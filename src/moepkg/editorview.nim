@@ -336,29 +336,32 @@ proc writeCurrentLine(
 
     if viewSettings.highlightCurrentLine and
        not (isVisualMode or isConfigMode):
+
+      let themeColors = ColorThemeTable[theme]
+
       # Change background color to white if background color is editorBg
       let
-        originalColorPairDef =
+        originalColorPair =
           if i >= 0 and i < highlight.len:
-            theme.colorPairDefine(highlight[i].color)
+            themeColors[highlight[i].color]
           else:
-            theme.colorPairDefine(EditorColorPairIndex.default)
+            themeColors[EditorColorPairIndex.default]
 
         attribute =
           if viewSettings.cursorLine: Attribute.underline
           elif i > -1 and i < highlight.len: highlight[i].attribute
           else: Attribute.normal
 
-        themeDef = ColorThemeTable[theme]
-
       # Init colors for the current line buffer
       let
-        bufferFg = originalColorPairDef.foreground
+        bufferFg = originalColorPair.foreground
+
+        originalBgRgb = theme.backgroundRgb(EditorColorPairIndex.default)
         bufferBg =
-          if originalColorPairDef.background == themeDef.default.background:
-            themeDef.currentLineBg.background
+          if originalColorPair.background.rgb == originalBgRgb:
+            themeColors[EditorColorPairIndex.currentLineBg].background
           else:
-            originalColorPairDef.background
+            originalColorPair.background
 
       currentLineColorPair.initColorPair(bufferFg, bufferBg)
 
@@ -370,8 +373,8 @@ proc writeCurrentLine(
 
       # Write spaces after text in the current line
       let
-        afterFg = themeDef.default.foreground
-        afterBg = themeDef.currentLineBg.background
+        afterFg = themeColors[EditorColorPairIndex.default].foreground
+        afterBg = themeColors[EditorColorPairIndex.currentLineBg].background
       currentLineColorPair.initColorPair(afterFg, afterBg)
 
       let

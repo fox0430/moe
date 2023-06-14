@@ -246,10 +246,10 @@ proc highlightOtherUsesCurrentWord(
                 # Init colors for current words.
                 let
                   originalEditorColorPairIndex = highlight.getColorPair(i, j)
-                  originalColorPairDef = theme.colorPairDefine(originalEditorColorPairIndex)
+                  originalColorPair = ColorThemeTable[theme][originalEditorColorPairIndex]
                 EditorColorPairIndex.currentWord.initColorPair(
-                  originalColorPairDef.foreground,
-                  ColorThemeTable[theme].currentWord.background)
+                  originalColorPair.foreground,
+                  ColorThemeTable[theme][EditorColorPairIndex.currentWord].background)
 
                 highlight.overwrite(
                   ColorSegment(

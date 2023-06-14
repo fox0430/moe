@@ -30,17 +30,9 @@ type
   RgbPair* = object
     foreground*, background*: Rgb
 
-  # 8 for the terminal.
-  Color8* {.pure.} = enum
-    default             = -1   # The terminal default
-    black               = 0    ## hex: #000000
-    maroon              = 1    ## hex: #800000
-    green               = 2    ## hex: #008000
-    olive               = 3    ## hex: #808000
-    navy                = 4    ## hex: #000080
-    purple1             = 5    ## hex: #800080
-    teal                = 6    ## hex: #008080
-    silver              = 7    ## hex: #c0c0c0
+  ColorLayer* {.pure.} = enum
+    foreground
+    background
 
   # 16 for the terminal.
   Color16* {.pure.} =  enum
@@ -346,7 +338,25 @@ proc hexToRgb*(s: string): Result[Rgb, string] =
 ## Converts from the Rgb to a hex color code with `#`.
 ## Example: Rgb(red: 0, green: 0, blue: 0) -> "#000000"
 proc toHex*(rgb: Rgb): string {.inline.} =
-  fmt"#{rgb.red.toHex}{rgb.green.toHex}{rgb.blue.toHex}"
+  fmt"#{rgb.red.toHex(2)}{rgb.green.toHex(2)}{rgb.blue.toHex(2)}"
+
+## Return true if valid hex color code.
+## '#' is required if `isPrefix` is true.
+## Range: 000000 ~ ffffff
+proc isHexColor*(s: string, isPrefix: bool = true): bool =
+  if (not isPrefix or s.startsWith('#')) and s.len == 7:
+    var
+      r, g, b: int
+    try:
+      r = fromHex[int](s[1..2])
+      g = fromHex[int](s[3..4])
+      b = fromHex[int](s[5..6])
+    except ValueError:
+      return false
+
+    return (r >= 0 and r <= 255) and
+           (g >= 0 and g <= 255) and
+           (b >= 0 and b <= 255)
 
 proc isTermDefaultColor*(rgb: Rgb): bool {.inline.} =
   rgb == Rgb(red: -1, green: -1, blue: -1)
@@ -757,91 +767,7 @@ type
     foreground*: Color
     background*: Color
 
-  EditorColorPair* = object
-    default*: ColorPair
-    lineNum*: ColorPair
-    currentLineNum*: ColorPair
-    # status line
-    statusLineNormalMode*: ColorPair
-    statusLineModeNormalMode*: ColorPair
-    statusLineNormalModeInactive*: ColorPair
-    statusLineInsertMode*: ColorPair
-    statusLineModeInsertMode*: ColorPair
-    statusLineInsertModeInactive*: ColorPair
-    statusLineVisualMode*: ColorPair
-    statusLineModeVisualMode*: ColorPair
-    statusLineVisualModeInactive*: ColorPair
-    statusLineReplaceMode*: ColorPair
-    statusLineModeReplaceMode*: ColorPair
-    statusLineReplaceModeInactive*: ColorPair
-    statusLineFilerMode*: ColorPair
-    statusLineModeFilerMode*: ColorPair
-    statusLineFilerModeInactive*: ColorPair
-    statusLineExMode*: ColorPair
-    statusLineModeExMode*: ColorPair
-    statusLineExModeInactive*: ColorPair
-    statusLineGitBranch*: ColorPair
-    # tab lnie
-    tab*: ColorPair
-    # tab line
-    currentTab*: ColorPair
-    # command bar
-    commandBar*: ColorPair
-    # error message
-    errorMessage*: ColorPair
-    # search result highlighting
-    searchResult*: ColorPair
-    # selected area in visual mode
-    visualMode*: ColorPair
-
-    # Color scheme
-    keyword*: ColorPair
-    functionName*: ColorPair
-    typeName*: ColorPair
-    boolean*: ColorPair
-    specialVar*: ColorPair
-    builtin*: ColorPair
-    stringLit*: ColorPair
-    binNumber*: ColorPair
-    decNumber*: ColorPair
-    floatNumber*: ColorPair
-    hexNumber*: ColorPair
-    octNumber*: ColorPair
-    comment*: ColorPair
-    longComment*: ColorPair
-    whitespace*: ColorPair
-    preprocessor*: ColorPair
-    pragma*: ColorPair
-
-    # filer mode
-    currentFile*: ColorPair
-    file*: ColorPair
-    dir*: ColorPair
-    pcLink*: ColorPair
-    # pop up window
-    popupWindow*: ColorPair
-    popupWinCurrentLine*: ColorPair
-    # replace text highlighting
-    replaceText*: ColorPair
-    # pair of paren highlighting
-    parenText*: ColorPair
-    # other uses current word
-    currentWord*: ColorPair
-    # full width space
-    highlightFullWidthSpace*: ColorPair
-    # trailing spaces
-    highlightTrailingSpaces*: ColorPair
-    # reserved words
-    reservedWord*: ColorPair
-    # Backup manager
-    currentBackup*: ColorPair
-    # diff viewer
-    addedLine*: ColorPair
-    deletedLine*: ColorPair
-    # configuration mode
-    currentSetting*: ColorPair
-    # highlight curent line background
-    currentLineBg*: ColorPair
+  ThemeColors* = array[EditorColorPairIndex, ColorPair]
 
 const
   TerminalDefaultRgb* = Rgb(red: -1, green: -1, blue: -1)
@@ -849,14 +775,13 @@ const
   ## Default terminal colors.
   DefaultForegroundColor* = Color(
     index: termDefaultForeground,
-    rgb: Rgb(red: -1, green: -1, blue: -1))
-
+    rgb: TerminalDefaultRgb)
   DefaultBackgoundColor* = Color(
     index: termDefaultBackground,
-    rgb: Rgb(red: -1, green: -1, blue: -1))
+    rgb: TerminalDefaultRgb)
 
-  DarkTheme* = EditorColorPair(
-    default: ColorPair(
+let DarkTheme*: ThemeColors = [
+    EditorColorPairIndex.default: ColorPair(
       index: EditorColorPairIndex.default,
       foreground: Color(
         index: EditorColorIndex.foreground,
@@ -865,7 +790,7 @@ const
         index: EditorColorIndex.background,
         rgb: TerminalDefaultRgb)),
 
-    lineNum: ColorPair(
+    EditorColorPairIndex.lineNum: ColorPair(
       index: EditorColorPairIndex.lineNum,
       foreground: Color(
         index: EditorColorIndex.lineNum,
@@ -873,7 +798,7 @@ const
       background:  Color(
         index: EditorColorIndex.lineNumBg,
         rgb: TerminalDefaultRgb)),
-    currentLineNum: ColorPair(
+    EditorColorPairIndex.currentLineNum: ColorPair(
       index: EditorColorPairIndex.currentLineNum,
       foreground: Color(
         index: EditorColorIndex.currentLineNum,
@@ -882,7 +807,7 @@ const
         index: EditorColorIndex.currentLineNumBg,
         rgb: TerminalDefaultRgb)),
 
-    statusLineNormalMode: ColorPair(
+    EditorColorPairIndex.statusLineNormalMode: ColorPair(
       index: EditorColorPairIndex.statusLineNormalMode,
       foreground: Color(
         index: EditorColorIndex.statusLineNormalMode,
@@ -890,7 +815,7 @@ const
       background: Color(
         index: EditorColorIndex.statusLineNormalModeBg,
         rgb: "#0000ff".hexToRgb.get)),
-    statusLineModeNormalMode: ColorPair(
+    EditorColorPairIndex.statusLineModeNormalMode: ColorPair(
       index: EditorColorPairIndex.statusLineModeNormalMode,
       foreground: Color(
         index: EditorColorIndex.statusLineModeNormalMode,
@@ -898,7 +823,7 @@ const
       background: Color(
         index: EditorColorIndex.statusLineModeNormalModeBg,
         rgb: "#ffffff".hexToRgb.get)),
-    statusLineNormalModeInactive: ColorPair(
+    EditorColorPairIndex.statusLineNormalModeInactive: ColorPair(
       index: EditorColorPairIndex.statusLineNormalModeInactive,
       foreground: Color(
         index: EditorColorIndex.statusLineNormalModeInactive,
@@ -907,7 +832,7 @@ const
         index: EditorColorIndex.statusLineNormalModeInactiveBg,
         rgb: "#ffffff".hexToRgb.get)),
 
-    statusLineInsertMode: ColorPair(
+    EditorColorPairIndex.statusLineInsertMode: ColorPair(
       index: EditorColorPairIndex.statusLineInsertMode,
       foreground: Color(
         index: EditorColorIndex.statusLineInsertMode,
@@ -915,7 +840,7 @@ const
       background: Color(
         index: EditorColorIndex.statusLineInsertModeBg,
         rgb: "#0000ff".hexToRgb.get)),
-    statusLineModeInsertMode: ColorPair(
+    EditorColorPairIndex.statusLineModeInsertMode: ColorPair(
       index: EditorColorPairIndex.statusLineModeInsertMode,
       foreground: Color(
         index: EditorColorIndex.statusLineModeInsertMode,
@@ -923,7 +848,7 @@ const
       background: Color(
         index: EditorColorIndex.statusLineModeInsertModeBg,
         rgb: "#ffffff".hexToRgb.get)),
-    statusLineInsertModeInactive: ColorPair(
+    EditorColorPairIndex.statusLineInsertModeInactive: ColorPair(
       index: EditorColorPairIndex.statusLineInsertModeInactive,
       foreground: Color(
         index: EditorColorIndex.statusLineInsertModeInactive,
@@ -932,7 +857,7 @@ const
         index: EditorColorIndex.statusLineInsertModeInactiveBg,
         rgb: "#ffffff".hexToRgb.get)),
 
-    statusLineVisualMode: ColorPair(
+    EditorColorPairIndex.statusLineVisualMode: ColorPair(
       index: EditorColorPairIndex.statusLineVisualMode,
       foreground: Color(
         index: EditorColorIndex.statusLineVisualMode,
@@ -940,7 +865,7 @@ const
       background: Color(
         index: EditorColorIndex.statusLineVisualModeBg,
         rgb: "#0000ff".hexToRgb.get)),
-    statusLineModeVisualMode: ColorPair(
+    EditorColorPairIndex.statusLineModeVisualMode: ColorPair(
       index: EditorColorPairIndex.statusLineModeVisualMode,
       foreground: Color(
         index: EditorColorIndex.statusLineModeVisualMode,
@@ -948,7 +873,7 @@ const
       background: Color(
         index: EditorColorIndex.statusLineModeVisualModeBg,
         rgb: "#ffffff".hexToRgb.get)),
-    statusLineVisualModeInactive: ColorPair(
+    EditorColorPairIndex.statusLineVisualModeInactive: ColorPair(
       index: EditorColorPairIndex.statusLineVisualModeInactive,
       foreground: Color(
         index: EditorColorIndex.statusLineVisualModeInactive,
@@ -957,7 +882,7 @@ const
         index: EditorColorIndex.statusLineVisualModeInactiveBg,
         rgb: "#ffffff".hexToRgb.get)),
 
-    statusLineReplaceMode: ColorPair(
+    EditorColorPairIndex.statusLineReplaceMode: ColorPair(
       index: EditorColorPairIndex.statusLineReplaceMode,
       foreground: Color(
         index: EditorColorIndex.statusLineReplaceMode,
@@ -965,7 +890,7 @@ const
       background: Color(
         index: EditorColorIndex.statusLineReplaceModeBg,
         rgb: "#0000ff".hexToRgb.get)),
-    statusLineModeReplaceMode: ColorPair(
+    EditorColorPairIndex.statusLineModeReplaceMode: ColorPair(
       index: EditorColorPairIndex.statusLineModeReplaceMode,
       foreground: Color(
         index: EditorColorIndex.statusLineModeReplaceMode,
@@ -973,7 +898,7 @@ const
       background: Color(
         index: EditorColorIndex.statusLineModeReplaceModeBg,
         rgb: "#ffffff".hexToRgb.get)),
-    statusLineReplaceModeInactive: ColorPair(
+    EditorColorPairIndex.statusLineReplaceModeInactive: ColorPair(
       index: EditorColorPairIndex.statusLineReplaceModeInactive,
       foreground: Color(
         index: EditorColorIndex.statusLineReplaceModeInactive,
@@ -982,7 +907,7 @@ const
         index: EditorColorIndex.statusLineReplaceModeInactiveBg,
         rgb: "#ffffff".hexToRgb.get)),
 
-    statusLineFilerMode: ColorPair(
+    EditorColorPairIndex.statusLineFilerMode: ColorPair(
       index: EditorColorPairIndex.statusLineFilerMode,
       foreground: Color(
         index: EditorColorIndex.statusLineReplaceModeInactive,
@@ -990,7 +915,7 @@ const
       background: Color(
         index: EditorColorIndex.statusLineReplaceModeInactiveBg,
         rgb: "#0000ff".hexToRgb.get)),
-    statusLineModeFilerMode: ColorPair(
+    EditorColorPairIndex.statusLineModeFilerMode: ColorPair(
       index: EditorColorPairIndex.statusLineModeFilerMode,
       foreground: Color(
         index: EditorColorIndex.statusLineModeFilerMode,
@@ -998,7 +923,7 @@ const
       background: Color(
         index: EditorColorIndex.statusLineModeFilerModeBg,
         rgb: "#ffffff".hexToRgb.get)),
-    statusLineFilerModeInactive: ColorPair(
+    EditorColorPairIndex.statusLineFilerModeInactive: ColorPair(
       index: EditorColorPairIndex.statusLineFilerModeInactive,
       foreground: Color(
         index: EditorColorIndex.statusLineFilerModeInactive,
@@ -1007,7 +932,7 @@ const
         index: EditorColorIndex.statusLineFilerModeInactiveBg,
         rgb: "#ffffff".hexToRgb.get)),
 
-    statusLineExMode: ColorPair(
+    EditorColorPairIndex.statusLineExMode: ColorPair(
       index: EditorColorPairIndex.statusLineExMode,
       foreground: Color(
         index: EditorColorIndex.statusLineExMode,
@@ -1016,7 +941,7 @@ const
         index: EditorColorIndex.statusLineExModeBg,
         rgb: "#0000ff".hexToRgb.get)),
 
-    statusLineModeExMode: ColorPair(
+    EditorColorPairIndex.statusLineModeExMode: ColorPair(
       index: EditorColorPairIndex.statusLineModeExMode,
       foreground: Color(
         index: EditorColorIndex.statusLineModeExMode,
@@ -1025,7 +950,7 @@ const
         index: EditorColorIndex.statusLineModeExModeBg,
         rgb: "#ffffff".hexToRgb.get)),
 
-    statusLineExModeInactive: ColorPair(
+    EditorColorPairIndex.statusLineExModeInactive: ColorPair(
       index: EditorColorPairIndex.statusLineExModeInactive,
       foreground: Color(
         index: EditorColorIndex.statusLineExModeInactive,
@@ -1034,7 +959,7 @@ const
         index: EditorColorIndex.statusLineExModeInactiveBg,
         rgb: "#ffffff".hexToRgb.get)),
 
-    statusLineGitBranch: ColorPair(
+    EditorColorPairIndex.statusLineGitBranch: ColorPair(
       index: EditorColorPairIndex.statusLineGitBranch,
       foreground: Color(
         index: EditorColorIndex.statusLineGitBranch,
@@ -1044,7 +969,7 @@ const
         rgb: "#0000ff".hexToRgb.get)),
 
     # Tab line
-    tab: ColorPair(
+    EditorColorPairIndex.tab: ColorPair(
       index: EditorColorPairIndex.tab,
       foreground: Color(
         index: EditorColorIndex.tab,
@@ -1053,7 +978,7 @@ const
         index: EditorColorIndex.tabBg,
         rgb: TerminalDefaultRgb)),
 
-    currentTab: ColorPair(
+    EditorColorPairIndex.currentTab: ColorPair(
       index: EditorColorPairIndex.currentTab,
       foreground: Color(
         index: EditorColorIndex.currentTab,
@@ -1064,7 +989,7 @@ const
 
     # Command line
     # TODO: Rename to commandLine
-    commandBar: ColorPair(
+    EditorColorPairIndex.commandBar: ColorPair(
       index: EditorColorPairIndex.commandBar,
       foreground: Color(
         index: EditorColorIndex.commandBar,
@@ -1074,7 +999,7 @@ const
         rgb: TerminalDefaultRgb)),
 
     # Error message
-    errorMessage: ColorPair(
+    EditorColorPairIndex.errorMessage: ColorPair(
       index: EditorColorPairIndex.errorMessage,
       foreground: Color(
         index: EditorColorIndex.errorMessage,
@@ -1082,7 +1007,7 @@ const
       background: DefaultBackgoundColor),
 
     # Search result highlighting
-    searchResult: ColorPair(
+    EditorColorPairIndex.searchResult: ColorPair(
       index: EditorColorPairIndex.searchResult,
       foreground: Color(
         index: EditorColorIndex.searchResult,
@@ -1092,7 +1017,7 @@ const
         rgb: "#ff0000".hexToRgb.get)),
 
     # Selected area in Visual mode
-    visualMode: ColorPair(
+    EditorColorPairIndex.visualMode: ColorPair(
       index: EditorColorPairIndex.visualMode,
       foreground: Color(
         index: EditorColorIndex.visualMode,
@@ -1102,7 +1027,7 @@ const
         rgb: "#800080".hexToRgb.get)),
 
     # Color scheme
-    keyword: ColorPair(
+    EditorColorPairIndex.keyword: ColorPair(
       index: EditorColorPairIndex.keyword,
       foreground: Color(
         index: EditorColorIndex.keyword,
@@ -1111,7 +1036,7 @@ const
         index: EditorColorIndex.keywordBg,
         rgb: TerminalDefaultRgb)),
 
-    functionName: ColorPair(
+    EditorColorPairIndex.functionName: ColorPair(
       index: EditorColorPairIndex.functionName,
       foreground: Color(
         index: EditorColorIndex.functionName,
@@ -1120,7 +1045,7 @@ const
         index: EditorColorIndex.functionNameBg,
         rgb: TerminalDefaultRgb)),
 
-    typeName: ColorPair(
+    EditorColorPairIndex.typeName: ColorPair(
       index: EditorColorPairIndex.typeName,
       foreground: Color(
         index: EditorColorIndex.typeName,
@@ -1129,7 +1054,7 @@ const
         index: EditorColorIndex.typeNameBg,
         rgb: TerminalDefaultRgb)),
 
-    boolean: ColorPair(
+    EditorColorPairIndex.boolean: ColorPair(
       index: EditorColorPairIndex.boolean,
       foreground: Color(
         index: EditorColorIndex.boolean,
@@ -1138,16 +1063,7 @@ const
         index: EditorColorIndex.booleanBg,
         rgb: TerminalDefaultRgb)),
 
-    stringLit: ColorPair(
-      index: EditorColorPairIndex.stringLit,
-      foreground: Color(
-        index: EditorColorIndex.stringLit,
-        rgb: "#ffff00".hexToRgb.get),
-      background: Color(
-        index: EditorColorIndex.stringLitBg,
-        rgb: TerminalDefaultRgb)),
-
-    specialVar: ColorPair(
+    EditorColorPairIndex.specialVar: ColorPair(
       index: EditorColorPairIndex.specialVar,
       foreground: Color(
         index: EditorColorIndex.specialVar,
@@ -1156,7 +1072,7 @@ const
         index: EditorColorIndex.specialVarBg,
         rgb: TerminalDefaultRgb)),
 
-    builtin: ColorPair(
+    EditorColorPairIndex.builtin: ColorPair(
       index: EditorColorPairIndex.builtin,
       foreground: Color(
         index: EditorColorIndex.builtin,
@@ -1165,7 +1081,16 @@ const
         index: EditorColorIndex.builtinBg,
         rgb: TerminalDefaultRgb)),
 
-    binNumber: ColorPair(
+    EditorColorPairIndex.stringLit: ColorPair(
+      index: EditorColorPairIndex.stringLit,
+      foreground: Color(
+        index: EditorColorIndex.stringLit,
+        rgb: "#ffff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.stringLitBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.binNumber: ColorPair(
       index: EditorColorPairIndex.binNumber,
       foreground: Color(
         index: EditorColorIndex.binNumber,
@@ -1174,7 +1099,7 @@ const
         index: EditorColorIndex.binNumberBg,
         rgb: TerminalDefaultRgb)),
 
-    decNumber: ColorPair(
+    EditorColorPairIndex.decNumber: ColorPair(
       index: EditorColorPairIndex.decNumber,
       foreground: Color(
         index: EditorColorIndex.decNumber,
@@ -1183,7 +1108,7 @@ const
         index: EditorColorIndex.decNumber,
         rgb: TerminalDefaultRgb)),
 
-    floatNumber: ColorPair(
+    EditorColorPairIndex.floatNumber: ColorPair(
       index: EditorColorPairIndex.floatNumber,
       foreground: Color(
         index: EditorColorIndex.floatNumber,
@@ -1192,7 +1117,7 @@ const
         index: EditorColorIndex.floatNumberBg,
         rgb: TerminalDefaultRgb)),
 
-    hexNumber: ColorPair(
+    EditorColorPairIndex.hexNumber: ColorPair(
       index: EditorColorPairIndex.hexNumber,
       foreground: Color(
         index: EditorColorIndex.hexNumber,
@@ -1201,7 +1126,7 @@ const
         index: EditorColorIndex.hexNumberBg,
         rgb: TerminalDefaultRgb)),
 
-    octNumber: ColorPair(
+    EditorColorPairIndex.octNumber: ColorPair(
       index: EditorColorPairIndex.octNumber,
       foreground: Color(
         index: EditorColorIndex.octNumber,
@@ -1210,7 +1135,7 @@ const
         index: EditorColorIndex.octNumber,
         rgb: TerminalDefaultRgb)),
 
-    comment: ColorPair(
+    EditorColorPairIndex.comment: ColorPair(
       index: EditorColorPairIndex.comment,
       foreground: Color(
         index: EditorColorIndex.comment,
@@ -1219,7 +1144,7 @@ const
         index: EditorColorIndex.commentBg,
         rgb: TerminalDefaultRgb)),
 
-    longComment: ColorPair(
+    EditorColorPairIndex.longComment: ColorPair(
       index: EditorColorPairIndex.longComment,
       foreground: Color(
         index: EditorColorIndex.longComment,
@@ -1228,7 +1153,7 @@ const
         index: EditorColorIndex.longComment,
         rgb: TerminalDefaultRgb)),
 
-    whitespace: ColorPair(
+    EditorColorPairIndex.whitespace: ColorPair(
       index: EditorColorPairIndex.whitespace,
       foreground: Color(
         index: EditorColorIndex.whitespace,
@@ -1237,7 +1162,7 @@ const
         index: EditorColorIndex.whitespaceBg,
         rgb: TerminalDefaultRgb)),
 
-    preprocessor: ColorPair(
+    EditorColorPairIndex.preprocessor: ColorPair(
       index: EditorColorPairIndex.preprocessor,
       foreground: Color(
         index: EditorColorIndex.preprocessor,
@@ -1246,7 +1171,7 @@ const
         index: EditorColorIndex.preprocessorBg,
         rgb: TerminalDefaultRgb)),
 
-    pragma: ColorPair(
+    EditorColorPairIndex.pragma: ColorPair(
       index: EditorColorPairIndex.pragma,
       foreground: Color(
         index: EditorColorIndex.pragma,
@@ -1256,7 +1181,7 @@ const
         rgb: TerminalDefaultRgb)),
 
     # filer mode
-    currentFile: ColorPair(
+    EditorColorPairIndex.currentFile: ColorPair(
       index: EditorColorPairIndex.currentFile,
       foreground: Color(
         index: EditorColorIndex.currentFile,
@@ -1265,7 +1190,7 @@ const
         index: EditorColorIndex.currentFileBg,
         rgb: "#008080".hexToRgb.get)),
 
-    file: ColorPair(
+    EditorColorPairIndex.file: ColorPair(
       index: EditorColorPairIndex.file,
       foreground: Color(
         index: EditorColorIndex.file,
@@ -1274,7 +1199,7 @@ const
         index: EditorColorIndex.fileBg,
         rgb: TerminalDefaultRgb)),
 
-    dir: ColorPair(
+    EditorColorPairIndex.dir: ColorPair(
       index: EditorColorPairIndex.dir,
       foreground: Color(
         index: EditorColorIndex.dir,
@@ -1283,7 +1208,7 @@ const
         index: EditorColorIndex.fileBg,
         rgb: TerminalDefaultRgb)),
 
-    pcLink: ColorPair(
+    EditorColorPairIndex.pcLink: ColorPair(
       index: EditorColorPairIndex.pcLink,
       foreground: Color(
         index: EditorColorIndex.pcLink,
@@ -1293,7 +1218,7 @@ const
         rgb: TerminalDefaultRgb)),
 
     # Pop up window
-    popupWindow: ColorPair(
+    EditorColorPairIndex.popupWindow: ColorPair(
       index: EditorColorPairIndex.popupWindow,
       foreground: Color(
         index: EditorColorIndex.popupWindow,
@@ -1301,7 +1226,7 @@ const
       background: Color(
         index: EditorColorIndex.popupWindowBg,
         rgb: "#000000".hexToRgb.get)),
-    popupWinCurrentLine: ColorPair(
+    EditorColorPairIndex.popupWinCurrentLine: ColorPair(
       index: EditorColorPairIndex.popupWinCurrentLine,
       foreground: Color(
         index: EditorColorIndex.popupWinCurrentLine,
@@ -1311,7 +1236,7 @@ const
         rgb: "#000000".hexToRgb.get)),
 
     # Replace text highlighting
-    replaceText: ColorPair(
+    EditorColorPairIndex.replaceText: ColorPair(
       index: EditorColorPairIndex.replaceText,
       foreground: Color(
         index: EditorColorIndex.replaceText,
@@ -1322,7 +1247,7 @@ const
 
     # Pair of paren highlighting
     # TODO: Rename to parenPair?
-    parenText: ColorPair(
+    EditorColorPairIndex.parenText: ColorPair(
       index: EditorColorPairIndex.parenText,
       foreground: Color(
         index: EditorColorIndex.parenText,
@@ -1332,7 +1257,7 @@ const
         rgb: "#0000ff".hexToRgb.get)),
 
     # highlight other uses current word
-    currentWord: ColorPair(
+    EditorColorPairIndex.currentWord: ColorPair(
       index: EditorColorPairIndex.currentWord,
       foreground: Color(
         index: EditorColorIndex.currentWord,
@@ -1342,7 +1267,7 @@ const
         rgb: "#808080".hexToRgb.get)),
 
     # highlight full width space
-    highlightFullWidthSpace: ColorPair(
+    EditorColorPairIndex.highlightFullWidthSpace: ColorPair(
       index: EditorColorPairIndex.highlightFullWidthSpace,
       foreground: Color(
         index: EditorColorIndex.highlightFullWidthSpace,
@@ -1352,7 +1277,7 @@ const
         rgb: "#ff0000".hexToRgb.get)),
 
     # highlight trailing spaces
-    highlightTrailingSpaces: ColorPair(
+    EditorColorPairIndex.highlightTrailingSpaces: ColorPair(
       index: EditorColorPairIndex.highlightTrailingSpaces,
       foreground: Color(
         index: EditorColorIndex.highlightTrailingSpaces,
@@ -1362,7 +1287,7 @@ const
         rgb: "#ff0000".hexToRgb.get)),
 
     # highlight reserved words
-    reservedWord: ColorPair(
+    EditorColorPairIndex.reservedWord: ColorPair(
       index: EditorColorPairIndex.reservedWord,
       foreground: Color(
         index: EditorColorIndex.reservedWord,
@@ -1373,7 +1298,7 @@ const
 
     # Backup manager
     # TODO: Rename to BackupManagerCurrentLine?
-    currentBackup: ColorPair(
+    EditorColorPairIndex.currentBackup: ColorPair(
       index: EditorColorPairIndex.currentBackup,
       foreground: Color(
         index: EditorColorIndex.currentBackup,
@@ -1384,7 +1309,7 @@ const
 
     # Diff viewer
     # TODO: Ranme to diffViewerAddedLine?
-    addedLine: ColorPair(
+    EditorColorPairIndex.addedLine: ColorPair(
       index: EditorColorPairIndex.addedLine,
       foreground: Color(
         index: EditorColorIndex.addedLine,
@@ -1394,7 +1319,7 @@ const
         rgb: TerminalDefaultRgb)),
 
     # TODO: Ranme to diffViewerDeletedLine ?
-    deletedLine: ColorPair(
+    EditorColorPairIndex.deletedLine: ColorPair(
       index: EditorColorPairIndex.deletedLine,
       foreground: Color(
         index: EditorColorIndex.deletedLine,
@@ -1405,7 +1330,7 @@ const
 
     # Configuration mode
     # TODO: Ranme to ConfiModeCurrentLine?
-    currentSetting: ColorPair(
+    EditorColorPairIndex.currentSetting: ColorPair(
       index: EditorColorPairIndex.currentSetting,
       foreground: Color(
         index: EditorColorIndex.currentSetting,
@@ -1414,16 +1339,17 @@ const
         index: EditorColorIndex.currentSettingBg,
         rgb: "#008080".hexToRgb.get)),
 
-    currentLineBg: ColorPair(
+    EditorColorPairIndex.currentLineBg: ColorPair(
       index: EditorColorPairIndex.currentLineBg,
       # Don't use the foreground.
       foreground: DefaultForegroundColor,
       background: Color(
         index: EditorColorIndex.currentLineBg,
-        rgb: "#000000".hexToRgb.get)))
+        rgb: "#000000".hexToRgb.get))
+]
 
 var
-  ColorThemeTable*: array[ColorTheme, EditorColorPair] = [
+  ColorThemeTable*: array[ColorTheme, ThemeColors] = [
     dark: DarkTheme,
     light: DarkTheme,
     vivid: DarkTheme,
@@ -1459,68 +1385,53 @@ proc initColorPair(p: ColorPair) {.inline.} =
   p.index.initColorPair(p.foreground, p.background)
 
 ## Init Ncurses colors and color pairs.
-proc initEditrorColor*(pair: EditorColorPair) =
-  for _, value in pair.fieldPairs:
+proc initEditrorColor*(theme: ColorTheme) =
+  for colorPair in ColorThemeTable[theme]:
     # Init all color pair defines.
-    value.foreground.initColor
-    value.background.initColor
+    colorPair.foreground.initColor
+    colorPair.background.initColor
 
-    value.initColorPair
+    colorPair.initColorPair
 
 proc index*(c: ColorPair): EditorColorPairIndex {.inline.} = c.index
 
-proc foregroundRgb*(theme: ColorTheme, pair: EditorColorPairIndex): Rgb =
-  for _, value in ColorThemeTable[theme].fieldPairs:
-    if value.index == pair:
-      return value.foreground.rgb
+proc foregroundRgb*(
+  theme: ColorTheme,
+  pairIndex: EditorColorPairIndex): Rgb {.inline.} =
 
-proc backgroundRgb*(theme: ColorTheme, pair: EditorColorPairIndex): Rgb =
-  for _, value in ColorThemeTable[theme].fieldPairs:
-    if value.index == pair:
-      return value.background.rgb
+    ColorThemeTable[theme][pairIndex].foreground.rgb
 
-proc rgbPair*(theme: ColorTheme, pair: EditorColorPairIndex): RgbPair =
-  for _, value in ColorThemeTable[theme].fieldPairs:
-    if value.index == pair:
-      return RgbPair(
-        foreground: value.foreground.rgb,
-        background: value.background.rgb)
+proc backgroundRgb*(
+  theme: ColorTheme,
+  pairIndex: EditorColorPairIndex): Rgb {.inline.} =
+
+    ColorThemeTable[theme][pairIndex].background.rgb
 
 ## Return a RGB pair from ColorThemeTable.
 proc rgbPairFromEditorColorPair*(
   theme: ColorTheme,
-  pair: EditorColorPairIndex): RgbPair =
+  pairIndex: EditorColorPairIndex): RgbPair =
 
-    for _, value in ColorThemeTable[theme].fieldPairs:
-      if value.index == pair:
-        return RgbPair(
-          foreground: value.foreground.rgb,
-          background: value.background.rgb)
+    return RgbPair(
+      foreground: ColorThemeTable[theme][pairIndex].foreground.rgb,
+      background: ColorThemeTable[theme][pairIndex].background.rgb)
 
-## Return a ColorPair from ColorThemeTable.
-proc colorPairDefine*(
+## Return true if `s` exists in `EditorColorPairIndex`.
+proc isEditorColorPairIndex*(s: string): bool =
+  for i in EditorColorPairIndex:
+    if $i == s: return true
+
+## Set a Rgb to ColorThemeTable.
+proc setForegroundRgb*(
   theme: ColorTheme,
-  pair: EditorColorPairIndex): ColorPair =
-
-    for _, value in ColorThemeTable[theme].fieldPairs:
-      if value.index == pair:
-        return value
-
-macro `[]`*(ep: EditorColorPair, field: static string): untyped =
-  nnkDotExpr.newTree(ep, ident(field))
+  pairIndex: EditorColorPairIndex,
+  rgb: Rgb) {.inline.} = ColorThemeTable[theme][pairIndex].foreground.rgb = rgb
 
 ## Set a Rgb to ColorThemeTable.
-macro setForegroundRgb*(theme: ColorTheme, field: string, val: Rgb): untyped =
-  parseStmt(fmt"""
-    ColorThemeTable[{repr(theme)}].{field}.foreground.rgb = {repr(val)}
-  """)
-
-## Set a Rgb to ColorThemeTable.
-macro setBackgroundRgb*(theme: ColorTheme, field: string, val: Rgb): untyped =
-  parseStmt(fmt"""
-    ColorThemeTable[{repr(theme)}].{field}.background.rgb = {repr(val)}
-  """)
-
+proc setBackgroundRgb*(
+  theme: ColorTheme,
+  pairIndex: EditorColorPairIndex,
+  rgb: Rgb) {.inline.} = ColorThemeTable[theme][pairIndex].background.rgb = rgb
 
 # Environment where only 8 colors can be used
 # TODO: Rewrite or remove color.convertToConsoleEnvironmentColor

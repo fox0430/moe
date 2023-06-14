@@ -1052,7 +1052,7 @@ proc changeTheme*(status: var EditorStatus) =
       status.commandLine.writeError(
         fmt"Error: Failed to switch to VSCode theme: {vsCodeTheme.error}")
 
-  initEditrorColor(ColorThemeTable[status.settings.editorColorTheme])
+  status.settings.editorColorTheme.initEditrorColor
 
   # TODO: Uncomment
   #if checkColorSupportedTerminal() == 8:
