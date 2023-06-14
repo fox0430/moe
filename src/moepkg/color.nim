@@ -779,7 +779,7 @@ const
     index: termDefaultBackground,
     rgb: TerminalDefaultRgb)
 
-let DarkTheme*: ThemeColors = [
+  DarkTheme*: ThemeColors = [
     EditorColorPairIndex.default: ColorPair(
       foreground: Color(
         index: EditorColorIndex.foreground,
@@ -920,7 +920,6 @@ let DarkTheme*: ThemeColors = [
       background: Color(
         index: EditorColorIndex.statusLineExModeBg,
         rgb: "#0000ff".hexToRgb.get)),
-
     EditorColorPairIndex.statusLineModeExMode: ColorPair(
       foreground: Color(
         index: EditorColorIndex.statusLineModeExMode,
@@ -928,7 +927,6 @@ let DarkTheme*: ThemeColors = [
       background: Color(
         index: EditorColorIndex.statusLineModeExModeBg,
         rgb: "#ffffff".hexToRgb.get)),
-
     EditorColorPairIndex.statusLineExModeInactive: ColorPair(
       foreground: Color(
         index: EditorColorIndex.statusLineExModeInactive,
@@ -1283,15 +1281,1025 @@ let DarkTheme*: ThemeColors = [
       background: Color(
         index: EditorColorIndex.currentLineBg,
         rgb: "#000000".hexToRgb.get))
-]
+  ]
+
+  LightTheme*: ThemeColors = [
+    EditorColorPairIndex.default: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.foreground,
+        rgb: "#000000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.background,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.lineNum: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.lineNum,
+        rgb: "#8a8a8a".hexToRgb.get),
+      background:  Color(
+        index: EditorColorIndex.lineNumBg,
+        rgb: TerminalDefaultRgb)),
+    EditorColorPairIndex.currentLineNum: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.currentLineNum,
+        rgb: "#000000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.currentLineNumBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.statusLineNormalMode: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineNormalMode,
+        rgb: "#0000ff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineNormalModeBg,
+        rgb: "#8a8a8a".hexToRgb.get)),
+    EditorColorPairIndex.statusLineModeNormalMode: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineModeNormalMode,
+        rgb: "#ffffff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineModeNormalModeBg,
+        rgb: "#008080".hexToRgb.get)),
+    EditorColorPairIndex.statusLineNormalModeInactive: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineNormalModeInactive,
+        rgb: "#008080".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineNormalModeInactiveBg,
+        rgb: "#0000ff".hexToRgb.get)),
+
+    EditorColorPairIndex.statusLineInsertMode: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineInsertMode,
+        rgb: "#0000ff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineInsertModeBg,
+        rgb: "#8a8a8a".hexToRgb.get)),
+    EditorColorPairIndex.statusLineModeInsertMode: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineModeInsertMode,
+        rgb: "#ffffff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineModeInsertModeBg,
+        rgb: "#008080".hexToRgb.get)),
+    EditorColorPairIndex.statusLineInsertModeInactive: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineInsertModeInactive,
+        rgb: "#8a8a8a".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineInsertModeInactiveBg,
+        rgb: "#0000ff".hexToRgb.get)),
+
+    EditorColorPairIndex.statusLineVisualMode: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineVisualMode,
+        rgb: "#0000ff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineVisualModeBg,
+        rgb: "#8a8a8a".hexToRgb.get)),
+    EditorColorPairIndex.statusLineModeVisualMode: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineModeVisualMode,
+        rgb: "#ffffff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineModeVisualModeBg,
+        rgb: "#008080".hexToRgb.get)),
+    EditorColorPairIndex.statusLineVisualModeInactive: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineVisualModeInactive,
+        rgb: "#8a8a8a".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineVisualModeInactiveBg,
+        rgb: "#0000ff".hexToRgb.get)),
+
+    EditorColorPairIndex.statusLineReplaceMode: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineReplaceMode,
+        rgb: "#0000ff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineReplaceModeBg,
+        rgb: "#8a8a8a".hexToRgb.get)),
+    EditorColorPairIndex.statusLineModeReplaceMode: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineModeReplaceMode,
+        rgb: "#ffffff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineModeReplaceModeBg,
+        rgb: "#008080".hexToRgb.get)),
+    EditorColorPairIndex.statusLineReplaceModeInactive: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineReplaceModeInactive,
+        rgb: "#8a8a8a".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineReplaceModeInactiveBg,
+        rgb: "#0000ff".hexToRgb.get)),
+
+    EditorColorPairIndex.statusLineFilerMode: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineReplaceModeInactive,
+        rgb: "#0000ff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineReplaceModeInactiveBg,
+        rgb: "#8a8a8a".hexToRgb.get)),
+    EditorColorPairIndex.statusLineModeFilerMode: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineModeFilerMode,
+        rgb: "#ffffff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineModeFilerModeBg,
+        rgb: "#008080".hexToRgb.get)),
+    EditorColorPairIndex.statusLineFilerModeInactive: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineFilerModeInactive,
+        rgb: "#8a8a8a".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineFilerModeInactiveBg,
+        rgb: "#0000ff".hexToRgb.get)),
+
+    EditorColorPairIndex.statusLineExMode: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineExMode,
+        rgb: "#0000ff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineExModeBg,
+        rgb: "#008080".hexToRgb.get)),
+    EditorColorPairIndex.statusLineModeExMode: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineModeExMode,
+        rgb: "#ffffff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineModeExModeBg,
+        rgb: "#008080".hexToRgb.get)),
+    EditorColorPairIndex.statusLineExModeInactive: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineExModeInactive,
+        rgb: "#8a8a8a".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineExModeInactiveBg,
+        rgb: "#0000ff".hexToRgb.get)),
+
+    EditorColorPairIndex.statusLineGitBranch: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineGitBranch,
+        rgb: "#0000ff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineGitBranchBg,
+        rgb: "#8a8a8a".hexToRgb.get)),
+
+    # Tab line
+    EditorColorPairIndex.tab: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.tab,
+        rgb: "#0000ff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.tabBg,
+        rgb: "#8a8a8a".hexToRgb.get)),
+
+    EditorColorPairIndex.currentTab: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.currentTab,
+        rgb: "#ffffff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.currentTabBg,
+        rgb: "#0000ff".hexToRgb.get)),
+
+    # Command line
+    # TODO: Rename to commandLine
+    EditorColorPairIndex.commandBar: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.commandBar,
+        rgb: "#000000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.commandBarBg,
+        rgb: TerminalDefaultRgb)),
+
+    # Error message
+    EditorColorPairIndex.errorMessage: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.errorMessage,
+        rgb: "#ff0000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.errorMessageBg,
+        rgb: TerminalDefaultRgb)),
+
+    # Search result highlighting
+    EditorColorPairIndex.searchResult: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.searchResult,
+        rgb: "#000000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.searchResultBg,
+        rgb: "#ff0000".hexToRgb.get)),
+
+    # Selected area in Visual mode
+    EditorColorPairIndex.visualMode: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.visualMode,
+        rgb: "#000000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.visualModeBg,
+        rgb: "#800080".hexToRgb.get)),
+
+    # Color scheme
+    EditorColorPairIndex.keyword: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.keyword,
+        rgb: "#5fffaf".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.keywordBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.functionName: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.functionName,
+        rgb: "#ffd700".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.functionNameBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.typeName: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.typeName,
+        rgb: "#008000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.typeNameBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.boolean: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.boolean,
+        rgb: "#ffff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.booleanBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.specialVar: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.specialVar,
+        rgb: "#008000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.specialVarBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.builtin: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.builtin,
+        rgb: "#ffff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.builtinBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.stringLit: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.stringLit,
+        rgb: "#800080".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.stringLitBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.binNumber: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.binNumber,
+        rgb: "#00ffff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.binNumberBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.decNumber: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.decNumber,
+        rgb: "#00ffff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.decNumber,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.floatNumber: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.floatNumber,
+        rgb: "#00ffff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.floatNumberBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.hexNumber: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.hexNumber,
+        rgb: "#00ffff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.hexNumberBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.octNumber: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.octNumber,
+        rgb: "#00ffff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.octNumber,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.comment: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.comment,
+        rgb: "#808080".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.commentBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.longComment: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.longComment,
+        rgb: "#808080".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.longComment,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.whitespace: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.whitespace,
+        rgb: "#808080".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.whitespaceBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.preprocessor: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.preprocessor,
+        rgb: "#808080".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.preprocessorBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.pragma: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.pragma,
+        rgb: "#ffff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.pragmaBg,
+        rgb: TerminalDefaultRgb)),
+
+    # filer mode
+    EditorColorPairIndex.currentFile: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.currentFile,
+        rgb: "#000000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.currentFileBg,
+        rgb: "#ff0087".hexToRgb.get)),
+
+    EditorColorPairIndex.file: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.file,
+        rgb: "#000000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.fileBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.dir: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.dir,
+        rgb: "#ff0087".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.fileBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.pcLink: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.pcLink,
+        rgb: "#008080".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.pcLinkBg,
+        rgb: TerminalDefaultRgb)),
+
+    # Pop up window
+    EditorColorPairIndex.popupWindow: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.popupWindow,
+        rgb: "#000000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.popupWindowBg,
+        rgb: "#808080".hexToRgb.get)),
+    EditorColorPairIndex.popupWinCurrentLine: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.popupWinCurrentLine,
+        rgb: "#0000ff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.popupWinCurrentLineBg,
+        rgb: "#808080".hexToRgb.get)),
+
+    # Replace text highlighting
+    EditorColorPairIndex.replaceText: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.replaceText,
+        rgb: "#000000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.replaceTextBg,
+        rgb: "#ff0000".hexToRgb.get)),
+
+    # Pair of paren highlighting
+    # TODO: Rename to parenPair?
+    EditorColorPairIndex.parenText: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.parenText,
+        rgb: "#000000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.parenTextBg,
+        rgb: "#808080".hexToRgb.get)),
+
+    # highlight other uses current word
+    EditorColorPairIndex.currentWord: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.currentWord,
+        rgb: "#000000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.currentWordBg,
+        rgb: "#808080".hexToRgb.get)),
+
+    # highlight full width space
+    EditorColorPairIndex.highlightFullWidthSpace: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.highlightFullWidthSpace,
+        rgb: "#ff0000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.highlightFullWidthSpaceBg,
+        rgb: "#ff0000".hexToRgb.get)),
+
+    # highlight trailing spaces
+    EditorColorPairIndex.highlightTrailingSpaces: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.highlightTrailingSpaces,
+        rgb: "#ff0000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.highlightTrailingSpacesBg,
+        rgb: "#ff0000".hexToRgb.get)),
+
+    # highlight reserved words
+    EditorColorPairIndex.reservedWord: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.reservedWord,
+        rgb: "#ffffff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.reservedWordBg,
+        rgb: "#808080".hexToRgb.get)),
+
+    # Backup manager
+    # TODO: Rename to BackupManagerCurrentLine?
+    EditorColorPairIndex.currentBackup: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.currentBackup,
+        rgb: "#000000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.currentBackupBg,
+        rgb: "#ff0087".hexToRgb.get)),
+
+    # Diff viewer
+    # TODO: Ranme to diffViewerAddedLine?
+    EditorColorPairIndex.addedLine: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.addedLine,
+        rgb: "#008000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.addedLineBg,
+        rgb: TerminalDefaultRgb)),
+
+    # TODO: Ranme to diffViewerDeletedLine ?
+    EditorColorPairIndex.deletedLine: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.deletedLine,
+        rgb: "#ff0000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.deletedLineBg,
+        rgb: TerminalDefaultRgb)),
+
+    # Configuration mode
+    # TODO: Ranme to ConfiModeCurrentLine?
+    EditorColorPairIndex.currentSetting: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.currentSetting,
+        rgb: "#000000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.currentSettingBg,
+        rgb: "#ff0087".hexToRgb.get)),
+
+    EditorColorPairIndex.currentLineBg: ColorPair(
+      # Don't use the foreground.
+      foreground: DefaultForegroundColor,
+      background: Color(
+        index: EditorColorIndex.currentLineBg,
+        rgb: "#444444".hexToRgb.get))
+  ]
+
+  VividTheme*: ThemeColors = [
+    EditorColorPairIndex.default: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.foreground,
+        rgb: "#ffffff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.background,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.lineNum: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.lineNum,
+        rgb: "#8a8a8a".hexToRgb.get),
+      background:  Color(
+        index: EditorColorIndex.lineNumBg,
+        rgb: TerminalDefaultRgb)),
+    EditorColorPairIndex.currentLineNum: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.currentLineNum,
+        rgb: "#ff0087".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.currentLineNumBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.statusLineNormalMode: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineNormalMode,
+        rgb: "#000000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineNormalModeBg,
+        rgb: "#ff0087".hexToRgb.get)),
+    EditorColorPairIndex.statusLineModeNormalMode: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineModeNormalMode,
+        rgb: "#000000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineModeNormalModeBg,
+        rgb: "#ffffff".hexToRgb.get)),
+    EditorColorPairIndex.statusLineNormalModeInactive: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineNormalModeInactive,
+        rgb: "#ff0087".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineNormalModeInactiveBg,
+        rgb: "#ffffff".hexToRgb.get)),
+
+    EditorColorPairIndex.statusLineInsertMode: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineInsertMode,
+        rgb: "#000000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineInsertModeBg,
+        rgb: "#ff0087".hexToRgb.get)),
+    EditorColorPairIndex.statusLineModeInsertMode: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineModeInsertMode,
+        rgb: "#000000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineModeInsertModeBg,
+        rgb: "#ffffff".hexToRgb.get)),
+    EditorColorPairIndex.statusLineInsertModeInactive: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineInsertModeInactive,
+        rgb: "#ff0087".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineInsertModeInactiveBg,
+        rgb: "#ffffff".hexToRgb.get)),
+
+    EditorColorPairIndex.statusLineVisualMode: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineVisualMode,
+        rgb: "#000000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineVisualModeBg,
+        rgb: "#ff0087".hexToRgb.get)),
+    EditorColorPairIndex.statusLineModeVisualMode: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineModeVisualMode,
+        rgb: "#000000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineModeVisualModeBg,
+        rgb: "#ffffff".hexToRgb.get)),
+    EditorColorPairIndex.statusLineVisualModeInactive: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineVisualModeInactive,
+        rgb: "#ff0087".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineVisualModeInactiveBg,
+        rgb: "#ffffff".hexToRgb.get)),
+
+    EditorColorPairIndex.statusLineReplaceMode: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineReplaceMode,
+        rgb: "#000000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineReplaceModeBg,
+        rgb: "#ff0087".hexToRgb.get)),
+    EditorColorPairIndex.statusLineModeReplaceMode: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineModeReplaceMode,
+        rgb: "#000000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineModeReplaceModeBg,
+        rgb: "#ffffff".hexToRgb.get)),
+    EditorColorPairIndex.statusLineReplaceModeInactive: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineReplaceModeInactive,
+        rgb: "#ff0087".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineReplaceModeInactiveBg,
+        rgb: "#ffffff".hexToRgb.get)),
+
+    EditorColorPairIndex.statusLineFilerMode: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineReplaceModeInactive,
+        rgb: "#000000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineReplaceModeInactiveBg,
+        rgb: "#ff0087".hexToRgb.get)),
+    EditorColorPairIndex.statusLineModeFilerMode: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineModeFilerMode,
+        rgb: "#000000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineModeFilerModeBg,
+        rgb: "#ffffff".hexToRgb.get)),
+    EditorColorPairIndex.statusLineFilerModeInactive: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineFilerModeInactive,
+        rgb: "#ff0087".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineFilerModeInactiveBg,
+        rgb: "#ffffff".hexToRgb.get)),
+
+    EditorColorPairIndex.statusLineExMode: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineExMode,
+        rgb: "#000000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineExModeBg,
+        rgb: "#ff0087".hexToRgb.get)),
+    EditorColorPairIndex.statusLineModeExMode: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineModeExMode,
+        rgb: "#000000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineModeExModeBg,
+        rgb: "#ffffff".hexToRgb.get)),
+    EditorColorPairIndex.statusLineExModeInactive: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineExModeInactive,
+        rgb: "#ff0087".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineExModeInactiveBg,
+        rgb: "#ffffff".hexToRgb.get)),
+
+    EditorColorPairIndex.statusLineGitBranch: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineGitBranch,
+        rgb: "#ff0087".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineGitBranchBg,
+        rgb: "#000000".hexToRgb.get)),
+
+    # Tab line
+    EditorColorPairIndex.tab: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.tab,
+        rgb: "#ffffff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.tabBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.currentTab: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.currentTab,
+        rgb: "#000000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.currentTabBg,
+        rgb: "#ff0087".hexToRgb.get)),
+
+    # Command line
+    # TODO: Rename to commandLine
+    EditorColorPairIndex.commandBar: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.commandBar,
+        rgb: "#ffffff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.commandBarBg,
+        rgb: TerminalDefaultRgb)),
+
+    # Error message
+    EditorColorPairIndex.errorMessage: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.errorMessage,
+        rgb: "#ff0000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.errorMessageBg,
+        rgb: TerminalDefaultRgb)),
+
+    # Search result highlighting
+    EditorColorPairIndex.searchResult: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.searchResult,
+        rgb: "#ffffff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.searchResultBg,
+        rgb: "#ff0087".hexToRgb.get)),
+
+    # Selected area in Visual mode
+    EditorColorPairIndex.visualMode: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.visualMode,
+        rgb: "#ffffff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.visualModeBg,
+        rgb: "#ff0087".hexToRgb.get)),
+
+    # Color scheme
+    EditorColorPairIndex.keyword: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.keyword,
+        rgb: "#ff0087".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.keywordBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.functionName: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.functionName,
+        rgb: "#ffd700".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.functionNameBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.typeName: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.typeName,
+        rgb: "#ffd700".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.typeNameBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.boolean: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.boolean,
+        rgb: "#ffff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.booleanBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.specialVar: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.specialVar,
+        rgb: "#008000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.specialVarBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.builtin: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.builtin,
+        rgb: "#00ffff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.builtinBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.stringLit: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.stringLit,
+        rgb: "#ff0087".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.stringLitBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.binNumber: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.binNumber,
+        rgb: "#00ffff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.binNumberBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.decNumber: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.decNumber,
+        rgb: "#00ffff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.decNumber,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.floatNumber: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.floatNumber,
+        rgb: "#00ffff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.floatNumberBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.hexNumber: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.hexNumber,
+        rgb: "#00ffff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.hexNumberBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.octNumber: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.octNumber,
+        rgb: "#00ffff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.octNumber,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.comment: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.comment,
+        rgb: "#808080".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.commentBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.longComment: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.longComment,
+        rgb: "#808080".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.longComment,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.whitespace: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.whitespace,
+        rgb: "#808080".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.whitespaceBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.preprocessor: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.preprocessor,
+        rgb: "#808080".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.preprocessorBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.pragma: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.pragma,
+        rgb: "#ffff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.pragmaBg,
+        rgb: TerminalDefaultRgb)),
+
+    # filer mode
+    EditorColorPairIndex.currentFile: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.currentFile,
+        rgb: "#ffffff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.currentFileBg,
+        rgb: "#ff0087".hexToRgb.get)),
+
+    EditorColorPairIndex.file: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.file,
+        rgb: "#ffffff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.fileBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.dir: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.dir,
+        rgb: "#ff0087".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.fileBg,
+        rgb: TerminalDefaultRgb)),
+
+    EditorColorPairIndex.pcLink: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.pcLink,
+        rgb: "#00ffff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.pcLinkBg,
+        rgb: TerminalDefaultRgb)),
+
+    # Pop up window
+    EditorColorPairIndex.popupWindow: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.popupWindow,
+        rgb: "#ffffff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.popupWindowBg,
+        rgb: "#000000".hexToRgb.get)),
+    EditorColorPairIndex.popupWinCurrentLine: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.popupWinCurrentLine,
+        rgb: "#ff0087".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.popupWinCurrentLineBg,
+        rgb: "#000000".hexToRgb.get)),
+
+    # Replace text highlighting
+    EditorColorPairIndex.replaceText: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.replaceText,
+        rgb: "#000000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.replaceTextBg,
+        rgb: "#ff0087".hexToRgb.get)),
+
+    # Pair of paren highlighting
+    # TODO: Rename to parenPair?
+    EditorColorPairIndex.parenText: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.parenText,
+        rgb: "#000000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.parenTextBg,
+        rgb: "#808080".hexToRgb.get)),
+
+    # highlight other uses current word
+    EditorColorPairIndex.currentWord: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.currentWord,
+        rgb: "#000000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.currentWordBg,
+        rgb: "#808080".hexToRgb.get)),
+
+    # highlight full width space
+    EditorColorPairIndex.highlightFullWidthSpace: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.highlightFullWidthSpace,
+        rgb: "#ff0000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.highlightFullWidthSpaceBg,
+        rgb: "#ff0000".hexToRgb.get)),
+
+    # highlight trailing spaces
+    EditorColorPairIndex.highlightTrailingSpaces: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.highlightTrailingSpaces,
+        rgb: "#ff0000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.highlightTrailingSpacesBg,
+        rgb: "#ff0000".hexToRgb.get)),
+
+    # highlight reserved words
+    EditorColorPairIndex.reservedWord: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.reservedWord,
+        rgb: "#ff0087".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.reservedWordBg,
+        rgb: "#000000".hexToRgb.get)),
+
+    # Backup manager
+    # TODO: Rename to BackupManagerCurrentLine?
+    EditorColorPairIndex.currentBackup: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.currentBackup,
+        rgb: "#ffffff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.currentBackupBg,
+        rgb: "#ff0087".hexToRgb.get)),
+
+    # Diff viewer
+    # TODO: Ranme to diffViewerAddedLine?
+    EditorColorPairIndex.addedLine: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.addedLine,
+        rgb: "#008000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.addedLineBg,
+        rgb: TerminalDefaultRgb)),
+
+    # TODO: Ranme to diffViewerDeletedLine ?
+    EditorColorPairIndex.deletedLine: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.deletedLine,
+        rgb: "#ff0000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.deletedLineBg,
+        rgb: TerminalDefaultRgb)),
+
+    # Configuration mode
+    # TODO: Ranme to ConfiModeCurrentLine?
+    EditorColorPairIndex.currentSetting: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.currentSetting,
+        rgb: "#ffffff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.currentSettingBg,
+        rgb: "#ff0087".hexToRgb.get)),
+
+    EditorColorPairIndex.currentLineBg: ColorPair(
+      # Don't use the foreground.
+      foreground: DefaultForegroundColor,
+      background: Color(
+        index: EditorColorIndex.currentLineBg,
+        rgb: "#444444".hexToRgb.get))
+  ]
 
 var
   ColorThemeTable*: array[ColorTheme, ThemeColors] = [
     dark: DarkTheme,
-    # TODO: Fix light theme
-    light: DarkTheme,
-    # TODO: Fix vivid theme
-    vivid: DarkTheme,
+    light: LightTheme,
+    vivid: VividTheme,
     config: DarkTheme,
     vscode: DarkTheme
   ]
