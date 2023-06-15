@@ -428,17 +428,13 @@ proc initEditorSettings*(): EditorSettings =
   result.git = initGitSettings()
   result.syntaxChecker = initSyntaxCheckerSettings()
 
-proc getTheme(theme: string): ColorTheme =
-  # TODO: Return the Result type.
-
+proc toColorTheme(theme: string): Result[ColorTheme, string] =
   case theme:
-    of "vivid": ColorTheme.vivid
-    of "light": ColorTheme.light
-    of "config": ColorTheme.config
-    of "vscode": ColorTheme.vscode
-    else:
-      # TODO: Return an error
-      return ColorTheme.dark
+    of "vivid": Result[ColorTheme, string].ok ColorTheme.vivid
+    of "light": Result[ColorTheme, string].ok ColorTheme.light
+    of "config": Result[ColorTheme, string].ok ColorTheme.config
+    of "vscode": Result[ColorTheme, string].ok ColorTheme.vscode
+    else: Result[ColorTheme, string].err fmt"Invalid value {theme}"
 
 proc colorFromNode(node: JsonNode): Rgb =
   if node == nil:
@@ -1028,7 +1024,7 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
 
     if settings["Standard"].contains("theme"):
       let themeString = settings["Standard"]["theme"].getStr()
-      result.editorColorTheme = getTheme(themeString)
+      result.editorColorTheme = themeString.toColorTheme.get
 
     if settings["Standard"].contains("number"):
       result.view.lineNumber = settings["Standard"]["number"].getBool()
