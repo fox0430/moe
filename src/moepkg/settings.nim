@@ -19,7 +19,7 @@
 
 import std/[os, json, macros, options, strformat, osproc, strutils]
 import pkg/[parsetoml, results]
-import ui, color, unicodeext, highlight, platform, independentutils
+import ui, color, unicodeext, highlight, platform, independentutils, rgb
 
 export TomlError
 

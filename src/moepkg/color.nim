@@ -17,22 +17,25 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, tables, macros, strformat]
 import pkg/results
-import ui
+import rgb, ui
 
 type
-  # 0 ~ 255
-  # -1 is the terminal default color.
-  Rgb* = object
-    red*, green*, blue*: int16
-
-  RgbPair* = object
-    foreground*, background*: Rgb
-
   ColorLayer* {.pure.} = enum
     foreground
     background
+
+  # 8 for the terminal.
+  Color8* {.pure.} =  enum
+    default             = -1   # The terminal default
+    black               = 0    ## hex: #000000
+    maroon              = 1    ## hex: #800000
+    green               = 2    ## hex: #008000
+    olive               = 3    ## hex: #808000
+    navy                = 4    ## hex: #000080
+    purple              = 5    ## hex: #800080
+    teal                = 6    ## hex: #008080
+    silver              = 7    ## hex: #c0c0c0
 
   # 16 for the terminal.
   Color16* {.pure.} =  enum
@@ -42,7 +45,7 @@ type
     green               = 2    ## hex: #008000
     olive               = 3    ## hex: #808000
     navy                = 4    ## hex: #000080
-    purple1             = 5    ## hex: #800080
+    purple              = 5    ## hex: #800080
     teal                = 6    ## hex: #008080
     silver              = 7    ## hex: #c0c0c0
     gray                = 8    ## hex: #808080
@@ -314,193 +317,6 @@ type
     gray89              = 254  ## hex: #e4e4e4
     gray93              = 255  ## hex: #eeeeee
 
-## Parses a hex color value from a string s.
-## Examples: "#000000", "ff0000"
-proc hexToRgb*(s: string): Result[Rgb, string] =
-  if not (s.len == 6 or (s.len == 7 and s.startsWith('#'))):
-    return Result[Rgb, string].err "Invalid hex color"
-
-  let hexStr =
-    if s.startsWith('#'): s[1 .. 6]
-    else: s
-
-  var rgb: Rgb
-  try:
-    rgb = Rgb(
-      red: fromHex[int16](hexStr[0..1]),
-      green: fromHex[int16](hexStr[2..3]),
-      blue: fromHex[int16](hexStr[4..5]))
-  except CatchableError as e:
-    return Result[Rgb, string].err fmt"Failed to parse hex color: {$e.msg}"
-
-  return Result[Rgb, string].ok rgb
-
-## Converts from the Rgb to a hex color code with `#`.
-## Example: Rgb(red: 0, green: 0, blue: 0) -> "#000000"
-proc toHex*(rgb: Rgb): string {.inline.} =
-  fmt"#{rgb.red.toHex(2)}{rgb.green.toHex(2)}{rgb.blue.toHex(2)}"
-
-## Return true if valid hex color code.
-## '#' is required if `isPrefix` is true.
-## Range: 000000 ~ ffffff
-proc isHexColor*(s: string, isPrefix: bool = true): bool =
-  if (not isPrefix or s.startsWith('#')) and s.len == 7:
-    var
-      r, g, b: int
-    try:
-      r = fromHex[int](s[1..2])
-      g = fromHex[int](s[3..4])
-      b = fromHex[int](s[5..6])
-    except ValueError:
-      return false
-
-    return (r >= 0 and r <= 255) and
-           (g >= 0 and g <= 255) and
-           (b >= 0 and b <= 255)
-
-proc isTermDefaultColor*(rgb: Rgb): bool {.inline.} =
-  rgb == Rgb(red: -1, green: -1, blue: -1)
-
-## Return the inverse color.
-proc inverseColor*(color: Rgb): Rgb =
-  if color.isTermDefaultColor:
-    return color
-
-  result.red = abs(color.red - 255)
-  result.green = abs(color.green - 255)
-  result.blue  = abs(color.blue - 255)
-
-# maps annotations of the enum to a hexToColor table
-# TODO: Rewrite color.mapAnnotationToTable
-macro mapAnnotationToTable(args: varargs[untyped]): untyped =
-  var lines: seq[string]
-  let original = args[0]
-  # read source file at compile time into string
-  # and put all ines in the lines sequence
-  for line in staticRead(original.lineInfoObj.filename).splitLines():
-    lines.add line
-  let typeDef           = original[0][0]
-  let enumTy            = typeDef[2]
-  let tableIdent        = ident"hexToColorTable"
-  let tableReverseIdent = ident"colorToHexTable"
-  let tableRGBIdent     = ident"colorToRGBTable"
-
-  # create filling lines for the hexToColor table
-  var fillTable: NimNode = quote do: discard
-  for child in enumTy:
-    if child.kind != nnkEnumFieldDef:
-      continue
-    let line = lines[child.lineInfoObj.line-1].strip()
-    # check for annotations
-    if "##" notin line:
-      continue
-
-    let hexCode = line[line.len()-6..line.len()-1]
-    let red     = parseHexInt(hexCode[0..1])
-    let green   = parseHexInt(hexCode[2..3])
-    let blue    = parseHexInt(hexCode[4..5])
-    if hexCode.len() == 6:
-      let intLit = child[1]
-      fillTable = quote do:
-        `fillTable`
-        `tableIdent`[`hexCode`]       = `intLit`
-        `tableReverseIdent`[`intLit`] = `hexCode`
-        `tableRGBIdent`[`intLit`]     = (`red`, `green`, `blue`)
-
-  # emit source code
-  return quote do:
-    var `tableIdent`        = initTable[string, int]()
-    var `tableReverseIdent` = initTable[int, string]()
-    var `tableRGBIdent`     = initTable[int, (int, int, int)]()
-    `original`
-    `fillTable`
-
-# Calculates the difference between two rgb colors
-template calcRGBDifference(col1: Rgb, col2: Rgb): int =
-  abs(col1[0] - col2[0]) + abs(col1[1] - col2[1]) + abs(col1[2] - col2[2])
-
-# Converts an rgb value to a color,
-# the closest color is approximated
-# TODO: Rewrite color.rgbToColor
-#proc rgbToColor*(rgb: Rgb): Color =
-#  var closestColor     : Color
-#  var lowestDifference : int    = 100000
-#  for key, value in colorToRGBTable:
-#    let keyRed   = value[0]
-#    let keyGreen = value[1]
-#    let keyBlue  = value[2]
-#    let difference = calcRGBDifference((red, green, blue),
-#                                       (keyRed, keyGreen, keyBlue))
-#    if difference < lowestDifference:
-#      lowestDifference = difference
-#      closestColor     = Color(key)
-#      if difference == 0:
-#        break
-#  return closestColor
-
-# Returns the closest inverse Color for col.
-# TODO: Rewrite color.inverseColor
-#proc inverseColor*(col: Color): Color =
-#  if not colorToHexTable.hasKey(int(col)):
-#    return Color.default
-#
-#  var rgb      = colorToRGBTable[int(col)]
-#  rgb[0] = abs(rgb[0] - 255)
-#  rgb[1] = abs(rgb[1] - 255)
-#  rgb[2] = abs(rgb[2] - 255)
-#  return rgbToColor(rgb[0], rgb[1], rgb[2])
-
-# Make Color col readable on the background.
-# This tries to preserve the color of col as much as
-# possible, but adjusts it when needed for
-# becoming readable on the background.
-# Returns col without changes, if it's already readable.
-# TODO: Rewrite color.readableOnBackground
-#proc readableOnBackground*(col: Color, background: Color): Color =
-#  template incDiff(val1: untyped, val2: untyped) =
-#    if val1 > val2:
-#      let newVal = val1 + (val1 - val2) * 1
-#      if newVal > 255:
-#        val1 = 255
-#      else:
-#        val1 = newVal
-#    elif val1 < val2:
-#      let newVal = val1 - (val2 - val1) * 1
-#      if newVal < 0:
-#        val1 = 0
-#      else:
-#        val1 = newVal
-#
-#  let minDiff = 255
-#
-#  var
-#    rgb1 : (int, int, int)
-#    rgb2 : (int, int, int)
-#  if colorToRGBTable.hasKey(int(col)):
-#    rgb1 = colorToRGBTable[int(col)]
-#  else:
-#    #rgb1 = (128,128,128)
-#    rgb1 = (0, 0, 0)
-#  if colorToRGBTable.hasKey(int(background)):
-#    rgb2 = colorToRGBTable[int(background)]
-#  else:
-#    #rgb2 = (128,128,128)
-#    rgb2 = (0, 0, 0)
-#
-#  var diff = calcRGBDifference((rgb1[0], rgb1[1], rgb1[2]),
-#                               (rgb2[0], rgb2[1], rgb2[2]))
-#  if diff < minDiff:
-#    let missingDiff = minDiff - diff
-#    incDiff(rgb1[0], rgb2[0])
-#    incDiff(rgb1[1], rgb2[1])
-#    incDiff(rgb1[2], rgb2[2])
-#  diff = calcRGBDifference((rgb1[0], rgb1[1], rgb1[2]),
-#                           (rgb2[0], rgb2[1], rgb2[2]))
-#  if diff < minDiff:
-#    return inverseColor(col)
-#  return rgbToColor(rgb1[0], rgb1[1], rgb1[2])
-
-type
   ColorTheme* {.pure.} = enum
     dark
     light
@@ -768,9 +584,302 @@ type
 
   ThemeColors* = array[EditorColorPairIndex, ColorPair]
 
-const
-  TerminalDefaultRgb* = Rgb(red: -1, green: -1, blue: -1)
+## Return the Rgb.
+proc rgb(c: Color8): Rgb =
+  case c:
+    of Color8.default: TerminalDefaultRgb
+    of Color8.black: "#000000".hexToRgb.get
+    of Color8.maroon: "#800000".hexToRgb.get
+    of Color8.green: "#008000".hexToRgb.get
+    of Color8.olive: "#808000".hexToRgb.get
+    of Color8.navy: "#000080".hexToRgb.get
+    of Color8.purple: "#800080".hexToRgb.get
+    of Color8.teal: "#008080".hexToRgb.get
+    of Color8.silver: "#c0c0c0".hexToRgb.get
 
+## Return the Rgb.
+proc rgb(c: Color16): Rgb =
+  case c:
+    of Color16.default: TerminalDefaultRgb
+    of Color16.black: "#000000".hexToRgb.get
+    of Color16.maroon: "#800000".hexToRgb.get
+    of Color16.green: "#008000".hexToRgb.get
+    of Color16.olive: "#808000".hexToRgb.get
+    of Color16.navy: "#000080".hexToRgb.get
+    of Color16.purple: "#800080".hexToRgb.get
+    of Color16.teal: "#008080".hexToRgb.get
+    of Color16.silver: "#c0c0c0".hexToRgb.get
+    of Color16.gray: "#808080".hexToRgb.get
+    of Color16.red: "#ff0000".hexToRgb.get
+    of Color16.lime: "#00ff00".hexToRgb.get
+    of Color16.yellow: "#ffff00".hexToRgb.get
+    of Color16.blue: "#0000ff".hexToRgb.get
+    of Color16.fuchsia: "#ff00ff".hexToRgb.get
+    of Color16.aqua: "#00ffff".hexToRgb.get
+    of Color16.white: "#ffffff".hexToRgb.get
+
+## Return the Rgb.
+proc rgb(c: Color256): Rgb =
+  case c:
+    of Color256.default: TerminalDefaultRgb
+    of Color256.black: "#000000".hexToRgb.get
+    of Color256.maroon: "#800000".hexToRgb.get
+    of Color256.green: "#008000".hexToRgb.get
+    of Color256.olive: "#808000".hexToRgb.get
+    of Color256.navy: "#000080".hexToRgb.get
+    of Color256.purple1: "#800080".hexToRgb.get
+    of Color256.teal: "#008080".hexToRgb.get
+    of Color256.silver: "#c0c0c0".hexToRgb.get
+    of Color256.gray: "#808080".hexToRgb.get
+    of Color256.red: "#ff0000".hexToRgb.get
+    of Color256.lime: "#00ff00".hexToRgb.get
+    of Color256.yellow: "#ffff00".hexToRgb.get
+    of Color256.blue: "#0000ff".hexToRgb.get
+    of Color256.fuchsia: "#ff00ff".hexToRgb.get
+    of Color256.aqua: "#00ffff".hexToRgb.get
+    of Color256.white: "#ffffff".hexToRgb.get
+    of Color256.gray0: "#000000".hexToRgb.get
+    of Color256.navyBlue: "#00005F".hexToRgb.get
+    of Color256.darkBlue: "#000087".hexToRgb.get
+    of Color256.blue31: "#0000aF".hexToRgb.get
+    of Color256.blue32: "#0000d7".hexToRgb.get
+    of Color256.blue1: "#0000fF".hexToRgb.get
+    of Color256.darkGreen: "#005f00".hexToRgb.get
+    of Color256.deepSkyBlue41: "#005f5F".hexToRgb.get
+    of Color256.deepSkyBlue42: "#005f87".hexToRgb.get
+    of Color256.deepSkyBlue43: "#005faF".hexToRgb.get
+    of Color256.dodgerBlue31: "#005fd7".hexToRgb.get
+    of Color256.dodgerBlue32: "#005ffF".hexToRgb.get
+    of Color256.green4: "#008700".hexToRgb.get
+    of Color256.springGreen4: "#00875F".hexToRgb.get
+    of Color256.turquoise4: "#008787".hexToRgb.get
+    of Color256.deepSkyBlue31: "#0087aF".hexToRgb.get
+    of Color256.deepSkyBlue32: "#0087d7".hexToRgb.get
+    of Color256.dodgerBlue1: "#0087fF".hexToRgb.get
+    of Color256.green31: "#00af00".hexToRgb.get
+    of Color256.springGreen31: "#00af5F".hexToRgb.get
+    of Color256.darkCyan: "#00af87".hexToRgb.get
+    of Color256.lightSeaGreen: "#00afaF".hexToRgb.get
+    of Color256.deepSkyBlue2: "#00afd7".hexToRgb.get
+    of Color256.deepSkyBlue1: "#00affF".hexToRgb.get
+    of Color256.green32: "#00d700".hexToRgb.get
+    of Color256.springGreen33: "#00d75F".hexToRgb.get
+    of Color256.springGreen21: "#00d787".hexToRgb.get
+    of Color256.cyan3: "#00d7aF".hexToRgb.get
+    of Color256.darkTurquoise: "#00d7dF".hexToRgb.get
+    of Color256.turquoise2: "#00d7fF".hexToRgb.get
+    of Color256.green1: "#00ff00".hexToRgb.get
+    of Color256.springGreen22: "#00ff5F".hexToRgb.get
+    of Color256.springGreen1: "#00ff87".hexToRgb.get
+    of Color256.mediumSpringGreen: "#00ffaF".hexToRgb.get
+    of Color256.cyan2: "#00ffd7".hexToRgb.get
+    of Color256.cyan1: "#00fffF".hexToRgb.get
+    of Color256.darkRed1: "#5f0000".hexToRgb.get
+    of Color256.deepPink41: "#5f005F".hexToRgb.get
+    of Color256.purple41: "#5f0087".hexToRgb.get
+    of Color256.purple42: "#5f00aF".hexToRgb.get
+    of Color256.purple3: "#5f00dF".hexToRgb.get
+    of Color256.blueViolet: "#5f00fF".hexToRgb.get
+    of Color256.orange41: "#5f5f00".hexToRgb.get
+    of Color256.gray37: "#5f5f5F".hexToRgb.get
+    of Color256.mediumPurple4: "#5f5f87".hexToRgb.get
+    of Color256.slateBlue31: "#5f5faF".hexToRgb.get
+    of Color256.slateBlue32: "#5f5fd7".hexToRgb.get
+    of Color256.royalBlue1: "#5f5ffF".hexToRgb.get
+    of Color256.chartreuse4: "#5f8700".hexToRgb.get
+    of Color256.darkSeaGreen41: "#5f875F".hexToRgb.get
+    of Color256.paleTurquoise4: "#5f8787".hexToRgb.get
+    of Color256.steelBlue: "#5f87aF".hexToRgb.get
+    of Color256.steelBlue3: "#5f87d7".hexToRgb.get
+    of Color256.cornflowerBlue: "#5f87fF".hexToRgb.get
+    of Color256.chartreuse31: "#5faf00".hexToRgb.get
+    of Color256.darkSeaGreen42: "#5faf5F".hexToRgb.get
+    of Color256.cadetBlue1: "#5faf87".hexToRgb.get
+    of Color256.cadetBlue2: "#5fafaF".hexToRgb.get
+    of Color256.skyBlue3: "#5fafd7".hexToRgb.get
+    of Color256.steelBlue11: "#5faffF".hexToRgb.get
+    of Color256.chartreuse32: "#5fd000".hexToRgb.get
+    of Color256.paleGreen31: "#5fd75F".hexToRgb.get
+    of Color256.seaGreen3: "#5fd787".hexToRgb.get
+    of Color256.aquamarine3: "#5fd7aF".hexToRgb.get
+    of Color256.mediumTurquoise: "#5fd7d7".hexToRgb.get
+    of Color256.steelBlue12: "#5fd7fF".hexToRgb.get
+    of Color256.chartreuse21: "#5fff00".hexToRgb.get
+    of Color256.seaGreen2: "#5fff5F".hexToRgb.get
+    of Color256.seaGreen11: "#5fff87".hexToRgb.get
+    of Color256.seaGreen12: "#5fffaF".hexToRgb.get
+    of Color256.aquamarine11: "#5fffd7".hexToRgb.get
+    of Color256.darkSlateGray2: "#5ffffF".hexToRgb.get
+    of Color256.darkRed2: "#870000".hexToRgb.get
+    of Color256.deepPink42: "#87005F".hexToRgb.get
+    of Color256.darkMagenta1: "#870087".hexToRgb.get
+    of Color256.darkMagenta2: "#8700aF".hexToRgb.get
+    of Color256.darkViolet1: "#8700d7".hexToRgb.get
+    of Color256.purple2: "#8700fF".hexToRgb.get
+    of Color256.orange42: "#875f00".hexToRgb.get
+    of Color256.lightPink4: "#875f5F".hexToRgb.get
+    of Color256.plum4: "#875f87".hexToRgb.get
+    of Color256.mediumPurple31: "#875faF".hexToRgb.get
+    of Color256.mediumPurple32: "#875fd7".hexToRgb.get
+    of Color256.slateBlue1: "#875ffF".hexToRgb.get
+    of Color256.yellow41: "#878700".hexToRgb.get
+    of Color256.wheat4: "#87875F".hexToRgb.get
+    of Color256.gray53: "#878787".hexToRgb.get
+    of Color256.lightSlategray: "#8787aF".hexToRgb.get
+    of Color256.mediumPurple: "#8787d7".hexToRgb.get
+    of Color256.lightSlateBlue: "#8787fF".hexToRgb.get
+    of Color256.yellow42: "#87af00".hexToRgb.get
+    of Color256.Wheat4: "#87af5F".hexToRgb.get
+    of Color256.darkSeaGreen: "#87af87".hexToRgb.get
+    of Color256.lightSkyBlue31: "#87afaF".hexToRgb.get
+    of Color256.lightSkyBlue32: "#87afd7".hexToRgb.get
+    of Color256.skyBlue2: "#87affF".hexToRgb.get
+    of Color256.chartreuse22: "#87d700".hexToRgb.get
+    of Color256.darkOliveGreen31: "#87d75F".hexToRgb.get
+    of Color256.paleGreen32: "#87d787".hexToRgb.get
+    of Color256.darkSeaGreen31: "#87d7aF".hexToRgb.get
+    of Color256.darkSlateGray3: "#87d7d7".hexToRgb.get
+    of Color256.skyBlue1: "#87d7fF".hexToRgb.get
+    of Color256.chartreuse1: "#87ff00".hexToRgb.get
+    of Color256.lightGreen1: "#87ff5F".hexToRgb.get
+    of Color256.lightGreen2: "#87ff87".hexToRgb.get
+    of Color256.paleGreen11: "#87ffaF".hexToRgb.get
+    of Color256.aquamarine12: "#87ffd7".hexToRgb.get
+    of Color256.darkSlateGray1: "#87fffF".hexToRgb.get
+    of Color256.red31: "#af0000".hexToRgb.get
+    of Color256.deepPink4: "#af005F".hexToRgb.get
+    of Color256.mediumVioletRed: "#af0087".hexToRgb.get
+    of Color256.magenta3: "#af00aF".hexToRgb.get
+    of Color256.darkViolet2: "#af00d7".hexToRgb.get
+    of Color256.purple: "#af00fF".hexToRgb.get
+    of Color256.darkOrange31: "#af5f00".hexToRgb.get
+    of Color256.indianRed1: "#af5f5F".hexToRgb.get
+    of Color256.hotPink31: "#af5f87".hexToRgb.get
+    of Color256.mediumOrchid3: "#af5faF".hexToRgb.get
+    of Color256.mediumOrchid: "#af5fd7".hexToRgb.get
+    of Color256.mediumPurple21: "#af5ffF".hexToRgb.get
+    of Color256.darkGoldenrod: "#af8700".hexToRgb.get
+    of Color256.lightSalmon31: "#af875F".hexToRgb.get
+    of Color256.rosyBrown: "#af8787".hexToRgb.get
+    of Color256.gray63: "#af87aF".hexToRgb.get
+    of Color256.mediumPurple22: "#af87d7".hexToRgb.get
+    of Color256.mediumPurple1: "#af87fF".hexToRgb.get
+    of Color256.gold31: "#afaf00".hexToRgb.get
+    of Color256.darkKhaki: "#afaf5F".hexToRgb.get
+    of Color256.navajoWhite3: "#afaf87".hexToRgb.get
+    of Color256.gray69: "#afafaF".hexToRgb.get
+    of Color256.lightSteelBlue3: "#afafd7".hexToRgb.get
+    of Color256.lightSteelBlue: "#afaffF".hexToRgb.get
+    of Color256.yellow31: "#afd700".hexToRgb.get
+    of Color256.darkOliveGreen32: "#afd75F".hexToRgb.get
+    of Color256.darkSeaGreen32: "#afd787".hexToRgb.get
+    of Color256.darkSeaGreen21: "#afd7aF".hexToRgb.get
+    of Color256.lightCyan3: "#afafd7".hexToRgb.get
+    of Color256.lightSkyBlue1: "#afd7fF".hexToRgb.get
+    of Color256.greenYellow: "#afff00".hexToRgb.get
+    of Color256.darkOliveGreen2: "#afff5F".hexToRgb.get
+    of Color256.paleGreen12: "#afff87".hexToRgb.get
+    of Color256.darkSeaGreen22: "#afffaF".hexToRgb.get
+    of Color256.darkSeaGreen11: "#afffd7".hexToRgb.get
+    of Color256.paleTurquoise1: "#affffF".hexToRgb.get
+    of Color256.red32: "#d70000".hexToRgb.get
+    of Color256.deepPink31: "#d7005F".hexToRgb.get
+    of Color256.deepPink32: "#d70087".hexToRgb.get
+    of Color256.magenta31: "#d700aF".hexToRgb.get
+    of Color256.magenta32: "#d700d7".hexToRgb.get
+    of Color256.magenta21: "#d700fF".hexToRgb.get
+    of Color256.darkOrange32: "#d75f00".hexToRgb.get
+    of Color256.indianRed2: "#d75f5F".hexToRgb.get
+    of Color256.hotPink32: "#d75f87".hexToRgb.get
+    of Color256.hotPink2: "#d75faF".hexToRgb.get
+    of Color256.orchid: "#d75fd7".hexToRgb.get
+    of Color256.mediumOrchid11: "#d75ffF".hexToRgb.get
+    of Color256.orange3: "#d78700".hexToRgb.get
+    of Color256.lightSalmon32: "#d7875F".hexToRgb.get
+    of Color256.lightPink3: "#d78787".hexToRgb.get
+    of Color256.pink3: "#d787aF".hexToRgb.get
+    of Color256.plum3: "#d787d7".hexToRgb.get
+    of Color256.violet: "#d787fF".hexToRgb.get
+    of Color256.gold32: "#d7af00".hexToRgb.get
+    of Color256.lightGoldenrod3: "#d7af5F".hexToRgb.get
+    of Color256.tan: "#d7af87".hexToRgb.get
+    of Color256.mistyRose3: "#d7afaF".hexToRgb.get
+    of Color256.thistle3: "#d7afd7".hexToRgb.get
+    of Color256.plum2: "#d7affF".hexToRgb.get
+    of Color256.yellow32: "#d7d700".hexToRgb.get
+    of Color256.khaki3: "#d7d75F".hexToRgb.get
+    of Color256.lightGoldenrod2: "#d7d787".hexToRgb.get
+    of Color256.lightYellow3: "#d7d7aF".hexToRgb.get
+    of Color256.gray84: "#d7d7d7".hexToRgb.get
+    of Color256.lightSteelBlue1: "#d7d7fF".hexToRgb.get
+    of Color256.yellow2: "#d7ff00".hexToRgb.get
+    of Color256.darkOliveGreen11: "#d7ff5F".hexToRgb.get
+    of Color256.darkOliveGreen12: "#d7ff87".hexToRgb.get
+    of Color256.darkSeaGreen12: "#d7ffaF".hexToRgb.get
+    of Color256.honeydew2: "#d7ffd7".hexToRgb.get
+    of Color256.lightCyan1: "#d7fffF".hexToRgb.get
+    of Color256.red1: "#ff0000".hexToRgb.get
+    of Color256.deepPink2: "#ff005F".hexToRgb.get
+    of Color256.deepPink11: "#ff0087".hexToRgb.get
+    of Color256.deepPink12: "#ff00aF".hexToRgb.get
+    of Color256.magenta22: "#ff00d7".hexToRgb.get
+    of Color256.magenta1: "#ff00fF".hexToRgb.get
+    of Color256.orangeRed1: "#ff5f00".hexToRgb.get
+    of Color256.indianRed11: "#ff5f5F".hexToRgb.get
+    of Color256.indianRed12: "#ff5f87".hexToRgb.get
+    of Color256.hotPink11: "#ff5faF".hexToRgb.get
+    of Color256.hotPink12: "#ff5fd7".hexToRgb.get
+    of Color256.mediumOrchid12: "#ff5ffF".hexToRgb.get
+    of Color256.darkOrange: "#ff8700".hexToRgb.get
+    of Color256.salmon1: "#ff875F".hexToRgb.get
+    of Color256.lightCoral: "#ff8787".hexToRgb.get
+    of Color256.paleVioletRed1: "#ff87aF".hexToRgb.get
+    of Color256.orchid2: "#ff87d7".hexToRgb.get
+    of Color256.orchid1: "#ff87fF".hexToRgb.get
+    of Color256.orange1: "#ffaf00".hexToRgb.get
+    of Color256.sandyBrown: "#ffaf5F".hexToRgb.get
+    of Color256.lightSalmon1: "#ffaf87".hexToRgb.get
+    of Color256.lightPink1: "#ffafaF".hexToRgb.get
+    of Color256.pink1: "#ffafd7".hexToRgb.get
+    of Color256.plum1: "#ffaffF".hexToRgb.get
+    of Color256.gold1: "#ffd700".hexToRgb.get
+    of Color256.lightGoldenrod21: "#ffd75F".hexToRgb.get
+    of Color256.lightGoldenrod22: "#ffd787".hexToRgb.get
+    of Color256.navajoWhite1: "#ffd7aF".hexToRgb.get
+    of Color256.mistyRose1: "#ffd7d7".hexToRgb.get
+    of Color256.thistle1: "#ffd7fF".hexToRgb.get
+    of Color256.yellow1: "#ffff00".hexToRgb.get
+    of Color256.lightGoldenrod1: "#ffff5F".hexToRgb.get
+    of Color256.khaki1: "#ffff87".hexToRgb.get
+    of Color256.wheat1: "#ffffaF".hexToRgb.get
+    of Color256.cornsilk1: "#ffffd7".hexToRgb.get
+    of Color256.gray100: "#fffffF".hexToRgb.get
+    of Color256.gray3: "#080808".hexToRgb.get
+    of Color256.gray7: "#121212".hexToRgb.get
+    of Color256.gray11: "#1c1c1C".hexToRgb.get
+    of Color256.gray15: "#262626".hexToRgb.get
+    of Color256.gray19: "#303030".hexToRgb.get
+    of Color256.gray23: "#3a3a3A".hexToRgb.get
+    of Color256.gray27: "#444444".hexToRgb.get
+    of Color256.gray30: "#4e4e4E".hexToRgb.get
+    of Color256.gray35: "#585858".hexToRgb.get
+    of Color256.gray39: "#626262".hexToRgb.get
+    of Color256.gray42: "#6c6c6C".hexToRgb.get
+    of Color256.gray46: "#767676".hexToRgb.get
+    of Color256.gray50: "#808080".hexToRgb.get
+    of Color256.gray54: "#8a8a8A".hexToRgb.get
+    of Color256.gray58: "#949494".hexToRgb.get
+    of Color256.gray62: "#9e9e9E".hexToRgb.get
+    of Color256.gray66: "#a8a8a8".hexToRgb.get
+    of Color256.gray70: "#b2b2b2".hexToRgb.get
+    of Color256.gray74: "#bcbcbC".hexToRgb.get
+    of Color256.gray78: "#c6c6c6".hexToRgb.get
+    of Color256.gray82: "#d0d0d0".hexToRgb.get
+    of Color256.gray85: "#dadadA".hexToRgb.get
+    of Color256.gray89: "#e4e4e4".hexToRgb.get
+    of Color256.gray93: "#eeeeeE".hexToRgb.get
+
+const
   ## Default terminal colors.
   DefaultForegroundColor* = Color(
     index: termDefaultForeground,
@@ -2304,6 +2413,19 @@ var
     vscode: DarkTheme
   ]
 
+# Converts an rgb value to a color,
+# the closest color is approximated
+proc rgbToColor256*(orignRgb: Rgb): Color256 =
+  var lowestDifference = 100000
+
+  for name in Color256:
+    let difference = calcRGBDifference(orignRgb, name.rgb)
+    if difference < lowestDifference:
+      lowestDifference = difference
+      result = name
+      if difference == 0:
+        break
+
 proc isTermDefaultColor*(i: EditorColorIndex): bool {.inline.} =
   i == termDefaultForeground or i == termDefaultBackground
 
@@ -2381,113 +2503,5 @@ proc setBackgroundRgb*(
   pairIndex: EditorColorPairIndex,
   rgb: Rgb) {.inline.} = ColorThemeTable[theme][pairIndex].background.rgb = rgb
 
-# Environment where only 8 colors can be used
-# TODO: Rewrite or remove color.convertToConsoleEnvironmentColor
-#proc convertToConsoleEnvironmentColor*(theme: ColorTheme) =
-#  proc isDefault(color: Color): bool {.inline.} = color == DefaultColor
-#
-#  proc isBlack(color: Color): bool =
-#    case color:
-#      of black, gray3, gray7, gray11, gray15, gray19, gray23, gray27, gray30,
-#         gray35, gray39, gray42, gray46, gray50, gray54, gray58, gray62, gray66,
-#         gray70, gray74, gray78: true
-#      else: false
-#
-#  # is maroon (red)
-#  proc isMaroon(color: Color): bool =
-#    case color:
-#      of maroon, red, darkRed1, darkRed2, red31, mediumVioletRed,
-#         indianRed1, red32, indianRed2, red1, orangeRed1, indianRed11,
-#         indianRed12, paleVioletRed1, deepPink41, deepPink42, deepPink4,
-#         magenta3: true
-#      else: false
-#
-#  proc isGreen(color: Color): bool =
-#    case color:
-#      of green, darkGreen, green4, springGreen4, green31, springGreen31,
-#         lightSeaGreen, green32, springGreen33, springGreen21, green1,
-#         springGreen22, springGreen1, mediumSpringGreen, darkSeaGreen41,
-#         darkSeaGreen42, paleGreen31, seaGreen3, seaGreen2, seaGreen11,
-#         seaGreen12, darkSeaGreen, darkOliveGreen31, paleGreen32,
-#         darkSeaGreen31, lightGreen1, lightGreen2, paleGreen11,
-#         darkOliveGreen32, darkSeaGreen32, darkSeaGreen21, greenYellow,
-#         darkOliveGreen2, paleGreen12, darkSeaGreen22, darkSeaGreen11,
-#         darkOliveGreen11, darkOliveGreen12, darkSeaGreen12,
-#         lime, orange41, chartreuse4, paleTurquoise4, chartreuse31,
-#         chartreuse32, chartreuse21, Wheat4, chartreuse22, chartreuse1,
-#         darkGoldenrod, lightSalmon31, rosyBrown, gold31, darkKhaki,
-#         navajoWhite3: true
-#      else: false
-#
-#  # is olive (yellow)
-#  proc isOlive(color: Color): bool =
-#    case color:
-#      of olive,
-#         yellow, yellow41, yellow42, yellow31, yellow32, lightYellow3,
-#         yellow2, yellow1, orange42, lightPink4, plum4, wheat4, darkOrange31,
-#         darkOrange32, orange3, lightSalmon32, gold32, lightGoldenrod3, tan,
-#         mistyRose3, khaki3, lightGoldenrod2, darkOrange, salmon1, orange1,
-#         sandyBrown, lightSalmon1, gold1, lightGoldenrod21, lightGoldenrod22,
-#         navajoWhite1, lightGoldenrod1, khaki1, wheat1, cornsilk1: true
-#      else: false
-#
-#  # is navy (blue)
-#  proc isNavy(color: Color): bool =
-#    case color:
-#      of navy,
-#         blue, navyBlue, darkBlue, blue31, blue32, blue1, deepSkyBlue41,
-#         deepSkyBlue42, deepSkyBlue43, dodgerBlue31, dodgerBlue32,
-#         deepSkyBlue31, deepSkyBlue32, dodgerBlue1, deepSkyBlue2,
-#         deepSkyBlue1, blueViolet, slateBlue31, slateBlue32, royalBlue1,
-#         steelBlue, steelBlue3, cornflowerBlue, cadetBlue1, cadetBlue2,
-#         skyBlue3, steelBlue11, steelBlue12, slateBlue1, lightSlateBlue,
-#         lightSkyBlue31, lightSkyBlue32, skyBlue2, skyBlue1,
-#         lightSteelBlue3, lightSteelBlue, lightSkyBlue1, lightSteelBlue1,
-#         aqua, darkTurquoise, turquoise2, aquamarine11: true
-#      else: false
-#
-#  proc isPurple(color: Color): bool =
-#    case color:
-#      of purple1,
-#         purple41, purple42, purple3, mediumPurple4, purple2,
-#         mediumPurple31, mediumPurple32, mediumPurple, purple,
-#         mediumPurple21, mediumPurple22, mediumPurple1, fuchsia,
-#         darkMagenta1, darkMagenta2, darkViolet1, darkViolet2, hotPink31,
-#         mediumOrchid3, mediumOrchid, deepPink31, deepPink32, magenta31,
-#         magenta32, magenta21, hotPink32, hotPink2, orchid, mediumOrchid11,
-#         lightPink3, pink3, plum3, violet, thistle3, plum2, deepPink2,
-#         deepPink11, deepPink12, magenta22, magenta1, hotPink11,
-#         hotPink12, mediumOrchid12, lightCoral, orchid2, orchid1, lightPink1,
-#         pink1, plum1, mistyRose1, thistle1: true
-#      else: false
-#
-#  # is teal (cyan)
-#  proc isTeal(color: Color): bool =
-#    case color:
-#      of teal, darkCyan, cyan3, cyan2, cyan1, lightCyan3, lightCyan1,
-#         turquoise4, turquoise2, aquamarine3, mediumTurquoise, aquamarine12,
-#         paleTurquoise1, honeydew2: true
-#      else: false
-#
-#  for name, color in ColorThemeTable[theme].fieldPairs:
-#    if isDefault(color):
-#      setColor(theme, name, Color.default)
-#    elif isBlack(color):
-#      setColor(theme, name, Color.black)
-#    elif isMaroon(color):
-#      setColor(theme, name, Color.maroon)
-#    elif isGreen(color):
-#      setColor(theme, name, Color.green)
-#    elif isOlive(color):
-#      setColor(theme, name, Color.olive)
-#    elif isNavy(color):
-#      setColor(theme, name, Color.navy)
-#    elif isPurple(color):
-#      setColor(theme, name, Color.purple1)
-#    elif isTeal(color):
-#      setColor(theme, name, Color.teal)
-#    else:
-#      # is silver (white)
-#      setColor(theme, name, Color.silver)
-#
-#    setCursesColor(ColorThemeTable[theme])
+# Donwgrade colors to 256, 16, 8.
+proc downgrade*(theme: ColorTheme) = discard
