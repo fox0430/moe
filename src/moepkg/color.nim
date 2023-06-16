@@ -25,6 +25,12 @@ type
     foreground
     background
 
+  ColorMode* {.pure.} = enum
+    c8 = 8
+    c16 = 16
+    c256 = 256
+    c24bit = 16777216
+
   # 8 for the terminal.
   Color8* {.pure.} =  enum
     default             = -1   # The terminal default
@@ -2413,9 +2419,98 @@ var
     vscode: DarkTheme
   ]
 
-# Converts an rgb value to a color,
-# the closest color is approximated
+proc isTermDefaultColor*(i: EditorColorIndex): bool {.inline.} =
+  i == termDefaultForeground or i == termDefaultBackground
+
+proc foregroundRgb*(
+  theme: ColorTheme,
+  pairIndex: EditorColorPairIndex): Rgb {.inline.} =
+
+    ColorThemeTable[theme][pairIndex].foreground.rgb
+
+proc backgroundRgb*(
+  theme: ColorTheme,
+  pairIndex: EditorColorPairIndex): Rgb {.inline.} =
+
+    ColorThemeTable[theme][pairIndex].background.rgb
+
+## Return a RGB pair from ColorThemeTable.
+proc rgbPairFromEditorColorPair*(
+  theme: ColorTheme,
+  pairIndex: EditorColorPairIndex): RgbPair =
+
+    return RgbPair(
+      foreground: ColorThemeTable[theme][pairIndex].foreground.rgb,
+      background: ColorThemeTable[theme][pairIndex].background.rgb)
+
+## Return true if `s` exists in `EditorColorPairIndex`.
+proc isEditorColorPairIndex*(s: string): bool =
+  for i in EditorColorPairIndex:
+    if $i == s: return true
+
+## Set a EditorColorIndex to ColorThemeTable.
+proc setBackgroundIndex*(
+  theme: ColorTheme,
+  pairIndex: EditorColorPairIndex,
+  colorIndex: EditorColorIndex | int) {.inline.} =
+
+    ColorThemeTable[theme][pairIndex].background.index = colorIndex
+
+## Set a EditorColorIndex to ColorThemeTable.
+proc setForegroundIndex*(
+  theme: ColorTheme,
+  pairIndex: EditorColorPairIndex,
+  colorIndex: EditorColorIndex | int) {.inline.} =
+
+    ColorThemeTable[theme][pairIndex].foreground.index = colorIndex
+
+## Set a Rgb to ColorThemeTable.
+proc setForegroundRgb*(
+  theme: ColorTheme,
+  pairIndex: EditorColorPairIndex,
+  rgb: Rgb) {.inline.} = ColorThemeTable[theme][pairIndex].foreground.rgb = rgb
+
+## Set a Rgb to ColorThemeTable.
+proc setBackgroundRgb*(
+  theme: ColorTheme,
+  pairIndex: EditorColorPairIndex,
+  rgb: Rgb) {.inline.} = ColorThemeTable[theme][pairIndex].background.rgb = rgb
+
+## Converts an rgb value to a color,
+## the closest color is approximated
+proc rgbToColor8*(orignRgb: Rgb): Color8 =
+  if orignRgb.isTermDefaultColor: return Color8.default
+
+  var lowestDifference = 100000
+
+  for name in Color8:
+    let difference = calcRGBDifference(orignRgb, name.rgb)
+    if difference < lowestDifference:
+      lowestDifference = difference
+      result = name
+      if difference == 0:
+        break
+
+## Converts an rgb value to a color,
+## the closest color is approximated
+proc rgbToColor16*(orignRgb: Rgb): Color16 =
+  if orignRgb.isTermDefaultColor: return Color16.default
+
+  var lowestDifference = 100000
+
+  for name in Color16:
+    let difference = calcRGBDifference(orignRgb, name.rgb)
+    if difference < lowestDifference:
+      lowestDifference = difference
+      result = name
+      if difference == 0:
+        break
+
+## Converts an rgb value to a color,
+## the closest color is approximated
 proc rgbToColor256*(orignRgb: Rgb): Color256 =
+  if orignRgb.isTermDefaultColor: return Color256.default
+
   var lowestDifference = 100000
 
   for name in Color256:
@@ -2426,8 +2521,24 @@ proc rgbToColor256*(orignRgb: Rgb): Color256 =
       if difference == 0:
         break
 
-proc isTermDefaultColor*(i: EditorColorIndex): bool {.inline.} =
-  i == termDefaultForeground or i == termDefaultBackground
+## Donwgrade colors to 256 or 16 or 8.
+## Do nothing if greater than 256.
+proc downgrade*(theme: ColorTheme, mode: ColorMode) =
+  if mode.int > 256: return
+
+  for pairIndex, pair in ColorThemeTable[theme]:
+    case mode:
+      of ColorMode.c8:
+       theme.setForegroundRgb(pairIndex, pair.foreground.rgb.rgbToColor8.rgb)
+       theme.setBackgroundRgb(pairIndex, pair.foreground.rgb.rgbToColor8.rgb)
+      of ColorMode.c16:
+       theme.setForegroundRgb(pairIndex, pair.foreground.rgb.rgbToColor16.rgb)
+       theme.setBackgroundRgb(pairIndex, pair.foreground.rgb.rgbToColor16.rgb)
+      of ColorMode.c256:
+       theme.setForegroundRgb(pairIndex, pair.foreground.rgb.rgbToColor256.rgb)
+       theme.setBackgroundRgb(pairIndex, pair.foreground.rgb.rgbToColor256.rgb)
+      else:
+        discard
 
 ## Init a Rgb definition of Color.
 proc initColor*(c: Color) {.inline.} =
@@ -2464,44 +2575,3 @@ proc initEditrorColor*(theme: ColorTheme) =
     colorPair.background.initColor
 
     pairIndex.initColorPair(colorPair)
-
-proc foregroundRgb*(
-  theme: ColorTheme,
-  pairIndex: EditorColorPairIndex): Rgb {.inline.} =
-
-    ColorThemeTable[theme][pairIndex].foreground.rgb
-
-proc backgroundRgb*(
-  theme: ColorTheme,
-  pairIndex: EditorColorPairIndex): Rgb {.inline.} =
-
-    ColorThemeTable[theme][pairIndex].background.rgb
-
-## Return a RGB pair from ColorThemeTable.
-proc rgbPairFromEditorColorPair*(
-  theme: ColorTheme,
-  pairIndex: EditorColorPairIndex): RgbPair =
-
-    return RgbPair(
-      foreground: ColorThemeTable[theme][pairIndex].foreground.rgb,
-      background: ColorThemeTable[theme][pairIndex].background.rgb)
-
-## Return true if `s` exists in `EditorColorPairIndex`.
-proc isEditorColorPairIndex*(s: string): bool =
-  for i in EditorColorPairIndex:
-    if $i == s: return true
-
-## Set a Rgb to ColorThemeTable.
-proc setForegroundRgb*(
-  theme: ColorTheme,
-  pairIndex: EditorColorPairIndex,
-  rgb: Rgb) {.inline.} = ColorThemeTable[theme][pairIndex].foreground.rgb = rgb
-
-## Set a Rgb to ColorThemeTable.
-proc setBackgroundRgb*(
-  theme: ColorTheme,
-  pairIndex: EditorColorPairIndex,
-  rgb: Rgb) {.inline.} = ColorThemeTable[theme][pairIndex].background.rgb = rgb
-
-# Donwgrade colors to 256, 16, 8.
-proc downgrade*(theme: ColorTheme) = discard

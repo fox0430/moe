@@ -430,8 +430,9 @@ proc initEditorSettings*(): EditorSettings =
 
 proc toColorTheme(theme: string): Result[ColorTheme, string] =
   case theme:
-    of "vivid": Result[ColorTheme, string].ok ColorTheme.vivid
+    of "dark": Result[ColorTheme, string].ok ColorTheme.dark
     of "light": Result[ColorTheme, string].ok ColorTheme.light
+    of "vivid": Result[ColorTheme, string].ok ColorTheme.vivid
     of "config": Result[ColorTheme, string].ok ColorTheme.config
     of "vscode": Result[ColorTheme, string].ok ColorTheme.vscode
     else: Result[ColorTheme, string].err fmt"Invalid value {theme}"
