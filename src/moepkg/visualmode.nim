@@ -512,7 +512,8 @@ proc exitVisualMode(status: var EditorStatus) =
       currentMainWindowNode,
       status.isSearchHighlight,
       status.searchHistory,
-      status.settings)
+      status.settings,
+      status.colorMode)
 
     status.changeMode(Mode.normal)
 

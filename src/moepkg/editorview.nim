@@ -328,6 +328,7 @@ proc writeCurrentLine(
   view: EditorView,
   highlight: Highlight,
   theme: ColorTheme,
+  colorMode: ColorMode,
   runes: Runes,
   currentLineColorPair: var int,
   y, x, i, last: int,
@@ -362,7 +363,7 @@ proc writeCurrentLine(
           else:
             originalColorPair.background
 
-      currentLineColorPair.initColorPair(bufferFg, bufferBg)
+      currentLineColorPair.initColorPair(colorMode, bufferFg, bufferBg)
 
       win.attron(attribute)
       view.write(win, y, x, runes, currentLineColorPair.int16)
@@ -374,7 +375,7 @@ proc writeCurrentLine(
       let
         afterFg = themeColors[EditorColorPairIndex.default].foreground
         afterBg = themeColors[EditorColorPairIndex.currentLineBg].background
-      currentLineColorPair.initColorPair(afterFg, afterBg)
+      currentLineColorPair.initColorPair(colorMode, afterFg, afterBg)
 
       let
         spaces = ru" ".repeat(view.width - view.lines[y].width)
@@ -396,6 +397,7 @@ proc writeAllLines*[T](
   buffer: T,
   highlight: Highlight,
   theme: ColorTheme,
+  colorMode: ColorMode,
   currentLine: int,
   selectedRange: Range,
   currentLineColorPair: var int) =
@@ -449,6 +451,7 @@ proc writeAllLines*[T](
                  view,
                  highlight,
                  theme,
+                 colorMode,
                  ru"",
                  currentLineColorPair,
                  y, x, i, 0,
@@ -506,6 +509,7 @@ proc writeAllLines*[T](
             view,
             highlight,
             theme,
+            colorMode,
             str,
             currentLineColorPair,
             y, x, i, last,
@@ -534,6 +538,7 @@ proc update*[T](
   buffer: T,
   highlight: Highlight,
   theme: ColorTheme,
+  colorMode: ColorMode,
   currentLine: int,
   selectedRange : Range,
   currentLineColorPair: var int) =
@@ -554,6 +559,7 @@ proc update*[T](
       buffer,
       highlight,
       theme,
+      colorMode,
       currentLine,
       selectedRange,
       currentLineColorPair)

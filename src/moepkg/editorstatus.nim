@@ -729,7 +729,8 @@ proc update*(status: var EditorStatus) =
             node,
             status.isSearchHighlight,
             status.searchHistory,
-            settings)
+            settings,
+            status.colorMode)
 
         # TODO: Fix condition. Will use a flag.
         if not bufStatus.isFilerMode:
@@ -765,6 +766,7 @@ proc update*(status: var EditorStatus) =
             buffer,
             highlight,
             settings.editorColorTheme,
+            status.colorMode,
             node.currentLine,
             selectedRange,
             currentLineColorPair)

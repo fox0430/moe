@@ -19,7 +19,7 @@
 
 import std/[options, deques]
 import independentutils, bufferstatus, highlight, color, windownode, gapbuffer,
-       unicodeext, editorview, searchutils, settings, movement
+       unicodeext, editorview, searchutils, settings, movement, ui
 
 proc initBufferPosition(
   n: WindowNode): BufferPosition {.inline.} =
@@ -186,7 +186,8 @@ proc highlightOtherUsesCurrentWord(
   highlight: var Highlight,
   bufStatus: BufferStatus,
   windowNode: WindowNode,
-  theme: ColorTheme) =
+  theme: ColorTheme,
+  colorMode: ColorMode) =
 
     let line = bufStatus.buffer[windowNode.currentLine]
 
@@ -248,6 +249,7 @@ proc highlightOtherUsesCurrentWord(
                   originalEditorColorPairIndex = highlight.getColorPair(i, j)
                   originalColorPair = ColorThemeTable[theme][originalEditorColorPairIndex]
                 EditorColorPairIndex.currentWord.initColorPair(
+                  colorMode,
                   originalColorPair.foreground,
                   ColorThemeTable[theme][EditorColorPairIndex.currentWord].background)
 
@@ -360,13 +362,15 @@ proc updateHighlight*(
   windowNode: var WindowNode,
   isSearchHighlight: bool,
   searchHistory: seq[seq[Rune]],
-  settings: EditorSettings) =
+  settings: EditorSettings,
+  colorMode: ColorMode) =
 
     if settings.highlight.currentWord:
       highlight.highlightOtherUsesCurrentWord(
         bufStatus,
         windowNode,
-        settings.editorColorTheme)
+        settings.editorColorTheme,
+        colorMode)
 
     if isVisualMode(bufStatus.mode):
       highlight.highlightSelectedArea(bufStatus, windowNode.initBufferPosition)

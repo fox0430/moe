@@ -584,882 +584,6 @@ type
 
   ThemeColors* = array[EditorColorPairIndex, ColorPair]
 
-## Return the Rgb.
-proc rgb(c: Color8): Rgb =
-  case c:
-    of Color8.default: TerminalDefaultRgb
-    of Color8.black: "#000000".hexToRgb.get
-    of Color8.maroon: "#800000".hexToRgb.get
-    of Color8.green: "#008000".hexToRgb.get
-    of Color8.olive: "#808000".hexToRgb.get
-    of Color8.navy: "#000080".hexToRgb.get
-    of Color8.purple: "#800080".hexToRgb.get
-    of Color8.teal: "#008080".hexToRgb.get
-    of Color8.silver: "#c0c0c0".hexToRgb.get
-
-## Return the Rgb.
-proc rgb(c: Color16): Rgb =
-  case c:
-    of Color16.default: TerminalDefaultRgb
-    of Color16.black: "#000000".hexToRgb.get
-    of Color16.maroon: "#800000".hexToRgb.get
-    of Color16.green: "#008000".hexToRgb.get
-    of Color16.olive: "#808000".hexToRgb.get
-    of Color16.navy: "#000080".hexToRgb.get
-    of Color16.purple: "#800080".hexToRgb.get
-    of Color16.teal: "#008080".hexToRgb.get
-    of Color16.silver: "#c0c0c0".hexToRgb.get
-    of Color16.gray: "#808080".hexToRgb.get
-    of Color16.red: "#ff0000".hexToRgb.get
-    of Color16.lime: "#00ff00".hexToRgb.get
-    of Color16.yellow: "#ffff00".hexToRgb.get
-    of Color16.blue: "#0000ff".hexToRgb.get
-    of Color16.fuchsia: "#ff00ff".hexToRgb.get
-    of Color16.aqua: "#00ffff".hexToRgb.get
-    of Color16.white: "#ffffff".hexToRgb.get
-
-## Return the Rgb.
-proc rgb(c: Color256): Rgb =
-  case c:
-    of Color256.default: TerminalDefaultRgb
-    of Color256.black: "#000000".hexToRgb.get
-    of Color256.maroon: "#800000".hexToRgb.get
-    of Color256.green: "#008000".hexToRgb.get
-    of Color256.olive: "#808000".hexToRgb.get
-    of Color256.navy: "#000080".hexToRgb.get
-    of Color256.purple1: "#800080".hexToRgb.get
-    of Color256.teal: "#008080".hexToRgb.get
-    of Color256.silver: "#c0c0c0".hexToRgb.get
-    of Color256.gray: "#808080".hexToRgb.get
-    of Color256.red: "#ff0000".hexToRgb.get
-    of Color256.lime: "#00ff00".hexToRgb.get
-    of Color256.yellow: "#ffff00".hexToRgb.get
-    of Color256.blue: "#0000ff".hexToRgb.get
-    of Color256.fuchsia: "#ff00ff".hexToRgb.get
-    of Color256.aqua: "#00ffff".hexToRgb.get
-    of Color256.white: "#ffffff".hexToRgb.get
-    of Color256.gray0: "#000000".hexToRgb.get
-    of Color256.navyBlue: "#00005f".hexToRgb.get
-    of Color256.darkBlue: "#000087".hexToRgb.get
-    of Color256.blue31: "#0000af".hexToRgb.get
-    of Color256.blue32: "#0000d7".hexToRgb.get
-    of Color256.blue1: "#0000ff".hexToRgb.get
-    of Color256.darkGreen: "#005f00".hexToRgb.get
-    of Color256.deepSkyBlue41: "#005f5f".hexToRgb.get
-    of Color256.deepSkyBlue42: "#005f87".hexToRgb.get
-    of Color256.deepSkyBlue43: "#005faf".hexToRgb.get
-    of Color256.dodgerBlue31: "#005fd7".hexToRgb.get
-    of Color256.dodgerBlue32: "#005fff".hexToRgb.get
-    of Color256.green4: "#008700".hexToRgb.get
-    of Color256.springGreen4: "#00875f".hexToRgb.get
-    of Color256.turquoise4: "#008787".hexToRgb.get
-    of Color256.deepSkyBlue31: "#0087af".hexToRgb.get
-    of Color256.deepSkyBlue32: "#0087d7".hexToRgb.get
-    of Color256.dodgerBlue1: "#0087ff".hexToRgb.get
-    of Color256.green31: "#00af00".hexToRgb.get
-    of Color256.springGreen31: "#00af5f".hexToRgb.get
-    of Color256.darkCyan: "#00af87".hexToRgb.get
-    of Color256.lightSeaGreen: "#00afaf".hexToRgb.get
-    of Color256.deepSkyBlue2: "#00afd7".hexToRgb.get
-    of Color256.deepSkyBlue1: "#00afff".hexToRgb.get
-    of Color256.green32: "#00d700".hexToRgb.get
-    of Color256.springGreen33: "#00d75f".hexToRgb.get
-    of Color256.springGreen21: "#00d787".hexToRgb.get
-    of Color256.cyan3: "#00d7af".hexToRgb.get
-    of Color256.darkTurquoise: "#00d7df".hexToRgb.get
-    of Color256.turquoise2: "#00d7ff".hexToRgb.get
-    of Color256.green1: "#00ff00".hexToRgb.get
-    of Color256.springGreen22: "#00ff5f".hexToRgb.get
-    of Color256.springGreen1: "#00ff87".hexToRgb.get
-    of Color256.mediumSpringGreen: "#00ffaf".hexToRgb.get
-    of Color256.cyan2: "#00ffd7".hexToRgb.get
-    of Color256.cyan1: "#00ffff".hexToRgb.get
-    of Color256.darkRed1: "#5f0000".hexToRgb.get
-    of Color256.deepPink41: "#5f005f".hexToRgb.get
-    of Color256.purple41: "#5f0087".hexToRgb.get
-    of Color256.purple42: "#5f00af".hexToRgb.get
-    of Color256.purple3: "#5f00df".hexToRgb.get
-    of Color256.blueViolet: "#5f00ff".hexToRgb.get
-    of Color256.orange41: "#5f5f00".hexToRgb.get
-    of Color256.gray37: "#5f5f5f".hexToRgb.get
-    of Color256.mediumPurple4: "#5f5f87".hexToRgb.get
-    of Color256.slateBlue31: "#5f5faf".hexToRgb.get
-    of Color256.slateBlue32: "#5f5fd7".hexToRgb.get
-    of Color256.royalBlue1: "#5f5fff".hexToRgb.get
-    of Color256.chartreuse4: "#5f8700".hexToRgb.get
-    of Color256.darkSeaGreen41: "#5f875f".hexToRgb.get
-    of Color256.paleTurquoise4: "#5f8787".hexToRgb.get
-    of Color256.steelBlue: "#5f87af".hexToRgb.get
-    of Color256.steelBlue3: "#5f87d7".hexToRgb.get
-    of Color256.cornflowerBlue: "#5f87ff".hexToRgb.get
-    of Color256.chartreuse31: "#5faf00".hexToRgb.get
-    of Color256.darkSeaGreen42: "#5faf5f".hexToRgb.get
-    of Color256.cadetBlue1: "#5faf87".hexToRgb.get
-    of Color256.cadetBlue2: "#5fafaf".hexToRgb.get
-    of Color256.skyBlue3: "#5fafd7".hexToRgb.get
-    of Color256.steelBlue11: "#5fafff".hexToRgb.get
-    of Color256.chartreuse32: "#5fd000".hexToRgb.get
-    of Color256.paleGreen31: "#5fd75f".hexToRgb.get
-    of Color256.seaGreen3: "#5fd787".hexToRgb.get
-    of Color256.aquamarine3: "#5fd7af".hexToRgb.get
-    of Color256.mediumTurquoise: "#5fd7d7".hexToRgb.get
-    of Color256.steelBlue12: "#5fd7ff".hexToRgb.get
-    of Color256.chartreuse21: "#5fff00".hexToRgb.get
-    of Color256.seaGreen2: "#5fff5f".hexToRgb.get
-    of Color256.seaGreen11: "#5fff87".hexToRgb.get
-    of Color256.seaGreen12: "#5fffaf".hexToRgb.get
-    of Color256.aquamarine11: "#5fffd7".hexToRgb.get
-    of Color256.darkSlateGray2: "#5fffff".hexToRgb.get
-    of Color256.darkRed2: "#870000".hexToRgb.get
-    of Color256.deepPink42: "#87005f".hexToRgb.get
-    of Color256.darkMagenta1: "#870087".hexToRgb.get
-    of Color256.darkMagenta2: "#8700af".hexToRgb.get
-    of Color256.darkViolet1: "#8700d7".hexToRgb.get
-    of Color256.purple2: "#8700ff".hexToRgb.get
-    of Color256.orange42: "#875f00".hexToRgb.get
-    of Color256.lightPink4: "#875f5f".hexToRgb.get
-    of Color256.plum4: "#875f87".hexToRgb.get
-    of Color256.mediumPurple31: "#875faf".hexToRgb.get
-    of Color256.mediumPurple32: "#875fd7".hexToRgb.get
-    of Color256.slateBlue1: "#875fff".hexToRgb.get
-    of Color256.yellow41: "#878700".hexToRgb.get
-    of Color256.wheat4: "#87875f".hexToRgb.get
-    of Color256.gray53: "#878787".hexToRgb.get
-    of Color256.lightSlategray: "#8787af".hexToRgb.get
-    of Color256.mediumPurple: "#8787d7".hexToRgb.get
-    of Color256.lightSlateBlue: "#8787ff".hexToRgb.get
-    of Color256.yellow42: "#87af00".hexToRgb.get
-    of Color256.Wheat4: "#87af5f".hexToRgb.get
-    of Color256.darkSeaGreen: "#87af87".hexToRgb.get
-    of Color256.lightSkyBlue31: "#87afaf".hexToRgb.get
-    of Color256.lightSkyBlue32: "#87afd7".hexToRgb.get
-    of Color256.skyBlue2: "#87afff".hexToRgb.get
-    of Color256.chartreuse22: "#87d700".hexToRgb.get
-    of Color256.darkOliveGreen31: "#87d75f".hexToRgb.get
-    of Color256.paleGreen32: "#87d787".hexToRgb.get
-    of Color256.darkSeaGreen31: "#87d7af".hexToRgb.get
-    of Color256.darkSlateGray3: "#87d7d7".hexToRgb.get
-    of Color256.skyBlue1: "#87d7ff".hexToRgb.get
-    of Color256.chartreuse1: "#87ff00".hexToRgb.get
-    of Color256.lightGreen1: "#87ff5f".hexToRgb.get
-    of Color256.lightGreen2: "#87ff87".hexToRgb.get
-    of Color256.paleGreen11: "#87ffaf".hexToRgb.get
-    of Color256.aquamarine12: "#87ffd7".hexToRgb.get
-    of Color256.darkSlateGray1: "#87ffff".hexToRgb.get
-    of Color256.red31: "#af0000".hexToRgb.get
-    of Color256.deepPink4: "#af005f".hexToRgb.get
-    of Color256.mediumVioletRed: "#af0087".hexToRgb.get
-    of Color256.magenta3: "#af00af".hexToRgb.get
-    of Color256.darkViolet2: "#af00d7".hexToRgb.get
-    of Color256.purple: "#af00ff".hexToRgb.get
-    of Color256.darkOrange31: "#af5f00".hexToRgb.get
-    of Color256.indianRed1: "#af5f5f".hexToRgb.get
-    of Color256.hotPink31: "#af5f87".hexToRgb.get
-    of Color256.mediumOrchid3: "#af5faf".hexToRgb.get
-    of Color256.mediumOrchid: "#af5fd7".hexToRgb.get
-    of Color256.mediumPurple21: "#af5fff".hexToRgb.get
-    of Color256.darkGoldenrod: "#af8700".hexToRgb.get
-    of Color256.lightSalmon31: "#af875f".hexToRgb.get
-    of Color256.rosyBrown: "#af8787".hexToRgb.get
-    of Color256.gray63: "#af87af".hexToRgb.get
-    of Color256.mediumPurple22: "#af87d7".hexToRgb.get
-    of Color256.mediumPurple1: "#af87ff".hexToRgb.get
-    of Color256.gold31: "#afaf00".hexToRgb.get
-    of Color256.darkKhaki: "#afaf5f".hexToRgb.get
-    of Color256.navajoWhite3: "#afaf87".hexToRgb.get
-    of Color256.gray69: "#afafaf".hexToRgb.get
-    of Color256.lightSteelBlue3: "#afafd7".hexToRgb.get
-    of Color256.lightSteelBlue: "#afafff".hexToRgb.get
-    of Color256.yellow31: "#afd700".hexToRgb.get
-    of Color256.darkOliveGreen32: "#afd75f".hexToRgb.get
-    of Color256.darkSeaGreen32: "#afd787".hexToRgb.get
-    of Color256.darkSeaGreen21: "#afd7af".hexToRgb.get
-    of Color256.lightCyan3: "#afafd7".hexToRgb.get
-    of Color256.lightSkyBlue1: "#afd7ff".hexToRgb.get
-    of Color256.greenYellow: "#afff00".hexToRgb.get
-    of Color256.darkOliveGreen2: "#afff5f".hexToRgb.get
-    of Color256.paleGreen12: "#afff87".hexToRgb.get
-    of Color256.darkSeaGreen22: "#afffaf".hexToRgb.get
-    of Color256.darkSeaGreen11: "#afffd7".hexToRgb.get
-    of Color256.paleTurquoise1: "#afffff".hexToRgb.get
-    of Color256.red32: "#d70000".hexToRgb.get
-    of Color256.deepPink31: "#d7005f".hexToRgb.get
-    of Color256.deepPink32: "#d70087".hexToRgb.get
-    of Color256.magenta31: "#d700af".hexToRgb.get
-    of Color256.magenta32: "#d700d7".hexToRgb.get
-    of Color256.magenta21: "#d700ff".hexToRgb.get
-    of Color256.darkOrange32: "#d75f00".hexToRgb.get
-    of Color256.indianRed2: "#d75f5f".hexToRgb.get
-    of Color256.hotPink32: "#d75f87".hexToRgb.get
-    of Color256.hotPink2: "#d75faf".hexToRgb.get
-    of Color256.orchid: "#d75fd7".hexToRgb.get
-    of Color256.mediumOrchid11: "#d75fff".hexToRgb.get
-    of Color256.orange3: "#d78700".hexToRgb.get
-    of Color256.lightSalmon32: "#d7875f".hexToRgb.get
-    of Color256.lightPink3: "#d78787".hexToRgb.get
-    of Color256.pink3: "#d787af".hexToRgb.get
-    of Color256.plum3: "#d787d7".hexToRgb.get
-    of Color256.violet: "#d787ff".hexToRgb.get
-    of Color256.gold32: "#d7af00".hexToRgb.get
-    of Color256.lightGoldenrod3: "#d7af5f".hexToRgb.get
-    of Color256.tan: "#d7af87".hexToRgb.get
-    of Color256.mistyRose3: "#d7afaf".hexToRgb.get
-    of Color256.thistle3: "#d7afd7".hexToRgb.get
-    of Color256.plum2: "#d7afff".hexToRgb.get
-    of Color256.yellow32: "#d7d700".hexToRgb.get
-    of Color256.khaki3: "#d7d75f".hexToRgb.get
-    of Color256.lightGoldenrod2: "#d7d787".hexToRgb.get
-    of Color256.lightYellow3: "#d7d7af".hexToRgb.get
-    of Color256.gray84: "#d7d7d7".hexToRgb.get
-    of Color256.lightSteelBlue1: "#d7d7ff".hexToRgb.get
-    of Color256.yellow2: "#d7ff00".hexToRgb.get
-    of Color256.darkOliveGreen11: "#d7ff5f".hexToRgb.get
-    of Color256.darkOliveGreen12: "#d7ff87".hexToRgb.get
-    of Color256.darkSeaGreen12: "#d7ffaf".hexToRgb.get
-    of Color256.honeydew2: "#d7ffd7".hexToRgb.get
-    of Color256.lightCyan1: "#d7ffff".hexToRgb.get
-    of Color256.red1: "#ff0000".hexToRgb.get
-    of Color256.deepPink2: "#ff005f".hexToRgb.get
-    of Color256.deepPink11: "#ff0087".hexToRgb.get
-    of Color256.deepPink12: "#ff00af".hexToRgb.get
-    of Color256.magenta22: "#ff00d7".hexToRgb.get
-    of Color256.magenta1: "#ff00ff".hexToRgb.get
-    of Color256.orangeRed1: "#ff5f00".hexToRgb.get
-    of Color256.indianRed11: "#ff5f5f".hexToRgb.get
-    of Color256.indianRed12: "#ff5f87".hexToRgb.get
-    of Color256.hotPink11: "#ff5faf".hexToRgb.get
-    of Color256.hotPink12: "#ff5fd7".hexToRgb.get
-    of Color256.mediumOrchid12: "#ff5fff".hexToRgb.get
-    of Color256.darkOrange: "#ff8700".hexToRgb.get
-    of Color256.salmon1: "#ff875f".hexToRgb.get
-    of Color256.lightCoral: "#ff8787".hexToRgb.get
-    of Color256.paleVioletRed1: "#ff87af".hexToRgb.get
-    of Color256.orchid2: "#ff87d7".hexToRgb.get
-    of Color256.orchid1: "#ff87ff".hexToRgb.get
-    of Color256.orange1: "#ffaf00".hexToRgb.get
-    of Color256.sandyBrown: "#ffaf5f".hexToRgb.get
-    of Color256.lightSalmon1: "#ffaf87".hexToRgb.get
-    of Color256.lightPink1: "#ffafaf".hexToRgb.get
-    of Color256.pink1: "#ffafd7".hexToRgb.get
-    of Color256.plum1: "#ffafff".hexToRgb.get
-    of Color256.gold1: "#ffd700".hexToRgb.get
-    of Color256.lightGoldenrod21: "#ffd75f".hexToRgb.get
-    of Color256.lightGoldenrod22: "#ffd787".hexToRgb.get
-    of Color256.navajoWhite1: "#ffd7af".hexToRgb.get
-    of Color256.mistyRose1: "#ffd7d7".hexToRgb.get
-    of Color256.thistle1: "#ffd7ff".hexToRgb.get
-    of Color256.yellow1: "#ffff00".hexToRgb.get
-    of Color256.lightGoldenrod1: "#ffff5f".hexToRgb.get
-    of Color256.khaki1: "#ffff87".hexToRgb.get
-    of Color256.wheat1: "#ffffaf".hexToRgb.get
-    of Color256.cornsilk1: "#ffffd7".hexToRgb.get
-    of Color256.gray100: "#ffffff".hexToRgb.get
-    of Color256.gray3: "#080808".hexToRgb.get
-    of Color256.gray7: "#121212".hexToRgb.get
-    of Color256.gray11: "#1c1c1c".hexToRgb.get
-    of Color256.gray15: "#262626".hexToRgb.get
-    of Color256.gray19: "#303030".hexToRgb.get
-    of Color256.gray23: "#3a3a3a".hexToRgb.get
-    of Color256.gray27: "#444444".hexToRgb.get
-    of Color256.gray30: "#4e4e4e".hexToRgb.get
-    of Color256.gray35: "#585858".hexToRgb.get
-    of Color256.gray39: "#626262".hexToRgb.get
-    of Color256.gray42: "#6c6c6c".hexToRgb.get
-    of Color256.gray46: "#767676".hexToRgb.get
-    of Color256.gray50: "#808080".hexToRgb.get
-    of Color256.gray54: "#8a8a8a".hexToRgb.get
-    of Color256.gray58: "#949494".hexToRgb.get
-    of Color256.gray62: "#9e9e9e".hexToRgb.get
-    of Color256.gray66: "#a8a8a8".hexToRgb.get
-    of Color256.gray70: "#b2b2b2".hexToRgb.get
-    of Color256.gray74: "#bcbcbc".hexToRgb.get
-    of Color256.gray78: "#c6c6c6".hexToRgb.get
-    of Color256.gray82: "#d0d0d0".hexToRgb.get
-    of Color256.gray85: "#dadada".hexToRgb.get
-    of Color256.gray89: "#e4e4e4".hexToRgb.get
-    of Color256.gray93: "#eeeeee".hexToRgb.get
-
-## Return Color8 from Rgb.
-proc color8(rgb: Rgb): Result[Color8, string] =
-  if rgb == TerminalDefaultRgb:
-    return Result[Color8, string].ok Color8.default
-  if rgb == "#000000".hexToRgb.get:
-    return Result[Color8, string].ok Color8.black
-  if rgb == "#800000".hexToRgb.get:
-    return Result[Color8, string].ok Color8.maroon
-  if rgb == "#008000".hexToRgb.get:
-    return Result[Color8, string].ok Color8.green
-  if rgb == "#808000".hexToRgb.get:
-    return Result[Color8, string].ok Color8.olive
-  if rgb == "#000080".hexToRgb.get:
-    return Result[Color8, string].ok Color8.navy
-  if rgb == "#008080".hexToRgb.get:
-    return Result[Color8, string].ok Color8.purple
-  if rgb == "#008080".hexToRgb.get:
-    return Result[Color8, string].ok Color8.teal
-  if rgb == "#c0c0c0".hexToRgb.get:
-    return Result[Color8, string].ok Color8.silver
-  else:
-    return Result[Color8, string].err "Invalid value"
-
-## Return Color16 from Rgb.
-proc color16(rgb: Rgb): Result[Color16, string] =
-  if rgb == TerminalDefaultRgb:
-    return Result[Color16, string].ok Color16.default
-  if rgb == "#000000".hexToRgb.get:
-    return Result[Color16, string].ok Color16.black
-  if rgb == "#800000".hexToRgb.get:
-    return Result[Color16, string].ok Color16.maroon
-  if rgb == "#008000".hexToRgb.get:
-    return Result[Color16, string].ok Color16.green
-  if rgb == "#808000".hexToRgb.get:
-    return Result[Color16, string].ok Color16.olive
-  if rgb == "#000080".hexToRgb.get:
-    return Result[Color16, string].ok Color16.navy
-  if rgb == "#008080".hexToRgb.get:
-    return Result[Color16, string].ok Color16.purple
-  if rgb == "#008080".hexToRgb.get:
-    return Result[Color16, string].ok Color16.teal
-  if rgb == "#c0c0c0".hexToRgb.get:
-    return Result[Color16, string].ok Color16.silver
-  if rgb == "#808080".hexToRgb.get:
-    return Result[Color16, string].ok Color16.gray
-  if rgb == "#ff0000".hexToRgb.get:
-    return Result[Color16, string].ok Color16.red
-  if rgb == "#00ff00".hexToRgb.get:
-    return Result[Color16, string].ok Color16.lime
-  if rgb == "#ffff00".hexToRgb.get:
-    return Result[Color16, string].ok Color16.yellow
-  if rgb == "#0000ff".hexToRgb.get:
-    return Result[Color16, string].ok Color16.blue
-  if rgb == "#ff00ff".hexToRgb.get:
-    return Result[Color16, string].ok Color16.fuchsia
-  if rgb == "#00ffff".hexToRgb.get:
-    return Result[Color16, string].ok Color16.aqua
-  if rgb == "#ffffff".hexToRgb.get:
-    return Result[Color16, string].ok Color16.white
-  else:
-    return Result[Color16, string].err "Invalid value"
-
-## Return Color256 from Rgb.
-proc color256(rgb: Rgb): Result[Color256, string] =
-  if rgb == TerminalDefaultRgb:
-    return Result[Color256, string].ok Color256.default
-  if rgb == "#000000".hexToRgb.get:
-    return Result[Color256, string].ok Color256.black
-  if rgb == "#800000".hexToRgb.get:
-    return Result[Color256, string].ok Color256.maroon
-  if rgb == "#008000".hexToRgb.get:
-    return Result[Color256, string].ok Color256.green
-  if rgb == "#808000".hexToRgb.get:
-    return Result[Color256, string].ok Color256.olive
-  if rgb == "#000080".hexToRgb.get:
-    return Result[Color256, string].ok Color256.navy
-  if rgb == "#008080".hexToRgb.get:
-    return Result[Color256, string].ok Color256.purple
-  if rgb == "#008080".hexToRgb.get:
-    return Result[Color256, string].ok Color256.teal
-  if rgb == "#c0c0c0".hexToRgb.get:
-    return Result[Color256, string].ok Color256.silver
-  if rgb == "#808080".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray
-  if rgb == "#ff0000".hexToRgb.get:
-    return Result[Color256, string].ok Color256.red
-  if rgb == "#00ff00".hexToRgb.get:
-    return Result[Color256, string].ok Color256.lime
-  if rgb == "#ffff00".hexToRgb.get:
-    return Result[Color256, string].ok Color256.yellow
-  if rgb == "#0000ff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.blue
-  if rgb == "#ff00ff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.fuchsia
-  if rgb == "#00ffff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.aqua
-  if rgb == "#ffffff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.white
-  if rgb == "#000000".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray0
-  if rgb == "#00005f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.navyBlue
-  if rgb == "#000087".hexToRgb.get:
-    return Result[Color256, string].ok Color256.darkBlue
-  if rgb == "#0000af".hexToRgb.get:
-    return Result[Color256, string].ok Color256.blue31
-  if rgb == "#0000d7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.blue32
-  if rgb == "#0000ff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.blue1
-  if rgb == "#005f00".hexToRgb.get:
-    return Result[Color256, string].ok Color256.darkGreen
-  if rgb == "#005f5f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.deepSkyBlue41
-  if rgb == "#005f87".hexToRgb.get:
-    return Result[Color256, string].ok Color256.deepSkyBlue42
-  if rgb == "#005faf".hexToRgb.get:
-    return Result[Color256, string].ok Color256.deepSkyBlue43
-  if rgb == "#005fd7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.dodgerBlue31
-  if rgb == "#005fff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.dodgerBlue32
-  if rgb == "#008700".hexToRgb.get:
-    return Result[Color256, string].ok Color256.green4
-  if rgb == "#00875f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.springGreen4
-  if rgb == "#008787".hexToRgb.get:
-    return Result[Color256, string].ok Color256.turquoise4
-  if rgb == "#0087af".hexToRgb.get:
-    return Result[Color256, string].ok Color256.deepSkyBlue31
-  if rgb == "#0087d7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.deepSkyBlue32
-  if rgb == "#0087ff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.dodgerBlue1
-  if rgb == "#00af00".hexToRgb.get:
-    return Result[Color256, string].ok Color256.green31
-  if rgb == "#00af5f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.springGreen31
-  if rgb == "#00af87".hexToRgb.get:
-    return Result[Color256, string].ok Color256.darkCyan
-  if rgb == "#00afaf".hexToRgb.get:
-    return Result[Color256, string].ok Color256.lightSeaGreen
-  if rgb == "#00afd7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.deepSkyBlue2
-  if rgb == "#00afff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.deepSkyBlue1
-  if rgb == "#00d700".hexToRgb.get:
-    return Result[Color256, string].ok Color256.green32
-  if rgb == "#00d75f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.springGreen33
-  if rgb == "#00d787".hexToRgb.get:
-    return Result[Color256, string].ok Color256.springGreen21
-  if rgb == "#00d7af".hexToRgb.get:
-    return Result[Color256, string].ok Color256.cyan3
-  if rgb == "#00d7df".hexToRgb.get:
-    return Result[Color256, string].ok Color256.darkTurquoise
-  if rgb == "#00d7ff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.turquoise2
-  if rgb == "#00ff00".hexToRgb.get:
-    return Result[Color256, string].ok Color256.green1
-  if rgb == "#00ff5f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.springGreen22
-  if rgb == "#00ff87".hexToRgb.get:
-    return Result[Color256, string].ok Color256.springGreen1
-  if rgb == "#00ffaf".hexToRgb.get:
-    return Result[Color256, string].ok Color256.mediumSpringGreen
-  if rgb == "#00ffd7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.cyan2
-  if rgb == "#00ffff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.cyan1
-  if rgb == "#5f0000".hexToRgb.get:
-    return Result[Color256, string].ok Color256.darkRed1
-  if rgb == "#5f005f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.deepPink41
-  if rgb == "#5f0087".hexToRgb.get:
-    return Result[Color256, string].ok Color256.purple41
-  if rgb == "#5f00af".hexToRgb.get:
-    return Result[Color256, string].ok Color256.purple42
-  if rgb == "#5f00df".hexToRgb.get:
-    return Result[Color256, string].ok Color256.purple3
-  if rgb == "#5f00ff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.blueViolet
-  if rgb == "#5f5f00".hexToRgb.get:
-    return Result[Color256, string].ok Color256.orange41
-  if rgb == "#5f5f5f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray37
-  if rgb == "#5f5f87".hexToRgb.get:
-    return Result[Color256, string].ok Color256.mediumPurple4
-  if rgb == "#5f5faf".hexToRgb.get:
-    return Result[Color256, string].ok Color256.slateBlue31
-  if rgb == "#5f5fd7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.slateBlue32
-  if rgb == "#5f5fff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.royalBlue1
-  if rgb == "#5f8700".hexToRgb.get:
-    return Result[Color256, string].ok Color256.chartreuse4
-  if rgb == "#5f875f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.darkSeaGreen41
-  if rgb == "#5f8787".hexToRgb.get:
-    return Result[Color256, string].ok Color256.paleTurquoise4
-  if rgb == "#5f87af".hexToRgb.get:
-    return Result[Color256, string].ok Color256.steelBlue
-  if rgb == "#5f87d7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.steelBlue3
-  if rgb == "#5f87ff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.cornflowerBlue
-  if rgb == "#5faf00".hexToRgb.get:
-    return Result[Color256, string].ok Color256.chartreuse31
-  if rgb == "#5faf5f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.darkSeaGreen42
-  if rgb == "#5faf87".hexToRgb.get:
-    return Result[Color256, string].ok Color256.cadetBlue1
-  if rgb == "#5fafaf".hexToRgb.get:
-    return Result[Color256, string].ok Color256.cadetBlue2
-  if rgb == "#5fafd7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.skyBlue3
-  if rgb == "#5fafff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.steelBlue11
-  if rgb == "#5fd000".hexToRgb.get:
-    return Result[Color256, string].ok Color256.chartreuse32
-  if rgb == "#5fd75f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.paleGreen31
-  if rgb == "#5fd787".hexToRgb.get:
-    return Result[Color256, string].ok Color256.seaGreen3
-  if rgb == "#5fd7af".hexToRgb.get:
-    return Result[Color256, string].ok Color256.aquamarine3
-  if rgb == "#5fd7d7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.mediumTurquoise
-  if rgb == "#5fd7ff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.steelBlue12
-  if rgb == "#5fff00".hexToRgb.get:
-    return Result[Color256, string].ok Color256.chartreuse21
-  if rgb == "#5fff5f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.seaGreen2
-  if rgb == "#5fff87".hexToRgb.get:
-    return Result[Color256, string].ok Color256.seaGreen11
-  if rgb == "#5fffaf".hexToRgb.get:
-    return Result[Color256, string].ok Color256.seaGreen12
-  if rgb == "#5fffd7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.aquamarine11
-  if rgb == "#5fffff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.darkSlateGray2
-  if rgb == "#870000".hexToRgb.get:
-    return Result[Color256, string].ok Color256.darkRed2
-  if rgb == "#87005f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.deepPink42
-  if rgb == "#870087".hexToRgb.get:
-    return Result[Color256, string].ok Color256.darkMagenta1
-  if rgb == "#8700af".hexToRgb.get:
-    return Result[Color256, string].ok Color256.darkMagenta2
-  if rgb == "#8700d7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.darkViolet1
-  if rgb == "#8700ff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.purple2
-  if rgb == "#875f00".hexToRgb.get:
-    return Result[Color256, string].ok Color256.orange42
-  if rgb == "#875f5f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.lightPink4
-  if rgb == "#875f87".hexToRgb.get:
-    return Result[Color256, string].ok Color256.plum4
-  if rgb == "#875faf".hexToRgb.get:
-    return Result[Color256, string].ok Color256.mediumPurple31
-  if rgb == "#875fd7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.mediumPurple32
-  if rgb == "#875fff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.slateBlue1
-  if rgb == "#878700".hexToRgb.get:
-    return Result[Color256, string].ok Color256.yellow41
-  if rgb == "#87875f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.wheat4
-  if rgb == "#878787".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray53
-  if rgb == "#8787af".hexToRgb.get:
-    return Result[Color256, string].ok Color256.lightSlategray
-  if rgb == "#8787d7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.mediumPurple
-  if rgb == "#8787ff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.lightSlateBlue
-  if rgb == "#87af00".hexToRgb.get:
-    return Result[Color256, string].ok Color256.yellow42
-  if rgb == "#87af5f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.Wheat4
-  if rgb == "#87af87".hexToRgb.get:
-    return Result[Color256, string].ok Color256.darkSeaGreen
-  if rgb == "#87afaf".hexToRgb.get:
-    return Result[Color256, string].ok Color256.lightSkyBlue31
-  if rgb == "#87afd7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.lightSkyBlue32
-  if rgb == "#87afff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.skyBlue2
-  if rgb == "#87d700".hexToRgb.get:
-    return Result[Color256, string].ok Color256.chartreuse22
-  if rgb == "#87d75f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.darkOliveGreen31
-  if rgb == "#87d787".hexToRgb.get:
-    return Result[Color256, string].ok Color256.paleGreen32
-  if rgb == "#87d7af".hexToRgb.get:
-    return Result[Color256, string].ok Color256.darkSeaGreen31
-  if rgb == "#87d7d7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.darkSlateGray3
-  if rgb == "#87d7ff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.skyBlue1
-  if rgb == "#87ff00".hexToRgb.get:
-    return Result[Color256, string].ok Color256.chartreuse1
-  if rgb == "#87ff5f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.lightGreen1
-  if rgb == "#87ff87".hexToRgb.get:
-    return Result[Color256, string].ok Color256.lightGreen2
-  if rgb == "#87ffaf".hexToRgb.get:
-    return Result[Color256, string].ok Color256.paleGreen11
-  if rgb == "#87ffd7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.aquamarine12
-  if rgb == "#87ffff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.darkSlateGray1
-  if rgb == "#af0000".hexToRgb.get:
-    return Result[Color256, string].ok Color256.red31
-  if rgb == "#af005f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.deepPink4
-  if rgb == "#af0087".hexToRgb.get:
-    return Result[Color256, string].ok Color256.mediumVioletRed
-  if rgb == "#af00af".hexToRgb.get:
-    return Result[Color256, string].ok Color256.magenta3
-  if rgb == "#af00d7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.darkViolet2
-  if rgb == "#af00ff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.purple
-  if rgb == "#af5f00".hexToRgb.get:
-    return Result[Color256, string].ok Color256.darkOrange31
-  if rgb == "#af5f5f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.indianRed1
-  if rgb == "#af5f87".hexToRgb.get:
-    return Result[Color256, string].ok Color256.hotPink31
-  if rgb == "#af5faf".hexToRgb.get:
-    return Result[Color256, string].ok Color256.mediumOrchid3
-  if rgb == "#af5fd7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.mediumOrchid
-  if rgb == "#af5fff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.mediumPurple21
-  if rgb == "#af8700".hexToRgb.get:
-    return Result[Color256, string].ok Color256.darkGoldenrod
-  if rgb == "#af875f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.lightSalmon31
-  if rgb == "#af8787".hexToRgb.get:
-    return Result[Color256, string].ok Color256.rosyBrown
-  if rgb == "#af87af".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray63
-  if rgb == "#af87d7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.mediumPurple22
-  if rgb == "#af87ff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.mediumPurple1
-  if rgb == "#afaf00".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gold31
-  if rgb == "#afaf5f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.darkKhaki
-  if rgb == "#afaf87".hexToRgb.get:
-    return Result[Color256, string].ok Color256.navajoWhite3
-  if rgb == "#afafaf".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray69
-  if rgb == "#afafd7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.lightSteelBlue3
-  if rgb == "#afafff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.lightSteelBlue
-  if rgb == "#afd700".hexToRgb.get:
-    return Result[Color256, string].ok Color256.yellow31
-  if rgb == "#afd75f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.darkOliveGreen32
-  if rgb == "#afd787".hexToRgb.get:
-    return Result[Color256, string].ok Color256.darkSeaGreen32
-  if rgb == "#afd7af".hexToRgb.get:
-    return Result[Color256, string].ok Color256.darkSeaGreen21
-  if rgb == "#afafd7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.lightCyan3
-  if rgb == "#afd7ff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.lightSkyBlue1
-  if rgb == "#afff00".hexToRgb.get:
-    return Result[Color256, string].ok Color256.greenYellow
-  if rgb == "#afff5f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.darkOliveGreen2
-  if rgb == "#afff87".hexToRgb.get:
-    return Result[Color256, string].ok Color256.paleGreen12
-  if rgb == "#afffaf".hexToRgb.get:
-    return Result[Color256, string].ok Color256.darkSeaGreen22
-  if rgb == "#afffd7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.darkSeaGreen11
-  if rgb == "#afffff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.paleTurquoise1
-  if rgb == "#d70000".hexToRgb.get:
-    return Result[Color256, string].ok Color256.red32
-  if rgb == "#d7005f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.deepPink31
-  if rgb == "#d70087".hexToRgb.get:
-    return Result[Color256, string].ok Color256.deepPink32
-  if rgb == "#d700af".hexToRgb.get:
-    return Result[Color256, string].ok Color256.magenta31
-  if rgb == "#d700d7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.magenta32
-  if rgb == "#d700ff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.magenta21
-  if rgb == "#d75f00".hexToRgb.get:
-    return Result[Color256, string].ok Color256.darkOrange32
-  if rgb == "#d75f5f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.indianRed2
-  if rgb == "#d75f87".hexToRgb.get:
-    return Result[Color256, string].ok Color256.hotPink32
-  if rgb == "#d75faf".hexToRgb.get:
-    return Result[Color256, string].ok Color256.hotPink2
-  if rgb == "#d75fd7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.orchid
-  if rgb == "#d75fff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.mediumOrchid11
-  if rgb == "#d78700".hexToRgb.get:
-    return Result[Color256, string].ok Color256.orange3
-  if rgb == "#d7875f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.lightSalmon32
-  if rgb == "#d78787".hexToRgb.get:
-    return Result[Color256, string].ok Color256.lightPink3
-  if rgb == "#d787af".hexToRgb.get:
-    return Result[Color256, string].ok Color256.pink3
-  if rgb == "#d787d7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.plum3
-  if rgb == "#d787ff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.violet
-  if rgb == "#d7af00".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gold32
-  if rgb == "#d7af5f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.lightGoldenrod3
-  if rgb == "#d7af87".hexToRgb.get:
-    return Result[Color256, string].ok Color256.tan
-  if rgb == "#d7afaf".hexToRgb.get:
-    return Result[Color256, string].ok Color256.mistyRose3
-  if rgb == "#d7afd7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.thistle3
-  if rgb == "#d7afff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.plum2
-  if rgb == "#d7d700".hexToRgb.get:
-    return Result[Color256, string].ok Color256.yellow32
-  if rgb == "#d7d75f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.khaki3
-  if rgb == "#d7d787".hexToRgb.get:
-    return Result[Color256, string].ok Color256.lightGoldenrod2
-  if rgb == "#d7d7af".hexToRgb.get:
-    return Result[Color256, string].ok Color256.lightYellow3
-  if rgb == "#d7d7d7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray84
-  if rgb == "#d7d7ff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.lightSteelBlue1
-  if rgb == "#d7ff00".hexToRgb.get:
-    return Result[Color256, string].ok Color256.yellow2
-  if rgb == "#d7ff5f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.darkOliveGreen11
-  if rgb == "#d7ff87".hexToRgb.get:
-    return Result[Color256, string].ok Color256.darkOliveGreen12
-  if rgb == "#d7ffaf".hexToRgb.get:
-    return Result[Color256, string].ok Color256.darkSeaGreen12
-  if rgb == "#d7ffd7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.honeydew2
-  if rgb == "#d7ffff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.lightCyan1
-  if rgb == "#ff0000".hexToRgb.get:
-    return Result[Color256, string].ok Color256.red1
-  if rgb == "#ff005f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.deepPink2
-  if rgb == "#ff0087".hexToRgb.get:
-    return Result[Color256, string].ok Color256.deepPink11
-  if rgb == "#ff00af".hexToRgb.get:
-    return Result[Color256, string].ok Color256.deepPink12
-  if rgb == "#ff00d7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.magenta22
-  if rgb == "#ff00ff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.magenta1
-  if rgb == "#ff5f00".hexToRgb.get:
-    return Result[Color256, string].ok Color256.orangeRed1
-  if rgb == "#ff5f5f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.indianRed11
-  if rgb == "#ff5f87".hexToRgb.get:
-    return Result[Color256, string].ok Color256.indianRed12
-  if rgb == "#ff5faf".hexToRgb.get:
-    return Result[Color256, string].ok Color256.hotPink11
-  if rgb == "#ff5fd7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.hotPink12
-  if rgb == "#ff5fff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.mediumOrchid12
-  if rgb == "#ff8700".hexToRgb.get:
-    return Result[Color256, string].ok Color256.darkOrange
-  if rgb == "#ff875f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.salmon1
-  if rgb == "#ff8787".hexToRgb.get:
-    return Result[Color256, string].ok Color256.lightCoral
-  if rgb == "#ff87af".hexToRgb.get:
-    return Result[Color256, string].ok Color256.paleVioletRed1
-  if rgb == "#ff87d7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.orchid2
-  if rgb == "#ff87ff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.orchid1
-  if rgb == "#ffaf00".hexToRgb.get:
-    return Result[Color256, string].ok Color256.orange1
-  if rgb == "#ffaf5f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.sandyBrown
-  if rgb == "#ffaf87".hexToRgb.get:
-    return Result[Color256, string].ok Color256.lightSalmon1
-  if rgb == "#ffafaf".hexToRgb.get:
-    return Result[Color256, string].ok Color256.lightPink1
-  if rgb == "#ffafd7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.pink1
-  if rgb == "#ffafff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.plum1
-  if rgb == "#ffd700".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gold1
-  if rgb == "#ffd75f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.lightGoldenrod21
-  if rgb == "#ffd787".hexToRgb.get:
-    return Result[Color256, string].ok Color256.lightGoldenrod22
-  if rgb == "#ffd7af".hexToRgb.get:
-    return Result[Color256, string].ok Color256.navajoWhite1
-  if rgb == "#ffd7d7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.mistyRose1
-  if rgb == "#ffd7ff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.thistle1
-  if rgb == "#ffff00".hexToRgb.get:
-    return Result[Color256, string].ok Color256.yellow1
-  if rgb == "#ffff5f".hexToRgb.get:
-    return Result[Color256, string].ok Color256.lightGoldenrod1
-  if rgb == "#ffff87".hexToRgb.get:
-    return Result[Color256, string].ok Color256.khaki1
-  if rgb == "#ffffaf".hexToRgb.get:
-    return Result[Color256, string].ok Color256.wheat1
-  if rgb == "#ffffd7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.cornsilk1
-  if rgb == "#ffffff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray100
-  if rgb == "#080808".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray3
-  if rgb == "#121212".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray7
-  if rgb == "#1c1c1c".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray11
-  if rgb == "#262626".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray15
-  if rgb == "#303030".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray19
-  if rgb == "#3a3a3a".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray23
-  if rgb == "#444444".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray27
-  if rgb == "#4e4e4e".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray30
-  if rgb == "#585858".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray35
-  if rgb == "#626262".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray39
-  if rgb == "#6c6c6c".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray42
-  if rgb == "#767676".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray46
-  if rgb == "#808080".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray50
-  if rgb == "#8a8a8A".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray54
-  if rgb == "#949494".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray58
-  if rgb == "#9e9e9e".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray62
-  if rgb == "#a8a8a8".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray66
-  if rgb == "#b2b2b2".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray70
-  if rgb == "#bcbcbc".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray74
-  if rgb == "#c6c6c6".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray78
-  if rgb == "#d0d0d0".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray82
-  if rgb == "#dadada".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray85
-  if rgb == "#e4e4e4".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray89
-  if rgb == "#eeeeeE".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray93
-  else:
-    return Result[Color256, string].err "Invalid value"
-
 const
   ## Default terminal colors.
   DefaultForegroundColor* = Color(
@@ -2994,6 +2118,882 @@ var
     vscode: DarkTheme
   ]
 
+## Return the Rgb.
+proc rgb(c: Color8): Rgb =
+  case c:
+    of Color8.default: TerminalDefaultRgb
+    of Color8.black: "#000000".hexToRgb.get
+    of Color8.maroon: "#800000".hexToRgb.get
+    of Color8.green: "#008000".hexToRgb.get
+    of Color8.olive: "#808000".hexToRgb.get
+    of Color8.navy: "#000080".hexToRgb.get
+    of Color8.purple: "#800080".hexToRgb.get
+    of Color8.teal: "#008080".hexToRgb.get
+    of Color8.silver: "#c0c0c0".hexToRgb.get
+
+## Return the Rgb.
+proc rgb(c: Color16): Rgb =
+  case c:
+    of Color16.default: TerminalDefaultRgb
+    of Color16.black: "#000000".hexToRgb.get
+    of Color16.maroon: "#800000".hexToRgb.get
+    of Color16.green: "#008000".hexToRgb.get
+    of Color16.olive: "#808000".hexToRgb.get
+    of Color16.navy: "#000080".hexToRgb.get
+    of Color16.purple: "#800080".hexToRgb.get
+    of Color16.teal: "#008080".hexToRgb.get
+    of Color16.silver: "#c0c0c0".hexToRgb.get
+    of Color16.gray: "#808080".hexToRgb.get
+    of Color16.red: "#ff0000".hexToRgb.get
+    of Color16.lime: "#00ff00".hexToRgb.get
+    of Color16.yellow: "#ffff00".hexToRgb.get
+    of Color16.blue: "#0000ff".hexToRgb.get
+    of Color16.fuchsia: "#ff00ff".hexToRgb.get
+    of Color16.aqua: "#00ffff".hexToRgb.get
+    of Color16.white: "#ffffff".hexToRgb.get
+
+## Return the Rgb.
+proc rgb(c: Color256): Rgb =
+  case c:
+    of Color256.default: TerminalDefaultRgb
+    of Color256.black: "#000000".hexToRgb.get
+    of Color256.maroon: "#800000".hexToRgb.get
+    of Color256.green: "#008000".hexToRgb.get
+    of Color256.olive: "#808000".hexToRgb.get
+    of Color256.navy: "#000080".hexToRgb.get
+    of Color256.purple1: "#800080".hexToRgb.get
+    of Color256.teal: "#008080".hexToRgb.get
+    of Color256.silver: "#c0c0c0".hexToRgb.get
+    of Color256.gray: "#808080".hexToRgb.get
+    of Color256.red: "#ff0000".hexToRgb.get
+    of Color256.lime: "#00ff00".hexToRgb.get
+    of Color256.yellow: "#ffff00".hexToRgb.get
+    of Color256.blue: "#0000ff".hexToRgb.get
+    of Color256.fuchsia: "#ff00ff".hexToRgb.get
+    of Color256.aqua: "#00ffff".hexToRgb.get
+    of Color256.white: "#ffffff".hexToRgb.get
+    of Color256.gray0: "#000000".hexToRgb.get
+    of Color256.navyBlue: "#00005f".hexToRgb.get
+    of Color256.darkBlue: "#000087".hexToRgb.get
+    of Color256.blue31: "#0000af".hexToRgb.get
+    of Color256.blue32: "#0000d7".hexToRgb.get
+    of Color256.blue1: "#0000ff".hexToRgb.get
+    of Color256.darkGreen: "#005f00".hexToRgb.get
+    of Color256.deepSkyBlue41: "#005f5f".hexToRgb.get
+    of Color256.deepSkyBlue42: "#005f87".hexToRgb.get
+    of Color256.deepSkyBlue43: "#005faf".hexToRgb.get
+    of Color256.dodgerBlue31: "#005fd7".hexToRgb.get
+    of Color256.dodgerBlue32: "#005fff".hexToRgb.get
+    of Color256.green4: "#008700".hexToRgb.get
+    of Color256.springGreen4: "#00875f".hexToRgb.get
+    of Color256.turquoise4: "#008787".hexToRgb.get
+    of Color256.deepSkyBlue31: "#0087af".hexToRgb.get
+    of Color256.deepSkyBlue32: "#0087d7".hexToRgb.get
+    of Color256.dodgerBlue1: "#0087ff".hexToRgb.get
+    of Color256.green31: "#00af00".hexToRgb.get
+    of Color256.springGreen31: "#00af5f".hexToRgb.get
+    of Color256.darkCyan: "#00af87".hexToRgb.get
+    of Color256.lightSeaGreen: "#00afaf".hexToRgb.get
+    of Color256.deepSkyBlue2: "#00afd7".hexToRgb.get
+    of Color256.deepSkyBlue1: "#00afff".hexToRgb.get
+    of Color256.green32: "#00d700".hexToRgb.get
+    of Color256.springGreen33: "#00d75f".hexToRgb.get
+    of Color256.springGreen21: "#00d787".hexToRgb.get
+    of Color256.cyan3: "#00d7af".hexToRgb.get
+    of Color256.darkTurquoise: "#00d7df".hexToRgb.get
+    of Color256.turquoise2: "#00d7ff".hexToRgb.get
+    of Color256.green1: "#00ff00".hexToRgb.get
+    of Color256.springGreen22: "#00ff5f".hexToRgb.get
+    of Color256.springGreen1: "#00ff87".hexToRgb.get
+    of Color256.mediumSpringGreen: "#00ffaf".hexToRgb.get
+    of Color256.cyan2: "#00ffd7".hexToRgb.get
+    of Color256.cyan1: "#00ffff".hexToRgb.get
+    of Color256.darkRed1: "#5f0000".hexToRgb.get
+    of Color256.deepPink41: "#5f005f".hexToRgb.get
+    of Color256.purple41: "#5f0087".hexToRgb.get
+    of Color256.purple42: "#5f00af".hexToRgb.get
+    of Color256.purple3: "#5f00df".hexToRgb.get
+    of Color256.blueViolet: "#5f00ff".hexToRgb.get
+    of Color256.orange41: "#5f5f00".hexToRgb.get
+    of Color256.gray37: "#5f5f5f".hexToRgb.get
+    of Color256.mediumPurple4: "#5f5f87".hexToRgb.get
+    of Color256.slateBlue31: "#5f5faf".hexToRgb.get
+    of Color256.slateBlue32: "#5f5fd7".hexToRgb.get
+    of Color256.royalBlue1: "#5f5fff".hexToRgb.get
+    of Color256.chartreuse4: "#5f8700".hexToRgb.get
+    of Color256.darkSeaGreen41: "#5f875f".hexToRgb.get
+    of Color256.paleTurquoise4: "#5f8787".hexToRgb.get
+    of Color256.steelBlue: "#5f87af".hexToRgb.get
+    of Color256.steelBlue3: "#5f87d7".hexToRgb.get
+    of Color256.cornflowerBlue: "#5f87ff".hexToRgb.get
+    of Color256.chartreuse31: "#5faf00".hexToRgb.get
+    of Color256.darkSeaGreen42: "#5faf5f".hexToRgb.get
+    of Color256.cadetBlue1: "#5faf87".hexToRgb.get
+    of Color256.cadetBlue2: "#5fafaf".hexToRgb.get
+    of Color256.skyBlue3: "#5fafd7".hexToRgb.get
+    of Color256.steelBlue11: "#5fafff".hexToRgb.get
+    of Color256.chartreuse32: "#5fd000".hexToRgb.get
+    of Color256.paleGreen31: "#5fd75f".hexToRgb.get
+    of Color256.seaGreen3: "#5fd787".hexToRgb.get
+    of Color256.aquamarine3: "#5fd7af".hexToRgb.get
+    of Color256.mediumTurquoise: "#5fd7d7".hexToRgb.get
+    of Color256.steelBlue12: "#5fd7ff".hexToRgb.get
+    of Color256.chartreuse21: "#5fff00".hexToRgb.get
+    of Color256.seaGreen2: "#5fff5f".hexToRgb.get
+    of Color256.seaGreen11: "#5fff87".hexToRgb.get
+    of Color256.seaGreen12: "#5fffaf".hexToRgb.get
+    of Color256.aquamarine11: "#5fffd7".hexToRgb.get
+    of Color256.darkSlateGray2: "#5fffff".hexToRgb.get
+    of Color256.darkRed2: "#870000".hexToRgb.get
+    of Color256.deepPink42: "#87005f".hexToRgb.get
+    of Color256.darkMagenta1: "#870087".hexToRgb.get
+    of Color256.darkMagenta2: "#8700af".hexToRgb.get
+    of Color256.darkViolet1: "#8700d7".hexToRgb.get
+    of Color256.purple2: "#8700ff".hexToRgb.get
+    of Color256.orange42: "#875f00".hexToRgb.get
+    of Color256.lightPink4: "#875f5f".hexToRgb.get
+    of Color256.plum4: "#875f87".hexToRgb.get
+    of Color256.mediumPurple31: "#875faf".hexToRgb.get
+    of Color256.mediumPurple32: "#875fd7".hexToRgb.get
+    of Color256.slateBlue1: "#875fff".hexToRgb.get
+    of Color256.yellow41: "#878700".hexToRgb.get
+    of Color256.wheat4: "#87875f".hexToRgb.get
+    of Color256.gray53: "#878787".hexToRgb.get
+    of Color256.lightSlategray: "#8787af".hexToRgb.get
+    of Color256.mediumPurple: "#8787d7".hexToRgb.get
+    of Color256.lightSlateBlue: "#8787ff".hexToRgb.get
+    of Color256.yellow42: "#87af00".hexToRgb.get
+    of Color256.Wheat4: "#87af5f".hexToRgb.get
+    of Color256.darkSeaGreen: "#87af87".hexToRgb.get
+    of Color256.lightSkyBlue31: "#87afaf".hexToRgb.get
+    of Color256.lightSkyBlue32: "#87afd7".hexToRgb.get
+    of Color256.skyBlue2: "#87afff".hexToRgb.get
+    of Color256.chartreuse22: "#87d700".hexToRgb.get
+    of Color256.darkOliveGreen31: "#87d75f".hexToRgb.get
+    of Color256.paleGreen32: "#87d787".hexToRgb.get
+    of Color256.darkSeaGreen31: "#87d7af".hexToRgb.get
+    of Color256.darkSlateGray3: "#87d7d7".hexToRgb.get
+    of Color256.skyBlue1: "#87d7ff".hexToRgb.get
+    of Color256.chartreuse1: "#87ff00".hexToRgb.get
+    of Color256.lightGreen1: "#87ff5f".hexToRgb.get
+    of Color256.lightGreen2: "#87ff87".hexToRgb.get
+    of Color256.paleGreen11: "#87ffaf".hexToRgb.get
+    of Color256.aquamarine12: "#87ffd7".hexToRgb.get
+    of Color256.darkSlateGray1: "#87ffff".hexToRgb.get
+    of Color256.red31: "#af0000".hexToRgb.get
+    of Color256.deepPink4: "#af005f".hexToRgb.get
+    of Color256.mediumVioletRed: "#af0087".hexToRgb.get
+    of Color256.magenta3: "#af00af".hexToRgb.get
+    of Color256.darkViolet2: "#af00d7".hexToRgb.get
+    of Color256.purple: "#af00ff".hexToRgb.get
+    of Color256.darkOrange31: "#af5f00".hexToRgb.get
+    of Color256.indianRed1: "#af5f5f".hexToRgb.get
+    of Color256.hotPink31: "#af5f87".hexToRgb.get
+    of Color256.mediumOrchid3: "#af5faf".hexToRgb.get
+    of Color256.mediumOrchid: "#af5fd7".hexToRgb.get
+    of Color256.mediumPurple21: "#af5fff".hexToRgb.get
+    of Color256.darkGoldenrod: "#af8700".hexToRgb.get
+    of Color256.lightSalmon31: "#af875f".hexToRgb.get
+    of Color256.rosyBrown: "#af8787".hexToRgb.get
+    of Color256.gray63: "#af87af".hexToRgb.get
+    of Color256.mediumPurple22: "#af87d7".hexToRgb.get
+    of Color256.mediumPurple1: "#af87ff".hexToRgb.get
+    of Color256.gold31: "#afaf00".hexToRgb.get
+    of Color256.darkKhaki: "#afaf5f".hexToRgb.get
+    of Color256.navajoWhite3: "#afaf87".hexToRgb.get
+    of Color256.gray69: "#afafaf".hexToRgb.get
+    of Color256.lightSteelBlue3: "#afafd7".hexToRgb.get
+    of Color256.lightSteelBlue: "#afafff".hexToRgb.get
+    of Color256.yellow31: "#afd700".hexToRgb.get
+    of Color256.darkOliveGreen32: "#afd75f".hexToRgb.get
+    of Color256.darkSeaGreen32: "#afd787".hexToRgb.get
+    of Color256.darkSeaGreen21: "#afd7af".hexToRgb.get
+    of Color256.lightCyan3: "#afafd7".hexToRgb.get
+    of Color256.lightSkyBlue1: "#afd7ff".hexToRgb.get
+    of Color256.greenYellow: "#afff00".hexToRgb.get
+    of Color256.darkOliveGreen2: "#afff5f".hexToRgb.get
+    of Color256.paleGreen12: "#afff87".hexToRgb.get
+    of Color256.darkSeaGreen22: "#afffaf".hexToRgb.get
+    of Color256.darkSeaGreen11: "#afffd7".hexToRgb.get
+    of Color256.paleTurquoise1: "#afffff".hexToRgb.get
+    of Color256.red32: "#d70000".hexToRgb.get
+    of Color256.deepPink31: "#d7005f".hexToRgb.get
+    of Color256.deepPink32: "#d70087".hexToRgb.get
+    of Color256.magenta31: "#d700af".hexToRgb.get
+    of Color256.magenta32: "#d700d7".hexToRgb.get
+    of Color256.magenta21: "#d700ff".hexToRgb.get
+    of Color256.darkOrange32: "#d75f00".hexToRgb.get
+    of Color256.indianRed2: "#d75f5f".hexToRgb.get
+    of Color256.hotPink32: "#d75f87".hexToRgb.get
+    of Color256.hotPink2: "#d75faf".hexToRgb.get
+    of Color256.orchid: "#d75fd7".hexToRgb.get
+    of Color256.mediumOrchid11: "#d75fff".hexToRgb.get
+    of Color256.orange3: "#d78700".hexToRgb.get
+    of Color256.lightSalmon32: "#d7875f".hexToRgb.get
+    of Color256.lightPink3: "#d78787".hexToRgb.get
+    of Color256.pink3: "#d787af".hexToRgb.get
+    of Color256.plum3: "#d787d7".hexToRgb.get
+    of Color256.violet: "#d787ff".hexToRgb.get
+    of Color256.gold32: "#d7af00".hexToRgb.get
+    of Color256.lightGoldenrod3: "#d7af5f".hexToRgb.get
+    of Color256.tan: "#d7af87".hexToRgb.get
+    of Color256.mistyRose3: "#d7afaf".hexToRgb.get
+    of Color256.thistle3: "#d7afd7".hexToRgb.get
+    of Color256.plum2: "#d7afff".hexToRgb.get
+    of Color256.yellow32: "#d7d700".hexToRgb.get
+    of Color256.khaki3: "#d7d75f".hexToRgb.get
+    of Color256.lightGoldenrod2: "#d7d787".hexToRgb.get
+    of Color256.lightYellow3: "#d7d7af".hexToRgb.get
+    of Color256.gray84: "#d7d7d7".hexToRgb.get
+    of Color256.lightSteelBlue1: "#d7d7ff".hexToRgb.get
+    of Color256.yellow2: "#d7ff00".hexToRgb.get
+    of Color256.darkOliveGreen11: "#d7ff5f".hexToRgb.get
+    of Color256.darkOliveGreen12: "#d7ff87".hexToRgb.get
+    of Color256.darkSeaGreen12: "#d7ffaf".hexToRgb.get
+    of Color256.honeydew2: "#d7ffd7".hexToRgb.get
+    of Color256.lightCyan1: "#d7ffff".hexToRgb.get
+    of Color256.red1: "#ff0000".hexToRgb.get
+    of Color256.deepPink2: "#ff005f".hexToRgb.get
+    of Color256.deepPink11: "#ff0087".hexToRgb.get
+    of Color256.deepPink12: "#ff00af".hexToRgb.get
+    of Color256.magenta22: "#ff00d7".hexToRgb.get
+    of Color256.magenta1: "#ff00ff".hexToRgb.get
+    of Color256.orangeRed1: "#ff5f00".hexToRgb.get
+    of Color256.indianRed11: "#ff5f5f".hexToRgb.get
+    of Color256.indianRed12: "#ff5f87".hexToRgb.get
+    of Color256.hotPink11: "#ff5faf".hexToRgb.get
+    of Color256.hotPink12: "#ff5fd7".hexToRgb.get
+    of Color256.mediumOrchid12: "#ff5fff".hexToRgb.get
+    of Color256.darkOrange: "#ff8700".hexToRgb.get
+    of Color256.salmon1: "#ff875f".hexToRgb.get
+    of Color256.lightCoral: "#ff8787".hexToRgb.get
+    of Color256.paleVioletRed1: "#ff87af".hexToRgb.get
+    of Color256.orchid2: "#ff87d7".hexToRgb.get
+    of Color256.orchid1: "#ff87ff".hexToRgb.get
+    of Color256.orange1: "#ffaf00".hexToRgb.get
+    of Color256.sandyBrown: "#ffaf5f".hexToRgb.get
+    of Color256.lightSalmon1: "#ffaf87".hexToRgb.get
+    of Color256.lightPink1: "#ffafaf".hexToRgb.get
+    of Color256.pink1: "#ffafd7".hexToRgb.get
+    of Color256.plum1: "#ffafff".hexToRgb.get
+    of Color256.gold1: "#ffd700".hexToRgb.get
+    of Color256.lightGoldenrod21: "#ffd75f".hexToRgb.get
+    of Color256.lightGoldenrod22: "#ffd787".hexToRgb.get
+    of Color256.navajoWhite1: "#ffd7af".hexToRgb.get
+    of Color256.mistyRose1: "#ffd7d7".hexToRgb.get
+    of Color256.thistle1: "#ffd7ff".hexToRgb.get
+    of Color256.yellow1: "#ffff00".hexToRgb.get
+    of Color256.lightGoldenrod1: "#ffff5f".hexToRgb.get
+    of Color256.khaki1: "#ffff87".hexToRgb.get
+    of Color256.wheat1: "#ffffaf".hexToRgb.get
+    of Color256.cornsilk1: "#ffffd7".hexToRgb.get
+    of Color256.gray100: "#ffffff".hexToRgb.get
+    of Color256.gray3: "#080808".hexToRgb.get
+    of Color256.gray7: "#121212".hexToRgb.get
+    of Color256.gray11: "#1c1c1c".hexToRgb.get
+    of Color256.gray15: "#262626".hexToRgb.get
+    of Color256.gray19: "#303030".hexToRgb.get
+    of Color256.gray23: "#3a3a3a".hexToRgb.get
+    of Color256.gray27: "#444444".hexToRgb.get
+    of Color256.gray30: "#4e4e4e".hexToRgb.get
+    of Color256.gray35: "#585858".hexToRgb.get
+    of Color256.gray39: "#626262".hexToRgb.get
+    of Color256.gray42: "#6c6c6c".hexToRgb.get
+    of Color256.gray46: "#767676".hexToRgb.get
+    of Color256.gray50: "#808080".hexToRgb.get
+    of Color256.gray54: "#8a8a8a".hexToRgb.get
+    of Color256.gray58: "#949494".hexToRgb.get
+    of Color256.gray62: "#9e9e9e".hexToRgb.get
+    of Color256.gray66: "#a8a8a8".hexToRgb.get
+    of Color256.gray70: "#b2b2b2".hexToRgb.get
+    of Color256.gray74: "#bcbcbc".hexToRgb.get
+    of Color256.gray78: "#c6c6c6".hexToRgb.get
+    of Color256.gray82: "#d0d0d0".hexToRgb.get
+    of Color256.gray85: "#dadada".hexToRgb.get
+    of Color256.gray89: "#e4e4e4".hexToRgb.get
+    of Color256.gray93: "#eeeeee".hexToRgb.get
+
+## Return Color8 from Rgb.
+proc color8(rgb: Rgb): Result[Color8, string] =
+  if rgb == TerminalDefaultRgb:
+    return Result[Color8, string].ok Color8.default
+  if rgb == "#000000".hexToRgb.get:
+    return Result[Color8, string].ok Color8.black
+  if rgb == "#800000".hexToRgb.get:
+    return Result[Color8, string].ok Color8.maroon
+  if rgb == "#008000".hexToRgb.get:
+    return Result[Color8, string].ok Color8.green
+  if rgb == "#808000".hexToRgb.get:
+    return Result[Color8, string].ok Color8.olive
+  if rgb == "#000080".hexToRgb.get:
+    return Result[Color8, string].ok Color8.navy
+  if rgb == "#008080".hexToRgb.get:
+    return Result[Color8, string].ok Color8.purple
+  if rgb == "#008080".hexToRgb.get:
+    return Result[Color8, string].ok Color8.teal
+  if rgb == "#c0c0c0".hexToRgb.get:
+    return Result[Color8, string].ok Color8.silver
+  else:
+    return Result[Color8, string].err "Invalid value"
+
+## Return Color16 from Rgb.
+proc color16(rgb: Rgb): Result[Color16, string] =
+  if rgb == TerminalDefaultRgb:
+    return Result[Color16, string].ok Color16.default
+  if rgb == "#000000".hexToRgb.get:
+    return Result[Color16, string].ok Color16.black
+  if rgb == "#800000".hexToRgb.get:
+    return Result[Color16, string].ok Color16.maroon
+  if rgb == "#008000".hexToRgb.get:
+    return Result[Color16, string].ok Color16.green
+  if rgb == "#808000".hexToRgb.get:
+    return Result[Color16, string].ok Color16.olive
+  if rgb == "#000080".hexToRgb.get:
+    return Result[Color16, string].ok Color16.navy
+  if rgb == "#008080".hexToRgb.get:
+    return Result[Color16, string].ok Color16.purple
+  if rgb == "#008080".hexToRgb.get:
+    return Result[Color16, string].ok Color16.teal
+  if rgb == "#c0c0c0".hexToRgb.get:
+    return Result[Color16, string].ok Color16.silver
+  if rgb == "#808080".hexToRgb.get:
+    return Result[Color16, string].ok Color16.gray
+  if rgb == "#ff0000".hexToRgb.get:
+    return Result[Color16, string].ok Color16.red
+  if rgb == "#00ff00".hexToRgb.get:
+    return Result[Color16, string].ok Color16.lime
+  if rgb == "#ffff00".hexToRgb.get:
+    return Result[Color16, string].ok Color16.yellow
+  if rgb == "#0000ff".hexToRgb.get:
+    return Result[Color16, string].ok Color16.blue
+  if rgb == "#ff00ff".hexToRgb.get:
+    return Result[Color16, string].ok Color16.fuchsia
+  if rgb == "#00ffff".hexToRgb.get:
+    return Result[Color16, string].ok Color16.aqua
+  if rgb == "#ffffff".hexToRgb.get:
+    return Result[Color16, string].ok Color16.white
+  else:
+    return Result[Color16, string].err "Invalid value"
+
+## Return Color256 from Rgb.
+proc color256(rgb: Rgb): Result[Color256, string] =
+  if rgb == TerminalDefaultRgb:
+    return Result[Color256, string].ok Color256.default
+  if rgb == "#000000".hexToRgb.get:
+    return Result[Color256, string].ok Color256.black
+  if rgb == "#800000".hexToRgb.get:
+    return Result[Color256, string].ok Color256.maroon
+  if rgb == "#008000".hexToRgb.get:
+    return Result[Color256, string].ok Color256.green
+  if rgb == "#808000".hexToRgb.get:
+    return Result[Color256, string].ok Color256.olive
+  if rgb == "#000080".hexToRgb.get:
+    return Result[Color256, string].ok Color256.navy
+  if rgb == "#008080".hexToRgb.get:
+    return Result[Color256, string].ok Color256.purple
+  if rgb == "#008080".hexToRgb.get:
+    return Result[Color256, string].ok Color256.teal
+  if rgb == "#c0c0c0".hexToRgb.get:
+    return Result[Color256, string].ok Color256.silver
+  if rgb == "#808080".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gray
+  if rgb == "#ff0000".hexToRgb.get:
+    return Result[Color256, string].ok Color256.red
+  if rgb == "#00ff00".hexToRgb.get:
+    return Result[Color256, string].ok Color256.lime
+  if rgb == "#ffff00".hexToRgb.get:
+    return Result[Color256, string].ok Color256.yellow
+  if rgb == "#0000ff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.blue
+  if rgb == "#ff00ff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.fuchsia
+  if rgb == "#00ffff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.aqua
+  if rgb == "#ffffff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.white
+  if rgb == "#000000".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gray0
+  if rgb == "#00005f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.navyBlue
+  if rgb == "#000087".hexToRgb.get:
+    return Result[Color256, string].ok Color256.darkBlue
+  if rgb == "#0000af".hexToRgb.get:
+    return Result[Color256, string].ok Color256.blue31
+  if rgb == "#0000d7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.blue32
+  if rgb == "#0000ff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.blue1
+  if rgb == "#005f00".hexToRgb.get:
+    return Result[Color256, string].ok Color256.darkGreen
+  if rgb == "#005f5f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.deepSkyBlue41
+  if rgb == "#005f87".hexToRgb.get:
+    return Result[Color256, string].ok Color256.deepSkyBlue42
+  if rgb == "#005faf".hexToRgb.get:
+    return Result[Color256, string].ok Color256.deepSkyBlue43
+  if rgb == "#005fd7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.dodgerBlue31
+  if rgb == "#005fff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.dodgerBlue32
+  if rgb == "#008700".hexToRgb.get:
+    return Result[Color256, string].ok Color256.green4
+  if rgb == "#00875f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.springGreen4
+  if rgb == "#008787".hexToRgb.get:
+    return Result[Color256, string].ok Color256.turquoise4
+  if rgb == "#0087af".hexToRgb.get:
+    return Result[Color256, string].ok Color256.deepSkyBlue31
+  if rgb == "#0087d7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.deepSkyBlue32
+  if rgb == "#0087ff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.dodgerBlue1
+  if rgb == "#00af00".hexToRgb.get:
+    return Result[Color256, string].ok Color256.green31
+  if rgb == "#00af5f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.springGreen31
+  if rgb == "#00af87".hexToRgb.get:
+    return Result[Color256, string].ok Color256.darkCyan
+  if rgb == "#00afaf".hexToRgb.get:
+    return Result[Color256, string].ok Color256.lightSeaGreen
+  if rgb == "#00afd7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.deepSkyBlue2
+  if rgb == "#00afff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.deepSkyBlue1
+  if rgb == "#00d700".hexToRgb.get:
+    return Result[Color256, string].ok Color256.green32
+  if rgb == "#00d75f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.springGreen33
+  if rgb == "#00d787".hexToRgb.get:
+    return Result[Color256, string].ok Color256.springGreen21
+  if rgb == "#00d7af".hexToRgb.get:
+    return Result[Color256, string].ok Color256.cyan3
+  if rgb == "#00d7df".hexToRgb.get:
+    return Result[Color256, string].ok Color256.darkTurquoise
+  if rgb == "#00d7ff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.turquoise2
+  if rgb == "#00ff00".hexToRgb.get:
+    return Result[Color256, string].ok Color256.green1
+  if rgb == "#00ff5f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.springGreen22
+  if rgb == "#00ff87".hexToRgb.get:
+    return Result[Color256, string].ok Color256.springGreen1
+  if rgb == "#00ffaf".hexToRgb.get:
+    return Result[Color256, string].ok Color256.mediumSpringGreen
+  if rgb == "#00ffd7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.cyan2
+  if rgb == "#00ffff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.cyan1
+  if rgb == "#5f0000".hexToRgb.get:
+    return Result[Color256, string].ok Color256.darkRed1
+  if rgb == "#5f005f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.deepPink41
+  if rgb == "#5f0087".hexToRgb.get:
+    return Result[Color256, string].ok Color256.purple41
+  if rgb == "#5f00af".hexToRgb.get:
+    return Result[Color256, string].ok Color256.purple42
+  if rgb == "#5f00df".hexToRgb.get:
+    return Result[Color256, string].ok Color256.purple3
+  if rgb == "#5f00ff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.blueViolet
+  if rgb == "#5f5f00".hexToRgb.get:
+    return Result[Color256, string].ok Color256.orange41
+  if rgb == "#5f5f5f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gray37
+  if rgb == "#5f5f87".hexToRgb.get:
+    return Result[Color256, string].ok Color256.mediumPurple4
+  if rgb == "#5f5faf".hexToRgb.get:
+    return Result[Color256, string].ok Color256.slateBlue31
+  if rgb == "#5f5fd7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.slateBlue32
+  if rgb == "#5f5fff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.royalBlue1
+  if rgb == "#5f8700".hexToRgb.get:
+    return Result[Color256, string].ok Color256.chartreuse4
+  if rgb == "#5f875f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.darkSeaGreen41
+  if rgb == "#5f8787".hexToRgb.get:
+    return Result[Color256, string].ok Color256.paleTurquoise4
+  if rgb == "#5f87af".hexToRgb.get:
+    return Result[Color256, string].ok Color256.steelBlue
+  if rgb == "#5f87d7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.steelBlue3
+  if rgb == "#5f87ff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.cornflowerBlue
+  if rgb == "#5faf00".hexToRgb.get:
+    return Result[Color256, string].ok Color256.chartreuse31
+  if rgb == "#5faf5f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.darkSeaGreen42
+  if rgb == "#5faf87".hexToRgb.get:
+    return Result[Color256, string].ok Color256.cadetBlue1
+  if rgb == "#5fafaf".hexToRgb.get:
+    return Result[Color256, string].ok Color256.cadetBlue2
+  if rgb == "#5fafd7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.skyBlue3
+  if rgb == "#5fafff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.steelBlue11
+  if rgb == "#5fd000".hexToRgb.get:
+    return Result[Color256, string].ok Color256.chartreuse32
+  if rgb == "#5fd75f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.paleGreen31
+  if rgb == "#5fd787".hexToRgb.get:
+    return Result[Color256, string].ok Color256.seaGreen3
+  if rgb == "#5fd7af".hexToRgb.get:
+    return Result[Color256, string].ok Color256.aquamarine3
+  if rgb == "#5fd7d7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.mediumTurquoise
+  if rgb == "#5fd7ff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.steelBlue12
+  if rgb == "#5fff00".hexToRgb.get:
+    return Result[Color256, string].ok Color256.chartreuse21
+  if rgb == "#5fff5f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.seaGreen2
+  if rgb == "#5fff87".hexToRgb.get:
+    return Result[Color256, string].ok Color256.seaGreen11
+  if rgb == "#5fffaf".hexToRgb.get:
+    return Result[Color256, string].ok Color256.seaGreen12
+  if rgb == "#5fffd7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.aquamarine11
+  if rgb == "#5fffff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.darkSlateGray2
+  if rgb == "#870000".hexToRgb.get:
+    return Result[Color256, string].ok Color256.darkRed2
+  if rgb == "#87005f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.deepPink42
+  if rgb == "#870087".hexToRgb.get:
+    return Result[Color256, string].ok Color256.darkMagenta1
+  if rgb == "#8700af".hexToRgb.get:
+    return Result[Color256, string].ok Color256.darkMagenta2
+  if rgb == "#8700d7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.darkViolet1
+  if rgb == "#8700ff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.purple2
+  if rgb == "#875f00".hexToRgb.get:
+    return Result[Color256, string].ok Color256.orange42
+  if rgb == "#875f5f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.lightPink4
+  if rgb == "#875f87".hexToRgb.get:
+    return Result[Color256, string].ok Color256.plum4
+  if rgb == "#875faf".hexToRgb.get:
+    return Result[Color256, string].ok Color256.mediumPurple31
+  if rgb == "#875fd7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.mediumPurple32
+  if rgb == "#875fff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.slateBlue1
+  if rgb == "#878700".hexToRgb.get:
+    return Result[Color256, string].ok Color256.yellow41
+  if rgb == "#87875f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.wheat4
+  if rgb == "#878787".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gray53
+  if rgb == "#8787af".hexToRgb.get:
+    return Result[Color256, string].ok Color256.lightSlategray
+  if rgb == "#8787d7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.mediumPurple
+  if rgb == "#8787ff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.lightSlateBlue
+  if rgb == "#87af00".hexToRgb.get:
+    return Result[Color256, string].ok Color256.yellow42
+  if rgb == "#87af5f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.Wheat4
+  if rgb == "#87af87".hexToRgb.get:
+    return Result[Color256, string].ok Color256.darkSeaGreen
+  if rgb == "#87afaf".hexToRgb.get:
+    return Result[Color256, string].ok Color256.lightSkyBlue31
+  if rgb == "#87afd7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.lightSkyBlue32
+  if rgb == "#87afff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.skyBlue2
+  if rgb == "#87d700".hexToRgb.get:
+    return Result[Color256, string].ok Color256.chartreuse22
+  if rgb == "#87d75f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.darkOliveGreen31
+  if rgb == "#87d787".hexToRgb.get:
+    return Result[Color256, string].ok Color256.paleGreen32
+  if rgb == "#87d7af".hexToRgb.get:
+    return Result[Color256, string].ok Color256.darkSeaGreen31
+  if rgb == "#87d7d7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.darkSlateGray3
+  if rgb == "#87d7ff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.skyBlue1
+  if rgb == "#87ff00".hexToRgb.get:
+    return Result[Color256, string].ok Color256.chartreuse1
+  if rgb == "#87ff5f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.lightGreen1
+  if rgb == "#87ff87".hexToRgb.get:
+    return Result[Color256, string].ok Color256.lightGreen2
+  if rgb == "#87ffaf".hexToRgb.get:
+    return Result[Color256, string].ok Color256.paleGreen11
+  if rgb == "#87ffd7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.aquamarine12
+  if rgb == "#87ffff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.darkSlateGray1
+  if rgb == "#af0000".hexToRgb.get:
+    return Result[Color256, string].ok Color256.red31
+  if rgb == "#af005f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.deepPink4
+  if rgb == "#af0087".hexToRgb.get:
+    return Result[Color256, string].ok Color256.mediumVioletRed
+  if rgb == "#af00af".hexToRgb.get:
+    return Result[Color256, string].ok Color256.magenta3
+  if rgb == "#af00d7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.darkViolet2
+  if rgb == "#af00ff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.purple
+  if rgb == "#af5f00".hexToRgb.get:
+    return Result[Color256, string].ok Color256.darkOrange31
+  if rgb == "#af5f5f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.indianRed1
+  if rgb == "#af5f87".hexToRgb.get:
+    return Result[Color256, string].ok Color256.hotPink31
+  if rgb == "#af5faf".hexToRgb.get:
+    return Result[Color256, string].ok Color256.mediumOrchid3
+  if rgb == "#af5fd7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.mediumOrchid
+  if rgb == "#af5fff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.mediumPurple21
+  if rgb == "#af8700".hexToRgb.get:
+    return Result[Color256, string].ok Color256.darkGoldenrod
+  if rgb == "#af875f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.lightSalmon31
+  if rgb == "#af8787".hexToRgb.get:
+    return Result[Color256, string].ok Color256.rosyBrown
+  if rgb == "#af87af".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gray63
+  if rgb == "#af87d7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.mediumPurple22
+  if rgb == "#af87ff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.mediumPurple1
+  if rgb == "#afaf00".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gold31
+  if rgb == "#afaf5f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.darkKhaki
+  if rgb == "#afaf87".hexToRgb.get:
+    return Result[Color256, string].ok Color256.navajoWhite3
+  if rgb == "#afafaf".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gray69
+  if rgb == "#afafd7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.lightSteelBlue3
+  if rgb == "#afafff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.lightSteelBlue
+  if rgb == "#afd700".hexToRgb.get:
+    return Result[Color256, string].ok Color256.yellow31
+  if rgb == "#afd75f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.darkOliveGreen32
+  if rgb == "#afd787".hexToRgb.get:
+    return Result[Color256, string].ok Color256.darkSeaGreen32
+  if rgb == "#afd7af".hexToRgb.get:
+    return Result[Color256, string].ok Color256.darkSeaGreen21
+  if rgb == "#afafd7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.lightCyan3
+  if rgb == "#afd7ff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.lightSkyBlue1
+  if rgb == "#afff00".hexToRgb.get:
+    return Result[Color256, string].ok Color256.greenYellow
+  if rgb == "#afff5f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.darkOliveGreen2
+  if rgb == "#afff87".hexToRgb.get:
+    return Result[Color256, string].ok Color256.paleGreen12
+  if rgb == "#afffaf".hexToRgb.get:
+    return Result[Color256, string].ok Color256.darkSeaGreen22
+  if rgb == "#afffd7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.darkSeaGreen11
+  if rgb == "#afffff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.paleTurquoise1
+  if rgb == "#d70000".hexToRgb.get:
+    return Result[Color256, string].ok Color256.red32
+  if rgb == "#d7005f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.deepPink31
+  if rgb == "#d70087".hexToRgb.get:
+    return Result[Color256, string].ok Color256.deepPink32
+  if rgb == "#d700af".hexToRgb.get:
+    return Result[Color256, string].ok Color256.magenta31
+  if rgb == "#d700d7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.magenta32
+  if rgb == "#d700ff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.magenta21
+  if rgb == "#d75f00".hexToRgb.get:
+    return Result[Color256, string].ok Color256.darkOrange32
+  if rgb == "#d75f5f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.indianRed2
+  if rgb == "#d75f87".hexToRgb.get:
+    return Result[Color256, string].ok Color256.hotPink32
+  if rgb == "#d75faf".hexToRgb.get:
+    return Result[Color256, string].ok Color256.hotPink2
+  if rgb == "#d75fd7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.orchid
+  if rgb == "#d75fff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.mediumOrchid11
+  if rgb == "#d78700".hexToRgb.get:
+    return Result[Color256, string].ok Color256.orange3
+  if rgb == "#d7875f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.lightSalmon32
+  if rgb == "#d78787".hexToRgb.get:
+    return Result[Color256, string].ok Color256.lightPink3
+  if rgb == "#d787af".hexToRgb.get:
+    return Result[Color256, string].ok Color256.pink3
+  if rgb == "#d787d7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.plum3
+  if rgb == "#d787ff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.violet
+  if rgb == "#d7af00".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gold32
+  if rgb == "#d7af5f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.lightGoldenrod3
+  if rgb == "#d7af87".hexToRgb.get:
+    return Result[Color256, string].ok Color256.tan
+  if rgb == "#d7afaf".hexToRgb.get:
+    return Result[Color256, string].ok Color256.mistyRose3
+  if rgb == "#d7afd7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.thistle3
+  if rgb == "#d7afff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.plum2
+  if rgb == "#d7d700".hexToRgb.get:
+    return Result[Color256, string].ok Color256.yellow32
+  if rgb == "#d7d75f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.khaki3
+  if rgb == "#d7d787".hexToRgb.get:
+    return Result[Color256, string].ok Color256.lightGoldenrod2
+  if rgb == "#d7d7af".hexToRgb.get:
+    return Result[Color256, string].ok Color256.lightYellow3
+  if rgb == "#d7d7d7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gray84
+  if rgb == "#d7d7ff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.lightSteelBlue1
+  if rgb == "#d7ff00".hexToRgb.get:
+    return Result[Color256, string].ok Color256.yellow2
+  if rgb == "#d7ff5f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.darkOliveGreen11
+  if rgb == "#d7ff87".hexToRgb.get:
+    return Result[Color256, string].ok Color256.darkOliveGreen12
+  if rgb == "#d7ffaf".hexToRgb.get:
+    return Result[Color256, string].ok Color256.darkSeaGreen12
+  if rgb == "#d7ffd7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.honeydew2
+  if rgb == "#d7ffff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.lightCyan1
+  if rgb == "#ff0000".hexToRgb.get:
+    return Result[Color256, string].ok Color256.red1
+  if rgb == "#ff005f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.deepPink2
+  if rgb == "#ff0087".hexToRgb.get:
+    return Result[Color256, string].ok Color256.deepPink11
+  if rgb == "#ff00af".hexToRgb.get:
+    return Result[Color256, string].ok Color256.deepPink12
+  if rgb == "#ff00d7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.magenta22
+  if rgb == "#ff00ff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.magenta1
+  if rgb == "#ff5f00".hexToRgb.get:
+    return Result[Color256, string].ok Color256.orangeRed1
+  if rgb == "#ff5f5f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.indianRed11
+  if rgb == "#ff5f87".hexToRgb.get:
+    return Result[Color256, string].ok Color256.indianRed12
+  if rgb == "#ff5faf".hexToRgb.get:
+    return Result[Color256, string].ok Color256.hotPink11
+  if rgb == "#ff5fd7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.hotPink12
+  if rgb == "#ff5fff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.mediumOrchid12
+  if rgb == "#ff8700".hexToRgb.get:
+    return Result[Color256, string].ok Color256.darkOrange
+  if rgb == "#ff875f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.salmon1
+  if rgb == "#ff8787".hexToRgb.get:
+    return Result[Color256, string].ok Color256.lightCoral
+  if rgb == "#ff87af".hexToRgb.get:
+    return Result[Color256, string].ok Color256.paleVioletRed1
+  if rgb == "#ff87d7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.orchid2
+  if rgb == "#ff87ff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.orchid1
+  if rgb == "#ffaf00".hexToRgb.get:
+    return Result[Color256, string].ok Color256.orange1
+  if rgb == "#ffaf5f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.sandyBrown
+  if rgb == "#ffaf87".hexToRgb.get:
+    return Result[Color256, string].ok Color256.lightSalmon1
+  if rgb == "#ffafaf".hexToRgb.get:
+    return Result[Color256, string].ok Color256.lightPink1
+  if rgb == "#ffafd7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.pink1
+  if rgb == "#ffafff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.plum1
+  if rgb == "#ffd700".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gold1
+  if rgb == "#ffd75f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.lightGoldenrod21
+  if rgb == "#ffd787".hexToRgb.get:
+    return Result[Color256, string].ok Color256.lightGoldenrod22
+  if rgb == "#ffd7af".hexToRgb.get:
+    return Result[Color256, string].ok Color256.navajoWhite1
+  if rgb == "#ffd7d7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.mistyRose1
+  if rgb == "#ffd7ff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.thistle1
+  if rgb == "#ffff00".hexToRgb.get:
+    return Result[Color256, string].ok Color256.yellow1
+  if rgb == "#ffff5f".hexToRgb.get:
+    return Result[Color256, string].ok Color256.lightGoldenrod1
+  if rgb == "#ffff87".hexToRgb.get:
+    return Result[Color256, string].ok Color256.khaki1
+  if rgb == "#ffffaf".hexToRgb.get:
+    return Result[Color256, string].ok Color256.wheat1
+  if rgb == "#ffffd7".hexToRgb.get:
+    return Result[Color256, string].ok Color256.cornsilk1
+  if rgb == "#ffffff".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gray100
+  if rgb == "#080808".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gray3
+  if rgb == "#121212".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gray7
+  if rgb == "#1c1c1c".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gray11
+  if rgb == "#262626".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gray15
+  if rgb == "#303030".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gray19
+  if rgb == "#3a3a3a".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gray23
+  if rgb == "#444444".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gray27
+  if rgb == "#4e4e4e".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gray30
+  if rgb == "#585858".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gray35
+  if rgb == "#626262".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gray39
+  if rgb == "#6c6c6c".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gray42
+  if rgb == "#767676".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gray46
+  if rgb == "#808080".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gray50
+  if rgb == "#8a8a8A".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gray54
+  if rgb == "#949494".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gray58
+  if rgb == "#9e9e9e".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gray62
+  if rgb == "#a8a8a8".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gray66
+  if rgb == "#b2b2b2".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gray70
+  if rgb == "#bcbcbc".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gray74
+  if rgb == "#c6c6c6".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gray78
+  if rgb == "#d0d0d0".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gray82
+  if rgb == "#dadada".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gray85
+  if rgb == "#e4e4e4".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gray89
+  if rgb == "#eeeeeE".hexToRgb.get:
+    return Result[Color256, string].ok Color256.gray93
+  else:
+    return Result[Color256, string].err "Invalid value"
+
 proc isTermDefaultColor*(i: EditorColorIndex): bool {.inline.} =
   i == termDefaultForeground or i == termDefaultBackground
 
@@ -3099,25 +3099,6 @@ proc rgbToColor256*(orignRgb: Rgb): Color256 =
       if difference == 0:
         break
 
-## Donwgrade colors to 256 or 16 or 8.
-## Do nothing if greater than 256.
-proc downgrade*(theme: ColorTheme, mode: ColorMode) =
-  if mode.int > 256: return
-
-  for pairIndex, pair in ColorThemeTable[theme]:
-    case mode:
-      of ColorMode.c8:
-       theme.setForegroundRgb(pairIndex, pair.foreground.rgb.rgbToColor8.rgb)
-       theme.setBackgroundRgb(pairIndex, pair.foreground.rgb.rgbToColor8.rgb)
-      of ColorMode.c16:
-       theme.setForegroundRgb(pairIndex, pair.foreground.rgb.rgbToColor16.rgb)
-       theme.setBackgroundRgb(pairIndex, pair.foreground.rgb.rgbToColor16.rgb)
-      of ColorMode.c256:
-       theme.setForegroundRgb(pairIndex, pair.foreground.rgb.rgbToColor256.rgb)
-       theme.setBackgroundRgb(pairIndex, pair.foreground.rgb.rgbToColor256.rgb)
-      else:
-        discard
-
 ## Donwgrade rgb to 256 or 16 or 8.
 ## Do nothing if greater than 256.
 proc downgrade*(rgb: Rgb, colorMode: ColorMode): Rgb =
@@ -3130,6 +3111,25 @@ proc downgrade*(rgb: Rgb, colorMode: ColorMode): Rgb =
      rgb.rgbToColor256.rgb
     else:
       rgb
+
+## Donwgrade theme colors to 256 or 16 or 8.
+## Do nothing if greater than 256.
+proc downgrade*(theme: ColorTheme, mode: ColorMode) =
+  if mode.int > 256: return
+
+  for pairIndex, pair in ColorThemeTable[theme]:
+    case mode:
+      of ColorMode.c8:
+       theme.setForegroundRgb(pairIndex, pair.foreground.rgb.rgbToColor8.rgb)
+       theme.setBackgroundRgb(pairIndex, pair.background.rgb.rgbToColor8.rgb)
+      of ColorMode.c16:
+       theme.setForegroundRgb(pairIndex, pair.foreground.rgb.rgbToColor16.rgb)
+       theme.setBackgroundRgb(pairIndex, pair.background.rgb.rgbToColor16.rgb)
+      of ColorMode.c256:
+       theme.setForegroundRgb(pairIndex, pair.foreground.rgb.rgbToColor256.rgb)
+       theme.setBackgroundRgb(pairIndex, pair.background.rgb.rgbToColor256.rgb)
+      else:
+        discard
 
 ## Init a Rgb definition of Color.
 proc initColor*(c: Color): Result[(), string] =
@@ -3152,43 +3152,64 @@ proc initColor*(pair: ColorPair): Result[(), string] =
   return Result[(), string].ok ()
 
 ## Init a Ncurses color pair.
+## Downgrade colors if not 24bit support.
 proc initColorPair*(
   pairIndex: EditorColorPairIndex | int,
+  colorMode: ColorMode,
   foreground, background: Color) =
 
     let
       fg: int16 =
-        if foreground.rgb.isTermDefaultColor: -1
-        else: foreground.index.int16
+        if foreground.isTermDefaultColor:
+          -1
+        else:
+          case colorMode:
+            of ColorMode.c8:
+              foreground.rgb.rgbToColor8.int16
+            of ColorMode.c16:
+              foreground.rgb.rgbToColor16.int16
+            of ColorMode.c256:
+              foreground.rgb.rgbToColor256.int16
+            else:
+              foreground.index.int16
+
       bg: int16 =
-        if background.rgb.isTermDefaultColor: -1
-        else: background.index.int16
+        if background.isTermDefaultColor:
+          -1
+        else:
+          case colorMode:
+            of ColorMode.c8:
+              background.rgb.rgbToColor8.int16
+            of ColorMode.c16:
+              background.rgb.rgbToColor16.int16
+            of ColorMode.c256:
+              background.rgb.rgbToColor256.int16
+            else:
+              background.index.int16
 
     initNcursesColorPair(pairIndex.int, fg, bg)
 
 ## Init a new Ncurses color pair.
 proc initColorPair(
   pairIndex: EditorColorPairIndex,
+  colorMode: ColorMode,
   pair: ColorPair) {.inline.} =
 
-    pairIndex.initColorPair(pair.foreground, pair.background)
+    pairIndex.initColorPair(colorMode, pair.foreground, pair.background)
 
 ## Init Ncurses colors and color pairs.
-## Downgrade colors if not 24bit support
 proc initEditrorColor*(
   theme: ColorTheme,
   colorMode: ColorMode): Result[(), string] =
 
-    if colorMode < ColorMode.c24bit:
-      theme.downgrade(colorMode)
-    else:
+    if colorMode >= ColorMode.c24bit:
+      # Override Ncurses default color definitions if TrueColor is supported.
       for _, colorPair in ColorThemeTable[theme]:
-        # Init all color pair defines.
-        block initRgb:
-          let r = colorPair.initColor
-          if r.isErr: return Result[(), string].err r.error
+        # Init all color defines.
+        let r = colorPair.initColor
+        if r.isErr: return Result[(), string].err r.error
 
     for pairIndex, colorPair in ColorThemeTable[theme]:
-      pairIndex.initColorPair(colorPair)
+      pairIndex.initColorPair(colorMode, colorPair)
 
     return Result[(), string].ok ()

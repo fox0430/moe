@@ -1191,7 +1191,8 @@ proc listAllBufferCommand(status: var EditorStatus) =
     currentMainWindowNode,
     status.isSearchHighlight,
     status.searchHistory,
-    status.settings)
+    status.settings,
+    status.colorMode)
 
   while true:
     status.update
