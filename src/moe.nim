@@ -18,6 +18,7 @@
 #[############################################################################]#
 
 import std/[os, times]
+import pkg/results
 import moepkg/[ui, bufferstatus, editorstatus, cmdlineoption, mainloop, git,
                editorview, color]
 
@@ -67,8 +68,14 @@ proc initEditor(): EditorStatus =
   result.loadConfigurationFile
   result.timeConfFileLastReloaded = now()
 
-  # TODO: Show error messages when failing to the load VSCode theme.
-  result.settings.editorColorTheme.initEditrorColor
+  block initColors:
+    # TODO: Show error messages when failing to the load VSCode theme.
+    let r = result.settings.editorColorTheme.initEditrorColor(result.colorMode)
+    if r.isErr:
+      exitUi()
+      echo r.error
+      # TODO: Fix raise
+      raise
 
   setControlCHook(proc() {.noconv.} =
     exitUi()

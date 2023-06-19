@@ -58,6 +58,7 @@ type EditorStatus* = object
   wordDictionary*: WordDictionary
   suggestionWindow*: Option[SuggestionWindow]
   sidebar*: Option[GlobalSidebar]
+  colorMode*: ColorMode
 
 const
   tabLineWindowHeight = 1
@@ -82,6 +83,8 @@ proc initEditorStatus*(): EditorStatus =
       l = 0
       color = EditorColorPairIndex.default
     result.tabWindow = initWindow(h, w, t, l, color.int16)
+
+  result.colorMode = checkColorSupportedTerminal()
 
 template currentBufStatus*: var BufferStatus =
   mixin status
@@ -1052,11 +1055,12 @@ proc changeTheme*(status: var EditorStatus) =
       status.commandLine.writeError(
         fmt"Error: Failed to switch to VSCode theme: {vsCodeTheme.error}")
 
-  status.settings.editorColorTheme.initEditrorColor
-
-  # TODO: Uncomment
-  #if checkColorSupportedTerminal() == 8:
-  #  convertToConsoleEnvironmentColor(status.settings.editorColorTheme)
+  let r = status.settings.editorColorTheme.initEditrorColor(status.colorMode)
+  if r.isErr:
+    exitUi()
+    echo r.error
+    # TODO: Fix raise
+    raise
 
 proc autoSave(status: var EditorStatus) =
   let interval = status.settings.autoSaveInterval.minutes

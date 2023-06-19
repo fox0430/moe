@@ -18,7 +18,7 @@
 #[############################################################################]#
 
 import std/[strformat, osproc, strutils, os, terminal]
-import pkg/ncurses
+import pkg/[ncurses, results]
 import unicodeext, independentutils
 
 when not defined unitTest:
@@ -54,6 +54,18 @@ type
     Valid
     Invalid
     Cancel
+
+  ColorMode* {.pure.} = enum
+    # No color support
+    None = 1
+    # 8 colors
+    c8 = 8
+    # 16 colors
+    c16 = 16
+    # 256 colors
+    c256 = 256
+    # 24 bit colors (Truecolor)
+    c24bit = 16777216
 
 const DefaultColorPair: int16 = 0
 
@@ -115,18 +127,43 @@ proc keyEcho*(keyecho: bool) =
   if keyecho == true: echo()
   elif keyecho == false: noecho()
 
-proc setTimeout*(win: var Window) {.inline.} = win.cursesWindow.wtimeout(cint(1000)) # 500mm sec
+proc setTimeout*(win: var Window) {.inline.} =
+  win.cursesWindow.wtimeout(cint(1000)) # 500mm sec
 
-proc setTimeout*(win: var Window, time: int) {.inline.} = win.cursesWindow.wtimeout(cint(time))
+proc setTimeout*(win: var Window, time: int) {.inline.} =
+  win.cursesWindow.wtimeout(cint(time))
 
-# Check how many colors are supported on the terminal
-proc checkColorSupportedTerminal*(): int =
-  let (output, exitCode) = execCmdEx("tput colors")
+## Check how many colors are supported on the terminal and return ColorMode.
+## Check "$COLORTERM" first, then check "tput colors" if it fails.
+## Return ColorMode.None if unknown color support.
+proc checkColorSupportedTerminal*(): ColorMode =
+  result = ColorMode.None
 
-  if exitCode == 0:
-    result = (output[0 ..< output.high]).parseInt
-  else:
-    result = -1
+  block checkColorTerm:
+    let cmdResult = execCmdEx("echo $COLORTERM")
+    if cmdResult.exitCode == 0:
+      var output = cmdResult.output
+      output.stripLineEnd
+      if output == "truecolor":
+        return ColorMode.c24bit
+
+  block checkTput:
+    let cmdResult = execCmdEx("tput colors")
+    if cmdResult.exitCode == 0:
+      var output = cmdResult.output
+      output.stripLineEnd
+
+      var num: int
+      try:
+        num = output.parseInt
+      except ValueError:
+        return ColorMode.None
+
+      case num:
+        of 8: return ColorMode.c8
+        of 16: return ColorMode.c16
+        of 256: return ColorMode.c256
+        else: return ColorMode.None
 
 proc startUi*() =
   # Not start when running unit tests
@@ -165,17 +202,17 @@ proc toNcursesColor(element: int16): int16 =
 
   return int16(element.float * (1000.0 / 255.0) + 0.5)
 
-proc initNcursesColor*(color, red, green, blue: int16) =
+proc initNcursesColor*(color, red, green, blue: int16): Result[(), string] =
   let
     r = red.toNcursesColor
     g = green.toNcursesColor
     b = blue.toNcursesColor
 
-  if 0 != initColor(color.cshort, r.cshort, g.cshort, b.cshort):
-    # TODO: Return an error?
-    exitUi()
-    echo fmt"Init Ncurses color failed: (r: {r}, g: {g}, b: {b})"
-    raise
+  let exitCode = initColor(color.cshort, r.cshort, g.cshort, b.cshort)
+  if 0 != exitCode:
+    return Result[(), string].err "Init Ncurses color failed: (r: {r}, g: {g}, b: {b}): Exit code: {exitCode}"
+
+  return Result[(), string].ok ()
 
 proc initNcursesColorPair*(pair, fg, bg: int) =
   when not defined(release):
@@ -183,9 +220,11 @@ proc initNcursesColorPair*(pair, fg, bg: int) =
     # 0 is reserved by Ncurses.
     doAssert(pair > 0, fmt"Cannot use `{pair}` in Ncurses color pair")
 
-  if 0 != initExtendedPair(pair.cint, fg.cint, bg.cint):
+  let r = initExtendedPair(pair.cint, fg.cint, bg.cint)
+  if 0 != r:
     exitUi()
-    echo fmt"Init Ncurses color pair failed: (pair: {pair}, fg: {fg}, bg: {bg})"
+    echo fmt"Init Ncurses color pair failed: (pair: {pair}, fg: {fg}, bg: {bg}): Exit code: {r}"
+    # TODO: Return Result.error
     raise
 
 proc initWindow*(height, width, y, x: int, color: int16): Window =
