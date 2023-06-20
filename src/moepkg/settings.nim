@@ -1528,9 +1528,47 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Theme"].contains("foreground"):
       ColorThemeTable[configTheme][EditorColorPairIndex.default].foreground.rgb =
         toRgb("foreground")
+      ColorThemeTable[configTheme][EditorColorPairIndex.currentLineBg].foreground.rgb =
+        toRgb("foreground")
+
     if settings["Theme"].contains("background"):
+      let bgRgb = toRgb("background")
       ColorThemeTable[configTheme][EditorColorPairIndex.default].background.rgb =
-        toRgb("background")
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.keyword].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.functionName].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.typeName].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.boolean].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.specialVar].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.builtin].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.stringLit].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.binNumber].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.decNumber].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.floatNumber].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.hexNumber].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.octNumber].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.comment].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.longComment].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.whitespace].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.preprocessor].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.pragma].background.rgb =
+        bgRgb
 
     if settings["Theme"].contains("lineNum"):
       ColorThemeTable[configTheme][EditorColorPairIndex.lineNum].foreground.rgb =
@@ -1724,114 +1762,68 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Theme"].contains("keyword"):
       ColorThemeTable[configTheme][EditorColorPairIndex.keyword].foreground.rgb =
         toRgb("keyword")
-    if settings["Theme"].contains("keywordBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.keyword].background.rgb =
-        toRgb("keywordBg")
 
     if settings["Theme"].contains("functionName"):
       ColorThemeTable[configTheme][EditorColorPairIndex.functionName].foreground.rgb =
         toRgb("functionName")
-    if settings["Theme"].contains("functionNameBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.functionName].background.rgb =
-        toRgb("functionNameBg")
-
     if settings["Theme"].contains("typeName"):
       ColorThemeTable[configTheme][EditorColorPairIndex.typeName].foreground.rgb =
         toRgb("typeName")
-    if settings["Theme"].contains("typeNameBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.typeName].background.rgb =
-        toRgb("typeNameBg")
-
     if settings["Theme"].contains("boolean"):
       ColorThemeTable[configTheme][EditorColorPairIndex.boolean].foreground.rgb =
         toRgb("boolean")
-    if settings["Theme"].contains("booleanBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.boolean].background.rgb =
-        toRgb("booleanBg")
 
     if settings["Theme"].contains("specialVar"):
       ColorThemeTable[configTheme][EditorColorPairIndex.specialVar].foreground.rgb =
         toRgb("specialVar")
-    if settings["Theme"].contains("specialVarBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.specialVar].background.rgb =
-        toRgb("specialVarBg")
 
     if settings["Theme"].contains("builtin"):
       ColorThemeTable[configTheme][EditorColorPairIndex.builtin].foreground.rgb =
         toRgb("builtin")
-    if settings["Theme"].contains("builtinBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.builtin].background.rgb =
-        toRgb("builtinBg")
 
     if settings["Theme"].contains("stringLit"):
       ColorThemeTable[configTheme][EditorColorPairIndex.stringLit].foreground.rgb =
         toRgb("stringLit")
-    if settings["Theme"].contains("stringLitBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.stringLit].background.rgb =
-        toRgb("stringLitBg")
 
     if settings["Theme"].contains("binNumber"):
       ColorThemeTable[configTheme][EditorColorPairIndex.binNumber].foreground.rgb =
         toRgb("binNumber")
-    if settings["Theme"].contains("binNumberBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.binNumber].background.rgb =
-        toRgb("binNumberBg")
 
     if settings["Theme"].contains("decNumber"):
       ColorThemeTable[configTheme][EditorColorPairIndex.decNumber].foreground.rgb =
         toRgb("decNumber")
-    if settings["Theme"].contains("decNumberBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.decNumber].background.rgb =
-        toRgb("decNumberBg")
 
     if settings["Theme"].contains("floatNumber"):
       ColorThemeTable[configTheme][EditorColorPairIndex.floatNumber].foreground.rgb =
         toRgb("floatNumber")
-    if settings["Theme"].contains("floatNumberBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.floatNumber].background.rgb =
-        toRgb("floatNumberBg")
 
     if settings["Theme"].contains("hexNumber"):
       ColorThemeTable[configTheme][EditorColorPairIndex.hexNumber].foreground.rgb =
         toRgb("hexNumber")
-    if settings["Theme"].contains("hexNumberBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.hexNumber].background.rgb =
-        toRgb("hexNumberBg")
 
     if settings["Theme"].contains("octNumber"):
       ColorThemeTable[configTheme][EditorColorPairIndex.octNumber].foreground.rgb =
         toRgb("octNumber")
-    if settings["Theme"].contains("octNumberBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.octNumber].background.rgb =
-        toRgb("octNumberBg")
 
     if settings["Theme"].contains("comment"):
       ColorThemeTable[configTheme][EditorColorPairIndex.comment].foreground.rgb =
         toRgb("comment")
-    if settings["Theme"].contains("commentBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.comment].background.rgb =
-        toRgb("commentBg")
 
     if settings["Theme"].contains("longComment"):
       ColorThemeTable[configTheme][EditorColorPairIndex.longComment].foreground.rgb =
         toRgb("longComment")
-    if settings["Theme"].contains("longCommentBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.longComment].background.rgb =
-        toRgb("longCommentBg")
 
     if settings["Theme"].contains("whitespace"):
       ColorThemeTable[configTheme][EditorColorPairIndex.whitespace].foreground.rgb =
         toRgb("whitespace")
-    if settings["Theme"].contains("whitespaceBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.whitespace].background.rgb =
-        toRgb("whitespaceBg")
 
     if settings["Theme"].contains("preprocessor"):
       ColorThemeTable[configTheme][EditorColorPairIndex.preprocessor].foreground.rgb =
         toRgb("preprocessor")
-    if settings["Theme"].contains("preprocessorBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.preprocessor].background.rgb =
-        toRgb("preprocessorBg")
+
+    if settings["Theme"].contains("pragma"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.pragma].foreground.rgb =
+        toRgb("pragma")
 
     if settings["Theme"].contains("currentFile"):
       ColorThemeTable[configTheme][EditorColorPairIndex.currentFile].foreground.rgb =
@@ -1954,7 +1946,7 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       ColorThemeTable[configTheme][EditorColorPairIndex.currentLineBg].background.rgb =
         toRgb("currentLineBg")
 
-  if result.editorColorTheme == ColorTheme.vscode:
+  elif result.editorColorTheme == ColorTheme.vscode:
     let vsCodeTheme = loadVSCodeTheme()
     if vsCodeTheme.isOk:
       result.editorColorTheme = vsCodeTheme.get
@@ -2692,22 +2684,22 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "searchResultBg = \"{$theme.backgroundRgb(EditorColorPairIndex.searchResult).toHex}\""
   result.addLine fmt "visualMode = \"{$theme.foregroundRgb(EditorColorPairIndex.visualMode).toHex}\""
   result.addLine fmt "visualModeBg = \"{$theme.backgroundRgb(EditorColorPairIndex.visualMode).toHex}\""
-  result.addLine fmt "gtKeyword = \"{$theme.foregroundRgb(EditorColorPairIndex.keyword).toHex}\""
-  result.addLine fmt "gtFunctionName = \"{$theme.foregroundRgb(EditorColorPairIndex.functionName)}\""
-  result.addLine fmt "gtTypeName= \"{$theme.foregroundRgb(EditorColorPairIndex.typeName).toHex}\""
-  result.addLine fmt "gtBoolean = \"{$theme.foregroundRgb(EditorColorPairIndex.boolean).toHex}\""
-  result.addLine fmt "gtStringLit = \"{$theme.foregroundRgb(EditorColorPairIndex.stringLit).toHex}\""
-  result.addLine fmt "gtSpecialVar = \"{$theme.foregroundRgb(EditorColorPairIndex.specialVar).toHex}\""
-  result.addLine fmt "gtBuiltin = \"{$theme.foregroundRgb(EditorColorPairIndex.builtin).toHex}\""
-  result.addLine fmt "gtBinNumber = \"{$theme.foregroundRgb(EditorColorPairIndex.binNumber).toHex}\""
-  result.addLine fmt "gtDecNumber = \"{$theme.foregroundRgb(EditorColorPairIndex.decNumber).toHex}\""
-  result.addLine fmt "gtFloatNumber = \"{$theme.foregroundRgb(EditorColorPairIndex.floatNumber).toHex}\""
-  result.addLine fmt "gtHexNumber = \"{$theme.foregroundRgb(EditorColorPairIndex.hexNumber).toHex}\""
-  result.addLine fmt "gtOctNumber = \"{$theme.foregroundRgb(EditorColorPairIndex.octNumber).toHex}\""
-  result.addLine fmt "gtComment = \"{$theme.foregroundRgb(EditorColorPairIndex.comment).toHex}\""
-  result.addLine fmt "gtLongComment = \"{$theme.foregroundRgb(EditorColorPairIndex.longComment).toHex}\""
-  result.addLine fmt "gtWhitespace = \"{$theme.foregroundRgb(EditorColorPairIndex.whitespace).toHex}\""
-  result.addLine fmt "gtPreprocessor = \"{$theme.foregroundRgb(EditorColorPairIndex.preprocessor).toHex}\""
+  result.addLine fmt "keyword = \"{$theme.foregroundRgb(EditorColorPairIndex.keyword).toHex}\""
+  result.addLine fmt "functionName = \"{$theme.foregroundRgb(EditorColorPairIndex.functionName)}\""
+  result.addLine fmt "typeName= \"{$theme.foregroundRgb(EditorColorPairIndex.typeName).toHex}\""
+  result.addLine fmt "boolean = \"{$theme.foregroundRgb(EditorColorPairIndex.boolean).toHex}\""
+  result.addLine fmt "stringLit = \"{$theme.foregroundRgb(EditorColorPairIndex.stringLit).toHex}\""
+  result.addLine fmt "specialVar = \"{$theme.foregroundRgb(EditorColorPairIndex.specialVar).toHex}\""
+  result.addLine fmt "builtin = \"{$theme.foregroundRgb(EditorColorPairIndex.builtin).toHex}\""
+  result.addLine fmt "binNumber = \"{$theme.foregroundRgb(EditorColorPairIndex.binNumber).toHex}\""
+  result.addLine fmt "decNumber = \"{$theme.foregroundRgb(EditorColorPairIndex.decNumber).toHex}\""
+  result.addLine fmt "floatNumber = \"{$theme.foregroundRgb(EditorColorPairIndex.floatNumber).toHex}\""
+  result.addLine fmt "hexNumber = \"{$theme.foregroundRgb(EditorColorPairIndex.hexNumber).toHex}\""
+  result.addLine fmt "octNumber = \"{$theme.foregroundRgb(EditorColorPairIndex.octNumber).toHex}\""
+  result.addLine fmt "comment = \"{$theme.foregroundRgb(EditorColorPairIndex.comment).toHex}\""
+  result.addLine fmt "longComment = \"{$theme.foregroundRgb(EditorColorPairIndex.longComment).toHex}\""
+  result.addLine fmt "whitespace = \"{$theme.foregroundRgb(EditorColorPairIndex.whitespace).toHex}\""
+  result.addLine fmt "preprocessor = \"{$theme.foregroundRgb(EditorColorPairIndex.preprocessor).toHex}\""
   result.addLine fmt "currentFile = \"{$theme.foregroundRgb(EditorColorPairIndex.currentFile).toHex}\""
   result.addLine fmt "currentFileBg = \"{$theme.foregroundRgb(EditorColorPairIndex.currentFile).toHex}\""
   result.addLine fmt "file = \"{$theme.foregroundRgb(EditorColorPairIndex.file).toHex}\""
