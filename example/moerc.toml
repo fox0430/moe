@@ -401,6 +401,11 @@ highlightTrailingSpacesBg = "#ff0000"
 reservedWord = "#ffffff"
 reservedWordBg = "#808080"
 
+addedLine = "#008000"
+addedLineBg = "termDefautBg"
+deletedLine = "#deletedLine"
+deletedLineBg = "termDefautBg"
+
 # configuration mode
 currentSetting = "#ffffff"
 currentSettingBg = "#008080"
