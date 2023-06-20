@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strformat, osproc, strutils, os, terminal]
+import std/[strformat, osproc, strutils, terminal]
 import pkg/[ncurses, results]
 import unicodeext, independentutils
 
@@ -227,9 +227,17 @@ proc initNcursesColor*(color, red, green, blue: int16): Result[(), string] =
     g = green.toNcursesColor
     b = blue.toNcursesColor
 
-  let exitCode = initColor(color.cshort, r.cshort, g.cshort, b.cshort)
-  if 0 != exitCode:
-    return Result[(), string].err "Init Ncurses color failed: (r: {r}, g: {g}, b: {b}): Exit code: {exitCode}"
+  when not defined(release):
+    # TODO: Return an error?
+    doAssert(r >= 0, fmt"Invalid value: (r: `{r}`)")
+    doAssert(g >= 0, fmt"Invalid value: (g: `{g}`)")
+    doAssert(b >= 0, fmt"Invalid value: (b: `{b}`)")
+
+  when not defined unitTest:
+    # Not start when running unit tests
+    let exitCode = initColor(color.cshort, r.cshort, g.cshort, b.cshort)
+    if 0 != exitCode:
+      return Result[(), string].err "Init Ncurses color failed: (r: {r}, g: {g}, b: {b}): Exit code: {exitCode}"
 
   return Result[(), string].ok ()
 
@@ -239,12 +247,14 @@ proc initNcursesColorPair*(pair, fg, bg: int) =
     # 0 is reserved by Ncurses.
     doAssert(pair > 0, fmt"Cannot use `{pair}` in Ncurses color pair")
 
-  let r = initExtendedPair(pair.cint, fg.cint, bg.cint)
-  if 0 != r:
-    exitUi()
-    echo fmt"Init Ncurses color pair failed: (pair: {pair}, fg: {fg}, bg: {bg}): Exit code: {r}"
-    # TODO: Return Result.error
-    raise
+  when not defined unitTest:
+    # Not start when running unit tests
+    let r = initExtendedPair(pair.cint, fg.cint, bg.cint)
+    if 0 != r:
+      exitUi()
+      echo fmt"Init Ncurses color pair failed: (pair: {pair}, fg: {fg}, bg: {bg}): Exit code: {r}"
+      # TODO: Return Result.error
+      raise
 
 proc initWindow*(height, width, y, x: int, color: int16): Window =
   result = Window()
