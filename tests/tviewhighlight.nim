@@ -24,10 +24,11 @@ test "Highlight current word 1":
   highlight.highlightOtherUsesCurrentWord(
     currentBufStatus,
     currentMainWindowNode,
-    status.settings.editorColorTheme)
+    status.settings.editorColorTheme,
+    status.colorMode)
 
-  check(highlight[0].color == EditorColorPair.defaultChar)
-  check(highlight[1].color == EditorColorPair.currentWord)
+  check(highlight[0].color == EditorColorPairIndex.default)
+  check(highlight[1].color == EditorColorPairIndex.currentWord)
 
 test "Highlight current word 2":
   var status = initEditorStatus()
@@ -42,10 +43,11 @@ test "Highlight current word 2":
   highlight.highlightOtherUsesCurrentWord(
     currentBufStatus,
     currentMainWindowNode,
-    status.settings.editorColorTheme)
+    status.settings.editorColorTheme,
+    status.colorMode)
 
-  check(highlight[0].color == EditorColorPair.defaultChar)
-  check(highlight[1].color == EditorColorPair.currentWord)
+  check(highlight[0].color == EditorColorPairIndex.default)
+  check(highlight[1].color == EditorColorPairIndex.currentWord)
 
 test "Highlight current word 3":
   var status = initEditorStatus()
@@ -61,10 +63,11 @@ test "Highlight current word 3":
   highlight.highlightOtherUsesCurrentWord(
     currentBufStatus,
     currentMainWindowNode,
-    status.settings.editorColorTheme)
+    status.settings.editorColorTheme,
+    status.colorMode)
 
-  check(highlight[0].color == EditorColorPair.defaultChar)
-  check(highlight[1].color == EditorColorPair.currentWord)
+  check(highlight[0].color == EditorColorPairIndex.default)
+  check(highlight[1].color == EditorColorPairIndex.currentWord)
 
 test "Highlight full width space 1":
   var status = initEditorStatus()
@@ -91,8 +94,8 @@ test "Highlight full width space 1":
   var highlight = currentMainWindowNode.highlight
   highlight.highlightFullWidthSpace(currentMainWindowNode, bufferInView, range)
 
-  check(highlight[0].color == EditorColorPair.defaultChar)
-  check(highlight[1].color == EditorColorPair.highlightFullWidthSpace)
+  check(highlight[0].color == EditorColorPairIndex.default)
+  check(highlight[1].color == EditorColorPairIndex.highlightFullWidthSpace)
 
 test "Highlight full width space 2":
   var status = initEditorStatus()
@@ -118,8 +121,8 @@ test "Highlight full width space 2":
   var highlight = currentMainWindowNode.highlight
   highlight.highlightFullWidthSpace(currentMainWindowNode, bufferInView, range)
 
-  check(highlight[0].color == EditorColorPair.defaultChar)
-  check(highlight[1].color == EditorColorPair.highlightFullWidthSpace)
+  check(highlight[0].color == EditorColorPairIndex.default)
+  check(highlight[1].color == EditorColorPairIndex.highlightFullWidthSpace)
 
 test "Highlight full width space 3":
   var status = initEditorStatus()
@@ -145,7 +148,7 @@ test "Highlight full width space 3":
   var highlight = currentMainWindowNode.highlight
   highlight.highlightFullWidthSpace(currentMainWindowNode, bufferInView, range)
 
-  check(highlight[0].color == EditorColorPair.highlightFullWidthSpace)
+  check(highlight[0].color == EditorColorPairIndex.highlightFullWidthSpace)
 
 test "Highlight full width space 4":
   var status = initEditorStatus()
@@ -171,9 +174,9 @@ test "Highlight full width space 4":
   var highlight = currentMainWindowNode.highlight
   highlight.highlightFullWidthSpace(currentMainWindowNode, bufferInView, range)
 
-  check(highlight[0].color == EditorColorPair.defaultChar)
-  check(highlight[1].color == EditorColorPair.highlightFullWidthSpace)
-  check(highlight[2].color == EditorColorPair.defaultChar)
+  check(highlight[0].color == EditorColorPairIndex.default)
+  check(highlight[1].color == EditorColorPairIndex.highlightFullWidthSpace)
+  check(highlight[2].color == EditorColorPairIndex.default)
 
 suite "Highlight trailing spaces":
   test "Highlight trailing spaces 1":
@@ -195,14 +198,15 @@ suite "Highlight trailing spaces":
       currentMainWindowNode,
       status.isSearchHighlight,
       status.searchHistory,
-      status.settings)
+      status.settings,
+      status.colorMode)
 
     updateTerminalSize(100, 100)
     status.resize
     status.update
 
     let node = currentMainWindowNode
-    check(node.highlight[0].color == EditorColorPair.defaultChar)
+    check(node.highlight[0].color == EditorColorPairIndex.default)
     check(node.highlight[0].firstColumn == 0)
     check(node.highlight[0].lastColumn == 2)
 
@@ -221,17 +225,18 @@ suite "Highlight trailing spaces":
       currentMainWindowNode,
       status.isSearchHighlight,
       status.searchHistory,
-      status.settings)
+      status.settings,
+      status.colorMode)
 
-    check(highlight[0].color == EditorColorPair.defaultChar)
+    check(highlight[0].color == EditorColorPairIndex.default)
     check(highlight[0].firstColumn == 0)
     check(highlight[0].lastColumn == -1)
 
-    check(highlight[1].color == EditorColorPair.defaultChar)
+    check(highlight[1].color == EditorColorPairIndex.default)
     check(highlight[1].firstColumn == 0)
     check(highlight[1].lastColumn == 2)
 
-    check(highlight[2].color == EditorColorPair.highlightTrailingSpaces)
+    check(highlight[2].color == EditorColorPairIndex.highlightTrailingSpaces)
     check(highlight[2].firstColumn == 3)
     check(highlight[2].lastColumn == 4)
 
@@ -250,9 +255,10 @@ suite "Highlight trailing spaces":
       currentMainWindowNode,
       status.isSearchHighlight,
       status.searchHistory,
-      status.settings)
+      status.settings,
+      status.colorMode)
 
-    check(highlight[0].color == EditorColorPair.defaultChar)
+    check(highlight[0].color == EditorColorPairIndex.default)
     check(highlight[0].firstColumn == 0)
     check(highlight[0].lastColumn == 0)
 
@@ -302,7 +308,7 @@ suite "highlightPairOfParen":
       buffer = @[ru""]
       position = BufferPosition(line: 0, column: 0)
       expectHighlight = Highlight(colorSegments: @[
-        ColorSegment(firstRow: 0, firstColumn: 0, lastRow: 0, lastColumn: -1, color: EditorColorPair.defaultChar),
+        ColorSegment(firstRow: 0, firstColumn: 0, lastRow: 0, lastColumn: -1, color: EditorColorPairIndex.default),
       ])
 
     for i in 0 ..< openParens.len:
@@ -326,13 +332,13 @@ suite "highlightPairOfParen":
               firstColumn: 0,
               lastRow: 0,
               lastColumn: 0,
-              color: EditorColorPair.defaultChar),
+              color: EditorColorPairIndex.default),
             ColorSegment(
               firstRow: 0,
               firstColumn: 1,
               lastRow: 0,
               lastColumn: 1,
-              color: EditorColorPair.parenText),
+              color: EditorColorPairIndex.parenText),
           ])
 
         highlightParenPairTest(testIndex, openParens[i], buffer, position, expectHighlight)
@@ -346,13 +352,13 @@ suite "highlightPairOfParen":
               firstColumn: 0,
               lastRow: 0,
               lastColumn: 0,
-              color: EditorColorPair.parenText),
+              color: EditorColorPairIndex.parenText),
             ColorSegment(
               firstRow: 0,
               firstColumn: 1,
               lastRow: 0,
               lastColumn: 1,
-              color: EditorColorPair.defaultChar)
+              color: EditorColorPairIndex.default)
           ])
 
         highlightParenPairTest(testIndex, closeParens[i], buffer, position, expectHighlight)
@@ -372,13 +378,13 @@ suite "highlightPairOfParen":
               firstColumn: 0,
               lastRow: 0,
               lastColumn: 1,
-              color: EditorColorPair.defaultChar),
+              color: EditorColorPairIndex.default),
             ColorSegment(
               firstRow: 0,
               firstColumn: 2,
               lastRow: 0,
               lastColumn: 2,
-              color: EditorColorPair.parenText),
+              color: EditorColorPairIndex.parenText),
           ])
 
         highlightParenPairTest(testIndex, openParens[i], buffer, position, expectHighlight)
@@ -392,13 +398,13 @@ suite "highlightPairOfParen":
               firstColumn: 0,
               lastRow: 0,
               lastColumn: 0,
-              color: EditorColorPair.parenText),
+              color: EditorColorPairIndex.parenText),
             ColorSegment(
               firstRow: 0,
               firstColumn: 1,
               lastRow: 0,
               lastColumn: 2,
-              color: EditorColorPair.defaultChar),
+              color: EditorColorPairIndex.default),
           ])
 
         highlightParenPairTest(testIndex, closeParens[i], buffer, position, expectHighlight)
@@ -418,13 +424,13 @@ suite "highlightPairOfParen":
               firstColumn: 0,
               lastRow: 0,
               lastColumn: 0,
-              color: EditorColorPair.defaultChar),
+              color: EditorColorPairIndex.default),
             ColorSegment(
               firstRow: 1,
               firstColumn: 0,
               lastRow: 1,
               lastColumn: 0,
-              color: EditorColorPair.parenText),
+              color: EditorColorPairIndex.parenText),
           ])
 
         highlightParenPairTest(testIndex, openParens[i], buffer, position, expectHighlight)
@@ -438,13 +444,13 @@ suite "highlightPairOfParen":
               firstColumn: 0,
               lastRow: 0,
               lastColumn: 0,
-              color: EditorColorPair.parenText),
+              color: EditorColorPairIndex.parenText),
             ColorSegment(
               firstRow: 1,
               firstColumn: 0,
               lastRow: 1,
               lastColumn: 0,
-              color: EditorColorPair.defaultChar),
+              color: EditorColorPairIndex.default),
           ])
 
         highlightParenPairTest(testIndex, closeParens[i], buffer, position, expectHighlight)
@@ -464,19 +470,19 @@ suite "highlightPairOfParen":
               firstColumn: 0,
               lastRow: 0,
               lastColumn: 0,
-              color: EditorColorPair.defaultChar),
+              color: EditorColorPairIndex.default),
             ColorSegment(
               firstRow: 1,
               firstColumn: 0,
               lastRow: 1,
               lastColumn: -1,
-              color: EditorColorPair.defaultChar),
+              color: EditorColorPairIndex.default),
             ColorSegment(
               firstRow: 2,
               firstColumn: 0,
               lastRow: 2,
               lastColumn: 0,
-              color: EditorColorPair.parenText),
+              color: EditorColorPairIndex.parenText),
           ])
 
         highlightParenPairTest(testIndex, openParens[i], buffer, position, expectHighlight)
@@ -490,19 +496,19 @@ suite "highlightPairOfParen":
               firstColumn: 0,
               lastRow: 0,
               lastColumn: 0,
-              color: EditorColorPair.parenText),
+              color: EditorColorPairIndex.parenText),
             ColorSegment(
               firstRow: 1,
               firstColumn: 0,
               lastRow: 1,
               lastColumn: -1,
-              color: EditorColorPair.defaultChar),
+              color: EditorColorPairIndex.default),
             ColorSegment(
               firstRow: 2,
               firstColumn: 0,
               lastRow: 2,
               lastColumn: 0,
-              color: EditorColorPair.defaultChar),
+              color: EditorColorPairIndex.default),
           ])
 
         highlightParenPairTest(testIndex, closeParens[i], buffer, position, expectHighlight)
@@ -522,13 +528,13 @@ suite "highlightPairOfParen":
               firstColumn: 0,
               lastRow: 0,
               lastColumn: 0,
-              color: EditorColorPair.defaultChar),
+              color: EditorColorPairIndex.default),
             ColorSegment(
               firstRow: 1,
               firstColumn: 0,
               lastRow: 1,
               lastColumn: -1,
-              color: EditorColorPair.defaultChar)
+              color: EditorColorPairIndex.default)
           ])
 
         highlightParenPairTest(testIndex, openParens[i], buffer, position, expectHighlight)
@@ -543,13 +549,13 @@ suite "highlightPairOfParen":
               firstColumn: 0,
               lastRow: 0,
               lastColumn: -1,
-              color: EditorColorPair.defaultChar),
+              color: EditorColorPairIndex.default),
             ColorSegment(
               firstRow: 1,
               firstColumn: 0,
               lastRow: 1,
               lastColumn: 0,
-              color: EditorColorPair.defaultChar)
+              color: EditorColorPairIndex.default)
           ])
 
         highlightParenPairTest(testIndex, closeParens[i], buffer, position, expectHighlight)
@@ -567,7 +573,7 @@ suite "highlightPairOfParen":
           firstColumn: 0,
           lastRow: 0,
           lastColumn: 1,
-          color: EditorColorPair.defaultChar)
+          color: EditorColorPairIndex.default)
       ])
 
     highlightParenPairTest(testIndex, paren, buffer, position, expectHighlight)
@@ -586,7 +592,7 @@ suite "highlightPairOfParen":
           firstColumn: 0,
           lastRow: 0,
           lastColumn: 1,
-          color: EditorColorPair.defaultChar)
+          color: EditorColorPairIndex.default)
       ])
 
     highlightParenPairTest(testIndex, paren, buffer, position, expectHighlight)
@@ -605,7 +611,7 @@ suite "highlightPairOfParen":
             firstColumn: 0,
             lastRow: 0,
             lastColumn: 0,
-            color: EditorColorPair.defaultChar)
+            color: EditorColorPairIndex.default)
         ])
 
       highlightParenPairTest(testIndex, closeParens[i], buffer, position, expectHighlight)
@@ -629,7 +635,7 @@ suite "Highlight paren":
 
     check highlight[8] == ColorSegment(
       firstRow: 0, firstColumn: 19, lastRow: 0, lastColumn: 19,
-      color: EditorColorPair.parenText)
+      color: EditorColorPairIndex.parenText)
 
   test "Highlight '('":
     var status = initEditorStatus()
@@ -649,7 +655,7 @@ suite "Highlight paren":
 
     check highlight[3] == ColorSegment(
       firstRow: 0, firstColumn: 9, lastRow: 0, lastColumn: 9,
-      color: EditorColorPair.parenText)
+      color: EditorColorPairIndex.parenText)
 
 suite "Update search highlight":
   test "single window":
@@ -670,12 +676,13 @@ suite "Update search highlight":
       currentMainWindowNode,
       status.isSearchHighlight,
       status.searchHistory,
-      status.settings)
+      status.settings,
+      status.colorMode)
 
     check highlight.len == 3
-    check highlight[0].color == EditorColorPair.searchResult
-    check highlight[1].color == EditorColorPair.defaultChar
-    check highlight[2].color == EditorColorPair.defaultChar
+    check highlight[0].color == EditorColorPairIndex.searchResult
+    check highlight[1].color == EditorColorPairIndex.default
+    check highlight[2].color == EditorColorPairIndex.default
 
   test "two windows":
     var status = initEditorStatus()
@@ -706,9 +713,10 @@ suite "Update search highlight":
             node,
             status.isSearchHighlight,
             status.searchHistory,
-            status.settings)
+            status.settings,
+            status.colorMode)
 
           check highlight.len == 3
-          check highlight[0].color == EditorColorPair.searchResult
-          check highlight[1].color == EditorColorPair.defaultChar
-          check highlight[2].color == EditorColorPair.defaultChar
+          check highlight[0].color == EditorColorPairIndex.searchResult
+          check highlight[1].color == EditorColorPairIndex.default
+          check highlight[2].color == EditorColorPairIndex.default

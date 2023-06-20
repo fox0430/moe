@@ -17,9 +17,9 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, macros, strformat, os]
-import moepkg/[unicodeext, editorstatus, bufferstatus, gapbuffer, settings,
-               color, ui]
+import std/[unittest, strformat, os]
+import pkg/results
+import moepkg/[unicodeext, editorstatus, bufferstatus, settings, color, ui, rgb]
 
 import moepkg/configmode {.all.}
 
@@ -241,241 +241,255 @@ suite "Config mode: Init buffer":
     let buffer = status.settings.initThemeTableBuffer
 
     const sample = @[ru "Theme",
-                     ru "  editorBg",
-                     ru "    background                   default",
+                     ru "  default",
+                     ru "    foreground                  #FFFFFF",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  lineNum",
-                     ru "    foreground                   gray54",
-                     ru "    background                   default",
+                     ru "    foreground                  #8A8A8A",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  currentLineNum",
-                     ru "    foreground                   teal",
-                     ru "    background                   default",
+                     ru "    foreground                  #008080",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  statusLineNormalMode",
-                     ru "    foreground                   white",
-                     ru "    background                   blue",
+                     ru "    foreground                  #FFFFFF",
+                     ru "    background                  #0000FF",
                      ru "",
                      ru "  statusLineModeNormalMode",
-                     ru "    foreground                   black",
-                     ru "    background                   white",
+                     ru "    foreground                  #000000",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  statusLineNormalModeInactive",
-                     ru "    foreground                   blue",
-                     ru "    background                   white",
+                     ru "    foreground                  #0000FF",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  statusLineInsertMode",
-                     ru "    foreground                   white",
-                     ru "    background                   blue",
+                     ru "    foreground                  #FFFFFF",
+                     ru "    background                  #0000FF",
                      ru "",
                      ru "  statusLineModeInsertMode",
-                     ru "    foreground                   black",
-                     ru "    background                   white",
+                     ru "    foreground                  #000000",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  statusLineInsertModeInactive",
-                     ru "    foreground                   blue",
-                     ru "    background                   white",
+                     ru "    foreground                  #0000FF",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  statusLineVisualMode",
-                     ru "    foreground                   white",
-                     ru "    background                   blue",
+                     ru "    foreground                  #FFFFFF",
+                     ru "    background                  #0000FF",
                      ru "",
                      ru "  statusLineModeVisualMode",
-                     ru "    foreground                   black",
-                     ru "    background                   white",
+                     ru "    foreground                  #000000",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  statusLineVisualModeInactive",
-                     ru "    foreground                   blue",
-                     ru "    background                   white",
+                     ru "    foreground                  #0000FF",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  statusLineReplaceMode",
-                     ru "    foreground                   white",
-                     ru "    background                   blue",
+                     ru "    foreground                  #FFFFFF",
+                     ru "    background                  #0000FF",
                      ru "",
                      ru "  statusLineModeReplaceMode",
-                     ru "    foreground                   black",
-                     ru "    background                   white",
+                     ru "    foreground                  #000000",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  statusLineReplaceModeInactive",
-                     ru "    foreground                   blue",
-                     ru "    background                   white",
+                     ru "    foreground                  #0000FF",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  statusLineFilerMode",
-                     ru "    foreground                   white",
-                     ru "    background                   blue",
+                     ru "    foreground                  #FFFFFF",
+                     ru "    background                  #0000FF",
                      ru "",
                      ru "  statusLineModeFilerMode",
-                     ru "    foreground                   black",
-                     ru "    background                   white",
+                     ru "    foreground                  #000000",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  statusLineFilerModeInactive",
-                     ru "    foreground                   blue",
-                     ru "    background                   white",
+                     ru "    foreground                  #0000FF",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  statusLineExMode",
-                     ru "    foreground                   white",
-                     ru "    background                   blue",
+                     ru "    foreground                  #FFFFFF",
+                     ru "    background                  #0000FF",
                      ru "",
                      ru "  statusLineModeExMode",
-                     ru "    foreground                   black",
-                     ru "    background                   white",
+                     ru "    foreground                  #000000",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  statusLineExModeInactive",
-                     ru "    foreground                   blue",
-                     ru "    background                   white",
+                     ru "    foreground                  #0000FF",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  statusLineGitBranch",
-                     ru "    foreground                   white",
-                     ru "    background                   blue",
+                     ru "    foreground                  #FFFFFF",
+                     ru "    background                  #0000FF",
                      ru "",
                      ru "  tab",
-                     ru "    foreground                   white",
-                     ru "    background                   default",
+                     ru "    foreground                  #FFFFFF",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  currentTab",
-                     ru "    foreground                   white",
-                     ru "    background                   blue",
+                     ru "    foreground                  #FFFFFF",
+                     ru "    background                  #0000FF",
                      ru "",
                      ru "  commandBar",
-                     ru "    foreground                   gray100",
-                     ru "    background                   default",
+                     ru "    foreground                  #FFFFFF",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  errorMessage",
-                     ru "    foreground                   red",
-                     ru "    background                   default",
+                     ru "    foreground                  #FF0000",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  searchResult",
-                     ru "    foreground                   default",
-                     ru "    background                   red",
+                     ru "    foreground                  #FFFFFF",
+                     ru "    background                  #FF0000",
                      ru "",
                      ru "  visualMode",
-                     ru "    foreground                   gray100",
-                     ru "    background                   purple1",
-                     ru "",
-                     ru "  defaultChar",
-                     ru "    foreground                   white",
-                     ru "    background                   default",
+                     ru "    foreground                  #FFFFFF",
+                     ru "    background                  #800080",
                      ru "",
                      ru "  keyword",
-                     ru "    foreground                   skyBlue1",
-                     ru "    background                   default",
+                     ru "    foreground                  #87D7FF",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  functionName",
-                     ru "    foreground                   gold1",
-                     ru "    background                   default",
+                     ru "    foreground                  #FFD700",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  typeName",
-                     ru "    foreground                   green",
-                     ru "    background                   default",
+                     ru "    foreground                  #008000",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  boolean",
-                     ru "    foreground                   yellow",
-                     ru "    background                   default",
+                     ru "    foreground                  #FFFF00",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  specialVar",
-                     ru "    foreground                   green",
-                     ru "    background                   default",
+                     ru "    foreground                  #008000",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  builtin",
-                     ru "    foreground                   yellow",
-                     ru "    background                   default",
+                     ru "    foreground                  #FFFF00",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  stringLit",
-                     ru "    foreground                   yellow",
-                     ru "    background                   default",
+                     ru "    foreground                  #FFFF00",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  binNumber",
-                     ru "    foreground                   aqua",
-                     ru "    background                   default",
+                     ru "    foreground                  #00FFFF",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  decNumber",
-                     ru "    foreground                   aqua",
-                     ru "    background                   default",
+                     ru "    foreground                  #00FFFF",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  floatNumber",
-                     ru "    foreground                   aqua",
-                     ru "    background                   default",
+                     ru "    foreground                  #00FFFF",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  hexNumber",
-                     ru "    foreground                   aqua",
-                     ru "    background                   default",
+                     ru "    foreground                  #00FFFF",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  octNumber",
-                     ru "    foreground                   aqua",
-                     ru "    background                   default",
+                     ru "    foreground                  #00FFFF",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  comment",
-                     ru "    foreground                   gray",
-                     ru "    background                   default",
+                     ru "    foreground                  #808080",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  longComment",
-                     ru "    foreground                   gray",
-                     ru "    background                   default",
+                     ru "    foreground                  #808080",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  whitespace",
-                     ru "    foreground                   gray",
-                     ru "    background                   default",
+                     ru "    foreground                  #808080",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  preprocessor",
-                     ru "    foreground                   green",
-                     ru "    background                   default",
+                     ru "    foreground                  #008000",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  pragma",
-                     ru "    foreground                   yellow",
-                     ru "    background                   default",
+                     ru "    foreground                  #FFFF00",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  currentFile",
-                     ru "    foreground                   gray100",
-                     ru "    background                   teal",
+                     ru "    foreground                  #FFFFFF",
+                     ru "    background                  #008080",
                      ru "",
                      ru "  file",
-                     ru "    foreground                   gray100",
-                     ru "    background                   default",
+                     ru "    foreground                  #FFFFFF",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  dir",
-                     ru "    foreground                   blue",
-                     ru "    background                   default",
+                     ru "    foreground                  #0000FF",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  pcLink",
-                     ru "    foreground                   teal",
-                     ru "    background                   default",
+                     ru "    foreground                  #008080",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  popupWindow",
-                     ru "    foreground                   gray100",
-                     ru "    background                   black",
+                     ru "    foreground                  #FFFFFF",
+                     ru "    background                  #000000",
                      ru "",
                      ru "  popupWinCurrentLine",
-                     ru "    foreground                   blue",
-                     ru "    background                   black",
+                     ru "    foreground                  #0000FF",
+                     ru "    background                  #000000",
                      ru "",
                      ru "  replaceText",
-                     ru "    foreground                   default",
-                     ru "    background                   red",
+                     ru "    foreground                  #FFFFFF",
+                     ru "    background                  #FF0000",
                      ru "",
                      ru "  parenText",
-                     ru "    foreground                   default",
-                     ru "    background                   blue",
+                     ru "    foreground                  #FFFFFF",
+                     ru "    background                  #0000FF",
                      ru "",
                      ru "  currentWord",
-                     ru "    foreground                   default",
-                     ru "    background                   gray",
+                     ru "    foreground                  #FFFFFF",
+                     ru "    background                  #808080",
                      ru "",
                      ru "  highlightFullWidthSpace",
-                     ru "    foreground                   red",
-                     ru "    background                   red",
+                     ru "    foreground                  #FF0000",
+                     ru "    background                  #FF0000",
                      ru "",
                      ru "  highlightTrailingSpaces",
-                     ru "    foreground                   red",
-                     ru "    background                   red",
+                     ru "    foreground                  #FF0000",
+                     ru "    background                  #FF0000",
                      ru "",
                      ru "  reservedWord",
-                     ru "    foreground                   white",
-                     ru "    background                   gray",
+                     ru "    foreground                  #FFFFFF",
+                     ru "    background                  #808080",
+                     ru "",
+                     ru "  currentBackup",
+                     ru "    foreground                  #FFFFFF",
+                     ru "    background                  #008080",
+                     ru "",
+                     ru "  addedLine",
+                     ru "    foreground                  #008000",
+                     ru "    background                  #FFFFFF",
+                     ru "",
+                     ru "  deletedLine",
+                     ru "    foreground                  #FF0000",
+                     ru "    background                  #FFFFFF",
                      ru "",
                      ru "  currentSetting",
-                     ru "    foreground                   gray100",
-                     ru "    background                   teal",
-                     ru ""]
+                     ru "    foreground                  #FFFFFF",
+                     ru "    background                  #008080",
+                     ru "",
+                     ru "  currentLineBg",
+                     ru "    foreground                  #FFFFFF",
+                     ru "    background                  #000000",
+                     ru ""
+    ]
 
     for index, line in buffer:
       check sample[index] == line
@@ -495,7 +509,7 @@ suite "Config mode: Get standard table setting values":
     const name = "theme"
     let values = settings.getStandardTableSettingValues(name)
 
-    check values == @[ru "dark", ru "config", ru "vscode", ru "light", ru "vivid"]
+    check values == @[ru"dark", ru"light",ru "vivid", ru"config", ru"vscode"]
 
   test "Get defaultCursor values":
     var status = initEditorStatus()
@@ -1547,66 +1561,12 @@ suite "Config mode: Get Persist table setting values":
 
     check values.len == 0
 
-suite "Config mode: Get Theme table setting values":
-  # Generate test code
-  macro checkColorValues(colorPair: EditorColorPair,
-                         position: string): untyped =
-
-    quote do:
-      let testTitle = "Get " & $`colorPair` & "." & $`position`  & " values"
-      test testTitle:
-        let
-          theme = settings.editorcolorTheme
-          (fg, bg) = theme.getColorFromEditorColorPair(`colorPair`)
-          values = settings.getThemeTableSettingValues($`colorPair`, $`position`)
-          # values[0] should be current setting
-          default = $values[0]
-
-        if $`position` == "foreground":
-          check default == $fg
-        else:
-          check default == $bg
-
-        let colorLen = int(Color.high)
-        var index = 0
-        for c in Color:
-          if index < colorLen and $c != default:
-            inc(index)
-            check $values[index] == $c
-
-  let
-    status = initEditorStatus()
-    settings = status.settings
-
-  # Check Theme.editorBg
-  test "Get editorBg.background values":
-    let
-      theme = settings.editorcolorTheme
-      bg = colorThemeTable[theme].editorBg
-      values = settings.getThemeTableSettingValues("editorBg", "background")
-      # values[0] should be current setting
-      default = $values[0]
-
-    check default == $bg
-
-    let colorLen = int(Color.high)
-    var index = 0
-    for c in Color:
-      if index < colorLen and $c != default:
-        inc(index)
-        check $values[index] == $c
-
-  # Check other than Theme.editorBg by checkColorValues macro
-  for pair in EditorColorPair:
-    checkColorValues(pair, "foreground")
-    checkColorValues(pair, "background")
-
 suite "Config mode: Chaging Standard table settings":
   test "Chaging theme":
     var settings = initEditorSettings()
     settings.changeStandardTableSetting("theme", "vivid")
 
-    check settings.editorcolorTheme == colorTheme.vivid
+    check settings.editorColorTheme == ColorTheme.vivid
 
   test "Chaging number":
     var settings = initEditorSettings()
@@ -2402,33 +2362,30 @@ suite "Config mode: Chaging Persist table settings":
 
     check val == persistSettings.search
 
-suite "Config mode: Chaging Theme table settings":
-  # Generate test code
-  macro checkChaingThemeSetting(theme: colorTheme, editorColorName: string): untyped =
-    let editorColor = ident(editorColorName.strVal)
-    quote do:
-      let
-        name = $`editorColorName`
-        testTitle = "Chaging " & name
+suite "Config mode: Change Theme table settings":
+  test "change foreground":
+    var settings = initEditorSettings()
 
-      test testTitle:
-        var settings = initEditorSettings()
+    for pairIndex in EditorColorPairIndex:
+      settings.changeThemeTableSetting(
+        ColorLayer.foreground,
+        $pairIndex,
+        "#000000")
 
-        let
-          position = if name[name.len - 2 .. ^1] == "Bg": "background"
-                     else: "foreground"
-          currentVal = colorThemeTable[theme].`editorColor`
-          n = if position == "background": name[0 .. name.high - 2]
-              else: name
-        var val = Color.default
-        if currentVal == val: inc(val)
-        settings.changeThemeTableSetting(n, position, $val)
+      assert "#000000".hexToRgb.get ==
+        settings.editorColorTheme.foregroundRgb(pairIndex)
 
-        check colorThemeTable[theme].`editorColor` == val
+  test "change background":
+    var settings = initEditorSettings()
 
-  let theme = colorTheme.dark
-  for name, _ in colorThemeTable[theme].fieldPairs:
-    checkChaingThemeSetting(theme, $name)
+    for pairIndex in EditorColorPairIndex:
+      settings.changeThemeTableSetting(
+        ColorLayer.background,
+        $pairIndex,
+        "#000000")
+
+      assert "#000000".hexToRgb.get ==
+        settings.editorColorTheme.backgroundRgb(pairIndex)
 
 suite "Config mode: Get BuildOnSave table setting type":
   test "Get enable setting type":

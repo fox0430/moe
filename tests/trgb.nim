@@ -20,7 +20,7 @@
 import std/unittest
 import pkg/results
 
-import moepkg/color {.all.}
+import moepkg/rgb {.all.}
 
 suite "hexToRgb":
   test "Parse hex color 1":

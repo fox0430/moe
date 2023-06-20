@@ -1,6 +1,5 @@
 import std/unittest
 import moepkg/syntax/highlite
-import moepkg/syntax/syntaxrust
 
 type
   GT = GeneralTokenizer

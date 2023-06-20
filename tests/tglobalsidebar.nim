@@ -43,7 +43,7 @@ suite "sidebar":
           firstColumn: 0,
           lastRow: 0,
           lastColumn: 1,
-          color: EditorColorPair.defaultChar)])
+          color: EditorColorPairIndex.default)])
 
   test "initHighlight":
     var sidebar = initGlobalSidebar(Rect(h: 10, w: 10, y: 0, x: 0))
@@ -55,7 +55,7 @@ suite "sidebar":
           firstColumn: 0,
           lastRow: 0,
           lastColumn: 0,
-          color: EditorColorPair.defaultChar)])
+          color: EditorColorPairIndex.default)])
 
     sidebar.initHighlight
 
@@ -66,12 +66,12 @@ suite "sidebar":
           firstColumn: 0,
           lastRow: 9,
           lastColumn: 9,
-          color: EditorColorPair.defaultChar)])
+          color: EditorColorPairIndex.default)])
 
   test "write 1":
     var sidebar = initGlobalSidebar(Rect(h: 100, w: 100, y: 0, x: 0))
 
-    sidebar.write(Position(y: 0, x: 0), ru"test", EditorColorPair.reservedWord)
+    sidebar.write(Position(y: 0, x: 0), ru"test", EditorColorPairIndex.reservedWord)
 
     privateAccess(sidebar.type)
 
@@ -86,18 +86,18 @@ suite "sidebar":
           firstColumn: 0,
           lastRow: 0,
           lastColumn: 3,
-          color: EditorColorPair.reservedWord),
+          color: EditorColorPairIndex.reservedWord),
         ColorSegment(
           firstRow: 0,
           firstColumn: 4,
           lastRow: 99,
           lastColumn: 99,
-          color: EditorColorPair.defaultChar)])
+          color: EditorColorPairIndex.default)])
 
   test "write 2":
     var sidebar = initGlobalSidebar(Rect(h: 100, w: 100, y: 0, x: 0))
 
-    sidebar.write(Position(y: 1, x: 10), ru"test", EditorColorPair.reservedWord)
+    sidebar.write(Position(y: 1, x: 10), ru"test", EditorColorPairIndex.reservedWord)
 
     privateAccess(sidebar.type)
 
@@ -114,19 +114,19 @@ suite "sidebar":
           firstColumn: 0,
           lastRow: 1,
           lastColumn: 9,
-          color: EditorColorPair.defaultChar),
+          color: EditorColorPairIndex.default),
         ColorSegment(
           firstRow: 1,
           firstColumn: 10,
           lastRow: 1,
           lastColumn: 13,
-          color: EditorColorPair.reservedWord),
+          color: EditorColorPairIndex.reservedWord),
         ColorSegment(
           firstRow: 1,
           firstColumn: 14,
           lastRow: 99,
           lastColumn: 99,
-          color: EditorColorPair.defaultChar)])
+          color: EditorColorPairIndex.default)])
 
   test "resize":
     var sidebar = initGlobalSidebar(Rect(h: 1, w: 1, y: 0, x: 0))

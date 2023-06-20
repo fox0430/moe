@@ -112,7 +112,7 @@ suite "tabline: initTabLines":
     check t[0] == TabLine(
       position: Position(x: 0, y: 0),
       buffer: " New file" & " ".repeat(92),
-      color: EditorColorPair.currentTab)
+      color: EditorColorPairIndex.currentTab)
 
   test "Single buffer 2":
     var status = initEditorStatus()
@@ -137,7 +137,7 @@ suite "tabline: initTabLines":
     check t[0] == TabLine(
       position: Position(x: 0, y: 0),
       buffer: fmt" {$path}" & ' '.repeat(100 - path.len),
-      color: EditorColorPair.currentTab)
+      color: EditorColorPairIndex.currentTab)
 
   test "Single buffer 3":
     var status = initEditorStatus()
@@ -161,7 +161,7 @@ suite "tabline: initTabLines":
     check t[0] == TabLine(
       position: Position(x: 0, y: 0),
       buffer: " text~",
-      color: EditorColorPair.currentTab)
+      color: EditorColorPairIndex.currentTab)
 
   test "Multiple buffer":
     var status = initEditorStatus()
@@ -191,7 +191,7 @@ suite "tabline: initTabLines":
       check t[0] == TabLine(
         position: Position(x: 0, y: 0),
         buffer: fmt" {$path}" & ' '.repeat(50 - path.len),
-        color: EditorColorPair.currentTab)
+        color: EditorColorPairIndex.currentTab)
 
     block:
       let path = status.bufStatus[1].path
@@ -200,7 +200,7 @@ suite "tabline: initTabLines":
       check t[1] == TabLine(
         position: Position(x: 50, y: 0),
         buffer: fmt" {$path}" & ' '.repeat(50 - path.len),
-        color: EditorColorPair.tab)
+        color: EditorColorPairIndex.tab)
 
   test "Multiple buffer 2":
     var status = initEditorStatus()
@@ -231,4 +231,4 @@ suite "tabline: initTabLines":
     check t[0] == TabLine(
       position: Position(x: 0, y: 0),
       buffer: fmt" {$path}" & ' '.repeat(100 - path.len),
-      color: EditorColorPair.currentTab)
+      color: EditorColorPairIndex.currentTab)
