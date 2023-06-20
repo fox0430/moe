@@ -406,8 +406,7 @@ proc initEditorSettings*(): EditorSettings =
   result.tabStop = 2
   result.ignorecase = true
   result.smartcase = true
-  # defaultCursor is terminal default curosr shape
-  result.defaultCursor = CursorType.blinkBlock
+  result.defaultCursor = CursorType.terminalDefault
   result.normalModeCursor = CursorType.blinkBlock
   result.insertModeCursor = CursorType.blinkIbeam
   result.autoSaveInterval = 5

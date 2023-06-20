@@ -24,6 +24,7 @@ proc exitInsertMode(status: var EditorStatus) =
   if currentMainWindowNode.currentColumn > 0:
     currentMainWindowNode.currentColumn.dec
     currentMainWindowNode.expandedColumn = currentMainWindowNode.currentColumn
+  changeCursorType(status.settings.normalModeCursor)
   status.changeMode(currentBufStatus.prevMode)
 
 proc execInsertModeCommand*(status: var EditorStatus, command: Runes) =
@@ -90,11 +91,11 @@ proc execInsertModeCommand*(status: var EditorStatus, command: Runes) =
     currentBufStatus.deleteCharactersBeforeCursorInCurrentLine(
       currentMainWindowNode)
   elif isControlT(key):
-    currentBufStatus.addIndentInCurrentLine(
+    currentBufStatus.indentInCurrentLine(
       currentMainWindowNode,
       status.settings.view.tabStop)
   elif isControlD(key):
-    currentBufStatus.deleteIndentInCurrentLine(
+    currentBufStatus.unindentInCurrentLine(
       currentMainWindowNode,
       status.settings.view.tabStop)
   else:

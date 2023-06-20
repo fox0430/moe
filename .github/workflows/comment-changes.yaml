@@ -17,39 +17,54 @@
 ##                                                                            ##
 ################################################################################
 
-name: Release
+name: comment-changes
 
 on:
+  pull_request:
+    types:
+      - opened
+      - reopened
   workflow_dispatch:
-    inputs:
-      release:
-        description: Release type
-        required: true
-        default: patch
-        type: choice
-        options:
-        - major
-        - minor
-        - patch 
 
 permissions:
   contents: write
 
 jobs:
-  release:
-    name: release
+  run:
+    name: run
     runs-on: ubuntu-latest
-    if: contains(fromJson('["major", "minor", "patch"]'), inputs.release)
+
+    # Ignore Dependabot PRs.
+    if: ${{ github.actor != 'dependabot[bot]' }}
     steps:
-      - name: checkout
+      - name: Checkout source
         uses: actions/checkout@v3.5.3
-
-      - name: release-bump2version-scriv
-        uses: kevinmatthes/release-bump2version-scriv@v0.2.3
         with:
-          release: ${{ inputs.release }}
+          fetch-depth: 0
+          ref: ${{ github.head_ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
 
-      - name: push
-        run: git push
+      - name: Setup git user
+        uses: fregante/setup-git-user@v2.0.1
 
-################################################################################
+      - name: Update Rust toolchain
+        run: |
+          rustup update
+
+      - name: Install aeruginous-rs
+        uses: baptiste0928/cargo-install@v2
+        with:
+          crate: aeruginous
+
+      - name: Create commit changes
+        run: |
+          aeruginous comment-changes \
+            -d : \
+            -k \
+            -n 1 \
+            -o changelog.d/ \
+            -l \#${{ github.event.pull_request.number }} \
+            -t https://github.com/fox0430/moe/pull/${{ github.event.pull_request.number }}
+          git add changelog.d/
+          git commit -m 'Create summary of recent changes'
+          git push

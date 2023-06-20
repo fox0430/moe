@@ -1,6 +1,6 @@
 ######################## GNU General Public License 3.0 ########################
 ##                                                                            ##
-## Copyright (C) 2017─2023 fox0430                                            ##
+## Copyright (C) 2017─2023 Shuhei Nogawa                                      ##
 ##                                                                            ##
 ## This program is free software: you can redistribute it and/or modify       ##
 ## it under the terms of the GNU General Public License as published by       ##
@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: checkout
-        uses: actions/checkout@v3.5.2
+        uses: actions/checkout@v3.5.3
 
       - name: scriv
         uses: kevinmatthes/create-scriv-fragment@v0.2.3

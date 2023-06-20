@@ -23,6 +23,45 @@ import editorstatus, ui, gapbuffer, unicodeext, fileutils, windownode, movement,
        editor, searchutils, bufferstatus, quickrun, messages, visualmode,
        commandline, viewhighlight, messagelog
 
+proc changeModeToInsertMode(status: var EditorStatus) {.inline.} =
+  if currentBufStatus.isReadonly:
+    status.commandLine.writeReadonlyModeWarning
+  else:
+    changeCursorType(status.settings.insertModeCursor)
+    status.changeMode(Mode.insert)
+
+proc changeModeToReplaceMode(status: var EditorStatus) {.inline.} =
+  if currentBufStatus.isReadonly:
+    status.commandLine.writeReadonlyModeWarning
+  else:
+    status.changeMode(Mode.replace)
+
+proc changeModeToVisualMode(status: var EditorStatus) =
+  status.changeMode(Mode.visual)
+  currentBufStatus.selectedArea = initSelectedArea(
+    currentMainWindowNode.currentLine,
+    currentMainWindowNode.currentColumn)
+
+proc changeModeToVisualBlockMode(status: var EditorStatus) =
+  status.changeMode(Mode.visualBlock)
+  currentBufStatus.selectedArea = initSelectedArea(
+    currentMainWindowNode.currentLine,
+    currentMainWindowNode.currentColumn)
+
+proc changeModeToVisualLineMode(status: var EditorStatus) =
+  status.changeMode(Mode.visualLine)
+  currentBufStatus.selectedArea = initSelectedArea(
+    currentMainWindowNode.currentLine,
+    currentMainWindowNode.currentColumn)
+
+proc changeModeToExMode*(
+  bufStatus: var BufferStatus,
+  commandLine: var CommandLine) =
+
+    bufStatus.changeMode(Mode.ex)
+    commandLine.clear
+    commandLine.setPrompt(exModePrompt)
+
 proc searchOneCharacterToEndOfLine(bufStatus: var BufferStatus,
                                    windowNode: WindowNode,
                                    rune: Rune): int =
@@ -131,10 +170,14 @@ proc turnOffHighlighting*(status: var EditorStatus) =
   status.isSearchHighlight = false
   status.update
 
+proc changeModeToNormalMode(status: var EditorStatus) =
+  status.changeMode(Mode.normal)
+  setBlinkingBlockCursor()
+
 proc writeFileAndExit(status: var EditorStatus) =
   if currentBufStatus.path.len == 0:
     status.commandLine.writeNoFileNameError
-    status.changeMode(Mode.normal)
+    status.changeModeToNormalMode
   else:
     try:
       saveFile(currentBufStatus.path,
@@ -229,13 +272,13 @@ proc changeInnerCommand(status: var EditorStatus, key: Rune) =
 
     if oldLine != currentBufStatus.buffer[currentLine]:
       currentMainWindowNode.currentColumn.inc
-      status.changeMode(Mode.insert)
+      status.changeModeToInsertMode
   # Delete current word and enter insert mode
   elif key == ru'w':
     if oldLine.len > 0:
       currentBufStatus.moveToBackwardWord(currentMainWindowNode)
       status.deleteWord
-    status.changeMode(Mode.insert)
+    status.changeModeToInsertMode
   else:
     discard
 
@@ -263,13 +306,13 @@ proc changeInnerCommand(status: var EditorStatus,
 
     if oldLine != currentBufStatus.buffer[currentLine]:
       currentMainWindowNode.currentColumn.inc
-      status.changeMode(Mode.insert)
+      status.changeModeToInsertMode
   # Delete current word and enter insert mode
   elif key == ru'w':
     if oldLine.len > 0:
       currentBufStatus.moveToBackwardWord(currentMainWindowNode)
       status.deleteWord
-    status.changeMode(Mode.insert)
+    status.changeModeToInsertMode
   else:
     discard
 
@@ -769,7 +812,7 @@ proc deleteCharacterAndEnterInsertMode(status: var EditorStatus,
 
     status.deleteCharacters(registerName)
 
-  status.changeMode(Mode.insert)
+  status.changeModeToInsertMode
 
 # s and cl commands
 proc deleteCharacterAndEnterInsertMode(status: var EditorStatus) =
@@ -809,7 +852,7 @@ proc deleteCharactersToCharacterAndEnterInsertMode(status: var EditorStatus,
     currentBufStatus.cmdLoop = position - currentColumn + 1
     status.deleteCharacters
 
-    status.changeMode(Mode.insert)
+    status.changeModeToInsertMode
 
 # cf command
 proc deleteCharactersToCharacterAndEnterInsertMode(status: var EditorStatus,
@@ -827,7 +870,7 @@ proc enterInsertModeAfterCursor(status: var EditorStatus) =
   if lineWidth == 0: discard
   elif lineWidth == currentMainWindowNode.currentColumn: discard
   else: inc(currentMainWindowNode.currentColumn)
-  status.changeMode(Mode.insert)
+  status.changeModeToInsertMode
 
 proc toggleCharacterAndMoveRight(status: var EditorStatus) =
   if currentBufStatus.isReadonly:
@@ -859,7 +902,7 @@ proc openBlankLineBelowAndEnterInsertMode(status: var EditorStatus) =
   currentBufStatus.openBlankLineBelow(currentMainWindowNode,
                                       status.settings.autoIndent,
                                       status.settings.tabStop)
-  status.changeMode(Mode.insert)
+  status.changeModeToInsertMode
 
 proc openBlankLineAboveAndEnterInsertMode(status: var EditorStatus) =
   if currentBufStatus.isReadonly:
@@ -879,7 +922,7 @@ proc openBlankLineAboveAndEnterInsertMode(status: var EditorStatus) =
     status.settings,
     status.colorMode)
 
-  status.changeMode(Mode.insert)
+  status.changeModeToInsertMode
 
 proc moveToFirstNonBlankOfLineAndEnterInsertMode(status: var EditorStatus) =
   if currentBufStatus.isReadonly:
@@ -887,7 +930,7 @@ proc moveToFirstNonBlankOfLineAndEnterInsertMode(status: var EditorStatus) =
     return
 
   currentBufStatus.moveToFirstNonBlankOfLine(currentMainWindowNode)
-  status.changeMode(Mode.insert)
+  status.changeModeToInsertMode
 
 proc moveToEndOfLineAndEnterInsertMode(status: var EditorStatus) =
   if currentBufStatus.isReadonly:
@@ -896,7 +939,7 @@ proc moveToEndOfLineAndEnterInsertMode(status: var EditorStatus) =
 
   let lineLen = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
   currentMainWindowNode.currentColumn = lineLen
-  status.changeMode(Mode.insert)
+  status.changeModeToInsertMode
 
 proc closeCurrentWindow(status: var EditorStatus) =
   if status.mainWindow.numOfMainWindow == 1: return
@@ -1056,44 +1099,6 @@ proc isChangeModeKey(key: Rune): bool =
           key == ord('I') or
           key == ord('a') or
           key == ord('A')
-
-proc changeModeToInsertMode(status: var EditorStatus) {.inline.} =
-  if currentBufStatus.isReadonly:
-    status.commandLine.writeReadonlyModeWarning
-  else:
-    status.changeMode(Mode.insert)
-
-proc changeModeToReplaceMode(status: var EditorStatus) {.inline.} =
-  if currentBufStatus.isReadonly:
-    status.commandLine.writeReadonlyModeWarning
-  else:
-    status.changeMode(Mode.replace)
-
-proc changeModeToVisualMode(status: var EditorStatus) =
-  status.changeMode(Mode.visual)
-  currentBufStatus.selectedArea = initSelectedArea(
-    currentMainWindowNode.currentLine,
-    currentMainWindowNode.currentColumn)
-
-proc changeModeToVisualBlockMode(status: var EditorStatus) =
-  status.changeMode(Mode.visualBlock)
-  currentBufStatus.selectedArea = initSelectedArea(
-    currentMainWindowNode.currentLine,
-    currentMainWindowNode.currentColumn)
-
-proc changeModeToVisualLineMode(status: var EditorStatus) =
-  status.changeMode(Mode.visualLine)
-  currentBufStatus.selectedArea = initSelectedArea(
-    currentMainWindowNode.currentLine,
-    currentMainWindowNode.currentColumn)
-
-proc changeModeToExMode*(
-  bufStatus: var BufferStatus,
-  commandLine: var CommandLine) =
-
-    bufStatus.changeMode(Mode.ex)
-    commandLine.clear
-    commandLine.setPrompt(exModePrompt)
 
 proc changeModeToSearchForwardMode(
   bufStatus: var BufferStatus,
@@ -1278,10 +1283,10 @@ proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
     status.pasteBeforeCursor
   elif key == ord('>'):
     for i in 0 ..< cmdLoop:
-      currentBufStatus.addIndent(currentMainWindowNode, status.settings.tabStop)
+      currentBufStatus.indent(currentMainWindowNode, status.settings.tabStop)
   elif key == ord('<'):
     for i in 0 ..< cmdLoop:
-      currentBufStatus.deleteIndent(currentMainWindowNode, status.settings.tabStop)
+      currentBufStatus.unindent(currentMainWindowNode, status.settings.tabStop)
   elif key == ord('='):
     let secondKey = commands[1]
     if secondKey == ord('='):

@@ -77,7 +77,7 @@ proc genDelimiterStr*(buffer: string): string =
     if buffer != result: break
 
 proc execCmdExNoOutput*(cmd: string): int {.inline.} =
-  (execCmdEx(cmd)).exitCode
+  execCmdEx(cmd).exitCode
 
 proc isEmpty*[T](s: seq[T]): bool {.inline.} = s.len == 0
 

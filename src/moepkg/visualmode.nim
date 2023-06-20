@@ -234,7 +234,7 @@ proc addIndent(
 
     windowNode.currentLine = area.startLine
     for i in area.startLine .. area.endLine:
-      bufStatus.addIndent(windowNode, tabStop)
+      bufStatus.indent(windowNode, tabStop)
       inc(windowNode.currentLine)
 
     windowNode.currentLine = area.startLine
@@ -252,7 +252,7 @@ proc deleteIndent(
 
     windowNode.currentLine = area.startLine
     for i in area.startLine .. area.endLine:
-      deleteIndent(bufStatus, windowNode, tabStop)
+      bufStatus.unindent(windowNode, tabStop)
       inc(windowNode.currentLine)
 
     windowNode.currentLine = area.startLine
@@ -505,6 +505,10 @@ proc insertCharBlock(
                                       c)
     windowNode.currentLine = beforeLine
 
+proc changeModeToNormalMode(status: var EditorStatus) =
+  setBlinkingBlockCursor()
+  status.changeMode(Mode.normal)
+
 proc exitVisualMode(status: var EditorStatus) =
     var highlight = currentMainWindowNode.highlight
     highlight.updateHighlight(
@@ -515,7 +519,7 @@ proc exitVisualMode(status: var EditorStatus) =
       status.settings,
       status.colorMode)
 
-    status.changeMode(Mode.normal)
+    status.changeModeToNormalMode
 
 proc visualCommand(
   status: var EditorStatus,
@@ -664,6 +668,8 @@ proc isVisualModeCommand*(command: Runes): InputState =
        c == ord('e') or
        c == ord('G') or
        c == ord('g') or
+       c == ord('{') or
+       c == ord('}') or
        c == ord('y') or isDcKey(c) or
        c == ord('x') or c == ord('d') or
        c == ord('>') or
@@ -706,6 +712,10 @@ proc execVisualModeCommand*(status: var EditorStatus, command: Runes) =
   elif key == ord('g') and command.len == 2:
     if command[1] == ord('g'):
       currentBufStatus.moveToFirstLine(currentMainWindowNode)
+  elif key == ord('{'):
+    currentBufStatus.moveToPreviousBlankLine(currentMainWindowNode)
+  elif key == ord('}'):
+    currentBufStatus.moveToNextBlankLine(currentMainWindowNode)
   else:
     if isVisualBlockMode(currentBufStatus.mode):
       status.visualBlockCommand(currentBufStatus.selectedArea, key)

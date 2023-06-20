@@ -30,7 +30,7 @@ smartcase = true
 
 disableChangeCursor = false
 
-defaultCursor = "blinkBlock"
+defaultCursor = "terminalDefault"
 
 normalModeCursor = "blinkBlock"
 
