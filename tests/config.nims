@@ -1,3 +1,5 @@
+switch("path", "$projectDir/../src")
+
 switch("d", "unitTest")
 switch("d", "nimOldCaseObjects")
 
