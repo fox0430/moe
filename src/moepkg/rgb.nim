@@ -55,22 +55,33 @@ proc hexToRgb*(s: string): Result[Rgb, string] =
 
   return Result[Rgb, string].ok rgb
 
-## Converts from the Rgb to a hex color code with `#`.
+## Converts from the Rgb to a hex color code.
+## And with '#' prefix if isPrefix is true.
 ## Example: Rgb(red: 0, green: 0, blue: 0) -> "#000000"
-proc toHex*(rgb: Rgb): string {.inline.} =
-  fmt"#{rgb.red.toHex(2)}{rgb.green.toHex(2)}{rgb.blue.toHex(2)}"
+proc toHex*(rgb: Rgb, isPrefix: bool = true): string =
+  let
+    r = rgb.red.toHex(2).toLowerAscii
+    g = rgb.green.toHex(2).toLowerAscii
+    b = rgb.blue.toHex(2).toLowerAscii
+
+  if isPrefix: fmt"#{r}{g}{b}"
+  else: fmt"{r}{g}{b}"
 
 ## Return true if valid hex color code.
 ## '#' is required if `isPrefix` is true.
 ## Range: 000000 ~ ffffff
 proc isHexColor*(s: string, isPrefix: bool = true): bool =
-  if (not isPrefix or s.startsWith('#')) and s.len == 7:
+  if (not isPrefix and s.len == 6) or (s.startsWith('#') and s.len == 7):
+    let hexStr =
+      if s.startsWith('#'): s[1..6]
+      else: s[0..5]
+
     var
       r, g, b: int
     try:
-      r = fromHex[int](s[1..2])
-      g = fromHex[int](s[3..4])
-      b = fromHex[int](s[5..6])
+      r = fromHex[int](hexStr[0..1])
+      g = fromHex[int](hexStr[2..3])
+      b = fromHex[int](hexStr[4..5])
     except ValueError:
       return false
 
@@ -87,6 +98,6 @@ proc inverseColor*(color: Rgb): Rgb =
   result.green = abs(color.green - 255)
   result.blue = abs(color.blue - 255)
 
-# Calculates the difference between two rgb colors
-proc calcRGBDifference*(c1: Rgb, c2: Rgb): int {.inline.} =
+## Calculates the difference between two rgb colors.
+proc calcRgbDifference*(c1: Rgb, c2: Rgb): int {.inline.} =
   abs(c1.red - c2.red) + abs(c1.green - c2.green) + abs(c1.blue - c2.blue)
