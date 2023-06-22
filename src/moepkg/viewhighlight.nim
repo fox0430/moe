@@ -248,7 +248,8 @@ proc highlightOtherUsesCurrentWord(
                 let
                   originalEditorColorPairIndex = highlight.getColorPair(i, j)
                   originalColorPair = ColorThemeTable[theme][originalEditorColorPairIndex]
-                EditorColorPairIndex.currentWord.initColorPair(
+                # TODO: Return `Result` type.
+                discard EditorColorPairIndex.currentWord.initColorPair(
                   colorMode,
                   originalColorPair.foreground,
                   ColorThemeTable[theme][EditorColorPairIndex.currentWord].background)

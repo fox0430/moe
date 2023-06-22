@@ -241,7 +241,7 @@ proc initNcursesColor*(color, red, green, blue: int16): Result[(), string] =
 
   return Result[(), string].ok ()
 
-proc initNcursesColorPair*(pair, fg, bg: int) =
+proc initNcursesColorPair*(pair, fg, bg: int): Result[(), string] =
   when not defined(release):
     # TODO: Return an error?
     # 0 is reserved by Ncurses.
@@ -251,10 +251,10 @@ proc initNcursesColorPair*(pair, fg, bg: int) =
     # Not start when running unit tests
     let r = initExtendedPair(pair.cint, fg.cint, bg.cint)
     if 0 != r:
-      exitUi()
-      echo fmt"Init Ncurses color pair failed: (pair: {pair}, fg: {fg}, bg: {bg}): Exit code: {r}"
-      # TODO: Return Result.error
-      raise
+      let msg = fmt"Init Ncurses color pair failed: (pair: {pair}, fg: {fg}, bg: {bg}): Exit code: {r}"
+      return Result[(), string].err msg
+
+  return Result[(), string].ok ()
 
 proc initWindow*(height, width, y, x: int, color: int16): Window =
   result = Window()

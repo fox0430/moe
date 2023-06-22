@@ -3156,7 +3156,7 @@ proc initColor*(pair: ColorPair): Result[(), string] =
 proc initColorPair*(
   pairIndex: EditorColorPairIndex | int,
   colorMode: ColorMode,
-  foreground, background: Color) =
+  foreground, background: Color): Result[(), string] =
 
     let
       fg: int16 =
@@ -3187,15 +3187,15 @@ proc initColorPair*(
             else:
               background.index.int16
 
-    initNcursesColorPair(pairIndex.int, fg, bg)
+    return initNcursesColorPair(pairIndex.int, fg, bg)
 
 ## Init a new Ncurses color pair.
 proc initColorPair(
   pairIndex: EditorColorPairIndex,
   colorMode: ColorMode,
-  pair: ColorPair) {.inline.} =
+  pair: ColorPair): Result[(), string] =
 
-    pairIndex.initColorPair(colorMode, pair.foreground, pair.background)
+    return pairIndex.initColorPair(colorMode, pair.foreground, pair.background)
 
 ## Init Ncurses colors and color pairs.
 proc initEditrorColor*(
@@ -3210,6 +3210,7 @@ proc initEditrorColor*(
         if r.isErr: return Result[(), string].err r.error
 
     for pairIndex, colorPair in ColorThemeTable[theme]:
-      pairIndex.initColorPair(colorMode, colorPair)
+      let r = pairIndex.initColorPair(colorMode, colorPair)
+      if r.isErr: return r
 
     return Result[(), string].ok ()

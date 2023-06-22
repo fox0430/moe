@@ -363,7 +363,8 @@ proc writeCurrentLine(
           else:
             originalColorPair.background
 
-      currentLineColorPair.initColorPair(colorMode, bufferFg, bufferBg)
+      # TODO: Return `Result` type.
+      discard currentLineColorPair.initColorPair(colorMode, bufferFg, bufferBg)
 
       win.attron(attribute)
       view.write(win, y, x, runes, currentLineColorPair.int16)
@@ -375,7 +376,8 @@ proc writeCurrentLine(
       let
         afterFg = themeColors[EditorColorPairIndex.default].foreground
         afterBg = themeColors[EditorColorPairIndex.currentLineBg].background
-      currentLineColorPair.initColorPair(colorMode, afterFg, afterBg)
+      # TODO: Return `Result` type.
+      discard currentLineColorPair.initColorPair(colorMode, afterFg, afterBg)
 
       let
         spaces = ru" ".repeat(view.width - view.lines[y].width)
