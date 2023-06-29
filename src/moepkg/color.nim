@@ -2156,7 +2156,7 @@ proc rgb(c: Color16): Rgb =
 proc rgb(c: Color256): Rgb =
   case c:
     of Color256.default: TerminalDefaultRgb
-    of Color256.black: "#000000".hexToRgb.get
+    of Color256.black, Color256.gray0: "#000000".hexToRgb.get
     of Color256.maroon: "#800000".hexToRgb.get
     of Color256.green: "#008000".hexToRgb.get
     of Color256.olive: "#808000".hexToRgb.get
@@ -2164,20 +2164,18 @@ proc rgb(c: Color256): Rgb =
     of Color256.purple1: "#800080".hexToRgb.get
     of Color256.teal: "#008080".hexToRgb.get
     of Color256.silver: "#c0c0c0".hexToRgb.get
-    of Color256.gray: "#808080".hexToRgb.get
+    of Color256.gray, Color256.gray50: "#808080".hexToRgb.get
     of Color256.red: "#ff0000".hexToRgb.get
-    of Color256.lime: "#00ff00".hexToRgb.get
-    of Color256.yellow: "#ffff00".hexToRgb.get
-    of Color256.blue: "#0000ff".hexToRgb.get
+    of Color256.lime, Color256.green1: "#00ff00".hexToRgb.get
+    of Color256.yellow, Color256.yellow1: "#ffff00".hexToRgb.get
+    of Color256.blue, Color256.blue1: "#0000ff".hexToRgb.get
     of Color256.fuchsia: "#ff00ff".hexToRgb.get
-    of Color256.aqua: "#00ffff".hexToRgb.get
-    of Color256.white: "#ffffff".hexToRgb.get
-    of Color256.gray0: "#000000".hexToRgb.get
+    of Color256.aqua, Color256.cyan1: "#00ffff".hexToRgb.get
+    of Color256.white, Color256.gray100: "#ffffff".hexToRgb.get
     of Color256.navyBlue: "#00005f".hexToRgb.get
     of Color256.darkBlue: "#000087".hexToRgb.get
     of Color256.blue31: "#0000af".hexToRgb.get
     of Color256.blue32: "#0000d7".hexToRgb.get
-    of Color256.blue1: "#0000ff".hexToRgb.get
     of Color256.darkGreen: "#005f00".hexToRgb.get
     of Color256.deepSkyBlue41: "#005f5f".hexToRgb.get
     of Color256.deepSkyBlue42: "#005f87".hexToRgb.get
@@ -2202,12 +2200,10 @@ proc rgb(c: Color256): Rgb =
     of Color256.cyan3: "#00d7af".hexToRgb.get
     of Color256.darkTurquoise: "#00d7df".hexToRgb.get
     of Color256.turquoise2: "#00d7ff".hexToRgb.get
-    of Color256.green1: "#00ff00".hexToRgb.get
     of Color256.springGreen22: "#00ff5f".hexToRgb.get
     of Color256.springGreen1: "#00ff87".hexToRgb.get
     of Color256.mediumSpringGreen: "#00ffaf".hexToRgb.get
     of Color256.cyan2: "#00ffd7".hexToRgb.get
-    of Color256.cyan1: "#00ffff".hexToRgb.get
     of Color256.darkRed1: "#5f0000".hexToRgb.get
     of Color256.deepPink41: "#5f005f".hexToRgb.get
     of Color256.purple41: "#5f0087".hexToRgb.get
@@ -2302,13 +2298,12 @@ proc rgb(c: Color256): Rgb =
     of Color256.darkKhaki: "#afaf5f".hexToRgb.get
     of Color256.navajoWhite3: "#afaf87".hexToRgb.get
     of Color256.gray69: "#afafaf".hexToRgb.get
-    of Color256.lightSteelBlue3: "#afafd7".hexToRgb.get
+    of Color256.lightSteelBlue3, Color256.lightCyan3: "#afafd7".hexToRgb.get
     of Color256.lightSteelBlue: "#afafff".hexToRgb.get
     of Color256.yellow31: "#afd700".hexToRgb.get
     of Color256.darkOliveGreen32: "#afd75f".hexToRgb.get
     of Color256.darkSeaGreen32: "#afd787".hexToRgb.get
     of Color256.darkSeaGreen21: "#afd7af".hexToRgb.get
-    of Color256.lightCyan3: "#afafd7".hexToRgb.get
     of Color256.lightSkyBlue1: "#afd7ff".hexToRgb.get
     of Color256.greenYellow: "#afff00".hexToRgb.get
     of Color256.darkOliveGreen2: "#afff5f".hexToRgb.get
@@ -2382,12 +2377,10 @@ proc rgb(c: Color256): Rgb =
     of Color256.navajoWhite1: "#ffd7af".hexToRgb.get
     of Color256.mistyRose1: "#ffd7d7".hexToRgb.get
     of Color256.thistle1: "#ffd7ff".hexToRgb.get
-    of Color256.yellow1: "#ffff00".hexToRgb.get
     of Color256.lightGoldenrod1: "#ffff5f".hexToRgb.get
     of Color256.khaki1: "#ffff87".hexToRgb.get
     of Color256.wheat1: "#ffffaf".hexToRgb.get
     of Color256.cornsilk1: "#ffffd7".hexToRgb.get
-    of Color256.gray100: "#ffffff".hexToRgb.get
     of Color256.gray3: "#080808".hexToRgb.get
     of Color256.gray7: "#121212".hexToRgb.get
     of Color256.gray11: "#1c1c1c".hexToRgb.get
@@ -2400,7 +2393,6 @@ proc rgb(c: Color256): Rgb =
     of Color256.gray39: "#626262".hexToRgb.get
     of Color256.gray42: "#6c6c6c".hexToRgb.get
     of Color256.gray46: "#767676".hexToRgb.get
-    of Color256.gray50: "#808080".hexToRgb.get
     of Color256.gray54: "#8a8a8a".hexToRgb.get
     of Color256.gray58: "#949494".hexToRgb.get
     of Color256.gray62: "#9e9e9e".hexToRgb.get
@@ -2427,7 +2419,7 @@ proc color8(rgb: Rgb): Result[Color8, string] =
     return Result[Color8, string].ok Color8.olive
   if rgb == "#000080".hexToRgb.get:
     return Result[Color8, string].ok Color8.navy
-  if rgb == "#008080".hexToRgb.get:
+  if rgb == "#800080".hexToRgb.get:
     return Result[Color8, string].ok Color8.purple
   if rgb == "#008080".hexToRgb.get:
     return Result[Color8, string].ok Color8.teal
@@ -2450,7 +2442,7 @@ proc color16(rgb: Rgb): Result[Color16, string] =
     return Result[Color16, string].ok Color16.olive
   if rgb == "#000080".hexToRgb.get:
     return Result[Color16, string].ok Color16.navy
-  if rgb == "#008080".hexToRgb.get:
+  if rgb == "#800080".hexToRgb.get:
     return Result[Color16, string].ok Color16.purple
   if rgb == "#008080".hexToRgb.get:
     return Result[Color16, string].ok Color16.teal
@@ -2480,6 +2472,7 @@ proc color256(rgb: Rgb): Result[Color256, string] =
   if rgb == TerminalDefaultRgb:
     return Result[Color256, string].ok Color256.default
   if rgb == "#000000".hexToRgb.get:
+    # NOTE: black == gray0
     return Result[Color256, string].ok Color256.black
   if rgb == "#800000".hexToRgb.get:
     return Result[Color256, string].ok Color256.maroon
@@ -2489,30 +2482,35 @@ proc color256(rgb: Rgb): Result[Color256, string] =
     return Result[Color256, string].ok Color256.olive
   if rgb == "#000080".hexToRgb.get:
     return Result[Color256, string].ok Color256.navy
-  if rgb == "#008080".hexToRgb.get:
+  if rgb == "#800080".hexToRgb.get:
     return Result[Color256, string].ok Color256.purple
   if rgb == "#008080".hexToRgb.get:
     return Result[Color256, string].ok Color256.teal
   if rgb == "#c0c0c0".hexToRgb.get:
     return Result[Color256, string].ok Color256.silver
   if rgb == "#808080".hexToRgb.get:
+    # NOTE: gray == gray50
     return Result[Color256, string].ok Color256.gray
   if rgb == "#ff0000".hexToRgb.get:
+    # NOTE: red == red1
     return Result[Color256, string].ok Color256.red
   if rgb == "#00ff00".hexToRgb.get:
+    # NOTE: lime == green1
     return Result[Color256, string].ok Color256.lime
   if rgb == "#ffff00".hexToRgb.get:
+    # NOTE: yellow == yellow1
     return Result[Color256, string].ok Color256.yellow
   if rgb == "#0000ff".hexToRgb.get:
+    # NOTE: blue == blue1
     return Result[Color256, string].ok Color256.blue
   if rgb == "#ff00ff".hexToRgb.get:
+    # NOTE: fuchsia == magenta1
     return Result[Color256, string].ok Color256.fuchsia
   if rgb == "#00ffff".hexToRgb.get:
+    # NOTE: aqua == cyan1
     return Result[Color256, string].ok Color256.aqua
   if rgb == "#ffffff".hexToRgb.get:
     return Result[Color256, string].ok Color256.white
-  if rgb == "#000000".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray0
   if rgb == "#00005f".hexToRgb.get:
     return Result[Color256, string].ok Color256.navyBlue
   if rgb == "#000087".hexToRgb.get:
@@ -2521,8 +2519,6 @@ proc color256(rgb: Rgb): Result[Color256, string] =
     return Result[Color256, string].ok Color256.blue31
   if rgb == "#0000d7".hexToRgb.get:
     return Result[Color256, string].ok Color256.blue32
-  if rgb == "#0000ff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.blue1
   if rgb == "#005f00".hexToRgb.get:
     return Result[Color256, string].ok Color256.darkGreen
   if rgb == "#005f5f".hexToRgb.get:
@@ -2571,8 +2567,6 @@ proc color256(rgb: Rgb): Result[Color256, string] =
     return Result[Color256, string].ok Color256.darkTurquoise
   if rgb == "#00d7ff".hexToRgb.get:
     return Result[Color256, string].ok Color256.turquoise2
-  if rgb == "#00ff00".hexToRgb.get:
-    return Result[Color256, string].ok Color256.green1
   if rgb == "#00ff5f".hexToRgb.get:
     return Result[Color256, string].ok Color256.springGreen22
   if rgb == "#00ff87".hexToRgb.get:
@@ -2581,8 +2575,6 @@ proc color256(rgb: Rgb): Result[Color256, string] =
     return Result[Color256, string].ok Color256.mediumSpringGreen
   if rgb == "#00ffd7".hexToRgb.get:
     return Result[Color256, string].ok Color256.cyan2
-  if rgb == "#00ffff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.cyan1
   if rgb == "#5f0000".hexToRgb.get:
     return Result[Color256, string].ok Color256.darkRed1
   if rgb == "#5f005f".hexToRgb.get:
@@ -2772,6 +2764,7 @@ proc color256(rgb: Rgb): Result[Color256, string] =
   if rgb == "#afafaf".hexToRgb.get:
     return Result[Color256, string].ok Color256.gray69
   if rgb == "#afafd7".hexToRgb.get:
+    # NOTE: lightSteelBlue3 == lightCyan3
     return Result[Color256, string].ok Color256.lightSteelBlue3
   if rgb == "#afafff".hexToRgb.get:
     return Result[Color256, string].ok Color256.lightSteelBlue
@@ -2783,8 +2776,6 @@ proc color256(rgb: Rgb): Result[Color256, string] =
     return Result[Color256, string].ok Color256.darkSeaGreen32
   if rgb == "#afd7af".hexToRgb.get:
     return Result[Color256, string].ok Color256.darkSeaGreen21
-  if rgb == "#afafd7".hexToRgb.get:
-    return Result[Color256, string].ok Color256.lightCyan3
   if rgb == "#afd7ff".hexToRgb.get:
     return Result[Color256, string].ok Color256.lightSkyBlue1
   if rgb == "#afff00".hexToRgb.get:
@@ -2871,8 +2862,6 @@ proc color256(rgb: Rgb): Result[Color256, string] =
     return Result[Color256, string].ok Color256.honeydew2
   if rgb == "#d7ffff".hexToRgb.get:
     return Result[Color256, string].ok Color256.lightCyan1
-  if rgb == "#ff0000".hexToRgb.get:
-    return Result[Color256, string].ok Color256.red1
   if rgb == "#ff005f".hexToRgb.get:
     return Result[Color256, string].ok Color256.deepPink2
   if rgb == "#ff0087".hexToRgb.get:
@@ -2881,8 +2870,6 @@ proc color256(rgb: Rgb): Result[Color256, string] =
     return Result[Color256, string].ok Color256.deepPink12
   if rgb == "#ff00d7".hexToRgb.get:
     return Result[Color256, string].ok Color256.magenta22
-  if rgb == "#ff00ff".hexToRgb.get:
-    return Result[Color256, string].ok Color256.magenta1
   if rgb == "#ff5f00".hexToRgb.get:
     return Result[Color256, string].ok Color256.orangeRed1
   if rgb == "#ff5f5f".hexToRgb.get:
@@ -2931,8 +2918,6 @@ proc color256(rgb: Rgb): Result[Color256, string] =
     return Result[Color256, string].ok Color256.mistyRose1
   if rgb == "#ffd7ff".hexToRgb.get:
     return Result[Color256, string].ok Color256.thistle1
-  if rgb == "#ffff00".hexToRgb.get:
-    return Result[Color256, string].ok Color256.yellow1
   if rgb == "#ffff5f".hexToRgb.get:
     return Result[Color256, string].ok Color256.lightGoldenrod1
   if rgb == "#ffff87".hexToRgb.get:
@@ -2967,8 +2952,6 @@ proc color256(rgb: Rgb): Result[Color256, string] =
     return Result[Color256, string].ok Color256.gray42
   if rgb == "#767676".hexToRgb.get:
     return Result[Color256, string].ok Color256.gray46
-  if rgb == "#808080".hexToRgb.get:
-    return Result[Color256, string].ok Color256.gray50
   if rgb == "#8a8a8A".hexToRgb.get:
     return Result[Color256, string].ok Color256.gray54
   if rgb == "#949494".hexToRgb.get:
@@ -3027,20 +3010,22 @@ proc isEditorColorPairIndex*(s: string): bool =
     if $i == s: return true
 
 ## Set a EditorColorIndex to ColorThemeTable.
-proc setBackgroundIndex*(
-  theme: ColorTheme,
-  pairIndex: EditorColorPairIndex,
-  colorIndex: EditorColorIndex | int) {.inline.} =
-
-    ColorThemeTable[theme][pairIndex].background.index = colorIndex
-
-## Set a EditorColorIndex to ColorThemeTable.
 proc setForegroundIndex*(
   theme: ColorTheme,
   pairIndex: EditorColorPairIndex,
   colorIndex: EditorColorIndex | int) {.inline.} =
 
-    ColorThemeTable[theme][pairIndex].foreground.index = colorIndex
+    ColorThemeTable[theme][pairIndex].foreground.index =
+      colorIndex.EditorColorIndex
+
+## Set a EditorColorIndex to ColorThemeTable.
+proc setBackgroundIndex*(
+  theme: ColorTheme,
+  pairIndex: EditorColorPairIndex,
+  colorIndex: EditorColorIndex | int) {.inline.} =
+
+    ColorThemeTable[theme][pairIndex].background.index =
+      colorIndex.EditorColorIndex
 
 ## Set a Rgb to ColorThemeTable.
 proc setForegroundRgb*(
@@ -3101,8 +3086,8 @@ proc rgbToColor256*(orignRgb: Rgb): Color256 =
 
 ## Donwgrade rgb to 256 or 16 or 8.
 ## Do nothing if greater than 256.
-proc downgrade*(rgb: Rgb, colorMode: ColorMode): Rgb =
-  case colorMode:
+proc downgrade*(rgb: Rgb, mode: ColorMode): Rgb =
+  case mode:
     of ColorMode.c8:
      rgb.rgbToColor8.rgb
     of ColorMode.c16:
