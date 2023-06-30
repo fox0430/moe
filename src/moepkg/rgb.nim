@@ -60,9 +60,9 @@ proc hexToRgb*(s: string): Result[Rgb, string] =
 ## Example: Rgb(red: 0, green: 0, blue: 0) -> "#000000"
 proc toHex*(rgb: Rgb, isPrefix: bool = true): string =
   let
-    r = rgb.red.toHex(2).toLowerAscii
-    g = rgb.green.toHex(2).toLowerAscii
-    b = rgb.blue.toHex(2).toLowerAscii
+    r = rgb.red.uint64.toHex(2).toLowerAscii
+    g = rgb.green.uint64.toHex(2).toLowerAscii
+    b = rgb.blue.uint64.toHex(2).toLowerAscii
 
   if isPrefix: fmt"#{r}{g}{b}"
   else: fmt"{r}{g}{b}"

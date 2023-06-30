@@ -282,7 +282,7 @@ proc writeExitHelp*(commandLine: var CommandLine) {.inline.} =
 proc writeCurrentCharInfo*(commandLine: var CommandLine, r: Rune) {.inline.} =
   let
     e = encodeUTF8(r)
-    eHex = e[0].toHex
+    eHex = e[0].uint64.toHex
     eOct = int64(e[0]).toOct(5)
     mess = fmt "<{$r}>  {e[0]}  Hex {normalizeHex($eHex)}  Oct {$eOct}"
   commandLine.writeMessageOnCommandLine(mess)
