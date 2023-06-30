@@ -30,7 +30,7 @@ proc writeMessageOnCommandLine*(
 proc writeMessageOnCommandLine*(
   commandLine: var CommandLine,
   message: string) {.inline.} =
-    commandLine.writeMessageOnCommandLine(message, EditorColorPairIndex.commandBar)
+    commandLine.writeMessageOnCommandLine(message, EditorColorPairIndex.commandLine)
 
 proc writeError*(c: var CommandLine, message: string) =
   c.writeMessageOnCommandLine(message, EditorColorPairIndex.errorMessage)

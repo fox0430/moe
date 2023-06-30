@@ -338,7 +338,7 @@ suite "highlightPairOfParen":
               firstColumn: 1,
               lastRow: 0,
               lastColumn: 1,
-              color: EditorColorPairIndex.parenText),
+              color: EditorColorPairIndex.parenPair),
           ])
 
         highlightParenPairTest(testIndex, openParens[i], buffer, position, expectHighlight)
@@ -352,7 +352,7 @@ suite "highlightPairOfParen":
               firstColumn: 0,
               lastRow: 0,
               lastColumn: 0,
-              color: EditorColorPairIndex.parenText),
+              color: EditorColorPairIndex.parenPair),
             ColorSegment(
               firstRow: 0,
               firstColumn: 1,
@@ -384,7 +384,7 @@ suite "highlightPairOfParen":
               firstColumn: 2,
               lastRow: 0,
               lastColumn: 2,
-              color: EditorColorPairIndex.parenText),
+              color: EditorColorPairIndex.parenPair),
           ])
 
         highlightParenPairTest(testIndex, openParens[i], buffer, position, expectHighlight)
@@ -398,7 +398,7 @@ suite "highlightPairOfParen":
               firstColumn: 0,
               lastRow: 0,
               lastColumn: 0,
-              color: EditorColorPairIndex.parenText),
+              color: EditorColorPairIndex.parenPair),
             ColorSegment(
               firstRow: 0,
               firstColumn: 1,
@@ -430,7 +430,7 @@ suite "highlightPairOfParen":
               firstColumn: 0,
               lastRow: 1,
               lastColumn: 0,
-              color: EditorColorPairIndex.parenText),
+              color: EditorColorPairIndex.parenPair),
           ])
 
         highlightParenPairTest(testIndex, openParens[i], buffer, position, expectHighlight)
@@ -444,7 +444,7 @@ suite "highlightPairOfParen":
               firstColumn: 0,
               lastRow: 0,
               lastColumn: 0,
-              color: EditorColorPairIndex.parenText),
+              color: EditorColorPairIndex.parenPair),
             ColorSegment(
               firstRow: 1,
               firstColumn: 0,
@@ -482,7 +482,7 @@ suite "highlightPairOfParen":
               firstColumn: 0,
               lastRow: 2,
               lastColumn: 0,
-              color: EditorColorPairIndex.parenText),
+              color: EditorColorPairIndex.parenPair),
           ])
 
         highlightParenPairTest(testIndex, openParens[i], buffer, position, expectHighlight)
@@ -496,7 +496,7 @@ suite "highlightPairOfParen":
               firstColumn: 0,
               lastRow: 0,
               lastColumn: 0,
-              color: EditorColorPairIndex.parenText),
+              color: EditorColorPairIndex.parenPair),
             ColorSegment(
               firstRow: 1,
               firstColumn: 0,
@@ -635,7 +635,7 @@ suite "Highlight paren":
 
     check highlight[8] == ColorSegment(
       firstRow: 0, firstColumn: 19, lastRow: 0, lastColumn: 19,
-      color: EditorColorPairIndex.parenText)
+      color: EditorColorPairIndex.parenPair)
 
   test "Highlight '('":
     var status = initEditorStatus()
@@ -655,7 +655,7 @@ suite "Highlight paren":
 
     check highlight[3] == ColorSegment(
       firstRow: 0, firstColumn: 9, lastRow: 0, lastColumn: 9,
-      color: EditorColorPairIndex.parenText)
+      color: EditorColorPairIndex.parenPair)
 
 suite "Update search highlight":
   test "single window":

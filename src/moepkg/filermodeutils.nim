@@ -508,7 +508,7 @@ proc searchFileMode*(
         0,
         0,
         "Not found",
-        EditorColorPairIndex.commandBar.int16)
+        EditorColorPairIndex.commandLine.int16)
 
       windowNode.refreshWindow
       filerStatus.isUpdatePathList = true

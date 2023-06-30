@@ -327,8 +327,8 @@ currentTab = "#ffffff"
 currentTabBg = "#0000ff"
 
 # command  bar
-commandBar = "#ffffff"
-commandBarBg = "termDefaultBg"
+commandLine = "#ffffff"
+commandLineBg = "termDefaultBg"
 
 # error message
 errorMessage = "#ff0000"
@@ -382,8 +382,8 @@ replaceText = "termDefaultBg"
 replaceTextBg = "#ff0000"
 
 # pair of paren highlighting
-parenText = "termDefaultBg"
-parenTextBg = "#0000ff"
+parenPair = "termDefaultBg"
+parenPairBg = "#0000ff"
 
 # highlight other uses current word
 currentWord = "termDefaultBg"
@@ -401,14 +401,17 @@ highlightTrailingSpacesBg = "#ff0000"
 reservedWord = "#ffffff"
 reservedWordBg = "#808080"
 
-addedLine = "#008000"
-addedLineBg = "termDefautBg"
-deletedLine = "#deletedLine"
-deletedLineBg = "termDefautBg"
+backupManagerCurrentLine = "#ffffff"
+backupManagerCurrentLineBg = "#008080"
+
+diffViewerAddedLine = "#008000"
+diffViewerAddedLineBg = "termDefautBg"
+diffViewerDeletedLine = "#deletedLine"
+diffViewerDeletedLineBg = "termDefautBg"
 
 # configuration mode
-currentSetting = "#ffffff"
-currentSettingBg = "#008080"
+configModeCurrentLine = "#ffffff"
+configModeCurrentLineBg = "#008080"
 
 # highlight current line background
 currentLineBg = "#444444"

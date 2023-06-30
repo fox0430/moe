@@ -384,8 +384,8 @@ type
     currentTab
     currentTabBg
     # command bar
-    commandBar
-    commandBarBg
+    commandLine
+    commandLineBg
     # error message
     errorMessage
     errorMessageBg
@@ -451,8 +451,8 @@ type
     replaceTextBg
 
     # pair of paren highlighting
-    parenText
-    parenTextBg
+    parenPair
+    parenPairBg
 
     # highlight for other uses current word
     currentWord
@@ -471,18 +471,18 @@ type
     reservedWordBg
 
     # backup manager
-    currentBackup
-    currentBackupBg
+    backupManagerCurrentLine
+    backupManagerCurrentLineBg
 
     # diff viewer
-    addedLine
-    addedLineBg
-    deletedLine
-    deletedLineBg
+    diffViewerAddedLine
+    diffViewerAddedLineBg
+    diffViewerDeletedLine
+    diffViewerDeletedLineBg
 
     # configuration mode
-    currentSetting
-    currentSettingBg
+    configModeCurrentLine
+    configModeCurrentLineBg
 
     # highlight curent line background
     currentLineBg
@@ -517,7 +517,7 @@ type
     # tab line
     currentTab
     # command bar
-    commandBar
+    commandLine
     # error message
     errorMessage
     # search result highlighting
@@ -555,7 +555,7 @@ type
     # replace text highlighting
     replaceText
     # pair of paren highlighting
-    parenText
+    parenPair
     # other uses current word
     currentWord
     # full width space
@@ -565,12 +565,12 @@ type
     # reserved words
     reservedWord
     # Backup manager
-    currentBackup
+    backupManagerCurrentLine
     # diff viewer
-    addedLine
-    deletedLine
+    diffViewerAddedLine
+    diffViewerDeletedLine
     # configuration mode
-    currentSetting
+    configModeCurrentLine
     # highlight curent line background
     currentLineBg
 
@@ -775,13 +775,12 @@ const
         rgb: "#0000ff".hexToRgb.get)),
 
     # Command line
-    # TODO: Rename to commandLine
-    EditorColorPairIndex.commandBar: ColorPair(
+    EditorColorPairIndex.commandLine: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.commandBar,
+        index: EditorColorIndex.commandLine,
         rgb: "#ffffff".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.commandBarBg,
+        index: EditorColorIndex.commandLineBg,
         rgb: TerminalDefaultRgb)),
 
     # Error message
@@ -1005,13 +1004,12 @@ const
         rgb: "#ff0000".hexToRgb.get)),
 
     # Pair of paren highlighting
-    # TODO: Rename to parenPair?
-    EditorColorPairIndex.parenText: ColorPair(
+    EditorColorPairIndex.parenPair: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.parenText,
+        index: EditorColorIndex.parenPair,
         rgb: "#ffffff".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.parenTextBg,
+        index: EditorColorIndex.parenPairBg,
         rgb: "#0000ff".hexToRgb.get)),
 
     # highlight other uses current word
@@ -1051,42 +1049,38 @@ const
         rgb: "#808080".hexToRgb.get)),
 
     # Backup manager
-    # TODO: Rename to BackupManagerCurrentLine?
-    EditorColorPairIndex.currentBackup: ColorPair(
+    EditorColorPairIndex.backupManagerCurrentLine: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.currentBackup,
+        index: EditorColorIndex.backupManagerCurrentLine,
         rgb: "#ffffff".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.currentBackupBg,
+        index: EditorColorIndex.backupManagerCurrentLineBg,
         rgb: "#008080".hexToRgb.get)),
 
     # Diff viewer
-    # TODO: Ranme to diffViewerAddedLine?
-    EditorColorPairIndex.addedLine: ColorPair(
+    EditorColorPairIndex.diffViewerAddedLine: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.addedLine,
+        index: EditorColorIndex.diffViewerAddedLine,
         rgb: "#008000".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.addedLineBg,
+        index: EditorColorIndex.diffViewerAddedLineBg,
         rgb: TerminalDefaultRgb)),
 
-    # TODO: Ranme to diffViewerDeletedLine ?
-    EditorColorPairIndex.deletedLine: ColorPair(
+    EditorColorPairIndex.diffViewerDeletedLine: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.deletedLine,
+        index: EditorColorIndex.diffViewerDeletedLine,
         rgb: "#ff0000".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.deletedLineBg,
+        index: EditorColorIndex.diffViewerDeletedLineBg,
         rgb: TerminalDefaultRgb)),
 
     # Configuration mode
-    # TODO: Ranme to ConfiModeCurrentLine?
-    EditorColorPairIndex.currentSetting: ColorPair(
+    EditorColorPairIndex.configModeCurrentLine: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.currentSetting,
+        index: EditorColorIndex.configModeCurrentLine,
         rgb: "#ffffff".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.currentSettingBg,
+        index: EditorColorIndex.configModeCurrentLineBg,
         rgb: "#008080".hexToRgb.get)),
 
     EditorColorPairIndex.currentLineBg: ColorPair(
@@ -1279,13 +1273,12 @@ const
         rgb: "#0000ff".hexToRgb.get)),
 
     # Command line
-    # TODO: Rename to commandLine
-    EditorColorPairIndex.commandBar: ColorPair(
+    EditorColorPairIndex.commandLine: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.commandBar,
+        index: EditorColorIndex.commandLine,
         rgb: "#000000".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.commandBarBg,
+        index: EditorColorIndex.commandLineBg,
         rgb: TerminalDefaultRgb)),
 
     # Error message
@@ -1511,13 +1504,12 @@ const
         rgb: "#ff0000".hexToRgb.get)),
 
     # Pair of paren highlighting
-    # TODO: Rename to parenPair?
-    EditorColorPairIndex.parenText: ColorPair(
+    EditorColorPairIndex.parenPair: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.parenText,
+        index: EditorColorIndex.parenPair,
         rgb: "#000000".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.parenTextBg,
+        index: EditorColorIndex.parenPairBg,
         rgb: "#808080".hexToRgb.get)),
 
     # highlight other uses current word
@@ -1557,42 +1549,38 @@ const
         rgb: "#808080".hexToRgb.get)),
 
     # Backup manager
-    # TODO: Rename to BackupManagerCurrentLine?
-    EditorColorPairIndex.currentBackup: ColorPair(
+    EditorColorPairIndex.backupManagerCurrentLine: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.currentBackup,
+        index: EditorColorIndex.backupManagerCurrentLine,
         rgb: "#000000".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.currentBackupBg,
+        index: EditorColorIndex.backupManagerCurrentLineBg,
         rgb: "#ff0087".hexToRgb.get)),
 
     # Diff viewer
-    # TODO: Ranme to diffViewerAddedLine?
-    EditorColorPairIndex.addedLine: ColorPair(
+    EditorColorPairIndex.diffViewerAddedLine: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.addedLine,
+        index: EditorColorIndex.diffViewerAddedLine,
         rgb: "#008000".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.addedLineBg,
+        index: EditorColorIndex.diffViewerAddedLineBg,
         rgb: TerminalDefaultRgb)),
 
-    # TODO: Ranme to diffViewerDeletedLine ?
-    EditorColorPairIndex.deletedLine: ColorPair(
+    EditorColorPairIndex.diffViewerDeletedLine: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.deletedLine,
+        index: EditorColorIndex.diffViewerDeletedLine,
         rgb: "#ff0000".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.deletedLineBg,
+        index: EditorColorIndex.diffViewerDeletedLineBg,
         rgb: TerminalDefaultRgb)),
 
     # Configuration mode
-    # TODO: Ranme to ConfiModeCurrentLine?
-    EditorColorPairIndex.currentSetting: ColorPair(
+    EditorColorPairIndex.configModeCurrentLine: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.currentSetting,
+        index: EditorColorIndex.configModeCurrentLine,
         rgb: "#000000".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.currentSettingBg,
+        index: EditorColorIndex.configModeCurrentLineBg,
         rgb: "#ff0087".hexToRgb.get)),
 
     EditorColorPairIndex.currentLineBg: ColorPair(
@@ -1785,13 +1773,12 @@ const
         rgb: "#ff0087".hexToRgb.get)),
 
     # Command line
-    # TODO: Rename to commandLine
-    EditorColorPairIndex.commandBar: ColorPair(
+    EditorColorPairIndex.commandLine: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.commandBar,
+        index: EditorColorIndex.commandLine,
         rgb: "#ffffff".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.commandBarBg,
+        index: EditorColorIndex.commandLineBg,
         rgb: TerminalDefaultRgb)),
 
     # Error message
@@ -2017,13 +2004,12 @@ const
         rgb: "#ff0087".hexToRgb.get)),
 
     # Pair of paren highlighting
-    # TODO: Rename to parenPair?
-    EditorColorPairIndex.parenText: ColorPair(
+    EditorColorPairIndex.parenPair: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.parenText,
+        index: EditorColorIndex.parenPair,
         rgb: "#000000".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.parenTextBg,
+        index: EditorColorIndex.parenPairBg,
         rgb: "#808080".hexToRgb.get)),
 
     # highlight other uses current word
@@ -2063,42 +2049,38 @@ const
         rgb: "#000000".hexToRgb.get)),
 
     # Backup manager
-    # TODO: Rename to BackupManagerCurrentLine?
-    EditorColorPairIndex.currentBackup: ColorPair(
+    EditorColorPairIndex.backupManagerCurrentLine: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.currentBackup,
+        index: EditorColorIndex.backupManagerCurrentLine,
         rgb: "#ffffff".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.currentBackupBg,
+        index: EditorColorIndex.backupManagerCurrentLineBg,
         rgb: "#ff0087".hexToRgb.get)),
 
     # Diff viewer
-    # TODO: Ranme to diffViewerAddedLine?
-    EditorColorPairIndex.addedLine: ColorPair(
+    EditorColorPairIndex.diffViewerAddedLine: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.addedLine,
+        index: EditorColorIndex.diffViewerAddedLine,
         rgb: "#008000".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.addedLineBg,
+        index: EditorColorIndex.diffViewerAddedLineBg,
         rgb: TerminalDefaultRgb)),
 
-    # TODO: Ranme to diffViewerDeletedLine ?
-    EditorColorPairIndex.deletedLine: ColorPair(
+    EditorColorPairIndex.diffViewerDeletedLine: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.deletedLine,
+        index: EditorColorIndex.diffViewerDeletedLine,
         rgb: "#ff0000".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.deletedLineBg,
+        index: EditorColorIndex.diffViewerDeletedLineBg,
         rgb: TerminalDefaultRgb)),
 
     # Configuration mode
-    # TODO: Ranme to ConfiModeCurrentLine?
-    EditorColorPairIndex.currentSetting: ColorPair(
+    EditorColorPairIndex.configModeCurrentLine: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.currentSetting,
+        index: EditorColorIndex.configModeCurrentLine,
         rgb: "#ffffff".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.currentSettingBg,
+        index: EditorColorIndex.configModeCurrentLineBg,
         rgb: "#ff0087".hexToRgb.get)),
 
     EditorColorPairIndex.currentLineBg: ColorPair(

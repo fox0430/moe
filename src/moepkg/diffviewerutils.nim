@@ -35,9 +35,9 @@ proc initDiffViewerHighlight*(buffer: seq[Runes]): Highlight =
   for i, line in buffer:
     let color =
       if line.len > 0 and line[0] == ru'+':
-        EditorColorPairIndex.addedLine
+        EditorColorPairIndex.diffViewerAddedLine
       elif line.len > 0 and line[0] == ru'-':
-        EditorColorPairIndex.deletedLine
+        EditorColorPairIndex.diffViewerDeletedLine
       else:
         EditorColorPairIndex.default
 

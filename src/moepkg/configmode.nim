@@ -645,7 +645,7 @@ proc initConfigModeHighlight[T](buffer: T,
               firstColumn: start,
               lastRow: i,
               lastColumn: `end`,
-              color: EditorColorPairIndex.currentSetting))
+              color: EditorColorPairIndex.configModeCurrentLine))
         else:
           result.overwrite(
             ColorSegment(
@@ -653,7 +653,7 @@ proc initConfigModeHighlight[T](buffer: T,
               firstColumn: numOfIndent + positionOfSetVal,
               lastRow: i,
               lastColumn: buffer[i].len,
-              color: EditorColorPairIndex.currentSetting))
+              color: EditorColorPairIndex.configModeCurrentLine))
     else:
       result.colorSegments.add(
         ColorSegment(

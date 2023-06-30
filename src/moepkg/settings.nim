@@ -480,7 +480,7 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
     result[EditorColorPairIndex.default].foreground.rgb =
       colorFromNode(jsonNode{"colors", "editor.foreground"})
 
-    result[EditorColorPairIndex.commandBar].foreground.rgb =
+    result[EditorColorPairIndex.commandLine].foreground.rgb =
       colorFromNode(jsonNode{"colors", "editor.foreground"})
 
     result[EditorColorPairIndex.currentWord].foreground.rgb =
@@ -536,7 +536,7 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
     result[EditorColorPairIndex.octNumber].background.rgb =
       colorFromNode(jsonNode{"colors", "editor.background"})
 
-    result[EditorColorPairIndex.commandBar].background.rgb =
+    result[EditorColorPairIndex.commandLine].background.rgb =
       colorFromNode(jsonNode{"colors", "editor.background"})
 
     result[EditorColorPairIndex.errorMessage].background.rgb =
@@ -554,16 +554,16 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
     result[EditorColorPairIndex.pcLink].background.rgb =
       colorFromNode(jsonNode{"colors", "editor.background"})
 
-    result[EditorColorPairIndex.addedLine].background.rgb =
+    result[EditorColorPairIndex.diffViewerAddedLine].background.rgb =
       colorFromNode(jsonNode{"colors", "editor.background"})
 
-    result[EditorColorPairIndex.deletedLine].background.rgb =
+    result[EditorColorPairIndex.diffViewerDeletedLine].background.rgb =
       colorFromNode(jsonNode{"colors", "editor.background"})
 
-    result[EditorColorPairIndex.currentBackup].background.rgb =
+    result[EditorColorPairIndex.backupManagerCurrentLine].background.rgb =
       colorFromNode(jsonNode{"colors", "editor.background"})
 
-    result[EditorColorPairIndex.currentSetting].background.rgb =
+    result[EditorColorPairIndex.configModeCurrentLine].background.rgb =
       colorFromNode(jsonNode{"colors", "editor.background"})
 
     result[EditorColorPairIndex.preprocessor].background.rgb =
@@ -784,13 +784,13 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
     result[EditorColorPairIndex.currentLineNum].foreground.rgb =
       colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
 
-    result[EditorColorPairIndex.currentBackup].foreground.rgb =
+    result[EditorColorPairIndex.backupManagerCurrentLine].foreground.rgb =
       colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
 
-    result[EditorColorPairIndex.deletedLine].foreground.rgb =
+    result[EditorColorPairIndex.diffViewerDeletedLine].foreground.rgb =
       colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
 
-    result[EditorColorPairIndex.currentSetting].foreground.rgb =
+    result[EditorColorPairIndex.configModeCurrentLine].foreground.rgb =
       colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
 
   if jsonNode["colors"].contains("editor.selectionBackground"):
@@ -814,11 +814,11 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
       colorFromNode(jsonNode{"colors", "editorSuggestWidget.selectedBackground"})
 
   if tokenNodes.hasKey("unnamedScope"):
-    result[EditorColorPairIndex.parenText].foreground.rgb =
+    result[EditorColorPairIndex.parenPair].foreground.rgb =
       colorFromNode(tokenNodes["unnamedScope"]{"bracketsForeground"})
 
   if jsonNode["colors"].contains("editor.selectionBackground"):
-    result[EditorColorPairIndex.parenText].background.rgb =
+    result[EditorColorPairIndex.parenPair].background.rgb =
       colorFromNode(jsonNode{"colors", "editor.selectionBackground"})
 
     result[EditorColorPairIndex.currentFile].background.rgb =
@@ -858,11 +858,11 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
       colorFromNode(jsonNode{"colors", "tab.activeBorder"})
 
   if jsonNode["colors"].contains("dir.inserted"):
-    result[EditorColorPairIndex.addedLine].foreground.rgb =
+    result[EditorColorPairIndex.diffViewerAddedLine].foreground.rgb =
       colorFromNode(jsonNode{"colors", "dir.inserted"})
 
   if jsonNode["colors"].contains("dir.deleted"):
-    result[EditorColorPairIndex.deletedLine].foreground.rgb =
+    result[EditorColorPairIndex.diffViewerDeletedLine].foreground.rgb =
       colorFromNode(jsonNode{"colors", "dir.deleted"})
 
 proc codeOssUserSettingsFilePath(): string {.inline.} =
@@ -1731,12 +1731,12 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       ColorThemeTable[configTheme][EditorColorPairIndex.currentTab].background.rgb =
         toRgb("currentTabBg")
 
-    if settings["Theme"].contains("commandBar"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.commandBar].foreground.rgb =
-        toRgb("commandBar")
-    if settings["Theme"].contains("commandBarBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.commandBar].background.rgb =
-        toRgb("commandBarBg")
+    if settings["Theme"].contains("commandLine"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.commandLine].foreground.rgb =
+        toRgb("commandLine")
+    if settings["Theme"].contains("commandLineBg"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.commandLine].background.rgb =
+        toRgb("commandLineBg")
 
     if settings["Theme"].contains("errorMessage"):
       ColorThemeTable[configTheme][EditorColorPairIndex.errorMessage].foreground.rgb =
@@ -1874,12 +1874,12 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       ColorThemeTable[configTheme][EditorColorPairIndex.replaceText].background.rgb =
         toRgb("replaceTextBg")
 
-    if settings["Theme"].contains("parenText"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.parenText].foreground.rgb =
-        toRgb("parenText")
-    if settings["Theme"].contains("parenTextBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.parenText].background.rgb =
-        toRgb("parenTextBg")
+    if settings["Theme"].contains("parenPair"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.parenPair].foreground.rgb =
+        toRgb("parenPair")
+    if settings["Theme"].contains("parenPairBg"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.parenPair].background.rgb =
+        toRgb("parenPairBg")
 
     if settings["Theme"].contains("currentWord"):
       ColorThemeTable[configTheme][EditorColorPairIndex.currentWord].foreground.rgb =
@@ -1914,33 +1914,33 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       ColorThemeTable[configTheme][EditorColorPairIndex.reservedWord].background.rgb =
         toRgb("reservedWordBg")
 
-    if settings["Theme"].contains("currentBackup"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.currentBackup].foreground.rgb =
-        toRgb("currentBackup")
-    if settings["Theme"].contains("currentBackupBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.currentBackup].background.rgb =
-        toRgb("currentBackupBg")
+    if settings["Theme"].contains("backupManagerCurrentLine"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.backupManagerCurrentLine].foreground.rgb =
+        toRgb("backupManagerCurrentLine")
+    if settings["Theme"].contains("backupManagerCurrentLineBg"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.backupManagerCurrentLine].background.rgb =
+        toRgb("backupManagerCurrentLineBg")
 
-    if settings["Theme"].contains("addedLine"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.addedLine].foreground.rgb =
-        toRgb("addedLine")
-    if settings["Theme"].contains("addedLineBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.addedLine].background.rgb =
-        toRgb("addedLineBg")
+    if settings["Theme"].contains("diffViewerAddedLine"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.diffViewerAddedLine].foreground.rgb =
+        toRgb("diffViewerAddedLine")
+    if settings["Theme"].contains("diffViewerAddedLineBg"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.diffViewerAddedLine].background.rgb =
+        toRgb("diffViewerAddedLineBg")
 
-    if settings["Theme"].contains("deletedLine"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.deletedLine].foreground.rgb =
-        toRgb("deletedLine")
-    if settings["Theme"].contains("deletedLineBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.deletedLine].background.rgb =
-        toRgb("deletedLineBg")
+    if settings["Theme"].contains("diffViewerDeletedLine"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.diffViewerDeletedLine].foreground.rgb =
+        toRgb("diffViewerDeletedLine")
+    if settings["Theme"].contains("diffViewerDeletedLineBg"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.diffViewerDeletedLine].background.rgb =
+        toRgb("diffViewerDeletedLineBg")
 
-    if settings["Theme"].contains("currentSetting"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.currentSetting].foreground.rgb =
-        toRgb("currentSetting")
-    if settings["Theme"].contains("currentSettingBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.currentSetting].background.rgb =
-        toRgb("currentSettingBg")
+    if settings["Theme"].contains("configModeCurrentLine"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.configModeCurrentLine].foreground.rgb =
+        toRgb("configModeCurrentLine")
+    if settings["Theme"].contains("configModeCurrentLineBg"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.configModeCurrentLine].background.rgb =
+        toRgb("configModeCurrentLineBg")
 
     if settings["Theme"].contains("currentLineBg"):
       ColorThemeTable[configTheme][EditorColorPairIndex.currentLineBg].background.rgb =
@@ -2676,8 +2676,8 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "tabBg = \"{$theme.backgroundRgb(EditorColorPairIndex.tab).toHex}\""
   result.addLine fmt "currentTab = \"{$theme.foregroundRgb(EditorColorPairIndex.currentTab).toHex}\""
   result.addLine fmt "currentTabBg = \"{$theme.backgroundRgb(EditorColorPairIndex.currentTab).toHex}\""
-  result.addLine fmt "commandBar = \"{$theme.foregroundRgb(EditorColorPairIndex.commandBar).toHex}\""
-  result.addLine fmt "commandBarBg = \"{$theme.backgroundRgb(EditorColorPairIndex.currentTab).toHex}\""
+  result.addLine fmt "commandLine = \"{$theme.foregroundRgb(EditorColorPairIndex.commandLine).toHex}\""
+  result.addLine fmt "commandLineBg = \"{$theme.backgroundRgb(EditorColorPairIndex.commandLine).toHex}\""
   result.addLine fmt "errorMessage = \"{$theme.foregroundRgb(EditorColorPairIndex.errorMessage).toHex}\""
   result.addLine fmt "errorMessageBg = \"{$theme.backgroundRgb(EditorColorPairIndex.errorMessage).toHex}\""
   result.addLine fmt "searchResult = \"{$theme.foregroundRgb(EditorColorPairIndex.searchResult).toHex}\""
@@ -2714,8 +2714,8 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "popupWinCurrentLineBg = \"{$theme.backgroundRgb(EditorColorPairIndex.popupWinCurrentLine).toHex}\""
   result.addLine fmt "replaceText = \"{$theme.foregroundRgb(EditorColorPairIndex.replaceText).toHex}\""
   result.addLine fmt "replaceTextBg = \"{$theme.backgroundRgb(EditorColorPairIndex.replaceText).toHex}\""
-  result.addLine fmt "parenText = \"{$theme.foregroundRgb(EditorColorPairIndex.parenText).toHex}\""
-  result.addLine fmt "parenTextBg = \"{$theme.backgroundRgb(EditorColorPairIndex.parenText).toHex}\""
+  result.addLine fmt "parenPair = \"{$theme.foregroundRgb(EditorColorPairIndex.parenPair).toHex}\""
+  result.addLine fmt "parenPairBg = \"{$theme.backgroundRgb(EditorColorPairIndex.parenPair).toHex}\""
   result.addLine fmt "currentWord = \"{$theme.foregroundRgb(EditorColorPairIndex.currentWord).toHex}\""
   result.addLine fmt "currentWordBg = \"{$theme.backgroundRgb(EditorColorPairIndex.currentFile).toHex}\""
   result.addLine fmt "highlightFullWidthSpace = \"{$theme.foregroundRgb(EditorColorPairIndex.highlightFullWidthSpace).toHex}\""
@@ -2724,8 +2724,8 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "highlightTrailingSpacesBg = \"{$theme.backgroundRgb(EditorColorPairIndex.highlightTrailingSpaces).toHex}\""
   result.addLine fmt "reservedWord = \"{$theme.foregroundRgb(EditorColorPairIndex.reservedWord).toHex}\""
   result.addLine fmt "reservedWordBg = \"{$theme.backgroundRgb(EditorColorPairIndex.reservedWord).toHex}\""
-  result.addLine fmt "currentSetting = \"{$theme.foregroundRgb(EditorColorPairIndex.currentSetting).toHex}\""
-  result.addLine fmt "currentSettingBg = \"{$theme.backgroundRgb(EditorColorPairIndex.currentSetting).toHex}\""
+  result.addLine fmt "configModeCurrentLine = \"{$theme.foregroundRgb(EditorColorPairIndex.configModeCurrentLine).toHex}\""
+  result.addLine fmt "configModeCurrentLineBg = \"{$theme.backgroundRgb(EditorColorPairIndex.configModeCurrentLine).toHex}\""
   result.addLine fmt "currentLineBg = \"{$theme.backgroundRgb(EditorColorPairIndex.currentLineBg).toHex}\""
 
 # Generate a string of the default TOML configuration.

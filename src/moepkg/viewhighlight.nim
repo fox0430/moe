@@ -136,7 +136,7 @@ proc highlightPairOfParen(
           firstColumn: correspondParenPosition.get.column,
           lastRow: correspondParenPosition.get.line,
           lastColumn: correspondParenPosition.get.column,
-          color: EditorColorPairIndex.parenText))
+          color: EditorColorPairIndex.parenPair))
     elif isCloseParen(rune):
       # Search only in the displayed range on the view.
       # TODO: Add bufStatus.prev or gapbuffer.prev and replace with it.
@@ -179,7 +179,7 @@ proc highlightPairOfParen(
           firstColumn: correspondParenPosition.get.column,
           lastRow: correspondParenPosition.get.line,
           lastColumn: correspondParenPosition.get.column,
-          color: EditorColorPairIndex.parenText))
+          color: EditorColorPairIndex.parenPair))
 
 # Highlighting other uses of the current word under the cursor
 proc highlightOtherUsesCurrentWord(
