@@ -3,5 +3,5 @@
 Added
 .....
 
-- #1735_ feat: Add hex color supports
+- #1735_ feat: Add 24bit color and hex color supports
 
