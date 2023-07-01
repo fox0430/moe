@@ -265,8 +265,8 @@ bufferLen = true
 
 [Theme]
 
-background = "termDefaultBg"
 foreground = "#ffffff"
+background = "termDefaultBg"
 
 lineNum = "#8a8a8a"
 lineNumBg = "termDefaultBg"
