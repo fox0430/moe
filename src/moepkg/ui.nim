@@ -210,7 +210,6 @@ proc startUi*() =
 
 proc exitUi*() {.inline.} = endwin()
 
-
 proc toNcursesColor(element: int16): int16 =
   ## Converts a color element (0 ~ 255) to a value for Ncurses (0 ~ 1000).
   ## The accuracy is not perfect.
@@ -249,9 +248,9 @@ proc initNcursesColorPair*(pair, fg, bg: int): Result[(), string] =
 
   when not defined unitTest:
     # Not start when running unit tests
-    let r = initExtendedPair(pair.cint, fg.cint, bg.cint)
-    if 0 != r:
-      let msg = fmt"Init Ncurses color pair failed: (pair: {pair}, fg: {fg}, bg: {bg}): Exit code: {r}"
+    let exitCode = initExtendedPair(pair.cint, fg.cint, bg.cint)
+    if 0 != exitCode:
+      let msg = fmt"Init Ncurses color pair failed: (pair: {pair}, fg: {fg}, bg: {bg}): Exit code: {exitCode}"
       return Result[(), string].err msg
 
   return Result[(), string].ok ()
