@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/unittest
+import std/[unittest, options]
 import pkg/results
 
 import moepkg/rgb {.all.}
@@ -58,22 +58,25 @@ suite "hexToRgb":
 
 suite "toHex":
   test "Rgb to hex string with prefix 1":
-    check "#000000" == Rgb(red: 0, green: 0, blue: 0).toHex
+    check "#000000" == Rgb(red: 0, green: 0, blue: 0).toHex.get
 
   test "Rgb to hex string with prefix 2":
-    check "#ffffff" == Rgb(red: 255, green: 255, blue: 255).toHex
+    check "#ffffff" == Rgb(red: 255, green: 255, blue: 255).toHex.get
 
   test "Rgb to hex string with prefix 3":
-    check "#ff0000" == Rgb(red: 255, green: 0, blue: 0).toHex
+    check "#ff0000" == Rgb(red: 255, green: 0, blue: 0).toHex.get
 
   test "Rgb to hex string without prefix 1":
-    check "000000" == Rgb(red: 0, green: 0, blue: 0).toHex(false)
+    check "000000" == Rgb(red: 0, green: 0, blue: 0).toHex(false).get
 
   test "Rgb to hex string without prefix 2":
-    check "ffffff" == Rgb(red: 255, green: 255, blue: 255).toHex(false)
+    check "ffffff" == Rgb(red: 255, green: 255, blue: 255).toHex(false).get
 
   test "Rgb to hex string without prefix 3":
-    check "ff0000" == Rgb(red: 255, green: 0, blue: 0).toHex(false)
+    check "ff0000" == Rgb(red: 255, green: 0, blue: 0).toHex(false).get
+
+  test "TerminalDefaultRgb":
+    check none(string) == Rgb(red: -1, green: -1, blue: -1).toHex
 
 suite "isHexColor":
   test "isHexColor with prefix 1":

@@ -458,10 +458,8 @@ suite "Parse configuration file":
     check not settings.git.showChangedLine
 
     for pair in ColorThemeTable[ColorTheme.config]:
-      if pair.foreground.rgb != "#000000".hexToRgb.get or pair.background.rgb != "#000000".hexToRgb.get:
-        echo pair
-      #check pair.foreground.rgb == "#000000".hexToRgb.get
-      #check pair.background.rgb == "#000000".hexToRgb.get
+      check pair.foreground.rgb == "#000000".hexToRgb.get
+      check pair.background.rgb == "#000000".hexToRgb.get
 
   test "Parse Clipboard setting 1":
     const str = """
