@@ -787,6 +787,7 @@ enable
 
 ### Color and theme
 moe supports 24 bit color and set in hexadecimal (#000000 ~ #ffffff).
+And, `termDefaultBg` and `termDefaultFg`.
 
 Default character color
 ```
