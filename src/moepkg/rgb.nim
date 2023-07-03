@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, strformat]
+import std/[strutils, strformat, options]
 import pkg/results
 
 type
@@ -57,18 +57,21 @@ proc hexToRgb*(s: string): Result[Rgb, string] =
 
 ## Converts from the Rgb to a hex color code.
 ## And with '#' prefix if isPrefix is true.
+## Return None if Rgb(red: -1, green: -1, blue: -1)
 ## Example: Rgb(red: 0, green: 0, blue: 0) -> "#000000"
-proc toHex*(rgb: Rgb, isPrefix: bool = true): string =
-  let
-    r = rgb.red.uint64.toHex(2).toLowerAscii
-    g = rgb.green.uint64.toHex(2).toLowerAscii
-    b = rgb.blue.uint64.toHex(2).toLowerAscii
+proc toHex*(rgb: Rgb, isPrefix: bool = true): Option[string] =
+  if not rgb.isTermDefaultColor:
+    let
+      r = rgb.red.uint64.toHex(2).toLowerAscii
+      g = rgb.green.uint64.toHex(2).toLowerAscii
+      b = rgb.blue.uint64.toHex(2).toLowerAscii
 
-  if isPrefix: fmt"#{r}{g}{b}"
-  else: fmt"{r}{g}{b}"
+    if isPrefix: return some(fmt"#{r}{g}{b}")
+    else: return some(fmt"{r}{g}{b}")
 
 ## Return true if valid hex color code.
 ## '#' is required if `isPrefix` is true.
+## Return false if Rgb(red: -1, green: -1, blue: -1)
 ## Range: 000000 ~ ffffff
 proc isHexColor*(s: string, isPrefix: bool = true): bool =
   if (not isPrefix and s.len == 6) or (s.startsWith('#') and s.len == 7):

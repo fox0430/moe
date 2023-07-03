@@ -932,9 +932,9 @@ proc toColorLayer(s: string): Result[ColorLayer, string] =
 proc changeThemeTableSetting(
   settings: EditorSettings,
   colorLayer: ColorLayer,
-  settingName, settingVal: string) =
+  settingName, settingVal: string): Result[(), string] =
 
-    if settingName.isEditorColorPairIndex and settingVal.isHexColor:
+    if settingName.isEditorColorPairIndex and settingVal.isHexColor(false):
       let
         pairIndex = parseEnum[EditorColorPairIndex](settingName)
         rgb = settingVal.hexToRgb.get
@@ -944,6 +944,8 @@ proc changeThemeTableSetting(
           settings.editorColorTheme.setForegroundRgb(pairIndex, rgb)
         of ColorLayer.background:
           settings.editorColorTheme.setBackgroundRgb(pairIndex, rgb)
+
+      return Result[(), string].ok ()
 
 proc changeEditorSettings(status: var EditorStatus,
                           table, settingName, position, settingVal: string) =
@@ -1024,9 +1026,6 @@ proc changeEditorSettings(status: var EditorStatus,
       gitSettings.changeGitTableSettings(settingName, settingVal)
     of "SyntaxChecker":
       SyntaxCheckerSettings.changeSyntaxCheckerTableSettings(settingName, settingVal)
-    of "Theme":
-      settings.changeThemeTableSetting(position.toColorLayer.get, settingName, settingVal)
-      status.changeTheme
     else:
       discard
 
@@ -1413,17 +1412,17 @@ proc getCurrentColorVal(s: EditorSettings, name, position: string): string =
     pairIndex = parseEnum[EditorColorPairIndex](name)
   case parseEnum[ColorLayer](position):
     of ColorLayer.foreground:
-      s.editorColorTheme.foregroundRgb(pairIndex).toHex
+      let fgHex = s.editorColorTheme.foregroundRgb(pairIndex).toHex
+      if fgHex.isSome: return fgHex.get
+      else: return " termDefautFg"
     of ColorLayer.background:
-      s.editorColorTheme.backgroundRgb(pairIndex).toHex
+      let bgHex = s.editorColorTheme.backgroundRgb(pairIndex).toHex
+      if bgHex.isSome: return bgHex.get
+      else: return " termDefautBg"
 
 proc editStringSetting(status: var EditorStatus,
                        table, name, position: string,
                        arrayIndex: int) =
-
-  setCursor(true)
-  if not status.settings.disableChangeCursor:
-    changeCursorType(status.settings.insertModeCursor)
 
   let
     currentLine = currentMainWindowNode.currentLine
@@ -1487,6 +1486,10 @@ proc editStringSetting(status: var EditorStatus,
           positionOfSetVal + numOfIndent + getSettingVal().len
 
       currentMainWindowNode.currentColumn = col
+
+  setCursor(true)
+  if not status.settings.disableChangeCursor:
+    changeCursorType(status.settings.insertModeCursor)
 
   var
     buffer = ""
@@ -1574,6 +1577,13 @@ proc editStringSetting(status: var EditorStatus,
         else:
           discard
 
+    template themeTable() =
+      let r = status.settings.changeThemeTableSetting(
+        position.toColorLayer.get,
+        name,
+        buffer)
+      if r.isOk: status.changeTheme
+
     # Change setting
     case table:
       of "BuildOnSave":
@@ -1584,6 +1594,8 @@ proc editStringSetting(status: var EditorStatus,
         autoBackupTable()
       of "QuickRun":
         quickRunTable()
+      of "Theme":
+        themeTable()
       else:
         discard
 
@@ -2011,9 +2023,17 @@ proc initThemeTableBuffer*(s: EditorSettings): seq[Runes] =
       fgHex = s.editorColorTheme.foregroundRgb(pairIndex).toHex
       bgHex = s.editorColorTheme.backgroundRgb(pairIndex).toHex
 
+      fgColorText =
+        if fgHex.isSome: fgHex.get
+        else: " termDefautFg"
+
+      bgColorText =
+        if bgHex.isSome: bgHex.get
+        else: " termDefautBg"
+
     result.add(ru fmt"{indent}{$pairIndex}")
-    result.add(ru fmt"{indent.repeat(2)}foreground{space}{fgHex}")
-    result.add(ru fmt"{indent.repeat(2)}background{space}{bgHex}")
+    result.add(ru fmt"{indent.repeat(2)}foreground{space}{fgColorText}")
+    result.add(ru fmt"{indent.repeat(2)}background{space}{bgColorText}")
 
     result.add(ru "")
 
