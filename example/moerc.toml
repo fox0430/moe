@@ -405,9 +405,9 @@ backupManagerCurrentLine = "#ffffff"
 backupManagerCurrentLineBg = "#008080"
 
 diffViewerAddedLine = "#008000"
-diffViewerAddedLineBg = "termDefautBg"
-diffViewerDeletedLine = "#deletedLine"
-diffViewerDeletedLineBg = "termDefautBg"
+diffViewerAddedLineBg = "termDefaultBg"
+diffViewerDeletedLine = "#ff0000"
+diffViewerDeletedLineBg = "termDefaultBg"
 
 # configuration mode
 configModeCurrentLine = "#ffffff"
