@@ -1088,7 +1088,7 @@ const
       foreground: DefaultForegroundColor,
       background: Color(
         index: EditorColorIndex.currentLineBg,
-        rgb: "#000000".hexToRgb.get))
+        rgb: "#444444".hexToRgb.get))
   ]
 
   LightTheme*: ThemeColors = [
