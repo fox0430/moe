@@ -786,279 +786,21 @@ enable
 ```
 
 ### Color and theme
--- Available colors --
+moe supports 24 bit color and set in hexadecimal (#000000 ~ #ffffff).
+And, `termDefaultBg` and `termDefaultFg`.
 
-default  
-black  
-maroon  
-green  
-olive  
-navy  
-purple1  
-teal  
-silver  
-gray  
-red  
-lime  
-yellow  
-blue  
-fuchsia  
-aqua  
-white  
-gray0  
-navyBlue  
-darkBlue  
-blue31  
-blue32  
-blue1  
-darkGreen  
-deepSkyBlue41  
-deepSkyBlue42  
-deepSkyBlue43  
-dodgerBlue31  
-dodgerBlue32  
-green4  
-springGreen4  
-turquoise4  
-deepSkyBlue31  
-deepSkyBlue32  
-dodgerBlue1  
-green31  
-springGreen31  
-darkCyan  
-lightSeaGreen  
-deepSkyBlue2  
-deepSkyBlue1  
-green32  
-springGreen33  
-springGreen21  
-cyan3  
-darkTurquoise  
-turquoise2  
-green1  
-springGreen22  
-springGreen1  
-mediumSpringGreen  
-cyan2  
-cyan1  
-darkRed1  
-deepPink41  
-purple41  
-purple42  
-purple3  
-blueViolet  
-orange41  
-gray37  
-mediumPurple4  
-slateBlue31  
-slateBlue32  
-royalBlue1  
-chartreuse4  
-darkSeaGreen41  
-paleTurquoise4  
-steelBlue  
-steelBlue3  
-cornflowerBlue  
-chartreuse31  
-darkSeaGreen42  
-cadetBlue1  
-cadetBlue2  
-skyBlue3  
-steelBlue11  
-chartreuse32  
-paleGreen31  
-seaGreen3  
-aquamarine3  
-mediumTurquoise  
-steelBlue12  
-chartreuse21  
-seaGreen2  
-seaGreen11  
-seaGreen12  
-aquamarine11  
-darkSlateGray2  
-darkRed2  
-deepPink42  
-darkMagenta1  
-darkMagenta2  
-darkViolet1  
-purple2  
-orange42  
-lightPink4  
-plum4  
-mediumPurple31  
-mediumPurple32  
-slateBlue1  
-yellow41  
-wheat4  
-gray53  
-lightSlategray  
-mediumPurple  
-lightSlateBlue  
-yellow42  
-Wheat4  
-darkSeaGreen  
-lightSkyBlue31  
-lightSkyBlue32  
-skyBlue2  
-chartreuse22  
-darkOliveGreen31  
-paleGreen32  
-darkSeaGreen31  
-darkSlateGray3  
-skyBlue1  
-chartreuse1  
-lightGreen1  
-lightGreen2  
-paleGreen11  
-aquamarine12  
-darkSlateGray1  
-red31  
-deepPink4  
-mediumVioletRed  
-magenta3  
-darkViolet2  
-purple  
-darkOrange31  
-indianRed1  
-hotPink31  
-mediumOrchid3  
-mediumOrchid  
-mediumPurple21  
-darkGoldenrod  
-lightSalmon31  
-rosyBrown  
-gray63  
-mediumPurple22  
-mediumPurple1  
-gold31  
-darkKhaki  
-navajoWhite3  
-gray69  
-lightSteelBlue3  
-lightSteelBlue  
-yellow31  
-darkOliveGreen32  
-darkSeaGreen32  
-darkSeaGreen21  
-lightCyan3  
-lightSkyBlue1  
-greenYellow  
-darkOliveGreen2  
-paleGreen12  
-darkSeaGreen22  
-darkSeaGreen11  
-paleTurquoise1  
-red32  
-deepPink31  
-deepPink32  
-magenta31  
-magenta32  
-magenta21  
-darkOrange32  
-indianRed2  
-hotPink32  
-hotPink2  
-orchid  
-mediumOrchid11  
-orange3  
-lightSalmon32  
-lightPink3  
-pink3  
-plum3  
-violet  
-gold32  
-lightGoldenrod3  
-tan  
-mistyRose3  
-thistle3  
-plum2  
-yellow32  
-khaki3  
-lightGoldenrod2  
-lightYellow3  
-gray84  
-lightSteelBlue1  
-yellow2  
-darkOliveGreen11  
-darkOliveGreen12  
-darkSeaGreen12  
-honeydew2  
-lightCyan1  
-red1  
-deepPink2  
-deepPink11  
-deepPink12  
-magenta22  
-magenta1  
-orangeRed1  
-indianRed11  
-indianRed12  
-hotPink11  
-hotPink12  
-mediumOrchid12  
-darkOrange  
-salmon1  
-lightCoral  
-paleVioletRed1  
-orchid2  
-orchid1  
-orange1  
-sandyBrown  
-lightSalmon1  
-lightPink1  
-pink1  
-plum1  
-gold1  
-lightGoldenrod21  
-lightGoldenrod22  
-navajoWhite1  
-mistyRose1  
-thistle1  
-yellow1  
-lightGoldenrod1  
-khaki1  
-wheat1  
-cornsilk1  
-gray100  
-gray3  
-gray7  
-gray11  
-gray15  
-gray19  
-gray23  
-gray27  
-gray30  
-gray35  
-gray39  
-gray42  
-gray46  
-gray50  
-gray54  
-gray58  
-gray62  
-gray66  
-gray70  
-gray74  
-gray78  
-gray82  
-gray85  
-gray89  
-gray93  
-
--- Color Srttings --
-
-Background color
+Default character color
 ```
-editorBg
+foreground
+```
+```
+background
 ```
 
 Line number color
 ```
 lineNum
 ```
-
-Line number background color
 ```
 lineNumBg
 ```
@@ -1067,8 +809,6 @@ Current line number highlighting color
 ```
 currentLineNum
 ```
-
-Current line number highlighting background color
 ```
 currentLineNumBg
 ```
@@ -1077,8 +817,6 @@ Character color of Status line in normal mode
 ```
 statusLineNormalMode
 ```
-
-Status line base color in normal mode
 ```
 statusLineNormalModeBg
 ```
@@ -1087,8 +825,6 @@ Mode text color in the status line in normal mode
 ```
 statusLineModeNormalMode
 ```
-
-Background color of mode text in the status line in normal mode
 ```
 statusLineModeNormalModeBg
 ```
@@ -1097,8 +833,6 @@ Character color of Status line in normal mode when inactive
 ```
 statusLineNormalModeInactive
 ```
-
-Status line base color in normal mode when inactive  
 ```
 statusLineNormalModeInactiveBg
 ```
@@ -1107,8 +841,6 @@ Character color of Status line in insert mode
 ```
 statusLineInsertMode
 ```
-
-Status line base color in insert mode
 ```
 statusLineInsertModeBg
 ```
@@ -1117,8 +849,6 @@ Mode text color in the status line in insert mode
 ```
 statusLineModeInsertMode
 ```
-
-Background color of mode text in the status line in insert mode
 ```
 statusLineModeInsertModeBg
 ```
@@ -1127,8 +857,6 @@ Character color of Status line in insert mode when inactive
 ```
 statusLineInsertModeInactive
 ```
-
-Status line base color in insert mode when inactive
 ```
 statusLineInsertModeInactiveBg
 ```
@@ -1137,8 +865,6 @@ Character color of Status line in visual mode
 ```
 statusLineVisualMode
 ```
-
-Status line base color in visual mode
 ```
 statusLineVisualModeBg
 ```
@@ -1147,8 +873,6 @@ Mode text color in the status line in visual mode
 ```
 statusLineModeVisualMode
 ```
-
-Background color of mode text in the status line in visual mode
 ```
 statusLineModeVisualModeBg
 ```
@@ -1157,8 +881,6 @@ Character color of Status line in visual mode when inactive
 ```
 statusLineVisualModeInactive
 ```
-
-Status line base color in visual mode when inactive
 ```
 statusLineVisualModeInactiveBg
 ```
@@ -1167,8 +889,6 @@ Character color of Status line replace in mode
 ```
 statusLineReplaceMode
 ```
-
-Status line base color in replace mode
 ```
 statusLineReplaceModeBg
 ```
@@ -1177,8 +897,6 @@ Mode text color in the status line in replace mode
 ```
 statusLineModeReplaceMode
 ```
-
-Background color of mode text in the status line in replace mode
 ```
 statusLineModeReplaceModeBg
 ```
@@ -1187,8 +905,6 @@ Character color of Status line replace in mode when inactive
 ```
 statusLineReplaceModeInactive
 ```
-
-Status line base color in replace mode when inactive
 ```
 statusLineReplaceModeInactiveBg
 ```
@@ -1197,8 +913,6 @@ Character color of Status line in filer mode
 ```
 statusLineFilerMode
 ```
-
-Status line base color in filer mode
 ```
 statusLineFilerModeBg
 ```
@@ -1207,8 +921,6 @@ Mode text color in the status line in filer mode
 ```
 statusLineModeFilerMode
 ```
-
-Background color of mode text in the status line in filer mode
 ```
 statusLineModeFilerModeBg
 ```
@@ -1217,8 +929,6 @@ Character color of Status line in filer mode when inactive
 ```
 statusLineFilerModeInactive
 ```
-
-Status line base color in filer mode when inactive
 ```
 statusLineFilerModeInactiveBg
 ```
@@ -1227,8 +937,6 @@ Character color of Status line in ex mode
 ```
 statusLineExMode
 ```
-
-Status line base color in ex mode
 ```
 statusLineExModeBg
 ```
@@ -1237,8 +945,6 @@ Mode text color in the status line in ex mode
 ```
 statusLineExModeBg
 ```
-
-Background color of mode text in the status line in ex mode
 ```
 statusLineModeExModeBg
 ```
@@ -1247,8 +953,6 @@ Character color of Status line in ex mode when inactive
 ```
 statusLineExModeInactive
 ```
-
-Status line base color in ex mode when inactive
 ```
 statusLineExModeInactiveBg
 ```
@@ -1256,21 +960,15 @@ statusLineExModeInactiveBg
 Current git branch text color
 ```
 statusLineGitBranch
-
 ```
-
-Current git branch background color
 ```
 statusLineGitBranchBg
 ```
-
 
 Character color of tab title in tab line
 ```
 tab
 ```
-
-Background color of tab title in tab line
 ```
 tabBg
 ```
@@ -1279,28 +977,22 @@ Character color of current tab title in tab line
 ```
 currentTab
 ```
-
-Background color of current tab title in tab line
 ```
 currentTabBg
 ```
 
 Character color in command bar
 ```
-commandBar
+commandLine
 ```
-
-Background color in command bar
 ```
-commandBarBg
+commandLineBg
 ```
 
 Character color of error messages
 ```
 errorMessage
 ```
-
-Background color of error messages
 ```
 errorMessageBg
 ```
@@ -1309,8 +1001,6 @@ Character color of search result highlighting
 ```
 searchResult
 ```
-
-Background color of search result highlighting
 ```
 searchResultBg
 ```
@@ -1319,108 +1009,99 @@ Character color selected in visual mode
 ```
 visualMode
 ```
-
-Background color selected in visual mode
 ```
 visualModeBg
 ```
 
-Default text color
+Syntax highlighting color
 ```
-defaultCharactorColor
+keyword
 ```
 
 Syntax highlighting color
 ```
-gtKeyword
+functionName
 ```
 
 Syntax highlighting color
 ```
-gtFunctionName
+typeName
 ```
 
 Syntax highlighting color
 ```
-gtTypeName
+boolean
 ```
 
 Syntax highlighting color
 ```
-gtBoolean
+specialVar
 ```
 
 Syntax highlighting color
 ```
-gtSpecialVar
+builtin
 ```
 
 Syntax highlighting color
 ```
-gtBuiltin
+stringLit
 ```
 
 Syntax highlighting color
 ```
-gtStringLit
+binNumber
 ```
 
 Syntax highlighting color
 ```
-gtBinNumber
+decNumber
 ```
 
 Syntax highlighting color
 ```
-gtDecNumber
+floatNumber
 ```
 
 Syntax highlighting color
 ```
-gtFloatNumber
+hexNumber
 ```
 
 Syntax highlighting color
 ```
-gtHexNumber
+octNumber
 ```
 
 Syntax highlighting color
 ```
-gtOctNumber
+comment
 ```
 
 Syntax highlighting color
 ```
-gtComment
+longComment
 ```
 
 Syntax highlighting color
 ```
-gtLongComment
+whitespace
 ```
 
 Syntax highlighting color
 ```
-gtWhitespace
+preprocessor
 ```
 
 Syntax highlighting color
 ```
-gtPreprocessor
-```
-
-Syntax highlighting color
-```
-gtPragma
+pragma
 ```
 
 Character color of current file name in filer mode
 ```
 currentFile
 ```
-
-Background color of current file name in filer mode
 ```
 currentFileBg
 ```
@@ -1429,8 +1110,6 @@ Character color of file name in filer mode
 ```
 file
 ```
-
-Background color of file name in filer mode
 ```
 fileBg
 ```
@@ -1439,17 +1118,14 @@ Character color of directory name in filer mode
 ```
 dir
 ```
-
-Background color of directory name in filer mode
 ```
 dirBg
 ```
+
 Character color of symbolic links to file in filer mode
 ```
 pcLink
 ```
-
-Background color of symbolic links to file in filer mode
 ```
 pcLinkBg
 ```
@@ -1458,8 +1134,6 @@ Pop-up window text color
 ```
 popUpWindow
 ```
-
-Pop-up window background color
 ```
 popUpWindowBg
 ```
@@ -1468,8 +1142,6 @@ Pop-up window current line text color
 ```
 popUpWinCurrentLine
 ```
-
-Pop-up window current line background color
 ```
 popUpWinCurrentLineBg
 ```
@@ -1478,13 +1150,22 @@ Text color when replace text
 ```
 replaceText
 ```
-
-Background color when replace text 
 ```
 replaceTextBg
 ```
 
-Background color of current word
+Pair of paren highlighting
+```
+parenPair
+```
+```
+parenPairBg 
+```
+
+Current word highlighting
+```
+currentWord
+```
 ```
 currentWordBg
 ```
@@ -1493,8 +1174,6 @@ Full width space text color
 ```
 highlightFullWidthSpace
 ```
-
-Full width space background color
 ```
 highlightFullWidthSpaceBg
 ```
@@ -1503,8 +1182,6 @@ Trailing space color
 ```
 highlightTrailingSpaces
 ```
-
-Trailing space background color
 ```
 highlightTrailingSpacesBg
 ```
@@ -1513,20 +1190,40 @@ Reserved word text color
 ```
 reservedWord
 ```
-
-Reserved word background color
 ```
 reservedWordBg
 ```
 
-Current line color in configuration mode
+Added line color on Diff viewer
 ```
-currentSetting
+diffViewerAddedLine 
+```
+```
+diffViewerAddedLineBg
 ```
 
-Current line background color in configuration mode
+Deleted line color on Diff viewer
 ```
-currentSettingBg
+diffViewerDeletedLine
+```
+```
+diffViewerDeletedLineBg
+```
+
+Current line color on Backup manager
+```
+backupManagerCurrentLine
+```
+```
+backupManagerCurrentLineBg 
+```
+
+Current line color in configuration mode
+```
+configModeCurrentLine
+```
+```
+configModeCurrentLineBg
 ```
 
 Current line background color

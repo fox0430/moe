@@ -52,7 +52,7 @@ type MainWindow* = object
   numOfMainWindow*: int
 
 proc newWindow(): Window {.inline.} =
-  result = initWindow(1, 1, 0, 0, EditorColorPair.defaultChar)
+  result = initWindow(1, 1, 0, 0, EditorColorPairIndex.default.ord)
   result.setTimeout()
 
 proc initWindowNode*(): WindowNode =

@@ -17,10 +17,9 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[os, json, macros, times, options, strformat, osproc,
-            strutils]
-import pkg/parsetoml
-import ui, color, unicodeext, highlight, platform, independentutils
+import std/[os, json, macros, options, strformat, osproc, strutils]
+import pkg/[parsetoml, results]
+import ui, color, unicodeext, highlight, platform, independentutils, rgb
 
 export TomlError
 
@@ -191,7 +190,7 @@ type
     enable*: bool
 
   EditorSettings* = object
-    editorColorTheme*: colorTheme
+    editorColorTheme*: ColorTheme
     statusLine*: StatusLineSettings
     tabLine*: TabLineSettings
     view*: EditorViewSettings
@@ -340,9 +339,9 @@ proc initEditorViewSettings*(): EditorViewSettings =
 
 proc initReservedWords*(): seq[ReservedWord] =
   result = @[
-    ReservedWord(word: "TODO", color: EditorColorPair.reservedWord),
-    ReservedWord(word: "WIP", color: EditorColorPair.reservedWord),
-    ReservedWord(word: "NOTE", color: EditorColorPair.reservedWord),
+    ReservedWord(word: "TODO", color: EditorColorPairIndex.reservedWord),
+    ReservedWord(word: "WIP", color: EditorColorPairIndex.reservedWord),
+    ReservedWord(word: "NOTE", color: EditorColorPairIndex.reservedWord),
   ]
 
 proc initHighlightSettings(): HighlightSettings =
@@ -397,7 +396,7 @@ proc initSyntaxCheckerSettings(): SyntaxCheckerSettings =
   result.enable = false
 
 proc initEditorSettings*(): EditorSettings =
-  result.editorColorTheme = colorTheme.dark
+  result.editorColorTheme = ColorTheme.dark
   result.statusLine = initStatusLineSettings()
   result.tabLine = initTabBarSettings()
   result.view = initEditorViewSettings()
@@ -428,103 +427,38 @@ proc initEditorSettings*(): EditorSettings =
   result.git = initGitSettings()
   result.syntaxChecker = initSyntaxCheckerSettings()
 
-proc getTheme(theme: string): colorTheme =
-  if theme == "vivid": return colorTheme.vivid
-  elif theme == "light": return colorTheme.light
-  elif theme == "config": return colorTheme.config
-  elif theme == "vscode": return colorTheme.vscode
-  else: return colorTheme.dark
+proc toColorTheme(theme: string): Result[ColorTheme, string] =
+  case theme:
+    of "dark": Result[ColorTheme, string].ok ColorTheme.dark
+    of "light": Result[ColorTheme, string].ok ColorTheme.light
+    of "vivid": Result[ColorTheme, string].ok ColorTheme.vivid
+    of "config": Result[ColorTheme, string].ok ColorTheme.config
+    of "vscode": Result[ColorTheme, string].ok ColorTheme.vscode
+    else: Result[ColorTheme, string].err fmt"Invalid value {theme}"
 
-# This macro takes statement lists for the foreground and
-# background colors of a foreground/background color setting.
-# these statements are supposed to set the color, and
-# the first statement that doesn't result in Color.default
-# will be used. Color.default will only be used when there's
-# no success at all.
-# Finally adjusts can be used to generate a suitable color.
-# adjusts:
-#   InverseBackground    - inversing the background color
-#   InverseForeground    - inversing the foreground color
-#   ReadableVsBackground - adjusts foreground to be readable
-macro setEditorColor(args: varargs[untyped]): untyped =
-  let colorNameIdent           = args[0]
-  let colorNameBackgroundIdent = ident(colorNameIdent.strVal & "Bg")
-  let resultIdent              = ident"result"
-  let fgColorIdent             = genSym(nskVar, "fgColor")
-  let bgColorIdent             = genSym(nskVar, "bgColor")
-  let stmtList                 = args[^1]
-  let fgStmtList               = stmtList[0][^1]
-  let bgStmtList               = stmtList[^1][^1]
-  var setFgColor               : NimNode = quote do: discard
-  var setBgColor               : NimNode = quote do: discard
-  var fgDynamicAdjust          : NimNode = quote do: discard
-  var bgDynamicAdjust          : NimNode = quote do: discard
-  var assignColors             : NimNode = quote do: discard
-  var fallbackInverseBg        : NimNode = quote do:
-    if (`fgColorIdent` == Color.default and
-        `bgColorIdent` != Color.default):
-      `fgColorIdent` = inverseColor(`bgColorIdent`)
-  var fallbackInverseFg        : NimNode = quote do:
-    if (`fgColorIdent` != Color.default and
-        `bgColorIdent` == Color.default):
-      `bgColorIdent` = inverseColor(`fgColorIdent`)
-  var readableVsBackground     : NimNode = quote do:
-    `fgColorIdent` = readableOnBackground(`fgColorIdent`, `bgColorIdent`)
-  for statement in fgStmtList:
-    if (statement.kind == nnkCall and statement[0].kind == nnkIdent and
-        statement[0].strVal() == "adjust"):
-        let adjust = statement[^1][0].strVal()
-        case adjust
-        of "InverseBackground":
-          fgDynamicAdjust = quote do:
-            `fgDynamicAdjust`
-            `fallbackInverseBg`
-        of "ReadableVsBackground":
-          fgDynamicAdjust = quote do:
-            `fgDynamicAdjust`
-            `readableVsBackground`
-        else: discard
-    else:
-      setFgColor = quote do:
-        `setFgColor`
-        if `fgColorIdent` == Color.default:
-          `fgColorIdent` = `statement`
-  for statement in bgStmtList:
-    setBgColor = quote do:
-      `setBgColor`
-      if `bgColorIdent` == Color.default:
-        `bgColorIdent` = `statement`
-  if stmtList[0][0].strVal() == stmtList[^1][0].strVal():
-    # they are the same => there's only one
-    setBgColor = quote do: discard
-    #fgDynamicAdjust = quote do: discard
-    #bgDynamicAdjust = quote do: discard
-    assignColors    = quote do:
-      `resultIdent`.`colorNameIdent`           = `fgColorIdent`
+proc colorFromNode(node: JsonNode): Rgb =
+  if node == nil:
+    return TerminalDefaultRgb
+
+  var asString = node.getStr
+  if asString.len >= 7 and asString[0] == '#':
+    # Indexes above 6 are cut.
+    return asString[1 .. 6].hexToRgb.get
   else:
-    assignColors    = quote do:
-      `resultIdent`.`colorNameIdent`           = `fgColorIdent`
-      `resultIdent`.`colorNameBackgroundIdent` = `bgColorIdent`
+    return TerminalDefaultRgb
 
-  return quote do:
-    var `fgColorIdent` = Color.default
-    var `bgColorIdent` = Color.default
-    `setFgColor`
-    `setBgColor`
-    `fgDynamicAdjust`
-    `bgDynamicAdjust`
-    `assignColors`
+proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
+  # Load the theme file of VSCode and adapt it as the theme of moe.
+  # Reproduce the original theme as much as possible.
 
-proc makecolorThemeFromVSCodeThemeFile(jsonNode: JsonNode): EditorColor =
-  # This converts a JsonNode JString to a 256-Color-Terminal-Color
-  proc colorFromNode(node: JsonNode): Color =
-    if node == nil:
-      return Color.default
-    var asString = node.getStr()
-    if (asString.len() >= 7   and
-        asString[0]    == '#'):
-        return hexToColor(asString[1..asString.len()-1])
-    return Color.default
+  # The base theme is dark.
+  result = ColorThemeTable[ColorTheme.dark]
+
+  let colorsNode =
+    if jsonNode.contains("colors"):
+      jsonNode["colors"]
+    else:
+      %* {}
 
   var tokenNodes = initTable[string, JsonNode]()
   for node in jsonNode{"tokenColors"}:
@@ -540,327 +474,396 @@ proc makecolorThemeFromVSCodeThemeFile(jsonNode: JsonNode): EditorColor =
     else:
       tokenNodes[scope.getStr()] = settings
 
-  # Convenience
-  proc getScope(key: string): JsonNode =
-    if tokenNodes.hasKey(key):
-      return tokenNodes[key]
-    else:
-      return JsonNode.default()
+  proc isKey(key: string): bool {.inline.} = tokenNodes.hasKey(key)
 
-  # This is currently optimized and tested for the Forest Focus theme
-  # and even for that theme it only produces a partial and imperfect
-  # translation
-  setEditorColor editorBg:
-    background:
+  if jsonNode["colors"].contains("editor.foreground"):
+    result[EditorColorPairIndex.default].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "editor.foreground"})
+
+    result[EditorColorPairIndex.commandLine].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "editor.foreground"})
+
+    result[EditorColorPairIndex.currentWord].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "editor.foreground"})
+
+    result[EditorColorPairIndex.replaceText].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "editor.foreground"})
+
+    result[EditorColorPairIndex.currentFile].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "editor.foreground"})
+
+    result[EditorColorPairIndex.searchResult].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "editor.foreground"})
+
+    result[EditorColorPairIndex.visualMode].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "editor.foreground"})
+
+  if jsonNode["colors"].contains("editor.background"):
+
+    result[EditorColorPairIndex.default].background.rgb =
       colorFromNode(jsonNode{"colors", "editor.background"})
 
-  # Color scheme
-  setEditorColor defaultChar:
-    foreground:
-      colorFromNode(jsonNode{"colors", "editor.foreground"})
-  setEditorColor gtKeyword:
-    foreground:
-      colorFromNode(getScope("keyword"){"foreground"})
-  setEditorColor gtFunctionName:
-    foreground:
-      colorFromNode(getScope("entity"){"foreground"})
-  setEditorColor gtTypeName:
-    foreground:
-      colorFromNode(getScope("entity"){"foreground"})
-  setEditorColor gtBoolean:
-    foreground:
-      colorFromNode(getScope("entity"){"foreground"})
-  setEditorColor gtSpecialVar:
-    foreground:
-      colorFromNode(getScope("variable"){"foreground"})
-  setEditorColor gtBuiltin:
-    foreground:
-      colorFromNode(getScope("entity"){"foreground"})
-  setEditorColor gtStringLit:
-    foreground:
-      colorFromNode(getScope("string"){"foreground"})
-  setEditorColor gtBinNumber:
-    foreground:
-      colorFromNode(getScope("constant"){"foreground"})
-  setEditorColor gtDecNumber:
-    foreground:
-      colorFromNode(getScope("constant"){"foreground"})
-  setEditorColor gtFloatNumber:
-    foreground:
-      colorFromNode(getScope("constant"){"foreground"})
-  setEditorColor gtHexNumber:
-    foreground:
-      colorFromNode(getScope("constant"){"foreground"})
-  setEditorColor gtOctNumber:
-    foreground:
-      colorFromNode(getScope("constant"){"foreground"})
-  setEditorColor gtComment:
-    foreground:
-      colorFromNode(getScope("comment"){"foreground"})
-  setEditorColor gtLongComment:
-    foreground:
-      colorFromNode(getScope("comment"){"foreground"})
-  setEditorColor gtWhitespace:
-    foreground:
+    result[EditorColorPairIndex.keyword].background.rgb =
+      colorFromNode(jsonNode{"colors", "editor.background"})
+
+    result[EditorColorPairIndex.functionName].background.rgb =
+      colorFromNode(jsonNode{"colors", "editor.background"})
+
+    result[EditorColorPairIndex.typeName].background.rgb =
+      colorFromNode(jsonNode{"colors", "editor.background"})
+
+    result[EditorColorPairIndex.boolean].background.rgb =
+      colorFromNode(jsonNode{"colors", "editor.background"})
+
+    result[EditorColorPairIndex.stringLit].background.rgb =
+      colorFromNode(jsonNode{"colors", "editor.background"})
+
+    result[EditorColorPairIndex.specialVar].background.rgb =
+      colorFromNode(jsonNode{"colors", "editor.background"})
+
+    result[EditorColorPairIndex.binNumber].background.rgb =
+      colorFromNode(jsonNode{"colors", "editor.background"})
+
+    result[EditorColorPairIndex.decNumber].background.rgb =
+      colorFromNode(jsonNode{"colors", "editor.background"})
+
+    result[EditorColorPairIndex.floatNumber].background.rgb =
+      colorFromNode(jsonNode{"colors", "editor.background"})
+
+    result[EditorColorPairIndex.hexNumber].background.rgb =
+      colorFromNode(jsonNode{"colors", "editor.background"})
+
+    result[EditorColorPairIndex.octNumber].background.rgb =
+      colorFromNode(jsonNode{"colors", "editor.background"})
+
+    result[EditorColorPairIndex.commandLine].background.rgb =
+      colorFromNode(jsonNode{"colors", "editor.background"})
+
+    result[EditorColorPairIndex.errorMessage].background.rgb =
+      colorFromNode(jsonNode{"colors", "editor.background"})
+
+    result[EditorColorPairIndex.currentLineNum].background.rgb =
+      colorFromNode(jsonNode{"colors", "editor.background"})
+
+    result[EditorColorPairIndex.file].background.rgb =
+      colorFromNode(jsonNode{"colors", "editor.background"})
+
+    result[EditorColorPairIndex.dir].background.rgb =
+      colorFromNode(jsonNode{"colors", "editor.background"})
+
+    result[EditorColorPairIndex.pcLink].background.rgb =
+      colorFromNode(jsonNode{"colors", "editor.background"})
+
+    result[EditorColorPairIndex.diffViewerAddedLine].background.rgb =
+      colorFromNode(jsonNode{"colors", "editor.background"})
+
+    result[EditorColorPairIndex.diffViewerDeletedLine].background.rgb =
+      colorFromNode(jsonNode{"colors", "editor.background"})
+
+    result[EditorColorPairIndex.backupManagerCurrentLine].background.rgb =
+      colorFromNode(jsonNode{"colors", "editor.background"})
+
+    result[EditorColorPairIndex.configModeCurrentLine].background.rgb =
+      colorFromNode(jsonNode{"colors", "editor.background"})
+
+    result[EditorColorPairIndex.preprocessor].background.rgb =
+      colorFromNode(jsonNode{"colors", "editor.background"})
+
+    result[EditorColorPairIndex.pragma].background.rgb =
+      colorFromNode(jsonNode{"colors", "editor.background"})
+
+  if tokenNodes.hasKey("keyword"):
+    result[EditorColorPairIndex.keyword].foreground.rgb =
+      colorFromNode(tokenNodes["keyword"]{"foreground"})
+
+  if tokenNodes.hasKey("entity"):
+    result[EditorColorPairIndex.functionName].foreground.rgb =
+      colorFromNode(tokenNodes["entity"]{"foreground"})
+
+    result[EditorColorPairIndex.typeName].foreground.rgb =
+      colorFromNode(tokenNodes["entity"]{"foreground"})
+
+    result[EditorColorPairIndex.boolean].foreground.rgb =
+      colorFromNode(tokenNodes["entity"]{"foreground"})
+
+    result[EditorColorPairIndex.builtin].foreground.rgb =
+      colorFromNode(tokenNodes["entity"]{"foreground"})
+
+  if tokenNodes.hasKey("string"):
+    result[EditorColorPairIndex.stringLit].foreground.rgb =
+      colorFromNode(tokenNodes["string"]{"foreground"})
+
+  if tokenNodes.hasKey("variable"):
+    result[EditorColorPairIndex.specialVar].foreground.rgb =
+      colorFromNode(tokenNodes["variable"]{"foreground"})
+
+  if tokenNodes.hasKey("constant"):
+    result[EditorColorPairIndex.binNumber].foreground.rgb =
+      colorFromNode(tokenNodes["constant"]{"foreground"})
+
+    result[EditorColorPairIndex.decNumber].foreground.rgb =
+      colorFromNode(tokenNodes["constant"]{"foreground"})
+
+    result[EditorColorPairIndex.floatNumber].foreground.rgb =
+      colorFromNode(tokenNodes["constant"]{"foreground"})
+
+    result[EditorColorPairIndex.hexNumber].foreground.rgb =
+      colorFromNode(tokenNodes["constant"]{"foreground"})
+
+    result[EditorColorPairIndex.octNumber].foreground.rgb =
+      colorFromNode(tokenNodes["constant"]{"foreground"})
+
+  if tokenNodes.hasKey("comment"):
+    result[EditorColorPairIndex.comment].foreground.rgb =
+      colorFromNode(tokenNodes["comment"]{"foreground"})
+
+    result[EditorColorPairIndex.longComment].foreground.rgb =
+      colorFromNode(tokenNodes["comment"]{"foreground"})
+
+  if jsonNode["colors"].contains("editorWhitespace.foreground"):
+    result[EditorColorPairIndex.whitespace].foreground.rgb =
       colorFromNode(jsonNode{"colors", "editorWhitespace.foreground"})
 
-  # status line
-  setEditorColor statusLineNormalMode:
-    foreground:
-      colorFromNode(jsonNode{"colors", "editor.foreground"})
-      adjust: ReadableVsBackground
-    background:
-      colorFromNode(jsonNode{"colors", "statusLine.background"})
-  setEditorColor statusLineModeNormalMode:
-    foreground:
-      adjust: ReadableVsBackground
-    background:
-      colorFromNode(jsonNode{"colors", "statusLine.background"})
-  setEditorColor statusLineNormalModeInactive:
-    foreground:
-      colorFromNode(jsonNode{"colors", "statusLine.foreground"})
-      adjust: ReadableVsBackground
-    background:
-      colorFromNode(jsonNode{"colors", "editor.background"})
-  setEditorColor statusLineInsertMode:
-    foreground:
-      adjust: ReadableVsBackground
-    background:
-      colorFromNode(jsonNode{"colors", "statusLine.background"})
-  setEditorColor statusLineModeInsertMode:
-    foreground:
-      adjust: ReadableVsBackground
-    background:
-      white
-  setEditorColor statusLineInsertModeInactive:
-    foreground:
-      adjust: ReadableVsBackground
-    background:
-      colorFromNode(jsonNode{"colors", "statusLine.background"})
-  setEditorColor statusLineVisualMode:
-    foreground:
-      adjust: ReadableVsBackground
-    background:
-      colorFromNode(jsonNode{"colors", "statusLine.background"})
-  setEditorColor statusLineModeVisualMode:
-    foreground:
-      adjust: ReadableVsBackground
-    background:
-      white
-  setEditorColor statusLineVisualModeInactive:
-    foreground:
-      adjust: ReadableVsBackground
-    background:
-      colorFromNode(jsonNode{"colors", "statusLine.background"})
-  setEditorColor statusLineReplaceMode:
-    foreground:
-      adjust: ReadableVsBackground
-    background:
-      colorFromNode(jsonNode{"colors", "statusLine.background"})
-  setEditorColor statusLineModeReplaceMode:
-    foreground:
-      adjust: ReadableVsBackground
-    background:
-      white
-  setEditorColor statusLineReplaceModeInactive:
-    foreground:
-      adjust: ReadableVsBackground
-    background:
-      colorFromNode(jsonNode{"colors", "statusLine.background"})
-  setEditorColor statusLineFilerMode:
-    foreground:
-      adjust: ReadableVsBackground
-    background:
-      colorFromNode(jsonNode{"colors", "statusLine.background"})
-  setEditorColor statusLineModeFilerMode:
-    foreground:
-      adjust: ReadableVsBackground
-    background:
-      white
-  setEditorColor statusLineFilerModeInactive:
-    foreground:
-      adjust: ReadableVsBackground
-    background:
-      colorFromNode(jsonNode{"colors", "statusLine.background"})
-  setEditorColor statusLineExMode:
-    foreground:
-      adjust: ReadableVsBackground
-    background:
-      colorFromNode(jsonNode{"colors", "statusLine.background"})
-  setEditorColor statusLineModeExMode:
-    foreground:
-      adjust: ReadableVsBackground
-    background:
-      white
-  setEditorColor statusLineExModeInactive:
-    foreground:
-      adjust: ReadableVsBackground
-    background:
-      colorFromNode(jsonNode{"colors", "statusLine.background"})
-  setEditorColor statusLineGitBranch:
-    foreground:
-      adjust: ReadableVsBackground
-    background:
-      colorFromNode(jsonNode{"colors", "statusLine.background"})
-  # command  bar
-  setEditorColor commandBar:
-    foreground:
-      adjust: ReadableVsBackground
-    background:
-      Color.default
-  # error message
-  setEditorColor errorMessage:
-    foreground:
-      colorFromNode(getScope("console.error"){"foreground"})
-    background:
-      Color.default
-  setEditorColor currentTab:
-    foreground:
-      colorFromNode(jsonNode{"colors", "tab.foreground"})
-    background:
-      colorFromNode(jsonNode{"colors", "tab.activeBackground"})
+  if jsonNode.contains("semanticTokenColors"):
+    result[EditorColorPairIndex.preprocessor].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "semanticTokenColors.parameter.label"})
 
-  setEditorColor tab:
-    foreground:
+    result[EditorColorPairIndex.pragma].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "semanticTokenColors.parameter.label"})
+
+  if jsonNode["colors"].contains("statusBar.foreground"):
+    result[EditorColorPairIndex.statusLineNormalMode].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.foreground"})
+
+    result[EditorColorPairIndex.statusLineModeNormalMode].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.foreground"})
+
+    result[EditorColorPairIndex.statusLineNormalModeInactive].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.foreground"})
+
+    result[EditorColorPairIndex.statusLineInsertMode].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.foreground"})
+
+    result[EditorColorPairIndex.statusLineModeInsertMode].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.foreground"})
+
+    result[EditorColorPairIndex.statusLineModeInsertMode].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.foreground"})
+
+    result[EditorColorPairIndex.statusLineInsertModeInactive].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.foreground"})
+
+    result[EditorColorPairIndex.statusLineVisualMode].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.foreground"})
+
+    result[EditorColorPairIndex.statusLineModeVisualMode].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.foreground"})
+
+    result[EditorColorPairIndex.statusLineVisualModeInactive].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.foreground"})
+
+    result[EditorColorPairIndex.statusLineReplaceMode].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.foreground"})
+
+    result[EditorColorPairIndex.statusLineModeReplaceMode].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.foreground"})
+
+    result[EditorColorPairIndex.statusLineReplaceModeInactive].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.foreground"})
+
+    result[EditorColorPairIndex.statusLineFilerMode].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.foreground"})
+
+    result[EditorColorPairIndex.statusLineModeFilerMode].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.foreground"})
+
+    result[EditorColorPairIndex.statusLineFilerModeInactive].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.foreground"})
+
+    result[EditorColorPairIndex.statusLineExMode].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.foreground"})
+
+    result[EditorColorPairIndex.statusLineModeExMode].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.foreground"})
+
+    result[EditorColorPairIndex.statusLineExModeInactive].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.foreground"})
+
+    result[EditorColorPairIndex.statusLineGitBranch].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.foreground"})
+
+  if jsonNode["colors"].contains("statusBar.background"):
+    result[EditorColorPairIndex.statusLineNormalMode].background.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+
+    result[EditorColorPairIndex.statusLineModeNormalMode].background.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+
+    result[EditorColorPairIndex.statusLineNormalModeInactive].background.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+
+    result[EditorColorPairIndex.statusLineInsertMode].background.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+
+    result[EditorColorPairIndex.statusLineModeInsertMode].background.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+
+    result[EditorColorPairIndex.statusLineModeInsertMode].background.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+
+    result[EditorColorPairIndex.statusLineInsertModeInactive].background.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+
+    result[EditorColorPairIndex.statusLineVisualMode].background.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+
+    result[EditorColorPairIndex.statusLineModeVisualMode].background.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+
+    result[EditorColorPairIndex.statusLineVisualModeInactive].background.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+
+    result[EditorColorPairIndex.statusLineReplaceMode].background.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+
+    result[EditorColorPairIndex.statusLineModeReplaceMode].background.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+
+    result[EditorColorPairIndex.statusLineReplaceModeInactive].background.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+
+    result[EditorColorPairIndex.statusLineFilerMode].background.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+
+    result[EditorColorPairIndex.statusLineModeFilerMode].background.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+
+    result[EditorColorPairIndex.statusLineFilerModeInactive].background.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+
+    result[EditorColorPairIndex.statusLineExMode].background.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+
+    result[EditorColorPairIndex.statusLineModeExMode].background.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+
+    result[EditorColorPairIndex.statusLineExModeInactive].background.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+
+    result[EditorColorPairIndex.statusLineGitBranch].background.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+
+  if tokenNodes.hasKey("console.error"):
+    result[EditorColorPairIndex.errorMessage].foreground.rgb =
+      colorFromNode(jsonNode{"console.error", "foreground"})
+
+  if jsonNode["colors"].contains("tab.foreground"):
+    result[EditorColorPairIndex.tab].foreground.rgb =
       colorFromNode(jsonNode{"colors", "tab.foreground"})
-    background:
+
+    result[EditorColorPairIndex.currentTab].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "tab.foreground"})
+
+  if jsonNode["colors"].contains("tab.inactiveBackground"):
+    result[EditorColorPairIndex.tab].background.rgb =
       colorFromNode(jsonNode{"colors", "tab.inactiveBackground"})
 
-  setEditorColor lineNum:
-    foreground:
+  if jsonNode["colors"].contains("tab.activeBackground"):
+    result[EditorColorPairIndex.currentTab].background.rgb =
+      colorFromNode(jsonNode{"colors", "tab.activeBackground"})
+
+  if jsonNode["colors"].contains("editorLineNumber.foreground"):
+    result[EditorColorPairIndex.lineNum].foreground.rgb =
       colorFromNode(jsonNode{"colors", "editorLineNumber.foreground"})
-      adjust: InverseBackground
-    background:
+
+  if jsonNode["colors"].contains("editorLineNumber.background"):
+    result[EditorColorPairIndex.lineNum].background.rgb =
       colorFromNode(jsonNode{"colors", "editorLineNumber.background"})
 
-  setEditorColor currentLineNum:
-    foreground:
+  if jsonNode["colors"].contains("editorCursor.foreground"):
+    result[EditorColorPairIndex.currentLineNum].foreground.rgb =
       colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
-    background:
-      colorFromNode(jsonNode{"colors", "editor.background"})
 
-  setEditorColor pcLink:
-    foreground:
-      colorFromNode(getScope("hyperlink"){"foreground"})
-      adjust: ReadableVsBackground
-    background:
-      Color.default
+    result[EditorColorPairIndex.backupManagerCurrentLine].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
 
-  # highlight other uses current word
-  setEditorColor currentWord:
-    foreground:
-      adjust: ReadableVsBackground
-    background:
+    result[EditorColorPairIndex.diffViewerDeletedLine].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
+
+    result[EditorColorPairIndex.configModeCurrentLine].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
+
+  if jsonNode["colors"].contains("editor.selectionBackground"):
+    result[EditorColorPairIndex.currentWord].background.rgb =
       colorFromNode(jsonNode{"colors", "editor.selectionBackground"})
 
-  setEditorColor popupWinCurrentLine:
-    foreground:
-      colorFromNode(jsonNode{"colors", "sideBarTitle.forground"})
-    background:
-      colorFromNode(jsonNode{"colors", "sideBarSectionHeader.background"})
+  if jsonNode["colors"].contains("editorSuggestWidget.foreground"):
+    result[EditorColorPairIndex.popupWindow].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "editorSuggestWidget.foreground"})
 
-  # pop up window
-  setEditorColor popupWindow:
-    foreground:
-      adjust: ReadableVsBackground
-    background:
-      colorFromNode(jsonNode{"colors", "sideBar.background"})
-  setEditorColor popupWinCurrentLine:
-    foreground:
-      colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
-      adjust: ReadableVsBackground
-    background:
-      colorFromNode(jsonNode{"colors", "sideBar.background"})
+  if jsonNode["colors"].contains("editorSuggestWidget.selectionBackground"):
+    result[EditorColorPairIndex.popupWindow].background.rgb =
+      colorFromNode(jsonNode{"colors", "editorSuggestWidget.selectedBackground"})
 
-  # pair of paren highlighting
-  setEditorColor parenText:
-    foreground:
-      colorFromNode(getScope("unnamedScope"){"bracketsForeground"})
-      adjust: ReadableVsBackground
-    background:
+  if jsonNode["colors"].contains("editorSuggestWidget.highlightForeground"):
+    result[EditorColorPairIndex.popupWinCurrentLine].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "editorSuggestWidget.highlightForeground"})
+
+  if jsonNode["colors"].contains("editorSuggestWidget.selectedBackground"):
+    result[EditorColorPairIndex.popupWinCurrentLine].background.rgb =
+      colorFromNode(jsonNode{"colors", "editorSuggestWidget.selectedBackground"})
+
+  if tokenNodes.hasKey("unnamedScope"):
+    result[EditorColorPairIndex.parenPair].foreground.rgb =
+      colorFromNode(tokenNodes["unnamedScope"]{"bracketsForeground"})
+
+  if jsonNode["colors"].contains("editor.selectionBackground"):
+    result[EditorColorPairIndex.parenPair].background.rgb =
       colorFromNode(jsonNode{"colors", "editor.selectionBackground"})
 
-  # replace text highlighting
-  setEditorColor replaceText:
-    foreground:
-      adjust: ReadableVsBackground
-    background:
-      colorFromNode(jsonNode{"colors",
-        "gitDecoration.conflictingResourceForeground"})
-
-  # filer mode
-  setEditorColor currentFile:
-    foreground:
-      adjust: ReadableVsBackground
-    background:
+    result[EditorColorPairIndex.currentFile].background.rgb =
       colorFromNode(jsonNode{"colors", "editor.selectionBackground"})
-  setEditorColor file:
-    foreground:
-      adjust: ReadableVsBackground
-    background:
-      Color.default
-  setEditorColor dir:
-    foreground:
-      colorFromNode(getScope("hyperlink"){"foreground"})
-      adjust: ReadableVsBackground
-    background:
-      Color.default
 
-  # highlight full width space
-  setEditorColor highlightFullWidthSpace:
-    foreground:
-      colorFromNode(jsonNode{"colors", "tab.activeBorder"})
-    background:
-      colorFromNode(jsonNode{"colors", "tab.activeBorder"})
+  if jsonNode["colors"].contains("gitDecoration.conflictingResourceForeground"):
+    result[EditorColorPairIndex.replaceText].background.rgb =
+      colorFromNode(jsonNode{"colors", "gitDecoration.conflictingResourceForeground"})
 
-  # highlight trailing spaces
-  setEditorColor highlightTrailingSpaces:
-    foreground:
-      colorFromNode(jsonNode{"colors", "tab.activeBorder"})
-    background:
+  if tokenNodes.hasKey("hyperlink"):
+    result[EditorColorPairIndex.file].foreground.rgb =
+      colorFromNode(tokenNodes["hyperlink"]{"foreground"})
+
+    result[EditorColorPairIndex.dir].foreground.rgb =
+      colorFromNode(tokenNodes["hyperlink"]{"foreground"})
+
+    result[EditorColorPairIndex.pcLink].foreground.rgb =
+      colorFromNode(tokenNodes["hyperlink"]{"foreground"})
+
+  if jsonNode["colors"].contains("tab.activeBorder"):
+    result[EditorColorPairIndex.highlightFullWidthSpace].foreground.rgb =
       colorFromNode(jsonNode{"colors", "tab.activeBorder"})
 
-  # highlight diff
-  setEditorColor addedLine:
-    foreground:
-      colorFromNode(jsonNode{"colors", "diff.inserted"})
-    background:
-      colorFromNode(jsonNode{"colors", "editor.background"})
-  setEditorColor deletedLine:
-    foreground:
-      colorFromNode(jsonNode{"colors", "diff.deleted"})
-    background:
-      colorFromNode(jsonNode{"colors", "editor.background"})
-
-  # search result highlighting
-  setEditorColor searchResult:
-    foreground:
-      adjust: ReadableVsBackground
-    background:
+    result[EditorColorPairIndex.highlightFullWidthSpace].background.rgb =
       colorFromNode(jsonNode{"colors", "tab.activeBorder"})
 
-  # selected area in visual mode
-  setEditorColor visualMode:
-    foreground:
-      adjust: ReadableVsBackground
-    background:
+    result[EditorColorPairIndex.highlightTrailingSpaces].foreground.rgb =
       colorFromNode(jsonNode{"colors", "tab.activeBorder"})
 
-  # Backup manager
-  setEditorColor currentBackup:
-    foreground:
-      colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
-      adjust: ReadableVsBackground
-    background:
-      colorFromNode(jsonNode{"colors", "editor.background"})
+    result[EditorColorPairIndex.highlightTrailingSpaces].background.rgb =
+      colorFromNode(jsonNode{"colors", "tab.activeBorder"})
 
-  # Configuration mode
-  setEditorColor currentSetting:
-    foreground:
-      colorFromNode(jsonNode{"colors", "editorCursor.foreground"})
-      adjust: ReadableVsBackground
-    background:
-      colorFromNode(jsonNode{"colors", "editor.background"})
+    result[EditorColorPairIndex.searchResult].background.rgb =
+      colorFromNode(jsonNode{"colors", "tab.activeBorder"})
+
+    result[EditorColorPairIndex.visualMode].background.rgb =
+      colorFromNode(jsonNode{"colors", "tab.activeBorder"})
+
+  if jsonNode["colors"].contains("dir.inserted"):
+    result[EditorColorPairIndex.diffViewerAddedLine].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "dir.inserted"})
+
+  if jsonNode["colors"].contains("dir.deleted"):
+    result[EditorColorPairIndex.diffViewerDeletedLine].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "dir.deleted"})
 
 proc codeOssUserSettingsFilePath(): string {.inline.} =
   getConfigDir() / "Code - OSS/User/settings.json"
@@ -932,6 +935,16 @@ proc detectVsCodeFlavor(): Option[VsCodeFlavor] =
   elif fileExists(vsCodeUserSettingsFilePath()):
     return some(VsCodeFlavor.VSCode)
 
+proc isCurrentVsCodeThemePackage(json: JsonNode, themeName: string): bool =
+  # Return true if `json` is the current VSCode theme.
+
+  if json{"contributes", "themes"} != nil:
+    let themes = json{"contributes", "themes"}
+    if themes != nil and themes.kind == JArray:
+      for t in themes:
+        if t{"label"} != nil and t{"label"}.getStr == themeName:
+          return true
+
 proc parseVsCodeThemeJson(
   packageJson: JsonNode,
   themeName, extensionDir: string): Option[JsonNode] =
@@ -939,7 +952,7 @@ proc parseVsCodeThemeJson(
     let themesJson = packageJson{"contributes", "themes"}
     if themesJson != nil and themesJson.kind == JArray:
       for theme in themesJson:
-        if theme{"id"} != nil and theme{"id"}.getStr == themeName:
+        if theme{"label"} != nil and theme{"label"}.getStr == themeName:
           let themePath = theme{"path"}
 
           if themePath != nil and themePath.kind == JString:
@@ -950,77 +963,57 @@ proc parseVsCodeThemeJson(
                 try: some(json.parseFile(themeFilePath))
                 except CatchableError: none(JsonNode)
 
-proc isCurrentVsCodeThemePackage(json: JsonNode, themeName: string): bool =
-  # Return true if `json` is the current VSCode theme.
-
-  if json{"displayName"} != nil:
-    if json{"displayName"}.getStr == "%displayName%":
-      let themes = json{"contributes", "themes"}
-      if themes != nil and themes.kind == JArray:
-        for t in themes:
-          if t{"id"} != nil and t{"id"}.getStr == themeName:
-            return true
-    else:
-      if json{"displayName"}.getStr == themeName: return true
-
-proc loadVSCodeTheme*(): colorTheme =
+proc loadVSCodeTheme*(): Result[ColorTheme, string] =
   # If no vscode theme can be found, this defaults to the dark theme.
   # Hopefully other contributors will come and add support for Windows,
   # and other systems.
 
-  result = colorTheme.dark
-
   let vsCodeFlavor = detectVsCodeFlavor()
-  if vsCodeFlavor.isNone: return colorTheme.dark
+  if vsCodeFlavor.isNone:
+    return Result[ColorTheme, string].err fmt"Failed to load VSCode theme: Could not find VSCode"
 
   let
     # load the VSCode user settings json
     settingsFilePath = vsCodeSettingsFilePath(vsCodeFlavor.get)
     settingsJson =
-      try: json.parseFile(settingsFilePath)
-      except CatchableError: return colorTheme.dark
+      try:
+        json.parseFile(settingsFilePath)
+      except CatchableError as e:
+        return Result[ColorTheme, string].err fmt"Failed to load VSCode theme: {e.msg}"
 
   # The current theme name
   if settingsJson{"workbench.colorTheme"} == nil or
-     settingsJson{"workbench.colorTheme"}.getStr == "": return colorTheme.dark
+     settingsJson{"workbench.colorTheme"}.getStr == "":
+       return Result[ColorTheme, string].err fmt"Failed to load VSCode theme: Failed to get the current theme"
 
-  let themeSetting = settingsJson{"workbench.colorTheme"}.getStr
+  let
+    currentThemeName = settingsJson{"workbench.colorTheme"}.getStr
 
-  # First, Check build in themes.
-  let defaultExtesionsDir = vsCodeDefaultExtensionsDir(vsCodeFlavor.get)
-  if dirExists(defaultExtesionsDir):
-    for file in walkPattern(defaultExtesionsDir / "*/package.json" ):
-      let packageJson =
-        try: json.parseFile(file)
-        except CatchableError: continue
+    extensionDirs = [
+      # Build in themes.
+      vsCodeDefaultExtensionsDir(vsCodeFlavor.get),
+      # User themes.
+      vsCodeUserExtensionsDir(vsCodeFlavor.get)]
 
-      if isCurrentVsCodeThemePackage(packageJson, themeSetting):
-        let themeJson = parseVsCodeThemeJson(
-          packageJson,
-          themeSetting,
-          file)
-        if themeJson.isSome:
-          colorThemeTable[colorTheme.vscode] =
-            makecolorThemeFromVSCodeThemeFile(themeJson.get)
-          return colorTheme.vscode
+  for dir in extensionDirs:
+    if dirExists(dir):
+      for file in walkPattern(dir / "*/package.json" ):
+        let packageJson =
+          try: json.parseFile(file)
+          except CatchableError: continue
 
-  # Check user themes.
-  let userExtensionsDir = vsCodeUserExtensionsDir(vsCodeFlavor.get)
-  if dirExists(userExtensionsDir):
-    for file in walkPattern(userExtensionsDir / "*/package.json" ):
-      let packageJson =
-        try: json.parseFile(file)
-        except CatchableError: continue
+        if isCurrentVsCodeThemePackage(packageJson, currentThemeName):
+          let themeJson = parseVsCodeThemeJson(
+            packageJson,
+            currentThemeName,
+            file)
+          if themeJson.isSome:
+            ColorThemeTable[ColorTheme.vscode] =
+              makecolorThemeFromVSCodeThemeFile(themeJson.get)
 
-      if isCurrentVsCodeThemePackage(packageJson, themeSetting):
-        let themeJson = parseVsCodeThemeJson(
-          packageJson,
-          themeSetting,
-          file)
-        if themeJson.isSome:
-          colorThemeTable[colorTheme.vscode] =
-            makecolorThemeFromVSCodeThemeFile(themeJson.get)
-          return colorTheme.vscode
+            return Result[ColorTheme, string].ok ColorTheme.vscode
+
+  return Result[ColorTheme, string].err fmt"Failed to load VSCode theme: Could not find files for the current theme"
 
 proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
   result = initEditorSettings()
@@ -1031,7 +1024,7 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
 
     if settings["Standard"].contains("theme"):
       let themeString = settings["Standard"]["theme"].getStr()
-      result.editorColorTheme = getTheme(themeString)
+      result.editorColorTheme = themeString.toColorTheme.get
 
     if settings["Standard"].contains("number"):
       result.view.lineNumber = settings["Standard"]["number"].getBool()
@@ -1191,7 +1184,7 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       for i in 0 ..< reservedWords.len:
         let
           word = reservedWords[i].getStr
-          reservedWord = ReservedWord(word: word, color: EditorColorPair.reservedWord)
+          reservedWord = ReservedWord(word: word, color: EditorColorPairIndex.reservedWord)
         result.highlight.reservedWords.add(reservedWord)
 
     if settings["Highlight"].contains("currentLine"):
@@ -1504,343 +1497,467 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
         let setting = bufStatusSettings["bufferLen"].getBool
         result.debugMode.bufStatus.bufferLen = setting
 
-  if result.editorColorTheme == colorTheme.config and
+  if result.editorColorTheme == ColorTheme.config and
      settings.contains("Theme"):
     if settings["Theme"].contains("baseTheme"):
       let themeString = settings["Theme"]["baseTheme"].getStr()
       if fileExists(themeString):
-        # TODO: Test this
         let jsonNode =
           try: some(json.parseFile(themeString))
           except CatchableError: none(JsonNode)
         if jsonNode.isSome:
-          colorThemeTable[colorTheme.config] = makecolorThemeFromVSCodeThemeFile(jsonNode.get)
+          ColorThemeTable[ColorTheme.config] = makecolorThemeFromVSCodeThemeFile(jsonNode.get)
         else:
-          let theme = parseEnum[colorTheme](themeString)
-          colorThemeTable[colorTheme.config] = colorThemeTable[theme]
+          let theme = parseEnum[ColorTheme](themeString)
+          ColorThemeTable[ColorTheme.config] = ColorThemeTable[theme]
       else:
-        let theme = parseEnum[colorTheme](themeString)
-        colorThemeTable[colorTheme.config] = colorThemeTable[theme]
+        let theme = parseEnum[ColorTheme](themeString)
+        ColorThemeTable[ColorTheme.config] = ColorThemeTable[theme]
 
-    template color(str: string): untyped =
-      parseEnum[Color](settings["Theme"][str].getStr())
+    proc toRgb(s: string): Rgb =
+      let val = settings["Theme"][s].getStr
+      case val:
+        of "termDefaultFg", "termDefaultBg":
+          TerminalDefaultRgb
+        else:
+          if val.isHexColor:
+            val.hexToRgb.get
+          else:
+            # TODO: Return Result.error
+            raise newException(ValueError, fmt"Invalid color value: {s} = {val}")
 
-    if settings["Theme"].contains("editorBg"):
-      colorThemeTable[colorTheme.config].editorBg = color("editorBg")
+    result.editorColorTheme = ColorTheme.config
+
+    let configTheme = ColorTheme.config
+
+    if settings["Theme"].contains("foreground"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.default].foreground.rgb =
+        toRgb("foreground")
+      ColorThemeTable[configTheme][EditorColorPairIndex.currentLineBg].foreground.rgb =
+        toRgb("foreground")
+
+    if settings["Theme"].contains("background"):
+      let bgRgb = toRgb("background")
+      ColorThemeTable[configTheme][EditorColorPairIndex.default].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.keyword].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.functionName].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.typeName].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.boolean].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.specialVar].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.builtin].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.stringLit].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.binNumber].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.decNumber].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.floatNumber].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.hexNumber].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.octNumber].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.comment].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.longComment].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.whitespace].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.preprocessor].background.rgb =
+        bgRgb
+      ColorThemeTable[configTheme][EditorColorPairIndex.pragma].background.rgb =
+        bgRgb
 
     if settings["Theme"].contains("lineNum"):
-      colorThemeTable[colorTheme.config].lineNum = color("lineNum")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.lineNum].foreground.rgb =
+        toRgb("lineNum")
     if settings["Theme"].contains("lineNumBg"):
-      colorThemeTable[colorTheme.config].lineNumBg = color("lineNumBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.lineNum].background.rgb =
+        toRgb("lineNumBg")
 
     if settings["Theme"].contains("currentLineNum"):
-      colorThemeTable[colorTheme.config].currentLineNum = color("currentLineNum")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.currentLineNum].foreground.rgb =
+        toRgb("currentLineNum")
     if settings["Theme"].contains("currentLineNumBg"):
-      colorThemeTable[colorTheme.config].currentLineNumBg = color("currentLineNumBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.currentLineNum].background.rgb =
+        toRgb("currentLineNumBg")
 
     if settings["Theme"].contains("statusLineNormalMode"):
-      colorThemeTable[colorTheme.config].statusLineNormalMode = color("statusLineNormalMode")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineNormalMode].foreground.rgb =
+        toRgb("statusLineNormalMode")
     if settings["Theme"].contains("statusLineNormalModeBg"):
-      colorThemeTable[colorTheme.config].statusLineNormalModeBg = color("statusLineNormalModeBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineNormalMode].background.rgb =
+        toRgb("statusLineNormalModeBg")
 
     if settings["Theme"].contains("statusLineModeNormalMode"):
-      colorThemeTable[colorTheme.config].statusLineModeNormalMode = color("statusLineModeNormalMode")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineModeNormalMode].foreground.rgb =
+        toRgb("statusLineModeNormalMode")
     if settings["Theme"].contains("statusLineModeNormalModeBg"):
-      colorThemeTable[colorTheme.config].statusLineModeNormalModeBg = color("statusLineModeNormalModeBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineModeNormalMode].background.rgb =
+        toRgb("statusLineModeNormalModeBg")
 
     if settings["Theme"].contains("statusLineNormalModeInactive"):
-      colorThemeTable[colorTheme.config].statusLineNormalModeInactive = color("statusLineNormalModeInactive")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineNormalModeInactive].foreground.rgb =
+        toRgb("statusLineNormalModeInactive")
     if settings["Theme"].contains("statusLineNormalModeInactiveBg"):
-      colorThemeTable[colorTheme.config].statusLineNormalModeInactiveBg = color("statusLineNormalModeInactiveBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineNormalModeInactive].background.rgb =
+        toRgb("statusLineNormalModeInactiveBg")
 
     if settings["Theme"].contains("statusLineInsertMode"):
-      colorThemeTable[colorTheme.config].statusLineInsertMode = color("statusLineInsertMode")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineInsertMode].foreground.rgb =
+        toRgb("statusLineInsertMode")
     if settings["Theme"].contains("statusLineInsertModeBg"):
-      colorThemeTable[colorTheme.config].statusLineInsertModeBg = color("statusLineInsertModeBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineInsertMode].background.rgb =
+        toRgb("statusLineInsertModeBg")
 
     if settings["Theme"].contains("statusLineModeInsertMode"):
-      colorThemeTable[colorTheme.config].statusLineModeInsertMode = color("statusLineModeInsertMode")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineModeInsertMode].foreground.rgb =
+        toRgb("statusLineModeInsertMode")
     if settings["Theme"].contains("statusLineModeInsertModeBg"):
-      colorThemeTable[colorTheme.config].statusLineModeInsertModeBg = color("statusLineModeInsertModeBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineModeInsertMode].background.rgb =
+        toRgb("statusLineModeInsertModeBg")
 
     if settings["Theme"].contains("statusLineInsertModeInactive"):
-      colorThemeTable[colorTheme.config].statusLineInsertModeInactive = color("statusLineInsertModeInactive")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineInsertModeInactive].foreground.rgb =
+        toRgb("statusLineInsertModeInactive")
     if settings["Theme"].contains("statusLineInsertModeInactiveBg"):
-      colorThemeTable[colorTheme.config].statusLineInsertModeInactiveBg = color("statusLineInsertModeInactiveBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineInsertModeInactive].background.rgb =
+        toRgb("statusLineInsertModeInactiveBg")
 
     if settings["Theme"].contains("statusLineVisualMode"):
-      colorThemeTable[colorTheme.config].statusLineVisualMode = color("statusLineVisualMode")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineVisualMode].foreground.rgb =
+        toRgb("statusLineVisualMode")
     if settings["Theme"].contains("statusLineVisualModeBg"):
-      colorThemeTable[colorTheme.config].statusLineVisualModeBg = color("statusLineVisualModeBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineVisualMode].background.rgb =
+        toRgb("statusLineVisualModeBg")
 
     if settings["Theme"].contains("statusLineModeVisualMode"):
-      colorThemeTable[colorTheme.config].statusLineModeVisualMode = color("statusLineModeVisualMode")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineModeVisualMode].foreground.rgb =
+        toRgb("statusLineModeVisualMode")
     if settings["Theme"].contains("statusLineModeVisualModeBg"):
-      colorThemeTable[colorTheme.config].statusLineModeVisualModeBg = color("statusLineModeVisualModeBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineModeVisualMode].background.rgb =
+        toRgb("statusLineModeVisualModeBg")
 
     if settings["Theme"].contains("statusLineVisualModeInactive"):
-      colorThemeTable[colorTheme.config].statusLineVisualModeInactive = color("statusLineVisualModeInactive")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineVisualModeInactive].foreground.rgb =
+        toRgb("statusLineVisualModeInactive")
     if settings["Theme"].contains("statusLineVisualModeInactiveBg"):
-      colorThemeTable[colorTheme.config].statusLineVisualModeInactiveBg = color("statusLineVisualModeInactiveBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineVisualModeInactive].background.rgb =
+        toRgb("statusLineVisualModeInactiveBg")
 
     if settings["Theme"].contains("statusLineReplaceMode"):
-      colorThemeTable[colorTheme.config].statusLineReplaceMode = color("statusLineReplaceMode")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineReplaceMode].foreground.rgb =
+        toRgb("statusLineReplaceMode")
     if settings["Theme"].contains("statusLineReplaceModeBg"):
-      colorThemeTable[colorTheme.config].statusLineReplaceModeBg = color("statusLineReplaceModeBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineReplaceMode].background.rgb =
+        toRgb("statusLineReplaceModeBg")
 
     if settings["Theme"].contains("statusLineModeReplaceMode"):
-      colorThemeTable[colorTheme.config].statusLineModeReplaceMode = color("statusLineModeReplaceMode")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineModeReplaceMode].foreground.rgb =
+        toRgb("statusLineModeReplaceMode")
     if settings["Theme"].contains("statusLineModeReplaceModeBg"):
-      colorThemeTable[colorTheme.config].statusLineModeReplaceModeBg = color("statusLineModeReplaceModeBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineModeReplaceMode].background.rgb =
+        toRgb("statusLineModeReplaceModeBg")
 
     if settings["Theme"].contains("statusLineReplaceModeInactive"):
-      colorThemeTable[colorTheme.config].statusLineReplaceModeInactive = color("statusLineReplaceModeInactive")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineReplaceModeInactive].foreground.rgb =
+        toRgb("statusLineReplaceModeInactive")
     if settings["Theme"].contains("statusLineReplaceModeInactiveBg"):
-      colorThemeTable[colorTheme.config].statusLineReplaceModeInactiveBg = color("statusLineReplaceModeInactiveBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineReplaceModeInactive].background.rgb =
+        toRgb("statusLineReplaceModeInactiveBg")
 
     if settings["Theme"].contains("statusLineFilerMode"):
-      colorThemeTable[colorTheme.config].statusLineFilerMode = color("statusLineFilerMode")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineFilerMode].foreground.rgb =
+        toRgb("statusLineFilerMode")
     if settings["Theme"].contains("statusLineFilerModeBg"):
-      colorThemeTable[colorTheme.config].statusLineFilerModeBg = color("statusLineFilerModeBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineFilerMode].background.rgb =
+        toRgb("statusLineFilerModeBg")
 
     if settings["Theme"].contains("statusLineModeFilerMode"):
-      colorThemeTable[colorTheme.config].statusLineModeFilerMode = color("statusLineModeFilerMode")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineModeFilerMode].foreground.rgb =
+        toRgb("statusLineModeFilerMode")
     if settings["Theme"].contains("statusLineModeFilerModeBg"):
-      colorThemeTable[colorTheme.config].statusLineModeFilerModeBg = color("statusLineModeFilerModeBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineModeFilerMode].background.rgb =
+        toRgb("statusLineModeFilerModeBg")
 
     if settings["Theme"].contains("statusLineFilerModeInactive"):
-      colorThemeTable[colorTheme.config].statusLineFilerModeInactive = color("statusLineFilerModeInactive")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineFilerModeInactive].foreground.rgb =
+        toRgb("statusLineFilerModeInactive")
     if settings["Theme"].contains("statusLineFilerModeInactiveBg"):
-      colorThemeTable[colorTheme.config].statusLineFilerModeInactiveBg = color("statusLineFilerModeInactiveBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineFilerModeInactive].background.rgb =
+        toRgb("statusLineFilerModeInactiveBg")
 
     if settings["Theme"].contains("statusLineExMode"):
-      colorThemeTable[colorTheme.config].statusLineExMode = color("statusLineExMode")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineExMode].foreground.rgb =
+        toRgb("statusLineExMode")
     if settings["Theme"].contains("statusLineExModeBg"):
-      colorThemeTable[colorTheme.config].statusLineExModeBg = color("statusLineExModeBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineExMode].background.rgb =
+        toRgb("statusLineExModeBg")
 
     if settings["Theme"].contains("statusLineModeExMode"):
-      colorThemeTable[colorTheme.config].statusLineModeExMode = color("statusLineModeExMode")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineModeExMode].foreground.rgb =
+        toRgb("statusLineModeExMode")
     if settings["Theme"].contains("statusLineModeExModeBg"):
-      colorThemeTable[colorTheme.config].statusLineModeExModeBg = color("statusLineModeExModeBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineModeExMode].background.rgb =
+        toRgb("statusLineModeExModeBg")
 
     if settings["Theme"].contains("statusLineExModeInactive"):
-      colorThemeTable[colorTheme.config].statusLineExModeInactive = color("statusLineExModeInactive")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineExModeInactive].foreground.rgb =
+        toRgb("statusLineExModeInactive")
     if settings["Theme"].contains("statusLineExModeInactiveBg"):
-      colorThemeTable[colorTheme.config].statusLineExModeInactiveBg = color("statusLineExModeInactiveBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineExModeInactive].background.rgb =
+        toRgb("statusLineExModeInactiveBg")
 
     if settings["Theme"].contains("statusLineGitBranch"):
-      colorThemeTable[colorTheme.config].statusLineGitBranch = color("statusLineGitBranch")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineGitBranch].foreground.rgb =
+        toRgb("statusLineGitBranch")
     if settings["Theme"].contains("statusLineGitBranchBg"):
-      colorThemeTable[colorTheme.config].statusLineGitBranchBg = color("statusLineGitBranchBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineGitBranch].background.rgb =
+        toRgb("statusLineGitBranchBg")
 
     if settings["Theme"].contains("tab"):
-      colorThemeTable[colorTheme.config].tab = color("tab")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.tab].foreground.rgb =
+        toRgb("tab")
     if settings["Theme"].contains("tabBg"):
-      colorThemeTable[colorTheme.config].tabBg = color("tabBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.tab].background.rgb =
+        toRgb("tabBg")
 
     if settings["Theme"].contains("currentTab"):
-      colorThemeTable[colorTheme.config].currentTab = color("currentTab")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.currentTab].foreground.rgb =
+        toRgb("currentTab")
     if settings["Theme"].contains("currentTabBg"):
-      colorThemeTable[colorTheme.config].currentTabBg = color("currentTabBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.currentTab].background.rgb =
+        toRgb("currentTabBg")
 
-    if settings["Theme"].contains("commandBar"):
-      colorThemeTable[colorTheme.config].commandBar = color("commandBar")
-
-    if settings["Theme"].contains("commandBarBg"):
-      colorThemeTable[colorTheme.config].commandBarBg = color("commandBarBg")
+    if settings["Theme"].contains("commandLine"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.commandLine].foreground.rgb =
+        toRgb("commandLine")
+    if settings["Theme"].contains("commandLineBg"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.commandLine].background.rgb =
+        toRgb("commandLineBg")
 
     if settings["Theme"].contains("errorMessage"):
-      colorThemeTable[colorTheme.config].errorMessage = color("errorMessage")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.errorMessage].foreground.rgb =
+        toRgb("errorMessage")
     if settings["Theme"].contains("errorMessageBg"):
-      colorThemeTable[colorTheme.config].errorMessageBg = color("errorMessageBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.errorMessage].background.rgb =
+        toRgb("errorMessageBg")
 
     if settings["Theme"].contains("searchResult"):
-      colorThemeTable[colorTheme.config].searchResult = color("searchResult")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.searchResult].foreground.rgb =
+        toRgb("searchResult")
     if settings["Theme"].contains("searchResultBg"):
-      colorThemeTable[colorTheme.config].searchResultBg = color("searchResultBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.searchResult].background.rgb =
+        toRgb("searchResultBg")
 
     if settings["Theme"].contains("visualMode"):
-      colorThemeTable[colorTheme.config].visualMode = color("visualMode")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.visualMode].foreground.rgb =
+        toRgb("visualMode")
     if settings["Theme"].contains("visualModeBg"):
-      colorThemeTable[colorTheme.config].visualModeBg = color("visualModeBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.visualMode].background.rgb =
+        toRgb("visualModeBg")
 
-    if settings["Theme"].contains("defaultChar"):
-      colorThemeTable[colorTheme.config].defaultChar = color("defaultChar")
+    if settings["Theme"].contains("keyword"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.keyword].foreground.rgb =
+        toRgb("keyword")
 
-    if settings["Theme"].contains("gtKeyword"):
-      colorThemeTable[colorTheme.config].gtKeyword = color("gtKeyword")
+    if settings["Theme"].contains("functionName"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.functionName].foreground.rgb =
+        toRgb("functionName")
+    if settings["Theme"].contains("typeName"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.typeName].foreground.rgb =
+        toRgb("typeName")
+    if settings["Theme"].contains("boolean"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.boolean].foreground.rgb =
+        toRgb("boolean")
 
-    if settings["Theme"].contains("gtFunctionName"):
-      colorThemeTable[colorTheme.config].gtFunctionName = color("gtFunctionName")
+    if settings["Theme"].contains("specialVar"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.specialVar].foreground.rgb =
+        toRgb("specialVar")
 
-    if settings["Theme"].contains("gtTypeName"):
-      colorThemeTable[colorTheme.config].gtTypeName = color("gtTypeName")
+    if settings["Theme"].contains("builtin"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.builtin].foreground.rgb =
+        toRgb("builtin")
 
-    if settings["Theme"].contains("gtBoolean"):
-      colorThemeTable[colorTheme.config].gtBoolean = color("gtBoolean")
+    if settings["Theme"].contains("stringLit"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.stringLit].foreground.rgb =
+        toRgb("stringLit")
 
-    if settings["Theme"].contains("gtSpecialVar"):
-      colorThemeTable[colorTheme.config].gtSpecialVar = color("gtSpecialVar")
+    if settings["Theme"].contains("binNumber"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.binNumber].foreground.rgb =
+        toRgb("binNumber")
 
-    if settings["Theme"].contains("gtBuiltin"):
-      colorThemeTable[colorTheme.config].gtBuiltin = color("gtBuiltin")
+    if settings["Theme"].contains("decNumber"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.decNumber].foreground.rgb =
+        toRgb("decNumber")
 
-    if settings["Theme"].contains("gtStringLit"):
-      colorThemeTable[colorTheme.config].gtStringLit = color("gtStringLit")
+    if settings["Theme"].contains("floatNumber"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.floatNumber].foreground.rgb =
+        toRgb("floatNumber")
 
-    if settings["Theme"].contains("gtBinNumber"):
-      colorThemeTable[colorTheme.config].gtBinNumber = color("gtBinNumber")
+    if settings["Theme"].contains("hexNumber"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.hexNumber].foreground.rgb =
+        toRgb("hexNumber")
 
-    if settings["Theme"].contains("gtDecNumber"):
-      colorThemeTable[colorTheme.config].gtDecNumber = color("gtDecNumber")
+    if settings["Theme"].contains("octNumber"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.octNumber].foreground.rgb =
+        toRgb("octNumber")
 
-    if settings["Theme"].contains("gtFloatNumber"):
-      colorThemeTable[colorTheme.config].gtFloatNumber = color("gtFloatNumber")
+    if settings["Theme"].contains("comment"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.comment].foreground.rgb =
+        toRgb("comment")
 
-    if settings["Theme"].contains("gtHexNumber"):
-      colorThemeTable[colorTheme.config].gtHexNumber = color("gtHexNumber")
+    if settings["Theme"].contains("longComment"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.longComment].foreground.rgb =
+        toRgb("longComment")
 
-    if settings["Theme"].contains("gtOctNumber"):
-      colorThemeTable[colorTheme.config].gtOctNumber = color("gtOctNumber")
+    if settings["Theme"].contains("whitespace"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.whitespace].foreground.rgb =
+        toRgb("whitespace")
 
-    if settings["Theme"].contains("gtComment"):
-      colorThemeTable[colorTheme.config].gtComment = color("gtComment")
+    if settings["Theme"].contains("preprocessor"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.preprocessor].foreground.rgb =
+        toRgb("preprocessor")
 
-    if settings["Theme"].contains("gtLongComment"):
-      colorThemeTable[colorTheme.config].gtLongComment = color("gtLongComment")
-
-    if settings["Theme"].contains("gtWhitespace"):
-      colorThemeTable[colorTheme.config].gtWhitespace = color("gtWhitespace")
-
-    if settings["Theme"].contains("gtPreprocessor"):
-      colorThemeTable[colorTheme.config].gtPreprocessor = color("gtPreprocessor")
+    if settings["Theme"].contains("pragma"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.pragma].foreground.rgb =
+        toRgb("pragma")
 
     if settings["Theme"].contains("currentFile"):
-      colorThemeTable[colorTheme.config].currentFile = color("currentFile")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.currentFile].foreground.rgb =
+        toRgb("currentFile")
     if settings["Theme"].contains("currentFileBg"):
-      colorThemeTable[colorTheme.config].currentFileBg = color("currentFileBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.currentFile].background.rgb =
+        toRgb("currentFileBg")
 
     if settings["Theme"].contains("file"):
-      colorThemeTable[colorTheme.config].file = color("file")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.file].foreground.rgb =
+        toRgb("file")
     if settings["Theme"].contains("fileBg"):
-      colorThemeTable[colorTheme.config].fileBg = color("fileBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.file].background.rgb =
+        toRgb("fileBg")
 
     if settings["Theme"].contains("dir"):
-      colorThemeTable[colorTheme.config].dir = color("dir")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.dir].foreground.rgb =
+        toRgb("dir")
     if settings["Theme"].contains("dirBg"):
-      colorThemeTable[colorTheme.config].dirBg = color("dirBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.dir].background.rgb =
+        toRgb("dirBg")
 
     if settings["Theme"].contains("pcLink"):
-      colorThemeTable[colorTheme.config].pcLink = color("pcLink")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.pcLink].foreground.rgb =
+        toRgb("pcLink")
     if settings["Theme"].contains("pcLinkBg"):
-      colorThemeTable[colorTheme.config].pcLinkBg = color("pcLinkBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.pcLink].background.rgb =
+        toRgb("pcLinkBg")
 
     if settings["Theme"].contains("popupWindow"):
-      colorThemeTable[colorTheme.config].popupWindow = color("popupWindow")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.popupWindow].foreground.rgb =
+        toRgb("popupWindow")
     if settings["Theme"].contains("popupWindowBg"):
-      colorThemeTable[colorTheme.config].popupWindowBg = color("popupWindowBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.popupWindow].background.rgb =
+        toRgb("popupWindowBg")
 
     if settings["Theme"].contains("popupWinCurrentLine"):
-      colorThemeTable[colorTheme.config].popupWinCurrentLine = color("popupWinCurrentLine")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.popupWinCurrentLine].foreground.rgb =
+        toRgb("popupWinCurrentLine")
     if settings["Theme"].contains("popupWinCurrentLineBg"):
-      colorThemeTable[colorTheme.config].popupWinCurrentLineBg = color("popupWinCurrentLineBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.popupWinCurrentLine].background.rgb =
+        toRgb("popupWinCurrentLineBg")
 
     if settings["Theme"].contains("replaceText"):
-      colorThemeTable[colorTheme.config].replaceText = color("replaceText")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.replaceText].foreground.rgb =
+        toRgb("replaceText")
     if settings["Theme"].contains("replaceTextBg"):
-      colorThemeTable[colorTheme.config].replaceTextBg = color("replaceTextBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.replaceText].background.rgb =
+        toRgb("replaceTextBg")
 
-    if settings["Theme"].contains("parenText"):
-      colorThemeTable[colorTheme.config].parenText = color("parenText")
+    if settings["Theme"].contains("parenPair"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.parenPair].foreground.rgb =
+        toRgb("parenPair")
+    if settings["Theme"].contains("parenPairBg"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.parenPair].background.rgb =
+        toRgb("parenPairBg")
 
-    if settings["Theme"].contains("parenTextBg"):
-      colorThemeTable[colorTheme.config].parenTextBg = color("parenTextBg")
-
+    if settings["Theme"].contains("currentWord"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.currentWord].foreground.rgb =
+        toRgb("currentWord")
     if settings["Theme"].contains("currentWordBg"):
-      colorThemeTable[colorTheme.config].currentWordBg = color("currentWordBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.currentWord].background.rgb =
+        toRgb("currentWordBg")
 
     if settings["Theme"].contains("highlightFullWidthSpace"):
-      colorThemeTable[colorTheme.config].highlightFullWidthSpace = color("highlightFullWidthSpace")
+      ColorThemeTable[configTheme][EditorColorPairIndex.highlightFullWidthSpace].foreground.rgb =
+        toRgb("highlightFullWidthSpace")
+    if settings["Theme"].contains("highlightFullWidthSpaceBg"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.highlightFullWidthSpace].background.rgb =
+        toRgb("highlightFullWidthSpaceBg")
 
     if settings["Theme"].contains("highlightFullWidthSpaceBg"):
-      colorThemeTable[colorTheme.config].highlightFullWidthSpaceBg = color("highlightFullWidthSpaceBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.highlightFullWidthSpace].background.rgb =
+        toRgb("highlightFullWidthSpaceBg")
 
     if settings["Theme"].contains("highlightTrailingSpaces"):
-      colorThemeTable[colorTheme.config].highlightTrailingSpaces = color("highlightTrailingSpaces")
+      ColorThemeTable[configTheme][EditorColorPairIndex.highlightTrailingSpaces].foreground.rgb =
+        toRgb("highlightTrailingSpaces")
 
     if settings["Theme"].contains("highlightTrailingSpacesBg"):
-      colorThemeTable[colorTheme.config].highlightTrailingSpacesBg = color("highlightTrailingSpacesBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.highlightTrailingSpaces].background.rgb =
+        toRgb("highlightTrailingSpacesBg")
 
     if settings["Theme"].contains("reservedWord"):
-      colorThemeTable[colorTheme.config].reservedWord = color("reservedWord")
-
+      ColorThemeTable[configTheme][EditorColorPairIndex.reservedWord].foreground.rgb =
+        toRgb("reservedWord")
     if settings["Theme"].contains("reservedWordBg"):
-      colorThemeTable[colorTheme.config].reservedWordBg = color("reservedWordBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.reservedWord].background.rgb =
+        toRgb("reservedWordBg")
 
-    if settings["Theme"].contains("currentBackup"):
-      colorThemeTable[colorTheme.config].currentBackup = color("currentBackup")
+    if settings["Theme"].contains("backupManagerCurrentLine"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.backupManagerCurrentLine].foreground.rgb =
+        toRgb("backupManagerCurrentLine")
+    if settings["Theme"].contains("backupManagerCurrentLineBg"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.backupManagerCurrentLine].background.rgb =
+        toRgb("backupManagerCurrentLineBg")
 
-    if settings["Theme"].contains("currentBackupBg"):
-      colorThemeTable[colorTheme.config].currentBackupBg = color("currentBackupBg")
+    if settings["Theme"].contains("diffViewerAddedLine"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.diffViewerAddedLine].foreground.rgb =
+        toRgb("diffViewerAddedLine")
+    if settings["Theme"].contains("diffViewerAddedLineBg"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.diffViewerAddedLine].background.rgb =
+        toRgb("diffViewerAddedLineBg")
 
-    if settings["Theme"].contains("addedLine"):
-      colorThemeTable[colorTheme.config].addedLine = color("addedLine")
+    if settings["Theme"].contains("diffViewerDeletedLine"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.diffViewerDeletedLine].foreground.rgb =
+        toRgb("diffViewerDeletedLine")
+    if settings["Theme"].contains("diffViewerDeletedLineBg"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.diffViewerDeletedLine].background.rgb =
+        toRgb("diffViewerDeletedLineBg")
 
-    if settings["Theme"].contains("addedLineBg"):
-      colorThemeTable[colorTheme.config].addedLineBg = color("addedLineBg")
-
-    if settings["Theme"].contains("deletedLine"):
-      colorThemeTable[colorTheme.config].deletedLine = color("deletedLine")
-
-    if settings["Theme"].contains("deletedLineBg"):
-      colorThemeTable[colorTheme.config].deletedLineBg = color("deletedLineBg")
-
-    if settings["Theme"].contains("currentSetting"):
-      colorThemeTable[colorTheme.config].currentSetting = color("currentSetting")
-
-    if settings["Theme"].contains("currentSettingBg"):
-      colorThemeTable[colorTheme.config].currentSettingBg = color("currentSettingBg")
+    if settings["Theme"].contains("configModeCurrentLine"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.configModeCurrentLine].foreground.rgb =
+        toRgb("configModeCurrentLine")
+    if settings["Theme"].contains("configModeCurrentLineBg"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.configModeCurrentLine].background.rgb =
+        toRgb("configModeCurrentLineBg")
 
     if settings["Theme"].contains("currentLineBg"):
-      colorThemeTable[colorTheme.config].currentLineBg = color("currentLineBg")
+      ColorThemeTable[configTheme][EditorColorPairIndex.currentLineBg].background.rgb =
+        toRgb("currentLineBg")
 
-    result.editorColorTheme = colorTheme.config
-
-  if result.editorColorTheme == colorTheme.vscode:
-    result.editorColorTheme = loadVSCodeTheme()
+  elif result.editorColorTheme == ColorTheme.vscode:
+    let vsCodeTheme = loadVSCodeTheme()
+    if vsCodeTheme.isOk:
+      result.editorColorTheme = vsCodeTheme.get
+    else:
+      # The default theme is dark
+      result.editorColorTheme = ColorTheme.dark
 
   if settings.contains("Git"):
     if settings["Git"].contains("showChangedLine"):
@@ -1858,7 +1975,7 @@ proc validateStandardTable(table: TomlValueRef): Option[InvalidItem] =
         if val.getStr == "vscode":
           correctValue = true
         else:
-          for theme in colorTheme:
+          for theme in ColorTheme:
             if $theme == val.getStr:
               correctValue = true
         if not correctValue:
@@ -2170,26 +2287,25 @@ proc validateDebugTable(table: TomlValueRef): Option[InvalidItem] =
         return some(InvalidItem(name: $key, val: $val))
 
 proc validateThemeTable(table: TomlValueRef): Option[InvalidItem] =
-  let editorColors = colorThemeTable[colorTheme.config]
+  let editorColors = ColorThemeTable[ColorTheme.config]
   for key, val in table.getTable:
     case key:
       of "baseTheme":
         var correctKey = false
-        for theme in colorTheme:
+        for theme in ColorTheme:
           if $theme == val.getStr:
             correctKey = true
         if not correctKey: return some(InvalidItem(name: $key, val: $val))
       else:
-        # Check color names
         var correctKey = false
-        for field, fieldVal in editorColors.fieldPairs:
-          if key == field and
+        for field in EditorColorIndex:
+          if (key == "termDefautFg" or  key == "termDefautBg") and
              val.kind == TomlValueKind.String:
-            for color in Color:
-              if val.getStr == $color:
-                correctKey = true
-                break
-            if correctKey: break
+               correctKey = true
+               break
+          elif key == $field and val.kind == TomlValueKind.String:
+            correctKey = true
+            break
         if not correctKey:
           return some(InvalidItem(name: $key, val: $val))
 
@@ -2295,7 +2411,7 @@ proc loadSettingFile*(): EditorSettings =
   else:
     return parseSettingsFile(toml)
 
-# Generate a string of the configuration file of TOML.
+## Generate a string of the configuration file of TOML.
 proc genTomlConfigStr*(settings: EditorSettings): string =
   proc addLine(buf: var string, str: string) {.inline.} = buf &= "\n" & str
 
@@ -2514,108 +2630,118 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
 
   result.addLine ""
 
-  let theme = colorThemeTable[colorTheme.config]
+  proc fgColor(t: ColorTheme, index: EditorColorPairIndex): string =
+    let hexColor = t.foregroundRgb(index).toHex
+    if hexColor.isSome: return hexColor.get
+    else: "termDefautFg"
+
+  proc bgColor(t: ColorTheme, index: EditorColorPairIndex): string =
+    let hexColor = t.backgroundRgb(index).toHex
+    if hexColor.isSome: return hexColor.get
+    else: "termDefautBg"
+
+  let theme = settings.editorcolorTheme
   result.addLine fmt "[Theme]"
-  result.addLine fmt "baseTheme = \"{$settings.editorcolorTheme}\""
-  result.addLine fmt "editorBg = \"{$theme.editorBg}\""
-  result.addLine fmt "lineNum = \"{$theme.lineNum}\""
-  result.addLine fmt "lineNumBg = \"{$theme.lineNumBg}\""
-  result.addLine fmt "currentLineNum = \"{$theme.currentLineNum}\""
-  result.addLine fmt "currentLineNumBg = \"{$theme.currentLineNumBg}\""
-  result.addLine fmt "statusLineNormalMode = \"{$theme.statusLineNormalMode}\""
-  result.addLine fmt "statusLineNormalModeBg = \"{$theme.statusLineNormalModeBg}\""
-  result.addLine fmt "statusLineModeNormalMode = \"{$theme.statusLineNormalMode}\""
-  result.addLine fmt "statusLineModeNormalModeBg = \"{$theme.statusLineNormalModeBg}\""
-  result.addLine fmt "statusLineNormalModeInactive = \"{$theme.statusLineNormalModeInactive}\""
-  result.addLine fmt "statusLineNormalModeInactiveBg = \"{$theme.statusLineNormalModeInactiveBg}\""
-  result.addLine fmt "statusLineInsertMode = \"{$theme.statusLineInsertMode}\""
-  result.addLine fmt "statusLineInsertModeBg = \"{$theme.statusLineInsertModeBg}\""
-  result.addLine fmt "statusLineModeInsertMode = \"{$theme.statusLineModeInsertMode}\""
-  result.addLine fmt "statusLineModeInsertModeBg = \"{$theme.statusLineModeInsertModeBg}\""
-  result.addLine fmt "statusLineInsertModeInactive = \"{$theme.statusLineInsertModeInactive}\""
-  result.addLine fmt "statusLineInsertModeInactiveBg = \"{$theme.statusLineInsertModeInactiveBg}\""
-  result.addLine fmt "statusLineVisualMode = \"{$theme.statusLineVisualMode}\""
-  result.addLine fmt "statusLineVisualModeBg = \"{$theme.statusLineVisualModeBg}\""
-  result.addLine fmt "statusLineModeVisualMode = \"{$theme.statusLineModeVisualMode}\""
-  result.addLine fmt "statusLineModeVisualModeBg = \"{$theme.statusLineModeVisualModeBg}\""
-  result.addLine fmt "statusLineVisualModeInactive = \"{$theme.statusLineVisualModeInactive}\""
-  result.addLine fmt "statusLineVisualModeInactiveBg = \"{$theme.statusLineVisualModeInactiveBg}\""
-  result.addLine fmt "statusLineReplaceMode = \"{$theme.statusLineReplaceMode}\""
-  result.addLine fmt "statusLineReplaceModeBg = \"{$theme.statusLineReplaceModeBg}\""
-  result.addLine fmt "statusLineModeReplaceMode = \"{$theme.statusLineModeReplaceMode}\""
-  result.addLine fmt "statusLineModeReplaceModeBg = \"{$theme.statusLineModeReplaceModeBg}\""
-  result.addLine fmt "statusLineReplaceModeInactive = \"{$theme.statusLineReplaceModeInactive}\""
-  result.addLine fmt "statusLineReplaceModeInactiveBg = \"{$theme.statusLineReplaceModeInactiveBg}\""
-  result.addLine fmt "statusLineFilerMode = \"{$theme.statusLineFilerMode}\""
-  result.addLine fmt "statusLineFilerModeBg = \"{$theme.statusLineFilerModeBg}\""
-  result.addLine fmt "statusLineModeFilerMode = \"{$theme.statusLineModeFilerMode}\""
-  result.addLine fmt "statusLineModeFilerModeBg = \"{$theme.statusLineModeFilerModeBg}\""
-  result.addLine fmt "statusLineFilerModeInactive = \"{$theme.statusLineFilerModeInactive}\""
-  result.addLine fmt "statusLineFilerModeInactiveBg = \"{$theme.statusLineFilerModeInactiveBg}\""
-  result.addLine fmt "statusLineExMode = \"{$theme.statusLineExMode}\""
-  result.addLine fmt "statusLineExModeBg = \"{$theme.statusLineExModeBg}\""
-  result.addLine fmt "statusLineModeExMode = \"{$theme.statusLineModeExMode}\""
-  result.addLine fmt "statusLineModeExModeBg = \"{$theme.statusLineModeExModeBg}\""
-  result.addLine fmt "statusLineExModeInactive = \"{$theme.statusLineExModeInactive}\""
-  result.addLine fmt "statusLineExModeInactiveBg = \"{$theme.statusLineExModeInactiveBg}\""
-  result.addLine fmt "statusLineGitBranch = \"{$theme.statusLineGitBranch}\""
-  result.addLine fmt "statusLineGitBranchBg = \"{$theme.statusLineGitBranchBg}\""
-  result.addLine fmt "tab = \"{$theme.tab}\""
-  result.addLine fmt "tabBg = \"{$theme.tabBg}\""
-  result.addLine fmt "currentTab = \"{$theme.currentTab}\""
-  result.addLine fmt "currentTabBg = \"{$theme.currentTabBg}\""
-  result.addLine fmt "commandBar = \"{$theme.commandBar}\""
-  result.addLine fmt "commandBarBg = \"{$theme.currentTabBg}\""
-  result.addLine fmt "errorMessage = \"{$theme.errorMessage}\""
-  result.addLine fmt "errorMessageBg = \"{$theme.errorMessageBg}\""
-  result.addLine fmt "searchResult = \"{$theme.searchResult}\""
-  result.addLine fmt "searchResultBg = \"{$theme.searchResultBg}\""
-  result.addLine fmt "visualMode = \"{$theme.visualMode}\""
-  result.addLine fmt "visualModeBg = \"{$theme.visualModeBg}\""
-  result.addLine fmt "defaultChar = \"{$theme.defaultChar}\""
-  result.addLine fmt "gtKeyword = \"{$theme.gtKeyword}\""
-  result.addLine fmt "gtFunctionName = \"{$theme.gtFunctionName}\""
-  result.addLine fmt "gtTypeName= \"{$theme.gtTypeName}\""
-  result.addLine fmt "gtBoolean = \"{$theme.gtBoolean}\""
-  result.addLine fmt "gtStringLit = \"{$theme.gtStringLit}\""
-  result.addLine fmt "gtSpecialVar = \"{$theme.gtSpecialVar}\""
-  result.addLine fmt "gtBuiltin = \"{$theme.gtBuiltin}\""
-  result.addLine fmt "gtBinNumber = \"{$theme.gtBinNumber}\""
-  result.addLine fmt "gtDecNumber = \"{$theme.gtDecNumber}\""
-  result.addLine fmt "gtFloatNumber = \"{$theme.gtFloatNumber}\""
-  result.addLine fmt "gtHexNumber = \"{$theme.gtHexNumber}\""
-  result.addLine fmt "gtOctNumber = \"{$theme.gtOctNumber}\""
-  result.addLine fmt "gtComment = \"{$theme.gtComment}\""
-  result.addLine fmt "gtLongComment = \"{$theme.gtLongComment}\""
-  result.addLine fmt "gtWhitespace = \"{$theme.gtWhitespace}\""
-  result.addLine fmt "gtPreprocessor = \"{$theme.gtPreprocessor}\""
-  result.addLine fmt "currentFile = \"{$theme.currentFile}\""
-  result.addLine fmt "currentFileBg = \"{$theme.currentFileBg}\""
-  result.addLine fmt "file = \"{$theme.file}\""
-  result.addLine fmt "fileBg = \"{$theme.fileBg}\""
-  result.addLine fmt "dir = \"{$theme.dir}\""
-  result.addLine fmt "dirBg = \"{$theme.dirBg}\""
-  result.addLine fmt "pcLink = \"{$theme.pcLink}\""
-  result.addLine fmt "pcLinkBg = \"{$theme.pcLinkBg}\""
-  result.addLine fmt "popupWindow = \"{$theme.popupWindow}\""
-  result.addLine fmt "popupWindowBg = \"{$theme.popupWindowBg}\""
-  result.addLine fmt "popupWinCurrentLine = \"{$theme.popupWinCurrentLine}\""
-  result.addLine fmt "popupWinCurrentLineBg = \"{$theme.popupWinCurrentLineBg}\""
-  result.addLine fmt "replaceText = \"{$theme.replaceText}\""
-  result.addLine fmt "replaceTextBg = \"{$theme.replaceTextBg}\""
-  result.addLine fmt "parenText = \"{$theme.parenText}\""
-  result.addLine fmt "parenTextBg = \"{$theme.parenTextBg}\""
-  result.addLine fmt "currentWord = \"{$theme.currentWord}\""
-  result.addLine fmt "currentWordBg = \"{$theme.currentFileBg}\""
-  result.addLine fmt "highlightFullWidthSpace = \"{$theme.highlightFullWidthSpace}\""
-  result.addLine fmt "highlightFullWidthSpaceBg = \"{$theme.highlightFullWidthSpaceBg}\""
-  result.addLine fmt "highlightTrailingSpaces = \"{$theme.highlightTrailingSpaces}\""
-  result.addLine fmt "highlightTrailingSpacesBg = \"{$theme.highlightTrailingSpacesBg}\""
-  result.addLine fmt "reservedWord = \"{$theme.reservedWord}\""
-  result.addLine fmt "reservedWordBg = \"{$theme.reservedWordBg}\""
-  result.addLine fmt "currentSetting = \"{$theme.currentSetting}\""
-  result.addLine fmt "currentSettingBg = \"{$theme.currentSettingBg}\""
-  result.addLine fmt "currentLineBg = \"{$theme.currentLineBg}\""
+  result.addLine fmt "baseTheme = \"{$theme}\""
+  result.addLine fmt "foreground = \"{theme.fgColor(EditorColorPairIndex.default)}\""
+  result.addLine fmt "background = \"{theme.bgColor(EditorColorPairIndex.default)}\""
+  result.addLine fmt "lineNum = \"{theme.fgColor(EditorColorPairIndex.lineNum)}\""
+  result.addLine fmt "lineNumBg = \"{theme.bgColor(EditorColorPairIndex.lineNum)}\""
+  result.addLine fmt "currentLineNum = \"{theme.fgColor(EditorColorPairIndex.currentLineNum)}\""
+  result.addLine fmt "currentLineNumBg = \"{theme.bgColor(EditorColorPairIndex.currentLineNum)}\""
+  result.addLine fmt "statusLineNormalMode = \"{theme.fgColor(EditorColorPairIndex.statusLineNormalMode)}\""
+  result.addLine fmt "statusLineNormalModeBg = \"{theme.bgColor(EditorColorPairIndex.statusLineNormalMode)}\""
+  result.addLine fmt "statusLineModeNormalMode = \"{theme.fgColor(EditorColorPairIndex.statusLineNormalMode)}\""
+  result.addLine fmt "statusLineModeNormalModeBg = \"{theme.bgColor(EditorColorPairIndex.statusLineNormalMode)}\""
+  result.addLine fmt "statusLineNormalModeInactive = \"{theme.fgColor(EditorColorPairIndex.statusLineNormalModeInactive)}\""
+  result.addLine fmt "statusLineNormalModeInactiveBg = \"{theme.bgColor(EditorColorPairIndex.statusLineNormalModeInactive)}\""
+  result.addLine fmt "statusLineInsertMode = \"{theme.fgColor(EditorColorPairIndex.statusLineInsertMode)}\""
+  result.addLine fmt "statusLineInsertModeBg = \"{theme.bgColor(EditorColorPairIndex.statusLineInsertMode)}\""
+  result.addLine fmt "statusLineModeInsertMode = \"{theme.fgColor(EditorColorPairIndex.statusLineModeInsertMode)}\""
+  result.addLine fmt "statusLineModeInsertModeBg = \"{theme.bgColor(EditorColorPairIndex.statusLineModeInsertMode)}\""
+  result.addLine fmt "statusLineInsertModeInactive = \"{theme.fgColor(EditorColorPairIndex.statusLineInsertModeInactive)}\""
+  result.addLine fmt "statusLineInsertModeInactiveBg = \"{theme.bgColor(EditorColorPairIndex.statusLineInsertModeInactive)}\""
+  result.addLine fmt "statusLineVisualMode = \"{theme.fgColor(EditorColorPairIndex.statusLineVisualMode)}\""
+  result.addLine fmt "statusLineVisualModeBg = \"{theme.bgColor(EditorColorPairIndex.statusLineVisualMode)}\""
+  result.addLine fmt "statusLineModeVisualMode = \"{theme.bgColor(EditorColorPairIndex.statusLineModeVisualMode)}\""
+  result.addLine fmt "statusLineModeVisualModeBg = \"{theme.bgColor(EditorColorPairIndex.statusLineModeVisualMode)}\""
+  result.addLine fmt "statusLineVisualModeInactive = \"{theme.fgColor(EditorColorPairIndex.statusLineVisualModeInactive)}\""
+  result.addLine fmt "statusLineVisualModeInactiveBg = \"{theme.bgColor(EditorColorPairIndex.statusLineVisualModeInactive)}\""
+  result.addLine fmt "statusLineReplaceMode = \"{theme.fgColor(EditorColorPairIndex.statusLineReplaceMode)}\""
+  result.addLine fmt "statusLineReplaceModeBg = \"{theme.bgColor(EditorColorPairIndex.statusLineReplaceMode)}\""
+  result.addLine fmt "statusLineModeReplaceMode = \"{theme.fgColor(EditorColorPairIndex.statusLineModeReplaceMode)}\""
+  result.addLine fmt "statusLineModeReplaceModeBg = \"{theme.bgColor(EditorColorPairIndex.statusLineModeReplaceMode)}\""
+  result.addLine fmt "statusLineReplaceModeInactive = \"{theme.fgColor(EditorColorPairIndex.statusLineReplaceModeInactive)}\""
+  result.addLine fmt "statusLineReplaceModeInactiveBg = \"{theme.bgColor(EditorColorPairIndex.statusLineReplaceModeInactive)}\""
+  result.addLine fmt "statusLineFilerMode = \"{theme.fgColor(EditorColorPairIndex.statusLineFilerMode)}\""
+  result.addLine fmt "statusLineFilerModeBg = \"{theme.bgColor(EditorColorPairIndex.statusLineFilerMode)}\""
+  result.addLine fmt "statusLineModeFilerMode = \"{theme.fgColor(EditorColorPairIndex.statusLineModeFilerMode)}\""
+  result.addLine fmt "statusLineModeFilerModeBg = \"{theme.bgColor(EditorColorPairIndex.statusLineModeFilerMode)}\""
+  result.addLine fmt "statusLineFilerModeInactive = \"{theme.fgColor(EditorColorPairIndex.statusLineFilerModeInactive)}\""
+  result.addLine fmt "statusLineFilerModeInactiveBg = \"{theme.bgColor(EditorColorPairIndex.statusLineFilerModeInactive)}\""
+  result.addLine fmt "statusLineExMode = \"{theme.fgColor(EditorColorPairIndex.statusLineExMode)}\""
+  result.addLine fmt "statusLineExModeBg = \"{theme.bgColor(EditorColorPairIndex.statusLineExMode)}\""
+  result.addLine fmt "statusLineModeExMode = \"{theme.fgColor(EditorColorPairIndex.statusLineModeExMode)}\""
+  result.addLine fmt "statusLineModeExModeBg = \"{theme.bgColor(EditorColorPairIndex.statusLineModeExMode)}\""
+  result.addLine fmt "statusLineExModeInactive = \"{theme.fgColor(EditorColorPairIndex.statusLineExModeInactive)}\""
+  result.addLine fmt "statusLineExModeInactiveBg = \"{theme.bgColor(EditorColorPairIndex.statusLineExModeInactive)}\""
+  result.addLine fmt "statusLineGitBranch = \"{theme.fgColor(EditorColorPairIndex.statusLineGitBranch)}\""
+  result.addLine fmt "statusLineGitBranchBg = \"{theme.bgColor(EditorColorPairIndex.statusLineGitBranch)}\""
+  result.addLine fmt "tab = \"{theme.fgColor(EditorColorPairIndex.tab)}\""
+  result.addLine fmt "tabBg = \"{theme.bgColor(EditorColorPairIndex.tab)}\""
+  result.addLine fmt "currentTab = \"{theme.fgColor(EditorColorPairIndex.currentTab)}\""
+  result.addLine fmt "currentTabBg = \"{theme.bgColor(EditorColorPairIndex.currentTab)}\""
+  result.addLine fmt "commandLine = \"{theme.fgColor(EditorColorPairIndex.commandLine)}\""
+  result.addLine fmt "commandLineBg = \"{theme.bgColor(EditorColorPairIndex.commandLine)}\""
+  result.addLine fmt "errorMessage = \"{theme.fgColor(EditorColorPairIndex.errorMessage)}\""
+  result.addLine fmt "errorMessageBg = \"{theme.bgColor(EditorColorPairIndex.errorMessage)}\""
+  result.addLine fmt "searchResult = \"{theme.fgColor(EditorColorPairIndex.searchResult)}\""
+  result.addLine fmt "searchResultBg = \"{theme.bgColor(EditorColorPairIndex.searchResult)}\""
+  result.addLine fmt "visualMode = \"{theme.fgColor(EditorColorPairIndex.visualMode)}\""
+  result.addLine fmt "visualModeBg = \"{theme.bgColor(EditorColorPairIndex.visualMode)}\""
+  result.addLine fmt "keyword = \"{theme.fgColor(EditorColorPairIndex.keyword)}\""
+  result.addLine fmt "functionName = \"{theme.fgColor(EditorColorPairIndex.functionName)}\""
+  result.addLine fmt "typeName= \"{theme.fgColor(EditorColorPairIndex.typeName)}\""
+  result.addLine fmt "boolean = \"{theme.fgColor(EditorColorPairIndex.boolean)}\""
+  result.addLine fmt "stringLit = \"{theme.fgColor(EditorColorPairIndex.stringLit)}\""
+  result.addLine fmt "specialVar = \"{theme.fgColor(EditorColorPairIndex.specialVar)}\""
+  result.addLine fmt "builtin = \"{theme.fgColor(EditorColorPairIndex.builtin)}\""
+  result.addLine fmt "binNumber = \"{theme.fgColor(EditorColorPairIndex.binNumber)}\""
+  result.addLine fmt "decNumber = \"{theme.fgColor(EditorColorPairIndex.decNumber)}\""
+  result.addLine fmt "floatNumber = \"{theme.fgColor(EditorColorPairIndex.floatNumber)}\""
+  result.addLine fmt "hexNumber = \"{theme.fgColor(EditorColorPairIndex.hexNumber)}\""
+  result.addLine fmt "octNumber = \"{theme.fgColor(EditorColorPairIndex.octNumber)}\""
+  result.addLine fmt "comment = \"{theme.fgColor(EditorColorPairIndex.comment)}\""
+  result.addLine fmt "longComment = \"{theme.fgColor(EditorColorPairIndex.longComment)}\""
+  result.addLine fmt "whitespace = \"{theme.fgColor(EditorColorPairIndex.whitespace)}\""
+  result.addLine fmt "preprocessor = \"{theme.fgColor(EditorColorPairIndex.preprocessor)}\""
+  result.addLine fmt "currentFile = \"{theme.fgColor(EditorColorPairIndex.currentFile)}\""
+  result.addLine fmt "currentFileBg = \"{theme.fgColor(EditorColorPairIndex.currentFile)}\""
+  result.addLine fmt "file = \"{theme.fgColor(EditorColorPairIndex.file)}\""
+  result.addLine fmt "fileBg = \"{theme.bgColor(EditorColorPairIndex.file)}\""
+  result.addLine fmt "dir = \"{theme.fgColor(EditorColorPairIndex.dir)}\""
+  result.addLine fmt "dirBg = \"{theme.bgColor(EditorColorPairIndex.dir)}\""
+  result.addLine fmt "pcLink = \"{theme.fgColor(EditorColorPairIndex.pcLink)}\""
+  result.addLine fmt "pcLinkBg = \"{theme.bgColor(EditorColorPairIndex.pcLink)}\""
+  result.addLine fmt "popupWindow = \"{theme.fgColor(EditorColorPairIndex.popupWindow)}\""
+  result.addLine fmt "popupWindowBg = \"{theme.bgColor(EditorColorPairIndex.popupWindow)}\""
+  result.addLine fmt "popupWinCurrentLine = \"{theme.fgColor(EditorColorPairIndex.popupWinCurrentLine)}\""
+  result.addLine fmt "popupWinCurrentLineBg = \"{theme.bgColor(EditorColorPairIndex.popupWinCurrentLine)}\""
+  result.addLine fmt "replaceText = \"{theme.fgColor(EditorColorPairIndex.replaceText)}\""
+  result.addLine fmt "replaceTextBg = \"{theme.bgColor(EditorColorPairIndex.replaceText)}\""
+  result.addLine fmt "parenPair = \"{theme.fgColor(EditorColorPairIndex.parenPair)}\""
+  result.addLine fmt "parenPairBg = \"{theme.bgColor(EditorColorPairIndex.parenPair)}\""
+  result.addLine fmt "currentWord = \"{theme.fgColor(EditorColorPairIndex.currentWord)}\""
+  result.addLine fmt "currentWordBg = \"{theme.bgColor(EditorColorPairIndex.currentFile)}\""
+  result.addLine fmt "highlightFullWidthSpace = \"{theme.fgColor(EditorColorPairIndex.highlightFullWidthSpace)}\""
+  result.addLine fmt "highlightFullWidthSpaceBg = \"{theme.bgColor(EditorColorPairIndex.highlightFullWidthSpace)}\""
+  result.addLine fmt "highlightTrailingSpaces = \"{theme.fgColor(EditorColorPairIndex.highlightTrailingSpaces)}\""
+  result.addLine fmt "highlightTrailingSpacesBg = \"{theme.bgColor(EditorColorPairIndex.highlightTrailingSpaces)}\""
+  result.addLine fmt "reservedWord = \"{theme.fgColor(EditorColorPairIndex.reservedWord)}\""
+  result.addLine fmt "reservedWordBg = \"{theme.bgColor(EditorColorPairIndex.reservedWord)}\""
+  result.addLine fmt "configModeCurrentLine = \"{theme.fgColor(EditorColorPairIndex.configModeCurrentLine)}\""
+  result.addLine fmt "configModeCurrentLineBg = \"{theme.bgColor(EditorColorPairIndex.configModeCurrentLine)}\""
+  result.addLine fmt "currentLineBg = \"{theme.bgColor(EditorColorPairIndex.currentLineBg)}\""
 
 # Generate a string of the default TOML configuration.
 proc genDefaultTomlConfigStr*(): string {.inline.} =

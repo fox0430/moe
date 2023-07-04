@@ -24,7 +24,7 @@ type
   TabLine = object
     position: Position
     buffer: string
-    color: EditorColorPair
+    color: EditorColorPairIndex
 
 ## Return buffer for a tab line to display.
 proc tabLineBuffer*(title: string, tabWidth: int): string =
@@ -73,8 +73,8 @@ proc initTabLines(
           title = bufStatus.displayedPath
           tabWidth = int(ceil(getTerminalWidth() / numOfBuffer))
           color =
-            if currentBufferIndex == index: EditorColorPair.currentTab
-            else: EditorColorPair.tab
+            if currentBufferIndex == index: EditorColorPairIndex.currentTab
+            else: EditorColorPairIndex.tab
 
         result.add TabLine(
           position: Position(y: 0, x: index * tabWidth),
@@ -93,7 +93,7 @@ proc initTabLines(
           TabLine(
             position: Position(y: 0, x: 0),
             buffer: tabLineBuffer(title, tabWidth),
-            color: EditorColorPair.currentTab)]
+            color: EditorColorPairIndex.currentTab)]
 
 ## Write buffer to the terminal (UI).
 ## Need to refresh after writing.
@@ -102,7 +102,7 @@ proc write(win: var Window, tabLine: TabLine) {.inline.} =
     tabLine.position.y,
     tabLine.position.x,
     tabLine.buffer,
-    tabline.color)
+    tabline.color.int16)
 
 ## Write all tab lines.
 proc writeTabLineBuffers*(

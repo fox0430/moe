@@ -19,6 +19,7 @@
 
 import std/[strutils, os, strformat, tables, times, heapqueue, deques, options,
             encodings]
+import pkg/results
 import syntax/highlite
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        windownode, color, settings, statusline, bufferstatus, cursor, tabline,
@@ -57,6 +58,7 @@ type EditorStatus* = object
   wordDictionary*: WordDictionary
   suggestionWindow*: Option[SuggestionWindow]
   sidebar*: Option[GlobalSidebar]
+  colorMode*: ColorMode
 
 const
   tabLineWindowHeight = 1
@@ -79,8 +81,10 @@ proc initEditorStatus*(): EditorStatus =
       w = 1
       t = 0
       l = 0
-      color = EditorColorPair.defaultChar
-    result.tabWindow = initWindow(h, w, t, l, color)
+      color = EditorColorPairIndex.default
+    result.tabWindow = initWindow(h, w, t, l, color.int16)
+
+  result.colorMode = checkColorSupportedTerminal()
 
 template currentBufStatus*: var BufferStatus =
   mixin status
@@ -670,7 +674,7 @@ proc update*(status: var EditorStatus) =
 
   # Set editor Color Pair for current line highlight.
   # New color pairs are set to Number larger than the maximum value of EditorColorPiar.
-  var currentLineColorPair: int16 = ord(EditorColorPair.high) + 1
+  var currentLineColorPair: int = ord(EditorColorPairIndex.high) + 1
 
   var queue = initHeapQueue[WindowNode]()
   for node in mainWindowNode.child:
@@ -725,7 +729,8 @@ proc update*(status: var EditorStatus) =
             node,
             status.isSearchHighlight,
             status.searchHistory,
-            settings)
+            settings,
+            status.colorMode)
 
         # TODO: Fix condition. Will use a flag.
         if not bufStatus.isFilerMode:
@@ -761,6 +766,7 @@ proc update*(status: var EditorStatus) =
             buffer,
             highlight,
             settings.editorColorTheme,
+            status.colorMode,
             node.currentLine,
             selectedRange,
             currentLineColorPair)
@@ -1043,13 +1049,20 @@ proc halfPageDown*(status: var EditorStatus) =
   status.scrollDownNumberOfLines(Natural(currentMainWindowNode.view.height / 2))
 
 proc changeTheme*(status: var EditorStatus) =
-  if status.settings.editorColorTheme == colorTheme.vscode:
-    status.settings.editorColorTheme = loadVSCodeTheme()
+  if status.settings.editorColorTheme == ColorTheme.vscode:
+    let vsCodeTheme = loadVSCodeTheme()
+    if vsCodeTheme.isOk:
+      status.settings.editorColorTheme = vsCodeTheme.get
+    else:
+      status.commandLine.writeError(
+        fmt"Error: Failed to switch to VSCode theme: {vsCodeTheme.error}")
 
-  setCursesColor(colorThemeTable[status.settings.editorColorTheme])
-
-  if checkColorSupportedTerminal() == 8:
-    convertToConsoleEnvironmentColor(status.settings.editorColorTheme)
+  let r = status.settings.editorColorTheme.initEditrorColor(status.colorMode)
+  if r.isErr:
+    exitUi()
+    echo r.error
+    # TODO: Fix raise
+    raise
 
 proc autoSave(status: var EditorStatus) =
   let interval = status.settings.autoSaveInterval.minutes

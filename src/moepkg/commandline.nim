@@ -35,8 +35,8 @@ type
     ## the buffer position
     bufferPosition: Position
 
-    # TODO: Change type from EditorColorPair to Highlight.
-    color: EditorColorPair
+    # TODO: Change type from EditorColorPairIndex to Highlight.
+    color: EditorColorPairIndex
 
     window*: Window
 
@@ -46,17 +46,17 @@ const
   searchBackwardModePrompt* = "?"
 
 proc initCommandLine*(): CommandLine =
-  result.color = EditorColorPair.defaultChar
+  result.color = EditorColorPairIndex.default
 
   # Init the command line window
   const
     t = 0
     l = 0
-    color = EditorColorPair.defaultChar
+    color = EditorColorPairIndex.default
   let
     w = getTerminalWidth()
     h = getTerminalHeight() - 1
-  result.window = initWindow(h, w, t, l, color)
+  result.window = initWindow(h, w, t, l, color.int16)
   result.window.setTimeout()
 
 proc resize*(commandLine: var CommandLine, y, x, h, w: int) {.inline.} =
@@ -85,7 +85,7 @@ proc update*(commandLine: var CommandLine) =
       commandLine.buffer[range.first .. range.last]
 
   commandLine.window.erase
-  commandLine.window.write(0, 0, buffer, commandLine.color)
+  commandLine.window.write(0, 0, buffer, commandLine.color.int16)
   commandLine.window.refresh
 
   let cursorPos = commandLine.seekCursor
@@ -96,7 +96,7 @@ proc clear*(commandLine: var CommandLine) =
   commandLine.prompt = "".toRunes
   commandLine.bufferPosition.x = 0
   commandLine.bufferPosition.y = 0
-  commandLine.color = EditorColorPair.defaultChar
+  commandLine.color = EditorColorPairIndex.default
 
 proc clearPrompt*(commandLine: var CommandLine) {.inline.} =
   commandLine.prompt = "".toRunes
@@ -176,11 +176,11 @@ proc setPrompt*(commandLine: var CommandLine, r: Runes) {.inline.} =
   commandLine.prompt = r
 
 ## Set a color for command line prompt and buffer.
-proc setColor*(commandLine: var CommandLine, c: EditorColorPair) {.inline.} =
+proc setColor*(commandLine: var CommandLine, c: EditorColorPairIndex) {.inline.} =
   commandLine.color = c
 
 ## Return commandLine.color
-proc color*(commandLine: CommandLine): EditorColorPair {.inline.} =
+proc color*(commandLine: CommandLine): EditorColorPairIndex {.inline.} =
   commandLine.color
 
 proc bufferPosition*(commandLine: CommandLine): Position {.inline.} =

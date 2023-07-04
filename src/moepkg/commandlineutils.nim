@@ -434,7 +434,12 @@ proc tryOpenSuggestWindow*(): Option[Window] =
     y = getTerminalHeight() - 1
 
   # Use EditorStatus.popUpWindow?
-  var popUpWindow = initWindow(h, w, y, x, EditorColorPair.popUpWindow)
+  var popUpWindow = initWindow(
+    h,
+    w,
+    y,
+    x,
+    EditorColorPairIndex.popUpWindow.int16)
 
   return some(popUpWindow)
 

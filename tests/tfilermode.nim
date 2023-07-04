@@ -68,7 +68,7 @@ suite "Filer mode":
     const currentLine = 0
     let highlight = filerStatus.initFilerHighlight(bufStatus.buffer, currentLine)
 
-    check highlight[0].color == EditorColorPair.currentFile
+    check highlight[0].color == EditorColorPairIndex.currentFile
 
   test "Open current directory":
     const path = "./".toRunes

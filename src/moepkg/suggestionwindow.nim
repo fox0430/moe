@@ -348,7 +348,7 @@ proc writeSuggestionWindow*(
         width,
         if y < mainWindowNodeY: mainWindowNodeY else: y,
         x,
-        EditorColorPair.popUpWindow)
+        EditorColorPairIndex.popUpWindow.int16)
         .some
     else:
       suggestionWindow.popUpWindow.get.height = height

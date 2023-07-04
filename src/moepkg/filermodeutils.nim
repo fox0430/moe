@@ -268,14 +268,14 @@ proc openFileOrDir*(
 
 proc setDirListColor(
   kind: PathComponent,
-  isCurrentLine: bool): EditorColorPair =
+  isCurrentLine: bool): EditorColorPairIndex =
 
-    if isCurrentLine: result = EditorColorPair.currentFile
+    if isCurrentLine: result = EditorColorPairIndex.currentFile
     else:
       case kind
-      of pcFile: result = EditorColorPair.file
-      of pcDir: result = EditorColorPair.dir
-      of pcLinkToDir, pcLinkToFile: result = EditorColorPair.pcLink
+      of pcFile: result = EditorColorPairIndex.file
+      of pcDir: result = EditorColorPairIndex.dir
+      of pcLinkToDir, pcLinkToFile: result = EditorColorPairIndex.pcLink
 
 proc initFilerHighlight*[T](
   filerStatus: FilerStatus,
@@ -431,7 +431,7 @@ proc initFileDeitalHighlight[T](buffer: T): Highlight =
       firstColumn: 0,
       lastRow: i,
       lastColumn: buffer[i].len,
-      color: EditorColorPair.defaultChar))
+      color: EditorColorPairIndex.default))
 
 # TODO: Separate updating buffer and updating view.
 proc writeFileDetail*(
@@ -503,7 +503,13 @@ proc searchFileMode*(
     if filerStatus.pathList.len == 0:
       # TODO: Fix
       windowNode.eraseWindow
-      windowNode.window.get.write(0, 0, "Not found", EditorColorPair.commandBar)
+
+      windowNode.window.get.write(
+        0,
+        0,
+        "Not found",
+        EditorColorPairIndex.commandLine.int16)
+
       windowNode.refreshWindow
       filerStatus.isUpdatePathList = true
 

@@ -67,6 +67,8 @@ This project's goals are easily customizable, high productivity, user friendly, 
 
 - Suggestions in ex mode
 
+- TrueColor (24bit color)
+
 - VSCode themes
 
 - Build on save

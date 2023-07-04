@@ -18,8 +18,9 @@
 #[############################################################################]#
 
 import std/[os, times]
+import pkg/results
 import moepkg/[ui, bufferstatus, editorstatus, cmdlineoption, mainloop, git,
-               editorview]
+               editorview, color]
 
 # Load persisted data (Ex command history, search history and cursor postion)
 proc loadPersistData(status: var EditorStatus) =
@@ -66,7 +67,15 @@ proc initEditor(): EditorStatus =
   result = initEditorStatus()
   result.loadConfigurationFile
   result.timeConfFileLastReloaded = now()
-  result.changeTheme
+
+  block initColors:
+    # TODO: Show error messages when failing to the load VSCode theme.
+    let r = result.settings.editorColorTheme.initEditrorColor(result.colorMode)
+    if r.isErr:
+      exitUi()
+      echo r.error
+      # TODO: Fix raise
+      raise
 
   setControlCHook(proc() {.noconv.} =
     exitUi()

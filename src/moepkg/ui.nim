@@ -18,8 +18,8 @@
 #[############################################################################]#
 
 import std/[strformat, osproc, strutils, terminal]
-import pkg/ncurses
-import unicodeext, color, independentutils
+import pkg/[ncurses, results]
+import unicodeext, independentutils
 
 when not defined unitTest:
   import std/[posix, os]
@@ -55,6 +55,20 @@ type
     Valid
     Invalid
     Cancel
+
+  ColorMode* {.pure.} = enum
+    # No color support
+    None = 1
+    # 8 colors
+    c8 = 8
+    # 16 colors
+    c16 = 16
+    # 256 colors
+    c256 = 256
+    # 24 bit colors (Truecolor)
+    c24bit = 16777216
+
+const DefaultColorPair: int16 = 0
 
 var
   # if press ctrl-c key, set true in setControlCHook()
@@ -138,14 +152,37 @@ proc keyEcho*(keyecho: bool) =
 proc setTimeout*(win: var Window, time: int = 100) {.inline.} =
   win.cursesWindow.wtimeout(cint(time))
 
-# Check how many colors are supported on the terminal
-proc checkColorSupportedTerminal*(): int =
-  let (output, exitCode) = execCmdEx("tput colors")
+## Check how many colors are supported on the terminal and return ColorMode.
+## Check "$COLORTERM" first, then check "tput colors" if it fails.
+## Return ColorMode.None if unknown color support.
+proc checkColorSupportedTerminal*(): ColorMode =
+  result = ColorMode.None
 
-  if exitCode == 0:
-    result = (output[0 ..< output.high]).parseInt
-  else:
-    result = -1
+  block checkColorTerm:
+    let cmdResult = execCmdEx("echo $COLORTERM")
+    if cmdResult.exitCode == 0:
+      var output = cmdResult.output
+      output.stripLineEnd
+      if output == "truecolor":
+        return ColorMode.c24bit
+
+  block checkTput:
+    let cmdResult = execCmdEx("tput colors")
+    if cmdResult.exitCode == 0:
+      var output = cmdResult.output
+      output.stripLineEnd
+
+      var num: int
+      try:
+        num = output.parseInt
+      except ValueError:
+        return ColorMode.None
+
+      case num:
+        of 8: return ColorMode.c8
+        of 16: return ColorMode.c16
+        of 256: return ColorMode.c256
+        else: return ColorMode.None
 
 proc startUi*() =
   # Not start when running unit tests
@@ -161,8 +198,11 @@ proc startUi*() =
     setCursor(true)
 
     if can_change_color():
-      ## default is dark
-      setCursesColor(colorThemeTable[colorTheme.dark])
+      # Enable Ncurses color
+      startColor()
+
+      # Set terminal default color
+      useDefaultColors()
 
     erase()
     keyEcho(false)
@@ -170,20 +210,65 @@ proc startUi*() =
 
 proc exitUi*() {.inline.} = endwin()
 
-proc initWindow*(height, width, y, x: int, color: EditorColorPair): Window =
+proc toNcursesColor(element: int16): int16 =
+  ## Converts a color element (0 ~ 255) to a value for Ncurses (0 ~ 1000).
+  ## The accuracy is not perfect.
+
+  when not defined(release):
+    # TODO: Return an error?
+    doAssert(element >= 0 and element <= 255, fmt"Invalid value: `{element}`")
+
+  return int16(element.float * (1000.0 / 255.0) + 0.5)
+
+proc initNcursesColor*(color, red, green, blue: int16): Result[(), string] =
+  let
+    r = red.toNcursesColor
+    g = green.toNcursesColor
+    b = blue.toNcursesColor
+
+  when not defined(release):
+    # TODO: Return an error?
+    doAssert(r >= 0, fmt"Invalid value: (r: `{r}`)")
+    doAssert(g >= 0, fmt"Invalid value: (g: `{g}`)")
+    doAssert(b >= 0, fmt"Invalid value: (b: `{b}`)")
+
+  when not defined unitTest:
+    # Not start when running unit tests
+    let exitCode = initColor(color.cshort, r.cshort, g.cshort, b.cshort)
+    if 0 != exitCode:
+      return Result[(), string].err "Init Ncurses color failed: (r: {r}, g: {g}, b: {b}): Exit code: {exitCode}"
+
+  return Result[(), string].ok ()
+
+proc initNcursesColorPair*(pair, fg, bg: int): Result[(), string] =
+  when not defined(release):
+    # TODO: Return an error?
+    # 0 is reserved by Ncurses.
+    doAssert(pair > 0, fmt"Cannot use `{pair}` in Ncurses color pair")
+
+  when not defined unitTest:
+    # Not start when running unit tests
+    let exitCode = initExtendedPair(pair.cint, fg.cint, bg.cint)
+    if 0 != exitCode:
+      let msg = fmt"Init Ncurses color pair failed: (pair: {pair}, fg: {fg}, bg: {bg}): Exit code: {exitCode}"
+      return Result[(), string].err msg
+
+  return Result[(), string].ok ()
+
+proc initWindow*(height, width, y, x: int, color: int16): Window =
   result = Window()
   result.y = y
   result.x = x
   result.height = height
   result.width = width
   result.cursesWindow = newwin(cint(height), cint(width), cint(y), cint(x))
-  keypad(result.cursesWindow, true)
-  discard wbkgd(result.cursesWindow, ncurses.COLOR_PAIR(color))
+  result.cursesWindow.keypad(true)
+  result.cursesWindow.wbkgd(ncurses.COLOR_PAIR(color))
 
-proc initWindow*(rect: Rect, color: EditorColorPair): Window {.inline.} =
+proc initWindow*(rect: Rect, color: int16): Window {.inline.} =
   initWindow(rect.h, rect.w, rect.y, rect.x, color)
 
-proc attrSet*(win: var Window, color: EditorColorPair | int16) {.inline.} =
+proc attrSet*(win: var Window, color: int16) {.inline.} =
   win.cursesWindow.wattrSet(A_COLOR, color.cshort, nil)
 
 proc attrOn*(win: var Window, attribute: Attribute) {.inline.} =
@@ -192,21 +277,21 @@ proc attrOn*(win: var Window, attribute: Attribute) {.inline.} =
 proc attrOff*(win: var Window, attribute: Attribute) {.inline.} =
   win.cursesWindow.wattroff(cint(attribute))
 
-proc attrOff*(win: var Window, colorPair: EditorColorPair | int16) {.inline.} =
+proc attrOff*(win: var Window, colorPair:  int16 | int16) {.inline.} =
   win.cursesWindow.wattroff(colorPair.cshort)
 
 proc write*(
   win: var Window,
   y, x: int,
   str: string,
-  color: int16 = EditorColorPair.defaultChar.int16,
+  color: int16 = DefaultColorPair,
   storeX: bool = true) =
 
     when not defined unitTest:
       # Not write when running unit tests
-      win.attrSet(color.cshort)
+      win.attrSet(color)
       win.cursesWindow.mvwaddstr(y.cint, x.cint, str)
-      win.attrOff(color.cshort)
+      win.attrOff(color)
 
       if storeX:
         # WARNING: If `storeX` is true, this procedure will change the window position.
@@ -217,34 +302,16 @@ proc write*(
 proc write*(
   win: var Window,
   y, x: int,
-  str: string,
-  color: EditorColorPair = EditorColorPair.defaultChar,
-  storeX: bool = true) {.inline.} =
-
-    win.write(y, x, str, color.int16, storeX)
-
-proc write*(
-  win: var Window,
-  y, x: int,
   runes: Runes,
-  color: int16 = EditorColorPair.defaultChar.int16,
+  color:  int16 = DefaultColorPair,
   storeX: bool = true) {.inline.} =
-
-    win.write(y, x, $runes, color, storeX)
-
-proc write*(
-  win: var Window,
-  y, x: int,
-  runes: Runes,
-  color: EditorColorPair = EditorColorPair.defaultChar,
-  storeX: bool = true) =
 
     win.write(y, x, $runes, color, storeX)
 
 proc append*(
   win: var Window,
   str: string,
-  color: EditorColorPair = EditorColorPair.defaultChar) =
+  color: int16 = DefaultColorPair) =
 
     when not defined unitTest:
       # Not write when running unit tests
@@ -257,7 +324,7 @@ proc append*(
 proc append*(
   win: var Window,
   runes: Runes,
-  color: EditorColorPair = EditorColorPair.defaultChar) {.inline.} =
+  color: int16 = DefaultColorPair) {.inline.} =
 
     win.append($runes, color)
 

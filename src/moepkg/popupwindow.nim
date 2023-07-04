@@ -48,11 +48,11 @@ proc writePopUpWindow*(
 
     for i in 0 ..< h:
       if currentLine.isSome and i + startLine == currentLine.get:
-        let color = EditorColorPair.popUpWinCurrentLine
-        popUpWindow.write(i, 1, buffer[i + startLine], color, false)
+        let color = EditorColorPairIndex.popUpWinCurrentLine
+        popUpWindow.write(i, 1, buffer[i + startLine], color.int16, false)
       else:
-        let color = EditorColorPair.popUpWindow
-        popUpWindow.write(i, 1, buffer[i + startLine], color, false)
+        let color = EditorColorPairIndex.popUpWindow
+        popUpWindow.write(i, 1, buffer[i + startLine], color.int16, false)
 
     popUpWindow.refresh
 

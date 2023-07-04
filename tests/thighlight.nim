@@ -22,7 +22,7 @@ import moepkg/[highlight, color]
 import moepkg/syntax/highlite
 
 const reservedWords = @[
-  ReservedWord(word: "WIP", color: EditorColorPair.reservedWord)
+  ReservedWord(word: "WIP", color: EditorColorPairIndex.reservedWord)
 ]
 
 test "initHighlight: start with newline":
@@ -74,7 +74,7 @@ test "over write":
                                 firstColumn: 0,
                                 lastRow: 0,
                                 lastColumn: 0,
-                                color: EditorColorPair.highlightFullWidthSpace)
+                                color: EditorColorPairIndex.highlightFullWidthSpace)
 
   highlight.overwrite(colorSegment)
 
@@ -83,7 +83,7 @@ test "over write":
   check(highlight[0].firstColumn == 0)
   check(highlight[0].lastRow == 0)
   check(highlight[0].lastColumn == 0)
-  check(highlight[0].color == EditorColorPair.highlightFullWidthSpace)
+  check(highlight[0].color == EditorColorPairIndex.highlightFullWidthSpace)
 
 # Fix #733
 test """Highlight "echo \"""":
@@ -107,7 +107,7 @@ test "Nim pragma":
     reservedWords,
     SourceLanguage.langNim)
 
-  check highlight[2] == ColorSegment(firstRow: 0, firstColumn: 2, lastRow: 0, lastColumn: 7, color: pragma)
+  check highlight[2] == ColorSegment(firstRow: 0, firstColumn: 2, lastRow: 0, lastColumn: 7, color: EditorColorPairIndex.pragma)
 
 test "Fix #1524":
   # https://github.com/fox0430/moe/issues/1524
@@ -120,10 +120,10 @@ test "Fix #1524":
 
   check highlight == Highlight(
     colorSegments: @[
-      ColorSegment(firstRow: 0, firstColumn: 0, lastRow: 0, lastColumn: 3, color: defaultChar),
-      ColorSegment(firstRow: 0, firstColumn: 4, lastRow: 0, lastColumn: 4, color: defaultChar),
-      ColorSegment(firstRow: 0, firstColumn: 5, lastRow: 0, lastColumn: 5, color: defaultChar),
-      ColorSegment(firstRow: 0, firstColumn: 6, lastRow: 0, lastColumn: 8, color: defaultChar)])
+      ColorSegment(firstRow: 0, firstColumn: 0, lastRow: 0, lastColumn: 3, color: EditorColorPairIndex.default),
+      ColorSegment(firstRow: 0, firstColumn: 4, lastRow: 0, lastColumn: 4, color: EditorColorPairIndex.default),
+      ColorSegment(firstRow: 0, firstColumn: 5, lastRow: 0, lastColumn: 5, color: EditorColorPairIndex.default),
+      ColorSegment(firstRow: 0, firstColumn: 6, lastRow: 0, lastColumn: 8, color: EditorColorPairIndex.default)])
 
 test "Only '/' in Clang":
   # https://github.com/fox0430/moe/issues/1568
@@ -138,4 +138,4 @@ test "Only '/' in Clang":
 
   check highlight == Highlight(
     colorSegments: @[
-      ColorSegment(firstRow: 0, firstColumn: 0, lastRow: 0, lastColumn: 0, color: defaultChar)])
+      ColorSegment(firstRow: 0, firstColumn: 0, lastRow: 0, lastColumn: 0, color: EditorColorPairIndex.default)])
