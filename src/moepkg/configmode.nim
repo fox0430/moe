@@ -154,9 +154,14 @@ type SettingType {.pure.} = enum
   String
   Array
 
-const numOfIndent = 2
+const
+  NumOfIndent = 2
+  Indent = "  "
 
-proc calcPositionOfSettingValue(): int {.compileTime.} =
+proc positionOfSetVal(): int {.compileTime.} =
+  ## A start position of a setting value in the line.
+  ## All start positions are same.
+
   var names: seq[string]
 
   for name in standardTableNames: names.add($name)
@@ -173,11 +178,7 @@ proc calcPositionOfSettingValue(): int {.compileTime.} =
   for name in names:
     if result < name.len: result = name.len
 
-  result += numOfIndent
-
-const
-  positionOfSetVal = calcPositionOfSettingValue()
-  indent = "  "
+  result += NumOfIndent
 
 proc getColorThemeSettingValues(currentVal: ColorTheme): seq[Runes] =
   result.add ru $currentVal
@@ -609,7 +610,7 @@ proc getCurrentArraySettingValueRange(reservedWords: seq[ReservedWord],
 
   const spaceLengh = 1
 
-  result[0] = positionOfSetVal + numOfIndent
+  result[0] = positionOfSetVal() + NumOfIndent
 
   for i in 0 .. arrayIndex:
     # Add space length
@@ -650,7 +651,7 @@ proc initConfigModeHighlight[T](buffer: T,
           result.overwrite(
             ColorSegment(
               firstRow: i,
-              firstColumn: numOfIndent + positionOfSetVal,
+              firstColumn: NumOfIndent + positionOfSetVal(),
               lastRow: i,
               lastColumn: buffer[i].len,
               color: EditorColorPairIndex.configModeCurrentLine))
@@ -1312,7 +1313,7 @@ proc editFiguresSetting(status: var EditorStatus,
 
     let
       val = getSettingVal()
-      col = positionOfSetVal + numOfIndent + ($val).len
+      col = positionOfSetVal() + NumOfIndent + ($val).len
     currentMainWindowNode.currentColumn = col
 
   var
@@ -1414,35 +1415,32 @@ proc getCurrentColorVal(s: EditorSettings, name, position: string): string =
     of ColorLayer.foreground:
       let fgHex = s.editorColorTheme.foregroundRgb(pairIndex).toHex
       if fgHex.isSome: return fgHex.get
-      else: return " termDefautFg"
+      else: return "termDefautFg"
     of ColorLayer.background:
       let bgHex = s.editorColorTheme.backgroundRgb(pairIndex).toHex
       if bgHex.isSome: return bgHex.get
-      else: return " termDefautBg"
+      else: return "termDefautBg"
 
 proc editStringSetting(status: var EditorStatus,
                        table, name, position: string,
                        arrayIndex: int) =
 
-  let
-    currentLine = currentMainWindowNode.currentLine
-    minColumn = numOfIndent + positionOfSetVal
+  const MinColumn = NumOfIndent + positionOfSetVal()
+  let currentLine = currentMainWindowNode.currentLine
 
   template moveToLeft() =
-    if minColumn > currentMainWindowNode.currentColumn:
+    if MinColumn > currentMainWindowNode.currentColumn:
       currentMainWindowNode.keyLeft
 
-  # Set currentColumn
-  block:
-    let settings = status.settings
-    template getSettingVal: seq[Rune] =
+  block setCurrentColumn:
+    template getSettingVal: Runes =
       case table:
         of "BuildOnSave":
           case name:
             of "workspaceRoot":
-              settings.buildOnSave.workspaceRoot
+              status.settings.buildOnSave.workspaceRoot
             of "command":
-              settings.buildOnSave.command
+              status.settings.buildOnSave.command
             else: ru ""
         of "Highlight":
           case name:
@@ -1450,42 +1448,36 @@ proc editStringSetting(status: var EditorStatus,
               var val = ru ""
               for i in 0 .. arrayIndex:
                 if i > 0: val &= ru " "
-                val &= settings.highlight.reservedWords[i].word.ru
+                val &= status.settings.highlight.reservedWords[i].word.toRunes
               # return val
               val
             else: ru ""
         of "AutoBackup":
           case name:
             of "backupDir":
-              settings.autoBackup.backupDir
+              status.settings.autoBackup.backupDir
             else: ru ""
         of "QuickRun":
           case name:
             of "nimAdvancedCommand":
-              ru settings.quickRun.nimAdvancedCommand
+              status.settings.quickRun.nimAdvancedCommand.toRunes
             of "ClangOptions":
-              ru settings.quickRun.clangOptions
+              status.settings.quickRun.clangOptions.toRunes
             of "CppOptions":
-              ru settings.quickRun.cppOptions
+              status.settings.quickRun.cppOptions.toRunes
             of "NimOptions":
-              ru settings.quickRun.nimOptions
+              status.settings.quickRun.nimOptions.toRunes
             of "shOptions":
-              ru settings.quickRun.shOptions
+              status.settings.quickRun.shOptions.toRunes
             of "bashOptions":
-              ru settings.quickRun.bashOptions
+              status.settings.quickRun.bashOptions.toRunes
             else: ru ""
         of "Theme":
-          ru settings.getCurrentColorVal(name, position)
+          ru status.settings.getCurrentColorVal(name, position)
         else: ru ""
 
-    block updateCurentColmun:
-      let col =
-        if table == "Theme":
-          positionOfSetVal + getSettingVal().len + 1
-        else:
-          positionOfSetVal + numOfIndent + getSettingVal().len
-
-      currentMainWindowNode.currentColumn = col
+    currentMainWindowNode.currentColumn =
+      positionOfSetVal() + NumOfIndent + getSettingVal().len
 
   setCursor(true)
   if not status.settings.disableChangeCursor:
@@ -1518,7 +1510,7 @@ proc editStringSetting(status: var EditorStatus,
       let
         autoDeleteParen = false
 
-      if currentMainWindowNode.currentColumn > minColumn:
+      if currentMainWindowNode.currentColumn > MinColumn:
         currentBufStatus.keyBackspace(
           currentMainWindowNode,
           autoDeleteParen,
@@ -1583,6 +1575,7 @@ proc editStringSetting(status: var EditorStatus,
         name,
         buffer)
       if r.isOk: status.changeTheme
+      else: status.commandLine.writeError(ru"Invalid value")
 
     # Change setting
     case table:
@@ -1613,7 +1606,7 @@ proc editEnumAndBoolSettings(status: var EditorStatus,
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
     y = absoluteY
-    x = absoluteX + positionOfSetVal + numOfIndent - margin
+    x = absoluteX + positionOfSetVal() + NumOfIndent - margin
 
   var
     popupWindow = initWindow(h, w, y, x, EditorColorPairIndex.popupWindow.int16)
@@ -1693,8 +1686,8 @@ proc initStandardTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
 
   for name in standardTableNames:
     let
-      nameStr = indent & $name
-      space = " ".repeat(positionOfSetVal - len($name))
+      nameStr = Indent & $name
+      space = " ".repeat(positionOfSetVal() - len($name))
     case $name:
       of "theme":
         result.add(ru nameStr & space & $settings.editorColorTheme)
@@ -1756,8 +1749,8 @@ proc initClipBoardTableBuffer(settings: ClipboardSettings): seq[seq[Rune]] =
 
   for name in clipboardTableNames:
     let
-      nameStr = indent & $name
-      space = " ".repeat(positionOfSetVal - len($name))
+      nameStr = Indent & $name
+      space = " ".repeat(positionOfSetVal() - len($name))
     case $name:
       of "enable":
         result.add(ru nameStr & space & $settings.enable)
@@ -1769,8 +1762,8 @@ proc initBuildOnSaveTableBuffer(settings: BuildOnSaveSettings): seq[seq[Rune]] =
 
   for name in buildOnSaveTableNames:
     let
-      nameStr = indent & $name
-      space = " ".repeat(positionOfSetVal - len($name))
+      nameStr = Indent & $name
+      space = " ".repeat(positionOfSetVal() - len($name))
     case $name:
       of "enable":
         result.add(ru nameStr & space & $settings.enable)
@@ -1784,8 +1777,8 @@ proc initTabLineTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
 
   for name in tabLineTableNames:
     let
-      nameStr = indent & $name
-      space = " ".repeat(positionOfSetVal - len($name))
+      nameStr = Indent & $name
+      space = " ".repeat(positionOfSetVal() - len($name))
     case $name:
       of "allBuffer":
         result.add(ru nameStr & space & $settings.tabLine.allBuffer)
@@ -1795,8 +1788,8 @@ proc initStatusLineTableBuffer(settings: StatusLineSettings): seq[seq[Rune]] =
 
   for name in statusLineTableNames:
     let
-      nameStr = indent & $name
-      space = " ".repeat(positionOfSetVal - len($name))
+      nameStr = Indent & $name
+      space = " ".repeat(positionOfSetVal() - len($name))
     case $name:
       of "multipleStatusLine":
         result.add(ru nameStr & space & $settings.multipleStatusLine)
@@ -1830,8 +1823,8 @@ proc initHighlightTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
 
   for name in highlightTableNames:
     let
-      nameStr = indent & $name
-      space = " ".repeat(positionOfSetVal - len($name))
+      nameStr = Indent & $name
+      space = " ".repeat(positionOfSetVal() - len($name))
     case $name:
       of "currentLine":
         result.add(ru nameStr & space & $settings.view.highlightCurrentLine)
@@ -1857,8 +1850,8 @@ proc initAutoBackupTableBuffer(settings: AutoBackupSettings): seq[seq[Rune]] =
 
   for name in autoBackupTableNames:
     let
-      nameStr = indent & $name
-      space = " ".repeat(positionOfSetVal - len($name))
+      nameStr = Indent & $name
+      space = " ".repeat(positionOfSetVal() - len($name))
     case $name:
       of "enable":
         result.add(ru nameStr & space & $settings.enable)
@@ -1876,8 +1869,8 @@ proc initQuickRunTableBuffer(settings: QuickRunSettings): seq[seq[Rune]] =
 
   for name in quickRunTableNames:
     let
-      nameStr = indent & $name
-      space = " ".repeat(positionOfSetVal - len($name))
+      nameStr = Indent & $name
+      space = " ".repeat(positionOfSetVal() - len($name))
     case $name:
       of "saveBufferWhenQuickRun":
         result.add(ru nameStr & space & $settings.saveBufferWhenQuickRun)
@@ -1905,8 +1898,8 @@ proc initNotificationTableBuffer(
 
   for name in notificationTableNames:
     let
-      nameStr = indent & $name
-      space = " ".repeat(positionOfSetVal - len($name))
+      nameStr = Indent & $name
+      space = " ".repeat(positionOfSetVal() - len($name))
     case $name:
       of "screenNotifications":
         result.add(ru nameStr & space & $settings.screenNotifications)
@@ -1954,8 +1947,8 @@ proc initFilerTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
 
   for name in filerTableNames:
     let
-      nameStr = indent & $name
-      space = " ".repeat(positionOfSetVal - len($name))
+      nameStr = Indent & $name
+      space = " ".repeat(positionOfSetVal() - len($name))
     case $name:
       of "showIcons":
         result.add(ru nameStr & space & $settings.filer.showIcons)
@@ -1965,8 +1958,8 @@ proc initAutocompleteTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
 
   for name in autocompleteTableNames:
     let
-      nameStr = indent & $name
-      space = " ".repeat(positionOfSetVal - len($name))
+      nameStr = Indent & $name
+      space = " ".repeat(positionOfSetVal() - len($name))
     case $name:
       of "enable":
         result.add(ru nameStr & space & $settings.autocomplete.enable)
@@ -1976,8 +1969,8 @@ proc initPersistTableBuffer(persistSettings: PersistSettings): seq[seq[Rune]] =
 
   for name in persistTableNames:
     let
-      nameStr = indent & $name
-      space = " ".repeat(positionOfSetVal - len($name))
+      nameStr = Indent & $name
+      space = " ".repeat(positionOfSetVal() - len($name))
     case $name:
       of "exCommand":
         result.add(ru nameStr & space & $persistSettings.exCommand)
@@ -1995,8 +1988,8 @@ proc initGitTableBuffer(settings: GitSettings): seq[Runes] =
 
   for name in GitTableNames:
     let
-      nameStr = indent & $name
-      space = " ".repeat(positionOfSetVal - len($name))
+      nameStr = Indent & $name
+      space = " ".repeat(positionOfSetVal() - len($name))
     case $name:
       of "showChangedLine":
         result.add(ru nameStr & space & $settings.showChangedLine)
@@ -2006,8 +1999,8 @@ proc initSyntaxCheckerTableBuffer(settings: SyntaxCheckerSettings): seq[Runes] =
 
   for name in SyntaxCheckerTableNames:
     let
-      nameStr = indent & $name
-      space = " ".repeat(positionOfSetVal - len($name))
+      nameStr = Indent & $name
+      space = " ".repeat(positionOfSetVal() - len($name))
     case $name:
       of "enable":
         result.add(ru nameStr & space & $settings.enable)
@@ -2017,23 +2010,23 @@ proc initThemeTableBuffer*(s: EditorSettings): seq[Runes] =
 
   for pairIndex in EditorColorPairIndex:
     let
-      # 11 is "foreground " and "background " length.
-      space = " ".repeat(positionOfSetVal - indent.len - 11)
+      # 10 is "foreground " and "background " length.
+      space = " ".repeat(positionOfSetVal() - Indent.len - 10)
 
       fgHex = s.editorColorTheme.foregroundRgb(pairIndex).toHex
       bgHex = s.editorColorTheme.backgroundRgb(pairIndex).toHex
 
       fgColorText =
         if fgHex.isSome: fgHex.get
-        else: " termDefautFg"
+        else: "termDefautFg"
 
       bgColorText =
         if bgHex.isSome: bgHex.get
-        else: " termDefautBg"
+        else: "termDefautBg"
 
-    result.add(ru fmt"{indent}{$pairIndex}")
-    result.add(ru fmt"{indent.repeat(2)}foreground{space}{fgColorText}")
-    result.add(ru fmt"{indent.repeat(2)}background{space}{bgColorText}")
+    result.add(ru fmt"{Indent}{$pairIndex}")
+    result.add(ru fmt"{Indent.repeat(2)}foreground{space}{fgColorText}")
+    result.add(ru fmt"{Indent.repeat(2)}background{space}{bgColorText}")
 
     result.add(ru "")
 
