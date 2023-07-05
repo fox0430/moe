@@ -212,6 +212,54 @@ suite "Normal mode: Move to last line":
 
     check(currentMainWindowNode.currentLine == 2)
 
+suite "Normal mode: Move to the top of the screen":
+  test "Some lines":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
+    currentMainWindowNode.currentLine = 2
+
+    status.resize(100, 100)
+    status.update
+
+    const key = @[ru'H']
+    status.normalCommand(key)
+    status.update
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+
+  test "Some empty lines":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"", ru"", ru""])
+    currentMainWindowNode.currentLine = 2
+
+    status.resize(100, 100)
+    status.update
+
+    const key = @[ru'H']
+    status.normalCommand(key)
+    status.update
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+
+  test "Empty buffer":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    status.bufStatus[0].buffer = initGapBuffer(@[ru""])
+
+    status.resize(100, 100)
+    status.update
+
+    const key = @[ru'H']
+    status.normalCommand(key)
+    status.update
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+
 suite "Normal mode: Page down":
   test "Page down":
     var status = initEditorStatus()
