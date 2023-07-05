@@ -338,7 +338,7 @@ proc moveToForwardEndOfWord*(bufStatus: var BufferStatus,
 
 ## Move to the top line of the screen.
 proc moveToTopOfScreen*(bufStatus: BufferStatus, windowNode: var WindowNode) =
-  if windowNode.currentLine > 0:
+  if windowNode.currentLine > windowNode.view.originalLine[0]:
     windowNode.currentLine = windowNode.view.originalLine[0]
 
     if windowNode.currentColumn > 0 and

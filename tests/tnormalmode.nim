@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, importutils]
+import std/[unittest, importutils, sequtils, sugar]
 import pkg/ncurses
 import moepkg/[register, settings, editorstatus, gapbuffer, unicodeext,
                bufferstatus, ui]
@@ -216,8 +216,11 @@ suite "Normal mode: Move to the top of the screen":
   test "Some lines":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
-    status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
-    currentMainWindowNode.currentLine = 2
+
+    let buffer = toSeq(0..101).map(x => toRunes($x))
+    status.bufStatus[0].buffer = initGapBuffer(buffer)
+
+    currentMainWindowNode.currentLine = 100
 
     status.resize(100, 100)
     status.update
@@ -226,14 +229,17 @@ suite "Normal mode: Move to the top of the screen":
     status.normalCommand(key)
     status.update
 
-    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentLine == 4
     check currentMainWindowNode.currentColumn == 0
 
   test "Some empty lines":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
-    status.bufStatus[0].buffer = initGapBuffer(@[ru"", ru"", ru""])
-    currentMainWindowNode.currentLine = 2
+
+    let buffer = toSeq(0..101).map(x => toRunes($x))
+    status.bufStatus[0].buffer = initGapBuffer(buffer)
+
+    currentMainWindowNode.currentLine = 100
 
     status.resize(100, 100)
     status.update
@@ -242,7 +248,7 @@ suite "Normal mode: Move to the top of the screen":
     status.normalCommand(key)
     status.update
 
-    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentLine == 4
     check currentMainWindowNode.currentColumn == 0
 
   test "Empty buffer":
