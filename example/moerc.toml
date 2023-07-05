@@ -264,154 +264,129 @@ lastSaveTime = true
 bufferLen = true
 
 [Theme]
+baseTheme = "dark"
 
-foreground = "#ffffff"
-background = "termDefaultBg"
+foreground = "#f8f5e3"
+background = "#000000"
 
 lineNum = "#8a8a8a"
-lineNumBg = "termDefaultBg"
+lineNumBg = "#000000"
 
 currentLineNum = "#008080"
-currentLineNumBg = "termDefaultBg"
+currentLineNumBg = "#000000"
 
-## Status bar
 statusLineNormalMode = "#ffffff"
-statusLineNormalModeBg = "#0000ff"
-statusLineModeNormalMode = "#000000"
-statusLineModeNormalModeBg = "#ffffff"
-statusLineNormalModeInactive = "#0000ff"
+statusLineNormalModeBg = "#09aefa"
+statusLineModeNormalMode = "#ffffff"
+statusLineModeNormalModeBg = "#09aefa"
+statusLineNormalModeInactive = "#09aefa"
 statusLineNormalModeInactiveBg = "#ffffff"
 
 statusLineInsertMode = "#ffffff"
-statusLineInsertModeBg = "#0000ff"
+statusLineInsertModeBg = "#09aefa"
 statusLineModeInsertMode = "#000000"
 statusLineModeInsertModeBg = "#ffffff"
-statusLineInsertModeInactive = "#0000ff"
+statusLineInsertModeInactive = "#09aefa"
 statusLineInsertModeInactiveBg = "#ffffff"
 
 statusLineVisualMode = "#ffffff"
-statusLineVisualModeBg = "#0000ff"
-statusLineModeVisualMode = "#000000"
+statusLineVisualModeBg = "#09aefa"
+statusLineModeVisualMode = "#ffffff"
 statusLineModeVisualModeBg = "#ffffff"
-statusLineVisualModeInactive = "#0000ff"
+statusLineVisualModeInactive = "#09aefa"
 statusLineVisualModeInactiveBg = "#ffffff"
 
 statusLineReplaceMode = "#ffffff"
-statusLineReplaceModeBg = "#0000ff"
+statusLineReplaceModeBg = "#09aefa"
 statusLineModeReplaceMode = "#000000"
 statusLineModeReplaceModeBg = "#ffffff"
-statusLineReplaceModeInactive = "#0000ff"
+statusLineReplaceModeInactive = "#09aefa"
 statusLineReplaceModeInactiveBg = "#ffffff"
 
 statusLineFilerMode = "#ffffff"
-statusLineFilerModeBg = "#0000ff"
+statusLineFilerModeBg = "#09aefa"
 statusLineModeFilerMode = "#000000"
 statusLineModeFilerModeBg = "#ffffff"
-statusLineFilerModeInactive = "#0000ff"
+statusLineFilerModeInactive = "#09aefa"
 statusLineFilerModeInactiveBg = "#ffffff"
 
 statusLineExMode = "#ffffff"
-statusLineExModeBg = "#0000ff"
+statusLineExModeBg = "#09aefa"
 statusLineModeExMode = "#000000"
 statusLineModeExModeBg = "#ffffff"
-statusLineExModeInactive = "#0000ff"
+statusLineExModeInactive = "#09aefa"
 statusLineExModeInactiveBg = "#ffffff"
 
 statusLineGitBranch = "#ffffff"
-statusLineGitBranchBg = "#0000ff"
+statusLineGitBranchBg = "#0040ff"
 
-# tab line
 tab = "#ffffff"
-tabBg = "termDefaultBg"
+tabBg = "#000000"
 currentTab = "#ffffff"
-currentTabBg = "#0000ff"
+currentTabBg = "#09aefa"
 
-# command  bar
 commandLine = "#ffffff"
-commandLineBg = "termDefaultBg"
+commandLineBg = "#000000"
 
-# error message
 errorMessage = "#ff0000"
-errorMessageBg = "termDefaultBg"
+errorMessageBg = "termDefautBg"
 
-# search result highlighting
 searchResult = "#ffffff"
 searchResultBg = "#ff0000"
 
-# selected area in visual mode
 visualMode = "#ffffff"
 visualModeBg = "#800080"
 
-# color scheme
 keyword = "#87d7ff"
-functionName = "#ffd700"
-typeName = "#008000"
-boolean = "#ffff00"
-stringLit = "#ffff00"
-specialVar = "#008000"
-builtin = "#ffff00"
-binNumber = "#00ffff"
-decNumber = "#00ffff"
-floatNumber = "#00ffff"
-hexNumber = "#00ffff"
-octNumber = "#00ffff"
+functionName = "#00b7ce"
+typeName= "#00ffff"
+boolean = "#add8e6"
+stringLit = "#add8e6"
+specialVar = "#0090a8"
+builtin = "#add8e6"
+binNumber = "#add8e6"
+decNumber = "#add8e6"
+floatNumber = "#add8e6"
+hexNumber = "#add8e6"
+octNumber = "#add8e6"
 comment = "#808080"
 longComment = "#808080"
 whitespace = "#808080"
-preprocessor = "#008000"
-pragma = "#ffff00"
+preprocessor = "#0090a8"
 
-# filer mode
 currentFile = "#ffffff"
-currentFileBg = "#008080"
+currentFileBg = "#ffffff"
 file = "#ffffff"
-fileBg = "termDefaultBg"
-dir = "#0000ff"
-dirBg = "termDefaultBg"
+fileBg = "#000000"
+dir = "#09aefa"
+dirBg = "#000000"
 pcLink = "#008080"
-pcLinkBg = "termDefaultBg"
+pcLinkBg = "#000000"
 
-# pop up window
 popupWindow = "#ffffff"
 popupWindowBg = "#000000"
-popupWinCurrentLine = "#0000ff"
+popupWinCurrentLine = "#09aefa"
 popupWinCurrentLineBg = "#000000"
 
-# replace text highlighting
-replaceText = "termDefaultBg"
+replaceText = "#ffffff"
 replaceTextBg = "#ff0000"
 
-# pair of paren highlighting
-parenPair = "termDefaultBg"
-parenPairBg = "#0000ff"
+parenPair = "#ffffff"
+parenPairBg = "#09aefa"
 
-# highlight other uses current word
-currentWord = "termDefaultBg"
-currentWordBg = "#808080"
+currentWord = "#ffffff"
+currentWordBg = "#09aefa"
 
-# highlight full width space
 highlightFullWidthSpace = "#ff0000"
 highlightFullWidthSpaceBg = "#ff0000"
 
-# highlight trailing spaces
 highlightTrailingSpaces = "#ff0000"
 highlightTrailingSpacesBg = "#ff0000"
 
-# highlight reserved words
 reservedWord = "#ffffff"
 reservedWordBg = "#808080"
 
-backupManagerCurrentLine = "#ffffff"
-backupManagerCurrentLineBg = "#008080"
-
-diffViewerAddedLine = "#008000"
-diffViewerAddedLineBg = "termDefaultBg"
-diffViewerDeletedLine = "#ff0000"
-diffViewerDeletedLineBg = "termDefaultBg"
-
-# configuration mode
 configModeCurrentLine = "#ffffff"
 configModeCurrentLineBg = "#008080"
 
-# highlight current line background
 currentLineBg = "#444444"
