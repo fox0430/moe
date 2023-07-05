@@ -338,9 +338,12 @@ proc moveToForwardEndOfWord*(bufStatus: var BufferStatus,
 
 ## Move to the top line of the screen.
 proc moveToTopOfScreen*(bufStatus: BufferStatus, windowNode: var WindowNode) =
-  windowNode.currentLine = windowNode.view.originalLine[0]
-  if windowNode.currentColumn > bufStatus.buffer[windowNode.currentLine].high:
-    windowNode.currentColumn = bufStatus.buffer[windowNode.currentLine].high
+  if windowNode.currentLine > windowNode.view.originalLine[0]:
+    windowNode.currentLine = windowNode.view.originalLine[0]
+
+    if windowNode.currentColumn > 0 and
+       windowNode.currentColumn > bufStatus.buffer[windowNode.currentLine].high:
+         windowNode.currentColumn = bufStatus.buffer[windowNode.currentLine].high
 
 ## Move to the center line of the screen.
 proc moveToCenterOfScreen*(bufStatus: BufferStatus, windowNode: var WindowNode) =
