@@ -382,8 +382,9 @@ proc runQuickRunCommand(status: var EditorStatus) =
     addMessageLog buffer.error.toRunes
     return
 
-  let quickRunBufferIndex = status.bufStatus.getQuickRunBufferIndex(
-    currentMainWindowNode)
+  let quickRunBufferIndex = getQuickRunBufferIndex(
+    status.bufStatus,
+    mainWindowNode)
 
   if quickRunBufferIndex == -1:
     status.verticalSplitWindow
@@ -398,6 +399,8 @@ proc runQuickRunCommand(status: var EditorStatus) =
     status.changeMode(bufferstatus.Mode.quickRun)
   else:
     status.bufStatus[quickRunBufferIndex].buffer = initGapBuffer(buffer.get)
+
+  status.resize
 
 proc staticReadVersionFromConfigFileExample(): string {.compileTime.} =
   staticRead(currentSourcePath.parentDir() / "../../example/moerc.toml")

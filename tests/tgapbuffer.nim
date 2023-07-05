@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/unittest
+import std/[unittest, unicode]
 import moepkg/gapbuffer
 
 test "empty":
@@ -221,3 +221,21 @@ test "calcIndexInEntireBuffer (with containing newlines)":
   check buffer.calcIndexInEntireBuffer(2, 0, true) == 5
   check buffer.calcIndexInEntireBuffer(2, 1, true) == 6
   check buffer.calcIndexInEntireBuffer(2, 2, true) == 7
+
+test "toRunes":
+  var buffer = initGapBuffer[seq[Rune]]()
+  buffer.add "0".toRunes
+  buffer.add "1".toRunes
+
+  check buffer.len == 2
+
+  check buffer.toRunes == "0\n1".toRunes
+
+test "toSeqRunes":
+  var buffer = initGapBuffer[seq[Rune]]()
+  buffer.add "0".toRunes
+  buffer.add "1".toRunes
+
+  check buffer.len == 2
+
+  check buffer.toSeqRunes == @["0".toRunes, "1".toRunes]

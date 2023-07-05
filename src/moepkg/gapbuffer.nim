@@ -243,3 +243,7 @@ proc toRunes*(buffer: GapBuffer[Runes]): Runes =
   for i in 0 ..< buffer.len:
     result.add(buffer[i])
     if i+1 < buffer.len: result.add(ru'\n')
+
+proc toSeqRunes*(buffer: GapBuffer[Runes]): seq[Runes] =
+  for i in 0 ..< buffer.len:
+    result.add buffer[i]

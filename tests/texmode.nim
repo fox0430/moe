@@ -18,6 +18,7 @@
 #[############################################################################]#
 
 import std/[unittest, os, oids, deques, macros, strformat]
+import moepkg/syntax/highlite
 import moepkg/[ui, editorstatus, gapbuffer, unicodeext, bufferstatus, settings,
                windownode, helputils]
 
@@ -761,13 +762,99 @@ suite "Ex mode: Show/Hide git branch name in status line when inactive window":
       status.exModeCommand(command)
       check status.settings.statusLine.showGitInactive
 
-suite "Ex mode: Quick run command":
-  test "Quick run command":
+suite "Ex mode: Quickrun command wihtout file":
+  test "Exec Quickrun without file":
+    # Create a file for the test.
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
+    status.bufStatus[0].language = SourceLanguage.langNim
+    status.bufStatus[0].buffer = toGapBuffer(@[ru"echo 1"])
 
-    const command = @[ru"run"]
-    status.exModeCommand(command)
+    const Command = @[ru"run"]
+    status.exModeCommand(Command)
+
+    status.update
+
+    for w in mainWindowNode.getAllWindowNode:
+      if w.bufferIndex == 1:
+        # 1 is the quickrun result.
+        assert w.view.height > status.bufStatus[1].buffer.high
+
+  test "Exec Quickrun twice without file":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    status.bufStatus[0].language = SourceLanguage.langNim
+    status.bufStatus[0].buffer = toGapBuffer(@[ru"echo 1"])
+
+    const Command = @[ru"run"]
+
+    status.exModeCommand(Command)
+    status.update
+
+    # 1 is the quickrun result.
+    let beforeBuffer = status.bufStatus[1].buffer.toRunes
+
+    status.movePrevWindow
+
+    # Edit the buffer and exec Quickrun again.
+    status.bufStatus[0].buffer[0] = ru"echo 2"
+    status.exModeCommand(Command)
+    status.update
+
+    assert mainWindowNode.getAllWindowNode.len == 2
+    assert beforeBuffer != status.bufStatus[1].buffer.toRunes
+
+suite "Ex mode: Quickrun command with file":
+  const
+    TestfileDir = "quickrunTestDir"
+    TestfilePath = TestfileDir / "quickrunTest.nim"
+
+  setup:
+    createDir(TestfileDir)
+    writeFile(TestfilePath, "echo 1")
+
+  teardown:
+    removeDir(TestfileDir)
+
+  test "Exec Quickrun with file":
+    # Create a file for the test.
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin(TestfilePath, Mode.normal)
+
+    const Command = @[ru"run"]
+    status.exModeCommand(Command)
+
+    status.update
+
+    for w in mainWindowNode.getAllWindowNode:
+      if w.bufferIndex == 1:
+        # 1 is the quickrun result.
+        assert w.view.height > status.bufStatus[1].buffer.high
+
+  test "Exec Quickrun twice with file":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin(TestfilePath, Mode.normal)
+
+    const Command = @[ru"run"]
+
+    status.exModeCommand(Command)
+    status.update
+
+    # 1 is the quickrun result.
+    let beforeBuffer = status.bufStatus[1].buffer.toRunes
+
+    status.movePrevWindow
+
+    # Edit the buffer and exec Quickrun again.
+    status.settings.quickRun.saveBufferWhenQuickRun = true
+    status.bufStatus[0].buffer[0] = ru"echo 2"
+    status.update
+
+    status.exModeCommand(Command)
+    status.update
+
+    assert mainWindowNode.getAllWindowNode.len == 2
+    assert beforeBuffer != status.bufStatus[1].buffer.toRunes
 
 suite "Ex mode: Workspace list command":
   test "Workspace list command":

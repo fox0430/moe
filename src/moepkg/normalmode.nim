@@ -200,7 +200,9 @@ proc runQuickRunCommand(status: var EditorStatus) =
     addMessageLog buffer.error.toRunes
     return
 
-  let quickRunWindowIndex = status.bufStatus.getQuickRunBufferIndex(mainWindowNode)
+  let quickRunWindowIndex = getQuickRunBufferIndex(
+    status.bufStatus,
+    mainWindowNode)
 
   if quickRunWindowIndex == -1:
     status.verticalSplitWindow
@@ -213,10 +215,10 @@ proc runQuickRunCommand(status: var EditorStatus) =
     status.changeCurrentBuffer(status.bufStatus.high)
 
     status.changeMode(Mode.quickRun)
-
   else:
     status.bufStatus[quickRunWindowIndex].buffer = initGapBuffer(buffer.get)
-    status.bufStatus[quickRunWindowIndex].isUpdate = true
+
+  status.resize
 
 proc yankWord(status: var EditorStatus) =
   currentBufStatus.yankWord(status.registers,
