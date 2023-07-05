@@ -23,68 +23,106 @@ import syntax/highlite
 import unicodeext, settings, bufferstatus, gapbuffer, messages, ui,
        editorstatus, movement, windownode, fileutils, commandline
 
-proc generateCommand(bufStatus: BufferStatus,
-                     settings: QuickRunSettings): string =
-
-  let filename = $bufStatus.path
-
-  result = "timeout " & $settings.timeout & " "
-  if bufStatus.language == SourceLanguage.langNim:
-    let
-      advancedCommand = settings.nimAdvancedCommand
-      options = settings.nimOptions
-    result &= "nim " & advancedCommand & " -r " & options & " " & filename
-  elif bufStatus.language == SourceLanguage.langC:
-    result &= "gcc " & settings.clangOptions & " " & filename & " && ./a.out"
-  elif bufStatus.language == SourceLanguage.langCpp:
-    result &= "g++ " & settings.cppOptions & " " & filename & " && ./a.out"
-  elif bufStatus.language == SourceLanguage.langShell:
-    if bufStatus.buffer[0] == ru"#!/bin/bash":
-      result &= "bash " & settings.bashOptions & " " & filename
+proc languageExtension(lang: SourceLanguage): Result[string, string] =
+  case lang:
+    of SourceLanguage.langNim:
+      Result[string, string].ok "nim"
+    of SourceLanguage.langC:
+      Result[string, string].ok"c"
+    of SourceLanguage.langCpp:
+      Result[string, string].ok "cpp"
+    of SourceLanguage.langShell:
+      # TODO: Add support for other shells.
+      Result[string, string].ok "bash"
     else:
-      result &= "sh " & settings.shOptions & " "  & filename
-  else:
-    result = ""
+      Result[string, string].err "Unknown language"
 
-proc getQuickRunBufferIndex*(bufStatus: seq[BufferStatus],
-                             mainWindowNode: WindowNode): int =
+proc generateCommand(
+  path: string,
+  lang: SourceLanguage,
+  buffer: seq[Runes],
+  settings: QuickRunSettings): Result[string, string] =
 
-  result = -1
-  let allBufferIndex = mainWindowNode.getAllBufferIndex
-  for index in allBufferIndex:
-    if bufStatus[index].mode == Mode.quickRun: return index
+    var command = "timeout " & $settings.timeout & " "
+    case lang
+      of SourceLanguage.langNim:
+        let
+          advancedCommand = settings.nimAdvancedCommand
+          options = settings.nimOptions
+        command &= "nim " & advancedCommand & " -r " & options & " " & path
+      of SourceLanguage.langC:
+        command &= "gcc " & settings.clangOptions & " " & path & " && ./a.out"
+      of SourceLanguage.langCpp:
+        command &= "g++ " & settings.cppOptions & " " & path & " && ./a.out"
+      of SourceLanguage.langShell:
+        # TODO: Add support for other shells.
+        if buffer[0] == ru"#!/bin/sh":
+          command &= "sh " & settings.shOptions & " "  & path
+        else:
+          command &= "bash " & settings.bashOptions & " " & path
+      else:
+        return Result[string, string].err "Unknown language"
+
+    return Result[string, string].ok command
+
+proc getQuickRunBufferIndex*(
+  bufStatus: seq[BufferStatus],
+  mainWindowNode: WindowNode): int =
+
+    result = -1
+    let allBufferIndex = mainWindowNode.getAllBufferIndex
+    for index in allBufferIndex:
+      if bufStatus[index].mode == Mode.quickRun: return index
 
 proc runQuickRun*(
   bufStatus: var BufferStatus,
   commandLine: var CommandLine,
   settings: EditorSettings): Result[seq[Runes], string] =
 
-    if bufStatus.path.len == 0:
-      return Result[seq[Runes], string].err "The path is empty"
+    let
+      useTempFile = not fileExists($bufStatus.path)
+      path =
+        if useTempFile:
+          # A temporary file name.
+          "quickruntemp." & ?bufStatus.language.languageExtension
+        else:
+          $bufStatus.path
 
-    let filename = bufStatus.path
+    if settings.quickRun.saveBufferWhenQuickRun and not useTempFile:
+      let lastModificationTime = getLastModificationTime($bufStatus.path)
+      if lastModificationTime > bufStatus.lastSaveTime.toTime:
+        return Result[seq[Runes], string].err "The file has been changed by other programs"
 
-    if settings.quickRun.saveBufferWhenQuickRun:
-      block:
-        let lastModificationTime = getLastModificationTime($bufStatus.path)
-        if lastModificationTime > bufStatus.lastSaveTime.toTime:
-          return Result[seq[Runes], string].err "The file has been changed by other programs"
-
+    if settings.quickRun.saveBufferWhenQuickRun or useTempFile:
+      # Create and use a temporary file if the source code file does not exist.
       try:
-        saveFile(filename, bufStatus.buffer.toRunes, bufStatus.characterEncoding)
+        saveFile(
+          path.toRunes,
+          bufStatus.buffer.toRunes,
+          bufStatus.characterEncoding)
       except CatchableError as e:
         return Result[seq[Runes], string].err fmt"Failed to save the current code: {e.msg}"
 
-      bufStatus.countChange = 0
-      bufStatus.lastSaveTime = now()
+      if not useTempFile:
+        bufStatus.countChange = 0
+        bufStatus.lastSaveTime = now()
 
-    let command = bufStatus.generateCommand(settings.quickRun)
-    if command == "":
-      return Result[seq[Runes], string].err "Quickrun: Invalid command: empty string"
+    let command = generateCommand(
+      path,
+      bufStatus.language,
+      bufStatus.buffer.toSeqRunes,
+      settings.quickRun)
+    if command.isErr:
+      return Result[seq[Runes], string].err "Quickrun: {command.error}"
 
     commandLine.writeRunQuickRunMessage(settings.notification)
-    let cmdResult = execCmdEx(command)
+    let cmdResult = execCmdEx(command.get)
     commandLine.clear
+
+    if useTempFile:
+      # Cleanup temporary files.
+      if path.fileExists: removeFile(path)
+      if path.split(".")[0].fileExists: removeFile(path.split(".")[0])
 
     case cmdResult.exitCode:
       of 124:
