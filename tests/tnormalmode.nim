@@ -17,10 +17,11 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, importutils, sequtils, sugar]
+import std/[unittest, importutils, sequtils, sugar, os]
 import pkg/ncurses
+import moepkg/syntax/highlite
 import moepkg/[register, settings, editorstatus, gapbuffer, unicodeext,
-               bufferstatus, ui]
+               bufferstatus, ui, windownode]
 
 import moepkg/normalmode {.all.}
 
@@ -2267,3 +2268,99 @@ suite "Normal mode: execNormalModeCommand":
     status.execNormalModeCommand(command)
 
     check status.searchHistory == @["def".toRunes, "abc".toRunes]
+
+suite "Ex mode: Quickrun command wihtout file":
+  test "Exec Quickrun without file":
+    # Create a file for the test.
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    status.bufStatus[0].language = SourceLanguage.langNim
+    status.bufStatus[0].buffer = toGapBuffer(@[ru"echo 1"])
+
+    const Command = @[ru'\\', ru'r']
+    status.execNormalModeCommand(Command)
+
+    status.update
+
+    for w in mainWindowNode.getAllWindowNode:
+      if w.bufferIndex == 1:
+        # 1 is the quickrun result.
+        assert w.view.height > status.bufStatus[1].buffer.high
+
+  test "Exec Quickrun twice without file":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    status.bufStatus[0].language = SourceLanguage.langNim
+    status.bufStatus[0].buffer = toGapBuffer(@[ru"echo 1"])
+
+    const Command = @[ru'\\', ru'r']
+
+    status.execNormalModeCommand(Command)
+    status.update
+
+    # 1 is the quickrun result.
+    let beforeBuffer = status.bufStatus[1].buffer.toRunes
+
+    status.movePrevWindow
+
+    # Edit the buffer and exec Quickrun again.
+    status.bufStatus[0].buffer[0] = ru"echo 2"
+    status.execNormalModeCommand(Command)
+    status.update
+
+    assert mainWindowNode.getAllWindowNode.len == 2
+    assert beforeBuffer != status.bufStatus[1].buffer.toRunes
+
+suite "Normal mode: Quickrun command with file":
+  const
+    TestfileDir = "quickrunTestDir"
+    TestfilePath = TestfileDir / "quickrunTest.nim"
+
+  setup:
+    createDir(TestfileDir)
+    writeFile(TestfilePath, "echo 1")
+
+  teardown:
+    removeDir(TestfileDir)
+
+  test "Exec Quickrun with file":
+    # Create a file for the test.
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin(TestfilePath, Mode.normal)
+
+    const Command = @[ru'\\', ru'r']
+    status.execNormalModeCommand(Command)
+
+    status.update
+
+    for w in mainWindowNode.getAllWindowNode:
+      if w.bufferIndex == 1:
+        # 1 is the quickrun result.
+        assert w.view.height > status.bufStatus[1].buffer.high
+
+  test "Noarma mode: Quickrun twice with file":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin(TestfilePath, Mode.normal)
+
+    const Command = @[ru'\\', ru'r']
+
+    status.execNormalModeCommand(Command)
+    status.update
+
+    # 1 is the quickrun result.
+    let beforeBuffer = status.bufStatus[1].buffer.toRunes
+
+    status.movePrevWindow
+
+    # Edit the buffer and exec Quickrun again.
+    status.settings.quickRun.saveBufferWhenQuickRun = true
+    status.bufStatus[0].buffer[0] = ru"echo 2"
+    status.update
+
+    status.execNormalModeCommand(Command)
+    status.update
+
+    assert mainWindowNode.getAllWindowNode.len == 2
+    assert beforeBuffer != status.bufStatus[1].buffer.toRunes
+
+
