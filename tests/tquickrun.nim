@@ -17,12 +17,14 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os]
+import std/[unittest, os, importutils]
 import pkg/results
 import moepkg/syntax/highlite
-import moepkg/[unicodeext, settings, bufferstatus, commandline, gapbuffer]
+import moepkg/[unicodeext, settings, bufferstatus, commandline, gapbuffer,
+               editorstatus]
 
 import moepkg/quickrun {.all.}
+import moepkg/commandline {.all.}
 
 suite "QuickRun: languageExtension":
   test "Nim":
@@ -157,3 +159,17 @@ suite "QuickRun: runQuickRun":
 
     check "echo 1234" == fileBuffer
     check ru"1234" == r[r.high - 1]
+
+suite "QuickRun: Change mode":
+  test "Change to Ex mode (':' command)":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    status.changeMode(Mode.quickRun)
+
+    const Command = ru":"
+    status.execQuickRunCommand(Command)
+
+    check status.commandLine.buffer.len == 0
+
+    privateAccess(status.commandLine.type)
+    check status.commandLine.prompt == ru":"
