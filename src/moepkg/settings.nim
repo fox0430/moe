@@ -454,12 +454,6 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
   # The base theme is dark.
   result = ColorThemeTable[ColorTheme.dark]
 
-  let colorsNode =
-    if jsonNode.contains("colors"):
-      jsonNode["colors"]
-    else:
-      %* {}
-
   var tokenNodes = initTable[string, JsonNode]()
   for node in jsonNode{"tokenColors"}:
     var scope = node{"scope"}
@@ -473,8 +467,6 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
         tokenNodes[item.getStr()] = settings
     else:
       tokenNodes[scope.getStr()] = settings
-
-  proc isKey(key: string): bool {.inline.} = tokenNodes.hasKey(key)
 
   if jsonNode["colors"].contains("editor.foreground"):
     result[EditorColorPairIndex.default].foreground.rgb =
@@ -2287,7 +2279,6 @@ proc validateDebugTable(table: TomlValueRef): Option[InvalidItem] =
         return some(InvalidItem(name: $key, val: $val))
 
 proc validateThemeTable(table: TomlValueRef): Option[InvalidItem] =
-  let editorColors = ColorThemeTable[ColorTheme.config]
   for key, val in table.getTable:
     case key:
       of "baseTheme":
