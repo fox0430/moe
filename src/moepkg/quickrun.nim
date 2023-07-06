@@ -134,6 +134,14 @@ proc runQuickRun*(
 
         return Result[seq[Runes], string].ok cmdOutput
 
+proc changeModeToExMode*(
+  bufStatus: var BufferStatus,
+  commandLine: var CommandLine) =
+
+    bufStatus.changeMode(Mode.ex)
+    commandLine.clear
+    commandLine.setPrompt(exModePrompt)
+
 proc isQuickRunCommand*(command: Runes): InputState =
   result = InputState.Invalid
 
@@ -161,7 +169,7 @@ proc execQuickRunCommand*(status: var EditorStatus, command: Runes) =
     elif isControlJ(key):
       status.movePrevWindow
     elif key == ord(':'):
-      status.changeMode(Mode.ex)
+      currentBufStatus.changeModeToExMode(status.commandLine)
     elif key == ord('k') or isUpKey(key):
       currentBufStatus.keyUp(currentMainWindowNode)
     elif key == ord('j') or isDownKey(key):
