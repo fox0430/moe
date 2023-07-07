@@ -329,7 +329,7 @@ commandLine = "#ffffff"
 commandLineBg = "#000000"
 
 errorMessage = "#ff0000"
-errorMessageBg = "termDefautBg"
+errorMessageBg = "termDefaultBg"
 
 searchResult = "#ffffff"
 searchResultBg = "#ff0000"
