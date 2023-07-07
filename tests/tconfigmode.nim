@@ -33,6 +33,8 @@ suite "Config mode: Start configuration mode":
 suite "Config mode: Init buffer":
   test "Init standard table buffer":
     var status = initEditorStatus()
+    status.settings.colorMode = ColorMode.c24bit
+
     let buffer = status.settings.initStandardTableBuffer
 
     const sample = @[ru "Standard",
