@@ -18,8 +18,9 @@
 #[############################################################################]#
 
 import std/[unittest, options, os, importutils]
+import pkg/results
 import moepkg/[editor, gapbuffer, bufferstatus, editorview, unicodeext, ui,
-               highlight, windownode, movement]
+               highlight, windownode, movement, build, backgroundprocess]
 
 import moepkg/editorstatus {.all.}
 
@@ -621,3 +622,61 @@ suite "Fix #1361":
 
     let nodes = mainWindowNode.getAllWindowNode
     check nodes[0].highlight == nodes[1].highlight
+
+suite "BackgroundTasks":
+  const
+    TestDir = "./backgroundTasksTest"
+    TestFilePath = TestDir / "test.nim"
+    Buffer = "echo 1"
+
+  setup:
+    createDir(TestDir)
+    writeFile(TestFilePath, Buffer)
+
+  teardown:
+    removeDir(TestDir)
+
+  test "checkBackgroundBuild 1":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin("test.nim")
+    currentBufStatus.buffer = initGapBuffer(@[Buffer.toRunes])
+
+    status.backgroundTasks.build.add startBackgroundBuild(
+      TestFilePath.toRunes,
+      currentBufStatus.language).get
+
+    for i in 0 .. 10:
+      sleep 1000
+
+      status.checkBackgroundBuild
+      if status.backgroundTasks.build.len == 0:
+        break
+
+    if status.backgroundTasks.build.len > 0:
+      status.backgroundTasks.build[0].process.kill
+      check false
+
+  test "checkBackgroundBuild 2":
+    ## Exec background builds twice.
+
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin("test.nim")
+    currentBufStatus.buffer = initGapBuffer(@[Buffer.toRunes])
+
+    for i in 0 .. 1:
+      status.backgroundTasks.build.add startBackgroundBuild(
+        TestFilePath.toRunes,
+        currentBufStatus.language).get
+
+    for i in 0 .. 10:
+      sleep 1000
+
+      status.checkBackgroundBuild
+      if status.backgroundTasks.build.len == 0:
+        break
+
+    if status.backgroundTasks.build.len > 0:
+      for i in 0 ..< status.backgroundTasks.build.len:
+        status.backgroundTasks.build[i].process.kill
+
+      check false

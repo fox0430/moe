@@ -860,23 +860,17 @@ proc execCmdResultToMessageLog*(output: string)=
     else: line.add(ch)
 
 proc buildOnSave(status: var EditorStatus) =
-  status.commandLine.writeMessageBuildOnSave(
-    status.settings.notification)
+  ## Start a background process for the build.
 
-  let
-    filename = currentBufStatus.path
-    workspaceRoot = status.settings.buildOnSave.workspaceRoot
-    command = status.settings.buildOnSave.command
-    language = currentBufStatus.language
-    cmdResult = build(filename, workspaceRoot, command, language)
+  let buildProcess = startBackgroundBuild(
+    currentBufStatus.path,
+    currentBufStatus.language,
+    status.settings.buildOnSave.workspaceRoot)
 
-  cmdResult.output.execCmdResultToMessageLog
-
-  if cmdResult.exitCode != 0:
-    status.commandLine.writeMessageFailedBuildOnSave
+  if buildProcess.isErr:
+    status.commandLine.writeMessageFailedBuildOnSave(currentBufStatus.path)
   else:
-    status.commandLine.writeMessageSuccessBuildOnSave(
-      status.settings.notification)
+    status.backgroundTasks.build.add buildProcess.get
 
 proc checkAndCreateDir(
   commandLine: var CommandLine,
@@ -958,14 +952,14 @@ proc writeCommand(status: var EditorStatus, path: seq[Rune]) =
 
     # Build on save
     if status.settings.buildOnSave.enable:
-      try:
-        status.buildOnSave
-      except IOError:
-        status.commandLine.writeSaveError
+      status.buildOnSave
+      status.commandLine.writeMessageSaveFileAndStartBuild(
+        path,
+        status.settings.notification)
     else:
-        status.commandLine.writeMessageSaveFile(
-          path,
-          status.settings.notification)
+      status.commandLine.writeMessageSaveFile(
+        path,
+        status.settings.notification)
 
     # Update the changedLines for git diff.
     if status.settings.git.showChangedLine and

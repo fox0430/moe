@@ -279,6 +279,10 @@ proc toRunes*(s: seq[string]): Runes =
 
 proc toRunes*(r: Rune): Runes {.inline.} = @[r]
 
+proc toSeqRunes*(s: seq[string]): seq[Runes] =
+  for l in s:
+    result.add l.toRunes
+
 proc startsWith*(runes1, runes2: seq[Rune]): bool =
   result = true
   for i in 0 ..< min(runes1.len, runes2.len):

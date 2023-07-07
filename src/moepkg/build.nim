@@ -17,28 +17,77 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[os, osproc, strformat, unicode]
+import std/strformat
+import pkg/results
 import syntax/highlite
+import unicodeext, backgroundprocess
 
-proc build*(filename, workspaceRoot,
-            command: seq[Rune],
-            language: SourceLanguage): tuple[output: string, exitCode: int] =
+type
+  BuildCommand* = object
+    command*: string
+    args*: seq[string]
 
-  if language == SourceLanguage.langNim:
-    let
-      currentDir = getCurrentDir()
-      workspaceRoot = workspaceRoot
-      cmd = if command.len > 0: $command
-            elif ($workspaceRoot).dirExists: fmt"cd {workspaceRoot} && nimble build"
-            else: fmt"nim c {filename}"
+  BuildProcess* = object
+    buildCommand*: BuildCommand
+    filePath*: Runes
+    process*: BackgroundProcess
 
-    result = cmd.execCmdEx
+proc isFinish*(bp: BuildProcess): bool {.inline.} = bp.process.isFinish
 
-    currentDir.setCurrentDir
+proc result*(bp: var BuildProcess): Result[seq[string], string] {.inline.} =
+  bp.process.result
 
-  elif command.len > 0:
-    let currentDir = getCurrentDir()
+proc nimBuildCommand(path: string): BuildCommand {.inline.} =
+  BuildCommand(command: "nim", args: @["c", path])
 
-    result = ($command).execCmdEx
+proc buildCommand(
+  path: string,
+  lang: SourceLanguage): Result[BuildCommand, string] =
 
-    if getCurrentDir() != currentDir: currentDir.setCurrentDir
+    case lang:
+      of SourceLanguage.langNim:
+        return Result[BuildCommand, string].ok path.nimBuildCommand
+      else:
+        return Result[BuildCommand, string].err "Unknown language"
+
+proc startBackgroundBuild*(
+  path: Runes,
+  language: SourceLanguage,
+  workspaceRoot: Runes = ru""): Result[BuildProcess, string] =
+    ## Start a background process for exec the build command.
+
+    let cmd = buildCommand($path, language)
+    if cmd.isErr:
+      return Result[BuildProcess, string].err fmt"Failed to exec build commands: {cmd.error}"
+
+    let backgroundProcess = startBackgroundProcess(
+      cmd.get.command,
+      cmd.get.args,
+      $workspaceRoot)
+    if backgroundProcess.isOk:
+      return Result[BuildProcess, string].ok BuildProcess(
+        buildCommand: cmd.get,
+        filePath: path,
+        process: backgroundProcess.get)
+    else:
+      return Result[BuildProcess, string].err fmt"Failed to exec build commands: {backgroundProcess.error}"
+
+proc startBackgroundBuild*(
+  customCommand: BuildCommand,
+  language: SourceLanguage,
+  workspaceRoot: Runes = ru""): Result[BuildProcess, string] =
+    ## Start the build on a background process.
+
+    if customCommand.command.len == 0:
+      return Result[BuildProcess, string].err fmt"command is empty"
+
+    let backgroundProcess = startBackgroundProcess(
+      customCommand.command,
+      customCommand.args,
+      $workspaceRoot)
+    if backgroundProcess.isOk:
+      return Result[BuildProcess, string].ok BuildProcess(
+        buildCommand: customCommand,
+        process: backgroundProcess.get)
+    else:
+      return Result[BuildProcess, string].err fmt"Failed to exec build commands: {backgroundProcess.error}"
