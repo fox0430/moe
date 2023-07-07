@@ -71,7 +71,7 @@ jobs:
     - uses: actions/checkout@v3.5.3
     - run: |
         sudo apt-get update -yqq
-        sudo apt-get install -y gcc libncursesw5-dev build-essential
+        sudo apt-get install -y gcc libncursesw5-dev build-essential xvfb x11-xserver-utils xsel xclip
     - name: Cache choosenim
       id: cache-choosenim
       uses: actions/cache@v3.3.1
@@ -99,7 +99,7 @@ jobs:
     - name: Run unit test
       run: |
         nimble refresh
-        nimble test --verbose -y
+        xvfb-run nimble test --verbose -y
 
     - name: Install moe
       run: nimble install --verbose -y
