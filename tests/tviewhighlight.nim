@@ -25,7 +25,7 @@ test "Highlight current word 1":
     currentBufStatus,
     currentMainWindowNode,
     status.settings.editorColorTheme,
-    status.colorMode)
+    status.settings.colorMode)
 
   check(highlight[0].color == EditorColorPairIndex.default)
   check(highlight[1].color == EditorColorPairIndex.currentWord)
@@ -44,7 +44,7 @@ test "Highlight current word 2":
     currentBufStatus,
     currentMainWindowNode,
     status.settings.editorColorTheme,
-    status.colorMode)
+    status.settings.colorMode)
 
   check(highlight[0].color == EditorColorPairIndex.default)
   check(highlight[1].color == EditorColorPairIndex.currentWord)
@@ -64,7 +64,7 @@ test "Highlight current word 3":
     currentBufStatus,
     currentMainWindowNode,
     status.settings.editorColorTheme,
-    status.colorMode)
+    status.settings.colorMode)
 
   check(highlight[0].color == EditorColorPairIndex.default)
   check(highlight[1].color == EditorColorPairIndex.currentWord)
@@ -199,7 +199,7 @@ suite "Highlight trailing spaces":
       status.isSearchHighlight,
       status.searchHistory,
       status.settings,
-      status.colorMode)
+      status.settings.colorMode)
 
     updateTerminalSize(100, 100)
     status.resize
@@ -226,7 +226,7 @@ suite "Highlight trailing spaces":
       status.isSearchHighlight,
       status.searchHistory,
       status.settings,
-      status.colorMode)
+      status.settings.colorMode)
 
     check(highlight[0].color == EditorColorPairIndex.default)
     check(highlight[0].firstColumn == 0)
@@ -256,7 +256,7 @@ suite "Highlight trailing spaces":
       status.isSearchHighlight,
       status.searchHistory,
       status.settings,
-      status.colorMode)
+      status.settings.colorMode)
 
     check(highlight[0].color == EditorColorPairIndex.default)
     check(highlight[0].firstColumn == 0)
@@ -677,7 +677,7 @@ suite "Update search highlight":
       status.isSearchHighlight,
       status.searchHistory,
       status.settings,
-      status.colorMode)
+      status.settings.colorMode)
 
     check highlight.len == 3
     check highlight[0].color == EditorColorPairIndex.searchResult
@@ -714,7 +714,7 @@ suite "Update search highlight":
             status.isSearchHighlight,
             status.searchHistory,
             status.settings,
-            status.colorMode)
+            status.settings.colorMode)
 
           check highlight.len == 3
           check highlight[0].color == EditorColorPairIndex.searchResult

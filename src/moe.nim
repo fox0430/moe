@@ -70,7 +70,8 @@ proc initEditor(): EditorStatus =
 
   block initColors:
     # TODO: Show error messages when failing to the load VSCode theme.
-    let r = result.settings.editorColorTheme.initEditrorColor(result.colorMode)
+    let r = result.settings.editorColorTheme.initEditrorColor(
+      result.settings.colorMode)
     if r.isErr:
       exitUi()
       echo r.error

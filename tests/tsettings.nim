@@ -50,6 +50,7 @@ const TomlStr = """
   autoDeleteParen = false
   smoothScroll = false
   smoothScrollSpeed = 1
+  colorMode = "none"
 
   [Clipboard]
   enable = false
@@ -344,6 +345,7 @@ suite "Parse configuration file":
     check not settings.autoDeleteParen
     check not settings.smoothScroll
     check settings.smoothScrollSpeed == 1
+    check settings.colorMode == ColorMode.none
 
     check not settings.clipboard.enable
     check settings.clipboard.toolOnLinux == ClipboardToolOnLinux.xclip

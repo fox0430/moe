@@ -62,7 +62,8 @@ suite "Config mode: Init buffer":
                      ru "  autoDeleteParen                false",
                      ru "  smoothScroll                   true",
                      ru "  smoothScrollSpeed              15",
-                     ru "  liveReloadOfFile               false"]
+                     ru "  liveReloadOfFile               false",
+                     ru "  colorMode                      24bit"]
 
     for index, line in buffer:
       check sample[index] == line
