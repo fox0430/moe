@@ -236,7 +236,7 @@ proc initNcursesColor*(color, red, green, blue: int16): Result[(), string] =
     # Not start when running unit tests
     let exitCode = initColor(color.cshort, r.cshort, g.cshort, b.cshort)
     if 0 != exitCode:
-      return Result[(), string].err "Init Ncurses color failed: (r: {r}, g: {g}, b: {b}): Exit code: {exitCode}"
+      return Result[(), string].err fmt"Init Ncurses color failed: (r: {r}, g: {g}, b: {b}): Exit code: {exitCode}"
 
   return Result[(), string].ok ()
 
