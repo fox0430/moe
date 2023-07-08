@@ -54,6 +54,8 @@ smoothScrollSpeed = 15
 
 liveReloadOfFile = false
 
+colorMode = "24bit"
+
 [Clipboard]
 enable = true
 

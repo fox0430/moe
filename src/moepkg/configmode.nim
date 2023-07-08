@@ -50,6 +50,7 @@ type standardTableNames {.pure.} = enum
   smoothScroll
   smoothScrollSpeed
   liveReloadOfFile
+  colorMode
 
 type clipboardTableNames {.pure.} = enum
   enable
@@ -192,6 +193,13 @@ proc getCursorTypeSettingValues(currentVal: CursorType): seq[seq[Rune]] =
     if $cursorType != $currentVal:
       result.add ru $cursorType
 
+proc getColorModeSettingValues(currentVal: ColorMode): seq[Runes] =
+  result.add currentVal.toConfigStr.toRunes
+  const ConfigVals = @["none", "8", "16", "256", "24bit"]
+  for c in ConfigVals:
+    if c != currentVal.toConfigStr:
+      result.add c.toRunes
+
 proc getStandardTableSettingValues(settings: EditorSettings,
                                    name: string): seq[seq[Rune]] =
   if name == "theme":
@@ -206,6 +214,8 @@ proc getStandardTableSettingValues(settings: EditorSettings,
   elif name == "insertModeCursor":
       let currentCursorType = settings.insertModeCursor
       result = getCursorTypeSettingValues(currentCursorType)
+  elif name == "colorMode":
+    result = settings.colorMode.getColorModeSettingValues
   else:
     var currentVal: bool
 
@@ -716,6 +726,8 @@ proc changeStandardTableSetting(settings: var EditorSettings,
       settings.smoothScroll = parseBool(settingVal)
     of "liveReloadOfFile":
       settings.liveReloadOfFile = parseBool(settingVal)
+    of "colorMode":
+      settings.colorMode = parseColorMode(settingVal).get
     else:
       discard
 
@@ -1743,6 +1755,8 @@ proc initStandardTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
         result.add(ru nameStr & space & $settings.smoothScrollSpeed)
       of "liveReloadOfFile":
         result.add(ru nameStr & space & $settings.liveReloadOfFile)
+      of "colorMode":
+        result.add(ru nameStr & space & settings.colorMode.toConfigStr)
 
 proc initClipBoardTableBuffer(settings: ClipboardSettings): seq[seq[Rune]] =
   result.add(ru"ClipBoard")

@@ -50,6 +50,7 @@ const TomlStr = """
   autoDeleteParen = false
   smoothScroll = false
   smoothScrollSpeed = 1
+  colorMode = "none"
 
   [Clipboard]
   enable = false
@@ -344,6 +345,7 @@ suite "Parse configuration file":
     check not settings.autoDeleteParen
     check not settings.smoothScroll
     check settings.smoothScrollSpeed == 1
+    check settings.colorMode == ColorMode.none
 
     check not settings.clipboard.enable
     check settings.clipboard.toolOnLinux == ClipboardToolOnLinux.xclip
@@ -497,6 +499,50 @@ suite "Parse configuration file":
     check settings.clipboard.enable
     check settings.clipboard.toolOnLinux == ClipboardToolOnLinux.wlClipboard
 
+  test "Parse color Mode setting 1":
+    const str = """
+      [Standard]
+      colorMode = "none"
+    """
+
+    let toml = parsetoml.parseString(str)
+    let settings = parseSettingsFile(toml)
+
+    check ColorMode.none == settings.colorMode
+
+  test "Parse color Mode setting 2":
+    const str = """
+      [Standard]
+      colorMode = "8"
+    """
+
+    let toml = parsetoml.parseString(str)
+    let settings = parseSettingsFile(toml)
+
+    check ColorMode.c8 == settings.colorMode
+
+  test "Parse color Mode setting 3":
+    const str = """
+      [Standard]
+      colorMode = "256"
+    """
+
+    let toml = parsetoml.parseString(str)
+    let settings = parseSettingsFile(toml)
+
+    check ColorMode.c256  == settings.colorMode
+
+  test "Parse color Mode setting 4":
+    const str = """
+      [Standard]
+      colorMode = "24bit"
+    """
+
+    let toml = parsetoml.parseString(str)
+    let settings = parseSettingsFile(toml)
+
+    check ColorMode.c24bit == settings.colorMode
+
 suite "Validate toml config":
   test "Except for success":
     let toml = parsetoml.parseString(TomlStr)
@@ -593,3 +639,35 @@ suite "Error message":
       errorMessage = result.get.toValidateErrorMessage
 
     check errorMessage == """(name: test, val: test1 = "test1" test2 = "test2")"""
+
+suite "parseColorMode":
+  test "none":
+    check ColorMode.none == "none".parseColorMode.get
+
+  test "c8":
+    check ColorMode.c8 == "8".parseColorMode.get
+
+  test "c16":
+    check ColorMode.c16 == "16".parseColorMode.get
+
+  test "c256":
+    check ColorMode.c256 == "256".parseColorMode.get
+
+  test "c24bit":
+    check ColorMode.c24bit == "24bit".parseColorMode.get
+
+suite "toConfigStr":
+  test "from ColorMode.none":
+    check "none" == ColorMode.none.toConfigStr
+
+  test "from ColorMode.c8":
+    check "8" == ColorMode.c8.toConfigStr
+
+  test "from ColorMode.c16":
+    check "16" == ColorMode.c16.toConfigStr
+
+  test "from ColorMode.c256":
+    check "256" == ColorMode.c256.toConfigStr
+
+  test "from ColorMode.c24bit":
+    check "24bit" == ColorMode.c24bit.toConfigStr

@@ -160,6 +160,12 @@ default is false
 liveReloadOfFile
 ```
 
+Terminal color mode (string) `none` or `8` or `16` or `256` or `24bit`
+defualt is "24bit"
+```
+colorMode
+```
+
 ### Clipboard table
 Enable/Disable system clipboard (bool)  
 default is true
