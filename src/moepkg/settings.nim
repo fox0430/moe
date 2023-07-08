@@ -17,7 +17,8 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[os, json, macros, options, strformat, osproc, strutils]
+import std/[os, json, macros, options, strformat, osproc, strutils, sequtils,
+            enumutils]
 import pkg/[parsetoml, results]
 import ui, color, unicodeext, highlight, platform, independentutils, rgb
 
@@ -2302,25 +2303,25 @@ proc validateDebugTable(table: TomlValueRef): Option[InvalidItem] =
         return some(InvalidItem(name: $key, val: $val))
 
 proc validateThemeTable(table: TomlValueRef): Option[InvalidItem] =
+  proc ColorThemeNames(): seq[string] {.compileTime.} =
+    ColorTheme.mapIt(it.symbolName)
+
+  proc EditorColorIndexNames(): seq[string] {.compileTime.} =
+    EditorColorIndex.mapIt(it.symbolName)
+
+  proc isColorVal(val: string): bool {.inline.} =
+    val == "termDefaultFg" or val == "termDefaultBg" or val.isHexColor
+
   for key, val in table.getTable:
+    if val.kind != TomlValueKind.String:
+      return some(InvalidItem(name: $key, val: $val))
+
     case key:
       of "baseTheme":
-        var correctKey = false
-        for theme in ColorTheme:
-          if $theme == val.getStr:
-            correctKey = true
-        if not correctKey: return some(InvalidItem(name: $key, val: $val))
+        if not ColorThemeNames().contains(val.getStr):
+          return some(InvalidItem(name: $key, val: $val))
       else:
-        var correctKey = false
-        for field in EditorColorIndex:
-          if (key == "termDefautFg" or  key == "termDefautBg") and
-             val.kind == TomlValueKind.String:
-               correctKey = true
-               break
-          elif key == $field and val.kind == TomlValueKind.String:
-            correctKey = true
-            break
-        if not correctKey:
+        if not EditorColorIndexNames().contains(key) or not val.getStr.isColorVal:
           return some(InvalidItem(name: $key, val: $val))
 
 proc validateGitTable(table: TomlValueRef): Option[InvalidItem] =
