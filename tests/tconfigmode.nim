@@ -755,6 +755,17 @@ suite "Config mode: Get standard table setting values":
 
     checkBoolSettingValue(default, values)
 
+  test "Get colorMode values":
+    var status = initEditorStatus()
+
+    var settings = status.settings
+    settings.colorMode = ColorMode.c24bit
+
+    const Name = "colorMode"
+    let values = settings.getStandardTableSettingValues(Name)
+
+    check values == @[ru"24bit", ru"none", ru"8", ru"16", ru"256"]
+
   test "Set invalid name":
     var status = initEditorStatus()
     let settings = status.settings
@@ -1740,6 +1751,29 @@ suite "Config mode: Chaging Standard table settings":
 
     check val == settings.smoothScroll
 
+  test "Chaging colorMode":
+    var settings = initEditorSettings()
+
+    settings.colorMode = ColorMode.c24bit
+    settings.changeStandardTableSetting("colorMode", "none")
+    check ColorMode.none == settings.colorMode
+
+    settings.colorMode = ColorMode.c24bit
+    settings.changeStandardTableSetting("colorMode", "8")
+    check ColorMode.c8 == settings.colorMode
+
+    settings.colorMode = ColorMode.c24bit
+    settings.changeStandardTableSetting("colorMode", "16")
+    check ColorMode.c16 == settings.colorMode
+
+    settings.colorMode = ColorMode.c24bit
+    settings.changeStandardTableSetting("colorMode", "256")
+    check ColorMode.c256 == settings.colorMode
+
+    settings.colorMode = ColorMode.none
+    settings.changeStandardTableSetting("colorMode", "24bit")
+    check ColorMode.c24bit == settings.colorMode
+
   test "Set invalid value":
     var settings = initEditorSettings()
 
@@ -2423,3 +2457,24 @@ suite "Config mode: Get BuildOnSave table setting type":
 
     const settingType = getSettingType(table, name)
     check settingType == SettingType.None
+
+suite "Config mode: getColorModeSettingValues":
+  test "Current mode is ColorMode.none":
+    check @[ru"none", ru"8", ru"16", ru"256", ru"24bit"] ==
+      ColorMode.none.getColorModeSettingValues
+
+  test "Current mode is ColorMode.c8":
+    check @[ru"8", ru"none", ru"16", ru"256", ru"24bit"] ==
+      ColorMode.c8.getColorModeSettingValues
+
+  test "Current mode is ColorMode.c16":
+    check @[ru"16", ru"none", ru"8", ru"256", ru"24bit"] ==
+      ColorMode.c16.getColorModeSettingValues
+
+  test "Current mode is ColorMode.c256":
+    check @[ru"256", ru"none", ru"8", ru"16", ru"24bit"] ==
+      ColorMode.c256.getColorModeSettingValues
+
+  test "Current mode is ColorMode.c24bit":
+    check @[ru"24bit", ru"none", ru"8", ru"16", ru"256"] ==
+      ColorMode.c24bit.getColorModeSettingValues
