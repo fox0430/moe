@@ -418,10 +418,12 @@ suite "Ex mode: Open log viewer":
   test "Open log viewer":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
-    startUi()
 
-    const command = @[ru"log"]
-    status.exModeCommand(command)
+    const Command = @[ru"log"]
+    status.exModeCommand(Command)
+
+    check status.mainWindow.numOfMainWindow == 2
+    check currentMainWindowNode.view.height > 1
 
 suite "Ex mode: Highlight pair of paren settig command":
   test "Highlight pair of paren settig command":

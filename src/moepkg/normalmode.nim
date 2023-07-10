@@ -106,7 +106,7 @@ proc searchNextOccurrence(status: var EditorStatus, keyword: seq[Rune]) =
     status.isSearchHighlight,
     status.searchHistory,
     status.settings,
-    status.colorMode)
+    status.settings.colorMode)
 
   status.bufStatus[currentBufferIndex].keyRight(currentMainWindowNode)
 
@@ -141,7 +141,7 @@ proc searchNextOccurrenceReversely(status: var EditorStatus, keyword: seq[Rune])
     status.isSearchHighlight,
     status.searchHistory,
     status.settings,
-    status.colorMode)
+    status.settings.colorMode)
 
   currentMainWindowNode.keyLeft
 
@@ -922,7 +922,7 @@ proc openBlankLineAboveAndEnterInsertMode(status: var EditorStatus) =
     status.isSearchHighlight,
     status.searchHistory,
     status.settings,
-    status.colorMode)
+    status.settings.colorMode)
 
   status.changeModeToInsertMode
 

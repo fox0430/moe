@@ -8,4 +8,6 @@
 
 [Configuration file](https://github.com/fox0430/moe/blob/develop/documents/configfile.md)
 
+[Platform / Terminal](https://github.com/fox0430/moe/blob/develop/documents/platform_terminal.md)
+
 [Developer](https://github.com/fox0430/moe/blob/develop/documents/developer.md)

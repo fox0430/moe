@@ -458,6 +458,8 @@ proc openLogViewer(status: var EditorStatus) =
   status.moveNextWindow
 
   status.addNewBufferInCurrentWin(Mode.logviewer)
+  status.resize
+
   status.changeCurrentBuffer(status.bufStatus.high)
 
 proc openBufferManager(status: var EditorStatus) =
@@ -1189,7 +1191,7 @@ proc listAllBufferCommand(status: var EditorStatus) =
     status.isSearchHighlight,
     status.searchHistory,
     status.settings,
-    status.colorMode)
+    status.settings.colorMode)
 
   while true:
     status.update

@@ -23,14 +23,17 @@ import moepkg/[settings, unicodeext, clipboard]
 import moepkg/platform {.all.}
 import moepkg/independentutils {.all.}
 
+proc isXAvailable(): bool {.inline.} =
+  execCmdExNoOutput("xset q") == 0
+
 proc isXselAvailable(): bool {.inline.} =
-  execCmdExNoOutput("xset q") == 0 and execCmdExNoOutput("xsel --version") == 0
+  isXAvailable() and execCmdExNoOutput("xsel --version") == 0
 
 proc isXclipAvailable(): bool {.inline.} =
-  execCmdExNoOutput("xset q") == 0 and execCmdExNoOutput("xclip -version") == 0
+  isXAvailable() and execCmdExNoOutput("xclip -version") == 0
 
 if isXselAvailable():
-  suite "Editor: Send to clipboad (xsel)":
+  suite "Clipboard: Send to clipboad (xsel)":
     test "Send string to clipboard 1 (xsel)":
       const
         buffer = @[ru "Clipboard test"]
@@ -107,7 +110,7 @@ if isXselAvailable():
           check output[0 .. output.high - 2] == $buffer
 
 if isXclipAvailable():
-  suite "Send string to clipboard (xclip)":
+  suite "Clipboard: Send string to clipboard (xclip)":
     test "Send string to clipboard (xclip)":
       const
         buffer = @[ru "`````"]

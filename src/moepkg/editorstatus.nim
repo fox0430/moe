@@ -89,8 +89,6 @@ proc initEditorStatus*(): EditorStatus =
       color = EditorColorPairIndex.default
     result.tabWindow = initWindow(h, w, t, l, color.int16)
 
-  result.colorMode = checkColorSupportedTerminal()
-
 template currentBufStatus*: var BufferStatus =
   mixin status
   status.bufStatus[status.bufferIndexInCurrentWindow]
@@ -764,7 +762,7 @@ proc update*(status: var EditorStatus) =
             status.isSearchHighlight,
             status.searchHistory,
             settings,
-            status.colorMode)
+            status.settings.colorMode)
 
         # TODO: Fix condition. Will use a flag.
         if not bufStatus.isFilerMode:
@@ -800,7 +798,7 @@ proc update*(status: var EditorStatus) =
             buffer,
             highlight,
             settings.editorColorTheme,
-            status.colorMode,
+            status.settings.colorMode,
             node.currentLine,
             selectedRange,
             currentLineColorPair)
@@ -1091,7 +1089,8 @@ proc changeTheme*(status: var EditorStatus) =
       status.commandLine.writeError(
         fmt"Error: Failed to switch to VSCode theme: {vsCodeTheme.error}")
 
-  let r = status.settings.editorColorTheme.initEditrorColor(status.colorMode)
+  let r = status.settings.editorColorTheme.initEditrorColor(
+    status.settings.colorMode)
   if r.isErr:
     exitUi()
     echo r.error

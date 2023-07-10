@@ -58,7 +58,7 @@ type
 
   ColorMode* {.pure.} = enum
     # No color support
-    None = 1
+    none = 1
     # 8 colors
     c8 = 8
     # 16 colors
@@ -156,7 +156,7 @@ proc setTimeout*(win: var Window, time: int = 100) {.inline.} =
 ## Check "$COLORTERM" first, then check "tput colors" if it fails.
 ## Return ColorMode.None if unknown color support.
 proc checkColorSupportedTerminal*(): ColorMode =
-  result = ColorMode.None
+  result = ColorMode.none
 
   block checkColorTerm:
     let cmdResult = execCmdEx("echo $COLORTERM")
@@ -176,13 +176,13 @@ proc checkColorSupportedTerminal*(): ColorMode =
       try:
         num = output.parseInt
       except ValueError:
-        return ColorMode.None
+        return ColorMode.none
 
       case num:
         of 8: return ColorMode.c8
         of 16: return ColorMode.c16
         of 256: return ColorMode.c256
-        else: return ColorMode.None
+        else: return ColorMode.none
 
 proc startUi*() =
   # Not start when running unit tests
@@ -236,7 +236,7 @@ proc initNcursesColor*(color, red, green, blue: int16): Result[(), string] =
     # Not start when running unit tests
     let exitCode = initColor(color.cshort, r.cshort, g.cshort, b.cshort)
     if 0 != exitCode:
-      return Result[(), string].err "Init Ncurses color failed: (r: {r}, g: {g}, b: {b}): Exit code: {exitCode}"
+      return Result[(), string].err fmt"Init Ncurses color failed: (r: {r}, g: {g}, b: {b}): Exit code: {exitCode}"
 
   return Result[(), string].ok ()
 

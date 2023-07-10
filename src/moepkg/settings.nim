@@ -17,7 +17,8 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[os, json, macros, options, strformat, osproc, strutils]
+import std/[os, json, macros, options, strformat, osproc, strutils, sequtils,
+            enumutils]
 import pkg/[parsetoml, results]
 import ui, color, unicodeext, highlight, platform, independentutils, rgb
 
@@ -213,6 +214,7 @@ type
     smoothScroll*: bool
     smoothScrollSpeed*: int
     liveReloadOfFile*: bool
+    colorMode*: ColorMode
     clipboard*: ClipboardSettings
     buildOnSave*: BuildOnSaveSettings
     filer*: FilerSettings
@@ -414,6 +416,7 @@ proc initEditorSettings*(): EditorSettings =
   result.popupWindowInExmode = true
   result.smoothScroll = true
   result.smoothScrollSpeed = 15
+  result.colorMode = checkColorSupportedTerminal()
   result.clipboard = initClipboardSettings()
   result.buildOnSave = BuildOnSaveSettings()
   result.filer = initFilerSettings()
@@ -1007,6 +1010,21 @@ proc loadVSCodeTheme*(): Result[ColorTheme, string] =
 
   return Result[ColorTheme, string].err fmt"Failed to load VSCode theme: Could not find files for the current theme"
 
+proc parseColorMode*(str: string): Result[ColorMode, string] =
+  case str:
+    of "none":
+      return Result[ColorMode, string].ok ColorMode.none
+    of "8":
+      return Result[ColorMode, string].ok ColorMode.c8
+    of "16":
+      return Result[ColorMode, string].ok ColorMode.c16
+    of "256":
+      return Result[ColorMode, string].ok ColorMode.c256
+    of "24bit":
+      return Result[ColorMode, string].ok ColorMode.c24bit
+    else:
+      return Result[ColorMode, string].err "Invalid value"
+
 proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
   result = initEditorSettings()
 
@@ -1093,6 +1111,9 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
 
     if settings["Standard"].contains("smoothScrollSpeed"):
       result.smoothScrollSpeed = settings["Standard"]["smoothScrollSpeed"].getInt()
+
+    if settings["Standard"].contains("colorMode"):
+      result.colorMode = settings["Standard"]["colorMode"].getStr.parseColorMode.get
 
     if settings["Standard"].contains("liveReloadOfFile"):
       result.liveReloadOfFile = settings["Standard"]["liveReloadOfFile"].getBool()
@@ -2009,6 +2030,9 @@ proc validateStandardTable(table: TomlValueRef): Option[InvalidItem] =
             break
         if not correctValue:
           return some(InvalidItem(name: $key, val: $val))
+      of "colorMode":
+        if val.getStr.parseColorMode.isErr:
+          return some(InvalidItem(name: $key, val: $val))
       else:
         return some(InvalidItem(name: $key, val: $val))
 
@@ -2279,25 +2303,25 @@ proc validateDebugTable(table: TomlValueRef): Option[InvalidItem] =
         return some(InvalidItem(name: $key, val: $val))
 
 proc validateThemeTable(table: TomlValueRef): Option[InvalidItem] =
+  proc ColorThemeNames(): seq[string] {.compileTime.} =
+    ColorTheme.mapIt(it.symbolName)
+
+  proc EditorColorIndexNames(): seq[string] {.compileTime.} =
+    EditorColorIndex.mapIt(it.symbolName)
+
+  proc isColorVal(val: string): bool {.inline.} =
+    val == "termDefaultFg" or val == "termDefaultBg" or val.isHexColor
+
   for key, val in table.getTable:
+    if val.kind != TomlValueKind.String:
+      return some(InvalidItem(name: $key, val: $val))
+
     case key:
       of "baseTheme":
-        var correctKey = false
-        for theme in ColorTheme:
-          if $theme == val.getStr:
-            correctKey = true
-        if not correctKey: return some(InvalidItem(name: $key, val: $val))
+        if not ColorThemeNames().contains(val.getStr):
+          return some(InvalidItem(name: $key, val: $val))
       else:
-        var correctKey = false
-        for field in EditorColorIndex:
-          if (key == "termDefautFg" or  key == "termDefautBg") and
-             val.kind == TomlValueKind.String:
-               correctKey = true
-               break
-          elif key == $field and val.kind == TomlValueKind.String:
-            correctKey = true
-            break
-        if not correctKey:
+        if not EditorColorIndexNames().contains(key) or not val.getStr.isColorVal:
           return some(InvalidItem(name: $key, val: $val))
 
 proc validateGitTable(table: TomlValueRef): Option[InvalidItem] =
@@ -2402,6 +2426,14 @@ proc loadSettingFile*(): EditorSettings =
   else:
     return parseSettingsFile(toml)
 
+proc toConfigStr*(colorMode: ColorMode): string =
+  case colorMode:
+    of ColorMode.none: "none"
+    of ColorMode.c8: "8"
+    of ColorMode.c16: "16"
+    of ColorMode.c256: "256"
+    of ColorMode.c24bit: "24bit"
+
 ## Generate a string of the configuration file of TOML.
 proc genTomlConfigStr*(settings: EditorSettings): string =
   proc addLine(buf: var string, str: string) {.inline.} = buf &= "\n" & str
@@ -2433,6 +2465,7 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "smoothScroll = {$settings.smoothScroll }"
   result.addLine fmt "smoothScrollSpeed = {$settings.smoothScrollSpeed}"
   result.addLine fmt "liveReloadOfFile = {$settings.liveReloadOfFile}"
+  result.addLine fmt "colorMode = \"{settings.colorMode.toConfigStr}\""
 
   result.addLine ""
 

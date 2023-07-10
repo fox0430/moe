@@ -54,6 +54,8 @@ smoothScrollSpeed = 15
 
 liveReloadOfFile = false
 
+colorMode = "24bit"
+
 [Clipboard]
 enable = true
 
@@ -329,7 +331,7 @@ commandLine = "#ffffff"
 commandLineBg = "#000000"
 
 errorMessage = "#ff0000"
-errorMessageBg = "termDefautBg"
+errorMessageBg = "#000000"
 
 searchResult = "#ffffff"
 searchResultBg = "#ff0000"
