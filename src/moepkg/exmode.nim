@@ -458,6 +458,8 @@ proc openLogViewer(status: var EditorStatus) =
   status.moveNextWindow
 
   status.addNewBufferInCurrentWin(Mode.logviewer)
+  status.resize
+
   status.changeCurrentBuffer(status.bufStatus.high)
 
 proc openBufferManager(status: var EditorStatus) =
