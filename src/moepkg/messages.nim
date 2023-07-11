@@ -116,26 +116,19 @@ proc writeMessageAutoSave*(
     if settings.logNotifications and settings.autoSaveLogNotify:
       addMessageLog mess
 
-proc writeMessageBuildOnSave*(
-  commandLine: var CommandLine,
-  settings: NotificationSettings) =
-    const mess = "Build on save..."
-    if settings.screenNotifications and settings.buildOnSaveScreenNotify:
-      commandLine.writeMessageOnCommandLine(mess)
-    if settings.logNotifications and settings.buildOnSaveLogNotify:
-      addMessageLog mess
-
 proc writeMessageSuccessBuildOnSave*(
   commandLine: var CommandLine,
+  path: Runes,
   settings: NotificationSettings) =
-    const mess = "Build successful, file saved"
+
+    let mess = fmt"Build on save successful: {$path}"
     if settings.screenNotifications and settings.buildOnSaveScreenNotify:
       commandLine.writeMessageOnCommandLine(mess)
     if settings.logNotifications and settings.buildOnSaveLogNotify:
       addMessageLog mess
 
-proc writeMessageFailedBuildOnSave*(commandLine: var CommandLine) =
-  const mess = "Build failed"
+proc writeMessageFailedBuildOnSave*(commandLine: var CommandLine, path: Runes) =
+  let mess = fmt"Build failed: {$path}"
   commandLine.writeMessageOnCommandLine(mess)
   addMessageLog mess
 
@@ -153,12 +146,24 @@ proc writeNotEditorCommandError*(
 
 proc writeMessageSaveFile*(
   commandLine: var CommandLine,
-  filename: seq[Rune],
+  filename: Runes,
   settings: NotificationSettings) =
+
     let mess = fmt"Saved {filename}"
     if settings.screenNotifications and settings.saveScreenNotify:
       commandLine.writeMessageOnCommandLine(mess)
     if settings.logNotifications and settings.saveLogNotify:
+      addMessageLog mess
+
+proc writeMessageSaveFileAndStartBuild*(
+  commandLine: var CommandLine,
+  filename: Runes,
+  settings: NotificationSettings) =
+
+    let mess = fmt"Saved {filename} and start build..."
+    if settings.screenNotifications and settings.buildOnSaveScreenNotify:
+      commandLine.writeMessageOnCommandLine(mess)
+    if settings.logNotifications and settings.buildOnSaveLogNotify:
       addMessageLog mess
 
 proc writeNoBufferDeletedError*(commandLine: var CommandLine) =

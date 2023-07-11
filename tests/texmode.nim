@@ -20,7 +20,7 @@
 import std/[unittest, os, oids, deques, macros, strformat]
 import moepkg/syntax/highlite
 import moepkg/[ui, editorstatus, gapbuffer, unicodeext, bufferstatus, settings,
-               windownode, helputils]
+               windownode, helputils, backgroundprocess]
 
 import moepkg/exmode {.all.}
 import moepkg/commandlineutils{.all.}
@@ -127,17 +127,37 @@ suite "Fix #1581":
     currentMainWindowNode.isValidWindowSize
 
 suite "Ex mode: Write command":
+  const
+    TestDir = "./ExModeWriteTest"
+    TestFilePath = TestDir / "test.nim"
+
+  setup:
+    createDir(TestDir)
+
+  teardown:
+    removeDir(TestDir)
+
   test "Write command":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
-
+    status.addNewBufferInCurrentWin(TestFilePath)
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a"])
-    status.bufStatus[0].path = ru"test.txt"
+
     const command = @[ru"w"]
     status.exModeCommand(command)
 
-    if fileExists("test.txt"):
-      removeFile("test.txt")
+  test "buildOnSave":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin(TestFilePath)
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"echo 1"])
+
+    status.settings.buildOnSave.enable = true
+
+    const command = @[ru"w"]
+    status.exModeCommand(command)
+
+    check status.backgroundTasks.build.len == 1
+
+    status.backgroundTasks.build[0].process.kill
 
 suite "Ex mode: Change next buffer command":
  test "Change next buffer command":

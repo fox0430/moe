@@ -26,38 +26,44 @@ import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        backup, messages, commandline, register, platform, movement,
        autocomplete, suggestionwindow, filermodeutils, debugmodeutils,
        independentutils, viewhighlight, helputils, backupmanagerutils,
-       diffviewerutils, messagelog, globalsidebar
+       diffviewerutils, messagelog, globalsidebar, build
 
-# Save cursor position when a buffer for a window(file) gets closed.
-type LastCursorPosition* = object
-  path: seq[Rune]
-  line: int
-  column: int
+type
+  LastCursorPosition* = object
+    ## Save cursor position when a buffer for a window(file) gets closed.
+    path: Runes
+    line: int
+    column: int
 
-type EditorStatus* = object
-  bufStatus*: seq[BufferStatus]
-  filerStatuses: seq[FilerStatus]
-  prevBufferIndex*: int
-  searchHistory*: seq[Runes]
-  exCommandHistory*: seq[Runes]
-  normalCommandHistory*: seq[seq[Rune]]
-  registers*: Registers
-  settings*: EditorSettings
-  mainWindow*: MainWindow
-  statusLine*: seq[StatusLine]
-  timeConfFileLastReloaded*: DateTime
-  currentDir: seq[Rune]
-  commandLine*: CommandLine
-  tabWindow*: Window
-  popupWindow*: Window
-  lastOperatingTime*: DateTime
-  autoBackupStatus*: AutoBackupStatus
-  isSearchHighlight*: bool
-  lastPosition*: seq[LastCursorPosition]
-  isReadonly*: bool
-  wordDictionary*: WordDictionary
-  suggestionWindow*: Option[SuggestionWindow]
-  sidebar*: Option[GlobalSidebar]
+  BackgroundTasks* = object
+    build*: seq[BuildProcess]
+
+  EditorStatus* = object
+    bufStatus*: seq[BufferStatus]
+    filerStatuses: seq[FilerStatus]
+    prevBufferIndex*: int
+    searchHistory*: seq[Runes]
+    exCommandHistory*: seq[Runes]
+    normalCommandHistory*: seq[Runes]
+    registers*: Registers
+    settings*: EditorSettings
+    mainWindow*: MainWindow
+    statusLine*: seq[StatusLine]
+    timeConfFileLastReloaded*: DateTime
+    currentDir: Runes
+    commandLine*: CommandLine
+    tabWindow*: Window
+    popupWindow*: Window
+    lastOperatingTime*: DateTime
+    autoBackupStatus*: AutoBackupStatus
+    isSearchHighlight*: bool
+    lastPosition*: seq[LastCursorPosition]
+    isReadonly*: bool
+    wordDictionary*: WordDictionary
+    suggestionWindow*: Option[SuggestionWindow]
+    sidebar*: Option[GlobalSidebar]
+    colorMode*: ColorMode
+    backgroundTasks*: BackgroundTasks
 
 const
   tabLineWindowHeight = 1
@@ -604,13 +610,10 @@ proc updateLogViewerBuffer(
   if logs.len > 0 and logs[0].len > 0:
     bufStatus.buffer = logs.toGapBuffer
 
-proc updateLogViewerHighlight(buffer: string): Highlight =
+proc initLogViewerHighlight(buffer: string): Highlight =
   if buffer.len > 0:
-    const emptyReservedWord: seq[ReservedWord] = @[]
-    return initHighlight(
-      buffer,
-      emptyReservedWord,
-      SourceLanguage.langNone)
+    const EmptyReservedWord: seq[ReservedWord] = @[]
+    return buffer.initHighlight(EmptyReservedWord, SourceLanguage.langNone)
 
 proc updateSuggestWindow(status: var EditorStatus) =
   let
@@ -670,7 +673,7 @@ proc update*(status: var EditorStatus) =
     settings.syntax)
 
   # Set editor Color Pair for current line highlight.
-  # New color pairs are set to Number larger than the maximum value of EditorColorPiar.
+  # New color pairs are set to number larger than the maximum value of EditorColorPiarIndex.
   var currentLineColorPair: int = ord(EditorColorPairIndex.high) + 1
 
   var queue = initHeapQueue[WindowNode]()
@@ -711,15 +714,17 @@ proc update*(status: var EditorStatus) =
         var highlight = node.highlight
 
         ## Update highlights
-        # TODO: Fix condition
+        # TODO: Fix conditions
         if bufStatus.isLogViewerMode:
-          highlight = updateLogViewerHighlight($buffer)
-        elif bufStatus.isFilerMode and status.filerStatuses[bufStatus.filerStatusIndex.get].isUpdateView:
-          highlight = status.filerStatuses[bufStatus.filerStatusIndex.get].initFilerHighlight(
-            buffer,
-            node.currentLine)
+          highlight = initLogViewerHighlight($buffer)
         elif bufStatus.isDiffViewerMode:
           highlight = bufStatus.buffer.toRunes.initDiffViewerHighlight
+        elif bufStatus.isFilerMode and
+             status.filerStatuses[bufStatus.filerStatusIndex.get].isUpdateView:
+               highlight = initFilerHighlight(
+                 status.filerStatuses[bufStatus.filerStatusIndex.get],
+                 buffer,
+                 node.currentLine)
         elif bufStatus.isEditMode:
           highlight.updateHighlight(
             bufStatus,
@@ -1089,7 +1094,44 @@ proc loadConfigurationFile*(status: var EditorStatus) =
         failureCause)
       initEditorSettings()
 
+proc checkBackgroundBuild(status: var EditorStatus) =
+  var i = 0
+  while i < status.backgroundTasks.build.len:
+    template p(): var BuildProcess =
+      status.backgroundTasks.build[i]
+
+    if not p.isFinish:
+      i.inc
+    else:
+      let r = p.result
+      if r.isOk:
+        addMessageLog r.get.toSeqRunes
+        status.commandLine.writeMessageSuccessBuildOnSave(
+          p.filePath,
+          status.settings.notification)
+      else:
+        addMessageLog r.error.toRunes
+        status.commandLine.writeMessageFailedBuildOnSave(p.filePath)
+
+      # Back to the cursor position to the current main window from the command
+      # line window.
+      currentMainWindowNode.moveCursor(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn)
+
+      status.backgroundTasks.build.delete i
+
+proc checkBackgroundTasks(status: var EditorStatus) =
+  ## Check if background processes for builds are finished and if there are finished,
+  ## do the next process and delete from `status.backgroundTasks`.
+
+  if status.backgroundTasks.build.len > 0:
+    status.checkBackgroundBuild
+
 proc eventLoopTask(status: var EditorStatus) =
+  # BackgroundTasks
+  status.checkBackgroundTasks
+
   # Auto save
   if status.settings.autoSave: status.autoSave
 
