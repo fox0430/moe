@@ -17,14 +17,13 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, importutils]
+import std/[unittest, os]
 import pkg/results
 import moepkg/syntax/highlite
-import moepkg/[unicodeext, settings, bufferstatus, commandline, gapbuffer,
-               editorstatus]
+import moepkg/[unicodeext, bufferstatus, gapbuffer, backgroundprocess]
 
-import moepkg/quickrun {.all.}
-import moepkg/commandline {.all.}
+import moepkg/settings {.all.}
+import moepkg/quickrunutils {.all.}
 
 suite "QuickRun: languageExtension":
   test "Nim":
@@ -42,134 +41,302 @@ suite "QuickRun: languageExtension":
   test "Unknown":
     check languageExtension(SourceLanguage.langNone).isErr
 
-suite "QuickRun: generateCommand":
+suite "QuickRun: nimQuickRunCommand":
+  test "Default settings":
+    const Path = "test.nim"
+    let settings = initQuickRunSettings()
+
+    check nimQuickRunCommand(Path, settings) ==
+      BackgroundProcessCommand(
+        cmd: "nim",
+        args: @["c", "-r", "test.nim"],
+        workingDir: "")
+
+  test "User settings":
+    const Path = "test.nim"
+    let settings = QuickRunSettings(
+      nimAdvancedCommand: "js",
+      nimOptions: "--d:release")
+
+    check nimQuickRunCommand(Path, settings) ==
+      BackgroundProcessCommand(
+        cmd: "nim",
+        args: @["js", "-r", "--d:release", "test.nim"],
+        workingDir: "")
+
+suite "QuickRun: clangQuickRunCommand":
+  test "Default settings":
+    const Path = "test.c"
+    let settings = initQuickRunSettings()
+
+    check clangQuickRunCommand(Path, settings) ==
+      BackgroundProcessCommand(
+        cmd: "/bin/bash",
+        args: @["-c", "'gcc  test.c && ./.out'"],
+        workingDir: "")
+
+  test "User settings":
+    const Path = "test.c"
+    let settings = QuickRunSettings(
+      clangOptions: "--wall")
+
+    check clangQuickRunCommand(Path, settings) ==
+      BackgroundProcessCommand(
+        cmd: "/bin/bash",
+        args: @["-c", "'gcc --wall test.c && ./.out'"],
+        workingDir: "")
+
+suite "QuickRun: cppQuickRunCommand":
+  test "Default settings":
+    const Path = "test.cpp"
+    let settings = initQuickRunSettings()
+
+    check cppQuickRunCommand(Path, settings) ==
+      BackgroundProcessCommand(
+        cmd: "/bin/bash",
+        args: @["-c", "'g++  test.cpp && ./.out'"],
+        workingDir: "")
+
+  test "User settings":
+    const Path = "test.cpp"
+    let settings = QuickRunSettings(
+      cppOptions: "--wall")
+
+    check cppQuickRunCommand(Path, settings) ==
+      BackgroundProcessCommand(
+        cmd: "/bin/bash",
+        args: @["-c", "'g++ --wall test.cpp && ./.out'"],
+        workingDir: "")
+
+suite "QuickRun: shQuickRunCommand":
+  test "Default settings":
+    const Path = "test.sh"
+    let settings = initQuickRunSettings()
+
+    check shQuickRunCommand(Path, settings) ==
+      BackgroundProcessCommand(
+        cmd: "/bin/sh",
+        args: @["test.sh"],
+        workingDir: "")
+
+  test "User settings":
+    const Path = "test.sh"
+    let settings = QuickRunSettings(shOptions: "-c")
+
+    check shQuickRunCommand(Path, settings) ==
+      BackgroundProcessCommand(
+        cmd: "/bin/sh",
+        args: @["-c", "test.sh"],
+        workingDir: "")
+
+suite "QuickRun: bashQuickRunCommand":
+  test "Default settings":
+    const Path = "test.sh"
+    let settings = initQuickRunSettings()
+
+    check bashQuickRunCommand(Path, settings) ==
+      BackgroundProcessCommand(
+        cmd: "/bin/bash",
+        args: @["test.sh"],
+        workingDir: "")
+
+  test "User settings":
+    const Path = "test.sh"
+    let settings = QuickRunSettings(bashOptions: "-c")
+
+    check bashQuickRunCommand(Path, settings) ==
+      BackgroundProcessCommand(
+        cmd: "/bin/bash",
+        args: @["-c", "test.sh"],
+        workingDir: "")
+
+suite "QuickRun: quickRunCommand":
   test "Nim":
     const
       Path = "test.nim"
       Buffer = @[ru"echo 1"]
-    let
-      settings = QuickRunSettings(nimAdvancedCommand: "c", timeout: 1)
+    let settings = initQuickRunSettings()
 
-    check "timeout 1 nim c -r  test.nim" ==
-      generateCommand(Path, SourceLanguage.langNim, Buffer, settings).get
+    check quickRunCommand(Path, SourceLanguage.langNim, Buffer, settings).get ==
+      BackgroundProcessCommand(
+        cmd: "nim",
+        args: @["c", "-r", "test.nim"],
+        workingDir: "")
 
   test "C":
     const
       Path = "test.c"
-      Buffer = @[ru"""#include <stdio.h> main() { printf("Hello World\n"); }"""]
-    let
-      settings = QuickRunSettings(timeout: 1)
+      Buffer = @[ru"int main() {return 0;}"]
+    let settings = initQuickRunSettings()
 
-    check "timeout 1 gcc  test.c && ./a.out" ==
-      generateCommand(Path, SourceLanguage.langC, Buffer, settings).get
+    check quickRunCommand(Path, SourceLanguage.langC, Buffer, settings).get ==
+      BackgroundProcessCommand(
+        cmd: "/bin/bash",
+        args: @["-c", "'gcc  test.c && ./.out'"],
+        workingDir: "")
 
   test "C++":
     const
       Path = "test.cpp"
-      Buffer = @[ru"""#include <stdio.h> main() { printf("Hello World\n"); }"""]
-    let
-      settings = QuickRunSettings(timeout: 1)
+      Buffer = @[ru"int main() {return 0;}"]
+    let settings = initQuickRunSettings()
 
-    check "timeout 1 g++  test.cpp && ./a.out" ==
-      generateCommand(Path, SourceLanguage.langCpp, Buffer, settings).get
+    check quickRunCommand(Path, SourceLanguage.langCpp, Buffer, settings).get ==
+      BackgroundProcessCommand(
+        cmd: "/bin/bash",
+        args: @["-c", "'g++  test.cpp && ./.out'"],
+        workingDir: "")
 
-  test "Shell (Sh)":
+  test "Sh":
     const
       Path = "test.sh"
-      Buffer = @[ru"#!/bin/sh", ru "echo 1"]
-    let
-      settings = QuickRunSettings(timeout: 1)
+      Buffer = @[ru"#!/bin/sh", ru"echo 1"]
+    let settings = initQuickRunSettings()
 
-    check "timeout 1 sh  test.sh" ==
-      generateCommand(Path, SourceLanguage.langShell, Buffer, settings).get
+    check quickRunCommand(Path, SourceLanguage.langShell, Buffer, settings).get ==
+      BackgroundProcessCommand(
+        cmd: "/bin/sh",
+        args: @["test.sh"],
+        workingDir: "")
 
-  test "Shell (Bash)":
+  test "Bash":
     const
       Path = "test.sh"
-      Buffer = @[ru"#!/bin/bash", ru "echo 1"]
-    let
-      settings = QuickRunSettings(timeout: 1)
+      Buffer = @[ru"#!/bin/bash", ru"echo 1"]
+    let settings = initQuickRunSettings()
 
-    check "timeout 1 bash  test.sh" ==
-      generateCommand(Path, SourceLanguage.langShell, Buffer, settings).get
+    check quickRunCommand(Path, SourceLanguage.langShell, Buffer, settings).get ==
+      BackgroundProcessCommand(
+        cmd: "/bin/bash",
+        args: @["test.sh"],
+        workingDir: "")
 
-suite "QuickRun: runQuickRun":
-  test "Run Nim code without file":
-    const
-      Path = "test.nim"
-    let
-      settings = initEditorSettings()
-    var
-      bufStatus = initBufferStatus(Path)
-      commandLine = initCommandLine()
+suite "QuickRun: isRunning":
+  test "Return true":
+    let settings = initEditorSettings()
 
-    bufStatus.buffer = @[ru"echo 123"].toGapBuffer
+    var bufStatus = initBufferStatus("test.sh")
+    bufStatus.buffer = @[ru"sleep 1000"].toGapBuffer
 
-    let r = runQuickRun(bufStatus, commandLine, settings).get
+    var p = bufStatus.startBackgroundQuickRun(settings).get
 
-    check ru"123" == r[r.high - 1]
+    # Wait just in case
+    sleep 100
 
-  test "Run Nim code with file":
-    const
-      Dir = "./quickrun_test"
-      Path = Dir / "quickruntest.nim"
-      Buffer = "echo 123"
+    let isRunning = p.isRunning
 
-    # Create dir and file for the test.
-    createDir(Dir)
-    writeFile(Path, Buffer)
+    p.close
 
-    let
-      settings = initEditorSettings()
-    var
-      bufStatus = initBufferStatus(Path)
-      commandLine = initCommandLine()
+    check isRunning
 
-    let r = runQuickRun(bufStatus, commandLine, settings).get
+  test "Return false":
+    let settings = initEditorSettings()
 
-    # Cleanup test file and dir.
-    removeDir(Dir)
+    var bufStatus = initBufferStatus("test.sh")
+    bufStatus.buffer = @[ru"sleep 0"].toGapBuffer
 
-    check ru"123" == r[r.high - 1]
+    var p = bufStatus.startBackgroundQuickRun(settings).get
 
-  test "Run Nim code with file and before save":
-    const
-      Dir = "./quickrun_test"
-      Path = Dir / "quickruntest.nim"
-      Buffer = "echo 123"
+    # Wait just in case
+    sleep 100
 
-    # Create dir and file for the test.
-    createDir(Dir)
-    writeFile(Path, Buffer)
+    let isRunning = p.isRunning
 
-    var
-      settings = initEditorSettings()
-      bufStatus = initBufferStatus(Path)
-      commandLine = initCommandLine()
+    p.close
 
-    settings.quickrun.saveBufferWhenQuickRun = true
-    bufStatus.buffer[0] = ru"echo 1234"
+    check not isRunning
 
-    let
-      r = runQuickRun(bufStatus, commandLine, settings).get
-      fileBuffer = readFile(Path)
+suite "QuickRun: isFinish":
+  test "Return true":
+    let settings = initEditorSettings()
 
-    # Cleanup test file and dir.
-    removeDir(Dir)
+    var bufStatus = initBufferStatus("test.sh")
+    bufStatus.buffer = @[ru"sleep 0"].toGapBuffer
 
-    check "echo 1234" == fileBuffer
-    check ru"1234" == r[r.high - 1]
+    var p = bufStatus.startBackgroundQuickRun(settings).get
 
-suite "QuickRun: Change mode":
-  test "Change to Ex mode (':' command)":
-    var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
-    status.changeMode(Mode.quickRun)
+    # Wait just in case
+    sleep 100
 
-    const Command = ru":"
-    status.execQuickRunCommand(Command)
+    let isFinish = p.isFinish
 
-    check status.commandLine.buffer.len == 0
+    p.close
 
-    privateAccess(status.commandLine.type)
-    check status.commandLine.prompt == ru":"
+    check isFinish
+
+  test "Return false":
+    let settings = initEditorSettings()
+
+    var bufStatus = initBufferStatus("test.sh")
+    bufStatus.buffer = @[ru"sleep 500"].toGapBuffer
+
+    var p = bufStatus.startBackgroundQuickRun(settings).get
+
+    let isFinish = p.isFinish
+
+    p.close
+
+    check not isFinish
+
+suite "QuickRun: cancel":
+  test "cancel":
+    let settings = initEditorSettings()
+
+    var bufStatus = initBufferStatus("test.sh")
+    bufStatus.buffer = @[ru"sleep 500"].toGapBuffer
+
+    var p = bufStatus.startBackgroundQuickRun(settings).get
+
+    p.cancel
+
+    # Wait just in case
+    sleep 100
+
+    check p.isFinish
+
+suite "QuickRun: kill":
+  test "kill":
+    let settings = initEditorSettings()
+
+    var bufStatus = initBufferStatus("test.sh")
+    bufStatus.buffer = @[ru"sleep 500"].toGapBuffer
+
+    var p = bufStatus.startBackgroundQuickRun(settings).get
+
+    p.kill
+
+    # Wait just in case
+    sleep 100
+
+    check p.isFinish
+
+suite "QuickRun: close":
+  test "close":
+    let settings = initEditorSettings()
+
+    var bufStatus = initBufferStatus("test.sh")
+    bufStatus.buffer = @[ru"sleep 500"].toGapBuffer
+
+    var p = bufStatus.startBackgroundQuickRun(settings).get
+
+    p.close
+
+suite "QuickRun: startBackgroundQuickRun and result":
+  test "Without file":
+    let settings = initEditorSettings()
+
+    var bufStatus = initBufferStatus("test.nim")
+    bufStatus.buffer = @[ru"echo 1"].toGapBuffer
+
+    var p = bufStatus.startBackgroundQuickRun(settings).get
+
+    var timeout = true
+    for _ in 0 .. 20:
+      sleep 500
+
+      if p.isFinish:
+        check p.result.get[^1] == "1"
+        timeout = false
+        break
+
+    check not timeout

@@ -26,7 +26,7 @@ import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        backup, messages, commandline, register, platform, movement,
        autocomplete, suggestionwindow, filermodeutils, debugmodeutils,
        independentutils, viewhighlight, helputils, backupmanagerutils,
-       diffviewerutils, messagelog, globalsidebar, build
+       diffviewerutils, messagelog, globalsidebar, build, quickrunutils
 
 type
   LastCursorPosition* = object
@@ -37,6 +37,7 @@ type
 
   BackgroundTasks* = object
     build*: seq[BuildProcess]
+    quickRun*: seq[QuickRunProcess]
 
   EditorStatus* = object
     bufStatus*: seq[BufferStatus]
@@ -1121,12 +1122,56 @@ proc checkBackgroundBuild(status: var EditorStatus) =
 
       status.backgroundTasks.build.delete i
 
+proc updateQuickRunBuffer(
+  bufStatus: var BufferStatus,
+  quickRunResult: seq[string]) =
+
+    if quickRunResult.len > bufStatus.buffer.len:
+      for i in bufStatus.buffer.len .. quickRunResult.high:
+        bufStatus.buffer.add quickRunResult[i].toRunes
+
+      bufStatus.isUpdate = true
+
+proc checkBackgroundQuickRun(status: var EditorStatus) =
+  var
+    isUpdate = false
+    i = 0
+  while i < status.backgroundTasks.quickRun.len:
+    template p(): var QuickRunProcess =
+      status.backgroundTasks.quickRun[i]
+
+    if p.isRunning:
+      i.inc
+    else:
+      let index = status.bufStatus.quickRunBufferIndex(p.filePath)
+
+      if index.isNone:
+        p.close
+      else:
+        let r = p.result
+        if r.isOk:
+          status.bufStatus[index.get].updateQuickRunBuffer(r.get)
+        else:
+          status.bufStatus[index.get].updateQuickRunBuffer(@[r.error])
+
+        if not isUpdate and status.bufStatus[index.get].isUpdate:
+          isUpdate = true
+
+      status.backgroundTasks.quickRun.delete i
+
+  if isUpdate:
+    # Update for quickrun windows
+    status.update
+
 proc checkBackgroundTasks(status: var EditorStatus) =
   ## Check if background processes for builds are finished and if there are finished,
   ## do the next process and delete from `status.backgroundTasks`.
 
   if status.backgroundTasks.build.len > 0:
     status.checkBackgroundBuild
+
+  if status.backgroundTasks.quickRun.len > 0:
+    status.checkBackgroundQuickRun
 
 proc eventLoopTask(status: var EditorStatus) =
   # BackgroundTasks

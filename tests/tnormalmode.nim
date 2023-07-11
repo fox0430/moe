@@ -18,10 +18,10 @@
 #[############################################################################]#
 
 import std/[unittest, importutils, sequtils, sugar, os]
-import pkg/ncurses
+import pkg/[ncurses, results]
 import moepkg/syntax/highlite
 import moepkg/[register, settings, editorstatus, gapbuffer, unicodeext,
-               bufferstatus, ui, windownode]
+               bufferstatus, ui, windownode, quickrunutils]
 
 import moepkg/normalmode {.all.}
 
@@ -2279,13 +2279,37 @@ suite "Ex mode: Quickrun command wihtout file":
 
     const Command = @[ru'\\', ru'r']
     status.execNormalModeCommand(Command)
-
     status.update
+
+    # Wait just in case
+    sleep 100
+
+    block:
+      check status.backgroundTasks.quickRun.len == 1
+      check mainWindowNode.getAllWindowNode.len == 2
+
+      # 1 is the quickrun buffer.
+      check status.bufStatus[1].path.len > 0
+      check status.bufStatus[1].mode == Mode.quickRun
+      check status.bufStatus[1].buffer.toRunes ==
+        quickRunStartupMessage($status.bufStatus[1].path).toRunes
 
     for w in mainWindowNode.getAllWindowNode:
       if w.bufferIndex == 1:
-        # 1 is the quickrun result.
-        assert w.view.height > status.bufStatus[1].buffer.high
+        # 1 is the quickrun window.
+        check w.view.height > status.bufStatus[1].buffer.high
+
+    var timeout = true
+    for _ in 0 .. 20:
+      sleep 500
+      if status.backgroundTasks.quickRun[0].isFinish:
+        let r = status.backgroundTasks.quickRun[0].result.get
+        check r[^1] == "1"
+
+        timeout = false
+        break
+
+    check not timeout
 
   test "Exec Quickrun twice without file":
     var status = initEditorStatus()
@@ -2298,8 +2322,18 @@ suite "Ex mode: Quickrun command wihtout file":
     status.execNormalModeCommand(Command)
     status.update
 
-    # 1 is the quickrun result.
-    let beforeBuffer = status.bufStatus[1].buffer.toRunes
+    # Wait just in case
+    sleep 100
+
+    block:
+      check status.backgroundTasks.quickRun.len == 1
+      check mainWindowNode.getAllWindowNode.len == 2
+
+      # 1 is the quickrun buffer.
+      check status.bufStatus[1].path.len > 0
+      check status.bufStatus[1].mode == Mode.quickRun
+      check status.bufStatus[1].buffer.toRunes ==
+        quickRunStartupMessage($status.bufStatus[1].path).toRunes
 
     status.movePrevWindow
 
@@ -2308,8 +2342,48 @@ suite "Ex mode: Quickrun command wihtout file":
     status.execNormalModeCommand(Command)
     status.update
 
-    assert mainWindowNode.getAllWindowNode.len == 2
-    assert beforeBuffer != status.bufStatus[1].buffer.toRunes
+    # Wait just in case
+    sleep 100
+
+    block:
+      check status.backgroundTasks.quickRun.len == 2
+      check mainWindowNode.getAllWindowNode.len == 2
+
+      # 1 is the quickrun buffer.
+      check status.bufStatus[1].path.len > 0
+      check status.bufStatus[1].mode == Mode.quickRun
+      check status.bufStatus[1].buffer.toRunes ==
+        quickRunStartupMessage($status.bufStatus[1].path).toRunes
+
+    block:
+      # Wait for the first quickrun.
+
+      var timeout = true
+      for _ in 0 .. 20:
+        sleep 500
+        if status.backgroundTasks.quickRun[0].isFinish:
+          let r = status.backgroundTasks.quickRun[0].result.get
+          check r[^1] == "2"
+
+          timeout = false
+          break
+
+      check not timeout
+
+    block:
+      # Wait for the second quickrun.
+
+      var timeout = true
+      for _ in 0 .. 20:
+        sleep 500
+        if status.backgroundTasks.quickRun[1].isFinish:
+          let r = status.backgroundTasks.quickRun[1].result.get
+          check r[^1] == "2"
+
+          timeout = false
+          break
+
+      check not timeout
 
 suite "Normal mode: Quickrun command with file":
   const
@@ -2330,13 +2404,37 @@ suite "Normal mode: Quickrun command with file":
 
     const Command = @[ru'\\', ru'r']
     status.execNormalModeCommand(Command)
-
     status.update
 
-    for w in mainWindowNode.getAllWindowNode:
-      if w.bufferIndex == 1:
-        # 1 is the quickrun result.
-        assert w.view.height > status.bufStatus[1].buffer.high
+    # Wait just in case
+    sleep 100
+
+    block:
+      check status.backgroundTasks.quickRun.len == 1
+      check mainWindowNode.getAllWindowNode.len == 2
+
+      # 1 is the quickrun buffer.
+      check status.bufStatus[1].path.len > 0
+      check status.bufStatus[1].mode == Mode.quickRun
+      check status.bufStatus[1].buffer.toRunes ==
+        quickRunStartupMessage($status.bufStatus[1].path).toRunes
+
+      for w in mainWindowNode.getAllWindowNode:
+        if w.bufferIndex == 1:
+          # 1 is the quickrun result.
+          check w.view.height > status.bufStatus[1].buffer.high
+
+    var timeout = true
+    for _ in 0 .. 20:
+      sleep 500
+      if status.backgroundTasks.quickRun[0].isFinish:
+        let r = status.backgroundTasks.quickRun[0].result.get
+        check r[^1] == "1"
+
+        timeout = false
+        break
+
+    check not timeout
 
   test "Noarma mode: Quickrun twice with file":
     var status = initEditorStatus()
@@ -2347,8 +2445,22 @@ suite "Normal mode: Quickrun command with file":
     status.execNormalModeCommand(Command)
     status.update
 
-    # 1 is the quickrun result.
-    let beforeBuffer = status.bufStatus[1].buffer.toRunes
+    # Wait just in case
+    sleep 100
+
+    block:
+      # 1 is the quickrun window.
+      check status.bufStatus[1].buffer.toRunes ==
+        quickRunStartupMessage($status.bufStatus[1].path).toRunes
+
+      check status.backgroundTasks.quickRun.len == 1
+      check mainWindowNode.getAllWindowNode.len == 2
+
+      # 1 is the quickrun buffer.
+      check status.bufStatus[1].path.len > 0
+      check status.bufStatus[1].mode == Mode.quickRun
+      check status.bufStatus[1].buffer.toRunes ==
+        quickRunStartupMessage($status.bufStatus[1].path).toRunes
 
     status.movePrevWindow
 
@@ -2360,7 +2472,49 @@ suite "Normal mode: Quickrun command with file":
     status.execNormalModeCommand(Command)
     status.update
 
-    assert mainWindowNode.getAllWindowNode.len == 2
-    assert beforeBuffer != status.bufStatus[1].buffer.toRunes
+    # Wait just in case
+    sleep 100
 
+    block:
+      # 1 is the quickrun window.
+      check status.bufStatus[1].buffer.toRunes ==
+        quickRunStartupMessage($status.bufStatus[1].path).toRunes
 
+      check status.backgroundTasks.quickRun.len == 2
+      check mainWindowNode.getAllWindowNode.len == 2
+
+      # 1 is the quickrun buffer.
+      check status.bufStatus[1].path.len > 0
+      check status.bufStatus[1].mode == Mode.quickRun
+      check status.bufStatus[1].buffer.toRunes ==
+        quickRunStartupMessage($status.bufStatus[1].path).toRunes
+
+    block:
+      # Wait for the first quickrun.
+
+      var timeout = true
+      for _ in 0 .. 20:
+        sleep 500
+        if status.backgroundTasks.quickRun[0].isFinish:
+          let r = status.backgroundTasks.quickRun[0].result.get
+          check r[^1] == "2"
+
+          timeout = false
+          break
+
+      check not timeout
+
+    block:
+      # Wait for the second quickrun.
+
+      var timeout = true
+      for _ in 0 .. 20:
+        sleep 500
+        if status.backgroundTasks.quickRun[1].isFinish:
+          let r = status.backgroundTasks.quickRun[1].result.get
+          check r[^1] == "2"
+
+          timeout = false
+          break
+
+      check not timeout

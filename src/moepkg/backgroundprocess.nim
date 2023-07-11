@@ -17,12 +17,17 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[osproc, strformat]
+import std/[osproc, strformat, streams]
 import pkg/results
 
 type
+  BackgroundProcessCommand* = object
+    cmd*: string
+    args*: seq[string]
+    workingDir*: string
+
   BackgroundProcess* = object
-    process: Process
+    process*: Process
 
   StartProcessResult* = Result[BackgroundProcess, string]
 
@@ -30,16 +35,16 @@ proc isRunning*(bp: BackgroundProcess): bool {.inline.} = bp.process.running
 
 proc isFinish*(bp: BackgroundProcess): bool {.inline.} = not bp.process.running
 
-proc cancel*(bp: var BackgroundProcess) = bp.process.terminate
+proc cancel*(bp: BackgroundProcess) = bp.process.terminate
 
-proc kill*(bp: var BackgroundProcess) = bp.process.kill
+proc kill*(bp: BackgroundProcess) = bp.process.kill
 
-proc close(bp: var BackgroundProcess) = bp.process.close
+proc close*(bp: BackgroundProcess) = bp.process.close
+
+proc outputStream*(bp: BackgroundProcess): Stream = bp.process.outputStream
 
 proc startBackgroundProcess*(
-  command: string,
-  args: seq[string],
-  workingDir: string = ""): StartProcessResult =
+  command: BackgroundProcessCommand): StartProcessResult =
     ## Start the passed command in a new process and return BackgroundProcess.
 
     const
@@ -48,7 +53,12 @@ proc startBackgroundProcess*(
 
     var process: Process
     try:
-      process = startProcess(command, workingDir, args, Env, Options)
+      process = startProcess(
+        command.cmd,
+        command.workingDir,
+        command.args,
+        Env,
+        Options)
     except OSError as e:
       return StartProcessResult.err fmt"Failed to create a background process: {e.msg}"
 
