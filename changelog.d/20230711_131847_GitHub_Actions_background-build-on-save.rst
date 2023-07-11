@@ -1,4 +1,4 @@
-.. _#:  https://github.com/fox0430/moe/pull/
+.. _#1759:  https://github.com/fox0430/moe/pull/1759
 
 Added
 .....
