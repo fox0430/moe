@@ -403,6 +403,16 @@ proc absolutePosition*(
 
     return (y, x)
 
+proc moveCursor*(node: var WindowNode, line, column: int) =
+  if node.window.isSome:
+    node.currentLine = line
+    node.currentColumn = column
+    node.window.get.move(line, column)
+
+proc moveCursor*(node: var WindowNode) =
+  if node.window.isSome:
+    node.window.get.move(node.currentLine, node.currentColumn)
+
 proc refreshWindow*(node: var WindowNode) {.inline.} =
   if node.window.isSome: node.window.get.refresh
 

@@ -631,40 +631,10 @@ proc updateSuggestWindow(status: var EditorStatus) =
     mainWindowY,
     status.settings.statusLine.enable)
 
-proc checkBackgroundBuild(status: var EditorStatus) =
-  var i = 0
-  while i < status.backgroundTasks.build.len:
-    template p(): var BuildProcess =
-      status.backgroundTasks.build[i]
-
-    if not p.isFinish:
-      i.inc
-    else:
-      let r = p.result
-      if r.isOk:
-        addMessageLog r.get.toSeqRunes
-        status.commandLine.writeMessageSuccessBuildOnSave(
-          p.filePath,
-          status.settings.notification)
-      else:
-        addMessageLog r.error.toRunes
-        status.commandLine.writeMessageFailedBuildOnSave(p.filePath)
-
-      status.backgroundTasks.build.delete i
-
-proc checkBackgroundTasks(status: var EditorStatus) =
-  ## Check if background processes for builds are finished and if there are finished,
-  ## do the next process and delete from `status.backgroundTasks`.
-
-  if status.backgroundTasks.build.len > 0:
-    status.checkBackgroundBuild
-
 ## Update all views, highlighting, cursor, etc.
 proc update*(status: var EditorStatus) =
   # Disable the cursor while updating.
   setCursor(false)
-
-  status.checkBackgroundTasks
 
   let settings = status.settings
 
@@ -1124,7 +1094,44 @@ proc loadConfigurationFile*(status: var EditorStatus) =
         failureCause)
       initEditorSettings()
 
+proc checkBackgroundBuild(status: var EditorStatus) =
+  var i = 0
+  while i < status.backgroundTasks.build.len:
+    template p(): var BuildProcess =
+      status.backgroundTasks.build[i]
+
+    if not p.isFinish:
+      i.inc
+    else:
+      let r = p.result
+      if r.isOk:
+        addMessageLog r.get.toSeqRunes
+        status.commandLine.writeMessageSuccessBuildOnSave(
+          p.filePath,
+          status.settings.notification)
+      else:
+        addMessageLog r.error.toRunes
+        status.commandLine.writeMessageFailedBuildOnSave(p.filePath)
+
+      # Back to the cursor position to the current main window from the command
+      # line window.
+      currentMainWindowNode.moveCursor(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn)
+
+      status.backgroundTasks.build.delete i
+
+proc checkBackgroundTasks(status: var EditorStatus) =
+  ## Check if background processes for builds are finished and if there are finished,
+  ## do the next process and delete from `status.backgroundTasks`.
+
+  if status.backgroundTasks.build.len > 0:
+    status.checkBackgroundBuild
+
 proc eventLoopTask(status: var EditorStatus) =
+  # BackgroundTasks
+  status.checkBackgroundTasks
+
   # Auto save
   if status.settings.autoSave: status.autoSave
 
