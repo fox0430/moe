@@ -19,7 +19,6 @@
 
 name: Bug Report
 description: Outline a bug.
-title: ''
 labels:
   - bug
 body:

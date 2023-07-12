@@ -19,7 +19,6 @@
 
 name: Feature Request
 description: Feature request.
-title: ''
 labels:
   - feature
 body:
