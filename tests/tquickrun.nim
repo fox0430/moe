@@ -227,6 +227,9 @@ suite "QuickRun: isRunning":
 
     p.close
 
+    if fileExists("quickruntemp.bash"):
+      removeFile("quickruntemp.bash")
+
     check isRunning
 
   test "Return false":
@@ -243,6 +246,9 @@ suite "QuickRun: isRunning":
     let isRunning = p.isRunning
 
     p.close
+
+    if fileExists("quickruntemp.bash"):
+      removeFile("quickruntemp.bash")
 
     check not isRunning
 
@@ -276,6 +282,9 @@ suite "QuickRun: isFinish":
 
     p.close
 
+    if fileExists("quickruntemp.bash"):
+      removeFile("quickruntemp.bash")
+
     check not isFinish
 
 suite "QuickRun: cancel":
@@ -292,7 +301,12 @@ suite "QuickRun: cancel":
     # Wait just in case
     sleep 100
 
-    check p.isFinish
+    let isFinish = p.isFinish
+
+    if fileExists("quickruntemp.bash"):
+      removeFile("quickruntemp.bash")
+
+    check isFinish
 
 suite "QuickRun: kill":
   test "kill":
@@ -308,7 +322,12 @@ suite "QuickRun: kill":
     # Wait just in case
     sleep 100
 
-    check p.isFinish
+    let isFinish = p.isFinish
+
+    if fileExists("quickruntemp.bash"):
+      removeFile("quickruntemp.bash")
+
+    check isFinish
 
 suite "QuickRun: close":
   test "close":
@@ -320,6 +339,9 @@ suite "QuickRun: close":
     var p = bufStatus.startBackgroundQuickRun(settings).get
 
     p.close
+
+    if fileExists("quickruntemp.bash"):
+      removeFile("quickruntemp.bash")
 
 suite "QuickRun: startBackgroundQuickRun and result":
   test "Without file":
