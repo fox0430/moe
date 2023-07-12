@@ -204,7 +204,7 @@ proc runQuickRunCommand(status: var EditorStatus) =
   let index = status.bufStatus.quickRunBufferIndex(quickRunProcess.get.filePath)
 
   if index.isSome:
-    currentBufStatus.buffer =
+    status.bufStatus[index.get].buffer =
       quickRunStartupMessage($currentBufStatus.path).toRunes.toGapBuffer
   else:
     # Open a new window and add a buffer for this quickrun.
