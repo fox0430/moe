@@ -3,5 +3,5 @@
 Added
 .....
 
-- `1760`_ feat: Add Background QuickRun support
+- `#1760`_ feat: Add Background QuickRun support
 
