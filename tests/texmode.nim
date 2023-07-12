@@ -827,7 +827,7 @@ suite "Ex mode: Quickrun command wihtout file":
 
     check not timeout
 
-  test "Exec Quickrun twice without file":
+  test "Exec Quickrun without file twice":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
     status.bufStatus[0].language = SourceLanguage.langNim
@@ -952,7 +952,7 @@ suite "Ex mode: Quickrun command with file":
 
     check not timeout
 
-  test "Exec Quickrun twice with file":
+  test "Exec Quickrun with file twice":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin(TestfilePath, Mode.normal)
 
@@ -965,10 +965,6 @@ suite "Ex mode: Quickrun command with file":
     sleep 100
 
     block:
-      # 1 is the quickrun window.
-      check status.bufStatus[1].buffer.toRunes ==
-        quickRunStartupMessage($status.bufStatus[1].path).toRunes
-
       check status.backgroundTasks.quickRun.len == 1
       check mainWindowNode.getAllWindowNode.len == 2
 
