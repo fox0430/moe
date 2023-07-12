@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[times, os, strutils, strformat, options, streams]
+import std/[times, os, strutils, strformat, options]
 import pkg/results
 import syntax/highlite
 import unicodeext, settings, bufferstatus, gapbuffer, fileutils,
@@ -28,7 +28,6 @@ type
     command*: BackgroundProcessCommand
     filePath*: string
     isTempFile*: bool
-    outputStream*: Stream
     process*: BackgroundProcess
 
 proc quickRunStartupMessage*(path: string): string =
@@ -207,7 +206,6 @@ proc startBackgroundQuickRun*(
       command: command.get,
       filePath: path,
       isTempFile: useTempFile,
-      outputStream: backgroundProcess.get.outputStream,
       process: backgroundProcess.get)
 
 proc result*(p: var QuickRunProcess): Result[seq[string], string] =

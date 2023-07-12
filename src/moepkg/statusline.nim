@@ -177,6 +177,25 @@ proc writeStatusLineLogViewerModeInfo(
       color.int16)
     statusLine.window.write(0, statusLineWidth - info.len - 1, info, color.int16)
 
+proc writeStatusLineQuickRunModeInfo(
+  statusLine: var StatusLine,
+  statusLineBuffer: var seq[Rune],
+  bufStatus: BufferStatus,
+  windowNode: WindowNode,
+  isActiveWindow: bool,
+  settings: EditorSettings) =
+
+    let
+      color = if isActiveWindow: EditorColorPairIndex.statusLineNormalMode
+              else: EditorColorPairIndex.statusLineNormalModeInactive
+      info = fmt"{windowNode.currentLine + 1}/{bufStatus.buffer.len - 1}"
+      statusLineWidth = statusLine.window.width
+
+    statusLine.window.append(
+      ru " ".repeat(statusLineWidth - statusLineBuffer.len),
+      color.int16)
+    statusLine.window.write(0, statusLineWidth - info.len - 1, info, color.int16)
+
 proc writeStatusLineCurrentGitBranchName(
   statusLine: var StatusLine,
   statusLineBuffer: var seq[Rune],
@@ -295,22 +314,29 @@ proc writeStatusLine*(
         statusLineBuffer,
         isActiveWindow)
 
-    if isFilerMode(currentMode, prevMode):
+    if bufStatus.isFilerMode:
       statusLine.writeStatusLineFilerModeInfo(
         statusLineBuffer,
         bufStatus,
         windowNode,
         isActiveWindow,
         settings)
-    elif currentMode == Mode.bufManager:
+    elif bufStatus.isBufferManagerMode:
       statusLine.writeStatusLineBufferManagerModeInfo(
         statusLineBuffer,
         bufStatus,
         windowNode,
         isActiveWindow,
         settings)
-    elif currentMode == Mode.logViewer:
+    elif bufStatus.isLogViewerMode:
       statusLine.writeStatusLineLogViewerModeInfo(
+        statusLineBuffer,
+        bufStatus,
+        windowNode,
+        isActiveWindow,
+        settings)
+    elif bufStatus.isQuickRunMode:
+      statusLine.writeStatusLineQuickRunModeInfo(
         statusLineBuffer,
         bufStatus,
         windowNode,
