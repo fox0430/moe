@@ -19,7 +19,7 @@
 
 name: Feature Request
 description: Feature request.
-title: '[Feature] <Title>'
+title: ''
 labels:
   - feature
 body:

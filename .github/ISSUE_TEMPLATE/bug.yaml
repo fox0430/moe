@@ -19,7 +19,7 @@
 
 name: Bug Report
 description: Outline a bug.
-title: '[Bug Report] <Bug Report Title>'
+title: ''
 labels:
   - bug
 body:
