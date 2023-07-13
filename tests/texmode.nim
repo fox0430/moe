@@ -18,9 +18,10 @@
 #[############################################################################]#
 
 import std/[unittest, os, oids, deques, macros, strformat]
+import pkg/results
 import moepkg/syntax/highlite
 import moepkg/[ui, editorstatus, gapbuffer, unicodeext, bufferstatus, settings,
-               windownode, helputils, backgroundprocess]
+               windownode, helputils, backgroundprocess, quickrunutils]
 
 import moepkg/exmode {.all.}
 import moepkg/commandlineutils{.all.}
@@ -794,15 +795,39 @@ suite "Ex mode: Quickrun command wihtout file":
 
     const Command = @[ru"run"]
     status.exModeCommand(Command)
-
     status.update
 
-    for w in mainWindowNode.getAllWindowNode:
-      if w.bufferIndex == 1:
-        # 1 is the quickrun result.
-        assert w.view.height > status.bufStatus[1].buffer.high
+    # Wait just in case
+    sleep 100
 
-  test "Exec Quickrun twice without file":
+    block:
+      check status.backgroundTasks.quickRun.len == 1
+      check mainWindowNode.getAllWindowNode.len == 2
+
+      # 1 is the quickrun buffer.
+      check status.bufStatus[1].path.len > 0
+      check status.bufStatus[1].mode == Mode.quickRun
+      check status.bufStatus[1].buffer.toRunes ==
+        quickRunStartupMessage($status.bufStatus[1].path).toRunes
+
+      for w in mainWindowNode.getAllWindowNode:
+        if w.bufferIndex == 1:
+          # 1 is the quickrun window.
+          check w.view.height > status.bufStatus[1].buffer.high
+
+    var timeout = true
+    for _ in 0 .. 20:
+      sleep 500
+      if status.backgroundTasks.quickRun[0].isFinish:
+        let r = status.backgroundTasks.quickRun[0].result.get
+        check r[^1] == "1"
+
+        timeout = false
+        break
+
+    check not timeout
+
+  test "Exec Quickrun without file twice":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
     status.bufStatus[0].language = SourceLanguage.langNim
@@ -813,8 +838,18 @@ suite "Ex mode: Quickrun command wihtout file":
     status.exModeCommand(Command)
     status.update
 
-    # 1 is the quickrun result.
-    let beforeBuffer = status.bufStatus[1].buffer.toRunes
+    # Wait just in case
+    sleep 100
+
+    block:
+      check status.backgroundTasks.quickRun.len == 1
+      check mainWindowNode.getAllWindowNode.len == 2
+
+      # 1 is the quickrun buffer.
+      check status.bufStatus[1].path.len > 0
+      check status.bufStatus[1].mode == Mode.quickRun
+      check status.bufStatus[1].buffer.toRunes ==
+        quickRunStartupMessage($status.bufStatus[1].path).toRunes
 
     status.movePrevWindow
 
@@ -823,8 +858,48 @@ suite "Ex mode: Quickrun command wihtout file":
     status.exModeCommand(Command)
     status.update
 
-    assert mainWindowNode.getAllWindowNode.len == 2
-    assert beforeBuffer != status.bufStatus[1].buffer.toRunes
+    # Wait just in case
+    sleep 100
+
+    block:
+      check status.backgroundTasks.quickRun.len == 2
+      check mainWindowNode.getAllWindowNode.len == 2
+
+      # 1 is the quickrun buffer.
+      check status.bufStatus[1].path.len > 0
+      check status.bufStatus[1].mode == Mode.quickRun
+      check status.bufStatus[1].buffer.toRunes ==
+        quickRunStartupMessage($status.bufStatus[1].path).toRunes
+
+    block:
+      # Wait for the first quickrun.
+
+      var timeout = true
+      for _ in 0 .. 20:
+        sleep 500
+        if status.backgroundTasks.quickRun[0].isFinish:
+          let r = status.backgroundTasks.quickRun[0].result.get
+          check r[^1] == "2"
+
+          timeout = false
+          break
+
+      check not timeout
+
+    block:
+      # Wait for the second quickrun.
+
+      var timeout = true
+      for _ in 0 .. 20:
+        sleep 500
+        if status.backgroundTasks.quickRun[1].isFinish:
+          let r = status.backgroundTasks.quickRun[1].result.get
+          check r[^1] == "2"
+
+          timeout = false
+          break
+
+      check not timeout
 
 suite "Ex mode: Quickrun command with file":
   const
@@ -845,15 +920,39 @@ suite "Ex mode: Quickrun command with file":
 
     const Command = @[ru"run"]
     status.exModeCommand(Command)
-
     status.update
 
-    for w in mainWindowNode.getAllWindowNode:
-      if w.bufferIndex == 1:
-        # 1 is the quickrun result.
-        assert w.view.height > status.bufStatus[1].buffer.high
+    # Wait just in case
+    sleep 100
 
-  test "Exec Quickrun twice with file":
+    block:
+      check status.backgroundTasks.quickRun.len == 1
+      check mainWindowNode.getAllWindowNode.len == 2
+
+      # 1 is the quickrun buffer.
+      check status.bufStatus[1].path.len > 0
+      check status.bufStatus[1].mode == Mode.quickRun
+      check status.bufStatus[1].buffer.toRunes ==
+        quickRunStartupMessage($status.bufStatus[1].path).toRunes
+
+      for w in mainWindowNode.getAllWindowNode:
+        if w.bufferIndex == 1:
+          # 1 is the quickrun result.
+          check w.view.height > status.bufStatus[1].buffer.high
+
+    var timeout = true
+    for _ in 0 .. 20:
+      sleep 500
+      if status.backgroundTasks.quickRun[0].isFinish:
+        let r = status.backgroundTasks.quickRun[0].result.get
+        check r[^1] == "1"
+
+        timeout = false
+        break
+
+    check not timeout
+
+  test "Exec Quickrun with file twice":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin(TestfilePath, Mode.normal)
 
@@ -862,8 +961,18 @@ suite "Ex mode: Quickrun command with file":
     status.exModeCommand(Command)
     status.update
 
-    # 1 is the quickrun result.
-    let beforeBuffer = status.bufStatus[1].buffer.toRunes
+    # Wait just in case
+    sleep 100
+
+    block:
+      check status.backgroundTasks.quickRun.len == 1
+      check mainWindowNode.getAllWindowNode.len == 2
+
+      # 1 is the quickrun buffer.
+      check status.bufStatus[1].path.len > 0
+      check status.bufStatus[1].mode == Mode.quickRun
+      check status.bufStatus[1].buffer.toRunes ==
+        quickRunStartupMessage($status.bufStatus[1].path).toRunes
 
     status.movePrevWindow
 
@@ -875,8 +984,52 @@ suite "Ex mode: Quickrun command with file":
     status.exModeCommand(Command)
     status.update
 
-    assert mainWindowNode.getAllWindowNode.len == 2
-    assert beforeBuffer != status.bufStatus[1].buffer.toRunes
+    # Wait just in case
+    sleep 100
+
+    block:
+      # 1 is the quickrun window.
+      check status.bufStatus[1].buffer.toRunes ==
+        quickRunStartupMessage($status.bufStatus[1].path).toRunes
+
+      check status.backgroundTasks.quickRun.len == 2
+      check mainWindowNode.getAllWindowNode.len == 2
+
+      # 1 is the quickrun buffer.
+      check status.bufStatus[1].path.len > 0
+      check status.bufStatus[1].mode == Mode.quickRun
+      check status.bufStatus[1].buffer.toRunes ==
+        quickRunStartupMessage($status.bufStatus[1].path).toRunes
+
+    block:
+      # Wait for the first quickrun.
+
+      var timeout = true
+      for _ in 0 .. 20:
+        sleep 500
+        if status.backgroundTasks.quickRun[0].isFinish:
+          let r = status.backgroundTasks.quickRun[0].result.get
+          check r[^1] == "2"
+
+          timeout = false
+          break
+
+      check not timeout
+
+    block:
+      # Wait for the second quickrun.
+
+      var timeout = true
+      for _ in 0 .. 20:
+        sleep 500
+        if status.backgroundTasks.quickRun[1].isFinish:
+          let r = status.backgroundTasks.quickRun[1].result.get
+          check r[^1] == "2"
+
+          timeout = false
+          break
+
+      check not timeout
 
 suite "Ex mode: Workspace list command":
   test "Workspace list command":

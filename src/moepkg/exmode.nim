@@ -22,7 +22,7 @@ import pkg/results
 import syntax/highlite
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
        unicodeext, independentutils, searchutils, highlight, windownode,
-       movement, color, build, bufferstatus, editor, settings, quickrun,
+       movement, color, build, bufferstatus, editor, settings, quickrunutils,
        messages, commandline, debugmodeutils, platform, commandlineutils,
        recentfilemode, buffermanager, viewhighlight, messagelog, configmode
 
@@ -376,31 +376,38 @@ proc startRecentFileMode(status: var EditorStatus) =
 proc runQuickRunCommand(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 
-  let buffer = currentBufStatus.runQuickRun(status.commandLine, status.settings)
-  if buffer.isErr:
-    status.commandLine.writeError(buffer.error.toRunes)
-    addMessageLog buffer.error.toRunes
+  let quickRunProcess = startBackgroundQuickRun(
+    status.bufStatus[currentMainWindowNode.bufferIndex],
+    status.settings)
+  if quickRunProcess.isErr:
+    status.commandLine.writeError(quickRunProcess.error.toRunes)
+    addMessageLog quickRunProcess.error.toRunes
     return
 
-  let quickRunBufferIndex = getQuickRunBufferIndex(
-    status.bufStatus,
-    mainWindowNode)
+  status.backgroundTasks.quickRun.add quickRunProcess.get
 
-  if quickRunBufferIndex == -1:
+  let index = status.bufStatus.quickRunBufferIndex(quickRunProcess.get.filePath)
+
+  if index.isSome:
+    # Overwrite the quickrun buffer.
+    status.bufStatus[index.get].buffer = quickRunStartupMessage(
+      $status.bufStatus[index.get].path).toRunes.toGapBuffer
+  else:
+    # Open a new window and add a buffer for this quickrun.
     status.verticalSplitWindow
     status.resize
     status.moveNextWindow
 
-    status.addNewBufferInCurrentWin
-    status.bufStatus[^1].buffer = initGapBuffer(buffer.get)
-
+    status.addNewBufferInCurrentWin("")
     status.changeCurrentBuffer(status.bufStatus.high)
+    currentBufStatus.path = quickRunProcess.get.filePath.toRunes
+    currentBufStatus.buffer[0] =
+      quickRunStartupMessage($currentBufStatus.path).toRunes
+    status.changeMode(Mode.quickRun)
 
-    status.changeMode(bufferstatus.Mode.quickRun)
-  else:
-    status.bufStatus[quickRunBufferIndex].buffer = initGapBuffer(buffer.get)
+    status.resize
 
-  status.resize
+  status.commandLine.writeRunQuickRunMessage(status.settings.notification)
 
 proc staticReadVersionFromConfigFileExample(): string {.compileTime.} =
   staticRead(currentSourcePath.parentDir() / "../../example/moerc.toml")

@@ -146,8 +146,12 @@ proc isDebugMode*(b: BufferStatus): bool {.inline.} =
 
 proc isQuickRunMode*(mode: Mode): bool = mode == Mode.quickRun
 
+proc isQuickRunMode*(mode, prevMode: Mode): bool {.inline.} =
+  (mode == Mode.quickRun) or
+  (mode == Mode.ex and prevMode == Mode.quickRun)
+
 proc isQuickRunMode*(b: BufferStatus): bool {.inline.} =
-  b.mode == Mode.quickRun
+  isQuickRunMode(b.mode, b.prevMode)
 
 proc isLogViewerMode*(mode: Mode): bool {.inline.} = mode == Mode.logViewer
 

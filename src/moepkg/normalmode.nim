@@ -20,7 +20,7 @@
 import std/[times, strutils, sequtils, options]
 import pkg/results
 import editorstatus, ui, gapbuffer, unicodeext, fileutils, windownode, movement,
-       editor, searchutils, bufferstatus, quickrun, messages, visualmode,
+       editor, searchutils, bufferstatus, quickrunutils, messages, visualmode,
        commandline, viewhighlight, messagelog
 
 proc changeModeToInsertMode(status: var EditorStatus) {.inline.} =
@@ -191,34 +191,38 @@ proc forceExit(status: var EditorStatus) {.inline.} =
   status.closeWindow(currentMainWindowNode)
 
 proc runQuickRunCommand(status: var EditorStatus) =
-  let buffer = runQuickRun(
+  let quickRunProcess = startBackgroundQuickRun(
     status.bufStatus[currentMainWindowNode.bufferIndex],
-    status.commandLine,
     status.settings)
-  if buffer.isErr:
-    status.commandLine.writeError(buffer.error.toRunes)
-    addMessageLog buffer.error.toRunes
+  if quickRunProcess.isErr:
+    status.commandLine.writeError(quickRunProcess.error.toRunes)
+    addMessageLog quickRunProcess.error.toRunes
     return
 
-  let quickRunWindowIndex = getQuickRunBufferIndex(
-    status.bufStatus,
-    mainWindowNode)
+  status.backgroundTasks.quickRun.add quickRunProcess.get
 
-  if quickRunWindowIndex == -1:
+  let index = status.bufStatus.quickRunBufferIndex(quickRunProcess.get.filePath)
+
+  if index.isSome:
+    # Overwrite the quickrun buffer.
+    status.bufStatus[index.get].buffer = quickRunStartupMessage(
+      $status.bufStatus[index.get].path).toRunes.toGapBuffer
+  else:
+    # Open a new window and add a buffer for this quickrun.
     status.verticalSplitWindow
     status.resize
     status.moveNextWindow
 
     status.addNewBufferInCurrentWin("")
-    status.bufStatus[^1].buffer = initGapBuffer(buffer.get)
-
     status.changeCurrentBuffer(status.bufStatus.high)
-
+    currentBufStatus.path = quickRunProcess.get.filePath.toRunes
+    currentBufStatus.buffer[0] =
+      quickRunStartupMessage($currentBufStatus.path).toRunes
     status.changeMode(Mode.quickRun)
-  else:
-    status.bufStatus[quickRunWindowIndex].buffer = initGapBuffer(buffer.get)
 
-  status.resize
+    status.resize
+
+  status.commandLine.writeRunQuickRunMessage(status.settings.notification)
 
 proc yankWord(status: var EditorStatus) =
   currentBufStatus.yankWord(status.registers,
