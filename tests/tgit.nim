@@ -70,7 +70,7 @@ index f328eafe..a8229205 100644
 """
 
     check diffResult.parseGitDiffOutput == @[
-      Diff(operation: OperationType.deleted, firstLine: 19, lastLine: 19),
+      Diff(operation: OperationType.deleted, firstLine: 18, lastLine: 18),
     ]
 
   test "Deleted 2":
@@ -91,7 +91,7 @@ index f328eafe..03715814 100644
 """
 
     check diffResult.parseGitDiffOutput == @[
-      Diff(operation: OperationType.deleted, firstLine: 19, lastLine: 19),
+      Diff(operation: OperationType.deleted, firstLine: 18, lastLine: 18),
     ]
 
   test "Deleted 3":
@@ -120,8 +120,8 @@ index f328eafe..8fa55819 100644
 """
 
     check diffResult.parseGitDiffOutput == @[
-      Diff(operation: OperationType.deleted, firstLine: 8, lastLine: 8),
-      Diff(operation: OperationType.deleted, firstLine: 19, lastLine: 19),
+      Diff(operation: OperationType.deleted, firstLine: 7, lastLine: 7),
+      Diff(operation: OperationType.deleted, firstLine: 17, lastLine: 17),
     ]
 
   test "Added 1":
@@ -203,7 +203,7 @@ index 6b23176b..d3d54244 100644
  #[############################################################################]#
 
  import std/[strutils, os, strformat, tables, times, heapqueue, deques, options,
--            encodings]
+-            encodings] modified
 +            encodings]
 +
  import syntax/highlite
@@ -228,7 +228,7 @@ index 6b23176b..bd0a8fd3 100644
              encodings]
 -import syntax/highlite
 -import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
-+mport syntax/highlite
++import syntax/highlite modified
         windownode, color, settings, statusline, bufferstatus, cursor, tabline,
         backup, messages, commandline, register, platform, movement,
         autocomplete, suggestionwindow, filermodeutils, debugmodeutils,

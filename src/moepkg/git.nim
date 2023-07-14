@@ -51,7 +51,7 @@ proc splitGitDiffSections(output: string): seq[Section] =
     if line.startsWith("@@"):
       let
         # The first character is '+' or '-' after splitting the line.
-        afterFileRange = (strutils.splitWhitespace(line))[1][1 .. ^1]
+        afterFileRange = (strutils.splitWhitespace(line))[2][1 .. ^1]
         firstLineNum =
           # Count omitted if the change is one line.
           if afterFileRange.contains(","):
@@ -59,55 +59,89 @@ proc splitGitDiffSections(output: string): seq[Section] =
           else:
             afterFileRange.parseInt
 
-      result.add Section(firstOriginalLine: firstLineNum)
+      result.add Section(firstOriginalLine: firstLineNum - 1)
     else:
       result[^1].buffer.add line
 
-## Parse a raw git diff command result.
 proc parseGitDiffOutput(output: string): seq[Diff] =
+  ## Parse Unified diff format.
+
+  proc inRange(s: Section, currentLine: int): bool {.inline.} =
+    currentLine < s.buffer.len
+
   for s in output.splitGitDiffSections:
     var
-      countChanged = 0
-      currentLine = 0
+      originalLine = s.firstOriginalLine
+      currentLine: int
+    while currentLine < s.buffer.high:
+      var addedLine, deletedLine: int
 
-    while currentLine < s.buffer.len:
-      if s.buffer[currentLine].startsWith("+"):
-        let firstLine = currentLine
-        while s.buffer[currentLine + 1].startsWith("+"): currentLine.inc
+      while s.inRange(currentLine) and
+            (s.buffer[currentLine].len == 0 or s.buffer[currentLine].startsWith(' ')):
+              # Skip no changed lines.
+              originalLine.inc
+              currentLine.inc
 
-        result.add Diff(
-          operation: OperationType.added,
-          firstLine: s.firstOriginalLine + firstLine - 1 - countChanged,
-          lastLine: s.firstOriginalLine + currentLine - 1 - countChanged)
-      elif s.buffer[currentLine].startsWith("-"):
-        if s.buffer[currentLine + 1].startsWith("+"):
-          # If it's the added line next to the deleted line,
-          # it's regarded as changed the line.
+      if not s.inRange(currentLine): break
+
+      let startOriginalLine = originalLine
+
+      while s.inRange(currentLine) and
+            (s.buffer[currentLine].len == 0 or not s.buffer[currentLine].startsWith(' ')):
+              # Count deleted line or added line.
+              if s.buffer[currentLine].startsWith('-'):
+                deletedLine.inc
+              if s.buffer[currentLine].startsWith('+'):
+                originalLine.inc
+                addedLine.inc
+
+              currentLine.inc
+
+      if deletedLine > 0 or addedLine > 0:
+        # Treat lines that are both deleted and added as "changed".
+        var changedLine, changedAndDeletedLine: int
+
+        if deletedLine - addedLine == 0:
+          changedLine = deletedLine
+          deletedLine = 0
+          addedLine = 0
+        elif deletedLine > 0 and addedLine > 0:
+          if deletedLine > addedLine and deletedLine > 1:
+            addedLine = 0
+            deletedLine = 0
+            changedAndDeletedLine = 1
+          elif deletedLine > addedLine:
+            changedLine = addedLine
+            deletedLine -= addedLine
+            addedLine = 0
+          else:
+            changedLine = deletedLine
+            addedLine -= deletedLine
+            deletedLine = 0
+
+        if changedLine > 0:
           result.add Diff(
             operation: OperationType.changed,
-            firstLine: s.firstOriginalLine + currentLine - 1,
-            lastLine: s.firstOriginalLine + currentLine - 1)
-          currentLine.inc
-          countChanged.inc
-        else:
-          let firstLine = currentLine
-          while s.buffer[currentLine + 1].startsWith("-"): currentLine.inc
-          if s.buffer[currentLine + 1].startsWith("+"):
-            # Considered as "Changed" if the next line is "+".
-            currentLine.inc
-            result.add Diff(
-              operation: OperationType.changedAndDeleted,
-              firstLine: s.firstOriginalLine + firstLine - 1 - countChanged,
-              lastLine: s.firstOriginalLine + firstLine - 1 - countChanged)
-          else:
-            result.add Diff(
-              operation: OperationType.deleted,
-              firstLine: s.firstOriginalLine + firstLine - 1 - countChanged,
-              lastLine: s.firstOriginalLine + firstLine - 1 - countChanged)
+            firstLine: startOriginalLine,
+            lastLine: startOriginalLine + changedLine - 1)
 
-          countChanged.inc
+        if changedAndDeletedLine > 0:
+          result.add Diff(
+            operation: OperationType.changedAndDeleted,
+            firstLine: startOriginalLine + changedLine,
+            lastLine: startOriginalLine + changedLine)
 
-      currentLine.inc
+        if deletedLine > 0:
+          result.add Diff(
+            operation: OperationType.deleted,
+            firstLine: startOriginalLine + changedLine - 1,
+            lastLine: startOriginalLine + changedLine - 1)
+
+        elif addedLine > 0:
+          result.add Diff(
+            operation: OperationType.added,
+            firstLine: startOriginalLine + changedLine,
+            lastLine: startOriginalLine + changedLine + addedLine - 1)
 
 ## Returns changed information from HEAD using `git diff` command.
 proc gitDiff*(path: string | Runes): seq[Diff] =
