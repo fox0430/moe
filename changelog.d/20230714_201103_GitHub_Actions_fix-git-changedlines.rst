@@ -3,5 +3,5 @@
 Fixed
 .....
 
-- `#1761`_ Fix the git changed lines view
+- `#1763`_ Fix the git changed lines view
 
