@@ -95,7 +95,9 @@ language = true
 
 directory = true
 
-gitbranchName = true
+gitChangedLines = true
+
+gitBranchName = true
 
 showGitInactive = false
 
@@ -319,6 +321,8 @@ statusLineModeExModeBg = "#ffffff"
 statusLineExModeInactive = "#09aefa"
 statusLineExModeInactiveBg = "#ffffff"
 
+statusLineGitChangedLines = "#ffffff"
+statusLineGitChangedLinesBg = "#0040ff"
 statusLineGitBranch = "#ffffff"
 statusLineGitBranchBg = "#0040ff"
 
