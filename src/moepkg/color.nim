@@ -880,7 +880,7 @@ const
         index: EditorColorIndex.decNumber,
         rgb: "#add8e6".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.decNumber,
+        index: EditorColorIndex.decNumberBg,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.floatNumber: ColorPair(
@@ -1380,7 +1380,7 @@ const
         index: EditorColorIndex.decNumber,
         rgb: "#00ffff".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.decNumber,
+        index: EditorColorIndex.decNumberBg,
         rgb: "#ffffff".hexToRgb.get)),
 
     EditorColorPairIndex.floatNumber: ColorPair(
@@ -1880,7 +1880,7 @@ const
         index: EditorColorIndex.decNumber,
         rgb: "#00ffff".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.decNumber,
+        index: EditorColorIndex.decNumberBg,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.floatNumber: ColorPair(
