@@ -120,7 +120,8 @@ suite "Config mode: Init buffer":
                      ru "  encoding                       true",
                      ru "  language                       true",
                      ru "  directory                      true",
-                     ru "  gitbranchName                  true",
+                     ru "  gitChangedLines                true",
+                     ru "  gitBranchName                  true",
                      ru "  showGitInactive                false",
                      ru "  showModeInactive               false"]
 
@@ -328,6 +329,10 @@ suite "Config mode: Init buffer":
       ru"  statusLineExModeInactive",
       ru"    foreground                   #09aefa",
       ru"    background                   #ffffff",
+      ru"",
+      ru"  statusLineGitChangedLines",
+      ru"    foreground                   #ffffff",
+      ru"    background                   #0040ff",
       ru"",
       ru"  statusLineGitBranch",
       ru"    foreground                   #ffffff",
@@ -974,13 +979,24 @@ suite "Config mode: Get StatusLine table setting values":
 
     checkBoolSettingValue(default, values)
 
-  test "Get gitbranchName values":
+  test "Get gitChangedLines values":
     var status = initEditorStatus()
     let statusLineSettings = status.settings.statusLine
 
-    const name = "gitbranchName"
+    const name = "gitChangedLines"
     let
-      default = statusLineSettings.gitbranchName
+      default = statusLineSettings.gitChangedLines
+      values = statusLineSettings.getStatusLineTableSettingValues(name)
+
+    checkBoolSettingValue(default, values)
+
+  test "Get gitBranchName values":
+    var status = initEditorStatus()
+    let statusLineSettings = status.settings.statusLine
+
+    const name = "gitBranchName"
+    let
+      default = statusLineSettings.gitBranchName
       values = statusLineSettings.getStatusLineTableSettingValues(name)
 
     checkBoolSettingValue(default, values)
@@ -1957,15 +1973,25 @@ suite "Config mode: Chaging StatusLine table settings":
 
     check val == statusLineSettings.directory
 
-  test "Chaging gitbranchName":
+  test "Chaging gitChangedLines":
     var
       settings = initEditorSettings()
       statusLineSettings = settings.statusLine
 
-    let val = not statusLineSettings.gitbranchName
-    statusLineSettings.changeStatusLineTableSetting("gitbranchName", $val)
+    let val = not statusLineSettings.gitChangedLines
+    statusLineSettings.changeStatusLineTableSetting("gitChangedLines", $val)
 
-    check val == statusLineSettings.gitbranchName
+    check val == statusLineSettings.gitChangedLines
+
+  test "Chaging gitBranchName":
+    var
+      settings = initEditorSettings()
+      statusLineSettings = settings.statusLine
+
+    let val = not statusLineSettings.gitBranchName
+    statusLineSettings.changeStatusLineTableSetting("gitBranchName", $val)
+
+    check val == statusLineSettings.gitBranchName
 
   test "Chaging showGitInactive":
     var

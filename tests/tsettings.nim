@@ -75,7 +75,8 @@ const TomlStr = """
   encoding = false
   language = false
   directory = false
-  gitbranchName = false
+  gitChangedLines = false
+  gitBranchName = false
   showGitInactive = true
   showModeInactive = true
 
@@ -231,6 +232,8 @@ const TomlStr = """
   statusLineExModeInactive = "#000000"
   statusLineExModeInactiveBg = "#000000"
 
+  statusLineGitChangedLines = "#000000"
+  statusLineGitChangedLinesBg = "#000000"
   statusLineGitBranch = "#000000"
   statusLineGitBranchBg = "#000000"
 
@@ -366,7 +369,8 @@ suite "Parse configuration file":
     check not settings.statusLine.characterEncoding
     check not settings.statusLine.language
     check not settings.statusLine.directory
-    check not settings.statusLine.gitbranchName
+    check not settings.statusLine.gitChangedLines
+    check not settings.statusLine.gitBranchName
     check settings.statusLine.showGitInactive
     check settings.statusLine.showModeInactive
 

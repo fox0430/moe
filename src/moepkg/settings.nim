@@ -145,7 +145,8 @@ type
     language*: bool
     directory*: bool
     multipleStatusLine*: bool
-    gitbranchName*: bool
+    gitChangedLines*: bool
+    gitBranchName*: bool
     showGitInactive*: bool
     showModeInactive*: bool
 
@@ -329,7 +330,8 @@ proc initStatusLineSettings*(): StatusLineSettings =
   result.language = true
   result.directory = true
   result.multipleStatusLine = true
-  result.gitbranchName = true
+  result.gitChangedLines = true
+  result.gitBranchName = true
 
 proc initEditorViewSettings*(): EditorViewSettings =
   result.highlightCurrentLine = true
@@ -684,6 +686,9 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
     result[EditorColorPairIndex.statusLineExModeInactive].foreground.rgb =
       colorFromNode(jsonNode{"colors", "statusBar.foreground"})
 
+    result[EditorColorPairIndex.statusLineGitChangedLines].foreground.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.foreground"})
+
     result[EditorColorPairIndex.statusLineGitBranch].foreground.rgb =
       colorFromNode(jsonNode{"colors", "statusBar.foreground"})
 
@@ -743,6 +748,9 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
       colorFromNode(jsonNode{"colors", "statusBar.background"})
 
     result[EditorColorPairIndex.statusLineExModeInactive].background.rgb =
+      colorFromNode(jsonNode{"colors", "statusBar.background"})
+
+    result[EditorColorPairIndex.statusLineGitChangedLines].background.rgb =
       colorFromNode(jsonNode{"colors", "statusBar.background"})
 
     result[EditorColorPairIndex.statusLineGitBranch].background.rgb =
@@ -1172,8 +1180,11 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["StatusLine"].contains("directory"):
         result.statusLine.directory = settings["StatusLine"]["directory"].getBool()
 
-    if settings["StatusLine"].contains("gitbranchName"):
-        result.statusLine.gitbranchName = settings["StatusLine"]["gitbranchName"].getBool()
+    if settings["StatusLine"].contains("gitChangedLines"):
+        result.statusLine.gitChangedLines = settings["StatusLine"]["gitChangedLines"].getBool()
+
+    if settings["StatusLine"].contains("gitBranchName"):
+        result.statusLine.gitBranchName = settings["StatusLine"]["gitBranchName"].getBool()
 
     if settings["StatusLine"].contains("showGitInactive"):
         result.statusLine.showGitInactive = settings["StatusLine"]["showGitInactive"].getBool()
@@ -1728,6 +1739,13 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       ColorThemeTable[configTheme][EditorColorPairIndex.statusLineExModeInactive].background.rgb =
         toRgb("statusLineExModeInactiveBg")
 
+    if settings["Theme"].contains("statusLineGitChangedLines"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineGitChangedLines].foreground.rgb =
+        toRgb("statusLineGitChangedLines")
+    if settings["Theme"].contains("statusLineGitChangedLinesBg"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineGitChangedLines].background.rgb =
+        toRgb("statusLineGitChangedLinesBg")
+
     if settings["Theme"].contains("statusLineGitBranch"):
       ColorThemeTable[configTheme][EditorColorPairIndex.statusLineGitBranch].foreground.rgb =
         toRgb("statusLineGitBranch")
@@ -2087,7 +2105,8 @@ proc validateStatusLineTable(table: TomlValueRef): Option[InvalidItem] =
          "encoding",
          "language",
          "directory",
-         "gitbranchName",
+         "gitChangedLines",
+         "gitBranchName",
          "showGitInactive",
          "showModeInactive":
         if not (val.kind == TomlValueKind.Bool):
@@ -2500,7 +2519,8 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "encoding = {$settings.statusLine.characterEncoding}"
   result.addLine fmt "language = {$settings.statusLine.language}"
   result.addLine fmt "directory = {$settings.statusLine.directory}"
-  result.addLine fmt "gitbranchName = {$settings.statusLine.gitbranchName}"
+  result.addLine fmt "gitChangedLines = {$settings.statusLine.gitChangedLines}"
+  result.addLine fmt "gitBranchName = {$settings.statusLine.gitBranchName}"
   result.addLine fmt "showGitInactive = {$settings.statusLine.showGitInactive}"
   result.addLine fmt "showModeInactive = {$settings.statusLine.showModeInactive}"
 
@@ -2709,6 +2729,8 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "statusLineModeExModeBg = \"{theme.bgColor(EditorColorPairIndex.statusLineModeExMode)}\""
   result.addLine fmt "statusLineExModeInactive = \"{theme.fgColor(EditorColorPairIndex.statusLineExModeInactive)}\""
   result.addLine fmt "statusLineExModeInactiveBg = \"{theme.bgColor(EditorColorPairIndex.statusLineExModeInactive)}\""
+  result.addLine fmt "statusLineGitChangedLines = \"{theme.fgColor(EditorColorPairIndex.statusLineGitChangedLines)}\""
+  result.addLine fmt "statusLineGitChangedLinesBg = \"{theme.bgColor(EditorColorPairIndex.statusLineGitChangedLines)}\""
   result.addLine fmt "statusLineGitBranch = \"{theme.fgColor(EditorColorPairIndex.statusLineGitBranch)}\""
   result.addLine fmt "statusLineGitBranchBg = \"{theme.bgColor(EditorColorPairIndex.statusLineGitBranch)}\""
   result.addLine fmt "tab = \"{theme.fgColor(EditorColorPairIndex.tab)}\""

@@ -27,6 +27,8 @@ type
     changed
     changedAndDeleted
 
+  ChangedLines* = tuple[added, changed, deleted: int]
+
   Section = object
     firstOriginalLine: int
     buffer: seq[string]
@@ -36,14 +38,30 @@ type
     firstLine*: int
     lastLine*: int
 
-## Exec `git diff` command and return the output.
+proc countChangedLines*(diffs: seq[Diff]): ChangedLines =
+  ## Count and return changed lines in seq[Diff].
+
+  for d in diffs:
+    case d.operation:
+      of OperationType.added:
+        result.added += d.lastLine - d.firstLine + 1
+      of OperationType.changed:
+        result.changed += d.lastLine - d.firstLine + 1
+      of OperationType.deleted:
+        result.deleted += d.lastLine - d.firstLine + 1
+      of OperationType.changedAndDeleted:
+        result.deleted += d.lastLine - d.firstLine + 1
+        result.changed += + 1
+
 proc exexGitDiffCommand(path: string): string =
+  ## Exec `git diff` command and return the output.
   let cmdResult = execCmdEx(fmt"git diff --no-ext-diff {path}")
   if cmdResult.exitCode == 0:
     return cmdResult.output
 
-## Split the `git diff` command output by "@@".
-proc splitGitDiffSections(output: string): seq[Section] =
+proc splitGitHunks(output: string): seq[Section] =
+  ## Split the `git diff` command output by "@@".
+
   let lines = output.splitLines
 
   # line 0 ~ 4 are a header.
@@ -69,50 +87,49 @@ proc parseGitDiffOutput(output: string): seq[Diff] =
   proc inRange(s: Section, currentLine: int): bool {.inline.} =
     currentLine < s.buffer.len
 
-  for s in output.splitGitDiffSections:
+  for s in output.splitGitHunks:
     var
       originalLine = s.firstOriginalLine
-      currentLine: int
-    while currentLine < s.buffer.high:
+      currentLineNum: int
+    while currentLineNum < s.buffer.high:
+      template currentLine: string = s.buffer[currentLineNum]
+
       var addedLine, deletedLine: int
 
-      while s.inRange(currentLine) and
-            (s.buffer[currentLine].len == 0 or s.buffer[currentLine].startsWith(' ')):
+      while s.inRange(currentLineNum) and
+            (currentLine.len == 0 or currentLine.startsWith(' ')):
               # Skip no changed lines.
               originalLine.inc
-              currentLine.inc
+              currentLineNum.inc
 
-      if not s.inRange(currentLine): break
+      if not s.inRange(currentLineNum): break
 
       let startOriginalLine = originalLine
 
-      while s.inRange(currentLine) and
-            (s.buffer[currentLine].len == 0 or not s.buffer[currentLine].startsWith(' ')):
+      while s.inRange(currentLineNum) and
+            (currentLine.len == 0 or not currentLine.startsWith(' ')):
               # Count deleted line or added line.
-              if s.buffer[currentLine].startsWith('-'):
+              if currentLine.startsWith('-'):
                 deletedLine.inc
-              if s.buffer[currentLine].startsWith('+'):
+              if currentLine.startsWith('+'):
                 originalLine.inc
                 addedLine.inc
 
-              currentLine.inc
+              currentLineNum.inc
 
       if deletedLine > 0 or addedLine > 0:
         # Treat lines that are both deleted and added as "changed".
         var changedLine, changedAndDeletedLine: int
 
-        if deletedLine - addedLine == 0:
+        if deletedLine == addedLine:
           changedLine = deletedLine
           deletedLine = 0
           addedLine = 0
         elif deletedLine > 0 and addedLine > 0:
-          if deletedLine > addedLine and deletedLine > 1:
-            addedLine = 0
+          if deletedLine > addedLine:
+            if addedLine > 1: changedLine = addedLine - 1
+            changedAndDeletedLine = deletedLine - addedLine
             deletedLine = 0
-            changedAndDeletedLine = 1
-          elif deletedLine > addedLine:
-            changedLine = addedLine
-            deletedLine -= addedLine
             addedLine = 0
           else:
             changedLine = deletedLine
@@ -125,44 +142,50 @@ proc parseGitDiffOutput(output: string): seq[Diff] =
             firstLine: startOriginalLine,
             lastLine: startOriginalLine + changedLine - 1)
 
-        if changedAndDeletedLine > 0:
-          result.add Diff(
-            operation: OperationType.changedAndDeleted,
-            firstLine: startOriginalLine + changedLine,
-            lastLine: startOriginalLine + changedLine)
-
         if deletedLine > 0:
           result.add Diff(
             operation: OperationType.deleted,
             firstLine: startOriginalLine + changedLine - 1,
-            lastLine: startOriginalLine + changedLine - 1)
+            lastLine: startOriginalLine + changedLine - 1 + deletedLine - 1)
 
-        elif addedLine > 0:
+        if changedAndDeletedLine > 0:
+          result.add Diff(
+            operation: OperationType.changedAndDeleted,
+            firstLine: startOriginalLine + changedLine,
+            lastLine: startOriginalLine + changedLine + changedAndDeletedLine - 1)
+
+        if addedLine > 0:
           result.add Diff(
             operation: OperationType.added,
             firstLine: startOriginalLine + changedLine,
             lastLine: startOriginalLine + changedLine + addedLine - 1)
 
-## Returns changed information from HEAD using `git diff` command.
+        doAssert(result[^1].firstLine <= result[^1].lastLine, $result[^1])
+
 proc gitDiff*(path: string | Runes): seq[Diff] =
+  ## Returns changed information from HEAD using `git diff` command.
+
   let output = exexGitDiffCommand($path)
   if output.len > 0:
     return output.parseGitDiffOutput
 
-## Return a git project root absolute path.
 proc gitProjectRoot(): string =
+  ## Return a git project root absolute path.
+
   let cmdResult = execCmdEx("git rev-parse --show-toplevel")
   if cmdResult.output.len > 0:
     return cmdResult.output
 
-## Returns all tracked file names by git in a current project.
 proc getAllTrakedFilesByGit(): seq[string] =
+  ## Returns all tracked file names by git in a current project.
+
   let cmdResult = execCmdEx("git ls-tree --full-tree --name-only -r HEAD")
   if cmdResult.output.len > 0:
     return strutils.splitWhitespace(cmdResult.output)
 
-## Return true if tracked by git.
 proc isTrackingByGit*(path: string): bool =
+  ## Return true if tracked by git.
+
   let trackedList = getAllTrakedFilesByGit()
 
   if path.isAbsolute:
@@ -173,6 +196,7 @@ proc isTrackingByGit*(path: string): bool =
   else:
     return trackedList.contains(path)
 
-## Return true if git command is available.
 proc isGitAvailable*(): bool {.inline.} =
+  ## Return true if git command is available.
+
   if execCmdExNoOutput("git -v") == 0: return true

@@ -376,6 +376,8 @@ type
     statusLineExModeInactive
     statusLineExModeInactiveBg
 
+    statusLineGitChangedLines
+    statusLineGitChangedLinesBg
     statusLineGitBranch
     statusLineGitBranchBg
     # tab line
@@ -511,6 +513,7 @@ type
     statusLineExMode
     statusLineModeExMode
     statusLineExModeInactive
+    statusLineGitChangedLines
     statusLineGitBranch
     # tab lnie
     tab
@@ -748,6 +751,14 @@ const
       background: Color(
         index: EditorColorIndex.statusLineExModeInactiveBg,
         rgb: "#ffffff".hexToRgb.get)),
+
+    EditorColorPairIndex.statusLineGitChangedLines: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineGitChangedLines,
+        rgb: "#ffffff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineGitChangedLinesBg,
+        rgb: "#0040ff".hexToRgb.get)),
 
     EditorColorPairIndex.statusLineGitBranch: ColorPair(
       foreground: Color(
@@ -1249,6 +1260,14 @@ const
         index: EditorColorIndex.statusLineExModeInactiveBg,
         rgb: "#f8f5e3".hexToRgb.get)),
 
+    EditorColorPairIndex.statusLineGitChangedLines: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineGitChangedLines,
+        rgb: "#ffffff".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineGitChangedLinesBg,
+        rgb: "#8a8a8a".hexToRgb.get)),
+
     EditorColorPairIndex.statusLineGitBranch: ColorPair(
       foreground: Color(
         index: EditorColorIndex.statusLineGitBranch,
@@ -1748,6 +1767,14 @@ const
       background: Color(
         index: EditorColorIndex.statusLineExModeInactiveBg,
         rgb: "#ffffff".hexToRgb.get)),
+
+    EditorColorPairIndex.statusLineGitChangedLines: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.statusLineGitChangedLines,
+        rgb: "#ff0087".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.statusLineGitChangedLinesBg,
+        rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.statusLineGitBranch: ColorPair(
       foreground: Color(

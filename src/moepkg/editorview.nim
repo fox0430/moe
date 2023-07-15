@@ -615,8 +615,13 @@ proc updateSidebarBufferForChangedLine*(
   changedLines: seq[Diff]) =
     ## Update a sidebar buffer for git diff. It's on left side of EditorView.
 
-    proc inRange(v: EditorView, d: Diff): bool {.inline.} =
-      v.firstOriginLine <= d.firstLine or v.firstOriginLine <= d.lastLine
+    proc inRange(v: EditorView, d: Diff): bool =
+      case d.operation:
+        of deleted, changedAndDeleted:
+          # Only use the firstline.
+          v.firstOriginLine <= d.firstLine
+        else:
+          v.firstOriginLine <= d.firstLine or v.firstOriginLine <= d.lastLine
 
     # height * 2 spaces.
     var newBuffer = view.height.newSeqWith(ru"  ")
@@ -624,16 +629,21 @@ proc updateSidebarBufferForChangedLine*(
     for d in changedLines:
       if view.inRange(d):
         for y, lineNum in view.originalLine:
-          if lineNum >= d.firstLine and lineNum <= d.lastLine:
-            case d.operation:
-              of OperationType.added:
-                newBuffer[y] = ru"+ "
-              of OperationType.deleted:
+          case d.operation:
+            of deleted:
+              # Only use the firstLine.
+              if lineNum >= d.firstLine and lineNum <= d.firstLine:
                 newBuffer[y] = ru"_ "
-              of OperationType.changed:
-                newBuffer[y] = ru"~ "
-              of OperationType.changedAndDeleted:
+            of changedAndDeleted:
+              # Only use the firstLine.
+              if lineNum >= d.firstLine and lineNum <= d.firstLine:
                 newBuffer[y] = ru"~_"
+            of changed:
+              if lineNum >= d.firstLine and lineNum <= d.lastLine:
+                newBuffer[y] = ru"~ "
+            of OperationType.added:
+              if lineNum >= d.firstLine and lineNum <= d.lastLine:
+                newBuffer[y] = ru"+ "
 
     view.sidebar.get.buffer = newBuffer
 
