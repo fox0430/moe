@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/unittest
+import std/[unittest, strutils]
 
 import moepkg/git {.all.}
 
@@ -48,7 +48,7 @@ index f328eafe..4f540b87 100644
         backup, messages, commandline, register, platform, movement,
 """
 
-    check diffResult.parseGitDiffOutput == @[
+    check diffResult.splitLines.parseGitDiffOutput == @[
       Diff(operation: OperationType.changed, firstLine: 8, lastLine: 8),
       Diff(operation: OperationType.changed, firstLine: 21, lastLine: 21),
     ]
@@ -69,7 +69,7 @@ index f328eafe..a8229205 100644
  import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
 """
 
-    check diffResult.parseGitDiffOutput == @[
+    check diffResult.splitLines.parseGitDiffOutput == @[
       Diff(operation: OperationType.deleted, firstLine: 18, lastLine: 18),
     ]
 
@@ -90,7 +90,7 @@ index f328eafe..03715814 100644
         windownode, color, settings, statusline, bufferstatus, cursor, tabline,
 """
 
-    check diffResult.parseGitDiffOutput == @[
+    check diffResult.splitLines.parseGitDiffOutput == @[
       Diff(operation: OperationType.deleted, firstLine: 18, lastLine: 19),
     ]
 
@@ -119,7 +119,7 @@ index f328eafe..8fa55819 100644
 
 """
 
-    check diffResult.parseGitDiffOutput == @[
+    check diffResult.splitLines.parseGitDiffOutput == @[
       Diff(operation: OperationType.deleted, firstLine: 7, lastLine: 7),
       Diff(operation: OperationType.deleted, firstLine: 17, lastLine: 17),
     ]
@@ -140,7 +140,7 @@ index f328eafe..6deb6128 100644
         backup, messages, commandline, register, platform, movement,
 """
 
-    check diffResult.parseGitDiffOutput == @[
+    check diffResult.splitLines.parseGitDiffOutput == @[
       Diff(operation: OperationType.added, firstLine: 22, lastLine: 22)
     ]
 
@@ -161,7 +161,7 @@ index f328eafe..e43d4504 100644
         backup, messages, commandline, register, platform, movement,
 """
 
-    check diffResult.parseGitDiffOutput == @[
+    check diffResult.splitLines.parseGitDiffOutput == @[
       Diff(operation: OperationType.added, firstLine: 22, lastLine: 23)
     ]
 
@@ -188,7 +188,7 @@ index f328eafe..57a9ea4d 100644
    path: seq[Rune]
 """
 
-    check diffResult.parseGitDiffOutput == @[
+    check diffResult.splitLines.parseGitDiffOutput == @[
       Diff(operation: OperationType.added, firstLine: 22, lastLine: 22),
       Diff(operation: OperationType.added, firstLine: 29, lastLine: 29)
     ]
@@ -211,7 +211,7 @@ index 6b23176b..d3d54244 100644
         windownode, color, settings, statusline, bufferstatus, cursor, tabline,
 """
 
-    check diffResult.parseGitDiffOutput == @[
+    check diffResult.splitLines.parseGitDiffOutput == @[
       Diff(operation: OperationType.changed, firstLine: 20, lastLine: 20),
       Diff(operation: OperationType.added, firstLine: 21, lastLine: 21)
     ]
@@ -234,6 +234,6 @@ index 6b23176b..bd0a8fd3 100644
         autocomplete, suggestionwindow, filermodeutils, debugmodeutils,
 """
 
-    check diffResult.parseGitDiffOutput == @[
+    check diffResult.splitLines.parseGitDiffOutput == @[
       Diff(operation: OperationType.changedAndDeleted, firstLine: 21, lastLine: 21)
     ]

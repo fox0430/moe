@@ -26,7 +26,7 @@ import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        backup, messages, commandline, register, platform, movement,
        autocomplete, suggestionwindow, filermodeutils, debugmodeutils,
        independentutils, viewhighlight, helputils, backupmanagerutils,
-       diffviewerutils, messagelog, globalsidebar, build, quickrunutils
+       diffviewerutils, messagelog, globalsidebar, build, quickrunutils, git
 
 type
   LastCursorPosition* = object
@@ -38,6 +38,7 @@ type
   BackgroundTasks* = object
     build*: seq[BuildProcess]
     quickRun*: seq[QuickRunProcess]
+    gitDiff*: seq[GitDiffProcess]
 
   EditorStatus* = object
     bufStatus*: seq[BufferStatus]
@@ -1101,7 +1102,7 @@ proc checkBackgroundBuild(status: var EditorStatus) =
     template p(): var BuildProcess =
       status.backgroundTasks.build[i]
 
-    if not p.isFinish:
+    if p.isRunning:
       i.inc
     else:
       let r = p.result
@@ -1163,8 +1164,25 @@ proc checkBackgroundQuickRun(status: var EditorStatus) =
     # Update for quickrun windows
     status.update
 
+proc checkBackgroundGitDiff(status: var EditorStatus) =
+  var i = 0
+  while i < status.backgroundTasks.gitDiff.len:
+    template p(): var GitDiffProcess =
+      status.backgroundTasks.gitDiff[i]
+
+    if p.isRunning:
+      i.inc
+    else:
+      let r = p.result
+      if r.isOk:
+        let index = status.bufStatus.checkBufferExist(p.filePath)
+        if index.isSome:
+          status.bufStatus[index.get].changedLines = r.get.parseGitDiffOutput
+
+      status.backgroundTasks.gitDiff.delete i
+
 proc checkBackgroundTasks(status: var EditorStatus) =
-  ## Check if background processes for builds are finished and if there are finished,
+  ## Check if background processes are finished and if there are finished,
   ## do the next process and delete from `status.backgroundTasks`.
 
   if status.backgroundTasks.build.len > 0:
@@ -1172,6 +1190,9 @@ proc checkBackgroundTasks(status: var EditorStatus) =
 
   if status.backgroundTasks.quickRun.len > 0:
     status.checkBackgroundQuickRun
+
+  if status.backgroundTasks.gitDiff.len > 0:
+    status.checkBackgroundGitDiff
 
 proc eventLoopTask(status: var EditorStatus) =
   # BackgroundTasks

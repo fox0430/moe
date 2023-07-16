@@ -18,7 +18,8 @@
 #[############################################################################]#
 
 import std/[strformat, strutils, osproc, os]
-import unicodeext, independentutils
+import pkg/results
+import unicodeext, independentutils, backgroundprocess
 
 type
   OperationType* = enum
@@ -38,6 +39,11 @@ type
     firstLine*: int
     lastLine*: int
 
+  GitDiffProcess* = object
+    command*: BackgroundProcessCommand
+    filePath*: Runes
+    process*: BackgroundProcess
+
 proc countChangedLines*(diffs: seq[Diff]): ChangedLines =
   ## Count and return changed lines in seq[Diff].
 
@@ -53,19 +59,20 @@ proc countChangedLines*(diffs: seq[Diff]): ChangedLines =
         result.deleted += d.lastLine - d.firstLine + 1
         result.changed += + 1
 
-proc exexGitDiffCommand(path: string): string =
+
+proc execGitDiffCommand(path: string): string =
   ## Exec `git diff` command and return the output.
   let cmdResult = execCmdEx(fmt"git diff --no-ext-diff {path}")
   if cmdResult.exitCode == 0:
     return cmdResult.output
 
-proc splitGitHunks(output: string): seq[Section] =
+proc splitGitHunks(output: seq[string]): seq[Section] =
   ## Split the `git diff` command output by "@@".
 
-  let lines = output.splitLines
+  if output.len < 5: return
 
   # line 0 ~ 4 are a header.
-  for line in lines[4 .. lines.high]:
+  for line in output[4 .. ^1]:
     if line.startsWith("@@"):
       let
         # The first character is '+' or '-' after splitting the line.
@@ -81,7 +88,7 @@ proc splitGitHunks(output: string): seq[Section] =
     else:
       result[^1].buffer.add line
 
-proc parseGitDiffOutput(output: string): seq[Diff] =
+proc parseGitDiffOutput*(output: seq[string]): seq[Diff] =
   ## Parse Unified diff format.
 
   proc inRange(s: Section, currentLine: int): bool {.inline.} =
@@ -141,33 +148,32 @@ proc parseGitDiffOutput(output: string): seq[Diff] =
             operation: OperationType.changed,
             firstLine: startOriginalLine,
             lastLine: startOriginalLine + changedLine - 1)
+          when not defined(release):
+            doAssert(result[^1].firstLine <= result[^1].lastLine, $result[^1])
 
         if deletedLine > 0:
           result.add Diff(
             operation: OperationType.deleted,
             firstLine: startOriginalLine + changedLine - 1,
             lastLine: startOriginalLine + changedLine - 1 + deletedLine - 1)
+          when not defined(release):
+            doAssert(result[^1].firstLine <= result[^1].lastLine, $result[^1])
 
         if changedAndDeletedLine > 0:
           result.add Diff(
             operation: OperationType.changedAndDeleted,
             firstLine: startOriginalLine + changedLine,
             lastLine: startOriginalLine + changedLine + changedAndDeletedLine - 1)
+          when not defined(release):
+            doAssert(result[^1].firstLine <= result[^1].lastLine, $result[^1])
 
         if addedLine > 0:
           result.add Diff(
             operation: OperationType.added,
             firstLine: startOriginalLine + changedLine,
             lastLine: startOriginalLine + changedLine + addedLine - 1)
-
-        doAssert(result[^1].firstLine <= result[^1].lastLine, $result[^1])
-
-proc gitDiff*(path: string | Runes): seq[Diff] =
-  ## Returns changed information from HEAD using `git diff` command.
-
-  let output = exexGitDiffCommand($path)
-  if output.len > 0:
-    return output.parseGitDiffOutput
+          when not defined(release):
+            doAssert(result[^1].firstLine <= result[^1].lastLine, $result[^1])
 
 proc gitProjectRoot(): string =
   ## Return a git project root absolute path.
@@ -200,3 +206,31 @@ proc isGitAvailable*(): bool {.inline.} =
   ## Return true if git command is available.
 
   if execCmdExNoOutput("git -v") == 0: return true
+
+proc gitDiff*(path: string | Runes): seq[Diff] =
+  ## Returns changed information from HEAD using `git diff` command.
+
+  let output = execGitDiffCommand($path)
+  if output.len > 0:
+    return output.splitLines.parseGitDiffOutput
+
+proc isRunning*(bp: GitDiffProcess): bool {.inline.} = bp.process.isRunning
+
+proc result*(bp: var GitDiffProcess): Result[seq[string], string] {.inline.} =
+  bp.process.result
+
+proc startBackgroundGitDiff*(path: Runes): Result[GitDiffProcess, string] =
+  ## Start a background process for the git diff command.
+
+  let command = BackgroundProcessCommand(
+    cmd: "git",
+    args: @["diff", "--no-ext-diff", $path])
+
+  let backgroundProcess = startBackgroundProcess(command)
+  if backgroundProcess.isErr:
+    return Result[GitDiffProcess, string].err fmt"Failed to exec git diff commands: {backgroundProcess.error}"
+
+  return Result[GitDiffProcess, string].ok GitDiffProcess(
+    command: command,
+    filePath: path,
+    process: backgroundProcess.get)

@@ -231,12 +231,10 @@ proc isCursor*(mode: Mode): bool {.inline.} =
 proc isCursor*(bufStatus: BufferStatus): bool {.inline.} =
   bufStatus.mode.isCursor
 
-proc checkBufferExist*(
-  bufStatus: seq[BufferStatus],
-  path: Runes): Option[int] =
-    for index, buf in bufStatus:
-      if buf.path == path:
-        return some(index)
+proc checkBufferExist*(bufStatus: seq[BufferStatus], path: Runes): Option[int] =
+  for index, buf in bufStatus:
+    if buf.path == path:
+      return some(index)
 
 proc absolutePath*(bufStatus: BufferStatus): Runes =
   if isAbsolute($bufStatus.path):
