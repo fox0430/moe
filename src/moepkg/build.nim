@@ -30,6 +30,8 @@ type
     filePath*: Runes
     process*: BackgroundProcess
 
+proc isRunning*(bp: BuildProcess): bool {.inline.} = bp.process.isRunning
+
 proc isFinish*(bp: BuildProcess): bool {.inline.} = bp.process.isFinish
 
 proc result*(bp: var BuildProcess): Result[seq[string], string] {.inline.} =

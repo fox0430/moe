@@ -24,7 +24,8 @@ import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
        unicodeext, independentutils, searchutils, highlight, windownode,
        movement, color, build, bufferstatus, editor, settings, quickrunutils,
        messages, commandline, debugmodeutils, platform, commandlineutils,
-       recentfilemode, buffermanager, viewhighlight, messagelog, configmode
+       recentfilemode, buffermanager, viewhighlight, messagelog, configmode,
+       git
 
 type
   replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
@@ -881,6 +882,13 @@ proc buildOnSave(status: var EditorStatus) =
   else:
     status.backgroundTasks.build.add buildProcess.get
 
+proc updateChangedLines(status: var EditorStatus) =
+  ## Start a background process for the git diff.
+
+  let gitDiffProcess = startBackgroundGitDiff(currentBufStatus.path)
+  if gitDiffProcess.isOk:
+    status.backgroundTasks.gitDiff.add gitDiffProcess.get
+
 proc checkAndCreateDir(
   commandLine: var CommandLine,
   filename: seq[Rune]): bool =
@@ -973,7 +981,7 @@ proc writeCommand(status: var EditorStatus, path: seq[Rune]) =
     # Update the changedLines for git diff.
     if status.settings.git.showChangedLine and
        currentBufStatus.isTrackingByGit:
-         currentBufStatus.updateChangedLines
+         status.updateChangedLines
 
     # Update syntax checker reuslts.
     if status.settings.syntaxChecker.enable:
