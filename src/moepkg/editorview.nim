@@ -624,7 +624,11 @@ proc updateSidebarBufferForChangedLine*(
           v.firstOriginLine <= d.firstLine or v.firstOriginLine <= d.lastLine
 
     # height * 2 spaces.
-    var newBuffer = view.height.newSeqWith(ru"  ")
+    var
+      buffer = view.height.newSeqWith(ru"  ")
+      highlights = buffer.len.newSeqWith(
+        @[EditorColorPairIndex.default,
+          EditorColorPairIndex.default])
 
     for d in changedLines:
       if view.inRange(d):
@@ -633,19 +637,25 @@ proc updateSidebarBufferForChangedLine*(
             of deleted:
               # Only use the firstLine.
               if lineNum >= d.firstLine and lineNum <= d.firstLine:
-                newBuffer[y] = ru"_ "
+                buffer[y] = ru"_ "
+                highlights[y][0] = EditorColorPairIndex.sideBarGitDeletedSign
             of changedAndDeleted:
               # Only use the firstLine.
               if lineNum >= d.firstLine and lineNum <= d.firstLine:
-                newBuffer[y] = ru"~_"
+                buffer[y] = ru"~_"
+                highlights[y] = EditorColorPairIndex.sideBarGitChangedSign.repeat(
+                  2)
             of changed:
               if lineNum >= d.firstLine and lineNum <= d.lastLine:
-                newBuffer[y] = ru"~ "
+                buffer[y] = ru"~ "
+                highlights[y][0] = EditorColorPairIndex.sideBarGitChangedSign
             of OperationType.added:
               if lineNum >= d.firstLine and lineNum <= d.lastLine:
-                newBuffer[y] = ru"+ "
+                buffer[y] = ru"+ "
+                highlights[y][0] = EditorColorPairIndex.sideBarGitAddedSign
 
-    view.sidebar.get.buffer = newBuffer
+    view.sidebar.get.buffer = buffer
+    view.sidebar.get.highlights = highlights
 
 ## Update a sidebar buffer for syntax checker reuslts.
 ## It's on left side of EditorView.

@@ -316,6 +316,13 @@ const TomlStr = """
   configModeCurrentLineBg = "#000000"
 
   currentLineBg = "#000000"
+
+  sidebarGitAddedSign = "#000000"
+  sidebarGitAddedSignBg = "#000000"
+  sidebarGitDeletedSign = "#000000"
+  sidebarGitDeletedSignBg = "#000000"
+  sidebarGitChangedSign = "#000000"
+  sidebarGitChangedSignBg = "#000000"
 """
 
 suite "Parse configuration file":

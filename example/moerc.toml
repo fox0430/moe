@@ -396,3 +396,10 @@ configModeCurrentLine = "#ffffff"
 configModeCurrentLineBg = "#008080"
 
 currentLineBg = "#444444"
+
+sidebarGitAddedSign = "#008000"
+sidebarGitAddedSignBg = "#000000"
+sidebarGitDeletedSign = "#ff0000"
+sidebarGitDeletedSignBg = "#000000"
+sidebarGitChangedSign = "#ffff00"
+sidebarGitChangedSignBg = "#000000"

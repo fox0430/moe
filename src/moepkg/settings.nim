@@ -1982,6 +1982,30 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       ColorThemeTable[configTheme][EditorColorPairIndex.currentLineBg].background.rgb =
         toRgb("currentLineBg")
 
+    if settings["Theme"].contains("sidebarGitAddedSign"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.sidebarGitAddedSign].foreground.rgb =
+        toRgb("sidebarGitAddedSign")
+
+    if settings["Theme"].contains("sidebarGitAddedSignBg"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.sidebarGitAddedSign].background.rgb =
+        toRgb("sidebarGitAddedSignBg")
+
+    if settings["Theme"].contains("sidebarGitDeletedSign"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.sidebarGitDeletedSign].foreground.rgb =
+        toRgb("sidebarGitDeletedSign")
+
+    if settings["Theme"].contains("sidebarGitDeletedSignBg"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.sidebarGitDeletedSign].background.rgb =
+        toRgb("sidebarGitDeletedSignBg")
+
+    if settings["Theme"].contains("sidebarGitChangedSign"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.sidebarGitChangedSign].foreground.rgb =
+        toRgb("sidebarGitChangedSign")
+
+    if settings["Theme"].contains("sidebarGitChangedSignBg"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.sidebarGitChangedSign].background.rgb =
+        toRgb("sidebarGitChangedSignBg")
+
   elif result.editorColorTheme == ColorTheme.vscode:
     let vsCodeTheme = loadVSCodeTheme()
     if vsCodeTheme.isOk:
@@ -2788,6 +2812,12 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "configModeCurrentLine = \"{theme.fgColor(EditorColorPairIndex.configModeCurrentLine)}\""
   result.addLine fmt "configModeCurrentLineBg = \"{theme.bgColor(EditorColorPairIndex.configModeCurrentLine)}\""
   result.addLine fmt "currentLineBg = \"{theme.bgColor(EditorColorPairIndex.currentLineBg)}\""
+  result.addLine fmt "sidebarGitAddedSign = \"{theme.fgColor(EditorColorPairIndex.sidebarGitAddedSign)}\""
+  result.addLine fmt "sidebarGitAddedSignBg = \"{theme.bgColor(EditorColorPairIndex.sidebarGitAddedSign)}\""
+  result.addLine fmt "sidebarGitDeletedSign = \"{theme.fgColor(EditorColorPairIndex.sidebarGitDeletedSign)}\""
+  result.addLine fmt "sidebarGitDeletedSignBg = \"{theme.bgColor(EditorColorPairIndex.sidebarGitDeletedSign)}\""
+  result.addLine fmt "sidebarGitChangedSign = \"{theme.fgColor(EditorColorPairIndex.sidebarGitChangedSign)}\""
+  result.addLine fmt "sidebarGitChangedSignBg = \"{theme.bgColor(EditorColorPairIndex.sidebarGitChangedSign)}\""
 
 # Generate a string of the default TOML configuration.
 proc genDefaultTomlConfigStr*(): string {.inline.} =
