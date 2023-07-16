@@ -497,6 +497,18 @@ suite "Config mode: Init buffer":
       ru"  currentLineBg",
       ru"    foreground                   termDefautFg",
       ru"    background                   #444444",
+      ru"",
+      ru"  sidebarGitAddedSign",
+      ru"    foreground                   #008000",
+      ru"    background                   #000000",
+      ru"",
+      ru"  sidebarGitDeletedSign",
+      ru"    foreground                   #ff0000",
+      ru"    background                   #000000",
+      ru"",
+      ru"  sidebarGitChangedSign",
+      ru"    foreground                   #ffff00",
+      ru"    background                   #000000",
       ru""
     ]
 

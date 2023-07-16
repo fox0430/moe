@@ -489,6 +489,14 @@ type
     # highlight curent line background
     currentLineBg
 
+    # Side bar
+    sidebarGitAddedSign
+    sidebarGitAddedSignBg
+    sidebarGitDeletedSign
+    sidebarGitDeletedSignBg
+    sidebarGitChangedSign
+    sidebarGitChangedSignBg
+
   EditorColorPairIndex* {.pure.} = enum
     # Cannot use 0 in Ncurses color pair.
     default = 1
@@ -577,6 +585,11 @@ type
     configModeCurrentLine
     # highlight curent line background
     currentLineBg
+
+    # Side bar
+    sidebarGitAddedSign
+    sidebarGitDeletedSign
+    sidebarGitChangedSign
 
   Color* = object
     index*: EditorColorIndex
@@ -1102,7 +1115,32 @@ const
       foreground: DefaultForegroundColor,
       background: Color(
         index: EditorColorIndex.currentLineBg,
-        rgb: "#444444".hexToRgb.get))
+        rgb: "#444444".hexToRgb.get)),
+
+    # Side bar
+    EditorColorPairIndex.sidebarGitAddedSign: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.sidebarGitAddedSign,
+        rgb: "#008000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.sidebarGitAddedSignBg,
+        rgb: "#000000".hexToRgb.get)),
+
+    EditorColorPairIndex.sidebarGitDeletedSign: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.sidebarGitDeletedSign,
+        rgb: "#ff0000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.sidebarGitDeletedSignBg,
+        rgb: "#000000".hexToRgb.get)),
+
+    EditorColorPairIndex.sidebarGitChangedSign: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.sidebarGitChangedSign,
+        rgb: "#ffff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.sidebarGitChangedSignBg,
+        rgb: "#000000".hexToRgb.get))
   ]
 
   LightTheme*: ThemeColors = [
@@ -1610,7 +1648,32 @@ const
       foreground: DefaultForegroundColor,
       background: Color(
         index: EditorColorIndex.currentLineBg,
-        rgb: "#d3d3d3".hexToRgb.get))
+        rgb: "#d3d3d3".hexToRgb.get)),
+
+    # Side bar
+    EditorColorPairIndex.sidebarGitAddedSign: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.sidebarGitAddedSign,
+        rgb: "#008000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.sidebarGitAddedSignBg,
+        rgb: "#000000".hexToRgb.get)),
+
+    EditorColorPairIndex.sidebarGitDeletedSign: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.sidebarGitDeletedSign,
+        rgb: "#ff0000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.sidebarGitDeletedSign,
+        rgb: "#000000".hexToRgb.get)),
+
+    EditorColorPairIndex.sidebarGitChangedSign: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.sidebarGitChangedSign,
+        rgb: "#ffff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.sidebarGitChangedSignBg,
+        rgb: "#000000".hexToRgb.get))
   ]
 
   VividTheme*: ThemeColors = [
@@ -2118,7 +2181,32 @@ const
       foreground: DefaultForegroundColor,
       background: Color(
         index: EditorColorIndex.currentLineBg,
-        rgb: "#444444".hexToRgb.get))
+        rgb: "#444444".hexToRgb.get)),
+
+    # Side bar
+    EditorColorPairIndex.sidebarGitAddedSign: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.sidebarGitAddedSign,
+        rgb: "#008000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.sidebarGitAddedSignBg,
+        rgb: "#000000".hexToRgb.get)),
+
+    EditorColorPairIndex.sidebarGitDeletedSign: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.sidebarGitDeletedSign,
+        rgb: "#ff0000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.sidebarGitDeletedSign,
+        rgb: "#000000".hexToRgb.get)),
+
+    EditorColorPairIndex.sidebarGitChangedSign: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.sidebarGitChangedSign,
+        rgb: "#ffff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.sidebarGitChangedSignBg,
+        rgb: "#000000".hexToRgb.get))
   ]
 
 var
