@@ -513,6 +513,7 @@ type
     statusLineExMode
     statusLineModeExMode
     statusLineExModeInactive
+
     statusLineGitChangedLines
     statusLineGitBranch
     # tab lnie

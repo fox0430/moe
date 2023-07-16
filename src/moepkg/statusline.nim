@@ -204,10 +204,7 @@ proc isGitBranchName(
     if settings.statusLine.gitBranchName:
       if settings.statusLine.showGitInactive or
       (not settings.statusLine.showGitInactive and isActiveWindow):
-        return bufStatus.isNormalMode or
-               bufStatus.isInsertMode or
-               bufStatus.isVisualMode or
-               bufStatus.isReplaceMode
+        return bufStatus.isEditMode
 
 proc isGitChangedLine(
   bufStatus: BufferStatus,
@@ -217,10 +214,7 @@ proc isGitChangedLine(
     if settings.statusLine.gitchangedLines:
       if settings.statusLine.showGitInactive or
       (not settings.statusLine.showGitInactive and isActiveWindow):
-        return bufStatus.isNormalMode or
-               bufStatus.isInsertMode or
-               bufStatus.isVisualMode or
-               bufStatus.isReplaceMode
+        return bufStatus.isEditMode
 
 proc gitBranchNameBuffer(
   statusLine: var StatusLine,
