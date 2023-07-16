@@ -17,9 +17,9 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strformat, strutils, osproc, os]
+import std/[strformat, strutils, osproc, os, times]
 import pkg/results
-import unicodeext, independentutils, backgroundprocess
+import unicodeext, independentutils, backgroundprocess, fileutils
 
 type
   OperationType* = enum
@@ -42,6 +42,7 @@ type
   GitDiffProcess* = object
     command*: BackgroundProcessCommand
     filePath*: Runes
+    tmpPath*: Runes
     process*: BackgroundProcess
 
 proc countChangedLines*(diffs: seq[Diff]): ChangedLines =
@@ -59,10 +60,9 @@ proc countChangedLines*(diffs: seq[Diff]): ChangedLines =
         result.deleted += d.lastLine - d.firstLine + 1
         result.changed += + 1
 
-
-proc execGitDiffCommand(path: string): string =
-  ## Exec `git diff` command and return the output.
-  let cmdResult = execCmdEx(fmt"git diff --no-ext-diff {path}")
+proc execGitDiffCommand(originalPath, tmpPath: string): string =
+  ## Exec `git diff` command and return an output.
+  let cmdResult = execCmdEx(fmt"git diff --no-index {originalPath} {tmpPath}")
   if cmdResult.exitCode == 0:
     return cmdResult.output
 
@@ -207,30 +207,38 @@ proc isGitAvailable*(): bool {.inline.} =
 
   if execCmdExNoOutput("git -v") == 0: return true
 
-proc gitDiff*(path: string | Runes): seq[Diff] =
-  ## Returns changed information from HEAD using `git diff` command.
-
-  let output = execGitDiffCommand($path)
-  if output.len > 0:
-    return output.splitLines.parseGitDiffOutput
-
 proc isRunning*(bp: GitDiffProcess): bool {.inline.} = bp.process.isRunning
 
 proc result*(bp: var GitDiffProcess): Result[seq[string], string] {.inline.} =
   bp.process.result
 
-proc startBackgroundGitDiff*(path: Runes): Result[GitDiffProcess, string] =
-  ## Start a background process for the git diff command.
+proc startBackgroundGitDiff*(
+  path: Runes,
+  buffer: Runes,
+  encoding: CharacterEncoding): Result[GitDiffProcess, string] =
+    ## Start a background process for the git diff command.
+    ## Save a current buffer to a temporarily file before exec
+    ## `git diff --no-index`.
 
-  let command = BackgroundProcessCommand(
-    cmd: "git",
-    args: @["diff", "--no-ext-diff", $path])
+    # TODO: Change tmpPath to ~/.config/moe.
+    let tmpPath = fmt"{$path}_{$now()}.tmp".toRunes
+    try:
+      saveFile(tmpPath, buffer, encoding)
+    except CatchableError as e:
+      return Result[GitDiffProcess, string].err fmt"Failed to save a temp file {e.msg}"
 
-  let backgroundProcess = startBackgroundProcess(command)
-  if backgroundProcess.isErr:
-    return Result[GitDiffProcess, string].err fmt"Failed to exec git diff commands: {backgroundProcess.error}"
+    let command = BackgroundProcessCommand(
+      cmd: "git",
+      args: @["diff", "--no-index", $path, $tmpPath])
 
-  return Result[GitDiffProcess, string].ok GitDiffProcess(
-    command: command,
-    filePath: path,
-    process: backgroundProcess.get)
+    let backgroundProcess = startBackgroundProcess(command)
+    if backgroundProcess.isErr:
+      if fileExists($tmpPath):
+        removeFile($tmpPath)
+      return Result[GitDiffProcess, string].err fmt"Failed to exec git diff commands: {backgroundProcess.error}"
+
+    return Result[GitDiffProcess, string].ok GitDiffProcess(
+      command: command,
+      filePath: path,
+      tmpPath: tmpPath,
+      process: backgroundProcess.get)

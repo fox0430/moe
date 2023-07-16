@@ -307,11 +307,12 @@ proc addFilerStatus(status: var EditorStatus, bufStatusIndex: int) {.inline.} =
   status.bufStatus[bufStatusIndex].filerStatusIndex =
     some(status.filerStatuses.high)
 
-## Return bufStatus.high after adding a new buffer.
 proc addNewBuffer*(
   status: var EditorStatus,
   path: string,
   mode: Mode): Option[int] =
+    ## Return bufStatus.high after adding a new buffer.
+    # TODO: Return Result type
 
     case mode:
       of Mode.help:
@@ -351,25 +352,40 @@ proc addNewBuffer*(
           addMessageLog errMessage
           return
 
+        if status.settings.git.showChangedLine and
+           status.bufStatus[^1].isTrackingByGit:
+             let gitDiffProcess = startBackgroundGitDiff(
+               status.bufStatus[^1].path,
+               status.bufStatus[^1].buffer.toRunes,
+               status.bufStatus[^1].characterEncoding)
+             if gitDiffProcess.isOk:
+               status.backgroundTasks.gitDiff.add gitDiffProcess.get
+
     return some(status.bufStatus.high)
 
 proc addNewBuffer*(
   status: var EditorStatus,
   mode: Mode): Option[int] {.inline.} =
-    const path = ""
-    return status.addNewBuffer(path, mode)
+    # TODO: Return Result type
 
-## Add a new buffer and change the current buffer to it and init an editor view.
+    const Path = ""
+    return status.addNewBuffer(Path, mode)
+
 proc addNewBufferInCurrentWin*(
   status: var EditorStatus,
   path: string,
   mode: Mode) =
+    ## Add a new buffer and change the current buffer to it and init an editor
+    ## view.
+
     let index = status.addNewBuffer(path, mode)
     if index.isNone: return
 
     status.changeCurrentBuffer(index.get)
 
     currentMainWindowNode.view = currentBufStatus.buffer.initEditorView(1, 1)
+    if status.settings.view.sidebar:
+      currentMainWindowNode.view.initSidebar
 
     if mode.isFilerMode:
       status.addFilerStatus
@@ -851,7 +867,8 @@ proc verticalSplitWindow*(status: var EditorStatus) =
 
   status.resize
 
-  var newNode = mainWindowNode.searchByWindowIndex(currentMainWindowNode.windowIndex + 1)
+  var newNode = mainWindowNode.searchByWindowIndex(
+    currentMainWindowNode.windowIndex + 1)
   newNode.restoreCursorPostion(currentBufStatus, status.lastPosition)
 
 proc horizontalSplitWindow*(status: var EditorStatus) =
@@ -873,7 +890,8 @@ proc horizontalSplitWindow*(status: var EditorStatus) =
 
   status.resize
 
-  var newNode = mainWindowNode.searchByWindowIndex(currentMainWindowNode.windowIndex + 1)
+  var newNode = mainWindowNode.searchByWindowIndex(
+    currentMainWindowNode.windowIndex + 1)
   newNode.restoreCursorPostion(currentBufStatus, status.lastPosition)
 
 proc closeWindow*(status: var EditorStatus, node: WindowNode) =
@@ -1178,6 +1196,10 @@ proc checkBackgroundGitDiff(status: var EditorStatus) =
         let index = status.bufStatus.checkBufferExist(p.filePath)
         if index.isSome:
           status.bufStatus[index.get].changedLines = r.get.parseGitDiffOutput
+          status.bufStatus[index.get].lastGitInfoUpdateTime = now()
+
+      if fileExists($p.tmpPath):
+        removeFile($p.tmpPath)
 
       status.backgroundTasks.gitDiff.delete i
 
@@ -1236,6 +1258,15 @@ proc eventLoopTask(status: var EditorStatus) =
         currentBufStatus.characterEncoding = newTextAndEncoding.encoding
         currentBufStatus.isUpdate = true
 
+        if currentBufStatus.isTrackingByGit:
+          # TODO: Decrease update interval.
+          let gitDiffProcess = startBackgroundGitDiff(
+            currentBufStatus.path,
+            currentBufStatus.buffer.toRunes,
+            currentBufStatus.characterEncoding)
+          if gitDiffProcess.isOk:
+            status.backgroundTasks.gitDiff.add gitDiffProcess.get
+
   # Automatic backup
   let
     lastBackupTime = status.autoBackupStatus.lastBackupTime
@@ -1253,6 +1284,19 @@ proc eventLoopTask(status: var EditorStatus) =
           status.commandLine)
 
         status.autoBackupStatus.lastBackupTime = now()
+
+  # TODO: Add a setting for git update interval.
+  if status.lastOperatingTime + 1.seconds < now():
+    # Update changed lines.
+    for b in status.bufStatus:
+      if b.isTrackingByGit and
+         b.lastGitInfoUpdateTime + 1.seconds < now():
+           let gitDiffProcess = startBackgroundGitDiff(
+            b.path,
+            b.buffer.toRunes,
+            b.characterEncoding)
+           if gitDiffProcess.isOk:
+             status.backgroundTasks.gitDiff.add gitDiffProcess.get
 
 # Get a key from the main current window and execute the event loop.
 proc getKeyFromMainWindow*(status: var EditorStatus): Rune =

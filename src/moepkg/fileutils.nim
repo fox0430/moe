@@ -35,6 +35,7 @@ proc normalizePath*(path: seq[Rune]): seq[Rune] =
 
 proc openFile*(filename: seq[Rune]):
   tuple[text: seq[Rune], encoding: CharacterEncoding] =
+    # TODO: Return Result type
 
     let
       raw = readFile($filename)
@@ -54,6 +55,7 @@ proc newFile*(): GapBuffer[seq[Rune]] {.inline.} =
 proc saveFile*(
   path, runes: seq[Rune],
   encoding: CharacterEncoding) =
+    # TODO: Return Result type
 
     let
       encode =
