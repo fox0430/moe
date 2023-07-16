@@ -75,7 +75,8 @@ type statusLineTableNames {.pure.} = enum
   encoding
   language
   directory
-  gitbranchName
+  gitChangedLines
+  gitBranchName
   showGitInactive
   showModeInactive
 
@@ -344,8 +345,10 @@ proc getStatusLineTableSettingValues(settings: StatusLineSettings,
       currentVal = settings.language
     of "directory":
       currentVal = settings.directory
-    of "gitbranchName":
-      currentVal = settings.gitbranchName
+    of "gitChangedLines":
+      currentVal = settings.gitChangedLines
+    of "gitBranchName":
+      currentVal = settings.gitBranchName
     of "showGitInactive":
       currentVal = settings.showGitInactive
     of "showModeInactive":
@@ -785,8 +788,10 @@ proc changeStatusLineTableSetting(settings: var StatusLineSettings,
     settings.language = parseBool(settingVal)
   of "directory":
     settings.directory = parseBool(settingVal)
-  of "gitbranchName":
-    settings.gitbranchName = parseBool(settingVal)
+  of "gitChangedLines":
+    settings.gitChangedLines = parseBool(settingVal)
+  of "gitBranchName":
+    settings.gitBranchName = parseBool(settingVal)
   of "showGitInactive":
     settings.showGitInactive = parseBool(settingVal)
   of "showModeInactive":
@@ -1114,7 +1119,8 @@ proc getSettingType(table, name: string): SettingType =
          "encoding",
          "language",
          "directory",
-         "gitbranchName",
+         "gitChangedLines",
+         "gitBranchName",
          "showGitInactive",
          "showModeInactive": result = SettingType.Bool
       else:
@@ -1825,8 +1831,10 @@ proc initStatusLineTableBuffer(settings: StatusLineSettings): seq[seq[Rune]] =
         result.add(ru nameStr & space & $settings.language)
       of "directory":
         result.add(ru nameStr & space & $settings.directory)
-      of "gitbranchName":
-        result.add(ru nameStr & space & $settings.gitbranchName)
+      of "gitChangedLines":
+        result.add(ru nameStr & space & $settings.gitChangedLines)
+      of "gitBranchName":
+        result.add(ru nameStr & space & $settings.gitBranchName)
       of "showGitInactive":
         result.add(ru nameStr & space & $settings.showGitInactive)
       of "showModeInactive":

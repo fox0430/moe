@@ -19,7 +19,7 @@
 
 import std/[strutils, strformat, os, osproc]
 import syntax/highlite
-import ui, bufferstatus, color, unicodeext, settings, windownode, gapbuffer
+import ui, bufferstatus, color, unicodeext, settings, windownode, gapbuffer, git
 
 type StatusLine* = object
   window*: Window
@@ -196,23 +196,89 @@ proc writeStatusLineQuickRunModeInfo(
       color.int16)
     statusLine.window.write(0, statusLineWidth - info.len - 1, info, color.int16)
 
-proc writeStatusLineCurrentGitBranchName(
+proc isGitBranchName(
+  bufStatus: BufferStatus,
+  isActiveWindow: bool,
+  settings: EditorSettings): bool =
+
+    if settings.statusLine.gitBranchName:
+      if settings.statusLine.showGitInactive or
+      (not settings.statusLine.showGitInactive and isActiveWindow):
+        return bufStatus.isEditMode
+
+proc isGitChangedLine(
+  bufStatus: BufferStatus,
+  isActiveWindow: bool,
+  settings: EditorSettings): bool =
+
+    if settings.statusLine.gitchangedLines:
+      if settings.statusLine.showGitInactive or
+      (not settings.statusLine.showGitInactive and isActiveWindow):
+        return bufStatus.isEditMode
+
+proc gitBranchNameBuffer(
   statusLine: var StatusLine,
-  statusLineBuffer: var seq[Rune],
-  isActiveWindow: bool) =
+  statusLineBuffer: var Runes): Runes =
+    ## Return a buffer for the git branch name.
+
+    const GitBranchSymbol = ""
 
     # Get current git branch name
     let cmdResult = execCmdEx("git rev-parse --abbrev-ref HEAD")
     if cmdResult.exitCode != 0: return
 
     let
-      branchName = cmdResult.output
-      ## Add symbol and delete newline
-      buffer = ru"  " & branchName[0 .. branchName.high - 1].toRunes & ru" "
-      color = EditorColorPairIndex.statusLineGitBranch
+      branchName = (cmdResult.output)[0 .. cmdResult.output.high - 1]
+      buffer = fmt"{GitBranchSymbol} {branchName} ".toRunes
 
-    statusLineBuffer.add(buffer)
-    statusLine.window.append(buffer, color.int16)
+    return buffer
+
+proc changedLinesBuffer(
+  statusLine: var StatusLine,
+  statusLineBuffer: var seq[Rune],
+  changedLines: seq[Diff],
+  isActiveWindow: bool): Runes =
+    ## Return a buffer for the number of lines changed using git.
+
+    if isActiveWindow and changedLines.len > 0:
+      let (added, changed, deleted) = changedLines.countChangedLines
+      return fmt" +{added} ~{changed} -{deleted}".toRunes
+
+proc writeGitInfo(
+  statusLine: var StatusLine,
+  statusLineBuffer: var seq[Rune],
+  bufStatus: BufferStatus,
+  settings: EditorSettings,
+  isActiveWindow: bool) =
+    ## Write git info to the status line. (changed lines, branch name, etc)
+
+    var changedLinesBuffer: Runes
+    if isGitChangedLine(bufStatus, isActiveWindow, settings):
+      let changedLinesBuffer = statusLine.changedLinesBuffer(
+        statusLineBuffer,
+        bufStatus.changedLines,
+        isActiveWindow)
+
+      if changedLinesBuffer.len > 0:
+        statusLineBuffer.add changedLinesBuffer
+        statusLine.window.append(
+          changedLinesBuffer,
+          EditorColorPairIndex.statusLineGitBranch.int16)
+
+    if isGitBranchName(bufStatus, isActiveWindow, settings):
+      let branchNameBuffer = statusLine.gitBranchNameBuffer(statusLineBuffer)
+
+      if branchNameBuffer.len > 0 and changedLinesBuffer.len == 0:
+        # Add the single space if no changedLines.
+        statusLineBuffer.add ru" "
+        statusLine.window.append(
+          ru" ",
+          EditorColorPairIndex.statusLineGitBranch.int16)
+
+        statusLineBuffer.add branchNameBuffer
+        statusLine.window.append(
+          branchNameBuffer,
+          EditorColorPairIndex.statusLineGitBranch.int16)
 
 proc modeLablel(mode: Mode, isActiveWindow, showModeInactive: bool): string =
   if not isActiveWindow and not showModeInactive:
@@ -252,7 +318,7 @@ proc modeLablel(mode: Mode, isActiveWindow, showModeInactive: bool): string =
       else:
         result = "NORMAL"
 
-proc setModeStrColor(mode: Mode): EditorColorPairIndex =
+proc modeStrColor(mode: Mode): EditorColorPairIndex =
   case mode
     of Mode.insert: EditorColorPairIndex.statusLineModeInsertMode
     of Mode.visual: EditorColorPairIndex.statusLineModeVisualMode
@@ -260,29 +326,6 @@ proc setModeStrColor(mode: Mode): EditorColorPairIndex =
     of Mode.filer: EditorColorPairIndex.statusLineModeFilerMode
     of Mode.ex: EditorColorPairIndex.statusLineModeExMode
     else: EditorColorPairIndex.statusLineModeNormalMode
-
-proc isShowGitBranchName(
-  mode, prevMode: Mode,
-  isActiveWindow: bool,
-  settings: EditorSettings): bool =
-
-    if settings.statusLine.gitbranchName:
-      let showGitInactive = settings.statusLine.showGitInactive
-
-      if showGitInactive or
-      (not showGitInactive and isActiveWindow): result = true
-
-    if mode == Mode.normal or
-       mode == Mode.insert or
-       mode == Mode.visual or
-       mode == Mode.replace: result = true
-    elif mode == Mode.ex:
-      if prevMode == Mode.normal or
-         prevMode == Mode.insert or
-         prevMode == Mode.visual or
-         prevMode == Mode.replace: result = true
-    else:
-      result = false
 
 proc writeStatusLine*(
   statusLine: var StatusLine,
@@ -294,10 +337,7 @@ proc writeStatusLine*(
     statusLine.window.erase
 
     let
-      currentMode = bufStatus.mode
-      prevMode = bufStatus.prevMode
-      color = setModeStrColor(currentMode)
-      modeLabel = currentMode.modeLablel(
+      modeLabel = bufStatus.mode.modeLablel(
         isActiveWindow,
         settings.statusLine.showModeInactive)
 
@@ -307,12 +347,13 @@ proc writeStatusLine*(
 
     ## Write current mode
     if settings.statusLine.mode:
-      statusLine.window.write(0, 0, statusLineBuffer, color.int16)
+      statusLine.window.write(0, 0, statusLineBuffer, modeStrColor(bufStatus.mode).int16)
 
-    if isShowGitBranchName(currentMode, prevMode, isActiveWindow, settings):
-      statusLine.writeStatusLineCurrentGitBranchName(
-        statusLineBuffer,
-        isActiveWindow)
+    statusLine.writeGitinfo(
+      statusLineBuffer,
+      bufStatus,
+      settings,
+      isActiveWindow)
 
     if bufStatus.isFilerMode:
       statusLine.writeStatusLineFilerModeInfo(

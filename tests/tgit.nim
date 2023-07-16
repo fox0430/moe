@@ -91,7 +91,7 @@ index f328eafe..03715814 100644
 """
 
     check diffResult.parseGitDiffOutput == @[
-      Diff(operation: OperationType.deleted, firstLine: 18, lastLine: 18),
+      Diff(operation: OperationType.deleted, firstLine: 18, lastLine: 19),
     ]
 
   test "Deleted 3":
