@@ -1178,10 +1178,6 @@ proc checkBackgroundQuickRun(status: var EditorStatus) =
 
       status.backgroundTasks.quickRun.delete i
 
-  if isUpdate:
-    # Update for quickrun windows
-    status.update
-
 proc checkBackgroundGitDiff(status: var EditorStatus) =
   var i = 0
   while i < status.backgroundTasks.gitDiff.len:
@@ -1195,8 +1191,8 @@ proc checkBackgroundGitDiff(status: var EditorStatus) =
       if r.isOk:
         let index = status.bufStatus.checkBufferExist(p.filePath)
         if index.isSome:
-          status.bufStatus[index.get].changedLines = r.get.parseGitDiffOutput
-          status.bufStatus[index.get].lastGitInfoUpdateTime = now()
+          status.bufStatus[index.get].updateChangedLines(
+            r.get.parseGitDiffOutput)
 
       if fileExists($p.tmpPath):
         removeFile($p.tmpPath)
@@ -1216,6 +1212,11 @@ proc checkBackgroundTasks(status: var EditorStatus) =
   if status.backgroundTasks.gitDiff.len > 0:
     status.checkBackgroundGitDiff
 
+  for b in status.bufStatus:
+    if b.isUpdate:
+      status.update
+      break
+
 proc eventLoopTask(status: var EditorStatus) =
   # BackgroundTasks
   status.checkBackgroundTasks
@@ -1223,20 +1224,22 @@ proc eventLoopTask(status: var EditorStatus) =
   # Auto save
   if status.settings.autoSave: status.autoSave
 
-  # Live reload of configuration file
   if status.settings.liveReloadOfConf and
      status.timeConfFileLastReloaded + 1.seconds < now():
-    let beforeTheme = status.settings.editorColorTheme
+       # Live reload of configuration file
 
-    status.loadConfigurationFile
+       let beforeTheme = status.settings.editorColorTheme
 
-    status.timeConfFileLastReloaded = now()
-    if beforeTheme != status.settings.editorColorTheme:
-      changeTheme(status)
-      status.resize
+       status.loadConfigurationFile
 
-  # Live reload of an open file. a current window's buffer only.
+       status.timeConfFileLastReloaded = now()
+       if beforeTheme != status.settings.editorColorTheme:
+         changeTheme(status)
+         status.resize
+
   if status.settings.liveReloadOfFile:
+    # Live reload of an open file. a current window's buffer only.
+
     let lastModificationTime = getLastModificationTime($currentBufStatus.path)
     if 0 == currentBufStatus.countChange and
        lastModificationTime > currentBufStatus.lastSaveTime.toTime:
@@ -1267,36 +1270,39 @@ proc eventLoopTask(status: var EditorStatus) =
           if gitDiffProcess.isOk:
             status.backgroundTasks.gitDiff.add gitDiffProcess.get
 
-  # Automatic backup
-  let
-    lastBackupTime = status.autoBackupStatus.lastBackupTime
-    interval = status.settings.autoBackup.interval
-    idleTime = status.settings.autoBackup.idleTime
+  block automaticBackups:
+    let
+      lastBackupTime = status.autoBackupStatus.lastBackupTime
+      interval = status.settings.autoBackup.interval
+      idleTime = status.settings.autoBackup.idleTime
 
-  if status.settings.autoBackup.enable and
-     lastBackupTime + interval.minutes < now() and
-     status.lastOperatingTime + idleTime.seconds < now():
-    for bufStatus in status.bufStatus:
-      if isEditMode(bufStatus.mode, bufStatus.prevMode):
-        bufStatus.backupBuffer(
-          status.settings.autoBackup,
-          status.settings.notification,
-          status.commandLine)
+    if status.settings.autoBackup.enable and
+       lastBackupTime + interval.minutes < now() and
+       status.lastOperatingTime + idleTime.seconds < now():
+      for bufStatus in status.bufStatus:
+        if isEditMode(bufStatus.mode, bufStatus.prevMode):
+          bufStatus.backupBuffer(
+            status.settings.autoBackup,
+            status.settings.notification,
+            status.commandLine)
 
-        status.autoBackupStatus.lastBackupTime = now()
+          status.autoBackupStatus.lastBackupTime = now()
 
-  # TODO: Add a setting for git update interval.
-  if status.lastOperatingTime + 1.seconds < now():
-    # Update changed lines.
-    for b in status.bufStatus:
-      if b.isTrackingByGit and
-         b.lastGitInfoUpdateTime + 1.seconds < now():
-           let gitDiffProcess = startBackgroundGitDiff(
-            b.path,
-            b.buffer.toRunes,
-            b.characterEncoding)
-           if gitDiffProcess.isOk:
-             status.backgroundTasks.gitDiff.add gitDiffProcess.get
+  block updateGitInfo:
+    if status.lastOperatingTime + 1.seconds < now():
+      # Update changed lines.
+      for i, buf in status.bufStatus:
+        if buf.isTrackingByGit and
+           buf.isUpdate and
+           buf.lastGitInfoCheckTime + 1.seconds < now():
+             let gitDiffProcess = startBackgroundGitDiff(
+              buf.path,
+              buf.buffer.toRunes,
+              buf.characterEncoding)
+             if gitDiffProcess.isOk:
+               status.backgroundTasks.gitDiff.add gitDiffProcess.get
+
+             status.bufStatus[i].updateLastGitInfoCheckTime
 
 # Get a key from the main current window and execute the event loop.
 proc getKeyFromMainWindow*(status: var EditorStatus): Rune =

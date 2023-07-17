@@ -45,6 +45,42 @@ type
     tmpPath*: Runes
     process*: BackgroundProcess
 
+proc gitProjectRoot(): string =
+  ## Return a git project root absolute path.
+
+  let cmdResult = execCmdEx("git rev-parse --show-toplevel")
+  if cmdResult.output.len > 0:
+    return cmdResult.output
+
+proc getAllTrakedFilesByGit(): seq[string] =
+  ## Returns all tracked file names by git in a current project.
+
+  let cmdResult = execCmdEx("git ls-tree --full-tree --name-only -r HEAD")
+  if cmdResult.output.len > 0:
+    return strutils.splitWhitespace(cmdResult.output)
+
+proc isTrackingByGit*(path: string): bool =
+  ## Return true if tracked by git.
+
+  let trackedList = getAllTrakedFilesByGit()
+
+  if path.isAbsolute:
+    let root = gitProjectRoot()
+    for trackedFile in trackedList:
+      if path == root / trackedFile:
+        return true
+  else:
+    return trackedList.contains(path)
+
+proc isGitAvailable*(): bool {.inline.} =
+  ## Return true if git command is available.
+
+  if execCmdExNoOutput("git -v") == 0: return true
+
+proc gitDiffTmpDir*(): string {.inline.} =
+  ## Return a path for a tmp dir for git diff.
+  return getCacheDir() / "moe/git_tmp/"
+
 proc countChangedLines*(diffs: seq[Diff]): ChangedLines =
   ## Count and return changed lines in seq[Diff].
 
@@ -59,12 +95,6 @@ proc countChangedLines*(diffs: seq[Diff]): ChangedLines =
       of OperationType.changedAndDeleted:
         result.deleted += d.lastLine - d.firstLine + 1
         result.changed += + 1
-
-proc execGitDiffCommand(originalPath, tmpPath: string): string =
-  ## Exec `git diff` command and return an output.
-  let cmdResult = execCmdEx(fmt"git diff --no-index {originalPath} {tmpPath}")
-  if cmdResult.exitCode == 0:
-    return cmdResult.output
 
 proc splitGitHunks(output: seq[string]): seq[Section] =
   ## Split the `git diff` command output by "@@".
@@ -85,7 +115,7 @@ proc splitGitHunks(output: seq[string]): seq[Section] =
             afterFileRange.parseInt
 
       result.add Section(firstOriginalLine: firstLineNum - 1)
-    else:
+    elif result.len > 0:
       result[^1].buffer.add line
 
 proc parseGitDiffOutput*(output: seq[string]): seq[Diff] =
@@ -175,38 +205,6 @@ proc parseGitDiffOutput*(output: seq[string]): seq[Diff] =
           when not defined(release):
             doAssert(result[^1].firstLine <= result[^1].lastLine, $result[^1])
 
-proc gitProjectRoot(): string =
-  ## Return a git project root absolute path.
-
-  let cmdResult = execCmdEx("git rev-parse --show-toplevel")
-  if cmdResult.output.len > 0:
-    return cmdResult.output
-
-proc getAllTrakedFilesByGit(): seq[string] =
-  ## Returns all tracked file names by git in a current project.
-
-  let cmdResult = execCmdEx("git ls-tree --full-tree --name-only -r HEAD")
-  if cmdResult.output.len > 0:
-    return strutils.splitWhitespace(cmdResult.output)
-
-proc isTrackingByGit*(path: string): bool =
-  ## Return true if tracked by git.
-
-  let trackedList = getAllTrakedFilesByGit()
-
-  if path.isAbsolute:
-    let root = gitProjectRoot()
-    for trackedFile in trackedList:
-      if path == root / trackedFile:
-        return true
-  else:
-    return trackedList.contains(path)
-
-proc isGitAvailable*(): bool {.inline.} =
-  ## Return true if git command is available.
-
-  if execCmdExNoOutput("git -v") == 0: return true
-
 proc isRunning*(bp: GitDiffProcess): bool {.inline.} = bp.process.isRunning
 
 proc result*(bp: var GitDiffProcess): Result[seq[string], string] {.inline.} =
@@ -220,16 +218,20 @@ proc startBackgroundGitDiff*(
     ## Save a current buffer to a temporarily file before exec
     ## `git diff --no-index`.
 
-    # TODO: Change tmpPath to ~/.config/moe.
-    let tmpPath = fmt"{$path}_{$now()}.tmp".toRunes
+    let
+      cacheDir = gitDiffTmpDir()
+      tmpFilename = fmt"{splitPath($path).tail}_{$now()}.tmp"
+      tmpPath = cacheDir / tmpFilename
     try:
-      saveFile(tmpPath, buffer, encoding)
+      # Create the cache dir and save a tmp file for git diff.
+      if not dirExists(cacheDir): createDir(cacheDir)
+      saveFile(tmpPath.toRunes, buffer, encoding)
     except CatchableError as e:
-      return Result[GitDiffProcess, string].err fmt"Failed to save a temp file {e.msg}"
+      return Result[GitDiffProcess, string].err fmt"Failed to save a tmp file {e.msg}"
 
     let command = BackgroundProcessCommand(
       cmd: "git",
-      args: @["diff", "--no-index", $path, $tmpPath])
+      args: @["diff", "--no-index", "--no-color", $path, $tmpPath])
 
     let backgroundProcess = startBackgroundProcess(command)
     if backgroundProcess.isErr:
@@ -240,5 +242,5 @@ proc startBackgroundGitDiff*(
     return Result[GitDiffProcess, string].ok GitDiffProcess(
       command: command,
       filePath: path,
-      tmpPath: tmpPath,
+      tmpPath: tmpPath.toRunes,
       process: backgroundProcess.get)

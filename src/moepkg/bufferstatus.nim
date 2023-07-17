@@ -63,7 +63,7 @@ type
     filerStatusIndex*: Option[int]
     isTrackingByGit*: bool
     changedLines*: seq[Diff]
-    lastGitInfoUpdateTime*: DateTime
+    lastGitInfoCheckTime*: DateTime
     syntaxCheckResults*: seq[SyntaxError]
 
 proc isExMode*(mode: Mode): bool {.inline.} = mode == Mode.ex
@@ -253,6 +253,7 @@ proc initBufferStatus*(
     result.openDir = getCurrentDir().toRunes
     result.mode = mode
     result.lastSaveTime = now()
+    result.lastGitInfoCheckTime = now()
 
     if isFilerMode(result.mode):
       result.path = absolutePath(path).toRunes
@@ -281,6 +282,7 @@ proc initBufferStatus*(
     result.openDir = getCurrentDir().toRunes
     result.mode = mode
     result.lastSaveTime = now()
+    result.lastGitInfoCheckTime = now()
 
     if mode.isFilerMode:
       result.buffer = initGapBuffer(@[ru ""])
@@ -305,6 +307,15 @@ proc positionEndOfBuffer*(bufStatus: BufferStatus): BufferPosition {.inline.} =
   BufferPosition(
     line: bufStatus.buffer.high,
     column: bufStatus.buffer[bufStatus.buffer.high].high)
+
+proc updateLastGitInfoCheckTime*(bufStatus: var BufferStatus) {.inline.} =
+  bufStatus.lastGitInfoCheckTime = now()
+
+proc updateChangedLines*(bufStatus: var BufferStatus, diffs: seq[Diff]) =
+  ## Update changedLines and lastGitInfoCheckTime.
+
+  bufStatus.changedLines = diffs
+  bufStatus.updateLastGitInfoCheckTime
 
 ## Exec syntax check and update BufferStatus.syntaxCheckResults
 proc updateSyntaxCheckerResults*(
