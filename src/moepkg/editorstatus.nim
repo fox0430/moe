@@ -370,6 +370,8 @@ proc addNewBufferInCurrentWin*(
     status.changeCurrentBuffer(index.get)
 
     currentMainWindowNode.view = currentBufStatus.buffer.initEditorView(1, 1)
+    if status.settings.view.sidebar:
+      currentMainWindowNode.view.initSidebar
 
     if mode.isFilerMode:
       status.addFilerStatus
