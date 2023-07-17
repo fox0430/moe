@@ -62,8 +62,9 @@ type
     isReadonly*: bool
     filerStatusIndex*: Option[int]
     isTrackingByGit*: bool
-    changedLines*: seq[Diff]
     lastGitInfoCheckTime*: DateTime
+    isGitUpdate*: bool
+    changedLines*: seq[Diff]
     syntaxCheckResults*: seq[SyntaxError]
 
 proc isExMode*(mode: Mode): bool {.inline.} = mode == Mode.ex

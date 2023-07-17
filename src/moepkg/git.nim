@@ -79,7 +79,7 @@ proc isGitAvailable*(): bool {.inline.} =
 
 proc gitDiffTmpDir*(): string {.inline.} =
   ## Return a path for a tmp dir for git diff.
-  return getCacheDir() / "moe/git_tmp/"
+  return getCacheDir() / "moe/gitDiffTmp/"
 
 proc countChangedLines*(diffs: seq[Diff]): ChangedLines =
   ## Count and return changed lines in seq[Diff].
@@ -215,32 +215,45 @@ proc startBackgroundGitDiff*(
   buffer: Runes,
   encoding: CharacterEncoding): Result[GitDiffProcess, string] =
     ## Start a background process for the git diff command.
-    ## Save a current buffer to a temporarily file before exec
+    ## Save the current buffer and `path` of HEAD to temporary files before exec
     ## `git diff --no-index`.
 
-    let
-      cacheDir = gitDiffTmpDir()
-      tmpFilename = fmt"{splitPath($path).tail}_{$now()}.tmp"
-      tmpPath = cacheDir / tmpFilename
+    let cacheDir = gitDiffTmpDir()
     try:
-      # Create the cache dir and save a tmp file for git diff.
       if not dirExists(cacheDir): createDir(cacheDir)
-      saveFile(tmpPath.toRunes, buffer, encoding)
+    except CatchableError as e:
+      return Result[GitDiffProcess, string].err fmt"Failed to save a tmp file {e.msg}"
+
+    let
+      # A temporary file of HEAD.
+      tmpHeadFilename = fmt"{splitPath($path).tail}_{$now()}_head.tmp"
+      tmpHeadPath = cacheDir / tmpHeadFilename
+
+      # A temporary file of the current buffer.
+      tmpBufFilename = fmt"{splitPath($path).tail}_{$now()}_buf.tmp"
+      tmpBufPath = cacheDir / tmpBufFilename
+
+    # TODO: Saving temporary files every time is an expensive cost,
+    # so make it asynchronous(background) or take a workaround.
+
+    if 0 != execCmdExNoOutput(fmt"git show HEAD:{path} > {tmpHeadPath}"):
+      return Result[GitDiffProcess, string].err fmt"Failed to save a tmp file {path}"
+
+    try:
+      saveFile(tmpBufPath.toRunes, buffer, encoding)
     except CatchableError as e:
       return Result[GitDiffProcess, string].err fmt"Failed to save a tmp file {e.msg}"
 
     let command = BackgroundProcessCommand(
       cmd: "git",
-      args: @["diff", "--no-index", "--no-color", $path, $tmpPath])
+      args: @["diff", "--no-index", "--no-color", $tmpHeadPath, $tmpBufPath])
 
     let backgroundProcess = startBackgroundProcess(command)
     if backgroundProcess.isErr:
-      if fileExists($tmpPath):
-        removeFile($tmpPath)
       return Result[GitDiffProcess, string].err fmt"Failed to exec git diff commands: {backgroundProcess.error}"
 
     return Result[GitDiffProcess, string].ok GitDiffProcess(
       command: command,
       filePath: path,
-      tmpPath: tmpPath.toRunes,
+      tmpPath: tmpBufPath.toRunes,
       process: backgroundProcess.get)

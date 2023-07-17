@@ -126,5 +126,5 @@ suite "BackgroundTask: Run background process":
       args:  @["-c", "sleep 0.5; echo 1"])
     var bp = command.startBackgroundProcess.get
 
-    check @["1"] == bp.waitFor.get
+    check @["1"] == bp.waitFor
     check not bp.isRunning

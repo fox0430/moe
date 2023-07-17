@@ -290,6 +290,10 @@ proc exitEditor*(status: EditorStatus) =
   if status.settings.persist.cursorPosition:
     saveLastCursorPosition(status.lastPosition)
 
+  if dirExists(gitDiffTmpDir()):
+    # Cleanup temporary files fot git diff.
+    removeDir(gitDiffTmpDir())
+
   exitUi()
 
   executeOnExit(status.settings, currentPlatform)
@@ -601,13 +605,17 @@ proc initSyntaxHighlight(
     var updatedHighlights: seq[(int, Highlight)]
     for index, buf in bufStatus:
       # The filer syntax highlight is initialized/updated in filermode module.
-      if buf.isUpdate and not isFilerMode(buf.mode, buf.prevMode):
+      if not buf.isFilerMode and buf.isUpdate:
         let
-          lang = if isSyntaxHighlight: buf.language
-                 else: SourceLanguage.langNone
+          lang =
+            if isSyntaxHighlight: buf.language
+            else: SourceLanguage.langNone
           h = ($buf.buffer).initHighlight(reservedWords, lang)
         updatedHighlights.add (index, h)
+
         bufStatus[index].isUpdate = false
+        if bufStatus[index].isTrackingByGit:
+          bufStatus[index].isGitUpdate = true
 
     var queue = initHeapQueue[WindowNode]()
     for node in windowNode.child: queue.push(node)
@@ -1194,9 +1202,6 @@ proc checkBackgroundGitDiff(status: var EditorStatus) =
           status.bufStatus[index.get].updateChangedLines(
             r.get.parseGitDiffOutput)
 
-      if fileExists($p.tmpPath):
-        removeFile($p.tmpPath)
-
       status.backgroundTasks.gitDiff.delete i
 
 proc checkBackgroundTasks(status: var EditorStatus) =
@@ -1211,11 +1216,6 @@ proc checkBackgroundTasks(status: var EditorStatus) =
 
   if status.backgroundTasks.gitDiff.len > 0:
     status.checkBackgroundGitDiff
-
-  for b in status.bufStatus:
-    if b.isUpdate:
-      status.update
-      break
 
 proc eventLoopTask(status: var EditorStatus) =
   # BackgroundTasks
@@ -1262,7 +1262,6 @@ proc eventLoopTask(status: var EditorStatus) =
         currentBufStatus.isUpdate = true
 
         if currentBufStatus.isTrackingByGit:
-          # TODO: Decrease update interval.
           let gitDiffProcess = startBackgroundGitDiff(
             currentBufStatus.path,
             currentBufStatus.buffer.toRunes,
@@ -1289,41 +1288,51 @@ proc eventLoopTask(status: var EditorStatus) =
           status.autoBackupStatus.lastBackupTime = now()
 
   block updateGitInfo:
-    if status.lastOperatingTime + 1.seconds < now():
-      # Update changed lines.
+    let interval = status.settings.git.updateInterval.milliSeconds
+    if status.lastOperatingTime + interval < now():
       for i, buf in status.bufStatus:
-        if buf.isTrackingByGit and
-           buf.isUpdate and
-           buf.lastGitInfoCheckTime + 1.seconds < now():
-             let gitDiffProcess = startBackgroundGitDiff(
-              buf.path,
-              buf.buffer.toRunes,
-              buf.characterEncoding)
-             if gitDiffProcess.isOk:
-               status.backgroundTasks.gitDiff.add gitDiffProcess.get
+        if buf.isGitUpdate:
+          status.bufStatus[i].isGitUpdate = false
 
-             status.bufStatus[i].updateLastGitInfoCheckTime
+          let gitDiffProcess = startBackgroundGitDiff(
+            buf.path,
+            buf.buffer.toRunes,
+            buf.characterEncoding)
+          if gitDiffProcess.isOk:
+            status.backgroundTasks.gitDiff.add gitDiffProcess.get
 
-# Get a key from the main current window and execute the event loop.
+            # The buffer no changed here but need to update the sidebar.
+            status.bufStatus[i].isUpdate = true
+
+proc isUpdate(bufStatuses: seq[BufferStatus]): bool =
+  for b in bufStatuses:
+    if b.isUpdate: return true
+
 proc getKeyFromMainWindow*(status: var EditorStatus): Rune =
-  result = ERR_KEY
-  while result == ERR_KEY:
-    status.eventLoopTask
+  ## Get a key from the main current window and execute the event loop.
 
+  result = ERR_KEY
+  while isError(result):
     result = currentMainWindowNode.getKey
-
     if pressCtrlC:
       pressCtrlC = false
-      result = Rune(3)
+      return Rune(3)
 
-# Get a key from the command line window and execute the event loop.
-proc getKeyFromCommandLine*(status: var EditorStatus): Rune =
-  result = ERR_KEY
-  while result == ERR_KEY:
     status.eventLoopTask
+    if status.bufStatus.isUpdate:
+      status.update
 
+proc getKeyFromCommandLine*(status: var EditorStatus): Rune =
+  ## Get a key from the command line window and execute the event loop.
+
+  result = ERR_KEY
+  while isError(result):
+    status.eventLoopTask
     result = status.commandLine.getKey
-
     if pressCtrlC:
       pressCtrlC = false
-      result = Rune(3)
+      return Rune(3)
+
+    status.eventLoopTask
+    if status.bufStatus.isUpdate:
+      status.update
