@@ -39,6 +39,7 @@ suite "windownode: absolutePosition":
 
   test "Disable EditorView.Sidebar":
     var status = initEditorStatus()
+    status.settings.view.sidebar = false
     status.addNewBufferInCurrentWin
 
     status.resize(100, 100)

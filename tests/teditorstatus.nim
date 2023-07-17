@@ -28,18 +28,54 @@ proc resize(status: var EditorStatus, h, w: int) =
   updateTerminalSize(h, w)
   status.resize
 
-suite "Add new buffer":
-  test "Add 2 uffers":
+suite "Open new buffers in the current window":
+  test "Open 2 buffers":
     var status = initEditorStatus()
+    status.settings.view.sidebar = false
 
     status.addNewBufferInCurrentWin
-
     status.resize(100, 100)
     status.update
 
-    status.addNewBufferInCurrentWin
+    block:
+      check status.bufStatus.len == 1
 
-    check status.bufStatus.len == 2
+      check mainWindowNode.getAllWindowNode.len == 1
+      check currentMainWindowNode.view.sidebar.isNone
+
+    status.addNewBufferInCurrentWin
+    status.resize(100, 100)
+    status.update
+
+    block:
+      check status.bufStatus.len == 2
+
+      check mainWindowNode.getAllWindowNode.len == 1
+      check currentMainWindowNode.view.sidebar.isNone
+
+  test "Add 2 buffers with Sidebar":
+    var status = initEditorStatus()
+    status.settings.view.sidebar = true
+
+    status.addNewBufferInCurrentWin
+    status.resize(100, 100)
+    status.update
+
+    block:
+      check status.bufStatus.len == 1
+
+      check mainWindowNode.getAllWindowNode.len == 1
+      check currentMainWindowNode.view.sidebar.isSome
+
+    status.addNewBufferInCurrentWin
+    status.resize(100, 100)
+    status.update
+
+    block:
+      check status.bufStatus.len == 2
+
+      check mainWindowNode.getAllWindowNode.len == 1
+      check currentMainWindowNode.view.sidebar.isSome
 
   test "Add new buffer (Dir)":
     var status = initEditorStatus()

@@ -293,6 +293,7 @@ suite "Insert mode":
                          line, column, height, width: int): EditorStatus =
 
     result = initEditorStatus()
+    result.settings.view.sidebar = false
     result.addNewBufferInCurrentWin(Mode.insert)
     result.bufStatus[0].buffer = initGapBuffer(buffer.map(s => s.ru))
     result.mainWindow.currentMainWindowNode.currentLine = line
@@ -310,7 +311,7 @@ suite "Insert mode":
       100)
 
     var dictionary: WordDictionary
-    let currentBufferIndex =currentMainWindowNode.bufferIndex
+    let currentBufferIndex = currentMainWindowNode.bufferIndex
     var suggestionWindow = tryOpenSuggestionWindow(
       dictionary,
       status.bufStatus,
