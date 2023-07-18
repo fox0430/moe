@@ -24,7 +24,6 @@ on:
     types:
       - opened
       - reopened
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -34,8 +33,10 @@ jobs:
     name: run
     runs-on: ubuntu-latest
 
-    # Ignore Dependabot PRs.
-    if: ${{ github.actor != 'dependabot[bot]' }}
+    # Ignore Dependabot PRs and do not attempt to push to other repositories.
+    if: |
+      github.actor != 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == 'fox0430/moe'
     steps:
       - name: Checkout source
         uses: actions/checkout@v3.5.3
