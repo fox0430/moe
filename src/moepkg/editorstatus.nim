@@ -1292,10 +1292,13 @@ proc eventLoopTask(status: var EditorStatus) =
           status.autoBackupStatus.lastBackupTime = now()
 
   block updateGitInfo:
-    let interval = status.settings.git.updateInterval.milliSeconds
+    let
+      interval = status.settings.git.updateInterval.milliSeconds
+      displayBufIndexes = mainWindowNode.getAllBufferIndex
+
     if status.lastOperatingTime + interval < now():
       for i, buf in status.bufStatus:
-        if buf.isGitUpdate:
+        if displayBufIndexes.contains(i) and buf.isGitUpdate:
           status.bufStatus[i].isGitUpdate = false
 
           let gitDiffProcess = startBackgroundGitDiff(
@@ -1304,11 +1307,12 @@ proc eventLoopTask(status: var EditorStatus) =
             buf.characterEncoding)
           if gitDiffProcess.isOk:
             status.backgroundTasks.gitDiff.add gitDiffProcess.get
-          else:
-            status.commandLine.writeGitInfoUpdateError(gitDiffProcess.error)
 
             # The buffer no changed here but need to update the sidebar.
             status.bufStatus[i].isUpdate = true
+          else:
+            status.commandLine.writeGitInfoUpdateError(gitDiffProcess.error)
+
 
 proc isUpdate(bufStatuses: seq[BufferStatus]): bool =
   for b in bufStatuses:
@@ -1333,7 +1337,6 @@ proc getKeyFromCommandLine*(status: var EditorStatus): Rune =
 
   result = ERR_KEY
   while isError(result):
-    status.eventLoopTask
     result = status.commandLine.getKey
     if pressCtrlC:
       pressCtrlC = false
