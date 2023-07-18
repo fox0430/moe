@@ -604,7 +604,7 @@ proc initSyntaxHighlight(
   isSyntaxHighlight: bool) =
 
     # int is buffer index
-    var updatedHighlights: seq[(int, Highlight)]
+    var newHighlights: seq[tuple[bufIndex: int, highlight: Highlight]]
     for index, buf in bufStatus:
       # The filer syntax highlight is initialized/updated in filermode module.
       if not buf.isFilerMode and buf.isUpdate:
@@ -612,12 +612,9 @@ proc initSyntaxHighlight(
           lang =
             if isSyntaxHighlight: buf.language
             else: SourceLanguage.langNone
-          h = ($buf.buffer).initHighlight(reservedWords, lang)
-        updatedHighlights.add (index, h)
-
+          h = initHighlight($buf.buffer, reservedWords, lang)
+        newHighlights.add (bufIndex: index, highlight: h)
         bufStatus[index].isUpdate = false
-        if bufStatus[index].isTrackingByGit:
-          bufStatus[index].isGitUpdate = true
 
     var queue = initHeapQueue[WindowNode]()
     for node in windowNode.child: queue.push(node)
@@ -625,9 +622,12 @@ proc initSyntaxHighlight(
       for i in  0 ..< queue.len:
         var node = queue.pop
         if node.window.isSome:
-          for h in updatedHighlights:
-            if h[0] == node.bufferIndex:
-              node.highlight = h[1]
+          for h in newHighlights:
+            if h.bufIndex == node.bufferIndex and h.highlight != node.highlight:
+              node.highlight = h.highlight
+
+              if bufStatus[h.bufIndex].isTrackingByGit:
+                bufStatus[h.bufIndex].isGitUpdate = true
 
         if node.child.len > 0:
           for node in node.child: queue.push(node)
@@ -1006,9 +1006,6 @@ proc revertPosition*(bufStatus: var BufferStatus,
   windowNode.currentColumn = bufStatus.positionRecord[id].column
   windowNode.expandedColumn = bufStatus.positionRecord[id].expandedColumn
 
-# TODO: Remove
-proc eventLoopTask*(status: var EditorStatus)
-
 # TODO: Move
 proc scrollUpNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
   let destination = max(currentMainWindowNode.currentLine - numberOfLines, 0)
@@ -1204,6 +1201,9 @@ proc checkBackgroundGitDiff(status: var EditorStatus) =
           status.bufStatus[index.get].updateChangedLines(
             r.get.parseGitDiffOutput)
 
+          # The buffer no changed here but need to update the sidebar.
+          status.bufStatus[index.get].isUpdate = true
+
       status.backgroundTasks.gitDiff.delete i
 
 proc checkBackgroundTasks(status: var EditorStatus) =
@@ -1219,7 +1219,7 @@ proc checkBackgroundTasks(status: var EditorStatus) =
   if status.backgroundTasks.gitDiff.len > 0:
     status.checkBackgroundGitDiff
 
-proc eventLoopTask(status: var EditorStatus) =
+proc eventLoopTask*(status: var EditorStatus) =
   # BackgroundTasks
   status.checkBackgroundTasks
 
@@ -1292,6 +1292,8 @@ proc eventLoopTask(status: var EditorStatus) =
           status.autoBackupStatus.lastBackupTime = now()
 
   block updateGitInfo:
+    ## Start background tasks for git info updates.
+
     let
       interval = status.settings.git.updateInterval.milliSeconds
       displayBufIndexes = mainWindowNode.getAllBufferIndex
@@ -1307,16 +1309,8 @@ proc eventLoopTask(status: var EditorStatus) =
             buf.characterEncoding)
           if gitDiffProcess.isOk:
             status.backgroundTasks.gitDiff.add gitDiffProcess.get
-
-            # The buffer no changed here but need to update the sidebar.
-            status.bufStatus[i].isUpdate = true
           else:
             status.commandLine.writeGitInfoUpdateError(gitDiffProcess.error)
-
-
-proc isUpdate(bufStatuses: seq[BufferStatus]): bool =
-  for b in bufStatuses:
-    if b.isUpdate: return true
 
 proc getKeyFromMainWindow*(status: var EditorStatus): Rune =
   ## Get a key from the main current window and execute the event loop.
@@ -1343,5 +1337,3 @@ proc getKeyFromCommandLine*(status: var EditorStatus): Rune =
       return Rune(3)
 
     status.eventLoopTask
-    if status.bufStatus.isUpdate:
-      status.update

@@ -233,6 +233,12 @@ proc isCursor*(mode: Mode): bool {.inline.} =
 proc isCursor*(bufStatus: BufferStatus): bool {.inline.} =
   bufStatus.mode.isCursor
 
+proc isUpdate*(bufStatuses: seq[BufferStatus]): bool =
+  ## Return true if at least one bufStatus.isUpdate is true.
+
+  for b in bufStatuses:
+    if b.isUpdate: return true
+
 proc checkBufferExist*(bufStatus: seq[BufferStatus], path: Runes): Option[int] =
   for index, buf in bufStatus:
     if buf.path == path:
