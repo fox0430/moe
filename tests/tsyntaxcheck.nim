@@ -17,16 +17,26 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os]
+import std/[unittest, os, strutils]
 
 import pkg/results
 
 import moepkg/syntax/highlite
-import moepkg/independentutils
+import moepkg/[independentutils, backgroundprocess]
 
-import moepkg/syntaxchecker {.all.}
+import moepkg/syntaxcheck {.all.}
 
-suite "syntaxchecker: toSyntaxCheckMessageType: Nim":
+suite "syntaxCheck: syntaxCheckCommand":
+  test "Nim":
+    const Path = "test.nim"
+    check BackgroundProcessCommand(cmd: "nim", args: @["check", "test.nim"]) ==
+      syntaxCheckCommand(Path, SourceLanguage.langNim).get
+
+  test "Unknown":
+    const Path = "test"
+    check syntaxCheckCommand(Path, SourceLanguage.langNone).isErr
+
+suite "syntaxCheck: toSyntaxCheckMessageType: Nim":
   test "Return SyntaxCheckMessageType.error":
     check toSyntaxCheckMessageType("Error").get == SyntaxCheckMessageType.error
 
@@ -42,8 +52,7 @@ suite "syntaxchecker: toSyntaxCheckMessageType: Nim":
   test "Invalid text":
     check toSyntaxCheckMessageType("Ok").isErr
 
-
-suite "syntaxchecker: parseNimCheckResult":
+suite "syntaxCheck: parseNimCheckResult":
   test "No error":
     const
       path = "/home/user/moe/tests/tsyntaxchecker.nim"
@@ -57,7 +66,7 @@ Hint:
 107093 lines; 0.466s; 147.027MiB peakmem; proj: /home/user/moe/tests/tsyntaxchecker.nim; out: unknownOutput [SuccessX]
 """
 
-    check path.parseNimCheckResult(cmdOutput).get.isEmpty
+    check path.parseNimCheckResult(cmdOutput.splitLines).get.isEmpty
 
   test "Including hint":
     const
@@ -73,7 +82,7 @@ Hint:
 107093 lines; 0.466s; 147.027MiB peakmem; proj: /home/user/moe/tests/tsyntaxchecker.nim; out: unknownOutput [SuccessX]
 """
 
-    let r = path.parseNimCheckResult(cmdOutput).get
+    let r = path.parseNimCheckResult(cmdOutput.splitLines).get
     check r.len == 1
     check r[0].position == BufferPosition(line: 60, column: 8)
     check r[0].messageType == SyntaxCheckMessageType.hint
@@ -93,7 +102,7 @@ Hint:
 107093 lines; 0.466s; 147.027MiB peakmem; proj: /home/user/moe/tests/tsyntaxchecker.nim; out: unknownOutput [SuccessX]
 """
 
-    let r = path.parseNimCheckResult(cmdOutput).get
+    let r = path.parseNimCheckResult(cmdOutput.splitLines).get
     check r.len == 1
     check r[0].position == BufferPosition(line: 22, column: 13)
     check r[0].messageType == SyntaxCheckMessageType.warning
@@ -115,7 +124,7 @@ Hint: used config file '/home/user/moe/tests/config.nims' [Conf]
 /home/user/moe/tests/tsyntaxchecker.nim(47, 1) Error: invalid indentation
 """
 
-    let r = path.parseNimCheckResult(cmdOutput).get
+    let r = path.parseNimCheckResult(cmdOutput.splitLines).get
     check r.len == 1
     check r[0].position == BufferPosition(line: 46, column: 0)
     check r[0].messageType == SyntaxCheckMessageType.error
@@ -136,7 +145,7 @@ Hint:
 107093 lines; 0.466s; 147.027MiB peakmem; proj: /home/user/moe/tests/tsyntaxchecker.nim; out: unknownOutput [SuccessX]
 """
 
-    let r = path.parseNimCheckResult(cmdOutput).get
+    let r = path.parseNimCheckResult(cmdOutput.splitLines).get
 
     check r.len == 2
 
@@ -164,7 +173,7 @@ Hint:
 107093 lines; 0.466s; 147.027MiB peakmem; proj: /home/user/moe/tests/tsyntaxchecker.nim; out: unknownOutput [SuccessX]
 """
 
-    let r = path.parseNimCheckResult(cmdOutput).get
+    let r = path.parseNimCheckResult(cmdOutput.splitLines).get
 
     check r.len == 3
 
@@ -198,7 +207,7 @@ Hint: used config file '/home/user/moe/tests/config.nims' [Conf]
 /home/user/moe/tests/tsyntaxchecker.nim(55, 1) Error: invalid indentation
 """
 
-    let r = path.parseNimCheckResult(cmdOutput).get
+    let r = path.parseNimCheckResult(cmdOutput.splitLines).get
 
     check r.len == 3
 
@@ -229,7 +238,7 @@ Hint:
 107093 lines; 0.466s; 147.027MiB peakmem; proj: /home/user/moe/tests/tsyntaxchecker.nim; out: unknownOutput [SuccessX]
 """
 
-    let r = path.parseNimCheckResult(cmdOutput).get
+    let r = path.parseNimCheckResult(cmdOutput.splitLines).get
     check r.len == 2
 
     check r[0].position == BufferPosition(line: 60, column: 8)
@@ -240,7 +249,7 @@ Hint:
     check r[1].messageType == SyntaxCheckMessageType.warning
     check not r[1].message.isEmpty
 
-suite "syntaxchecker: execSyntaxCheck: Nim":
+suite "syntaxCheck: startBackgroundSyntaxCheck: Nim":
   let testFileDir = getCurrentDir() / "syntaxchecker_test"
 
   setup:
@@ -254,7 +263,11 @@ suite "syntaxchecker: execSyntaxCheck: Nim":
     const code ="""echo "Hello world""""
     writeFile(testFilePath, code)
 
-    check testFilePath.execSyntaxCheck(SourceLanguage.langNim).get.len == 0
+    var p = testFilePath.startBackgroundSyntaxCheck(SourceLanguage.langNim).get
+    let output = p.process.waitFor
+    let r = testFilePath.parseNimCheckResult(output).get
+
+    check r.len == 0
 
     removeFile(testFilePath)
 
@@ -266,11 +279,14 @@ echo "Hello world"
 """
     writeFile(testFilePath, code)
 
-    let r = testFilePath.execSyntaxCheck(SourceLanguage.langNim)
-    check r.get.len == 1
-    check r.get[0].position == BufferPosition(line: 0, column: 4)
-    check r.get[0].messageType == SyntaxCheckMessageType.hint
-    check r.get[0].message.len > 0
+    var p = testFilePath.startBackgroundSyntaxCheck(SourceLanguage.langNim).get
+    let output = p.process.waitFor
+    let r = testFilePath.parseNimCheckResult(output).get
+
+    check r.len == 1
+    check r[0].position == BufferPosition(line: 0, column: 4)
+    check r[0].messageType == SyntaxCheckMessageType.hint
+    check r[0].message.len > 0
 
     removeFile(testFilePath)
 
@@ -282,11 +298,14 @@ echo "Hello world"
 """
     writeFile(testFilePath, code)
 
-    let r = testFilePath.execSyntaxCheck(SourceLanguage.langNim)
-    check r.get.len == 1
-    check r.get[0].position == BufferPosition(line: 0, column: 10)
-    check r.get[0].messageType == SyntaxCheckMessageType.warning
-    check r.get[0].message.len > 0
+    var p = testFilePath.startBackgroundSyntaxCheck(SourceLanguage.langNim).get
+    let output = p.process.waitFor
+    let r = testFilePath.parseNimCheckResult(output).get
+
+    check r.len == 1
+    check r[0].position == BufferPosition(line: 0, column: 10)
+    check r[0].messageType == SyntaxCheckMessageType.warning
+    check r[0].message.len > 0
 
     removeFile(testFilePath)
 
@@ -297,11 +316,14 @@ import std/nonExistModule
 """
     writeFile(testFilePath, code)
 
-    let r = testFilePath.execSyntaxCheck(SourceLanguage.langNim)
-    check r.get.len == 1
-    check r.get[0].position == BufferPosition(line: 0, column: 10)
-    check r.get[0].messageType == SyntaxCheckMessageType.error
-    check r.get[0].message.len > 0
+    var p = testFilePath.startBackgroundSyntaxCheck(SourceLanguage.langNim).get
+    let output = p.process.waitFor
+    let r = testFilePath.parseNimCheckResult(output).get
+
+    check r.len == 1
+    check r[0].position == BufferPosition(line: 0, column: 10)
+    check r[0].messageType == SyntaxCheckMessageType.error
+    check r[0].message.len > 0
 
     removeFile(testFilePath)
 
@@ -315,17 +337,19 @@ echo "Hello world"
 """
     writeFile(testFilePath, code)
 
-    let r = testFilePath.execSyntaxCheck(SourceLanguage.langNim)
+    var p = testFilePath.startBackgroundSyntaxCheck(SourceLanguage.langNim).get
+    let output = p.process.waitFor
+    let r = testFilePath.parseNimCheckResult(output).get
 
-    check r.get.len == 2
+    check r.len == 2
 
-    check r.get[0].position == BufferPosition(line: 0, column: 10)
-    check r.get[0].messageType == SyntaxCheckMessageType.warning
-    check r.get[0].message.len > 0
+    check r[0].position == BufferPosition(line: 0, column: 10)
+    check r[0].messageType == SyntaxCheckMessageType.warning
+    check r[0].message.len > 0
 
-    check r.get[1].position == BufferPosition(line: 1, column: 10)
-    check r.get[1].messageType == SyntaxCheckMessageType.warning
-    check r.get[1].message.len > 0
+    check r[1].position == BufferPosition(line: 1, column: 10)
+    check r[1].messageType == SyntaxCheckMessageType.warning
+    check r[1].message.len > 0
 
     removeFile(testFilePath)
 
@@ -337,17 +361,19 @@ import std/nonExistModule2
 """
     writeFile(testFilePath, code)
 
-    let r = testFilePath.execSyntaxCheck(SourceLanguage.langNim)
+    var p = testFilePath.startBackgroundSyntaxCheck(SourceLanguage.langNim).get
+    let output = p.process.waitFor
+    let r = testFilePath.parseNimCheckResult(output).get
 
-    check r.get.len == 2
+    check r.len == 2
 
-    check r.get[0].position == BufferPosition(line: 0, column: 10)
-    check r.get[0].messageType == SyntaxCheckMessageType.error
-    check r.get[0].message.len > 0
+    check r[0].position == BufferPosition(line: 0, column: 10)
+    check r[0].messageType == SyntaxCheckMessageType.error
+    check r[0].message.len > 0
 
-    check r.get[1].position == BufferPosition(line: 1, column: 10)
-    check r.get[1].messageType == SyntaxCheckMessageType.error
-    check r.get[1].message.len > 0
+    check r[1].position == BufferPosition(line: 1, column: 10)
+    check r[1].messageType == SyntaxCheckMessageType.error
+    check r[1].message.len > 0
 
     removeFile(testFilePath)
 
@@ -360,16 +386,18 @@ echo "Hello world"
 """
     writeFile(testFilePath, code)
 
-    let r = testFilePath.execSyntaxCheck(SourceLanguage.langNim)
+    var p = testFilePath.startBackgroundSyntaxCheck(SourceLanguage.langNim).get
+    let output = p.process.waitFor
+    let r = testFilePath.parseNimCheckResult(output).get
 
-    check r.get.len == 2
+    check r.len == 2
 
-    check r.get[0].position == BufferPosition(line: 1, column: 4)
-    check r.get[0].messageType == SyntaxCheckMessageType.hint
-    check r.get[0].message.len > 0
+    check r[0].position == BufferPosition(line: 1, column: 4)
+    check r[0].messageType == SyntaxCheckMessageType.hint
+    check r[0].message.len > 0
 
-    check r.get[1].position == BufferPosition(line: 0, column: 10)
-    check r.get[1].messageType == SyntaxCheckMessageType.warning
-    check r.get[1].message.len > 0
+    check r[1].position == BufferPosition(line: 0, column: 10)
+    check r[1].messageType == SyntaxCheckMessageType.warning
+    check r[1].message.len > 0
 
     removeFile(testFilePath)

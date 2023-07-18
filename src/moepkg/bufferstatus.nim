@@ -21,7 +21,7 @@ import std/[tables, times, options, os]
 import pkg/results
 import syntax/highlite
 import gapbuffer, unicodeext, fileutils, highlight, independentutils, git,
-       syntaxchecker
+       syntaxcheck
 
 type
   Mode* = enum
@@ -324,14 +324,15 @@ proc updateChangedLines*(bufStatus: var BufferStatus, diffs: seq[Diff]) =
   bufStatus.changedLines = diffs
   bufStatus.updateLastGitInfoCheckTime
 
-## Exec syntax check and update BufferStatus.syntaxCheckResults
 proc updateSyntaxCheckerResults*(
-  bufStatus: var BufferStatus): Result[(), string]=
+  bufStatus: var BufferStatus,
+  output: seq[string]): Result[(), string]=
+    ## Update BufferStatus.syntaxCheckResults
 
-    let r = execSyntaxCheck($bufStatus.absolutePath, bufStatus.language)
+    let r = parseNimCheckResult($bufStatus.path.absolutePath, output)
     if r.isErr:
       return Result[(), string].err r.error
-    else:
-      bufStatus.syntaxCheckResults = r.get
+
+    bufStatus.syntaxCheckResults = r.get
 
     return Result[(), string].ok ()

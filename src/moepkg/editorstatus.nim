@@ -26,7 +26,8 @@ import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        backup, messages, commandline, register, platform, movement,
        autocomplete, suggestionwindow, filermodeutils, debugmodeutils,
        independentutils, viewhighlight, helputils, backupmanagerutils,
-       diffviewerutils, messagelog, globalsidebar, build, quickrunutils, git
+       diffviewerutils, messagelog, globalsidebar, build, quickrunutils, git,
+       syntaxcheck
 
 type
   LastCursorPosition* = object
@@ -39,6 +40,7 @@ type
     build*: seq[BuildProcess]
     quickRun*: seq[QuickRunProcess]
     gitDiff*: seq[GitDiffProcess]
+    syntaxCheck*: seq[SyntaxCheckProcess]
 
   EditorStatus* = object
     bufStatus*: seq[BufferStatus]
@@ -1206,6 +1208,26 @@ proc checkBackgroundGitDiff(status: var EditorStatus) =
 
       status.backgroundTasks.gitDiff.delete i
 
+proc checkBackgroundSyntaxCheck(status: var EditorStatus) =
+  var i = 0
+  while i < status.backgroundTasks.syntaxCheck.len:
+    template p(): var SyntaxCheckProcess =
+      status.backgroundTasks.syntaxCheck[i]
+
+    if p.isRunning:
+      i.inc
+    else:
+      let r = p.result
+      if r.isOk:
+        let index = status.bufStatus.checkBufferExist(p.filePath)
+        if index.isSome:
+          let r = status.bufStatus[index.get].updateSyntaxCheckerResults(r.get)
+          if r.isOk:
+            # The buffer no changed here but need to update the sidebar.
+            status.bufStatus[index.get].isUpdate = true
+
+      status.backgroundTasks.syntaxCheck.delete i
+
 proc checkBackgroundTasks(status: var EditorStatus) =
   ## Check if background processes are finished and if there are finished,
   ## do the next process and delete from `status.backgroundTasks`.
@@ -1218,6 +1240,9 @@ proc checkBackgroundTasks(status: var EditorStatus) =
 
   if status.backgroundTasks.gitDiff.len > 0:
     status.checkBackgroundGitDiff
+
+  if status.backgroundTasks.syntaxCheck.len > 0:
+    status.checkBackgroundSyntaxCheck
 
 proc eventLoopTask*(status: var EditorStatus) =
   # BackgroundTasks

@@ -25,7 +25,7 @@ import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
        movement, color, build, bufferstatus, editor, settings, quickrunutils,
        messages, commandline, debugmodeutils, platform, commandlineutils,
        recentfilemode, buffermanager, viewhighlight, messagelog, configmode,
-       git
+       git, syntaxcheck
 
 type
   replaceCommandInfo = tuple[searhWord: seq[Rune], replaceWord: seq[Rune]]
@@ -990,9 +990,13 @@ proc writeCommand(status: var EditorStatus, path: seq[Rune]) =
 
     # Update syntax checker reuslts.
     if status.settings.syntaxChecker.enable:
-      let r = currentBufStatus.updateSyntaxCheckerResults
-      if r.isErr:
-        status.commandLine.writeSyntaxCheckError(r.error)
+      let syntaxCheckProcess = startBackgroundSyntaxCheck(
+        $currentBufStatus.path,
+        currentBufStatus.language)
+      if syntaxCheckProcess.isOk:
+        status.backgroundTasks.syntaxCheck.add syntaxCheckProcess.get
+      else:
+        status.commandLine.writeSyntaxCheckError(syntaxCheckProcess.error)
 
     currentBufStatus.countChange = 0
     currentBufStatus.lastSaveTime = now()
