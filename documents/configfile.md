@@ -45,7 +45,7 @@ default is true
 indentationLines
 ```
 
-Set tab width (Integer)  
+Set tab width (integer)  
 default is 2
 ```
 tabStop
@@ -782,6 +782,11 @@ bufferLen
 Show/Hidden line changes on sidebars (bool)
 ```
 showChangedLine
+```
+
+Interval for updating Git information. (Milli seconds) (integer)
+```
+1000
 ```
 
 ### SyntaxChecker table
