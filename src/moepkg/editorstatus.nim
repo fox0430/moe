@@ -364,6 +364,8 @@ proc addNewBuffer*(
                status.bufStatus[^1].characterEncoding)
              if gitDiffProcess.isOk:
                status.backgroundTasks.gitDiff.add gitDiffProcess.get
+             else:
+               status.commandLine.writeGitInfoUpdateError(gitDiffProcess.error)
 
     return some(status.bufStatus.high)
 
@@ -1268,6 +1270,8 @@ proc eventLoopTask(status: var EditorStatus) =
             currentBufStatus.characterEncoding)
           if gitDiffProcess.isOk:
             status.backgroundTasks.gitDiff.add gitDiffProcess.get
+          else:
+            status.commandLine.writeGitInfoUpdateError(gitDiffProcess.error)
 
   block automaticBackups:
     let
@@ -1300,6 +1304,8 @@ proc eventLoopTask(status: var EditorStatus) =
             buf.characterEncoding)
           if gitDiffProcess.isOk:
             status.backgroundTasks.gitDiff.add gitDiffProcess.get
+          else:
+            status.commandLine.writeGitInfoUpdateError(gitDiffProcess.error)
 
             # The buffer no changed here but need to update the sidebar.
             status.bufStatus[i].isUpdate = true

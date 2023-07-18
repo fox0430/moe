@@ -891,6 +891,8 @@ proc updateChangedLines(status: var EditorStatus) =
     currentBufStatus.characterEncoding)
   if gitDiffProcess.isOk:
     status.backgroundTasks.gitDiff.add gitDiffProcess.get
+  else:
+    status.commandLine.writeGitInfoUpdateError(gitDiffProcess.error)
 
 proc checkAndCreateDir(
   commandLine: var CommandLine,

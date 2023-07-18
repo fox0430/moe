@@ -42,7 +42,6 @@ type
   GitDiffProcess* = object
     command*: BackgroundProcessCommand
     filePath*: Runes
-    tmpPath*: Runes
     process*: BackgroundProcess
 
 proc gitProjectRoot(): string =
@@ -224,21 +223,20 @@ proc startBackgroundGitDiff*(
     except CatchableError as e:
       return Result[GitDiffProcess, string].err fmt"Failed to save a tmp file {e.msg}"
 
-    let
-      # A temporary file of HEAD.
-      tmpHeadFilename = fmt"{splitPath($path).tail}_{$now()}_head.tmp"
-      tmpHeadPath = cacheDir / tmpHeadFilename
-
-      # A temporary file of the current buffer.
-      tmpBufFilename = fmt"{splitPath($path).tail}_{$now()}_buf.tmp"
-      tmpBufPath = cacheDir / tmpBufFilename
-
     # TODO: Saving temporary files every time is an expensive cost,
     # so make it asynchronous(background) or take a workaround.
 
+    # A temporary file of the HEAD.
+    let
+      tmpHeadFilename = fmt"{splitPath($path).tail}_{$now()}_head.tmp"
+      tmpHeadPath = cacheDir / tmpHeadFilename
     if 0 != execCmdExNoOutput(fmt"git show HEAD:{path} > {tmpHeadPath}"):
       return Result[GitDiffProcess, string].err fmt"Failed to save a tmp file {path}"
 
+    let
+      # A temporary file of the current buffer.
+      tmpBufFilename = fmt"{splitPath($path).tail}_{$now()}_buf.tmp"
+      tmpBufPath = cacheDir / tmpBufFilename
     try:
       saveFile(tmpBufPath.toRunes, buffer, encoding)
     except CatchableError as e:
@@ -255,5 +253,4 @@ proc startBackgroundGitDiff*(
     return Result[GitDiffProcess, string].ok GitDiffProcess(
       command: command,
       filePath: path,
-      tmpPath: tmpBufPath.toRunes,
       process: backgroundProcess.get)
