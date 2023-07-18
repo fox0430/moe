@@ -177,6 +177,7 @@ const TomlStr = """
 
   [Git]
   showChangedLine = false
+  updateInterval = 1
 
   [Theme]
   baseTheme = "dark"
@@ -469,6 +470,7 @@ suite "Parse configuration file":
     check not settings.debugMode.bufStatus.bufferLen
 
     check not settings.git.showChangedLine
+    check settings.git.updateInterval == 1
 
     for pair in ColorThemeTable[ColorTheme.config]:
       check pair.foreground.rgb == "#000000".hexToRgb.get

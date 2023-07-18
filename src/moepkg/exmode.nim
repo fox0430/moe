@@ -826,7 +826,7 @@ proc editCommand(status: var EditorStatus, path: seq[Rune]) =
     countReferencedWindow(mainWindowNode, currentBufferIndex) == 1:
     status.commandLine.writeNoWriteError
   else:
-    # Add buffer(bufStatus) if not exist.
+    # Add bufStatus if not exist.
     var bufferIndex = status.bufStatus.checkBufferExist(path)
     if isNone(bufferIndex):
       if dirExists($path):
@@ -885,9 +885,14 @@ proc buildOnSave(status: var EditorStatus) =
 proc updateChangedLines(status: var EditorStatus) =
   ## Start a background process for the git diff.
 
-  let gitDiffProcess = startBackgroundGitDiff(currentBufStatus.path)
+  let gitDiffProcess = startBackgroundGitDiff(
+    currentBufStatus.path,
+    currentBufStatus.buffer.toRunes,
+    currentBufStatus.characterEncoding)
   if gitDiffProcess.isOk:
     status.backgroundTasks.gitDiff.add gitDiffProcess.get
+  else:
+    status.commandLine.writeGitInfoUpdateError(gitDiffProcess.error)
 
 proc checkAndCreateDir(
   commandLine: var CommandLine,

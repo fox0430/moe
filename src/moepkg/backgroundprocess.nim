@@ -66,23 +66,20 @@ proc startBackgroundProcess*(
 
 proc result*(bp: var BackgroundProcess): Result[seq[string], string] =
   ## Return results (Stdout) the BackgroundProcess and close the process.
+
   if bp.isRunning:
     return Result[seq[string], string].err "BackgroundProcess is still running"
 
-  let (output, exitCode) = bp.process.readLines
+  let (output, _) = bp.process.readLines
   bp.close
 
-  if exitCode == 0:
-    return Result[seq[string], string].ok output
-  else:
-    return Result[seq[string], string].err fmt"BackgroundProcess is failed: {output}"
+  return Result[seq[string], string].ok output
 
-proc waitFor*(bp: var BackgroundProcess, timeout: int = -1): Result[seq[string], string] =
-  let exitCode = bp.process.waitForExit
-  if 0 == exitCode:
-    let (output, _) = bp.process.readLines
-    bp.close
-    return Result[seq[string], string].ok output
-  else:
-    bp.close
-    return Result[seq[string], string].err fmt"Failed to the background process: {$exitCode}"
+proc waitFor*(bp: var BackgroundProcess, timeout: int = -1): seq[string] =
+  ## Return results (Stdout) the BackgroundProcess and close the process.
+  ## Block until quit the process.
+
+  discard bp.process.waitForExit
+  let (output, _) = bp.process.readLines
+  bp.close
+  return output

@@ -310,3 +310,8 @@ proc writeSyntaxCheckError*(
     let mess = fmt"Error: Syntax check failed: {message}"
     commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
     addMessageLog mess
+
+proc writeGitInfoUpdateError*(commandLine: var CommandLine, message: string) =
+    let mess = fmt"Error: Update Git info: {message}"
+    commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
+    addMessageLog mess

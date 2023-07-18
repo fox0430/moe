@@ -19,8 +19,9 @@
 
 import std/[unittest, strformat, os]
 import pkg/results
-import moepkg/[unicodeext, editorstatus, bufferstatus, settings, color, ui, rgb]
+import moepkg/[unicodeext, editorstatus, bufferstatus, color, ui, rgb]
 
+import moepkg/settings {.all.}
 import moepkg/configmode {.all.}
 
 suite "Config mode: Start configuration mode":
@@ -239,6 +240,19 @@ suite "Config mode: Init buffer":
 
     for index, line in buffer:
       check sample[index] == line
+
+  test "init GitTableBuffer":
+    var status = initEditorStatus()
+    let buffer = status.settings.git.initGitTableBuffer
+
+    const Sample = @[
+      "Git",
+      "  showChangedLine                true",
+      "  updateInterval                 1000",
+    ].toSeqRunes
+
+    for index, line in buffer:
+      check Sample[index] == line
 
   test "Init Theme table buffer":
     var status = initEditorStatus()
@@ -1604,6 +1618,31 @@ suite "Config mode: Get Persist table setting values":
 
     check values.len == 0
 
+suite "Config mode: Get Git table setting values":
+  test "showChangedLine":
+    let s = initGitSettings()
+
+    const Name = "showChangedLine"
+    let
+      default = s.showChangedLine
+      values = s.getGitTableSettingsValues(Name)
+
+    checkBoolSettingValue(default, values)
+
+  test "updateInterval":
+    let s = initGitSettings()
+
+    const Name = "updateInterval"
+    let values = s.getGitTableSettingsValues(Name)
+
+    check @[ru"1000"] == values
+
+  test "Invalid name":
+    let s = initGitSettings()
+
+    const Name = "test"
+    check s.getGitTableSettingsValues(Name).len == 0
+
 suite "Config mode: Chaging Standard table settings":
   test "Chaging theme":
     var settings = initEditorSettings()
@@ -2437,6 +2476,23 @@ suite "Config mode: Chaging Persist table settings":
     persistSettings.changePerSistTableSettings("search", $val)
 
     check val == persistSettings.search
+
+suite "Config mode: Change Git table sttings":
+  test "showChangedLine":
+    var s = initGitSettings()
+
+    let val = not s.showChangedLine
+    s.changeGitTableSettings("showChangedLine", $val)
+
+    check val == s.showChangedLine
+
+  test "updateInterval":
+    var s = initGitSettings()
+
+    let val = 1
+    s.changeGitTableSettings("updateInterval", $val)
+
+    check 1 == s.updateInterval
 
 suite "Config mode: Change Theme table settings":
   test "change foreground":

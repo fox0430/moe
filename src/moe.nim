@@ -56,9 +56,6 @@ proc initSidebar(status: var EditorStatus) =
   if status.settings.view.sidebar:
     currentMainWindowNode.view.initSidebar
 
-    if status.settings.git.showChangedLine and currentBufStatus.isTrackingByGit:
-      currentBufStatus.updateChangedLines
-
 proc initEditor(): EditorStatus =
   let parsedList = parseCommandLineOption(commandLineParams())
 

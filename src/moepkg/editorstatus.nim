@@ -290,6 +290,10 @@ proc exitEditor*(status: EditorStatus) =
   if status.settings.persist.cursorPosition:
     saveLastCursorPosition(status.lastPosition)
 
+  if dirExists(gitDiffTmpDir()):
+    # Cleanup temporary files fot git diff.
+    removeDir(gitDiffTmpDir())
+
   exitUi()
 
   executeOnExit(status.settings, currentPlatform)
@@ -307,11 +311,12 @@ proc addFilerStatus(status: var EditorStatus, bufStatusIndex: int) {.inline.} =
   status.bufStatus[bufStatusIndex].filerStatusIndex =
     some(status.filerStatuses.high)
 
-## Return bufStatus.high after adding a new buffer.
 proc addNewBuffer*(
   status: var EditorStatus,
   path: string,
   mode: Mode): Option[int] =
+    ## Return bufStatus.high after adding a new buffer.
+    # TODO: Return Result type
 
     case mode:
       of Mode.help:
@@ -351,19 +356,34 @@ proc addNewBuffer*(
           addMessageLog errMessage
           return
 
+        if status.settings.git.showChangedLine and
+           status.bufStatus[^1].isTrackingByGit:
+             let gitDiffProcess = startBackgroundGitDiff(
+               status.bufStatus[^1].path,
+               status.bufStatus[^1].buffer.toRunes,
+               status.bufStatus[^1].characterEncoding)
+             if gitDiffProcess.isOk:
+               status.backgroundTasks.gitDiff.add gitDiffProcess.get
+             else:
+               status.commandLine.writeGitInfoUpdateError(gitDiffProcess.error)
+
     return some(status.bufStatus.high)
 
 proc addNewBuffer*(
   status: var EditorStatus,
   mode: Mode): Option[int] {.inline.} =
-    const path = ""
-    return status.addNewBuffer(path, mode)
+    # TODO: Return Result type
 
-## Add a new buffer and change the current buffer to it and init an editor view.
+    const Path = ""
+    return status.addNewBuffer(Path, mode)
+
 proc addNewBufferInCurrentWin*(
   status: var EditorStatus,
   path: string,
   mode: Mode) =
+    ## Add a new buffer and change the current buffer to it and init an editor
+    ## view.
+
     let index = status.addNewBuffer(path, mode)
     if index.isNone: return
 
@@ -584,15 +604,16 @@ proc initSyntaxHighlight(
   isSyntaxHighlight: bool) =
 
     # int is buffer index
-    var updatedHighlights: seq[(int, Highlight)]
+    var newHighlights: seq[tuple[bufIndex: int, highlight: Highlight]]
     for index, buf in bufStatus:
       # The filer syntax highlight is initialized/updated in filermode module.
-      if buf.isUpdate and not isFilerMode(buf.mode, buf.prevMode):
+      if not buf.isFilerMode and buf.isUpdate:
         let
-          lang = if isSyntaxHighlight: buf.language
-                 else: SourceLanguage.langNone
-          h = ($buf.buffer).initHighlight(reservedWords, lang)
-        updatedHighlights.add (index, h)
+          lang =
+            if isSyntaxHighlight: buf.language
+            else: SourceLanguage.langNone
+          h = initHighlight($buf.buffer, reservedWords, lang)
+        newHighlights.add (bufIndex: index, highlight: h)
         bufStatus[index].isUpdate = false
 
     var queue = initHeapQueue[WindowNode]()
@@ -601,9 +622,12 @@ proc initSyntaxHighlight(
       for i in  0 ..< queue.len:
         var node = queue.pop
         if node.window.isSome:
-          for h in updatedHighlights:
-            if h[0] == node.bufferIndex:
-              node.highlight = h[1]
+          for h in newHighlights:
+            if h.bufIndex == node.bufferIndex and h.highlight != node.highlight:
+              node.highlight = h.highlight
+
+              if bufStatus[h.bufIndex].isTrackingByGit:
+                bufStatus[h.bufIndex].isGitUpdate = true
 
         if node.child.len > 0:
           for node in node.child: queue.push(node)
@@ -853,7 +877,8 @@ proc verticalSplitWindow*(status: var EditorStatus) =
 
   status.resize
 
-  var newNode = mainWindowNode.searchByWindowIndex(currentMainWindowNode.windowIndex + 1)
+  var newNode = mainWindowNode.searchByWindowIndex(
+    currentMainWindowNode.windowIndex + 1)
   newNode.restoreCursorPostion(currentBufStatus, status.lastPosition)
 
 proc horizontalSplitWindow*(status: var EditorStatus) =
@@ -875,7 +900,8 @@ proc horizontalSplitWindow*(status: var EditorStatus) =
 
   status.resize
 
-  var newNode = mainWindowNode.searchByWindowIndex(currentMainWindowNode.windowIndex + 1)
+  var newNode = mainWindowNode.searchByWindowIndex(
+    currentMainWindowNode.windowIndex + 1)
   newNode.restoreCursorPostion(currentBufStatus, status.lastPosition)
 
 proc closeWindow*(status: var EditorStatus, node: WindowNode) =
@@ -979,9 +1005,6 @@ proc revertPosition*(bufStatus: var BufferStatus,
   windowNode.currentLine = bufStatus.positionRecord[id].line
   windowNode.currentColumn = bufStatus.positionRecord[id].column
   windowNode.expandedColumn = bufStatus.positionRecord[id].expandedColumn
-
-# TODO: Remove
-proc eventLoopTask*(status: var EditorStatus)
 
 # TODO: Move
 proc scrollUpNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
@@ -1162,10 +1185,6 @@ proc checkBackgroundQuickRun(status: var EditorStatus) =
 
       status.backgroundTasks.quickRun.delete i
 
-  if isUpdate:
-    # Update for quickrun windows
-    status.update
-
 proc checkBackgroundGitDiff(status: var EditorStatus) =
   var i = 0
   while i < status.backgroundTasks.gitDiff.len:
@@ -1179,7 +1198,11 @@ proc checkBackgroundGitDiff(status: var EditorStatus) =
       if r.isOk:
         let index = status.bufStatus.checkBufferExist(p.filePath)
         if index.isSome:
-          status.bufStatus[index.get].changedLines = r.get.parseGitDiffOutput
+          status.bufStatus[index.get].updateChangedLines(
+            r.get.parseGitDiffOutput)
+
+          # The buffer no changed here but need to update the sidebar.
+          status.bufStatus[index.get].isUpdate = true
 
       status.backgroundTasks.gitDiff.delete i
 
@@ -1196,27 +1219,29 @@ proc checkBackgroundTasks(status: var EditorStatus) =
   if status.backgroundTasks.gitDiff.len > 0:
     status.checkBackgroundGitDiff
 
-proc eventLoopTask(status: var EditorStatus) =
+proc eventLoopTask*(status: var EditorStatus) =
   # BackgroundTasks
   status.checkBackgroundTasks
 
   # Auto save
   if status.settings.autoSave: status.autoSave
 
-  # Live reload of configuration file
   if status.settings.liveReloadOfConf and
      status.timeConfFileLastReloaded + 1.seconds < now():
-    let beforeTheme = status.settings.editorColorTheme
+       # Live reload of configuration file
 
-    status.loadConfigurationFile
+       let beforeTheme = status.settings.editorColorTheme
 
-    status.timeConfFileLastReloaded = now()
-    if beforeTheme != status.settings.editorColorTheme:
-      changeTheme(status)
-      status.resize
+       status.loadConfigurationFile
 
-  # Live reload of an open file. a current window's buffer only.
+       status.timeConfFileLastReloaded = now()
+       if beforeTheme != status.settings.editorColorTheme:
+         changeTheme(status)
+         status.resize
+
   if status.settings.liveReloadOfFile:
+    # Live reload of an open file. a current window's buffer only.
+
     let lastModificationTime = getLastModificationTime($currentBufStatus.path)
     if 0 == currentBufStatus.countChange and
        lastModificationTime > currentBufStatus.lastSaveTime.toTime:
@@ -1238,44 +1263,77 @@ proc eventLoopTask(status: var EditorStatus) =
         currentBufStatus.characterEncoding = newTextAndEncoding.encoding
         currentBufStatus.isUpdate = true
 
-  # Automatic backup
-  let
-    lastBackupTime = status.autoBackupStatus.lastBackupTime
-    interval = status.settings.autoBackup.interval
-    idleTime = status.settings.autoBackup.idleTime
+        if currentBufStatus.isTrackingByGit:
+          let gitDiffProcess = startBackgroundGitDiff(
+            currentBufStatus.path,
+            currentBufStatus.buffer.toRunes,
+            currentBufStatus.characterEncoding)
+          if gitDiffProcess.isOk:
+            status.backgroundTasks.gitDiff.add gitDiffProcess.get
+          else:
+            status.commandLine.writeGitInfoUpdateError(gitDiffProcess.error)
 
-  if status.settings.autoBackup.enable and
-     lastBackupTime + interval.minutes < now() and
-     status.lastOperatingTime + idleTime.seconds < now():
-    for bufStatus in status.bufStatus:
-      if isEditMode(bufStatus.mode, bufStatus.prevMode):
-        bufStatus.backupBuffer(
-          status.settings.autoBackup,
-          status.settings.notification,
-          status.commandLine)
+  block automaticBackups:
+    let
+      lastBackupTime = status.autoBackupStatus.lastBackupTime
+      interval = status.settings.autoBackup.interval
+      idleTime = status.settings.autoBackup.idleTime
 
-        status.autoBackupStatus.lastBackupTime = now()
+    if status.settings.autoBackup.enable and
+       lastBackupTime + interval.minutes < now() and
+       status.lastOperatingTime + idleTime.seconds < now():
+      for bufStatus in status.bufStatus:
+        if isEditMode(bufStatus.mode, bufStatus.prevMode):
+          bufStatus.backupBuffer(
+            status.settings.autoBackup,
+            status.settings.notification,
+            status.commandLine)
 
-# Get a key from the main current window and execute the event loop.
+          status.autoBackupStatus.lastBackupTime = now()
+
+  block updateGitInfo:
+    ## Start background tasks for git info updates.
+
+    let
+      interval = status.settings.git.updateInterval.milliSeconds
+      displayBufIndexes = mainWindowNode.getAllBufferIndex
+
+    if status.lastOperatingTime + interval < now():
+      for i, buf in status.bufStatus:
+        if displayBufIndexes.contains(i) and buf.isGitUpdate:
+          status.bufStatus[i].isGitUpdate = false
+
+          let gitDiffProcess = startBackgroundGitDiff(
+            buf.path,
+            buf.buffer.toRunes,
+            buf.characterEncoding)
+          if gitDiffProcess.isOk:
+            status.backgroundTasks.gitDiff.add gitDiffProcess.get
+          else:
+            status.commandLine.writeGitInfoUpdateError(gitDiffProcess.error)
+
 proc getKeyFromMainWindow*(status: var EditorStatus): Rune =
-  result = ERR_KEY
-  while result == ERR_KEY:
-    status.eventLoopTask
+  ## Get a key from the main current window and execute the event loop.
 
+  result = ERR_KEY
+  while isError(result):
     result = currentMainWindowNode.getKey
-
     if pressCtrlC:
       pressCtrlC = false
-      result = Rune(3)
+      return Rune(3)
 
-# Get a key from the command line window and execute the event loop.
-proc getKeyFromCommandLine*(status: var EditorStatus): Rune =
-  result = ERR_KEY
-  while result == ERR_KEY:
     status.eventLoopTask
+    if status.bufStatus.isUpdate:
+      status.update
 
+proc getKeyFromCommandLine*(status: var EditorStatus): Rune =
+  ## Get a key from the command line window and execute the event loop.
+
+  result = ERR_KEY
+  while isError(result):
     result = status.commandLine.getKey
-
     if pressCtrlC:
       pressCtrlC = false
-      result = Rune(3)
+      return Rune(3)
+
+    status.eventLoopTask

@@ -187,6 +187,7 @@ type
 
   GitSettings* = object
     showChangedLine*: bool
+    updateInterval*: int
 
   SyntaxCheckerSettings* = object
     enable*: bool
@@ -395,6 +396,7 @@ proc initClipboardSettings(): ClipboardSettings =
 
 proc initGitSettings(): GitSettings =
   result.showChangedLine = true
+  result.updateInterval = 1000 # Milli seconds
 
 proc initSyntaxCheckerSettings(): SyntaxCheckerSettings =
   result.enable = false
@@ -2018,6 +2020,9 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Git"].contains("showChangedLine"):
       result.git.showChangedLine = settings["Git"]["showChangedLine"].getBool
 
+    if settings["Git"].contains("updateInterval"):
+      result.git.updateInterval = settings["Git"]["updateInterval"].getInt
+
   if settings.contains("SyntaxChecker"):
     if settings["SyntaxChecker"].contains("enable"):
       result.syntaxChecker.enable = settings["SyntaxChecker"]["enable"].getBool
@@ -2373,6 +2378,9 @@ proc validateGitTable(table: TomlValueRef): Option[InvalidItem] =
       of "showChangedLine":
         if val.kind != TomlValueKind.Bool:
           return some(InvalidItem(name: $key, val: $val))
+      of "updateInterval":
+        if val.kind != TomlValueKind.Int:
+          return some(InvalidItem(name: $key, val: $val))
       else:
         return some(InvalidItem(name: $key, val: $val))
 
@@ -2644,6 +2652,7 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
 
   result.addLine fmt "[Git]"
   result.addLine fmt "showChangedLine = {$settings.git.showChangedLine}"
+  result.addLine fmt "updateInterval = {$settings.git.updateInterval}"
 
   result.addLine ""
 

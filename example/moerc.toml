@@ -221,6 +221,8 @@ cursorPosition = true
 
 showChangedLine = true
 
+updateInterval = 1000
+
 [SyntaxChecker]
 
 enable = false

@@ -144,6 +144,7 @@ type persistTableNames {.pure.} = enum
 
 type GitTableNames {.pure.} = enum
   showChangedLine
+  updateInterval
 
 type SyntaxCheckerTableNames {.pure.} = enum
   enable
@@ -550,6 +551,8 @@ proc getGitTableSettingsValues(s: GitSettings, name: string): seq[Runes] =
         result = @[ru "true", ru "false"]
       else:
         result = @[ru "false", ru "true"]
+    of "updateInterval":
+      return @[s.updateInterval.toRunes]
 
 proc getSyntaxCheckerTableSettingsValues(
   s: SyntaxCheckerSettings,
@@ -925,6 +928,8 @@ proc changeGitTableSettings(
     case settingName:
       of "showChangedLine":
         s.showChangedLine = settingVal.parseBool
+      of "updateInterval":
+        s.updateInterval = settingVal.parseInt
       else:
         discard
 
@@ -1209,6 +1214,8 @@ proc getSettingType(table, name: string): SettingType =
     case name:
       of "showChangedLine":
         result = SettingType.Bool
+      of "updateInterval":
+        result = SettingType.Number
       else:
         result = SettingType.None
 
@@ -2015,6 +2022,8 @@ proc initGitTableBuffer(settings: GitSettings): seq[Runes] =
     case $name:
       of "showChangedLine":
         result.add(ru nameStr & space & $settings.showChangedLine)
+      of "updateInterval":
+        result.add(ru nameStr & space & $settings.updateInterval)
 
 proc initSyntaxCheckerTableBuffer(settings: SyntaxCheckerSettings): seq[Runes] =
   result.add(ru"SyntaxChecker")

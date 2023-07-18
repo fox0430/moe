@@ -62,6 +62,8 @@ type
     isReadonly*: bool
     filerStatusIndex*: Option[int]
     isTrackingByGit*: bool
+    lastGitInfoCheckTime*: DateTime
+    isGitUpdate*: bool
     changedLines*: seq[Diff]
     syntaxCheckResults*: seq[SyntaxError]
 
@@ -231,6 +233,12 @@ proc isCursor*(mode: Mode): bool {.inline.} =
 proc isCursor*(bufStatus: BufferStatus): bool {.inline.} =
   bufStatus.mode.isCursor
 
+proc isUpdate*(bufStatuses: seq[BufferStatus]): bool =
+  ## Return true if at least one bufStatus.isUpdate is true.
+
+  for b in bufStatuses:
+    if b.isUpdate: return true
+
 proc checkBufferExist*(bufStatus: seq[BufferStatus], path: Runes): Option[int] =
   for index, buf in bufStatus:
     if buf.path == path:
@@ -244,12 +252,15 @@ proc absolutePath*(bufStatus: BufferStatus): Runes =
 
 proc initBufferStatus*(
   path: string,
-  mode: Mode): BufferStatus {.raises: [IOError, OSError, ValueError].} =
+  mode: Mode): BufferStatus =
+    ## Open a file or dir and return a new BufferStatus.
+    # TODO: Return Result type
 
     result.isUpdate = true
     result.openDir = getCurrentDir().toRunes
     result.mode = mode
     result.lastSaveTime = now()
+    result.lastGitInfoCheckTime = now()
 
     if isFilerMode(result.mode):
       result.path = absolutePath(path).toRunes
@@ -264,18 +275,21 @@ proc initBufferStatus*(
         result.buffer = textAndEncoding.text.toGapBuffer
         result.characterEncoding = textAndEncoding.encoding
 
+        result.isTrackingByGit = isTrackingByGit(path)
+
       result.language = detectLanguage($result.path)
 
 proc initBufferStatus*(
-  mode: Mode): BufferStatus {.raises: [OSError].} =
+  mode: Mode): BufferStatus =
+    ## Return a BufferStatus for a new empty buffer.
+    # TODO: Return an error if open a dir.
+    # TODO: Return Result type
 
     result.isUpdate = true
     result.openDir = getCurrentDir().toRunes
     result.mode = mode
     result.lastSaveTime = now()
-
-    result.path = "".toRunes
-    result.path = "".toRunes
+    result.lastGitInfoCheckTime = now()
 
     if mode.isFilerMode:
       result.buffer = initGapBuffer(@[ru ""])
@@ -283,8 +297,11 @@ proc initBufferStatus*(
       result.buffer = newFile()
 
 proc initBufferStatus*(
-  p: string): BufferStatus {.inline, raises: [IOError, OSError, ValueError].} =
-    initBufferStatus(p, Mode.normal)
+  path: string): BufferStatus {.inline.} =
+    # TODO: Return an error if open a dir.
+    # TODO: Return Result type
+
+    initBufferStatus(path, Mode.normal)
 
 proc changeMode*(bufStatus: var BufferStatus, mode: Mode) =
   let currentMode = bufStatus.mode
@@ -298,9 +315,14 @@ proc positionEndOfBuffer*(bufStatus: BufferStatus): BufferPosition {.inline.} =
     line: bufStatus.buffer.high,
     column: bufStatus.buffer[bufStatus.buffer.high].high)
 
-proc updateChangedLines*(bufStatus: var BufferStatus) =
-  if bufStatus.isTrackingByGit:
-    bufStatus.changedLines = bufStatus.path.gitDiff
+proc updateLastGitInfoCheckTime*(bufStatus: var BufferStatus) {.inline.} =
+  bufStatus.lastGitInfoCheckTime = now()
+
+proc updateChangedLines*(bufStatus: var BufferStatus, diffs: seq[Diff]) =
+  ## Update changedLines and lastGitInfoCheckTime.
+
+  bufStatus.changedLines = diffs
+  bufStatus.updateLastGitInfoCheckTime
 
 ## Exec syntax check and update BufferStatus.syntaxCheckResults
 proc updateSyntaxCheckerResults*(
