@@ -19,7 +19,7 @@
 
 import std/[deques, strutils, math, strformat, options, sequtils]
 import gapbuffer, ui, unicodeext, independentutils, color, settings,
-       highlight, git, syntaxchecker
+       highlight, git, syntaxcheck
 
 type
   Sidebar = object

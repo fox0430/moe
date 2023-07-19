@@ -17,10 +17,10 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[os, osproc, strformat, strutils]
+import std/[os, strformat, strutils]
 import pkg/[regex, results]
 import syntax/highlite
-import independentutils, unicodeext
+import independentutils, unicodeext, backgroundprocess
 
 type
   SyntaxCheckMessageType* = enum
@@ -37,6 +37,24 @@ type
     message*: Runes
 
   SyntaxErrorsResult* = Result[seq[SyntaxError], string]
+
+  SyntaxCheckProcess* = object
+    command*: BackgroundProcessCommand
+    filePath*: Runes
+    process*: BackgroundProcess
+
+proc syntaxCheckCommand(
+  path: string,
+  lang: SourceLanguage): Result[BackgroundProcessCommand, string] =
+
+    case lang:
+      of SourceLanguage.langNim:
+        # Checks the code for syntax and semantics using "nim check" command.
+        return Result[BackgroundProcessCommand, string].ok BackgroundProcessCommand(
+          cmd: "nim",
+          args: @["check", path])
+      else:
+        return Result[BackgroundProcessCommand, string].err "Unknown language"
 
 proc toSyntaxCheckMessageType(s: string): MessageTypeResult =
   case s.toLowerAscii:
@@ -70,13 +88,13 @@ proc parseNimSyntaxCheckMessage(line: string): Result[string, string] =
     return Result[string, string].err "Failed to parse error message"
 
 ## Parse results of "nim check" command.
-proc parseNimCheckResult(path: string, cmdResult: string): SyntaxErrorsResult =
+proc parseNimCheckResult*(path: string, cmdResult: seq[string]): SyntaxErrorsResult =
   var syntaxErrors: seq[SyntaxError]
 
   if not path.isAbsolute:
     return SyntaxErrorsResult.err fmt"Need to an absolute path: {path}"
 
-  for line in cmdResult.splitLines:
+  for line in cmdResult:
     if line.startsWith(path):
       # Find a buffer position
       var m: RegexMatch
@@ -96,15 +114,27 @@ proc parseNimCheckResult(path: string, cmdResult: string): SyntaxErrorsResult =
 
   return SyntaxErrorsResult.ok syntaxErrors
 
-## Use commands to check syntax (semantics) of a source code.
-proc execSyntaxCheck*(path: string, lang: SourceLanguage): SyntaxErrorsResult =
-  case lang:
-    of SourceLanguage.langNim:
-      # Checks the code for syntax and semantics using "nim check" command.
-      let cmdResult = execCmdEx(fmt"nim check {path}")
-      if cmdResult.output.len > 0:
-        return path.parseNimCheckResult(cmdResult.output)
-      else:
-        return SyntaxErrorsResult.err fmt"`nim check` command failed: (exitCode: {cmdResult.exitCode})"
-    else:
-      return SyntaxErrorsResult.err fmt"{lang} does not yet support"
+proc isRunning*(p: SyntaxCheckProcess): bool {.inline.} = p.process.isRunning
+
+proc result*(
+  bp: var SyntaxCheckProcess): Result[seq[string], string] {.inline.} =
+
+    bp.process.result
+
+proc startBackgroundSyntaxCheck*(
+  path: string, lang: SourceLanguage): Result[SyntaxCheckProcess, string] =
+    ## Start the syntax check on a background process.
+    ## Use commands to check syntax (semantics) of a source code.
+
+    let command = syntaxCheckCommand(path.absolutePath, lang)
+    if command.isErr:
+      return Result[SyntaxCheckProcess, string].err fmt"Syntax check failed: {command.error}"
+
+    let backgroundProcess = startBackgroundProcess(command.get)
+    if backgroundProcess.isErr:
+      return Result[SyntaxCheckProcess, string].err fmt"Failed to exec build commands: {backgroundProcess.error}"
+
+    return Result[SyntaxCheckProcess, string].ok SyntaxCheckProcess(
+      command: command.get,
+      filePath: path.toRunes,
+      process: backgroundProcess.get)
