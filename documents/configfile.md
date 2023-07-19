@@ -13,13 +13,13 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example/m
 
 ### Standard table
 Color theme (String)
-```"vivid"``` or ```"dark"``` or ```"light"``` or ```"vscode"```  
-default is ```"dark"```.
+`"vivid"` or `"dark"` or `"light"` or `"vscode"`
+default is `"dark"`.
 ```
 theme
 ```
 
-Note: ```"vscode"``` is you can use current VSCode/VSCodium theme. Check [#648](https://github.com/fox0430/moe/pull/648)
+Note: `"vscode"` is you can use current VSCode/VSCodium theme. Check [#648](https://github.com/fox0430/moe/pull/648)
 
 Display line numbers (bool)  
 default is true
@@ -87,20 +87,20 @@ default is false
 disableChangeCursor
 ```
 
-Set cursor shape of the terminal emulator you are using (String) ```"terminalDefault"``` or ```"blinkBlock"``` or ```"blinkIbeam"``` or ```noneBlinkBlock``` or ```noneBlinkIbeam```  
-default is ```"terminalDefault"```
+Set cursor shape of the terminal emulator you are using (String) `"terminalDefault"` or `"blinkBlock"` or `"blinkIbeam"` or `noneBlinkBlock` or `noneBlinkIbeam`  
+default is `"terminalDefault"`
 ```
 defaultCursor
 ```
 
-Set cursor shape in normal mode (String) ```"terminalDefault"``` or ```"blinkBlock"``` or ```"blinkIbeam"``` or ```noneBlinkBlock``` or ```noneBlinkIbeam```  
-default is ```"blinkBlock"```
+Set cursor shape in normal mode (String) `"terminalDefault"` or `"blinkBlock"` or `"blinkIbeam"` or `noneBlinkBlock` or `noneBlinkIbeam`  
+default is `"blinkBlock"`
 ```
 normalModeCursor
 ```
 
-Set cursor shape in insert mode (String) ```"terminalDefault"``` or ```"blinkBlock"``` or ```"blinkIbeam"``` or ```noneBlinkBlock``` or ```noneBlinkIbeam```  
-default is ```"blinkIbeam"```
+Set cursor shape in insert mode (String) `"terminalDefault"` or `"blinkBlock"` or `"blinkIbeam"` or `noneBlinkBlock` or `noneBlinkIbeam`  
+default is `"blinkIbeam"`
 
 ```
 insertModeCursor
@@ -176,7 +176,7 @@ enable
 Set clipboard tool for Linux (string)  
 default is xsel
 
-```xsel``` or ```xclip``` or ```wl-clipboard```.
+`xsel` or `xclip` or `wl-clipboard`.
 
 ```
 toolOnLinux
@@ -248,6 +248,12 @@ Show current git branch name (bool)
 default is true
 ```
 gitbranchName
+```
+
+Show number of changed lines (bool)  
+defualt is true
+```
+showChangedLine
 ```
 
 Show/Hide git branch name in status line when window is inactive (bool)  
@@ -1240,4 +1246,28 @@ configModeCurrentLineBg
 Current line background color
 ```
 currentLineBg
+```
+
+A sign color of git added lines in sidebars
+```
+sidebarGitAddedSign
+```
+```
+sidebarGitAddedSignBg
+```
+
+A sign color of git deleted lines in sidebars
+```
+sidebarGitDeletedSign
+```
+```
+sidebarGitDeletedSignBg
+```
+
+A sign color of git changed lines in sidebars
+```
+sidebarGitChangedSign
+```
+```
+sidebarGitChangedSignBg
 ```
