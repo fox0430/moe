@@ -324,6 +324,15 @@ const TomlStr = """
   sidebarGitDeletedSignBg = "#000000"
   sidebarGitChangedSign = "#000000"
   sidebarGitChangedSignBg = "#000000"
+
+  sidebarSyntaxCheckInfoSign = "#000000"
+  sidebarSyntaxCheckInfoSignBg = "#000000"
+  sidebarSyntaxCheckHintSign = "#000000"
+  sidebarSyntaxCheckHintSignBg = "#000000"
+  sidebarSyntaxCheckWarnSign = "#000000"
+  sidebarSyntaxCheckWarnSignBg = "#000000"
+  sidebarSyntaxCheckErrSign = "#000000"
+  sidebarSyntaxCheckErrSignBg = "#000000"
 """
 
 suite "Parse configuration file":

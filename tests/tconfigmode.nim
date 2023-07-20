@@ -523,6 +523,22 @@ suite "Config mode: Init buffer":
       ru"  sidebarGitChangedSign",
       ru"    foreground                   #ffff00",
       ru"    background                   #000000",
+      ru"",
+      ru"  sidebarSyntaxCheckInfoSign",
+      ru"    foreground                   #ffff00",
+      ru"    background                   #000000",
+      ru"",
+      ru"  sidebarSyntaxCheckHintSign",
+      ru"    foreground                   #ffff00",
+      ru"    background                   #000000",
+      ru"",
+      ru"  sidebarSyntaxCheckWarnSign",
+      ru"    foreground                   #ffff00",
+      ru"    background                   #000000",
+      ru"",
+      ru"  sidebarSyntaxCheckErrSign",
+      ru"    foreground                   #ff0000",
+      ru"    background                   #000000",
       ru""
     ]
 

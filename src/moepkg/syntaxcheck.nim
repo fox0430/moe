@@ -24,10 +24,10 @@ import independentutils, unicodeext, backgroundprocess
 
 type
   SyntaxCheckMessageType* = enum
-    error
-    warning
     info
     hint
+    warning
+    error
 
   MessageTypeResult = Result[SyntaxCheckMessageType, string]
 

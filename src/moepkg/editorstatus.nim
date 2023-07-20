@@ -771,18 +771,20 @@ proc update*(status: var EditorStatus) =
             node.currentLine,
             node.currentColumn)
 
-        if currentMainWindowNode.view.sidebar.isSome:
+        if node.view.sidebar.isSome:
           # Update the EditorView.Sidebar.buffer
+
+          node.view.clearSidebar
 
           if settings.git.showChangedLine:
             # Write change lines to the sidebar
-            currentMainWindowNode.view.updateSidebarBufferForChangedLine(
-              currentBufStatus.changedLines)
+            node.view.updateSidebarBufferForChangedLine(
+              bufStatus.changedLines)
 
           if status.settings.syntaxChecker.enable:
             # Write syntax checker reuslts to the sidebar
-            currentMainWindowNode.view.updateSidebarBufferForSyntaxChecker(
-              currentBufStatus.syntaxCheckResults)
+            node.view.updateSidebarBufferForSyntaxChecker(
+              bufStatus.syntaxCheckResults)
 
         block updateTerminalBuffer:
           let selectedRange = Range(

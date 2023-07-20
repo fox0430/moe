@@ -231,6 +231,10 @@ suite "Ex mode: Turn off highlighting command":
   test "Turn off highlighting command":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
+
+    status.resize(100, 100)
+    status.update
+
     const command = @[ru"noh"]
     status.exModeCommand(command)
 
@@ -1229,6 +1233,9 @@ suite "Ex mode: Save Ex command history":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
 
+    status.resize(100, 100)
+    status.update
+
     const command = @[ru"noh"]
     status.exModeCommand(command)
 
@@ -1237,6 +1244,9 @@ suite "Ex mode: Save Ex command history":
   test "Save \"noh\" command 2":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
+
+    status.resize(100, 100)
+    status.update
 
     for i in 0 ..< 2:
       const command = @[ru"noh"]
@@ -1248,9 +1258,14 @@ suite "Ex mode: Save Ex command history":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
 
+    status.resize(100, 100)
+    status.update
+
     block:
       const command = @[ru"noh"]
       status.exModeCommand(command)
+
+    status.update
 
     block:
       const command = @[ru"vs"]
