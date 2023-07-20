@@ -497,6 +497,15 @@ type
     sidebarGitChangedSign
     sidebarGitChangedSignBg
 
+    sidebarSyntaxCheckInfoSign
+    sidebarSyntaxCheckInfoSignBg
+    sidebarSyntaxCheckHintSign
+    sidebarSyntaxCheckHintSignBg
+    sidebarSyntaxCheckWarnSign
+    sidebarSyntaxCheckWarnSignBg
+    sidebarSyntaxCheckErrSign
+    sidebarSyntaxCheckErrSignBg
+
   EditorColorPairIndex* {.pure.} = enum
     # Cannot use 0 in Ncurses color pair.
     default = 1
@@ -590,6 +599,11 @@ type
     sidebarGitAddedSign
     sidebarGitDeletedSign
     sidebarGitChangedSign
+
+    sidebarSyntaxCheckInfoSign
+    sidebarSyntaxCheckHintSign
+    sidebarSyntaxCheckWarnSign
+    sidebarSyntaxCheckErrSign
 
   Color* = object
     index*: EditorColorIndex
@@ -1140,6 +1154,38 @@ const
         rgb: "#ffff00".hexToRgb.get),
       background: Color(
         index: EditorColorIndex.sidebarGitChangedSignBg,
+        rgb: "#000000".hexToRgb.get)),
+
+    EditorColorPairIndex.sidebarSyntaxCheckInfoSign: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.sidebarSyntaxCheckInfoSign,
+        rgb: "#ffff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.sidebarSyntaxCheckInfoSignBg,
+        rgb: "#000000".hexToRgb.get)),
+
+    EditorColorPairIndex.sidebarSyntaxCheckHintSign: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.sidebarSyntaxCheckHintSign,
+        rgb: "#ffff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.sidebarSyntaxCheckHintSignBg,
+        rgb: "#000000".hexToRgb.get)),
+
+    EditorColorPairIndex.sidebarSyntaxCheckWarnSign: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.sidebarSyntaxCheckWarnSign,
+        rgb: "#ffff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.sidebarSyntaxCheckWarnSignBg,
+        rgb: "#000000".hexToRgb.get)),
+
+    EditorColorPairIndex.sidebarSyntaxCheckErrSign: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.sidebarSyntaxCheckErrSign,
+        rgb: "#ff0000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.sidebarSyntaxCheckErrSignBg,
         rgb: "#000000".hexToRgb.get))
   ]
 
@@ -1673,6 +1719,38 @@ const
         rgb: "#ffff00".hexToRgb.get),
       background: Color(
         index: EditorColorIndex.sidebarGitChangedSignBg,
+        rgb: "#000000".hexToRgb.get)),
+
+    EditorColorPairIndex.sidebarSyntaxCheckInfoSign: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.sidebarSyntaxCheckInfoSign,
+        rgb: "#ffff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.sidebarSyntaxCheckInfoSignBg,
+        rgb: "#000000".hexToRgb.get)),
+
+    EditorColorPairIndex.sidebarSyntaxCheckHintSign: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.sidebarSyntaxCheckHintSign,
+        rgb: "#ffff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.sidebarSyntaxCheckHintSignBg,
+        rgb: "#000000".hexToRgb.get)),
+
+    EditorColorPairIndex.sidebarSyntaxCheckWarnSign: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.sidebarSyntaxCheckWarnSign,
+        rgb: "#ffff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.sidebarSyntaxCheckWarnSignBg,
+        rgb: "#000000".hexToRgb.get)),
+
+    EditorColorPairIndex.sidebarSyntaxCheckErrSign: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.sidebarSyntaxCheckErrSign,
+        rgb: "#ff0000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.sidebarSyntaxCheckErrSignBg,
         rgb: "#000000".hexToRgb.get))
   ]
 
@@ -2206,6 +2284,38 @@ const
         rgb: "#ffff00".hexToRgb.get),
       background: Color(
         index: EditorColorIndex.sidebarGitChangedSignBg,
+        rgb: "#000000".hexToRgb.get)),
+
+    EditorColorPairIndex.sidebarSyntaxCheckInfoSign: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.sidebarSyntaxCheckInfoSign,
+        rgb: "#ffff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.sidebarSyntaxCheckInfoSignBg,
+        rgb: "#000000".hexToRgb.get)),
+
+    EditorColorPairIndex.sidebarSyntaxCheckHintSign: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.sidebarSyntaxCheckHintSign,
+        rgb: "#ffff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.sidebarSyntaxCheckHintSignBg,
+        rgb: "#000000".hexToRgb.get)),
+
+    EditorColorPairIndex.sidebarSyntaxCheckWarnSign: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.sidebarSyntaxCheckWarnSign,
+        rgb: "#ffff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.sidebarSyntaxCheckWarnSignBg,
+        rgb: "#000000".hexToRgb.get)),
+
+    EditorColorPairIndex.sidebarSyntaxCheckErrSign: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.sidebarSyntaxCheckErrSign,
+        rgb: "#ff0000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.sidebarSyntaxCheckErrSignBg,
         rgb: "#000000".hexToRgb.get))
   ]
 

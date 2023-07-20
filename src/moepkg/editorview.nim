@@ -127,19 +127,26 @@ proc initEditorView*[T](buffer: T, height, width: int): EditorView =
 
   result.reload(buffer, 0)
 
-proc initSidebar*(view: var EditorView) =
-  # Initialize EditorView.sidebar.
+proc initSidebar*(view: var EditorView, width: int = 2) =
+  ## Initialize EditorView.sidebar.
 
-  let sidebarHeight = view.height
-  let sidebar = Sidebar(
-    # The default size is 2 spaces * view height.
-    buffer: sidebarHeight.newSeqWith(ru"  "),
-    highlights: sidebarHeight.newSeqWith(
-      @[EditorColorPairIndex.default,
-        EditorColorPairIndex.default]))
+  view.sidebar = Sidebar(
+    buffer: view.height.newSeqWith(ru' '.repeat(width)),
+    highlights: view.height.newSeqWith(
+      EditorColorPairIndex.default.repeat(width))).some
 
-  view.sidebar = sidebar.some
-  view.leftMargin = 2
+  view.leftMargin = width
+
+proc clearSidebar*(view: var EditorView) {.inline.} =
+  ## Clear the sidebr buffer and highlights.
+
+  let
+    height = view.height
+    width = view.sidebar.get.buffer.len
+
+  view.sidebar.get.buffer = height.newSeqWith(ru' '.repeat(width))
+  view.sidebar.get.highlights = height.newSeqWith(
+    EditorColorPairIndex.default.repeat(width))
 
 proc updateSidebarBuffer*(view: var EditorView, buffer: seq[Runes]) {.inline.} =
   view.sidebar.get.buffer = buffer
@@ -613,7 +620,11 @@ proc lastOriginLine*(view: EditorView): int =
 proc updateSidebarBufferForChangedLine*(
   view: var EditorView,
   changedLines: seq[Diff]) =
-    ## Update a sidebar buffer for git diff. It's on left side of EditorView.
+    ## Update (Overwrite) a sidebar buffer for git diff. It's on left side of EditorView.
+
+    template buffer: var seq[Runes] = view.sidebar.get.buffer
+    template highlights: var seq[seq[EditorColorPairIndex]] =
+      view.sidebar.get.highlights
 
     proc inRange(v: EditorView, d: Diff): bool =
       case d.operation:
@@ -623,12 +634,8 @@ proc updateSidebarBufferForChangedLine*(
         else:
           v.firstOriginLine <= d.firstLine or v.firstOriginLine <= d.lastLine
 
-    # height * 2 spaces.
-    var
-      buffer = view.height.newSeqWith(ru"  ")
-      highlights = buffer.len.newSeqWith(
-        @[EditorColorPairIndex.default,
-          EditorColorPairIndex.default])
+    # 2 or more width required.
+    if view.sidebar.get.buffer.len < 2: return
 
     for d in changedLines:
       if view.inRange(d):
@@ -638,41 +645,59 @@ proc updateSidebarBufferForChangedLine*(
               # Only use the firstLine.
               if lineNum >= d.firstLine and lineNum <= d.firstLine:
                 buffer[y] = ru"_ "
-                highlights[y][0] = EditorColorPairIndex.sideBarGitDeletedSign
+                highlights[y] = EditorColorPairIndex.sidebarGitDeletedSign.repeat(
+                 2)
             of changedAndDeleted:
               # Only use the firstLine.
               if lineNum >= d.firstLine and lineNum <= d.firstLine:
                 buffer[y] = ru"~_"
-                highlights[y] = EditorColorPairIndex.sideBarGitChangedSign.repeat(
+                highlights[y] = EditorColorPairIndex.sidebarGitChangedSign.repeat(
                   2)
             of changed:
               if lineNum >= d.firstLine and lineNum <= d.lastLine:
                 buffer[y] = ru"~ "
-                highlights[y][0] = EditorColorPairIndex.sideBarGitChangedSign
+                highlights[y] = EditorColorPairIndex.sidebarGitChangedSign.repeat(
+                  2)
             of OperationType.added:
               if lineNum >= d.firstLine and lineNum <= d.lastLine:
                 buffer[y] = ru"+ "
-                highlights[y][0] = EditorColorPairIndex.sideBarGitAddedSign
+                highlights[y] = EditorColorPairIndex.sidebarGitAddedSign.repeat(
+                  2)
 
-    view.sidebar.get.buffer = buffer
-    view.sidebar.get.highlights = highlights
-
-## Update a sidebar buffer for syntax checker reuslts.
-## It's on left side of EditorView.
 proc updateSidebarBufferForSyntaxChecker*(
   view: var EditorView,
   syntaxCheckResults: seq[SyntaxError]) =
+    ## Update (Overwrite) a sidebar buffer for syntax checker reuslts.
+    ## It's on left side of EditorView.
 
-    let
-      firstViewOriginLine = view.firstOriginLine
-      lastViewOriginLine = view.lastOriginLine
+    template buffer: var seq[Runes] = view.sidebar.get.buffer
+    template highlights: var seq[seq[EditorColorPairIndex]] =
+      view.sidebar.get.highlights
+
+    proc inRange(v: EditorView, se: SyntaxError): bool {.inline.} =
+      v.firstOriginLine <= se.position.line and
+      v.lastOriginLine >= se.position.line
+
+    # 2 or more width required.
+    if view.sidebar.get.buffer.len < 2: return
 
     for syntaxErr in syntaxCheckResults:
-      if firstViewOriginLine <= syntaxErr.position.line and
-         lastViewOriginLine >= syntaxErr.position.line:
-           let y = max(syntaxErr.position.line - firstViewOriginLine, 0)
-           case syntaxErr.messageType:
-             of SyntaxCheckMessageType.error:
-               view.sidebar.get.buffer[y] = ru">>"
-             else:
-               view.sidebar.get.buffer[y] = ru"⚠ "
+      if view.inRange(syntaxErr):
+        let y = max(syntaxErr.position.line - view.firstOriginLine, 0)
+        case syntaxErr.messageType:
+          of SyntaxCheckMessageType.info:
+            view.sidebar.get.buffer[y] = ru"⚠ "
+            highlights[y] =
+              EditorColorPairIndex.sidebarSyntaxCheckWarnSign.repeat(2)
+          of SyntaxCheckMessageType.hint:
+            view.sidebar.get.buffer[y] = ru"⚠ "
+            highlights[y] =
+              EditorColorPairIndex.sidebarSyntaxCheckWarnSign.repeat(2)
+          of SyntaxCheckMessageType.warning:
+            view.sidebar.get.buffer[y] = ru"⚠ "
+            highlights[y] =
+              EditorColorPairIndex.sidebarSyntaxCheckWarnSign.repeat(2)
+          of SyntaxCheckMessageType.error:
+            view.sidebar.get.buffer[y] = ru">>"
+            highlights[y] =
+              EditorColorPairIndex.sidebarSyntaxCheckErrSign.repeat(2)

@@ -1987,7 +1987,6 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Theme"].contains("sidebarGitAddedSign"):
       ColorThemeTable[configTheme][EditorColorPairIndex.sidebarGitAddedSign].foreground.rgb =
         toRgb("sidebarGitAddedSign")
-
     if settings["Theme"].contains("sidebarGitAddedSignBg"):
       ColorThemeTable[configTheme][EditorColorPairIndex.sidebarGitAddedSign].background.rgb =
         toRgb("sidebarGitAddedSignBg")
@@ -1995,7 +1994,6 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Theme"].contains("sidebarGitDeletedSign"):
       ColorThemeTable[configTheme][EditorColorPairIndex.sidebarGitDeletedSign].foreground.rgb =
         toRgb("sidebarGitDeletedSign")
-
     if settings["Theme"].contains("sidebarGitDeletedSignBg"):
       ColorThemeTable[configTheme][EditorColorPairIndex.sidebarGitDeletedSign].background.rgb =
         toRgb("sidebarGitDeletedSignBg")
@@ -2003,10 +2001,37 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Theme"].contains("sidebarGitChangedSign"):
       ColorThemeTable[configTheme][EditorColorPairIndex.sidebarGitChangedSign].foreground.rgb =
         toRgb("sidebarGitChangedSign")
-
     if settings["Theme"].contains("sidebarGitChangedSignBg"):
       ColorThemeTable[configTheme][EditorColorPairIndex.sidebarGitChangedSign].background.rgb =
         toRgb("sidebarGitChangedSignBg")
+
+    if settings["Theme"].contains("sidebarSyntaxCheckInfoSign"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.sidebarSyntaxCheckInfoSign].foreground.rgb =
+        toRgb("sidebarSyntaxCheckInfoSign")
+    if settings["Theme"].contains("sidebarSyntaxCheckInfoSignBg"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.sidebarSyntaxCheckInfoSign].background.rgb =
+        toRgb("sidebarSyntaxCheckInfoSignBg")
+
+    if settings["Theme"].contains("sidebarSyntaxCheckHintSign"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.sidebarSyntaxCheckHintSign].foreground.rgb =
+        toRgb("sidebarSyntaxCheckHintSign")
+    if settings["Theme"].contains("sidebarSyntaxCheckHintSignBg"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.sidebarSyntaxCheckHintSign].background.rgb =
+        toRgb("sidebarSyntaxCheckHintSignBg")
+
+    if settings["Theme"].contains("sidebarSyntaxCheckWarnSign"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.sidebarSyntaxCheckWarnSign].foreground.rgb =
+        toRgb("sidebarSyntaxCheckWarnSign")
+    if settings["Theme"].contains("sidebarSyntaxCheckWarnSignBg"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.sidebarSyntaxCheckWarnSign].background.rgb =
+        toRgb("sidebarSyntaxCheckWarnSignBg")
+
+    if settings["Theme"].contains("sidebarSyntaxCheckErrSign"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.sidebarSyntaxCheckErrSign].foreground.rgb =
+        toRgb("sidebarSyntaxCheckErrSign")
+    if settings["Theme"].contains("sidebarSyntaxCheckErrSignBg"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.sidebarSyntaxCheckErrSign].background.rgb =
+        toRgb("sidebarSyntaxCheckErrSignBg")
 
   elif result.editorColorTheme == ColorTheme.vscode:
     let vsCodeTheme = loadVSCodeTheme()
@@ -2827,6 +2852,14 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "sidebarGitDeletedSignBg = \"{theme.bgColor(EditorColorPairIndex.sidebarGitDeletedSign)}\""
   result.addLine fmt "sidebarGitChangedSign = \"{theme.fgColor(EditorColorPairIndex.sidebarGitChangedSign)}\""
   result.addLine fmt "sidebarGitChangedSignBg = \"{theme.bgColor(EditorColorPairIndex.sidebarGitChangedSign)}\""
+  result.addLine fmt "sidebarSyntaxCheckInfoSign = \"{theme.fgColor(EditorColorPairIndex.sidebarSyntaxCheckInfoSign)}\""
+  result.addLine fmt "sidebarSyntaxCheckInfoSignBg = \"{theme.bgColor(EditorColorPairIndex.sidebarSyntaxCheckInfoSign)}\""
+  result.addLine fmt "sidebarSyntaxCheckHintSign = \"{theme.fgColor(EditorColorPairIndex.sidebarSyntaxCheckHintSign)}\""
+  result.addLine fmt "sidebarSyntaxCheckHintSignBg = \"{theme.bgColor(EditorColorPairIndex.sidebarSyntaxCheckHintSign)}\""
+  result.addLine fmt "sidebarSyntaxCheckWarnSign = \"{theme.fgColor(EditorColorPairIndex.sidebarSyntaxCheckWarnSign)}\""
+  result.addLine fmt "sidebarSyntaxCheckWarnSignBg = \"{theme.bgColor(EditorColorPairIndex.sidebarSyntaxCheckWarnSign)}\""
+  result.addLine fmt "sidebarSyntaxCheckErrSign = \"{theme.fgColor(EditorColorPairIndex.sidebarSyntaxCheckErrSign)}\""
+  result.addLine fmt "sidebarSyntaxCheckErrSignBg = \"{theme.bgColor(EditorColorPairIndex.sidebarSyntaxCheckErrSign)}\""
 
 # Generate a string of the default TOML configuration.
 proc genDefaultTomlConfigStr*(): string {.inline.} =

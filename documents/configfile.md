@@ -1248,7 +1248,7 @@ Current line background color
 currentLineBg
 ```
 
-A sign color of git added lines in sidebars
+An added lines sign color of Git in sidebars
 ```
 sidebarGitAddedSign
 ```
@@ -1256,7 +1256,7 @@ sidebarGitAddedSign
 sidebarGitAddedSignBg
 ```
 
-A sign color of git deleted lines in sidebars
+A deleted lines sign color of Git in sidebars
 ```
 sidebarGitDeletedSign
 ```
@@ -1264,10 +1264,42 @@ sidebarGitDeletedSign
 sidebarGitDeletedSignBg
 ```
 
-A sign color of git changed lines in sidebars
+A changed lines sign color of Git in sidebars.
 ```
 sidebarGitChangedSign
 ```
 ```
 sidebarGitChangedSignBg
+```
+
+An info sign color of syntax checker results in sidebars.
+```
+sidebarSyntaxCheckInfoSign 
+```
+```
+sidebarSyntaxCheckInfoSignBg 
+```
+
+A hint sign color of syntax checker results in sidebars.
+```
+sidebarSyntaxCheckHintSign 
+```
+```
+sidebarSyntaxCheckHintSignBg
+```
+
+A warning color of syntax checker results in sidebars.
+```
+sidebarSyntaxCheckWarnSign 
+```
+```
+sidebarSyntaxCheckWarnSignBg
+```
+
+An error color of syntax checker results in sidebars.
+```
+sidebarSyntaxCheckErrSign 
+```
+```
+sidebarSyntaxCheckErrSignBg
 ```
