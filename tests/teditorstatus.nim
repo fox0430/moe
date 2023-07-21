@@ -20,7 +20,8 @@
 import std/[unittest, options, os, importutils]
 import pkg/results
 import moepkg/[editor, gapbuffer, bufferstatus, editorview, unicodeext, ui,
-               highlight, windownode, movement, build, backgroundprocess]
+               highlight, windownode, movement, build, backgroundprocess,
+               syntaxcheck, independentutils]
 
 import moepkg/editorstatus {.all.}
 
@@ -716,3 +717,47 @@ suite "BackgroundTasks":
         status.backgroundTasks.build[i].process.kill
 
       check false
+
+suite "updateCommandLine":
+  test "Write syntax checker messages":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = @["import std/os", "echo 1"]
+      .toSeqRunes
+      .toGapBuffer
+
+    let syntaxError = SyntaxError(
+      position: BufferPosition(line: 0, column: 11),
+      messageType: SyntaxCheckMessageType.warning,
+      message: ru"imported and not used: 'os' [UnusedImport]")
+
+    currentBufStatus.syntaxCheckResults = @[syntaxError]
+
+    status.resize(100, 100)
+    status.update
+
+    check status.commandLine.buffer ==
+      ru"SyntaxError: (0, 11) imported and not used: 'os' [UnusedImport]"
+
+  test "Write syntax checker messages and move line":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = @["import std/os", "echo 1"]
+      .toSeqRunes
+      .toGapBuffer
+
+    let syntaxError = SyntaxError(
+      position: BufferPosition(line: 0, column: 11),
+      messageType: SyntaxCheckMessageType.warning,
+      message: ru"imported and not used: 'os' [UnusedImport]")
+
+    currentBufStatus.syntaxCheckResults = @[syntaxError]
+
+    status.resize(100, 100)
+    status.update
+
+    currentMainWindowNode.currentLine = 1
+    status.update
+
+    # Should be empty for other lines.
+    check status.commandLine.buffer.len == 0
