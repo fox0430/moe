@@ -274,10 +274,13 @@ proc attrSet*(win: var Window, color: int16) {.inline.} =
 proc attrOn*(win: var Window, attribute: Attribute) {.inline.} =
   win.cursesWindow.wattron(cint(attribute))
 
+proc attrOn*(win: var Window, colorPair: int16) {.inline.} =
+  win.cursesWindow.wattron(colorPair.cshort)
+
 proc attrOff*(win: var Window, attribute: Attribute) {.inline.} =
   win.cursesWindow.wattroff(cint(attribute))
 
-proc attrOff*(win: var Window, colorPair:  int16 | int16) {.inline.} =
+proc attrOff*(win: var Window, colorPair:  int16) {.inline.} =
   win.cursesWindow.wattroff(colorPair.cshort)
 
 proc write*(
@@ -285,12 +288,17 @@ proc write*(
   y, x: int,
   str: string,
   color: int16 = DefaultColorPair,
+  attribute: Attribute = Attribute.normal,
   storeX: bool = true) =
 
     when not defined unitTest:
       # Not write when running unit tests
       win.attrSet(color)
+      win.attrOn(attribute)
+
       win.cursesWindow.mvwaddstr(y.cint, x.cint, str)
+
+      win.attrOff(attribute)
       win.attrOff(color)
 
       if storeX:
@@ -304,9 +312,10 @@ proc write*(
   y, x: int,
   runes: Runes,
   color:  int16 = DefaultColorPair,
+  attribute: Attribute = Attribute.normal,
   storeX: bool = true) {.inline.} =
 
-    win.write(y, x, $runes, color, storeX)
+    win.write(y, x, $runes, color, attribute, storeX)
 
 proc append*(
   win: var Window,

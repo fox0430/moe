@@ -301,7 +301,7 @@ proc writeSidebarLine(view: EditorView, win: var Window, y: int) =
     line = view.sidebar.get.buffer[y][0 .. view.leftMargin - 1]
     highlight = view.sidebar.get.highlights[y]
   for x, r in line:
-    win.write(y, x, $r, highlight[x].int16, false)
+    win.write(y, x, $r, highlight[x].int16, Attribute.normal, false)
 
 proc writeLineNum(
   view: EditorView,
@@ -317,18 +317,19 @@ proc writeLineNum(
       buffer =
         strutils.align($(line + 1), view.widthOfLineNum - 1) & rightMargin
 
-    win.write(y, x, buffer, colorPair.int16, storeX)
+    win.write(y, x, buffer, colorPair.int16, Attribute.normal, storeX)
 
 proc write(
   view: EditorView,
   win: var Window,
   y, x: int,
   runes: Runes,
-  color: EditorColorPairIndex | int16) {.inline.} =
+  color: EditorColorPairIndex | int16,
+  attribute: Attribute = Attribute.normal) {.inline.} =
 
     # TODO: use settings file
     const tab = "    "
-    win.write(y, x, replace($runes, "\t", tab), color.int16, false)
+    win.write(y, x, replace($runes, "\t", tab), color.int16, attribute, false)
 
 proc writeLine(
   view: EditorView,
@@ -385,9 +386,7 @@ proc writeCurrentLine(
       # TODO: Return `Result` type.
       discard currentLineColorPair.initColorPair(colorMode, bufferFg, bufferBg)
 
-      win.attron(attribute)
-      view.write(win, y, x, runes, currentLineColorPair.int16)
-      win.attroff(attribute)
+      view.write(win, y, x, runes, currentLineColorPair.int16, attribute)
 
       currentLineColorPair.inc
 
