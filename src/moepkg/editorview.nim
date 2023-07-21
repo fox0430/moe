@@ -331,18 +331,6 @@ proc write(
     const tab = "    "
     win.write(y, x, replace($runes, "\t", tab), color.int16, attribute, false)
 
-proc writeLine(
-  view: EditorView,
-  win: var Window,
-  y, x: int,
-  runes: Runes,
-  attribute: Attribute,
-  color: EditorColorPairIndex | int16) =
-
-    win.attrOn(attribute)
-    view.write(win, y, x, runes, color)
-    win.attrOff(attribute)
-
 proc writeCurrentLine(
   win: var Window,
   view: EditorView,
@@ -536,11 +524,11 @@ proc writeAllLines*[T](
             isVisualMode,
             viewSettings)
         else:
-          view.writeLine(
+          view.write(
             win,
             y, x,
             str,
-            highlight[i].attribute, highlight[i].color)
+            highlight[i].color, highlight[i].attribute)
         x += width(str)
         if last == highlight[i].lastColumn - view.start[y]: inc(i) # consumed a whole segment
         else: break
@@ -548,11 +536,10 @@ proc writeAllLines*[T](
       if viewSettings.indentationLines:
         # Write indentation lines.
         for i in 0 ..< indents:
-          view.writeLine(
+          view.write(
             win,
             y, lineStart + (viewSettings.tabStop * i),
             ru("┊"),
-            Attribute.normal,
             EditorColorPairIndex.whitespace)
 
 proc update*[T](

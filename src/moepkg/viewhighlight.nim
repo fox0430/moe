@@ -361,6 +361,7 @@ proc highlightSyntaxCheckerReuslts(
   highlight: var Highlight,
   range: Range,
   syntaxErrors: seq[SyntaxError]) =
+    ## Display underline and highlight syntax errors.
 
     for se in syntaxErrors:
       if se.position.line >= range.first and se.position.line <= range.last:
