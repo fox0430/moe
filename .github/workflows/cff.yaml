@@ -41,6 +41,6 @@ jobs:
           persist-credentials: false
 
       - name: cffconvert
-        uses: citation-file-format/cffconvert-github-action@2.0.0
+        uses: docker://citationcff/cffconvert:latest
         with:
           args: --validate
