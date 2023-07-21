@@ -17,14 +17,49 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, strutils]
+import std/[unittest, os, strutils, options]
 
 import pkg/results
 
 import moepkg/syntax/highlite
-import moepkg/[independentutils, backgroundprocess]
+import moepkg/[independentutils, backgroundprocess, unicodeext]
 
 import moepkg/syntaxcheck {.all.}
+
+suite "syntaxCheck: isSyntaxCheckFormatedMessage":
+  test "Valid runes":
+    check "SyntaxError: (10, 0) Error!".toRunes.isSyntaxCheckFormatedMessage
+
+  test "Valid string":
+    check "SyntaxError: (10, 0) Error!".isSyntaxCheckFormatedMessage
+
+  test "Invalid":
+    check not "Error!".isSyntaxCheckFormatedMessage
+
+suite "syntaxCheck: formatedMessage":
+  test "Some messages and none":
+    let results = @[
+      SyntaxError(
+        position: BufferPosition(line: 0, column: 0),
+        messageType: SyntaxCheckMessageType.error,
+        message: "Error1".toRunes),
+      SyntaxError(
+        position: BufferPosition(line: 5, column: 10),
+        messageType: SyntaxCheckMessageType.error,
+        message: "Error2".toRunes)
+    ]
+
+    block checkLine0:
+      const Line = 0
+      check ru"SyntaxError: (0, 0) Error1" == results.formatedMessage(Line).get
+
+    block checkLine5:
+      const Line = 5
+      check ru"SyntaxError: (5, 10) Error2" == results.formatedMessage(Line).get
+
+    block checkNone:
+      const Line = 10
+      check results.formatedMessage(Line).isNone
 
 suite "syntaxCheck: syntaxCheckCommand":
   test "Nim":

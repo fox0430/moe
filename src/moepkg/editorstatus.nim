@@ -661,6 +661,22 @@ proc updateSuggestWindow(status: var EditorStatus) =
     mainWindowY,
     status.settings.statusLine.enable)
 
+proc updateCommandLine(status: var EditorStatus) =
+  ## Update the command line.
+
+  if currentBufStatus.mode.isEditMode and
+     currentBufStatus.syntaxCheckResults.len > 0:
+       let message = currentBufStatus.syntaxCheckResults.formatedMessage(
+         currentMainWindowNode.currentLine)
+       if message.isSome:
+          # Write messages for syntax checker reuslts.
+         status.commandLine.write message.get
+       elif status.commandLine.buffer.isSyntaxCheckFormatedMessage:
+         # Clear if messages for other lines are still displayed.
+         status.commandLine.clear
+
+  status.commandLine.update
+
 ## Update all views, highlighting, cursor, etc.
 proc update*(status: var EditorStatus) =
   # Disable the cursor while updating.
@@ -832,7 +848,7 @@ proc update*(status: var EditorStatus) =
 
   if status.sidebar.isSome: status.sidebar.get.update
 
-  status.commandLine.update
+  status.updateCommandLine
 
   if currentBufStatus.isCursor:
     setCursor(true)

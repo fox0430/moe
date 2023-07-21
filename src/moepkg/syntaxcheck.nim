@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[os, strformat, strutils]
+import std/[os, strformat, strutils, options]
 import pkg/[regex, results]
 import syntax/highlite
 import independentutils, unicodeext, backgroundprocess
@@ -42,6 +42,22 @@ type
     command*: BackgroundProcessCommand
     filePath*: Runes
     process*: BackgroundProcess
+
+proc isSyntaxCheckFormatedMessage*(m: string | Runes): bool {.inline.} =
+  startsWith($m, "SyntaxError: ")
+
+proc formatedMessage*(
+  syntaxErrors: seq[SyntaxError],
+  line: int): Option[Runes] =
+    ## Return a formated syntax error message with the position for
+    ## the specified line, if it exists.
+    ## Message exmaple: "SyntaxError: (1, 2) Syntax error!"
+
+    for se in syntaxErrors:
+      if line == se.position.line:
+        return fmt"SyntaxError: ({$se.position.line}, {$se.position.column}) {$se.message}"
+          .toRunes
+          .some
 
 proc syntaxCheckCommand(
   path: string,

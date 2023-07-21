@@ -121,6 +121,8 @@ proc isSearchMode*(mode: Mode): bool {.inline.} =
 proc isSearchMode*(b: BufferStatus): bool {.inline.} =
   b.isSearchForwardMode or b.isSearchBackwardMode
 
+proc isNormalMode*(mode: Mode): bool {.inline.} = mode == Mode.normal
+
 proc isNormalMode*(mode, prevMode: Mode): bool {.inline.} =
   (mode == Mode.normal) or
   (mode.isExMode and prevMode == Mode.normal) or
@@ -200,14 +202,20 @@ proc isRecentFileMode*(mode, prevMode: Mode): bool {.inline.} =
 proc isRecentFileMode*(b: BufferStatus): bool {.inline.} =
   isRecentFileMode(b.mode, b.prevMode)
 
-# Modes for editing text
 proc isEditMode*(mode, prevMode: Mode): bool {.inline.} =
+  ## Modes for editing text
+
   isNormalMode(mode, prevMode) or
   isInsertMode(mode) or
   isVisualMode(mode) or
   isReplaceMode(mode)
 
-# Modes for editing text
+proc isEditMode*(mode: Mode): bool {.inline.} =
+  isNormalMode(mode) or
+  isInsertMode(mode) or
+  isVisualMode(mode) or
+  isReplaceMode(mode)
+
 proc isEditMode*(b: BufferStatus): bool {.inline.} =
   b.isNormalMode or
   b.isInsertMode or
