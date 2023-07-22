@@ -19,7 +19,7 @@
 
 import std/[options, deques]
 import independentutils, bufferstatus, highlight, color, windownode, gapbuffer,
-       unicodeext, editorview, searchutils, settings, movement, ui
+       unicodeext, editorview, searchutils, settings, movement, ui, syntaxcheck
 
 proc initBufferPosition(
   n: WindowNode): BufferPosition {.inline.} =
@@ -357,6 +357,33 @@ proc highlightSearchResults(
       color: color)
     highlight.overwrite(colorSegment)
 
+proc highlightSyntaxCheckerReuslts(
+  highlight: var Highlight,
+  range: Range,
+  syntaxErrors: seq[SyntaxError]) =
+    ## Display underline and highlight syntax errors.
+
+    for se in syntaxErrors:
+      if se.position.line >= range.first and se.position.line <= range.last:
+        let color =
+          case se.messageType:
+            of SyntaxCheckMessageType.info:
+              EditorColorPairIndex.syntaxCheckInfo
+            of SyntaxCheckMessageType.hint:
+              EditorColorPairIndex.syntaxCheckHint
+            of SyntaxCheckMessageType.warning:
+              EditorColorPairIndex.syntaxCheckWarn
+            of SyntaxCheckMessageType.error:
+              EditorColorPairIndex.syntaxCheckErr
+
+        highlight.overwrite(ColorSegment(
+          firstRow: se.position.line,
+          firstColumn: se.position.column,
+          lastRow: se.position.line,
+          lastColumn: se.position.column,
+          color: color,
+          attribute: Attribute.underline))
+
 proc updateHighlight*(
   highlight: var Highlight,
   bufStatus: BufferStatus,
@@ -406,3 +433,9 @@ proc updateHighlight*(
         searchHistory[^1],
         settings,
         isSearchHighlight)
+
+    if bufStatus.syntaxCheckResults.len > 0:
+      # Highlight syntax chcker results
+      highlight.highlightSyntaxCheckerReuslts(
+        range,
+        bufStatus.syntaxCheckResults)

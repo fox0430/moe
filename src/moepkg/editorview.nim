@@ -524,18 +524,23 @@ proc writeAllLines*[T](
             isVisualMode,
             viewSettings)
         else:
-          view.write(win, y, x, str, highlight[i].color)
+          view.write(
+            win,
+            y, x,
+            str,
+            highlight[i].color, highlight[i].attribute)
         x += width(str)
         if last == highlight[i].lastColumn - view.start[y]: inc(i) # consumed a whole segment
         else: break
 
       if viewSettings.indentationLines:
-        for i in 0..<indents:
-          view.write(win,
-                     y,
-                     lineStart+(viewSettings.tabStop*i),
-                     ru("┊"),
-                     EditorColorPairIndex.whitespace)
+        # Write indentation lines.
+        for i in 0 ..< indents:
+          view.write(
+            win,
+            y, lineStart + (viewSettings.tabStop * i),
+            ru("┊"),
+            EditorColorPairIndex.whitespace)
 
 proc update*[T](
   view: var EditorView,

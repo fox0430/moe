@@ -472,6 +472,16 @@ type
     reservedWord
     reservedWordBg
 
+    # Syntax checker
+    syntaxCheckInfo
+    syntaxCheckInfoBg
+    syntaxCheckHint
+    syntaxCheckHintBg
+    syntaxCheckWarn
+    syntaxCheckWarnBg
+    syntaxCheckErr
+    syntaxCheckErrBg
+
     # backup manager
     backupManagerCurrentLine
     backupManagerCurrentLineBg
@@ -570,9 +580,11 @@ type
     file
     dir
     pcLink
+
     # pop up window
     popupWindow
     popupWinCurrentLine
+
     # replace text highlighting
     replaceText
     # pair of paren highlighting
@@ -585,13 +597,22 @@ type
     highlightTrailingSpaces
     # reserved words
     reservedWord
+    # Syntax checker
+    syntaxCheckInfo
+    syntaxCheckHint
+    syntaxCheckWarn
+    syntaxCheckErr
+
     # Backup manager
     backupManagerCurrentLine
+
     # diff viewer
     diffViewerAddedLine
     diffViewerDeletedLine
+
     # configuration mode
     configModeCurrentLine
+
     # highlight curent line background
     currentLineBg
 
@@ -1088,6 +1109,38 @@ const
       background: Color(
         index: EditorColorIndex.reservedWordBg,
         rgb: "#808080".hexToRgb.get)),
+
+    EditorColorPairIndex.syntaxCheckInfo: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.syntaxCheckInfo,
+        rgb: "#ffff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.syntaxCheckInfoBg,
+        rgb: "#000000".hexToRgb.get)),
+
+    EditorColorPairIndex.syntaxCheckHint: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.syntaxCheckHint,
+        rgb: "#ffff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.syntaxCheckHintBg,
+        rgb: "#000000".hexToRgb.get)),
+
+    EditorColorPairIndex.syntaxCheckWarn: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.syntaxCheckWarn,
+        rgb: "#ffff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.syntaxCheckWarnBg,
+        rgb: "#000000".hexToRgb.get)),
+
+    EditorColorPairIndex.syntaxCheckErr: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.syntaxCheckErr,
+        rgb: "#ff0000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.syntaxCheckErrBg,
+        rgb: "#000000".hexToRgb.get)),
 
     # Backup manager
     EditorColorPairIndex.backupManagerCurrentLine: ColorPair(
@@ -1654,6 +1707,38 @@ const
         index: EditorColorIndex.reservedWordBg,
         rgb: "#808080".hexToRgb.get)),
 
+    EditorColorPairIndex.syntaxCheckInfo: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.syntaxCheckInfo,
+        rgb: "#ffff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.syntaxCheckInfoBg,
+        rgb: "#000000".hexToRgb.get)),
+
+    EditorColorPairIndex.syntaxCheckHint: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.syntaxCheckHint,
+        rgb: "#ffff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.syntaxCheckHintBg,
+        rgb: "#000000".hexToRgb.get)),
+
+    EditorColorPairIndex.syntaxCheckWarn: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.syntaxCheckWarn,
+        rgb: "#ffff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.syntaxCheckWarnBg,
+        rgb: "#000000".hexToRgb.get)),
+
+    EditorColorPairIndex.syntaxCheckErr: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.syntaxCheckErr,
+        rgb: "#ff0000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.syntaxCheckErrBg,
+        rgb: "#000000".hexToRgb.get)),
+
     # Backup manager
     EditorColorPairIndex.backupManagerCurrentLine: ColorPair(
       foreground: Color(
@@ -2217,6 +2302,38 @@ const
         rgb: "#ff0087".hexToRgb.get),
       background: Color(
         index: EditorColorIndex.reservedWordBg,
+        rgb: "#000000".hexToRgb.get)),
+
+    EditorColorPairIndex.syntaxCheckInfo: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.syntaxCheckInfo,
+        rgb: "#ffff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.syntaxCheckInfoBg,
+        rgb: "#000000".hexToRgb.get)),
+
+    EditorColorPairIndex.syntaxCheckHint: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.syntaxCheckHint,
+        rgb: "#ffff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.syntaxCheckHintBg,
+        rgb: "#000000".hexToRgb.get)),
+
+    EditorColorPairIndex.syntaxCheckWarn: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.syntaxCheckWarn,
+        rgb: "#ffff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.syntaxCheckWarnBg,
+        rgb: "#000000".hexToRgb.get)),
+
+    EditorColorPairIndex.syntaxCheckErr: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.syntaxCheckErr,
+        rgb: "#ff0000".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.syntaxCheckErrBg,
         rgb: "#000000".hexToRgb.get)),
 
     # Backup manager

@@ -394,6 +394,15 @@ highlightTrailingSpacesBg = "#ff0000"
 reservedWord = "#ffffff"
 reservedWordBg = "#808080"
 
+syntaxCheckInfo = "#ffff00"
+syntaxCheckInfoBg = "#000000"
+syntaxCheckHint = "#ffff00"
+syntaxCheckHintBg = "#000000"
+syntaxCheckWarn = "#ffff00"
+syntaxCheckWarnBg = "#000000"
+syntaxCheckErr = "#ff0000"
+syntaxCheckErrBg = "#000000"
+
 configModeCurrentLine = "#ffffff"
 configModeCurrentLineBg = "#008080"
 

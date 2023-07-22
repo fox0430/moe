@@ -81,7 +81,7 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
       lastRow: s.lastRow,
       lastColumn: s.lastColumn,
       color: t.color,
-      attribute: Attribute.normal)]
+      attribute: t.attribute)]
 
   if s.contains(t):
     if (s.firstRow, s.firstColumn) < (t.firstRow, t.firstColumn):
@@ -92,7 +92,7 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
         lastRow: last.row,
         lastColumn: last.column,
         color: s.color,
-        attribute: Attribute.normal))
+        attribute: t.attribute))
 
     result.add(t)
 
@@ -104,7 +104,7 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
         lastRow: s.lastRow,
         lastColumn: s.lastColumn,
         color: s.color,
-        attribute: Attribute.normal))
+        attribute: t.attribute))
 
     return result
 
@@ -116,7 +116,7 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
       lastRow: t.lastRow,
       lastColumn: t.lastColumn,
       color: t.color,
-      attribute: Attribute.normal))
+      attribute: t.attribute))
 
     result.add(ColorSegment(
       firstRow: first.row,
@@ -124,7 +124,7 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
       lastRow: s.lastRow,
       lastColumn: s.lastColumn,
       color: s.color,
-      attribute: Attribute.normal))
+      attribute: t.attribute))
   else:
     let last = prev((t.firstRow, t.firstColumn))
     result.add(ColorSegment(
@@ -133,7 +133,7 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
       lastRow: last.row,
       lastColumn: last.column,
       color: s.color,
-      attribute: Attribute.normal))
+      attribute: t.attribute))
 
     result.add(ColorSegment(
       firstRow: t.firstRow,
@@ -141,7 +141,7 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
       lastRow: s.lastRow,
       lastColumn: s.lastColumn,
       color: t.color,
-      attribute: Attribute.normal))
+      attribute: t.attribute))
 
 proc overwrite*(highlight: var Highlight, colorSegment: ColorSegment) =
   ## Overwrite `highlight` with colorSegment
