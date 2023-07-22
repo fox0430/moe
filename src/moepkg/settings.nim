@@ -434,7 +434,7 @@ proc initEditorSettings*(): EditorSettings =
   result.git = initGitSettings()
   result.syntaxChecker = initSyntaxCheckerSettings()
 
-proc toColorTheme(theme: string): Result[ColorTheme, string] =
+proc parseColorTheme(theme: string): Result[ColorTheme, string] =
   case theme:
     of "dark": Result[ColorTheme, string].ok ColorTheme.dark
     of "light": Result[ColorTheme, string].ok ColorTheme.light
@@ -1020,1060 +1020,678 @@ proc loadVSCodeTheme*(): Result[ColorTheme, string] =
 
   return Result[ColorTheme, string].err fmt"Failed to load VSCode theme: Could not find files for the current theme"
 
-proc parseColorMode*(str: string): Result[ColorMode, string] =
-  case str:
-    of "none":
-      return Result[ColorMode, string].ok ColorMode.none
-    of "8":
-      return Result[ColorMode, string].ok ColorMode.c8
-    of "16":
-      return Result[ColorMode, string].ok ColorMode.c16
-    of "256":
-      return Result[ColorMode, string].ok ColorMode.c256
-    of "24bit":
-      return Result[ColorMode, string].ok ColorMode.c24bit
-    else:
-      return Result[ColorMode, string].err "Invalid value"
+proc parseStandardTable(s: var EditorSettings, standardConfigs: TomlValueRef) =
+  template cursorType(str: string): untyped =
+    parseEnum[CursorType](str)
 
-proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
-  result = initEditorSettings()
+  if standardConfigs.contains("theme"):
+    let themeString = standardConfigs["theme"].getStr
+    s.editorColorTheme = themeString.parseColorTheme.get
 
-  if settings.contains("Standard"):
-    template cursorType(str: string): untyped =
-      parseEnum[CursorType](str)
+  if standardConfigs.contains("number"):
+    s.view.lineNumber = standardConfigs["number"].getBool
 
-    if settings["Standard"].contains("theme"):
-      let themeString = settings["Standard"]["theme"].getStr()
-      result.editorColorTheme = themeString.toColorTheme.get
+  if standardConfigs.contains("currentNumber"):
+    s.view.currentLineNumber = standardConfigs["currentNumber"].getBool
 
-    if settings["Standard"].contains("number"):
-      result.view.lineNumber = settings["Standard"]["number"].getBool()
+  if standardConfigs.contains("cursorLine"):
+    s.view.cursorLine = standardConfigs["cursorLine"].getBool
 
-    if settings["Standard"].contains("currentNumber"):
-      result.view.currentLineNumber = settings["Standard"]["currentNumber"].getBool()
+  if standardConfigs.contains("statusLine"):
+    s.statusLine.enable = standardConfigs["statusLine"].getBool
 
-    if settings["Standard"].contains("cursorLine"):
-      result.view.cursorLine = settings["Standard"]["cursorLine"].getBool()
+  if standardConfigs.contains("tabLine"):
+    s.tabLine.enable = standardConfigs["tabLine"].getBool
 
-    if settings["Standard"].contains("statusLine"):
-      result.statusLine.enable = settings["Standard"]["statusLine"].getBool()
+  if standardConfigs.contains("syntax"):
+    s.syntax = standardConfigs["syntax"].getBool
 
-    if settings["Standard"].contains("tabLine"):
-      result.tabLine.enable = settings["Standard"]["tabLine"].getBool()
+  if standardConfigs.contains("tabStop"):
+    s.tabStop      = standardConfigs["tabStop"].getInt
+    s.view.tabStop = standardConfigs["tabStop"].getInt
 
-    if settings["Standard"].contains("syntax"):
-      result.syntax = settings["Standard"]["syntax"].getBool()
+  if standardConfigs.contains("sidebar"):
+    s.view.sidebar = standardConfigs["sidebar"].getBool
 
-    if settings["Standard"].contains("tabStop"):
-      result.tabStop      = settings["Standard"]["tabStop"].getInt()
-      result.view.tabStop = settings["Standard"]["tabStop"].getInt()
+  if standardConfigs.contains("autoCloseParen"):
+    s.autoCloseParen = standardConfigs["autoCloseParen"].getBool
 
-    if settings["Standard"].contains("sidebar"):
-      result.view.sidebar = settings["Standard"]["sidebar"].getBool
+  if standardConfigs.contains("autoIndent"):
+    s.autoIndent = standardConfigs["autoIndent"].getBool
 
-    if settings["Standard"].contains("autoCloseParen"):
-      result.autoCloseParen = settings["Standard"]["autoCloseParen"].getBool()
+  if standardConfigs.contains("ignorecase"):
+    s.ignorecase = standardConfigs["ignorecase"].getBool
 
-    if settings["Standard"].contains("autoIndent"):
-      result.autoIndent = settings["Standard"]["autoIndent"].getBool()
+  if standardConfigs.contains("smartcase"):
+    s.smartcase = standardConfigs["smartcase"].getBool
 
-    if settings["Standard"].contains("ignorecase"):
-      result.ignorecase = settings["Standard"]["ignorecase"].getBool()
+  if standardConfigs.contains("disableChangeCursor"):
+    s.disableChangeCursor = standardConfigs["disableChangeCursor"].getBool
 
-    if settings["Standard"].contains("smartcase"):
-      result.smartcase = settings["Standard"]["smartcase"].getBool()
+  if standardConfigs.contains("defaultCursor"):
+    let str = standardConfigs["defaultCursor"].getStr
+    s.defaultCursor = cursorType(str)
 
-    if settings["Standard"].contains("disableChangeCursor"):
-      result.disableChangeCursor = settings["Standard"]["disableChangeCursor"].getBool()
+  if standardConfigs.contains("normalModeCursor"):
+    let str = standardConfigs["normalModeCursor"].getStr
+    s.normalModeCursor = cursorType(str)
 
-    if settings["Standard"].contains("defaultCursor"):
-      let str = settings["Standard"]["defaultCursor"].getStr()
-      result.defaultCursor = cursorType(str)
+  if standardConfigs.contains("insertModeCursor"):
+    let str = standardConfigs["insertModeCursor"].getStr
+    s.insertModeCursor = cursorType(str)
 
-    if settings["Standard"].contains("normalModeCursor"):
-      let str = settings["Standard"]["normalModeCursor"].getStr()
-      result.normalModeCursor = cursorType(str)
+  if standardConfigs.contains("autoSave"):
+    s.autoSave = standardConfigs["autoSave"].getBool
 
-    if settings["Standard"].contains("insertModeCursor"):
-      let str = settings["Standard"]["insertModeCursor"].getStr()
-      result.insertModeCursor = cursorType(str)
+  if standardConfigs.contains("autoSaveInterval"):
+    s.autoSaveInterval = standardConfigs["autoSaveInterval"].getInt
 
-    if settings["Standard"].contains("autoSave"):
-      result.autoSave = settings["Standard"]["autoSave"].getBool()
+  if standardConfigs.contains("liveReloadOfConf"):
+    s.liveReloadOfConf = standardConfigs["liveReloadOfConf"].getBool
 
-    if settings["Standard"].contains("autoSaveInterval"):
-      result.autoSaveInterval = settings["Standard"]["autoSaveInterval"].getInt()
+  if standardConfigs.contains("incrementalSearch"):
+    s.incrementalSearch = standardConfigs["incrementalSearch"].getBool
 
-    if settings["Standard"].contains("liveReloadOfConf"):
-      result.liveReloadOfConf = settings["Standard"]["liveReloadOfConf"].getBool()
+  if standardConfigs.contains("popupWindowInExmode"):
+    s.popupWindowInExmode = standardConfigs["popupWindowInExmode"].getBool
 
-    if settings["Standard"].contains("incrementalSearch"):
-      result.incrementalSearch = settings["Standard"]["incrementalSearch"].getBool()
+  if standardConfigs.contains("autoDeleteParen"):
+    s.autoDeleteParen =  standardConfigs["autoDeleteParen"].getBool
 
-    if settings["Standard"].contains("popupWindowInExmode"):
-      result.popupWindowInExmode = settings["Standard"]["popupWindowInExmode"].getBool()
+  if standardConfigs.contains("smoothScroll"):
+    s.smoothScroll =  standardConfigs["smoothScroll"].getBool
 
-    if settings["Standard"].contains("autoDeleteParen"):
-      result.autoDeleteParen =  settings["Standard"]["autoDeleteParen"].getBool()
+  if standardConfigs.contains("smoothScrollSpeed"):
+    s.smoothScrollSpeed = standardConfigs["smoothScrollSpeed"].getInt
 
-    if settings["Standard"].contains("smoothScroll"):
-      result.smoothScroll =  settings["Standard"]["smoothScroll"].getBool()
+  if standardConfigs.contains("colorMode"):
+    s.colorMode = standardConfigs["colorMode"].getStr.parseColorMode.get
 
-    if settings["Standard"].contains("smoothScrollSpeed"):
-      result.smoothScrollSpeed = settings["Standard"]["smoothScrollSpeed"].getInt()
+  if standardConfigs.contains("liveReloadOfFile"):
+    s.liveReloadOfFile = standardConfigs["liveReloadOfFile"].getBool
 
-    if settings["Standard"].contains("colorMode"):
-      result.colorMode = settings["Standard"]["colorMode"].getStr.parseColorMode.get
+  if standardConfigs.contains("indentationLines"):
+    s.view.indentationLines = standardConfigs["indentationLines"].getBool
 
-    if settings["Standard"].contains("liveReloadOfFile"):
-      result.liveReloadOfFile = settings["Standard"]["liveReloadOfFile"].getBool()
+proc parseClipboardTable(
+  s: var EditorSettings,
+  clipboardConfigs: TomlValueRef) =
 
-    if settings["Standard"].contains("indentationLines"):
-      result.view.indentationLines = settings["Standard"]["indentationLines"].getBool()
+    if clipboardConfigs.contains("enable"):
+      s.clipboard.enable = clipboardConfigs["enable"].getBool
 
-  if settings.contains("Clipboard"):
-    if settings["Clipboard"].contains("enable"):
-      result.clipboard.enable = settings["Clipboard"]["enable"].getBool()
-
-    if settings["Clipboard"].contains("toolOnLinux"):
-      let str = settings["Clipboard"]["toolOnLinux"].getStr
+    if clipboardConfigs.contains("toolOnLinux"):
+      let str = clipboardConfigs["toolOnLinux"].getStr
       case str:
         of "xsel":
-          result.clipboard.toolOnLinux = ClipboardToolOnLinux.xsel
+          s.clipboard.toolOnLinux = ClipboardToolOnLinux.xsel
         of "xclip":
-          result.clipboard.toolOnLinux = ClipboardToolOnLinux.xclip
+          s.clipboard.toolOnLinux = ClipboardToolOnLinux.xclip
         of "wl-clipboard":
-          result.clipboard.toolOnLinux = ClipboardToolOnLinux.wlClipboard
+          s.clipboard.toolOnLinux = ClipboardToolOnLinux.wlClipboard
         else:
-          result.clipboard.toolOnLinux = ClipboardToolOnLinux.xsel
+          s.clipboard.toolOnLinux = ClipboardToolOnLinux.xsel
 
-  if settings.contains("TabLine"):
-    if settings["TabLine"].contains("allBuffer"):
-        result.tabLine.allBuffer = settings["TabLine"]["allBuffer"].getBool()
+proc parseTabLineTable(s: var EditorSettings, tablineConfigs: TomlValueRef) =
+  if tablineConfigs.contains("allBuffer"):
+    s.tabLine.allBuffer = tablineConfigs["allBuffer"].getBool
 
-  if settings.contains("StatusLine"):
-    if settings["StatusLine"].contains("multipleStatusLine"):
-        result.statusLine.multipleStatusLine = settings["StatusLine"]["multipleStatusLine"].getBool()
+proc parseStatusLineTable(
+  s: var EditorSettings,
+  statusLineConfigs: TomlValueRef) =
 
-    if settings["StatusLine"].contains("merge"):
-        result.statusLine.merge = settings["StatusLine"]["merge"].getBool()
+    if statusLineConfigs.contains("multipleStatusLine"):
+      s.statusLine.multipleStatusLine = statusLineConfigs["multipleStatusLine"].getBool
 
-    if settings["StatusLine"].contains("mode"):
-        result.statusLine.mode= settings["StatusLine"]["mode"].getBool()
+    if statusLineConfigs.contains("merge"):
+      s.statusLine.merge = statusLineConfigs["merge"].getBool
 
-    if settings["StatusLine"].contains("filename"):
-        result.statusLine.filename = settings["StatusLine"]["filename"].getBool()
+    if statusLineConfigs.contains("mode"):
+      s.statusLine.mode= statusLineConfigs["mode"].getBool
 
-    if settings["StatusLine"].contains("chanedMark"):
-        result.statusLine.chanedMark = settings["StatusLine"]["chanedMark"].getBool()
+    if statusLineConfigs.contains("filename"):
+      s.statusLine.filename = statusLineConfigs["filename"].getBool
 
-    if settings["StatusLine"].contains("line"):
-        result.statusLine.line = settings["StatusLine"]["line"].getBool()
+    if statusLineConfigs.contains("chanedMark"):
+      s.statusLine.chanedMark = statusLineConfigs["chanedMark"].getBool
 
-    if settings["StatusLine"].contains("column"):
-        result.statusLine.column = settings["StatusLine"]["column"].getBool()
+    if statusLineConfigs.contains("line"):
+      s.statusLine.line = statusLineConfigs["line"].getBool
 
-    if settings["StatusLine"].contains("encoding"):
-        result.statusLine.characterEncoding = settings["StatusLine"]["encoding"].getBool()
+    if statusLineConfigs.contains("column"):
+      s.statusLine.column = statusLineConfigs["column"].getBool
 
-    if settings["StatusLine"].contains("language"):
-        result.statusLine.language = settings["StatusLine"]["language"].getBool()
+    if statusLineConfigs.contains("encoding"):
+      s.statusLine.characterEncoding = statusLineConfigs["encoding"].getBool
 
-    if settings["StatusLine"].contains("directory"):
-        result.statusLine.directory = settings["StatusLine"]["directory"].getBool()
+    if statusLineConfigs.contains("language"):
+      s.statusLine.language = statusLineConfigs["language"].getBool
 
-    if settings["StatusLine"].contains("gitChangedLines"):
-        result.statusLine.gitChangedLines = settings["StatusLine"]["gitChangedLines"].getBool()
+    if statusLineConfigs.contains("directory"):
+      s.statusLine.directory = statusLineConfigs["directory"].getBool
 
-    if settings["StatusLine"].contains("gitBranchName"):
-        result.statusLine.gitBranchName = settings["StatusLine"]["gitBranchName"].getBool()
+    if statusLineConfigs.contains("gitChangedLines"):
+      s.statusLine.gitChangedLines = statusLineConfigs["gitChangedLines"].getBool
 
-    if settings["StatusLine"].contains("showGitInactive"):
-        result.statusLine.showGitInactive = settings["StatusLine"]["showGitInactive"].getBool()
+    if statusLineConfigs.contains("gitBranchName"):
+      s.statusLine.gitBranchName = statusLineConfigs["gitBranchName"].getBool
 
-    if settings["StatusLine"].contains("showModeInactive"):
-        result.statusLine.showModeInactive = settings["StatusLine"]["showModeInactive"].getBool()
+    if statusLineConfigs.contains("showGitInactive"):
+      s.statusLine.showGitInactive = statusLineConfigs["showGitInactive"].getBool
 
-  if settings.contains("BuildOnSave"):
-    if settings["BuildOnSave"].contains("enable"):
-      result.buildOnSave.enable = settings["BuildOnSave"]["enable"].getBool()
+    if statusLineConfigs.contains("showModeInactive"):
+      s.statusLine.showModeInactive = statusLineConfigs["showModeInactive"].getBool
 
-    if settings["BuildOnSave"].contains("workspaceRoot"):
-      result.buildOnSave.workspaceRoot = settings["BuildOnSave"]["workspaceRoot"].getStr().toRunes
+proc parseBuildOnSaveTable(
+  s: var EditorSettings,
+  buildOnSaveConfigs: TomlValueRef) =
 
-    if settings["BuildOnSave"].contains("command"):
-      result.buildOnSave.command = settings["BuildOnSave"]["command"].getStr().toRunes
+    if buildOnSaveConfigs.contains("enable"):
+      s.buildOnSave.enable = buildOnSaveConfigs["enable"].getBool
 
-  if settings.contains("Highlight"):
-    if settings["Highlight"].contains("reservedWord"):
-      let reservedWords = settings["Highlight"]["reservedWord"]
+    if buildOnSaveConfigs.contains("workspaceRoot"):
+      s.buildOnSave.workspaceRoot = buildOnSaveConfigs["workspaceRoot"]
+        .getStr
+        .toRunes
+
+    if buildOnSaveConfigs.contains("command"):
+      s.buildOnSave.command = buildOnSaveConfigs["command"].getStr.toRunes
+
+proc parseHighlightTable(
+  s: var EditorSettings,
+  highlightConfigs: TomlValueRef) =
+
+    if highlightConfigs.contains("reservedWord"):
+      let reservedWords = highlightConfigs["reservedWord"]
       for i in 0 ..< reservedWords.len:
-        let
-          word = reservedWords[i].getStr
-          reservedWord = ReservedWord(word: word, color: EditorColorPairIndex.reservedWord)
-        result.highlight.reservedWords.add(reservedWord)
+        s.highlight.reservedWords.add(ReservedWord(
+          word: reservedWords[i].getStr,
+          color: EditorColorPairIndex.reservedWord))
 
-    if settings["Highlight"].contains("currentLine"):
-      result.view.highlightCurrentLine = settings["Highlight"]["currentLine"].getBool()
+    if highlightConfigs.contains("currentLine"):
+      s.view.highlightCurrentLine = highlightConfigs["currentLine"].getBool
 
-    if settings["Highlight"].contains("currentWord"):
-      result.highlight.currentWord = settings["Highlight"]["currentWord"].getBool()
+    if highlightConfigs.contains("currentWord"):
+      s.highlight.currentWord = highlightConfigs["currentWord"].getBool
 
-    if settings["Highlight"].contains("replaceText"):
-      result.highlight.replaceText = settings["Highlight"]["replaceText"].getBool()
+    if highlightConfigs.contains("replaceText"):
+      s.highlight.replaceText = highlightConfigs["replaceText"].getBool
 
-    if settings["Highlight"].contains("pairOfParen"):
-      result.highlight.pairOfParen =  settings["Highlight"]["pairOfParen"].getBool()
+    if highlightConfigs.contains("pairOfParen"):
+      s.highlight.pairOfParen =  highlightConfigs["pairOfParen"].getBool
 
-    if settings["Highlight"].contains("fullWidthSpace"):
-      result.highlight.fullWidthSpace = settings["Highlight"]["fullWidthSpace"].getBool()
+    if highlightConfigs.contains("fullWidthSpace"):
+      s.highlight.fullWidthSpace = highlightConfigs["fullWidthSpace"].getBool
 
-    if settings["Highlight"].contains("trailingSpaces"):
-      result.highlight.trailingSpaces = settings["Highlight"]["trailingSpaces"].getBool()
+    if highlightConfigs.contains("trailingSpaces"):
+      s.highlight.trailingSpaces = highlightConfigs["trailingSpaces"].getBool
 
-  if settings.contains("AutoBackup"):
-    if settings["AutoBackup"].contains("enable"):
-      result.autoBackup.enable = settings["AutoBackup"]["enable"].getBool()
+proc parseAutoBackupTable(
+  s: var EditorSettings,
+  autoBackupConfigs: TomlValueRef) =
 
-    if settings["AutoBackup"].contains("idleTime"):
-      result.autoBackup.idleTime = settings["AutoBackup"]["idleTime"].getInt()
+    if autoBackupConfigs.contains("enable"):
+      s.autoBackup.enable = autoBackupConfigs["enable"].getBool
 
-    if settings["AutoBackup"].contains("interval"):
-      result.autoBackup.interval = settings["AutoBackup"]["interval"].getInt()
+    if autoBackupConfigs.contains("idleTime"):
+      s.autoBackup.idleTime = autoBackupConfigs["idleTime"].getInt
 
-    if settings["AutoBackup"].contains("backupDir"):
-      let dir = settings["AutoBackup"]["backupDir"].getStr()
-      result.autoBackup.backupDir = dir.toRunes
+    if autoBackupConfigs.contains("interval"):
+      s.autoBackup.interval = autoBackupConfigs["interval"].getInt
 
-    if settings["AutoBackup"].contains("dirToExclude"):
-      result.autoBackup.dirToExclude = @[]
-      let dirs = settings["AutoBackup"]["dirToExclude"]
+    if autoBackupConfigs.contains("backupDir"):
+      s.autoBackup.backupDir = autoBackupConfigs["backupDir"].getStr.toRunes
+
+    if autoBackupConfigs.contains("dirToExclude"):
+      s.autoBackup.dirToExclude = @[]
+      let dirs = autoBackupConfigs["dirToExclude"]
       for i in 0 ..< dirs.len:
-        result.autoBackup.dirToExclude.add(ru dirs[i].getStr)
+        s.autoBackup.dirToExclude.add dirs[i].getStr.toRunes
 
-  if settings.contains("QuickRun"):
-    if settings["QuickRun"].contains("saveBufferWhenQuickRun"):
-      let saveBufferWhenQuickRun = settings["QuickRun"]["saveBufferWhenQuickRun"].getBool()
-      result.quickRun.saveBufferWhenQuickRun = saveBufferWhenQuickRun
+proc parseQuickRunTable(s: var EditorSettings, quickRunConfigs: TomlValueRef) =
+  if quickRunConfigs.contains("saveBufferWhenQuickRun"):
+    s.quickRun.saveBufferWhenQuickRun =
+      quickRunConfigs["saveBufferWhenQuickRun"].getBool
 
-    if settings["QuickRun"].contains("command"):
-      result.quickRun.command = settings["QuickRun"]["command"].getStr()
+  if quickRunConfigs.contains("command"):
+    s.quickRun.command = quickRunConfigs["command"].getStr
 
-    if settings["QuickRun"].contains("timeout"):
-      result.quickRun.timeout = settings["QuickRun"]["timeout"].getInt()
+  if quickRunConfigs.contains("timeout"):
+    s.quickRun.timeout = quickRunConfigs["timeout"].getInt
 
-    if settings["QuickRun"].contains("nimAdvancedCommand"):
-      result.quickRun.nimAdvancedCommand = settings["QuickRun"]["nimAdvancedCommand"].getStr()
+  if quickRunConfigs.contains("nimAdvancedCommand"):
+    s.quickRun.nimAdvancedCommand = quickRunConfigs["nimAdvancedCommand"].getStr
 
-    if settings["QuickRun"].contains("clangOptions"):
-      result.quickRun.clangOptions = settings["QuickRun"]["clangOptions"].getStr()
+  if quickRunConfigs.contains("clangOptions"):
+    s.quickRun.clangOptions = quickRunConfigs["clangOptions"].getStr
 
-    if settings["QuickRun"].contains("cppOptions"):
-      result.quickRun.cppOptions = settings["QuickRun"]["cppOptions"].getStr()
+  if quickRunConfigs.contains("cppOptions"):
+    s.quickRun.cppOptions = quickRunConfigs["cppOptions"].getStr
 
-    if settings["QuickRun"].contains("nimOptions"):
-      result.quickRun.nimOptions = settings["QuickRun"]["nimOptions"].getStr()
+  if quickRunConfigs.contains("nimOptions"):
+    s.quickRun.nimOptions = quickRunConfigs["nimOptions"].getStr
 
-    if settings["QuickRun"].contains("shOptions"):
-      result.quickRun.shOptions = settings["QuickRun"]["shOptions"].getStr()
+  if quickRunConfigs.contains("shOptions"):
+    s.quickRun.shOptions = quickRunConfigs["shOptions"].getStr
 
-    if settings["QuickRun"].contains("bashOptions"):
-      result.quickRun.bashOptions = settings["QuickRun"]["bashOptions"].getStr()
+  if quickRunConfigs.contains("bashOptions"):
+    s.quickRun.bashOptions = quickRunConfigs["bashOptions"].getStr
 
-  if settings.contains("Notification"):
-    if settings["Notification"].contains("screenNotifications"):
-      result.notification.screenNotifications = settings["Notification"]["screenNotifications"].getBool
+proc parseNotificationTable(
+  s: var EditorSettings,
+  notificationConfigs: TomlValueRef) =
+    if notificationConfigs.contains("screenNotifications"):
+      s.notification.screenNotifications =
+        notificationConfigs["screenNotifications"].getBool
 
-    if settings["Notification"].contains("logNotifications"):
-      result.notification.logNotifications = settings["Notification"]["logNotifications"].getBool
+    if notificationConfigs.contains("logNotifications"):
+      s.notification.logNotifications =
+        notificationConfigs["logNotifications"].getBool
 
-    if settings["Notification"].contains("autoBackupScreenNotify"):
-      result.notification.autoBackupScreenNotify = settings["Notification"]["autoBackupScreenNotify"].getBool
+    if notificationConfigs.contains("autoBackupScreenNotify"):
+      s.notification.autoBackupScreenNotify =
+        notificationConfigs["autoBackupScreenNotify"].getBool
 
-    if settings["Notification"].contains("autoBackupLogNotify"):
-      result.notification.autoBackupLogNotify = settings["Notification"]["autoBackupLogNotify"].getBool
+    if notificationConfigs.contains("autoBackupLogNotify"):
+      s.notification.autoBackupLogNotify =
+        notificationConfigs["autoBackupLogNotify"].getBool
 
-    if settings["Notification"].contains("autoSaveScreenNotify"):
-      result.notification.autoSaveScreenNotify = settings["Notification"]["autoSaveScreenNotify"].getBool
+    if notificationConfigs.contains("autoSaveScreenNotify"):
+      s.notification.autoSaveScreenNotify =
+        notificationConfigs["autoSaveScreenNotify"].getBool
 
-    if settings["Notification"].contains("autoSaveLogNotify"):
-      result.notification.autoSaveLogNotify = settings["Notification"]["autoSaveLogNotify"].getBool
+    if notificationConfigs.contains("autoSaveLogNotify"):
+      s.notification.autoSaveLogNotify =
+        notificationConfigs["autoSaveLogNotify"].getBool
 
-    if settings["Notification"].contains("yankScreenNotify"):
-      result.notification.yankScreenNotify = settings["Notification"]["yankScreenNotify"].getBool
+    if notificationConfigs.contains("yankScreenNotify"):
+      s.notification.yankScreenNotify =
+        notificationConfigs["yankScreenNotify"].getBool
 
-    if settings["Notification"].contains("yankLogNotify"):
-      result.notification.yankLogNotify = settings["Notification"]["yankLogNotify"].getBool
+    if notificationConfigs.contains("yankLogNotify"):
+      s.notification.yankLogNotify =
+        notificationConfigs["yankLogNotify"].getBool
 
-    if settings["Notification"].contains("deleteScreenNotify"):
-      result.notification.deleteScreenNotify = settings["Notification"]["deleteScreenNotify"].getBool
+    if notificationConfigs.contains("deleteScreenNotify"):
+      s.notification.deleteScreenNotify =
+        notificationConfigs["deleteScreenNotify"].getBool
 
-    if settings["Notification"].contains("deleteLogNotify"):
-      result.notification.deleteLogNotify = settings["Notification"]["deleteLogNotify"].getBool
+    if notificationConfigs.contains("deleteLogNotify"):
+      s.notification.deleteLogNotify =
+        notificationConfigs["deleteLogNotify"].getBool
 
-    if settings["Notification"].contains("saveScreenNotify"):
-      result.notification.saveScreenNotify = settings["Notification"]["saveScreenNotify"].getBool
+    if notificationConfigs.contains("saveScreenNotify"):
+      s.notification.saveScreenNotify =
+        notificationConfigs["saveScreenNotify"].getBool
 
-    if settings["Notification"].contains("saveLogNotify"):
-      result.notification.saveLogNotify = settings["Notification"]["saveLogNotify"].getBool
+    if notificationConfigs.contains("saveLogNotify"):
+      s.notification.saveLogNotify =
+        notificationConfigs["saveLogNotify"].getBool
 
-    if settings["Notification"].contains("quickRunScreenNotify"):
-      result.notification.quickRunScreenNotify = settings["Notification"]["quickRunScreenNotify"].getBool
+    if notificationConfigs.contains("quickRunScreenNotify"):
+      s.notification.quickRunScreenNotify =
+        notificationConfigs["quickRunScreenNotify"].getBool
 
-    if settings["Notification"].contains("quickRunLogNotify"):
-      result.notification.quickRunLogNotify = settings["Notification"]["quickRunLogNotify"].getBool
+    if notificationConfigs.contains("quickRunLogNotify"):
+      s.notification.quickRunLogNotify =
+        notificationConfigs["quickRunLogNotify"].getBool
 
-    if settings["Notification"].contains("buildOnSaveScreenNotify"):
-      result.notification.buildOnSaveScreenNotify = settings["Notification"]["buildOnSaveScreenNotify"].getBool
+    if notificationConfigs.contains("buildOnSaveScreenNotify"):
+      s.notification.buildOnSaveScreenNotify =
+        notificationConfigs["buildOnSaveScreenNotify"].getBool
 
-    if settings["Notification"].contains("buildOnSaveLogNotify"):
-      result.notification.buildOnSaveLogNotify = settings["Notification"]["buildOnSaveLogNotify"].getBool
+    if notificationConfigs.contains("buildOnSaveLogNotify"):
+      s.notification.buildOnSaveLogNotify =
+        notificationConfigs["buildOnSaveLogNotify"].getBool
 
-    if settings["Notification"].contains("filerScreenNotify"):
-      result.notification.filerScreenNotify = settings["Notification"]["filerScreenNotify"].getBool
+    if notificationConfigs.contains("filerScreenNotify"):
+      s.notification.filerScreenNotify =
+        notificationConfigs["filerScreenNotify"].getBool
 
-    if settings["Notification"].contains("filerLogNotify"):
-      result.notification.filerLogNotify = settings["Notification"]["filerLogNotify"].getBool
+    if notificationConfigs.contains("filerLogNotify"):
+      s.notification.filerLogNotify =
+        notificationConfigs["filerLogNotify"].getBool
 
-    if settings["Notification"].contains("restoreScreenNotify"):
-      result.notification.restoreScreenNotify = settings["Notification"]["restoreScreenNotify"].getBool
+    if notificationConfigs.contains("restoreScreenNotify"):
+      s.notification.restoreScreenNotify =
+        notificationConfigs["restoreScreenNotify"].getBool
 
-    if settings["Notification"].contains("restoreLogNotify"):
-      result.notification.restoreLogNotify = settings["Notification"]["restoreLogNotify"].getBool
+    if notificationConfigs.contains("restoreLogNotify"):
+      s.notification.restoreLogNotify =
+        notificationConfigs["restoreLogNotify"].getBool
 
-  if settings.contains("Filer"):
-    if settings["Filer"].contains("showIcons"):
-      result.filer.showIcons = settings["Filer"]["showIcons"].getBool()
+proc parseFilerTable(s: var EditorSettings, filerConfigs: TomlValueRef) =
+  if filerConfigs.contains("showIcons"):
+    s.filer.showIcons = filerConfigs["showIcons"].getBool
 
-  if (const table = "Autocomplete"; settings.contains(table)):
-    if (const key = "enable"; settings[table].contains(key)):
-      result.autocomplete.enable = settings[table][key].getBool
+proc parseAutocompleteTable(
+  s: var EditorSettings,
+  autocompleteConfigs: TomlValueRef) =
 
-  if settings.contains("Persist"):
-    if settings["Persist"].contains("exCommand"):
-      result.persist.exCommand = settings["Persist"]["exCommand"].getBool
+    if autocompleteConfigs.contains("enable"):
+      s.autocomplete.enable = autocompleteConfigs["enable"].getBool
 
-    if settings["Persist"].contains("exCommandHistoryLimit"):
-      result.persist.exCommandHistoryLimit = settings["Persist"]["exCommandHistoryLimit"].getInt
+proc parsePersistTable(s: var EditorSettings, persistConfigs: TomlValueRef) =
+  if persistConfigs.contains("exCommand"):
+    s.persist.exCommand = persistConfigs["exCommand"].getBool
 
-    if settings["Persist"].contains("search"):
-      result.persist.search = settings["Persist"]["search"].getBool
+  if persistConfigs.contains("exCommandHistoryLimit"):
+    s.persist.exCommandHistoryLimit = persistConfigs["exCommandHistoryLimit"]
+      .getInt
 
-    if settings["Persist"].contains("searchHistoryLimit"):
-      result.persist.searchHistoryLimit = settings["Persist"]["searchHistoryLimit"].getInt
+  if persistConfigs.contains("search"):
+    s.persist.search = persistConfigs["search"].getBool
 
-    if settings["Persist"].contains("cursorPosition"):
-      result.persist.cursorPosition = settings["Persist"]["cursorPosition"].getBool
+  if persistConfigs.contains("searchHistoryLimit"):
+    s.persist.searchHistoryLimit = persistConfigs["searchHistoryLimit"].getInt
 
-  if settings.contains("Debug"):
-    if settings["Debug"].contains("WindowNode"):
-      let windowNodeSettings = settings["Debug"]["WindowNode"]
+  if persistConfigs.contains("cursorPosition"):
+    s.persist.cursorPosition = persistConfigs["cursorPosition"].getBool
 
-      if windowNodeSettings.contains("enable"):
-        let setting = windowNodeSettings["enable"].getBool
-        result.debugMode.windowNode.enable = setting
+proc parseDebugTable(s: var EditorSettings, debugConfigs: TomlValueRef) =
+  if debugConfigs.contains("WindowNode"):
+    if debugConfigs["WindowNode"].contains("enable"):
+      let setting = debugConfigs["WindowNode"]["enable"].getBool
+      s.debugMode.windowNode.enable = setting
 
-      if windowNodeSettings.contains("currentWindow"):
-        let setting = windowNodeSettings["currentWindow"].getBool
-        result.debugMode.windowNode.currentWindow = setting
+    if debugConfigs["WindowNode"].contains("currentWindow"):
+      let setting = debugConfigs["WindowNode"]["currentWindow"].getBool
+      s.debugMode.windowNode.currentWindow = setting
 
-      if windowNodeSettings.contains("index"):
-        let setting = windowNodeSettings["index"].getBool
-        result.debugMode.windowNode.index = setting
+    if debugConfigs["WindowNode"].contains("index"):
+      let setting = debugConfigs["WindowNode"]["index"].getBool
+      s.debugMode.windowNode.index = setting
 
-      if windowNodeSettings.contains("windowIndex"):
-        let setting = windowNodeSettings["windowIndex"].getBool
-        result.debugMode.windowNode.windowIndex = setting
+    if debugConfigs["WindowNode"].contains("windowIndex"):
+      let setting = debugConfigs["WindowNode"]["windowIndex"].getBool
+      s.debugMode.windowNode.windowIndex = setting
 
-      if windowNodeSettings.contains("bufferIndex"):
-        let setting = windowNodeSettings["bufferIndex"].getBool
-        result.debugMode.windowNode.bufferIndex = setting
+    if debugConfigs["WindowNode"].contains("bufferIndex"):
+      let setting = debugConfigs["WindowNode"]["bufferIndex"].getBool
+      s.debugMode.windowNode.bufferIndex = setting
 
-      if windowNodeSettings.contains("parentIndex"):
-        let setting = windowNodeSettings["parentIndex"].getBool
-        result.debugMode.windowNode.parentIndex = setting
+    if debugConfigs["WindowNode"].contains("parentIndex"):
+      let setting = debugConfigs["WindowNode"]["parentIndex"].getBool
+      s.debugMode.windowNode.parentIndex = setting
 
-      if windowNodeSettings.contains("childLen"):
-        let setting = windowNodeSettings["childLen"].getBool
-        result.debugMode.windowNode.childLen = setting
+    if debugConfigs["WindowNode"].contains("childLen"):
+      let setting = debugConfigs["WindowNode"]["childLen"].getBool
+      s.debugMode.windowNode.childLen = setting
 
-      if windowNodeSettings.contains("splitType"):
-        let setting = windowNodeSettings["splitType"].getBool
-        result.debugMode.windowNode.splitType = setting
+    if debugConfigs["WindowNode"].contains("splitType"):
+      let setting = debugConfigs["WindowNode"]["splitType"].getBool
+      s.debugMode.windowNode.splitType = setting
 
-      if windowNodeSettings.contains("haveCursesWin"):
-        let setting = windowNodeSettings["haveCursesWin"].getBool
-        result.debugMode.windowNode.haveCursesWin = setting
+    if debugConfigs["WindowNode"].contains("haveCursesWin"):
+      let setting = debugConfigs["WindowNode"]["haveCursesWin"].getBool
+      s.debugMode.windowNode.haveCursesWin = setting
 
-      if windowNodeSettings.contains("haveCursesWin"):
-        let setting = windowNodeSettings["haveCursesWin"].getBool
-        result.debugMode.windowNode.haveCursesWin = setting
+    if debugConfigs["WindowNode"].contains("haveCursesWin"):
+      let setting = debugConfigs["WindowNode"]["haveCursesWin"].getBool
+      s.debugMode.windowNode.haveCursesWin = setting
 
-      if windowNodeSettings.contains("y"):
-        let setting = windowNodeSettings["y"].getBool
-        result.debugMode.windowNode.y = setting
+    if debugConfigs["WindowNode"].contains("y"):
+      let setting = debugConfigs["WindowNode"]["y"].getBool
+      s.debugMode.windowNode.y = setting
 
-      if windowNodeSettings.contains("x"):
-        let setting = windowNodeSettings["x"].getBool
-        result.debugMode.windowNode.x = setting
+    if debugConfigs["WindowNode"].contains("x"):
+      let setting = debugConfigs["WindowNode"]["x"].getBool
+      s.debugMode.windowNode.x = setting
 
-      if windowNodeSettings.contains("h"):
-        let setting = windowNodeSettings["h"].getBool
-        result.debugMode.windowNode.h = setting
+    if debugConfigs["WindowNode"].contains("h"):
+      let setting = debugConfigs["WindowNode"]["h"].getBool
+      s.debugMode.windowNode.h = setting
 
-      if windowNodeSettings.contains("w"):
-        let setting = windowNodeSettings["w"].getBool
-        result.debugMode.windowNode.w = setting
+    if debugConfigs["WindowNode"].contains("w"):
+      let setting = debugConfigs["WindowNode"]["w"].getBool
+      s.debugMode.windowNode.w = setting
 
-      if windowNodeSettings.contains("currentLine"):
-        let setting = windowNodeSettings["currentLine"].getBool
-        result.debugMode.windowNode.currentLine = setting
+    if debugConfigs["WindowNode"].contains("currentLine"):
+      let setting = debugConfigs["WindowNode"]["currentLine"].getBool
+      s.debugMode.windowNode.currentLine = setting
 
-      if windowNodeSettings.contains("currentColumn"):
-        let setting = windowNodeSettings["currentColumn"].getBool
-        result.debugMode.windowNode.currentColumn = setting
-
-      if windowNodeSettings.contains("expandedColumn"):
-        let setting = windowNodeSettings["expandedColumn"].getBool
-        result.debugMode.windowNode.expandedColumn = setting
-
-      if windowNodeSettings.contains("cursor"):
-        let setting = windowNodeSettings["cursor"].getBool
-        result.debugMode.windowNode.cursor = setting
-
-    if settings["Debug"].contains("EditorView"):
-      let editorViewSettings = settings["Debug"]["EditorView"]
-
-      if editorViewSettings.contains("enable"):
-        let setting = editorViewSettings["enable"].getBool
-        result.debugMode.editorview.enable = setting
-
-      if editorViewSettings.contains("widthOfLineNum"):
-        let setting = editorViewSettings["widthOfLineNum"].getBool
-        result.debugMode.editorview.widthOfLineNum = setting
-
-      if editorViewSettings.contains("height"):
-        let setting = editorViewSettings["height"].getBool
-        result.debugMode.editorview.height = setting
-
-      if editorViewSettings.contains("width"):
-        let setting = editorViewSettings["width"].getBool
-        result.debugMode.editorview.width = setting
-
-      if editorViewSettings.contains("originalLine"):
-        let setting = editorViewSettings["originalLine"].getBool
-        result.debugMode.editorview.originalLine = setting
-
-      if editorViewSettings.contains("start"):
-        let setting = editorViewSettings["start"].getBool
-        result.debugMode.editorview.start = setting
-
-      if editorViewSettings.contains("length"):
-        let setting = editorViewSettings["length"].getBool
-        result.debugMode.editorview.length = setting
-
-    if settings["Debug"].contains("BufferStatus"):
-      let bufStatusSettings = settings["Debug"]["BufferStatus"]
-
-      if bufStatusSettings.contains("enable"):
-        let setting = bufStatusSettings["enable"].getBool
-        result.debugMode.bufStatus.enable = setting
-
-      if bufStatusSettings.contains("bufferIndex"):
-        let setting = bufStatusSettings["bufferIndex"].getBool
-        result.debugMode.bufStatus.bufferIndex = setting
-
-      if bufStatusSettings.contains("path"):
-        let setting = bufStatusSettings["path"].getBool
-        result.debugMode.bufStatus.path = setting
-
-      if bufStatusSettings.contains("openDir"):
-        let setting = bufStatusSettings["openDir"].getBool
-        result.debugMode.bufStatus.openDir = setting
-
-      if bufStatusSettings.contains("currentMode"):
-        let setting = bufStatusSettings["currentMode"].getBool
-        result.debugMode.bufStatus.currentMode = setting
-
-      if bufStatusSettings.contains("prevMode"):
-        let setting = bufStatusSettings["prevMode"].getBool
-        result.debugMode.bufStatus.prevMode = setting
-
-      if bufStatusSettings.contains("language"):
-        let setting = bufStatusSettings["language"].getBool
-        result.debugMode.bufStatus.language = setting
-
-      if bufStatusSettings.contains("encoding"):
-        let setting = bufStatusSettings["encoding"].getBool
-        result.debugMode.bufStatus.encoding = setting
-
-      if bufStatusSettings.contains("countChange"):
-        let setting = bufStatusSettings["countChange"].getBool
-        result.debugMode.bufStatus.countChange = setting
-
-      if bufStatusSettings.contains("cmdLoop"):
-        let setting = bufStatusSettings["cmdLoop"].getBool
-        result.debugMode.bufStatus.cmdLoop = setting
-
-      if bufStatusSettings.contains("lastSaveTime"):
-        let setting = bufStatusSettings["lastSaveTime"].getBool
-        result.debugMode.bufStatus.lastSaveTime = setting
-
-      if bufStatusSettings.contains("bufferLen"):
-        let setting = bufStatusSettings["bufferLen"].getBool
-        result.debugMode.bufStatus.bufferLen = setting
-
-  if result.editorColorTheme == ColorTheme.config and
-     settings.contains("Theme"):
-    if settings["Theme"].contains("baseTheme"):
-      let themeString = settings["Theme"]["baseTheme"].getStr()
-      if fileExists(themeString):
-        let jsonNode =
-          try: some(json.parseFile(themeString))
-          except CatchableError: none(JsonNode)
-        if jsonNode.isSome:
-          ColorThemeTable[ColorTheme.config] = makecolorThemeFromVSCodeThemeFile(jsonNode.get)
-        else:
-          let theme = parseEnum[ColorTheme](themeString)
-          ColorThemeTable[ColorTheme.config] = ColorThemeTable[theme]
-      else:
-        let theme = parseEnum[ColorTheme](themeString)
-        ColorThemeTable[ColorTheme.config] = ColorThemeTable[theme]
+    if debugConfigs["WindowNode"].contains("currentColumn"):
+      let setting = debugConfigs["WindowNode"]["currentColumn"].getBool
+      s.debugMode.windowNode.currentColumn = setting
+
+    if debugConfigs["WindowNode"].contains("expandedColumn"):
+      let setting = debugConfigs["WindowNode"]["expandedColumn"].getBool
+      s.debugMode.windowNode.expandedColumn = setting
+
+    if debugConfigs["WindowNode"].contains("cursor"):
+      let setting = debugConfigs["WindowNode"]["cursor"].getBool
+      s.debugMode.windowNode.cursor = setting
+
+  if debugConfigs.contains("EditorView"):
+    if debugConfigs["EditorView"].contains("enable"):
+      let setting = debugConfigs["EditorView"]["enable"].getBool
+      s.debugMode.editorview.enable = setting
+
+    if debugConfigs["EditorView"].contains("widthOfLineNum"):
+      let setting = debugConfigs["EditorView"]["widthOfLineNum"].getBool
+      s.debugMode.editorview.widthOfLineNum = setting
+
+    if debugConfigs["EditorView"].contains("height"):
+      let setting = debugConfigs["EditorView"]["height"].getBool
+      s.debugMode.editorview.height = setting
+
+    if debugConfigs["EditorView"].contains("width"):
+      let setting = debugConfigs["EditorView"]["width"].getBool
+      s.debugMode.editorview.width = setting
+
+    if debugConfigs["EditorView"].contains("originalLine"):
+      let setting = debugConfigs["EditorView"]["originalLine"].getBool
+      s.debugMode.editorview.originalLine = setting
+
+    if debugConfigs["EditorView"].contains("start"):
+      let setting = debugConfigs["EditorView"]["start"].getBool
+      s.debugMode.editorview.start = setting
+
+    if debugConfigs["EditorView"].contains("length"):
+      let setting = debugConfigs["EditorView"]["length"].getBool
+      s.debugMode.editorview.length = setting
+
+  if debugConfigs.contains("BufferStatus"):
+    if debugConfigs["BufferStatus"].contains("enable"):
+      let setting = debugConfigs["BufferStatus"]["enable"].getBool
+      s.debugMode.bufStatus.enable = setting
+
+    if debugConfigs["BufferStatus"].contains("bufferIndex"):
+      let setting = debugConfigs["BufferStatus"]["bufferIndex"].getBool
+      s.debugMode.bufStatus.bufferIndex = setting
+
+    if debugConfigs["BufferStatus"].contains("path"):
+      let setting = debugConfigs["BufferStatus"]["path"].getBool
+      s.debugMode.bufStatus.path = setting
+
+    if debugConfigs["BufferStatus"].contains("openDir"):
+      let setting = debugConfigs["BufferStatus"]["openDir"].getBool
+      s.debugMode.bufStatus.openDir = setting
+
+    if debugConfigs["BufferStatus"].contains("currentMode"):
+      let setting = debugConfigs["BufferStatus"]["currentMode"].getBool
+      s.debugMode.bufStatus.currentMode = setting
+
+    if debugConfigs["BufferStatus"].contains("prevMode"):
+      let setting = debugConfigs["BufferStatus"]["prevMode"].getBool
+      s.debugMode.bufStatus.prevMode = setting
+
+    if debugConfigs["BufferStatus"].contains("language"):
+      let setting = debugConfigs["BufferStatus"]["language"].getBool
+      s.debugMode.bufStatus.language = setting
+
+    if debugConfigs["BufferStatus"].contains("encoding"):
+      let setting = debugConfigs["BufferStatus"]["encoding"].getBool
+      s.debugMode.bufStatus.encoding = setting
+
+    if debugConfigs["BufferStatus"].contains("countChange"):
+      let setting = debugConfigs["BufferStatus"]["countChange"].getBool
+      s.debugMode.bufStatus.countChange = setting
+
+    if debugConfigs["BufferStatus"].contains("cmdLoop"):
+      let setting = debugConfigs["BufferStatus"]["cmdLoop"].getBool
+      s.debugMode.bufStatus.cmdLoop = setting
+
+    if debugConfigs["BufferStatus"].contains("lastSaveTime"):
+      let setting = debugConfigs["BufferStatus"]["lastSaveTime"].getBool
+      s.debugMode.bufStatus.lastSaveTime = setting
+
+    if debugConfigs["BufferStatus"].contains("bufferLen"):
+      let setting = debugConfigs["BufferStatus"]["bufferLen"].getBool
+      s.debugMode.bufStatus.bufferLen = setting
+
+proc parseGitTable(s: var EditorSettings, gitConfigs: TomlValueRef) =
+  if gitConfigs.contains("showChangedLine"):
+    s.git.showChangedLine = gitConfigs["showChangedLine"].getBool
+
+  if gitConfigs.contains("updateInterval"):
+    s.git.updateInterval = gitConfigs["updateInterval"].getInt
+
+proc parseSyntaxCheckerTable(
+  s: var EditorSettings,
+  syntaxCheckConfigs: TomlValueRef) =
+
+    if syntaxCheckConfigs.contains("enable"):
+      s.syntaxChecker.enable = syntaxCheckConfigs["enable"].getBool
+
+proc parseThemeTable(
+  s: var EditorSettings,
+  themeConfigs: Option[TomlValueRef]) =
 
     proc toRgb(s: string): Rgb =
-      let val = settings["Theme"][s].getStr
-      case val:
+      case s:
         of "termDefaultFg", "termDefaultBg":
           TerminalDefaultRgb
         else:
-          if val.isHexColor:
-            val.hexToRgb.get
-          else:
-            # TODO: Return Result.error
-            raise newException(ValueError, fmt"Invalid color value: {s} = {val}")
+          s.hexToRgb.get
+
+    proc setFgColorToConfig(index: EditorColorPairIndex, rgb: Rgb) {.inline.} =
+      ColorThemeTable[ColorTheme.config][index].foreground.rgb = rgb
+
+    proc setBgColorToConfig(index: EditorColorPairIndex, rgb: Rgb) {.inline.} =
+      ColorThemeTable[ColorTheme.config][index].background.rgb = rgb
+
+    proc setEditorColorPairIndexForegrounds(colorStr: string) =
+      let rgb = themeConfigs.get["foreground"].getStr.toRgb
+
+      EditorColorPairIndex.default.setFgColorToConfig(rgb)
+      EditorColorPairIndex.currentLineBg.setFgColorToConfig(rgb)
+
+    proc setEditorColorPairIndexBackgrounds(colorStr: string) =
+      let rgb = themeConfigs.get["background"].getStr.toRgb
+
+      EditorColorPairIndex.default.setBgColorToConfig(rgb)
+      EditorColorPairIndex.keyword.setBgColorToConfig(rgb)
+      EditorColorPairIndex.functionName.setBgColorToConfig(rgb)
+      EditorColorPairIndex.typeName.setBgColorToConfig(rgb)
+      EditorColorPairIndex.boolean.setBgColorToConfig(rgb)
+      EditorColorPairIndex.specialVar.setBgColorToConfig(rgb)
+      EditorColorPairIndex.builtin.setBgColorToConfig(rgb)
+      EditorColorPairIndex.stringLit.setBgColorToConfig(rgb)
+      EditorColorPairIndex.binNumber.setBgColorToConfig(rgb)
+      EditorColorPairIndex.decNumber.setBgColorToConfig(rgb)
+      EditorColorPairIndex.floatNumber.setBgColorToConfig(rgb)
+      EditorColorPairIndex.hexNumber.setBgColorToConfig(rgb)
+      EditorColorPairIndex.octNumber.setBgColorToConfig(rgb)
+      EditorColorPairIndex.comment.setBgColorToConfig(rgb)
+      EditorColorPairIndex.longComment.setBgColorToConfig(rgb)
+      EditorColorPairIndex.whitespace.setBgColorToConfig(rgb)
+      EditorColorPairIndex.preprocessor.setBgColorToConfig(rgb)
+      EditorColorPairIndex.pragma.setBgColorToConfig(rgb)
+
+    if themeConfigs.isSome and themeConfigs.get.contains("baseTheme"):
+      # Set a base theme for config and vscode.
+      let t = themeConfigs.get["baseTheme"].getStr.parseColorTheme.get
+      ColorThemeTable[ColorTheme.config] = ColorThemeTable[t]
+
+    case s.editorColorTheme:
+      of ColorTheme.config:
+        for index in EditorColorIndex:
+          if themeConfigs.isSome and themeConfigs.get.contains($index):
+            case index:
+              of EditorColorIndex.foreground:
+                setEditorColorPairIndexForegrounds($index)
+              of EditorColorIndex.background:
+                setEditorColorPairIndexBackgrounds($index)
+              of EditorColorIndex.currentLineBg:
+                EditorColorPairIndex.currentLineBg.setBgColorToConfig(
+                  themeConfigs.get[$index].getStr.toRgb)
+              else:
+                if endsWith($index, "Bg"):
+                  # Set background colors
+                  let
+                    # Remove "Bg" and parse enum.
+                    indexStr = ($index)[0 .. ($index).high - 2]
+                    pairIndex = parseEnum[EditorColorPairIndex](indexStr)
+                    rgb = themeConfigs.get[$index].getStr.toRgb
+                  pairIndex.setBgColorToConfig(rgb)
+                else:
+                  # Set foreground colors
+                  let
+                    pairIndex = parseEnum[EditorColorPairIndex]($index)
+                    rgb = themeConfigs.get[$index].getStr.toRgb
+                  pairIndex.setFgColorToConfig(rgb)
+      of ColorTheme.vscode:
+        let vsCodeTheme = loadVSCodeTheme()
+        if vsCodeTheme.isOk:
+          s.editorColorTheme = vsCodeTheme.get
+      else:
+        discard
+
+proc parseTomlConfigs*(tomlConfigs: TomlValueRef): EditorSettings =
+  result = initEditorSettings()
+
+  if tomlConfigs.contains("Standard"):
+    result.parseStandardTable(tomlConfigs["Standard"])
+
+  if tomlConfigs.contains("Clipboard"):
+    result.parseClipboardTable(tomlConfigs["Clipboard"])
+
+  if tomlConfigs.contains("TabLine"):
+    result.parseTabLineTable(tomlConfigs["TabLine"])
+
+  if tomlConfigs.contains("StatusLine"):
+    result.parseStatusLineTable(tomlConfigs["StatusLine"])
+
+  if tomlConfigs.contains("BuildOnSave"):
+    result.parseBuildOnSaveTable(tomlConfigs["BuildOnSave"])
+
+  if tomlConfigs.contains("Highlight"):
+    result.parseHighlightTable(tomlConfigs["Highlight"])
+
+  if tomlConfigs.contains("AutoBackup"):
+    result.parseAutoBackupTable(tomlConfigs["AutoBackup"])
+
+  if tomlConfigs.contains("QuickRun"):
+    result.parseQuickRunTable(tomlConfigs["QuickRun"])
 
-    result.editorColorTheme = ColorTheme.config
+  if tomlConfigs.contains("Notification"):
+    result.parseNotificationTable(tomlConfigs["Notification"])
 
-    let configTheme = ColorTheme.config
+  if tomlConfigs.contains("Filer"):
+    result.parseFilerTable(tomlConfigs["Filer"])
 
-    if settings["Theme"].contains("foreground"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.default].foreground.rgb =
-        toRgb("foreground")
-      ColorThemeTable[configTheme][EditorColorPairIndex.currentLineBg].foreground.rgb =
-        toRgb("foreground")
+  if tomlConfigs.contains("Autocomplete"):
+    result.parseAutocompleteTable(tomlConfigs["Autocomplete"])
 
-    if settings["Theme"].contains("background"):
-      let bgRgb = toRgb("background")
-      ColorThemeTable[configTheme][EditorColorPairIndex.default].background.rgb =
-        bgRgb
-      ColorThemeTable[configTheme][EditorColorPairIndex.keyword].background.rgb =
-        bgRgb
-      ColorThemeTable[configTheme][EditorColorPairIndex.functionName].background.rgb =
-        bgRgb
-      ColorThemeTable[configTheme][EditorColorPairIndex.typeName].background.rgb =
-        bgRgb
-      ColorThemeTable[configTheme][EditorColorPairIndex.boolean].background.rgb =
-        bgRgb
-      ColorThemeTable[configTheme][EditorColorPairIndex.specialVar].background.rgb =
-        bgRgb
-      ColorThemeTable[configTheme][EditorColorPairIndex.builtin].background.rgb =
-        bgRgb
-      ColorThemeTable[configTheme][EditorColorPairIndex.stringLit].background.rgb =
-        bgRgb
-      ColorThemeTable[configTheme][EditorColorPairIndex.binNumber].background.rgb =
-        bgRgb
-      ColorThemeTable[configTheme][EditorColorPairIndex.decNumber].background.rgb =
-        bgRgb
-      ColorThemeTable[configTheme][EditorColorPairIndex.floatNumber].background.rgb =
-        bgRgb
-      ColorThemeTable[configTheme][EditorColorPairIndex.hexNumber].background.rgb =
-        bgRgb
-      ColorThemeTable[configTheme][EditorColorPairIndex.octNumber].background.rgb =
-        bgRgb
-      ColorThemeTable[configTheme][EditorColorPairIndex.comment].background.rgb =
-        bgRgb
-      ColorThemeTable[configTheme][EditorColorPairIndex.longComment].background.rgb =
-        bgRgb
-      ColorThemeTable[configTheme][EditorColorPairIndex.whitespace].background.rgb =
-        bgRgb
-      ColorThemeTable[configTheme][EditorColorPairIndex.preprocessor].background.rgb =
-        bgRgb
-      ColorThemeTable[configTheme][EditorColorPairIndex.pragma].background.rgb =
-        bgRgb
+  if tomlConfigs.contains("Persist"):
+    result.parsePersistTable(tomlConfigs["Persist"])
 
-    if settings["Theme"].contains("lineNum"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.lineNum].foreground.rgb =
-        toRgb("lineNum")
-    if settings["Theme"].contains("lineNumBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.lineNum].background.rgb =
-        toRgb("lineNumBg")
+  if tomlConfigs.contains("Debug"):
+    result.parseDebugTable(tomlConfigs["Debug"])
 
-    if settings["Theme"].contains("currentLineNum"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.currentLineNum].foreground.rgb =
-        toRgb("currentLineNum")
-    if settings["Theme"].contains("currentLineNumBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.currentLineNum].background.rgb =
-        toRgb("currentLineNumBg")
+  if tomlConfigs.contains("Git"):
+    result.parseGitTable(tomlConfigs["Git"])
 
-    if settings["Theme"].contains("statusLineNormalMode"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineNormalMode].foreground.rgb =
-        toRgb("statusLineNormalMode")
-    if settings["Theme"].contains("statusLineNormalModeBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineNormalMode].background.rgb =
-        toRgb("statusLineNormalModeBg")
+  if tomlConfigs.contains("SyntaxChecker"):
+    result.parseSyntaxCheckerTable(tomlConfigs["SyntaxChecker"])
 
-    if settings["Theme"].contains("statusLineModeNormalMode"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineModeNormalMode].foreground.rgb =
-        toRgb("statusLineModeNormalMode")
-    if settings["Theme"].contains("statusLineModeNormalModeBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineModeNormalMode].background.rgb =
-        toRgb("statusLineModeNormalModeBg")
-
-    if settings["Theme"].contains("statusLineNormalModeInactive"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineNormalModeInactive].foreground.rgb =
-        toRgb("statusLineNormalModeInactive")
-    if settings["Theme"].contains("statusLineNormalModeInactiveBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineNormalModeInactive].background.rgb =
-        toRgb("statusLineNormalModeInactiveBg")
-
-    if settings["Theme"].contains("statusLineInsertMode"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineInsertMode].foreground.rgb =
-        toRgb("statusLineInsertMode")
-    if settings["Theme"].contains("statusLineInsertModeBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineInsertMode].background.rgb =
-        toRgb("statusLineInsertModeBg")
-
-    if settings["Theme"].contains("statusLineModeInsertMode"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineModeInsertMode].foreground.rgb =
-        toRgb("statusLineModeInsertMode")
-    if settings["Theme"].contains("statusLineModeInsertModeBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineModeInsertMode].background.rgb =
-        toRgb("statusLineModeInsertModeBg")
-
-    if settings["Theme"].contains("statusLineInsertModeInactive"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineInsertModeInactive].foreground.rgb =
-        toRgb("statusLineInsertModeInactive")
-    if settings["Theme"].contains("statusLineInsertModeInactiveBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineInsertModeInactive].background.rgb =
-        toRgb("statusLineInsertModeInactiveBg")
-
-    if settings["Theme"].contains("statusLineVisualMode"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineVisualMode].foreground.rgb =
-        toRgb("statusLineVisualMode")
-    if settings["Theme"].contains("statusLineVisualModeBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineVisualMode].background.rgb =
-        toRgb("statusLineVisualModeBg")
-
-    if settings["Theme"].contains("statusLineModeVisualMode"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineModeVisualMode].foreground.rgb =
-        toRgb("statusLineModeVisualMode")
-    if settings["Theme"].contains("statusLineModeVisualModeBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineModeVisualMode].background.rgb =
-        toRgb("statusLineModeVisualModeBg")
-
-    if settings["Theme"].contains("statusLineVisualModeInactive"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineVisualModeInactive].foreground.rgb =
-        toRgb("statusLineVisualModeInactive")
-    if settings["Theme"].contains("statusLineVisualModeInactiveBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineVisualModeInactive].background.rgb =
-        toRgb("statusLineVisualModeInactiveBg")
-
-    if settings["Theme"].contains("statusLineReplaceMode"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineReplaceMode].foreground.rgb =
-        toRgb("statusLineReplaceMode")
-    if settings["Theme"].contains("statusLineReplaceModeBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineReplaceMode].background.rgb =
-        toRgb("statusLineReplaceModeBg")
-
-    if settings["Theme"].contains("statusLineModeReplaceMode"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineModeReplaceMode].foreground.rgb =
-        toRgb("statusLineModeReplaceMode")
-    if settings["Theme"].contains("statusLineModeReplaceModeBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineModeReplaceMode].background.rgb =
-        toRgb("statusLineModeReplaceModeBg")
-
-    if settings["Theme"].contains("statusLineReplaceModeInactive"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineReplaceModeInactive].foreground.rgb =
-        toRgb("statusLineReplaceModeInactive")
-    if settings["Theme"].contains("statusLineReplaceModeInactiveBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineReplaceModeInactive].background.rgb =
-        toRgb("statusLineReplaceModeInactiveBg")
-
-    if settings["Theme"].contains("statusLineFilerMode"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineFilerMode].foreground.rgb =
-        toRgb("statusLineFilerMode")
-    if settings["Theme"].contains("statusLineFilerModeBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineFilerMode].background.rgb =
-        toRgb("statusLineFilerModeBg")
-
-    if settings["Theme"].contains("statusLineModeFilerMode"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineModeFilerMode].foreground.rgb =
-        toRgb("statusLineModeFilerMode")
-    if settings["Theme"].contains("statusLineModeFilerModeBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineModeFilerMode].background.rgb =
-        toRgb("statusLineModeFilerModeBg")
-
-    if settings["Theme"].contains("statusLineFilerModeInactive"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineFilerModeInactive].foreground.rgb =
-        toRgb("statusLineFilerModeInactive")
-    if settings["Theme"].contains("statusLineFilerModeInactiveBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineFilerModeInactive].background.rgb =
-        toRgb("statusLineFilerModeInactiveBg")
-
-    if settings["Theme"].contains("statusLineExMode"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineExMode].foreground.rgb =
-        toRgb("statusLineExMode")
-    if settings["Theme"].contains("statusLineExModeBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineExMode].background.rgb =
-        toRgb("statusLineExModeBg")
-
-    if settings["Theme"].contains("statusLineModeExMode"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineModeExMode].foreground.rgb =
-        toRgb("statusLineModeExMode")
-    if settings["Theme"].contains("statusLineModeExModeBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineModeExMode].background.rgb =
-        toRgb("statusLineModeExModeBg")
-
-    if settings["Theme"].contains("statusLineExModeInactive"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineExModeInactive].foreground.rgb =
-        toRgb("statusLineExModeInactive")
-    if settings["Theme"].contains("statusLineExModeInactiveBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineExModeInactive].background.rgb =
-        toRgb("statusLineExModeInactiveBg")
-
-    if settings["Theme"].contains("statusLineGitChangedLines"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineGitChangedLines].foreground.rgb =
-        toRgb("statusLineGitChangedLines")
-    if settings["Theme"].contains("statusLineGitChangedLinesBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineGitChangedLines].background.rgb =
-        toRgb("statusLineGitChangedLinesBg")
-
-    if settings["Theme"].contains("statusLineGitBranch"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineGitBranch].foreground.rgb =
-        toRgb("statusLineGitBranch")
-    if settings["Theme"].contains("statusLineGitBranchBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.statusLineGitBranch].background.rgb =
-        toRgb("statusLineGitBranchBg")
-
-    if settings["Theme"].contains("tab"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.tab].foreground.rgb =
-        toRgb("tab")
-    if settings["Theme"].contains("tabBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.tab].background.rgb =
-        toRgb("tabBg")
-
-    if settings["Theme"].contains("currentTab"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.currentTab].foreground.rgb =
-        toRgb("currentTab")
-    if settings["Theme"].contains("currentTabBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.currentTab].background.rgb =
-        toRgb("currentTabBg")
-
-    if settings["Theme"].contains("commandLine"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.commandLine].foreground.rgb =
-        toRgb("commandLine")
-    if settings["Theme"].contains("commandLineBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.commandLine].background.rgb =
-        toRgb("commandLineBg")
-
-    if settings["Theme"].contains("errorMessage"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.errorMessage].foreground.rgb =
-        toRgb("errorMessage")
-    if settings["Theme"].contains("errorMessageBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.errorMessage].background.rgb =
-        toRgb("errorMessageBg")
-
-    if settings["Theme"].contains("searchResult"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.searchResult].foreground.rgb =
-        toRgb("searchResult")
-    if settings["Theme"].contains("searchResultBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.searchResult].background.rgb =
-        toRgb("searchResultBg")
-
-    if settings["Theme"].contains("visualMode"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.visualMode].foreground.rgb =
-        toRgb("visualMode")
-    if settings["Theme"].contains("visualModeBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.visualMode].background.rgb =
-        toRgb("visualModeBg")
-
-    if settings["Theme"].contains("keyword"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.keyword].foreground.rgb =
-        toRgb("keyword")
-
-    if settings["Theme"].contains("functionName"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.functionName].foreground.rgb =
-        toRgb("functionName")
-    if settings["Theme"].contains("typeName"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.typeName].foreground.rgb =
-        toRgb("typeName")
-    if settings["Theme"].contains("boolean"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.boolean].foreground.rgb =
-        toRgb("boolean")
-
-    if settings["Theme"].contains("specialVar"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.specialVar].foreground.rgb =
-        toRgb("specialVar")
-
-    if settings["Theme"].contains("builtin"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.builtin].foreground.rgb =
-        toRgb("builtin")
-
-    if settings["Theme"].contains("stringLit"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.stringLit].foreground.rgb =
-        toRgb("stringLit")
-
-    if settings["Theme"].contains("binNumber"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.binNumber].foreground.rgb =
-        toRgb("binNumber")
-
-    if settings["Theme"].contains("decNumber"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.decNumber].foreground.rgb =
-        toRgb("decNumber")
-
-    if settings["Theme"].contains("floatNumber"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.floatNumber].foreground.rgb =
-        toRgb("floatNumber")
-
-    if settings["Theme"].contains("hexNumber"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.hexNumber].foreground.rgb =
-        toRgb("hexNumber")
-
-    if settings["Theme"].contains("octNumber"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.octNumber].foreground.rgb =
-        toRgb("octNumber")
-
-    if settings["Theme"].contains("comment"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.comment].foreground.rgb =
-        toRgb("comment")
-
-    if settings["Theme"].contains("longComment"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.longComment].foreground.rgb =
-        toRgb("longComment")
-
-    if settings["Theme"].contains("whitespace"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.whitespace].foreground.rgb =
-        toRgb("whitespace")
-
-    if settings["Theme"].contains("preprocessor"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.preprocessor].foreground.rgb =
-        toRgb("preprocessor")
-
-    if settings["Theme"].contains("pragma"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.pragma].foreground.rgb =
-        toRgb("pragma")
-
-    if settings["Theme"].contains("currentFile"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.currentFile].foreground.rgb =
-        toRgb("currentFile")
-    if settings["Theme"].contains("currentFileBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.currentFile].background.rgb =
-        toRgb("currentFileBg")
-
-    if settings["Theme"].contains("file"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.file].foreground.rgb =
-        toRgb("file")
-    if settings["Theme"].contains("fileBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.file].background.rgb =
-        toRgb("fileBg")
-
-    if settings["Theme"].contains("dir"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.dir].foreground.rgb =
-        toRgb("dir")
-    if settings["Theme"].contains("dirBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.dir].background.rgb =
-        toRgb("dirBg")
-
-    if settings["Theme"].contains("pcLink"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.pcLink].foreground.rgb =
-        toRgb("pcLink")
-    if settings["Theme"].contains("pcLinkBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.pcLink].background.rgb =
-        toRgb("pcLinkBg")
-
-    if settings["Theme"].contains("popupWindow"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.popupWindow].foreground.rgb =
-        toRgb("popupWindow")
-    if settings["Theme"].contains("popupWindowBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.popupWindow].background.rgb =
-        toRgb("popupWindowBg")
-
-    if settings["Theme"].contains("popupWinCurrentLine"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.popupWinCurrentLine].foreground.rgb =
-        toRgb("popupWinCurrentLine")
-    if settings["Theme"].contains("popupWinCurrentLineBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.popupWinCurrentLine].background.rgb =
-        toRgb("popupWinCurrentLineBg")
-
-    if settings["Theme"].contains("replaceText"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.replaceText].foreground.rgb =
-        toRgb("replaceText")
-    if settings["Theme"].contains("replaceTextBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.replaceText].background.rgb =
-        toRgb("replaceTextBg")
-
-    if settings["Theme"].contains("parenPair"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.parenPair].foreground.rgb =
-        toRgb("parenPair")
-    if settings["Theme"].contains("parenPairBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.parenPair].background.rgb =
-        toRgb("parenPairBg")
-
-    if settings["Theme"].contains("currentWord"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.currentWord].foreground.rgb =
-        toRgb("currentWord")
-    if settings["Theme"].contains("currentWordBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.currentWord].background.rgb =
-        toRgb("currentWordBg")
-
-    if settings["Theme"].contains("highlightFullWidthSpace"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.highlightFullWidthSpace].foreground.rgb =
-        toRgb("highlightFullWidthSpace")
-    if settings["Theme"].contains("highlightFullWidthSpaceBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.highlightFullWidthSpace].background.rgb =
-        toRgb("highlightFullWidthSpaceBg")
-
-    if settings["Theme"].contains("highlightTrailingSpaces"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.highlightTrailingSpaces].foreground.rgb =
-        toRgb("highlightTrailingSpaces")
-    if settings["Theme"].contains("highlightTrailingSpacesBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.highlightTrailingSpaces].background.rgb =
-        toRgb("highlightTrailingSpacesBg")
-
-    if settings["Theme"].contains("reservedWord"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.reservedWord].foreground.rgb =
-        toRgb("reservedWord")
-    if settings["Theme"].contains("reservedWordBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.reservedWord].background.rgb =
-        toRgb("reservedWordBg")
-
-    if settings["Theme"].contains("syntaxCheckInfo"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.syntaxCheckInfo].foreground.rgb =
-        toRgb("syntaxCheckInfo")
-    if settings["Theme"].contains("syntaxCheckInfoBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.syntaxCheckInfo].background.rgb =
-        toRgb("syntaxCheckInfoBg")
-
-    if settings["Theme"].contains("syntaxCheckHint"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.syntaxCheckHint].foreground.rgb =
-        toRgb("syntaxCheckHint")
-    if settings["Theme"].contains("syntaxCheckHintBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.syntaxCheckHint].background.rgb =
-        toRgb("syntaxCheckHintBg")
-
-    if settings["Theme"].contains("syntaxCheckWarn"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.syntaxCheckWarn].foreground.rgb =
-        toRgb("syntaxCheckWarn")
-    if settings["Theme"].contains("syntaxCheckWarn"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.syntaxCheckWarn].background.rgb =
-        toRgb("syntaxCheckWarnBg")
-
-    if settings["Theme"].contains("syntaxCheckErr"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.syntaxCheckErr].foreground.rgb =
-        toRgb("syntaxCheckErr")
-    if settings["Theme"].contains("syntaxCheckErrBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.syntaxCheckErr].background.rgb =
-        toRgb("syntaxCheckErrBg")
-
-    if settings["Theme"].contains("backupManagerCurrentLine"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.backupManagerCurrentLine].foreground.rgb =
-        toRgb("backupManagerCurrentLine")
-    if settings["Theme"].contains("backupManagerCurrentLineBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.backupManagerCurrentLine].background.rgb =
-        toRgb("backupManagerCurrentLineBg")
-
-    if settings["Theme"].contains("diffViewerAddedLine"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.diffViewerAddedLine].foreground.rgb =
-        toRgb("diffViewerAddedLine")
-    if settings["Theme"].contains("diffViewerAddedLineBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.diffViewerAddedLine].background.rgb =
-        toRgb("diffViewerAddedLineBg")
-
-    if settings["Theme"].contains("diffViewerDeletedLine"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.diffViewerDeletedLine].foreground.rgb =
-        toRgb("diffViewerDeletedLine")
-    if settings["Theme"].contains("diffViewerDeletedLineBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.diffViewerDeletedLine].background.rgb =
-        toRgb("diffViewerDeletedLineBg")
-
-    if settings["Theme"].contains("configModeCurrentLine"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.configModeCurrentLine].foreground.rgb =
-        toRgb("configModeCurrentLine")
-    if settings["Theme"].contains("configModeCurrentLineBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.configModeCurrentLine].background.rgb =
-        toRgb("configModeCurrentLineBg")
-
-    if settings["Theme"].contains("currentLineBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.currentLineBg].background.rgb =
-        toRgb("currentLineBg")
-
-    if settings["Theme"].contains("sidebarGitAddedSign"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.sidebarGitAddedSign].foreground.rgb =
-        toRgb("sidebarGitAddedSign")
-    if settings["Theme"].contains("sidebarGitAddedSignBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.sidebarGitAddedSign].background.rgb =
-        toRgb("sidebarGitAddedSignBg")
-
-    if settings["Theme"].contains("sidebarGitDeletedSign"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.sidebarGitDeletedSign].foreground.rgb =
-        toRgb("sidebarGitDeletedSign")
-    if settings["Theme"].contains("sidebarGitDeletedSignBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.sidebarGitDeletedSign].background.rgb =
-        toRgb("sidebarGitDeletedSignBg")
-
-    if settings["Theme"].contains("sidebarGitChangedSign"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.sidebarGitChangedSign].foreground.rgb =
-        toRgb("sidebarGitChangedSign")
-    if settings["Theme"].contains("sidebarGitChangedSignBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.sidebarGitChangedSign].background.rgb =
-        toRgb("sidebarGitChangedSignBg")
-
-    if settings["Theme"].contains("sidebarSyntaxCheckInfoSign"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.sidebarSyntaxCheckInfoSign].foreground.rgb =
-        toRgb("sidebarSyntaxCheckInfoSign")
-    if settings["Theme"].contains("sidebarSyntaxCheckInfoSignBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.sidebarSyntaxCheckInfoSign].background.rgb =
-        toRgb("sidebarSyntaxCheckInfoSignBg")
-
-    if settings["Theme"].contains("sidebarSyntaxCheckHintSign"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.sidebarSyntaxCheckHintSign].foreground.rgb =
-        toRgb("sidebarSyntaxCheckHintSign")
-    if settings["Theme"].contains("sidebarSyntaxCheckHintSignBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.sidebarSyntaxCheckHintSign].background.rgb =
-        toRgb("sidebarSyntaxCheckHintSignBg")
-
-    if settings["Theme"].contains("sidebarSyntaxCheckWarnSign"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.sidebarSyntaxCheckWarnSign].foreground.rgb =
-        toRgb("sidebarSyntaxCheckWarnSign")
-    if settings["Theme"].contains("sidebarSyntaxCheckWarnSignBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.sidebarSyntaxCheckWarnSign].background.rgb =
-        toRgb("sidebarSyntaxCheckWarnSignBg")
-
-    if settings["Theme"].contains("sidebarSyntaxCheckErrSign"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.sidebarSyntaxCheckErrSign].foreground.rgb =
-        toRgb("sidebarSyntaxCheckErrSign")
-    if settings["Theme"].contains("sidebarSyntaxCheckErrSignBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.sidebarSyntaxCheckErrSign].background.rgb =
-        toRgb("sidebarSyntaxCheckErrSignBg")
-
-  elif result.editorColorTheme == ColorTheme.vscode:
-    let vsCodeTheme = loadVSCodeTheme()
-    if vsCodeTheme.isOk:
-      result.editorColorTheme = vsCodeTheme.get
-    else:
-      # The default theme is dark
-      result.editorColorTheme = ColorTheme.dark
-
-  if settings.contains("Git"):
-    if settings["Git"].contains("showChangedLine"):
-      result.git.showChangedLine = settings["Git"]["showChangedLine"].getBool
-
-    if settings["Git"].contains("updateInterval"):
-      result.git.updateInterval = settings["Git"]["updateInterval"].getInt
-
-  if settings.contains("SyntaxChecker"):
-    if settings["SyntaxChecker"].contains("enable"):
-      result.syntaxChecker.enable = settings["SyntaxChecker"]["enable"].getBool
+  if result.editorColorTheme == ColorTheme.config or
+     result.editorColorTheme == ColorTheme.vscode:
+       if tomlConfigs.contains("Theme"):
+         result.parseThemeTable(tomlConfigs["Theme"].some)
+       else:
+         result.parseThemeTable(TomlValueRef.none)
 
 proc validateStandardTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
@@ -2523,15 +2141,7 @@ proc loadSettingFile*(): EditorSettings =
     let errorMessage = toValidateErrorMessage(invalidItem.get)
     raise newException(InvalidItemError, $errorMessage)
   else:
-    return parseSettingsFile(toml)
-
-proc toConfigStr*(colorMode: ColorMode): string =
-  case colorMode:
-    of ColorMode.none: "none"
-    of ColorMode.c8: "8"
-    of ColorMode.c16: "16"
-    of ColorMode.c256: "256"
-    of ColorMode.c24bit: "24bit"
+    return parseTomlConfigs(toml)
 
 ## Generate a string of the configuration file of TOML.
 proc genTomlConfigStr*(settings: EditorSettings): string =
@@ -2564,7 +2174,7 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "smoothScroll = {$settings.smoothScroll }"
   result.addLine fmt "smoothScrollSpeed = {$settings.smoothScrollSpeed}"
   result.addLine fmt "liveReloadOfFile = {$settings.liveReloadOfFile}"
-  result.addLine fmt "colorMode = \"{settings.colorMode.toConfigStr}\""
+  result.addLine fmt "colorMode = \"{$settings.colorMode}\""
 
   result.addLine ""
 

@@ -77,6 +77,29 @@ var
 
   terminalSize: Size
 
+proc `$`*(colorMode: ColorMode): string =
+  case colorMode:
+    of ColorMode.none: "none"
+    of ColorMode.c8: "8"
+    of ColorMode.c16: "16"
+    of ColorMode.c256: "256"
+    of ColorMode.c24bit: "24bit"
+
+proc parseColorMode*(str: string): Result[ColorMode, string] =
+  case str:
+    of "none":
+      return Result[ColorMode, string].ok ColorMode.none
+    of "8":
+      return Result[ColorMode, string].ok ColorMode.c8
+    of "16":
+      return Result[ColorMode, string].ok ColorMode.c16
+    of "256":
+      return Result[ColorMode, string].ok ColorMode.c256
+    of "24bit":
+      return Result[ColorMode, string].ok ColorMode.c24bit
+    else:
+      return Result[ColorMode, string].err "Invalid value"
+
 ## Get the current terminal size and update.
 proc updateTerminalSize*() =
   terminalSize.h = terminalHeight()

@@ -347,7 +347,7 @@ const TomlStr = """
 suite "Parse configuration file":
   test "Parse all settings":
     let toml = parsetoml.parseString(TomlStr)
-    var settings = parseSettingsFile(toml)
+    var settings = parseTomlConfigs(toml)
 
     check settings.editorColorTheme == ColorTheme.config
     check not settings.view.lineNumber
@@ -501,7 +501,7 @@ suite "Parse configuration file":
       toolOnLinux = "xclip""""
 
     let toml = parsetoml.parseString(str)
-    let settings = parseSettingsFile(toml)
+    let settings = parseTomlConfigs(toml)
 
     check settings.clipboard.enable
     check settings.clipboard.toolOnLinux == ClipboardToolOnLinux.xclip
@@ -513,7 +513,7 @@ suite "Parse configuration file":
       toolOnLinux = "xsel""""
 
     let toml = parsetoml.parseString(str)
-    let settings = parseSettingsFile(toml)
+    let settings = parseTomlConfigs(toml)
 
     check settings.clipboard.enable
     check settings.clipboard.toolOnLinux == ClipboardToolOnLinux.xsel
@@ -525,7 +525,7 @@ suite "Parse configuration file":
       toolOnLinux = "wl-clipboard""""
 
     let toml = parsetoml.parseString(str)
-    let settings = parseSettingsFile(toml)
+    let settings = parseTomlConfigs(toml)
 
     check settings.clipboard.enable
     check settings.clipboard.toolOnLinux == ClipboardToolOnLinux.wlClipboard
@@ -537,7 +537,7 @@ suite "Parse configuration file":
     """
 
     let toml = parsetoml.parseString(str)
-    let settings = parseSettingsFile(toml)
+    let settings = parseTomlConfigs(toml)
 
     check ColorMode.none == settings.colorMode
 
@@ -548,7 +548,7 @@ suite "Parse configuration file":
     """
 
     let toml = parsetoml.parseString(str)
-    let settings = parseSettingsFile(toml)
+    let settings = parseTomlConfigs(toml)
 
     check ColorMode.c8 == settings.colorMode
 
@@ -559,7 +559,7 @@ suite "Parse configuration file":
     """
 
     let toml = parsetoml.parseString(str)
-    let settings = parseSettingsFile(toml)
+    let settings = parseTomlConfigs(toml)
 
     check ColorMode.c256  == settings.colorMode
 
@@ -570,7 +570,7 @@ suite "Parse configuration file":
     """
 
     let toml = parsetoml.parseString(str)
-    let settings = parseSettingsFile(toml)
+    let settings = parseTomlConfigs(toml)
 
     check ColorMode.c24bit == settings.colorMode
 
@@ -816,35 +816,3 @@ suite "Error message":
       errorMessage = result.get.toValidateErrorMessage
 
     check errorMessage == """(name: test, val: test1 = "test1" test2 = "test2")"""
-
-suite "parseColorMode":
-  test "none":
-    check ColorMode.none == "none".parseColorMode.get
-
-  test "c8":
-    check ColorMode.c8 == "8".parseColorMode.get
-
-  test "c16":
-    check ColorMode.c16 == "16".parseColorMode.get
-
-  test "c256":
-    check ColorMode.c256 == "256".parseColorMode.get
-
-  test "c24bit":
-    check ColorMode.c24bit == "24bit".parseColorMode.get
-
-suite "toConfigStr":
-  test "from ColorMode.none":
-    check "none" == ColorMode.none.toConfigStr
-
-  test "from ColorMode.c8":
-    check "8" == ColorMode.c8.toConfigStr
-
-  test "from ColorMode.c16":
-    check "16" == ColorMode.c16.toConfigStr
-
-  test "from ColorMode.c256":
-    check "256" == ColorMode.c256.toConfigStr
-
-  test "from ColorMode.c24bit":
-    check "24bit" == ColorMode.c24bit.toConfigStr

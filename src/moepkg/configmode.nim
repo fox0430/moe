@@ -196,10 +196,10 @@ proc getCursorTypeSettingValues(currentVal: CursorType): seq[seq[Rune]] =
       result.add ru $cursorType
 
 proc getColorModeSettingValues(currentVal: ColorMode): seq[Runes] =
-  result.add currentVal.toConfigStr.toRunes
+  result.add toRunes($currentVal)
   const ConfigVals = @["none", "8", "16", "256", "24bit"]
   for c in ConfigVals:
-    if c != currentVal.toConfigStr:
+    if c != $currentVal:
       result.add c.toRunes
 
 proc getStandardTableSettingValues(settings: EditorSettings,
@@ -1769,7 +1769,7 @@ proc initStandardTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
       of "liveReloadOfFile":
         result.add(ru nameStr & space & $settings.liveReloadOfFile)
       of "colorMode":
-        result.add(ru nameStr & space & settings.colorMode.toConfigStr)
+        result.add(ru nameStr & space & $settings.colorMode)
 
 proc initClipBoardTableBuffer(settings: ClipboardSettings): seq[seq[Rune]] =
   result.add(ru"ClipBoard")
