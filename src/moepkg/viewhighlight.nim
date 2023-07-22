@@ -365,12 +365,23 @@ proc highlightSyntaxCheckerReuslts(
 
     for se in syntaxErrors:
       if se.position.line >= range.first and se.position.line <= range.last:
+        let color =
+          case se.messageType:
+            of SyntaxCheckMessageType.info:
+              EditorColorPairIndex.syntaxCheckInfo
+            of SyntaxCheckMessageType.hint:
+              EditorColorPairIndex.syntaxCheckHint
+            of SyntaxCheckMessageType.warning:
+              EditorColorPairIndex.syntaxCheckWarn
+            of SyntaxCheckMessageType.error:
+              EditorColorPairIndex.syntaxCheckErr
+
         highlight.overwrite(ColorSegment(
           firstRow: se.position.line,
           firstColumn: se.position.column,
           lastRow: se.position.line,
           lastColumn: se.position.column,
-          color: EditorColorPairIndex.sidebarSyntaxCheckErrSign,
+          color: color,
           attribute: Attribute.underline))
 
 proc updateHighlight*(

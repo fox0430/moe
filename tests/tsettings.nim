@@ -305,6 +305,15 @@ const TomlStr = """
   reservedWord = "#000000"
   reservedWordBg = "#000000"
 
+  syntaxCheckInfo = "#000000"
+  syntaxCheckInfoBg = "#000000"
+  syntaxCheckHint = "#000000"
+  syntaxCheckHintBg = "#000000"
+  syntaxCheckWarn = "#000000"
+  syntaxCheckWarnBg = "#000000"
+  syntaxCheckErr = "#000000"
+  syntaxCheckErrBg = "#000000"
+
   backupManagerCurrentLine = "#000000"
   backupManagerCurrentLineBg = "#000000"
 

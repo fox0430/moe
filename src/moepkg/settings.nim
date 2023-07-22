@@ -1933,14 +1933,9 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
       ColorThemeTable[configTheme][EditorColorPairIndex.highlightFullWidthSpace].background.rgb =
         toRgb("highlightFullWidthSpaceBg")
 
-    if settings["Theme"].contains("highlightFullWidthSpaceBg"):
-      ColorThemeTable[configTheme][EditorColorPairIndex.highlightFullWidthSpace].background.rgb =
-        toRgb("highlightFullWidthSpaceBg")
-
     if settings["Theme"].contains("highlightTrailingSpaces"):
       ColorThemeTable[configTheme][EditorColorPairIndex.highlightTrailingSpaces].foreground.rgb =
         toRgb("highlightTrailingSpaces")
-
     if settings["Theme"].contains("highlightTrailingSpacesBg"):
       ColorThemeTable[configTheme][EditorColorPairIndex.highlightTrailingSpaces].background.rgb =
         toRgb("highlightTrailingSpacesBg")
@@ -1951,6 +1946,34 @@ proc parseSettingsFile*(settings: TomlValueRef): EditorSettings =
     if settings["Theme"].contains("reservedWordBg"):
       ColorThemeTable[configTheme][EditorColorPairIndex.reservedWord].background.rgb =
         toRgb("reservedWordBg")
+
+    if settings["Theme"].contains("syntaxCheckInfo"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.syntaxCheckInfo].foreground.rgb =
+        toRgb("syntaxCheckInfo")
+    if settings["Theme"].contains("syntaxCheckInfoBg"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.syntaxCheckInfo].background.rgb =
+        toRgb("syntaxCheckInfoBg")
+
+    if settings["Theme"].contains("syntaxCheckHint"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.syntaxCheckHint].foreground.rgb =
+        toRgb("syntaxCheckHint")
+    if settings["Theme"].contains("syntaxCheckHintBg"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.syntaxCheckHint].background.rgb =
+        toRgb("syntaxCheckHintBg")
+
+    if settings["Theme"].contains("syntaxCheckWarn"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.syntaxCheckWarn].foreground.rgb =
+        toRgb("syntaxCheckWarn")
+    if settings["Theme"].contains("syntaxCheckWarn"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.syntaxCheckWarn].background.rgb =
+        toRgb("syntaxCheckWarnBg")
+
+    if settings["Theme"].contains("syntaxCheckErr"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.syntaxCheckErr].foreground.rgb =
+        toRgb("syntaxCheckErr")
+    if settings["Theme"].contains("syntaxCheckErrBg"):
+      ColorThemeTable[configTheme][EditorColorPairIndex.syntaxCheckErr].background.rgb =
+        toRgb("syntaxCheckErrBg")
 
     if settings["Theme"].contains("backupManagerCurrentLine"):
       ColorThemeTable[configTheme][EditorColorPairIndex.backupManagerCurrentLine].foreground.rgb =
@@ -2843,6 +2866,14 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "highlightTrailingSpacesBg = \"{theme.bgColor(EditorColorPairIndex.highlightTrailingSpaces)}\""
   result.addLine fmt "reservedWord = \"{theme.fgColor(EditorColorPairIndex.reservedWord)}\""
   result.addLine fmt "reservedWordBg = \"{theme.bgColor(EditorColorPairIndex.reservedWord)}\""
+  result.addLine fmt "syntaxCheckInfo = \"{theme.fgColor(EditorColorPairIndex.syntaxCheckInfo)}\""
+  result.addLine fmt "syntaxCheckInfoBg = \"{theme.bgColor(EditorColorPairIndex.syntaxCheckInfo)}\""
+  result.addLine fmt "syntaxCheckHint = \"{theme.fgColor(EditorColorPairIndex.syntaxCheckHint)}\""
+  result.addLine fmt "syntaxCheckHintBg = \"{theme.bgColor(EditorColorPairIndex.syntaxCheckHint)}\""
+  result.addLine fmt "syntaxCheckWarn = \"{theme.fgColor(EditorColorPairIndex.syntaxCheckWarn)}\""
+  result.addLine fmt "syntaxCheckWarnBg = \"{theme.bgColor(EditorColorPairIndex.syntaxCheckWarn)}\""
+  result.addLine fmt "syntaxCheckErr = \"{theme.fgColor(EditorColorPairIndex.syntaxCheckErr)}\""
+  result.addLine fmt "syntaxCheckErrBg = \"{theme.bgColor(EditorColorPairIndex.syntaxCheckErr)}\""
   result.addLine fmt "configModeCurrentLine = \"{theme.fgColor(EditorColorPairIndex.configModeCurrentLine)}\""
   result.addLine fmt "configModeCurrentLineBg = \"{theme.bgColor(EditorColorPairIndex.configModeCurrentLine)}\""
   result.addLine fmt "currentLineBg = \"{theme.bgColor(EditorColorPairIndex.currentLineBg)}\""

@@ -1211,6 +1211,38 @@ reservedWord
 reservedWordBg
 ```
 
+A info color of Syntax checker result highlighting
+```
+syntaxCheckInfo
+```
+```
+syntaxCheckInfoBg
+```
+
+A hint color of Syntax checker result highlighting
+```
+syntaxCheckHint
+```
+```
+syntaxCheckHintBg
+```
+
+A warning color of Syntax checker result highlighting
+```
+syntaxCheckWarn
+```
+```
+syntaxCheckWarnBg
+```
+
+An error color of Syntax checker result highlighting
+```
+syntaxCheckErr
+```
+```
+syntaxCheckErrBg
+```
+
 Added line color on Diff viewer
 ```
 diffViewerAddedLine 
