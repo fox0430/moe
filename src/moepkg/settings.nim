@@ -2143,6 +2143,16 @@ proc loadSettingFile*(): EditorSettings =
   else:
     return parseTomlConfigs(toml)
 
+proc toConfigStr*(colorMode: ColorMode): string =
+  ## Convert ColorMode to string for the config file.
+
+  case colorMode:
+    of ColorMode.none: "none"
+    of ColorMode.c8: "8"
+    of ColorMode.c16: "16"
+    of ColorMode.c256: "256"
+    of ColorMode.c24bit: "24bit"
+
 ## Generate a string of the configuration file of TOML.
 proc genTomlConfigStr*(settings: EditorSettings): string =
   proc addLine(buf: var string, str: string) {.inline.} = buf &= "\n" & str
@@ -2174,7 +2184,7 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "smoothScroll = {$settings.smoothScroll }"
   result.addLine fmt "smoothScrollSpeed = {$settings.smoothScrollSpeed}"
   result.addLine fmt "liveReloadOfFile = {$settings.liveReloadOfFile}"
-  result.addLine fmt "colorMode = \"{$settings.colorMode}\""
+  result.addLine fmt "colorMode = \"{settings.colorMode.toConfigStr}\""
 
   result.addLine ""
 

@@ -816,3 +816,19 @@ suite "Error message":
       errorMessage = result.get.toValidateErrorMessage
 
     check errorMessage == """(name: test, val: test1 = "test1" test2 = "test2")"""
+
+suite "ColorMode to string for the config file":
+  test "from ColorMode.none":
+    check "none" == ColorMode.none.toConfigStr
+
+  test "from ColorMode.c8":
+    check "8" == ColorMode.c8.toConfigStr
+
+  test "from ColorMode.c16":
+    check "16" == ColorMode.c16.toConfigStr
+
+  test "from ColorMode.c256":
+    check "256" == ColorMode.c256.toConfigStr
+
+  test "from ColorMode.c24bit":
+    check "24bit" == ColorMode.c24bit.toConfigStr

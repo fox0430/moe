@@ -22,22 +22,6 @@ import pkg/results
 
 import moepkg/ui {.all.}
 
-suite "ColorMode to string":
-  test "from ColorMode.none":
-    check "none" == $ColorMode.none
-
-  test "from ColorMode.c8":
-    check "8" == $ColorMode.c8
-
-  test "from ColorMode.c16":
-    check "16" == $ColorMode.c16
-
-  test "from ColorMode.c256":
-    check "256" == $ColorMode.c256
-
-  test "from ColorMode.c24bit":
-    check "24bit" == $ColorMode.c24bit
-
 suite "parseColorMode":
   test "none":
     check ColorMode.none == "none".parseColorMode.get
