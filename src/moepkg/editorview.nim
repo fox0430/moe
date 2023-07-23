@@ -344,7 +344,6 @@ proc writeCurrentLine(
   viewSettings: EditorViewSettings) =
 
     if viewSettings.highlightCurrentLine and not isVisualMode:
-
       let themeColors = ColorThemeTable[theme]
 
       # Change background color to white if background color is editorBg
@@ -389,7 +388,7 @@ proc writeCurrentLine(
         spaces = ru" ".repeat(view.width - view.lines[y].width)
         x = view.leftMargin + view.widthOfLineNum + view.lines[y].width
 
-      view.write(win, y, x, spaces, currentLineColorPair.int16)
+      view.write(win, y, x, spaces, currentLineColorPair.int16, attribute)
 
       currentLineColorPair.inc
 
