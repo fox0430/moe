@@ -77,14 +77,6 @@ var
 
   terminalSize: Size
 
-proc `$`*(colorMode: ColorMode): string =
-  case colorMode:
-    of ColorMode.none: "none"
-    of ColorMode.c8: "8"
-    of ColorMode.c16: "16"
-    of ColorMode.c256: "256"
-    of ColorMode.c24bit: "24bit"
-
 proc parseColorMode*(str: string): Result[ColorMode, string] =
   case str:
     of "none":
