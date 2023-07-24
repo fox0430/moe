@@ -170,11 +170,11 @@ proc deleteBuffer(
     if area.startLine > bufStatus.buffer.high:
       windowNode.currentLine = bufStatus.buffer.high
     else: windowNode.currentLine = area.startLine
-    let column = if bufStatus.buffer[currentLine].high > area.startColumn:
-                   area.startColumn
-                 elif area.startColumn > 0:
-                   area.startColumn - 1
-                 else: 0
+
+    let column =
+      if bufStatus.buffer[currentLine].high > area.startColumn: area.startColumn
+      elif area.startColumn > 0: area.startColumn - 1
+      else: 0
 
     windowNode.currentColumn = column
     windowNode.expandedColumn = column
@@ -197,10 +197,11 @@ proc deleteBufferBlock(
 
     if bufStatus.buffer.len == 1 and
        bufStatus.buffer[windowNode.currentLine].len < 1: return
-    bufStatus.yankBufferBlock(registers,
-                              windowNode,
-                              area,
-                              settings)
+    bufStatus.yankBufferBlock(
+      registers,
+      windowNode,
+      area,
+      settings)
 
     if area.startLine == area.endLine and bufStatus.buffer[area.startLine].len < 1:
       bufStatus.buffer.delete(area.startLine, area.startLine + 1)
@@ -270,9 +271,10 @@ proc insertIndent(
     for i in area.startLine .. area.endLine:
       let oldLine = bufStatus.buffer[i]
       var newLine = bufStatus.buffer[i]
-      newLine.insert(ru' '.repeat(tabStop),
-                     min(area.startColumn,
-                     bufStatus.buffer[i].high))
+      newLine.insert(
+        ru' '.repeat(tabStop),
+        min(area.startColumn,
+        bufStatus.buffer[i].high))
       if oldLine != newLine: bufStatus.buffer[i] = newLine
 
 proc replaceCharacter(
@@ -452,10 +454,11 @@ proc getInsertBuffer(status: var EditorStatus): seq[Rune] =
         result.delete(result.high)
     elif isTabKey(key):
       result.add(key)
-      insertTab(currentBufStatus,
-                currentMainWindowNode,
-                status.settings.tabStop,
-                status.settings.autoCloseParen)
+      insertTab(
+        currentBufStatus,
+        currentMainWindowNode,
+        status.settings.tabStop,
+        status.settings.autoCloseParen)
     else:
       result.add(key)
       currentBufStatus.insertCharacter(
@@ -495,14 +498,16 @@ proc insertCharBlock(
       if bufStatus.buffer[i].high >= area.startColumn:
         for c in insertBuffer:
           if isTabKey(c):
-            insertTab(bufStatus,
-                      windowNode,
-                      tabStop,
-                      autoCloseParen)
+            insertTab(
+              bufStatus,
+              windowNode,
+              tabStop,
+              autoCloseParen)
           else:
-            bufStatus.insertCharacter(windowNode,
-                                      autoCloseParen,
-                                      c)
+            bufStatus.insertCharacter(
+              windowNode,
+              autoCloseParen,
+              c)
     windowNode.currentLine = beforeLine
 
 proc changeModeToNormalMode(status: var EditorStatus) =

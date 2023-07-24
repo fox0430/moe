@@ -374,9 +374,10 @@ test "Auto delete paren 5":
     currentBufStatus.buffer = initGapBuffer(@[ru"()"])
     status.changeMode(Mode.insert)
     currentBufStatus.keyRight(currentMainWindowNode)
-    currentBufStatus.keyBackspace(currentMainWindowNode,
-                                  status.settings.autoDeleteParen,
-                                  status.settings.tabStop)
+    currentBufStatus.keyBackspace(
+      currentMainWindowNode,
+      status.settings.autoDeleteParen,
+      status.settings.tabStop)
 
     check(currentBufStatus.buffer[0] == ru"")
 
@@ -389,9 +390,10 @@ test "Auto delete paren 5":
     status.changeMode(Mode.insert)
     for i in 0 ..< 2:
       currentBufStatus.keyRight(currentMainWindowNode)
-    currentBufStatus.keyBackspace(currentMainWindowNode,
-                                  status.settings.autoDeleteParen,
-                                  status.settings.tabStop)
+    currentBufStatus.keyBackspace(
+      currentMainWindowNode,
+      status.settings.autoDeleteParen,
+      status.settings.tabStop)
 
     check(currentBufStatus.buffer[0] == ru"")
 
@@ -408,9 +410,10 @@ test "Auto delete paren 6":
     for i in 0 ..< 5:
       currentBufStatus.keyRight(currentMainWindowNode)
 
-    currentBufStatus.keyBackspace(currentMainWindowNode,
-                                  status.settings.autoDeleteParen,
-                                  status.settings.tabStop)
+    currentBufStatus.keyBackspace(
+      currentMainWindowNode,
+      status.settings.autoDeleteParen,
+      status.settings.tabStop)
 
     check(currentBufStatus.buffer[0] == ru"(aa)")
 
@@ -426,9 +429,10 @@ test "Auto delete paren 6":
     for i in 0 ..< 6:
       currentBufStatus.keyRight(currentMainWindowNode)
 
-    currentBufStatus.keyBackspace(currentMainWindowNode,
-                                  status.settings.autoDeleteParen,
-                                  status.settings.tabStop)
+    currentBufStatus.keyBackspace(
+      currentMainWindowNode,
+      status.settings.autoDeleteParen,
+      status.settings.tabStop)
 
     check(currentBufStatus.buffer[0] == ru"a(a)")
 
@@ -630,8 +634,9 @@ suite "editorstatus: Updates/Restore the last cursor postion":
 
     status.updateLastCursorPostion
 
-    currentMainWindowNode.restoreCursorPostion(currentBufStatus,
-                                               status.lastPosition)
+    currentMainWindowNode.restoreCursorPostion(
+      currentBufStatus,
+      status.lastPosition)
 
     status.update
 
@@ -649,11 +654,11 @@ suite "Fix #1361":
 
     status.verticalSplitWindow
 
-    const key = ru 'a'
+    const Key = ru 'a'
     currentBufStatus.insertCharacter(
       currentMainWindowNode,
       status.settings.autoCloseParen,
-      key)
+      Key)
 
     status.update
 

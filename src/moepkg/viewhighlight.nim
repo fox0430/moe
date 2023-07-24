@@ -268,8 +268,8 @@ proc highlightTrailingSpaces(
   windowNode: WindowNode) =
 
     # TODO: Fix condition
-    if isConfigMode(bufStatus.mode, bufStatus.prevMode) or
-       isDebugMode(bufStatus.mode, bufStatus.prevMode): return
+    if bufStatus.isConfigMode or
+       bufStatus.isDebugMode: return
 
     let
       currentLine = windowNode.currentLine
@@ -309,13 +309,13 @@ proc highlightFullWidthSpace(
   range: Range) =
 
     const
-      fullWidthSpace = ru"　"
-      ignorecase = false
-      smartcase = false
+      FullWidthSpace = ru"　"
+      Ignorecase = false
+      Smartcase = false
     let allOccurrence = bufferInView.searchAllOccurrence(
-      fullWidthSpace,
-      ignorecase,
-      smartcase)
+      FullWidthSpace,
+      Ignorecase,
+      Smartcase)
 
     for pos in allOccurrence:
       let colorSegment = ColorSegment(
@@ -409,9 +409,10 @@ proc updateHighlight*(
     let
       range = windowNode.view.rangeOfOriginalLineInView
       startLine = range.first
-      endLine = if bufStatus.buffer.len > range.last + 1: range.last + 2
-                elif bufStatus.buffer.len > range.last: range.last + 1
-                else: range.last
+      endLine =
+        if bufStatus.buffer.len > range.last + 1: range.last + 2
+        elif bufStatus.buffer.len > range.last: range.last + 1
+        else: range.last
 
     var bufferInView = initGapBuffer[seq[Rune]]()
     for i in startLine ..< endLine: bufferInView.add(bufStatus.buffer[i])

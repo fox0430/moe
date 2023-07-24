@@ -49,7 +49,7 @@ proc changeModeToExMode*(
 
     bufStatus.changeMode(Mode.ex)
     commandLine.clear
-    commandLine.setPrompt(exModePrompt)
+    commandLine.setPrompt(ExModePrompt)
 
 proc execHelpCommand*(status: var EditorStatus, command: Runes) =
   if command.len == 1:

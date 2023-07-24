@@ -2141,7 +2141,7 @@ proc changeModeToSearchForwardMode(
 
     bufStatus.changeMode(Mode.searchForward)
     commandLine.clear
-    commandLine.setPrompt(searchForwardModePrompt)
+    commandLine.setPrompt(SearchForwardModePrompt)
 
 # TODO: Move or Remove
 proc changeModeToSearchBackwardMode(
@@ -2150,7 +2150,7 @@ proc changeModeToSearchBackwardMode(
 
     bufStatus.changeMode(Mode.searchBackward)
     commandLine.clear
-    commandLine.setPrompt(searchBackwardModePrompt)
+    commandLine.setPrompt(SearchBackwardModePrompt)
 
 proc isConfigModeCommand*(command: Runes): InputState =
   result = InputState.Invalid

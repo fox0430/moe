@@ -53,180 +53,177 @@ proc parseReplaceCommand(command: seq[Rune]): replaceCommandInfo =
   return (searhWord: searchWord, replaceWord: replaceWord)
 
 proc isForceWriteAndQuitCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "wq!") == 0
+  command.len == 1 and cmpIgnoreCase($command[0], "wq!") == 0
 
 proc isForceWriteCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "w!") == 0
+  command.len == 1 and cmpIgnoreCase($command[0], "w!") == 0
 
 proc isPutConfigFileCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "putconfigfile") == 0
+  command.len == 1 and cmpIgnoreCase($command[0], "putconfigfile") == 0
 
 proc isDeleteTrailingSpacesCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and
+  command.len == 1 and
          cmpIgnoreCase($command[0], "deletetrailingspaces") == 0
 
 proc isOpenHelpCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "help") == 0
+  command.len == 1 and cmpIgnoreCase($command[0], "help") == 0
 
 proc isOpenLogViweer(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "log") == 0
+  command.len == 1 and cmpIgnoreCase($command[0], "log") == 0
 
 proc isOpenBufferManager(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "buf") == 0
+  command.len == 1 and cmpIgnoreCase($command[0], "buf") == 0
 
 proc isChangeCursorLineCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and cmpIgnoreCase($command[0], "cursorline") == 0
+  command.len == 2 and cmpIgnoreCase($command[0], "cursorline") == 0
 
 proc isListAllBufferCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "ls") == 0
+  command.len == 1 and cmpIgnoreCase($command[0], "ls") == 0
 
 proc isWriteAndQuitAllBufferCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "wqa") == 0
+  command.len == 1 and cmpIgnoreCase($command[0], "wqa") == 0
 
 proc isForceAllBufferQuitCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "qa!") == 0
+  command.len == 1 and cmpIgnoreCase($command[0], "qa!") == 0
 
 proc isAllBufferQuitCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "qa") == 0
+  command.len == 1 and cmpIgnoreCase($command[0], "qa") == 0
 
 proc isVerticalSplitWindowCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "vs") == 0
+  command.len == 1 and cmpIgnoreCase($command[0], "vs") == 0
 
 proc isHorizontalSplitWindowCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "sv") == 0
+  command.len == 1 and cmpIgnoreCase($command[0], "sv") == 0
 
 proc isFilerIconSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and cmpIgnoreCase($command[0], "icon") == 0
+  command.len == 2 and cmpIgnoreCase($command[0], "icon") == 0
 
 proc isLiveReloadOfConfSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and cmpIgnoreCase($command[0], "livereload") == 0
+  command.len == 2 and cmpIgnoreCase($command[0], "livereload") == 0
 
 proc isChangeThemeSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and cmpIgnoreCase($command[0], "theme") == 0
+  command.len == 2 and cmpIgnoreCase($command[0], "theme") == 0
 
 proc isTabLineSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and cmpIgnoreCase($command[0], "tab") == 0
+  command.len == 2 and cmpIgnoreCase($command[0], "tab") == 0
 
 proc isSyntaxSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and cmpIgnoreCase($command[0], "syntax") == 0
+  command.len == 2 and cmpIgnoreCase($command[0], "syntax") == 0
 
 proc isTabStopSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and
-         cmpIgnoreCase($command[0], "tabstop") == 0 and
-         isDigit(command[1])
+  command.len == 2 and
+  cmpIgnoreCase($command[0], "tabstop") == 0 and
+  isDigit(command[1])
 
 proc isAutoCloseParenSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and cmpIgnoreCase($command[0], "paren") == 0
+  command.len == 2 and cmpIgnoreCase($command[0], "paren") == 0
 
 proc isAutoIndentSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and cmpIgnoreCase($command[0], "indent") == 0
+  command.len == 2 and cmpIgnoreCase($command[0], "indent") == 0
 
 proc isIndentationLinesSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and cmpIgnoreCase($command[0], "indentationlines") == 0
+  command.len == 2 and cmpIgnoreCase($command[0], "indentationlines") == 0
 
 proc isLineNumberSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and cmpIgnoreCase($command[0], "linenum") == 0
+  command.len == 2 and cmpIgnoreCase($command[0], "linenum") == 0
 
 proc isStatusLineSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and cmpIgnoreCase($command[0], "statusline") == 0
+  command.len == 2 and cmpIgnoreCase($command[0], "statusline") == 0
 
 proc isIncrementalSearchSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and cmpIgnoreCase($command[0], "incrementalsearch") == 0
+  command.len == 2 and cmpIgnoreCase($command[0], "incrementalsearch") == 0
 
 proc isHighlightPairOfParenSettigCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and cmpIgnoreCase($command[0], "highlightparen") == 0
+  command.len == 2 and cmpIgnoreCase($command[0], "highlightparen") == 0
 
 proc isAutoDeleteParenSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and cmpIgnoreCase($command[0], "deleteparen") == 0
+  command.len == 2 and cmpIgnoreCase($command[0], "deleteparen") == 0
 
 proc isSmoothScrollSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and cmpIgnoreCase($command[0], "smoothscroll") == 0
+  command.len == 2 and cmpIgnoreCase($command[0], "smoothscroll") == 0
 
 proc isSmoothScrollSpeedSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and
-         cmpIgnoreCase($command[0], "scrollspeed") == 0 and
-         isDigit(command[1])
+  command.len == 2 and
+  cmpIgnoreCase($command[0], "scrollspeed") == 0 and
+  isDigit(command[1])
 
 proc isHighlightCurrentWordSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and cmpIgnoreCase($command[0], "highlightcurrentword") == 0
+  command.len == 2 and cmpIgnoreCase($command[0], "highlightcurrentword") == 0
 
 proc isSystemClipboardSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and cmpIgnoreCase($command[0], "clipboard") == 0
+  command.len == 2 and cmpIgnoreCase($command[0], "clipboard") == 0
 
 proc isHighlightFullWidthSpaceSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and cmpIgnoreCase($command[0], "highlightfullspace") == 0
+  command.len == 2 and cmpIgnoreCase($command[0], "highlightfullspace") == 0
 
 proc isMultipleStatusLineSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and cmpIgnoreCase($command[0], "multiplestatusline") == 0
+  command.len == 2 and cmpIgnoreCase($command[0], "multiplestatusline") == 0
 
 proc isBuildOnSaveSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and cmpIgnoreCase($command[0], "buildonsave") == 0
+  command.len == 2 and cmpIgnoreCase($command[0], "buildonsave") == 0
 
 proc isShowGitInInactiveSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and cmpIgnoreCase($command[0], "showgitinactive") == 0
+  command.len == 2 and cmpIgnoreCase($command[0], "showgitinactive") == 0
 
 proc isIgnorecaseSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and cmpIgnoreCase($command[0], "ignorecase") == 0
+  command.len == 2 and cmpIgnoreCase($command[0], "ignorecase") == 0
 
 proc isSmartcaseSettingCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and cmpIgnoreCase($command[0], "smartcase") == 0
+  command.len == 2 and cmpIgnoreCase($command[0], "smartcase") == 0
 
 proc isHighlightCurrentLineSettingCommand(
   command: seq[seq[Rune]]): bool {.inline.} =
 
-  return command.len == 2 and
-         cmpIgnoreCase($command[0], "highlightcurrentline") == 0
+    command.len == 2 and
+    cmpIgnoreCase($command[0], "highlightcurrentline") == 0
 
 proc isTurnOffHighlightingCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "noh") == 0
+  command.len == 1 and cmpIgnoreCase($command[0], "noh") == 0
 
 proc isDeleteCurrentBufferStatusCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "bd") == 0
+  command.len == 1 and cmpIgnoreCase($command[0], "bd") == 0
 
 proc isDeleteBufferStatusCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and
-         cmpIgnoreCase($command[0], "bd") == 0 and
-         isDigit(command[1])
+  command.len == 2 and
+  cmpIgnoreCase($command[0], "bd") == 0 and
+  isDigit(command[1])
 
 proc isChangeFirstBufferCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "bfirst") == 0
+  command.len == 1 and cmpIgnoreCase($command[0], "bfirst") == 0
 
 proc isChangeLastBufferCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "blast") == 0
+  command.len == 1 and cmpIgnoreCase($command[0], "blast") == 0
 
 proc isOpenBufferByNumber(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and
-         cmpIgnoreCase($command[0], "b") == 0 and
-         isDigit(command[1])
+  command.len == 2 and
+  cmpIgnoreCase($command[0], "b") == 0 and
+  isDigit(command[1])
 
 proc isChangeNextBufferCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "bnext") == 0
+  command.len == 1 and cmpIgnoreCase($command[0], "bnext") == 0
 
 proc isChangePreveBufferCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "bprev") == 0
+  command.len == 1 and cmpIgnoreCase($command[0], "bprev") == 0
 
 proc isJumpCommand(command: seq[seq[Rune]]): bool =
   command.len == 1 and isDigit(command[0])
 
 proc isJumpCommand(status: EditorStatus, command: seq[seq[Rune]]): bool =
-  let
-    currentBufferIndex = status.bufferIndexInCurrentWindow
-    prevMode = status.bufStatus[currentBufferIndex].prevMode
-  return command.len == 1 and
-         isDigit(command[0]) and
-         (prevMode == bufferstatus.Mode.normal or
-         prevMode == bufferstatus.Mode.logviewer)
+  command.len == 1 and
+  isDigit(command[0]) and
+  (currentBufStatus.prevMode == Mode.normal or
+   currentBufStatus.prevMode == Mode.logviewer)
 
 proc isEditCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and cmpIgnoreCase($command[0], "e") == 0
+  command.len == 2 and cmpIgnoreCase($command[0], "e") == 0
 
 proc isOpenInHorizontalSplitWindowCommand(command: seq[seq[Rune]]): bool =
-  return command.len > 0 and
-         command.len < 3 and
-         cmpIgnoreCase($command[0], "sp") == 0
+  command.len > 0 and
+  command.len < 3 and
+  cmpIgnoreCase($command[0], "sp") == 0
 
-proc isOpenInVerticalSplitWindowCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 2 and cmpIgnoreCase($command[0], "vs") == 0
+proc isOpenInVerticalSplitWindowCommand(command: seq[Runes]): bool {.inline.} =
+  command.len == 2 and cmpIgnoreCase($command[0], "vs") == 0
 
 proc isWriteCommand(command: seq[seq[Rune]]): bool =
   command.len in {1, 2} and
@@ -234,69 +231,72 @@ proc isWriteCommand(command: seq[seq[Rune]]): bool =
 
 proc isWriteCommand(status: EditorStatus, command: seq[seq[Rune]]): bool =
   let prevMode = currentBufStatus.prevMode
-  return command.len in {1, 2} and
-         cmpIgnoreCase($command[0], "w") == 0 and
-         (prevMode == bufferstatus.Mode.normal or
-          prevMode == bufferstatus.Mode.config)
+  return
+    command.len in {1, 2} and
+    cmpIgnoreCase($command[0], "w") == 0 and
+    (prevMode == Mode.normal or prevMode == Mode.config)
 
 proc isQuitCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "q") == 0
+  command.len == 1 and cmpIgnoreCase($command[0], "q") == 0
 
 proc isWriteAndQuitCommand(command: seq[seq[Rune]]): bool =
   command.len == 1 and
   cmpIgnoreCase($command[0], "wq") == 0
 
 proc isWriteAndQuitCommand(status: EditorStatus, command: seq[seq[Rune]]): bool =
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
-  return command.len == 1 and
-         cmpIgnoreCase($command[0], "wq") == 0 and
-         status.bufStatus[currentBufferIndex].prevMode == bufferstatus.Mode.normal
+  command.len == 1 and
+  cmpIgnoreCase($command[0], "wq") == 0 and
+  currentBufStatus.prevMode == Mode.normal
 
 proc isForceQuitCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "q!") == 0
+  command.len == 1 and cmpIgnoreCase($command[0], "q!") == 0
 
 proc isShellCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len >= 1 and command[0][0] == ru'!'
+  command.len >= 1 and command[0][0] == ru'!'
 
 proc isBackgroundCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "bg") == 0
+  command.len == 1 and cmpIgnoreCase($command[0], "bg") == 0
 
 proc isManualCommand(command: seq[seq[Rune]]): bool {.inline.} =
   # TODO:  Configure a default manual page to show on `:man`.
-  return command.len > 1 and cmpIgnoreCase($command[0], "man") == 0
+  command.len > 1 and cmpIgnoreCase($command[0], "man") == 0
 
 proc isReplaceCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len >= 1 and
-         command[0].len > 4 and
-         command[0][0 .. 2] == ru"%s/"
+  command.len >= 1 and
+  command[0].len > 4 and
+  command[0][0 .. 2] == ru"%s/"
 
 proc isCreateNewEmptyBufferCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "ene") == 0
+  command.len == 1 and cmpIgnoreCase($command[0], "ene") == 0
 
-proc isNewEmptyBufferInSplitWindowHorizontally(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "new") == 0
+proc isNewEmptyBufferInSplitWindowHorizontally(
+  command: seq[seq[Rune]]): bool {.inline.} =
 
-proc isNewEmptyBufferInSplitWindowVertically(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "vnew") == 0
+    command.len == 1 and cmpIgnoreCase($command[0], "new") == 0
+
+proc isNewEmptyBufferInSplitWindowVertically(
+  command: seq[seq[Rune]]): bool {.inline.} =
+
+    command.len == 1 and cmpIgnoreCase($command[0], "vnew") == 0
 
 proc isQuickRunCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and
-         (cmpIgnoreCase($command[0], "run") == 0 or command[0] == ru"Q")
+  command.len == 1 and
+  (cmpIgnoreCase($command[0], "run") == 0 or command[0] == ru"Q")
 
 proc isRecentFileModeCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "recent") == 0
+  command.len == 1 and cmpIgnoreCase($command[0], "recent") == 0
 
 proc isBackupManagerCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "backup") == 0
+  command.len == 1 and cmpIgnoreCase($command[0], "backup") == 0
 
 proc isStartConfigMode(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "conf") == 0
+  command.len == 1 and cmpIgnoreCase($command[0], "conf") == 0
 
 proc isStartDebugMode(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "debug") == 0
+  command.len == 1 and cmpIgnoreCase($command[0], "debug") == 0
 
 proc isBuildCommand(command: seq[seq[Rune]]): bool {.inline.} =
-  return command.len == 1 and cmpIgnoreCase($command[0], "build") == 0
+  command.len == 1 and cmpIgnoreCase($command[0], "build") == 0
 
 proc startDebugMode(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
@@ -508,7 +508,7 @@ proc filerIconSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
-proc liveReloadOfConfSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+proc liveReloadOfConfSettingCommand(status: var EditorStatus, command: Runes) =
   if command == ru "on": status.settings.liveReloadOfConf = true
   elif command == ru"off": status.settings.liveReloadOfConf = false
 
@@ -549,9 +549,10 @@ proc syntaxSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   let sourceLang = if status.settings.syntax: currentBufStatus.language
                    else: SourceLanguage.langNone
 
-  currentMainWindowNode.highlight = initHighlight($currentBufStatus.buffer,
-                                                  status.settings.highlight.reservedWords,
-                                                  sourceLang)
+  currentMainWindowNode.highlight = initHighlight(
+    $currentBufStatus.buffer,
+    status.settings.highlight.reservedWords,
+    sourceLang)
 
   status.commandLine.clear
   status.changeMode(currentBufStatus.prevMode)
@@ -563,7 +564,7 @@ proc tabStopSettingCommand(status: var EditorStatus, command: int) =
 
   status.changeMode(currentBufStatus.prevMode)
 
-proc autoCloseParenSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+proc autoCloseParenSettingCommand(status: var EditorStatus, command: Runes) =
   if command == ru"on": status.settings.autoCloseParen = true
   elif command == ru"off": status.settings.autoCloseParen = false
 
@@ -571,7 +572,7 @@ proc autoCloseParenSettingCommand(status: var EditorStatus, command: seq[Rune]) 
 
   status.changeMode(currentBufStatus.prevMode)
 
-proc autoIndentSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+proc autoIndentSettingCommand(status: var EditorStatus, command: Runes) =
   if command == ru"on": status.settings.autoIndent = true
   elif command == ru"off": status.settings.autoIndent = false
 
@@ -579,7 +580,7 @@ proc autoIndentSettingCommand(status: var EditorStatus, command: seq[Rune]) =
 
   status.changeMode(currentBufStatus.prevMode)
 
-proc indentationLinesSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+proc indentationLinesSettingCommand(status: var EditorStatus, command: Runes) =
   if command == ru"on": status.settings.view.indentationLines = true
   elif command == ru"off": status.settings.view.indentationLines = false
 
@@ -587,14 +588,16 @@ proc indentationLinesSettingCommand(status: var EditorStatus, command: seq[Rune]
 
   status.changeMode(currentBufStatus.prevMode)
 
-proc lineNumberSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+proc lineNumberSettingCommand(status: var EditorStatus, command: Runes) =
   if command == ru "on": status.settings.view.lineNumber = true
   elif command == ru"off": status.settings.view.lineNumber = false
 
   let
-    numberOfDigitsLen = if status.settings.view.lineNumber:
-                            numberOfDigits(status.bufStatus[0].buffer.len) - 2
-                          else: 0
+    numberOfDigitsLen =
+      if status.settings.view.lineNumber:
+        numberOfDigits(status.bufStatus[0].buffer.len) - 2
+      else:
+        0
     useStatusLine = if status.settings.statusLine.enable: 1 else: 0
 
   currentMainWindowNode.view = initEditorView(
@@ -611,9 +614,11 @@ proc statusLineSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   elif command == ru"off": status.settings.statusLine.enable = false
 
   let
-    numberOfDigitsLen = if status.settings.view.lineNumber:
-                            numberOfDigits(status.bufStatus[0].buffer.len) - 2
-                          else: 0
+    numberOfDigitsLen =
+      if status.settings.view.lineNumber:
+        numberOfDigits(status.bufStatus[0].buffer.len) - 2
+      else:
+        0
     useStatusLine = if status.settings.statusLine.enable : 1 else: 0
 
   currentMainWindowNode.view = initEditorView(
@@ -625,7 +630,7 @@ proc statusLineSettingCommand(status: var EditorStatus, command: seq[Rune]) =
 
   status.changeMode(currentBufStatus.prevMode)
 
-proc incrementalSearchSettingCommand(status: var EditorStatus, command: seq[Rune]) =
+proc incrementalSearchSettingCommand(status: var EditorStatus, command: Runes) =
   if command == ru"on": status.settings.incrementalSearch = true
   elif command == ru"off": status.settings.incrementalSearch = false
 
@@ -633,25 +638,27 @@ proc incrementalSearchSettingCommand(status: var EditorStatus, command: seq[Rune
 
   status.changeMode(currentBufStatus.prevMode)
 
-proc highlightPairOfParenSettigCommand(status: var EditorStatus,
-                                       command: seq[Rune]) =
+proc highlightPairOfParenSettigCommand(
+  status: var EditorStatus,
+  command: seq[Rune]) =
 
-  if command == ru"on": status.settings.highlight.pairOfParen = true
-  elif command == ru"off": status.settings.highlight.pairOfParen = false
+    if command == ru"on": status.settings.highlight.pairOfParen = true
+    elif command == ru"off": status.settings.highlight.pairOfParen = false
 
-  status.commandLine.clear
+    status.commandLine.clear
 
-  status.changeMode(currentBufStatus.prevMode)
+    status.changeMode(currentBufStatus.prevMode)
 
-proc autoDeleteParenSettingCommand(status: var EditorStatus,
-                                   command: seq[Rune]) =
+proc autoDeleteParenSettingCommand(
+  status: var EditorStatus,
+  command: seq[Rune]) =
 
-  if command == ru"on": status.settings.autoDeleteParen = true
-  elif command == ru"off": status.settings.autoDeleteParen = false
+    if command == ru"on": status.settings.autoDeleteParen = true
+    elif command == ru"off": status.settings.autoDeleteParen = false
 
-  status.commandLine.clear
+    status.commandLine.clear
 
-  status.changeMode(currentBufStatus.prevMode)
+    status.changeMode(currentBufStatus.prevMode)
 
 proc smoothScrollSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru"on": status.settings.smoothScroll = true
@@ -668,37 +675,40 @@ proc smoothScrollSpeedSettingCommand(status: var EditorStatus, speed: int) =
 
   status.changeMode(currentBufStatus.prevMode)
 
-proc highlightCurrentWordSettingCommand(status: var EditorStatus,
-                                        command: seq[Rune]) =
+proc highlightCurrentWordSettingCommand(
+  status: var EditorStatus,
+  command: seq[Rune]) =
 
-  if command == ru"on": status.settings.highlight.currentWord = true
-  if command == ru"off": status.settings.highlight.currentWord = false
+    if command == ru"on": status.settings.highlight.currentWord = true
+    if command == ru"off": status.settings.highlight.currentWord = false
 
-  status.commandLine.clear
+    status.commandLine.clear
 
-  status.changeMode(currentBufStatus.prevMode)
+    status.changeMode(currentBufStatus.prevMode)
 
-proc systemClipboardSettingCommand(status: var EditorStatus,
-                                   command: seq[Rune]) =
+proc systemClipboardSettingCommand(
+  status: var EditorStatus,
+  command: seq[Rune]) =
 
-  if command == ru"on": status.settings.clipboard.enable = true
-  elif command == ru"off": status.settings.clipboard.enable = false
+    if command == ru"on": status.settings.clipboard.enable = true
+    elif command == ru"off": status.settings.clipboard.enable = false
 
-  status.commandLine.clear
+    status.commandLine.clear
 
-  status.changeMode(currentBufStatus.prevMode)
+    status.changeMode(currentBufStatus.prevMode)
 
-proc highlightFullWidthSpaceSettingCommand(status: var EditorStatus,
-                                           command: seq[Rune]) =
+proc highlightFullWidthSpaceSettingCommand(
+  status: var EditorStatus,
+  command: seq[Rune]) =
 
-  if command == ru"on":
-    status.settings.highlight.fullWidthSpace = true
-  elif command == ru"off":
-    status.settings.highlight.fullWidthSpace = false
+    if command == ru"on":
+      status.settings.highlight.fullWidthSpace = true
+    elif command == ru"off":
+      status.settings.highlight.fullWidthSpace = false
 
-  status.commandLine.clear
+    status.commandLine.clear
 
-  status.changeMode(currentBufStatus.prevMode)
+    status.changeMode(currentBufStatus.prevMode)
 
 proc buildOnSaveSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru"on": status.settings.buildOnSave.enable = true
@@ -715,25 +725,29 @@ proc turnOffHighlightingCommand(status: var EditorStatus) =
   status.commandLine.clear
   status.changeMode(bufferstatus.Mode.normal)
 
-proc multipleStatusLineSettingCommand(status: var EditorStatus,
-                                     command: seq[Rune]) =
+proc multipleStatusLineSettingCommand(
+  status: var EditorStatus,
+  command: seq[Rune]) =
 
-  if command == ru"on": status.settings.statusLine.multipleStatusLine = true
-  elif command == ru"off": status.settings.statusLine.multipleStatusLine = false
+    if command == ru"on":
+      status.settings.statusLine.multipleStatusLine = true
+    elif command == ru"off":
+      status.settings.statusLine.multipleStatusLine = false
 
-  status.commandLine.clear
+    status.commandLine.clear
 
-  status.changeMode(currentBufStatus.prevMode)
+    status.changeMode(currentBufStatus.prevMode)
 
-proc showGitInInactiveSettingCommand(status: var EditorStatus,
-                                     command: seq[Rune]) =
+proc showGitInInactiveSettingCommand(
+  status: var EditorStatus,
+  command: seq[Rune]) =
 
-  if command == ru"on": status.settings.statusLine.showGitInactive = true
-  elif command == ru"off": status.settings.statusLine.showGitInactive = false
+    if command == ru"on": status.settings.statusLine.showGitInactive = true
+    elif command == ru"off": status.settings.statusLine.showGitInactive = false
 
-  status.commandLine.clear
+    status.commandLine.clear
 
-  status.changeMode(currentBufStatus.prevMode)
+    status.changeMode(currentBufStatus.prevMode)
 
 proc ignorecaseSettingCommand(status: var EditorStatus, command: seq[Rune]) =
   if command == ru "on": status.settings.ignorecase = true
@@ -747,13 +761,14 @@ proc smartcaseSettingCommand(status: var EditorStatus, command: seq[Rune]) =
 
   status.changeMode(currentBufStatus.prevMode)
 
-proc highlightCurrentLineSettingCommand(status: var EditorStatus,
-                                        command: seq[Rune]) =
+proc highlightCurrentLineSettingCommand(
+  status: var EditorStatus,
+  command: seq[Rune]) =
 
-  if command == ru "on": status.settings.view.highlightCurrentLine = true
-  elif command == ru "off": status.settings.view.highlightCurrentLine  = false
+    if command == ru "on": status.settings.view.highlightCurrentLine = true
+    elif command == ru "off": status.settings.view.highlightCurrentLine  = false
 
-  status.changeMode(currentBufStatus.prevMode)
+    status.changeMode(currentBufStatus.prevMode)
 
 proc deleteBufferStatusCommand(status: var EditorStatus, index: int) =
   if index < 0 or index > status.bufStatus.high:
@@ -912,7 +927,7 @@ proc checkAndCreateDir(
 
 # Write current editor settings to configuration file
 proc writeConfigurationFile(status: var EditorStatus) =
-  const
+  let
     configFileDir = getHomeDir() / ".config/moe/"
     configFilePath = configFileDir & "moerc.toml"
 
@@ -923,9 +938,10 @@ proc writeConfigurationFile(status: var EditorStatus) =
   else:
     try:
       createDir(configFileDir)
-      saveFile(configFilePath.toRunes,
-               buffer.toRunes,
-               CharacterEncoding.utf8)
+      saveFile(
+        configFilePath.toRunes,
+        buffer.toRunes,
+        CharacterEncoding.utf8)
     except IOError:
       status.commandLine.writeSaveError
 
@@ -1092,7 +1108,8 @@ proc allBufferQuitCommand(status: var EditorStatus) =
 
   status.exitEditor
 
-proc forceAllBufferQuitCommand(status: var EditorStatus) {.inline.} = status.exitEditor
+proc forceAllBufferQuitCommand(status: var EditorStatus) {.inline.} =
+  status.exitEditor
 
 proc writeAndQuitAllBufferCommand(status: var EditorStatus) =
   for bufStatus in status.bufStatus:
@@ -1117,9 +1134,10 @@ proc writeAndQuitAllBufferCommand(status: var EditorStatus) =
       return
 
     try:
-      saveFile(path,
-               bufStatus.buffer.toRunes,
-               bufStatus.characterEncoding)
+      saveFile(
+        path,
+        bufStatus.buffer.toRunes,
+        bufStatus.characterEncoding)
     except IOError:
       status.commandLine.writeSaveError
       status.changeMode(currentBufStatus.prevMode)
@@ -1276,7 +1294,6 @@ proc replaceBuffer(status: var EditorStatus, command: seq[Rune]) =
   status.changeMode(currentBufStatus.prevMode)
 
 proc createNewEmptyBufferCommand*(status: var EditorStatus) =
-
   status.changeMode(currentBufStatus.prevMode)
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
@@ -1307,12 +1324,12 @@ proc newEmptyBufferInSplitWindowVertically*(status: var EditorStatus) =
 
   status.changeCurrentBuffer(status.bufStatus.high)
 
-## Save a command to the exCommandHistory.
-## If the size exceeds the limit, the oldest will be deleted.
 proc saveExCommandHistory(
   exCommandHistory: var seq[Runes],
   command: seq[Runes],
   limit: int) =
+    ## Save a command to the exCommandHistory.
+    ## If the size exceeds the limit, the oldest will be deleted.
 
     if limit < 1 or command.len == 0: return
 

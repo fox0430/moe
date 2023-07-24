@@ -495,81 +495,81 @@ suite "Parse configuration file":
       check pair.background.rgb == "#000000".hexToRgb.get
 
   test "Parse Clipboard setting 1":
-    const str = """
+    const Str = """
       [Clipboard]
       enable = true
       toolOnLinux = "xclip""""
 
-    let toml = parsetoml.parseString(str)
+    let toml = parsetoml.parseString(Str)
     let settings = parseTomlConfigs(toml)
 
     check settings.clipboard.enable
     check settings.clipboard.toolOnLinux == ClipboardToolOnLinux.xclip
 
   test "Parse Clipboard setting 2":
-    const str = """
+    const Str = """
       [Clipboard]
       enable = true
       toolOnLinux = "xsel""""
 
-    let toml = parsetoml.parseString(str)
+    let toml = parsetoml.parseString(Str)
     let settings = parseTomlConfigs(toml)
 
     check settings.clipboard.enable
     check settings.clipboard.toolOnLinux == ClipboardToolOnLinux.xsel
 
   test "Parse Clipboard setting 3":
-    const str = """
+    const Str = """
       [Clipboard]
       enable = true
       toolOnLinux = "wl-clipboard""""
 
-    let toml = parsetoml.parseString(str)
+    let toml = parsetoml.parseString(Str)
     let settings = parseTomlConfigs(toml)
 
     check settings.clipboard.enable
     check settings.clipboard.toolOnLinux == ClipboardToolOnLinux.wlClipboard
 
   test "Parse color Mode setting 1":
-    const str = """
+    const Str = """
       [Standard]
       colorMode = "none"
     """
 
-    let toml = parsetoml.parseString(str)
+    let toml = parsetoml.parseString(Str)
     let settings = parseTomlConfigs(toml)
 
     check ColorMode.none == settings.colorMode
 
   test "Parse color Mode setting 2":
-    const str = """
+    const Str = """
       [Standard]
       colorMode = "8"
     """
 
-    let toml = parsetoml.parseString(str)
+    let toml = parsetoml.parseString(Str)
     let settings = parseTomlConfigs(toml)
 
     check ColorMode.c8 == settings.colorMode
 
   test "Parse color Mode setting 3":
-    const str = """
+    const Str = """
       [Standard]
       colorMode = "256"
     """
 
-    let toml = parsetoml.parseString(str)
+    let toml = parsetoml.parseString(Str)
     let settings = parseTomlConfigs(toml)
 
     check ColorMode.c256  == settings.colorMode
 
   test "Parse color Mode setting 4":
-    const str = """
+    const Str = """
       [Standard]
       colorMode = "24bit"
     """
 
-    let toml = parsetoml.parseString(str)
+    let toml = parsetoml.parseString(Str)
     let settings = parseTomlConfigs(toml)
 
     check ColorMode.c24bit == settings.colorMode
@@ -583,79 +583,79 @@ suite "Validate toml config":
     check result == none(InvalidItem)
 
   test "Except to fail":
-    const tomlThemeConfig ="""
+    const TomlThemeConfig ="""
       [Persist]
       a = "a"
     """
 
-    let toml = parsetoml.parseString(tomlThemeConfig)
+    let toml = parsetoml.parseString(TomlThemeConfig)
     let result = toml.validateTomlConfig
 
     check isSome(result)
 
 suite "Validate Standard.theme":
   test "Dark":
-    const tomlThemeConfig ="""
+    const TomlThemeConfig ="""
       [Standard]
       theme = "dark"
     """
 
-    let toml = parsetoml.parseString(tomlThemeConfig)
+    let toml = parsetoml.parseString(TomlThemeConfig)
     let result = toml.validateTomlConfig
 
     check result == none(InvalidItem)
 
   test "light":
-    const tomlThemeConfig ="""
+    const TomlThemeConfig ="""
       [Standard]
       theme = "light"
     """
 
-    let toml = parsetoml.parseString(tomlThemeConfig)
+    let toml = parsetoml.parseString(TomlThemeConfig)
     let result = toml.validateTomlConfig
 
     check result == none(InvalidItem)
 
   test "vivid":
-    const tomlThemeConfig ="""
+    const TomlThemeConfig ="""
       [Standard]
       theme = "vivid"
     """
 
-    let toml = parsetoml.parseString(tomlThemeConfig)
+    let toml = parsetoml.parseString(TomlThemeConfig)
     let result = toml.validateTomlConfig
 
     check result == none(InvalidItem)
 
   test "config":
-    const tomlThemeConfig ="""
+    const TomlThemeConfig ="""
       [Standard]
       theme = "config"
     """
 
-    let toml = parsetoml.parseString(tomlThemeConfig)
+    let toml = parsetoml.parseString(TomlThemeConfig)
     let result = toml.validateTomlConfig
 
     check result == none(InvalidItem)
 
   test "vscode":
-    const tomlThemeConfig ="""
+    const TomlThemeConfig ="""
       [Standard]
       theme = "vscode"
     """
 
-    let toml = parsetoml.parseString(tomlThemeConfig)
+    let toml = parsetoml.parseString(TomlThemeConfig)
     let result = toml.validateTomlConfig
 
     check result == none(InvalidItem)
 
   test "Invalid value":
-    const tomlThemeConfig ="""
+    const TomlThemeConfig ="""
       [Standard]
       theme = "a"
     """
 
-    let toml = parsetoml.parseString(tomlThemeConfig)
+    let toml = parsetoml.parseString(TomlThemeConfig)
     let result = toml.validateTomlConfig
 
     privateAccess InvalidItem
@@ -663,7 +663,7 @@ suite "Validate Standard.theme":
 
 suite "Validate theme tables":
   test "Color code":
-    const tomlThemeConfig ="""
+    const TomlThemeConfig ="""
       [Standard]
       theme = "config"
 
@@ -671,13 +671,13 @@ suite "Validate theme tables":
       baseTheme = "dark"
       foreground = "#000000"
     """
-    let toml = parsetoml.parseString(tomlThemeConfig)
+    let toml = parsetoml.parseString(TomlThemeConfig)
     let result = toml.validateTomlConfig
 
     check result.isNone
 
   test "termDefaultFg":
-    const tomlThemeConfig ="""
+    const TomlThemeConfig ="""
       [Standard]
       theme = "config"
 
@@ -685,13 +685,13 @@ suite "Validate theme tables":
       baseTheme = "dark"
       foreground = "termDefaultFg"
     """
-    let toml = parsetoml.parseString(tomlThemeConfig)
+    let toml = parsetoml.parseString(TomlThemeConfig)
     let result = toml.validateTomlConfig
 
     check result.isNone
 
   test "termDefaultBg":
-    const tomlThemeConfig ="""
+    const TomlThemeConfig ="""
       [Standard]
       theme = "config"
 
@@ -699,41 +699,41 @@ suite "Validate theme tables":
       baseTheme = "dark"
       background = "termDefaultBg"
     """
-    let toml = parsetoml.parseString(tomlThemeConfig)
+    let toml = parsetoml.parseString(TomlThemeConfig)
     let result = toml.validateTomlConfig
 
     check result.isNone
 
   test "Invalid key":
-    const tomlThemeConfig ="""
+    const TomlThemeConfig ="""
       [Standard]
       theme = "config"
 
       [Theme]
       a = "dark"
     """
-    let toml = parsetoml.parseString(tomlThemeConfig)
+    let toml = parsetoml.parseString(TomlThemeConfig)
     let result = toml.validateTomlConfig
 
     privateAccess InvalidItem
     check result == some(InvalidItem(name: "a", val: "dark"))
 
   test "Invalid value 1":
-    const tomlThemeConfig ="""
+    const TomlThemeConfig ="""
       [Standard]
       theme = "config"
 
       [Theme]
       baseTheme = "a"
     """
-    let toml = parsetoml.parseString(tomlThemeConfig)
+    let toml = parsetoml.parseString(TomlThemeConfig)
     let result = toml.validateTomlConfig
 
     privateAccess InvalidItem
     check result == some(InvalidItem(name: "baseTheme", val: "a"))
 
   test "Invalid value 2":
-    const tomlThemeConfig ="""
+    const TomlThemeConfig ="""
       [Standard]
       theme = "config"
 
@@ -741,7 +741,7 @@ suite "Validate theme tables":
       baseTheme = "dark"
       foreground = "0"
     """
-    let toml = parsetoml.parseString(tomlThemeConfig)
+    let toml = parsetoml.parseString(TomlThemeConfig)
     let result = toml.validateTomlConfig
 
     privateAccess InvalidItem
@@ -778,40 +778,40 @@ suite "Generate toml default config":
 
 suite "Error message":
   test "Single line":
-    const TOML_STR = """
+    const TomlStr = """
       [test]
       test = "test"
     """
 
     let
-      toml = parseString(TOML_STR)
+      toml = parseString(TomlStr)
       result = toml.validateTomlConfig
       errorMessage = result.get.toValidateErrorMessage
 
     check errorMessage == """(name: test, val: test = "test")"""
 
   test "Single line 2":
-    const TOML_STR = """
+    const TomlStr = """
       [Standard]
       test = "test"
     """
 
     let
-      toml = parseString(TOML_STR)
+      toml = parseString(TomlStr)
       result = toml.validateTomlConfig
       errorMessage = result.get.toValidateErrorMessage
 
     check errorMessage == """(name: test, val: test)"""
 
   test "Multiple lines":
-    const TOML_STR = """
+    const TomlStr = """
       [test]
       test1 = "test1"
       test2 = "test2"
     """
 
     let
-      toml = parseString(TOML_STR)
+      toml = parseString(TomlStr)
       result = toml.validateTomlConfig
       errorMessage = result.get.toValidateErrorMessage
 

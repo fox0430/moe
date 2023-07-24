@@ -28,13 +28,13 @@ type StatusLine* = object
 
 proc initStatusLine*(): StatusLine {.inline.} =
   const
-    h = 1
-    w = 1
-    t = 1
-    l = 1
-    color = EditorColorPairIndex.default
+    H = 1
+    W = 1
+    T = 1
+    L = 1
+    Color = EditorColorPairIndex.default
 
-  result.window = initWindow(h, w, t, l, color.int16)
+  result.window = initWindow(H, W, T, L, Color.int16)
 
 proc showFilename(mode, prevMode: Mode): bool {.inline.} =
   not isBackupManagerMode(mode, prevMode) and
@@ -49,17 +49,18 @@ proc appendFileName(
     let
       mode = bufStatus.mode
       prevMode = bufStatus.prevMode
-    var filename = if not showFilename(mode, prevMode): ru""
-                   elif bufStatus.path.len > 0: bufStatus.path
-                   else: ru"No name"
+    var filename =
+      if not showFilename(mode, prevMode): ru""
+      elif bufStatus.path.len > 0: bufStatus.path
+      else: ru"No name"
     let homeDir = ru(getHomeDir())
     if (filename.len() >= homeDir.len() and
         filename[0..homeDir.len()-1] == homeDir):
-      filename = filename[homeDir.len()-1..filename.len()-1]
-      if filename[0] == ru'/':
-        filename = ru"~" & filename
-      else:
-        filename = ru"~/" & filename
+          filename = filename[homeDir.len()-1..filename.len()-1]
+          if filename[0] == ru'/':
+            filename = ru"~" & filename
+          else:
+            filename = ru"~/" & filename
     statusLineBuffer.add(filename)
     statusLineWindow.append(filename, color.int16)
 
@@ -107,17 +108,25 @@ proc writeStatusLineNormalModeInfo(
     statusLine.window.append(ru " ".repeat(statusLineWidth - statusLineBuffer.len), color.int16)
 
     let
-      line = if settings.statusLine.line:
-               fmt"{windowNode.currentLine + 1}/{bufStatus.buffer.len}"
-             else: ""
-      column = if settings.statusLine.column:
-                 fmt"{windowNode.currentColumn + 1}/{bufStatus.buffer[windowNode.currentLine].len}"
-               else: ""
-      encoding = if settings.statusLine.characterEncoding: $bufStatus.characterEncoding
-                 else: ""
-      language = if bufStatus.language == SourceLanguage.langNone: "Plain"
-                 else: sourceLanguageToStr[bufStatus.language]
+      line =
+        if settings.statusLine.line:
+          fmt"{windowNode.currentLine + 1}/{bufStatus.buffer.len}"
+        else:
+        ""
+      column =
+        if settings.statusLine.column:
+          fmt"{windowNode.currentColumn + 1}/{bufStatus.buffer[windowNode.currentLine].len}"
+        else:
+        ""
+      encoding =
+        if settings.statusLine.characterEncoding: $bufStatus.characterEncoding
+        else:
+        ""
+      language =
+        if bufStatus.language == SourceLanguage.langNone: "Plain"
+         else: sourceLanguageToStr[bufStatus.language]
       info = fmt"{line} {column} {encoding} {language} "
+
     statusLine.window.write(0, statusLineWidth - info.len, info, color.int16)
 
 proc writeStatusLineFilerModeInfo(
@@ -129,8 +138,9 @@ proc writeStatusLineFilerModeInfo(
   settings: EditorSettings) =
 
     let
-      color = if isActiveWindow: EditorColorPairIndex.statusLineFilerMode
-              else: EditorColorPairIndex.statusLineFilerModeInactive
+      color =
+        if isActiveWindow: EditorColorPairIndex.statusLineFilerMode
+        else: EditorColorPairIndex.statusLineFilerModeInactive
       statusLineWidth = statusLine.window.width
 
     if settings.statusLine.directory:
@@ -148,8 +158,9 @@ proc writeStatusLineBufferManagerModeInfo(
   settings: EditorSettings) =
 
     let
-      color = if isActiveWindow: EditorColorPairIndex.statusLineNormalMode
-              else: EditorColorPairIndex.statusLineNormalModeInactive
+      color =
+        if isActiveWindow: EditorColorPairIndex.statusLineNormalMode
+        else: EditorColorPairIndex.statusLineNormalModeInactive
       info = fmt"{windowNode.currentLine + 1}/{bufStatus.buffer.len - 1}"
       statusLineWidth = statusLine.window.width
 
@@ -167,8 +178,9 @@ proc writeStatusLineLogViewerModeInfo(
   settings: EditorSettings) =
 
     let
-      color = if isActiveWindow: EditorColorPairIndex.statusLineNormalMode
-              else: EditorColorPairIndex.statusLineNormalModeInactive
+      color =
+        if isActiveWindow: EditorColorPairIndex.statusLineNormalMode
+        else: EditorColorPairIndex.statusLineNormalModeInactive
       info = fmt"{windowNode.currentLine + 1}/{bufStatus.buffer.len - 1}"
       statusLineWidth = statusLine.window.width
 
@@ -186,8 +198,9 @@ proc writeStatusLineQuickRunModeInfo(
   settings: EditorSettings) =
 
     let
-      color = if isActiveWindow: EditorColorPairIndex.statusLineNormalMode
-              else: EditorColorPairIndex.statusLineNormalModeInactive
+      color =
+        if isActiveWindow: EditorColorPairIndex.statusLineNormalMode
+        else: EditorColorPairIndex.statusLineNormalModeInactive
       info = fmt"{windowNode.currentLine + 1}/{bufStatus.buffer.len - 1}"
       statusLineWidth = statusLine.window.width
 

@@ -145,13 +145,13 @@ suite "Editor: Delete word":
 
     let settings = initEditorSettings()
     const
-      loop = 2
-      registerName = ""
+      Loop = 2
+      RegisterName = ""
     currentBufStatus.deleteWord(
       currentMainWindowNode,
-      loop,
+      Loop,
       status.registers,
-      registerName,
+      RegisterName,
       settings)
 
 suite "Editor: keyEnter":
@@ -164,11 +164,12 @@ suite "Editor: keyEnter":
     currentMainWindowNode.currentLine = 1
     currentMainWindowNode.currentColumn = 2
 
-    const isAutoIndent = true
+    const IsAutoIndent = true
     for i in 0 ..< 2:
-      status.bufStatus[0].keyEnter(currentMainWindowNode,
-                                   isAutoIndent,
-                                   status.settings.tabStop)
+      status.bufStatus[0].keyEnter(
+        currentMainWindowNode,
+        IsAutoIndent,
+        status.settings.tabStop)
 
     check status.bufStatus[0].buffer[0] == ru"block:"
     check status.bufStatus[0].buffer[1] == ru""
@@ -182,10 +183,10 @@ suite "Editor: keyEnter":
     currentBufStatus.buffer = initGapBuffer(@[ru""])
     currentBufStatus.mode = Mode.insert
 
-    const isAutoIndent = false
+    const IsAutoIndent = false
     currentBufStatus.keyEnter(
       currentMainWindowNode,
-      isAutoIndent,
+      IsAutoIndent,
       status.settings.tabStop)
 
     check currentBufStatus.buffer.len == 2
@@ -208,10 +209,10 @@ suite "Editor: keyEnter":
     currentMainWindowNode.currentColumn = currentBufStatus.buffer[1].len
 
     for i in 0 ..< 2:
-      const isAutoIndent = true
+      const IsAutoIndent = true
       currentBufStatus.keyEnter(
         currentMainWindowNode,
-        isAutoIndent,
+        IsAutoIndent,
         status.settings.tabStop)
 
   # Generate test code
@@ -238,10 +239,10 @@ suite "Editor: keyEnter":
           let buffer = status.bufStatus[0].buffer
           status.mainWindow.currentMainWindowNode.currentColumn = buffer[0].len
 
-        const isAutoIndent = `isAutoIndent`
-        status.bufStatus[0].keyEnter(status.mainWindow.currentMainWindowNode,
-                                     isAutoIndent,
-                                     status.settings.tabStop)
+        status.bufStatus[0].keyEnter(
+          status.mainWindow.currentMainWindowNode,
+          `isAutoIndent`,
+          status.settings.tabStop)
 
         let currentBufStatus = status.bufStatus[0]
         check currentBufStatus.buffer.len == 2
@@ -255,11 +256,11 @@ suite "Editor: keyEnter":
   # Generate test code by macro
   for l in SourceLanguage:
     block:
-      const isAutoIndent = false
-      newLineTestCase1(l, isAutoIndent)
+      const IsAutoIndent = false
+      newLineTestCase1(l, IsAutoIndent)
     block:
-      const isAutoIndent = true
-      newLineTestCase1(l, isAutoIndent)
+      const IsAutoIndent = true
+      newLineTestCase1(l, IsAutoIndent)
 
   # Generate test code
   # Enable/Disable autoindent
@@ -283,10 +284,10 @@ suite "Editor: keyEnter":
 
         status.mainWindow.currentMainWindowNode.currentColumn = 2
 
-        const isAutoIndent = `isAutoIndent`
-        status.bufStatus[0].keyEnter(status.mainWindow.currentMainWindowNode,
-                                     isAutoIndent,
-                                     status.settings.tabStop)
+        status.bufStatus[0].keyEnter(
+          status.mainWindow.currentMainWindowNode,
+          `isAutoIndent`,
+          status.settings.tabStop)
 
         let currentBufStatus = status.bufStatus[0]
         check currentBufStatus.buffer.len == 2
@@ -300,11 +301,11 @@ suite "Editor: keyEnter":
   # Generate test code by macro
   for l in SourceLanguage:
     block:
-      const isAutoIndent = false
-      newLineTestCase2(l, isAutoIndent)
+      const IsAutoIndent = false
+      newLineTestCase2(l, IsAutoIndent)
     block:
-      const isAutoIndent = true
-      newLineTestCase2(l, isAutoIndent)
+      const IsAutoIndent = true
+      newLineTestCase2(l, IsAutoIndent)
 
   # Generate test code
   # Enable/Disable autoindent
@@ -326,10 +327,10 @@ suite "Editor: keyEnter":
         status.bufStatus[0].language = `lang`
         status.bufStatus[0].mode = Mode.insert
 
-        const isAutoIndent = `isAutoIndent`
-        status.bufStatus[0].keyEnter(status.mainWindow.currentMainWindowNode,
-                                     isAutoIndent,
-                                     status.settings.tabStop)
+        status.bufStatus[0].keyEnter(
+          status.mainWindow.currentMainWindowNode,
+          `isAutoIndent`,
+          status.settings.tabStop)
 
         let currentBufStatus = status.bufStatus[0]
         check currentBufStatus.buffer.len == 2
@@ -343,11 +344,11 @@ suite "Editor: keyEnter":
   # Generate test code by macro
   for l in SourceLanguage:
     block:
-      const isAutoIndent = false
-      newLineTestCase3(l, isAutoIndent)
+      const IsAutoIndent = false
+      newLineTestCase3(l, IsAutoIndent)
     block:
-      const isAutoIndent = true
-      newLineTestCase3(l, isAutoIndent)
+      const IsAutoIndent = true
+      newLineTestCase3(l, IsAutoIndent)
 
   # Generate test code
   # Enable/Disable autoindent
@@ -369,10 +370,10 @@ suite "Editor: keyEnter":
         status.bufStatus[0].language = `lang`
         status.bufStatus[0].mode = Mode.insert
 
-        const isAutoIndent = `isAutoIndent`
-        status.bufStatus[0].keyEnter(status.mainWindow.currentMainWindowNode,
-                                     isAutoIndent,
-                                     status.settings.tabStop)
+        status.bufStatus[0].keyEnter(
+          status.mainWindow.currentMainWindowNode,
+          `isAutoIndent`,
+          status.settings.tabStop)
 
         let currentBufStatus = status.bufStatus[0]
         check currentBufStatus.buffer.len == 2
@@ -386,11 +387,11 @@ suite "Editor: keyEnter":
   # Generate test code by macro
   for l in SourceLanguage:
     block:
-      const isAutoIndent = false
-      newLineTestCase4(l, isAutoIndent)
+      const IsAutoIndent = false
+      newLineTestCase4(l, IsAutoIndent)
     block:
-      const isAutoIndent = true
-      newLineTestCase4(l, isAutoIndent)
+      const IsAutoIndent = true
+      newLineTestCase4(l, IsAutoIndent)
 
   # Generate test code
   # Disable autoindent
@@ -414,10 +415,11 @@ suite "Editor: keyEnter":
           let buffer = status.bufStatus[0].buffer
           status.mainWindow.currentMainWindowNode.currentColumn = buffer[0].len
 
-        const isAutoIndent = false
-        status.bufStatus[0].keyEnter(status.mainWindow.currentMainWindowNode,
-                                     isAutoIndent,
-                                     status.settings.tabStop)
+        const IsAutoIndent = false
+        status.bufStatus[0].keyEnter(
+          status.mainWindow.currentMainWindowNode,
+          IsAutoIndent,
+          status.settings.tabStop)
 
         let currentBufStatus = status.bufStatus[0]
         check currentBufStatus.buffer.len == 2
@@ -448,17 +450,18 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
         var status = initEditorStatus()
         status.addNewBufferInCurrentWin
 
-        status.bufStatus[0].buffer = initGapBuffer(@[keyword.ru])
+        status.bufStatus[0].buffer = initGapBuffer(@[`keyword`.toRunes])
         status.bufStatus[0].language = SourceLanguage.langNim
         status.bufStatus[0].mode = Mode.insert
         block:
           let lineLen = status.bufStatus[0].buffer[0].len
           status.mainWindow.currentMainWindowNode.currentColumn = lineLen
 
-        const isAutoIndent = true
-        status.bufStatus[0].keyEnter(status.mainWindow.currentMainWindowNode,
-                                     isAutoIndent,
-                                     status.settings.tabStop)
+        const IsAutoIndent = true
+        status.bufStatus[0].keyEnter(
+          status.mainWindow.currentMainWindowNode,
+          IsAutoIndent,
+          status.settings.tabStop)
 
         let currentBufStatus = status.bufStatus[0]
         check currentBufStatus.buffer.len == 2
@@ -471,14 +474,14 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
 
   # Generate test code by macro
   block:
-    const keyword = "var"
-    newLineTestInNimCase1(keyword)
+    const Keyword = "var"
+    newLineTestInNimCase1(Keyword)
   block:
-    const keyword = "let"
-    newLineTestInNimCase1(keyword)
+    const Keyword = "let"
+    newLineTestInNimCase1(Keyword)
   block:
-    const keyword = "const"
-    newLineTestInNimCase1(keyword)
+    const Keyword = "const"
+    newLineTestInNimCase1(Keyword)
 
   # Generate test code
   # Disable autoindent
@@ -504,10 +507,11 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
           let lineLen = status.bufStatus[0].buffer[0].len
           status.mainWindow.currentMainWindowNode.currentColumn = lineLen
 
-        const isAutoIndent = true
-        status.bufStatus[0].keyEnter(status.mainWindow.currentMainWindowNode,
-                                     isAutoIndent,
-                                     status.settings.tabStop)
+        const IsAutoIndent = true
+        status.bufStatus[0].keyEnter(
+          status.mainWindow.currentMainWindowNode,
+          IsAutoIndent,
+          status.settings.tabStop)
 
         let currentBufStatus = status.bufStatus[0]
         check currentBufStatus.buffer.len == 2
@@ -520,14 +524,14 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
 
   # Generate test code by macro
   block:
-    const keyword = "var"
-    newLineTestInNimCase2(keyword)
+    const Keyword = "var"
+    newLineTestInNimCase2(Keyword)
   block:
-    const keyword = "let"
-    newLineTestInNimCase2(keyword)
+    const Keyword = "let"
+    newLineTestInNimCase2(Keyword)
   block:
-    const keyword = "const"
-    newLineTestInNimCase2(keyword)
+    const Keyword = "const"
+    newLineTestInNimCase2(Keyword)
 
   # Generate test code
   # Disable autoindent
@@ -544,15 +548,15 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
         var status = initEditorStatus()
         status.addNewBufferInCurrentWin
 
-        const buffer = `keyword`
-        status.bufStatus[0].buffer = initGapBuffer(@[ru buffer])
+        status.bufStatus[0].buffer = initGapBuffer(@[`keyword`.toRunes])
         status.bufStatus[0].language = SourceLanguage.langNim
         status.bufStatus[0].mode = Mode.insert
 
-        const isAutoIndent = true
-        status.bufStatus[0].keyEnter(status.mainWindow.currentMainWindowNode,
-                                     isAutoIndent,
-                                     status.settings.tabStop)
+        const IsAutoIndent = true
+        status.bufStatus[0].keyEnter(
+          status.mainWindow.currentMainWindowNode,
+          IsAutoIndent,
+          status.settings.tabStop)
 
         let currentBufStatus = status.bufStatus[0]
         check currentBufStatus.buffer.len == 2
@@ -565,14 +569,14 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
 
   # Generate test code by macro
   block:
-    const keyword = "var"
-    newLineTestInNimCase3(keyword)
+    const Keyword = "var"
+    newLineTestInNimCase3(Keyword)
   block:
-    const keyword = "let"
-    newLineTestInNimCase3(keyword)
+    const Keyword = "let"
+    newLineTestInNimCase3(Keyword)
   block:
-    const keyword = "const"
-    newLineTestInNimCase3(keyword)
+    const Keyword = "const"
+    newLineTestInNimCase3(Keyword)
 
   # Generate test code
   # Enable autoindent
@@ -587,39 +591,39 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
         var status = initEditorStatus()
         status.addNewBufferInCurrentWin
 
-        const buffer = "test " & `keyword`
-        status.bufStatus[0].buffer = initGapBuffer(@[ru buffer])
+        const Buffer = @["test " & `keyword`].toSeqRunes
+        status.bufStatus[0].buffer = initGapBuffer(Buffer)
         status.bufStatus[0].language = SourceLanguage.langNim
         status.bufStatus[0].mode = Mode.insert
         block:
           let lineLen = status.bufStatus[0].buffer[0].len
           status.mainWindow.currentMainWindowNode.currentColumn = lineLen
 
-        const isAutoIndent = true
-        status.bufStatus[0].keyEnter(status.mainWindow.currentMainWindowNode,
-                                     isAutoIndent,
-                                     status.settings.tabStop)
+        const IsAutoIndent = true
+        status.bufStatus[0].keyEnter(
+          status.mainWindow.currentMainWindowNode,
+          IsAutoIndent,
+          status.settings.tabStop)
 
-        let currentBufStatus = status.bufStatus[0]
-        check $currentBufStatus.buffer[0] == buffer
-        check currentBufStatus.buffer[1] == ru"  "
+        check status.bufStatus[0].buffer[0] == Buffer[0]
+        check $status.bufStatus[0].buffer[1] == "  "
 
   # Generate test code
   block:
-    const keyword = "or"
-    newLineTestInNimCase4(keyword)
+    const Keyword = "or"
+    newLineTestInNimCase4(Keyword)
   block:
-    const keyword = "and"
-    newLineTestInNimCase4(keyword)
+    const Keyword = "and"
+    newLineTestInNimCase4(Keyword)
   block:
-    const keyword = ":"
-    newLineTestInNimCase4(keyword)
+    const Keyword = ":"
+    newLineTestInNimCase4(Keyword)
   block:
-    const keyword = "object"
-    newLineTestInNimCase4(keyword)
+    const Keyword = "object"
+    newLineTestInNimCase4(Keyword)
   block:
-    const keyword = "="
-    newLineTestInNimCase4(keyword)
+    const Keyword = "="
+    newLineTestInNimCase4(Keyword)
 
   # Generate test code
   # Enable autoindent
@@ -635,36 +639,37 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
         var status = initEditorStatus()
         status.addNewBufferInCurrentWin
 
-        const buffer = "test " & `keyword`
-        status.bufStatus[0].buffer = initGapBuffer(@[ru buffer])
+        const Buffer = "test " & `keyword`
+        status.bufStatus[0].buffer = initGapBuffer(@[Buffer.toRunes])
         status.bufStatus[0].language = SourceLanguage.langNim
         status.bufStatus[0].mode = Mode.insert
 
-        const isAutoIndent = true
-        status.bufStatus[0].keyEnter(status.mainWindow.currentMainWindowNode,
-                                     isAutoIndent,
-                                     status.settings.tabStop)
+        const IsAutoIndent = true
+        status.bufStatus[0].keyEnter(
+          status.mainWindow.currentMainWindowNode,
+          IsAutoIndent,
+          status.settings.tabStop)
 
         let currentBufStatus = status.bufStatus[0]
         check currentBufStatus.buffer[0] == ru ""
-        check currentBufStatus.buffer[1] == ru buffer
+        check currentBufStatus.buffer[1] == Buffer.toRunes
 
   # Generate test code
   block:
-    const keyword = "or"
-    newLineTestInNimCase5(keyword)
+    const Keyword = "or"
+    newLineTestInNimCase5(Keyword)
   block:
-    const keyword = "and"
-    newLineTestInNimCase5(keyword)
+    const Keyword = "and"
+    newLineTestInNimCase5(Keyword)
   block:
-    const keyword = ":"
-    newLineTestInNimCase5(keyword)
+    const Keyword = ":"
+    newLineTestInNimCase5(Keyword)
   block:
-    const keyword = "object"
-    newLineTestInNimCase5(keyword)
+    const Keyword = "objecT"
+    newLineTestInNimCase5(Keyword)
   block:
-    const keyword = "="
-    newLineTestInNimCase5(keyword)
+    const Keyword = "="
+    newLineTestInNimCase5(Keyword)
 
   # Generate test code
   # Enable autoindent
@@ -680,16 +685,16 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
         var status = initEditorStatus()
         status.addNewBufferInCurrentWin
 
-        const buffer = `pair`
-        status.bufStatus[0].buffer = initGapBuffer(@[ru buffer])
+        status.bufStatus[0].buffer = initGapBuffer(@[`pair`.toRunes])
         status.bufStatus[0].language = SourceLanguage.langNim
         status.bufStatus[0].mode = Mode.insert
         status.mainWindow.currentMainWindowNode.currentColumn = 1
 
-        const isAutoIndent = true
-        status.bufStatus[0].keyEnter(status.mainWindow.currentMainWindowNode,
-                                     isAutoIndent,
-                                     status.settings.tabStop)
+        const IsAutoIndent = true
+        status.bufStatus[0].keyEnter(
+          status.mainWindow.currentMainWindowNode,
+          IsAutoIndent,
+          status.settings.tabStop)
 
         let currentBufStatus = status.bufStatus[0]
         check currentBufStatus.buffer.len == 2
@@ -698,14 +703,14 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
 
   # Generate test code
   block:
-    const keyword = "{}"
-    newLineTestInNimCase6(keyword)
+    const Keyword = "{}"
+    newLineTestInNimCase6(Keyword)
   block:
-    const keyword = "[]"
-    newLineTestInNimCase6(keyword)
+    const Keyword = "[]"
+    newLineTestInNimCase6(Keyword)
   block:
-    const keyword = "()"
-    newLineTestInNimCase6(keyword)
+    const Keyword = "()"
+    newLineTestInNimCase6(Keyword)
 
   # Generate test code
   # Enable autoindent
@@ -721,15 +726,15 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
         var status = initEditorStatus()
         status.addNewBufferInCurrentWin
 
-        const buffer = `pair`
-        status.bufStatus[0].buffer = initGapBuffer(@[ru buffer])
+        status.bufStatus[0].buffer = initGapBuffer(@[`pair`.toRunes])
         status.bufStatus[0].language = SourceLanguage.langNim
         status.bufStatus[0].mode = Mode.insert
 
-        const isAutoIndent = true
-        status.bufStatus[0].keyEnter(status.mainWindow.currentMainWindowNode,
-                                     isAutoIndent,
-                                     status.settings.tabStop)
+        const IsAutoIndent = true
+        status.bufStatus[0].keyEnter(
+          status.mainWindow.currentMainWindowNode,
+          IsAutoIndent,
+          status.settings.tabStop)
 
         let currentBufStatus = status.bufStatus[0]
         check currentBufStatus.buffer.len == 2
@@ -738,14 +743,14 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
 
   # Generate test code
   block:
-    const keyword = "{}"
-    newLineTestInNimCase7(keyword)
+    const Keyword = "{}"
+    newLineTestInNimCase7(Keyword)
   block:
-    const keyword = "[]"
-    newLineTestInNimCase7(keyword)
+    const Keyword = "[]"
+    newLineTestInNimCase7(Keyword)
   block:
-    const keyword = "()"
-    newLineTestInNimCase7(keyword)
+    const Keyword = "()"
+    newLineTestInNimCase7(Keyword)
 
   # Generate test code
   # Enable autoindent
@@ -761,16 +766,17 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
         var status = initEditorStatus()
         status.addNewBufferInCurrentWin
 
-        const buffer = `pair`[0] & "a" & `pair`[1]
-        status.bufStatus[0].buffer = initGapBuffer(@[ru buffer])
+        const Buffer = `pair`[0] & "a" & `pair`[1]
+        status.bufStatus[0].buffer = initGapBuffer(@[Buffer.toRunes])
         status.bufStatus[0].language = SourceLanguage.langNim
         status.bufStatus[0].mode = Mode.insert
         status.mainWindow.currentMainWindowNode.currentColumn = 1
 
-        const isAutoIndent = true
-        status.bufStatus[0].keyEnter(status.mainWindow.currentMainWindowNode,
-                                     isAutoIndent,
-                                     status.settings.tabStop)
+        const IsAutoIndent = true
+        status.bufStatus[0].keyEnter(
+          status.mainWindow.currentMainWindowNode,
+          IsAutoIndent,
+          status.settings.tabStop)
 
         let currentBufStatus = status.bufStatus[0]
         check currentBufStatus.buffer.len == 2
@@ -779,14 +785,14 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
 
   # Generate test code
   block:
-    const keyword = "{}"
-    newLineTestInNimCase8(keyword)
+    const Keyword = "{}"
+    newLineTestInNimCase8(Keyword)
   block:
-    const keyword = "[]"
-    newLineTestInNimCase8(keyword)
+    const Keyword = "[]"
+    newLineTestInNimCase8(Keyword)
   block:
-    const keyword = "()"
-    newLineTestInNimCase8(keyword)
+    const Keyword = "()"
+    newLineTestInNimCase8(Keyword)
 
 suite "Editor: keyEnter: Enable autoindent in C":
   # Generate test code
@@ -803,16 +809,16 @@ suite "Editor: keyEnter: Enable autoindent in C":
         var status = initEditorStatus()
         status.addNewBufferInCurrentWin
 
-        const buffer = `pair`
-        status.bufStatus[0].buffer = initGapBuffer(@[ru buffer])
+        status.bufStatus[0].buffer = initGapBuffer(@[`pair`.toRunes])
         status.bufStatus[0].language = SourceLanguage.langC
         status.bufStatus[0].mode = Mode.insert
         status.mainWindow.currentMainWindowNode.currentColumn = 1
 
-        const isAutoIndent = true
-        status.bufStatus[0].keyEnter(status.mainWindow.currentMainWindowNode,
-                                     isAutoIndent,
-                                     status.settings.tabStop)
+        const IsAutoIndent = true
+        status.bufStatus[0].keyEnter(
+          status.mainWindow.currentMainWindowNode,
+          IsAutoIndent,
+          status.settings.tabStop)
 
         let currentBufStatus = status.bufStatus[0]
         check currentBufStatus.buffer.len == 3
@@ -822,14 +828,14 @@ suite "Editor: keyEnter: Enable autoindent in C":
 
   # Generate test code
   block:
-    const keyword = "{}"
-    newLineTestInCcase1(keyword)
+    const Keyword = "{}"
+    newLineTestInCcase1(Keyword)
   block:
-    const keyword = "[]"
-    newLineTestInCcase1(keyword)
+    const Keyword = "[]"
+    newLineTestInCcase1(Keyword)
   block:
-    const keyword = "()"
-    newLineTestInCcase1(keyword)
+    const Keyword = "()"
+    newLineTestInCcase1(Keyword)
 
   # Generate test code
   # Enable autoindent
@@ -845,15 +851,15 @@ suite "Editor: keyEnter: Enable autoindent in C":
         var status = initEditorStatus()
         status.addNewBufferInCurrentWin
 
-        const buffer = `pair`
-        status.bufStatus[0].buffer = initGapBuffer(@[ru buffer])
+        status.bufStatus[0].buffer = initGapBuffer(@[`pair`.toRunes])
         status.bufStatus[0].language = SourceLanguage.langC
         status.bufStatus[0].mode = Mode.insert
 
-        const isAutoIndent = true
-        status.bufStatus[0].keyEnter(status.mainWindow.currentMainWindowNode,
-                                     isAutoIndent,
-                                     status.settings.tabStop)
+        const IsAutoIndent = true
+        status.bufStatus[0].keyEnter(
+          status.mainWindow.currentMainWindowNode,
+          IsAutoIndent,
+          status.settings.tabStop)
 
         let currentBufStatus = status.bufStatus[0]
         check currentBufStatus.buffer.len == 2
@@ -862,14 +868,14 @@ suite "Editor: keyEnter: Enable autoindent in C":
 
   # Generate test code
   block:
-    const keyword = "{}"
-    newLineTestInCcase2(keyword)
+    const Keyword = "{}"
+    newLineTestInCcase2(Keyword)
   block:
-    const keyword = "[]"
-    newLineTestInCcase2(keyword)
+    const Keyword = "[]"
+    newLineTestInCcase2(Keyword)
   block:
-    const keyword = "()"
-    newLineTestInCcase2(keyword)
+    const Keyword = "()"
+    newLineTestInCcase2(Keyword)
 
   # Generate test code
   # Enable autoindent
@@ -885,16 +891,17 @@ suite "Editor: keyEnter: Enable autoindent in C":
         var status = initEditorStatus()
         status.addNewBufferInCurrentWin
 
-        const buffer = `pair`[0] & "a" & `pair`[1]
-        status.bufStatus[0].buffer = initGapBuffer(@[ru buffer])
+        const Buffer = `pair`[0] & "a" & `pair`[1]
+        status.bufStatus[0].buffer = initGapBuffer(@[Buffer.toRunes])
         status.bufStatus[0].language = SourceLanguage.langC
         status.bufStatus[0].mode = Mode.insert
         status.mainWindow.currentMainWindowNode.currentColumn = 1
 
-        const isAutoIndent = true
-        status.bufStatus[0].keyEnter(status.mainWindow.currentMainWindowNode,
-                                     isAutoIndent,
-                                     status.settings.tabStop)
+        const IsAutoIndent = true
+        status.bufStatus[0].keyEnter(
+          status.mainWindow.currentMainWindowNode,
+          IsAutoIndent,
+          status.settings.tabStop)
 
         let currentBufStatus = status.bufStatus[0]
         check currentBufStatus.buffer.len == 3
@@ -923,10 +930,11 @@ suite "Editor: keyEnter: Enable autoindent in Yaml":
     status.bufStatus[0].mode = Mode.insert
     currentMainWindowNode.currentColumn = status.bufStatus[0].buffer[0].len
 
-    const isAutoIndent = true
-    status.bufStatus[0].keyEnter(currentMainWindowNode,
-                                 isAutoIndent,
-                                 status.settings.tabStop)
+    const IsAutoIndent = true
+    status.bufStatus[0].keyEnter(
+      currentMainWindowNode,
+      IsAutoIndent,
+      status.settings.tabStop)
 
 
     check status.bufStatus[0].buffer[0] == ru"test:"
@@ -942,11 +950,11 @@ suite "Editor: keyEnter and autoindent in Python":
     status.bufStatus[0].mode = Mode.insert
     currentMainWindowNode.currentColumn = status.bufStatus[0].buffer[0].len
 
-    const isAutoIndent = true
-    status.bufStatus[0].keyEnter(currentMainWindowNode,
-                                 isAutoIndent,
-                                 status.settings.tabStop)
-
+    const IsAutoIndent = true
+    status.bufStatus[0].keyEnter(
+      currentMainWindowNode,
+      IsAutoIndent,
+      status.settings.tabStop)
 
     check status.bufStatus[0].buffer[0] == ru"if true:"
     check status.bufStatus[0].buffer[1] == ru"  "
@@ -960,11 +968,11 @@ suite "Editor: keyEnter and autoindent in Python":
     status.bufStatus[0].mode = Mode.insert
     currentMainWindowNode.currentColumn = status.bufStatus[0].buffer[0].len
 
-    const isAutoIndent = true
-    status.bufStatus[0].keyEnter(currentMainWindowNode,
-                                 isAutoIndent,
-                                 status.settings.tabStop)
-
+    const IsAutoIndent = true
+    status.bufStatus[0].keyEnter(
+      currentMainWindowNode,
+      IsAutoIndent,
+      status.settings.tabStop)
 
     check status.bufStatus[0].buffer[0] == ru"if true and"
     check status.bufStatus[0].buffer[1] == ru"  "
@@ -978,11 +986,11 @@ suite "Editor: keyEnter and autoindent in Python":
     status.bufStatus[0].mode = Mode.insert
     currentMainWindowNode.currentColumn = status.bufStatus[0].buffer[0].len
 
-    const isAutoIndent = true
-    status.bufStatus[0].keyEnter(currentMainWindowNode,
-                                 isAutoIndent,
-                                 status.settings.tabStop)
-
+    const IsAutoIndent = true
+    status.bufStatus[0].keyEnter(
+      currentMainWindowNode,
+      IsAutoIndent,
+      status.settings.tabStop)
 
     check currentBufStatus.buffer[0] == ru"if true or"
     check currentBufStatus.buffer[1] == ru"  "
@@ -997,11 +1005,12 @@ suite "Editor: keyEnter and autoindent in Python":
     currentMainWindowNode.currentLine = 1
     currentMainWindowNode.currentColumn = currentBufStatus.buffer[1].len
 
-    const isAutoIndent = true
+    const IsAutoIndent = true
     for i in 0 ..< 2:
-      currentBufStatus.keyEnter(currentMainWindowNode,
-                                isAutoIndent,
-                                status.settings.tabStop)
+      currentBufStatus.keyEnter(
+        currentMainWindowNode,
+        IsAutoIndent,
+        status.settings.tabStop)
 
 suite "Delete character before cursor":
   test "Delete one character":
@@ -1013,11 +1022,12 @@ suite "Delete character before cursor":
     currentMainWindowNode.currentColumn = 4
 
     const
-      autoCloseParen = true
-      tabStop = 2
-    status.bufStatus[0].keyBackspace(currentMainWindowNode,
-                                     autoCloseParen,
-                                     tabStop)
+      AutoCloseParen = true
+      TabStop = 2
+    status.bufStatus[0].keyBackspace(
+      currentMainWindowNode,
+      AutoCloseParen,
+      TabStop)
 
     check status.bufStatus[0].buffer.len == 1
     check status.bufStatus[0].buffer[0] == ru"tes"
@@ -1031,11 +1041,12 @@ suite "Delete character before cursor":
     currentMainWindowNode.currentColumn = 7
 
     const
-      autoCloseParen = true
-      tabStop = 2
-    status.bufStatus[0].keyBackspace(currentMainWindowNode,
-                                     autoCloseParen,
-                                     tabStop)
+      AutoCloseParen = true
+      TabStop = 2
+    status.bufStatus[0].keyBackspace(
+      currentMainWindowNode,
+      AutoCloseParen,
+      TabStop)
 
     check status.bufStatus[0].buffer.len == 1
     check status.bufStatus[0].buffer[0] == ru"  testtest2"
@@ -1050,11 +1061,12 @@ suite "Delete character before cursor":
     currentMainWindowNode.currentColumn = 0
 
     const
-      autoCloseParen = true
-      tabStop = 2
-    status.bufStatus[0].keyBackspace(currentMainWindowNode,
-                                     autoCloseParen,
-                                     tabStop)
+      AutoCloseParen = true
+      TabStop = 2
+    status.bufStatus[0].keyBackspace(
+      currentMainWindowNode,
+      AutoCloseParen,
+      TabStop)
 
     check status.bufStatus[0].buffer.len == 1
     check status.bufStatus[0].buffer[0] == ru"test"
@@ -1068,11 +1080,12 @@ suite "Delete character before cursor":
     currentMainWindowNode.currentColumn = 2
 
     const
-      autoCloseParen = true
-      tabStop = 2
-    status.bufStatus[0].keyBackspace(currentMainWindowNode,
-                                     autoCloseParen,
-                                     tabStop)
+      AutoCloseParen = true
+      TabStop = 2
+    status.bufStatus[0].keyBackspace(
+      currentMainWindowNode,
+      AutoCloseParen,
+      TabStop)
 
     check status.bufStatus[0].buffer.len == 1
     check status.bufStatus[0].buffer[0] == ru"test"
@@ -1086,11 +1099,12 @@ suite "Delete character before cursor":
     currentMainWindowNode.currentColumn = 3
 
     const
-      autoCloseParen = true
-      tabStop = 2
-    status.bufStatus[0].keyBackspace(currentMainWindowNode,
-                                     autoCloseParen,
-                                     tabStop)
+      AutoCloseParen = true
+      TabStop = 2
+    status.bufStatus[0].keyBackspace(
+      currentMainWindowNode,
+      AutoCloseParen,
+      TabStop)
 
     check status.bufStatus[0].buffer.len == 1
     check status.bufStatus[0].buffer[0] == ru"  test"
@@ -1104,11 +1118,12 @@ suite "Delete character before cursor":
     currentMainWindowNode.currentColumn = 4
 
     const
-      autoCloseParen = true
-      tabStop = 2
-    status.bufStatus[0].keyBackspace(currentMainWindowNode,
-                                     autoCloseParen,
-                                     tabStop)
+      AutoCloseParen = true
+      TabStop = 2
+    status.bufStatus[0].keyBackspace(
+      currentMainWindowNode,
+      AutoCloseParen,
+      TabStop)
 
     check status.bufStatus[0].buffer.len == 1
     check status.bufStatus[0].buffer[0] == ru"  test"
@@ -1122,11 +1137,12 @@ suite "Delete character before cursor":
     currentMainWindowNode.currentColumn = 1
 
     const
-      autoCloseParen = true
-      tabStop = 2
-    status.bufStatus[0].keyBackspace(currentMainWindowNode,
-                                     autoCloseParen,
-                                     tabStop)
+      AutoCloseParen = true
+      TabStop = 2
+    status.bufStatus[0].keyBackspace(
+      currentMainWindowNode,
+      AutoCloseParen,
+      TabStop)
 
     check status.bufStatus[0].buffer.len == 1
     check status.bufStatus[0].buffer[0] == ru" test"
@@ -1140,11 +1156,12 @@ suite "Delete character before cursor":
     currentMainWindowNode.currentColumn = 4
 
     const
-      autoCloseParen = true
-      tabStop = 2
-    status.bufStatus[0].keyBackspace(currentMainWindowNode,
-                                     autoCloseParen,
-                                     tabStop)
+      AutoCloseParen = true
+      TabStop = 2
+    status.bufStatus[0].keyBackspace(
+      currentMainWindowNode,
+      AutoCloseParen,
+      TabStop)
 
     check status.bufStatus[0].buffer.len == 1
     check status.bufStatus[0].buffer[0] == ru"  tst"
@@ -1219,17 +1236,17 @@ if isXselAvailable():
       currentBufStatus.buffer = initGapBuffer(@[ru ""])
 
       const
-        length = 1
-        name = "a"
-        isDelete = false
+        Length = 1
+        Name = "a"
+        IsDelete = false
       currentBufStatus.yankCharacters(
         status.registers,
         currentMainWindowNode,
         status.commandline,
         status.settings,
-        length,
-        name,
-        isDelete)
+        Length,
+        Name,
+        IsDelete)
 
       check status.registers.noNameRegister.buffer.len == 0
 
@@ -1240,37 +1257,38 @@ if isXselAvailable():
       status.addNewBufferInCurrentWin
       currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
 
-      const loop = 1
-      currentBufStatus.yankWord(status.registers,
-                                currentMainWindowNode,
-                                loop,
-                                status.settings)
+      const Loop = 1
+      currentBufStatus.yankWord(
+        status.registers,
+        currentMainWindowNode,
+        Loop,
+        status.settings)
 
       check status.registers.noNameRegister ==  register.Register(
         buffer: @[ru "abc "],
         isLine: false,
         name: "")
 
-      let p = initPlatform()
       # Check clipboad
-      if (p == Platforms.linux or
-          p == Platforms.wsl):
+      let p = initPlatform()
+      if p == Platforms.linux or p == Platforms.wsl:
         let
-          cmd = if p == Platforms.linux:
-                  execCmdEx("xsel -o")
-                else:
-                  # On the WSL
-                  execCmdEx("powershell.exe -Command Get-Clipboard")
+          cmd =
+            if p == Platforms.linux:
+              execCmdEx("xsel -o")
+            else:
+              # On the WSL
+              execCmdEx("powershell.exe -Command Get-Clipboard")
           (output, exitCode) = cmd
 
         check exitCode == 0
 
-        const str = "abc "
+        const Str = "abc "
         if p == Platforms.linux:
-          check output[0 .. output.high - 1] == str
+          check output[0 .. output.high - 1] == Str
         else:
           # On the WSL
-          check output[0 .. output.high - 2] == str
+          check output[0 .. output.high - 2] == Str
 
 suite "Editor: Modify the number string under the cursor":
   test "Increment the number string":
@@ -1278,10 +1296,10 @@ suite "Editor: Modify the number string under the cursor":
     status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru "1"])
 
-    const amount = 1
+    const Amount = 1
     currentBufStatus.modifyNumberTextUnderCurosr(
       currentMainWindowNode,
-      amount)
+      Amount)
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "2"
@@ -1292,10 +1310,10 @@ suite "Editor: Modify the number string under the cursor":
     currentBufStatus.buffer = initGapBuffer(@[ru " 1 "])
     currentMainWindowNode.currentColumn = 1
 
-    const amount = 1
+    const Amount = 1
     currentBufStatus.modifyNumberTextUnderCurosr(
       currentMainWindowNode,
-      amount)
+      Amount)
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru " 2 "
@@ -1305,10 +1323,10 @@ suite "Editor: Modify the number string under the cursor":
     status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru "9"])
 
-    const amount = 1
+    const Amount = 1
     currentBufStatus.modifyNumberTextUnderCurosr(
       currentMainWindowNode,
-      amount)
+      Amount)
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "10"
@@ -1318,10 +1336,10 @@ suite "Editor: Modify the number string under the cursor":
     status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru "1"])
 
-    const amount = -1
+    const Amount = -1
     currentBufStatus.modifyNumberTextUnderCurosr(
       currentMainWindowNode,
-      amount)
+      Amount)
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "0"
@@ -1331,10 +1349,10 @@ suite "Editor: Modify the number string under the cursor":
     status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru "0"])
 
-    const amount = -1
+    const Amount = -1
     currentBufStatus.modifyNumberTextUnderCurosr(
       currentMainWindowNode,
-      amount)
+      Amount)
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "-1"
@@ -1344,10 +1362,10 @@ suite "Editor: Modify the number string under the cursor":
     status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru "10"])
 
-    const amount = -1
+    const Amount = -1
     currentBufStatus.modifyNumberTextUnderCurosr(
       currentMainWindowNode,
-      amount)
+      Amount)
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "9"
@@ -1357,10 +1375,10 @@ suite "Editor: Modify the number string under the cursor":
     status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
 
-    const amount = 1
+    const Amount = 1
     currentBufStatus.modifyNumberTextUnderCurosr(
       currentMainWindowNode,
-      amount)
+      Amount)
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1372,11 +1390,11 @@ suite "Editor: Delete from the previous blank line to the current line":
     currentBufStatus.buffer = initGapBuffer(@[ru "abc", ru "", ru "def", ru "ghi"])
     currentMainWindowNode.currentLine = 3
 
-    const registerName = ""
+    const RegisterName = ""
     currentBufStatus.deleteTillPreviousBlankLine(
       status.registers,
       currentMainWindowNode,
-      registerName,
+      RegisterName,
       status.settings)
 
     check currentBufStatus.buffer.len == 2
@@ -1390,15 +1408,19 @@ suite "Editor: Delete from the previous blank line to the current line":
   test "Delete lines 2":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
-    currentBufStatus.buffer = initGapBuffer(@[ru "abc", ru "", ru "def", ru "ghi"])
+    currentBufStatus.buffer = initGapBuffer(@[
+      "abc",
+      "",
+      "def",
+      "ghi"].toSeqRunes)
     currentMainWindowNode.currentLine = 3
     currentMainWindowNode.currentColumn = 1
 
-    const registerName = ""
+    const RegisterName = ""
     currentBufStatus.deleteTillPreviousBlankLine(
       status.registers,
       currentMainWindowNode,
-      registerName,
+      RegisterName,
       status.settings)
 
     check currentBufStatus.buffer.len == 2
@@ -1413,13 +1435,17 @@ suite "Editor: Delete from the current line to the next blank line":
   test "Delete lines":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
-    currentBufStatus.buffer = initGapBuffer(@[ru "abc", ru "def", ru "", ru "ghi"])
+    currentBufStatus.buffer = initGapBuffer(@[
+      "abc",
+      "def",
+      "",
+      "ghi"].toSeqRunes)
 
-    const registerName = ""
+    const RegisterName = ""
     currentBufStatus.deleteTillNextBlankLine(
       status.registers,
       currentMainWindowNode,
-      registerName,
+      RegisterName,
       status.settings)
 
     check currentBufStatus.buffer.len == 2
@@ -1433,14 +1459,17 @@ suite "Editor: Delete from the current line to the next blank line":
   test "Delete lines 2":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
-    currentBufStatus.buffer = initGapBuffer(@[ru "abc", ru "def", ru "", ru "ghi"])
+    currentBufStatus.buffer = initGapBuffer(@[
+      "abc",
+      "def",
+      "","ghi"].toSeqRunes)
     currentMainWindowNode.currentColumn = 1
 
-    const registerName = ""
+    const RegisterName = ""
     currentBufStatus.deleteTillNextBlankLine(
       status.registers,
       currentMainWindowNode,
-      registerName,
+      RegisterName,
       status.settings)
 
     check currentBufStatus.buffer.len == 3
@@ -1459,19 +1488,19 @@ suite "Editor: Replace characters":
     currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
 
     const
-      autoIndent = false
-      autoDeleteParen = false
-      tabStop = 2
-      loop = 1
-      character = ru 'z'
+      AutoIndent = false
+      AutoDeleteParen = false
+      TabStop = 2
+      Loop = 1
+      Character = ru 'z'
 
     currentBufStatus.replaceCharacters(
       currentMainWindowNode,
-      autoIndent,
-      autoDeleteParen,
-      tabStop,
-      loop,
-      character)
+      AutoIndent,
+      AutoDeleteParen,
+      TabStop,
+      Loop,
+      Character)
 
     check currentBufStatus.buffer[0] == ru "zbcdef"
     check currentMainWindowNode.currentColumn == 0
@@ -1482,19 +1511,19 @@ suite "Editor: Replace characters":
     currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
 
     const
-      autoIndent = false
-      autoDeleteParen = false
-      tabStop = 2
-      loop = 3
-      character = ru 'z'
+      AutoIndent = false
+      AutoDeleteParen = false
+      TabStop = 2
+      Loop = 3
+      Character = ru 'z'
 
     currentBufStatus.replaceCharacters(
       currentMainWindowNode,
-      autoIndent,
-      autoDeleteParen,
-      tabStop,
-      loop,
-      character)
+      AutoIndent,
+      AutoDeleteParen,
+      TabStop,
+      Loop,
+      Character)
 
     check currentBufStatus.buffer[0] == ru "zzzdef"
     check currentMainWindowNode.currentColumn == 2
@@ -1505,19 +1534,19 @@ suite "Editor: Replace characters":
     currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
 
     const
-      autoIndent = false
-      autoDeleteParen = false
-      tabStop = 2
-      loop = 10
-      character = ru 'z'
+      AutoIndent = false
+      AutoDeleteParen = false
+      TabStop = 2
+      Loop = 10
+      Character = ru 'z'
 
     currentBufStatus.replaceCharacters(
       currentMainWindowNode,
-      autoIndent,
-      autoDeleteParen,
-      tabStop,
-      loop,
-      character)
+      AutoIndent,
+      AutoDeleteParen,
+      TabStop,
+      Loop,
+      Character)
 
     check currentBufStatus.buffer[0] == ru "zzzzzz"
     check currentMainWindowNode.currentColumn == 5
@@ -1528,18 +1557,18 @@ suite "Editor: Replace characters":
     currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
 
     const
-      autoIndent = false
-      autoDeleteParen = false
-      tabStop = 2
-      loop = 1
+      AutoIndent = false
+      AutoDeleteParen = false
+      TabStop = 2
+      Loop = 1
     let character = toRune(KEY_ENTER)
 
     currentBufStatus.replaceCharacters(
       currentMainWindowNode,
-      autoIndent,
-      autoDeleteParen,
-      tabStop,
-      loop,
+      AutoIndent,
+      AutoDeleteParen,
+      TabStop,
+      Loop,
       character)
 
     check currentBufStatus.buffer.len == 2
@@ -1552,18 +1581,18 @@ suite "Editor: Replace characters":
     currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
 
     const
-      autoIndent = false
-      autoDeleteParen = false
-      tabStop = 2
-      loop = 3
+      AutoIndent = false
+      AutoDeleteParen = false
+      TabStop = 2
+      Loop = 3
     let character = toRune(KEY_ENTER)
 
     currentBufStatus.replaceCharacters(
       currentMainWindowNode,
-      autoIndent,
-      autoDeleteParen,
-      tabStop,
-      loop,
+      AutoIndent,
+      AutoDeleteParen,
+      TabStop,
+      Loop,
       character)
 
     check currentBufStatus.buffer.len == 2
@@ -1577,18 +1606,18 @@ suite "Editor: Replace characters":
     currentMainWindowNode.currentColumn = 2
 
     const
-      autoIndent = false
-      autoDeleteParen = false
-      tabStop = 2
-      loop = 1
+      AutoIndent = false
+      AutoDeleteParen = false
+      TabStop = 2
+      Loop = 1
     let character = toRune('z')
 
     currentBufStatus.replaceCharacters(
       currentMainWindowNode,
-      autoIndent,
-      autoDeleteParen,
-      tabStop,
-      loop,
+      AutoIndent,
+      AutoDeleteParen,
+      TabStop,
+      Loop,
       character)
 
     check currentBufStatus.buffer.len == 1
@@ -1648,10 +1677,10 @@ suite "Editor: Open the blank line below":
         status.bufStatus[0].buffer = initGapBuffer(@[ru "  test"])
         status.bufStatus[0].language = `lang`
 
-        const isAutoIndent = `isAutoIndent`
+        const IsAutoIndent = `isAutoIndent`
         status.bufStatus[0].openBlankLineBelow(
           status.mainWindow.currentMainWindowNode,
-          isAutoIndent,
+          IsAutoIndent,
           status.settings.tabStop)
 
         let
@@ -1661,7 +1690,7 @@ suite "Editor: Open the blank line below":
         check currentBufStatus.buffer.len == 2
         check currentBufStatus.buffer[0] == ru "  test"
 
-        if isAutoIndent:
+        if IsAutoIndent:
           check currentBufStatus.buffer[1] == ru "  "
 
           check currentMainWindowNode.currentLine == 1
@@ -1675,11 +1704,11 @@ suite "Editor: Open the blank line below":
   # Generate test code by macro
   for l in SourceLanguage:
     block:
-      const isAutoIndent = false
-      openLineBelowTestCase1(l, isAutoIndent)
+      const IsAutoIndent = false
+      openLineBelowTestCase1(l, IsAutoIndent)
     block:
-      const isAutoIndent = true
-      openLineBelowTestCase1(l, isAutoIndent)
+      const IsAutoIndent = true
+      openLineBelowTestCase1(l, IsAutoIndent)
 
   # Generate test code
   # Enable autoindent
@@ -1695,14 +1724,13 @@ suite "Editor: Open the blank line below":
         var status = initEditorStatus()
         status.addNewBufferInCurrentWin
 
-        const buffer = `keyword`
-        status.bufStatus[0].buffer = initGapBuffer(@[ru buffer])
+        status.bufStatus[0].buffer = initGapBuffer(@[`keyword`.toRunes])
         status.bufStatus[0].language = SourceLanguage.langNim
 
-        const isAutoIndent = true
+        const IsAutoIndent = true
         status.bufStatus[0].openBlankLineBelow(
           status.mainWindow.currentMainWindowNode,
-          isAutoIndent,
+          IsAutoIndent,
           status.settings.tabStop)
 
         let currentBufStatus = status.bufStatus[0]
@@ -1716,14 +1744,14 @@ suite "Editor: Open the blank line below":
 
   # Generate test code by macro
   block:
-    const keyword = "var"
-    openLineBelowTestCase2(keyword)
+    const Keyword = "var"
+    openLineBelowTestCase2(Keyword)
   block:
-    const keyword = "let"
-    openLineBelowTestCase2(keyword)
+    const Keyword = "let"
+    openLineBelowTestCase2(Keyword)
   block:
-    const keyword = "const"
-    openLineBelowTestCase2(keyword)
+    const Keyword = "const"
+    openLineBelowTestCase2(Keyword)
 
   # Generate test code
   # Enable autoindent
@@ -1739,18 +1767,18 @@ suite "Editor: Open the blank line below":
         var status = initEditorStatus()
         status.addNewBufferInCurrentWin
 
-        const buffer = "test " & `keyword`
-        status.bufStatus[0].buffer = initGapBuffer(@[ru buffer])
+        const Buffer = "test " & `keyword`
+        status.bufStatus[0].buffer = initGapBuffer(@[Buffer.toRunes])
         status.bufStatus[0].language = SourceLanguage.langNim
 
-        const isAutoIndent = true
+        const IsAutoIndent = true
         status.bufStatus[0].openBlankLineBelow(
           status.mainWindow.currentMainWindowNode,
-          isAutoIndent,
+          IsAutoIndent,
           status.settings.tabStop)
 
         let currentBufStatus = status.bufStatus[0]
-        check $currentBufStatus.buffer[0] == buffer
+        check $currentBufStatus.buffer[0] == Buffer
         check currentBufStatus.buffer[1] == ru"  "
 
         let currentMainWindowNode = status.mainWindow.currentMainWindowNode
@@ -1759,20 +1787,20 @@ suite "Editor: Open the blank line below":
 
   # Generate test code by macro
   block:
-    const keyword = "or"
-    openLineBelowTestCase3(keyword)
+    const Keyword = "or"
+    openLineBelowTestCase3(Keyword)
   block:
-    const keyword = "and"
-    openLineBelowTestCase3(keyword)
+    const Keyword = "and"
+    openLineBelowTestCase3(Keyword)
   block:
-    const keyword = ":"
-    openLineBelowTestCase3(keyword)
+    const Keyword = ":"
+    openLineBelowTestCase3(Keyword)
   block:
-    const keyword = "object"
-    openLineBelowTestCase3(keyword)
+    const Keyword = "object"
+    openLineBelowTestCase3(Keyword)
   block:
-    const keyword = "="
-    openLineBelowTestCase3(keyword)
+    const Keyword = "="
+    openLineBelowTestCase3(Keyword)
 
   # Generate test code
   # Enable/Disable autoindent
@@ -1793,10 +1821,10 @@ suite "Editor: Open the blank line below":
         status.bufStatus[0].buffer = initGapBuffer(@[ru ""])
         status.bufStatus[0].language = `lang`
 
-        const isAutoIndent = `isAutoIndent`
+        const IsAutoIndent = `isAutoIndent`
         status.bufStatus[0].openBlankLineBelow(
           status.mainWindow.currentMainWindowNode,
-          isAutoIndent,
+          IsAutoIndent,
           status.settings.tabStop)
 
         let
@@ -1807,7 +1835,7 @@ suite "Editor: Open the blank line below":
         check currentBufStatus.buffer[0] == ru ""
         check currentBufStatus.buffer[1] == ru ""
 
-        if isAutoIndent:
+        if IsAutoIndent:
           check currentMainWindowNode.currentLine == 1
           check currentMainWindowNode.currentColumn == 0
         else:
@@ -1817,11 +1845,11 @@ suite "Editor: Open the blank line below":
   # Generate test code by macro
   for l in SourceLanguage:
     block:
-      const isAutoIndent = false
-      openLineBelowTestCase4(l, isAutoIndent)
+      const IsAutoIndent = false
+      openLineBelowTestCase4(l, IsAutoIndent)
     block:
-      const isAutoIndent = true
-      openLineBelowTestCase4(l, isAutoIndent)
+      const IsAutoIndent = true
+      openLineBelowTestCase4(l, IsAutoIndent)
 
   # Generate test code
   # Enable autoindent
@@ -1837,18 +1865,18 @@ suite "Editor: Open the blank line below":
         var status = initEditorStatus()
         status.addNewBufferInCurrentWin
 
-        const buffer = "test " & `keyword`
-        status.bufStatus[0].buffer = initGapBuffer(@[ru buffer])
+        const Buffer = "test " & `keyword`
+        status.bufStatus[0].buffer = initGapBuffer(@[Buffer.toRunes])
         status.bufStatus[0].language = SourceLanguage.langPython
 
-        const isAutoIndent = true
+        const IsAutoIndent = true
         status.bufStatus[0].openBlankLineBelow(
           status.mainWindow.currentMainWindowNode,
-          isAutoIndent,
+          IsAutoIndent,
           status.settings.tabStop)
 
         let currentBufStatus = status.bufStatus[0]
-        check $currentBufStatus.buffer[0] == buffer
+        check $currentBufStatus.buffer[0] == Buffer
         check currentBufStatus.buffer[1] == ru"  "
 
         let currentMainWindowNode = status.mainWindow.currentMainWindowNode
@@ -1857,14 +1885,14 @@ suite "Editor: Open the blank line below":
 
   # Generate test code by macro
   block:
-    const keyword = "or"
-    openLineBelowTestCase5(keyword)
+    const Keyword = "or"
+    openLineBelowTestCase5(Keyword)
   block:
-    const keyword = "and"
-    openLineBelowTestCase5(keyword)
+    const Keyword = "and"
+    openLineBelowTestCase5(Keyword)
   block:
-    const keyword = ":"
-    openLineBelowTestCase5(keyword)
+    const Keyword = ":"
+    openLineBelowTestCase5(Keyword)
 
 suite "Editor: Open the blank line abave":
   # Generate test code
@@ -1875,8 +1903,9 @@ suite "Editor: Open the blank line abave":
       # Generate test title
       let
         langStr = sourceLangToStr(`lang`)
-        testTitle = if `isAutoIndent`: "Case 1: Enable autoindent: Open the blank line abave in " & langStr
-                    else: "Case 1: Disable autoindent: Open the blank line abave in " & langStr
+        testTitle =
+          if `isAutoIndent`: "Case 1: Enable autoindent: Open the blank line abave in " & langStr
+          else: "Case 1: Disable autoindent: Open the blank line abave in " & langStr
 
       # Generate test code
       test testTitle:
@@ -1886,10 +1915,10 @@ suite "Editor: Open the blank line abave":
         status.bufStatus[0].buffer = initGapBuffer(@[ru "test"])
         status.bufStatus[0].language = `lang`
 
-        const isAutoIndent = `isAutoIndent`
+        const IsAutoIndent = `isAutoIndent`
         status.bufStatus[0].openBlankLineAbove(
           status.mainWindow.currentMainWindowNode,
-          isAutoIndent,
+          IsAutoIndent,
           status.settings.tabStop)
 
         let
@@ -1906,11 +1935,11 @@ suite "Editor: Open the blank line abave":
   # Generate test code by macro
   for l in SourceLanguage:
     block:
-      const isAutoIndent = false
-      openLineAboveTestCase1(l, isAutoIndent)
+      const IsAutoIndent = false
+      openLineAboveTestCase1(l, IsAutoIndent)
     block:
-      const isAutoIndent = true
-      openLineAboveTestCase1(l, isAutoIndent)
+      const IsAutoIndent = true
+      openLineAboveTestCase1(l, IsAutoIndent)
 
   # Generate test code
   # Enable/Disable autoindent
@@ -1920,8 +1949,9 @@ suite "Editor: Open the blank line abave":
       # Generate test title
       let
         langStr = sourceLangToStr(`lang`)
-        testTitle = if `isAutoIndent`: "Case 2: Enable autoindent: Open the blank line abave in " & langStr
-                    else: "Case 2: Disable autoindent: Open the blank line abave in " & langStr
+        testTitle =
+          if `isAutoIndent`: "Case 2: Enable autoindent: Open the blank line abave in " & langStr
+          else: "Case 2: Disable autoindent: Open the blank line abave in " & langStr
 
       # Generate test code
       test testTitle:
@@ -1933,10 +1963,10 @@ suite "Editor: Open the blank line abave":
 
         status.mainWindow.currentMainWindowNode.currentLine = 1
 
-        const isAutoIndent = `isAutoIndent`
+        const IsAutoIndent = `isAutoIndent`
         status.bufStatus[0].openBlankLineAbove(
           status.mainWindow.currentMainWindowNode,
-          isAutoIndent,
+          IsAutoIndent,
           status.settings.tabStop)
 
         let
@@ -1949,7 +1979,7 @@ suite "Editor: Open the blank line abave":
 
         check currentMainWindowNode.currentLine == 1
 
-        if isAutoIndent:
+        if IsAutoIndent:
           check currentBufStatus.buffer[1] == ru "  "
           check currentMainWindowNode.currentColumn == 2
         else:
@@ -1959,11 +1989,11 @@ suite "Editor: Open the blank line abave":
   # Generate test code by macro
   for l in SourceLanguage:
     block:
-      const isAutoIndent = false
-      openLineAboveTestCase2(l, isAutoIndent)
+      const IsAutoIndent = false
+      openLineAboveTestCase2(l, IsAutoIndent)
     block:
-      const isAutoIndent = true
-      openLineAboveTestCase2(l, isAutoIndent)
+      const IsAutoIndent = true
+      openLineAboveTestCase2(l, IsAutoIndent)
 
   # Generate test code
   # Enable autoindent
@@ -1979,16 +2009,15 @@ suite "Editor: Open the blank line abave":
         var status = initEditorStatus()
         status.addNewBufferInCurrentWin
 
-        const buffer = `keyword`
-        status.bufStatus[0].buffer = initGapBuffer(@[ru buffer, ru ""])
+        status.bufStatus[0].buffer = initGapBuffer(@[`keyword`, ""].toSeqRunes)
         status.bufStatus[0].language = SourceLanguage.langNim
 
         status.mainWindow.currentMainWindowNode.currentLine = 1
 
-        const isAutoIndent = true
+        const IsAutoIndent = true
         status.bufStatus[0].openBlankLineAbove(
           status.mainWindow.currentMainWindowNode,
-          isAutoIndent,
+          IsAutoIndent,
           status.settings.tabStop)
 
         let currentBufStatus = status.bufStatus[0]
@@ -2002,14 +2031,14 @@ suite "Editor: Open the blank line abave":
 
   # Generate test code by macro
   block:
-    const keyword = "var"
-    openLineAboveTestCase3(keyword)
+    const Keyword = "var"
+    openLineAboveTestCase3(Keyword)
   block:
-    const keyword = "let"
-    openLineAboveTestCase3(keyword)
+    const Keyword = "let"
+    openLineAboveTestCase3(Keyword)
   block:
-    const keyword = "const"
-    openLineAboveTestCase3(keyword)
+    const Keyword = "const"
+    openLineAboveTestCase3(Keyword)
 
   # Generate test code
   # Enable autoindent
@@ -2025,23 +2054,23 @@ suite "Editor: Open the blank line abave":
         var status = initEditorStatus()
         status.addNewBufferInCurrentWin
 
-        const buffer = "test " & `keyword`
-        status.bufStatus[0].buffer = initGapBuffer(@[ru buffer, ru ""])
+        const Buffer = @["test " & `keyword`, ""].toSeqRunes
+        status.bufStatus[0].buffer = initGapBuffer(Buffer)
         status.bufStatus[0].language = SourceLanguage.langNim
 
         status.mainWindow.currentMainWindowNode.currentLine = 1
 
-        const isAutoIndent = true
+        const IsAutoIndent = true
         status.bufStatus[0].openBlankLineAbove(
           status.mainWindow.currentMainWindowNode,
-          isAutoIndent,
+          IsAutoIndent,
           status.settings.tabStop)
 
         let currentBufStatus = status.bufStatus[0]
 
         check currentBufStatus.buffer.len == 3
 
-        check $currentBufStatus.buffer[0] == buffer
+        check currentBufStatus.buffer[0] == Buffer[0]
         check currentBufStatus.buffer[1] == ru "  "
         check currentBufStatus.buffer[2] == ru ""
 
@@ -2080,38 +2109,39 @@ suite "Editor: Open the blank line abave":
         var status = initEditorStatus()
         status.addNewBufferInCurrentWin
 
-        const buffer = "test " & `keyword`
-        status.bufStatus[0].buffer = initGapBuffer(@[ru buffer, ru ""])
+        const Buffer = @["test " & `keyword`, ""].toSeqRunes
+        status.bufStatus[0].buffer = initGapBuffer(Buffer)
         status.bufStatus[0].language = SourceLanguage.langPython
 
         status.mainWindow.currentMainWindowNode.currentLine = 1
 
-        const isAutoIndent = true
+        const IsAutoIndent = true
         status.bufStatus[0].openBlankLineAbove(
           status.mainWindow.currentMainWindowNode,
-          isAutoIndent,
+          IsAutoIndent,
           status.settings.tabStop)
 
         let currentBufStatus = status.bufStatus[0]
         check currentBufStatus.buffer.len == 3
-        check $currentBufStatus.buffer[0] == buffer
+
+        check currentBufStatus.buffer[0] == Buffer[0]
         check currentBufStatus.buffer[1] == ru"  "
         check currentBufStatus.buffer[2] == ru""
 
-        let currentMainWindowNode = status.mainWindow.currentMainWindowNode
-        check currentMainWindowNode.currentLine == 1
-        check currentMainWindowNode.currentColumn == currentBufStatus.buffer[1].len
+        check status.mainWindow.currentMainWindowNode.currentLine == 1
+        check status.mainWindow.currentMainWindowNode.currentColumn ==
+          currentBufStatus.buffer[1].len
 
   # Generate test code by macro
   block:
-    const keyword = "or"
-    openLineAboveTestCase5(keyword)
+    const Keyword = "or"
+    openLineAboveTestCase5(Keyword)
   block:
-    const keyword = "and"
-    openLineAboveTestCase5(keyword)
+    const Keyword = "and"
+    openLineAboveTestCase5(Keyword)
   block:
-    const keyword = ":"
-    openLineAboveTestCase5(keyword)
+    const Keyword = ":"
+    openLineAboveTestCase5(Keyword)
 
 suite "Editor: Indent":
   block:
@@ -2130,8 +2160,7 @@ suite "Editor: Indent":
           var status = initEditorStatus()
           status.addNewBufferInCurrentWin
 
-          const buffer = @[ru""]
-          status.bufStatus[0].buffer = initGapBuffer(buffer)
+          status.bufStatus[0].buffer = initGapBuffer(@[ru""])
           status.bufStatus[0].language = `lang`
 
           status.bufStatus[0].indent(
@@ -2168,23 +2197,18 @@ suite "Editor: Indent":
           var status = initEditorStatus()
           status.addNewBufferInCurrentWin
 
-          const buffer = @[ru"  "]
-          status.bufStatus[0].buffer = initGapBuffer(buffer)
+          status.bufStatus[0].buffer = initGapBuffer(@[ru"  "])
           status.bufStatus[0].language = `lang`
 
           status.bufStatus[0].indent(
             status.mainWindow.currentMainWindowNode,
             status.settings.tabStop)
 
-          let
-            currentBufStatus = status.bufStatus[0]
-            currentMainWindowNode = status.mainWindow.currentMainWindowNode
+          check status.bufStatus[0].buffer.len == 1
+          check status.bufStatus[0].buffer[0] == ru"    "
 
-          check currentBufStatus.buffer.len == 1
-          check currentBufStatus.buffer[0] == ru"    "
-
-          check currentMainWindowNode.currentLine == 0
-          check currentMainWindowNode.currentColumn == 0
+          check status.mainWindow.currentMainWindowNode.currentLine == 0
+          check status.mainWindow.currentMainWindowNode.currentColumn == 0
 
     for l in SourceLanguage:
       # Generate test code by macro
@@ -2205,8 +2229,7 @@ suite "Editor: Indent":
           var status = initEditorStatus()
           status.addNewBufferInCurrentWin
 
-          const buffer = @[ru"  test"]
-          status.bufStatus[0].buffer = initGapBuffer(buffer)
+          status.bufStatus[0].buffer = initGapBuffer(@[ru"  test"])
           status.bufStatus[0].language = `lang`
 
           status.bufStatus[0].indent(
@@ -2242,8 +2265,7 @@ suite "Editor: Indent":
           var status = initEditorStatus()
           status.addNewBufferInCurrentWin
 
-          const buffer = @[ru"  "]
-          status.bufStatus[0].buffer = initGapBuffer(buffer)
+          status.bufStatus[0].buffer = initGapBuffer(@[ru"  "])
           status.bufStatus[0].language = `lang`
 
           status.mainWindow.currentMainWindowNode.currentColumn = 1
@@ -2281,8 +2303,7 @@ suite "Editor: Indent":
           var status = initEditorStatus()
           status.addNewBufferInCurrentWin
 
-          const buffer = @[ru"  ", ru"", ru"  "]
-          status.bufStatus[0].buffer = initGapBuffer(buffer)
+          status.bufStatus[0].buffer = initGapBuffer(@[ru"  ", ru"", ru"  "])
           status.bufStatus[0].language = `lang`
 
           status.mainWindow.currentMainWindowNode.currentLine = 1
@@ -2324,8 +2345,7 @@ suite "Editor: Unindent":
           var status = initEditorStatus()
           status.addNewBufferInCurrentWin
 
-          const buffer = @[ru"  "]
-          status.bufStatus[0].buffer = initGapBuffer(buffer)
+          status.bufStatus[0].buffer = initGapBuffer(@[ru"  "])
           status.bufStatus[0].language = `lang`
 
           status.bufStatus[0].unindent(
@@ -2362,11 +2382,10 @@ suite "Editor: Unindent":
           var status = initEditorStatus()
           status.addNewBufferInCurrentWin
 
-          const buffer = @[ru"  "]
-          status.bufStatus[0].buffer = initGapBuffer(buffer)
+          status.bufStatus[0].buffer = initGapBuffer(@[ru"  "])
           status.bufStatus[0].language = `lang`
 
-          status.mainWindow.currentMainWindowNode.currentColumn = buffer[0].high
+          status.mainWindow.currentMainWindowNode.currentColumn = 1
 
           status.bufStatus[0].unindent(
             status.mainWindow.currentMainWindowNode,
@@ -2401,11 +2420,10 @@ suite "Editor: Unindent":
           var status = initEditorStatus()
           status.addNewBufferInCurrentWin
 
-          const buffer = @[ru"  test"]
-          status.bufStatus[0].buffer = initGapBuffer(buffer)
+          status.bufStatus[0].buffer = initGapBuffer(@[ru"  test"])
           status.bufStatus[0].language = `lang`
 
-          status.mainWindow.currentMainWindowNode.currentColumn = buffer[0].high
+          status.mainWindow.currentMainWindowNode.currentColumn = 5
 
           status.bufStatus[0].unindent(
             status.mainWindow.currentMainWindowNode,
@@ -2440,8 +2458,7 @@ suite "Editor: Unindent":
           var status = initEditorStatus()
           status.addNewBufferInCurrentWin
 
-          const buffer = @[ru""]
-          status.bufStatus[0].buffer = initGapBuffer(buffer)
+          status.bufStatus[0].buffer = initGapBuffer(@[ru""])
           status.bufStatus[0].language = `lang`
 
           status.bufStatus[0].unindent(
@@ -2477,8 +2494,7 @@ suite "Editor: Unindent":
           var status = initEditorStatus()
           status.addNewBufferInCurrentWin
 
-          const buffer = @[ru"  ", ru"", ru"  "]
-          status.bufStatus[0].buffer = initGapBuffer(buffer)
+          status.bufStatus[0].buffer = initGapBuffer(@[ru"  ", ru"", ru"  "])
           status.bufStatus[0].language = `lang`
 
           status.mainWindow.currentMainWindowNode.currentLine = 1

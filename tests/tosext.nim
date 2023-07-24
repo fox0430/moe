@@ -31,7 +31,7 @@ suite "osext: isPath":
       test testTitle:
         check `expectVal` == isPath(`line`)
 
-  const testCases: seq[tuple[expectVal: bool, line: seq[Rune]]] = @[
+  const TestCases: seq[tuple[expectVal: bool, line: seq[Rune]]] = @[
     (expectVal: true, line: "/".ru),
     (expectVal: true, line: "/h".ru),
     (expectVal: true, line: "/home/".ru),
@@ -44,7 +44,7 @@ suite "osext: isPath":
     (expectVal: false, line: "te/st".ru)]
 
   # Generate test code by macro
-  for i, c in testCases:
+  for i, c in TestCases:
     isPathTest(i, c.expectVal, c.line)
 
 suite "osext: splitPathExt":
@@ -63,7 +63,7 @@ suite "osext: splitPathExt":
         check `expectVal` == splitPathExt(`path`)
 
   const
-    testCases: seq[tuple[expectVal: tuple[head, tail: seq[Rune]], path: seq[Rune]]] = @[
+    TestCases: seq[tuple[expectVal: tuple[head, tail: Runes], path: Runes]] = @[
       (expectVal: (head: "/".ru, tail: "".ru), path: "/".ru),
       (expectVal: (head: "./".ru, tail: "".ru), path: "./".ru),
       (expectVal: (head: "../".ru, tail: "".ru), path: "../".ru),
@@ -74,5 +74,5 @@ suite "osext: splitPathExt":
       (expectVal: (head: "../home/".ru, tail: "dir".ru), path: "../home/dir".ru)]
 
   # Generate test code by macro
-  for i, c in testCases:
+  for i, c in TestCases:
     splitPathExtTest(i, c.expectVal, c.path)

@@ -70,9 +70,9 @@ type
     backgroundTasks*: BackgroundTasks
 
 const
-  tabLineWindowHeight = 1
-  statusLineWindowHeight = 1
-  commandLineWindowHeight = 1
+  TabLineWindowHeight = 1
+  StatusLineWindowHeight = 1
+  CommandLineWindowHeight = 1
 
 proc initEditorStatus*(): EditorStatus =
   result.currentDir = getCurrentDir().toRunes
@@ -86,12 +86,12 @@ proc initEditorStatus*(): EditorStatus =
   # Init tab line
   if result.settings.tabLine.enable:
     const
-      h = 1
-      w = 1
-      t = 0
-      l = 0
-      color = EditorColorPairIndex.default
-    result.tabWindow = initWindow(h, w, t, l, color.int16)
+      H = 1
+      W = 1
+      T = 0
+      L = 0
+      Color = EditorColorPairIndex.default
+    result.tabWindow = initWindow(H, W, T, L, Color.int16)
 
 template currentBufStatus*: var BufferStatus =
   mixin status
@@ -122,6 +122,7 @@ proc changeCurrentBuffer*(
   statusLines: var seq[StatusLine],
   bufStatuses: seq[BufferStatus],
   bufferIndex: int) =
+
     if 0 <= bufferIndex and bufferIndex < bufStatuses.len:
       currentNode.bufferIndex = bufferIndex
 
@@ -161,18 +162,18 @@ proc updateLastCursorPostion*(status: var EditorStatus) =
       return
 
   if currentBufStatus.path.len > 0:
-    let
-      path = currentBufStatus.path.absolutePath
-      line = currentMainWindowNode.currentLine
-      column = currentMainWindowNode.currentColumn
-    status.lastPosition.add LastCursorPosition(path: path, line: line, column: column)
+    status.lastPosition.add LastCursorPosition(
+      path: currentBufStatus.path.absolutePath,
+      line: currentMainWindowNode.currentLine,
+      column: currentMainWindowNode.currentColumn)
 
-proc getLastCursorPostion*(lastPosition: seq[LastCursorPosition],
-                           path: seq[Rune]): Option[LastCursorPosition] =
+proc getLastCursorPostion*(
+  lastPosition: seq[LastCursorPosition],
+  path: seq[Rune]): Option[LastCursorPosition] =
 
-  for p in lastPosition:
-    if p.path.absolutePath == path.absolutePath:
-      return some(p)
+    for p in lastPosition:
+      if p.path.absolutePath == path.absolutePath:
+        return some(p)
 
 proc changeCurrentWin*(status: var EditorStatus, index: int) =
   if index < status.mainWindow.numOfMainWindow and index > 0:
@@ -427,13 +428,13 @@ proc resizeMainWindowNode(status: var EditorStatus, terminalSize: Size) =
   let
     height = terminalSize.h
     tabLineHeight =
-      if status.settings.tabLine.enable: tabLineWindowHeight
+      if status.settings.tabLine.enable: TabLineWindowHeight
       else: 0
     statusLineHeight =
-      if status.settings.statusLine.enable: statusLineWindowHeight
+      if status.settings.statusLine.enable: StatusLineWindowHeight
       else: 0
     commandLineHeight =
-      if status.settings.statusLine.merge: commandLineWindowHeight
+      if status.settings.statusLine.merge: CommandLineWindowHeight
       else: 0
     sidebarWidth =
       if status.sidebar.isSome: status.sidebar.get.w
@@ -556,21 +557,21 @@ proc resize*(status: var EditorStatus) =
       w =
         if status.sidebar.isSome: mainWindowNode.w
         else: terminalWidth
-    status.tabWindow.resize(tabLineWindowHeight, w, y, x)
+    status.tabWindow.resize(TabLineWindowHeight, w, y, x)
 
   # Resize the sidebar
   if status.sidebar.isSome:
     let rect = Rect(
       x: 0,
       y: 0,
-      h: terminalHeight - commandLineWindowHeight,
+      h: terminalHeight - CommandLineWindowHeight,
       w: terminalWidth - mainWindowNode.w)
     status.sidebar.get.resize(rect)
 
   # Resize command line.
   const x = 0
   let y = max(terminalHeight, 4) - 1
-  status.commandLine.resize(y, x, commandLineWindowHeight, terminalWidth)
+  status.commandLine.resize(y, x, CommandLineWindowHeight, terminalWidth)
 
   if currentBufStatus.isCursor:
     setCursor(true)
@@ -945,9 +946,11 @@ proc closeWindow*(status: var EditorStatus, node: WindowNode) =
 
   let
     numOfMainWindow = status.mainWindow.numOfMainWindow
-    newCurrentWinIndex = if deleteWindowIndex > numOfMainWindow - 1:
-                           status.mainWindow.numOfMainWindow - 1
-                         else: deleteWindowIndex
+    newCurrentWinIndex =
+      if deleteWindowIndex > numOfMainWindow - 1:
+        status.mainWindow.numOfMainWindow - 1
+      else:
+        deleteWindowIndex
 
   let node = mainWindowNode.searchByWindowIndex(newCurrentWinIndex)
   status.mainWindow.currentMainWindowNode = node
@@ -1003,28 +1006,33 @@ proc deleteBuffer*(status: var EditorStatus, deleteIndex: int) =
       if node.child.len > 0:
         for node in node.child: queue.push(node)
 
-  let afterWindowIndex = if beforeWindowIndex > status.mainWindow.numOfMainWindow - 1:
-                            status.mainWindow.numOfMainWindow - 1
-                         else: beforeWindowIndex
+  let afterWindowIndex =
+    if beforeWindowIndex > status.mainWindow.numOfMainWindow - 1:
+      status.mainWindow.numOfMainWindow - 1
+    else:
+      beforeWindowIndex
   currentMainWindowNode = mainWindowNode.searchByWindowIndex(afterWindowIndex)
 
-proc tryRecordCurrentPosition*(bufStatus: var BufferStatus,
-                               windowNode: WindowNode) {.inline.} =
+proc tryRecordCurrentPosition*(
+  bufStatus: var BufferStatus,
+  windowNode: WindowNode) {.inline.} =
 
-  bufStatus.positionRecord[bufStatus.buffer.lastSuitId] = (windowNode.currentLine,
-                                                           windowNode.currentColumn,
-                                                           windowNode.expandedColumn)
+    bufStatus.positionRecord[bufStatus.buffer.lastSuitId] = (
+      windowNode.currentLine,
+      windowNode.currentColumn,
+      windowNode.expandedColumn)
 
-proc revertPosition*(bufStatus: var BufferStatus,
-                     windowNode: WindowNode,
-                     id: int) =
+proc revertPosition*(
+  bufStatus: var BufferStatus,
+  windowNode: WindowNode,
+  id: int) =
 
-  let mess = fmt"The id not recorded was requested. [bufStatus.positionRecord = {bufStatus.positionRecord}, id = {id}]"
-  doAssert(bufStatus.positionRecord.contains(id), mess)
+    let mess = fmt"The id not recorded was requested. [bufStatus.positionRecord = {bufStatus.positionRecord}, id = {id}]"
+    doAssert(bufStatus.positionRecord.contains(id), mess)
 
-  windowNode.currentLine = bufStatus.positionRecord[id].line
-  windowNode.currentColumn = bufStatus.positionRecord[id].column
-  windowNode.expandedColumn = bufStatus.positionRecord[id].expandedColumn
+    windowNode.currentLine = bufStatus.positionRecord[id].line
+    windowNode.currentColumn = bufStatus.positionRecord[id].column
+    windowNode.expandedColumn = bufStatus.positionRecord[id].expandedColumn
 
 # TODO: Move
 proc scrollUpNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
@@ -1086,8 +1094,12 @@ proc scrollDownNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
     if not (view.originalLine[0] <= destination and
        (view.originalLine[view.height - 1] == -1 or
        destination <= view.originalLine[view.height - 1])):
-      let startOfPrintedLines = max(destination - (currentLine - currentMainWindowNode.view.originalLine[0]), 0)
-      currentMainWindowNode.view.reload(currentBufStatus.buffer, startOfPrintedLines)
+         let startOfPrintedLines = max(
+           destination - (currentLine - currentMainWindowNode.view.originalLine[0]),
+           0)
+         currentMainWindowNode.view.reload(
+           currentBufStatus.buffer,
+           startOfPrintedLines)
 
 # TODO: Move
 proc pageDown*(status: var EditorStatus) =

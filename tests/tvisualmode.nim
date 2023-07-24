@@ -325,10 +325,11 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
     let area = currentBufStatus.selectedArea
     status.settings.clipboard.enable = false
-    currentBufStatus.yankBuffer(status.registers,
-                                currentMainWindowNode,
-                                area,
-                                status.settings)
+    currentBufStatus.yankBuffer(
+      status.registers,
+      currentMainWindowNode,
+      area,
+      status.settings)
 
     check status.registers.noNameRegister.isLine
     check status.registers.noNameRegister.buffer == @[ru"abc", ru"def"]
@@ -395,10 +396,11 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
     let area = currentBufStatus.selectedArea
     status.settings.clipboard.enable = false
-    currentBufStatus.yankBuffer(status.registers,
-                                currentMainWindowNode,
-                                area,
-                                status.settings)
+    currentBufStatus.yankBuffer(
+      status.registers,
+      currentMainWindowNode,
+      area,
+      status.settings)
 
     check not status.registers.noNameRegister.isLine
     check status.registers.noNameRegister.buffer[^1] == ru"abc"
@@ -426,10 +428,11 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
     let area = currentBufStatus.selectedArea
     status.settings.clipboard.enable = false
-    currentBufStatus.yankBuffer(status.registers,
-                                currentMainWindowNode,
-                                area,
-                                status.settings)
+    currentBufStatus.yankBuffer(
+      status.registers,
+      currentMainWindowNode,
+      area,
+      status.settings)
 
     check status.registers.noNameRegister.isLine
     check status.registers.noNameRegister.buffer == @[ru"abc", ru""]
@@ -456,10 +459,11 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
     let area = currentBufStatus.selectedArea
     status.settings.clipboard.enable = false
-    currentBufStatus.yankBuffer(status.registers,
-                                currentMainWindowNode,
-                                area,
-                                status.settings)
+    currentBufStatus.yankBuffer(
+      status.registers,
+      currentMainWindowNode,
+      area,
+      status.settings)
 
     check status.registers.noNameRegister.isLine
     check status.registers.noNameRegister.buffer == @[ru""]
@@ -492,10 +496,11 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
 
     let area = currentBufStatus.selectedArea
     status.settings.clipboard.enable = false
-    currentBufStatus.yankBufferBlock(status.registers,
-                                     currentMainWindowNode,
-                                     area,
-                                     status.settings)
+    currentBufStatus.yankBufferBlock(
+      status.registers,
+      currentMainWindowNode,
+      area,
+      status.settings)
 
     check status.registers.noNameRegister.isLine
     check status.registers.noNameRegister.buffer == @[ru"a", ru"d"]
@@ -535,10 +540,11 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
 
     let area = currentBufStatus.selectedArea
     status.settings.clipboard.enable = false
-    currentBufStatus.yankBufferBlock(status.registers,
-                                     currentMainWindowNode,
-                                     area,
-                                     status.settings)
+    currentBufStatus.yankBufferBlock(
+      status.registers,
+      currentMainWindowNode,
+      area,
+      status.settings)
 
     check status.registers.noNameRegister.isLine
     check status.registers.noNameRegister.buffer == @[ru"ab", ru"d"]
@@ -565,8 +571,8 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
     status.settings.clipboard.enable = false
 
     var area = currentBufStatus.selectedArea
-    const key = ru'y'
-    status.visualBlockCommand(area, key)
+    const Key = ru'y'
+    status.visualBlockCommand(area, Key)
 
     check currentBufStatus.isNormalMode
 
@@ -598,11 +604,12 @@ suite "Visual block mode: Delete buffer (Disable clipboard)":
 
     let area = currentBufStatus.selectedArea
     status.settings.clipboard.enable = false
-    currentBufStatus.deleteBufferBlock(status.registers,
-                                       currentMainWindowNode,
-                                       area,
-                                       status.settings,
-                                       status.commandLine)
+    currentBufStatus.deleteBufferBlock(
+      status.registers,
+      currentMainWindowNode,
+      area,
+      status.settings,
+      status.commandLine)
 
     check(currentBufStatus.buffer[0] == ru"bc")
     check(currentBufStatus.buffer[1] == ru"ef")
@@ -637,22 +644,24 @@ if isXselAvailable():
 
       let area = currentBufStatus.selectedArea
       status.settings.clipboard.enable = true
-      currentBufStatus.yankBuffer(status.registers,
-                                  currentMainWindowNode,
-                                  area,
-                                  status.settings)
+      currentBufStatus.yankBuffer(
+        status.registers,
+        currentMainWindowNode,
+        area,
+        status.settings)
 
-      if (currentPlatform == Platforms.linux or
-          currentPlatform == Platforms.wsl):
+      if currentPlatform == Platforms.linux or currentPlatform == Platforms.wsl:
         let
-          cmd = if currentPlatform == Platforms.linux:
-                  execCmdEx("xsel -o")
-                else:
-                  # On the WSL
-                  execCmdEx("powershell.exe -Command Get-Clipboard")
+          cmd =
+            if currentPlatform == Platforms.linux:
+              execCmdEx("xsel -o")
+            else:
+              # On the WSL
+             execCmdEx("powershell.exe -Command Get-Clipboard")
           (output, exitCode) = cmd
 
         check exitCode == 0
+
         if currentPlatform == Platforms.linux:
           check output[0 .. output.high - 1] == "abc"
         else:
@@ -691,22 +700,24 @@ if isXselAvailable():
 
       let area = currentBufStatus.selectedArea
       status.settings.clipboard.enable = true
-      currentBufStatus.yankBuffer(status.registers,
-                                  currentMainWindowNode,
-                                  area,
-                                  status.settings)
+      currentBufStatus.yankBuffer(
+        status.registers,
+        currentMainWindowNode,
+        area,
+        status.settings)
 
-      if (currentPlatform == Platforms.linux or
-          currentPlatform == Platforms.wsl):
+      if currentPlatform == Platforms.linux or currentPlatform == Platforms.wsl:
         let
-          cmd = if currentPlatform == Platforms.linux:
-                  execCmdEx("xsel -o")
-                else:
-                  # On the WSL
-                  execCmdEx("powershell.exe -Command Get-Clipboard")
+          cmd =
+            if currentPlatform == Platforms.linux:
+              execCmdEx("xsel -o")
+            else:
+              # On the WSL
+              execCmdEx("powershell.exe -Command Get-Clipboard")
           (output, exitCode) = cmd
 
         check exitCode == 0
+
         if currentPlatform == Platforms.linux:
           check output[0 .. output.high - 1] == "abc\ndef"
         else:
@@ -743,15 +754,14 @@ if isXselAvailable():
 
       let area = currentBufStatus.selectedArea
       status.settings.clipboard.enable = true
-      currentBufStatus.yankBufferBlock(status.registers,
-                                       currentMainWindowNode,
-                                       area,
-                                       status.settings)
+      currentBufStatus.yankBufferBlock(
+        status.registers,
+        currentMainWindowNode,
+        area,
+        status.settings)
 
       if currentPlatform == Platforms.linux:
-        let
-          cmd = execCmdEx("xsel -o")
-          (output, exitCode) = cmd
+        let (output, exitCode) = execCmdEx("xsel -o")
 
         check exitCode == 0
         check output[0 .. output.high - 1] == "a\nd"
@@ -788,15 +798,14 @@ if isXselAvailable():
 
       let area = currentBufStatus.selectedArea
       status.settings.clipboard.enable = true
-      currentBufStatus.yankBufferBlock(status.registers,
-                                       currentMainWindowNode,
-                                       area,
-                                       status.settings)
+      currentBufStatus.yankBufferBlock(
+        status.registers,
+       currentMainWindowNode,
+       area,
+       status.settings)
 
       if currentPlatform == Platforms.linux:
-        let
-          cmd = execCmdEx("xsel -o")
-          (output, exitCode) = cmd
+        let (output, exitCode) = execCmdEx("xsel -o")
 
         check exitCode == 0
         check output[0 .. output.high - 1] == "ab\nd"
@@ -831,11 +840,12 @@ if isXselAvailable():
 
       let area = currentBufStatus.selectedArea
       status.settings.clipboard.enable = true
-      currentBufStatus.deleteBufferBlock(status.registers,
-                                         currentMainWindowNode,
-                                         area,
-                                         status.settings,
-                                         status.commandLine)
+      currentBufStatus.deleteBufferBlock(
+        status.registers,
+        currentMainWindowNode,
+        area,
+        status.settings,
+        status.commandLine)
 
       if currentPlatform == Platforms.linux:
         let (output, exitCode) = execCmdEx("xsel -o")
@@ -870,11 +880,12 @@ if isXselAvailable():
 
       let area = currentBufStatus.selectedArea
       status.settings.clipboard.enable = true
-      currentBufStatus.deleteBufferBlock(status.registers,
-                                         currentMainWindowNode,
-                                         area,
-                                         status.settings,
-                                         status.commandLine)
+      currentBufStatus.deleteBufferBlock(
+        status.registers,
+        currentMainWindowNode,
+        area,
+        status.settings,
+        status.commandLine)
 
     test "Fix #885":
       var status = initEditorStatus()
@@ -1551,18 +1562,19 @@ suite "Visual block mode: Insert buffer":
       currentMainWindowNode.currentLine = area.startLine
       currentMainWindowNode.currentColumn = area.startColumn
 
-      const insertBuffer = ru "\t"
+      const InsertBuffer = ru "\t"
 
       # Insert buffer to the area.startLine
-      for c in insertBuffer:
-        insertTab(currentBufStatus,
-                  currentMainWindowNode,
-                  status.settings.tabStop,
-                  status.settings.autoCloseParen)
+      for c in InsertBuffer:
+        insertTab(
+          currentBufStatus,
+          currentMainWindowNode,
+          status.settings.tabStop,
+          status.settings.autoCloseParen)
 
       currentBufStatus.insertCharBlock(
         currentMainWindowNode,
-        insertBuffer,
+        InsertBuffer,
         area,
         status.settings.tabStop,
         status.settings.autoCloseParen,
@@ -1794,7 +1806,10 @@ suite "Visual mode: Run command when Readonly mode":
 
     status.update
 
-    currentBufStatus.replaceCharacter(currentBufStatus.selectedArea, ru 'z', status.commandLine)
+    currentBufStatus.replaceCharacter(
+      currentBufStatus.selectedArea,
+      ru 'z',
+      status.commandLine)
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
@@ -2072,7 +2087,10 @@ suite "Visual block mode: Run command when Readonly mode":
 
     status.update
 
-    currentBufStatus.replaceCharacter(currentBufStatus.selectedArea, ru 'z', status.commandLine)
+    currentBufStatus.replaceCharacter(
+      currentBufStatus.selectedArea,
+      ru 'z',
+      status.commandLine)
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
@@ -2284,9 +2302,7 @@ if isXselAvailable():
         status.settings)
 
       if currentPlatform == Platforms.linux:
-        let
-          cmd = execCmdEx("xsel -o")
-          (output, exitCode) = cmd
+        let (output, exitCode) = execCmdEx("xsel -o")
 
         check exitCode == 0
         check output[0 .. output.high - 1] == "a"

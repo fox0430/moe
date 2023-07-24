@@ -21,7 +21,7 @@ import std/[unittest, strutils]
 import moepkg/[highlight, color]
 import moepkg/syntax/highlite
 
-const reservedWords = @[
+const ReservedWords = @[
   ReservedWord(word: "WIP", color: EditorColorPairIndex.reservedWord)
 ]
 
@@ -29,9 +29,10 @@ test "initHighlight: start with newline":
   let
     code = "\x0Aproc test =\x0A  echo \"Hello, world!\""
     buffer = split(code, '\n')
-    highlight = initHighlight(code,
-                              reservedWords,
-                              SourceLanguage.langNim)
+    highlight = initHighlight(
+      code,
+      ReservedWords,
+      SourceLanguage.langNim)
 
   # unite segments
   var unitedStr: string
@@ -49,32 +50,36 @@ test "initHighlight: start with newline":
 test "indexOf: basic":
   let
     code = "proc test =\x0A  echo \"Hello, world!\""
-    highlight = initHighlight(code,
-                              reservedWords,
-                              SourceLanguage.langNim)
+    highlight = initHighlight(
+      code,
+     ReservedWords,
+     SourceLanguage.langNim)
 
   check(highlight.indexOf(0, 0) == 0)
 
 test "indexOf: start with newline":
   let
     code = "\x0Aproc test =\x0A  echo \"Hello, world!\""
-    highlight = initHighlight(code,
-                              reservedWords,
-                              SourceLanguage.langNim)
+    highlight = initHighlight(
+      code,
+     ReservedWords,
+     SourceLanguage.langNim)
 
   check(highlight.indexOf(0, 0) == 0)
 
 test "over write":
   let code = "　"
-  var highlight = initHighlight(code,
-                                reservedWords,
-                                SourceLanguage.langNone)
+  var highlight = initHighlight(
+    code,
+   ReservedWords,
+   SourceLanguage.langNone)
 
-  let colorSegment = ColorSegment(firstRow: 0,
-                                firstColumn: 0,
-                                lastRow: 0,
-                                lastColumn: 0,
-                                color: EditorColorPairIndex.highlightFullWidthSpace)
+  let colorSegment = ColorSegment(
+    firstRow: 0,
+    firstColumn: 0,
+    lastRow: 0,
+    lastColumn: 0,
+    color: EditorColorPairIndex.highlightFullWidthSpace)
 
   highlight.overwrite(colorSegment)
 
@@ -87,55 +92,87 @@ test "over write":
 
 # Fix #733
 test """Highlight "echo \"""":
-  const code = """echo "\""""
-  discard initHighlight(code,
-                        reservedWords,
-                        SourceLanguage.langNim)
+  const Code = """echo "\""""
+  discard initHighlight(
+    Code,
+    ReservedWords,
+    SourceLanguage.langNim)
 
 test "initHighlight shell script (Fix #1166)":
-  const code = "echo hello"
-  let r = initHighlight(code,
-                        reservedWords,
-                        SourceLanguage.langShell)
+  const Code = "echo hello"
+  let r = initHighlight(
+    Code,
+    ReservedWords,
+    SourceLanguage.langShell)
 
   check r.len > 0
 
 test "Nim pragma":
-  const code = """{.pragma.}""""
+  const Code = """{.pragma.}""""
   let highlight = initHighlight(
-    code,
-    reservedWords,
+    Code,
+    ReservedWords,
     SourceLanguage.langNim)
 
-  check highlight[2] == ColorSegment(firstRow: 0, firstColumn: 2, lastRow: 0, lastColumn: 7, color: EditorColorPairIndex.pragma)
+  check highlight[2] == ColorSegment(
+    firstRow: 0,
+    firstColumn: 2,
+    lastRow: 0,
+    lastColumn: 7,
+    color: EditorColorPairIndex.pragma)
 
 test "Fix #1524":
   # https://github.com/fox0430/moe/issues/1524
 
-  const code = "test: '0'"
+  const Code = "test: '0'"
   let highlight = initHighlight(
-    code,
-    reservedWords,
+    Code,
+    ReservedWords,
     SourceLanguage.langYaml)
 
   check highlight == Highlight(
     colorSegments: @[
-      ColorSegment(firstRow: 0, firstColumn: 0, lastRow: 0, lastColumn: 3, color: EditorColorPairIndex.default),
-      ColorSegment(firstRow: 0, firstColumn: 4, lastRow: 0, lastColumn: 4, color: EditorColorPairIndex.default),
-      ColorSegment(firstRow: 0, firstColumn: 5, lastRow: 0, lastColumn: 5, color: EditorColorPairIndex.default),
-      ColorSegment(firstRow: 0, firstColumn: 6, lastRow: 0, lastColumn: 8, color: EditorColorPairIndex.default)])
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 0,
+        lastRow: 0,
+        lastColumn: 3,
+        color: EditorColorPairIndex.default),
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 4,
+        lastRow: 0,
+        lastColumn: 4,
+        color: EditorColorPairIndex.default),
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 5,
+        lastRow: 0,
+        lastColumn: 5,
+        color: EditorColorPairIndex.default),
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 6,
+        lastRow: 0,
+        lastColumn: 8,
+        color: EditorColorPairIndex.default)])
 
 test "Only '/' in Clang":
   # https://github.com/fox0430/moe/issues/1568
 
   const
-    code = "/"
-    emptyReservedWords = @[]
+    Code = "/"
+    EmptyReservedWords = @[]
   let highlight = initHighlight(
-    code,
-    emptyReservedWords,
+    Code,
+    EmptyReservedWords,
     SourceLanguage.langC)
 
   check highlight == Highlight(
     colorSegments: @[
-      ColorSegment(firstRow: 0, firstColumn: 0, lastRow: 0, lastColumn: 0, color: EditorColorPairIndex.default)])
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 0,
+        lastRow: 0,
+        lastColumn: 0,
+        color: EditorColorPairIndex.default)])

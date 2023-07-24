@@ -415,7 +415,8 @@ proc initFilerBuffer*(
         of pcLinkToFile:
           newLine.add(ru"@ -> " & expandSymLinkOrFilename(filename).toRunes)
         of pcLinkToDir:
-          newLine.add(ru"@ -> " & toRunes(expandSymLinkOrFilename(filename) / $DirSep))
+          newLine.add(
+            ru"@ -> " & toRunes(expandSymLinkOrFilename(filename) / $DirSep))
 
       # Set icons
       if isShowIcons:

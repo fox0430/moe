@@ -21,18 +21,20 @@ import std/[unittest, deques]
 import moepkg/[editorview, gapbuffer, unicodeext]
 
 test "initEditorView 1":
+  const Lines = @[ru"abc", ru"def"]
   let
-    lines = @[ru"abc", ru"def"]
-    buffer = initGapBuffer[seq[Rune]](lines)
+    buffer = initGapBuffer[Runes](Lines)
     view = initEditorView(buffer, 2, 3)
+
   check(view.lines[0] == ru"abc")
   check(view.lines[1] == ru"def")
 
 test "initEditorView 2":
+  const Lines = @[ru"abcあd", ru"いうefgh", ru"ij"]
   let
-    lines = @[ru"abcあd", ru"いうefgh", ru"ij"]
-    buffer = initGapBuffer[seq[Rune]](lines)
+    buffer = initGapBuffer[Runes](Lines)
     view = initEditorView(buffer, 8, 4)
+
   check(view.lines[0] == ru"abc")
   check(view.lines[1] == ru"あd")
   check(view.lines[2] == ru"いう")
@@ -43,9 +45,8 @@ test "initEditorView 2":
   check(view.originalLine[7] == -1)
 
 test "seekCursor 1":
-  let
-    lines = @[ru"aaa", ru"bbbb", ru"ccccc", ru"ddd"]
-    buffer = initGapBuffer[seq[RUne]](lines)
+  const Lines = @[ru"aaa", ru"bbbb", ru"ccccc", ru"ddd"]
+  let buffer = initGapBuffer[Runes](Lines)
   var view = initEditorView(buffer, 2, 3)
 
   check(view.lines[0] == ru"aaa")
@@ -60,9 +61,8 @@ test "seekCursor 1":
   check(view.lines[1] == ru"ddd")
 
 test "seekCursor 2":
-  let
-    lines = @[ru"aaaaaaa", ru"bbbb", ru"ccc", ru"d"]
-    buffer = initGapBuffer(lines)
+  const Lines = @[ru"aaaaaaa", ru"bbbb", ru"ccc", ru"d"]
+  let buffer = initGapBuffer(Lines)
   var view = initEditorView(buffer, 2, 3)
 
   check(view.lines[0] == ru"aaa")

@@ -20,7 +20,7 @@
 import std/strutils
 import unicodeext
 
-const helpSentences = """
+const HelpSentences = """
 # Exiting
 
 :w    - Write file
@@ -278,5 +278,5 @@ debug - Open debug mode
 """
 
 proc initHelpModeBuffer*(): seq[Runes] =
-  for line in helpSentences.splitLines:
+  for line in HelpSentences.splitLines:
     result.add line.toRunes

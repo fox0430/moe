@@ -44,7 +44,7 @@ proc changeModeToExMode(
   commandLine: var CommandLine)  =
     bufStatus.changeMode(Mode.ex)
     commandLine.clear
-    commandLine.setPrompt(exModePrompt)
+    commandLine.setPrompt(ExModePrompt)
 
 # TODO: Resolve the recursive module dependency and move to top.
 import editorstatus

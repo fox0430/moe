@@ -30,25 +30,25 @@ proc resize(status: var EditorStatus, size: Size) =
 suite "tabline: tabLineBuffer":
   test "Basic":
     const
-      path = "test.txt"
-      tabWidth = 100
+      Path = "test.txt"
+      TabWidth = 100
 
-    check path.tabLineBuffer(tabWidth) ==
-      " test.txt" & " ".repeat(100 - path.len)
+    check Path.tabLineBuffer(TabWidth) ==
+      " test.txt" & " ".repeat(100 - Path.len)
 
   test "Short":
     const
-      path = "test.txt"
-      tabWidth = 5
+      Path = "test.txt"
+      TabWidth = 5
 
-    check path.tabLineBuffer(tabWidth) == " test~"
+    check Path.tabLineBuffer(TabWidth) == " test~"
 
   test "Ignore":
-    const path = "test.txt"
+    const Path = "test.txt"
 
     for i in 0 .. 1:
       let tabWidth = i
-      check path.tabLineBuffer(tabWidth) == ""
+      check Path.tabLineBuffer(tabWidth) == ""
 
 suite "tabline: displayedPath":
   test "Backup mode":
@@ -98,12 +98,12 @@ suite "tabline: initTabLines":
     status.resize(Size(h: 100, w: 100))
 
     const
-      currentBufferIndex = 0
-      isAllbuffer = true
+      CurrentBufferIndex = 0
+      IsAllbuffer = true
 
     let t = status.bufStatus.initTabLines(
-      currentBufferIndex,
-      isAllbuffer,
+      CurrentBufferIndex,
+      IsAllbuffer,
       mainWindowNode)
 
     check t.len == 1
@@ -121,12 +121,12 @@ suite "tabline: initTabLines":
     status.resize(Size(h: 100, w: 100))
 
     const
-      currentBufferIndex = 0
-      isAllbuffer = true
+      CurrentBufferIndex = 0
+      IsAllbuffer = true
 
     let t = status.bufStatus.initTabLines(
-      currentBufferIndex,
-      isAllbuffer,
+      CurrentBufferIndex,
+      IsAllbuffer,
       mainWindowNode)
 
     check t.len == 1
@@ -147,12 +147,12 @@ suite "tabline: initTabLines":
     status.resize(Size(h: 100, w: 5))
 
     const
-      currentBufferIndex = 0
-      isAllbuffer = true
+      CurrentBufferIndex = 0
+      IsAllbuffer = true
 
     let t = status.bufStatus.initTabLines(
-      currentBufferIndex,
-      isAllbuffer,
+      CurrentBufferIndex,
+      IsAllbuffer,
       mainWindowNode)
 
     check t.len == 1
@@ -174,12 +174,12 @@ suite "tabline: initTabLines":
     status.resize(Size(h: 100, w: 100))
 
     const
-      currentBufferIndex = 0
-      isAllbuffer = true
+      CurrentBufferIndex = 0
+      IsAllbuffer = true
 
     let t = status.bufStatus.initTabLines(
-      currentBufferIndex,
-      isAllbuffer,
+      CurrentBufferIndex,
+      IsAllbuffer,
       mainWindowNode)
 
     check t.len == 2
@@ -213,14 +213,14 @@ suite "tabline: initTabLines":
     status.resize(Size(h: 100, w: 100))
 
     const
-      currentBufferIndex = 0
+      CurrentBufferIndex = 0
 
       # Show only the current buffer
-      isAllbuffer = false
+      IsAllbuffer = false
 
     let t = status.bufStatus.initTabLines(
-      currentBufferIndex,
-      isAllbuffer,
+      CurrentBufferIndex,
+      IsAllbuffer,
       mainWindowNode)
 
     check t.len == 1

@@ -21,53 +21,52 @@ import std/[heapqueue, options]
 import ui, editorview, gapbuffer, color, cursor, highlight, unicodeext,
        independentutils
 
-# vertical is default
-type SplitType* = enum
-  vertical = 0
-  horaizontal = 1
+type
+  SplitType* = enum
+    ## vertical is default
 
-## WindowNode is N-Ary tree
-type WindowNode* = ref object
-  parent*: WindowNode
-  child*: seq[WindowNode]
-  splitType*: SplitType
-  window*: Option[Window]
-  view*: EditorView
-  highlight*: Highlight
-  cursor*: CursorPosition
-  currentLine*: int
-  currentColumn*: int
-  expandedColumn*: int
-  bufferIndex*: int
-  windowIndex*: int
-  index*: int   ## Index as seen by parent node
-  y*: int
-  x*: int
-  h*: int
-  w*: int
+    vertical = 0
+    horaizontal = 1
 
-type MainWindow* = object
-  root*: WindowNode
-  currentMainWindowNode*: WindowNode
-  numOfMainWindow*: int
+  WindowNode* = ref object
+    ## WindowNode is N-Ary tree
+
+    parent*: WindowNode
+    child*: seq[WindowNode]
+    splitType*: SplitType
+    window*: Option[Window]
+    view*: EditorView
+    highlight*: Highlight
+    cursor*: CursorPosition
+    currentLine*, currentColumn*, expandedColumn*: int
+    bufferIndex*: int
+    windowIndex*: int
+    index*: int   ## Index as seen by parent node
+    y*, x*, h*, w*: int
+
+  MainWindow* = object
+    root*, currentMainWindowNode*: WindowNode
+    numOfMainWindow*: int
 
 proc newWindow(): Window {.inline.} =
   result = initWindow(1, 1, 0, 0, EditorColorPairIndex.default.ord)
-  result.setTimeout()
+  result.setTimeout
 
 proc initWindowNode*(): WindowNode =
   var
-    node = WindowNode(child: @[],
-                      splitType: SplitType.vertical,
-                      window: some(newWindow()),
-                      h: 1,
-                      w: 1)
-    root = WindowNode(child: @[node],
-                      splitType: SplitType.vertical,
-                      y: 0,
-                      x: 0,
-                      h: 1,
-                      w: 1)
+    node = WindowNode(
+      child: @[],
+      splitType: SplitType.vertical,
+      window: some(newWindow()),
+      h: 1,
+      w: 1)
+    root = WindowNode(
+      child: @[node],
+      splitType: SplitType.vertical,
+      y: 0,
+      x: 0,
+      h: 1,
+      w: 1)
   node.parent = root
   return root
 
