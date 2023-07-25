@@ -44,6 +44,17 @@ type
     filePath*: Runes
     process*: BackgroundProcess
 
+proc isGitConflictStartMarker*(runes: Runes): bool {.inline.} =
+  const Mark = ru"<<<<<<< "
+  return runes.startsWith(Mark) and runes.len > Mark.len
+
+proc isGitConflictDivideMarker*(runes: Runes): bool {.inline.} =
+  runes == ru"======="
+
+proc isGitConflictEndMarker*(runes: Runes): bool {.inline.} =
+  const Mark = ru">>>>>>> "
+  return runes.startsWith(Mark) and runes.len > Mark.len
+
 proc gitProjectRoot(): string =
   ## Return a git project root absolute path.
 

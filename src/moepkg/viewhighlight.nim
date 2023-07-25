@@ -19,7 +19,8 @@
 
 import std/[options, deques]
 import independentutils, bufferstatus, highlight, color, windownode, gapbuffer,
-       unicodeext, editorview, searchutils, settings, movement, ui, syntaxcheck
+       unicodeext, editorview, searchutils, settings, movement, ui, syntaxcheck,
+       git
 
 proc initBufferPosition(
   n: WindowNode): BufferPosition {.inline.} =
@@ -384,6 +385,24 @@ proc highlightSyntaxCheckerReuslts(
           color: color,
           attribute: Attribute.underline))
 
+proc highlightGitConflicts(
+  highlight: var Highlight,
+  bufStatus: BufferStatus,
+  range: Range) =
+    ## Highlight Git conflict marker lines.
+
+    for i in range.first .. min(range.last, bufStatus.buffer.high):
+      if bufStatus.buffer[i].isGitConflictStartMarker or
+         bufStatus.buffer[i].isGitConflictDivideMarker or
+         bufStatus.buffer[i].isGitConflictEndMarker:
+           highlight.overwrite(ColorSegment(
+             firstRow: i,
+             firstColumn: 0,
+             lastRow: i,
+             lastColumn: bufStatus.buffer[i].high,
+             color: EditorColorPairIndex.gitConflict,
+             attribute: Attribute.normal))
+
 proc updateHighlight*(
   highlight: var Highlight,
   bufStatus: BufferStatus,
@@ -440,3 +459,5 @@ proc updateHighlight*(
       highlight.highlightSyntaxCheckerReuslts(
         range,
         bufStatus.syntaxCheckResults)
+
+    highlight.highlightGitConflicts(bufStatus, range)
