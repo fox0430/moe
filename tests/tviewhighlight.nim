@@ -1,6 +1,27 @@
-import std/[unittest, heapqueue, options, macros, strformat]
+#[###################### GNU General Public License 3.0 ######################]#
+#                                                                              #
+#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#                                                                              #
+#  This program is free software: you can redistribute it and/or modify        #
+#  it under the terms of the GNU General Public License as published by        #
+#  the Free Software Foundation, either version 3 of the License, or           #
+#  (at your option) any later version.                                         #
+#                                                                              #
+#  This program is distributed in the hope that it will be useful,             #
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of              #
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the               #
+#  GNU General Public License for more details.                                #
+#                                                                              #
+#  You should have received a copy of the GNU General Public License           #
+#  along with this program.  If not, see <https://www.gnu.org/licenses/>.      #
+#                                                                              #
+#[############################################################################]#
+
+import std/[unittest, heapqueue, options, macros, strformat, strutils]
+import moepkg/syntax/highlite
 import moepkg/[editorstatus, highlight, color, editorview, gapbuffer,
-               unicodeext, movement, windownode, ui, independentutils]
+               unicodeext, movement, windownode, ui, independentutils,
+               bufferstatus]
 
 import moepkg/viewhighlight {.all.}
 
@@ -740,3 +761,159 @@ suite "Update search highlight":
           check highlight[0].color == EditorColorPairIndex.searchResult
           check highlight[1].color == EditorColorPairIndex.default
           check highlight[2].color == EditorColorPairIndex.default
+
+suite "Highlighting git conflicts":
+  test "highlightGitConflicts":
+    const
+      Range = Range(first: 0, last: 100)
+      Buffer = """
+<<<<<<< HEAD
+echo 1
+echo 2
+=======
+echo "test"
+>>>>>>> new_branch
+""".splitLines.toSeqRunes
+
+    var bufStatus = initBufferStatus("")
+    bufStatus.buffer = Buffer.toGapBuffer
+    var h = initHighlight($bufStatus.buffer, @[], SourceLanguage.langNim)
+
+    h.highlightGitConflicts(bufStatus, Range)
+
+    check h.colorSegments == @[
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 0,
+        lastRow: 0,
+        lastColumn: 6,
+        color: EditorColorPairIndex.gitConflict,
+        attribute: Attribute.normal),
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 7,
+        lastRow: 0,
+        lastColumn: 7,
+        color: EditorColorPairIndex.gitConflict,
+        attribute: Attribute.normal),
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 8,
+        lastRow: 0,
+        lastColumn: 11,
+        color: EditorColorPairIndex.gitConflict,
+        attribute: Attribute.normal),
+      ColorSegment(
+        firstRow: 1,
+        firstColumn: 0,
+        lastRow: 1,
+        lastColumn: 3,
+        color: EditorColorPairIndex.builtin,
+        attribute: Attribute.normal),
+      ColorSegment(
+        firstRow: 1,firstColumn: 4,
+        lastRow: 1,lastColumn: 4,
+        color: EditorColorPairIndex.default,
+        attribute: Attribute.normal),
+      ColorSegment(
+        firstRow: 1,
+        firstColumn: 5,
+        lastRow: 1,
+        lastColumn: 5,
+        color: EditorColorPairIndex.decNumber,
+        attribute: Attribute.normal),
+      ColorSegment(
+        firstRow: 2,
+        firstColumn: 0,
+        lastRow: 2, lastColumn: 3,
+        color: EditorColorPairIndex.builtin,
+        attribute: Attribute.normal),
+      ColorSegment(
+        firstRow: 2,
+        firstColumn: 4,
+        lastRow: 2,
+        lastColumn: 4,
+        color: EditorColorPairIndex.default,
+        attribute: Attribute.normal),
+      ColorSegment(
+        firstRow: 2,
+        firstColumn: 5,
+        lastRow: 2,
+        lastColumn: 5,
+        color: EditorColorPairIndex.decNumber,
+        attribute: Attribute.normal),
+      ColorSegment(
+        firstRow: 3,
+        firstColumn: 0,
+        lastRow: 3,
+        lastColumn: 6,
+        color: EditorColorPairIndex.gitConflict,
+        attribute: Attribute.normal),
+      ColorSegment(
+        firstRow: 4,
+        firstColumn: 0,
+        lastRow: 4,
+        lastColumn: 3,
+        color: EditorColorPairIndex.builtin,
+        attribute: Attribute.normal),
+      ColorSegment(
+        firstRow: 4,
+        firstColumn: 4,
+        lastRow: 4,
+        lastColumn: 4,
+        color: EditorColorPairIndex.default,
+        attribute: Attribute.normal),
+      ColorSegment(
+        firstRow: 4,
+        firstColumn: 5,
+        lastRow: 4,
+        lastColumn: 10,
+        color: EditorColorPairIndex.stringLit,
+        attribute: Attribute.normal),
+      ColorSegment(
+        firstRow: 5,
+        firstColumn: 0,
+        lastRow: 5,
+        lastColumn: 6,
+        color: EditorColorPairIndex.gitConflict,
+        attribute: Attribute.normal),
+      ColorSegment(
+        firstRow: 5,
+        firstColumn: 7,
+        lastRow: 5,
+        lastColumn: 7,
+        color: EditorColorPairIndex.gitConflict,
+        attribute: Attribute.normal),
+      ColorSegment(
+        firstRow: 5,
+        firstColumn: 8,
+        lastRow: 5,
+        lastColumn: 17,
+        color: EditorColorPairIndex.gitConflict,
+        attribute: Attribute.normal)
+    ]
+
+  test "Out of range":
+    const
+      Range = Range(first: 0, last: 100)
+      Code = """
+<<<<<<< HEAD
+echo 1
+echo 2
+=======
+echo "test"
+>>>>>>> new_branch
+""".splitLines
+
+    var bufStatus = initBufferStatus("")
+    for i in 0..100:
+      bufStatus.buffer.add ru""
+    for line in Code:
+      bufStatus.buffer.add line.toRunes
+
+    var h = initHighlight($bufStatus.buffer, @[], SourceLanguage.langNim)
+
+    h.highlightGitConflicts(bufStatus, Range)
+
+    for cs in h.colorSegments:
+      check cs.color != EditorColorPairIndex.gitConflict

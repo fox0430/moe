@@ -482,6 +482,10 @@ type
     syntaxCheckErr
     syntaxCheckErrBg
 
+    # Git conflicts background
+    gitConflict
+    gitConflictBg
+
     # backup manager
     backupManagerCurrentLine
     backupManagerCurrentLineBg
@@ -602,6 +606,9 @@ type
     syntaxCheckHint
     syntaxCheckWarn
     syntaxCheckErr
+
+    # Git conflict background
+    gitConflict
 
     # Backup manager
     backupManagerCurrentLine
@@ -1140,6 +1147,15 @@ const
         rgb: "#ff0000".hexToRgb.get),
       background: Color(
         index: EditorColorIndex.syntaxCheckErrBg,
+        rgb: "#000000".hexToRgb.get)),
+
+    # Git config background
+    EditorColorPairIndex.gitConflict: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.gitConflict,
+        rgb: "#00ff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.gitConflictBg,
         rgb: "#000000".hexToRgb.get)),
 
     # Backup manager
@@ -1739,6 +1755,15 @@ const
         index: EditorColorIndex.syntaxCheckErrBg,
         rgb: "#000000".hexToRgb.get)),
 
+    # Git config background
+    EditorColorPairIndex.gitConflict: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.gitConflict,
+        rgb: "#00ff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.gitConflictBg,
+        rgb: "#ffffff".hexToRgb.get)),
+
     # Backup manager
     EditorColorPairIndex.backupManagerCurrentLine: ColorPair(
       foreground: Color(
@@ -2334,6 +2359,15 @@ const
         rgb: "#ff0000".hexToRgb.get),
       background: Color(
         index: EditorColorIndex.syntaxCheckErrBg,
+        rgb: "#000000".hexToRgb.get)),
+
+    # Git config background
+    EditorColorPairIndex.gitConflict: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.gitConflict,
+        rgb: "#00ff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.gitConflictBg,
         rgb: "#000000".hexToRgb.get)),
 
     # Backup manager

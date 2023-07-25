@@ -403,6 +403,9 @@ syntaxCheckWarnBg = "#000000"
 syntaxCheckErr = "#ff0000"
 syntaxCheckErrBg = "#000000"
 
+gitConflict = "#00ff00"
+gitConflictBg = "#000000"
+
 configModeCurrentLine = "#ffffff"
 configModeCurrentLineBg = "#008080"
 

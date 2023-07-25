@@ -1243,6 +1243,14 @@ syntaxCheckErr
 syntaxCheckErrBg
 ```
 
+Git confict marker color
+```
+gitConflict
+```
+```
+gitConflictBg
+```
+
 Added line color on Diff viewer
 ```
 diffViewerAddedLine 
