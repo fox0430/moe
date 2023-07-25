@@ -314,6 +314,9 @@ const TomlStr = """
   syntaxCheckErr = "#000000"
   syntaxCheckErrBg = "#000000"
 
+  gitConflict = "#000000"
+  gitConflictBg = "#000000"
+
   backupManagerCurrentLine = "#000000"
   backupManagerCurrentLineBg = "#000000"
 
