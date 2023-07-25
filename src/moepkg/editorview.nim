@@ -44,26 +44,31 @@ type
     start: int
     length: int
 
-proc loadSingleViewLine[T](view: EditorView,
-                           buffer: T,
-                           originalLine,
-                           start: int): ViewLine =
+proc loadSingleViewLine[T](
+  view: EditorView,
+  buffer: T,
+  originalLine,
+  start: int): ViewLine =
 
-  result.line = ru""
-  result.originalLine = originalLine
-  result.start = start
-  let bufferLine = buffer[originalLine]
-  template isRemaining: bool = start+result.length < bufferLine.len
-  template calcNextWidth: int =
-    if isRemaining(): unicodeext.width(bufferLine[start+result.length]) else: 0
-  var
-    totalWidth = 0
-    nextWidth = calcNextWidth()
-  while isRemaining() and totalWidth+nextWidth <= view.width:
-    result.line.add(bufferLine[start+result.length])
-    result.length.inc
-    totalWidth += nextWidth
-    nextWidth = calcNextWidth
+    result.line = ru""
+    result.originalLine = originalLine
+    result.start = start
+
+    let bufferLine = buffer[originalLine]
+
+    template isRemaining: bool = start+result.length < bufferLine.len
+
+    template calcNextWidth: int =
+      if isRemaining(): unicodeext.width(bufferLine[start+result.length]) else: 0
+
+    var
+      totalWidth = 0
+      nextWidth = calcNextWidth()
+    while isRemaining() and totalWidth+nextWidth <= view.width:
+      result.line.add(bufferLine[start+result.length])
+      result.length.inc
+      totalWidth += nextWidth
+      nextWidth = calcNextWidth
 
 proc reload*[T](view: var EditorView, buffer: T, topLine: int) =
   # Reload from the buffer to the EditorView so that topLine is displayed as the top line of the EditorView.
@@ -273,9 +278,10 @@ proc scrollDown*[T](view: var EditorView, buffer: T) =
 
   var originalLine, start: int
   if view.start[height-2]+view.length[height-2] == buffer[view.originalLine[height-2]].len:
-    originalLine = if view.originalLine[height-2] == -1 or
-                      view.originalLine[height-2]+1 == buffer.len: -1
-                   else: view.originalLine[height-2]+1
+    originalLine =
+      if view.originalLine[height-2] == -1 or
+         view.originalLine[height-2]+1 == buffer.len: -1
+      else: view.originalLine[height-2]+1
     start = 0
   else:
     originalLine = view.originalLine[height-2]
@@ -471,9 +477,9 @@ proc writeAllLines*[T](
       if viewSettings.indentationLines and not isConfigMode:
         let currentOriginalLine = view.originalLine[y]
         if currentOriginalLine != lastOriginalLine:
-          let line = if buffer.len() > currentOriginalLine:
-                       buffer[currentOriginalLine]
-                     else: ru""
+          let line =
+            if buffer.len() > currentOriginalLine: buffer[currentOriginalLine]
+            else: ru""
           lineStart = x
           var numSpaces = 0
           for i in 0..<line.len:
@@ -503,9 +509,13 @@ proc writeAllLines*[T](
           let
             lastStr = $last
             lineStr = $view.lines[y]
-          assert(last <= view.lines[y].high,
-                 fmt"last = {lastStr}, view.lines[y] = {lineStr}")
-          assert(first <= last, fmt"first = {first}, last = {last}")
+
+          assert(
+            last <= view.lines[y].high,
+            fmt"last = {lastStr}, view.lines[y] = {lineStr}")
+          assert(
+            first <= last,
+            fmt"first = {first}, last = {last}")
 
         let str = view.lines[y][first .. last]
 

@@ -22,7 +22,7 @@ import moepkg/color
 
 import moepkg/highlight {.all.}
 
-const reservedWords = @[
+const ReservedWords = @[
   ReservedWord(word: "TODO", color: EditorColorPairIndex.reservedWord),
   ReservedWord(word: "WIP", color: EditorColorPairIndex.reservedWord),
   ReservedWord(word: "NOTE", color: EditorColorPairIndex.reservedWord)
@@ -30,54 +30,74 @@ const reservedWords = @[
 
 suite "parseReservedWord":
   test "no reserved word":
-    check toSeq(parseReservedWord("abcdefh", reservedWords, EditorColorPairIndex.default)) == @[
-      ("abcdefh", EditorColorPairIndex.default),
-    ]
+    check parseReservedWord(
+      "abcdefh",
+      ReservedWords,
+      EditorColorPairIndex.default).toSeq == @[("abcdefh", EditorColorPairIndex.default)]
+
   test "1 TODO":
-    check toSeq(parseReservedWord("# hello TODO world", reservedWords, EditorColorPairIndex.default)) == @[
-      ("# hello ", EditorColorPairIndex.default),
-      ("TODO", EditorColorPairIndex.reservedWord),
-      (" world", EditorColorPairIndex.default),
-    ]
+    check parseReservedWord(
+      "# hello TODO world",
+      ReservedWords,
+      EditorColorPairIndex.default).toSeq == @[
+        ("# hello ", EditorColorPairIndex.default),
+        ("TODO", EditorColorPairIndex.reservedWord),
+        (" world", EditorColorPairIndex.default),
+      ]
+
   test "2 TODO":
-    check toSeq(parseReservedWord("# hello TODO world TODO", reservedWords, EditorColorPairIndex.default)) == @[
-      ("# hello ", EditorColorPairIndex.default),
-      ("TODO", EditorColorPairIndex.reservedWord),
-      (" world ", EditorColorPairIndex.default),
-      ("TODO", EditorColorPairIndex.reservedWord),
-      ("", EditorColorPairIndex.default),
-    ]
+    check parseReservedWord(
+      "# hello TODO world TODO",
+      ReservedWords,
+      EditorColorPairIndex.default).toSeq == @[
+        ("# hello ", EditorColorPairIndex.default),
+        ("TODO", EditorColorPairIndex.reservedWord),
+        (" world ", EditorColorPairIndex.default),
+        ("TODO", EditorColorPairIndex.reservedWord),
+        ("", EditorColorPairIndex.default),
+      ]
+
   test "edge TODO":
-    check toSeq(parseReservedWord("TODO hello TODO", reservedWords, EditorColorPairIndex.default)) == @[
-      ("", EditorColorPairIndex.default),
-      ("TODO", EditorColorPairIndex.reservedWord),
-      (" hello ", EditorColorPairIndex.default),
-      ("TODO", EditorColorPairIndex.reservedWord),
-      ("", EditorColorPairIndex.default),
-    ]
+    check parseReservedWord(
+      "TODO hello TODO",
+      ReservedWords,
+      EditorColorPairIndex.default).toSeq == @[
+        ("", EditorColorPairIndex.default),
+        ("TODO", EditorColorPairIndex.reservedWord),
+        (" hello ", EditorColorPairIndex.default),
+        ("TODO", EditorColorPairIndex.reservedWord),
+        ("", EditorColorPairIndex.default),
+      ]
+
   test "TODO and WIP and NOTE":
-    check toSeq(parseReservedWord("hello TODO WIP NOTE world", reservedWords, EditorColorPairIndex.default)) == @[
-      ("hello ", EditorColorPairIndex.default),
-      ("TODO", EditorColorPairIndex.reservedWord),
-      (" ", EditorColorPairIndex.default),
-      ("WIP", EditorColorPairIndex.reservedWord),
-      (" ", EditorColorPairIndex.default),
-      ("NOTE", EditorColorPairIndex.reservedWord),
-      (" world", EditorColorPairIndex.default),
-    ]
+    check parseReservedWord(
+      "hello TODO WIP NOTE world",
+      ReservedWords,
+      EditorColorPairIndex.default).toSeq == @[
+        ("hello ", EditorColorPairIndex.default),
+        ("TODO", EditorColorPairIndex.reservedWord),
+        (" ", EditorColorPairIndex.default),
+        ("WIP", EditorColorPairIndex.reservedWord),
+        (" ", EditorColorPairIndex.default),
+        ("NOTE", EditorColorPairIndex.reservedWord),
+        (" world", EditorColorPairIndex.default),
+      ]
   test "no whitespace":
-    check toSeq(parseReservedWord("TODOWIPNOTETODOWIPNOTE", reservedWords, EditorColorPairIndex.default)) == @[
-      ("", EditorColorPairIndex.default),
-      ("TODO", EditorColorPairIndex.reservedWord),
-      ("", EditorColorPairIndex.default),
-      ("WIP", EditorColorPairIndex.reservedWord),
-      ("", EditorColorPairIndex.default),
-      ("NOTE", EditorColorPairIndex.reservedWord),
-      ("", EditorColorPairIndex.default),
-      ("TODO", EditorColorPairIndex.reservedWord),
-      ("", EditorColorPairIndex.default),
-      ("WIP", EditorColorPairIndex.reservedWord),
-      ("", EditorColorPairIndex.default),
-      ("NOTE", EditorColorPairIndex.reservedWord),
-      ("", EditorColorPairIndex.default),
-    ]
+    check parseReservedWord(
+      "TODOWIPNOTETODOWIPNOTE",
+      ReservedWords,
+      EditorColorPairIndex.default).toSeq == @[
+        ("", EditorColorPairIndex.default),
+        ("TODO", EditorColorPairIndex.reservedWord),
+        ("", EditorColorPairIndex.default),
+        ("WIP", EditorColorPairIndex.reservedWord),
+        ("", EditorColorPairIndex.default),
+        ("NOTE", EditorColorPairIndex.reservedWord),
+        ("", EditorColorPairIndex.default),
+        ("TODO", EditorColorPairIndex.reservedWord),
+        ("", EditorColorPairIndex.default),
+        ("WIP", EditorColorPairIndex.reservedWord),
+        ("", EditorColorPairIndex.default),
+        ("NOTE", EditorColorPairIndex.reservedWord),
+        ("", EditorColorPairIndex.default),
+      ]

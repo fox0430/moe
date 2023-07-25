@@ -18,9 +18,9 @@
 #[############################################################################]#
 
 import std/[unicode, os]
-import independentutils, platform, settings
+import independentutils, platform, settings, unicodeext
 
-proc runesToStrings(runes: seq[seq[Rune]]): string =
+proc runesToStrings(runes: seq[Runes]): string =
   if runes.len == 1:
     result = $runes[0]
   else:
@@ -30,32 +30,35 @@ proc runesToStrings(runes: seq[seq[Rune]]): string =
       else:
         result &= "\n" & $runes[i]
 
-proc sendToClipboard*(buffer: seq[seq[Rune]],
-                      tool: ClipboardToolOnLinux) =
+proc sendToClipboard*(
+  buffer: seq[Runes],
+  tool: ClipboardToolOnLinux) =
 
-  if buffer.len < 1: return
+    if buffer.len < 1: return
 
-  let
-    str = runesToStrings(buffer)
-    delimiterStr = genDelimiterStr(str)
+    let
+      str = runesToStrings(buffer)
+      delimiterStr = genDelimiterStr(str)
 
-  case currentPlatform:
-    of linux:
-      let cmd = if tool == ClipboardToolOnLinux.xclip:
-                  "xclip -r <<" & "'" & delimiterStr & "'" & "\n" & str & "\n" & delimiterStr & "\n"
-                elif tool == ClipboardToolOnLinux.xsel:
-                  "xsel <<" & "'" & delimiterStr & "'" & "\n" & str & "\n" & delimiterStr & "\n"
-                elif tool == ClipboardToolOnLinux.wlClipboard:
-                  "wl-copy <<" & "'" & delimiterStr & "'" & "\n" & str & "\n" & delimiterStr & "\n"
-                else:
-                  ""
-      if cmd.len > 0:
+    case currentPlatform:
+      of linux:
+        let cmd =
+          if tool == ClipboardToolOnLinux.xclip:
+            "xclip -r <<" & "'" & delimiterStr & "'" & "\n" & str & "\n" & delimiterStr & "\n"
+          elif tool == ClipboardToolOnLinux.xsel:
+            "xsel <<" & "'" & delimiterStr & "'" & "\n" & str & "\n" & delimiterStr & "\n"
+          elif tool == ClipboardToolOnLinux.wlClipboard:
+            "wl-copy <<" & "'" & delimiterStr & "'" & "\n" & str & "\n" & delimiterStr & "\n"
+          else:
+            ""
+
+        if cmd.len > 0:
+          discard execShellCmd(cmd)
+      of wsl:
+        let cmd = "clip.exe <<" & "'" & delimiterStr & "'" & "\n" & str & "\n"  & delimiterStr & "\n"
         discard execShellCmd(cmd)
-    of wsl:
-      let cmd = "clip.exe <<" & "'" & delimiterStr & "'" & "\n" & str & "\n"  & delimiterStr & "\n"
-      discard execShellCmd(cmd)
-    of mac:
-      let cmd = "pbcopy <<" & "'" & delimiterStr & "'" & "\n" & str & "\n"  & delimiterStr & "\n"
-      discard execShellCmd(cmd)
-    else:
-      discard
+      of mac:
+        let cmd = "pbcopy <<" & "'" & delimiterStr & "'" & "\n" & str & "\n"  & delimiterStr & "\n"
+        discard execShellCmd(cmd)
+      else:
+        discard

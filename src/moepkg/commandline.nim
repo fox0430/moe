@@ -41,9 +41,9 @@ type
     window*: Window
 
 const
-  exModePrompt* = ":"
-  searchForwardModePrompt* = "/"
-  searchBackwardModePrompt* = "?"
+  ExModePrompt* = ":"
+  SearchForwardModePrompt* = "/"
+  SearchBackwardModePrompt* = "?"
 
 proc initCommandLine*(): CommandLine =
   result.color = EditorColorPairIndex.default

@@ -39,8 +39,8 @@ suite "Normal mode: Move to the right":
     status.update
 
     status.bufStatus[0].cmdLoop = 2
-    const key = @[ru'l']
-    status.normalCommand(key)
+    const Key = @[ru'l']
+    status.normalCommand(Key)
     status.update
 
     check(currentMainWindowNode.currentColumn == 2)
@@ -55,8 +55,8 @@ suite "Normal mode: Move to the left":
     status.resize(100, 100)
     status.update
 
-    const key = @[ru'h']
-    status.normalCommand(key)
+    const Key = @[ru'h']
+    status.normalCommand(Key)
     status.update
 
     check(currentMainWindowNode.currentColumn == 1)
@@ -71,8 +71,8 @@ suite "Normal mode: Move to the down":
     status.update
 
     status.bufStatus[0].cmdLoop = 2
-    const key = @[ru'j']
-    status.normalCommand(key)
+    const Key = @[ru'j']
+    status.normalCommand(Key)
     status.update
 
     check(currentMainWindowNode.currentLine == 2)
@@ -88,8 +88,8 @@ suite "Normal mode: Move to the up":
     status.update
 
     status.bufStatus[0].cmdLoop = 2
-    const key = @[ru'k']
-    status.normalCommand(key)
+    const Key = @[ru'k']
+    status.normalCommand(Key)
     status.update
 
     check(currentMainWindowNode.currentLine == 0)
@@ -104,8 +104,8 @@ suite "Normal mode: Delete current character":
     status.update
 
     status.bufStatus[0].cmdLoop = 2
-    const key = @[ru'x']
-    status.normalCommand(key)
+    const Key = @[ru'x']
+    status.normalCommand(Key)
     status.update
 
     check status.bufStatus[0].buffer[0] == ru"c"
@@ -123,8 +123,8 @@ suite "Normal mode: Move to last of line":
     status.resize(100, 100)
     status.update
 
-    const key = @[ru'$']
-    status.normalCommand(key)
+    const Key = @[ru'$']
+    status.normalCommand(Key)
     status.update
 
     check(currentMainWindowNode.currentColumn == 2)
@@ -139,8 +139,8 @@ suite "Normal mode: Move to first of line":
     status.resize(100, 100)
     status.update
 
-    const key = @[ru'0']
-    status.normalCommand(key)
+    const Key = @[ru'0']
+    status.normalCommand(Key)
     status.update
 
     check(currentMainWindowNode.currentColumn == 0)
@@ -155,8 +155,8 @@ suite "Normal mode: Move to first non blank of line":
     status.resize(100, 100)
     status.update
 
-    const key = @[ru'^']
-    status.normalCommand(key)
+    const Key = @[ru'^']
+    status.normalCommand(Key)
     status.update
 
     check(currentMainWindowNode.currentColumn == 2)
@@ -171,13 +171,13 @@ suite "Normal mode: Move to first of previous line":
     status.resize(100, 100)
     status.update
 
-    const key = @[ru'-']
-    status.normalCommand(key)
+    const Key = @[ru'-']
+    status.normalCommand(Key)
     status.update
     check(currentMainWindowNode.currentLine == 1)
     check(currentMainWindowNode.currentColumn == 0)
 
-    status.normalCommand(key)
+    status.normalCommand(Key)
     status.update
     check(currentMainWindowNode.currentLine == 0)
     check(currentMainWindowNode.currentColumn == 0)
@@ -191,8 +191,8 @@ suite "Normal mode: Move to first of next line":
     status.resize(100, 100)
     status.update
 
-    const key = @[ru'+']
-    status.normalCommand(key)
+    const Key = @[ru'+']
+    status.normalCommand(Key)
     status.update
 
     check(currentMainWindowNode.currentLine == 1)
@@ -207,8 +207,8 @@ suite "Normal mode: Move to last line":
     status.resize(100, 100)
     status.update
 
-    const key = @[ru'G']
-    status.normalCommand(key)
+    const Key = @[ru'G']
+    status.normalCommand(Key)
     status.update
 
     check(currentMainWindowNode.currentLine == 2)
@@ -218,16 +218,16 @@ suite "Normal mode: Move to the top of the screen":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
 
-    let buffer = toSeq(0..101).map(x => toRunes($x))
-    status.bufStatus[0].buffer = initGapBuffer(buffer)
+    const Buffer = toSeq(0..101).map(x => toRunes($x))
+    status.bufStatus[0].buffer = initGapBuffer(Buffer)
 
     currentMainWindowNode.currentLine = 100
 
     status.resize(100, 100)
     status.update
 
-    const key = @[ru'H']
-    status.normalCommand(key)
+    const Key = @[ru'H']
+    status.normalCommand(Key)
     status.update
 
     check currentMainWindowNode.currentLine == 4
@@ -237,16 +237,16 @@ suite "Normal mode: Move to the top of the screen":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
 
-    let buffer = toSeq(0..101).map(x => toRunes($x))
-    status.bufStatus[0].buffer = initGapBuffer(buffer)
+    const Buffer = toSeq(0..101).map(x => toRunes($x))
+    status.bufStatus[0].buffer = initGapBuffer(Buffer)
 
     currentMainWindowNode.currentLine = 100
 
     status.resize(100, 100)
     status.update
 
-    const key = @[ru'H']
-    status.normalCommand(key)
+    const Key = @[ru'H']
+    status.normalCommand(Key)
     status.update
 
     check currentMainWindowNode.currentLine == 4
@@ -260,8 +260,8 @@ suite "Normal mode: Move to the top of the screen":
     status.resize(100, 100)
     status.update
 
-    const key = @[ru'H']
-    status.normalCommand(key)
+    const Key = @[ru'H']
+    status.normalCommand(Key)
     status.update
 
     check currentMainWindowNode.currentLine == 0
@@ -279,8 +279,8 @@ suite "Normal mode: Page down":
     status.resize(100, 100)
     status.update
 
-    const key = @[KEY_NPAGE.toRune]
-    status.normalCommand(key)
+    const Key = @[KEY_NPAGE.toRune]
+    status.normalCommand(Key)
     status.update
 
     let
@@ -302,13 +302,13 @@ suite "Normal mode: Page up":
     status.update
 
     block:
-      const key = @[KEY_NPAGE.toRune]
-      status.normalCommand(key)
+      const Key = @[KEY_NPAGE.toRune]
+      status.normalCommand(Key)
     status.update
 
     block:
-      const key = @[KEY_PPAGE.toRune]
-      status.normalCommand(key)
+      const Key = @[KEY_PPAGE.toRune]
+      status.normalCommand(Key)
     status.update
 
     check(currentMainWindowNode.currentLine == 0)
@@ -323,8 +323,8 @@ suite "Normal mode: Move to forward word":
     status.update
 
     status.bufStatus[0].cmdLoop = 2
-    const key = @[ru'w']
-    status.normalCommand(key)
+    const Key = @[ru'w']
+    status.normalCommand(Key)
     status.update
 
     check(currentMainWindowNode.currentColumn == 8)
@@ -340,8 +340,8 @@ suite "Normal mode: Move to backward word":
     status.update
 
     status.bufStatus[0].cmdLoop = 1
-    const key = @[ru'b']
-    status.normalCommand(key)
+    const Key = @[ru'b']
+    status.normalCommand(Key)
     status.update
 
     check(currentMainWindowNode.currentColumn == 4)
@@ -356,8 +356,8 @@ suite "Normal mode: Move to forward end of word":
     status.update
 
     status.bufStatus[0].cmdLoop = 2
-    const key = @[ru'e']
-    status.normalCommand(key)
+    const Key = @[ru'e']
+    status.normalCommand(Key)
     status.update
 
     check(currentMainWindowNode.currentColumn == 6)
@@ -371,8 +371,8 @@ suite "Normal mode: Open blank line below":
     status.resize(100, 100)
     status.update
 
-    const key = @[ru'o']
-    status.normalCommand(key)
+    const Key = @[ru'o']
+    status.normalCommand(Key)
     status.update
 
     check(status.bufStatus[0].buffer.len == 2)
@@ -392,8 +392,8 @@ suite "Normal mode: Open blank line below":
     status.resize(100, 100)
     status.update
 
-    const key = @[ru'O']
-    status.normalCommand(key)
+    const Key = @[ru'O']
+    status.normalCommand(Key)
     status.update
 
     check(status.bufStatus[0].buffer.len == 2)
@@ -413,8 +413,8 @@ suite "Normal mode: Add indent":
     status.resize(100, 100)
     status.update
 
-    const key = @[ru'>']
-    status.normalCommand(key)
+    const Key = @[ru'>']
+    status.normalCommand(Key)
     status.update
 
     check(status.bufStatus[0].buffer[0] == ru"  a")
@@ -428,8 +428,8 @@ suite "Normal mode: Delete indent":
     status.resize(100, 100)
     status.update
 
-    const key = @[ru'<']
-    status.normalCommand(key)
+    const Key = @[ru'<']
+    status.normalCommand(Key)
     status.update
 
     check(status.bufStatus[0].buffer[0] == ru"a")
@@ -443,8 +443,8 @@ suite "Normal mode: Join line":
     status.resize(100, 100)
     status.update
 
-    const key = @[ru'J']
-    status.normalCommand(key)
+    const Key = @[ru'J']
+    status.normalCommand(Key)
     status.update
 
     check(status.bufStatus[0].buffer[0] == ru"ab")
@@ -458,8 +458,8 @@ suite "Normal mode: Replace mode":
     status.resize(100, 100)
     status.update
 
-    const key = @[ru'R']
-    status.normalCommand(key)
+    const Key = @[ru'R']
+    status.normalCommand(Key)
     status.update
 
     check(status.bufStatus[0].mode == Mode.replace)
@@ -473,8 +473,8 @@ suite "Normal mode: Move right and enter insert mode":
     status.resize(100, 100)
     status.update
 
-    const key = @[ru'a']
-    status.normalCommand(key)
+    const Key = @[ru'a']
+    status.normalCommand(Key)
     status.update
 
     check(status.bufStatus[0].mode == Mode.insert)
@@ -489,8 +489,8 @@ suite "Normal mode: Move last of line and enter insert mode":
     status.resize(100, 100)
     status.update
 
-    const key = @[ru'A']
-    status.normalCommand(key)
+    const Key = @[ru'A']
+    status.normalCommand(Key)
     status.update
 
     check(status.bufStatus[0].mode == Mode.insert)
@@ -506,16 +506,16 @@ suite "Normal mode: Repeat last command":
     status.update
 
     block:
-      const command = ru "x"
+      const Command = ru "x"
 
-      check isNormalModeCommand(command) == InputState.Valid
+      check isNormalModeCommand(Command) == InputState.Valid
 
-      status.normalCommand(command)
+      status.normalCommand(Command)
       status.update
 
     block:
-      const key = @[ru'.']
-      status.normalCommand(key)
+      const Key = @[ru'.']
+      status.normalCommand(Key)
       status.update
 
     check(currentBufStatus.buffer.len == 1)
@@ -530,26 +530,26 @@ suite "Normal mode: Repeat last command":
     status.update
 
     block:
-      const command = ru ">"
+      const Command = ru ">"
 
-      check isNormalModeCommand(command) == InputState.Valid
+      check isNormalModeCommand(Command) == InputState.Valid
 
-      status.normalCommand(command)
+      status.normalCommand(Command)
       status.update
 
     currentMainWindowNode.currentColumn = 0
 
     block:
-      const command = ru "x"
+      const Command = ru "x"
 
-      check isNormalModeCommand(command) == InputState.Valid
+      check isNormalModeCommand(Command) == InputState.Valid
 
-      status.normalCommand(command)
+      status.normalCommand(Command)
       status.update
 
     block:
-      const command = ru "."
-      status.normalCommand(command)
+      const Command = ru "."
+      status.normalCommand(Command)
       status.update
 
     check(currentBufStatus.buffer.len == 1)
@@ -564,19 +564,19 @@ suite "Normal mode: Repeat last command":
     status.update
 
     block:
-      const command = ru "j"
+      const Command = ru "j"
 
-      check isNormalModeCommand(command) == InputState.Valid
+      check isNormalModeCommand(Command) == InputState.Valid
 
-      status.normalCommand(command)
+      status.normalCommand(Command)
       status.update
 
     block:
-      const command = @[ru'.']
+      const Command = @[ru'.']
 
-      check isNormalModeCommand(command) == InputState.Valid
+      check isNormalModeCommand(Command) == InputState.Valid
 
-      status.normalCommand(command)
+      status.normalCommand(Command)
       status.update
 
     check(currentMainWindowNode.currentLine == 1)
@@ -590,8 +590,8 @@ suite "Normal mode: Delete the current line":
     status.resize(100, 100)
     status.update
 
-    let command = @[ru'd', ru'd']
-    status.normalCommand(command)
+    const Command = @[ru'd', ru'd']
+    status.normalCommand(Command)
     status.update
 
     check currentBufStatus.buffer.len == 3
@@ -613,11 +613,11 @@ suite "Normal mode: Delete the line from current line to last line":
     status.resize(100, 100)
     status.update
 
-    let command = @[ru'd', ru'G']
+    const Command = @[ru'd', ru'G']
 
-    check isNormalModeCommand(command) == InputState.Valid
+    check isNormalModeCommand(Command) == InputState.Valid
 
-    status.normalCommand(command)
+    status.normalCommand(Command)
     status.update
 
     let buffer = currentBufStatus.buffer
@@ -635,8 +635,8 @@ suite "Normal mode: Delete the line from first line to current line":
     status.resize(100, 100)
     status.update
 
-    let commands = @[ru'd', ru'g', ru'g']
-    status.normalCommand(commands)
+    const Commands = @[ru'd', ru'g', ru'g']
+    status.normalCommand(Commands)
     status.update
 
     let buffer = status.bufStatus[0].buffer
@@ -654,8 +654,8 @@ suite "Normal mode: Delete inside paren and enter insert mode":
     status.resize(100, 100)
     status.update
 
-    let commands = @[ru'c', ru'i', ru'"']
-    status.normalCommand(commands)
+    const Commands = @[ru'c', ru'i', ru'"']
+    status.normalCommand(Commands)
     status.update
 
     check currentBufStatus.buffer[0] == ru """abc "" "ghi""""
@@ -674,8 +674,8 @@ suite "Normal mode: Delete inside paren and enter insert mode":
     status.resize(100, 100)
     status.update
 
-    let commands = @[ru'c', ru'i', ru'\'']
-    status.normalCommand(commands)
+    const Commands = @[ru'c', ru'i', ru'\'']
+    status.normalCommand(Commands)
     status.update
 
     check currentBufStatus.buffer[0] == ru "abc '' 'ghi'"
@@ -694,8 +694,8 @@ suite "Normal mode: Delete inside paren and enter insert mode":
     status.resize(100, 100)
     status.update
 
-    let commands = @[ru'c', ru'i', ru'{']
-    status.normalCommand(commands)
+    const Commands = @[ru'c', ru'i', ru'{']
+    status.normalCommand(Commands)
     status.update
 
     check currentBufStatus.buffer[0] == ru "abc {} {ghi}"
@@ -714,8 +714,8 @@ suite "Normal mode: Delete inside paren and enter insert mode":
     status.resize(100, 100)
     status.update
 
-    let commands = @[ru'c', ru'i', ru'(']
-    status.normalCommand(commands)
+    const Commands = @[ru'c', ru'i', ru'(']
+    status.normalCommand(Commands)
     status.update
 
     check currentBufStatus.buffer[0] == ru "abc () (ghi)"
@@ -734,8 +734,8 @@ suite "Normal mode: Delete inside paren and enter insert mode":
     status.resize(100, 100)
     status.update
 
-    let commands = @[ru'c', ru'i', ru'[']
-    status.normalCommand(commands)
+    const Commands = @[ru'c', ru'i', ru'[']
+    status.normalCommand(Commands)
     status.update
 
     check currentBufStatus.buffer[0] == ru "abc [] [ghi]"
@@ -754,8 +754,8 @@ suite "Normal mode: Delete current word and enter insert mode":
     status.resize(100, 100)
     status.update
 
-    let commands = @[ru'c', ru'i', ru'w']
-    status.normalCommand(commands)
+    const Commands = @[ru'c', ru'i', ru'w']
+    status.normalCommand(Commands)
     status.update
 
     check currentBufStatus.buffer[0] == ru "def"
@@ -773,8 +773,8 @@ suite "Normal mode: Delete current word and enter insert mode":
     status.resize(100, 100)
     status.update
 
-    let commands = @[ru'c', ru'i', ru'w']
-    status.normalCommand(commands)
+    const Commands = @[ru'c', ru'i', ru'w']
+    status.normalCommand(Commands)
     status.update
 
     check currentBufStatus.buffer[0] == ru""
@@ -794,8 +794,8 @@ suite "Normal mode: Delete inside paren":
     status.resize(100, 100)
     status.update
 
-    let commands = @[ru'd', ru'i', ru'"']
-    status.normalCommand(commands)
+    const Commands = @[ru'd', ru'i', ru'"']
+    status.normalCommand(Commands)
     status.update
 
     check currentBufStatus.buffer[0] == ru """abc "" "ghi""""
@@ -813,8 +813,8 @@ suite "Normal mode: Delete inside paren":
     status.resize(100, 100)
     status.update
 
-    let commands = @[ru'd', ru'i', ru'\'']
-    status.normalCommand(commands)
+    const Commands = @[ru'd', ru'i', ru'\'']
+    status.normalCommand(Commands)
     status.update
 
     check currentBufStatus.buffer[0] == ru "abc '' 'ghi'"
@@ -832,8 +832,8 @@ suite "Normal mode: Delete inside paren":
     status.resize(100, 100)
     status.update
 
-    let commands = @[ru'd', ru'i', ru'{']
-    status.normalCommand(commands)
+    const Commands = @[ru'd', ru'i', ru'{']
+    status.normalCommand(Commands)
     status.update
 
     check currentBufStatus.buffer[0] == ru "abc {} {ghi}"
@@ -851,8 +851,8 @@ suite "Normal mode: Delete inside paren":
     status.resize(100, 100)
     status.update
 
-    let commands = @[ru'd', ru'i', ru'(']
-    status.normalCommand(commands)
+    const Commands = @[ru'd', ru'i', ru'(']
+    status.normalCommand(Commands)
     status.update
 
     check currentBufStatus.buffer[0] == ru "abc () (ghi)"
@@ -870,8 +870,8 @@ suite "Normal mode: Delete inside paren":
     status.resize(100, 100)
     status.update
 
-    let commands = @[ru'd', ru'i', ru'[']
-    status.normalCommand(commands)
+    const Commands = @[ru'd', ru'i', ru'[']
+    status.normalCommand(Commands)
     status.update
 
     check currentBufStatus.buffer[0] == ru "abc [] [ghi]"
@@ -889,8 +889,8 @@ suite "Normal mode: Delete current word":
     status.resize(100, 100)
     status.update
 
-    let commands = @[ru'd', ru'i', ru'w']
-    status.normalCommand(commands)
+    const Commands = @[ru'd', ru'i', ru'w']
+    status.normalCommand(Commands)
     status.update
 
     check currentBufStatus.buffer[0] == ru "def"
@@ -907,8 +907,8 @@ suite "Normal mode: Delete current word":
     status.resize(100, 100)
     status.update
 
-    let commands = @[ru'd', ru'i', ru'w']
-    status.normalCommand(commands)
+    const Commands = @[ru'd', ru'i', ru'w']
+    status.normalCommand(Commands)
     status.update
 
     check currentBufStatus.buffer[0] == ru""
@@ -926,8 +926,8 @@ suite "Normal mode: Delete current character and enter insert mode":
     status.resize(100, 100)
     status.update
 
-    let commands = @[ru's']
-    status.normalCommand(commands)
+    const Commands = @[ru's']
+    status.normalCommand(Commands)
     status.update
 
     check currentBufStatus.buffer[0] == ru"bc"
@@ -944,8 +944,8 @@ suite "Normal mode: Delete current character and enter insert mode":
     status.resize(100, 100)
     status.update
 
-    let commands = @[ru's']
-    status.normalCommand(commands)
+    const Commands = @[ru's']
+    status.normalCommand(Commands)
     status.update
 
     check currentBufStatus.buffer.len == 3
@@ -964,8 +964,8 @@ suite "Normal mode: Delete current character and enter insert mode":
     status.update
 
     currentBufStatus.cmdLoop = 3
-    let commands = @[ru's']
-    status.normalCommand(commands)
+    const Commands = @[ru's']
+    status.normalCommand(Commands)
     status.update
 
     check currentBufStatus.buffer[0] == ru"def"
@@ -981,8 +981,8 @@ suite "Normal mode: Delete current character and enter insert mode":
     status.resize(100, 100)
     status.update
 
-    let commands = @[ru'c', ru'l']
-    status.normalCommand(commands)
+    const Commands = @[ru'c', ru'l']
+    status.normalCommand(Commands)
     status.update
 
     check currentBufStatus.buffer[0] == ru"bc"
@@ -997,8 +997,8 @@ suite "Normal mode: Delete current character and enter insert mode":
     status.resize(100, 100)
     status.update
 
-    let commands = @[ru'c', ru'l']
-    status.normalCommand(commands)
+    const Commands = @[ru'c', ru'l']
+    status.normalCommand(Commands)
     status.update
 
     check currentBufStatus.buffer.len == 3
@@ -1018,8 +1018,8 @@ suite "Normal mode: Yank lines":
     status.resize(100, 100)
     status.update
 
-    let commands = @[ru'y', ru'{']
-    status.normalCommand(commands)
+    const Commands = @[ru'y', ru'{']
+    status.normalCommand(Commands)
     status.update
 
     check status.registers.noNameRegister.isLine
@@ -1035,8 +1035,8 @@ suite "Normal mode: Yank lines":
     status.resize(100, 100)
     status.update
 
-    let commands = @[ru'y', ru'{']
-    status.normalCommand(commands)
+    const Commands = @[ru'y', ru'{']
+    status.normalCommand(Commands)
     status.update
 
     check status.registers.noNameRegister.isLine
@@ -1051,8 +1051,8 @@ suite "Normal mode: Yank lines":
     status.resize(100, 100)
     status.update
 
-    let commands = @[ru'y', ru'}']
-    status.normalCommand(commands)
+    const Commands = @[ru'y', ru'}']
+    status.normalCommand(Commands)
     status.update
 
     check status.registers.noNameRegister.isLine
@@ -1067,8 +1067,8 @@ suite "Normal mode: Yank lines":
     status.resize(100, 100)
     status.update
 
-    let commands = @[ru'y', ru'}']
-    status.normalCommand(commands)
+    const Commands = @[ru'y', ru'}']
+    status.normalCommand(Commands)
     status.update
 
     check status.registers.noNameRegister.isLine
@@ -1084,8 +1084,8 @@ suite "Normal mode: Yank lines":
     status.resize(100, 100)
     status.update
 
-    let commands = @[ru'y', ru'y']
-    status.normalCommand(commands)
+    const Commands = @[ru'y', ru'y']
+    status.normalCommand(Commands)
     status.update
 
     check status.registers.noNameRegister.isLine
@@ -1100,8 +1100,8 @@ suite "Normal mode: Yank lines":
     status.resize(100, 100)
     status.update
 
-    let commands = @[ru'Y']
-    status.normalCommand(commands)
+    const Commands = @[ru'Y']
+    status.normalCommand(Commands)
     status.update
 
     check status.registers.noNameRegister.isLine
@@ -1117,8 +1117,8 @@ suite "Normal mode: Delete the characters from current column to end of line":
     status.resize(100, 100)
     status.update
 
-    let commands = @[ru'd', ru'$']
-    status.normalCommand(commands)
+    const Commands = @[ru'd', ru'$']
+    status.normalCommand(Commands)
     status.update
 
     check currentBufStatus.buffer[0] == ru"abc"
@@ -1135,8 +1135,8 @@ suite "Normal mode: delete from the beginning of the line to current column":
     status.resize(100, 100)
     status.update
 
-    let commands = @[ru'd', ru'0']
-    status.normalCommand(commands)
+    const Commands = @[ru'd', ru'0']
+    status.normalCommand(Commands)
     status.update
 
     check currentBufStatus.buffer[0] == ru"fgh"
@@ -1149,8 +1149,8 @@ suite "Normal mode: Yank string":
     status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abcdefgh"])
 
-    let commands = @[ru'y', ru'l']
-    status.normalCommand(commands)
+    const Commands = @[ru'y', ru'l']
+    status.normalCommand(Commands)
 
     status.resize(100, 100)
     status.update
@@ -1163,8 +1163,8 @@ suite "Normal mode: Yank string":
     currentBufStatus.buffer = initGapBuffer(@[ru"abcde"])
 
     currentBufStatus.cmdLoop = 3
-    let commands = @[ru'y', ru'l']
-    status.normalCommand(commands)
+    const Commands = @[ru'y', ru'l']
+    status.normalCommand(Commands)
 
     status.resize(100, 100)
     status.update
@@ -1177,8 +1177,8 @@ suite "Normal mode: Yank string":
     currentBufStatus.buffer = initGapBuffer(@[ru"abcde"])
 
     currentBufStatus.cmdLoop = 10
-    let commands = @[ru'y', ru'l']
-    status.normalCommand(commands)
+    const Commands = @[ru'y', ru'l']
+    status.normalCommand(Commands)
 
     status.resize(100, 100)
     status.update
@@ -1192,8 +1192,8 @@ suite "Normal mode: Cut character before cursor":
     currentBufStatus.buffer = initGapBuffer(@[ru"abcde"])
     currentMainWindowNode.currentColumn = 1
 
-    let commands = @[ru'X']
-    status.normalCommand(commands)
+    const Commands = @[ru'X']
+    status.normalCommand(Commands)
 
     status.resize(100, 100)
     status.update
@@ -1209,8 +1209,8 @@ suite "Normal mode: Cut character before cursor":
     currentMainWindowNode.currentColumn = 3
 
     currentBufStatus.cmdLoop = 3
-    let commands = @[ru'X']
-    status.normalCommand(commands)
+    const Commands = @[ru'X']
+    status.normalCommand(Commands)
 
     status.resize(100, 100)
     status.update
@@ -1227,8 +1227,8 @@ suite "Normal mode: Cut character before cursor":
     status.resize(100, 100)
     status.update
 
-    let commands = @[ru'X']
-    status.normalCommand(commands)
+    const Commands = @[ru'X']
+    status.normalCommand(Commands)
 
     check currentBufStatus.buffer[0] == ru"abcde"
 
@@ -1243,8 +1243,8 @@ suite "Normal mode: Cut character before cursor":
     status.resize(100, 100)
     status.update
 
-    let commands = @[ru'd', ru'h']
-    status.normalCommand(commands)
+    const Commands = @[ru'd', ru'h']
+    status.normalCommand(Commands)
 
     check currentBufStatus.buffer[0] == ru"bcde"
 
@@ -1259,8 +1259,8 @@ suite "Add buffer to the register":
     status.resize(100, 100)
     status.update
 
-    let commands = ru "\"ayl"
-    status.normalCommand(commands)
+    const Commands = ru "\"ayl"
+    status.normalCommand(Commands)
 
     check status.registers.noNameRegister == Register(
       buffer: @[ru "a"], isLine: false, name: "a")
@@ -1273,8 +1273,8 @@ suite "Add buffer to the register":
     status.resize(100, 100)
     status.update
 
-    let commands = ru "\"a2yl"
-    status.normalCommand(commands)
+    const Commands = ru "\"a2yl"
+    status.normalCommand(Commands)
 
     check status.registers.noNameRegister == Register(
       buffer: @[ru "ab"], isLine: false, name: "a")
@@ -1287,8 +1287,8 @@ suite "Add buffer to the register":
     status.resize(100, 100)
     status.update
 
-    let commands = ru "\"ayw"
-    status.normalCommand(commands)
+    const Commands = ru "\"ayw"
+    status.normalCommand(Commands)
 
     check status.registers.noNameRegister == Register(
       buffer: @[ru "abc "], isLine: false, name: "a")
@@ -1301,8 +1301,8 @@ suite "Add buffer to the register":
     status.resize(100, 100)
     status.update
 
-    let commands = ru "\"a2yw"
-    status.normalCommand(commands)
+    const Commands = ru "\"a2yw"
+    status.normalCommand(Commands)
 
     check status.registers.noNameRegister == Register(
       buffer: @[ru "abc def"], isLine: false, name: "a")
@@ -1315,8 +1315,8 @@ suite "Add buffer to the register":
     status.resize(100, 100)
     status.update
 
-    let commands = ru "\"ayy"
-    status.normalCommand(commands)
+    const Commands = ru "\"ayy"
+    status.normalCommand(Commands)
 
     check status.registers.noNameRegister == Register(
       buffer: @[ru "abc"], isLine: true, name: "a")
@@ -1329,8 +1329,8 @@ suite "Add buffer to the register":
     status.resize(100, 100)
     status.update
 
-    let commands = ru "\"a2yy"
-    status.normalCommand(commands)
+    const Commands = ru "\"a2yy"
+    status.normalCommand(Commands)
 
     check status.registers.noNameRegister == Register(
       buffer: @[ru "abc", ru "def"], isLine: true, name: "a")
@@ -1343,8 +1343,8 @@ suite "Add buffer to the register":
     status.resize(100, 100)
     status.update
 
-    let commands = ru "\"a2yy"
-    status.normalCommand(commands)
+    const Commands = ru "\"a2yy"
+    status.normalCommand(Commands)
 
     check status.registers.noNameRegister == Register(
       buffer: @[ru "abc", ru "def"], isLine: true, name: "a")
@@ -1357,8 +1357,8 @@ suite "Add buffer to the register":
     status.resize(100, 100)
     status.update
 
-    let commands = ru "\"ay}"
-    status.normalCommand(commands)
+    const Commands = ru "\"ay}"
+    status.normalCommand(Commands)
 
     check status.registers.noNameRegister == Register(
       buffer: @[ru "abc", ru "def", ru ""], isLine: true, name: "a")
@@ -1371,8 +1371,8 @@ suite "Add buffer to the register":
     status.resize(100, 100)
     status.update
 
-    let commands = ru "\"add"
-    status.normalCommand(commands)
+    const Commands = ru "\"add"
+    status.normalCommand(Commands)
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "def"
@@ -1389,8 +1389,8 @@ suite "Add buffer to the register":
     status.resize(100, 100)
     status.update
 
-    let commands = ru "\"ay{"
-    status.normalCommand(commands)
+    const Commands = ru "\"ay{"
+    status.normalCommand(Commands)
 
     check status.registers.noNameRegister == Register(
       buffer: @[ru "", ru "def", ru "ghi"], isLine: true, name: "a")
@@ -1403,8 +1403,8 @@ suite "Add buffer to the register":
     status.resize(100, 100)
     status.update
 
-    let command = ru "\"adw"
-    status.normalCommand(command)
+    const Command = ru "\"adw"
+    status.normalCommand(Command)
     status.update
 
     check currentBufStatus.buffer.len == 1
@@ -1421,8 +1421,8 @@ suite "Add buffer to the register":
     status.resize(100, 100)
     status.update
 
-    let command = ru "\"ad$"
-    status.normalCommand(command)
+    const Command = ru "\"ad$"
+    status.normalCommand(Command)
     status.update
 
     check currentBufStatus.buffer.len == 2
@@ -1441,8 +1441,8 @@ suite "Add buffer to the register":
     status.resize(100, 100)
     status.update
 
-    let command = ru "\"ad0"
-    status.normalCommand(command)
+    const Command = ru "\"ad0"
+    status.normalCommand(Command)
     status.update
 
     check currentBufStatus.buffer.len == 1
@@ -1460,8 +1460,8 @@ suite "Add buffer to the register":
     status.resize(100, 100)
     status.update
 
-    let command = ru "\"adG"
-    status.normalCommand(command)
+    const Command = ru "\"adG"
+    status.normalCommand(Command)
     status.update
 
     check currentBufStatus.buffer.len == 1
@@ -1479,8 +1479,8 @@ suite "Add buffer to the register":
     status.resize(100, 100)
     status.update
 
-    let command = ru "\"adgg"
-    status.normalCommand(command)
+    const Command = ru "\"adgg"
+    status.normalCommand(Command)
     status.update
 
     check currentBufStatus.buffer.len == 1
@@ -1498,8 +1498,8 @@ suite "Add buffer to the register":
     status.resize(100, 100)
     status.update
 
-    let command = ru "\"ad{"
-    status.normalCommand(command)
+    const Command = ru "\"ad{"
+    status.normalCommand(Command)
     status.update
 
     check currentBufStatus.buffer.len == 2
@@ -1516,8 +1516,8 @@ suite "Add buffer to the register":
     status.resize(100, 100)
     status.update
 
-    let command = ru "\"ad}"
-    status.normalCommand(command)
+    const Command = ru "\"ad}"
+    status.normalCommand(Command)
     status.update
 
     check currentBufStatus.buffer.len == 2
@@ -1536,8 +1536,8 @@ suite "Add buffer to the register":
     status.resize(100, 100)
     status.update
 
-    let command = ru "\"adi["
-    status.normalCommand(command)
+    const Command = ru "\"adi["
+    status.normalCommand(Command)
     status.update
 
     check currentBufStatus.buffer.len == 1
@@ -1555,8 +1555,8 @@ suite "Add buffer to the register":
     status.resize(100, 100)
     status.update
 
-    let command = ru "\"adh"
-    status.normalCommand(command)
+    const Command = ru "\"adh"
+    status.normalCommand(Command)
     status.update
 
     check currentBufStatus.buffer.len == 1
@@ -1567,32 +1567,32 @@ suite "Add buffer to the register":
 
 suite "Normal mode: Validate normal mode command":
   test "\" (Expect to continue)":
-    const command = ru "\""
-    check isNormalModeCommand(command) == InputState.Continue
+    const Command = ru "\""
+    check isNormalModeCommand(Command) == InputState.Continue
 
   test "\"a (Expect to continue)":
-    const command = ru "\"a"
-    check isNormalModeCommand(command) == InputState.Continue
+    const Command = ru "\"a"
+    check isNormalModeCommand(Command) == InputState.Continue
 
   test "\"ay (Expect to continue)":
-    const command = ru "\"ay"
-    check isNormalModeCommand(command) == InputState.Continue
+    const Command = ru "\"ay"
+    check isNormalModeCommand(Command) == InputState.Continue
 
   test "\"ayy (Expect to validate)":
-    const command = ru "\"ayy"
-    check isNormalModeCommand(command) == InputState.Valid
+    const Command = ru "\"ayy"
+    check isNormalModeCommand(Command) == InputState.Valid
 
   test "\"y ESC (Expect to invalid)":
-    const command = @['y'.toRune, KEY_ESC.toRune]
-    check isNormalModeCommand(command) == InputState.Invalid
+    const Command = @['y'.toRune, KEY_ESC.toRune]
+    check isNormalModeCommand(Command) == InputState.Invalid
 
   test "\"1 y ESC (Expect to invalid)":
-    const command = @['1'.toRune, 'y'.toRune, KEY_ESC.toRune]
-    check isNormalModeCommand(command) == InputState.Invalid
+    const Command = @['1'.toRune, 'y'.toRune, KEY_ESC.toRune]
+    check isNormalModeCommand(Command) == InputState.Invalid
 
   test "\"10 y ESC (Expect to invalid)":
-    const command = @['1'.toRune, '0'.toRune, 'y'.toRune, KEY_ESC.toRune]
-    check isNormalModeCommand(command) == InputState.Invalid
+    const Command = @['1'.toRune, '0'.toRune, 'y'.toRune, KEY_ESC.toRune]
+    check isNormalModeCommand(Command) == InputState.Invalid
 
 suite "Normal mode: Yank and delete words":
   test "Ynak and delete a word (dw command)":
@@ -1600,8 +1600,8 @@ suite "Normal mode: Yank and delete words":
     status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc def ghi"])
 
-    const command = ru"dw"
-    status.normalCommand(command)
+    const Command = ru"dw"
+    status.normalCommand(Command)
 
     status.resize(100, 100)
     status.update
@@ -1617,9 +1617,9 @@ suite "Normal mode: Yank and delete words":
     status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc def ghi"])
 
-    const command = ru"dw"
+    const Command = ru"dw"
     currentBufStatus.cmdLoop = 2
-    status.normalCommand(command)
+    status.normalCommand(Command)
 
     status.resize(100, 100)
     status.update
@@ -1639,8 +1639,8 @@ suite "Editor: Yank characters in the current line":
     status.resize(100, 100)
     status.update
 
-    const command = ru "cc"
-    status.normalCommand(command)
+    const Command = ru "cc"
+    status.normalCommand(Command)
 
     check currentBufStatus.buffer.len == 2
     check currentBufStatus.buffer[0] == ru ""
@@ -1657,8 +1657,8 @@ suite "Editor: Yank characters in the current line":
     status.resize(100, 100)
     status.update
 
-    const command = ru "S"
-    status.normalCommand(command)
+    const Command = ru "S"
+    status.normalCommand(Command)
 
     check currentBufStatus.buffer.len == 2
     check currentBufStatus.buffer[0] == ru ""
@@ -1676,8 +1676,8 @@ suite "Normal mode: Open the blank line below and enter insert mode":
     status.resize(100, 100)
     status.update
 
-    const command = ru "o"
-    status.normalCommand(command)
+    const Command = ru "o"
+    status.normalCommand(Command)
 
     check currentBufStatus.buffer.len == 2
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1693,9 +1693,9 @@ suite "Normal mode: Open the blank line below and enter insert mode":
     status.resize(100, 100)
     status.update
 
-    const command = ru "o"
+    const Command = ru "o"
     currentBufStatus.cmdLoop = 3
-    status.normalCommand(command)
+    status.normalCommand(Command)
 
     check currentBufStatus.buffer.len == 2
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1712,9 +1712,9 @@ suite "Normal mode: Open the blank line above and enter insert mode":
     status.resize(100, 100)
     status.update
 
-    const command = ru "O"
+    const Command = ru "O"
     currentBufStatus.cmdLoop = 1
-    status.normalCommand(command)
+    status.normalCommand(Command)
 
 
     check currentBufStatus.buffer.len == 2
@@ -1731,9 +1731,9 @@ suite "Normal mode: Open the blank line above and enter insert mode":
     status.resize(100, 100)
     status.update
 
-    const command = ru "O"
+    const Command = ru "O"
     currentBufStatus.cmdLoop = 3
-    status.normalCommand(command)
+    status.normalCommand(Command)
 
     check currentBufStatus.buffer.len == 2
     check currentBufStatus.buffer[0] == ru ""
@@ -1751,8 +1751,8 @@ suite "Normal mode: Run command when Readonly mode":
     status.resize(100, 100)
     status.update
 
-    const command = ru "i"
-    status.normalCommand(command)
+    const Command = ru "i"
+    status.normalCommand(Command)
 
     check currentBufStatus.mode == Mode.normal
 
@@ -1765,8 +1765,8 @@ suite "Normal mode: Run command when Readonly mode":
     status.resize(100, 100)
     status.update
 
-    const command = ru "I"
-    status.normalCommand(command)
+    const Command = ru "I"
+    status.normalCommand(Command)
 
     check currentBufStatus.mode == Mode.normal
 
@@ -1779,8 +1779,8 @@ suite "Normal mode: Run command when Readonly mode":
     status.resize(100, 100)
     status.update
 
-    const command = ru "o"
-    status.normalCommand(command)
+    const Command = ru "o"
+    status.normalCommand(Command)
 
     check currentBufStatus.mode == Mode.normal
 
@@ -1796,8 +1796,8 @@ suite "Normal mode: Run command when Readonly mode":
     status.resize(100, 100)
     status.update
 
-    const command = ru "O"
-    status.normalCommand(command)
+    const Command = ru "O"
+    status.normalCommand(Command)
 
     check currentBufStatus.mode == Mode.normal
 
@@ -1813,8 +1813,8 @@ suite "Normal mode: Run command when Readonly mode":
     status.resize(100, 100)
     status.update
 
-    const command = ru "R"
-    status.normalCommand(command)
+    const Command = ru "R"
+    status.normalCommand(Command)
 
     check currentBufStatus.mode == Mode.normal
 
@@ -1827,8 +1827,8 @@ suite "Normal mode: Run command when Readonly mode":
     status.resize(100, 100)
     status.update
 
-    const command = ru "dd"
-    status.normalCommand(command)
+    const Command = ru "dd"
+    status.normalCommand(Command)
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1844,8 +1844,8 @@ suite "Normal mode: Run command when Readonly mode":
 
     status.registers.addRegister(ru "def", settings)
 
-    const command = ru "p"
-    status.normalCommand(command)
+    const Command = ru "p"
+    status.normalCommand(Command)
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1858,14 +1858,14 @@ suite "Normal mode: Move to the next any character on the current line":
     status.resize(100, 100)
     status.update
 
-    const buffer = ru "abc def ghi"
-    currentBufStatus.buffer = initGapBuffer(@[buffer])
+    const Buffer = ru "abc def ghi"
+    currentBufStatus.buffer = initGapBuffer(@[Buffer])
 
-    const command = ru "fc"
-    status.normalCommand(command)
+    const Command = ru "fc"
+    status.normalCommand(Command)
 
     check currentBufStatus.buffer.len == 1
-    check currentBufStatus.buffer[0] == buffer
+    check currentBufStatus.buffer[0] == Buffer
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 2
@@ -1877,17 +1877,17 @@ suite "Normal mode: Move to the next any character on the current line":
     status.resize(100, 100)
     status.update
 
-    const buffer = ru "abc def ghi"
-    currentBufStatus.buffer = initGapBuffer(@[buffer])
+    const Buffer = ru "abc def ghi"
+    currentBufStatus.buffer = initGapBuffer(@[Buffer])
 
-    const command = ru "fi"
-    status.normalCommand(command)
+    const Command = ru "fi"
+    status.normalCommand(Command)
 
     check currentBufStatus.buffer.len == 1
-    check currentBufStatus.buffer[0] == buffer
+    check currentBufStatus.buffer[0] == Buffer
 
     check currentMainWindowNode.currentLine == 0
-    check currentMainWindowNode.currentColumn == buffer.high
+    check currentMainWindowNode.currentColumn == Buffer.high
 
   test "Do nothing (\"fz\" command)":
     var status = initEditorStatus()
@@ -1896,14 +1896,14 @@ suite "Normal mode: Move to the next any character on the current line":
     status.resize(100, 100)
     status.update
 
-    const buffer = ru "abc def ghi"
-    currentBufStatus.buffer = initGapBuffer(@[buffer])
+    const Buffer = ru "abc def ghi"
+    currentBufStatus.buffer = initGapBuffer(@[Buffer])
 
-    const command = ru "fz"
-    status.normalCommand(command)
+    const Command = ru "fz"
+    status.normalCommand(Command)
 
     check currentBufStatus.buffer.len == 1
-    check currentBufStatus.buffer[0] == buffer
+    check currentBufStatus.buffer[0] == Buffer
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
@@ -1916,16 +1916,16 @@ suite "Normal mode: Move to forward word in the current line":
     status.resize(100, 100)
     status.update
 
-    const buffer = ru "abc def ghi"
-    currentBufStatus.buffer = initGapBuffer(@[buffer])
+    const Buffer = ru "abc def ghi"
+    currentBufStatus.buffer = initGapBuffer(@[Buffer])
 
-    currentMainWindowNode.currentColumn = buffer.high
+    currentMainWindowNode.currentColumn = Buffer.high
 
-    const command = ru "Fe"
-    status.normalCommand(command)
+    const Command = ru "Fe"
+    status.normalCommand(Command)
 
     check currentBufStatus.buffer.len == 1
-    check currentBufStatus.buffer[0] == buffer
+    check currentBufStatus.buffer[0] == Buffer
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 5
@@ -1937,19 +1937,19 @@ suite "Normal mode: Move to forward word in the current line":
     status.resize(100, 100)
     status.update
 
-    const buffer = ru "abc def ghi"
-    currentBufStatus.buffer = initGapBuffer(@[buffer])
+    const Buffer = ru "abc def ghi"
+    currentBufStatus.buffer = initGapBuffer(@[Buffer])
 
-    currentMainWindowNode.currentColumn = buffer.high
+    currentMainWindowNode.currentColumn = Buffer.high
 
-    const command = ru "Fz"
-    status.normalCommand(command)
+    const Command = ru "Fz"
+    status.normalCommand(Command)
 
     check currentBufStatus.buffer.len == 1
-    check currentBufStatus.buffer[0] == buffer
+    check currentBufStatus.buffer[0] == Buffer
 
     check currentMainWindowNode.currentLine == 0
-    check currentMainWindowNode.currentColumn == buffer.high
+    check currentMainWindowNode.currentColumn == Buffer.high
 
 suite "Normal mode: Move to the left of the next any character":
   test "Move to the character next the next 'e' (\"tf\" command)":
@@ -1959,14 +1959,14 @@ suite "Normal mode: Move to the left of the next any character":
     status.resize(100, 100)
     status.update
 
-    const buffer = ru "abc def ghi"
-    currentBufStatus.buffer = initGapBuffer(@[buffer])
+    const Buffer = ru "abc def ghi"
+    currentBufStatus.buffer = initGapBuffer(@[Buffer])
 
-    const command = ru "tf"
-    status.normalCommand(command)
+    const Command = ru "tf"
+    status.normalCommand(Command)
 
     check currentBufStatus.buffer.len == 1
-    check currentBufStatus.buffer[0] == buffer
+    check currentBufStatus.buffer[0] == Buffer
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 5
@@ -1978,14 +1978,14 @@ suite "Normal mode: Move to the left of the next any character":
     status.resize(100, 100)
     status.update
 
-    const buffer = ru "abc def ghi"
-    currentBufStatus.buffer = initGapBuffer(@[buffer])
+    const Buffer = ru "abc def ghi"
+    currentBufStatus.buffer = initGapBuffer(@[Buffer])
 
-    const command = ru "tz"
-    status.normalCommand(command)
+    const Command = ru "tz"
+    status.normalCommand(Command)
 
     check currentBufStatus.buffer.len == 1
-    check currentBufStatus.buffer[0] == buffer
+    check currentBufStatus.buffer[0] == Buffer
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
@@ -1998,16 +1998,16 @@ suite "Normal mode: Move to the right of the back character":
     status.resize(100, 100)
     status.update
 
-    const buffer = ru "abc def ghi"
-    currentBufStatus.buffer = initGapBuffer(@[buffer])
+    const Buffer = ru "abc def ghi"
+    currentBufStatus.buffer = initGapBuffer(@[Buffer])
 
-    currentMainWindowNode.currentColumn = buffer.high
+    currentMainWindowNode.currentColumn = Buffer.high
 
-    const command = ru "Te"
-    status.normalCommand(command)
+    const Command = ru "Te"
+    status.normalCommand(Command)
 
     check currentBufStatus.buffer.len == 1
-    check currentBufStatus.buffer[0] == buffer
+    check currentBufStatus.buffer[0] == Buffer
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 6
@@ -2019,14 +2019,14 @@ suite "Normal mode: Move to the right of the back character":
     status.resize(100, 100)
     status.update
 
-    const buffer = ru "abc def ghi"
-    currentBufStatus.buffer = initGapBuffer(@[buffer])
+    const Buffer = ru "abc def ghi"
+    currentBufStatus.buffer = initGapBuffer(@[Buffer])
 
-    const command = ru "Tz"
-    status.normalCommand(command)
+    const Command = ru "Tz"
+    status.normalCommand(Command)
 
     check currentBufStatus.buffer.len == 1
-    check currentBufStatus.buffer[0] == buffer
+    check currentBufStatus.buffer[0] == Buffer
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
@@ -2039,14 +2039,14 @@ suite "Normal mode: Yank characters to any character":
     status.resize(100, 100)
     status.update
 
-    const buffer = ru "abcd"
-    currentBufStatus.buffer = initGapBuffer(@[buffer])
+    const Buffer = ru "abcd"
+    currentBufStatus.buffer = initGapBuffer(@[Buffer])
 
-    const command = ru "ytd"
-    status.normalCommand(command)
+    const Command = ru "ytd"
+    status.normalCommand(Command)
 
     check currentBufStatus.buffer.len == 1
-    check currentBufStatus.buffer[0] == buffer
+    check currentBufStatus.buffer[0] == Buffer
 
     check not status.registers.noNameRegister.isLine
     check status.registers.noNameRegister.buffer[0] == ru "abc"
@@ -2058,14 +2058,14 @@ suite "Normal mode: Yank characters to any character":
     status.resize(100, 100)
     status.update
 
-    const buffer = ru "ab c d"
-    currentBufStatus.buffer = initGapBuffer(@[buffer])
+    const Buffer = ru "ab c d"
+    currentBufStatus.buffer = initGapBuffer(@[Buffer])
 
-    const command = ru "ytd"
-    status.normalCommand(command)
+    const Command = ru "ytd"
+    status.normalCommand(Command)
 
     check currentBufStatus.buffer.len == 1
-    check currentBufStatus.buffer[0] == buffer
+    check currentBufStatus.buffer[0] == Buffer
 
     check not status.registers.noNameRegister.isLine
     check status.registers.noNameRegister.buffer[0] == ru "ab c "
@@ -2077,14 +2077,14 @@ suite "Normal mode: Yank characters to any character":
     status.resize(100, 100)
     status.update
 
-    const buffer = ru "abc"
-    currentBufStatus.buffer = initGapBuffer(@[buffer])
+    const Buffer = ru "abc"
+    currentBufStatus.buffer = initGapBuffer(@[Buffer])
 
-    const command = ru "ytd"
-    status.normalCommand(command)
+    const Command = ru "ytd"
+    status.normalCommand(Command)
 
     check currentBufStatus.buffer.len == 1
-    check currentBufStatus.buffer[0] == buffer
+    check currentBufStatus.buffer[0] == Buffer
 
     check status.registers.noNameRegister.buffer.len == 0
 
@@ -2095,15 +2095,15 @@ suite "Normal mode: Yank characters to any character":
     status.resize(100, 100)
     status.update
 
-    const buffer = ru "abcd efg"
-    currentBufStatus.buffer = initGapBuffer(@[buffer])
+    const Buffer = ru "abcd efg"
+    currentBufStatus.buffer = initGapBuffer(@[Buffer])
     currentMainWindowNode.currentColumn = 3
 
-    const command = ru "ytd"
-    status.normalCommand(command)
+    const Command = ru "ytd"
+    status.normalCommand(Command)
 
     check currentBufStatus.buffer.len == 1
-    check currentBufStatus.buffer[0] == buffer
+    check currentBufStatus.buffer[0] == Buffer
 
     check status.registers.noNameRegister.buffer.len == 0
 
@@ -2114,15 +2114,15 @@ suite "Normal mode: Yank characters to any character":
     status.resize(100, 100)
     status.update
 
-    const buffer = ru "abcd efg"
-    currentBufStatus.buffer = initGapBuffer(@[buffer])
-    currentMainWindowNode.currentColumn = buffer.high
+    const Buffer = ru "abcd efg"
+    currentBufStatus.buffer = initGapBuffer(@[Buffer])
+    currentMainWindowNode.currentColumn = Buffer.high
 
-    const command = ru "ytd"
-    status.normalCommand(command)
+    const Command = ru "ytd"
+    status.normalCommand(Command)
 
     check currentBufStatus.buffer.len == 1
-    check currentBufStatus.buffer[0] == buffer
+    check currentBufStatus.buffer[0] == Buffer
 
     check status.registers.noNameRegister.buffer.len == 0
 
@@ -2134,11 +2134,11 @@ suite "Normal mode: Delete characters to any characters and Enter insert mode":
     status.resize(100, 100)
     status.update
 
-    const buffer = ru "abcd"
-    currentBufStatus.buffer = initGapBuffer(@[buffer])
+    const Buffer = ru "abcd"
+    currentBufStatus.buffer = initGapBuffer(@[Buffer])
 
-    const command = ru "cfd"
-    status.normalCommand(command)
+    const Command = ru "cfd"
+    status.normalCommand(Command)
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru ""
@@ -2155,14 +2155,14 @@ suite "Normal mode: Delete characters to any characters and Enter insert mode":
     status.resize(100, 100)
     status.update
 
-    const buffer = ru "abcd"
-    currentBufStatus.buffer = initGapBuffer(@[buffer])
+    const Buffer = ru "abcd"
+    currentBufStatus.buffer = initGapBuffer(@[Buffer])
 
-    const command = ru "cfz"
-    status.normalCommand(command)
+    const Command = ru "cfz"
+    status.normalCommand(Command)
 
     check currentBufStatus.buffer.len == 1
-    check currentBufStatus.buffer[0] == buffer
+    check currentBufStatus.buffer[0] == Buffer
 
     check status.registers.noNameRegister.buffer.len == 0
 
@@ -2266,8 +2266,8 @@ suite "Normal mode: execNormalModeCommand":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
 
-    let buffer = @["a".toRunes]
-    currentBufStatus.buffer = buffer.toGapBuffer
+    const Buffer = @["a".toRunes]
+    currentBufStatus.buffer = Buffer.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -2275,7 +2275,7 @@ suite "Normal mode: execNormalModeCommand":
     status.execNormalModeCommand("yy".toRunes)
 
     check status.registers.noNameRegister == Register(
-      buffer: buffer,
+      buffer: Buffer,
       isLine: true)
 
   test "\"2yy\" keys":
@@ -2284,8 +2284,8 @@ suite "Normal mode: execNormalModeCommand":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
 
-    let buffer = @["a".toRunes, "b".toRunes]
-    currentBufStatus.buffer = buffer.initGapBuffer
+    const Buffer = @["a".toRunes, "b".toRunes]
+    currentBufStatus.buffer = Buffer.initGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -2293,7 +2293,7 @@ suite "Normal mode: execNormalModeCommand":
     status.execNormalModeCommand("2yy".toRunes)
 
     check status.registers.noNameRegister == Register(
-      buffer: buffer,
+      buffer: Buffer,
       isLine: true)
 
   test "'0' command":
@@ -2302,8 +2302,8 @@ suite "Normal mode: execNormalModeCommand":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
 
-    let buffer = @["abc".toRunes]
-    currentBufStatus.buffer = buffer.initGapBuffer
+    const Buffer = @["abc".toRunes]
+    currentBufStatus.buffer = Buffer.initGapBuffer
     currentMainWindowNode.currentColumn =
       currentBufStatus.buffer[currentMainWindowNode.currentLine].high
 
@@ -2325,10 +2325,10 @@ suite "Normal mode: execNormalModeCommand":
     status.resize(100, 100)
     status.update
 
-    const command = ru"%"
+    const Command = ru"%"
 
-    check isNormalModeCommand(command) == InputState.Valid
-    status.execNormalModeCommand(command)
+    check isNormalModeCommand(Command) == InputState.Valid
+    status.execNormalModeCommand(Command)
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 2
@@ -2344,10 +2344,10 @@ suite "Normal mode: execNormalModeCommand":
     status.resize(100, 100)
     status.update
 
-    const command = ru"*"
+    const Command = ru"*"
 
-    check isNormalModeCommand(command) == InputState.Valid
-    status.execNormalModeCommand(command)
+    check isNormalModeCommand(Command) == InputState.Valid
+    status.execNormalModeCommand(Command)
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 8
@@ -2364,8 +2364,8 @@ suite "Normal mode: execNormalModeCommand":
     status.resize(100, 100)
     status.update
 
-    const command = ru"*"
-    status.execNormalModeCommand(command)
+    const Command = ru"*"
+    status.execNormalModeCommand(Command)
 
     check status.searchHistory == @["def".toRunes, "abc".toRunes]
 
@@ -2381,10 +2381,10 @@ suite "Normal mode: execNormalModeCommand":
     status.resize(100, 100)
     status.update
 
-    const command = ru"#"
+    const Command = ru"#"
 
-    check isNormalModeCommand(command) == InputState.Valid
-    status.execNormalModeCommand(command)
+    check isNormalModeCommand(Command) == InputState.Valid
+    status.execNormalModeCommand(Command)
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
@@ -2403,8 +2403,8 @@ suite "Normal mode: execNormalModeCommand":
 
     status.update
 
-    const command = ru"#"
-    status.execNormalModeCommand(command)
+    const Command = ru"#"
+    status.execNormalModeCommand(Command)
 
     check status.searchHistory == @["def".toRunes, "abc".toRunes]
 

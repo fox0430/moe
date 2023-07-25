@@ -26,7 +26,7 @@ proc changeModeToExMode*(
 
     bufStatus.changeMode(Mode.ex)
     commandLine.clear
-    commandLine.setPrompt(exModePrompt)
+    commandLine.setPrompt(ExModePrompt)
 
 proc isQuickRunCommand*(command: Runes): InputState =
   result = InputState.Invalid

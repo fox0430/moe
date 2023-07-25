@@ -30,7 +30,7 @@ suite "commandlineutils: getCandidatesFilePath":
       let p = if dirExists(path): path & '/' else: path
       files.add(p)
 
-    const buffer = "e ".toRunes
+    let buffer = "e ".toRunes
     let r = getCandidatesFilePath(buffer)
 
     # r[0] is the input path.
@@ -46,7 +46,7 @@ suite "commandlineutils: getCandidatesFilePath":
         p = if dirExists(path): path & '/' else: path
       files.add(p)
 
-    const buffer = "e /".toRunes
+    let buffer = "e /".toRunes
     let r = getCandidatesFilePath(buffer)
 
     # r[0] is the input path.
@@ -55,7 +55,7 @@ suite "commandlineutils: getCandidatesFilePath":
 
 suite "commandlineutils: getCandidatesExCommandOption":
   test "Expect \"on\" and \"off\"":
-    const commands = [
+    let commands = [
       "cursorline",
       "highlightparen",
       "indent",
@@ -88,7 +88,7 @@ suite "commandlineutils: getCandidatesExCommandOption":
   test "Expect \"vivid\", \"dark\", \"light\", \"config\", \"vscode\"":
     var commandLine = initCommandLine()
 
-    const command = "theme".toRunes
+    let command = "theme".toRunes
     commandLine.buffer = command
 
     check commandLine.getCandidatesExCommandOption == @[
@@ -99,10 +99,10 @@ suite "commandview: getCandidatesExCommand":
     let r = getCandidatesExCommand(ru"")
 
     for i in 0 ..< r.high:
-      check exCommandList[i].command == $r[i]
+      check ExCommandList[i].command == $r[i]
 
   test "Expect ex commands starting with \"b\"":
-    const candidates = [
+    let candidates = [
       "b",
       "bd",
       "bg",
@@ -116,7 +116,7 @@ suite "commandview: getCandidatesExCommand":
       "backup"
     ]
 
-    const command = "b".toRunes
+    let command = "b".toRunes
     let r = getCandidatesExCommand(command)
 
     check candidates.len == r.len
@@ -126,13 +126,13 @@ suite "commandview: getCandidatesExCommand":
 
 suite "commandview: getSuggestType":
   test "Expect to SuggestType.exCommand":
-    const buffer = ru"h"
+    let buffer = ru"h"
     check getSuggestType(buffer) == SuggestType.exCommand
 
   test "Expect to SuggestType.exCommandOption":
-    const buffer = ru"cursorLine "
+    let buffer = ru"cursorLine "
     check getSuggestType(buffer) == SuggestType.exCommandOption
 
   test "Expect to SuggestType.filePath":
-    const buffer = ru"e "
+    let buffer = ru"e "
     check getSuggestType(buffer) == SuggestType.filePath

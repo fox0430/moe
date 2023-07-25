@@ -130,7 +130,14 @@ test "Move to first of next Line":
 test "Jump line":
   var status = initEditorStatus()
   status.addNewBufferInCurrentWin
-  status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"efg", ru"hij", ru"klm", ru"nop", ru"qrs"])
+  status.bufStatus[0].buffer = initGapBuffer(@[
+    "abc",
+    "efg",
+    "hij",
+    "klm",
+    "nop",
+    "qrs"].toSeqRunes)
+
   currentBufStatus.jumpLine(currentMainWindowNode, 1)
   currentBufStatus.jumpLine(currentMainWindowNode, 4)
   check(currentMainWindowNode.currentLine == 4)
@@ -138,7 +145,14 @@ test "Jump line":
 test "Move to first line":
   var status = initEditorStatus()
   status.addNewBufferInCurrentWin
-  status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"efg", ru"hij", ru"klm", ru"nop", ru"qrs"])
+  status.bufStatus[0].buffer = initGapBuffer(@[
+    "abc",
+    "efg",
+    "hij",
+    "klm",
+    "nop",
+    "qrs"].toSeqRunes)
+
   currentMainWindowNode.currentLine = 4
   currentBufStatus.moveToFirstLine(currentMainWindowNode)
   check(currentMainWindowNode.currentLine == 0)
@@ -146,7 +160,14 @@ test "Move to first line":
 test "Move to last line":
   var status = initEditorStatus()
   status.addNewBufferInCurrentWin
-  status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"efg", ru"hij", ru"klm", ru"nop", ru"qrs"])
+  status.bufStatus[0].buffer = initGapBuffer(@[
+    "abc",
+    "efg",
+    "hij",
+    "klm",
+    "nop",
+    "qrs"].toSeqRunes)
+
   currentMainWindowNode.currentLine = 1
   currentBufStatus.moveToLastLine(currentMainWindowNode)
   check(currentMainWindowNode.currentLine == 5)
@@ -370,17 +391,15 @@ suite "jumpToSearchForwardResults":
     status.addNewBufferInCurrentWin
 
     currentMainWindowNode.currentColumn = 1
+    currentBufStatus.buffer = initGapBuffer(@[
+      "abc def",
+      "ghi jkl",
+      "mno jkl"].toSeqRunes)
 
-    let
-      line1 = ru"abc def"
-      line2 = ru"ghi jkl"
-      line3 = ru"mno jkl"
-    currentBufStatus.buffer = initGapBuffer(@[line1, line2, line3])
-
-    let keyword = ru"jkl"
+    const Keyword = ru"jkl"
     currentBufStatus.jumpToSearchForwardResults(
       currentMainWindowNode,
-      keyword,
+      Keyword,
       status.settings.ignorecase,
       status.settings.smartcase)
 
@@ -392,17 +411,15 @@ suite "jumpToSearchForwardResults":
     status.addNewBufferInCurrentWin
 
     currentMainWindowNode.currentColumn = 1
+    currentBufStatus.buffer = initGapBuffer(@[
+      "abc def",
+      "ghi jkl",
+      "mno pqr"].toSeqRunes)
 
-    let
-      line1 = ru"abc def"
-      line2 = ru"ghi jkl"
-      line3 = ru"mno pqr"
-    currentBufStatus.buffer = initGapBuffer(@[line1, line2, line3])
-
-    let keyword = ru"xyz"
+    const Keyword = ru"xyz"
     currentBufStatus.jumpToSearchForwardResults(
       currentMainWindowNode,
-      keyword,
+      Keyword,
       status.settings.ignorecase,
       status.settings.smartcase)
 
@@ -415,17 +432,15 @@ suite "jumpToSearchBackwordResults":
     status.addNewBufferInCurrentWin
 
     currentMainWindowNode.currentLine = 1
+    currentBufStatus.buffer = initGapBuffer(@[
+      "abc def",
+      "ghi jkl",
+      "mno abc"].toSeqRunes)
 
-    let
-      line1 = ru"abc def"
-      line2 = ru"ghi jkl"
-      line3 = ru"mno abc"
-    currentBufStatus.buffer = initGapBuffer(@[line1, line2, line3])
-
-    let keyword = ru"abc"
+    const Keyword = ru"abc"
     currentBufStatus.jumpToSearchBackwordResults(
       currentMainWindowNode,
-      keyword,
+      Keyword,
       status.settings.ignorecase,
       status.settings.smartcase)
 
@@ -437,17 +452,15 @@ suite "jumpToSearchBackwordResults":
     status.addNewBufferInCurrentWin
 
     currentMainWindowNode.currentColumn = 1
+    currentBufStatus.buffer = initGapBuffer(@[
+      "abc def",
+      "ghi jkl",
+      "mno pqr"].toSeqRunes)
 
-    let
-      line1 = ru"abc def"
-      line2 = ru"ghi jkl"
-      line3 = ru"mno pqr"
-    currentBufStatus.buffer = initGapBuffer(@[line1, line2, line3])
-
-    let keyword = ru"xyz"
+    const Keyword = ru"xyz"
     currentBufStatus.jumpToSearchBackwordResults(
       currentMainWindowNode,
-      keyword,
+      Keyword,
       status.settings.ignorecase,
       status.settings.smartcase)
 

@@ -36,11 +36,11 @@ suite "suggestionwindow: buildSuggestionWindow":
     currentMainWindowNode.currentLine = currentBufStatus.buffer.high
     currentMainWindowNode.currentColumn = 1
 
-    const currentBufferIndex = 0
+    const CurrentBufferIndex = 0
 
     let suggestionWin = status.wordDictionary.buildSuggestionWindow(
       status.bufStatus,
-      currentBufferIndex,
+      CurrentBufferIndex,
       mainWindowNode,
       currentMainWindowNode)
 
@@ -71,11 +71,11 @@ suite "suggestionwindow: buildSuggestionWindow":
     currentMainWindowNode.currentLine = currentBufStatus.buffer.high
     currentMainWindowNode.currentColumn = 1
 
-    const currentBufferIndex = 0
+    const CurrentBufferIndex = 0
 
     let suggestionWin = status.wordDictionary.buildSuggestionWindow(
       status.bufStatus,
-      currentBufferIndex,
+      CurrentBufferIndex,
       mainWindowNode,
       currentMainWindowNode)
 
@@ -106,11 +106,11 @@ suite "suggestionwindow: buildSuggestionWindow":
 
     currentMainWindowNode.currentColumn = 1
 
-    const currentBufferIndex = 0
+    const CurrentBufferIndex = 0
 
     let suggestionWin = status.wordDictionary.buildSuggestionWindow(
       status.bufStatus,
-      currentBufferIndex,
+      CurrentBufferIndex,
       mainWindowNode,
       currentMainWindowNode)
 

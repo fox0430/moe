@@ -186,7 +186,6 @@ iterator parseReservedWord(
     buffer = buffer[last ..^ 1]
 
 proc getEditorColorPairInNim(kind: TokenClass): EditorColorPairIndex =
-
   case kind:
     of gtKeyword: EditorColorPairIndex.keyword
     of gtBoolean: EditorColorPairIndex.boolean
@@ -208,130 +207,132 @@ proc getEditorColorPairInNim(kind: TokenClass): EditorColorPairIndex =
     of gtPragma: EditorColorPairIndex.pragma
     else: EditorColorPairIndex.default
 
-proc getEditorColorPair(kind: TokenClass,
-                        language: SourceLanguage): EditorColorPairIndex =
+proc getEditorColorPair(
+  kind: TokenClass,
+  language: SourceLanguage): EditorColorPairIndex =
 
-  case kind:
-    of gtKeyword: EditorColorPairIndex.keyword
-    of gtBoolean: EditorColorPairIndex.boolean
-    of gtSpecialVar: EditorColorPairIndex.specialVar
-    of gtBuiltin: EditorColorPairIndex.builtin
-    of gtStringLit:
-      if language == SourceLanguage.langYaml: EditorColorPairIndex.default
-      else: EditorColorPairIndex.stringLit
-    of gtBinNumber: EditorColorPairIndex.binNumber
-    of gtDecNumber: EditorColorPairIndex.decNumber
-    of gtFloatNumber: EditorColorPairIndex.floatNumber
-    of gtHexNumber: EditorColorPairIndex.hexNumber
-    of gtOctNumber: EditorColorPairIndex.octNumber
-    of gtComment: EditorColorPairIndex.comment
-    of gtLongComment: EditorColorPairIndex.longComment
-    of gtPreprocessor: EditorColorPairIndex.preprocessor
-    of gtWhitespace: EditorColorPairIndex.default
-    of gtPragma: EditorColorPairIndex.pragma
-    else: EditorColorPairIndex.default
+    case kind:
+      of gtKeyword: EditorColorPairIndex.keyword
+      of gtBoolean: EditorColorPairIndex.boolean
+      of gtSpecialVar: EditorColorPairIndex.specialVar
+      of gtBuiltin: EditorColorPairIndex.builtin
+      of gtStringLit:
+        if language == SourceLanguage.langYaml: EditorColorPairIndex.default
+        else: EditorColorPairIndex.stringLit
+      of gtBinNumber: EditorColorPairIndex.binNumber
+      of gtDecNumber: EditorColorPairIndex.decNumber
+      of gtFloatNumber: EditorColorPairIndex.floatNumber
+      of gtHexNumber: EditorColorPairIndex.hexNumber
+      of gtOctNumber: EditorColorPairIndex.octNumber
+      of gtComment: EditorColorPairIndex.comment
+      of gtLongComment: EditorColorPairIndex.longComment
+      of gtPreprocessor: EditorColorPairIndex.preprocessor
+      of gtWhitespace: EditorColorPairIndex.default
+      of gtPragma: EditorColorPairIndex.pragma
+      else: EditorColorPairIndex.default
 
-proc initHighlight*(buffer: string,
-                    reservedWords: seq[ReservedWord],
-                    language: SourceLanguage): Highlight =
+proc initHighlight*(
+  buffer: string,
+  reservedWords: seq[ReservedWord],
+  language: SourceLanguage): Highlight =
 
-  var currentRow, currentColumn: int
+    var currentRow, currentColumn: int
 
-  template splitByNewline(str, c: typed) =
-    const newline = Rune('\n')
-    var
-      cs = ColorSegment(firstRow: currentRow,
-                        firstColumn: currentColumn,
-                        lastRow: currentRow,
-                        lastColumn: currentColumn,
-                        color: c)
-      empty = true
-    for r in runes(str):
-      if r == newline:
-        # push an empty segment
-        if empty:
-          let color = EditorColorPairIndex.default
-          result.colorSegments.add(ColorSegment(firstRow: currentRow,
-                                                firstColumn: currentColumn,
-                                                lastRow: currentRow,
-                                                lastColumn: currentColumn - 1,
-                                                color: color))
-        else: result.colorSegments.add(cs)
-        inc(currentRow)
-        currentColumn = 0
-        cs.firstRow = currentRow
-        cs.firstColumn = currentColumn
-        cs.lastRow = currentRow
-        cs.lastColumn = currentColumn
+    template splitByNewline(str, c: typed) =
+      const newline = Rune('\n')
+      var
+        cs = ColorSegment(
+          firstRow: currentRow,
+          firstColumn: currentColumn,
+          lastRow: currentRow,
+          lastColumn: currentColumn,
+          color: c)
         empty = true
-      else:
-        cs.lastColumn = currentColumn
-        inc(currentColumn)
-        empty = false
-    if not empty: result.colorSegments.add(cs)
-
-  if language == SourceLanguage.langNone:
-    splitByNewline(buffer, EditorColorPairIndex.default)
-    return result
-
-  var token = GeneralTokenizer()
-  token.initGeneralTokenizer(buffer)
-  var pad: string
-  if buffer.parseWhile(pad, {' ', '\x09'..'\x0D'}) > 0:
-    splitByNewline(pad, EditorColorPairIndex.default)
-
-  while true:
-    try:
-      token.getNextToken(language)
-    except AssertionDefect:
-      discard
-
-    if token.kind == gtEof: break
-
-    let
-      first = token.start
-
-      # Make it complete even if it's incomplete.
-      last =
-        if first + token.length - 1 > buffer.high:
-          buffer.high
+      for r in runes(str):
+        if r == newline:
+          # push an empty segment
+          if empty:
+            let color = EditorColorPairIndex.default
+            result.colorSegments.add(ColorSegment(
+              firstRow: currentRow,
+              firstColumn: currentColumn,
+              lastRow: currentRow,
+              lastColumn: currentColumn - 1,
+              color: color))
+          else: result.colorSegments.add(cs)
+          inc(currentRow)
+          currentColumn = 0
+          cs.firstRow = currentRow
+          cs.firstColumn = currentColumn
+          cs.lastRow = currentRow
+          cs.lastColumn = currentColumn
+          empty = true
         else:
-          first + token.length - 1
+          cs.lastColumn = currentColumn
+          inc(currentColumn)
+          empty = false
+      if not empty: result.colorSegments.add(cs)
 
-    block:
-      # Increment `currentRow` if newlines only.
-      let str = buffer[first..last]
-      if str != "" and all(str, proc (x: char): bool = x == '\n'):
-        currentRow += last - first + 1
-        currentColumn = 0
+    if language == SourceLanguage.langNone:
+      splitByNewline(buffer, EditorColorPairIndex.default)
+      return result
+
+    var token = GeneralTokenizer()
+    token.initGeneralTokenizer(buffer)
+    var pad: string
+    if buffer.parseWhile(pad, {' ', '\x09'..'\x0D'}) > 0:
+      splitByNewline(pad, EditorColorPairIndex.default)
+
+    while true:
+      try:
+        token.getNextToken(language)
+      except AssertionDefect:
+        discard
+
+      if token.kind == gtEof: break
+
+      let
+        first = token.start
+
+        # Make it complete even if it's incomplete.
+        last =
+          if first + token.length - 1 > buffer.high: buffer.high
+          else: first + token.length - 1
+
+      block:
+        # Increment `currentRow` if newlines only.
+        let str = buffer[first..last]
+        if str != "" and all(str, proc (x: char): bool = x == '\n'):
+          currentRow += last - first + 1
+          currentColumn = 0
+          continue
+
+      let color =
+        if language == SourceLanguage.langNim:
+          getEditorColorPairInNim(token.kind)
+        else:
+          getEditorColorPair(token.kind, language)
+
+      if token.kind == gtComment:
+        for r in buffer[first..last].parseReservedWord(reservedWords, color):
+          if r[0] == "": continue
+          splitByNewline(r[0], r[1])
         continue
 
-    let color = if language == SourceLanguage.langNim:
-                  getEditorColorPairInNim(token.kind)
-                else:
-                  getEditorColorPair(token.kind, language)
-
-    if token.kind == gtComment:
-      for r in buffer[first..last].parseReservedWord(reservedWords, color):
-        if r[0] == "": continue
-        splitByNewline(r[0], r[1])
-      continue
-
-    splitByNewline(buffer[first..last], color)
+      splitByNewline(buffer[first..last], color)
 
 proc indexOf*(highlight: Highlight, row, column: int): int =
   ## calculate the index of the color segment which the pair (row, column) belongs to
 
   # Because the following assertion is sluggish, it is disabled in release builds.
   when not defined(release):
-    block:
-      let mess = fmt"row = {row}, column = {column}, highlight[0].firstRow = {highlight[0].firstRow}, hightlihgt[0].firstColumn = {highlight[0].firstColumn}"
-      doAssert((row, column) >= (highlight[0].firstRow, highlight[0].firstColumn),
-               mess)
-    block:
-      let mess = fmt"row = {row}, column = {column}, highlight[^1].lastRow = {highlight[^1].lastRow}, hightlihgt[^1].lastColumn = {highlight[^1].lastColumn}, highlight = {highlight}"
-      doAssert((row, column) <= (highlight[^1].lastRow, highlight[^1].lastColumn),
-               mess)
+    doAssert(
+      (row, column) >= (highlight[0].firstRow, highlight[0].firstColumn),
+      fmt"row = {row}, column = {column}, highlight[0].firstRow = {highlight[0].firstRow}, hightlihgt[0].firstColumn = {highlight[0].firstColumn}")
+    doAssert(
+      (row, column) <= (highlight[^1].lastRow, highlight[^1].lastColumn),
+      fmt"row = {row}, column = {column}, highlight[^1].lastRow = {highlight[^1].lastRow}, hightlihgt[^1].lastColumn = {highlight[^1].lastColumn}, highlight = {highlight}")
+
   var
     lb = 0
     ub = highlight.len

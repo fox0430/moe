@@ -20,64 +20,59 @@
 import std/[sugar, critbits, options, sequtils, strutils]
 import pkg/unicodedb/properties
 import unicodeext, bufferstatus, algorithm, osext, gapbuffer
-import syntax/[ highlite
-              , syntaxc
-              , syntaxcpp
-              , syntaxcsharp
-              , syntaxhaskell
-              , syntaxjava
-              , syntaxjavascript
-              , syntaxnim
-              , syntaxpython
-              , syntaxrust
-              ]
+import syntax/[highlite, syntaxc, syntaxcpp, syntaxcsharp, syntaxhaskell,
+               syntaxjava, syntaxjavascript, syntaxnim, syntaxpython,
+               syntaxrust]
 
 type
   # `WordDictionary.val` is number of times used in the autocomplete.
   WordDictionary* = CritBitTree[int]
 
 const
-  letterCharacter = ctgLu + ctgLl + ctgLt + ctgLm + ctgLo + ctgNl
-  combiningCharacter = ctgMn + ctgMc
-  decimalDigitCharacter = ctgNd
-  connectingCharacter = ctgPc
-  formattingCharacter = ctgCf
+  LetterCharacter = ctgLu + ctgLl + ctgLt + ctgLm + ctgLo + ctgNl
+  CombiningCharacter = ctgMn + ctgMc
+  DecimalDigitCharacter = ctgNd
+  ConnectingCharacter = ctgPc
+  FormattingCharacter = ctgCf
 
-  firstCharacter = letterCharacter
-  succeedingCharacter = letterCharacter +
-                        combiningCharacter +
-                        decimalDigitCharacter +
-                        connectingCharacter +
-                        formattingCharacter +
-                        formattingCharacter
+  FirstCharacter = LetterCharacter
+  SucceedingCharacter = LetterCharacter +
+                        CombiningCharacter +
+                        DecimalDigitCharacter +
+                        ConnectingCharacter +
+                        FormattingCharacter +
+                        FormattingCharacter
 
-iterator enumerateWords*(runes: seq[Rune]): seq[Rune] =
-  for word in split(runes, r => r.unicodeCategory notin succeedingCharacter, true):
-    if word[0].unicodeCategory notin firstCharacter: continue
-    yield word
+iterator enumerateWords*(runes: Runes): Runes =
+  for word in split(
+    runes,
+    r => r.unicodeCategory notin SucceedingCharacter,
+    true):
+      if word[0].unicodeCategory notin FirstCharacter: continue
+      yield word
 
 # Returns true if `word` is in `WordDictionary.word` or false if not found.
-proc contains(wordDictionary: WordDictionary, word: seq[Rune]): bool {.inline.} =
+proc contains(wordDictionary: WordDictionary, word: Runes): bool {.inline.} =
   wordDictionary.contains($word)
 
 # Get `WordDictionary.numOfUsed` by `word`
-proc getNumOfUsed(wordDictionary: WordDictionary, word: seq[Rune]): int {.inline.} =
+proc getNumOfUsed(wordDictionary: WordDictionary, word: Runes): int {.inline.} =
   wordDictionary[$word]
 
 # Add words to the wordDictionary.
-proc addWordToDictionary*(wordDictionary: var WordDictionary, text: seq[Rune]) =
+proc addWordToDictionary*(wordDictionary: var WordDictionary, text: Runes) =
   for word in enumerateWords(text):
     if not wordDictionary.contains(word):
       wordDictionary[$word] = 0
 
 # Increment `WordDictionary.numOfUsed`
-proc incNumOfUsed*(wordDictionary: var WordDictionary, word: seq[Rune]) =
+proc incNumOfUsed*(wordDictionary: var WordDictionary, word: Runes) =
   wordDictionary.inc($word)
 
 # Extract a word from `runes` based on position.
 proc extractNeighborWord*(
-  runes: seq[Rune],
-  pos: int): Option[tuple[word: seq[Rune], first, last: int]] =
+  runes: Runes,
+  pos: int): Option[tuple[word: Runes, first, last: int]] =
 
   block:
     let
@@ -85,7 +80,7 @@ proc extractNeighborWord*(
       unicodeCategory = r.unicodeCategory
     if (runes.len == 0) or
        (pos notin runes.low .. runes.high) or
-       ((r != '/'.ru) and (unicodeCategory notin succeedingCharacter)): return
+       ((r != '/'.ru) and (unicodeCategory notin SucceedingCharacter)): return
 
   var
     first = pos
@@ -94,21 +89,21 @@ proc extractNeighborWord*(
   block:
     template r: Rune = runes[first - 1]
 
-    while first - 1 >= 0 and r.unicodeCategory in succeedingCharacter:
+    while first - 1 >= 0 and r.unicodeCategory in SucceedingCharacter:
       dec(first)
 
   block:
     template r: Rune = runes[last + 1]
 
-    while last + 1 <= runes.high and r.unicodeCategory in succeedingCharacter:
+    while last + 1 <= runes.high and r.unicodeCategory in SucceedingCharacter:
       inc(last)
 
   return some((runes[first .. last], first, last))
 
 # Extract a path from `runes` based on position.
 proc extractNeighborPath*(
-  runes: seq[Rune],
-  pos: int): Option[tuple[path: seq[Rune], first, last: int]] =
+  runes: Runes,
+  pos: int): Option[tuple[path: Runes, first, last: int]] =
 
   if (runes.len == 0) or (pos notin runes.low .. runes.high):
     return
@@ -134,12 +129,12 @@ proc extractNeighborPath*(
   return some((runes[first..last], first, last))
 
 proc isCharacterInWord*(r: Rune): bool =
-  r.unicodeCategory in succeedingCharacter
+  r.unicodeCategory in SucceedingCharacter
 
 # Collect words for suggestion from `wordDictionary`
 proc collectSuggestions*(
   wordDictionary: CritBitTree[int],
-  word: seq[Rune]): seq[seq[Rune]] =
+  word: Runes): seq[Runes] =
 
   let pairs = collect:
     for item in wordDictionary.pairsWithPrefix($word): item
@@ -148,7 +143,7 @@ proc collectSuggestions*(
 
 proc getTextInBuffers*(
   bufStatus: seq[BufferStatus],
-  firstDeletedIndex, lastDeletedIndex: int): seq[Rune] =
+  firstDeletedIndex, lastDeletedIndex: int): Runes =
 
   for i, buf in bufStatus:
     # 0 is current bufStatus
@@ -160,25 +155,25 @@ proc getTextInBuffers*(
     else:
       result.add buf.buffer.toRunes
 
-proc getCKeywords(): seq[Rune] {.compileTime.} =
+proc getCKeywords(): Runes {.compileTime.} =
   for s in cKeywords: result.add toRunes(s & " ")
 
-proc getCppKeywords(): seq[Rune] {.compileTime.} =
+proc getCppKeywords(): Runes {.compileTime.} =
   for s in cppKeywords: result.add toRunes(s & " ")
 
-proc getCsharpKeywords(): seq[Rune] {.compileTime.} =
+proc getCsharpKeywords(): Runes {.compileTime.} =
   for s in csharpKeywords: result.add toRunes(s & " ")
 
-proc getHaskellKeywords(): seq[Rune] {.compileTime.} =
+proc getHaskellKeywords(): Runes {.compileTime.} =
   for s in haskellKeywords: result.add toRunes(s & " ")
 
-proc getJavaKeywords(): seq[Rune] {.compileTime.} =
+proc getJavaKeywords(): Runes {.compileTime.} =
   for s in javaKeywords: result.add toRunes(s & " ")
 
-proc getJavaScriptKeywords(): seq[Rune] {.compileTime.} =
+proc getJavaScriptKeywords(): Runes {.compileTime.} =
   for s in javaScriptkeywords: result.add toRunes(s & " ")
 
-proc getNimKeywords(): seq[Rune] {.compileTime.} =
+proc getNimKeywords(): Runes {.compileTime.} =
   for s in nimKeywords: result.add toRunes(s & " ")
   for s in nimBooleans: result.add toRunes(s & " ")
   for s in nimSpecialVars: result.add toRunes(s & " ")
@@ -186,13 +181,13 @@ proc getNimKeywords(): seq[Rune] {.compileTime.} =
   for s in nimBuiltins: result.add toRunes(s & " ")
   for s in nimStdLibs: result.add toRunes(s & " ")
 
-proc getPythonKeywords(): seq[Rune] {.compileTime.} =
+proc getPythonKeywords(): Runes {.compileTime.} =
   for s in pythonKeywords: result.add toRunes(s & " ")
 
-proc getRustKeywords(): seq[Rune] {.compileTime.} =
+proc getRustKeywords(): Runes {.compileTime.} =
   for s in rustKeywords: result.add toRunes(s & " ")
 
-proc getTextInLangKeywords*(lang: SourceLanguage): seq[Rune] =
+proc getTextInLangKeywords*(lang: SourceLanguage): Runes =
   case lang:
     of SourceLanguage.langC:
       result = getCKeywords()
@@ -216,7 +211,7 @@ proc getTextInLangKeywords*(lang: SourceLanguage): seq[Rune] =
       discard
 
 # Return Path list for the autocomplete.
-proc getPathList*(path: seq[Rune]): seq[Rune] =
+proc getPathList*(path: Runes): Runes =
   let
     (head, tail) = splitPathExt($path)
     paths = walkDir(head.expandTilde).toSeq.mapIt(it.path.getPathTail)

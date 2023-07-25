@@ -38,38 +38,39 @@ suite "Config mode: Init buffer":
 
     let buffer = status.settings.initStandardTableBuffer
 
-    const sample = @[ru "Standard",
-                     ru "  theme                          dark",
-                     ru "  number                         true",
-                     ru "  currentNumber                  true",
-                     ru "  cursorLine                     false",
-                     ru "  statusLine                     true",
-                     ru "  tabLine                        true",
-                     ru "  syntax                         true",
-                     ru "  indentationLines               true",
-                     ru "  tabStop                        2",
-                     ru "  sidebar                        true",
-                     ru "  autoCloseParen                 true",
-                     ru "  autoIndent                     true",
-                     ru "  ignorecase                     true",
-                     ru "  smartcase                      true",
-                     ru "  disableChangeCursor            false",
-                     ru "  defaultCursor                  terminalDefault",
-                     ru "  normalModeCursor               blinkBlock",
-                     ru "  insertModeCursor               blinkIbeam",
-                     ru "  autoSave                       false",
-                     ru "  autoSaveInterval               5",
-                     ru "  liveReloadOfConf               false",
-                     ru "  incrementalSearch              true",
-                     ru "  popupWindowInExmode            true",
-                     ru "  autoDeleteParen                false",
-                     ru "  smoothScroll                   true",
-                     ru "  smoothScrollSpeed              15",
-                     ru "  liveReloadOfFile               false",
-                     ru "  colorMode                      24bit"]
+    const Sample = @[
+      "Standard",
+      "  theme                          dark",
+      "  number                         true",
+      "  currentNumber                  true",
+      "  cursorLine                     false",
+      "  statusLine                     true",
+      "  tabLine                        true",
+      "  syntax                         true",
+      "  indentationLines               true",
+      "  tabStop                        2",
+      "  sidebar                        true",
+      "  autoCloseParen                 true",
+      "  autoIndent                     true",
+      "  ignorecase                     true",
+      "  smartcase                      true",
+      "  disableChangeCursor            false",
+      "  defaultCursor                  terminalDefault",
+      "  normalModeCursor               blinkBlock",
+      "  insertModeCursor               blinkIbeam",
+      "  autoSave                       false",
+      "  autoSaveInterval               5",
+      "  liveReloadOfConf               false",
+      "  incrementalSearch              true",
+      "  popupWindowInExmode            true",
+      "  autoDeleteParen                false",
+      "  smoothScroll                   true",
+      "  smoothScrollSpeed              15",
+      "  liveReloadOfFile               false",
+      "  colorMode                      24bit"].toSeqRunes
 
     for index, line in buffer:
-      check sample[index] == line
+      check Sample[index] == line
 
   test "Init ClipBoard table buffer":
     var status = initEditorStatus()
@@ -77,104 +78,111 @@ suite "Config mode: Init buffer":
     status.settings.clipboard.toolOnLinux = ClipboardToolOnLinux.none
     let buffer = status.settings.clipboard.initClipBoardTableBuffer
 
-    const sample = @[ru "ClipBoard",
-                     ru "  enable                         true",
-                     ru "  toolOnLinux                    none"]
+    const Sample = @[
+      "ClipBoard",
+      "  enable                         true",
+      "  toolOnLinux                    none"].toSeqRunes
 
     for index, line in buffer:
-      check sample[index] == line
+      check Sample[index] == line
 
   test "Init build on save table buffer":
     var status = initEditorStatus()
     let buffer = status.settings.buildOnSave.initBuildOnSaveTableBuffer
 
-    const sample = @[ru "BuildOnSave",
-                     ru "  enable                         false",
-                     ru "  workspaceRoot                  ",
-                     ru "  command                        "]
+    const Sample = @[
+      "BuildOnSave",
+      "  enable                         false",
+      "  workspaceRoot                  ",
+      "  command                        "].toSeqRunes
 
     for index, line in buffer:
-      check sample[index] == line
+      check Sample[index] == line
 
   test "Init tab line table buffer":
     var status = initEditorStatus()
     let buffer = status.settings.initTabLineTableBuffer
 
-    const sample = @[ru "TabLine",
-                     ru "  allBuffer                      false"]
+    const Sample = @[
+      "TabLine",
+      "  allBuffer                      false"].toSeqRunes
 
     for index, line in buffer:
-      check sample[index] == line
+      check Sample[index] == line
 
   test "Init status line table buffer":
     var status = initEditorStatus()
     let buffer = status.settings.statusLine.initStatusLineTableBuffer
 
-    const sample = @[ru "StatusLine",
-                     ru "  multipleStatusLine             true",
-                     ru "  merge                          false",
-                     ru "  mode                           true",
-                     ru "  filename                       true",
-                     ru "  chanedMark                     true",
-                     ru "  line                           true",
-                     ru "  column                         true",
-                     ru "  encoding                       true",
-                     ru "  language                       true",
-                     ru "  directory                      true",
-                     ru "  gitChangedLines                true",
-                     ru "  gitBranchName                  true",
-                     ru "  showGitInactive                false",
-                     ru "  showModeInactive               false"]
+    const Sample = @[
+      "StatusLine",
+      "  multipleStatusLine             true",
+      "  merge                          false",
+      "  mode                           true",
+      "  filename                       true",
+      "  chanedMark                     true",
+      "  line                           true",
+      "  column                         true",
+      "  encoding                       true",
+      "  language                       true",
+      "  directory                      true",
+      "  gitChangedLines                true",
+      "  gitBranchName                  true",
+      "  showGitInactive                false",
+      "  showModeInactive               false"].toSeqRunes
 
     for index, line in buffer:
-      check sample[index] == line
+      check Sample[index] == line
 
   test "Init highlight table buffer":
     var status = initEditorStatus()
     let buffer = status.settings.initHighlightTableBuffer
 
-    const sample = @[ru "Highlight",
-                     ru "  currentLine                    true",
-                     ru "  fullWidthSpace                 true",
-                     ru "  trailingSpaces                 true",
-                     ru "  currentWord                    true",
-                     ru "  replaceText                    true",
-                     ru "  reservedWord                   TODO WIP NOTE "]
+    const Sample = @[
+      "Highlight",
+      "  currentLine                    true",
+      "  fullWidthSpace                 true",
+      "  trailingSpaces                 true",
+      "  currentWord                    true",
+      "  replaceText                    true",
+      "  reservedWord                   TODO WIP NOTE "].toSeqRunes
 
     for index, line in buffer:
-      check sample[index] == line
+      check Sample[index] == line
 
   test "Init auto backup table buffer":
     var status = initEditorStatus()
     let buffer = status.settings.autoBackup.initAutoBackupTableBuffer
 
-    const sample = @[ru "AutoBackup",
-                     ru "  enable                         false",
-                     ru "  idleTime                       10",
-                     ru "  interval                       5",
-                     ru "  backupDir                      {getCacheDir()}/moe/backups".fmt,
-                     ru "  dirToExclude                   /etc"]
+    const Sample = @[
+      "AutoBackup",
+      "  enable                         false",
+      "  idleTime                       10",
+      "  interval                       5",
+      "  backupDir                      {getCacheDir()}/moe/backups".fmt,
+      "  dirToExclude                   /etc"].toSeqRunes
 
     for index, line in buffer:
-      check sample[index] == line
+      check Sample[index] == line
 
   test "Init QuickRun table buffer":
     var status = initEditorStatus()
     let buffer = status.settings.quickRun.initQuickRunTableBuffer
 
-    const sample = @[ru "QuickRun",
-                     ru "  saveBufferWhenQuickRun         true",
-                     ru "  command                        ",
-                     ru "  timeout                        30",
-                     ru "  nimAdvancedCommand             c",
-                     ru "  clangOptions                   ",
-                     ru "  cppOptions                     ",
-                     ru "  nimOptions                     ",
-                     ru "  shOptions                      ",
-                     ru "  bashOptions                    "]
+    const Sample = @[
+      "QuickRun",
+      "  saveBufferWhenQuickRun         true",
+      "  command                        ",
+      "  timeout                        30",
+      "  nimAdvancedCommand             c",
+      "  clangOptions                   ",
+      "  cppOptions                     ",
+      "  nimOptions                     ",
+      "  shOptions                      ",
+      "  bashOptions                    "].toSeqRunes
 
     for index, line in buffer:
-      check sample[index] == line
+      check Sample[index] == line
 
   test "Init Notification table buffer":
     var status = initEditorStatus()
@@ -182,64 +190,68 @@ suite "Config mode: Init buffer":
       notificationSettings = status.settings.notification
       buffer = notificationSettings.initNotificationTableBuffer
 
-    const sample = @[ru "Notification",
-                     ru "  screenNotifications            true",
-                     ru "  logNotifications               true",
-                     ru "  autoBackupScreenNotify         true",
-                     ru "  autoBackupLogNotify            true",
-                     ru "  autoSaveScreenNotify           true",
-                     ru "  autoSaveLogNotify              true",
-                     ru "  yankScreenNotify               true",
-                     ru "  yankLogNotify                  true",
-                     ru "  deleteScreenNotify             true",
-                     ru "  deleteLogNotify                true",
-                     ru "  saveScreenNotify               true",
-                     ru "  saveLogNotify                  true",
-                     ru "  quickRunScreenNotify           true",
-                     ru "  quickRunLogNotify              true",
-                     ru "  buildOnSaveScreenNotify        true",
-                     ru "  buildOnSaveLogNotify           true",
-                     ru "  filerScreenNotify              true",
-                     ru "  filerLogNotify                 true",
-                     ru "  restoreScreenNotify            true",
-                     ru "  restoreLogNotify               true"]
+    const Sample = @[
+      "Notification",
+      "  screenNotifications            true",
+      "  logNotifications               true",
+      "  autoBackupScreenNotify         true",
+      "  autoBackupLogNotify            true",
+      "  autoSaveScreenNotify           true",
+      "  autoSaveLogNotify              true",
+      "  yankScreenNotify               true",
+      "  yankLogNotify                  true",
+      "  deleteScreenNotify             true",
+      "  deleteLogNotify                true",
+      "  saveScreenNotify               true",
+      "  saveLogNotify                  true",
+      "  quickRunScreenNotify           true",
+      "  quickRunLogNotify              true",
+      "  buildOnSaveScreenNotify        true",
+      "  buildOnSaveLogNotify           true",
+      "  filerScreenNotify              true",
+      "  filerLogNotify                 true",
+      "  restoreScreenNotify            true",
+      "  restoreLogNotify               true"].toSeqRunes
 
     for index, line in buffer:
-      check sample[index] == line
+      check Sample[index] == line
 
   test "Init Filer table buffer":
     var status = initEditorStatus()
     let buffer = status.settings.initFilerTableBuffer
 
-    const sample = @[ru "Filer",
-                     ru "  showIcons                      true"]
+    const Sample = @[
+      ru"Filer",
+      ru"  showIcons                      true"]
 
     for index, line in buffer:
-      check sample[index] == line
+      check Sample[index] == line
 
   test "Init Autocomplete table buffer":
     var status = initEditorStatus()
     let buffer = status.settings.initAutocompleteTableBuffer
 
-    const sample = @[ru "Autocomplete",
-                     ru "  enable                         true"]
+    const Sample = @[
+      ru"Autocomplete",
+      ru"  enable                         true"]
 
     for index, line in buffer:
-      check sample[index] == line
+      check Sample[index] == line
 
   test "Init Persist table buffer":
     var status = initEditorStatus()
     let buffer = status.settings.persist.initPersistTableBuffer
 
-    const sample = @[ru "Persist",
-                     ru "  exCommand                      true",
-                     ru "  exCommandHistoryLimit          1000",
-                     ru "  search                         true",
-                     ru "  searchHistoryLimit             1000",
-                     ru "  cursorPosition                 true"]
+    const Sample = @[
+      "Persist",
+      "  exCommand                      true",
+      "  exCommandHistoryLimit          1000",
+      "  search                         true",
+      "  searchHistoryLimit             1000",
+      "  cursorPosition                 true"].toSeqRunes
 
     for index, line in buffer:
-      check sample[index] == line
+      check Sample[index] == line
 
   test "init GitTableBuffer":
     var status = initEditorStatus()
@@ -248,8 +260,7 @@ suite "Config mode: Init buffer":
     const Sample = @[
       "Git",
       "  showChangedLine                true",
-      "  updateInterval                 1000",
-    ].toSeqRunes
+      "  updateInterval                 1000"].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
@@ -258,308 +269,308 @@ suite "Config mode: Init buffer":
     var status = initEditorStatus()
     let buffer = status.settings.initThemeTableBuffer
 
-    const sample = @[
-      ru"Theme",
-      ru"  default",
-      ru"    foreground                   #f8f5e3",
-      ru"    background                   #000000",
-      ru"",
-      ru"  lineNum",
-      ru"    foreground                   #8a8a8a",
-      ru"    background                   #000000",
-      ru"",
-      ru"  currentLineNum",
-      ru"    foreground                   #008080",
-      ru"    background                   #000000",
-      ru"",
-      ru"  statusLineNormalMode",
-      ru"    foreground                   #ffffff",
-      ru"    background                   #09aefa",
-      ru"",
-      ru"  statusLineModeNormalMode",
-      ru"    foreground                   #000000",
-      ru"    background                   #ffffff",
-      ru"",
-      ru"  statusLineNormalModeInactive",
-      ru"    foreground                   #09aefa",
-      ru"    background                   #ffffff",
-      ru"",
-      ru"  statusLineInsertMode",
-      ru"    foreground                   #ffffff",
-      ru"    background                   #09aefa",
-      ru"",
-      ru"  statusLineModeInsertMode",
-      ru"    foreground                   #000000",
-      ru"    background                   #ffffff",
-      ru"",
-      ru"  statusLineInsertModeInactive",
-      ru"    foreground                   #09aefa",
-      ru"    background                   #ffffff",
-      ru"",
-      ru"  statusLineVisualMode",
-      ru"    foreground                   #ffffff",
-      ru"    background                   #09aefa",
-      ru"",
-      ru"  statusLineModeVisualMode",
-      ru"    foreground                   #000000",
-      ru"    background                   #ffffff",
-      ru"",
-      ru"  statusLineVisualModeInactive",
-      ru"    foreground                   #09aefa",
-      ru"    background                   #ffffff",
-      ru"",
-      ru"  statusLineReplaceMode",
-      ru"    foreground                   #ffffff",
-      ru"    background                   #09aefa",
-      ru"",
-      ru"  statusLineModeReplaceMode",
-      ru"    foreground                   #000000",
-      ru"    background                   #ffffff",
-      ru"",
-      ru"  statusLineReplaceModeInactive",
-      ru"    foreground                   #09aefa",
-      ru"    background                   #ffffff",
-      ru"",
-      ru"  statusLineFilerMode",
-      ru"    foreground                   #ffffff",
-      ru"    background                   #09aefa",
-      ru"",
-      ru"  statusLineModeFilerMode",
-      ru"    foreground                   #000000",
-      ru"    background                   #ffffff",
-      ru"",
-      ru"  statusLineFilerModeInactive",
-      ru"    foreground                   #09aefa",
-      ru"    background                   #ffffff",
-      ru"",
-      ru"  statusLineExMode",
-      ru"    foreground                   #ffffff",
-      ru"    background                   #09aefa",
-      ru"",
-      ru"  statusLineModeExMode",
-      ru"    foreground                   #000000",
-      ru"    background                   #ffffff",
-      ru"",
-      ru"  statusLineExModeInactive",
-      ru"    foreground                   #09aefa",
-      ru"    background                   #ffffff",
-      ru"",
-      ru"  statusLineGitChangedLines",
-      ru"    foreground                   #ffffff",
-      ru"    background                   #0040ff",
-      ru"",
-      ru"  statusLineGitBranch",
-      ru"    foreground                   #ffffff",
-      ru"    background                   #0040ff",
-      ru"",
-      ru"  tab",
-      ru"    foreground                   #ffffff",
-      ru"    background                   #000000",
-      ru"",
-      ru"  currentTab",
-      ru"    foreground                   #ffffff",
-      ru"    background                   #09aefa",
-      ru"",
-      ru"  commandLine",
-      ru"    foreground                   #ffffff",
-      ru"    background                   #000000",
-      ru"",
-      ru"  errorMessage",
-      ru"    foreground                   #ff0000",
-      ru"    background                   #000000",
-      ru"",
-      ru"  searchResult",
-      ru"    foreground                   #ffffff",
-      ru"    background                   #ff0000",
-      ru"",
-      ru"  visualMode",
-      ru"    foreground                   #ffffff",
-      ru"    background                   #800080",
-      ru"",
-      ru"  keyword",
-      ru"    foreground                   #87d7ff",
-      ru"    background                   #000000",
-      ru"",
-      ru"  functionName",
-      ru"    foreground                   #00b7ce",
-      ru"    background                   #000000",
-      ru"",
-      ru"  typeName",
-      ru"    foreground                   #00ffff",
-      ru"    background                   #000000",
-      ru"",
-      ru"  boolean",
-      ru"    foreground                   #add8e6",
-      ru"    background                   #000000",
-      ru"",
-      ru"  specialVar",
-      ru"    foreground                   #0090a8",
-      ru"    background                   #000000",
-      ru"",
-      ru"  builtin",
-      ru"    foreground                   #add8e6",
-      ru"    background                   #000000",
-      ru"",
-      ru"  stringLit",
-      ru"    foreground                   #add8e6",
-      ru"    background                   #000000",
-      ru"",
-      ru"  binNumber",
-      ru"    foreground                   #add8e6",
-      ru"    background                   #000000",
-      ru"",
-      ru"  decNumber",
-      ru"    foreground                   #add8e6",
-      ru"    background                   #000000",
-      ru"",
-      ru"  floatNumber",
-      ru"    foreground                   #add8e6",
-      ru"    background                   #000000",
-      ru"",
-      ru"  hexNumber",
-      ru"    foreground                   #add8e6",
-      ru"    background                   #000000",
-      ru"",
-      ru"  octNumber",
-      ru"    foreground                   #add8e6",
-      ru"    background                   #000000",
-      ru"",
-      ru"  comment",
-      ru"    foreground                   #808080",
-      ru"    background                   #000000",
-      ru"",
-      ru"  longComment",
-      ru"    foreground                   #808080",
-      ru"    background                   #000000",
-      ru"",
-      ru"  whitespace",
-      ru"    foreground                   #808080",
-      ru"    background                   #000000",
-      ru"",
-      ru"  preprocessor",
-      ru"    foreground                   #0090a8",
-      ru"    background                   #000000",
-      ru"",
-      ru"  pragma",
-      ru"    foreground                   #0090a8",
-      ru"    background                   #000000",
-      ru"",
-      ru"  currentFile",
-      ru"    foreground                   #ffffff",
-      ru"    background                   #09aefa",
-      ru"",
-      ru"  file",
-      ru"    foreground                   #ffffff",
-      ru"    background                   #000000",
-      ru"",
-      ru"  dir",
-      ru"    foreground                   #09aefa",
-      ru"    background                   #000000",
-      ru"",
-      ru"  pcLink",
-      ru"    foreground                   #008080",
-      ru"    background                   #000000",
-      ru"",
-      ru"  popupWindow",
-      ru"    foreground                   #ffffff",
-      ru"    background                   #000000",
-      ru"",
-      ru"  popupWinCurrentLine",
-      ru"    foreground                   #09aefa",
-      ru"    background                   #000000",
-      ru"",
-      ru"  replaceText",
-      ru"    foreground                   #ffffff",
-      ru"    background                   #ff0000",
-      ru"",
-      ru"  parenPair",
-      ru"    foreground                   #ffffff",
-      ru"    background                   #09aefa",
-      ru"",
-      ru"  currentWord",
-      ru"    foreground                   #ffffff",
-      ru"    background                   #808080",
-      ru"",
-      ru"  highlightFullWidthSpace",
-      ru"    foreground                   #ff0000",
-      ru"    background                   #ff0000",
-      ru"",
-      ru"  highlightTrailingSpaces",
-      ru"    foreground                   #ff0000",
-      ru"    background                   #ff0000",
-      ru"",
-      ru"  reservedWord",
-      ru"    foreground                   #ffffff",
-      ru"    background                   #808080",
-      ru"",
-      ru"  syntaxCheckInfo",
-      ru"    foreground                   #ffff00",
-      ru"    background                   #000000",
-      ru"",
-      ru"  syntaxCheckHint",
-      ru"    foreground                   #ffff00",
-      ru"    background                   #000000",
-      ru"",
-      ru"  syntaxCheckWarn",
-      ru"    foreground                   #ffff00",
-      ru"    background                   #000000",
-      ru"",
-      ru"  syntaxCheckErr",
-      ru"    foreground                   #ff0000",
-      ru"    background                   #000000",
-      ru"",
-      ru"  backupManagerCurrentLine",
-      ru"    foreground                   #ffffff",
-      ru"    background                   #008080",
-      ru"",
-      ru"  diffViewerAddedLine",
-      ru"    foreground                   #008000",
-      ru"    background                   #000000",
-      ru"",
-      ru"  diffViewerDeletedLine",
-      ru"    foreground                   #ff0000",
-      ru"    background                   #000000",
-      ru"",
-      ru"  configModeCurrentLine",
-      ru"    foreground                   #ffffff",
-      ru"    background                   #008080",
-      ru"",
-      ru"  currentLineBg",
-      ru"    foreground                   termDefautFg",
-      ru"    background                   #444444",
-      ru"",
-      ru"  sidebarGitAddedSign",
-      ru"    foreground                   #008000",
-      ru"    background                   #000000",
-      ru"",
-      ru"  sidebarGitDeletedSign",
-      ru"    foreground                   #ff0000",
-      ru"    background                   #000000",
-      ru"",
-      ru"  sidebarGitChangedSign",
-      ru"    foreground                   #ffff00",
-      ru"    background                   #000000",
-      ru"",
-      ru"  sidebarSyntaxCheckInfoSign",
-      ru"    foreground                   #ffff00",
-      ru"    background                   #000000",
-      ru"",
-      ru"  sidebarSyntaxCheckHintSign",
-      ru"    foreground                   #ffff00",
-      ru"    background                   #000000",
-      ru"",
-      ru"  sidebarSyntaxCheckWarnSign",
-      ru"    foreground                   #ffff00",
-      ru"    background                   #000000",
-      ru"",
-      ru"  sidebarSyntaxCheckErrSign",
-      ru"    foreground                   #ff0000",
-      ru"    background                   #000000",
-      ru""
-    ]
+    const Sample = @[
+      "Theme",
+      "  default",
+      "    foreground                   #f8f5e3",
+      "    background                   #000000",
+      "",
+      "  lineNum",
+      "    foreground                   #8a8a8a",
+      "    background                   #000000",
+      "",
+      "  currentLineNum",
+      "    foreground                   #008080",
+      "    background                   #000000",
+      "",
+      "  statusLineNormalMode",
+      "    foreground                   #ffffff",
+      "    background                   #09aefa",
+      "",
+      "  statusLineModeNormalMode",
+      "    foreground                   #000000",
+      "    background                   #ffffff",
+      "",
+      "  statusLineNormalModeInactive",
+      "    foreground                   #09aefa",
+      "    background                   #ffffff",
+      "",
+      "  statusLineInsertMode",
+      "    foreground                   #ffffff",
+      "    background                   #09aefa",
+      "",
+      "  statusLineModeInsertMode",
+      "    foreground                   #000000",
+      "    background                   #ffffff",
+      "",
+      "  statusLineInsertModeInactive",
+      "    foreground                   #09aefa",
+      "    background                   #ffffff",
+      "",
+      "  statusLineVisualMode",
+      "    foreground                   #ffffff",
+      "    background                   #09aefa",
+      "",
+      "  statusLineModeVisualMode",
+      "    foreground                   #000000",
+      "    background                   #ffffff",
+      "",
+      "  statusLineVisualModeInactive",
+      "    foreground                   #09aefa",
+      "    background                   #ffffff",
+      "",
+      "  statusLineReplaceMode",
+      "    foreground                   #ffffff",
+      "    background                   #09aefa",
+      "",
+      "  statusLineModeReplaceMode",
+      "    foreground                   #000000",
+      "    background                   #ffffff",
+      "",
+      "  statusLineReplaceModeInactive",
+      "    foreground                   #09aefa",
+      "    background                   #ffffff",
+      "",
+      "  statusLineFilerMode",
+      "    foreground                   #ffffff",
+      "    background                   #09aefa",
+      "",
+      "  statusLineModeFilerMode",
+      "    foreground                   #000000",
+      "    background                   #ffffff",
+      "",
+      "  statusLineFilerModeInactive",
+      "    foreground                   #09aefa",
+      "    background                   #ffffff",
+      "",
+      "  statusLineExMode",
+      "    foreground                   #ffffff",
+      "    background                   #09aefa",
+      "",
+      "  statusLineModeExMode",
+      "    foreground                   #000000",
+      "    background                   #ffffff",
+      "",
+      "  statusLineExModeInactive",
+      "    foreground                   #09aefa",
+      "    background                   #ffffff",
+      "",
+      "  statusLineGitChangedLines",
+      "    foreground                   #ffffff",
+      "    background                   #0040ff",
+      "",
+      "  statusLineGitBranch",
+      "    foreground                   #ffffff",
+      "    background                   #0040ff",
+      "",
+      "  tab",
+      "    foreground                   #ffffff",
+      "    background                   #000000",
+      "",
+      "  currentTab",
+      "    foreground                   #ffffff",
+      "    background                   #09aefa",
+      "",
+      "  commandLine",
+      "    foreground                   #ffffff",
+      "    background                   #000000",
+      "",
+      "  errorMessage",
+      "    foreground                   #ff0000",
+      "    background                   #000000",
+      "",
+      "  searchResult",
+      "    foreground                   #ffffff",
+      "    background                   #ff0000",
+      "",
+      "  visualMode",
+      "    foreground                   #ffffff",
+      "    background                   #800080",
+      "",
+      "  keyword",
+      "    foreground                   #87d7ff",
+      "    background                   #000000",
+      "",
+      "  functionName",
+      "    foreground                   #00b7ce",
+      "    background                   #000000",
+      "",
+      "  typeName",
+      "    foreground                   #00ffff",
+      "    background                   #000000",
+      "",
+      "  boolean",
+      "    foreground                   #add8e6",
+      "    background                   #000000",
+      "",
+      "  specialVar",
+      "    foreground                   #0090a8",
+      "    background                   #000000",
+      "",
+      "  builtin",
+      "    foreground                   #add8e6",
+      "    background                   #000000",
+      "",
+      "  stringLit",
+      "    foreground                   #add8e6",
+      "    background                   #000000",
+      "",
+      "  binNumber",
+      "    foreground                   #add8e6",
+      "    background                   #000000",
+      "",
+      "  decNumber",
+      "    foreground                   #add8e6",
+      "    background                   #000000",
+      "",
+      "  floatNumber",
+      "    foreground                   #add8e6",
+      "    background                   #000000",
+      "",
+      "  hexNumber",
+      "    foreground                   #add8e6",
+      "    background                   #000000",
+      "",
+      "  octNumber",
+      "    foreground                   #add8e6",
+      "    background                   #000000",
+      "",
+      "  comment",
+      "    foreground                   #808080",
+      "    background                   #000000",
+      "",
+      "  longComment",
+      "    foreground                   #808080",
+      "    background                   #000000",
+      "",
+      "  whitespace",
+      "    foreground                   #808080",
+      "    background                   #000000",
+      "",
+      "  preprocessor",
+      "    foreground                   #0090a8",
+      "    background                   #000000",
+      "",
+      "  pragma",
+      "    foreground                   #0090a8",
+      "    background                   #000000",
+      "",
+      "  currentFile",
+      "    foreground                   #ffffff",
+      "    background                   #09aefa",
+      "",
+      "  file",
+      "    foreground                   #ffffff",
+      "    background                   #000000",
+      "",
+      "  dir",
+      "    foreground                   #09aefa",
+      "    background                   #000000",
+      "",
+      "  pcLink",
+      "    foreground                   #008080",
+      "    background                   #000000",
+      "",
+      "  popupWindow",
+      "    foreground                   #ffffff",
+      "    background                   #000000",
+      "",
+      "  popupWinCurrentLine",
+      "    foreground                   #09aefa",
+      "    background                   #000000",
+      "",
+      "  replaceText",
+      "    foreground                   #ffffff",
+      "    background                   #ff0000",
+      "",
+      "  parenPair",
+      "    foreground                   #ffffff",
+      "    background                   #09aefa",
+      "",
+      "  currentWord",
+      "    foreground                   #ffffff",
+      "    background                   #808080",
+      "",
+      "  highlightFullWidthSpace",
+      "    foreground                   #ff0000",
+      "    background                   #ff0000",
+      "",
+      "  highlightTrailingSpaces",
+      "    foreground                   #ff0000",
+      "    background                   #ff0000",
+      "",
+      "  reservedWord",
+      "    foreground                   #ffffff",
+      "    background                   #808080",
+      "",
+      "  syntaxCheckInfo",
+      "    foreground                   #ffff00",
+      "    background                   #000000",
+      "",
+      "  syntaxCheckHint",
+      "    foreground                   #ffff00",
+      "    background                   #000000",
+      "",
+      "  syntaxCheckWarn",
+      "    foreground                   #ffff00",
+      "    background                   #000000",
+      "",
+      "  syntaxCheckErr",
+      "    foreground                   #ff0000",
+      "    background                   #000000",
+      "",
+      "  backupManagerCurrentLine",
+      "    foreground                   #ffffff",
+      "    background                   #008080",
+      "",
+      "  diffViewerAddedLine",
+      "    foreground                   #008000",
+      "    background                   #000000",
+      "",
+      "  diffViewerDeletedLine",
+      "    foreground                   #ff0000",
+      "    background                   #000000",
+      "",
+      "  configModeCurrentLine",
+      "    foreground                   #ffffff",
+      "    background                   #008080",
+      "",
+      "  currentLineBg",
+      "    foreground                   termDefautFg",
+      "    background                   #444444",
+      "",
+      "  sidebarGitAddedSign",
+      "    foreground                   #008000",
+      "    background                   #000000",
+      "",
+      "  sidebarGitDeletedSign",
+      "    foreground                   #ff0000",
+      "    background                   #000000",
+      "",
+      "  sidebarGitChangedSign",
+      "    foreground                   #ffff00",
+      "    background                   #000000",
+      "",
+      "  sidebarSyntaxCheckInfoSign",
+      "    foreground                   #ffff00",
+      "    background                   #000000",
+      "",
+      "  sidebarSyntaxCheckHintSign",
+      "    foreground                   #ffff00",
+      "    background                   #000000",
+      "",
+      "  sidebarSyntaxCheckWarnSign",
+      "    foreground                   #ffff00",
+      "    background                   #000000",
+      "",
+      "  sidebarSyntaxCheckErrSign",
+      "    foreground                   #ff0000",
+      "    background                   #000000",
+      ""
+    ].toSeqRunes
 
     for index, line in buffer:
-      check sample[index] == line
+      check Sample[index] == line
 
 # TODO: Should return bool.
 proc checkBoolSettingValue(default: bool, values: seq[seq[Rune]]) =
@@ -573,8 +584,8 @@ suite "Config mode: Get standard table setting values":
     var status = initEditorStatus()
     let settings = status.settings
 
-    const name = "theme"
-    let values = settings.getStandardTableSettingValues(name)
+    const Name = "theme"
+    let values = settings.getStandardTableSettingValues(Name)
 
     check values == @[ru"dark", ru"light",ru "vivid", ru"config", ru"vscode"]
 
@@ -582,8 +593,8 @@ suite "Config mode: Get standard table setting values":
     var status = initEditorStatus()
     let settings = status.settings
 
-    const name = "defaultCursor"
-    let values = settings.getStandardTableSettingValues(name)
+    const Name = "defaultCursor"
+    let values = settings.getStandardTableSettingValues(Name)
 
     check values == @[
       ru"terminalDefault",
@@ -596,8 +607,8 @@ suite "Config mode: Get standard table setting values":
     var status = initEditorStatus()
     let settings = status.settings
 
-    const name ="normalModeCursor"
-    let values = settings.getStandardTableSettingValues(name)
+    const Name ="normalModeCursor"
+    let values = settings.getStandardTableSettingValues(Name)
 
     check values == @[
       ru"blinkBlock",
@@ -610,8 +621,8 @@ suite "Config mode: Get standard table setting values":
     var status = initEditorStatus()
     let settings = status.settings
 
-    const name = "insertModeCursor"
-    let values = settings.getStandardTableSettingValues(name)
+    const Name = "insertModeCursor"
+    let values = settings.getStandardTableSettingValues(Name)
 
     check values == @[
       ru"blinkIbeam",
@@ -624,10 +635,10 @@ suite "Config mode: Get standard table setting values":
     var status = initEditorStatus()
     let settings = status.settings
 
-    const name = "number"
+    const Name = "number"
     let
       default = settings.view.lineNumber
-      values = settings.getStandardTableSettingValues(name)
+      values = settings.getStandardTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -635,10 +646,10 @@ suite "Config mode: Get standard table setting values":
     var status = initEditorStatus()
     let settings = status.settings
 
-    const name = "currentNumber"
+    const Name = "currentNumber"
     let
       default = settings.view.currentLineNumber
-      values = settings.getStandardTableSettingValues(name)
+      values = settings.getStandardTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -646,10 +657,10 @@ suite "Config mode: Get standard table setting values":
     var status = initEditorStatus()
     let settings = status.settings
 
-    const name = "cursorLine"
+    const Name = "cursorLine"
     let
       default = settings.view.cursorLine
-      values = settings.getStandardTableSettingValues(name)
+      values = settings.getStandardTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -657,10 +668,10 @@ suite "Config mode: Get standard table setting values":
     var status = initEditorStatus()
     let settings = status.settings
 
-    const name = "statusLine"
+    const Name = "statusLine"
     let
       default = settings.statusLine.enable
-      values = settings.getStandardTableSettingValues(name)
+      values = settings.getStandardTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -668,10 +679,10 @@ suite "Config mode: Get standard table setting values":
     var status = initEditorStatus()
     let settings = status.settings
 
-    const name = "tabLine"
+    const Name = "tabLine"
     let
       default = settings.tabLine.enable
-      values = settings.getStandardTableSettingValues(name)
+      values = settings.getStandardTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -679,10 +690,10 @@ suite "Config mode: Get standard table setting values":
     var status = initEditorStatus()
     let settings = status.settings
 
-    const name = "syntax"
+    const Name = "syntax"
     let
       default = settings.syntax
-      values = settings.getStandardTableSettingValues(name)
+      values = settings.getStandardTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -690,10 +701,10 @@ suite "Config mode: Get standard table setting values":
     var status = initEditorStatus()
     let settings = status.settings
 
-    const name = "indentationLines"
+    const Name = "indentationLines"
     let
       default = settings.view.indentationLines
-      values = settings.getStandardTableSettingValues(name)
+      values = settings.getStandardTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -701,10 +712,10 @@ suite "Config mode: Get standard table setting values":
     var status = initEditorStatus()
     let settings = status.settings
 
-    const name = "autoCloseParen"
+    const Name = "autoCloseParen"
     let
       default = settings.autoCloseParen
-      values = settings.getStandardTableSettingValues(name)
+      values = settings.getStandardTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -712,10 +723,10 @@ suite "Config mode: Get standard table setting values":
     var status = initEditorStatus()
     let settings = status.settings
 
-    const name = "autoIndent"
+    const Name = "autoIndent"
     let
       default = settings.autoIndent
-      values = settings.getStandardTableSettingValues(name)
+      values = settings.getStandardTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -723,10 +734,10 @@ suite "Config mode: Get standard table setting values":
     var status = initEditorStatus()
     let settings = status.settings
 
-    const name = "ignorecase"
+    const Name = "ignorecase"
     let
       default = settings.ignorecase
-      values = settings.getStandardTableSettingValues(name)
+      values = settings.getStandardTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -734,10 +745,10 @@ suite "Config mode: Get standard table setting values":
     var status = initEditorStatus()
     let settings = status.settings
 
-    const name = "smartcase"
+    const Name = "smartcase"
     let
       default = settings.smartcase
-      values = settings.getStandardTableSettingValues(name)
+      values = settings.getStandardTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -745,10 +756,10 @@ suite "Config mode: Get standard table setting values":
     var status = initEditorStatus()
     let settings = status.settings
 
-    const name = "disableChangeCursor"
+    const Name = "disableChangeCursor"
     let
       default = settings.disableChangeCursor
-      values = settings.getStandardTableSettingValues(name)
+      values = settings.getStandardTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -756,10 +767,10 @@ suite "Config mode: Get standard table setting values":
     var status = initEditorStatus()
     let settings = status.settings
 
-    const name = "autoSave"
+    const Name = "autoSave"
     let
       default = settings.autoSave
-      values = settings.getStandardTableSettingValues(name)
+      values = settings.getStandardTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -767,10 +778,10 @@ suite "Config mode: Get standard table setting values":
     var status = initEditorStatus()
     let settings = status.settings
 
-    const name = "liveReloadOfConf"
+    const Name = "liveReloadOfConf"
     let
       default = settings.liveReloadOfConf
-      values = settings.getStandardTableSettingValues(name)
+      values = settings.getStandardTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -778,10 +789,10 @@ suite "Config mode: Get standard table setting values":
     var status = initEditorStatus()
     let settings = status.settings
 
-    const name = "incrementalSearch"
+    const Name = "incrementalSearch"
     let
       default = settings.incrementalSearch
-      values = settings.getStandardTableSettingValues(name)
+      values = settings.getStandardTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -789,10 +800,10 @@ suite "Config mode: Get standard table setting values":
     var status = initEditorStatus()
     let settings = status.settings
 
-    const name = "popupWindowInExmode"
+    const Name = "popupWindowInExmode"
     let
       default = settings.popupWindowInExmode
-      values = settings.getStandardTableSettingValues(name)
+      values = settings.getStandardTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -800,10 +811,10 @@ suite "Config mode: Get standard table setting values":
     var status = initEditorStatus()
     let settings = status.settings
 
-    const name = "autoDeleteParen"
+    const Name = "autoDeleteParen"
     let
       default = settings.autoDeleteParen
-      values = settings.getStandardTableSettingValues(name)
+      values = settings.getStandardTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -811,10 +822,10 @@ suite "Config mode: Get standard table setting values":
     var status = initEditorStatus()
     let settings = status.settings
 
-    const name = "smoothScroll"
+    const Name = "smoothScroll"
     let
       default = settings.smoothScroll
-      values = settings.getStandardTableSettingValues(name)
+      values = settings.getStandardTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -829,12 +840,12 @@ suite "Config mode: Get standard table setting values":
 
     check values == @[ru"24bit", ru"none", ru"8", ru"16", ru"256"]
 
-  test "Set invalid name":
+  test "Set invalid Name":
     var status = initEditorStatus()
     let settings = status.settings
 
-    const name = "test"
-    let values = settings.getStandardTableSettingValues(name)
+    const Name = "test"
+    let values = settings.getStandardTableSettingValues(Name)
 
     check values.len == 0
 
@@ -843,10 +854,10 @@ suite "Config mode: Get ClipBoard table setting values":
     var status = initEditorStatus()
     let clipboardSettings = status.settings.clipboard
 
-    const name = "enable"
+    const Name = "enable"
     let
       default = clipboardSettings.enable
-      values = clipboardSettings.getClipboardTableSettingsValues(name)
+      values = clipboardSettings.getClipboardTableSettingsValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -855,10 +866,10 @@ suite "Config mode: Get ClipBoard table setting values":
     status.settings.clipboard.toolOnLinux = ClipboardToolOnLinux.none
     let clipboardSettings = status.settings.clipboard
 
-    const name = "toolOnLinux"
+    const Name = "toolOnLinux"
     let
       default = clipboardSettings.toolOnLinux
-      values = clipboardSettings.getClipboardTableSettingsValues(name)
+      values = clipboardSettings.getClipboardTableSettingsValues(Name)
 
     check $default == $values[0]
 
@@ -867,10 +878,10 @@ suite "Config mode: Get BuildOnSave table setting values":
     var status = initEditorStatus()
     let buildOnSaveSettings = status.settings.buildOnSave
 
-    const name = "enable"
+    const Name = "enable"
     let
       default = buildOnSaveSettings.enable
-      values = buildOnSaveSettings.getBuildOnSaveTableSettingValues(name)
+      values = buildOnSaveSettings.getBuildOnSaveTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -878,10 +889,10 @@ suite "Config mode: Get BuildOnSave table setting values":
     var status = initEditorStatus()
     let buildOnSaveSettings = status.settings.buildOnSave
 
-    const name = "workspaceRoot"
+    const Name = "workspaceRoot"
     let
       default = buildOnSaveSettings.workspaceRoot
-      values = buildOnSaveSettings.getBuildOnSaveTableSettingValues(name)
+      values = buildOnSaveSettings.getBuildOnSaveTableSettingValues(Name)
 
     check default == values[0]
 
@@ -889,19 +900,19 @@ suite "Config mode: Get BuildOnSave table setting values":
     var status = initEditorStatus()
     let buildOnSaveSettings = status.settings.buildOnSave
 
-    const name = "command"
+    const Name = "command"
     let
       default = buildOnSaveSettings.command
-      values = buildOnSaveSettings.getBuildOnSaveTableSettingValues(name)
+      values = buildOnSaveSettings.getBuildOnSaveTableSettingValues(Name)
 
     check default == values[0]
 
-  test "Set invalid name":
+  test "Set invalid Name":
     var status = initEditorStatus()
     let buildOnSaveSettings = status.settings.buildOnSave
 
-    const name = "test"
-    let values = buildOnSaveSettings.getBuildOnSaveTableSettingValues(name)
+    const Name = "test"
+    let values = buildOnSaveSettings.getBuildOnSaveTableSettingValues(Name)
 
     check values.len == 0
 
@@ -910,19 +921,19 @@ suite "Config mode: Get TabLine table setting values":
     var status = initEditorStatus()
     let tablineSettings = status.settings.tabLine
 
-    const name = "allBuffer"
+    const Name = "allBuffer"
     let
       default = tablineSettings.allBuffer
-      values = tablineSettings.getTabLineTableSettingValues(name)
+      values = tablineSettings.getTabLineTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
-  test "Set invalid name":
+  test "Set invalid Name":
     var status = initEditorStatus()
     let tablineSettings = status.settings.tabLine
 
-    const name = "test"
-    let values = tablineSettings.getTabLineTableSettingValues(name)
+    const Name = "test"
+    let values = tablineSettings.getTabLineTableSettingValues(Name)
 
     check values.len == 0
 
@@ -931,10 +942,10 @@ suite "Config mode: Get StatusLine table setting values":
     var status = initEditorStatus()
     let statusLineSettings = status.settings.statusLine
 
-    const name = "multipleStatusLine"
+    const Name = "multipleStatusLine"
     let
       default = statusLineSettings.multipleStatusLine
-      values = statusLineSettings.getStatusLineTableSettingValues(name)
+      values = statusLineSettings.getStatusLineTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -942,10 +953,10 @@ suite "Config mode: Get StatusLine table setting values":
     var status = initEditorStatus()
     let statusLineSettings = status.settings.statusLine
 
-    const name = "merge"
+    const Name = "merge"
     let
       default = statusLineSettings.merge
-      values = statusLineSettings.getStatusLineTableSettingValues(name)
+      values = statusLineSettings.getStatusLineTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -953,21 +964,21 @@ suite "Config mode: Get StatusLine table setting values":
     var status = initEditorStatus()
     let statusLineSettings = status.settings.statusLine
 
-    const name = "mode"
+    const Name = "mode"
     let
       default = statusLineSettings.mode
-      values = statusLineSettings.getStatusLineTableSettingValues(name)
+      values = statusLineSettings.getStatusLineTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
-  test "Get filename values":
+  test "Get fileName values":
     var status = initEditorStatus()
     let statusLineSettings = status.settings.statusLine
 
-    const name = "filename"
+    const Name = "filename"
     let
-      default = statusLineSettings.filename
-      values = statusLineSettings.getStatusLineTableSettingValues(name)
+      default = statusLineSettings.fileName
+      values = statusLineSettings.getStatusLineTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -975,10 +986,10 @@ suite "Config mode: Get StatusLine table setting values":
     var status = initEditorStatus()
     let statusLineSettings = status.settings.statusLine
 
-    const name = "chanedMark"
+    const Name = "chanedMark"
     let
       default = statusLineSettings.chanedMark
-      values = statusLineSettings.getStatusLineTableSettingValues(name)
+      values = statusLineSettings.getStatusLineTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -986,10 +997,10 @@ suite "Config mode: Get StatusLine table setting values":
     var status = initEditorStatus()
     let statusLineSettings = status.settings.statusLine
 
-    const name = "line"
+    const Name = "line"
     let
       default = statusLineSettings.line
-      values = statusLineSettings.getStatusLineTableSettingValues(name)
+      values = statusLineSettings.getStatusLineTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -997,10 +1008,10 @@ suite "Config mode: Get StatusLine table setting values":
     var status = initEditorStatus()
     let statusLineSettings = status.settings.statusLine
 
-    const name = "column"
+    const Name = "column"
     let
       default = statusLineSettings.column
-      values = statusLineSettings.getStatusLineTableSettingValues(name)
+      values = statusLineSettings.getStatusLineTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1008,10 +1019,10 @@ suite "Config mode: Get StatusLine table setting values":
     var status = initEditorStatus()
     let statusLineSettings = status.settings.statusLine
 
-    const name = "encoding"
+    const Name = "encoding"
     let
       default = statusLineSettings.characterEncoding
-      values = statusLineSettings.getStatusLineTableSettingValues(name)
+      values = statusLineSettings.getStatusLineTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1019,10 +1030,10 @@ suite "Config mode: Get StatusLine table setting values":
     var status = initEditorStatus()
     let statusLineSettings = status.settings.statusLine
 
-    const name = "language"
+    const Name = "language"
     let
       default = statusLineSettings.language
-      values = statusLineSettings.getStatusLineTableSettingValues(name)
+      values = statusLineSettings.getStatusLineTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1030,10 +1041,10 @@ suite "Config mode: Get StatusLine table setting values":
     var status = initEditorStatus()
     let statusLineSettings = status.settings.statusLine
 
-    const name = "directory"
+    const Name = "directory"
     let
       default = statusLineSettings.directory
-      values = statusLineSettings.getStatusLineTableSettingValues(name)
+      values = statusLineSettings.getStatusLineTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1041,10 +1052,10 @@ suite "Config mode: Get StatusLine table setting values":
     var status = initEditorStatus()
     let statusLineSettings = status.settings.statusLine
 
-    const name = "gitChangedLines"
+    const Name = "gitChangedLines"
     let
       default = statusLineSettings.gitChangedLines
-      values = statusLineSettings.getStatusLineTableSettingValues(name)
+      values = statusLineSettings.getStatusLineTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1052,10 +1063,10 @@ suite "Config mode: Get StatusLine table setting values":
     var status = initEditorStatus()
     let statusLineSettings = status.settings.statusLine
 
-    const name = "gitBranchName"
+    const Name = "gitBranchName"
     let
       default = statusLineSettings.gitBranchName
-      values = statusLineSettings.getStatusLineTableSettingValues(name)
+      values = statusLineSettings.getStatusLineTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1063,10 +1074,10 @@ suite "Config mode: Get StatusLine table setting values":
     var status = initEditorStatus()
     let statusLineSettings = status.settings.statusLine
 
-    const name = "showGitInactive"
+    const Name = "showGitInactive"
     let
       default = statusLineSettings.showGitInactive
-      values = statusLineSettings.getStatusLineTableSettingValues(name)
+      values = statusLineSettings.getStatusLineTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1074,19 +1085,19 @@ suite "Config mode: Get StatusLine table setting values":
     var status = initEditorStatus()
     let statusLineSettings = status.settings.statusLine
 
-    const name = "showModeInactive"
+    const Name = "showModeInactive"
     let
       default = statusLineSettings.showModeInactive
-      values = statusLineSettings.getStatusLineTableSettingValues(name)
+      values = statusLineSettings.getStatusLineTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
-  test "Set invalid name":
+  test "Set invalid Name":
     var status = initEditorStatus()
     let statusLineSettings = status.settings.statusLine
 
-    const name = "test"
-    let values = statusLineSettings.getStatusLineTableSettingValues(name)
+    const Name = "test"
+    let values = statusLineSettings.getStatusLineTableSettingValues(Name)
 
     check values.len == 0
 
@@ -1095,10 +1106,10 @@ suite "Config mode: Get Highlight table setting values":
     var status = initEditorStatus()
     let settings = status.settings
 
-    const name = "currentLine"
+    const Name = "currentLine"
     let
       default = settings.view.highlightCurrentLine
-      values = settings.getHighlightTableSettingValues(name)
+      values = settings.getHighlightTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1106,10 +1117,10 @@ suite "Config mode: Get Highlight table setting values":
     var status = initEditorStatus()
     let settings = status.settings
 
-    const name = "fullWidthSpace"
+    const Name = "fullWidthSpace"
     let
       default = settings.highlight.fullWidthSpace
-      values = settings.getHighlightTableSettingValues(name)
+      values = settings.getHighlightTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1117,10 +1128,10 @@ suite "Config mode: Get Highlight table setting values":
     var status = initEditorStatus()
     let settings = status.settings
 
-    const name = "trailingSpaces"
+    const Name = "trailingSpaces"
     let
       default = settings.highlight.trailingSpaces
-      values = settings.getHighlightTableSettingValues(name)
+      values = settings.getHighlightTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1128,10 +1139,10 @@ suite "Config mode: Get Highlight table setting values":
     var status = initEditorStatus()
     let settings = status.settings
 
-    const name = "currentWord"
+    const Name = "currentWord"
     let
       default = settings.highlight.currentWord
-      values = settings.getHighlightTableSettingValues(name)
+      values = settings.getHighlightTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1139,10 +1150,10 @@ suite "Config mode: Get Highlight table setting values":
     var status = initEditorStatus()
     let settings = status.settings
 
-    const name = "replaceText"
+    const Name = "replaceText"
     let
       default = settings.highlight.replaceText
-      values = settings.getHighlightTableSettingValues(name)
+      values = settings.getHighlightTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1150,19 +1161,19 @@ suite "Config mode: Get Highlight table setting values":
     var status = initEditorStatus()
     let settings = status.settings
 
-    const name = "pairOfParen"
+    const Name = "pairOfParen"
     let
       default = settings.highlight.pairOfParen
-      values = settings.getHighlightTableSettingValues(name)
+      values = settings.getHighlightTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
-  test "Set invalid name":
+  test "Set invalid Name":
     var status = initEditorStatus()
     let settings = status.settings
 
-    const name = "test"
-    let values = settings.getHighlightTableSettingValues(name)
+    const Name = "test"
+    let values = settings.getHighlightTableSettingValues(Name)
 
     check values.len == 0
 
@@ -1172,13 +1183,13 @@ suite "Config mode: Get AutoBackup table setting values":
     let autoBackupSettings = status.settings.autoBackup
 
     const
-      name = "enable"
-      settingType = SettingType.Bool
+      Name = "enable"
+      SettingType = SettingType.Bool
     let
       default = autoBackupSettings.enable
       values = autoBackupSettings.getAutoBackupTableSettingValues(
-        name,
-        settingType)
+        Name,
+        SettingType)
 
     checkBoolSettingValue(default, values)
 
@@ -1187,26 +1198,26 @@ suite "Config mode: Get AutoBackup table setting values":
     let autoBackupSettings = status.settings.autoBackup
 
     const
-      name = "backupDir"
-      settingType = SettingType.String
+      Name = "backupDir"
+      SettingType = SettingType.String
     let
       default = autoBackupSettings.backupDir
       values = autoBackupSettings.getAutoBackupTableSettingValues(
-        name,
-        settingType)
+        Name,
+        SettingType)
 
     check default == values[0]
 
-  test "Set invalid name":
+  test "Set invalid Name":
     var status = initEditorStatus()
     let autoBackupSettings = status.settings.autoBackup
 
     const
-      name = "test"
-      settingType = SettingType.None
+      Name = "test"
+      SettingType = SettingType.None
     let values = autoBackupSettings.getAutoBackupTableSettingValues(
-      name,
-      settingType)
+      Name,
+      SettingType)
 
     check values.len == 0
 
@@ -1216,11 +1227,11 @@ suite "Config mode: Get QuickRun table setting values":
     let quickRunSettings = status.settings.quickRun
 
     const
-      name = "saveBufferWhenQuickRun"
-      settingType = SettingType.Bool
+      Name = "saveBufferWhenQuickRun"
+      SettingType = SettingType.Bool
     let
       default = quickRunSettings.saveBufferWhenQuickRun
-      values = quickRunSettings.getQuickRunTableSettingValues(name, settingType)
+      values = quickRunSettings.getQuickRunTableSettingValues(Name, SettingType)
 
     checkBoolSettingValue(default, values)
 
@@ -1229,11 +1240,11 @@ suite "Config mode: Get QuickRun table setting values":
     let quickRunSettings = status.settings.quickRun
 
     const
-      name = "nimAdvancedCommand"
-      settingType = SettingType.String
+      Name = "nimAdvancedCommand"
+      SettingType = SettingType.String
     let
       default = ru quickRunSettings.nimAdvancedCommand
-      values = quickRunSettings.getQuickRunTableSettingValues(name, settingType)
+      values = quickRunSettings.getQuickRunTableSettingValues(Name, SettingType)
 
     check default == values[0]
 
@@ -1242,11 +1253,11 @@ suite "Config mode: Get QuickRun table setting values":
     let quickRunSettings = status.settings.quickRun
 
     const
-      name = "clangOptions"
-      settingType = SettingType.String
+      Name = "clangOptions"
+      SettingType = SettingType.String
     let
       default = ru quickRunSettings.clangOptions
-      values = quickRunSettings.getQuickRunTableSettingValues(name, settingType)
+      values = quickRunSettings.getQuickRunTableSettingValues(Name, SettingType)
 
     check default == values[0]
 
@@ -1255,11 +1266,11 @@ suite "Config mode: Get QuickRun table setting values":
     let quickRunSettings = status.settings.quickRun
 
     const
-      name = "cppOptions"
-      settingType = SettingType.String
+      Name = "cppOptions"
+      SettingType = SettingType.String
     let
       default = ru quickRunSettings.cppOptions
-      values = quickRunSettings.getQuickRunTableSettingValues(name, settingType)
+      values = quickRunSettings.getQuickRunTableSettingValues(Name, SettingType)
 
     check default == values[0]
 
@@ -1268,11 +1279,11 @@ suite "Config mode: Get QuickRun table setting values":
     let quickRunSettings = status.settings.quickRun
 
     const
-      name = "nimOptions"
-      settingType = SettingType.String
+      Name = "nimOptions"
+      SettingType = SettingType.String
     let
       default = ru quickRunSettings.nimOptions
-      values = quickRunSettings.getQuickRunTableSettingValues(name, settingType)
+      values = quickRunSettings.getQuickRunTableSettingValues(Name, SettingType)
 
     check default == values[0]
 
@@ -1281,11 +1292,11 @@ suite "Config mode: Get QuickRun table setting values":
     let quickRunSettings = status.settings.quickRun
 
     const
-      name = "shOptions"
-      settingType = SettingType.String
+      Name = "shOptions"
+      SettingType = SettingType.String
     let
       default = ru quickRunSettings.shOptions
-      values = quickRunSettings.getQuickRunTableSettingValues(name, settingType)
+      values = quickRunSettings.getQuickRunTableSettingValues(Name, SettingType)
 
     check default == values[0]
 
@@ -1294,22 +1305,22 @@ suite "Config mode: Get QuickRun table setting values":
     let quickRunSettings = status.settings.quickRun
 
     const
-      name = "bashOptions"
-      settingType = SettingType.String
+      Name = "bashOptions"
+      SettingType = SettingType.String
     let
       default = ru quickRunSettings.bashOptions
-      values = quickRunSettings.getQuickRunTableSettingValues(name, settingType)
+      values = quickRunSettings.getQuickRunTableSettingValues(Name, SettingType)
 
     check default == values[0]
 
-  test "Set invalid name":
+  test "Set invalid Name":
     var status = initEditorStatus()
     let quickRunSettings = status.settings.quickRun
 
     const
-      name = "test"
-      settingType = SettingType.None
-    let values = quickRunSettings.getQuickRunTableSettingValues(name, settingType)
+      Name = "test"
+      SettingType = SettingType.None
+    let values = quickRunSettings.getQuickRunTableSettingValues(Name, SettingType)
 
     check values.len == 0
 
@@ -1318,10 +1329,10 @@ suite "Config mode: Get Notification table setting values":
     var status = initEditorStatus()
     let notificationSettings = status.settings.notification
 
-    const name = "screenNotifications"
+    const Name = "screenNotifications"
     let
       default = notificationSettings.screenNotifications
-      values = notificationSettings.getNotificationTableSettingValues(name)
+      values = notificationSettings.getNotificationTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1329,10 +1340,10 @@ suite "Config mode: Get Notification table setting values":
     var status = initEditorStatus()
     let notificationSettings = status.settings.notification
 
-    const name = "logNotifications"
+    const Name = "logNotifications"
     let
       default = notificationSettings.logNotifications
-      values = notificationSettings.getNotificationTableSettingValues(name)
+      values = notificationSettings.getNotificationTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1340,10 +1351,10 @@ suite "Config mode: Get Notification table setting values":
     var status = initEditorStatus()
     let notificationSettings = status.settings.notification
 
-    const name = "autoBackupScreenNotify"
+    const Name = "autoBackupScreenNotify"
     let
       default = notificationSettings.autoBackupScreenNotify
-      values = notificationSettings.getNotificationTableSettingValues(name)
+      values = notificationSettings.getNotificationTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1351,10 +1362,10 @@ suite "Config mode: Get Notification table setting values":
     var status = initEditorStatus()
     let notificationSettings = status.settings.notification
 
-    const name = "autoBackupLogNotify"
+    const Name = "autoBackupLogNotify"
     let
       default = notificationSettings.autoBackupLogNotify
-      values = notificationSettings.getNotificationTableSettingValues(name)
+      values = notificationSettings.getNotificationTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1362,10 +1373,10 @@ suite "Config mode: Get Notification table setting values":
     var status = initEditorStatus()
     let notificationSettings = status.settings.notification
 
-    const name = "autoSaveScreenNotify"
+    const Name = "autoSaveScreenNotify"
     let
       default = notificationSettings.autoSaveScreenNotify
-      values = notificationSettings.getNotificationTableSettingValues(name)
+      values = notificationSettings.getNotificationTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1373,10 +1384,10 @@ suite "Config mode: Get Notification table setting values":
     var status = initEditorStatus()
     let notificationSettings = status.settings.notification
 
-    const name = "autoSaveLogNotify"
+    const Name = "autoSaveLogNotify"
     let
       default = notificationSettings.autoSaveLogNotify
-      values = notificationSettings.getNotificationTableSettingValues(name)
+      values = notificationSettings.getNotificationTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1384,10 +1395,10 @@ suite "Config mode: Get Notification table setting values":
     var status = initEditorStatus()
     let notificationSettings = status.settings.notification
 
-    const name = "yankScreenNotify"
+    const Name = "yankScreenNotify"
     let
       default = notificationSettings.yankScreenNotify
-      values = notificationSettings.getNotificationTableSettingValues(name)
+      values = notificationSettings.getNotificationTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1395,10 +1406,10 @@ suite "Config mode: Get Notification table setting values":
     var status = initEditorStatus()
     let notificationSettings = status.settings.notification
 
-    const name = "yankLogNotify"
+    const Name = "yankLogNotify"
     let
       default = notificationSettings.yankLogNotify
-      values = notificationSettings.getNotificationTableSettingValues(name)
+      values = notificationSettings.getNotificationTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1406,10 +1417,10 @@ suite "Config mode: Get Notification table setting values":
     var status = initEditorStatus()
     let notificationSettings = status.settings.notification
 
-    const name = "deleteScreenNotify"
+    const Name = "deleteScreenNotify"
     let
       default = notificationSettings.deleteScreenNotify
-      values = notificationSettings.getNotificationTableSettingValues(name)
+      values = notificationSettings.getNotificationTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1417,10 +1428,10 @@ suite "Config mode: Get Notification table setting values":
     var status = initEditorStatus()
     let notificationSettings = status.settings.notification
 
-    const name = "deleteLogNotify"
+    const Name = "deleteLogNotify"
     let
       default = notificationSettings.deleteLogNotify
-      values = notificationSettings.getNotificationTableSettingValues(name)
+      values = notificationSettings.getNotificationTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1428,10 +1439,10 @@ suite "Config mode: Get Notification table setting values":
     var status = initEditorStatus()
     let notificationSettings = status.settings.notification
 
-    const name = "saveScreenNotify"
+    const Name = "saveScreenNotify"
     let
       default = notificationSettings.saveScreenNotify
-      values = notificationSettings.getNotificationTableSettingValues(name)
+      values = notificationSettings.getNotificationTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1439,10 +1450,10 @@ suite "Config mode: Get Notification table setting values":
     var status = initEditorStatus()
     let notificationSettings = status.settings.notification
 
-    const name = "saveLogNotify"
+    const Name = "saveLogNotify"
     let
       default = notificationSettings.saveLogNotify
-      values = notificationSettings.getNotificationTableSettingValues(name)
+      values = notificationSettings.getNotificationTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1450,10 +1461,10 @@ suite "Config mode: Get Notification table setting values":
     var status = initEditorStatus()
     let notificationSettings = status.settings.notification
 
-    const name = "quickRunScreenNotify"
+    const Name = "quickRunScreenNotify"
     let
       default = notificationSettings.quickRunScreenNotify
-      values = notificationSettings.getNotificationTableSettingValues(name)
+      values = notificationSettings.getNotificationTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1461,10 +1472,10 @@ suite "Config mode: Get Notification table setting values":
     var status = initEditorStatus()
     let notificationSettings = status.settings.notification
 
-    const name = "quickRunLogNotify"
+    const Name = "quickRunLogNotify"
     let
       default = notificationSettings.quickRunLogNotify
-      values = notificationSettings.getNotificationTableSettingValues(name)
+      values = notificationSettings.getNotificationTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1472,10 +1483,10 @@ suite "Config mode: Get Notification table setting values":
     var status = initEditorStatus()
     let notificationSettings = status.settings.notification
 
-    const name = "buildOnSaveScreenNotify"
+    const Name = "buildOnSaveScreenNotify"
     let
       default = notificationSettings.buildOnSaveScreenNotify
-      values = notificationSettings.getNotificationTableSettingValues(name)
+      values = notificationSettings.getNotificationTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1483,10 +1494,10 @@ suite "Config mode: Get Notification table setting values":
     var status = initEditorStatus()
     let notificationSettings = status.settings.notification
 
-    const name = "buildOnSaveLogNotify"
+    const Name = "buildOnSaveLogNotify"
     let
       default = notificationSettings.buildOnSaveLogNotify
-      values = notificationSettings.getNotificationTableSettingValues(name)
+      values = notificationSettings.getNotificationTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1494,10 +1505,10 @@ suite "Config mode: Get Notification table setting values":
     var status = initEditorStatus()
     let notificationSettings = status.settings.notification
 
-    const name = "filerScreenNotify"
+    const Name = "filerScreenNotify"
     let
       default = notificationSettings.filerScreenNotify
-      values = notificationSettings.getNotificationTableSettingValues(name)
+      values = notificationSettings.getNotificationTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1505,10 +1516,10 @@ suite "Config mode: Get Notification table setting values":
     var status = initEditorStatus()
     let notificationSettings = status.settings.notification
 
-    const name = "filerLogNotify"
+    const Name = "filerLogNotify"
     let
       default = notificationSettings.filerLogNotify
-      values = notificationSettings.getNotificationTableSettingValues(name)
+      values = notificationSettings.getNotificationTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1516,10 +1527,10 @@ suite "Config mode: Get Notification table setting values":
     var status = initEditorStatus()
     let notificationSettings = status.settings.notification
 
-    const name = "restoreScreenNotify"
+    const Name = "restoreScreenNotify"
     let
       default = notificationSettings.restoreScreenNotify
-      values = notificationSettings.getNotificationTableSettingValues(name)
+      values = notificationSettings.getNotificationTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1527,19 +1538,19 @@ suite "Config mode: Get Notification table setting values":
     var status = initEditorStatus()
     let notificationSettings = status.settings.notification
 
-    const name = "restoreLogNotify"
+    const Name = "restoreLogNotify"
     let
       default = notificationSettings.restoreLogNotify
-      values = notificationSettings.getNotificationTableSettingValues(name)
+      values = notificationSettings.getNotificationTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
-  test "Set invalid name":
+  test "Set invalid Name":
     var status = initEditorStatus()
     let notificationSettings = status.settings.notification
 
-    const name = "test"
-    let values = notificationSettings.getNotificationTableSettingValues(name)
+    const Name = "test"
+    let values = notificationSettings.getNotificationTableSettingValues(Name)
 
     check values.len == 0
 
@@ -1548,19 +1559,19 @@ suite "Config mode: Get Filer table setting values":
     var status = initEditorStatus()
     let filerSettings = status.settings.filer
 
-    const name = "showIcons"
+    const Name = "showIcons"
     let
       default = filerSettings.showIcons
-      values = filerSettings.getFilerTableSettingValues(name)
+      values = filerSettings.getFilerTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
-  test "Set invalid name":
+  test "Set invalid Name":
     var status = initEditorStatus()
     let filerSettings = status.settings.filer
 
-    const name = "test"
-    let values = filerSettings.getFilerTableSettingValues(name)
+    const Name = "test"
+    let values = filerSettings.getFilerTableSettingValues(Name)
 
     check values.len == 0
 
@@ -1569,19 +1580,19 @@ suite "Config mode: Get Autocomplete table setting values":
     var status = initEditorStatus()
     let autocompleteSettings = status.settings.autocomplete
 
-    const name = "enable"
+    const Name = "enable"
     let
       default = autocompleteSettings.enable
-      values = autocompleteSettings.getAutocompleteTableSettingValues(name)
+      values = autocompleteSettings.getAutocompleteTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
 
-  test "Set invalid name":
+  test "Set invalid Name":
     var status = initEditorStatus()
     let autocompleteSettings = status.settings.autocomplete
 
-    const name = "test"
-    let values = autocompleteSettings.getAutocompleteTableSettingValues(name)
+    const Name = "test"
+    let values = autocompleteSettings.getAutocompleteTableSettingValues(Name)
 
     check values.len == 0
 
@@ -1590,10 +1601,10 @@ suite "Config mode: Get Persist table setting values":
     var status = initEditorStatus()
     let persistSettings = status.settings.persist
 
-    const name = "exCommand"
+    const Name = "exCommand"
     let
       default = persistSettings.exCommand
-      values = persistSettings.getPersistTableSettingsValues(name)
+      values = persistSettings.getPersistTableSettingsValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1601,10 +1612,10 @@ suite "Config mode: Get Persist table setting values":
     var status = initEditorStatus()
     let persistSettings = status.settings.persist
 
-    const name = "exCommandHistoryLimit"
+    const Name = "exCommandHistoryLimit"
     let
       default = persistSettings.exCommandHistoryLimit
-      values = persistSettings.getPersistTableSettingsValues(name)
+      values = persistSettings.getPersistTableSettingsValues(Name)
 
     check default == values[0].parseInt
 
@@ -1612,10 +1623,10 @@ suite "Config mode: Get Persist table setting values":
     var status = initEditorStatus()
     let persistSettings = status.settings.persist
 
-    const name = "search"
+    const Name = "search"
     let
       default = persistSettings.exCommand
-      values = persistSettings.getPersistTableSettingsValues(name)
+      values = persistSettings.getPersistTableSettingsValues(Name)
 
     checkBoolSettingValue(default, values)
 
@@ -1623,10 +1634,10 @@ suite "Config mode: Get Persist table setting values":
     var status = initEditorStatus()
     let persistSettings = status.settings.persist
 
-    const name = "searchHistoryLimit"
+    const Name = "searchHistoryLimit"
     let
       default = persistSettings.searchHistoryLimit
-      values = persistSettings.getPersistTableSettingsValues(name)
+      values = persistSettings.getPersistTableSettingsValues(Name)
 
     check default == values[0].parseInt
 
@@ -1634,19 +1645,19 @@ suite "Config mode: Get Persist table setting values":
     var status = initEditorStatus()
     let persistSettings = status.settings.persist
 
-    const name = "cursorPosition"
+    const Name = "cursorPosition"
     let
       default = persistSettings.cursorPosition
-      values = persistSettings.getPersistTableSettingsValues(name)
+      values = persistSettings.getPersistTableSettingsValues(Name)
 
     checkBoolSettingValue(default, values)
 
-  test "Set invalid name":
+  test "Set invalid Name":
     var status = initEditorStatus()
     let persistSettings = status.settings.persist
 
-    const name = "test"
-    let values = persistSettings.getPersistTableSettingsValues(name)
+    const Name = "test"
+    let values = persistSettings.getPersistTableSettingsValues(Name)
 
     check values.len == 0
 
@@ -1669,7 +1680,7 @@ suite "Config mode: Get Git table setting values":
 
     check @[ru"1000"] == values
 
-  test "Invalid name":
+  test "Invalid Name":
     let s = initGitSettings()
 
     const Name = "test"
@@ -1986,15 +1997,15 @@ suite "Config mode: Chaging StatusLine table settings":
 
     check val == statusLineSettings.mode
 
-  test "Chaging filename":
+  test "Chaging fileName":
     var
       settings = initEditorSettings()
       statusLineSettings = settings.statusLine
 
-    let val = not statusLineSettings.filename
+    let val = not statusLineSettings.fileName
     statusLineSettings.changeStatusLineTableSetting("filename", $val)
 
-    check val == statusLineSettings.filename
+    check val == statusLineSettings.fileName
 
   test "Chaging chanedMark":
     var
@@ -2554,34 +2565,34 @@ suite "Config mode: Change Theme table settings":
 suite "Config mode: Get BuildOnSave table setting type":
   test "Get enable setting type":
     const
-      table= "BuildOnSave"
-      name = "enable"
+      Table = "BuildOnSave"
+      Name = "enable"
 
-    const settingType = getSettingType(table, name)
+    let settingType = getSettingType(Table, Name)
     check settingType == SettingType.Bool
 
   test "Get workspaceRoot setting type":
     const
-      table = "BuildOnSave"
-      name = "workspaceRoot"
+      Table = "BuildOnSave"
+      Name = "workspaceRoot"
 
-    const settingType = getSettingType(table, name)
+    let settingType = getSettingType(Table, Name)
     check settingType == SettingType.String
 
   test "Get command setting type":
     const
-      table = "BuildOnSave"
-      name = "command"
+      Table = "BuildOnSave"
+      Name = "command"
 
-    const settingType = getSettingType(table, name)
+    let settingType = getSettingType(Table, Name)
     check settingType == SettingType.String
 
-  test "Set invalid name":
+  test "Set invalid Name":
     const
-      table = "BuildOnSave"
-      name = "test"
+      Table = "BuildOnSave"
+      Name = "test"
 
-    const settingType = getSettingType(table, name)
+    let settingType = getSettingType(Table, Name)
     check settingType == SettingType.None
 
 suite "Config mode: getColorModeSettingValues":

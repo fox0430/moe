@@ -91,6 +91,7 @@ proc replaceCurrentCharacter(
 proc undoOrMoveCursor(bufStatus: var BufferStatus, windowNode: var WindowNode) =
   # Can undo until you enter Replace mode
   # Do not undo if the cursor is moved and re-enable undo if the character is replaced
+
   if bufStatus.buffer.lastSuitId > undoLastSuitId.get:
     bufStatus.undo(windowNode)
   else:

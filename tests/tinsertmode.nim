@@ -41,10 +41,11 @@ suite "Insert mode":
     status.resize(10, 10)
 
     for i in 0..<100:
-      insertCharacter(status.bufStatus[0],
-                      currentMainWindowNode,
-                      status.settings.autoCloseParen,
-                      ru'a')
+      insertCharacter(
+        status.bufStatus[0],
+        currentMainWindowNode,
+        status.settings.autoCloseParen,
+        ru'a')
 
     status.update
 
@@ -289,17 +290,18 @@ suite "Insert mode":
 
     check currentMainWindowNode.currentColumn == 3
 
-  proc prepareInsertMode(buffer: openArray[string],
-                         line, column, height, width: int): EditorStatus =
+  proc prepareInsertMode(
+    buffer: openArray[string],
+    line, column, height, width: int): EditorStatus =
 
-    result = initEditorStatus()
-    result.settings.view.sidebar = false
-    result.addNewBufferInCurrentWin(Mode.insert)
-    result.bufStatus[0].buffer = initGapBuffer(buffer.map(s => s.ru))
-    result.mainWindow.currentMainWindowNode.currentLine = line
-    result.mainWindow.currentMainWindowNode.currentColumn = column
-    result.resize(height, width)
-    result.update
+      result = initEditorStatus()
+      result.settings.view.sidebar = false
+      result.addNewBufferInCurrentWin(Mode.insert)
+      result.bufStatus[0].buffer = initGapBuffer(buffer.map(s => s.ru))
+      result.mainWindow.currentMainWindowNode.currentLine = line
+      result.mainWindow.currentMainWindowNode.currentColumn = column
+      result.resize(height, width)
+      result.update
 
   test "General-purpose autocomplete window position 1":
     const buffer = @["a", "aba", "abb", "abc", "abd", "abe", "abf"]
@@ -341,11 +343,12 @@ suite "Insert mode":
     const
       buffer = @["aba", "abb", "abc", "abcd", "", "a"]
       terminalHeight = 10
-    var status = prepareInsertMode(buffer,
-                                   buffer.high,
-                                   1,
-                                   terminalHeight,
-                                   100)
+    var status = prepareInsertMode(
+      buffer,
+      buffer.high,
+      1,
+      terminalHeight,
+      100)
 
     var dictionary: WordDictionary
     let currentBufferIndex =currentMainWindowNode.bufferIndex
@@ -418,10 +421,11 @@ suite "Insert mode":
      100,
      100)
 
-    insertCharacter(currentBufStatus,
-                    currentMainWindowNode,
-                    status.settings.autoCloseParen,
-                    ru'a')
+    insertCharacter(
+      currentBufStatus,
+      currentMainWindowNode,
+      status.settings.autoCloseParen,
+      ru'a')
 
     var dictionary: WordDictionary
     let currentBufferIndex =currentMainWindowNode.bufferIndex
@@ -434,9 +438,10 @@ suite "Insert mode":
 
     status.update
 
-    suggestionWindow.get.handleKeyInSuggestionWindow(currentBufStatus,
-                                                     currentMainWindowNode,
-                                                     ru'\t')
+    suggestionWindow.get.handleKeyInSuggestionWindow(
+      currentBufStatus,
+      currentMainWindowNode,
+      ru'\t')
 
     check currentMainWindowNode.currentLine == 0
 
@@ -449,10 +454,11 @@ suite "Insert mode":
       100,
       100)
 
-    insertCharacter(currentBufStatus,
-                    currentMainWindowNode,
-                    status.settings.autoCloseParen,
-                    ru'a')
+    insertCharacter(
+      currentBufStatus,
+      currentMainWindowNode,
+      status.settings.autoCloseParen,
+      ru'a')
 
     var dictionary: WordDictionary
     let currentBufferIndex =currentMainWindowNode.bufferIndex

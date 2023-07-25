@@ -34,7 +34,7 @@ type
     theme   # color.colorTheme
 
 # TODO: Auto inserts spaces in compile time.
-const exCommandList: array[63, tuple[command, description: string, argsType: ArgsType]] = [
+const ExCommandList: array[63, tuple[command, description: string, argsType: ArgsType]] = [
   (command: "!", description: "                    | Shell command execution", argsType: ArgsType.none),
   (command: "deleteParen", description: "          | Enable/Disable auto delete paren", argsType: ArgsType.toggle),
   (command: "b", description: "                    | Change the buffer with the given number", argsType: ArgsType.number),
@@ -141,15 +141,15 @@ proc askDeleteBackupPrompt*(
 
 proc askFileChangedSinceReading*(commndLine: var CommandLine): bool =
   block:
-    const mess = "WARNING: The file has been changed since reading it!: Press any key"
-    commndLine.write(mess.toRunes)
-    addMessageLog mess.toRunes
+    const Mess = "WARNING: The file has been changed since reading it!: Press any key"
+    commndLine.write(Mess.toRunes)
+    addMessageLog Mess.toRunes
     discard commndLine.getKey
 
   block:
-    const mess = "Do you really want to write to it: y/n ?"
-    commndLine.write(mess.toRunes)
-    addMessageLog mess.toRunes
+    const Mess = "Do you really want to write to it: y/n ?"
+    commndLine.write(Mess.toRunes)
+    addMessageLog Mess.toRunes
     let key = commndLine.getKey
 
     if key == ord('y'): result = true
@@ -250,13 +250,13 @@ proc getCandidatesFilePath*(buffer: Runes): seq[string] =
 proc isExCommand*(buffer: string): bool =
   let bufferSplited = strutils.splitWhitespace(buffer)
   if bufferSplited.len > 0:
-    for c in exCommandList:
+    for c in ExCommandList:
       if bufferSplited[0] == c.command:
         return true
 
 proc getCandidatesExCommand*(commandLineBuffer: Runes): seq[Runes] =
   let buffer = toLowerAscii($commandLineBuffer)
-  for list in exCommandList:
+  for list in ExCommandList:
     let cmd = list.command
     if cmd.len >= buffer.len and cmd.startsWith(buffer):
       result.add(cmd.toRunes)
@@ -314,7 +314,7 @@ proc initSuggestBuffer*(
             result.add(path)
       of exCommand:
         # Add command description
-        for list in exCommandList:
+        for list in ExCommandList:
           for l in suggestList:
             if $l == list.command:
               result.add l & list.description.ru
@@ -402,9 +402,9 @@ proc calcXWhenSuggestPath*(buffer, inputPath: Runes): int =
       else:
         0
 
-  const promptAndSpaceWidth = 2
+  const PromptAndSpaceWidth = 2
   let command = buffer.firstArg
-  return command.len + promptAndSpaceWidth + positionInInputPath
+  return command.len + PromptAndSpaceWidth + positionInInputPath
 
 proc calcPopUpWindowSize*(
   buffer: seq[Runes]): tuple[h: int, w: int] =

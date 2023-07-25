@@ -27,8 +27,9 @@ type
     forward = 0
     backward = 1
 
-## Return true If the text matches.
 proc compare(rune, sub: Runes, isIgnorecase, isSmartcase: bool): bool =
+  ## Return true If the text matches.
+
   if isIgnorecase and not isSmartcase:
     if cmpIgnoreCase($rune, $sub) == 0: return true
   elif isSmartcase and isIgnorecase:
@@ -39,11 +40,11 @@ proc compare(rune, sub: Runes, isIgnorecase, isSmartcase: bool): bool =
   else:
     return rune == sub
 
-## Return a position in a line if a keyword matches.
 proc searchLine(
   line: Runes,
   keyword: Runes,
   isIgnorecase, isSmartcase: bool): Option[int] =
+    ## Return a position in a line if a keyword matches.
 
     for startPostion in 0 .. (line.len - keyword.len):
       let
@@ -53,11 +54,11 @@ proc searchLine(
       if compare(runes, keyword, isIgnorecase, isSmartcase):
         return startPostion.some
 
-## Return a position in a line if a keyword matches.
 proc searchLineReversely(
   line: Runes,
   keyword: Runes,
   isIgnorecase, isSmartcase: bool): Option[int] =
+    ## Return a position in a line if a keyword matches.
 
     for startPostion in countdown((line.len - keyword.len), 0):
       let
@@ -67,12 +68,12 @@ proc searchLineReversely(
       if compare(runes, keyword, isIgnorecase, isSmartcase):
         return startPostion.some
 
-## Return a buffer position if a keyword matches.
 proc searchBuffer*(
   bufStatus: BufferStatus,
   windowNode: WindowNode,
   keyword: Runes,
   isIgnorecase, isSmartcase: bool): Option[SearchResult] =
+    ## Return a buffer position if a keyword matches.
 
     let startLine = windowNode.currentLine
     for i in 0 ..< bufStatus.buffer.len:
@@ -95,12 +96,12 @@ proc searchBuffer*(
       if position.isSome:
         return SearchResult(line: lineNumber, column: first + position.get).some
 
-## Return a buffer position if a keyword matches.
 proc searchBufferReversely*(
   bufStatus: BufferStatus,
   windowNode: WindowNode,
   keyword: Runes,
   isIgnorecase, isSmartcase: bool): Option[SearchResult] =
+    ## Return a buffer position if a keyword matches.
 
     let
       startLine = windowNode.currentLine
@@ -124,11 +125,11 @@ proc searchBufferReversely*(
       if position.isSome:
         return SearchResult(line: lineNumber, column: position.get).some
 
-## Return a buffer position if a keyword matches.
 proc searchAllOccurrence*(
   buffer: GapBuffer[Runes],
   keyword: Runes,
   isIgnorecase, isSmartcase: bool): seq[SearchResult] =
+    ## Return a buffer position if a keyword matches.
 
     if keyword.len < 1: return
 
@@ -149,12 +150,12 @@ proc searchAllOccurrence*(
         result.add SearchResult(line: lineNumber, column: first + position.get)
         first += position.get + keyword.len
 
-## Save a keyword to the searchHistory.
-## If the size exceeds the limit, the oldest will be deleted.
 proc saveSearchHistory*(
   searchHistory: var seq[Runes],
   keyword: Runes,
   limit: int) =
+    ## Save a keyword to the searchHistory.
+    ## If the size exceeds the limit, the oldest will be deleted.
 
     if limit < 1 or keyword.len == 0: return
 
@@ -176,12 +177,12 @@ proc assertRange(range: BufferRange) =
   doAssert range.last.line >= 0
   doAssert range.first.line >= 0
 
-## If `parenPosition` is an opening paren,
-## search for the corresponding closing paren and return its position.
 proc searchClosingParen(
   bufStatus: BufferStatus,
   range: BufferRange,
   openParen: Rune): Option[SearchResult] =
+    ## If `parenPosition` is an opening paren,
+    ## search for the corresponding closing paren and return its position.
 
     when not defined(release): range.assertRange
 
@@ -211,12 +212,12 @@ proc searchClosingParen(
         if depth == 0:
           return SearchResult(line: i, column: j).some
 
-## If `parenPosition` is an closing paren,
-## Search for the corresponding opening paren and return its position.
 proc searchOpeningParen(
   bufStatus: BufferStatus,
   range: BufferRange,
   closeParen: Rune): Option[SearchResult] =
+    ## If `parenPosition` is an closing paren,
+    ## Search for the corresponding opening paren and return its position.
 
     when not defined(release): range.assertRange
 
@@ -246,11 +247,11 @@ proc searchOpeningParen(
         if depth == 0:
           return SearchResult(line: i, column: j).some
 
-## Return a position of the corresponding pair of paren.
 proc matchingParenPair*(
   bufStatus: BufferStatus,
   range: BufferRange,
   paren: Rune): Option[SearchResult] =
+    ## Return a position of the corresponding pair of paren.
 
     if bufStatus.buffer.high < range.first.line: return
 
@@ -259,12 +260,12 @@ proc matchingParenPair*(
     elif isCloseParen(paren):
       return bufStatus.searchOpeningParen(range, paren)
 
-## Return a position of the corresponding pair of paren.
-## Search from the `parenPosition` to the end or the buffer (if opening paren) or
-## The first of the buffer (if closing paren).
 proc matchingParenPair*(
   bufStatus: BufferStatus,
   parenPosition: BufferPosition): Option[SearchResult] =
+    ## Return a position of the corresponding pair of paren.
+    ## Search from the `parenPosition` to the end or the buffer (if opening paren) or
+    ## The first of the buffer (if closing paren).
 
     if bufStatus.buffer[parenPosition.line].len < 1: return
 
