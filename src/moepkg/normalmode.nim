@@ -98,7 +98,7 @@ proc searchOneCharacterToBeginOfLine(
 proc searchHistoryLimit(status: EditorStatus): int {.inline.} =
   status.settings.persist.searchHistoryLimit
 
-proc searchNextOccurrence(status: var EditorStatus, keyword: seq[Rune]) =
+proc searchNextOccurrence(status: var EditorStatus, keyword: Runes) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
 
   status.isSearchHighlight = true
@@ -137,7 +137,7 @@ proc searchNextOccurrence(status: var EditorStatus) =
 
 proc searchNextOccurrenceReversely(
   status: var EditorStatus,
-  keyword: seq[Rune]) =
+  keyword: Runes) =
 
     status.isSearchHighlight = true
 
@@ -383,7 +383,7 @@ proc showCurrentCharInfoCommand(
 
     status.commandLine.writeCurrentCharInfo(currentChar)
 
-proc normalCommand(status: var EditorStatus, commands: seq[Rune])
+proc normalCommand(status: var EditorStatus, commands: Runes)
 
 proc repeatNormalModeCommand(status: var EditorStatus) =
   if status.normalCommandHistory.len == 0: return
@@ -1061,7 +1061,7 @@ proc pasteFromRegister(status: var EditorStatus, command, name: string) =
     else:
       discard
 
-proc registerCommand(status: var EditorStatus, command: seq[Rune]) =
+proc registerCommand(status: var EditorStatus, command: Runes) =
   var
     numberStr = ""
     currentIndex = 2
@@ -1163,7 +1163,7 @@ proc changeModeToSearchBackwardMode(
     commandLine.clear
     commandLine.setPrompt(SearchBackwardModePrompt)
 
-proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
+proc normalCommand(status: var EditorStatus, commands: Runes) =
   if commands.len == 0:
     return
   elif isControlC(commands[^1]):
@@ -1435,7 +1435,7 @@ proc normalCommand(status: var EditorStatus, commands: seq[Rune]) =
      not isChangeModeKey(commands[0]):
     status.normalCommandHistory.add commands
 
-proc isNormalModeCommand*(command: seq[Rune]): InputState =
+proc isNormalModeCommand*(command: Runes): InputState =
   result = InputState.Invalid
 
   if command.len == 0:

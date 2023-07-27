@@ -23,7 +23,7 @@ import moepkg/[osext, unicodeext]
 suite "osext: isPath":
   # Generate test code
   # Check return values of suggestionwindow.isPath
-  macro isPathTest(testIndex: int, expectVal: bool, line: seq[Rune]): untyped =
+  macro isPathTest(testIndex: int, expectVal: bool, line: Runes): untyped =
     quote do:
       let testTitle = "Case " & $`testIndex` & ": " & $`line`
 
@@ -31,7 +31,7 @@ suite "osext: isPath":
       test testTitle:
         check `expectVal` == isPath(`line`)
 
-  const TestCases: seq[tuple[expectVal: bool, line: seq[Rune]]] = @[
+  const TestCases: seq[tuple[expectVal: bool, line: Runes]] = @[
     (expectVal: true, line: "/".ru),
     (expectVal: true, line: "/h".ru),
     (expectVal: true, line: "/home/".ru),
@@ -52,8 +52,8 @@ suite "osext: splitPathExt":
   # Check return values of suggestionwindow.splitPathExtTest
   macro splitPathExtTest(
     testIndex: int,
-    expectVal: tuple[head, tail: seq[Rune]],
-    path: seq[Rune]): untyped =
+    expectVal: tuple[head, tail: Runes],
+    path: Runes): untyped =
 
     quote do:
       let testTitle = "Case " & $`testIndex` & ": " & $`path`

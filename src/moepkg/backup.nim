@@ -28,11 +28,11 @@ type
 proc initAutoBackupStatus*(): AutoBackupStatus {.inline.} =
   result.lastBackupTime = now()
 
-template backupInfoJsonPath(backupDir: seq[Rune]): seq[Rune] =
+template backupInfoJsonPath(backupDir: Runes): Runes =
   backupDir / "backup.json".toRunes
 
 # Return true if already exists or create dir successfully.
-proc createDir(dir: seq[Rune]): bool =
+proc createDir(dir: Runes): bool =
   if dirExists($dir):
     return true
   else:
@@ -49,7 +49,7 @@ proc validateBackupInfoJson*(jsonNode: JsonNode): bool =
 
 # Return path of backupDir.
 # Return empty Runes if error or isn't exist.
-proc getBackupDir*(baseBackupDir, sourceFilePath: seq[Rune]): seq[Rune] =
+proc getBackupDir*(baseBackupDir, sourceFilePath: Runes): Runes =
   if not dirExists($baseBackupDir):
     return "".toRunes
 
@@ -88,7 +88,7 @@ template isPcFile*(f: tuple[kind: PathComponent, path: string]): bool =
   f.kind == PathComponent.pcFile
 
 # `sourceFilePath` is need to absolute path.
-proc getBackupFiles*(baseBackupDir, sourceFilePath: seq[Rune]): seq[seq[Rune]] =
+proc getBackupFiles*(baseBackupDir, sourceFilePath: Runes): seq[Runes] =
   let backupDir = backupDir($baseBackupDir, $sourceFilePath)
   if dirExists(backupDir):
     for f in walkDir(backupDir):
@@ -98,7 +98,7 @@ proc getBackupFiles*(baseBackupDir, sourceFilePath: seq[Rune]): seq[seq[Rune]] =
 
 # Return path of backupDir.
 # Create dirs for base dir and for the backup source.
-proc initBackupDir(baseBackupDir, sourceFilePath: seq[Rune]): seq[Rune]=
+proc initBackupDir(baseBackupDir, sourceFilePath: Runes): Runes =
   if createDir(baseBackupDir):
     let backupDir = getBackupDir(baseBackupDir, sourceFilePath)
     if backupDir.len > 0:
@@ -116,10 +116,10 @@ proc initBackupDir(baseBackupDir, sourceFilePath: seq[Rune]): seq[Rune]=
       return backupDir
 
 # Return the filename for the backup.
-template genFilename(): seq[Rune] = now().toRunes
+template genFilename(): Runes = now().toRunes
 
 # Return true if the buffer changed after the previous backup.
-proc diff(baseBackupDir, sourceFilePath: seq[Rune], buffer: string): bool =
+proc diff(baseBackupDir, sourceFilePath: Runes, buffer: string): bool =
   const FORMAT = "yyyy-MM-dd\'T\'HH:mm:sszzz"
   var mostRecentFile = ""
 
@@ -140,7 +140,7 @@ proc diff(baseBackupDir, sourceFilePath: seq[Rune], buffer: string): bool =
 
 # Return if successful.
 proc writeBackupFile(
-  path, buffer: seq[Rune],
+  path, buffer: Runes,
   encoding: CharacterEncoding): bool =
 
     try:
@@ -152,7 +152,7 @@ proc writeBackupFile(
 
 # Return true if successful.
 # Save json file for backup info in the same dir of backup files.
-proc writeBackupInfoJson(backupDir, sourceFilePath: seq[Rune]): bool =
+proc writeBackupInfoJson(backupDir, sourceFilePath: Runes): bool =
   # `path` is the absolute path of backup source file.
   let jsonNode = %* { "path": $sourceFilePath }
 

@@ -109,8 +109,8 @@ type
 
   BuildOnSaveSettings* = object
     enable*: bool
-    workspaceRoot*: seq[Rune]
-    command*: seq[Rune]
+    workspaceRoot*: Runes
+    command*: Runes
 
   QuickRunSettings* = object
     saveBufferWhenQuickRun*: bool
@@ -127,8 +127,8 @@ type
     enable*: bool
     idleTime*: int # seconds
     interval*: int # minutes
-    backupDir*: seq[Rune]
-    dirToExclude*: seq[seq[Rune]]
+    backupDir*: Runes
+    dirToExclude*: seq[Runes]
 
   FilerSettings* = object
     showIcons*: bool

@@ -439,7 +439,7 @@ proc moveToPairOfParen*(
 proc jumpToSearchForwardResults*(
   bufStatus: var BufferStatus,
   windowNode: var WindowNode,
-  keyword: seq[Rune],
+  keyword: Runes,
   isIgnorecase, isSmartcase: bool) =
 
     let searchResult = bufStatus.searchBuffer(
@@ -456,7 +456,7 @@ proc jumpToSearchForwardResults*(
 proc jumpToSearchBackwordResults*(
   bufStatus: var BufferStatus,
   windowNode: var WindowNode,
-  keyword: seq[Rune],
+  keyword: Runes,
   isIgnorecase, isSmartcase: bool) =
 
     let searchResult = bufStatus.searchBufferReversely(

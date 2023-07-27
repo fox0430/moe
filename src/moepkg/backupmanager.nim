@@ -24,7 +24,7 @@ import editorstatus, bufferstatus, unicodeext, ui, movement, gapbuffer,
        highlight, settings, messages, backup, fileutils, editorview,
        windownode, commandlineutils, backupmanagerutils
 
-template baseBackupDir*(status: EditorStatus): seq[Rune] =
+template baseBackupDir*(status: EditorStatus): Runes =
   status.settings.autoBackup.backupDir
 
 # Create an new window and open the diff viewer.
@@ -57,7 +57,7 @@ proc openDiffViewer(status: var EditorStatus, sourceFilePath: string) =
 # the filename is the curent line.
 proc restoreBackupFile(
   status: var EditorStatus,
-  sourceFilePath: seq[Rune],
+  sourceFilePath: Runes,
   isForceRestore: bool) =
 
     if not fileExists($sourceFilePath): return
@@ -123,7 +123,7 @@ proc restoreBackupFile(
 
 template restoreBackupFile(
   status: var EditorStatus,
-  sourceFilePath: seq[Rune]) =
+  sourceFilePath: Runes) =
 
     const IS_FORCE_RESTORE = false
     status.restoreBackupFile(sourceFilePath, IS_FORCE_RESTORE)
@@ -132,7 +132,7 @@ template restoreBackupFile(
 # the filename is the curent line.
 proc removeBackupFile(
   status: var EditorStatus,
-  sourceFilePath: seq[Rune],
+  sourceFilePath: Runes,
   isForceRemove: bool) =
 
     let
@@ -159,7 +159,7 @@ proc removeBackupFile(
       $backupFilename,
       settings)
 
-template removeBackupFile(status: var EditorStatus, sourceFilePath: seq[Rune]) =
+template removeBackupFile(status: var EditorStatus, sourceFilePath: Runes) =
   const IS_FORCE_REMOVE = false
   status.removeBackupFile(sourceFilePath, IS_FORCE_REMOVE)
 

@@ -17,11 +17,11 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[options, strutils, unicode]
-import independentutils, clipboard, settings
+import std/[options, strutils]
+import independentutils, clipboard, settings, unicodeext
 
 type Register* = object
-  buffer*: seq[seq[Rune]]
+  buffer*: seq[Runes]
   isLine*: bool
   name*: string
 
@@ -58,7 +58,7 @@ proc addRegister(
 
 proc addRegister*(
   registers: var Registers,
-  buffer: seq[Rune],
+  buffer: Runes,
   settings: EditorSettings) =
 
     let r = Register(buffer: @[buffer], isLine: false)
@@ -67,7 +67,7 @@ proc addRegister*(
 
 proc addRegister*(
   registers: var Registers,
-  buffer: seq[Rune],
+  buffer: Runes,
   isLine: bool,
   settings: EditorSettings) =
 
@@ -77,7 +77,7 @@ proc addRegister*(
 
 proc addRegister*(
   registers: var Registers,
-  buffer: seq[seq[Rune]],
+  buffer: seq[Runes],
   settings: EditorSettings) =
 
     let r = Register(buffer: buffer, isLine: true)
@@ -86,7 +86,7 @@ proc addRegister*(
 
 proc addRegister*(
   registers: var Registers,
-  buffer: seq[seq[Rune]],
+  buffer: seq[Runes],
   isLine: bool,
   settings: EditorSettings) =
 
@@ -96,7 +96,7 @@ proc addRegister*(
 
 proc addRegister*(
   registers: var Registers,
-  buffer: seq[Rune],
+  buffer: Runes,
   isLine, isDelete: bool,
   settings: EditorSettings) =
 
@@ -105,7 +105,7 @@ proc addRegister*(
 
 proc addRegister*(
   registers: var Registers,
-  buffer: seq[seq[Rune]],
+  buffer: seq[Runes],
   isLine, isDelete: bool,
   settings: EditorSettings) =
 
@@ -139,7 +139,7 @@ proc addRegister(
 
 proc addRegister*(
   registers: var Registers,
-  buffer: seq[Rune],
+  buffer: Runes,
   name: string,
   settings: EditorSettings) =
     ## Add/Overwrite the named register
@@ -150,7 +150,7 @@ proc addRegister*(
 
 proc addRegister*(
   registers: var Registers,
-  buffer: seq[Rune],
+  buffer: Runes,
   isLine: bool,
   name: string,
   settings: EditorSettings) =
@@ -161,7 +161,7 @@ proc addRegister*(
 
 proc addRegister*(
   registers: var Registers,
-  buffer: seq[seq[Rune]],
+  buffer: seq[Runes],
   name: string,
   settings: EditorSettings) =
 
@@ -171,7 +171,7 @@ proc addRegister*(
 
 proc addRegister*(
   registers: var Registers,
-  buffer: seq[seq[Rune]],
+  buffer: seq[Runes],
   isLine: bool,
   name: string,
   settings: EditorSettings) =

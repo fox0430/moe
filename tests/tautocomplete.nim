@@ -104,8 +104,8 @@ suite "autocomplete: extractNeighborPath":
   # Check return values of suggestionwindow.isPath
   macro extractNeighborPathTest(
     testIndex: int,
-    expectVal: Option[tuple[path: seq[Rune], first, last: int]],
-    text: seq[Rune],
+    expectVal: Option[tuple[path: Runes, first, last: int]],
+    text: Runes,
     position: int): untyped =
 
     quote do:
@@ -116,8 +116,8 @@ suite "autocomplete: extractNeighborPath":
         check `expectVal` == extractNeighborPath(`text`, `position`)
 
   const
-    testCases: seq[tuple[expectVal: Option[tuple[path: seq[Rune], first, last: int]], text: seq[Rune], position: int]] = @[
-      (expectVal: none(tuple[path: seq[Rune], first, last: int]), text: "".ru, position: 0),
+    testCases: seq[tuple[expectVal: Option[tuple[path: Runes, first, last: int]], text: Runes, position: int]] = @[
+      (expectVal: none(tuple[path: Runes, first, last: int]), text: "".ru, position: 0),
       (expectVal: some((path: "/home".ru, first: 0, last: "/home".ru.high)), text: "/home".ru, position: 0),
       (expectVal: some((path: "/home/user/".ru, first: 0, last: "/home/user/".ru.high)), text: "/home/user/".ru, position: 0),
       (expectVal: some((path: "../test".ru, first: 0, last: "../test".ru.high)), text: "../test".ru, position: 0),
@@ -133,7 +133,7 @@ suite "autocomplete: getPathList":
   block:
     # Generate test code
     # Check return values of suggestionwindow.getPathList
-    macro getPathListTest(testIndex: int, expectVal, path: seq[Rune]): untyped =
+    macro getPathListTest(testIndex: int, expectVal, path: Runes): untyped =
       quote do:
         let testTitle = "Case :" & $`testIndex` & $`path`
 
@@ -141,7 +141,7 @@ suite "autocomplete: getPathList":
         test testTitle:
           check `expectVal` == getPathList(`path`)
 
-    const testCases: seq[tuple[expectVal, path: seq[Rune]]] = @[
+    const testCases: seq[tuple[expectVal, path: Runes]] = @[
       (expectVal: "moerc.toml ".ru, path: "./example/".ru),
       (expectVal: "moerc.toml ".ru, path: "./example/m".ru)]
 

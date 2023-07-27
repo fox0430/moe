@@ -189,7 +189,7 @@ proc getColorThemeSettingValues(currentVal: ColorTheme): seq[Runes] =
     if theme != currentVal:
       result.add ru $theme
 
-proc getCursorTypeSettingValues(currentVal: CursorType): seq[seq[Rune]] =
+proc getCursorTypeSettingValues(currentVal: CursorType): seq[Runes] =
   result.add ru $currentVal
   for cursorType in CursorType:
     if $cursorType != $currentVal:
@@ -203,7 +203,7 @@ proc getColorModeSettingValues(currentVal: ColorMode): seq[Runes] =
       result.add c.toRunes
 
 proc getStandardTableSettingValues(settings: EditorSettings,
-                                   name: string): seq[seq[Rune]] =
+                                   name: string): seq[Runes] =
   if name == "theme":
     let theme = settings.editorColorTheme
     result = getColorThemeSettingValues(theme)
@@ -271,7 +271,7 @@ proc getStandardTableSettingValues(settings: EditorSettings,
       result = @[ru "false", ru "true"]
 
 proc getClipboardTableSettingsValues(settings: ClipboardSettings,
-                                     name: string): seq[seq[Rune]] =
+                                     name: string): seq[Runes] =
 
   case name:
     of "enable":
@@ -290,7 +290,7 @@ proc getClipboardTableSettingsValues(settings: ClipboardSettings,
       return
 
 proc getBuildOnSaveTableSettingValues(settings: BuildOnSaveSettings,
-                                      name: string): seq[seq[Rune]] =
+                                      name: string): seq[Runes] =
 
   case name:
     of "enable":
@@ -307,7 +307,7 @@ proc getBuildOnSaveTableSettingValues(settings: BuildOnSaveSettings,
       return
 
 proc getTabLineTableSettingValues(settings: TabLineSettings,
-                                  name: string): seq[seq[Rune]] =
+                                  name: string): seq[Runes] =
 
   var currentVal: bool
   case name:
@@ -322,7 +322,7 @@ proc getTabLineTableSettingValues(settings: TabLineSettings,
     result = @[ru "false", ru "true"]
 
 proc getStatusLineTableSettingValues(settings: StatusLineSettings,
-                                     name: string): seq[seq[Rune]] =
+                                     name: string): seq[Runes] =
 
   var currentVal: bool
   case name:
@@ -363,7 +363,7 @@ proc getStatusLineTableSettingValues(settings: StatusLineSettings,
     result = @[ru "false", ru "true"]
 
 proc getHighlightTableSettingValues(settings: EditorSettings,
-                                    name: string): seq[seq[Rune]] =
+                                    name: string): seq[Runes] =
 
   var currentVal: bool
   case name:
@@ -389,7 +389,7 @@ proc getHighlightTableSettingValues(settings: EditorSettings,
 
 proc getAutoBackupTableSettingValues(settings: AutoBackupSettings,
                                      name: string,
-                                     settingType: SettingType): seq[seq[Rune]] =
+                                     settingType: SettingType): seq[Runes] =
 
   case name:
     of "enable":
@@ -405,7 +405,7 @@ proc getAutoBackupTableSettingValues(settings: AutoBackupSettings,
 
 proc getQuickRunTableSettingValues(settings: QuickRunSettings,
                                    name: string,
-                                   settingType: SettingType): seq[seq[Rune]] =
+                                   settingType: SettingType): seq[Runes] =
 
   case name:
     of "saveBufferWhenQuickRun":
@@ -430,7 +430,7 @@ proc getQuickRunTableSettingValues(settings: QuickRunSettings,
       return
 
 proc getNotificationTableSettingValues(settings: NotificationSettings,
-                                       name: string): seq[seq[Rune]] =
+                                       name: string): seq[Runes] =
 
   var currentVal: bool
   case name:
@@ -483,7 +483,7 @@ proc getNotificationTableSettingValues(settings: NotificationSettings,
     result = @[ru "false", ru "true"]
 
 proc getFilerTableSettingValues(settings: FilerSettings,
-                                name: string): seq[seq[Rune]] =
+                                name: string): seq[Runes] =
 
   var currentVal: bool
   case name:
@@ -498,7 +498,7 @@ proc getFilerTableSettingValues(settings: FilerSettings,
     result = @[ru "false", ru "true"]
 
 proc getAutocompleteTableSettingValues(settings: AutocompleteSettings,
-                                       name: string): seq[seq[Rune]] =
+                                       name: string): seq[Runes] =
 
   var currentVal: bool
   case name:
@@ -513,7 +513,7 @@ proc getAutocompleteTableSettingValues(settings: AutocompleteSettings,
     result = @[ru "false", ru "true"]
 
 proc getPersistTableSettingsValues(settings: PersistSettings,
-                                   name: string): seq[seq[Rune]] =
+                                   name: string): seq[Runes] =
 
   case name:
     of "exCommand", "search", "cursorPosition":
@@ -567,7 +567,7 @@ proc getSyntaxCheckerTableSettingsValues(
 
 proc getSettingValues(settings: EditorSettings,
                       settingType: SettingType,
-                      table, name, position: string): seq[seq[Rune]] =
+                      table, name, position: string): seq[Runes] =
 
   case table:
     of "Standard":
@@ -609,12 +609,12 @@ proc getSettingValues(settings: EditorSettings,
     else:
       discard
 
-proc maxLen(list: seq[seq[Rune]]): int =
+proc maxLen(list: seq[Runes]): int =
   for r in list:
     if r.len > result:
       result = r.len + 2
 
-proc getTableName(buffer: GapBuffer[seq[Rune]], line: int): string =
+proc getTableName(buffer: GapBuffer[Runes], line: int): string =
   # Search table name from configuration mode buffer
   for i in countdown(line, 0):
     if buffer[i].len > 0 and buffer[i][0] != ru ' ':
@@ -1256,8 +1256,8 @@ proc getSettingType(table, name: string): SettingType =
     of "Theme":
       return SettingType.String
 
-proc getEditorColorPairIndexStr(buffer: GapBuffer[seq[Rune]],
-                             lineSplit: seq[seq[Rune]],
+proc getEditorColorPairIndexStr(buffer: GapBuffer[Runes],
+                             lineSplit: seq[Runes],
                              currentLine: int): string =
 
   if (lineSplit[0] == ru "foreground") or
@@ -1266,7 +1266,7 @@ proc getEditorColorPairIndexStr(buffer: GapBuffer[seq[Rune]],
   else:
     return $(buffer[currentLine - 2].splitWhitespace)[0]
 
-proc getSettingType(buffer: GapBuffer[seq[Rune]],
+proc getSettingType(buffer: GapBuffer[Runes],
                     currentLine: int): SettingType =
 
   let
@@ -1618,9 +1618,9 @@ proc editStringSetting(status: var EditorStatus,
         discard
 
 proc editEnumAndBoolSettings(status: var EditorStatus,
-                             lineSplit: seq[seq[Rune]],
+                             lineSplit: seq[Runes],
                              selectedTable, selectedSetting: string,
-                             settingValues: seq[seq[Rune]]) =
+                             settingValues: seq[Runes]) =
 
   const
     margin = 1
@@ -1706,7 +1706,7 @@ proc selectAndChangeEditorSettings(status: var EditorStatus, arrayIndex: int) =
                                      selectedSetting,
                                      settingValues)
 
-proc initStandardTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
+proc initStandardTableBuffer(settings: EditorSettings): seq[Runes] =
   result.add(ru"Standard")
 
   for name in standardTableNames:
@@ -1771,7 +1771,7 @@ proc initStandardTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
       of "colorMode":
         result.add(ru nameStr & space & settings.colorMode.toConfigStr)
 
-proc initClipBoardTableBuffer(settings: ClipboardSettings): seq[seq[Rune]] =
+proc initClipBoardTableBuffer(settings: ClipboardSettings): seq[Runes] =
   result.add(ru"ClipBoard")
 
   for name in clipboardTableNames:
@@ -1784,7 +1784,7 @@ proc initClipBoardTableBuffer(settings: ClipboardSettings): seq[seq[Rune]] =
       of "toolOnLinux":
         result.add(ru nameStr & space & $settings.toolOnLinux)
 
-proc initBuildOnSaveTableBuffer(settings: BuildOnSaveSettings): seq[seq[Rune]] =
+proc initBuildOnSaveTableBuffer(settings: BuildOnSaveSettings): seq[Runes] =
   result.add(ru"BuildOnSave")
 
   for name in buildOnSaveTableNames:
@@ -1799,7 +1799,7 @@ proc initBuildOnSaveTableBuffer(settings: BuildOnSaveSettings): seq[seq[Rune]] =
       of "command":
         result.add(ru nameStr & space & $settings.command)
 
-proc initTabLineTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
+proc initTabLineTableBuffer(settings: EditorSettings): seq[Runes] =
   result.add(ru"TabLine")
 
   for name in tabLineTableNames:
@@ -1810,7 +1810,7 @@ proc initTabLineTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
       of "allBuffer":
         result.add(ru nameStr & space & $settings.tabLine.allBuffer)
 
-proc initStatusLineTableBuffer(settings: StatusLineSettings): seq[seq[Rune]] =
+proc initStatusLineTableBuffer(settings: StatusLineSettings): seq[Runes] =
   result.add(ru"StatusLine")
 
   for name in statusLineTableNames:
@@ -1847,7 +1847,7 @@ proc initStatusLineTableBuffer(settings: StatusLineSettings): seq[seq[Rune]] =
       of "showModeInactive":
         result.add(ru nameStr & space & $settings.showModeInactive)
 
-proc initHighlightTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
+proc initHighlightTableBuffer(settings: EditorSettings): seq[Runes] =
   result.add(ru"Highlight")
 
   for name in highlightTableNames:
@@ -1874,7 +1874,7 @@ proc initHighlightTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
 
         result.add line
 
-proc initAutoBackupTableBuffer(settings: AutoBackupSettings): seq[seq[Rune]] =
+proc initAutoBackupTableBuffer(settings: AutoBackupSettings): seq[Runes] =
   result.add(ru"AutoBackup")
 
   for name in autoBackupTableNames:
@@ -1893,7 +1893,7 @@ proc initAutoBackupTableBuffer(settings: AutoBackupSettings): seq[seq[Rune]] =
       of "dirToExclude":
         result.add(ru nameStr & space & $settings.dirToExclude)
 
-proc initQuickRunTableBuffer(settings: QuickRunSettings): seq[seq[Rune]] =
+proc initQuickRunTableBuffer(settings: QuickRunSettings): seq[Runes] =
   result.add(ru"QuickRun")
 
   for name in quickRunTableNames:
@@ -1921,7 +1921,7 @@ proc initQuickRunTableBuffer(settings: QuickRunSettings): seq[seq[Rune]] =
         result.add(ru nameStr & space & $settings.bashOptions)
 
 proc initNotificationTableBuffer(
-  settings: NotificationSettings): seq[seq[Rune]] =
+  settings: NotificationSettings): seq[Runes] =
 
   result.add(ru"Notification")
 
@@ -1971,7 +1971,7 @@ proc initNotificationTableBuffer(
       of "restoreLogNotify":
         result.add(ru nameStr & space & $settings.restoreLogNotify)
 
-proc initFilerTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
+proc initFilerTableBuffer(settings: EditorSettings): seq[Runes] =
   result.add(ru"Filer")
 
   for name in filerTableNames:
@@ -1982,7 +1982,7 @@ proc initFilerTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
       of "showIcons":
         result.add(ru nameStr & space & $settings.filer.showIcons)
 
-proc initAutocompleteTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
+proc initAutocompleteTableBuffer(settings: EditorSettings): seq[Runes] =
   result.add(ru"Autocomplete")
 
   for name in autocompleteTableNames:
@@ -1993,7 +1993,7 @@ proc initAutocompleteTableBuffer(settings: EditorSettings): seq[seq[Rune]] =
       of "enable":
         result.add(ru nameStr & space & $settings.autocomplete.enable)
 
-proc initPersistTableBuffer(persistSettings: PersistSettings): seq[seq[Rune]] =
+proc initPersistTableBuffer(persistSettings: PersistSettings): seq[Runes] =
   result.add(ru"Persist")
 
   for name in persistTableNames:
@@ -2061,8 +2061,8 @@ proc initThemeTableBuffer*(s: EditorSettings): seq[Runes] =
 
     result.add(ru "")
 
-proc initConfigModeBuffer*(settings: EditorSettings): GapBuffer[seq[Rune]] =
-  var buffer: seq[seq[Rune]]
+proc initConfigModeBuffer*(settings: EditorSettings): GapBuffer[Runes] =
+  var buffer: seq[Runes]
   buffer.add(initStandardTableBuffer(settings))
 
   buffer.add(ru"")
@@ -2130,7 +2130,7 @@ proc keyDown(bufStatus: BufferStatus, windowNode: var WindowNode) =
       bufStatus.keyDown(windowNode)
 
 # Count number of values in the array setting.
-proc getNumOfValueOfArraySetting(line: seq[Rune]): int =
+proc getNumOfValueOfArraySetting(line: Runes): int =
   # 1 is the name of the setting
   line.splitWhitespace.len - 1
 

@@ -243,7 +243,7 @@ proc calcIndexInEntireBuffer*[T: array | seq | string](
     if containNewline: inc(result)
   result += column
 
-proc toGapBuffer*(r: seq[Rune]): GapBuffer[Runes] {.inline.} =
+proc toGapBuffer*(r: Runes): GapBuffer[Runes] {.inline.} =
   r.split(ru'\n').initGapBuffer
 
 proc toGapBuffer*(r: seq[Runes]): GapBuffer[Runes] {.inline.} =

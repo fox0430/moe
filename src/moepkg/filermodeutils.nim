@@ -105,7 +105,7 @@ when defined(posix):
 else:
   proc isFifo(file: string): bool {.inline.} = false
 
-proc refreshDirList(path: seq[Rune], sortBy: Sort): seq[PathInfo] =
+proc refreshDirList(path: Runes, sortBy: Sort): seq[PathInfo] =
   var
     pathList  : seq[PathInfo]
     fileList : seq[PathInfo]
@@ -185,7 +185,7 @@ proc moveToLastOfList*(filerStatus: var FilerStatus, currentLine: var int) =
 proc copyFile*(
   filerStatus: var FilerStatus,
   currentLine: int,
-  currentPath: seq[Rune]) =
+  currentPath: Runes) =
     filerStatus.register.copy = true
     filerStatus.register.cut = false
     filerStatus.register.filename = filerStatus.pathList[currentLine].path
@@ -195,7 +195,7 @@ proc copyFile*(
 proc cutFile*(
   filerStatus: var FilerStatus,
   currentLine: int,
-  currentPath: seq[Rune]) =
+  currentPath: Runes) =
     filerStatus.register.copy = false
     filerStatus.register.cut = true
     let path = filerStatus.pathList[currentLine].path
@@ -205,7 +205,7 @@ proc cutFile*(
 proc pasteFile*(
   commandLine: var CommandLine,
   filerStatus: var FilerStatus,
-  currentPath: seq[Rune]) =
+  currentPath: Runes) =
     try:
       let filename = filerStatus.register.filename
       copyFile(filerStatus.register.originPath, $currentPath / filename)
@@ -299,7 +299,7 @@ proc isDockerFile(filename: string): bool {.inline.} =
  filename == "compose.yaml" or
  filename == "compose.yml"
 
-proc pathToIcon(path: string): seq[Rune] =
+proc pathToIcon(path: string): Runes =
   if dirExists(path):
     return ru"📁 "
 
@@ -442,7 +442,7 @@ proc writeFileDetail*(
   numOfFile: int,
   fileName: string) =
 
-    bufStatus.buffer = initGapBuffer[seq[Rune]]()
+    bufStatus.buffer = initGapBuffer[Runes]()
 
     let fileInfo = getFileInfo(fileName, false)
 
