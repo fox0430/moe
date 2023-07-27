@@ -1729,7 +1729,7 @@ const
         rgb: "#ffff00".hexToRgb.get),
       background: Color(
         index: EditorColorIndex.syntaxCheckInfoBg,
-        rgb: "#000000".hexToRgb.get)),
+        rgb: "#ffffff".hexToRgb.get)),
 
     EditorColorPairIndex.syntaxCheckHint: ColorPair(
       foreground: Color(
@@ -1737,7 +1737,7 @@ const
         rgb: "#ffff00".hexToRgb.get),
       background: Color(
         index: EditorColorIndex.syntaxCheckHintBg,
-        rgb: "#000000".hexToRgb.get)),
+        rgb: "#ffffff".hexToRgb.get)),
 
     EditorColorPairIndex.syntaxCheckWarn: ColorPair(
       foreground: Color(
@@ -1745,7 +1745,7 @@ const
         rgb: "#ffff00".hexToRgb.get),
       background: Color(
         index: EditorColorIndex.syntaxCheckWarnBg,
-        rgb: "#000000".hexToRgb.get)),
+        rgb: "#ffffff".hexToRgb.get)),
 
     EditorColorPairIndex.syntaxCheckErr: ColorPair(
       foreground: Color(
@@ -1753,7 +1753,7 @@ const
         rgb: "#ff0000".hexToRgb.get),
       background: Color(
         index: EditorColorIndex.syntaxCheckErrBg,
-        rgb: "#000000".hexToRgb.get)),
+        rgb: "#ffffff".hexToRgb.get)),
 
     # Git config background
     EditorColorPairIndex.gitConflict: ColorPair(
