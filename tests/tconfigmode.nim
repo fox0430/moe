@@ -577,7 +577,7 @@ suite "Config mode: Init buffer":
       check Sample[index] == line
 
 # TODO: Should return bool.
-proc checkBoolSettingValue(default: bool, values: seq[seq[Rune]]) =
+proc checkBoolSettingValue(default: bool, values: seq[Runes]) =
   if default:
     check values == @[ru "true", ru "false"]
   else:

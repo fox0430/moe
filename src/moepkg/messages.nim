@@ -107,7 +107,7 @@ proc writeMessageYankedCharactor*(
 
 proc writeMessageAutoSave*(
   commandLine: var CommandLine,
-  filename: seq[Rune],
+  filename: Runes,
   settings: NotificationSettings) =
     let mess = fmt"Auto saved {filename}"
     if settings.screenNotifications and settings.autoSaveScreenNotify:
@@ -196,7 +196,7 @@ proc writeOpenRecentlyUsedXbelError*(commandLine: var CommandLine) =
 
 proc writeFileNotFoundError*(
   commandLine: var CommandLine,
-  filename: seq[Rune]) =
+  filename: Runes) =
     let mess = "Error: " & $filename & " not found"
     commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
     addMessageLog mess
@@ -221,7 +221,7 @@ proc writeAutoBackupSuccessMessage*(
 
 proc writeAutoBackupFailedMessage*(
   commandLine: var CommandLine,
-  filename: seq[Rune],
+  filename: Runes,
   settings: NotificationSettings) =
     let message = fmt"Error: Automatic backups failed: {$filename}"
     if settings.screenNotifications and settings.autoBackupScreenNotify:
@@ -267,7 +267,7 @@ proc writeBackupRestoreError*(commandLine: var CommandLine) {.inline.} =
 
 proc writeRestoreFileSuccessMessage*(
   commandLine: var CommandLine,
-  filename: seq[Rune],
+  filename: Runes,
   settings: NotificationSettings) =
     let message = fmt"Restore successful {filename}"
     if settings.screenNotifications and settings.restoreScreenNotify:

@@ -67,7 +67,7 @@ test "countRepeat":
   check(ru"    ".countRepeat(Whitespace, 1) == 3)
 
 test "toRunes":
-  let runes: seq[Rune] = @[]
+  let runes: Runes = @[]
   check(runes.toGapBuffer.toRunes == runes)
 
 let s = """Sentences that contain all letters commonly used in a language

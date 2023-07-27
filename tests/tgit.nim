@@ -185,7 +185,7 @@ index f328eafe..57a9ea4d 100644
 +b
  # Save cursor position when a buffer for a window(file) gets closed.
  type LastCursorPosition* = object
-   path: seq[Rune]
+   path: Runes
 """
 
     check diffResult.splitLines.parseGitDiffOutput == @[

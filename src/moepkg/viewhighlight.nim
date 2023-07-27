@@ -306,7 +306,7 @@ proc highlightTrailingSpaces(
 proc highlightFullWidthSpace(
   highlight: var Highlight,
   windowNode: WindowNode,
-  bufferInView: GapBuffer[seq[Rune]],
+  bufferInView: GapBuffer[Runes],
   range: Range) =
 
     const
@@ -330,9 +330,9 @@ proc highlightFullWidthSpace(
 proc highlightSearchResults(
   highlight: var Highlight,
   bufStatus: BufferStatus,
-  bufferInView: GapBuffer[seq[Rune]],
+  bufferInView: GapBuffer[Runes],
   range: Range,
-  keyword: seq[Rune],
+  keyword: Runes,
   settings: EditorSettings,
   isSearchHighlight: bool) =
 
@@ -408,7 +408,7 @@ proc updateHighlight*(
   bufStatus: BufferStatus,
   windowNode: var WindowNode,
   isSearchHighlight: bool,
-  searchHistory: seq[seq[Rune]],
+  searchHistory: seq[Runes],
   settings: EditorSettings,
   colorMode: ColorMode) =
 
@@ -433,7 +433,7 @@ proc updateHighlight*(
         elif bufStatus.buffer.len > range.last: range.last + 1
         else: range.last
 
-    var bufferInView = initGapBuffer[seq[Rune]]()
+    var bufferInView = initGapBuffer[Runes]()
     for i in startLine ..< endLine: bufferInView.add(bufStatus.buffer[i])
 
     # highlight trailing spaces

@@ -169,7 +169,7 @@ proc updateLastCursorPostion*(status: var EditorStatus) =
 
 proc getLastCursorPostion*(
   lastPosition: seq[LastCursorPosition],
-  path: seq[Rune]): Option[LastCursorPosition] =
+  path: Runes): Option[LastCursorPosition] =
 
     for p in lastPosition:
       if p.path.absolutePath == path.absolutePath:
@@ -239,7 +239,7 @@ proc executeOnExit(settings: EditorSettings, platform: Platforms) {.inline.} =
     unhideCursor()
 
 # Save Ex command history to the file
-proc saveExCommandHistory(history: seq[seq[Rune]]) =
+proc saveExCommandHistory(history: seq[Runes]) =
   let
     chaheDir = getHomeDir() / ".cache/moe"
     chaheFile = chaheDir / "exCommandHistory"
@@ -254,7 +254,7 @@ proc saveExCommandHistory(history: seq[seq[Rune]]) =
     f.writeLine($line)
 
 # Save the search history to the file
-proc saveSearchHistory(history: seq[seq[Rune]]) =
+proc saveSearchHistory(history: seq[Runes]) =
   let
     chaheDir = getHomeDir() / ".cache/moe"
     chaheFile = chaheDir / "searchHistory"

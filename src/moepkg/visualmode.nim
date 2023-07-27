@@ -65,7 +65,7 @@ proc yankBuffer(
   settings: EditorSettings) =
 
     var
-      yankedBuffer: seq[seq[Rune]]
+      yankedBuffer: seq[Runes]
       isLine = true
 
     if area.startLine == area.endLine:
@@ -111,7 +111,7 @@ proc yankBufferBlock(
     if bufStatus.buffer.len == 1 and
        bufStatus.buffer[windowNode.currentLine].len < 1: return
 
-    var yankedBuffer: seq[seq[Rune]]
+    var yankedBuffer: seq[Runes]
 
     for i in area.startLine .. area.endLine:
       yankedBuffer.add(@[ru ""])
@@ -420,7 +420,7 @@ proc toUpperStringBlock(
       if oldLine != newLine: bufStatus.buffer[i] = newLine
 
 # TODO: Remove
-proc getInsertBuffer(status: var EditorStatus): seq[Rune] =
+proc getInsertBuffer(status: var EditorStatus): Runes =
   while true:
     status.update
 
@@ -477,7 +477,7 @@ proc enterInsertMode(status: var EditorStatus) =
 proc insertCharBlock(
   bufStatus: var BufferStatus,
   windowNode: var WindowNode,
-  insertBuffer: seq[Rune],
+  insertBuffer: Runes,
   area: SelectedArea,
   tabStop: int,
   autoCloseParen: bool,

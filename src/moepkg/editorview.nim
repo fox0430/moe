@@ -31,7 +31,7 @@ type
     width*: int
     widthOfLineNum*: int
     leftMargin*: int # TODO: Rename to sidebarWidth?
-    lines*: Deque[seq[Rune]]
+    lines*: Deque[Runes]
     originalLine*: Deque[int]
     start*: Deque[int]
     length*: Deque[int]
@@ -39,7 +39,7 @@ type
     sidebar*: Option[Sidebar]
 
   ViewLine = object
-    line: seq[Rune]
+    line: Runes
     originalLine: int
     start: int
     length: int
@@ -120,7 +120,7 @@ proc initEditorView*[T](buffer: T, height, width: int): EditorView =
   result.width = width
   result.widthOfLineNum = buffer.len.intToStr.len+1
 
-  result.lines = initDeque[seq[Rune]]()
+  result.lines = initDeque[Runes]()
   for i in 0..height-1: result.lines.addLast(ru"")
 
   result.originalLine = initDeque[int]()
@@ -216,7 +216,7 @@ proc resize*[T](
 
     let topLine = view.originalLine[0]
 
-    view.lines = initDeque[seq[Rune]]()
+    view.lines = initDeque[Runes]()
     for i in 0..height-1: view.lines.addLast(ru"")
 
     view.height = height

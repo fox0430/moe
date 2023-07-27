@@ -110,7 +110,7 @@ test "Highlight full width space 1":
       if currentBufStatus.buffer.len > range.last + 1: range.last + 2
       elif currentBufStatus.buffer.len > range.last: range.last + 1
       else: range.last
-  var bufferInView = initGapBuffer[seq[Rune]]()
+  var bufferInView = initGapBuffer[Runes]()
   for i in startLine ..< endLine: bufferInView.add(currentBufStatus.buffer[i])
 
   var highlight = currentMainWindowNode.highlight
@@ -138,7 +138,7 @@ test "Highlight full width space 2":
       if currentBufStatus.buffer.len > range.last + 1: range.last + 2
       elif currentBufStatus.buffer.len > range.last: range.last + 1
       else: range.last
-  var bufferInView = initGapBuffer[seq[Rune]]()
+  var bufferInView = initGapBuffer[Runes]()
   for i in startLine ..< endLine: bufferInView.add(currentBufStatus.buffer[i])
 
   var highlight = currentMainWindowNode.highlight
@@ -166,7 +166,7 @@ test "Highlight full width space 3":
       if currentBufStatus.buffer.len > range.last + 1: range.last + 2
      elif currentBufStatus.buffer.len > range.last: range.last + 1
      else: range.last
-  var bufferInView = initGapBuffer[seq[Rune]]()
+  var bufferInView = initGapBuffer[Runes]()
   for i in startLine ..< endLine: bufferInView.add(currentBufStatus.buffer[i])
 
   var highlight = currentMainWindowNode.highlight
@@ -193,7 +193,7 @@ test "Highlight full width space 4":
       if currentBufStatus.buffer.len > range.last + 1: range.last + 2
       elif currentBufStatus.buffer.len > range.last: range.last + 1
       else: range.last
-  var bufferInView = initGapBuffer[seq[Rune]]()
+  var bufferInView = initGapBuffer[Runes]()
   for i in startLine ..< endLine: bufferInView.add(currentBufStatus.buffer[i])
 
   var highlight = currentMainWindowNode.highlight

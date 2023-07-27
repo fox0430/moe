@@ -17,8 +17,8 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, unicode]
-import moepkg/gapbuffer
+import std/[unittest]
+import moepkg/[gapbuffer, unicodeext]
 
 test "empty":
   let buffer = initGapBuffer[string]()
@@ -223,7 +223,7 @@ test "calcIndexInEntireBuffer (with containing newlines)":
   check buffer.calcIndexInEntireBuffer(2, 2, true) == 7
 
 test "toRunes":
-  var buffer = initGapBuffer[seq[Rune]]()
+  var buffer = initGapBuffer[Runes]()
   buffer.add "0".toRunes
   buffer.add "1".toRunes
 
@@ -232,7 +232,7 @@ test "toRunes":
   check buffer.toRunes == "0\n1".toRunes
 
 test "toSeqRunes":
-  var buffer = initGapBuffer[seq[Rune]]()
+  var buffer = initGapBuffer[Runes]()
   buffer.add "0".toRunes
   buffer.add "1".toRunes
 

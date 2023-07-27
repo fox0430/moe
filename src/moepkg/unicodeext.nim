@@ -172,9 +172,9 @@ proc `==`*(c: Rune, x: int): bool {.inline.} = c == toRune(x)
 proc `==`*(c: Rune, x: char): bool {.inline.} = c == toRune(x)
 
 proc ru*(c: char): Rune {.inline.} = toRune(c)
-proc ru*(s: string): seq[Rune] {.inline.} = s.toRunes
-proc ru*(r: Rune): seq[Rune] {.inline.} = @[r]
-proc ru*(array: seq[string]): seq[Rune] =
+proc ru*(s: string): Runes {.inline.} = s.toRunes
+proc ru*(r: Rune): Runes {.inline.} = @[r]
+proc ru*(array: seq[string]): Runes =
   for s in array:
     result.add s.toRunes
 
@@ -199,7 +199,7 @@ proc width*(c: Rune): int =
      UnicodeWidth.uwdtNeutral: 1
   else: 2
 
-proc width*(runes: seq[Rune]): int {.inline.} =
+proc width*(runes: Runes): int {.inline.} =
   for c in runes: result += width(c)
 
 proc numberOfBytes*(firstByte: char): int =
@@ -213,7 +213,7 @@ proc isDigit*(c: Rune): bool =
   let s = $c
   return s.len == 1 and strutils.isDigit(s[0])
 
-proc isDigit*(runes: seq[Rune]): bool {.inline.} = all(runes, isDigit)
+proc isDigit*(runes: Runes): bool {.inline.} = all(runes, isDigit)
 
 proc isSpace*(c: Rune): bool {.inline.} =
   return unicode.isSpace($c)
@@ -253,26 +253,26 @@ proc isPunct*(c: Rune): bool =
     '=',
     '}'}
 
-proc countRepeat*(runes: seq[Rune], charSet: set[char], start: int): int =
+proc countRepeat*(runes: Runes, charSet: set[char], start: int): int =
   for i in start ..< runes.len:
     let s = $runes[i]
     if s.len > 1 or (not (s[0] in charSet)): break
     inc(result)
 
-proc split*(runes: seq[Rune], sep: Rune): seq[seq[Rune]] =
+proc split*(runes: Runes, sep: Rune): seq[Runes] =
   result.add(@[])
   for c in runes:
     if c == sep: result.add(@[])
     else: result[result.high].add(c)
 
-proc splitLines*(runes: seq[Rune]): seq[seq[Rune]] =
+proc splitLines*(runes: Runes): seq[Runes] =
   runes.split(ru'\n')
 
-proc toRunes*(num: int): seq[Rune] {.inline.} = toRunes($num)
+proc toRunes*(num: int): Runes {.inline.} = toRunes($num)
 
-proc toRunes*(dateTime: DateTime): seq[Rune] {.inline.} = toRunes($dateTime)
+proc toRunes*(dateTime: DateTime): Runes {.inline.} = toRunes($dateTime)
 
-proc toRunes*(oid: Oid): seq[Rune] {.inline.} = toRunes($oid)
+proc toRunes*(oid: Oid): Runes {.inline.} = toRunes($oid)
 
 proc toRunes*(s: seq[string]): Runes =
   for l in s: result.add l.toRunes
@@ -283,19 +283,19 @@ proc toSeqRunes*(s: seq[string]): seq[Runes] =
   for l in s:
     result.add l.toRunes
 
-proc startsWith*(runes1, runes2: seq[Rune]): bool =
+proc startsWith*(runes1, runes2: Runes): bool =
   result = true
   for i in 0 ..< min(runes1.len, runes2.len):
     if runes1[i] != runes2[i]:
       result = false
       break
 
-proc startsWith*(runes1: seq[Rune], r: Rune): bool {.inline.} = runes1[0] == r
+proc startsWith*(runes1: Runes, r: Rune): bool {.inline.} = runes1[0] == r
 
-proc `$`*(seqRunes: seq[seq[Rune]]): string =
+proc `$`*(seqRunes: seq[Runes]): string =
   for runes in seqRunes: result = result & $runes
 
-proc `&`*(runes1, runes2: seq[Rune]): seq[Rune] {.inline.} =
+proc `&`*(runes1, runes2: Runes): Runes {.inline.} =
   result = runes1
   result.add runes2
 
@@ -341,7 +341,7 @@ proc isParen*(r: Rune): bool =
   if r.isOpenParen or r.isCloseParen: return true
   else: return false
 
-proc find*(runes, sub: seq[Rune], start: Natural = 0, last = 0): int =
+proc find*(runes, sub: Runes, start: Natural = 0, last = 0): int =
   ## If `last` is unspecified, it defaults to `runes.high`(the last element).
   ## If `sub` is no in `runes`, -1 is returned. Otherwise the index is returned.
 
@@ -361,7 +361,7 @@ proc find*(runes, sub: seq[Rune], start: Natural = 0, last = 0): int =
   if i == -1: return -1
   else: return runeLen(str[0..<i])
 
-proc rfind*(runes: seq[Rune], r: Rune, start: Natural = 0, last = -1): int =
+proc rfind*(runes: Runes, r: Rune, start: Natural = 0, last = -1): int =
   ## If `last` is unspecified, it defaults to `runes.high`(the last element).
   ## If `r` is no in `runes`, -1 is returned. Otherwise the index is returned.
 
@@ -372,7 +372,7 @@ proc rfind*(runes: seq[Rune], r: Rune, start: Natural = 0, last = -1): int =
 
   return -1
 
-proc rfind*(runes, sub: seq[Rune], start: Natural = 0, last = -1): int =
+proc rfind*(runes, sub: Runes, start: Natural = 0, last = -1): int =
   ## If `last` is unspecified, it defaults to `runes.high`(the last element).
   ## If `sub` is no in `runes`, -1 is returned. Otherwise the index is returned.
 
@@ -389,36 +389,36 @@ proc rfind*(runes, sub: seq[Rune], start: Natural = 0, last = -1): int =
     if result != -1: return
   return -1
 
-proc substr*(runes: seq[Rune], first, last: int): seq[Rune] {.inline.} =
+proc substr*(runes: Runes, first, last: int): Runes {.inline.} =
   runes[first .. last]
 
-proc substr*(runes: seq[Rune], first = 0): seq[Rune] {.inline.} =
+proc substr*(runes: Runes, first = 0): Runes {.inline.} =
   substr(runes, first, runes.high)
 
-proc contains*(runes: seq[Rune], sub: Rune): bool {.inline.} =
+proc contains*(runes: Runes, sub: Rune): bool {.inline.} =
   find(runes, sub) >= 0
 
-proc contains*(runes, sub: seq[Rune]): bool {.inline.} =
+proc contains*(runes, sub: Runes): bool {.inline.} =
   find(runes, sub) >= 0
 
-proc contains*(runes: seq[seq[Rune]], sub: seq[Rune]): bool {.inline.} =
+proc contains*(runes: seq[Runes], sub: Runes): bool {.inline.} =
   find(runes, sub) >= 0
 
-proc `in`*(runes: seq[Rune], sub: Rune): bool {.inline.} =
+proc `in`*(runes: Runes, sub: Rune): bool {.inline.} =
   find(runes, sub) >= 0
 
-proc `in`*(runes, sub: seq[Rune]): bool {.inline.} =
+proc `in`*(runes, sub: Runes): bool {.inline.} =
   find(runes, sub) >= 0
 
-proc `in`*(runes: seq[seq[Rune]], sub: seq[Rune]): bool {.inline.} =
+proc `in`*(runes: seq[Runes], sub: Runes): bool {.inline.} =
   find(runes, sub) >= 0
 
-proc splitWhitespace*(runes: seq[Rune]): seq[seq[Rune]] =
+proc splitWhitespace*(runes: Runes): seq[Runes] =
   for s in unicode.split($runes):
     if not s.isEmptyOrWhitespace:
       result.add(s.toRunes)
 
-iterator split*(runes: seq[Rune], isSep: proc (r: Rune): bool, removeEmptyEntries: bool = false): seq[Rune] =
+iterator split*(runes: Runes, isSep: proc (r: Rune): bool, removeEmptyEntries: bool = false): Runes =
   var first = 0
   while first <= runes.len:
     var last = first
@@ -430,7 +430,7 @@ iterator split*(runes: seq[Rune], isSep: proc (r: Rune): bool, removeEmptyEntrie
 
 proc parseInt*(rune: Rune): int {.inline.} = parseInt($rune)
 
-proc parseInt*(runes: seq[Rune]): int {.inline.} = parseInt($runes)
+proc parseInt*(runes: Runes): int {.inline.} = parseInt($runes)
 
 proc toggleCase*(ch: Rune): Rune =
   result = ch
@@ -440,14 +440,14 @@ proc toggleCase*(ch: Rune): Rune =
     result = result.toUpper()
   return result
 
-proc `/`*(runes1, runes2: seq[Rune]): seq[Rune] {.inline.} =
+proc `/`*(runes1, runes2: Runes): Runes {.inline.} =
   toRunes($runes1 / $runes2)
 
-proc repeat*(runes: seq[Rune], n: Natural): seq[Rune] =
+proc repeat*(runes: Runes, n: Natural): Runes =
   let str = repeat($runes, n)
   result = str.toRunes
 
-proc repeat*(rune: Rune, n: Natural): seq[Rune] =
+proc repeat*(rune: Rune, n: Natural): Runes =
   let str = repeat($rune, n)
   result = str.ru
 
@@ -486,18 +486,18 @@ proc encodeUTF8*(r: Rune): seq[uint32] =
     result.add mbLead or i shl 6
     result.add mbLead or i and mbMask
 
-proc absolutePath*(runes: seq[Rune]): seq[Rune] {.inline.} =
+proc absolutePath*(runes: Runes): Runes {.inline.} =
   result = absolutePath($runes).ru
   if result.len > 0 and dirExists($runes) and result[^1] != ru '/':
     result &= ru "/"
 
-proc removePrefix*(runes: seq[Rune], prefix: seq[Rune]): seq[Rune] {.inline.} =
+proc removePrefix*(runes: Runes, prefix: Runes): Runes {.inline.} =
   var str = $runes
   removePrefix(str, $prefix)
   return str.ru
 
 # Count `r` contained in `runes`
-proc count*(runes: seq[Rune], r: Rune): int {.inline.} =
+proc count*(runes: Runes, r: Rune): int {.inline.} =
   for r2 in runes:
     if r2 == r: result.inc
 

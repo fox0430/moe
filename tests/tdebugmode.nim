@@ -37,7 +37,7 @@ suite "Init debug mode buffer":
     status.resize
     status.update
 
-    let correctBuf = initGapBuffer[seq[Rune]](@[
+    let correctBuf = initGapBuffer[Runes](@[
       ru"",
       ru"-- WindowNode --",
       ru"  currentWindow           : true",

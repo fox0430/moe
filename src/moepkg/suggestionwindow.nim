@@ -24,23 +24,23 @@ import syntax/highlite
 
 type SuggestionWindow* = object
   wordDictionary: WordDictionary
-  oldLine: seq[Rune]
-  inputWord: seq[Rune]
+  oldLine: Runes
+  inputWord: Runes
   firstColumn, lastColumn: int
-  suggestoins: seq[seq[Rune]]
+  suggestoins: seq[Runes]
   selectedSuggestion: int
   popUpWindow: Option[Window]
   isPath: bool
 
-proc selectedWordOrInputWord(suggestionWindow: SuggestionWindow): seq[Rune] =
+proc selectedWordOrInputWord(suggestionWindow: SuggestionWindow): Runes =
   if suggestionWindow.selectedSuggestion == -1:
     suggestionWindow.inputWord
   else:
     suggestionWindow.suggestoins[suggestionWindow.selectedSuggestion]
 
-proc newLine*(suggestionWindow: SuggestionWindow): seq[Rune] =
+proc newLine*(suggestionWindow: SuggestionWindow): Runes =
   suggestionWindow.oldLine.dup(
-    proc (r: var seq[Rune]) =
+    proc (r: var Runes) =
       let
         firstColumn = suggestionWindow.firstColumn
         lastColumn = suggestionWindow.lastColumn
@@ -116,7 +116,7 @@ proc handleKeyInSuggestionWindow*(
 # `isPath` is true when the file path suggestions.
 proc initSuggestionWindow*(
   wordDictionary: var WordDictionary,
-  text, word, currentLineText: seq[Rune],
+  text, word, currentLineText: Runes,
   firstColumn, lastColumn: int,
   isPath: bool): Option[SuggestionWindow] =
 
@@ -146,7 +146,7 @@ proc initSuggestionWindow*(
 
 proc extractWordBeforeCursor(
   bufStatus: BufferStatus,
-  windowNode: WindowNode): Option[tuple[word: seq[Rune], first, last: int]] =
+  windowNode: WindowNode): Option[tuple[word: Runes, first, last: int]] =
 
     if windowNode.currentColumn - 1 < 0: return
     extractNeighborWord(
@@ -155,7 +155,7 @@ proc extractWordBeforeCursor(
 
 proc extractPathBeforeCursor(
   bufStatus: BufferStatus,
-  windowNode: WindowNode): Option[tuple[path: seq[Rune], first, last: int]] =
+  windowNode: WindowNode): Option[tuple[path: Runes, first, last: int]] =
 
     if windowNode.currentColumn - 1 < 0: return
     extractNeighborPath(
@@ -174,7 +174,7 @@ proc wordExistsBeforeCursor(
 proc getBufferAndLangKeyword(
   checkBuffers: seq[BufferStatus],
   firstDeletedIndex, lastDeletedIndex: int,
-  lang: SourceLanguage): seq[Rune] =
+  lang: SourceLanguage): Runes =
 
     let
       bufferText = getTextInBuffers(
@@ -371,6 +371,6 @@ proc writeSuggestionWindow*(
 proc isLineChanged*(suggestionWindow: SuggestionWindow): bool {.inline.} =
   suggestionWindow.newLine != suggestionWindow.oldLine
 
-proc getSelectedWord*(suggestionWindow: SuggestionWindow): seq[Rune] {.inline.} =
+proc getSelectedWord*(suggestionWindow: SuggestionWindow): Runes {.inline.} =
   if suggestionWindow.selectedSuggestion >= 0:
     return suggestionWindow.suggestoins[suggestionWindow.selectedSuggestion]

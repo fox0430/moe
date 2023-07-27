@@ -41,7 +41,7 @@ proc showFilename(mode, prevMode: Mode): bool {.inline.} =
   not isConfigMode(mode, prevMode)
 
 proc appendFileName(
-  statusLineBuffer: var seq[Rune],
+  statusLineBuffer: var Runes,
   bufStatus: BufferStatus,
   statusLineWindow: var Window,
   color: EditorColorPairIndex) =
@@ -84,7 +84,7 @@ proc statusLineColor(mode: Mode, isActiveWindow: bool): EditorColorPairIndex =
 
 proc writeStatusLineNormalModeInfo(
   statusLine: var StatusLine,
-  statusLineBuffer: var seq[Rune],
+  statusLineBuffer: var Runes,
   bufStatus: BufferStatus,
   windowNode: WindowNode,
   isActiveWindow: bool,
@@ -131,7 +131,7 @@ proc writeStatusLineNormalModeInfo(
 
 proc writeStatusLineFilerModeInfo(
   statusLine: var StatusLine,
-  statusLineBuffer: var seq[Rune],
+  statusLineBuffer: var Runes,
   bufStatus: BufferStatus,
   windowNode: WindowNode,
   isActiveWindow: bool,
@@ -151,7 +151,7 @@ proc writeStatusLineFilerModeInfo(
 
 proc writeStatusLineBufferManagerModeInfo(
   statusLine: var StatusLine,
-  statusLineBuffer: var seq[Rune],
+  statusLineBuffer: var Runes,
   bufStatus: BufferStatus,
   windowNode: WindowNode,
   isActiveWindow: bool,
@@ -171,7 +171,7 @@ proc writeStatusLineBufferManagerModeInfo(
 
 proc writeStatusLineLogViewerModeInfo(
   statusLine: var StatusLine,
-  statusLineBuffer: var seq[Rune],
+  statusLineBuffer: var Runes,
   bufStatus: BufferStatus,
   windowNode: WindowNode,
   isActiveWindow: bool,
@@ -191,7 +191,7 @@ proc writeStatusLineLogViewerModeInfo(
 
 proc writeStatusLineQuickRunModeInfo(
   statusLine: var StatusLine,
-  statusLineBuffer: var seq[Rune],
+  statusLineBuffer: var Runes,
   bufStatus: BufferStatus,
   windowNode: WindowNode,
   isActiveWindow: bool,
@@ -248,7 +248,7 @@ proc gitBranchNameBuffer(
 
 proc changedLinesBuffer(
   statusLine: var StatusLine,
-  statusLineBuffer: var seq[Rune],
+  statusLineBuffer: var Runes,
   changedLines: seq[Diff],
   isActiveWindow: bool): Runes =
     ## Return a buffer for the number of lines changed using git.
@@ -259,7 +259,7 @@ proc changedLinesBuffer(
 
 proc writeGitInfo(
   statusLine: var StatusLine,
-  statusLineBuffer: var seq[Rune],
+  statusLineBuffer: var Runes,
   bufStatus: BufferStatus,
   settings: EditorSettings,
   isActiveWindow: bool) =

@@ -40,7 +40,7 @@ proc splitPathExt*(path: string): tuple[head, tail: string] =
       else: r.head
   return (head: head, tail: r.tail)
 
-proc splitPathExt*(path: seq[Rune]): tuple[head, tail: seq[Rune]] =
+proc splitPathExt*(path: Runes): tuple[head, tail: Runes] =
   let
     r = splitPath($path)
     head =
@@ -55,7 +55,7 @@ proc getPathTail*(path: string): string {.inline.} =
   let (_, tail) = path.splitPath
   return tail
 
-proc isPath*(runes: seq[Rune]): bool =
+proc isPath*(runes: Runes): bool =
   if runes.len > 0:
     if runes.startsWith("/".ru) or
        runes.startsWith("./".ru) or

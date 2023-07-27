@@ -171,7 +171,7 @@ proc currentLineDeleteLineBreakBeforeCursor*(
     inc(bufStatus.countChange)
     bufStatus.isUpdate = true
 
-proc countSpaceBeginOfLine(line: seq[Rune], tabStop, currentColumn: int): int =
+proc countSpaceBeginOfLine(line: Runes, tabStop, currentColumn: int): int =
   for i in 0 ..< min(line.len, currentColumn):
     if isWhiteSpace(line[i]): result.inc
     else: break
@@ -216,12 +216,12 @@ proc deleteBeforeCursorToFirstNonBlank*(
     for _ in firstNonBlank..max(0, windowNode.currentColumn-1):
       bufStatus.currentLineDeleteCharacterBeforeCursor(windowNode, false)
 
-proc isWhiteSpaceLine(line: seq[Rune]): bool =
+proc isWhiteSpaceLine(line: Runes): bool =
   result = true
   for r in line:
     if not isWhiteSpace(r): return false
 
-proc deleteAllCharInLine(line: var seq[Rune]) =
+proc deleteAllCharInLine(line: var Runes) =
   for i in 0 ..< line.len: line.delete(0)
 
 proc basicNewLine(
@@ -607,7 +607,7 @@ proc deleteWord*(
   settings: EditorSettings) =
     ## Delete current word
 
-    var deletedBuffer: seq[Rune]
+    var deletedBuffer: Runes
 
     for i in 0 ..< loop:
       if bufStatus.buffer.len == 1 and
@@ -716,7 +716,7 @@ proc deleteWordBeforeCursor*(
       loop,
       settings)
 
-proc countSpaceOfBeginningOfLine(line: seq[Rune]): int =
+proc countSpaceOfBeginningOfLine(line: Runes): int =
   for r in line:
     if r != ru' ': break
     else: result.inc
@@ -866,7 +866,7 @@ proc deleteCharacters*(
     var
       currentColumn = colmun
 
-      deletedBuffer: seq[Rune]
+      deletedBuffer: Runes
 
     for i in 0 ..< loop:
       if newLine.len == 0: break
@@ -914,7 +914,7 @@ proc deleteCharacters*(
     var
       currentColumn = colmun
 
-      deletedBuffer: seq[Rune]
+      deletedBuffer: Runes
 
     for i in 0 ..< loop:
       if newLine.len == 0: break
@@ -1101,7 +1101,7 @@ proc deleteLines*(
     block:
       let buffer = bufStatus.buffer
 
-      var deleteLines: seq[seq[Rune]]
+      var deleteLines: seq[Runes]
 
       for i in startLine .. endLine: deleteLines.add(buffer[i])
 
@@ -1203,7 +1203,7 @@ proc deleteTillPreviousBlankLine*(
   registerName: string,
   settings: EditorSettings) =
 
-    var deletedBuffer: seq[seq[Rune]]
+    var deletedBuffer: seq[Runes]
 
     block:
       # Delete lines before the currentLine
@@ -1224,7 +1224,7 @@ proc deleteTillPreviousBlankLine*(
       var newLine = bufStatus.buffer[currentLine]
 
       if currentColumn > 0:
-        var deletedLine: seq[Rune]
+        var deletedLine: Runes
         for i in 0 ..< currentColumn: deletedLine.add oldLine[i]
         if deletedLine.len > 0: deletedBuffer.add deletedLine
 
@@ -1261,7 +1261,7 @@ proc deleteTillNextBlankLine*(
     var blankLine = bufStatus.findNextBlankLine(currentLine)
     if blankLine < 0: blankLine = bufStatus.buffer.len
 
-    var deletedBuffer: seq[seq[Rune]]
+    var deletedBuffer: seq[Runes]
 
     block:
       # Delete characters after the cursor in the currentLine
@@ -1269,7 +1269,7 @@ proc deleteTillNextBlankLine*(
       var newLine = bufStatus.buffer[currentLine]
 
       if currentColumn > 0:
-        var deletedLine: seq[Rune]
+        var deletedLine: Runes
         for i in currentColumn ..< oldLine.len : deletedLine.add oldLine[i]
 
         for _ in currentColumn .. oldLine.high:
@@ -1309,7 +1309,7 @@ proc yankLines*(
   isDelete: bool,
   settings: EditorSettings) =
 
-    var yankedBuffer: seq[seq[Rune]]
+    var yankedBuffer: seq[Runes]
     for i in first .. last:
       yankedBuffer.add bufStatus.buffer[i]
 
@@ -1405,7 +1405,7 @@ proc yankCharacters*(
   name: string,
   isDelete: bool) =
 
-    var yankedBuffer: seq[Rune]
+    var yankedBuffer: Runes
 
     if bufStatus.buffer[windowNode.currentLine].len > 0:
       for i in 0 ..< length:
@@ -1432,7 +1432,7 @@ proc yankWord*(
   isDelete: bool,
   settings: EditorSettings) =
 
-    var yankedBuffer: seq[seq[Rune]] = @[ru ""]
+    var yankedBuffer: seq[Runes] = @[ru ""]
 
     let line = bufStatus.buffer[windowNode.currentLine]
     var startColumn = windowNode.currentColumn
@@ -1833,7 +1833,7 @@ proc deleteInsideOfParen*(
 # Return the colmn and word
 proc getWordUnderCursor*(
   bufStatus: BufferStatus,
-  windowNode: WindowNode): (int, seq[Rune]) =
+  windowNode: WindowNode): (int, Runes) =
 
     let line = bufStatus.buffer[windowNode.currentLine]
     if line.len <= windowNode.currentColumn:
@@ -1855,7 +1855,7 @@ proc getWordUnderCursor*(
         break
       endCol = i
     if endCol == -1 or beginCol == -1:
-      (-1, seq[Rune].default)
+      (-1, Runes.default)
     else:
       return (beginCol, line[beginCol..endCol])
 

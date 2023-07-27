@@ -20,7 +20,7 @@
 import unicodeext, backup
 
 proc initBackupManagerBuffer*(
-  baseBackupDir, sourceFilePath: seq[Rune]): seq[Runes] =
+  baseBackupDir, sourceFilePath: Runes): seq[Runes] =
     let filename = getBackupFiles(baseBackupDir, sourceFilePath)
     # Add backup file names.
     if filename.len > 0:

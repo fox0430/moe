@@ -116,7 +116,7 @@ suite "Backup: getBackupFiles":
     let backupInfoJsonPath = backupDir / "backup.json"
     writeFile(backupInfoJsonPath, $backupInfoJsonNode)
 
-    var backupFilenames: seq[seq[Rune]]
+    var backupFilenames: seq[Runes]
     for _ in 0 .. 2:
       backupFilenames.add now().toRunes
       writeFile(backupDir / $backupFilenames[^1], "\n")

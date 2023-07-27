@@ -46,13 +46,13 @@ type
     searchBackward
 
   BufferStatus* = object
-    buffer*: GapBuffer[seq[Rune]]
+    buffer*: GapBuffer[Runes]
     isUpdate*: bool
     characterEncoding*: CharacterEncoding
     language*: SourceLanguage
     selectedArea*: SelectedArea
-    path*: seq[Rune]
-    openDir*: seq[Rune]
+    path*: Runes
+    openDir*: Runes
     positionRecord*: Table[int, tuple[line, column, expandedColumn: int]]
     countChange*: int
     cmdLoop*: int

@@ -20,7 +20,7 @@
 import std/[os, encodings]
 import gapbuffer, unicodeext
 
-proc normalizePath*(path: seq[Rune]): seq[Rune] =
+proc normalizePath*(path: Runes): Runes =
   if path[0] == ru'~':
     if path == ru"~" or path == ru"~/":
       result = getHomeDir().toRunes
@@ -33,8 +33,8 @@ proc normalizePath*(path: seq[Rune]): seq[Rune] =
   else:
     return path
 
-proc openFile*(filename: seq[Rune]):
-  tuple[text: seq[Rune], encoding: CharacterEncoding] =
+proc openFile*(filename: Runes):
+  tuple[text: Runes, encoding: CharacterEncoding] =
     # TODO: Return Result type
 
     let
@@ -48,12 +48,12 @@ proc openFile*(filename: seq[Rune]):
         convert(raw, "UTF-8", $encoding).toRunes
     return (text, encoding)
 
-proc newFile*(): GapBuffer[seq[Rune]] {.inline.} =
-  result = initGapBuffer[seq[Rune]]()
+proc newFile*(): GapBuffer[Runes] {.inline.} =
+  result = initGapBuffer[Runes]()
   result.add(ru"", false)
 
 proc saveFile*(
-  path, runes: seq[Rune],
+  path, runes: Runes,
   encoding: CharacterEncoding) =
     # TODO: Return Result type
 

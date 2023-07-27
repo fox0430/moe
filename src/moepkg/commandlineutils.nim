@@ -115,7 +115,7 @@ proc askCreateDirPrompt*(
 
 proc askBackupRestorePrompt*(
   commndLine: var CommandLine,
-  filename: seq[Rune]): bool =
+  filename: Runes): bool =
 
     let mess = fmt"Restore {filename}?: y/n"
     commndLine.write(mess.toRunes)
@@ -128,7 +128,7 @@ proc askBackupRestorePrompt*(
 
 proc askDeleteBackupPrompt*(
   commndLine: var CommandLine,
-  filename: seq[Rune]): bool =
+  filename: Runes): bool =
 
     let mess = fmt"Delete {filename}?: y/n"
     commndLine.write(mess.toRunes)
