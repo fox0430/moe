@@ -144,7 +144,7 @@ proc refreshDirList(path: Runes, sortBy: Sort): seq[PathInfo] =
               getLastModificationTimeOrDefault(list.path))
 
     if item.path.len > 0:
-      item.path = $(item.path.toRunes.normalizePath)
+      item.path = $(item.path.toRunes.normalizedPath)
 
     if list.kind in {pcLinkToDir, pcDir}:
       pathList.add item

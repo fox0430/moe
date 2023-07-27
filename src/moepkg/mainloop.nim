@@ -125,13 +125,14 @@ proc isIncrementalSearch(status: EditorStatus): bool {.inline.} =
   isSearchMode(currentBufStatus.mode) and
   status.settings.incrementalSearch
 
-proc decListIndex(index: var int, list: seq[Runes]) =
-  if index == 0: index = list.high
-  else: index .dec
+proc decListIndex(list: var SuggestList) =
+  if list.currentIndex == 0: list.currentIndex = -1
+  elif list.currentIndex == -1: list.currentIndex = list.suggestions.high
+  else: list.currentIndex.dec
 
-proc incListIndex(index: var int, list: seq[Runes]) =
-  if index == list.high: index = 0
-  else: index .inc
+proc incListIndex(list: var SuggestList) =
+  if list.currentIndex == list.suggestions.high: list.currentIndex = -1
+  else: list.currentIndex.inc
 
 proc assignNextExCommandHistory(
   status: var EditorStatus,
@@ -201,17 +202,19 @@ proc isResetSearchHistoryIndex(
 
     (searchHistoryIndex.isSome) and not (isUpKey(key) or isDownKey(key))
 
-## Get keys and update view.
 proc commandLineLoop*(status: var EditorStatus) =
-  # TODO: Remove
-  template openSuggestWindow() =
-    suggestType = status.commandLine.buffer.getSuggestType
-    suggestList = status.commandLine.getSuggestList(suggestType)
-    if suggestList.len > 0:
-      if suggestIndex > suggestList.high:
-        suggestIndex = suggestList.high
+  ## Get keys and update view.
 
-      suggestWin = tryOpenSuggestWindow()
+  proc openSuggestWindow(
+    commandLine: var CommandLine,
+    suggestList: var SuggestList): Option[Window] =
+      ## If there is only one candidate, insert it without opening a window.
+
+      suggestList = commandLine.buffer.initSuggestList
+      if suggestList.suggestions.len == 1:
+        commandLine.insertSuggestion(suggestList)
+      elif suggestList.suggestions.len > 1:
+        return tryOpenSuggestWindow()
 
   if currentBufStatus.isSearchMode:
     status.searchHistory.add "".toRunes
@@ -225,19 +228,9 @@ proc commandLineLoop*(status: var EditorStatus) =
     # TODO: Change type to `SuggestionWindow`.
     suggestWin = none(Window)
 
-    # Use only when Ex mode.
-    # TODO: Move
-    suggestType = SuggestType.exCommand
-
     # Use when Ex mode and search mode.
     # TODO: Move
-    suggestList: seq[Runes]
-
-    # Use when Ex mode and search mode.
-    # TODO: Move
-    suggestIndex =
-      if currentBufStatus.isSearchMode: status.searchHistory.high
-      else: 0
+    suggestList: SuggestList
 
     # TODO: Remove
     exCommandHistoryIndex: Option[int]
@@ -245,20 +238,21 @@ proc commandLineLoop*(status: var EditorStatus) =
     # TODO: Remove
     searchHistoryIndex: Option[int]
 
+  if currentBufStatus.isSearchMode:
+    suggestList.currentIndex = status.searchHistory.high
+
   while not isCancel:
     status.update
 
     if suggestWin.isSome:
       suggestWin.get.updateSuggestWindow(
-        suggestType,
-        suggestList,
-        suggestIndex,
-        status.commandLine)
+        status.commandLine,
+        suggestList)
       status.commandLine.update
 
     # TODO: Move to editorstatus.update?
     if currentBufStatus.isSearchMode:
-      status.commandLine.buffer = status.searchHistory[suggestIndex]
+      status.commandLine.buffer = status.searchHistory[suggestList.currentIndex]
       status.commandLine.update
 
     let key = status.getKeyFromCommandLine
@@ -280,18 +274,28 @@ proc commandLineLoop*(status: var EditorStatus) =
         suggestWin.get.delete
         suggestWin = none(Window)
     elif isEnterKey(key):
+      # Close the suggestion window.
       if suggestWin.isSome:
         suggestWin.get.delete
         suggestWin = none(Window)
-      break
+        if suggestList.currentindex > -1:
+          # Insert the current selection and continue the current mode.
+          status.commandLine.insertSuggestion(suggestList)
+      else:
+        # Exit the current mode.
+        break
 
     elif isTabKey(key):
-      if suggestWin.isNone: openSuggestWindow()
-      else: suggestIndex.incListIndex(suggestList)
+      if suggestWin.isNone:
+        suggestWin = status.commandLine.openSuggestWindow(suggestList)
+      else:
+        suggestList.incListIndex
       continue
     elif isShiftTab(key):
-      if suggestWin.isNone: openSuggestWindow()
-      else: suggestIndex.decListIndex(suggestList)
+      if suggestWin.isNone:
+        suggestWin = status.commandLine.openSuggestWindow(suggestList)
+      else:
+        suggestList.decListIndex
       continue
 
     elif isLeftKey(key):
@@ -306,7 +310,7 @@ proc commandLineLoop*(status: var EditorStatus) =
     elif isUpKey(key):
       if suggestWin.isSome and currentBufStatus.isExMode:
         # The suggestion window is used only when suggesting ex commands.
-        suggestIndex.decListIndex(suggestList)
+        suggestList.decListIndex
       else:
         if currentBufStatus.isSearchMode:
           status.assignPrevSearchHistory(searchHistoryIndex)
@@ -316,7 +320,7 @@ proc commandLineLoop*(status: var EditorStatus) =
     elif isDownKey(key):
       if suggestWin.isSome and currentBufStatus.isExMode:
         # The suggestion window is used only when suggesting ex commands.
-        suggestIndex.incListIndex(suggestList)
+        suggestList.incListIndex
       else:
         if currentBufStatus.isSearchMode:
           status.assignNextSearchHistory(searchHistoryIndex)
@@ -385,8 +389,9 @@ proc close(suggestWin: var Option[SuggestionWindow]) {.inline.} =
   suggestWin.get.close
   suggestWin = none(SuggestionWindow)
 
-## Get keys and update view.
 proc editorMainLoop*(status: var EditorStatus) =
+  ## Get keys and update view.
+
   status.resize
 
   var command: Runes

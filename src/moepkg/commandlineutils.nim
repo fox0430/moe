@@ -24,18 +24,30 @@ type
   SuggestType* = enum
     exCommand
     exCommandOption
-    filePath
 
   ArgsType* = enum
     none
     toggle  # "on" or "off"
     number
     text
-    theme   # color.colorTheme
+    path    # File path
+    theme   # color.ColorTheme
+
+  CommandLineCommand* = object
+    command*: Runes
+    args*: seq[Runes]
+
+  SuggestList* = object
+    rawInput*: Runes
+    commandLineCmd*: CommandLineCommand
+    suggestType*: SuggestType
+    argsType*: Option[ArgsType]
+    currentIndex*: int
+    suggestions*: seq[Runes]
 
 # TODO: Auto inserts spaces in compile time.
-const ExCommandList: array[63, tuple[command, description: string, argsType: ArgsType]] = [
-  (command: "!", description: "                    | Shell command execution", argsType: ArgsType.none),
+const ExCommandList: array[64, tuple[command, description: string, argsType: ArgsType]] = [
+  (command: "!", description: "                    | Shell command execution", argsType: ArgsType.text),
   (command: "deleteParen", description: "          | Enable/Disable auto delete paren", argsType: ArgsType.toggle),
   (command: "b", description: "                    | Change the buffer with the given number", argsType: ArgsType.number),
   (command: "bd", description: "                   | Delete the current buffer", argsType: ArgsType.none),
@@ -52,7 +64,7 @@ const ExCommandList: array[63, tuple[command, description: string, argsType: Arg
   (command: "cursorLine", description: "           | Change setting to the cursorLine", argsType: ArgsType.toggle),
   (command: "debug", description: "                | Open the debug mode", argsType: ArgsType.none),
   (command: "deleteTrailingSpaces", description: " | Delete the trailing spaces in the current buffer", argsType: ArgsType.none),
-  (command: "e", description: "                    | Open file", argsType: ArgsType.text),
+  (command: "e", description: "                    | Open file", argsType: ArgsType.path),
   (command: "ene", description: "                  | Create the empty buffer", argsType: ArgsType.none),
   (command: "help", description: "                 | Open the help", argsType: ArgsType.none),
   (command: "highlightCurrentLine", description: " | Change setting to the highlightCurrentLine", argsType: ArgsType.toggle),
@@ -86,19 +98,152 @@ const ExCommandList: array[63, tuple[command, description: string, argsType: Arg
   (command: "showGitInactive", description: "      | Change status line setting to show/hide git branch name in inactive window", argsType: ArgsType.toggle),
   (command: "smartcase", description: "            | Change setting to smart case in search", argsType: ArgsType.toggle),
   (command: "smoothScroll", description: "         | Enable/Disable the smooth scroll", argsType: ArgsType.toggle),
-  (command: "sp", description: "                   | Open the file in horizontal split window", argsType: ArgsType.none),
+  (command: "sp", description: "                   | Open the file in horizontal split window", argsType: ArgsType.path),
   (command: "statusLine", description: "           | Enable/Disable the status line", argsType: ArgsType.toggle),
   (command: "syntax", description: "               | Enable/Disable the syntax highlighting", argsType: ArgsType.toggle),
+  (command: "sv", description: "                   | Horizontal split window", argsType: ArgsType.path),
   (command: "tab", description: "                  | Enable/Disable the tab line", argsType: ArgsType.toggle),
   (command: "tabstop", description: "              | Change setting to the tabstop", argsType: ArgsType.number),
   (command: "theme", description: "                | Change the color theme", argsType: ArgsType.theme),
-  (command: "vs", description: "                   | Vertical split window", argsType: ArgsType.none),
+  (command: "vs", description: "                   | Vertical split window", argsType: ArgsType.path),
   (command: "w", description: "                    | Write file", argsType: ArgsType.none),
   (command: "w!", description: "                   | Force write file", argsType: ArgsType.none),
   (command: "wq", description: "                   | Write file and close window", argsType: ArgsType.none),
   (command: "wq!", description: "                  | Force write file and close window", argsType: ArgsType.none),
   (command: "wqa", description: "                  | Write all files", argsType: ArgsType.none)
 ]
+
+when (NimMajor, NimMinor) >= (1, 9):
+  # These codes can't compile in Nim 1.6. Maybe compiler bug.
+
+  proc noArgsCommands(): seq[Runes] {.compileTime.} =
+    ExCommandList
+      .filterIt(it.argsType == ArgsType.none)
+      .mapIt(it.command.toRunes)
+
+  proc toggleArgsCommands(): seq[Runes] {.compileTime.} =
+    ExCommandList
+      .filterIt(it.argsType == ArgsType.toggle)
+      .mapIt(it.command.toRunes)
+
+  proc numberArgsCommands(): seq[Runes] {.compileTime.} =
+    ExCommandList
+      .filterIt(it.argsType == ArgsType.number)
+      .mapIt(it.command.toRunes)
+
+  proc textArgsCommands(): seq[Runes] {.compileTime.} =
+    ExCommandList
+      .filterIt(it.argsType == ArgsType.text)
+      .mapIt(it.command.toRunes)
+
+  proc pathArgsCommands(): seq[Runes] {.compileTime.} =
+    ExCommandList
+      .filterIt(it.argsType == ArgsType.path)
+      .mapIt(it.command.toRunes)
+
+  proc themeArgsCommands(): seq[Runes] {.compileTime.} =
+    ExCommandList
+      .filterIt(it.argsType == ArgsType.theme)
+      .mapIt(it.command.toRunes)
+
+  proc isExCommand(c: Runes, isCaseSensitive: bool = false): bool =
+    if isCaseSensitive:
+      const Commands = ExCommandList.mapIt(it.command.toRunes)
+      Commands.contains(c)
+    else:
+      const Commands = ExCommandList.mapIt(it.command.toLowerAscii.toRunes)
+      Commands.contains(c.toLowerAscii)
+else:
+  proc noArgsCommands(): seq[Runes] =
+    ExCommandList
+      .filterIt(it.argsType == ArgsType.none)
+      .mapIt(it.command.toRunes)
+
+  proc toggleArgsCommands(): seq[Runes] =
+    ExCommandList
+      .filterIt(it.argsType == ArgsType.toggle)
+      .mapIt(it.command.toRunes)
+
+  proc numberArgsCommands(): seq[Runes] =
+    ExCommandList
+      .filterIt(it.argsType == ArgsType.number)
+      .mapIt(it.command.toRunes)
+
+  proc textArgsCommands(): seq[Runes] =
+    ExCommandList
+      .filterIt(it.argsType == ArgsType.text)
+      .mapIt(it.command.toRunes)
+
+  proc pathArgsCommands(): seq[Runes] =
+    ExCommandList
+      .filterIt(it.argsType == ArgsType.path)
+      .mapIt(it.command.toRunes)
+
+  proc themeArgsCommands(): seq[Runes] =
+    ExCommandList
+      .filterIt(it.argsType == ArgsType.theme)
+      .mapIt(it.command.toRunes)
+
+  proc isExCommand(c: Runes, isCaseSensitive: bool = false): bool =
+    if isCaseSensitive:
+      let commands = ExCommandList.mapIt(it.command.toRunes)
+      commands.contains(c)
+    else:
+      let commands = ExCommandList.mapIt(it.command.toLowerAscii.toRunes)
+      commands.contains(c.toLowerAscii)
+
+proc isNoArgsCommand(c: Runes, isCaseSensitive: bool = false): bool {.used.} =
+  # NOTE: Remove the used pragma if you use this.
+
+  if isCaseSensitive:
+    noArgsCommands().contains(c)
+  else:
+    noArgsCommands().toLowerAscii.contains(c.toLowerAscii)
+
+proc isToggleArgsCommand(c: Runes, isCaseSensitive: bool = false): bool =
+  if isCaseSensitive:
+    toggleArgsCommands().contains(c)
+  else:
+    toggleArgsCommands().toLowerAscii.contains(c.toLowerAscii)
+
+proc isNumberArgsCommand(
+  c: Runes,
+  isCaseSensitive: bool = false): bool {.used.} =
+    # NOTE: Remove the used pragma if you use this.
+
+    if isCaseSensitive:
+      numberArgsCommands().contains(c)
+    else:
+      numberArgsCommands().toLowerAscii.contains(c.toLowerAscii)
+
+proc isTextArgsCommand(c: Runes, isCaseSensitive: bool = false): bool {.used.} =
+  # NOTE: Remove the used pragma if you use this.
+
+  if isCaseSensitive:
+    textArgsCommands().contains(c)
+  else:
+    textArgsCommands().toLowerAscii.contains(c.toLowerAscii)
+
+proc isPathArgsCommand(c: Runes, isCaseSensitive: bool = false): bool =
+  if isCaseSensitive:
+    pathArgsCommands().contains(c)
+  else:
+    pathArgsCommands().toLowerAscii.contains(c.toLowerAscii)
+
+proc isThemeArgsCommand(c: Runes, isCaseSensitive: bool = false): bool =
+  if isCaseSensitive:
+    themeArgsCommands().contains(c)
+  else:
+    themeArgsCommands().toLowerAscii.contains(c.toLowerAscii)
+
+proc isPath(a: Option[ArgsType]): bool {.inline.} =
+  a.isSome and a.get == ArgsType.path
+
+proc isExCommand*(suggestType: SuggestType): bool {.inline.} =
+  suggestType == SuggestType.exCommand
+
+proc isExCommandOption*(suggestType: SuggestType): bool {.inline.} =
+  suggestType == SuggestType.exCommandOption
 
 proc askCreateDirPrompt*(
   commndLine: var CommandLine,
@@ -155,155 +300,176 @@ proc askFileChangedSinceReading*(commndLine: var CommandLine): bool =
     if key == ord('y'): result = true
     else: result = false
 
-proc removeSuffix(r: seq[Runes], suffix: string): seq[Runes] =
-  for i in 0 .. r.high:
-    var string = $r[i]
-    string.removeSuffix(suffix)
-    if i == 0: result = @[string.toRunes]
-    else: result.add(string.toRunes)
+proc removeSuffix(lines: seq[Runes], suffix: Runes): seq[Runes] =
+  for i, runes in lines:
+    var withoutSuffix = runes
+    withoutSuffix.removeSuffix(suffix)
+    if i == 0: result = @[withoutSuffix]
+    else: result.add withoutSuffix
 
-proc splitQout(s: string): seq[Runes]=
+proc splitQout(runes: Runes): seq[Runes]=
+  # TODO: Rewrite
   result = @[ru""]
   var
-    quotIn = false
+    InQuot = false
     backSlash = false
 
-  for i in 0 .. s.high:
-    if s[i] == '\\':
+  for i, r in runes:
+    if r == ru'\\':
       backSlash = true
     elif backSlash:
       backSlash = false
-      result[result.high].add(($s[i]).toRunes)
-    elif i > 0 and s[i - 1] == '\\':
-      result[result.high].add(($s[i]).toRunes)
-    elif not quotIn and s[i] == '"':
-      quotIn = true
-      result.add(ru"")
-    elif quotIn and s[i] == '"':
-      quotIn = false
-      if i != s.high:  result.add(ru"")
+      result[^1].add r
+    elif i > 0 and runes[i - 1] == ru'\\':
+      result[^1].add r
+    elif not InQuot and r == ru'"':
+      InQuot = true
+      result.add ru""
+    elif InQuot and r == ru'"':
+      InQuot = false
+      if i != runes.high:  result.add ru""
     else:
-      result[result.high].add(($s[i]).toRunes)
+      result[^1].add r
 
-  return result.removeSuffix(" ")
+  return result.removeSuffix(ru" ")
 
-proc splitCommand*(command: string): seq[Runes] =
-  if (command).contains('"'):
-    return splitQout(command)
-  else:
-    return strutils.splitWhitespace(command).mapIt(it.toRunes)
+proc getFilePathCandidates*(inputPath: Runes): seq[Runes] =
+  ## Return paths for suggestions from `inputPath`.
+  ## Return all files and dirs in the current dir if `inputPath` is empty.
 
-# Return a path in the `buffer`.
-# Return an absolute path if path is `~`.
-proc getInputPath*(buffer: Runes): Runes =
-  let bufferSplited = strutils.splitWhitespace($buffer)
-  if bufferSplited.len > 1:
-    # Assume the last word as path.
-    let path = bufferSplited[^1]
-
-    if path == "~":
-      return getHomeDir().toRunes
-    else:
-      return path.toRunes
-
-# Return file paths for a suggestion from `buffer`.
-# Return all file and dir in the current dir if inputPath is empty.
-proc getCandidatesFilePath*(buffer: Runes): seq[string] =
-  let inputPath = buffer.getInputPath
-
-  var list: seq[Runes] = @[]
-
-  # result[0] is input
-  result.add $inputPath
-
-  if inputPath.contains(ru'/'):
-    let
-      normalizedInput = normalizePath(inputPath)
-      normalizedPath = normalizePath(inputPath.substr(0, inputPath.rfind(ru'/')))
-    for kind, path in walkDir($normalizedPath):
-      if path.toRunes.len > normalizedInput.len and
-            path.toRunes.startsWith(normalizedInput):
+  if inputPath == ru"~":
+    # Return an absolute path of the home dir.
+    return @[getHomeDir().toRunes]
+  elif inputPath.contains(ru'/'):
+    let (inputPathHead, inputPathTail) = splitAndNormalizedPath(inputPath)
+    for kind, path in walkDir($inputPathHead):
+      if path.splitPath.tail.startsWith($inputPathTail):
         if inputPath[0] == ru'~':
           let
-            pathLen = path.toRunes.high
-            hoemeDirLen = (getHomeDir()).high
-            addPath = ru"~" & path.toRunes.substr(hoemeDirLen, pathLen)
-            # If the path is a directory, add '/'
-            p = if dirExists($addPath): addPath & ru "/" else: addPath
-          list.add(p)
+            pathHigh = path.toRunes.high
+            homeDirHigh = high(getHomeDir())
+            addPath = ru"~" & path.toRunes[homeDirHigh .. pathHigh]
+          # If the path is a directory, add '/'
+          if dirExists($addPath): result.add addPath & ru"/"
+          else: result.add addPath
         else:
           # If the path is a directory, add '/'
-          let p = if dirExists(path): path & "/" else: path
-          list.add(p.toRunes)
+          if dirExists(path): result.add toRunes(path & "/")
+          else: result.add path.toRunes
   else:
     for kind, path in walkDir("./"):
-      let normalizePath = path.toRunes.normalizePath
+      let normalizePath = normalizedPath(path.toRunes)
       if inputPath.len == 0 or normalizePath.startsWith(inputPath):
-        let p = path.toRunes.normalizePath
+        let p = normalizedPath(path.toRunes)
         # If the path is a directory, add '/'
-        if dirExists($p): list.add p & ru "/"
-        else: list.add p
+        if dirExists($p): result.add p & ru"/"
+        else: result.add p
 
-  for path in list: result.add($path)
-  result.sort(proc (a, b: string): int = cmp(a, b))
+  result.sort(proc (a, b: Runes): int = cmp($a, $b))
 
-proc isExCommand*(buffer: string): bool =
-  let bufferSplited = strutils.splitWhitespace(buffer)
-  if bufferSplited.len > 0:
-    for c in ExCommandList:
-      if bufferSplited[0] == c.command:
-        return true
-
-proc getCandidatesExCommand*(commandLineBuffer: Runes): seq[Runes] =
-  let buffer = toLowerAscii($commandLineBuffer)
+proc getExCommandCandidates*(input: Runes): seq[Runes] =
+  let lowerInput = toLowerAscii(input)
   for list in ExCommandList:
-    let cmd = list.command
-    if cmd.len >= buffer.len and cmd.startsWith(buffer):
-      result.add(cmd.toRunes)
+    let cmd = list.command.toRunes
+    if cmd.len >= lowerInput.len and cmd.startsWith(lowerInput):
+      result.add cmd
 
-proc getSuggestType*(buffer: Runes): SuggestType =
-  proc isECommand(command: seq[Runes]): bool {.inline.} =
-    cmpIgnoreCase($command[0], "e") == 0
-
-  proc isVsCommand(command: seq[Runes]): bool {.inline.} =
-    cmpIgnoreCase($command[0], "vs") == 0
-
-  proc isSvCommand(command: seq[Runes]): bool {.inline.} =
-    cmpIgnoreCase($command[0], "sv") == 0
-
-  proc isSpCommand(command: seq[Runes]): bool {.inline.} =
-    command.len > 0 and
-    command.len < 3 and
-    cmpIgnoreCase($command[0], "sp") == 0
-
-
-  if buffer.len > 0 and isExCommand($buffer):
-    let cmd = splitCommand($buffer)
-    if isECommand(cmd) or
-       isVsCommand(cmd) or
-       isSvCommand(cmd) or
-       isSpCommand(cmd): SuggestType.filePath
-    else:
-      SuggestType.exCommandOption
+proc getSuggestType*(command: Runes): SuggestType =
+  if command.len > 0 and isExCommand(command):
+    SuggestType.exCommandOption
   else:
     SuggestType.exCommand
 
-proc isSuggestTypeExCommand*(suggestType: SuggestType): bool {.inline.} =
-  suggestType == SuggestType.exCommand
+proc getArgsType(command: Runes): Option[ArgsType] =
+  ## Return ArgsType if valid ex command.
 
-proc isSuggestTypeExCommandOption*(suggestType: SuggestType): bool {.inline.} =
-  suggestType == SuggestType.exCommandOption
+  let lowerCommand = command.toLowerAscii
+  for cmd in ExCommandList:
+    if cmd.command.toLowerAscii.toRunes == lowerCommand:
+      return some(cmd.argsType)
 
-proc isSuggestTypeFilePath*(suggestType: SuggestType): bool {.inline.} =
-  suggestType == SuggestType.filePath
+proc getExCommandOptionCandidates*(
+  command: Runes,
+  args: seq[Runes]): seq[Runes] =
+    ## Return candidates for ex command option suggestion.
+    ## Interpreting upper and lowercase letters as being the same.
 
-proc initSuggestBuffer*(
-  suggestList: seq[Runes],
-  suggestType: SuggestType): seq[Runes] =
+    if isToggleArgsCommand(command):
+      if args.len == 0:
+        return @[ru"on", ru"off"]
+      elif args.len == 1:
+        let arg = args[0]
+        for candidate in [ru"on", ru"off"]:
+          if arg.len < candidate.len and candidate.startsWith(arg):
+            result.add candidate
+    elif isPathArgsCommand(command):
+      if args.len == 1:
+        return getFilePathCandidates(args[0])
+    elif isThemeArgsCommand(command):
+      if args.len == 0:
+        return ColorTheme.mapIt(toRunes($it))
+      elif args.len == 1:
+        for theme in ColorTheme.mapIt(toRunes($it)):
+          if args[0].len < theme.len and theme.startsWith(args[0]):
+            result.add theme
 
-    case suggestType:
-      of filePath:
-        for index, path in suggestList:
+proc currentSuggestion(list: SuggestList): Runes {.inline.} =
+  ## Return the current suggestion.
+
+  list.suggestions[list.currentIndex]
+
+proc updateSuggestions*(list: var SuggestList) =
+  ## Update SuggestList.suggestions.
+
+  case list.suggestType:
+    of SuggestType.exCommand:
+      list.suggestions = getExCommandCandidates(list.rawInput)
+    of SuggestType.exCommandOption:
+      if isPath(list.argsType):
+        let path =
+          if list.commandLineCmd.args.len == 1: list.commandLineCmd.args[0]
+          else: ru""
+        list.suggestions = getFilePathCandidates(path)
+      else:
+        list.suggestions = getExCommandOptionCandidates(
+          list.commandLineCmd.command,
+          list.commandLineCmd.args)
+
+proc splitCommand*(rawInput: Runes): seq[Runes] =
+  if rawInput.contains(ru'"'):
+    # `splitQout` is incomplete.
+    return rawInput.splitQout
+  else:
+    return rawInput.splitWhitespace
+
+proc initCommandLineCommand(rawInput: Runes): CommandLineCommand =
+  ## Return CommandLineCommand from a raw input.
+
+  let commandSplit = splitCommand(rawInput)
+  if commandSplit.len > 0:
+    result.command = commandSplit[0]
+
+    if commandSplit.len > 1:
+      result.args = commandSplit[1 .. ^1]
+
+proc initSuggestList*(rawInput: Runes): SuggestList =
+  result.rawInput = rawInput
+  result.commandLineCmd = rawInput.initCommandLineCommand
+  result.suggestType = getSuggestType(result.commandLineCmd.command)
+  result.argsType = getArgsType(result.commandLineCmd.command)
+  result.updateSuggestions
+
+proc initSuggestBuffer*(suggestList: SuggestList): seq[Runes] =
+  case suggestList.suggestType:
+    of SuggestType.exCommand:
+      # Add command description
+      for list in ExCommandList:
+        for l in suggestList.suggestions:
+          if $l == list.command:
+            result.add l & list.description.ru
+    of SuggestType.exCommandOption:
+      if isPath(suggestList.argsType):
+        for index, path in suggestList.suggestions:
           # Remove '/' end of the path string
           let p =
             if path.len > 0: path[0 .. path.high - 1]
@@ -312,99 +478,28 @@ proc initSuggestBuffer*(
             result.add(path[p.rfind(ru'/') + 1 ..< path.len])
           else:
             result.add(path)
-      of exCommand:
-        # Add command description
-        for list in ExCommandList:
-          for l in suggestList:
-            if $l == list.command:
-              result.add l & list.description.ru
-      of exCommandOption:
-        return suggestList
-
-proc firstArg(buffer: Runes): Runes =
-  let commandSplit = splitWhitespace(buffer)
-  if commandSplit.len > 0:
-    return commandSplit[0]
-  else:
-    return "".toRunes
-
-proc getCandidatesExCommandOption*(commandLine: CommandLine): seq[Runes] =
-  let
-    buffer = commandLine.buffer
-    command = $buffer.firstArg
-
-  var argList: seq[string] = @[]
-  case toLowerAscii(command):
-    of "cursorline",
-       "highlightparen",
-       "indent",
-       "linenum",
-       "livereload",
-       "realtimesearch",
-       "statusline",
-       "syntax",
-       "tabstop",
-       "smoothscroll",
-       "clipboard",
-       "highlightCurrentLine",
-       "highlightcurrentword",
-       "highlightfullspace",
-       "multiplestatusline",
-       "buildonsave",
-       "indentationlines",
-       "icon",
-       "showgitinactive",
-       "ignorecase",
-       "smartcase":
-         argList = @["on", "off"]
-    of "theme":
-      argList = @["vivid", "dark", "light", "config", "vscode"]
-    of "e",
-       "sp",
-       "vs",
-       "sv":
-         argList = buffer.getCandidatesFilePath
-    else:
-      discard
-
-  if argList.len > 0 and argList[0] != "":
-    let arg =
-      if splitWhitespace(buffer).len > 1:
-        splitWhitespace(buffer)[1]
       else:
-        ru""
-    result = @[arg]
+        return suggestList.suggestions
 
-  for i in 0 ..< argList.len:
-    result.add(argList[i].toRunes)
+proc calcXWhenSuggestPath*(commandLineCmd: CommandLineCommand): int =
+  const PromptAndSpaceWidth = 2
 
-proc getSuggestList*(
-  commandLine: CommandLine,
-  suggestType: SuggestType): seq[Runes] =
+  if commandLineCmd.args.len == 0:
+    return commandLineCmd.command.high + PromptAndSpaceWidth
 
-    if isSuggestTypeExCommand(suggestType):
-      result = getCandidatesExCommand(commandLine.buffer)
-    elif isSuggestTypeExCommandOption(suggestType):
-      result = commandLine.getCandidatesExCommandOption
-    else:
-      let pathList = commandLine.buffer.getCandidatesFilePath
-      for path in pathList: result.add(path.ru)
-
-proc calcXWhenSuggestPath*(buffer, inputPath: Runes): int =
   let
+    inputPath = commandLineCmd.args[0]
     # TODO: Refactor
     positionInInputPath =
       if inputPath.len > 0 and
          (inputPath.count('/'.toRune) > 1 or
-         (not inputPath.startsWith("./".toRunes)) or
-         (inputPath.count('/'.toRune) == 1 and $inputPath[^1] != "/")):
-           inputPath.rfind(ru"/")
+         (not inputPath.startsWith(ru"./")) or
+         (inputPath.count(ru'/') == 1 and inputPath[^1] != ru'/')):
+           inputPath.rfind(ru'/')
       else:
         0
 
-  const PromptAndSpaceWidth = 2
-  let command = buffer.firstArg
-  return command.len + PromptAndSpaceWidth + positionInInputPath
+  return commandLineCmd.command.len + PromptAndSpaceWidth + positionInInputPath
 
 proc calcPopUpWindowSize*(
   buffer: seq[Runes]): tuple[h: int, w: int] =
@@ -435,22 +530,37 @@ proc tryOpenSuggestWindow*(): Option[Window] =
 
   # Use EditorStatus.popUpWindow?
   var popUpWindow = initWindow(
-    h,
-    w,
-    y,
-    x,
+    h, w, y, x,
     EditorColorPairIndex.popUpWindow.int16)
 
   return some(popUpWindow)
 
+proc insertSuggestion*(commandLine: var CommandLine, suggestList: SuggestList) =
+  ## Insert the current suggestion to the command line buffer and
+  ## move the cursor position to the end + 1.
+
+  case suggestList.suggestType:
+    of exCommand:
+      if suggestList.currentIndex > -1:
+        commandLine.buffer = suggestList.currentSuggestion
+      else:
+        commandLine.buffer = suggestList.rawInput
+    else:
+      if suggestList.currentIndex > -1:
+        commandLine.buffer =
+          suggestList.commandLineCmd.command &
+          ru" " &
+          suggestList.currentSuggestion
+      else:
+        commandLine.buffer = suggestList.rawInput
+
+  commandLine.moveEnd
+  commandLine.moveRight
+
 proc updateSuggestWindow*(
   suggestWin: var Window,
-  suggestType: SuggestType,
-  suggestList: seq[Runes],
-  suggestIndex: int,
-  commandLine: var CommandLine) =
-
-    let firstArg = commandLine.buffer.firstArg
+  commandLine: var CommandLine,
+  suggestList: SuggestList) =
 
     var
       # Pop up window initial size/position
@@ -459,21 +569,20 @@ proc updateSuggestWindow*(
       x = 0
       y = getTerminalHeight() - 2
 
-    case suggestType:
-      of exCommand:
+    case suggestList.suggestType:
+      of SuggestType.exCommand:
         x = 0
-      of exCommandOption:
-        x = firstArg.len + 1
-      of filePath:
-        # suggestList[0] is the input path.
-        let inputPath =
-          if suggestList.len > 0: suggestList[0]
-          else: "".toRunes
-        x = calcXWhenSuggestPath(commandLine.buffer, inputPath)
+      of SuggestType.exCommandOption:
+        if isPath(suggestList.argsType):
+          x = calcXWhenSuggestPath(suggestList.commandLineCmd)
+        else:
+          x = suggestList.commandLineCmd.command.len + 1
 
     let
-      currentLine = some(suggestIndex)
-      displayBuffer = initSuggestBuffer(suggestList, suggestType)
+      currentLine =
+        if suggestList.currentIndex > -1: some(suggestList.currentIndex)
+        else: none(int)
+      displayBuffer = suggestList.initSuggestBuffer
       winSize = calcPopUpWindowSize(
         displayBuffer)
 
@@ -482,17 +591,8 @@ proc updateSuggestWindow*(
 
     suggestWin.erase
     suggestWin.writePopUpWindow(
-      h, w,
-      y, x,
+      h, w, y, x,
       currentLine,
       displayBuffer)
 
-    case suggestType:
-      of exCommand:
-        commandLine.buffer = suggestList[suggestIndex]
-      else:
-        commandLine.buffer = firstArg & ' '.toRune & suggestList[suggestIndex]
-
-
-    commandLine.moveEnd
-    commandLine.moveRight
+    commandLine.insertSuggestion(suggestList)

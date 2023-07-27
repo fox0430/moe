@@ -20,18 +20,23 @@
 import std/[os, encodings]
 import gapbuffer, unicodeext
 
-proc normalizePath*(path: Runes): Runes =
-  if path[0] == ru'~':
+proc normalizedPath*(path: Runes): Runes =
+  result = normalizedPath($path).toRunes
+  if path.startsWith(ru'~'):
     if path == ru"~" or path == ru"~/":
-      result = getHomeDir().toRunes
-    else:
-      result = getHomeDir().toRunes & path[2..path.high]
-  elif path == ru"./":
-    return path
-  elif path.len > 1 and path[0 .. 1] == ru"./":
-    return path[2 .. path.high]
-  else:
-    return path
+      return getHomeDir().toRunes
+    elif path.startsWith(ru"~/") and path.len > 2:
+      return getHomeDir().toRunes & path[2 .. ^1]
+
+proc splitPath*(path: Runes): tuple[head, tail: Runes] =
+  let (head, tail) = splitPath($path)
+  return (head: head.toRunes, tail: tail.toRunes)
+
+proc splitAndNormalizedPath*(path: Runes): tuple[head, tail: Runes] =
+  ## Returns a normalized path after split.
+
+  let (head, tail) = splitPath(path)
+  return (head: normalizedPath(head), tail: normalizedPath(tail))
 
 proc openFile*(filename: Runes):
   tuple[text: Runes, encoding: CharacterEncoding] =

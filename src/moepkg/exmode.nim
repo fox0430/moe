@@ -1352,8 +1352,10 @@ proc isExCommand*(command: Runes): InputState =
   # Remove ':' if included and split.
   # TODO: Remove?
   let cmd =
-    if command.len > 1 and command.startsWith(":".ru): splitCommand($command[1..^1])
-    else: splitCommand($command)
+    if command.len > 1 and command.startsWith(ru":"):
+      command[1..^1].splitCommand
+    else:
+      command.splitCommand
 
   if cmd.len == 0:
     return InputState.Continue
@@ -1443,11 +1445,11 @@ proc exModeCommand*(status: var EditorStatus, command: seq[Runes]) =
       line = currentBufStatus.buffer.high
     jumpCommand(status, line)
   elif isEditCommand(command):
-    status.editCommand(command[1].normalizePath)
+    status.editCommand(command[1].normalizedPath)
   elif isOpenInHorizontalSplitWindowCommand(command):
-    let path = if command.len == 2:
-      command[1].normalizePath
-    else: status.bufStatus[currentBufferIndex].path
+    let path =
+      if command.len == 2: command[1].normalizedPath
+      else: status.bufStatus[currentBufferIndex].path
     status.openInHorizontalSplitWindow(path)
   elif isOpenInVerticalSplitWindowCommand(command):
     status.openInVerticalSplitWindowCommand(command[1])
@@ -1585,4 +1587,4 @@ proc exModeCommand*(status: var EditorStatus, command: seq[Runes]) =
     status.changeMode(currentBufStatus.prevMode)
 
 proc execExCommand*(status: var EditorStatus, command: Runes) =
-  status.exModeCommand(splitCommand($command))
+  status.exModeCommand(command.splitCommand)
