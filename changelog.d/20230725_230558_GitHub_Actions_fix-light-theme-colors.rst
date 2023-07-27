@@ -3,5 +3,5 @@
 Fixed
 .....
 
-- `#1789`_ Fix light theme colors
+- `#1788`_ Fix light theme colors
 
