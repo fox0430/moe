@@ -145,14 +145,6 @@ when (NimMajor, NimMinor) >= (1, 9):
     ExCommandList
       .filterIt(it.argsType == ArgsType.theme)
       .mapIt(it.command.toRunes)
-
-  proc isExCommand(c: Runes, isCaseSensitive: bool = false): bool =
-    if isCaseSensitive:
-      const Commands = ExCommandList.mapIt(it.command.toRunes)
-      Commands.contains(c)
-    else:
-      const Commands = ExCommandList.mapIt(it.command.toLowerAscii.toRunes)
-      Commands.contains(c.toLowerAscii)
 else:
   proc noArgsCommands(): seq[Runes] =
     ExCommandList
@@ -184,13 +176,13 @@ else:
       .filterIt(it.argsType == ArgsType.theme)
       .mapIt(it.command.toRunes)
 
-  proc isExCommand(c: Runes, isCaseSensitive: bool = false): bool =
-    if isCaseSensitive:
-      let commands = ExCommandList.mapIt(it.command.toRunes)
-      commands.contains(c)
-    else:
-      let commands = ExCommandList.mapIt(it.command.toLowerAscii.toRunes)
-      commands.contains(c.toLowerAscii)
+proc isExCommand(c: Runes, isCaseSensitive: bool = false): bool =
+  if isCaseSensitive:
+    let commands = ExCommandList.mapIt(it.command.toRunes)
+    commands.contains(c)
+  else:
+    let commands = ExCommandList.mapIt(it.command.toLowerAscii.toRunes)
+    commands.contains(c.toLowerAscii)
 
 proc isNoArgsCommand(c: Runes, isCaseSensitive: bool = false): bool {.used.} =
   # NOTE: Remove the used pragma if you use this.
