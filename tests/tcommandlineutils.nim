@@ -183,6 +183,10 @@ suite "commandlineutils: getFilePathCandidates":
     for path in getFilePathCandidates(buffer):
       check files.contains($path)
 
+  test "Expect the absolute path of the home dir":
+    const Input = ru"~"
+    check @[getHomeDir().toRunes] == getFilePathCandidates(Input)
+
 suite "commandlineutils: getExCommandOptionCandidates":
   test "Expect \"on\" and \"off\"":
     let commands = ExCommandList.filterIt(it.argsType == ArgsType.toggle)
@@ -191,7 +195,8 @@ suite "commandlineutils: getExCommandOptionCandidates":
       const Args: seq[Runes] = @[]
       check @[ru"on", ru"off"] == getExCommandOptionCandidates(
         c.command.toRunes,
-        Args)
+        Args,
+        ArgsType.toggle)
 
   test "Expect ColorTheme values":
     const
@@ -199,7 +204,8 @@ suite "commandlineutils: getExCommandOptionCandidates":
       Args: seq[Runes] = @[]
     check ColorTheme.mapIt(toRunes($it)) == getExCommandOptionCandidates(
       Command,
-      Args)
+      Args,
+        ArgsType.theme)
 
 suite "commandlineutils: getExCommandCandidates":
   test "Expect all ex command":
@@ -214,8 +220,24 @@ suite "commandlineutils: getExCommandCandidates":
 
     check commands == getExCommandCandidates(Input)
 
+  test "Expect \"cursorLine\"":
+    const Input = ru"cursorl"
+    let commands = ExCommandList
+      .filterIt(it.command == "cursorLine")
+      .mapIt(it.command.toRunes)
+
+    check commands == getExCommandCandidates(Input)
+
+  test "Expect \"cursorLine\" 2":
+    const Input = ru"cursorL"
+    let commands = ExCommandList
+      .filterIt(it.command == "cursorLine")
+      .mapIt(it.command.toRunes)
+
+    check commands == getExCommandCandidates(Input)
+
 suite "commandlineutils: initSuggestList":
-  test "Incomplete command":
+  test "Suggest ex commands":
     const RawInput = ru"h"
     let expectSuggestions = ExCommandList
       .filterIt(it.command.toRunes.startsWith(RawInput))
@@ -225,6 +247,21 @@ suite "commandlineutils: initSuggestList":
     check SuggestList(
       rawInput: ru"h",
       commandLineCmd: CommandLineCommand(command: ru"h", args: @[]),
+      suggestType: SuggestType.exCommand,
+      argsType: none(ArgsType),
+      currentIndex: 0,
+      suggestions: expectSuggestions) == initSuggestList(RawInput)
+
+  test "Suggest ex commands 2":
+    const RawInput = ru"e"
+    let expectSuggestions = ExCommandList
+      .filterIt(it.command.toRunes.startsWith(RawInput))
+      .mapIt(it.command.toRunes)
+    check expectSuggestions.len > 0
+
+    check SuggestList(
+      rawInput: ru"e",
+      commandLineCmd: CommandLineCommand(command: ru"e", args: @[]),
       suggestType: SuggestType.exCommand,
       argsType: none(ArgsType),
       currentIndex: 0,

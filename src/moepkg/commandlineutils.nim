@@ -237,6 +237,11 @@ proc isExCommand*(suggestType: SuggestType): bool {.inline.} =
 proc isExCommandOption*(suggestType: SuggestType): bool {.inline.} =
   suggestType == SuggestType.exCommandOption
 
+proc isExCommand(list: SuggestList): bool {.inline.} =
+  ## Return true if valid ex command text with space in the raw input.
+
+  list.rawInput.contains(ru' ') and list.commandLineCmd.command.isExCommand
+
 proc askCreateDirPrompt*(
   commndLine: var CommandLine,
   path: string): bool =
@@ -370,7 +375,7 @@ proc getExCommandCandidates*(input: Runes): seq[Runes] =
       result.add list.command.toRunes
 
 proc getSuggestType*(command: Runes): SuggestType =
-  if command.len > 0 and isExCommand(command):
+  if isExCommand(command):
     SuggestType.exCommandOption
   else:
     SuggestType.exCommand
@@ -434,6 +439,10 @@ proc initCommandLineCommand(rawInput: Runes): CommandLineCommand =
     if commandSplit.len > 1:
       result.args = commandSplit[1 .. ^1]
 
+proc updateSuggestType(list: var SuggestList) =
+  if list.isExCommand:
+    list.suggestType = getSuggestType(list.commandLineCmd.command)
+
 proc updateArgsType(list: var SuggestList) =
   if list.suggestType != SuggestType.exCommand:
     list.argsType = getArgsType(list.commandLineCmd.command)
@@ -468,8 +477,8 @@ proc updateSuggestions*(list: var SuggestList) =
 proc initSuggestList*(rawInput: Runes): SuggestList =
   result.rawInput = rawInput
   result.commandLineCmd = rawInput.initCommandLineCommand
-  result.suggestType = getSuggestType(result.commandLineCmd.command)
-  result.argsType = getArgsType(result.commandLineCmd.command)
+  result.updateSuggestType
+  result.updateArgsType
   result.updateSuggestions
 
 proc initSuggestBuffer*(suggestList: SuggestList): seq[Runes] =
