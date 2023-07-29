@@ -394,13 +394,17 @@ proc editorMainLoop*(status: var EditorStatus) =
 
   status.resize
 
-  var command: Runes
+  var
+    currentMode = currentBufStatus.mode
+    command: Runes
 
   while mainWindow.numOfMainWindow > 0:
-    if currentBufStatus.isEditMode:
-      # For undo/redo
+    if currentBufStatus.mode != currentMode and currentMode.isEditMode:
+      # Recording for undo/redo.
       currentBufStatus.buffer.beginNewSuitIfNeeded
       currentBufStatus.tryRecordCurrentPosition(currentMainWindowNode)
+
+      currentMode = currentBufStatus.mode
 
     # TODO: Move to editorstatus.update
     if isVisualMode(currentBufStatus.mode):
