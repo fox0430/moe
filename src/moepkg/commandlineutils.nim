@@ -193,11 +193,15 @@ proc isNoArgsCommand(c: Runes, isCaseSensitive: bool = false): bool {.used.} =
   else:
     noArgsCommands().toLower.contains(c.toLower)
 
-proc isToggleArgsCommand(c: Runes, isCaseSensitive: bool = false): bool =
-  if isCaseSensitive:
-    toggleArgsCommands().contains(c)
-  else:
-    toggleArgsCommands().toLower.contains(c.toLower)
+proc isToggleArgsCommand(
+  c: Runes,
+  isCaseSensitive: bool = false): bool {.used.} =
+    # NOTE: Remove the used pragma if you use this.
+
+    if isCaseSensitive:
+      toggleArgsCommands().contains(c)
+    else:
+      toggleArgsCommands().toLower.contains(c.toLower)
 
 proc isNumberArgsCommand(
   c: Runes,
@@ -217,13 +221,17 @@ proc isTextArgsCommand(c: Runes, isCaseSensitive: bool = false): bool {.used.} =
   else:
     textArgsCommands().toLower.contains(c.toLower)
 
-proc isPathArgsCommand(c: Runes, isCaseSensitive: bool = false): bool =
+proc isPathArgsCommand(c: Runes, isCaseSensitive: bool = false): bool {.used.} =
+  # NOTE: Remove the used pragma if you use this.
+
   if isCaseSensitive:
     pathArgsCommands().contains(c)
   else:
     pathArgsCommands().toLower.contains(c.toLower)
 
-proc isThemeArgsCommand(c: Runes, isCaseSensitive: bool = false): bool =
+proc isThemeArgsCommand(c: Runes, isCaseSensitive: bool = false): bool {.used.} =
+  # NOTE: Remove the used pragma if you use this.
+
   if isCaseSensitive:
     themeArgsCommands().contains(c)
   else:

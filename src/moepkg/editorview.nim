@@ -683,7 +683,6 @@ proc updateSidebarBufferForSyntaxChecker*(
     ## Update (Overwrite) a sidebar buffer for syntax checker reuslts.
     ## It's on left side of EditorView.
 
-    template buffer: var seq[Runes] = view.sidebar.get.buffer
     template highlights: var seq[seq[EditorColorPairIndex]] =
       view.sidebar.get.highlights
 
