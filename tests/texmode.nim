@@ -24,7 +24,7 @@ import moepkg/[ui, editorstatus, gapbuffer, unicodeext, bufferstatus, settings,
                windownode, helputils, backgroundprocess, quickrunutils]
 
 import moepkg/exmode {.all.}
-import moepkg/commandlineutils{.all.}
+import moepkg/commandlineutils {.all.}
 
 proc resize(status: var EditorStatus, h, w: int) =
   updateTerminalSize(h, w)
@@ -40,36 +40,34 @@ proc isValidWindowSize(n: WindowNode) =
   check n.view.originalLine.len > 1
   check n.view.length.len > 1
 
-
 suite "isExCommand":
   ## Generate test code
-  macro isExCommandTest(command: Runes, exceptInputState: InputState) =
-    quote do:
-      let testTitle = "isExCommand: " & $`command`
-
-      test testTitle:
-        check isExCommand(`command`) == `exceptInputState`
+  template isExCommandTest(command: Runes, exceptInputState: InputState) =
+    let testTitle = "isExCommand: " & $`command`
+    test testTitle:
+      check exmode.isExCommand(`command`) == `exceptInputState`
 
   # Check valid Commands
   for cmd in ExCommandList:
     case cmd.argsType:
       of ArgsType.none:
         isExCommandTest(cmd.command.toRunes, InputState.Valid)
-
-      of ArgsType.theme:
-        for t in @["vivid", "dark", "light", "config", "vscode"]:
-          isExCommandTest(toRunes(fmt"{cmd.command} {t}"), InputState.Valid)
-
-      of ArgsType.number:
-        isExCommandTest(toRunes(fmt"{cmd.command} 0"), InputState.Valid)
-
-      of ArgsType.text:
-        isExCommandTest(toRunes(fmt"{cmd.command} text"), InputState.Valid)
-
       of ArgsType.toggle:
         isExCommandTest(toRunes(fmt"{cmd.command} on"), InputState.Valid)
         isExCommandTest(toRunes(fmt"{cmd.command} off"), InputState.Valid)
-
+      of ArgsType.number:
+        isExCommandTest(toRunes(fmt"{cmd.command} 0"), InputState.Valid)
+      of ArgsType.text:
+        isExCommandTest(toRunes(fmt"{cmd.command} text"), InputState.Valid)
+      of ArgsType.path:
+        if "e" == cmd.command:
+          isExCommandTest(toRunes(fmt"{cmd.command} /"), InputState.Valid)
+        else:
+          # TODO: Add path And fix tests
+          isExCommandTest(toRunes(fmt"{cmd.command}"), InputState.Valid)
+      of ArgsType.theme:
+        for t in @["vivid", "dark", "light", "config", "vscode"]:
+          isExCommandTest(toRunes(fmt"{cmd.command} {t}"), InputState.Valid)
   # Check the empty
   isExCommandTest("".toRunes, InputState.Continue)
 
@@ -1094,7 +1092,7 @@ suite "Ex mode: e command":
     status.exModeCommand(Command)
 
     check status.bufStatus[1].mode == Mode.filer
-    check status.bufStatus[1].path == (ru getCurrentDir()) & ru"/"
+    check status.bufStatus[1].path == getCurrentDir().toRunes
 
 suite "Ex mode: q command":
   test "Run q command when opening multiple windows (#1056)":

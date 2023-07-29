@@ -283,14 +283,11 @@ proc toSeqRunes*(s: seq[string]): seq[Runes] =
   for l in s:
     result.add l.toRunes
 
-proc startsWith*(runes1, runes2: Runes): bool =
-  result = true
-  for i in 0 ..< min(runes1.len, runes2.len):
-    if runes1[i] != runes2[i]:
-      result = false
-      break
+proc startsWith*(r1: Runes, r2: Runes | Rune): bool {.inline.} =
+  startsWith($r1, $r2)
 
-proc startsWith*(runes1: Runes, r: Rune): bool {.inline.} = runes1[0] == r
+proc endsWith*(r1: Runes, r2: Runes | Rune): bool {.inline.} =
+  endsWith($r1, $r2)
 
 proc `$`*(seqRunes: seq[Runes]): string =
   for runes in seqRunes: result = result & $runes
@@ -516,3 +513,24 @@ proc join*(lines: seq[Runes], sep: Runes = ru""): Runes =
   for index, runes in lines:
     result.add runes
     if index < lines.high: result.add sep
+
+proc removePrefix*(runes: var Runes, prefix: Runes) =
+  var str = $runes
+  str.removePrefix($prefix)
+  runes = str.toRunes
+
+proc removeSuffix*(runes: var Runes, suffix: Runes) =
+  var str = $runes
+  str.removeSuffix($suffix)
+  runes = str.toRunes
+
+proc toLower*(runes: Runes): Runes =
+  for r in runes: result.add toLower(r)
+
+proc toLower*(lines: seq[Runes]): seq[Runes] =
+  for runes in lines: result.add toLower(runes)
+
+proc isAllLower*(runes: Runes): bool =
+  result = true
+  for r in runes:
+    if not r.isLower: return false
