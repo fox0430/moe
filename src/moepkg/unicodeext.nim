@@ -524,12 +524,13 @@ proc removeSuffix*(runes: var Runes, suffix: Runes) =
   str.removeSuffix($suffix)
   runes = str.toRunes
 
-proc toLowerAscii*(r: Rune): Rune {.inline.} =
-  toLowerAscii(r.char).toRune
+proc toLower*(runes: Runes): Runes =
+  for r in runes: result.add toLower(r)
 
-proc toLowerAscii*(runes: Runes): Runes {.inline.} =
-  toLowerAscii($runes).toRunes
+proc toLower*(lines: seq[Runes]): seq[Runes] =
+  for runes in lines: result.add toLower(runes)
 
-proc toLowerAscii*(lines: seq[Runes]): seq[Runes] =
-  for runes in lines:
-    result.add toLowerAscii($runes).toRunes
+proc isAllLower*(runes: Runes): bool =
+  result = true
+  for r in runes:
+    if not r.isLower: return false
