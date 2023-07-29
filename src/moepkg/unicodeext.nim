@@ -452,15 +452,15 @@ proc encodeUTF8*(r: Rune): seq[uint32] =
   const
     # first byte of a 2-byte encoding starts 110 and carries 5 bits of data
     b2Lead = 0xC0 # 1100 0000
-    b2Mask = 0x1F # 0001 1111
+    b2Mask {.used.} = 0x1F # 0001 1111
 
     # first byte of a 3-byte encoding starts 1110 and carries 4 bits of data
     b3Lead = 0xE0 # 1110 0000
-    b3Mask = 0x0F # 0000 1111
+    b3Mask {.used.} = 0x0F # 0000 1111
 
     # first byte of a 4-byte encoding starts 11110 and carries 3 bits of data
     b4Lead = 0xF0 # 1111 0000
-    b4Mask = 0x07 # 0000 0111
+    b4Mask {.used.} = 0x07 # 0000 0111
 
     # non-first bytes start 10 and carry 6 bits of data
     mbLead = 0x80 # 1000 0000

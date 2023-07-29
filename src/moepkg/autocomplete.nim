@@ -55,10 +55,6 @@ iterator enumerateWords*(runes: Runes): Runes =
 proc contains(wordDictionary: WordDictionary, word: Runes): bool {.inline.} =
   wordDictionary.contains($word)
 
-# Get `WordDictionary.numOfUsed` by `word`
-proc getNumOfUsed(wordDictionary: WordDictionary, word: Runes): int {.inline.} =
-  wordDictionary[$word]
-
 # Add words to the wordDictionary.
 proc addWordToDictionary*(wordDictionary: var WordDictionary, text: Runes) =
   for word in enumerateWords(text):
