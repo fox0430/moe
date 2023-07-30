@@ -587,42 +587,36 @@ proc insertSuggestion*(commandLine: var CommandLine, suggestList: SuggestList) =
   commandLine.moveEnd
   commandLine.moveRight
 
-proc updateSuggestWindow*(
-  suggestWin: var Window,
-  commandLine: var CommandLine,
-  suggestList: SuggestList) =
+proc updateSuggestWindow*(suggestWin: var Window, suggestList: SuggestList) =
+  var
+    # Pop up window initial size/position
+    h = 1
+    w = 1
+    x = 0
+    y = getTerminalHeight() - 2
 
-    var
-      # Pop up window initial size/position
-      h = 1
-      w = 1
+  case suggestList.suggestType:
+    of SuggestType.exCommand:
       x = 0
-      y = getTerminalHeight() - 2
+    of SuggestType.exCommandOption:
+      if isPath(suggestList.argsType.get):
+        x = calcXWhenSuggestPath(suggestList.commandLineCmd)
+      else:
+        x = suggestList.commandLineCmd.command.len + 1
 
-    case suggestList.suggestType:
-      of SuggestType.exCommand:
-        x = 0
-      of SuggestType.exCommandOption:
-        if isPath(suggestList.argsType.get):
-          x = calcXWhenSuggestPath(suggestList.commandLineCmd)
-        else:
-          x = suggestList.commandLineCmd.command.len + 1
-
-    let
-      currentLine =
-        if suggestList.currentIndex > -1: some(suggestList.currentIndex)
-        else: none(int)
-      displayBuffer = suggestList.initSuggestBuffer
-      winSize = calcPopUpWindowSize(
-        displayBuffer)
-
-    h = winSize.h
-    w = winSize.w
-
-    suggestWin.erase
-    suggestWin.writePopUpWindow(
-      h, w, y, x,
-      currentLine,
+  let
+    currentLine =
+      if suggestList.currentIndex > -1: some(suggestList.currentIndex)
+      else: none(int)
+    displayBuffer = suggestList.initSuggestBuffer
+    winSize = calcPopUpWindowSize(
       displayBuffer)
 
-    commandLine.insertSuggestion(suggestList)
+  h = winSize.h
+  w = winSize.w
+
+  suggestWin.erase
+  suggestWin.writePopUpWindow(
+    h, w, y, x,
+    currentLine,
+    displayBuffer)

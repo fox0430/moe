@@ -216,6 +216,10 @@ proc commandLineLoop*(status: var EditorStatus) =
       elif suggestList.suggestions.len > 1:
         return tryOpenSuggestWindow()
 
+  proc closeSuggestWindow(suggestWin: var Option[Window]) =
+    suggestWin.get.delete
+    suggestWin = none(Window)
+
   if currentBufStatus.isSearchMode:
     status.searchHistory.add "".toRunes
 
@@ -242,13 +246,23 @@ proc commandLineLoop*(status: var EditorStatus) =
     suggestList.currentIndex = status.searchHistory.high
 
   while not isCancel:
-    status.update
-
     if suggestWin.isSome:
-      suggestWin.get.updateSuggestWindow(
-        status.commandLine,
-        suggestList)
+        # Update suggestion window and command line.
+
+      suggestList.updateSuggestions
+      if suggestList.suggestions.len == 0:
+        suggestWin.closeSuggestWindow
+      elif suggestList.suggestions.len == 1:
+        # If there is only one candidate, remove the window and insert it.
+        suggestWin.closeSuggestWindow
+        status.commandLine.insertSuggestion(suggestList)
+      elif suggestList.suggestions.len > 1:
+        suggestWin.get.updateSuggestWindow(suggestList)
+        status.commandLine.insertSuggestion(suggestList)
+
       status.commandLine.update
+    else:
+      status.update
 
     # TODO: Move to editorstatus.update?
     if currentBufStatus.isSearchMode:
@@ -260,6 +274,7 @@ proc commandLineLoop*(status: var EditorStatus) =
     if isResizeKey(key):
       updateTerminalSize()
       status.resize
+      status.update
       continue
 
     if exCommandHistoryIndex.isResetExCommandHistoryIndex(key):
@@ -274,10 +289,8 @@ proc commandLineLoop*(status: var EditorStatus) =
         suggestWin.get.delete
         suggestWin = none(Window)
     elif isEnterKey(key):
-      # Close the suggestion window.
       if suggestWin.isSome:
-        suggestWin.get.delete
-        suggestWin = none(Window)
+        suggestWin.closeSuggestWindow
         if suggestList.currentindex > -1:
           # Insert the current selection and continue the current mode.
           status.commandLine.insertSuggestion(suggestList)
@@ -343,8 +356,7 @@ proc commandLineLoop*(status: var EditorStatus) =
       status.execSearchCommand(status.commandLine.buffer)
 
     if suggestWin.isSome:
-      suggestWin.get.delete
-      suggestWin = none(Window)
+      suggestWin.closeSuggestWindow
 
   if isCancel:
     status.changeMode(currentBufStatus.prevMode)
