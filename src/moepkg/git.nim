@@ -87,6 +87,15 @@ proc isGitAvailable*(): bool {.inline.} =
 
   if execCmdExNoOutput("git -v") == 0: return true
 
+proc getCurrentGitBranchName*(): Result[Runes, string] =
+  ## Return the current git branch name
+
+  let cmdResult = execCmdEx("git rev-parse --abbrev-ref HEAD")
+  if cmdResult.exitCode == 0:
+    return Result[Runes, string].ok stripLineEnd(cmdResult.output.toRunes)
+  else:
+    return Result[Runes, string].err "Failed to get a git branch: {cmdResult.output}"
+
 proc gitDiffTmpDir*(): string {.inline.} =
   ## Return a path for a tmp dir for git diff.
   return getCacheDir() / "moe/gitDiffTmp/"

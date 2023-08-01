@@ -534,3 +534,8 @@ proc isAllLower*(runes: Runes): bool =
   result = true
   for r in runes:
     if not r.isLower: return false
+
+proc stripLineEnd*(runes: Runes): Runes =
+  var s = $runes
+  s.stripLineEnd
+  return s.toRunes
