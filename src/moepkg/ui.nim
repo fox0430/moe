@@ -332,26 +332,6 @@ proc write*(
 
     win.write(y, x, $runes, color, attribute, storeX)
 
-proc append*(
-  win: var Window,
-  str: string,
-  color: int16 = DefaultColorPair) =
-
-    when not defined unitTest:
-      # Not write when running unit tests
-      win.attrSet(color.cshort)
-      win.cursesWindow.mvwaddstr(win.y.cint, win.x.cint, str)
-      win.attrOff(color.cshort)
-
-      win.x += str.toRunes.width
-
-proc append*(
-  win: var Window,
-  runes: Runes,
-  color: int16 = DefaultColorPair) {.inline.} =
-
-    win.append($runes, color)
-
 proc erase*(win: var Window) =
   werase(win.cursesWindow)
 
