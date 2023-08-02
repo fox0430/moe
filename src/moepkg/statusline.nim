@@ -20,7 +20,8 @@
 import std/[strutils, strformat, os]
 import pkg/results
 import syntax/highlite
-import ui, bufferstatus, color, unicodeext, settings, windownode, gapbuffer, git
+import ui, bufferstatus, color, unicodeext, settings, windownode, gapbuffer,
+       git, fileutils
 
 type
   StatusLineColorSegment = object
@@ -81,7 +82,70 @@ proc statusLineColor(mode: Mode, isActiveWindow: bool): EditorColorPairIndex =
       if isActiveWindow: return EditorColorPairIndex.statusLineNormalMode
       else: return EditorColorPairIndex.statusLineNormalModeInactive
 
+proc currentLineNumber(node: WindowNode): int {.inline.} =
+  node.currentLine + 1
+
+proc totalLines(b: BufferStatus): int {.inline.} = b.buffer.len
+
+proc currentColumnNumber(node: WindowNode): int {.inline.} =
+  node.currentColumn + 1
+
+proc totalColumns(b: BufferStatus, node: WindowNode): int {.inline.} =
+  b.buffer[node.currentLine].len
+
+proc lineInPercent(b: BufferStatus, node: WindowNode): int {.inline.} =
+  int(node.currentLine / b.buffer.len) * 100
+
+proc columnInPercent(b: BufferStatus, node: WindowNode): int {.inline.} =
+  if b.buffer[node.currentLine].len > 0:
+    return int(node.currentColumn / b.buffer[node.currentLine].len) * 100
+
+proc encoding(b: BufferStatus): CharacterEncoding {.inline.} =
+  b.characterEncoding
+
+proc fileType(b: BufferStatus): string =
+  if b.isEditMode:
+    if b.language == SourceLanguage.langNone:
+      return "Plain"
+    else:
+      return sourceLanguageToStr[b.language]
+
+proc fileTypeIcon(b: BufferStatus): string =
+  if b.isEditMode:
+    return $fileTypeIcon(b.fileType)
+
 proc statusLineWidth(s: StatusLine): int {.inline.} = s.window.width
+
+proc statusLineInfoBuffer(
+  b: BufferStatus,
+  node: WindowNode,
+  setupText: string): string =
+    ## Buit and returns a buffer based on the setupText.
+    ## Also see settings.StatusLineItem.
+    ## Text example: "{lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {fileType}"
+
+    result = setupText
+
+    # StatusLineItem.lineNumber
+    result = result.replace("{lineNumber}", $currentLineNumber(node))
+    # StatusLineItem.lineInPercent
+    result = result.replace("{lineInPercent}", $lineInPercent(b, node))
+    # StatusLineItem.totalLines
+    result = result.replace("{totalLines}", $totalLines(b))
+    # StatusLineItem.columnNumber
+    result = result.replace("{columnNumber}", $currentColumnNumber(node))
+    # StatusLineItem.columnInPercent
+    result = result.replace("{columnInPercent}", $columnInPercent(b, node))
+    # StatusLineItem.totalColumns
+    result = result.replace("{totalColumns}", $totalColumns(b, node))
+    # StatusLineItem.encoding
+    result = result.replace("{encoding}", $encoding(b))
+    # StatusLineItem.fileType
+    result = result.replace("{fileType}", fileType(b))
+    # StatusLineItem.fileTypeIcon
+    result = result.replace("{fileTypeIcon}", fileTypeIcon(b))
+
+    if result.len > 0: result.add ' '
 
 proc addFilerModeInfo(
   s: var StatusLine,
@@ -95,9 +159,17 @@ proc addFilerModeInfo(
     if settings.statusLine.directory:
       buffer.add ru" " & bufStatus.path
 
-    if s.statusLineWidth > s.buffer.len + buffer.len:
+    let info = statusLineInfoBuffer(
+      bufStatus,
+      windowNode,
+      $settings.statusLine.setupText).toRunes
+
+    if s.statusLineWidth > s.buffer.len + buffer.len + info.len:
       # Add spaces before info.
-      buffer.add ru " ".repeat(s.statusLineWidth - s.buffer.len - buffer.len)
+      buffer.add ru " ".repeat(
+        s.statusLineWidth - s.buffer.len - buffer.len - info.len)
+
+    buffer.add info
 
     s.highlight.segments.add StatusLineColorSegment(
       first: s.buffer.len,
@@ -112,18 +184,25 @@ proc addBufManagerModeInfo(
   isActiveWindow: bool,
   settings: EditorSettings) =
 
-    var buffer = fmt"{windowNode.currentLine + 1}/{bufStatus.buffer.high}"
+    var buffer: Runes
 
-    # Add spaces before info.
-    if s.statusLineWidth > s.buffer.len - buffer.len:
+    let info = statusLineInfoBuffer(
+      bufStatus,
+      windowNode,
+      $settings.statusLine.setupText).toRunes
+
+    if s.statusLineWidth > buffer.len + s.buffer.len + info.len:
       # Add spaces before info.
-      buffer.add ' '.repeat(s.statusLineWidth - s.buffer.len - buffer.len)
+      buffer.add  ' '.repeat(
+        s.statusLineWidth - buffer.len - s.buffer.len - info.len).toRunes
+
+    buffer.add info
 
     s.highlight.segments.add StatusLineColorSegment(
       first: s.buffer.len,
       last: s.buffer.len + buffer.high,
       color: statusLineColor(bufStatus.mode, isActiveWindow))
-    s.buffer.add buffer.toRunes
+    s.buffer.add buffer
 
 proc addLogViewerModeInfo(
   s: var StatusLine,
@@ -132,17 +211,25 @@ proc addLogViewerModeInfo(
   isActiveWindow: bool,
   settings: EditorSettings) =
 
-    var buffer = fmt"{windowNode.currentLine + 1}/{bufStatus.buffer.high}"
+    var buffer: Runes
 
-    if s.statusLineWidth > s.buffer.len - buffer.len:
+    let info = statusLineInfoBuffer(
+      bufStatus,
+      windowNode,
+      $settings.statusLine.setupText).toRunes
+
+    if s.statusLineWidth > buffer.len + s.buffer.len + info.len:
       # Add spaces before info.
-      buffer.add ' '.repeat(s.statusLineWidth - s.buffer.len - buffer.len)
+      buffer.add  ' '.repeat(
+        s.statusLineWidth - buffer.len - s.buffer.len - info.len).toRunes
+
+    buffer.add info
 
     s.highlight.segments.add StatusLineColorSegment(
       first: s.buffer.len,
       last: s.buffer.len + buffer.high,
       color: statusLineColor(bufStatus.mode, isActiveWindow))
-    s.buffer.add buffer.toRunes
+    s.buffer.add buffer
 
 proc addQuickRunModeInfo(
   s: var StatusLine,
@@ -151,17 +238,25 @@ proc addQuickRunModeInfo(
   isActiveWindow: bool,
   settings: EditorSettings) =
 
-    var buffer = fmt"{windowNode.currentLine + 1}/{bufStatus.buffer.high}"
+    var buffer: Runes
 
-    if s.statusLineWidth > s.buffer.len + buffer.len:
+    let info = statusLineInfoBuffer(
+      bufStatus,
+      windowNode,
+      $settings.statusLine.setupText).toRunes
+
+    if s.statusLineWidth > buffer.len + s.buffer.len + info.len:
       # Add spaces before info.
-      buffer.add  ' '.repeat(s.statusLineWidth - s.buffer.len - buffer.len)
+      buffer.add  ' '.repeat(
+        s.statusLineWidth - buffer.len - s.buffer.len - info.len).toRunes
+
+    buffer.add info
 
     s.highlight.segments.add StatusLineColorSegment(
       first: s.buffer.len,
       last: s.buffer.len + buffer.high,
       color: statusLineColor(bufStatus.mode, isActiveWindow))
-    s.buffer.add buffer.toRunes
+    s.buffer.add buffer
 
 proc addNormalModeInfo(
   s: var StatusLine,
@@ -179,34 +274,17 @@ proc addNormalModeInfo(
       const ChangedMark = ru"[+]"
       buffer.add ru" " & ChangedMark
 
-    let
-      line =
-        if settings.statusLine.line:
-          fmt"{windowNode.currentLine + 1}/{bufStatus.buffer.len}"
-        else:
-          ""
-      column =
-        if settings.statusLine.column:
-          fmt"{windowNode.currentColumn + 1}/{bufStatus.buffer[windowNode.currentLine].len}"
-        else:
-          ""
-      encoding =
-        if settings.statusLine.characterEncoding: $bufStatus.characterEncoding
-        else:
-        ""
-      language =
-        if bufStatus.language == SourceLanguage.langNone: "Plain"
-        else: sourceLanguageToStr[bufStatus.language]
-
-      info = fmt"{line} {column} {encoding} {language} ".toRunes
+    let info = statusLineInfoBuffer(
+      bufStatus,
+      windowNode,
+      $settings.statusLine.setupText).toRunes
 
     if s.statusLineWidth > buffer.len + s.buffer.len + info.len:
-      # Add spaces
+      # Add spaces before info.
       buffer.add  ' '.repeat(
-        s.statusLineWidth - buffer.len - s.buffer.len - info.len)
-        .toRunes
+        s.statusLineWidth - buffer.len - s.buffer.len - info.len).toRunes
 
-    buffer.add fmt"{line} {column} {encoding} {language} ".toRunes
+    buffer.add info
 
     s.highlight.segments.add StatusLineColorSegment(
       first: s.buffer.len,
@@ -373,6 +451,7 @@ proc updateStatusLineBuffer(
   windowNode: WindowNode,
   isActiveWindow: bool,
   settings: EditorSettings) =
+    ## Update buffer and highlight for the status line.
 
     s.buffer = @[]
     s.highlight.segments = @[]
@@ -399,6 +478,8 @@ proc updateStatusLineBuffer(
       s.addNormalModeInfo(bufStatus, windowNode, isActiveWindow, settings)
 
 proc write(s: var StatusLine) =
+  ## Write buffer to the terminal.
+
   const Y = 0
   for cs in s.highlight.segments:
     let

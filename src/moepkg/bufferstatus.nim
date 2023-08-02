@@ -50,6 +50,7 @@ type
     isUpdate*: bool
     characterEncoding*: CharacterEncoding
     language*: SourceLanguage
+    fileType*: FileType
     selectedArea*: SelectedArea
     path*: Runes
     openDir*: Runes
@@ -269,6 +270,7 @@ proc initBufferStatus*(
     result.mode = mode
     result.lastSaveTime = now()
     result.lastGitInfoCheckTime = now()
+    result.fileType = getFileType(path)
 
     if isFilerMode(result.mode):
       result.path = absolutePath(path).toRunes

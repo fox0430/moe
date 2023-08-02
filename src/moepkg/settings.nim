@@ -19,7 +19,7 @@
 
 import std/[os, json, macros, options, strformat, osproc, strutils, sequtils,
             enumutils]
-import pkg/[parsetoml, results]
+import pkg/[parsetoml, results, regex]
 import ui, color, unicodeext, highlight, platform, independentutils, rgb
 
 export TomlError
@@ -133,22 +133,30 @@ type
   FilerSettings* = object
     showIcons*: bool
 
+  StatusLineItem* = enum
+    lineNumber
+    lineInPercent
+    totalLines
+    columnNumber
+    columnInPercent
+    totalColumns
+    encoding
+    fileType
+    fileTypeIcon
+
   StatusLineSettings* = object
     enable*: bool
     merge*: bool
     mode*: bool
     filename*: bool
     chanedMark*: bool
-    line*: bool
-    column*: bool
-    characterEncoding*: bool
-    language*: bool
     directory*: bool
     multipleStatusLine*: bool
     gitChangedLines*: bool
     gitBranchName*: bool
     showGitInactive*: bool
     showModeInactive*: bool
+    setupText*: Runes
 
   TabLineSettings* = object
     enable*: bool
@@ -325,14 +333,12 @@ proc initStatusLineSettings*(): StatusLineSettings =
   result.mode = true
   result.filename = true
   result.chanedMark = true
-  result.line = true
-  result.column = true
-  result.characterEncoding = true
-  result.language = true
   result.directory = true
   result.multipleStatusLine = true
   result.gitChangedLines = true
   result.gitBranchName = true
+  result.setupText =
+    ru"{lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {fileType}"
 
 proc initEditorViewSettings*(): EditorViewSettings =
   result.highlightCurrentLine = true
@@ -1141,7 +1147,8 @@ proc parseStatusLineTable(
   statusLineConfigs: TomlValueRef) =
 
     if statusLineConfigs.contains("multipleStatusLine"):
-      s.statusLine.multipleStatusLine = statusLineConfigs["multipleStatusLine"].getBool
+      s.statusLine.multipleStatusLine =
+        statusLineConfigs["multipleStatusLine"].getBool
 
     if statusLineConfigs.contains("merge"):
       s.statusLine.merge = statusLineConfigs["merge"].getBool
@@ -1155,32 +1162,26 @@ proc parseStatusLineTable(
     if statusLineConfigs.contains("chanedMark"):
       s.statusLine.chanedMark = statusLineConfigs["chanedMark"].getBool
 
-    if statusLineConfigs.contains("line"):
-      s.statusLine.line = statusLineConfigs["line"].getBool
-
-    if statusLineConfigs.contains("column"):
-      s.statusLine.column = statusLineConfigs["column"].getBool
-
-    if statusLineConfigs.contains("encoding"):
-      s.statusLine.characterEncoding = statusLineConfigs["encoding"].getBool
-
-    if statusLineConfigs.contains("language"):
-      s.statusLine.language = statusLineConfigs["language"].getBool
-
     if statusLineConfigs.contains("directory"):
       s.statusLine.directory = statusLineConfigs["directory"].getBool
 
     if statusLineConfigs.contains("gitChangedLines"):
-      s.statusLine.gitChangedLines = statusLineConfigs["gitChangedLines"].getBool
+      s.statusLine.gitChangedLines =
+        statusLineConfigs["gitChangedLines"].getBool
 
     if statusLineConfigs.contains("gitBranchName"):
       s.statusLine.gitBranchName = statusLineConfigs["gitBranchName"].getBool
 
     if statusLineConfigs.contains("showGitInactive"):
-      s.statusLine.showGitInactive = statusLineConfigs["showGitInactive"].getBool
+      s.statusLine.showGitInactive =
+        statusLineConfigs["showGitInactive"].getBool
 
     if statusLineConfigs.contains("showModeInactive"):
-      s.statusLine.showModeInactive = statusLineConfigs["showModeInactive"].getBool
+      s.statusLine.showModeInactive =
+        statusLineConfigs["showModeInactive"].getBool
+
+    if statusLineConfigs.contains("setupText"):
+      s.statusLine.setupText = statusLineConfigs["setupText"].getStr.toRunes
 
 proc parseBuildOnSaveTable(
   s: var EditorSettings,
@@ -1787,6 +1788,17 @@ proc validateBuildOnSaveTable(table: TomlValueRef): Option[InvalidItem] =
       else:
           return some(InvalidItem(name: $key, val: $val))
 
+proc validateStatusLineSetupText(text: string): bool =
+  ## Check text for StatusLineSettings.setupText.
+  ## Text example: "{lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {fileType}"
+
+  result = true
+
+  for m in text.findAll(re"\{(\w+)\}"):
+    let word = m.group(0, text)[0]
+    if not StatusLineItem.mapIt($it).contains(word):
+      return false
+
 proc validateStatusLineTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
     case key:
@@ -1795,10 +1807,6 @@ proc validateStatusLineTable(table: TomlValueRef): Option[InvalidItem] =
          "mode",
          "filename",
          "chanedMark",
-         "line",
-         "column",
-         "encoding",
-         "language",
          "directory",
          "gitChangedLines",
          "gitBranchName",
@@ -1806,6 +1814,10 @@ proc validateStatusLineTable(table: TomlValueRef): Option[InvalidItem] =
          "showModeInactive":
         if not (val.kind == TomlValueKind.Bool):
           return some(InvalidItem(name: $key, val: $val))
+      of "setupText":
+        if (val.kind != TomlValueKind.String) and
+           (not validateStatusLineSetupText(val.getStr)):
+             return some(InvalidItem(name: $key, val: $val))
       else:
         return some(InvalidItem(name: $key, val: $val))
 
@@ -2214,15 +2226,12 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "mode = {$settings.statusLine.mode }"
   result.addLine fmt "filename = {$settings.statusLine.filename}"
   result.addLine fmt "chanedMark = {$settings.statusLine.chanedMark}"
-  result.addLine fmt "line = {$settings.statusLine.line}"
-  result.addLine fmt "column = {$settings.statusLine.column}"
-  result.addLine fmt "encoding = {$settings.statusLine.characterEncoding}"
-  result.addLine fmt "language = {$settings.statusLine.language}"
   result.addLine fmt "directory = {$settings.statusLine.directory}"
   result.addLine fmt "gitChangedLines = {$settings.statusLine.gitChangedLines}"
   result.addLine fmt "gitBranchName = {$settings.statusLine.gitBranchName}"
   result.addLine fmt "showGitInactive = {$settings.statusLine.showGitInactive}"
   result.addLine fmt "showModeInactive = {$settings.statusLine.showModeInactive}"
+  result.addLine fmt "setupText = \"{settings.statusLine.setupText}\""
 
   result.addLine ""
 

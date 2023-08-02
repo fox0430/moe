@@ -70,15 +70,12 @@ const TomlStr = """
   mode = false
   filename = false
   chanedMark = false
-  line = false
-  column = false
-  encoding = false
-  language = false
   directory = false
   gitChangedLines = false
   gitBranchName = false
   showGitInactive = true
   showModeInactive = true
+  setupText = "{lineNumber}/{totalLines}"
 
   [Highlight]
   currentLine = true
@@ -393,15 +390,12 @@ suite "Parse configuration file":
     check not settings.statusLine.mode
     check not settings.statusLine.filename
     check not settings.statusLine.chanedMark
-    check not settings.statusLine.line
-    check not settings.statusLine.column
-    check not settings.statusLine.characterEncoding
-    check not settings.statusLine.language
     check not settings.statusLine.directory
     check not settings.statusLine.gitChangedLines
     check not settings.statusLine.gitBranchName
     check settings.statusLine.showGitInactive
     check settings.statusLine.showModeInactive
+    check settings.statusLine.setupText == ru"{lineNumber}/{totalLines}"
 
     check settings.view.highlightCurrentLine
     check not settings.highlight.replaceText

@@ -291,15 +291,9 @@ proc initFilerHighlight*[T](
         lastColumn: buffer[index].len,
         color: color))
 
-## Return true if Dockerfile or docker compose file.
-proc isDockerFile(filename: string): bool {.inline.} =
- filename == "Dockerfile" or
- filename == "docker-compose.yml" or
- filename == "docker-compose.yaml" or
- filename == "compose.yaml" or
- filename == "compose.yml"
-
 proc pathToIcon(path: string): Runes =
+  # TODO: Use fileutils.getFileType
+
   if dirExists(path):
     return ru"📁 "
 
