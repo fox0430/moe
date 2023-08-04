@@ -732,6 +732,9 @@ proc update*(status: var EditorStatus) =
     settings.highlight.reservedWords,
     settings.syntax)
 
+  if currentBufStatus.isVisualMode:
+    currentBufStatus.updateSelectedArea(currentMainWindowNode)
+
   # Set editor Color Pair for current line highlight.
   # New color pairs are set to number larger than the maximum value of EditorColorPiarIndex.
   var currentLineColorPair: int = ord(EditorColorPairIndex.high) + 1
@@ -762,9 +765,6 @@ proc update*(status: var EditorStatus) =
           isCurrentMainWin =
             if node.windowIndex == currentMainWindowNode.windowIndex: true
             else: false
-
-        if isCurrentMainWin and bufStatus.isVisualMode:
-          status.bufStatus[node.bufferIndex].updateSelectedArea(node)
 
         # Reload Editorview. This is not the actual terminal view.
         node.view.reload(
