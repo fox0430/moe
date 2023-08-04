@@ -763,7 +763,7 @@ proc update*(status: var EditorStatus) =
             if node.windowIndex == currentMainWindowNode.windowIndex: true
             else: false
 
-        if isCurrentMainWin:
+        if isCurrentMainWin and bufStatus.isVisualMode:
           status.bufStatus[node.bufferIndex].updateSelectedArea(node)
 
         # Reload Editorview. This is not the actual terminal view.
