@@ -28,13 +28,6 @@ proc initSelectedArea*(startLine, startColumn: int): SelectedArea =
   result.endLine = startLine
   result.endColumn = startColumn
 
-proc updateSelectedArea*(
-  area: var SelectedArea,
-  currentLine, currentColumn: int) {.inline.} =
-
-    area.endLine = currentLine
-    area.endColumn = currentColumn
-
 proc swapSelectedArea*(area: var SelectedArea) =
   if area.startLine == area.endLine:
     if area.endColumn < area.startColumn:

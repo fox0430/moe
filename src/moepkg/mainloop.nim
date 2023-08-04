@@ -106,21 +106,6 @@ proc tryOpenSuggestWindow(status: var EditorStatus) {.inline.} =
     mainWindowNode,
     currentMainWindowNode)
 
-proc updateSelectedArea(status: var EditorStatus) {.inline.} =
-  if currentBufStatus.isVisualLineMode:
-    let
-      currentLine = currentMainWindowNode.currentLine
-      column =
-        if currentBufStatus.buffer[currentLine].high > 0:
-          currentBufStatus.buffer[currentLine].high
-        else:
-          0
-    currentBufStatus.selectedArea.updateSelectedArea(currentLine, column)
-  else:
-    currentBufStatus.selectedArea.updateSelectedArea(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn)
-
 proc isIncrementalSearch(status: EditorStatus): bool {.inline.} =
   isSearchMode(currentBufStatus.mode) and
   status.settings.incrementalSearch
@@ -413,10 +398,6 @@ proc editorMainLoop*(status: var EditorStatus) =
       # For undo/redo
       currentBufStatus.buffer.beginNewSuitIfNeeded
       currentBufStatus.tryRecordCurrentPosition(currentMainWindowNode)
-
-    # TODO: Move to editorstatus.update
-    if isVisualMode(currentBufStatus.mode):
-      status.updateSelectedArea
 
     status.update
 

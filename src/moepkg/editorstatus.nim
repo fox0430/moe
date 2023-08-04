@@ -662,6 +662,19 @@ proc updateSuggestWindow(status: var EditorStatus) =
     mainWindowY,
     status.settings.statusLine.enable)
 
+proc updateSelectedArea(b: var BufferStatus, windowNode: var WindowNode) =
+  if b.isVisualLineMode:
+    let
+      currentLine = windowNode.currentLine
+      column =
+        if b.buffer[currentLine].high > 0: b.buffer[currentLine].high
+        else: 0
+    b.selectedArea.endLine = currentLine
+    b.selectedArea.endColumn = column
+  else:
+    b.selectedArea.endLine = windowNode.currentLine
+    b.selectedArea.endColumn = windowNode.currentColumn
+
 proc updateCommandLine(status: var EditorStatus) =
   ## Update the command line.
 
@@ -719,6 +732,9 @@ proc update*(status: var EditorStatus) =
     settings.highlight.reservedWords,
     settings.syntax)
 
+  if currentBufStatus.isVisualMode:
+    currentBufStatus.updateSelectedArea(currentMainWindowNode)
+
   # Set editor Color Pair for current line highlight.
   # New color pairs are set to number larger than the maximum value of EditorColorPiarIndex.
   var currentLineColorPair: int = ord(EditorColorPairIndex.high) + 1
@@ -745,11 +761,10 @@ proc update*(status: var EditorStatus) =
              node.currentColumn = bufStatus.buffer[node.currentLine].high
 
         let
-          currentWindowIndex = currentMainWindowNode.windowIndex
-          isCurrentMainWin = if node.windowIndex == currentWindowIndex: true
-                             else: false
-
-        let buffer = status.bufStatus[node.bufferIndex].buffer
+          buffer = status.bufStatus[node.bufferIndex].buffer
+          isCurrentMainWin =
+            if node.windowIndex == currentMainWindowNode.windowIndex: true
+            else: false
 
         # Reload Editorview. This is not the actual terminal view.
         node.view.reload(
