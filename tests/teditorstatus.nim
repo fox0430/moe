@@ -767,12 +767,12 @@ suite "updateCommandLine":
     # Should be empty for other lines.
     check status.commandLine.buffer.len == 0
 
-suite "updateSelectedArea: Visual line":
+suite "updateSelectedArea: Visual mode":
   test "Move to right":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
     currentBufStatus.buffer = @["abc"].toSeqRunes.toGapBuffer
-    status.changeMode(Mode.visualLine)
+    status.changeMode(Mode.visual)
 
     status.resize(100, 100)
     status.update
@@ -787,7 +787,7 @@ suite "updateSelectedArea: Visual line":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
     currentBufStatus.buffer = @["abc", "def"].toSeqRunes.toGapBuffer
-    status.changeMode(Mode.visualLine)
+    status.changeMode(Mode.visual)
 
     status.resize(100, 100)
     status.update
@@ -798,7 +798,7 @@ suite "updateSelectedArea: Visual line":
     check currentBufStatus.selectedArea ==
       SelectedArea(startLine: 0, startColumn: 0, endLine: 1, endColumn: 0)
 
-suite "updateSelectedArea: Visual block":
+suite "updateSelectedArea: Visual block mode":
   test "Move to right":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
@@ -828,3 +828,34 @@ suite "updateSelectedArea: Visual block":
 
     check currentBufStatus.selectedArea ==
       SelectedArea(startLine: 0, startColumn: 0, endLine: 1, endColumn: 0)
+
+suite "updateSelectedArea: Visual line mode":
+  test "Move to right":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = @["abc"].toSeqRunes.toGapBuffer
+    status.changeMode(Mode.visualLine)
+
+    status.resize(100, 100)
+    status.update
+
+    currentBufStatus.keyRight(currentMainWindowNode)
+    status.update
+
+    check currentBufStatus.selectedArea ==
+      SelectedArea(startLine: 0, startColumn: 0, endLine: 0, endColumn: 2)
+
+  test "Move to below":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = @["abc", "def"].toSeqRunes.toGapBuffer
+    status.changeMode(Mode.visualLine)
+
+    status.resize(100, 100)
+    status.update
+
+    currentBufStatus.keyDown(currentMainWindowNode)
+    status.update
+
+    check currentBufStatus.selectedArea ==
+      SelectedArea(startLine: 0, startColumn: 0, endLine: 1, endColumn: 2)
