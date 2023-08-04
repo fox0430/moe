@@ -121,15 +121,13 @@ suite "Config mode: Init buffer":
       "  mode                           true",
       "  filename                       true",
       "  chanedMark                     true",
-      "  line                           true",
-      "  column                         true",
-      "  encoding                       true",
-      "  language                       true",
       "  directory                      true",
       "  gitChangedLines                true",
       "  gitBranchName                  true",
       "  showGitInactive                false",
-      "  showModeInactive               false"].toSeqRunes
+      "  showModeInactive               false",
+      "  setupText                      {lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {fileType}"
+    ].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
@@ -993,50 +991,6 @@ suite "Config mode: Get StatusLine table setting values":
     const Name = "chanedMark"
     let
       default = statusLineSettings.chanedMark
-      values = statusLineSettings.getStatusLineTableSettingValues(Name)
-
-    checkBoolSettingValue(default, values)
-
-  test "Get line values":
-    var status = initEditorStatus()
-    let statusLineSettings = status.settings.statusLine
-
-    const Name = "line"
-    let
-      default = statusLineSettings.line
-      values = statusLineSettings.getStatusLineTableSettingValues(Name)
-
-    checkBoolSettingValue(default, values)
-
-  test "Get column values":
-    var status = initEditorStatus()
-    let statusLineSettings = status.settings.statusLine
-
-    const Name = "column"
-    let
-      default = statusLineSettings.column
-      values = statusLineSettings.getStatusLineTableSettingValues(Name)
-
-    checkBoolSettingValue(default, values)
-
-  test "Get encoding values":
-    var status = initEditorStatus()
-    let statusLineSettings = status.settings.statusLine
-
-    const Name = "encoding"
-    let
-      default = statusLineSettings.characterEncoding
-      values = statusLineSettings.getStatusLineTableSettingValues(Name)
-
-    checkBoolSettingValue(default, values)
-
-  test "Get language values":
-    var status = initEditorStatus()
-    let statusLineSettings = status.settings.statusLine
-
-    const Name = "language"
-    let
-      default = statusLineSettings.language
       values = statusLineSettings.getStatusLineTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
@@ -2020,46 +1974,6 @@ suite "Config mode: Chaging StatusLine table settings":
     statusLineSettings.changeStatusLineTableSetting("chanedMark", $val)
 
     check val == statusLineSettings.chanedMark
-
-  test "Chaging line":
-    var
-      settings = initEditorSettings()
-      statusLineSettings = settings.statusLine
-
-    let val = not statusLineSettings.line
-    statusLineSettings.changeStatusLineTableSetting("line", $val)
-
-    check val == statusLineSettings.line
-
-  test "Chaging column":
-    var
-      settings = initEditorSettings()
-      statusLineSettings = settings.statusLine
-
-    let val = not statusLineSettings.column
-    statusLineSettings.changeStatusLineTableSetting("column", $val)
-
-    check val == statusLineSettings.column
-
-  test "Chaging encoding":
-    var
-      settings = initEditorSettings()
-      statusLineSettings = settings.statusLine
-
-    let val = not statusLineSettings.characterEncoding
-    statusLineSettings.changeStatusLineTableSetting("encoding", $val)
-
-    check val == statusLineSettings.characterEncoding
-
-  test "Chaging language":
-    var
-      settings = initEditorSettings()
-      statusLineSettings = settings.statusLine
-
-    let val = not statusLineSettings.language
-    statusLineSettings.changeStatusLineTableSetting("language", $val)
-
-    check val == statusLineSettings.language
 
   test "Chaging directory":
     var
