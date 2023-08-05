@@ -222,14 +222,21 @@ proc isEditMode*(b: BufferStatus): bool {.inline.} =
   b.isVisualMode or
   b.isReplaceMode
 
-## Can move up to the line.high + 1 in these modes.
 proc isExpandableMode*(bufStatus: BufferStatus): bool {.inline.} =
+  ## Can move up to the line.high + 1 in these modes.
+
   bufStatus.isInsertMode or
   bufStatus.isReplaceMode or
   bufStatus.isVisualMode
 
-## Return true if a mode in which it uses the cursor.
+proc isCommandLineMode*(bufStatus: BufferStatus): bool {.inline.} =
+  ## Returns true if the mode uses the command line.
+
+  bufStatus.isExMode or bufStatus.isSearchMode
+
 proc isCursor*(mode: Mode): bool {.inline.} =
+  ## Return true if a mode in which it uses the cursor.
+
   case mode:
     of filer, bufManager, recentFile, backup, config, debug:
       # Don't use the cursor.
@@ -237,8 +244,9 @@ proc isCursor*(mode: Mode): bool {.inline.} =
     else:
       return true
 
-## Return true if a mode in which it uses the cursor.
 proc isCursor*(bufStatus: BufferStatus): bool {.inline.} =
+  ## Return true if a mode in which it uses the cursor.
+
   bufStatus.mode.isCursor
 
 proc isUpdate*(bufStatuses: seq[BufferStatus]): bool =
@@ -317,8 +325,9 @@ proc changeMode*(bufStatus: var BufferStatus, mode: Mode) =
   bufStatus.prevMode = currentMode
   bufStatus.mode = mode
 
-## Return the BufferPosition of the end of the buffer.
 proc positionEndOfBuffer*(bufStatus: BufferStatus): BufferPosition {.inline.} =
+  ## Return the BufferPosition of the end of the buffer.
+
   BufferPosition(
     line: bufStatus.buffer.high,
     column: bufStatus.buffer[bufStatus.buffer.high].high)

@@ -436,9 +436,5 @@ proc editorMainLoop*(status: var EditorStatus) =
     if status.isOpenSuggestWindow:
       status.tryOpenSuggestWindow
 
-    # TODO: Fix condition.
-    # I think this should use something like a flag or enum
-    # for switching to the command line instead of modes.
-    if currentBufStatus.isExMode or
-       currentBufStatus.isSearchMode:
-         status.commandLineLoop
+    if currentBufStatus.isCommandLineMode:
+      status.commandLineLoop
