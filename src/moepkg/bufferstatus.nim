@@ -300,6 +300,7 @@ proc initBufferStatus*(
     result.mode = mode
     result.lastSaveTime = now()
     result.lastGitInfoCheckTime = now()
+    result.fileType = getFileType("")
 
     if mode.isFilerMode:
       result.buffer = initGapBuffer(@[ru ""])

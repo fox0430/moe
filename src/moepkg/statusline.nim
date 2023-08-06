@@ -103,23 +103,24 @@ proc columnInPercent(b: BufferStatus, node: WindowNode): int {.inline.} =
 proc encoding(b: BufferStatus): CharacterEncoding {.inline.} =
   b.characterEncoding
 
-proc fileType(b: BufferStatus): string =
+proc getFileType(b: BufferStatus): Runes =
   if b.isEditMode:
     if b.language == SourceLanguage.langNone:
-      return "Plain"
+      return ru"Plain"
     else:
-      return sourceLanguageToStr[b.language]
+      return sourceLanguageToStr[b.language].toRunes
 
-proc fileTypeIcon(b: BufferStatus): string =
+proc getFileTypeIcon(b: BufferStatus): Runes =
+  # TODO: Only languages
   if b.isEditMode:
-    return $fileTypeIcon(b.fileType)
+    return fileTypeIcon(b.fileType)
 
 proc statusLineWidth(s: StatusLine): int {.inline.} = s.window.width
 
 proc statusLineInfoBuffer(
   b: BufferStatus,
   node: WindowNode,
-  setupText: string): string =
+  setupText: Runes): Runes =
     ## Buit and returns a buffer based on the setupText.
     ## Also see settings.StatusLineItem.
     ## Text example: "{lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {fileType}"
@@ -127,25 +128,36 @@ proc statusLineInfoBuffer(
     result = setupText
 
     # StatusLineItem.lineNumber
-    result = result.replace("{lineNumber}", $currentLineNumber(node))
+    result = result.replace(ru"{lineNumber}", currentLineNumber(node).toRunes)
     # StatusLineItem.lineInPercent
-    result = result.replace("{lineInPercent}", $lineInPercent(b, node))
+    result = result.replace(ru"{lineInPercent}", lineInPercent(b, node).toRunes)
     # StatusLineItem.totalLines
-    result = result.replace("{totalLines}", $totalLines(b))
+    result = result.replace(ru"{totalLines}", totalLines(b).toRunes)
     # StatusLineItem.columnNumber
-    result = result.replace("{columnNumber}", $currentColumnNumber(node))
+    result = result.replace(
+      ru"{columnNumber}",
+      currentColumnNumber(node).toRunes)
     # StatusLineItem.columnInPercent
-    result = result.replace("{columnInPercent}", $columnInPercent(b, node))
+    result = result.replace(
+      ru"{columnInPercent}",
+      columnInPercent(b, node).toRunes)
     # StatusLineItem.totalColumns
-    result = result.replace("{totalColumns}", $totalColumns(b, node))
+    result = result.replace(ru"{totalColumns}", totalColumns(b, node).toRunes)
     # StatusLineItem.encoding
-    result = result.replace("{encoding}", $encoding(b))
+    result = result.replace(ru"{encoding}", toRunes($encoding(b)))
     # StatusLineItem.fileType
-    result = result.replace("{fileType}", fileType(b))
+    result = result.replace(ru"{fileType}", getFileType(b))
     # StatusLineItem.fileTypeIcon
-    result = result.replace("{fileTypeIcon}", fileTypeIcon(b))
+    result = result.replace(ru"{fileTypeIcon}", getFileTypeIcon(b))
 
-    if result.len > 0: result.add ' '
+    if result.len > 0: result.add ru' '
+
+proc statusLineFilerInfoBuffer(
+  b: BufferStatus,
+  node: WindowNode): Runes =
+    ## Return status buffer for Filer mode.
+
+    result.add fmt"{currentLineNumber(node)}/{totalLines(b)} ".toRunes
 
 proc addFilerModeInfo(
   s: var StatusLine,
@@ -159,10 +171,7 @@ proc addFilerModeInfo(
     if settings.statusLine.directory:
       buffer.add ru" " & bufStatus.path
 
-    let info = statusLineInfoBuffer(
-      bufStatus,
-      windowNode,
-      $settings.statusLine.setupText).toRunes
+    let info = statusLineFilerInfoBuffer(bufStatus, windowNode)
 
     if s.statusLineWidth > s.buffer.len + buffer.len + info.len:
       # Add spaces before info.
@@ -189,7 +198,7 @@ proc addBufManagerModeInfo(
     let info = statusLineInfoBuffer(
       bufStatus,
       windowNode,
-      $settings.statusLine.setupText).toRunes
+      settings.statusLine.setupText)
 
     if s.statusLineWidth > buffer.len + s.buffer.len + info.len:
       # Add spaces before info.
@@ -216,7 +225,7 @@ proc addLogViewerModeInfo(
     let info = statusLineInfoBuffer(
       bufStatus,
       windowNode,
-      $settings.statusLine.setupText).toRunes
+      settings.statusLine.setupText)
 
     if s.statusLineWidth > buffer.len + s.buffer.len + info.len:
       # Add spaces before info.
@@ -243,7 +252,7 @@ proc addQuickRunModeInfo(
     let info = statusLineInfoBuffer(
       bufStatus,
       windowNode,
-      $settings.statusLine.setupText).toRunes
+      settings.statusLine.setupText)
 
     if s.statusLineWidth > buffer.len + s.buffer.len + info.len:
       # Add spaces before info.
@@ -277,7 +286,7 @@ proc addNormalModeInfo(
     let info = statusLineInfoBuffer(
       bufStatus,
       windowNode,
-      $settings.statusLine.setupText).toRunes
+      settings.statusLine.setupText)
 
     if s.statusLineWidth > buffer.len + s.buffer.len + info.len:
       # Add spaces before info.
@@ -310,7 +319,7 @@ proc isGitChangedLine(
     if settings.statusLine.gitchangedLines:
       if settings.statusLine.showGitInactive or
       (not settings.statusLine.showGitInactive and isActiveWindow):
-        return bufStatus.isEditMode
+        return bufStatus.changedLines.len > 0 and bufStatus.isEditMode
 
 proc isGitInfo(
   bufStatus: BufferStatus,
@@ -332,14 +341,10 @@ proc gitBranchNameBuffer(
       # Add the single space if no changedLines.
       return fmt" {GitBranchSymbol} {branchName} ".toRunes
 
-proc changedLinesBuffer(
-  changedLines: seq[Diff],
-  isActiveWindow: bool): Runes =
-    ## Return a buffer for the number of lines changed using git.
-
-    if isActiveWindow and changedLines.len > 0:
-      let (added, changed, deleted) = changedLines.countChangedLines
-      return fmt" +{added} ~{changed} -{deleted}".toRunes
+proc changedLinesBuffer(changedLines: seq[Diff]): Runes =
+  ## Return a buffer for the number of lines changed using git.
+  let (added, changed, deleted) = changedLines.countChangedLines
+  return fmt" +{added} ~{changed} -{deleted}".toRunes
 
 proc addGitInfo(
   s: var StatusLine,
@@ -350,9 +355,7 @@ proc addGitInfo(
 
     var changedLinesBuffer: Runes
     if isGitChangedLine(bufStatus, isActiveWindow, settings):
-      let changedLinesBuffer = changedLinesBuffer(
-        bufStatus.changedLines,
-        isActiveWindow)
+      let changedLinesBuffer = changedLinesBuffer(bufStatus.changedLines)
 
       if changedLinesBuffer.len > 0:
         s.highlight.segments.add StatusLineColorSegment(
@@ -445,6 +448,12 @@ proc addModeLabel(
       color: bufStatus.mode.modeStrColor)
     s.buffer.add buffer
 
+proc clear(s: var StatusLine) =
+  ## Clear status line buffer and highlight.
+
+  s.buffer = @[]
+  s.highlight.segments = @[]
+
 proc updateStatusLineBuffer(
   s: var StatusLine,
   bufStatus: BufferStatus,
@@ -453,8 +462,7 @@ proc updateStatusLineBuffer(
   settings: EditorSettings) =
     ## Update buffer and highlight for the status line.
 
-    s.buffer = @[]
-    s.highlight.segments = @[]
+    s.clear
 
     if settings.statusLine.mode:
       s.addModeLabel(

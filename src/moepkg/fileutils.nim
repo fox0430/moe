@@ -169,7 +169,7 @@ proc getFileType*(path: string): FileType =
           return FileType.unknown
     else:
       for ext in FileType:
-        if ext != FileType.unknown and fileSplit.ext == $ext:
+        if ext != FileType.unknown and fileSplit.ext[1 .. ^1] == $ext:
           return ext
       return FileType.unknown
 
