@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, strutils, strformat, sugar, importutils]
+import std/[unittest, os, strutils, strformat, importutils]
 import moepkg/[bufferstatus, unicodeext, editorstatus, ui, gapbuffer, git, color]
 
 import moepkg/statusline {.all.}
@@ -147,11 +147,23 @@ suite "statusline: statusLineInfoBuffer":
       currentBufStatus.statusLineInfoBuffer(currentMainWindowNode, SetupText)
 
 suite "statusline: addFilerModeInfo":
+  # "../", dummy1 and dummy2
+  const NumOfFiles = 3
+
+  let path = getCurrentDir() / "statusline_test_dir"
+
+  setup:
+    createDir(path)
+    writeFile(path / "dummy1", "")
+    writeFile(path / "dummy2", "")
+
+  teardown:
+    removeDir(path)
+
   test "Active window":
     var status = initEditorStatus()
 
-    const Path = getHomeDir()
-    status.addNewBufferInCurrentWin(Path, Mode.filer)
+    status.addNewBufferInCurrentWin(path, Mode.filer)
 
     status.resize(100, 100)
     status.update
@@ -159,33 +171,36 @@ suite "statusline: addFilerModeInfo":
     status.statusLine[0].clear
 
     const IsActiveWindow = true
+
+    status.statusLine[0].addModeLabel(
+      currentBufStatus,
+      currentMainWindowNode,
+      IsActiveWindow,
+      status.settings.statusLine)
+
     status.statusLine[0].addFilerModeInfo(
       currentBufStatus,
       currentMainWindowNode,
       IsActiveWindow,
       status.settings)
 
-    # 1 is "../"
-    let numOfFiles = collect(for k in walkDir(Path): k).len + 1
-
     privateAccess(status.statusLine[0].type)
-    check status.statusLine[0].buffer ==
-      fmt" {getHomeDir()}                                                                                    1/{numOfFiles} ".toRunes
+    check startsWith($status.statusLine[0].buffer, fmt" FILER  {path}")
+    check endsWith($status.statusLine[0].buffer, fmt"1/{NumOfFiles} ")
+    for i in fmt" FILER  {path}".len .. fmt"1/{NumOfFiles} ".len:
+      check " " == $status.statusLine[0].buffer[i]
 
     privateAccess(status.statusLine[0].highlight.type)
     privateAccess(StatusLineColorSegment.type)
     check status.statusLine[0].highlight.segments == @[
-      StatusLineColorSegment(
-        first: 0,
-        last: 99,
-        color: EditorColorPairIndex.statusLineFilerMode)
+      StatusLineColorSegment(first: 0, last: 6, color: EditorColorPairIndex.statusLineModeFilerMode),
+      StatusLineColorSegment(first: 7, last: 99, color: EditorColorPairIndex.statusLineFilerMode)
     ]
 
   test "Inactive window":
     var status = initEditorStatus()
 
-    const Path = getHomeDir()
-    status.addNewBufferInCurrentWin(Path, Mode.filer)
+    status.addNewBufferInCurrentWin(path, Mode.filer)
 
     status.resize(100, 100)
     status.update
@@ -193,26 +208,30 @@ suite "statusline: addFilerModeInfo":
     status.statusLine[0].clear
 
     const IsActiveWindow = false
+
+    status.statusLine[0].addModeLabel(
+      currentBufStatus,
+      currentMainWindowNode,
+      IsActiveWindow,
+      status.settings.statusLine)
+
     status.statusLine[0].addFilerModeInfo(
       currentBufStatus,
       currentMainWindowNode,
       IsActiveWindow,
       status.settings)
 
-    # 1 is "../"
-    let numOfFiles = collect(for k in walkDir(Path): k).len + 1
-
     privateAccess(status.statusLine[0].type)
-    check status.statusLine[0].buffer ==
-      fmt" {getHomeDir()}                                                                                    1/{numOfFiles} ".toRunes
+    check startsWith($status.statusLine[0].buffer, fmt"   {path}")
+    check endsWith($status.statusLine[0].buffer, fmt"1/{NumOfFiles} ")
+    for i in fmt"   {path}".len .. fmt"1/{NumOfFiles} ".len:
+      check " " == $status.statusLine[0].buffer[i]
 
     privateAccess(status.statusLine[0].highlight.type)
     privateAccess(StatusLineColorSegment.type)
     check status.statusLine[0].highlight.segments == @[
-      StatusLineColorSegment(
-        first: 0,
-        last: 99,
-        color: EditorColorPairIndex.statusLineFilerModeInactive)
+      StatusLineColorSegment(first: 0, last: 1, color: EditorColorPairIndex.statusLineModeFilerMode),
+      StatusLineColorSegment(first: 2, last: 99, color: EditorColorPairIndex.statusLineFilerModeInactive)
     ]
 
 suite "statusline: gitBranchNameBuffer":
