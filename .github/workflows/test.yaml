@@ -72,18 +72,6 @@ jobs:
     - run: |
         sudo apt-get update -yqq
         sudo apt-get install -y gcc libncursesw5-dev build-essential xvfb x11-xserver-utils xsel xclip
-    - name: Cache choosenim
-      id: cache-choosenim
-      uses: actions/cache@v3.3.1
-      with:
-        path: ~/.choosenim
-        key: ${{ runner.os }}-choosenim-${{ env.NIM_VERSION }}
-    - name: Cache nimble
-      id: cache-nimble
-      uses: actions/cache@v3.3.1
-      with:
-        path: ~/.nimble
-        key: ${{ runner.os }}-nimble-${{ env.NIM_VERSION }}
     - uses: jiro4989/setup-nim-action@v1.4.8
       with:
         nim-version: ${{ env.NIM_VERSION }}
