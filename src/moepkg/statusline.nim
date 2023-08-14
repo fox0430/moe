@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, strformat, os]
+import std/[strutils, strformat, os, options]
 import pkg/results
 import syntax/highlite
 import ui, bufferstatus, color, unicodeext, settings, windownode, gapbuffer,
@@ -154,7 +154,7 @@ proc statusLineInfoBuffer(
 
 proc statusLineFilerInfoBuffer(
   b: BufferStatus,
-  node: WindowNode): Runes =
+  node: WindowNode): Runes {.inline.} =
     ## Return status buffer for Filer mode.
 
     result.add fmt"{currentLineNumber(node)}/{totalLines(b)} ".toRunes
@@ -186,6 +186,13 @@ proc addFilerModeInfo(
       color: statusLineColor(bufStatus.mode, isActiveWindow))
     s.buffer.add buffer
 
+proc statusLineBufManagerInfoBuffer(
+  b: BufferStatus,
+  node: WindowNode): Runes {.inline.} =
+    ## Return status buffer for Buffer manager mode.
+
+    result.add fmt"{currentLineNumber(node)}/{totalLines(b)} ".toRunes
+
 proc addBufManagerModeInfo(
   s: var StatusLine,
   bufStatus: BufferStatus,
@@ -195,10 +202,7 @@ proc addBufManagerModeInfo(
 
     var buffer: Runes
 
-    let info = statusLineInfoBuffer(
-      bufStatus,
-      windowNode,
-      settings.statusLine.setupText)
+    let info = statusLineBufManagerInfoBuffer(bufStatus, windowNode)
 
     if s.statusLineWidth > buffer.len + s.buffer.len + info.len:
       # Add spaces before info.
@@ -212,6 +216,13 @@ proc addBufManagerModeInfo(
       last: s.buffer.len + buffer.high,
       color: statusLineColor(bufStatus.mode, isActiveWindow))
     s.buffer.add buffer
+
+proc statusLineLogViewerModeInfoBuffer(
+  b: BufferStatus,
+  node: WindowNode): Runes {.inline.} =
+    ## Return status buffer for Log viewer mode.
+
+    result.add fmt"{currentLineNumber(node)}/{totalLines(b)} ".toRunes
 
 proc addLogViewerModeInfo(
   s: var StatusLine,
@@ -222,10 +233,7 @@ proc addLogViewerModeInfo(
 
     var buffer: Runes
 
-    let info = statusLineInfoBuffer(
-      bufStatus,
-      windowNode,
-      settings.statusLine.setupText)
+    let info = statusLineLogViewerModeInfoBuffer(bufStatus, windowNode)
 
     if s.statusLineWidth > buffer.len + s.buffer.len + info.len:
       # Add spaces before info.
@@ -240,6 +248,13 @@ proc addLogViewerModeInfo(
       color: statusLineColor(bufStatus.mode, isActiveWindow))
     s.buffer.add buffer
 
+proc statusLineQuickRunModeInfoBuffer(
+  b: BufferStatus,
+  node: WindowNode): Runes {.inline.} =
+    ## Return status buffer for Quickrun mode.
+
+    result.add fmt"{currentLineNumber(node)}/{totalLines(b)} ".toRunes
+
 proc addQuickRunModeInfo(
   s: var StatusLine,
   bufStatus: BufferStatus,
@@ -249,10 +264,7 @@ proc addQuickRunModeInfo(
 
     var buffer: Runes
 
-    let info = statusLineInfoBuffer(
-      bufStatus,
-      windowNode,
-      settings.statusLine.setupText)
+    let info = statusLineQuickRunModeInfoBuffer(bufStatus, windowNode)
 
     if s.statusLineWidth > buffer.len + s.buffer.len + info.len:
       # Add spaces before info.
@@ -341,10 +353,16 @@ proc gitBranchNameBuffer(
       # Add the single space if no changedLines.
       return fmt" {GitBranchSymbol} {branchName} ".toRunes
 
-proc changedLinesBuffer(changedLines: seq[Diff]): Runes =
-  ## Return a buffer for the number of lines changed using git.
-  let (added, changed, deleted) = changedLines.countChangedLines
-  return fmt" +{added} ~{changed} -{deleted}".toRunes
+proc changedLinesBuffer(
+  changedLines: seq[Diff],
+  withGitBranch: bool): Runes =
+    ## Return a buffer for the number of lines changed using git.
+
+    let (added, changed, deleted) = changedLines.countChangedLines
+    if withGitBranch:
+      return fmt" +{added} ~{changed} -{deleted}".toRunes
+    else:
+      return fmt" +{added} ~{changed} -{deleted} ".toRunes
 
 proc addGitInfo(
   s: var StatusLine,
@@ -353,33 +371,38 @@ proc addGitInfo(
   settings: EditorSettings) =
     ## Add git info to the status line. (changed lines, branch name, etc)
 
+    var branchName: Option[Runes]
+    if isGitBranchName(bufStatus, isActiveWindow, settings):
+      let name = getCurrentGitBranchName()
+      if name.isOk: branchName = some(name.get)
+
     var changedLinesBuffer: Runes
     if isGitChangedLine(bufStatus, isActiveWindow, settings):
-      let changedLinesBuffer = changedLinesBuffer(bufStatus.changedLines)
+      let changedLinesBuffer = changedLinesBuffer(
+        bufStatus.changedLines,
+        branchName.isSome)
 
       if changedLinesBuffer.len > 0:
         s.highlight.segments.add StatusLineColorSegment(
           first: s.buffer.len,
           last: s.buffer.len + changedLinesBuffer.high,
-          color: EditorColorPairIndex.statusLineGitBranch)
+          color: EditorColorPairIndex.statusLineGitChangedLines)
         s.buffer.add changedLinesBuffer
 
-    if isGitBranchName(bufStatus, isActiveWindow, settings):
-      let branchName = getCurrentGitBranchName()
-      if branchName.isOk:
-        let
-          withChangedLine = changedLinesBuffer.len > 0
-          branchNameBuffer = gitBranchNameBuffer(
-            branchName.get,
-            withChangedLine)
+    if branchName.isSome:
+      let
+        withChangedLine = changedLinesBuffer.len > 0
+        branchNameBuffer = gitBranchNameBuffer(
+          branchName.get,
+          withChangedLine)
 
-        s.highlight.segments.add StatusLineColorSegment(
-          first: s.buffer.len,
-          last: s.buffer.len + branchNameBuffer.high,
-          color: EditorColorPairIndex.statusLineGitBranch)
-        s.buffer.add branchNameBuffer
+      s.highlight.segments.add StatusLineColorSegment(
+        first: s.buffer.len,
+        last: s.buffer.len + branchNameBuffer.high,
+        color: EditorColorPairIndex.statusLineGitBranch)
+      s.buffer.add branchNameBuffer
 
-proc modeLablel(mode: Mode, isActiveWindow: bool): string =
+proc modeLablel(mode: Mode): string =
   case mode:
     of Mode.insert:
       "INSERT"
@@ -414,14 +437,20 @@ proc modeLablel(mode: Mode, isActiveWindow: bool): string =
     else:
       "NORMAL"
 
-proc modeStrColor(mode: Mode): EditorColorPairIndex =
+proc modeLablelColor(mode: Mode): EditorColorPairIndex =
   case mode
-    of Mode.insert: EditorColorPairIndex.statusLineModeInsertMode
-    of Mode.visual: EditorColorPairIndex.statusLineModeVisualMode
-    of Mode.replace: EditorColorPairIndex.statusLineModeReplaceMode
-    of Mode.filer: EditorColorPairIndex.statusLineModeFilerMode
-    of Mode.ex: EditorColorPairIndex.statusLineModeExMode
-    else: EditorColorPairIndex.statusLineModeNormalMode
+    of Mode.insert:
+      EditorColorPairIndex.statusLineModeInsertMode
+    of Mode.visual, Mode.visualBlock, Mode.visualLine:
+      EditorColorPairIndex.statusLineModeVisualMode
+    of Mode.replace:
+      EditorColorPairIndex.statusLineModeReplaceMode
+    of Mode.filer:
+      EditorColorPairIndex.statusLineModeFilerMode
+    of Mode.ex:
+      EditorColorPairIndex.statusLineModeExMode
+    else:
+      EditorColorPairIndex.statusLineModeNormalMode
 
 proc addModeLabel(
   s: var StatusLine,
@@ -434,19 +463,21 @@ proc addModeLabel(
     let
       modeLabel =
         if not isActiveWindow and not settings.showModeInactive:
-          ""
+          none(string)
         else:
-          bufStatus.mode.modeLablel(isActiveWindow)
+          some(modeLablel(bufStatus.mode))
 
-      buffer =
-        if windowNode.x > 0: fmt"  {modeLabel} ".toRunes
-        else: fmt" {modeLabel} ".toRunes
+    if modeLabel.isSome:
+      let
+        buffer =
+          if windowNode.x > 0: fmt"  {modeLabel.get} ".toRunes
+          else: fmt" {modeLabel.get} ".toRunes
 
-    s.highlight.segments.add StatusLineColorSegment(
-      first: 0,
-      last: buffer.high,
-      color: bufStatus.mode.modeStrColor)
-    s.buffer.add buffer
+      s.highlight.segments.add StatusLineColorSegment(
+        first: 0,
+        last: buffer.high,
+        color: modeLablelColor(bufStatus.mode))
+      s.buffer.add buffer
 
 proc clear(s: var StatusLine) =
   ## Clear status line buffer and highlight.
