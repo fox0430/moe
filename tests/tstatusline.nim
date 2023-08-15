@@ -18,6 +18,7 @@
 #[############################################################################]#
 
 import std/[unittest, os, strutils, strformat, importutils]
+import pkg/results
 import moepkg/[bufferstatus, unicodeext, editorstatus, ui, gapbuffer, git, color]
 
 import moepkg/statusline {.all.}
@@ -146,6 +147,77 @@ suite "statusline: statusLineInfoBuffer":
     check ru"lineNumber " ==
       currentBufStatus.statusLineInfoBuffer(currentMainWindowNode, SetupText)
 
+suite "statusline: statusLineFilerInfoBuffer":
+  let path = getCurrentDir() / "statusline_test_dir"
+
+  setup:
+    createDir(path)
+
+  teardown:
+    removeDir(path)
+
+  test "1 digit":
+    # Create a file for the test.
+    writeFile(path / "dummy", "")
+
+    var status = initEditorStatus()
+
+    status.addNewBufferInCurrentWin(path, Mode.filer)
+
+    status.resize(100, 100)
+    status.update
+
+    check statusLineFilerInfoBuffer(currentBufStatus, currentMainWindowNode) ==
+      fmt"1/2 ".toRunes
+
+  test "1 digit 2":
+    # Create a file for the test.
+    writeFile(path / "dummy", "")
+
+    var status = initEditorStatus()
+
+    status.addNewBufferInCurrentWin(path, Mode.filer)
+
+    currentMainWindowNode.currentLine = 1
+
+    status.resize(100, 100)
+    status.update
+
+    check statusLineFilerInfoBuffer(currentBufStatus, currentMainWindowNode) ==
+      fmt"2/2 ".toRunes
+
+  test "2 digit":
+    # Create files for the test.
+    for i in 0 ..< 9:
+      writeFile(path / "dummy" & $i, "")
+
+    var status = initEditorStatus()
+
+    status.addNewBufferInCurrentWin(path, Mode.filer)
+
+    status.resize(100, 100)
+    status.update
+
+    check statusLineFilerInfoBuffer(currentBufStatus, currentMainWindowNode) ==
+      fmt"1/10 ".toRunes
+
+  test "2 digit 2":
+    # Create files for the test.
+    for i in 0 ..< 9:
+      writeFile(path / "dummy" & $i, "")
+
+    var status = initEditorStatus()
+
+    status.addNewBufferInCurrentWin(path, Mode.filer)
+
+    currentMainWindowNode.currentLine = 9
+
+    status.resize(100, 100)
+    status.update
+
+    check statusLineFilerInfoBuffer(currentBufStatus, currentMainWindowNode) ==
+      fmt"10/10 ".toRunes
+
 suite "statusline: addFilerModeInfo":
   # "../", dummy1 and dummy2
   const NumOfFiles = 3
@@ -193,8 +265,14 @@ suite "statusline: addFilerModeInfo":
     privateAccess(status.statusLine[0].highlight.type)
     privateAccess(StatusLineColorSegment.type)
     check status.statusLine[0].highlight.segments == @[
-      StatusLineColorSegment(first: 0, last: 6, color: EditorColorPairIndex.statusLineModeFilerMode),
-      StatusLineColorSegment(first: 7, last: 99, color: EditorColorPairIndex.statusLineFilerMode)
+      StatusLineColorSegment(
+        first: 0,
+        last: 6,
+        color: EditorColorPairIndex.statusLineModeFilerMode),
+      StatusLineColorSegment(
+        first: 7,
+        last: 99,
+        color: EditorColorPairIndex.statusLineFilerMode)
     ]
 
   test "Inactive window":
@@ -222,7 +300,7 @@ suite "statusline: addFilerModeInfo":
       status.settings)
 
     privateAccess(status.statusLine[0].type)
-    check startsWith($status.statusLine[0].buffer, fmt"   {path}")
+    check startsWith($status.statusLine[0].buffer, fmt" {path}")
     check endsWith($status.statusLine[0].buffer, fmt"1/{NumOfFiles} ")
     for i in fmt"   {path}".len .. fmt"1/{NumOfFiles} ".len:
       check " " == $status.statusLine[0].buffer[i]
@@ -230,8 +308,342 @@ suite "statusline: addFilerModeInfo":
     privateAccess(status.statusLine[0].highlight.type)
     privateAccess(StatusLineColorSegment.type)
     check status.statusLine[0].highlight.segments == @[
-      StatusLineColorSegment(first: 0, last: 1, color: EditorColorPairIndex.statusLineModeFilerMode),
-      StatusLineColorSegment(first: 2, last: 99, color: EditorColorPairIndex.statusLineFilerModeInactive)
+      StatusLineColorSegment(
+        first: 0,
+        last: 99,
+        color: EditorColorPairIndex.statusLineFilerModeInactive)
+    ]
+
+suite "statusline: addBufManagerModeInfo":
+  test "Active window":
+    var status = initEditorStatus()
+
+    const Path = ""
+    status.addNewBufferInCurrentWin(Path, Mode.bufManager)
+
+    status.resize(100, 100)
+    status.update
+
+    status.statusLine[0].clear
+
+    const IsActiveWindow = true
+
+    status.statusLine[0].addModeLabel(
+      currentBufStatus,
+      currentMainWindowNode,
+      IsActiveWindow,
+      status.settings.statusLine)
+
+    status.statusLine[0].addBufManagerModeInfo(
+      currentBufStatus,
+      currentMainWindowNode,
+      IsActiveWindow,
+      status.settings)
+
+    privateAccess(status.statusLine[0].type)
+    check status.statusLine[0].buffer ==
+      " BUFFER                                                                                         1/1 "
+      .toRunes
+
+    privateAccess(status.statusLine[0].highlight.type)
+    privateAccess(StatusLineColorSegment.type)
+    check status.statusLine[0].highlight.segments == @[
+      StatusLineColorSegment(
+        first: 0,
+        last: 7,
+        color: EditorColorPairIndex.statusLineModeNormalMode),
+      StatusLineColorSegment(
+        first: 8,
+        last: 99,
+        color: EditorColorPairIndex.statusLineNormalMode)
+    ]
+
+  test "Inactive window":
+    var status = initEditorStatus()
+
+    const Path = ""
+    status.addNewBufferInCurrentWin(Path, Mode.bufManager)
+
+    status.resize(100, 100)
+    status.update
+
+    status.statusLine[0].clear
+
+    const IsActiveWindow = false
+
+    status.statusLine[0].addModeLabel(
+      currentBufStatus,
+      currentMainWindowNode,
+      IsActiveWindow,
+      status.settings.statusLine)
+
+    status.statusLine[0].addBufManagerModeInfo(
+      currentBufStatus,
+      currentMainWindowNode,
+      IsActiveWindow,
+      status.settings)
+
+    privateAccess(status.statusLine[0].type)
+    check status.statusLine[0].buffer ==
+      "                                                                                                1/1 "
+      .toRunes
+
+    privateAccess(status.statusLine[0].highlight.type)
+    privateAccess(StatusLineColorSegment.type)
+    check status.statusLine[0].highlight.segments == @[
+      StatusLineColorSegment(
+        first: 0,
+        last: 99,
+        color: EditorColorPairIndex.statusLineNormalModeInactive)
+    ]
+
+suite "statusline: addLogViewerModeInfo":
+  test "Active window":
+    var status = initEditorStatus()
+
+    const Path = ""
+    status.addNewBufferInCurrentWin(Path, Mode.logViewer)
+
+    status.resize(100, 100)
+    status.update
+
+    status.statusLine[0].clear
+
+    const IsActiveWindow = true
+
+    status.statusLine[0].addModeLabel(
+      currentBufStatus,
+      currentMainWindowNode,
+      IsActiveWindow,
+      status.settings.statusLine)
+
+    status.statusLine[0].addLogViewerModeInfo(
+      currentBufStatus,
+      currentMainWindowNode,
+      IsActiveWindow,
+      status.settings)
+
+    privateAccess(status.statusLine[0].type)
+    check status.statusLine[0].buffer ==
+      " LOG                                                                                            1/1 "
+      .toRunes
+
+    privateAccess(status.statusLine[0].highlight.type)
+    privateAccess(StatusLineColorSegment.type)
+    check status.statusLine[0].highlight.segments == @[
+      StatusLineColorSegment(
+        first: 0,
+        last: 4,
+        color: EditorColorPairIndex.statusLineModeNormalMode),
+      StatusLineColorSegment(
+        first: 5,
+        last: 99,
+        color: EditorColorPairIndex.statusLineNormalMode)
+    ]
+
+  test "Inactive window":
+    var status = initEditorStatus()
+
+    const Path = ""
+    status.addNewBufferInCurrentWin(Path, Mode.logViewer)
+
+    status.resize(100, 100)
+    status.update
+
+    status.statusLine[0].clear
+
+    const IsActiveWindow = false
+
+    status.statusLine[0].addModeLabel(
+      currentBufStatus,
+      currentMainWindowNode,
+      IsActiveWindow,
+      status.settings.statusLine)
+
+    status.statusLine[0].addLogViewerModeInfo(
+      currentBufStatus,
+      currentMainWindowNode,
+      IsActiveWindow,
+      status.settings)
+
+    privateAccess(status.statusLine[0].type)
+    check status.statusLine[0].buffer ==
+      "                                                                                                1/1 "
+      .toRunes
+
+    privateAccess(status.statusLine[0].highlight.type)
+    privateAccess(StatusLineColorSegment.type)
+    check status.statusLine[0].highlight.segments == @[
+      StatusLineColorSegment(
+        first: 0,
+        last: 99,
+        color: EditorColorPairIndex.statusLineNormalModeInactive)
+    ]
+
+suite "statusline: addQuickRunModeInfo":
+  test "Active window":
+    var status = initEditorStatus()
+
+    const Path = ""
+    status.addNewBufferInCurrentWin(Path, Mode.quickRun)
+
+    status.resize(100, 100)
+    status.update
+
+    status.statusLine[0].clear
+
+    const IsActiveWindow = true
+
+    status.statusLine[0].addModeLabel(
+      currentBufStatus,
+      currentMainWindowNode,
+      IsActiveWindow,
+      status.settings.statusLine)
+
+    status.statusLine[0].addQuickRunModeInfo(
+      currentBufStatus,
+      currentMainWindowNode,
+      IsActiveWindow,
+      status.settings)
+
+    privateAccess(status.statusLine[0].type)
+    check status.statusLine[0].buffer ==
+      " QUICKRUN                                                                                       1/1 "
+      .toRunes
+
+    privateAccess(status.statusLine[0].highlight.type)
+    privateAccess(StatusLineColorSegment.type)
+    check status.statusLine[0].highlight.segments == @[
+      StatusLineColorSegment(
+        first: 0,
+        last: 9,
+        color: EditorColorPairIndex.statusLineModeNormalMode),
+      StatusLineColorSegment(
+        first: 10,
+        last: 99,
+        color: EditorColorPairIndex.statusLineNormalMode)
+    ]
+
+  test "Inactive window":
+    var status = initEditorStatus()
+
+    const Path = ""
+    status.addNewBufferInCurrentWin(Path, Mode.quickRun)
+
+    status.resize(100, 100)
+    status.update
+
+    status.statusLine[0].clear
+
+    const IsActiveWindow = false
+
+    status.statusLine[0].addModeLabel(
+      currentBufStatus,
+      currentMainWindowNode,
+      IsActiveWindow,
+      status.settings.statusLine)
+
+    status.statusLine[0].addQuickRunModeInfo(
+      currentBufStatus,
+      currentMainWindowNode,
+      IsActiveWindow,
+      status.settings)
+
+    privateAccess(status.statusLine[0].type)
+    check status.statusLine[0].buffer ==
+      "                                                                                                1/1 "
+      .toRunes
+
+    privateAccess(status.statusLine[0].highlight.type)
+    privateAccess(StatusLineColorSegment.type)
+    check status.statusLine[0].highlight.segments == @[
+      StatusLineColorSegment(
+        first: 0,
+        last: 99,
+        color: EditorColorPairIndex.statusLineNormalModeInactive)
+    ]
+
+suite "statusline: addNormalModeInfo":
+  test "Active window":
+    var status = initEditorStatus()
+
+    const Path = ""
+    status.addNewBufferInCurrentWin(Path, Mode.normal)
+
+    status.resize(100, 100)
+    status.update
+
+    status.statusLine[0].clear
+
+    const IsActiveWindow = true
+
+    status.statusLine[0].addModeLabel(
+      currentBufStatus,
+      currentMainWindowNode,
+      IsActiveWindow,
+      status.settings.statusLine)
+
+    status.statusLine[0].addNormalModeInfo(
+      currentBufStatus,
+      currentMainWindowNode,
+      IsActiveWindow,
+      status.settings)
+
+    privateAccess(status.statusLine[0].type)
+    check status.statusLine[0].buffer ==
+      " NORMAL  No name                                                                1/1 1/0 UTF-8 Plain "
+      .toRunes
+
+    privateAccess(status.statusLine[0].highlight.type)
+    privateAccess(StatusLineColorSegment.type)
+    check status.statusLine[0].highlight.segments == @[
+      StatusLineColorSegment(
+        first: 0,
+        last: 7,
+        color: EditorColorPairIndex.statusLineModeNormalMode),
+      StatusLineColorSegment(
+        first: 8,
+        last: 99,
+        color: EditorColorPairIndex.statusLineNormalMode)
+    ]
+
+  test "Active window":
+    var status = initEditorStatus()
+
+    const Path = ""
+    status.addNewBufferInCurrentWin(Path, Mode.normal)
+
+    status.resize(100, 100)
+    status.update
+
+    status.statusLine[0].clear
+
+    const IsActiveWindow = false
+
+    status.statusLine[0].addModeLabel(
+      currentBufStatus,
+      currentMainWindowNode,
+      IsActiveWindow,
+      status.settings.statusLine)
+
+    status.statusLine[0].addNormalModeInfo(
+      currentBufStatus,
+      currentMainWindowNode,
+      IsActiveWindow,
+      status.settings)
+
+    privateAccess(status.statusLine[0].type)
+    check status.statusLine[0].buffer ==
+      " No name                                                                        1/1 1/0 UTF-8 Plain "
+      .toRunes
+
+    privateAccess(status.statusLine[0].highlight.type)
+    privateAccess(StatusLineColorSegment.type)
+    check status.statusLine[0].highlight.segments == @[
+      StatusLineColorSegment(
+        first: 0,
+        last: 99,
+        color: EditorColorPairIndex.statusLineNormalModeInactive)
     ]
 
 suite "statusline: gitBranchNameBuffer":
@@ -252,31 +664,417 @@ suite "statusline: gitBranchNameBuffer":
       WithGitChangedLine)
 
 suite "statusline: changedLinesBuffer":
-  test "Added line":
+  test "Added line With Git branch":
+    const WithGitBranch = true
     check ru" +1 ~0 -0" ==
       changedLinesBuffer(
-        @[Diff(operation: OperationType.added, firstLine: 0, lastLine: 0)])
+        @[Diff(operation: OperationType.added, firstLine: 0, lastLine: 0)],
+        WithGitBranch)
 
-  test "Changed line":
+  test "Changed line With Git branch":
+    const WithGitBranch = true
     check ru" +0 ~1 -0" ==
       changedLinesBuffer(
-        @[Diff(operation: OperationType.changed, firstLine: 0, lastLine: 0)])
+        @[Diff(operation: OperationType.changed, firstLine: 0, lastLine: 0)],
+        WithGitBranch)
 
-  test "Deleted line":
+  test "Deleted line With Git branch":
+    const WithGitBranch = true
     check ru" +0 ~0 -1" ==
       changedLinesBuffer(
-        @[Diff(operation: OperationType.deleted, firstLine: 0, lastLine: 0)])
+        @[Diff(operation: OperationType.deleted, firstLine: 0, lastLine: 0)],
+        WithGitBranch)
 
-  test "Changed and deleted line":
+  test "Changed and deleted line With Git branch":
+    const WithGitBranch = true
     check ru" +0 ~1 -1" ==
       changedLinesBuffer(
-        @[Diff(operation: OperationType.changedAndDeleted, firstLine: 0, lastLine: 0)])
+        @[Diff(operation: OperationType.changedAndDeleted, firstLine: 0, lastLine: 0)],
+        WithGitBranch)
 
-  test "Mixed":
+  test "Mixed With Git branch":
+    const WithGitBranch = true
     check ru" +1 ~2 -2" ==
-      changedLinesBuffer(@[
-        Diff(operation: OperationType.added, firstLine: 0, lastLine: 0),
-        Diff(operation: OperationType.deleted, firstLine: 0, lastLine: 0),
-        Diff(operation: OperationType.changed, firstLine: 0, lastLine: 0),
-        Diff(operation: OperationType.changedAndDeleted, firstLine: 0, lastLine: 0)
-      ])
+      changedLinesBuffer(
+        @[
+          Diff(operation: OperationType.added, firstLine: 0, lastLine: 0),
+          Diff(operation: OperationType.deleted, firstLine: 0, lastLine: 0),
+          Diff(operation: OperationType.changed, firstLine: 0, lastLine: 0),
+          Diff(operation: OperationType.changedAndDeleted, firstLine: 0, lastLine: 0)
+        ],
+        WithGitBranch)
+
+  test "Only Added line":
+    const WithGitBranch = false
+    check ru" +1 ~0 -0 " ==
+      changedLinesBuffer(
+        @[Diff(operation: OperationType.added, firstLine: 0, lastLine: 0)],
+        WithGitBranch)
+
+  test "Only Changed line":
+    const WithGitBranch = false
+    check ru" +0 ~1 -0 " ==
+      changedLinesBuffer(
+        @[Diff(operation: OperationType.changed, firstLine: 0, lastLine: 0)],
+        WithGitBranch)
+
+  test "Only Deleted line":
+    const WithGitBranch = false
+    check ru" +0 ~0 -1 " ==
+      changedLinesBuffer(
+        @[Diff(operation: OperationType.deleted, firstLine: 0, lastLine: 0)],
+        WithGitBranch)
+
+  test "Only Changed and deleted line":
+    const WithGitBranch = false
+    check ru" +0 ~1 -1 " ==
+      changedLinesBuffer(
+        @[Diff(operation: OperationType.changedAndDeleted, firstLine: 0, lastLine: 0)],
+        WithGitBranch)
+
+  test "Only Mixed":
+    const WithGitBranch = false
+    check ru" +1 ~2 -2 " ==
+      changedLinesBuffer(
+        @[
+          Diff(operation: OperationType.added, firstLine: 0, lastLine: 0),
+          Diff(operation: OperationType.deleted, firstLine: 0, lastLine: 0),
+          Diff(operation: OperationType.changed, firstLine: 0, lastLine: 0),
+          Diff(operation: OperationType.changedAndDeleted, firstLine: 0, lastLine: 0)
+        ],
+        WithGitBranch)
+
+suite "statusline: addGitInfo":
+  test "Only Changed lines":
+    var status = initEditorStatus()
+
+    const Path = ""
+    status.addNewBufferInCurrentWin(Path, Mode.normal)
+
+    status.settings.statusLine.gitChangedLines = true
+    status.settings.statusLine.gitBranchName = false
+
+    currentBufStatus.changedLines = @[
+      Diff(operation: OperationType.added, firstLine: 0, lastLine: 0)
+    ]
+
+    status.resize(100, 100)
+    status.update
+
+    status.statusLine[0].clear
+
+    const IsActiveWindow = true
+    status.statusLine[0].addGitInfo(
+      currentBufStatus,
+      IsActiveWindow,
+      status.settings)
+
+    privateAccess(status.statusLine[0].type)
+    check status.statusLine[0].buffer == ru" +1 ~0 -0 "
+
+    privateAccess(status.statusLine[0].highlight.type)
+    privateAccess(StatusLineColorSegment.type)
+    check status.statusLine[0].highlight.segments == @[
+      StatusLineColorSegment(
+        first: 0,
+        last: 9,
+        color: EditorColorPairIndex.statusLineGitChangedLines)
+    ]
+
+  test "Only Git branch":
+    var status = initEditorStatus()
+
+    const Path = ""
+    status.addNewBufferInCurrentWin(Path, Mode.normal)
+
+    status.settings.statusLine.gitBranchName = true
+    status.settings.statusLine.gitChangedLines = false
+
+    currentBufStatus.changedLines = @[
+      Diff(operation: OperationType.added, firstLine: 0, lastLine: 0)
+    ]
+
+    status.resize(100, 100)
+    status.update
+
+    status.statusLine[0].clear
+
+    const IsActiveWindow = true
+    status.statusLine[0].addGitInfo(
+      currentBufStatus,
+      IsActiveWindow,
+      status.settings)
+
+    let branchName = getCurrentGitBranchName().get
+
+    privateAccess(status.statusLine[0].type)
+    check status.statusLine[0].buffer == fmt"  {branchName} ".toRunes
+
+    privateAccess(status.statusLine[0].highlight.type)
+    privateAccess(StatusLineColorSegment.type)
+    check status.statusLine[0].highlight.segments == @[
+      StatusLineColorSegment(
+        first: 0,
+        last: 31,
+        color: EditorColorPairIndex.statusLineGitBranch)
+    ]
+
+  test "Git branch and Changed lines":
+    var status = initEditorStatus()
+
+    const Path = ""
+    status.addNewBufferInCurrentWin(Path, Mode.normal)
+
+    status.settings.statusLine.gitBranchName = true
+    status.settings.statusLine.gitChangedLines = true
+
+    currentBufStatus.changedLines = @[
+      Diff(operation: OperationType.added, firstLine: 0, lastLine: 0)
+    ]
+
+    status.resize(100, 100)
+    status.update
+
+    status.statusLine[0].clear
+
+    const IsActiveWindow = true
+    status.statusLine[0].addGitInfo(
+      currentBufStatus,
+      IsActiveWindow,
+      status.settings)
+
+    let branchName = getCurrentGitBranchName().get
+
+    privateAccess(status.statusLine[0].type)
+    check status.statusLine[0].buffer == fmt" +1 ~0 -0  {branchName} ".toRunes
+
+    privateAccess(status.statusLine[0].highlight.type)
+    privateAccess(StatusLineColorSegment.type)
+    check status.statusLine[0].highlight.segments == @[
+      StatusLineColorSegment(
+        first: 0,
+        last: 8,
+        color: EditorColorPairIndex.statusLineGitChangedLines),
+      StatusLineColorSegment(
+        first: 9,
+        last: 40,
+        color: EditorColorPairIndex.statusLineGitBranch)
+    ]
+
+suite "statusline: modeLabel":
+  test "Insert mode":
+    check modeLablel(Mode.insert) == "INSERT"
+
+  test "Visual mode":
+    check modeLablel(Mode.visual) == "VISUAL"
+
+  test "Visual block mode":
+    check modeLablel(Mode.visualBlock) == "VISUAL BLOCK"
+
+  test "Visual line mode":
+    check modeLablel(Mode.visualLine) == "VISUAL LINE"
+
+  test "Replace mode":
+    check modeLablel(Mode.replace) == "REPLACE"
+
+  test "Filer mode":
+    check modeLablel(Mode.filer) == "FILER"
+
+  test "Buffer Manager mode":
+    check modeLablel(Mode.bufManager) == "BUFFER"
+
+  test "Ex mode":
+    check modeLablel(Mode.ex) == "EX"
+
+  test "Log viewer mode":
+    check modeLablel(Mode.logViewer) == "LOG"
+
+  test "Recent file mode":
+    check modeLablel(Mode.recentFile) == "RECENT"
+
+  test "QuickRun mode":
+    check modeLablel(Mode.quickRun) == "QUICKRUN"
+
+  test "Backup mode":
+    check modeLablel(Mode.backup) == "BACKUP"
+
+  test "Diff mode":
+    check modeLablel(Mode.diff) == "DIFF"
+
+  test "Config mode":
+    check modeLablel(Mode.config) == "CONFIG"
+
+  test "Debug mode":
+    check modeLablel(Mode.debug) == "DEBUG"
+
+suite "statusline: modeLablelColor":
+  test "Insert mode":
+    check modeLablelColor(Mode.insert) ==
+      EditorColorPairIndex.statusLineModeInsertMode
+
+  test "Viausl mode":
+    check modeLablelColor(Mode.visual) ==
+      EditorColorPairIndex.statusLineModeVisualMode
+
+  test "Viausl block mode":
+    check modeLablelColor(Mode.visualBlock) ==
+      EditorColorPairIndex.statusLineModeVisualMode
+
+  test "Viausl line mode":
+    check modeLablelColor(Mode.visualLine) ==
+      EditorColorPairIndex.statusLineModeVisualMode
+
+  test "Replace mode":
+    check modeLablelColor(Mode.replace) ==
+      EditorColorPairIndex.statusLineModeReplaceMode
+
+  test "Filer mode":
+    check modeLablelColor(Mode.filer) ==
+      EditorColorPairIndex.statusLineModeFilerMode
+
+  test "Ex mode":
+    check modeLablelColor(Mode.ex) ==
+      EditorColorPairIndex.statusLineModeExMode
+
+  test "Normal mode":
+    check modeLablelColor(Mode.normal) ==
+      EditorColorPairIndex.statusLineModeNormalMode
+
+suite "statusline: addModeLabel":
+  test "Normal mode in active window":
+    var status = initEditorStatus()
+
+    const Path = ""
+    status.addNewBufferInCurrentWin(Path, Mode.normal)
+
+    status.resize(100, 100)
+    status.update
+
+    status.statusLine[0].clear
+
+    const IsActiveWindow = true
+    status.statusLine[0].addModeLabel(
+      currentBufStatus,
+      currentMainWindowNode,
+      IsActiveWindow,
+      status.settings.statusLine)
+
+    privateAccess(status.statusLine[0].type)
+    check status.statusLine[0].buffer == ru" NORMAL "
+
+  test "Normal mode in inactive window":
+    var status = initEditorStatus()
+
+    const Path = ""
+    status.addNewBufferInCurrentWin(Path, Mode.normal)
+
+    status.resize(100, 100)
+    status.update
+
+    status.statusLine[0].clear
+
+    const IsActiveWindow = false
+    status.statusLine[0].addModeLabel(
+      currentBufStatus,
+      currentMainWindowNode,
+      IsActiveWindow,
+      status.settings.statusLine)
+
+    privateAccess(status.statusLine[0].type)
+    check status.statusLine[0].buffer == ru""
+
+suite "statusline: clear":
+  test "Clear":
+    var s = initStatusLine()
+
+    privateAccess(s.type)
+    s.buffer = ru"test"
+
+    privateAccess(s.highlight.type)
+    privateAccess(StatusLineColorSegment.type)
+    s.highlight.segments = @[
+      StatusLineColorSegment(
+        first: 0,
+        last: 4,
+        color: EditorColorPairIndex.statusLineModeNormalMode)
+    ]
+
+    s.clear
+
+    check s.buffer.len == 0
+    check s.highlight.segments.len == 0
+
+suite "statusline: updateStatusLineBuffer":
+  test "Normal mode in active window":
+    var status = initEditorStatus()
+
+    const Path = ""
+    status.addNewBufferInCurrentWin(Path, Mode.normal)
+
+    status.resize(100, 100)
+    status.update
+
+    status.statusLine[0].clear
+
+    const IsActiveWindow = true
+    status.statusLine[0].updateStatusLineBuffer(
+      currentBufStatus,
+      currentMainWindowNode,
+      IsActiveWindow,
+      status.settings)
+
+    let branchName = getCurrentGitBranchName().get
+
+    privateAccess(status.statusLine[0].type)
+    check status.statusLine[0].buffer ==
+      fmt" NORMAL   {branchName}  No name                                1/1 1/0 UTF-8 Plain "
+      .toRunes
+
+    privateAccess(status.statusLine[0].highlight.type)
+    privateAccess(StatusLineColorSegment.type)
+    check status.statusLine[0].highlight.segments == @[
+      StatusLineColorSegment(
+        first: 0,
+        last: 7,
+        color: EditorColorPairIndex.statusLineModeNormalMode),
+      StatusLineColorSegment(
+        first: 8,
+        last: 39,
+        color: EditorColorPairIndex.statusLineGitBranch),
+      StatusLineColorSegment(
+        first: 40,
+        last: 99,
+        color: EditorColorPairIndex.statusLineNormalMode)
+    ]
+
+  test "Normal mode in inactive window":
+    var status = initEditorStatus()
+
+    const Path = ""
+    status.addNewBufferInCurrentWin(Path, Mode.normal)
+
+    status.resize(100, 100)
+    status.update
+
+    status.statusLine[0].clear
+
+    const IsActiveWindow = false
+    status.statusLine[0].updateStatusLineBuffer(
+      currentBufStatus,
+      currentMainWindowNode,
+      IsActiveWindow,
+      status.settings)
+
+    privateAccess(status.statusLine[0].type)
+    check status.statusLine[0].buffer ==
+      " No name                                                                        1/1 1/0 UTF-8 Plain "
+      .toRunes
+
+    privateAccess(status.statusLine[0].highlight.type)
+    privateAccess(StatusLineColorSegment.type)
+    check status.statusLine[0].highlight.segments == @[
+      StatusLineColorSegment(
+        first: 0,
+        last: 99,
+        color: EditorColorPairIndex.statusLineNormalModeInactive)
+    ]
