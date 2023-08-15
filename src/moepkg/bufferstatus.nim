@@ -274,6 +274,7 @@ proc initBufferStatus*(
 
     result.isUpdate = true
     result.openDir = getCurrentDir().toRunes
+    result.prevMode = mode
     result.mode = mode
     result.lastSaveTime = now()
     result.lastGitInfoCheckTime = now()
@@ -303,6 +304,7 @@ proc initBufferStatus*(
 
     result.isUpdate = true
     result.openDir = getCurrentDir().toRunes
+    result.prevMode = mode
     result.mode = mode
     result.lastSaveTime = now()
     result.lastGitInfoCheckTime = now()
