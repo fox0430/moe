@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, oids, deques, macros, strformat]
+import std/[unittest, os, oids, deques, macros, strformat, importutils]
 import pkg/results
 import moepkg/syntax/highlite
 import moepkg/[ui, editorstatus, gapbuffer, unicodeext, bufferstatus, settings,
@@ -621,6 +621,50 @@ suite "Ex mode: help command":
     for i, line in help:
       check status.bufStatus[1].buffer[i] == line
 
+suite "Ex mode: split window vertically":
+  test "In Normal mode":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+
+    status.resize(100, 100)
+    status.update
+
+    status.changeMode(Mode.ex)
+
+    const Command = @[ru"sp"]
+    status.exModeCommand(Command)
+
+    check status.mainWindow.numOfMainWindow == 2
+    check status.bufStatus.len == 1
+
+    check status.bufStatus[0].prevMode == Mode.ex
+    check status.bufStatus[0].mode == Mode.normal
+
+  test "In Filer mode":
+    var status = initEditorStatus()
+    const Path = "./"
+    status.addNewBufferInCurrentWin(Path, Mode.filer)
+
+    status.resize(100, 100)
+    status.update
+
+    status.changeMode(Mode.ex)
+
+    const Command = @[ru"sp"]
+    status.exModeCommand(Command)
+
+    check status.mainWindow.numOfMainWindow == 2
+    check status.bufStatus.len == 2
+
+    privateAccess(status.type)
+    check status.filerStatuses.len == 2
+
+    check status.bufStatus[0].prevMode == Mode.ex
+    check status.bufStatus[0].mode == Mode.filer
+
+    check status.bufStatus[1].prevMode == Mode.filer
+    check status.bufStatus[1].mode == Mode.filer
+
 suite "Ex mode: Open in horizontal split window":
   test "Open in horizontal split window":
     var status = initEditorStatus()
@@ -1178,7 +1222,7 @@ suite "Ex mode: debug command":
     check status.bufStatus[0].prevMode == Mode.ex
 
     check status.bufStatus[1].mode == Mode.debug
-    check status.bufStatus[1].prevMode == Mode.normal
+    check status.bufStatus[1].prevMode == Mode.debug
 
     check currentMainWindowNode.bufferIndex == 0
 
@@ -1205,7 +1249,7 @@ suite "Ex mode: debug command":
     check status.bufStatus[0].prevMode == Mode.ex
 
     check status.bufStatus[1].mode == Mode.debug
-    check status.bufStatus[1].prevMode == Mode.normal
+    check status.bufStatus[1].prevMode == Mode.debug
 
     check currentMainWindowNode.bufferIndex == 0
 

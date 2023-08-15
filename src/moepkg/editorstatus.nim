@@ -893,6 +893,27 @@ proc restoreCursorPostion*(
       else:
         node.currentColumn = posi.column
 
+# TODO: Move to window.nim?
+proc moveCurrentMainWindow*(status: var EditorStatus, index: int) =
+  if index < 0 or
+     status.mainWindow.numOfMainWindow <= index: return
+
+  status.updateLastCursorPostion
+
+  currentMainWindowNode = mainWindowNode.searchByWindowIndex(index)
+
+# TODO: Move to window.nim?
+proc moveNextWindow*(status: var EditorStatus) {.inline.} =
+  status.updateLastCursorPostion
+
+  status.moveCurrentMainWindow(currentMainWindowNode.windowIndex + 1)
+
+# TODO: Move to window.nim?
+proc movePrevWindow*(status: var EditorStatus) {.inline.} =
+  status.updateLastCursorPostion
+
+  status.moveCurrentMainWindow(currentMainWindowNode.windowIndex - 1)
+
 proc verticalSplitWindow*(status: var EditorStatus) =
   status.updateLastCursorPostion
 
@@ -905,13 +926,18 @@ proc verticalSplitWindow*(status: var EditorStatus) =
     # Add a new buffer if the filer mode because need to a new filerStatus.
     let bufSatusIndex = status.addNewBuffer($currentBufStatus.path, Mode.filer)
     if bufSatusIndex.isNone: return
-
     status.addFilerStatus(bufSatusIndex.get)
+
+    status.statusLine.add(initStatusLine())
+
+    status.resize
+
+    status.moveNextWindow
     currentMainWindowNode.bufferIndex = bufSatusIndex.get
-
-  status.statusLine.add(initStatusLine())
-
-  status.resize
+    status.movePrevWindow
+  else:
+    status.statusLine.add(initStatusLine())
+    status.resize
 
   var newNode = mainWindowNode.searchByWindowIndex(
     currentMainWindowNode.windowIndex + 1)
@@ -928,13 +954,18 @@ proc horizontalSplitWindow*(status: var EditorStatus) =
     # Add a new buffer if the filer mode because need to a new filerStatus.
     let bufSatusIndex = status.addNewBuffer($currentBufStatus.path, Mode.filer)
     if bufSatusIndex.isNone: return
-
     status.addFilerStatus(bufSatusIndex.get)
+
+    status.statusLine.add(initStatusLine())
+
+    status.resize
+
+    status.moveNextWindow
     currentMainWindowNode.bufferIndex = bufSatusIndex.get
-
-  status.statusLine.add(initStatusLine())
-
-  status.resize
+    status.movePrevWindow
+  else:
+    status.statusLine.add(initStatusLine())
+    status.resize
 
   var newNode = mainWindowNode.searchByWindowIndex(
     currentMainWindowNode.windowIndex + 1)
@@ -969,27 +1000,6 @@ proc closeWindow*(status: var EditorStatus, node: WindowNode) =
 
   let node = mainWindowNode.searchByWindowIndex(newCurrentWinIndex)
   status.mainWindow.currentMainWindowNode = node
-
-# TODO: Move to window.nim?
-proc moveCurrentMainWindow*(status: var EditorStatus, index: int) =
-  if index < 0 or
-     status.mainWindow.numOfMainWindow <= index: return
-
-  status.updateLastCursorPostion
-
-  currentMainWindowNode = mainWindowNode.searchByWindowIndex(index)
-
-# TODO: Move to window.nim?
-proc moveNextWindow*(status: var EditorStatus) {.inline.} =
-  status.updateLastCursorPostion
-
-  status.moveCurrentMainWindow(currentMainWindowNode.windowIndex + 1)
-
-# TODO: Move to window.nim?
-proc movePrevWindow*(status: var EditorStatus) {.inline.} =
-  status.updateLastCursorPostion
-
-  status.moveCurrentMainWindow(currentMainWindowNode.windowIndex - 1)
 
 proc deleteBuffer*(status: var EditorStatus, deleteIndex: int) =
   let beforeWindowIndex = currentMainWindowNode.windowIndex

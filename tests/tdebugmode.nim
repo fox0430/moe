@@ -79,7 +79,7 @@ suite "Init debug mode buffer":
       ru"  path                    : ",
       ru fmt"  openDir                 : {getCurrentDir()}",
       ru"  currentMode             : debug",
-      ru"  prevMode                : normal",
+      ru"  prevMode                : debug",
       ru"  language                : langNone",
       ru"  encoding                : UTF-8",
       ru"  countChange             : 0",
