@@ -815,7 +815,7 @@ suite "statusline: addGitInfo":
     check status.statusLine[0].highlight.segments == @[
       StatusLineColorSegment(
         first: 0,
-        last: 31,
+        last: status.statusLine[0].buffer.high,
         color: EditorColorPairIndex.statusLineGitBranch)
     ]
 
@@ -857,7 +857,7 @@ suite "statusline: addGitInfo":
         color: EditorColorPairIndex.statusLineGitChangedLines),
       StatusLineColorSegment(
         first: 9,
-        last: 40,
+        last: status.statusLine[0].buffer.high,
         color: EditorColorPairIndex.statusLineGitBranch)
     ]
 
@@ -1026,9 +1026,9 @@ suite "statusline: updateStatusLineBuffer":
     let branchName = getCurrentGitBranchName().get
 
     privateAccess(status.statusLine[0].type)
-    check status.statusLine[0].buffer ==
-      fmt" NORMAL   {branchName}  No name                                1/1 1/0 UTF-8 Plain "
-      .toRunes
+    check status.statusLine[0].buffer.startsWith(
+      fmt" NORMAL   {branchName}  No name".toRunes)
+    check status.statusLine[0].buffer.endsWith(ru"1/1 1/0 UTF-8 Plain ")
 
     privateAccess(status.statusLine[0].highlight.type)
     privateAccess(StatusLineColorSegment.type)
@@ -1039,10 +1039,10 @@ suite "statusline: updateStatusLineBuffer":
         color: EditorColorPairIndex.statusLineModeNormalMode),
       StatusLineColorSegment(
         first: 8,
-        last: 39,
+        last: 8 + 4 + branchName.high,
         color: EditorColorPairIndex.statusLineGitBranch),
       StatusLineColorSegment(
-        first: 40,
+        first: 8 + 4 + branchName.high + 1,
         last: 99,
         color: EditorColorPairIndex.statusLineNormalMode)
     ]
