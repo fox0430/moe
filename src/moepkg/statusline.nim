@@ -111,7 +111,6 @@ proc getFileType(b: BufferStatus): Runes =
       return sourceLanguageToStr[b.language].toRunes
 
 proc getFileTypeIcon(b: BufferStatus): Runes =
-  # TODO: Only languages
   if b.isEditMode:
     return fileTypeIcon(b.fileType)
 
