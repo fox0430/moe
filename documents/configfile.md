@@ -214,30 +214,6 @@ default is true
 chanedMark
 ```
 
-Show line info (bool)  
-default is true
-```
-line
-```
-
-Show column info (bool)  
-default is ture
-```
-column
-```
-
-Show character encoding (bool)  
-default is true
-```
-encoding
-```
-
-Show language (bool)  
-default is true
-```
-language
-```
-
 Show file location (bool)  
 default is true
 ```
@@ -266,6 +242,17 @@ Show/Hide mode string in status line when window is inactive (bool)
 default is false
 ```
 showModeInactive
+```
+
+Text to customize the items displayed in the status line (string)
+
+Items: `lineNumber`, `totalLines` `columnNumber`, `totalColumns`,  `encoding`, `fileType`, `fileTypeIcon`
+
+You can display information in the status lien by enclosing the above items in parentheses. Example: `{lineNumber}`
+
+defaut is `"{lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {fileType}"`
+```
+setupText
 ```
 
 ### BuildOnSave table
