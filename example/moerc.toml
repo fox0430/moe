@@ -85,14 +85,6 @@ filename = true
 
 chanedMark = true
 
-line = true
-
-column = true
-
-encoding = true
-
-language = true
-
 directory = true
 
 gitChangedLines = true
@@ -103,6 +95,7 @@ showGitInactive = false
 
 showModeInactive = false
 
+setupText = "{lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {fileType}"
 
 [Highlight]
 

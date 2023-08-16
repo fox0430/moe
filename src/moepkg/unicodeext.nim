@@ -539,3 +539,6 @@ proc stripLineEnd*(runes: Runes): Runes =
   var s = $runes
   s.stripLineEnd
   return s.toRunes
+
+proc replace*(runes1, sub: Runes, by: Runes = ru""): Runes {.inline.} =
+  replace($runes1, $sub, $by).toRunes

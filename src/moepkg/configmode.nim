@@ -79,6 +79,7 @@ type statusLineTableNames {.pure.} = enum
   gitBranchName
   showGitInactive
   showModeInactive
+  setupText
 
 type highlightTableNames {.pure.} = enum
   currentLine
@@ -324,43 +325,38 @@ proc getTabLineTableSettingValues(settings: TabLineSettings,
 proc getStatusLineTableSettingValues(settings: StatusLineSettings,
                                      name: string): seq[Runes] =
 
-  var currentVal: bool
-  case name:
-    of "multipleStatusLine":
-      currentVal = settings.multipleStatusLine
-    of "merge":
-      currentVal = settings.merge
-    of "mode":
-      currentVal = settings.mode
-    of "filename":
-      currentVal = settings.filename
-    of "chanedMark":
-      currentVal = settings.chanedMark
-    of "line":
-      currentVal = settings.line
-    of "column":
-      currentVal = settings.column
-    of "encoding":
-      currentVal = settings.characterEncoding
-    of "language":
-      currentVal = settings.language
-    of "directory":
-      currentVal = settings.directory
-    of "gitChangedLines":
-      currentVal = settings.gitChangedLines
-    of "gitBranchName":
-      currentVal = settings.gitBranchName
-    of "showGitInactive":
-      currentVal = settings.showGitInactive
-    of "showModeInactive":
-      currentVal = settings.showModeInactive
-    else:
-      return
-
-  if currentVal:
-    result = @[ru "true", ru "false"]
+  if name == "setupText":
+    return @[settings.setupText]
   else:
-    result = @[ru "false", ru "true"]
+    var currentVal: bool
+    case name:
+      of "multipleStatusLine":
+        currentVal = settings.multipleStatusLine
+      of "merge":
+        currentVal = settings.merge
+      of "mode":
+        currentVal = settings.mode
+      of "filename":
+        currentVal = settings.filename
+      of "chanedMark":
+        currentVal = settings.chanedMark
+      of "directory":
+        currentVal = settings.directory
+      of "gitChangedLines":
+        currentVal = settings.gitChangedLines
+      of "gitBranchName":
+        currentVal = settings.gitBranchName
+      of "showGitInactive":
+        currentVal = settings.showGitInactive
+      of "showModeInactive":
+        currentVal = settings.showModeInactive
+      else:
+        return
+
+    if currentVal:
+      result = @[ru "true", ru "false"]
+    else:
+      result = @[ru "false", ru "true"]
 
 proc getHighlightTableSettingValues(settings: EditorSettings,
                                     name: string): seq[Runes] =
@@ -781,14 +777,6 @@ proc changeStatusLineTableSetting(settings: var StatusLineSettings,
     settings.filename = parseBool(settingVal)
   of "chanedMark":
     settings.chanedMark = parseBool(settingVal)
-  of "line":
-    settings.line = parseBool(settingVal)
-  of "column":
-    settings.column = parseBool(settingVal)
-  of "encoding":
-    settings.characterEncoding = parseBool(settingVal)
-  of "language":
-    settings.language = parseBool(settingVal)
   of "directory":
     settings.directory = parseBool(settingVal)
   of "gitChangedLines":
@@ -799,6 +787,8 @@ proc changeStatusLineTableSetting(settings: var StatusLineSettings,
     settings.showGitInactive = parseBool(settingVal)
   of "showModeInactive":
     settings.showModeInactive = parseBool(settingVal)
+  of "setupText":
+    settings.setupText = settingVal.toRunes
   else:
     discard
 
@@ -1127,7 +1117,10 @@ proc getSettingType(table, name: string): SettingType =
          "gitChangedLines",
          "gitBranchName",
          "showGitInactive",
-         "showModeInactive": result = SettingType.Bool
+         "showModeInactive":
+           result = SettingType.Bool
+      of "setupText":
+        result = SettingType.String
       else:
         result = SettingType.None
 
@@ -1828,14 +1821,6 @@ proc initStatusLineTableBuffer(settings: StatusLineSettings): seq[Runes] =
         result.add(ru nameStr & space & $settings.filename)
       of "chanedMark":
         result.add(ru nameStr & space & $settings.chanedMark)
-      of "line":
-        result.add(ru nameStr & space & $settings.line)
-      of "column":
-        result.add(ru nameStr & space & $settings.column)
-      of "encoding":
-        result.add(ru nameStr & space & $settings.characterEncoding)
-      of "language":
-        result.add(ru nameStr & space & $settings.language)
       of "directory":
         result.add(ru nameStr & space & $settings.directory)
       of "gitChangedLines":
@@ -1846,6 +1831,8 @@ proc initStatusLineTableBuffer(settings: StatusLineSettings): seq[Runes] =
         result.add(ru nameStr & space & $settings.showGitInactive)
       of "showModeInactive":
         result.add(ru nameStr & space & $settings.showModeInactive)
+      of "setupText":
+        result.add(ru nameStr & space & $settings.setupText)
 
 proc initHighlightTableBuffer(settings: EditorSettings): seq[Runes] =
   result.add(ru"Highlight")

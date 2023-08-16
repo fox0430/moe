@@ -20,6 +20,159 @@
 import std/[os, encodings]
 import gapbuffer, unicodeext
 
+type
+  FileType* = enum
+    dir
+    docker
+    nim
+    nimble
+    rpm
+    deb
+    py
+    ui
+    glade
+    txt
+    md
+    rst
+    cpp
+    cxx
+    hpp
+    c
+    h
+    java
+    php
+    js
+    json
+    rs
+    html
+    xhtml
+    css
+    xml
+    cfg
+    ini
+    sh
+    pdf
+    doc
+    odf
+    ods
+    odt
+    wav
+    mp3
+    ogg
+    zip
+    bz2
+    xz
+    gz
+    tgz
+    zstd
+    exe
+    bin
+    mp4
+    webm
+    avi
+    mpeg
+    patch
+    lock
+    pem
+    crt
+    png
+    jpeg
+    jpg
+    bmp
+    gif
+    unknown
+
+proc fileTypeIcon*(fileType: FileType): Runes =
+  case fileType:
+    of dir:
+      ru"📁"
+    of docker:
+      ru"🐳"
+    of nim:
+      ru"👑"
+    of nimble, rpm, deb:
+      ru"📦"
+    of py:
+      ru"🐍"
+    of ui, glade:
+      ru"🏠"
+    of txt, md, rst:
+      ru"📝"
+    of cpp, cxx, hpp:
+      ru"⧺"
+    of c, h:
+      ru"🅒"
+    of java:
+      ru"🍵"
+    of php:
+      ru"🙈"
+    of js, json:
+      ru"🙉"
+    of rs:
+      ru"🦀"
+    of html, xhtml:
+      ru"🏄"
+    of css:
+      ru"👚"
+    of xml:
+      ru"༕"
+    of cfg, ini:
+      ru"🍳"
+    of sh:
+      ru"🐚"
+    of pdf, doc, odf, ods, odt:
+      ru"🍞"
+    of wav, mp3, ogg:
+      ru"🎼"
+    of zip, bz2, xz, gz, tgz, zstd:
+      ru"🚢"
+    of exe, bin:
+      ru"🏃"
+    of mp4, webm, avi, mpeg:
+      ru"🎞"
+    of patch:
+      ru"💊"
+    of lock:
+      ru"🔒"
+    of pem, crt:
+      ru"🔏"
+    of png, jpeg, jpg, bmp, gif:
+      ru"🎨"
+    else:
+      ru"🍕"
+
+proc isDockerFile*(filename: string): bool {.inline.} =
+  ## Return true if Dockerfile or docker compose file.
+
+  filename == "Dockerfile" or
+  filename == "docker-compose.yml" or
+  filename == "docker-compose.yaml" or
+  filename == "compose.yaml" or
+  filename == "compose.yml"
+
+proc getFileType*(path: string): FileType =
+  if dirExists(path):
+    return FileType.dir
+  else:
+    let fileSplit = splitFile(path)
+    if fileSplit.ext.len == 0:
+      if isDockerFile(fileSplit.name):
+        return FileType.docker
+      else:
+        # Not sure if this is a perfect solution,
+        # it should detect if the current user can execute the file or not:
+        try:
+          let permissions = getFilePermissions(path)
+          if fpUserExec in permissions or fpGroupExec in permissions:
+            return FileType.exe
+        except:
+          return FileType.unknown
+    else:
+      for ext in FileType:
+        if ext != FileType.unknown and fileSplit.ext[1 .. ^1] == $ext:
+          return ext
+      return FileType.unknown
+
 proc normalizedPath*(path: Runes): Runes =
   result = normalizedPath($path).toRunes
   if path.startsWith(ru'~'):
