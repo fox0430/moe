@@ -17,10 +17,19 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[os, encodings]
+import std/[os, encodings, strformat]
+import pkg/results
 import gapbuffer, unicodeext
 
 type
+  TextAndEncoding* = object
+    text*: Runes
+    encoding*: CharacterEncoding
+
+  OpenFileResult* = Result[TextAndEncoding, string]
+
+  SaveFileResult* = Result[(), string]
+
   FileType* = enum
     dir
     docker
@@ -191,20 +200,25 @@ proc splitAndNormalizedPath*(path: Runes): tuple[head, tail: Runes] =
   let (head, tail) = splitPath(path)
   return (head: normalizedPath(head), tail: normalizedPath(tail))
 
-proc openFile*(filename: Runes):
-  tuple[text: Runes, encoding: CharacterEncoding] =
-    # TODO: Return Result type
+proc openFile*(filename: Runes): OpenFileResult =
+  let raw =
+    try:
+      readFile($filename)
+    except IOError as e:
+      return OpenFileResult.err fmt"Failed to read file: {e.msg}"
 
-    let
-      raw = readFile($filename)
-      encoding = detectCharacterEncoding(raw)
-      text =  if encoding == CharacterEncoding.unknown or
-                 encoding == CharacterEncoding.utf8:
-        # If the character encoding is unknown, convert to UTF-8.
-        raw.toRunes
-      else:
-        convert(raw, "UTF-8", $encoding).toRunes
-    return (text, encoding)
+  var t: TextAndEncoding
+
+  t.encoding = detectCharacterEncoding(raw)
+
+  case t.encoding:
+    of CharacterEncoding.unknown, CharacterEncoding.utf8:
+      # If the character encoding is unknown, convert to UTF-8.
+      t.text = raw.toRunes
+    else:
+      t.text = convert(raw, "UTF-8", $t.encoding).toRunes
+
+  return OpenFileResult.ok t
 
 proc newFile*(): GapBuffer[Runes] {.inline.} =
   result = initGapBuffer[Runes]()
@@ -212,12 +226,18 @@ proc newFile*(): GapBuffer[Runes] {.inline.} =
 
 proc saveFile*(
   path, runes: Runes,
-  encoding: CharacterEncoding) =
-    # TODO: Return Result type
+  encoding: CharacterEncoding): SaveFileResult =
 
     let
       encode =
         if encoding == CharacterEncoding.unknown: CharacterEncoding.utf8
         else: encoding
       buffer = convert($runes, $encode, "UTF-8")
-    writeFile($path, buffer)
+
+    try:
+      writeFile($path, buffer)
+    except IOError as e:
+      return SaveFileResult.err fmt"Failed to save file: {e.msg}"
+
+    return SaveFileResult.ok ()
+

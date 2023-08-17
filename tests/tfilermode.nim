@@ -60,7 +60,7 @@ suite "Filer mode":
     var filerStatus = initFilerStatus()
     filerStatus.updatePathList(path)
 
-    var bufStatus = initBufferStatus($path, Mode.filer)
+    var bufStatus = initBufferStatus($path, Mode.filer).get
 
     const isShowIcons = false
     bufStatus.buffer = filerStatus.initFilerBuffer(isShowIcons).toGapBuffer
@@ -76,7 +76,7 @@ suite "Filer mode":
     var filerStatus = initFilerStatus()
     filerStatus.updatePathList(path)
 
-    var bufStatus = initBufferStatus($path, Mode.filer)
+    var bufStatus = initBufferStatus($path, Mode.filer).get
     const isShowIcons = false
 
     bufStatus.buffer = filerStatus.initFilerBuffer(isShowIcons).toGapBuffer
@@ -92,7 +92,7 @@ suite "Filer mode":
     filerStatus.updatePathList(path)
 
     var
-      bufStatuses = @[initBufferStatus($path, Mode.filer)]
+      bufStatuses = @[initBufferStatus($path, Mode.filer).get]
       mainWindow = initMainWindow()
     const isShowIcons = false
 
@@ -116,7 +116,7 @@ suite "Filer mode":
     filerStatus.updatePathList(path)
 
     var
-      bufStatuses = @[initBufferStatus($path, Mode.filer)]
+      bufStatuses = @[initBufferStatus($path, Mode.filer).get]
       mainWindow = initMainWindow()
     const isShowIcons = false
 

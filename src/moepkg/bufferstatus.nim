@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[tables, times, options, os]
+import std/[tables, times, options, os, strformat]
 import pkg/results
 import syntax/highlite
 import gapbuffer, unicodeext, fileutils, highlight, independentutils, git,
@@ -269,59 +269,66 @@ proc absolutePath*(bufStatus: BufferStatus): Runes =
 
 proc initBufferStatus*(
   path: string,
-  mode: Mode): BufferStatus =
+  mode: Mode): Result[BufferStatus, string] =
     ## Open a file or dir and return a new BufferStatus.
-    # TODO: Return Result type
 
-    result.isUpdate = true
-    result.openDir = getCurrentDir().toRunes
-    result.prevMode = mode
-    result.mode = mode
-    result.lastSaveTime = now()
-    result.lastGitInfoCheckTime = now()
-    result.fileType = getFileType(path)
+    var b: BufferStatus
 
-    if isFilerMode(result.mode):
-      result.path = absolutePath(path).toRunes
-      result.buffer = initGapBuffer(@[ru ""])
+    b.isUpdate = true
+    b.openDir = getCurrentDir().toRunes
+    b.prevMode = mode
+    b.mode = mode
+    b.lastSaveTime = now()
+    b.lastGitInfoCheckTime = now()
+    b.fileType = getFileType(path)
+
+    if isFilerMode(b.mode):
+      b.path = absolutePath(path).toRunes
+      b.buffer = initGapBuffer(@[ru ""])
+
+      return Result[BufferStatus, string].ok b
     else:
-      result.path = path.toRunes
+      b.path = path.toRunes
 
-      if not fileExists($result.path):
-        result.buffer = newFile()
+      if not fileExists($b.path):
+        b.buffer = newFile()
       else:
-        let textAndEncoding = openFile(result.path)
-        result.buffer = textAndEncoding.text.toGapBuffer
-        result.characterEncoding = textAndEncoding.encoding
+        let textAndEncoding = openFile(b.path)
+        if textAndEncoding.isErr:
+          return Result[BufferStatus, string].err fmt"Failed to init BufferStatus: {textAndEncoding.error}"
 
-        result.isTrackingByGit = isTrackingByGit(path)
+        b.buffer = textAndEncoding.get.text.toGapBuffer
+        b.characterEncoding = textAndEncoding.get.encoding
 
-      result.language = detectLanguage($result.path)
+        b.isTrackingByGit = isTrackingByGit(path)
+
+      b.language = detectLanguage($b.path)
+
+      return Result[BufferStatus, string].ok b
 
 proc initBufferStatus*(
-  mode: Mode): BufferStatus =
+  mode: Mode): Result[BufferStatus, string] =
     ## Return a BufferStatus for a new empty buffer.
-    # TODO: Return an error if open a dir.
-    # TODO: Return Result type
 
-    result.isUpdate = true
-    result.openDir = getCurrentDir().toRunes
-    result.prevMode = mode
-    result.mode = mode
-    result.lastSaveTime = now()
-    result.lastGitInfoCheckTime = now()
-    result.fileType = getFileType("")
+    var b: BufferStatus
+
+    b.isUpdate = true
+    b.openDir = getCurrentDir().toRunes
+    b.prevMode = mode
+    b.mode = mode
+    b.lastSaveTime = now()
+    b.lastGitInfoCheckTime = now()
+    b.fileType = FileType.unknown
 
     if mode.isFilerMode:
-      result.buffer = initGapBuffer(@[ru ""])
+      b.buffer = initGapBuffer(@[ru""])
     else:
-      result.buffer = newFile()
+      b.buffer = newFile()
+
+    return Result[BufferStatus, string].ok b
 
 proc initBufferStatus*(
-  path: string): BufferStatus {.inline.} =
-    # TODO: Return an error if open a dir.
-    # TODO: Return Result type
-
+  path: string): Result[BufferStatus, string] {.inline.} =
     initBufferStatus(path, Mode.normal)
 
 proc changeMode*(bufStatus: var BufferStatus, mode: Mode) =

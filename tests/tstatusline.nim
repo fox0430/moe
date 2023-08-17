@@ -30,38 +30,38 @@ proc resize(status: var EditorStatus, h, w: int) =
 suite "statusline: displayPath":
   test "Empty":
     const Path = ""
-    let bufStatus = initBufferStatus(Path)
+    let bufStatus = initBufferStatus(Path).get
 
     check ru"No name" == displayPath(bufStatus)
 
   test "Absolute path":
     const Path = "/path/to/file"
-    let bufStatus = initBufferStatus(Path)
+    let bufStatus = initBufferStatus(Path).get
 
     check Path.toRunes == displayPath(bufStatus)
 
   test "Relative path":
     const Path = "./file"
-    let bufStatus = initBufferStatus(Path)
+    let bufStatus = initBufferStatus(Path).get
 
     check Path.toRunes == displayPath(bufStatus)
 
   test "In the home dir":
     let path = getHomeDir() / "file"
-    let bufStatus = initBufferStatus(path)
+    let bufStatus = initBufferStatus(path).get
 
     check ru"~/file" == displayPath(bufStatus)
 
 suite "statusline: getFileType":
   test "Nim and Normal mode":
     const Path = "test.nim"
-    let bufStatus = initBufferStatus(Path)
+    let bufStatus = initBufferStatus(Path).get
 
     check ru"Nim" == bufStatus.getFileType
 
   test "Plain and Normal mode":
     const Path = "test.txt"
-    let bufStatus = initBufferStatus(Path)
+    let bufStatus = initBufferStatus(Path).get
 
     check ru"Plain" == bufStatus.getFileType
 

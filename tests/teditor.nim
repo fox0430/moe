@@ -18,6 +18,7 @@
 #[############################################################################]#
 
 import std/[unittest, macros, osproc]
+import pkg/results
 import moepkg/[independentutils, gapbuffer, unicodeext, bufferstatus,
                editorstatus, settings, register]
 import moepkg/syntax/highlite
@@ -126,7 +127,7 @@ suite "Editor: Delete trailing spaces":
   test "Fix #1582":
     # Fix for https://github.com/fox0430/moe/issues/1582.
 
-    var bufStatus = initBufferStatus(Mode.normal)
+    var bufStatus = initBufferStatus(Mode.normal).get
     bufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi "])
 
     bufStatus.deleteTrailingSpaces

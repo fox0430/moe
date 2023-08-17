@@ -18,6 +18,7 @@
 #[############################################################################]#
 
 import std/[unittest, strutils, strformat, importutils]
+import pkg/results
 import moepkg/[bufferstatus, editorstatus, ui, color, independentutils,
                unicodeext]
 
@@ -52,43 +53,43 @@ suite "tabline: tabLineBuffer":
 
 suite "tabline: displayedPath":
   test "Backup mode":
-    let bufStatus = initBufferStatus("", Mode.backup)
+    let bufStatus = initBufferStatus("", Mode.backup).get
     check bufStatus.displayedPath == "BACKUP"
 
   test "Config mode":
-    let bufStatus = initBufferStatus("", Mode.config)
+    let bufStatus = initBufferStatus("", Mode.config).get
     check bufStatus.displayedPath == "CONFIG"
 
   test "Help mode":
-    let bufStatus = initBufferStatus("", Mode.help)
+    let bufStatus = initBufferStatus("", Mode.help).get
     check bufStatus.displayedPath == "HELP"
 
   test "Buffer manager mode":
-    let bufStatus = initBufferStatus("", Mode.bufManager)
+    let bufStatus = initBufferStatus("", Mode.bufManager).get
     check bufStatus.displayedPath == "BUFFER"
 
   test "Log viewer mode":
-    let bufStatus = initBufferStatus("", Mode.logViewer)
+    let bufStatus = initBufferStatus("", Mode.logViewer).get
     check bufStatus.displayedPath == "LOG"
 
   test "Recent file mode":
-    let bufStatus = initBufferStatus("", Mode.recentFile)
+    let bufStatus = initBufferStatus("", Mode.recentFile).get
     check bufStatus.displayedPath == "RECENT"
 
   test "Debug mode":
-    let bufStatus = initBufferStatus("", Mode.debug)
+    let bufStatus = initBufferStatus("", Mode.debug).get
     check bufStatus.displayedPath == "DEBUG"
 
   test " Quickrun mode":
-    let bufStatus = initBufferStatus("", Mode.quickRun)
+    let bufStatus = initBufferStatus("", Mode.quickRun).get
     check bufStatus.displayedPath == "QUICKRUN"
 
   test "Normal mode":
-    let bufStatus = initBufferStatus("test.txt", Mode.normal)
+    let bufStatus = initBufferStatus("test.txt", Mode.normal).get
     check bufStatus.displayedPath == "test.txt"
 
   test "Normal mode and empty path":
-    let bufStatus = initBufferStatus("", Mode.normal)
+    let bufStatus = initBufferStatus("", Mode.normal).get
     check bufStatus.displayedPath == "New file"
 
 suite "tabline: initTabLines":
