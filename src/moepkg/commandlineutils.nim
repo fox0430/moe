@@ -26,7 +26,7 @@ type
     exCommand
     exCommandOption
 
-  ArgsType* = enum
+  ArgsType* {.pure.} = enum
     none
     toggle  # "on" or "off"
     number
