@@ -18,7 +18,7 @@
 #[############################################################################]#
 
 import std/[unittest, os, sequtils, strutils, options, sugar, algorithm]
-import moepkg/[unicodeext, color]
+import moepkg/[unicodeext, theme]
 
 import moepkg/commandlineutils {.all.}
 

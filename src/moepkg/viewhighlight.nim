@@ -20,7 +20,7 @@
 import std/[options, deques]
 import independentutils, bufferstatus, highlight, color, windownode, gapbuffer,
        unicodeext, editorview, searchutils, settings, movement, ui, syntaxcheck,
-       git
+       git, theme
 
 proc initBufferPosition(
   n: WindowNode): BufferPosition {.inline.} =

@@ -20,7 +20,7 @@
 import std/[os, times]
 import pkg/results
 import moepkg/[ui, bufferstatus, editorstatus, cmdlineoption, mainloop, git,
-               editorview, color]
+               editorview, theme]
 
 # Load persisted data (Ex command history, search history and cursor postion)
 proc loadPersistData(status: var EditorStatus) =

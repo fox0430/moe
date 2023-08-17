@@ -27,7 +27,7 @@ import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        autocomplete, suggestionwindow, filermodeutils, debugmodeutils,
        independentutils, viewhighlight, helputils, backupmanagerutils,
        diffviewerutils, messagelog, globalsidebar, build, quickrunutils, git,
-       syntaxcheck
+       syntaxcheck, theme
 
 type
   LastCursorPosition* = object

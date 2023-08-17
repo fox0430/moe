@@ -18,14 +18,15 @@
 #[############################################################################]#
 
 import std/[strutils, sequtils, strformat, os, algorithm, options]
-import ui, unicodeext, fileutils, color, commandline, popupwindow, messagelog
+import ui, unicodeext, fileutils, color, commandline, popupwindow, messagelog,
+       theme
 
 type
   SuggestType* = enum
     exCommand
     exCommandOption
 
-  ArgsType* = enum
+  ArgsType* {.pure.} = enum
     none
     toggle  # "on" or "off"
     number

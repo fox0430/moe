@@ -22,10 +22,10 @@ import pkg/results
 import syntax/highlite
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
        unicodeext, independentutils, searchutils, highlight, windownode,
-       movement, color, build, bufferstatus, editor, settings, quickrunutils,
-       messages, commandline, debugmodeutils, platform, commandlineutils,
-       recentfilemode, buffermanager, viewhighlight, messagelog, configmode,
-       git, syntaxcheck
+       movement, build, bufferstatus, editor, settings, quickrunutils, messages,
+       commandline, debugmodeutils, platform, commandlineutils, recentfilemode,
+       buffermanager, viewhighlight, messagelog, configmode, git, syntaxcheck,
+       theme
 
 type
   replaceCommandInfo = tuple[searhWord: Runes, replaceWord: Runes]
