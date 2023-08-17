@@ -186,12 +186,13 @@ proc writeFileAndExit(status: var EditorStatus) =
     status.commandLine.writeNoFileNameError
     status.changeModeToNormalMode
   else:
-    try:
-      saveFile(currentBufStatus.path,
-               currentBufStatus.buffer.toRunes,
-               currentBufStatus.characterEncoding)
+    let r = saveFile(
+      currentBufStatus.path,
+      currentBufStatus.buffer.toRunes,
+      currentBufStatus.characterEncoding)
+    if r.isOk:
       status.closeWindow(currentMainWindowNode)
-    except IOError:
+    else:
       status.commandLine.writeSaveError
 
 proc forceExit(status: var EditorStatus) {.inline.} =

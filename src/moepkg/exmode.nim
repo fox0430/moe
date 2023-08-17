@@ -938,14 +938,16 @@ proc writeConfigurationFile(status: var EditorStatus) =
   else:
     try:
       createDir(configFileDir)
-      saveFile(
-        configFilePath.toRunes,
-        buffer.toRunes,
-        CharacterEncoding.utf8)
     except IOError:
       status.commandLine.writeSaveError
 
-    status.commandLine.writePutConfigFile(configFilePath)
+    let r = saveFile(
+      configFilePath.toRunes,
+      buffer.toRunes, CharacterEncoding.utf8)
+    if r.isOk:
+      status.commandLine.writePutConfigFile(configFilePath)
+    else:
+      status.commandLine.writeSaveError
 
   status.changeMode(currentBufStatus.prevMode)
 
@@ -976,13 +978,13 @@ proc writeCommand(status: var EditorStatus, path: Runes) =
       status.commandLine.writeSaveError
       return
 
-    try:
-      saveFile(
-        path,
-        currentBufStatus.buffer.toRunes,
-        currentBufStatus.characterEncoding)
-    except IOError:
+    let r = saveFile(
+      path,
+      currentBufStatus.buffer.toRunes,
+      currentBufStatus.characterEncoding)
+    if r.isErr:
       status.commandLine.writeSaveError
+      return
 
     if currentBufStatus.path != path:
       currentBufStatus.path = path
@@ -1067,17 +1069,16 @@ proc writeAndQuitCommand(status: var EditorStatus) =
     status.commandLine.writeSaveError
     return
 
-  try:
-    saveFile(path,
-             currentBufStatus.buffer.toRunes,
-             currentBufStatus.characterEncoding)
-  except IOError:
+  let r = saveFile(
+    path,
+    currentBufStatus.buffer.toRunes,
+    currentBufStatus.characterEncoding)
+  if r.isOk:
+    status.changeMode(currentBufStatus.prevMode)
+    status.closeWindow(currentMainWindowNode)
+  else:
     status.commandLine.writeSaveError
     status.changeMode(currentBufStatus.prevMode)
-    return
-
-  status.changeMode(currentBufStatus.prevMode)
-  status.closeWindow(currentMainWindowNode)
 
 proc forceWriteAndQuitCommand(status: var EditorStatus) =
   try:
@@ -1133,17 +1134,16 @@ proc writeAndQuitAllBufferCommand(status: var EditorStatus) =
       status.commandLine.writeSaveError
       return
 
-    try:
-      saveFile(
-        path,
-        bufStatus.buffer.toRunes,
-        bufStatus.characterEncoding)
-    except IOError:
+    let r =saveFile(
+      path,
+      bufStatus.buffer.toRunes,
+      bufStatus.characterEncoding)
+    if r.isOk:
+      status.exitEditor
+    else:
       status.commandLine.writeSaveError
       status.changeMode(currentBufStatus.prevMode)
       return
-
-  status.exitEditor
 
 # Save buffer, buid and open log viewer
 proc buildCommand(status: var EditorStatus) =

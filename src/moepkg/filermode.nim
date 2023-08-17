@@ -25,26 +25,40 @@ import editorstatus, ui, windownode, bufferstatus, unicodeext, filermodeutils,
 proc openNewWinAndOpenFilerOrDir(
   status: var EditorStatus,
   filerStatus: var FilerStatus) =
-    let path = filerStatus.pathList[currentMainWindowNode.currentLine].path
 
-    status.verticalSplitWindow
-    status.resize
-    status.moveNextWindow
+    let path = filerStatus.pathList[currentMainWindowNode.currentLine].path
 
     if dirExists($path):
       try:
         setCurrentDir($path)
       except OSError:
         status.commandLine.writeFileOpenError($path)
-        status.bufStatus.add initBufferStatus("")
+        return
 
-      status.bufStatus.add initBufferStatus(Mode.filer)
+      let b = initBufferStatus(Mode.filer)
+      if b.isErr:
+        status.commandLine.writeFileOpenError($path)
+        return
+
+      status.verticalSplitWindow
+      status.resize
+      status.moveNextWindow
+
+      status.bufStatus.add b.get
     else:
-      status.bufStatus.add initBufferStatus($path)
+      let b = initBufferStatus($path)
+      if b.isErr:
+        status.commandLine.writeFileOpenError($path)
+        return
 
+      status.verticalSplitWindow
+      status.resize
+      status.moveNextWindow
+
+      status.bufStatus.add b.get
       status.changeCurrentBuffer(status.bufStatus.high)
 
-proc currentPathInfo(status: EditorStatus,): PathInfo {.inline.} =
+proc currentPathInfo(status: EditorStatus): PathInfo {.inline.} =
   currentFilerStatus.pathList[currentMainWindowNode.currentLine]
 
 proc changeModeToExMode*(

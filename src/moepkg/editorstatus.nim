@@ -323,12 +323,12 @@ proc addNewBuffer*(
 
     case mode:
       of Mode.help:
-        status.bufStatus.add initBufferStatus(mode)
+        status.bufStatus.add initBufferStatus(mode).get
         status.bufStatus[^1].buffer = initHelpModeBuffer().toGapBuffer
       of Mode.backup:
         # Get a backup history of the current buffer.
         let sourceFilePath = currentBufStatus.absolutePath
-        status.bufStatus.add initBufferStatus(mode)
+        status.bufStatus.add initBufferStatus(mode).get
         status.bufStatus[^1].buffer = initBackupManagerBuffer(
           status.settings.autoBackup.backupDir,
           sourceFilePath).toGapBuffer
@@ -340,14 +340,14 @@ proc addNewBuffer*(
           baseBackupDir = $status.settings.autoBackup.backupDir
           backupDir = backupDir(baseBackupDir, sourceFilePath)
           backupFilePath = backupDir / $currentLineBuffer
-        status.bufStatus.add initBufferStatus(mode)
+        status.bufStatus.add initBufferStatus(mode).get
         status.bufStatus[^1].buffer = initDiffViewerBuffer(
           sourceFilePath,
           backupFilePath).toGapBuffer
         status.bufStatus[^1].path = backupFilePath.toRunes
       else:
         try:
-          status.bufStatus.add initBufferStatus(path, mode)
+          status.bufStatus.add initBufferStatus(path, mode).get
         except CatchableError:
           let errMessage =
             if mode.isFilerMode:
@@ -1155,9 +1155,14 @@ proc autoSave(status: var EditorStatus) =
   let interval = status.settings.autoSaveInterval.minutes
   for index, bufStatus in status.bufStatus:
     if bufStatus.path != ru"" and now() > bufStatus.lastSaveTime + interval:
-      saveFile(bufStatus.path,
-               bufStatus.buffer.toRunes,
-               bufStatus.characterEncoding)
+      let r = saveFile(
+        bufStatus.path,
+        bufStatus.buffer.toRunes,
+        bufStatus.characterEncoding)
+      if r.isErr:
+        addMessageLog fmt"Failed to auto save: {bufStatus.path}: {r.get}"
+        .toRunes
+
       status.commandLine.writeMessageAutoSave(
         bufStatus.path,
         status.settings.notification)
@@ -1333,25 +1338,32 @@ proc eventLoopTask*(status: var EditorStatus) =
             currentBufStatus.characterEncoding
         buffer = convert($currentBufStatus.buffer, $encoding, "UTF-8")
 
-        newText = openFile(currentBufStatus.path)
-        newBuffer = convert(($newText.text & "\n"), $newText.encoding, "UTF-8")
+      let newText = openFile(currentBufStatus.path)
+      if newText.isErr:
+        addMessageLog fmt"Failed to reload the {currentBufStatus.path}: {newText.error}"
+        .toRunes
+      else:
+        let newBuffer = convert(
+          ($newText.get.text & "\n"),
+          $newText.get.encoding,
+          "UTF-8")
 
-      # TODO: Show a warning if both are edited.
-      if buffer != newBuffer:
-        let newTextAndEncoding = openFile(currentBufStatus.path)
-        currentBufStatus.buffer = newTextAndEncoding.text.toGapBuffer
-        currentBufStatus.characterEncoding = newTextAndEncoding.encoding
-        currentBufStatus.isUpdate = true
+        # TODO: Show a warning if both are edited.
+        if buffer != newBuffer:
+          let newTextAndEncoding = openFile(currentBufStatus.path)
+          currentBufStatus.buffer = newTextAndEncoding.get.text.toGapBuffer
+          currentBufStatus.characterEncoding = newTextAndEncoding.get.encoding
+          currentBufStatus.isUpdate = true
 
-        if currentBufStatus.isTrackingByGit:
-          let gitDiffProcess = startBackgroundGitDiff(
-            currentBufStatus.path,
-            currentBufStatus.buffer.toRunes,
-            currentBufStatus.characterEncoding)
-          if gitDiffProcess.isOk:
-            status.backgroundTasks.gitDiff.add gitDiffProcess.get
-          else:
-            status.commandLine.writeGitInfoUpdateError(gitDiffProcess.error)
+          if currentBufStatus.isTrackingByGit:
+            let gitDiffProcess = startBackgroundGitDiff(
+              currentBufStatus.path,
+              currentBufStatus.buffer.toRunes,
+              currentBufStatus.characterEncoding)
+            if gitDiffProcess.isOk:
+              status.backgroundTasks.gitDiff.add gitDiffProcess.get
+            else:
+              status.commandLine.writeGitInfoUpdateError(gitDiffProcess.error)
 
   block automaticBackups:
     let

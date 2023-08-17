@@ -215,7 +215,7 @@ suite "QuickRun: isRunning":
   test "Return true":
     let settings = initEditorSettings()
 
-    var bufStatus = initBufferStatus("test.sh")
+    var bufStatus = initBufferStatus("test.sh").get
     bufStatus.buffer = @[ru"sleep 1000"].toGapBuffer
 
     var p = bufStatus.startBackgroundQuickRun(settings).get
@@ -235,7 +235,7 @@ suite "QuickRun: isRunning":
   test "Return false":
     let settings = initEditorSettings()
 
-    var bufStatus = initBufferStatus("test.sh")
+    var bufStatus = initBufferStatus("test.sh").get
     bufStatus.buffer = @[ru"sleep 0"].toGapBuffer
 
     var p = bufStatus.startBackgroundQuickRun(settings).get
@@ -256,7 +256,7 @@ suite "QuickRun: isFinish":
   test "Return true":
     let settings = initEditorSettings()
 
-    var bufStatus = initBufferStatus("test.sh")
+    var bufStatus = initBufferStatus("test.sh").get
     bufStatus.buffer = @[ru"sleep 0"].toGapBuffer
 
     var p = bufStatus.startBackgroundQuickRun(settings).get
@@ -273,7 +273,7 @@ suite "QuickRun: isFinish":
   test "Return false":
     let settings = initEditorSettings()
 
-    var bufStatus = initBufferStatus("test.sh")
+    var bufStatus = initBufferStatus("test.sh").get
     bufStatus.buffer = @[ru"sleep 500"].toGapBuffer
 
     var p = bufStatus.startBackgroundQuickRun(settings).get
@@ -291,7 +291,7 @@ suite "QuickRun: cancel":
   test "cancel":
     let settings = initEditorSettings()
 
-    var bufStatus = initBufferStatus("test.sh")
+    var bufStatus = initBufferStatus("test.sh").get
     bufStatus.buffer = @[ru"sleep 500"].toGapBuffer
 
     var p = bufStatus.startBackgroundQuickRun(settings).get
@@ -312,7 +312,7 @@ suite "QuickRun: kill":
   test "kill":
     let settings = initEditorSettings()
 
-    var bufStatus = initBufferStatus("test.sh")
+    var bufStatus = initBufferStatus("test.sh").get
     bufStatus.buffer = @[ru"sleep 500"].toGapBuffer
 
     var p = bufStatus.startBackgroundQuickRun(settings).get
@@ -333,7 +333,7 @@ suite "QuickRun: close":
   test "close":
     let settings = initEditorSettings()
 
-    var bufStatus = initBufferStatus("test.sh")
+    var bufStatus = initBufferStatus("test.sh").get
     bufStatus.buffer = @[ru"sleep 500"].toGapBuffer
 
     var p = bufStatus.startBackgroundQuickRun(settings).get
@@ -347,7 +347,7 @@ suite "QuickRun: startBackgroundQuickRun and result":
   test "Without file":
     let settings = initEditorSettings()
 
-    var bufStatus = initBufferStatus("test.nim")
+    var bufStatus = initBufferStatus("test.nim").get
     bufStatus.buffer = @[ru"echo 1"].toGapBuffer
 
     var p = bufStatus.startBackgroundQuickRun(settings).get

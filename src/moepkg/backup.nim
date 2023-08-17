@@ -18,6 +18,7 @@
 #[############################################################################]#
 
 import std/[os, times, oids, json]
+import pkg/results
 import settings, unicodeext, fileutils, bufferstatus, gapbuffer, messages,
        commandline
 
@@ -132,10 +133,10 @@ proc diff(baseBackupDir, sourceFilePath: Runes, buffer: string): bool =
         mostRecentFile = filename
 
   if fileExists(mostRecentFile):
-    try:
-      let mostRecentBuffer = openFile(mostRecentFile.toRunes)
-      return $mostRecentBuffer.text == buffer[0 ..< ^1]
-    except CatchableError:
+    let mostRecentBuffer = openFile(mostRecentFile.toRunes)
+    if mostRecentBuffer.isOk:
+      return $mostRecentBuffer.get.text == buffer[0 ..< ^1]
+    else:
       return false
 
 # Return if successful.

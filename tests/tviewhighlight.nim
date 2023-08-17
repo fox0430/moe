@@ -18,6 +18,7 @@
 #[############################################################################]#
 
 import std/[unittest, heapqueue, options, macros, strformat, strutils]
+import pkg/results
 import moepkg/syntax/highlite
 import moepkg/[editorstatus, highlight, color, editorview, gapbuffer,
                unicodeext, movement, windownode, ui, independentutils,
@@ -775,7 +776,7 @@ echo "test"
 >>>>>>> new_branch
 """.splitLines.toSeqRunes
 
-    var bufStatus = initBufferStatus("")
+    var bufStatus = initBufferStatus("").get
     bufStatus.buffer = Buffer.toGapBuffer
     var h = initHighlight($bufStatus.buffer, @[], SourceLanguage.langNim)
 
@@ -905,7 +906,7 @@ echo "test"
 >>>>>>> new_branch
 """.splitLines
 
-    var bufStatus = initBufferStatus("")
+    var bufStatus = initBufferStatus("").get
     for i in 0..100:
       bufStatus.buffer.add ru""
     for line in Code:

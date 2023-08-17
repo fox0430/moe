@@ -20,6 +20,7 @@
 # Manager for automatic backup.
 
 import std/os
+import pkg/results
 import editorstatus, bufferstatus, unicodeext, ui, movement, gapbuffer,
        highlight, settings, messages, backup, fileutils, editorview,
        windownode, commandlineutils, backupmanagerutils
@@ -95,15 +96,21 @@ proc restoreBackupFile(
       if status.bufStatus[i].absolutePath == sourceFilePath:
         let beforeBufStatus = status.bufStatus[i]
 
-        status.bufStatus[i] = initBufferStatus($sourceFilePath)
+        let b = initBufferStatus($sourceFilePath)
+        if b.isOk:
+          status.bufStatus[i] = b.get
+        else:
+          status.commandLine.writeBackupRestoreError
+          return
 
-        try:
-          let textAndEncoding = openFile(sourceFilePath)
-          status.bufStatus[i].buffer = textAndEncoding.text.toGapBuffer
-          status.bufStatus[i].characterEncoding = textAndEncoding.encoding
-        except OSError:
+        let textAndEncoding = openFile(sourceFilePath)
+        if textAndEncoding.isErr:
           status.bufStatus[i] = beforeBufStatus
           status.commandLine.writeBackupRestoreError
+          return
+
+        status.bufStatus[i].buffer = textAndEncoding.get.text.toGapBuffer
+        status.bufStatus[i].characterEncoding = textAndEncoding.get.encoding
 
         status.bufStatus[i].language = detectLanguage($sourceFilePath)
 
