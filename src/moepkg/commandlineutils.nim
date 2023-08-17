@@ -18,7 +18,8 @@
 #[############################################################################]#
 
 import std/[strutils, sequtils, strformat, os, algorithm, options]
-import ui, unicodeext, fileutils, color, commandline, popupwindow, messagelog
+import ui, unicodeext, fileutils, color, commandline, popupwindow, messagelog,
+       theme
 
 type
   SuggestType* = enum

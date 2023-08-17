@@ -19,7 +19,7 @@
 
 import std/[unittest, options, importutils]
 import pkg/[parsetoml, results]
-import moepkg/[color, unicodeext, ui, rgb]
+import moepkg/[color, unicodeext, ui, rgb, theme]
 
 import moepkg/settings {.all.}
 

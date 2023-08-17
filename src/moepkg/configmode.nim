@@ -20,7 +20,8 @@
 import std/[times, strutils, options, strformat]
 import pkg/results
 import gapbuffer, ui, editorstatus, unicodeext, windownode, movement, settings,
-       bufferstatus, color, highlight, editor, commandline, popupwindow, rgb
+       bufferstatus, color, highlight, editor, commandline, popupwindow, rgb,
+       theme
 
 type standardTableNames {.pure.} = enum
   theme
