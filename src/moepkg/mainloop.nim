@@ -18,7 +18,6 @@
 #[############################################################################]#
 
 import std/[options, times]
-
 import editorstatus, bufferstatus, windownode, unicodeext, gapbuffer, ui,
        normalmode, visualmode, insertmode, autocomplete, suggestionwindow,
        exmode, replacemode, filermode, buffermanager, logviewer, help,
@@ -31,7 +30,7 @@ proc invokeCommand(currentMode: Mode, command: Runes): InputState =
     of Mode.insert, Mode.searchForward, Mode.searchBackward:
       InputState.Valid
     of Mode.ex:
-      isExCommand(command)
+      isExCommandBuffer(command)
     of Mode.normal:
       isNormalModeCommand(command)
     of Mode.visual, Mode.visualBlock, Mode.visualLine:

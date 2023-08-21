@@ -18,7 +18,7 @@
 #[############################################################################]#
 
 import std/[unittest, os, sequtils, strutils, options, sugar, algorithm]
-import moepkg/[unicodeext, theme]
+import moepkg/[unicodeext, theme, exmodeutils]
 
 import moepkg/commandlineutils {.all.}
 
@@ -52,111 +52,6 @@ suite "commandlineutils: getSuggestType":
     const Command = ru"cursorline"
     check getSuggestType(Command) == SuggestType.exCommandOption
 
-suite "commandlineutils: getArgsType":
-  test "none(ArgsType)":
-    const InvalidCommand = ru"aaaaa"
-    check getArgsType(InvalidCommand).isNone
-
-  # Generate test code
-  template genGetArgsTypeTest(argsType: ArgsType) =
-    let testTitle = $`argsType`
-    test testTitle:
-      let commands = ExCommandList
-        .filterIt(it.argsType == `argsType`)
-        .mapIt(it.command.toRunes)
-      check commands.len > 0
-
-      for c in commands:
-        check getArgsType(c).get == `argsType`
-
-  for argsType in ArgsType:
-    # Run tests for all ArgsType.
-    genGetArgsTypeTest(argsType)
-
-suite "commandlineutils: isNoArgsCommand":
-  test "Expect to ture":
-    let commands = ExCommandList
-      .filterIt(it.argsType == ArgsType.none)
-      .mapIt(it.command.toRunes)
-    check commands.len > 0
-
-    for c in commands:
-      check isNoArgsCommand(c)
-
-  test "Expect to false":
-    const Command = ru"!"
-    check not isNoArgsCommand(Command)
-
-suite "commandlineutils: isToggleArgsCommand":
-  test "Expect to ture":
-    let commands = ExCommandList
-      .filterIt(it.argsType == ArgsType.toggle)
-      .mapIt(it.command.toRunes)
-    check commands.len > 0
-
-    for c in commands:
-      check isToggleArgsCommand(c)
-
-  test "Expect to false":
-    const Command = ru"!"
-    check not isToggleArgsCommand(Command)
-
-suite "commandlineutils: isNumberArgsCommand":
-  test "Expect to ture":
-    let commands = ExCommandList
-      .filterIt(it.argsType == ArgsType.number)
-      .mapIt(it.command.toRunes)
-    check commands.len > 0
-
-    for c in commands:
-      check isNumberArgsCommand(c)
-
-  test "Expect to false":
-    const Command = ru"!"
-    check not isNumberArgsCommand(Command)
-
-suite "commandlineutils: isTextArgsCommand":
-  test "Expect to ture":
-    let commands = ExCommandList
-      .filterIt(it.argsType == ArgsType.text)
-      .mapIt(it.command.toRunes)
-    check commands.len > 0
-
-    for c in commands:
-      check isTextArgsCommand(c)
-
-  test "Expect to false":
-    const Command = ru"deleteParen"
-    check not isTextArgsCommand(Command)
-
-suite "commandlineutils: isPathArgsCommand":
-  test "Expect to ture":
-    let commands = ExCommandList
-      .filterIt(it.argsType == ArgsType.path)
-      .mapIt(it.command.toRunes)
-    check commands.len > 0
-
-    for c in commands:
-      check isPathArgsCommand(c)
-
-  test "Expect to false":
-    const Command = ru"!"
-    check not isPathArgsCommand(Command)
-
-suite "commandlineutils: isThemeArgsCommand":
-  test "Expect to ture":
-    let commands = ExCommandList
-      .filterIt(it.argsType == ArgsType.theme)
-      .mapIt(it.command.toRunes)
-    check commands.len > 0
-
-    for c in commands:
-      check isThemeArgsCommand(c)
-
-  test "Expect to false":
-    const Command = ru"!"
-    check not isThemeArgsCommand(Command)
-
 suite "commandlineutils: getFilePathCandidates":
   test "Expect file and dir in current path":
     var files: seq[string] = @[]
@@ -189,7 +84,7 @@ suite "commandlineutils: getFilePathCandidates":
 
 suite "commandlineutils: getExCommandOptionCandidates":
   test "Expect \"on\" and \"off\"":
-    let commands = ExCommandList.filterIt(it.argsType == ArgsType.toggle)
+    let commands = ExCommandInfoList.filterIt(it.argsType == ArgsType.toggle)
 
     for c in commands:
       const Args: seq[Runes] = @[]
@@ -209,12 +104,12 @@ suite "commandlineutils: getExCommandOptionCandidates":
 
 suite "commandlineutils: getExCommandCandidates":
   test "Expect all ex command":
-    check ExCommandList.mapIt(it.command.toRunes) == getExCommandCandidates(
+    check ExCommandInfoList.mapIt(it.command.toRunes) == getExCommandCandidates(
       ru"")
 
   test "Expect ex commands starting with \"b\"":
     const Input = ru"b"
-    let commands = ExCommandList
+    let commands = ExCommandInfoList
       .filterIt(it.command.startsWith("b"))
       .mapIt(it.command.toRunes)
 
@@ -222,7 +117,7 @@ suite "commandlineutils: getExCommandCandidates":
 
   test "Expect \"cursorLine\"":
     const Input = ru"cursorl"
-    let commands = ExCommandList
+    let commands = ExCommandInfoList
       .filterIt(it.command == "cursorLine")
       .mapIt(it.command.toRunes)
 
@@ -230,7 +125,7 @@ suite "commandlineutils: getExCommandCandidates":
 
   test "Expect \"cursorLine\" 2":
     const Input = ru"cursorL"
-    let commands = ExCommandList
+    let commands = ExCommandInfoList
       .filterIt(it.command == "cursorLine")
       .mapIt(it.command.toRunes)
 
@@ -239,7 +134,7 @@ suite "commandlineutils: getExCommandCandidates":
 suite "commandlineutils: initSuggestList":
   test "Suggest ex commands":
     const RawInput = ru"h"
-    let expectSuggestions = ExCommandList
+    let expectSuggestions = ExCommandInfoList
       .filterIt(it.command.toRunes.startsWith(RawInput))
       .mapIt(it.command.toRunes)
     check expectSuggestions.len > 0
@@ -254,7 +149,7 @@ suite "commandlineutils: initSuggestList":
 
   test "Suggest ex commands 2":
     const RawInput = ru"e"
-    let expectSuggestions = ExCommandList
+    let expectSuggestions = ExCommandInfoList
       .filterIt(it.command.toRunes.startsWith(RawInput))
       .mapIt(it.command.toRunes)
     check expectSuggestions.len > 0

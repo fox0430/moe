@@ -173,7 +173,6 @@ proc `==`*(c: Rune, x: char): bool {.inline.} = c == toRune(x)
 
 proc ru*(c: char): Rune {.inline.} = toRune(c)
 proc ru*(s: string): Runes {.inline.} = s.toRunes
-proc ru*(r: Rune): Runes {.inline.} = @[r]
 proc ru*(array: seq[string]): Runes =
   for s in array:
     result.add s.toRunes
