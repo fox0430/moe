@@ -697,8 +697,7 @@ proc isNewEmptyBufferInSplitWindowVerticallyCommand*(
     command.len == 1 and cmpIgnoreCase($command[0], "vnew") == 0
 
 proc isQuickRunCommand*(command: seq[Runes]): bool {.inline.} =
-  command.len == 1 and
-  (cmpIgnoreCase($command[0], "run") == 0 or command[0] == ru"Q")
+  command.len == 1 and cmpIgnoreCase($command[0], "run") == 0
 
 proc isRecentFileModeCommand*(command: seq[Runes]): bool {.inline.} =
   command.len == 1 and cmpIgnoreCase($command[0], "recent") == 0
