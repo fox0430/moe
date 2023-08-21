@@ -266,7 +266,7 @@ help - Open this help
 
 putConfigFile - Put a sample configuration file in ~/.config/moe
 
-run or Q - Quick run
+run - Quick run
 
 recent - Open recent file selection mode (Only supported on Linux)
 
