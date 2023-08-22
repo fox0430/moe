@@ -315,3 +315,10 @@ proc writeGitInfoUpdateError*(commandLine: var CommandLine, message: string) =
     let mess = fmt"Error: Update Git info: {message}"
     commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
     addMessageLog mess
+
+proc writeBufferChangedWarn*(commandLine: var CommandLine, filename: Runes) =
+    let mess = fmt"Warn: File {filename} has changed and the buffer was changed in Moe as well."
+    commandLine.writeMessageOnCommandLine(
+      mess,
+      EditorColorPairIndex.errorMessage)
+    addMessageLog mess

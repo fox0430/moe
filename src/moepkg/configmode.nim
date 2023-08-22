@@ -972,7 +972,8 @@ proc changeEditorSettings(status: var EditorStatus,
     status.settings.changeStandardTableSetting(settingName, settingVal)
 
     if status.settings.editorColorTheme != currentTheme:
-      status.changeTheme
+      # TODO: Add error handling
+      discard status.changeTheme
 
   template clipboardSettings: var ClipboardSettings =
     status.settings.clipboard
@@ -1593,8 +1594,11 @@ proc editStringSetting(status: var EditorStatus,
         position.toColorLayer.get,
         name,
         buffer)
-      if r.isOk: status.changeTheme
-      else: status.commandLine.writeError(ru"Invalid value")
+      if r.isOk:
+        # TODO: Add error handling
+        discard status.changeTheme
+      else:
+        status.commandLine.writeError(ru"Invalid value")
 
     # Change setting
     case table:
