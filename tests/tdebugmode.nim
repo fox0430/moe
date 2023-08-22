@@ -18,6 +18,7 @@
 #[############################################################################]#
 
 import std/[unittest, os, strformat, times, options]
+import pkg/results
 import moepkg/[editorstatus, bufferstatus, gapbuffer, unicodeext, ui]
 import moepkg/debugmodeutils {.all.}
 

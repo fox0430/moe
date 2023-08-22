@@ -130,11 +130,6 @@ proc changeCurrentBuffer*(
       currentNode.currentColumn = 0
       currentNode.expandedColumn = 0
 
-      # TODO: Remove from here?
-      for i in 0 ..< statusLines.len:
-        if statusLines[i].windowIndex == currentNode.windowIndex:
-          statusLines[i].bufferIndex = bufferIndex
-
 proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
   changeCurrentBuffer(
     currentMainWindowNode,
@@ -317,9 +312,8 @@ proc addFilerStatus(status: var EditorStatus, bufStatusIndex: int) {.inline.} =
 proc addNewBuffer*(
   status: var EditorStatus,
   path: string,
-  mode: Mode): Option[int] =
+  mode: Mode): Result[int, string] =
     ## Return bufStatus.high after adding a new buffer.
-    # TODO: Return Result type
 
     case mode:
       of Mode.help:
@@ -346,9 +340,10 @@ proc addNewBuffer*(
           backupFilePath).toGapBuffer
         status.bufStatus[^1].path = backupFilePath.toRunes
       else:
-        try:
-          status.bufStatus.add initBufferStatus(path, mode).get
-        except CatchableError:
+        let b = initBufferStatus(path, mode)
+        if b.isOk:
+          status.bufStatus.add b.get
+        else:
           let errMessage =
             if mode.isFilerMode:
               fmt"Failed to open dir: {path} : {getCurrentExceptionMsg()}"
@@ -357,7 +352,7 @@ proc addNewBuffer*(
 
           status.commandLine.writeError(errMessage.toRunes)
           addMessageLog errMessage
-          return
+          return Result[int, string].err errMessage
 
         if status.settings.git.showChangedLine and
            status.bufStatus[^1].isTrackingByGit:
@@ -370,15 +365,11 @@ proc addNewBuffer*(
              else:
                status.commandLine.writeGitInfoUpdateError(gitDiffProcess.error)
 
-    return some(status.bufStatus.high)
+    return Result[int, string].ok status.bufStatus.high
 
-proc addNewBuffer*(
-  status: var EditorStatus,
-  mode: Mode): Option[int] {.inline.} =
-    # TODO: Return Result type
-
-    const Path = ""
-    return status.addNewBuffer(Path, mode)
+proc addNewBuffer*(status: var EditorStatus, mode: Mode): Result[int, string] =
+  const Path = ""
+  return status.addNewBuffer(Path, mode)
 
 proc addNewBufferInCurrentWin*(
   status: var EditorStatus,
@@ -388,7 +379,7 @@ proc addNewBufferInCurrentWin*(
     ## view.
 
     let index = status.addNewBuffer(path, mode)
-    if index.isNone: return
+    if index.isErr: return
 
     status.changeCurrentBuffer(index.get)
 
@@ -412,17 +403,8 @@ proc addNewBufferInCurrentWin*(
     status.addNewBufferInCurrentWin(filename, Mode.normal)
 
 proc addNewBufferInCurrentWin*(status: var EditorStatus) {.inline.} =
-  status.addNewBufferInCurrentWin("")
-
-# TODO: Move to window.nim?
-proc getMainWindowHeight*(settings: EditorSettings): int =
-  let
-    h = getTerminalHeight()
-    tabHeight = if settings.tabLine.enable: 1 else: 0
-    statusHeight = if settings.statusLine.enable: 1 else: 0
-    commandHeight = if settings.statusLine.merge: 1 else: 0
-
-  result = h - tabHeight - statusHeight - commandHeight
+  const Path = ""
+  status.addNewBufferInCurrentWin(Path)
 
 proc resizeMainWindowNode(status: var EditorStatus, terminalSize: Size) =
   let
@@ -454,8 +436,9 @@ proc resizeMainWindowNode(status: var EditorStatus, terminalSize: Size) =
 
 ## Reszie all windows to ui.terminalSize.
 proc resize*(status: var EditorStatus) =
-  # Disable the cursor while updating views.
-  setCursor(false)
+  if currentBufStatus.isCursor:
+    # Disable the cursor while updating views.
+    setCursor(false)
 
   # Get the current terminal from ui.terminalSize.
   let terminalSize = getTerminalSize()
@@ -466,7 +449,7 @@ proc resize*(status: var EditorStatus) =
     terminalHeight = terminalSize.h
     terminalWidth = terminalSize.w
 
-  const statusLineHeight = 1
+  const StatusLineHeight = 1
   var
     statusLineIndex = 0
     queue = initHeapQueue[WindowNode]()
@@ -481,7 +464,7 @@ proc resize*(status: var EditorStatus) =
         let
           bufIndex = node.bufferIndex
           widthOfLineNum = node.view.widthOfLineNum
-          h = node.h - statusLineHeight
+          h = node.h - StatusLineHeight
           sidebarWidth =
             if node.view.sidebar.isSome: 2
             else: 2
@@ -495,8 +478,7 @@ proc resize*(status: var EditorStatus) =
           adjustedWidth,
           widthOfLineNum)
 
-        # TODO: Fix condition
-        if not status.bufStatus[bufIndex].isFilerMode:
+        if status.bufStatus[bufIndex].isCursor:
           node.view.seekCursor(
             status.bufStatus[bufIndex].buffer,
             node.currentLine,
@@ -508,27 +490,25 @@ proc resize*(status: var EditorStatus) =
           enableStatusLine = status.settings.statusLine.enable
           mode = status.bufStatus[bufIndex].mode
         if enableStatusLine and
-           (not isMergeStatusLine or
-           (isMergeStatusLine and mode != Mode.ex)):
+           (not isMergeStatusLine or (isMergeStatusLine and mode != Mode.ex)):
+             const StatusLineHeight = 1
+             let
+               width = node.w
+               y = node.y + adjustedHeight
+               x = node.x
+             status.statusLine[statusLineIndex].window.resize(
+               StatusLineHeight,
+               width,
+               y,
+               x)
+             status.statusLine[statusLineIndex].window.refresh
 
-          const statusLineHeight = 1
-          let
-            width = node.w
-            y = node.y + adjustedHeight
-            x = node.x
-          status.statusLine[statusLineIndex].window.resize(
-            statusLineHeight,
-            width,
-            y,
-            x)
-          status.statusLine[statusLineIndex].window.refresh
-
-          # Update status line info.
-          status.statusLine[statusLineIndex].bufferIndex =
-            node.bufferIndex
-          status.statusLine[statusLineIndex].windowIndex =
-            node.windowIndex
-          inc(statusLineIndex)
+             # Update status line info.
+             status.statusLine[statusLineIndex].bufferIndex =
+               node.bufferIndex
+             status.statusLine[statusLineIndex].windowIndex =
+               node.windowIndex
+             inc(statusLineIndex)
 
       if node.child.len > 0:
         for node in node.child: queue.push(node)
@@ -537,18 +517,21 @@ proc resize*(status: var EditorStatus) =
   if status.settings.statusLine.enable and
      not status.settings.statusLine.multipleStatusLine:
     const
-      statusLineHeight = 1
-      x = 0
+      StatusLineHeight = 1
+      X = 0
     let
-      y = max(terminalHeight, 4) - 1 - (if status.settings.statusLine.merge: 0 else: 1)
+      y =
+        max(terminalHeight, 4) -
+        1 -
+        (if status.settings.statusLine.merge: 0 else: 1)
       w =
         if status.sidebar.isSome: mainWindowNode.w
         else: terminalWidth
-    status.statusLine[0].window.resize(statusLineHeight, w, y, x)
+    status.statusLine[0].window.resize(StatusLineHeight, w, y, X)
 
   # Resize tab line.
   if status.settings.tabLine.enable:
-    const y = 0
+    const Y = 0
     let
       x =
         if status.sidebar.isSome:
@@ -557,7 +540,7 @@ proc resize*(status: var EditorStatus) =
       w =
         if status.sidebar.isSome: mainWindowNode.w
         else: terminalWidth
-    status.tabWindow.resize(TabLineWindowHeight, w, y, x)
+    status.tabWindow.resize(TabLineWindowHeight, w, Y, x)
 
   # Resize the sidebar
   if status.sidebar.isSome:
@@ -569,21 +552,21 @@ proc resize*(status: var EditorStatus) =
     status.sidebar.get.resize(rect)
 
   # Resize command line.
-  const x = 0
+  const X = 0
   let y = max(terminalHeight, 4) - 1
-  status.commandLine.resize(y, x, CommandLineWindowHeight, terminalWidth)
+  status.commandLine.resize(y, X, CommandLineWindowHeight, terminalWidth)
 
   if currentBufStatus.isCursor:
     setCursor(true)
 
 proc updateStatusLine(status: var EditorStatus) =
   if not status.settings.statusLine.multipleStatusLine:
-    const isActiveWindow = true
+    const IsActiveWindow = true
     let index = status.statusLine[0].bufferIndex
     status.statusLine[0].updateStatusLine(
       status.bufStatus[index],
       currentMainWindowNode,
-      isActiveWindow,
+      IsActiveWindow,
       status.settings)
   else:
     for i in 0 ..< status.statusLine.len:
@@ -776,7 +759,6 @@ proc update*(status: var EditorStatus) =
         var highlight = node.highlight
 
         ## Update highlights
-        # TODO: Fix conditions
         if bufStatus.isLogViewerMode:
           highlight = initLogViewerHighlight($buffer)
         elif bufStatus.isDiffViewerMode:
@@ -796,12 +778,8 @@ proc update*(status: var EditorStatus) =
             settings,
             status.settings.colorMode)
 
-        # TODO: Fix condition. Will use a flag.
-        if not bufStatus.isFilerMode:
-          node.view.seekCursor(
-            buffer,
-            node.currentLine,
-            node.currentColumn)
+        if bufStatus.isCursor:
+          node.view.seekCursor(buffer, node.currentLine, node.currentColumn)
 
         if node.view.sidebar.isSome:
           # Update the EditorView.Sidebar.buffer
@@ -837,8 +815,7 @@ proc update*(status: var EditorStatus) =
             selectedRange,
             currentLineColorPair)
 
-        # TODO: Fix condition. Will use a flag.
-        if isCurrentMainWin and not bufStatus.isFilerMode:
+        if isCurrentMainWin and bufStatus.isCursor:
           # Update the cursor position.
           node.cursor.update(node.view, node.currentLine, node.currentColumn)
 
@@ -893,7 +870,6 @@ proc restoreCursorPostion*(
       else:
         node.currentColumn = posi.column
 
-# TODO: Move to window.nim?
 proc moveCurrentMainWindow*(status: var EditorStatus, index: int) =
   if index < 0 or
      status.mainWindow.numOfMainWindow <= index: return
@@ -902,13 +878,11 @@ proc moveCurrentMainWindow*(status: var EditorStatus, index: int) =
 
   currentMainWindowNode = mainWindowNode.searchByWindowIndex(index)
 
-# TODO: Move to window.nim?
 proc moveNextWindow*(status: var EditorStatus) {.inline.} =
   status.updateLastCursorPostion
 
   status.moveCurrentMainWindow(currentMainWindowNode.windowIndex + 1)
 
-# TODO: Move to window.nim?
 proc movePrevWindow*(status: var EditorStatus) {.inline.} =
   status.updateLastCursorPostion
 
@@ -925,7 +899,7 @@ proc verticalSplitWindow*(status: var EditorStatus) =
   if currentBufStatus.isFilerMode:
     # Add a new buffer if the filer mode because need to a new filerStatus.
     let bufSatusIndex = status.addNewBuffer($currentBufStatus.path, Mode.filer)
-    if bufSatusIndex.isNone: return
+    if bufSatusIndex.isErr: return
     status.addFilerStatus(bufSatusIndex.get)
 
     status.statusLine.add(initStatusLine())
@@ -953,7 +927,7 @@ proc horizontalSplitWindow*(status: var EditorStatus) =
   if currentBufStatus.isFilerMode:
     # Add a new buffer if the filer mode because need to a new filerStatus.
     let bufSatusIndex = status.addNewBuffer($currentBufStatus.path, Mode.filer)
-    if bufSatusIndex.isNone: return
+    if bufSatusIndex.isErr: return
     status.addFilerStatus(bufSatusIndex.get)
 
     status.statusLine.add(initStatusLine())
@@ -1059,7 +1033,6 @@ proc revertPosition*(
     windowNode.currentColumn = bufStatus.positionRecord[id].column
     windowNode.expandedColumn = bufStatus.positionRecord[id].expandedColumn
 
-# TODO: Move
 proc scrollUpNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
   let destination = max(currentMainWindowNode.currentLine - numberOfLines, 0)
 
@@ -1081,19 +1054,17 @@ proc scrollUpNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
   else:
     currentBufStatus.jumpLine(currentMainWindowNode, destination)
 
-# TODO: Move
 proc pageUp*(status: var EditorStatus) =
   status.scrollUpNumberOfLines(currentMainWindowNode.view.height)
 
-# TODO: Move
 proc halfPageUp*(status: var EditorStatus) =
   status.scrollUpNumberOfLines(Natural(currentMainWindowNode.view.height / 2))
 
-# TODO: Move
 proc scrollDownNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
   let
-    destination = min(currentMainWindowNode.currentLine + numberOfLines,
-                      currentBufStatus.buffer.len - 1)
+    destination = min(
+      currentMainWindowNode.currentLine + numberOfLines,
+      currentBufStatus.buffer.len - 1)
     currentLine = currentMainWindowNode.currentLine
 
   if status.settings.smoothScroll:
@@ -1126,15 +1097,13 @@ proc scrollDownNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
            currentBufStatus.buffer,
            startOfPrintedLines)
 
-# TODO: Move
 proc pageDown*(status: var EditorStatus) =
   status.scrollDownNumberOfLines(currentMainWindowNode.view.height)
 
-# TODO: Move
 proc halfPageDown*(status: var EditorStatus) =
   status.scrollDownNumberOfLines(Natural(currentMainWindowNode.view.height / 2))
 
-proc changeTheme*(status: var EditorStatus) =
+proc changeTheme*(status: var EditorStatus): Result[(), string] =
   if status.settings.editorColorTheme == ColorTheme.vscode:
     let vsCodeTheme = loadVSCodeTheme()
     if vsCodeTheme.isOk:
@@ -1146,10 +1115,9 @@ proc changeTheme*(status: var EditorStatus) =
   let r = status.settings.editorColorTheme.initEditrorColor(
     status.settings.colorMode)
   if r.isErr:
-    exitUi()
-    echo r.error
-    # TODO: Fix raise
-    raise
+    return Result[(), string].err r.error
+
+  return Result[(), string].ok ()
 
 proc autoSave(status: var EditorStatus) =
   let interval = status.settings.autoSaveInterval.minutes
@@ -1321,7 +1289,13 @@ proc eventLoopTask*(status: var EditorStatus) =
 
        status.timeConfFileLastReloaded = now()
        if beforeTheme != status.settings.editorColorTheme:
-         changeTheme(status)
+         let r = changeTheme(status)
+         if r.isErr:
+           # Exit the editor if it failed.
+           exitUi()
+           echo r.error
+           raise
+
          status.resize
 
   if status.settings.liveReloadOfFile:
@@ -1338,32 +1312,34 @@ proc eventLoopTask*(status: var EditorStatus) =
             currentBufStatus.characterEncoding
         buffer = convert($currentBufStatus.buffer, $encoding, "UTF-8")
 
-      let newText = openFile(currentBufStatus.path)
-      if newText.isErr:
-        addMessageLog fmt"Failed to reload the {currentBufStatus.path}: {newText.error}"
+      let newTextAndEncoding = openFile(currentBufStatus.path)
+      if newTextAndEncoding.isErr:
+        addMessageLog fmt"Failed to reload the {currentBufStatus.path}: {newTextAndEncoding.error}"
         .toRunes
       else:
         let newBuffer = convert(
-          ($newText.get.text & "\n"),
-          $newText.get.encoding,
+          ($newTextAndEncoding.get.text & "\n"),
+          $newTextAndEncoding.get.encoding,
           "UTF-8")
 
-        # TODO: Show a warning if both are edited.
         if buffer != newBuffer:
-          let newTextAndEncoding = openFile(currentBufStatus.path)
-          currentBufStatus.buffer = newTextAndEncoding.get.text.toGapBuffer
-          currentBufStatus.characterEncoding = newTextAndEncoding.get.encoding
-          currentBufStatus.isUpdate = true
+          if currentBufStatus.countChange > 0:
+            # If it was edited with other editors or something.
+            status.commandLine.writeBufferChangedWarn(currentBufStatus.path)
+          else:
+            currentBufStatus.buffer = newTextAndEncoding.get.text.toGapBuffer
+            currentBufStatus.characterEncoding = newTextAndEncoding.get.encoding
+            currentBufStatus.isUpdate = true
 
-          if currentBufStatus.isTrackingByGit:
-            let gitDiffProcess = startBackgroundGitDiff(
-              currentBufStatus.path,
-              currentBufStatus.buffer.toRunes,
-              currentBufStatus.characterEncoding)
-            if gitDiffProcess.isOk:
-              status.backgroundTasks.gitDiff.add gitDiffProcess.get
-            else:
-              status.commandLine.writeGitInfoUpdateError(gitDiffProcess.error)
+            if currentBufStatus.isTrackingByGit:
+              let gitDiffProcess = startBackgroundGitDiff(
+                currentBufStatus.path,
+                currentBufStatus.buffer.toRunes,
+                currentBufStatus.characterEncoding)
+              if gitDiffProcess.isOk:
+                status.backgroundTasks.gitDiff.add gitDiffProcess.get
+              else:
+                status.commandLine.writeGitInfoUpdateError(gitDiffProcess.error)
 
   block automaticBackups:
     let

@@ -61,7 +61,7 @@ proc startDebugMode(status: var EditorStatus) =
 
   # Add the buffer for the debug mode
   let bufferIndex = status.addNewBuffer(bufferstatus.Mode.debug)
-  if bufferIndex.isSome:
+  if bufferIndex.isOk:
     # Initialize the debug mode buffer
     status.bufStatus[bufferIndex.get].buffer =
       status.bufStatus.initDebugModeBuffer(
@@ -97,7 +97,7 @@ proc startBackupManager(status: var EditorStatus) =
   if not currentBufStatus.isNormalMode: return
 
   let bufferIndex = status.addNewBuffer(Mode.backup)
-  if bufferIndex.isSome:
+  if bufferIndex.isOk:
     status.verticalSplitWindow
     status.resize
     status.moveNextWindow
@@ -283,11 +283,13 @@ proc changeThemeSettingCommand(status: var EditorStatus, command: Runes) =
   elif command == ru"vscode":
     status.settings.editorColorTheme = ColorTheme.vscode
 
-  status.changeTheme
-  status.resize
-  status.commandLine.clear
+  let r = status.changeTheme
+  # TODO: Add error message
+  if r.isOk:
+    status.resize
+    status.commandLine.clear
 
-  status.changeMode(currentBufStatus.prevMode)
+    status.changeMode(currentBufStatus.prevMode)
 
 proc tabLineSettingCommand(status: var EditorStatus, command: Runes) =
   if command == ru"on": status.settings.tabLine.enable = true

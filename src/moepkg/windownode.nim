@@ -19,7 +19,7 @@
 
 import std/[heapqueue, options]
 import ui, editorview, gapbuffer, color, cursor, highlight, unicodeext,
-       independentutils
+       independentutils, settings
 
 type
   SplitType* = enum
@@ -370,6 +370,15 @@ proc getAllBufferIndex*(root: WindowNode): seq[int]  =
 
       if node.child.len > 0:
         for node in node.child: qeue.push(node)
+
+proc getMainWindowHeight*(settings: EditorSettings): int =
+  let
+    h = getTerminalHeight()
+    tabHeight = if settings.tabLine.enable: 1 else: 0
+    statusHeight = if settings.statusLine.enable: 1 else: 0
+    commandHeight = if settings.statusLine.merge: 1 else: 0
+
+  return h - tabHeight - statusHeight - commandHeight
 
 proc countReferencedWindow*(root: WindowNode, bufferIndex: int): int =
   var qeue = initHeapQueue[WindowNode]()
