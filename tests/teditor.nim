@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, macros, osproc]
+import std/[unittest, osproc]
 import pkg/results
 import moepkg/[independentutils, gapbuffer, unicodeext, bufferstatus,
                editorstatus, settings, register]
@@ -216,45 +216,44 @@ suite "Editor: keyEnter":
         IsAutoIndent,
         status.settings.tabStop)
 
-  # Generate test code
-  # Enable/Disable autoindent
-  # Newline in some languages
-  macro newLineTestCase1(lang: SourceLanguage, isAutoIndent: bool): untyped =
-    quote do:
-      # Generate test title
-      let
-        langStr = sourceLangToStr(`lang`)
-        testTitle = if `isAutoIndent`: "Case 1: Enable autoindent: Newline in " & langStr
-                    else: "Case 1: Disable autoindent: Newline in " & langStr
+  proc newLineTestCase1(lang: SourceLanguage, isAutoIndent: bool) =
+    ## Enable/Disable autoindent
+    ## Newline in some languages
 
-      # Generate test code
-      test testTitle:
-        var status = initEditorStatus()
-        status.addNewBufferInCurrentWin
+    # Generate test title
+    let
+      langStr = sourceLangToStr(lang)
+      testTitle =
+        if isAutoIndent: "Case 1: Enable autoindent: Newline in " & langStr
+        else: "Case 1: Disable autoindent: Newline in " & langStr
 
-        status.bufStatus[0].buffer = initGapBuffer(@[ru"test"])
-        status.bufStatus[0].language = `lang`
-        status.bufStatus[0].mode = Mode.insert
+    # Generate test code
+    test testTitle:
+      var status = initEditorStatus()
+      status.addNewBufferInCurrentWin
 
-        block:
-          let buffer = status.bufStatus[0].buffer
-          status.mainWindow.currentMainWindowNode.currentColumn = buffer[0].len
+      status.bufStatus[0].buffer = initGapBuffer(@[ru"test"])
+      status.bufStatus[0].language = lang
+      status.bufStatus[0].mode = Mode.insert
 
-        status.bufStatus[0].keyEnter(
-          status.mainWindow.currentMainWindowNode,
-          `isAutoIndent`,
-          status.settings.tabStop)
+      block:
+        let buffer = status.bufStatus[0].buffer
+        status.mainWindow.currentMainWindowNode.currentColumn = buffer[0].len
 
-        let currentBufStatus = status.bufStatus[0]
-        check currentBufStatus.buffer.len == 2
-        check currentBufStatus.buffer[0] == ru"test"
-        check currentBufStatus.buffer[1] == ru""
+      status.bufStatus[0].keyEnter(
+        status.mainWindow.currentMainWindowNode,
+        isAutoIndent,
+        status.settings.tabStop)
 
-        let currentMainWindowNode = status.mainWindow.currentMainWindowNode
-        check currentMainWindowNode.currentLine == 1
-        check currentMainWindowNode.currentColumn == 0
+      let currentBufStatus = status.bufStatus[0]
+      check currentBufStatus.buffer.len == 2
+      check currentBufStatus.buffer[0] == ru"test"
+      check currentBufStatus.buffer[1] == ru""
 
-  # Generate test code by macro
+      let currentMainWindowNode = status.mainWindow.currentMainWindowNode
+      check currentMainWindowNode.currentLine == 1
+      check currentMainWindowNode.currentColumn == 0
+
   for l in SourceLanguage:
     block:
       const IsAutoIndent = false
@@ -263,43 +262,42 @@ suite "Editor: keyEnter":
       const IsAutoIndent = true
       newLineTestCase1(l, IsAutoIndent)
 
-  # Generate test code
-  # Enable/Disable autoindent
-  # Newline in some language.
-  macro newLineTestCase2(lang: SourceLanguage, isAutoIndent: bool): untyped =
-    quote do:
-      # Generate test title
-      let
-        langStr = sourceLangToStr(`lang`)
-        testTitle = if `isAutoIndent`: "Case 2: Enable autoindent: Newline in " & langStr
-                    else: "Case 2: Disable autoindent: Newline in " & langStr
+  proc newLineTestCase2(lang: SourceLanguage, isAutoIndent: bool) =
+    ## Enable/Disable autoindent
+    ## Newline in some language.
 
-      # Generate test code
-      test testTitle:
-        var status = initEditorStatus()
-        status.addNewBufferInCurrentWin
+    # Generate test title
+    let
+      langStr = sourceLangToStr(lang)
+      testTitle =
+        if isAutoIndent: "Case 2: Enable autoindent: Newline in " & langStr
+        else: "Case 2: Disable autoindent: Newline in " & langStr
 
-        status.bufStatus[0].buffer = initGapBuffer(@[ru"test"])
-        status.bufStatus[0].language = `lang`
-        status.bufStatus[0].mode = Mode.insert
+    # Generate test code
+    test testTitle:
+      var status = initEditorStatus()
+      status.addNewBufferInCurrentWin
 
-        status.mainWindow.currentMainWindowNode.currentColumn = 2
+      status.bufStatus[0].buffer = initGapBuffer(@[ru"test"])
+      status.bufStatus[0].language = lang
+      status.bufStatus[0].mode = Mode.insert
 
-        status.bufStatus[0].keyEnter(
-          status.mainWindow.currentMainWindowNode,
-          `isAutoIndent`,
-          status.settings.tabStop)
+      status.mainWindow.currentMainWindowNode.currentColumn = 2
 
-        let currentBufStatus = status.bufStatus[0]
-        check currentBufStatus.buffer.len == 2
-        check currentBufStatus.buffer[0] == ru"te"
-        check currentBufStatus.buffer[1] == ru"st"
+      status.bufStatus[0].keyEnter(
+        status.mainWindow.currentMainWindowNode,
+        isAutoIndent,
+        status.settings.tabStop)
 
-        let currentMainWindowNode = status.mainWindow.currentMainWindowNode
-        check currentMainWindowNode.currentLine == 1
-        check currentMainWindowNode.currentColumn == 0
+      let currentBufStatus = status.bufStatus[0]
+      check currentBufStatus.buffer.len == 2
+      check currentBufStatus.buffer[0] == ru"te"
+      check currentBufStatus.buffer[1] == ru"st"
 
-  # Generate test code by macro
+      let currentMainWindowNode = status.mainWindow.currentMainWindowNode
+      check currentMainWindowNode.currentLine == 1
+      check currentMainWindowNode.currentColumn == 0
+
   for l in SourceLanguage:
     block:
       const IsAutoIndent = false
@@ -308,41 +306,39 @@ suite "Editor: keyEnter":
       const IsAutoIndent = true
       newLineTestCase2(l, IsAutoIndent)
 
-  # Generate test code
-  # Enable/Disable autoindent
-  # Newline in some languages
-  macro newLineTestCase3(lang: SourceLanguage, isAutoIndent: bool): untyped =
-    quote do:
-      # Generate test title
-      let
-        langStr = sourceLangToStr(`lang`)
-        testTitle = if `isAutoIndent`: "Case 3: Enable autoindent: Newline in " & langStr
-                    else: "Case 3: Disable autoindent: Newline in " & langStr
+  proc newLineTestCase3(lang: SourceLanguage, isAutoIndent: bool) =
+    ## Enable/Disable autoindent
+    ## Newline in some languages
 
-      # Generate test code
-      test testTitle:
-        var status = initEditorStatus()
-        status.addNewBufferInCurrentWin
+    # Generate test title
+    let
+      langStr = sourceLangToStr(lang)
+      testTitle =
+        if isAutoIndent: "Case 3: Enable autoindent: Newline in " & langStr
+        else: "Case 3: Disable autoindent: Newline in " & langStr
 
-        status.bufStatus[0].buffer = initGapBuffer(@[ru"test"])
-        status.bufStatus[0].language = `lang`
-        status.bufStatus[0].mode = Mode.insert
+    test testTitle:
+      var status = initEditorStatus()
+      status.addNewBufferInCurrentWin
 
-        status.bufStatus[0].keyEnter(
-          status.mainWindow.currentMainWindowNode,
-          `isAutoIndent`,
-          status.settings.tabStop)
+      status.bufStatus[0].buffer = initGapBuffer(@[ru"test"])
+      status.bufStatus[0].language = lang
+      status.bufStatus[0].mode = Mode.insert
 
-        let currentBufStatus = status.bufStatus[0]
-        check currentBufStatus.buffer.len == 2
-        check currentBufStatus.buffer[0] == ru""
-        check currentBufStatus.buffer[1] == ru"test"
+      status.bufStatus[0].keyEnter(
+        status.mainWindow.currentMainWindowNode,
+        isAutoIndent,
+        status.settings.tabStop)
 
-        let currentMainWindowNode = status.mainWindow.currentMainWindowNode
-        check currentMainWindowNode.currentLine == 1
-        check currentMainWindowNode.currentColumn == 0
+      let currentBufStatus = status.bufStatus[0]
+      check currentBufStatus.buffer.len == 2
+      check currentBufStatus.buffer[0] == ru""
+      check currentBufStatus.buffer[1] == ru"test"
 
-  # Generate test code by macro
+      let currentMainWindowNode = status.mainWindow.currentMainWindowNode
+      check currentMainWindowNode.currentLine == 1
+      check currentMainWindowNode.currentColumn == 0
+
   for l in SourceLanguage:
     block:
       const IsAutoIndent = false
@@ -351,41 +347,39 @@ suite "Editor: keyEnter":
       const IsAutoIndent = true
       newLineTestCase3(l, IsAutoIndent)
 
-  # Generate test code
-  # Enable/Disable autoindent
-  # Newline in some languages
-  macro newLineTestCase4(lang: SourceLanguage, isAutoIndent: bool): untyped =
-    quote do:
-      # Generate test title
-      let
-        langStr = sourceLangToStr(`lang`)
-        testTitle = if `isAutoIndent`: "Case 4: Enable autoindent: Newline in " & langStr
-                    else: "Case 4: Disable autoindent: Newline in " & langStr
+  proc newLineTestCase4(lang: SourceLanguage, isAutoIndent: bool) =
+    ## Enable/Disable autoindent
+    ## Newline in some languages
 
-      # Generate test code
-      test testTitle:
-        var status = initEditorStatus()
-        status.addNewBufferInCurrentWin
+    # Generate test title
+    let
+      langStr = sourceLangToStr(lang)
+      testTitle =
+        if isAutoIndent: "Case 4: Enable autoindent: Newline in " & langStr
+        else: "Case 4: Disable autoindent: Newline in " & langStr
 
-        status.bufStatus[0].buffer = initGapBuffer(@[ru""])
-        status.bufStatus[0].language = `lang`
-        status.bufStatus[0].mode = Mode.insert
+    test testTitle:
+      var status = initEditorStatus()
+      status.addNewBufferInCurrentWin
 
-        status.bufStatus[0].keyEnter(
-          status.mainWindow.currentMainWindowNode,
-          `isAutoIndent`,
-          status.settings.tabStop)
+      status.bufStatus[0].buffer = initGapBuffer(@[ru""])
+      status.bufStatus[0].language = lang
+      status.bufStatus[0].mode = Mode.insert
 
-        let currentBufStatus = status.bufStatus[0]
-        check currentBufStatus.buffer.len == 2
-        check currentBufStatus.buffer[0] == ru""
-        check currentBufStatus.buffer[1] == ru""
+      status.bufStatus[0].keyEnter(
+        status.mainWindow.currentMainWindowNode,
+        isAutoIndent,
+        status.settings.tabStop)
 
-        let currentMainWindowNode = status.mainWindow.currentMainWindowNode
-        check currentMainWindowNode.currentLine == 1
-        check currentMainWindowNode.currentColumn == 0
+      let currentBufStatus = status.bufStatus[0]
+      check currentBufStatus.buffer.len == 2
+      check currentBufStatus.buffer[0] == ru""
+      check currentBufStatus.buffer[1] == ru""
 
-  # Generate test code by macro
+      let currentMainWindowNode = status.mainWindow.currentMainWindowNode
+      check currentMainWindowNode.currentLine == 1
+      check currentMainWindowNode.currentColumn == 0
+
   for l in SourceLanguage:
     block:
       const IsAutoIndent = false
@@ -394,86 +388,80 @@ suite "Editor: keyEnter":
       const IsAutoIndent = true
       newLineTestCase4(l, IsAutoIndent)
 
-  # Generate test code
-  # Disable autoindent
-  # Line break test that case there is an indent on the current line.
-  macro newLineTestDisableAutoindent1(lang: SourceLanguage): untyped =
-    quote do:
-      # Generate test title
-      let
-        langStr = sourceLangToStr(`lang`)
-        testTitle = "Case 5: Disable autoindent: Newline in " & langStr
+  proc newLineTestDisableAutoindent1(lang: SourceLanguage) =
+    ## Disable autoindent
+    ## Line break test that case there is an indent on the current line.
 
-      # Generate test code
-      test testTitle:
-        var status = initEditorStatus()
-        status.addNewBufferInCurrentWin
+    # Generate test title
+    let
+      langStr = sourceLangToStr(lang)
+      testTitle = "Case 5: Disable autoindent: Newline in " & langStr
 
-        status.bufStatus[0].buffer = initGapBuffer(@[ru"  test"])
-        status.bufStatus[0].language = `lang`
-        status.bufStatus[0].mode = Mode.insert
-        block:
-          let buffer = status.bufStatus[0].buffer
-          status.mainWindow.currentMainWindowNode.currentColumn = buffer[0].len
+    test testTitle:
+      var status = initEditorStatus()
+      status.addNewBufferInCurrentWin
 
-        const IsAutoIndent = false
-        status.bufStatus[0].keyEnter(
-          status.mainWindow.currentMainWindowNode,
-          IsAutoIndent,
-          status.settings.tabStop)
+      status.bufStatus[0].buffer = initGapBuffer(@[ru"  test"])
+      status.bufStatus[0].language = lang
+      status.bufStatus[0].mode = Mode.insert
+      block:
+        let buffer = status.bufStatus[0].buffer
+        status.mainWindow.currentMainWindowNode.currentColumn = buffer[0].len
 
-        let currentBufStatus = status.bufStatus[0]
-        check currentBufStatus.buffer.len == 2
-        check currentBufStatus.buffer[0] == ru"  test"
-        check currentBufStatus.buffer[1] == ru""
+      const IsAutoIndent = false
+      status.bufStatus[0].keyEnter(
+        status.mainWindow.currentMainWindowNode,
+        IsAutoIndent,
+        status.settings.tabStop)
 
-        let currentMainWindowNode = status.mainWindow.currentMainWindowNode
-        check currentMainWindowNode.currentLine == 1
-        check currentMainWindowNode.currentColumn == 0
+      let currentBufStatus = status.bufStatus[0]
+      check currentBufStatus.buffer.len == 2
+      check currentBufStatus.buffer[0] == ru"  test"
+      check currentBufStatus.buffer[1] == ru""
 
-  # Generate test code by macro
+      let currentMainWindowNode = status.mainWindow.currentMainWindowNode
+      check currentMainWindowNode.currentLine == 1
+      check currentMainWindowNode.currentColumn == 0
+
   for l in SourceLanguage:
     newLineTestDisableAutoindent1(l)
 
 suite "Editor: keyEnter: Enable autoindent in Nim":
 
-  # Generate test code
-  # Disable autoindent
-  # Line break test that case there is some keyword on the current line.
-  # keywords: "var", "let", "const"
-  macro newLineTestInNimCase1(keyword: string): untyped =
-    quote do:
-      # Generate test title
-      let testTitle = "Case 1: if the current line is " & `keyword` & " in Nim"
+  proc newLineTestInNimCase1(keyword: string) =
+    ## Disable autoindent
+    ## Line break test that case there is some keyword on the current line.
+    ## keywords: "var", "let", "const"
 
-      # Generate test code
-      test testTitle:
-        var status = initEditorStatus()
-        status.addNewBufferInCurrentWin
+    # Generate test title
+    let testTitle = "Case 1: if the current line is " & keyword & " in Nim"
 
-        status.bufStatus[0].buffer = initGapBuffer(@[`keyword`.toRunes])
-        status.bufStatus[0].language = SourceLanguage.langNim
-        status.bufStatus[0].mode = Mode.insert
-        block:
-          let lineLen = status.bufStatus[0].buffer[0].len
-          status.mainWindow.currentMainWindowNode.currentColumn = lineLen
+    test testTitle:
+      var status = initEditorStatus()
+      status.addNewBufferInCurrentWin
 
-        const IsAutoIndent = true
-        status.bufStatus[0].keyEnter(
-          status.mainWindow.currentMainWindowNode,
-          IsAutoIndent,
-          status.settings.tabStop)
+      status.bufStatus[0].buffer = initGapBuffer(@[keyword.toRunes])
+      status.bufStatus[0].language = SourceLanguage.langNim
+      status.bufStatus[0].mode = Mode.insert
+      block:
+        let lineLen = status.bufStatus[0].buffer[0].len
+        status.mainWindow.currentMainWindowNode.currentColumn = lineLen
 
-        let currentBufStatus = status.bufStatus[0]
-        check currentBufStatus.buffer.len == 2
-        check currentBufStatus.buffer[0] == ru `keyword`
-        check currentBufStatus.buffer[1] == ru "  "
+      const IsAutoIndent = true
+      status.bufStatus[0].keyEnter(
+        status.mainWindow.currentMainWindowNode,
+        IsAutoIndent,
+        status.settings.tabStop)
 
-        let currentMainWindowNode = status.mainWindow.currentMainWindowNode
-        check currentMainWindowNode.currentLine == 1
-        check currentMainWindowNode.currentColumn == status.settings.tabStop
+      let currentBufStatus = status.bufStatus[0]
+      check currentBufStatus.buffer.len == 2
+      check currentBufStatus.buffer[0] == ru keyword
+      check currentBufStatus.buffer[1] == ru "  "
 
-  # Generate test code by macro
+      let currentMainWindowNode = status.mainWindow.currentMainWindowNode
+      check currentMainWindowNode.currentLine == 1
+      check currentMainWindowNode.currentColumn == status.settings.tabStop
+
   block:
     const Keyword = "var"
     newLineTestInNimCase1(Keyword)
@@ -484,46 +472,42 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
     const Keyword = "const"
     newLineTestInNimCase1(Keyword)
 
-  # Generate test code
-  # Disable autoindent
-  # Line break test that case there are some keyword and an indent on the current line.
-  # keywords: "var", "let", "const"
-  macro newLineTestInNimCase2(keyword: string): untyped =
-    quote do:
-      # Generate test title
-      let testTitle = "Case 2: if the current line is " & `keyword` & " in Nim"
+  proc newLineTestInNimCase2(keyword: string) =
+    ## Disable autoindent
+    ## Line break test that case there are some keyword and an indent on the current line.
+    ## keywords: "var", "let", "const"
 
-      # Generate test code
-      test testTitle:
-        var status = initEditorStatus()
-        status.addNewBufferInCurrentWin
+    # Generate test title
+    let testTitle = "Case 2: if the current line is " & keyword & " in Nim"
 
-        const
-          indent = "  "
-          buffer = indent & `keyword`
-        status.bufStatus[0].buffer = initGapBuffer(@[ru buffer])
-        status.bufStatus[0].language = SourceLanguage.langNim
-        status.bufStatus[0].mode = Mode.insert
-        block:
-          let lineLen = status.bufStatus[0].buffer[0].len
-          status.mainWindow.currentMainWindowNode.currentColumn = lineLen
+    test testTitle:
+      var status = initEditorStatus()
+      status.addNewBufferInCurrentWin
 
-        const IsAutoIndent = true
-        status.bufStatus[0].keyEnter(
-          status.mainWindow.currentMainWindowNode,
-          IsAutoIndent,
-          status.settings.tabStop)
+      const Indent = "  "
+      let buffer = Indent & keyword
+      status.bufStatus[0].buffer = initGapBuffer(@[ru buffer])
+      status.bufStatus[0].language = SourceLanguage.langNim
+      status.bufStatus[0].mode = Mode.insert
+      block:
+        let lineLen = status.bufStatus[0].buffer[0].len
+        status.mainWindow.currentMainWindowNode.currentColumn = lineLen
 
-        let currentBufStatus = status.bufStatus[0]
-        check currentBufStatus.buffer.len == 2
-        check $currentBufStatus.buffer[0] == indent & `keyword`
-        check currentBufStatus.buffer[1] == ru "    "
+      const IsAutoIndent = true
+      status.bufStatus[0].keyEnter(
+        status.mainWindow.currentMainWindowNode,
+        IsAutoIndent,
+        status.settings.tabStop)
 
-        let currentMainWindowNode = status.mainWindow.currentMainWindowNode
-        check currentMainWindowNode.currentLine == 1
-        check currentMainWindowNode.currentColumn == "    ".len
+      let currentBufStatus = status.bufStatus[0]
+      check currentBufStatus.buffer.len == 2
+      check $currentBufStatus.buffer[0] == Indent & keyword
+      check currentBufStatus.buffer[1] == ru "    "
 
-  # Generate test code by macro
+      let currentMainWindowNode = status.mainWindow.currentMainWindowNode
+      check currentMainWindowNode.currentLine == 1
+      check currentMainWindowNode.currentColumn == "    ".len
+
   block:
     const Keyword = "var"
     newLineTestInNimCase2(Keyword)
@@ -534,41 +518,38 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
     const Keyword = "const"
     newLineTestInNimCase2(Keyword)
 
-  # Generate test code
-  # Disable autoindent
-  # currentColumn is 0
-  # Line break test that case there are some keyword and an indent on the current line.
-  # keywords: "var", "let", "const"
-  macro newLineTestInNimCase3(keyword: string): untyped =
-    quote do:
-      # Generate test title
-      let testTitle = "Case 3: if the current line is " & `keyword` & " in Nim"
+  proc newLineTestInNimCase3(keyword: string) =
+    ## Disable autoindent
+    ## currentColumn is 0
+    ## Line break test that case there are some keyword and an indent on the current line.
+    ## keywords: "var", "let", "const"
 
-      # Generate test code
-      test testTitle:
-        var status = initEditorStatus()
-        status.addNewBufferInCurrentWin
+    # Generate test title
+    let testTitle = "Case 3: if the current line is " & keyword & " in Nim"
 
-        status.bufStatus[0].buffer = initGapBuffer(@[`keyword`.toRunes])
-        status.bufStatus[0].language = SourceLanguage.langNim
-        status.bufStatus[0].mode = Mode.insert
+    test testTitle:
+      var status = initEditorStatus()
+      status.addNewBufferInCurrentWin
 
-        const IsAutoIndent = true
-        status.bufStatus[0].keyEnter(
-          status.mainWindow.currentMainWindowNode,
-          IsAutoIndent,
-          status.settings.tabStop)
+      status.bufStatus[0].buffer = initGapBuffer(@[keyword.toRunes])
+      status.bufStatus[0].language = SourceLanguage.langNim
+      status.bufStatus[0].mode = Mode.insert
 
-        let currentBufStatus = status.bufStatus[0]
-        check currentBufStatus.buffer.len == 2
-        check currentBufStatus.buffer[0] == ru ""
-        check $currentBufStatus.buffer[1] == `keyword`
+      const IsAutoIndent = true
+      status.bufStatus[0].keyEnter(
+        status.mainWindow.currentMainWindowNode,
+        IsAutoIndent,
+        status.settings.tabStop)
 
-        let currentMainWindowNode = status.mainWindow.currentMainWindowNode
-        check currentMainWindowNode.currentLine == 1
-        check currentMainWindowNode.currentColumn == 0
+      let currentBufStatus = status.bufStatus[0]
+      check currentBufStatus.buffer.len == 2
+      check currentBufStatus.buffer[0] == ru ""
+      check $currentBufStatus.buffer[1] == keyword
 
-  # Generate test code by macro
+      let currentMainWindowNode = status.mainWindow.currentMainWindowNode
+      check currentMainWindowNode.currentLine == 1
+      check currentMainWindowNode.currentColumn == 0
+
   block:
     const Keyword = "var"
     newLineTestInNimCase3(Keyword)
@@ -579,35 +560,33 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
     const Keyword = "const"
     newLineTestInNimCase3(Keyword)
 
-  # Generate test code
-  # Enable autoindent
-  # Line break test when the current line ends with "or", "and", ':', "object".
-  macro newLineTestInNimCase4(keyword: string): untyped =
-    quote do:
-      # Generate test title
-      let testTitle = "Case 4: When the current line ends with " & `keyword` & " in Nim"
+  proc newLineTestInNimCase4(keyword: string) =
+    ## Enable autoindent
+    ## Line break test when the current line ends with "or", "and", ':', "object".
 
-      # Generate test code
-      test testTitle:
-        var status = initEditorStatus()
-        status.addNewBufferInCurrentWin
+    # Generate test title
+    let testTitle = "Case 4: When the current line ends with " & keyword & " in Nim"
 
-        const Buffer = @["test " & `keyword`].toSeqRunes
-        status.bufStatus[0].buffer = initGapBuffer(Buffer)
-        status.bufStatus[0].language = SourceLanguage.langNim
-        status.bufStatus[0].mode = Mode.insert
-        block:
-          let lineLen = status.bufStatus[0].buffer[0].len
-          status.mainWindow.currentMainWindowNode.currentColumn = lineLen
+    test testTitle:
+      var status = initEditorStatus()
+      status.addNewBufferInCurrentWin
 
-        const IsAutoIndent = true
-        status.bufStatus[0].keyEnter(
-          status.mainWindow.currentMainWindowNode,
-          IsAutoIndent,
-          status.settings.tabStop)
+      let buffer = @["test " & keyword].toSeqRunes
+      status.bufStatus[0].buffer = initGapBuffer(buffer)
+      status.bufStatus[0].language = SourceLanguage.langNim
+      status.bufStatus[0].mode = Mode.insert
+      block:
+        let lineLen = status.bufStatus[0].buffer[0].len
+        status.mainWindow.currentMainWindowNode.currentColumn = lineLen
 
-        check status.bufStatus[0].buffer[0] == Buffer[0]
-        check $status.bufStatus[0].buffer[1] == "  "
+      const IsAutoIndent = true
+      status.bufStatus[0].keyEnter(
+        status.mainWindow.currentMainWindowNode,
+        IsAutoIndent,
+        status.settings.tabStop)
+
+      check status.bufStatus[0].buffer[0] == buffer[0]
+      check $status.bufStatus[0].buffer[1] == "  "
 
   # Generate test code
   block:
@@ -626,36 +605,33 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
     const Keyword = "="
     newLineTestInNimCase4(Keyword)
 
-  # Generate test code
-  # Enable autoindent
-  # currentColumn is 0
-  # Line break test when the current line ends with "or", "and", ':', "object".
-  macro newLineTestInNimCase5(keyword: string): untyped =
-    quote do:
-      # Generate test title
-      let testTitle = "Case 5: When the current line ends with " & `keyword` & " in Nim"
+  proc newLineTestInNimCase5(keyword: string) =
+    ## Enable autoindent
+    ## currentColumn is 0
+    ## Line break test when the current line ends with "or", "and", ':', "object".
 
-      # Generate test code
-      test testTitle:
-        var status = initEditorStatus()
-        status.addNewBufferInCurrentWin
+    # Generate test title
+    let testTitle = "Case 5: When the current line ends with " & keyword & " in Nim"
 
-        const Buffer = "test " & `keyword`
-        status.bufStatus[0].buffer = initGapBuffer(@[Buffer.toRunes])
-        status.bufStatus[0].language = SourceLanguage.langNim
-        status.bufStatus[0].mode = Mode.insert
+    test testTitle:
+      var status = initEditorStatus()
+      status.addNewBufferInCurrentWin
 
-        const IsAutoIndent = true
-        status.bufStatus[0].keyEnter(
-          status.mainWindow.currentMainWindowNode,
-          IsAutoIndent,
-          status.settings.tabStop)
+      let buffer = "test " & keyword
+      status.bufStatus[0].buffer = initGapBuffer(@[buffer.toRunes])
+      status.bufStatus[0].language = SourceLanguage.langNim
+      status.bufStatus[0].mode = Mode.insert
 
-        let currentBufStatus = status.bufStatus[0]
-        check currentBufStatus.buffer[0] == ru ""
-        check currentBufStatus.buffer[1] == Buffer.toRunes
+      const IsAutoIndent = true
+      status.bufStatus[0].keyEnter(
+        status.mainWindow.currentMainWindowNode,
+        IsAutoIndent,
+        status.settings.tabStop)
 
-  # Generate test code
+      let currentBufStatus = status.bufStatus[0]
+      check currentBufStatus.buffer[0] == ru ""
+      check currentBufStatus.buffer[1] == buffer.toRunes
+
   block:
     const Keyword = "or"
     newLineTestInNimCase5(Keyword)
@@ -672,37 +648,34 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
     const Keyword = "="
     newLineTestInNimCase5(Keyword)
 
-  # Generate test code
-  # Enable autoindent
-  # currentColumn is 1
-  # Line break test when the current line ends with pair of paren.
-  macro newLineTestInNimCase6(pair: string): untyped =
-    quote do:
-      # Generate test title
-      let testTitle = "Case 6: When the current line ends with " & `pair` & " in Nim"
+  proc newLineTestInNimCase6(pair: string) =
+    ## Enable autoindent
+    ## currentColumn is 1
+    ## Line break test when the current line ends with pair of paren.
 
-      # Generate test code
-      test testTitle:
-        var status = initEditorStatus()
-        status.addNewBufferInCurrentWin
+    # Generate test title
+    let testTitle = "Case 6: When the current line ends with " & pair & " in Nim"
 
-        status.bufStatus[0].buffer = initGapBuffer(@[`pair`.toRunes])
-        status.bufStatus[0].language = SourceLanguage.langNim
-        status.bufStatus[0].mode = Mode.insert
-        status.mainWindow.currentMainWindowNode.currentColumn = 1
+    test testTitle:
+      var status = initEditorStatus()
+      status.addNewBufferInCurrentWin
 
-        const IsAutoIndent = true
-        status.bufStatus[0].keyEnter(
-          status.mainWindow.currentMainWindowNode,
-          IsAutoIndent,
-          status.settings.tabStop)
+      status.bufStatus[0].buffer = initGapBuffer(@[pair.toRunes])
+      status.bufStatus[0].language = SourceLanguage.langNim
+      status.bufStatus[0].mode = Mode.insert
+      status.mainWindow.currentMainWindowNode.currentColumn = 1
 
-        let currentBufStatus = status.bufStatus[0]
-        check currentBufStatus.buffer.len == 2
-        check $currentBufStatus.buffer[0] == $(`pair`[0])
-        check $currentBufStatus.buffer[1] == "  " & $(`pair`[1])
+      const IsAutoIndent = true
+      status.bufStatus[0].keyEnter(
+        status.mainWindow.currentMainWindowNode,
+        IsAutoIndent,
+        status.settings.tabStop)
 
-  # Generate test code
+      let currentBufStatus = status.bufStatus[0]
+      check currentBufStatus.buffer.len == 2
+      check $currentBufStatus.buffer[0] == $(pair[0])
+      check $currentBufStatus.buffer[1] == "  " & $(pair[1])
+
   block:
     const Keyword = "{}"
     newLineTestInNimCase6(Keyword)
@@ -713,36 +686,33 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
     const Keyword = "()"
     newLineTestInNimCase6(Keyword)
 
-  # Generate test code
-  # Enable autoindent
-  # currentColumn is 0
-  # Line break test when the current line ends with pair of paren.
-  macro newLineTestInNimCase7(pair: string): untyped =
-    quote do:
-      # Generate test title
-      let testTitle = "Case 7: When the current line ends with " & `pair` & " in Nim"
+  proc newLineTestInNimCase7(pair: string) =
+    ## Enable autoindent
+    ## currentColumn is 0
+    ## Line break test when the current line ends with pair of paren.
 
-      # Generate test code
-      test testTitle:
-        var status = initEditorStatus()
-        status.addNewBufferInCurrentWin
+     # Generate test title
+    let testTitle = "Case 7: When the current line ends with " & pair & " in Nim"
 
-        status.bufStatus[0].buffer = initGapBuffer(@[`pair`.toRunes])
-        status.bufStatus[0].language = SourceLanguage.langNim
-        status.bufStatus[0].mode = Mode.insert
+    test testTitle:
+      var status = initEditorStatus()
+      status.addNewBufferInCurrentWin
 
-        const IsAutoIndent = true
-        status.bufStatus[0].keyEnter(
-          status.mainWindow.currentMainWindowNode,
-          IsAutoIndent,
-          status.settings.tabStop)
+      status.bufStatus[0].buffer = initGapBuffer(@[pair.toRunes])
+      status.bufStatus[0].language = SourceLanguage.langNim
+      status.bufStatus[0].mode = Mode.insert
 
-        let currentBufStatus = status.bufStatus[0]
-        check currentBufStatus.buffer.len == 2
-        check $currentBufStatus.buffer[0] == ""
-        check $currentBufStatus.buffer[1] == `pair`
+      const IsAutoIndent = true
+      status.bufStatus[0].keyEnter(
+        status.mainWindow.currentMainWindowNode,
+        IsAutoIndent,
+        status.settings.tabStop)
 
-  # Generate test code
+      let currentBufStatus = status.bufStatus[0]
+      check currentBufStatus.buffer.len == 2
+      check $currentBufStatus.buffer[0] == ""
+      check $currentBufStatus.buffer[1] == pair
+
   block:
     const Keyword = "{}"
     newLineTestInNimCase7(Keyword)
@@ -753,38 +723,35 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
     const Keyword = "()"
     newLineTestInNimCase7(Keyword)
 
-  # Generate test code
-  # Enable autoindent
-  # currentColumn is 1
-  # Line break test when the current line ends with the close paren.
-  macro newLineTestInNimCase8(pair: string): untyped =
-    quote do:
-      # Generate test title
-      let testTitle = "Case 8: When the current line ends with " & `pair` & " in Nim"
+  proc newLineTestInNimCase8(pair: string) =
+    ## Enable autoindent
+    ## currentColumn is 1
+    ## Line break test when the current line ends with the close paren.
 
-      # Generate test code
-      test testTitle:
-        var status = initEditorStatus()
-        status.addNewBufferInCurrentWin
+    # Generate test title
+    let testTitle = "Case 8: When the current line ends with " & pair & " in Nim"
 
-        const Buffer = `pair`[0] & "a" & `pair`[1]
-        status.bufStatus[0].buffer = initGapBuffer(@[Buffer.toRunes])
-        status.bufStatus[0].language = SourceLanguage.langNim
-        status.bufStatus[0].mode = Mode.insert
-        status.mainWindow.currentMainWindowNode.currentColumn = 1
+    test testTitle:
+      var status = initEditorStatus()
+      status.addNewBufferInCurrentWin
 
-        const IsAutoIndent = true
-        status.bufStatus[0].keyEnter(
-          status.mainWindow.currentMainWindowNode,
-          IsAutoIndent,
-          status.settings.tabStop)
+      let buffer = pair[0] & "a" & pair[1]
+      status.bufStatus[0].buffer = initGapBuffer(@[buffer.toRunes])
+      status.bufStatus[0].language = SourceLanguage.langNim
+      status.bufStatus[0].mode = Mode.insert
+      status.mainWindow.currentMainWindowNode.currentColumn = 1
 
-        let currentBufStatus = status.bufStatus[0]
-        check currentBufStatus.buffer.len == 2
-        check $currentBufStatus.buffer[0] == $`pair`[0]
-        check $currentBufStatus.buffer[1] == "  a" & `pair`[1]
+      const IsAutoIndent = true
+      status.bufStatus[0].keyEnter(
+        status.mainWindow.currentMainWindowNode,
+        IsAutoIndent,
+        status.settings.tabStop)
 
-  # Generate test code
+      let currentBufStatus = status.bufStatus[0]
+      check currentBufStatus.buffer.len == 2
+      check $currentBufStatus.buffer[0] == $pair[0]
+      check $currentBufStatus.buffer[1] == "  a" & pair[1]
+
   block:
     const Keyword = "{}"
     newLineTestInNimCase8(Keyword)
@@ -796,38 +763,35 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
     newLineTestInNimCase8(Keyword)
 
 suite "Editor: keyEnter: Enable autoindent in C":
-  # Generate test code
-  # Enable autoindent
-  # currentColumn is 1
-  # Line break test when the current line ends with pair of paren.
-  macro newLineTestInCcase1(pair: string): untyped =
-    quote do:
-      # Generate test title
-      let testTitle = "Case 1: When the current line ends with " & `pair` & " in C"
+  proc newLineTestInCcase1(pair: string) =
+    ## Enable autoindent
+    ## currentColumn is 1
+    ## Line break test when the current line ends with pair of paren.
 
-      # Generate test code
-      test testTitle:
-        var status = initEditorStatus()
-        status.addNewBufferInCurrentWin
+    # Generate test title
+    let testTitle = "Case 1: When the current line ends with " & pair & " in C"
 
-        status.bufStatus[0].buffer = initGapBuffer(@[`pair`.toRunes])
-        status.bufStatus[0].language = SourceLanguage.langC
-        status.bufStatus[0].mode = Mode.insert
-        status.mainWindow.currentMainWindowNode.currentColumn = 1
+    test testTitle:
+      var status = initEditorStatus()
+      status.addNewBufferInCurrentWin
 
-        const IsAutoIndent = true
-        status.bufStatus[0].keyEnter(
-          status.mainWindow.currentMainWindowNode,
-          IsAutoIndent,
-          status.settings.tabStop)
+      status.bufStatus[0].buffer = initGapBuffer(@[pair.toRunes])
+      status.bufStatus[0].language = SourceLanguage.langC
+      status.bufStatus[0].mode = Mode.insert
+      status.mainWindow.currentMainWindowNode.currentColumn = 1
 
-        let currentBufStatus = status.bufStatus[0]
-        check currentBufStatus.buffer.len == 3
-        check $currentBufStatus.buffer[0] == $(`pair`[0])
-        check $currentBufStatus.buffer[1] == "  "
-        check $currentBufStatus.buffer[2] == $(`pair`[1])
+      const IsAutoIndent = true
+      status.bufStatus[0].keyEnter(
+        status.mainWindow.currentMainWindowNode,
+        IsAutoIndent,
+        status.settings.tabStop)
 
-  # Generate test code
+      let currentBufStatus = status.bufStatus[0]
+      check currentBufStatus.buffer.len == 3
+      check $currentBufStatus.buffer[0] == $(pair[0])
+      check $currentBufStatus.buffer[1] == "  "
+      check $currentBufStatus.buffer[2] == $(pair[1])
+
   block:
     const Keyword = "{}"
     newLineTestInCcase1(Keyword)
@@ -838,36 +802,33 @@ suite "Editor: keyEnter: Enable autoindent in C":
     const Keyword = "()"
     newLineTestInCcase1(Keyword)
 
-  # Generate test code
-  # Enable autoindent
-  # currentColumn is 0
-  # Line break test when the current line ends with pair of paren.
-  macro newLineTestInCcase2(pair: string): untyped =
-    quote do:
-      # Generate test title
-      let testTitle = "Case 2: When the current line ends with " & `pair` & " in C"
+  proc newLineTestInCcase2(pair: string) =
+    ## Enable autoindent
+    ## currentColumn is 0
+    ## Line break test when the current line ends with pair of paren.
 
-      # Generate test code
-      test testTitle:
-        var status = initEditorStatus()
-        status.addNewBufferInCurrentWin
+    # Generate test title
+    let testTitle = "Case 2: When the current line ends with " & pair & " in C"
 
-        status.bufStatus[0].buffer = initGapBuffer(@[`pair`.toRunes])
-        status.bufStatus[0].language = SourceLanguage.langC
-        status.bufStatus[0].mode = Mode.insert
+    test testTitle:
+      var status = initEditorStatus()
+      status.addNewBufferInCurrentWin
 
-        const IsAutoIndent = true
-        status.bufStatus[0].keyEnter(
-          status.mainWindow.currentMainWindowNode,
-          IsAutoIndent,
-          status.settings.tabStop)
+      status.bufStatus[0].buffer = initGapBuffer(@[pair.toRunes])
+      status.bufStatus[0].language = SourceLanguage.langC
+      status.bufStatus[0].mode = Mode.insert
 
-        let currentBufStatus = status.bufStatus[0]
-        check currentBufStatus.buffer.len == 2
-        check $currentBufStatus.buffer[0] == ""
-        check $currentBufStatus.buffer[1] == `pair`
+      const IsAutoIndent = true
+      status.bufStatus[0].keyEnter(
+        status.mainWindow.currentMainWindowNode,
+        IsAutoIndent,
+        status.settings.tabStop)
 
-  # Generate test code
+      let currentBufStatus = status.bufStatus[0]
+      check currentBufStatus.buffer.len == 2
+      check $currentBufStatus.buffer[0] == ""
+      check $currentBufStatus.buffer[1] == pair
+
   block:
     const Keyword = "{}"
     newLineTestInCcase2(Keyword)
@@ -878,39 +839,36 @@ suite "Editor: keyEnter: Enable autoindent in C":
     const Keyword = "()"
     newLineTestInCcase2(Keyword)
 
-  # Generate test code
-  # Enable autoindent
-  # currentColumn is 1
-  # Line break test when the current line ends with the close paren.
-  macro newLineTestInCcase3(pair: string): untyped =
-    quote do:
-      # Generate test title
-      let testTitle = "Case 3: When the current line ends with " & `pair` & " in C"
+  proc newLineTestInCcase3(pair: string) =
+    ## Enable autoindent
+    ## currentColumn is 1
+    ## Line break test when the current line ends with the close paren.
 
-      # Generate test code
-      test testTitle:
-        var status = initEditorStatus()
-        status.addNewBufferInCurrentWin
+    # Generate test title
+    let testTitle = "Case 3: When the current line ends with " & pair & " in C"
 
-        const Buffer = `pair`[0] & "a" & `pair`[1]
-        status.bufStatus[0].buffer = initGapBuffer(@[Buffer.toRunes])
-        status.bufStatus[0].language = SourceLanguage.langC
-        status.bufStatus[0].mode = Mode.insert
-        status.mainWindow.currentMainWindowNode.currentColumn = 1
+    test testTitle:
+      var status = initEditorStatus()
+      status.addNewBufferInCurrentWin
 
-        const IsAutoIndent = true
-        status.bufStatus[0].keyEnter(
-          status.mainWindow.currentMainWindowNode,
-          IsAutoIndent,
-          status.settings.tabStop)
+      let buffer = pair[0] & "a" & pair[1]
+      status.bufStatus[0].buffer = initGapBuffer(@[buffer.toRunes])
+      status.bufStatus[0].language = SourceLanguage.langC
+      status.bufStatus[0].mode = Mode.insert
+      status.mainWindow.currentMainWindowNode.currentColumn = 1
 
-        let currentBufStatus = status.bufStatus[0]
-        check currentBufStatus.buffer.len == 3
-        check $currentBufStatus.buffer[0] == $`pair`[0]
-        check $currentBufStatus.buffer[1] == "  a"
-        check $currentBufStatus.buffer[2] == $`pair`[1]
+      const IsAutoIndent = true
+      status.bufStatus[0].keyEnter(
+        status.mainWindow.currentMainWindowNode,
+        IsAutoIndent,
+        status.settings.tabStop)
 
-  # Generate test code
+      let currentBufStatus = status.bufStatus[0]
+      check currentBufStatus.buffer.len == 3
+      check $currentBufStatus.buffer[0] == $`pair`[0]
+      check $currentBufStatus.buffer[1] == "  a"
+      check $currentBufStatus.buffer[2] == $`pair`[1]
+
   block:
     const keyword = "{}"
     newLineTestInCcase3(keyword)
@@ -1659,50 +1617,47 @@ suite "Editor: Toggle characters":
     check currentMainWindowNode.currentColumn == 0
 
 suite "Editor: Open the blank line below":
-  # Generate test code
-  # Enable/Disable autoindent
-  # open the blank line below in some languages
-  macro openLineBelowTestCase1(lang: SourceLanguage, isAutoIndent: bool): untyped =
-    quote do:
-      # Generate test title
+  proc openLineBelowTestCase1(lang: SourceLanguage, isAutoIndent: bool) =
+    ## Enable/Disable autoindent
+    ## open the blank line below in some languages
+
+    # Generate test title
+    let
+      langStr = sourceLangToStr(lang)
+      testTitle =
+        if isAutoIndent: "Case 1: Enable autoindent: Open the blank line below in " & langStr
+        else: "Case 1: Disable autoindent: Open the blank line below in " & langStr
+
+    test testTitle:
+      var status = initEditorStatus()
+      status.addNewBufferInCurrentWin
+
+      status.bufStatus[0].buffer = initGapBuffer(@[ru "  test"])
+      status.bufStatus[0].language = lang
+
+      status.bufStatus[0].openBlankLineBelow(
+        status.mainWindow.currentMainWindowNode,
+        isAutoIndent,
+        status.settings.tabStop)
+
       let
-        langStr = sourceLangToStr(`lang`)
-        testTitle = if `isAutoIndent`: "Case 1: Enable autoindent: Open the blank line below in " & langStr
-                    else: "Case 1: Disable autoindent: Open the blank line below in " & langStr
+        currentBufStatus = status.bufStatus[0]
+        currentMainWindowNode = status.mainWindow.currentMainWindowNode
 
-      # Generate test code
-      test testTitle:
-        var status = initEditorStatus()
-        status.addNewBufferInCurrentWin
+      check currentBufStatus.buffer.len == 2
+      check currentBufStatus.buffer[0] == ru "  test"
 
-        status.bufStatus[0].buffer = initGapBuffer(@[ru "  test"])
-        status.bufStatus[0].language = `lang`
+      if isAutoIndent:
+        check currentBufStatus.buffer[1] == ru "  "
 
-        const IsAutoIndent = `isAutoIndent`
-        status.bufStatus[0].openBlankLineBelow(
-          status.mainWindow.currentMainWindowNode,
-          IsAutoIndent,
-          status.settings.tabStop)
+        check currentMainWindowNode.currentLine == 1
+        check currentMainWindowNode.currentColumn == 2
+      else:
+        check currentBufStatus.buffer[1] == ru ""
 
-        let
-          currentBufStatus = status.bufStatus[0]
-          currentMainWindowNode = status.mainWindow.currentMainWindowNode
+        check currentMainWindowNode.currentLine == 1
+        check currentMainWindowNode.currentColumn == 0
 
-        check currentBufStatus.buffer.len == 2
-        check currentBufStatus.buffer[0] == ru "  test"
-
-        if IsAutoIndent:
-          check currentBufStatus.buffer[1] == ru "  "
-
-          check currentMainWindowNode.currentLine == 1
-          check currentMainWindowNode.currentColumn == 2
-        else:
-          check currentBufStatus.buffer[1] == ru ""
-
-          check currentMainWindowNode.currentLine == 1
-          check currentMainWindowNode.currentColumn == 0
-
-  # Generate test code by macro
   for l in SourceLanguage:
     block:
       const IsAutoIndent = false
@@ -1711,39 +1666,36 @@ suite "Editor: Open the blank line below":
       const IsAutoIndent = true
       openLineBelowTestCase1(l, IsAutoIndent)
 
-  # Generate test code
-  # Enable autoindent
-  # open the blank line below in Nim
-  # keywords: "var", "let", "const"
-  macro openLineBelowTestCase2(keyword: string): untyped =
-    quote do:
-      # Generate test title
-      let testTitle = "Case 2: if the current line is " & `keyword` & " in Nim"
+  proc openLineBelowTestCase2(keyword: string) =
+    ## Enable autoindent
+    ## open the blank line below in Nim
+    ## keywords: "var", "let", "const"
 
-      # Generate test code
-      test testTitle:
-        var status = initEditorStatus()
-        status.addNewBufferInCurrentWin
+    # Generate test title
+    let testTitle = "Case 2: if the current line is " & keyword & " in Nim"
 
-        status.bufStatus[0].buffer = initGapBuffer(@[`keyword`.toRunes])
-        status.bufStatus[0].language = SourceLanguage.langNim
+    test testTitle:
+      var status = initEditorStatus()
+      status.addNewBufferInCurrentWin
 
-        const IsAutoIndent = true
-        status.bufStatus[0].openBlankLineBelow(
-          status.mainWindow.currentMainWindowNode,
-          IsAutoIndent,
-          status.settings.tabStop)
+      status.bufStatus[0].buffer = initGapBuffer(@[keyword.toRunes])
+      status.bufStatus[0].language = SourceLanguage.langNim
 
-        let currentBufStatus = status.bufStatus[0]
-        check currentBufStatus.buffer.len == 2
-        check $currentBufStatus.buffer[0] == `keyword`
-        check currentBufStatus.buffer[1] == ru "  "
+      const IsAutoIndent = true
+      status.bufStatus[0].openBlankLineBelow(
+        status.mainWindow.currentMainWindowNode,
+        IsAutoIndent,
+        status.settings.tabStop)
 
-        let currentMainWindowNode = status.mainWindow.currentMainWindowNode
-        check currentMainWindowNode.currentLine == 1
-        check currentMainWindowNode.currentColumn == 2
+      let currentBufStatus = status.bufStatus[0]
+      check currentBufStatus.buffer.len == 2
+      check $currentBufStatus.buffer[0] == keyword
+      check currentBufStatus.buffer[1] == ru "  "
 
-  # Generate test code by macro
+      let currentMainWindowNode = status.mainWindow.currentMainWindowNode
+      check currentMainWindowNode.currentLine == 1
+      check currentMainWindowNode.currentColumn == 2
+
   block:
     const Keyword = "var"
     openLineBelowTestCase2(Keyword)
@@ -1754,39 +1706,36 @@ suite "Editor: Open the blank line below":
     const Keyword = "const"
     openLineBelowTestCase2(Keyword)
 
-  # Generate test code
-  # Enable autoindent
-  # open the blank line below in Nim
-  # When the current line ends with "or", "and", ':', "object", '='.
-  macro openLineBelowTestCase3(keyword: string): untyped =
-    quote do:
-      # Generate test title
-      let testTitle = "Case 3: if the current line end with " & `keyword` & " in Nim"
+  proc openLineBelowTestCase3(keyword: string) =
+    ## Enable autoindent
+    ## open the blank line below in Nim
+    ## When the current line ends with "or", "and", ':', "object", '='.
 
-      # Generate test code
-      test testTitle:
-        var status = initEditorStatus()
-        status.addNewBufferInCurrentWin
+    # Generate test title
+    let testTitle = "Case 3: if the current line end with " & keyword & " in Nim"
 
-        const Buffer = "test " & `keyword`
-        status.bufStatus[0].buffer = initGapBuffer(@[Buffer.toRunes])
-        status.bufStatus[0].language = SourceLanguage.langNim
+    test testTitle:
+      var status = initEditorStatus()
+      status.addNewBufferInCurrentWin
 
-        const IsAutoIndent = true
-        status.bufStatus[0].openBlankLineBelow(
-          status.mainWindow.currentMainWindowNode,
-          IsAutoIndent,
-          status.settings.tabStop)
+      let buffer = "test " & keyword
+      status.bufStatus[0].buffer = initGapBuffer(@[buffer.toRunes])
+      status.bufStatus[0].language = SourceLanguage.langNim
 
-        let currentBufStatus = status.bufStatus[0]
-        check $currentBufStatus.buffer[0] == Buffer
-        check currentBufStatus.buffer[1] == ru"  "
+      const IsAutoIndent = true
+      status.bufStatus[0].openBlankLineBelow(
+        status.mainWindow.currentMainWindowNode,
+        IsAutoIndent,
+        status.settings.tabStop)
 
-        let currentMainWindowNode = status.mainWindow.currentMainWindowNode
-        check currentMainWindowNode.currentLine == 1
-        check currentMainWindowNode.currentColumn == currentBufStatus.buffer[1].len
+      let currentBufStatus = status.bufStatus[0]
+      check $currentBufStatus.buffer[0] == buffer
+      check currentBufStatus.buffer[1] == ru"  "
 
-  # Generate test code by macro
+      let currentMainWindowNode = status.mainWindow.currentMainWindowNode
+      check currentMainWindowNode.currentLine == 1
+      check currentMainWindowNode.currentColumn == currentBufStatus.buffer[1].len
+
   block:
     const Keyword = "or"
     openLineBelowTestCase3(Keyword)
@@ -1803,47 +1752,44 @@ suite "Editor: Open the blank line below":
     const Keyword = "="
     openLineBelowTestCase3(Keyword)
 
-  # Generate test code
-  # Enable/Disable autoindent
-  # the current line is empty
-  macro openLineBelowTestCase4(lang: SourceLanguage, isAutoIndent: bool): untyped =
-    quote do:
-      # Generate test title
+  proc openLineBelowTestCase4(lang: SourceLanguage, isAutoIndent: bool) =
+    ## Enable/Disable autoindent
+    ## the current line is empty
+
+    # Generate test title
+    let
+      langStr = sourceLangToStr(lang)
+      testTitle =
+        if isAutoIndent: "Case 4: Enable autoindent: Open the blank line below in " & langStr
+        else: "Case 4: Disable autoindent: Open the blank line below in " & langStr
+
+    test testTitle:
+      var status = initEditorStatus()
+      status.addNewBufferInCurrentWin
+
+      status.bufStatus[0].buffer = initGapBuffer(@[ru ""])
+      status.bufStatus[0].language = lang
+
+      status.bufStatus[0].openBlankLineBelow(
+        status.mainWindow.currentMainWindowNode,
+        isAutoIndent,
+        status.settings.tabStop)
+
       let
-        langStr = sourceLangToStr(`lang`)
-        testTitle = if `isAutoIndent`: "Case 4: Enable autoindent: Open the blank line below in " & langStr
-                    else: "Case 4: Disable autoindent: Open the blank line below in " & langStr
+        currentBufStatus = status.bufStatus[0]
+        currentMainWindowNode = status.mainWindow.currentMainWindowNode
 
-      # Generate test code
-      test testTitle:
-        var status = initEditorStatus()
-        status.addNewBufferInCurrentWin
+      check currentBufStatus.buffer.len == 2
+      check currentBufStatus.buffer[0] == ru ""
+      check currentBufStatus.buffer[1] == ru ""
 
-        status.bufStatus[0].buffer = initGapBuffer(@[ru ""])
-        status.bufStatus[0].language = `lang`
+      if isAutoIndent:
+        check currentMainWindowNode.currentLine == 1
+        check currentMainWindowNode.currentColumn == 0
+      else:
+        check currentMainWindowNode.currentLine == 1
+        check currentMainWindowNode.currentColumn == 0
 
-        const IsAutoIndent = `isAutoIndent`
-        status.bufStatus[0].openBlankLineBelow(
-          status.mainWindow.currentMainWindowNode,
-          IsAutoIndent,
-          status.settings.tabStop)
-
-        let
-          currentBufStatus = status.bufStatus[0]
-          currentMainWindowNode = status.mainWindow.currentMainWindowNode
-
-        check currentBufStatus.buffer.len == 2
-        check currentBufStatus.buffer[0] == ru ""
-        check currentBufStatus.buffer[1] == ru ""
-
-        if IsAutoIndent:
-          check currentMainWindowNode.currentLine == 1
-          check currentMainWindowNode.currentColumn == 0
-        else:
-          check currentMainWindowNode.currentLine == 1
-          check currentMainWindowNode.currentColumn == 0
-
-  # Generate test code by macro
   for l in SourceLanguage:
     block:
       const IsAutoIndent = false
@@ -1852,39 +1798,36 @@ suite "Editor: Open the blank line below":
       const IsAutoIndent = true
       openLineBelowTestCase4(l, IsAutoIndent)
 
-  # Generate test code
-  # Enable autoindent
-  # open the blank line below in Python
-  # When the current line ends with "or", "and", ':'.
-  macro openLineBelowTestCase5(keyword: string): untyped =
-    quote do:
-      # Generate test title
-      let testTitle = "Case 5: if the current line end with " & `keyword` & " in Python"
+  proc openLineBelowTestCase5(keyword: string) =
+    ## Enable autoindent
+    ## open the blank line below in Python
+    ## When the current line ends with "or", "and", ':'.
 
-      # Generate test code
-      test testTitle:
-        var status = initEditorStatus()
-        status.addNewBufferInCurrentWin
+    # Generate test title
+    let testTitle = "Case 5: if the current line end with " & keyword & " in Python"
 
-        const Buffer = "test " & `keyword`
-        status.bufStatus[0].buffer = initGapBuffer(@[Buffer.toRunes])
-        status.bufStatus[0].language = SourceLanguage.langPython
+    test testTitle:
+      var status = initEditorStatus()
+      status.addNewBufferInCurrentWin
 
-        const IsAutoIndent = true
-        status.bufStatus[0].openBlankLineBelow(
-          status.mainWindow.currentMainWindowNode,
-          IsAutoIndent,
-          status.settings.tabStop)
+      let buffer = "test " & keyword
+      status.bufStatus[0].buffer = initGapBuffer(@[buffer.toRunes])
+      status.bufStatus[0].language = SourceLanguage.langPython
 
-        let currentBufStatus = status.bufStatus[0]
-        check $currentBufStatus.buffer[0] == Buffer
-        check currentBufStatus.buffer[1] == ru"  "
+      const IsAutoIndent = true
+      status.bufStatus[0].openBlankLineBelow(
+        status.mainWindow.currentMainWindowNode,
+        IsAutoIndent,
+        status.settings.tabStop)
 
-        let currentMainWindowNode = status.mainWindow.currentMainWindowNode
-        check currentMainWindowNode.currentLine == 1
-        check currentMainWindowNode.currentColumn == currentBufStatus.buffer[1].len
+      let currentBufStatus = status.bufStatus[0]
+      check $currentBufStatus.buffer[0] == buffer
+      check currentBufStatus.buffer[1] == ru"  "
 
-  # Generate test code by macro
+      let currentMainWindowNode = status.mainWindow.currentMainWindowNode
+      check currentMainWindowNode.currentLine == 1
+      check currentMainWindowNode.currentColumn == currentBufStatus.buffer[1].len
+
   block:
     const Keyword = "or"
     openLineBelowTestCase5(Keyword)
@@ -1896,98 +1839,90 @@ suite "Editor: Open the blank line below":
     openLineBelowTestCase5(Keyword)
 
 suite "Editor: Open the blank line abave":
-  # Generate test code
-  # Enable/Disable autoindent
-  # open the blank line abave in some languages
-  macro openLineAboveTestCase1(lang: SourceLanguage, isAutoIndent: bool): untyped =
-    quote do:
-      # Generate test title
+  proc openLineAboveTestCase1(lang: SourceLanguage, isAutoIndent: bool) =
+    ## Enable/Disable autoindent
+    ## open the blank line abave in some languages
+
+    # Generate test title
+    let
+      langStr = sourceLangToStr(lang)
+      testTitle =
+        if isAutoIndent: "Case 1: Enable autoindent: Open the blank line abave in " & langStr
+        else: "Case 1: Disable autoindent: Open the blank line abave in " & langStr
+
+    test testTitle:
+      var status = initEditorStatus()
+      status.addNewBufferInCurrentWin
+
+      status.bufStatus[0].buffer = initGapBuffer(@[ru "test"])
+      status.bufStatus[0].language = lang
+
+      status.bufStatus[0].openBlankLineAbove(
+        status.mainWindow.currentMainWindowNode,
+        isAutoIndent,
+        status.settings.tabStop)
+
       let
-        langStr = sourceLangToStr(`lang`)
-        testTitle =
-          if `isAutoIndent`: "Case 1: Enable autoindent: Open the blank line abave in " & langStr
-          else: "Case 1: Disable autoindent: Open the blank line abave in " & langStr
+        currentBufStatus = status.bufStatus[0]
+        currentMainWindowNode = status.mainWindow.currentMainWindowNode
 
-      # Generate test code
-      test testTitle:
-        var status = initEditorStatus()
-        status.addNewBufferInCurrentWin
+      check currentBufStatus.buffer.len == 2
+      check currentBufStatus.buffer[0] == ru ""
+      check currentBufStatus.buffer[1] == ru "test"
 
-        status.bufStatus[0].buffer = initGapBuffer(@[ru "test"])
-        status.bufStatus[0].language = `lang`
+      check currentMainWindowNode.currentLine == 0
+      check currentMainWindowNode.currentColumn == 0
 
-        const IsAutoIndent = `isAutoIndent`
-        status.bufStatus[0].openBlankLineAbove(
-          status.mainWindow.currentMainWindowNode,
-          IsAutoIndent,
-          status.settings.tabStop)
+  for l in SourceLanguage:
+    block:
+      const IsAutoIndent = false
+      openLineAboveTestCase1(l, IsAutoIndent)
+    block:
+      const IsAutoIndent = true
+      openLineAboveTestCase1(l, IsAutoIndent)
 
-        let
-          currentBufStatus = status.bufStatus[0]
-          currentMainWindowNode = status.mainWindow.currentMainWindowNode
+  proc openLineAboveTestCase2(lang: SourceLanguage, isAutoIndent: bool) =
+    ## Enable/Disable autoindent
+    ## open the blank line abave in some languages
 
-        check currentBufStatus.buffer.len == 2
-        check currentBufStatus.buffer[0] == ru ""
-        check currentBufStatus.buffer[1] == ru "test"
+    # Generate test title
+    let
+      langStr = sourceLangToStr(lang)
+      testTitle =
+        if isAutoIndent: "Case 2: Enable autoindent: Open the blank line abave in " & langStr
+        else: "Case 2: Disable autoindent: Open the blank line abave in " & langStr
 
-        check currentMainWindowNode.currentLine == 0
+    test testTitle:
+      var status = initEditorStatus()
+      status.addNewBufferInCurrentWin
+
+      status.bufStatus[0].buffer = initGapBuffer(@[ru "  test", ru ""])
+      status.bufStatus[0].language = lang
+
+      status.mainWindow.currentMainWindowNode.currentLine = 1
+
+      status.bufStatus[0].openBlankLineAbove(
+        status.mainWindow.currentMainWindowNode,
+        isAutoIndent,
+        status.settings.tabStop)
+
+      let
+        currentBufStatus = status.bufStatus[0]
+        currentMainWindowNode = status.mainWindow.currentMainWindowNode
+
+      check currentBufStatus.buffer.len == 3
+      check currentBufStatus.buffer[0] == ru "  test"
+      check currentBufStatus.buffer[2] == ru ""
+
+      check currentMainWindowNode.currentLine == 1
+
+      if isAutoIndent:
+        check currentBufStatus.buffer[1] == ru "  "
+        check currentMainWindowNode.currentColumn == 2
+      else:
+        check currentBufStatus.buffer[1] == ru ""
         check currentMainWindowNode.currentColumn == 0
 
-  # Generate test code by macro
-  for l in SourceLanguage:
-    block:
-      const IsAutoIndent = false
-      openLineAboveTestCase1(l, IsAutoIndent)
-    block:
-      const IsAutoIndent = true
-      openLineAboveTestCase1(l, IsAutoIndent)
-
-  # Generate test code
-  # Enable/Disable autoindent
-  # open the blank line abave in some languages
-  macro openLineAboveTestCase2(lang: SourceLanguage, isAutoIndent: bool): untyped =
-    quote do:
-      # Generate test title
-      let
-        langStr = sourceLangToStr(`lang`)
-        testTitle =
-          if `isAutoIndent`: "Case 2: Enable autoindent: Open the blank line abave in " & langStr
-          else: "Case 2: Disable autoindent: Open the blank line abave in " & langStr
-
-      # Generate test code
-      test testTitle:
-        var status = initEditorStatus()
-        status.addNewBufferInCurrentWin
-
-        status.bufStatus[0].buffer = initGapBuffer(@[ru "  test", ru ""])
-        status.bufStatus[0].language = `lang`
-
-        status.mainWindow.currentMainWindowNode.currentLine = 1
-
-        const IsAutoIndent = `isAutoIndent`
-        status.bufStatus[0].openBlankLineAbove(
-          status.mainWindow.currentMainWindowNode,
-          IsAutoIndent,
-          status.settings.tabStop)
-
-        let
-          currentBufStatus = status.bufStatus[0]
-          currentMainWindowNode = status.mainWindow.currentMainWindowNode
-
-        check currentBufStatus.buffer.len == 3
-        check currentBufStatus.buffer[0] == ru "  test"
-        check currentBufStatus.buffer[2] == ru ""
-
-        check currentMainWindowNode.currentLine == 1
-
-        if IsAutoIndent:
-          check currentBufStatus.buffer[1] == ru "  "
-          check currentMainWindowNode.currentColumn == 2
-        else:
-          check currentBufStatus.buffer[1] == ru ""
-          check currentMainWindowNode.currentColumn == 0
-
-  # Generate test code by macro
   for l in SourceLanguage:
     block:
       const IsAutoIndent = false
@@ -1996,41 +1931,38 @@ suite "Editor: Open the blank line abave":
       const IsAutoIndent = true
       openLineAboveTestCase2(l, IsAutoIndent)
 
-  # Generate test code
-  # Enable autoindent
-  # open the blank line above in Nim
-  # keywords: "var", "let", "const"
-  macro openLineAboveTestCase3(keyword: string): untyped =
-    quote do:
-      # Generate test title
-      let testTitle = "Case 3: if the current line is " & `keyword` & " in Nim"
+  proc openLineAboveTestCase3(keyword: string) =
+    ## Enable autoindent
+    ## open the blank line above in Nim
+    ## keywords: "var", "let", "const"
 
-      # Generate test code
-      test testTitle:
-        var status = initEditorStatus()
-        status.addNewBufferInCurrentWin
+    # Generate test title
+    let testTitle = "Case 3: if the current line is " & keyword & " in Nim"
 
-        status.bufStatus[0].buffer = initGapBuffer(@[`keyword`, ""].toSeqRunes)
-        status.bufStatus[0].language = SourceLanguage.langNim
+    test testTitle:
+      var status = initEditorStatus()
+      status.addNewBufferInCurrentWin
 
-        status.mainWindow.currentMainWindowNode.currentLine = 1
+      status.bufStatus[0].buffer = initGapBuffer(@[keyword, ""].toSeqRunes)
+      status.bufStatus[0].language = SourceLanguage.langNim
 
-        const IsAutoIndent = true
-        status.bufStatus[0].openBlankLineAbove(
-          status.mainWindow.currentMainWindowNode,
-          IsAutoIndent,
-          status.settings.tabStop)
+      status.mainWindow.currentMainWindowNode.currentLine = 1
 
-        let currentBufStatus = status.bufStatus[0]
-        check currentBufStatus.buffer.len == 3
-        check $currentBufStatus.buffer[0] == `keyword`
-        check currentBufStatus.buffer[1] == ru "  "
+      const IsAutoIndent = true
+      status.bufStatus[0].openBlankLineAbove(
+        status.mainWindow.currentMainWindowNode,
+        IsAutoIndent,
+        status.settings.tabStop)
 
-        let currentMainWindowNode = status.mainWindow.currentMainWindowNode
-        check currentMainWindowNode.currentLine == 1
-        check currentMainWindowNode.currentColumn == 2
+      let currentBufStatus = status.bufStatus[0]
+      check currentBufStatus.buffer.len == 3
+      check $currentBufStatus.buffer[0] == keyword
+      check currentBufStatus.buffer[1] == ru "  "
 
-  # Generate test code by macro
+      let currentMainWindowNode = status.mainWindow.currentMainWindowNode
+      check currentMainWindowNode.currentLine == 1
+      check currentMainWindowNode.currentColumn == 2
+
   block:
     const Keyword = "var"
     openLineAboveTestCase3(Keyword)
@@ -2041,45 +1973,42 @@ suite "Editor: Open the blank line abave":
     const Keyword = "const"
     openLineAboveTestCase3(Keyword)
 
-  # Generate test code
-  # Enable autoindent
-  # open the blank line above in Nim
-  # When the current line ends with "or", "and", ':', "object", "=".
-  macro openLineAboveTestCase4(keyword: string): untyped =
-    quote do:
-      # Generate test title
-      let testTitle = "Case 4: if the current line end with " & `keyword` & " in Nim"
+  proc openLineAboveTestCase4(keyword: string) =
+    ## Enable autoindent
+    ## open the blank line above in Nim
+    ## When the current line ends with "or", "and", ':', "object", "=".
 
-      # Generate test code
-      test testTitle:
-        var status = initEditorStatus()
-        status.addNewBufferInCurrentWin
+    # Generate test title
+    let testTitle = "Case 4: if the current line end with " & `keyword` & " in Nim"
 
-        const Buffer = @["test " & `keyword`, ""].toSeqRunes
-        status.bufStatus[0].buffer = initGapBuffer(Buffer)
-        status.bufStatus[0].language = SourceLanguage.langNim
+    test testTitle:
+      var status = initEditorStatus()
+      status.addNewBufferInCurrentWin
 
-        status.mainWindow.currentMainWindowNode.currentLine = 1
+      let buffer = @["test " & keyword, ""].toSeqRunes
+      status.bufStatus[0].buffer = initGapBuffer(buffer)
+      status.bufStatus[0].language = SourceLanguage.langNim
 
-        const IsAutoIndent = true
-        status.bufStatus[0].openBlankLineAbove(
-          status.mainWindow.currentMainWindowNode,
-          IsAutoIndent,
-          status.settings.tabStop)
+      status.mainWindow.currentMainWindowNode.currentLine = 1
 
-        let currentBufStatus = status.bufStatus[0]
+      const IsAutoIndent = true
+      status.bufStatus[0].openBlankLineAbove(
+        status.mainWindow.currentMainWindowNode,
+        IsAutoIndent,
+        status.settings.tabStop)
 
-        check currentBufStatus.buffer.len == 3
+      let currentBufStatus = status.bufStatus[0]
 
-        check currentBufStatus.buffer[0] == Buffer[0]
-        check currentBufStatus.buffer[1] == ru "  "
-        check currentBufStatus.buffer[2] == ru ""
+      check currentBufStatus.buffer.len == 3
 
-        let currentMainWindowNode = status.mainWindow.currentMainWindowNode
-        check currentMainWindowNode.currentLine == 1
-        check currentMainWindowNode.currentColumn == currentBufStatus.buffer[1].len
+      check currentBufStatus.buffer[0] == buffer[0]
+      check currentBufStatus.buffer[1] == ru "  "
+      check currentBufStatus.buffer[2] == ru ""
 
-  # Generate test code by macro
+      let currentMainWindowNode = status.mainWindow.currentMainWindowNode
+      check currentMainWindowNode.currentLine == 1
+      check currentMainWindowNode.currentColumn == currentBufStatus.buffer[1].len
+
   block:
     const keyword = "or"
     openLineAboveTestCase4(keyword)
@@ -2096,44 +2025,41 @@ suite "Editor: Open the blank line abave":
     const keyword = "="
     openLineAboveTestCase4(keyword)
 
-  # Generate test code
-  # Enable autoindent
-  # open the blank line above in Python
-  # When the current line ends with "or", "and", ':'.
-  macro openLineAboveTestCase5(keyword: string): untyped =
-    quote do:
-      # Generate test title
-      let testTitle = "Case 5: if the current line end with " & `keyword` & " in Python"
+  proc openLineAboveTestCase5(keyword: string) =
+    ## Enable autoindent
+    ## open the blank line above in Python
+    ## When the current line ends with "or", "and", ':'.
 
-      # Generate test code
-      test testTitle:
-        var status = initEditorStatus()
-        status.addNewBufferInCurrentWin
+    # Generate test title
+    let testTitle = "Case 5: if the current line end with " & keyword & " in Python"
 
-        const Buffer = @["test " & `keyword`, ""].toSeqRunes
-        status.bufStatus[0].buffer = initGapBuffer(Buffer)
-        status.bufStatus[0].language = SourceLanguage.langPython
+    test testTitle:
+      var status = initEditorStatus()
+      status.addNewBufferInCurrentWin
 
-        status.mainWindow.currentMainWindowNode.currentLine = 1
+      let buffer = @["test " & keyword, ""].toSeqRunes
+      status.bufStatus[0].buffer = initGapBuffer(buffer)
+      status.bufStatus[0].language = SourceLanguage.langPython
 
-        const IsAutoIndent = true
-        status.bufStatus[0].openBlankLineAbove(
-          status.mainWindow.currentMainWindowNode,
-          IsAutoIndent,
-          status.settings.tabStop)
+      status.mainWindow.currentMainWindowNode.currentLine = 1
 
-        let currentBufStatus = status.bufStatus[0]
-        check currentBufStatus.buffer.len == 3
+      const IsAutoIndent = true
+      status.bufStatus[0].openBlankLineAbove(
+        status.mainWindow.currentMainWindowNode,
+        IsAutoIndent,
+        status.settings.tabStop)
 
-        check currentBufStatus.buffer[0] == Buffer[0]
-        check currentBufStatus.buffer[1] == ru"  "
-        check currentBufStatus.buffer[2] == ru""
+      let currentBufStatus = status.bufStatus[0]
+      check currentBufStatus.buffer.len == 3
 
-        check status.mainWindow.currentMainWindowNode.currentLine == 1
-        check status.mainWindow.currentMainWindowNode.currentColumn ==
-          currentBufStatus.buffer[1].len
+      check currentBufStatus.buffer[0] == buffer[0]
+      check currentBufStatus.buffer[1] == ru"  "
+      check currentBufStatus.buffer[2] == ru""
 
-  # Generate test code by macro
+      check status.mainWindow.currentMainWindowNode.currentLine == 1
+      check status.mainWindow.currentMainWindowNode.currentColumn ==
+        currentBufStatus.buffer[1].len
+
   block:
     const Keyword = "or"
     openLineAboveTestCase5(Keyword)
@@ -2146,376 +2072,351 @@ suite "Editor: Open the blank line abave":
 
 suite "Editor: Indent":
   block:
-    # Generate test code
-    # Indenet with a empty buffer in some languages
-    # Run at first of line.
-    macro indentTestCase1(lang: SourceLanguage): untyped =
-      quote do:
-        # Generate test title
+    proc indentTestCase1(lang: SourceLanguage) =
+      ## Indenet with a empty buffer in some languages
+      ## Run at first of line.
+
+      # Generate test title
+      let
+        langStr = sourceLangToStr(lang)
+        testTitle = "Case 1: Indenet in " & langStr
+
+      test testTitle:
+        var status = initEditorStatus()
+        status.addNewBufferInCurrentWin
+
+        status.bufStatus[0].buffer = initGapBuffer(@[ru""])
+        status.bufStatus[0].language = lang
+
+        status.bufStatus[0].indent(
+          status.mainWindow.currentMainWindowNode,
+          status.settings.tabStop)
+
         let
-          langStr = sourceLangToStr(`lang`)
-          testTitle = "Case 1: Indenet in " & langStr
+          currentBufStatus = status.bufStatus[0]
+          currentMainWindowNode = status.mainWindow.currentMainWindowNode
 
-        # Generate test code
-        test testTitle:
-          var status = initEditorStatus()
-          status.addNewBufferInCurrentWin
+        check currentBufStatus.buffer.len == 1
+        check currentBufStatus.buffer[0] == ru"  "
 
-          status.bufStatus[0].buffer = initGapBuffer(@[ru""])
-          status.bufStatus[0].language = `lang`
-
-          status.bufStatus[0].indent(
-            status.mainWindow.currentMainWindowNode,
-            status.settings.tabStop)
-
-          let
-            currentBufStatus = status.bufStatus[0]
-            currentMainWindowNode = status.mainWindow.currentMainWindowNode
-
-          check currentBufStatus.buffer.len == 1
-          check currentBufStatus.buffer[0] == ru"  "
-
-          check currentMainWindowNode.currentLine == 0
-          check currentMainWindowNode.currentColumn == 0
+        check currentMainWindowNode.currentLine == 0
+        check currentMainWindowNode.currentColumn == 0
 
     for l in SourceLanguage:
-      # Generate test code by macro
       indentTestCase1(l)
 
   block:
-    # Generate test code
-    # Indenet with a only spaces buffer in some languages
-    # Run at end of line.
-    macro indentTestCase2(lang: SourceLanguage): untyped =
-      quote do:
-        # Generate test title
-        let
-          langStr = sourceLangToStr(`lang`)
-          testTitle = "Case 2: Indenet in " & langStr
+    proc indentTestCase2(lang: SourceLanguage) =
+      ## Indenet with a only spaces buffer in some languages
+      ## Run at end of line.
 
-        # Generate test code
-        test testTitle:
-          var status = initEditorStatus()
-          status.addNewBufferInCurrentWin
+      # Generate test title
+      let
+        langStr = sourceLangToStr(lang)
+        testTitle = "Case 2: Indenet in " & langStr
 
-          status.bufStatus[0].buffer = initGapBuffer(@[ru"  "])
-          status.bufStatus[0].language = `lang`
+      test testTitle:
+        var status = initEditorStatus()
+        status.addNewBufferInCurrentWin
 
-          status.bufStatus[0].indent(
-            status.mainWindow.currentMainWindowNode,
-            status.settings.tabStop)
+        status.bufStatus[0].buffer = initGapBuffer(@[ru"  "])
+        status.bufStatus[0].language = lang
 
-          check status.bufStatus[0].buffer.len == 1
-          check status.bufStatus[0].buffer[0] == ru"    "
+        status.bufStatus[0].indent(
+          status.mainWindow.currentMainWindowNode,
+          status.settings.tabStop)
 
-          check status.mainWindow.currentMainWindowNode.currentLine == 0
-          check status.mainWindow.currentMainWindowNode.currentColumn == 0
+        check status.bufStatus[0].buffer.len == 1
+        check status.bufStatus[0].buffer[0] == ru"    "
+
+        check status.mainWindow.currentMainWindowNode.currentLine == 0
+        check status.mainWindow.currentMainWindowNode.currentColumn == 0
 
     for l in SourceLanguage:
-      # Generate test code by macro
       indentTestCase2(l)
 
   block:
-    # Generate test code
-    # Indenet in some languages
-    macro indentTestCase3(lang: SourceLanguage): untyped =
-      quote do:
-        # Generate test title
+    proc indentTestCase3(lang: SourceLanguage) =
+      ## Indenet in some languages
+
+      # Generate test title
+      let
+        langStr = sourceLangToStr(lang)
+        testTitle = "Case 3: Indenet in " & langStr
+
+      test testTitle:
+        var status = initEditorStatus()
+        status.addNewBufferInCurrentWin
+
+        status.bufStatus[0].buffer = initGapBuffer(@[ru"  test"])
+        status.bufStatus[0].language = lang
+
+        status.bufStatus[0].indent(
+          status.mainWindow.currentMainWindowNode,
+          status.settings.tabStop)
+
         let
-          langStr = sourceLangToStr(`lang`)
-          testTitle = "Case 3: Indenet in " & langStr
+          currentBufStatus = status.bufStatus[0]
+          currentMainWindowNode = status.mainWindow.currentMainWindowNode
 
-        # Generate test code
-        test testTitle:
-          var status = initEditorStatus()
-          status.addNewBufferInCurrentWin
+        check currentBufStatus.buffer.len == 1
+        check currentBufStatus.buffer[0] == ru"    test"
 
-          status.bufStatus[0].buffer = initGapBuffer(@[ru"  test"])
-          status.bufStatus[0].language = `lang`
-
-          status.bufStatus[0].indent(
-            status.mainWindow.currentMainWindowNode,
-            status.settings.tabStop)
-
-          let
-            currentBufStatus = status.bufStatus[0]
-            currentMainWindowNode = status.mainWindow.currentMainWindowNode
-
-          check currentBufStatus.buffer.len == 1
-          check currentBufStatus.buffer[0] == ru"    test"
-
-          check currentMainWindowNode.currentLine == 0
-          check currentMainWindowNode.currentColumn == 0
+        check currentMainWindowNode.currentLine == 0
+        check currentMainWindowNode.currentColumn == 0
 
     for l in SourceLanguage:
-      # Generate test code by macro
       indentTestCase3(l)
 
   block:
-    # Generate test code
-    # Indenet in some languages
-    macro indentTestCase4(lang: SourceLanguage): untyped =
-      quote do:
-        # Generate test title
+    proc indentTestCase4(lang: SourceLanguage) =
+      ## Indenet in some languages
+
+      # Generate test title
+      let
+        langStr = sourceLangToStr(lang)
+        testTitle = "Case 4: Indenet in " & langStr
+
+      # Generate test code
+      test testTitle:
+        var status = initEditorStatus()
+        status.addNewBufferInCurrentWin
+
+        status.bufStatus[0].buffer = initGapBuffer(@[ru"  "])
+        status.bufStatus[0].language = lang
+
+        status.mainWindow.currentMainWindowNode.currentColumn = 1
+
+        status.bufStatus[0].indent(
+          status.mainWindow.currentMainWindowNode,
+          status.settings.tabStop)
+
         let
-          langStr = sourceLangToStr(`lang`)
-          testTitle = "Case 4: Indenet in " & langStr
+          currentBufStatus = status.bufStatus[0]
+          currentMainWindowNode = status.mainWindow.currentMainWindowNode
 
-        # Generate test code
-        test testTitle:
-          var status = initEditorStatus()
-          status.addNewBufferInCurrentWin
+        check currentBufStatus.buffer.len == 1
+        check currentBufStatus.buffer[0] == ru"    "
 
-          status.bufStatus[0].buffer = initGapBuffer(@[ru"  "])
-          status.bufStatus[0].language = `lang`
-
-          status.mainWindow.currentMainWindowNode.currentColumn = 1
-
-          status.bufStatus[0].indent(
-            status.mainWindow.currentMainWindowNode,
-            status.settings.tabStop)
-
-          let
-            currentBufStatus = status.bufStatus[0]
-            currentMainWindowNode = status.mainWindow.currentMainWindowNode
-
-          check currentBufStatus.buffer.len == 1
-          check currentBufStatus.buffer[0] == ru"    "
-
-          check currentMainWindowNode.currentLine == 0
-          check currentMainWindowNode.currentColumn == 1
+        check currentMainWindowNode.currentLine == 0
+        check currentMainWindowNode.currentColumn == 1
 
     for l in SourceLanguage:
-      # Generate test code by macro
       indentTestCase4(l)
 
   block:
-    # Generate test code
-    # Indenet in some languages
-    macro indentTestCase5(lang: SourceLanguage): untyped =
-      quote do:
-        # Generate test title
+    proc indentTestCase5(lang: SourceLanguage) =
+      ## Indenet in some languages
+
+      # Generate test title
+      let
+        langStr = sourceLangToStr(lang)
+        testTitle = "Case 5: Indenet in " & langStr
+
+      test testTitle:
+        var status = initEditorStatus()
+        status.addNewBufferInCurrentWin
+
+        status.bufStatus[0].buffer = initGapBuffer(@[ru"  ", ru"", ru"  "])
+        status.bufStatus[0].language = lang
+
+        status.mainWindow.currentMainWindowNode.currentLine = 1
+
+        status.bufStatus[0].indent(
+          status.mainWindow.currentMainWindowNode,
+          status.settings.tabStop)
+
         let
-          langStr = sourceLangToStr(`lang`)
-          testTitle = "Case 5: Indenet in " & langStr
+          currentBufStatus = status.bufStatus[0]
+          currentMainWindowNode = status.mainWindow.currentMainWindowNode
 
-        # Generate test code
-        test testTitle:
-          var status = initEditorStatus()
-          status.addNewBufferInCurrentWin
+        check currentBufStatus.buffer.len == 3
+        check currentBufStatus.buffer[0] == ru"  "
+        check currentBufStatus.buffer[1] == ru"  "
+        check currentBufStatus.buffer[2] == ru"  "
 
-          status.bufStatus[0].buffer = initGapBuffer(@[ru"  ", ru"", ru"  "])
-          status.bufStatus[0].language = `lang`
-
-          status.mainWindow.currentMainWindowNode.currentLine = 1
-
-          status.bufStatus[0].indent(
-            status.mainWindow.currentMainWindowNode,
-            status.settings.tabStop)
-
-          let
-            currentBufStatus = status.bufStatus[0]
-            currentMainWindowNode = status.mainWindow.currentMainWindowNode
-
-          check currentBufStatus.buffer.len == 3
-          check currentBufStatus.buffer[0] == ru"  "
-          check currentBufStatus.buffer[1] == ru"  "
-          check currentBufStatus.buffer[2] == ru"  "
-
-          check currentMainWindowNode.currentLine == 1
-          check currentMainWindowNode.currentColumn == 0
+        check currentMainWindowNode.currentLine == 1
+        check currentMainWindowNode.currentColumn == 0
 
     for l in SourceLanguage:
-      # Generate test code by macro
       indentTestCase5(l)
 
 suite "Editor: Unindent":
   block:
-    # Generate test code
-    # Unindenet with a only spaces buffer in some languages
-    # Run at first of line.
-    macro unindentTestCase1(lang: SourceLanguage): untyped =
-      quote do:
-        # Generate test title
+    proc unindentTestCase1(lang: SourceLanguage) =
+      ## Unindenet with a only spaces buffer in some languages
+      ## Run at first of line.
+
+      # Generate test title
+      let
+        langStr = sourceLangToStr(lang)
+        testTitle = "Case 1: Unindenet in " & langStr
+
+      # Generate test code
+      test testTitle:
+        var status = initEditorStatus()
+        status.addNewBufferInCurrentWin
+
+        status.bufStatus[0].buffer = initGapBuffer(@[ru"  "])
+        status.bufStatus[0].language = lang
+
+        status.bufStatus[0].unindent(
+          status.mainWindow.currentMainWindowNode,
+          status.settings.tabStop)
+
         let
-          langStr = sourceLangToStr(`lang`)
-          testTitle = "Case 1: Unindenet in " & langStr
+          currentBufStatus = status.bufStatus[0]
+          currentMainWindowNode = status.mainWindow.currentMainWindowNode
 
-        # Generate test code
-        test testTitle:
-          var status = initEditorStatus()
-          status.addNewBufferInCurrentWin
+        check currentBufStatus.buffer.len == 1
+        check currentBufStatus.buffer[0] == ru""
 
-          status.bufStatus[0].buffer = initGapBuffer(@[ru"  "])
-          status.bufStatus[0].language = `lang`
-
-          status.bufStatus[0].unindent(
-            status.mainWindow.currentMainWindowNode,
-            status.settings.tabStop)
-
-          let
-            currentBufStatus = status.bufStatus[0]
-            currentMainWindowNode = status.mainWindow.currentMainWindowNode
-
-          check currentBufStatus.buffer.len == 1
-          check currentBufStatus.buffer[0] == ru""
-
-          check currentMainWindowNode.currentLine == 0
-          check currentMainWindowNode.currentColumn == 0
+        check currentMainWindowNode.currentLine == 0
+        check currentMainWindowNode.currentColumn == 0
 
     for l in SourceLanguage:
-      # Generate test code by macro
       unindentTestCase1(l)
 
   block:
-    # Generate test code
-    # Unindenet with a only spaces buffer in some languages
-    # Run at end of line.
-    macro unindentTestCase2(lang: SourceLanguage): untyped =
-      quote do:
-        # Generate test title
+    proc unindentTestCase2(lang: SourceLanguage) =
+      ## Unindenet with a only spaces buffer in some languages
+      ## Run at end of line.
+
+      # Generate test title
+      let
+        langStr = sourceLangToStr(lang)
+        testTitle = "Case 2: Unindenet in " & langStr
+
+      # Generate test code
+      test testTitle:
+        var status = initEditorStatus()
+        status.addNewBufferInCurrentWin
+
+        status.bufStatus[0].buffer = initGapBuffer(@[ru"  "])
+        status.bufStatus[0].language = lang
+
+        status.mainWindow.currentMainWindowNode.currentColumn = 1
+
+        status.bufStatus[0].unindent(
+          status.mainWindow.currentMainWindowNode,
+          status.settings.tabStop)
+
         let
-          langStr = sourceLangToStr(`lang`)
-          testTitle = "Case 2: Unindenet in " & langStr
+          currentBufStatus = status.bufStatus[0]
+          currentMainWindowNode = status.mainWindow.currentMainWindowNode
 
-        # Generate test code
-        test testTitle:
-          var status = initEditorStatus()
-          status.addNewBufferInCurrentWin
+        check currentBufStatus.buffer.len == 1
+        check currentBufStatus.buffer[0] == ru""
 
-          status.bufStatus[0].buffer = initGapBuffer(@[ru"  "])
-          status.bufStatus[0].language = `lang`
-
-          status.mainWindow.currentMainWindowNode.currentColumn = 1
-
-          status.bufStatus[0].unindent(
-            status.mainWindow.currentMainWindowNode,
-            status.settings.tabStop)
-
-          let
-            currentBufStatus = status.bufStatus[0]
-            currentMainWindowNode = status.mainWindow.currentMainWindowNode
-
-          check currentBufStatus.buffer.len == 1
-          check currentBufStatus.buffer[0] == ru""
-
-          check currentMainWindowNode.currentLine == 0
-          check currentMainWindowNode.currentColumn == 0
+        check currentMainWindowNode.currentLine == 0
+        check currentMainWindowNode.currentColumn == 0
 
     for l in SourceLanguage:
-      # Generate test code by macro
       unindentTestCase2(l)
 
   block:
-    # Generate test code
-    # Unindenet in some languages
-    macro unindentTestCase3(lang: SourceLanguage): untyped =
-      quote do:
-        # Generate test title
+    proc unindentTestCase3(lang: SourceLanguage) =
+      ## Unindenet in some languages
+
+      # Generate test title
+      let
+        langStr = sourceLangToStr(`lang`)
+        testTitle = "Case 3: Unindenet in " & langStr
+
+      test testTitle:
+        var status = initEditorStatus()
+        status.addNewBufferInCurrentWin
+
+        status.bufStatus[0].buffer = initGapBuffer(@[ru"  test"])
+        status.bufStatus[0].language = `lang`
+
+        status.mainWindow.currentMainWindowNode.currentColumn = 5
+
+        status.bufStatus[0].unindent(
+          status.mainWindow.currentMainWindowNode,
+          status.settings.tabStop)
+
         let
-          langStr = sourceLangToStr(`lang`)
-          testTitle = "Case 3: Unindenet in " & langStr
+          currentBufStatus = status.bufStatus[0]
+          currentMainWindowNode = status.mainWindow.currentMainWindowNode
 
-        # Generate test code
-        test testTitle:
-          var status = initEditorStatus()
-          status.addNewBufferInCurrentWin
+        check currentBufStatus.buffer.len == 1
+        check currentBufStatus.buffer[0] == ru"test"
 
-          status.bufStatus[0].buffer = initGapBuffer(@[ru"  test"])
-          status.bufStatus[0].language = `lang`
-
-          status.mainWindow.currentMainWindowNode.currentColumn = 5
-
-          status.bufStatus[0].unindent(
-            status.mainWindow.currentMainWindowNode,
-            status.settings.tabStop)
-
-          let
-            currentBufStatus = status.bufStatus[0]
-            currentMainWindowNode = status.mainWindow.currentMainWindowNode
-
-          check currentBufStatus.buffer.len == 1
-          check currentBufStatus.buffer[0] == ru"test"
-
-          check currentMainWindowNode.currentLine == 0
-          check currentMainWindowNode.currentColumn == 3
+        check currentMainWindowNode.currentLine == 0
+        check currentMainWindowNode.currentColumn == 3
 
     for l in SourceLanguage:
-      # Generate test code by macro
       unindentTestCase3(l)
 
   block:
-    # Generate test code
-    # Nothing to do in the empty line.
-    macro unindentTestCase4(lang: SourceLanguage): untyped =
-      quote do:
-        # Generate test title
+    proc unindentTestCase4(lang: SourceLanguage) =
+      ## Nothing to do in the empty line.
+
+      # Generate test title
+      let
+        langStr = sourceLangToStr(lang)
+        testTitle = "Case 4: Unindenet in " & langStr
+
+      # Generate test code
+      test testTitle:
+        var status = initEditorStatus()
+        status.addNewBufferInCurrentWin
+
+        status.bufStatus[0].buffer = initGapBuffer(@[ru""])
+        status.bufStatus[0].language = lang
+
+        status.bufStatus[0].unindent(
+          status.mainWindow.currentMainWindowNode,
+          status.settings.tabStop)
+
         let
-          langStr = sourceLangToStr(`lang`)
-          testTitle = "Case 4: Unindenet in " & langStr
+          currentBufStatus = status.bufStatus[0]
+          currentMainWindowNode = status.mainWindow.currentMainWindowNode
 
-        # Generate test code
-        test testTitle:
-          var status = initEditorStatus()
-          status.addNewBufferInCurrentWin
+        check currentBufStatus.buffer.len == 1
+        check currentBufStatus.buffer[0].len == 0
 
-          status.bufStatus[0].buffer = initGapBuffer(@[ru""])
-          status.bufStatus[0].language = `lang`
-
-          status.bufStatus[0].unindent(
-            status.mainWindow.currentMainWindowNode,
-            status.settings.tabStop)
-
-          let
-            currentBufStatus = status.bufStatus[0]
-            currentMainWindowNode = status.mainWindow.currentMainWindowNode
-
-          check currentBufStatus.buffer.len == 1
-          check currentBufStatus.buffer[0].len == 0
-
-          check currentMainWindowNode.currentLine == 0
-          check currentMainWindowNode.currentColumn == 0
+        check currentMainWindowNode.currentLine == 0
+        check currentMainWindowNode.currentColumn == 0
 
     for l in SourceLanguage:
-      # Generate test code by macro
       unindentTestCase4(l)
 
   block:
-    # Generate test code
-    # Nothing to do in the empty line.
-    macro unindentTestCase5(lang: SourceLanguage): untyped =
-      quote do:
-        # Generate test title
+    proc unindentTestCase5(lang: SourceLanguage) =
+      ## Nothing to do in the empty line.
+
+      # Generate test title
+      let
+        langStr = sourceLangToStr(lang)
+        testTitle = "Case 5: Unindenet in " & langStr
+
+      # Generate test code
+      test testTitle:
+        var status = initEditorStatus()
+        status.addNewBufferInCurrentWin
+
+        status.bufStatus[0].buffer = initGapBuffer(@[ru"  ", ru"", ru"  "])
+        status.bufStatus[0].language = lang
+
+        status.mainWindow.currentMainWindowNode.currentLine = 1
+
+        status.bufStatus[0].unindent(
+          status.mainWindow.currentMainWindowNode,
+          status.settings.tabStop)
+
         let
-          langStr = sourceLangToStr(`lang`)
-          testTitle = "Case 5: Unindenet in " & langStr
+          currentBufStatus = status.bufStatus[0]
+          currentMainWindowNode = status.mainWindow.currentMainWindowNode
 
-        # Generate test code
-        test testTitle:
-          var status = initEditorStatus()
-          status.addNewBufferInCurrentWin
+        check currentBufStatus.buffer.len == 3
+        check currentBufStatus.buffer[0] == ru"  "
+        check currentBufStatus.buffer[1] == ru""
+        check currentBufStatus.buffer[2] == ru"  "
 
-          status.bufStatus[0].buffer = initGapBuffer(@[ru"  ", ru"", ru"  "])
-          status.bufStatus[0].language = `lang`
-
-          status.mainWindow.currentMainWindowNode.currentLine = 1
-
-          status.bufStatus[0].unindent(
-            status.mainWindow.currentMainWindowNode,
-            status.settings.tabStop)
-
-          let
-            currentBufStatus = status.bufStatus[0]
-            currentMainWindowNode = status.mainWindow.currentMainWindowNode
-
-          check currentBufStatus.buffer.len == 3
-          check currentBufStatus.buffer[0] == ru"  "
-          check currentBufStatus.buffer[1] == ru""
-          check currentBufStatus.buffer[2] == ru"  "
-
-          check currentMainWindowNode.currentLine == 1
-          check currentMainWindowNode.currentColumn == 0
+        check currentMainWindowNode.currentLine == 1
+        check currentMainWindowNode.currentColumn == 0
 
     for l in SourceLanguage:
-      # Generate test code by macro
       unindentTestCase5(l)

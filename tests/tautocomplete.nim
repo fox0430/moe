@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, macros, sequtils, sugar, critbits, options]
+import std/[unittest, sequtils, sugar, critbits, options]
 import moepkg/unicodeext
 import moepkg/syntax/[highlite, syntaxc, syntaxcpp, syntaxcsharp, syntaxhaskell,
                       syntaxjava, syntaxjavascript, syntaxnim, syntaxpython,
@@ -100,23 +100,19 @@ suite "autocomplete: collectSuggestions":
       check suggestions[1] == "proc".toRunes
 
 suite "autocomplete: extractNeighborPath":
-  # Generate test code
-  # Check return values of suggestionwindow.isPath
-  macro extractNeighborPathTest(
+  proc extractNeighborPathTest(
     testIndex: int,
     expectVal: Option[tuple[path: Runes, first, last: int]],
     text: Runes,
-    position: int): untyped =
+    position: int) =
+      ## Check return values of suggestionwindow.isPath
 
-    quote do:
-      let testTitle = "Case " & $`testIndex` & ": " & $`text` & ", " & $`position`
-
-      # Generate test code
+      let testTitle = "Case " & $testIndex & ": " & $text & ", " & $position
       test testTitle:
-        check `expectVal` == extractNeighborPath(`text`, `position`)
+        check expectVal == extractNeighborPath(`text`, position)
 
   const
-    testCases: seq[tuple[expectVal: Option[tuple[path: Runes, first, last: int]], text: Runes, position: int]] = @[
+    TestCases: seq[tuple[expectVal: Option[tuple[path: Runes, first, last: int]], text: Runes, position: int]] = @[
       (expectVal: none(tuple[path: Runes, first, last: int]), text: "".ru, position: 0),
       (expectVal: some((path: "/home".ru, first: 0, last: "/home".ru.high)), text: "/home".ru, position: 0),
       (expectVal: some((path: "/home/user/".ru, first: 0, last: "/home/user/".ru.high)), text: "/home/user/".ru, position: 0),
@@ -126,27 +122,23 @@ suite "autocomplete: extractNeighborPath":
       (expectVal: some((path: "~/".ru, first: 0, last: "~/".ru.high)), text: "~/".ru, position: 0),
       (expectVal: some((path: "~/".ru, first: 5, last: 6)), text: "test ~/".ru, position: 5)]
 
-  for i, c in testCases:
+  for i, c in TestCases:
     extractNeighborPathTest(i, c.expectVal, c.text, c.position)
 
 suite "autocomplete: getPathList":
   block:
-    # Generate test code
-    # Check return values of suggestionwindow.getPathList
-    macro getPathListTest(testIndex: int, expectVal, path: Runes): untyped =
-      quote do:
-        let testTitle = "Case :" & $`testIndex` & $`path`
+    proc getPathListTest(testIndex: int, expectVal, path: Runes) =
+      ## Check return values of suggestionwindow.getPathList
 
-        # Generate test code
-        test testTitle:
-          check `expectVal` == getPathList(`path`)
+      let testTitle = "Case :" & $testIndex & $path
+      test testTitle:
+        check expectVal == getPathList(path)
 
-    const testCases: seq[tuple[expectVal, path: Runes]] = @[
+    const TestCases: seq[tuple[expectVal, path: Runes]] = @[
       (expectVal: "moerc.toml ".ru, path: "./example/".ru),
       (expectVal: "moerc.toml ".ru, path: "./example/m".ru)]
 
-    # Generate test code by macro
-    for i, c in testCases:
+    for i, c in TestCases:
       getPathListTest(i, c.expectVal, c.path)
 
 suite "getTextInLangKeywords":

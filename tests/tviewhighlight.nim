@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, heapqueue, options, macros, strformat, strutils]
+import std/[unittest, heapqueue, options, strformat, strutils]
 import pkg/results
 import moepkg/syntax/highlite
 import moepkg/[editorstatus, highlight, color, editorview, gapbuffer,
@@ -293,40 +293,37 @@ suite "highlightPairOfParen":
     OpenParens = @[ru'(', ru'{', ru'[']
     CloseParens = @[ru')', ru'}', ru']']
 
-  ## Generate test code
-  macro highlightParenPairTest(
+  proc highlightParenPairTest(
     TestIndex: int,
     paren: Rune,
     buffer: seq[Runes],
     position: BufferPosition,
-    expectHighlight: Highlight): untyped =
+    expectHighlight: Highlight) =
 
-      quote do:
-        let testTitle =
-          "Case " & $`TestIndex` & ": highlightParenPair: '" & $`paren` & "'"
+      let testTitle =
+        "Case " & $TestIndex & ": highlightParenPair: '" & $paren & "'"
 
-        test testTitle:
-          var status = initEditorStatus()
-          status.addNewBufferInCurrentWin
+      test testTitle:
+        var status = initEditorStatus()
+        status.addNewBufferInCurrentWin
 
-          status.bufStatus[0].buffer = `buffer`.toGapBuffer
+        status.bufStatus[0].buffer = buffer.toGapBuffer
 
-          status.mainWindow.currentMainWindowNode.currentLine = `position`.line
-          status.mainWindow.currentMainWindowNode.currentColumn =
-            `position`.column
+        status.mainWindow.currentMainWindowNode.currentLine = position.line
+        status.mainWindow.currentMainWindowNode.currentColumn = position.column
 
-          updateTerminalSize(100, 100)
-          status.resize
-          status.update()
+        updateTerminalSize(100, 100)
+        status.resize
+        status.update()
 
-          status.initHighlight
+        status.initHighlight
 
-          var highlight = status.mainWindow.currentMainWindowNode.highlight
-          highlight.highlightPairOfParen(
-            status.bufStatus[0],
-            status.mainWindow.currentMainWindowNode)
+        var highlight = status.mainWindow.currentMainWindowNode.highlight
+        highlight.highlightPairOfParen(
+          status.bufStatus[0],
+          status.mainWindow.currentMainWindowNode)
 
-          check highlight == `expectHighlight`
+        check highlight == `expectHighlight`
 
   block highlightParenPairTestCase1:
     ## Case 1 is starting the search on an empty line.
