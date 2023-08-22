@@ -81,8 +81,10 @@ jobs:
         # shpec
         sudo sh -c "$(curl -L https://raw.githubusercontent.com/rylnd/shpec/master/install.sh)"
         # abduco
-        wget http://mirrors.kernel.org/ubuntu/pool/universe/a/abduco/abduco_0.1-2_amd64.deb
-        sudo dpkg -i abduco_0.1-2_amd64.deb
+        wget https://github.com/martanne/abduco/releases/download/v0.6/abduco-0.6.tar.gz
+        tar -zcvf abduco-0.6.tar.gz.tar.gz abduco
+        cd abduco
+        make && sudo make install
 
     - name: Run unit test
       run: |
