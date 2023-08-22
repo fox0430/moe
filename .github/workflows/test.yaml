@@ -82,8 +82,8 @@ jobs:
         sudo sh -c "$(curl -L https://raw.githubusercontent.com/rylnd/shpec/master/install.sh)"
         # abduco
         wget https://github.com/martanne/abduco/releases/download/v0.6/abduco-0.6.tar.gz
-        tar -zcvf abduco-0.6.tar.gz.tar.gz abduco
-        cd abduco
+        tar -zxvf abduco-0.6.tar.gz
+        cd abduco-0.6
         make && sudo make install
 
     - name: Run unit test
