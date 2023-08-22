@@ -17,26 +17,24 @@
 ##                                                                            ##
 ################################################################################
 
-name: Unit tests
+name: Integration tests
 
 on:
   push:
     paths:
-      - '.github/workflows/test.yaml'
-      - 'example/**'
+      - '.github/workflows/integration-test.yaml'
       - 'moe.nimble'
       - 'src/**'
-      - 'tests/**'
+      - 'shpec.sh'
     branches:
       - develop
       - master
   pull_request:
     paths:
-      - '.github/workflows/test.yaml'
-      - 'example/**'
+      - '.github/workflows/integration-test.yaml'
       - 'moe.nimble'
       - 'src/**'
-      - 'tests/**'
+      - 'shpec.sh'
 
 permissions:
   contents: read
@@ -84,7 +82,8 @@ jobs:
         cd abduco-0.6
         make && sudo make install
 
-    - name: Run unit test
-      run: |
-        nimble refresh
-        xvfb-run nimble test --verbose -y
+    - name: Install moe
+      run: nimble install --verbose -y
+
+    - name: Run integration test
+      run: shpec ./shpec.sh
