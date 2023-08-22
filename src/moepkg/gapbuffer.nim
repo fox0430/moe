@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[macros, strformat, strutils]
+import std/[strformat, strutils]
 import undoredostack, unicodeext
 export undoredostack
 

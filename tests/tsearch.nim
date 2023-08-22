@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, macros, strformat]
+import std/[unittest, options, strformat]
 import moepkg/[unicodeext, editorstatus, gapbuffer, independentutils]
 
 import moepkg/searchutils {.all.}
@@ -243,28 +243,25 @@ suite "search: matchingParenPair":
     openParens = @[ru'(', ru'{', ru'[']
     closeParens = @[ru')', ru'}', ru']']
 
-  ## Generate test code
-  macro matchingParenPairTest(
+  proc matchingParenPairTest(
     testIndex: int,
     paren: Rune,
     buffer: seq[Runes],
     currentPosition: BufferPosition,
-    expectPosition: Option[BufferPosition]): untyped =
+    expectPosition: Option[BufferPosition]) =
 
-      quote do:
-        let testTitle =
-          "Case " & $`testIndex` & ": matchingParenPair: '" & $`paren` & "'"
+      let testTitle =
+        "Case " & $testIndex & ": matchingParenPair: '" & $paren & "'"
 
-        test testTitle:
-          var status = initEditorStatus()
-          status.addNewBufferInCurrentWin
+      test testTitle:
+        var status = initEditorStatus()
+        status.addNewBufferInCurrentWin
 
-          status.bufStatus[0].buffer = `buffer`.toGapBuffer
+        status.bufStatus[0].buffer = `buffer`.toGapBuffer
 
-          let searchResult = status.bufStatus[0].matchingParenPair(
-            `currentPosition`)
-
-          check searchResult == `expectPosition`
+        let searchResult = status.bufStatus[0].matchingParenPair(
+          currentPosition)
+        check searchResult == expectPosition
 
   block matchingParenPairTestCase1:
     ## Case 1 is starting the search on an empty line.

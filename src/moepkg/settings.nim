@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[os, json, macros, options, strformat, osproc, strutils, sequtils,
+import std/[os, json, options, strformat, osproc, strutils, sequtils,
             enumutils]
 import pkg/[parsetoml, results, regex]
 import ui, color, unicodeext, highlight, platform, independentutils, rgb, theme

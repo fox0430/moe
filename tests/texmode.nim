@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, oids, deques, macros, strformat, importutils]
+import std/[unittest, os, oids, deques, strformat, importutils]
 import pkg/results
 import moepkg/syntax/highlite
 import moepkg/[ui, editorstatus, gapbuffer, unicodeext, bufferstatus, settings,
