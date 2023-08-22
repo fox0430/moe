@@ -17,162 +17,255 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, strutils]
-import moepkg/[highlight, color]
+import std/[unittest, strutils, sequtils]
+import moepkg/color
 import moepkg/syntax/highlite
 
-const ReservedWords = @[
-  ReservedWord(word: "WIP", color: EditorColorPairIndex.reservedWord)
-]
+import moepkg/highlight {.all.}
 
-test "initHighlight: start with newline":
-  let
-    code = "\x0Aproc test =\x0A  echo \"Hello, world!\""
-    buffer = split(code, '\n')
-    highlight = initHighlight(
-      code,
+suite "highlight: initHighlight":
+  const ReservedWords = @[
+    ReservedWord(word: "WIP", color: EditorColorPairIndex.reservedWord)
+  ]
+
+  test "Start with newline":
+    let
+      code = "\x0Aproc test =\x0A  echo \"Hello, world!\""
+      buffer = split(code, '\n')
+      highlight = initHighlight(
+        code,
+        ReservedWords,
+        SourceLanguage.langNim)
+
+    # unite segments
+    var unitedStr: string
+    for i in 0 ..< highlight.len:
+      let segment = highlight[i]
+      if i > 0 and segment.firstRow != highlight[i-1].lastRow: unitedStr &= "\n"
+      let
+        firstRow = segment.firstRow
+        firstColumn = segment.firstColumn
+        lastColumn = segment.lastColumn
+      unitedStr &= buffer[firstRow][firstColumn .. lastColumn]
+
+    check(unitedStr == code)
+
+  test """Highlight "echo \"""":
+    # Fix #733
+    const Code = """echo "\""""
+    discard initHighlight(
+      Code,
       ReservedWords,
       SourceLanguage.langNim)
 
-  # unite segments
-  var unitedStr: string
-  for i in 0 ..< highlight.len:
-    let segment = highlight[i]
-    if i > 0 and segment.firstRow != highlight[i-1].lastRow: unitedStr &= "\n"
+  test "Only '/' in Clang":
+    # https://github.com/fox0430/moe/issues/1568
+
+    const
+      Code = "/"
+      EmptyReservedWords = @[]
+    let highlight = initHighlight(
+      Code,
+      EmptyReservedWords,
+      SourceLanguage.langC)
+
+    check highlight == Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 0,
+          color: EditorColorPairIndex.default)])
+
+  test "initHighlight shell script (Fix #1166)":
+    const Code = "echo hello"
+    let r = initHighlight(
+      Code,
+      ReservedWords,
+      SourceLanguage.langShell)
+
+    check r.len > 0
+
+  test "Nim pragma":
+    const Code = """{.pragma.}""""
+    let highlight = initHighlight(
+      Code,
+      ReservedWords,
+      SourceLanguage.langNim)
+
+    check highlight[2] == ColorSegment(
+      firstRow: 0,
+      firstColumn: 2,
+      lastRow: 0,
+      lastColumn: 7,
+      color: EditorColorPairIndex.pragma)
+
+  test "Fix #1524":
+    # https://github.com/fox0430/moe/issues/1524
+
+    const Code = "test: '0'"
+    let highlight = initHighlight(
+      Code,
+      ReservedWords,
+      SourceLanguage.langYaml)
+
+    check highlight == Highlight(
+      colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 3,
+          color: EditorColorPairIndex.default),
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 4,
+          lastRow: 0,
+          lastColumn: 4,
+          color: EditorColorPairIndex.default),
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 5,
+          lastRow: 0,
+          lastColumn: 5,
+          color: EditorColorPairIndex.default),
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 6,
+          lastRow: 0,
+          lastColumn: 8,
+          color: EditorColorPairIndex.default)])
+
+suite "highlight: indexOf":
+  const ReservedWords = @[
+    ReservedWord(word: "WIP", color: EditorColorPairIndex.reservedWord)
+  ]
+
+  test "Basic":
     let
-      firstRow = segment.firstRow
-      firstColumn = segment.firstColumn
-      lastColumn = segment.lastColumn
-    unitedStr &= buffer[firstRow][firstColumn .. lastColumn]
+      code = "proc test =\x0A  echo \"Hello, world!\""
+      highlight = initHighlight(
+        code,
+       ReservedWords,
+       SourceLanguage.langNim)
 
-  check(unitedStr == code)
+    check(highlight.indexOf(0, 0) == 0)
 
-test "indexOf: basic":
-  let
-    code = "proc test =\x0A  echo \"Hello, world!\""
-    highlight = initHighlight(
+  test "Start with newline":
+    let
+      code = "\x0Aproc test =\x0A  echo \"Hello, world!\""
+      highlight = initHighlight(
+        code,
+       ReservedWords,
+       SourceLanguage.langNim)
+
+    check(highlight.indexOf(0, 0) == 0)
+
+suite "highlight: overwrite":
+  const ReservedWords = @[
+    ReservedWord(word: "WIP", color: EditorColorPairIndex.reservedWord)
+  ]
+
+  test "Basic":
+    let code = "　"
+    var highlight = initHighlight(
       code,
      ReservedWords,
-     SourceLanguage.langNim)
+     SourceLanguage.langNone)
 
-  check(highlight.indexOf(0, 0) == 0)
+    let colorSegment = ColorSegment(
+      firstRow: 0,
+      firstColumn: 0,
+      lastRow: 0,
+      lastColumn: 0,
+      color: EditorColorPairIndex.highlightFullWidthSpace)
 
-test "indexOf: start with newline":
-  let
-    code = "\x0Aproc test =\x0A  echo \"Hello, world!\""
-    highlight = initHighlight(
-      code,
-     ReservedWords,
-     SourceLanguage.langNim)
+    highlight.overwrite(colorSegment)
 
-  check(highlight.indexOf(0, 0) == 0)
+    check(highlight.len == 1)
+    check(highlight[0].firstRow == 0)
+    check(highlight[0].firstColumn == 0)
+    check(highlight[0].lastRow == 0)
+    check(highlight[0].lastColumn == 0)
+    check(highlight[0].color == EditorColorPairIndex.highlightFullWidthSpace)
 
-test "over write":
-  let code = "　"
-  var highlight = initHighlight(
-    code,
-   ReservedWords,
-   SourceLanguage.langNone)
+suite "parseReservedWord":
+  const ReservedWords = @[
+    ReservedWord(word: "TODO", color: EditorColorPairIndex.reservedWord),
+    ReservedWord(word: "WIP", color: EditorColorPairIndex.reservedWord),
+    ReservedWord(word: "NOTE", color: EditorColorPairIndex.reservedWord)
+  ]
 
-  let colorSegment = ColorSegment(
-    firstRow: 0,
-    firstColumn: 0,
-    lastRow: 0,
-    lastColumn: 0,
-    color: EditorColorPairIndex.highlightFullWidthSpace)
+  test "no reserved word":
+    check parseReservedWord(
+      "abcdefh",
+      ReservedWords,
+      EditorColorPairIndex.default).toSeq == @[("abcdefh", EditorColorPairIndex.default)]
 
-  highlight.overwrite(colorSegment)
+  test "1 TODO":
+    check parseReservedWord(
+      "# hello TODO world",
+      ReservedWords,
+      EditorColorPairIndex.default).toSeq == @[
+        ("# hello ", EditorColorPairIndex.default),
+        ("TODO", EditorColorPairIndex.reservedWord),
+        (" world", EditorColorPairIndex.default),
+      ]
 
-  check(highlight.len == 1)
-  check(highlight[0].firstRow == 0)
-  check(highlight[0].firstColumn == 0)
-  check(highlight[0].lastRow == 0)
-  check(highlight[0].lastColumn == 0)
-  check(highlight[0].color == EditorColorPairIndex.highlightFullWidthSpace)
+  test "2 TODO":
+    check parseReservedWord(
+      "# hello TODO world TODO",
+      ReservedWords,
+      EditorColorPairIndex.default).toSeq == @[
+        ("# hello ", EditorColorPairIndex.default),
+        ("TODO", EditorColorPairIndex.reservedWord),
+        (" world ", EditorColorPairIndex.default),
+        ("TODO", EditorColorPairIndex.reservedWord),
+        ("", EditorColorPairIndex.default),
+      ]
 
-# Fix #733
-test """Highlight "echo \"""":
-  const Code = """echo "\""""
-  discard initHighlight(
-    Code,
-    ReservedWords,
-    SourceLanguage.langNim)
+  test "edge TODO":
+    check parseReservedWord(
+      "TODO hello TODO",
+      ReservedWords,
+      EditorColorPairIndex.default).toSeq == @[
+        ("", EditorColorPairIndex.default),
+        ("TODO", EditorColorPairIndex.reservedWord),
+        (" hello ", EditorColorPairIndex.default),
+        ("TODO", EditorColorPairIndex.reservedWord),
+        ("", EditorColorPairIndex.default),
+      ]
 
-test "initHighlight shell script (Fix #1166)":
-  const Code = "echo hello"
-  let r = initHighlight(
-    Code,
-    ReservedWords,
-    SourceLanguage.langShell)
-
-  check r.len > 0
-
-test "Nim pragma":
-  const Code = """{.pragma.}""""
-  let highlight = initHighlight(
-    Code,
-    ReservedWords,
-    SourceLanguage.langNim)
-
-  check highlight[2] == ColorSegment(
-    firstRow: 0,
-    firstColumn: 2,
-    lastRow: 0,
-    lastColumn: 7,
-    color: EditorColorPairIndex.pragma)
-
-test "Fix #1524":
-  # https://github.com/fox0430/moe/issues/1524
-
-  const Code = "test: '0'"
-  let highlight = initHighlight(
-    Code,
-    ReservedWords,
-    SourceLanguage.langYaml)
-
-  check highlight == Highlight(
-    colorSegments: @[
-      ColorSegment(
-        firstRow: 0,
-        firstColumn: 0,
-        lastRow: 0,
-        lastColumn: 3,
-        color: EditorColorPairIndex.default),
-      ColorSegment(
-        firstRow: 0,
-        firstColumn: 4,
-        lastRow: 0,
-        lastColumn: 4,
-        color: EditorColorPairIndex.default),
-      ColorSegment(
-        firstRow: 0,
-        firstColumn: 5,
-        lastRow: 0,
-        lastColumn: 5,
-        color: EditorColorPairIndex.default),
-      ColorSegment(
-        firstRow: 0,
-        firstColumn: 6,
-        lastRow: 0,
-        lastColumn: 8,
-        color: EditorColorPairIndex.default)])
-
-test "Only '/' in Clang":
-  # https://github.com/fox0430/moe/issues/1568
-
-  const
-    Code = "/"
-    EmptyReservedWords = @[]
-  let highlight = initHighlight(
-    Code,
-    EmptyReservedWords,
-    SourceLanguage.langC)
-
-  check highlight == Highlight(
-    colorSegments: @[
-      ColorSegment(
-        firstRow: 0,
-        firstColumn: 0,
-        lastRow: 0,
-        lastColumn: 0,
-        color: EditorColorPairIndex.default)])
+  test "TODO and WIP and NOTE":
+    check parseReservedWord(
+      "hello TODO WIP NOTE world",
+      ReservedWords,
+      EditorColorPairIndex.default).toSeq == @[
+        ("hello ", EditorColorPairIndex.default),
+        ("TODO", EditorColorPairIndex.reservedWord),
+        (" ", EditorColorPairIndex.default),
+        ("WIP", EditorColorPairIndex.reservedWord),
+        (" ", EditorColorPairIndex.default),
+        ("NOTE", EditorColorPairIndex.reservedWord),
+        (" world", EditorColorPairIndex.default),
+      ]
+  test "no whitespace":
+    check parseReservedWord(
+      "TODOWIPNOTETODOWIPNOTE",
+      ReservedWords,
+      EditorColorPairIndex.default).toSeq == @[
+        ("", EditorColorPairIndex.default),
+        ("TODO", EditorColorPairIndex.reservedWord),
+        ("", EditorColorPairIndex.default),
+        ("WIP", EditorColorPairIndex.reservedWord),
+        ("", EditorColorPairIndex.default),
+        ("NOTE", EditorColorPairIndex.reservedWord),
+        ("", EditorColorPairIndex.default),
+        ("TODO", EditorColorPairIndex.reservedWord),
+        ("", EditorColorPairIndex.default),
+        ("WIP", EditorColorPairIndex.reservedWord),
+        ("", EditorColorPairIndex.default),
+        ("NOTE", EditorColorPairIndex.reservedWord),
+        ("", EditorColorPairIndex.default),
+      ]
