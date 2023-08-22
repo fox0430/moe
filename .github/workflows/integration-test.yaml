@@ -17,26 +17,24 @@
 ##                                                                            ##
 ################################################################################
 
-name: Unit tests
+name: Integration tests
 
 on:
   push:
     paths:
-      - '.github/workflows/test.yaml'
-      - 'example/**'
+      - '.github/workflows/integration-test.yaml'
       - 'moe.nimble'
       - 'src/**'
-      - 'tests/**'
+      - 'shpec.sh'
     branches:
       - develop
       - master
   pull_request:
     paths:
-      - '.github/workflows/test.yaml'
-      - 'example/**'
+      - '.github/workflows/integration-test.yaml'
       - 'moe.nimble'
       - 'src/**'
-      - 'tests/**'
+      - 'shpec.sh'
 
 permissions:
   contents: read
@@ -69,7 +67,7 @@ jobs:
     - uses: actions/checkout@v3.5.3
     - run: |
         sudo apt-get update -yqq
-        sudo apt-get install -y gcc libncursesw5-dev build-essential xvfb x11-xserver-utils xsel xclip
+        sudo apt-get install -y gcc libncursesw5-dev build-essential
     - uses: jiro4989/setup-nim-action@v1.4.8
       with:
         nim-version: ${{ env.NIM_VERSION }}
@@ -84,7 +82,8 @@ jobs:
         cd abduco-0.6
         make && sudo make install
 
-    - name: Run unit test
-      run: |
-        nimble refresh
-        xvfb-run nimble test --verbose -y
+    - name: Install moe
+      run: nimble install --verbose -y
+
+    - name: Run integration test
+      run: shpec ./shpec.sh
