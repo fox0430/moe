@@ -1794,8 +1794,8 @@ proc validateStatusLineSetupText(text: string): bool =
 
   result = true
 
-  for m in text.findAll(re"\{(\w+)\}"):
-    let word = m.group(0, text)[0]
+  for m in text.findAll(re2"\{(\w+)\}"):
+    let word = text[m.group(0)]
     if not StatusLineItem.mapIt($it).contains(word):
       return false
 
