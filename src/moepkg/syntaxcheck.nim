@@ -113,12 +113,12 @@ proc parseNimCheckResult*(path: string, cmdResult: seq[string]): SyntaxErrorsRes
   for line in cmdResult:
     if line.startsWith(path):
       # Find a buffer position
-      var m: RegexMatch
-      if line.find(re"\((\d+), (\d+)\)", m):
+      var m: RegexMatch2
+      if line.find(re2"\((\d+), (\d+)\)", m):
         let
           position = BufferPosition(
-            line: line[m.captures[0][0]].parseInt - 1,
-            column: line[m.captures[1][0]].parseInt - 1)
+            line: line[m.captures[0]].parseInt - 1,
+            column: line[m.captures[1]].parseInt - 1)
 
           messageType = ?line.parseNimSyntaxCheckMessageType
           message = ?line.parseNimSyntaxCheckMessage

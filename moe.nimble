@@ -13,7 +13,7 @@ requires "nim >= 1.6.2"
 requires "ncurses >= 1.0.2"
 requires "unicodedb >= 0.12.0"
 requires "parsetoml >= 0.7.1"
-requires "regex >= 0.20.2"
+requires "regex >= 0.21.0"
 requires "results >= 0.4.0"
 
 task release, "Build for release":
