@@ -17,141 +17,13 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[times, strutils, options, strformat]
+import std/[times, strutils, options, strformat, tables]
 import pkg/results
 import gapbuffer, ui, editorstatus, unicodeext, windownode, movement, settings,
        bufferstatus, color, highlight, editor, commandline, popupwindow, rgb,
        theme
 
 type
-  StandardTableNames {.pure.} = enum
-    theme
-    number
-    currentNumber
-    cursorLine
-    statusLine
-    tabLine
-    syntax
-    indentationLines
-    tabStop
-    sidebar
-    autoCloseParen
-    autoIndent
-    ignorecase
-    smartcase
-    disableChangeCursor
-    defaultCursor
-    normalModeCursor
-    insertModeCursor
-    autoSave
-    autoSaveInterval
-    liveReloadOfConf
-    incrementalSearch
-    popupWindowInExmode
-    autoDeleteParen
-    smoothScroll
-    smoothScrollSpeed
-    liveReloadOfFile
-    colorMode
-
-  ClipboardTableNames {.pure.} = enum
-    enable
-    toolOnLinux
-
-  BuildOnSaveTableNames {.pure.}= enum
-    enable
-    workspaceRoot
-    command
-
-  TabLineTableNames {.pure.} = enum
-    allBuffer
-
-  StatusLineTableNames {.pure.} = enum
-    multipleStatusLine
-    merge
-    mode
-    filename
-    chanedMark
-    line
-    column
-    encoding
-    language
-    directory
-    gitChangedLines
-    gitBranchName
-    showGitInactive
-    showModeInactive
-    setupText
-
-  HighlightTableNames {.pure.} = enum
-    currentLine
-    fullWidthSpace
-    trailingSpaces
-    currentWord
-    replaceText
-    pairOfParen
-    reservedWord
-
-  AutoBackupTableNames {.pure.} = enum
-    enable
-    idleTime
-    interval
-    backupDir
-    dirToExclude
-
-  QuickRunTableNames {.pure.} = enum
-    saveBufferWhenQuickRun
-    command
-    timeout
-    nimAdvancedCommand
-    clangOptions
-    cppOptions
-    nimOptions
-    shOptions
-    bashOptions
-
-  NotificationTableNames {.pure.} = enum
-    screenNotifications
-    logNotifications
-    autoBackupScreenNotify
-    autoBackupLogNotify
-    autoSaveScreenNotify
-    autoSaveLogNotify
-    yankScreenNotify
-    yankLogNotify
-    deleteScreenNotify
-    deleteLogNotify
-    saveScreenNotify
-    saveLogNotify
-    quickRunScreenNotify
-    quickRunLogNotify
-    buildOnSaveScreenNotify
-    buildOnSaveLogNotify
-    filerScreenNotify
-    filerLogNotify
-    restoreScreenNotify
-    restoreLogNotify
-
-  FilerTableNames {.pure.} = enum
-    showIcons
-
-  AutocompleteTableNames {.pure.} = enum
-    enable
-
-  PersistTableNames {.pure.} = enum
-    exCommand
-    exCommandHistoryLimit
-    search
-    searchHistoryLimit
-    cursorPosition
-
-  GitTableNames {.pure.} = enum
-    showChangedLine
-    updateInterval
-
-  SyntaxCheckerTableNames {.pure.} = enum
-    enable
-
   SettingType {.pure.} = enum
     None
     Bool
@@ -164,26 +36,170 @@ const
   NumOfIndent = 2
   Indent = "  "
 
+  StandardSettingTable = {
+    "theme": SettingType.String,
+    "number": SettingType.Bool,
+    "currentNumber": SettingType.Bool,
+    "cursorLine": SettingType.Bool,
+    "statusLine": SettingType.Bool,
+    "tabLine": SettingType.Bool,
+    "syntax": SettingType.Bool,
+    "indentationLines": SettingType.Bool,
+    "tabStop": SettingType.Number,
+    "sidebar": SettingType.Bool,
+    "autoCloseParen": SettingType.Bool,
+    "autoIndent": SettingType.Bool,
+    "ignorecase": SettingType.Bool,
+    "smartcase": SettingType.Bool,
+    "disableChangeCursor": SettingType.Bool,
+    "defaultCursor": SettingType.String,
+    "normalModeCursor": SettingType.String,
+    "insertModeCursor": SettingType.String,
+    "autoSave": SettingType.Bool,
+    "autoSaveInterval": SettingType.Number,
+    "liveReloadOfConf": SettingType.Bool,
+    "incrementalSearch": SettingType.Bool,
+    "popupWindowInExmode": SettingType.Bool,
+    "autoDeleteParen": SettingType.Bool,
+    "smoothScroll": SettingType.Bool,
+    "smoothScrollSpeed": SettingType.Number,
+    "liveReloadOfFile": SettingType.Bool,
+    "colorMode": SettingType.String
+  }.toTable
+
+  ClipboardSettingTable = {
+    "enable": SettingType.Bool,
+    "toolOnLinux": SettingType.String
+  }.toTable
+
+  BuildOnSaveSettingTable = {
+    "enable": SettingType.Bool,
+    "workspaceRoot": SettingType.String,
+    "command": SettingType.String
+  }.toTable
+
+  TabLineSettingTable = {
+    "allBuffer": SettingType.Bool
+  }.toTable
+
+  StatusLineSettingTable = {
+    "enable": SettingType.Bool,
+    "merge": SettingType.Bool,
+    "mode": SettingType.Bool,
+    "filename": SettingType.Bool,
+    "chanedMark": SettingType.Bool,
+    "directory": SettingType.Bool,
+    "multipleStatusLine": SettingType.Bool,
+    "gitChangedLines": SettingType.Bool,
+    "gitBranchName": SettingType.Bool,
+    "showGitInactive": SettingType.Bool,
+    "showModeInactive": SettingType.Bool,
+    "setupText": SettingType.String
+  }.toTable
+
+  HighlightSettingTable = {
+    "currentLine": SettingType.Bool,
+    "fullWidthSpace": SettingType.Bool,
+    "trailingSpaces": SettingType.Bool,
+    "currentWord": SettingType.Bool,
+    "replaceText": SettingType.Bool,
+    "pairOfParen": SettingType.Bool,
+    "reservedWord": SettingType.Bool
+  }.toTable
+
+  AutoBackupSettingTable = {
+    "enable": SettingType.Bool,
+    "idleTime": SettingType.Number,
+    "interval": SettingType.Number,
+    "backupDir": SettingType.String,
+    "dirToExclude": SettingType.String
+  }.toTable
+
+  QuickRunSettingTable= {
+    "saveBufferWhenQuickRun": SettingType.Bool,
+    "command": SettingType.String,
+    "timeout": SettingType.Number,
+    "nimAdvancedCommand": SettingType.String,
+    "clangOptions": SettingType.String,
+    "cppOptions": SettingType.String,
+    "nimOptions": SettingType.String,
+    "shOptions": SettingType.String,
+    "bashOptions": SettingType.String
+  }.toTable
+
+  NotificationSettingTable = {
+    "screenNotifications": SettingType.Bool,
+    "logNotifications": SettingType.Bool,
+    "autoBackupScreenNotify": SettingType.Bool,
+    "autoBackupLogNotify": SettingType.Bool,
+    "autoSaveScreenNotify": SettingType.Bool,
+    "autoSaveLogNotify": SettingType.Bool,
+    "yankScreenNotify": SettingType.Bool,
+    "yankLogNotify": SettingType.Bool,
+    "deleteScreenNotify": SettingType.Bool,
+    "deleteLogNotify": SettingType.Bool,
+    "saveScreenNotify": SettingType.Bool,
+    "saveLogNotify": SettingType.Bool,
+    "quickRunScreenNotify": SettingType.Bool,
+    "quickRunLogNotify": SettingType.Bool,
+    "buildOnSaveScreenNotify": SettingType.Bool,
+    "buildOnSaveLogNotify": SettingType.Bool,
+    "filerScreenNotify": SettingType.Bool,
+    "filerLogNotify": SettingType.Bool,
+    "restoreScreenNotify": SettingType.Bool,
+    "restoreLogNotify": SettingType.Bool
+  }.toTable
+
+  FilerSettingTable = {
+    "showIcons": SettingType.Bool
+  }.toTable
+
+  AutocompleteSettingTable = {
+    "enable": SettingType.Bool
+  }.toTable
+
+  PersistSettingTable = {
+    "exCommand": SettingType.Bool,
+    "exCommandHistoryLimit": SettingType.Number,
+    "search": SettingType.Bool,
+    "searchHistoryLimit": SettingType.Number,
+    "cursorPosition": SettingType.Bool
+  }.toTable
+
+  GitSettingTable = {
+    "showChangedLine": SettingType.Bool,
+    "updateInterval": SettingType.Number
+  }.toTable
+
+  SyntaxCheckerSettingTable = {
+    "enable": SettingType.Bool
+  }.toTable
+
+  EditorSettingTable = {
+    "standard": StandardSettingTable,
+    "clipboard": ClipboardSettingTable,
+    "buildOnSave": BuildOnSaveSettingTable,
+    "tabLine": TabLineSettingTable,
+    "statusLine": StatusLineSettingTable,
+    "highlight": HighlightSettingTable,
+    "autoBackup": AutoBackupSettingTable,
+    "quickRun": QuickRunSettingTable,
+    "notification": NotificationSettingTable,
+    "filer": FilerSettingTable,
+    "autocomplete": AutocompleteSettingTable,
+    "persist": PersistSettingTable,
+    "git": GitSettingTable,
+    "syntaxChecker": SyntaxCheckerSettingTable
+  }.toTable
+
 proc positionOfSetVal(): int {.compileTime.} =
   ## A start position of a setting value in the line.
   ## All start positions are same.
 
   var names: seq[string]
-
-  for name in StandardTableNames: names.add $name
-  for name in ClipboardTableNames: names.add $name
-  for name in BuildOnSaveTableNames: names.add $name
-  for name in TabLineTableNames: names.add $name
-  for name in StatusLineTableNames: names.add $name
-  for name in HighlightTableNames: names.add $name
-  for name in AutoBackupTableNames: names.add $name
-  for name in QuickRunTableNames: names.add $name
-  for name in NotificationTableNames: names.add $name
-  for name in FilerTableNames: names.add $name
-  for name in AutocompleteTableNames: names.add $name
-  for name in PersistTableNames: names.add $name
-  for name in GitTableNames: names.add $name
-  for name in SyntaxCheckerTableNames: names.add $name
+  for v in EditorSettingTable.values:
+    for k in v.keys:
+      names.add k
   for name in EditorColorPairIndex: names.add $name
 
   for name in names:
@@ -218,14 +234,14 @@ proc getStandardTableSettingValues(
       let theme = settings.editorColorTheme
       result = getColorThemeSettingValues(theme)
     elif name == "defaultCursor":
-        let currentCursorType = settings.defaultCursor
-        result = getCursorTypeSettingValues(currentCursorType)
+      let currentCursorType = settings.defaultCursor
+      result = getCursorTypeSettingValues(currentCursorType)
     elif name == "normalModeCursor":
-        let currentCursorType = settings.normalModeCursor
-        result = getCursorTypeSettingValues(currentCursorType)
+      let currentCursorType = settings.normalModeCursor
+      result = getCursorTypeSettingValues(currentCursorType)
     elif name == "insertModeCursor":
-        let currentCursorType = settings.insertModeCursor
-        result = getCursorTypeSettingValues(currentCursorType)
+      let currentCursorType = settings.insertModeCursor
+      result = getCursorTypeSettingValues(currentCursorType)
     elif name == "colorMode":
       result = settings.colorMode.getColorModeSettingValues
     else:
@@ -660,36 +676,38 @@ proc initConfigModeHighlight[T](
 
     for i in 0 ..< buffer.len:
       if i == currentLine:
-          result.colorSegments.add(
+        result.colorSegments.add(
+          ColorSegment(
+            firstRow: i,
+            firstColumn: 0,
+            lastRow: i,
+            lastColumn: buffer[i].len,
+            color: EditorColorPairIndex.default))
+
+        if buffer[currentLine].splitWhitespace.len > 1 and
+           SettingType.Array == buffer.getSettingType(currentLine):
+             let
+               range = getCurrentArraySettingValueRange(
+                 reservedWords,
+                 arrayIndex)
+               start = range[0]
+               `end` = range[1]
+
+             result.overwrite(
+               ColorSegment(
+                 firstRow: i,
+                 firstColumn: start,
+                 lastRow: i,
+                 lastColumn: `end`,
+                 color: EditorColorPairIndex.configModeCurrentLine))
+        else:
+          result.overwrite(
             ColorSegment(
               firstRow: i,
-              firstColumn: 0,
+              firstColumn: NumOfIndent + positionOfSetVal(),
               lastRow: i,
               lastColumn: buffer[i].len,
-              color: EditorColorPairIndex.default))
-
-          if buffer[currentLine].splitWhitespace.len > 1 and
-             SettingType.Array == buffer.getSettingType(currentLine):
-            let
-              range = getCurrentArraySettingValueRange(reservedWords, arrayIndex)
-              start = range[0]
-              `end` = range[1]
-
-            result.overwrite(
-              ColorSegment(
-                firstRow: i,
-                firstColumn: start,
-                lastRow: i,
-                lastColumn: `end`,
-                color: EditorColorPairIndex.configModeCurrentLine))
-          else:
-            result.overwrite(
-              ColorSegment(
-                firstRow: i,
-                firstColumn: NumOfIndent + positionOfSetVal(),
-                lastRow: i,
-                lastColumn: buffer[i].len,
-                color: EditorColorPairIndex.configModeCurrentLine))
+              color: EditorColorPairIndex.configModeCurrentLine))
       else:
         result.colorSegments.add(
           ColorSegment(
@@ -1293,7 +1311,7 @@ proc getEditorColorPairIndexStr(
 
     if (lineSplit[0] == ru "foreground") or
        (buffer[currentLine - 2] == ru "Theme"):
-      return $(buffer[currentLine - 1].splitWhitespace)[0]
+         return $(buffer[currentLine - 1].splitWhitespace)[0]
     else:
       return $(buffer[currentLine - 2].splitWhitespace)[0]
 
@@ -1347,8 +1365,8 @@ proc editFiguresSetting(
       if minColumn > currentMainWindowNode.currentColumn:
         currentMainWindowNode.keyLeft
 
-    # Set currentColumn
     block:
+      # Set currentColumn
       let settings = status.settings
       template getSettingVal: int =
         case table:
@@ -1400,8 +1418,7 @@ proc editFiguresSetting(
         currentBufStatus.keyRight(currentMainWindowNode)
 
       elif isBackspaceKey(key):
-        let
-          autoDeleteParen = false
+        let autoDeleteParen = false
 
         if currentMainWindowNode.currentColumn > minColumn:
           currentBufStatus.keyBackspace(
@@ -1420,8 +1437,9 @@ proc editFiguresSetting(
             reservedWords)
 
     if not isCancel:
-      let number = try: parseInt(numStr)
-                   except ValueError: return
+      let number =
+        try: parseInt(numStr)
+        except ValueError: return
 
       template standardTable() =
         case name:
@@ -1469,8 +1487,8 @@ proc editFiguresSetting(
 
 proc getCurrentColorVal(s: EditorSettings, name, position: string): string =
   ## Return a hex color string
-  let
-    pairIndex = parseEnum[EditorColorPairIndex](name)
+
+  let pairIndex = parseEnum[EditorColorPairIndex](name)
   case parseEnum[ColorLayer](position):
     of ColorLayer.foreground:
       let fgHex = s.editorColorTheme.foregroundRgb(pairIndex).toHex
@@ -1568,8 +1586,7 @@ proc editStringSetting(
         currentBufStatus.keyRight(currentMainWindowNode)
 
       elif isBackspaceKey(key):
-        let
-          autoDeleteParen = false
+        let autoDeleteParen = false
 
         if currentMainWindowNode.currentColumn > MinColumn:
           currentBufStatus.keyBackspace(
@@ -1755,7 +1772,7 @@ proc selectAndChangeEditorSettings(status: var EditorStatus, arrayIndex: int) =
 proc initStandardTableBuffer(settings: EditorSettings): seq[Runes] =
   result.add ru"Standard"
 
-  for name in StandardTableNames:
+  for name in StandardSettingTable.values:
     let
       nameStr = Indent & $name
       space = " ".repeat(positionOfSetVal() - len($name))
@@ -1820,7 +1837,7 @@ proc initStandardTableBuffer(settings: EditorSettings): seq[Runes] =
 proc initClipBoardTableBuffer(settings: ClipboardSettings): seq[Runes] =
   result.add ru"ClipBoard"
 
-  for name in ClipboardTableNames:
+  for name in ClipboardSettingTable.values:
     let
       nameStr = Indent & $name
       space = " ".repeat(positionOfSetVal() - len($name))
@@ -1833,7 +1850,7 @@ proc initClipBoardTableBuffer(settings: ClipboardSettings): seq[Runes] =
 proc initBuildOnSaveTableBuffer(settings: BuildOnSaveSettings): seq[Runes] =
   result.add ru"BuildOnSave"
 
-  for name in BuildOnSaveTableNames:
+  for name in BuildOnSaveSettingTable.values:
     let
       nameStr = Indent & $name
       space = " ".repeat(positionOfSetVal() - len($name))
@@ -1848,7 +1865,7 @@ proc initBuildOnSaveTableBuffer(settings: BuildOnSaveSettings): seq[Runes] =
 proc initTabLineTableBuffer(settings: EditorSettings): seq[Runes] =
   result.add ru"TabLine"
 
-  for name in TabLineTableNames:
+  for name in TabLineSettingTable.values:
     let
       nameStr = Indent & $name
       space = " ".repeat(positionOfSetVal() - len($name))
@@ -1859,7 +1876,7 @@ proc initTabLineTableBuffer(settings: EditorSettings): seq[Runes] =
 proc initStatusLineTableBuffer(settings: StatusLineSettings): seq[Runes] =
   result.add ru"StatusLine"
 
-  for name in StatusLineTableNames:
+  for name in StatusLineSettingTable.values:
     let
       nameStr = Indent & $name
       space = " ".repeat(positionOfSetVal() - len($name))
@@ -1890,7 +1907,7 @@ proc initStatusLineTableBuffer(settings: StatusLineSettings): seq[Runes] =
 proc initHighlightTableBuffer(settings: EditorSettings): seq[Runes] =
   result.add ru"Highlight"
 
-  for name in HighlightTableNames:
+  for name in HighlightSettingTable.values:
     let
       nameStr = Indent & $name
       space = " ".repeat(positionOfSetVal() - len($name))
@@ -1917,7 +1934,7 @@ proc initHighlightTableBuffer(settings: EditorSettings): seq[Runes] =
 proc initAutoBackupTableBuffer(settings: AutoBackupSettings): seq[Runes] =
   result.add ru"AutoBackup"
 
-  for name in AutoBackupTableNames:
+  for name in AutoBackupSettingTable.values:
     let
       nameStr = Indent & $name
       space = " ".repeat(positionOfSetVal() - len($name))
@@ -1936,7 +1953,7 @@ proc initAutoBackupTableBuffer(settings: AutoBackupSettings): seq[Runes] =
 proc initQuickRunTableBuffer(settings: QuickRunSettings): seq[Runes] =
   result.add ru"QuickRun"
 
-  for name in QuickRunTableNames:
+  for name in QuickRunSettingTable.values:
     let
       nameStr = Indent & $name
       space = " ".repeat(positionOfSetVal() - len($name))
@@ -1965,7 +1982,7 @@ proc initNotificationTableBuffer(
 
   result.add ru"Notification"
 
-  for name in NotificationTableNames:
+  for name in NotificationSettingTable.values:
     let
       nameStr = Indent & $name
       space = " ".repeat(positionOfSetVal() - len($name))
@@ -2014,7 +2031,7 @@ proc initNotificationTableBuffer(
 proc initFilerTableBuffer(settings: EditorSettings): seq[Runes] =
   result.add ru"Filer"
 
-  for name in FilerTableNames:
+  for name in FilerSettingTable.values:
     let
       nameStr = Indent & $name
       space = " ".repeat(positionOfSetVal() - len($name))
@@ -2025,7 +2042,7 @@ proc initFilerTableBuffer(settings: EditorSettings): seq[Runes] =
 proc initAutocompleteTableBuffer(settings: EditorSettings): seq[Runes] =
   result.add ru"Autocomplete"
 
-  for name in AutocompleteTableNames:
+  for name in AutocompleteSettingTable.values:
     let
       nameStr = Indent & $name
       space = " ".repeat(positionOfSetVal() - len($name))
@@ -2036,7 +2053,7 @@ proc initAutocompleteTableBuffer(settings: EditorSettings): seq[Runes] =
 proc initPersistTableBuffer(persistSettings: PersistSettings): seq[Runes] =
   result.add ru"Persist"
 
-  for name in PersistTableNames:
+  for name in PersistSettingTable.values:
     let
       nameStr = Indent & $name
       space = " ".repeat(positionOfSetVal() - len($name))
@@ -2055,7 +2072,7 @@ proc initPersistTableBuffer(persistSettings: PersistSettings): seq[Runes] =
 proc initGitTableBuffer(settings: GitSettings): seq[Runes] =
   result.add ru"Git"
 
-  for name in GitTableNames:
+  for name in GitSettingTable.values:
     let
       nameStr = Indent & $name
       space = " ".repeat(positionOfSetVal() - len($name))
@@ -2068,7 +2085,7 @@ proc initGitTableBuffer(settings: GitSettings): seq[Runes] =
 proc initSyntaxCheckerTableBuffer(settings: SyntaxCheckerSettings): seq[Runes] =
   result.add ru"SyntaxChecker"
 
-  for name in SyntaxCheckerTableNames:
+  for name in SyntaxCheckerSettingTable.values:
     let
       nameStr = Indent & $name
       space = " ".repeat(positionOfSetVal() - len($name))
@@ -2221,7 +2238,6 @@ proc isConfigModeCommand*(command: Runes): InputState =
         return InputState.Valid
 
 proc execConfigCommand*(status: var EditorStatus, command: Runes) =
-
   # TODO: Move or Remove
   template getSettingType(): SettingType =
     let buffer = currentBufStatus.buffer
