@@ -222,7 +222,7 @@ type
     popupWindowInExmode*: bool
     autoDeleteParen*: bool
     smoothScroll*: bool
-    smoothScrollSpeed*: int
+    smoothScrollDelay*: int
     liveReloadOfFile*: bool
     colorMode*: ColorMode
     clipboard*: ClipboardSettings
@@ -425,7 +425,7 @@ proc initEditorSettings*(): EditorSettings =
   result.incrementalSearch = true
   result.popupWindowInExmode = true
   result.smoothScroll = true
-  result.smoothScrollSpeed = 15
+  result.smoothScrollDelay = 15
   result.colorMode = checkColorSupportedTerminal()
   result.clipboard = initClipboardSettings()
   result.buildOnSave = BuildOnSaveSettings()
@@ -1107,8 +1107,8 @@ proc parseStandardTable(s: var EditorSettings, standardConfigs: TomlValueRef) =
   if standardConfigs.contains("smoothScroll"):
     s.smoothScroll =  standardConfigs["smoothScroll"].getBool
 
-  if standardConfigs.contains("smoothScrollSpeed"):
-    s.smoothScrollSpeed = standardConfigs["smoothScrollSpeed"].getInt
+  if standardConfigs.contains("smoothScrollDelay"):
+    s.smoothScrollDelay = standardConfigs["smoothScrollDelay"].getInt
 
   if standardConfigs.contains("colorMode"):
     s.colorMode = standardConfigs["colorMode"].getStr.parseColorMode.get
@@ -1730,7 +1730,7 @@ proc validateStandardTable(table: TomlValueRef): Option[InvalidItem] =
          "sidebar":
         if not (val.kind == TomlValueKind.Bool):
           return some(InvalidItem(name: $key, val: $val))
-      of "tabStop", "autoSaveInterval", "smoothScrollSpeed":
+      of "tabStop", "autoSaveInterval", "smoothScrollDelay":
         if not (val.kind == TomlValueKind.Int and val.getInt > 0):
           return some(InvalidItem(name: $key, val: $val))
       of "defaultCursor",
@@ -2194,7 +2194,7 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "popupWindowInExmode = {$settings.popupWindowInExmode}"
   result.addLine fmt "autoDeleteParen = {$settings.autoDeleteParen }"
   result.addLine fmt "smoothScroll = {$settings.smoothScroll }"
-  result.addLine fmt "smoothScrollSpeed = {$settings.smoothScrollSpeed}"
+  result.addLine fmt "smoothScrollDelay = {$settings.smoothScrollDelay}"
   result.addLine fmt "liveReloadOfFile = {$settings.liveReloadOfFile}"
   result.addLine fmt "colorMode = \"{settings.colorMode.toConfigStr}\""
 

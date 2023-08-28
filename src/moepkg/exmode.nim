@@ -424,8 +424,8 @@ proc smoothScrollSettingCommand(status: var EditorStatus, command: Runes) =
 
   status.changeMode(currentBufStatus.prevMode)
 
-proc smoothScrollSpeedSettingCommand(status: var EditorStatus, speed: int) =
-  if speed > 0: status.settings.smoothScrollSpeed = speed
+proc smoothScrollDelaySettingCommand(status: var EditorStatus, delay: int) =
+  if delay > 0: status.settings.smoothScrollDelay = delay
 
   status.commandLine.clear
 
@@ -1218,8 +1218,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[Runes]) =
     status.autoDeleteParenSettingCommand(command[1])
   elif isSmoothScrollSettingCommand(command):
     status.smoothScrollSettingCommand(command[1])
-  elif isSmoothScrollSpeedSettingCommand(command):
-    status.smoothScrollSpeedSettingCommand(($command[1]).parseInt)
+  elif isSmoothScrollDelaySettingCommand(command):
+    status.smoothScrollDelaySettingCommand(($command[1]).parseInt)
   elif isHighlightCurrentWordSettingCommand(command):
     status.highlightCurrentWordSettingCommand(command[1])
   elif isSystemClipboardSettingCommand(command):

@@ -65,7 +65,7 @@ suite "Config mode: Init buffer":
       "  popupWindowInExmode            true",
       "  autoDeleteParen                false",
       "  smoothScroll                   true",
-      "  smoothScrollSpeed              15",
+      "  smoothScrollDelay              15",
       "  liveReloadOfFile               false",
       "  colorMode                      24bit"].toSeqRunes
 

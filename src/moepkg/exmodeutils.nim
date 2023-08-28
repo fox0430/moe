@@ -226,8 +226,8 @@ const
       description: "Run Quickrun",
       argsType: ArgsType.none),
     ExCommandInfo(
-      command: "scrollSpeed",
-      description: "Change setting to the scroll speed",
+      command: "scrollDelay",
+      description: "Change setting to the smooth scroll delay",
       argsType: ArgsType.number),
     ExCommandInfo(
       command: "showGitInactive",
@@ -561,9 +561,9 @@ proc isAutoDeleteParenSettingCommand*(command: seq[Runes]): bool {.inline.} =
 proc isSmoothScrollSettingCommand*(command: seq[Runes]): bool {.inline.} =
   command.len == 2 and cmpIgnoreCase($command[0], "smoothscroll") == 0
 
-proc isSmoothScrollSpeedSettingCommand*(command: seq[Runes]): bool {.inline.} =
+proc isSmoothScrollDelaySettingCommand*(command: seq[Runes]): bool {.inline.} =
   command.len == 2 and
-  cmpIgnoreCase($command[0], "scrollspeed") == 0 and
+  cmpIgnoreCase($command[0], "scrolldelay") == 0 and
   isDigit(command[1])
 
 proc isHighlightCurrentWordSettingCommand*(
@@ -763,7 +763,7 @@ proc isValidExCommand*(commandSplit: seq[Runes]): bool =
     isHighlightPairOfParenSettigCommand(commandSplit) or
     isAutoDeleteParenSettingCommand(commandSplit) or
     isSmoothScrollSettingCommand(commandSplit) or
-    isSmoothScrollSpeedSettingCommand(commandSplit) or
+    isSmoothScrollDelaySettingCommand(commandSplit) or
     isHighlightCurrentWordSettingCommand(commandSplit) or
     isSystemClipboardSettingCommand(commandSplit) or
     isHighlightFullWidthSpaceSettingCommand(commandSplit) or

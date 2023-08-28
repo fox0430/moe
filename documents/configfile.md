@@ -148,10 +148,10 @@ default is true
 smoothScroll
 ```
 
-Smooth scroll speed (int)  
+Smooth scroll delay (int)  
 default is 15
 ```
-smoothScrollSpeed
+smoothScrollDelay
 ```
 
 Live reloading open files (bool)  

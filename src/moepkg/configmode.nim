@@ -49,7 +49,7 @@ type standardTableNames {.pure.} = enum
   popupWindowInExmode
   autoDeleteParen
   smoothScroll
-  smoothScrollSpeed
+  smoothScrollDelay
   liveReloadOfFile
   colorMode
 
@@ -1074,7 +1074,7 @@ proc getSettingType(table, name: string): SettingType =
          "sidebar": result = SettingType.Bool
       of "tabStop",
          "autoSaveInterval",
-         "smoothScrollSpeed": result = SettingType.Number
+         "smoothScrollDelay": result = SettingType.Number
       else:
         result = SettingType.None
 
@@ -1316,7 +1316,7 @@ proc editFiguresSetting(status: var EditorStatus,
           case name:
             of "tabStop": settings.tabStop
             of "autoSaveInterval": settings.autoSaveInterval
-            of "smoothScrollSpeed": settings.smoothScrollSpeed
+            of "smoothScrollDelay": settings.smoothScrollDelay
             else: 0
 
         of "AutoBackup":
@@ -1390,8 +1390,8 @@ proc editFiguresSetting(status: var EditorStatus,
           status.settings.view.tabStop = number
         of "autoSaveInterval":
           status.settings.autoSaveInterval = number
-        of "smoothScrollSpeed":
-          status.settings.smoothScrollSpeed = number
+        of "smoothScrollDelay":
+          status.settings.smoothScrollDelay = number
         else:
           discard
 
@@ -1762,8 +1762,8 @@ proc initStandardTableBuffer(settings: EditorSettings): seq[Runes] =
         result.add(ru nameStr & space & $settings.autoDeleteParen)
       of "smoothScroll":
         result.add(ru nameStr & space & $settings.smoothScroll)
-      of "smoothScrollSpeed":
-        result.add(ru nameStr & space & $settings.smoothScrollSpeed)
+      of "smoothScrollDelay":
+        result.add(ru nameStr & space & $settings.smoothScrollDelay)
       of "liveReloadOfFile":
         result.add(ru nameStr & space & $settings.liveReloadOfFile)
       of "colorMode":
