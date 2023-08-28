@@ -50,7 +50,7 @@ autoDeleteParen = false
 
 smoothScroll = true
 
-smoothScrollSpeed = 15
+smoothScrollDelay = 15
 
 liveReloadOfFile = false
 

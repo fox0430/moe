@@ -471,15 +471,26 @@ suite "Ex mode: Smooth scroll setting command":
       status.exModeCommand(Command)
       check(status.settings.smoothScroll == true)
 
-suite "Ex mode: Smooth scroll speed setting command":
-  test "Smooth scroll speed setting command":
+suite "Ex mode: Smooth scroll delay setting command":
+  test "Smooth scroll delay setting command":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
 
-    block:
-      const Command = @[ru"scrollspeed", ru"1"]
-      status.exModeCommand(Command)
-      check(status.settings.smoothScrollSpeed == 1)
+    const Command = @[ru"scrollDelay", ru"1"]
+    status.exModeCommand(Command)
+
+    check(status.settings.smoothScrollDelay == 1)
+
+  test "Smooth scroll delay setting command 2":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+
+    let defaultSpeed = status.settings.smoothScrollDelay
+
+    const Command = @[ru"scrollDelay", ru"a"]
+    status.exModeCommand(Command)
+
+    check(status.settings.smoothScrollDelay == defaultSpeed)
 
 suite "Ex mode: Highlight current word setting command":
   test "Highlight current word setting command":
@@ -536,27 +547,6 @@ suite "Ex mode: Highlight full width space command":
     status.exModeCommand(Command)
 
     check(status.settings.tabStop == defaultTabStop)
-
-suite "Ex mode: Smooth scroll speed setting command":
-  test "Smooth scroll speed setting command":
-    var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
-
-    const Command = @[ru"scrollspeed", ru"1"]
-    status.exModeCommand(Command)
-
-    check(status.settings.smoothScrollSpeed == 1)
-
-  test "Smooth scroll speed setting command 2":
-    var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
-
-    let defaultSpeed = status.settings.smoothScrollSpeed
-
-    const Command = @[ru"scrollspeed", ru"a"]
-    status.exModeCommand(Command)
-
-    check(status.settings.smoothScrollSpeed == defaultSpeed)
 
 suite "Ex mode: Delete buffer status command":
   test "Delete buffer status command":

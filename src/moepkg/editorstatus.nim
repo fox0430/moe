@@ -1043,7 +1043,7 @@ proc scrollUpNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
 
       currentBufStatus.keyUp(currentMainWindowNode)
       status.update
-      currentMainWindowNode.setTimeout(status.settings.smoothScrollSpeed)
+      currentMainWindowNode.setTimeout(status.settings.smoothScrollDelay)
       var key = ERR_KEY
       key = getKey(currentMainWindowNode)
       if key != ERR_KEY: break
@@ -1073,7 +1073,7 @@ proc scrollDownNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
 
       currentBufStatus.keyDown(currentMainWindowNode)
       status.update
-      currentMainWindowNode.setTimeout(status.settings.smoothScrollSpeed)
+      currentMainWindowNode.setTimeout(status.settings.smoothScrollDelay)
       var key = ERR_KEY
       key = getKey(currentMainWindowNode)
       if key != ERR_KEY: break

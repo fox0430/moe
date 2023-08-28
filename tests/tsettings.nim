@@ -49,7 +49,7 @@ const TomlStr = """
   popupWindowInExmode = false
   autoDeleteParen = false
   smoothScroll = false
-  smoothScrollSpeed = 1
+  smoothScrollDelay = 1
   colorMode = "none"
 
   [Clipboard]
@@ -373,7 +373,7 @@ suite "Parse configuration file":
     check not settings.popupWindowInExmode
     check not settings.autoDeleteParen
     check not settings.smoothScroll
-    check settings.smoothScrollSpeed == 1
+    check settings.smoothScrollDelay == 1
     check settings.colorMode == ColorMode.none
 
     check not settings.clipboard.enable
