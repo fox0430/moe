@@ -60,12 +60,12 @@ const
       background: Color(
         index: EditorColorIndex.statusLineNormalModeBg,
         rgb: "#09aefa".hexToRgb.get)),
-    EditorColorPairIndex.statusLineModeNormalMode: ColorPair(
+    EditorColorPairIndex.statusLineNormalModeLabel: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.statusLineModeNormalMode,
+        index: EditorColorIndex.statusLineNormalModeLabel,
         rgb: "#000000".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.statusLineModeNormalModeBg,
+        index: EditorColorIndex.statusLineNormalModeLabelBg,
         rgb: "#ffffff".hexToRgb.get)),
     EditorColorPairIndex.statusLineNormalModeInactive: ColorPair(
       foreground: Color(
@@ -82,12 +82,12 @@ const
       background: Color(
         index: EditorColorIndex.statusLineInsertModeBg,
         rgb: "#09aefa".hexToRgb.get)),
-    EditorColorPairIndex.statusLineModeInsertMode: ColorPair(
+    EditorColorPairIndex.statusLineInsertModeLabel: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.statusLineModeInsertMode,
+        index: EditorColorIndex.statusLineInsertModeLabel,
         rgb: "#000000".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.statusLineModeInsertModeBg,
+        index: EditorColorIndex.statusLineInsertModeLabelBg,
         rgb: "#ffffff".hexToRgb.get)),
     EditorColorPairIndex.statusLineInsertModeInactive: ColorPair(
       foreground: Color(
@@ -104,12 +104,12 @@ const
       background: Color(
         index: EditorColorIndex.statusLineVisualModeBg,
         rgb: "#09aefa".hexToRgb.get)),
-    EditorColorPairIndex.statusLineModeVisualMode: ColorPair(
+    EditorColorPairIndex.statusLineVisualModeLabel: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.statusLineModeVisualMode,
+        index: EditorColorIndex.statusLineVisualModeLabel,
         rgb: "#000000".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.statusLineModeVisualModeBg,
+        index: EditorColorIndex.statusLineVisualModeLabelBg,
         rgb: "#ffffff".hexToRgb.get)),
     EditorColorPairIndex.statusLineVisualModeInactive: ColorPair(
       foreground: Color(
@@ -126,12 +126,12 @@ const
       background: Color(
         index: EditorColorIndex.statusLineReplaceModeBg,
         rgb: "#09aefa".hexToRgb.get)),
-    EditorColorPairIndex.statusLineModeReplaceMode: ColorPair(
+    EditorColorPairIndex.statusLineReplaceModeLabel: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.statusLineModeReplaceMode,
+        index: EditorColorIndex.statusLineReplaceModeLabel,
         rgb: "#000000".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.statusLineModeReplaceModeBg,
+        index: EditorColorIndex.statusLineReplaceModeLabelBg,
         rgb: "#ffffff".hexToRgb.get)),
     EditorColorPairIndex.statusLineReplaceModeInactive: ColorPair(
       foreground: Color(
@@ -148,12 +148,12 @@ const
       background: Color(
         index: EditorColorIndex.statusLineReplaceModeInactiveBg,
         rgb: "#09aefa".hexToRgb.get)),
-    EditorColorPairIndex.statusLineModeFilerMode: ColorPair(
+    EditorColorPairIndex.statusLineFilerModeLabel: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.statusLineModeFilerMode,
+        index: EditorColorIndex.statusLineFilerModeLabel,
         rgb: "#000000".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.statusLineModeFilerModeBg,
+        index: EditorColorIndex.statusLineFilerModeLabelBg,
         rgb: "#ffffff".hexToRgb.get)),
     EditorColorPairIndex.statusLineFilerModeInactive: ColorPair(
       foreground: Color(
@@ -170,12 +170,12 @@ const
       background: Color(
         index: EditorColorIndex.statusLineExModeBg,
         rgb: "#09aefa".hexToRgb.get)),
-    EditorColorPairIndex.statusLineModeExMode: ColorPair(
+    EditorColorPairIndex.statusLineExModeLabel: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.statusLineModeExMode,
+        index: EditorColorIndex.statusLineExModeLabel,
         rgb: "#000000".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.statusLineModeExModeBg,
+        index: EditorColorIndex.statusLineExModeLabelBg,
         rgb: "#ffffff".hexToRgb.get)),
     EditorColorPairIndex.statusLineExModeInactive: ColorPair(
       foreground: Color(
@@ -666,12 +666,12 @@ const
       background: Color(
         index: EditorColorIndex.statusLineNormalModeBg,
         rgb: "#8a8a8a".hexToRgb.get)),
-    EditorColorPairIndex.statusLineModeNormalMode: ColorPair(
+    EditorColorPairIndex.statusLineNormalModeLabel: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.statusLineModeNormalMode,
+        index: EditorColorIndex.statusLineNormalModeLabel,
         rgb: "#ffffff".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.statusLineModeNormalModeBg,
+        index: EditorColorIndex.statusLineNormalModeLabelBg,
         rgb: "#09aefa".hexToRgb.get)),
     EditorColorPairIndex.statusLineNormalModeInactive: ColorPair(
       foreground: Color(
@@ -688,12 +688,12 @@ const
       background: Color(
         index: EditorColorIndex.statusLineInsertModeBg,
         rgb: "#8a8a8a".hexToRgb.get)),
-    EditorColorPairIndex.statusLineModeInsertMode: ColorPair(
+    EditorColorPairIndex.statusLineInsertModeLabel: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.statusLineModeInsertMode,
+        index: EditorColorIndex.statusLineInsertModeLabel,
         rgb: "#ffffff".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.statusLineModeInsertModeBg,
+        index: EditorColorIndex.statusLineInsertModeLabelBg,
         rgb: "#09aefa".hexToRgb.get)),
     EditorColorPairIndex.statusLineInsertModeInactive: ColorPair(
       foreground: Color(
@@ -710,12 +710,12 @@ const
       background: Color(
         index: EditorColorIndex.statusLineVisualModeBg,
         rgb: "#8a8a8a".hexToRgb.get)),
-    EditorColorPairIndex.statusLineModeVisualMode: ColorPair(
+    EditorColorPairIndex.statusLineVisualModeLabel: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.statusLineModeVisualMode,
+        index: EditorColorIndex.statusLineVisualModeLabel,
         rgb: "#ffffff".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.statusLineModeVisualModeBg,
+        index: EditorColorIndex.statusLineVisualModeLabelBg,
         rgb: "#09aefa".hexToRgb.get)),
     EditorColorPairIndex.statusLineVisualModeInactive: ColorPair(
       foreground: Color(
@@ -732,12 +732,12 @@ const
       background: Color(
         index: EditorColorIndex.statusLineReplaceModeBg,
         rgb: "#8a8a8a".hexToRgb.get)),
-    EditorColorPairIndex.statusLineModeReplaceMode: ColorPair(
+    EditorColorPairIndex.statusLineReplaceModeLabel: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.statusLineModeReplaceMode,
+        index: EditorColorIndex.statusLineReplaceModeLabel,
         rgb: "#ffffff".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.statusLineModeReplaceModeBg,
+        index: EditorColorIndex.statusLineReplaceModeLabelBg,
         rgb: "#09aefa".hexToRgb.get)),
     EditorColorPairIndex.statusLineReplaceModeInactive: ColorPair(
       foreground: Color(
@@ -754,12 +754,12 @@ const
       background: Color(
         index: EditorColorIndex.statusLineReplaceModeInactiveBg,
         rgb: "#8a8a8a".hexToRgb.get)),
-    EditorColorPairIndex.statusLineModeFilerMode: ColorPair(
+    EditorColorPairIndex.statusLineFilerModeLabel: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.statusLineModeFilerMode,
+        index: EditorColorIndex.statusLineFilerModeLabel,
         rgb: "#ffffff".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.statusLineModeFilerModeBg,
+        index: EditorColorIndex.statusLineFilerModeLabelBg,
         rgb: "#09aefa".hexToRgb.get)),
     EditorColorPairIndex.statusLineFilerModeInactive: ColorPair(
       foreground: Color(
@@ -776,12 +776,12 @@ const
       background: Color(
         index: EditorColorIndex.statusLineExModeBg,
         rgb: "#8a8a8a".hexToRgb.get)),
-    EditorColorPairIndex.statusLineModeExMode: ColorPair(
+    EditorColorPairIndex.statusLineExModeLabel: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.statusLineModeExMode,
+        index: EditorColorIndex.statusLineExModeLabel,
         rgb: "#ffffff".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.statusLineModeExModeBg,
+        index: EditorColorIndex.statusLineExModeLabelBg,
         rgb: "#09aefa".hexToRgb.get)),
     EditorColorPairIndex.statusLineExModeInactive: ColorPair(
       foreground: Color(
@@ -1272,12 +1272,12 @@ const
       background: Color(
         index: EditorColorIndex.statusLineNormalModeBg,
         rgb: "#ff0087".hexToRgb.get)),
-    EditorColorPairIndex.statusLineModeNormalMode: ColorPair(
+    EditorColorPairIndex.statusLineNormalModeLabel: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.statusLineModeNormalMode,
+        index: EditorColorIndex.statusLineNormalModeLabel,
         rgb: "#000000".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.statusLineModeNormalModeBg,
+        index: EditorColorIndex.statusLineNormalModeLabelBg,
         rgb: "#ffffff".hexToRgb.get)),
     EditorColorPairIndex.statusLineNormalModeInactive: ColorPair(
       foreground: Color(
@@ -1294,12 +1294,12 @@ const
       background: Color(
         index: EditorColorIndex.statusLineInsertModeBg,
         rgb: "#ff0087".hexToRgb.get)),
-    EditorColorPairIndex.statusLineModeInsertMode: ColorPair(
+    EditorColorPairIndex.statusLineInsertModeLabel: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.statusLineModeInsertMode,
+        index: EditorColorIndex.statusLineInsertModeLabel,
         rgb: "#000000".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.statusLineModeInsertModeBg,
+        index: EditorColorIndex.statusLineInsertModeLabelBg,
         rgb: "#ffffff".hexToRgb.get)),
     EditorColorPairIndex.statusLineInsertModeInactive: ColorPair(
       foreground: Color(
@@ -1316,12 +1316,12 @@ const
       background: Color(
         index: EditorColorIndex.statusLineVisualModeBg,
         rgb: "#ff0087".hexToRgb.get)),
-    EditorColorPairIndex.statusLineModeVisualMode: ColorPair(
+    EditorColorPairIndex.statusLineVisualModeLabel: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.statusLineModeVisualMode,
+        index: EditorColorIndex.statusLineVisualModeLabel,
         rgb: "#000000".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.statusLineModeVisualModeBg,
+        index: EditorColorIndex.statusLineVisualModeLabelBg,
         rgb: "#ffffff".hexToRgb.get)),
     EditorColorPairIndex.statusLineVisualModeInactive: ColorPair(
       foreground: Color(
@@ -1338,12 +1338,12 @@ const
       background: Color(
         index: EditorColorIndex.statusLineReplaceModeBg,
         rgb: "#ff0087".hexToRgb.get)),
-    EditorColorPairIndex.statusLineModeReplaceMode: ColorPair(
+    EditorColorPairIndex.statusLineReplaceModeLabel: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.statusLineModeReplaceMode,
+        index: EditorColorIndex.statusLineReplaceModeLabel,
         rgb: "#000000".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.statusLineModeReplaceModeBg,
+        index: EditorColorIndex.statusLineReplaceModeLabelBg,
         rgb: "#ffffff".hexToRgb.get)),
     EditorColorPairIndex.statusLineReplaceModeInactive: ColorPair(
       foreground: Color(
@@ -1360,12 +1360,12 @@ const
       background: Color(
         index: EditorColorIndex.statusLineReplaceModeInactiveBg,
         rgb: "#ff0087".hexToRgb.get)),
-    EditorColorPairIndex.statusLineModeFilerMode: ColorPair(
+    EditorColorPairIndex.statusLineFilerModeLabel: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.statusLineModeFilerMode,
+        index: EditorColorIndex.statusLineFilerModeLabel,
         rgb: "#000000".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.statusLineModeFilerModeBg,
+        index: EditorColorIndex.statusLineFilerModeLabelBg,
         rgb: "#ffffff".hexToRgb.get)),
     EditorColorPairIndex.statusLineFilerModeInactive: ColorPair(
       foreground: Color(
@@ -1382,12 +1382,12 @@ const
       background: Color(
         index: EditorColorIndex.statusLineExModeBg,
         rgb: "#ff0087".hexToRgb.get)),
-    EditorColorPairIndex.statusLineModeExMode: ColorPair(
+    EditorColorPairIndex.statusLineExModeLabel: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.statusLineModeExMode,
+        index: EditorColorIndex.statusLineExModeLabel,
         rgb: "#000000".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.statusLineModeExModeBg,
+        index: EditorColorIndex.statusLineExModeLabelBg,
         rgb: "#ffffff".hexToRgb.get)),
     EditorColorPairIndex.statusLineExModeInactive: ColorPair(
       foreground: Color(

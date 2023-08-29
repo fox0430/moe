@@ -439,17 +439,17 @@ proc modeLablel(mode: Mode): string =
 proc modeLablelColor(mode: Mode): EditorColorPairIndex =
   case mode
     of Mode.insert:
-      EditorColorPairIndex.statusLineModeInsertMode
+      EditorColorPairIndex.statusLineInsertModeLabel
     of Mode.visual, Mode.visualBlock, Mode.visualLine:
-      EditorColorPairIndex.statusLineModeVisualMode
+      EditorColorPairIndex.statusLineVisualModeLabel
     of Mode.replace:
-      EditorColorPairIndex.statusLineModeReplaceMode
+      EditorColorPairIndex.statusLineReplaceModeLabel
     of Mode.filer:
-      EditorColorPairIndex.statusLineModeFilerMode
+      EditorColorPairIndex.statusLineFilerModeLabel
     of Mode.ex:
-      EditorColorPairIndex.statusLineModeExMode
+      EditorColorPairIndex.statusLineExModeLabel
     else:
-      EditorColorPairIndex.statusLineModeNormalMode
+      EditorColorPairIndex.statusLineNormalModeLabel
 
 proc addModeLabel(
   s: var StatusLine,

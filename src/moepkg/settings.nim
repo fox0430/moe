@@ -640,7 +640,7 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
     result[EditorColorPairIndex.statusLineNormalMode].foreground.rgb =
       colorFromNode(jsonNode{"colors", "statusBar.foreground"})
 
-    result[EditorColorPairIndex.statusLineModeNormalMode].foreground.rgb =
+    result[EditorColorPairIndex.statusLineNormalModeLabel].foreground.rgb =
       colorFromNode(jsonNode{"colors", "statusBar.foreground"})
 
     result[EditorColorPairIndex.statusLineNormalModeInactive].foreground.rgb =
@@ -649,10 +649,10 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
     result[EditorColorPairIndex.statusLineInsertMode].foreground.rgb =
       colorFromNode(jsonNode{"colors", "statusBar.foreground"})
 
-    result[EditorColorPairIndex.statusLineModeInsertMode].foreground.rgb =
+    result[EditorColorPairIndex.statusLineInsertModeLabel].foreground.rgb =
       colorFromNode(jsonNode{"colors", "statusBar.foreground"})
 
-    result[EditorColorPairIndex.statusLineModeInsertMode].foreground.rgb =
+    result[EditorColorPairIndex.statusLineInsertModeLabel].foreground.rgb =
       colorFromNode(jsonNode{"colors", "statusBar.foreground"})
 
     result[EditorColorPairIndex.statusLineInsertModeInactive].foreground.rgb =
@@ -661,7 +661,7 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
     result[EditorColorPairIndex.statusLineVisualMode].foreground.rgb =
       colorFromNode(jsonNode{"colors", "statusBar.foreground"})
 
-    result[EditorColorPairIndex.statusLineModeVisualMode].foreground.rgb =
+    result[EditorColorPairIndex.statusLineVisualModeLabel].foreground.rgb =
       colorFromNode(jsonNode{"colors", "statusBar.foreground"})
 
     result[EditorColorPairIndex.statusLineVisualModeInactive].foreground.rgb =
@@ -670,7 +670,7 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
     result[EditorColorPairIndex.statusLineReplaceMode].foreground.rgb =
       colorFromNode(jsonNode{"colors", "statusBar.foreground"})
 
-    result[EditorColorPairIndex.statusLineModeReplaceMode].foreground.rgb =
+    result[EditorColorPairIndex.statusLineReplaceModeLabel].foreground.rgb =
       colorFromNode(jsonNode{"colors", "statusBar.foreground"})
 
     result[EditorColorPairIndex.statusLineReplaceModeInactive].foreground.rgb =
@@ -679,7 +679,7 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
     result[EditorColorPairIndex.statusLineFilerMode].foreground.rgb =
       colorFromNode(jsonNode{"colors", "statusBar.foreground"})
 
-    result[EditorColorPairIndex.statusLineModeFilerMode].foreground.rgb =
+    result[EditorColorPairIndex.statusLineFilerModeLabel].foreground.rgb =
       colorFromNode(jsonNode{"colors", "statusBar.foreground"})
 
     result[EditorColorPairIndex.statusLineFilerModeInactive].foreground.rgb =
@@ -688,7 +688,7 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
     result[EditorColorPairIndex.statusLineExMode].foreground.rgb =
       colorFromNode(jsonNode{"colors", "statusBar.foreground"})
 
-    result[EditorColorPairIndex.statusLineModeExMode].foreground.rgb =
+    result[EditorColorPairIndex.statusLineExModeLabel].foreground.rgb =
       colorFromNode(jsonNode{"colors", "statusBar.foreground"})
 
     result[EditorColorPairIndex.statusLineExModeInactive].foreground.rgb =
@@ -704,7 +704,7 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
     result[EditorColorPairIndex.statusLineNormalMode].background.rgb =
       colorFromNode(jsonNode{"colors", "statusBar.background"})
 
-    result[EditorColorPairIndex.statusLineModeNormalMode].background.rgb =
+    result[EditorColorPairIndex.statusLineNormalModeLabel].background.rgb =
       colorFromNode(jsonNode{"colors", "statusBar.background"})
 
     result[EditorColorPairIndex.statusLineNormalModeInactive].background.rgb =
@@ -713,10 +713,10 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
     result[EditorColorPairIndex.statusLineInsertMode].background.rgb =
       colorFromNode(jsonNode{"colors", "statusBar.background"})
 
-    result[EditorColorPairIndex.statusLineModeInsertMode].background.rgb =
+    result[EditorColorPairIndex.statusLineInsertModeLabel].background.rgb =
       colorFromNode(jsonNode{"colors", "statusBar.background"})
 
-    result[EditorColorPairIndex.statusLineModeInsertMode].background.rgb =
+    result[EditorColorPairIndex.statusLineInsertModeLabel].background.rgb =
       colorFromNode(jsonNode{"colors", "statusBar.background"})
 
     result[EditorColorPairIndex.statusLineInsertModeInactive].background.rgb =
@@ -725,7 +725,7 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
     result[EditorColorPairIndex.statusLineVisualMode].background.rgb =
       colorFromNode(jsonNode{"colors", "statusBar.background"})
 
-    result[EditorColorPairIndex.statusLineModeVisualMode].background.rgb =
+    result[EditorColorPairIndex.statusLineVisualModeLabel].background.rgb =
       colorFromNode(jsonNode{"colors", "statusBar.background"})
 
     result[EditorColorPairIndex.statusLineVisualModeInactive].background.rgb =
@@ -734,7 +734,7 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
     result[EditorColorPairIndex.statusLineReplaceMode].background.rgb =
       colorFromNode(jsonNode{"colors", "statusBar.background"})
 
-    result[EditorColorPairIndex.statusLineModeReplaceMode].background.rgb =
+    result[EditorColorPairIndex.statusLineReplaceModeLabel].background.rgb =
       colorFromNode(jsonNode{"colors", "statusBar.background"})
 
     result[EditorColorPairIndex.statusLineReplaceModeInactive].background.rgb =
@@ -743,7 +743,7 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
     result[EditorColorPairIndex.statusLineFilerMode].background.rgb =
       colorFromNode(jsonNode{"colors", "statusBar.background"})
 
-    result[EditorColorPairIndex.statusLineModeFilerMode].background.rgb =
+    result[EditorColorPairIndex.statusLineFilerModeLabel].background.rgb =
       colorFromNode(jsonNode{"colors", "statusBar.background"})
 
     result[EditorColorPairIndex.statusLineFilerModeInactive].background.rgb =
@@ -752,7 +752,7 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
     result[EditorColorPairIndex.statusLineExMode].background.rgb =
       colorFromNode(jsonNode{"colors", "statusBar.background"})
 
-    result[EditorColorPairIndex.statusLineModeExMode].background.rgb =
+    result[EditorColorPairIndex.statusLineExModeLabel].background.rgb =
       colorFromNode(jsonNode{"colors", "statusBar.background"})
 
     result[EditorColorPairIndex.statusLineExModeInactive].background.rgb =
