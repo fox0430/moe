@@ -1556,7 +1556,7 @@ proc pasteAfterCursor*(
   windowNode: var WindowNode,
   registers: Registers) =
 
-    let r = registers.noNameRegister
+    let r = registers.noNameRegisters
 
     if r.buffer.len > 0:
       if r.isLine:
@@ -1585,7 +1585,7 @@ proc pasteBeforeCursor*(
   windowNode: var WindowNode,
   registers: Registers) =
 
-    let r = registers.noNameRegister
+    let r = registers.noNameRegisters
 
     if r.buffer.len > 0:
       if r.isLine:

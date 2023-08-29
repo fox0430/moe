@@ -29,19 +29,19 @@ suite "Register: Add a buffer to the no name register":
 
     registers.addRegister(ru "abc", settings)
 
-    check registers.noNameRegister == Register(
+    check registers.noNameRegisters == Register(
       buffer: @[ru "abc"],
       isLine: false,
       name: "")
 
   test "Overwrite a string in the no name register":
     var registers: Registers
-    registers.noNameRegister = Register(buffer: @[ru "abc"])
+    registers.noNameRegisters = Register(buffer: @[ru "abc"])
     let settings = initEditorSettings()
 
     registers.addRegister(ru "def", settings)
 
-    check registers.noNameRegister == Register(
+    check registers.noNameRegisters == Register(
       buffer: @[ru "def"],
       isLine: false,
       name: "")
@@ -53,7 +53,7 @@ suite "Register: Add a buffer to the no name register":
     const isLine = true
     registers.addRegister(ru "abc", isLine, settings)
 
-    check registers.noNameRegister == Register(
+    check registers.noNameRegisters == Register(
       buffer: @[ru "abc"],
       isLine: true,
       name: "")
@@ -65,7 +65,7 @@ suite "Register: Add a buffer to the no name register":
     const isLine = true
     registers.addRegister(@[ru "abc", ru "def"], isLine, settings)
 
-    check registers.noNameRegister == Register(
+    check registers.noNameRegisters == Register(
       buffer: @[ru "abc", ru "def"],
       isLine: true,
       name: "")
@@ -78,7 +78,7 @@ suite "Register: Add a buffer to the named register":
     const name = "a"
     registers.addRegister(ru "abc", name, settings)
 
-    check registers.namedRegister[0] == Register(
+    check registers.namedRegisters[0] == Register(
       buffer: @[ru "abc"],
       isLine: false,
       name: name)
@@ -88,14 +88,14 @@ suite "Register: Add a buffer to the named register":
     let settings = initEditorSettings()
 
     const name = "a"
-    registers.namedRegister.add Register(
+    registers.namedRegisters.add Register(
       buffer: @[ru "abc"],
       isLine: false,
       name: name)
 
     registers.addRegister(ru "def", name, settings)
 
-    check registers.namedRegister[0] == Register(
+    check registers.namedRegisters[0] == Register(
       buffer: @[ru "def"],
       isLine: false,
       name: name)
@@ -105,7 +105,7 @@ suite "Register: Add a buffer to the named register":
     let settings = initEditorSettings()
 
     const name = "a"
-    registers.namedRegister.add Register(
+    registers.namedRegisters.add Register(
       buffer: @[ru "abc"],
       isLine: false,
       name: name)
@@ -113,7 +113,7 @@ suite "Register: Add a buffer to the named register":
     const isLine = true
     registers.addRegister(ru "def", isLine, name, settings)
 
-    check registers.namedRegister[0] == Register(
+    check registers.namedRegisters[0] == Register(
       buffer: @[ru "def"],
       isLine: true,
       name: name)
@@ -125,8 +125,8 @@ suite "Register: Add a buffer to the named register":
     const name = "_"
     registers.addRegister(ru "def", name, settings)
 
-    check registers.namedRegister.len == 0
-    check registers.noNameRegister == Register()
+    check registers.namedRegisters.len == 0
+    check registers.noNameRegisters == Register()
 
 suite "Register: Add a buffer to the small delete register":
   test "Add a deleted string to the small deleted register":
@@ -139,12 +139,12 @@ suite "Register: Add a buffer to the small delete register":
     registers.addRegister(ru "abc", isLine, isDelete, settings)
     registers.addRegister(ru "def", isLine, isDelete, settings)
 
-    check registers.noNameRegister == Register(buffer: @[ru "def"])
+    check registers.noNameRegisters == Register(buffer: @[ru "def"])
 
-    check registers.smallDeleteRegister == Register(buffer: @[ru "def"])
+    check registers.smallDeleteRegisters == Register(buffer: @[ru "def"])
 
     for i in 0 ..< 10:
-      let r = registers.numberRegister[i]
+      let r = registers.numberRegisters[i]
       check r == Register()
 
 suite "Register: Add a buffer to the number register":
@@ -156,7 +156,7 @@ suite "Register: Add a buffer to the number register":
     registers.addRegister(ru "def", settings)
 
     for i in 0 ..< 10:
-      let r  = registers.numberRegister[i]
+      let r  = registers.numberRegisters[i]
       if i == 0:
         check r == Register(buffer: @[ru "def"])
       else:
@@ -174,7 +174,7 @@ suite "Register: Add a buffer to the number register":
     registers.addRegister(ru "def", isLine, isDelete, settings)
 
     for i in 0 ..< 10:
-      let r = registers.numberRegister[i]
+      let r = registers.numberRegisters[i]
       if i == 0:
         check r == Register(buffer: @[ru "abc"], isLine: true)
       elif i == 1:
@@ -190,7 +190,7 @@ suite "Register: Search a register by name":
       r2 = Register(buffer: @[ru "def"], name: "b")
       r3 = Register(buffer: @[ru "ghi"], name: "c")
 
-    registers.namedRegister = @[r1, r2, r3]
+    registers.namedRegisters = @[r1, r2, r3]
 
     check registers.searchByName("b").isSome
     check registers.searchByName("b").get == r2
@@ -203,8 +203,8 @@ suite "Register: Search a register by name":
 
       r3 = Register(buffer: @[ru "ghi"], name: "0")
 
-    registers.namedRegister = @[r1, r2]
-    registers.numberRegister[0] = r3
+    registers.namedRegisters = @[r1, r2]
+    registers.numberRegisters[0] = r3
 
     check registers.searchByName("0").isSome
     check registers.searchByName("0").get == r3
@@ -216,6 +216,6 @@ suite "Register: Search a register by name":
       r2 = Register(buffer: @[ru "def"], name: "b")
       r3 = Register(buffer: @[ru "ghi"], name: "c")
 
-    registers.namedRegister = @[r1, r2, r3]
+    registers.namedRegisters = @[r1, r2, r3]
 
     check registers.searchByName("z").isNone
