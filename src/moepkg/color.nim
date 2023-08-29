@@ -329,43 +329,43 @@ type
     # status line
     statusLineNormalMode
     statusLineNormalModeBg
-    statusLineModeNormalMode
-    statusLineModeNormalModeBg
+    statusLineNormalModeLabel
+    statusLineNormalModeLabelBg
     statusLineNormalModeInactive
     statusLineNormalModeInactiveBg
 
     statusLineInsertMode
     statusLineInsertModeBg
-    statusLineModeInsertMode
-    statusLineModeInsertModeBg
+    statusLineInsertModeLabel
+    statusLineInsertModeLabelBg
     statusLineInsertModeInactive
     statusLineInsertModeInactiveBg
 
     statusLineVisualMode
     statusLineVisualModeBg
-    statusLineModeVisualMode
-    statusLineModeVisualModeBg
+    statusLineVisualModeLabel
+    statusLineVisualModeLabelBg
     statusLineVisualModeInactive
     statusLineVisualModeInactiveBg
 
     statusLineReplaceMode
     statusLineReplaceModeBg
-    statusLineModeReplaceMode
-    statusLineModeReplaceModeBg
+    statusLineReplaceModeLabel
+    statusLineReplaceModeLabelBg
     statusLineReplaceModeInactive
     statusLineReplaceModeInactiveBg
 
     statusLineFilerMode
     statusLineFilerModeBg
-    statusLineModeFilerMode
-    statusLineModeFilerModeBg
+    statusLineFilerModeLabel
+    statusLineFilerModeLabelBg
     statusLineFilerModeInactive
     statusLineFilerModeInactiveBg
 
     statusLineExMode
     statusLineExModeBg
-    statusLineModeExMode
-    statusLineModeExModeBg
+    statusLineExModeLabel
+    statusLineExModeLabelBg
     statusLineExModeInactive
     statusLineExModeInactiveBg
 
@@ -520,22 +520,22 @@ type
     currentLineNum
     # status line
     statusLineNormalMode
-    statusLineModeNormalMode
+    statusLineNormalModeLabel
     statusLineNormalModeInactive
     statusLineInsertMode
-    statusLineModeInsertMode
+    statusLineInsertModeLabel
     statusLineInsertModeInactive
     statusLineVisualMode
-    statusLineModeVisualMode
+    statusLineVisualModeLabel
     statusLineVisualModeInactive
     statusLineReplaceMode
-    statusLineModeReplaceMode
+    statusLineReplaceModeLabel
     statusLineReplaceModeInactive
     statusLineFilerMode
-    statusLineModeFilerMode
+    statusLineFilerModeLabel
     statusLineFilerModeInactive
     statusLineExMode
-    statusLineModeExMode
+    statusLineExModeLabel
     statusLineExModeInactive
 
     statusLineGitChangedLines

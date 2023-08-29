@@ -268,7 +268,7 @@ suite "statusline: addFilerModeInfo":
       StatusLineColorSegment(
         first: 0,
         last: 6,
-        color: EditorColorPairIndex.statusLineModeFilerMode),
+        color: EditorColorPairIndex.statusLineFilerModeLabel),
       StatusLineColorSegment(
         first: 7,
         last: 99,
@@ -351,7 +351,7 @@ suite "statusline: addBufManagerModeInfo":
       StatusLineColorSegment(
         first: 0,
         last: 7,
-        color: EditorColorPairIndex.statusLineModeNormalMode),
+        color: EditorColorPairIndex.statusLineNormalModeLabel),
       StatusLineColorSegment(
         first: 8,
         last: 99,
@@ -434,7 +434,7 @@ suite "statusline: addLogViewerModeInfo":
       StatusLineColorSegment(
         first: 0,
         last: 4,
-        color: EditorColorPairIndex.statusLineModeNormalMode),
+        color: EditorColorPairIndex.statusLineNormalModeLabel),
       StatusLineColorSegment(
         first: 5,
         last: 99,
@@ -517,7 +517,7 @@ suite "statusline: addQuickRunModeInfo":
       StatusLineColorSegment(
         first: 0,
         last: 9,
-        color: EditorColorPairIndex.statusLineModeNormalMode),
+        color: EditorColorPairIndex.statusLineNormalModeLabel),
       StatusLineColorSegment(
         first: 10,
         last: 99,
@@ -600,7 +600,7 @@ suite "statusline: addNormalModeInfo":
       StatusLineColorSegment(
         first: 0,
         last: 7,
-        color: EditorColorPairIndex.statusLineModeNormalMode),
+        color: EditorColorPairIndex.statusLineNormalModeLabel),
       StatusLineColorSegment(
         first: 8,
         last: 99,
@@ -910,35 +910,35 @@ suite "statusline: modeLabel":
 suite "statusline: modeLablelColor":
   test "Insert mode":
     check modeLablelColor(Mode.insert) ==
-      EditorColorPairIndex.statusLineModeInsertMode
+      EditorColorPairIndex.statusLineInsertModeLabel
 
   test "Viausl mode":
     check modeLablelColor(Mode.visual) ==
-      EditorColorPairIndex.statusLineModeVisualMode
+      EditorColorPairIndex.statusLineVisualModeLabel
 
   test "Viausl block mode":
     check modeLablelColor(Mode.visualBlock) ==
-      EditorColorPairIndex.statusLineModeVisualMode
+      EditorColorPairIndex.statusLineVisualModeLabel
 
   test "Viausl line mode":
     check modeLablelColor(Mode.visualLine) ==
-      EditorColorPairIndex.statusLineModeVisualMode
+      EditorColorPairIndex.statusLineVisualModeLabel
 
   test "Replace mode":
     check modeLablelColor(Mode.replace) ==
-      EditorColorPairIndex.statusLineModeReplaceMode
+      EditorColorPairIndex.statusLineReplaceModeLabel
 
   test "Filer mode":
     check modeLablelColor(Mode.filer) ==
-      EditorColorPairIndex.statusLineModeFilerMode
+      EditorColorPairIndex.statusLineFilerModeLabel
 
   test "Ex mode":
     check modeLablelColor(Mode.ex) ==
-      EditorColorPairIndex.statusLineModeExMode
+      EditorColorPairIndex.statusLineExModeLabel
 
   test "Normal mode":
     check modeLablelColor(Mode.normal) ==
-      EditorColorPairIndex.statusLineModeNormalMode
+      EditorColorPairIndex.statusLineNormalModeLabel
 
 suite "statusline: addModeLabel":
   test "Normal mode in active window":
@@ -996,7 +996,7 @@ suite "statusline: clear":
       StatusLineColorSegment(
         first: 0,
         last: 4,
-        color: EditorColorPairIndex.statusLineModeNormalMode)
+        color: EditorColorPairIndex.statusLineNormalModeLabel)
     ]
 
     s.clear
@@ -1036,7 +1036,7 @@ suite "statusline: updateStatusLineBuffer":
       StatusLineColorSegment(
         first: 0,
         last: 7,
-        color: EditorColorPairIndex.statusLineModeNormalMode),
+        color: EditorColorPairIndex.statusLineNormalModeLabel),
       StatusLineColorSegment(
         first: 8,
         last: 8 + 4 + branchName.high,

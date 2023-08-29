@@ -825,12 +825,12 @@ statusLineNormalMode
 statusLineNormalModeBg
 ```
 
-Mode text color in the status line in normal mode
+Mode label color in the status line in normal mode
 ```
-statusLineModeNormalMode
+statusLineNormalModeLabel
 ```
 ```
-statusLineModeNormalModeBg
+statusLineNormalModeLabelBg
 ```
 
 Character color of Status line in normal mode when inactive  
@@ -849,12 +849,12 @@ statusLineInsertMode
 statusLineInsertModeBg
 ```
 
-Mode text color in the status line in insert mode
+Mode label color in the status line in insert mode
 ```
-statusLineModeInsertMode
+statusLineInsertModeLabel
 ```
 ```
-statusLineModeInsertModeBg
+statusLineInsertModeLabelBg
 ```
 
 Character color of Status line in insert mode when inactive
@@ -873,12 +873,12 @@ statusLineVisualMode
 statusLineVisualModeBg
 ```
 
-Mode text color in the status line in visual mode
+Mode label color in the status line in visual mode
 ```
-statusLineModeVisualMode
+statusLineVisualModeLabel
 ```
 ```
-statusLineModeVisualModeBg
+statusLineVisualModeLabelBg
 ```
 
 Character color of Status line in visual mode when inactive
@@ -897,12 +897,12 @@ statusLineReplaceMode
 statusLineReplaceModeBg
 ```
 
-Mode text color in the status line in replace mode
+Mode label color in the status line in replace mode
 ```
-statusLineModeReplaceMode
+statusLineReplaceModeLabel
 ```
 ```
-statusLineModeReplaceModeBg
+statusLineReplaceModeLabelBg
 ```
 
 Character color of Status line replace in mode when inactive
@@ -921,12 +921,12 @@ statusLineFilerMode
 statusLineFilerModeBg
 ```
 
-Mode text color in the status line in filer mode
+Mode label color in the status line in filer mode
 ```
-statusLineModeFilerMode
+statusLineFilerModeLabel
 ```
 ```
-statusLineModeFilerModeBg
+statusLineFilerModeLabelBg
 ```
 
 Character color of Status line in filer mode when inactive
@@ -945,12 +945,12 @@ statusLineExMode
 statusLineExModeBg
 ```
 
-Mode text color in the status line in ex mode
+Mode label color in the status line in ex mode
 ```
-statusLineExModeBg
+statusLineExModeLabel
 ```
 ```
-statusLineModeExModeBg
+statusLineExModeLabelBg
 ```
 
 Character color of Status line in ex mode when inactive
