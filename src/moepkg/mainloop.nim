@@ -406,7 +406,7 @@ proc execMacro*(status: var EditorStatus, name: Rune) =
   if isOperationRegisterName(name):
     let commands = getOperationsFromRegister(name).get
     for c in commands:
-      status.execCommand(c)
+      if c.len > 0: status.execCommand(c)
 
 proc editorMainLoop*(status: var EditorStatus) =
   ## Get keys, exec commands and update view.
