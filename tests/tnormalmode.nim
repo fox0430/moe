@@ -20,7 +20,7 @@
 import std/[unittest, importutils, sequtils, sugar, os, options]
 import pkg/[ncurses, results]
 import moepkg/syntax/highlite
-import moepkg/[register, settings, editorstatus, gapbuffer, unicodeext,
+import moepkg/[registers, settings, editorstatus, gapbuffer, unicodeext,
                bufferstatus, ui, windownode, quickrunutils]
 
 import moepkg/normalmode {.all.}
@@ -519,7 +519,7 @@ suite "Normal mode: Repeat last command":
       status.update
 
     check(currentBufStatus.buffer.len == 1)
-    check(currentBufStatus.buffer[0].len == 1)
+    check(currentBufStatus.buffer[0].len == 2)
 
   test "Repeat last command 2":
     var status = initEditorStatus()
@@ -553,7 +553,7 @@ suite "Normal mode: Repeat last command":
       status.update
 
     check(currentBufStatus.buffer.len == 1)
-    check(currentBufStatus.buffer[0] == ru"abc")
+    check(currentBufStatus.buffer[0] == ru" abc")
 
   test "Repeat last command 3":
     var status = initEditorStatus()

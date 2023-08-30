@@ -20,7 +20,7 @@
 import std/[unittest, options]
 import moepkg/[unicodeext, settings]
 
-import moepkg/register {.all.}
+import moepkg/registers {.all.}
 
 suite "Register: Add a buffer to the no name register":
   test "Add a string to the no name register":

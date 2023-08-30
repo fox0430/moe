@@ -23,7 +23,7 @@ import pkg/results
 import syntax/highlite
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        windownode, color, settings, statusline, bufferstatus, cursor, tabline,
-       backup, messages, commandline, register, platform, movement,
+       backup, messages, commandline, registers, platform, movement,
        autocomplete, suggestionwindow, filermodeutils, debugmodeutils,
        independentutils, viewhighlight, helputils, backupmanagerutils,
        diffviewerutils, messagelog, globalsidebar, build, quickrunutils, git,

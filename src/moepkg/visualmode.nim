@@ -19,7 +19,7 @@
 
 import std/[strutils, sequtils]
 import editorstatus, ui, gapbuffer, unicodeext, windownode, movement, editor,
-       bufferstatus, settings, register, messages, commandline,
+       bufferstatus, settings, registers, messages, commandline,
        independentutils, viewhighlight
 
 proc initSelectedArea*(startLine, startColumn: int): SelectedArea =

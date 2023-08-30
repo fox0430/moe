@@ -20,7 +20,7 @@
 import std/[strutils, sequtils, strformat, options]
 import syntax/highlite
 import editorstatus, ui, gapbuffer, unicodeext, undoredostack, windownode,
-       bufferstatus, movement, messages, settings, register, commandline
+       bufferstatus, movement, messages, settings, registers, commandline
 
 proc correspondingCloseParen(c: char): char =
   case c

@@ -24,7 +24,7 @@ import editorstatus, bufferstatus, windownode, unicodeext, gapbuffer, ui,
        exmode, replacemode, filermode, buffermanager, logviewer, help,
        recentfilemode, quickrun, backupmanager, diffviewer, configmode,
        debugmode, commandline, search, commandlineutils, popupwindow,
-       filermodeutils, messages, register
+       filermodeutils, messages, registers
 
 proc invokeCommand(
   currentMode: Mode,

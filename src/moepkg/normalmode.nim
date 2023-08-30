@@ -21,7 +21,7 @@ import std/[times, strutils, sequtils, options, strformat]
 import pkg/results
 import editorstatus, ui, gapbuffer, unicodeext, fileutils, windownode, movement,
        editor, searchutils, bufferstatus, quickrunutils, messages, visualmode,
-       commandline, viewhighlight, messagelog, register
+       commandline, viewhighlight, messagelog, registers
 
 proc changeModeToInsertMode(status: var EditorStatus) {.inline.} =
   if currentBufStatus.isReadonly:
