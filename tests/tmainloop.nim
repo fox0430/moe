@@ -19,10 +19,14 @@
 
 import std/[unittest, tables, options]
 import pkg/results
-import moepkg/[unicodeext, bufferstatus, gapbuffer, editorstatus]
+import moepkg/[unicodeext, bufferstatus, gapbuffer, editorstatus, ui]
 
 import moepkg/registers {.all.}
 import moepkg/mainloop {.all.}
+
+proc resize(status: var EditorStatus, h, w: int) =
+  updateTerminalSize(h, w)
+  status.resize
 
 suite "mainloop: isExecMacroCommand":
   setup:
@@ -92,6 +96,9 @@ suite "mainloop: execMacro":
     status.addNewBufferInCurrentWin
     currentBufStatus.buffer = @["1", "2"].toSeqRunes.initGapBuffer
 
+    status.resize(100, 100)
+    status.update
+
     const RegisterName = 'a'
     registers.operationRegisters[RegisterName] = @["dd"].toSeqRunes
     status.execMacro(RegisterName.toRune)
@@ -103,6 +110,9 @@ suite "mainloop: execMacro":
     status.addNewBufferInCurrentWin
     currentBufStatus.buffer = @["1", "2", "3"].toSeqRunes.initGapBuffer
 
+    status.resize(100, 100)
+    status.update
+
     const RegisterName = 'a'
     registers.operationRegisters[RegisterName] = @["dd", "dd"].toSeqRunes
     status.execMacro(RegisterName.toRune)
@@ -113,6 +123,9 @@ suite "mainloop: execMacro":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
     currentBufStatus.buffer = @["1", "2", "3"].toSeqRunes.initGapBuffer
+
+    status.resize(100, 100)
+    status.update
 
     const RegisterName = 'a'
     registers.operationRegisters[RegisterName] = @["j", "dd"].toSeqRunes
@@ -129,6 +142,9 @@ suite "mainloop: execEditorCommand":
     status.addNewBufferInCurrentWin
     currentBufStatus.buffer = @["1", "2"].toSeqRunes.initGapBuffer
 
+    status.resize(100, 100)
+    status.update
+
     const Command = ru"dd"
     status.execEditorCommand(Command)
 
@@ -140,6 +156,9 @@ suite "mainloop: execEditorCommand":
     status.addNewBufferInCurrentWin
     currentBufStatus.buffer = @["1", "2"].toSeqRunes.initGapBuffer
 
+    status.resize(100, 100)
+    status.update
+
     const Command = ru":"
     status.execEditorCommand(Command)
 
@@ -149,6 +168,9 @@ suite "mainloop: execEditorCommand":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
     currentBufStatus.buffer = @["1", "2"].toSeqRunes.initGapBuffer
+
+    status.resize(100, 100)
+    status.update
 
     const RegisterName = 'a'
     status.recodingOperationRegister = some(RegisterName.toRune)
@@ -169,6 +191,9 @@ suite "mainloop: execEditorCommand":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
     currentBufStatus.buffer = @["1", "2", "3"].toSeqRunes.initGapBuffer
+
+    status.resize(100, 100)
+    status.update
 
     const RegisterName = 'a'
     registers.operationRegisters[RegisterName] = @["j", "dd"].toSeqRunes
