@@ -17,12 +17,13 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options]
+import std/[unittest, options, tables]
+import pkg/results
 import moepkg/[unicodeext, settings]
 
 import moepkg/registers {.all.}
 
-suite "Register: Add a buffer to the no name register":
+suite "registers: Add a buffer to the no name register":
   test "Add a string to the no name register":
     var registers: Registers
     let settings = initEditorSettings()
@@ -70,7 +71,7 @@ suite "Register: Add a buffer to the no name register":
       isLine: true,
       name: "")
 
-suite "Register: Add a buffer to the named register":
+suite "registers: Add a buffer to the named register":
   test "Add a string to the named register":
     var registers: Registers
     let settings = initEditorSettings()
@@ -128,7 +129,7 @@ suite "Register: Add a buffer to the named register":
     check registers.namedRegisters.len == 0
     check registers.noNameRegisters == Register()
 
-suite "Register: Add a buffer to the small delete register":
+suite "registers: Add a buffer to the small delete register":
   test "Add a deleted string to the small deleted register":
     var registers: Registers
     let settings = initEditorSettings()
@@ -147,7 +148,7 @@ suite "Register: Add a buffer to the small delete register":
       let r = registers.numberRegisters[i]
       check r == Register()
 
-suite "Register: Add a buffer to the number register":
+suite "registers: Add a buffer to the number register":
   test "Add a yanked string to the number register":
     var registers: Registers
     let settings = initEditorSettings()
@@ -182,7 +183,7 @@ suite "Register: Add a buffer to the number register":
       else:
         check r == Register()
 
-suite "Register: Search a register by name":
+suite "registers: Search a register by name":
   test "Search a register by name":
     var registers: Registers
     const
@@ -219,3 +220,94 @@ suite "Register: Search a register by name":
     registers.namedRegisters = @[r1, r2, r3]
 
     check registers.searchByName("z").isNone
+
+suite "registers: addOperationToNormalModeOperationsRegister":
+  setup:
+    normalModeOperationsRegister = @[]
+
+  test "Add operations":
+    addOperationToNormalModeOperationsRegister(ru"yy")
+    addOperationToNormalModeOperationsRegister(ru"dd")
+
+    check normalModeOperationsRegister == @["yy", "dd"].toSeqRunes
+
+suite "registers: getOperationsFromNormalModeOperationsRegister":
+  setup:
+    normalModeOperationsRegister = @[]
+
+  test "Get operations":
+    addOperationToNormalModeOperationsRegister(ru"yy")
+    addOperationToNormalModeOperationsRegister(ru"dd")
+
+    check getOperationsFromNormalModeOperationsRegister() ==
+      @["yy", "dd"].toSeqRunes
+
+suite "registers: isOperationRegisterName":
+  test "Except to true":
+    for ch in '0'..'9':
+      check isOperationRegisterName(ch.toRune)
+
+  test "Except to true 2":
+    for ch in 'A'..'Z':
+      check isOperationRegisterName(ch.toRune)
+
+  test "Except to true 3":
+    for ch in 'a'..'z':
+      check isOperationRegisterName(ch.toRune)
+
+  test "Except to true 4":
+    check isOperationRegisterName(ru'^')
+
+  test "Except to false":
+    check not isOperationRegisterName(ru'@')
+
+suite "registers: getLatestNormalModeOperation":
+  setup:
+    normalModeOperationsRegister = @[]
+
+  test "Get operations":
+    normalModeOperationsRegister = @["yy", "dd"].toSeqRunes
+
+    check getLatestNormalModeOperation() == some(ru"dd")
+
+  test "Except to none":
+    check getLatestNormalModeOperation().isNone
+
+suite "registers: clearOperationToRegister":
+  setup:
+    initOperationRegisters()
+
+  test "Clear the operation register":
+    const RegisterName = 'a'
+    registers.operationRegisters[RegisterName] = @["yy"].toSeqRunes
+
+    check clearOperationToRegister(RegisterName.toRune).isOk
+    check registers.operationRegisters[RegisterName].len == 0
+
+suite "registers: addOperationToRegister":
+  setup:
+    initOperationRegisters()
+
+  test "Add operations":
+    const RegisterName = 'a'
+
+    block:
+      const Operation = ru"yy"
+      check addOperationToRegister(RegisterName.toRune, Operation).isOk
+
+    block:
+      const Operation = ru"dd"
+      check addOperationToRegister(RegisterName.toRune, Operation).isOk
+
+    check registers.operationRegisters[RegisterName] == @["yy", "dd"].toSeqRunes
+
+suite "registers: getOperationsFromRegister":
+  setup:
+    initOperationRegisters()
+
+  test "Get operations":
+    const RegisterName = 'a'
+    registers.operationRegisters[RegisterName] = @["yy", "dd"].toSeqRunes
+
+    check getOperationsFromRegister(RegisterName.toRune).get ==
+      @["yy", "dd"].toSeqRunes

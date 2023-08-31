@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, importutils, sequtils, sugar, os, options]
+import std/[unittest, importutils, sequtils, sugar, os, options, strformat]
 import pkg/[ncurses, results]
 import moepkg/syntax/highlite
 import moepkg/[registers, settings, editorstatus, gapbuffer, unicodeext,
@@ -2665,3 +2665,53 @@ suite "Normal mode: Quickrun command with file":
           break
 
       check not timeout
+
+suite "Normal mode: startRecordingOperations":
+  test "startRecordingOperations 1":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    initOperationRegisters()
+
+    status.resize(100, 100)
+    status.update
+
+    const RegisterName = 'a'
+    status.startRecordingOperations(RegisterName.toRune)
+
+    check status.recodingOperationRegister == some(ru'a')
+
+  test "startRecordingOperations 2":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    initOperationRegisters()
+
+    status.resize(100, 100)
+    status.update
+
+    const RegisterName = '0'
+    status.startRecordingOperations(RegisterName.toRune)
+    status.update
+
+    check status.recodingOperationRegister == some(ru'0')
+
+    check status.commandLine.buffer == (fmt"recording @{$RegisterName}").toRunes
+
+suite "Normal mode: stopRecordingOperations":
+  test "stopRecordingOperations":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    initOperationRegisters()
+
+    status.resize(100, 100)
+    status.update
+
+    const RegisterName = 'a'
+    status.startRecordingOperations(RegisterName.toRune)
+    status.update
+
+    status.stopRecordingOperations
+    status.update
+
+    check status.recodingOperationRegister.isNone
+
+    check status.commandLine.buffer.len == 0
