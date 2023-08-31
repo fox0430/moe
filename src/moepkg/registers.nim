@@ -39,19 +39,21 @@ var
   ## Records all normal mode operations.
   normalModeOperationsRegister: seq[Runes]
 
-  ## Registers named '0' ~ '9', 'A' ~ 'Z' 'a' ~ 'z' and '^' for recoding
+  ## Registers named '0' ~ '9', 'A' ~ 'Z' 'a' ~ 'z' for recoding
   ## the editor operations.
-  ## '^' records the last operation.
   ##
   ## key: Rgister name
   ## value: Operations (editor commands)
-  operationRegisters: OrderedTable[char, seq[Runes]] = toOrderedTable(
-    concat(
-      toSeq('0'..'9'),
-      toSeq('A'..'Z'),
-      toSeq('a'..'z'),
-      toSeq('^'..'^')
-    ).mapIt((it, @[ru""])))
+  operationRegisters: OrderedTable[char, seq[Runes]]
+
+proc initOperationRegisters*() =
+  operationRegisters = concat(
+    toSeq('0'..'9'),
+    toSeq('A'..'Z'),
+    toSeq('a'..'z'),
+  )
+  .mapIt((it, newSeq[Runes]()))
+  .toOrderedTable
 
 proc addRegister(
   registers: var Registers,
@@ -235,9 +237,13 @@ proc searchByName*(registers: Registers, name: string): Option[Register] =
         return some(r)
 
 proc addOperationToNormalModeOperationsRegister*(command: Runes) {.inline.} =
+  ## Add an operation to normalModeOperationsRegister.
+
   normalModeOperationsRegister.add command
 
-proc getAllNormalModeOperations*(): seq[Runes] {.inline.} =
+proc getOperationsFromNormalModeOperationsRegister*(): seq[Runes] {.inline.} =
+  ## Return all operations from normalModeOperationsRegister.
+
   normalModeOperationsRegister
 
 proc getLatestNormalModeOperation*(): Option[Runes] =
@@ -249,7 +255,8 @@ proc isOperationRegisterName*(name: Rune): bool {.inline.} =
 
   char(name) >= '0' and char(name) <= '9' or
   char(name) >= 'A' and char(name) <= 'Z' or
-  char(name) >= 'a' and char(name) <= 'z'
+  char(name) >= 'a' and char(name) <= 'z' or
+  char(name) == '^'
 
 proc clearOperationToRegister*(name: Rune): Result[(), string] =
   ## Clear the operationRegister.
@@ -265,11 +272,13 @@ proc addOperationToRegister*(
   operation: Runes): Result[(), string] =
     ## Add an editor operation to the operationRegister.
 
-    if isOperationRegisterName(name):
+    if not isOperationRegisterName(name):
+      return Result[(), string].err "Invalid register name"
+    elif operation.len == 0:
+      return Result[(), string].err "Invalid operation"
+    else:
       operationRegisters[char(name)].add operation
       return Result[(), string].ok ()
-    else:
-      return Result[(), string].err "Invalid register name"
 
 proc getOperationsFromRegister*(name: Rune): Result[seq[Runes], string] =
     ## Return editor operations from the operationRegister.

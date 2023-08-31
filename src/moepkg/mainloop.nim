@@ -398,15 +398,34 @@ proc isExecMacroCommand(bufStatus: BufferStatus, commands: Runes): bool =
   bufStatus.mode.isNormalMode and
   commands.len == 2 and
   commands[0] == ord('@') and
-  isOperationRegisterName(commands[1])
+  isOperationRegisterName(commands[1]) and
+  getOperationsFromRegister(commands[1]).get.len > 0
 
-proc execMacro*(status: var EditorStatus, name: Rune) =
+proc execMacro(status: var EditorStatus, name: Rune) =
   ## Exec commands from the operationRegister.
+  ## Terminate macro execution if exmode is entered.
 
   if isOperationRegisterName(name):
     let commands = getOperationsFromRegister(name).get
     for c in commands:
-      if c.len > 0: status.execCommand(c)
+      status.execCommand(c)
+
+      if currentBufStatus.isExMode: break
+      else: status.update
+
+proc execEditorCommand(status: var EditorStatus, command: Runes) =
+  if status.recodingOperationRegister.isSome:
+    if not isStopRecordingOperationsCommand(command):
+      discard addOperationToRegister(
+        status.recodingOperationRegister.get,
+        command).get
+
+  status.lastOperatingTime = now()
+
+  if isExecMacroCommand(currentBufStatus, command):
+    status.execMacro(command[1])
+  else:
+    status.execCommand(command)
 
 proc editorMainLoop*(status: var EditorStatus) =
   ## Get keys, exec commands and update view.
@@ -451,19 +470,7 @@ proc editorMainLoop*(status: var EditorStatus) =
       of InputState.Continue:
         continue
       of InputState.Valid:
-        if status.recodingOperationRegister.isSome:
-          if not isStopRecordingOperationsCommand(command):
-            discard addOperationToRegister(
-              status.recodingOperationRegister.get,
-              command).get
-
-        status.lastOperatingTime = now()
-
-        if isExecMacroCommand(currentBufStatus, command):
-          status.execMacro(command[1])
-        else:
-          status.execCommand(command)
-
+        status.execEditorCommand(command)
         command.clear
       of InputState.Invalid, InputState.Cancel:
         command.clear
