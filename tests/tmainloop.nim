@@ -50,6 +50,24 @@ suite "mainloop: isExecMacroCommand":
     const Command = ru"@0"
     check b.isExecMacroCommand(Command)
 
+  test "Except to true 3":
+    let b = initBufferStatus("").get
+
+    const RegisterName = '0'
+    registers.operationRegisters[RegisterName] = @["yy"].toSeqRunes
+
+    const Command = ru"1@0"
+    check b.isExecMacroCommand(Command)
+
+  test "Except to true 4":
+    let b = initBufferStatus("").get
+
+    const RegisterName = '0'
+    registers.operationRegisters[RegisterName] = @["yy"].toSeqRunes
+
+    const Command = ru"10@0"
+    check b.isExecMacroCommand(Command)
+
   test "Except to false":
     let b = initBufferStatus("").get
 
@@ -85,6 +103,18 @@ suite "mainloop: isExecMacroCommand":
     registers.operationRegisters[RegisterName] = @[].toSeqRunes
 
     const Command = ru"@a"
+    check not b.isExecMacroCommand(Command)
+
+  test "Except to false 4":
+    var b = initBufferStatus("").get
+
+    const Command = ru"1@a"
+    check not b.isExecMacroCommand(Command)
+
+  test "Except to false 5":
+    var b = initBufferStatus("").get
+
+    const Command = ru"1@@"
     check not b.isExecMacroCommand(Command)
 
 suite "mainloop: execMacro":
@@ -202,3 +232,35 @@ suite "mainloop: execEditorCommand":
     status.execEditorCommand(Command)
 
     check currentBufStatus.buffer.toSeqRunes == @["1", "3"].toSeqRunes
+
+  test "Exec macro 2":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = @["1", "2", "3"].toSeqRunes.initGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const RegisterName = 'a'
+    registers.operationRegisters[RegisterName] = @["2dd"].toSeqRunes
+
+    const Command = ru"@a"
+    status.execEditorCommand(Command)
+
+    check currentBufStatus.buffer.toSeqRunes == @["3"].toSeqRunes
+
+  test "Repeat macro":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = @["1", "2"].toSeqRunes.initGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const RegisterName = 'a'
+    registers.operationRegisters[RegisterName] = @["dd"].toSeqRunes
+
+    const Command = ru"2@a"
+    status.execEditorCommand(Command)
+
+    check currentBufStatus.buffer.toSeqRunes == @[""].toSeqRunes

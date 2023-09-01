@@ -395,11 +395,19 @@ proc close(suggestWin: var Option[SuggestionWindow]) {.inline.} =
   suggestWin = none(SuggestionWindow)
 
 proc isExecMacroCommand(bufStatus: BufferStatus, commands: Runes): bool =
-  bufStatus.mode.isNormalMode and
-  commands.len == 2 and
-  commands[0] == ord('@') and
-  isOperationRegisterName(commands[1]) and
-  getOperationsFromRegister(commands[1]).get.len > 0
+  if bufStatus.mode.isNormalMode and commands.len > 1:
+    if commands[0].isDigit:
+      var i = 0
+      while commands[i].isDigit: i.inc
+      if commands.len - i == 2:
+        return commands[i] == ord('@') and
+          isOperationRegisterName(commands[i + 1]) and
+          getOperationsFromRegister(commands[i + 1]).get.len > 0
+    else:
+      return commands.len == 2 and
+        commands[0] == ord('@') and
+        isOperationRegisterName(commands[1]) and
+        getOperationsFromRegister(commands[1]).get.len > 0
 
 proc execMacro(status: var EditorStatus, name: Rune) =
   ## Exec commands from the operationRegister.
@@ -423,7 +431,17 @@ proc execEditorCommand(status: var EditorStatus, command: Runes) =
   status.lastOperatingTime = now()
 
   if isExecMacroCommand(currentBufStatus, command):
-    status.execMacro(command[1])
+
+    var repeat = 1
+    if command[0].isDigit:
+      # If the first word (text) is a number, it is considered as the number
+      # repetitions.
+      var i = 0
+      while command[i + 1].isDigit: i.inc
+      repeat = parseInt(command[0 .. i])
+
+    for i in 0 ..< repeat:
+      status.execMacro(command[^1])
   else:
     status.execCommand(command)
 
