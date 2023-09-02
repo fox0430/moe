@@ -105,16 +105,22 @@ suite "mainloop: isExecMacroCommand":
     const Command = ru"@a"
     check not b.isExecMacroCommand(Command)
 
-  test "Except to false 4":
+  test "Except to false 5":
     var b = initBufferStatus("").get
 
     const Command = ru"1@a"
     check not b.isExecMacroCommand(Command)
 
-  test "Except to false 5":
+  test "Except to false 6":
     var b = initBufferStatus("").get
 
     const Command = ru"1@@"
+    check not b.isExecMacroCommand(Command)
+
+  test "Except to false 7":
+    var b = initBufferStatus("").get
+
+    const Command = ru"10"
     check not b.isExecMacroCommand(Command)
 
 suite "mainloop: execMacro":

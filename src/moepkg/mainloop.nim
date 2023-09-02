@@ -197,7 +197,7 @@ proc isExecMacroCommand(bufStatus: BufferStatus, commands: Runes): bool =
       # If the first word (text) is a number, it is considered as the number
       # repetitions.
       var i = 0
-      while commands[i].isDigit: i.inc
+      while i < commands.high and commands[i].isDigit: i.inc
       if commands.len - i == 2:
         return commands[i] == ord('@') and
           isOperationRegisterName(commands[i + 1]) and
