@@ -23,7 +23,7 @@ import pkg/results
 import syntax/highlite
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        windownode, color, settings, statusline, bufferstatus, cursor, tabline,
-       backup, messages, commandline, register, platform, movement,
+       backup, messages, commandline, registers, platform, movement,
        autocomplete, suggestionwindow, filermodeutils, debugmodeutils,
        independentutils, viewhighlight, helputils, backupmanagerutils,
        diffviewerutils, messagelog, globalsidebar, build, quickrunutils, git,
@@ -48,7 +48,6 @@ type
     prevBufferIndex*: int
     searchHistory*: seq[Runes]
     exCommandHistory*: seq[Runes]
-    normalCommandHistory*: seq[Runes]
     registers*: Registers
     settings*: EditorSettings
     mainWindow*: MainWindow
@@ -68,6 +67,7 @@ type
     sidebar*: Option[GlobalSidebar]
     colorMode*: ColorMode
     backgroundTasks*: BackgroundTasks
+    recodingOperationRegister*: Option[Rune]
 
 const
   TabLineWindowHeight = 1
@@ -842,6 +842,12 @@ proc update*(status: var EditorStatus) =
   if status.sidebar.isSome: status.sidebar.get.update
 
   status.updateCommandLine
+
+  if not currentBufStatus.isCommandLineMode and
+     status.recodingOperationRegister.isSome:
+       # Always write a message to the command line while recording operations.
+       status.commandLine.writeInRecordingOperations(
+         status.recodingOperationRegister.get)
 
   if currentBufStatus.isCursor:
     setCursor(true)

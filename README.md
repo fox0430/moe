@@ -91,6 +91,8 @@ This project's goals are easily customizable, high productivity, user friendly, 
 
   - Nim
 
+- Macros
+
 ## Planned features
 
 - Supports regular expression and PEG
@@ -102,8 +104,6 @@ This project's goals are easily customizable, high productivity, user friendly, 
 - Snippets
 
 - Spell checker
-
-- Macros
 
 - Terminal
 

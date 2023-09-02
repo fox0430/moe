@@ -219,6 +219,21 @@ proc writeAutoBackupSuccessMessage*(
     if settings.logNotifications and settings.autoBackupLogNotify:
       addMessageLog message
 
+proc writeRunQuickRunMessage*(
+  commandLine: var CommandLine,
+  settings: NotificationSettings) =
+    const mess = "Quick run..."
+    if settings.quickRunScreenNotify:
+      commandLine.writeMessageOnCommandLine(mess)
+
+proc writeInRecordingOperations*(
+  commandLine: var CommandLine,
+  registerName: Rune) =
+
+    let mess = fmt"recording @{$registerName}"
+    commandLine.writeMessageOnCommandLine(mess)
+    addMessageLog mess
+
 proc writeAutoBackupFailedMessage*(
   commandLine: var CommandLine,
   filename: Runes,
@@ -228,13 +243,6 @@ proc writeAutoBackupFailedMessage*(
       commandLine.writeMessageOnCommandLine(message, EditorColorPairIndex.errorMessage)
     if settings.logNotifications and settings.autoBackupLogNotify:
       addMessageLog message
-
-proc writeRunQuickRunMessage*(
-  commandLine: var CommandLine,
-  settings: NotificationSettings) =
-    const mess = "Quick run..."
-    if settings.quickRunScreenNotify:
-      commandLine.writeMessageOnCommandLine(mess)
 
 proc writeRunQuickRunTimeoutMessage*(commandLine: var CommandLine) =
     const mess = "Quick run timeout"

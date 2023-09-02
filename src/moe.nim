@@ -20,7 +20,7 @@
 import std/[os, times]
 import pkg/results
 import moepkg/[ui, bufferstatus, editorstatus, cmdlineoption, mainloop, git,
-               editorview, theme]
+               editorview, theme, registers]
 
 # Load persisted data (Ex command history, search history and cursor postion)
 proc loadPersistData(status: var EditorStatus) =
@@ -87,6 +87,8 @@ proc initEditor(): EditorStatus =
   result.loadPersistData
 
   result.initSidebar
+
+  initOperationRegisters()
 
   disableControlC()
 

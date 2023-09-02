@@ -18,45 +18,50 @@
 #[############################################################################]#
 
 import std/[options, times]
+import pkg/results
 import editorstatus, bufferstatus, windownode, unicodeext, gapbuffer, ui,
        normalmode, visualmode, insertmode, autocomplete, suggestionwindow,
        exmode, replacemode, filermode, buffermanager, logviewer, help,
        recentfilemode, quickrun, backupmanager, diffviewer, configmode,
        debugmode, commandline, search, commandlineutils, popupwindow,
-       filermodeutils, messages
+       filermodeutils, messages, registers
 
-proc invokeCommand(currentMode: Mode, command: Runes): InputState =
-  case currentMode:
-    of Mode.insert, Mode.searchForward, Mode.searchBackward:
-      InputState.Valid
-    of Mode.ex:
-      isExCommandBuffer(command)
-    of Mode.normal:
-      isNormalModeCommand(command)
-    of Mode.visual, Mode.visualBlock, Mode.visualLine:
-      isVisualModeCommand(command)
-    of Mode.replace:
-      isReplaceModeCommand(command)
-    of Mode.filer:
-      isFilerModeCommand(command)
-    of Mode.bufManager:
-      isBufferManagerCommand(command)
-    of Mode.logViewer:
-      isLogViewerCommand(command)
-    of Mode.help:
-      isHelpCommand(command)
-    of Mode.recentFile:
-      isRecentFileCommand(command)
-    of Mode.quickRun:
-      isQuickRunCommand(command)
-    of Mode.backup:
-      isBackupManagerCommand(command)
-    of Mode.diff:
-      isDiffViewerCommand(command)
-    of Mode.config:
-      isConfigModeCommand(command)
-    of Mode.debug:
-      isDebugModeCommand(command)
+proc invokeCommand(
+  currentMode: Mode,
+  command: Runes,
+  recodingOperationRegister: Option[Rune]): InputState =
+
+    case currentMode:
+      of Mode.insert, Mode.searchForward, Mode.searchBackward:
+        InputState.Valid
+      of Mode.ex:
+        isExCommandBuffer(command)
+      of Mode.normal:
+        isNormalModeCommand(command, recodingOperationRegister)
+      of Mode.visual, Mode.visualBlock, Mode.visualLine:
+        isVisualModeCommand(command)
+      of Mode.replace:
+        isReplaceModeCommand(command)
+      of Mode.filer:
+        isFilerModeCommand(command)
+      of Mode.bufManager:
+        isBufferManagerCommand(command)
+      of Mode.logViewer:
+        isLogViewerCommand(command)
+      of Mode.help:
+        isHelpCommand(command)
+      of Mode.recentFile:
+        isRecentFileCommand(command)
+      of Mode.quickRun:
+        isQuickRunCommand(command)
+      of Mode.backup:
+        isBackupManagerCommand(command)
+      of Mode.diff:
+        isDiffViewerCommand(command)
+      of Mode.config:
+        isConfigModeCommand(command)
+      of Mode.debug:
+        isDebugModeCommand(command)
 
 proc execCommand(status: var EditorStatus, command: Runes) =
   let currentMode = currentBufStatus.mode
@@ -185,6 +190,56 @@ proc isResetSearchHistoryIndex(
   key: Rune): bool {.inline.} =
 
     (searchHistoryIndex.isSome) and not (isUpKey(key) or isDownKey(key))
+
+proc isExecMacroCommand(bufStatus: BufferStatus, commands: Runes): bool =
+  if bufStatus.mode.isNormalMode and commands.len > 1:
+    if commands[0].isDigit:
+      # If the first word (text) is a number, it is considered as the number
+      # repetitions.
+      var i = 0
+      while commands[i].isDigit: i.inc
+      if commands.len - i == 2:
+        return commands[i] == ord('@') and
+          isOperationRegisterName(commands[i + 1]) and
+          getOperationsFromRegister(commands[i + 1]).get.len > 0
+    else:
+      return commands.len == 2 and
+        commands[0] == ord('@') and
+        isOperationRegisterName(commands[1]) and
+        getOperationsFromRegister(commands[1]).get.len > 0
+
+proc execMacro(status: var EditorStatus, name: Rune) =
+  ## Exec commands from the operationRegister.
+
+  if isOperationRegisterName(name):
+    let commands = getOperationsFromRegister(name).get
+    for c in commands:
+      status.execCommand(c)
+      status.update
+
+proc execEditorCommand(status: var EditorStatus, command: Runes) =
+  if status.recodingOperationRegister.isSome:
+    if not isStopRecordingOperationsCommand(currentBufStatus, command):
+      discard addOperationToRegister(
+        status.recodingOperationRegister.get,
+        command).get
+
+  status.lastOperatingTime = now()
+
+  if isExecMacroCommand(currentBufStatus, command):
+    var repeat = 1
+    if command[0].isDigit:
+      # If the first word (text) is a number, it is considered as the number
+      # repetitions.
+      var i = 0
+      while command[i + 1].isDigit: i.inc
+      repeat = parseInt(command[0 .. i])
+
+    let registerName = command[^1]
+    for i in 0 ..< repeat:
+      status.execMacro(registerName)
+  else:
+    status.execCommand(command)
 
 proc commandLineLoop*(status: var EditorStatus) =
   ## Get keys and update view.
@@ -355,9 +410,13 @@ proc commandLineLoop*(status: var EditorStatus) =
     if isExMode(currentBufStatus.mode):
       let command = status.commandLine.buffer
 
-      case invokeCommand(currentBufStatus.mode, command):
+      let inputState = invokeCommand(
+        currentBufStatus.mode,
+        command,
+        status.recodingOperationRegister)
+      case inputState:
         of InputState.Valid:
-          status.execCommand(command)
+          status.execEditorCommand(command)
         of InputState.Invalid:
           status.commandLine.writeNotEditorCommandError(command)
         else:
@@ -386,7 +445,7 @@ proc close(suggestWin: var Option[SuggestionWindow]) {.inline.} =
   suggestWin = none(SuggestionWindow)
 
 proc editorMainLoop*(status: var EditorStatus) =
-  ## Get keys and update view.
+  ## Get keys, exec commands and update view.
 
   status.resize
 
@@ -420,12 +479,15 @@ proc editorMainLoop*(status: var EditorStatus) =
 
     command.add key
 
-    case invokeCommand(currentBufStatus.mode, command):
+    let inputState = invokeCommand(
+      currentBufStatus.mode,
+      command,
+      status.recodingOperationRegister)
+    case inputState:
       of InputState.Continue:
         continue
       of InputState.Valid:
-        status.lastOperatingTime = now()
-        status.execCommand(command)
+        status.execEditorCommand(command)
         command.clear
       of InputState.Invalid, InputState.Cancel:
         command.clear

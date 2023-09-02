@@ -17,11 +17,11 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[times, strutils, sequtils, options]
+import std/[times, strutils, sequtils, options, strformat]
 import pkg/results
 import editorstatus, ui, gapbuffer, unicodeext, fileutils, windownode, movement,
        editor, searchutils, bufferstatus, quickrunutils, messages, visualmode,
-       commandline, viewhighlight, messagelog
+       commandline, viewhighlight, messagelog, registers
 
 proc changeModeToInsertMode(status: var EditorStatus) {.inline.} =
   if currentBufStatus.isReadonly:
@@ -383,14 +383,6 @@ proc showCurrentCharInfoCommand(
       currentChar = currentBufStatus.buffer[currentLine][currentColumn]
 
     status.commandLine.writeCurrentCharInfo(currentChar)
-
-proc normalCommand(status: var EditorStatus, commands: Runes)
-
-proc repeatNormalModeCommand(status: var EditorStatus) =
-  if status.normalCommandHistory.len == 0: return
-
-  let commands  = status.normalCommandHistory[^1]
-  status.normalCommand(commands)
 
 proc yankLines(status: var EditorStatus, start, last: int) =
   let lastLine = min(
@@ -1114,6 +1106,26 @@ proc pasteBeforeCursor(status: var EditorStatus) {.inline.} =
   else:
     currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
 
+proc startRecordingOperations(status: var EditorStatus, name: Rune) =
+  ## Start recoding editor operations for macro.
+
+  if isOperationRegisterName(name):
+    discard clearOperationToRegister(name).get
+    status.recodingOperationRegister = some(name)
+  else:
+    let errMess = fmt"Error: Invalid operation register name: {name}"
+    addMessageLog errMess.toRunes
+
+proc stopRecordingOperations(status: var EditorStatus) =
+  status.recodingOperationRegister = none(Rune)
+  status.commandLine.clear
+
+proc isStopRecordingOperationsCommand*(
+  bufStatus: BufferStatus,
+  command: Runes): bool {.inline.} =
+
+    bufStatus.mode.isNormalMode and $command == "q"
+
 proc isMovementKey(key: Rune): bool {.inline.} =
   isControlK(key) or
   isControlJ(key) or
@@ -1420,281 +1432,317 @@ proc normalCommand(status: var EditorStatus, commands: Runes) =
     let secondKey = commands[1]
     if secondKey == ord('c'):
       status.closeCurrentWindow
-  elif key == ord('.'):
-    status.repeatNormalModeCommand
   elif key == ord('\\'):
     let secondKey = commands[1]
     if secondKey == ord('r'): status.runQuickRunCommand
   elif key == ord('"'):
     status.registerCommand(commands)
+  elif key == ord('q'):
+    if commands.len == 1: status.stopRecordingOperations
+    elif commands.len == 2: status.startRecordingOperations(commands[1])
   else:
     return
 
-  # Record normal mode commands
-  if commands[0] != ord('.') and
-     not isMovementKey(commands[0]) and
-     not isChangeModeKey(commands[0]):
-    status.normalCommandHistory.add commands
+  addOperationToNormalModeOperationsRegister(commands)
 
-proc isNormalModeCommand*(command: Runes): InputState =
-  result = InputState.Invalid
+proc isNormalModeCommand*(
+  command: Runes,
+  recodingOperationRegister: Option[Rune]): InputState =
 
-  if command.len == 0:
-    return InputState.Continue
-  elif isControlC(command[^1]):
-    result = InputState.Valid
-  elif isEscKey(command[0]):
-    if command.len == 1:
-      result = InputState.Continue
-    elif command.len == 2 and isEscKey(command[1]):
-      result = InputState.Valid
-    else:
-      # Remove ECS key and call recursively.
-      return isNormalModeCommand(command[1 .. command.high])
-
-  elif isEscKey(command[^1]):
-    # Cancel commands.
     result = InputState.Invalid
 
-  else:
-    if $command == "/" or
-       $command == "?" or
-       $command == ":" or
-       isControlK(command) or
-       isControlJ(command) or
-       isControlV(command) or
-       $command == "h" or isLeftKey(command) or isBackspaceKey(command[0]) or
-       $command == "l" or isRightKey(command) or
-       $command == "k" or isUpKey(command) or
-       $command == "j" or isDownKey(command) or
-       isEnterKey(command) or
-       $command == "x" or isDcKey(command) or
-       $command == "X" or
-       $command == "^" or $command == "_" or
-       $command == "0" or isHomeKey(command) or
-       $command == "$" or isEndKey(command) or
-       $command == "{" or
-       $command == "}" or
-       $command == "-" or
-       $command == "+" or
-       $command == "G" or
-       isControlU(command) or
-       isControlD(command) or
-       isPageUpKey(command) or
-       ## Page down and Ctrl - F
-       isPageDownKey(command) or
-       $command == "w" or
-       $command == "b" or
-       $command == "e" or
-       $command == "o" or
-       $command == "O" or
-       $command == "D" or
-       $command == "S" or
-       $command == "s" or
-       $command == "p" or
-       $command == "P" or
-       $command == ">" or
-       $command == "<" or
-       $command == "J" or
-       isControlA(command) or
-       isControlX(command) or
-       $command == "~" or
-       $command == "n" or
-       $command == "N" or
-       $command == "*" or
-       $command == "#" or
-       $command == "R" or
-       $command == "i" or
-       $command == "I" or
-       $command == "v" or
-       $command == "a" or
-       $command == "A" or
-       $command == "u" or
-       isControlR(command) or
-       $command == "." or
-       $command == "Y" or
-       $command == "V" or
-       $command == "H" or
-       $command == "M" or
-       $command == "L" or
-       $command == "%":
-         result = InputState.Valid
-
-    elif isDigit(command[0]):
-      # Remove numbers and call recursively.
-      return isNormalModeCommand(command[1 .. command.high])
-
-    elif command[0] == ord('g'):
+    if command.len == 0:
+      return InputState.Continue
+    elif isControlC(command[^1]):
+      result = InputState.Valid
+    elif isEscKey(command[0]):
       if command.len == 1:
         result = InputState.Continue
-      elif command.len == 2:
-        if command[1] == ord('g') or
-           command[1] == ord('_') or
-           command[1] == ord('a'):
-             result = InputState.Valid
+      elif command.len == 2 and isEscKey(command[1]):
+        result = InputState.Valid
+      else:
+        # Remove ECS key and call recursively.
+        return isNormalModeCommand(
+          command[1 .. command.high],
+          recodingOperationRegister)
 
-    elif command[0] == ord('z'):
-      if command.len == 1:
-        result = InputState.Continue
-      elif command.len == 2:
-        if command[1] == ord('.') or
-           command[1] == ord('t') or
-           command[1] == ord('b'):
-             result = InputState.Valid
+    elif isEscKey(command[^1]):
+      # Cancel commands.
+      result = InputState.Invalid
 
-    elif command[0] == ord('c'):
-      if command.len == 1:
-        result = InputState.Continue
-      elif command.len == 2:
-        if command[1] == ord('i') or
-           command[1] == ord('f'):
-             result = InputState.Continue
-        elif command[1] == ord('c') or command[1] == ('l'):
-          result = InputState.Valid
-      elif command.len == 3:
-        if command[1] == ord('f') or
-           (command[1] == ord('i') and
-           (isParen(command[2]) or command[2] == ord('w'))):
-             result = InputState.Valid
+    else:
+      if $command == "/" or
+         $command == "?" or
+         $command == ":" or
+         isControlK(command) or
+         isControlJ(command) or
+         isControlV(command) or
+         $command == "h" or isLeftKey(command) or isBackspaceKey(command[0]) or
+         $command == "l" or isRightKey(command) or
+         $command == "k" or isUpKey(command) or
+         $command == "j" or isDownKey(command) or
+         isEnterKey(command) or
+         $command == "x" or isDcKey(command) or
+         $command == "X" or
+         $command == "^" or $command == "_" or
+         $command == "0" or isHomeKey(command) or
+         $command == "$" or isEndKey(command) or
+         $command == "{" or
+         $command == "}" or
+         $command == "-" or
+         $command == "+" or
+         $command == "G" or
+         isControlU(command) or
+         isControlD(command) or
+         isPageUpKey(command) or
+         ## Page down and Ctrl - F
+         isPageDownKey(command) or
+         $command == "w" or
+         $command == "b" or
+         $command == "e" or
+         $command == "o" or
+         $command == "O" or
+         $command == "D" or
+         $command == "S" or
+         $command == "s" or
+         $command == "p" or
+         $command == "P" or
+         $command == ">" or
+         $command == "<" or
+         $command == "J" or
+         isControlA(command) or
+         isControlX(command) or
+         $command == "~" or
+         $command == "n" or
+         $command == "N" or
+         $command == "*" or
+         $command == "#" or
+         $command == "R" or
+         $command == "i" or
+         $command == "I" or
+         $command == "v" or
+         $command == "a" or
+         $command == "A" or
+         $command == "u" or
+         isControlR(command) or
+         $command == "." or
+         $command == "Y" or
+         $command == "V" or
+         $command == "H" or
+         $command == "M" or
+         $command == "L" or
+         $command == "%":
+           result = InputState.Valid
 
-    elif command[0] == ord('d'):
-      if command.len == 1:
-        result = InputState.Continue
-      elif command.len == 2:
-        if command[1] == ord('d') or
-           command[1] == ord('w') or
-           command[1] == ord('$') or isEndKey(command[1]) or
-           command[1] == ord('0') or isHomeKey(command[1]) or
-           command[1] == ord('G') or
-           command[1] == ord('{') or
-           command[1] == ord('}'):
-             result = InputState.Valid
-        elif command[1] == ord('g') or command[1] == ord('i'):
+      elif isDigit(command[0]):
+        # Remove numbers and call recursively.
+        return isNormalModeCommand(
+          command[1 .. command.high],
+          recodingOperationRegister)
+
+      elif command[0] == ord('g'):
+        if command.len == 1:
           result = InputState.Continue
-      elif command.len == 3:
-        if command[2] == ord('g'):
-          result = InputState.Valid
-        elif command[1] == ord('i'):
-          if isParen(command[2]) or
-             command[2] == ord('w'):
+        elif command.len == 2:
+          if command[1] == ord('g') or
+             command[1] == ord('_') or
+             command[1] == ord('a'):
                result = InputState.Valid
 
-    elif command[0] == ord('y'):
-      if command.len == 1:
-        result = InputState.Continue
-      elif command.len == 2:
-        if command[1] == ord('y') or
-           command[1] == ord('w') or
-           command[1] == ord('{') or
-           command[1] == ord('}') or
-           command[1] == ord('l'):
-          result = InputState.Valid
-        elif command == "yt".ru:
+      elif command[0] == ord('z'):
+        if command.len == 1:
           result = InputState.Continue
-      elif command.len == 3:
-        if command[0 .. 1] == "yt".ru:
+        elif command.len == 2:
+          if command[1] == ord('.') or
+             command[1] == ord('t') or
+             command[1] == ord('b'):
+               result = InputState.Valid
+
+      elif command[0] == ord('c'):
+        if command.len == 1:
+          result = InputState.Continue
+        elif command.len == 2:
+          if command[1] == ord('i') or
+             command[1] == ord('f'):
+               result = InputState.Continue
+          elif command[1] == ord('c') or command[1] == ('l'):
+            result = InputState.Valid
+        elif command.len == 3:
+          if command[1] == ord('f') or
+             (command[1] == ord('i') and
+             (isParen(command[2]) or command[2] == ord('w'))):
+               result = InputState.Valid
+
+      elif command[0] == ord('d'):
+        if command.len == 1:
+          result = InputState.Continue
+        elif command.len == 2:
+          if command[1] == ord('d') or
+             command[1] == ord('w') or
+             command[1] == ord('$') or isEndKey(command[1]) or
+             command[1] == ord('0') or isHomeKey(command[1]) or
+             command[1] == ord('G') or
+             command[1] == ord('{') or
+             command[1] == ord('}'):
+               result = InputState.Valid
+          elif command[1] == ord('g') or command[1] == ord('i'):
+            result = InputState.Continue
+        elif command.len == 3:
+          if command[2] == ord('g'):
+            result = InputState.Valid
+          elif command[1] == ord('i'):
+            if isParen(command[2]) or
+               command[2] == ord('w'):
+                 result = InputState.Valid
+
+      elif command[0] == ord('y'):
+        if command.len == 1:
+          result = InputState.Continue
+        elif command.len == 2:
+          if command[1] == ord('y') or
+             command[1] == ord('w') or
+             command[1] == ord('{') or
+             command[1] == ord('}') or
+             command[1] == ord('l'):
+            result = InputState.Valid
+          elif command == "yt".ru:
+            result = InputState.Continue
+        elif command.len == 3:
+          if command[0 .. 1] == "yt".ru:
+            result = InputState.Valid
+
+      elif command[0] == ord('='):
+        if command.len == 1:
+          result = InputState.Continue
+        elif command[1] == ord('='):
           result = InputState.Valid
 
-    elif command[0] == ord('='):
-      if command.len == 1:
-        result = InputState.Continue
-      elif command[1] == ord('='):
-        result = InputState.Valid
-
-    elif command[0] == ord('r'):
-      if command.len == 1:
-        result = InputState.Continue
-      elif command.len == 2:
-        result = InputState.Valid
-
-    elif command[0] == ord('f'):
-      if command.len == 1:
-        result = InputState.Continue
-      elif command.len == 2:
-        result = InputState.Valid
-
-    elif command[0] == ord('t'):
-      if command.len == 1:
-        result = InputState.Continue
-      elif command.len == 2:
-        result = InputState.Valid
-
-    elif command[0] == ord('F'):
-      if command.len == 1:
-        result = InputState.Continue
-      elif command.len == 2:
-        result = InputState.Valid
-
-    elif command[0] == ord('T'):
-      if command.len == 1:
-        result = InputState.Continue
-      elif command.len == 2:
-        result = InputState.Valid
-
-    elif command[0] == ord('Z'):
-      if command.len == 1:
-        result = InputState.Continue
-      elif command.len == 2:
-        if command[1] == ord('Z') or command[1] == ord('Q'):
+      elif command[0] == ord('r'):
+        if command.len == 1:
+          result = InputState.Continue
+        elif command.len == 2:
           result = InputState.Valid
 
-    elif isControlW(command[0]):
-      if command.len == 1:
-        result = InputState.Continue
-      elif command.len == 2:
-        if command[1] == ord('c'):
+      elif command[0] == ord('f'):
+        if command.len == 1:
+          result = InputState.Continue
+        elif command.len == 2:
           result = InputState.Valid
 
-    elif command[0] == ('\\'):
-      if command.len == 1:
-        result = InputState.Continue
-      elif command[1] == ord('r'):
-        result = InputState.Valid
+      elif command[0] == ord('t'):
+        if command.len == 1:
+          result = InputState.Continue
+        elif command.len == 2:
+          result = InputState.Valid
 
-    elif command[0] == ord('"'):
-      if command.len < 3:
-        result = InputState.Continue
-      else:
-        block:
-          let ch = char(command[2])
-          if not (ch in Letters and isDigit(ch)):
+      elif command[0] == ord('F'):
+        if command.len == 1:
+          result = InputState.Continue
+        elif command.len == 2:
+          result = InputState.Valid
+
+      elif command[0] == ord('T'):
+        if command.len == 1:
+          result = InputState.Continue
+        elif command.len == 2:
+          result = InputState.Valid
+
+      elif command[0] == ord('Z'):
+        if command.len == 1:
+          result = InputState.Continue
+        elif command.len == 2:
+          if command[1] == ord('Z') or command[1] == ord('Q'):
+            result = InputState.Valid
+
+      elif isControlW(command[0]):
+        if command.len == 1:
+          result = InputState.Continue
+        elif command.len == 2:
+          if command[1] == ord('c'):
+            result = InputState.Valid
+
+      elif command[0] == ('\\'):
+        if command.len == 1:
+          result = InputState.Continue
+        elif command[1] == ord('r'):
+          result = InputState.Valid
+
+      elif command[0] == ord('"'):
+        if command.len < 3:
+          result = InputState.Continue
+        else:
+          block:
+            let ch = char(command[2])
+            if not (ch in Letters and isDigit(ch)):
+              result = InputState.Invalid
+
+          var
+            currentIndex = 2
+            ch = char(command[currentIndex])
+          while ch in Digits and currentIndex < command.len:
+            inc(currentIndex)
+            ch = char(command[currentIndex])
+
+          let cmd = $command[currentIndex .. ^1]
+          if cmd == "y" or
+             cmd == "d" or
+             cmd == "dg" or
+             cmd == "di" or
+             cmd == "c" or
+             cmd == "ci":
+               result = InputState.Continue
+          elif cmd == "p" or
+               cmd == "P" or
+               cmd == "yy" or
+               cmd == "yw" or
+               cmd == "yl" or
+               cmd == "y{" or
+               cmd == "y}" or
+               cmd == "dd" or
+               cmd == "dw" or
+               cmd == "d$" or (cmd.len == 1 and isEndKey(cmd[0].toRune)) or
+               cmd == "d0" or
+               cmd == "dG" or
+               cmd == "dgg" or
+               cmd == "d{" or
+               cmd == "d}" or
+               (cmd.len == 3 and cmd[0 .. 1] == "di") or
+               cmd == "dh" or
+               cmd == "cl" or cmd == "s" or
+               (cmd.len == 3 and cmd[0 .. 1] == "ci"):
+                 result = InputState.Valid
+
+      elif command[0] == 'q':
+        if command.len == 1:
+          if recodingOperationRegister.isSome:
+            result = InputState.Valid
+          else:
+            result = InputState.Continue
+        elif command.len == 2:
+          let ch = char(command[1])
+          if ch >= 'a' and ch <= 'z':
+            result = InputState.Valid
+          else:
             result = InputState.Invalid
 
-        var
-          currentIndex = 2
-          ch = char(command[currentIndex])
-        while ch in Digits and currentIndex < command.len:
-          inc(currentIndex)
-          ch = char(command[currentIndex])
+      elif command[0] == '@':
+        if command.len == 1:
+            result = InputState.Continue
+        elif command.len == 2:
+          if isOperationRegisterName(command[1]):
+            result = InputState.Valid
+          else:
+            result = InputState.Invalid
 
-        let cmd = $command[currentIndex .. ^1]
-        if cmd == "y" or
-           cmd == "d" or
-           cmd == "dg" or
-           cmd == "di" or
-           cmd == "c" or
-           cmd == "ci":
-             result = InputState.Continue
-        elif cmd == "p" or
-             cmd == "P" or
-             cmd == "yy" or
-             cmd == "yw" or
-             cmd == "yl" or
-             cmd == "y{" or
-             cmd == "y}" or
-             cmd == "dd" or
-             cmd == "dw" or
-             cmd == "d$" or (cmd.len == 1 and isEndKey(cmd[0].toRune)) or
-             cmd == "d0" or
-             cmd == "dG" or
-             cmd == "dgg" or
-             cmd == "d{" or
-             cmd == "d}" or
-             (cmd.len == 3 and cmd[0 .. 1] == "di") or
-             cmd == "dh" or
-             cmd == "cl" or cmd == "s" or
-             (cmd.len == 3 and cmd[0 .. 1] == "ci"):
-               result = InputState.Valid
+proc repeatNormalModeCommand(status: var EditorStatus) =
+  ## Exec the last used normal mode command.
+  ## Not executed for movement and mode change commands.
+
+  let command = getLatestNormalModeOperation()
+  if command.isSome:
+    if not isMovementKey(command.get[0]) and
+       not isChangeModeKey(command.get[0]):
+         status.normalCommand(command.get)
 
 proc execNormalModeCommand*(status: var EditorStatus, command: Runes) =
   status.lastOperatingTime = now()
@@ -1705,6 +1753,8 @@ proc execNormalModeCommand*(status: var EditorStatus, command: Runes) =
     currentBufStatus.changeModeToSearchBackwardMode(status.commandLine)
   elif $command == ":":
     currentBufStatus.changeModeToExMode(status.commandLine)
+  elif $command == ".":
+    status.repeatNormalModeCommand
   elif isEscKey(command[0]):
     if command.len == 2 and isEscKey(command[1]):
       status.turnOffHighlighting

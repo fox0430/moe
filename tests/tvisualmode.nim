@@ -290,8 +290,8 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
       area,
       status.settings)
 
-    check status.registers.noNameRegister.isLine
-    check status.registers.noNameRegister.buffer == @[ru"abc", ru"def"]
+    check status.registers.noNameRegisters.isLine
+    check status.registers.noNameRegisters.buffer == @[ru"abc", ru"def"]
 
   test "Yank lines 2":
     var status = initEditorStatus()
@@ -324,8 +324,8 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
       area,
       status.settings)
 
-    check not status.registers.noNameRegister.isLine
-    check status.registers.noNameRegister.buffer == @[ru"abc"]
+    check not status.registers.noNameRegisters.isLine
+    check status.registers.noNameRegisters.buffer == @[ru"abc"]
 
   test "Yank string (Fix #1124)":
     var status = initEditorStatus()
@@ -352,8 +352,8 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
       area,
       status.settings)
 
-    check not status.registers.noNameRegister.isLine
-    check status.registers.noNameRegister.buffer[^1] == ru"abc"
+    check not status.registers.noNameRegisters.isLine
+    check status.registers.noNameRegisters.buffer[^1] == ru"abc"
 
   test "Yank lines when the last line is empty (Fix #1183)":
     var status = initEditorStatus()
@@ -380,8 +380,8 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
       area,
       status.settings)
 
-    check status.registers.noNameRegister.isLine
-    check status.registers.noNameRegister.buffer == @[ru"abc", ru""]
+    check status.registers.noNameRegisters.isLine
+    check status.registers.noNameRegisters.buffer == @[ru"abc", ru""]
 
   test "Yank the empty line":
     var status = initEditorStatus()
@@ -406,8 +406,8 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
       area,
       status.settings)
 
-    check status.registers.noNameRegister.isLine
-    check status.registers.noNameRegister.buffer == @[ru""]
+    check status.registers.noNameRegisters.isLine
+    check status.registers.noNameRegisters.buffer == @[ru""]
 
 suite "Visual block mode: Yank buffer (Disable clipboard)":
   test "Yank lines 1":
@@ -439,8 +439,8 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
       area,
       status.settings)
 
-    check status.registers.noNameRegister.isLine
-    check status.registers.noNameRegister.buffer == @[ru"a", ru"d"]
+    check status.registers.noNameRegisters.isLine
+    check status.registers.noNameRegisters.buffer == @[ru"a", ru"d"]
 
   test "Yank lines 2":
     var status = initEditorStatus()
@@ -475,8 +475,8 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
       area,
       status.settings)
 
-    check status.registers.noNameRegister.isLine
-    check status.registers.noNameRegister.buffer == @[ru"ab", ru"d"]
+    check status.registers.noNameRegisters.isLine
+    check status.registers.noNameRegisters.buffer == @[ru"ab", ru"d"]
 
   test "Fix #1636":
     var status = initEditorStatus()
@@ -2046,7 +2046,7 @@ suite "Visual line mode: Yank buffer (Disable clipboard)":
       area,
       status.settings)
 
-    check status.registers.noNameRegister.buffer == @[buffer[0]]
+    check status.registers.noNameRegisters.buffer == @[buffer[0]]
 
 if isXselAvailable():
   suite "Visual line mode: Yank buffer (Enable clipboard)":

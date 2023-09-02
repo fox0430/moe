@@ -20,7 +20,7 @@
 import std/[unittest, osproc]
 import pkg/results
 import moepkg/[independentutils, gapbuffer, unicodeext, bufferstatus,
-               editorstatus, settings, register]
+               editorstatus, settings, registers]
 import moepkg/syntax/highlite
 
 import moepkg/editor {.all.}
@@ -1132,7 +1132,7 @@ suite "Editor: Delete inside paren":
     currentBufStatus.buffer = initGapBuffer(@[ru """abc "def" "ghi""""])
     currentMainWindowNode.currentColumn = 6
 
-    var registers: register.Registers
+    var registers: registers.Registers
 
     let settings = initEditorSettings()
     currentBufStatus.deleteInsideOfParen(
@@ -1207,7 +1207,7 @@ if isXselAvailable():
         Name,
         IsDelete)
 
-      check status.registers.noNameRegister.buffer.len == 0
+      check status.registers.noNameRegisters.buffer.len == 0
 
 if isXselAvailable():
   suite "Editor: Yank words":
@@ -1223,7 +1223,7 @@ if isXselAvailable():
         Loop,
         status.settings)
 
-      check status.registers.noNameRegister ==  register.Register(
+      check status.registers.noNameRegisters ==  registers.Register(
         buffer: @[ru "abc "],
         isLine: false,
         name: "")
@@ -1360,7 +1360,7 @@ suite "Editor: Delete from the previous blank line to the current line":
     check currentBufStatus.buffer[0] == ru "abc"
     check currentBufStatus.buffer[1] == ru "ghi"
 
-    check status.registers.noNameRegister == register.Register(
+    check status.registers.noNameRegisters == registers.Register(
       buffer: @[ru "", ru "def"],
       isLine: true)
 
@@ -1386,7 +1386,7 @@ suite "Editor: Delete from the previous blank line to the current line":
     check currentBufStatus.buffer[0] == ru "abc"
     check currentBufStatus.buffer[1] == ru "hi"
 
-    check status.registers.noNameRegister == register.Register(
+    check status.registers.noNameRegisters == registers.Register(
       buffer: @[ru "", ru "def", ru "g"],
       isLine: true)
 
@@ -1411,7 +1411,7 @@ suite "Editor: Delete from the current line to the next blank line":
     check currentBufStatus.buffer[0] == ru ""
     check currentBufStatus.buffer[1] == ru "ghi"
 
-    check status.registers.noNameRegister == register.Register(
+    check status.registers.noNameRegisters == registers.Register(
       buffer: @[ru "abc", ru "def"],
       isLine: true)
 
@@ -1436,7 +1436,7 @@ suite "Editor: Delete from the current line to the next blank line":
     check currentBufStatus.buffer[1] == ru ""
     check currentBufStatus.buffer[2] == ru "ghi"
 
-    check status.registers.noNameRegister == register.Register(
+    check status.registers.noNameRegisters == registers.Register(
       buffer: @[ru "bc", ru "def"],
       isLine: true)
 
