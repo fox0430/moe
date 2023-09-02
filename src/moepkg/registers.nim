@@ -255,8 +255,7 @@ proc isOperationRegisterName*(name: Rune): bool {.inline.} =
 
   char(name) >= '0' and char(name) <= '9' or
   char(name) >= 'A' and char(name) <= 'Z' or
-  char(name) >= 'a' and char(name) <= 'z' or
-  char(name) == '^'
+  char(name) >= 'a' and char(name) <= 'z'
 
 proc clearOperationToRegister*(name: Rune): Result[(), string] =
   ## Clear the operationRegister.
