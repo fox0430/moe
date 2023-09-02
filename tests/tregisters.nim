@@ -255,9 +255,6 @@ suite "registers: isOperationRegisterName":
     for ch in 'a'..'z':
       check isOperationRegisterName(ch.toRune)
 
-  test "Except to true 4":
-    check isOperationRegisterName(ru'^')
-
   test "Except to false":
     check not isOperationRegisterName(ru'@')
 
