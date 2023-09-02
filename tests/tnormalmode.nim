@@ -1566,6 +1566,10 @@ suite "Add buffer to the register":
       buffer: @[ru "a"], isLine: false, name: "a")
 
 suite "Normal mode: Validate normal mode command":
+  test "\"0 (Expect to Valid)":
+    const Command = ru"0"
+    check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
+
   test "\" (Expect to continue)":
     const Command = ru "\""
     check isNormalModeCommand(Command, none(Rune)) == InputState.Continue
@@ -1576,6 +1580,18 @@ suite "Normal mode: Validate normal mode command":
 
   test "\"ay (Expect to continue)":
     const Command = ru "\"ay"
+    check isNormalModeCommand(Command, none(Rune)) == InputState.Continue
+
+  test "\"1 (Expect to Continue)":
+    const Command = ru"1"
+    check isNormalModeCommand(Command, none(Rune)) == InputState.Continue
+
+  test "\"10 (Expect to Continue)":
+    const Command = ru"10"
+    check isNormalModeCommand(Command, none(Rune)) == InputState.Continue
+
+  test "\"100 (Expect to Continue)":
+    const Command = ru"100"
     check isNormalModeCommand(Command, none(Rune)) == InputState.Continue
 
   test "\"ayy (Expect to validate)":
@@ -2291,6 +2307,24 @@ suite "Normal mode: execNormalModeCommand":
     status.update
 
     status.execNormalModeCommand("2yy".toRunes)
+
+    check status.registers.noNameRegisters == Register(
+      buffer: Buffer,
+      isLine: true)
+
+  test "\"10yy\" keys":
+    # Yank lines
+
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+
+    const Buffer = toSeq(0..9).mapIt(it.toRunes)
+    currentBufStatus.buffer = Buffer.initGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    status.execNormalModeCommand("10yy".toRunes)
 
     check status.registers.noNameRegisters == Register(
       buffer: Buffer,
