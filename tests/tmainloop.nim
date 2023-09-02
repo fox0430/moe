@@ -19,7 +19,7 @@
 
 import std/[unittest, tables, options]
 import pkg/results
-import moepkg/[unicodeext, bufferstatus, gapbuffer, editorstatus, ui]
+import moepkg/[unicodeext, bufferstatus, gapbuffer, editorstatus, ui, windownode]
 
 import moepkg/registers {.all.}
 import moepkg/mainloop {.all.}
@@ -248,6 +248,23 @@ suite "mainloop: execEditorCommand":
     status.execEditorCommand(Command)
 
     check currentBufStatus.buffer.toSeqRunes == @["3"].toSeqRunes
+
+  test "Exec macro 3":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = @["1", "2", "3"].toSeqRunes.initGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const RegisterName = 'a'
+    registers.operationRegisters[RegisterName] = @[":", "vs", "dd"].toSeqRunes
+
+    const Command = ru"@a"
+    status.execEditorCommand(Command)
+
+    check currentBufStatus.buffer.toSeqRunes == @["2", "3"].toSeqRunes
+    check mainWindow.numOfMainWindow == 2
 
   test "Repeat macro":
     var status = initEditorStatus()

@@ -1120,8 +1120,11 @@ proc stopRecordingOperations(status: var EditorStatus) =
   status.recodingOperationRegister = none(Rune)
   status.commandLine.clear
 
-proc isStopRecordingOperationsCommand*(command: Runes): bool {.inline.} =
-  $command == "q"
+proc isStopRecordingOperationsCommand*(
+  bufStatus: BufferStatus,
+  command: Runes): bool {.inline.} =
+
+    bufStatus.mode.isNormalMode and $command == "q"
 
 proc isMovementKey(key: Rune): bool {.inline.} =
   isControlK(key) or
