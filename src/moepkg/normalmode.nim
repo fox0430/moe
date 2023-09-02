@@ -1536,9 +1536,14 @@ proc isNormalModeCommand*(
 
       elif isDigit(command[0]):
         # Remove numbers and call recursively.
-        return isNormalModeCommand(
-          command[1 .. command.high],
-          recodingOperationRegister)
+        var i = 0
+        while i < command.high and command[i].isDigit: i.inc
+        if i == command.high:
+          result = InputState.Continue
+        else:
+          return isNormalModeCommand(
+            command[i .. command.high],
+            recodingOperationRegister)
 
       elif command[0] == ord('g'):
         if command.len == 1:
