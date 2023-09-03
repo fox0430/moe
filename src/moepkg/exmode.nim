@@ -417,18 +417,21 @@ proc autoDeleteParenSettingCommand(
     status.changeMode(currentBufStatus.prevMode)
 
 proc smoothScrollSettingCommand(status: var EditorStatus, command: Runes) =
-  if command == ru"on": status.settings.smoothScroll = true
-  elif command == ru"off": status.settings.smoothScroll = false
+  if command == ru"on": status.settings.smoothScroll.enable = true
+  elif command == ru"off": status.settings.smoothScroll.enable = false
 
   status.commandLine.clear
 
   status.changeMode(currentBufStatus.prevMode)
 
-proc smoothScrollDelaySettingCommand(status: var EditorStatus, delay: int) =
-  if delay > 0: status.settings.smoothScrollDelay = delay
-
+proc smoothScrollMaxDelaySettingCommand(status: var EditorStatus, delay: int) =
+  if delay > 0: status.settings.smoothScroll.maxDelay = delay
   status.commandLine.clear
+  status.changeMode(currentBufStatus.prevMode)
 
+proc smoothScrollMinDelaySettingCommand(status: var EditorStatus, delay: int) =
+  if delay > 0: status.settings.smoothScroll.minDelay = delay
+  status.commandLine.clear
   status.changeMode(currentBufStatus.prevMode)
 
 proc highlightCurrentWordSettingCommand(
@@ -1218,8 +1221,10 @@ proc exModeCommand*(status: var EditorStatus, command: seq[Runes]) =
     status.autoDeleteParenSettingCommand(command[1])
   elif isSmoothScrollSettingCommand(command):
     status.smoothScrollSettingCommand(command[1])
-  elif isSmoothScrollDelaySettingCommand(command):
-    status.smoothScrollDelaySettingCommand(($command[1]).parseInt)
+  elif isSmoothScrollMinDelaySettingCommand(command):
+    status.smoothScrollMinDelaySettingCommand(($command[1]).parseInt)
+  elif isSmoothScrollMaxDelaySettingCommand(command):
+    status.smoothScrollMaxDelaySettingCommand(($command[1]).parseInt)
   elif isHighlightCurrentWordSettingCommand(command):
     status.highlightCurrentWordSettingCommand(command[1])
   elif isSystemClipboardSettingCommand(command):

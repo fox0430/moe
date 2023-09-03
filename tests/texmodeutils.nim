@@ -342,12 +342,19 @@ suite "exmodeutils: isSmoothScrollSettingCommand":
   test "Invalid":
     check not isSmoothScrollSettingCommand(@["a"].toSeqRunes)
 
-suite "exmodeutils: isSmoothScrollDelaySettingCommand":
+suite "exmodeutils: isSmoothScrollMinDelaySettingCommand":
   test "Valid":
-    check isSmoothScrollDelaySettingCommand(@["scrollDelay", "1"].toSeqRunes)
+    check isSmoothScrollMinDelaySettingCommand(@["scrollMinDelay", "1"].toSeqRunes)
 
   test "Invalid":
-    check not isSmoothScrollDelaySettingCommand(@["a"].toSeqRunes)
+    check not isSmoothScrollMinDelaySettingCommand(@["a"].toSeqRunes)
+
+suite "exmodeutils: isSmoothScrollMaxDelaySettingCommand":
+  test "Valid":
+    check isSmoothScrollMaxDelaySettingCommand(@["scrollMaxDelay", "1"].toSeqRunes)
+
+  test "Invalid":
+    check not isSmoothScrollMaxDelaySettingCommand(@["a"].toSeqRunes)
 
 suite "exmodeutils: isHighlightCurrentWordSettingCommand":
   test "Valid":

@@ -182,7 +182,7 @@ suite "mainloop: execEditorCommand":
     status.update
 
     const Command = ru"dd"
-    status.execEditorCommand(Command)
+    check status.execEditorCommand(Command).isNone
 
     check currentBufStatus.buffer.toSeqRunes == @["2"].toSeqRunes
     check currentBufStatus.buffer.toSeqRunes == @["2"].toSeqRunes
@@ -196,7 +196,7 @@ suite "mainloop: execEditorCommand":
     status.update
 
     const Command = ru":"
-    status.execEditorCommand(Command)
+    check status.execEditorCommand(Command).isNone
 
     check currentBufStatus.isExMode
 
@@ -213,11 +213,11 @@ suite "mainloop: execEditorCommand":
 
     block:
       const Command = ru"dd"
-      status.execEditorCommand(Command)
+      check status.execEditorCommand(Command).isNone
 
     block:
       const Command = ru"yy"
-      status.execEditorCommand(Command)
+      check status.execEditorCommand(Command).isNone
 
     check registers.operationRegisters[RegisterName] ==
       @["dd", "yy"].toSeqRunes
@@ -235,7 +235,7 @@ suite "mainloop: execEditorCommand":
     registers.operationRegisters[RegisterName] = @["j", "dd"].toSeqRunes
 
     const Command = ru"@a"
-    status.execEditorCommand(Command)
+    check status.execEditorCommand(Command).isNone
 
     check currentBufStatus.buffer.toSeqRunes == @["1", "3"].toSeqRunes
 
@@ -251,7 +251,7 @@ suite "mainloop: execEditorCommand":
     registers.operationRegisters[RegisterName] = @["2dd"].toSeqRunes
 
     const Command = ru"@a"
-    status.execEditorCommand(Command)
+    check status.execEditorCommand(Command).isNone
 
     check currentBufStatus.buffer.toSeqRunes == @["3"].toSeqRunes
 
@@ -267,7 +267,7 @@ suite "mainloop: execEditorCommand":
     registers.operationRegisters[RegisterName] = @[":", "vs", "dd"].toSeqRunes
 
     const Command = ru"@a"
-    status.execEditorCommand(Command)
+    check status.execEditorCommand(Command).isNone
 
     check currentBufStatus.buffer.toSeqRunes == @["2", "3"].toSeqRunes
     check mainWindow.numOfMainWindow == 2
@@ -284,6 +284,6 @@ suite "mainloop: execEditorCommand":
     registers.operationRegisters[RegisterName] = @["dd"].toSeqRunes
 
     const Command = ru"2@a"
-    status.execEditorCommand(Command)
+    check status.execEditorCommand(Command).isNone
 
     check currentBufStatus.buffer.toSeqRunes == @[""].toSeqRunes

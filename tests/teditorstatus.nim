@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, os, importutils]
+import std/[unittest, options, os, importutils, sequtils]
 import pkg/results
 import moepkg/[editor, gapbuffer, bufferstatus, editorview, unicodeext, ui,
                highlight, windownode, movement, build, backgroundprocess,
@@ -859,3 +859,133 @@ suite "updateSelectedArea: Visual line mode":
 
     check currentBufStatus.selectedArea ==
       SelectedArea(startLine: 0, startColumn: 0, endLine: 1, endColumn: 2)
+
+suite "editorstatus: smoothScrollDelays":
+  test "totalLines: 20, minDelay 5, maxDelay 20":
+    const
+      TotalLines = 20
+      MinDelay = 5
+      MaxDelay = 20
+
+    check smoothScrollDelays(TotalLines, MinDelay, MaxDelay) == @[
+      13, 10, 8, 7, 6, 6, 6, 7, 8, 10, 13, 16, 20, 25, 30, 36, 42, 49, 56, 64]
+
+  test "totalLines: 0, minDelay 5, maxDelay 20":
+    const
+      TotalLines = 0
+      MinDelay = 5
+      MaxDelay = 20
+
+    check smoothScrollDelays(TotalLines, MinDelay, MaxDelay).len == 0
+
+suite "editorstatus: scrollUpNumberOfLines":
+  test "numberOfLines: 20":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = toSeq(0..30).mapIt(it.toRunes).toGapBuffer
+    currentMainWindowNode.currentLine = 30
+
+    status.resize(100, 100)
+    status.update
+
+    const NumberOfLines = 20
+    status.scrollUpNumberOfLines(NumberOfLines)
+
+    check currentMainWindowNode.currentLine == 10
+
+  test "numberOfLines: 20 and buffer.len: 10":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = toSeq(0..10).mapIt(it.toRunes).toGapBuffer
+    currentMainWindowNode.currentLine = 10
+
+    status.resize(100, 100)
+    status.update
+
+    const NumberOfLines = 20
+    status.scrollUpNumberOfLines(NumberOfLines)
+
+    check currentMainWindowNode.currentLine == 0
+
+suite "editorstatus: scrollDownNumberOfLines":
+  test "numberOfLines: 20":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = toSeq(0..30).mapIt(it.toRunes).toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const NumberOfLines = 20
+    status.scrollDownNumberOfLines(NumberOfLines)
+
+    check currentMainWindowNode.currentLine == 20
+
+  test "numberOfLines: 20 and buffer.len: 10":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = toSeq(0..10).mapIt(it.toRunes).toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const NumberOfLines = 20
+    status.scrollDownNumberOfLines(NumberOfLines)
+
+    check currentMainWindowNode.currentLine == 10
+
+suite "editorstatus: smoothScrollUpNumberOfLines":
+  test "numberOfLines: 20":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = toSeq(0..30).mapIt(it.toRunes).toGapBuffer
+    currentMainWindowNode.currentLine = 30
+
+    status.resize(100, 100)
+    status.update
+
+    const TotalLines = 20
+    check status.smoothScrollUpNumberOfLines(TotalLines).isNone
+
+    check currentMainWindowNode.currentLine == 10
+
+  test "numberOfLines: 20; buffer.len: 10":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = toSeq(0..10).mapIt(it.toRunes).toGapBuffer
+    currentMainWindowNode.currentLine = 10
+
+    status.resize(100, 100)
+    status.update
+
+    const TotalLines = 20
+    check status.smoothScrollUpNumberOfLines(TotalLines).isNone
+
+    check currentMainWindowNode.currentLine == 0
+
+suite "editorstatus: smoothScrollDownNumberOfLines":
+  test "numberOfLines: 20":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = toSeq(0..30).mapIt(it.toRunes).toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const TotalLines = 20
+    check status.smoothScrollDownNumberOfLines(TotalLines).isNone
+
+    check currentMainWindowNode.currentLine == 20
+
+  test "numberOfLines: 20; buffer.len: 10":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = toSeq(0..10).mapIt(it.toRunes).toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const TotalLines = 20
+    check status.smoothScrollDownNumberOfLines(TotalLines).isNone
+
+    check currentMainWindowNode.currentLine == 10
