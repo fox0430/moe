@@ -37,7 +37,7 @@ body:
       placeholder: |
         Please paste the result of `moe -v`
     validations:
-      required: true
+      required: false
 
   - type: textarea
     attributes:
@@ -47,7 +47,7 @@ body:
       placeholder: |
         OS, Terminal, etc...
     validations:
-      required: true
+      required: false
 
   - type: dropdown
     attributes:
@@ -61,7 +61,7 @@ body:
         - Typo — There is a spelling mistake or something similar.
         - Visual ─ Output is hardly readable or not uniformly formatted.
     validations:
-      required: true
+      required: false
 
   - type: textarea
     attributes:
