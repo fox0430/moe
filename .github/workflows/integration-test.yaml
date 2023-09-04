@@ -68,7 +68,7 @@ jobs:
     - run: |
         sudo apt-get update -yqq
         sudo apt-get install -y gcc libncursesw5-dev build-essential
-    - uses: jiro4989/setup-nim-action@v1.4.8
+    - uses: jiro4989/setup-nim-action@v1.4.9
       with:
         nim-version: ${{ env.NIM_VERSION }}
 
