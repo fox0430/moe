@@ -45,7 +45,7 @@ jobs:
         nim: [ '1.6.2', 'stable', 'devel' ]
     name: Build on ${{ matrix.nim }}
     steps:
-      - uses: actions/checkout@v3.6.0
+      - uses: actions/checkout@v4.0.0
       - name: Setup nim
         uses: jiro4989/setup-nim-action@v1.4.9
         with:
