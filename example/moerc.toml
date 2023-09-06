@@ -48,10 +48,6 @@ popupWindowInExmode = true
 
 autoDeleteParen = false
 
-smoothScroll = true
-
-smoothScrollDelay = 15
-
 liveReloadOfFile = false
 
 colorMode = "24bit"
@@ -219,6 +215,14 @@ updateInterval = 1000
 [SyntaxChecker]
 
 enable = false
+
+[SmoothScroll]
+
+enable = true
+
+minDelay = 5
+
+maxDelay = 20
 
 [Debug.WindowNode]
 enable = true

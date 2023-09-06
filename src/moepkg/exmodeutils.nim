@@ -226,8 +226,12 @@ const
       description: "Run Quickrun",
       argsType: ArgsType.none),
     ExCommandInfo(
-      command: "scrollDelay",
-      description: "Change setting to the smooth scroll delay",
+      command: "scrollMinDelay",
+      description: "Change setting to the smooth scroll min delay",
+      argsType: ArgsType.number),
+    ExCommandInfo(
+      command: "scrollMaxDelay",
+      description: "Change setting to the smooth scroll max delay",
       argsType: ArgsType.number),
     ExCommandInfo(
       command: "showGitInactive",
@@ -561,10 +565,17 @@ proc isAutoDeleteParenSettingCommand*(command: seq[Runes]): bool {.inline.} =
 proc isSmoothScrollSettingCommand*(command: seq[Runes]): bool {.inline.} =
   command.len == 2 and cmpIgnoreCase($command[0], "smoothscroll") == 0
 
-proc isSmoothScrollDelaySettingCommand*(command: seq[Runes]): bool {.inline.} =
-  command.len == 2 and
-  cmpIgnoreCase($command[0], "scrolldelay") == 0 and
-  isDigit(command[1])
+proc isSmoothScrollMinDelaySettingCommand*(
+  command: seq[Runes]): bool {.inline.} =
+    command.len == 2 and
+    cmpIgnoreCase($command[0], "scrollmindelay") == 0 and
+    isDigit(command[1])
+
+proc isSmoothScrollMaxDelaySettingCommand*(
+  command: seq[Runes]): bool {.inline.} =
+    command.len == 2 and
+    cmpIgnoreCase($command[0], "scrollmaxdelay") == 0 and
+    isDigit(command[1])
 
 proc isHighlightCurrentWordSettingCommand*(
   command: seq[Runes]): bool {.inline.} =
@@ -763,7 +774,8 @@ proc isValidExCommand*(commandSplit: seq[Runes]): bool =
     isHighlightPairOfParenSettigCommand(commandSplit) or
     isAutoDeleteParenSettingCommand(commandSplit) or
     isSmoothScrollSettingCommand(commandSplit) or
-    isSmoothScrollDelaySettingCommand(commandSplit) or
+    isSmoothScrollMinDelaySettingCommand(commandSplit) or
+    isSmoothScrollMaxDelaySettingCommand(commandSplit) or
     isHighlightCurrentWordSettingCommand(commandSplit) or
     isSystemClipboardSettingCommand(commandSplit) or
     isHighlightFullWidthSpaceSettingCommand(commandSplit) or

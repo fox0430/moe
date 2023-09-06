@@ -64,8 +64,6 @@ suite "Config mode: Init buffer":
       "  incrementalSearch              true",
       "  popupWindowInExmode            true",
       "  autoDeleteParen                false",
-      "  smoothScroll                   true",
-      "  smoothScrollDelay              15",
       "  liveReloadOfFile               false",
       "  colorMode                      24bit"].toSeqRunes
 
@@ -819,28 +817,6 @@ suite "Config mode: Get standard table setting values":
       values = settings.getStandardTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
-
-  test "Get smoothScroll values":
-    var status = initEditorStatus()
-    let settings = status.settings
-
-    const Name = "smoothScroll"
-    let
-      default = settings.smoothScroll
-      values = settings.getStandardTableSettingValues(Name)
-
-    checkBoolSettingValue(default, values)
-
-  test "Get colorMode values":
-    var status = initEditorStatus()
-
-    var settings = status.settings
-    settings.colorMode = ColorMode.c24bit
-
-    const Name = "colorMode"
-    let values = settings.getStandardTableSettingValues(Name)
-
-    check values == @[ru"24bit", ru"none", ru"8", ru"16", ru"256"]
 
   test "Set invalid Name":
     var status = initEditorStatus()
@@ -1810,14 +1786,6 @@ suite "Config mode: Chaging Standard table settings":
     settings.changeStandardTableSetting("autoDeleteParen", $val)
 
     check val == settings.autoDeleteParen
-
-  test "Chaging smoothScroll":
-    var settings = initEditorSettings()
-
-    let val = not settings.smoothScroll
-    settings.changeStandardTableSetting("smoothScroll", $val)
-
-    check val == settings.smoothScroll
 
   test "Chaging colorMode":
     var settings = initEditorSettings()

@@ -200,6 +200,11 @@ type
   SyntaxCheckerSettings* = object
     enable*: bool
 
+  SmoothScrollSettings* = object
+    enable*: bool
+    minDelay*: int
+    maxDelay*: int
+
   EditorSettings* = object
     editorColorTheme*: ColorTheme
     statusLine*: StatusLineSettings
@@ -221,8 +226,7 @@ type
     incrementalSearch*: bool
     popupWindowInExmode*: bool
     autoDeleteParen*: bool
-    smoothScroll*: bool
-    smoothScrollDelay*: int
+    smoothScroll*: SmoothScrollSettings
     liveReloadOfFile*: bool
     colorMode*: ColorMode
     clipboard*: ClipboardSettings
@@ -407,6 +411,11 @@ proc initGitSettings(): GitSettings =
 proc initSyntaxCheckerSettings(): SyntaxCheckerSettings =
   result.enable = false
 
+proc initSmoothScrollSettings(): SmoothScrollSettings =
+  result.enable = true
+  result.minDelay = 5
+  result.maxDelay = 20
+
 proc initEditorSettings*(): EditorSettings =
   result.editorColorTheme = ColorTheme.dark
   result.statusLine = initStatusLineSettings()
@@ -424,8 +433,7 @@ proc initEditorSettings*(): EditorSettings =
   result.autoSaveInterval = 5
   result.incrementalSearch = true
   result.popupWindowInExmode = true
-  result.smoothScroll = true
-  result.smoothScrollDelay = 15
+  result.smoothScroll = initSmoothScrollSettings()
   result.colorMode = checkColorSupportedTerminal()
   result.clipboard = initClipboardSettings()
   result.buildOnSave = BuildOnSaveSettings()
@@ -1104,12 +1112,6 @@ proc parseStandardTable(s: var EditorSettings, standardConfigs: TomlValueRef) =
   if standardConfigs.contains("autoDeleteParen"):
     s.autoDeleteParen =  standardConfigs["autoDeleteParen"].getBool
 
-  if standardConfigs.contains("smoothScroll"):
-    s.smoothScroll =  standardConfigs["smoothScroll"].getBool
-
-  if standardConfigs.contains("smoothScrollDelay"):
-    s.smoothScrollDelay = standardConfigs["smoothScrollDelay"].getInt
-
   if standardConfigs.contains("colorMode"):
     s.colorMode = standardConfigs["colorMode"].getStr.parseColorMode.get
 
@@ -1555,6 +1557,19 @@ proc parseSyntaxCheckerTable(
     if syntaxCheckConfigs.contains("enable"):
       s.syntaxChecker.enable = syntaxCheckConfigs["enable"].getBool
 
+proc parseSmoothScrollTable(
+  s: var EditorSettings,
+  smoothScrollConfigs: TomlValueRef) =
+
+    if smoothScrollConfigs.contains("enable"):
+      s.smoothScroll.enable = smoothScrollConfigs["enable"].getBool
+
+    if smoothScrollConfigs.contains("minDelay"):
+      s.smoothScroll.minDelay = smoothScrollConfigs["minDelay"].getInt
+
+    if smoothScrollConfigs.contains("maxDelay"):
+      s.smoothScroll.maxDelay = smoothScrollConfigs["maxDelay"].getInt
+
 proc parseThemeTable(
   s: var EditorSettings,
   themeConfigs: Option[TomlValueRef]) =
@@ -1687,6 +1702,9 @@ proc parseTomlConfigs*(tomlConfigs: TomlValueRef): EditorSettings =
   if tomlConfigs.contains("SyntaxChecker"):
     result.parseSyntaxCheckerTable(tomlConfigs["SyntaxChecker"])
 
+  if tomlConfigs.contains("SmoothScroll"):
+    result.parseSmoothScrollTable(tomlConfigs["SmoothScroll"])
+
   if result.editorColorTheme == ColorTheme.config or
      result.editorColorTheme == ColorTheme.vscode:
        if tomlConfigs.contains("Theme"):
@@ -1725,12 +1743,11 @@ proc validateStandardTable(table: TomlValueRef): Option[InvalidItem] =
          "popupWindowInExmode",
          "autoDeleteParen",
          "systemClipboard",
-         "smoothScroll",
          "liveReloadOfFile",
          "sidebar":
         if not (val.kind == TomlValueKind.Bool):
           return some(InvalidItem(name: $key, val: $val))
-      of "tabStop", "autoSaveInterval", "smoothScrollDelay":
+      of "tabStop", "autoSaveInterval":
         if not (val.kind == TomlValueKind.Int and val.getInt > 0):
           return some(InvalidItem(name: $key, val: $val))
       of "defaultCursor",
@@ -2071,6 +2088,18 @@ proc validateSyntaxCheckerTable(table: TomlValueRef): Option[InvalidItem] =
       else:
         return some(InvalidItem(name: $key, val: $val))
 
+proc validateSmoothScrollTable(table: TomlValueRef): Option[InvalidItem] =
+  for key, val in table.getTable:
+    case key:
+      of "enable":
+        if val.kind != TomlValueKind.Bool:
+          return some(InvalidItem(name: $key, val: $val))
+      of "minDelay", "maxDelay":
+        if val.kind != TomlValueKind.Int:
+          return some(InvalidItem(name: $key, val: $val))
+      else:
+        return some(InvalidItem(name: $key, val: $val))
+
 proc validateTomlConfig(toml: TomlValueRef): Option[InvalidItem] =
   for key, val in toml.getTable:
     case key:
@@ -2124,6 +2153,9 @@ proc validateTomlConfig(toml: TomlValueRef): Option[InvalidItem] =
         if r.isSome: return r
       of "SyntaxChecker":
         let r = validateSyntaxCheckerTable(val)
+        if r.isSome: return r
+      of "SmoothScroll":
+        let r = validateSmoothScrollTable(val)
         if r.isSome: return r
       else:
         return some(InvalidItem(name: $key, val: $val))
@@ -2193,8 +2225,6 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "incrementalSearch = {$settings.incrementalSearch}"
   result.addLine fmt "popupWindowInExmode = {$settings.popupWindowInExmode}"
   result.addLine fmt "autoDeleteParen = {$settings.autoDeleteParen }"
-  result.addLine fmt "smoothScroll = {$settings.smoothScroll }"
-  result.addLine fmt "smoothScrollDelay = {$settings.smoothScrollDelay}"
   result.addLine fmt "liveReloadOfFile = {$settings.liveReloadOfFile}"
   result.addLine fmt "colorMode = \"{settings.colorMode.toConfigStr}\""
 
@@ -2337,6 +2367,11 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "enable = {$settings.syntaxChecker.enable}"
 
   result.addLine ""
+
+  result.addLine fmt "[SmoothScroll]"
+  result.addLine fmt "enable = {$settings.smoothScroll.enable}"
+  result.addLine fmt "minDelay = {$settings.smoothScroll.minDelay}"
+  result.addLine fmt "maxDelay = {$settings.smoothScroll.maxDelay}"
 
   result.addLine fmt "[Debug.WindowNode]"
   result.addLine fmt "enable = {$settings.debugMode.windowNode.enable}"

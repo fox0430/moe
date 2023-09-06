@@ -48,8 +48,6 @@ const TomlStr = """
   incrementalSearch = false
   popupWindowInExmode = false
   autoDeleteParen = false
-  smoothScroll = false
-  smoothScrollDelay = 1
   colorMode = "none"
 
   [Clipboard]
@@ -139,6 +137,18 @@ const TomlStr = """
   searchHistoryLimit = 1
   cursorPosition = false
 
+  [Git]
+  showChangedLine = false
+  updateInterval = 1
+
+  [SyntaxChecker]
+  enable = true
+
+  [SmoothScroll]
+  enable = false
+  minDelay = 1
+  maxDelay = 1
+
   [Debug.WindowNode]
   enable = false
   currentWindow = false
@@ -171,10 +181,6 @@ const TomlStr = """
   cmdLoop = false
   lastSaveTime = false
   bufferLen = false
-
-  [Git]
-  showChangedLine = false
-  updateInterval = 1
 
   [Theme]
   baseTheme = "dark"
@@ -372,8 +378,6 @@ suite "Parse configuration file":
     check not settings.incrementalSearch
     check not settings.popupWindowInExmode
     check not settings.autoDeleteParen
-    check not settings.smoothScroll
-    check settings.smoothScrollDelay == 1
     check settings.colorMode == ColorMode.none
 
     check not settings.clipboard.enable
@@ -452,6 +456,15 @@ suite "Parse configuration file":
     check not settings.persist.search
     check settings.persist.searchHistoryLimit == 1
     check not settings.persist.cursorPosition
+
+    check not settings.git.showChangedLine
+    check settings.git.updateInterval == 1
+
+    check settings.syntaxChecker.enable
+
+    check not settings.smoothScroll.enable
+    check settings.smoothScroll.minDelay == 1
+    check settings.smoothScroll.maxDelay == 1
 
     check not settings.debugMode.windowNode.enable
     check not settings.debugMode.windowNode.currentWindow

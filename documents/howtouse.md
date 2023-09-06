@@ -211,7 +211,8 @@
 ```realtimesearch on``` or ```realtimesearch off``` - Change setting to real-time search   
 ```deleteparen on``` or ```deleteparen off``` - Change setting to auto delete paren  
 ```smoothscroll on``` or ```smoothscroll off``` - Change setting to smooth scroll  
-```scrollspeed number``` - Set smooth scroll speed : Example ```scrollspeed 10```  
+```scrollMinDelay number``` - Set smooth scroll min speed : Example ```scrollMinDelay 10```  
+```scrollMaxDelay number``` - Set smooth scroll max speed : Example ```scrollMaxDelay 10```  
 ```highlightcurrentword on``` or ```highlightcurrentword off``` - Change setting to highlight other uses of the current word  
 ```clipboard on``` or ```clipboard off``` - Change setting to system clipboard  
 ```highlightfullspace on``` or ```highlightfullspace off``` - Change setting to highlight full width space  

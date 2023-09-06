@@ -48,8 +48,6 @@ type standardTableNames {.pure.} = enum
   incrementalSearch
   popupWindowInExmode
   autoDeleteParen
-  smoothScroll
-  smoothScrollDelay
   liveReloadOfFile
   colorMode
 
@@ -150,6 +148,11 @@ type GitTableNames {.pure.} = enum
 
 type SyntaxCheckerTableNames {.pure.} = enum
   enable
+
+type SmoothScrollTableNames {.pure.} = enum
+  enable
+  minDelay
+  maxDelay
 
 type SettingType {.pure.} = enum
   None
@@ -260,8 +263,6 @@ proc getStandardTableSettingValues(settings: EditorSettings,
         currentVal = settings.popupWindowInExmode
       of "autoDeleteParen":
         currentVal = settings.autoDeleteParen
-      of "smoothScroll":
-        currentVal = settings.smoothScroll
       of "liveReloadOfFile":
         currentVal = settings.liveReloadOfFile
       else:
@@ -562,6 +563,21 @@ proc getSyntaxCheckerTableSettingsValues(
         else:
           result = @[ru "false", ru "true"]
 
+proc getSmoothScrollTableSettingsValues(
+  s: SmoothScrollSettings,
+  name: string): seq[Runes] =
+
+    case name
+      of "enable":
+        if s.enable:
+          result = @[ru "true", ru "false"]
+        else:
+          result = @[ru "false", ru "true"]
+      of "minDelay":
+        result = @[toRunes($s.minDelay)]
+      of "maxDelay":
+        result = @[toRunes($s.maxDelay)]
+
 proc getSettingValues(settings: EditorSettings,
                       settingType: SettingType,
                       table, name, position: string): seq[Runes] =
@@ -601,6 +617,8 @@ proc getSettingValues(settings: EditorSettings,
       result = gitSettings.getGitTableSettingsValues(name)
     of "SyntaxChecker":
       result = settings.syntaxChecker.getSyntaxCheckerTableSettingsValues(name)
+    of "SmoothScroll":
+      result = settings.smoothScroll.getSmoothScrollTableSettingsValues(name)
     of "Theme":
       discard
     else:
@@ -725,8 +743,6 @@ proc changeStandardTableSetting(settings: var EditorSettings,
       settings.popupWindowInExmode = parseBool(settingVal)
     of "autoDeleteParen":
       settings.autoDeleteParen = parseBool(settingVal)
-    of "smoothScroll":
-      settings.smoothScroll = parseBool(settingVal)
     of "liveReloadOfFile":
       settings.liveReloadOfFile = parseBool(settingVal)
     of "colorMode":
@@ -934,6 +950,20 @@ proc changeSyntaxCheckerTableSettings(
       else:
         discard
 
+proc changeSmoothScrollTableSettings(
+  s: var SmoothScrollSettings,
+  settingName, settingVal: string) =
+
+    case settingName:
+      of "enable":
+        s.enable = settingVal.parseBool
+      of "minDelay":
+        s.minDelay = settingVal.parseInt
+      of "maxDelay":
+        s.maxDelay = settingVal.parseInt
+      else:
+        discard
+
 proc toColorLayer(s: string): Result[ColorLayer, string] =
   var cl: ColorLayer
   try:
@@ -1011,6 +1041,9 @@ proc changeEditorSettings(status: var EditorStatus,
   template SyntaxCheckerSettings: var SyntaxCheckerSettings =
     status.settings.syntaxChecker
 
+  template SmoothScrollSettings: var SmoothScrollSettings =
+    status.settings.smoothScroll
+
   case table:
     of "Standard":
       changeStandardTableSetting()
@@ -1041,6 +1074,8 @@ proc changeEditorSettings(status: var EditorStatus,
       gitSettings.changeGitTableSettings(settingName, settingVal)
     of "SyntaxChecker":
       SyntaxCheckerSettings.changeSyntaxCheckerTableSettings(settingName, settingVal)
+    of "SmoothScroll":
+      SmoothScrollSettings.changeSmoothScrollTableSettings(settingName, settingVal)
     else:
       discard
 
@@ -1074,7 +1109,7 @@ proc getSettingType(table, name: string): SettingType =
          "sidebar": result = SettingType.Bool
       of "tabStop",
          "autoSaveInterval",
-         "smoothScrollDelay": result = SettingType.Number
+         "smoothScrollMaxDelay": result = SettingType.Number
       else:
         result = SettingType.None
 
@@ -1221,6 +1256,15 @@ proc getSettingType(table, name: string): SettingType =
       else:
         result = SettingType.None
 
+  template smoothScrollTable() =
+    case name:
+      of "enable":
+        result = SettingType.Bool
+      of "minDelay", "maxDelay":
+        result = SettingType.Number
+      else:
+        result = SettingType.None
+
   case table:
     of "Standard":
       standardTable()
@@ -1248,6 +1292,8 @@ proc getSettingType(table, name: string): SettingType =
       gitTable()
     of "SyntaxChecker":
       syntaxCheckerTable()
+    of "SmoothScroll":
+      smoothScrollTable()
     of "Theme":
       return SettingType.String
 
@@ -1316,7 +1362,6 @@ proc editFiguresSetting(status: var EditorStatus,
           case name:
             of "tabStop": settings.tabStop
             of "autoSaveInterval": settings.autoSaveInterval
-            of "smoothScrollDelay": settings.smoothScrollDelay
             else: 0
 
         of "AutoBackup":
@@ -1328,6 +1373,11 @@ proc editFiguresSetting(status: var EditorStatus,
         of "QuickRun":
           case name:
             of "timeout": settings.quickRun.timeout
+            else: 0
+        of "SmoothScroll":
+          case name:
+            of "minDelay": settings.smoothScroll.minDelay
+            of "maxDelay": settings.smoothScroll.maxDelay
             else: 0
         else: 0
 
@@ -1390,8 +1440,6 @@ proc editFiguresSetting(status: var EditorStatus,
           status.settings.view.tabStop = number
         of "autoSaveInterval":
           status.settings.autoSaveInterval = number
-        of "smoothScrollDelay":
-          status.settings.smoothScrollDelay = number
         else:
           discard
 
@@ -1411,6 +1459,13 @@ proc editFiguresSetting(status: var EditorStatus,
         else:
           discard
 
+    template smoothScrollTable() =
+      case name:
+        of "minDelay":
+          status.settings.smoothScroll.minDelay = number
+        of "maxDelay":
+          status.settings.smoothScroll.maxDelay = number
+
     # Change setting
     case table:
       of "Standard":
@@ -1419,6 +1474,8 @@ proc editFiguresSetting(status: var EditorStatus,
         autoBackupTable()
       of "QuickRun":
         quickRunTable()
+      of "SmoothScroll":
+        smoothScrollTable()
       else:
         discard
 
@@ -1760,10 +1817,6 @@ proc initStandardTableBuffer(settings: EditorSettings): seq[Runes] =
         result.add(ru nameStr & space & $settings.popupWindowInExmode)
       of "autoDeleteParen":
         result.add(ru nameStr & space & $settings.autoDeleteParen)
-      of "smoothScroll":
-        result.add(ru nameStr & space & $settings.smoothScroll)
-      of "smoothScrollDelay":
-        result.add(ru nameStr & space & $settings.smoothScrollDelay)
       of "liveReloadOfFile":
         result.add(ru nameStr & space & $settings.liveReloadOfFile)
       of "colorMode":
@@ -2028,6 +2081,21 @@ proc initSyntaxCheckerTableBuffer(settings: SyntaxCheckerSettings): seq[Runes] =
       of "enable":
         result.add(ru nameStr & space & $settings.enable)
 
+proc initSmoothScrollTableBuffer(settings: SmoothScrollSettings): seq[Runes] =
+  result.add(ru"SmoothScroll")
+
+  for name in SmoothScrollTableNames:
+    let
+      nameStr = Indent & $name
+      space = " ".repeat(positionOfSetVal() - len($name))
+    case $name:
+      of "enable":
+        result.add(ru nameStr & space & $settings.enable)
+      of "minDelay":
+        result.add(ru nameStr & space & $settings.minDelay)
+      of "maxDelay":
+        result.add(ru nameStr & space & $settings.maxDelay)
+
 proc initThemeTableBuffer*(s: EditorSettings): seq[Runes] =
   result.add(ru"Theme")
 
@@ -2095,6 +2163,9 @@ proc initConfigModeBuffer*(settings: EditorSettings): GapBuffer[Runes] =
 
   buffer.add ru""
   buffer.add initSyntaxCheckerTableBuffer(settings.syntaxChecker)
+
+  buffer.add ru""
+  buffer.add initSmoothScrollTableBuffer(settings.smoothScroll)
 
   buffer.add(ru"")
   buffer.add(initThemeTableBuffer(settings))

@@ -18,7 +18,7 @@
 #[############################################################################]#
 
 import std/[strutils, os, strformat, tables, times, heapqueue, deques, options,
-            encodings]
+            encodings, math]
 import pkg/results
 import syntax/highlite
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
@@ -1031,82 +1031,147 @@ proc revertPosition*(
   windowNode: WindowNode,
   id: int) =
 
-    let mess = fmt"The id not recorded was requested. [bufStatus.positionRecord = {bufStatus.positionRecord}, id = {id}]"
+    let mess =
+      fmt"The id not recorded was requested. [bufStatus.positionRecord = {bufStatus.positionRecord}, id = {id}]"
     doAssert(bufStatus.positionRecord.contains(id), mess)
 
     windowNode.currentLine = bufStatus.positionRecord[id].line
     windowNode.currentColumn = bufStatus.positionRecord[id].column
     windowNode.expandedColumn = bufStatus.positionRecord[id].expandedColumn
 
-proc scrollUpNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
-  let destination = max(currentMainWindowNode.currentLine - numberOfLines, 0)
+proc smoothScrollDelays(totalLines, minDelay, maxDelay: int): seq[int] =
+  ## Return all delay values for the smooth scrolling.
 
-  if status.settings.smoothScroll:
-    let currentLine = currentMainWindowNode.currentLine
-    for i in countdown(currentLine, destination):
+  if totalLines == 0: return
+
+  let stepSize = 2.0 / float(totalLines)
+  var t = 0.0
+  for _ in 0 ..< totalLines:
+    # Use a quadratic polynomial
+    let delay = float(maxDelay) * (1.5 * (t - 0.5)^2 + 0.3)
+    result.add int(delay)
+    t += stepSize
+
+proc scrollUpNumberOfLines(status: var EditorStatus, numberOfLines: int) =
+  let destination = max(currentMainWindowNode.currentLine - numberOfLines, 0)
+  jumpLine(currentBufStatus, currentMainWindowNode, destination)
+
+proc smoothScrollUpNumberOfLines(
+  status: var EditorStatus,
+  numberOfLines: int): Option[Rune] =
+    ## Smooth scroll to top lines.
+    ## Interrupt scrolling and return a key If a key is pressed while scrolling.
+
+    let
+      currentLine = currentMainWindowNode.currentLine
+      destination = max(currentMainWindowNode.currentLine - numberOfLines, 0)
+
+      totalLines = currentLine - destination
+      delays = smoothScrollDelays(
+        totalLines,
+        status.settings.smoothScroll.minDelay,
+        status.settings.smoothScroll.maxDelay)
+
+    var delayIndex = 0
+    for i in countdown(currentLine, destination + 1):
       if i == 0: break
 
       currentBufStatus.keyUp(currentMainWindowNode)
       status.update
-      currentMainWindowNode.setTimeout(status.settings.smoothScrollDelay)
-      var key = ERR_KEY
-      key = getKey(currentMainWindowNode)
-      if key != ERR_KEY: break
+      currentMainWindowNode.setTimeout(delays[delayIndex])
+
+      let key = getKey(currentMainWindowNode)
+      if key != ERR_KEY:
+        return some(key)
+
+      if i > destination + 1: delayIndex.inc
 
     ## Set default time out setting
     currentMainWindowNode.setTimeout
 
-  else:
-    currentBufStatus.jumpLine(currentMainWindowNode, destination)
-
-proc pageUp*(status: var EditorStatus) =
+proc pageUp*(status: var EditorStatus) {.inline.} =
   status.scrollUpNumberOfLines(currentMainWindowNode.view.height)
 
-proc halfPageUp*(status: var EditorStatus) =
+proc smoothPageUp*(status: var EditorStatus): Option[Rune] {.inline.} =
+  status.smoothScrollUpNumberOfLines(currentMainWindowNode.view.height)
+
+proc halfPageUp*(status: var EditorStatus) {.inline.} =
   status.scrollUpNumberOfLines(Natural(currentMainWindowNode.view.height / 2))
 
-proc scrollDownNumberOfLines(status: var EditorStatus, numberOfLines: Natural) =
+proc smoothhalfPageUp*(status: var EditorStatus): Option[Rune] {.inline.} =
+  status.smoothScrollUpNumberOfLines(int(currentMainWindowNode.view.height / 2))
+
+proc scrollDownNumberOfLines(status: var EditorStatus, numberOfLines: int) =
   let
+    view = currentMainWindowNode.view
+    currentLine = currentMainWindowNode.currentLine
     destination = min(
       currentMainWindowNode.currentLine + numberOfLines,
       currentBufStatus.buffer.len - 1)
-    currentLine = currentMainWindowNode.currentLine
 
-  if status.settings.smoothScroll:
+  currentMainWindowNode.currentLine = destination
+  currentMainWindowNode.currentColumn = 0
+  currentMainWindowNode.expandedColumn = 0
+
+  if not (view.originalLine[0] <= destination and
+     (view.originalLine[view.height - 1] == -1 or
+     destination <= view.originalLine[view.height - 1])):
+       let
+         firstOriginLineInView = currentMainWindowNode.view.originalLine[0]
+         startOfPrintedLines = max(
+           destination - (currentLine - firstOriginLineInView),
+           0)
+       currentMainWindowNode.view.reload(
+         currentBufStatus.buffer,
+         startOfPrintedLines)
+
+proc smoothScrollDownNumberOfLines(
+  status: var EditorStatus,
+  numberOfLines: int): Option[Rune] =
+    ## Smooth scroll to bottom lines.
+    ## Interrupt scrolling and return a key If a key is pressed while scrolling.
+
+    let
+      currentLine = currentMainWindowNode.currentLine
+      destination = min(
+        currentMainWindowNode.currentLine + numberOfLines,
+        currentBufStatus.buffer.len - 1)
+
+      totalLines = destination - currentLine
+      delays = smoothScrollDelays(
+        totalLines,
+        status.settings.smoothScroll.minDelay,
+        status.settings.smoothScroll.maxDelay)
+
+    var delayIndex = 0
     for i in currentLine ..< destination:
       if i == currentBufStatus.buffer.high: break
 
       currentBufStatus.keyDown(currentMainWindowNode)
       status.update
-      currentMainWindowNode.setTimeout(status.settings.smoothScrollDelay)
-      var key = ERR_KEY
-      key = getKey(currentMainWindowNode)
-      if key != ERR_KEY: break
+      currentMainWindowNode.setTimeout(delays[delayIndex])
+
+      let key = getKey(currentMainWindowNode)
+      if key != ERR_KEY:
+        return some(key)
+
+      if i < destination: delayIndex.inc
 
     ## Set default time out setting
     currentMainWindowNode.setTimeout
 
-  else:
-    let view = currentMainWindowNode.view
-    currentMainWindowNode.currentLine = destination
-    currentMainWindowNode.currentColumn = 0
-    currentMainWindowNode.expandedColumn = 0
-
-    if not (view.originalLine[0] <= destination and
-       (view.originalLine[view.height - 1] == -1 or
-       destination <= view.originalLine[view.height - 1])):
-         let startOfPrintedLines = max(
-           destination - (currentLine - currentMainWindowNode.view.originalLine[0]),
-           0)
-         currentMainWindowNode.view.reload(
-           currentBufStatus.buffer,
-           startOfPrintedLines)
-
-proc pageDown*(status: var EditorStatus) =
+proc pageDown*(status: var EditorStatus) {.inline.} =
   status.scrollDownNumberOfLines(currentMainWindowNode.view.height)
 
-proc halfPageDown*(status: var EditorStatus) =
-  status.scrollDownNumberOfLines(Natural(currentMainWindowNode.view.height / 2))
+proc smoothPageDown*(status: var EditorStatus): Option[Rune] {.inline.} =
+  status.smoothScrollDownNumberOfLines(currentMainWindowNode.view.height)
+
+proc halfPageDown*(status: var EditorStatus) {.inline.} =
+  status.scrollDownNumberOfLines(int(currentMainWindowNode.view.height / 2))
+
+proc smoothHalfPageDown*(status: var EditorStatus): Option[Rune] {.inline.} =
+  status.smoothScrollDownNumberOfLines(
+    int(currentMainWindowNode.view.height / 2))
 
 proc changeTheme*(status: var EditorStatus): Result[(), string] =
   if status.settings.editorColorTheme == ColorTheme.vscode:

@@ -464,33 +464,54 @@ suite "Ex mode: Smooth scroll setting command":
     block:
       const Command = @[ru"smoothscroll", ru"off"]
       status.exModeCommand(Command)
-      check(status.settings.smoothScroll == false)
+      check not status.settings.smoothScroll.enable
 
     block:
       const Command = @[ru"smoothscroll", ru"on"]
       status.exModeCommand(Command)
-      check(status.settings.smoothScroll == true)
+      check status.settings.smoothScroll.enable
 
-suite "Ex mode: Smooth scroll delay setting command":
-  test "Smooth scroll delay setting command":
+suite "Ex mode: Smooth scroll min delay setting command":
+  test "Set to 1":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
 
-    const Command = @[ru"scrollDelay", ru"1"]
+    const Command = @[ru"scrollMinDelay", ru"1"]
     status.exModeCommand(Command)
 
-    check(status.settings.smoothScrollDelay == 1)
+    check status.settings.smoothScroll.minDelay == 1
 
-  test "Smooth scroll delay setting command 2":
+  test "Invalid value":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
 
-    let defaultSpeed = status.settings.smoothScrollDelay
+    let defaultSpeed = status.settings.smoothScroll.minDelay
 
-    const Command = @[ru"scrollDelay", ru"a"]
+    const Command = @[ru"scrollMinDelay", ru"a"]
     status.exModeCommand(Command)
 
-    check(status.settings.smoothScrollDelay == defaultSpeed)
+    check status.settings.smoothScroll.minDelay == defaultSpeed
+
+suite "Ex mode: Smooth scroll max delay setting command":
+  test "Set to 1":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+
+    const Command = @[ru"scrollMaxDelay", ru"1"]
+    status.exModeCommand(Command)
+
+    check status.settings.smoothScroll.maxDelay == 1
+
+  test "Invalid value":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+
+    let defaultSpeed = status.settings.smoothScroll.maxDelay
+
+    const Command = @[ru"scrollMaxDelay", ru"a"]
+    status.exModeCommand(Command)
+
+    check status.settings.smoothScroll.maxDelay == defaultSpeed
 
 suite "Ex mode: Highlight current word setting command":
   test "Highlight current word setting command":

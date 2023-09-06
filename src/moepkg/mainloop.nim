@@ -63,7 +63,10 @@ proc invokeCommand(
       of Mode.debug:
         isDebugModeCommand(command)
 
-proc execCommand(status: var EditorStatus, command: Runes) =
+proc execCommand(status: var EditorStatus, command: Runes): Option[Rune] =
+  ## Exec editor commands.
+  ## Return the key typed during command execution if needed.
+
   let currentMode = currentBufStatus.mode
   case currentMode:
     of Mode.insert:
@@ -71,7 +74,7 @@ proc execCommand(status: var EditorStatus, command: Runes) =
     of Mode.ex:
       status.execExCommand(command)
     of Mode.normal:
-      status.execNormalModeCommand(command)
+      return status.execNormalModeCommand(command)
     of Mode.visual, Mode.visualBlock, Mode.visualLine:
       status.execVisualModeCommand(command)
     of Mode.replace:
@@ -214,10 +217,13 @@ proc execMacro(status: var EditorStatus, name: Rune) =
   if isOperationRegisterName(name):
     let commands = getOperationsFromRegister(name).get
     for c in commands:
-      status.execCommand(c)
+      discard status.execCommand(c)
       status.update
 
-proc execEditorCommand(status: var EditorStatus, command: Runes) =
+proc execEditorCommand(status: var EditorStatus, command: Runes): Option[Rune] =
+  ## Exec editor commands.
+  ## Return the key typed during command execution if needed.
+
   if status.recodingOperationRegister.isSome:
     if not isStopRecordingOperationsCommand(currentBufStatus, command):
       discard addOperationToRegister(
@@ -239,10 +245,11 @@ proc execEditorCommand(status: var EditorStatus, command: Runes) =
     for i in 0 ..< repeat:
       status.execMacro(registerName)
   else:
-    status.execCommand(command)
+    return status.execCommand(command)
 
-proc commandLineLoop*(status: var EditorStatus) =
+proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
   ## Get keys and update view.
+  ## Return the key typed during command execution if needed.
 
   proc openSuggestWindow(
     commandLine: var CommandLine,
@@ -416,7 +423,7 @@ proc commandLineLoop*(status: var EditorStatus) =
         status.recodingOperationRegister)
       case inputState:
         of InputState.Valid:
-          status.execEditorCommand(command)
+          result = status.execEditorCommand(command)
         of InputState.Invalid:
           status.commandLine.writeNotEditorCommandError(command)
         else:
@@ -449,7 +456,10 @@ proc editorMainLoop*(status: var EditorStatus) =
 
   status.resize
 
-  var command: Runes
+  var
+    isSkipGetKey = false
+    key:Rune
+    command: Runes
 
   while mainWindow.numOfMainWindow > 0:
     if currentBufStatus.isEditMode:
@@ -459,7 +469,10 @@ proc editorMainLoop*(status: var EditorStatus) =
 
     status.update
 
-    let key = status.getKeyFromMainWindow
+    if isSkipGetKey:
+      isSkipGetKey = false
+    else:
+      key = status.getKeyFromMainWindow
 
     if status.suggestionWindow.isSome:
       if canHandleInSuggestionWindow(key):
@@ -487,8 +500,15 @@ proc editorMainLoop*(status: var EditorStatus) =
       of InputState.Continue:
         continue
       of InputState.Valid:
-        status.execEditorCommand(command)
-        command.clear
+        let interruptKey = status.execEditorCommand(command)
+        if interruptKey.isSome:
+          key = interruptKey.get
+          isSkipGetKey = true
+
+          command.clear
+          continue
+        else:
+          command.clear
       of InputState.Invalid, InputState.Cancel:
         command.clear
         currentBufStatus.cmdLoop = 0
@@ -498,4 +518,6 @@ proc editorMainLoop*(status: var EditorStatus) =
       status.tryOpenSuggestWindow
 
     if currentBufStatus.isCommandLineMode:
-      status.commandLineLoop
+      let interruptKey = status.commandLineLoop
+      if interruptKey.isSome: key = interruptKey.get
+      continue

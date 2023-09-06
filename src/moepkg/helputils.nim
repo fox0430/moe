@@ -248,7 +248,8 @@ statusLine on or statusLine on - Change setting to display stattus bar
 realtimesearch on or realtimesearch off - Change setting to real-time search
 deleteparen on or deleteparen off - Change setting to auto delete paren
 smoothscroll on or smoothscroll off - Change setting to smooth scroll
-scrollDelay number - Set smooth scroll delay; for example scrollDelay 10
+scrollMinDelay number - Set smooth scroll min delay; for example scrollMinDelay 10
+scrollMaxDelay number - Set smooth scroll max delay; for example scrollMaxDelay 10
 highlightcurrentword on or highlightcurrentword off - Change setting to highlight other uses of the current word
 clipboard on or clipboard off - Change setting to system clipboard
 highlightfullspace on or highlightfullspace off - Change setting to highlight full width space

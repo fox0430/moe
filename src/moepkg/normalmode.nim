@@ -177,6 +177,50 @@ proc turnOffHighlighting*(status: var EditorStatus) =
   status.isSearchHighlight = false
   status.update
 
+proc pageUpCommand(status: var EditorStatus): Option[Rune] =
+  ## Interrupt scrolling and return a key If a key is pressed while scrolling.
+
+  for i in 0 ..< currentBufStatus.cmdLoop:
+    if status.settings.smoothScroll.enable:
+      let interruptKey = status.smoothPageUp
+      if interruptKey.isSome:
+        return interruptKey
+    else:
+      status.pageUp
+
+proc pageDownCommand(status: var EditorStatus): Option[Rune] =
+  ## Interrupt scrolling and return a key If a key is pressed while scrolling.
+
+  for i in 0 ..< currentBufStatus.cmdLoop:
+    if status.settings.smoothScroll.enable:
+      let interruptKey = status.smoothPageDown
+      if interruptKey.isSome:
+        return interruptKey
+    else:
+      status.pageDown
+
+proc halfPageUpCommand(status: var EditorStatus): Option[Rune] =
+  ## Interrupt scrolling and return a key If a key is pressed while scrolling.
+
+  for i in 0 ..< currentBufStatus.cmdLoop:
+    if status.settings.smoothScroll.enable:
+      let interruptKey = status.smoothHalfPageUp
+      if interruptKey.isSome:
+        return interruptKey
+    else:
+      status.halfPageUp
+
+proc halfPageDownCommand(status: var EditorStatus): Option[Rune] =
+  ## Interrupt scrolling and return a key If a key is pressed while scrolling.
+
+  for i in 0 ..< currentBufStatus.cmdLoop:
+    if status.settings.smoothScroll.enable:
+      let interruptKey = status.smoothHalfPageDown
+      if interruptKey.isSome:
+        return interruptKey
+    else:
+      status.halfPageDown
+
 proc changeModeToNormalMode(status: var EditorStatus) =
   status.changeMode(Mode.normal)
   setBlinkingBlockCursor()
@@ -1176,7 +1220,10 @@ proc changeModeToSearchBackwardMode(
     commandLine.clear
     commandLine.setPrompt(SearchBackwardModePrompt)
 
-proc normalCommand(status: var EditorStatus, commands: Runes) =
+proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
+  ## Exec normal mode commands.
+  ## Return the key typed during command execution if needed.
+
   if commands.len == 0:
     return
   elif isControlC(commands[^1]):
@@ -1184,7 +1231,7 @@ proc normalCommand(status: var EditorStatus, commands: Runes) =
     status.commandLine.writeExitHelp
   elif commands.len > 1 and isEscKey(commands[0]):
     # Remove ECS key and call recursively.
-    status.normalCommand(commands[1..commands.high])
+    discard status.normalCommand(commands[1..commands.high])
 
   if currentBufStatus.cmdLoop == 0: currentBufStatus.cmdLoop = 1
 
@@ -1237,13 +1284,13 @@ proc normalCommand(status: var EditorStatus, commands: Runes) =
   elif key == ord('G'):
     currentBufStatus.moveToLastLine(currentMainWindowNode)
   elif isControlU(key):
-    for i in 0 ..< cmdLoop: status.halfPageUp
+    return status.halfPageUpCommand
   elif isControlD(key):
-    for i in 0 ..< cmdLoop: status.halfPageDown
+    return status.halfPageDownCommand
   elif isPageUpKey(key):
-    for i in 0 ..< cmdLoop: status.pageUp
+    return status.pageUpCommand
   elif isPageDownKey(key): ## Page down and Ctrl - F
-    for i in 0 ..< cmdLoop: status.pageDown
+    return status.pageDownCommand
   elif key == ord('w'):
     for i in 0 ..< cmdLoop:
       currentBufStatus.moveToForwardWord(currentMainWindowNode)
@@ -1739,42 +1786,46 @@ proc isNormalModeCommand*(
           else:
             result = InputState.Invalid
 
-proc repeatNormalModeCommand(status: var EditorStatus) =
+proc repeatNormalModeCommand(status: var EditorStatus): Option[Rune] =
   ## Exec the last used normal mode command.
   ## Not executed for movement and mode change commands.
+  ## Return the key typed during command execution if needed.
 
   let command = getLatestNormalModeOperation()
   if command.isSome:
     if not isMovementKey(command.get[0]) and
        not isChangeModeKey(command.get[0]):
-         status.normalCommand(command.get)
+         result = status.normalCommand(command.get)
 
-proc execNormalModeCommand*(status: var EditorStatus, command: Runes) =
-  status.lastOperatingTime = now()
+proc execNormalModeCommand*(
+  status: var EditorStatus,
+  command: Runes): Option[Rune] =
 
-  if $command == "/":
-    currentBufStatus.changeModeToSearchForwardMode(status.commandLine)
-  elif $command == "?":
-    currentBufStatus.changeModeToSearchBackwardMode(status.commandLine)
-  elif $command == ":":
-    currentBufStatus.changeModeToExMode(status.commandLine)
-  elif $command == ".":
-    status.repeatNormalModeCommand
-  elif isEscKey(command[0]):
-    if command.len == 2 and isEscKey(command[1]):
-      status.turnOffHighlighting
-    else:
-      # Remove ECS key and call recursively.
-      status.execNormalModeCommand(command[1..command.high])
-  else:
-    if command[0] != '0' and isDigit(command[0]):
-      currentBufStatus.cmdLoop = parseInt($command.filterIt(isDigit(it)))
+    status.lastOperatingTime = now()
 
-    let cmd =
-      if command[0] != '0' and isDigit(command[0]):
-        command.filterIt(not isDigit(it))
+    if $command == "/":
+      currentBufStatus.changeModeToSearchForwardMode(status.commandLine)
+    elif $command == "?":
+      currentBufStatus.changeModeToSearchBackwardMode(status.commandLine)
+    elif $command == ":":
+      currentBufStatus.changeModeToExMode(status.commandLine)
+    elif $command == ".":
+      result = status.repeatNormalModeCommand
+    elif isEscKey(command[0]):
+      if command.len == 2 and isEscKey(command[1]):
+        status.turnOffHighlighting
       else:
-        command
-    status.normalCommand(cmd)
+        # Remove ECS key and call recursively.
+        discard status.execNormalModeCommand(command[1..command.high])
+    else:
+      if command[0] != '0' and isDigit(command[0]):
+        currentBufStatus.cmdLoop = parseInt($command.filterIt(isDigit(it)))
 
-  currentBufStatus.cmdLoop = 0
+      let cmd =
+        if command[0] != '0' and isDigit(command[0]):
+          command.filterIt(not isDigit(it))
+        else:
+          command
+      result = status.normalCommand(cmd)
+
+    currentBufStatus.cmdLoop = 0
