@@ -778,8 +778,7 @@ proc update*(status: var EditorStatus) =
             settings,
             status.settings.colorMode)
 
-        if bufStatus.isCursor:
-          node.view.seekCursor(buffer, node.currentLine, node.currentColumn)
+        node.view.seekCursor(buffer, node.currentLine, node.currentColumn)
 
         if node.view.sidebar.isSome:
           # Update the EditorView.Sidebar.buffer
@@ -815,7 +814,7 @@ proc update*(status: var EditorStatus) =
             selectedRange,
             currentLineColorPair)
 
-        if isCurrentMainWin and bufStatus.isCursor:
+        if isCurrentMainWin:
           # Update the cursor position.
           node.cursor.update(node.view, node.currentLine, node.currentColumn)
 
