@@ -2275,6 +2275,7 @@ proc execConfigCommand*(status: var EditorStatus, command: Runes) =
     elif isEnterKey(key):
       status.selectAndChangeEditorSettings(arrayIndex)
       currentBufStatus.buffer = initConfigModeBuffer(status.settings)
+      currentBufStatus.isUpdate = true
     elif isControlU(key):
       status.halfPageUp
     elif isControlD(key):
