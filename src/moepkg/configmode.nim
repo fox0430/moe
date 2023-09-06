@@ -1692,37 +1692,33 @@ proc editEnumAndBoolSettings(status: var EditorStatus,
     popupWindow = initWindow(h, w, y, x, EditorColorPairIndex.popupWindow.int16)
     suggestIndex = 0
 
-    key = ERR_KEY
-
-  while (isTabKey(key) or isShiftTab(key) or isDownKey(key) or isUpKey(key) or
-         ERR_KEY == key) and settingValues.len > 1:
-
-    if (isTabKey(key) or isDownKey(key)) and
-       suggestIndex < settingValues.high: inc(suggestIndex)
-    elif (isShiftTab(key) or isUpKey(key)) and suggestIndex > 0:
-      dec(suggestIndex)
-    elif (isShiftTab(key) or isUpKey(key)) and suggestIndex == 0:
-      suggestIndex = settingValues.high
-    else:
-      suggestIndex = 0
-
+  while settingValues.len > 1:
     popupWindow.writePopUpWindow(
       h, w, y, x,
       some(suggestIndex),
       settingValues)
 
-    key = currentMainWindowNode.getKey
+    let key = currentMainWindowNode.getKey
 
-  if isEnterKey(key):
-    let
-      settingVal = $settingValues[suggestIndex]
-      # position is "foreground" or "background" or ""
-      position = if selectedTable == "Theme": $lineSplit[0] else: ""
-    status.changeEditorSettings(
-      selectedTable, selectedSetting, position, settingVal)
-  else:
-    if not status.popupWindow.isNil:
-      status.popupWindow.deleteWindow
+    if isTabKey(key) or isDownKey(key) or key == ord('j'):
+      if suggestIndex == settingValues.high: suggestIndex = 0
+      else: suggestIndex.inc
+    elif isShiftTab(key) or isUpKey(key) or key == ord('k'):
+      if suggestIndex == 0: suggestIndex = settingValues.high
+      else: suggestIndex.dec
+    elif isEnterKey(key):
+      let
+        settingVal = $settingValues[suggestIndex]
+        # position is "foreground" or "background" or ""
+        position = if selectedTable == "Theme": $lineSplit[0] else: ""
+      status.changeEditorSettings(
+        selectedTable, selectedSetting, position, settingVal)
+      break
+    elif isEscKey(key):
+      break
+
+  if not status.popupWindow.isNil:
+    status.popupWindow.deleteWindow
 
 proc selectAndChangeEditorSettings(status: var EditorStatus, arrayIndex: int) =
   let
@@ -2197,7 +2193,6 @@ proc getNumOfValueOfArraySetting(line: Runes): int =
   # 1 is the name of the setting
   line.splitWhitespace.len - 1
 
-# TODO: Move or Remove
 proc changeModeToSearchForwardMode(
   bufStatus: var BufferStatus,
   commandLine: var CommandLine) =
@@ -2206,7 +2201,6 @@ proc changeModeToSearchForwardMode(
     commandLine.clear
     commandLine.setPrompt(SearchForwardModePrompt)
 
-# TODO: Move or Remove
 proc changeModeToSearchBackwardMode(
   bufStatus: var BufferStatus,
   commandLine: var CommandLine) =
