@@ -1,0 +1,7 @@
+.. _#1837:  https://github.com/fox0430/moe/pull/1837
+
+Fixed
+.....
+
+- `#1837`_ Fix #1836
+
