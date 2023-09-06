@@ -172,16 +172,22 @@ proc positionOfSetVal(): int {.compileTime.} =
 
   var names: seq[string]
 
-  for name in standardTableNames: names.add($name)
-  for name in clipboardTableNames: names.add($name)
-  for name in buildOnSaveTableNames: names.add($name)
-  for name in tabLineTableNames: names.add($name)
-  for name in highlightTableNames: names.add($name)
-  for name in autoBackupTableNames: names.add($name)
-  for name in quickRunTableNames: names.add($name)
-  for name in notificationTableNames: names.add($name)
-  for name in filerTableNames: names.add($name)
-  for name in EditorColorPairIndex: names.add($name)
+  for name in standardTableNames: names.add $name
+  for name in clipboardTableNames: names.add $name
+  for name in buildOnSaveTableNames: names.add $name
+  for name in tabLineTableNames: names.add $name
+  for name in statusLineTableNames: names.add $name
+  for name in highlightTableNames: names.add $name
+  for name in autoBackupTableNames: names.add $name
+  for name in quickRunTableNames: names.add $name
+  for name in notificationTableNames: names.add $name
+  for name in filerTableNames: names.add $name
+  for name in autocompleteTableNames: names.add $name
+  for name in persistTableNames: names.add $name
+  for name in GitTableNames: names.add $name
+  for name in SyntaxCheckerTableNames: names.add $name
+  for name in SmoothScrollTableNames: names.add $name
+  for name in EditorColorPairIndex: names.add $name
 
   for name in names:
     if result < name.len: result = name.len
