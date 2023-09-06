@@ -141,7 +141,7 @@ suite "Config mode: Init buffer":
       "  trailingSpaces                 true",
       "  currentWord                    true",
       "  replaceText                    true",
-      "  reservedWord                   TODO WIP NOTE "].toSeqRunes
+      "  reservedWords                  TODO WIP NOTE "].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
@@ -1133,7 +1133,7 @@ suite "Config mode: Get AutoBackup table setting values":
 
     const
       Name = "backupDir"
-      SettingType = SettingType.String
+      SettingType = SettingType.Text
     let
       default = autoBackupSettings.backupDir
       values = autoBackupSettings.getAutoBackupTableSettingValues(
@@ -1175,7 +1175,7 @@ suite "Config mode: Get QuickRun table setting values":
 
     const
       Name = "nimAdvancedCommand"
-      SettingType = SettingType.String
+      SettingType = SettingType.Text
     let
       default = ru quickRunSettings.nimAdvancedCommand
       values = quickRunSettings.getQuickRunTableSettingValues(Name, SettingType)
@@ -1188,7 +1188,7 @@ suite "Config mode: Get QuickRun table setting values":
 
     const
       Name = "clangOptions"
-      SettingType = SettingType.String
+      SettingType = SettingType.Text
     let
       default = ru quickRunSettings.clangOptions
       values = quickRunSettings.getQuickRunTableSettingValues(Name, SettingType)
@@ -1201,7 +1201,7 @@ suite "Config mode: Get QuickRun table setting values":
 
     const
       Name = "cppOptions"
-      SettingType = SettingType.String
+      SettingType = SettingType.Text
     let
       default = ru quickRunSettings.cppOptions
       values = quickRunSettings.getQuickRunTableSettingValues(Name, SettingType)
@@ -1214,7 +1214,7 @@ suite "Config mode: Get QuickRun table setting values":
 
     const
       Name = "nimOptions"
-      SettingType = SettingType.String
+      SettingType = SettingType.Text
     let
       default = ru quickRunSettings.nimOptions
       values = quickRunSettings.getQuickRunTableSettingValues(Name, SettingType)
@@ -1227,7 +1227,7 @@ suite "Config mode: Get QuickRun table setting values":
 
     const
       Name = "shOptions"
-      SettingType = SettingType.String
+      SettingType = SettingType.Text
     let
       default = ru quickRunSettings.shOptions
       values = quickRunSettings.getQuickRunTableSettingValues(Name, SettingType)
@@ -1240,7 +1240,7 @@ suite "Config mode: Get QuickRun table setting values":
 
     const
       Name = "bashOptions"
-      SettingType = SettingType.String
+      SettingType = SettingType.Text
     let
       default = ru quickRunSettings.bashOptions
       values = quickRunSettings.getQuickRunTableSettingValues(Name, SettingType)
@@ -2463,7 +2463,7 @@ suite "Config mode: Get BuildOnSave table setting type":
       Name = "workspaceRoot"
 
     let settingType = getSettingType(Table, Name)
-    check settingType == SettingType.String
+    check settingType == SettingType.Text
 
   test "Get command setting type":
     const
@@ -2471,7 +2471,7 @@ suite "Config mode: Get BuildOnSave table setting type":
       Name = "command"
 
     let settingType = getSettingType(Table, Name)
-    check settingType == SettingType.String
+    check settingType == SettingType.Text
 
   test "Set invalid Name":
     const

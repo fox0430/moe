@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[times, strutils, options, strformat]
+import std/[times, strutils, options, strformat, sequtils]
 import pkg/results
 import gapbuffer, ui, editorstatus, unicodeext, windownode, movement, settings,
        bufferstatus, color, highlight, editor, commandline, popupwindow, rgb,
@@ -87,7 +87,7 @@ type highlightTableNames {.pure.} = enum
   currentWord
   replaceText
   pairOfParen
-  reservedWord
+  reservedWords
 
 type autoBackupTableNames {.pure.} = enum
   enable
@@ -159,8 +159,7 @@ type SettingType {.pure.} = enum
   Bool
   Enum
   Number
-  String
-  Array
+  Text
 
 const
   NumOfIndent = 2
@@ -641,27 +640,13 @@ proc getTableName(buffer: GapBuffer[Runes], line: int): string =
     if buffer[i].len > 0 and buffer[i][0] != ru ' ':
       return $buffer[i]
 
-# return (start, end: int)
-proc getCurrentArraySettingValueRange(reservedWords: seq[ReservedWord],
-                                      arrayIndex: int): (int, int) =
+proc initConfigModeHighlight[T](
+  buffer: T,
+  currentLine: int,
+  reservedWords: seq[ReservedWord]): Highlight =
 
-  const spaceLengh = 1
-
-  result[0] = positionOfSetVal() + NumOfIndent
-
-  for i in 0 .. arrayIndex:
-    # Add space length
-    if i > 0:
-      result[0] += reservedWords[i - 1].word.ru.len + spaceLengh
-
-  result[1] = result[0] + reservedWords[arrayIndex].word.ru.high
-
-proc initConfigModeHighlight[T](buffer: T,
-                                currentLine, arrayIndex: int,
-                                reservedWords: seq[ReservedWord]): Highlight =
-
-  for i in 0 ..< buffer.len:
-    if i == currentLine:
+    for i in 0 ..< buffer.len:
+      if i == currentLine:
         result.colorSegments.add(
           ColorSegment(
             firstRow: i,
@@ -669,37 +654,6 @@ proc initConfigModeHighlight[T](buffer: T,
             lastRow: i,
             lastColumn: buffer[i].len,
             color: EditorColorPairIndex.default))
-
-        if buffer[currentLine].splitWhitespace.len > 1 and
-           SettingType.Array == buffer.getSettingType(currentLine):
-          let
-            range = getCurrentArraySettingValueRange(reservedWords, arrayIndex)
-            start = range[0]
-            `end` = range[1]
-
-          result.overwrite(
-            ColorSegment(
-              firstRow: i,
-              firstColumn: start,
-              lastRow: i,
-              lastColumn: `end`,
-              color: EditorColorPairIndex.configModeCurrentLine))
-        else:
-          result.overwrite(
-            ColorSegment(
-              firstRow: i,
-              firstColumn: NumOfIndent + positionOfSetVal(),
-              lastRow: i,
-              lastColumn: buffer[i].len,
-              color: EditorColorPairIndex.configModeCurrentLine))
-    else:
-      result.colorSegments.add(
-        ColorSegment(
-          firstRow: i,
-          firstColumn: 0,
-          lastRow: i,
-          lastColumn: buffer[i].len,
-          color: EditorColorPairIndex.default))
 
 proc changeStandardTableSetting(settings: var EditorSettings,
                                 settingName, settingVal: string) =
@@ -831,7 +785,7 @@ proc changeHighlightTableSetting(settings: var EditorSettings,
       settings.highlight.pairOfParen = parseBool(settingVal)
     of "currentWord":
       settings.highlight.currentWord = parseBool(settingVal)
-    of "reservedWord":
+    of "reservedWords":
       discard
     else:
       discard
@@ -1134,7 +1088,7 @@ proc getSettingType(table, name: string): SettingType =
         result = SettingType.Bool
       of "workspaceRoot",
          "command":
-        result = SettingType.String
+        result = SettingType.Text
       else:
         result = SettingType.None
 
@@ -1163,7 +1117,7 @@ proc getSettingType(table, name: string): SettingType =
          "showModeInactive":
            result = SettingType.Bool
       of "setupText":
-        result = SettingType.String
+        result = SettingType.Text
       else:
         result = SettingType.None
 
@@ -1175,7 +1129,7 @@ proc getSettingType(table, name: string): SettingType =
          "currentWord",
          "replaceText",
          "pairOfParen": result = SettingType.Bool
-      of "reservedWord": result = SettingType.Array
+      of "reservedWords": result = SettingType.Text
       else:
         result = SettingType.None
 
@@ -1187,7 +1141,7 @@ proc getSettingType(table, name: string): SettingType =
          "interval":
         result = SettingType.Number
       of "backupDir":
-        result = SettingType.String
+        result = SettingType.Text
       else:
         result = SettingType.None
 
@@ -1203,7 +1157,7 @@ proc getSettingType(table, name: string): SettingType =
          "NimOptions",
          "shOptions",
          "bashOptions":
-           result = SettingType.String
+           result = SettingType.Text
       else:
         result = SettingType.None
 
@@ -1301,11 +1255,11 @@ proc getSettingType(table, name: string): SettingType =
     of "SmoothScroll":
       smoothScrollTable()
     of "Theme":
-      return SettingType.String
+      return SettingType.Text
 
 proc getEditorColorPairIndexStr(buffer: GapBuffer[Runes],
-                             lineSplit: seq[Runes],
-                             currentLine: int): string =
+                                lineSplit: seq[Runes],
+                                currentLine: int): string =
 
   if (lineSplit[0] == ru "foreground") or
      (buffer[currentLine - 2] == ru "Theme"):
@@ -1343,10 +1297,7 @@ proc insertCharacter(bufStatus: var BufferStatus,
   if oldLine != newLine:
     bufStatus.buffer[windowNode.currentLine] = newLine
 
-proc editFiguresSetting(status: var EditorStatus,
-                        table, name: string,
-                        arrayIndex: int) =
-
+proc editFiguresSetting(status: var EditorStatus, table, name: string) =
   setCursor(true)
   if not status.settings.disableChangeCursor:
     changeCursorType(status.settings.insertModeCursor)
@@ -1432,7 +1383,6 @@ proc editFiguresSetting(status: var EditorStatus,
       currentMainWindowNode.highlight =
         currentBufStatus.buffer.initConfigModeHighlight(
           currentLine,
-          arrayIndex,
           reservedWords)
 
   if not isCancel:
@@ -1504,74 +1454,65 @@ proc getCurrentColorVal(s: EditorSettings, name, position: string): string =
       if bgHex.isSome: return bgHex.get
       else: return "termDefautBg"
 
-proc editStringSetting(status: var EditorStatus,
-                       table, name, position: string,
-                       arrayIndex: int) =
+proc getTextSettingVal(
+  s: EditorSettings,
+  table, name, position: string): Runes =
 
+    case table:
+      of "BuildOnSave":
+        case name:
+          of "workspaceRoot":
+            return s.buildOnSave.workspaceRoot
+          of "command":
+            return s.buildOnSave.command
+      of "Highlight":
+        case name:
+          of "reservedWords":
+            for i, reservedWord in s.highlight.reservedWords:
+              result &= reservedWord.word.toRunes & ru" "
+      of "AutoBackup":
+        case name:
+          of "backupDir":
+            return s.autoBackup.backupDir
+      of "QuickRun":
+        case name:
+          of "nimAdvancedCommand":
+            return s.quickRun.nimAdvancedCommand.toRunes
+          of "ClangOptions":
+            return s.quickRun.clangOptions.toRunes
+          of "CppOptions":
+            return s.quickRun.cppOptions.toRunes
+          of "NimOptions":
+            return s.quickRun.nimOptions.toRunes
+          of "shOptions":
+            return s.quickRun.shOptions.toRunes
+          of "bashOptions":
+            return s.quickRun.bashOptions.toRunes
+      of "Theme":
+        return s.getCurrentColorVal(name, position).toRunes
+
+proc editTextSetting(status: var EditorStatus, table, name, position: string) =
   const MinColumn = NumOfIndent + positionOfSetVal()
-  let currentLine = currentMainWindowNode.currentLine
 
-  template moveToLeft() =
-    if MinColumn > currentMainWindowNode.currentColumn:
-      currentMainWindowNode.keyLeft
+  currentMainWindowNode.currentColumn =
+    positionOfSetVal() +
+    NumOfIndent +
+    getTextSettingVal(status.settings, table, name, position).len
 
-  block setCurrentColumn:
-    template getSettingVal: Runes =
-      case table:
-        of "BuildOnSave":
-          case name:
-            of "workspaceRoot":
-              status.settings.buildOnSave.workspaceRoot
-            of "command":
-              status.settings.buildOnSave.command
-            else: ru ""
-        of "Highlight":
-          case name:
-            of "reservedWord":
-              var val = ru ""
-              for i in 0 .. arrayIndex:
-                if i > 0: val &= ru " "
-                val &= status.settings.highlight.reservedWords[i].word.toRunes
-              # return val
-              val
-            else: ru ""
-        of "AutoBackup":
-          case name:
-            of "backupDir":
-              status.settings.autoBackup.backupDir
-            else: ru ""
-        of "QuickRun":
-          case name:
-            of "nimAdvancedCommand":
-              status.settings.quickRun.nimAdvancedCommand.toRunes
-            of "ClangOptions":
-              status.settings.quickRun.clangOptions.toRunes
-            of "CppOptions":
-              status.settings.quickRun.cppOptions.toRunes
-            of "NimOptions":
-              status.settings.quickRun.nimOptions.toRunes
-            of "shOptions":
-              status.settings.quickRun.shOptions.toRunes
-            of "bashOptions":
-              status.settings.quickRun.bashOptions.toRunes
-            else: ru ""
-        of "Theme":
-          ru status.settings.getCurrentColorVal(name, position)
-        else: ru ""
-
-    currentMainWindowNode.currentColumn =
-      positionOfSetVal() + NumOfIndent + getSettingVal().len
-
-  setCursor(true)
   if not status.settings.disableChangeCursor:
     changeCursorType(status.settings.insertModeCursor)
 
   var
-    buffer = ""
+    buffer = getTextSettingVal(status.settings, table, name, position)
     isCancel = false
     isBreak = false
   while not isBreak and not isCancel:
+    # Edit text settings
+
     status.update
+
+    # status.update clears the cursor, so enable it every time.
+    setCursor(true)
 
     var key = ERR_KEY
     while key == ERR_KEY:
@@ -1585,7 +1526,8 @@ proc editStringSetting(status: var EditorStatus,
       isBreak = true
 
     elif isLeftKey(key):
-      moveToLeft()
+      if MinColumn < currentMainWindowNode.currentColumn:
+        currentMainWindowNode.keyLeft
     elif isRightKey(key):
       currentBufStatus.keyRight(currentMainWindowNode)
 
@@ -1605,50 +1547,53 @@ proc editStringSetting(status: var EditorStatus,
       let reservedWords = status.settings.highlight.reservedWords
       currentMainWindowNode.highlight =
         currentBufStatus.buffer.initConfigModeHighlight(
-          currentLine,
-          arrayIndex,
+          currentMainWindowNode.currentLine,
           reservedWords)
 
+  currentMainWindowNode.currentColumn = 0
+
   if isCancel:
-    currentMainWindowNode.currentColumn = 0
+    setCursor(false)
   else:
     template buildOnSaveTable() =
       case name:
         of "workspaceRoot":
-          status.settings.buildOnSave.workspaceRoot = buffer.toRunes
+          status.settings.buildOnSave.workspaceRoot = buffer
         of "command":
-          status.settings.buildOnSave.command = buffer.toRunes
+          status.settings.buildOnSave.command = buffer
         else:
           discard
 
     template  highlightTable() =
       case name:
-        of "reservedWord":
-          status.settings.highlight.reservedWords[arrayIndex].word = buffer
+        of "reservedWords":
+          status.settings.highlight.reservedWords =
+            buffer.splitWhitespace.mapIt(
+              ReservedWord(word: $it, color: EditorColorPairIndex.reservedWord))
         else:
           discard
 
     template autoBackupTable() =
       case name:
         of "backupDir":
-          status.settings.autoBackup.backupDir = ru buffer
+          status.settings.autoBackup.backupDir = buffer
         else:
           discard
 
     template quickRunTable() =
       case name:
         of "nimAdvancedCommand":
-          status.settings.quickRun.nimAdvancedCommand = buffer
+          status.settings.quickRun.nimAdvancedCommand = $buffer
         of "ClangOptions":
-          status.settings.quickRun.clangOptions = buffer
+          status.settings.quickRun.clangOptions = $buffer
         of "CppOptions":
-          status.settings.quickRun.cppOptions = buffer
+          status.settings.quickRun.cppOptions = $buffer
         of "NimOptions":
-          status.settings.quickRun.nimOptions = buffer
+          status.settings.quickRun.nimOptions = $buffer
         of "shOptions":
-          status.settings.quickRun.shOptions = buffer
+          status.settings.quickRun.shOptions = $buffer
         of "bashOptions":
-          status.settings.quickRun.bashOptions = buffer
+          status.settings.quickRun.bashOptions = $buffer
         else:
           discard
 
@@ -1656,7 +1601,7 @@ proc editStringSetting(status: var EditorStatus,
       let r = status.settings.changeThemeTableSetting(
         position.toColorLayer.get,
         name,
-        buffer)
+        $buffer)
       if r.isOk:
         # TODO: Add error handling
         discard status.changeTheme
@@ -1754,9 +1699,9 @@ proc selectAndChangeEditorSettings(status: var EditorStatus, arrayIndex: int) =
 
   case settingType:
     of SettingType.Number:
-      status.editFiguresSetting(selectedTable, selectedSetting, arrayIndex)
-    of SettingType.String, SettingType.Array:
-      status.editStringSetting(selectedTable, selectedSetting, position, arrayIndex)
+      status.editFiguresSetting(selectedTable, selectedSetting)
+    of SettingType.Text:
+      status.editTextSetting(selectedTable, selectedSetting, position)
     else:
       status.editEnumAndBoolSettings(lineSplit,
                                      selectedTable,
@@ -1914,7 +1859,7 @@ proc initHighlightTableBuffer(settings: EditorSettings): seq[Runes] =
         result.add(ru nameStr & space & $settings.highlight.trailingSpaces)
       of "currentWord":
         result.add(ru nameStr & space & $settings.highlight.currentWord)
-      of "reservedWord":
+      of "reservedWords":
         var line = ru nameStr & space
         for reservedWord in settings.highlight.reservedWords:
           line &= ru reservedWord.word & " "
@@ -2269,14 +2214,6 @@ proc execConfigCommand*(status: var EditorStatus, command: Runes) =
       status.movePrevWindow
     elif key == ord(':'):
       status.changeMode(Mode.ex)
-
-    elif key == ord('h') or isLeftKey(key):
-      if getSettingType() == SettingType.Array and arrayIndex > 0:
-        arrayIndex.dec
-    elif key == ord('l') or isRightKey(key):
-      let numOfValue = getNumOfValueOfArraySetting()
-      if getSettingType() == SettingType.Array and numOfValue - 1 > arrayIndex:
-        arrayIndex.inc
 
     elif isEnterKey(key):
       status.selectAndChangeEditorSettings(arrayIndex)
