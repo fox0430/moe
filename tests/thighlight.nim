@@ -69,14 +69,14 @@ suite "highlight: initHighlight":
       EmptyReservedWords,
       SourceLanguage.langC)
 
-    check highlight == Highlight(
+    check highlight[] == Highlight(
       colorSegments: @[
         ColorSegment(
           firstRow: 0,
           firstColumn: 0,
           lastRow: 0,
           lastColumn: 0,
-          color: EditorColorPairIndex.default)])
+          color: EditorColorPairIndex.default)])[]
 
   test "initHighlight shell script (Fix #1166)":
     const Code = "echo hello"
@@ -110,7 +110,7 @@ suite "highlight: initHighlight":
       ReservedWords,
       SourceLanguage.langYaml)
 
-    check highlight == Highlight(
+    check highlight[] == Highlight(
       colorSegments: @[
         ColorSegment(
           firstRow: 0,
@@ -135,7 +135,7 @@ suite "highlight: initHighlight":
           firstColumn: 6,
           lastRow: 0,
           lastColumn: 8,
-          color: EditorColorPairIndex.default)])
+          color: EditorColorPairIndex.default)])[]
 
 suite "highlight: indexOf":
   const ReservedWords = @[

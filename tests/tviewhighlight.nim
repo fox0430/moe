@@ -323,7 +323,7 @@ suite "highlightPairOfParen":
           status.bufStatus[0],
           status.mainWindow.currentMainWindowNode)
 
-        check highlight == `expectHighlight`
+        check highlight[] == `expectHighlight`[]
 
   block highlightParenPairTestCase1:
     ## Case 1 is starting the search on an empty line.
@@ -331,7 +331,8 @@ suite "highlightPairOfParen":
       TestIndex = 1
       Buffer = @[ru""]
       Position = BufferPosition(line: 0, column: 0)
-      ExpectHighlight = Highlight(colorSegments: @[
+    let
+      expectHighlight = Highlight(colorSegments: @[
         ColorSegment(
           firstRow: 0,
           firstColumn: 0,
@@ -347,14 +348,14 @@ suite "highlightPairOfParen":
           OpenParens[i],
           Buffer,
           Position,
-          ExpectHighlight)
+          expectHighlight)
       block close:
         highlightParenPairTest(
           TestIndex,
           CloseParens[i],
           Buffer,
           Position,
-          ExpectHighlight)
+          expectHighlight)
 
   block highlightParenPairTestCase2:
     const TestIndex = 2
@@ -363,9 +364,8 @@ suite "highlightPairOfParen":
       let buffer = @[toRunes(fmt"{OpenParens[i]}{CloseParens[i]}")]
 
       block open:
-        const
-          Position = BufferPosition(line: 0, column: 0)
-          ExpectHighlight = Highlight(colorSegments: @[
+        const Position = BufferPosition(line: 0, column: 0)
+        let expectHighlight = Highlight(colorSegments: @[
             ColorSegment(
               firstRow: 0,
               firstColumn: 0,
@@ -380,12 +380,16 @@ suite "highlightPairOfParen":
               color: EditorColorPairIndex.parenPair),
           ])
 
-        highlightParenPairTest(TestIndex, OpenParens[i], buffer, Position, ExpectHighlight)
+        highlightParenPairTest(
+          TestIndex,
+          OpenParens[i],
+          buffer,
+          Position,
+          expectHighlight)
 
       block close:
-        const
-          position = BufferPosition(line: 0, column: 1)
-          expectHighlight = Highlight(colorSegments: @[
+        const Position = BufferPosition(line: 0, column: 1)
+        let expectHighlight = Highlight(colorSegments: @[
             ColorSegment(
               firstRow: 0,
               firstColumn: 0,
@@ -400,7 +404,12 @@ suite "highlightPairOfParen":
               color: EditorColorPairIndex.default)
           ])
 
-        highlightParenPairTest(TestIndex, CloseParens[i], buffer, position, expectHighlight)
+        highlightParenPairTest(
+          TestIndex,
+          CloseParens[i],
+          buffer,
+          Position,
+          expectHighlight)
 
   block highlightParenPairTestCase3:
     const TestIndex = 3
@@ -409,9 +418,8 @@ suite "highlightPairOfParen":
       let buffer = @[toRunes(fmt"{OpenParens[i]} {CloseParens[i]}")]
 
       block open:
-        const
-          position = BufferPosition(line: 0, column: 0)
-          expectHighlight = Highlight(colorSegments: @[
+        const Position = BufferPosition(line: 0, column: 0)
+        let expectHighlight = Highlight(colorSegments: @[
             ColorSegment(
               firstRow: 0,
               firstColumn: 0,
@@ -426,12 +434,16 @@ suite "highlightPairOfParen":
               color: EditorColorPairIndex.parenPair),
           ])
 
-        highlightParenPairTest(TestIndex, OpenParens[i], buffer, position, expectHighlight)
+        highlightParenPairTest(
+          TestIndex,
+          OpenParens[i],
+          buffer,
+          Position,
+          expectHighlight)
 
       block close:
-        const
-          position = BufferPosition(line: 0, column: 2)
-          expectHighlight = Highlight(colorSegments: @[
+        const Position = BufferPosition(line: 0, column: 2)
+        let expectHighlight = Highlight(colorSegments: @[
             ColorSegment(
               firstRow: 0,
               firstColumn: 0,
@@ -446,7 +458,12 @@ suite "highlightPairOfParen":
               color: EditorColorPairIndex.default),
           ])
 
-        highlightParenPairTest(TestIndex, CloseParens[i], buffer, position, expectHighlight)
+        highlightParenPairTest(
+          TestIndex,
+          CloseParens[i],
+          buffer,
+          Position,
+          expectHighlight)
 
   block highlightParenPairTestCase4:
     const TestIndex = 4
@@ -455,9 +472,8 @@ suite "highlightPairOfParen":
       let buffer = @[OpenParens[i].toRunes, CloseParens[i].toRunes]
 
       block open:
-        const
-          position = BufferPosition(line: 0, column: 0)
-          expectHighlight = Highlight(colorSegments: @[
+        const Position = BufferPosition(line: 0, column: 0)
+        let expectHighlight = Highlight(colorSegments: @[
             ColorSegment(
               firstRow: 0,
               firstColumn: 0,
@@ -472,12 +488,16 @@ suite "highlightPairOfParen":
               color: EditorColorPairIndex.parenPair),
           ])
 
-        highlightParenPairTest(TestIndex, OpenParens[i], buffer, position, expectHighlight)
+        highlightParenPairTest(
+          TestIndex,
+          OpenParens[i],
+          buffer,
+          Position,
+          expectHighlight)
 
       block close:
-        const
-          position = BufferPosition(line: 1, column: 0)
-          expectHighlight = Highlight(colorSegments: @[
+        const Position = BufferPosition(line: 1, column: 0)
+        let expectHighlight = Highlight(colorSegments: @[
             ColorSegment(
               firstRow: 0,
               firstColumn: 0,
@@ -492,7 +512,12 @@ suite "highlightPairOfParen":
               color: EditorColorPairIndex.default),
           ])
 
-        highlightParenPairTest(TestIndex, CloseParens[i], buffer, position, expectHighlight)
+        highlightParenPairTest(
+          TestIndex,
+          CloseParens[i],
+          buffer,
+          Position,
+          expectHighlight)
 
   block highlightParenPairTestCase5:
     const TestIndex = 5
@@ -501,9 +526,8 @@ suite "highlightPairOfParen":
       let buffer = @[OpenParens[i].toRunes, ru"", CloseParens[i].toRunes]
 
       block open:
-        const
-          position = BufferPosition(line: 0, column: 0)
-          expectHighlight = Highlight(colorSegments: @[
+        const Position = BufferPosition(line: 0, column: 0)
+        let expectHighlight = Highlight(colorSegments: @[
             ColorSegment(
               firstRow: 0,
               firstColumn: 0,
@@ -524,12 +548,16 @@ suite "highlightPairOfParen":
               color: EditorColorPairIndex.parenPair),
           ])
 
-        highlightParenPairTest(TestIndex, OpenParens[i], buffer, position, expectHighlight)
+        highlightParenPairTest(
+          TestIndex,
+          OpenParens[i],
+          buffer,
+          Position,
+          expectHighlight)
 
       block close:
-        const
-          position = BufferPosition(line: 2, column: 0)
-          expectHighlight = Highlight(colorSegments: @[
+        const Position = BufferPosition(line: 2, column: 0)
+        let expectHighlight = Highlight(colorSegments: @[
             ColorSegment(
               firstRow: 0,
               firstColumn: 0,
@@ -550,7 +578,12 @@ suite "highlightPairOfParen":
               color: EditorColorPairIndex.default),
           ])
 
-        highlightParenPairTest(TestIndex, CloseParens[i], buffer, position, expectHighlight)
+        highlightParenPairTest(
+          TestIndex,
+          CloseParens[i],
+          buffer,
+          Position,
+          expectHighlight)
 
   block highlightParenPairTestCase6:
     const TestIndex = 6
@@ -559,9 +592,8 @@ suite "highlightPairOfParen":
 
       block open:
         let buffer = @[OpenParens[i].toRunes, ru""]
-        const
-          position = BufferPosition(line: 0, column: 0)
-          expectHighlight = Highlight(colorSegments: @[
+        const Position = BufferPosition(line: 0, column: 0)
+        let expectHighlight = Highlight(colorSegments: @[
             ColorSegment(
               firstRow: 0,
               firstColumn: 0,
@@ -576,13 +608,17 @@ suite "highlightPairOfParen":
               color: EditorColorPairIndex.default)
           ])
 
-        highlightParenPairTest(TestIndex, OpenParens[i], buffer, position, expectHighlight)
+        highlightParenPairTest(
+          TestIndex,
+          OpenParens[i],
+          buffer,
+          Position,
+          expectHighlight)
 
       block close:
         let buffer = @[ru"", CloseParens[i].toRunes]
-        const
-          position = BufferPosition(line: 1, column: 0)
-          expectHighlight = Highlight(colorSegments: @[
+        const Position = BufferPosition(line: 1, column: 0)
+        let expectHighlight = Highlight(colorSegments: @[
             ColorSegment(
               firstRow: 0,
               firstColumn: 0,
@@ -597,7 +633,12 @@ suite "highlightPairOfParen":
               color: EditorColorPairIndex.default)
           ])
 
-        highlightParenPairTest(TestIndex, CloseParens[i], buffer, position, expectHighlight)
+        highlightParenPairTest(
+          TestIndex,
+          CloseParens[i],
+          buffer,
+          Position,
+          expectHighlight)
 
   block highlightParenPairTestCase7:
     ## matchingParenPair should ignore '"'.
@@ -606,7 +647,7 @@ suite "highlightPairOfParen":
       Buffer = @["\"\"".toRunes]
       Position = BufferPosition(line: 0, column: 0)
       Paren = ru'"'
-      ExpectHighlight = Highlight(colorSegments: @[
+    let expectHighlight = Highlight(colorSegments: @[
         ColorSegment(
           firstRow: 0,
           firstColumn: 0,
@@ -615,7 +656,7 @@ suite "highlightPairOfParen":
           color: EditorColorPairIndex.default)
       ])
 
-    highlightParenPairTest(TestIndex, Paren, Buffer, Position, ExpectHighlight)
+    highlightParenPairTest(TestIndex, Paren, Buffer, Position, expectHighlight)
 
 
   block highlightParenPairTestCase8:
@@ -625,7 +666,7 @@ suite "highlightPairOfParen":
       Buffer = @["''".toRunes]
       Position = BufferPosition(line: 0, column: 0)
       Paren = ru'\''
-      ExpectHighlight = Highlight(colorSegments: @[
+    let expectHighlight = Highlight(colorSegments: @[
         ColorSegment(
           firstRow: 0,
           firstColumn: 0,
@@ -634,7 +675,7 @@ suite "highlightPairOfParen":
           color: EditorColorPairIndex.default)
       ])
 
-    highlightParenPairTest(TestIndex, Paren, Buffer, Position, ExpectHighlight)
+    highlightParenPairTest(TestIndex, Paren, Buffer, Position, expectHighlight)
 
   block highlightParenPairTestCase9:
     const TestIndex = 9
@@ -642,9 +683,8 @@ suite "highlightPairOfParen":
     for i in 0 ..< OpenParens.len:
       let buffer = @[CloseParens[i].toRunes]
 
-      const
-        Position = BufferPosition(line: 0, column: 0)
-        ExpectHighlight = Highlight(colorSegments: @[
+      const Position = BufferPosition(line: 0, column: 0)
+      let expectHighlight = Highlight(colorSegments: @[
           ColorSegment(
             firstRow: 0,
             firstColumn: 0,
@@ -653,7 +693,12 @@ suite "highlightPairOfParen":
             color: EditorColorPairIndex.default)
         ])
 
-      highlightParenPairTest(TestIndex, CloseParens[i], buffer, Position, ExpectHighlight)
+      highlightParenPairTest(
+        TestIndex,
+        CloseParens[i],
+        buffer,
+        Position,
+        expectHighlight)
 
 suite "Highlight paren":
   test "Highlight ')'":

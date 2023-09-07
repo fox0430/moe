@@ -42,7 +42,7 @@ type
     gitDiff*: seq[GitDiffProcess]
     syntaxCheck*: seq[SyntaxCheckProcess]
 
-  EditorStatus* = object
+  EditorStatus* = ref object
     bufStatus*: seq[BufferStatus]
     filerStatuses: seq[FilerStatus]
     prevBufferIndex*: int
@@ -75,13 +75,14 @@ const
   CommandLineWindowHeight = 1
 
 proc initEditorStatus*(): EditorStatus =
-  result.currentDir = getCurrentDir().toRunes
-  result.settings = initEditorSettings()
-  result.lastOperatingTime = now()
-  result.autoBackupStatus = initAutoBackupStatus()
-  result.commandLine = initCommandLine()
-  result.mainWindow = initMainWindow()
-  result.statusLine = @[initStatusLine()]
+  result = EditorStatus(
+    currentDir: getCurrentDir().toRunes,
+    settings: initEditorSettings(),
+    lastOperatingTime: now(),
+    autoBackupStatus: initAutoBackupStatus(),
+    commandLine: initCommandLine(),
+    mainWindow: initMainWindow(),
+    statusLine: @[initStatusLine()])
 
   # Init tab line
   if result.settings.tabLine.enable:
@@ -729,56 +730,54 @@ proc update*(status: var EditorStatus) =
     for i in  0 ..< queue.len:
       var node = queue.pop
       if node.window.isSome:
-        let bufStatus = status.bufStatus[node.bufferIndex]
+        template b: var BufferStatus = status.bufStatus[node.bufferIndex]
 
-        if bufStatus.buffer.high < node.currentLine:
-          node.currentLine = bufStatus.buffer.high
+        if b.buffer.high < node.currentLine:
+          node.currentLine = b.buffer.high
 
         # TODO: Remove
-        if not bufStatus.isInsertMode and
-           not bufStatus.isReplaceMode and
-           not bufStatus.isConfigMode and
-           not bufStatus.isVisualMode and
-           bufStatus.buffer[node.currentLine].len > 0 and
-           bufStatus.buffer[node.currentLine].high < node.currentColumn:
-             node.currentColumn = bufStatus.buffer[node.currentLine].high
+        if not b.isInsertMode and
+           not b.isReplaceMode and
+           not b.isConfigMode and
+           not b.isVisualMode and
+           b.buffer[node.currentLine].len > 0 and
+           b.buffer[node.currentLine].high < node.currentColumn:
+             node.currentColumn = b.buffer[node.currentLine].high
 
-        let
-          buffer = status.bufStatus[node.bufferIndex].buffer
-          isCurrentMainWin =
-            if node.windowIndex == currentMainWindowNode.windowIndex: true
-            else: false
+        let isCurrentMainWin =
+          if node.windowIndex == currentMainWindowNode.windowIndex: true
+          else: false
 
         # Reload Editorview. This is not the actual terminal view.
         node.view.reload(
-          buffer,
+          b.buffer,
           min(node.view.originalLine[0],
-          bufStatus.buffer.high))
+          b.buffer.high))
 
         # NOTE: node.highlight is not directly change here for performance.
         var highlight = node.highlight
 
         ## Update highlights
-        if bufStatus.isLogViewerMode:
-          highlight = initLogViewerHighlight($buffer)
-        elif bufStatus.isDiffViewerMode:
-          highlight = bufStatus.buffer.toRunes.initDiffViewerHighlight
-        elif bufStatus.isFilerMode and
-             status.filerStatuses[bufStatus.filerStatusIndex.get].isUpdateView:
+        if b.isLogViewerMode:
+          highlight = initLogViewerHighlight($b.buffer)
+        elif b.isDiffViewerMode:
+          highlight = b.buffer.toRunes.initDiffViewerHighlight
+        elif b.isFilerMode and
+             status.filerStatuses[b.filerStatusIndex.get].isUpdateView:
                highlight = initFilerHighlight(
-                 status.filerStatuses[bufStatus.filerStatusIndex.get],
-                 buffer,
+                 status.filerStatuses[b.filerStatusIndex.get],
+                 b.buffer,
                  node.currentLine)
-        elif bufStatus.isEditMode:
+        elif b.isEditMode:
           highlight.updateHighlight(
-            bufStatus,
+            b,
             node,
             status.isSearchHighlight,
             status.searchHistory,
             settings,
             status.settings.colorMode)
 
-        node.view.seekCursor(buffer, node.currentLine, node.currentColumn)
+        node.view.seekCursor(b.buffer, node.currentLine, node.currentColumn)
 
         if node.view.sidebar.isSome:
           # Update the EditorView.Sidebar.buffer
@@ -788,25 +787,25 @@ proc update*(status: var EditorStatus) =
           if settings.git.showChangedLine:
             # Write change lines to the sidebar
             node.view.updateSidebarBufferForChangedLine(
-              bufStatus.changedLines)
+              b.changedLines)
 
           if status.settings.syntaxChecker.enable:
             # Write syntax checker reuslts to the sidebar
             node.view.updateSidebarBufferForSyntaxChecker(
-              bufStatus.syntaxCheckResults)
+              b.syntaxCheckResults)
 
         block updateTerminalBuffer:
           let selectedRange = Range(
-            first: bufStatus.selectedArea.startLine,
-            last: bufStatus.selectedArea.endLine)
+            first: b.selectedArea.startLine,
+            last: b.selectedArea.endLine)
 
           node.view.update(
             node.window.get,
             settings.view,
             isCurrentMainWin,
-            bufStatus.isVisualMode,
-            bufStatus.isConfigMode,
-            buffer,
+            b.isVisualMode,
+            b.isConfigMode,
+            b.buffer,
             highlight,
             settings.editorColorTheme,
             status.settings.colorMode,
