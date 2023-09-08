@@ -583,14 +583,13 @@ proc updateStatusLine(status: var EditorStatus) =
         isActiveWindow,
         status.settings)
 
-## Init syntax highlightings in all buffers.
-proc initSyntaxHighlight(
+proc initSyntaxHighlights(
   windowNode: var WindowNode,
   bufStatus: var seq[BufferStatus],
   reservedWords: seq[ReservedWord],
   isSyntaxHighlight: bool) =
+    ## Init syntax highlightings in all buffers.
 
-    # int is buffer index
     var newHighlights: seq[tuple[bufIndex: int, highlight: Highlight]]
     for index, buf in bufStatus:
       # The filer syntax highlight is initialized/updated in filermode module.
@@ -612,6 +611,7 @@ proc initSyntaxHighlight(
           for h in newHighlights:
             if h.bufIndex == node.bufferIndex and h.highlight != node.highlight:
               node.highlight = h.highlight
+              node.isUpdate = true
 
               if bufStatus[h.bufIndex].isTrackingByGit:
                 bufStatus[h.bufIndex].isGitUpdate = true
@@ -677,9 +677,6 @@ proc updateCommandLine(status: var EditorStatus) =
 
 ## Update all views, highlighting, cursor, etc.
 proc update*(status: var EditorStatus) =
-  # Disable the cursor while updating.
-  setCursor(false)
-
   let settings = status.settings
 
   if settings.tabLine.enable:
@@ -711,7 +708,7 @@ proc update*(status: var EditorStatus) =
         status.settings.debugMode).toGapBuffer
 
   # Init (Update) syntax highlightings.
-  mainWindowNode.initSyntaxHighlight(
+  mainWindowNode.initSyntaxHighlights(
     status.bufStatus,
     settings.highlight.reservedWords,
     settings.syntax)
@@ -730,6 +727,8 @@ proc update*(status: var EditorStatus) =
     for i in  0 ..< queue.len:
       var node = queue.pop
       if node.window.isSome:
+        if not node.isUpdate: continue
+
         template b: var BufferStatus = status.bufStatus[node.bufferIndex]
 
         if b.buffer.high < node.currentLine:
@@ -754,6 +753,8 @@ proc update*(status: var EditorStatus) =
           min(node.view.originalLine[0],
           b.buffer.high))
 
+        node.view.seekCursor(b.buffer, node.currentLine, node.currentColumn)
+
         # NOTE: node.highlight is not directly change here for performance.
         var highlight = node.highlight
 
@@ -776,8 +777,6 @@ proc update*(status: var EditorStatus) =
             status.searchHistory,
             settings,
             status.settings.colorMode)
-
-        node.view.seekCursor(b.buffer, node.currentLine, node.currentColumn)
 
         if node.view.sidebar.isSome:
           # Update the EditorView.Sidebar.buffer
@@ -817,11 +816,16 @@ proc update*(status: var EditorStatus) =
           # Update the cursor position.
           node.cursor.update(node.view, node.currentLine, node.currentColumn)
 
-        # Update the terminal view.
-        node.refreshWindow
+        node.isUpdate = false
 
       if node.child.len > 0:
         for node in node.child: queue.push(node)
+
+  # Disable the cursor while updating.
+  setCursor(false)
+
+  # Update all main window node views.
+  mainWindowNode.refreshAll
 
   # Update the suggestion window
   if status.suggestionWindow.isSome:

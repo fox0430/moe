@@ -38,6 +38,7 @@ type
     view*: EditorView
     highlight*: Highlight
     cursor*: CursorPosition
+    isUpdate*: bool
     currentLine*, currentColumn*, expandedColumn*: int
     bufferIndex*: int
     windowIndex*: int
@@ -58,11 +59,13 @@ proc initWindowNode*(): WindowNode =
       child: @[],
       splitType: SplitType.vertical,
       window: some(newWindow()),
+      isUpdate: true,
       h: 1,
       w: 1)
     root = WindowNode(
       child: @[node],
       splitType: SplitType.vertical,
+      isUpdate: true,
       y: 0,
       x: 0,
       h: 1,
@@ -421,8 +424,24 @@ proc moveCursor*(node: var WindowNode) =
   if node.window.isSome:
     node.window.get.move(node.currentLine, node.currentColumn)
 
-proc refreshWindow*(node: var WindowNode) {.inline.} =
+proc refresh*(node: var WindowNode) {.inline.} =
+  ## Refresh a window node.
+
   if node.window.isSome: node.window.get.refresh
+
+proc refreshAll*(root: var WindowNode) =
+  ## Refresh all window nodes.
+
+  var queue = initHeapQueue[WindowNode]()
+  for node in root.child: queue.push(node)
+
+  while queue.len > 0:
+    for i in  0 ..< queue.len:
+      var node = queue.pop
+      if node.window.isSome: node.refresh
+
+      if node.child.len > 0:
+        for node in node.child: queue.push(node)
 
 proc getKey*(node: var WindowNode): Rune {.inline.} =
   if node.window.isSome: result = node.window.get.getKey

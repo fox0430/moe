@@ -509,7 +509,7 @@ proc searchFileMode*(
         "Not found",
         EditorColorPairIndex.commandLine.int16)
 
-      windowNode.refreshWindow
+      windowNode.refresh
       filerStatus.isUpdatePathList = true
 
 proc isFilerModeCommand*(command: Runes): InputState =
