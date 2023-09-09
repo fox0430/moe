@@ -36,7 +36,6 @@ proc keyLeft*(windowNode: var WindowNode) =
 
   dec(windowNode.currentColumn)
   windowNode.expandedColumn = windowNode.currentColumn
-  windowNode.isUpdate = true
 
 proc keyRight*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
   let maxColumn = currentLineLen + (if bufStatus.isExpandableMode: 1 else: 0)
@@ -44,7 +43,6 @@ proc keyRight*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
 
   inc(windowNode.currentColumn)
   windowNode.expandedColumn = windowNode.currentColumn
-  windowNode.isUpdate = true
 
 proc keyUp*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
   if windowNode.currentLine == 0: return
@@ -53,9 +51,8 @@ proc keyUp*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
 
   let maxColumn = currentLineLen + (if bufStatus.isExpandableMode:0 else: -1)
   windowNode.currentColumn = min(windowNode.expandedColumn, maxColumn)
-  if windowNode.currentColumn < 0: windowNode.currentColumn = 0
 
-  windowNode.isUpdate = true
+  if windowNode.currentColumn < 0: windowNode.currentColumn = 0
 
 proc keyDown*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
   if windowNode.currentLine + 1 == bufStatus.buffer.len: return
@@ -64,9 +61,8 @@ proc keyDown*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
 
   let maxColumn = currentLineLen + (if bufStatus.isExpandableMode: 0 else: -1)
   windowNode.currentColumn = min(windowNode.expandedColumn, maxColumn)
-  if windowNode.currentColumn < 0: windowNode.currentColumn = 0
 
-  windowNode.isUpdate = true
+  if windowNode.currentColumn < 0: windowNode.currentColumn = 0
 
 proc getFirstNonBlankOfLine*(
   bufStatus: BufferStatus,
@@ -110,7 +106,6 @@ proc moveToFirstNonBlankOfLine*(
     windowNode.currentColumn = bufStatus.getFirstNonBlankOfLineOrLastColumn(
       windowNode)
     windowNode.expandedColumn = windowNode.currentColumn
-    windowNode.isUpdate = true
 
 proc moveToLastNonBlankOfLine*(
   bufStatus: var BufferStatus,
@@ -118,12 +113,10 @@ proc moveToLastNonBlankOfLine*(
 
     windowNode.currentColumn = bufStatus.getLastNonBlankOfLine(windowNode)
     windowNode.expandedColumn = windowNode.currentColumn
-    windowNode.isUpdate = true
 
 proc moveToFirstOfLine*(windowNode: var WindowNode) =
   windowNode.currentColumn = 0
   windowNode.expandedColumn = windowNode.currentColumn
-  windowNode.isUpdate = true
 
 proc moveToLastOfLine*(
   bufStatus: var BufferStatus,
@@ -137,7 +130,6 @@ proc moveToLastOfLine*(
 
     windowNode.currentColumn = max(destination, 0)
     windowNode.expandedColumn = windowNode.currentColumn
-    windowNode.isUpdate = true
 
 proc moveToFirstOfPreviousLine*(
   bufStatus: var BufferStatus,
@@ -180,7 +172,6 @@ proc jumpLine*(
           0)
 
       windowNode.view.reload(bufStatus.buffer, startOfPrintedLines)
-      windowNode.isUpdate = true
 
 proc findNextBlankLine*(bufStatus: BufferStatus, currentLine: int): int =
   result = -1
@@ -194,6 +185,8 @@ proc findNextBlankLine*(bufStatus: BufferStatus, currentLine: int): int =
       elif currentLineStartedBlank:
         currentLineStartedBlank = false
 
+  return -1
+
 proc findPreviousBlankLine*(bufStatus: BufferStatus, currentLine: int): int =
   result = -1
 
@@ -205,6 +198,8 @@ proc findPreviousBlankLine*(bufStatus: BufferStatus, currentLine: int): int =
           return i
       elif currentLineStartedBlank:
         currentLineStartedBlank = false
+
+  return -1
 
 proc moveToNextBlankLine*(bufStatus: BufferStatus, windowNode: var WindowNode) =
   let nextBlankLine = bufStatus.findNextBlankLine(windowNode.currentLine)
@@ -278,7 +273,6 @@ proc moveToForwardWord*(
       inc(windowNode.currentColumn)
 
     windowNode.expandedColumn = windowNode.currentColumn
-    windowNode.isUpdate = true
 
 proc moveToBackwardWord*(
   bufStatus: var BufferStatus,
@@ -315,7 +309,6 @@ proc moveToBackwardWord*(
       if currType != backType: break
 
     windowNode.expandedColumn = windowNode.currentColumn
-    windowNode.isUpdate = true
 
 proc moveToForwardEndOfWord*(
   bufStatus: var BufferStatus,
@@ -367,7 +360,6 @@ proc moveToForwardEndOfWord*(
       inc(windowNode.currentColumn)
 
     windowNode.expandedColumn = windowNode.currentColumn
-    windowNode.isUpdate = true
 
 ## Move to the top line of the screen.
 proc moveToTopOfScreen*(bufStatus: BufferStatus, windowNode: var WindowNode) =
@@ -378,8 +370,6 @@ proc moveToTopOfScreen*(bufStatus: BufferStatus, windowNode: var WindowNode) =
        windowNode.currentColumn > bufStatus.buffer[windowNode.currentLine].high:
          windowNode.currentColumn = bufStatus.buffer[windowNode.currentLine].high
 
-    windowNode.isUpdate = true
-
 ## Move to the center line of the screen.
 proc moveToCenterOfScreen*(bufStatus: BufferStatus, windowNode: var WindowNode) =
   if (bufStatus.buffer.high - windowNode.currentLine) < windowNode.view.height - 1:
@@ -387,14 +377,12 @@ proc moveToCenterOfScreen*(bufStatus: BufferStatus, windowNode: var WindowNode) 
     let
       medInVisible = int((bufStatus.buffer.high - windowNode.view.originalLine[0]) / 2)
     windowNode.currentLine = windowNode.view.originalLine[0] + medInVisible
-    windowNode.isUpdate = true
   else:
     let
       medOnScreen = int(windowNode.view.originalLine.len / 2)
       dest = windowNode.view.originalLine[medOnScreen]
     if dest > -1 and bufStatus.buffer.high >= dest:
       windowNode.currentLine = dest
-      windowNode.isUpdate = true
 
 ## Move to the bottom line of the screen.
 proc moveToBottomOfScreen*(bufStatus: BufferStatus, windowNode: var WindowNode) =
@@ -402,12 +390,10 @@ proc moveToBottomOfScreen*(bufStatus: BufferStatus, windowNode: var WindowNode) 
     # Move to the bottom of visible lines if less than a view bottom.
     let bottomInVisalbe = bufStatus.buffer.high - windowNode.view.originalLine[0]
     windowNode.currentLine = windowNode.view.originalLine[0] + bottomInVisalbe
-    windowNode.isUpdate = true
   else:
     windowNode.currentLine = windowNode.view.originalLine[^1]
     if windowNode.currentColumn > bufStatus.buffer[windowNode.currentLine].high:
       windowNode.currentColumn = bufStatus.buffer[windowNode.currentLine].high
-      windowNode.isUpdate = true
 
 proc scrollScreenTop*(
   bufStatus: var BufferStatus,
@@ -416,7 +402,6 @@ proc scrollScreenTop*(
     windowNode.view.reload(
       bufStatus.buffer,
       windowNode.view.originalLine[windowNode.cursor.y])
-    windowNode.isUpdate = true
 
 proc scrollScreenCenter*(
   bufStatus: var BufferStatus,
@@ -432,13 +417,10 @@ proc scrollScreenCenter*(
         let numOfTime = int(windowNode.view.height / 2) - windowNode.cursor.y
         for i in 0 ..< numOfTime: scrollUp(windowNode.view, bufStatus.buffer)
 
-      windowNode.isUpdate = true
-
 proc scrollScreenBottom*(bufStatus: var BufferStatus, windowNode: WindowNode) =
   if windowNode.currentLine > windowNode.view.height:
     let numOfTime = windowNode.view.height - windowNode.cursor.y - 2
     for i in 0 ..< numOfTime: windowNode.view.scrollUp(bufStatus.buffer)
-    windowNode.isUpdate = true
 
 ## Move to matching pair of paren. Do nothing If no matching pair exists.
 proc moveToPairOfParen*(
@@ -453,7 +435,6 @@ proc moveToPairOfParen*(
     if correspondParenPosition.isSome:
       windowNode.currentLine = correspondParenPosition.get.line
       windowNode.currentColumn = correspondParenPosition.get.column
-      windowNode.isUpdate = true
 
 proc jumpToSearchForwardResults*(
   bufStatus: var BufferStatus,
