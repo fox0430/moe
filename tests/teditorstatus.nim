@@ -113,7 +113,7 @@ test "resize 1":
   currentBufStatus.buffer = initGapBuffer(@[ru"a"])
 
   currentMainWindowNode.highlight =
-    initHighlight($currentBufStatus.buffer,
+    initHighlight(currentBufStatus.buffer.toSeqRunes,
     status.settings.highlight.reservedWords,
     currentBufStatus.language)
 
@@ -129,7 +129,7 @@ test "resize 2":
   currentBufStatus.buffer = initGapBuffer(@[ru"a"])
 
   currentMainWindowNode.highlight =
-    initHighlight($currentBufStatus.buffer,
+    initHighlight(currentBufStatus.buffer.toSeqRunes,
     status.settings.highlight.reservedWords,
     currentBufStatus.language)
 
