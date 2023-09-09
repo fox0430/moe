@@ -283,14 +283,17 @@ proc initFilerHighlight*[T](
   buffer: T,
   currentLine: int): Highlight =
 
+    var colorSegments: seq[ColorSegment]
     for index, dir in filerStatus.pathList:
       let color = setDirListColor(dir.kind, index == currentLine)
-      result.colorSegments.add(ColorSegment(
+      colorSegments.add(ColorSegment(
         firstRow: index,
         firstColumn: 0,
         lastRow: index,
         lastColumn: buffer[index].len,
         color: color))
+
+    return Highlight(colorSegments: colorSegments)
 
 proc pathToIcon(path: string): Runes =
   # TODO: Use fileutils.getFileType

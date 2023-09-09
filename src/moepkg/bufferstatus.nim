@@ -45,7 +45,7 @@ type
     searchForward
     searchBackward
 
-  BufferStatus* = object
+  BufferStatus* = ref object
     buffer*: GapBuffer[Runes]
     isUpdate*: bool
     characterEncoding*: CharacterEncoding
@@ -270,22 +270,20 @@ proc absolutePath*(bufStatus: BufferStatus): Runes =
 proc initBufferStatus*(
   path: string,
   mode: Mode): Result[BufferStatus, string] =
-    ## Open a file or dir and return a new BufferStatus.
+    ## Open file or dir and return a new BufferStatus.
 
-    var b: BufferStatus
+    var b = BufferStatus(
+      isUpdate: true,
+      openDir: getCurrentDir().toRunes,
+      prevMode: mode,
+      mode: mode,
+      lastSaveTime: now(),
+      lastGitInfoCheckTime: now(),
+      fileType: getFileType(path))
 
-    b.isUpdate = true
-    b.openDir = getCurrentDir().toRunes
-    b.prevMode = mode
-    b.mode = mode
-    b.lastSaveTime = now()
-    b.lastGitInfoCheckTime = now()
-    b.fileType = getFileType(path)
-
-    if isFilerMode(b.mode):
+    if isFilerMode(mode):
       b.path = absolutePath(path).toRunes
-      b.buffer = initGapBuffer(@[ru ""])
-
+      b.buffer = initGapBuffer(@[ru""])
       return Result[BufferStatus, string].ok b
     else:
       b.path = path.toRunes
@@ -310,15 +308,14 @@ proc initBufferStatus*(
   mode: Mode): Result[BufferStatus, string] =
     ## Return a BufferStatus for a new empty buffer.
 
-    var b: BufferStatus
-
-    b.isUpdate = true
-    b.openDir = getCurrentDir().toRunes
-    b.prevMode = mode
-    b.mode = mode
-    b.lastSaveTime = now()
-    b.lastGitInfoCheckTime = now()
-    b.fileType = FileType.unknown
+    var b = BufferStatus(
+      isUpdate: true,
+      openDir: getCurrentDir().toRunes,
+      prevMode: mode,
+      mode: mode,
+      lastSaveTime: now(),
+      lastGitInfoCheckTime: now(),
+      fileType: FileType.unknown)
 
     if mode.isFilerMode:
       b.buffer = initGapBuffer(@[ru""])

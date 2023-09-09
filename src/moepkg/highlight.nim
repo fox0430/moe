@@ -17,25 +17,36 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[sequtils, os, parseutils, strutils]
+import std/[sequtils, os, parseutils, strutils, strformat]
 import syntax/highlite
 import unicodeext, color, independentutils, ui
-
-when not defined(release):
- import std/strformat
 
 type ColorSegment* = object
   firstRow*, firstColumn*, lastRow*, lastColumn*: int
   color*: EditorColorPairIndex
   attribute*: Attribute
 
-type Highlight* = object
+type Highlight* = ref object
   colorSegments*: seq[ColorSegment]
 
 type
   ReservedWord* = object
     word*: string
     color*: EditorColorPairIndex
+
+proc `$`*(highlight: Highlight): string =
+  result = "Highlight: ["
+  for i, s in highlight.colorSegments:
+    result &=
+      fmt"ColorSegment(firstRow: {$s.firstRow}, " &
+      fmt"firstColumn: {$s.firstColumn}, " &
+      fmt"lastRow: {$s.lastRow}, " &
+      fmt"lastColumn: {$s.lastColumn}, " &
+      fmt"color: {s.color}, " &
+      fmt"attribute: {s.attribute})"
+    if i < highlight.colorSegments.high:
+      result.add ", "
+  result.add "]"
 
 proc len*(highlight: Highlight): int {.inline.} = highlight.colorSegments.len
 
@@ -236,7 +247,9 @@ proc initHighlight*(
   reservedWords: seq[ReservedWord],
   language: SourceLanguage): Highlight =
 
-    var currentRow, currentColumn: int
+    var
+      currentRow, currentColumn: int
+      colorSegments: seq[ColorSegment]
 
     template splitByNewline(str, c: typed) =
       const newline = Rune('\n')
@@ -253,13 +266,14 @@ proc initHighlight*(
           # push an empty segment
           if empty:
             let color = EditorColorPairIndex.default
-            result.colorSegments.add(ColorSegment(
+            colorSegments.add(ColorSegment(
               firstRow: currentRow,
               firstColumn: currentColumn,
               lastRow: currentRow,
               lastColumn: currentColumn - 1,
               color: color))
-          else: result.colorSegments.add(cs)
+          else:
+            colorSegments.add(cs)
           inc(currentRow)
           currentColumn = 0
           cs.firstRow = currentRow
@@ -271,11 +285,11 @@ proc initHighlight*(
           cs.lastColumn = currentColumn
           inc(currentColumn)
           empty = false
-      if not empty: result.colorSegments.add(cs)
+      if not empty: colorSegments.add(cs)
 
     if language == SourceLanguage.langNone:
       splitByNewline(buffer, EditorColorPairIndex.default)
-      return result
+      return Highlight(colorSegments: colorSegments)
 
     var token = GeneralTokenizer()
     token.initGeneralTokenizer(buffer)
@@ -320,6 +334,8 @@ proc initHighlight*(
         continue
 
       splitByNewline(buffer[first..last], color)
+
+    return Highlight(colorSegments: colorSegments)
 
 proc indexOf*(highlight: Highlight, row, column: int): int =
   ## calculate the index of the color segment which the pair (row, column) belongs to
