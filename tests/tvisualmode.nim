@@ -40,7 +40,7 @@ suite "Visual mode: Delete buffer":
     currentBufStatus.buffer = initGapBuffer(@[ru"abcd"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -63,7 +63,7 @@ suite "Visual mode: Delete buffer":
     currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"b", ru"c"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -87,7 +87,7 @@ suite "Visual mode: Delete buffer":
     currentBufStatus.buffer = initGapBuffer(@[ru"ab", ru"cdef"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -113,7 +113,7 @@ suite "Visual mode: Delete buffer":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"defg"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -148,7 +148,7 @@ suite "Visual mode: Delete buffer":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -180,7 +180,7 @@ suite "Visual mode: Delete buffer":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -206,7 +206,7 @@ suite "Visual mode: Delete buffer":
     currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"", ru"a"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -235,7 +235,7 @@ suite "Visual mode: Delete buffer":
     currentBufStatus.buffer = initGapBuffer(@[ru"a b c"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -264,7 +264,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -299,7 +299,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -333,7 +333,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -361,7 +361,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru""])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -389,7 +389,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     currentBufStatus.buffer = initGapBuffer(@[ru"", ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -416,7 +416,7 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -448,7 +448,7 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"d"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -484,7 +484,7 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"d"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -512,7 +512,7 @@ suite "Visual block mode: Delete buffer (Disable clipboard)":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -547,7 +547,7 @@ if isXselAvailable():
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
       currentMainWindowNode.highlight = initHighlight(
-        $currentBufStatus.buffer,
+        currentBufStatus.buffer.toSeqRunes,
         status.settings.highlight.reservedWords,
         currentBufStatus.language)
 
@@ -591,7 +591,7 @@ if isXselAvailable():
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
       currentMainWindowNode.highlight = initHighlight(
-        $currentBufStatus.buffer,
+        currentBufStatus.buffer.toSeqRunes,
         status.settings.highlight.reservedWords,
         currentBufStatus.language)
 
@@ -643,7 +643,7 @@ if isXselAvailable():
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
       currentMainWindowNode.highlight = initHighlight(
-        $currentBufStatus.buffer,
+        currentBufStatus.buffer.toSeqRunes,
         status.settings.highlight.reservedWords,
         currentBufStatus.language)
 
@@ -678,7 +678,7 @@ if isXselAvailable():
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"d"])
 
       currentMainWindowNode.highlight = initHighlight(
-        $currentBufStatus.buffer,
+        currentBufStatus.buffer.toSeqRunes,
         status.settings.highlight.reservedWords,
         currentBufStatus.language)
 
@@ -718,7 +718,7 @@ if isXselAvailable():
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
       currentMainWindowNode.highlight = initHighlight(
-        $currentBufStatus.buffer,
+        currentBufStatus.buffer.toSeqRunes,
         status.settings.highlight.reservedWords,
         currentBufStatus.language)
 
@@ -752,7 +752,7 @@ if isXselAvailable():
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"", ru"edf"])
 
       currentMainWindowNode.highlight = initHighlight(
-        $currentBufStatus.buffer,
+        currentBufStatus.buffer.toSeqRunes,
         status.settings.highlight.reservedWords,
         currentBufStatus.language)
 
@@ -783,7 +783,7 @@ if isXselAvailable():
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"de", ru"fgh"])
 
       currentMainWindowNode.highlight = initHighlight(
-        $currentBufStatus.buffer,
+        currentBufStatus.buffer.toSeqRunes,
         status.settings.highlight.reservedWords,
         currentBufStatus.language)
 
@@ -820,7 +820,7 @@ suite "Visual mode: Join lines":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -851,7 +851,7 @@ suite "Visual block mode: Join lines":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -882,7 +882,7 @@ test "Visual mode: Add indent":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -912,7 +912,7 @@ suite "Visual block mode: Add indent":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -942,7 +942,7 @@ suite "Visual mode: Delete indent":
     currentBufStatus.buffer = initGapBuffer(@[ru"  abc", ru"  def", ru"  ghi"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -972,7 +972,7 @@ suite "Visual block mode: Delete indent":
     currentBufStatus.buffer = initGapBuffer(@[ru"  abc", ru"  def", ru"  ghi"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1002,7 +1002,7 @@ suite "Visual mode: Converts string into lower-case string":
     currentBufStatus.buffer = initGapBuffer(@[ru"ABC"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1028,7 +1028,7 @@ suite "Visual mode: Converts string into lower-case string":
     currentBufStatus.buffer = initGapBuffer(@[ru"AあbC"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1054,7 +1054,7 @@ suite "Visual mode: Converts string into lower-case string":
     currentBufStatus.buffer = initGapBuffer(@[ru"ABC", ru"DEF"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1078,7 +1078,8 @@ suite "Visual mode: Converts string into lower-case string":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"ABC", ru"", ru"DEF", ru""])
-    currentMainWindowNode.highlight = initHighlight($currentBufStatus.buffer,
+    currentMainWindowNode.highlight = initHighlight(
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1106,7 +1107,7 @@ test "Visual block mode: Converts string into lower-case string":
     currentBufStatus.buffer = initGapBuffer(@[ru"ABC"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1131,7 +1132,7 @@ test "Visual block mode: Converts string into lower-case string":
     currentBufStatus.buffer = initGapBuffer(@[ru"ABC", ru"DEF"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1161,7 +1162,7 @@ suite "Visual mode: Converts string into upper-case string":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1187,7 +1188,7 @@ suite "Visual mode: Converts string into upper-case string":
     currentBufStatus.buffer = initGapBuffer(@[ru"aあBc"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1213,7 +1214,7 @@ suite "Visual mode: Converts string into upper-case string":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1237,7 +1238,7 @@ suite "Visual mode: Converts string into upper-case string":
     status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"", ru"def", ru""])
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1264,7 +1265,7 @@ suite "Visual mode: Movement":
     status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1287,7 +1288,7 @@ suite "Visual block mode: Converts string into upper-case string":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1313,7 +1314,7 @@ suite "Visual block mode: Converts string into upper-case string":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1342,7 +1343,7 @@ suite "Visual block mode: Insert buffer":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1433,7 +1434,7 @@ suite "Visual mode: Run command when Readonly mode":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1459,7 +1460,7 @@ suite "Visual mode: Run command when Readonly mode":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1485,7 +1486,7 @@ suite "Visual mode: Run command when Readonly mode":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1511,7 +1512,7 @@ suite "Visual mode: Run command when Readonly mode":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru "def"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1542,7 +1543,7 @@ suite "Visual mode: Run command when Readonly mode":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1568,7 +1569,7 @@ suite "Visual mode: Run command when Readonly mode":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1594,7 +1595,7 @@ suite "Visual mode: Run command when Readonly mode":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1623,7 +1624,7 @@ suite "Visual mode: Run command when Readonly mode":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1689,7 +1690,7 @@ suite "Visual block mode: Run command when Readonly mode":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1715,7 +1716,7 @@ suite "Visual block mode: Run command when Readonly mode":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1740,7 +1741,7 @@ suite "Visual block mode: Run command when Readonly mode":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1766,7 +1767,7 @@ suite "Visual block mode: Run command when Readonly mode":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1792,7 +1793,7 @@ suite "Visual block mode: Run command when Readonly mode":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru "def"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1823,7 +1824,7 @@ suite "Visual block mode: Run command when Readonly mode":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1849,7 +1850,7 @@ suite "Visual block mode: Run command when Readonly mode":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1875,7 +1876,7 @@ suite "Visual block mode: Run command when Readonly mode":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1903,7 +1904,7 @@ suite "Visual block mode: Movement":
     status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1928,7 +1929,7 @@ suite "Visual line mode: Delete buffer":
     currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"b", ru"c", ru"d"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1951,7 +1952,7 @@ suite "Visual line mode: Delete buffer":
     currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"b", ru"c", ru"d"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1976,7 +1977,7 @@ suite "Visual line mode: Delete buffer":
     currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"b", ru"c", ru"d"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -1999,7 +2000,7 @@ suite "Visual line mode: Delete buffer":
     currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"b", ru"c", ru"d"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -2024,7 +2025,7 @@ suite "Visual line mode: Yank buffer (Disable clipboard)":
     currentBufStatus.buffer = buffer.toGapBuffer
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -2057,7 +2058,7 @@ if isXselAvailable():
       currentBufStatus.buffer = buffer.toGapBuffer
 
       currentMainWindowNode.highlight = initHighlight(
-        $currentBufStatus.buffer,
+        currentBufStatus.buffer.toSeqRunes,
         status.settings.highlight.reservedWords,
         currentBufStatus.language)
 
@@ -2093,7 +2094,7 @@ suite "Visual line mode: idenet":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -2119,7 +2120,7 @@ suite "Visual line mode: idenet":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 

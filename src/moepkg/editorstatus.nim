@@ -583,12 +583,12 @@ proc updateStatusLine(status: var EditorStatus) =
         isActiveWindow,
         status.settings)
 
-## Init syntax highlightings in all buffers.
-proc initSyntaxHighlight(
+proc updateSyntaxHighlights(
   windowNode: var WindowNode,
   bufStatus: var seq[BufferStatus],
   reservedWords: seq[ReservedWord],
   isSyntaxHighlight: bool) =
+    ## Update syntax highlightings in all buffers.
 
     # int is buffer index
     var newHighlights: seq[tuple[bufIndex: int, highlight: Highlight]]
@@ -597,9 +597,9 @@ proc initSyntaxHighlight(
       if not buf.isFilerMode and buf.isUpdate:
         let
           lang =
-            if isSyntaxHighlight: buf.language
-            else: SourceLanguage.langNone
-          h = initHighlight($buf.buffer, reservedWords, lang)
+            if not isSyntaxHighlight: SourceLanguage.langNone
+            else: buf.language
+          h = initHighlight(buf.buffer.toSeqRunes, reservedWords, lang)
         newHighlights.add (bufIndex: index, highlight: h)
         bufStatus[index].isUpdate = false
 
@@ -625,7 +625,7 @@ proc updateLogViewerBuffer(
   if logs.len > 0 and logs[0].len > 0:
     bufStatus.buffer = logs.toGapBuffer
 
-proc initLogViewerHighlight(buffer: string): Highlight =
+proc initLogViewerHighlight(buffer: seq[Runes]): Highlight =
   if buffer.len > 0:
     const EmptyReservedWord: seq[ReservedWord] = @[]
     return buffer.initHighlight(EmptyReservedWord, SourceLanguage.langNone)
@@ -711,7 +711,7 @@ proc update*(status: var EditorStatus) =
         status.settings.debugMode).toGapBuffer
 
   # Init (Update) syntax highlightings.
-  mainWindowNode.initSyntaxHighlight(
+  mainWindowNode.updateSyntaxHighlights(
     status.bufStatus,
     settings.highlight.reservedWords,
     settings.syntax)
@@ -759,7 +759,7 @@ proc update*(status: var EditorStatus) =
 
         ## Update highlights
         if b.isLogViewerMode:
-          highlight = initLogViewerHighlight($b.buffer)
+          highlight = initLogViewerHighlight(b.buffer.toSeqRunes)
         elif b.isDiffViewerMode:
           highlight = b.buffer.toRunes.initDiffViewerHighlight
         elif b.isFilerMode and

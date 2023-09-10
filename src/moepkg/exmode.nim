@@ -306,7 +306,7 @@ proc syntaxSettingCommand(status: var EditorStatus, command: Runes) =
                    else: SourceLanguage.langNone
 
   currentMainWindowNode.highlight = initHighlight(
-    $currentBufStatus.buffer,
+    currentBufStatus.buffer.toSeqRunes,
     status.settings.highlight.reservedWords,
     sourceLang)
 

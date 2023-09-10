@@ -34,7 +34,7 @@ suite "Insert mode":
     status.bufStatus[0].buffer = initGapBuffer(@[ru""])
 
     currentMainWindowNode.highlight = initHighlight(
-      $status.bufStatus[0].buffer,
+      status.bufStatus[0].buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       status.bufStatus[0].language)
 

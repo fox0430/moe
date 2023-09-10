@@ -17,8 +17,8 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, strutils, sequtils]
-import moepkg/color
+import std/[unittest, sequtils]
+import moepkg/[color, unicodeext]
 import moepkg/syntax/highlite
 
 import moepkg/highlight {.all.}
@@ -28,33 +28,36 @@ suite "highlight: initHighlight":
     ReservedWord(word: "WIP", color: EditorColorPairIndex.reservedWord)
   ]
 
-  test "Start with newline":
-    let
-      code = "\x0Aproc test =\x0A  echo \"Hello, world!\""
-      buffer = split(code, '\n')
-      highlight = initHighlight(
-        code,
-        ReservedWords,
-        SourceLanguage.langNim)
-
-    # unite segments
-    var unitedStr: string
-    for i in 0 ..< highlight.len:
-      let segment = highlight[i]
-      if i > 0 and segment.firstRow != highlight[i-1].lastRow: unitedStr &= "\n"
-      let
-        firstRow = segment.firstRow
-        firstColumn = segment.firstColumn
-        lastColumn = segment.lastColumn
-      unitedStr &= buffer[firstRow][firstColumn .. lastColumn]
-
-    check(unitedStr == code)
+  test "langNone":
+    const Buffer = @["", "1", "123"].toSeqRunes
+    let h = initHighlight(Buffer, ReservedWords, SourceLanguage.langNone)
+    echo h.colorSegments
+    check h.colorSegments == @[
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 0,
+        lastRow: 0,
+        lastColumn: -1,
+        color: EditorColorPairIndex.default),
+      ColorSegment(
+        firstRow: 1,
+        firstColumn: 0,
+        lastRow: 1,
+        lastColumn: 0,
+        color: EditorColorPairIndex.default),
+      ColorSegment(
+        firstRow: 2,
+        firstColumn: 0,
+        lastRow: 2,
+        lastColumn: 2,
+        color: EditorColorPairIndex.default)]
 
   test """Highlight "echo \"""":
     # Fix #733
     const Code = """echo "\""""
+    let buffer = @[Code].toSeqRunes
     discard initHighlight(
-      Code,
+      buffer,
       ReservedWords,
       SourceLanguage.langNim)
 
@@ -64,10 +67,12 @@ suite "highlight: initHighlight":
     const
       Code = "/"
       EmptyReservedWords = @[]
-    let highlight = initHighlight(
-      Code,
-      EmptyReservedWords,
-      SourceLanguage.langC)
+    let
+      buffer = @[Code].toSeqRunes
+      highlight = initHighlight(
+        buffer,
+        EmptyReservedWords,
+        SourceLanguage.langC)
 
     check highlight[] == Highlight(
       colorSegments: @[
@@ -80,19 +85,23 @@ suite "highlight: initHighlight":
 
   test "initHighlight shell script (Fix #1166)":
     const Code = "echo hello"
-    let r = initHighlight(
-      Code,
-      ReservedWords,
-      SourceLanguage.langShell)
+    let
+      buffer = @[Code].toSeqRunes
+      highlight = initHighlight(
+        buffer,
+        ReservedWords,
+        SourceLanguage.langShell)
 
-    check r.len > 0
+    check highlight.len > 0
 
   test "Nim pragma":
     const Code = """{.pragma.}""""
-    let highlight = initHighlight(
-      Code,
-      ReservedWords,
-      SourceLanguage.langNim)
+    let
+      buffer = @[Code].toSeqRunes
+      highlight = initHighlight(
+        buffer,
+        ReservedWords,
+        SourceLanguage.langNim)
 
     check highlight[2] == ColorSegment(
       firstRow: 0,
@@ -105,10 +114,12 @@ suite "highlight: initHighlight":
     # https://github.com/fox0430/moe/issues/1524
 
     const Code = "test: '0'"
-    let highlight = initHighlight(
-      Code,
-      ReservedWords,
-      SourceLanguage.langYaml)
+    let
+      buffer = @[Code].toSeqRunes
+      highlight = initHighlight(
+        buffer,
+        ReservedWords,
+        SourceLanguage.langYaml)
 
     check highlight[] == Highlight(
       colorSegments: @[
@@ -143,20 +154,22 @@ suite "highlight: indexOf":
   ]
 
   test "Basic":
+    const Code = "proc test =\x0A  echo \"Hello, world!\""
     let
-      code = "proc test =\x0A  echo \"Hello, world!\""
+      buffer = @[Code].toSeqRunes
       highlight = initHighlight(
-        code,
+       buffer,
        ReservedWords,
        SourceLanguage.langNim)
 
     check(highlight.indexOf(0, 0) == 0)
 
   test "Start with newline":
+    const Code = "\x0Aproc test =\x0A  echo \"Hello, world!\""
     let
-      code = "\x0Aproc test =\x0A  echo \"Hello, world!\""
+      buffer = @[Code].toSeqRunes
       highlight = initHighlight(
-        code,
+       buffer,
        ReservedWords,
        SourceLanguage.langNim)
 
@@ -168,11 +181,14 @@ suite "highlight: overwrite":
   ]
 
   test "Basic":
-    let code = "　"
-    var highlight = initHighlight(
-      code,
-     ReservedWords,
-     SourceLanguage.langNone)
+    # Full width space
+    const Code = "　"
+    let buffer = @[Code].toSeqRunes
+    var
+      highlight = initHighlight(
+        buffer,
+        ReservedWords,
+        SourceLanguage.langNone)
 
     let colorSegment = ColorSegment(
       firstRow: 0,

@@ -28,7 +28,7 @@ import moepkg/viewhighlight {.all.}
 
 proc initHighlight(status: EditorStatus) {.inline.} =
   currentMainWindowNode.highlight = initHighlight(
-    $currentBufStatus.buffer,
+    currentBufStatus.buffer.toSeqRunes,
     status.settings.highlight.reservedWords,
     currentBufStatus.language)
 
@@ -212,7 +212,7 @@ suite "Highlight trailing spaces":
     status.settings.highlight.currentWord = false
 
     currentMainWindowNode.highlight = initHighlight(
-      $currentBufStatus.buffer,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
@@ -820,7 +820,7 @@ echo "test"
 
     var bufStatus = initBufferStatus("").get
     bufStatus.buffer = Buffer.toGapBuffer
-    var h = initHighlight($bufStatus.buffer, @[], SourceLanguage.langNim)
+    var h = initHighlight(bufStatus.buffer.toSeqRunes, @[], SourceLanguage.langNim)
 
     h.highlightGitConflicts(bufStatus, Range)
 
@@ -954,7 +954,7 @@ echo "test"
     for line in Code:
       bufStatus.buffer.add line.toRunes
 
-    var h = initHighlight($bufStatus.buffer, @[], SourceLanguage.langNim)
+    var h = initHighlight(bufStatus.buffer.toSeqRunes, @[], SourceLanguage.langNim)
 
     h.highlightGitConflicts(bufStatus, Range)
 

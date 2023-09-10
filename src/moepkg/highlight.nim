@@ -242,10 +242,35 @@ proc getEditorColorPair(
       of gtPragma: EditorColorPairIndex.pragma
       else: EditorColorPairIndex.default
 
+proc initHighlightPlain*(buffer: seq[Runes]): Highlight {.inline.} =
+  ## Return highlighting for the plain text.
+
+  var colorSegments: seq[ColorSegment]
+  for i in 0 .. buffer.high:
+    let lastColumn =
+      if buffer[i].len > 0: buffer[i].high
+      else: -1
+    colorSegments.add ColorSegment(
+      firstRow: i,
+      firstColumn: 0,
+      lastRow: i,
+      lastColumn: lastColumn,
+      color: EditorColorPairIndex.default)
+
+  return Highlight(colorSegments: colorSegments)
+
 proc initHighlight*(
-  buffer: string,
+  buffer: seq[Runes],
   reservedWords: seq[ReservedWord],
   language: SourceLanguage): Highlight =
+
+    if language == SourceLanguage.langNone:
+      return initHighlightPlain(buffer)
+
+    var bufferStr: string
+    for i in 0 .. buffer.high:
+      bufferStr &= $buffer[i]
+      if i < buffer.high: bufferStr &= '\n'
 
     var
       currentRow, currentColumn: int
@@ -287,14 +312,10 @@ proc initHighlight*(
           empty = false
       if not empty: colorSegments.add(cs)
 
-    if language == SourceLanguage.langNone:
-      splitByNewline(buffer, EditorColorPairIndex.default)
-      return Highlight(colorSegments: colorSegments)
-
     var token = GeneralTokenizer()
-    token.initGeneralTokenizer(buffer)
+    token.initGeneralTokenizer(bufferStr)
     var pad: string
-    if buffer.parseWhile(pad, {' ', '\x09'..'\x0D'}) > 0:
+    if bufferStr.parseWhile(pad, {' ', '\x09'..'\x0D'}) > 0:
       splitByNewline(pad, EditorColorPairIndex.default)
 
     while true:
@@ -310,12 +331,12 @@ proc initHighlight*(
 
         # Make it complete even if it's incomplete.
         last =
-          if first + token.length - 1 > buffer.high: buffer.high
+          if first + token.length - 1 > bufferStr.high: bufferStr.high
           else: first + token.length - 1
 
       block:
         # Increment `currentRow` if newlines only.
-        let str = buffer[first..last]
+        let str = bufferStr[first..last]
         if str != "" and all(str, proc (x: char): bool = x == '\n'):
           currentRow += last - first + 1
           currentColumn = 0
@@ -328,12 +349,12 @@ proc initHighlight*(
           getEditorColorPair(token.kind, language)
 
       if token.kind == gtComment:
-        for r in buffer[first..last].parseReservedWord(reservedWords, color):
+        for r in bufferStr[first..last].parseReservedWord(reservedWords, color):
           if r[0] == "": continue
           splitByNewline(r[0], r[1])
         continue
 
-      splitByNewline(buffer[first..last], color)
+      splitByNewline(bufferStr[first..last], color)
 
     return Highlight(colorSegments: colorSegments)
 
