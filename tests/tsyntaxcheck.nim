@@ -90,8 +90,8 @@ suite "syntaxCheck: toSyntaxCheckMessageType: Nim":
 suite "syntaxCheck: parseNimCheckResult":
   test "No error":
     const
-      path = "/home/user/moe/tests/tsyntaxchecker.nim"
-      cmdOutput = """
+      Path = "/home/user/moe/tests/tsyntaxchecker.nim"
+      CmdOutput = """
 Hint: used config file '/home/user/.choosenim/toolchains/nim-1.6.12/config/nim.cfg' [Conf]
 Hint: used config file '/home/user/.choosenim/toolchains/nim-1.6.12/config/config.nims' [Conf]
 Hint: used config file '/home/user/moe/tests/nim.cfg' [Conf]
@@ -101,12 +101,12 @@ Hint:
 107093 lines; 0.466s; 147.027MiB peakmem; proj: /home/user/moe/tests/tsyntaxchecker.nim; out: unknownOutput [SuccessX]
 """
 
-    check path.parseNimCheckResult(cmdOutput.splitLines).get.isEmpty
+    check Path.parseNimCheckResult(CmdOutput.splitLines).get.isEmpty
 
   test "Including hint":
     const
-      path = "/home/user/moe/tests/tsyntaxchecker.nim"
-      cmdOutput = """
+      Path = "/home/user/moe/tests/tsyntaxchecker.nim"
+      CmdOutput = """
 Hint: used config file '/home/user/.choosenim/toolchains/nim-1.6.12/config/nim.cfg' [Conf]
 Hint: used config file '/home/user/.choosenim/toolchains/nim-1.6.12/config/config.nims' [Conf]
 Hint: used config file '/home/user/moe/tests/nim.cfg' [Conf]
@@ -117,7 +117,7 @@ Hint:
 107093 lines; 0.466s; 147.027MiB peakmem; proj: /home/user/moe/tests/tsyntaxchecker.nim; out: unknownOutput [SuccessX]
 """
 
-    let r = path.parseNimCheckResult(cmdOutput.splitLines).get
+    let r = Path.parseNimCheckResult(CmdOutput.splitLines).get
     check r.len == 1
     check r[0].position == BufferPosition(line: 60, column: 8)
     check r[0].messageType == SyntaxCheckMessageType.hint
@@ -125,8 +125,8 @@ Hint:
 
   test "Including warning":
     const
-      path = "/home/user/moe/tests/tsyntaxchecker.nim"
-      cmdOutput = """
+      Path = "/home/user/moe/tests/tsyntaxchecker.nim"
+      CmdOutput = """
 Hint: used config file '/home/user/.choosenim/toolchains/nim-1.6.12/config/nim.cfg' [Conf]
 Hint: used config file '/home/user/.choosenim/toolchains/nim-1.6.12/config/config.nims' [Conf]
 Hint: used config file '/home/user/moe/tests/nim.cfg' [Conf]
@@ -137,7 +137,7 @@ Hint:
 107093 lines; 0.466s; 147.027MiB peakmem; proj: /home/user/moe/tests/tsyntaxchecker.nim; out: unknownOutput [SuccessX]
 """
 
-    let r = path.parseNimCheckResult(cmdOutput.splitLines).get
+    let r = Path.parseNimCheckResult(CmdOutput.splitLines).get
     check r.len == 1
     check r[0].position == BufferPosition(line: 22, column: 13)
     check r[0].messageType == SyntaxCheckMessageType.warning
@@ -145,8 +145,8 @@ Hint:
 
   test "Including error":
     const
-      path = "/home/user/moe/tests/tsyntaxchecker.nim"
-      cmdOutput = """
+      Path = "/home/user/moe/tests/tsyntaxchecker.nim"
+      CmdOutput = """
 Hint: used config file '/home/user/.choosenim/toolchains/nim-1.6.12/config/nim.cfg' [Conf]
 Hint: used config file '/home/user/.choosenim/toolchains/nim-1.6.12/config/config.nims' [Conf]
 Hint: used config file '/home/user/moe/tests/nim.cfg' [Conf]
@@ -159,7 +159,7 @@ Hint: used config file '/home/user/moe/tests/config.nims' [Conf]
 /home/user/moe/tests/tsyntaxchecker.nim(47, 1) Error: invalid indentation
 """
 
-    let r = path.parseNimCheckResult(cmdOutput.splitLines).get
+    let r = Path.parseNimCheckResult(CmdOutput.splitLines).get
     check r.len == 1
     check r[0].position == BufferPosition(line: 46, column: 0)
     check r[0].messageType == SyntaxCheckMessageType.error
@@ -167,8 +167,8 @@ Hint: used config file '/home/user/moe/tests/config.nims' [Conf]
 
   test "Including some hints":
     const
-      path = "/home/user/moe/tests/tsyntaxchecker.nim"
-      cmdOutput = """
+      Path = "/home/user/moe/tests/tsyntaxchecker.nim"
+      CmdOutput = """
 Hint: used config file '/home/user/.choosenim/toolchains/nim-1.6.12/config/nim.cfg' [Conf]
 Hint: used config file '/home/user/.choosenim/toolchains/nim-1.6.12/config/config.nims' [Conf]
 Hint: used config file '/home/user/moe/tests/nim.cfg' [Conf]
@@ -180,7 +180,7 @@ Hint:
 107093 lines; 0.466s; 147.027MiB peakmem; proj: /home/user/moe/tests/tsyntaxchecker.nim; out: unknownOutput [SuccessX]
 """
 
-    let r = path.parseNimCheckResult(cmdOutput.splitLines).get
+    let r = Path.parseNimCheckResult(CmdOutput.splitLines).get
 
     check r.len == 2
 
@@ -194,8 +194,8 @@ Hint:
 
   test "Including some warnings":
     const
-      path = "/home/user/moe/tests/tsyntaxchecker.nim"
-      cmdOutput = """
+      Path = "/home/user/moe/tests/tsyntaxchecker.nim"
+      CmdOutput = """
 Hint: used config file '/home/user/.choosenim/toolchains/nim-1.6.12/config/nim.cfg' [Conf]
 Hint: used config file '/home/user/.choosenim/toolchains/nim-1.6.12/config/config.nims' [Conf]
 Hint: used config file '/home/user/moe/tests/nim.cfg' [Conf]
@@ -208,7 +208,7 @@ Hint:
 107093 lines; 0.466s; 147.027MiB peakmem; proj: /home/user/moe/tests/tsyntaxchecker.nim; out: unknownOutput [SuccessX]
 """
 
-    let r = path.parseNimCheckResult(cmdOutput.splitLines).get
+    let r = Path.parseNimCheckResult(CmdOutput.splitLines).get
 
     check r.len == 3
 
@@ -226,8 +226,8 @@ Hint:
 
   test "Including some errors":
     const
-      path = "/home/user/moe/tests/tsyntaxchecker.nim"
-      cmdOutput = """
+      Path = "/home/user/moe/tests/tsyntaxchecker.nim"
+      CmdOutput = """
 Hint: used config file '/home/user/.choosenim/toolchains/nim-1.6.12/config/nim.cfg' [Conf]
 Hint: used config file '/home/user/.choosenim/toolchains/nim-1.6.12/config/config.nims' [Conf]
 Hint: used config file '/home/user/moe/tests/nim.cfg' [Conf]
@@ -242,7 +242,7 @@ Hint: used config file '/home/user/moe/tests/config.nims' [Conf]
 /home/user/moe/tests/tsyntaxchecker.nim(55, 1) Error: invalid indentation
 """
 
-    let r = path.parseNimCheckResult(cmdOutput.splitLines).get
+    let r = Path.parseNimCheckResult(CmdOutput.splitLines).get
 
     check r.len == 3
 
@@ -260,8 +260,8 @@ Hint: used config file '/home/user/moe/tests/config.nims' [Conf]
 
   test "Including hint and warning":
     const
-      path = "/home/user/moe/tests/tsyntaxchecker.nim"
-      cmdOutput = """
+      Path = "/home/user/moe/tests/tsyntaxchecker.nim"
+      CmdOutput = """
 Hint: used config file '/home/user/.choosenim/toolchains/nim-1.6.12/config/nim.cfg' [Conf]
 Hint: used config file '/home/user/.choosenim/toolchains/nim-1.6.12/config/config.nims' [Conf]
 Hint: used config file '/home/user/moe/tests/nim.cfg' [Conf]
@@ -273,7 +273,7 @@ Hint:
 107093 lines; 0.466s; 147.027MiB peakmem; proj: /home/user/moe/tests/tsyntaxchecker.nim; out: unknownOutput [SuccessX]
 """
 
-    let r = path.parseNimCheckResult(cmdOutput.splitLines).get
+    let r = Path.parseNimCheckResult(CmdOutput.splitLines).get
     check r.len == 2
 
     check r[0].position == BufferPosition(line: 60, column: 8)
@@ -295,8 +295,8 @@ suite "syntaxCheck: startBackgroundSyntaxCheck: Nim":
 
   test "No error":
     let testFilePath = testFileDir / "syntaxchecker_nim.nim"
-    const code ="""echo "Hello world""""
-    writeFile(testFilePath, code)
+    const Code ="""echo "Hello world""""
+    writeFile(testFilePath, Code)
 
     var p = testFilePath.startBackgroundSyntaxCheck(SourceLanguage.langNim).get
     let output = p.process.waitFor
@@ -308,11 +308,11 @@ suite "syntaxCheck: startBackgroundSyntaxCheck: Nim":
 
   test "hint":
     let testFilePath = testFileDir / "syntaxchecker_nim.nim"
-    const code ="""
+    const Code ="""
 let a = 0
 echo "Hello world"
 """
-    writeFile(testFilePath, code)
+    writeFile(testFilePath, Code)
 
     var p = testFilePath.startBackgroundSyntaxCheck(SourceLanguage.langNim).get
     let output = p.process.waitFor
@@ -327,11 +327,11 @@ echo "Hello world"
 
   test "warning":
     let testFilePath = testFileDir / "syntaxchecker_nim.nim"
-    const code ="""
+    const Code ="""
 import std/os
 echo "Hello world"
 """
-    writeFile(testFilePath, code)
+    writeFile(testFilePath, Code)
 
     var p = testFilePath.startBackgroundSyntaxCheck(SourceLanguage.langNim).get
     let output = p.process.waitFor
@@ -346,10 +346,10 @@ echo "Hello world"
 
   test "error":
     let testFilePath = testFileDir / "syntaxchecker_nim.nim"
-    const code ="""
+    const Code ="""
 import std/nonExistModule
 """
-    writeFile(testFilePath, code)
+    writeFile(testFilePath, Code)
 
     var p = testFilePath.startBackgroundSyntaxCheck(SourceLanguage.langNim).get
     let output = p.process.waitFor
@@ -364,13 +364,13 @@ import std/nonExistModule
 
   test "some warnings":
     let testFilePath = testFileDir / "syntaxchecker_nim.nim"
-    const code ="""
+    const Code ="""
 import std/os
 import std/osproc
 
 echo "Hello world"
 """
-    writeFile(testFilePath, code)
+    writeFile(testFilePath, Code)
 
     var p = testFilePath.startBackgroundSyntaxCheck(SourceLanguage.langNim).get
     let output = p.process.waitFor
@@ -390,11 +390,11 @@ echo "Hello world"
 
   test "some errors":
     let testFilePath = testFileDir / "syntaxchecker_nim.nim"
-    const code ="""
+    const Code ="""
 import std/nonExistModule
 import std/nonExistModule2
 """
-    writeFile(testFilePath, code)
+    writeFile(testFilePath, Code)
 
     var p = testFilePath.startBackgroundSyntaxCheck(SourceLanguage.langNim).get
     let output = p.process.waitFor
@@ -414,12 +414,12 @@ import std/nonExistModule2
 
   test "hint and warning":
     let testFilePath = testFileDir / "syntaxchecker_nim.nim"
-    const code ="""
+    const Code ="""
 import std/os
 let a = 1
 echo "Hello world"
 """
-    writeFile(testFilePath, code)
+    writeFile(testFilePath, Code)
 
     var p = testFilePath.startBackgroundSyntaxCheck(SourceLanguage.langNim).get
     let output = p.process.waitFor

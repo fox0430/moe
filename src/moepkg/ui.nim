@@ -167,10 +167,12 @@ proc keyEcho*(keyecho: bool) =
 proc setTimeout*(win: var Window, time: int = 100) {.inline.} =
   win.cursesWindow.wtimeout(cint(time))
 
-## Check how many colors are supported on the terminal and return ColorMode.
-## Check "$COLORTERM" first, then check "tput colors" if it fails.
-## Return ColorMode.None if unknown color support.
+
 proc checkColorSupportedTerminal*(): ColorMode =
+  ## Check how many colors are supported on the terminal and return ColorMode.
+  ## Check "$COLORTERM" first, then check "tput colors" if it fails.
+  ## Return ColorMode.None if unknown color support.
+
   result = ColorMode.none
 
   block checkColorTerm:
@@ -497,9 +499,11 @@ proc isControlI*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == 9
 proc isControlT*(key: Rune): bool {.inline.} = key == 20
 proc isControlT*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == 20
 
-# Ctrl - [
 proc isControlSquareBracketsRight*(key: Rune): bool {.inline.} =
+  # Ctrl - [
+
   key == 27
+
 proc isControlSquareBracketsRight*(r: Runes): bool {.inline.} =
   r.len == 1 and r[0] == 27
 

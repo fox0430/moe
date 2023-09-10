@@ -25,5 +25,5 @@ test "Open buffer manager":
   status.addNewBufferInCurrentWin
   startUi()
 
-  const command = @[ru"buf"]
-  status.exModeCommand(command)
+  const Command = @[ru"buf"]
+  status.exModeCommand(Command)

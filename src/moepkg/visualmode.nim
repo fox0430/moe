@@ -679,8 +679,9 @@ proc isVisualModeCommand*(command: Runes): InputState =
        c == ord('I'):
          return InputState.Valid
 
-# Execute the visual command and change the mode to a previous mode.
 proc execVisualModeCommand*(status: var EditorStatus, command: Runes) =
+  ## Execute the visual command and change the mode to a previous mode.
+
   let key = command[0]
 
   if isControlC(key) or isEscKey(key) or isControlSquareBracketsRight(key):

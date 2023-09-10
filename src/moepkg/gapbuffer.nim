@@ -136,8 +136,8 @@ proc delete*[T](
   gapBuffer: var GapBuffer[T],
   index: int,
   pushToStack: bool = true) =
-
     ## Delete the i-th element
+
     if pushToStack:
       gapBuffer.undoRedoStack.push(newDeleteCommand[T](gapBuffer[index], index))
     gapBuffer.deleteInterval(index, index)
@@ -146,8 +146,8 @@ proc delete*[T](
   gapBuffer: var GapBuffer[T],
   first, last: int,
   pushToStack: bool = true) =
-
     ## Delete [first, last] elements
+
     for i in countdown(last, first): gapBuffer.delete(i)
 
 proc assign*[T](

@@ -28,10 +28,11 @@ import editorstatus, bufferstatus, unicodeext, ui, movement, gapbuffer,
 template baseBackupDir*(status: EditorStatus): Runes =
   status.settings.autoBackup.backupDir
 
-# Create an new window and open the diff viewer.
-# `sourceFilePath` and `backupFilePath` is need to absolute path.
-# Use diff command.
 proc openDiffViewer(status: var EditorStatus, sourceFilePath: string) =
+  ## Create an new window and open the diff viewer.
+  ## `sourceFilePath` and `backupFilePath` is need to absolute path.
+  ## Use diff command.
+
   if currentLineBuffer.len == 0:
     return
 
@@ -54,12 +55,12 @@ proc openDiffViewer(status: var EditorStatus, sourceFilePath: string) =
 
   status.resize
 
-# Restore the current buffer from backupFile.
-# the filename is the curent line.
 proc restoreBackupFile(
   status: var EditorStatus,
   sourceFilePath: Runes,
   isForceRestore: bool) =
+    ## Restore the current buffer from backupFile.
+    ## the filename is the curent line.
 
     if not fileExists($sourceFilePath): return
 
@@ -135,12 +136,12 @@ template restoreBackupFile(
     const IS_FORCE_RESTORE = false
     status.restoreBackupFile(sourceFilePath, IS_FORCE_RESTORE)
 
-# Remove the backup file.
-# the filename is the curent line.
 proc removeBackupFile(
   status: var EditorStatus,
   sourceFilePath: Runes,
   isForceRemove: bool) =
+    ## Remove the backup file.
+    ## the filename is the curent line.
 
     let
       backupFilename = currentBufStatus.buffer[currentMainWindowNode.currentLine]

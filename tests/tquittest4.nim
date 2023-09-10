@@ -28,5 +28,5 @@ test "All buffer quit command":
   updateTerminalSize(100, 100)
   status.resize
 
-  const command = @[ru"qa"]
-  status.exModeCommand(command)
+  const Command = @[ru"qa"]
+  status.exModeCommand(Command)

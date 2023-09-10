@@ -33,11 +33,11 @@ suite "Replace mode: Replace current Character":
     currentBufStatus.mode = Mode.replace
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
-    const key = ru'z'
+    const Key = ru'z'
     currentBufStatus.replaceCurrentCharacter(
       currentMainWindowNode,
       status.settings,
-      key)
+      Key)
 
     check currentBufStatus.buffer[0] == ru"zbc"
 
@@ -48,11 +48,11 @@ suite "Replace mode: Replace current Character":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     for i in 0 ..< 5:
-      const key = ru'z'
+      const Key = ru'z'
       currentBufStatus.replaceCurrentCharacter(
         currentMainWindowNode,
         status.settings,
-        key)
+        Key)
 
     check currentBufStatus.buffer[0] == ru"zzzzz"
 
@@ -65,11 +65,11 @@ suite "Replace mode: Undo":
 
     recordCurrentPosition()
 
-    const key = ru'z'
+    const Key = ru'z'
     currentBufStatus.replaceCurrentCharacter(
       currentMainWindowNode,
       status.settings,
-      key)
+      Key)
 
     recordCurrentPosition()
 
@@ -86,11 +86,11 @@ suite "Replace mode: Undo":
 
     recordCurrentPosition()
 
-    const key = ru'z'
+    const Key = ru'z'
     currentBufStatus.replaceCurrentCharacter(
       currentMainWindowNode,
       status.settings,
-      key)
+      Key)
 
     recordCurrentPosition()
 
@@ -109,11 +109,11 @@ suite "Replace mode: Undo":
 
     recordCurrentPosition()
 
-    const key = ru'z'
+    const Key = ru'z'
     currentBufStatus.replaceCurrentCharacter(
       currentMainWindowNode,
       status.settings,
-      key)
+      Key)
 
     recordCurrentPosition()
 
@@ -138,11 +138,11 @@ suite "Replace mode: New line":
       status.settings.autoIndent,
       status.settings.tabStop)
 
-    const key = ru'z'
+    const Key = ru'z'
     currentBufStatus.replaceCurrentCharacter(
       currentMainWindowNode,
       status.settings,
-      key)
+      Key)
 
     check currentBufStatus.buffer.len == 2
     check currentBufStatus.buffer[0] == ru"a"

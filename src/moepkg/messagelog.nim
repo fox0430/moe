@@ -22,17 +22,21 @@ import unicodeext
 ## Log messages displayed on the command line.
 var messageLog: seq[Runes]
 
-## Add messages to `logger.messageLog`.
 proc addMessageLog*(message: Runes) =
+  ## Add messages to `logger.messageLog`.
+
   messageLog.add message
 
-## Add messages to `logger.messageLog`.
 proc addMessageLog*(messages: seq[Runes]) =
+  ## Add messages to `logger.messageLog`.
+
   for l in messages: messageLog.add l
 
-## Add messages to `logger.messageLog`.
 proc addMessageLog*(message: string) =
+  ## Add messages to `logger.messageLog`.
+
   messageLog.add message.toRunes
 
-## Return `logger.messageLog`.
-proc getMessageLog*(): seq[Runes] = messageLog
+proc getMessageLog*(): seq[Runes] =
+  ## Return `logger.messageLog`.
+  messageLog

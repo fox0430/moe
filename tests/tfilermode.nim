@@ -47,23 +47,23 @@ proc getCurrentFiles(path: string): seq[string] =
 
 suite "Filer mode":
   test "Update directory list":
-    const path = "./".toRunes
+    const Path = "./".toRunes
 
     var filerStatus = initFilerStatus()
-    filerStatus.updatePathList(path)
+    filerStatus.updatePathList(Path)
 
     check filerStatus.pathList.len > 0
 
   test "Check highlight in filer mode":
-    const path = "./".toRunes
+    const Path = "./".toRunes
 
     var filerStatus = initFilerStatus()
-    filerStatus.updatePathList(path)
+    filerStatus.updatePathList(Path)
 
-    var bufStatus = initBufferStatus($path, Mode.filer).get
+    var bufStatus = initBufferStatus($Path, Mode.filer).get
 
-    const isShowIcons = false
-    bufStatus.buffer = filerStatus.initFilerBuffer(isShowIcons).toGapBuffer
+    const IsShowIcons = false
+    bufStatus.buffer = filerStatus.initFilerBuffer(IsShowIcons).toGapBuffer
 
     const currentLine = 0
     let highlight = filerStatus.initFilerHighlight(bufStatus.buffer, currentLine)
@@ -71,56 +71,56 @@ suite "Filer mode":
     check highlight[0].color == EditorColorPairIndex.currentFile
 
   test "Open current directory":
-    const path = "./".toRunes
+    const Path = "./".toRunes
 
     var filerStatus = initFilerStatus()
-    filerStatus.updatePathList(path)
+    filerStatus.updatePathList(Path)
 
-    var bufStatus = initBufferStatus($path, Mode.filer).get
-    const isShowIcons = false
+    var bufStatus = initBufferStatus($Path, Mode.filer).get
+    const IsShowIcons = false
 
-    bufStatus.buffer = filerStatus.initFilerBuffer(isShowIcons).toGapBuffer
+    bufStatus.buffer = filerStatus.initFilerBuffer(IsShowIcons).toGapBuffer
 
-    let files = getCurrentFiles($path)
+    let files = getCurrentFiles($Path)
     for i in 0 ..< bufStatus.buffer.len:
       check files[i] == $bufStatus.buffer[i]
 
   test "Move directory":
-    const path = "./".toRunes
+    const Path = "./".toRunes
 
     var filerStatus = initFilerStatus()
-    filerStatus.updatePathList(path)
+    filerStatus.updatePathList(Path)
 
     var
-      bufStatuses = @[initBufferStatus($path, Mode.filer).get]
+      bufStatuses = @[initBufferStatus($Path, Mode.filer).get]
       mainWindow = initMainWindow()
-    const isShowIcons = false
+    const IsShowIcons = false
 
-    bufStatuses[0].buffer = filerStatus.initFilerBuffer(isShowIcons).toGapBuffer
+    bufStatuses[0].buffer = filerStatus.initFilerBuffer(IsShowIcons).toGapBuffer
 
     assert bufStatuses.openFileOrDir(
       mainWindow.currentMainWindowNode,
       filerStatus).isOk
 
     filerStatus.updatePathList(bufStatuses[0].path)
-    bufStatuses[0].buffer = filerStatus.initFilerBuffer(isShowIcons).toGapBuffer
+    bufStatuses[0].buffer = filerStatus.initFilerBuffer(IsShowIcons).toGapBuffer
 
     let files = getCurrentFiles("../")
     for i in 0 ..< bufStatuses[0].buffer.len:
       check files[i] == $bufStatuses[0].buffer[i]
 
   test "Open a file":
-    const path = "./".toRunes
+    const Path = "./".toRunes
 
     var filerStatus = initFilerStatus()
-    filerStatus.updatePathList(path)
+    filerStatus.updatePathList(Path)
 
     var
-      bufStatuses = @[initBufferStatus($path, Mode.filer).get]
+      bufStatuses = @[initBufferStatus($Path, Mode.filer).get]
       mainWindow = initMainWindow()
-    const isShowIcons = false
+    const IsShowIcons = false
 
-    bufStatuses[0].buffer = filerStatus.initFilerBuffer(isShowIcons).toGapBuffer
+    bufStatuses[0].buffer = filerStatus.initFilerBuffer(IsShowIcons).toGapBuffer
 
     for i in 0 .. bufStatuses[0].buffer.high:
       # Search a pcFile index

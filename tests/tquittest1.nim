@@ -24,5 +24,5 @@ test "Quit command":
   var status = initEditorStatus()
   status.addNewBufferInCurrentWin
 
-  const command = @[ru"q"]
-  status.exModeCommand(command)
+  const Command = @[ru"q"]
+  status.exModeCommand(Command)

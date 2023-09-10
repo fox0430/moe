@@ -48,10 +48,11 @@ proc newAssignCommand*[T](
   oldElement, newElement: T,
   position: int): Command[T] {.inline.} =
 
-    Command[T](kind: assign,
-               oldElement: oldElement,
-               newElement: newElement,
-               assignPosition: position)
+    Command[T](
+      kind: assign,
+      oldElement: oldElement,
+      newElement: newElement,
+      assignPosition: position)
 
 proc doInsert[T, U](
   command: Command[T],
@@ -97,9 +98,10 @@ proc inverseOfDelete[T](command: Command[T]): Command[T] {.inline.} =
 
 proc inverseOfAssign[T](command: Command[T]): Command[T] {.inline.} =
   doAssert(command.kind == CommandKind.assign)
-  return newAssignCommand[T](command.newElement,
-                             command.oldElement,
-                             command.assignPosition)
+  return newAssignCommand[T](
+    command.newElement,
+    command.oldElement,
+    command.assignPosition)
 
 proc inverseCommand[T](command: Command[T]): Command[T] =
   case command.kind:
@@ -146,6 +148,7 @@ proc lockCurrentSuit*[T](undoRedoStack: var UndoRedoStack[T]) =
 
 proc lastSuitId*[T](undoRedoStack: UndoRedoStack[T]): int =
   ## Return the id that was applied last.
+
   if undoRedoStack.undoSuits.len == 0: return 0
   if undoRedoStack.currentSuit.len > 0: undoRedoStack.currentSuit.id
   else: undoRedoStack.undoSuits[^1].id

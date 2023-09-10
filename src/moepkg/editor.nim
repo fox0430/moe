@@ -19,7 +19,7 @@
 
 import std/[strutils, sequtils, strformat, options]
 import syntax/highlite
-import editorstatus, ui, gapbuffer, unicodeext, undoredostack, windownode,
+import editorstatus, ui, gapbuffer, unicodeext, windownode,
        bufferstatus, movement, messages, settings, registers, commandline
 
 proc correspondingCloseParen(c: char): char =
@@ -499,12 +499,12 @@ proc insertIndentInPlainTextForKeyEnter(
 
     bufStatus.basicNewLine(windowNode, autoIndent, tabStop)
 
-# Insert indent to the next line
 proc insertIndentForKeyEnter(
   bufStatus: var BufferStatus,
   winNode: WindowNode,
   autoIndent:bool,
   tabStop: int) =
+    ## Insert indent to the next line
 
     case bufStatus.language:
       of SourceLanguage.langNim:
@@ -721,11 +721,11 @@ proc countSpaceOfBeginningOfLine(line: Runes): int =
     if r != ru' ': break
     else: result.inc
 
-## Indent in the current line.
 proc indent*(
   bufStatus: var BufferStatus,
   windowNode: WindowNode,
   tabStop: int) =
+    ## Indent in the current line.
 
     let oldLine = bufStatus.buffer[windowNode.currentLine]
     var newLine = bufStatus.buffer[windowNode.currentLine]
@@ -743,11 +743,11 @@ proc indent*(
 
     bufStatus.isUpdate = true
 
-## Unindent in the current line.
 proc unindent*(
   bufStatus: var BufferStatus,
   windowNode: WindowNode,
   tabStop: int) =
+    ## Unindent in the current line.
 
     let
       oldLine = bufStatus.buffer[windowNode.currentLine]
@@ -1237,9 +1237,9 @@ proc deleteTillPreviousBlankLine*(
       registers.addRegister(deletedBuffer, registerName, settings)
     else:
       const
-        isLine = true
-        isDelete = true
-      registers.addRegister(deletedBuffer, isLine, isDelete, settings)
+        IsLine = true
+        IsDelete = true
+      registers.addRegister(deletedBuffer, IsLine, IsDelete, settings)
 
     windowNode.currentLine = min(bufStatus.buffer.high, windowNode.currentLine)
     windowNode.currentColumn = 0
@@ -1291,9 +1291,9 @@ proc deleteTillNextBlankLine*(
       registers.addRegister(deletedBuffer, registerName, settings)
     else:
       const
-        isLine = true
-        isDelete = true
-      registers.addRegister(deletedBuffer, isLine, isDelete, settings)
+        IsLine = true
+        IsDelete = true
+      registers.addRegister(deletedBuffer, IsLine, IsDelete, settings)
 
     inc(bufStatus.countChange)
     bufStatus.isUpdate = true
@@ -1316,8 +1316,8 @@ proc yankLines*(
     if name.len > 0:
       registers.addRegister(yankedBuffer, name, settings)
     else:
-      const isLine = true
-      registers.addRegister(yankedBuffer, isLine, isDelete, settings)
+      const IsLine = true
+      registers.addRegister(yankedBuffer, IsLine, isDelete, settings)
 
     commandLine.writeMessageYankedLine(
       yankedBuffer.len,
@@ -1332,13 +1332,13 @@ proc yankLines*(
   isDelete: bool,
   settings: EditorSettings) =
 
-    const name = ""
+    const Name = ""
     bufStatus.yankLines(
       registers,
       commandLine,
       notificationSettings,
       first, last,
-      name,
+      Name,
       isDelete,
       settings)
 
@@ -1807,9 +1807,9 @@ proc deleteInsideOfParen*(
           registers.addRegister(deleteBuffer, registerName, settings)
         else:
           const
-            isLine = false
-            isDelete = true
-          registers.addRegister(deleteBuffer, isLine, isDelete, settings)
+            IsLine = false
+            IsDelete = true
+          registers.addRegister(deleteBuffer, IsLine, IsDelete, settings)
 
         bufStatus.buffer[currentLine] = newLine
         windowNode.currentColumn = openParenPosition

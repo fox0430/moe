@@ -125,10 +125,10 @@ proc count0000(s: string): int =
     i += 2
 
 proc detectCharacterEncoding*(s: string): CharacterEncoding =
-  # Guess the character encoding form of `s`.
-  # In currently, only the Unicode format is supported.
-  # Returns `CharacterEncoding.utf8` if only ASCII characters are included.
-  # Returns `CharacterEncoding.unknown` if encoding format is unknown.
+  ## Guess the character encoding form of `s`.
+  ## In currently, only the Unicode format is supported.
+  ## Returns `CharacterEncoding.utf8` if only ASCII characters are included.
+  ## Returns `CharacterEncoding.unknown` if encoding format is unknown.
 
 
   # Check UTF-8 BOM
@@ -188,9 +188,9 @@ proc toChar*(c: Rune): char {.inline.} =
   return ($c)[0]
 
 proc width*(c: Rune): int =
-  const tab = Rune('\t')
+  const Tab = Rune('\t')
   if int(c) > 0x10FFFF: return 1
-  if c == tab: return 4
+  if c == Tab: return 4
   case c.unicodeWidth
   of UnicodeWidth.uwdtNarrow,
      UnicodeWidth.uwdtHalf,
@@ -450,37 +450,37 @@ proc repeat*(rune: Rune, n: Natural): Runes =
 proc encodeUTF8*(r: Rune): seq[uint32] =
   const
     # first byte of a 2-byte encoding starts 110 and carries 5 bits of data
-    b2Lead = 0xC0 # 1100 0000
-    b2Mask {.used.} = 0x1F # 0001 1111
+    B2Lead = 0xC0 # 1100 0000
+    B2Mask {.used.} = 0x1F # 0001 1111
 
     # first byte of a 3-byte encoding starts 1110 and carries 4 bits of data
-    b3Lead = 0xE0 # 1110 0000
-    b3Mask {.used.} = 0x0F # 0000 1111
+    B3Lead = 0xE0 # 1110 0000
+    B3Mask {.used.} = 0x0F # 0000 1111
 
     # first byte of a 4-byte encoding starts 11110 and carries 3 bits of data
-    b4Lead = 0xF0 # 1111 0000
-    b4Mask {.used.} = 0x07 # 0000 0111
+    B4Lead = 0xF0 # 1111 0000
+    B4Mask {.used.} = 0x07 # 0000 0111
 
     # non-first bytes start 10 and carry 6 bits of data
-    mbLead = 0x80 # 1000 0000
-    mbMask = 0x3F # 0011 1111
+    MbLead = 0x80 # 1000 0000
+    MbMask = 0x3F # 0011 1111
 
   let i = uint32(r)
   if i <= i shl 7 - 1:
     result.add uint32(r)
   if i <= 1 shl 11 - 1:
-    result.add b2Lead or i shr 6
-    result.add mbLead or i and mbMask
+    result.add B2Lead or i shr 6
+    result.add MbLead or i and MbMask
   if i <= i shl 16 - 1:
-    result.add b3Lead or i shr 12
-    result.add mbLead or i shr 6
-    result.add mbLead or i and mbLead
+    result.add B3Lead or i shr 12
+    result.add MbLead or i shr 6
+    result.add MbLead or i and MbLead
   else:
     result.add uint32(r)
-    result.add b4Lead or i shl 18
-    result.add mbLead or i shl 12
-    result.add mbLead or i shl 6
-    result.add mbLead or i and mbMask
+    result.add B4Lead or i shl 18
+    result.add MbLead or i shl 12
+    result.add MbLead or i shl 6
+    result.add MbLead or i and MbMask
 
 proc absolutePath*(runes: Runes): Runes {.inline.} =
   result = absolutePath($runes).ru
@@ -492,16 +492,21 @@ proc removePrefix*(runes: Runes, prefix: Runes): Runes {.inline.} =
   removePrefix(str, $prefix)
   return str.ru
 
-# Count `r` contained in `runes`
 proc count*(runes: Runes, r: Rune): int {.inline.} =
+  ## Count `r` contained in `runes`
+
   for r2 in runes:
     if r2 == r: result.inc
 
-# Assign empty rune.
-template clear*(r: var Rune) = r = "".ru
+template clear*(r: var Rune) =
+  ## Assign empty rune.
 
-# Assign empty runes.
-template clear*(r: var Runes) = r = "".ru
+  r = "".ru
+
+template clear*(r: var Runes) =
+  ## Assign empty runes.
+
+  r = "".ru
 
 proc isContainUpper*(runes: Runes): bool =
   for r in runes:

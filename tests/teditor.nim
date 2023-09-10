@@ -1588,8 +1588,8 @@ suite "Editor: Toggle characters":
     status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
 
-    const loop = 1
-    currentBufStatus.toggleCharacters(currentMainWindowNode, loop)
+    const Loop = 1
+    currentBufStatus.toggleCharacters(currentMainWindowNode, Loop)
 
     check currentBufStatus.buffer[0] == ru "Abcdef"
     check currentMainWindowNode.currentColumn == 1
@@ -1599,8 +1599,8 @@ suite "Editor: Toggle characters":
     status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
 
-    const loop = 3
-    currentBufStatus.toggleCharacters(currentMainWindowNode, loop)
+    const Loop = 3
+    currentBufStatus.toggleCharacters(currentMainWindowNode, Loop)
 
     check currentBufStatus.buffer[0] == ru "ABCdef"
     check currentMainWindowNode.currentColumn == 3
@@ -1610,8 +1610,8 @@ suite "Editor: Toggle characters":
     status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru " abcde"])
 
-    const loop = 1
-    currentBufStatus.toggleCharacters(currentMainWindowNode, loop)
+    const Loop = 1
+    currentBufStatus.toggleCharacters(currentMainWindowNode, Loop)
 
     check currentBufStatus.buffer[0] == ru " abcde"
     check currentMainWindowNode.currentColumn == 0
@@ -2010,20 +2010,20 @@ suite "Editor: Open the blank line abave":
       check currentMainWindowNode.currentColumn == currentBufStatus.buffer[1].len
 
   block:
-    const keyword = "or"
-    openLineAboveTestCase4(keyword)
+    const Keyword = "or"
+    openLineAboveTestCase4(Keyword)
   block:
-    const keyword = "and"
-    openLineAboveTestCase4(keyword)
+    const Keyword = "and"
+    openLineAboveTestCase4(Keyword)
   block:
-    const keyword = ":"
-    openLineAboveTestCase4(keyword)
+    const Keyword = ":"
+    openLineAboveTestCase4(Keyword)
   block:
-    const keyword = "object"
-    openLineAboveTestCase4(keyword)
+    const Keyword = "object"
+    openLineAboveTestCase4(Keyword)
   block:
-    const keyword = "="
-    openLineAboveTestCase4(keyword)
+    const Keyword = "="
+    openLineAboveTestCase4(Keyword)
 
   proc openLineAboveTestCase5(keyword: string) =
     ## Enable autoindent

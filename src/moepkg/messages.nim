@@ -67,8 +67,8 @@ proc writeFileOpenError*(commandLine: var CommandLine, fileName: string) =
   addMessageLog mess
 
 proc writeCreateDirError*(commandLine: var CommandLine) {.inline.} =
-  const mess = "Error: Can not create directory"
-  addMessageLog mess
+  const Mess = "Error: Can not create directory"
+  addMessageLog Mess
 
 proc writeMessageDeletedFile*(
   commandLine: var CommandLine,
@@ -177,22 +177,22 @@ proc writePutConfigFile*(commandLine: var CommandLine, configPath: string) =
   addMessageLog mess
 
 proc writePutConfigFileError*(commandLine: var CommandLine) =
-  const mess = "Error: Failed to put configuration file"
-  commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
-  addMessageLog mess
+  const Mess = "Error: Failed to put configuration file"
+  commandLine.writeMessageOnCommandLine(Mess, EditorColorPairIndex.errorMessage)
+  addMessageLog Mess
 
 proc writePutConfigFileAlreadyExistError*(commandLine: var CommandLine) =
-  const mess = "Error: Configuration file already exists"
-  commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
-  addMessageLog mess
+  const Mess = "Error: Configuration file already exists"
+  commandLine.writeMessageOnCommandLine(Mess, EditorColorPairIndex.errorMessage)
+  addMessageLog Mess
 
 proc writeOpenRecentlyUsedXbelError*(commandLine: var CommandLine) =
-  const mess =
+  const Mess =
     "Error: " &
     getHomeDir() / ".local/share/recently-used.xbel" &
     " Not found"
-  commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
-  addMessageLog mess
+  commandLine.writeMessageOnCommandLine(Mess, EditorColorPairIndex.errorMessage)
+  addMessageLog Mess
 
 proc writeFileNotFoundError*(
   commandLine: var CommandLine,
@@ -204,11 +204,11 @@ proc writeFileNotFoundError*(
 proc writeStartAutoBackupMessage*(
   commandLine: var CommandLine,
   settings: NotificationSettings) =
-    const mess = "Start automatic backup..."
+    const Mess = "Start automatic backup..."
     if settings.screenNotifications and settings.autoBackupScreenNotify:
-      commandLine.writeMessageOnCommandLine(mess)
+      commandLine.writeMessageOnCommandLine(Mess)
     if settings.logNotifications and settings.autoBackupLogNotify:
-      addMessageLog mess
+      addMessageLog Mess
 
 proc writeAutoBackupSuccessMessage*(
   commandLine: var CommandLine,
@@ -222,9 +222,9 @@ proc writeAutoBackupSuccessMessage*(
 proc writeRunQuickRunMessage*(
   commandLine: var CommandLine,
   settings: NotificationSettings) =
-    const mess = "Quick run..."
+    const Mess = "Quick run..."
     if settings.quickRunScreenNotify:
-      commandLine.writeMessageOnCommandLine(mess)
+      commandLine.writeMessageOnCommandLine(Mess)
 
 proc writeInRecordingOperations*(
   commandLine: var CommandLine,
@@ -245,14 +245,14 @@ proc writeAutoBackupFailedMessage*(
       addMessageLog message
 
 proc writeRunQuickRunTimeoutMessage*(commandLine: var CommandLine) =
-    const mess = "Quick run timeout"
-    commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
-    addMessageLog mess
+    const Mess = "Quick run timeout"
+    commandLine.writeMessageOnCommandLine(Mess, EditorColorPairIndex.errorMessage)
+    addMessageLog Mess
 
 proc writeRunQuickRunFailedMessage*(commandLine: var CommandLine) =
-    const mess = "Quick run failed"
-    commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
-    addMessageLog mess
+    const Mess = "Quick run failed"
+    commandLine.writeMessageOnCommandLine(Mess, EditorColorPairIndex.errorMessage)
+    addMessageLog Mess
 
 proc writeInvalidItemInConfigurationFileError*(
   commandLine: var CommandLine,
@@ -270,8 +270,8 @@ proc writeFailedToLoadConfigurationFileError*(
     addMessageLog mess
 
 proc writeBackupRestoreError*(commandLine: var CommandLine) {.inline.} =
-  const mess = "Error: Restore failed"
-  commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
+  const Mess = "Error: Restore failed"
+  commandLine.writeMessageOnCommandLine(Mess, EditorColorPairIndex.errorMessage)
 
 proc writeRestoreFileSuccessMessage*(
   commandLine: var CommandLine,
@@ -284,13 +284,13 @@ proc writeRestoreFileSuccessMessage*(
       addMessageLog message
 
 proc writeDeleteBackupError*(commandLine: var CommandLine) {.inline.} =
-  const mess = "Error: Delete backup file failed"
-  commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
-  addMessageLog mess
+  const Mess = "Error: Delete backup file failed"
+  commandLine.writeMessageOnCommandLine(Mess, EditorColorPairIndex.errorMessage)
+  addMessageLog Mess
 
 proc writeExitHelp*(commandLine: var CommandLine) {.inline.} =
-  const mess = "Type  :qa  and press <Enter> to exit moe"
-  commandLine.writeMessageOnCommandLine(mess)
+  const Mess = "Type  :qa  and press <Enter> to exit moe"
+  commandLine.writeMessageOnCommandLine(Mess)
 
 proc writeCurrentCharInfo*(commandLine: var CommandLine, r: Rune) {.inline.} =
   let
@@ -301,8 +301,8 @@ proc writeCurrentCharInfo*(commandLine: var CommandLine, r: Rune) {.inline.} =
   commandLine.writeMessageOnCommandLine(mess)
 
 proc writeReadonlyModeWarning*(commandLine: var CommandLine) {.inline.} =
-  const mess = "Warning: Readonly mode"
-  commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
+  const Mess = "Warning: Readonly mode"
+  commandLine.writeMessageOnCommandLine(Mess, EditorColorPairIndex.errorMessage)
 
 proc writeManualCommandError*(
   commandLine: var CommandLine,

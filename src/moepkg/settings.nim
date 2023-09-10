@@ -380,7 +380,7 @@ proc autoSetClipboardTool(): ClipboardToolOnLinux =
 
   case currentPlatform:
     of linux:
-      ## Check if X server is running
+      # Check if X server is running
       if execCmdExNoOutput("xset q") == 0:
 
         if execCmdExNoOutput("xsel --version") == 0:
@@ -2197,8 +2197,9 @@ proc toConfigStr*(colorMode: ColorMode): string =
     of ColorMode.c256: "256"
     of ColorMode.c24bit: "24bit"
 
-## Generate a string of the configuration file of TOML.
 proc genTomlConfigStr*(settings: EditorSettings): string =
+  ## Generate a string of the configuration file of TOML.
+
   proc addLine(buf: var string, str: string) {.inline.} = buf &= "\n" & str
 
   result = "[Standard]"

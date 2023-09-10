@@ -1118,7 +1118,7 @@ suite "Config mode: Get AutoBackup table setting values":
 
     const
       Name = "enable"
-      SettingType = SettingType.Bool
+      SettingType = SettingType.bool
     let
       default = autoBackupSettings.enable
       values = autoBackupSettings.getAutoBackupTableSettingValues(
@@ -1133,7 +1133,7 @@ suite "Config mode: Get AutoBackup table setting values":
 
     const
       Name = "backupDir"
-      SettingType = SettingType.Text
+      SettingType = SettingType.text
     let
       default = autoBackupSettings.backupDir
       values = autoBackupSettings.getAutoBackupTableSettingValues(
@@ -1148,7 +1148,7 @@ suite "Config mode: Get AutoBackup table setting values":
 
     const
       Name = "test"
-      SettingType = SettingType.None
+      SettingType = SettingType.none
     let values = autoBackupSettings.getAutoBackupTableSettingValues(
       Name,
       SettingType)
@@ -1162,7 +1162,7 @@ suite "Config mode: Get QuickRun table setting values":
 
     const
       Name = "saveBufferWhenQuickRun"
-      SettingType = SettingType.Bool
+      SettingType = SettingType.bool
     let
       default = quickRunSettings.saveBufferWhenQuickRun
       values = quickRunSettings.getQuickRunTableSettingValues(Name, SettingType)
@@ -1175,7 +1175,7 @@ suite "Config mode: Get QuickRun table setting values":
 
     const
       Name = "nimAdvancedCommand"
-      SettingType = SettingType.Text
+      SettingType = SettingType.text
     let
       default = ru quickRunSettings.nimAdvancedCommand
       values = quickRunSettings.getQuickRunTableSettingValues(Name, SettingType)
@@ -1188,7 +1188,7 @@ suite "Config mode: Get QuickRun table setting values":
 
     const
       Name = "clangOptions"
-      SettingType = SettingType.Text
+      SettingType = SettingType.text
     let
       default = ru quickRunSettings.clangOptions
       values = quickRunSettings.getQuickRunTableSettingValues(Name, SettingType)
@@ -1201,7 +1201,7 @@ suite "Config mode: Get QuickRun table setting values":
 
     const
       Name = "cppOptions"
-      SettingType = SettingType.Text
+      SettingType = SettingType.text
     let
       default = ru quickRunSettings.cppOptions
       values = quickRunSettings.getQuickRunTableSettingValues(Name, SettingType)
@@ -1214,7 +1214,7 @@ suite "Config mode: Get QuickRun table setting values":
 
     const
       Name = "nimOptions"
-      SettingType = SettingType.Text
+      SettingType = SettingType.text
     let
       default = ru quickRunSettings.nimOptions
       values = quickRunSettings.getQuickRunTableSettingValues(Name, SettingType)
@@ -1227,7 +1227,7 @@ suite "Config mode: Get QuickRun table setting values":
 
     const
       Name = "shOptions"
-      SettingType = SettingType.Text
+      SettingType = SettingType.text
     let
       default = ru quickRunSettings.shOptions
       values = quickRunSettings.getQuickRunTableSettingValues(Name, SettingType)
@@ -1240,7 +1240,7 @@ suite "Config mode: Get QuickRun table setting values":
 
     const
       Name = "bashOptions"
-      SettingType = SettingType.Text
+      SettingType = SettingType.text
     let
       default = ru quickRunSettings.bashOptions
       values = quickRunSettings.getQuickRunTableSettingValues(Name, SettingType)
@@ -1253,7 +1253,7 @@ suite "Config mode: Get QuickRun table setting values":
 
     const
       Name = "test"
-      SettingType = SettingType.None
+      SettingType = SettingType.none
     let values = quickRunSettings.getQuickRunTableSettingValues(Name, SettingType)
 
     check values.len == 0
@@ -2455,7 +2455,7 @@ suite "Config mode: Get BuildOnSave table setting type":
       Name = "enable"
 
     let settingType = getSettingType(Table, Name)
-    check settingType == SettingType.Bool
+    check settingType == SettingType.bool
 
   test "Get workspaceRoot setting type":
     const
@@ -2463,7 +2463,7 @@ suite "Config mode: Get BuildOnSave table setting type":
       Name = "workspaceRoot"
 
     let settingType = getSettingType(Table, Name)
-    check settingType == SettingType.Text
+    check settingType == SettingType.text
 
   test "Get command setting type":
     const
@@ -2471,7 +2471,7 @@ suite "Config mode: Get BuildOnSave table setting type":
       Name = "command"
 
     let settingType = getSettingType(Table, Name)
-    check settingType == SettingType.Text
+    check settingType == SettingType.text
 
   test "Set invalid Name":
     const
@@ -2479,7 +2479,7 @@ suite "Config mode: Get BuildOnSave table setting type":
       Name = "test"
 
     let settingType = getSettingType(Table, Name)
-    check settingType == SettingType.None
+    check settingType == SettingType.none
 
 suite "Config mode: getColorModeSettingValues":
   test "Current mode is ColorMode.none":
