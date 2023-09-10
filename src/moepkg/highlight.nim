@@ -21,15 +21,15 @@ import std/[sequtils, os, parseutils, strutils, strformat]
 import syntax/highlite
 import unicodeext, color, independentutils, ui
 
-type ColorSegment* = object
-  firstRow*, firstColumn*, lastRow*, lastColumn*: int
-  color*: EditorColorPairIndex
-  attribute*: Attribute
-
-type Highlight* = ref object
-  colorSegments*: seq[ColorSegment]
-
 type
+  ColorSegment* = object
+    firstRow*, firstColumn*, lastRow*, lastColumn*: int
+    color*: EditorColorPairIndex
+    attribute*: Attribute
+
+  Highlight* = ref object
+    colorSegments*: seq[ColorSegment]
+
   ReservedWord* = object
     word*: string
     color*: EditorColorPairIndex
@@ -75,6 +75,7 @@ proc contains(s, t: ColorSegment): bool =
 
 proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
   ## Overwrite `s` with t
+
   type Position = tuple[row, column: int]
 
   proc prev(pos: Position): Position =
@@ -188,11 +189,10 @@ iterator parseReservedWord(
       yield (buffer[0 ..^ 1], color)
       break
 
-    const
-      first = 0
+    const First = 0
     let
       last = pos + reservedWord.word.len
-    yield (buffer[first ..< pos], color)
+    yield (buffer[First ..< pos], color)
     yield (buffer[pos ..< last], reservedWord.color)
     buffer = buffer[last ..^ 1]
 
@@ -277,7 +277,7 @@ proc initHighlight*(
       colorSegments: seq[ColorSegment]
 
     template splitByNewline(str, c: typed) =
-      const newline = Rune('\n')
+      const Newline = Rune('\n')
       var
         cs = ColorSegment(
           firstRow: currentRow,
@@ -287,7 +287,7 @@ proc initHighlight*(
           color: c)
         empty = true
       for r in runes(str):
-        if r == newline:
+        if r == Newline:
           # push an empty segment
           if empty:
             let color = EditorColorPairIndex.default

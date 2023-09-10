@@ -182,13 +182,13 @@ proc highlightPairOfParen(
           lastColumn: correspondParenPosition.get.column,
           color: EditorColorPairIndex.parenPair))
 
-# Highlighting other uses of the current word under the cursor
 proc highlightOtherUsesCurrentWord(
   highlight: var Highlight,
   bufStatus: BufferStatus,
   windowNode: WindowNode,
   theme: ColorTheme,
   colorMode: ColorMode) =
+    # Highlighting other uses of the current word under the cursor
 
     let line = bufStatus.buffer[windowNode.currentLine]
 

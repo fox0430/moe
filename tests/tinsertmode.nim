@@ -139,11 +139,11 @@ suite "Insert mode":
 
     currentMainWindowNode.currentColumn = 4
 
-    const loop = 1
+    const Loop = 1
     currentBufStatus.deleteWordBeforeCursor(
       currentMainWindowNode,
       status.registers,
-      loop,
+      Loop,
       status.settings)
 
     let buffer = status.bufStatus[0].buffer
@@ -155,11 +155,11 @@ suite "Insert mode":
     status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
-    const loop = 1
+    const Loop = 1
     currentBufStatus.deleteWordBeforeCursor(
       currentMainWindowNode,
       status.registers,
-      loop,
+      Loop,
       status.settings)
 
     let buffer = status.bufStatus[0].buffer
@@ -173,11 +173,11 @@ suite "Insert mode":
 
     currentMainWindowNode.currentLine = 1
 
-    const loop = 1
+    const Loop = 1
     currentBufStatus.deleteWordBeforeCursor(
       currentMainWindowNode,
       status.registers,
-      loop,
+      Loop,
       status.settings)
 
     let buffer = status.bufStatus[0].buffer
@@ -304,9 +304,9 @@ suite "Insert mode":
       result.update
 
   test "General-purpose autocomplete window position 1":
-    const buffer = @["a", "aba", "abb", "abc", "abd", "abe", "abf"]
+    const Buffer = @["a", "aba", "abb", "abc", "abd", "abe", "abf"]
     var status = prepareInsertMode(
-      buffer,
+      Buffer,
       0,
       1,
       100,
@@ -328,26 +328,26 @@ suite "Insert mode":
         mainWindowHeight)
 
     const
-      isEnableStatusLine = true
-      mainWindowNodeY = 2
+      IsEnableStatusLine = true
+      MainWindowNodeY = 2
     suggestionWindow.get.writeSuggestionWindow(
       currentMainWindowNode,
       y, x,
-      mainWindowNodeY,
-      isEnableStatusLine)
+      MainWindowNodeY,
+      IsEnableStatusLine)
 
     check y == 2
     check x == 1
 
   test "General-purpose autocomplete window position 2":
     const
-      buffer = @["aba", "abb", "abc", "abcd", "", "a"]
-      terminalHeight = 10
+      Buffer = @["aba", "abb", "abc", "abcd", "", "a"]
+      TerminalHeight = 10
     var status = prepareInsertMode(
-      buffer,
-      buffer.high,
+      Buffer,
+      Buffer.high,
       1,
-      terminalHeight,
+      TerminalHeight,
       100)
 
     var dictionary: WordDictionary
@@ -366,23 +366,23 @@ suite "Insert mode":
         mainWindowHeight)
 
     const
-      isEnableStatusLine = true
-      mainWindowNodeY = 2
+      IsEnableStatusLine = true
+      MainWindowNodeY = 2
     suggestionWindow.get.writeSuggestionWindow(
       currentMainWindowNode,
       y, x,
-      mainWindowNodeY,
-      isEnableStatusLine)
+      MainWindowNodeY,
+      IsEnableStatusLine)
 
     check y == 2
     check x == 1
 
   test "General-purpose autocomplete (Fix #1032)":
-    const buffer = @[
+    const Buffer = @[
       "import os, unicode, times",
       "import"]
     var status = prepareInsertMode(
-      buffer,
+      Buffer,
       0,
       1,
       100,
@@ -404,22 +404,22 @@ suite "Insert mode":
         mainWindowHeight)
 
     const
-      isEnableStatusLine = true
-      mainWindowNodeY = 2
+      IsEnableStatusLine = true
+      MainWindowNodeY = 2
     suggestionWindow.get.writeSuggestionWindow(
       currentMainWindowNode,
       y, x,
-      mainWindowNodeY,
-      isEnableStatusLine)
+      MainWindowNodeY,
+      IsEnableStatusLine)
 
   test "General-purpose autocomplete (the cursor position): Selecting a suggestion which is length 1 when the buffer contains some lines.":
-    const buffer = @["", "", "a"]
+    const Buffer = @["", "", "a"]
     var status = prepareInsertMode(
-      buffer,
-     0,
-     0,
-     100,
-     100)
+      Buffer,
+      0,
+      0,
+      100,
+      100)
 
     insertCharacter(
       currentBufStatus,
@@ -446,9 +446,9 @@ suite "Insert mode":
     check currentMainWindowNode.currentLine == 0
 
   test "General-purpose autocomplete (the cursor position): Selecting a suggestion which is length 1 when the buffer contains a line.":
-    const buffer = @[" a"]
+    const Buffer = @[" a"]
     var status = prepareInsertMode(
-      buffer,
+      Buffer,
       0,
       0,
       100,
@@ -488,16 +488,16 @@ suite "Insert mode":
       buffer.add("a" & randStr)
 
     const
-      line = 0
-      column = 1
-      terminalHeight = 100
-      terminalWidth = 100
+      Line = 0
+      Column = 1
+      TerminalHeight = 100
+      TerminalWidth = 100
     var status = prepareInsertMode(
       buffer,
-      line,
-      column,
-      terminalHeight,
-      terminalWidth)
+      Line,
+      Column,
+      TerminalHeight,
+      TerminalWidth)
 
     status.settings.tabLine.enable = true
     status.settings.statusLine.enable = true
@@ -511,7 +511,7 @@ suite "Insert mode":
       mainWindowNode,
       currentMainWindowNode)
 
-    const mainWindowNodeY = 1
+    const MainWindowNodeY = 1
     let
       mainWindowHeight = status.settings.getMainWindowHeight
       (y, x) = suggestionWindow.get.calcSuggestionWindowPosition(
@@ -520,10 +520,10 @@ suite "Insert mode":
     suggestionWindow.get.writeSuggestionWindow(
       currentMainWindowNode,
       y, x,
-      mainWindowNodeY,
+      MainWindowNodeY,
       status.settings.statusLine.enable)
 
     privateAccess(suggestionWindow.get.type)
 
     check suggestionWindow.get.popUpWindow.get.y == 2
-    check suggestionWindow.get.popUpWindow.get.height == terminalHeight - 4
+    check suggestionWindow.get.popUpWindow.get.height == TerminalHeight - 4

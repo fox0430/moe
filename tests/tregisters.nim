@@ -51,8 +51,8 @@ suite "registers: Add a buffer to the no name register":
     var registers: Registers
     let settings = initEditorSettings()
 
-    const isLine = true
-    registers.addRegister(ru "abc", isLine, settings)
+    const IsLine = true
+    registers.addRegister(ru "abc", IsLine, settings)
 
     check registers.noNameRegisters == Register(
       buffer: @[ru "abc"],
@@ -63,8 +63,8 @@ suite "registers: Add a buffer to the no name register":
     var registers: Registers
     let settings = initEditorSettings()
 
-    const isLine = true
-    registers.addRegister(@[ru "abc", ru "def"], isLine, settings)
+    const IsLine = true
+    registers.addRegister(@[ru "abc", ru "def"], IsLine, settings)
 
     check registers.noNameRegisters == Register(
       buffer: @[ru "abc", ru "def"],
@@ -76,55 +76,55 @@ suite "registers: Add a buffer to the named register":
     var registers: Registers
     let settings = initEditorSettings()
 
-    const name = "a"
-    registers.addRegister(ru "abc", name, settings)
+    const Name = "a"
+    registers.addRegister(ru "abc", Name, settings)
 
     check registers.namedRegisters[0] == Register(
       buffer: @[ru "abc"],
       isLine: false,
-      name: name)
+      name: Name)
 
   test "Overwrite a string to the named register":
     var registers: Registers
     let settings = initEditorSettings()
 
-    const name = "a"
+    const Name = "a"
     registers.namedRegisters.add Register(
       buffer: @[ru "abc"],
       isLine: false,
-      name: name)
+      name: Name)
 
-    registers.addRegister(ru "def", name, settings)
+    registers.addRegister(ru "def", Name, settings)
 
     check registers.namedRegisters[0] == Register(
       buffer: @[ru "def"],
       isLine: false,
-      name: name)
+      name: Name)
 
   test "Overwrite a line to the named register":
     var registers: Registers
     let settings = initEditorSettings()
 
-    const name = "a"
+    const Name = "a"
     registers.namedRegisters.add Register(
       buffer: @[ru "abc"],
       isLine: false,
-      name: name)
+      name: Name)
 
     const isLine = true
-    registers.addRegister(ru "def", isLine, name, settings)
+    registers.addRegister(ru "def", isLine, Name, settings)
 
     check registers.namedRegisters[0] == Register(
       buffer: @[ru "def"],
       isLine: true,
-      name: name)
+      name: Name)
 
   test "Not added to the register (_ register)":
     var registers: Registers
     let settings = initEditorSettings()
 
-    const name = "_"
-    registers.addRegister(ru "def", name, settings)
+    const Name = "_"
+    registers.addRegister(ru "def", Name, settings)
 
     check registers.namedRegisters.len == 0
     check registers.noNameRegisters == Register()
@@ -135,10 +135,10 @@ suite "registers: Add a buffer to the small delete register":
     let settings = initEditorSettings()
 
     const
-      isLine = false
-      isDelete = true
-    registers.addRegister(ru "abc", isLine, isDelete, settings)
-    registers.addRegister(ru "def", isLine, isDelete, settings)
+      IsLine = false
+      IsDelete = true
+    registers.addRegister(ru "abc", IsLine, IsDelete, settings)
+    registers.addRegister(ru "def", IsLine, IsDelete, settings)
 
     check registers.noNameRegisters == Register(buffer: @[ru "def"])
 
@@ -170,9 +170,9 @@ suite "registers: Add a buffer to the number register":
     registers.addRegister(@[ru "abc"], settings)
 
     const
-      isDelete = true
-      isLine = true
-    registers.addRegister(ru "def", isLine, isDelete, settings)
+      IsDelete = true
+      IsLine = true
+    registers.addRegister(ru "def", IsLine, IsDelete, settings)
 
     for i in 0 ..< 10:
       let r = registers.numberRegisters[i]
@@ -187,37 +187,36 @@ suite "registers: Search a register by name":
   test "Search a register by name":
     var registers: Registers
     const
-      r1 = Register(buffer: @[ru "abc"], name: "a")
-      r2 = Register(buffer: @[ru "def"], name: "b")
-      r3 = Register(buffer: @[ru "ghi"], name: "c")
+      R1 = Register(buffer: @[ru "abc"], name: "a")
+      R2 = Register(buffer: @[ru "def"], name: "b")
+      R3 = Register(buffer: @[ru "ghi"], name: "c")
 
-    registers.namedRegisters = @[r1, r2, r3]
+    registers.namedRegisters = @[R1, R2, R3]
 
     check registers.searchByName("b").isSome
-    check registers.searchByName("b").get == r2
+    check registers.searchByName("b").get == R2
 
   test "Search a register by number string":
     var registers: Registers
     const
-      r1 = Register(buffer: @[ru "abc"], name: "a")
-      r2 = Register(buffer: @[ru "def"], name: "b")
+      R1 = Register(buffer: @[ru "abc"], name: "a")
+      R2 = Register(buffer: @[ru "def"], name: "b")
+      R3 = Register(buffer: @[ru "ghi"], name: "0")
 
-      r3 = Register(buffer: @[ru "ghi"], name: "0")
-
-    registers.namedRegisters = @[r1, r2]
-    registers.numberRegisters[0] = r3
+    registers.namedRegisters = @[R1, R2]
+    registers.numberRegisters[0] = R3
 
     check registers.searchByName("0").isSome
-    check registers.searchByName("0").get == r3
+    check registers.searchByName("0").get == R3
 
   test "Return empty":
     var registers: Registers
     const
-      r1 = Register(buffer: @[ru "abc"], name: "a")
-      r2 = Register(buffer: @[ru "def"], name: "b")
-      r3 = Register(buffer: @[ru "ghi"], name: "c")
+      R1 = Register(buffer: @[ru "abc"], name: "a")
+      R2 = Register(buffer: @[ru "def"], name: "b")
+      R3 = Register(buffer: @[ru "ghi"], name: "c")
 
-    registers.namedRegisters = @[r1, r2, r3]
+    registers.namedRegisters = @[R1, R2, R3]
 
     check registers.searchByName("z").isNone
 

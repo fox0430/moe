@@ -36,9 +36,9 @@ proc staticReadVersionFromNimble: string {.compileTime.} =
   return captures[0]
 
 proc gitHash: string {.compileTime.} =
-  const r = gorgeEx("git rev-parse HEAD")
-  if r.exitCode == 0 and r.output.len == 40:
-    return r.output
+  const CmdResult = gorgeEx("git rev-parse HEAD")
+  if CmdResult.exitCode == 0 and CmdResult.output.len == 40:
+    return CmdResult.output
   else:
     return ""
 
@@ -51,21 +51,21 @@ proc writeError(msg: string) {.inline.} =
 
 proc generateVersionInfoMessage(): string =
   const
-    versionInfo = "moe v" & staticReadVersionFromNimble()
-    gitHash = "Git hash: " & gitHash()
-    buildType = "Build type: " & checkReleaseBuild()
+    VersionInfo = "moe v" & staticReadVersionFromNimble()
+    GitHash = "Git hash: " & gitHash()
+    BuildType = "Build type: " & checkReleaseBuild()
 
   result =
-    versionInfo & "\n\n" &
-    gitHash & "\n" &
-    buildType
+    VersionInfo & "\n\n" &
+    GitHash & "\n" &
+    BuildType
 
 proc writeVersion() =
   echo generateVersionInfoMessage()
   quit()
 
 proc generateHelpMessage(): string =
-  const helpMessage = """
+  const HelpMessage = """
 Usage:
   moe [file]       Edit file
 
@@ -77,22 +77,24 @@ Arguments:
   -v, --version    Print version
 """
 
-  result = generateVersionInfoMessage() & "\n\n" & helpMessage
+  result = generateVersionInfoMessage() & "\n\n" & HelpMessage
 
 proc writeHelp() =
   echo generateHelpMessage()
   quit()
 
 proc writeCmdLineError(kind: CmdLineKind, arg: string) =
-  # Short option or long option
+  ## Short option or long option
+
   let optionStr = if kind == cmdShortOption: "-" else: "--"
 
   echo fmt"Unknown option argument: {optionStr}{arg}"
   echo """Pelase check "moe -h""""
   quit()
 
-## Create/Overwrite the default configuration file and quit.
 proc initDefaultConfigFile() =
+  ## Create/Overwrite the default configuration file and quit.
+
   let
     configFileDir = getHomeDir() / ".config/moe/"
     configFilePath = configFileDir & "moerc.toml"

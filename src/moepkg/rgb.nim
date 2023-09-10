@@ -34,9 +34,10 @@ const TerminalDefaultRgb* = Rgb(red: -1, green: -1, blue: -1)
 proc isTermDefaultColor*(rgb: Rgb): bool {.inline.} =
   rgb == TerminalDefaultRgb
 
-## Parses a hex color value from a string s.
-## Examples: "#000000", "ff0000"
 proc hexToRgb*(s: string): Result[Rgb, string] =
+  ## Parses a hex color value from a string s.
+  ## Examples: "#000000", "ff0000"
+
   if not (s.len == 6 or (s.len == 7 and s.startsWith('#'))):
     return Result[Rgb, string].err "Invalid hex color"
 
@@ -55,11 +56,12 @@ proc hexToRgb*(s: string): Result[Rgb, string] =
 
   return Result[Rgb, string].ok rgb
 
-## Converts from the Rgb to a hex color code.
-## And with '#' prefix if isPrefix is true.
-## Return None if Rgb(red: -1, green: -1, blue: -1)
-## Example: Rgb(red: 0, green: 0, blue: 0) -> "#000000"
 proc toHex*(rgb: Rgb, isPrefix: bool = true): Option[string] =
+  ## Converts from the Rgb to a hex color code.
+  ## And with '#' prefix if isPrefix is true.
+  ## Return None if Rgb(red: -1, green: -1, blue: -1)
+  ## Example: Rgb(red: 0, green: 0, blue: 0) -> "#000000"
+
   if not rgb.isTermDefaultColor:
     let
       r = rgb.red.uint64.toHex(2).toLowerAscii
@@ -69,11 +71,13 @@ proc toHex*(rgb: Rgb, isPrefix: bool = true): Option[string] =
     if isPrefix: return some(fmt"#{r}{g}{b}")
     else: return some(fmt"{r}{g}{b}")
 
-## Return true if valid hex color code.
-## '#' is required if `isPrefix` is true.
-## Return false if Rgb(red: -1, green: -1, blue: -1)
-## Range: 000000 ~ ffffff
+
 proc isHexColor*(s: string, isPrefix: bool = true): bool =
+  ## Return true if valid hex color code.
+  ## '#' is required if `isPrefix` is true.
+  ## Return false if Rgb(red: -1, green: -1, blue: -1)
+  ## Range: 000000 ~ ffffff
+
   if (not isPrefix and s.len == 6) or (s.startsWith('#') and s.len == 7):
     let hexStr =
       if s.startsWith('#'): s[1..6]
@@ -92,8 +96,9 @@ proc isHexColor*(s: string, isPrefix: bool = true): bool =
            (g >= 0 and g <= 255) and
            (b >= 0 and b <= 255)
 
-## Return the inverse color.
 proc inverseColor*(color: Rgb): Rgb =
+  ## Return the inverse color.
+
   if color.isTermDefaultColor:
     return color
 
@@ -101,6 +106,7 @@ proc inverseColor*(color: Rgb): Rgb =
   result.green = abs(color.green - 255)
   result.blue = abs(color.blue - 255)
 
-## Calculates the difference between two rgb colors.
 proc calcRgbDifference*(c1: Rgb, c2: Rgb): int {.inline.} =
+  ## Calculates the difference between two rgb colors.
+
   abs(c1.red - c2.red) + abs(c1.green - c2.green) + abs(c1.blue - c2.blue)

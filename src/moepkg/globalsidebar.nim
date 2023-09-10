@@ -28,39 +28,55 @@ type
     window: Window
     terminalBuffer: seq[Runes]
 
-## Return the window position of x.
-proc x*(sidebar: GlobalSidebar): int {.inline.} = sidebar.window.x
+proc x*(sidebar: GlobalSidebar): int {.inline.} =
+  ## Return the window position of x.
 
-## Return the window position of x.
-proc y*(sidebar: GlobalSidebar): int {.inline.} = sidebar.window.y
+  sidebar.window.x
 
-## Return the window height.
-proc height*(sidebar: GlobalSidebar): int {.inline.} = sidebar.window.height
+proc y*(sidebar: GlobalSidebar): int {.inline.} =
+  ## Return the window position of x.
 
-## Return the window height.
-proc h*(sidebar: GlobalSidebar): int {.inline.} = sidebar.window.height
+  sidebar.window.y
 
-## Return the window width.
-proc width*(sidebar: GlobalSidebar): int {.inline.} = sidebar.window.width
+proc height*(sidebar: GlobalSidebar): int {.inline.} =
+  ## Return the window height.
 
-## Return the window width.
-proc w*(sidebar: GlobalSidebar): int {.inline.} = sidebar.window.width
+  sidebar.window.height
 
-## Return the sidebar window size.
+proc h*(sidebar: GlobalSidebar): int {.inline.} =
+  ## Return the window height.
+
+  sidebar.window.height
+
+proc width*(sidebar: GlobalSidebar): int {.inline.} =
+  ## Return the window width.
+
+  sidebar.window.width
+
+proc w*(sidebar: GlobalSidebar): int {.inline.} =
+  ## Return the window width.
+
+  sidebar.window.width
+
 proc size*(sidebar: GlobalSidebar): Size {.inline.} =
+  ## Return the sidebar window size.
+
   Size(h: sidebar.h, w: sidebar.w)
 
-## Return the sidebar window position.
 proc position*(sidebar: GlobalSidebar): Position {.inline.} =
+  ## Return the sidebar window position.
+
   Position(y: sidebar.y, x: sidebar.x)
 
-## Return the sidebar window rect.
 proc rect*(sidebar: GlobalSidebar): Rect {.inline.} =
+  ## Return the sidebar window rect.
+
   Rect(y: sidebar.y, x: sidebar.x, h: sidebar.h, w: sidebar.w)
 
-## Init the terminal buffer.
-## Pad the size of the `size` with spaces.
 proc initTerminalBuffer(sidebar: var GlobalSidebar) {.inline.} =
+  ## Init the terminal buffer.
+  ## Pad the size of the `size` with spaces.
+
   sidebar.terminalBuffer = sidebar.h.newSeqWith(ru" ".repeat(sidebar.w))
 
 proc initGlobalSidebar*(rect: Rect): GlobalSidebar =
@@ -96,8 +112,9 @@ proc initGlobalSidebar*(): GlobalSidebar {.inline.} =
         lastColumn: 1,
         color: EditorColorPairIndex.default)])
 
-## Init the sidebar highlight
 proc initHighlight*(sidebar: var GlobalSidebar) =
+  ## Init the sidebar highlight
+
   sidebar.highlight = Highlight(
     colorSegments: @[
       ColorSegment(
@@ -107,13 +124,13 @@ proc initHighlight*(sidebar: var GlobalSidebar) =
         lastColumn: sidebar.terminalBuffer[0].high,
         color: EditorColorPairIndex.default)])
 
-## Write a buffer to the terminalBuffer
-## Cut off the buffer if longer than the window sieze.
 proc write*(
   sidebar: var GlobalSidebar,
   startPosition: Position,
   buffer: Runes,
   color: EditorColorPairIndex = EditorColorPairIndex.default) {.inline.} =
+    ## Write a buffer to the terminalBuffer
+    ## Cut off the buffer if longer than the window sieze.
 
     when not defined(release):
       assert startPosition.y >= 0 and startPosition.x >= 0
@@ -132,8 +149,9 @@ proc write*(
         lastColumn: startPosition.x + buffer.high,
         color: color))
 
-## Write a buffer to the terminal (ui).
 proc write(sidebar: var GlobalSidebar) =
+  ## Write a buffer to the terminal (ui).
+
   let buf = sidebar.terminalBuffer
   var
     highlightIndex = 0
@@ -147,25 +165,32 @@ proc write(sidebar: var GlobalSidebar) =
 
       sidebar.window.write(i, j, $buf[i][j], cs.color.int16)
 
-## Refresh the ncurses window for the sidebar.
-proc refresh(sidebar: GlobalSidebar) {.inline.} = sidebar.window.refresh
+proc refresh(sidebar: GlobalSidebar) {.inline.} =
+  ## Refresh the ncurses window for the sidebar.
+  sidebar.window.refresh
 
-## Write buffer to the terminal and refresh.
 proc update*(sidebar: var GlobalSidebar) =
+  ## Write buffer to the terminal and refresh.
+
   sidebar.write
   sidebar.refresh
 
-## Resize the sidebar window
 proc resize*(sidebar: var GlobalSidebar, size: Size) {.inline.} =
+  ## Resize the sidebar window
+
   sidebar.window.resize(size)
 
-## Resize the sidebar window
 proc resize*(sidebar: var GlobalSidebar, rect: Rect) {.inline.} =
+  ## Resize the sidebar window
+
   sidebar.window.resize(rect)
 
-## Move the sidebar window
 proc move*(sidebar: var GlobalSidebar, position: Position) {.inline.} =
+  ## Move the sidebar window
+
   sidebar.window.move(position)
 
-## Clear the terminal buffer.
-proc clear*(sidebar: var GlobalSidebar) {.inline.} = sidebar.initTerminalBuffer
+proc clear*(sidebar: var GlobalSidebar) {.inline.} =
+  ## Clear the terminal buffer.
+
+  sidebar.initTerminalBuffer

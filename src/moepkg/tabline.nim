@@ -26,8 +26,9 @@ type
     buffer: string
     color: EditorColorPairIndex
 
-## Return buffer for a tab line to display.
 proc tabLineBuffer*(title: string, tabWidth: int): string =
+  ## Return buffer for a tab line to display.
+
   if tabWidth > title.len:
     let spaces = " ".repeat(tabWidth - title.len)
     return fmt" {title}{spaces}"
@@ -35,8 +36,9 @@ proc tabLineBuffer*(title: string, tabWidth: int): string =
     let shortTitle = title.substr(0, tabWidth - 2) & "~"
     return fmt" {shortTitle}"
 
-## Return a text for a path to display.
 proc displayedPath(b: BufferStatus): string =
+  ## Return a text for a path to display.
+
   if b.isBackupManagerMode:
     "BACKUP"
   elif b.isConfigMode:
@@ -95,22 +97,23 @@ proc initTabLines(
             buffer: tabLineBuffer(title, tabWidth),
             color: EditorColorPairIndex.currentTab)]
 
-## Write buffer to the terminal (UI).
-## Need to refresh after writing.
 proc write(win: var Window, tabLine: TabLine) {.inline.} =
+  ## Write buffer to the terminal (UI).
+  ## Need to refresh after writing.
+
   win.write(
     tabLine.position.y,
     tabLine.position.x,
     tabLine.buffer,
     tabline.color.int16)
 
-## Write all tab lines.
 proc writeTabLineBuffers*(
   tabWin: var Window,
   bufStatuses: seq[BufferStatus],
   currentBufferIndex: int,
   mainWindowNode: WindowNode,
   isAllbuffer: bool) =
+    ## Write all tab lines.
 
     let tablines = bufStatuses.initTabLines(
       currentBufferIndex,

@@ -111,14 +111,14 @@ proc handleKeyInSuggestionWindow*(
 
       bufStatus.isUpdate = true
 
-# Suggestions are extracted from `text`.
-# `word` is the inputted text.
-# `isPath` is true when the file path suggestions.
 proc initSuggestionWindow*(
   wordDictionary: var WordDictionary,
   text, word, currentLineText: Runes,
   firstColumn, lastColumn: int,
   isPath: bool): Option[SuggestionWindow] =
+    ## Suggestions are extracted from `text`.
+    ## `word` is the inputted text.
+    ## `isPath` is true when the file path suggestions.
 
     if not isPath:
       wordDictionary.addWordToDictionary(text)
@@ -170,11 +170,11 @@ proc wordExistsBeforeCursor(
     let wordFirstLast = extractWordBeforeCursor(bufStatus, windowNode)
     wordFirstLast.isSome and wordFirstLast.get.word.len > 0
 
-# Get a text in the buffer and language keywords
 proc getBufferAndLangKeyword(
   checkBuffers: seq[BufferStatus],
   firstDeletedIndex, lastDeletedIndex: int,
   lang: SourceLanguage): Runes =
+    ## Get a text in the buffer and language keywords
 
     let
       bufferText = getTextInBuffers(
@@ -308,18 +308,22 @@ proc calcSuggestionWindowPosition*(
 
     return (y, x)
 
-# cursorPosition is absolute y
 proc calcMaxSugestionWindowHeight(
   y: int,
   cursorYPosition: int,
   mainWindowNodeY: int,
   isEnableStatusLine: bool): int =
 
-    const commanLineHeight = 1
+    const CommanLineHeight = 1
     let statusLineHeight = if isEnableStatusLine: 1 else: 0
 
+    # cursorYPosition is absolute y
     if y > cursorYPosition:
-      result = (getTerminalHeight() - 1) - cursorYPosition - commanLineHeight - statusLineHeight
+      result =
+        (getTerminalHeight() - 1) -
+        cursorYPosition -
+        CommanLineHeight -
+        statusLineHeight
     else:
       result = cursorYPosition - mainWindowNodeY
 

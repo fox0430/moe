@@ -23,10 +23,10 @@ import editorview, gapbuffer, unicodeext, windownode, bufferstatus,
 
 template currentLineLen: int = bufStatus.buffer[windowNode.currentLine].len
 
-## Return true if currentColumn is line.high + 1.
 proc isExpandPosition*(
   bufStatus: BufferStatus,
   windowNode: WindowNode): bool {.inline.} =
+    ## Return true if currentColumn is line.high + 1.
 
     windowNode.currentColumn ==
       bufStatus.buffer[windowNode.currentLine].high + 1
@@ -361,8 +361,9 @@ proc moveToForwardEndOfWord*(
 
     windowNode.expandedColumn = windowNode.currentColumn
 
-## Move to the top line of the screen.
 proc moveToTopOfScreen*(bufStatus: BufferStatus, windowNode: var WindowNode) =
+  ## Move to the top line of the screen.
+
   if windowNode.currentLine > windowNode.view.originalLine[0]:
     windowNode.currentLine = windowNode.view.originalLine[0]
 
@@ -370,8 +371,9 @@ proc moveToTopOfScreen*(bufStatus: BufferStatus, windowNode: var WindowNode) =
        windowNode.currentColumn > bufStatus.buffer[windowNode.currentLine].high:
          windowNode.currentColumn = bufStatus.buffer[windowNode.currentLine].high
 
-## Move to the center line of the screen.
 proc moveToCenterOfScreen*(bufStatus: BufferStatus, windowNode: var WindowNode) =
+  ## Move to the center line of the screen.
+
   if (bufStatus.buffer.high - windowNode.currentLine) < windowNode.view.height - 1:
     # Move to the middle of visible lines if less than a view bottom.
     let
@@ -384,8 +386,9 @@ proc moveToCenterOfScreen*(bufStatus: BufferStatus, windowNode: var WindowNode) 
     if dest > -1 and bufStatus.buffer.high >= dest:
       windowNode.currentLine = dest
 
-## Move to the bottom line of the screen.
 proc moveToBottomOfScreen*(bufStatus: BufferStatus, windowNode: var WindowNode) =
+  ## Move to the bottom line of the screen.
+
   if (bufStatus.buffer.high - windowNode.currentLine) < windowNode.view.height - 1:
     # Move to the bottom of visible lines if less than a view bottom.
     let bottomInVisalbe = bufStatus.buffer.high - windowNode.view.originalLine[0]
@@ -422,10 +425,10 @@ proc scrollScreenBottom*(bufStatus: var BufferStatus, windowNode: WindowNode) =
     let numOfTime = windowNode.view.height - windowNode.cursor.y - 2
     for i in 0 ..< numOfTime: windowNode.view.scrollUp(bufStatus.buffer)
 
-## Move to matching pair of paren. Do nothing If no matching pair exists.
 proc moveToPairOfParen*(
   bufStatus: BufferStatus,
   windowNode: var WindowNode) =
+    ## Move to matching pair of paren. Do nothing If no matching pair exists.
 
     if bufStatus.isExpandPosition(windowNode): return
 

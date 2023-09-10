@@ -25,7 +25,7 @@ import moepkg/syntax/[highlite, syntaxc, syntaxcpp, syntaxcsharp, syntaxhaskell,
 
 import moepkg/autocomplete {.all.}
 
-const code = ru"""proc fibonacci(n: int): int =
+const Code = ru"""proc fibonacci(n: int): int =
   if n == 0: return 0
   if n == 1: return 1
   return fibonacci(n - 1) + fibonacci(n - 2)"""
@@ -33,34 +33,34 @@ const code = ru"""proc fibonacci(n: int): int =
 suite "autocomplete: enumerateWords":
   test "Case 1":
     const
-      expectedResult = @["proc", "fibonacci", "n", "int", "int", "if", "n",
+      ExpectedResult = @["proc", "fibonacci", "n", "int", "int", "if", "n",
         "return", "if", "n", "return", "return", "fibonacci", "n", "fibonacci", "n"].map(s => s.ru)
 
-      actualResult = collect(newSeq):
-        for x in enumerateWords(code):
+      ActualResult = collect(newSeq):
+        for x in enumerateWords(Code):
           x
 
-    check actualResult == expectedResult
+    check ActualResult == ExpectedResult
 
 suite "autocomplete: enumerateWords":
   test "Case 1":
     var dictionary: WordDictionary
-    const allWords = @["proc", "fibonacci", "n", "int", "int", "if", "n",
+    const AllWords = @["proc", "fibonacci", "n", "int", "int", "if", "n",
       "return", "if", "n", "return", "return", "fibonacci", "n", "fibonacci", "n"].deduplicate
 
-    dictionary.addWordToDictionary(code)
+    dictionary.addWordToDictionary(Code)
 
-    for x in allWords:
+    for x in AllWords:
       check dictionary.contains(x)
     for x in dictionary.items:
-      check allWords.contains(x)
+      check AllWords.contains(x)
 
 suite "autocomplete: extractNeighborWord":
   test "Case 1":
-    const text = ru"This is a sample text."
+    const Text = ru"This is a sample text."
 
     proc validate(pos: int, expected: string) =
-      let wordFirstLast = extractNeighborWord(text, pos)
+      let wordFirstLast = extractNeighborWord(Text, pos)
       if expected.len > 0:
         check wordFirstLast.get.word == expected.ru
       else:
@@ -77,7 +77,7 @@ suite "autocomplete: extractNeighborWord":
 suite "autocomplete: collectSuggestions":
   test "Case 1":
     var dictionary: WordDictionary
-    dictionary.addWordToDictionary(code)
+    dictionary.addWordToDictionary(Code)
 
     dictionary.incNumOfUsed("proc".toRunes)
 

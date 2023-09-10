@@ -27,5 +27,5 @@ test "All buffer force quit command":
     status.bufStatus[i].countChange = 1
   status.verticalSplitWindow
 
-  const command = @[ru"qa!"]
-  status.exModeCommand(command)
+  const Command = @[ru"qa!"]
+  status.exModeCommand(Command)

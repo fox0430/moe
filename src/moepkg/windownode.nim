@@ -229,18 +229,18 @@ proc resize*(root: var WindowNode, position: Position, size: Size) =
     qeue = initHeapQueue[WindowNode]()
     windowIndex = 0
 
-  const statusBarLineHeight = 1
+  const StatusBarLineHeight = 1
 
   for index, node in root.child:
     if root.splitType == SplitType.vertical:
-      ## Vertical split
+      # Vertical split
 
-      ## Calc window width
+      # Calc window width
       if root.w mod root.child.len != 0 and index == 0:
         node.w = int(root.w / root.child.len) + (root.w mod root.child.len)
       else: node.w = int(root.w / root.child.len)
 
-      ## Calc window x
+      # Calc window x
       if root.w mod root.child.len != 0 and index > 0:
         node.x = root.x + (node.w * index) + (root.w mod root.child.len)
       else: node.x = root.x + (node.w * index)
@@ -248,14 +248,14 @@ proc resize*(root: var WindowNode, position: Position, size: Size) =
       node.h = root.h
       node.y = root.y
     else:
-      ## Horaizontal split
+      # Horaizontal split
 
-      ## Calc window height
+      # Calc window height
       if root.h mod root.child.len != 0 and index == 0:
         node.h = int(root.h / root.child.len) + (root.h mod root.child.len)
       else: node.h = int(root.h / root.child.len)
 
-      ## Calc window y
+      # Calc window y
       if root.h mod root.child.len != 0 and index > 0:
         node.y = (node.h * index) + (root.h mod root.child.len) + root.y
       else: node.y = node.h * index + root.y
@@ -264,9 +264,14 @@ proc resize*(root: var WindowNode, position: Position, size: Size) =
       node.x = root.x
 
     if node.window.isSome:
-      ## Resize curses window
-      node.window.get.resize(node.h - statusBarLineHeight, node.w, node.y, node.x)
-      ## Set windowIndex
+      # Resize curses window
+      node.window.get.resize(
+        node.h - StatusBarLineHeight,
+        node.w,
+        node.y,
+        node.x)
+
+      # Set windowIndex
       node.windowIndex = windowIndex
       inc(windowIndex)
 
@@ -282,14 +287,14 @@ proc resize*(root: var WindowNode, position: Position, size: Size) =
         child = qeue.pop
         parent = child.parent
       if parent.splitType == SplitType.vertical:
-        ## Vertical split
+        # Vertical split
 
-        ## Calc window width
+        # Calc window width
         if parent.w mod parent.child.len != 0 and i == 0:
           child.w = int(parent.w / parent.child.len) + 1
         else: child.w = int(parent.w / parent.child.len)
 
-        ## Calc window x
+        # Calc window x
         if parent.w mod parent.child.len != 0 and i > 0:
           child.x = parent.x + (child.w * i) + 1
         else: child.x = parent.x + (child.w * i)
@@ -297,14 +302,14 @@ proc resize*(root: var WindowNode, position: Position, size: Size) =
         child.h = parent.h
         child.y = parent.y
       else:
-        ## Horaizontal split
+        # Horaizontal split
 
-        ## Calc window height
+        # Calc window height
         if parent.h mod parent.child.len != 0 and i == 0:
           child.h = int(parent.h / parent.child.len) + 1
         else: child.h = int(parent.h / parent.child.len)
 
-        ## Calc window y
+        # Calc window y
         if parent.h mod parent.child.len != 0 and i > 0:
           child.y = parent.y + (child.h * i) + 1
         else: child.y = parent.y + (child.h * i)
@@ -315,7 +320,7 @@ proc resize*(root: var WindowNode, position: Position, size: Size) =
       if child.window.isSome:
         # Resize curses window
         child.window.get.resize(
-          child.h - statusBarLineHeight,
+          child.h - StatusBarLineHeight,
           child.w,
           child.y,
           child.x)
@@ -323,7 +328,7 @@ proc resize*(root: var WindowNode, position: Position, size: Size) =
         child.windowIndex = windowIndex
         inc(windowIndex)
 
-      ## Set index
+      # Set index
       for i, n in child.child: n.index = i
 
       if child.child.len > 0:
@@ -440,6 +445,7 @@ proc getHeight*(node: var WindowNode): int {.inline.} = node.window.get.height
 
 proc getWidth*(node: var WindowNode): int {.inline.} = node.window.get.width
 
-## Return the current position.
 proc bufferPosition*(windowNode: WindowNode): BufferPosition {.inline.} =
+  ## Return the current position.
+
   BufferPosition(line: windowNode.currentLine, column: windowNode.currentColumn)

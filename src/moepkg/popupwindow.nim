@@ -64,9 +64,10 @@ proc writePopUpWindow*(
 
     popUpWindow.refresh
 
-# Delete the popup window.
-# Need `status.update` after delete it.
 proc delete*(popUpWindow: var Window) =
+  ## Delete the popup window.
+  ## Need `status.update` after delete it.
+
   # TODO: Use Option type
   if popUpWindow != nil:
     popUpWindow.deleteWindow

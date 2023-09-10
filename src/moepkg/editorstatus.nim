@@ -299,13 +299,15 @@ proc exitEditor*(status: EditorStatus) =
 
   quit()
 
-## Add a new FilerStatus and link it to the current bufStatus.
 proc addFilerStatus(status: var EditorStatus) {.inline.} =
+  ## Add a new FilerStatus and link it to the current bufStatus.
+
   status.filerStatuses.add initFilerStatus()
   currentBufStatus.filerStatusIndex = some(status.filerStatuses.high)
 
-## Add a new FilerStatus and link it to the bufStatus.
 proc addFilerStatus(status: var EditorStatus, bufStatusIndex: int) {.inline.} =
+  ## Add a new FilerStatus and link it to the bufStatus.
+
   status.filerStatuses.add initFilerStatus()
   status.bufStatus[bufStatusIndex].filerStatusIndex =
     some(status.filerStatuses.high)
@@ -435,8 +437,9 @@ proc resizeMainWindowNode(status: var EditorStatus, terminalSize: Size) =
 
   mainWindowNode.resize(Position(y: y, x: x), Size(h: h, w: w))
 
-## Reszie all windows to ui.terminalSize.
 proc resize*(status: var EditorStatus) =
+  ## Reszie all windows to ui.terminalSize.
+
   if currentBufStatus.isCursor:
     # Disable the cursor while updating views.
     setCursor(false)
@@ -485,7 +488,7 @@ proc resize*(status: var EditorStatus) =
             node.currentLine,
             node.currentColumn)
 
-        ## Resize multiple status line.
+        # Resize multiple status line.
         let
           isMergeStatusLine = status.settings.statusLine.merge
           enableStatusLine = status.settings.statusLine.enable
@@ -675,9 +678,10 @@ proc updateCommandLine(status: var EditorStatus) =
 
   status.commandLine.update
 
-## Update all views, highlighting, cursor, etc.
 proc update*(status: var EditorStatus) =
-  # Disable the cursor while updating.
+  ## Update all views, highlighting, cursor, etc.
+
+# Disable the cursor while updating.
   setCursor(false)
 
   let settings = status.settings
@@ -757,7 +761,7 @@ proc update*(status: var EditorStatus) =
         # NOTE: node.highlight is not directly change here for performance.
         var highlight = node.highlight
 
-        ## Update highlights
+        # Update highlights
         if b.isLogViewerMode:
           highlight = initLogViewerHighlight(b.buffer.toSeqRunes)
         elif b.isDiffViewerMode:
@@ -1085,7 +1089,7 @@ proc smoothScrollUpNumberOfLines(
 
       if i > destination + 1: delayIndex.inc
 
-    ## Set default time out setting
+    # Set default time out setting
     currentMainWindowNode.setTimeout
 
 proc pageUp*(status: var EditorStatus) {.inline.} =
@@ -1156,7 +1160,7 @@ proc smoothScrollDownNumberOfLines(
 
       if i < destination: delayIndex.inc
 
-    ## Set default time out setting
+    # Set default time out setting
     currentMainWindowNode.setTimeout
 
 proc pageDown*(status: var EditorStatus) {.inline.} =

@@ -25,5 +25,5 @@ test "Force quit command":
   status.addNewBufferInCurrentWin
 
   status.bufStatus[0].countChange = 1
-  const command = @[ru"q!"]
-  status.exModeCommand(command)
+  const Command = @[ru"q!"]
+  status.exModeCommand(Command)

@@ -28,9 +28,9 @@ import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
        theme, exmodeutils
 
 type
-  replaceCommandInfo = tuple[searhWord: Runes, replaceWord: Runes]
+  ReplaceCommandInfo = tuple[searhWord: Runes, replaceWord: Runes]
 
-proc parseReplaceCommand(command: Runes): replaceCommandInfo =
+proc parseReplaceCommand(command: Runes): ReplaceCommandInfo =
   var numOfSlash = 0
   for i in 0 .. command.high:
     if command[i] == '/': numOfSlash.inc
@@ -190,8 +190,8 @@ proc putConfigFileCommand(status: var EditorStatus) =
     return
 
   let path = getHomeDir() / ".config" / "moe" / "moerc.toml"
-  const configExample = staticReadVersionFromConfigFileExample()
-  writeFile(path, configExample)
+  const ConfigExample = staticReadVersionFromConfigFileExample()
+  writeFile(path, ConfigExample)
 
   status.changeMode(currentBufStatus.prevMode)
 
@@ -207,8 +207,8 @@ proc openHelp(status: var EditorStatus) =
   status.resize
   status.moveNextWindow
 
-  const path = ""
-  status.addNewBufferInCurrentWin(path, Mode.help)
+  const Path = ""
+  status.addNewBufferInCurrentWin(Path, Mode.help)
 
   status.resize
 
@@ -822,7 +822,7 @@ proc writeAndQuitCommand(status: var EditorStatus) =
         status.commandLine.clear
         return
 
-  ## Ask if you want to create a directory that does not exist
+  # Ask if you want to create a directory that does not exist
   if not status.commandLine.checkAndCreateDir(path):
     status.changeMode(currentBufStatus.prevMode)
     status.commandLine.writeSaveError
@@ -887,7 +887,7 @@ proc writeAndQuitAllBufferCommand(status: var EditorStatus) =
           status.commandLine.clear
           return
 
-    ## Ask if you want to create a directory that does not exist
+    # Ask if you want to create a directory that does not exist
     if not status.commandLine.checkAndCreateDir(path):
       status.changeMode(currentBufStatus.prevMode)
       status.commandLine.writeSaveError

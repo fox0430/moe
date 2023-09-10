@@ -292,24 +292,24 @@ test "substr":
   check substr(ru"あいう", first = 1) == ru"いう"
 
 test "splitWhitespace":
-  const s = "this\lis an\texample"
-  check splitWhitespace(s.ru) == @[ru"this", ru"is", ru"an", ru"example"]
+  const S = "this\lis an\texample"
+  check splitWhitespace(S.ru) == @[ru"this", ru"is", ru"an", ru"example"]
 
 test "iteratorSplit":
   const
-    expectedResult = @[ru"", ru"", ru"this", ru"is", ru"an", ru"", ru"example", ru"", ru"", ru""]
-    actualResult = collect(newSeq):
+    ExpectedResult = @[ru"", ru"", ru"this", ru"is", ru"an", ru"", ru"example", ru"", ru"", ru""]
+    ActualResult = collect(newSeq):
       for x in unicodeext.split(ru";;this;is;an;;example;;;", r => r == ru';'):
         x
-  check actualResult == expectedResult
+  check ActualResult == ExpectedResult
 
 test "iteratorSplitWithRemoveEmptyEntries":
   const
-    expectedResult = @[ru"", ru"", ru"this", ru"is", ru"an", ru"", ru"example", ru"", ru"", ru""].filter(runes => runes.len > 0)
-    actualResult = collect(newSeq):
+    ExpectedResult = @[ru"", ru"", ru"this", ru"is", ru"an", ru"", ru"example", ru"", ru"", ru""].filter(runes => runes.len > 0)
+    ActualResult = collect(newSeq):
       for x in unicodeext.split(ru";;this;is;an;;example;;;", r => r == ru';', true):
         x
-  check actualResult == expectedResult
+  check ActualResult == ExpectedResult
 
 test "join 1":
   check @[ru"a", ru"b", ru"c"].join == ru"abc"

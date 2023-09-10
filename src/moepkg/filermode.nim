@@ -75,8 +75,8 @@ proc execFilerModeCommand*(status: var EditorStatus, command: Runes) =
   if key == ord(':'):
     currentBufStatus.changeModeToExMode(status.commandLine)
   elif key == ord('/'):
-    const prompt = "/"
-    if status.commandLine.getKeys(prompt):
+    const Prompt = "/"
+    if status.commandLine.getKeys(Prompt):
       let keyword = status.commandLine.buffer
       currentBufStatus.searchFileMode(
         currentMainWindowNode,
