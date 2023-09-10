@@ -31,6 +31,7 @@ suite "highlight: initHighlight":
   test "langNone":
     const Buffer = @["", "1", "123"].toSeqRunes
     let h = initHighlight(Buffer, ReservedWords, SourceLanguage.langNone)
+    echo h.colorSegments
     check h.colorSegments == @[
       ColorSegment(
         firstRow: 0,
@@ -39,15 +40,15 @@ suite "highlight: initHighlight":
         lastColumn: -1,
         color: EditorColorPairIndex.default),
       ColorSegment(
-        firstRow: 0,
+        firstRow: 1,
         firstColumn: 0,
-        lastRow: 0,
+        lastRow: 1,
         lastColumn: 0,
         color: EditorColorPairIndex.default),
       ColorSegment(
-        firstRow: 0,
+        firstRow: 2,
         firstColumn: 0,
-        lastRow: 0,
+        lastRow: 2,
         lastColumn: 2,
         color: EditorColorPairIndex.default)]
 
