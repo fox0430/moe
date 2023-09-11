@@ -17,7 +17,8 @@
 #                                                                              #
 #[############################################################################]#
 
-import ui, unicodeext, windownode, bufferstatus, movement, commandline
+import ui, unicodeext, windownode, bufferstatus, movement, commandline,
+       editorstatus
 
 proc isDebugModeCommand*(command: Runes): InputState =
   result = InputState.Invalid
@@ -45,9 +46,6 @@ proc changeModeToExMode(
     bufStatus.changeMode(Mode.ex)
     commandLine.clear
     commandLine.setPrompt(ExModePrompt)
-
-# TODO: Resolve the recursive module dependency and move to top.
-import editorstatus
 
 proc execDebugModeCommand*(status: var EditorStatus, command: Runes) =
   if command.len == 1:

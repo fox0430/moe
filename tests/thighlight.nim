@@ -31,7 +31,6 @@ suite "highlight: initHighlight":
   test "langNone":
     const Buffer = @["", "1", "123"].toSeqRunes
     let h = initHighlight(Buffer, ReservedWords, SourceLanguage.langNone)
-    echo h.colorSegments
     check h.colorSegments == @[
       ColorSegment(
         firstRow: 0,
