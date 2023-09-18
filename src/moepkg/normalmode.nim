@@ -104,13 +104,12 @@ proc searchNextOccurrence(status: var EditorStatus, keyword: Runes) =
   status.isSearchHighlight = true
 
   var highlight = currentMainWindowNode.highlight
-  highlight.updateHighlight(
+  highlight.updateViewHighlight(
     currentBufStatus,
     currentMainWindowNode,
     status.isSearchHighlight,
     status.searchHistory,
-    status.settings,
-    status.settings.colorMode)
+    status.settings)
 
   status.bufStatus[currentBufferIndex].keyRight(currentMainWindowNode)
 
@@ -142,13 +141,12 @@ proc searchNextOccurrenceReversely(
     status.isSearchHighlight = true
 
     var highlight = currentMainWindowNode.highlight
-    highlight.updateHighlight(
+    highlight.updateViewHighlight(
       currentBufStatus,
       currentMainWindowNode,
       status.isSearchHighlight,
       status.searchHistory,
-      status.settings,
-      status.settings.colorMode)
+      status.settings)
 
     currentMainWindowNode.keyLeft
 
@@ -997,13 +995,12 @@ proc openBlankLineAboveAndEnterInsertMode(status: var EditorStatus) =
     status.settings.tabStop)
 
   var highlight = currentMainWindowNode.highlight
-  highlight.updateHighlight(
+  highlight.updateViewHighlight(
     currentBufStatus,
     currentMainWindowNode,
     status.isSearchHighlight,
     status.searchHistory,
-    status.settings,
-    status.settings.colorMode)
+    status.settings)
 
   status.changeModeToInsertMode
 

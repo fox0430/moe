@@ -189,21 +189,19 @@ suite "search: searchAllOccurrence":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
 
-    let
-      line1 = ru"abc def"
-      line2 = ru"ghi abc"
-      line3 = ru"abc pqr"
-    status.bufStatus[0].buffer = initGapBuffer(@[line1, line2, line3])
+    const
+      Line1 = "abc def"
+      Line2 = "ghi abc"
+      Line3 = "abc pqr"
+      Buffer = @[Line1, Line2, Line3].toSeqRunes
+      Keyword = ru"abc"
+      IsIgnorecase = true
+      IsSmartcase = true
 
-    let
-      keyword = ru"abc"
-      buffer = status.bufStatus[0].buffer
-      isIgnorecase = true
-      isSmartcase = true
-      searchResult = buffer.searchAllOccurrence(
-        keyword,
-        isIgnorecase,
-        isSmartcase)
+    let searchResult = Buffer.searchAllOccurrence(
+      Keyword,
+      IsIgnorecase,
+      IsSmartcase)
 
     check searchResult.len == 3
 
@@ -220,21 +218,19 @@ suite "search: searchAllOccurrence":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
 
-    let
-      line1 = ru"abc def"
-      line2 = ru"ghi abc"
-      line3 = ru"abc pqr"
-    status.bufStatus[0].buffer = initGapBuffer(@[line1, line2, line3])
+    const
+      Line1 = "abc def"
+      Line2 = "ghi abc"
+      Line3 = "abc pqr"
+      Buffer = @[Line1, Line2, Line3].toSeqRunes
+      Keyword = ru"xyz"
+      IsIgnorecase = true
+      IsSmartcase = true
 
-    let
-      keyword = ru"xyz"
-      buffer = status.bufStatus[0].buffer
-      isIgnorecase = true
-      isSmartcase = true
-      searchResult = buffer.searchAllOccurrence(
-        keyword,
-        isIgnorecase,
-        isSmartcase)
+    let searchResult = Buffer.searchAllOccurrence(
+        Keyword,
+        IsIgnorecase,
+        IsSmartcase)
 
     check searchResult.len == 0
 
