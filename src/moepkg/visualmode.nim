@@ -509,13 +509,12 @@ proc changeModeToNormalMode(status: var EditorStatus) =
 
 proc exitVisualMode(status: var EditorStatus) =
     var highlight = currentMainWindowNode.highlight
-    highlight.updateHighlight(
+    highlight.updateViewHighlight(
       currentBufStatus,
       currentMainWindowNode,
       status.isSearchHighlight,
       status.searchHistory,
-      status.settings,
-      status.settings.colorMode)
+      status.settings)
 
     status.changeModeToNormalMode
 

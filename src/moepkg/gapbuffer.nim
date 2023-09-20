@@ -178,6 +178,10 @@ proc `[]`*[T](gapBuffer: GapBuffer[T], index: int): T =
   if index < gapBuffer.gapBegin: return gapBuffer.buffer[index]
   return gapBuffer.buffer[gapBuffer.gapEnd+(index-gapBuffer.gapBegin)]
 
+proc `[]`*[T](gapBuffer: Gapbuffer[T], s: HSlice[int, int]): seq[Runes] =
+  for i in s.a .. s.b:
+    result.add gapBuffer[i]
+
 proc lastSuitId*(gapBuffer: GapBuffer): int {.inline.} = gapBuffer.undoRedoStack.lastSuitId
 
 proc beginNewSuitIfNeeded*(gapBuffer: var GapBuffer) {.inline.} =

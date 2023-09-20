@@ -19,12 +19,61 @@
 
 import std/[options, deques]
 import independentutils, bufferstatus, highlight, color, windownode, gapbuffer,
-       unicodeext, editorview, searchutils, settings, movement, ui, syntaxcheck,
-       git, theme
+       unicodeext, editorview, searchutils, settings, ui, syntaxcheck, git,
+       theme
+
+type
+  BufferInView = ref object
+    buffer: seq[Runes]
+    originalLineRange: Range
+    currentPosition: BufferPosition
 
 proc initBufferPosition(
   n: WindowNode): BufferPosition {.inline.} =
+
     BufferPosition(line: n.currentLine, column: n.currentColumn)
+
+proc initBufferInView(
+  bufStatus: BufferStatus,
+  windowNode: WindowNode): BufferInView =
+    ## Returns displayed part of the buffer and info.
+
+    let
+      range = windowNode.view.rangeOfOriginalLineInView
+      firstLine = range.first
+      lastLine =
+        if range.last > bufStatus.buffer.high: bufStatus.buffer.high
+        else: range.last
+
+    return BufferInView(
+      buffer: bufStatus.buffer[firstLine .. lastLine],
+      originalLineRange: Range(first: firstLine, last: lastLine),
+      currentPosition: initBufferPosition(windowNode))
+
+proc currentPositionInView(b: BufferInView): BufferPosition {.inline.} =
+  BufferPosition(
+    line: b.currentPosition.line - b.originalLineRange.first,
+    column: b.currentPosition.column)
+
+proc currentLineInView(b: BufferInView): int {.inline.} =
+  b.currentPosition.line - b.originalLineRange.first
+
+proc originalLine(b: BufferInView, line: int): int {.inline.} =
+  b.originalLineRange.first + line
+
+proc originalPosition(
+  b: BufferInView,
+  line, column: int): BufferPosition {.inline.} =
+
+    BufferPosition(
+      line: b.originalLine(line),
+      column: column)
+
+proc originalPosition(
+  b: BufferInView,
+  position: BufferPosition): BufferPosition {.inline.} =
+
+    b.originalPosition(position.line, position.column)
 
 proc highlightSelectedArea(
   highlight: var Highlight,
@@ -73,391 +122,267 @@ proc highlightSelectedArea(
 
 proc highlightPairOfParen(
   highlight: var Highlight,
-  bufStatus: BufferStatus,
-  windowNode: WindowNode) =
+  bufferInView: BufferInView) =
+    ## Add a highlight for a parenthesis corresponding to the parenthesis on
+    ## the cursor.
 
-    if bufStatus.buffer.len == 0: return
+    template currentLine: int = bufferInView.currentLineInView
+    template currentColumn: int = bufferInView.currentPosition.column
 
-    if bufStatus.buffer.len == 1 and bufStatus.buffer[0].len < 1: return
+    template currentLineBuffer: Runes = bufferInView.buffer[currentLine]
 
-    if bufStatus.isExpandPosition(windowNode) or
-       bufStatus.buffer[windowNode.currentLine].len < 1: return
+    if currentColumn > currentLineBuffer.high: return
 
     let
-      currentPosition = windowNode.bufferPosition
-      rune = bufStatus.buffer[windowNode.currentLine][windowNode.currentColumn]
+      rune = currentLineBuffer[currentColumn]
+      correspondPosition =
+        if isOpenParen(rune):
+          searchClosingParen(bufferInView.buffer, bufferInView.currentPosition)
+        elif isCloseParen(rune):
+          searchOpeningParen(bufferInView.buffer, bufferInView.currentPosition)
+        else:
+          none(SearchResult)
 
-    if isOpenParen(rune):
-      # Search only in the displayed range on the view.
+    if correspondPosition.isSome:
+      let originalPosition = bufferInView.originalPosition(
+        correspondPosition.get.line, correspondPosition.get.column)
+      highlight.overwrite(ColorSegment(
+        firstRow: originalPosition.line,
+        firstColumn: originalPosition.column,
+        lastRow: originalPosition.line,
+        lastColumn: originalPosition.column,
+        color: EditorColorPairIndex.parenPair))
 
-      if windowNode.currentLine == bufStatus.buffer.high and
-         windowNode.currentColumn == bufStatus.buffer[windowNode.currentLine].high:
-           return
-
-      let
-        # TODO: Add bufStatus.next or gapbuffer.next and replace with it.
-        firstPositionLine =
-          if currentPosition.column + 1 < bufStatus.buffer[currentPosition.line].len:
-            currentPosition.line
-          else:
-            currentPosition.line + 1
-        firstPositionColumn =
-          if firstPositionLine == currentPosition.line: currentPosition.column + 1
-          else:
-            if bufStatus.buffer[firstPositionLine].high >= 0:
-              bufStatus.buffer[firstPositionLine].high
-            else:
-              0
-        firstPosition = BufferPosition(
-          line: firstPositionLine,
-          column: firstPositionColumn)
-
-        lastPositionLine =
-          if windowNode.view.originalLine[^1] >= 0:
-            windowNode.view.originalLine[^1]
-          else:
-            bufStatus.buffer.high
-        lastPositionColumn =
-          if bufStatus.buffer[lastPositionLine].high >= 0:
-            bufStatus.buffer[lastPositionLine].high
-          else:
-            0
-        lastPosition = BufferPosition(
-          line: lastPositionLine,
-          column: lastPositionColumn)
-
-        range = BufferRange(
-          first: firstPosition,
-          last: lastPosition)
-
-      let correspondParenPosition = bufStatus.matchingParenPair(range, rune)
-      if correspondParenPosition.isSome:
-        highlight.overwrite(ColorSegment(
-          firstRow: correspondParenPosition.get.line,
-          firstColumn: correspondParenPosition.get.column,
-          lastRow: correspondParenPosition.get.line,
-          lastColumn: correspondParenPosition.get.column,
-          color: EditorColorPairIndex.parenPair))
-    elif isCloseParen(rune):
-      # Search only in the displayed range on the view.
-      # TODO: Add bufStatus.prev or gapbuffer.prev and replace with it.
-      let
-        firstPositionLine =
-          if currentPosition.column > 0: currentPosition.line
-          elif currentPosition.line == 0: 0
-          else: currentPosition.line - 1
-        firstPositionColumn =
-          if currentPosition.column == 0:
-            0
-          elif firstPositionLine == currentPosition.line:
-            currentPosition.column - 1
-          else:
-            if bufStatus.buffer[firstPositionLine].high >= 0:
-              bufStatus.buffer[firstPositionLine].high
-            else:
-              0
-        firstPosition = BufferPosition(
-          line: firstPositionLine,
-          column: firstPositionColumn)
-
-        lastPositionLine =
-          if windowNode.view.originalLine[0] >= 0:
-            windowNode.view.originalLine[0]
-          else:
-            0
-        lastPosition = BufferPosition(
-          line: lastPositionLine,
-          column: 0)
-
-        range = BufferRange(
-          first: firstPosition,
-          last: lastPosition)
-
-      let correspondParenPosition = bufStatus.matchingParenPair(range, rune)
-      if correspondParenPosition.isSome:
-        highlight.overwrite(ColorSegment(
-          firstRow: correspondParenPosition.get.line,
-          firstColumn: correspondParenPosition.get.column,
-          lastRow: correspondParenPosition.get.line,
-          lastColumn: correspondParenPosition.get.column,
-          color: EditorColorPairIndex.parenPair))
-
-proc highlightOtherUsesCurrentWord(
+proc highlightCurrentWordElsewhere(
   highlight: var Highlight,
-  bufStatus: BufferStatus,
-  windowNode: WindowNode,
+  bufferInView: BufferInView,
   theme: ColorTheme,
   colorMode: ColorMode) =
-    # Highlighting other uses of the current word under the cursor
+    ## Add highlights the word on the cursor.
+    ## Ignore symbols, spaces and the word on the cursor.
 
-    let line = bufStatus.buffer[windowNode.currentLine]
+    proc isPunctOrSpace(r: Rune): bool {.inline.} =
+       (r != '_' and isPunct(r)) or isSpace(r)
 
-    if line.len < 1 or
-       windowNode.currentColumn > line.high or
-       (line[windowNode.currentColumn] != '_' and
-       unicodeext.isPunct(line[windowNode.currentColumn])) or
-       line[windowNode.currentColumn].isSpace: return
-    var
-      startCol = windowNode.currentColumn
-      endCol = windowNode.currentColumn
+    proc isHighlightWord(line, word: Runes, position: int): bool {.inline.} =
+      template beforeRune: Rune = line[position - 1]
+      template nextRune: Rune = line[position + word.high + 1]
 
-    # Set start col
-    for i in countdown(windowNode.currentColumn - 1, 0):
-      if (line[i] != '_' and unicodeext.isPunct(line[i])) or line[i].isSpace:
-        break
-      else: startCol.dec
+      # Check around the word.
+      line[position .. position + word.high] == word and
+      (position == 0 or isPunctOrSpace(beforeRune)) and
+      (position + word.high == line.high or isPunctOrSpace(nextRune))
 
-    # Set end col
-    for i in windowNode.currentColumn ..< line.len:
-      if (line[i] != '_' and unicodeext.isPunct(line[i])) or line[i].isSpace:
-        break
-      else: endCol.inc
-
-    let highlightWord = line[startCol ..< endCol]
+    proc isOnCursor(
+      currentWordPosition, position: BufferPosition): bool {.inline.} =
+        currentWordPosition == position
 
     let
-      range = windowNode.view.rangeOfOriginalLineInView
-      startLine = range.first
-      endLine =
-        if bufStatus.buffer.len > range.last + 1: range.last + 2
-        elif bufStatus.buffer.len > range.last: range.last + 1
-        else: range.last
+      # Get the word on the cursor.
+      currentPositionInView = bufferInView.currentPositionInView
+      highlightWord = currentWord(
+        bufferInView.buffer,
+        currentPositionInView)
 
-    # TODO: Remove isWordAtCursor
-    proc isWordAtCursor(currentLine, i, j: int): bool =
-      i == currentLine and (j >= startCol and j <= endCol)
+    if highlightWord.word.len == 0:
+      # Empty line or ignore character.
+      return
 
-    for i in startLine ..< endLine:
-      let line = bufStatus.buffer[i]
-      for j in 0 .. (line.len - highlightWord.len):
-        let endCol = j + highlightWord.len
-        if line[j ..< endCol] == highlightWord:
-          ## TODO: Refactor
-          if j == 0 or
-             (j > 0 and
-             ((line[j - 1] != '_' and
-             unicodeext.isPunct(line[j - 1])) or
-             line[j - 1].isSpace)):
-            if (j == (line.len - highlightWord.len)) or
-               ((line[j + highlightWord.len] != '_' and
-               unicodeext.isPunct(line[j + highlightWord.len])) or
-               line[j + highlightWord.len].isSpace):
+    let highlightWordPositionInView = BufferPosition(
+      line: currentPositionInView.line,
+      column: highlightWord.position)
 
-              if not isWordAtCursor(windowNode.currentLine, i, j):
-                # Do not highlight current word on the cursor.
-                # Init colors for current words.
-                let
-                  originalEditorColorPairIndex = highlight.getColorPair(i, j)
-                  originalColorPair = ColorThemeTable[theme][originalEditorColorPairIndex]
-                # TODO: Return `Result` type.
-                discard EditorColorPairIndex.currentWord.initColorPair(
-                  colorMode,
-                  originalColorPair.foreground,
-                  ColorThemeTable[theme][EditorColorPairIndex.currentWord].background)
+    let results = searchAllOccurrence(bufferInView.buffer, highlightWord.word)
+    for position in results:
+      template line: Runes = bufferInView.buffer[position.line]
 
-                highlight.overwrite(
-                  ColorSegment(
-                    firstRow: i,
-                    firstColumn: j,
-                    lastRow: i,
-                    lastColumn: j + highlightWord.high,
-                    color: EditorColorPairIndex.currentWord))
+      if isHighlightWord(line, highlightWord.word, position.column) and
+         not isOnCursor(highlightWordPositionInView, position):
+           # Overwrite colors for the current word.
+           let
+             originalPosition = bufferInView.originalPosition(position)
+
+             originalEditorColorPairIndex = highlight.getColorPair(
+               originalPosition.line,
+               originalPosition.column)
+             originalColorPair =
+               ColorThemeTable[theme][originalEditorColorPairIndex]
+           discard EditorColorPairIndex.currentWord.initColorPair(
+             colorMode,
+             originalColorPair.foreground,
+             ColorThemeTable[theme][EditorColorPairIndex.currentWord]
+             .background)
+
+           highlight.overwrite(
+             ColorSegment(
+               firstRow: originalPosition.line,
+               firstColumn: originalPosition.column,
+               lastRow: originalPosition.line,
+               lastColumn: originalPosition.column + highlightWord.word.high,
+               color: EditorColorPairIndex.currentWord))
 
 proc highlightTrailingSpaces(
   highlight: var Highlight,
-  bufStatus: BufferStatus,
-  windowNode: WindowNode) =
+  bufferInView: BufferInView) =
+    ## Add highlights for spaces at the end of lines. Ignore the current line.
 
-    # TODO: Fix condition
-    if bufStatus.isConfigMode or
-       bufStatus.isDebugMode: return
+    for i in 0 .. bufferInView.buffer.high:
+      template line: Runes = bufferInView.buffer[i]
 
-    let
-      currentLine = windowNode.currentLine
-      range = windowNode.view.rangeOfOriginalLineInView
-      buffer = bufStatus.buffer
-      startLine = range.first
-      endLine =
-        if buffer.len > range.last + 1: range.last + 2
-        elif buffer.len > range.last: range.last + 1
-        else: range.last
-
-    var colorSegments: seq[ColorSegment] = @[]
-    for i in startLine ..< endLine:
-      let line = buffer[i]
-      if line.len > 0 and i != currentLine:
+      if i != bufferInView.currentLineInView and line.len > 0:
         var countSpaces = 0
         for j in countdown(line.high, 0):
-          if line[j] == ru' ': inc countSpaces
+          if line[j] == ru' ': countSpaces.inc
           else: break
 
         if countSpaces > 0:
-          let firstColumn = line.len - countSpaces
-          colorSegments.add(ColorSegment(
-            firstRow: i,
-            firstColumn: firstColumn,
-            lastRow: i,
-            lastColumn: line.high,
-            color: EditorColorPairIndex.highlightTrailingSpaces))
-
-    for colorSegment in colorSegments:
-      highlight.overwrite(colorSegment)
+          let
+            originalLine = bufferInView.originalLine(i)
+            firstColumn = line.len - countSpaces
+          highlight.overwrite(
+            ColorSegment(
+              firstRow: originalLine,
+              firstColumn: firstColumn,
+              lastRow: originalLine,
+              lastColumn: line.high,
+              color: EditorColorPairIndex.highlightTrailingSpaces))
 
 proc highlightFullWidthSpace(
   highlight: var Highlight,
   windowNode: WindowNode,
-  bufferInView: GapBuffer[Runes],
-  range: Range) =
+  bufferInView: BufferInView) =
+    ## Add highlights for all full width spaces.
 
-    const
-      FullWidthSpace = ru"　"
-      Ignorecase = false
-      Smartcase = false
-    let allOccurrence = bufferInView.searchAllOccurrence(
-      FullWidthSpace,
-      Ignorecase,
-      Smartcase)
+    const FullWidthSpace = ru"　"
+    let allOccurrence = searchAllOccurrence(bufferInView.buffer, FullWidthSpace)
 
     for pos in allOccurrence:
       let colorSegment = ColorSegment(
-        firstRow: range.first + pos.line,
+        firstRow: bufferInView.originalLineRange.first + pos.line,
         firstColumn: pos.column,
-        lastRow: range.first + pos.line,
+        lastRow: bufferInView.originalLineRange.first + pos.line,
         lastColumn: pos.column,
         color: EditorColorPairIndex.highlightFullWidthSpace)
       highlight.overwrite(colorSegment)
 
 proc highlightSearchResults(
   highlight: var Highlight,
-  bufStatus: BufferStatus,
-  bufferInView: GapBuffer[Runes],
-  range: Range,
+  bufferInView: BufferInView,
   keyword: Runes,
   settings: EditorSettings,
   isSearchHighlight: bool) =
 
-  let
-    ignorecase = settings.ignorecase
-    smartcase = settings.smartcase
-    allOccurrence = searchAllOccurrence(
-      bufferInView,
-      keyword,
-      ignorecase,
-      smartcase)
+    let
+      allOccurrence = searchAllOccurrence(
+        bufferInView.buffer,
+        keyword,
+        settings.ignorecase,
+        settings.smartcase)
 
-    color =
-      if isSearchHighlight: EditorColorPairIndex.searchResult
-      else: EditorColorPairIndex.replaceText
+      color =
+        if isSearchHighlight: EditorColorPairIndex.searchResult
+        else: EditorColorPairIndex.replaceText
 
-  for pos in allOccurrence:
-    let colorSegment = ColorSegment(
-      firstRow: range.first + pos.line,
-      firstColumn: pos.column,
-      lastRow: range.first + pos.line,
-      lastColumn: pos.column + keyword.high,
-      color: color)
-    highlight.overwrite(colorSegment)
+    for pos in allOccurrence:
+      let colorSegment = ColorSegment(
+        firstRow: bufferInView.originalLineRange.first + pos.line,
+        firstColumn: pos.column,
+        lastRow: bufferInView.originalLineRange.first + pos.line,
+        lastColumn: pos.column + keyword.high,
+        color: color)
+      highlight.overwrite(colorSegment)
 
 proc highlightSyntaxCheckerReuslts(
   highlight: var Highlight,
-  range: Range,
+  bufferInView: BufferInView,
   syntaxErrors: seq[SyntaxError]) =
-    ## Display underline and highlight syntax errors.
+    ## Add highlights for syntax checker results.
+
+    proc inRange(b: BufferInView, position: BufferPosition): bool {.inline.} =
+      position.line >= b.originalLineRange.first and
+      position.line <= b.originalLineRange.last
 
     for se in syntaxErrors:
-      if se.position.line >= range.first and se.position.line <= range.last:
-        let color =
-          case se.messageType:
-            of SyntaxCheckMessageType.info:
-              EditorColorPairIndex.syntaxCheckInfo
-            of SyntaxCheckMessageType.hint:
-              EditorColorPairIndex.syntaxCheckHint
-            of SyntaxCheckMessageType.warning:
-              EditorColorPairIndex.syntaxCheckWarn
-            of SyntaxCheckMessageType.error:
-              EditorColorPairIndex.syntaxCheckErr
-
+      if inRange(bufferInView, se.position):
+        let
+          originalPosition = bufferInView.originalPosition(se.position)
+          color =
+            case se.messageType:
+              of SyntaxCheckMessageType.info:
+                EditorColorPairIndex.syntaxCheckInfo
+              of SyntaxCheckMessageType.hint:
+                EditorColorPairIndex.syntaxCheckHint
+              of SyntaxCheckMessageType.warning:
+                EditorColorPairIndex.syntaxCheckWarn
+              of SyntaxCheckMessageType.error:
+                EditorColorPairIndex.syntaxCheckErr
         highlight.overwrite(ColorSegment(
-          firstRow: se.position.line,
-          firstColumn: se.position.column,
-          lastRow: se.position.line,
-          lastColumn: se.position.column,
+          firstRow: originalPosition.line,
+          firstColumn: originalPosition.column,
+          lastRow: originalPosition.line,
+          lastColumn: originalPosition.column,
           color: color,
           attribute: Attribute.underline))
 
 proc highlightGitConflicts(
   highlight: var Highlight,
-  bufStatus: BufferStatus,
-  range: Range) =
-    ## Highlight Git conflict marker lines.
+  bufferInView: BufferInView) =
+    ## Add highlights for git conflict marker lines.
 
-    for i in range.first .. min(range.last, bufStatus.buffer.high):
-      if bufStatus.buffer[i].isGitConflictStartMarker or
-         bufStatus.buffer[i].isGitConflictDivideMarker or
-         bufStatus.buffer[i].isGitConflictEndMarker:
-           highlight.overwrite(ColorSegment(
-             firstRow: i,
-             firstColumn: 0,
-             lastRow: i,
-             lastColumn: bufStatus.buffer[i].high,
-             color: EditorColorPairIndex.gitConflict,
-             attribute: Attribute.normal))
+    proc isHighlightLine(line: Runes): bool {.inline.} =
+      line.isGitConflictStartMarker or
+      line.isGitConflictDivideMarker or
+      line.isGitConflictEndMarker
 
-proc updateHighlight*(
+    for i in 0 .. bufferInView.buffer.high:
+      if isHighlightLine(bufferInView.buffer[i]):
+        let originalLine = bufferInView.originalLine(i)
+        highlight.overwrite(ColorSegment(
+          firstRow: originalLine,
+          firstColumn: 0,
+          lastRow: originalLine,
+          lastColumn: bufferInView.buffer[i].high,
+          color: EditorColorPairIndex.gitConflict,
+          attribute: Attribute.normal))
+
+proc updateViewHighlight*(
   highlight: var Highlight,
   bufStatus: BufferStatus,
   windowNode: var WindowNode,
   isSearchHighlight: bool,
   searchHistory: seq[Runes],
-  settings: EditorSettings,
-  colorMode: ColorMode) =
+  settings: EditorSettings) =
+
+    let bufferInView = initBufferInView(bufStatus, windowNode)
 
     if settings.highlight.currentWord:
-      highlight.highlightOtherUsesCurrentWord(
-        bufStatus,
-        windowNode,
+      highlight.highlightCurrentWordElsewhere(
+        bufferInView,
         settings.editorColorTheme,
-        colorMode)
+        settings.colorMode)
 
     if isVisualMode(bufStatus.mode):
       highlight.highlightSelectedArea(bufStatus, windowNode.initBufferPosition)
 
     if settings.highlight.pairOfParen:
-      highlight.highlightPairOfParen(bufStatus, windowNode)
+      highlight.highlightPairOfParen(bufferInView)
 
-    let
-      range = windowNode.view.rangeOfOriginalLineInView
-      startLine = range.first
-      endLine =
-        if bufStatus.buffer.len > range.last + 1: range.last + 2
-        elif bufStatus.buffer.len > range.last: range.last + 1
-        else: range.last
+    if settings.highlight.trailingSpaces and bufStatus.isEditMode:
+      highlight.highlightTrailingSpaces(bufferInView)
 
-    var bufferInView = initGapBuffer[Runes]()
-    for i in startLine ..< endLine: bufferInView.add(bufStatus.buffer[i])
-
-    # highlight trailing spaces
-    if settings.highlight.trailingSpaces:
-      highlight.highlightTrailingSpaces(bufStatus, windowNode)
-
-    # highlight full width space
     if settings.highlight.fullWidthSpace:
-      highlight.highlightFullWidthSpace(windowNode, bufferInView, range)
+      highlight.highlightFullWidthSpace(windowNode, bufferInView)
 
-    # highlight search results
     if isSearchHighlight and searchHistory.len > 0:
       highlight.highlightSearchResults(
-        bufStatus,
         bufferInView,
-        range,
         searchHistory[^1],
         settings,
         isSearchHighlight)
 
     if bufStatus.syntaxCheckResults.len > 0:
-      # Highlight syntax chcker results
       highlight.highlightSyntaxCheckerReuslts(
-        range,
+        bufferInView,
         bufStatus.syntaxCheckResults)
 
-    highlight.highlightGitConflicts(bufStatus, range)
+    highlight.highlightGitConflicts(bufferInView)

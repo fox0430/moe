@@ -126,7 +126,7 @@ proc searchBufferReversely*(
         return SearchResult(line: lineNumber, column: position.get).some
 
 proc searchAllOccurrence*(
-  buffer: GapBuffer[Runes],
+  buffer: seq[Runes],
   keyword: Runes,
   isIgnorecase, isSmartcase: bool): seq[SearchResult] =
     ## Return a buffer position if a keyword matches.
@@ -150,6 +150,13 @@ proc searchAllOccurrence*(
         result.add SearchResult(line: lineNumber, column: first + position.get)
         first += position.get + keyword.len
 
+proc searchAllOccurrence*(
+  buffer: seq[Runes],
+  keyword: Runes): seq[SearchResult] {.inline.} =
+    ## Return a buffer position if a keyword matches.
+
+    searchAllOccurrence(buffer, keyword, false, false)
+
 proc saveSearchHistory*(
   searchHistory: var seq[Runes],
   keyword: Runes,
@@ -169,6 +176,68 @@ proc saveSearchHistory*(
           first = searchHistory.len - limit
           last = first + limit - 1
         searchHistory = searchHistory[first .. last]
+
+proc searchClosingParen*(
+  buffer: seq[Runes],
+  openParenPosition: BufferPosition): Option[SearchResult] =
+    ## If `parenPosition` is an opening paren,
+    ## search for the corresponding closing paren and return its position.
+
+    if openParenPosition.line > buffer.high or
+       openParenPosition.column > buffer[openParenPosition.line].high:
+         return
+
+    let openParen = buffer[openParenPosition.line][openParenPosition.column]
+
+    if (openParen == ru'"') or (openParen == ru'\''): return
+
+    var depth = 0
+    let closeParen = correspondingCloseParen(openParen)
+    for i in openParenPosition.line .. buffer.high:
+      if buffer[i].len > 0:
+        let
+          startColumn =
+            if i == openParenPosition.line: openParenPosition.column
+            else: 0
+          endColumn = buffer[i].high
+
+        for j in startColumn .. endColumn:
+          if buffer[i][j] == openParen: depth.inc
+          elif buffer[i][j] == closeParen: depth.dec
+
+          if depth == 0:
+            return SearchResult(line: i, column: j).some
+
+proc searchOpeningParen*(
+  buffer: seq[Runes],
+  closeParenPosition: BufferPosition): Option[SearchResult] =
+    ## If `parenPosition` is an closing paren,
+    ## Search for the corresponding opening paren and return its position.
+
+    if closeParenPosition.line > buffer.high or
+       closeParenPosition.column > buffer[closeParenPosition.line].high:
+         return
+
+    let closeParen = buffer[closeParenPosition.line][closeParenPosition.column]
+
+    if (closeParen  == ru'"') or (closeParen == ru'\''): return
+
+    var depth = 0
+    let openParen = correspondingOpenParen(closeParen)
+    for i in countdown(closeParenPosition.line, 0):
+      if buffer[i].len > 0:
+        let
+          startColumn = 0
+          endColumn =
+            if i == closeParenPosition.line: closeParenPosition.column
+            else: buffer[i].high
+
+        for j in countdown(endColumn, startColumn):
+          if buffer[i][j] == closeParen: depth.inc
+          elif buffer[i][j] == openParen: depth.dec
+
+          if depth == 0:
+            return SearchResult(line: i, column: j).some
 
 proc assertRange(range: BufferRange) =
   doAssert range.first.line >= 0
@@ -327,3 +396,40 @@ proc matchingParenPair*(
           last: BufferPosition(line: 0, column: 0))
 
       return bufStatus.searchOpeningParen(range, currentRune)
+
+proc currentWord*(
+  buffer: seq[Runes],
+  currentPosition: BufferPosition): tuple[word: Runes, position: int] =
+    ## Return the word with position on the current cursor position.
+    ## Ignore symbols and spaces.
+
+    template lineBuffer: Runes = buffer[currentPosition.line]
+
+    template currentRune: Rune = lineBuffer[currentPosition.column]
+
+    proc isIgnoreRune(r: Rune): bool {.inline.} =
+       (r != '_' and isPunct(r)) or isSpace(r)
+
+    if
+       buffer.len < 1 or
+       lineBuffer.len < 1 or
+       currentPosition.column > lineBuffer.high or
+       isIgnoreRune(currentRune):
+         return
+
+    var
+      startCol = currentPosition.column
+      endCol = currentPosition.column
+
+    # Find the start col
+    for i in countdown(currentPosition.column - 1, 0):
+      if isIgnoreRune(lineBuffer[i]): break
+      else: startCol.dec
+
+    # Find the end col
+    for i in currentPosition.column + 1 .. lineBuffer.high:
+      if isIgnoreRune(lineBuffer[i]): break
+      else: endCol.inc
+
+    return (word: lineBuffer[startCol .. endCol],
+            position: startCol)

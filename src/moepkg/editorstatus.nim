@@ -758,6 +758,8 @@ proc update*(status: var EditorStatus) =
           min(node.view.originalLine[0],
           b.buffer.high))
 
+        node.view.seekCursor(b.buffer, node.currentLine, node.currentColumn)
+
         # NOTE: node.highlight is not directly change here for performance.
         var highlight = node.highlight
 
@@ -773,15 +775,12 @@ proc update*(status: var EditorStatus) =
                  b.buffer,
                  node.currentLine)
         elif b.isEditMode:
-          highlight.updateHighlight(
+          highlight.updateViewHighlight(
             b,
             node,
             status.isSearchHighlight,
             status.searchHistory,
-            settings,
-            status.settings.colorMode)
-
-        node.view.seekCursor(b.buffer, node.currentLine, node.currentColumn)
+            settings)
 
         if node.view.sidebar.isSome:
           # Update the EditorView.Sidebar.buffer

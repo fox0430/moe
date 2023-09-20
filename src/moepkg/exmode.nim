@@ -986,13 +986,12 @@ proc listAllBufferCommand(status: var EditorStatus) =
   currentMainWindowNode.currentLine = 0
 
   var highlight = currentMainWindowNode.highlight
-  highlight.updateHighlight(
+  highlight.updateViewHighlight(
     currentBufStatus,
     currentMainWindowNode,
     status.isSearchHighlight,
     status.searchHistory,
-    status.settings,
-    status.settings.colorMode)
+    status.settings)
 
   while true:
     status.update
