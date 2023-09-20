@@ -234,6 +234,292 @@ suite "search: searchAllOccurrence":
 
     check searchResult.len == 0
 
+suite "search: searchClosingParen":
+  const
+    OpenParens = [ru'(', ru'{', ru'[']
+    CloseParens = [ru')', ru'}', ru']']
+
+  proc searchClosingParenTest(
+    testIndex: int,
+    openParen: Rune,
+    buffer: seq[Runes],
+    closeParenPosition: BufferPosition,
+    expectResult: Option[BufferPosition]) =
+
+      let testTitle =
+        "Case " & $testIndex & ": '" & $openParen & "'"
+
+      test testTitle:
+        let searchResult = searchClosingParen(buffer, closeParenPosition)
+        check searchResult == expectResult
+
+  block searchClosingParenTestCase1:
+    # Case 1 is starting the search on an empty line.
+    const
+      TestIndex = 1
+      Buffer = @[ru""]
+      CurrentPosition = BufferPosition(line: 0, column: 0)
+      ExpectResult = SearchResult.none
+
+    for paren in OpenParens:
+      searchClosingParenTest(
+        TestIndex,
+        paren,
+        Buffer,
+        CurrentPosition,
+        ExpectResult)
+
+  block searchClosingParenTestCase2:
+    const TestIndex = 2
+
+    for i in 0 .. OpenParens.high:
+      let buffer = @[toRunes(fmt"{OpenParens[i]}{CloseParens[i]}")]
+      const
+        CurrentPosition = BufferPosition(line: 0, column: 0)
+        ExpectResult = SearchResult(line: 0, column: 1).some
+
+      searchClosingParenTest(
+        TestIndex,
+        OpenParens[i],
+        buffer,
+        CurrentPosition,
+        ExpectResult)
+
+  block searchClosingParenTestCase3:
+    const TestIndex = 3
+
+    for i in 0 .. OpenParens.high:
+      let buffer = @[toRunes(fmt"{OpenParens[i]} {CloseParens[i]}")]
+      const
+        CurrentPosition = BufferPosition(line: 0, column: 0)
+        ExpectPosition = SearchResult(line: 0, column: 2).some
+      searchClosingParenTest(
+        TestIndex,
+        OpenParens[i],
+        buffer,
+        CurrentPosition,
+        ExpectPosition)
+
+  block searchClosingParenTestCase4:
+    const TestIndex = 4
+
+    for i in 0 .. OpenParens.high:
+      let buffer = @[OpenParens[i].toRunes, CloseParens[i].toRunes]
+      const
+        CurrentPosition = BufferPosition(line: 0, column: 0)
+        ExpectResult = SearchResult(line: 1, column: 0).some
+      searchClosingParenTest(
+        TestIndex,
+        OpenParens[i],
+        buffer,
+        CurrentPosition,
+        ExpectResult)
+
+  block searchClosingParenTestCase5:
+    const TestIndex = 5
+
+    for i in 0 .. OpenParens.high:
+      let buffer = @[OpenParens[i].toRunes, ru"", CloseParens[i].toRunes]
+      const
+        CurrentPosition = BufferPosition(line: 0, column: 0)
+        ExpectResult = SearchResult(line: 2, column: 0).some
+      searchClosingParenTest(
+        TestIndex,
+        OpenParens[i],
+        buffer,
+        CurrentPosition,
+        ExpectResult)
+
+  block searchClosingParenTestCase6:
+    const TestIndex = 6
+
+    for i in 0 .. OpenParens.high:
+      let buffer = @[OpenParens[i].toRunes, ru""]
+      const
+        CurrentPosition = BufferPosition(line: 0, column: 0)
+        ExpectResult = none(SearchResult)
+      searchClosingParenTest(
+        TestIndex,
+        OpenParens[i],
+        buffer,
+        CurrentPosition,
+        ExpectResult)
+
+  block searchOpeningParenTest7:
+    # matchingParenPair should ignore '"'.
+    const
+      TestIndex = 7
+      Buffer = @["\"\"".toRunes]
+      Paren = ru'"'
+      CurrentPosition = BufferPosition(line: 0, column: 0)
+      ExpectResult = none(SearchResult)
+
+    searchClosingParenTest(
+      TestIndex,
+      Paren,
+      Buffer,
+      CurrentPosition,
+      ExpectResult)
+
+  block searchOpeningParenTest8:
+    # matchingParenPair should ignore '''.
+    const
+      TestIndex = 8
+      Buffer = @["''".toRunes]
+      Paren = ru'\''
+      CurrentPosition = BufferPosition(line: 0, column: 0)
+      ExpectResult = none(SearchResult)
+
+    searchClosingParenTest(
+      TestIndex,
+      Paren,
+      Buffer,
+      CurrentPosition,
+      ExpectResult)
+
+suite "search: searchOpeningParen":
+  const
+    OpenParens = [ru'(', ru'{', ru'[']
+    CloseParens = [ru')', ru'}', ru']']
+
+  proc searchOpeningParenTest(
+    testIndex: int,
+    closeParen: Rune,
+    buffer: seq[Runes],
+    closeParenPosition: BufferPosition,
+    expectResult: Option[BufferPosition]) =
+
+      let testTitle =
+        "Case " & $testIndex & ": '" & $closeParen & "'"
+
+      test testTitle:
+        let searchResult = searchOpeningParen(buffer, closeParenPosition)
+        check searchResult == expectResult
+
+  block searchOpeningParenTestCase1:
+    # Case 1 is starting the search on an empty line.
+    const
+      TestIndex = 1
+      Buffer = @[ru""]
+      CurrentPosition = BufferPosition(line: 0, column: 0)
+      ExpectResult = SearchResult.none
+
+    for paren in CloseParens:
+      searchOpeningParenTest(
+        TestIndex,
+        paren,
+        Buffer,
+        CurrentPosition,
+        ExpectResult)
+
+  block searchOpeningParenTestCase2:
+    const TestIndex = 2
+
+    for i in 0 .. OpenParens.high:
+      let buffer = @[toRunes(fmt"{OpenParens[i]}{CloseParens[i]}")]
+      const
+        CurrentPosition = BufferPosition(line: 0, column: 1)
+        ExpectResult = SearchResult(line: 0, column: 0).some
+
+      searchOpeningParenTest(
+        TestIndex,
+        CloseParens[i],
+        buffer,
+        CurrentPosition,
+        ExpectResult)
+
+  block searchOpeningParenTestCase3:
+    const TestIndex = 3
+
+    for i in 0 .. OpenParens.high:
+      let buffer = @[toRunes(fmt"{OpenParens[i]} {CloseParens[i]}")]
+      const
+        CurrentPosition = BufferPosition(line: 0, column: 2)
+        ExpectPosition = SearchResult(line: 0, column: 0).some
+      searchOpeningParenTest(
+        TestIndex,
+        CloseParens[i],
+        buffer,
+        CurrentPosition,
+        ExpectPosition)
+
+  block searchOpeningParenTestCase4:
+    const TestIndex = 4
+
+    for i in 0 .. OpenParens.high:
+      let buffer = @[OpenParens[i].toRunes, CloseParens[i].toRunes]
+      const
+        CurrentPosition = BufferPosition(line: 1, column: 0)
+        ExpectResult = SearchResult(line: 0, column: 0).some
+      searchOpeningParenTest(
+        TestIndex,
+        CloseParens[i],
+        buffer,
+        CurrentPosition,
+        ExpectResult)
+
+  block searchOpeningParenTestCase5:
+    const TestIndex = 5
+
+    for i in 0 .. OpenParens.high:
+      let buffer = @[OpenParens[i].toRunes, ru"", CloseParens[i].toRunes]
+      const
+        CurrentPosition = BufferPosition(line: 2, column: 0)
+        ExpectResult = SearchResult(line: 0, column: 0).some
+      searchOpeningParenTest(
+        TestIndex,
+        CloseParens[i],
+        buffer,
+        CurrentPosition,
+        ExpectResult)
+
+  block searchOpeningParenTestCase6:
+    const TestIndex = 6
+
+    for i in 0 .. OpenParens.high:
+      let buffer = @[CloseParens[i].toRunes, ru""]
+      const
+        CurrentPosition = BufferPosition(line: 0, column: 0)
+        ExpectResult = none(SearchResult)
+      searchOpeningParenTest(
+        TestIndex,
+        CloseParens[i],
+        buffer,
+        CurrentPosition,
+        ExpectResult)
+
+  block searchOpeningParenTest7:
+    # matchingParenPair should ignore '"'.
+    const
+      TestIndex = 7
+      Buffer = @["\"\"".toRunes]
+      Paren = ru'"'
+      CurrentPosition = BufferPosition(line: 0, column: 0)
+      ExpectResult = none(SearchResult)
+
+    searchOpeningParenTest(
+      TestIndex,
+      Paren,
+      Buffer,
+      CurrentPosition,
+      ExpectResult)
+
+  block searchOpeningParenTest8:
+    # matchingParenPair should ignore '''.
+    const
+      TestIndex = 8
+      Buffer = @["''".toRunes]
+      Paren = ru'\''
+      CurrentPosition = BufferPosition(line: 0, column: 0)
+      ExpectResult = none(SearchResult)
+
+    searchOpeningParenTest(
+      TestIndex,
+      Paren,
+      Buffer,
+      CurrentPosition,
+      ExpectResult)
+
 suite "search: matchingParenPair":
   let
     openParens = @[ru'(', ru'{', ru'[']

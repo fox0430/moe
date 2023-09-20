@@ -17,7 +17,8 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, heapqueue, options, strutils]
+import std/[unittest, heapqueue, options, strutils, strformat, importutils,
+            sequtils]
 import moepkg/syntax/highlite
 import moepkg/[editorstatus, highlight, color, gapbuffer, unicodeext, movement,
                windownode, ui, independentutils, bufferstatus]
@@ -34,144 +35,213 @@ proc initHighlight(status: EditorStatus) {.inline.} =
     status.settings.highlight.reservedWords,
     currentBufStatus.language)
 
-test "Highlight current word 1":
-  var status = initEditorStatus()
-  status.addNewBufferInCurrentWin
-  currentBufStatus.buffer = initGapBuffer(@[ru"test abc test"])
-  status.initHighlight
+suite "viewhighlight: initBufferInView":
+  privateAccess(BufferInView)
 
-  updateTerminalSize(100, 100)
-  status.resize
-  status.update
+  test "Less than the terminal size":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"line1"])
+    status.initHighlight
 
-  let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
-  var highlight = currentMainWindowNode.highlight
-  highlight.highlightCurrentWordElsewhere(
-    bufferInView,
-    status.settings.editorColorTheme,
-    status.settings.colorMode)
+    status.resize(10, 10)
+    status.update
 
-  check(highlight[0].color == EditorColorPairIndex.default)
-  check(highlight[1].color == EditorColorPairIndex.currentWord)
+    let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
 
-test "Highlight current word 2":
-  var status = initEditorStatus()
-  status.addNewBufferInCurrentWin
-  currentBufStatus.buffer = initGapBuffer(@[ru"test", ru"test"])
+    check currentMainWindowNode.h == 8
+    check bufferInView.buffer == @[ru"line1"]
+    check bufferInView.originalLineRange == Range(first: 0, last: 0)
+    check bufferInView.currentPosition == BufferPosition(line: 0, column: 0)
 
-  updateTerminalSize(100, 100)
-  status.resize
-  status.update
+  test "More than the terminal size":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = toSeq(0 .. 20).mapIt(it.toRunes).toGapBuffer
+    status.initHighlight
 
-  let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
-  var highlight = currentMainWindowNode.highlight
-  highlight.highlightCurrentWordElsewhere(
-    bufferInView,
-    status.settings.editorColorTheme,
-    status.settings.colorMode)
+    status.resize(10, 10)
+    status.update
 
-  check(highlight[0].color == EditorColorPairIndex.default)
-  check(highlight[1].color == EditorColorPairIndex.currentWord)
+    let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
 
-test "Highlight current word 3":
-  var status = initEditorStatus()
-  status.addNewBufferInCurrentWin
-  currentBufStatus.buffer = initGapBuffer(@[ru"[test]", ru"test"])
+    check currentMainWindowNode.h == 8
+    check bufferInView.buffer == toSeq(0 .. 6).mapIt(it.toRunes)
+    check bufferInView.originalLineRange == Range(first: 0, last: 6)
+    check bufferInView.currentPosition == BufferPosition(line: 0, column: 0)
 
-  updateTerminalSize(100, 100)
-  status.resize
-  currentBufStatus.keyRight(currentMainWindowNode)
-  status.update
+  test "More than the terminal size 2":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = toSeq(0 .. 20).mapIt(it.toRunes).toGapBuffer
+    status.initHighlight
+    currentMainWindowNode.currentLine = 19
 
-  let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
-  var highlight = currentMainWindowNode.highlight
-  highlight.highlightCurrentWordElsewhere(
-    bufferInView,
-    status.settings.editorColorTheme,
-    status.settings.colorMode)
+    status.resize(10, 10)
+    status.update
 
-  check(highlight[0].color == EditorColorPairIndex.default)
-  check(highlight[1].color == EditorColorPairIndex.currentWord)
+    let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
 
-test "Highlight full width space 1":
-  var status = initEditorStatus()
+    check currentMainWindowNode.h == 8
+    check bufferInView.buffer == toSeq(13 .. 19).mapIt(it.toRunes)
+    check bufferInView.originalLineRange == Range(first: 13, last: 19)
+    check bufferInView.currentPosition == BufferPosition(line: 19, column: 0)
 
-  status.addNewBufferInCurrentWin
-  currentBufStatus.buffer = initGapBuffer(@[ru"", ru"　"])
+suite "viewhighlight: highlightCurrentWordElsewhere":
+  test "Same line":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"test abc test"])
+    status.initHighlight
 
-  status.settings.highlight.currentWord = false
-  status.initHighlight
+    status.resize(100, 100)
+    status.update
 
-  status.resize(100, 100)
-  status.update
+    let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
+    var highlight = currentMainWindowNode.highlight
+    highlight.highlightCurrentWordElsewhere(
+      bufferInView,
+      status.settings.editorColorTheme,
+      status.settings.colorMode)
 
-  let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
-  var highlight = currentMainWindowNode.highlight
-  highlight.highlightFullWidthSpace(
-    currentMainWindowNode,
-    bufferInView)
+    check highlight[0].color == EditorColorPairIndex.default
+    check highlight[1].color == EditorColorPairIndex.currentWord
 
-  check(highlight[0].color == EditorColorPairIndex.default)
-  check(highlight[1].color == EditorColorPairIndex.highlightFullWidthSpace)
+  test "Another line":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"test", ru"test"])
 
-test "Highlight full width space 2":
-  var status = initEditorStatus()
-  status.addNewBufferInCurrentWin
-  currentBufStatus.buffer = initGapBuffer(@[ru"abc　"])
+    status.resize(100, 100)
+    status.update
 
-  status.settings.highlight.currentWord = false
-  status.initHighlight
+    let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
+    var highlight = currentMainWindowNode.highlight
+    highlight.highlightCurrentWordElsewhere(
+      bufferInView,
+      status.settings.editorColorTheme,
+      status.settings.colorMode)
 
-  status.resize(100, 100)
-  status.update
+    check highlight[0].color == EditorColorPairIndex.default
+    check highlight[1].color == EditorColorPairIndex.currentWord
 
-  let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
-  var highlight = currentMainWindowNode.highlight
-  highlight.highlightFullWidthSpace(
-    currentMainWindowNode,
-    bufferInView)
+  test "With brackets":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"[test]", ru"test"])
 
-  check(highlight[0].color == EditorColorPairIndex.default)
-  check(highlight[1].color == EditorColorPairIndex.highlightFullWidthSpace)
+    status.resize(100, 100)
+    currentBufStatus.keyRight(currentMainWindowNode)
+    status.update
 
-test "Highlight full width space 3":
-  var status = initEditorStatus()
-  status.addNewBufferInCurrentWin
-  currentBufStatus.buffer = initGapBuffer(@[ru"　"])
+    let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
+    var highlight = currentMainWindowNode.highlight
+    highlight.highlightCurrentWordElsewhere(
+      bufferInView,
+      status.settings.editorColorTheme,
+      status.settings.colorMode)
 
-  status.settings.highlight.currentWord = false
-  status.initHighlight
+    check highlight[0].color == EditorColorPairIndex.default
+    check highlight[1].color == EditorColorPairIndex.currentWord
 
-  status.resize(100, 100)
-  status.update
+  test "With underbar":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"_test", ru"_test"])
 
-  let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
-  var highlight = currentMainWindowNode.highlight
-  highlight.highlightFullWidthSpace(currentMainWindowNode, bufferInView)
+    status.resize(100, 100)
+    currentBufStatus.keyRight(currentMainWindowNode)
+    status.update
 
-  check(highlight[0].color == EditorColorPairIndex.highlightFullWidthSpace)
+    let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
+    var highlight = currentMainWindowNode.highlight
+    highlight.highlightCurrentWordElsewhere(
+      bufferInView,
+      status.settings.editorColorTheme,
+      status.settings.colorMode)
 
-test "Highlight full width space 4":
-  var status = initEditorStatus()
-  status.addNewBufferInCurrentWin
-  currentBufStatus.buffer = initGapBuffer(@[ru"a　b"])
+    check highlight[0].color == EditorColorPairIndex.default
+    check highlight[1].color == EditorColorPairIndex.currentWord
 
-  status.settings.highlight.currentWord = false
-  status.initHighlight
+suite "viewhighlight: highlightFullWidthSpace":
+  test "Highlight full width space 1":
+    var status = initEditorStatus()
 
-  updateTerminalSize(100, 100)
-  status.resize
-  status.update
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"", ru"　"])
 
-  let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
-  var highlight = currentMainWindowNode.highlight
-  highlight.highlightFullWidthSpace(currentMainWindowNode, bufferInView)
+    status.settings.highlight.currentWord = false
+    status.initHighlight
 
-  check(highlight[0].color == EditorColorPairIndex.default)
-  check(highlight[1].color == EditorColorPairIndex.highlightFullWidthSpace)
-  check(highlight[2].color == EditorColorPairIndex.default)
+    status.resize(100, 100)
+    status.update
 
-suite "Highlight trailing spaces":
+    let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
+    var highlight = currentMainWindowNode.highlight
+    highlight.highlightFullWidthSpace(
+      currentMainWindowNode,
+      bufferInView)
+
+    check highlight[0].color == EditorColorPairIndex.default
+    check highlight[1].color == EditorColorPairIndex.highlightFullWidthSpace
+
+  test "Highlight full width space 2":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc　"])
+
+    status.settings.highlight.currentWord = false
+    status.initHighlight
+
+    status.resize(100, 100)
+    status.update
+
+    let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
+    var highlight = currentMainWindowNode.highlight
+    highlight.highlightFullWidthSpace(
+      currentMainWindowNode,
+      bufferInView)
+
+    check highlight[0].color == EditorColorPairIndex.default
+    check highlight[1].color == EditorColorPairIndex.highlightFullWidthSpace
+
+  test "Highlight full width space 3":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"　"])
+
+    status.settings.highlight.currentWord = false
+    status.initHighlight
+
+    status.resize(100, 100)
+    status.update
+
+    let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
+    var highlight = currentMainWindowNode.highlight
+    highlight.highlightFullWidthSpace(currentMainWindowNode, bufferInView)
+
+    check highlight[0].color == EditorColorPairIndex.highlightFullWidthSpace
+
+  test "Highlight full width space 4":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"a　b"])
+
+    status.settings.highlight.currentWord = false
+    status.initHighlight
+
+    status.resize(100, 100)
+    status.update
+
+    let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
+    var highlight = currentMainWindowNode.highlight
+    highlight.highlightFullWidthSpace(currentMainWindowNode, bufferInView)
+
+    check highlight[0].color == EditorColorPairIndex.default
+    check highlight[1].color == EditorColorPairIndex.highlightFullWidthSpace
+    check highlight[2].color == EditorColorPairIndex.default
+
+suite "viewhighlight: Highlight trailing spaces":
   test "Highlight trailing spaces 1":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
@@ -193,14 +263,13 @@ suite "Highlight trailing spaces":
       status.searchHistory,
       status.settings)
 
-    updateTerminalSize(100, 100)
-    status.resize
+    status.resize(100, 100)
     status.update
 
     let node = currentMainWindowNode
-    check(node.highlight[0].color == EditorColorPairIndex.default)
-    check(node.highlight[0].firstColumn == 0)
-    check(node.highlight[0].lastColumn == 2)
+    check node.highlight[0].color == EditorColorPairIndex.default
+    check node.highlight[0].firstColumn == 0
+    check node.highlight[0].lastColumn == 2
 
   test "Highlight trailing spaces 2":
     var status = initEditorStatus()
@@ -222,17 +291,17 @@ suite "Highlight trailing spaces":
       status.searchHistory,
       status.settings)
 
-    check(highlight[0].color == EditorColorPairIndex.default)
-    check(highlight[0].firstColumn == 0)
-    check(highlight[0].lastColumn == -1)
+    check highlight[0].color == EditorColorPairIndex.default
+    check highlight[0].firstColumn == 0
+    check highlight[0].lastColumn == -1
 
-    check(highlight[1].color == EditorColorPairIndex.default)
-    check(highlight[1].firstColumn == 0)
-    check(highlight[1].lastColumn == 2)
+    check highlight[1].color == EditorColorPairIndex.default
+    check highlight[1].firstColumn == 0
+    check highlight[1].lastColumn == 2
 
-    check(highlight[2].color == EditorColorPairIndex.highlightTrailingSpaces)
-    check(highlight[2].firstColumn == 3)
-    check(highlight[2].lastColumn == 4)
+    check highlight[2].color == EditorColorPairIndex.highlightTrailingSpaces
+    check highlight[2].firstColumn == 3
+    check highlight[2].lastColumn == 4
 
   test "Highlight trailing spaces 3":
     var status = initEditorStatus()
@@ -254,11 +323,11 @@ suite "Highlight trailing spaces":
       status.searchHistory,
       status.settings)
 
-    check(highlight[0].color == EditorColorPairIndex.default)
-    check(highlight[0].firstColumn == 0)
-    check(highlight[0].lastColumn == 0)
+    check highlight[0].color == EditorColorPairIndex.default
+    check highlight[0].firstColumn == 0
+    check highlight[0].lastColumn == 0
 
-suite "highlightPairOfParen":
+suite "viewhighlight: highlightPairOfParen":
   const
     OpenParens = @[ru'(', ru'{', ru'[']
     CloseParens = @[ru')', ru'}', ru']']
@@ -298,145 +367,145 @@ suite "highlightPairOfParen":
 
         check highlight[] == `expectHighlight`[]
 
-#  block highlightParenPairTestCase1:
-#    ## Case 1 is starting the search on an empty line.
-#    const
-#      TestIndex = 1
-#      Buffer = @[ru""]
-#      Position = BufferPosition(line: 0, column: 0)
-#    let
-#      expectHighlight = Highlight(colorSegments: @[
-#        ColorSegment(
-#          firstRow: 0,
-#          firstColumn: 0,
-#          lastRow: 0,
-#          lastColumn: -1,
-#          color: EditorColorPairIndex.default),
-#      ])
-#
-#    for i in 0 ..< OpenParens.len:
-#      block open:
-#        highlightParenPairTest(
-#          TestIndex,
-#          OpenParens[i],
-#          Buffer,
-#          Position,
-#          expectHighlight)
-#      block close:
-#        highlightParenPairTest(
-#          TestIndex,
-#          CloseParens[i],
-#          Buffer,
-#          Position,
-#          expectHighlight)
-#
-#  block highlightParenPairTestCase2:
-#    const TestIndex = 2
-#
-#    for i in 0 ..< OpenParens.len:
-#      let buffer = @[toRunes(fmt"{OpenParens[i]}{CloseParens[i]}")]
-#
-#      block open:
-#        const Position = BufferPosition(line: 0, column: 0)
-#        let expectHighlight = Highlight(colorSegments: @[
-#            ColorSegment(
-#              firstRow: 0,
-#              firstColumn: 0,
-#              lastRow: 0,
-#              lastColumn: 0,
-#              color: EditorColorPairIndex.default),
-#            ColorSegment(
-#              firstRow: 0,
-#              firstColumn: 1,
-#              lastRow: 0,
-#              lastColumn: 1,
-#              color: EditorColorPairIndex.parenPair),
-#          ])
-#
-#        highlightParenPairTest(
-#          TestIndex,
-#          OpenParens[i],
-#          buffer,
-#          Position,
-#          expectHighlight)
-#
-#      block close:
-#        const Position = BufferPosition(line: 0, column: 1)
-#        let expectHighlight = Highlight(colorSegments: @[
-#            ColorSegment(
-#              firstRow: 0,
-#              firstColumn: 0,
-#              lastRow: 0,
-#              lastColumn: 0,
-#              color: EditorColorPairIndex.parenPair),
-#            ColorSegment(
-#              firstRow: 0,
-#              firstColumn: 1,
-#              lastRow: 0,
-#              lastColumn: 1,
-#              color: EditorColorPairIndex.default)
-#          ])
-#
-#        highlightParenPairTest(
-#          TestIndex,
-#          CloseParens[i],
-#          buffer,
-#          Position,
-#          expectHighlight)
-#
-#  block highlightParenPairTestCase3:
-#    const TestIndex = 3
-#
-#    for i in 0 ..< OpenParens.len:
-#      let buffer = @[toRunes(fmt"{OpenParens[i]} {CloseParens[i]}")]
-#
-#      block open:
-#        const Position = BufferPosition(line: 0, column: 0)
-#        let expectHighlight = Highlight(colorSegments: @[
-#            ColorSegment(
-#              firstRow: 0,
-#              firstColumn: 0,
-#              lastRow: 0,
-#              lastColumn: 1,
-#              color: EditorColorPairIndex.default),
-#            ColorSegment(
-#              firstRow: 0,
-#              firstColumn: 2,
-#              lastRow: 0,
-#              lastColumn: 2,
-#              color: EditorColorPairIndex.parenPair),
-#          ])
-#
-#        highlightParenPairTest(
-#          TestIndex,
-#          OpenParens[i],
-#          buffer,
-#          Position,
-#          expectHighlight)
-#
-#      block close:
-#        const Position = BufferPosition(line: 0, column: 2)
-#        let expectHighlight = Highlight(colorSegments: @[
-#            ColorSegment(
-#              firstRow: 0,
-#              firstColumn: 0,
-#              lastRow: 0,
-#              lastColumn: 0,
-#              color: EditorColorPairIndex.parenPair),
-#            ColorSegment(
-#              firstRow: 0,
-#              firstColumn: 1,
-#              lastRow: 0,
-#              lastColumn: 2,
-#              color: EditorColorPairIndex.default),
-#          ])
-#
-#        highlightParenPairTest(
-#          TestIndex,
-#          CloseParens[i],
-#          buffer,
-#          Position,
-#          expectHighlight)
+  block highlightParenPairTestCase1:
+    ## Case 1 is starting the search on an empty line.
+    const
+      TestIndex = 1
+      Buffer = @[ru""]
+      Position = BufferPosition(line: 0, column: 0)
+    let
+      expectHighlight = Highlight(colorSegments: @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: -1,
+          color: EditorColorPairIndex.default),
+      ])
+
+    for i in 0 ..< OpenParens.len:
+      block open:
+        highlightParenPairTest(
+          TestIndex,
+          OpenParens[i],
+          Buffer,
+          Position,
+          expectHighlight)
+      block close:
+        highlightParenPairTest(
+          TestIndex,
+          CloseParens[i],
+          Buffer,
+          Position,
+          expectHighlight)
+
+  block highlightParenPairTestCase2:
+    const TestIndex = 2
+
+    for i in 0 ..< OpenParens.len:
+      let buffer = @[toRunes(fmt"{OpenParens[i]}{CloseParens[i]}")]
+
+      block open:
+        const Position = BufferPosition(line: 0, column: 0)
+        let expectHighlight = Highlight(colorSegments: @[
+            ColorSegment(
+              firstRow: 0,
+              firstColumn: 0,
+              lastRow: 0,
+              lastColumn: 0,
+              color: EditorColorPairIndex.default),
+            ColorSegment(
+              firstRow: 0,
+              firstColumn: 1,
+              lastRow: 0,
+              lastColumn: 1,
+              color: EditorColorPairIndex.parenPair),
+          ])
+
+        highlightParenPairTest(
+          TestIndex,
+          OpenParens[i],
+          buffer,
+          Position,
+          expectHighlight)
+
+      block close:
+        const Position = BufferPosition(line: 0, column: 1)
+        let expectHighlight = Highlight(colorSegments: @[
+            ColorSegment(
+              firstRow: 0,
+              firstColumn: 0,
+              lastRow: 0,
+              lastColumn: 0,
+              color: EditorColorPairIndex.parenPair),
+            ColorSegment(
+              firstRow: 0,
+              firstColumn: 1,
+              lastRow: 0,
+              lastColumn: 1,
+              color: EditorColorPairIndex.default)
+          ])
+
+        highlightParenPairTest(
+          TestIndex,
+          CloseParens[i],
+          buffer,
+          Position,
+          expectHighlight)
+
+  block highlightParenPairTestCase3:
+    const TestIndex = 3
+
+    for i in 0 ..< OpenParens.len:
+      let buffer = @[toRunes(fmt"{OpenParens[i]} {CloseParens[i]}")]
+
+      block open:
+        const Position = BufferPosition(line: 0, column: 0)
+        let expectHighlight = Highlight(colorSegments: @[
+            ColorSegment(
+              firstRow: 0,
+              firstColumn: 0,
+              lastRow: 0,
+              lastColumn: 1,
+              color: EditorColorPairIndex.default),
+            ColorSegment(
+              firstRow: 0,
+              firstColumn: 2,
+              lastRow: 0,
+              lastColumn: 2,
+              color: EditorColorPairIndex.parenPair),
+          ])
+
+        highlightParenPairTest(
+          TestIndex,
+          OpenParens[i],
+          buffer,
+          Position,
+          expectHighlight)
+
+      block close:
+        const Position = BufferPosition(line: 0, column: 2)
+        let expectHighlight = Highlight(colorSegments: @[
+            ColorSegment(
+              firstRow: 0,
+              firstColumn: 0,
+              lastRow: 0,
+              lastColumn: 0,
+              color: EditorColorPairIndex.parenPair),
+            ColorSegment(
+              firstRow: 0,
+              firstColumn: 1,
+              lastRow: 0,
+              lastColumn: 2,
+              color: EditorColorPairIndex.default),
+          ])
+
+        highlightParenPairTest(
+          TestIndex,
+          CloseParens[i],
+          buffer,
+          Position,
+          expectHighlight)
 
   block highlightParenPairTestCase4:
     const TestIndex = 4
@@ -673,7 +742,7 @@ suite "highlightPairOfParen":
         Position,
         expectHighlight)
 
-suite "Highlight paren":
+suite "viewhighlight: highlightPairOfParen":
   test "Highlight ')'":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin("test.nim")
@@ -710,7 +779,7 @@ suite "Highlight paren":
       firstRow: 0, firstColumn: 9, lastRow: 0, lastColumn: 9,
       color: EditorColorPairIndex.parenPair)
 
-suite "Update search highlight":
+suite "viewhighlight: Update search highlight":
   test "single window":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin("test.nim")
@@ -772,8 +841,8 @@ suite "Update search highlight":
           check highlight[1].color == EditorColorPairIndex.default
           check highlight[2].color == EditorColorPairIndex.default
 
-suite "Highlighting git conflicts":
-  test "highlightGitConflicts":
+suite "viewhighlight: highlightGitConflicts":
+  test "Highlight Git conflicts":
     const Buffer = """
 <<<<<<< HEAD
 echo 1
