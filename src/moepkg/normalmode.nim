@@ -294,12 +294,12 @@ proc deleteWord(status: var EditorStatus) =
     status.commandLine.writeReadonlyModeWarning
     return
 
-  const registerName = ""
+  const RegisterName = ""
   currentBufStatus.deleteWord(
     currentMainWindowNode,
     currentBufStatus.cmdLoop,
     status.registers,
-    registerName,
+    RegisterName,
     status.settings)
 
 proc deleteWord(status: var EditorStatus, registerName: string) =
@@ -310,8 +310,9 @@ proc deleteWord(status: var EditorStatus, registerName: string) =
     registerName,
     status.settings)
 
-# ci command
 proc changeInnerCommand(status: var EditorStatus, key: Rune) =
+  # # ci command
+
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
     return
@@ -340,11 +341,11 @@ proc changeInnerCommand(status: var EditorStatus, key: Rune) =
   else:
     discard
 
-# ci command
 proc changeInnerCommand(
   status: var EditorStatus,
   key: Rune,
   registerName: string) =
+    ## ci command
 
     if currentBufStatus.isReadonly:
       status.commandLine.writeReadonlyModeWarning
@@ -375,8 +376,9 @@ proc changeInnerCommand(
     else:
       discard
 
-# di command
 proc deleteInnerCommand(status: var EditorStatus, key: Rune, registerName: string) =
+  ## di command
+
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
     return
@@ -406,8 +408,9 @@ proc deleteInnerCommand(status: var EditorStatus, key: Rune, registerName: strin
   else:
     discard
 
-# di command
 proc deleteInnerCommand(status: var EditorStatus, key: Rune) =
+  ## di command
+
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
     return
@@ -438,23 +441,28 @@ proc yankLines(status: var EditorStatus, start, last: int) =
     start, lastLine,
     status.settings)
 
-proc yankLines(status: var EditorStatus, start, last: int, registerName: string) =
-  let lastLine = min(
-    last,
-    currentBufStatus.buffer.high)
+proc yankLines(
+  status: var EditorStatus,
+  start, last: int,
+  registerName: string) =
 
-  currentBufStatus.yankLines(
-    status.registers,
-    status.commandLine,
-    status.settings.notification,
-    start, lastLine,
-    registerName,
-    status.settings)
+    let lastLine = min(
+      last,
+      currentBufStatus.buffer.high)
 
-# yy command
-# Ynak lines from the current line
+    currentBufStatus.yankLines(
+      status.registers,
+      status.commandLine,
+      status.settings.notification,
+      start, lastLine,
+      registerName,
+      status.settings)
+
 proc yankLines(status: var EditorStatus) =
-  const registerName = ""
+  ## yy command
+  ## Ynak lines from the current line
+
+  const RegisterName = ""
   let
     cmdLoop = currentBufStatus.cmdLoop
     currentLine = currentMainWindowNode.currentLine
@@ -464,11 +472,12 @@ proc yankLines(status: var EditorStatus) =
     status.commandLine,
     status.settings.notification,
     currentLine, lastLine,
-    registerName,
+    RegisterName,
     status.settings)
 
-# Ynak lines from the current line
 proc yankLines(status: var EditorStatus, registerName: string) =
+  ## Ynak lines from the current line
+
   let
     cmdLoop = currentBufStatus.cmdLoop
     currentLine = currentMainWindowNode.currentLine
@@ -481,8 +490,9 @@ proc yankLines(status: var EditorStatus, registerName: string) =
     registerName,
     status.settings)
 
-# y{ command
 proc yankToPreviousBlankLine(status: var EditorStatus, registerName: string) =
+  ## y{ command
+
   let
     currentLine = currentMainWindowNode.currentLine
     previousBlankLine = currentBufStatus.findPreviousBlankLine(currentLine)
@@ -490,8 +500,9 @@ proc yankToPreviousBlankLine(status: var EditorStatus, registerName: string) =
   if previousBlankLine >= 0:
     currentBufStatus.jumpLine(currentMainWindowNode, previousBlankLine)
 
-# y{ command
 proc yankToPreviousBlankLine(status: var EditorStatus) =
+  ## y{ command
+
   let
     currentLine = currentMainWindowNode.currentLine
     previousBlankLine = currentBufStatus.findPreviousBlankLine(currentLine)
@@ -499,8 +510,9 @@ proc yankToPreviousBlankLine(status: var EditorStatus) =
   if previousBlankLine >= 0:
     currentBufStatus.jumpLine(currentMainWindowNode, previousBlankLine)
 
-# y} command
 proc yankToNextBlankLine(status: var EditorStatus, registerName: string) =
+  ## y} command
+
   let
     currentLine = currentMainWindowNode.currentLine
     buffer = currentBufStatus.buffer
@@ -509,8 +521,9 @@ proc yankToNextBlankLine(status: var EditorStatus, registerName: string) =
   if nextBlankLine >= 0:
     currentBufStatus.jumpLine(currentMainWindowNode, nextBlankLine)
 
-# y} command
 proc yankToNextBlankLine(status: var EditorStatus) =
+  ## y} command
+
   let
     currentLine = currentMainWindowNode.currentLine
     buffer = currentBufStatus.buffer
@@ -519,13 +532,14 @@ proc yankToNextBlankLine(status: var EditorStatus) =
   if nextBlankLine >= 0:
     currentBufStatus.jumpLine(currentMainWindowNode, nextBlankLine)
 
-# dd command
 proc deleteLines(status: var EditorStatus) =
+  ## dd command
+
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
     return
 
-  const registerName = ""
+  const RegisterName = ""
   let
     startLine = currentMainWindowNode.currentLine
     count = min(
@@ -534,7 +548,7 @@ proc deleteLines(status: var EditorStatus) =
   currentBufStatus.deleteLines(
     status.registers,
    currentMainWindowNode,
-   registerName,
+   RegisterName,
    startLine,
    count,
    status.settings)
@@ -578,7 +592,6 @@ proc yankCharacters(status: var EditorStatus) =
     RegisterName,
     IsDelete)
 
-# name is the register name
 proc yankCharacters(status: var EditorStatus, registerName: string) =
   const IsDelete = false
   let
@@ -598,10 +611,10 @@ proc yankCharacters(status: var EditorStatus, registerName: string) =
     registerName,
     IsDelete)
 
-# yt command
 proc yankCharactersToCharacter(
   status: var EditorStatus,
   rune: Rune) =
+    ## yt command
 
     let
       currentColumn = currentMainWindowNode.currentColumn
@@ -623,11 +636,11 @@ proc yankCharactersToCharacter(
         RegisterName,
         IsDelete)
 
-# yt command
 proc yankCharactersToCharacter(
   status: var EditorStatus,
   rune: Rune,
   registerName: string) =
+    ## yt command
 
     let
       currentColumn = currentMainWindowNode.currentColumn
@@ -674,10 +687,10 @@ proc deleteCharacters(status: var EditorStatus) =
     currentBufStatus.cmdLoop,
     status.settings)
 
-# d$ command
 proc deleteCharactersUntilEndOfLine(
   status: var EditorStatus,
   registerName: string) =
+    ## d$ command
 
     if currentBufStatus.isReadonly:
       status.commandLine.writeReadonlyModeWarning
@@ -694,8 +707,9 @@ proc deleteCharactersUntilEndOfLine(
       currentMainWindowNode,
       status.settings)
 
-# d$ command
 proc deleteCharactersUntilEndOfLine(status: var EditorStatus) =
+  ## d$ command
+
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
     return
@@ -725,8 +739,9 @@ proc deleteCharacterBeginningOfLine(
       registerName,
       status.settings)
 
-# d0 command
 proc deleteCharacterBeginningOfLine(status: var EditorStatus) =
+  ## d0 command
+
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
     return
@@ -765,13 +780,13 @@ proc deleteLineFromFirstLineToCurrentLine(
       status.commandLine.writeReadonlyModeWarning
       return
 
-    const startLine = 0
+    const StartLine = 0
     let count = currentMainWindowNode.currentLine
     currentBufStatus.deleteLines(
       status.registers,
       currentMainWindowNode,
       registerName,
-      startLine,
+      StartLine,
       count,
       status.settings)
 
@@ -868,10 +883,10 @@ proc deleteFromCurrentLineToLastLine(status: var EditorStatus) =
   const RegisterName = ""
   status.deleteFromCurrentLineToLastLine(RegisterName)
 
-# s and cl commands
 proc deleteCharacterAndEnterInsertMode(
   status: var EditorStatus,
   registerName: string) =
+    ## s and cl commands
 
     if currentBufStatus.isReadonly:
       status.commandLine.writeReadonlyModeWarning
