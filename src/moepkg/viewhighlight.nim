@@ -135,11 +135,12 @@ proc highlightPairOfParen(
 
     let
       rune = currentLineBuffer[currentColumn]
+      positionInView = bufferInView.currentPositionInView
       correspondPosition =
         if isOpenParen(rune):
-          searchClosingParen(bufferInView.buffer, bufferInView.currentPosition)
+          searchClosingParen(bufferInView.buffer, positionInView)
         elif isCloseParen(rune):
-          searchOpeningParen(bufferInView.buffer, bufferInView.currentPosition)
+          searchOpeningParen(bufferInView.buffer, positionInView)
         else:
           none(SearchResult)
 
