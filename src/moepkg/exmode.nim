@@ -196,7 +196,14 @@ proc putConfigFileCommand(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 
 proc deleteTrailingSpacesCommand(status: var EditorStatus) =
+  ## Delete trailing spaces in the current buffer.
+
   currentBufStatus.deleteTrailingSpaces
+
+  let lineHigh = currentBufStatus.buffer[currentMainWindowNode.currentLine].high
+  if currentMainWindowNode.currentColumn > lineHigh:
+    if lineHigh > -1: currentMainWindowNode.currentColumn = lineHigh
+    else: currentMainWindowNode.currentColumn = 0
 
   status.changeMode(currentBufStatus.prevMode)
 
