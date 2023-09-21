@@ -1383,13 +1383,13 @@ proc yankLines*(
 
 proc pasteLines(
   bufStatus: var BufferStatus,
-  windowNode: var WindowNode,
+  position: int,
   register: Register) =
 
     for i in 0 ..< register.buffer.len:
       bufStatus.buffer.insert(
         register.buffer[i],
-        windowNode.currentLine + i + 1)
+        position + i)
 
     inc(bufStatus.countChange)
     bufStatus.isUpdate = true
@@ -1560,7 +1560,7 @@ proc pasteAfterCursor*(
 
     if r.buffer.len > 0:
       if r.isLine:
-        bufStatus.pasteLines(windowNode, r)
+        bufStatus.pasteLines(windowNode.currentLine + 1, r)
       else:
         windowNode.currentColumn.inc
         bufStatus.pasteString(windowNode, r)
@@ -1575,7 +1575,7 @@ proc pasteAfterCursor*(
 
     if r.isSome:
       if r.get.isLine:
-        bufStatus.pasteLines(windowNode, r.get)
+        bufStatus.pasteLines(windowNode.currentLine, r.get)
       else:
         windowNode.currentColumn.inc
         bufStatus.pasteString(windowNode, r.get)
@@ -1589,7 +1589,7 @@ proc pasteBeforeCursor*(
 
     if r.buffer.len > 0:
       if r.isLine:
-        bufStatus.pasteLines(windowNode, r)
+        bufStatus.pasteLines(windowNode.currentLine, r)
       else:
         bufStatus.pasteString(windowNode, r)
 
@@ -1603,7 +1603,7 @@ proc pasteBeforeCursor*(
 
     if r.isSome:
       if r.get.isLine:
-        bufStatus.pasteLines(windowNode, r.get)
+        bufStatus.pasteLines(windowNode.currentLine + 1, r.get)
       else:
         bufStatus.pasteString(windowNode, r.get)
 
