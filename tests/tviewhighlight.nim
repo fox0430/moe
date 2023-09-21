@@ -742,7 +742,6 @@ suite "viewhighlight: highlightPairOfParen":
         Position,
         expectHighlight)
 
-suite "viewhighlight: highlightPairOfParen":
   test "Highlight ')'":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin("test.nim")
@@ -778,6 +777,20 @@ suite "viewhighlight: highlightPairOfParen":
     check highlight[3] == ColorSegment(
       firstRow: 0, firstColumn: 9, lastRow: 0, lastColumn: 9,
       color: EditorColorPairIndex.parenPair)
+
+  test "Display from the middle":
+    # NOTE: https://github.com/fox0430/moe/issues/1850
+    var buffer = toSeq(0..20).mapIt(it.toRunes)
+    buffer[1] = ru"()"
+    var highlight = initHighlightPlain(buffer)
+
+    privateAccess(BufferInView)
+    let bufferInView = BufferInView(
+      buffer: buffer[1 .. 20],
+      originalLineRange: Range(first: 1, last: 20),
+      currentPosition: BufferPosition(line: 1, column: 0))
+
+    highlight.highlightPairOfParen(bufferInView)
 
 suite "viewhighlight: Update search highlight":
   test "single window":
