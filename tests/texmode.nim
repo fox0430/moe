@@ -1403,3 +1403,48 @@ suite "Ex mode: Open configuration mode":
 
     # Check for crashes when updating
     status.update
+
+suite "Ex mode: deleteTrailingSpaces":
+  test "Basic":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = toGapBuffer(@[ru"test  "])
+
+    status.resize(100, 100)
+    status.update
+
+    status.deleteTrailingSpacesCommand
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"test"]
+
+  test "Basic 2":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = toGapBuffer(@[ru"test  "])
+    currentMainWindowNode.currentColumn = 5
+
+    status.resize(100, 100)
+    status.update
+
+    status.deleteTrailingSpacesCommand
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"test"]
+    check currentMainWindowNode.currentColumn == 3
+
+  test "Only spaces":
+    # NOTE: https://github.com/fox0430/moe/issues/1849
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = toGapBuffer(@[ru"  "])
+    currentMainWindowNode.currentColumn = 1
+
+    status.resize(100, 100)
+    status.update
+
+    status.deleteTrailingSpacesCommand
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru""]
+    check currentMainWindowNode.currentColumn == 0
