@@ -466,3 +466,121 @@ suite "jumpToSearchBackwordResults":
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 1
+
+suite "movement: moveToFirstWordOfPrevLine":
+  test "Only whitespaces":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = toGapBuffer(@[ru"  ", ru"  ", ru"  "])
+    currentMainWindowNode.currentLine = 2
+
+    status.resize(100, 100)
+    status.update
+
+    currentMainWindowNode.moveToFirstWordOfPrevLine(currentBufStatus)
+
+    check currentMainWindowNode.currentLine == 2
+    check currentMainWindowNode.currentColumn == 0
+
+  test "Nothing to do":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = toGapBuffer(@[ru"  word", ru"  ", ru"  "])
+    currentMainWindowNode.currentLine = 2
+    currentMainWindowNode.currentColumn = 1
+
+    status.resize(100, 100)
+    status.update
+
+    currentMainWindowNode.moveToFirstWordOfPrevLine(currentBufStatus)
+
+    check currentMainWindowNode.currentLine == 2
+    check currentMainWindowNode.currentColumn == 1
+
+  test "Move to the prev first word 1":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = toGapBuffer(@[ru"  word", ru"  "])
+    currentMainWindowNode.currentLine = 1
+
+    status.resize(100, 100)
+    status.update
+
+    currentMainWindowNode.moveToFirstWordOfPrevLine(currentBufStatus)
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 2
+
+  test "Move to the prev first word 2":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = toGapBuffer(@[ru"word", ru"  "])
+    currentMainWindowNode.currentLine = 1
+    currentMainWindowNode.currentColumn = 1
+
+    status.resize(100, 100)
+    status.update
+
+    currentMainWindowNode.moveToFirstWordOfPrevLine(currentBufStatus)
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+
+suite "movement: moveToFirstWordOfNextLine":
+  test "Only whitespaces":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = toGapBuffer(@[ru"  ", ru"  ", ru"  "])
+    currentMainWindowNode.currentLine = 0
+
+    status.resize(100, 100)
+    status.update
+
+    currentMainWindowNode.moveToFirstWordOfNextLine(currentBufStatus)
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+
+  test "Nothing to do":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = toGapBuffer(@[ru"  ", ru"  ", ru"  word"])
+    currentMainWindowNode.currentLine = 0
+    currentMainWindowNode.currentColumn = 0
+
+    status.resize(100, 100)
+    status.update
+
+    currentMainWindowNode.moveToFirstWordOfNextLine(currentBufStatus)
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+
+  test "Move to the next first word 1":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = toGapBuffer(@[ru"  ", ru"  word"])
+    currentMainWindowNode.currentLine = 0
+
+    status.resize(100, 100)
+    status.update
+
+    currentMainWindowNode.moveToFirstWordOfNextLine(currentBufStatus)
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 2
+
+  test "Move to the next first word 2":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = toGapBuffer(@[ru"  ", ru"word"])
+    currentMainWindowNode.currentLine = 0
+    currentMainWindowNode.currentColumn = 0
+
+    status.resize(100, 100)
+    status.update
+
+    currentMainWindowNode.moveToFirstWordOfNextLine(currentBufStatus)
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0
