@@ -398,6 +398,40 @@ proc moveToBottomOfScreen*(bufStatus: BufferStatus, windowNode: var WindowNode) 
     if windowNode.currentColumn > bufStatus.buffer[windowNode.currentLine].high:
       windowNode.currentColumn = bufStatus.buffer[windowNode.currentLine].high
 
+proc moveToFirstWordOfPrevLine*(
+  windowNode: var WindowNode,
+  bufStatus: BufferStatus) =
+    ## Move to the first word of the previous line.
+    ## Ignore empty lines and whitespaces.
+
+    if windowNode.bufferPosition.line == 0: return
+
+    let prevLine = windowNode.bufferPosition.line - 1
+    if bufStatus.buffer[prevLine].len > 0:
+      for j in 0 .. bufStatus.buffer[prevLine].high:
+        # Check all runes from the first of the line.
+        if not bufStatus.buffer[prevLine][j].isWhiteSpace:
+          windowNode.currentLine = prevLine
+          windowNode.currentColumn = j
+          return
+
+proc moveToFirstWordOfNextLine*(
+  windowNode: var WindowNode,
+  bufStatus: BufferStatus) =
+    ## Move to the first word of the next line.
+    ## Ignore empty lines and whitespaces.
+
+    if windowNode.bufferPosition.line == bufStatus.buffer.high: return
+
+    let nextLine = windowNode.bufferPosition.line + 1
+    if bufStatus.buffer[nextLine].len > 0:
+      for j in 0 .. bufStatus.buffer[nextLine].high:
+        # Check all runes from the first of the line.
+        if not bufStatus.buffer[nextLine][j].isWhiteSpace:
+          windowNode.currentLine = nextLine
+          windowNode.currentColumn = j
+          return
+
 proc scrollScreenTop*(
   bufStatus: var BufferStatus,
   windowNode: var WindowNode) {.inline.} =

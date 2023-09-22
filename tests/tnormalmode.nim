@@ -2758,3 +2758,71 @@ suite "Normal mode: stopRecordingOperations":
     check status.recodingOperationRegister.isNone
 
     check status.commandLine.buffer.len == 0
+
+suite "Normal mode: pasteAfterCursor":
+  test "Paste the line 1":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+
+    status.resize(100, 100)
+    status.update
+
+    status.registers.noNameRegisters = Register(
+      buffer: @[ru "line"],
+      isLine: true)
+    status.pasteAfterCursor
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"", ru"line"]
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0
+
+  test "Paste the line 2":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = toGapBuffer(@[ru"", ru""])
+
+    status.resize(100, 100)
+    status.update
+
+    status.registers.noNameRegisters = Register(
+      buffer: @[ru "  line"],
+      isLine: true)
+    status.pasteAfterCursor
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"", ru"  line", ru""]
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 2
+
+suite "Normal mode: pasteBeforeCursor":
+  test "Paste the line 1":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+
+    status.resize(100, 100)
+    status.update
+
+    status.registers.noNameRegisters = Register(
+      buffer: @[ru "line"],
+      isLine: true)
+    status.pasteBeforeCursor
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"line", ru""]
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+
+  test "Paste the line 2":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = toGapBuffer(@[ru"", ru""])
+
+    status.resize(100, 100)
+    status.update
+
+    status.registers.noNameRegisters = Register(
+      buffer: @[ru "  line"],
+      isLine: true)
+    status.pasteBeforeCursor
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"  line", ru"", ru""]
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 2

@@ -1150,17 +1150,31 @@ proc registerCommand(status: var EditorStatus, command: Runes) =
        (cmd.len == 3 and cmd[0 .. 1] == "cf"):
          status.addRegister(cmd, $registerName)
 
-proc pasteAfterCursor(status: var EditorStatus) {.inline.} =
+proc pasteAfterCursor(status: var EditorStatus) =
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
   else:
+    let beforeBufferLen = currentBufStatus.buffer.len
     currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
 
-proc pasteBeforeCursor(status: var EditorStatus) {.inline.} =
+    if currentBufStatus.buffer.len > beforeBufferLen:
+      currentMainWindowNode.moveToFirstWordOfNextLine(currentBufStatus)
+
+proc pasteBeforeCursor(status: var EditorStatus) =
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
   else:
+    let beforeBufferLen = currentBufStatus.buffer.len
     currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
+
+    if currentBufStatus.buffer.len > beforeBufferLen and
+       currentBufStatus.buffer[currentMainWindowNode.currentLine].len > 0:
+         # Move to a first word of the currentLine line.
+         let
+           currentLine = currentMainWindowNode.currentLine
+           currentColumn = currentMainWindowNode.currentColumn
+         if isWhiteSpace(currentBufStatus.buffer[currentLine][currentColumn]):
+           currentBufStatus.moveToForwardWord(currentMainWindowNode)
 
 proc startRecordingOperations(status: var EditorStatus, name: Rune) =
   ## Start recoding editor operations for macro.
