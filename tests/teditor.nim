@@ -20,7 +20,7 @@
 import std/[unittest, osproc]
 import pkg/results
 import moepkg/[independentutils, gapbuffer, unicodeext, bufferstatus,
-               editorstatus, settings, registers]
+               editorstatus, settings, registers, windownode]
 import moepkg/syntax/highlite
 
 import moepkg/editor {.all.}
@@ -58,6 +58,10 @@ proc sourceLangToStr(lang: SourceLanguage): string =
       "Yaml"
     else:
       "Plain text"
+
+proc resize(status: var EditorStatus, h, w: int) =
+  updateTerminalSize(h, w)
+  status.resize
 
 suite "Editor: Auto indent":
   test "Auto indent in current Line":
@@ -1143,49 +1147,507 @@ suite "Editor: Delete inside paren":
 
     check currentBufStatus.buffer[0] == ru """abc "" "ghi""""
 
-suite "Editor: Paste lines":
-  test "Paste the single line":
+suite "Editor: insertLinesFromRegister":
+  test "Insert the empty line":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
 
-    var registers: Registers
-    let settings = initEditorSettings()
-    registers.addRegister(ru "def", settings)
+    const
+      Register = Register(buffer: @[ru""], isLine: true)
+      Position = 1
+    currentBufStatus.insertLinesFromRegister(Position, Register)
 
-    currentBufStatus.pasteAfterCursor(currentMainWindowNode, registers)
+    check currentBufStatus.buffer.len == 2
+    check currentBufStatus.buffer.toSeqRunes == @[ru"abc", ru""]
 
-    check currentBufStatus.buffer.len == 1
-    check currentBufStatus.buffer[0] == ru"adefbc"
-
-  test "Paste lines when the last line is empty":
+  test "Insert lines":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
 
-    var registers: Registers
-    let settings = initEditorSettings()
-    registers.addRegister(@[ru "def", ru ""], settings)
-
-    currentBufStatus.pasteAfterCursor(currentMainWindowNode, registers)
+    const
+      Register = Register(buffer: @[ru"def", ru"ghi"], isLine: true)
+      Position = 0
+    currentBufStatus.insertLinesFromRegister(Position, Register)
 
     check currentBufStatus.buffer.len == 3
-    check currentBufStatus.buffer[0] == ru"abc"
-    check currentBufStatus.buffer[1] == ru"def"
-    check currentBufStatus.buffer[2] == ru""
+    check currentBufStatus.buffer.toSeqRunes == @[ru"def", ru"ghi", ru"abc"]
 
-suite "Editor: Paste a string":
-  test "Paste a string before cursor":
+suite "Editor: insertRunesFromRegister":
+  test "Nothing to do":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
-    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
-    var registers: Registers
-    let settings = initEditorSettings()
-    registers.addRegister(ru "def", settings)
-    currentBufStatus.pasteBeforeCursor(currentMainWindowNode, registers)
+    status.resize(100, 100)
+    status.update
 
-    check currentBufStatus.buffer[0] == ru "defabc"
+    const
+      Register = Register(buffer: @[ru""])
+      Position = BufferPosition(line: 0, column: 0)
+    currentBufStatus.insertRunesFromRegister(Position, Register)
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"abc"]
+    check currentBufStatus.countChange == 0
+    check not currentBufStatus.isUpdate
+
+  test "Insert words to the empty line":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru""])
+
+    status.resize(100, 100)
+    status.update
+
+    const
+      Register = Register(buffer: @[ru"abc"])
+      Position = BufferPosition(line: 0, column: 0)
+    currentBufStatus.insertRunesFromRegister(Position, Register)
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"abc"]
+    check currentBufStatus.countChange == 1
+    check currentBufStatus.isUpdate
+
+  test "Insert the word to end of the line":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
+
+    status.resize(100, 100)
+    status.update
+
+    const
+      Register = Register(buffer: @[ru"def"])
+      Position = BufferPosition(line: 0, column: 3)
+    currentBufStatus.insertRunesFromRegister(Position, Register)
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"abcdef"]
+    check currentBufStatus.countChange == 1
+    check currentBufStatus.isUpdate
+
+  test "Insert the word to the mid of the line":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
+
+    status.resize(100, 100)
+    status.update
+
+    const
+      Register = Register(buffer: @[ru"def"])
+      Position = BufferPosition(line: 0, column: 1)
+    currentBufStatus.insertRunesFromRegister(Position, Register)
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"adefbc"]
+    check currentBufStatus.countChange == 1
+    check currentBufStatus.isUpdate
+
+suite "Editor: pasteAfterCursor":
+  test "Nothing to do":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
+
+    status.resize(100, 100)
+    status.update
+
+    # Add a empty buffer to No name register.
+    status.registers.addRegister(ru"", status.settings)
+
+    currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"abc"]
+    check currentBufStatus.countChange == 0
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+
+  test "Paste words 1":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru""])
+
+    status.resize(100, 100)
+    status.update
+
+    # Add buffer to No name register.
+    status.registers.addRegister(ru"abc", status.settings)
+
+    currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"abc"]
+    check currentBufStatus.countChange == 1
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 2
+
+  test "Paste words 2":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc "])
+    currentMainWindowNode.currentColumn = 3
+
+    status.resize(100, 100)
+    status.update
+
+    # Add buffer to No name register.
+    status.registers.addRegister(ru"def ghi", status.settings)
+
+    currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"abc def ghi"]
+    check currentBufStatus.countChange == 1
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 10
+
+  test "Paste words 3":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc ghi"])
+    currentMainWindowNode.currentColumn = 3
+
+    status.resize(100, 100)
+    status.update
+
+    # Add buffer to No name register.
+    status.registers.addRegister(ru"def ", status.settings)
+
+    currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"abc def ghi"]
+    check currentBufStatus.countChange == 1
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 7
+
+  test "Paste words 4":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
+    currentMainWindowNode.currentColumn = 2
+
+    status.resize(100, 100)
+    status.update
+
+    # Add buffer to No name register.
+    status.registers.addRegister(ru"d", status.settings)
+
+    currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"abcd"]
+    check currentBufStatus.countChange == 1
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 3
+
+  test "Paste words 5":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"acd"])
+
+    status.resize(100, 100)
+    status.update
+
+    # Add buffer to No name register.
+    status.registers.addRegister(ru"b", status.settings)
+
+    currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"abcd"]
+    check currentBufStatus.countChange == 1
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 1
+
+  test "Paste words 6":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru""])
+
+    status.resize(100, 100)
+    status.update
+
+    # Add buffer to No name register.
+    status.registers.addRegister(ru"a", status.settings)
+
+    currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"a"]
+    check currentBufStatus.countChange == 1
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+
+  test "Paste lines":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"line1"])
+
+    status.resize(100, 100)
+    status.update
+
+    # Add buffer to No name register.
+    status.registers.addRegister(@[ru"line2", ru"line3"], status.settings)
+
+    currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
+
+    check currentBufStatus.buffer.toSeqRunes == @[
+      ru"line1",
+      ru"line2",
+      ru"line3"]
+    check currentBufStatus.countChange == 1
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0
+
+  test "Paste lines 2":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"line1"])
+
+    status.resize(100, 100)
+    status.update
+
+    # Add buffer to No name register.
+    status.registers.addRegister(@[ru"  line2"], status.settings)
+
+    currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
+
+    check currentBufStatus.buffer.toSeqRunes == @[
+      ru"line1",
+      ru"  line2"]
+    check currentBufStatus.countChange == 1
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 2
+
+  test "Paste lines 3":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"line1", ru"line3"])
+    currentMainWindowNode.currentLine = 0
+
+    status.resize(100, 100)
+    status.update
+
+    # Add buffer to No name register.
+    status.registers.addRegister(@[ru"line2"], status.settings)
+
+    currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
+
+    check currentBufStatus.buffer.toSeqRunes == @[
+      ru"line1",
+      ru"line2",
+      ru"line3"]
+    check currentBufStatus.countChange == 1
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0
+
+suite "Editor: pasteBeforeCursor":
+  test "Nothing to do":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
+
+    status.resize(100, 100)
+    status.update
+
+    # Add a empty buffer to No name register.
+    status.registers.addRegister(ru"", status.settings)
+
+    currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"abc"]
+    check currentBufStatus.countChange == 0
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+
+  test "Paste words 1":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru""])
+
+    status.resize(100, 100)
+    status.update
+
+    # Add buffer to No name register.
+    status.registers.addRegister(ru"abc", status.settings)
+
+    currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"abc"]
+    check currentBufStatus.countChange == 1
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 2
+
+  test "Paste words 2":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru" ghi"])
+
+    status.resize(100, 100)
+    status.update
+
+    # Add buffer to No name register.
+    status.registers.addRegister(ru"abc def", status.settings)
+
+    currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"abc def ghi"]
+    check currentBufStatus.countChange == 1
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 6
+
+  test "Paste words 3":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc ghi"])
+    currentMainWindowNode.currentColumn = 4
+
+    status.resize(100, 100)
+    status.update
+
+    # Add buffer to No name register.
+    status.registers.addRegister(ru"def ", status.settings)
+
+    currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"abc def ghi"]
+    check currentBufStatus.countChange == 1
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 7
+
+  test "Paste words 4":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"bcd"])
+    currentMainWindowNode.currentColumn = 0
+
+    status.resize(100, 100)
+    status.update
+
+    # Add buffer to No name register.
+    status.registers.addRegister(ru"a", status.settings)
+
+    currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"abcd"]
+    check currentBufStatus.countChange == 1
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+
+  test "Paste words 5":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"acd"])
+    currentMainWindowNode.currentColumn = 1
+
+    status.resize(100, 100)
+    status.update
+
+    # Add buffer to No name register.
+    status.registers.addRegister(ru"b", status.settings)
+
+    currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"abcd"]
+    check currentBufStatus.countChange == 1
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 1
+
+  test "Paste words 6":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru""])
+
+    status.resize(100, 100)
+    status.update
+
+    # Add buffer to No name register.
+    status.registers.addRegister(ru"a", status.settings)
+
+    currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"a"]
+    check currentBufStatus.countChange == 1
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+
+  test "Paste lines":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"line3"])
+
+    status.resize(100, 100)
+    status.update
+
+    # Add buffer to No name register.
+    status.registers.addRegister(@[ru"line1", ru"line2"], status.settings)
+
+    currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
+
+    check currentBufStatus.buffer.toSeqRunes == @[
+      ru"line1",
+      ru"line2",
+      ru"line3"]
+    check currentBufStatus.countChange == 1
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+
+  test "Paste lines 2":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"line2"])
+
+    status.resize(100, 100)
+    status.update
+
+    # Add buffer to No name register.
+    status.registers.addRegister(@[ru"  line1"], status.settings)
+
+    currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
+
+    check currentBufStatus.buffer.toSeqRunes == @[
+      ru"  line1",
+      ru"line2"]
+    check currentBufStatus.countChange == 1
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 2
+
+  test "Paste lines 3":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru"line1", ru"line3"])
+    currentMainWindowNode.currentLine = 1
+
+    status.resize(100, 100)
+    status.update
+
+    # Add buffer to No name register.
+    status.registers.addRegister(@[ru"line2"], status.settings)
+
+    currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
+
+    check currentBufStatus.buffer.toSeqRunes == @[
+      ru"line1",
+      ru"line2",
+      ru"line3"]
+    check currentBufStatus.countChange == 1
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0
 
 if isXselAvailable():
   suite "Editor: Yank characters":

@@ -19,8 +19,8 @@
 
 import std/[strutils, sequtils, strformat, options]
 import syntax/highlite
-import editorstatus, ui, gapbuffer, unicodeext, windownode,
-       bufferstatus, movement, messages, settings, registers, commandline
+import editorstatus, ui, gapbuffer, unicodeext, windownode, bufferstatus,
+       movement, messages, settings, registers, commandline, independentutils
 
 proc correspondingCloseParen(c: char): char =
   case c
@@ -46,6 +46,13 @@ proc nextRuneIs(
 
     if bufStatus.buffer[currentLine].len > currentColumn:
       result = bufStatus.buffer[currentLine][currentColumn] == c
+
+proc isEmptyLine(
+  bufStatus: BufferStatus,
+  windowNode: WindowNode): bool {.inline.} =
+    # Return true if the buffer of the current line is empty.
+
+    bufStatus.buffer[windowNode.currentLine].len == 0
 
 proc insertCharacter*(
   bufStatus: var BufferStatus,
@@ -1381,19 +1388,6 @@ proc yankLines*(
       IsDelete,
       settings)
 
-proc pasteLines(
-  bufStatus: var BufferStatus,
-  position: int,
-  register: Register) =
-
-    for i in 0 ..< register.buffer.len:
-      bufStatus.buffer.insert(
-        register.buffer[i],
-        position + i)
-
-    inc(bufStatus.countChange)
-    bufStatus.isUpdate = true
-
 # name is the register name
 proc yankCharacters*(
   bufStatus: BufferStatus,
@@ -1533,79 +1527,140 @@ proc yankCharactersOfLines*(
     else:
       registers.addRegister(line, IsLine, isDelete, settings)
 
-proc pasteString(
+proc insertRunesFromRegister(
+  bufStatus: var BufferStatus,
+  position: BufferPosition,
+  register: Register) =
+    ## Get buffer from the register.
+
+    let oldLine = bufStatus.buffer[position.line]
+    var newLine = bufStatus.buffer[position.line]
+
+    newLine.insert(register.buffer[^1], position.column)
+
+    if oldLine != newLine:
+      bufStatus.buffer[position.line] = newLine
+
+      bufStatus.countChange.inc
+      bufStatus.isUpdate = true
+
+proc insertLinesFromRegister(
+  bufStatus: var BufferStatus,
+  position: int,
+  register: Register) =
+    ## Get buffer from the register.
+
+    let beforeBufferLen = bufStatus.buffer.len
+
+    for i in 0 ..< register.buffer.len:
+      bufStatus.buffer.insert(
+        register.buffer[i],
+        position + i)
+
+    if bufStatus.buffer.len > beforeBufferLen:
+      bufStatus.countChange.inc
+      bufStatus.isUpdate = true
+
+proc pasteAfterCursor*(
   bufStatus: var BufferStatus,
   windowNode: var WindowNode,
   register: Register) =
+    ## Paste buffer after the current cursor position.
+    ## The buffer get from the register.
+    ## if runes, Move the cursor position to the end of the runes.
+    ## if lines, Move the cursor position to the first word of the inserted
+    ## lines.
 
-    let oldLine = bufStatus.buffer[windowNode.currentLine]
-    var newLine = bufStatus.buffer[windowNode.currentLine]
+    if register.buffer.len > 0:
+      if register.isLine:
+        let beforeBufferLen = bufStatus.buffer.len
+        bufStatus.insertLinesFromRegister(windowNode.currentLine + 1, register)
+        if bufStatus.buffer.len > beforeBufferLen:
+          # Move to a first word of the next line.
+          windowNode.moveToFirstWordOfNextLine(bufStatus)
+      else:
+        let
+          beforeCountChange = bufStatus.countChange
+          insertColumn =
+            if bufStatus.isEmptyLine(windowNode): 0
+            else: windowNode.currentColumn + 1
+          position = BufferPosition(
+            line: windowNode.currentLine,
+            column: insertColumn)
 
-    newLine.insert(register.buffer[^1], windowNode.currentColumn)
-
-    if oldLine != newLine:
-      bufStatus.buffer[windowNode.currentLine] = newLine
-
-    windowNode.currentColumn += register.buffer[^1].high
-
-    inc(bufStatus.countChange)
-    bufStatus.isUpdate = true
+        bufStatus.insertRunesFromRegister(position, register)
+        if bufStatus.countChange > beforeCountChange:
+          # Move to end of the word.
+          if insertColumn == 0:
+            windowNode.currentColumn += register.buffer[^1].len - 1
+          else:
+            windowNode.currentColumn += register.buffer[^1].len
 
 proc pasteAfterCursor*(
   bufStatus: var BufferStatus,
   windowNode: var WindowNode,
-  registers: Registers) =
+  registers: Registers) {.inline.} =
+    ## The buffer get from the noNameRegister.
 
-    let r = registers.noNameRegisters
-
-    if r.buffer.len > 0:
-      if r.isLine:
-        bufStatus.pasteLines(windowNode.currentLine + 1, r)
-      else:
-        windowNode.currentColumn.inc
-        bufStatus.pasteString(windowNode, r)
+    bufStatus.pasteAfterCursor(windowNode, registers.noNameRegisters)
 
 proc pasteAfterCursor*(
   bufStatus: var BufferStatus,
   windowNode: var WindowNode,
   registers: Registers,
   registerName: string) =
+    ## The buffer get from the register.
 
-    let r = registers.searchByName(registerName)
+    let register = registers.searchByName(registerName)
+    if register.isSome:
+      bufStatus.pasteAfterCursor(windowNode, register.get)
 
-    if r.isSome:
-      if r.get.isLine:
-        bufStatus.pasteLines(windowNode.currentLine, r.get)
+proc pasteBeforeCursor*(
+  bufStatus: var BufferStatus,
+  windowNode: var WindowNode,
+  register: Register) =
+    ## Paste buffer lines befor the current cursor position.
+    ## The buffer get from the register.
+    ## if runes, Move the cursor position to the end of the runes.
+    ## if lines, Move the cursor position to the first of the inserted lines.
+
+    if register.buffer.len > 0:
+      if register.isLine:
+        let beforeBufferLen = bufStatus.buffer.len
+        bufStatus.insertLinesFromRegister(windowNode.currentLine, register)
+        if bufStatus.buffer.len > beforeBufferLen and
+           bufStatus.buffer[windowNode.currentLine].len > 0:
+             # Move to a first word of the currentLine line.
+             let
+               currentLine = windowNode.currentLine
+               currentColumn = windowNode.currentColumn
+             if isWhiteSpace(bufStatus.buffer[currentLine][currentColumn]):
+               bufStatus.moveToForwardWord(windowNode)
       else:
-        windowNode.currentColumn.inc
-        bufStatus.pasteString(windowNode, r.get)
+        let beforeCountChange = bufStatus.countChange
+        bufStatus.insertRunesFromRegister(windowNode.bufferPosition, register)
+        if bufStatus.countChange > beforeCountChange:
+          # Move to end of the word.
+          windowNode.currentColumn += register.buffer[^1].len - 1
 
 proc pasteBeforeCursor*(
   bufStatus: var BufferStatus,
   windowNode: var WindowNode,
   registers: Registers) =
+    ## The buffer get from the noNameRegister.
 
-    let r = registers.noNameRegisters
-
-    if r.buffer.len > 0:
-      if r.isLine:
-        bufStatus.pasteLines(windowNode.currentLine, r)
-      else:
-        bufStatus.pasteString(windowNode, r)
+    bufStatus.pasteBeforeCursor(windowNode, registers.noNameRegisters)
 
 proc pasteBeforeCursor*(
   bufStatus: var BufferStatus,
   windowNode: var WindowNode,
   registers: Registers,
   registerName: string) =
+    ## The buffer get from the register.
 
-    let r = registers.searchByName(registerName)
-
-    if r.isSome:
-      if r.get.isLine:
-        bufStatus.pasteLines(windowNode.currentLine + 1, r.get)
-      else:
-        bufStatus.pasteString(windowNode, r.get)
+    let register = registers.searchByName(registerName)
+    if register.isSome:
+      bufStatus.pasteBeforeCursor(windowNode, register.get)
 
 # Replace characters and move to the right
 proc replaceCharacters*(
