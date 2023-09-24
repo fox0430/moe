@@ -422,9 +422,11 @@ proc moveCursor*(node: var WindowNode, line, column: int) =
     node.currentColumn = column
     node.window.get.move(line, column)
 
-proc moveCursor*(node: var WindowNode) =
-  if node.window.isSome:
-    node.window.get.move(node.currentLine, node.currentColumn)
+proc moveCursor*(node: var WindowNode, position: BufferPosition) {.inline.} =
+  node.moveCursor(position.line, position.column)
+
+proc moveCursor*(node: var WindowNode) {.inline.} =
+  node.moveCursor(node.currentLine, node.currentColumn)
 
 proc refreshWindow*(node: var WindowNode) {.inline.} =
   if node.window.isSome: node.window.get.refresh

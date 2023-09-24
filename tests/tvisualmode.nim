@@ -282,12 +282,17 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     currentBufStatus.keyDown(currentMainWindowNode)
     status.update
 
-    let area = currentBufStatus.selectedArea
+    let
+      area = currentBufStatus.selectedArea
+      firstCursorPosition = BufferPosition(
+        line: area.startLine,
+        column: area.startColumn)
     status.settings.clipboard.enable = false
     currentBufStatus.yankBuffer(
       status.registers,
       currentMainWindowNode,
       area,
+      firstCursorPosition,
       status.settings)
 
     check status.registers.noNameRegisters.isLine
@@ -316,12 +321,17 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     currentBufStatus.moveToLastOfLine(currentMainWindowNode)
     status.update
 
-    let area = currentBufStatus.selectedArea
+    let
+      area = currentBufStatus.selectedArea
+      firstCursorPosition = BufferPosition(
+        line: area.startLine,
+        column: area.startColumn)
     status.settings.clipboard.enable = false
     currentBufStatus.yankBuffer(
       status.registers,
       currentMainWindowNode,
       area,
+      firstCursorPosition,
       status.settings)
 
     check not status.registers.noNameRegisters.isLine
@@ -344,12 +354,17 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
     status.update
 
-    let area = currentBufStatus.selectedArea
+    let
+      area = currentBufStatus.selectedArea
+      firstCursorPosition = BufferPosition(
+        line: area.startLine,
+        column: area.startColumn)
     status.settings.clipboard.enable = false
     currentBufStatus.yankBuffer(
       status.registers,
       currentMainWindowNode,
       area,
+      firstCursorPosition,
       status.settings)
 
     check not status.registers.noNameRegisters.isLine
@@ -372,12 +387,17 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     currentBufStatus.keyDown(currentMainWindowNode)
     status.update
 
-    let area = currentBufStatus.selectedArea
+    let
+      area = currentBufStatus.selectedArea
+      firstCursorPosition = BufferPosition(
+        line: area.startLine,
+        column: area.startColumn)
     status.settings.clipboard.enable = false
     currentBufStatus.yankBuffer(
       status.registers,
       currentMainWindowNode,
       area,
+      firstCursorPosition,
       status.settings)
 
     check status.registers.noNameRegisters.isLine
@@ -398,12 +418,17 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     status.changeMode(Mode.visual)
     status.update
 
-    let area = currentBufStatus.selectedArea
+    let
+      area = currentBufStatus.selectedArea
+      firstCursorPosition = BufferPosition(
+        line: area.startLine,
+        column: area.startColumn)
     status.settings.clipboard.enable = false
     currentBufStatus.yankBuffer(
       status.registers,
       currentMainWindowNode,
       area,
+      firstCursorPosition,
       status.settings)
 
     check status.registers.noNameRegisters.isLine
@@ -559,12 +584,17 @@ if isXselAvailable():
       currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
       status.update
 
-      let area = currentBufStatus.selectedArea
+      let
+        area = currentBufStatus.selectedArea
+        firstCursorPosition = BufferPosition(
+          line: area.startLine,
+          column: area.startColumn)
       status.settings.clipboard.enable = true
       currentBufStatus.yankBuffer(
         status.registers,
         currentMainWindowNode,
         area,
+        firstCursorPosition,
         status.settings)
 
       if currentPlatform == Platforms.linux or currentPlatform == Platforms.wsl:
@@ -609,12 +639,17 @@ if isXselAvailable():
       currentBufStatus.keyDown(currentMainWindowNode)
       status.update
 
-      let area = currentBufStatus.selectedArea
+      let
+        area = currentBufStatus.selectedArea
+        firstCursorPosition = BufferPosition(
+          line: area.startLine,
+          column: area.startColumn)
       status.settings.clipboard.enable = true
       currentBufStatus.yankBuffer(
         status.registers,
         currentMainWindowNode,
         area,
+        firstCursorPosition,
         status.settings)
 
       if currentPlatform == Platforms.linux or currentPlatform == Platforms.wsl:
@@ -875,7 +910,7 @@ suite "Visual block mode: Join lines":
     check(currentBufStatus.buffer.len == 1)
     check(currentBufStatus.buffer[0] == ru"abcdefghi")
 
-test "Visual mode: Add indent":
+suite "Visual mode: Add indent":
   test "Add 1 indent":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
@@ -1100,7 +1135,7 @@ suite "Visual mode: Converts string into lower-case string":
     check(currentBufStatus.buffer[1] == ru"")
     check(currentBufStatus.buffer[2] == ru"def")
 
-test "Visual block mode: Converts string into lower-case string":
+suite "Visual block mode: Converts string into lower-case string":
   test "Converts string into lower-case string":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
@@ -1387,6 +1422,7 @@ suite "Visual block mode: Insert buffer":
     check currentBufStatus.buffer[1] == ru"  def"
 
 suite "Visual mode: move to the previous blank line":
+  test "move to the previous blank line":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"1", ru "", ru "3", ru "4"])
@@ -1408,6 +1444,7 @@ suite "Visual mode: move to the previous blank line":
     check currentMainWindowNode.currentLine == 1
 
 suite "Visual mode: move to the next blank line":
+  test "move to the next blank line":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"1", ru "2", ru "", ru "4"])
@@ -1643,6 +1680,7 @@ suite "Visual mode: Run command when Readonly mode":
     check currentBufStatus.mode == Mode.normal
 
 suite "Visual block mode: move to the previous blank line":
+  test "move to the previous blank line":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"1", ru "", ru "3", ru "4"])
@@ -1664,6 +1702,7 @@ suite "Visual block mode: move to the previous blank line":
     check currentMainWindowNode.currentLine == 1
 
 suite "Visual block mode: move to the next blank line":
+  test "move to the next blank line":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
     currentBufStatus.buffer = initGapBuffer(@[ru"1", ru "2", ru "", ru "4"])
@@ -2039,12 +2078,17 @@ suite "Visual line mode: Yank buffer (Disable clipboard)":
       currentMainWindowNode.currentColumn)
     status.update
 
-    let area = currentBufStatus.selectedArea
+    let
+      area = currentBufStatus.selectedArea
+      firstCursorPosition = BufferPosition(
+        line: area.startLine,
+        column: area.startColumn)
     status.settings.clipboard.enable = false
     currentBufStatus.yankBuffer(
       status.registers,
       currentMainWindowNode,
       area,
+      firstCursorPosition,
       status.settings)
 
     check status.registers.noNameRegisters.buffer == @[buffer[0]]
@@ -2072,12 +2116,17 @@ if isXselAvailable():
         currentMainWindowNode.currentColumn)
       status.update
 
-      let area = currentBufStatus.selectedArea
+      let
+        area = currentBufStatus.selectedArea
+        firstCursorPosition = BufferPosition(
+          line: area.startLine,
+          column: area.startColumn)
       status.settings.clipboard.enable = true
       currentBufStatus.yankBuffer(
         status.registers,
         currentMainWindowNode,
         area,
+        firstCursorPosition,
         status.settings)
 
       if currentPlatform == Platforms.linux:
