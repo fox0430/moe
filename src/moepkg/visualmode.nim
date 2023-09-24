@@ -281,17 +281,18 @@ proc replaceCharacter(
       return
 
     for i in area.startLine .. area.endLine:
-      let oldLine = bufStatus.buffer[i]
-      var newLine = bufStatus.buffer[i]
-      if area.startLine == area.endLine:
-        for j in area.startColumn .. area.endColumn: newLine[j] = ch
-      elif i == area.startLine:
-        for j in area.startColumn .. bufStatus.buffer[i].high: newLine[j] = ch
-      elif i == area.endLine:
-        for j in 0 .. area.endColumn: newLine[j] = ch
-      else:
-        for j in 0 .. bufStatus.buffer[i].high: newLine[j] = ch
-      if oldLine != newLine: bufStatus.buffer[i] = newLine
+      if bufStatus.buffer[i].len > 0:
+        let oldLine = bufStatus.buffer[i]
+        var newLine = bufStatus.buffer[i]
+        if area.startLine == area.endLine:
+          for j in area.startColumn .. area.endColumn: newLine[j] = ch
+        elif i == area.startLine:
+          for j in area.startColumn .. bufStatus.buffer[i].high: newLine[j] = ch
+        elif i == area.endLine:
+          for j in 0 .. area.endColumn: newLine[j] = ch
+        else:
+          for j in 0 .. bufStatus.buffer[i].high: newLine[j] = ch
+        if oldLine != newLine: bufStatus.buffer[i] = newLine
 
     inc(bufStatus.countChange)
 
@@ -559,7 +560,7 @@ proc visualCommand(
     elif key == ord('U'):
       currentBufStatus.toUpperString(area, status.commandLine)
     elif key == ord('r'):
-      let ch = currentMainWindowNode.getKey
+      let ch = status.getKeyFromMainWindow
       if not isEscKey(ch):
         currentBufStatus.replaceCharacter(area, ch, status.commandLine)
     elif key == ord('I'):
@@ -636,7 +637,7 @@ proc visualBlockCommand(
     elif key == ord('U'):
       currentBufStatus.toUpperStringBlock(area, status.commandLine)
     elif key == ord('r'):
-      let ch = currentMainWindowNode.getKey
+      let ch = status.getKeyFromMainWindow
       if not isEscKey(ch):
         currentBufStatus.replaceCharacterBlock(area, ch, status.commandLine)
     elif key == ord('I'):

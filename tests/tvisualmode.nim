@@ -1426,6 +1426,63 @@ suite "Visual mode: move to the next blank line":
 
     check currentMainWindowNode.currentLine == 2
 
+suite "Visual mode: Replace characters":
+  test "Empty buffer":
+    # NOTE: https://github.com/fox0430/moe/issues/1856
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru""])
+
+    currentMainWindowNode.highlight = initHighlight(
+      currentBufStatus.buffer.toSeqRunes,
+      status.settings.highlight.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visual)
+
+    currentBufStatus.selectedArea = initSelectedArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    currentBufStatus.replaceCharacter(
+      currentBufStatus.selectedArea,
+      ru 'a',
+      status.commandLine)
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru""]
+
+suite "Visual block mode: Replace characters":
+  test "Empty buffer":
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.buffer = initGapBuffer(@[ru""])
+
+    currentMainWindowNode.highlight = initHighlight(
+      currentBufStatus.buffer.toSeqRunes,
+      status.settings.highlight.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visualBlock)
+
+    currentBufStatus.selectedArea = initSelectedArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+
+    status.update
+
+    currentBufStatus.replaceCharacterBlock(
+      currentBufStatus.selectedArea,
+      ru 'a',
+      status.commandLine)
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru""]
+
 suite "Visual mode: Run command when Readonly mode":
   test "Delete buffer (\"x\" command)":
     var status = initEditorStatus()
