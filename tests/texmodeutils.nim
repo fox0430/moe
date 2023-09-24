@@ -661,3 +661,37 @@ suite "exmodeutils: getDescription":
 
   test "Invalid":
     check getDescription(ru"a").isErr
+
+suite "exmodeutils: isValidFileOpenCommand":
+  test "Valid 1":
+    check isValidFileOpenCommand(ru"e moe.nimble")
+
+  test "Valid 2":
+    check isValidFileOpenCommand(ru"e src/moe.nim")
+
+  test "Valid 3":
+    check isValidFileOpenCommand(ru"e ./src/moepkg/autocomplete.nim")
+
+  test "Valid 4":
+    check isValidFileOpenCommand(ru"vs moe.nimble")
+
+  test "Valid 5":
+    check isValidFileOpenCommand(ru"sv moe.nimble")
+
+  test "Valid 6":
+    check isValidFileOpenCommand(ru"sp moe.nimble")
+
+  test "Invalid 1":
+    check not isValidFileOpenCommand(ru"")
+
+  test "Invalid 2":
+    check not isValidFileOpenCommand(ru"e xyz")
+
+  test "Invalid 3":
+    check not isValidFileOpenCommand(ru"! moe.nimble")
+
+  test "Invalid 4":
+    check not isValidFileOpenCommand(ru"! src")
+
+  test "Invalid 5":
+    check not isValidFileOpenCommand(ru"moe.nimble")

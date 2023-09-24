@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, sequtils]
+import std/[strutils, sequtils, os]
 import pkg/results
 import unicodeext, bufferstatus
 
@@ -474,6 +474,17 @@ proc isThemeArgsCommand*(
       themeArgsCommandList().contains(c)
     else:
       themeArgsCommandList().toLower.contains(c.toLower)
+
+proc isValidFileOpenCommand*(rawInput: Runes): bool =
+  ## Return true If the command is valid command to open the file.
+  ## Return false if a path is a directory.
+  ## Examples: "e src/moe.nim", "vs moe.nimble".
+
+  let commandSplit = splitExCommandBuffer(rawInput)
+
+  commandSplit.len == 2 and
+  commandSplit[0] in pathArgsCommandList() and
+  fileExists($commandSplit[1])
 
 proc isForceWriteAndQuitCommand*(command: seq[Runes]): bool {.inline.} =
   command.len == 1 and cmpIgnoreCase($command[0], "wq!") == 0
