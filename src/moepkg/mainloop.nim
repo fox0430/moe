@@ -24,7 +24,7 @@ import editorstatus, bufferstatus, windownode, unicodeext, gapbuffer, ui,
        exmode, replacemode, filermode, buffermanager, logviewer, help,
        recentfilemode, quickrun, backupmanager, diffviewer, configmode,
        debugmode, commandline, search, commandlineutils, popupwindow,
-       filermodeutils, messages, registers
+       filermodeutils, messages, registers, exmodeutils
 
 proc invokeCommand(
   currentMode: Mode,
@@ -340,6 +340,11 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
         if suggestList.currentindex > -1:
           # Insert the current selection and continue the current mode.
           status.commandLine.insertSuggestion(suggestList)
+
+          if isValidFileOpenCommand(status.commandLine.buffer):
+            # If the command is valid command to open the file,
+            # it will open the file immediately.
+            break
       else:
         # Exit the current mode.
         break
