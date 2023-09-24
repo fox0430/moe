@@ -53,8 +53,9 @@ proc swapSelectedAreaVisualLine(
 proc yankBuffer(
   bufStatus: var BufferStatus,
   registers: var Registers,
-  windowNode: WindowNode,
+  windowNode: var WindowNode,
   area: SelectedArea,
+  firstCursorPosition: BufferPosition,
   settings: EditorSettings) =
 
     var
@@ -94,6 +95,8 @@ proc yankBuffer(
 
     registers.addRegister(yankedBuffer, isLine, settings)
 
+    windowNode.moveCursor(firstCursorPosition)
+
 proc yankBufferBlock(
   bufStatus: var BufferStatus,
   registers: var Registers,
@@ -116,8 +119,9 @@ proc yankBufferBlock(
 proc deleteBuffer(
   bufStatus: var BufferStatus,
   registers: var Registers,
-  windowNode: WindowNode,
+  windowNode: var WindowNode,
   area: SelectedArea,
+  firstCursorPosition: BufferPosition,
   settings: EditorSettings,
   commandLine: var CommandLine) =
 
@@ -128,7 +132,12 @@ proc deleteBuffer(
     if bufStatus.buffer.len == 1 and
        bufStatus.buffer[windowNode.currentLine].len < 1: return
 
-    bufStatus.yankBuffer(registers, windowNode, area, settings)
+    bufStatus.yankBuffer(
+      registers,
+      windowNode,
+      area,
+      firstCursorPosition,
+      settings)
 
     var currentLine = area.startLine
     for i in area.startLine .. area.endLine:
@@ -328,7 +337,9 @@ proc joinLines(
 
 proc toLowerString(
   bufStatus: var BufferStatus,
+  windowNode: var WindowNode,
   area: SelectedArea,
+  firstCursorPosition: BufferPosition,
   commandLine: var CommandLine) =
 
     if bufStatus.isReadonly:
@@ -352,10 +363,13 @@ proc toLowerString(
       if oldLine != newLine: bufStatus.buffer[i] = newLine
 
     inc(bufStatus.countChange)
+    windowNode.moveCursor(firstCursorPosition)
 
 proc toLowerStringBlock(
   bufStatus: var BufferStatus,
+  windowNode: var WindowNode,
   area: SelectedArea,
+  firstCursorPosition: BufferPosition,
   commandLine: var CommandLine) =
 
     if bufStatus.isReadonly:
@@ -369,9 +383,13 @@ proc toLowerStringBlock(
         newLine[j] = oldLine[j].toLower
       if oldLine != newLine: bufStatus.buffer[i] = newLine
 
+    windowNode.moveCursor(firstCursorPosition)
+
 proc toUpperString(
   bufStatus: var BufferStatus,
+  windowNode: var WindowNode,
   area: SelectedArea,
+  firstCursorPosition: BufferPosition,
   commandLine: var CommandLine) =
 
     if bufStatus.isReadonly:
@@ -395,10 +413,13 @@ proc toUpperString(
       if oldLine != newLine: bufStatus.buffer[i] = newLine
 
     inc(bufStatus.countChange)
+    windowNode.moveCursor(firstCursorPosition)
 
 proc toUpperStringBlock(
   bufStatus: var BufferStatus,
+  windowNode: var WindowNode,
   area: SelectedArea,
+  firstCursorPosition: BufferPosition,
   commandLine: var CommandLine) =
 
     if bufStatus.isReadonly:
@@ -411,6 +432,8 @@ proc toUpperStringBlock(
       for j in area.startColumn .. min(area.endColumn, bufStatus.buffer[i].high):
         newLine[j] = oldLine[j].toUpper
       if oldLine != newLine: bufStatus.buffer[i] = newLine
+
+    windowNode.moveCursor(firstCursorPosition)
 
 # TODO: Remove
 proc getInsertBuffer(status: var EditorStatus): Runes =
@@ -520,7 +543,13 @@ proc exitVisualMode(status: var EditorStatus) =
 
 proc visualCommand(
   status: var EditorStatus,
-  area: var SelectedArea, key: Rune) =
+  area: var SelectedArea,
+  key: Rune) =
+
+    # The position of entered visual mode.
+    let firstCursorPosition = BufferPosition(
+      line: area.startLine,
+      column: area.startColumn)
 
     if currentBufStatus.isVisualLineMode:
       area.swapSelectedAreaVisualLine(currentBufStatus)
@@ -532,12 +561,14 @@ proc visualCommand(
         status.registers,
         currentMainWindowNode,
         area,
+        firstCursorPosition,
         status.settings)
     elif key == ord('x') or key == ord('d'):
       currentBufStatus.deleteBuffer(
         status.registers,
         currentMainWindowNode,
         area,
+        firstCursorPosition,
         status.settings,
         status.commandLine)
     elif key == ord('>'):
@@ -555,9 +586,17 @@ proc visualCommand(
     elif key == ord('J'):
       currentBufStatus.joinLines(currentMainWindowNode, area, status.commandLine)
     elif key == ord('u'):
-      currentBufStatus.toLowerString(area, status.commandLine)
+      currentBufStatus.toLowerString(
+        currentMainWindowNode,
+        area,
+        firstCursorPosition,
+        status.commandLine)
     elif key == ord('U'):
-      currentBufStatus.toUpperString(area, status.commandLine)
+      currentBufStatus.toUpperString(
+        currentMainWindowNode,
+        area,
+        firstCursorPosition,
+        status.commandLine)
     elif key == ord('r'):
       let ch = currentMainWindowNode.getKey
       if not isEscKey(ch):
@@ -603,6 +642,11 @@ proc visualBlockCommand(
   status: var EditorStatus,
   area: var SelectedArea, key: Rune) =
 
+    # The position of entered visual mode.
+    let firstCursorPosition = BufferPosition(
+      line: area.startLine,
+      column: area.startColumn)
+
     area.swapSelectedArea
 
     if key == ord('y') or isDcKey(key):
@@ -632,9 +676,17 @@ proc visualBlockCommand(
     elif key == ord('J'):
       currentBufStatus.joinLines(currentMainWindowNode, area, status.commandLine)
     elif key == ord('u'):
-      currentBufStatus.toLowerStringBlock(area, status.commandLine)
+      currentBufStatus.toLowerStringBlock(
+        currentMainWindowNode,
+        area,
+        firstCursorPosition,
+        status.commandLine)
     elif key == ord('U'):
-      currentBufStatus.toUpperStringBlock(area, status.commandLine)
+      currentBufStatus.toUpperStringBlock(
+        currentMainWindowNode,
+        area,
+        firstCursorPosition,
+        status.commandLine)
     elif key == ord('r'):
       let ch = currentMainWindowNode.getKey
       if not isEscKey(ch):
