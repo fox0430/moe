@@ -20,7 +20,7 @@ colorMode = "256"
 
 - https://github.com/fox0430/moe/issues/1751
 
-## [The TERM environment variable] 
+## The TERM environment variable
 
 Please set `$TERM` to `xterm-256color`. Otherwise, it may not work properly. This is a Ncurses limitation.
 
