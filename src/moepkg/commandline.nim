@@ -21,24 +21,29 @@ import std/[sequtils]
 import ui, unicodeext, color, independentutils
 
 type
-  # TODO: Add EditorView to CommandLine?
   CommandLine* = object
-    ## The prompt doesn't include in the buffer.
+    # TODO: Add EditorView to CommandLine?
+
     buffer*: Runes
+      ## The prompt doesn't include in the buffer.
 
-    ## The prompt show before the buffer.
     prompt: Runes
+      ## The prompt show before the buffer.
 
-    ## the command line window position.
     windowPosition: Position
+      ## the command line window position.
 
-    ## the buffer position
     bufferPosition: Position
+      ## the buffer position
 
-    # TODO: Change type from EditorColorPairIndex to Highlight.
     color: EditorColorPairIndex
+      ## TODO: Change type from EditorColorPairIndex to Highlight.
 
     window*: Window
+      ## Ncurses window
+
+    isUpdate: bool
+      ## Update flag
 
 const
   ExModePrompt* = ":"
@@ -61,6 +66,7 @@ proc initCommandLine*(): CommandLine =
 
 proc resize*(commandLine: var CommandLine, y, x, h, w: int) {.inline.} =
   commandLine.window.resize(h, w, y, x)
+  commandLine.isUpdate = true
 
 proc getDisplayRange(commandLine: CommandLine): tuple[first, last: int] =
   if commandLine.bufferPosition.x > commandLine.window.width:
@@ -78,7 +84,7 @@ proc seekCursor*(commandLine: CommandLine): Position {.inline.} =
     y: commandLine.bufferPosition.y)
 
 proc update*(commandLine: var CommandLine) =
-  # Update the command line view (window).
+  ## Update the command line view and window.
 
   let
     range = commandLine.getDisplayRange
@@ -90,6 +96,8 @@ proc update*(commandLine: var CommandLine) =
   commandLine.window.write(0, 0, buffer, commandLine.color.int16)
   commandLine.window.refresh
 
+  commandLine.isUpdate = false
+
   let cursorPos = commandLine.seekCursor
   commandLine.window.moveCursor(cursorPos.y, cursorPos.x)
 
@@ -99,23 +107,29 @@ proc clear*(commandLine: var CommandLine) =
   commandLine.bufferPosition.x = 0
   commandLine.bufferPosition.y = 0
   commandLine.color = EditorColorPairIndex.default
+  commandLine.isUpdate = true
 
 proc clearPrompt*(commandLine: var CommandLine) {.inline.} =
   commandLine.prompt = "".toRunes
+  commandLine.isUpdate = true
 
 proc moveLeft*(commandLine: var CommandLine) {.inline.} =
   if commandLine.bufferPosition.x > 0:
     commandLine.bufferPosition.x.dec
+    commandLine.isUpdate = true
 
 proc moveRight*(commandLine: var CommandLine) {.inline.} =
   if commandLine.bufferPosition.x < commandLine.buffer.len:
     commandLine.bufferPosition.x.inc
+    commandLine.isUpdate = true
 
 proc moveTop*(commandLine: var CommandLine) {.inline.} =
   commandLine.bufferPosition.x = 0
+  commandLine.isUpdate = true
 
 proc moveEnd*(commandLine: var CommandLine) {.inline.} =
   commandLine.bufferPosition.x = commandLine.buffer.len
+  commandLine.isUpdate = true
 
 proc deleteChar*(commandLine: var CommandLine) =
   ## Remove a character before the cursor and move to left.
@@ -123,10 +137,12 @@ proc deleteChar*(commandLine: var CommandLine) =
   if commandLine.bufferPosition.x > 0:
     commandLine.bufferPosition.x.dec
     commandLine.buffer.delete(commandLine.bufferPosition.x)
+    commandLine.isUpdate = true
 
 proc deleteCurrentChar*(commandLine: var CommandLine) =
   if commandLine.buffer.high >= commandLine.bufferPosition.x:
     commandLine.buffer.delete(commandLine.bufferPosition.x)
+    commandLine.isUpdate = true
 
 proc insert*(commandLine: var CommandLine, r: Rune, pos: int) =
   ## Insert a character to the command line buffer and move to Right.
@@ -134,6 +150,7 @@ proc insert*(commandLine: var CommandLine, r: Rune, pos: int) =
   commandLine.buffer.insert(r, pos)
   if commandLine.bufferPosition.x < commandLine.buffer.len:
     commandLine.bufferPosition.x.inc
+    commandLine.isUpdate = true
 
 proc insert*(commandLine: var CommandLine, r: Rune) {.inline.} =
   ## Insert text to the command line buffer and move to Right.
@@ -157,23 +174,23 @@ proc write*(commandLine: var CommandLine, runes: Runes) =
 
   commandLine.clear
   commandLine.insert(runes)
-  commandLine.update
+  commandLine.isUpdate = true
 
 proc writeError*(commandLine: var CommandLine, runes: Runes) =
   ## Clear and show error messages.
 
-# TODO: Change color to the error color.
+  # TODO: Change color to the error color.
   commandLine.clear
   commandLine.insert(runes)
-  commandLine.update
+  commandLine.isUpdate = true
 
 proc writeWarn*(commandLine: var CommandLine, runes: Runes) =
   ## Clear and show warning messages.
 
-# TODO: Change color to the wanrning color.
+  # TODO: Change color to the wanrning color.
   commandLine.clear
   commandLine.insert(runes)
-  commandLine.update
+  commandLine.isUpdate = true
 
 proc buffer*(commandLine: CommandLine) : Runes {.inline.} =
   ## Return commandLine.buffer
@@ -184,9 +201,10 @@ proc setPrompt*(commandLine: var CommandLine, s: string) {.inline.} =
   ## Set test to commandLine.prompt
 
   commandLine.prompt = s.toRunes
+  commandLine.isUpdate = true
 
 proc setPrompt*(commandLine: var CommandLine, r: Runes) {.inline.} =
-  commandLine.prompt = r
+  commandLine.setPrompt($r)
 
 proc setColor*(commandLine: var CommandLine, c: EditorColorPairIndex) {.inline.} =
   ## Set a color for command line prompt and buffer.
@@ -211,17 +229,23 @@ proc setBufferPosition*(
   commandLine: var CommandLine,
   pos: Position) {.inline.} =
     commandLine.bufferPosition = pos
+    commandLine.isUpdate = true
 
 proc setBufferPositionX*(commandLine: var CommandLine, x: int) {.inline.} =
   commandLine.bufferPosition.x = x
+  commandLine.isUpdate = true
 
 proc setBufferPositionY*(commandLine: var CommandLine, y: int) {.inline.} =
   commandLine.bufferPosition.y = y
+  commandLine.isUpdate = true
 
 proc getKey*(commandLine: var CommandLine): Rune {.inline.} =
   ## Return a single Key.
 
   commandLine.window.getKey
+
+proc isUpdate*(commandLine: CommandLine): bool {.inline.} =
+  commandLine.isUpdate
 
 
 proc getKeys*(commandLine: var CommandLine, prompt: string): bool =
