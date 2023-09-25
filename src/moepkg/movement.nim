@@ -226,11 +226,11 @@ proc moveToNextBlankLine*(bufStatus: BufferStatus, windowNode: var WindowNode) =
   ## If there is no blank line, move to the last line.
 
   let nextBlankLine = bufStatus.findNextBlankLine(windowNode.currentLine)
-  if nextBlankLine >= 0:
-    bufStatus.jumpLine(windowNode, nextBlankLine)
-    windowNode.currentColumn = max(
-      bufStatus.buffer[windowNode.currentLine].high,
-      0)
+  if nextBlankLine >= 0: bufStatus.jumpLine(windowNode, nextBlankLine)
+
+  windowNode.currentColumn = max(
+    bufStatus.buffer[windowNode.currentLine].high,
+    0)
 
 proc moveToPreviousBlankLine*(
   bufStatus: BufferStatus,
@@ -239,9 +239,9 @@ proc moveToPreviousBlankLine*(
     ## If there is no blank line, move to the first line.
 
     let previousBlankLine = bufStatus.findPreviousBlankLine(windowNode.currentLine)
-    if previousBlankLine >= 0:
-      bufStatus.jumpLine(windowNode, previousBlankLine)
-      windowNode.currentColumn = 0
+    if previousBlankLine >= 0: bufStatus.jumpLine(windowNode, previousBlankLine)
+
+    windowNode.currentColumn = 0
 
 proc moveToFirstLine*(
   bufStatus: BufferStatus,
