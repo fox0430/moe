@@ -67,17 +67,23 @@ proc keyDown*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
 proc getFirstNonBlankOfLine*(
   bufStatus: BufferStatus,
   windowNode: WindowNode): int =
+    ## Return a position of a first non blank column in the currentLine line.
+    ## Return 0 if it empty line.
+    ## Return -1 if it all spaces.
 
     if currentLineLen == 0: return 0
 
     let lineLen = currentLineLen
     while bufStatus.buffer[windowNode.currentLine][result] == ru' ':
-      inc(result)
+      result.inc
       if result == lineLen: return -1
 
 proc getFirstNonBlankOfLineOrLastColumn*(
   bufStatus: BufferStatus,
   windowNode: WindowNode): int =
+    ## Return a position of a first non blank column in the currentLine line.
+    ## Return 0 if it empty line.
+    ## Return the last index of the line if it all spaces.
 
     result = bufStatus.getFirstNonBlankOfLine(windowNode)
     if result == -1:
@@ -86,18 +92,26 @@ proc getFirstNonBlankOfLineOrLastColumn*(
 proc getFirstNonBlankOfLineOrFirstColumn*(
   bufStatus  : BufferStatus,
   windowNode : WindowNode): int =
+    ## Return a position of a first non blank column in the currentLine line.
+    ## Return 0 if it empty line.
+    ## Return the first index of the line if it all spaces.
 
     result = bufStatus.getFirstNonBlankOfLine(windowNode)
     if result == -1: return 0
 
 proc getLastNonBlankOfLine*(
   bufStatus: BufferStatus,
-  windowNode: WindowNode): Natural =
+  windowNode: WindowNode): int =
+    ## Return a position of a last non blank column in the currentLine line.
+    ## Return 0 if it empty line.
+    ## Return -1 if there are no spaces in the line.
 
     if currentLineLen == 0: return 0
 
     result = currentLineLen - 1
-    while bufStatus.buffer[windowNode.currentLine][result] == ru' ': dec(result)
+    while bufStatus.buffer[windowNode.currentLine][result] == ru' ':
+      result.dec
+      if result == -1: return -1
 
 proc moveToFirstNonBlankOfLine*(
   bufStatus: var BufferStatus,
@@ -174,6 +188,9 @@ proc jumpLine*(
       windowNode.view.reload(bufStatus.buffer, startOfPrintedLines)
 
 proc findNextBlankLine*(bufStatus: BufferStatus, currentLine: int): int =
+  ## Return a next blank line number.
+  ## Return the last line number if there are no blank lines.
+
   result = -1
 
   if currentLine < bufStatus.buffer.len - 1:
@@ -185,9 +202,12 @@ proc findNextBlankLine*(bufStatus: BufferStatus, currentLine: int): int =
       elif currentLineStartedBlank:
         currentLineStartedBlank = false
 
-  return -1
+    return bufStatus.buffer.high
 
 proc findPreviousBlankLine*(bufStatus: BufferStatus, currentLine: int): int =
+  ## Return a previous blank line number.
+  ## Return the first line number if there are no blank lines.
+
   result = -1
 
   if currentLine > 0:
@@ -199,20 +219,29 @@ proc findPreviousBlankLine*(bufStatus: BufferStatus, currentLine: int): int =
       elif currentLineStartedBlank:
         currentLineStartedBlank = false
 
-  return -1
+    return 0
 
 proc moveToNextBlankLine*(bufStatus: BufferStatus, windowNode: var WindowNode) =
+  ## Move to the last column in the next blank line.
+  ## If there is no blank line, move to the last line.
+
   let nextBlankLine = bufStatus.findNextBlankLine(windowNode.currentLine)
   if nextBlankLine >= 0: bufStatus.jumpLine(windowNode, nextBlankLine)
+
+  windowNode.currentColumn = max(
+    bufStatus.buffer[windowNode.currentLine].high,
+    0)
 
 proc moveToPreviousBlankLine*(
   bufStatus: BufferStatus,
   windowNode: var WindowNode) =
+    ## Move to the first column in the prev blank line.
+    ## If there is no blank line, move to the first line.
 
-    let
-      currentLine = windowNode.currentLine
-      previousBlankLine = bufStatus.findPreviousBlankLine(currentLine)
+    let previousBlankLine = bufStatus.findPreviousBlankLine(windowNode.currentLine)
     if previousBlankLine >= 0: bufStatus.jumpLine(windowNode, previousBlankLine)
+
+    windowNode.currentColumn = 0
 
 proc moveToFirstLine*(
   bufStatus: BufferStatus,
