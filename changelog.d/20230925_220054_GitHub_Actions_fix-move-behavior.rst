@@ -3,5 +3,5 @@
 Changed
 .......
 
-- `#1861`_ Change behaviors of moving to a blank line
+- `#1862`_ Change behaviors of moving to a blank line
 
