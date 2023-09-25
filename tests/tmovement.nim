@@ -215,6 +215,17 @@ test "Move to previous blank line":
   check currentMainWindowNode.currentLine == 1
   check currentMainWindowNode.currentColumn == 0
 
+test "Move to previous blank line 2":
+  var status = initEditorStatus()
+  status.addNewBufferInCurrentWin
+  currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"", ru"ghi"])
+  currentMainWindowNode.currentLine = 2
+
+  currentBufStatus.moveToPreviousBlankLine(currentMainWindowNode)
+
+  check currentMainWindowNode.currentLine == 0
+  check currentMainWindowNode.currentColumn == 0
+
 test "Move to next blank line":
   var status = initEditorStatus()
   status.addNewBufferInCurrentWin
@@ -224,6 +235,17 @@ test "Move to next blank line":
 
   check currentMainWindowNode.currentLine == 2
   check currentMainWindowNode.currentColumn == 0
+
+test "Move to next blank line 2":
+  var status = initEditorStatus()
+  status.addNewBufferInCurrentWin
+  currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"", ru"def", ru"ghi"])
+  currentMainWindowNode.currentLine = 1
+
+  currentBufStatus.moveToNextBlankLine(currentMainWindowNode)
+
+  check currentMainWindowNode.currentLine == 3
+  check currentMainWindowNode.currentColumn == 2
 
 test "Move to the top line of the screen":
   var status = initEditorStatus()
