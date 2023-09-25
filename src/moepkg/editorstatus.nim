@@ -676,7 +676,8 @@ proc updateCommandLine(status: var EditorStatus) =
          # Clear if messages for other lines are still displayed.
          status.commandLine.clear
 
-  status.commandLine.update
+  if status.commandLine.isUpdate:
+    status.commandLine.update
 
 proc update*(status: var EditorStatus) =
   ## Update all views, highlighting, cursor, etc.
