@@ -681,7 +681,7 @@ proc updateCommandLine(status: var EditorStatus) =
 proc update*(status: var EditorStatus) =
   ## Update all views, highlighting, cursor, etc.
 
-# Disable the cursor while updating.
+  # Disable the cursor while updating.
   setCursor(false)
 
   let settings = status.settings
@@ -1300,11 +1300,12 @@ proc checkBackgroundGitDiff(status: var EditorStatus) =
       if r.isOk:
         let index = status.bufStatus.checkBufferExist(p.filePath)
         if index.isSome:
-          status.bufStatus[index.get].updateChangedLines(
-            r.get.parseGitDiffOutput)
+          let diffs = r.get.parseGitDiffOutput
+          if status.bufStatus[index.get].changedLines != diffs:
+            status.bufStatus[index.get].updateChangedLines(diffs)
 
-          # The buffer no changed here but need to update the sidebar.
-          status.bufStatus[index.get].isUpdate = true
+            # The buffer no changed here but need to update the sidebar.
+            status.bufStatus[index.get].isUpdate = true
 
       status.backgroundTasks.gitDiff.delete i
 
