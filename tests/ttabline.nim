@@ -28,71 +28,69 @@ proc resize(status: var EditorStatus, size: Size) =
   updateTerminalSize(size)
   status.resize
 
-suite "tabline: tabLineBuffer":
+suite "tabline: initBuffers":
   test "Basic":
     const
-      Path = "test.txt"
-      TabWidth = 100
+      WinWidth = 100
+      Path = ru"test.txt"
+    let bufStatuses = @[BufferStatus(path: Path)]
 
-    check Path.tabLineBuffer(TabWidth) ==
-      " test.txt" & " ".repeat(100 - Path.len)
+    check initBuffers(bufStatuses, WinWidth) == @[
+      " test.txt" & " ".repeat(100 - Path.len)].toSeqRunes
 
   test "Short":
     const
-      Path = "test.txt"
-      TabWidth = 5
+      WinWidth = 5
+      Path = ru"test.txt"
+    let bufStatuses = @[BufferStatus(path: Path)]
 
-    check Path.tabLineBuffer(TabWidth) == " test~"
-
-  test "Ignore":
-    const Path = "test.txt"
-
-    for i in 0 .. 1:
-      let tabWidth = i
-      check Path.tabLineBuffer(tabWidth) == ""
+    check initBuffers(bufStatuses, WinWidth) == @[ " test~"].toSeqRunes
 
 suite "tabline: displayedPath":
   test "Backup mode":
     let bufStatus = initBufferStatus("", Mode.backup).get
-    check bufStatus.displayedPath == "BACKUP"
+    check bufStatus.displayPath == "BACKUP"
 
   test "Config mode":
     let bufStatus = initBufferStatus("", Mode.config).get
-    check bufStatus.displayedPath == "CONFIG"
+    check bufStatus.displayPath == "CONFIG"
 
   test "Help mode":
     let bufStatus = initBufferStatus("", Mode.help).get
-    check bufStatus.displayedPath == "HELP"
+    check bufStatus.displayPath == "HELP"
 
   test "Buffer manager mode":
     let bufStatus = initBufferStatus("", Mode.bufManager).get
-    check bufStatus.displayedPath == "BUFFER"
+    check bufStatus.displayPath == "BUFFER"
 
   test "Log viewer mode":
     let bufStatus = initBufferStatus("", Mode.logViewer).get
-    check bufStatus.displayedPath == "LOG"
+    check bufStatus.displayPath == "LOG"
 
   test "Recent file mode":
     let bufStatus = initBufferStatus("", Mode.recentFile).get
-    check bufStatus.displayedPath == "RECENT"
+    check bufStatus.displayPath == "RECENT"
 
   test "Debug mode":
     let bufStatus = initBufferStatus("", Mode.debug).get
-    check bufStatus.displayedPath == "DEBUG"
+    check bufStatus.displayPath == "DEBUG"
 
   test " Quickrun mode":
     let bufStatus = initBufferStatus("", Mode.quickRun).get
-    check bufStatus.displayedPath == "QUICKRUN"
+    check bufStatus.displayPath == "QUICKRUN"
 
   test "Normal mode":
     let bufStatus = initBufferStatus("test.txt", Mode.normal).get
-    check bufStatus.displayedPath == "test.txt"
+    check bufStatus.displayPath == "test.txt"
 
   test "Normal mode and empty path":
     let bufStatus = initBufferStatus("", Mode.normal).get
-    check bufStatus.displayedPath == "New file"
+    check bufStatus.displayPath == "New file"
 
-suite "tabline: initTabLines":
+suite "tabline: update":
+  privateAccess(TabLine)
+  privateAccess(ColorSegment)
+
   test "Single buffer":
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
@@ -102,75 +100,122 @@ suite "tabline: initTabLines":
       CurrentBufferIndex = 0
       IsAllbuffer = true
 
-    let t = status.bufStatus.initTabLines(
+    status.tabLine.update(
+      status.bufStatus,
       CurrentBufferIndex,
-      IsAllbuffer,
-      mainWindowNode)
+      IsAllbuffer)
 
-    check t.len == 1
-
-    privateAccess(t[0].type)
-    check t[0] == TabLine(
-      position: Position(x: 0, y: 0),
-      buffer: " New file" & " ".repeat(92),
-      color: EditorColorPairIndex.currentTab)
+    check status.tabLine.position == Position(x: 0, y: 0)
+    check status.tabLine.size == Size(h: 1, w: 100)
+    check status.tabLine.buffer == toRunes(" New file" & " ".repeat(92))
+    check status.tabLine.highlight.colorSegments == @[
+      ColorSegment(
+        firstColumn: 0,
+        lastColumn: 100,
+        color: EditorColorPairIndex.currentTab,
+        attribute: Attribute.normal)
+    ]
 
   test "Single buffer 2":
+    const Path = ru"text.txt"
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
-    currentBufStatus.path = ru"text.txt"
+    currentBufStatus.path = Path
     status.resize(Size(h: 100, w: 100))
 
     const
       CurrentBufferIndex = 0
       IsAllbuffer = true
 
-    let t = status.bufStatus.initTabLines(
+    status.tabLine.update(
+      status.bufStatus,
       CurrentBufferIndex,
-      IsAllbuffer,
-      mainWindowNode)
+      IsAllbuffer)
 
-    check t.len == 1
-
-    let path = currentBufStatus.path
-
-    privateAccess(t[0].type)
-    check t[0] == TabLine(
-      position: Position(x: 0, y: 0),
-      buffer: fmt" {$path}" & ' '.repeat(100 - path.len),
-      color: EditorColorPairIndex.currentTab)
+    check status.tabLine.position == Position(x: 0, y: 0)
+    check status.tabLine.size == Size(h: 1, w: 100)
+    check status.tabLine.buffer == toRunes(
+      fmt" {$Path}" & ' '.repeat(100 - Path.len))
+    check status.tabLine.highlight.colorSegments == @[
+      ColorSegment(
+        firstColumn: 0,
+        lastColumn: 100,
+        color: EditorColorPairIndex.currentTab,
+        attribute: Attribute.normal)
+    ]
 
   test "Single buffer 3":
+    const Path = ru"text.txt"
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
-    currentBufStatus.path = ru"text.txt"
-
+    currentBufStatus.path = Path
     status.resize(Size(h: 100, w: 5))
 
     const
       CurrentBufferIndex = 0
       IsAllbuffer = true
 
-    let t = status.bufStatus.initTabLines(
+    status.tabLine.update(
+      status.bufStatus,
       CurrentBufferIndex,
-      IsAllbuffer,
-      mainWindowNode)
+      IsAllbuffer)
 
-    check t.len == 1
+    check status.tabLine.position == Position(x: 0, y: 0)
+    check status.tabLine.size == Size(h: 1, w: 5)
+    check status.tabLine.buffer == ru" text~"
+    check status.tabLine.highlight.colorSegments == @[
+      ColorSegment(
+        firstColumn: 0,
+        lastColumn: 5,
+        color: EditorColorPairIndex.currentTab,
+        attribute: Attribute.normal)
+    ]
 
-    privateAccess(t[0].type)
-    check t[0] == TabLine(
-      position: Position(x: 0, y: 0),
-      buffer: " text~",
-      color: EditorColorPairIndex.currentTab)
-
-  test "Multiple buffer":
+  test "Single buffer 4":
+    const
+      Path1 = ru"text.txt"
+      Path2 = ru"text2.txt"
     var status = initEditorStatus()
     status.addNewBufferInCurrentWin
-    currentBufStatus.path = ru"text.txt"
+    currentBufStatus.path = Path1
 
     status.addNewBufferInCurrentWin
-    currentBufStatus.path = ru"text2.txt"
+    currentBufStatus.path = Path2
+
+    status.resize(Size(h: 100, w: 100))
+
+    const
+      CurrentBufferIndex = 0
+      IsAllbuffer = false
+
+    status.tabLine.update(
+      status.bufStatus,
+      CurrentBufferIndex,
+      IsAllbuffer)
+
+    check status.tabLine.position == Position(x: 0, y: 0)
+    check status.tabLine.size == Size(h: 1, w: 100)
+    check status.tabLine.buffer == toRunes(
+        fmt" {$Path1}{' '.repeat(100 - Path1.len)}")
+    check status.tabLine.highlight.colorSegments == @[
+      ColorSegment(
+        firstColumn: 0,
+        lastColumn: 100,
+        color: EditorColorPairIndex.currentTab,
+        attribute: Attribute.normal)
+    ]
+
+
+  test "Multiple buffer":
+    const
+      Path1 = ru"text.txt"
+      Path2 = ru"text2.txt"
+    var status = initEditorStatus()
+    status.addNewBufferInCurrentWin
+    currentBufStatus.path = Path1
+
+    status.addNewBufferInCurrentWin
+    currentBufStatus.path = Path2
 
     status.resize(Size(h: 100, w: 100))
 
@@ -178,58 +223,24 @@ suite "tabline: initTabLines":
       CurrentBufferIndex = 0
       IsAllbuffer = true
 
-    let t = status.bufStatus.initTabLines(
+    status.tabLine.update(
+      status.bufStatus,
       CurrentBufferIndex,
-      IsAllbuffer,
-      mainWindowNode)
+      IsAllbuffer)
 
-    check t.len == 2
-
-    block:
-      let path = status.bufStatus[0].path
-
-      privateAccess(t[0].type)
-      check t[0] == TabLine(
-        position: Position(x: 0, y: 0),
-        buffer: fmt" {$path}" & ' '.repeat(50 - path.len),
-        color: EditorColorPairIndex.currentTab)
-
-    block:
-      let path = status.bufStatus[1].path
-
-      privateAccess(t[1].type)
-      check t[1] == TabLine(
-        position: Position(x: 50, y: 0),
-        buffer: fmt" {$path}" & ' '.repeat(50 - path.len),
-        color: EditorColorPairIndex.tab)
-
-  test "Multiple buffer 2":
-    var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
-    currentBufStatus.path = ru"text.txt"
-
-    status.addNewBufferInCurrentWin
-    currentBufStatus.path = ru"text2.txt"
-
-    status.resize(Size(h: 100, w: 100))
-
-    const
-      CurrentBufferIndex = 0
-
-      # Show only the current buffer
-      IsAllbuffer = false
-
-    let t = status.bufStatus.initTabLines(
-      CurrentBufferIndex,
-      IsAllbuffer,
-      mainWindowNode)
-
-    check t.len == 1
-
-    let path = currentBufStatus.path
-
-    privateAccess(t[0].type)
-    check t[0] == TabLine(
-      position: Position(x: 0, y: 0),
-      buffer: fmt" {$path}" & ' '.repeat(100 - path.len),
-      color: EditorColorPairIndex.currentTab)
+    check status.tabLine.position == Position(x: 0, y: 0)
+    check status.tabLine.size == Size(h: 1, w: 100)
+    check status.tabLine.buffer == toRunes(
+        fmt" {$Path1}{' '.repeat(50 - Path1.len)} {Path2}{' '.repeat(50 - Path2.len)}")
+    check status.tabLine.highlight.colorSegments == @[
+      ColorSegment(
+        firstColumn: 0,
+        lastColumn: 50,
+        color: EditorColorPairIndex.currentTab,
+        attribute: Attribute.normal),
+      ColorSegment(
+        firstColumn: 51,
+        lastColumn: 100,
+        color: EditorColorPairIndex.tab,
+        attribute: Attribute.normal)
+    ]

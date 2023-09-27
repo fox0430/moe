@@ -21,7 +21,7 @@ import std/[unittest, options, os, importutils, sequtils]
 import pkg/results
 import moepkg/[editor, gapbuffer, bufferstatus, editorview, unicodeext, ui,
                highlight, windownode, movement, build, backgroundprocess,
-               syntaxcheck, independentutils]
+               syntaxcheck, independentutils, tabline]
 
 import moepkg/editorstatus {.all.}
 
@@ -442,7 +442,8 @@ test "Write tab line":
 
   status.resize(100, 100)
 
-  check(status.tabWindow.width == 100)
+  privateAccess(TabLine)
+  check status.tabLine.size.w == 100
 
 test "Close window":
   var status = initEditorStatus()
