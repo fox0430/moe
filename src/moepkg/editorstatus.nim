@@ -55,7 +55,7 @@ type
     timeConfFileLastReloaded*: DateTime
     currentDir: Runes
     commandLine*: CommandLine
-    tabWindow*: Window
+    tabLine*: TabLine
     popupWindow*: Window
     lastOperatingTime*: DateTime
     autoBackupStatus*: AutoBackupStatus
@@ -83,16 +83,6 @@ proc initEditorStatus*(): EditorStatus =
     commandLine: initCommandLine(),
     mainWindow: initMainWindow(),
     statusLine: @[initStatusLine()])
-
-  # Init tab line
-  if result.settings.tabLine.enable:
-    const
-      H = 1
-      W = 1
-      T = 0
-      L = 0
-      Color = EditorColorPairIndex.default
-    result.tabWindow = initWindow(H, W, T, L, Color.int16)
 
 template currentBufStatus*: var BufferStatus =
   mixin status
@@ -533,18 +523,12 @@ proc resize*(status: var EditorStatus) =
         else: terminalWidth
     status.statusLine[0].window.resize(StatusLineHeight, w, y, X)
 
-  # Resize tab line.
   if status.settings.tabLine.enable:
-    const Y = 0
-    let
-      x =
-        if status.sidebar.isSome:
-          terminalWidth - mainWindowNode.w
-        else: 0
-      w =
-        if status.sidebar.isSome: mainWindowNode.w
-        else: terminalWidth
-    status.tabWindow.resize(TabLineWindowHeight, w, Y, x)
+    # Resize the tabline.
+    status.tabLine.update(
+      status.bufStatus,
+      status.bufferIndexInCurrentWindow,
+      status.settings.tabLine.allBuffer)
 
   # Resize the sidebar
   if status.sidebar.isSome:
@@ -688,10 +672,9 @@ proc update*(status: var EditorStatus) =
   let settings = status.settings
 
   if settings.tabLine.enable:
-    status.tabWindow.writeTabLineBuffers(
+    status.tabLine.update(
       status.bufStatus,
       status.bufferIndexInCurrentWindow,
-      status.mainWindow.root,
       settings.tabLine.allBuffer)
 
   for i, buf in status.bufStatus:

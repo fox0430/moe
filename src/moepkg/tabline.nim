@@ -18,25 +18,25 @@
 #[############################################################################]#
 
 import std/[strutils, unicode, strformat, math]
-import ui, windownode, color, bufferstatus, independentutils
+import ui, color, bufferstatus, independentutils, unicodeext
 
 type
-  TabLine = object
-    position: Position
-    buffer: string
+  ColorSegment = object
+    firstColumn, lastColumn: int
     color: EditorColorPairIndex
+    attribute: Attribute
 
-proc tabLineBuffer*(title: string, tabWidth: int): string =
-  ## Return buffer for a tab line to display.
+  Highlight = ref object
+    colorSegments*: seq[ColorSegment]
 
-  if tabWidth > title.len:
-    let spaces = " ".repeat(tabWidth - title.len)
-    return fmt" {title}{spaces}"
-  elif tabWidth > 2:
-    let shortTitle = title.substr(0, tabWidth - 2) & "~"
-    return fmt" {shortTitle}"
+  TabLine* = object
+    window: Window
+    position: Position
+    size: Size
+    buffer: Runes
+    highlight: Highlight
 
-proc displayedPath(b: BufferStatus): string =
+proc displayPath(b: BufferStatus): string =
   ## Return a text for a path to display.
 
   if b.isBackupManagerMode:
@@ -60,66 +60,100 @@ proc displayedPath(b: BufferStatus): string =
   else:
     $b.path
 
-proc initTabLines(
+proc initBuffers*(
+  bufStatuses: seq[BufferStatus],
+  winWidth: int): seq[Runes] =
+    ## Return buffers for tablines
+
+    for index, bufStatus in bufStatuses:
+      let
+        title = displayPath(bufStatus)
+        tabWidth = int(ceil(winWidth / bufStatuses.len))
+
+      if tabWidth > title.len:
+        let spaces = " ".repeat(tabWidth - title.len)
+        result.add toRunes(fmt" {title}{spaces}")
+      elif tabWidth > 1:
+        let shortTitle = title.substr(0, tabWidth - 2) & "~"
+        result.add toRunes(fmt" {shortTitle}")
+      else:
+        result.add ru" "
+
+proc initHighlight(buffers: seq[Runes], currentBufferIndex: int): Highlight =
+  ## Return a highlight for the tabline.
+
+  result = Highlight()
+  var totalWidth = 0
+  for index, buf in buffers:
+    let
+      firstCol =
+        if totalWidth > 0: totalWidth + 1
+        else: totalWidth
+      color =
+        if currentBufferIndex == index or buffers.len == 1:
+          EditorColorPairIndex.currentTab
+        else:
+          EditorColorPairIndex.tab
+
+    totalWidth += buf.high
+
+    result.colorSegments.add ColorSegment(
+      firstColumn: firstCol,
+      lastColumn: totalWidth,
+      color: color,
+      attribute: Attribute.normal)
+
+proc initTabLine(
   bufStatuses: seq[BufferStatus],
   currentBufferIndex: int,
-  isAllbuffer: bool,
-  mainWindowNode: WindowNode): seq[TabLine] =
+  isAllbuffer: bool): TabLine =
+
+    const
+      Position = Position(y: 0, x: 0)
+      Color = EditorColorPairIndex.tab.int16
 
     if isAllBuffer:
-      # Display all buffer
+      # Multiple tablines for all buffers.
 
-      let numOfBuffer = bufStatuses.len
-      for index, bufStatus in bufStatuses:
-        let
-          title = bufStatus.displayedPath
-          tabWidth = int(ceil(getTerminalWidth() / numOfBuffer))
-          color =
-            if currentBufferIndex == index: EditorColorPairIndex.currentTab
-            else: EditorColorPairIndex.tab
+      let buffers = initBuffers(bufStatuses, getTerminalWidth())
 
-        result.add TabLine(
-          position: Position(y: 0, x: index * tabWidth),
-          buffer: tabLineBuffer(title, tabWidth),
-          color: color)
+      return TabLine(
+        window: initWindow(1, getTerminalWidth(), 0, 0, Color),
+        position: Position,
+        size: Size(h: 1, w: getTerminalWidth()),
+        highlight: initHighlight(buffers, currentBufferIndex),
+        buffer: buffers.join)
+
     else:
       # Only the current buffer.
+      let
+        buffers = initBuffers(
+          @[bufStatuses[currentBufferIndex]],
+          getTerminalWidth())
 
-      let allBufferIndex = mainWindowNode.getAllBufferIndex
-      for index, bufIndex in allBufferIndex:
-        let
-          title = bufStatuses[bufIndex].displayedPath
-          tabWidth = getTerminalWidth()
+      return TabLine(
+        window: initWindow(1, getTerminalWidth(), 0, 0, Color),
+        position: Position,
+        size: Size(h: 1, w: getTerminalWidth()),
+        highlight: initHighlight(buffers, currentBufferIndex),
+        buffer: buffers[0])
 
-        return @[
-          TabLine(
-            position: Position(y: 0, x: 0),
-            buffer: tabLineBuffer(title, tabWidth),
-            color: EditorColorPairIndex.currentTab)]
-
-proc write(win: var Window, tabLine: TabLine) {.inline.} =
-  ## Write buffer to the terminal (UI).
-  ## Need to refresh after writing.
-
-  win.write(
-    tabLine.position.y,
-    tabLine.position.x,
-    tabLine.buffer,
-    tabline.color.int16)
-
-proc writeTabLineBuffers*(
-  tabWin: var Window,
+proc update*(
+  tabLine: var TabLine,
   bufStatuses: seq[BufferStatus],
   currentBufferIndex: int,
-  mainWindowNode: WindowNode,
   isAllbuffer: bool) =
-    ## Write all tab lines.
+    ## Update tabline and window.
 
-    let tablines = bufStatuses.initTabLines(
-      currentBufferIndex,
-      isAllbuffer,
-      mainWindowNode)
+    tabline = initTabLine(bufStatuses, currentBufferIndex, isAllbuffer)
 
-    tabWin.erase
-    for t in tabLines: tabWin.write(t)
-    tabWin.refresh
+    # Update the window
+    tabLine.window.erase
+    for index, cs in tabLine.highlight.colorSegments:
+      tabLine.window.write(
+        tabLine.position.y,
+        cs.firstColumn,
+        tabLine.buffer[cs.firstColumn .. cs.lastColumn],
+        cs.color.int16,
+        cs.attribute)
+    tabLine.window.refresh
