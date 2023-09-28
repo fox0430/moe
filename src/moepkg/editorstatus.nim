@@ -371,6 +371,8 @@ proc addNewBufferInCurrentWin*(
     ## Add a new buffer and change the current buffer to it and init an editor
     ## view.
 
+    # TODO: Return an Error.
+
     let index = status.addNewBuffer(path, mode)
     if index.isErr: return
 
