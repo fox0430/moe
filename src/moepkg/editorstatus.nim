@@ -21,6 +21,7 @@ import std/[strutils, os, strformat, tables, times, heapqueue, deques, options,
             encodings, math]
 import pkg/results
 import syntax/highlite
+import lsp/client
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        windownode, color, settings, statusline, bufferstatus, cursor, tabline,
        backup, messages, commandline, registers, platform, movement,
@@ -68,6 +69,9 @@ type
     colorMode*: ColorMode
     backgroundTasks*: BackgroundTasks
     recodingOperationRegister*: Option[Rune]
+
+    lspClients*: Table[string, LspClient]
+      # key is languageId
 
 const
   TabLineWindowHeight = 1
@@ -347,6 +351,16 @@ proc addNewBuffer*(
           addMessageLog errMessage
           return Result[int, string].err errMessage
 
+        if status.bufStatus[^1].path.contains(ru"."):
+          let firstPosition = status.bufStatus[^1].path.rfind(ru".")
+          if firstPosition < status.bufStatus[^1].path.high:
+            # Set BufferStatus.languageId.
+            let
+              extension = path[firstPosition + 1 .. path.high]
+              langId = status.settings.lsp.languageIdFromLspLanguageSettings(
+                extension.toRunes)
+            status.bufStatus[^1].languageId = langId.get
+
         if status.settings.git.showChangedLine and
            status.bufStatus[^1].isTrackingByGit:
              let gitDiffProcess = startBackgroundGitDiff(
@@ -357,6 +371,37 @@ proc addNewBuffer*(
                status.backgroundTasks.gitDiff.add gitDiffProcess.get
              else:
                status.commandLine.writeGitInfoUpdateError(gitDiffProcess.error)
+
+        if status.settings.lsp.enable and
+           status.bufStatus[^1].languageId.len > 0 and
+           not status.lspClients.contains(status.bufStatus[^1].languageId):
+             block setupLsp:
+              # Init LSP client and LSP server.
+              let langId = status.bufStatus[^1].languageId
+              status.lspClients[langId] = initLspClient(
+                $status.settings.lsp.languages[langId].serverCommand)
+
+              # Initialize request
+              let initRes = status.lspClients[langId].initialize(
+                status.bufStatus.high,
+                initInitializeParams($status.bufStatus[^1].openDir))
+              if initRes.isErr:
+                status.commandLine.writeLspInitializeError(
+                  status.settings.lsp.languages[langId].serverCommand,
+                  initRes.error)
+                break setupLsp
+
+              # Initialized notification
+              discard status.lspClients[langId].initialized
+              status.commandLine.writeLspInitialized(
+                status.settings.lsp.languages[langId].serverCommand)
+
+              # textDocument/diOpen notification
+              discard status.lspClients[langId].textDocumentDidOpen(
+                1,
+                $status.bufStatus[^1].path.absolutePath,
+                langId,
+                $status.bufStatus[^1].buffer)
 
     return Result[int, string].ok status.bufStatus.high
 

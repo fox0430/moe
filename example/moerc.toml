@@ -224,6 +224,16 @@ minDelay = 5
 
 maxDelay = 20
 
+[Lsp]
+
+enable = false
+
+[Lsp.nim]
+
+extensions = ["nim"]
+
+serverCommand = ["nimlsp"]
+
 [Debug.WindowNode]
 enable = true
 currentWindow = true

@@ -17,11 +17,16 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[times, strutils, sequtils, options, strformat]
+import std/[times, strutils, sequtils, options, strformat, tables, logging]
 import pkg/results
+import lsp/client
 import editorstatus, ui, gapbuffer, unicodeext, fileutils, windownode, movement,
        editor, searchutils, bufferstatus, quickrunutils, messages, visualmode,
-       commandline, viewhighlight, messagelog, registers
+       commandline, viewhighlight, messagelog, registers, independentutils,
+       popupwindow
+
+type
+  WindowPosition = independentutils.Position
 
 proc changeModeToInsertMode(status: var EditorStatus) {.inline.} =
   if currentBufStatus.isReadonly:
@@ -1045,6 +1050,40 @@ proc closeCurrentWindow(status: var EditorStatus) =
      mainWindowNode.countReferencedWindow(currentBufferIndex) > 1:
     status.closeWindow(currentMainWindowNode)
 
+proc hover(status: var EditorStatus) =
+  ## Display info on a hover. Get info from the LSP server.
+  ## Call textDocument/hover.
+
+  if not status.lspClients.contains(currentBufStatus.languageId) or
+     not status.lspClients[currentBufStatus.languageId].isInitialized:
+       debug "lsp client is not ready"
+       return
+
+  let r = status.lspClients[currentBufStatus.languageId].textDocumentHover(
+    currentBufStatus.buffer.high,
+    $currentBufStatus.path.absolutePath,
+    currentMainWindowNode.bufferPosition)
+  if r.isErr:
+    status.commandLine.writeLspHoverError(r.error)
+    return
+
+  # Display info on a popup window.
+  let
+    buffer = r.get.toHoverContent.toRunes
+    absPositon = currentMainWindowNode.absolutePosition
+    expectPosition = Position(y: absPositon.y + 1, x: absPositon.x + 1)
+  var hoverWin = initPopupWindow(
+    expectPosition,
+    Size(h: buffer.len, w: buffer.maxLen),
+    buffer)
+
+  hoverWin.autoMoveAndResize(mainWindowNode.rect)
+  hoverWin.update
+
+  # Wait until any key is pressed.
+  discard status.getKeyFromMainWindow
+  hoverWin.close
+
 proc addRegister(status: var EditorStatus, command, registerName: string) =
   if command == "yy":
     status.yankLines(registerName)
@@ -1498,10 +1537,14 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
   elif key == ord('q'):
     if commands.len == 1: status.stopRecordingOperations
     elif commands.len == 2: status.startRecordingOperations(commands[1])
+  elif key == ord('K'):
+    status.hover
   else:
     return
 
   addOperationToNormalModeOperationsRegister(commands)
+
+  debug "End normalCommand"
 
 proc isNormalModeCommand*(
   command: Runes,
@@ -1589,7 +1632,8 @@ proc isNormalModeCommand*(
          $command == "H" or
          $command == "M" or
          $command == "L" or
-         $command == "%":
+         $command == "%" or
+         $command == "K":
            result = InputState.Valid
 
       elif isDigit(command[0]):

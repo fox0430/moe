@@ -546,3 +546,7 @@ proc stripLineEnd*(runes: Runes): Runes =
 
 proc replace*(runes1, sub: Runes, by: Runes = ru""): Runes {.inline.} =
   replace($runes1, $sub, $by).toRunes
+
+proc maxLen*(lines: seq[Runes]): int {.inline.} =
+  for i in 0 .. lines.high:
+    if lines[i].len > result: result = lines[i].len

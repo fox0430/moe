@@ -17,43 +17,21 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[parseopt, pegs, os, strformat, terminal]
-import logger, settings
+import std/[parseopt, os, strformat, terminal]
+import logger, settings, appinfo
 
 type CmdParsedList* = object
   path*: seq[string]
   isReadonly*: bool
-
-proc staticReadVersionFromNimble: string {.compileTime.} =
-  let peg = """@ "version" \s* "=" \s* \" {[0-9.]+} \" @ $""".peg
-  var captures: seq[string] = @[""]
-  let
-    nimblePath = currentSourcePath.parentDir() / "../../moe.nimble"
-    nimbleSpec = staticRead(nimblePath)
-
-  assert nimbleSpec.match(peg, captures)
-  assert captures.len == 1
-  return captures[0]
-
-proc gitHash: string {.compileTime.} =
-  const CmdResult = gorgeEx("git rev-parse HEAD")
-  if CmdResult.exitCode == 0 and CmdResult.output.len == 40:
-    return CmdResult.output
-  else:
-    return ""
-
-proc checkReleaseBuild: string {.compileTime.} =
-  if defined(release): return "Release"
-  else: return "Debug"
 
 proc writeError(msg: string) {.inline.} =
   stderr.styledWriteLine(ForegroundColor.fgRed, "Error: " & msg)
 
 proc generateVersionInfoMessage(): string =
   const
-    VersionInfo = "moe v" & staticReadVersionFromNimble()
+    VersionInfo = "moe v" & moeSemVersionStr()
     GitHash = "Git hash: " & gitHash()
-    BuildType = "Build type: " & checkReleaseBuild()
+    BuildType = "Build type: " & buildType()
 
   result =
     VersionInfo & "\n\n" &

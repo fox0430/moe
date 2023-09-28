@@ -21,7 +21,7 @@ import std/[times, strutils, options, strformat, sequtils]
 import pkg/results
 import gapbuffer, ui, editorstatus, unicodeext, windownode, movement, settings,
        bufferstatus, color, highlight, editor, commandline, popupwindow, rgb,
-       theme
+       theme, independentutils
 
 type
   StandardTableNames {.pure.} = enum
@@ -1678,14 +1678,14 @@ proc editEnumAndBoolSettings(
       x = absoluteX + positionOfSetVal() + NumOfIndent - Margin
 
     var
-      popupWindow = initWindow(h, w, y, x, EditorColorPairIndex.popupWindow.int16)
+      popupWindow = initPopupWindow(Position(y: y, x: x), Size(h: h, w: w))
       suggestIndex = 0
 
     while settingValues.len > 1:
-      popupWindow.writePopUpWindow(
-        h, w, y, x,
-        some(suggestIndex),
-        settingValues)
+      popupWindow.currentLine = some(suggestIndex)
+      popupWindow.buffer = settingValues
+
+      popupWindow.update
 
       let key = currentMainWindowNode.getKey
 

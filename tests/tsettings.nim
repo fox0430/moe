@@ -149,6 +149,17 @@ const TomlStr = """
   minDelay = 1
   maxDelay = 1
 
+  [Lsp]
+  enable = true
+
+  [Lsp.nim]
+  extensions = ["nim"]
+  serverCommand = "nimlangserver"
+
+  [Lsp.rust]
+  extensions = ["rs"]
+  serverCommand = "rust-analyzer"
+
   [Debug.WindowNode]
   enable = false
   currentWindow = false
@@ -465,6 +476,15 @@ suite "Parse configuration file":
     check not settings.smoothScroll.enable
     check settings.smoothScroll.minDelay == 1
     check settings.smoothScroll.maxDelay == 1
+
+    check settings.lsp.enable
+    check settings.lsp.languages["nim"] == LspLanguageSettings(
+      extensions: @[ru"nim"],
+      serverCommand: ru"nimlangserver")
+
+    check settings.lsp.languages["rust"] == LspLanguageSettings(
+      extensions: @[ru"rs"],
+      serverCommand: ru"rust-analyzer")
 
     check not settings.debugMode.windowNode.enable
     check not settings.debugMode.windowNode.currentWindow

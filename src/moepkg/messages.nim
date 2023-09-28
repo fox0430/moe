@@ -234,6 +234,11 @@ proc writeInRecordingOperations*(
     commandLine.writeMessageOnCommandLine(mess)
     addMessageLog mess
 
+proc writeLspInitialized*(commandLine: var CommandLine, serverCommand: Runes) =
+  let mess = fmt"LSP client initialized: {$serverCommand}"
+  commandLine.writeMessageOnCommandLine(mess)
+  addMessageLog mess
+
 proc writeAutoBackupFailedMessage*(
   commandLine: var CommandLine,
   filename: Runes,
@@ -307,8 +312,11 @@ proc writeReadonlyModeWarning*(commandLine: var CommandLine) {.inline.} =
 proc writeManualCommandError*(
   commandLine: var CommandLine,
   message: string) {.inline.} =
+
     let mess = fmt"Error: No manual entry for {message}"
-    commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
+    commandLine.writeMessageOnCommandLine(
+      mess,
+      EditorColorPairIndex.errorMessage)
     addMessageLog mess
 
 proc writeSyntaxCheckError*(
@@ -316,17 +324,33 @@ proc writeSyntaxCheckError*(
   message: string) {.inline.} =
 
     let mess = fmt"Error: Syntax check failed: {message}"
-    commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
-    addMessageLog mess
-
-proc writeGitInfoUpdateError*(commandLine: var CommandLine, message: string) =
-    let mess = fmt"Error: Update Git info: {message}"
-    commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
-    addMessageLog mess
-
-proc writeBufferChangedWarn*(commandLine: var CommandLine, filename: Runes) =
-    let mess = fmt"Warn: File {filename} has changed and the buffer was changed in Moe as well."
     commandLine.writeMessageOnCommandLine(
       mess,
       EditorColorPairIndex.errorMessage)
     addMessageLog mess
+
+proc writeGitInfoUpdateError*(commandLine: var CommandLine, message: string) =
+  let mess = fmt"Error: Update Git info: {message}"
+  commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
+  addMessageLog mess
+
+proc writeBufferChangedWarn*(commandLine: var CommandLine, filename: Runes) =
+  let mess = fmt"Warn: File {filename} has changed and the buffer was changed in Moe as well."
+  commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
+  addMessageLog mess
+
+proc writeLspInitializeError*(
+  commandLine: var CommandLine,
+  serverCommand: Runes,
+  errorMessage: string) =
+
+    let mess = fmt"lsp: client initialize failed: {$serverCommand}: {errorMessage}"
+    commandLine.writeMessageOnCommandLine(
+      mess,
+      EditorColorPairIndex.errorMessage)
+    addMessageLog mess
+
+proc writeLspHoverError*(commandLine: var CommandLine, errorMessage: string) =
+  let mess = fmt"lsp: hover failed: {errorMessage}"
+  commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
+  addMessageLog mess

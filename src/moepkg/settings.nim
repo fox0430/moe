@@ -17,8 +17,8 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[os, json, options, strformat, osproc, strutils, sequtils,
-            enumutils]
+import std/[os, json, options, strformat, osproc, strutils, sequtils, enumutils,
+            tables]
 import pkg/[parsetoml, results, regex]
 import ui, color, unicodeext, highlight, platform, independentutils, rgb, theme
 
@@ -205,6 +205,16 @@ type
     minDelay*: int
     maxDelay*: int
 
+  LspLanguageSettings* = object
+    extensions*: seq[Runes]
+    serverCommand*: Runes
+
+  LspSettings* = object
+    enable*: bool
+
+    languages*: Table[string, LspLanguageSettings]
+      # key is languageId
+
   EditorSettings* = object
     editorColorTheme*: ColorTheme
     statusLine*: StatusLineSettings
@@ -241,6 +251,7 @@ type
     persist*: PersistSettings
     git*: GitSettings
     syntaxChecker*: SyntaxCheckerSettings
+    lsp*: LspSettings
 
   InvalidItem = object
     name: string
@@ -416,6 +427,14 @@ proc initSmoothScrollSettings(): SmoothScrollSettings =
   result.minDelay = 5
   result.maxDelay = 20
 
+proc initLspSettigns(): LspSettings =
+  result.enable = false
+  result.languages = initTable[string, LspLanguageSettings]()
+
+  result.languages["nim"] = LspLanguageSettings(
+    extensions: @[ru"nim"],
+    serverCommand: ru"nimlsp")
+
 proc initEditorSettings*(): EditorSettings =
   result.editorColorTheme = ColorTheme.dark
   result.statusLine = initStatusLineSettings()
@@ -447,6 +466,16 @@ proc initEditorSettings*(): EditorSettings =
   result.persist = initPersistSettings()
   result.git = initGitSettings()
   result.syntaxChecker = initSyntaxCheckerSettings()
+  result.lsp = initLspSettigns()
+
+proc languageIdFromLspLanguageSettings*(
+  s: LspSettings,
+  ext: Runes): Option[string] =
+    ## Return a languageId if it exists from status.settings.lsp.languages.
+
+    for key, val in s.languages.pairs:
+      if val.extensions.contains(ext):
+        return some(key)
 
 proc parseColorTheme(theme: string): Result[ColorTheme, string] =
   case theme:
@@ -1570,6 +1599,27 @@ proc parseSmoothScrollTable(
     if smoothScrollConfigs.contains("maxDelay"):
       s.smoothScroll.maxDelay = smoothScrollConfigs["maxDelay"].getInt
 
+proc parseLspTable(
+  s: var EditorSettings,
+  lspConfigs: TomlValueRef) =
+
+    for key, val in lspConfigs.getTable:
+      case key:
+        of "enable":
+          s.lsp.enable = lspConfigs["enable"].getBool
+        else:
+          let langId = key
+          var langSettings = LspLanguageSettings()
+          for key, val in val.getTable:
+            case key:
+              of "extensions":
+                for i in 0 ..< val.len:
+                  langSettings.extensions.add val[i].getStr.toRunes
+              of "serverCommand":
+                langSettings.serverCommand = val.getStr.toRunes
+
+          s.lsp.languages[langId] = langSettings
+
 proc parseThemeTable(
   s: var EditorSettings,
   themeConfigs: Option[TomlValueRef]) =
@@ -1704,6 +1754,9 @@ proc parseTomlConfigs*(tomlConfigs: TomlValueRef): EditorSettings =
 
   if tomlConfigs.contains("SmoothScroll"):
     result.parseSmoothScrollTable(tomlConfigs["SmoothScroll"])
+
+  if tomlConfigs.contains("Lsp"):
+    result.parseLspTable(tomlConfigs["Lsp"])
 
   if result.editorColorTheme == ColorTheme.config or
      result.editorColorTheme == ColorTheme.vscode:
@@ -2100,6 +2153,25 @@ proc validateSmoothScrollTable(table: TomlValueRef): Option[InvalidItem] =
       else:
         return some(InvalidItem(name: $key, val: $val))
 
+proc validateLspSettings(table: TomlValueRef): Option[InvalidItem] =
+  for key, val in table.getTable:
+    case key:
+      of "enable":
+        if val.kind != TomlValueKind.Bool:
+          return some(InvalidItem(name: $key, val: $val))
+      else:
+        # Languages settings
+        for key, val in val.getTable:
+          case key:
+            of "extensions":
+              if val.kind != TomlValueKind.Array:
+                return some(InvalidItem(name: $key, val: $val))
+            of "serverCommand":
+              if val.kind != TomlValueKind.String:
+                return some(InvalidItem(name: $key, val: $val))
+            else:
+              return some(InvalidItem(name: $key, val: $val))
+
 proc validateTomlConfig(toml: TomlValueRef): Option[InvalidItem] =
   for key, val in toml.getTable:
     case key:
@@ -2156,6 +2228,9 @@ proc validateTomlConfig(toml: TomlValueRef): Option[InvalidItem] =
         if r.isSome: return r
       of "SmoothScroll":
         let r = validateSmoothScrollTable(val)
+        if r.isSome: return r
+      of "Lsp":
+        let r = validateLspSettings(val)
         if r.isSome: return r
       else:
         return some(InvalidItem(name: $key, val: $val))
@@ -2373,6 +2448,20 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "enable = {$settings.smoothScroll.enable}"
   result.addLine fmt "minDelay = {$settings.smoothScroll.minDelay}"
   result.addLine fmt "maxDelay = {$settings.smoothScroll.maxDelay}"
+
+  result.addLine fmt "[Lsp]"
+  result.addLine fmt "enable = {$settings.lsp.enable}"
+  for key, val in settings.lsp.languages.pairs:
+    result.addLine fmt "[Lsp.{key}]"
+
+    # Create array of string.
+    var exts = "[]"
+    for index, ext in val.extensions:
+      exts.insert('"' & $ext & '"', 1)
+      if index < val.extensions.high: exts.insert(", ", exts.high - 1)
+    result.addLine fmt "extensions = {exts}"
+
+    result.addLine fmt "serverCommand = \"{$val.serverCommand}\""
 
   result.addLine fmt "[Debug.WindowNode]"
   result.addLine fmt "enable = {$settings.debugMode.windowNode.enable}"

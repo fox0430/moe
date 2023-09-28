@@ -50,6 +50,7 @@ type
     isUpdate*: bool
     characterEncoding*: CharacterEncoding
     language*: SourceLanguage
+    languageId*: string
     fileType*: FileType
     selectedArea*: SelectedArea
     path*: Runes

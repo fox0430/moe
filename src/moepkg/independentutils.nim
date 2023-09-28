@@ -24,15 +24,21 @@ type
     y*: int
     x*: int
 
+  WindowPosition* = Position
+
   Size* = object
     h*: int
     w*: int
+
+  WindowSize* = Size
 
   Rect* = object
     x*: int
     y*: int
     h*: int
     w*: int
+
+  WindowRect* = Rect
 
   Range* = object
     first*: int

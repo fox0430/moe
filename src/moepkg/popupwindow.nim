@@ -18,56 +18,152 @@
 #[############################################################################]#
 
 import std/options
-import ui, color, unicodeext
+import ui, color, unicodeext, independentutils
 
-# TODO: Add PopUpWindow type
+type
+  PopupWindow* = ref object
+    window: Window
+      # Ncurses window
+    position*: Position
+      # Absolute position
+    size*: Size
+      # Window size
+    buffer*: seq[Runes]
+      # contents
+    currentLine*: Option[int]
+      # Current line number
 
-proc writePopUpWindow*(
-  popUpWindow: var Window,
-  h, w, y, x: int,
-  currentLine: Option[int],
-  buffer: seq[Runes]) =
+proc initPopupWindow*(
+  position: Position,
+  size: Size,
+  buffer: seq[Runes]): PopupWindow {.inline.} =
 
-    # TODO: Probably, the parameter `y` means the bottom of the window,
-    #       but it should change to the top of the window for consistency.
+    PopupWindow(
+      window: initWindow(
+        size.h,
+        size.w,
+        position.y,
+        position.x,
+        EditorColorPairIndex.popUpWindow.ord),
+      position: position,
+      size: size,
+      buffer: buffer)
 
-    popUpWindow.erase
+proc initPopupWindow*(position: Position, size: Size): PopupWindow {.inline.} =
+  initPopupWindow(position, size, @[])
 
-    # Pop up window position
+proc initPopupWindow*(): PopupWindow {.inline.} =
+  initPopupWindow(Position(y: 0, x: 0), Size(h: 1, w: 1), @[])
+
+proc refresh*(p: var PopupWindow) {.inline.} =
+  p.window.refresh
+
+proc resize*(p: var PopupWindow, h, w: Natural) =
+  ## Resize the window in the same position.
+
+  p.size.h = h
+  p.size.w = w
+
+  p.window.resize(p.size.h, p.size.w, p.position.y, p.position.x)
+
+proc resize*(p: var PopupWindow, size: Size) {.inline.} =
+  p.resize(size.h, size.w)
+
+proc move*(p: var PopupWindow, y, x: Natural) =
+  ## Move the popup window position.
+
+  p.position.y = y
+  p.position.x = x
+
+  p.window.move(p.position.y, p.position.x)
+
+proc move*(p: var PopupWindow, position: Position) {.inline.} =
+  p.move(position.y, position.x)
+
+proc autoMoveAndResize*(p: var PopupWindow, displayRect: WindowRect) =
+  ## Automatically move and resize the popup window to the best position within
+  ## the range.
+  ##
+  ## If the display range is small, display as much as possible.
+
+  let
+    isUnder =
+      # If true, display the window under the current `p.position.y`.
+      if displayRect.h - p.position.y > 0: true
+      else: false
+
+    isRight =
+      # If true, display the window right the current `p.position.x`.
+      if displayRect.w - p.position.x > 0: true
+      else: false
+
+    y =
+      if isUnder: p.position.y
+      else: max(p.position.y - p.size.h, displayRect.y)
+
+    x =
+      if isRight: p.position.x
+      else: max(p.position.x - p.size.w, displayRect.x)
+
+    maxHeight = displayRect.y + displayRect.h
+    h =
+      if isUnder:
+        if (maxHeight - y) - p.size.h > 0: p.size.h
+        else: maxHeight - y
+      else:
+        if y - p.size.h > 0: p.size.h
+        else: y
+
+    maxWidth = displayRect.x + displayRect.w
+    w =
+      if isRight:
+        if (maxWidth - x) - p.size.w > 0: p.size.w
+        else: maxWidth - x
+      else:
+        if x - p.size.w > 0: p.size.w
+        else: x
+
+  p.resize(Size(h: h, w: w))
+  p.move(Position(y: y, x: x))
+
+proc update*(p: var PopupWindow) =
+  ## Write popup window to the UI.
+  ##
+  ## If buffer is larger than window size, display as much as possible.
+  ##
+  ## If the number of lines in the buffer is larger than the window height and
+  ## the currentline is set, the display range will be automatically adjusted.
+
+  let startLine =
+    if p.currentLine.isSome and p.currentLine.get - p.size.h >= 0:
+      p.currentLine.get - p.size.h + 1
+    else:
+      0
+
+  p.window.erase
+
+  for i in 0 ..< min(p.size.h, p.buffer.len):
     let
-      absY = y.clamp(0, getTerminalHeight() - 1 - h)
-      absX = x.clamp(0, getTerminalWidth() - w)
+      line = p.buffer[i + startLine]
+      color =
+        if p.currentLine.isSome and i + startLine == p.currentLine.get:
+          EditorColorPairIndex.popUpWinCurrentLine
+        else:
+          EditorColorPairIndex.popUpWindow
 
-    popUpWindow.resize(h, w, absY, absX)
+    p.window.write(
+      i,
+      0,
+      line[0 .. min(line.high, p.size.w)],
+      color.int16,
+      Attribute.normal,
+      false)
 
-    let startLine =
-      if currentLine.isSome and currentLine.get - h >= 0:
-        currentLine.get - h + 1
-      else:
-        0
+  p.refresh
 
-    for i in 0 ..< h:
-      if currentLine.isSome and i + startLine == currentLine.get:
-        let color = EditorColorPairIndex.popUpWinCurrentLine
-        popUpWindow.write(
-          i, 1,
-          buffer[i + startLine],
-          color.int16, Attribute.normal,
-          false)
-      else:
-        let color = EditorColorPairIndex.popUpWindow
-        popUpWindow.write(
-          i, 1,
-          buffer[i + startLine],
-          color.int16, Attribute.normal,
-          false)
-
-    popUpWindow.refresh
-
-proc delete*(popUpWindow: var Window) =
+proc close*(p: var PopupWindow) =
   ## Delete the popup window.
   ## Need `status.update` after delete it.
 
-  # TODO: Use Option type
-  if popUpWindow != nil:
-    popUpWindow.deleteWindow
+  if p.window != nil:
+    p.window.deleteWindow
