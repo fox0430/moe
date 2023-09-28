@@ -3,5 +3,5 @@
 Added
 .....
 
-- `#1867`_ feat: Auto split view when starting
+- `#1868`_ feat: Auto split view when starting
 
