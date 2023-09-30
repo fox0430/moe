@@ -27,7 +27,7 @@ import moepkg/configmode {.all.}
 suite "Config mode: Start configuration mode":
   test "Init configuration mode buffer":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin(Mode.config)
+    discard status.addNewBufferInCurrentWin(Mode.config).get
 
     currentBufStatus.buffer = initConfigModeBuffer(status.settings)
 

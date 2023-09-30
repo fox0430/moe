@@ -93,7 +93,7 @@ suite "tabline: update":
 
   test "Single buffer":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     status.resize(Size(h: 100, w: 100))
 
     const
@@ -119,7 +119,7 @@ suite "tabline: update":
   test "Single buffer 2":
     const Path = ru"text.txt"
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.path = Path
     status.resize(Size(h: 100, w: 100))
 
@@ -147,7 +147,7 @@ suite "tabline: update":
   test "Single buffer 3":
     const Path = ru"text.txt"
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.path = Path
     status.resize(Size(h: 100, w: 5))
 
@@ -176,10 +176,10 @@ suite "tabline: update":
       Path1 = ru"text.txt"
       Path2 = ru"text2.txt"
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.path = Path1
 
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.path = Path2
 
     status.resize(Size(h: 100, w: 100))
@@ -211,10 +211,10 @@ suite "tabline: update":
       Path1 = ru"text.txt"
       Path2 = ru"text2.txt"
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.path = Path1
 
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.path = Path2
 
     status.resize(Size(h: 100, w: 100))

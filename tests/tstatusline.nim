@@ -70,7 +70,7 @@ suite "statusline: statusLineInfoBuffer":
     var status = initEditorStatus()
 
     const Path = "test.nim"
-    status.addNewBufferInCurrentWin(Path)
+    discard status.addNewBufferInCurrentWin(Path).get
 
     status.resize(100, 100)
     status.update
@@ -85,7 +85,7 @@ suite "statusline: statusLineInfoBuffer":
     var status = initEditorStatus()
 
     const Path = "test.nim"
-    status.addNewBufferInCurrentWin(Path)
+    discard status.addNewBufferInCurrentWin(Path).get
 
     for i in 0 ..< 9:
       currentBufStatus.buffer.add ' '.repeat(10).toRunes
@@ -106,7 +106,7 @@ suite "statusline: statusLineInfoBuffer":
     var status = initEditorStatus()
 
     const Path = "test.txt"
-    status.addNewBufferInCurrentWin(Path)
+    discard status.addNewBufferInCurrentWin(Path).get
 
     status.resize(100, 100)
     status.update
@@ -121,7 +121,7 @@ suite "statusline: statusLineInfoBuffer":
     var status = initEditorStatus()
 
     const Path = "test.txt"
-    status.addNewBufferInCurrentWin(Path)
+    discard status.addNewBufferInCurrentWin(Path).get
 
     status.resize(100, 100)
     status.update
@@ -136,7 +136,7 @@ suite "statusline: statusLineInfoBuffer":
     var status = initEditorStatus()
 
     const Path = "test.txt"
-    status.addNewBufferInCurrentWin(Path)
+    discard status.addNewBufferInCurrentWin(Path).get
 
     status.resize(100, 100)
     status.update
@@ -162,7 +162,7 @@ suite "statusline: statusLineFilerInfoBuffer":
 
     var status = initEditorStatus()
 
-    status.addNewBufferInCurrentWin(path, Mode.filer)
+    discard status.addNewBufferInCurrentWin(path, Mode.filer).get
 
     status.resize(100, 100)
     status.update
@@ -176,7 +176,7 @@ suite "statusline: statusLineFilerInfoBuffer":
 
     var status = initEditorStatus()
 
-    status.addNewBufferInCurrentWin(path, Mode.filer)
+    discard status.addNewBufferInCurrentWin(path, Mode.filer).get
 
     currentMainWindowNode.currentLine = 1
 
@@ -193,7 +193,7 @@ suite "statusline: statusLineFilerInfoBuffer":
 
     var status = initEditorStatus()
 
-    status.addNewBufferInCurrentWin(path, Mode.filer)
+    discard status.addNewBufferInCurrentWin(path, Mode.filer).get
 
     status.resize(100, 100)
     status.update
@@ -208,7 +208,7 @@ suite "statusline: statusLineFilerInfoBuffer":
 
     var status = initEditorStatus()
 
-    status.addNewBufferInCurrentWin(path, Mode.filer)
+    discard status.addNewBufferInCurrentWin(path, Mode.filer).get
 
     currentMainWindowNode.currentLine = 9
 
@@ -235,7 +235,7 @@ suite "statusline: addFilerModeInfo":
   test "Active window":
     var status = initEditorStatus()
 
-    status.addNewBufferInCurrentWin(path, Mode.filer)
+    discard status.addNewBufferInCurrentWin(path, Mode.filer).get
 
     status.resize(100, 100)
     status.update
@@ -278,7 +278,7 @@ suite "statusline: addFilerModeInfo":
   test "Inactive window":
     var status = initEditorStatus()
 
-    status.addNewBufferInCurrentWin(path, Mode.filer)
+    discard status.addNewBufferInCurrentWin(path, Mode.filer).get
 
     status.resize(100, 100)
     status.update
@@ -319,7 +319,7 @@ suite "statusline: addBufManagerModeInfo":
     var status = initEditorStatus()
 
     const Path = ""
-    status.addNewBufferInCurrentWin(Path, Mode.bufManager)
+    discard status.addNewBufferInCurrentWin(Path, Mode.bufManager).get
 
     status.resize(100, 100)
     status.update
@@ -362,7 +362,7 @@ suite "statusline: addBufManagerModeInfo":
     var status = initEditorStatus()
 
     const Path = ""
-    status.addNewBufferInCurrentWin(Path, Mode.bufManager)
+    discard status.addNewBufferInCurrentWin(Path, Mode.bufManager).get
 
     status.resize(100, 100)
     status.update
@@ -402,7 +402,7 @@ suite "statusline: addLogViewerModeInfo":
     var status = initEditorStatus()
 
     const Path = ""
-    status.addNewBufferInCurrentWin(Path, Mode.logViewer)
+    discard status.addNewBufferInCurrentWin(Path, Mode.logViewer).get
 
     status.resize(100, 100)
     status.update
@@ -445,7 +445,7 @@ suite "statusline: addLogViewerModeInfo":
     var status = initEditorStatus()
 
     const Path = ""
-    status.addNewBufferInCurrentWin(Path, Mode.logViewer)
+    discard status.addNewBufferInCurrentWin(Path, Mode.logViewer).get
 
     status.resize(100, 100)
     status.update
@@ -485,7 +485,7 @@ suite "statusline: addQuickRunModeInfo":
     var status = initEditorStatus()
 
     const Path = ""
-    status.addNewBufferInCurrentWin(Path, Mode.quickRun)
+    discard status.addNewBufferInCurrentWin(Path, Mode.quickRun).get
 
     status.resize(100, 100)
     status.update
@@ -528,7 +528,7 @@ suite "statusline: addQuickRunModeInfo":
     var status = initEditorStatus()
 
     const Path = ""
-    status.addNewBufferInCurrentWin(Path, Mode.quickRun)
+    discard status.addNewBufferInCurrentWin(Path, Mode.quickRun).get
 
     status.resize(100, 100)
     status.update
@@ -568,7 +568,7 @@ suite "statusline: addNormalModeInfo":
     var status = initEditorStatus()
 
     const Path = ""
-    status.addNewBufferInCurrentWin(Path, Mode.normal)
+    discard status.addNewBufferInCurrentWin(Path, Mode.normal).get
 
     status.resize(100, 100)
     status.update
@@ -611,7 +611,7 @@ suite "statusline: addNormalModeInfo":
     var status = initEditorStatus()
 
     const Path = ""
-    status.addNewBufferInCurrentWin(Path, Mode.normal)
+    discard status.addNewBufferInCurrentWin(Path, Mode.normal).get
 
     status.resize(100, 100)
     status.update
@@ -749,7 +749,7 @@ suite "statusline: addGitInfo":
     var status = initEditorStatus()
 
     const Path = ""
-    status.addNewBufferInCurrentWin(Path, Mode.normal)
+    discard status.addNewBufferInCurrentWin(Path, Mode.normal).get
 
     status.settings.statusLine.gitChangedLines = true
     status.settings.statusLine.gitBranchName = false
@@ -785,7 +785,7 @@ suite "statusline: addGitInfo":
     var status = initEditorStatus()
 
     const Path = ""
-    status.addNewBufferInCurrentWin(Path, Mode.normal)
+    discard status.addNewBufferInCurrentWin(Path, Mode.normal).get
 
     status.settings.statusLine.gitBranchName = true
     status.settings.statusLine.gitChangedLines = false
@@ -823,7 +823,7 @@ suite "statusline: addGitInfo":
     var status = initEditorStatus()
 
     const Path = ""
-    status.addNewBufferInCurrentWin(Path, Mode.normal)
+    discard status.addNewBufferInCurrentWin(Path, Mode.normal).get
 
     status.settings.statusLine.gitBranchName = true
     status.settings.statusLine.gitChangedLines = true
@@ -945,7 +945,7 @@ suite "statusline: addModeLabel":
     var status = initEditorStatus()
 
     const Path = ""
-    status.addNewBufferInCurrentWin(Path, Mode.normal)
+    discard status.addNewBufferInCurrentWin(Path, Mode.normal).get
 
     status.resize(100, 100)
     status.update
@@ -966,7 +966,7 @@ suite "statusline: addModeLabel":
     var status = initEditorStatus()
 
     const Path = ""
-    status.addNewBufferInCurrentWin(Path, Mode.normal)
+    discard status.addNewBufferInCurrentWin(Path, Mode.normal).get
 
     status.resize(100, 100)
     status.update
@@ -1009,7 +1009,7 @@ suite "statusline: updateStatusLineBuffer":
     var status = initEditorStatus()
 
     const Path = ""
-    status.addNewBufferInCurrentWin(Path, Mode.normal)
+    discard status.addNewBufferInCurrentWin(Path, Mode.normal).get
 
     status.resize(100, 100)
     status.update
@@ -1051,7 +1051,7 @@ suite "statusline: updateStatusLineBuffer":
     var status = initEditorStatus()
 
     const Path = ""
-    status.addNewBufferInCurrentWin(Path, Mode.normal)
+    discard status.addNewBufferInCurrentWin(Path, Mode.normal).get
 
     status.resize(100, 100)
     status.update

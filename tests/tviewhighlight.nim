@@ -19,6 +19,7 @@
 
 import std/[unittest, heapqueue, options, strutils, strformat, importutils,
             sequtils]
+import pkg/results
 import moepkg/syntax/highlite
 import moepkg/[editorstatus, highlight, color, gapbuffer, unicodeext, movement,
                windownode, ui, independentutils, bufferstatus]
@@ -40,7 +41,7 @@ suite "viewhighlight: initBufferInView":
 
   test "Less than the terminal size":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"line1"])
     status.initHighlight
 
@@ -56,7 +57,7 @@ suite "viewhighlight: initBufferInView":
 
   test "More than the terminal size":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = toSeq(0 .. 20).mapIt(it.toRunes).toGapBuffer
     status.initHighlight
 
@@ -72,7 +73,7 @@ suite "viewhighlight: initBufferInView":
 
   test "More than the terminal size 2":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = toSeq(0 .. 20).mapIt(it.toRunes).toGapBuffer
     status.initHighlight
     currentMainWindowNode.currentLine = 19
@@ -90,7 +91,7 @@ suite "viewhighlight: initBufferInView":
 suite "viewhighlight: highlightCurrentWordElsewhere":
   test "Same line":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"test abc test"])
     status.initHighlight
 
@@ -109,7 +110,7 @@ suite "viewhighlight: highlightCurrentWordElsewhere":
 
   test "Another line":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"test", ru"test"])
 
     status.resize(100, 100)
@@ -127,7 +128,7 @@ suite "viewhighlight: highlightCurrentWordElsewhere":
 
   test "With brackets":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"[test]", ru"test"])
 
     status.resize(100, 100)
@@ -146,7 +147,7 @@ suite "viewhighlight: highlightCurrentWordElsewhere":
 
   test "With underbar":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"_test", ru"_test"])
 
     status.resize(100, 100)
@@ -167,7 +168,7 @@ suite "viewhighlight: highlightFullWidthSpace":
   test "Highlight full width space 1":
     var status = initEditorStatus()
 
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"", ru"　"])
 
     status.settings.highlight.currentWord = false
@@ -187,7 +188,7 @@ suite "viewhighlight: highlightFullWidthSpace":
 
   test "Highlight full width space 2":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc　"])
 
     status.settings.highlight.currentWord = false
@@ -207,7 +208,7 @@ suite "viewhighlight: highlightFullWidthSpace":
 
   test "Highlight full width space 3":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"　"])
 
     status.settings.highlight.currentWord = false
@@ -224,7 +225,7 @@ suite "viewhighlight: highlightFullWidthSpace":
 
   test "Highlight full width space 4":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"a　b"])
 
     status.settings.highlight.currentWord = false
@@ -244,7 +245,7 @@ suite "viewhighlight: highlightFullWidthSpace":
 suite "viewhighlight: Highlight trailing spaces":
   test "Highlight trailing spaces 1":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     status.settings.highlight.currentWord = false
 
@@ -273,7 +274,7 @@ suite "viewhighlight: Highlight trailing spaces":
 
   test "Highlight trailing spaces 2":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"", ru"abc  "])
 
     status.settings.highlight.currentWord = false
@@ -305,7 +306,7 @@ suite "viewhighlight: Highlight trailing spaces":
 
   test "Highlight trailing spaces 3":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru" "])
 
     status.settings.highlight.currentWord = false
@@ -344,7 +345,7 @@ suite "viewhighlight: highlightPairOfParen":
 
       test testTitle:
         var status = initEditorStatus()
-        status.addNewBufferInCurrentWin
+        discard status.addNewBufferInCurrentWin.get
 
         status.bufStatus[0].buffer = buffer.toGapBuffer
 
@@ -744,7 +745,7 @@ suite "viewhighlight: highlightPairOfParen":
 
   test "Highlight ')'":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin("test.nim")
+    discard status.addNewBufferInCurrentWin("test.nim").get
     currentBufStatus.buffer = initGapBuffer(@[ru"proc test(a: string) ="])
     status.initHighlight
     currentMainWindowNode.currentColumn = 9
@@ -762,7 +763,7 @@ suite "viewhighlight: highlightPairOfParen":
 
   test "Highlight '('":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin("test.nim")
+    discard status.addNewBufferInCurrentWin("test.nim").get
     currentBufStatus.buffer = initGapBuffer(@[ru"proc test(a: string) ="])
     status.initHighlight
     currentMainWindowNode.currentColumn = 19
@@ -795,7 +796,7 @@ suite "viewhighlight: highlightPairOfParen":
 suite "viewhighlight: Update search highlight":
   test "single window":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin("test.nim")
+    discard status.addNewBufferInCurrentWin("test.nim").get
     currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
 
     updateTerminalSize(100, 100)
@@ -820,7 +821,7 @@ suite "viewhighlight: Update search highlight":
 
   test "two windows":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin("test.nim")
+    discard status.addNewBufferInCurrentWin("test.nim").get
     currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
 
     updateTerminalSize(100, 100)
@@ -866,7 +867,7 @@ echo "test"
 """.splitLines.toSeqRunes
 
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin("test.nim")
+    discard status.addNewBufferInCurrentWin("test.nim").get
     currentBufStatus.buffer = Buffer.toGapBuffer
 
     const ReservedWords: seq[ReservedWord] = @[]
@@ -1004,7 +1005,7 @@ echo "test"
 """.splitLines
 
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin("test.nim")
+    discard status.addNewBufferInCurrentWin("test.nim").get
 
     for i in 0..100:
       currentBufStatus.buffer.add ru""

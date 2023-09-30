@@ -367,14 +367,13 @@ proc addNewBuffer*(status: var EditorStatus, mode: Mode): Result[int, string] =
 proc addNewBufferInCurrentWin*(
   status: var EditorStatus,
   path: string,
-  mode: Mode) =
+  mode: Mode): Result[(), string] =
     ## Add a new buffer and change the current buffer to it and init an editor
     ## view.
 
-    # TODO: Return an Error.
-
     let index = status.addNewBuffer(path, mode)
-    if index.isErr: return
+    if index.isErr:
+      return Result[(), string].err fmt"Failed to add new buffer: {index.error}"
 
     status.changeCurrentBuffer(index.get)
 
@@ -387,19 +386,22 @@ proc addNewBufferInCurrentWin*(
 
     currentBufStatus.isReadonly = status.isReadonly
 
+    return Result[(), string].ok ()
+
 proc addNewBufferInCurrentWin*(
   status: var EditorStatus,
-  mode: Mode) {.inline.} =
+  mode: Mode): Result[(), string] {.inline.} =
     status.addNewBufferInCurrentWin("", mode)
 
 proc addNewBufferInCurrentWin*(
   status: var EditorStatus,
-  filename: string) {.inline.} =
+  filename: string): Result[(), string] {.inline.} =
     status.addNewBufferInCurrentWin(filename, Mode.normal)
 
-proc addNewBufferInCurrentWin*(status: var EditorStatus) {.inline.} =
-  const Path = ""
-  status.addNewBufferInCurrentWin(Path)
+proc addNewBufferInCurrentWin*(
+  status: var EditorStatus): Result[(), string] {.inline.} =
+    const Path = ""
+    status.addNewBufferInCurrentWin(Path)
 
 proc resizeMainWindowNode(status: var EditorStatus, terminalSize: Size) =
   let

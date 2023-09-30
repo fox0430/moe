@@ -18,6 +18,7 @@
 #[############################################################################]#
 
 import std/[os, re]
+import pkg/results
 import editorstatus, ui, unicodeext, bufferstatus, movement, gapbuffer,
        messages, windownode
 
@@ -27,7 +28,8 @@ proc openSelectedBuffer(status: var EditorStatus) =
     filename = status.bufStatus[currentMainWindowNode.bufferIndex].buffer[line]
 
   if fileExists($filename):
-    status.addNewBufferInCurrentWin($filename)
+    if status.addNewBufferInCurrentWin($filename).isErr:
+      status.commandLine.writeFileOpenError($filename)
   else:
     status.commandLine.writeFileNotFoundError(filename)
 

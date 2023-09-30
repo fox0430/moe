@@ -49,7 +49,7 @@ proc addBufferStatus(status: var EditorStatus, parsedList: CmdParsedList) =
 
   if parsedList.path.len == 0:
     # Add a new empty buffer
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin
   else:
     # Check git command.
     let isGitAvailable = isGitAvailable()
@@ -67,15 +67,18 @@ proc addBufferStatus(status: var EditorStatus, parsedList: CmdParsedList) =
         if isGitAvailable:
           status.bufStatus[^1].isTrackingByGit = isTrackingByGit($path)
 
-    if status.settings.startUp.fileOpen.autoSplit:
+    if status.settings.startUp.fileOpen.autoSplit and status.bufStatus.len > 1:
       # Display all added buffers in split view.
 
       for i in 0 .. status.bufStatus.high:
         status.initCurrentMainWindowView
 
         if i == status.bufStatus.high:
+          # Set the buffer to the latest window.
           status.changeCurrentBuffer(i)
         else:
+          # Split the window and set the buffer to the window and move to the
+          # latest window.
           case status.settings.startUp.fileOpen.splitType:
             of WindowSplitType.vertical: status.verticalSplitWindow
             of WindowSplitType.horizontal: status.horizontalSplitWindow
@@ -84,8 +87,12 @@ proc addBufferStatus(status: var EditorStatus, parsedList: CmdParsedList) =
     else:
       # Display only a single buffer.
 
-      status.initCurrentMainWindowView
-      status.changeCurrentBuffer(status.bufStatus.high)
+      if status.bufStatus.len == 0:
+        # Add a new empty buffer if files couldn't be read due to some error.
+        discard status.addNewBufferInCurrentWin
+      else:
+        status.initCurrentMainWindowView
+        status.changeCurrentBuffer(status.bufStatus.high)
 
 proc initSidebar(status: var EditorStatus) =
   if status.settings.view.sidebar:
