@@ -20,7 +20,7 @@
 import std/[os, times]
 import pkg/results
 import moepkg/[ui, bufferstatus, editorstatus, cmdlineoption, mainloop, git,
-               editorview, theme, registers, settings]
+               editorview, theme, registers, settings, messages]
 
 proc loadPersistData(status: var EditorStatus) =
   ## Load persisted data (Ex command history, search history and cursor
@@ -57,11 +57,13 @@ proc addBufferStatus(status: var EditorStatus, parsedList: CmdParsedList) =
     # Open all files for dirs at received paths.
     for path in parsedList.path:
       if dirExists(path):
-        # TODO: Error handling
-        discard status.addNewBuffer(path, Mode.filer)
+        if status.addNewBuffer(path, Mode.filer).isErr:
+          status.commandLine.writeFileOpenError(path)
       else:
-        # TODO: Error handling
-        discard status.addNewBuffer(path, Mode.normal)
+        if status.addNewBuffer(path, Mode.normal).isErr:
+          status.commandLine.writeFileOpenError(path)
+          continue
+
         if isGitAvailable:
           status.bufStatus[^1].isTrackingByGit = isTrackingByGit($path)
 
@@ -82,7 +84,7 @@ proc addBufferStatus(status: var EditorStatus, parsedList: CmdParsedList) =
     else:
       # Display only a single buffer.
 
-      status.addNewBufferInCurrentWin
+      status.initCurrentMainWindowView
       status.changeCurrentBuffer(status.bufStatus.high)
 
 proc initSidebar(status: var EditorStatus) =
