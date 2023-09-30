@@ -789,6 +789,22 @@ Enable/Disable syntax checker (bool)
 enable
 ```
 
+### StartUp.FileOpen table
+
+Display all buffers in multiple views if multiple paths are received when starting the editor (bool)  
+The default is `true`
+```
+autoSplit
+```
+
+Setting the split type for `StartUp.FileOpen.autoSplit`. (string)  
+`vertical` or `horizontal`  
+The default is `vertical`
+
+```
+splitType 
+```
+
 ### Color and theme
 moe supports 24 bit color and set in hexadecimal (#000000 ~ #ffffff).
 And, `termDefaultBg` and `termDefaultFg`.
