@@ -488,14 +488,11 @@ proc colorFromNode(node: JsonNode): Rgb =
   else:
     return TerminalDefaultRgb
 
-proc parseWindowSplitType(s: string): Result[WindowSplitType, string] =
-  case s:
-    of "vertical":
-      return Result[WindowSplitType, string].ok WindowSplitType.vertical
-    of "horizontal":
-      return Result[WindowSplitType, string].ok WindowSplitType.horizontal
-    else:
-      return Result[WindowSplitType, string].err "Invalid value"
+proc parseWindowSplitType*(s: string): Result[WindowSplitType, string] =
+  try:
+    return Result[WindowSplitType, string].ok parseEnum[WindowSplitType](s)
+  except ValueError:
+    return Result[WindowSplitType, string].err "Invalid value"
 
 proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
   # Load the theme file of VSCode and adapt it as the theme of moe.
@@ -2443,9 +2440,9 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "minDelay = {$settings.smoothScroll.minDelay}"
   result.addLine fmt "maxDelay = {$settings.smoothScroll.maxDelay}"
 
-  result.addLine fmt "[StartUp.OpenFile]"
+  result.addLine fmt "[StartUp.FileOpen]"
   result.addLine fmt "autoSplit = {$settings.startUp.fileOpen.autoSplit}"
-  result.addLine fmt "splitType = {$settings.startUp.fileOpen.splitType}"
+  result.addLine fmt "splitType = \"{$settings.startUp.fileOpen.splitType}\""
 
   result.addLine fmt "[Debug.WindowNode]"
   result.addLine fmt "enable = {$settings.debugMode.windowNode.enable}"

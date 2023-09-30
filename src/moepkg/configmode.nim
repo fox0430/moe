@@ -155,6 +155,10 @@ type
     minDelay
     maxDelay
 
+  StartUpFileOpenSettingsTableNames {.pure.} = enum
+    autoSplit
+    splitType
+
   SettingType {.pure.} = enum
     none
     bool
@@ -187,6 +191,7 @@ proc positionOfSetVal(): int {.compileTime.} =
   for name in GitTableNames: names.add $name
   for name in SyntaxCheckerTableNames: names.add $name
   for name in SmoothScrollTableNames: names.add $name
+  for name in StartUpFileOpenSettingsTableNames: names.add $name
   for name in EditorColorPairIndex: names.add $name
 
   for name in names:
@@ -221,14 +226,14 @@ proc getStandardTableSettingValues(
       let theme = settings.editorColorTheme
       result = getColorThemeSettingValues(theme)
     elif name == "defaultCursor":
-        let currentCursorType = settings.defaultCursor
-        result = getCursorTypeSettingValues(currentCursorType)
+      let currentCursorType = settings.defaultCursor
+      result = getCursorTypeSettingValues(currentCursorType)
     elif name == "normalModeCursor":
-        let currentCursorType = settings.normalModeCursor
-        result = getCursorTypeSettingValues(currentCursorType)
+      let currentCursorType = settings.normalModeCursor
+      result = getCursorTypeSettingValues(currentCursorType)
     elif name == "insertModeCursor":
-        let currentCursorType = settings.insertModeCursor
-        result = getCursorTypeSettingValues(currentCursorType)
+      let currentCursorType = settings.insertModeCursor
+      result = getCursorTypeSettingValues(currentCursorType)
     elif name == "colorMode":
       result = settings.colorMode.getColorModeSettingValues
     else:
@@ -600,6 +605,22 @@ proc getSmoothScrollTableSettingsValues(
       of "maxDelay":
         result = @[toRunes($s.maxDelay)]
 
+proc getStartUpFileOpenSettingsValues(
+  s: StartUpFileOpenSettings,
+  name: string): seq[Runes] =
+
+    case name
+      of "autoSplit":
+        if s.autoSplit:
+          result = @[ru "true", ru "false"]
+        else:
+          result = @[ru "false", ru "true"]
+      of "splitType":
+        if s.splitType == WindowSplitType.vertical:
+          result = @[ru "vertical", ru "horizontal"]
+        else:
+          result = @[ru "horizontal", ru "vertical"]
+
 proc getSettingValues(
   settings: EditorSettings,
   settingType: SettingType,
@@ -642,6 +663,8 @@ proc getSettingValues(
         result = settings.syntaxChecker.getSyntaxCheckerTableSettingsValues(name)
       of "SmoothScroll":
         result = settings.smoothScroll.getSmoothScrollTableSettingsValues(name)
+      of "StartUp.FileOpen":
+        result = settings.startUp.fileOpen.getStartUpFileOpenSettingsValues(name)
       of "Theme":
         discard
       else:
@@ -954,6 +977,16 @@ proc changeSmoothScrollTableSettings(
       else:
         discard
 
+proc changeStartUpFileOpenSettingsTableSettings(
+  s: var StartUpFileOpenSettings,
+  settingName, settingVal: string) =
+
+    case settingName:
+      of "autoSplit":
+        s.autoSplit = settingVal.parseBool
+      of "splitType":
+        s.splitType = settingVal.parseWindowSplitType.get
+
 proc toColorLayer(s: string): Result[ColorLayer, string] =
   var cl: ColorLayer
   try:
@@ -1035,6 +1068,9 @@ proc changeEditorSettings(
     template SmoothScrollSettings: var SmoothScrollSettings =
       status.settings.smoothScroll
 
+    template StartUpFileOpenSettings: var StartUpFileOpenSettings =
+      status.settings.startUp.fileOpen
+
     case table:
       of "Standard":
         changeStandardTableSetting()
@@ -1053,8 +1089,9 @@ proc changeEditorSettings(
       of "QuickRun":
         quickRunSettings.changeQuickRunTableSetting(settingName, settingVal)
       of "Notification":
-        notificationSettings.changeNotificationTableSetting(settingName,
-                                                            settingVal)
+        notificationSettings.changeNotificationTableSetting(
+          settingName,
+          settingVal)
       of "Filer":
         filerSettings.changeFilerTableSetting(settingName, settingVal)
       of "Autocomplete":
@@ -1067,6 +1104,10 @@ proc changeEditorSettings(
         SyntaxCheckerSettings.changeSyntaxCheckerTableSettings(settingName, settingVal)
       of "SmoothScroll":
         SmoothScrollSettings.changeSmoothScrollTableSettings(settingName, settingVal)
+      of "StartUp.FileOpen":
+        StartUpFileOpenSettings.changeStartUpFileOpenSettingsTableSettings(
+          settingName,
+          settingVal)
       else:
         discard
 
@@ -1256,6 +1297,13 @@ proc getSettingType(table, name: string): SettingType =
       else:
         result = SettingType.none
 
+  template startUpFileOpenTable() =
+    case name:
+      of "autoSplit":
+        result = SettingType.bool
+      of "splitType":
+        result = SettingType.enums
+
   case table:
     of "Standard":
       standardTable()
@@ -1285,6 +1333,8 @@ proc getSettingType(table, name: string): SettingType =
       syntaxCheckerTable()
     of "SmoothScroll":
       smoothScrollTable()
+    of "StartUp.FileOpen":
+      startUpFileOpenTable()
     of "Theme":
       return SettingType.text
 
@@ -2087,6 +2137,20 @@ proc initSmoothScrollTableBuffer(settings: SmoothScrollSettings): seq[Runes] =
       of "maxDelay":
         result.add(ru nameStr & space & $settings.maxDelay)
 
+proc initStartUpFileOpenTableBuffer(
+  settings: StartUpFileOpenSettings): seq[Runes] =
+    result.add(ru"StartUp.FileOpen")
+
+    for name in StartUpFileOpenSettingsTableNames:
+      let
+        nameStr = Indent & $name
+        space = " ".repeat(positionOfSetVal() - len($name))
+      case name:
+        of StartUpFileOpenSettingsTableNames.autoSplit:
+          result.add(ru nameStr & space & $settings.autoSplit)
+        of StartUpFileOpenSettingsTableNames.splitType:
+          result.add(ru nameStr & space & $settings.splitType)
+
 proc initThemeTableBuffer*(s: EditorSettings): seq[Runes] =
   result.add(ru"Theme")
 
@@ -2157,6 +2221,9 @@ proc initConfigModeBuffer*(settings: EditorSettings): GapBuffer[Runes] =
 
   buffer.add ru""
   buffer.add initSmoothScrollTableBuffer(settings.smoothScroll)
+
+  buffer.add ru""
+  buffer.add initStartUpFileOpenTableBuffer(settings.startUp.fileOpen)
 
   buffer.add(ru"")
   buffer.add(initThemeTableBuffer(settings))
