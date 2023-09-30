@@ -224,6 +224,10 @@ minDelay = 5
 
 maxDelay = 20
 
+[StartUp.FileOpen]
+autoSplit = true
+splitType = "vertical"
+
 [Debug.WindowNode]
 enable = true
 currentWindow = true

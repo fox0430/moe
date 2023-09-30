@@ -149,6 +149,10 @@ const TomlStr = """
   minDelay = 1
   maxDelay = 1
 
+  [StartUp.FileOpen]
+  autoSplit = false
+  splitType = "horizontal"
+
   [Debug.WindowNode]
   enable = false
   currentWindow = false
@@ -465,6 +469,9 @@ suite "Parse configuration file":
     check not settings.smoothScroll.enable
     check settings.smoothScroll.minDelay == 1
     check settings.smoothScroll.maxDelay == 1
+
+    check not settings.startUp.fileOpen.autoSplit
+    check settings.startUp.fileOpen.splitType == WindowSplitType.horizontal
 
     check not settings.debugMode.windowNode.enable
     check not settings.debugMode.windowNode.currentWindow
