@@ -18,12 +18,13 @@
 #[############################################################################]#
 
 import std/unittest
+import pkg/results
 import moepkg/[editorstatus, unicodeext, exmode]
 
 test "All buffer force quit command":
   var status = initEditorStatus()
   for i in 0 ..< 2:
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     status.bufStatus[i].countChange = 1
   status.verticalSplitWindow
 

@@ -18,11 +18,12 @@
 #[############################################################################]#
 
 import std/unittest
+import pkg/results
 import moepkg/[editorstatus, unicodeext, exmode]
 
 test "Force quit command":
   var status = initEditorStatus()
-  status.addNewBufferInCurrentWin
+  discard status.addNewBufferInCurrentWin.get
 
   status.bufStatus[0].countChange = 1
   const Command = @[ru"q!"]

@@ -18,11 +18,12 @@
 #[############################################################################]#
 
 import std/unittest
+import pkg/results
 import moepkg/[editorstatus, unicodeext, exmode, ui]
 
 test "All buffer quit command":
   var status = initEditorStatus()
-  status.addNewBufferInCurrentWin
+  discard status.addNewBufferInCurrentWin.get
   status.verticalSplitWindow
 
   updateTerminalSize(100, 100)

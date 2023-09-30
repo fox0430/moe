@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[sequtils, strutils, os, times, options]
+import std/[sequtils, strutils, os, times, options, strformat]
 import pkg/results
 import syntax/highlite
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
@@ -84,7 +84,7 @@ proc openConfigMode(status: var EditorStatus) =
   status.resize
   status.moveNextWindow
 
-  status.addNewBufferInCurrentWin(bufferstatus.Mode.config)
+  discard status.addNewBufferInCurrentWin(bufferstatus.Mode.config)
   status.changeCurrentBuffer(status.bufStatus.high)
 
   currentBufStatus.buffer = initConfigModeBuffer(status.settings)
@@ -122,7 +122,7 @@ proc startRecentFileMode(status: var EditorStatus) =
   status.resize
   status.moveNextWindow
 
-  status.addNewBufferInCurrentWin
+  discard status.addNewBufferInCurrentWin
   status.changeCurrentBuffer(status.bufStatus.high)
   status.changeMode(bufferstatus.Mode.recentFile)
 
@@ -153,7 +153,7 @@ proc runQuickRunCommand(status: var EditorStatus) =
     status.resize
     status.moveNextWindow
 
-    status.addNewBufferInCurrentWin("")
+    discard status.addNewBufferInCurrentWin
     status.changeCurrentBuffer(status.bufStatus.high)
     currentBufStatus.path = quickRunProcess.get.filePath.toRunes
     currentBufStatus.buffer[0] =
@@ -214,8 +214,7 @@ proc openHelp(status: var EditorStatus) =
   status.resize
   status.moveNextWindow
 
-  const Path = ""
-  status.addNewBufferInCurrentWin(Path, Mode.help)
+  discard status.addNewBufferInCurrentWin(Mode.help)
 
   status.resize
 
@@ -226,7 +225,7 @@ proc openLogViewer(status: var EditorStatus) =
   status.resize
   status.moveNextWindow
 
-  status.addNewBufferInCurrentWin(Mode.logviewer)
+  discard status.addNewBufferInCurrentWin(Mode.logviewer)
   status.resize
 
   status.changeCurrentBuffer(status.bufStatus.high)
@@ -238,7 +237,7 @@ proc openBufferManager(status: var EditorStatus) =
   status.resize
   status.moveNextWindow
 
-  status.addNewBufferInCurrentWin
+  discard status.addNewBufferInCurrentWin
   status.changeCurrentBuffer(status.bufStatus.high)
   status.changeMode(bufferstatus.Mode.bufManager)
   currentBufStatus.buffer = status.bufStatus.initBufferManagerBuffer.toGapBuffer
@@ -544,7 +543,8 @@ proc deleteBufferStatusCommand(status: var EditorStatus, index: int) =
 
   status.bufStatus.delete(index)
 
-  if status.bufStatus.len == 0: status.addNewBufferInCurrentWin
+  if status.bufStatus.len == 0:
+    discard status.addNewBufferInCurrentWin
   elif status.bufferIndexInCurrentWindow > status.bufStatus.high:
     currentMainWindowNode.bufferIndex = status.bufStatus.high
 
@@ -611,9 +611,15 @@ proc editCommand(status: var EditorStatus, path: Runes) =
     var bufferIndex = status.bufStatus.checkBufferExist(path)
     if isNone(bufferIndex):
       if dirExists($path):
-        status.addNewBufferInCurrentWin($path, bufferstatus.Mode.filer)
+        let err = status.addNewBufferInCurrentWin($path, Mode.filer)
+        if err.isErr:
+          addMessageLog toRunes(fmt"Failed to open dir: {$path}: {err.error}")
+          status.commandLine.writeFileOpenError($path)
       else:
-        status.addNewBufferInCurrentWin($path)
+        let err = status.addNewBufferInCurrentWin($path)
+        if err.isErr:
+          addMessageLog toRunes(fmt"Failed to open file: {$path}: {err.error}")
+          status.commandLine.writeFileOpenError($path)
 
       bufferIndex = some(status.bufStatus.high)
 
@@ -962,7 +968,7 @@ proc manualCommand(status: var EditorStatus, manualInvocationCommand: string) =
 
 proc listAllBufferCommand(status: var EditorStatus) =
   let swapCurrentBufferIndex = currentMainWindowNode.bufferIndex
-  status.addNewBufferInCurrentWin
+  discard status.addNewBufferInCurrentWin
   status.changeCurrentBuffer(status.bufStatus.high)
 
   for i in 0 ..< status.bufStatus.high:
@@ -1064,7 +1070,7 @@ proc createNewEmptyBufferCommand*(status: var EditorStatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   if status.bufStatus[currentBufferIndex].countChange == 0 or
      mainWindowNode.countReferencedWindow(currentBufferIndex) > 1:
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin
     status.changeCurrentBuffer(status.bufStatus.high)
   else:
     status.commandLine.writeNoWriteError
@@ -1075,7 +1081,7 @@ proc newEmptyBufferInSplitWindowHorizontally*(status: var EditorStatus) =
   status.horizontalSplitWindow
   status.resize
 
-  status.addNewBufferInCurrentWin
+  discard status.addNewBufferInCurrentWin
 
   status.changeCurrentBuffer(status.bufStatus.high)
 
@@ -1085,7 +1091,7 @@ proc newEmptyBufferInSplitWindowVertically*(status: var EditorStatus) =
   status.verticalSplitWindow
   status.resize
 
-  status.addNewBufferInCurrentWin
+  discard status.addNewBufferInCurrentWin
 
   status.changeCurrentBuffer(status.bufStatus.high)
 

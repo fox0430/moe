@@ -18,6 +18,7 @@
 #[############################################################################]#
 
 import std/[unittest, critbits, importutils, options]
+import pkg/results
 import moepkg/[editorstatus, gapbuffer, unicodeext]
 
 import moepkg/suggestionwindow {.all.}
@@ -25,7 +26,7 @@ import moepkg/suggestionwindow {.all.}
 suite "suggestionwindow: buildSuggestionWindow":
   test "Case 1":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(
       @["test".ru,
         "test2".ru,
@@ -64,7 +65,7 @@ suite "suggestionwindow: buildSuggestionWindow":
 
   test "Case 2":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(
       @["/".ru])
 
@@ -101,7 +102,7 @@ suite "suggestionwindow: buildSuggestionWindow":
 
   test "Case 3":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@["a".ru])
 
     currentMainWindowNode.currentColumn = 1

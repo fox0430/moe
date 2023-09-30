@@ -19,7 +19,7 @@
 
 import std/[unittest, strutils, importutils]
 import moepkg/[unicodeext, gapbuffer, editorstatus, bufferstatus, ui]
-import pkg/ncurses
+import pkg/[ncurses, results]
 
 import moepkg/helputils {.all.}
 import moepkg/help {.all.}
@@ -31,8 +31,7 @@ let CONTROL_K = 11
 proc initHelpMode(): EditorStatus =
   result = initEditorStatus()
 
-  let path = ""
-  result.addNewBufferInCurrentWin(path, Mode.help)
+  discard result.addNewBufferInCurrentWin(Mode.help).get
   result.resize
 
 suite "initHelpModeBuffer":

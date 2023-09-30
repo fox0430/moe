@@ -282,9 +282,12 @@ proc initBufferStatus*(
       fileType: getFileType(path))
 
     if isFilerMode(mode):
-      b.path = absolutePath(path).toRunes
-      b.buffer = initGapBuffer(@[ru""])
-      return Result[BufferStatus, string].ok b
+      if isAccessibleDir(path):
+        b.path = absolutePath(path).toRunes
+        b.buffer = initGapBuffer(@[ru""])
+        return Result[BufferStatus, string].ok b
+      else:
+        return Result[BufferStatus, string].err "Can not open dir"
     else:
       b.path = path.toRunes
 

@@ -129,7 +129,7 @@ suite "mainloop: execMacro":
 
   test "Single dd command":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["1", "2"].toSeqRunes.initGapBuffer
 
     status.resize(100, 100)
@@ -143,7 +143,7 @@ suite "mainloop: execMacro":
 
   test "Two dd commands":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["1", "2", "3"].toSeqRunes.initGapBuffer
 
     status.resize(100, 100)
@@ -157,7 +157,7 @@ suite "mainloop: execMacro":
 
   test "j and dd commands":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["1", "2", "3"].toSeqRunes.initGapBuffer
 
     status.resize(100, 100)
@@ -175,7 +175,7 @@ suite "mainloop: execEditorCommand":
 
   test "Exec normal mode commands":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["1", "2"].toSeqRunes.initGapBuffer
 
     status.resize(100, 100)
@@ -189,7 +189,7 @@ suite "mainloop: execEditorCommand":
 
   test "Enter to Ex mode":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["1", "2"].toSeqRunes.initGapBuffer
 
     status.resize(100, 100)
@@ -202,7 +202,7 @@ suite "mainloop: execEditorCommand":
 
   test "Recoding commands":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["1", "2"].toSeqRunes.initGapBuffer
 
     status.resize(100, 100)
@@ -225,7 +225,7 @@ suite "mainloop: execEditorCommand":
 
   test "Exec macro":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["1", "2", "3"].toSeqRunes.initGapBuffer
 
     status.resize(100, 100)
@@ -241,7 +241,7 @@ suite "mainloop: execEditorCommand":
 
   test "Exec macro 2":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["1", "2", "3"].toSeqRunes.initGapBuffer
 
     status.resize(100, 100)
@@ -257,7 +257,7 @@ suite "mainloop: execEditorCommand":
 
   test "Exec macro 3":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["1", "2", "3"].toSeqRunes.initGapBuffer
 
     status.resize(100, 100)
@@ -274,7 +274,7 @@ suite "mainloop: execEditorCommand":
 
   test "Repeat macro":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["1", "2"].toSeqRunes.initGapBuffer
 
     status.resize(100, 100)

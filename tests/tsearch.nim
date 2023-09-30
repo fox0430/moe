@@ -18,6 +18,7 @@
 #[############################################################################]#
 
 import std/[unittest, options, strformat]
+import pkg/results
 import moepkg/[unicodeext, editorstatus, gapbuffer, independentutils]
 
 import moepkg/searchutils {.all.}
@@ -101,7 +102,7 @@ suite "search: searchLineReversely":
 suite "search: searchBuffer":
   test "searchBuffer":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     let
       line1 = ru"abc def"
@@ -121,7 +122,7 @@ suite "search: searchBuffer":
 
   test "searchBuffer 2":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     let
       line1 = ru"abc def"
@@ -141,7 +142,7 @@ suite "search: searchBuffer":
 suite "search: searchBufferReversely":
   test "searchBufferReversely":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     let
       line1 = ru"abc def"
@@ -164,7 +165,7 @@ suite "search: searchBufferReversely":
 
   test "searchBufferReversely 2":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     let
       line1 = ru"abc def"
@@ -187,7 +188,7 @@ suite "search: searchBufferReversely":
 suite "search: searchAllOccurrence":
   test "searchAllOccurrence":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     const
       Line1 = "abc def"
@@ -216,7 +217,7 @@ suite "search: searchAllOccurrence":
 
   test "searchAllOccurrence 2":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     const
       Line1 = "abc def"
@@ -537,7 +538,7 @@ suite "search: matchingParenPair":
 
       test testTitle:
         var status = initEditorStatus()
-        status.addNewBufferInCurrentWin
+        discard status.addNewBufferInCurrentWin.get
 
         status.bufStatus[0].buffer = `buffer`.toGapBuffer
 

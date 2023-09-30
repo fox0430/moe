@@ -241,3 +241,9 @@ proc saveFile*(
 
     return SaveFileResult.ok ()
 
+
+proc isAccessibleDir*(path: string): bool =
+  ## Return true if the path is a directory and accessible.
+
+  if dirExists(path):
+    for _ in walkDir(path): return true

@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os]
+import std/[unittest, os, oids]
 import moepkg/[editorstatus, cmdlineoption, bufferstatus, unicodeext, gapbuffer,
                windownode, settings]
 
@@ -102,7 +102,7 @@ suite "moe: addBufferStatus":
 
     check mainWindowNode.getAllWindowNode.len == 2
     check currentMainWindowNode.bufferIndex == 1
-    check currentMainWindowNode.parent.splitType == SplitType.horaizontal
+    check currentMainWindowNode.parent.splitType == SplitType.horizontal
 
   test "2 files and startUp.fileOpen.autoSplit = false":
     var status = initEditorStatus()
@@ -123,3 +123,46 @@ suite "moe: addBufferStatus":
 
     check mainWindowNode.getAllWindowNode.len == 1
     check currentMainWindowNode.bufferIndex == 1
+
+  test "Open an unreadable file":
+    # Create an unreadable file for the test.
+    let path = $genOid()
+    writeFile(path, "hello")
+    const Permissions = {fpUserWrite}
+    setFilePermissions(path, Permissions)
+
+    var status = initEditorStatus()
+    let parsedList = CmdParsedList(path: @[path])
+
+    status.addBufferStatus(parsedList)
+
+    if fileExists(path): removeFile(path)
+
+    check status.bufStatus.len == 1
+    check currentBufStatus.buffer.toSeqRunes == @[ru""]
+    check currentBufStatus.path == ru""
+    check currentBufStatus.mode == Mode.normal
+
+    check currentMainWindowNode.bufferIndex == 0
+
+  test "Open an unreadable dir":
+    # Create an unreadable dir for the test.
+    let path = $genOid()
+    createDir(path)
+    const Permissions = {fpUserWrite}
+    setFilePermissions(path, Permissions)
+
+    var status = initEditorStatus()
+    let parsedList = CmdParsedList(path: @[path])
+
+    status.addBufferStatus(parsedList)
+
+    if dirExists(path): removeDir(path)
+
+    check status.bufStatus.len == 1
+    check currentBufStatus.buffer.toSeqRunes == @[ru""]
+    check currentBufStatus.path == ru""
+    check currentBufStatus.mode == Mode.normal
+
+    check currentMainWindowNode.bufferIndex == 0
+
