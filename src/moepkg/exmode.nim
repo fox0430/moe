@@ -128,6 +128,8 @@ proc startRecentFileMode(status: var EditorStatus) =
 
   currentBufStatus.initRecentFileModeBuffer
 
+  status.resize
+
 proc runQuickRunCommand(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 

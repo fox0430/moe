@@ -1448,3 +1448,15 @@ suite "Ex mode: deleteTrailingSpaces":
 
     check currentBufStatus.buffer.toSeqRunes == @[ru""]
     check currentMainWindowNode.currentColumn == 0
+
+suite "exmode: startRecentFileMode":
+  test "start Recentfile mode":
+    # NOTE: https://github.com/fox0430/moe/issues/1875
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+
+    status.resize(100, 100)
+    status.update
+
+    status.startRecentFileMode
+    status.update
