@@ -18,6 +18,7 @@
 #[############################################################################]#
 
 import std/unittest
+import pkg/results
 import moepkg/[editorstatus, editorview, ui]
 
 import moepkg/windownode {.all.}
@@ -29,7 +30,7 @@ proc resize(status: var EditorStatus, h, w: int) =
 suite "windownode: absolutePosition":
   test "Eanble EditorView.Sidebar":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentMainWindowNode.view.initSidebar
 
     status.resize(100, 100)
@@ -40,7 +41,7 @@ suite "windownode: absolutePosition":
   test "Disable EditorView.Sidebar":
     var status = initEditorStatus()
     status.settings.view.sidebar = false
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     status.resize(100, 100)
     status.update

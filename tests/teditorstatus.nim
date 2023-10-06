@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, os, importutils, sequtils]
+import std/[unittest, options, os, importutils, sequtils, oids]
 import pkg/results
 import moepkg/[editor, gapbuffer, bufferstatus, editorview, unicodeext, ui,
                highlight, windownode, movement, build, backgroundprocess,
@@ -29,12 +29,86 @@ proc resize(status: var EditorStatus, h, w: int) =
   updateTerminalSize(h, w)
   status.resize
 
+suite "addNewBufferInCurrentWin":
+  test "Empty buffer":
+    # Create a file for the test.
+    let path = $genOid()
+    writeFile(path, "hello")
+
+    var status = initEditorStatus()
+    let r = status.addNewBufferInCurrentWin
+
+    if fileExists(path): removeFile(path)
+
+    check r.isOk
+    check status.bufStatus.len == 1
+    check currentBufStatus.path == ru""
+    check currentBufStatus.buffer.toSeqRunes == @[ru""]
+
+    check mainWindowNode.getAllWindowNode.len == 1
+
+  test "Open a new":
+    # Create a file for the test.
+    let path = $genOid()
+    writeFile(path, "hello")
+
+    var status = initEditorStatus()
+    let r = status.addNewBufferInCurrentWin(path)
+
+    if fileExists(path): removeFile(path)
+
+    check r.isOk
+    check status.bufStatus.len == 1
+    check currentBufStatus.path == path.toRunes
+    check currentBufStatus.buffer.toSeqRunes == @[ru"hello"]
+
+    check mainWindowNode.getAllWindowNode.len == 1
+
+  test "Open a dir":
+    const Path = "./"
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin(Path).get
+
+    check status.bufStatus.len == 1
+    check currentBufStatus.path == ru"./"
+    check currentBufStatus.buffer.len > 0
+
+    check mainWindowNode.getAllWindowNode.len == 1
+
+  test "Open an unreadable file":
+    # Create an unreadable file for the test.
+    let path = $genOid()
+    writeFile(path, "hello")
+    const Permissions = {fpUserWrite}
+    setFilePermissions(path, Permissions)
+
+    var status = initEditorStatus()
+    let r = status.addNewBufferInCurrentWin(path)
+
+    if fileExists(path): removeFile(path)
+
+    check r.isErr
+
+  test "Open an unreadable dir":
+    # Create an unreadable dir for the test.
+    let path = $genOid()
+    createDir(path)
+    const Permissions = {fpUserWrite}
+    setFilePermissions(path, Permissions)
+
+    var status = initEditorStatus()
+    let r = status.addNewBufferInCurrentWin(path, Mode.filer)
+
+    if dirExists(path): removeDir(path)
+
+    check r.isErr
+
 suite "Open new buffers in the current window":
   test "Open 2 buffers":
     var status = initEditorStatus()
     status.settings.view.sidebar = false
 
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     status.resize(100, 100)
     status.update
 
@@ -44,7 +118,7 @@ suite "Open new buffers in the current window":
       check mainWindowNode.getAllWindowNode.len == 1
       check currentMainWindowNode.view.sidebar.isNone
 
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     status.resize(100, 100)
     status.update
 
@@ -58,7 +132,7 @@ suite "Open new buffers in the current window":
     var status = initEditorStatus()
     status.settings.view.sidebar = true
 
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     status.resize(100, 100)
     status.update
 
@@ -68,7 +142,7 @@ suite "Open new buffers in the current window":
       check mainWindowNode.getAllWindowNode.len == 1
       check currentMainWindowNode.view.sidebar.isSome
 
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     status.resize(100, 100)
     status.update
 
@@ -81,14 +155,14 @@ suite "Open new buffers in the current window":
   test "Add new buffer (Dir)":
     var status = initEditorStatus()
 
-    status.addNewBufferInCurrentWin("./")
+    discard status.addNewBufferInCurrentWin("./").get
 
     status.resize(100, 100)
     status.update
 
 test "Add new buffer and update editor view when disabling current line highlighting (Fix #1189)":
   var status = initEditorStatus()
-  status.addNewBufferInCurrentWin
+  discard status.addNewBufferInCurrentWin.get
   status.settings.view.highlightCurrentLine = false
 
   status.resize(100, 100)
@@ -96,19 +170,19 @@ test "Add new buffer and update editor view when disabling current line highligh
 
 test "Vertical split window":
   var status = initEditorStatus()
-  status.addNewBufferInCurrentWin
+  discard status.addNewBufferInCurrentWin.get
   status.resize(100, 100)
   status.verticalSplitWindow
 
 test "Horizontal split window":
   var status = initEditorStatus()
-  status.addNewBufferInCurrentWin
+  discard status.addNewBufferInCurrentWin.get
   status.resize(100, 100)
   status.horizontalSplitWindow
 
 test "resize 1":
   var status = initEditorStatus()
-  status.addNewBufferInCurrentWin
+  discard status.addNewBufferInCurrentWin.get
   status.resize(100, 100)
   currentBufStatus.buffer = initGapBuffer(@[ru"a"])
 
@@ -124,7 +198,7 @@ test "resize 1":
 
 test "resize 2":
   var status = initEditorStatus()
-  status.addNewBufferInCurrentWin
+  discard status.addNewBufferInCurrentWin.get
   status.resize(100, 100)
   currentBufStatus.buffer = initGapBuffer(@[ru"a"])
 
@@ -153,7 +227,7 @@ test "Auto delete paren 1":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"()"])
     currentBufStatus.deleteCharacter(
       currentMainWindowNode.currentLine,
@@ -166,7 +240,7 @@ test "Auto delete paren 1":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"()"])
     currentBufStatus.keyRight(currentMainWindowNode)
 
@@ -182,7 +256,7 @@ test "Auto delete paren 2":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"(())"])
 
     currentBufStatus.deleteCharacter(
@@ -196,7 +270,7 @@ test "Auto delete paren 2":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"(())"])
     currentBufStatus.keyRight(currentMainWindowNode)
 
@@ -211,7 +285,7 @@ test "Auto delete paren 2":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"(())"])
 
     for i in 0 ..< 2:
@@ -228,7 +302,7 @@ test "Auto delete paren 2":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"(())"])
     for i in 0 ..< 3:
       currentBufStatus.keyRight(currentMainWindowNode)
@@ -245,7 +319,7 @@ test "Auto delete paren 3":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     currentBufStatus.buffer = initGapBuffer(@[ru"(()"])
 
@@ -260,7 +334,7 @@ test "Auto delete paren 3":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"(()"])
     currentBufStatus.keyRight(currentMainWindowNode)
 
@@ -275,7 +349,7 @@ test "Auto delete paren 3":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"(()"])
     for i in 0 ..< 2:
       currentBufStatus.keyRight(currentMainWindowNode)
@@ -291,7 +365,7 @@ test "Auto delete paren 3":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"())"])
 
     currentBufStatus.deleteCharacter(
@@ -305,7 +379,7 @@ test "Auto delete paren 3":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"())"])
     currentBufStatus.keyRight(currentMainWindowNode)
 
@@ -320,7 +394,7 @@ test "Auto delete paren 3":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"())"])
 
     for i in 0 ..< 3:
@@ -338,7 +412,7 @@ test "Auto delete paren 4":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"(", ru")"])
 
     currentBufStatus.deleteCharacter(
@@ -353,7 +427,7 @@ test "Auto delete paren 4":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"(", ru")"])
     currentBufStatus.keyDown(currentMainWindowNode)
 
@@ -370,7 +444,7 @@ test "Auto delete paren 5":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"()"])
     status.changeMode(Mode.insert)
     currentBufStatus.keyRight(currentMainWindowNode)
@@ -385,7 +459,7 @@ test "Auto delete paren 5":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"()"])
     status.changeMode(Mode.insert)
     for i in 0 ..< 2:
@@ -402,7 +476,7 @@ test "Auto delete paren 6":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"(a(a))"])
 
     status.changeMode(Mode.insert)
@@ -421,7 +495,7 @@ test "Auto delete paren 6":
     var status = initEditorStatus()
     status.settings.autoDeleteParen = true
 
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"(a(a))"])
 
     status.changeMode(Mode.insert)
@@ -438,7 +512,7 @@ test "Auto delete paren 6":
 
 test "Write tab line":
   var status = initEditorStatus()
-  status.addNewBufferInCurrentWin("test.txt")
+  discard status.addNewBufferInCurrentWin("test.txt").get
 
   status.resize(100, 100)
 
@@ -447,14 +521,14 @@ test "Write tab line":
 
 test "Close window":
   var status = initEditorStatus()
-  status.addNewBufferInCurrentWin
+  discard status.addNewBufferInCurrentWin.get
   status.resize(100, 100)
   status.verticalSplitWindow
   status.closeWindow(currentMainWindowNode)
 
 test "Close window 2":
   var status = initEditorStatus()
-  status.addNewBufferInCurrentWin
+  discard status.addNewBufferInCurrentWin.get
 
   status.resize(100, 100)
   status.update
@@ -476,7 +550,7 @@ test "Close window 2":
 
 test "Close window 3":
   var status = initEditorStatus()
-  status.addNewBufferInCurrentWin
+  discard status.addNewBufferInCurrentWin.get
 
   status.resize(100, 100)
   status.update
@@ -503,7 +577,7 @@ test "Close window 3":
 
 test "Close window 4":
   var status = initEditorStatus()
-  status.addNewBufferInCurrentWin
+  discard status.addNewBufferInCurrentWin.get
 
   status.resize(100, 100)
   status.update
@@ -532,7 +606,7 @@ test "Close window 4":
 
 test "Close window 5":
   var status = initEditorStatus()
-  status.addNewBufferInCurrentWin("test.nim")
+  discard status.addNewBufferInCurrentWin("test.nim").get
 
   status.resize(100, 100)
   status.update
@@ -542,7 +616,7 @@ test "Close window 5":
   status.update
 
   status.moveCurrentMainWindow(1)
-  status.addNewBufferInCurrentWin("test2.nim")
+  discard status.addNewBufferInCurrentWin("test2.nim").get
   status.changeCurrentBuffer(1)
   status.resize(100, 100)
   status.update
@@ -557,7 +631,7 @@ test "Close window 5":
 test "Change current buffer":
   var status = initEditorStatus()
 
-  status.addNewBufferInCurrentWin
+  discard status.addNewBufferInCurrentWin.get
   currentBufStatus.path = ru"test"
   currentBufStatus.buffer = initGapBuffer(@[ru"", ru"abc"])
 
@@ -570,7 +644,7 @@ test "Change current buffer":
   currentMainWindowNode.currentLine = currentLine
   currentMainWindowNode.currentColumn = currentColumn
 
-  status.addNewBufferInCurrentWin
+  discard status.addNewBufferInCurrentWin.get
   currentBufStatus.path = ru"test2"
   currentBufStatus.buffer =  initGapBuffer(@[ru""])
 
@@ -583,7 +657,7 @@ suite "editorstatus: Updates/Restore the last cursor postion":
   test "Update the last cursor position (3 lines)":
     var status = initEditorStatus()
 
-    status.addNewBufferInCurrentWin("test.nim")
+    discard status.addNewBufferInCurrentWin("test.nim").get
     currentBufStatus.buffer = initGapBuffer(@[ru "a", ru "bcd", ru "e"])
     currentMainWindowNode.currentLine = 1
     currentMainWindowNode.currentColumn = 1
@@ -599,7 +673,7 @@ suite "editorstatus: Updates/Restore the last cursor postion":
   test "Update and restore the last cursor position (3 lines and edit the buffer after save)":
     var status = initEditorStatus()
 
-    status.addNewBufferInCurrentWin("test.nim")
+    discard status.addNewBufferInCurrentWin("test.nim").get
     currentBufStatus.buffer = initGapBuffer(@[ru "a", ru "bcd", ru "e"])
     currentMainWindowNode.currentLine = 1
     currentMainWindowNode.currentColumn = 1
@@ -622,9 +696,9 @@ suite "editorstatus: Updates/Restore the last cursor postion":
   test "Update and restore the last cursor position (3 lines and last line is empty)":
     var status = initEditorStatus()
 
-    status.addNewBufferInCurrentWin("test.nim")
+    discard status.addNewBufferInCurrentWin("test.nim").get
 
-    status.addNewBufferInCurrentWin("test.nim")
+    discard status.addNewBufferInCurrentWin("test.nim").get
     currentBufStatus.buffer = initGapBuffer(@[ru "a", ru "bcd", ru ""])
 
     status.resize(100, 100)
@@ -647,7 +721,7 @@ suite "editorstatus: Updates/Restore the last cursor postion":
 suite "Fix #1361":
   test "Insert a character after split window":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin("test.nim")
+    discard status.addNewBufferInCurrentWin("test.nim").get
     currentBufStatus.buffer = initGapBuffer(@[ru ""])
 
     status.resize(100, 100)
@@ -681,7 +755,7 @@ suite "BackgroundTasks":
 
   test "checkBackgroundBuild 1":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin("test.nim")
+    discard status.addNewBufferInCurrentWin("test.nim").get
     currentBufStatus.buffer = initGapBuffer(@[Buffer.toRunes])
 
     status.backgroundTasks.build.add startBackgroundBuild(
@@ -703,7 +777,7 @@ suite "BackgroundTasks":
     ## Exec background builds twice.
 
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin("test.nim")
+    discard status.addNewBufferInCurrentWin("test.nim").get
     currentBufStatus.buffer = initGapBuffer(@[Buffer.toRunes])
 
     for i in 0 .. 1:
@@ -727,7 +801,7 @@ suite "BackgroundTasks":
 suite "updateCommandLine":
   test "Write syntax checker messages":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["import std/os", "echo 1"]
       .toSeqRunes
       .toGapBuffer
@@ -747,7 +821,7 @@ suite "updateCommandLine":
 
   test "Write syntax checker messages and move line":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["import std/os", "echo 1"]
       .toSeqRunes
       .toGapBuffer
@@ -771,7 +845,7 @@ suite "updateCommandLine":
 suite "updateSelectedArea: Visual mode":
   test "Move to right":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["abc"].toSeqRunes.toGapBuffer
     status.changeMode(Mode.visual)
 
@@ -786,7 +860,7 @@ suite "updateSelectedArea: Visual mode":
 
   test "Move to below":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["abc", "def"].toSeqRunes.toGapBuffer
     status.changeMode(Mode.visual)
 
@@ -802,7 +876,7 @@ suite "updateSelectedArea: Visual mode":
 suite "updateSelectedArea: Visual block mode":
   test "Move to right":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["abc"].toSeqRunes.toGapBuffer
     status.changeMode(Mode.visualBlock)
 
@@ -817,7 +891,7 @@ suite "updateSelectedArea: Visual block mode":
 
   test "Move to below":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["abc", "def"].toSeqRunes.toGapBuffer
     status.changeMode(Mode.visualblock)
 
@@ -833,7 +907,7 @@ suite "updateSelectedArea: Visual block mode":
 suite "updateSelectedArea: Visual line mode":
   test "Move to right":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["abc"].toSeqRunes.toGapBuffer
     status.changeMode(Mode.visualLine)
 
@@ -848,7 +922,7 @@ suite "updateSelectedArea: Visual line mode":
 
   test "Move to below":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["abc", "def"].toSeqRunes.toGapBuffer
     status.changeMode(Mode.visualLine)
 
@@ -882,7 +956,7 @@ suite "editorstatus: smoothScrollDelays":
 suite "editorstatus: scrollUpNumberOfLines":
   test "numberOfLines: 20":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = toSeq(0..30).mapIt(it.toRunes).toGapBuffer
     currentMainWindowNode.currentLine = 30
 
@@ -896,7 +970,7 @@ suite "editorstatus: scrollUpNumberOfLines":
 
   test "numberOfLines: 20 and buffer.len: 10":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = toSeq(0..10).mapIt(it.toRunes).toGapBuffer
     currentMainWindowNode.currentLine = 10
 
@@ -911,7 +985,7 @@ suite "editorstatus: scrollUpNumberOfLines":
 suite "editorstatus: scrollDownNumberOfLines":
   test "numberOfLines: 20":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = toSeq(0..30).mapIt(it.toRunes).toGapBuffer
 
     status.resize(100, 100)
@@ -924,7 +998,7 @@ suite "editorstatus: scrollDownNumberOfLines":
 
   test "numberOfLines: 20 and buffer.len: 10":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = toSeq(0..10).mapIt(it.toRunes).toGapBuffer
 
     status.resize(100, 100)
@@ -938,7 +1012,7 @@ suite "editorstatus: scrollDownNumberOfLines":
 suite "editorstatus: smoothScrollUpNumberOfLines":
   test "numberOfLines: 20":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = toSeq(0..30).mapIt(it.toRunes).toGapBuffer
     currentMainWindowNode.currentLine = 30
 
@@ -952,7 +1026,7 @@ suite "editorstatus: smoothScrollUpNumberOfLines":
 
   test "numberOfLines: 20; buffer.len: 10":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = toSeq(0..10).mapIt(it.toRunes).toGapBuffer
     currentMainWindowNode.currentLine = 10
 
@@ -967,7 +1041,7 @@ suite "editorstatus: smoothScrollUpNumberOfLines":
 suite "editorstatus: smoothScrollDownNumberOfLines":
   test "numberOfLines: 20":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = toSeq(0..30).mapIt(it.toRunes).toGapBuffer
 
     status.resize(100, 100)
@@ -980,7 +1054,7 @@ suite "editorstatus: smoothScrollDownNumberOfLines":
 
   test "numberOfLines: 20; buffer.len: 10":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = toSeq(0..10).mapIt(it.toRunes).toGapBuffer
 
     status.resize(100, 100)

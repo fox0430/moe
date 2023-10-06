@@ -142,18 +142,6 @@ default is false
 autoDeleteParen
 ```
 
-Smooth scroll (bool)  
-default is true
-```
-smoothScroll
-```
-
-Smooth scroll delay (int)  
-default is 15
-```
-smoothScrollDelay
-```
-
 Live reloading open files (bool)  
 default is false
 ```
@@ -787,6 +775,42 @@ Interval for updating Git information. (Milli seconds) (integer)
 Enable/Disable syntax checker (bool)
 ```
 enable
+```
+
+### SmoothScroll table
+
+Enable/Disable Smooth scroll (bool)  
+default is true
+```
+enable
+```
+
+Smooth scroll minimum delay (int)  
+default is 5
+```
+minDelay
+```
+
+Smooth scroll maximum delay (int)  
+default is 20
+```
+maxDelay
+```
+
+### StartUp.FileOpen table
+
+Display all buffers in multiple views if multiple paths are received when starting the editor (bool)  
+The default is `true`
+```
+autoSplit
+```
+
+Setting the split type for `StartUp.FileOpen.autoSplit`. (string)  
+`vertical` or `horizontal`  
+The default is `vertical`
+
+```
+splitType 
 ```
 
 ### Color and theme

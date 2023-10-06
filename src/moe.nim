@@ -20,10 +20,12 @@
 import std/[os, times]
 import pkg/results
 import moepkg/[ui, bufferstatus, editorstatus, cmdlineoption, mainloop, git,
-               editorview, theme, registers]
+               editorview, theme, registers, settings, messages]
 
-# Load persisted data (Ex command history, search history and cursor postion)
 proc loadPersistData(status: var EditorStatus) =
+  ## Load persisted data (Ex command history, search history and cursor
+  ## postion)
+
   if status.settings.persist.exCommand:
     let limit = status.settings.persist.exCommandHistoryLimit
     status.exCommandHistory = loadExCommandHistory(limit)
@@ -38,19 +40,59 @@ proc loadPersistData(status: var EditorStatus) =
       currentBufStatus,
       status.lastPosition)
 
+proc initCurrentMainWindowView(status: var EditorStatus) {.inline.} =
+  currentMainWindowNode.view = currentBufStatus.buffer.initEditorView(1, 1)
+
 proc addBufferStatus(status: var EditorStatus, parsedList: CmdParsedList) =
-  if parsedList.path.len > 0:
+  ## Open files or dirs at received paths and initialize views and windows.
+  ## If paths don't exist, add an empty buffer.
+
+  if parsedList.path.len == 0:
+    # Add a new empty buffer
+    discard status.addNewBufferInCurrentWin
+  else:
+    # Check git command.
     let isGitAvailable = isGitAvailable()
 
+    # Open all files for dirs at received paths.
     for path in parsedList.path:
       if dirExists(path):
-        status.addNewBufferInCurrentWin(path, Mode.filer)
+        if status.addNewBuffer(path, Mode.filer).isErr:
+          status.commandLine.writeFileOpenError(path)
       else:
-        status.addNewBufferInCurrentWin(path)
+        if status.addNewBuffer(path, Mode.normal).isErr:
+          status.commandLine.writeFileOpenError(path)
+          continue
+
         if isGitAvailable:
           status.bufStatus[^1].isTrackingByGit = isTrackingByGit($path)
-  else:
-    status.addNewBufferInCurrentWin
+
+    if status.settings.startUp.fileOpen.autoSplit and status.bufStatus.len > 1:
+      # Display all added buffers in split view.
+
+      for i in 0 .. status.bufStatus.high:
+        status.initCurrentMainWindowView
+
+        if i == status.bufStatus.high:
+          # Set the buffer to the latest window.
+          status.changeCurrentBuffer(i)
+        else:
+          # Split the window and set the buffer to the window and move to the
+          # latest window.
+          case status.settings.startUp.fileOpen.splitType:
+            of WindowSplitType.vertical: status.verticalSplitWindow
+            of WindowSplitType.horizontal: status.horizontalSplitWindow
+          status.changeCurrentBuffer(i)
+          status.moveNextWindow
+    else:
+      # Display only a single buffer.
+
+      if status.bufStatus.len == 0:
+        # Add a new empty buffer if files couldn't be read due to some error.
+        discard status.addNewBufferInCurrentWin
+      else:
+        status.initCurrentMainWindowView
+        status.changeCurrentBuffer(status.bufStatus.high)
 
 proc initSidebar(status: var EditorStatus) =
   if status.settings.view.sidebar:

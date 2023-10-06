@@ -18,11 +18,12 @@
 #[############################################################################]#
 
 import std/unittest
+import pkg/results
 import moepkg/[editorstatus, unicodeext, exmode, ui]
 
 test "Open buffer manager":
   var status = initEditorStatus()
-  status.addNewBufferInCurrentWin
+  discard status.addNewBufferInCurrentWin.get
   startUi()
 
   const Command = @[ru"buf"]

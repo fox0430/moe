@@ -76,14 +76,14 @@ suite "Ex mode: isExCommandBuffer":
 suite "Ex mode: Edit command":
   test "Edit command":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     const Command = @[ru"e", ru"test"]
     status.exModeCommand(Command)
 
   test "Edit command 2":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin("test")
+    discard status.addNewBufferInCurrentWin("test").get
 
     status.resize(100, 100)
     status.verticalSplitWindow
@@ -114,7 +114,7 @@ suite "Fix #1581":
     # For https://github.com/fox0430/moe/issues/1581
 
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin(filePaths[0])
+    discard status.addNewBufferInCurrentWin(filePaths[0]).get
     status.resize(100, 100)
 
     status.changeMode(Mode.ex)
@@ -137,7 +137,7 @@ suite "Ex mode: Write command":
 
   test "Write command":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin(TestFilePath)
+    discard status.addNewBufferInCurrentWin(TestFilePath).get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a"])
 
     const Command = @[ru"w"]
@@ -145,7 +145,7 @@ suite "Ex mode: Write command":
 
   test "buildOnSave":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin(TestFilePath)
+    discard status.addNewBufferInCurrentWin(TestFilePath).get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"echo 1"])
 
     status.settings.buildOnSave.enable = true
@@ -160,7 +160,7 @@ suite "Ex mode: Write command":
 suite "Ex mode: Change next buffer command":
  test "Change next buffer command":
    var status = initEditorStatus()
-   for i in 0 ..< 2: status.addNewBufferInCurrentWin
+   for i in 0 ..< 2: discard status.addNewBufferInCurrentWin.get
 
    const Command = @[ru"bnext"]
    for i in 0 ..< 3: status.exModeCommand(Command)
@@ -168,7 +168,7 @@ suite "Ex mode: Change next buffer command":
 suite "Ex mode: Change next buffer command":
   test "Change prev buffer command":
     var status = initEditorStatus()
-    for i in 0 ..< 2: status.addNewBufferInCurrentWin
+    for i in 0 ..< 2: discard status.addNewBufferInCurrentWin.get
 
     currentMainWindowNode.bufferIndex = 1
     const Command = @[ru"bprev"]
@@ -177,7 +177,7 @@ suite "Ex mode: Change next buffer command":
 suite "Ex mode: Open buffer by number command":
   test "Open buffer by number command":
     var status = initEditorStatus()
-    for i in 0 ..< 3: status.addNewBufferInCurrentWin
+    for i in 0 ..< 3: discard status.addNewBufferInCurrentWin.get
 
     block:
       const Command = @[ru"b", ru"1"]
@@ -194,7 +194,7 @@ suite "Ex mode: Open buffer by number command":
 suite "Ex mode: Change to first buffer command":
   test "Change to first buffer command":
     var status = initEditorStatus()
-    for i in 0 ..< 3: status.addNewBufferInCurrentWin
+    for i in 0 ..< 3: discard status.addNewBufferInCurrentWin.get
 
     currentMainWindowNode.bufferIndex = 2
     const Command = @[ru"bfirst"]
@@ -205,7 +205,7 @@ suite "Ex mode: Change to first buffer command":
 suite "Ex mode: Change to last buffer command":
   test "Change to last buffer command":
     var status = initEditorStatus()
-    for i in 0 ..< 3: status.addNewBufferInCurrentWin
+    for i in 0 ..< 3: discard status.addNewBufferInCurrentWin.get
 
     currentMainWindowNode.bufferIndex = 0
     const Command = @[ru"blast"]
@@ -215,7 +215,7 @@ suite "Ex mode: Change to last buffer command":
 suite "Ex mode: Replace buffer command":
   test "Replace buffer command":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"xyz",
                                                  ru"abcdefghijk",
@@ -227,7 +227,7 @@ suite "Ex mode: Replace buffer command":
 suite "Ex mode: Turn off highlighting command":
   test "Turn off highlighting command":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     status.resize(100, 100)
     status.update
@@ -238,7 +238,7 @@ suite "Ex mode: Turn off highlighting command":
 suite "Ex mode: Tab line setting command":
   test "Tab line setting command":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     block:
       const Command = @[ru"tab", ru"off"]
@@ -252,7 +252,7 @@ suite "Ex mode: Tab line setting command":
 suite "Ex mode: StatusLine setting command":
   test "StatusLine setting command":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     block:
       const Command = @[ru"statusline", ru"off"]
@@ -266,7 +266,7 @@ suite "Ex mode: StatusLine setting command":
 suite "Ex mode: Line number setting command":
   test "Line number setting command":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     block:
       const Command = @[ru"linenum", ru"off"]
@@ -280,7 +280,7 @@ suite "Ex mode: Line number setting command":
 suite "Ex mode: Auto indent setting command":
   test "Auto indent setting command":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     block:
       const Command = @[ru"indent", ru"off"]
@@ -294,7 +294,7 @@ suite "Ex mode: Auto indent setting command":
 suite "Ex mode: Auto close paren setting command":
   test "Auto close paren setting command":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     block:
       const Command = @[ru"paren", ru"off"]
@@ -308,7 +308,7 @@ suite "Ex mode: Auto close paren setting command":
 suite "Ex mode: Tab stop setting command":
   test "Tab stop setting command":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     block:
       const Command = @[ru"paren", ru"off"]
@@ -322,7 +322,7 @@ suite "Ex mode: Tab stop setting command":
 suite "Ex mode: Syntax setting command":
   test "Syntax setting command":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     block:
       const Command = @[ru"syntax", ru"off"]
@@ -336,7 +336,7 @@ suite "Ex mode: Syntax setting command":
 suite "Ex mode: Change cursor line command":
   test "Change cursor line command":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     block:
       const Command = @[ru"cursorLine", ru"on"]
@@ -350,7 +350,7 @@ suite "Ex mode: Change cursor line command":
 suite "Ex mode: Split window command":
   test "Split window command":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     status.resize(100, 100)
 
     const Command = @[ru"vs"]
@@ -360,7 +360,7 @@ suite "Ex mode: Split window command":
 suite "Ex mode: Live reload of configuration file setting command":
   test "Live reload of configuration file setting command":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     block:
       const Command = @[ru"livereload", ru"on"]
@@ -374,7 +374,7 @@ suite "Ex mode: Live reload of configuration file setting command":
 suite "Ex mode: Incremental search setting command":
   test "Incremental search setting command":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     block:
       const Command = @[ru"incrementalSearch", ru"off"]
@@ -388,7 +388,7 @@ suite "Ex mode: Incremental search setting command":
 suite "Ex mode: Change theme command":
   test "Change theme command":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     startUi()
 
     block:
@@ -410,7 +410,7 @@ suite "Ex mode: Change theme command":
 suite "Ex mode: Open buffer manager":
   test "Open buffer manager":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     startUi()
 
     const Command = @[ru"buf"]
@@ -419,7 +419,7 @@ suite "Ex mode: Open buffer manager":
 suite "Ex mode: Open log viewer":
   test "Open log viewer":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     const Command = @[ru"log"]
     status.exModeCommand(Command)
@@ -430,7 +430,7 @@ suite "Ex mode: Open log viewer":
 suite "Ex mode: Highlight pair of paren settig command":
   test "Highlight pair of paren settig command":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     block:
       const Command = @[ru"highlightparen", ru"off"]
@@ -444,7 +444,7 @@ suite "Ex mode: Highlight pair of paren settig command":
 suite "Ex mode: Auto delete paren setting command":
   test "Auto delete paren setting command":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     block:
       const Command = @[ru"deleteparen", ru"off"]
@@ -459,7 +459,7 @@ suite "Ex mode: Auto delete paren setting command":
 suite "Ex mode: Smooth scroll setting command":
   test "Smooth scroll setting command":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     block:
       const Command = @[ru"smoothscroll", ru"off"]
@@ -474,7 +474,7 @@ suite "Ex mode: Smooth scroll setting command":
 suite "Ex mode: Smooth scroll min delay setting command":
   test "Set to 1":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     const Command = @[ru"scrollMinDelay", ru"1"]
     status.exModeCommand(Command)
@@ -483,7 +483,7 @@ suite "Ex mode: Smooth scroll min delay setting command":
 
   test "Invalid value":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     let defaultSpeed = status.settings.smoothScroll.minDelay
 
@@ -495,7 +495,7 @@ suite "Ex mode: Smooth scroll min delay setting command":
 suite "Ex mode: Smooth scroll max delay setting command":
   test "Set to 1":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     const Command = @[ru"scrollMaxDelay", ru"1"]
     status.exModeCommand(Command)
@@ -504,7 +504,7 @@ suite "Ex mode: Smooth scroll max delay setting command":
 
   test "Invalid value":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     let defaultSpeed = status.settings.smoothScroll.maxDelay
 
@@ -516,7 +516,7 @@ suite "Ex mode: Smooth scroll max delay setting command":
 suite "Ex mode: Highlight current word setting command":
   test "Highlight current word setting command":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     block:
       const Command = @[ru"highlightcurrentword", ru"off"]
@@ -531,7 +531,7 @@ suite "Ex mode: Highlight current word setting command":
 suite "Ex mode: Clipboard setting command":
   test "Clipboard setting command":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     block:
       const Command = @[ru"clipboard", ru"off"]
@@ -546,7 +546,7 @@ suite "Ex mode: Clipboard setting command":
 suite "Ex mode: Highlight full width space command":
   test "Highlight full width space command":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     block:
       const Command = @[ru"highlightfullspace", ru"off"]
@@ -560,7 +560,7 @@ suite "Ex mode: Highlight full width space command":
 
   test "Ex mode: Tab stop setting command 2":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     let defaultTabStop = status.settings.tabStop
 
@@ -572,7 +572,7 @@ suite "Ex mode: Highlight full width space command":
 suite "Ex mode: Delete buffer status command":
   test "Delete buffer status command":
     var status = initEditorStatus()
-    for i in 0 ..< 2: status.addNewBufferInCurrentWin
+    for i in 0 ..< 2: discard status.addNewBufferInCurrentWin.get
 
     const Command = @[ru"bd", ru"0"]
     status.exModeCommand(Command)
@@ -581,7 +581,7 @@ suite "Ex mode: Delete buffer status command":
 
   test "Delete buffer status command 2":
     var status = initEditorStatus()
-    for i in 0 ..< 2: status.addNewBufferInCurrentWin
+    for i in 0 ..< 2: discard status.addNewBufferInCurrentWin.get
 
     const Command = @[ru"bd", ru"a"]
     status.exModeCommand(Command)
@@ -591,7 +591,7 @@ suite "Ex mode: Delete buffer status command":
 suite "Ex mode: Open buffer by number command":
   test "Open buffer by number command":
     var status = initEditorStatus()
-    for i in 0 ..< 2: status.addNewBufferInCurrentWin
+    for i in 0 ..< 2: discard status.addNewBufferInCurrentWin.get
 
     const Command = @[ru"b", ru"0"]
     status.exModeCommand(Command)
@@ -600,7 +600,7 @@ suite "Ex mode: Open buffer by number command":
 
   test "Open buffer by number command 2":
     var status = initEditorStatus()
-    for i in 0 ..< 2: status.addNewBufferInCurrentWin
+    for i in 0 ..< 2: discard status.addNewBufferInCurrentWin.get
 
     const Command = @[ru"b", ru"a"]
     status.exModeCommand(Command)
@@ -610,7 +610,7 @@ suite "Ex mode: Open buffer by number command":
 suite "Ex mode: help command":
   test "Open help":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     status.resize(100, 100)
     status.update
@@ -634,7 +634,7 @@ suite "Ex mode: help command":
 suite "Ex mode: split window vertically":
   test "In Normal mode":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     status.resize(100, 100)
     status.update
@@ -653,7 +653,7 @@ suite "Ex mode: split window vertically":
   test "In Filer mode":
     var status = initEditorStatus()
     const Path = "./"
-    status.addNewBufferInCurrentWin(Path, Mode.filer)
+    discard status.addNewBufferInCurrentWin(Path, Mode.filer).get
 
     status.resize(100, 100)
     status.update
@@ -678,7 +678,7 @@ suite "Ex mode: split window vertically":
 suite "Ex mode: Open in horizontal split window":
   test "Open in horizontal split window":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     status.resize(100, 100)
     status.update
@@ -694,7 +694,7 @@ suite "Ex mode: Open in horizontal split window":
 
   test "Open in horizontal split window 2":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     status.resize(100, 100)
     status.update
@@ -711,7 +711,7 @@ suite "Ex mode: Open in horizontal split window":
 suite "Ex mode: Open in vertical split window":
   test "Open in vertical split window":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     status.resize(100, 100)
     status.update
@@ -728,7 +728,7 @@ suite "Ex mode: Open in vertical split window":
 suite "Ex mode: Create new empty buffer":
   test "Create new empty buffer":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin("a")
+    discard status.addNewBufferInCurrentWin("a").get
 
     status.resize(100, 100)
     status.update
@@ -743,7 +743,7 @@ suite "Ex mode: Create new empty buffer":
 
   test "Create new empty buffer 2":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     status.bufStatus[0].countChange = 1
 
@@ -760,7 +760,7 @@ suite "Ex mode: Create new empty buffer":
 suite "Ex mode: New empty buffer in split window horizontally":
   test "New empty buffer in split window horizontally":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin("a")
+    discard status.addNewBufferInCurrentWin("a").get
 
     status.resize(100, 100)
     status.update
@@ -780,7 +780,7 @@ suite "Ex mode: New empty buffer in split window horizontally":
 suite "Ex mode: New empty buffer in split window vertically":
   test "New empty buffer in split window vertically":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin("a")
+    discard status.addNewBufferInCurrentWin("a").get
 
     status.resize(100, 100)
     status.update
@@ -800,7 +800,7 @@ suite "Ex mode: New empty buffer in split window vertically":
 suite "Ex mode: Filer icon setting command":
   test "Filer icon setting command":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     const Command = @[ru"icon", ru"on"]
     status.exModeCommand(Command)
@@ -809,7 +809,7 @@ suite "Ex mode: Filer icon setting command":
 
   test "Filer icon setting command 2":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     const Command = @[ru"icon", ru"off"]
     status.exModeCommand(Command)
@@ -819,7 +819,7 @@ suite "Ex mode: Filer icon setting command":
 suite "Ex mode: Put config file command":
   test "Put config file command":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     const Command = @[ru"putConfigFile"]
     status.exModeCommand(Command)
@@ -829,7 +829,7 @@ suite "Ex mode: Put config file command":
 suite "Ex mode: Show/Hide git branch name in status line when inactive window":
   test "Show/Hide git branch name in status line when inactive window":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     block:
       const Command = @[ru"showGitInactive", ru"off"]
@@ -845,7 +845,7 @@ suite "Ex mode: Quickrun command wihtout file":
   test "Exec Quickrun without file":
     # Create a file for the test.
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].language = SourceLanguage.langNim
     status.bufStatus[0].buffer = toGapBuffer(@[ru"echo 1"])
 
@@ -885,7 +885,7 @@ suite "Ex mode: Quickrun command wihtout file":
 
   test "Exec Quickrun without file twice":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].language = SourceLanguage.langNim
     status.bufStatus[0].buffer = toGapBuffer(@[ru"echo 1"])
 
@@ -972,7 +972,7 @@ suite "Ex mode: Quickrun command with file":
   test "Exec Quickrun with file":
     # Create a file for the test.
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin(TestfilePath, Mode.normal)
+    discard status.addNewBufferInCurrentWin(TestfilePath, Mode.normal).get
 
     const Command = @[ru"run"]
     status.exModeCommand(Command)
@@ -1010,7 +1010,7 @@ suite "Ex mode: Quickrun command with file":
 
   test "Exec Quickrun with file twice":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin(TestfilePath, Mode.normal)
+    discard status.addNewBufferInCurrentWin(TestfilePath, Mode.normal).get
 
     const Command = @[ru"run"]
 
@@ -1090,7 +1090,7 @@ suite "Ex mode: Quickrun command with file":
 suite "Ex mode: Workspace list command":
   test "Workspace list command":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     const Command = @[ru"lsw"]
     status.exModeCommand(Command)
@@ -1098,7 +1098,7 @@ suite "Ex mode: Workspace list command":
 suite "Ex mode: Change ignorecase setting command":
   test "Enable ignorecase":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     status.settings.ignorecase = false
 
     const Command = @[ru"ignorecase", ru"on"]
@@ -1108,7 +1108,7 @@ suite "Ex mode: Change ignorecase setting command":
 
   test "Disale ignorecase":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     status.settings.ignorecase = true
 
     const Command = @[ru"ignorecase", ru"off"]
@@ -1119,7 +1119,7 @@ suite "Ex mode: Change ignorecase setting command":
 suite "Ex mode: Change smartcase setting command":
   test "Enable smartcase":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     status.settings.smartcase = false
 
     const Command = @[ru"smartcase", ru"on"]
@@ -1129,7 +1129,7 @@ suite "Ex mode: Change smartcase setting command":
 
   test "Disale smartcase":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     status.settings.smartcase = true
 
     const Command = @[ru"smartcase", ru"off"]
@@ -1140,7 +1140,7 @@ suite "Ex mode: Change smartcase setting command":
 suite "Ex mode: e command":
   test "Open dicrecoty (#1042)":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     const Command = @[ru"e", ru"./"]
     status.exModeCommand(Command)
@@ -1151,7 +1151,7 @@ suite "Ex mode: e command":
 suite "Ex mode: q command":
   test "Run q command when opening multiple windows (#1056)":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     status.resize(100, 100)
 
     status.verticalSplitWindow
@@ -1172,7 +1172,7 @@ suite "Ex mode: w! command":
     setFilePermissions(Filename, {fpUserRead})
 
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin(Filename)
+    discard status.addNewBufferInCurrentWin(Filename).get
     status.resize(100, 100)
 
     status.bufStatus[0].buffer[0] = ru"abc"
@@ -1194,7 +1194,7 @@ suite "Ex mode: wq! command":
     setFilePermissions(Filename, {fpUserRead})
 
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin(Filename)
+    discard status.addNewBufferInCurrentWin(Filename).get
     status.resize(100, 100)
 
     status.verticalSplitWindow
@@ -1214,7 +1214,7 @@ suite "Ex mode: wq! command":
 suite "Ex mode: debug command":
   test "Start debug mode":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     status.changeMode(Mode.ex)
 
     status.resize(100, 100)
@@ -1238,7 +1238,7 @@ suite "Ex mode: debug command":
 
   test "Start debug mode (Disable all info)":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     status.changeMode(Mode.ex)
 
     status.settings.debugMode.windowNode.enable = false
@@ -1266,7 +1266,7 @@ suite "Ex mode: debug command":
 suite "Ex mode: highlight current line setting command":
   test "Enable current line highlighting":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     const Command = @[ru"highlightCurrentLine", ru"off"]
     status.exModeCommand(Command)
@@ -1274,7 +1274,7 @@ suite "Ex mode: highlight current line setting command":
 
   test "Disable current line highlighting":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     const Command = @[ru"highlightCurrentLine", ru"on"]
     status.exModeCommand(Command)
@@ -1283,7 +1283,7 @@ suite "Ex mode: highlight current line setting command":
 suite "Ex mode: Save Ex command history":
   test "Save \"noh\" command":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     status.resize(100, 100)
     status.update
@@ -1295,7 +1295,7 @@ suite "Ex mode: Save Ex command history":
 
   test "Save \"noh\" command 2":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     status.resize(100, 100)
     status.update
@@ -1308,7 +1308,7 @@ suite "Ex mode: Save Ex command history":
 
   test "Save 2 Commands":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     status.resize(100, 100)
     status.update
@@ -1327,7 +1327,7 @@ suite "Ex mode: Save Ex command history":
 
   test "Fix #1304":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     const Command = @[ru"buildOnSave off"]
     status.exModeCommand(Command)
@@ -1337,7 +1337,7 @@ suite "Ex mode: Save Ex command history":
 suite "Ex mode: Open backup manager":
   test "backup command":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     status.resize(100, 100)
 
     status.changeMode(Mode.ex)
@@ -1397,7 +1397,7 @@ suite "saveExCommandHistory":
 suite "Ex mode: Open configuration mode":
   test "Open config mode":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
 
     status.openConfigMode
 
@@ -1407,7 +1407,7 @@ suite "Ex mode: Open configuration mode":
 suite "Ex mode: deleteTrailingSpaces":
   test "Basic":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = toGapBuffer(@[ru"test  "])
 
     status.resize(100, 100)
@@ -1420,7 +1420,7 @@ suite "Ex mode: deleteTrailingSpaces":
 
   test "Basic 2":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = toGapBuffer(@[ru"test  "])
     currentMainWindowNode.currentColumn = 5
 
@@ -1436,7 +1436,7 @@ suite "Ex mode: deleteTrailingSpaces":
   test "Only spaces":
     # NOTE: https://github.com/fox0430/moe/issues/1849
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = toGapBuffer(@[ru"  "])
     currentMainWindowNode.currentColumn = 1
 
@@ -1448,3 +1448,15 @@ suite "Ex mode: deleteTrailingSpaces":
 
     check currentBufStatus.buffer.toSeqRunes == @[ru""]
     check currentMainWindowNode.currentColumn == 0
+
+suite "exmode: startRecentFileMode":
+  test "start Recentfile mode":
+    # NOTE: https://github.com/fox0430/moe/issues/1875
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+
+    status.resize(100, 100)
+    status.update
+
+    status.startRecentFileMode
+    status.update

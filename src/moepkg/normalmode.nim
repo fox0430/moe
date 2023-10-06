@@ -268,7 +268,7 @@ proc runQuickRunCommand(status: var EditorStatus) =
     status.resize
     status.moveNextWindow
 
-    status.addNewBufferInCurrentWin("")
+    discard status.addNewBufferInCurrentWin
     status.changeCurrentBuffer(status.bufStatus.high)
     currentBufStatus.path = quickRunProcess.get.filePath.toRunes
     currentBufStatus.buffer[0] =

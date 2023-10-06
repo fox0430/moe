@@ -48,7 +48,7 @@ proc openDiffViewer(status: var EditorStatus, sourceFilePath: string) =
   status.resize
   status.moveNextWindow
 
-  status.addNewBufferInCurrentWin(Mode.diff)
+  discard status.addNewBufferInCurrentWin(Mode.diff)
   status.changeCurrentBuffer(status.bufStatus.high)
 
   currentBufStatus.path = backupFilePath.toRunes

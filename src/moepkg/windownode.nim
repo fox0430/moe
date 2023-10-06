@@ -26,7 +26,7 @@ type
     ## vertical is default
 
     vertical = 0
-    horaizontal = 1
+    horizontal = 1
 
   WindowNode* = ref object
     ## WindowNode is N-Ary tree
@@ -130,11 +130,11 @@ proc verticalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
 proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
   var parent = n.parent
 
-  if parent.splitType == SplitType.horaizontal:
+  if parent.splitType == SplitType.horizontal:
     var node = WindowNode(
       parent: parent,
       child: @[],
-      splitType: SplitType.horaizontal,
+      splitType: SplitType.horizontal,
       window: some(newWindow()),
       view: initEditorView(buffer, 1, 1),
       highlight: n.highlight,
@@ -160,7 +160,7 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
     if parent.child[^1].view.sidebar.isSome:
       node.view.initSidebar
 
-    n.parent.splitType = SplitType.horaizontal
+    n.parent.splitType = SplitType.horizontal
     n.parent.child.insert(node, n.index + 1)
 
     return n
@@ -187,7 +187,7 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
       node1.view.initSidebar
       node2.view.initSidebar
 
-    n.splitType = SplitType.horaizontal
+    n.splitType = SplitType.horizontal
     n.windowIndex = -1
     n.child.add(node1)
     n.child.add(node2)
@@ -248,7 +248,7 @@ proc resize*(root: var WindowNode, position: Position, size: Size) =
       node.h = root.h
       node.y = root.y
     else:
-      # Horaizontal split
+      # Horizontal split
 
       # Calc window height
       if root.h mod root.child.len != 0 and index == 0:
@@ -302,7 +302,7 @@ proc resize*(root: var WindowNode, position: Position, size: Size) =
         child.h = parent.h
         child.y = parent.y
       else:
-        # Horaizontal split
+        # Horizontal split
 
         # Calc window height
         if parent.h mod parent.child.len != 0 and i == 0:

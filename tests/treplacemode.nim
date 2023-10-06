@@ -18,6 +18,7 @@
 #[############################################################################]#
 
 import std/unittest
+import pkg/results
 import moepkg/[editorstatus, gapbuffer, bufferstatus, unicodeext, editor]
 
 import moepkg/replacemode {.all.}
@@ -29,7 +30,7 @@ template recordCurrentPosition() =
 suite "Replace mode: Replace current Character":
   test "Replace current character":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.mode = Mode.replace
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
@@ -43,7 +44,7 @@ suite "Replace mode: Replace current Character":
 
   test "Replace current character 2":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.mode = Mode.replace
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
@@ -59,7 +60,7 @@ suite "Replace mode: Replace current Character":
 suite "Replace mode: Undo":
   test "undo":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.mode = Mode.replace
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
@@ -80,7 +81,7 @@ suite "Replace mode: Undo":
 
   test "undo 2":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.mode = Mode.replace
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
@@ -102,7 +103,7 @@ suite "Replace mode: Undo":
 
   test "undo 3":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.mode = Mode.replace
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
     currentMainWindowNode.currentColumn = 2
@@ -126,7 +127,7 @@ suite "Replace mode: Undo":
 suite "Replace mode: New line":
   test "New line and replace character":
     var status = initEditorStatus()
-    status.addNewBufferInCurrentWin
+    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.mode = Mode.replace
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
     currentMainWindowNode.currentColumn = 1

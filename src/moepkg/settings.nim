@@ -38,6 +38,10 @@ type
     xclip
     wlClipboard
 
+  WindowSplitType* {.pure.} = enum
+    vertical
+    horizontal
+
   DebugWindowNodeSettings* = object
     enable*: bool
     currentWindow*: bool
@@ -204,6 +208,13 @@ type
     enable*: bool
     minDelay*: int
     maxDelay*: int
+ 
+  StartUpFileOpenSettings* = object
+    autoSplit*: bool
+    splitType*: WindowSplitType
+
+  StartUpSettings* = object
+    fileOpen*: StartUpFileOpenSettings
 
   LspLanguageSettings* = object
     extensions*: seq[Runes]
@@ -251,6 +262,8 @@ type
     persist*: PersistSettings
     git*: GitSettings
     syntaxChecker*: SyntaxCheckerSettings
+    startUp*: StartUpSettings
+
     lsp*: LspSettings
 
   InvalidItem = object
@@ -427,6 +440,13 @@ proc initSmoothScrollSettings(): SmoothScrollSettings =
   result.minDelay = 5
   result.maxDelay = 20
 
+proc initStartUpFileOpenSettings(): StartUpFileOpenSettings =
+  result.autoSplit = true
+  result.splitType = WindowSplitType.vertical
+
+proc initStartUpSettings(): StartUpSettings =
+  result.fileOpen = initStartUpFileOpenSettings()
+
 proc initLspSettigns(): LspSettings =
   result.enable = false
   result.languages = initTable[string, LspLanguageSettings]()
@@ -466,6 +486,7 @@ proc initEditorSettings*(): EditorSettings =
   result.persist = initPersistSettings()
   result.git = initGitSettings()
   result.syntaxChecker = initSyntaxCheckerSettings()
+  result.startUp = initStartUpSettings()
   result.lsp = initLspSettigns()
 
 proc languageIdFromLspLanguageSettings*(
@@ -496,6 +517,12 @@ proc colorFromNode(node: JsonNode): Rgb =
     return asString[1 .. 6].hexToRgb.get
   else:
     return TerminalDefaultRgb
+
+proc parseWindowSplitType*(s: string): Result[WindowSplitType, string] =
+  try:
+    return Result[WindowSplitType, string].ok parseEnum[WindowSplitType](s)
+  except ValueError:
+    return Result[WindowSplitType, string].err "Invalid value"
 
 proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
   # Load the theme file of VSCode and adapt it as the theme of moe.
@@ -973,8 +1000,8 @@ proc vsCodeDefaultExtensionsDir(flavor: VsCodeFlavor): string =
       return vsCodeDefaultExtensionsDir()
 
 proc detectVsCodeFlavor(): Option[VsCodeFlavor] =
-  # Check settings dirs in the following order.
-  # vscodium -> code-oss -> vscode
+  ## Check settings dirs in the following order.
+  ## vscodium -> code-oss -> vscode
 
   if fileExists(vsCodiumUserSettingsFilePath()):
     return some(VsCodeFlavor.VSCodium)
@@ -984,7 +1011,7 @@ proc detectVsCodeFlavor(): Option[VsCodeFlavor] =
     return some(VsCodeFlavor.VSCode)
 
 proc isCurrentVsCodeThemePackage(json: JsonNode, themeName: string): bool =
-  # Return true if `json` is the current VSCode theme.
+  ## Return true if `json` is the current VSCode theme.
 
   if json{"contributes", "themes"} != nil:
     let themes = json{"contributes", "themes"}
@@ -1012,9 +1039,9 @@ proc parseVsCodeThemeJson(
                 except CatchableError: none(JsonNode)
 
 proc loadVSCodeTheme*(): Result[ColorTheme, string] =
-  # If no vscode theme can be found, this defaults to the dark theme.
-  # Hopefully other contributors will come and add support for Windows,
-  # and other systems.
+  ## If no vscode theme can be found, this defaults to the dark theme.
+  ## Hopefully other contributors will come and add support for Windows,
+  ## and other systems.
 
   let vsCodeFlavor = detectVsCodeFlavor()
   if vsCodeFlavor.isNone:
@@ -1599,6 +1626,21 @@ proc parseSmoothScrollTable(
     if smoothScrollConfigs.contains("maxDelay"):
       s.smoothScroll.maxDelay = smoothScrollConfigs["maxDelay"].getInt
 
+proc parseStartUpSettingsTable(
+  s: var EditorSettings,
+  startUpConfigs: TomlValueRef) =
+
+    if startUpConfigs.contains("FileOpen"):
+      if startUpConfigs["FileOpen"].contains("autoSplit"):
+        s.startUp.fileOpen.autoSplit =
+          startUpConfigs["FileOpen"]["autoSplit"].getBool
+
+      if startUpConfigs["FileOpen"].contains("splitType"):
+        s.startUp.fileOpen.splitType = startUpConfigs["FileOpen"]["splitType"]
+          .getStr
+          .parseWindowSplitType
+          .get
+
 proc parseLspTable(
   s: var EditorSettings,
   lspConfigs: TomlValueRef) =
@@ -1754,6 +1796,9 @@ proc parseTomlConfigs*(tomlConfigs: TomlValueRef): EditorSettings =
 
   if tomlConfigs.contains("SmoothScroll"):
     result.parseSmoothScrollTable(tomlConfigs["SmoothScroll"])
+
+  if tomlConfigs.contains("StartUp"):
+    result.parseStartUpSettingsTable(tomlConfigs["StartUp"])
 
   if tomlConfigs.contains("Lsp"):
     result.parseLspTable(tomlConfigs["Lsp"])
@@ -2153,6 +2198,25 @@ proc validateSmoothScrollTable(table: TomlValueRef): Option[InvalidItem] =
       else:
         return some(InvalidItem(name: $key, val: $val))
 
+proc validateStartUpTable(table: TomlValueRef): Option[InvalidItem] =
+  for key, val in table.getTable:
+    case key:
+      of "FileOpen":
+        # Check [StartUp.FileOpen]
+        for key,val in table["FileOpen"].getTable:
+          case key:
+            of "autoSplit":
+              if val.kind != TomlValueKind.Bool:
+                return some(InvalidItem(name: $key, val: $val))
+            of "splitType":
+              if val.kind != TomlValueKind.String or
+                 parseWindowSplitType(val.getStr).isErr:
+                   return some(InvalidItem(name: $key, val: $val))
+            else:
+              return some(InvalidItem(name: $key, val: $val))
+      else:
+        return some(InvalidItem(name: $key, val: $val))
+
 proc validateLspSettings(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
     case key:
@@ -2228,6 +2292,9 @@ proc validateTomlConfig(toml: TomlValueRef): Option[InvalidItem] =
         if r.isSome: return r
       of "SmoothScroll":
         let r = validateSmoothScrollTable(val)
+        if r.isSome: return r
+      of "StartUp":
+        let r = validateStartUpTable(val)
         if r.isSome: return r
       of "Lsp":
         let r = validateLspSettings(val)
@@ -2448,6 +2515,10 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "enable = {$settings.smoothScroll.enable}"
   result.addLine fmt "minDelay = {$settings.smoothScroll.minDelay}"
   result.addLine fmt "maxDelay = {$settings.smoothScroll.maxDelay}"
+
+  result.addLine fmt "[StartUp.FileOpen]"
+  result.addLine fmt "autoSplit = {$settings.startUp.fileOpen.autoSplit}"
+  result.addLine fmt "splitType = \"{$settings.startUp.fileOpen.splitType}\""
 
   result.addLine fmt "[Lsp]"
   result.addLine fmt "enable = {$settings.lsp.enable}"
