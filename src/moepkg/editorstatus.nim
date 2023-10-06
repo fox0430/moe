@@ -351,15 +351,17 @@ proc addNewBuffer*(
           addMessageLog errMessage
           return Result[int, string].err errMessage
 
-        if status.bufStatus[^1].path.contains(ru"."):
-          let firstPosition = status.bufStatus[^1].path.rfind(ru".")
-          if firstPosition < status.bufStatus[^1].path.high:
-            # Set BufferStatus.languageId.
-            let
-              extension = path[firstPosition + 1 .. path.high]
-              langId = status.settings.lsp.languageIdFromLspLanguageSettings(
-                extension.toRunes)
-            status.bufStatus[^1].languageId = langId.get
+        if status.bufStatus[^1].isNormalMode and
+           status.bufStatus[^1].path.contains(ru"."):
+             let firstPosition = status.bufStatus[^1].path.rfind(ru".")
+             if firstPosition < status.bufStatus[^1].path.high:
+               # Set BufferStatus.languageId.
+               let
+                 extension = path[firstPosition + 1 .. path.high]
+                 langId = status.settings.lsp.languageIdFromLspLanguageSettings(
+                   extension.toRunes)
+               if langId.isSome:
+                 status.bufStatus[^1].languageId = langId.get
 
         if status.settings.git.showChangedLine and
            status.bufStatus[^1].isTrackingByGit:
