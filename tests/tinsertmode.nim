@@ -526,5 +526,5 @@ suite "Insert mode":
 
     privateAccess(suggestionWindow.get.type)
 
-    check suggestionWindow.get.popUpWindow.get.y == 2
-    check suggestionWindow.get.popUpWindow.get.height == TerminalHeight - 4
+    check suggestionWindow.get.popUpWindow.get.position.y == 2
+    check suggestionWindow.get.popUpWindow.get.size.h == TerminalHeight - 4
