@@ -22,7 +22,11 @@
 
 import std/[strformat, strutils, json, options, os, osproc]
 import pkg/results
-import ../[appinfo, independentutils, unicodeext]
+
+import ../appinfo
+import ../independentutils
+import ../unicodeext
+
 import protocol/types
 import jsonrpc
 
