@@ -84,7 +84,11 @@ jobs:
         cd abduco-0.6
         make && sudo make install
 
-    - name: Run unit test
+    - name: Install nimlsp
       run: |
         nimble refresh
+        nimble install nimlsp
+
+    - name: Run unit test
+      run: |
         xvfb-run nimble test --verbose -y
