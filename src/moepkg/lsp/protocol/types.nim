@@ -95,7 +95,7 @@ type
   InitializeParams* = ref object of RootObj
     processId*: OptionalNode # int or float
     clientInfo*: Option[ClientInfo]
-    locale: Option[string]
+    locale*: Option[string]
     rootPath*: Option[string]
     rootUri*: Option[string]
     initializationOptions*: OptionalNode

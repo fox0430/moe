@@ -60,6 +60,7 @@ type
   LspErrorParseResult* = R[LspError, string]
   LspInitializeResult* = R[InitializeResult, string]
   LspInitializedResult* = R[(), string]
+  LspWorkspaceDidChangeConfigurationResult* = R[(), string]
   LspShutdownResult* = R[(), string]
   LspDidOpenTextDocumentResult* = R[(), string]
   LspDidChangeTextDocumentResult* = R[(), string]
@@ -147,15 +148,38 @@ proc initInitializeParams*(workspaceRoot: string): InitializeParams =
       if workspaceRoot.len == 0: none(string)
       else: some(workspaceRoot.pathToUri)
 
+    workspaceDir = getCurrentDir()
+
   # TODO: WIP. Need to set more correct parameters.
   InitializeParams(
     processId: some(%getCurrentProcessId()),
     rootPath: path,
     rootUri: uri,
+    locale: some("en_US"),
     clientInfo: some(ClientInfo(
       name: "moe",
-      version: some(moeSemVersionStr()))),
-    capabilities: ClientCapabilities())
+      version: some(moeSemVersionStr())
+    )),
+    capabilities: ClientCapabilities(
+      workspace: some(WorkspaceClientCapabilities(
+        applyEdit: some(true)
+      )),
+      textDocument: some(TextDocumentClientCapabilities(
+        hover: some(HoverCapability(
+          dynamicRegistration: some(true),
+          contentFormat: some(@["plaintext"])
+        ))
+      ))
+    ),
+    workspaceFolders: some(
+      @[
+        WorkspaceFolder(
+          uri: workspaceDir.pathToUri,
+          name: workspaceDir.splitPath.tail)
+      ]
+    ),
+    trace: some("verbose")
+  )
 
 proc initialize*(
   c: LspClient,
@@ -204,6 +228,16 @@ proc shutdown*(c: LspClient, id: int): LspShutdownResult =
   if r.get["result"].kind == JNull: return LspShutdownResult.ok ()
   else: return LspShutdownResult.err fmt"lsp: Shutdown request failed: {r.get}"
 
+proc workspaceDidChangeConfiguration*(
+  c: LspClient): LspWorkspaceDidChangeConfigurationResult =
+    ## Send a workspace/didChangeConfiguration notification to the server.
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#workspace_didChangeConfiguration
+
+    let params = %* DidChangeConfigurationParams()
+    c.notify("workspace/didChangeConfiguration", params)
+
+    return LspWorkspaceDidChangeConfigurationResult.ok ()
+
 proc initTextDocumentDidOpenParams(
   version: int,
   uri, languageId, text: string): DidOpenTextDocumentParams {.inline.} =
@@ -232,21 +266,23 @@ proc textDocumentDidOpen*(
     return LspDidOpenTextDocumentResult.ok ()
 
 proc initTextDocumentDidChangeParams(
-  version: int,
-  text: string): DidChangeTextDocumentParams {.inline.} =
+  version: Natural,
+  path, text: string): DidChangeTextDocumentParams {.inline.} =
 
     DidChangeTextDocumentParams(
-      textDocument: VersionedTextDocumentIdentifier(version: some(%version)),
+      textDocument: VersionedTextDocumentIdentifier(
+        uri: path.pathToUri,
+        version: some(%version)),
       contentChanges: @[TextDocumentContentChangeEvent(text: text)])
 
 proc textDocumentDidChange*(
   c: LspClient,
   version: Natural,
-  text: string): LspDidChangeTextDocumentResult =
+  path, text: string): LspDidChangeTextDocumentResult =
     ## Send a textDocument/didChange notification to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didChange
 
-    let params = %* initTextDocumentDidChangeParams(version, text)
+    let params = %* initTextDocumentDidChangeParams(version, path, text)
     c.notify("textDocument/didChange", params)
 
     return LspDidChangeTextDocumentResult.ok ()

@@ -398,6 +398,9 @@ proc addNewBuffer*(
               status.commandLine.writeLspInitialized(
                 status.settings.lsp.languages[langId].serverCommand)
 
+              # workspace/didChangeConfiguration notification
+              discard status.lspClients[langId].workspaceDidChangeConfiguration
+
               # textDocument/diOpen notification
               discard status.lspClients[langId].textDocumentDidOpen(
                 1,
@@ -621,41 +624,52 @@ proc updateStatusLine(status: var EditorStatus) =
         isActiveWindow,
         status.settings)
 
-proc updateSyntaxHighlights(
-  windowNode: var WindowNode,
-  bufStatus: var seq[BufferStatus],
-  reservedWords: seq[ReservedWord],
-  isSyntaxHighlight: bool) =
-    ## Update syntax highlightings in all buffers.
+proc checkBufferStatusUpdate(status: EditorStatus) =
+  ## Update syntax highlightings in all buffers.
+  ## And send textDocument/didChange to LSP servers.
 
-    # int is buffer index
-    var newHighlights: seq[tuple[bufIndex: int, highlight: Highlight]]
-    for index, buf in bufStatus:
-      # The filer syntax highlight is initialized/updated in filermode module.
-      if not buf.isFilerMode and buf.isUpdate:
-        let
-          lang =
-            if not isSyntaxHighlight: SourceLanguage.langNone
-            else: buf.language
-          h = initHighlight(buf.buffer.toSeqRunes, reservedWords, lang)
-        newHighlights.add (bufIndex: index, highlight: h)
-        bufStatus[index].isUpdate = false
+  var newHighlights: seq[tuple[bufIndex: int, highlight: Highlight]]
+  for i in 0 .. status.bufStatus.high:
+    template buf: var BufferStatus = status.bufStatus[i]
 
-    var queue = initHeapQueue[WindowNode]()
-    for node in windowNode.child: queue.push(node)
-    while queue.len > 0:
-      for i in  0 ..< queue.len:
-        var node = queue.pop
-        if node.window.isSome:
-          for h in newHighlights:
-            if h.bufIndex == node.bufferIndex and h.highlight != node.highlight:
-              node.highlight = h.highlight
+    # The filer syntax highlight is initialized/updated in filermode module.
+    if not buf.isFilerMode and buf.isUpdate:
+      let
+        lang =
+          if not status.settings.syntax: SourceLanguage.langNone
+          else: buf.language
+        h = initHighlight(
+          buf.buffer.toSeqRunes,
+          status.settings.highlight.reservedWords, lang)
+      newHighlights.add (bufIndex: i, highlight: h)
 
-              if bufStatus[h.bufIndex].isTrackingByGit:
-                bufStatus[h.bufIndex].isGitUpdate = true
+      buf.version.inc
 
-        if node.child.len > 0:
-          for node in node.child: queue.push(node)
+      if status.lspClients.contains(buf.languageId) and
+         status.lspClients[buf.languageId].isInitialized:
+           # Send a textDocument/didChange notification to the LSP server.
+           discard status.lspClients[buf.languageId].textDocumentDidChange(
+             buf.version,
+             $buf.path.absolutePath,
+             $buf.buffer)
+
+      buf.isUpdate = false
+
+  var queue = initHeapQueue[WindowNode]()
+  for node in mainWindowNode.child: queue.push(node)
+  while queue.len > 0:
+    for i in  0 ..< queue.len:
+      var node = queue.pop
+      if node.window.isSome:
+        for h in newHighlights:
+          if h.bufIndex == node.bufferIndex and h.highlight != node.highlight:
+            node.highlight = h.highlight
+
+            if status.bufStatus[h.bufIndex].isTrackingByGit:
+              status.bufStatus[h.bufIndex].isGitUpdate = true
+
+      if node.child.len > 0:
+        for node in node.child: queue.push(node)
 
 proc updateLogViewerBuffer(
   bufStatus: var BufferStatus,
@@ -749,11 +763,7 @@ proc update*(status: var EditorStatus) =
         currentMainWindowNode.windowIndex,
         status.settings.debugMode).toGapBuffer
 
-  # Init (Update) syntax highlightings.
-  mainWindowNode.updateSyntaxHighlights(
-    status.bufStatus,
-    settings.highlight.reservedWords,
-    settings.syntax)
+  status.checkBufferStatusUpdate
 
   if currentBufStatus.isVisualMode:
     currentBufStatus.updateSelectedArea(currentMainWindowNode)

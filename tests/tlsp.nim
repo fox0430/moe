@@ -91,7 +91,7 @@ suite "lsp: Send requests":
       const SecondVersion = 1
       let changedText = "echo 1"
 
-      check client.textDocumentDidChange(SecondVersion, changedText).isOk
+      check client.textDocumentDidChange(SecondVersion, path, changedText).isOk
 
   test "Send textDocument/didClose":
     var client = initLspClient(ServerCommand)

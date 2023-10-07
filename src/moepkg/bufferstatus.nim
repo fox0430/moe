@@ -56,7 +56,8 @@ type
     path*: Runes
     openDir*: Runes
     positionRecord*: Table[int, tuple[line, column, expandedColumn: int]]
-    countChange*: int
+    countChange*: int # Counting temporary changes
+    version*: Natural # Counting total changes
     cmdLoop*: int
     mode* : Mode
     prevMode* : Mode
