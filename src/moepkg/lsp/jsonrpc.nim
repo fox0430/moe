@@ -48,8 +48,12 @@ proc readLine(s: Stream, timeout: int): Result[string, string] =
     n = now()
   while now() - n < d:
     sleep 100
-    if not s.atEnd():
-      return Result[string, string].ok s.readLine
+
+    try:
+      if not s.atEnd():
+        return Result[string, string].ok s.readLine
+    except CatchableError as e:
+      return Result[string, string].err e.msg
 
   return Result[string, string].err "timeout"
 
@@ -115,7 +119,7 @@ proc read*(s: Stream): JsonRpcResponseResult =
   else:
     return JsonRpcResponseResult.err fmt"Invalid jsonrpc: {$res}"
 
-proc send(s: Stream, frame: string) =
+proc send(s: Stream, frame: string): Result[(), string] =
   ## Write json-rpc message to the stream.
 
   let req = "Content-Length: " & $frame.len & "\r\n\r\n" & frame
@@ -123,8 +127,13 @@ proc send(s: Stream, frame: string) =
   debug fmt"lsp: client req: {req}"
   addMessageLog fmt"lsp: client req: {req}"
 
-  s.write req
-  s.flush
+  try:
+    s.write req
+    s.flush
+  except CatchableError as e:
+    return Result[(), string].err e.msg
+
+  return Result[(), string].ok ()
 
 proc newReqest(id: int, methodName: string, params: JsonNode): string =
   result = newStringOfCap(1024)
@@ -144,7 +153,10 @@ proc sendRequest*(
     ## Send a request and return a response.
 
     let req = newReqest(id, methodName, params)
-    s.input.send(req)
+
+    let err = s.input.send(req)
+    if err.isErr:
+      return JsonRpcResponseResult.err err.error
 
     let res = s.output.read
     if res.isOk:
@@ -161,9 +173,12 @@ proc newNotify(methodName: string, params: JsonNode): string =
   }
   result.toUgly(req)
 
-proc sendNotify*(s: Streams, methodName: string, params: JsonNode) =
-  ## Send a notification.
-  ## No response to the notification. Also, no `id` is required in the request.
+proc sendNotify*(
+  s: Streams,
+  methodName: string,
+  params: JsonNode): Result[(), string] =
+    ## Send a notification.
+    ## No response to the notification. Also, no `id` is required in the request.
 
-  let notify = newNotify(methodName, params)
-  s.input.send(notify)
+    let notify = newNotify(methodName, params)
+    return s.input.send(notify)
