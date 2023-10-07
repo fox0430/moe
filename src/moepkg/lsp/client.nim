@@ -46,6 +46,9 @@ type
     data*: string
       # Error data.
 
+  LspCapabilities* = object
+    hover*: bool
+
   LspClient* = ref object
     serverProcess: Process
       # LSP server process.
@@ -53,12 +56,14 @@ type
       # Streams for the LSP server process.
     isInitialized*: bool
       # Set true if initialized LSP client/server.
+    capabilities*: LspCapabilities
+      # LSP server capabilities
 
 type
   R = Result
 
   LspErrorParseResult* = R[LspError, string]
-  LspInitializeResult* = R[InitializeResult, string]
+  LspInitializeResult* = R[(), string]
   LspInitializedResult* = R[(), string]
   LspWorkspaceDidChangeConfigurationResult* = R[(), string]
   LspShutdownResult* = R[(), string]
@@ -181,11 +186,17 @@ proc initInitializeParams*(workspaceRoot: string): InitializeParams =
     trace: some("verbose")
   )
 
+proc setCapabilities(c: var LspClient, initResult: InitializeResult) =
+  ## Set server capabilities to the LspClient from InitializeResult.
+
+  if initResult.capabilities.hoverProvider == some(true):
+    c.capabilities.hover = true
+
 proc initialize*(
-  c: LspClient,
+  c: var LspClient,
   id: int,
   initParams: InitializeParams): LspInitializeResult =
-    ## Send a initialize request to the server.
+    ## Send a initialize request to the server and check server capabilities.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#initialize
 
     let params = %* initParams
@@ -197,11 +208,16 @@ proc initialize*(
     if r.get.isLspError:
       return LspInitializeResult.err fmt"lsp: Initialize request failed: {$r.error}"
 
+    var initResult: InitializeResult
     try:
-      return LspInitializeResult.ok r.get["result"].to(InitializeResult)
+      initResult = r.get["result"].to(InitializeResult)
     except CatchableError as e:
       let msg = fmt"json to InitializeResult failed {e.msg}"
       return LspInitializeResult.err fmt"lsp: Initialize request failed: {msg}"
+
+    c.setCapabilities(initResult)
+
+    return LspInitializeResult.ok ()
 
 proc initialized*(c: LspClient): LspInitializedResult =
   ## Send a initialized notification to the server.
@@ -345,6 +361,9 @@ proc textDocumentHover*(
   position: BufferPosition): LspHoverResult =
     ## Send a textDocument/hover request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_hover
+
+    if not c.capabilities.hover:
+      return LspHoverResult.err fmt"lsp: textDocument/hover unavailable"
 
     let params = %* initHoverParams(path, position.toLspPosition)
     let r = c.send(id, "textDocument/hover", params)
