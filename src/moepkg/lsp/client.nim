@@ -36,6 +36,7 @@ type
   HoverContent* = object
     title*: Runes
     description*: seq[Runes]
+    range*: BufferRange
 
   LspError* = object
     code*: int
@@ -240,7 +241,7 @@ proc initTextDocumentDidChangeParams(
 
 proc textDocumentDidChange*(
   c: LspClient,
-  version: int,
+  version: Natural,
   text: string): LspDidChangeTextDocumentResult =
     ## Send a textDocument/didChange notification to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didChange
@@ -277,24 +278,29 @@ proc initHoverParams(
 
 proc toHoverContent*(hover: Hover): HoverContent =
   let contents = %*hover.contents
-  if contents.len == 1:
-    if contents[0].contains("value"):
-      result.description = contents[0]["value"].getStr.splitLines.toSeqRunes
-  else:
-    if contents[0].contains("value"):
-      result.title = contents[0]["value"].getStr.toRunes
+  case contents.kind:
+    of JArray:
+      if contents.len == 1:
+        if contents[0].contains("value"):
+          result.description = contents[0]["value"].getStr.splitLines.toSeqRunes
+      else:
+        if contents[0].contains("value"):
+          result.title = contents[0]["value"].getStr.toRunes
 
-    for i in 1 ..< contents.len:
-      if contents[i].contains("value"):
-        result.description.add contents[i]["value"].getStr.splitLines.toSeqRunes
-        if i < contents.len - 1: result.description.add ru""
+        for i in 1 ..< contents.len:
+          if contents[i].contains("value"):
+            result.description.add contents[i]["value"].getStr.splitLines.toSeqRunes
+            if i < contents.len - 1: result.description.add ru""
+    else:
+      result.description = contents["value"].getStr.splitLines.toSeqRunes
 
-proc toRunes*(hoverContent: HoverContent): seq[Runes] =
-  if hoverContent.title.len > 0:
-    result.add @[hoverContent.title, ru""]
-
-  for line in hoverContent.description:
-    result.add line
+  let range = %*hover.range
+  result.range.first = BufferPosition(
+    line: range["start"]["line"].getInt,
+    column: range["start"]["character"].getInt)
+  result.range.last = BufferPosition(
+    line: range["end"]["line"].getInt,
+    column: range["end"]["character"].getInt)
 
 proc textDocumentHover*(
   c: LspClient,

@@ -25,9 +25,6 @@ import editorstatus, ui, gapbuffer, unicodeext, fileutils, windownode, movement,
        commandline, viewhighlight, messagelog, registers, independentutils,
        popupwindow
 
-type
-  WindowPosition = independentutils.Position
-
 proc changeModeToInsertMode(status: var EditorStatus) {.inline.} =
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
@@ -1068,8 +1065,15 @@ proc hover(status: var EditorStatus) =
     return
 
   # Display info on a popup window.
+
+  let hoverContent = r.get.toHoverContent
+  var buffer: seq[Runes]
+  if hoverContent.title.len > 0:
+    buffer = @[hoverContent.title, ru""]
+  for line in hoverContent.description:
+    buffer.add line
+
   let
-    buffer = r.get.toHoverContent.toRunes
     absPositon = currentMainWindowNode.absolutePosition
     expectPosition = Position(y: absPositon.y + 1, x: absPositon.x + 1)
   var hoverWin = initPopupWindow(
@@ -1543,8 +1547,6 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
     return
 
   addOperationToNormalModeOperationsRegister(commands)
-
-  debug "End normalCommand"
 
 proc isNormalModeCommand*(
   command: Runes,
