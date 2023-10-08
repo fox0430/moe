@@ -797,6 +797,29 @@ default is 20
 maxDelay
 ```
 
+### Lsp table
+
+Enable/Disable LSP (bool)  
+defaut is `false`
+```
+enable
+```
+
+### Lsp.{languageId} table
+
+File extensions (Array[string])
+```
+extensions
+
+```
+
+A LSP server command (string)  
+```
+serverCommand
+```
+
+Please check more [details](https://github.com/fox0430/moe/blob/develop/documents/lsp.md)
+
 ### StartUp.FileOpen table
 
 Display all buffers in multiple views if multiple paths are received when starting the editor (bool)  

@@ -53,8 +53,6 @@ This project's goals are easily customizable, high productivity, user friendly, 
 
 - Tab line
 
-- Simple file manager
-
 - Indentation lines
 
 - Auto close/delete paren
@@ -93,6 +91,8 @@ This project's goals are easily customizable, high productivity, user friendly, 
 
 - Macros
 
+- Language Server Protocol (WIP)
+
 ## Planned features
 
 - Supports regular expression and PEG
@@ -111,8 +111,6 @@ This project's goals are easily customizable, high productivity, user friendly, 
 
 - Edit files over ssh
 
-- Language Server Protocol
-
 - Fuzzy search
 
 - Plugins
@@ -127,28 +125,29 @@ We recommend Linux environments.
 
 ### Requires
 
-- Nim 1.6.2 or higher
+- [Nim](https://nim-lang.org) 1.6.2 or higher
 
-- ncurses
+- [Ncurses](https://invisible-island.net/ncurses) 6.1 or higher
 
-- xclip v0.13 or higher (Option on GNU/Linux)
+- [xclip](https://github.com/astrand/xclip) v0.13 or higher (Option on GNU/Linux)
 
-- xsel (Option on GNU/Linux)
+- [xsel](http://www.kfish.org/software/xsel/) (Option on GNU/Linux)
 
 ```sh
-# Latest released version
-nimble install moe
 # Latest developmental state inside Github repository
 nimble install moe@#head
+
+# Latest released version
+nimble install moe
 ```
 
 Check [detail](https://github.com/fox0430/moe/blob/develop/documents/overview.md)
 
 ## Usage
 
-[Documents (Release)](https://github.com/fox0430/moe/blob/master/documents/index.md)
-
 [Documents (Latest)](https://github.com/fox0430/moe/blob/develop/documents/index.md)
+
+[Documents (Release)](https://github.com/fox0430/moe/blob/master/documents/index.md)
 
 ## The origin of the name
 moe is a recursive acronym for "moe is an optimal editor".    

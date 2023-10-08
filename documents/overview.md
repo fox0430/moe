@@ -7,8 +7,8 @@ Currently you can use normal mode, visual mode, replace mode, insert mode, ex mo
 # Install and compile
 
 ## Requires
-- Nim 1.6.2 or higher
-- ncurses
+- [Nim](https://nim-lang.org) 1.6.2 or higher
+- [Ncurses](https://invisible-island.net/ncurses) 6.1 or higher
 
 ### Install
 
@@ -55,6 +55,11 @@ $ nimble release
 # Test
 
 ## Unit test
+
+### Requires
+
+- [nimlsp](https://github.com/PMunch/nimlsp)
+
 ```
 nimble test
 ```

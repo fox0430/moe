@@ -8,6 +8,8 @@
 
 [Configuration file](https://github.com/fox0430/moe/blob/develop/documents/configfile.md)
 
+[Language Server Protocol](https://github.com/fox0430/moe/blob/develop/documents/lsp.md)
+
 [Platform / Terminal](https://github.com/fox0430/moe/blob/develop/documents/platform_terminal.md)
 
 [Developer](https://github.com/fox0430/moe/blob/develop/documents/developer.md)
