@@ -550,3 +550,7 @@ proc replace*(runes1, sub: Runes, by: Runes = ru""): Runes {.inline.} =
 proc maxLen*(lines: seq[Runes]): int {.inline.} =
   for i in 0 .. lines.high:
     if lines[i].len > result: result = lines[i].len
+
+proc maxHigh*(lines: seq[Runes]): int {.inline.} =
+  for i in 0 .. lines.high:
+    if lines[i].high > result: result = lines[i].high

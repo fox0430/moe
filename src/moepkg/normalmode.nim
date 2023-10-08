@@ -1050,6 +1050,7 @@ proc closeCurrentWindow(status: var EditorStatus) =
 proc hover(status: var EditorStatus) =
   ## Display info on a hover. Get info from the LSP server.
   ## Call textDocument/hover.
+  ## TODO: Add tests after resolving the forever key waiting problem.
 
   if not status.lspClients.contains($currentBufStatus.extension) or
      not status.lspClients[$currentBufStatus.extension].isInitialized:

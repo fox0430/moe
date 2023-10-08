@@ -80,51 +80,52 @@ proc move*(p: var PopupWindow, y, x: Natural) =
 proc move*(p: var PopupWindow, position: Position) {.inline.} =
   p.move(position.y, position.x)
 
-proc autoMoveAndResize*(p: var PopupWindow, displayRect: WindowRect) =
-  ## Automatically move and resize the popup window to the best position within
-  ## the range.
-  ##
-  ## If the display range is small, display as much as possible.
+proc autoMoveAndResize*(
+  p: var PopupWindow,
+  minPosition, maxPosition: Position) =
+    ## Automatically move and resize the popup window to the best position
+    ## within the range.
+    ##
+    ## If the display range is small, display as much as possible.
+    ##
+    ## Priority is given to the below and right side of the current position.
+    ##
+    ## Window size and position are determined from current window position,
+    ## displayable area, and buffer size.
 
-  let
-    isUnder =
-      # If true, display the window under the current `p.position.y`.
-      if displayRect.h - p.position.y > 0: true
-      else: false
+    let
+      bufferMaxLen = p.buffer.maxLen
 
-    isRight =
+      aboveHeight = max(0, p.position.y - minPosition.y)
+      belowHeight = max(0, maxPosition.y - p.position.y)
+      rightWidth = max(0, maxPosition.x - p.position.x)
+      leftWidth = max(0, p.position.x - minPosition.x)
+
+      # If true, display the window below the current `p.position.y`.
+      isBelow = p.buffer.len < belowHeight or belowHeight > aboveHeight
       # If true, display the window right the current `p.position.x`.
-      if displayRect.w - p.position.x > 0: true
-      else: false
+      isRight = bufferMaxLen < rightWidth or rightWidth > leftWidth
 
-    y =
-      if isUnder: p.position.y
-      else: max(p.position.y - p.size.h, displayRect.y)
+    let
+      y =
+        if isBelow: p.position.y
+        else: max(minPosition.y, aboveHeight - p.buffer.len)
+      x =
+        if isRight: p.position.x
+        else: max(minPosition.x, leftWidth - bufferMaxLen)
 
-    x =
-      if isRight: p.position.x
-      else: max(p.position.x - p.size.w, displayRect.x)
+      # If the buffer length is smaller than the displayable area, the
+      # buffer length will be maximized.
 
-    maxHeight = displayRect.y + displayRect.h
-    h =
-      if isUnder:
-        if (maxHeight - y) - p.size.h > 0: p.size.h
-        else: maxHeight - y
-      else:
-        if y - p.size.h > 0: p.size.h
-        else: y
+      h =
+        if isBelow: min(p.buffer.len, belowHeight)
+        else: min(p.buffer.len, aboveHeight)
+      w =
+        if isRight: min(bufferMaxLen, rightWidth)
+        else: min(bufferMaxLen, leftWidth)
 
-    maxWidth = displayRect.x + displayRect.w
-    w =
-      if isRight:
-        if (maxWidth - x) - p.size.w > 0: p.size.w
-        else: maxWidth - x
-      else:
-        if x - p.size.w > 0: p.size.w
-        else: x
-
-  p.resize(Size(h: h, w: w))
-  p.move(Position(y: y, x: x))
+    p.resize(Size(h: max(1, h), w: max(1, w)))
+    p.move(Position(y: y, x: x))
 
 proc update*(p: var PopupWindow) =
   ## Write popup window to the UI.
