@@ -53,6 +53,18 @@ suite "lsp: Send requests":
 
     check client.shutdown(Id).isOk
 
+  test "Send workspace/didChangeConfiguration":
+    var client = initLspClient(ServerCommand).get
+
+    const Id = 1
+    let
+      rootPath = getCurrentDir()
+      params = initInitializeParams(rootPath, Trace)
+    assert client.initialize(Id, params).isOk
+    assert client.initialized.isOk
+
+    check client.workspaceDidChangeConfiguration.isOk
+
   test "Send textDocument/didOpen":
     var client = initLspClient(ServerCommand).get
 
