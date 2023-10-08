@@ -451,7 +451,6 @@ proc initStartUpSettings(): StartUpSettings =
 
 proc initLspSettigns(): LspSettings =
   result.enable = false
-  result.languages = initTable[string, LspLanguageSettings]()
 
   result.languages["nim"] = LspLanguageSettings(
     extensions: @[ru"nim"],
