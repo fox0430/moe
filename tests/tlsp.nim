@@ -20,43 +20,46 @@
 import std/[json, unittest, importutils, os, options]
 import pkg/results
 import moepkg/independentutils
+import moepkg/lsp/protocol/enums
 
 import moepkg/lsp/client {.all.}
 
 suite "lsp: Send requests":
   privateAccess(LspClient)
 
-  const ServerCommand = "nimlsp"
+  const
+    ServerCommand = "nimlsp"
+    Trace = TraceValue.verbose
 
   test "Send initialize":
-    var client = initLspClient(ServerCommand)
+    var client = initLspClient(ServerCommand).get
 
     const
       Id = 1
       RootPath = ""
-    let params = initInitializeParams(RootPath)
+    let params = initInitializeParams(RootPath, Trace)
 
     check client.initialize(Id, params).isOk
 
   test "Send shutdown":
-    var client = initLspClient(ServerCommand)
+    var client = initLspClient(ServerCommand).get
 
     const
       Id = 1
       RootPath = ""
-    let params = initInitializeParams(RootPath)
+    let params = initInitializeParams(RootPath, Trace)
     assert client.initialize(Id, params).isOk
     assert client.initialized.isOk
 
     check client.shutdown(Id).isOk
 
   test "Send textDocument/didOpen":
-    var client = initLspClient(ServerCommand)
+    var client = initLspClient(ServerCommand).get
 
     const Id = 1
     let
       rootPath = getCurrentDir()
-      params = initInitializeParams(rootPath)
+      params = initInitializeParams(rootPath, Trace)
     assert client.initialize(Id, params).isOk
     assert client.initialized.isOk
 
@@ -70,12 +73,12 @@ suite "lsp: Send requests":
     check client.textDocumentDidOpen(Version, path, LanguageId, text).isOk
 
   test "Send textDocument/didChange":
-    var client = initLspClient(ServerCommand)
+    var client = initLspClient(ServerCommand).get
 
     const Id = 1
     let
       rootPath = getCurrentDir()
-      params = initInitializeParams(rootPath)
+      params = initInitializeParams(rootPath, Trace)
     assert client.initialize(Id, params).isOk
     assert client.initialized.isOk
 
@@ -94,12 +97,12 @@ suite "lsp: Send requests":
       check client.textDocumentDidChange(SecondVersion, path, changedText).isOk
 
   test "Send textDocument/didClose":
-    var client = initLspClient(ServerCommand)
+    var client = initLspClient(ServerCommand).get
 
     const Id = 1
     let
       rootPath = getCurrentDir()
-      params = initInitializeParams(rootPath)
+      params = initInitializeParams(rootPath, Trace)
     assert client.initialize(Id, params).isOk
     assert client.initialized.isOk
 
@@ -114,12 +117,12 @@ suite "lsp: Send requests":
     check client.textDocumentDidClose(path).isOk
 
   test "Send textDocument/hover":
-    var client = initLspClient(ServerCommand)
+    var client = initLspClient(ServerCommand).get
 
     const Id = 1
     let
       rootPath = getCurrentDir()
-      params = initInitializeParams(rootPath)
+      params = initInitializeParams(rootPath, Trace)
     assert client.initialize(Id, params).isOk
     assert client.initialized.isOk
 
