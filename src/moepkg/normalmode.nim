@@ -1082,7 +1082,12 @@ proc hover(status: var EditorStatus) =
     Size(h: buffer.len, w: buffer.maxLen),
     buffer)
 
-  hoverWin.autoMoveAndResize(mainWindowNode.rect)
+  let
+    minPosition = Position(y: mainWindowNode.y, x: mainWindowNode.x)
+    maxPostion = Position(
+      y: mainWindowNode.y + mainWindowNode.h,
+      x: mainWindowNode.x + mainWindowNode.w)
+  hoverWin.autoMoveAndResize(minPosition, maxPostion)
   hoverWin.update
 
   # Wait until any key is pressed.
