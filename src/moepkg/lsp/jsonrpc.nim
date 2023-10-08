@@ -26,6 +26,10 @@ type
   ReadFrameResult = Result[string, string]
   JsonRpcResponseResult* = Result[JsonNode, string]
 
+  MessageType = enum
+    read
+    write
+
   Streams* = object
     input*, output*: Stream
 
@@ -39,6 +43,17 @@ proc isInvalidContentType(s: string, valueStart: int): bool {.inline.} =
 
 proc isValidJsonRpc(json: JsonNode): bool {.inline.} =
   json.contains("jsonrpc")
+
+proc debugLog(messageType: MessageType, message: string) =
+  let debugMessage =
+    case messageType:
+      of read:
+        "lsp: Read messages: \n" & message & '\n'
+      of write:
+        "lsp: Write messages: \n" & message & '\n'
+
+  debug debugMessage
+  addMessageLog debugMessage
 
 proc readLine(s: Stream, timeout: int): Result[string, string] =
   ## readLine with timeout.
@@ -60,19 +75,19 @@ proc readLine(s: Stream, timeout: int): Result[string, string] =
 proc readFrame(s: Stream): ReadFrameResult =
   ## Read text from the stream and return json node.
 
-  var contentLen = -1
-  var headerStarted = false
+  var
+    contentLen = -1
+    headerStarted = false
 
   while true:
     const Timeout = 1000
     var ln = s.readLine(Timeout)
     if ln.isErr:
-      debug "readLine Error!: " & ln.error
+      debugLog(MessageType.read, "readLine Error!: " & ln.error)
       return ReadFrameResult.err ln.error
 
     if ln.get.len != 0:
-      debug fmt"lsp: server res: {ln.get}"
-      addMessageLog fmt"lsp: server res: {ln.get}"
+      debugLog(MessageType.read, fmt"readLine: {ln.get}")
 
       let sep = ln.get.find(':')
       if sep == -1:
@@ -97,7 +112,9 @@ proc readFrame(s: Stream): ReadFrameResult =
       continue
     else:
       if contentLen != -1:
-        return ReadFrameResult.ok s.readStr(contentLen)
+        let response = s.readStr(contentLen)
+        debugLog(MessageType.read, "Response: {response}")
+        return ReadFrameResult.ok response
       else:
         return ReadFrameResult.err "Missing Content-Length header"
 
@@ -124,8 +141,7 @@ proc send(s: Stream, frame: string): Result[(), string] =
 
   let req = "Content-Length: " & $frame.len & "\r\n\r\n" & frame
 
-  debug fmt"lsp: client req: {req}"
-  addMessageLog fmt"lsp: client req: {req}"
+  debugLog(MessageType.write, req)
 
   try:
     s.write req
