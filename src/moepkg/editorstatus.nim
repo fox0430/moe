@@ -296,7 +296,7 @@ proc exitEditor*(status: EditorStatus) =
 proc initLsp(status: var EditorStatus, bufferIndex: int): Result[(), string] =
   ## Initialize LSP client and server.
 
-  let langId = status.bufStatus[bufferIndex].languageId
+  let langId = $status.bufStatus[bufferIndex].extension
 
   block:
     # Init a LSP client and start a LSP server.
@@ -413,18 +413,10 @@ proc addNewBuffer*(
              else:
                status.commandLine.writeGitInfoUpdateError(gitDiffProcess.error)
 
-        if status.bufStatus[^1].extension.len > 0:
-          # Set languageId for LSP.
-          let langId = status.settings.lsp.languageIdFromLspLanguageSettings(
-            status.bufStatus[^1].extension)
-          if langId.isSome:
-            status.bufStatus[^1].languageId = langId.get
-
         if status.settings.lsp.enable and
-           status.bufStatus[^1].languageId.len > 0 and
-           not status.lspClients.contains(status.bufStatus[^1].languageId):
+           not status.lspClients.contains($status.bufStatus[^1].extension):
              let
-               langId = status.bufStatus[^1].languageId
+               langId = $status.bufStatus[^1].extension
                err = status.initLsp(status.bufStatus.high)
              if err.isOk:
                status.commandLine.writeLspInitialized(
@@ -671,10 +663,10 @@ proc checkBufferStatusUpdate(status: EditorStatus) =
 
       buf.version.inc
 
-      if status.lspClients.contains(buf.languageId) and
-         status.lspClients[buf.languageId].isInitialized:
+      if status.lspClients.contains($buf.extension) and
+         status.lspClients[$buf.extension].isInitialized:
            # Send a textDocument/didChange notification to the LSP server.
-           discard status.lspClients[buf.languageId].textDocumentDidChange(
+           discard status.lspClients[$buf.extension].textDocumentDidChange(
              buf.version,
              $buf.path.absolutePath,
              $buf.buffer)
@@ -1055,6 +1047,11 @@ proc closeWindow*(status: var EditorStatus, node: WindowNode) =
 
 proc deleteBuffer*(status: var EditorStatus, deleteIndex: int) =
   let beforeWindowIndex = currentMainWindowNode.windowIndex
+
+  let langId = $status.bufStatus[beforeWindowIndex].extension
+  if status.lspClients.contains(langId):
+    discard status.lspClients[langId].textDocumentDidClose(
+      $status.bufStatus[beforeWindowIndex].path.absolutePath)
 
   var queue = initHeapQueue[WindowNode]()
   for node in mainWindowNode.child:

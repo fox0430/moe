@@ -1051,12 +1051,12 @@ proc hover(status: var EditorStatus) =
   ## Display info on a hover. Get info from the LSP server.
   ## Call textDocument/hover.
 
-  if not status.lspClients.contains(currentBufStatus.languageId) or
-     not status.lspClients[currentBufStatus.languageId].isInitialized:
+  if not status.lspClients.contains($currentBufStatus.extension) or
+     not status.lspClients[$currentBufStatus.extension].isInitialized:
        debug "lsp client is not ready"
        return
 
-  let r = status.lspClients[currentBufStatus.languageId].textDocumentHover(
+  let r = status.lspClients[$currentBufStatus.extension].textDocumentHover(
     currentBufStatus.buffer.high,
     $currentBufStatus.path.absolutePath,
     currentMainWindowNode.bufferPosition)
