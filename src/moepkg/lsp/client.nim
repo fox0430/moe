@@ -27,7 +27,7 @@ import ../appinfo
 import ../independentutils
 import ../unicodeext
 
-import protocol/types
+import protocol/[enums, types]
 import jsonrpc
 
 type
@@ -76,6 +76,12 @@ type
 
 proc toLspPosition*(p: BufferPosition): LspPosition {.inline.} =
   LspPosition(line: p.line, character: p.column)
+
+proc parseTraceValue*(s: string): Result[TraceValue, string] =
+  try:
+    return Result[TraceValue, string].ok parseEnum[TraceValue](s)
+  except ValueError:
+    return Result[TraceValue, string].err "Invalid value"
 
 proc pathToUri(path: string): string =
   # This is a modified copy of encodeUrl in the uri module. This doesn't encode
@@ -158,47 +164,49 @@ proc initLspClient*(serverCommand: string): initLspClientResult =
 
   return initLspClientResult.ok c
 
-proc initInitializeParams*(workspaceRoot: string): InitializeParams =
-  let
-    path =
-      if workspaceRoot.len == 0: none(string)
-      else: some(workspaceRoot)
-    uri =
-      if workspaceRoot.len == 0: none(string)
-      else: some(workspaceRoot.pathToUri)
+proc initInitializeParams*(
+  workspaceRoot: string,
+  trace: TraceValue): InitializeParams =
+    let
+      path =
+        if workspaceRoot.len == 0: none(string)
+        else: some(workspaceRoot)
+      uri =
+        if workspaceRoot.len == 0: none(string)
+        else: some(workspaceRoot.pathToUri)
 
-    workspaceDir = getCurrentDir()
+      workspaceDir = getCurrentDir()
 
-  # TODO: WIP. Need to set more correct parameters.
-  InitializeParams(
-    processId: some(%getCurrentProcessId()),
-    rootPath: path,
-    rootUri: uri,
-    locale: some("en_US"),
-    clientInfo: some(ClientInfo(
-      name: "moe",
-      version: some(moeSemVersionStr())
-    )),
-    capabilities: ClientCapabilities(
-      workspace: some(WorkspaceClientCapabilities(
-        applyEdit: some(true)
+    # TODO: WIP. Need to set more correct parameters.
+    InitializeParams(
+      processId: some(%getCurrentProcessId()),
+      rootPath: path,
+      rootUri: uri,
+      locale: some("en_US"),
+      clientInfo: some(ClientInfo(
+        name: "moe",
+        version: some(moeSemVersionStr())
       )),
-      textDocument: some(TextDocumentClientCapabilities(
-        hover: some(HoverCapability(
-          dynamicRegistration: some(true),
-          contentFormat: some(@["plaintext"])
+      capabilities: ClientCapabilities(
+        workspace: some(WorkspaceClientCapabilities(
+          applyEdit: some(true)
+        )),
+        textDocument: some(TextDocumentClientCapabilities(
+          hover: some(HoverCapability(
+            dynamicRegistration: some(true),
+            contentFormat: some(@["plaintext"])
+          ))
         ))
-      ))
-    ),
-    workspaceFolders: some(
-      @[
-        WorkspaceFolder(
-          uri: workspaceDir.pathToUri,
-          name: workspaceDir.splitPath.tail)
-      ]
-    ),
-    trace: some("verbose")
-  )
+      ),
+      workspaceFolders: some(
+        @[
+          WorkspaceFolder(
+            uri: workspaceDir.pathToUri,
+            name: workspaceDir.splitPath.tail)
+        ]
+      ),
+      trace: some($trace)
+    )
 
 proc setCapabilities(c: var LspClient, initResult: InitializeResult) =
   ## Set server capabilities to the LspClient from InitializeResult.

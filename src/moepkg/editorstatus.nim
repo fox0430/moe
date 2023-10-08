@@ -313,7 +313,9 @@ proc initLsp(status: var EditorStatus, bufferIndex: int): Result[(), string] =
     # Initialize request
     let err = status.lspClients[langId].initialize(
       status.bufStatus.high,
-      initInitializeParams($status.bufStatus[bufferIndex].openDir))
+      initInitializeParams(
+        $status.bufStatus[bufferIndex].openDir,
+        status.settings.lsp.languages[langId].trace))
     if err.isErr:
       return Result[(), string].err err.error
 

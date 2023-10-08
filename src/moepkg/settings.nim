@@ -20,6 +20,7 @@
 import std/[os, json, options, strformat, osproc, strutils, sequtils, enumutils,
             tables]
 import pkg/[parsetoml, results, regex]
+import lsp/[protocol/enums, client]
 import ui, color, unicodeext, highlight, platform, independentutils, rgb, theme
 
 export TomlError
@@ -208,7 +209,7 @@ type
     enable*: bool
     minDelay*: int
     maxDelay*: int
- 
+
   StartUpFileOpenSettings* = object
     autoSplit*: bool
     splitType*: WindowSplitType
@@ -219,6 +220,7 @@ type
   LspLanguageSettings* = object
     extensions*: seq[Runes]
     serverCommand*: Runes
+    trace*: TraceValue
 
   LspSettings* = object
     enable*: bool
@@ -453,7 +455,8 @@ proc initLspSettigns(): LspSettings =
 
   result.languages["nim"] = LspLanguageSettings(
     extensions: @[ru"nim"],
-    serverCommand: ru"nimlsp")
+    serverCommand: ru"nimlsp",
+    trace: TraceValue.verbose)
 
 proc initEditorSettings*(): EditorSettings =
   result.editorColorTheme = ColorTheme.dark
@@ -1659,6 +1662,8 @@ proc parseLspTable(
                   langSettings.extensions.add val[i].getStr.toRunes
               of "serverCommand":
                 langSettings.serverCommand = val.getStr.toRunes
+              of "trace":
+                langSettings.trace = val.getStr.parseTraceValue.get
 
           s.lsp.languages[langId] = langSettings
 
@@ -2230,9 +2235,10 @@ proc validateLspSettings(table: TomlValueRef): Option[InvalidItem] =
             of "extensions":
               if val.kind != TomlValueKind.Array:
                 return some(InvalidItem(name: $key, val: $val))
-            of "serverCommand":
-              if val.kind != TomlValueKind.String:
-                return some(InvalidItem(name: $key, val: $val))
+            of "serverCommand", "trace":
+              if val.kind != TomlValueKind.String and
+                 val.getStr.parseTraceValue.isErr:
+                   return some(InvalidItem(name: $key, val: $val))
             else:
               return some(InvalidItem(name: $key, val: $val))
 
