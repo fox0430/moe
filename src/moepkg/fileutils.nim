@@ -182,6 +182,15 @@ proc getFileType*(path: string): FileType =
           return ext
       return FileType.unknown
 
+proc getFileExtension*(path: Runes): Runes =
+  ## Return a file extension from path.
+  ## Return empty string if dosen't exist.
+
+  if not dirExists($path) and path.contains(ru'.'):
+    let position = path.rfind(ru'.')
+    if position < path.high:
+      return path[position + 1 .. ^1]
+
 proc normalizedPath*(path: Runes): Runes =
   result = normalizedPath($path).toRunes
   if path.startsWith(ru'~'):

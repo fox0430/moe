@@ -52,6 +52,7 @@ type
     language*: SourceLanguage
     languageId*: string
     fileType*: FileType
+    extension*: Runes
     selectedArea*: SelectedArea
     path*: Runes
     openDir*: Runes
@@ -280,8 +281,7 @@ proc initBufferStatus*(
       prevMode: mode,
       mode: mode,
       lastSaveTime: now(),
-      lastGitInfoCheckTime: now(),
-      fileType: getFileType(path))
+      lastGitInfoCheckTime: now())
 
     if isFilerMode(mode):
       if isAccessibleDir(path):
@@ -292,6 +292,9 @@ proc initBufferStatus*(
         return Result[BufferStatus, string].err "Can not open dir"
     else:
       b.path = path.toRunes
+
+      b.fileType = getFileType(path)
+      b.extension = getFileExtension(b.path)
 
       if not fileExists($b.path):
         b.buffer = newFile()
