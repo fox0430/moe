@@ -17,7 +17,8 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, importutils, sequtils, sugar, os, options, strformat]
+import std/[unittest, importutils, sequtils, sugar, os, options, strformat,
+            oids]
 import pkg/[ncurses, results]
 import moepkg/syntax/highlite
 import moepkg/[registers, settings, editorstatus, gapbuffer, unicodeext,
