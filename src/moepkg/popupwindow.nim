@@ -58,6 +58,9 @@ proc initPopupWindow*(): PopupWindow {.inline.} =
 proc refresh*(p: var PopupWindow) {.inline.} =
   p.window.refresh
 
+proc overlay*(p: var PopupWindow, destWin: var Window) {.inline.} =
+  overlay(p.window, destWin)
+
 proc resize*(p: var PopupWindow, h, w: Natural) =
   ## Resize the window in the same position.
 

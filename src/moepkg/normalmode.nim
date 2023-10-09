@@ -1090,6 +1090,10 @@ proc hover(status: var EditorStatus) =
   hoverWin.autoMoveAndResize(minPosition, maxPostion)
   hoverWin.update
 
+  # Keep the cursor position on currentMainWindowNode and display the hover
+  # window on the top.
+  hoverWin.overlay(currentMainWindowNode.window.get)
+
   # Wait until any key is pressed.
   discard status.getKeyFromMainWindow
   hoverWin.close
