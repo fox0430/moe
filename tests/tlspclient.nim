@@ -152,3 +152,37 @@ suite "lsp: Send requests":
     let r = client.textDocumentHover(Id, path, position)
     check r.isOk
     check r.get.contents.get.len > 0
+
+  test "Send textDocument/hover 2":
+    var client = initLspClient(ServerCommand).get
+
+    const Id = 1
+    let
+      rootPath = getCurrentDir()
+      params = initInitializeParams(rootPath, Trace)
+    assert client.initialize(Id, params).isOk
+    assert client.initialized.isOk
+
+    const LanguageId = "nim"
+    var version = 1
+    let
+      path = getCurrentDir() / "src/moe.nim"
+      # Use simple text for the test.
+      text = "echo 1"
+    assert client.textDocumentDidOpen(version, path, LanguageId, text).isOk
+
+    block first:
+      let position = BufferPosition(line: 0, column: 0)
+
+      let r = client.textDocumentHover(Id, path, position)
+      check r.get.contents.get.len > 0
+
+    block second:
+      version.inc
+      let changedText = "echo 1\necho 2"
+      assert client.textDocumentDidChange(version, path, changedText).isOk
+
+      let position = BufferPosition(line: 1, column: 0)
+
+      let r = client.textDocumentHover(Id, path, position)
+      check r.get.contents.get.len > 0
