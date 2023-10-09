@@ -1,6 +1,7 @@
 # Language Server Protocol
 
 Moe supports [LSP](https://microsoft.github.io/language-server-protocol/) but work in progress and not recommended for use yet.
+
 Please feedback, bug reports and PRs.
 
 ## Supported LSP commands
