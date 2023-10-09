@@ -204,7 +204,7 @@ proc initialize*(
     ## Send a initialize request to the server and check server capabilities.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#initialize
 
-    if c.serverProcess == nil:
+    if not c.serverProcess.running:
       return LspInitializeResult.err fmt"lsp: server crashed"
 
     let params = %* initParams
@@ -231,7 +231,7 @@ proc initialized*(c: LspClient): LspInitializedResult =
   ## Send a initialized notification to the server.
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#initialized
 
-  if c.serverProcess == nil:
+  if not c.serverProcess.running:
     return LspInitializeResult.err fmt"lsp: server crashed"
 
   let params = %* {}
@@ -248,7 +248,7 @@ proc shutdown*(c: LspClient, id: int): LspShutdownResult =
   ## Send a shutdown request to the server.
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#shutdown
 
-  if c.serverProcess == nil:
+  if not c.serverProcess.running:
     return LspShutdownResult.err fmt"lsp: server crashed"
 
   let r = c.send(id, "shutdown", %*{})
@@ -266,7 +266,7 @@ proc workspaceDidChangeConfiguration*(
     ## Send a workspace/didChangeConfiguration notification to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#workspace_didChangeConfiguration
 
-    if c.serverProcess == nil:
+    if not c.serverProcess.running:
       return LspWorkspaceDidChangeConfigurationResult.err fmt"lsp: server crashed"
 
     let params = %* DidChangeConfigurationParams()
@@ -295,7 +295,7 @@ proc textDocumentDidOpen*(
     ## Send a textDocument/didOpen notification to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didOpen
 
-    if c.serverProcess == nil:
+    if not c.serverProcess.running:
       return LspDidOpenTextDocumentResult.err fmt"lsp: server crashed"
 
     let params = %* initTextDocumentDidOpenParams(
@@ -327,7 +327,7 @@ proc textDocumentDidChange*(
     ## Send a textDocument/didChange notification to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didChange
 
-    if c.serverProcess == nil:
+    if not c.serverProcess.running:
       return LspDidChangeTextDocumentResult.err fmt"lsp: server crashed"
 
     let params = %* initTextDocumentDidChangeParams(version, path, text)
@@ -350,7 +350,7 @@ proc textDocumentDidClose*(
     ## Send a textDocument/didClose notification to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didClose
 
-    if c.serverProcess == nil:
+    if not c.serverProcess.running:
       return LspDidCloseTextDocumentResult.err fmt"lsp: server crashed"
 
     let params = %* initTextDocumentDidClose(text)
@@ -380,7 +380,7 @@ proc textDocumentHover*(
     if not c.capabilities.hover:
       return LspHoverResult.err fmt"lsp: textDocument/hover unavailable"
 
-    if c.serverProcess == nil:
+    if not c.serverProcess.running:
       return LspHoverResult.err fmt"lsp: server crashed"
 
     let params = %* initHoverParams(path, position.toLspPosition)

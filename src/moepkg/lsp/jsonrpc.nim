@@ -62,13 +62,13 @@ proc readLine(s: Stream, timeout: int): Result[string, string] =
     d = initDuration(milliseconds = timeout)
     n = now()
   while now() - n < d:
-    sleep 100
-
     try:
       if not s.atEnd():
         return Result[string, string].ok s.readLine
     except CatchableError as e:
       return Result[string, string].err e.msg
+
+    sleep 100
 
   return Result[string, string].err "timeout"
 
