@@ -437,9 +437,11 @@ type
     contentChanges*: seq[TextDocumentContentChangeEvent]
 
   TextDocumentContentChangeEvent* = ref object of RootObj
-    range*: Option[Range]
-    rangeLength*: Option[int]
     text*: string
+    #range*: Option[Range]
+    #rangeLength*: Option[int]
+      # If `range` and `rangeLength` exist, nimlsp considers it to be an
+      # invalid notification.
 
   TextDocumentChangeRegistrationOptions* = ref object of TextDocumentRegistrationOptions
     syncKind*: int
