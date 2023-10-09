@@ -3,5 +3,5 @@
 Fixed
 .....
 
-- `#1878`_ Fix ui.Attribute
+- `#1879`_ Fix ui.Attribute
 
