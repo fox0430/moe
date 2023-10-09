@@ -25,19 +25,11 @@ import pkg/results
 
 import ../appinfo
 import ../independentutils
-import ../unicodeext
 
 import protocol/[enums, types]
-import jsonrpc
+import jsonrpc, utils
 
 type
-  LspPosition* = types.Position
-
-  HoverContent* = object
-    title*: Runes
-    description*: seq[Runes]
-    range*: BufferRange
-
   LspError* = object
     code*: int
       # Error code.
@@ -73,15 +65,6 @@ type
   LspDidChangeTextDocumentResult* = R[(), string]
   LspDidCloseTextDocumentResult* = R[(), string]
   LspHoverResult* = R[Hover, string]
-
-proc toLspPosition*(p: BufferPosition): LspPosition {.inline.} =
-  LspPosition(line: p.line, character: p.column)
-
-proc parseTraceValue*(s: string): Result[TraceValue, string] =
-  try:
-    return Result[TraceValue, string].ok parseEnum[TraceValue](s)
-  except ValueError:
-    return Result[TraceValue, string].err "Invalid value"
 
 proc pathToUri(path: string): string =
   # This is a modified copy of encodeUrl in the uri module. This doesn't encode
@@ -385,32 +368,6 @@ proc initHoverParams(
     HoverParams(
       textDocument: TextDocumentIdentifier(uri: path.pathToUri),
       position: position)
-
-proc toHoverContent*(hover: Hover): HoverContent =
-  let contents = %*hover.contents
-  case contents.kind:
-    of JArray:
-      if contents.len == 1:
-        if contents[0].contains("value"):
-          result.description = contents[0]["value"].getStr.splitLines.toSeqRunes
-      else:
-        if contents[0].contains("value"):
-          result.title = contents[0]["value"].getStr.toRunes
-
-        for i in 1 ..< contents.len:
-          if contents[i].contains("value"):
-            result.description.add contents[i]["value"].getStr.splitLines.toSeqRunes
-            if i < contents.len - 1: result.description.add ru""
-    else:
-      result.description = contents["value"].getStr.splitLines.toSeqRunes
-
-  let range = %*hover.range
-  result.range.first = BufferPosition(
-    line: range["start"]["line"].getInt,
-    column: range["start"]["character"].getInt)
-  result.range.last = BufferPosition(
-    line: range["end"]["line"].getInt,
-    column: range["end"]["character"].getInt)
 
 proc textDocumentHover*(
   c: LspClient,

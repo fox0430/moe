@@ -19,7 +19,7 @@
 
 import std/[times, strutils, sequtils, options, strformat, tables, logging]
 import pkg/results
-import lsp/client
+import lsp/[client, utils]
 import editorstatus, ui, gapbuffer, unicodeext, fileutils, windownode, movement,
        editor, searchutils, bufferstatus, quickrunutils, messages, visualmode,
        commandline, viewhighlight, messagelog, registers, independentutils,

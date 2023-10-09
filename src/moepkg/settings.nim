@@ -20,7 +20,7 @@
 import std/[os, json, options, strformat, osproc, strutils, sequtils, enumutils,
             tables]
 import pkg/[parsetoml, results, regex]
-import lsp/[protocol/enums, client]
+import lsp/[protocol/enums, utils]
 import ui, color, unicodeext, highlight, platform, independentutils, rgb, theme
 
 export TomlError
