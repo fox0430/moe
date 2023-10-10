@@ -47,6 +47,7 @@ type
 
   BufferStatus* = ref object
     buffer*: GapBuffer[Runes]
+    id: int # A unique id. Don't overwrite
     isUpdate*: bool
     characterEncoding*: CharacterEncoding
     language*: SourceLanguage
@@ -69,6 +70,12 @@ type
     isGitUpdate*: bool
     changedLines*: seq[Diff]
     syntaxCheckResults*: seq[SyntaxError]
+
+var
+  countAddedBuffer = 0
+    # Increment after new BufferStatus is created.
+
+proc id*(b: BufferStatus): int {.inline.} = b.id
 
 proc isExMode*(mode: Mode): bool {.inline.} = mode == Mode.ex
 
@@ -269,6 +276,12 @@ proc absolutePath*(bufStatus: BufferStatus): Runes =
   else:
     bufStatus.openDir / bufStatus.path
 
+proc initId(b: var BufferStatus) {.inline.} =
+  ## Assign a unique id and Increment bufferstatus.countAddedBuffer.
+
+  b.id = countAddedBuffer
+  countAddedBuffer.inc
+
 proc initBufferStatus*(
   path: string,
   mode: Mode): Result[BufferStatus, string] =
@@ -286,6 +299,7 @@ proc initBufferStatus*(
       if isAccessibleDir(path):
         b.path = absolutePath(path).toRunes
         b.buffer = initGapBuffer(@[ru""])
+        b.initId
         return Result[BufferStatus, string].ok b
       else:
         return Result[BufferStatus, string].err "Can not open dir"
@@ -309,6 +323,8 @@ proc initBufferStatus*(
 
       b.language = detectLanguage($b.path)
 
+      b.initId
+
       return Result[BufferStatus, string].ok b
 
 proc initBufferStatus*(
@@ -328,6 +344,8 @@ proc initBufferStatus*(
       b.buffer = initGapBuffer(@[ru""])
     else:
       b.buffer = newFile()
+
+    b.initId
 
     return Result[BufferStatus, string].ok b
 

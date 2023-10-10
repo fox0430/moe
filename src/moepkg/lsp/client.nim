@@ -278,19 +278,17 @@ proc workspaceDidChangeConfiguration*(
     return LspWorkspaceDidChangeConfigurationResult.ok ()
 
 proc initTextDocumentDidOpenParams(
-  version: int,
   uri, languageId, text: string): DidOpenTextDocumentParams {.inline.} =
 
     DidOpenTextDocumentParams(
       textDocument: TextDocumentItem(
         uri: uri,
         languageId: languageId,
-        version: version,
+        version: 1,
         text: text))
 
 proc textDocumentDidOpen*(
   c: LspClient,
-  version: int,
   path, languageId, text: string): LspDidOpenTextDocumentResult =
     ## Send a textDocument/didOpen notification to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didOpen
@@ -299,7 +297,6 @@ proc textDocumentDidOpen*(
       return LspDidOpenTextDocumentResult.err fmt"lsp: server crashed"
 
     let params = %* initTextDocumentDidOpenParams(
-      version,
       path.pathToUri,
       languageId,
       text)

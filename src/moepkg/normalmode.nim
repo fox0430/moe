@@ -1058,7 +1058,7 @@ proc hover(status: var EditorStatus) =
        return
 
   let r = status.lspClients[$currentBufStatus.extension].textDocumentHover(
-    currentBufStatus.buffer.high,
+    currentBufStatus.id,
     $currentBufStatus.path.absolutePath,
     currentMainWindowNode.bufferPosition)
   if r.isErr:
