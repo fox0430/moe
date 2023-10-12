@@ -75,14 +75,12 @@ suite "lsp: Send requests":
     assert client.initialize(Id, params).isOk
     assert client.initialized.isOk
 
-    const
-      LanguageId = "nim"
-      Version = 1
+    const LanguageId = "nim"
     let
       path = getCurrentDir() / "src/moe.nim"
       text = readFile(path)
 
-    check client.textDocumentDidOpen(Version, path, LanguageId, text).isOk
+    check client.textDocumentDidOpen(path, LanguageId, text).isOk
 
   test "Send textDocument/didChange":
     var client = initLspClient(ServerCommand).get
@@ -94,13 +92,11 @@ suite "lsp: Send requests":
     assert client.initialize(Id, params).isOk
     assert client.initialized.isOk
 
-    const
-      LanguageId = "nim"
-      FirstVersion = 1
+    const LanguageId = "nim"
     let
       path = getCurrentDir() / "src/moe.nim"
       text = readFile(path)
-    assert client.textDocumentDidOpen(FirstVersion, path, LanguageId, text).isOk
+    assert client.textDocumentDidOpen(path, LanguageId, text).isOk
 
     block:
       const SecondVersion = 1
@@ -118,13 +114,11 @@ suite "lsp: Send requests":
     assert client.initialize(Id, params).isOk
     assert client.initialized.isOk
 
-    const
-      LanguageId = "nim"
-      Version = 1
+    const LanguageId = "nim"
     let
       path = getCurrentDir() / "src/moe.nim"
       text = readFile(path)
-    assert client.textDocumentDidOpen(Version, path, LanguageId, text).isOk
+    assert client.textDocumentDidOpen(path, LanguageId, text).isOk
 
     check client.textDocumentDidClose(path).isOk
 
@@ -138,14 +132,12 @@ suite "lsp: Send requests":
     assert client.initialize(Id, params).isOk
     assert client.initialized.isOk
 
-    const
-      LanguageId = "nim"
-      Version = 1
+    const LanguageId = "nim"
     let
       path = getCurrentDir() / "src/moe.nim"
       # Use simple text for the test.
       text = "echo 1"
-    assert client.textDocumentDidOpen(Version, path, LanguageId, text).isOk
+    assert client.textDocumentDidOpen(path, LanguageId, text).isOk
 
     let position = BufferPosition(line: 0, column: 0)
 
@@ -164,12 +156,11 @@ suite "lsp: Send requests":
     assert client.initialized.isOk
 
     const LanguageId = "nim"
-    var version = 1
     let
       path = getCurrentDir() / "src/moe.nim"
       # Use simple text for the test.
       text = "echo 1"
-    assert client.textDocumentDidOpen(version, path, LanguageId, text).isOk
+    assert client.textDocumentDidOpen(path, LanguageId, text).isOk
 
     block first:
       let position = BufferPosition(line: 0, column: 0)
@@ -178,9 +169,9 @@ suite "lsp: Send requests":
       check r.get.contents.get.len > 0
 
     block second:
-      version.inc
+      const SecondVersion = 2
       let changedText = "echo 1\necho 2"
-      assert client.textDocumentDidChange(version, path, changedText).isOk
+      assert client.textDocumentDidChange(SecondVersion, path, changedText).isOk
 
       let position = BufferPosition(line: 1, column: 0)
 

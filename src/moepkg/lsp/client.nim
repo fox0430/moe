@@ -22,6 +22,7 @@
 
 import std/[strformat, strutils, json, options, os, osproc]
 import pkg/results
+import pkg/asynctools/asyncproc
 
 import ../appinfo
 import ../independentutils
@@ -42,10 +43,10 @@ type
     hover*: bool
 
   LspClient* = ref object
-    serverProcess: Process
+    serverProcess: AsyncProcess
       # LSP server process.
-    serverStreams: Streams
-      # Streams for the LSP server process.
+    serverPipes: Pipes
+      # Input/Output handle for the LSP server process.
     isInitialized*: bool
       # Set true if initialized LSP client/server.
     capabilities*: LspCapabilities
@@ -91,6 +92,12 @@ proc serverProcessId*(c: LspClient): int {.inline.} =
 
   c.serverProcess.processID
 
+proc exit*(c: LspClient) =
+  ## Exit a LSP server process.
+  ## TODO: Send a shutdown request?
+
+  c.serverProcess.terminate
+
 proc send(
   c: LspClient,
   id: int,
@@ -98,7 +105,7 @@ proc send(
   params: JsonNode): JsonRpcResponseResult =
     ## Send a request to the LSP server and return a response.
 
-    return c.serverStreams.sendRequest(id, methodName, params)
+    return c.serverPipes.sendRequest(id, methodName, params)
 
 proc notify(
   c: LspClient,
@@ -106,7 +113,7 @@ proc notify(
   params: JsonNode): Result[(), string] {.inline.}  =
     ## Send a notification to the LSP server.
 
-    c.serverStreams.sendNotify(methodName, params)
+    c.serverPipes.input.sendNotify(methodName, params)
 
 proc isLspError(res: JsonNode): bool {.inline.} = res.contains("error")
 
@@ -127,7 +134,7 @@ proc initLspClient*(serverCommand: string): initLspClientResult =
     args =
       if commandSplit.len > 1: commandSplit[1 .. ^1]
       else: @[]
-    opts: set[ProcessOption] = {poStdErrToStdOut, poUsePath}
+    opts: set[asyncproc.ProcessOption] = {poStdErrToStdOut, poUsePath}
 
   var c = LspClient()
 
@@ -141,9 +148,9 @@ proc initLspClient*(serverCommand: string): initLspClientResult =
   except CatchableError as e:
     return initLspClientResult.err fmt"lsp: server start failed: {e.msg}"
 
-  c.serverStreams = Streams(
-    input: c.serverProcess.inputStream,
-    output: c.serverProcess.outputStream)
+  c.serverPipes = Pipes(
+    input: c.serverProcess.inputHandle,
+    output: c.serverProcess.outputHandle)
 
   return initLspClientResult.ok c
 

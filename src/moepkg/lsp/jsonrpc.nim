@@ -17,12 +17,14 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[streams, strformat, strutils, json, parseutils, options, logging,
-            times, os]
+import std/[strformat, strutils, json, parseutils, options, logging,
+            asyncdispatch]
 import pkg/results
+import pkg/asynctools/asyncpipe
 import ../messagelog
 
 type
+  ReadBufferResult = Result[string, string]
   ReadFrameResult = Result[string, string]
   JsonRpcResponseResult* = Result[JsonNode, string]
 
@@ -30,8 +32,8 @@ type
     read
     write
 
-  Streams* = object
-    input*, output*: Stream
+  Pipes* = object
+    input*, output*: AsyncPipe
 
 proc skipWhitespace(x: string, pos: int): int =
   result = pos
@@ -55,56 +57,59 @@ proc debugLog(messageType: MessageType, message: string) =
   debug debugMessage
   addMessageLog debugMessage
 
-proc readLine(s: Stream, timeout: int): Result[string, string] =
-  ## readLine with timeout.
-
-  let
-    d = initDuration(milliseconds = timeout)
-    n = now()
-  while now() - n < d:
-    try:
-      if not s.atEnd():
-        return Result[string, string].ok s.readLine
-    except CatchableError as e:
-      return Result[string, string].err e.msg
-
-    sleep 100
-
-  return Result[string, string].err "timeout"
-
-proc readFrame(s: Stream): ReadFrameResult =
-  ## Read text from the stream and return json node.
+proc readBuffer(output: AsyncPipe, timeout: int): ReadBufferResult =
+  ## readBuffer with timeout.
 
   var
+    buffer = newString(2048)
+    res: Future[int]
+
+  res = output.readInto(buffer[0].addr, buffer.len)
+
+  waitFor res or sleepAsync(timeout)
+  if res.finished:
+    let len = waitFor res
+    return Result[string, string].ok buffer[0 .. len - 1]
+  else:
+    return Result[string, string].err "timeout"
+
+proc readFrame(output: AsyncPipe): ReadFrameResult =
+  ## Read text from the stream and return json node.
+
+  const Timeout = 3000
+  let buffer = output.readBuffer(Timeout)
+  if buffer.isErr:
+    debugLog(MessageType.read, "readLine Error!: " & buffer.error)
+    return ReadFrameResult.err buffer.error
+
+  debugLog(MessageType.read, fmt"readFrame: {buffer.get}")
+
+  let lines = buffer.get.splitLines
+
+  var
+    currentLine = 0
     contentLen = -1
     headerStarted = false
 
-  while true:
-    const Timeout = 1000
-    var ln = s.readLine(Timeout)
-    if ln.isErr:
-      debugLog(MessageType.read, "readLine Error!: " & ln.error)
-      return ReadFrameResult.err ln.error
-
-    if ln.get.len != 0:
-      debugLog(MessageType.read, fmt"readLine: {ln.get}")
-
-      let sep = ln.get.find(':')
+  while currentLine < lines.len:
+    if lines[currentLine].len != 0:
+      let sep = lines[currentLine].find(':')
       if sep == -1:
         # Skip line if not json.
+        currentLine.inc
         continue
 
       headerStarted = true
 
-      let valueStart = ln.get.skipWhitespace(sep + 1)
+      let valueStart = lines[currentLine].skipWhitespace(sep + 1)
 
-      case ln.get[0 ..< sep]
+      case lines[currentLine][0 ..< sep]
         of "Content-Type":
-          if isInvalidContentType(ln.get, valueStart):
+          if isInvalidContentType(lines[currentLine], valueStart):
             return ReadFrameResult.err "Only utf-8 is supported"
         of "Content-Length":
-          if parseInt(ln.get, contentLen, valueStart) == 0:
-            return ReadFrameResult.err fmt"Invalid Content-Length: {ln.get.substr(valueStart)}"
+          if parseInt(lines[currentLine], contentLen, valueStart) == 0:
+            return ReadFrameResult.err fmt"Invalid Content-Length: {lines[currentLine].substr(valueStart)}"
         else:
           # Unrecognized headers are ignored
           discard
@@ -112,16 +117,21 @@ proc readFrame(s: Stream): ReadFrameResult =
       continue
     else:
       if contentLen != -1:
-        let response = s.readStr(contentLen)
+        var response = ""
+        for i in currentLine .. lines.high:
+          for j in 0 .. lines[i].high:
+            response &= lines[i][j]
         debugLog(MessageType.read, "Response: {response}")
         return ReadFrameResult.ok response
       else:
         return ReadFrameResult.err "Missing Content-Length header"
 
-proc read*(s: Stream): JsonRpcResponseResult =
+    currentLine.inc
+
+proc read*(output: AsyncPipe): JsonRpcResponseResult =
   ## Return a json-rpc response from the stream.
 
-  let r = s.readFrame
+  let r = output.readFrame
   if r.isErr:
     return JsonRpcResponseResult.err r.error
 
@@ -136,20 +146,24 @@ proc read*(s: Stream): JsonRpcResponseResult =
   else:
     return JsonRpcResponseResult.err fmt"Invalid jsonrpc: {$res}"
 
-proc send(s: Stream, frame: string): Result[(), string] =
-  ## Write json-rpc message to the stream.
+proc write(input: AsyncPipe, buffer: string) {.async.} =
+  discard await input.write(cast[pointer](addr buffer[0]), buffer.len)
 
-  let req = "Content-Length: " & $frame.len & "\r\n\r\n" & frame
+proc send(
+  input: AsyncPipe,
+  frame: string): Result[(), string] =
+    ## Write json-rpc message to the stream.
 
-  debugLog(MessageType.write, req)
+    let req = "Content-Length: " & $frame.len & "\r\n\r\n" & frame
 
-  try:
-    s.write req
-    s.flush
-  except CatchableError as e:
-    return Result[(), string].err e.msg
+    debugLog(MessageType.write, req)
 
-  return Result[(), string].ok ()
+    try:
+      waitFor input.write req
+    except CatchableError as e:
+      return Result[(), string].err e.msg
+
+    return Result[(), string].ok ()
 
 proc newReqest(id: int, methodName: string, params: JsonNode): string =
   result = newStringOfCap(1024)
@@ -162,7 +176,7 @@ proc newReqest(id: int, methodName: string, params: JsonNode): string =
   result.toUgly(req)
 
 proc sendRequest*(
-  s: Streams,
+  pipes: Pipes,
   id: int,
   methodName: string,
   params: JsonNode): JsonRpcResponseResult =
@@ -170,11 +184,11 @@ proc sendRequest*(
 
     let req = newReqest(id, methodName, params)
 
-    let err = s.input.send(req)
+    let err = pipes.input.send(req)
     if err.isErr:
       return JsonRpcResponseResult.err err.error
 
-    let res = s.output.read
+    let res = pipes.output.read
     if res.isOk:
       return JsonRpcResponseResult.ok res.get
     else:
@@ -190,11 +204,11 @@ proc newNotify(methodName: string, params: JsonNode): string =
   result.toUgly(req)
 
 proc sendNotify*(
-  s: Streams,
+  input: AsyncPipe,
   methodName: string,
   params: JsonNode): Result[(), string] =
     ## Send a notification.
     ## No response to the notification. Also, no `id` is required in the request.
 
     let notify = newNotify(methodName, params)
-    return s.input.send(notify)
+    return input.send(notify)
