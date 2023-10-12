@@ -20,7 +20,7 @@
 # NOTE: Language Server Protocol Specification - 3.17
 # https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/
 
-import std/[strformat, strutils, json, options, os, osproc]
+import std/[strformat, strutils, json, options, os]
 import pkg/results
 import pkg/asynctools/asyncproc
 

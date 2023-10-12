@@ -147,7 +147,7 @@ proc read*(output: AsyncPipe): JsonRpcResponseResult =
     return JsonRpcResponseResult.err fmt"Invalid jsonrpc: {$res}"
 
 proc write(input: AsyncPipe, buffer: string) {.async.} =
-  discard await input.write(cast[pointer](addr buffer[0]), buffer.len)
+  discard await input.write(cast[pointer](buffer[0].unsafeAddr), buffer.len)
 
 proc send(
   input: AsyncPipe,
