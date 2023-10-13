@@ -105,7 +105,7 @@ proc send(
   params: JsonNode): Future[JsonRpcResponseResult] {.async.} =
     ## Send a request to the LSP server and return a response.
 
-    await c.serverPipes.sendRequest(id, methodName, params)
+    return await c.serverPipes.sendRequest(id, methodName, params)
 
 proc notify(
   c: LspClient,
@@ -113,7 +113,7 @@ proc notify(
   params: JsonNode): Future[Result[(), string]] {.async.}  =
     ## Send a notification to the LSP server.
 
-    await c.serverPipes.input.sendNotify(methodName, params)
+    return await c.serverPipes.input.sendNotify(methodName, params)
 
 proc isLspError(res: JsonNode): bool {.inline.} = res.contains("error")
 
