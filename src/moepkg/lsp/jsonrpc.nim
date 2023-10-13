@@ -146,15 +146,15 @@ proc read*(output: AsyncPipe): JsonRpcResponseResult =
   else:
     return JsonRpcResponseResult.err fmt"Invalid jsonrpc: {$res}"
 
-proc write(input: AsyncPipe, buffer: string) =
+proc write(input: AsyncPipe, buffer: string) {.async.} =
   when NimMajor > 1:
-    discard waitFor input.write(buffer[0].addr, buffer.len)
+    discard await input.write(buffer[0].addr, buffer.len)
   else:
-    discard waitFor input.write(buffer[0].unsafeAddr, buffer.len)
+    discard await input.write(buffer[0].unsafeAddr, buffer.len)
 
 proc send(
   input: AsyncPipe,
-  frame: string): Result[(), string] =
+  frame: string): Future[Result[(), string]] {.async.} =
     ## Write json-rpc message to the stream.
 
     let req = "Content-Length: " & $frame.len & "\r\n\r\n" & frame
@@ -162,7 +162,7 @@ proc send(
     debugLog(MessageType.write, req)
 
     try:
-      input.write req
+      await input.write req
     except CatchableError as e:
       return Result[(), string].err e.msg
 
@@ -182,12 +182,12 @@ proc sendRequest*(
   pipes: Pipes,
   id: int,
   methodName: string,
-  params: JsonNode): JsonRpcResponseResult =
+  params: JsonNode): Future[JsonRpcResponseResult] {.async.} =
     ## Send a request and return a response.
 
     let req = newReqest(id, methodName, params)
 
-    let err = pipes.input.send(req)
+    let err = await pipes.input.send(req)
     if err.isErr:
       return JsonRpcResponseResult.err err.error
 
@@ -209,9 +209,9 @@ proc newNotify(methodName: string, params: JsonNode): string =
 proc sendNotify*(
   input: AsyncPipe,
   methodName: string,
-  params: JsonNode): Result[(), string] =
+  params: JsonNode): Future[Result[(), string]] {.async.} =
     ## Send a notification.
     ## No response to the notification. Also, no `id` is required in the request.
 
     let notify = newNotify(methodName, params)
-    return input.send(notify)
+    return await input.send(notify)

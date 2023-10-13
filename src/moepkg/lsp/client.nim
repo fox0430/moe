@@ -20,7 +20,7 @@
 # NOTE: Language Server Protocol Specification - 3.17
 # https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/
 
-import std/[strformat, strutils, json, options, os]
+import std/[strformat, strutils, json, options, os, asyncdispatch]
 import pkg/results
 import pkg/asynctools/asyncproc
 
@@ -102,18 +102,18 @@ proc send(
   c: LspClient,
   id: int,
   methodName: string,
-  params: JsonNode): JsonRpcResponseResult =
+  params: JsonNode): Future[JsonRpcResponseResult] {.async.} =
     ## Send a request to the LSP server and return a response.
 
-    return c.serverPipes.sendRequest(id, methodName, params)
+    await c.serverPipes.sendRequest(id, methodName, params)
 
 proc notify(
   c: LspClient,
   methodName: string,
-  params: JsonNode): Result[(), string] {.inline.}  =
+  params: JsonNode): Future[Result[(), string]] {.async.}  =
     ## Send a notification to the LSP server.
 
-    c.serverPipes.input.sendNotify(methodName, params)
+    await c.serverPipes.input.sendNotify(methodName, params)
 
 proc isLspError(res: JsonNode): bool {.inline.} = res.contains("error")
 
@@ -216,7 +216,7 @@ proc initialize*(
 
     let params = %* initParams
 
-    let r = c.send(id, "initialize", params)
+    let r = waitFor c.send(id, "initialize", params)
     if r.isErr:
       return LspInitializeResult.err fmt"lsp: Initialize request failed: {r.error}"
 
@@ -243,7 +243,7 @@ proc initialized*(c: LspClient): LspInitializedResult =
 
   let params = %* {}
 
-  let err = c.notify("initialized", params)
+  let err = waitFor c.notify("initialized", params)
   if err.isErr:
     return LspInitializedResult.err fmt"Invalid notification failed: {err.error}"
 
@@ -258,7 +258,7 @@ proc shutdown*(c: LspClient, id: int): LspShutdownResult =
   if not c.serverProcess.running:
     return LspShutdownResult.err fmt"lsp: server crashed"
 
-  let r = c.send(id, "shutdown", %*{})
+  let r = waitFor c.send(id, "shutdown", %*{})
   if r.isErr:
     return LspShutdownResult.err "lsp: Shutdown request failed: {r.error}"
 
@@ -278,7 +278,7 @@ proc workspaceDidChangeConfiguration*(
 
     let params = %* DidChangeConfigurationParams()
 
-    let err = c.notify("workspace/didChangeConfiguration", params)
+    let err = waitFor c.notify("workspace/didChangeConfiguration", params)
     if err.isErr:
       return LspWorkspaceDidChangeConfigurationResult.err fmt"Invalid workspace/didChangeConfiguration failed: {err.error}"
 
@@ -308,7 +308,7 @@ proc textDocumentDidOpen*(
       languageId,
       text)
 
-    let err = c.notify("textDocument/didOpen", params)
+    let err = waitFor c.notify("textDocument/didOpen", params)
     if err.isErr:
       return LspDidOpenTextDocumentResult.err fmt"lsp: textDocument/didOpen notification failed: {err.error}"
 
@@ -336,7 +336,7 @@ proc textDocumentDidChange*(
 
     let params = %* initTextDocumentDidChangeParams(version, path, text)
 
-    let err = c.notify("textDocument/didChange", params)
+    let err = waitFor c.notify("textDocument/didChange", params)
     if err.isErr:
       return LspDidChangeTextDocumentResult.err fmt"lsp: textDocument/didChange notification failed: {err.error}"
 
@@ -359,7 +359,7 @@ proc textDocumentDidClose*(
 
     let params = %* initTextDocumentDidClose(text)
 
-    let err = c.notify("textDocument/didClose", params)
+    let err = waitFor c.notify("textDocument/didClose", params)
     if err.isErr:
       return LspDidCloseTextDocumentResult.err fmt"lsp: textDocument/didClose notification failed: {err.error}"
 
@@ -388,7 +388,7 @@ proc textDocumentHover*(
       return LspHoverResult.err fmt"lsp: server crashed"
 
     let params = %* initHoverParams(path, position.toLspPosition)
-    let r = c.send(id, "textDocument/hover", params)
+    let r = waitFor c.send(id, "textDocument/hover", params)
     if r.isErr:
       return LspHoverResult.err fmt"lsp: textDocument/hover request failed: {r.error}"
 
