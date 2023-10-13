@@ -28,11 +28,11 @@ suite "lsp: Send requests":
   privateAccess(LspClient)
 
   const
-    ServerCommand = "nimlsp"
+    Command = "nimlsp"
     Trace = TraceValue.verbose
 
   test "Send initialize":
-    var client = initLspClient(ServerCommand).get
+    var client = initLspClient(Command).get
 
     const
       Id = 1
@@ -42,7 +42,7 @@ suite "lsp: Send requests":
     check client.initialize(Id, params).isOk
 
   test "Send shutdown":
-    var client = initLspClient(ServerCommand).get
+    var client = initLspClient(Command).get
 
     const
       Id = 1
@@ -54,7 +54,7 @@ suite "lsp: Send requests":
     check client.shutdown(Id).isOk
 
   test "Send workspace/didChangeConfiguration":
-    var client = initLspClient(ServerCommand).get
+    var client = initLspClient(Command).get
 
     const Id = 1
     let
@@ -66,7 +66,7 @@ suite "lsp: Send requests":
     check client.workspaceDidChangeConfiguration.isOk
 
   test "Send textDocument/didOpen":
-    var client = initLspClient(ServerCommand).get
+    var client = initLspClient(Command).get
 
     const Id = 1
     let
@@ -83,7 +83,7 @@ suite "lsp: Send requests":
     check client.textDocumentDidOpen(path, LanguageId, text).isOk
 
   test "Send textDocument/didChange":
-    var client = initLspClient(ServerCommand).get
+    var client = initLspClient(Command).get
 
     const Id = 1
     let
@@ -105,7 +105,7 @@ suite "lsp: Send requests":
       check client.textDocumentDidChange(SecondVersion, path, changedText).isOk
 
   test "Send textDocument/didClose":
-    var client = initLspClient(ServerCommand).get
+    var client = initLspClient(Command).get
 
     const Id = 1
     let
@@ -123,7 +123,7 @@ suite "lsp: Send requests":
     check client.textDocumentDidClose(path).isOk
 
   test "Send textDocument/hover":
-    var client = initLspClient(ServerCommand).get
+    var client = initLspClient(Command).get
 
     const Id = 1
     let
@@ -146,7 +146,7 @@ suite "lsp: Send requests":
     check r.get.contents.get.len > 0
 
   test "Send textDocument/hover 2":
-    var client = initLspClient(ServerCommand).get
+    var client = initLspClient(Command).get
 
     const Id = 1
     let

@@ -123,14 +123,14 @@ proc parseLspError*(res: JsonNode): LspErrorParseResult =
   except:
     return LspErrorParseResult.err fmt"Invalid error: {$res}"
 
-proc initLspClient*(serverCommand: string): initLspClientResult =
+proc initLspClient*(command: string): initLspClientResult =
   ## Start a LSP server process and init streams.
 
   const
     WorkingDir = ""
     Env = nil
   let
-    commandSplit = serverCommand.split(' ')
+    commandSplit = command.split(' ')
     args =
       if commandSplit.len > 1: commandSplit[1 .. ^1]
       else: @[]

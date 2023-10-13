@@ -28,7 +28,7 @@ enable = true
 extensions = ["nim"]
 
 # The LSP server command
-serverCommand = "nimlsp"
+command = "nimlsp"
 ```
 
 Configure each language by adding table `[Lsp.{languageId}]`.
@@ -39,11 +39,11 @@ enable = true
 
 [Lsp.nim]
 extensions = ["nim"]
-serverCommand = "nimlsp"
+command = "nimlsp"
 
 [Lsp.rust]
 extensions = ["rs"]
-serverCommand = "rust-analyzer"
+command = "rust-analyzer"
 ```
 
 ## Uses

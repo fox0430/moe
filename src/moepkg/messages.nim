@@ -234,8 +234,8 @@ proc writeInRecordingOperations*(
     commandLine.writeMessageOnCommandLine(mess)
     addMessageLog mess
 
-proc writeLspInitialized*(commandLine: var CommandLine, serverCommand: Runes) =
-  let mess = fmt"LSP client initialized: {$serverCommand}"
+proc writeLspInitialized*(commandLine: var CommandLine, command: Runes) =
+  let mess = fmt"LSP client initialized: {$command}"
   commandLine.writeMessageOnCommandLine(mess)
   addMessageLog mess
 
@@ -341,10 +341,10 @@ proc writeBufferChangedWarn*(commandLine: var CommandLine, filename: Runes) =
 
 proc writeLspInitializeError*(
   commandLine: var CommandLine,
-  serverCommand: Runes,
+  command: Runes,
   errorMessage: string) =
 
-    let mess = fmt"lsp: client initialize failed: {$serverCommand}: {errorMessage}"
+    let mess = fmt"lsp: client initialize failed: {$command}: {errorMessage}"
     commandLine.writeMessageOnCommandLine(
       mess,
       EditorColorPairIndex.errorMessage)

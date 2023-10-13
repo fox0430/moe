@@ -815,7 +815,7 @@ extensions
 
 A LSP server command (string)  
 ```
-serverCommand
+command
 ```
 
 Please check more [details](https://github.com/fox0430/moe/blob/develop/documents/lsp.md)

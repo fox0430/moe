@@ -152,17 +152,17 @@ const TomlStr = """
   [StartUp.FileOpen]
   autoSplit = false
   splitType = "horizontal"
-  
+
   [Lsp]
   enable = true
 
   [Lsp.nim]
   extensions = ["nim"]
-  serverCommand = "nimlangserver"
+  command = "nimlangserver"
 
   [Lsp.rust]
   extensions = ["rs"]
-  serverCommand = "rust-analyzer"
+  command = "rust-analyzer"
 
   [Debug.WindowNode]
   enable = false
@@ -487,11 +487,11 @@ suite "Parse configuration file":
     check settings.lsp.enable
     check settings.lsp.languages["nim"] == LspLanguageSettings(
       extensions: @[ru"nim"],
-      serverCommand: ru"nimlangserver")
+      command: ru"nimlangserver")
 
     check settings.lsp.languages["rust"] == LspLanguageSettings(
       extensions: @[ru"rs"],
-      serverCommand: ru"rust-analyzer")
+      command: ru"rust-analyzer")
 
     check not settings.debugMode.windowNode.enable
     check not settings.debugMode.windowNode.currentWindow

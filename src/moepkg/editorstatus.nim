@@ -303,10 +303,10 @@ proc initLsp(
     if not status.lspClients.contains(langId):
       # Init a LSP client and start a LSP server.
       var c = initLspClient(
-        $status.settings.lsp.languages[langId].serverCommand)
+        $status.settings.lsp.languages[langId].command)
       if c.isErr:
         status.commandLine.writeLspInitializeError(
-          status.settings.lsp.languages[langId].serverCommand,
+          status.settings.lsp.languages[langId].command,
           c.error)
         return Result[(), string].err c.error
 
@@ -343,7 +343,7 @@ proc initLsp(
         $status.bufStatus[^1].buffer)
       if err.isErr:
         status.commandLine.writeLspInitializeError(
-          status.settings.lsp.languages[langId].serverCommand,
+          status.settings.lsp.languages[langId].command,
           err.error)
 
     return Result[(), string].ok ()
@@ -427,10 +427,10 @@ proc addNewBuffer*(
               langId)
             if err.isOk:
               status.commandLine.writeLspInitialized(
-                status.settings.lsp.languages[langId].serverCommand)
+                status.settings.lsp.languages[langId].command)
             else:
               status.commandLine.writeLspInitializeError(
-                status.settings.lsp.languages[langId].serverCommand,
+                status.settings.lsp.languages[langId].command,
                 err.error)
 
     return Result[int, string].ok status.bufStatus.high

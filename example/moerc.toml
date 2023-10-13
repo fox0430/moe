@@ -236,7 +236,7 @@ enable = false
 
 extensions = ["nim"]
 
-serverCommand = "nimlsp"
+command = "nimlsp"
 
 [Debug.WindowNode]
 enable = true

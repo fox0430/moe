@@ -1074,7 +1074,7 @@ suite "editorstatus: initLsp":
     status.settings.lsp.enable = true
     status.settings.lsp.languages["nim"] = LspLanguageSettings(
       extensions: @[ru"nim"],
-      serverCommand: ru"nimlsp",
+      command: ru"nimlsp",
       trace: TraceValue.verbose)
 
     status.bufStatus.add initBufferStatus(path, Mode.normal).get

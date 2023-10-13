@@ -219,7 +219,7 @@ type
 
   LspLanguageSettings* = object
     extensions*: seq[Runes]
-    serverCommand*: Runes
+    command*: Runes
     trace*: TraceValue
 
   LspSettings* = object
@@ -454,7 +454,7 @@ proc initLspSettigns(): LspSettings =
 
   result.languages["nim"] = LspLanguageSettings(
     extensions: @[ru"nim"],
-    serverCommand: ru"nimlsp",
+    command: ru"nimlsp",
     trace: TraceValue.verbose)
 
 proc initEditorSettings*(): EditorSettings =
@@ -1659,8 +1659,8 @@ proc parseLspTable(
               of "extensions":
                 for i in 0 ..< val.len:
                   langSettings.extensions.add val[i].getStr.toRunes
-              of "serverCommand":
-                langSettings.serverCommand = val.getStr.toRunes
+              of "command":
+                langSettings.command = val.getStr.toRunes
               of "trace":
                 langSettings.trace = val.getStr.parseTraceValue.get
 
@@ -2234,7 +2234,7 @@ proc validateLspSettings(table: TomlValueRef): Option[InvalidItem] =
             of "extensions":
               if val.kind != TomlValueKind.Array:
                 return some(InvalidItem(name: $key, val: $val))
-            of "serverCommand", "trace":
+            of "command", "trace":
               if val.kind != TomlValueKind.String and
                  val.getStr.parseTraceValue.isErr:
                    return some(InvalidItem(name: $key, val: $val))
@@ -2537,7 +2537,7 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
       if index < val.extensions.high: exts.insert(", ", exts.high - 1)
     result.addLine fmt "extensions = {exts}"
 
-    result.addLine fmt "serverCommand = \"{$val.serverCommand}\""
+    result.addLine fmt "command = \"{$val.command}\""
 
   result.addLine fmt "[Debug.WindowNode]"
   result.addLine fmt "enable = {$settings.debugMode.windowNode.enable}"
