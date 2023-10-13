@@ -295,21 +295,37 @@ proc calcXWhenSuggestPath*(commandLineCmd: CommandLineCommand): int =
 
   return commandLineCmd.command.len + PromptAndSpaceWidth + positionInInputPath
 
-proc calcPopUpWindowSize*(buffer: seq[Runes]): Size =
-  var maxBufferLen = 0
-  for runes in buffer:
-    if maxBufferLen < runes.len: maxBufferLen = runes.len
-
+proc calcPopupWindowSize*(buffer: seq[Runes]): Size =
   let
     height =
       if buffer.len > getTerminalHeight() - 2: getTerminalHeight() - 2
       else: buffer.len
+
+    maxLen = buffer.maxLen
     width =
       # 2 is side spaces
-      if maxBufferLen + 2 > getTerminalWidth() - 1: getTerminalWidth() - 1
-      else: maxBufferLen + 2
+      if maxLen + 2 > getTerminalWidth() - 1: getTerminalWidth() - 1
+      else: maxLen + 2
 
   return Size(h: height, w: width)
+
+proc calcPopupWindowPosition(
+  suggestWin: PopupWindow,
+  suggestList: SuggestList): Position =
+
+    const CommandLineHeight = 1
+
+    result = Position()
+    result.y = getTerminalHeight() - suggestWin.size.h - CommandLineHeight
+    result.x =
+      case suggestList.suggestType:
+        of SuggestType.exCommand:
+          1
+        of SuggestType.exCommandOption:
+          if isPath(suggestList.argsType.get):
+            calcXWhenSuggestPath(suggestList.commandLineCmd)
+          else:
+            suggestList.commandLineCmd.command.len + 1
 
 # TODO: Fix the return type to `SuggestionWindow`.
 proc tryOpenSuggestWindow*(): Option[PopupWindow] {.inline.} =
@@ -341,32 +357,15 @@ proc insertSuggestion*(commandLine: var CommandLine, suggestList: SuggestList) =
   commandLine.moveRight
 
 proc updateSuggestWindow*(suggestWin: var PopupWindow, suggestList: SuggestList) =
-  var
-    # Pop up window initial size/position
-    h = 1
-    w = 1
-    x = 0
-    y = getTerminalHeight() - 2
+  suggestWin.buffer = suggestList.initSuggestBuffer
 
-  case suggestList.suggestType:
-    of SuggestType.exCommand:
-      x = 0
-    of SuggestType.exCommandOption:
-      if isPath(suggestList.argsType.get):
-        x = calcXWhenSuggestPath(suggestList.commandLineCmd)
-      else:
-        x = suggestList.commandLineCmd.command.len + 1
+  suggestWin.size = calcPopupWindowSize(suggestWin.buffer)
+  suggestWin.position = calcPopupWindowPosition(suggestWin, suggestList)
 
-  let
-    currentLine =
-      if suggestList.currentIndex > -1: some(suggestList.currentIndex)
-      else: none(int)
-    displayBuffer = suggestList.initSuggestBuffer
+  suggestWin.currentLine =
+    if suggestList.currentIndex > -1: some(suggestList.currentIndex)
+    else: none(int)
 
-  suggestWin.size = calcPopUpWindowSize(displayBuffer)
-  suggestWin.position.y = y
-  suggestWin.position.x = x
-  suggestWin.currentLine = currentLine
-  suggestWin.buffer = displayBuffer
-
+  suggestWin.resize
+  suggestWin.move
   suggestWin.update

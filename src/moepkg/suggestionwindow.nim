@@ -310,9 +310,7 @@ proc calcSuggestionWindowPosition*(
     return (y, x)
 
 proc calcMaxSugestionWindowHeight(
-  y: int,
-  cursorYPosition: int,
-  mainWindowNodeY: int,
+  y, cursorYPosition, mainWindowNodeY: int,
   isEnableStatusLine: bool): int =
     # TODO: Use `popupwindow.autoMoveAndResize`
 
@@ -346,7 +344,7 @@ proc writeSuggestionWindow*(
         mainWindowNodeY,
         isEnableStatusLine)
       height = min(suggestionWindow.suggestoins.len, maxHeight)
-      width = suggestionWindow.suggestoins.map(item => item.len).max + 2
+      width = suggestionWindow.suggestoins.maxLen + 2
 
     if suggestionWindow.popupWindow.isNone:
       let
@@ -365,7 +363,9 @@ proc writeSuggestionWindow*(
       if suggestionWindow.selectedSuggestion == -1: none(int)
       else: suggestionWindow.selectedSuggestion.some
 
+    # Add margin to both sides.
     suggestionWindow.popupWindow.get.buffer = suggestionWindow.suggestoins
+      .mapIt(ru" " & it & ru" ")
 
     suggestionWindow.popupWindow.get.update
 

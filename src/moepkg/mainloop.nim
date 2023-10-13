@@ -292,7 +292,7 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
 
   while not isCancel:
     if suggestWin.isSome:
-        # Update suggestion window and command line.
+      # Update suggestion window and command line.
 
       suggestList.updateSuggestions
       if suggestList.suggestions.len == 0:

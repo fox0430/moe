@@ -61,6 +61,9 @@ proc refresh*(p: var PopupWindow) {.inline.} =
 proc overlay*(p: var PopupWindow, destWin: var Window) {.inline.} =
   overlay(p.window, destWin)
 
+proc overwrite*(p: var PopupWindow, destWin: var Window) {.inline.} =
+  overwrite(p.window, destWin)
+
 proc resize*(p: var PopupWindow, h, w: Natural) =
   ## Resize the window in the same position.
 
@@ -72,6 +75,9 @@ proc resize*(p: var PopupWindow, h, w: Natural) =
 proc resize*(p: var PopupWindow, size: Size) {.inline.} =
   p.resize(size.h, size.w)
 
+proc resize*(p: var PopupWindow) {.inline.} =
+  p.resize(p.size)
+
 proc move*(p: var PopupWindow, y, x: Natural) =
   ## Move the popup window position.
 
@@ -82,6 +88,9 @@ proc move*(p: var PopupWindow, y, x: Natural) =
 
 proc move*(p: var PopupWindow, position: Position) {.inline.} =
   p.move(position.y, position.x)
+
+proc move*(p: var PopupWindow) {.inline.} =
+  p.window.move(p.position.y, p.position.x)
 
 proc autoMoveAndResize*(
   p: var PopupWindow,
@@ -131,7 +140,7 @@ proc autoMoveAndResize*(
     p.move(Position(y: y, x: x))
 
 proc update*(p: var PopupWindow) =
-  ## Write popup window to the UI.
+  ## Write a popup window to the UI.
   ##
   ## If buffer is larger than window size, display as much as possible.
   ##

@@ -146,8 +146,11 @@ proc read*(output: AsyncPipe): JsonRpcResponseResult =
   else:
     return JsonRpcResponseResult.err fmt"Invalid jsonrpc: {$res}"
 
-proc write(input: AsyncPipe, buffer: string) {.async.} =
-  discard await input.write(cast[pointer](buffer[0].unsafeAddr), buffer.len)
+proc write(input: AsyncPipe, buffer: string) =
+  when NimMajor > 1:
+    discard waitFor input.write(buffer[0].addr, buffer.len)
+  else:
+    discard waitFor input.write(buffer[0].unsafeAddr, buffer.len)
 
 proc send(
   input: AsyncPipe,
@@ -159,7 +162,7 @@ proc send(
     debugLog(MessageType.write, req)
 
     try:
-      waitFor input.write req
+      input.write req
     except CatchableError as e:
       return Result[(), string].err e.msg
 

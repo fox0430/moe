@@ -1067,12 +1067,13 @@ proc hover(status: var EditorStatus) =
 
   # Display info on a popup window.
 
+  const Margin = ru" "
   let hoverContent = r.get.toHoverContent
   var buffer: seq[Runes]
   if hoverContent.title.len > 0:
-    buffer = @[hoverContent.title, ru""]
+    buffer = @[Margin & hoverContent.title & Margin, ru""]
   for line in hoverContent.description:
-    buffer.add line
+    buffer.add Margin & line & Margin
 
   let
     absPositon = currentMainWindowNode.absolutePosition
@@ -1092,7 +1093,8 @@ proc hover(status: var EditorStatus) =
 
   # Keep the cursor position on currentMainWindowNode and display the hover
   # window on the top.
-  hoverWin.overlay(currentMainWindowNode.window.get)
+  hoverWin.overwrite(currentMainWindowNode.window.get)
+  hoverWin.refresh
 
   # Wait until any key is pressed.
   discard status.getKeyFromMainWindow
