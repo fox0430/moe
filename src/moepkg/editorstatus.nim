@@ -418,20 +418,21 @@ proc addNewBuffer*(
                status.commandLine.writeGitInfoUpdateError(gitDiffProcess.error)
 
         if status.settings.lsp.enable:
-          if not status.lspClients.contains($status.bufStatus[^1].extension):
-            # Init LSP client and server.
-            let langId = $status.bufStatus[^1].extension
+          if status.bufStatus[^1].extension.len > 0 and
+             not status.lspClients.contains($status.bufStatus[^1].extension):
+               # Init LSP client and server.
+               let langId = $status.bufStatus[^1].extension
 
-            let err = status.initLsp(
-              $status.bufStatus[^1].openDir,
-              langId)
-            if err.isOk:
-              status.commandLine.writeLspInitialized(
-                status.settings.lsp.languages[langId].command)
-            else:
-              status.commandLine.writeLspInitializeError(
-                status.settings.lsp.languages[langId].command,
-                err.error)
+               let err = status.initLsp(
+                 $status.bufStatus[^1].openDir,
+                 langId)
+               if err.isOk:
+                 status.commandLine.writeLspInitialized(
+                   status.settings.lsp.languages[langId].command)
+               else:
+                 status.commandLine.writeLspInitializeError(
+                   status.settings.lsp.languages[langId].command,
+                   err.error)
 
     return Result[int, string].ok status.bufStatus.high
 
