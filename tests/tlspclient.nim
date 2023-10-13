@@ -99,7 +99,7 @@ suite "lsp: Send requests":
     assert client.textDocumentDidOpen(path, LanguageId, text).isOk
 
     block:
-      const SecondVersion = 1
+      const SecondVersion = 2
       let changedText = "echo 1"
 
       check client.textDocumentDidChange(SecondVersion, path, changedText).isOk
