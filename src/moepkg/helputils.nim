@@ -124,6 +124,7 @@ ga         - Show current character info
 q any      - Start recording operations for Macros
 q          - Stop recoding operations
 @ any      - Exec a macro
+K          - Hover (Need LSP)
 
 # Register
 
