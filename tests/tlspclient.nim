@@ -20,7 +20,7 @@
 import std/[json, unittest, importutils, os, options]
 import pkg/results
 import moepkg/independentutils
-import moepkg/lsp/protocol/enums
+import moepkg/lsp/protocol/[enums, types]
 
 import moepkg/lsp/client {.all.}
 
@@ -141,9 +141,18 @@ suite "lsp: Send requests":
 
     let position = BufferPosition(line: 0, column: 0)
 
-    let r = client.textDocumentHover(Id, path, position)
-    check r.isOk
-    check r.get.contents.get.len > 0
+    var hoverResult = none(Hover)
+    for i in 0 .. 10:
+      # Wait for nimlsp to be ready.
+      sleep 1000
+
+      let r = client.textDocumentHover(Id, path, position)
+      if r.isOk:
+        hoverResult = some(r.get)
+        break
+
+    check hoverResult.isSome
+    check hoverResult.get.contents.get.len > 0
 
   test "Send textDocument/hover 2":
     var client = initLspClient(Command).get
@@ -165,8 +174,18 @@ suite "lsp: Send requests":
     block first:
       let position = BufferPosition(line: 0, column: 0)
 
-      let r = client.textDocumentHover(Id, path, position)
-      check r.get.contents.get.len > 0
+      var hoverResult = none(Hover)
+      for i in 0 .. 10:
+        # Wait for nimlsp to be ready.
+        sleep 1000
+
+        let r = client.textDocumentHover(Id, path, position)
+        if r.isOk:
+          hoverResult = some(r.get)
+          break
+
+      check hoverResult.isSome
+      check hoverResult.get.contents.get.len > 0
 
     block second:
       const SecondVersion = 2
@@ -175,5 +194,15 @@ suite "lsp: Send requests":
 
       let position = BufferPosition(line: 1, column: 0)
 
-      let r = client.textDocumentHover(Id, path, position)
-      check r.get.contents.get.len > 0
+      var hoverResult = none(Hover)
+      for i in 0 .. 10:
+        # Wait for nimlsp to be ready.
+        sleep 1000
+
+        let r = client.textDocumentHover(Id, path, position)
+        if r.isOk:
+          hoverResult = some(r.get)
+          break
+
+      check hoverResult.isSome
+      check hoverResult.get.contents.get.len > 0
