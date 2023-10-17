@@ -59,6 +59,8 @@ proc addBufferStatus(status: var EditorStatus, parsedList: CmdParsedList) =
       if dirExists(path):
         if status.addNewBuffer(path, Mode.filer).isErr:
           status.commandLine.writeFileOpenError(path)
+        else:
+          status.addFilerStatus
       else:
         if status.addNewBuffer(path, Mode.normal).isErr:
           status.commandLine.writeFileOpenError(path)
