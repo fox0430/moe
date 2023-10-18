@@ -1460,3 +1460,14 @@ suite "exmode: startRecentFileMode":
 
     status.startRecentFileMode
     status.update
+
+suite "exmode: openBufferManager":
+  test "Open Buffer Manager 1":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+
+    status.resize(100, 100)
+    status.update
+
+    status.openBufferManager
+    status.update

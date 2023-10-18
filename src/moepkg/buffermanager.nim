@@ -17,24 +17,22 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[os, heapqueue]
+import std/heapqueue
 import gapbuffer, ui, editorstatus, unicodeext, windownode, movement,
        bufferstatus
 
 proc initBufferManagerBuffer*(
   bufStatuses: seq[BufferStatus]): seq[Runes] =
+    ## Return buffer for the buffer manager.
+    ## Exclude the buffer for the buffer manager.
+
     for bufStatus in bufStatuses:
       let currentMode = bufStatus.mode
       if currentMode != Mode.bufManager:
-        let
-          prevMode = bufStatus.prevMode
-          line =
-            if (currentMode == Mode.filer) or
-               (prevMode == Mode.filer and
-                currentMode == Mode.ex): getCurrentDir().toRunes
-            else: bufStatus.path
-
-        result.add line
+        if bufStatus.path.len > 0:
+          result.add bufStatus.path
+        else:
+          result.add ru"No Name"
 
 proc deleteSelectedBuffer(status: var EditorStatus) =
   let deleteIndex = currentMainWindowNode.currentLine

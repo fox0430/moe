@@ -243,6 +243,7 @@ proc openBufferManager(status: var EditorStatus) =
   status.changeCurrentBuffer(status.bufStatus.high)
   status.changeMode(bufferstatus.Mode.bufManager)
   currentBufStatus.buffer = status.bufStatus.initBufferManagerBuffer.toGapBuffer
+  status.resize
 
 proc changeCursorLineCommand(status: var EditorStatus, command: Runes) =
   if command == ru"on" : status.settings.view.cursorLine = true
