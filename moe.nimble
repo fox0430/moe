@@ -15,7 +15,6 @@ requires "unicodedb >= 0.12.0"
 requires "parsetoml >= 0.7.1"
 requires "regex >= 0.22.0"
 requires "results >= 0.4.0"
-requires "asynctools >= 0.1.1"
 
 task release, "Build for release":
   exec "nimble build -d:release"

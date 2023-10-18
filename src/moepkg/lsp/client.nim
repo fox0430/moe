@@ -20,9 +20,8 @@
 # NOTE: Language Server Protocol Specification - 3.17
 # https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/
 
-import std/[strformat, strutils, json, options, os, asyncdispatch]
+import std/[strformat, strutils, json, options, os, osproc, posix, epoll]
 import pkg/results
-import pkg/asynctools/asyncproc
 
 import ../appinfo
 import ../independentutils
@@ -43,10 +42,10 @@ type
     hover*: bool
 
   LspClient* = ref object
-    serverProcess: AsyncProcess
+    serverProcess: Process
       # LSP server process.
-    serverPipes: Pipes
-      # Input/Output handle for the LSP server process.
+    serverStreams: Streams
+      # Input/Output streams for the LSP server process.
     isInitialized*: bool
       # Set true if initialized LSP client/server.
     capabilities*: LspCapabilities
@@ -68,9 +67,9 @@ type
   LspHoverResult* = R[Hover, string]
 
 proc pathToUri(path: string): string =
-  # This is a modified copy of encodeUrl in the uri module. This doesn't encode
-  # the / character, meaning a full file path can be passed in without breaking
-  # it.
+  ## This is a modified copy of encodeUrl in the uri module. This doesn't encode
+  ## the / character, meaning a full file path can be passed in without breaking
+  ## it.
 
   # Assume 12% non-alnum-chars
   result = "file://" & newStringOfCap(path.len + path.len shr 2)
@@ -98,22 +97,63 @@ proc exit*(c: LspClient) =
 
   c.serverProcess.terminate
 
-proc send(
+proc readyOutput(c: LspClient, timeout: int): Result[(), string] =
+  ## Return when output is written from the LSP server or timesout.
+  ## Wait for the output from process to be written using epoll(7).
+  ## timeout is milliseconds.
+
+  var epoll = epoll_create(sizeof(cint).cint)
+  if epoll < 0:
+    return Result[(), string].err "epoll_create failed"
+
+  var ev: EpollEvent
+  ev.events = EPOLLIN;
+  var ctl = epoll.epoll_ctl(
+    EPOLL_CTL_ADD,
+    c.serverProcess.outputHandle.cint,
+    ev.addr)
+  if ctl < 0:
+    return Result[(), string].err "epoll_ctl failed"
+
+  const MaxEvent = 1
+  let r = epoll.epoll_wait(ev.addr, MaxEvent, timeout.cint)
+  if r < 0:
+    return Result[(), string].err "epoll_wait failed"
+
+  return Result[(), string].ok ()
+
+proc call(
   c: LspClient,
   id: int,
   methodName: string,
-  params: JsonNode): Future[JsonRpcResponseResult] {.async.} =
+  params: JsonNode): JsonRpcResponseResult =
     ## Send a request to the LSP server and return a response.
 
-    return await c.serverPipes.sendRequest(id, methodName, params)
+    block send:
+      let r = c.serverStreams.sendRequest(id, methodName, params)
+      if r.isErr:
+        return JsonRpcResponseResult.err r.error
+
+    block wait:
+      const Timeout = 100
+      let r = c.readyOutput(Timeout)
+      if r.isErr:
+        return JsonRpcResponseResult.err r.error
+
+    block read:
+      let r = c.serverStreams.output.read
+      if r.isOk:
+        return JsonRpcResponseResult.ok r.get
+      else:
+        return JsonRpcResponseResult.err r.error
 
 proc notify(
   c: LspClient,
   methodName: string,
-  params: JsonNode): Future[Result[(), string]] {.async.}  =
+  params: JsonNode): Result[(), string] {.inline.} =
     ## Send a notification to the LSP server.
 
-    return await c.serverPipes.input.sendNotify(methodName, params)
+    return c.serverStreams.sendNotify(methodName, params)
 
 proc isLspError(res: JsonNode): bool {.inline.} = res.contains("error")
 
@@ -122,6 +162,12 @@ proc parseLspError*(res: JsonNode): LspErrorParseResult =
     return LspErrorParseResult.ok res["error"].to(LspError)
   except:
     return LspErrorParseResult.err fmt"Invalid error: {$res}"
+
+proc setNonBlockingOutput(p: Process): Result[(), string] =
+  if fcntl(p.outputHandle.cint, F_SETFL, O_NONBLOCK) < 0:
+    return Result[(), string].err "fcntl failed"
+
+  return Result[(), string].ok ()
 
 proc initLspClient*(command: string): initLspClientResult =
   ## Start a LSP server process and init streams.
@@ -134,7 +180,7 @@ proc initLspClient*(command: string): initLspClientResult =
     args =
       if commandSplit.len > 1: commandSplit[1 .. ^1]
       else: @[]
-    opts: set[asyncproc.ProcessOption] = {poStdErrToStdOut, poUsePath}
+    opts: set[ProcessOption] = {poStdErrToStdOut, poUsePath}
 
   var c = LspClient()
 
@@ -148,9 +194,14 @@ proc initLspClient*(command: string): initLspClientResult =
   except CatchableError as e:
     return initLspClientResult.err fmt"lsp: server start failed: {e.msg}"
 
-  c.serverPipes = Pipes(
-    input: c.serverProcess.inputHandle,
-    output: c.serverProcess.outputHandle)
+  block:
+    let r = c.serverProcess.setNonBlockingOutput
+    if r.isErr:
+      return initLspClientResult.err fmt"setNonBlockingOutput failed: {r.error}"
+
+  c.serverStreams = Streams(
+    input: InputStream(stream: c.serverProcess.inputStream),
+    output: OutputStream(stream: c.serverProcess.outputStream))
 
   return initLspClientResult.ok c
 
@@ -216,7 +267,7 @@ proc initialize*(
 
     let params = %* initParams
 
-    let r = waitFor c.send(id, "initialize", params)
+    let r = c.call(id, "initialize", params)
     if r.isErr:
       return LspInitializeResult.err fmt"lsp: Initialize request failed: {r.error}"
 
@@ -243,7 +294,7 @@ proc initialized*(c: LspClient): LspInitializedResult =
 
   let params = %* {}
 
-  let err = waitFor c.notify("initialized", params)
+  let err = c.notify("initialized", params)
   if err.isErr:
     return LspInitializedResult.err fmt"Invalid notification failed: {err.error}"
 
@@ -258,7 +309,7 @@ proc shutdown*(c: LspClient, id: int): LspShutdownResult =
   if not c.serverProcess.running:
     return LspShutdownResult.err fmt"lsp: server crashed"
 
-  let r = waitFor c.send(id, "shutdown", %*{})
+  let r = c.call(id, "shutdown", %*{})
   if r.isErr:
     return LspShutdownResult.err "lsp: Shutdown request failed: {r.error}"
 
@@ -278,7 +329,7 @@ proc workspaceDidChangeConfiguration*(
 
     let params = %* DidChangeConfigurationParams()
 
-    let err = waitFor c.notify("workspace/didChangeConfiguration", params)
+    let err = c.notify("workspace/didChangeConfiguration", params)
     if err.isErr:
       return LspWorkspaceDidChangeConfigurationResult.err fmt"Invalid workspace/didChangeConfiguration failed: {err.error}"
 
@@ -308,7 +359,7 @@ proc textDocumentDidOpen*(
       languageId,
       text)
 
-    let err = waitFor c.notify("textDocument/didOpen", params)
+    let err = c.notify("textDocument/didOpen", params)
     if err.isErr:
       return LspDidOpenTextDocumentResult.err fmt"lsp: textDocument/didOpen notification failed: {err.error}"
 
@@ -336,7 +387,7 @@ proc textDocumentDidChange*(
 
     let params = %* initTextDocumentDidChangeParams(version, path, text)
 
-    let err = waitFor c.notify("textDocument/didChange", params)
+    let err = c.notify("textDocument/didChange", params)
     if err.isErr:
       return LspDidChangeTextDocumentResult.err fmt"lsp: textDocument/didChange notification failed: {err.error}"
 
@@ -359,7 +410,7 @@ proc textDocumentDidClose*(
 
     let params = %* initTextDocumentDidClose(text)
 
-    let err = waitFor c.notify("textDocument/didClose", params)
+    let err = c.notify("textDocument/didClose", params)
     if err.isErr:
       return LspDidCloseTextDocumentResult.err fmt"lsp: textDocument/didClose notification failed: {err.error}"
 
@@ -388,7 +439,7 @@ proc textDocumentHover*(
       return LspHoverResult.err fmt"lsp: server crashed"
 
     let params = %* initHoverParams(path, position.toLspPosition)
-    let r = waitFor c.send(id, "textDocument/hover", params)
+    let r = c.call(id, "textDocument/hover", params)
     if r.isErr:
       return LspHoverResult.err fmt"lsp: textDocument/hover request failed: {r.error}"
 
