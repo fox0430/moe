@@ -158,19 +158,36 @@ suite "Ex mode: Write command":
     status.backgroundTasks.build[0].process.kill
 
 suite "Ex mode: Change next buffer command":
+ test "Change next buffer command 1":
+   var status = initEditorStatus()
+   for i in 0 ..< 2: discard status.addNewBufferInCurrentWin.get
+   status.bufStatus[1].isUpdate = false
+
+   currentMainWindowNode.bufferIndex = 0
+   const Command = @[ru"bnext"]
+   status.exModeCommand(Command)
+
+   check currentMainWindowNode.bufferIndex == 1
+   check status.bufStatus[1].isUpdate
+
  test "Change next buffer command":
    var status = initEditorStatus()
    for i in 0 ..< 2: discard status.addNewBufferInCurrentWin.get
 
-   const Command = @[ru"bnext"]
-   for i in 0 ..< 3: status.exModeCommand(Command)
+   status.resize(100, 100)
+   status.update
 
-suite "Ex mode: Change next buffer command":
+   check currentMainWindowNode.bufferIndex == 1
+   const Command = @[ru"bnext"]
+   status.exModeCommand(Command)
+
+   status.update
+
+suite "Ex mode: Change prev buffer command":
   test "Change prev buffer command 1":
     var status = initEditorStatus()
-    for i in 0 ..< 2:
-      discard status.addNewBufferInCurrentWin.get
-      status.bufStatus[^1].isUpdate = false
+    for i in 0 ..< 2: discard status.addNewBufferInCurrentWin.get
+    status.bufStatus[0].isUpdate = false
 
     currentMainWindowNode.bufferIndex = 1
     const Command = @[ru"bprev"]
@@ -183,10 +200,14 @@ suite "Ex mode: Change next buffer command":
     var status = initEditorStatus()
     for i in 0 ..< 2: discard status.addNewBufferInCurrentWin.get
 
-    currentMainWindowNode.bufferIndex = 1
+    status.resize(100, 100)
+    status.update
+
+    currentMainWindowNode.bufferIndex = 0
     const Command = @[ru"bprev"]
-    for i in 0 ..< 2:
-      status.exModeCommand(Command)
+    status.exModeCommand(Command)
+
+    status.update
 
 suite "Ex mode: Open buffer by number command":
   test "Open buffer by number command":
