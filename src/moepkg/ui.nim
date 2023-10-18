@@ -25,7 +25,7 @@ when not defined unitTest:
   import std/[posix, os]
 
 type
-  Attribute* = enum
+  Attribute* {.pure.} = enum
     normal = A_NORMAL
     standout = A_STANDOUT
     underline = A_UNDERLINE
@@ -36,7 +36,12 @@ type
     altcharet = A_ALT_CHARSET
     invis = A_INVIS
     protect = A_PROTECT
-    #chartext = A_CHAR_TEXT
+    horizontal = A_HORIZONTAL
+    left = A_LEFT
+    low = A_LOW
+    right = A_RIGHT
+    top = A_TOP
+    vertical = A_VERTICAL
 
   CursorType* = enum
     terminalDefault

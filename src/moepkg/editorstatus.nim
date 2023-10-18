@@ -348,13 +348,14 @@ proc initLsp(
 
     return Result[(), string].ok ()
 
-proc addFilerStatus(status: var EditorStatus) {.inline.} =
+proc addFilerStatus*(status: var EditorStatus) {.inline.} =
+
   ## Add a new FilerStatus and link it to the current bufStatus.
 
   status.filerStatuses.add initFilerStatus()
   currentBufStatus.filerStatusIndex = some(status.filerStatuses.high)
 
-proc addFilerStatus(status: var EditorStatus, bufStatusIndex: int) {.inline.} =
+proc addFilerStatus*(status: var EditorStatus, bufStatusIndex: int) {.inline.} =
   ## Add a new FilerStatus and link it to the bufStatus.
 
   status.filerStatuses.add initFilerStatus()

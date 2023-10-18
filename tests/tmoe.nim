@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, oids]
+import std/[unittest, os, oids, options]
 import moepkg/[editorstatus, cmdlineoption, bufferstatus, unicodeext, gapbuffer,
                windownode, settings]
 
@@ -62,6 +62,7 @@ suite "moe: addBufferStatus":
     check currentBufStatus.buffer.toSeqRunes.len > 0
     check currentBufStatus.path == getCurrentDir().toRunes & ru"/"
     check currentBufStatus.mode == Mode.filer
+    check currentBufStatus.filerStatusIndex.get == 0
 
     check mainWindowNode.getAllWindowNode.len == 1
 
