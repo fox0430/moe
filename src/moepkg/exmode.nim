@@ -582,8 +582,10 @@ proc changeNextBufferCommand(status: var EditorStatus) =
   if currentBufferIndex == status.bufStatus.high: return
 
   status.changeCurrentBuffer(currentBufferIndex + 1)
+  currentBufStatus.isUpdate = true
+
   status.commandLine.clear
-  status.changeMode(bufferstatus.Mode.normal)
+  status.changeMode(Mode.normal)
 
 proc changePreveBufferCommand(status: var EditorStatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
