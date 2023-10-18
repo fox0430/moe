@@ -166,13 +166,27 @@ suite "Ex mode: Change next buffer command":
    for i in 0 ..< 3: status.exModeCommand(Command)
 
 suite "Ex mode: Change next buffer command":
-  test "Change prev buffer command":
+  test "Change prev buffer command 1":
+    var status = initEditorStatus()
+    for i in 0 ..< 2:
+      discard status.addNewBufferInCurrentWin.get
+      status.bufStatus[^1].isUpdate = false
+
+    currentMainWindowNode.bufferIndex = 1
+    const Command = @[ru"bprev"]
+    status.exModeCommand(Command)
+
+    check currentMainWindowNode.bufferIndex == 0
+    check status.bufStatus[0].isUpdate
+
+  test "Change prev buffer command 2":
     var status = initEditorStatus()
     for i in 0 ..< 2: discard status.addNewBufferInCurrentWin.get
 
     currentMainWindowNode.bufferIndex = 1
     const Command = @[ru"bprev"]
-    for i in 0 ..< 3: status.exModeCommand(Command)
+    for i in 0 ..< 2:
+      status.exModeCommand(Command)
 
 suite "Ex mode: Open buffer by number command":
   test "Open buffer by number command":

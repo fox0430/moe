@@ -590,9 +590,11 @@ proc changePreveBufferCommand(status: var EditorStatus) =
   if currentBufferIndex < 1: return
 
   status.changeCurrentBuffer(currentBufferIndex - 1)
+  currentBufStatus.isUpdate = true
 
   status.commandLine.clear
-  status.changeMode(bufferstatus.Mode.normal)
+
+  status.changeMode(Mode.normal)
 
 proc jumpCommand(status: var EditorStatus, line: int) =
   currentBufStatus.jumpLine(currentMainWindowNode, line)
