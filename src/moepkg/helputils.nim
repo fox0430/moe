@@ -104,6 +104,7 @@ diw        - Delete the current word
 di( or di) - Delete the inside of round brackets
 di[ or di] - Delete the inside of square brackets
 di{ or di} - Delete the inside of curly brackets
+dt any     - Delete characters until the character
 *          - Search forwards for the word under cursor
 #          - Search backwards for the word under cursor
 f          - Move to next any character on the current line
