@@ -609,10 +609,12 @@ proc deleteWord*(
   bufStatus: var BufferStatus,
   windowNode: var WindowNode,
   loop: int,
+  withSpace: bool,
   registers: var Registers,
   registerName: string,
   settings: EditorSettings) =
-    ## Delete current word
+    ## Delete the current word.
+    ## If `withSpace` is true, delete spaces after the word.
 
     var deletedBuffer: Runes
 
@@ -665,7 +667,7 @@ proc deleteWord*(
             break
           let curr =
             bufStatus.buffer[windowNode.currentLine][windowNode.currentColumn]
-          if isPunct(curr) or isAlpha(curr) or isDigit(curr): break
+          if isPunct(curr) or isAlpha(curr) or isDigit(curr) or (not withSpace and isSpace(curr)): break
           inc(windowNode.currentColumn)
 
         let oldLine = bufStatus.buffer[currentLine]
@@ -701,12 +703,21 @@ proc deleteWordBeforeCursor*(
 
     if windowNode.currentLine == 0 and windowNode.currentColumn == 0: return
 
+
     if windowNode.currentColumn == 0:
       let isAutoDeleteParen = false
       bufStatus.keyBackspace(windowNode, isAutoDeleteParen, settings.tabStop)
     else:
       bufStatus.moveToBackwardWord(windowNode)
-      bufStatus.deleteWord(windowNode, loop, registers, registerName, settings)
+
+      const WithSpace = true
+      bufStatus.deleteWord(
+        windowNode,
+        loop,
+        WithSpace,
+        registers,
+        registerName,
+        settings)
 
 proc deleteWordBeforeCursor*(
   bufStatus: var BufferStatus,

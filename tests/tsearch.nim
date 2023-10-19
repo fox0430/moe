@@ -705,3 +705,48 @@ suite "saveSearchHistory":
     for word in keywords:
       searchHistory.saveSearchHistory(word, limit)
       check searchHistory.len == 0
+
+suite "searchutils: findFirstOfWord":
+  test "Empty line":
+    const Position = 0
+    check findFirstOfWord(ru"", Position) == 0
+
+  test "Alfabets":
+    const Position = 2
+    check findFirstOfWord(ru"abc", Position) == 0
+
+  test "Alfabets with space":
+    const Position = 6
+    check findFirstOfWord(ru"abc def", Position) == 4
+
+  test "Alfabets with symbol":
+    const Position = 6
+    check findFirstOfWord(ru"abc*def", Position) == 4
+
+  test "Digits":
+    const Position = 2
+    check findFirstOfWord(ru"123", Position) == 0
+
+  test "Digits with space":
+    const Position = 6
+    check findFirstOfWord(ru"123 456", Position) == 4
+
+  test "Digits with symbol":
+    const Position = 6
+    check findFirstOfWord(ru"123*456", Position) == 4
+
+  test "Spaces":
+    const Position = 2
+    check findFirstOfWord(ru"   ", Position) == 0
+
+  test "Spaces with alfabet":
+    const Position = 6
+    check findFirstOfWord(ru"   a   ", Position) == 4
+
+  test "Spaces with symbol":
+    const Position = 6
+    check findFirstOfWord(ru"   *   ", Position) == 4
+
+  test "Symbol with Alfabets":
+    const Position = 3
+    check findFirstOfWord(ru"abc*def", Position) == 3

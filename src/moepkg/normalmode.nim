@@ -289,57 +289,54 @@ proc yankWord(status: var EditorStatus, registerName: string) =
    registerName,
    status.settings)
 
-proc deleteWord(status: var EditorStatus) =
+proc deleteWordWithSpace(status: var EditorStatus) {.inline.} =
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
     return
 
-  const RegisterName = ""
+  const
+    WithSpace = true
+    RegisterName = ""
   currentBufStatus.deleteWord(
     currentMainWindowNode,
     currentBufStatus.cmdLoop,
+    WithSpace,
     status.registers,
     RegisterName,
     status.settings)
 
-proc deleteWord(status: var EditorStatus, registerName: string) =
-  currentBufStatus.deleteWord(
-    currentMainWindowNode,
-    currentBufStatus.cmdLoop,
-    status.registers,
-    registerName,
-    status.settings)
+proc deleteWordWithSpace(
+  status: var EditorStatus,
+  registerName: string) {.inline.} =
 
-proc changeInnerCommand(status: var EditorStatus, key: Rune) =
-  # # ci command
+    if currentBufStatus.isReadonly:
+      status.commandLine.writeReadonlyModeWarning
+      return
 
+    const WithSpace = true
+    currentBufStatus.deleteWord(
+      currentMainWindowNode,
+      currentBufStatus.cmdLoop,
+      WithSpace,
+      status.registers,
+      registerName,
+      status.settings)
+
+proc deleteWordWithoutSpace(status: var EditorStatus) {.inline.} =
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
     return
 
-  let
-    currentLine = currentMainWindowNode.currentLine
-    oldLine = currentBufStatus.buffer[currentLine]
-
-  if isParen(key):
-    # Delete inside paren and enter insert mode
-    currentBufStatus.deleteInsideOfParen(
-      currentMainWindowNode,
-      status.registers,
-      key,
-      status.settings)
-
-    if oldLine != currentBufStatus.buffer[currentLine]:
-      currentMainWindowNode.currentColumn.inc
-      status.changeModeToInsertMode
-  elif key == ru'w':
-    # Delete current word and enter insert mode
-    if oldLine.len > 0:
-      currentBufStatus.moveToBackwardWord(currentMainWindowNode)
-      status.deleteWord
-    status.changeModeToInsertMode
-  else:
-    discard
+  const
+    WithSpace = false
+    RegisterName = ""
+  currentBufStatus.deleteWord(
+    currentMainWindowNode,
+    currentBufStatus.cmdLoop,
+    WithSpace,
+    status.registers,
+    RegisterName,
+    status.settings)
 
 proc changeInnerCommand(
   status: var EditorStatus,
@@ -357,12 +354,19 @@ proc changeInnerCommand(
 
     if isParen(key):
       # Delete inside paren and enter insert mode
-      currentBufStatus.deleteInsideOfParen(
-        currentMainWindowNode,
-        status.registers,
-        registerName,
-        key,
-        status.settings)
+      if registerName.len > 0:
+        currentBufStatus.deleteInsideOfParen(
+          currentMainWindowNode,
+          status.registers,
+          registerName,
+          key,
+          status.settings)
+      else:
+        currentBufStatus.deleteInsideOfParen(
+          currentMainWindowNode,
+          status.registers,
+          key,
+          status.settings)
 
       if oldLine != currentBufStatus.buffer[currentLine]:
         currentMainWindowNode.currentColumn.inc
@@ -370,11 +374,17 @@ proc changeInnerCommand(
     elif key == ru'w':
       # Delete current word and enter insert mode
       if oldLine.len > 0:
-        currentBufStatus.moveToBackwardWord(currentMainWindowNode)
-        status.deleteWord
+        currentMainWindowNode.moveToFirstOfWord(currentBufStatus)
+        status.deleteWordWithoutSpace
       status.changeModeToInsertMode
     else:
       discard
+
+proc changeInnerCommand(status: var EditorStatus, key: Rune) {.inline.} =
+  ## ci command
+
+  const RegisterName = ""
+  status.changeInnerCommand(key, RegisterName)
 
 proc deleteInnerCommand(status: var EditorStatus, key: Rune, registerName: string) =
   ## di command
@@ -403,17 +413,13 @@ proc deleteInnerCommand(status: var EditorStatus, key: Rune, registerName: strin
   # Delete current word and enter insert mode
   elif key == ru'w':
     if currentBufStatus.buffer[currentMainWindowNode.currentLine].len > 0:
-      currentBufStatus.moveToBackwardWord(currentMainWindowNode)
-      status.deleteWord
+      currentMainWindowNode.moveToFirstOfWord(currentBufStatus)
+      status.deleteWordWithoutSpace
   else:
     discard
 
-proc deleteInnerCommand(status: var EditorStatus, key: Rune) =
+proc deleteInnerCommand(status: var EditorStatus, key: Rune) {.inline.} =
   ## di command
-
-  if currentBufStatus.isReadonly:
-    status.commandLine.writeReadonlyModeWarning
-    return
 
   const registerName = ""
   status.deleteInnerCommand(key, registerName)
@@ -1059,7 +1065,7 @@ proc addRegister(status: var EditorStatus, command, registerName: string) =
   elif command == "dd":
     status.deleteLines(registerName)
   elif command == "dw":
-    status.deleteWord(registerName)
+    status.deleteWordWithSpace(registerName)
   elif command == "d$" or (command.len == 1 and isEndKey(command[0].toRune)):
     status.deleteCharactersUntilEndOfLine(registerName)
   elif command == "d0":
@@ -1351,7 +1357,7 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
     if secondKey == ord('d'):
       status.deleteLines
     elif secondKey == ord('w'):
-      status.deleteWord
+      status.deleteWordWithSpace
     elif secondKey == ('$') or isEndKey(secondKey):
       status.deleteCharactersUntilEndOfLine
     elif secondKey == ('0') or isHomeKey(secondKey):

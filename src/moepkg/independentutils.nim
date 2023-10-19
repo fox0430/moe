@@ -82,3 +82,7 @@ proc execCmdExNoOutput*(cmd: string): int {.inline.} =
 proc isEmpty*[T](s: seq[T]): bool {.inline.} = s.len == 0
 
 proc isEmpty*(s: string): bool {.inline.} = s.len == 0
+
+proc dec*(n: var Natural): Natural {.inline.} = n -= 1
+
+proc inc*(n: var Natural): Natural {.inline.} = n += 1

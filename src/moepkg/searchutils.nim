@@ -433,3 +433,27 @@ proc currentWord*(
 
     return (word: lineBuffer[startCol .. endCol],
             position: startCol)
+
+proc findFirstOfWord*(line: Runes, currentPosition: Natural): Natural =
+  ## Return the first position of the current word.
+
+  template r: Rune = line[result]
+
+  result = currentPosition
+
+  if currentPosition == 0: return 0
+  elif isPunct(r): return currentPosition
+
+  if isDigit(r):
+    for i in countdown(currentPosition, 1):
+      if not isDigit(line[i - 1]): return i
+  elif isSpace(r):
+    for i in countdown(currentPosition, 1):
+      if not isSpace(line[i - 1]): return i
+  else:
+    # Other than symbols and digits.
+    for i in countdown(currentPosition, 1):
+      if isDigit(line[i - 1]) or isSpace(line[i - 1]) or isPunct(line[i - 1]):
+        return i
+
+  return 0
