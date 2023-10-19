@@ -1086,21 +1086,21 @@ proc newEmptyBufferInSplitWindowHorizontally*(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 
   status.horizontalSplitWindow
-  status.resize
 
   discard status.addNewBufferInCurrentWin
-
   status.changeCurrentBuffer(status.bufStatus.high)
+
+  status.resize
 
 proc newEmptyBufferInSplitWindowVertically*(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 
   status.verticalSplitWindow
-  status.resize
 
   discard status.addNewBufferInCurrentWin
-
   status.changeCurrentBuffer(status.bufStatus.high)
+
+  status.resize
 
 proc saveExCommandHistory(
   exCommandHistory: var seq[Runes],

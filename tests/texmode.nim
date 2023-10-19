@@ -812,6 +812,8 @@ suite "Ex mode: New empty buffer in split window horizontally":
 
     check status.mainWindow.numOfMainWindow == 2
 
+    status.update
+
 suite "Ex mode: New empty buffer in split window vertically":
   test "New empty buffer in split window vertically":
     var status = initEditorStatus()
@@ -831,6 +833,8 @@ suite "Ex mode: New empty buffer in split window vertically":
     check status.bufStatus[1].path == ru""
 
     check status.mainWindow.numOfMainWindow == 2
+
+    status.update
 
 suite "Ex mode: Filer icon setting command":
   test "Filer icon setting command":
