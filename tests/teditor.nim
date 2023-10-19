@@ -141,6 +141,48 @@ suite "Editor: Delete trailing spaces":
     check bufStatus.buffer[2] == ru"ghi"
 
 suite "Editor: Delete word":
+  test "With space":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = initGapBuffer(@[ru"test  "])
+
+    let settings = initEditorSettings()
+    const
+      Loop = 1
+      WithSpace = true
+      RegisterName = ""
+    currentBufStatus.deleteWord(
+      currentMainWindowNode,
+      Loop,
+      WithSpace,
+      status.registers,
+      RegisterName,
+      settings)
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru""]
+    check status.registers.noNameRegisters.buffer == @[ru"test  "]
+
+  test "Without space":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = initGapBuffer(@[ru"test  "])
+
+    let settings = initEditorSettings()
+    const
+      Loop = 1
+      WithSpace = false
+      RegisterName = ""
+    currentBufStatus.deleteWord(
+      currentMainWindowNode,
+      Loop,
+      WithSpace,
+      status.registers,
+      RegisterName,
+      settings)
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"  "]
+    check status.registers.noNameRegisters.buffer == @[ru"test"]
+
   test "Fix #842":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
@@ -151,10 +193,12 @@ suite "Editor: Delete word":
     let settings = initEditorSettings()
     const
       Loop = 2
+      WithSpace = true
       RegisterName = ""
     currentBufStatus.deleteWord(
       currentMainWindowNode,
       Loop,
+      WithSpace,
       status.registers,
       RegisterName,
       settings)

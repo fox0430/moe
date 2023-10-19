@@ -255,6 +255,13 @@ proc moveToLastLine*(bufStatus: BufferStatus, windowNode: var WindowNode) =
     bufStatus.jumpLine(windowNode, bufStatus.cmdLoop - 1)
   else: bufStatus.jumpLine(windowNode, bufStatus.buffer.high)
 
+proc moveToFirstOfWord*(windowNode: var WindowNode, bufStatus: BufferStatus) =
+  ## Move to the first position of the current word.
+
+  windowNode.currentColumn =
+    bufStatus.buffer[windowNode.currentLine].findFirstOfWord(
+      windowNode.currentColumn.Natural)
+
 proc moveToForwardWord*(
   bufStatus: var BufferStatus,
   windowNode: var WindowNode) =
