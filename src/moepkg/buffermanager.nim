@@ -27,64 +27,64 @@ proc initBufferManagerBuffer*(
     ## Exclude the buffer for the buffer manager.
 
     for bufStatus in bufStatuses:
-      let currentMode = bufStatus.mode
-      if currentMode != Mode.bufManager:
+      if not bufStatus.mode.isBufferManagerMode:
         if bufStatus.path.len > 0:
           result.add bufStatus.path
         else:
           result.add ru"No Name"
 
+    if result.len == 0:
+      return @[ru""]
+
 proc deleteSelectedBuffer(status: var EditorStatus) =
+  ## Delete the selected buffer and close windows for it.
+
   let deleteIndex = currentMainWindowNode.currentLine
 
+  # Close windows for the delete buffer.
   var qeue = initHeapQueue[WindowNode]()
   for node in mainWindowNode.child:
     qeue.push(node)
   while qeue.len > 0:
     for i in 0 ..< qeue.len:
-      let node = qeue.pop
+      var node = qeue.pop
       if node.bufferIndex == deleteIndex:
         status.closeWindow(node)
+      else:
+        if node.bufferIndex > deleteIndex:
+          node.bufferIndex.dec
+          status.bufStatus[node.bufferIndex].isUpdate = true
 
       if node.child.len > 0:
         for node in node.child: qeue.push(node)
 
   status.resize
 
-  if status.mainWindow.numOfMainWindow > 0:
-    status.bufStatus.delete(deleteIndex)
+  status.bufStatus.delete(deleteIndex)
 
-    var qeue = initHeapQueue[WindowNode]()
-    for node in mainWindowNode.child:
-      qeue.push(node)
-    while qeue.len > 0:
-      for i in 0 ..< qeue.len:
-        var node = qeue.pop
-        if node.bufferIndex > deleteIndex: dec(node.bufferIndex)
-
-        if node.child.len > 0:
-          for node in node.child: qeue.push(node)
-
-    if status.bufferIndexInCurrentWindow > deleteIndex:
-      dec(currentMainWindowNode.bufferIndex)
-    if currentMainWindowNode.currentLine > 0:
-      dec(currentMainWindowNode.currentLine)
-
-    let index = status.mainWindow.numOfMainWindow - 1
-    currentMainWindowNode = mainWindowNode.searchByWindowIndex(index)
-    currentBufStatus.buffer =
-      status.bufStatus.initBufferManagerBuffer.toGapBuffer
-
-    status.resize
+  currentBufStatus.buffer = status.bufStatus.initBufferManagerBuffer.toGapBuffer
+  currentBufStatus.isUpdate = true
 
 proc openSelectedBuffer(status: var EditorStatus, isNewWindow: bool) =
   if isNewWindow:
     status.verticalSplitWindow
     status.moveNextWindow
+
     status.changeCurrentBuffer(currentMainWindowNode.currentLine)
+    currentBufStatus.isUpdate = true
+
+    status.resize
   else:
+    # Open the selected buffer in the current (buffer manager) window.
     status.changeCurrentBuffer(currentMainWindowNode.currentLine)
-    status.bufStatus.delete(status.bufStatus.high)
+    currentBufStatus.isUpdate = true
+
+    status.resize
+
+    for i in 0 .. status.bufStatus.high:
+      if status.bufStatus[i].isBufferManagerMode:
+        # Delete the buffer for the buffer manager.
+        status.bufStatus.delete(i)
 
 proc isBufferManagerCommand*(command: Runes): InputState =
   result = InputState.Invalid
@@ -120,5 +120,3 @@ proc execBufferManagerCommand*(status: var EditorStatus, command: Runes) =
     status.openSelectedBuffer(true)
   elif key == ord('D'):
     status.deleteSelectedBuffer
-
-  if status.bufStatus.len < 2: status.exitEditor

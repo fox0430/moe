@@ -690,12 +690,10 @@ proc update*(status: var EditorStatus) =
         status.bufStatus[i].buffer =
           status.filerStatuses[filerIndex].initFilerBuffer(
             settings.filer.showIcons).toGapBuffer
-
-    if buf.isLogViewerMode:
+    elif buf.isLogViewerMode:
       # Update the logviewer mode buffer.
       status.bufStatus[i].updateLogViewerBuffer(getMessageLog())
-
-    if buf.isDebugMode:
+    elif buf.isDebugMode:
       # Update the debug mode buffer.
       status.bufStatus[i].buffer = status.bufStatus.initDebugModeBuffer(
         status.mainWindow.root,

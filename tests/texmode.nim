@@ -1506,3 +1506,8 @@ suite "exmode: openBufferManager":
 
     status.openBufferManager
     status.update
+
+    check status.bufStatus[0].mode.isNormalMode
+    check status.bufStatus[1].mode.isBufferManagerMode
+
+    check mainWindow.numOfMainWindow == 2
