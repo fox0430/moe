@@ -865,6 +865,39 @@ proc cutCharacterBeforeCursor(status: var EditorStatus) =
   const RegisterName = ""
   status.cutCharacterBeforeCursor(RegisterName)
 
+proc deleteCharactersUntilCharacterInLine(
+  bufStatus: var BufferStatus,
+  windowNode: var WindowNode,
+  r: Rune) =
+
+    template currentLineBuffer: Runes = bufStatus.buffer[windowNode.currentLine]
+
+    if windowNode.currentColumn == currentLineBuffer.high: return
+
+    let position = currentLineBuffer.find(
+      r,
+      Natural(windowNode.currentColumn),
+      currentLineBuffer.high)
+
+    if position > windowNode.currentColumn:
+      const AutoDeleteParen = false
+      bufStatus.deleteCharacters(
+        AutoDeleteParen,
+        windowNode.currentLine,
+        windowNode.currentColumn,
+        position - windowNode.currentColumn)
+
+proc deleteCharactersUntilCharacterInLine(status: var EditorStatus, r: Rune) =
+  # dt(x) command
+
+  if currentBufStatus.isReadonly:
+    status.commandLine.writeReadonlyModeWarning
+    return
+
+  currentBufStatus.deleteCharactersUntilCharacterInLine(
+    currentMainWindowNode,
+    r)
+
 proc deleteTillNextBlankLine(status: var EditorStatus) =
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
@@ -961,32 +994,22 @@ proc deleteCharactersToCharacterAndEnterInsertMode(
     const RegisterName = ""
     status.deleteCharactersToCharacterAndEnterInsertMode(rune, RegisterName)
 
-proc deleteCharactersUntilCharacterInLine(status: var EditorStatus, r: Rune) =
-  ## ct(x) command
+proc deleteCharactersUntilCharacterInLineAndEnterInsertMode(
+  status: var EditorStatus,
+  r: Rune) =
+    ## ct(x) command
 
-  if currentBufStatus.isReadonly:
-    status.commandLine.writeReadonlyModeWarning
-    return
+    if currentBufStatus.isReadonly:
+      status.commandLine.writeReadonlyModeWarning
+      return
 
-  template currentLineBuffer: Runes =
-    currentBufStatus.buffer[currentMainWindowNode.currentLine]
+    let oldLine = currentBufStatus.buffer[currentMainWindowNode.currentLine]
 
-  if currentMainWindowNode.currentColumn == currentLineBuffer.high: return
-
-  let position = currentLineBuffer.find(
-    r,
-    Natural(currentMainWindowNode.currentColumn),
-    currentLineBuffer.high)
-
-  if position > currentMainWindowNode.currentColumn:
-    const AutoDeleteParen = false
-    currentBufStatus.deleteCharacters(
-      AutoDeleteParen,
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn,
-      position - currentMainWindowNode.currentColumn)
-
-    status.changeModeToInsertMode
+    currentBufStatus.deleteCharactersUntilCharacterInLine(
+      currentMainWindowNode,
+      r)
+    if oldLine != currentBufStatus.buffer[currentMainWindowNode.currentLine]:
+      status.changeModeToInsertMode
 
 proc enterInsertModeAfterCursor(status: var EditorStatus) =
   if currentBufStatus.isReadonly:
@@ -1381,7 +1404,7 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
       status.deleteCharactersToCharacterAndEnterInsertMode(thirdKey)
     elif secondKey == ord('t'):
       let thirdKey = commands[2]
-      status.deleteCharactersUntilCharacterInLine(thirdKey)
+      status.deleteCharactersUntilCharacterInLineAndEnterInsertMode(thirdKey)
   elif key == ord('d'):
     let secondKey = commands[1]
     if secondKey == ord('d'):
@@ -1407,6 +1430,9 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
       status.deleteInnerCommand(thirdKey)
     elif secondKey == ord('h'):
       status.cutCharacterBeforeCursor
+    elif secondKey == ord('t'):
+      let thirdKey = commands[2]
+      status.deleteCharactersUntilCharacterInLine(thirdKey)
   elif key == ord('D'):
      status.deleteCharactersUntilEndOfLine
   elif key == ord('S'):
@@ -1687,7 +1713,9 @@ proc isNormalModeCommand*(
              command[1] == ord('{') or
              command[1] == ord('}'):
                result = InputState.Valid
-          elif command[1] == ord('g') or command[1] == ord('i'):
+          elif command[1] == ord('g') or
+               command[1] == ord('i') or
+               command[1] == ord('t'):
             result = InputState.Continue
         elif command.len == 3:
           if command[2] == ord('g'):
@@ -1696,6 +1724,8 @@ proc isNormalModeCommand*(
             if isParen(command[2]) or
                command[2] == ord('w'):
                  result = InputState.Valid
+          elif command[1] == ord('t'):
+            result = InputState.Valid
 
       elif command[0] == ord('y'):
         if command.len == 1:

@@ -2961,3 +2961,58 @@ suite "Normal mode: Delete characters until the character and enter Insert mode 
     check currentBufStatus.isInsertMode
 
     check currentMainWindowNode.currentColumn == 1
+
+suite "Normal mode: Delete characters until the character (dt(x) command)":
+  test "Not found":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = toGapBuffer(@[ru"abc"])
+
+    status.resize(100, 100)
+    status.update
+
+    const Command = ru"dtz"
+    check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
+    check status.normalCommand(Command).isNone
+
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"abc"]
+    check currentBufStatus.isNormalMode
+
+  test "Basic 1":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = toGapBuffer(@[ru"abcdef"])
+
+    status.resize(100, 100)
+    status.update
+
+    const Command = ru"dtf"
+    check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
+    check status.normalCommand(Command).isNone
+
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"f"]
+    check currentBufStatus.isNormalMode
+
+  test "Basic 2":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = toGapBuffer(@[ru"abc def"])
+    currentMainWindowNode.currentColumn = 1
+
+    status.resize(100, 100)
+    status.update
+
+    const Command = ru"dtd"
+    check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
+    check status.normalCommand(Command).isNone
+
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"adef"]
+    check currentBufStatus.isNormalMode
+
+    check currentMainWindowNode.currentColumn == 1
