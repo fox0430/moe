@@ -1,0 +1,7 @@
+.. _#1892:  https://github.com/fox0430/moe/pull/1892
+
+Fixed
+.....
+
+- `#1892`_ Fix :new and :vnew (#1891)
+
