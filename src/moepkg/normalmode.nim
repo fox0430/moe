@@ -961,6 +961,33 @@ proc deleteCharactersToCharacterAndEnterInsertMode(
     const RegisterName = ""
     status.deleteCharactersToCharacterAndEnterInsertMode(rune, RegisterName)
 
+proc deleteCharactersUntilCharacterInLine(status: var EditorStatus, r: Rune) =
+  ## ct(x) command
+
+  if currentBufStatus.isReadonly:
+    status.commandLine.writeReadonlyModeWarning
+    return
+
+  template currentLineBuffer: Runes =
+    currentBufStatus.buffer[currentMainWindowNode.currentLine]
+
+  if currentMainWindowNode.currentColumn == currentLineBuffer.high: return
+
+  let position = currentLineBuffer.find(
+    r,
+    Natural(currentMainWindowNode.currentColumn),
+    currentLineBuffer.high)
+
+  if position > currentMainWindowNode.currentColumn:
+    const AutoDeleteParen = false
+    currentBufStatus.deleteCharacters(
+      AutoDeleteParen,
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn,
+      position - currentMainWindowNode.currentColumn)
+
+    status.changeModeToInsertMode
+
 proc enterInsertModeAfterCursor(status: var EditorStatus) =
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
@@ -1352,6 +1379,9 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
     elif secondKey == ord('f'):
       let thirdKey = commands[2]
       status.deleteCharactersToCharacterAndEnterInsertMode(thirdKey)
+    elif secondKey == ord('t'):
+      let thirdKey = commands[2]
+      status.deleteCharactersUntilCharacterInLine(thirdKey)
   elif key == ord('d'):
     let secondKey = commands[1]
     if secondKey == ord('d'):
@@ -1632,7 +1662,8 @@ proc isNormalModeCommand*(
           result = InputState.Continue
         elif command.len == 2:
           if command[1] == ord('i') or
-             command[1] == ord('f'):
+             command[1] == ord('f') or
+             command[1] == ord('t'):
                result = InputState.Continue
           elif command[1] == ord('c') or command[1] == ('l'):
             result = InputState.Valid
@@ -1641,6 +1672,8 @@ proc isNormalModeCommand*(
              (command[1] == ord('i') and
              (isParen(command[2]) or command[2] == ord('w'))):
                result = InputState.Valid
+          elif command[1] == ord('t'):
+            result = InputState.Valid
 
       elif command[0] == ord('d'):
         if command.len == 1:
