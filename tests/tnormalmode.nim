@@ -2906,3 +2906,58 @@ suite "Normal mode: pasteBeforeCursor":
     check currentBufStatus.buffer.toSeqRunes == @[ru"  line", ru"", ru""]
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 2
+
+suite "Normal mode: Delete characters until the character and enter Insert mode (ct(x) command)":
+  test "Not found":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = toGapBuffer(@[ru"abc"])
+
+    status.resize(100, 100)
+    status.update
+
+    const Command = ru"ctz"
+    check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
+    check status.normalCommand(Command).isNone
+
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"abc"]
+    check currentBufStatus.isNormalMode
+
+  test "Basic 1":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = toGapBuffer(@[ru"abcdef"])
+
+    status.resize(100, 100)
+    status.update
+
+    const Command = ru"ctf"
+    check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
+    check status.normalCommand(Command).isNone
+
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"f"]
+    check currentBufStatus.isInsertMode
+
+  test "Basic 2":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = toGapBuffer(@[ru"abc def"])
+    currentMainWindowNode.currentColumn = 1
+
+    status.resize(100, 100)
+    status.update
+
+    const Command = ru"ctd"
+    check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
+    check status.normalCommand(Command).isNone
+
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"adef"]
+    check currentBufStatus.isInsertMode
+
+    check currentMainWindowNode.currentColumn == 1

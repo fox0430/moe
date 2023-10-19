@@ -357,6 +357,14 @@ proc find*(runes, sub: Runes, start: Natural = 0, last = 0): int =
   if i == -1: return -1
   else: return runeLen(str[0..<i])
 
+proc find*(
+  runes: Runes,
+  sub: Rune,
+  start: Natural = 0,
+  last = 0): int {.inline.} =
+
+    runes.find(sub.toRunes, start, last)
+
 proc rfind*(runes: Runes, r: Rune, start: Natural = 0, last = -1): int =
   ## If `last` is unspecified, it defaults to `runes.high`(the last element).
   ## If `r` is no in `runes`, -1 is returned. Otherwise the index is returned.
