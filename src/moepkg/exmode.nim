@@ -243,6 +243,7 @@ proc openBufferManager(status: var EditorStatus) =
   status.changeCurrentBuffer(status.bufStatus.high)
   status.changeMode(bufferstatus.Mode.bufManager)
   currentBufStatus.buffer = status.bufStatus.initBufferManagerBuffer.toGapBuffer
+  status.resize
 
 proc changeCursorLineCommand(status: var EditorStatus, command: Runes) =
   if command == ru"on" : status.settings.view.cursorLine = true
@@ -581,17 +582,21 @@ proc changeNextBufferCommand(status: var EditorStatus) =
   if currentBufferIndex == status.bufStatus.high: return
 
   status.changeCurrentBuffer(currentBufferIndex + 1)
+  currentBufStatus.isUpdate = true
+
   status.commandLine.clear
-  status.changeMode(bufferstatus.Mode.normal)
+  status.changeMode(Mode.normal)
 
 proc changePreveBufferCommand(status: var EditorStatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   if currentBufferIndex < 1: return
 
   status.changeCurrentBuffer(currentBufferIndex - 1)
+  currentBufStatus.isUpdate = true
 
   status.commandLine.clear
-  status.changeMode(bufferstatus.Mode.normal)
+
+  status.changeMode(Mode.normal)
 
 proc jumpCommand(status: var EditorStatus, line: int) =
   currentBufStatus.jumpLine(currentMainWindowNode, line)
@@ -1081,21 +1086,21 @@ proc newEmptyBufferInSplitWindowHorizontally*(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 
   status.horizontalSplitWindow
-  status.resize
 
   discard status.addNewBufferInCurrentWin
-
   status.changeCurrentBuffer(status.bufStatus.high)
+
+  status.resize
 
 proc newEmptyBufferInSplitWindowVertically*(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 
   status.verticalSplitWindow
-  status.resize
 
   discard status.addNewBufferInCurrentWin
-
   status.changeCurrentBuffer(status.bufStatus.high)
+
+  status.resize
 
 proc saveExCommandHistory(
   exCommandHistory: var seq[Runes],

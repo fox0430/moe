@@ -158,21 +158,56 @@ suite "Ex mode: Write command":
     status.backgroundTasks.build[0].process.kill
 
 suite "Ex mode: Change next buffer command":
+ test "Change next buffer command 1":
+   var status = initEditorStatus()
+   for i in 0 ..< 2: discard status.addNewBufferInCurrentWin.get
+   status.bufStatus[1].isUpdate = false
+
+   currentMainWindowNode.bufferIndex = 0
+   const Command = @[ru"bnext"]
+   status.exModeCommand(Command)
+
+   check currentMainWindowNode.bufferIndex == 1
+   check status.bufStatus[1].isUpdate
+
  test "Change next buffer command":
    var status = initEditorStatus()
    for i in 0 ..< 2: discard status.addNewBufferInCurrentWin.get
 
-   const Command = @[ru"bnext"]
-   for i in 0 ..< 3: status.exModeCommand(Command)
+   status.resize(100, 100)
+   status.update
 
-suite "Ex mode: Change next buffer command":
-  test "Change prev buffer command":
+   check currentMainWindowNode.bufferIndex == 1
+   const Command = @[ru"bnext"]
+   status.exModeCommand(Command)
+
+   status.update
+
+suite "Ex mode: Change prev buffer command":
+  test "Change prev buffer command 1":
     var status = initEditorStatus()
     for i in 0 ..< 2: discard status.addNewBufferInCurrentWin.get
+    status.bufStatus[0].isUpdate = false
 
     currentMainWindowNode.bufferIndex = 1
     const Command = @[ru"bprev"]
-    for i in 0 ..< 3: status.exModeCommand(Command)
+    status.exModeCommand(Command)
+
+    check currentMainWindowNode.bufferIndex == 0
+    check status.bufStatus[0].isUpdate
+
+  test "Change prev buffer command 2":
+    var status = initEditorStatus()
+    for i in 0 ..< 2: discard status.addNewBufferInCurrentWin.get
+
+    status.resize(100, 100)
+    status.update
+
+    currentMainWindowNode.bufferIndex = 0
+    const Command = @[ru"bprev"]
+    status.exModeCommand(Command)
+
+    status.update
 
 suite "Ex mode: Open buffer by number command":
   test "Open buffer by number command":
@@ -777,6 +812,8 @@ suite "Ex mode: New empty buffer in split window horizontally":
 
     check status.mainWindow.numOfMainWindow == 2
 
+    status.update
+
 suite "Ex mode: New empty buffer in split window vertically":
   test "New empty buffer in split window vertically":
     var status = initEditorStatus()
@@ -796,6 +833,8 @@ suite "Ex mode: New empty buffer in split window vertically":
     check status.bufStatus[1].path == ru""
 
     check status.mainWindow.numOfMainWindow == 2
+
+    status.update
 
 suite "Ex mode: Filer icon setting command":
   test "Filer icon setting command":
@@ -1460,3 +1499,19 @@ suite "exmode: startRecentFileMode":
 
     status.startRecentFileMode
     status.update
+
+suite "exmode: openBufferManager":
+  test "Open Buffer Manager 1":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+
+    status.resize(100, 100)
+    status.update
+
+    status.openBufferManager
+    status.update
+
+    check status.bufStatus[0].mode.isNormalMode
+    check status.bufStatus[1].mode.isBufferManagerMode
+
+    check mainWindow.numOfMainWindow == 2

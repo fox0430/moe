@@ -746,8 +746,8 @@ suite "Normal mode: Delete inside paren and enter insert mode":
 
     check status.registers.noNameRegisters.buffer[0] == ru"def"
 
-suite "Normal mode: Delete current word and enter insert mode":
-  test "Delete current word and enter insert mode (ciw command)":
+suite "Normal mode: Delete current word and enter insert mode (ciw command)":
+  test "First of the line":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
@@ -755,18 +755,18 @@ suite "Normal mode: Delete current word and enter insert mode":
     status.resize(100, 100)
     status.update
 
-    const Commands = @[ru'c', ru'i', ru'w']
+    const Commands = ru"ciw"
     check status.normalCommand(Commands).isNone
     status.update
 
-    check currentBufStatus.buffer[0] == ru "def"
+    check currentBufStatus.buffer[0] == ru " def"
     check currentBufStatus.mode == Mode.insert
 
     check currentMainWindowNode.currentColumn == 0
 
-    check status.registers.noNameRegisters.buffer[0] == ru"abc "
+    check status.registers.noNameRegisters.buffer[0] == ru"abc"
 
-  test "Delete current word and enter insert mode when empty line (ciw command)":
+  test "Empty line":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"", ru"abc"])
@@ -784,6 +784,48 @@ suite "Normal mode: Delete current word and enter insert mode":
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
+
+  test "Basic 1":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
+
+    currentMainWindowNode.currentColumn = 1
+
+    status.resize(100, 100)
+    status.update
+
+    const Commands = ru"ciw"
+    check status.normalCommand(Commands).isNone
+    status.update
+
+    check currentBufStatus.buffer[0] == ru " def"
+    check currentBufStatus.mode == Mode.insert
+
+    check currentMainWindowNode.currentColumn == 0
+
+    check status.registers.noNameRegisters.buffer[0] == ru"abc"
+
+  test "Basic 2":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
+
+    currentMainWindowNode.currentColumn = 4
+
+    status.resize(100, 100)
+    status.update
+
+    const Commands = ru"ciw"
+    check status.normalCommand(Commands).isNone
+    status.update
+
+    check currentBufStatus.buffer[0] == ru "abc "
+    check currentBufStatus.mode == Mode.insert
+
+    check currentMainWindowNode.currentColumn == 4
+
+    check status.registers.noNameRegisters.buffer[0] == ru"def"
 
 suite "Normal mode: Delete inside paren":
   test "Delete inside double quotes and enter insert mode (di\" command)":
@@ -881,8 +923,8 @@ suite "Normal mode: Delete inside paren":
 
     check status.registers.noNameRegisters.buffer[0] == ru"def"
 
-suite "Normal mode: Delete current word":
-  test "Delete current word and (diw command)":
+suite "Normal mode: Delete current word (diw command)":
+  test "First of line":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
@@ -890,17 +932,17 @@ suite "Normal mode: Delete current word":
     status.resize(100, 100)
     status.update
 
-    const Commands = @[ru'd', ru'i', ru'w']
+    const Commands = ru"diw"
     check status.normalCommand(Commands).isNone
     status.update
 
-    check currentBufStatus.buffer[0] == ru "def"
+    check currentBufStatus.buffer[0] == ru " def"
 
     check currentMainWindowNode.currentColumn == 0
 
-    check status.registers.noNameRegisters.buffer[0] == ru"abc "
+    check status.registers.noNameRegisters.buffer[0] == ru"abc"
 
-  test "Delete current word when empty line (diw command)":
+  test "Empty line":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"", ru"abc"])
@@ -917,6 +959,44 @@ suite "Normal mode: Delete current word":
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
+
+  test "Basic 1":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
+    currentMainWindowNode.currentColumn = 1
+
+    status.resize(100, 100)
+    status.update
+
+    const Commands = ru"diw"
+    check status.normalCommand(Commands).isNone
+    status.update
+
+    check currentBufStatus.buffer[0] == ru " def"
+
+    check currentMainWindowNode.currentColumn == 0
+
+    check status.registers.noNameRegisters.buffer[0] == ru"abc"
+
+  test "Basic 2":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
+    currentMainWindowNode.currentColumn = 4
+
+    status.resize(100, 100)
+    status.update
+
+    const Commands = ru"diw"
+    check status.normalCommand(Commands).isNone
+    status.update
+
+    check currentBufStatus.buffer[0] == ru "abc "
+
+    check currentMainWindowNode.currentColumn == 3
+
+    check status.registers.noNameRegisters.buffer[0] == ru"def"
 
 suite "Normal mode: Delete current character and enter insert mode":
   test "Delete current character and enter insert mode (s command)":
@@ -2827,3 +2907,113 @@ suite "Normal mode: pasteBeforeCursor":
     check currentBufStatus.buffer.toSeqRunes == @[ru"  line", ru"", ru""]
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 2
+
+suite "Normal mode: Delete characters until the character and enter Insert mode (ct(x) command)":
+  test "Not found":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = toGapBuffer(@[ru"abc"])
+
+    status.resize(100, 100)
+    status.update
+
+    const Command = ru"ctz"
+    check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
+    check status.normalCommand(Command).isNone
+
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"abc"]
+    check currentBufStatus.isNormalMode
+
+  test "Basic 1":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = toGapBuffer(@[ru"abcdef"])
+
+    status.resize(100, 100)
+    status.update
+
+    const Command = ru"ctf"
+    check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
+    check status.normalCommand(Command).isNone
+
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"f"]
+    check currentBufStatus.isInsertMode
+
+  test "Basic 2":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = toGapBuffer(@[ru"abc def"])
+    currentMainWindowNode.currentColumn = 1
+
+    status.resize(100, 100)
+    status.update
+
+    const Command = ru"ctd"
+    check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
+    check status.normalCommand(Command).isNone
+
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"adef"]
+    check currentBufStatus.isInsertMode
+
+    check currentMainWindowNode.currentColumn == 1
+
+suite "Normal mode: Delete characters until the character (dt(x) command)":
+  test "Not found":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = toGapBuffer(@[ru"abc"])
+
+    status.resize(100, 100)
+    status.update
+
+    const Command = ru"dtz"
+    check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
+    check status.normalCommand(Command).isNone
+
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"abc"]
+    check currentBufStatus.isNormalMode
+
+  test "Basic 1":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = toGapBuffer(@[ru"abcdef"])
+
+    status.resize(100, 100)
+    status.update
+
+    const Command = ru"dtf"
+    check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
+    check status.normalCommand(Command).isNone
+
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"f"]
+    check currentBufStatus.isNormalMode
+
+  test "Basic 2":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = toGapBuffer(@[ru"abc def"])
+    currentMainWindowNode.currentColumn = 1
+
+    status.resize(100, 100)
+    status.update
+
+    const Command = ru"dtd"
+    check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
+    check status.normalCommand(Command).isNone
+
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @[ru"adef"]
+    check currentBufStatus.isNormalMode
+
+    check currentMainWindowNode.currentColumn == 1
