@@ -136,9 +136,6 @@ We recommend Linux environments.
 ```sh
 # Latest developmental state inside Github repository
 nimble install moe@#head
-
-# Latest released version
-nimble install moe
 ```
 
 Check [detail](https://github.com/fox0430/moe/blob/develop/documents/overview.md)
