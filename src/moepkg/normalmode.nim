@@ -1306,6 +1306,7 @@ proc isMovementKey(key: Rune): bool {.inline.} =
   key == ord('$') or isEndKey(key) or
   key == ord('-') or
   key == ord('+') or
+  key == ord('g') or
   key == ord('G') or
   isControlU(key) or
   isControlD(key) or
@@ -1620,7 +1621,9 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
   else:
     return
 
-  addOperationToNormalModeOperationsRegister(commands)
+  if not isMovementKey(key):
+    # Save a command if not a movement command.
+    addOperationToNormalModeOperationsRegister(commands)
 
 proc isNormalModeCommand*(
   command: Runes,

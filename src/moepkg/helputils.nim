@@ -123,6 +123,7 @@ Ctrl-w c   - Close current window
 ?          - Search backwards
 \r         - QuickRun
 ga         - Show current character info
+.          - Repeat the last normal mode command
 q any      - Start recording operations for Macros
 q          - Stop recoding operations
 @ any      - Exec a macro

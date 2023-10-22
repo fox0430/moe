@@ -17,8 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, importutils, sequtils, sugar, os, options, strformat,
-            oids]
+import std/[unittest, importutils, sequtils, sugar, os, options, strformat]
 import pkg/[ncurses, results]
 import moepkg/syntax/highlite
 import moepkg/[registers, settings, editorstatus, gapbuffer, unicodeext,
@@ -531,17 +530,17 @@ suite "Normal mode: Repeat last command":
     status.update
 
     block:
-      const Command = ru ">"
+      const Command = ru">"
 
       check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
 
-      check status.normalCommand(Command).isNone
+      check status.execNormalModeCommand(Command).isNone
       status.update
 
     currentMainWindowNode.currentColumn = 0
 
     block:
-      const Command = ru "x"
+      const Command = ru"x"
 
       check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
 
@@ -549,12 +548,12 @@ suite "Normal mode: Repeat last command":
       status.update
 
     block:
-      const Command = ru "."
-      check status.normalCommand(Command).isNone
+      const Command = ru"."
+      check status.execNormalModeCommand(Command).isNone
       status.update
 
-    check(currentBufStatus.buffer.len == 1)
-    check(currentBufStatus.buffer[0] == ru" abc")
+    check currentBufStatus.buffer.len == 1
+    check currentBufStatus.buffer[0] == ru"abc"
 
   test "Repeat last command 3":
     var status = initEditorStatus()
@@ -565,7 +564,7 @@ suite "Normal mode: Repeat last command":
     status.update
 
     block:
-      const Command = ru "j"
+      const Command = ru"j"
 
       check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
 
@@ -577,10 +576,72 @@ suite "Normal mode: Repeat last command":
 
       check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
 
-      check status.normalCommand(Command).isNone
+      check status.execNormalModeCommand(Command).isNone
       status.update
 
     check(currentMainWindowNode.currentLine == 1)
+
+  test "Repeat last command 4":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"abc def"])
+
+    status.resize(100, 100)
+    status.update
+
+    block:
+      const Command = ru"dw"
+
+      check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
+
+      check status.normalCommand(Command).isNone
+      status.update
+
+    block:
+      const Command = @[ru'.']
+
+      check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
+
+      check status.execNormalModeCommand(Command).isNone
+      status.update
+
+      check currentBufStatus.buffer.toSeqRunes == @[ru""]
+
+  test "Repeat last command 5":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"abc def ghi"])
+
+    status.resize(100, 100)
+    status.update
+
+    block:
+      const Command = ru"dw"
+
+      check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
+
+      check status.normalCommand(Command).isNone
+      status.update
+
+    block:
+      const Command = ru"j"
+
+      check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
+
+      # Dont' save "j"
+      check status.normalCommand(Command).isNone
+      status.update
+
+    block:
+      const Command = @[ru'.']
+
+      check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
+
+      # Repeat "dw"
+      check status.execNormalModeCommand(Command).isNone
+      status.update
+
+      check currentBufStatus.buffer.toSeqRunes == @[ru"ghi"]
 
 suite "Normal mode: Delete the current line":
   test "Delete the current line":
