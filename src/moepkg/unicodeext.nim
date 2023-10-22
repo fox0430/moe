@@ -554,3 +554,9 @@ proc stripLineEnd*(runes: Runes): Runes =
 
 proc replace*(runes1, sub: Runes, by: Runes = ru""): Runes {.inline.} =
   replace($runes1, $sub, $by).toRunes
+
+proc maxLen*(lines: seq[Runes]): int {.inline.} =
+  lines.mapIt(it.len).max
+
+proc maxHigh*(lines: seq[Runes]): int {.inline.} =
+  lines.mapIt(it.high).max

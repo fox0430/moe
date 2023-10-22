@@ -344,6 +344,12 @@ proc erase*(win: var Window) =
 
 proc refresh*(win: Window) {.inline.} = wrefresh(win.cursesWindow)
 
+proc overlay*(win, destWin: var Window) {.inline.} =
+  overlay(win.cursesWindow, destWin.cursesWindow)
+
+proc overwrite*(win, destWin: var Window) {.inline.} =
+  overwrite(win.cursesWindow, destWin.cursesWindow)
+
 proc move*(win: Window, y, x: int) =
   mvwin(win.cursesWindow, cint(y), cint(x))
 

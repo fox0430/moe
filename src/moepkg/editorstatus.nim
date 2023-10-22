@@ -21,6 +21,7 @@ import std/[strutils, os, strformat, tables, times, heapqueue, deques, options,
             encodings, math]
 import pkg/results
 import syntax/highlite
+import lsp/client
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        windownode, color, settings, statusline, bufferstatus, cursor, tabline,
        backup, messages, commandline, registers, platform, movement,
@@ -68,6 +69,9 @@ type
     colorMode*: ColorMode
     backgroundTasks*: BackgroundTasks
     recodingOperationRegister*: Option[Rune]
+
+    lspClients*: Table[string, LspClient]
+      # key is languageId
 
 const
   TabLineWindowHeight = 1
@@ -289,7 +293,63 @@ proc exitEditor*(status: EditorStatus) =
 
   quit()
 
+proc initLsp(
+  status: var EditorStatus,
+  workspaceRoot, langId: string): Result[(), string] =
+    ## Initialize LSP client and server.
+
+    let langId = $status.bufStatus[^1].extension
+
+    if not status.lspClients.contains(langId):
+      # Init a LSP client and start a LSP server.
+      var c = initLspClient(
+        $status.settings.lsp.languages[langId].command)
+      if c.isErr:
+        status.commandLine.writeLspInitializeError(
+          status.settings.lsp.languages[langId].command,
+          c.error)
+        return Result[(), string].err c.error
+
+      status.lspClients[langId] = c.get
+
+    block:
+      # Initialize request
+      let err = status.lspClients[langId].initialize(
+        status.bufStatus[^1].id,
+        initInitializeParams(
+          workspaceRoot,
+          status.settings.lsp.languages[langId].trace))
+      if err.isErr:
+        return Result[(), string].err err.error
+
+    block:
+      # Initialized notification
+      let err = status.lspClients[langId].initialized
+      if err.isErr:
+        return Result[(), string].err err.error
+
+    block:
+      # workspace/didChangeConfiguration notification
+      let err = status.lspClients[langId]
+        .workspaceDidChangeConfiguration
+      if err.isErr:
+        return Result[(), string].err err.error
+
+    block:
+      # textDocument/diOpen notification
+      let err = status.lspClients[langId].textDocumentDidOpen(
+        $status.bufStatus[^1].path.absolutePath,
+        langId,
+        $status.bufStatus[^1].buffer)
+      if err.isErr:
+        status.commandLine.writeLspInitializeError(
+          status.settings.lsp.languages[langId].command,
+          err.error)
+
+    return Result[(), string].ok ()
+
 proc addFilerStatus*(status: var EditorStatus) {.inline.} =
+
   ## Add a new FilerStatus and link it to the current bufStatus.
 
   status.filerStatuses.add initFilerStatus()
@@ -357,6 +417,26 @@ proc addNewBuffer*(
                status.backgroundTasks.gitDiff.add gitDiffProcess.get
              else:
                status.commandLine.writeGitInfoUpdateError(gitDiffProcess.error)
+
+        if status.settings.lsp.enable:
+          let langId = $status.bufStatus[^1].extension
+
+          if langId.len > 0 and
+             status.settings.lsp.languages.contains(langId) and
+             not status.lspClients.contains($status.bufStatus[^1].extension):
+               # Init LSP client and server.
+               let langId = $status.bufStatus[^1].extension
+
+               let err = status.initLsp(
+                 $status.bufStatus[^1].openDir,
+                 langId)
+               if err.isOk:
+                 status.commandLine.writeLspInitialized(
+                   status.settings.lsp.languages[langId].command)
+               else:
+                 status.commandLine.writeLspInitializeError(
+                   status.settings.lsp.languages[langId].command,
+                   err.error)
 
     return Result[int, string].ok status.bufStatus.high
 
@@ -574,41 +654,53 @@ proc updateStatusLine(status: var EditorStatus) =
         isActiveWindow,
         status.settings)
 
-proc updateSyntaxHighlights(
-  windowNode: var WindowNode,
-  bufStatus: var seq[BufferStatus],
-  reservedWords: seq[ReservedWord],
-  isSyntaxHighlight: bool) =
-    ## Update syntax highlightings in all buffers.
+proc checkBufferStatusUpdate(status: EditorStatus) =
+  ## Update syntax highlightings in all buffers.
+  ## And send textDocument/didChange to LSP servers.
 
-    # int is buffer index
-    var newHighlights: seq[tuple[bufIndex: int, highlight: Highlight]]
-    for index, buf in bufStatus:
-      # The filer syntax highlight is initialized/updated in filermode module.
-      if not buf.isFilerMode and buf.isUpdate:
-        let
-          lang =
-            if not isSyntaxHighlight: SourceLanguage.langNone
-            else: buf.language
-          h = initHighlight(buf.buffer.toSeqRunes, reservedWords, lang)
-        newHighlights.add (bufIndex: index, highlight: h)
-        bufStatus[index].isUpdate = false
+  var newHighlights: seq[tuple[bufIndex: int, highlight: Highlight]]
+  for i in 0 .. status.bufStatus.high:
+    template buf: var BufferStatus = status.bufStatus[i]
 
-    var queue = initHeapQueue[WindowNode]()
-    for node in windowNode.child: queue.push(node)
-    while queue.len > 0:
-      for i in  0 ..< queue.len:
-        var node = queue.pop
-        if node.window.isSome:
-          for h in newHighlights:
-            if h.bufIndex == node.bufferIndex and h.highlight != node.highlight:
-              node.highlight = h.highlight
+    # The filer syntax highlight is initialized/updated in filermode module.
+    if not buf.isFilerMode and buf.isUpdate:
+      let
+        lang =
+          if not status.settings.syntax: SourceLanguage.langNone
+          else: buf.language
+        h = initHighlight(
+          buf.buffer.toSeqRunes,
+          status.settings.highlight.reservedWords, lang)
+      newHighlights.add (bufIndex: i, highlight: h)
 
-              if bufStatus[h.bufIndex].isTrackingByGit:
-                bufStatus[h.bufIndex].isGitUpdate = true
+      buf.version.inc
 
-        if node.child.len > 0:
-          for node in node.child: queue.push(node)
+      if status.lspClients.contains($buf.extension) and
+         status.lspClients[$buf.extension].isInitialized and
+         buf.version > 1:
+           # Send a textDocument/didChange notification to the LSP server.
+           discard status.lspClients[$buf.extension].textDocumentDidChange(
+             buf.version,
+             $buf.path.absolutePath,
+             $buf.buffer)
+
+      buf.isUpdate = false
+
+  var queue = initHeapQueue[WindowNode]()
+  for node in mainWindowNode.child: queue.push(node)
+  while queue.len > 0:
+    for i in  0 ..< queue.len:
+      var node = queue.pop
+      if node.window.isSome:
+        for h in newHighlights:
+          if h.bufIndex == node.bufferIndex and h.highlight != node.highlight:
+            node.highlight = h.highlight
+
+            if status.bufStatus[h.bufIndex].isTrackingByGit:
+              status.bufStatus[h.bufIndex].isGitUpdate = true
+
+      if node.child.len > 0:
+        for node in node.child: queue.push(node)
 
 proc updateLogViewerBuffer(
   bufStatus: var BufferStatus,
@@ -700,11 +792,7 @@ proc update*(status: var EditorStatus) =
         currentMainWindowNode.windowIndex,
         status.settings.debugMode).toGapBuffer
 
-  # Init (Update) syntax highlightings.
-  mainWindowNode.updateSyntaxHighlights(
-    status.bufStatus,
-    settings.highlight.reservedWords,
-    settings.syntax)
+  status.checkBufferStatusUpdate
 
   if currentBufStatus.isVisualMode:
     currentBufStatus.updateSelectedArea(currentMainWindowNode)
@@ -970,6 +1058,11 @@ proc closeWindow*(status: var EditorStatus, node: WindowNode) =
 
 proc deleteBuffer*(status: var EditorStatus, deleteIndex: int) =
   let beforeWindowIndex = currentMainWindowNode.windowIndex
+
+  let langId = $status.bufStatus[beforeWindowIndex].extension
+  if status.lspClients.contains(langId):
+    discard status.lspClients[langId].textDocumentDidClose(
+      $status.bufStatus[beforeWindowIndex].path.absolutePath)
 
   var queue = initHeapQueue[WindowNode]()
   for node in mainWindowNode.child:

@@ -20,7 +20,7 @@
 import std/[os, times]
 import pkg/results
 import moepkg/[ui, bufferstatus, editorstatus, cmdlineoption, mainloop, git,
-               editorview, theme, registers, settings, messages]
+               editorview, theme, registers, settings, messages, logger]
 
 proc loadPersistData(status: var EditorStatus) =
   ## Load persisted data (Ex command history, search history and cursor
@@ -108,6 +108,10 @@ proc initEditor(): EditorStatus =
   result = initEditorStatus()
   result.loadConfigurationFile
   result.timeConfFileLastReloaded = now()
+
+  if result.settings.lsp.enable:
+    # Force enable logger if enabled LSP.
+    initLogger()
 
   block initColors:
     # TODO: Show error messages when failing to the load VSCode theme.

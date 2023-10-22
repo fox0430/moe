@@ -1,0 +1,7 @@
+.. _#1877:  https://github.com/fox0430/moe/pull/1877
+
+Added
+.....
+
+- `#1877`_ feat: Add Language Server Protocol support
+

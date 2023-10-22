@@ -18,9 +18,9 @@
 #[############################################################################]#
 
 import std/[sugar, options, sequtils]
-import ui, windownode, autocomplete, bufferstatus, gapbuffer, color, unicodeext,
-       osext, popupwindow
 import syntax/highlite
+import ui, windownode, autocomplete, bufferstatus, gapbuffer, unicodeext, osext,
+       popupwindow, independentutils
 
 type SuggestionWindow* = object
   wordDictionary: WordDictionary
@@ -29,7 +29,7 @@ type SuggestionWindow* = object
   firstColumn, lastColumn: int
   suggestoins: seq[Runes]
   selectedSuggestion: int
-  popUpWindow: Option[Window]
+  popupWindow: Option[PopupWindow]
   isPath: bool
 
 proc selectedWordOrInputWord(suggestionWindow: SuggestionWindow): Runes =
@@ -51,8 +51,8 @@ proc newLine*(suggestionWindow: SuggestionWindow): Runes =
           suggestionWindow.selectedWordOrInputWord)
 
 proc close*(suggestionWindow: var SuggestionWindow) =
-  suggestionWindow.popUpWindow.get.deleteWindow
-  suggestionWindow.popupwindow = none(Window)
+  suggestionWindow.popupWindow.get.close
+  suggestionWindow.popupwindow = none(PopupWindow)
 
 proc canHandleInSuggestionWindow*(key: Rune): bool {.inline.} =
   isTabKey(key) or
@@ -86,10 +86,10 @@ proc handleKeyInSuggestionWindow*(
         dec(suggestionWindow.selectedSuggestion)
     elif isPageDownKey(key):
       suggestionWindow.selectedSuggestion +=
-        suggestionWindow.popUpWindow.get.height - 1
+        suggestionWindow.popupWindow.get.size.h - 1
     elif isPageUpKey(key):
       suggestionWindow.selectedSuggestion -=
-        suggestionWindow.popUpWindow.get.height - 1
+        suggestionWindow.popupWindow.get.size.h - 1
 
     suggestionWindow.selectedSuggestion =
       suggestionWindow.selectedSuggestion.clamp(0, suggestionWindow.suggestoins.high)
@@ -282,6 +282,7 @@ proc calcSuggestionWindowPosition*(
   suggestionWindow: SuggestionWindow,
   windowNode: WindowNode,
   mainWindowHeight: int): tuple[y, x: int] =
+    # TODO: Use `popupwindow.autoMoveAndResize`
 
     let
       line = windowNode.currentLine
@@ -309,10 +310,9 @@ proc calcSuggestionWindowPosition*(
     return (y, x)
 
 proc calcMaxSugestionWindowHeight(
-  y: int,
-  cursorYPosition: int,
-  mainWindowNodeY: int,
+  y, cursorYPosition, mainWindowNodeY: int,
   isEnableStatusLine: bool): int =
+    # TODO: Use `popupwindow.autoMoveAndResize`
 
     const CommanLineHeight = 1
     let statusLineHeight = if isEnableStatusLine: 1 else: 0
@@ -344,33 +344,30 @@ proc writeSuggestionWindow*(
         mainWindowNodeY,
         isEnableStatusLine)
       height = min(suggestionWindow.suggestoins.len, maxHeight)
-      width = suggestionWindow.suggestoins.map(item => item.len).max + 2
+      width = suggestionWindow.suggestoins.maxLen + 2
 
-    if suggestionWindow.popUpWindow.isNone:
-      suggestionWindow.popUpWindow = initWindow(
-        height,
-        width,
-        if y < mainWindowNodeY: mainWindowNodeY else: y,
-        x,
-        EditorColorPairIndex.popUpWindow.int16)
+    if suggestionWindow.popupWindow.isNone:
+      let
+        y =
+          if y < mainWindowNodeY: mainWindowNodeY
+          else: y
+      suggestionWindow.popupWindow = initPopupWindow(
+        Position(y: y, x: x),
+        Size(h: height, w: width))
         .some
     else:
-      suggestionWindow.popUpWindow.get.height = height
-      suggestionWindow.popUpWindow.get.width = width
-      suggestionWindow.popUpWindow.get.y = y
-      suggestionWindow.popUpWindow.get.x = x
+      suggestionWindow.popupWindow.get.size = Size(h: height, w: width)
+      suggestionWindow.popupWindow.get.position = Position(y: y, x: x)
 
-    let currentLine =
+    suggestionWindow.popupWindow.get.currentLine =
       if suggestionWindow.selectedSuggestion == -1: none(int)
       else: suggestionWindow.selectedSuggestion.some
 
-    suggestionWindow.popUpWindow.get.writePopUpWindow(
-      suggestionWindow.popUpWindow.get.height,
-      suggestionWindow.popUpWindow.get.width,
-      suggestionWindow.popUpWindow.get.y,
-      suggestionWindow.popUpWindow.get.x,
-      currentLine,
-      suggestionWindow.suggestoins)
+    # Add margin to both sides.
+    suggestionWindow.popupWindow.get.buffer = suggestionWindow.suggestoins
+      .mapIt(ru" " & it & ru" ")
+
+    suggestionWindow.popupWindow.get.update
 
 proc isLineChanged*(suggestionWindow: SuggestionWindow): bool {.inline.} =
   suggestionWindow.newLine != suggestionWindow.oldLine

@@ -253,7 +253,7 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
 
   proc openSuggestWindow(
     commandLine: var CommandLine,
-    suggestList: var SuggestList): Option[Window] =
+    suggestList: var SuggestList): Option[PopupWindow] =
       ## If there is only one candidate, insert it without opening a window.
 
       suggestList = commandLine.buffer.initSuggestList
@@ -262,9 +262,8 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
       elif suggestList.suggestions.len > 1:
         return tryOpenSuggestWindow()
 
-  proc closeSuggestWindow(suggestWin: var Option[Window]) =
-    suggestWin.get.delete
-    suggestWin = none(Window)
+  proc closeSuggestWindow(suggestWin: var Option[PopupWindow]) {.inline.} =
+    suggestWin.get.close
 
   if currentBufStatus.isSearchMode:
     status.searchHistory.add "".toRunes
@@ -276,7 +275,7 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
     isCancel = false
 
     # TODO: Change type to `SuggestionWindow`.
-    suggestWin = none(Window)
+    suggestWin = none(PopupWindow)
 
     # Use when Ex mode and search mode.
     # TODO: Move
@@ -293,7 +292,7 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
 
   while not isCancel:
     if suggestWin.isSome:
-        # Update suggestion window and command line.
+      # Update suggestion window and command line.
 
       suggestList.updateSuggestions
       if suggestList.suggestions.len == 0:
@@ -332,8 +331,7 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
     if isEscKey(key) or isControlC(key):
       isCancel = true
       if suggestWin.isSome:
-        suggestWin.get.delete
-        suggestWin = none(Window)
+        suggestWin.closeSuggestWindow
     elif isEnterKey(key):
       if suggestWin.isSome:
         suggestWin.closeSuggestWindow

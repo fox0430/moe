@@ -17,11 +17,12 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, os, importutils, sequtils, oids]
+import std/[unittest, options, os, importutils, sequtils, oids, tables]
 import pkg/results
+import moepkg/lsp/protocol/enums
 import moepkg/[editor, gapbuffer, bufferstatus, editorview, unicodeext, ui,
                highlight, windownode, movement, build, backgroundprocess,
-               syntaxcheck, independentutils, tabline]
+               syntaxcheck, independentutils, tabline, settings]
 
 import moepkg/editorstatus {.all.}
 
@@ -1064,3 +1065,20 @@ suite "editorstatus: smoothScrollDownNumberOfLines":
     check status.smoothScrollDownNumberOfLines(TotalLines).isNone
 
     check currentMainWindowNode.currentLine == 10
+
+suite "editorstatus: initLsp":
+  test "Init wtih nimlsp":
+    let path = $genOid() & ".nim"
+    var status = initEditorStatus()
+
+    status.settings.lsp.enable = true
+    status.settings.lsp.languages["nim"] = LspLanguageSettings(
+      extensions: @[ru"nim"],
+      command: ru"nimlsp",
+      trace: TraceValue.verbose)
+
+    status.bufStatus.add initBufferStatus(path, Mode.normal).get
+
+    let workspaceRoot = getCurrentDir()
+    const LanguageId = "nim"
+    check status.initLsp(workspaceRoot, LanguageId).isOk

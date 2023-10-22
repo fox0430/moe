@@ -416,17 +416,28 @@ proc absolutePosition*(
 
     return (y, x)
 
+proc absolutePosition*(node: WindowNode): tuple[y, x: int] {.inline.} =
+  ## Calculates the absolute position of the current position.
+
+  node.absolutePosition(node.currentLine, node.currentColumn)
+
+proc rect*(node: WindowNode): WindowRect {.inline.} =
+  Rect(y: node.y, x: node.x, w: node.w, h: node.h)
+
 proc moveCursor*(node: var WindowNode, line, column: int) =
   if node.window.isSome:
     node.currentLine = line
     node.currentColumn = column
     node.window.get.move(line, column)
+    node.window.get.refresh
 
 proc moveCursor*(node: var WindowNode, position: BufferPosition) {.inline.} =
   node.moveCursor(position.line, position.column)
 
 proc moveCursor*(node: var WindowNode) {.inline.} =
-  node.moveCursor(node.currentLine, node.currentColumn)
+  if node.window.isSome:
+    node.window.get.move(node.y, node.x)
+    node.window.get.refresh
 
 proc refreshWindow*(node: var WindowNode) {.inline.} =
   if node.window.isSome: node.window.get.refresh

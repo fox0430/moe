@@ -39,13 +39,15 @@ suite "moe: addBufferStatus":
 
   test "1 file":
     var status = initEditorStatus()
-    const ParsedList = CmdParsedList(path: @["test.nim"])
+    let
+      path = $genOid()
+      parsedList = CmdParsedList(path: @[path])
 
-    status.addBufferStatus(ParsedList)
+    status.addBufferStatus(parsedList)
 
     check status.bufStatus.len == 1
     check currentBufStatus.buffer.toSeqRunes == @[ru""]
-    check currentBufStatus.path == ru"test.nim"
+    check currentBufStatus.path == path.toRunes
     check currentBufStatus.mode == Mode.normal
 
     check mainWindowNode.getAllWindowNode.len == 1

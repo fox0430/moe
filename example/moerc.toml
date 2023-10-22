@@ -228,6 +228,16 @@ maxDelay = 20
 autoSplit = true
 splitType = "vertical"
 
+[Lsp]
+
+enable = false
+
+[Lsp.nim]
+
+extensions = ["nim"]
+
+command = "nimlsp"
+
 [Debug.WindowNode]
 enable = true
 currentWindow = true

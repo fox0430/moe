@@ -17,9 +17,10 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[os, json, options, strformat, osproc, strutils, sequtils,
-            enumutils]
+import std/[os, json, options, strformat, osproc, strutils, sequtils, enumutils,
+            tables]
 import pkg/[parsetoml, results, regex]
+import lsp/[protocol/enums, utils]
 import ui, color, unicodeext, highlight, platform, independentutils, rgb, theme
 
 export TomlError
@@ -216,6 +217,17 @@ type
   StartUpSettings* = object
     fileOpen*: StartUpFileOpenSettings
 
+  LspLanguageSettings* = object
+    extensions*: seq[Runes]
+    command*: Runes
+    trace*: TraceValue
+
+  LspSettings* = object
+    enable*: bool
+
+    languages*: Table[string, LspLanguageSettings]
+      # key is languageId
+
   EditorSettings* = object
     editorColorTheme*: ColorTheme
     statusLine*: StatusLineSettings
@@ -253,6 +265,8 @@ type
     git*: GitSettings
     syntaxChecker*: SyntaxCheckerSettings
     startUp*: StartUpSettings
+
+    lsp*: LspSettings
 
   InvalidItem = object
     name: string
@@ -435,6 +449,14 @@ proc initStartUpFileOpenSettings(): StartUpFileOpenSettings =
 proc initStartUpSettings(): StartUpSettings =
   result.fileOpen = initStartUpFileOpenSettings()
 
+proc initLspSettigns(): LspSettings =
+  result.enable = false
+
+  result.languages["nim"] = LspLanguageSettings(
+    extensions: @[ru"nim"],
+    command: ru"nimlsp",
+    trace: TraceValue.verbose)
+
 proc initEditorSettings*(): EditorSettings =
   result.editorColorTheme = ColorTheme.dark
   result.statusLine = initStatusLineSettings()
@@ -467,6 +489,16 @@ proc initEditorSettings*(): EditorSettings =
   result.git = initGitSettings()
   result.syntaxChecker = initSyntaxCheckerSettings()
   result.startUp = initStartUpSettings()
+  result.lsp = initLspSettigns()
+
+proc languageIdFromLspLanguageSettings*(
+  s: LspSettings,
+  ext: Runes): Option[string] =
+    ## Return a languageId if it exists from status.settings.lsp.languages.
+
+    for key, val in s.languages.pairs:
+      if val.extensions.contains(ext):
+        return some(key)
 
 proc parseColorTheme(theme: string): Result[ColorTheme, string] =
   case theme:
@@ -1611,6 +1643,29 @@ proc parseStartUpSettingsTable(
           .parseWindowSplitType
           .get
 
+proc parseLspTable(
+  s: var EditorSettings,
+  lspConfigs: TomlValueRef) =
+
+    for key, val in lspConfigs.getTable:
+      case key:
+        of "enable":
+          s.lsp.enable = lspConfigs["enable"].getBool
+        else:
+          let langId = key
+          var langSettings = LspLanguageSettings()
+          for key, val in val.getTable:
+            case key:
+              of "extensions":
+                for i in 0 ..< val.len:
+                  langSettings.extensions.add val[i].getStr.toRunes
+              of "command":
+                langSettings.command = val.getStr.toRunes
+              of "trace":
+                langSettings.trace = val.getStr.parseTraceValue.get
+
+          s.lsp.languages[langId] = langSettings
+
 proc parseThemeTable(
   s: var EditorSettings,
   themeConfigs: Option[TomlValueRef]) =
@@ -1748,6 +1803,9 @@ proc parseTomlConfigs*(tomlConfigs: TomlValueRef): EditorSettings =
 
   if tomlConfigs.contains("StartUp"):
     result.parseStartUpSettingsTable(tomlConfigs["StartUp"])
+
+  if tomlConfigs.contains("Lsp"):
+    result.parseLspTable(tomlConfigs["Lsp"])
 
   if result.editorColorTheme == ColorTheme.config or
      result.editorColorTheme == ColorTheme.vscode:
@@ -2163,6 +2221,26 @@ proc validateStartUpTable(table: TomlValueRef): Option[InvalidItem] =
       else:
         return some(InvalidItem(name: $key, val: $val))
 
+proc validateLspSettings(table: TomlValueRef): Option[InvalidItem] =
+  for key, val in table.getTable:
+    case key:
+      of "enable":
+        if val.kind != TomlValueKind.Bool:
+          return some(InvalidItem(name: $key, val: $val))
+      else:
+        # Languages settings
+        for key, val in val.getTable:
+          case key:
+            of "extensions":
+              if val.kind != TomlValueKind.Array:
+                return some(InvalidItem(name: $key, val: $val))
+            of "command", "trace":
+              if val.kind != TomlValueKind.String and
+                 val.getStr.parseTraceValue.isErr:
+                   return some(InvalidItem(name: $key, val: $val))
+            else:
+              return some(InvalidItem(name: $key, val: $val))
+
 proc validateTomlConfig(toml: TomlValueRef): Option[InvalidItem] =
   for key, val in toml.getTable:
     case key:
@@ -2222,6 +2300,9 @@ proc validateTomlConfig(toml: TomlValueRef): Option[InvalidItem] =
         if r.isSome: return r
       of "StartUp":
         let r = validateStartUpTable(val)
+        if r.isSome: return r
+      of "Lsp":
+        let r = validateLspSettings(val)
         if r.isSome: return r
       else:
         return some(InvalidItem(name: $key, val: $val))
@@ -2443,6 +2524,20 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "[StartUp.FileOpen]"
   result.addLine fmt "autoSplit = {$settings.startUp.fileOpen.autoSplit}"
   result.addLine fmt "splitType = \"{$settings.startUp.fileOpen.splitType}\""
+
+  result.addLine fmt "[Lsp]"
+  result.addLine fmt "enable = {$settings.lsp.enable}"
+  for key, val in settings.lsp.languages.pairs:
+    result.addLine fmt "[Lsp.{key}]"
+
+    # Create array of string.
+    var exts = "[]"
+    for index, ext in val.extensions:
+      exts.insert('"' & $ext & '"', 1)
+      if index < val.extensions.high: exts.insert(", ", exts.high - 1)
+    result.addLine fmt "extensions = {exts}"
+
+    result.addLine fmt "command = \"{$val.command}\""
 
   result.addLine fmt "[Debug.WindowNode]"
   result.addLine fmt "enable = {$settings.debugMode.windowNode.enable}"

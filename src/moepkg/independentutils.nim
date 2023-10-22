@@ -24,15 +24,21 @@ type
     y*: int
     x*: int
 
+  WindowPosition* = Position
+
   Size* = object
     h*: int
     w*: int
+
+  WindowSize* = Size
 
   Rect* = object
     x*: int
     y*: int
     h*: int
     w*: int
+
+  WindowRect* = Rect
 
   Range* = object
     first*: int
@@ -83,6 +89,6 @@ proc isEmpty*[T](s: seq[T]): bool {.inline.} = s.len == 0
 
 proc isEmpty*(s: string): bool {.inline.} = s.len == 0
 
-proc dec*(n: var Natural): Natural {.inline.} = n -= 1
+proc dec*(n: var Natural) {.inline.} = n -= 1
 
-proc inc*(n: var Natural): Natural {.inline.} = n += 1
+proc inc*(n: var Natural) {.inline.} = n += 1

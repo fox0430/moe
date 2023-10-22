@@ -153,6 +153,17 @@ const TomlStr = """
   autoSplit = false
   splitType = "horizontal"
 
+  [Lsp]
+  enable = true
+
+  [Lsp.nim]
+  extensions = ["nim"]
+  command = "nimlangserver"
+
+  [Lsp.rust]
+  extensions = ["rs"]
+  command = "rust-analyzer"
+
   [Debug.WindowNode]
   enable = false
   currentWindow = false
@@ -472,6 +483,15 @@ suite "Parse configuration file":
 
     check not settings.startUp.fileOpen.autoSplit
     check settings.startUp.fileOpen.splitType == WindowSplitType.horizontal
+
+    check settings.lsp.enable
+    check settings.lsp.languages["nim"] == LspLanguageSettings(
+      extensions: @[ru"nim"],
+      command: ru"nimlangserver")
+
+    check settings.lsp.languages["rust"] == LspLanguageSettings(
+      extensions: @[ru"rs"],
+      command: ru"rust-analyzer")
 
     check not settings.debugMode.windowNode.enable
     check not settings.debugMode.windowNode.currentWindow
