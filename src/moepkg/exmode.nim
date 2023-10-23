@@ -27,31 +27,6 @@ import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
        buffermanager, viewhighlight, messagelog, configmode, git, syntaxcheck,
        theme, exmodeutils
 
-type
-  ReplaceCommandInfo = tuple[searhWord: Runes, replaceWord: Runes]
-
-proc parseReplaceCommand(command: Runes): ReplaceCommandInfo =
-  var numOfSlash = 0
-  for i in 0 .. command.high:
-    if command[i] == '/': numOfSlash.inc
-  if numOfSlash == 0: return
-
-  var searchWord = ru""
-  var startReplaceWordIndex = 0
-  for i in 0 .. command.high:
-    if command[i] == '/':
-      startReplaceWordIndex = i + 1
-      break
-    searchWord.add(command[i])
-  if searchWord.len == 0: return
-
-  var replaceWord = ru""
-  for i in startReplaceWordIndex .. command.high:
-    if command[i] == '/': break
-    replaceWord.add(command[i])
-
-  return (searhWord: searchWord, replaceWord: replaceWord)
-
 proc startDebugMode(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 
@@ -1037,11 +1012,13 @@ proc replaceBuffer(status: var EditorStatus, command: Runes) =
     for i in 0 .. currentBufStatus.buffer.high - 2:
       let oldLine = currentBufStatus.buffer[startLine]
       var newLine = currentBufStatus.buffer[startLine]
-      newLine.insert(replaceInfo.replaceWord,
-                     currentBufStatus.buffer[startLine].len)
+      newLine.insert(
+        replaceInfo.replaceWord,
+        currentBufStatus.buffer[startLine].len)
       for j in 0 .. currentBufStatus.buffer[startLine + 1].high:
-        newLine.insert(currentBufStatus.buffer[startLine + 1][j],
-                       currentBufStatus.buffer[startLine].len)
+        newLine.insert(
+          currentBufStatus.buffer[startLine + 1][j],
+          currentBufStatus.buffer[startLine].len)
       if oldLine != newLine:
         currentBufStatus.buffer[startLine] = newLine
 
@@ -1051,21 +1028,23 @@ proc replaceBuffer(status: var EditorStatus, command: Runes) =
       isIgnorecase = status.settings.ignorecase
       isSmartcase = status.settings.smartcase
     for i in 0 .. currentBufStatus.buffer.high:
-      let searchResult = currentBufStatus.searchBuffer(
-        currentMainWindowNode, replaceInfo.searhWord, isIgnorecase, isSmartcase)
+      let searchResult = currentBufStatus.buffer[i].searchLine(
+        replaceInfo.searhWord, isIgnorecase, isSmartcase)
       if searchResult.isSome:
-        let oldLine = currentBufStatus.buffer[searchResult.get.line]
-        var newLine = currentBufStatus.buffer[searchResult.get.line]
+        let oldLine = currentBufStatus.buffer[i]
+        var newLine = currentBufStatus.buffer[i]
 
         let
-          first = searchResult.get.column
-          last = searchResult.get.column + replaceInfo.searhWord.high
+          first = searchResult.get
+          last = searchResult.get + replaceInfo.searhWord.high
         for _ in first .. last:
-          newLine.delete(searchResult.get.column)
+          newLine.delete(searchResult.get)
 
-        newLine.insert(replaceInfo.replaceWord, searchResult.get.column)
+        newLine.insert(replaceInfo.replaceWord, searchResult.get)
         if oldLine != newLine:
-          currentBufStatus.buffer[searchResult.get.line] = newLine
+          currentBufStatus.buffer[i] = newLine
+
+          if not currentBufStatus.isUpdate: currentBufStatus.isUpdate = true
 
   inc(currentBufStatus.countChange)
   status.commandLine.clear

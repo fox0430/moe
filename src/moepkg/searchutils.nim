@@ -40,7 +40,7 @@ proc compare(rune, sub: Runes, isIgnorecase, isSmartcase: bool): bool =
   else:
     return rune == sub
 
-proc searchLine(
+proc searchLine*(
   line: Runes,
   keyword: Runes,
   isIgnorecase, isSmartcase: bool): Option[int] =
