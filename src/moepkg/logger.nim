@@ -19,14 +19,14 @@
 
 import std/[logging, os, times]
 
-proc defaultFilePath(): string =
-  let cacheDir = getCacheDir() / "moe/logs"
-  createDir(cacheDir)
+proc defaultLogPath(): string =
+  let dir = getTempDir() / "moe/logs" / $getTime()
+  createDir(dir)
 
-  return cacheDir / $getTime() & ".log"
+  return dir / "moe.log"
 
 proc initLogger*() =
-  let path = defaultFilePath()
+  let path = defaultLogPath()
 
   var fileLog = newFileLogger(path, levelThreshold=lvlDebug)
   addHandler(fileLog)
