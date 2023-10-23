@@ -30,7 +30,7 @@ Please use :! or quit moe to check the output.
 
 ### Using logger
 You can use the logger.
-Log files are written to the cache dir (`~/.cache/moe/logs`).
+Log files are written to the temp dir (`/tmp/moe/logs`).
 You have to import `srd/logger`.
 
 Example
@@ -63,7 +63,7 @@ proc initEditor(): EditorStatus =
 ```
 
 ```
-cat ~/.cache/moe/logs/2023-01-13T05:29:04+09:00.log
+cat /tmp/moe/logs/2023-10-24T05:42:17+09:00/moe.log
 DEBUG debug
 ```
 
