@@ -35,6 +35,8 @@ type
     description*: string
     argsType*: ArgsType
 
+  ReplaceCommandInfo* = tuple[searhWord, replaceWord: Runes]
+
 const
   ExCommandInfoList* = [
     ExCommandInfo(
@@ -832,3 +834,11 @@ proc getDescription*(command: Runes): Result[Runes, string] =
 
   return Result[Runes, string].err "Invalid command"
 
+proc parseReplaceCommand*(command: Runes): ReplaceCommandInfo =
+  ## Parse the replace command.
+  ## Examples: "/xxx/yyy", "/xxx/yyy/"
+
+  let commandSplit = command.split(ru'/')
+  if commandSplit.len < 2: return
+
+  return (searhWord: commandSplit[0], replaceWord: commandSplit[1])
