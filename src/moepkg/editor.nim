@@ -352,6 +352,10 @@ proc insertIndentInNimForKeyEnter(
   autoIndent: bool,
   tabStop: int) =
 
+    proc splitWhitespace(runes: Runes): seq[Runes] {.inline.} =
+      ## Remove empty entries
+      runes.splitWhitespace(true)
+
     let
       currentLine = windowNode.currentLine
       currentColumn = windowNode.currentColumn
@@ -362,13 +366,13 @@ proc insertIndentInNimForKeyEnter(
       # And, if finish the current line with ':', "object"
       if currentColumn == line.len and (
           (line.len > 2 and
-            line.splitWhitespace == @[ru "var"] or
-            line.splitWhitespace == @[ru "let"]) or
+            line.splitWhitespace == @[ru"var"] or
+            line.splitWhitespace == @[ru"let"]) or
           (line.len > 4 and
-            line.splitWhitespace == @[ru "const"]) or
+            line.splitWhitespace == @[ru"const"]) or
           (line.len > 4 and
           line.splitWhitespace.len > 0 and
-          line.splitWhitespace[^1] == (ru "object")) or
+          line.splitWhitespace[^1] == (ru"object")) or
           line[^1] == (ru ':') or
           line[^1] == (ru '=')
         ):
@@ -962,6 +966,10 @@ proc insertIndentNimForOpenBlankLine(
   windowNode: var WindowNode,
   tabStop: int) =
 
+    proc splitWhitespace(runes: Runes): seq[Runes] {.inline.} =
+      ## Remove empty entries
+      runes.splitWhitespace(true)
+
     let
       currentLineNum = windowNode.currentLine
       aboveLine = bufStatus.buffer[currentLineNum - 1]
@@ -969,10 +977,10 @@ proc insertIndentNimForOpenBlankLine(
     if aboveLine.len > 0:
       # Auto indent if the current line are "var", "let", "const".
       # And, if finish the current line with ':', "object, '='"
-      if (aboveLine.splitWhitespace == @[ru "var"] or
-         aboveLine.splitWhitespace == @[ru "let"] or
-         aboveLine.splitWhitespace == @[ru "const"] or
-         aboveLine.splitWhitespace[^1] == (ru "object") or
+      if (aboveLine.splitWhitespace == @[ru"var"] or
+         aboveLine.splitWhitespace == @[ru"let"] or
+         aboveLine.splitWhitespace == @[ru"const"] or
+         aboveLine.splitWhitespace[^1] == (ru"object") or
          aboveLine[^1] == (ru ':') or
          aboveLine[^1] == (ru '=')):
         let
@@ -983,8 +991,8 @@ proc insertIndentNimForOpenBlankLine(
         newLine &= repeat(' ', count).toRunes
         if oldLine != newLine:
           bufStatus.buffer[currentLineNum] = newLine
-      elif ((aboveLine.len > 2 and (aboveLine.splitWhitespace)[^1] == ru "or") or
-           (aboveLine.len > 3 and (aboveLine.splitWhitespace)[^1] == ru "and")):
+      elif ((aboveLine.len > 2 and aboveLine.splitWhitespace[^1] == ru "or") or
+           (aboveLine.len > 3 and aboveLine.splitWhitespace[^1] == ru "and")):
         # Auto indent if finish the current line with "or", "and"
         let
           count = countRepeat(aboveLine, Whitespace, 0) + tabStop
@@ -1008,6 +1016,10 @@ proc insertIndentInPythonForOpenBlankLine(
   bufStatus: var BufferStatus,
   windowNode: WindowNode,
   tabStop: int) =
+
+    proc splitWhitespace(runes: Runes): seq[Runes] {.inline.} =
+      ## Remove empty entries
+      runes.splitWhitespace(true)
 
     let
       currentLineNum = windowNode.currentLine
