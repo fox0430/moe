@@ -37,14 +37,23 @@ type
 
 proc `$`*(encoding: CharacterEncoding): string =
   case encoding
-  of CharacterEncoding.utf8: return "UTF-8"
-  of CharacterEncoding.utf16: return "UTF-16"
-  of CharacterEncoding.utf16Be: return "UTF-16BE"
-  of CharacterEncoding.utf16Le: return "UTF-16LE"
-  of CharacterEncoding.utf32: return "UTF-32"
-  of CharacterEncoding.utf32Be: return "UTF-32BE"
-  of CharacterEncoding.utf32Le: return "UTF-32LE"
-  of CharacterEncoding.unknown: return "UNKNOWN"
+    of CharacterEncoding.utf8: return "UTF-8"
+    of CharacterEncoding.utf16: return "UTF-16"
+    of CharacterEncoding.utf16Be: return "UTF-16BE"
+    of CharacterEncoding.utf16Le: return "UTF-16LE"
+    of CharacterEncoding.utf32: return "UTF-32"
+    of CharacterEncoding.utf32Be: return "UTF-32BE"
+    of CharacterEncoding.utf32Le: return "UTF-32LE"
+    of CharacterEncoding.unknown: return "UNKNOWN"
+
+proc echo*(lines: seq[Runes]) =
+  var buf = "@["
+  for i, ln in lines:
+    buf &= '"' & $ln & '"'
+    if i < lines.high:
+      buf &= ", "
+
+  echo buf & "]"
 
 proc validateUtf16Be(s: string): bool =
   if (s.len mod 2) != 0: return false
@@ -252,20 +261,13 @@ proc isPunct*(c: Rune): bool =
     '=',
     '}'}
 
+proc isNewline*(r: Rune): bool {.inline.} = r in [ru'\n', ru'\r']
+
 proc countRepeat*(runes: Runes, charSet: set[char], start: int): int =
   for i in start ..< runes.len:
     let s = $runes[i]
     if s.len > 1 or (not (s[0] in charSet)): break
     inc(result)
-
-proc split*(runes: Runes, sep: Rune): seq[Runes] =
-  result.add(@[])
-  for c in runes:
-    if c == sep: result.add(@[])
-    else: result[result.high].add(c)
-
-proc splitLines*(runes: Runes): seq[Runes] =
-  runes.split(ru'\n')
 
 proc toRunes*(num: int): Runes {.inline.} = toRunes($num)
 
@@ -417,20 +419,66 @@ proc `in`*(runes, sub: Runes): bool {.inline.} =
 proc `in`*(runes: seq[Runes], sub: Runes): bool {.inline.} =
   find(runes, sub) >= 0
 
-proc splitWhitespace*(runes: Runes): seq[Runes] =
-  for s in unicode.split($runes):
-    if not s.isEmptyOrWhitespace:
-      result.add(s.toRunes)
+iterator split*(
+  runes: Runes,
+  isSep: proc (r: Rune): bool,
+  removeEmptyEntries: bool = false): Runes =
+    ## Splits the runes by `isSep`.
+    ## if `removeEmptyEntries` is false, including empty runes.
 
-iterator split*(runes: Runes, isSep: proc (r: Rune): bool, removeEmptyEntries: bool = false): Runes =
+    var first = 0
+    while first <= runes.len:
+      var last = first
+      while last < runes.len and not isSep(runes[last]):
+        last.inc
+
+      if first < last: yield runes[first ..< last]
+      if last < runes.len and not removeEmptyEntries: yield ru""
+
+      first = last + 1
+
+proc split*(
+  runes: Runes,
+  isSep: proc (r: Rune): bool,
+  removeEmptyEntries: bool = false): seq[Runes] {.inline.} =
+
+    if runes.len == 0:
+      if removeEmptyEntries: return @[]
+      else: return @[ru""]
+
+    for r in runes.split(isSep, removeEmptyEntries):
+      if removeEmptyEntries and r.len > 0: result.add r
+      else: result.add r
+
+proc split*(
+  runes: Runes,
+  sep: Rune,
+  removeEmptyEntries: bool = false): seq[Runes] {.inline.} =
+
+    runes.split(proc(r: Rune): bool = r == sep, removeEmptyEntries)
+
+proc splitWhitespace*(
+  runes: Runes,
+  removeEmptyEntries: bool = false): seq[Runes] {.inline.} =
+
+    runes.split(proc(r: Rune): bool = r.isWhiteSpace, removeEmptyEntries)
+
+iterator splitLines*(runes: Runes): Runes =
   var first = 0
   while first <= runes.len:
     var last = first
-    while last < runes.len and not isSep(runes[last]):
-      inc(last)
-    if not removeEmptyEntries or first < last:
+    while last < runes.len and not isNewline(runes[last]):
+      last.inc
+
+    if first < last:
       yield runes[first ..< last]
+    else:
+      yield ru""
+
     first = last + 1
+
+proc splitLines*(runes: Runes): seq[Runes] {.inline.} =
+  for line in runes.splitLines: result.add line
 
 proc parseInt*(rune: Rune): int {.inline.} = parseInt($rune)
 

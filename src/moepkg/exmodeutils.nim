@@ -376,7 +376,8 @@ proc splitExCommandBuffer*(rawInput: Runes): seq[Runes]=
   ## Split `runes` that consider single quotes and double quotes.
 
   if not rawInput.contains(ru'\'') and not rawInput.contains(ru'"'):
-    return rawInput.splitWhitespace
+    const RemoveEmptyEntries = true
+    return rawInput.splitWhitespace(RemoveEmptyEntries)
 
   var
     inEscape = false
@@ -838,7 +839,8 @@ proc parseReplaceCommand*(command: Runes): ReplaceCommandInfo =
   ## Parse the replace command.
   ## Examples: "/xxx/yyy", "/xxx/yyy/"
 
-  let commandSplit = command.split(ru'/')
+  const RemoveEmptyEntries = true
+  let commandSplit = command.split(ru'/', RemoveEmptyEntries)
   if commandSplit.len < 2: return
 
   return (searhWord: commandSplit[0], replaceWord: commandSplit[1])

@@ -30,8 +30,127 @@ test "width 2":
   check(Rune(0x10FFFF).width == 1)
   check(Rune(0x110000).width == 1)
 
-test "split":
-  check split(ru";;this;is;an;;example;;;", ru';') == @[ru"", ru"", ru"this", ru"is", ru"an", ru"", ru"example", ru"", ru"", ru""]
+suite "unicodeext: iterator split":
+  test "Basic":
+    const
+      ExpectedResult = @["abc", "", "def"].toSeqRunes
+
+      ActualResult = collect(newSeq):
+        for x in unicodeext.split(ru"abc;def", r => r == ru';'): x
+
+    check ActualResult == ExpectedResult
+
+  test "Basic 2":
+    const
+      ExpectedResult =
+        @["", "", "this", "", "is", "", "an", "", "", "example", "", "", ""]
+          .toSeqRunes
+
+      Buffer = ru";;this;is;an;;example;;;"
+      ActualResult = collect(newSeq):
+        for x in unicodeext.split(Buffer, r => r == ru';'): x
+
+    check ActualResult == ExpectedResult
+
+  test "Remove empty rntries":
+    const
+      ExpectedResult = @["", "", "this", "is", "an", "", "example", "", "", ""]
+        .toSeqRunes
+        .filter(runes => runes.len > 0)
+
+      Buffer = ru";;this;is;an;;example;;;"
+      ActualResult = collect(newSeq):
+        for x in unicodeext.split(Buffer, r => r == ru';', true): x
+
+    check ActualResult == ExpectedResult
+
+suite "unicodeext: split":
+  test "Basic":
+    check split(ru"abc;def", ru';') == @["abc", "", "def"].toSeqRunes
+
+  test "Basic 2":
+    check split(ru";;this;is;an;;example;;;", ru';') ==
+      @["", "", "this", "", "is", "", "an", "", "", "example", "", "", ""]
+        .toSeqRunes
+
+  test "Remove empty entries":
+    check split(ru";;this;is;an;;example;;;", ru';', true) ==
+      @["this", "is", "an", "example"].toSeqRunes
+
+  test "Empty":
+    check split(ru"", ru';') == @[""].toSeqRunes
+
+  test "Empty with remove empty entries":
+    check split(ru"", ru';', true).len == 0
+
+suite "unicodeext: splitWhitespace":
+  test "Basic":
+    check splitWhitespace(ru"abc def") == @["abc", "", "def"].toSeqRunes
+
+  test "Basic 2":
+    check splitWhitespace(ru"  abc def  efg  ") ==
+      @["", "", "abc", "", "def", "", "", "efg", "", ""].toSeqRunes
+
+  test "Remove empty entries":
+    check splitWhitespace(ru"  abc def  efg  ", true) ==
+      @["abc", "def", "efg"].toSeqRunes
+
+  test "Empty":
+    check splitWhitespace(ru"") == @[""].toSeqRunes
+
+  test "Empty with remove empty entries":
+    check splitWhitespace(ru"", true).len == 0
+
+  test "Without whitespaces":
+    check splitWhitespace(ru"abc") == @["abc"].toSeqRunes
+
+suite "unicodeext: iterator splitLines":
+  test "Basic":
+    let r = collect:
+      for x in splitLines(toRunes("ABC\nDEF\n")): x
+
+    check r == @["ABC", "DEF", ""].toSeqRunes
+
+  test "Basic 2":
+    let r = collect:
+      for x in splitLines(toRunes("\n\nA\nBC\n\n")): x
+
+    check r == @["", "", "A", "BC", "", ""].toSeqRunes
+
+  test "Empty":
+    let r = collect:
+      for x in splitLines(toRunes("")): x
+
+    check r == @[""].toSeqRunes
+
+  test "Only lines":
+    let r = collect:
+      for x in splitLines(toRunes("\n\n\n")): x
+
+    check r == @["", "", "", ""].toSeqRunes
+
+  test "Without lines":
+    let r = collect:
+      for x in splitLines(toRunes("abc")): x
+
+    check r == @["abc"].toSeqRunes
+
+suite "unicodeext: splitLines":
+  test "Basic":
+    check splitLines(toRunes("ABC\nDEF\n")) == @["ABC", "DEF", ""].toSeqRunes
+
+  test "Basic 2":
+    check splitLines(toRunes("\n\nA\nBC\n\n")) ==
+      @["", "", "A", "BC", "", ""].toSeqRunes
+
+  test "Empty":
+    check splitLines(ru"") == @[""].toSeqRunes
+
+  test "Only lines":
+    check splitLines(toRunes("\n\n\n")) == @["", "", "", ""].toSeqRunes
+
+  test "Without lines":
+    check splitLines(ru"abc") == @["abc"].toSeqRunes
 
 test "toRune":
   check(48.toRune == '0'.toRune)
@@ -290,26 +409,6 @@ test "substrWithLast":
 
 test "substr":
   check substr(ru"あいう", first = 1) == ru"いう"
-
-test "splitWhitespace":
-  const S = "this\lis an\texample"
-  check splitWhitespace(S.ru) == @[ru"this", ru"is", ru"an", ru"example"]
-
-test "iteratorSplit":
-  const
-    ExpectedResult = @[ru"", ru"", ru"this", ru"is", ru"an", ru"", ru"example", ru"", ru"", ru""]
-    ActualResult = collect(newSeq):
-      for x in unicodeext.split(ru";;this;is;an;;example;;;", r => r == ru';'):
-        x
-  check ActualResult == ExpectedResult
-
-test "iteratorSplitWithRemoveEmptyEntries":
-  const
-    ExpectedResult = @[ru"", ru"", ru"this", ru"is", ru"an", ru"", ru"example", ru"", ru"", ru""].filter(runes => runes.len > 0)
-    ActualResult = collect(newSeq):
-      for x in unicodeext.split(ru";;this;is;an;;example;;;", r => r == ru';', true):
-        x
-  check ActualResult == ExpectedResult
 
 test "join 1":
   check @[ru"a", ru"b", ru"c"].join == ru"abc"

@@ -252,12 +252,14 @@ suite "Ex mode: Replace buffer command":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
 
-    status.bufStatus[0].buffer = initGapBuffer(@[ru"xyz",
-                                                 ru"abcdefghijk",
-                                                 ru"Hello"])
+    status.bufStatus[0].buffer = initGapBuffer(
+      @["xyz", "abcdefghijk", "Hello"].toSeqRunes)
+
     const Command = @[ru"%s/efg/zzzzzz"]
     status.exModeCommand(Command)
-    check(status.bufStatus[0].buffer[1] == ru"abcdzzzzzzhijk")
+
+    check status.bufStatus[0].buffer.toSeqRunes ==
+      @["xyz", "abcdzzzzzzhijk", "Hello"].toSeqRunes
 
 suite "Ex mode: Turn off highlighting command":
   test "Turn off highlighting command":
