@@ -1708,47 +1708,67 @@ suite "Add buffer to the register":
       buffer: @[ru "a"], isLine: false, name: "a")
 
 suite "Normal mode: Validate normal mode command":
-  test "\"0 (Expect to Valid)":
+  test "0 (Expect to Valid)":
     const Command = ru"0"
     check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
 
-  test "\" (Expect to continue)":
+  test "1x (Expect to Valid)":
+    const Command = ru"1x"
+    check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
+
+  test "1dd (Expect to Valid)":
+    const Command = ru"1dd"
+    check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
+
+  test "10dd (Expect to Valid)":
+    const Command = ru"10dd"
+    check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
+
+  test "1diw (Expect to Valid)":
+    const Command = ru"1diw"
+    check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
+
+  test "10diw (Expect to Valid)":
+    const Command = ru"10diw"
+    check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
+
+  test "\" (Expect to Continue)":
     const Command = ru "\""
     check isNormalModeCommand(Command, none(Rune)) == InputState.Continue
 
-  test "\"a (Expect to continue)":
+  test "a (Expect to Continue)":
     const Command = ru "\"a"
     check isNormalModeCommand(Command, none(Rune)) == InputState.Continue
 
-  test "\"ay (Expect to continue)":
+  test "ay (Expect to Continue)":
     const Command = ru "\"ay"
     check isNormalModeCommand(Command, none(Rune)) == InputState.Continue
 
-  test "\"1 (Expect to Continue)":
+  test "1 (Expect to Continue)":
     const Command = ru"1"
     check isNormalModeCommand(Command, none(Rune)) == InputState.Continue
 
-  test "\"10 (Expect to Continue)":
+  test "10 (Expect to Continue)":
     const Command = ru"10"
     check isNormalModeCommand(Command, none(Rune)) == InputState.Continue
 
-  test "\"100 (Expect to Continue)":
+  test "100 (Expect to Continue)":
     const Command = ru"100"
     check isNormalModeCommand(Command, none(Rune)) == InputState.Continue
 
-  test "\"ayy (Expect to validate)":
+  test "ayy (Expect to Valid)":
     const Command = ru "\"ayy"
     check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
 
-  test "\"y ESC (Expect to invalid)":
+  test "y ESC (Expect to Invalid)":
     const Command = @['y'.toRune, KEY_ESC.toRune]
     check isNormalModeCommand(Command, none(Rune)) == InputState.Invalid
 
-  test "\"1 y ESC (Expect to invalid)":
+  test "1 y ESC (Expect to Invalid)":
     const Command = @['1'.toRune, 'y'.toRune, KEY_ESC.toRune]
     check isNormalModeCommand(Command, none(Rune)) == InputState.Invalid
 
-  test "\"10 y ESC (Expect to invalid)":
+  test "10 y ESC (Expect to invalid)":
     const Command = @['1'.toRune, '0'.toRune, 'y'.toRune, KEY_ESC.toRune]
     check isNormalModeCommand(Command, none(Rune)) == InputState.Invalid
 

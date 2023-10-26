@@ -1649,7 +1649,6 @@ proc isNormalModeCommand*(
     elif isEscKey(command[^1]):
       # Cancel commands.
       result = InputState.Invalid
-
     else:
       if $command == "/" or
          $command == "?" or
@@ -1716,14 +1715,14 @@ proc isNormalModeCommand*(
            result = InputState.Valid
 
       elif isDigit(command[0]):
-        # Remove numbers and call recursively.
-        var i = 0
-        while i < command.high and command[i].isDigit: i.inc
-        if i == command.high:
+        if command.isDigit:
           result = InputState.Continue
         else:
+          # Remove numbers and call recursively.
+          var i = 0
+          while i + 1 < command.len and command[i + 1].isDigit: i.inc
           return isNormalModeCommand(
-            command[i .. command.high],
+            command[i + 1 .. command.high],
             recodingOperationRegister)
 
       elif command[0] == ord('g'):
