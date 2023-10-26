@@ -38,19 +38,19 @@ proc changeModeToReplaceMode(status: var EditorStatus) {.inline.} =
   else:
     status.changeMode(Mode.replace)
 
-proc changeModeToVisualMode(status: var EditorStatus) =
+proc changeModeToVisualMode(status: var EditorStatus) {.inline.} =
   status.changeMode(Mode.visual)
   currentBufStatus.selectedArea = initSelectedArea(
     currentMainWindowNode.currentLine,
     currentMainWindowNode.currentColumn)
 
-proc changeModeToVisualBlockMode(status: var EditorStatus) =
+proc changeModeToVisualBlockMode(status: var EditorStatus) {.inline.} =
   status.changeMode(Mode.visualBlock)
   currentBufStatus.selectedArea = initSelectedArea(
     currentMainWindowNode.currentLine,
     currentMainWindowNode.currentColumn)
 
-proc changeModeToVisualLineMode(status: var EditorStatus) =
+proc changeModeToVisualLineMode(status: var EditorStatus) {.inline.} =
   status.changeMode(Mode.visualLine)
   currentBufStatus.selectedArea = initSelectedArea(
     currentMainWindowNode.currentLine,
@@ -58,7 +58,7 @@ proc changeModeToVisualLineMode(status: var EditorStatus) =
 
 proc changeModeToExMode*(
   bufStatus: var BufferStatus,
-  commandLine: var CommandLine) =
+  commandLine: var CommandLine) {.inline.} =
 
     bufStatus.changeMode(Mode.ex)
     commandLine.clear
@@ -221,7 +221,7 @@ proc halfPageDownCommand(status: var EditorStatus): Option[Rune] =
     else:
       status.halfPageDown
 
-proc changeModeToNormalMode(status: var EditorStatus) =
+proc changeModeToNormalMode(status: var EditorStatus) {.inline.} =
   status.changeMode(Mode.normal)
   setBlinkingBlockCursor()
 
@@ -276,14 +276,7 @@ proc runQuickRunCommand(status: var EditorStatus) =
 
   status.commandLine.writeRunQuickRunMessage(status.settings.notification)
 
-proc yankWord(status: var EditorStatus) =
-  currentBufStatus.yankWord(
-    status.registers,
-    currentMainWindowNode,
-    currentBufStatus.cmdLoop,
-    status.settings)
-
-proc yankWord(status: var EditorStatus, registerName: string) =
+proc yankWord(status: var EditorStatus, registerName: string = "") =
   currentBufStatus.yankWord(
     status.registers,
    currentMainWindowNode,
@@ -291,25 +284,9 @@ proc yankWord(status: var EditorStatus, registerName: string) =
    registerName,
    status.settings)
 
-proc deleteWordWithSpace(status: var EditorStatus) {.inline.} =
-  if currentBufStatus.isReadonly:
-    status.commandLine.writeReadonlyModeWarning
-    return
-
-  const
-    WithSpace = true
-    RegisterName = ""
-  currentBufStatus.deleteWord(
-    currentMainWindowNode,
-    currentBufStatus.cmdLoop,
-    WithSpace,
-    status.registers,
-    RegisterName,
-    status.settings)
-
 proc deleteWordWithSpace(
   status: var EditorStatus,
-  registerName: string) {.inline.} =
+  registerName: string = "") =
 
     if currentBufStatus.isReadonly:
       status.commandLine.writeReadonlyModeWarning
@@ -324,7 +301,7 @@ proc deleteWordWithSpace(
       registerName,
       status.settings)
 
-proc deleteWordWithoutSpace(status: var EditorStatus) {.inline.} =
+proc deleteWordWithoutSpace(status: var EditorStatus) =
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
     return
@@ -343,7 +320,7 @@ proc deleteWordWithoutSpace(status: var EditorStatus) {.inline.} =
 proc changeInnerCommand(
   status: var EditorStatus,
   key: Rune,
-  registerName: string) =
+  registerName: string = "") =
     ## ci command
 
     if currentBufStatus.isReadonly:
@@ -382,49 +359,40 @@ proc changeInnerCommand(
     else:
       discard
 
-proc changeInnerCommand(status: var EditorStatus, key: Rune) {.inline.} =
-  ## ci command
+proc deleteInnerCommand(
+  status: var EditorStatus,
+  key: Rune,
+  registerName: string = "") =
+    ## di command
 
-  const RegisterName = ""
-  status.changeInnerCommand(key, RegisterName)
+    if currentBufStatus.isReadonly:
+      status.commandLine.writeReadonlyModeWarning
+      return
 
-proc deleteInnerCommand(status: var EditorStatus, key: Rune, registerName: string) =
-  ## di command
+    if isParen(key):
+      # Delete inside paren and enter insert mode
+      if registerName.len > 0:
+        currentBufStatus.deleteInsideOfParen(
+          currentMainWindowNode,
+          status.registers,
+          registerName,
+          key,
+         status.settings)
+      else:
+        currentBufStatus.deleteInsideOfParen(
+          currentMainWindowNode,
+          status.registers,
+          key,
+         status.settings)
 
-  if currentBufStatus.isReadonly:
-    status.commandLine.writeReadonlyModeWarning
-    return
-
-  if isParen(key):
-    # Delete inside paren and enter insert mode
-    if registerName.len > 0:
-      currentBufStatus.deleteInsideOfParen(
-        currentMainWindowNode,
-        status.registers,
-        registerName,
-        key,
-       status.settings)
+      currentBufStatus.keyRight(currentMainWindowNode)
+    # Delete current word and enter insert mode
+    elif key == ru'w':
+      if currentBufStatus.buffer[currentMainWindowNode.currentLine].len > 0:
+        currentMainWindowNode.moveToFirstOfWord(currentBufStatus)
+        status.deleteWordWithoutSpace
     else:
-      currentBufStatus.deleteInsideOfParen(
-        currentMainWindowNode,
-        status.registers,
-        key,
-       status.settings)
-
-    currentBufStatus.keyRight(currentMainWindowNode)
-  # Delete current word and enter insert mode
-  elif key == ru'w':
-    if currentBufStatus.buffer[currentMainWindowNode.currentLine].len > 0:
-      currentMainWindowNode.moveToFirstOfWord(currentBufStatus)
-      status.deleteWordWithoutSpace
-  else:
-    discard
-
-proc deleteInnerCommand(status: var EditorStatus, key: Rune) {.inline.} =
-  ## di command
-
-  const registerName = ""
-  status.deleteInnerCommand(key, registerName)
+      discard
 
 proc showCurrentCharInfoCommand(
   status: var EditorStatus,
@@ -437,22 +405,10 @@ proc showCurrentCharInfoCommand(
 
     status.commandLine.writeCurrentCharInfo(currentChar)
 
-proc yankLines(status: var EditorStatus, start, last: int) =
-  let lastLine = min(
-    last,
-    currentBufStatus.buffer.high)
-
-  currentBufStatus.yankLines(
-    status.registers,
-    status.commandLine,
-    status.settings.notification,
-    start, lastLine,
-    status.settings)
-
 proc yankLines(
   status: var EditorStatus,
   start, last: int,
-  registerName: string) =
+  registerName: string = "") =
 
     let lastLine = min(
       last,
@@ -466,24 +422,8 @@ proc yankLines(
       registerName,
       status.settings)
 
-proc yankLines(status: var EditorStatus) =
+proc yankLines(status: var EditorStatus, registerName: string = "") =
   ## yy command
-  ## Ynak lines from the current line
-
-  const RegisterName = ""
-  let
-    cmdLoop = currentBufStatus.cmdLoop
-    currentLine = currentMainWindowNode.currentLine
-    lastLine = min(currentLine + cmdLoop - 1, currentBufStatus.buffer.high)
-  currentBufStatus.yankLines(
-    status.registers,
-    status.commandLine,
-    status.settings.notification,
-    currentLine, lastLine,
-    RegisterName,
-    status.settings)
-
-proc yankLines(status: var EditorStatus, registerName: string) =
   ## Ynak lines from the current line
 
   let
@@ -498,27 +438,19 @@ proc yankLines(status: var EditorStatus, registerName: string) =
     registerName,
     status.settings)
 
-proc yankToPreviousBlankLine(status: var EditorStatus, registerName: string) =
-  ## y{ command
+proc yankToPreviousBlankLine(
+  status: var EditorStatus,
+  registerName: string = "") =
+    ## y{ command
 
-  let
-    currentLine = currentMainWindowNode.currentLine
-    previousBlankLine = currentBufStatus.findPreviousBlankLine(currentLine)
-  status.yankLines(max(previousBlankLine, 0), currentLine, registerName)
-  if previousBlankLine >= 0:
-    currentBufStatus.jumpLine(currentMainWindowNode, previousBlankLine)
+    let
+      currentLine = currentMainWindowNode.currentLine
+      previousBlankLine = currentBufStatus.findPreviousBlankLine(currentLine)
+    status.yankLines(max(previousBlankLine, 0), currentLine, registerName)
+    if previousBlankLine >= 0:
+      currentBufStatus.jumpLine(currentMainWindowNode, previousBlankLine)
 
-proc yankToPreviousBlankLine(status: var EditorStatus) =
-  ## y{ command
-
-  let
-    currentLine = currentMainWindowNode.currentLine
-    previousBlankLine = currentBufStatus.findPreviousBlankLine(currentLine)
-  status.yankLines(max(previousBlankLine, 0), currentLine)
-  if previousBlankLine >= 0:
-    currentBufStatus.jumpLine(currentMainWindowNode, previousBlankLine)
-
-proc yankToNextBlankLine(status: var EditorStatus, registerName: string) =
+proc yankToNextBlankLine(status: var EditorStatus, registerName: string = "") =
   ## y} command
 
   let
@@ -529,39 +461,9 @@ proc yankToNextBlankLine(status: var EditorStatus, registerName: string) =
   if nextBlankLine >= 0:
     currentBufStatus.jumpLine(currentMainWindowNode, nextBlankLine)
 
-proc yankToNextBlankLine(status: var EditorStatus) =
-  ## y} command
-
-  let
-    currentLine = currentMainWindowNode.currentLine
-    buffer = currentBufStatus.buffer
-    nextBlankLine = currentBufStatus.findNextBlankLine(currentLine)
-  status.yankLines(currentLine, min(nextBlankLine, buffer.high))
-  if nextBlankLine >= 0:
-    currentBufStatus.jumpLine(currentMainWindowNode, nextBlankLine)
-
-proc deleteLines(status: var EditorStatus) =
+proc deleteLines(status: var EditorStatus, registerName: string = "") =
   ## dd command
 
-  if currentBufStatus.isReadonly:
-    status.commandLine.writeReadonlyModeWarning
-    return
-
-  const RegisterName = ""
-  let
-    startLine = currentMainWindowNode.currentLine
-    count = min(
-      currentBufStatus.cmdLoop - 1,
-      currentBufStatus.buffer.len - currentMainWindowNode.currentLine)
-  currentBufStatus.deleteLines(
-    status.registers,
-   currentMainWindowNode,
-   RegisterName,
-   startLine,
-   count,
-   status.settings)
-
-proc deleteLines(status: var EditorStatus, registerName: string) =
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
     return
@@ -579,28 +481,7 @@ proc deleteLines(status: var EditorStatus, registerName: string) =
    count,
    status.settings)
 
-proc yankCharacters(status: var EditorStatus) =
-  const
-    RegisterName = ""
-    IsDelete = false
-  let
-    buffer = currentBufStatus.buffer
-    lineLen = buffer[currentMainWindowNode.currentLine].len
-    width = lineLen - currentMainWindowNode.currentColumn
-    length =
-      if width > currentBufStatus.cmdLoop: currentBufStatus.cmdLoop
-      else: width
-
-  currentBufStatus.yankCharacters(
-    status.registers,
-    currentMainWindowNode,
-    status.commandLine,
-    status.settings,
-    length,
-    RegisterName,
-    IsDelete)
-
-proc yankCharacters(status: var EditorStatus, registerName: string) =
+proc yankCharacters(status: var EditorStatus, registerName: string = "") =
   const IsDelete = false
   let
     buffer = currentBufStatus.buffer
@@ -621,33 +502,8 @@ proc yankCharacters(status: var EditorStatus, registerName: string) =
 
 proc yankCharactersToCharacter(
   status: var EditorStatus,
-  rune: Rune) =
-    ## yt command
-
-    let
-      currentColumn = currentMainWindowNode.currentColumn
-      # Get the position of a character
-      position = currentBufStatus.searchOneCharacterToEndOfLine(
-        currentMainWindowNode,
-        rune)
-
-    if position > currentColumn:
-      const
-        IsDelete = false
-        RegisterName = ""
-      currentBufStatus.yankCharacters(
-        status.registers,
-        currentMainWindowNode,
-        status.commandLine,
-        status.settings,
-        position,
-        RegisterName,
-        IsDelete)
-
-proc yankCharactersToCharacter(
-  status: var EditorStatus,
   rune: Rune,
-  registerName: string) =
+  registerName: string = "") =
     ## yt command
 
     let
@@ -709,7 +565,7 @@ proc yankCharactersToEndOfLine(
         registerName,
         IsDelete)
 
-proc deleteCharacters(status: var EditorStatus, registerName: string) =
+proc deleteCharacters(status: var EditorStatus, registerName: string = "") =
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
     return
@@ -722,23 +578,9 @@ proc deleteCharacters(status: var EditorStatus, registerName: string) =
     currentBufStatus.cmdLoop,
     status.settings)
 
-proc deleteCharacters(status: var EditorStatus) =
-  if currentBufStatus.isReadonly:
-    status.commandLine.writeReadonlyModeWarning
-    return
-
-  const RegisterName = ""
-  currentBufStatus.deleteCharacters(
-    status.registers,
-    RegisterName,
-    currentMainWindowNode.currentLine,
-    currentMainWindowNode.currentColumn,
-    currentBufStatus.cmdLoop,
-    status.settings)
-
 proc deleteCharactersUntilEndOfLine(
   status: var EditorStatus,
-  registerName: string) =
+  registerName: string = "") =
     ## d$ command
 
     if currentBufStatus.isReadonly:
@@ -756,26 +598,9 @@ proc deleteCharactersUntilEndOfLine(
       currentMainWindowNode,
       status.settings)
 
-proc deleteCharactersUntilEndOfLine(status: var EditorStatus) =
-  ## d$ command
-
-  if currentBufStatus.isReadonly:
-    status.commandLine.writeReadonlyModeWarning
-    return
-
-  let lineWidth = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
-  currentBufStatus.cmdLoop = lineWidth - currentMainWindowNode.currentColumn
-
-  const RegisterName = ""
-  currentBufStatus.deleteCharacterUntilEndOfLine(
-    status.registers,
-    RegisterName,
-    currentMainWindowNode,
-    status.settings)
-
 proc deleteCharacterBeginningOfLine(
   status: var EditorStatus,
-  registerName: string) =
+  registerName: string = "") =
     ## d0 command
 
     if currentBufStatus.isReadonly:
@@ -788,19 +613,9 @@ proc deleteCharacterBeginningOfLine(
       registerName,
       status.settings)
 
-proc deleteCharacterBeginningOfLine(status: var EditorStatus) =
-  ## d0 command
-
-  if currentBufStatus.isReadonly:
-    status.commandLine.writeReadonlyModeWarning
-    return
-
-  const RegisterName = ""
-  status.deleteCharacterBeginningOfLine(RegisterName)
-
 proc deleteFromCurrentLineToLastLine(
   status: var EditorStatus,
-  registerName: string) =
+  registerName: string = "") =
     ## dG command
     ## Yank and delete the line from current line to last line
 
@@ -821,7 +636,7 @@ proc deleteFromCurrentLineToLastLine(
 
 proc deleteLineFromFirstLineToCurrentLine(
   status: var EditorStatus,
-  registerName: string) =
+  registerName: string = "") =
     ## dgg command
     ## Delete the line from first line to current line
 
@@ -843,7 +658,7 @@ proc deleteLineFromFirstLineToCurrentLine(
 
 proc deleteTillPreviousBlankLine(
   status: var EditorStatus,
-  registerName: string) =
+  registerName: string = "") =
     ## d{ command
 
     if currentBufStatus.isReadonly:
@@ -856,17 +671,9 @@ proc deleteTillPreviousBlankLine(
       registerName,
       status.settings)
 
-proc deleteTillPreviousBlankLine(status: var EditorStatus) =
-  if currentBufStatus.isReadonly:
-    status.commandLine.writeReadonlyModeWarning
-    return
-
-  const RegisterName = ""
-  status.deleteTillPreviousBlankLine(RegisterName)
-
 proc deleteTillNextBlankLine(
   status: var EditorStatus,
-  registerName: string) =
+  registerName: string = "") =
     ## d} command
 
     if currentBufStatus.isReadonly:
@@ -941,33 +748,9 @@ proc deleteCharactersUntilCharacterInLine(status: var EditorStatus, r: Rune) =
     currentMainWindowNode,
     r)
 
-proc deleteTillNextBlankLine(status: var EditorStatus) =
-  if currentBufStatus.isReadonly:
-    status.commandLine.writeReadonlyModeWarning
-    return
-
-  const RegisterName = ""
-  status.deleteTillNextBlankLine(RegisterName)
-
-proc deleteLineFromFirstLineToCurrentLine(status: var EditorStatus) =
-  if currentBufStatus.isReadonly:
-    status.commandLine.writeReadonlyModeWarning
-    return
-
-  const RegisterName = ""
-  status.deleteLineFromFirstLineToCurrentLine(RegisterName)
-
-proc deleteFromCurrentLineToLastLine(status: var EditorStatus) =
-  if currentBufStatus.isReadonly:
-    status.commandLine.writeReadonlyModeWarning
-    return
-
-  const RegisterName = ""
-  status.deleteFromCurrentLineToLastLine(RegisterName)
-
 proc deleteCharacterAndEnterInsertMode(
   status: var EditorStatus,
-  registerName: string) =
+  registerName: string = "") =
     ## s and cl commands
 
     if currentBufStatus.isReadonly:
@@ -986,12 +769,6 @@ proc deleteCharacterAndEnterInsertMode(
 
     status.changeModeToInsertMode
 
-proc deleteCharacterAndEnterInsertMode(status: var EditorStatus) =
-  ## s and cl commands
-
-  const RegisterName = ""
-  status.deleteCharacterAndEnterInsertMode(RegisterName)
-
 proc deleteCharactersAfterBlankInLine(status: var EditorStatus) =
   ## cc/S command
 
@@ -1009,7 +786,7 @@ proc deleteCharactersAfterBlankInLine(status: var EditorStatus) =
 proc deleteCharactersToCharacterAndEnterInsertMode(
   status: var EditorStatus,
   rune: Rune,
-  registerName: string) =
+  registerName: string = "") =
     ## cf command
 
     if currentBufStatus.isReadonly:
@@ -1028,14 +805,6 @@ proc deleteCharactersToCharacterAndEnterInsertMode(
       status.deleteCharacters
 
       status.changeModeToInsertMode
-
-proc deleteCharactersToCharacterAndEnterInsertMode(
-  status: var EditorStatus,
-  rune: Rune) =
-    ## cf command
-
-    const RegisterName = ""
-    status.deleteCharactersToCharacterAndEnterInsertMode(rune, RegisterName)
 
 proc deleteCharactersUntilCharacterInLineAndEnterInsertMode(
   status: var EditorStatus,
