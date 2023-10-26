@@ -30,6 +30,17 @@ suite "registers: Add a buffer to the no name register":
 
     registers.addRegister(ru "abc", settings)
 
+
+    check registers.smallDeleteRegisters == Register()
+
+    for i, r in registers.numberRegisters:
+      if i == 0:
+        check r == Register(name: "", buffer: @[ru"abc"])
+      else:
+        check r == Register()
+
+    check registers.namedRegisters.len == 0
+
     check registers.noNameRegisters == Register(
       buffer: @[ru "abc"],
       isLine: false,
@@ -79,9 +90,12 @@ suite "registers: Add a buffer to the named register":
     const Name = "a"
     registers.addRegister(ru "abc", Name, settings)
 
+    check registers.noNameRegisters == Register()
+    check registers.smallDeleteRegisters == Register()
+    for r in registers.numberRegisters: check r == Register()
+
     check registers.namedRegisters[0] == Register(
       buffer: @[ru "abc"],
-      isLine: false,
       name: Name)
 
   test "Overwrite a string to the named register":
