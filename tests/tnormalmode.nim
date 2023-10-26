@@ -1404,8 +1404,8 @@ suite "Add buffer to the register":
     const Commands = ru "\"ayl"
     check status.normalCommand(Commands).isNone
 
-    check status.registers.noNameRegisters == Register(
-      buffer: @[ru "a"], isLine: false, name: "a")
+    check status.registers.namedRegisters == @[
+      Register( buffer: @[ru "a"], isLine: false, name: "a")]
 
   test "Add 2 characters to the register (\"\"a2yl\" command)":
     var status = initEditorStatus()
@@ -1418,8 +1418,8 @@ suite "Add buffer to the register":
     const Commands = ru "\"a2yl"
     check status.normalCommand(Commands).isNone
 
-    check status.registers.noNameRegisters == Register(
-      buffer: @[ru "ab"], isLine: false, name: "a")
+    check status.registers.namedRegisters == @[
+      Register(buffer: @[ru "ab"], isLine: false, name: "a")]
 
   test "Add a word to the register (\"\"ayw\" command)":
     var status = initEditorStatus()
@@ -1432,8 +1432,8 @@ suite "Add buffer to the register":
     const Commands = ru "\"ayw"
     check status.normalCommand(Commands).isNone
 
-    check status.registers.noNameRegisters == Register(
-      buffer: @[ru "abc "], isLine: false, name: "a")
+    check status.registers.namedRegisters == @[
+      Register(buffer: @[ru "abc "], isLine: false, name: "a")]
 
   test "Add 2 words to the register (\"\"a2yw\" command)":
     var status = initEditorStatus()
@@ -1446,8 +1446,8 @@ suite "Add buffer to the register":
     const Commands = ru "\"a2yw"
     check status.normalCommand(Commands).isNone
 
-    check status.registers.noNameRegisters == Register(
-      buffer: @[ru "abc def"], isLine: false, name: "a")
+    check status.registers.namedRegisters == @[
+      Register(buffer: @[ru "abc def"], isLine: false, name: "a")]
 
   test "Add a line to the register (\"\"ayy\" command)":
     var status = initEditorStatus()
@@ -1460,8 +1460,8 @@ suite "Add buffer to the register":
     const Commands = ru "\"ayy"
     check status.normalCommand(Commands).isNone
 
-    check status.registers.noNameRegisters == Register(
-      buffer: @[ru "abc"], isLine: true, name: "a")
+    check status.registers.namedRegisters == @[
+      Register(buffer: @[ru "abc"], isLine: true, name: "a")]
 
   test "Add a line to the register (\"\"ayy\" command)":
     var status = initEditorStatus()
@@ -1474,8 +1474,8 @@ suite "Add buffer to the register":
     const Commands = ru "\"a2yy"
     check status.normalCommand(Commands).isNone
 
-    check status.registers.noNameRegisters == Register(
-      buffer: @[ru "abc", ru "def"], isLine: true, name: "a")
+    check status.registers.namedRegisters == @[
+      Register(buffer: @[ru "abc", ru "def"], isLine: true, name: "a")]
 
   test "Add 2 lines to the register (\"\"a2yy\" command)":
     var status = initEditorStatus()
@@ -1488,8 +1488,8 @@ suite "Add buffer to the register":
     const Commands = ru "\"a2yy"
     check status.normalCommand(Commands).isNone
 
-    check status.registers.noNameRegisters == Register(
-      buffer: @[ru "abc", ru "def"], isLine: true, name: "a")
+    check status.registers.namedRegisters == @[
+      Register(buffer: @[ru "abc", ru "def"], isLine: true, name: "a")]
 
   test "Add up to the next blank line to the register (\"ay} command)":
     var status = initEditorStatus()
@@ -1502,8 +1502,8 @@ suite "Add buffer to the register":
     const Commands = ru "\"ay}"
     check status.normalCommand(Commands).isNone
 
-    check status.registers.noNameRegisters == Register(
-      buffer: @[ru "abc", ru "def", ru ""], isLine: true, name: "a")
+    check status.registers.namedRegisters == @[
+      Register(buffer: @[ru "abc", ru "def", ru ""], isLine: true, name: "a")]
 
   test "Delete and ynak a line (\"add command)":
     var status = initEditorStatus()
@@ -1519,8 +1519,8 @@ suite "Add buffer to the register":
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "def"
 
-    check status.registers.noNameRegisters == Register(
-      buffer: @[ru "abc"], isLine: true, name: "a")
+    check status.registers.namedRegisters == @[
+      Register(buffer: @[ru "abc"], isLine: true, name: "a")]
 
   test "Add to the named register up to the previous blank line (\"ay{ command)":
     var status = initEditorStatus()
@@ -1534,8 +1534,8 @@ suite "Add buffer to the register":
     const Commands = ru "\"ay{"
     check status.normalCommand(Commands).isNone
 
-    check status.registers.noNameRegisters == Register(
-      buffer: @[ru "", ru "def", ru "ghi"], isLine: true, name: "a")
+    check status.registers.namedRegisters == @[
+      Register(buffer: @[ru "", ru "def", ru "ghi"], isLine: true, name: "a")]
 
   test "Delete and yank a word (\"adw command)":
     var status = initEditorStatus()
@@ -1552,8 +1552,8 @@ suite "Add buffer to the register":
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "def"
 
-    check status.registers.noNameRegisters == Register(
-      buffer: @[ru "abc "], isLine: false, name: "a")
+    check status.registers.namedRegisters == @[
+      Register(buffer: @[ru "abc "], isLine: false, name: "a")]
 
   test "Delete and yank characters to the end of the line (\"ad$ command)":
     var status = initEditorStatus()
@@ -1571,8 +1571,8 @@ suite "Add buffer to the register":
     check currentBufStatus.buffer[0] == ru ""
     check currentBufStatus.buffer[1] == ru "ghi"
 
-    check status.registers.noNameRegisters == Register(
-      buffer: @[ru "abc def"], isLine: false, name: "a")
+    check status.registers.namedRegisters == @[
+      Register(buffer: @[ru "abc def"], isLine: false, name: "a")]
 
   test "Delete and yank characters to the beginning of the line (\"ad0 command)":
     var status = initEditorStatus()
@@ -1590,8 +1590,8 @@ suite "Add buffer to the register":
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "def"
 
-    check status.registers.noNameRegisters == Register(
-      buffer: @[ru "abc "], isLine: false, name: "a")
+    check status.registers.namedRegisters == @[
+      Register(buffer: @[ru "abc "], isLine: false, name: "a")]
 
   test "Delete and yank lines to the last line (\"adG command)":
     var status = initEditorStatus()
@@ -1609,8 +1609,8 @@ suite "Add buffer to the register":
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "a"
 
-    check status.registers.noNameRegisters == Register(
-      buffer: @[ru "b", ru "c", ru "d"], isLine: true, name: "a")
+    check status.registers.namedRegisters == @[
+      Register(buffer: @[ru "b", ru "c", ru "d"], isLine: true, name: "a")]
 
   test "Delete and yank lines from the first line to the current line (\"adgg command)":
     var status = initEditorStatus()
@@ -1628,8 +1628,8 @@ suite "Add buffer to the register":
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "d"
 
-    check status.registers.noNameRegisters == Register(
-      buffer: @[ru "a", ru "b", ru "c"], isLine: true, name: "a")
+    check status.registers.namedRegisters == @[
+      Register(buffer: @[ru "a", ru "b", ru "c"], isLine: true, name: "a")]
 
   test "Delete and yank lines from the previous blank line to the current line (\"ad{ command)":
     var status = initEditorStatus()
@@ -1647,8 +1647,8 @@ suite "Add buffer to the register":
     check currentBufStatus.buffer.len == 2
     check currentBufStatus.buffer[0] == ru "a"
 
-    check status.registers.noNameRegisters == Register(
-      buffer: @[ru "", ru "b"], isLine: true, name: "a")
+    check status.registers.namedRegisters == @[
+      Register(buffer: @[ru "", ru "b"], isLine: true, name: "a")]
 
   test "Delete and yank lines from the current linet o the next blank line (\"ad} command)":
     var status = initEditorStatus()
@@ -1666,8 +1666,8 @@ suite "Add buffer to the register":
     check currentBufStatus.buffer[0] == ru ""
     check currentBufStatus.buffer[1] == ru "c"
 
-    check status.registers.noNameRegisters == Register(
-      buffer: @[ru "a", ru "b"], isLine: true, name: "a")
+    check status.registers.namedRegisters == @[
+      Register(buffer: @[ru "a", ru "b"], isLine: true, name: "a")]
 
   test "Delete and yank characters in the paren (\"adi[ command)":
     var status = initEditorStatus()
@@ -1685,8 +1685,8 @@ suite "Add buffer to the register":
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "a[]"
 
-    check status.registers.noNameRegisters == Register(
-      buffer: @[ru "abc"], isLine: false, name: "a")
+    check status.registers.namedRegisters == @[
+      Register(buffer: @[ru "abc"], isLine: false, name: "a")]
 
   test "Delete and yank characters befor cursor (\"adh command)":
     var status = initEditorStatus()
@@ -1704,8 +1704,8 @@ suite "Add buffer to the register":
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "bc"
 
-    check status.registers.noNameRegisters == Register(
-      buffer: @[ru "a"], isLine: false, name: "a")
+    check status.registers.namedRegisters == @[
+      Register(buffer: @[ru "a"], isLine: false, name: "a")]
 
 suite "Normal mode: Validate normal mode command":
   test "\"0 (Expect to Valid)":
