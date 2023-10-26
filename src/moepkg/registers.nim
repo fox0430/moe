@@ -143,7 +143,9 @@ proc addRegister(
 
     let name = register.name
 
-    if name != "_":
+    if name.len == 0:
+      registers.noNameRegisters = register
+    elif name != "_":
       # Add/Overwrite the named register
       var isOverwrite = false
 
@@ -155,8 +157,6 @@ proc addRegister(
 
       if not isOverwrite:
         registers.namedRegisters.add register
-
-      registers.noNameRegisters = register
 
       if settings.clipboard.enable:
         register.buffer.sendToClipboard(settings.clipboard.toolOnLinux)
