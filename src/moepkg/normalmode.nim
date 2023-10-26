@@ -1944,6 +1944,8 @@ proc isNormalModeCommand*(
                cmd == "yl" or
                cmd == "y{" or
                cmd == "y}" or
+               cmd == "y0" or
+               cmd == "y$" or
                cmd == "dd" or
                cmd == "dw" or
                cmd == "d$" or (cmd.len == 1 and isEndKey(cmd[0].toRune)) or
