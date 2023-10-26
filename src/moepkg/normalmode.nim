@@ -668,6 +668,47 @@ proc yankCharactersToCharacter(
         registerName,
         IsDelete)
 
+proc yankCharactersFromBeginOfLine(
+  status: var EditorStatus,
+  registerName: string = "") =
+    ## y0 command
+
+    if currentMainWindowNode.currentColumn > 0:
+      let currentColumn = currentMainWindowNode.currentColumn
+      currentMainWindowNode.currentColumn = 0
+
+      const IsDelete = false
+      currentBufStatus.yankCharacters(
+        status.registers,
+        currentMainWindowNode,
+        status.commandLine,
+        status.settings,
+        currentColumn,
+        registerName,
+        IsDelete)
+
+      currentMainWindowNode.currentColumn = currentColumn
+
+proc yankCharactersToEndOfLine(
+  status: var EditorStatus,
+  registerName: string = "") =
+    ## y$ command
+
+    if currentBufStatus.buffer[currentMainWindowNode.currentLine].len > 0:
+
+      const IsDelete = false
+      let length =
+        currentBufStatus.buffer[currentMainWindowNode.currentLine].len -
+        currentMainWindowNode.currentColumn
+      currentBufStatus.yankCharacters(
+        status.registers,
+        currentMainWindowNode,
+        status.commandLine,
+        status.settings,
+        length,
+        registerName,
+        IsDelete)
+
 proc deleteCharacters(status: var EditorStatus, registerName: string) =
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
@@ -1167,6 +1208,10 @@ proc addRegister(status: var EditorStatus, command, registerName: string) =
     status.yankToPreviousBlankLine(registerName)
   elif command == "y}":
     status.yankToNextBlankLine(registerName)
+  elif command == "y0":
+    status.yankCharactersFromBeginOfLine(registerName)
+  elif command == "y$":
+    status.yankCharactersToEndOfLine
   elif command == "dd":
     status.deleteLines(registerName)
   elif command == "dw":
@@ -1245,6 +1290,8 @@ proc registerCommand(status: var EditorStatus, command: Runes) =
        cmd == "yl" or
        cmd == "y{" or
        cmd == "y}" or
+       cmd == "y0" or
+       cmd == "y$" or
        cmd == "dd" or
        cmd == "dw" or
        cmd == "d$" or (cmd.len == 1 and isEndKey(command[0])) or
@@ -1508,6 +1555,10 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
       status.yankToNextBlankLine
     elif secondKey == ord('l'):
       status.yankCharacters
+    elif secondKey == ord('0'):
+      status.yankCharactersFromBeginOfLine
+    elif secondKey == ord('$'):
+      status.yankCharactersToEndOfLine
     elif secondKey == ord('t'):
       let thirdKey = commands[2]
       status.yankCharactersToCharacter(thirdKey)
@@ -1795,8 +1846,10 @@ proc isNormalModeCommand*(
              command[1] == ord('w') or
              command[1] == ord('{') or
              command[1] == ord('}') or
-             command[1] == ord('l'):
-            result = InputState.Valid
+             command[1] == ord('l') or
+             command[1] == ord('0') or
+             command[1] == ord('$'):
+               result = InputState.Valid
           elif command == "yt".ru:
             result = InputState.Continue
         elif command.len == 3:
@@ -1890,6 +1943,8 @@ proc isNormalModeCommand*(
                cmd == "yl" or
                cmd == "y{" or
                cmd == "y}" or
+               cmd == "y0" or
+               cmd == "y$" or
                cmd == "dd" or
                cmd == "dw" or
                cmd == "d$" or (cmd.len == 1 and isEndKey(cmd[0].toRune)) or
