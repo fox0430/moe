@@ -1381,15 +1381,15 @@ proc yankLines*(
   name: string,
   settings: EditorSettings) =
 
-  const IsDelete = false
-  bufStatus.yankLines(
-    registers,
-    commandLine,
-    notificationSettings,
-    first, last,
-    name,
-    IsDelete,
-    settings)
+    const IsDelete = false
+    bufStatus.yankLines(
+      registers,
+      commandLine,
+      notificationSettings,
+      first, last,
+      name,
+      IsDelete,
+      settings)
 
 proc yankLines*(
   bufStatus: BufferStatus,
@@ -1411,7 +1411,6 @@ proc yankLines*(
       IsDelete,
       settings)
 
-# name is the register name
 proc yankCharacters*(
   bufStatus: BufferStatus,
   registers: var Registers,
@@ -1419,7 +1418,7 @@ proc yankCharacters*(
   commandLine: var CommandLine,
   settings: EditorSettings,
   length: int,
-  name: string,
+  registerName: string,
   isDelete: bool) =
 
     var yankedBuffer: Runes
@@ -1431,8 +1430,8 @@ proc yankCharacters*(
           line = windowNode.currentLine
         yankedBuffer.add bufStatus.buffer[line][col]
 
-      if name.len > 0:
-        registers.addRegister(yankedBuffer, name, settings)
+      if registerName.len > 0:
+        registers.addRegister(yankedBuffer, registerName, settings)
       else:
         registers.addRegister(yankedBuffer, settings)
 

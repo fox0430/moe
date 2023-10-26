@@ -1285,7 +1285,7 @@ suite "Normal mode: delete from the beginning of the line to current column":
 
     check status.registers.noNameRegisters.buffer[0] == ru"abcde"
 
-suite "Normal mode: Yank string":
+suite "Normal mode: Yank characters":
   test "yank character (yl command)":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
@@ -1326,6 +1326,98 @@ suite "Normal mode: Yank string":
     status.update
 
     check status.registers.noNameRegisters.buffer[0] == ru"abcde"
+
+suite "Normal mode: yank characters from the begin of the line":
+  test "y0 command":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = initGapBuffer(@[ru"abcde"])
+    currentMainWindowNode.currentColumn = 2
+
+    const Command = ru"y0"
+    check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
+    check status.normalCommand(Command).isNone
+
+    check status.registers.noNameRegisters.buffer[0] == ru"ab"
+
+  test "Basic 1":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = initGapBuffer(@[ru"abcde"])
+    currentMainWindowNode.currentColumn = 1
+
+    status.yankCharactersFromBeginOfLine
+
+    check status.registers.noNameRegisters.buffer[0] == ru"a"
+
+  test "Basic 2":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = initGapBuffer(@[ru"abcde"])
+    currentMainWindowNode.currentColumn = 4
+
+    status.yankCharactersFromBeginOfLine
+
+    check status.registers.noNameRegisters.buffer[0] == ru"abcd"
+
+  test "currentColumn == 0":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = initGapBuffer(@[ru"abcde"])
+
+    status.yankCharactersFromBeginOfLine
+
+    check status.registers.noNameRegisters.buffer.len == 0
+
+  test "Empty line":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = initGapBuffer(@[ru""])
+
+    status.yankCharactersFromBeginOfLine
+
+    check status.registers.noNameRegisters.buffer.len == 0
+
+suite "Normal mode: yank characters to the end of the line":
+  test "y$ command":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = initGapBuffer(@[ru"abcde"])
+    currentMainWindowNode.currentColumn = 2
+
+    const Command = ru"y$"
+    check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
+    check status.normalCommand(Command).isNone
+
+    check status.registers.noNameRegisters.buffer[0] == ru"cde"
+
+  test "Basic 1":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = initGapBuffer(@[ru"abcde"])
+
+    status.yankCharactersToEndOfLine
+
+    check status.registers.noNameRegisters.buffer[0] == ru"abcde"
+
+  test "Basic 2":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = initGapBuffer(@[ru"abcde"])
+    currentMainWindowNode.currentColumn = 4
+
+    status.yankCharactersToEndOfLine
+
+    check status.registers.noNameRegisters.buffer[0] == ru"e"
+
+  test "Empty line":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = initGapBuffer(@[ru""])
+
+    status.yankCharactersToEndOfLine
+
+    check status.registers.noNameRegisters.buffer.len == 0
 
 suite "Normal mode: Cut character before cursor":
   test "Cut character before cursor (X command)":
