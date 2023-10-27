@@ -2926,3 +2926,125 @@ suite "Editor: Unindent":
 
     for l in SourceLanguage:
       unindentTestCase5(l)
+
+suite "Editor: replaceAll":
+  test "Basic":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["abc abc xyz", "abc"].toSeqRunes.toGapBuffer
+
+    let lineRange = Range(first: 0, last: 1)
+    const
+      Sub = ru"abc"
+      By = ru"xyz"
+    b.replaceAll(lineRange, Sub, By)
+
+    check b.buffer.toSeqRunes == @[ru"xyz xyz xyz", ru"xyz"]
+
+  test "Basic 2":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["abcabc", ""].toSeqRunes.toGapBuffer
+
+    let lineRange = Range(first: 0, last: 1)
+    const
+      Sub = ru"abc"
+      By = ru"xyz"
+    b.replaceAll(lineRange, Sub, By)
+
+    check b.buffer.toSeqRunes == @[ru"xyzxyz", ru""]
+
+  test "Basic 3":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["abcAbc", "ABC"].toSeqRunes.toGapBuffer
+
+    let lineRange = Range(first: 0, last: 1)
+    const
+      Sub = ru"Abc"
+      By = ru"xyz"
+    b.replaceAll(lineRange, Sub, By)
+
+    check b.buffer.toSeqRunes == @[ru"abcxyz", ru"ABC"]
+
+  test "With NewLine":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["abc", "abc", "xyz", "abc", "abc"].toSeqRunes.toGapBuffer
+
+    let lineRange = Range(first: 0, last: 4)
+    const
+      Sub = "abc\nabc".toRunes
+      By = ru"xyz"
+    b.replaceAll(lineRange, Sub, By)
+
+    check b.buffer.toSeqRunes == @[ru"xyz", ru"xyz", ru"xyz"]
+
+  test "With NewLine 2":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["abc", "abc", "xyz", "abc", "abc"].toSeqRunes.toGapBuffer
+
+    let lineRange = Range(first: 0, last: 4)
+    const
+      Sub = "abc\nabc".toRunes
+      By = "xyz\nxyz".toRunes
+    b.replaceAll(lineRange, Sub, By)
+
+    check b.buffer.toSeqRunes == @["xyz", "xyz", "xyz", "xyz", "xyz"].toSeqRunes
+
+suite "Editor: replaceOnlyFirstWordInLines":
+  test "Basic":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["abc abc xyz", "abc"].toSeqRunes.toGapBuffer
+
+    let lineRange = Range(first: 0, last: 1)
+    const
+      Sub = ru"abc"
+      By = ru"xyz"
+    b.replaceOnlyFirstWordInLines(lineRange, Sub, By)
+
+    check b.buffer.toSeqRunes == @[ru"xyz abc xyz", ru"xyz"]
+
+  test "Basic 2":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["abcabc", ""].toSeqRunes.toGapBuffer
+
+    let lineRange = Range(first: 0, last: 1)
+    const
+      Sub = ru"abc"
+      By = ru"xyz"
+    b.replaceOnlyFirstWordInLines(lineRange, Sub, By)
+
+    check b.buffer.toSeqRunes == @[ru"xyzabc", ru""]
+
+  test "Basic 3":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["abcAbc", "ABC"].toSeqRunes.toGapBuffer
+
+    let lineRange = Range(first: 0, last: 1)
+    const
+      Sub = ru"Abc"
+      By = ru"xyz"
+    b.replaceOnlyFirstWordInLines(lineRange, Sub, By)
+
+    check b.buffer.toSeqRunes == @[ru"abcxyz", ru"ABC"]
+
+  test "With NewLine":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["abc", "abc", "xyz", "abc", "abc"].toSeqRunes.toGapBuffer
+
+    let lineRange = Range(first: 0, last: 4)
+    const
+      Sub = "abc\nabc".toRunes
+      By = ru"xyz"
+    b.replaceOnlyFirstWordInLines(lineRange, Sub, By)
+
+    check b.buffer.toSeqRunes == @[ru"xyz", ru"xyz", ru"xyz"]
+
+  test "With NewLine 2":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["abc", "abc", "xyz", "abc", "abc"].toSeqRunes.toGapBuffer
+
+    let lineRange = Range(first: 0, last: 4)
+    const
+      Sub = "abc\nabc".toRunes
+      By = "xyz\nxyz".toRunes
+    b.replaceOnlyFirstWordInLines(lineRange, Sub, By)
+
+    check b.buffer.toSeqRunes == @["xyz", "xyz", "xyz", "xyz", "xyz"].toSeqRunes

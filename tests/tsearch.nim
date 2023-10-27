@@ -23,41 +23,41 @@ import moepkg/[unicodeext, editorstatus, gapbuffer, independentutils]
 
 import moepkg/searchutils {.all.}
 
-suite "search: searchLine":
-  test "searchLine":
+suite "search: search":
+  test "Basic":
     let
       line = ru"abc efg hijkl"
       isIgnorecase = true
       isSmartcase = true
-      position = line.searchLine(ru"ijk", isIgnorecase, isSmartcase)
+      position = line.search(ru"ijk", isIgnorecase, isSmartcase)
 
     check position.get == 9
 
-  test "searchLine 2":
+  test "Basic 2":
     let
       line = ru"abc efg hijkl"
       isIgnorecase = true
       isSmartcase = true
-      position = line.searchLine(ru"xyz", isIgnorecase, isSmartcase)
+      position = line.search(ru"xyz", isIgnorecase, isSmartcase)
 
     check position.isNone
 
-  test "Enable ignorecase, disable smartcase":
+  test "Enable ignorecase":
     let
       line = ru"Editor editor"
       isIgnorecase = true
       isSmartcase = true
-      position = line.searchLine(ru"editor", isIgnorecase, isSmartcase)
+      position = line.search(ru"editor", isIgnorecase, isSmartcase)
 
     check position.get == 0
 
-  test "Enable ignorecase and smartcase":
+  test "Enable all":
     block:
       let
         line = ru"editor Editor"
         isIgnorecase = true
         isSmartcase = true
-        position = line.searchLine(ru"Editor", isIgnorecase, isSmartcase)
+        position = line.search(ru"Editor", isIgnorecase, isSmartcase)
 
       check position.get == 7
 
@@ -66,36 +66,55 @@ suite "search: searchLine":
         line = ru"editor Editor"
         isIgnorecase = true
         isSmartcase = true
-        position = line.searchLine(ru"editor", isIgnorecase, isSmartcase)
+        position = line.search(ru"editor", isIgnorecase, isSmartcase)
 
       check position.get == 0
 
-  test "Disable ignorecase":
+  test "Disable all":
     let
       line = ru"Editor"
       isIgnorecase = false
       isSmartcase = false
-      position = line.searchLine(ru"editor", isIgnorecase, isSmartcase)
+      position = line.search(ru"editor", isIgnorecase, isSmartcase)
 
     check position.isNone
 
-suite "search: searchLineReversely":
-  test "searchLineReversely":
+suite "search: searchAll":
+  test "Basic":
+    let
+      line = ru"abc def abc"
+      isIgnorecase = true
+      isSmartcase = true
+
+    let positions = line.searchAll(ru"abc", isIgnorecase, isSmartcase)
+    check positions == @[0, 8]
+
+  test "Basic 2":
+    let
+      line = ru"abcdefabcabcdefabc"
+      isIgnorecase = true
+      isSmartcase = true
+
+    let positions = line.searchAll(ru"abc", isIgnorecase, isSmartcase)
+    check positions == @[0, 6, 9, 15]
+
+suite "search: searchReversely":
+  test "searchReversely":
     let
       line = ru"abc efg hijkl"
       isIgnorecase = true
       isSmartcase = true
-      position = line.searchLineReversely(ru"ijk", isIgnorecase, isSmartcase)
+      position = line.searchReversely(ru"ijk", isIgnorecase, isSmartcase)
 
     check position.get == 9
 
-  test "searchLineReversely 2":
+  test "searchReversely 2":
       let
         line = ru"abc efg hijkl"
         keyword = ru"xyz"
         isIgnorecase = true
         isSmartcase = true
-        position = line.searchLineReversely(keyword, isIgnorecase, isSmartcase)
+        position = line.searchReversely(keyword, isIgnorecase, isSmartcase)
 
       check position.isNone
 

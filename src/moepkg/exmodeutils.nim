@@ -35,7 +35,7 @@ type
     description*: string
     argsType*: ArgsType
 
-  ReplaceCommandInfo* = tuple[searhWord, replaceWord: Runes]
+  ReplaceCommandInfo* = tuple[sub, by: Runes, isGlobal: bool]
 
 const
   ExCommandInfoList* = [
@@ -843,4 +843,7 @@ proc parseReplaceCommand*(command: Runes): ReplaceCommandInfo =
   let commandSplit = command.split(ru'/', RemoveEmptyEntries)
   if commandSplit.len < 2: return
 
-  return (searhWord: commandSplit[0], replaceWord: commandSplit[1])
+  return (
+    sub: commandSplit[0].replaceToNewLines,
+    by: commandSplit[1].replaceToNewLines,
+    isGlobal: commandSplit.len == 3 and commandSplit[2] == ru"g")

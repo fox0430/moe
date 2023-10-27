@@ -27,34 +27,54 @@ type
     forward = 0
     backward = 1
 
-proc compare(rune, sub: Runes, isIgnorecase, isSmartcase: bool): bool =
-  ## Return true If the text matches.
+proc compare*(
+  rune, sub: Runes,
+  isIgnorecase, isSmartcase: bool): bool {.inline.} =
+    ## Return true If the text matches.
 
-  if isIgnorecase and not isSmartcase:
-    if cmpIgnoreCase($rune, $sub) == 0: return true
-  elif isSmartcase and isIgnorecase:
-    if isContainUpper(sub):
-      return rune == sub
-    else:
+    if isIgnorecase and not isSmartcase:
       if cmpIgnoreCase($rune, $sub) == 0: return true
-  else:
-    return rune == sub
+    elif isSmartcase and isIgnorecase:
+      if isContainUpper(sub):
+        return rune == sub
+      else:
+        if cmpIgnoreCase($rune, $sub) == 0: return true
+    else:
+      return rune == sub
 
-proc searchLine*(
-  line: Runes,
+proc search*(
+  buffer: Runes,
   keyword: Runes,
   isIgnorecase, isSmartcase: bool): Option[int] =
-    ## Return a position in a line if a keyword matches.
+    ## Return a position if keyword matches.
 
-    for startPostion in 0 .. (line.len - keyword.len):
-      let
-        endPosition = startPostion + keyword.len
-        runes = line[startPostion ..< endPosition]
+    for position in 0 .. buffer.high - keyword.high:
+      if compare(
+        buffer[position .. position + keyword.high],
+        keyword,
+        isIgnorecase,
+        isSmartcase):
+          return some(position)
 
-      if compare(runes, keyword, isIgnorecase, isSmartcase):
-        return startPostion.some
+proc searchAll*(
+  buffer: Runes,
+  keyword: Runes,
+  isIgnorecase, isSmartcase: bool): seq[int] =
+    ## Return positions if keyword matches.
 
-proc searchLineReversely(
+    var position = 0
+    while position + keyword.high < buffer.len:
+      if compare(
+        buffer[position .. position + keyword.high],
+        keyword,
+        isIgnorecase,
+        isSmartcase):
+          result.add position
+          position = position + keyword.len
+      else:
+        position.inc
+
+proc searchReversely(
   line: Runes,
   keyword: Runes,
   isIgnorecase, isSmartcase: bool): Option[int] =
@@ -87,7 +107,7 @@ proc searchBuffer*(
 
         line = bufStatus.buffer[lineNumber]
 
-        position = searchLine(
+        position = search(
           line[first ..< last],
           keyword,
           isIgnorecase,
@@ -116,7 +136,7 @@ proc searchBufferReversely*(
           else:
             buffer[lineNumber].len
 
-        position = searchLineReversely(
+        position = searchReversely(
           buffer[lineNumber][0 ..< endPosition],
           keyword,
           isIgnorecase,
@@ -139,7 +159,7 @@ proc searchAllOccurrence*(
         let
           last = buffer[lineNumber].len
           line = buffer[lineNumber]
-          position = searchLine(
+          position = search(
             line[first ..< last],
             keyword,
             isIgnorecase,

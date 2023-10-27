@@ -20,7 +20,8 @@
 import std/[strutils, sequtils, strformat, options]
 import syntax/highlite
 import editorstatus, ui, gapbuffer, unicodeext, windownode, bufferstatus,
-       movement, messages, settings, registers, commandline, independentutils
+       movement, messages, settings, registers, commandline, independentutils,
+       searchutils
 
 proc correspondingCloseParen(c: char): char =
   case c
@@ -1684,13 +1685,14 @@ proc pasteBeforeCursor*(
     if register.isSome:
       bufStatus.pasteBeforeCursor(windowNode, register.get)
 
-# Replace characters and move to the right
 proc replaceCharacters*(
   bufStatus: var BufferStatus,
   windowNode: WindowNode,
   autoIndent, autoDeleteParen: bool,
   tabStop, loop: int,
   character: Rune) =
+    ## Replace characters and move to the right
+    ## For 'r' command.
 
     if isEnterKey(character):
       let
@@ -1717,6 +1719,77 @@ proc replaceCharacters*(
 
     inc(bufStatus.countChange)
     bufStatus.isUpdate = true
+
+proc replaceAll*(b: var BufferStatus, lineRange: Range, sub, by: Runes) =
+  ## Replaces all words.
+
+  var isChanged = false
+
+  if sub.contains(ru'\n') or by.contains(ru'\n'):
+    let r = b.buffer.toRunes.searchAll(sub, false, false)
+    if r.len > 0:
+      let oldBuffer = b.buffer.toRunes
+
+      let diff = by.high - sub.high
+      # if including Newline, Convert the buffer to `Runes` and replace runes.
+      var newBuffer = b.buffer.toRunes
+      for i, position in r:
+        let start = position + (diff * i)
+        newBuffer.delete(start .. start + sub.high)
+        newBuffer.insert(by, start)
+
+      if oldBuffer != newBuffer:
+        b.buffer = newBuffer.splitLines.toGapBuffer
+        if not isChanged: isChanged = true
+  else:
+    for i in lineRange.first .. lineRange.last:
+      let r = b.buffer[i].searchAll(sub, false, false)
+      if r.len > 0:
+        let oldLine = b.buffer[i]
+
+        let diff = by.high - sub.high
+        var newLine = b.buffer[i]
+        for i, position in r:
+          let start = position + (diff * i)
+          newLine.delete(start .. start + sub.high)
+          newLine.insert(by, start)
+
+        if oldLine != newLine:
+          b.buffer[i] = newLine
+          if not isChanged: isChanged = true
+
+  if isChanged and not b.isUpdate:
+    b.isUpdate = true
+    b.countChange.inc
+
+proc replaceOnlyFirstWordInLines*(
+  b: var BufferStatus,
+  lineRange: Range,
+  sub, by: Runes) =
+    ## Replaces words in only first positions in lines.
+    ## If contains NewLine in `sub` or `by`, change to `replaceAll`.
+
+    if sub.contains(ru'\n') or by.contains(ru'\n'):
+      b.replaceAll(lineRange, sub, by)
+    else:
+      var isChanged = false
+
+      for i in lineRange.first .. lineRange.last:
+        let r = b.buffer[i].search(sub, false, false)
+        if r.isSome:
+          let oldLine = b.buffer[i]
+
+          var newLine = b.buffer[i]
+          newLine.delete(r.get .. r.get + sub.high)
+          newLine.insert(by, r.get)
+
+          if oldLine != newLine:
+            b.buffer[i] = newLine
+            if not isChanged: isChanged = true
+
+      if isChanged and not b.isUpdate:
+        b.isUpdate = true
+        b.countChange.inc
 
 proc toggleCharacters*(
   bufStatus: var BufferStatus,

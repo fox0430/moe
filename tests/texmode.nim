@@ -248,7 +248,7 @@ suite "Ex mode: Change to last buffer command":
     check(currentMainWindowNode.bufferIndex == 2)
 
 suite "Ex mode: Replace buffer command":
-  test "Replace buffer command":
+  test "Basic":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
 
@@ -260,6 +260,32 @@ suite "Ex mode: Replace buffer command":
 
     check status.bufStatus[0].buffer.toSeqRunes ==
       @["xyz", "abcdzzzzzzhijk", "Hello"].toSeqRunes
+
+  test "Replace all":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+
+    status.bufStatus[0].buffer = @[
+      "xyzabc",
+      "abcxyz",
+      "abc",
+      "abcxyzabc",
+      "",
+      "xyzabcxyz"]
+      .toSeqRunes
+      .initGapBuffer
+
+    const Command = @[ru"%s/abc/iii/g"]
+    status.exModeCommand(Command)
+
+    check status.bufStatus[0].buffer.toSeqRunes == @[
+      "xyziii",
+      "iiixyz",
+      "iii",
+      "iiixyziii",
+      "",
+      "xyziiixyz"]
+      .toSeqRunes
 
 suite "Ex mode: Turn off highlighting command":
   test "Turn off highlighting command":
