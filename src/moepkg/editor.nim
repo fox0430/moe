@@ -872,13 +872,13 @@ proc deleteCharacter*(
           colmun,
           currentChar)
 
-# Delete characters in the line
 proc deleteCharacters*(
   bufStatus: var BufferStatus,
   registers: var Registers,
   registerName: string,
   line, colmun, loop: int,
   settings: EditorSettings) =
+    ## Delete characters in the line
 
     if line >= bufStatus.buffer.high and
        colmun > bufStatus.buffer[line].high: return
@@ -922,11 +922,11 @@ proc deleteCharacters*(
       inc(bufStatus.countChange)
       bufStatus.isUpdate = true
 
-# No yank buffer
 proc deleteCharacters*(
   bufStatus: var BufferStatus,
   autoDeleteParen: bool,
   line, colmun, loop: int) =
+    ## No yank buffer
 
     if line >= bufStatus.buffer.high and
        colmun > bufStatus.buffer[line].high: return
@@ -961,11 +961,11 @@ proc deleteCharacters*(
       inc(bufStatus.countChange)
       bufStatus.isUpdate = true
 
-# Add the new line and insert indent in Nim
 proc insertIndentNimForOpenBlankLine(
   bufStatus: var BufferStatus,
   windowNode: var WindowNode,
   tabStop: int) =
+    ## Add the new line and insert indent in Nim
 
     proc splitWhitespace(runes: Runes): seq[Runes] {.inline.} =
       ## Remove empty entries
@@ -1050,11 +1050,11 @@ proc insertIndentInPythonForOpenBlankLine(
         if oldLine != newLine:
           bufStatus.buffer[currentLineNum] = newLine
 
-# Add the new line and insert indent in the plain text
 proc insertIndentPlainTextForOpenBlankLine(
   bufStatus: var BufferStatus,
   windowNode: var WindowNode,
   tabStop: int) =
+    ## Add the new line and insert indent in the plain text
 
     let
       currentLineNum = windowNode.currentLine
@@ -1117,7 +1117,6 @@ proc openBlankLineAbove*(
     inc(bufStatus.countChange)
     bufStatus.isUpdate = true
 
-# Delete lines and store lines to the register
 proc deleteLines*(
   bufStatus: var BufferStatus,
   registers: var Registers,
@@ -1125,6 +1124,7 @@ proc deleteLines*(
   registerName: string,
   startLine, loop: int,
   settings: EditorSettings) =
+    ## Delete lines and store lines to the register
 
     let endLine = min(startLine + loop, bufStatus.buffer.high)
 
@@ -1200,13 +1200,13 @@ proc deleteCharacterBeginningOfLine*(
     windowNode.currentColumn = 0
     windowNode.expandedColumn = 0
 
-# Delete characters after blank in the current line
 proc deleteCharactersAfterBlankInLine*(
   bufStatus: var BufferStatus,
   registers: var Registers,
   windowNode: var WindowNode,
   registerName: string,
   settings: EditorSettings) =
+    ## Delete characters after blank in the current line
 
     let
       currentLine = windowNode.currentLine
@@ -1226,13 +1226,13 @@ proc deleteCharactersAfterBlankInLine*(
     windowNode.currentColumn = firstNonBlankCol
     windowNode.expandedColumn = firstNonBlankCol
 
-# Delete from the previous blank line to the current line
 proc deleteTillPreviousBlankLine*(
   bufStatus: var BufferStatus,
   registers: var Registers,
   windowNode: WindowNode,
   registerName: string,
   settings: EditorSettings) =
+    ## Delete from the previous blank line to the current line
 
     var deletedBuffer: seq[Runes]
 
@@ -1278,13 +1278,13 @@ proc deleteTillPreviousBlankLine*(
     inc(bufStatus.countChange)
     bufStatus.isUpdate = true
 
-# Delete from the current line to the next blank line
 proc deleteTillNextBlankLine*(
   bufStatus: var BufferStatus,
   registers: var Registers,
   windowNode: WindowNode,
   registerName: string,
   settings: EditorSettings) =
+    ## Delete from the current line to the next blank line
 
     let
       currentLine = windowNode.currentLine
@@ -1329,7 +1329,6 @@ proc deleteTillNextBlankLine*(
     inc(bufStatus.countChange)
     bufStatus.isUpdate = true
 
-# name is the register name
 proc yankLines*(
   bufStatus: BufferStatus,
   registers: var Registers,
@@ -1339,6 +1338,7 @@ proc yankLines*(
   name: string,
   isDelete: bool,
   settings: EditorSettings) =
+    ## name is the register name
 
     var yankedBuffer: seq[Runes]
     for i in first .. last:
@@ -1907,7 +1907,6 @@ proc redo*(bufStatus: var BufferStatus, windowNode: WindowNode) =
   inc(bufStatus.countChange)
   bufStatus.isUpdate = true
 
-# If cursor is inside of paren, delete inside paren in the current line
 proc deleteInsideOfParen*(
   bufStatus: var BufferStatus,
   windowNode: var WindowNode,
@@ -1915,6 +1914,7 @@ proc deleteInsideOfParen*(
   registerName: string,
   rune: Rune,
   settings: EditorSettings) =
+    ## If cursor is inside of paren, delete inside paren in the current line
 
     let
       currentLine = windowNode.currentLine
@@ -1964,13 +1964,13 @@ proc deleteInsideOfParen*(
         bufStatus.buffer[currentLine] = newLine
         windowNode.currentColumn = openParenPosition
 
-# If cursor is inside of paren, delete inside paren in the current line
 proc deleteInsideOfParen*(
   bufStatus: var BufferStatus,
   windowNode: var WindowNode,
   registers: var Registers,
   rune: Rune,
   settings: EditorSettings) =
+    ## If cursor is inside of paren, delete inside paren in the current line
 
     const RegisterName = ""
     bufStatus.deleteInsideOfParen(
@@ -1980,10 +1980,10 @@ proc deleteInsideOfParen*(
       rune,
       settings)
 
-# Return the colmn and word
 proc getWordUnderCursor*(
   bufStatus: BufferStatus,
   windowNode: WindowNode): (int, Runes) =
+    ## Return the colmn and word
 
     let line = bufStatus.buffer[windowNode.currentLine]
     if line.len <= windowNode.currentColumn:
@@ -2019,11 +2019,11 @@ proc getCharacterUnderCursor*(
 
     line[windowNode.currentColumn]
 
-# Increment/Decrement the number string under the cursor
 proc modifyNumberTextUnderCurosr*(
   bufStatus: var BufferStatus,
   windowNode: var WindowNode,
   amount: int) =
+    ## Increment/Decrement the number string under the cursor
 
     let
       currentLine = windowNode.currentLine
