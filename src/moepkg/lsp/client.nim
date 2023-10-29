@@ -20,7 +20,7 @@
 # NOTE: Language Server Protocol Specification - 3.17
 # https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/
 
-import std/[strformat, strutils, json, options, os, osproc, posix, epoll]
+import std/[strformat, strutils, json, options, os, osproc, posix]
 import pkg/results
 
 import ../appinfo
@@ -99,28 +99,24 @@ proc exit*(c: LspClient) =
 
 proc readyOutput(c: LspClient, timeout: int): Result[(), string] =
   ## Return when output is written from the LSP server or timesout.
-  ## Wait for the output from process to be written using epoll(7).
+  ## Wait for the output from process to be written using epoll(2).
   ## timeout is milliseconds.
 
-  var epoll = epoll_create(sizeof(cint).cint)
-  if epoll < 0:
-    return Result[(), string].err "epoll_create failed"
+  # Init pollFd.
+  var pollFd: TPollfd
+  pollFd.addr.zeroMem(sizeof(pollFd))
 
-  var ev: EpollEvent
-  ev.events = EPOLLIN;
-  var ctl = epoll.epoll_ctl(
-    EPOLL_CTL_ADD,
-    c.serverProcess.outputHandle.cint,
-    ev.addr)
-  if ctl < 0:
-    return Result[(), string].err "epoll_ctl failed"
+  # Registers fd and events.
+  pollFd.fd = c.serverProcess.outputHandle.cint
+  pollFd.events = POLLIN or POLLERR
 
-  const MaxEvent = 1
-  let r = epoll.epoll_wait(ev.addr, MaxEvent, timeout.cint)
-  if r < 0:
-    return Result[(), string].err "epoll_wait failed"
-
-  return Result[(), string].ok ()
+  # Wait a server response.
+  const FdLen = 1
+  let r = pollFd.addr.poll(FdLen.Tnfds, timeout)
+  if r == 1:
+    return Result[(), string].ok ()
+  else:
+    return Result[(), string].err "timeout"
 
 proc call(
   c: LspClient,
