@@ -99,7 +99,7 @@ proc exit*(c: LspClient) =
 
 proc readyOutput(c: LspClient, timeout: int): Result[(), string] =
   ## Return when output is written from the LSP server or timesout.
-  ## Wait for the output from process to be written using epoll(2).
+  ## Wait for the output from process to be written using poll(2).
   ## timeout is milliseconds.
 
   # Init pollFd.
