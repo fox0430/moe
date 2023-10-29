@@ -18,6 +18,7 @@
 #[############################################################################]#
 
 import std/[strutils, unittest, encodings, sequtils, sugar]
+from std/os import `/`
 import moepkg/gapbuffer
 import moepkg/unicodeext
 
@@ -416,7 +417,6 @@ test "join 1":
 test "join 2":
   check @[ru"a", ru"b", ru"c"].join(ru" ") == ru"a b c"
 
-from os import `/`
 test "/":
   proc checkJoinPath(head, tail: string) =
     check head.ru / tail.ru == (head / tail).ru
@@ -427,3 +427,16 @@ test "/":
   checkJoinPath("usr", "/lib")
   checkJoinPath("usr/", "/lib/")
   check ru"usr" / ru"lib" / ru"../bin" == ru"usr/bin"
+
+suite "unicodeext: replaceToNewLines":
+  test "Basic":
+    check replaceToNewLines("\\nabc\\n".toRunes) == "\nabc\n".toRunes
+
+  test "Escape":
+    check replaceToNewLines("\\\\nabc\\\\n".toRunes) == "\\nabc\\n".toRunes
+
+  test "Without Newline":
+    check replaceToNewLines(ru"abc") == ru"abc"
+
+  test "Empty":
+    check replaceToNewLines(ru"") == ru""

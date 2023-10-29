@@ -603,6 +603,28 @@ proc stripLineEnd*(runes: Runes): Runes =
 proc replace*(runes1, sub: Runes, by: Runes = ru""): Runes {.inline.} =
   replace($runes1, $sub, $by).toRunes
 
+proc replaceToNewLines*(runes: Runes): Runes =
+  ## Replaces "\n" to '\n' in `runes`.
+  ## Ignore "\\n".
+
+  var
+    i = 0
+    isEscape = false
+  while i < runes.len:
+    if runes[i] == ru'\\':
+      if not isEscape:
+        isEscape = true
+      elif runes[i - 1] == ru'\\':
+        isEscape = false
+        result.add runes[i]
+    elif isEscape and runes[i] == ru'n':
+      result.add ru'\n'
+      isEscape = false
+    else:
+      result.add runes[i]
+
+    i.inc
+
 proc maxLen*(lines: seq[Runes]): int {.inline.} =
   lines.mapIt(it.len).max
 

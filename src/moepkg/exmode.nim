@@ -17,15 +17,15 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[sequtils, strutils, os, times, options, strformat]
+import std/[strutils, os, times, options, strformat]
 import pkg/results
 import syntax/highlite
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
-       unicodeext, independentutils, searchutils, highlight, windownode,
-       movement, build, bufferstatus, editor, settings, quickrunutils, messages,
-       commandline, debugmodeutils, platform, commandlineutils, recentfilemode,
-       buffermanager, viewhighlight, messagelog, configmode, git, syntaxcheck,
-       theme, exmodeutils
+       unicodeext, independentutils, highlight, windownode, movement, build,
+       bufferstatus, editor, settings, quickrunutils, messages, commandline,
+       debugmodeutils, platform, commandlineutils, recentfilemode, messagelog,
+       buffermanager, viewhighlight, configmode, git, syntaxcheck, theme,
+       exmodeutils
 
 proc startDebugMode(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
@@ -1004,49 +1004,23 @@ proc listAllBufferCommand(status: var EditorStatus) =
   currentBufStatus.isUpdate = true
 
 proc replaceBuffer(status: var EditorStatus, command: Runes) =
+  ## Repace runes in the current buffer.
+  ## "%s/abc/xyz" or "%s/abc/xyz/g" command.
+
   let replaceInfo = parseReplaceCommand(command)
-
-  if replaceInfo.searhWord == ru"'\n'" and currentBufStatus.buffer.len > 1:
-    let startLine = 0
-
-    for i in 0 .. currentBufStatus.buffer.high - 2:
-      let oldLine = currentBufStatus.buffer[startLine]
-      var newLine = currentBufStatus.buffer[startLine]
-      newLine.insert(
-        replaceInfo.replaceWord,
-        currentBufStatus.buffer[startLine].len)
-      for j in 0 .. currentBufStatus.buffer[startLine + 1].high:
-        newLine.insert(
-          currentBufStatus.buffer[startLine + 1][j],
-          currentBufStatus.buffer[startLine].len)
-      if oldLine != newLine:
-        currentBufStatus.buffer[startLine] = newLine
-
-      currentBufStatus.buffer.delete(startLine + 1, startLine + 1)
+  if replaceInfo.isGlobal:
+    # Replace all
+    currentBufStatus.replaceAll(
+      Range(first: 0, last: currentBufStatus.buffer.high),
+      replaceInfo.sub,
+      replaceInfo.by)
   else:
-    let
-      isIgnorecase = status.settings.ignorecase
-      isSmartcase = status.settings.smartcase
-    for i in 0 .. currentBufStatus.buffer.high:
-      let searchResult = currentBufStatus.buffer[i].searchLine(
-        replaceInfo.searhWord, isIgnorecase, isSmartcase)
-      if searchResult.isSome:
-        let oldLine = currentBufStatus.buffer[i]
-        var newLine = currentBufStatus.buffer[i]
+    # Replace only the first words in lines.
+    currentBufStatus.replaceOnlyFirstWordInLines(
+      Range(first: 0, last: currentBufStatus.buffer.high),
+      replaceInfo.sub,
+      replaceInfo.by)
 
-        let
-          first = searchResult.get
-          last = searchResult.get + replaceInfo.searhWord.high
-        for _ in first .. last:
-          newLine.delete(searchResult.get)
-
-        newLine.insert(replaceInfo.replaceWord, searchResult.get)
-        if oldLine != newLine:
-          currentBufStatus.buffer[i] = newLine
-
-          if not currentBufStatus.isUpdate: currentBufStatus.isUpdate = true
-
-  inc(currentBufStatus.countChange)
   status.commandLine.clear
   status.changeMode(currentBufStatus.prevMode)
 
