@@ -431,7 +431,12 @@ test "/":
 suite "unicodeext: replaceToNewLines":
   test "Basic":
     check replaceToNewLines("\\nabc\\n".toRunes) == "\nabc\n".toRunes
+
   test "Escape":
-    check replaceToNewLines("\\\\nabc\\\\n".toRunes) == ru"\nabc\n"
+    check replaceToNewLines("\\\\nabc\\\\n".toRunes) == "\\nabc\\n".toRunes
+
   test "Without Newline":
     check replaceToNewLines(ru"abc") == ru"abc"
+
+  test "Empty":
+    check replaceToNewLines(ru"") == ru""

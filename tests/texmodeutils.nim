@@ -695,3 +695,20 @@ suite "exmodeutils: isValidFileOpenCommand":
 
   test "Invalid 5":
     check not isValidFileOpenCommand(ru"moe.nimble")
+
+suite "exmodeutils: parseReplaceCommand":
+  test "Basic":
+    check parseReplaceCommand(ru"/abc/xyz") ==
+      (sub: ru"abc", by: ru"xyz", isGlobal: false)
+
+  test "Basic 2":
+    check parseReplaceCommand(ru"/abc/xyz/") ==
+      (sub: ru"abc", by: ru"xyz", isGlobal: false)
+
+  test "Global":
+    check parseReplaceCommand(ru"/abc/xyz/g") ==
+      (sub: ru"abc", by: ru"xyz", isGlobal: true)
+
+  test "With newlines":
+    check parseReplaceCommand(ru"/\nabc/xyz\n/") ==
+      (sub: "\nabc".toRunes, by: "xyz\n".toRunes, isGlobal: false)
