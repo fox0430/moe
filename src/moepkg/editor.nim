@@ -1723,6 +1723,8 @@ proc replaceCharacters*(
 proc replaceAll*(b: var BufferStatus, lineRange: Range, sub, by: Runes) =
   ## Replaces all words.
 
+  if sub.len < 1 or by.len < 1: return
+
   var isChanged = false
 
   if sub.contains(ru'\n') or by.contains(ru'\n'):
@@ -1768,6 +1770,8 @@ proc replaceOnlyFirstWordInLines*(
   sub, by: Runes) =
     ## Replaces words in only first positions in lines.
     ## If contains NewLine in `sub` or `by`, change to `replaceAll`.
+
+    if sub.len < 1 or by.len < 1: return
 
     if sub.contains(ru'\n') or by.contains(ru'\n'):
       b.replaceAll(lineRange, sub, by)
