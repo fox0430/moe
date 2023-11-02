@@ -1144,9 +1144,6 @@ proc isChangeModeKey(key: Rune): bool {.inline.} =
    key == ord('A')
 
 proc changeModeToSearchForwardMode(status: var EditorStatus) =
-  if status.settings.incrementalSearch:
-    status.isIncrementalSearch = true
-
   currentBufStatus.changeMode(Mode.searchForward)
   status.commandLine.clear
   status.commandLine.setPrompt(SearchForwardModePrompt)

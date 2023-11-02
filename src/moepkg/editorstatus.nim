@@ -61,7 +61,6 @@ type
     lastOperatingTime*: DateTime
     autoBackupStatus*: AutoBackupStatus
     isSearchHighlight*: bool
-    isIncrementalSearch*: bool
     lastPosition*: seq[LastCursorPosition]
     isReadonly*: bool
     wordDictionary*: WordDictionary

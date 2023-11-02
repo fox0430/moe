@@ -266,12 +266,12 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
 
   proc isJumpAndHighlightInReplaceCommand(
     status: EditorStatus): bool {.inline.} =
+      status.settings.incrementalSearch and
       status.commandLine.isReplaceCommand and
       status.commandLine.buffer.len > 3
 
   proc jumpAndHighlightInReplaceCommand(status: var EditorStatus) =
     # Jump and highlight in replace command.
-    if not status.isIncrementalSearch: status.isIncrementalSearch = true
     if not status.isSearchHighlight: status.isSearchHighlight = true
 
     let info = parseReplaceCommand(status.commandLine.buffer[2 .. ^1])
@@ -281,8 +281,7 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
   if currentBufStatus.isSearchMode:
     status.searchHistory.add "".toRunes
 
-    if status.isIncrementalSearch and not status.isSearchHighlight:
-      status.isSearchHighlight = true
+    if not status.isSearchHighlight: status.isSearchHighlight = true
 
   var
     isCancel = false
@@ -414,7 +413,7 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
     else:
       status.commandLine.insert(key)
 
-    if status.isIncrementalSearch and currentBufStatus.isSearchMode:
+    if status.settings.incrementalSearch and currentBufStatus.isSearchMode:
       status.execSearchCommand(status.commandLine.buffer)
     elif status.isJumpAndHighlightInReplaceCommand:
       status.jumpAndHighlightInReplaceCommand
@@ -429,7 +428,7 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
       if status.searchHistory[^1].len == 0:
         status.searchHistory.delete(status.searchHistory.high)
 
-      if status.isIncrementalSearch:
+      if status.settings.incrementalSearch:
         status.isSearchHighlight = false
   else:
     if isExMode(currentBufStatus.mode):
