@@ -261,6 +261,21 @@ suite "Ex mode: Replace buffer command":
     check status.bufStatus[0].buffer.toSeqRunes ==
       @["xyz", "abcdzzzzzzhijk", "Hello"].toSeqRunes
 
+  test "Incomplete command":
+    # NOTE: https://github.com/fox0430/moe/issues/1912
+
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+
+    status.bufStatus[0].buffer = initGapBuffer(
+      @["abc", "", "def"].toSeqRunes)
+
+    const Command = @[ru"%s/ab"]
+    status.exModeCommand(Command)
+
+    check status.bufStatus[0].buffer.toSeqRunes ==
+      @["abc", "", "def"].toSeqRunes
+
   test "Replace all":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
