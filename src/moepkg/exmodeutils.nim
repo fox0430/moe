@@ -837,13 +837,19 @@ proc getDescription*(command: Runes): Result[Runes, string] =
 
 proc parseReplaceCommand*(command: Runes): ReplaceCommandInfo =
   ## Parse the replace command.
-  ## Examples: "/xxx/yyy", "/xxx/yyy/"
+  ## Examples: "/xxx", "/xxx/yyy", "/xxx/yyy/g"
 
   const RemoveEmptyEntries = true
-  let commandSplit = command.split(ru'/', RemoveEmptyEntries)
-  if commandSplit.len < 2: return
+  let
+    commandSplit = command.split(ru'/', RemoveEmptyEntries)
 
-  return (
-    sub: commandSplit[0].replaceToNewLines,
-    by: commandSplit[1].replaceToNewLines,
-    isGlobal: commandSplit.len == 3 and commandSplit[2] == ru"g")
+    sub =
+      if commandSplit.len > 0: commandSplit[0].replaceToNewLines
+      else: ru""
+    by =
+      if commandSplit.len > 1: commandSplit[1].replaceToNewLines
+      else: ru""
+
+    isGlobal = commandSplit.len == 3 and commandSplit[2] == ru"g"
+
+  return (sub: sub, by: by, isGlobal: isGlobal)
