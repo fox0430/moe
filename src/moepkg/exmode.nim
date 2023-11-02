@@ -1008,21 +1008,22 @@ proc replaceBuffer(status: var EditorStatus, command: Runes) =
   ## "%s/abc/xyz" or "%s/abc/xyz/g" command.
 
   let replaceInfo = parseReplaceCommand(command)
-  if replaceInfo.isGlobal:
-    # Replace all
-    currentBufStatus.replaceAll(
-      Range(first: 0, last: currentBufStatus.buffer.high),
-      replaceInfo.sub,
-      replaceInfo.by)
-  else:
-    # Replace only the first words in lines.
-    currentBufStatus.replaceOnlyFirstWordInLines(
-      Range(first: 0, last: currentBufStatus.buffer.high),
-      replaceInfo.sub,
-      replaceInfo.by)
+  if replaceInfo.sub.len > 0 and replaceInfo.by.len > 0:
+    if replaceInfo.isGlobal:
+      # Replace all
+      currentBufStatus.replaceAll(
+        Range(first: 0, last: currentBufStatus.buffer.high),
+        replaceInfo.sub,
+        replaceInfo.by)
+    else:
+      # Replace only the first words in lines.
+      currentBufStatus.replaceOnlyFirstWordInLines(
+        Range(first: 0, last: currentBufStatus.buffer.high),
+        replaceInfo.sub,
+        replaceInfo.by)
 
-  status.commandLine.clear
-  status.changeMode(currentBufStatus.prevMode)
+    status.commandLine.clear
+    status.changeMode(currentBufStatus.prevMode)
 
 proc createNewEmptyBufferCommand*(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
