@@ -113,10 +113,6 @@ proc tryOpenSuggestWindow(status: var EditorStatus) {.inline.} =
     mainWindowNode,
     currentMainWindowNode)
 
-proc isIncrementalSearch(status: EditorStatus): bool {.inline.} =
-  isSearchMode(currentBufStatus.mode) and
-  status.settings.incrementalSearch
-
 proc decListIndex(list: var SuggestList) =
   if list.currentIndex == 0: list.currentIndex = -1
   elif list.currentIndex == -1: list.currentIndex = list.suggestions.high
@@ -265,11 +261,27 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
   proc closeSuggestWindow(suggestWin: var Option[PopupWindow]) {.inline.} =
     suggestWin.get.close
 
+  proc isReplaceCommand(commandLine: CommandLine): bool {.inline.} =
+    commandLine.buffer.startsWith(ru"%s/")
+
+  proc isJumpAndHighlightInReplaceCommand(
+    status: EditorStatus): bool {.inline.} =
+      status.settings.incrementalSearch and
+      status.commandLine.isReplaceCommand and
+      status.commandLine.buffer.len > 3
+
+  proc jumpAndHighlightInReplaceCommand(status: var EditorStatus) =
+    # Jump and highlight in replace command.
+    if not status.isSearchHighlight: status.isSearchHighlight = true
+
+    let info = parseReplaceCommand(status.commandLine.buffer[2 .. ^1])
+    if info.by.len == 0:
+      status.execSearchCommand(info.sub)
+
   if currentBufStatus.isSearchMode:
     status.searchHistory.add "".toRunes
 
-    if status.isIncrementalSearch:
-      status.isSearchHighlight = true
+    if not status.isSearchHighlight: status.isSearchHighlight = true
 
   var
     isCancel = false
@@ -401,8 +413,10 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
     else:
       status.commandLine.insert(key)
 
-    if status.isIncrementalSearch and status.commandLine.buffer.len > 0:
+    if status.settings.incrementalSearch and currentBufStatus.isSearchMode:
       status.execSearchCommand(status.commandLine.buffer)
+    elif status.isJumpAndHighlightInReplaceCommand:
+      status.jumpAndHighlightInReplaceCommand
 
     if suggestWin.isSome:
       suggestWin.closeSuggestWindow
@@ -414,7 +428,7 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
       if status.searchHistory[^1].len == 0:
         status.searchHistory.delete(status.searchHistory.high)
 
-      if status.isIncrementalSearch:
+      if status.settings.incrementalSearch:
         status.isSearchHighlight = false
   else:
     if isExMode(currentBufStatus.mode):

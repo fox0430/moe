@@ -1143,21 +1143,15 @@ proc isChangeModeKey(key: Rune): bool {.inline.} =
    key == ord('a') or
    key == ord('A')
 
-proc changeModeToSearchForwardMode(
-  bufStatus: var BufferStatus,
-  commandLine: var CommandLine) =
+proc changeModeToSearchForwardMode(status: var EditorStatus) =
+  currentBufStatus.changeMode(Mode.searchForward)
+  status.commandLine.clear
+  status.commandLine.setPrompt(SearchForwardModePrompt)
 
-    bufStatus.changeMode(Mode.searchForward)
-    commandLine.clear
-    commandLine.setPrompt(SearchForwardModePrompt)
-
-proc changeModeToSearchBackwardMode(
-  bufStatus: var BufferStatus,
-  commandLine: var CommandLine) =
-
-    bufStatus.changeMode(Mode.searchBackward)
-    commandLine.clear
-    commandLine.setPrompt(SearchBackwardModePrompt)
+proc changeModeToSearchBackwardMode(status: var EditorStatus) =
+  currentBufStatus.changeMode(Mode.searchBackward)
+  status.commandLine.clear
+  status.commandLine.setPrompt(SearchBackwardModePrompt)
 
 proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
   ## Exec normal mode commands.
@@ -1768,9 +1762,9 @@ proc execNormalModeCommand*(
     status.lastOperatingTime = now()
 
     if $command == "/":
-      currentBufStatus.changeModeToSearchForwardMode(status.commandLine)
+      status.changeModeToSearchForwardMode
     elif $command == "?":
-      currentBufStatus.changeModeToSearchBackwardMode(status.commandLine)
+      status.changeModeToSearchBackwardMode
     elif $command == ":":
       currentBufStatus.changeModeToExMode(status.commandLine)
     elif $command == ".":
