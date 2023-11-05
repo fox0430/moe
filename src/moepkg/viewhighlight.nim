@@ -266,17 +266,21 @@ proc highlightFullWidthSpace(
         color: EditorColorPairIndex.highlightFullWidthSpace)
       highlight.overwrite(colorSegment)
 
-proc highlightSearchResults(
+proc highlightKeyword(
   highlight: var Highlight,
   bufferInView: BufferInView,
   keyword: Runes,
   settings: EditorSettings,
   isSearchHighlight: bool) =
+    ## Add highlights for the keyword.
+    ## Assuming highlights of search results.
+
+    if keyword.len == 0: return
 
     let
-      allOccurrence = searchAllOccurrence(
-        bufferInView.buffer,
-        keyword,
+      lines = keyword.replaceToNewLines.splitLines
+      positions = bufferInView.buffer.search(
+        lines,
         settings.ignorecase,
         settings.smartcase)
 
@@ -284,13 +288,18 @@ proc highlightSearchResults(
         if isSearchHighlight: EditorColorPairIndex.searchResult
         else: EditorColorPairIndex.replaceText
 
-    for pos in allOccurrence:
-      let colorSegment = ColorSegment(
-        firstRow: bufferInView.originalLineRange.first + pos.line,
-        firstColumn: pos.column,
-        lastRow: bufferInView.originalLineRange.first + pos.line,
-        lastColumn: pos.column + keyword.high,
-        color: color)
+    for p in positions:
+      let
+        lastCol =
+          if lines.len == 1: p.column + lines[^1].high
+          else: lines[^1].high
+
+        colorSegment = ColorSegment(
+          firstRow: bufferInView.originalLineRange.first + p.line,
+          firstColumn: p.column,
+          lastRow: bufferInView.originalLineRange.first + p.line + lines.high,
+          lastColumn: lastCol,
+          color: color)
       highlight.overwrite(colorSegment)
 
 proc highlightSyntaxCheckerReuslts(
@@ -375,7 +384,7 @@ proc updateViewHighlight*(
       highlight.highlightFullWidthSpace(windowNode, bufferInView)
 
     if isSearchHighlight and searchHistory.len > 0:
-      highlight.highlightSearchResults(
+      highlight.highlightKeyword(
         bufferInView,
         searchHistory[^1],
         settings,

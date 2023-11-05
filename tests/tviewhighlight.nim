@@ -1026,3 +1026,235 @@ echo "test"
 
     for cs in h.colorSegments:
       check cs.color != EditorColorPairIndex.gitConflict
+
+suite "viewhighlight: highlightKeyword":
+  const ReservedWords: seq[ReservedWord] = @[]
+
+  test "Basic":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["abcdef", "ghijkl"].toSeqRunes.toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    var h = initHighlight(
+      currentBufStatus.buffer.toSeqRunes,
+      ReservedWords,
+      SourceLanguage.langNone)
+
+    let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
+
+    const
+      keyword = ru"ghi"
+      IsSearchHighlight = true
+
+    h.highlightKeyword(bufferInView, keyword, status.settings, IsSearchHighlight)
+
+    check h.colorSegments == @[
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 0,
+        lastRow: 0,
+        lastColumn: 5,
+        color: default,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 1,
+        firstColumn: 0,
+        lastRow: 1,
+        lastColumn: 2,
+        color: searchResult,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 1,
+        firstColumn: 3,
+        lastRow: 1,
+        lastColumn: 5,
+        color: default,
+        attribute: normal)]
+
+  test "Basic 2":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["abcdef", "ghijkl"].toSeqRunes.toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    var h = initHighlight(
+      currentBufStatus.buffer.toSeqRunes,
+      ReservedWords,
+      SourceLanguage.langNone)
+
+    let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
+
+    const
+      keyword = ru"cde"
+      IsSearchHighlight = true
+
+    h.highlightKeyword(bufferInView, keyword, status.settings, IsSearchHighlight)
+
+    check h.colorSegments == @[
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 0,
+        lastRow: 0,
+        lastColumn: 1,
+        color: default,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 2,
+        lastRow: 0,
+        lastColumn: 4,
+        color: searchResult,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 5,
+        lastRow: 0,
+        lastColumn: 5,
+        color: default,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 1,
+        firstColumn: 0,
+        lastRow: 1,
+        lastColumn: 5,
+        color: default,
+        attribute: normal)]
+
+  test "Multiple lines":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["abc", "ghi", "jkl"].toSeqRunes.toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    var h = initHighlight(
+      currentBufStatus.buffer.toSeqRunes,
+      ReservedWords,
+      SourceLanguage.langNone)
+
+    let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
+
+    const
+      keyword = "c\ngh".toRunes
+      IsSearchHighlight = true
+
+    h.highlightKeyword(bufferInView, keyword, status.settings, IsSearchHighlight)
+
+    check h.colorSegments == @[
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 0,
+        lastRow: 0,
+        lastColumn: 1,
+        color: default,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 2,
+        lastRow: 0,
+        lastColumn: 2,
+        color: searchResult,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 1,
+        firstColumn: 0,
+        lastRow: 1,
+        lastColumn: 1,
+        color: searchResult,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 1,
+        firstColumn: 2,
+        lastRow: 1,
+        lastColumn: 2,
+        color: default,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 2,
+        firstColumn: 0,
+        lastRow: 2,
+        lastColumn: 2,
+        color: default,
+        attribute: normal)]
+
+  test "Multiple lines 2":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["abc", "", "", "def"].toSeqRunes.toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    var h = initHighlight(
+      currentBufStatus.buffer.toSeqRunes,
+      ReservedWords,
+      SourceLanguage.langNone)
+
+    let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
+
+    const
+      keyword = "abc\n\n\ndef".toRunes
+      IsSearchHighlight = true
+
+    h.highlightKeyword(bufferInView, keyword, status.settings, IsSearchHighlight)
+
+    check h.colorSegments == @[
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 0,
+        lastRow: 0,
+        lastColumn: 2,
+        color: searchResult,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 1,
+        firstColumn: 0,
+        lastRow: 1,
+        lastColumn: -1,
+        color: searchResult,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 2,
+        firstColumn: 0,
+        lastRow: 2,
+        lastColumn: -1,
+        color: searchResult,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 3,
+        firstColumn: 0,
+        lastRow: 3,
+        lastColumn: 2,
+        color: searchResult,
+        attribute: normal)]
+
+  test "Only a newline":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    var h = initHighlight(
+      currentBufStatus.buffer.toSeqRunes,
+      ReservedWords,
+      SourceLanguage.langNone)
+
+    let beforeSegments = h.colorSegments
+
+    let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
+
+    const
+      keyword = "\n".toRunes
+      IsSearchHighlight = true
+
+    h.highlightKeyword(bufferInView, keyword, status.settings, IsSearchHighlight)
+
+    check h.colorSegments == beforeSegments
