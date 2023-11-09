@@ -516,7 +516,7 @@ proc jumpToSearchForwardResults*(
   isIgnorecase, isSmartcase: bool) =
 
     let searchResult = bufStatus.searchBuffer(
-      windowNode,
+      windowNode.bufferPosition,
       keyword,
       isIgnorecase,
       isSmartcase)

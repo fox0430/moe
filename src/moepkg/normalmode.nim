@@ -117,11 +117,11 @@ proc searchNextOccurrence(status: var EditorStatus, keyword: Runes) =
 
   status.searchHistory.saveSearchHistory(keyword, status.searchHistoryLimit)
 
-  let
-    ignorecase = status.settings.ignorecase
-    smartcase = status.settings.smartcase
-    searchResult = currentBufStatus.searchBuffer(
-      currentMainWindowNode, keyword, ignorecase, smartcase)
+  let searchResult = currentBufStatus.searchBuffer(
+    currentMainWindowNode.bufferPosition,
+    keyword,
+    status.settings.ignorecase,
+    status.settings.smartcase)
   if searchResult.isSome:
     currentBufStatus.jumpLine(currentMainWindowNode, searchResult.get.line)
     for column in 0 ..< searchResult.get.column:

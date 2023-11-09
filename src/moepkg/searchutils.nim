@@ -74,6 +74,51 @@ proc searchAll*(
       else:
         position.inc
 
+proc search*(
+  buffer, keyword: seq[Runes],
+  isIgnorecase, isSmartcase: bool): seq[BufferPosition] =
+    ## Return start positions if keyword matches.
+    ##
+    ## If the `keyword[0]` is a newline, `line.high + 1` will be set to the
+    ## column.
+
+    let
+      bufferRunes = buffer.toRunes
+
+      positionsResult = bufferRunes.searchAll(
+        keyword.toRunes,
+        isIgnorecase,
+        isSmartcase)
+
+    if positionsResult.len > 0:
+      var
+        countPositionsResult = 0
+        newLinePositions: seq[int]
+      for i in 0 .. bufferRunes.high:
+        if bufferRunes[i] == ru'\n':
+          newLinePositions.add i
+
+        if i == positionsResult[countPositionsResult]:
+          if newLinePositions.len == 0:
+            result.add BufferPosition(line: 0, column: i)
+          elif i == newLinePositions[^1]:
+            let col =
+              if newLinePositions.len > 1:
+                i - newLinePositions[newLinePositions.high - 1] - 1
+              else:
+                newLinePositions[^1]
+
+            result.add BufferPosition(
+              line: newLinePositions.high,
+              column: col)
+          else:
+            result.add BufferPosition(
+              line: newLinePositions.len,
+              column: i - newLinePositions[^1] - 1)
+
+          if countPositionsResult == positionsResult.high: break
+          else: countPositionsResult.inc
+
 proc searchReversely(
   line: Runes,
   keyword: Runes,
@@ -90,18 +135,18 @@ proc searchReversely(
 
 proc searchBuffer*(
   bufStatus: BufferStatus,
-  windowNode: WindowNode,
+  currentPosition: BufferPosition,
   keyword: Runes,
   isIgnorecase, isSmartcase: bool): Option[SearchResult] =
     ## Return a buffer position if a keyword matches.
 
-    let startLine = windowNode.currentLine
+    let startLine = currentPosition.line
     for i in 0 ..< bufStatus.buffer.len:
       let
         lineNumber = (startLine + i) mod bufStatus.buffer.len
 
         first =
-          if lineNumber == startLine and i == 0: windowNode.currentColumn
+          if lineNumber == startLine and i == 0: currentPosition.column
           else: 0
         last = bufStatus.buffer[lineNumber].len
 

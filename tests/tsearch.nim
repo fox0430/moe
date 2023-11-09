@@ -19,7 +19,8 @@
 
 import std/[unittest, options, strformat]
 import pkg/results
-import moepkg/[unicodeext, editorstatus, gapbuffer, independentutils]
+import moepkg/[unicodeext, editorstatus, gapbuffer, independentutils,
+               windownode]
 
 import moepkg/searchutils {.all.}
 
@@ -134,7 +135,10 @@ suite "search: searchBuffer":
       isIgnorecase = true
       isSmartcase = true
       searchResult = currentBufStatus.searchBuffer(
-        currentMainWindowNode, keyword, isIgnorecase, isSmartcase)
+        currentMainWindowNode.bufferPosition,
+        keyword,
+        isIgnorecase,
+        isSmartcase)
 
     check searchResult.get.line == 1
     check searchResult.get.column == 2
@@ -154,7 +158,10 @@ suite "search: searchBuffer":
       isIgnorecase = true
       isSmartcase = true
       searchResult = currentBufStatus.searchBuffer(
-        currentMainWindowNode, keyword, isIgnorecase, isSmartcase)
+        currentMainWindowNode.bufferPosition,
+        keyword,
+        isIgnorecase,
+        isSmartcase)
 
     check searchResult.isNone
 
@@ -769,3 +776,64 @@ suite "searchutils: findFirstOfWord":
   test "Symbol with Alfabets":
     const Position = 3
     check findFirstOfWord(ru"abc*def", Position) == 3
+
+suite "searchutils: search (seq[Runes])":
+  test "Basic":
+    let
+      buffer = @["abcdef", "ghijkl"].toSeqRunes
+      keyword = @["ijk"].toSeqRunes
+    const
+      IsIgnorecase = true
+      IsSmartcase = true
+
+    check buffer.search(keyword, IsIgnorecase, IsSmartcase) == @[
+      BufferPosition(line: 1, column: 2)]
+
+  test "Basic 2":
+    let
+      buffer = @["abc", "def", "ghi", "", "jkl"].toSeqRunes
+      keyword = @["def", "ghi"].toSeqRunes
+    const
+      IsIgnorecase = true
+      IsSmartcase = true
+
+    check buffer.search(keyword, IsIgnorecase, IsSmartcase) == @[
+      BufferPosition(line: 1, column: 0)]
+
+  test "Basic 3":
+    let
+      buffer = @["abcdef", "ghijkl"].toSeqRunes
+      keyword = @["def", "ghi"].toSeqRunes
+    const
+      IsIgnorecase = true
+      IsSmartcase = true
+
+    check buffer.search(keyword, IsIgnorecase, IsSmartcase) == @[
+      BufferPosition(line: 0, column: 3)
+    ]
+
+  test "Search new lines":
+    let
+      buffer = @["a", "bc", "def", "", "ghij"].toSeqRunes
+      keyword = @["", ""].toSeqRunes
+    const
+      IsIgnorecase = true
+      IsSmartcase = true
+
+    check buffer.search(keyword, IsIgnorecase, IsSmartcase) == @[
+      BufferPosition(line: 0, column: 1),
+      BufferPosition(line: 1, column: 2),
+      BufferPosition(line: 2, column: 3),
+      BufferPosition(line: 3, column: 0),
+    ]
+
+  test "Search new lines 2":
+    let
+      buffer = @["a", "b", "", "", "c"].toSeqRunes
+      keyword = @["", "", ""].toSeqRunes
+    const
+      IsIgnorecase = true
+      IsSmartcase = true
+
+    check buffer.search(keyword, IsIgnorecase, IsSmartcase) == @[
+      BufferPosition(line: 1, column: 1)]

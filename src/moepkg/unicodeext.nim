@@ -275,12 +275,17 @@ proc toRunes*(dateTime: DateTime): Runes {.inline.} = toRunes($dateTime)
 
 proc toRunes*(oid: Oid): Runes {.inline.} = toRunes($oid)
 
-proc toRunes*(s: seq[string]): Runes =
+proc toRunes*(s: seq[string]): Runes {.inline.} =
   for l in s: result.add l.toRunes
 
 proc toRunes*(r: Rune): Runes {.inline.} = @[r]
 
-proc toSeqRunes*(s: seq[string]): seq[Runes] =
+proc toRunes*(r: seq[Runes]): Runes {.inline.} =
+  for i, l in r:
+    result.add l
+    if i < r.high: result.add ru'\n'
+
+proc toSeqRunes*(s: seq[string]): seq[Runes] {.inline.} =
   for l in s:
     result.add l.toRunes
 

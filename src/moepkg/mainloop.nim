@@ -275,7 +275,7 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
     if not status.isSearchHighlight: status.isSearchHighlight = true
 
     let info = parseReplaceCommand(status.commandLine.buffer[2 .. ^1])
-    if info.by.len == 0:
+    if info.sub.len > 0:
       status.execSearchCommand(info.sub)
 
   if currentBufStatus.isSearchMode:
