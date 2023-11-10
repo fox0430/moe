@@ -181,7 +181,7 @@ suite "search: searchBufferReversely":
       isIgnorecase = true
       isSmartcase = true
       searchResult = currentBufStatus.searchBufferReversely(
-        currentMainWindowNode,
+        currentMainWindowNode.bufferPosition,
         keyword,
         isIgnorecase,
         isSmartcase)
@@ -204,7 +204,7 @@ suite "search: searchBufferReversely":
       isIgnorecase = true
       isSmartcase = true
       searchResult = currentBufStatus.searchBufferReversely(
-        currentMainWindowNode,
+        currentMainWindowNode.bufferPosition,
         keyword,
         isIgnorecase,
         isSmartcase)
@@ -778,6 +778,16 @@ suite "searchutils: findFirstOfWord":
     check findFirstOfWord(ru"abc*def", Position) == 3
 
 suite "searchutils: search (seq[Runes])":
+  test "Empty":
+    let
+      buffer = @["abcdef", "ghijkl"].toSeqRunes
+      keyword = @[ru""]
+    const
+      IsIgnorecase = true
+      IsSmartcase = true
+
+    check buffer.search(keyword, IsIgnorecase, IsSmartcase).len == 0
+
   test "Basic":
     let
       buffer = @["abcdef", "ghijkl"].toSeqRunes

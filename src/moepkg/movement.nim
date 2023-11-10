@@ -515,11 +515,21 @@ proc jumpToSearchForwardResults*(
   keyword: Runes,
   isIgnorecase, isSmartcase: bool) =
 
-    let searchResult = bufStatus.searchBuffer(
-      windowNode.bufferPosition,
-      keyword,
-      isIgnorecase,
-      isSmartcase)
+    let lines = keyword.replaceToNewLines.splitLines
+
+    var searchResult: Option[BufferPosition]
+    if lines.len == 1:
+      searchResult = bufStatus.searchBuffer(
+        windowNode.bufferPosition,
+        keyword,
+        isIgnorecase,
+        isSmartcase)
+    else:
+      searchResult = bufStatus.searchBuffer(
+        windowNode.bufferPosition,
+        lines,
+        isIgnorecase,
+        isSmartcase)
 
     if searchResult.isSome:
       bufStatus.jumpLine(windowNode, searchResult.get.line)
@@ -532,11 +542,21 @@ proc jumpToSearchBackwordResults*(
   keyword: Runes,
   isIgnorecase, isSmartcase: bool) =
 
-    let searchResult = bufStatus.searchBufferReversely(
-      windowNode,
-      keyword,
-      isIgnorecase,
-      isSmartcase)
+    let lines = keyword.replaceToNewLines.splitLines
+
+    var searchResult: Option[BufferPosition]
+    if lines.len == 1:
+      searchResult = bufStatus.searchBufferReversely(
+        windowNode.bufferPosition,
+        keyword,
+        isIgnorecase,
+        isSmartcase)
+    else:
+      searchResult = bufStatus.searchBufferReversely(
+        windowNode.bufferPosition,
+        lines,
+        isIgnorecase,
+        isSmartcase)
 
     if searchResult.isSome:
       bufStatus.jumpLine(windowNode, searchResult.get.line)
