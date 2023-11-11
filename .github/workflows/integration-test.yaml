@@ -20,15 +20,6 @@
 name: Integration tests
 
 on:
-  push:
-    paths:
-      - '.github/workflows/integration-test.yaml'
-      - 'moe.nimble'
-      - 'src/**'
-      - 'shpec.sh'
-    branches:
-      - develop
-      - master
   pull_request:
     paths:
       - '.github/workflows/integration-test.yaml'
