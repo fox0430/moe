@@ -101,6 +101,10 @@ proc searchHistoryLimit(status: EditorStatus): int {.inline.} =
   status.settings.persist.searchHistoryLimit
 
 proc searchNextOccurrence(status: var EditorStatus, keyword: Runes) =
+  ## Search and move to the next result.
+
+  if keyword.len == 0: return
+
   status.isSearchHighlight = true
 
   var highlight = currentMainWindowNode.highlight
@@ -154,6 +158,9 @@ proc searchNextOccurrence(status: var EditorStatus) {.inline.} =
 proc searchNextOccurrenceReversely(
   status: var EditorStatus,
   keyword: Runes) =
+    ## Search and move to the previous result.
+
+    if keyword.len == 0: return
 
     status.isSearchHighlight = true
 
