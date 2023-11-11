@@ -18,7 +18,7 @@
 #[############################################################################]#
 
 import std/[strutils, options]
-import gapbuffer, unicodeext, bufferstatus, windownode, independentutils
+import gapbuffer, unicodeext, bufferstatus, independentutils
 
 type
   SearchResult* = BufferPosition
@@ -43,8 +43,7 @@ proc compare*(
       return rune == sub
 
 proc search*(
-  buffer: Runes,
-  keyword: Runes,
+  buffer, keyword: Runes,
   isIgnorecase, isSmartcase: bool): Option[int] =
     ## Return a position if keyword matches.
 
@@ -57,8 +56,7 @@ proc search*(
           return some(position)
 
 proc searchAll*(
-  buffer: Runes,
-  keyword: Runes,
+  buffer, keyword: Runes,
   isIgnorecase, isSmartcase: bool): seq[int] =
     ## Return positions if keyword matches.
 
@@ -81,6 +79,8 @@ proc search*(
     ##
     ## If the `keyword[0]` is a newline, `line.high + 1` will be set to the
     ## column.
+
+    if keyword.len == 0 or (keyword.len == 1 and keyword[0].len == 0): return
 
     let
       bufferRunes = buffer.toRunes
@@ -120,15 +120,14 @@ proc search*(
           else: countPositionsResult.inc
 
 proc searchReversely(
-  line: Runes,
-  keyword: Runes,
+  line, keyword: Runes,
   isIgnorecase, isSmartcase: bool): Option[int] =
     ## Return a position in a line if a keyword matches.
 
-    for startPostion in countdown((line.len - keyword.len), 0):
+    for startPostion in countdown(line.len - keyword.len, 0):
       let
-        endPosition = startPostion + keyword.len
-        runes = line[startPostion ..< endPosition]
+        endPosition = startPostion + keyword.high
+        runes = line[startPostion .. endPosition]
 
       if compare(runes, keyword, isIgnorecase, isSmartcase):
         return startPostion.some
@@ -144,16 +143,13 @@ proc searchBuffer*(
     for i in 0 ..< bufStatus.buffer.len:
       let
         lineNumber = (startLine + i) mod bufStatus.buffer.len
-
+        line = bufStatus.buffer[lineNumber]
         first =
           if lineNumber == startLine and i == 0: currentPosition.column
           else: 0
-        last = bufStatus.buffer[lineNumber].len
-
-        line = bufStatus.buffer[lineNumber]
 
         position = search(
-          line[first ..< last],
+          line[first .. bufStatus.buffer[lineNumber].high],
           keyword,
           isIgnorecase,
           isSmartcase)
@@ -161,34 +157,78 @@ proc searchBuffer*(
       if position.isSome:
         return SearchResult(line: lineNumber, column: first + position.get).some
 
+proc searchBuffer*(
+  bufStatus: BufferStatus,
+  currentPosition: BufferPosition,
+  keyword: seq[Runes],
+  isIgnorecase, isSmartcase: bool): Option[SearchResult] =
+    ## Return a buffer position if a keyword matches.
+
+    let startLine = currentPosition.line
+    for i in 0 .. bufStatus.buffer.high - keyword.high:
+      let lineNumber = (startLine + i) mod bufStatus.buffer.len
+
+      if bufStatus.buffer.high < lineNumber + keyword.high:
+        continue
+
+      let position = search(
+        bufStatus.buffer[lineNumber .. lineNumber + keyword.high],
+        keyword,
+        isIgnorecase,
+        isSmartcase)
+
+      if position.len > 0:
+        return SearchResult(
+          line: lineNumber,
+          column: position[0].column).some
+
 proc searchBufferReversely*(
   bufStatus: BufferStatus,
-  windowNode: WindowNode,
+  currentPosition: BufferPosition,
   keyword: Runes,
   isIgnorecase, isSmartcase: bool): Option[SearchResult] =
     ## Return a buffer position if a keyword matches.
 
-    let
-      startLine = windowNode.currentLine
-      buffer = bufStatus.buffer
+    let startLine = currentPosition.line
     for i in 0 ..< bufStatus.buffer.len + 1:
-      var lineNumber = (startLine - i) mod buffer.len
-      if lineNumber < 0: lineNumber = buffer.len - i
+      var lineNumber = (startLine - i) mod bufStatus.buffer.len
+      if lineNumber < 0: lineNumber = bufStatus.buffer.len - i
       let
         endPosition =
-          if lineNumber == startLine and i == 0:
-            windowNode.currentColumn
-          else:
-            buffer[lineNumber].len
+          if lineNumber == startLine and i == 0: currentPosition.column
+          else: bufStatus.buffer[lineNumber].len
 
         position = searchReversely(
-          buffer[lineNumber][0 ..< endPosition],
+          bufStatus.buffer[lineNumber][0 ..< endPosition],
           keyword,
           isIgnorecase,
           isSmartcase)
 
       if position.isSome:
         return SearchResult(line: lineNumber, column: position.get).some
+
+proc searchBufferReversely*(
+  bufStatus: BufferStatus,
+  currentPosition: BufferPosition,
+  keyword: seq[Runes],
+  isIgnorecase, isSmartcase: bool): Option[SearchResult] =
+    ## Return a buffer position if a keyword matches.
+
+    let startLine = currentPosition.line
+    for i in 0 ..< bufStatus.buffer.len + 1:
+      var lineNumber = (startLine - i) mod bufStatus.buffer.len
+      if lineNumber < 0: lineNumber = bufStatus.buffer.len - i
+
+      if bufStatus.buffer.high < lineNumber + keyword.high:
+        continue
+
+      let positions = search(
+        bufStatus.buffer[lineNumber .. lineNumber + keyword.high],
+        keyword,
+        isIgnorecase,
+        isSmartcase)
+      if positions.len > 0:
+        return SearchResult(line: lineNumber, column: positions[0].column).some
 
 proc searchAllOccurrence*(
   buffer: seq[Runes],

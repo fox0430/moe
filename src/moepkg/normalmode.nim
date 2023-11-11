@@ -101,7 +101,9 @@ proc searchHistoryLimit(status: EditorStatus): int {.inline.} =
   status.settings.persist.searchHistoryLimit
 
 proc searchNextOccurrence(status: var EditorStatus, keyword: Runes) =
-  let currentBufferIndex = status.bufferIndexInCurrentWindow
+  ## Search and move to the next result.
+
+  if keyword.len == 0: return
 
   status.isSearchHighlight = true
 
@@ -113,32 +115,52 @@ proc searchNextOccurrence(status: var EditorStatus, keyword: Runes) =
     status.searchHistory,
     status.settings)
 
-  status.bufStatus[currentBufferIndex].keyRight(currentMainWindowNode)
-
   status.searchHistory.saveSearchHistory(keyword, status.searchHistoryLimit)
 
-  let searchResult = currentBufStatus.searchBuffer(
-    currentMainWindowNode.bufferPosition,
-    keyword,
-    status.settings.ignorecase,
-    status.settings.smartcase)
+  block:
+    let position = currentMainWindowNode.bufferPosition
+
+    # Move the cursor position before search
+    if currentBufStatus.buffer[position.line].high == -1 or
+       position.column == currentBufStatus.buffer[position.line].high:
+         if position.line == currentBufStatus.buffer.high:
+           currentMainWindowNode.currentLine = 0
+           currentMainWindowNode.currentColumn = 0
+         else:
+           currentBufStatus.keyDown(currentMainWindowNode)
+    else:
+      currentBufStatus.keyRight(currentMainWindowNode)
+  let lines = keyword.replaceToNewLines.splitLines
+  var searchResult: Option[BufferPosition]
+  if lines.len == 1:
+    searchResult = currentBufStatus.searchBuffer(
+      currentMainWindowNode.bufferPosition,
+      keyword,
+      status.settings.ignorecase,
+      status.settings.smartcase)
+  else:
+    searchResult = currentBufStatus.searchBuffer(
+      currentMainWindowNode.bufferPosition,
+      lines,
+      status.settings.ignorecase,
+      status.settings.smartcase)
   if searchResult.isSome:
     currentBufStatus.jumpLine(currentMainWindowNode, searchResult.get.line)
     for column in 0 ..< searchResult.get.column:
-      status.bufStatus[currentBufferIndex].keyRight(currentMainWindowNode)
+      currentBufStatus.keyRight(currentMainWindowNode)
   else:
     currentMainWindowNode.keyLeft
 
-proc searchNextOccurrence(status: var EditorStatus) =
-  if status.searchHistory.len < 1: return
-
-  let keyword = status.searchHistory[status.searchHistory.high]
-
-  status.searchNextOccurrence(keyword)
+proc searchNextOccurrence(status: var EditorStatus) {.inline.} =
+  if status.searchHistory.len > 0:
+    status.searchNextOccurrence(status.searchHistory[^1])
 
 proc searchNextOccurrenceReversely(
   status: var EditorStatus,
   keyword: Runes) =
+    ## Search and move to the previous result.
+
+    if keyword.len == 0: return
 
     status.isSearchHighlight = true
 
@@ -150,15 +172,43 @@ proc searchNextOccurrenceReversely(
       status.searchHistory,
       status.settings)
 
-    currentMainWindowNode.keyLeft
-
     status.searchHistory.saveSearchHistory(keyword, status.searchHistoryLimit)
 
-    let
-      ignorecase = status.settings.ignorecase
-      smartcase = status.settings.smartcase
+    block:
+      let position = currentMainWindowNode.bufferPosition
+
+      template b: BufferStatus = currentBufStatus
+
+      # Move the cursor position before search
+      if position.column == 0:
+        if position.line == 0 and b.buffer.len > 0:
+          currentMainWindowNode.currentLine = b.buffer.high
+        elif b.buffer.len > 0 and position.line > 0:
+          b.keyUp(currentMainWindowNode)
+
+        if position.line != currentMainWindowNode.currentLine:
+          currentMainWindowNode.currentColumn =
+            if b.buffer[currentMainWindowNode.currentLine].high > -1:
+              b.buffer[currentMainWindowNode.currentLine].high
+          else:
+            0
+      else:
+        currentMainWindowNode.keyLeft
+
+    let lines = keyword.replaceToNewLines.splitLines
+    var searchResult: Option[BufferPosition]
+    if lines.len == 1:
       searchResult = currentBufStatus.searchBufferReversely(
-        currentMainWindowNode, keyword, ignorecase, smartcase)
+        currentMainWindowNode.bufferPosition,
+        keyword,
+        status.settings.ignorecase,
+        status.settings.smartcase)
+    else:
+      searchResult = currentBufStatus.searchBufferReversely(
+        currentMainWindowNode.bufferPosition,
+        lines,
+        status.settings.ignorecase,
+        status.settings.smartcase)
     if searchResult.isSome:
       currentBufStatus.jumpLine(currentMainWindowNode, searchResult.get.line)
       for column in 0 ..< searchResult.get.column:
@@ -166,12 +216,9 @@ proc searchNextOccurrenceReversely(
     else:
       currentBufStatus.keyRight(currentMainWindowNode)
 
-proc searchNextOccurrenceReversely(status: var EditorStatus) =
-  if status.searchHistory.len < 1: return
-
-  let keyword = status.searchHistory[^1]
-
-  status.searchNextOccurrenceReversely(keyword)
+proc searchNextOccurrenceReversely(status: var EditorStatus) {.inline.} =
+  if status.searchHistory.len > 0:
+    status.searchNextOccurrenceReversely(status.searchHistory[^1])
 
 proc turnOffHighlighting*(status: var EditorStatus) =
   status.isSearchHighlight = false

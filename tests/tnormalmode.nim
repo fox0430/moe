@@ -3190,3 +3190,304 @@ suite "Normal mode: Delete characters until the character (dt(x) command)":
     check currentBufStatus.isNormalMode
 
     check currentMainWindowNode.currentColumn == 1
+
+suite "Normal mode: searchNextOccurrence":
+  test "Empty":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentMainWindowNode.currentColumn = 1
+    currentBufStatus.buffer = @["abcdef"]
+      .toSeqRunes
+      .toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const Keyword = ru""
+    status.searchNextOccurrence(Keyword)
+    status.update
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 1
+
+  test "Not found":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentMainWindowNode.currentColumn = 1
+    currentBufStatus.buffer = @["abcdef"]
+      .toSeqRunes
+      .toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const Keyword = ru"xyz"
+    status.searchNextOccurrence(Keyword)
+    status.update
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 1
+
+  test "Basic":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["abcdef"]
+      .toSeqRunes
+      .toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const Keyword = ru"de"
+    status.searchNextOccurrence(Keyword)
+    status.update
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 3
+
+  test "Basic 2":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["abc", "def", "ghi"]
+      .toSeqRunes
+      .toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const Keyword = ru"def"
+    status.searchNextOccurrence(Keyword)
+    status.update
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0
+
+  test "Basic 3":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentMainWindowNode.currentLine = 1
+    currentMainWindowNode.currentColumn = 1
+    currentBufStatus.buffer = @["abc", "def", "ghi"]
+      .toSeqRunes
+      .toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const Keyword = ru"ef"
+    status.searchNextOccurrence(Keyword)
+    status.update
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 1
+
+  test "Basic 4":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentMainWindowNode.currentLine = 1
+    currentMainWindowNode.currentColumn = 0
+    currentBufStatus.buffer = @["abc", "def", "ghi"]
+      .toSeqRunes
+      .toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const Keyword = ru"abc"
+    status.searchNextOccurrence(Keyword)
+    status.update
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+
+  test "With newline":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["abc", "def", "ghi"]
+      .toSeqRunes
+      .toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const Keyword = "ef\nghi".toRunes
+    status.searchNextOccurrence(Keyword)
+    status.update
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 1
+
+  test "Move twice":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["abc", "def", "abc", "def"]
+      .toSeqRunes
+      .toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const Keyword = ru"def"
+
+    status.searchNextOccurrence(Keyword)
+    status.update
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0
+
+    status.searchNextOccurrence(Keyword)
+    status.update
+    check currentMainWindowNode.currentLine == 3
+    check currentMainWindowNode.currentColumn == 0
+
+suite "Normal mode: searchNextOccurrenceReversely":
+  test "Empty":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentMainWindowNode.currentColumn = 1
+    currentBufStatus.buffer = @["abcdef"]
+      .toSeqRunes
+      .toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const Keyword = ru""
+    status.searchNextOccurrence(Keyword)
+    status.update
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 1
+
+  test "Not found":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentMainWindowNode.currentColumn = 1
+    currentBufStatus.buffer = @["abcdef"]
+      .toSeqRunes
+      .toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const Keyword = ru"xyz"
+    status.searchNextOccurrenceReversely(Keyword)
+    status.update
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 1
+
+  test "Basic":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentMainWindowNode.currentColumn = 5
+    currentBufStatus.buffer = @["abcdef"]
+      .toSeqRunes
+      .toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const Keyword = ru"bc"
+    status.searchNextOccurrenceReversely(Keyword)
+    status.update
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 1
+
+  test "Basic 2":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentMainWindowNode.currentColumn = 2
+    currentBufStatus.buffer = @["abc", "def", "ghi"]
+      .toSeqRunes
+      .toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const Keyword = ru"abc"
+    status.searchNextOccurrenceReversely(Keyword)
+    status.update
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+
+  test "Basic 3":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentMainWindowNode.currentLine = 1
+    currentMainWindowNode.currentColumn = 1
+    currentBufStatus.buffer = @["abc", "def", "ghi"]
+      .toSeqRunes
+      .toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const Keyword = ru"ef"
+    status.searchNextOccurrenceReversely(Keyword)
+    status.update
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 1
+
+  test "Basic 4":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentMainWindowNode.currentLine = 1
+    currentBufStatus.buffer = @["abc", "def", "ghi"]
+      .toSeqRunes
+      .toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const Keyword = ru"ghi"
+    status.searchNextOccurrenceReversely(Keyword)
+    status.update
+
+    check currentMainWindowNode.currentLine == 2
+    check currentMainWindowNode.currentColumn == 0
+
+  test "With newline":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentMainWindowNode.currentLine = 2
+    currentMainWindowNode.currentColumn = 2
+    currentBufStatus.buffer = @["abc", "def", "ghi"]
+      .toSeqRunes
+      .toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const Keyword = "ef\ngh".toRunes
+    status.searchNextOccurrenceReversely(Keyword)
+    status.update
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 1
+
+  test "Move twice":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentMainWindowNode.currentLine = 3
+    currentMainWindowNode.currentColumn = 2
+    currentBufStatus.buffer = @["abc", "def", "abc", "def"]
+      .toSeqRunes
+      .toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const Keyword = ru"abc"
+
+    status.searchNextOccurrenceReversely(Keyword)
+    status.update
+    check currentMainWindowNode.currentLine == 2
+    check currentMainWindowNode.currentColumn == 0
+
+    status.searchNextOccurrence(Keyword)
+    status.update
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0

@@ -360,17 +360,19 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
         break
 
     elif isTabKey(key):
-      if suggestWin.isNone:
-        suggestWin = status.commandLine.openSuggestWindow(suggestList)
-      else:
-        suggestList.incListIndex
-      continue
+      if currentBufStatus.isExMode:
+        if suggestWin.isNone:
+          suggestWin = status.commandLine.openSuggestWindow(suggestList)
+        else:
+          suggestList.incListIndex
+        continue
     elif isShiftTab(key):
-      if suggestWin.isNone:
-        suggestWin = status.commandLine.openSuggestWindow(suggestList)
-      else:
-        suggestList.decListIndex
-      continue
+      if currentBufStatus.isExMode:
+        if suggestWin.isNone:
+          suggestWin = status.commandLine.openSuggestWindow(suggestList)
+        else:
+          suggestList.decListIndex
+        continue
 
     elif isLeftKey(key):
       status.commandLine.moveLeft
