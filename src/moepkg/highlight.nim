@@ -240,6 +240,10 @@ proc getEditorColorPair(
       of gtPreprocessor: EditorColorPairIndex.preprocessor
       of gtWhitespace: EditorColorPairIndex.default
       of gtPragma: EditorColorPairIndex.pragma
+      of gtIdentifier:
+        # TODO: Add EditorColorPairIndex.identifier?
+        if language == SourceLanguage.langToml: EditorColorPairIndex.keyword
+        else: EditorColorPairIndex.default
       else: EditorColorPairIndex.default
 
 proc initHighlightPlain*(buffer: seq[Runes]): Highlight {.inline.} =
@@ -406,6 +410,8 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langShell
   of ".cff", ".yaml", ".yml":
     return SourceLanguage.langYaml
+  of ".toml":
+    return SourceLanguage.langToml
   else:
     return SourceLanguage.langNone
 
