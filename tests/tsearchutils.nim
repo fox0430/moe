@@ -24,7 +24,7 @@ import moepkg/[unicodeext, editorstatus, gapbuffer, independentutils,
 
 import moepkg/searchutils {.all.}
 
-suite "search: search":
+suite "searchutils: search":
   test "Basic":
     let
       line = ru"abc efg hijkl"
@@ -80,7 +80,7 @@ suite "search: search":
 
     check position.isNone
 
-suite "search: searchAll":
+suite "searchutils: searchAll":
   test "Basic":
     let
       line = ru"abc def abc"
@@ -99,7 +99,7 @@ suite "search: searchAll":
     let positions = line.searchAll(ru"abc", isIgnorecase, isSmartcase)
     check positions == @[0, 6, 9, 15]
 
-suite "search: searchReversely":
+suite "searchutils: searchReversely":
   test "searchReversely":
     let
       line = ru"abc efg hijkl"
@@ -293,7 +293,7 @@ suite "searchutils: searchBufferReversely":
 
     check r.get == BufferPosition(line: 1, column: 1)
 
-suite "search: searchAllOccurrence":
+suite "searchutils: searchAllOccurrence":
   test "searchAllOccurrence":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
@@ -343,7 +343,7 @@ suite "search: searchAllOccurrence":
 
     check searchResult.len == 0
 
-suite "search: searchClosingParen":
+suite "searchutils: searchClosingParen":
   const
     OpenParens = [ru'(', ru'{', ru'[']
     CloseParens = [ru')', ru'}', ru']']
@@ -486,7 +486,7 @@ suite "search: searchClosingParen":
       CurrentPosition,
       ExpectResult)
 
-suite "search: searchOpeningParen":
+suite "searchutils: searchOpeningParen":
   const
     OpenParens = [ru'(', ru'{', ru'[']
     CloseParens = [ru')', ru'}', ru']']
@@ -629,7 +629,7 @@ suite "search: searchOpeningParen":
       CurrentPosition,
       ExpectResult)
 
-suite "search: matchingParenPair":
+suite "searchutils: matchingParenPair":
   let
     openParens = @[ru'(', ru'{', ru'[']
     closeParens = @[ru')', ru'}', ru']']
