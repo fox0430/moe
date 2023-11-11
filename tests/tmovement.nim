@@ -430,7 +430,7 @@ test "Move to matching pair of paren 5":
   check currentMainWindowNode.currentColumn == 0
 
 suite "jumpToSearchForwardResults":
-  test "jumpToSearchForwardResults":
+  test "Basic":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
 
@@ -450,7 +450,7 @@ suite "jumpToSearchForwardResults":
     check currentMainWindowNode.currentLine == 1
     check currentMainWindowNode.currentColumn == 4
 
-  test "jumpToSearchForwardResults 2":
+  test "Basic 2":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
 
@@ -470,8 +470,30 @@ suite "jumpToSearchForwardResults":
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 1
 
+  test "With newline":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+
+    currentMainWindowNode.currentColumn = 0
+    currentBufStatus.buffer = @[
+      "abc def",
+      "ghi jkl",
+      "mno pqr"]
+      .toSeqRunes
+      .toGapBuffer
+
+    const Keyword = "jkl\nmno".toRunes
+    currentBufStatus.jumpToSearchForwardResults(
+      currentMainWindowNode,
+      Keyword,
+      status.settings.ignorecase,
+      status.settings.smartcase)
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 4
+
 suite "jumpToSearchBackwordResults":
-  test "jumpToSearchBackwordResults":
+  test "Basic":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
 
@@ -488,10 +510,10 @@ suite "jumpToSearchBackwordResults":
       status.settings.ignorecase,
       status.settings.smartcase)
 
-    check(currentMainWindowNode.currentLine == 0)
-    check(currentMainWindowNode.currentColumn == 0)
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
 
-  test "jumpToSearchBackwordResults 2":
+  test "Basic 2":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
 
@@ -510,6 +532,28 @@ suite "jumpToSearchBackwordResults":
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 1
+
+  test "With newline":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+
+    currentMainWindowNode.currentLine = 2
+    currentBufStatus.buffer = @[
+      "abc def",
+      "ghi jkl",
+      "mno abc"]
+      .toSeqRunes
+      .initGapBuffer
+
+    const Keyword = "def\nghi".toRunes
+    currentBufStatus.jumpToSearchBackwordResults(
+      currentMainWindowNode,
+      Keyword,
+      status.settings.ignorecase,
+      status.settings.smartcase)
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 4
 
 suite "movement: moveToFirstWordOfPrevLine":
   test "Only whitespaces":

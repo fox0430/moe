@@ -119,8 +119,8 @@ suite "search: searchReversely":
 
       check position.isNone
 
-suite "search: searchBuffer":
-  test "searchBuffer":
+suite "searchutils: searchBuffer":
+  test "Basic":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
 
@@ -143,7 +143,7 @@ suite "search: searchBuffer":
     check searchResult.get.line == 1
     check searchResult.get.column == 2
 
-  test "searchBuffer 2":
+  test "Basic 2":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
 
@@ -165,8 +165,49 @@ suite "search: searchBuffer":
 
     check searchResult.isNone
 
-suite "search: searchBufferReversely":
-  test "searchBufferReversely":
+  test "With newline":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["abc", "def", "ghi"]
+      .toSeqRunes
+      .toGapBuffer
+
+    let
+      keyword = @["ef", "gh"].toSeqRunes
+      isIgnorecase = true
+      isSmartcase = true
+
+    let r = currentBufStatus.searchBuffer(
+        currentMainWindowNode.bufferPosition,
+        keyword,
+        isIgnorecase,
+        isSmartcase)
+
+    check r.get == BufferPosition(line: 1, column: 1)
+
+  test "With newline 2":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentMainWindowNode.currentLine = 2
+    currentBufStatus.buffer = @["abc", "def", "ghi"]
+      .toSeqRunes
+      .toGapBuffer
+
+    let
+      keyword = @["bc", "de"].toSeqRunes
+      isIgnorecase = true
+      isSmartcase = true
+
+    let r = currentBufStatus.searchBuffer(
+        currentMainWindowNode.bufferPosition,
+        keyword,
+        isIgnorecase,
+        isSmartcase)
+
+    check r.get == BufferPosition(line: 0, column: 1)
+
+suite "searchutils: searchBufferReversely":
+  test "Basic":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
 
@@ -189,7 +230,7 @@ suite "search: searchBufferReversely":
     check searchResult.get.line == 1
     check searchResult.get.column == 2
 
-  test "searchBufferReversely 2":
+  test "Basic 2":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
 
@@ -210,6 +251,47 @@ suite "search: searchBufferReversely":
         isSmartcase)
 
     check searchResult.isNone
+
+  test "With newline":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentMainWindowNode.currentLine = 2
+    currentBufStatus.buffer = @["abc", "def", "ghi"]
+      .toSeqRunes
+      .toGapBuffer
+
+    let
+      keyword = @["bc", "de"].toSeqRunes
+      isIgnorecase = true
+      isSmartcase = true
+
+    let r = currentBufStatus.searchBufferReversely(
+        currentMainWindowNode.bufferPosition,
+        keyword,
+        isIgnorecase,
+        isSmartcase)
+
+    check r.get == BufferPosition(line: 0, column: 1)
+
+  test "With newline 2":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["abc", "def", "ghi"]
+      .toSeqRunes
+      .toGapBuffer
+
+    let
+      keyword = @["ef", "gh"].toSeqRunes
+      isIgnorecase = true
+      isSmartcase = true
+
+    let r = currentBufStatus.searchBufferReversely(
+        currentMainWindowNode.bufferPosition,
+        keyword,
+        isIgnorecase,
+        isSmartcase)
+
+    check r.get == BufferPosition(line: 1, column: 1)
 
 suite "search: searchAllOccurrence":
   test "searchAllOccurrence":
