@@ -99,8 +99,8 @@ type
     langPython,
     langRust,
     langShell,
-    langYaml,
     langToml,
+    langYaml
 
 const
   ## Characters ending a line.
@@ -154,8 +154,8 @@ const
     "Python",
     "Rust",
     "Shell",
-    "Yaml",
     "Toml",
+    "Yaml"
   ]
 
 
@@ -247,6 +247,6 @@ proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   of langPython: g.pythonNextToken
   of langRust: g.rustNextToken
   of langShell: g.shellNextToken
-  of langYaml: g.yamlNextToken
   of langToml: g.tomlNextToken
+  of langYaml: g.yamlNextToken
   else: discard
