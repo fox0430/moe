@@ -77,7 +77,7 @@ type
     gtTagStart, gtTagEnd, gtKey, gtValue, gtRawData, gtAssembler,
     gtPreprocessor, gtDirective, gtCommand, gtRule, gtHyperlink, gtLabel,
     gtReference, gtOther, gtBoolean, gtSpecialVar, gtBuiltin, gtFunctionName,
-    gtTypeName, gtPragma
+    gtTypeName, gtPragma, gtTable
 
   GeneralTokenizer* = object of RootObj
     kind*: TokenClass
@@ -86,7 +86,8 @@ type
     pos*: int
     state*: TokenClass
 
-  SourceLanguage* = enum langNone,
+  SourceLanguage* = enum
+    langNone,
     langC,
     langCpp,
     langCsharp,
@@ -98,7 +99,8 @@ type
     langPython,
     langRust,
     langShell,
-    langYaml,
+    langToml,
+    langYaml
 
 const
   ## Characters ending a line.
@@ -152,7 +154,8 @@ const
     "Python",
     "Rust",
     "Shell",
-    "Yaml",
+    "Toml",
+    "Yaml"
   ]
 
 
@@ -229,7 +232,8 @@ proc isKeyword*(x: openArray[string], y: string): int =
 
 import syntaxc, syntaxcpp, syntaxcsharp, syntaxhaskell, syntaxjava,
        syntaxjavascript, syntaxmarkdown, syntaxnim, syntaxpython, syntaxrust,
-       syntaxshell, syntaxyaml
+       syntaxshell, syntaxyaml, syntaxtoml
+
 proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   case lang
   of langC: g.cNextToken
@@ -243,5 +247,6 @@ proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   of langPython: g.pythonNextToken
   of langRust: g.rustNextToken
   of langShell: g.shellNextToken
+  of langToml: g.tomlNextToken
   of langYaml: g.yamlNextToken
   else: discard

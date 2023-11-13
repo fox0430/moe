@@ -114,4 +114,7 @@ const
                                , hasHashComments
                                }
 
+  ## The lexing rules for TOML.
+  flagsToml*: TokenizerFlags = { hasHashComments }
+
 #[############################################################################]#
