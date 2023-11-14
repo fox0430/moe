@@ -244,6 +244,14 @@ proc getEditorColorPair(
         # TODO: Add EditorColorPairIndex.identifier?
         if language == SourceLanguage.langToml: EditorColorPairIndex.keyword
         else: EditorColorPairIndex.default
+      of gtTable:
+        # TODO: Add EditorColorPairIndex.table?
+        if language == SourceLanguage.langToml: EditorColorPairIndex.keyword
+        else: EditorColorPairIndex.default
+      of gtDate:
+        # TODO: Add EditorColorPairIndex.date?
+        if language == SourceLanguage.langToml: EditorColorPairIndex.decNumber
+        else: EditorColorPairIndex.default
       else: EditorColorPairIndex.default
 
 proc initHighlightPlain*(buffer: seq[Runes]): Highlight {.inline.} =
