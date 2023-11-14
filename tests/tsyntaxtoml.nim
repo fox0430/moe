@@ -36,6 +36,7 @@ proc tokens(code: string): seq[GT] =
       result[^1].buf = ""
 
 suite "syntax: Toml":
+
   test "Basic":
     const Code = """
 [table]
@@ -46,76 +47,79 @@ bool2 = false
 dec = 1
 float = 1.0
 inlineTasble = { name = "Tom" }
+date = 1979-05-27T07:32:00Z
 
 [table2]
 str2 = '''Here are two quotation marks: "". Simple enough.'''
 """
     check tokens(Code) == @[
-      GT(kind: gtNone, start: 0, length: 1, buf: "", pos: 1, state: gtEof),
-      GT(kind: gtIdentifier, start: 1, length: 5, buf: "", pos: 6, state: gtEof),
-      GT(kind: gtNone, start: 6, length: 1, buf: "", pos: 7, state: gtEof),
-      GT(kind: gtWhitespace, start: 7, length: 1, buf: "", pos: 8, state: gtEof),
-      GT(kind: gtComment, start: 8, length: 10, buf: "", pos: 18, state: gtEof),
-      GT(kind: gtWhitespace, start: 18, length: 1, buf: "", pos: 19, state: gtEof),
-      GT(kind: gtIdentifier, start: 19, length: 3, buf: "", pos: 22, state: gtEof),
-      GT(kind: gtWhitespace, start: 22, length: 1, buf: "", pos: 23, state: gtEof),
-      GT(kind: gtOperator, start: 23, length: 1, buf: "", pos: 24, state: gtEof),
-      GT(kind: gtWhitespace, start: 24, length: 1, buf: "", pos: 25, state: gtEof),
-      GT(kind: gtStringLit, start: 25, length: 7, buf: "", pos: 32, state: gtEof),
-      GT(kind: gtWhitespace, start: 32, length: 1, buf: "", pos: 33, state: gtEof),
-      GT(kind: gtComment, start: 33, length: 10, buf: "", pos: 43, state: gtEof),
-      GT(kind: gtWhitespace, start: 43, length: 1, buf: "", pos: 44, state: gtEof),
-      GT(kind: gtIdentifier, start: 44, length: 5, buf: "", pos: 49, state: gtEof),
-      GT(kind: gtWhitespace, start: 49, length: 1, buf: "", pos: 50, state: gtEof),
-      GT(kind: gtOperator, start: 50, length: 1, buf: "", pos: 51, state: gtEof),
-      GT(kind: gtWhitespace, start: 51, length: 1, buf: "", pos: 52, state: gtEof),
-      GT(kind: gtBoolean, start: 52, length: 4, buf: "", pos: 56, state: gtEof),
-      GT(kind: gtWhitespace, start: 56, length: 1, buf: "", pos: 57, state: gtEof),
-      GT(kind: gtIdentifier, start: 57, length: 5, buf: "", pos: 62, state: gtEof),
-      GT(kind: gtWhitespace, start: 62, length: 1, buf: "", pos: 63, state: gtEof),
-      GT(kind: gtOperator, start: 63, length: 1, buf: "", pos: 64, state: gtEof),
-      GT(kind: gtWhitespace, start: 64, length: 1, buf: "", pos: 65, state: gtEof),
-      GT(kind: gtBoolean, start: 65, length: 5, buf: "", pos: 70, state: gtEof),
-      GT(kind: gtWhitespace, start: 70, length: 1, buf: "", pos: 71, state: gtEof),
-      GT(kind: gtIdentifier, start: 71, length: 3, buf: "", pos: 74, state: gtEof),
-      GT(kind: gtWhitespace, start: 74, length: 1, buf: "", pos: 75, state: gtEof),
-      GT(kind: gtOperator, start: 75, length: 1, buf: "", pos: 76, state: gtEof),
-      GT(kind: gtWhitespace, start: 76, length: 1, buf: "", pos: 77, state: gtEof),
-      GT(kind: gtDecNumber, start: 77, length: 1, buf: "", pos: 78, state: gtEof),
-      GT(kind: gtWhitespace, start: 78, length: 1, buf: "", pos: 79, state: gtEof),
-      GT(kind: gtIdentifier, start: 79, length: 5, buf: "", pos: 84, state: gtEof),
-      GT(kind: gtWhitespace, start: 84, length: 1, buf: "", pos: 85, state: gtEof),
-      GT(kind: gtOperator, start: 85, length: 1, buf: "", pos: 86, state: gtEof),
-      GT(kind: gtWhitespace, start: 86, length: 1, buf: "", pos: 87, state: gtEof),
-      GT(kind: gtFloatNumber, start: 87, length: 3, buf: "", pos: 90, state: gtEof),
-      GT(kind: gtWhitespace, start: 90, length: 1, buf: "", pos: 91, state: gtEof),
-      GT(kind: gtIdentifier, start: 91, length: 12, buf: "", pos: 103, state: gtEof),
-      GT(kind: gtWhitespace, start: 103, length: 1, buf: "", pos: 104, state: gtEof),
-      GT(kind: gtOperator, start: 104, length: 1, buf: "", pos: 105, state: gtEof),
-      GT(kind: gtWhitespace, start: 105, length: 1, buf: "", pos: 106, state: gtEof),
-      GT(kind: gtNone, start: 106, length: 1, buf: "", pos: 107, state: gtEof),
-      GT(kind: gtWhitespace, start: 107, length: 1, buf: "", pos: 108, state: gtEof),
-      GT(kind: gtIdentifier, start: 108, length: 4, buf: "", pos: 112, state: gtEof),
-      GT(kind: gtWhitespace, start: 112, length: 1, buf: "", pos: 113, state: gtEof),
-      GT(kind: gtOperator, start: 113, length: 1, buf: "", pos: 114, state: gtEof),
-      GT(kind: gtWhitespace, start: 114, length: 1, buf: "", pos: 115, state: gtEof),
-      GT(kind: gtStringLit, start: 115, length: 5, buf: "", pos: 120, state: gtEof),
-      GT(kind: gtWhitespace, start: 120, length: 1, buf: "", pos: 121, state: gtEof),
-      GT(kind: gtNone, start: 121, length: 1, buf: "", pos: 122, state: gtEof),
-      GT(kind: gtWhitespace, start: 122, length: 2, buf: "", pos: 124, state: gtEof),
-      GT(kind: gtNone, start: 124, length: 1, buf: "", pos: 125, state: gtEof),
-      GT(kind: gtIdentifier, start: 125, length: 6, buf: "", pos: 131, state: gtEof),
-      GT(kind: gtNone, start: 131, length: 1, buf: "", pos: 132, state: gtEof),
-      GT(kind: gtWhitespace, start: 132, length: 1, buf: "", pos: 133, state: gtEof),
-      GT(kind: gtIdentifier, start: 133, length: 4, buf: "", pos: 137, state: gtEof),
-      GT(kind: gtWhitespace, start: 137, length: 1, buf: "", pos: 138, state: gtEof),
-      GT(kind: gtOperator, start: 138, length: 1, buf: "", pos: 139, state: gtEof),
-      GT(kind: gtWhitespace, start: 139, length: 1, buf: "", pos: 140, state: gtEof),
-      GT(kind: gtStringLit, start: 140, length: 2, buf: "", pos: 142, state: gtEof),
-      GT(kind: gtStringLit, start: 142, length: 32, buf: "", pos: 174, state: gtEof),
-      GT(kind: gtStringLit, start: 174, length: 18, buf: "", pos: 192, state: gtEof),
-      GT(kind: gtStringLit, start: 192, length: 2, buf: "", pos: 194, state: gtEof),
-      GT(kind: gtWhitespace, start: 194, length: 1, buf: "", pos: 195, state: gtEof)
+      Gt(kind: gtTable, start: 0, length: 7, buf: "", pos: 7, state: gtEof),
+      Gt(kind: gtWhitespace, start: 7, length: 1, buf: "", pos: 8, state: gtEof),
+      Gt(kind: gtComment, start: 8, length: 10, buf: "", pos: 18, state: gtEof),
+      Gt(kind: gtWhitespace, start: 18, length: 1, buf: "", pos: 19, state: gtEof),
+      Gt(kind: gtIdentifier, start: 19, length: 3, buf: "", pos: 22, state: gtEof),
+      Gt(kind: gtWhitespace, start: 22, length: 1, buf: "", pos: 23, state: gtEof),
+      Gt(kind: gtOperator, start: 23, length: 1, buf: "", pos: 24, state: gtEof),
+      Gt(kind: gtWhitespace, start: 24, length: 1, buf: "", pos: 25, state: gtEof),
+      Gt(kind: gtStringLit, start: 25, length: 7, buf: "", pos: 32, state: gtEof),
+      Gt(kind: gtWhitespace, start: 32, length: 1, buf: "", pos: 33, state: gtEof),
+      Gt(kind: gtComment, start: 33, length: 10, buf: "", pos: 43, state: gtEof),
+      Gt(kind: gtWhitespace, start: 43, length: 1, buf: "", pos: 44, state: gtEof),
+      Gt(kind: gtIdentifier, start: 44, length: 5, buf: "", pos: 49, state: gtEof),
+      Gt(kind: gtWhitespace, start: 49, length: 1, buf: "", pos: 50, state: gtEof),
+      Gt(kind: gtOperator, start: 50, length: 1, buf: "", pos: 51, state: gtEof),
+      Gt(kind: gtWhitespace, start: 51, length: 1, buf: "", pos: 52, state: gtEof),
+      Gt(kind: gtBoolean, start: 52, length: 4, buf: "", pos: 56, state: gtEof),
+      Gt(kind: gtWhitespace, start: 56, length: 1, buf: "", pos: 57, state: gtEof),
+      Gt(kind: gtIdentifier, start: 57, length: 5, buf: "", pos: 62, state: gtEof),
+      Gt(kind: gtWhitespace, start: 62, length: 1, buf: "", pos: 63, state: gtEof),
+      Gt(kind: gtOperator, start: 63, length: 1, buf: "", pos: 64, state: gtEof),
+      Gt(kind: gtWhitespace, start: 64, length: 1, buf: "", pos: 65, state: gtEof),
+      Gt(kind: gtBoolean, start: 65, length: 5, buf: "", pos: 70, state: gtEof),
+      Gt(kind: gtWhitespace, start: 70, length: 1, buf: "", pos: 71, state: gtEof),
+      Gt(kind: gtIdentifier, start: 71, length: 3, buf: "", pos: 74, state: gtEof),
+      Gt(kind: gtWhitespace, start: 74, length: 1, buf: "", pos: 75, state: gtEof),
+      Gt(kind: gtOperator, start: 75, length: 1, buf: "", pos: 76, state: gtEof),
+      Gt(kind: gtWhitespace, start: 76, length: 1, buf: "", pos: 77, state: gtEof),
+      Gt(kind: gtDecNumber, start: 77, length: 1, buf: "", pos: 78, state: gtEof),
+      Gt(kind: gtWhitespace, start: 78, length: 1, buf: "", pos: 79, state: gtEof),
+      Gt(kind: gtIdentifier, start: 79, length: 5, buf: "", pos: 84, state: gtEof),
+      Gt(kind: gtWhitespace, start: 84, length: 1, buf: "", pos: 85, state: gtEof),
+      Gt(kind: gtOperator, start: 85, length: 1, buf: "", pos: 86, state: gtEof),
+      Gt(kind: gtWhitespace, start: 86, length: 1, buf: "", pos: 87, state: gtEof),
+      Gt(kind: gtFloatNumber, start: 87, length: 3, buf: "", pos: 90, state: gtEof),
+      Gt(kind: gtWhitespace, start: 90, length: 1, buf: "", pos: 91, state: gtEof),
+      Gt(kind: gtIdentifier, start: 91, length: 12, buf: "", pos: 103, state: gtEof),
+      Gt(kind: gtWhitespace, start: 103, length: 1, buf: "", pos: 104, state: gtEof),
+      Gt(kind: gtOperator, start: 104, length: 1, buf: "", pos: 105, state: gtEof),
+      Gt(kind: gtWhitespace, start: 105, length: 1, buf: "", pos: 106, state: gtEof),
+      Gt(kind: gtNone, start: 106, length: 1, buf: "", pos: 107, state: gtEof),
+      Gt(kind: gtWhitespace, start: 107, length: 1, buf: "", pos: 108, state: gtEof),
+      Gt(kind: gtIdentifier, start: 108, length: 4, buf: "", pos: 112, state: gtEof),
+      Gt(kind: gtWhitespace, start: 112, length: 1, buf: "", pos: 113, state: gtEof),
+      Gt(kind: gtOperator, start: 113, length: 1, buf: "", pos: 114, state: gtEof),
+      Gt(kind: gtWhitespace, start: 114, length: 1, buf: "", pos: 115, state: gtEof),
+      Gt(kind: gtStringLit, start: 115, length: 5, buf: "", pos: 120, state: gtEof),
+      Gt(kind: gtWhitespace, start: 120, length: 1, buf: "", pos: 121, state: gtEof),
+      Gt(kind: gtNone, start: 121, length: 1, buf: "", pos: 122, state: gtEof),
+      Gt(kind: gtWhitespace, start: 122, length: 1, buf: "", pos: 123, state: gtEof),
+      Gt(kind: gtIdentifier, start: 123, length: 4, buf: "", pos: 127, state: gtEof),
+      Gt(kind: gtWhitespace, start: 127, length: 1, buf: "", pos: 128, state: gtEof),
+      Gt(kind: gtOperator, start: 128, length: 1, buf: "", pos: 129, state: gtEof),
+      Gt(kind: gtWhitespace, start: 129, length: 1, buf: "", pos: 130, state: gtEof),
+      Gt(kind: gtDate, start: 130, length: 20, buf: "", pos: 150, state: gtEof),
+      Gt(kind: gtWhitespace, start: 150, length: 2, buf: "", pos: 152, state: gtEof),
+      Gt(kind: gtTable, start: 152, length: 8, buf: "", pos: 160, state: gtEof),
+      Gt(kind: gtWhitespace, start: 160, length: 1, buf: "", pos: 161, state: gtEof),
+      Gt(kind: gtIdentifier, start: 161, length: 4, buf: "", pos: 165, state: gtEof),
+      Gt(kind: gtWhitespace, start: 165, length: 1, buf: "", pos: 166, state: gtEof),
+      Gt(kind: gtOperator, start: 166, length: 1, buf: "", pos: 167, state: gtEof),
+      Gt(kind: gtWhitespace, start: 167, length: 1, buf: "", pos: 168, state: gtEof),
+      Gt(kind: gtStringLit, start: 168, length: 2, buf: "", pos: 170, state: gtEof),
+      Gt(kind: gtStringLit, start: 170, length: 32, buf: "", pos: 202, state: gtEof),
+      Gt(kind: gtStringLit, start: 202, length: 18, buf: "", pos: 220, state: gtEof),
+      Gt(kind: gtStringLit, start: 220, length: 2, buf: "", pos: 222, state: gtEof),
+      Gt(kind: gtWhitespace, start: 222, length: 1, buf: "", pos: 223, state: gtEof)
     ]
 
   test "Comment":
@@ -398,4 +402,84 @@ str2 = '''Here are two quotation marks: "". Simple enough.'''
       GT(kind: gtOperator, start: 4, length: 1, buf: "", pos: 5, state: gtEof),
       GT(kind: gtWhitespace, start: 5, length: 1, buf: "", pos: 6, state: gtEof),
       GT(kind: gtFloatNumber, start: 6, length: 4, buf: "", pos: 10, state: gtEof)
+    ]
+
+  test "Date":
+    const Code = "date = 1979-05-27T07:32:00Z"
+    check tokens(Code) == @[
+      GT(kind: gtIdentifier, start: 0, length: 4, buf: "", pos: 4, state: gtEof),
+      GT(kind: gtWhitespace, start: 4, length: 1, buf: "", pos: 5, state: gtEof),
+      GT(kind: gtOperator, start: 5, length: 1, buf: "", pos: 6, state: gtEof),
+      GT(kind: gtWhitespace, start: 6, length: 1, buf: "", pos: 7, state: gtEof),
+      GT(kind: gtDate, start: 7, length: 20, buf: "", pos: 27, state: gtEof)
+    ]
+
+  test "Date 2":
+    const Code = "date = 1979-05-27T00:32:00-07:00"
+    check tokens(Code) == @[
+      GT(kind: gtIdentifier, start: 0, length: 4, buf: "", pos: 4, state: gtEof),
+      GT(kind: gtWhitespace, start: 4, length: 1, buf: "", pos: 5, state: gtEof),
+      GT(kind: gtOperator, start: 5, length: 1, buf: "", pos: 6, state: gtEof),
+      GT(kind: gtWhitespace, start: 6, length: 1, buf: "", pos: 7, state: gtEof),
+      GT(kind: gtDate, start: 7, length: 25, buf: "", pos: 32, state: gtEof)
+    ]
+
+  test "Date 3":
+    const Code = "date = 1979-05-27T00:32:00.999999-07:00"
+    check tokens(Code) == @[
+      GT(kind: gtIdentifier, start: 0, length: 4, buf: "", pos: 4, state: gtEof),
+      GT(kind: gtWhitespace, start: 4, length: 1, buf: "", pos: 5, state: gtEof),
+      GT(kind: gtOperator, start: 5, length: 1, buf: "", pos: 6, state: gtEof),
+      GT(kind: gtWhitespace, start: 6, length: 1, buf: "", pos: 7, state: gtEof),
+      GT(kind: gtDate, start: 7, length: 32, buf: "", pos: 39, state: gtEof)
+    ]
+
+  test "Date 4":
+    const Code = "date = 1979-05-27 07:32:00Z"
+    check tokens(Code) == @[
+      GT(kind: gtIdentifier, start: 0, length: 4, buf: "", pos: 4, state: gtEof),
+      GT(kind: gtWhitespace, start: 4, length: 1, buf: "", pos: 5, state: gtEof),
+      GT(kind: gtOperator, start: 5, length: 1, buf: "", pos: 6, state: gtEof),
+      GT(kind: gtWhitespace, start: 6, length: 1, buf: "", pos: 7, state: gtEof),
+      GT(kind: gtDate, start: 7, length: 20, buf: "", pos: 27, state: gtEof)
+    ]
+
+  test "Date 5":
+    const Code = "date = 1979-05-27T07:32:00"
+    check tokens(Code) == @[
+      GT(kind: gtIdentifier, start: 0, length: 4, buf: "", pos: 4, state: gtEof),
+      GT(kind: gtWhitespace, start: 4, length: 1, buf: "", pos: 5, state: gtEof),
+      GT(kind: gtOperator, start: 5, length: 1, buf: "", pos: 6, state: gtEof),
+      GT(kind: gtWhitespace, start: 6, length: 1, buf: "", pos: 7, state: gtEof),
+      GT(kind: gtDate, start: 7, length: 19, buf: "", pos: 26, state: gtEof)
+    ]
+
+  test "Date 6":
+    const Code = "date = 1979-05-27T07:32:00.999999"
+    check tokens(Code) == @[
+      GT(kind: gtIdentifier, start: 0, length: 4, buf: "", pos: 4, state: gtEof),
+      GT(kind: gtWhitespace, start: 4, length: 1, buf: "", pos: 5, state: gtEof),
+      GT(kind: gtOperator, start: 5, length: 1, buf: "", pos: 6, state: gtEof),
+      GT(kind: gtWhitespace, start: 6, length: 1, buf: "", pos: 7, state: gtEof),
+      GT(kind: gtDate, start: 7, length: 26, buf: "", pos: 33, state: gtEof)
+    ]
+
+  test "Date 7":
+    const Code = "date = 1979-05-27"
+    check tokens(Code) == @[
+      GT(kind: gtIdentifier, start: 0, length: 4, buf: "", pos: 4, state: gtEof),
+      GT(kind: gtWhitespace, start: 4, length: 1, buf: "", pos: 5, state: gtEof),
+      GT(kind: gtOperator, start: 5, length: 1, buf: "", pos: 6, state: gtEof),
+      GT(kind: gtWhitespace, start: 6, length: 1, buf: "", pos: 7, state: gtEof),
+      GT(kind: gtDate, start: 7, length: 10, buf: "", pos: 17, state: gtEof)
+    ]
+
+  test "Date 8":
+    const Code = "date = 1979-05-27.999999"
+    check tokens(Code) == @[
+      GT(kind: gtIdentifier, start: 0, length: 4, buf: "", pos: 4, state: gtEof),
+      GT(kind: gtWhitespace, start: 4, length: 1, buf: "", pos: 5, state: gtEof),
+      GT(kind: gtOperator, start: 5, length: 1, buf: "", pos: 6, state: gtEof),
+      GT(kind: gtWhitespace, start: 6, length: 1, buf: "", pos: 7, state: gtEof),
+      GT(kind: gtDate, start: 7, length: 17, buf: "", pos: 24, state: gtEof)
     ]

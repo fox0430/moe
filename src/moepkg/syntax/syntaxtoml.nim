@@ -17,6 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
+import std/strutils
 import highlite, flags, lexer
 
 const
@@ -25,11 +26,12 @@ const
   OctChars = {'0'..'7'}
   BinChars = {'0'..'1'}
   Operators = {'+', '-'}
+  DateChars = {'0'..'9', 'T', 'z', '-', ':', '.', ' '}
   InfStr = "inf"
   NanStr = "nan"
   Booleans = ["true", "false"]
 
-proc tomlNumber(g: var GeneralTokenizer, position: int): int =
+proc tomlNumberAndDate(g: var GeneralTokenizer, position: int): int =
   var pos = position
 
   g.kind = gtDecNumber
@@ -60,6 +62,9 @@ proc tomlNumber(g: var GeneralTokenizer, position: int): int =
       while g.buf[pos] in DecChars: pos.inc
     if g.buf[pos] == '_':
       while g.buf[pos] in DecChars or g.buf[pos] == '_': pos.inc
+    if g.buf[pos] in {'-', ':'}:
+      g.kind = gtDate
+      while g.buf[pos] in DateChars: pos.inc
 
   return pos
 
@@ -77,9 +82,8 @@ proc tomlNextToken*(g: var GeneralTokenizer) =
           of 'x', 'X':
             inc(pos)
             if g.buf[pos] in HexChars: inc(pos)
-            if g.buf[pos] in HexChars: inc(pos)
-          of '0'..'9':
-            while g.buf[pos] in {'0'..'9'}: inc(pos)
+          of Digits:
+            while g.buf[pos] in Digits: inc(pos)
           of '\0':
             g.state = gtNone
           else: inc(pos)
@@ -97,7 +101,8 @@ proc tomlNextToken*(g: var GeneralTokenizer) =
       of ' ', '\x09'..'\x0D':
         g.kind = gtWhitespace
         while g.buf[pos] in {' ', '\x09'..'\x0D'}: inc(pos)
-      of '#': pos = g.lexHash(pos, flagsToml)
+      of '#':
+        pos = g.lexHash(pos, flagsToml)
       of 'a'..'z', 'A'..'Z', '_', '\x80'..'\xFF':
         var id = ""
         while g.buf[pos] in symChars:
@@ -112,21 +117,25 @@ proc tomlNextToken*(g: var GeneralTokenizer) =
         of 'b', 'B':
           inc(pos)
           while g.buf[pos] in BinChars: inc(pos)
-          if g.buf[pos] in {'A'..'Z', 'a'..'z'}: inc(pos)
+          if g.buf[pos] in Letters: inc(pos)
         of 'x', 'X':
           inc(pos)
           while g.buf[pos] in HexChars: inc(pos)
-          if g.buf[pos] in {'A'..'Z', 'a'..'z'}: inc(pos)
+          if g.buf[pos] in Letters: inc(pos)
         of '0'..'7':
           inc(pos)
           while g.buf[pos] in OctChars: inc(pos)
-          if g.buf[pos] in {'A'..'Z', 'a'..'z'}: inc(pos)
+          if g.buf[pos] in Letters: inc(pos)
         else:
-          pos = tomlNumber(g, pos)
-          if g.buf[pos] in {'A'..'Z', 'a'..'z'}: inc(pos)
+          pos = tomlNumberAndDate(g, pos)
+          if g.buf[pos] in Letters: inc(pos)
       of '1'..'9', '+', '-':
-        pos = tomlNumber(g, pos)
-        if g.buf[pos] in {'A'..'Z', 'a'..'z'}: inc(pos)
+        pos = tomlNumberAndDate(g, pos)
+        if g.buf[pos] in Letters: inc(pos)
+      of '[':
+        g.kind = gtTable
+        while g.buf[pos] != ']' and not (g.buf[pos] in Newlines): inc(pos)
+        if g.buf[pos] == ']': inc(pos)
       of '\"', '\'':
         inc(pos)
         g.kind = gtStringLit
