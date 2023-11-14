@@ -20,6 +20,16 @@
 name: Build
 
 on:
+  push:
+    paths:
+      - '.github/workflows/test.yaml'
+      - 'example/**'
+      - 'moe.nimble'
+      - 'src/**'
+      - 'tests/**'
+    branches:
+      - develop
+      - master
   pull_request:
     paths:
       - '.github/workflows/build.yaml'
