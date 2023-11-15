@@ -483,3 +483,21 @@ str2 = '''Here are two quotation marks: "". Simple enough.'''
       GT(kind: gtWhitespace, start: 6, length: 1, buf: "", pos: 7, state: gtEof),
       GT(kind: gtDate, start: 7, length: 17, buf: "", pos: 24, state: gtEof)
     ]
+
+  test "Table":
+    const Code = "[table]"
+    check tokens(Code) == @[
+      GT(kind: gtTable, start: 0, length: 7, buf: "", pos: 7, state: gtEof)
+    ]
+
+  test "Table 2":
+    const Code = "[abc.def]"
+    check tokens(Code) == @[
+      GT(kind: gtTable, start: 0, length: 9, buf: "", pos: 9, state: gtEof)
+    ]
+
+  test "Incomplete table":
+    const Code = "[a"
+    check tokens(Code) == @[
+      GT(kind: gtTable, start: 0, length: 2, buf: "", pos: 2, state: gtEof)
+    ]

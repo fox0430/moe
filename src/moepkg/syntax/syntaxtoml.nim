@@ -134,7 +134,8 @@ proc tomlNextToken*(g: var GeneralTokenizer) =
         if g.buf[pos] in Letters: inc(pos)
       of '[':
         g.kind = gtTable
-        while g.buf[pos] != ']' and not (g.buf[pos] in Newlines): inc(pos)
+        while g.buf[pos] != ']' and not (g.buf[pos] in {'\n', '\r', '\0'}):
+          inc(pos)
         if g.buf[pos] == ']': inc(pos)
       of '\"', '\'':
         inc(pos)
