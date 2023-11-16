@@ -68,6 +68,25 @@ proc tomlNumberAndDate(g: var GeneralTokenizer, position: int): int =
 
   return pos
 
+proc tomlTable(g: var GeneralTokenizer, position: int): int =
+  var pos = position
+
+  g.kind = gtTable
+
+  while not (g.buf[pos] in {'\n', '\r', '\0', '[', '['}):
+    inc(pos)
+
+  if g.buf[pos] == '[':
+    # Array of table
+    var countClose = 0
+    while not (g.buf[pos] in {'\n', '\r', '\0'} or countClose == 2):
+      inc(pos)
+      if g.buf[pos] == ']': countClose.inc
+
+    if countClose == 2: pos.inc
+
+  return pos
+
 proc tomlNextToken*(g: var GeneralTokenizer) =
   var pos = g.pos
   g.start = g.pos
@@ -133,10 +152,7 @@ proc tomlNextToken*(g: var GeneralTokenizer) =
         pos = tomlNumberAndDate(g, pos)
         if g.buf[pos] in Letters: inc(pos)
       of '[':
-        g.kind = gtTable
-        while g.buf[pos] != ']' and not (g.buf[pos] in {'\n', '\r', '\0'}):
-          inc(pos)
-        if g.buf[pos] == ']': inc(pos)
+        pos = tomlTable(g, pos)
       of '\"', '\'':
         inc(pos)
         g.kind = gtStringLit
