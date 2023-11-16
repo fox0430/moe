@@ -36,7 +36,6 @@ proc tokens(code: string): seq[GT] =
       result[^1].buf = ""
 
 suite "syntax: Toml":
-
   test "Basic":
     const Code = """
 [table]
@@ -500,4 +499,29 @@ str2 = '''Here are two quotation marks: "". Simple enough.'''
     const Code = "[a"
     check tokens(Code) == @[
       GT(kind: gtTable, start: 0, length: 2, buf: "", pos: 2, state: gtEof)
+    ]
+
+  test "Array of table":
+    const Code = "[[table]]"
+    check tokens(Code) == @[
+      GT(kind: gtTable, start: 0, length: 9, buf: "", pos: 9, state: gtEof)
+    ]
+
+  test "Incomplete array of table":
+    const Code = "[[table"
+    check tokens(Code) == @[
+      GT(kind: gtTable, start: 0, length: 7, buf: "", pos: 7, state: gtEof)
+    ]
+
+  test "Incomplete array of table 2":
+    const Code = "[[table]"
+    check tokens(Code) == @[
+      GT(kind: gtTable, start: 0, length: 8, buf: "", pos: 8, state: gtEof)
+    ]
+
+  test "Invalid array of table":
+    const Code = "[[[table]]]"
+    check tokens(Code) == @[
+      GT(kind: gtTable, start: 0, length: 10, buf: "", pos: 10, state: gtEof),
+      GT(kind: gtNone, start: 10, length: 1, buf: "", pos: 11, state: gtEof)
     ]
