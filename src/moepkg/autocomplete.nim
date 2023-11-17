@@ -173,12 +173,12 @@ proc getJavaScriptKeywords(): Runes {.compileTime.} =
   for s in javaScriptkeywords: result.add toRunes(s & " ")
 
 proc getNimKeywords(): Runes {.compileTime.} =
-  for s in nimKeywords: result.add toRunes(s & " ")
-  for s in nimBooleans: result.add toRunes(s & " ")
-  for s in nimSpecialVars: result.add toRunes(s & " ")
-  for s in nimPragmas: result.add toRunes(s & " ")
-  for s in nimBuiltins: result.add toRunes(s & " ")
-  for s in nimStdLibs: result.add toRunes(s & " ")
+  for s in NimKeywords: result.add toRunes(s & " ")
+  for s in NimBooleans: result.add toRunes(s & " ")
+  for s in NimSpecialVars: result.add toRunes(s & " ")
+  for s in NimPragmas: result.add toRunes(s & " ")
+  for s in NimBuiltins: result.add toRunes(s & " ")
+  for s in NimStdLibs: result.add toRunes(s & " ")
 
 proc getPythonKeywords(): Runes {.compileTime.} =
   for s in pythonKeywords: result.add toRunes(s & " ")
