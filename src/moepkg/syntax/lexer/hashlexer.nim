@@ -193,7 +193,6 @@ proc lexHashLineComment*(lexer: var GeneralTokenizer, position: int,
     case lexer.buf[result]
     of '#':
       if hasDoubleHashComments in flags:
-        lexer.kind = gtStringLit
         result = lexer.lexDoubleHashLineComment(result, flags)
       else:
         result = lexer.endLine(result)
