@@ -850,7 +850,7 @@ if isXselAvailable():
       check currentBufStatus.buffer[2] == ru"h"
 
 suite "Visual mode: Join lines":
-  test "Join 3 lines":
+  test "Join 2 lines":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
@@ -868,17 +868,13 @@ suite "Visual mode: Join lines":
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn)
 
-    for i in 0 ..< 2:
-      currentBufStatus.keyDown(currentMainWindowNode)
-      status.update
+    currentBufStatus.keyDown(currentMainWindowNode)
+    status.update
 
     let area = currentBufStatus.selectedArea
-
-    status.update
     currentBufStatus.joinLines(currentMainWindowNode, area, status.commandLine)
 
-    check(currentBufStatus.buffer.len == 1)
-    check(currentBufStatus.buffer[0] == ru"abcdefghi")
+    check currentBufStatus.buffer.toSeqRunes == @["abcdef", "ghi"].toSeqRunes
 
 suite "Visual block mode: Join lines":
   test "Join 3 lines":

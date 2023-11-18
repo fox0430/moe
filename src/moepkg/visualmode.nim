@@ -332,7 +332,7 @@ proc joinLines(
       commandLine.writeReadonlyModeWarning
       return
 
-    for i in area.startLine .. area.endLine:
+    for i in area.startLine ..< area.endLine:
       windowNode.currentLine = area.startLine
       bufStatus.joinLine(windowNode)
 
