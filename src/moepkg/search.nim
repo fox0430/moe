@@ -26,11 +26,11 @@ proc execSearchCommand*(status: var EditorStatus, keyword: Runes) =
     currentBufStatus.jumpToSearchForwardResults(
       currentMainWindowNode,
       keyword,
-      status.settings.ignorecase,
-      status.settings.smartcase)
+      status.settings.standard.ignorecase,
+      status.settings.standard.smartcase)
   else:
     currentBufStatus.jumpToSearchBackwordResults(
       currentMainWindowNode,
       keyword,
-      status.settings.ignorecase,
-      status.settings.smartcase)
+      status.settings.standard.ignorecase,
+      status.settings.standard.smartcase)

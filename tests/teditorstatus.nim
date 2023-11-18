@@ -219,27 +219,27 @@ test "resize 2":
   for i in 0 ..< 10:
     currentBufStatus.keyEnter(
       currentMainWindowNode,
-      status.settings.autoCloseParen,
-      status.settings.tabStop)
+      status.settings.standard.autoCloseParen,
+      status.settings.standard.tabStop)
     status.update
 
 test "Auto delete paren 1":
   block:
     var status = initEditorStatus()
-    status.settings.autoDeleteParen = true
+    status.settings.standard.autoDeleteParen = true
 
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"()"])
     currentBufStatus.deleteCharacter(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn,
-      status.settings.autoDeleteParen)
+      status.settings.standard.autoDeleteParen)
 
     check(currentBufStatus.buffer[0] == ru"")
 
   block:
     var status = initEditorStatus()
-    status.settings.autoDeleteParen = true
+    status.settings.standard.autoDeleteParen = true
 
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"()"])
@@ -248,14 +248,14 @@ test "Auto delete paren 1":
     currentBufStatus.deleteCharacter(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn,
-      status.settings.autoDeleteParen)
+      status.settings.standard.autoDeleteParen)
 
     check(currentBufStatus.buffer[0] == ru"")
 
 test "Auto delete paren 2":
   block:
     var status = initEditorStatus()
-    status.settings.autoDeleteParen = true
+    status.settings.standard.autoDeleteParen = true
 
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"(())"])
@@ -263,13 +263,13 @@ test "Auto delete paren 2":
     currentBufStatus.deleteCharacter(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn,
-      status.settings.autoDeleteParen)
+      status.settings.standard.autoDeleteParen)
 
     check(currentBufStatus.buffer[0] == ru"()")
 
   block:
     var status = initEditorStatus()
-    status.settings.autoDeleteParen = true
+    status.settings.standard.autoDeleteParen = true
 
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"(())"])
@@ -278,13 +278,13 @@ test "Auto delete paren 2":
     currentBufStatus.deleteCharacter(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn,
-      status.settings.autoDeleteParen)
+      status.settings.standard.autoDeleteParen)
 
     check(currentBufStatus.buffer[0] == ru"()")
 
   block:
     var status = initEditorStatus()
-    status.settings.autoDeleteParen = true
+    status.settings.standard.autoDeleteParen = true
 
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"(())"])
@@ -295,13 +295,13 @@ test "Auto delete paren 2":
     currentBufStatus.deleteCharacter(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn,
-      status.settings.autoDeleteParen)
+      status.settings.standard.autoDeleteParen)
 
     check(currentBufStatus.buffer[0] == ru"()")
 
   block:
     var status = initEditorStatus()
-    status.settings.autoDeleteParen = true
+    status.settings.standard.autoDeleteParen = true
 
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"(())"])
@@ -311,14 +311,14 @@ test "Auto delete paren 2":
     currentBufStatus.deleteCharacter(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn,
-      status.settings.autoDeleteParen)
+      status.settings.standard.autoDeleteParen)
 
     check(currentBufStatus.buffer[0] == ru"()")
 
 test "Auto delete paren 3":
   block:
     var status = initEditorStatus()
-    status.settings.autoDeleteParen = true
+    status.settings.standard.autoDeleteParen = true
 
     discard status.addNewBufferInCurrentWin.get
 
@@ -327,13 +327,13 @@ test "Auto delete paren 3":
     currentBufStatus.deleteCharacter(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn,
-      status.settings.autoDeleteParen)
+      status.settings.standard.autoDeleteParen)
 
     check(currentBufStatus.buffer[0] == ru"()")
 
   block:
     var status = initEditorStatus()
-    status.settings.autoDeleteParen = true
+    status.settings.standard.autoDeleteParen = true
 
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"(()"])
@@ -342,13 +342,13 @@ test "Auto delete paren 3":
     currentBufStatus.deleteCharacter(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn,
-      status.settings.autoDeleteParen)
+      status.settings.standard.autoDeleteParen)
 
     check(currentBufStatus.buffer[0] == ru"(")
 
   block:
     var status = initEditorStatus()
-    status.settings.autoDeleteParen = true
+    status.settings.standard.autoDeleteParen = true
 
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"(()"])
@@ -358,13 +358,13 @@ test "Auto delete paren 3":
     currentBufStatus.deleteCharacter(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn,
-      status.settings.autoDeleteParen)
+      status.settings.standard.autoDeleteParen)
 
     check(currentBufStatus.buffer[0] == ru"(")
 
   block:
     var status = initEditorStatus()
-    status.settings.autoDeleteParen = true
+    status.settings.standard.autoDeleteParen = true
 
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"())"])
@@ -372,13 +372,13 @@ test "Auto delete paren 3":
     currentBufStatus.deleteCharacter(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn,
-      status.settings.autoDeleteParen)
+      status.settings.standard.autoDeleteParen)
 
     check(currentBufStatus.buffer[0] == ru")")
 
   block:
     var status = initEditorStatus()
-    status.settings.autoDeleteParen = true
+    status.settings.standard.autoDeleteParen = true
 
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"())"])
@@ -387,13 +387,13 @@ test "Auto delete paren 3":
     currentBufStatus.deleteCharacter(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn,
-      status.settings.autoDeleteParen)
+      status.settings.standard.autoDeleteParen)
 
     check(currentBufStatus.buffer[0] == ru")")
 
   block:
     var status = initEditorStatus()
-    status.settings.autoDeleteParen = true
+    status.settings.standard.autoDeleteParen = true
 
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"())"])
@@ -404,14 +404,14 @@ test "Auto delete paren 3":
     currentBufStatus.deleteCharacter(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn,
-      status.settings.autoDeleteParen)
+      status.settings.standard.autoDeleteParen)
 
     check(currentBufStatus.buffer[0] == ru"()")
 
 test "Auto delete paren 4":
   block:
     var status = initEditorStatus()
-    status.settings.autoDeleteParen = true
+    status.settings.standard.autoDeleteParen = true
 
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"(", ru")"])
@@ -419,14 +419,14 @@ test "Auto delete paren 4":
     currentBufStatus.deleteCharacter(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn,
-      status.settings.autoDeleteParen)
+      status.settings.standard.autoDeleteParen)
 
     check(currentBufStatus.buffer[0] == ru"")
     check(currentBufStatus.buffer[1] == ru"")
 
   block:
     var status = initEditorStatus()
-    status.settings.autoDeleteParen = true
+    status.settings.standard.autoDeleteParen = true
 
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"(", ru")"])
@@ -435,7 +435,7 @@ test "Auto delete paren 4":
     currentBufStatus.deleteCharacter(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn,
-      status.settings.autoDeleteParen)
+      status.settings.standard.autoDeleteParen)
 
     check(currentBufStatus.buffer[0] == ru"")
     check(currentBufStatus.buffer[1] == ru"")
@@ -443,7 +443,7 @@ test "Auto delete paren 4":
 test "Auto delete paren 5":
   block:
     var status = initEditorStatus()
-    status.settings.autoDeleteParen = true
+    status.settings.standard.autoDeleteParen = true
 
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"()"])
@@ -451,14 +451,14 @@ test "Auto delete paren 5":
     currentBufStatus.keyRight(currentMainWindowNode)
     currentBufStatus.keyBackspace(
       currentMainWindowNode,
-      status.settings.autoDeleteParen,
-      status.settings.tabStop)
+      status.settings.standard.autoDeleteParen,
+      status.settings.standard.tabStop)
 
     check(currentBufStatus.buffer[0] == ru"")
 
   block:
     var status = initEditorStatus()
-    status.settings.autoDeleteParen = true
+    status.settings.standard.autoDeleteParen = true
 
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"()"])
@@ -467,15 +467,15 @@ test "Auto delete paren 5":
       currentBufStatus.keyRight(currentMainWindowNode)
     currentBufStatus.keyBackspace(
       currentMainWindowNode,
-      status.settings.autoDeleteParen,
-      status.settings.tabStop)
+      status.settings.standard.autoDeleteParen,
+      status.settings.standard.tabStop)
 
     check(currentBufStatus.buffer[0] == ru"")
 
 test "Auto delete paren 6":
   block:
     var status = initEditorStatus()
-    status.settings.autoDeleteParen = true
+    status.settings.standard.autoDeleteParen = true
 
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"(a(a))"])
@@ -487,14 +487,14 @@ test "Auto delete paren 6":
 
     currentBufStatus.keyBackspace(
       currentMainWindowNode,
-      status.settings.autoDeleteParen,
-      status.settings.tabStop)
+      status.settings.standard.autoDeleteParen,
+      status.settings.standard.tabStop)
 
     check(currentBufStatus.buffer[0] == ru"(aa)")
 
   block:
     var status = initEditorStatus()
-    status.settings.autoDeleteParen = true
+    status.settings.standard.autoDeleteParen = true
 
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"(a(a))"])
@@ -506,8 +506,8 @@ test "Auto delete paren 6":
 
     currentBufStatus.keyBackspace(
       currentMainWindowNode,
-      status.settings.autoDeleteParen,
-      status.settings.tabStop)
+      status.settings.standard.autoDeleteParen,
+      status.settings.standard.tabStop)
 
     check(currentBufStatus.buffer[0] == ru"a(a)")
 
@@ -733,7 +733,7 @@ suite "Fix #1361":
     const Key = ru 'a'
     currentBufStatus.insertCharacter(
       currentMainWindowNode,
-      status.settings.autoCloseParen,
+      status.settings.standard.autoCloseParen,
       Key)
 
     status.update

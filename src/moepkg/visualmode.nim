@@ -453,20 +453,20 @@ proc getInsertBuffer(status: var EditorStatus): Runes =
     elif isEnterKey(key):
       currentBufStatus.keyEnter(
         currentMainWindowNode,
-        status.settings.autoIndent,
-        status.settings.tabStop)
+        status.settings.standard.autoIndent,
+        status.settings.standard.tabStop)
       break
     elif isDcKey(key):
       currentBufStatus.deleteCharacter(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn,
-        status.settings.autoDeleteParen)
+        status.settings.standard.autoDeleteParen)
       break
     elif isBackspaceKey(key):
       currentBufStatus.keyBackspace(
         currentMainWindowNode,
-        status.settings.autoDeleteParen,
-        status.settings.tabStop)
+        status.settings.standard.autoDeleteParen,
+        status.settings.standard.tabStop)
       if result.len > 0:
         result.delete(result.high)
     elif isTabKey(key):
@@ -474,13 +474,13 @@ proc getInsertBuffer(status: var EditorStatus): Runes =
       insertTab(
         currentBufStatus,
         currentMainWindowNode,
-        status.settings.tabStop,
-        status.settings.autoCloseParen)
+        status.settings.standard.tabStop,
+        status.settings.standard.autoCloseParen)
     else:
       result.add(key)
       currentBufStatus.insertCharacter(
         currentMainWindowNode,
-        status.settings.autoCloseParen,
+        status.settings.standard.autoCloseParen,
         key)
 
 proc enterInsertMode(status: var EditorStatus) =
@@ -576,13 +576,13 @@ proc visualCommand(
       currentBufStatus.addIndent(
         currentMainWindowNode,
         area,
-        status.settings.tabStop,
+        status.settings.standard.tabStop,
         status.commandLine)
     elif key == ord('<'):
       currentBufStatus.deleteIndent(
         currentMainWindowNode,
         area,
-        status.settings.tabStop,
+        status.settings.standard.tabStop,
         status.commandLine)
     elif key == ord('J'):
       currentBufStatus.joinLines(currentMainWindowNode, area, status.commandLine)
@@ -629,8 +629,8 @@ proc insertCharacterMultipleLines(
         currentMainWindowNode,
         insertBuffer,
         area,
-        status.settings.tabStop,
-        status.settings.autoCloseParen,
+        status.settings.standard.tabStop,
+        status.settings.standard.autoCloseParen,
         status.commandLine)
     else:
       currentMainWindowNode.currentLine = area.startLine
@@ -666,13 +666,13 @@ proc visualBlockCommand(
     elif key == ord('>'):
       currentBufStatus.insertIndent(
         area,
-        status.settings.tabStop,
+        status.settings.standard.tabStop,
         status.commandLine)
     elif key == ord('<'):
       currentBufStatus.deleteIndent(
         currentMainWindowNode,
         area,
-        status.settings.tabStop,
+        status.settings.standard.tabStop,
         status.commandLine)
     elif key == ord('J'):
       currentBufStatus.joinLines(currentMainWindowNode, area, status.commandLine)

@@ -136,8 +136,8 @@ suite "Replace mode: New line":
 
     currentBufStatus.keyEnter(
       currentMainWindowNode,
-      status.settings.autoIndent,
-      status.settings.tabStop)
+      status.settings.standard.autoIndent,
+      status.settings.standard.tabStop)
 
     const Key = ru'z'
     currentBufStatus.replaceCurrentCharacter(

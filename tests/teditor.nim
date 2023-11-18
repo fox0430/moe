@@ -218,7 +218,7 @@ suite "Editor: keyEnter":
       status.bufStatus[0].keyEnter(
         currentMainWindowNode,
         IsAutoIndent,
-        status.settings.tabStop)
+        status.settings.standard.tabStop)
 
     check status.bufStatus[0].buffer[0] == ru"block:"
     check status.bufStatus[0].buffer[1] == ru""
@@ -236,7 +236,7 @@ suite "Editor: keyEnter":
     currentBufStatus.keyEnter(
       currentMainWindowNode,
       IsAutoIndent,
-      status.settings.tabStop)
+      status.settings.standard.tabStop)
 
     check currentBufStatus.buffer.len == 2
     check currentBufStatus.buffer[0] == ru ""
@@ -262,7 +262,7 @@ suite "Editor: keyEnter":
       currentBufStatus.keyEnter(
         currentMainWindowNode,
         IsAutoIndent,
-        status.settings.tabStop)
+        status.settings.standard.tabStop)
 
   proc newLineTestCase1(lang: SourceLanguage, isAutoIndent: bool) =
     ## Enable/Disable autoindent
@@ -291,7 +291,7 @@ suite "Editor: keyEnter":
       status.bufStatus[0].keyEnter(
         status.mainWindow.currentMainWindowNode,
         isAutoIndent,
-        status.settings.tabStop)
+        status.settings.standard.tabStop)
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 2
@@ -335,7 +335,7 @@ suite "Editor: keyEnter":
       status.bufStatus[0].keyEnter(
         status.mainWindow.currentMainWindowNode,
         isAutoIndent,
-        status.settings.tabStop)
+        status.settings.standard.tabStop)
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 2
@@ -376,7 +376,7 @@ suite "Editor: keyEnter":
       status.bufStatus[0].keyEnter(
         status.mainWindow.currentMainWindowNode,
         isAutoIndent,
-        status.settings.tabStop)
+        status.settings.standard.tabStop)
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 2
@@ -417,7 +417,7 @@ suite "Editor: keyEnter":
       status.bufStatus[0].keyEnter(
         status.mainWindow.currentMainWindowNode,
         isAutoIndent,
-        status.settings.tabStop)
+        status.settings.standard.tabStop)
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 2
@@ -460,7 +460,7 @@ suite "Editor: keyEnter":
       status.bufStatus[0].keyEnter(
         status.mainWindow.currentMainWindowNode,
         IsAutoIndent,
-        status.settings.tabStop)
+        status.settings.standard.tabStop)
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 2
@@ -499,7 +499,7 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
       status.bufStatus[0].keyEnter(
         status.mainWindow.currentMainWindowNode,
         IsAutoIndent,
-        status.settings.tabStop)
+        status.settings.standard.tabStop)
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 2
@@ -508,7 +508,7 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
 
       let currentMainWindowNode = status.mainWindow.currentMainWindowNode
       check currentMainWindowNode.currentLine == 1
-      check currentMainWindowNode.currentColumn == status.settings.tabStop
+      check currentMainWindowNode.currentColumn == status.settings.standard.tabStop
 
   block:
     const Keyword = "var"
@@ -545,7 +545,7 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
       status.bufStatus[0].keyEnter(
         status.mainWindow.currentMainWindowNode,
         IsAutoIndent,
-        status.settings.tabStop)
+        status.settings.standard.tabStop)
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 2
@@ -587,7 +587,7 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
       status.bufStatus[0].keyEnter(
         status.mainWindow.currentMainWindowNode,
         IsAutoIndent,
-        status.settings.tabStop)
+        status.settings.standard.tabStop)
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 2
@@ -631,7 +631,7 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
       status.bufStatus[0].keyEnter(
         status.mainWindow.currentMainWindowNode,
         IsAutoIndent,
-        status.settings.tabStop)
+        status.settings.standard.tabStop)
 
       check status.bufStatus[0].buffer[0] == buffer[0]
       check $status.bufStatus[0].buffer[1] == "  "
@@ -674,7 +674,7 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
       status.bufStatus[0].keyEnter(
         status.mainWindow.currentMainWindowNode,
         IsAutoIndent,
-        status.settings.tabStop)
+        status.settings.standard.tabStop)
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer[0] == ru ""
@@ -717,7 +717,7 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
       status.bufStatus[0].keyEnter(
         status.mainWindow.currentMainWindowNode,
         IsAutoIndent,
-        status.settings.tabStop)
+        status.settings.standard.tabStop)
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 2
@@ -754,7 +754,7 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
       status.bufStatus[0].keyEnter(
         status.mainWindow.currentMainWindowNode,
         IsAutoIndent,
-        status.settings.tabStop)
+        status.settings.standard.tabStop)
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 2
@@ -793,7 +793,7 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
       status.bufStatus[0].keyEnter(
         status.mainWindow.currentMainWindowNode,
         IsAutoIndent,
-        status.settings.tabStop)
+        status.settings.standard.tabStop)
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 2
@@ -832,7 +832,7 @@ suite "Editor: keyEnter: Enable autoindent in C":
       status.bufStatus[0].keyEnter(
         status.mainWindow.currentMainWindowNode,
         IsAutoIndent,
-        status.settings.tabStop)
+        status.settings.standard.tabStop)
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 3
@@ -870,7 +870,7 @@ suite "Editor: keyEnter: Enable autoindent in C":
       status.bufStatus[0].keyEnter(
         status.mainWindow.currentMainWindowNode,
         IsAutoIndent,
-        status.settings.tabStop)
+        status.settings.standard.tabStop)
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 2
@@ -909,7 +909,7 @@ suite "Editor: keyEnter: Enable autoindent in C":
       status.bufStatus[0].keyEnter(
         status.mainWindow.currentMainWindowNode,
         IsAutoIndent,
-        status.settings.tabStop)
+        status.settings.standard.tabStop)
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 3
@@ -941,7 +941,7 @@ suite "Editor: keyEnter: Enable autoindent in Yaml":
     status.bufStatus[0].keyEnter(
       currentMainWindowNode,
       IsAutoIndent,
-      status.settings.tabStop)
+      status.settings.standard.tabStop)
 
 
     check status.bufStatus[0].buffer[0] == ru"test:"
@@ -961,7 +961,7 @@ suite "Editor: keyEnter and autoindent in Python":
     status.bufStatus[0].keyEnter(
       currentMainWindowNode,
       IsAutoIndent,
-      status.settings.tabStop)
+      status.settings.standard.tabStop)
 
     check status.bufStatus[0].buffer[0] == ru"if true:"
     check status.bufStatus[0].buffer[1] == ru"  "
@@ -979,7 +979,7 @@ suite "Editor: keyEnter and autoindent in Python":
     status.bufStatus[0].keyEnter(
       currentMainWindowNode,
       IsAutoIndent,
-      status.settings.tabStop)
+      status.settings.standard.tabStop)
 
     check status.bufStatus[0].buffer[0] == ru"if true and"
     check status.bufStatus[0].buffer[1] == ru"  "
@@ -997,7 +997,7 @@ suite "Editor: keyEnter and autoindent in Python":
     status.bufStatus[0].keyEnter(
       currentMainWindowNode,
       IsAutoIndent,
-      status.settings.tabStop)
+      status.settings.standard.tabStop)
 
     check currentBufStatus.buffer[0] == ru"if true or"
     check currentBufStatus.buffer[1] == ru"  "
@@ -1017,7 +1017,7 @@ suite "Editor: keyEnter and autoindent in Python":
       currentBufStatus.keyEnter(
         currentMainWindowNode,
         IsAutoIndent,
-        status.settings.tabStop)
+        status.settings.standard.tabStop)
 
 suite "Delete character before cursor":
   test "Delete one character":
@@ -2144,7 +2144,7 @@ suite "Editor: Open the blank line below":
       status.bufStatus[0].openBlankLineBelow(
         status.mainWindow.currentMainWindowNode,
         isAutoIndent,
-        status.settings.tabStop)
+        status.settings.standard.tabStop)
 
       let
         currentBufStatus = status.bufStatus[0]
@@ -2191,7 +2191,7 @@ suite "Editor: Open the blank line below":
       status.bufStatus[0].openBlankLineBelow(
         status.mainWindow.currentMainWindowNode,
         IsAutoIndent,
-        status.settings.tabStop)
+        status.settings.standard.tabStop)
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 2
@@ -2232,7 +2232,7 @@ suite "Editor: Open the blank line below":
       status.bufStatus[0].openBlankLineBelow(
         status.mainWindow.currentMainWindowNode,
         IsAutoIndent,
-        status.settings.tabStop)
+        status.settings.standard.tabStop)
 
       let currentBufStatus = status.bufStatus[0]
       check $currentBufStatus.buffer[0] == buffer
@@ -2279,7 +2279,7 @@ suite "Editor: Open the blank line below":
       status.bufStatus[0].openBlankLineBelow(
         status.mainWindow.currentMainWindowNode,
         isAutoIndent,
-        status.settings.tabStop)
+        status.settings.standard.tabStop)
 
       let
         currentBufStatus = status.bufStatus[0]
@@ -2324,7 +2324,7 @@ suite "Editor: Open the blank line below":
       status.bufStatus[0].openBlankLineBelow(
         status.mainWindow.currentMainWindowNode,
         IsAutoIndent,
-        status.settings.tabStop)
+        status.settings.standard.tabStop)
 
       let currentBufStatus = status.bufStatus[0]
       check $currentBufStatus.buffer[0] == buffer
@@ -2366,7 +2366,7 @@ suite "Editor: Open the blank line abave":
       status.bufStatus[0].openBlankLineAbove(
         status.mainWindow.currentMainWindowNode,
         isAutoIndent,
-        status.settings.tabStop)
+        status.settings.standard.tabStop)
 
       let
         currentBufStatus = status.bufStatus[0]
@@ -2410,7 +2410,7 @@ suite "Editor: Open the blank line abave":
       status.bufStatus[0].openBlankLineAbove(
         status.mainWindow.currentMainWindowNode,
         isAutoIndent,
-        status.settings.tabStop)
+        status.settings.standard.tabStop)
 
       let
         currentBufStatus = status.bufStatus[0]
@@ -2458,7 +2458,7 @@ suite "Editor: Open the blank line abave":
       status.bufStatus[0].openBlankLineAbove(
         status.mainWindow.currentMainWindowNode,
         IsAutoIndent,
-        status.settings.tabStop)
+        status.settings.standard.tabStop)
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 3
@@ -2501,7 +2501,7 @@ suite "Editor: Open the blank line abave":
       status.bufStatus[0].openBlankLineAbove(
         status.mainWindow.currentMainWindowNode,
         IsAutoIndent,
-        status.settings.tabStop)
+        status.settings.standard.tabStop)
 
       let currentBufStatus = status.bufStatus[0]
 
@@ -2553,7 +2553,7 @@ suite "Editor: Open the blank line abave":
       status.bufStatus[0].openBlankLineAbove(
         status.mainWindow.currentMainWindowNode,
         IsAutoIndent,
-        status.settings.tabStop)
+        status.settings.standard.tabStop)
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 3
@@ -2596,7 +2596,7 @@ suite "Editor: Indent":
 
         status.bufStatus[0].indent(
           status.mainWindow.currentMainWindowNode,
-          status.settings.tabStop)
+          status.settings.standard.tabStop)
 
         let
           currentBufStatus = status.bufStatus[0]
@@ -2630,7 +2630,7 @@ suite "Editor: Indent":
 
         status.bufStatus[0].indent(
           status.mainWindow.currentMainWindowNode,
-          status.settings.tabStop)
+          status.settings.standard.tabStop)
 
         check status.bufStatus[0].buffer.len == 1
         check status.bufStatus[0].buffer[0] == ru"    "
@@ -2659,7 +2659,7 @@ suite "Editor: Indent":
 
         status.bufStatus[0].indent(
           status.mainWindow.currentMainWindowNode,
-          status.settings.tabStop)
+          status.settings.standard.tabStop)
 
         let
           currentBufStatus = status.bufStatus[0]
@@ -2695,7 +2695,7 @@ suite "Editor: Indent":
 
         status.bufStatus[0].indent(
           status.mainWindow.currentMainWindowNode,
-          status.settings.tabStop)
+          status.settings.standard.tabStop)
 
         let
           currentBufStatus = status.bufStatus[0]
@@ -2730,7 +2730,7 @@ suite "Editor: Indent":
 
         status.bufStatus[0].indent(
           status.mainWindow.currentMainWindowNode,
-          status.settings.tabStop)
+          status.settings.standard.tabStop)
 
         let
           currentBufStatus = status.bufStatus[0]
@@ -2768,7 +2768,7 @@ suite "Editor: Unindent":
 
         status.bufStatus[0].unindent(
           status.mainWindow.currentMainWindowNode,
-          status.settings.tabStop)
+          status.settings.standard.tabStop)
 
         let
           currentBufStatus = status.bufStatus[0]
@@ -2805,7 +2805,7 @@ suite "Editor: Unindent":
 
         status.bufStatus[0].unindent(
           status.mainWindow.currentMainWindowNode,
-          status.settings.tabStop)
+          status.settings.standard.tabStop)
 
         let
           currentBufStatus = status.bufStatus[0]
@@ -2840,7 +2840,7 @@ suite "Editor: Unindent":
 
         status.bufStatus[0].unindent(
           status.mainWindow.currentMainWindowNode,
-          status.settings.tabStop)
+          status.settings.standard.tabStop)
 
         let
           currentBufStatus = status.bufStatus[0]
@@ -2874,7 +2874,7 @@ suite "Editor: Unindent":
 
         status.bufStatus[0].unindent(
           status.mainWindow.currentMainWindowNode,
-          status.settings.tabStop)
+          status.settings.standard.tabStop)
 
         let
           currentBufStatus = status.bufStatus[0]
@@ -2910,7 +2910,7 @@ suite "Editor: Unindent":
 
         status.bufStatus[0].unindent(
           status.mainWindow.currentMainWindowNode,
-          status.settings.tabStop)
+          status.settings.standard.tabStop)
 
         let
           currentBufStatus = status.bufStatus[0]

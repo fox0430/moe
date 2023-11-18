@@ -228,30 +228,33 @@ type
     languages*: Table[string, LspLanguageSettings]
       # key is languageId
 
-  EditorSettings* = object
-    editorColorTheme*: ColorTheme
-    statusLine*: StatusLineSettings
-    tabLine*: TabLineSettings
-    view*: EditorViewSettings
+  StandardSettings* = object
     syntax*: bool
-    autoCloseParen*: bool
-    autoIndent*: bool
-    tabStop*: int
-    ignorecase*: bool
-    smartcase*: bool
+    editorColorTheme*: ColorTheme
     disableChangeCursor*: bool
     defaultCursor*: CursorType
     normalModeCursor*: CursorType
     insertModeCursor*: CursorType
+    ignorecase*: bool
+    smartcase*: bool
+    tabStop*: int
+    autoCloseParen*: bool
     autoSave*: bool
-    autoSaveInterval*: int # minutes
+    autoIndent*: bool
     liveReloadOfConf*: bool
     incrementalSearch*: bool
     popupWindowInExmode*: bool
     autoDeleteParen*: bool
-    smoothScroll*: SmoothScrollSettings
     liveReloadOfFile*: bool
     colorMode*: ColorMode
+
+  EditorSettings* = object
+    standard*: StandardSettings
+    statusLine*: StatusLineSettings
+    tabLine*: TabLineSettings
+    view*: EditorViewSettings
+    autoSaveInterval*: int # minutes # TODO: Move
+    smoothScroll*: SmoothScrollSettings
     clipboard*: ClipboardSettings
     buildOnSave*: BuildOnSaveSettings
     filer*: FilerSettings
@@ -457,11 +460,8 @@ proc initLspSettigns(): LspSettings =
     command: ru"nimlsp",
     trace: TraceValue.verbose)
 
-proc initEditorSettings*(): EditorSettings =
+proc initStandardSettings(): StandardSettings =
   result.editorColorTheme = ColorTheme.dark
-  result.statusLine = initStatusLineSettings()
-  result.tabLine = initTabBarSettings()
-  result.view = initEditorViewSettings()
   result.syntax = true
   result.autoCloseParen = true
   result.autoIndent = true
@@ -471,11 +471,17 @@ proc initEditorSettings*(): EditorSettings =
   result.defaultCursor = CursorType.terminalDefault
   result.normalModeCursor = CursorType.blinkBlock
   result.insertModeCursor = CursorType.blinkIbeam
-  result.autoSaveInterval = 5
   result.incrementalSearch = true
   result.popupWindowInExmode = true
-  result.smoothScroll = initSmoothScrollSettings()
   result.colorMode = checkColorSupportedTerminal()
+
+proc initEditorSettings*(): EditorSettings =
+  result.standard = initStandardSettings()
+  result.statusLine = initStatusLineSettings()
+  result.tabLine = initTabBarSettings()
+  result.view = initEditorViewSettings()
+  result.autoSaveInterval = 5
+  result.smoothScroll = initSmoothScrollSettings()
   result.clipboard = initClipboardSettings()
   result.buildOnSave = BuildOnSaveSettings()
   result.filer = initFilerSettings()
@@ -1098,7 +1104,7 @@ proc parseStandardTable(s: var EditorSettings, standardConfigs: TomlValueRef) =
 
   if standardConfigs.contains("theme"):
     let themeString = standardConfigs["theme"].getStr
-    s.editorColorTheme = themeString.parseColorTheme.get
+    s.standard.editorColorTheme = themeString.parseColorTheme.get
 
   if standardConfigs.contains("number"):
     s.view.lineNumber = standardConfigs["number"].getBool
@@ -1116,65 +1122,65 @@ proc parseStandardTable(s: var EditorSettings, standardConfigs: TomlValueRef) =
     s.tabLine.enable = standardConfigs["tabLine"].getBool
 
   if standardConfigs.contains("syntax"):
-    s.syntax = standardConfigs["syntax"].getBool
+    s.standard.syntax = standardConfigs["syntax"].getBool
 
   if standardConfigs.contains("tabStop"):
-    s.tabStop      = standardConfigs["tabStop"].getInt
+    s.standard.tabStop      = standardConfigs["tabStop"].getInt
     s.view.tabStop = standardConfigs["tabStop"].getInt
 
   if standardConfigs.contains("sidebar"):
     s.view.sidebar = standardConfigs["sidebar"].getBool
 
   if standardConfigs.contains("autoCloseParen"):
-    s.autoCloseParen = standardConfigs["autoCloseParen"].getBool
+    s.standard.autoCloseParen = standardConfigs["autoCloseParen"].getBool
 
   if standardConfigs.contains("autoIndent"):
-    s.autoIndent = standardConfigs["autoIndent"].getBool
+    s.standard.autoIndent = standardConfigs["autoIndent"].getBool
 
   if standardConfigs.contains("ignorecase"):
-    s.ignorecase = standardConfigs["ignorecase"].getBool
+    s.standard.ignorecase = standardConfigs["ignorecase"].getBool
 
   if standardConfigs.contains("smartcase"):
-    s.smartcase = standardConfigs["smartcase"].getBool
+    s.standard.smartcase = standardConfigs["smartcase"].getBool
 
   if standardConfigs.contains("disableChangeCursor"):
-    s.disableChangeCursor = standardConfigs["disableChangeCursor"].getBool
+    s.standard.disableChangeCursor = standardConfigs["disableChangeCursor"].getBool
 
   if standardConfigs.contains("defaultCursor"):
     let str = standardConfigs["defaultCursor"].getStr
-    s.defaultCursor = cursorType(str)
+    s.standard.defaultCursor = cursorType(str)
 
   if standardConfigs.contains("normalModeCursor"):
     let str = standardConfigs["normalModeCursor"].getStr
-    s.normalModeCursor = cursorType(str)
+    s.standard.normalModeCursor = cursorType(str)
 
   if standardConfigs.contains("insertModeCursor"):
     let str = standardConfigs["insertModeCursor"].getStr
-    s.insertModeCursor = cursorType(str)
+    s.standard.insertModeCursor = cursorType(str)
 
   if standardConfigs.contains("autoSave"):
-    s.autoSave = standardConfigs["autoSave"].getBool
+    s.standard.autoSave = standardConfigs["autoSave"].getBool
 
   if standardConfigs.contains("autoSaveInterval"):
     s.autoSaveInterval = standardConfigs["autoSaveInterval"].getInt
 
   if standardConfigs.contains("liveReloadOfConf"):
-    s.liveReloadOfConf = standardConfigs["liveReloadOfConf"].getBool
+    s.standard.liveReloadOfConf = standardConfigs["liveReloadOfConf"].getBool
 
   if standardConfigs.contains("incrementalSearch"):
-    s.incrementalSearch = standardConfigs["incrementalSearch"].getBool
+    s.standard.incrementalSearch = standardConfigs["incrementalSearch"].getBool
 
   if standardConfigs.contains("popupWindowInExmode"):
-    s.popupWindowInExmode = standardConfigs["popupWindowInExmode"].getBool
+    s.standard.popupWindowInExmode = standardConfigs["popupWindowInExmode"].getBool
 
   if standardConfigs.contains("autoDeleteParen"):
-    s.autoDeleteParen =  standardConfigs["autoDeleteParen"].getBool
+    s.standard.autoDeleteParen =  standardConfigs["autoDeleteParen"].getBool
 
   if standardConfigs.contains("colorMode"):
-    s.colorMode = standardConfigs["colorMode"].getStr.parseColorMode.get
+    s.standard.colorMode = standardConfigs["colorMode"].getStr.parseColorMode.get
 
   if standardConfigs.contains("liveReloadOfFile"):
-    s.liveReloadOfFile = standardConfigs["liveReloadOfFile"].getBool
+    s.standard.liveReloadOfFile = standardConfigs["liveReloadOfFile"].getBool
 
   if standardConfigs.contains("indentationLines"):
     s.view.indentationLines = standardConfigs["indentationLines"].getBool
@@ -1716,7 +1722,7 @@ proc parseThemeTable(
       let t = themeConfigs.get["baseTheme"].getStr.parseColorTheme.get
       ColorThemeTable[ColorTheme.config] = ColorThemeTable[t]
 
-    case s.editorColorTheme:
+    case s.standard.editorColorTheme:
       of ColorTheme.config:
         for index in EditorColorIndex:
           if themeConfigs.isSome and themeConfigs.get.contains($index):
@@ -1746,7 +1752,7 @@ proc parseThemeTable(
       of ColorTheme.vscode:
         let vsCodeTheme = loadVSCodeTheme()
         if vsCodeTheme.isOk:
-          s.editorColorTheme = vsCodeTheme.get
+          s.standard.editorColorTheme = vsCodeTheme.get
       else:
         discard
 
@@ -1807,8 +1813,8 @@ proc parseTomlConfigs*(tomlConfigs: TomlValueRef): EditorSettings =
   if tomlConfigs.contains("Lsp"):
     result.parseLspTable(tomlConfigs["Lsp"])
 
-  if result.editorColorTheme == ColorTheme.config or
-     result.editorColorTheme == ColorTheme.vscode:
+  if result.standard.editorColorTheme == ColorTheme.config or
+     result.standard.editorColorTheme == ColorTheme.vscode:
        if tomlConfigs.contains("Theme"):
          result.parseThemeTable(tomlConfigs["Theme"].some)
        else:
@@ -2350,31 +2356,31 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
   proc addLine(buf: var string, str: string) {.inline.} = buf &= "\n" & str
 
   result = "[Standard]"
-  result.addLine fmt "theme = \"{$settings.editorcolorTheme}\""
+  result.addLine fmt "theme = \"{$settings.standard.editorcolorTheme}\""
   result.addLine fmt "number = {$settings.view.lineNumber}"
   result.addLine fmt "currentNumber = {$settings.view.currentLineNumber}"
   result.addLine fmt "statusLine = {$settings.statusLine.enable}"
   result.addLine fmt "tabLine = {$settings.tabLine.enable}"
-  result.addLine fmt "syntax = {$settings.syntax}"
+  result.addLine fmt "syntax = {$settings.standard.syntax}"
   result.addLine fmt "indentationLines = {$settings.view.indentationLines}"
-  result.addLine fmt "tabStop = {$settings.tabStop}"
+  result.addLine fmt "tabStop = {$settings.standard.tabStop}"
   result.addLine fmt "sidebar = {$settings.view.sidebar}"
-  result.addLine fmt "autoCloseParen = {$settings.autoCloseParen}"
-  result.addLine fmt "autoIndent = {$settings.autoIndent}"
-  result.addLine fmt "ignorecase = {$settings.ignorecase}"
-  result.addLine fmt "smartcase = {$settings.smartcase}"
-  result.addLine fmt "disableChangeCursor = {$settings.disableChangeCursor}"
-  result.addLine fmt "defaultCursor = \"{$settings.defaultCursor}\""
-  result.addLine fmt "normalModeCursor = \"{$settings.normalModeCursor}\""
-  result.addLine fmt "insertModeCursor = \"{$settings.insertModeCursor}\""
-  result.addLine fmt "autoSave = {$settings.autoSave}"
+  result.addLine fmt "autoCloseParen = {$settings.standard.autoCloseParen}"
+  result.addLine fmt "autoIndent = {$settings.standard.autoIndent}"
+  result.addLine fmt "ignorecase = {$settings.standard.ignorecase}"
+  result.addLine fmt "smartcase = {$settings.standard.smartcase}"
+  result.addLine fmt "disableChangeCursor = {$settings.standard.disableChangeCursor}"
+  result.addLine fmt "defaultCursor = \"{$settings.standard.defaultCursor}\""
+  result.addLine fmt "normalModeCursor = \"{$settings.standard.normalModeCursor}\""
+  result.addLine fmt "insertModeCursor = \"{$settings.standard.insertModeCursor}\""
+  result.addLine fmt "autoSave = {$settings.standard.autoSave}"
   result.addLine fmt "autoSaveInterval = {$settings.autoSaveInterval}"
-  result.addLine fmt "liveReloadOfConf = {$settings.liveReloadOfConf}"
-  result.addLine fmt "incrementalSearch = {$settings.incrementalSearch}"
-  result.addLine fmt "popupWindowInExmode = {$settings.popupWindowInExmode}"
-  result.addLine fmt "autoDeleteParen = {$settings.autoDeleteParen }"
-  result.addLine fmt "liveReloadOfFile = {$settings.liveReloadOfFile}"
-  result.addLine fmt "colorMode = \"{settings.colorMode.toConfigStr}\""
+  result.addLine fmt "liveReloadOfConf = {$settings.standard.liveReloadOfConf}"
+  result.addLine fmt "incrementalSearch = {$settings.standard.incrementalSearch}"
+  result.addLine fmt "popupWindowInExmode = {$settings.standard.popupWindowInExmode}"
+  result.addLine fmt "autoDeleteParen = {$settings.standard.autoDeleteParen }"
+  result.addLine fmt "liveReloadOfFile = {$settings.standard.liveReloadOfFile}"
+  result.addLine fmt "colorMode = \"{settings.standard.colorMode.toConfigStr}\""
 
   result.addLine ""
 
@@ -2595,7 +2601,7 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
     if hexColor.isSome: return hexColor.get
     else: "termDefautBg"
 
-  let theme = settings.editorcolorTheme
+  let theme = settings.standard.editorcolorTheme
   result.addLine fmt "[Theme]"
   result.addLine fmt "baseTheme = \"{$theme}\""
 

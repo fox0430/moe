@@ -34,7 +34,7 @@ suite "Config mode: Start configuration mode":
 suite "Config mode: Init buffer":
   test "Init standard table buffer":
     var status = initEditorStatus()
-    status.settings.colorMode = ColorMode.c24bit
+    status.settings.standard.colorMode = ColorMode.c24bit
 
     let buffer = status.settings.initStandardTableBuffer
 
@@ -692,7 +692,7 @@ suite "Config mode: Get standard table setting values":
 
     const Name = "syntax"
     let
-      default = settings.syntax
+      default = status.settings.standard.syntax
       values = settings.getStandardTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
@@ -714,7 +714,7 @@ suite "Config mode: Get standard table setting values":
 
     const Name = "autoCloseParen"
     let
-      default = settings.autoCloseParen
+      default = settings.standard.autoCloseParen
       values = settings.getStandardTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
@@ -725,7 +725,7 @@ suite "Config mode: Get standard table setting values":
 
     const Name = "autoIndent"
     let
-      default = settings.autoIndent
+      default = settings.standard.autoIndent
       values = settings.getStandardTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
@@ -736,7 +736,7 @@ suite "Config mode: Get standard table setting values":
 
     const Name = "ignorecase"
     let
-      default = settings.ignorecase
+      default = settings.standard.ignorecase
       values = settings.getStandardTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
@@ -747,7 +747,7 @@ suite "Config mode: Get standard table setting values":
 
     const Name = "smartcase"
     let
-      default = settings.smartcase
+      default = settings.standard.smartcase
       values = settings.getStandardTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
@@ -758,7 +758,7 @@ suite "Config mode: Get standard table setting values":
 
     const Name = "disableChangeCursor"
     let
-      default = settings.disableChangeCursor
+      default = settings.standard.disableChangeCursor
       values = settings.getStandardTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
@@ -769,7 +769,7 @@ suite "Config mode: Get standard table setting values":
 
     const Name = "autoSave"
     let
-      default = settings.autoSave
+      default = settings.standard.autoSave
       values = settings.getStandardTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
@@ -780,7 +780,7 @@ suite "Config mode: Get standard table setting values":
 
     const Name = "liveReloadOfConf"
     let
-      default = settings.liveReloadOfConf
+      default = settings.standard.liveReloadOfConf
       values = settings.getStandardTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
@@ -791,7 +791,7 @@ suite "Config mode: Get standard table setting values":
 
     const Name = "incrementalSearch"
     let
-      default = settings.incrementalSearch
+      default = settings.standard.incrementalSearch
       values = settings.getStandardTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
@@ -802,7 +802,7 @@ suite "Config mode: Get standard table setting values":
 
     const Name = "popupWindowInExmode"
     let
-      default = settings.popupWindowInExmode
+      default = settings.standard.popupWindowInExmode
       values = settings.getStandardTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
@@ -813,7 +813,7 @@ suite "Config mode: Get standard table setting values":
 
     const Name = "autoDeleteParen"
     let
-      default = settings.autoDeleteParen
+      default = settings.standard.autoDeleteParen
       values = settings.getStandardTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
@@ -1625,7 +1625,7 @@ suite "Config mode: Chaging Standard table settings":
     var settings = initEditorSettings()
     settings.changeStandardTableSetting("theme", "vivid")
 
-    check settings.editorColorTheme == ColorTheme.vivid
+    check settings.standard.editorColorTheme == ColorTheme.vivid
 
   test "Chaging number":
     var settings = initEditorSettings()
@@ -1670,10 +1670,10 @@ suite "Config mode: Chaging Standard table settings":
   test "Chaging syntax":
     var settings = initEditorSettings()
 
-    let val = not settings.syntax
+    let val = not settings.standard.syntax
     settings.changeStandardTableSetting("syntax", $val)
 
-    check val == settings.syntax
+    check val == settings.standard.syntax
 
   test "Chaging indentationLines":
     var settings = initEditorSettings()
@@ -1686,42 +1686,42 @@ suite "Config mode: Chaging Standard table settings":
   test "Chaging autoCloseParen":
     var settings = initEditorSettings()
 
-    let val = not settings.autoCloseParen
+    let val = not settings.standard.autoCloseParen
     settings.changeStandardTableSetting("autoCloseParen", $val)
 
-    check val == settings.autoCloseParen
+    check val == settings.standard.autoCloseParen
 
   test "Chaging autoIndent":
     var settings = initEditorSettings()
 
-    let val = not settings.autoIndent
+    let val = not settings.standard.autoIndent
     settings.changeStandardTableSetting("autoIndent", $val)
 
-    check val == settings.autoIndent
+    check val == settings.standard.autoIndent
 
   test "Chaging ignorecase":
     var settings = initEditorSettings()
 
-    let val = not settings.ignorecase
+    let val = not settings.standard.ignorecase
     settings.changeStandardTableSetting("ignorecase", $val)
 
-    check val == settings.ignorecase
+    check val == settings.standard.ignorecase
 
   test "Chaging smartcase":
     var settings = initEditorSettings()
 
-    let val = not settings.smartcase
+    let val = not settings.standard.smartcase
     settings.changeStandardTableSetting("smartcase", $val)
 
-    check val == settings.smartcase
+    check val == settings.standard.smartcase
 
   test "Chaging disableChangeCursor":
     var settings = initEditorSettings()
 
-    let val = not settings.disableChangeCursor
+    let val = not settings.standard.disableChangeCursor
     settings.changeStandardTableSetting("disableChangeCursor", $val)
 
-    check val == settings.disableChangeCursor
+    check val == settings.standard.disableChangeCursor
 
   test "Chaging defaultCursor":
     var settings = initEditorSettings()
@@ -1729,7 +1729,7 @@ suite "Config mode: Chaging Standard table settings":
     let val = "noneBlinkIbeam"
     settings.changeStandardTableSetting("defaultCursor", val)
 
-    check CursorType.noneBlinkIbeam == settings.defaultCursor
+    check CursorType.noneBlinkIbeam == settings.standard.defaultCursor
 
   test "Chaging normalModeCursor":
     var settings = initEditorSettings()
@@ -1737,7 +1737,7 @@ suite "Config mode: Chaging Standard table settings":
     let val = "noneBlinkIbeam"
     settings.changeStandardTableSetting("normalModeCursor", val)
 
-    check CursorType.noneBlinkIbeam == settings.normalModeCursor
+    check CursorType.noneBlinkIbeam == settings.standard.normalModeCursor
 
   test "Chaging insertModeCursor":
     var settings = initEditorSettings()
@@ -1745,70 +1745,70 @@ suite "Config mode: Chaging Standard table settings":
     let val = "noneBlinkIbeam"
     settings.changeStandardTableSetting("insertModeCursor", val)
 
-    check CursorType.noneBlinkIbeam == settings.insertModeCursor
+    check CursorType.noneBlinkIbeam == settings.standard.insertModeCursor
 
   test "Chaging autoSave":
     var settings = initEditorSettings()
 
-    let val = not settings.autoSave
+    let val = not settings.standard.autoSave
     settings.changeStandardTableSetting("autoSave", $val)
 
-    check val == settings.autoSave
+    check val == settings.standard.autoSave
 
   test "Chaging liveReloadOfConf":
     var settings = initEditorSettings()
 
-    let val = not settings.liveReloadOfConf
+    let val = not settings.standard.liveReloadOfConf
     settings.changeStandardTableSetting("liveReloadOfConf", $val)
 
-    check val == settings.liveReloadOfConf
+    check val == settings.standard.liveReloadOfConf
 
   test "Chaging incrementalSearch":
     var settings = initEditorSettings()
 
-    let val = not settings.incrementalSearch
+    let val = not settings.standard.incrementalSearch
     settings.changeStandardTableSetting("incrementalSearch", $val)
 
-    check val == settings.incrementalSearch
+    check val == settings.standard.incrementalSearch
 
   test "Chaging popupWindowInExmode":
     var settings = initEditorSettings()
 
-    let val = not settings.popupWindowInExmode
+    let val = not settings.standard.popupWindowInExmode
     settings.changeStandardTableSetting("popupWindowInExmode", $val)
 
-    check val == settings.popupWindowInExmode
+    check val == settings.standard.popupWindowInExmode
 
   test "Chaging autoDeleteParen":
     var settings = initEditorSettings()
 
-    let val = not settings.autoDeleteParen
+    let val = not settings.standard.autoDeleteParen
     settings.changeStandardTableSetting("autoDeleteParen", $val)
 
-    check val == settings.autoDeleteParen
+    check val == settings.standard.autoDeleteParen
 
   test "Chaging colorMode":
     var settings = initEditorSettings()
 
-    settings.colorMode = ColorMode.c24bit
+    settings.standard.colorMode = ColorMode.c24bit
     settings.changeStandardTableSetting("colorMode", "none")
-    check ColorMode.none == settings.colorMode
+    check ColorMode.none == settings.standard.colorMode
 
-    settings.colorMode = ColorMode.c24bit
+    settings.standard.colorMode = ColorMode.c24bit
     settings.changeStandardTableSetting("colorMode", "8")
-    check ColorMode.c8 == settings.colorMode
+    check ColorMode.c8 == settings.standard.colorMode
 
-    settings.colorMode = ColorMode.c24bit
+    settings.standard.colorMode = ColorMode.c24bit
     settings.changeStandardTableSetting("colorMode", "16")
-    check ColorMode.c16 == settings.colorMode
+    check ColorMode.c16 == settings.standard.colorMode
 
-    settings.colorMode = ColorMode.c24bit
+    settings.standard.colorMode = ColorMode.c24bit
     settings.changeStandardTableSetting("colorMode", "256")
-    check ColorMode.c256 == settings.colorMode
+    check ColorMode.c256 == settings.standard.colorMode
 
-    settings.colorMode = ColorMode.none
+    settings.standard.colorMode = ColorMode.none
     settings.changeStandardTableSetting("colorMode", "24bit")
-    check ColorMode.c24bit == settings.colorMode
+    check ColorMode.c24bit == settings.standard.colorMode
 
   test "Set invalid value":
     var settings = initEditorSettings()
@@ -2434,7 +2434,7 @@ suite "Config mode: Change Theme table settings":
         "#000000").isOk
 
       assert "#000000".hexToRgb.get ==
-        settings.editorColorTheme.foregroundRgb(pairIndex)
+        settings.standard.editorColorTheme.foregroundRgb(pairIndex)
 
   test "change background":
     var settings = initEditorSettings()
@@ -2446,7 +2446,7 @@ suite "Config mode: Change Theme table settings":
         "#000000").isOk
 
       assert "#000000".hexToRgb.get ==
-        settings.editorColorTheme.backgroundRgb(pairIndex)
+        settings.standard.editorColorTheme.backgroundRgb(pairIndex)
 
 suite "Config mode: Get BuildOnSave table setting type":
   test "Get enable setting type":

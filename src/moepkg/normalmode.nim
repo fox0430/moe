@@ -29,7 +29,7 @@ proc changeModeToInsertMode(status: var EditorStatus) {.inline.} =
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
   else:
-    changeCursorType(status.settings.insertModeCursor)
+    changeCursorType(status.settings.standard.insertModeCursor)
     status.changeMode(Mode.insert)
 
 proc changeModeToReplaceMode(status: var EditorStatus) {.inline.} =
@@ -136,14 +136,14 @@ proc searchNextOccurrence(status: var EditorStatus, keyword: Runes) =
     searchResult = currentBufStatus.searchBuffer(
       currentMainWindowNode.bufferPosition,
       keyword,
-      status.settings.ignorecase,
-      status.settings.smartcase)
+      status.settings.standard.ignorecase,
+      status.settings.standard.smartcase)
   else:
     searchResult = currentBufStatus.searchBuffer(
       currentMainWindowNode.bufferPosition,
       lines,
-      status.settings.ignorecase,
-      status.settings.smartcase)
+      status.settings.standard.ignorecase,
+      status.settings.standard.smartcase)
   if searchResult.isSome:
     currentBufStatus.jumpLine(currentMainWindowNode, searchResult.get.line)
     for column in 0 ..< searchResult.get.column:
@@ -201,14 +201,14 @@ proc searchNextOccurrenceReversely(
       searchResult = currentBufStatus.searchBufferReversely(
         currentMainWindowNode.bufferPosition,
         keyword,
-        status.settings.ignorecase,
-        status.settings.smartcase)
+        status.settings.standard.ignorecase,
+        status.settings.standard.smartcase)
     else:
       searchResult = currentBufStatus.searchBufferReversely(
         currentMainWindowNode.bufferPosition,
         lines,
-        status.settings.ignorecase,
-        status.settings.smartcase)
+        status.settings.standard.ignorecase,
+        status.settings.standard.smartcase)
     if searchResult.isSome:
       currentBufStatus.jumpLine(currentMainWindowNode, searchResult.get.line)
       for column in 0 ..< searchResult.get.column:
@@ -897,9 +897,9 @@ proc replaceCurrentCharacter(status: var EditorStatus, newCharacter: Rune) =
 
   currentBufStatus.replaceCharacters(
     currentMainWindowNode,
-    status.settings.autoIndent,
-    status.settings.autoDeleteParen,
-    status.settings.tabStop,
+    status.settings.standard.autoIndent,
+    status.settings.standard.autoDeleteParen,
+    status.settings.standard.tabStop,
     currentBufStatus.cmdLoop,
     newCharacter)
 
@@ -910,8 +910,8 @@ proc openBlankLineBelowAndEnterInsertMode(status: var EditorStatus) =
 
   currentBufStatus.openBlankLineBelow(
     currentMainWindowNode,
-    status.settings.autoIndent,
-    status.settings.tabStop)
+    status.settings.standard.autoIndent,
+    status.settings.standard.tabStop)
   status.changeModeToInsertMode
 
 proc openBlankLineAboveAndEnterInsertMode(status: var EditorStatus) =
@@ -921,8 +921,8 @@ proc openBlankLineAboveAndEnterInsertMode(status: var EditorStatus) =
 
   currentBufStatus.openBlankLineAbove(
     currentMainWindowNode,
-    status.settings.autoIndent,
-    status.settings.tabStop)
+    status.settings.standard.autoIndent,
+    status.settings.standard.tabStop)
 
   var highlight = currentMainWindowNode.highlight
   highlight.updateViewHighlight(
@@ -1380,10 +1380,14 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
     status.pasteBeforeCursor
   elif key == ord('>'):
     for i in 0 ..< cmdLoop:
-      currentBufStatus.indent(currentMainWindowNode, status.settings.tabStop)
+      currentBufStatus.indent(
+        currentMainWindowNode,
+        status.settings.standard.tabStop)
   elif key == ord('<'):
     for i in 0 ..< cmdLoop:
-      currentBufStatus.unindent(currentMainWindowNode, status.settings.tabStop)
+      currentBufStatus.unindent(
+        currentMainWindowNode,
+        status.settings.standard.tabStop)
   elif key == ord('='):
     let secondKey = commands[1]
     if secondKey == ord('='):

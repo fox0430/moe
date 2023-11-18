@@ -266,7 +266,7 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
 
   proc isJumpAndHighlightInReplaceCommand(
     status: EditorStatus): bool {.inline.} =
-      status.settings.incrementalSearch and
+      status.settings.standard.incrementalSearch and
       status.commandLine.isReplaceCommand and
       status.commandLine.buffer.len > 3
 
@@ -378,7 +378,7 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
       status.commandLine.moveLeft
     elif isRightKey(key):
       status.commandLine.moveRight
-      if status.settings.popupWindowInExmode:
+      if status.settings.standard.popupWindowInExmode:
         if status.popupWindow != nil:
           status.popupWindow.deleteWindow
           continue
@@ -415,8 +415,9 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
     else:
       status.commandLine.insert(key)
 
-    if status.settings.incrementalSearch and currentBufStatus.isSearchMode:
-      status.execSearchCommand(status.commandLine.buffer)
+    if status.settings.standard.incrementalSearch and
+       currentBufStatus.isSearchMode:
+         status.execSearchCommand(status.commandLine.buffer)
     elif status.isJumpAndHighlightInReplaceCommand:
       status.jumpAndHighlightInReplaceCommand
 
@@ -430,7 +431,7 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
       if status.searchHistory[^1].len == 0:
         status.searchHistory.delete(status.searchHistory.high)
 
-      if status.settings.incrementalSearch:
+      if status.settings.standard.incrementalSearch:
         status.isSearchHighlight = false
   else:
     if isExMode(currentBufStatus.mode):

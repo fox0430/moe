@@ -1404,15 +1404,15 @@ suite "Visual block mode: Insert buffer":
         insertTab(
           currentBufStatus,
           currentMainWindowNode,
-          status.settings.tabStop,
-          status.settings.autoCloseParen)
+          status.settings.standard.tabStop,
+          status.settings.standard.autoCloseParen)
 
       currentBufStatus.insertCharBlock(
         currentMainWindowNode,
         InsertBuffer,
         area,
-        status.settings.tabStop,
-        status.settings.autoCloseParen,
+        status.settings.standard.tabStop,
+        status.settings.standard.autoCloseParen,
         status.commandLine)
 
     check currentBufStatus.buffer[0] == ru"  abc"
