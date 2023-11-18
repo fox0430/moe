@@ -196,45 +196,20 @@ iterator parseReservedWord(
     yield (buffer[pos ..< last], reservedWord.color)
     buffer = buffer[last ..^ 1]
 
-proc getEditorColorPairInNim(kind: TokenClass): EditorColorPairIndex =
-  case kind:
-    of gtKeyword: EditorColorPairIndex.keyword
-    of gtBoolean: EditorColorPairIndex.boolean
-    of gtSpecialVar: EditorColorPairIndex.specialVar
-    of gtOperator: EditorColorPairIndex.functionName
-    of gtBuiltin: EditorColorPairIndex.builtin
-    of gtStringLit: EditorColorPairIndex.stringLit
-    of gtCharLit:
-      # TODO: Add EditorColorPairIndex.charLit
-      EditorColorPairIndex.stringLit
-    of gtBinNumber: EditorColorPairIndex.binNumber
-    of gtDecNumber: EditorColorPairIndex.decNumber
-    of gtFloatNumber: EditorColorPairIndex.floatNumber
-    of gtHexNumber: EditorColorPairIndex.hexNumber
-    of gtOctNumber: EditorColorPairIndex.octNumber
-    of gtComment: EditorColorPairIndex.comment
-    of gtLongComment: EditorColorPairIndex.longComment
-    of gtPreprocessor: EditorColorPairIndex.preprocessor
-    of gtFunctionName: EditorColorPairIndex.functionName
-    of gtTypeName: EditorColorPairIndex.typeName
-    of gtPragma: EditorColorPairIndex.pragma
-    else: EditorColorPairIndex.default
-
 proc getEditorColorPair(
   kind: TokenClass,
   language: SourceLanguage): EditorColorPairIndex =
 
     case kind:
+      of gtOperator: EditorColorPairIndex.operator
+      of gtBuiltin: EditorColorPairIndex.builtin
       of gtKeyword: EditorColorPairIndex.keyword
       of gtBoolean: EditorColorPairIndex.boolean
       of gtSpecialVar: EditorColorPairIndex.specialVar
-      of gtBuiltin: EditorColorPairIndex.builtin
+      of gtCharLit: EditorColorPairIndex.charLit
       of gtStringLit:
         if language == SourceLanguage.langYaml: EditorColorPairIndex.default
         else: EditorColorPairIndex.stringLit
-      of gtCharLit:
-        # TODO: Add EditorColorPairIndex.charLit
-        EditorColorPairIndex.stringLit
       of gtBinNumber: EditorColorPairIndex.binNumber
       of gtDecNumber: EditorColorPairIndex.decNumber
       of gtFloatNumber: EditorColorPairIndex.floatNumber
@@ -243,20 +218,13 @@ proc getEditorColorPair(
       of gtComment: EditorColorPairIndex.comment
       of gtLongComment: EditorColorPairIndex.longComment
       of gtPreprocessor: EditorColorPairIndex.preprocessor
-      of gtWhitespace: EditorColorPairIndex.default
+      of gtFunctionName: EditorColorPairIndex.functionName
+      of gtTypeName: EditorColorPairIndex.typeName
+      of gtWhitespace: EditorColorPairIndex.whitespace
       of gtPragma: EditorColorPairIndex.pragma
-      of gtIdentifier:
-        # TODO: Add EditorColorPairIndex.identifier?
-        if language == SourceLanguage.langToml: EditorColorPairIndex.keyword
-        else: EditorColorPairIndex.default
-      of gtTable:
-        # TODO: Add EditorColorPairIndex.table?
-        if language == SourceLanguage.langToml: EditorColorPairIndex.keyword
-        else: EditorColorPairIndex.default
-      of gtDate:
-        # TODO: Add EditorColorPairIndex.date?
-        if language == SourceLanguage.langToml: EditorColorPairIndex.decNumber
-        else: EditorColorPairIndex.default
+      of gtIdentifier: EditorColorPairIndex.identifier
+      of gtTable: EditorColorPairIndex.table
+      of gtDate: EditorColorPairIndex.date
       else: EditorColorPairIndex.default
 
 proc initHighlightPlain*(buffer: seq[Runes]): Highlight {.inline.} =
@@ -356,11 +324,7 @@ proc initHighlight*(
           currentColumn = 0
           continue
 
-      let color =
-        if language == SourceLanguage.langNim:
-          getEditorColorPairInNim(token.kind)
-        else:
-          getEditorColorPair(token.kind, language)
+      let color = getEditorColorPair(token.kind, language)
 
       if token.kind == gtComment:
         for r in bufferStr[first..last].parseReservedWord(reservedWords, color):
