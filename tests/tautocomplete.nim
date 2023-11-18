@@ -195,17 +195,17 @@ suite "getTextInLangKeywords":
       r = getTextInLangKeywords(SourceLanguage.langNim)
       splited = r.split(' '.ru)
 
-    for s in nimKeywords:
+    for s in NimKeywords:
       check splited.in s.ru
-    for s in nimBooleans:
+    for s in NimBooleans:
       check splited.in s.ru
-    for s in nimSpecialVars:
+    for s in NimSpecialVars:
       check splited.in s.ru
-    for s in nimPragmas:
+    for s in NimPragmas:
       check splited.in s.ru
-    for s in nimBuiltins:
+    for s in NimBuiltins:
       check splited.in s.ru
-    for s in nimStdLibs:
+    for s in NimStdLibs:
       check splited.in s.ru
 
   test "Python":
