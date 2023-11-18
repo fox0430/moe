@@ -816,8 +816,8 @@ suite "viewhighlight: Update search highlight":
 
     check highlight.len == 3
     check highlight[0].color == EditorColorPairIndex.searchResult
-    check highlight[1].color == EditorColorPairIndex.default
-    check highlight[2].color == EditorColorPairIndex.default
+    check highlight[1].color == EditorColorPairIndex.whitespace
+    check highlight[2].color == EditorColorPairIndex.identifier
 
   test "two windows":
     var status = initEditorStatus()
@@ -852,8 +852,8 @@ suite "viewhighlight: Update search highlight":
 
           check highlight.len == 3
           check highlight[0].color == EditorColorPairIndex.searchResult
-          check highlight[1].color == EditorColorPairIndex.default
-          check highlight[2].color == EditorColorPairIndex.default
+          check highlight[1].color == EditorColorPairIndex.whitespace
+          check highlight[2].color == EditorColorPairIndex.identifier
 
 suite "viewhighlight: highlightGitConflicts":
   test "Highlight Git conflicts":
@@ -914,7 +914,7 @@ echo "test"
       ColorSegment(
         firstRow: 1,firstColumn: 4,
         lastRow: 1,lastColumn: 4,
-        color: EditorColorPairIndex.default,
+        color: EditorColorPairIndex.whitespace,
         attribute: Attribute.normal),
       ColorSegment(
         firstRow: 1,
@@ -934,7 +934,7 @@ echo "test"
         firstColumn: 4,
         lastRow: 2,
         lastColumn: 4,
-        color: EditorColorPairIndex.default,
+        color: EditorColorPairIndex.whitespace,
         attribute: Attribute.normal),
       ColorSegment(
         firstRow: 2,
@@ -962,7 +962,7 @@ echo "test"
         firstColumn: 4,
         lastRow: 4,
         lastColumn: 4,
-        color: EditorColorPairIndex.default,
+        color: EditorColorPairIndex.whitespace,
         attribute: Attribute.normal),
       ColorSegment(
         firstRow: 4,
