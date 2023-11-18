@@ -1096,6 +1096,11 @@ builtin
 
 Syntax highlighting color
 ```
+charLit
+```
+
+Syntax highlighting color
+```
 stringLit
 ```
 
@@ -1147,6 +1152,26 @@ preprocessor
 Syntax highlighting color
 ```
 pragma
+```
+
+Syntax highlighting color
+```
+identifier
+```
+
+Syntax highlighting color
+```
+table
+```
+
+Syntax highlighting color
+```
+date
+```
+
+Syntax highlighting color
+```
+operator
 ```
 
 Character color of current file name in filer mode

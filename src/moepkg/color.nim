@@ -400,6 +400,8 @@ type
     typeNameBg
     boolean
     booleanBg
+    charLit
+    charLitBg
     stringLit
     stringLitBg
     specialVar
@@ -426,6 +428,14 @@ type
     preprocessorBg
     pragma
     pragmaBg
+    identifier
+    identifierBg
+    table
+    tableBg
+    date
+    dateBg
+    operator
+    operatorBg
 
     # filer mode
     currentFile
@@ -560,6 +570,7 @@ type
     boolean
     specialVar
     builtin
+    charLit
     stringLit
     binNumber
     decNumber
@@ -571,6 +582,10 @@ type
     whitespace
     preprocessor
     pragma
+    identifier
+    table
+    date
+    operator
 
     # filer mode
     currentFile

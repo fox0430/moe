@@ -63,24 +63,22 @@ suite "highlight: initHighlight":
   test "Only '/' in Clang":
     # https://github.com/fox0430/moe/issues/1568
 
-    const
-      Code = "/"
-      EmptyReservedWords = @[]
+    const EmptyReservedWords = @[]
     let
-      buffer = @[Code].toSeqRunes
+      buffer = @["/"].toSeqRunes
       highlight = initHighlight(
         buffer,
         EmptyReservedWords,
         SourceLanguage.langC)
 
-    check highlight[] == Highlight(
-      colorSegments: @[
-        ColorSegment(
-          firstRow: 0,
-          firstColumn: 0,
-          lastRow: 0,
-          lastColumn: 0,
-          color: EditorColorPairIndex.default)])[]
+    check highlight.colorSegments == @[
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 0,
+        lastRow: 0,
+        lastColumn: 0,
+        color: EditorColorPairIndex.operator)
+    ]
 
   test "initHighlight shell script (Fix #1166)":
     const Code = "echo hello"
@@ -120,8 +118,7 @@ suite "highlight: initHighlight":
         ReservedWords,
         SourceLanguage.langYaml)
 
-    check highlight[] == Highlight(
-      colorSegments: @[
+    check highlight.colorSegments == @[
         ColorSegment(
           firstRow: 0,
           firstColumn: 0,
@@ -139,13 +136,14 @@ suite "highlight: initHighlight":
           firstColumn: 5,
           lastRow: 0,
           lastColumn: 5,
-          color: EditorColorPairIndex.default),
+          color: EditorColorPairIndex.whitespace),
         ColorSegment(
           firstRow: 0,
           firstColumn: 6,
           lastRow: 0,
           lastColumn: 8,
-          color: EditorColorPairIndex.default)])[]
+          color: EditorColorPairIndex.default)
+    ]
 
 suite "highlight: indexOf":
   const ReservedWords = @[
