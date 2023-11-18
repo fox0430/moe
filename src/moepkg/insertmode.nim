@@ -24,7 +24,7 @@ proc exitInsertMode(status: var EditorStatus) =
   if currentMainWindowNode.currentColumn > 0:
     currentMainWindowNode.currentColumn.dec
     currentMainWindowNode.expandedColumn = currentMainWindowNode.currentColumn
-  changeCursorType(status.settings.normalModeCursor)
+  changeCursorType(status.settings.standard.normalModeCursor)
   status.changeMode(currentBufStatus.prevMode)
 
 proc execInsertModeCommand*(status: var EditorStatus, command: Runes) =
@@ -56,24 +56,24 @@ proc execInsertModeCommand*(status: var EditorStatus, command: Runes) =
     currentBufStatus.deleteCharacter(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn,
-      status.settings.autoDeleteParen)
+      status.settings.standard.autoDeleteParen)
   elif isBackspaceKey(key) or isControlH(key):
     currentBufStatus.keyBackspace(
       currentMainWindowNode,
-      status.settings.autoDeleteParen,
-      status.settings.tabStop)
+      status.settings.standard.autoDeleteParen,
+      status.settings.standard.tabStop)
   elif isEnterKey(key):
     keyEnter(
       currentBufStatus,
       currentMainWindowNode,
-      status.settings.autoIndent,
-      status.settings.tabStop)
+      status.settings.standard.autoIndent,
+      status.settings.standard.tabStop)
   elif isTabKey(key) or isControlI(key):
     insertTab(
       currentBufStatus,
       currentMainWindowNode,
-      status.settings.tabStop,
-      status.settings.autoCloseParen)
+      status.settings.standard.tabStop,
+      status.settings.standard.autoCloseParen)
   elif isControlE(key):
     currentBufStatus.insertCharacterBelowCursor(
       currentMainWindowNode)
@@ -102,5 +102,5 @@ proc execInsertModeCommand*(status: var EditorStatus, command: Runes) =
     insertCharacter(
       currentBufStatus,
       currentMainWindowNode,
-      status.settings.autoCloseParen,
+      status.settings.standard.autoCloseParen,
       key)

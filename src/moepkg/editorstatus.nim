@@ -221,8 +221,8 @@ proc loadLastCursorPosition*(): seq[LastCursorPosition] =
           result.add position
 
 proc executeOnExit(settings: EditorSettings, platform: Platforms) {.inline.} =
-  if not settings.disableChangeCursor:
-    changeCursorType(settings.defaultCursor)
+  if not settings.standard.disableChangeCursor:
+    changeCursorType(settings.standard.defaultCursor)
 
   # Without this, the cursor disappears in Windows terminal
   if platform ==  Platforms.wsl:
@@ -666,7 +666,7 @@ proc checkBufferStatusUpdate(status: EditorStatus) =
     if not buf.isFilerMode and buf.isUpdate:
       let
         lang =
-          if not status.settings.syntax: SourceLanguage.langNone
+          if not status.settings.standard.syntax: SourceLanguage.langNone
           else: buf.language
         h = initHighlight(
           buf.buffer.toSeqRunes,
@@ -884,8 +884,8 @@ proc update*(status: var EditorStatus) =
             b.isConfigMode,
             b.buffer,
             highlight,
-            settings.editorColorTheme,
-            status.settings.colorMode,
+            settings.standard.editorColorTheme,
+            status.settings.standard.colorMode,
             node.currentLine,
             selectedRange,
             currentLineColorPair)
@@ -1255,16 +1255,16 @@ proc smoothHalfPageDown*(status: var EditorStatus): Option[Rune] {.inline.} =
     int(currentMainWindowNode.view.height / 2))
 
 proc changeTheme*(status: var EditorStatus): Result[(), string] =
-  if status.settings.editorColorTheme == ColorTheme.vscode:
+  if status.settings.standard.editorColorTheme == ColorTheme.vscode:
     let vsCodeTheme = loadVSCodeTheme()
     if vsCodeTheme.isOk:
-      status.settings.editorColorTheme = vsCodeTheme.get
+      status.settings.standard.editorColorTheme = vsCodeTheme.get
     else:
       status.commandLine.writeError(
         fmt"Error: Failed to switch to VSCode theme: {vsCodeTheme.error}")
 
-  let r = status.settings.editorColorTheme.initEditrorColor(
-    status.settings.colorMode)
+  let r = status.settings.standard.editorColorTheme.initEditrorColor(
+    status.settings.standard.colorMode)
   if r.isErr:
     return Result[(), string].err r.error
 
@@ -1429,18 +1429,18 @@ proc eventLoopTask*(status: var EditorStatus) =
   status.checkBackgroundTasks
 
   # Auto save
-  if status.settings.autoSave: status.autoSave
+  if status.settings.standard.autoSave: status.autoSave
 
-  if status.settings.liveReloadOfConf and
+  if status.settings.standard.liveReloadOfConf and
      status.timeConfFileLastReloaded + 1.seconds < now():
        # Live reload of configuration file
 
-       let beforeTheme = status.settings.editorColorTheme
+       let beforeTheme = status.settings.standard.editorColorTheme
 
        status.loadConfigurationFile
 
        status.timeConfFileLastReloaded = now()
-       if beforeTheme != status.settings.editorColorTheme:
+       if beforeTheme != status.settings.standard.editorColorTheme:
          let r = changeTheme(status)
          if r.isErr:
            # Exit the editor if it failed.
@@ -1450,7 +1450,7 @@ proc eventLoopTask*(status: var EditorStatus) =
 
          status.resize
 
-  if status.settings.liveReloadOfFile:
+  if status.settings.standard.liveReloadOfFile:
     # Live reload of an open file. a current window's buffer only.
 
     let lastModificationTime = getLastModificationTime($currentBufStatus.path)

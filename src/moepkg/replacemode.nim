@@ -65,12 +65,12 @@ proc moveDown(bufStatus: var BufferStatus, windowNode: var WindowNode) =
      beforeColumn != windowNode.currentColumn:
     undoLastSuitId = some(bufStatus.buffer.lastSuitId)
 
-# Repace the current chracter or insert the character and move to the right
 proc replaceCurrentCharacter(
   bufStatus: var BufferStatus,
   windowNode: var WindowNode,
   settings: EditorSettings,
   key: Rune) =
+    ## Repace the current chracter or insert the character and move to the right
 
     if windowNode.currentColumn < bufStatus.buffer[windowNode.currentLine].len:
       let
@@ -82,15 +82,18 @@ proc replaceCurrentCharacter(
 
       if oldLine != newLine: bufStatus.buffer[currentLine] = newLine
     else:
-      insertCharacter(bufStatus, windowNode, settings.autoCloseParen, key)
+      bufStatus.insertCharacter(
+        windowNode,
+        settings.standard.autoCloseParen,
+        key)
 
     bufStatus.keyRight(windowNode)
 
     undoLastSuitId = some(bufStatus.buffer.lastSuitId)
 
 proc undoOrMoveCursor(bufStatus: var BufferStatus, windowNode: var WindowNode) =
-  # Can undo until you enter Replace mode
-  # Do not undo if the cursor is moved and re-enable undo if the character is replaced
+  ## Can undo until you enter Replace mode
+  ## Do not undo if the cursor is moved and re-enable undo if the character is replaced
 
   if bufStatus.buffer.lastSuitId > undoLastSuitId.get:
     bufStatus.undo(windowNode)
@@ -132,8 +135,8 @@ proc execReplaceModeCommand*(status: var EditorStatus, command: Runes) =
   elif isEnterKey(key):
     currentBufStatus.keyEnter(
       currentMainWindowNode,
-      status.settings.autoIndent,
-      status.settings.tabStop)
+      status.settings.standard.autoIndent,
+      status.settings.standard.tabStop)
 
   elif isBackspaceKey(key):
     currentBufStatus.undoOrMoveCursor(currentMainWindowNode)

@@ -375,30 +375,30 @@ suite "Parse configuration file":
     let toml = parsetoml.parseString(TomlStr)
     var settings = parseTomlConfigs(toml)
 
-    check settings.editorColorTheme == ColorTheme.config
+    check settings.standard.editorColorTheme == ColorTheme.config
     check not settings.view.lineNumber
     check not settings.view.currentLineNumber
     check settings.view.cursorLine
     check not settings.statusLine.enable
     check not settings.tabLine.enable
-    check not settings.syntax
+    check not settings.standard.syntax
     check not settings.view.indentationLines
     check settings.view.tabStop == 4
-    check not settings.autoCloseParen
-    check not settings.autoIndent
-    check not settings.ignorecase
-    check not settings.smartcase
-    check settings.disableChangeCursor
-    check settings.defaultCursor == CursorType.blinkIbeam
-    check settings.normalModeCursor == CursorType.blinkIbeam
-    check settings.insertModeCursor == CursorType.blinkBlock
-    check settings.autoSave
+    check not settings.standard.autoCloseParen
+    check not settings.standard.autoIndent
+    check not settings.standard.ignorecase
+    check not settings.standard.smartcase
+    check settings.standard.disableChangeCursor
+    check settings.standard.defaultCursor == CursorType.blinkIbeam
+    check settings.standard.normalModeCursor == CursorType.blinkIbeam
+    check settings.standard.insertModeCursor == CursorType.blinkBlock
+    check settings.standard.autoSave
     check settings.autoSaveInterval == 1
-    check settings.liveReloadOfConf
-    check not settings.incrementalSearch
-    check not settings.popupWindowInExmode
-    check not settings.autoDeleteParen
-    check settings.colorMode == ColorMode.none
+    check settings.standard.liveReloadOfConf
+    check not settings.standard.incrementalSearch
+    check not settings.standard.popupWindowInExmode
+    check not settings.standard.autoDeleteParen
+    check settings.standard.colorMode == ColorMode.none
 
     check not settings.clipboard.enable
     check settings.clipboard.toolOnLinux == ClipboardToolOnLinux.xclip
@@ -581,7 +581,7 @@ suite "Parse configuration file":
     let toml = parsetoml.parseString(Str)
     let settings = parseTomlConfigs(toml)
 
-    check ColorMode.none == settings.colorMode
+    check ColorMode.none == settings.standard.colorMode
 
   test "Parse color Mode setting 2":
     const Str = """
@@ -592,7 +592,7 @@ suite "Parse configuration file":
     let toml = parsetoml.parseString(Str)
     let settings = parseTomlConfigs(toml)
 
-    check ColorMode.c8 == settings.colorMode
+    check ColorMode.c8 == settings.standard.colorMode
 
   test "Parse color Mode setting 3":
     const Str = """
@@ -603,7 +603,7 @@ suite "Parse configuration file":
     let toml = parsetoml.parseString(Str)
     let settings = parseTomlConfigs(toml)
 
-    check ColorMode.c256  == settings.colorMode
+    check ColorMode.c256  == settings.standard.colorMode
 
   test "Parse color Mode setting 4":
     const Str = """
@@ -614,7 +614,7 @@ suite "Parse configuration file":
     let toml = parsetoml.parseString(Str)
     let settings = parseTomlConfigs(toml)
 
-    check ColorMode.c24bit == settings.colorMode
+    check ColorMode.c24bit == settings.standard.colorMode
 
 suite "Validate toml config":
   test "Except for success":

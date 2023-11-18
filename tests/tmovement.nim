@@ -444,8 +444,8 @@ suite "jumpToSearchForwardResults":
     currentBufStatus.jumpToSearchForwardResults(
       currentMainWindowNode,
       Keyword,
-      status.settings.ignorecase,
-      status.settings.smartcase)
+      status.settings.standard.ignorecase,
+      status.settings.standard.smartcase)
 
     check currentMainWindowNode.currentLine == 1
     check currentMainWindowNode.currentColumn == 4
@@ -464,8 +464,8 @@ suite "jumpToSearchForwardResults":
     currentBufStatus.jumpToSearchForwardResults(
       currentMainWindowNode,
       Keyword,
-      status.settings.ignorecase,
-      status.settings.smartcase)
+      status.settings.standard.ignorecase,
+      status.settings.standard.smartcase)
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 1
@@ -486,8 +486,8 @@ suite "jumpToSearchForwardResults":
     currentBufStatus.jumpToSearchForwardResults(
       currentMainWindowNode,
       Keyword,
-      status.settings.ignorecase,
-      status.settings.smartcase)
+      status.settings.standard.ignorecase,
+      status.settings.standard.smartcase)
 
     check currentMainWindowNode.currentLine == 1
     check currentMainWindowNode.currentColumn == 4
@@ -507,8 +507,8 @@ suite "jumpToSearchBackwordResults":
     currentBufStatus.jumpToSearchBackwordResults(
       currentMainWindowNode,
       Keyword,
-      status.settings.ignorecase,
-      status.settings.smartcase)
+      status.settings.standard.ignorecase,
+      status.settings.standard.smartcase)
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
@@ -527,8 +527,8 @@ suite "jumpToSearchBackwordResults":
     currentBufStatus.jumpToSearchBackwordResults(
       currentMainWindowNode,
       Keyword,
-      status.settings.ignorecase,
-      status.settings.smartcase)
+      status.settings.standard.ignorecase,
+      status.settings.standard.smartcase)
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 1
@@ -549,8 +549,8 @@ suite "jumpToSearchBackwordResults":
     currentBufStatus.jumpToSearchBackwordResults(
       currentMainWindowNode,
       Keyword,
-      status.settings.ignorecase,
-      status.settings.smartcase)
+      status.settings.standard.ignorecase,
+      status.settings.standard.smartcase)
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 4

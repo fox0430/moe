@@ -363,11 +363,11 @@ suite "Ex mode: Auto indent setting command":
     block:
       const Command = @[ru"indent", ru"off"]
       status.exModeCommand(Command)
-    check(status.settings.autoIndent == false)
+    check(status.settings.standard.autoIndent == false)
     block:
       const Command = @[ru"indent", ru"on"]
       status.exModeCommand(Command)
-    check(status.settings.autoIndent == true)
+    check(status.settings.standard.autoIndent == true)
 
 suite "Ex mode: Auto close paren setting command":
   test "Auto close paren setting command":
@@ -377,11 +377,11 @@ suite "Ex mode: Auto close paren setting command":
     block:
       const Command = @[ru"paren", ru"off"]
       status.exModeCommand(Command)
-    check(status.settings.autoCloseParen == false)
+    check(status.settings.standard.autoCloseParen == false)
     block:
       const Command = @[ru"paren", ru"on"]
       status.exModeCommand(Command)
-    check(status.settings.autoCloseParen == true)
+    check(status.settings.standard.autoCloseParen == true)
 
 suite "Ex mode: Tab stop setting command":
   test "Tab stop setting command":
@@ -391,11 +391,11 @@ suite "Ex mode: Tab stop setting command":
     block:
       const Command = @[ru"paren", ru"off"]
       status.exModeCommand(Command)
-    check(status.settings.autoCloseParen == false)
+    check(status.settings.standard.autoCloseParen == false)
     block:
       const Command = @[ru"paren", ru"on"]
       status.exModeCommand(Command)
-    check(status.settings.autoCloseParen == true)
+    check(status.settings.standard.autoCloseParen == true)
 
 suite "Ex mode: Syntax setting command":
   test "Syntax setting command":
@@ -405,11 +405,11 @@ suite "Ex mode: Syntax setting command":
     block:
       const Command = @[ru"syntax", ru"off"]
       status.exModeCommand(Command)
-    check(status.settings.syntax == false)
+    check(status.settings.standard.syntax == false)
     block:
       const Command = @[ru"syntax", ru"on"]
       status.exModeCommand(Command)
-    check(status.settings.syntax == true)
+    check(status.settings.standard.syntax == true)
 
 suite "Ex mode: Change cursor line command":
   test "Change cursor line command":
@@ -443,11 +443,11 @@ suite "Ex mode: Live reload of configuration file setting command":
     block:
       const Command = @[ru"livereload", ru"on"]
       status.exModeCommand(Command)
-    check(status.settings.liveReloadOfConf == true)
+    check(status.settings.standard.liveReloadOfConf == true)
     block:
       const Command = @[ru"livereload", ru"off"]
       status.exModeCommand(Command)
-    check(status.settings.liveReloadOfConf == false)
+    check(status.settings.standard.liveReloadOfConf == false)
 
 suite "Ex mode: Incremental search setting command":
   test "Incremental search setting command":
@@ -457,11 +457,11 @@ suite "Ex mode: Incremental search setting command":
     block:
       const Command = @[ru"incrementalSearch", ru"off"]
       status.exModeCommand(Command)
-    check not status.settings.incrementalSearch
+    check not status.settings.standard.incrementalSearch
     block:
       const Command = @[ru"incrementalSearch", ru"on"]
       status.exModeCommand(Command)
-    check status.settings.incrementalSearch
+    check status.settings.standard.incrementalSearch
 
 suite "Ex mode: Change theme command":
   test "Change theme command":
@@ -527,12 +527,12 @@ suite "Ex mode: Auto delete paren setting command":
     block:
       const Command = @[ru"deleteparen", ru"off"]
       status.exModeCommand(Command)
-      check(status.settings.autoDeleteParen == false)
+      check(status.settings.standard.autoDeleteParen == false)
 
     block:
       const Command = @[ru"deleteparen", ru"on"]
       status.exModeCommand(Command)
-      check(status.settings.autoDeleteParen == true)
+      check(status.settings.standard.autoDeleteParen == true)
 
 suite "Ex mode: Smooth scroll setting command":
   test "Smooth scroll setting command":
@@ -640,12 +640,12 @@ suite "Ex mode: Highlight full width space command":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
 
-    let defaultTabStop = status.settings.tabStop
+    let defaultTabStop = status.settings.standard.tabStop
 
     const Command = @[ru"tabstop", ru"a"]
     status.exModeCommand(Command)
 
-    check(status.settings.tabStop == defaultTabStop)
+    check(status.settings.standard.tabStop == defaultTabStop)
 
 suite "Ex mode: Delete buffer status command":
   test "Delete buffer status command":
@@ -1181,43 +1181,43 @@ suite "Ex mode: Change ignorecase setting command":
   test "Enable ignorecase":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
-    status.settings.ignorecase = false
+    status.settings.standard.ignorecase = false
 
     const Command = @[ru"ignorecase", ru"on"]
     status.exModeCommand(Command)
 
-    check status.settings.ignorecase
+    check status.settings.standard.ignorecase
 
   test "Disale ignorecase":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
-    status.settings.ignorecase = true
+    status.settings.standard.ignorecase = true
 
     const Command = @[ru"ignorecase", ru"off"]
     status.exModeCommand(Command)
 
-    check not status.settings.ignorecase
+    check not status.settings.standard.ignorecase
 
 suite "Ex mode: Change smartcase setting command":
   test "Enable smartcase":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
-    status.settings.smartcase = false
+    status.settings.standard.smartcase = false
 
     const Command = @[ru"smartcase", ru"on"]
     status.exModeCommand(Command)
 
-    check status.settings.ignorecase
+    check status.settings.standard.ignorecase
 
   test "Disale smartcase":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
-    status.settings.smartcase = true
+    status.settings.standard.smartcase = true
 
     const Command = @[ru"smartcase", ru"off"]
     status.exModeCommand(Command)
 
-    check not status.settings.smartcase
+    check not status.settings.standard.smartcase
 
 suite "Ex mode: e command":
   test "Open dicrecoty (#1042)":

@@ -281,8 +281,8 @@ proc highlightKeyword(
       lines = keyword.replaceToNewLines.splitLines
       positions = bufferInView.buffer.search(
         lines,
-        settings.ignorecase,
-        settings.smartcase)
+        settings.standard.ignorecase,
+        settings.standard.smartcase)
 
       color =
         if isSearchHighlight: EditorColorPairIndex.searchResult
@@ -368,8 +368,8 @@ proc updateViewHighlight*(
     if settings.highlight.currentWord:
       highlight.highlightCurrentWordElsewhere(
         bufferInView,
-        settings.editorColorTheme,
-        settings.colorMode)
+        settings.standard.editorColorTheme,
+        settings.standard.colorMode)
 
     if isVisualMode(bufStatus.mode):
       highlight.highlightSelectedArea(bufStatus, windowNode.initBufferPosition)

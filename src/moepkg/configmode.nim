@@ -223,19 +223,19 @@ proc getStandardTableSettingValues(
   name: string): seq[Runes] =
 
     if name == "theme":
-      let theme = settings.editorColorTheme
+      let theme = settings.standard.editorColorTheme
       result = getColorThemeSettingValues(theme)
     elif name == "defaultCursor":
-      let currentCursorType = settings.defaultCursor
+      let currentCursorType = settings.standard.defaultCursor
       result = getCursorTypeSettingValues(currentCursorType)
     elif name == "normalModeCursor":
-      let currentCursorType = settings.normalModeCursor
+      let currentCursorType = settings.standard.normalModeCursor
       result = getCursorTypeSettingValues(currentCursorType)
     elif name == "insertModeCursor":
-      let currentCursorType = settings.insertModeCursor
+      let currentCursorType = settings.standard.insertModeCursor
       result = getCursorTypeSettingValues(currentCursorType)
     elif name == "colorMode":
-      result = settings.colorMode.getColorModeSettingValues
+      result = settings.standard.colorMode.getColorModeSettingValues
     else:
       var currentVal: bool
 
@@ -251,33 +251,33 @@ proc getStandardTableSettingValues(
         of "tabLine":
           currentVal = settings.tabLine.enable
         of "syntax":
-          currentVal = settings.syntax
+          currentVal = settings.standard.syntax
         of "indentationLines":
           currentVal = settings.view.indentationLines
         of "sidebar":
           currentVal = settings.view.sidebar
         of "autoCloseParen":
-          currentVal = settings.autoCloseParen
+          currentVal = settings.standard.autoCloseParen
         of "autoIndent":
-          currentVal = settings.autoIndent
+          currentVal = settings.standard.autoIndent
         of "ignorecase":
-          currentVal = settings.ignorecase
+          currentVal = settings.standard.ignorecase
         of "smartcase":
-          currentVal = settings.smartcase
+          currentVal = settings.standard.smartcase
         of "disableChangeCursor":
-          currentVal = settings.disableChangeCursor
+          currentVal = settings.standard.disableChangeCursor
         of "autoSave":
-          currentVal = settings.autoSave
+          currentVal = settings.standard.autoSave
         of "liveReloadOfConf":
-          currentVal = settings.liveReloadOfConf
+          currentVal = settings.standard.liveReloadOfConf
         of "incrementalSearch":
-          currentVal = settings.incrementalSearch
+          currentVal = settings.standard.incrementalSearch
         of "popupWindowInExmode":
-          currentVal = settings.popupWindowInExmode
+          currentVal = settings.standard.popupWindowInExmode
         of "autoDeleteParen":
-          currentVal = settings.autoDeleteParen
+          currentVal = settings.standard.autoDeleteParen
         of "liveReloadOfFile":
-          currentVal = settings.liveReloadOfFile
+          currentVal = settings.standard.liveReloadOfFile
         else:
           return
 
@@ -702,7 +702,7 @@ proc changeStandardTableSetting(
 
     case settingName:
       of "theme":
-        settings.editorColorTheme = parseEnum[ColorTheme](settingVal)
+        settings.standard.editorColorTheme = parseEnum[ColorTheme](settingVal)
       of "number":
         settings.view.lineNumber = parseBool(settingVal)
       of "currentNumber":
@@ -714,41 +714,41 @@ proc changeStandardTableSetting(
       of "tabLine":
         settings.tabLine.enable = parseBool(settingVal)
       of "syntax":
-        settings.syntax = parseBool(settingVal)
+        settings.standard.syntax = parseBool(settingVal)
       of "indentationLines":
         settings.view.indentationLines = parseBool(settingVal)
       of "sidebar":
         settings.view.sidebar = parseBool(settingVal)
       of "autoCloseParen":
-        settings.autoCloseParen = parseBool(settingVal)
+        settings.standard.autoCloseParen = parseBool(settingVal)
       of "autoIndent":
-        settings.autoIndent = parseBool(settingVal)
+        settings.standard.autoIndent = parseBool(settingVal)
       of "ignorecase":
-        settings.ignorecase = parseBool(settingVal)
+        settings.standard.ignorecase = parseBool(settingVal)
       of "smartcase":
-        settings.smartcase = parseBool(settingVal)
+        settings.standard.smartcase = parseBool(settingVal)
       of "disableChangeCursor":
-        settings.disableChangeCursor = parseBool(settingVal)
+        settings.standard.disableChangeCursor = parseBool(settingVal)
       of "defaultCursor":
-        settings.defaultCursor = parseEnum[CursorType](settingVal)
+        settings.standard.defaultCursor = parseEnum[CursorType](settingVal)
       of "normalModeCursor":
-        settings.normalModeCursor = parseEnum[CursorType](settingVal)
+        settings.standard.normalModeCursor = parseEnum[CursorType](settingVal)
       of "insertModeCursor":
-        settings.insertModeCursor = parseEnum[CursorType](settingVal)
+        settings.standard.insertModeCursor = parseEnum[CursorType](settingVal)
       of "autoSave":
-        settings.autoSave = parseBool(settingVal)
+        settings.standard.autoSave = parseBool(settingVal)
       of "liveReloadOfConf":
-        settings.liveReloadOfConf = parseBool(settingVal)
+        settings.standard.liveReloadOfConf = parseBool(settingVal)
       of "incrementalSearch":
-        settings.incrementalSearch = parseBool(settingVal)
+        settings.standard.incrementalSearch = parseBool(settingVal)
       of "popupWindowInExmode":
-        settings.popupWindowInExmode = parseBool(settingVal)
+        settings.standard.popupWindowInExmode = parseBool(settingVal)
       of "autoDeleteParen":
-        settings.autoDeleteParen = parseBool(settingVal)
+        settings.standard.autoDeleteParen = parseBool(settingVal)
       of "liveReloadOfFile":
-        settings.liveReloadOfFile = parseBool(settingVal)
+        settings.standard.liveReloadOfFile = parseBool(settingVal)
       of "colorMode":
-        settings.colorMode = parseColorMode(settingVal).get
+        settings.standard.colorMode = parseColorMode(settingVal).get
       else:
         discard
 
@@ -1008,9 +1008,9 @@ proc changeThemeTableSetting(
 
       case colorLayer:
         of ColorLayer.foreground:
-          settings.editorColorTheme.setForegroundRgb(pairIndex, rgb)
+          settings.standard.editorColorTheme.setForegroundRgb(pairIndex, rgb)
         of ColorLayer.background:
-          settings.editorColorTheme.setBackgroundRgb(pairIndex, rgb)
+          settings.standard.editorColorTheme.setBackgroundRgb(pairIndex, rgb)
 
       return Result[(), string].ok ()
 
@@ -1021,11 +1021,11 @@ proc changeEditorSettings(
     template settings: var EditorSettings = status.settings
 
     template changeStandardTableSetting() =
-      let currentTheme = status.settings.editorColorTheme
+      let currentTheme = status.settings.standard.editorColorTheme
 
       status.settings.changeStandardTableSetting(settingName, settingVal)
 
-      if status.settings.editorColorTheme != currentTheme:
+      if status.settings.standard.editorColorTheme != currentTheme:
         # TODO: Add error handling
         discard status.changeTheme
 
@@ -1385,8 +1385,8 @@ proc insertCharacter(
 
 proc editFiguresSetting(status: var EditorStatus, table, name: string) =
   setCursor(true)
-  if not status.settings.disableChangeCursor:
-    changeCursorType(status.settings.insertModeCursor)
+  if not status.settings.standard.disableChangeCursor:
+    changeCursorType(status.settings.standard.insertModeCursor)
 
   let
     currentLine = currentMainWindowNode.currentLine
@@ -1403,7 +1403,7 @@ proc editFiguresSetting(status: var EditorStatus, table, name: string) =
       case table:
         of "Standard":
           case name:
-            of "tabStop": settings.tabStop
+            of "tabStop": settings.standard.tabStop
             of "autoSaveInterval": settings.autoSaveInterval
             else: 0
 
@@ -1460,7 +1460,7 @@ proc editFiguresSetting(status: var EditorStatus, table, name: string) =
         currentBufStatus.keyBackspace(
           currentMainWindowNode,
           autoDeleteParen,
-          status.settings.tabStop)
+          status.settings.standard.tabStop)
 
     else:
       numStr &= key
@@ -1479,7 +1479,7 @@ proc editFiguresSetting(status: var EditorStatus, table, name: string) =
     template standardTable() =
       case name:
         of "tabStop":
-          status.settings.tabStop = number
+          status.settings.standard.tabStop = number
           status.settings.view.tabStop = number
         of "autoSaveInterval":
           status.settings.autoSaveInterval = number
@@ -1524,8 +1524,8 @@ proc editFiguresSetting(status: var EditorStatus, table, name: string) =
 
   setCursor(false)
   currentMainWindowNode.currentColumn = 0
-  if not status.settings.disableChangeCursor:
-    changeCursorType(status.settings.normalModeCursor)
+  if not status.settings.standard.disableChangeCursor:
+    changeCursorType(status.settings.standard.normalModeCursor)
 
 ## Return a hex color string
 proc getCurrentColorVal(s: EditorSettings, name, position: string): string =
@@ -1533,11 +1533,11 @@ proc getCurrentColorVal(s: EditorSettings, name, position: string): string =
     pairIndex = parseEnum[EditorColorPairIndex](name)
   case parseEnum[ColorLayer](position):
     of ColorLayer.foreground:
-      let fgHex = s.editorColorTheme.foregroundRgb(pairIndex).toHex
+      let fgHex = s.standard.editorColorTheme.foregroundRgb(pairIndex).toHex
       if fgHex.isSome: return fgHex.get
       else: return "termDefautFg"
     of ColorLayer.background:
-      let bgHex = s.editorColorTheme.backgroundRgb(pairIndex).toHex
+      let bgHex = s.standard.editorColorTheme.backgroundRgb(pairIndex).toHex
       if bgHex.isSome: return bgHex.get
       else: return "termDefautBg"
 
@@ -1586,8 +1586,8 @@ proc editTextSetting(status: var EditorStatus, table, name, position: string) =
     NumOfIndent +
     getTextSettingVal(status.settings, table, name, position).len
 
-  if not status.settings.disableChangeCursor:
-    changeCursorType(status.settings.insertModeCursor)
+  if not status.settings.standard.disableChangeCursor:
+    changeCursorType(status.settings.standard.insertModeCursor)
 
   var
     buffer = getTextSettingVal(status.settings, table, name, position)
@@ -1626,7 +1626,7 @@ proc editTextSetting(status: var EditorStatus, table, name, position: string) =
         currentBufStatus.keyBackspace(
           currentMainWindowNode,
           autoDeleteParen,
-          status.settings.tabStop)
+          status.settings.standard.tabStop)
 
     else:
       buffer &= key
@@ -1811,7 +1811,7 @@ proc initStandardTableBuffer(settings: EditorSettings): seq[Runes] =
       space = " ".repeat(positionOfSetVal() - len($name))
     case $name:
       of "theme":
-        result.add(ru nameStr & space & $settings.editorColorTheme)
+        result.add(ru nameStr & space & $settings.standard.editorColorTheme)
       of "number":
         result.add(ru nameStr & space & $settings.view.lineNumber)
       of "currentNumber":
@@ -1823,45 +1823,45 @@ proc initStandardTableBuffer(settings: EditorSettings): seq[Runes] =
       of "tabLine":
         result.add(ru nameStr & space & $settings.tabLine.enable)
       of "syntax":
-        result.add(ru nameStr & space & $settings.syntax)
+        result.add(ru nameStr & space & $settings.standard.syntax)
       of "indentationLines":
         result.add(ru nameStr & space & $settings.view.indentationLines)
       of "tabStop":
-        result.add(ru nameStr & space & $settings.tabStop)
+        result.add(ru nameStr & space & $settings.standard.tabStop)
       of "sidebar":
         result.add(ru nameStr & space & $settings.view.sidebar)
       of "autoCloseParen":
-        result.add(ru nameStr & space & $settings.autoCloseParen)
+        result.add(ru nameStr & space & $settings.standard.autoCloseParen)
       of "autoIndent":
-        result.add(ru nameStr & space & $settings.autoIndent)
+        result.add(ru nameStr & space & $settings.standard.autoIndent)
       of "ignorecase":
-        result.add(ru nameStr & space & $settings.ignorecase)
+        result.add(ru nameStr & space & $settings.standard.ignorecase)
       of "smartcase":
-        result.add(ru nameStr & space & $settings.smartcase)
+        result.add(ru nameStr & space & $settings.standard.smartcase)
       of "disableChangeCursor":
-        result.add(ru nameStr & space & $settings.disableChangeCursor)
+        result.add(ru nameStr & space & $settings.standard.disableChangeCursor)
       of "defaultCursor":
-        result.add(ru nameStr & space & $settings.defaultCursor)
+        result.add(ru nameStr & space & $settings.standard.defaultCursor)
       of "normalModeCursor":
-        result.add(ru nameStr & space & $settings.normalModeCursor)
+        result.add(ru nameStr & space & $settings.standard.normalModeCursor)
       of "insertModeCursor":
-        result.add(ru nameStr & space & $settings.insertModeCursor)
+        result.add(ru nameStr & space & $settings.standard.insertModeCursor)
       of "autoSave":
-        result.add(ru nameStr & space & $settings.autoSave)
+        result.add(ru nameStr & space & $settings.standard.autoSave)
       of "autoSaveInterval":
         result.add(ru nameStr & space & $settings.autoSaveInterval)
       of "liveReloadOfConf":
-        result.add(ru nameStr & space & $settings.liveReloadOfConf)
+        result.add(ru nameStr & space & $settings.standard.liveReloadOfConf)
       of "incrementalSearch":
-        result.add(ru nameStr & space & $settings.incrementalSearch)
+        result.add(ru nameStr & space & $settings.standard.incrementalSearch)
       of "popupWindowInExmode":
-        result.add(ru nameStr & space & $settings.popupWindowInExmode)
+        result.add(ru nameStr & space & $settings.standard.popupWindowInExmode)
       of "autoDeleteParen":
-        result.add(ru nameStr & space & $settings.autoDeleteParen)
+        result.add(ru nameStr & space & $settings.standard.autoDeleteParen)
       of "liveReloadOfFile":
-        result.add(ru nameStr & space & $settings.liveReloadOfFile)
+        result.add(ru nameStr & space & $settings.standard.liveReloadOfFile)
       of "colorMode":
-        result.add(ru nameStr & space & settings.colorMode.toConfigStr)
+        result.add(ru nameStr & space & settings.standard.colorMode.toConfigStr)
 
 proc initClipBoardTableBuffer(settings: ClipboardSettings): seq[Runes] =
   result.add(ru"ClipBoard")
@@ -2159,8 +2159,8 @@ proc initThemeTableBuffer*(s: EditorSettings): seq[Runes] =
       # 10 is "foreground " and "background " length.
       space = " ".repeat(positionOfSetVal() - Indent.len - 10)
 
-      fgHex = s.editorColorTheme.foregroundRgb(pairIndex).toHex
-      bgHex = s.editorColorTheme.backgroundRgb(pairIndex).toHex
+      fgHex = s.standard.editorColorTheme.foregroundRgb(pairIndex).toHex
+      bgHex = s.standard.editorColorTheme.backgroundRgb(pairIndex).toHex
 
       fgColorText =
         if fgHex.isSome: fgHex.get

@@ -711,7 +711,10 @@ proc deleteWordBeforeCursor*(
 
     if windowNode.currentColumn == 0:
       let isAutoDeleteParen = false
-      bufStatus.keyBackspace(windowNode, isAutoDeleteParen, settings.tabStop)
+      bufStatus.keyBackspace(
+        windowNode,
+        isAutoDeleteParen,
+        settings.standard.tabStop)
     else:
       bufStatus.moveToBackwardWord(windowNode)
 
@@ -901,7 +904,7 @@ proc deleteCharacters*(
 
       if currentColumn > newLine.high: currentColumn = newLine.high
 
-      if settings.autoDeleteParen and deleteChar.isParen:
+      if settings.standard.autoDeleteParen and deleteChar.isParen:
         bufStatus.deleteParen(
           line,
           colmun,

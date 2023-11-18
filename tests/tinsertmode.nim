@@ -45,7 +45,7 @@ suite "Insert mode":
       insertCharacter(
         status.bufStatus[0],
         currentMainWindowNode,
-        status.settings.autoCloseParen,
+        status.settings.standard.autoCloseParen,
         ru'a')
 
     status.update
@@ -425,7 +425,7 @@ suite "Insert mode":
     insertCharacter(
       currentBufStatus,
       currentMainWindowNode,
-      status.settings.autoCloseParen,
+      status.settings.standard.autoCloseParen,
       ru'a')
 
     var dictionary: WordDictionary
@@ -458,7 +458,7 @@ suite "Insert mode":
     insertCharacter(
       currentBufStatus,
       currentMainWindowNode,
-      status.settings.autoCloseParen,
+      status.settings.standard.autoCloseParen,
       ru'a')
 
     var dictionary: WordDictionary

@@ -247,8 +247,8 @@ proc filerIconSettingCommand(status: var EditorStatus, command: Runes) =
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
 proc liveReloadOfConfSettingCommand(status: var EditorStatus, command: Runes) =
-  if command == ru "on": status.settings.liveReloadOfConf = true
-  elif command == ru"off": status.settings.liveReloadOfConf = false
+  if command == ru "on": status.settings.standard.liveReloadOfConf = true
+  elif command == ru"off": status.settings.standard.liveReloadOfConf = false
 
   status.commandLine.clear
 
@@ -257,15 +257,15 @@ proc liveReloadOfConfSettingCommand(status: var EditorStatus, command: Runes) =
 
 proc changeThemeSettingCommand(status: var EditorStatus, command: Runes) =
   if command == ru"dark":
-    status.settings.editorColorTheme = ColorTheme.dark
+    status.settings.standard.editorColorTheme = ColorTheme.dark
   elif command == ru"light":
-    status.settings.editorColorTheme = ColorTheme.light
+    status.settings.standard.editorColorTheme = ColorTheme.light
   elif command == ru"vivid":
-    status.settings.editorColorTheme = ColorTheme.vivid
+    status.settings.standard.editorColorTheme = ColorTheme.vivid
   elif command == ru"config":
-    status.settings.editorColorTheme = ColorTheme.config
+    status.settings.standard.editorColorTheme = ColorTheme.config
   elif command == ru"vscode":
-    status.settings.editorColorTheme = ColorTheme.vscode
+    status.settings.standard.editorColorTheme = ColorTheme.vscode
 
   let r = status.changeTheme
   # TODO: Add error message
@@ -283,10 +283,10 @@ proc tabLineSettingCommand(status: var EditorStatus, command: Runes) =
   status.commandLine.clear
 
 proc syntaxSettingCommand(status: var EditorStatus, command: Runes) =
-  if command == ru"on": status.settings.syntax = true
-  elif command == ru"off": status.settings.syntax = false
+  if command == ru"on": status.settings.standard.syntax = true
+  elif command == ru"off": status.settings.standard.syntax = false
 
-  let sourceLang = if status.settings.syntax: currentBufStatus.language
+  let sourceLang = if status.settings.standard.syntax: currentBufStatus.language
                    else: SourceLanguage.langNone
 
   currentMainWindowNode.highlight = initHighlight(
@@ -298,23 +298,23 @@ proc syntaxSettingCommand(status: var EditorStatus, command: Runes) =
   status.changeMode(currentBufStatus.prevMode)
 
 proc tabStopSettingCommand(status: var EditorStatus, command: int) =
-  status.settings.tabStop = command
+  status.settings.standard.tabStop = command
 
   status.commandLine.clear
 
   status.changeMode(currentBufStatus.prevMode)
 
 proc autoCloseParenSettingCommand(status: var EditorStatus, command: Runes) =
-  if command == ru"on": status.settings.autoCloseParen = true
-  elif command == ru"off": status.settings.autoCloseParen = false
+  if command == ru"on": status.settings.standard.autoCloseParen = true
+  elif command == ru"off": status.settings.standard.autoCloseParen = false
 
   status.commandLine.clear
 
   status.changeMode(currentBufStatus.prevMode)
 
 proc autoIndentSettingCommand(status: var EditorStatus, command: Runes) =
-  if command == ru"on": status.settings.autoIndent = true
-  elif command == ru"off": status.settings.autoIndent = false
+  if command == ru"on": status.settings.standard.autoIndent = true
+  elif command == ru"off": status.settings.standard.autoIndent = false
 
   status.commandLine.clear
 
@@ -371,8 +371,8 @@ proc statusLineSettingCommand(status: var EditorStatus, command: Runes) =
   status.changeMode(currentBufStatus.prevMode)
 
 proc incrementalSearchSettingCommand(status: var EditorStatus, command: Runes) =
-  if command == ru"on": status.settings.incrementalSearch = true
-  elif command == ru"off": status.settings.incrementalSearch = false
+  if command == ru"on": status.settings.standard.incrementalSearch = true
+  elif command == ru"off": status.settings.standard.incrementalSearch = false
 
   status.commandLine.clear
 
@@ -393,8 +393,8 @@ proc autoDeleteParenSettingCommand(
   status: var EditorStatus,
   command: Runes) =
 
-    if command == ru"on": status.settings.autoDeleteParen = true
-    elif command == ru"off": status.settings.autoDeleteParen = false
+    if command == ru"on": status.settings.standard.autoDeleteParen = true
+    elif command == ru"off": status.settings.standard.autoDeleteParen = false
 
     status.commandLine.clear
 
@@ -493,14 +493,14 @@ proc showGitInInactiveSettingCommand(
     status.changeMode(currentBufStatus.prevMode)
 
 proc ignorecaseSettingCommand(status: var EditorStatus, command: Runes) =
-  if command == ru "on": status.settings.ignorecase = true
-  elif command == ru "off": status.settings.ignorecase = false
+  if command == ru "on": status.settings.standard.ignorecase = true
+  elif command == ru "off": status.settings.standard.ignorecase = false
 
   status.changeMode(currentBufStatus.prevMode)
 
 proc smartcaseSettingCommand(status: var EditorStatus, command: Runes) =
-  if command == ru "on": status.settings.smartcase = true
-  elif command == ru "off": status.settings.smartcase = false
+  if command == ru "on": status.settings.standard.smartcase = true
+  elif command == ru "off": status.settings.standard.smartcase = false
 
   status.changeMode(currentBufStatus.prevMode)
 
