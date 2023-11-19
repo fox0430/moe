@@ -260,6 +260,7 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
 
   proc closeSuggestWindow(suggestWin: var Option[PopupWindow]) {.inline.} =
     suggestWin.get.close
+    suggestWin = none(PopupWindow)
 
   proc isReplaceCommand(commandLine: CommandLine): bool {.inline.} =
     commandLine.buffer.startsWith(ru"%s/")
