@@ -58,8 +58,6 @@ suite "Config mode: Init buffer":
       "  defaultCursor                  terminalDefault",
       "  normalModeCursor               blinkBlock",
       "  insertModeCursor               blinkIbeam",
-      "  autoSave                       false",
-      "  autoSaveInterval               5",
       "  liveReloadOfConf               false",
       "  incrementalSearch              true",
       "  popupWindowInExmode            true",
@@ -230,6 +228,18 @@ suite "Config mode: Init buffer":
     const Sample = @[
       ru"Autocomplete",
       ru"  enable                         true"]
+
+    for index, line in buffer:
+      check Sample[index] == line
+
+  test "Init AutoSave table buffer":
+    var status = initEditorStatus()
+    let buffer = status.settings.initAutoSaveTableBuffer
+
+    const Sample = @[
+      ru"AutoSave",
+      ru"  enable                         true",
+      ru"  interval                       5"]
 
     for index, line in buffer:
       check Sample[index] == line
@@ -779,17 +789,6 @@ suite "Config mode: Get standard table setting values":
     const Name = "disableChangeCursor"
     let
       default = settings.standard.disableChangeCursor
-      values = settings.getStandardTableSettingValues(Name)
-
-    checkBoolSettingValue(default, values)
-
-  test "Get autoSave values":
-    var status = initEditorStatus()
-    let settings = status.settings
-
-    const Name = "autoSave"
-    let
-      default = settings.standard.autoSave
       values = settings.getStandardTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)
@@ -1766,14 +1765,6 @@ suite "Config mode: Chaging Standard table settings":
     settings.changeStandardTableSetting("insertModeCursor", val)
 
     check CursorType.noneBlinkIbeam == settings.standard.insertModeCursor
-
-  test "Chaging autoSave":
-    var settings = initEditorSettings()
-
-    let val = not settings.standard.autoSave
-    settings.changeStandardTableSetting("autoSave", $val)
-
-    check val == settings.standard.autoSave
 
   test "Chaging liveReloadOfConf":
     var settings = initEditorSettings()
