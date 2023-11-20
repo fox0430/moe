@@ -25,7 +25,7 @@ import moepkg/replacemode {.all.}
 
 template recordCurrentPosition() =
   currentBufStatus.buffer.beginNewSuitIfNeeded
-  currentBufStatus.tryRecordCurrentPosition(currentMainWindowNode)
+  currentBufStatus.recordCurrentPosition(currentMainWindowNode)
 
 suite "Replace mode: Replace current Character":
   test "Replace current character":

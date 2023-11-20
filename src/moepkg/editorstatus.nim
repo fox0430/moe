@@ -1125,7 +1125,7 @@ proc deleteBuffer*(status: var EditorStatus, deleteIndex: int) =
       beforeWindowIndex
   currentMainWindowNode = mainWindowNode.searchByWindowIndex(afterWindowIndex)
 
-proc tryRecordCurrentPosition*(
+proc recordCurrentPosition*(
   bufStatus: var BufferStatus,
   windowNode: WindowNode) {.inline.} =
 

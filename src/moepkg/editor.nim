@@ -1887,6 +1887,7 @@ proc deleteTrailingSpaces*(bufStatus: var BufferStatus) =
 
 proc undo*(bufStatus: var BufferStatus, windowNode: WindowNode) =
   if not bufStatus.buffer.canUndo: return
+
   bufStatus.buffer.undo
   bufStatus.revertPosition(windowNode, bufStatus.buffer.lastSuitId)
 

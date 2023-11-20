@@ -467,10 +467,12 @@ proc updateAfterInsertFromSuggestion(status: var EditorStatus) =
     if selectedWord.len > 0:
       status.wordDictionary.incNumOfUsed(selectedWord)
 
-# TODO: Move
 proc close(suggestWin: var Option[SuggestionWindow]) {.inline.} =
   suggestWin.get.close
   suggestWin = none(SuggestionWindow)
+
+proc isBeginNewSuit(bufStatus: BufferStatus): bool {.inline.} =
+  not bufStatus.isInsertMode and not bufStatus.isReplaceMode
 
 proc editorMainLoop*(status: var EditorStatus) =
   ## Get keys, exec commands and update view.
@@ -479,14 +481,15 @@ proc editorMainLoop*(status: var EditorStatus) =
 
   var
     isSkipGetKey = false
-    key:Rune
+    key: Rune
     command: Runes
 
   while mainWindow.numOfMainWindow > 0:
     if currentBufStatus.isEditMode:
-      # For undo/redo
-      currentBufStatus.buffer.beginNewSuitIfNeeded
-      currentBufStatus.tryRecordCurrentPosition(currentMainWindowNode)
+      # Record undo/redo suit
+      if currentBufStatus.isBeginNewSuit:
+        currentBufStatus.buffer.beginNewSuitIfNeeded
+        currentBufStatus.recordCurrentPosition(currentMainWindowNode)
 
     status.update
 

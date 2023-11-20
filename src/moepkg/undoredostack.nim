@@ -150,6 +150,7 @@ proc lastSuitId*[T](undoRedoStack: UndoRedoStack[T]): int =
   ## Return the id that was applied last.
 
   if undoRedoStack.undoSuits.len == 0: return 0
+
   if undoRedoStack.currentSuit.len > 0: undoRedoStack.currentSuit.id
   else: undoRedoStack.undoSuits[^1].id
 
@@ -157,7 +158,7 @@ proc beginNewSuitIfNeeded*[T](undoRedoStack: var UndoRedoStack[T]) {.inline.} =
   if undoRedoStack.currentSuit.len > 0: undoRedoStack.lockCurrentSuit
 
 proc push*[T](undoRedoStack: var UndoRedoStack[T], command: Command[T]) =
-  if  undoRedoStack.redoSuits.len > 0: undoRedoStack.redoSuits = @[]
+  if undoRedoStack.redoSuits.len > 0: undoRedoStack.redoSuits = @[]
 
   doAssert(not undoRedoStack.currentSuit.locked)
   undoRedoStack.currentSuit.add(command)
