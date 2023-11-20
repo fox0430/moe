@@ -443,7 +443,7 @@ proc getInsertBuffer(status: var EditorStatus): Runes =
 
     var key = ERR_KEY
     while key == ERR_KEY:
-      status.eventLoopTask
+      status.runBackgroundTasks
       key = getKey(currentMainWindowNode)
 
     if isEscKey(key):

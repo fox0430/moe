@@ -1271,7 +1271,7 @@ proc changeTheme*(status: var EditorStatus): Result[(), string] =
   return Result[(), string].ok ()
 
 proc autoSave(status: var EditorStatus) =
-  let interval = status.settings.autoSaveInterval.minutes
+  let interval = status.settings.autoSave.interval.minutes
   for index, bufStatus in status.bufStatus:
     if bufStatus.path != ru"" and now() > bufStatus.lastSaveTime + interval:
       let r = saveFile(
@@ -1424,12 +1424,12 @@ proc checkBackgroundTasks(status: var EditorStatus) =
   if status.backgroundTasks.syntaxCheck.len > 0:
     status.checkBackgroundSyntaxCheck
 
-proc eventLoopTask*(status: var EditorStatus) =
+proc runBackgroundTasks*(status: var EditorStatus) =
   # BackgroundTasks
   status.checkBackgroundTasks
 
   # Auto save
-  if status.settings.standard.autoSave: status.autoSave
+  if status.settings.autoSave.enable: status.autoSave
 
   if status.settings.standard.liveReloadOfConf and
      status.timeConfFileLastReloaded + 1.seconds < now():
@@ -1542,7 +1542,7 @@ proc getKeyFromMainWindow*(status: var EditorStatus): Rune =
       pressCtrlC = false
       return Rune(3)
 
-    status.eventLoopTask
+    status.runBackgroundTasks
     if status.bufStatus.isUpdate:
       status.update
 
@@ -1556,4 +1556,4 @@ proc getKeyFromCommandLine*(status: var EditorStatus): Rune =
       pressCtrlC = false
       return Rune(3)
 
-    status.eventLoopTask
+    status.runBackgroundTasks

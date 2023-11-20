@@ -36,10 +36,6 @@ normalModeCursor = "blinkBlock"
 
 insertModeCursor = "blinkIbeam"
 
-autoSave = false
-
-autoSaveInterval = 5
-
 liveReloadOfConf = false
 
 incrementalSearch = true
@@ -193,6 +189,12 @@ showIcons = true
 [Autocomplete]
 
 enable = true
+
+[AutoSave]
+
+enable = true
+
+interval = 5
 
 [Persist]
 

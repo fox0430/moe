@@ -179,6 +179,10 @@ type
   AutocompleteSettings* = object
     enable*: bool
 
+  AutoSaveSettings* = object
+    enable*: bool
+    interval*: int # minutes
+
   HighlightSettings* = object
     replaceText*: bool
     pairOfParen*: bool
@@ -239,7 +243,6 @@ type
     smartcase*: bool
     tabStop*: int
     autoCloseParen*: bool
-    autoSave*: bool
     autoIndent*: bool
     liveReloadOfConf*: bool
     incrementalSearch*: bool
@@ -253,7 +256,6 @@ type
     statusLine*: StatusLineSettings
     tabLine*: TabLineSettings
     view*: EditorViewSettings
-    autoSaveInterval*: int # minutes # TODO: Move
     smoothScroll*: SmoothScrollSettings
     clipboard*: ClipboardSettings
     buildOnSave*: BuildOnSaveSettings
@@ -268,6 +270,7 @@ type
     git*: GitSettings
     syntaxChecker*: SyntaxCheckerSettings
     startUp*: StartUpSettings
+    autoSave*: AutoSaveSettings
 
     lsp*: LspSettings
 
@@ -357,6 +360,10 @@ proc initFilerSettings(): FilerSettings {.inline.} =
 
 proc initAutocompleteSettings*(): AutocompleteSettings {.inline.} =
   result.enable = true
+
+proc initAutoSaveSettings(): AutoSaveSettings {.inline.} =
+  result.enable = true
+  result.interval = 5 # 5 minutes
 
 proc initTabBarSettings*(): TabLineSettings {.inline.} =
   result.enable = true
@@ -480,12 +487,12 @@ proc initEditorSettings*(): EditorSettings =
   result.statusLine = initStatusLineSettings()
   result.tabLine = initTabBarSettings()
   result.view = initEditorViewSettings()
-  result.autoSaveInterval = 5
   result.smoothScroll = initSmoothScrollSettings()
   result.clipboard = initClipboardSettings()
   result.buildOnSave = BuildOnSaveSettings()
   result.filer = initFilerSettings()
   result.autocomplete = initAutocompleteSettings()
+  result.autoSave = initAutoSaveSettings()
   result.autoBackup = initAutoBackupSettings()
   result.quickRun = initQuickRunSettings()
   result.notification = initNotificationSettings()
@@ -1158,12 +1165,6 @@ proc parseStandardTable(s: var EditorSettings, standardConfigs: TomlValueRef) =
     let str = standardConfigs["insertModeCursor"].getStr
     s.standard.insertModeCursor = cursorType(str)
 
-  if standardConfigs.contains("autoSave"):
-    s.standard.autoSave = standardConfigs["autoSave"].getBool
-
-  if standardConfigs.contains("autoSaveInterval"):
-    s.autoSaveInterval = standardConfigs["autoSaveInterval"].getInt
-
   if standardConfigs.contains("liveReloadOfConf"):
     s.standard.liveReloadOfConf = standardConfigs["liveReloadOfConf"].getBool
 
@@ -1437,6 +1438,16 @@ proc parseAutocompleteTable(
 
     if autocompleteConfigs.contains("enable"):
       s.autocomplete.enable = autocompleteConfigs["enable"].getBool
+
+proc parseAutoSaveTable(
+  s: var EditorSettings,
+  autoSaveConfigs: TomlValueRef) =
+
+    if autoSaveConfigs.contains("enable"):
+      s.autoSave.enable = autoSaveConfigs["enable"].getBool
+
+    if autoSaveConfigs.contains("interval"):
+      s.autoSave.interval = autoSaveConfigs["interval"].getInt
 
 proc parsePersistTable(s: var EditorSettings, persistConfigs: TomlValueRef) =
   if persistConfigs.contains("exCommand"):
@@ -1792,6 +1803,9 @@ proc parseTomlConfigs*(tomlConfigs: TomlValueRef): EditorSettings =
   if tomlConfigs.contains("Autocomplete"):
     result.parseAutocompleteTable(tomlConfigs["Autocomplete"])
 
+  if tomlConfigs.contains("AutoSave"):
+    result.parseAutoSaveTable(tomlConfigs["AutoSave"])
+
   if tomlConfigs.contains("Persist"):
     result.parsePersistTable(tomlConfigs["Persist"])
 
@@ -1855,7 +1869,7 @@ proc validateStandardTable(table: TomlValueRef): Option[InvalidItem] =
          "sidebar":
         if not (val.kind == TomlValueKind.Bool):
           return some(InvalidItem(name: $key, val: $val))
-      of "tabStop", "autoSaveInterval":
+      of "tabStop":
         if not (val.kind == TomlValueKind.Int and val.getInt > 0):
           return some(InvalidItem(name: $key, val: $val))
       of "defaultCursor",
@@ -2060,6 +2074,18 @@ proc validateAutocompleteTable(table: TomlValueRef): Option[InvalidItem] =
       case key:
         of "enable":
           if val.kind != TomlValueKind.Bool:
+            return some(InvalidItem(name: $key, val: $val))
+        else:
+          return some(InvalidItem(name: $key, val: $val))
+
+proc validateAutoSaveTable(table: TomlValueRef): Option[InvalidItem] =
+    for key, val in table.getTable:
+      case key:
+        of "enable":
+          if val.kind != TomlValueKind.Bool:
+            return some(InvalidItem(name: $key, val: $val))
+        of "interval":
+          if val.kind != TomlValueKind.Int:
             return some(InvalidItem(name: $key, val: $val))
         else:
           return some(InvalidItem(name: $key, val: $val))
@@ -2289,6 +2315,9 @@ proc validateTomlConfig(toml: TomlValueRef): Option[InvalidItem] =
       of "Autocomplete":
         let r = validateAutocompleteTable(val)
         if r.isSome: return r
+      of "AutoSave":
+        let r = validateAutoSaveTable(val)
+        if r.isSome: return r
       of "Persist":
         let r = validatePersistTable(val)
         if r.isSome: return r
@@ -2373,8 +2402,6 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "defaultCursor = \"{$settings.standard.defaultCursor}\""
   result.addLine fmt "normalModeCursor = \"{$settings.standard.normalModeCursor}\""
   result.addLine fmt "insertModeCursor = \"{$settings.standard.insertModeCursor}\""
-  result.addLine fmt "autoSave = {$settings.standard.autoSave}"
-  result.addLine fmt "autoSaveInterval = {$settings.autoSaveInterval}"
   result.addLine fmt "liveReloadOfConf = {$settings.standard.liveReloadOfConf}"
   result.addLine fmt "incrementalSearch = {$settings.standard.incrementalSearch}"
   result.addLine fmt "popupWindowInExmode = {$settings.standard.popupWindowInExmode}"
@@ -2499,6 +2526,12 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
 
   result.addLine fmt "[Autocomplete]"
   result.addLine fmt "enable = {$settings.autocomplete.enable}"
+
+  result.addLine ""
+
+  result.addLine fmt "[AutoSave]"
+  result.addLine fmt "enable = {$settings.autoSave.enable}"
+  result.addLine fmt "interval = {$settings.autoSave.interval}"
 
   result.addLine ""
 

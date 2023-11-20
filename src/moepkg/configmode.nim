@@ -43,8 +43,6 @@ type
     defaultCursor
     normalModeCursor
     insertModeCursor
-    autoSave
-    autoSaveInterval
     liveReloadOfConf
     incrementalSearch
     popupWindowInExmode
@@ -136,6 +134,10 @@ type
   AutocompleteTableNames {.pure.} = enum
     enable
 
+  AutoSaveTableNames {.pure.} = enum
+    enable
+    interval
+
   PersistTableNames {.pure.} = enum
     exCommand
     exCommandHistoryLimit
@@ -187,6 +189,7 @@ proc positionOfSetVal(): int {.compileTime.} =
   for name in NotificationTableNames: names.add $name
   for name in FilerTableNames: names.add $name
   for name in AutocompleteTableNames: names.add $name
+  for name in AutoSaveTableNames: names.add $name
   for name in PersistTableNames: names.add $name
   for name in GitTableNames: names.add $name
   for name in SyntaxCheckerTableNames: names.add $name
@@ -266,8 +269,6 @@ proc getStandardTableSettingValues(
           currentVal = settings.standard.smartcase
         of "disableChangeCursor":
           currentVal = settings.standard.disableChangeCursor
-        of "autoSave":
-          currentVal = settings.standard.autoSave
         of "liveReloadOfConf":
           currentVal = settings.standard.liveReloadOfConf
         of "incrementalSearch":
@@ -533,6 +534,21 @@ proc getAutocompleteTableSettingValues(
     else:
       result = @[ru "false", ru "true"]
 
+proc getAutoSaveTableSettingValues(
+  settings: AutoSaveSettings,
+  name: string): seq[Runes] =
+
+    case name:
+      of "enable":
+        if settings.enable:
+          return @[ru"true", ru"false"]
+        else:
+          return @[ru"false", ru"true"]
+      of "interval":
+        return @[settings.interval.toRunes]
+      else:
+        return
+
 proc getPersistTableSettingsValues(
   settings: PersistSettings,
   name: string): seq[Runes] =
@@ -653,6 +669,9 @@ proc getSettingValues(
       of "Autocomplete":
         let autocompleteSettings = settings.autocomplete
         result = autocompleteSettings.getAutocompleteTableSettingValues(name)
+      of "AutoSave":
+        let autoSaveSettings = settings.autoSave
+        result = autoSaveSettings.getAutoSaveTableSettingValues(name)
       of "Persist":
         let persistSettings = settings.persist
         result = persistSettings.getPersistTableSettingsValues(name)
@@ -735,8 +754,6 @@ proc changeStandardTableSetting(
         settings.standard.normalModeCursor = parseEnum[CursorType](settingVal)
       of "insertModeCursor":
         settings.standard.insertModeCursor = parseEnum[CursorType](settingVal)
-      of "autoSave":
-        settings.standard.autoSave = parseBool(settingVal)
       of "liveReloadOfConf":
         settings.standard.liveReloadOfConf = parseBool(settingVal)
       of "incrementalSearch":
@@ -923,6 +940,18 @@ proc changeAutoCompleteTableSetting(
       else:
         discard
 
+proc changeAutoSaveTableSetting(
+  settings: var AutoSaveSettings,
+  settingName, settingVal: string) =
+
+    case settingName:
+      of "enable":
+        settings.enable = parseBool(settingVal)
+      of "interval":
+        settings.interval = parseInt(settingVal)
+      else:
+        discard
+
 proc changePerSistTableSettings(
   settings: var PersistSettings,
   settingName, settingVal: string) =
@@ -1056,6 +1085,9 @@ proc changeEditorSettings(
     template autocompleteSettings: var AutocompleteSettings =
       status.settings.autocomplete
 
+    template autoSaveSettings: var AutoSaveSettings =
+      status.settings.autoSave
+
     template persistSettings: var PersistSettings =
       status.settings.persist
 
@@ -1096,6 +1128,8 @@ proc changeEditorSettings(
         filerSettings.changeFilerTableSetting(settingName, settingVal)
       of "Autocomplete":
         autocompleteSettings.changeAutoCompleteTableSetting(settingName, settingVal)
+      of "AutoSave":
+        autoSaveSettings.changeAutoSaveTableSetting(settingName, settingVal)
       of "Persist":
         persistSettings.changePerSistTableSettings(settingName, settingVal)
       of "Git":
@@ -1130,7 +1164,6 @@ proc getSettingType(table, name: string): SettingType =
          "ignorecase",
          "smartcase",
          "disableChangeCursor",
-         "autoSave",
          "liveReloadOfConf",
          "incrementalSearch",
          "popupWindowInExmode",
@@ -1140,7 +1173,6 @@ proc getSettingType(table, name: string): SettingType =
          "liveReloadOfFile",
          "sidebar": result = SettingType.bool
       of "tabStop",
-         "autoSaveInterval",
          "smoothScrollMaxDelay": result = SettingType.number
       else:
         result = SettingType.none
@@ -1272,6 +1304,13 @@ proc getSettingType(table, name: string): SettingType =
       else:
         result = SettingType.none
 
+  template autoSaveTable() =
+    case name:
+      of "enable":
+        result = SettingType.bool
+      of "interval":
+        result = SettingType.number
+
   template gitTable() =
     case name:
       of "showChangedLine":
@@ -1327,6 +1366,8 @@ proc getSettingType(table, name: string): SettingType =
       filerTable()
     of "Autocomplete":
       autocompleteTable()
+    of "AutoSave":
+      autoSaveTable()
     of "Git":
       gitTable()
     of "SyntaxChecker":
@@ -1348,23 +1389,6 @@ proc getEditorColorPairIndexStr(
       return $(buffer[currentLine - 1].splitWhitespace)[0]
     else:
       return $(buffer[currentLine - 2].splitWhitespace)[0]
-
-proc getSettingType(
-  buffer: GapBuffer[Runes],
-  currentLine: int): SettingType =
-
-    let
-      lineSplit = buffer[currentLine].splitWhitespace
-
-      selectedTable = getTableName(buffer, currentLine)
-
-      selectedSetting =
-        if selectedTable == "Theme":
-          buffer.getEditorColorPairIndexStr(lineSplit,currentLine)
-        else:
-          $lineSplit[0]
-
-    return getSettingType(selectedTable, selectedSetting)
 
 proc insertCharacter(
   bufStatus: var BufferStatus,
@@ -1404,7 +1428,6 @@ proc editFiguresSetting(status: var EditorStatus, table, name: string) =
         of "Standard":
           case name:
             of "tabStop": settings.standard.tabStop
-            of "autoSaveInterval": settings.autoSaveInterval
             else: 0
 
         of "AutoBackup":
@@ -1481,8 +1504,6 @@ proc editFiguresSetting(status: var EditorStatus, table, name: string) =
         of "tabStop":
           status.settings.standard.tabStop = number
           status.settings.view.tabStop = number
-        of "autoSaveInterval":
-          status.settings.autoSaveInterval = number
         else:
           discard
 
@@ -1846,10 +1867,6 @@ proc initStandardTableBuffer(settings: EditorSettings): seq[Runes] =
         result.add(ru nameStr & space & $settings.standard.normalModeCursor)
       of "insertModeCursor":
         result.add(ru nameStr & space & $settings.standard.insertModeCursor)
-      of "autoSave":
-        result.add(ru nameStr & space & $settings.standard.autoSave)
-      of "autoSaveInterval":
-        result.add(ru nameStr & space & $settings.autoSaveInterval)
       of "liveReloadOfConf":
         result.add(ru nameStr & space & $settings.standard.liveReloadOfConf)
       of "incrementalSearch":
@@ -2079,6 +2096,19 @@ proc initAutocompleteTableBuffer(settings: EditorSettings): seq[Runes] =
       of "enable":
         result.add(ru nameStr & space & $settings.autocomplete.enable)
 
+proc initAutoSaveTableBuffer(settings: EditorSettings): seq[Runes] =
+  result.add(ru"AutoSave")
+
+  for name in AutoSaveTableNames:
+    let
+      nameStr = Indent & $name
+      space = " ".repeat(positionOfSetVal() - len($name))
+    case $name:
+      of "enable":
+        result.add(ru nameStr & space & $settings.autoSave.enable)
+      of "interval":
+        result.add(ru nameStr & space & $settings.autoSave.interval)
+
 proc initPersistTableBuffer(persistSettings: PersistSettings): seq[Runes] =
   result.add(ru"Persist")
 
@@ -2211,6 +2241,9 @@ proc initConfigModeBuffer*(settings: EditorSettings): GapBuffer[Runes] =
   buffer.add(initAutocompleteTableBuffer(settings))
 
   buffer.add(ru"")
+  buffer.add(initAutoSaveTableBuffer(settings))
+
+  buffer.add(ru"")
   buffer.add(initPersistTableBuffer(settings.persist))
 
   buffer.add(ru"")
@@ -2249,11 +2282,6 @@ proc keyDown(bufStatus: BufferStatus, windowNode: var WindowNode) =
     while bufStatus.buffer[windowNode.currentLine].len == 0 or
           bufStatus.buffer[windowNode.currentLine][0] != ' ':
       bufStatus.keyDown(windowNode)
-
-# Count number of values in the array setting.
-proc getNumOfValueOfArraySetting(line: Runes): int =
-  # 1 is the name of the setting
-  line.splitWhitespace.len - 1
 
 proc changeModeToSearchForwardMode(
   bufStatus: var BufferStatus,
@@ -2300,19 +2328,6 @@ proc isConfigModeCommand*(command: Runes): InputState =
         return InputState.Valid
 
 proc execConfigCommand*(status: var EditorStatus, command: Runes) =
-
-  # TODO: Move or Remove
-  template getSettingType(): SettingType =
-    let buffer = currentBufStatus.buffer
-    buffer.getSettingType(currentMainWindowNode.currentLine)
-
-  # TODO: Move or Remove
-  template getNumOfValueOfArraySetting(): int =
-    let
-      currentLine = currentMainWindowNode.currentLine
-      line = currentBufStatus.buffer[currentLine]
-    getNumOfValueOfArraySetting(line)
-
   # TODO: Fix or Remove
   # For SettingType.Array
   var arrayIndex = 0

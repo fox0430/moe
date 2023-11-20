@@ -106,18 +106,6 @@ default is `"blinkIbeam"`
 insertModeCursor
 ```
 
-Auto save (bool)  
-default is false
-```
-autoSave
-```
-
-Auto save interval (minits) (int)  
-default is 5 (5 minits)
-```
-autoSaveInterval
-```
-
 Live reload of configuration file (bool)  
 default is false
 ```
@@ -538,6 +526,19 @@ Enable/Disable general-purpose autocomplete (bool).
 The default value is true.
 ```
 enable
+```
+
+### AutoSave table
+Enable/Disable auto save (bool)  
+default is true
+```
+enable
+```
+
+Auto save interval (minits) (int)  
+default is 5 (5 minits)
+```
+interval
 ```
 
 ### Persist table

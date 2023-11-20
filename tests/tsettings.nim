@@ -42,8 +42,6 @@ const TomlStr = """
   defaultCursor = "blinkIbeam"
   normalModeCursor = "blinkIbeam"
   insertModeCursor = "blinkBlock"
-  autoSave = true
-  autoSaveInterval = 1
   liveReloadOfConf = true
   incrementalSearch = false
   popupWindowInExmode = false
@@ -128,7 +126,11 @@ const TomlStr = """
   showIcons = false
 
   [Autocomplete]
-  enable = true
+  enable = false
+
+  [AutoSave]
+  enable = false
+  interval = 1
 
   [Persist]
   exCommand = false
@@ -392,8 +394,6 @@ suite "Parse configuration file":
     check settings.standard.defaultCursor == CursorType.blinkIbeam
     check settings.standard.normalModeCursor == CursorType.blinkIbeam
     check settings.standard.insertModeCursor == CursorType.blinkBlock
-    check settings.standard.autoSave
-    check settings.autoSaveInterval == 1
     check settings.standard.liveReloadOfConf
     check not settings.standard.incrementalSearch
     check not settings.standard.popupWindowInExmode
@@ -469,7 +469,10 @@ suite "Parse configuration file":
 
     check not settings.filer.showIcons
 
-    check settings.autocomplete.enable
+    check not settings.autocomplete.enable
+
+    check not settings.autoSave.enable
+    check settings.autoSave.interval == 1
 
     check not settings.persist.exCommand
     check settings.persist.exCommandHistoryLimit == 1
