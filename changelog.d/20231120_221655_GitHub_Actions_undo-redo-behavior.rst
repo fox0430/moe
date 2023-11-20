@@ -3,5 +3,5 @@
 Changed
 .......
 
-- `#1937`_ Change undo/redo behaviors same as Vim
+- `#1937`_ Change undo/redo behaviors to same as Vim
 
