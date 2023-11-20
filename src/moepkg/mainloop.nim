@@ -332,7 +332,6 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
     if isResizeKey(key):
       updateTerminalSize()
       status.resize
-      status.update
       continue
 
     if exCommandHistoryIndex.isResetExCommandHistoryIndex(key):
