@@ -759,6 +759,35 @@ proc updateCommandLine(status: var EditorStatus) =
   if status.commandLine.isUpdate:
     status.commandLine.update
 
+proc updateEditorViewConfig(view: var EditorView, settings: EditorSettings) =
+  ## Update `EditorView.config` based on `EditorSettings`.
+
+  template viewConf: var EditorViewConfig = view.config
+
+  if viewConf.colorMode != settings.standard.colorMode:
+    viewConf.colorMode = settings.standard.colorMode
+
+  if viewConf.theme != settings.standard.editorColorTheme:
+    viewConf.theme = settings.standard.editorColorTheme
+
+  if viewConf.isCursorLine != settings.view.cursorLine:
+    viewConf.isCursorLine = settings.view.cursorLine
+
+  if viewConf.isLineNumber != settings.view.lineNumber:
+    viewConf.isLineNumber = settings.view.lineNumber
+
+  if viewConf.isIndentationLines != settings.view.indentationLines:
+    viewConf.isIndentationLines = settings.view.indentationLines
+
+  if viewConf.isHighlightCurrentLine != settings.view.highlightCurrentLine:
+    viewConf.isHighlightCurrentLine = settings.view.highlightCurrentLine
+
+  if viewConf.isHighlightCurrentLineNumber != settings.view.currentLineNumber:
+    viewConf.isHighlightCurrentLineNumber = settings.view.currentLineNumber
+
+  if viewConf.tabStop != settings.standard.tabStop:
+    viewConf.tabStop = settings.standard.tabStop
+
 proc update*(status: var EditorStatus) =
   ## Update all views, highlighting, cursor, etc.
 
@@ -822,10 +851,6 @@ proc update*(status: var EditorStatus) =
            b.buffer[node.currentLine].high < node.currentColumn:
              node.currentColumn = b.buffer[node.currentLine].high
 
-        let isCurrentMainWin =
-          if node.windowIndex == currentMainWindowNode.windowIndex: true
-          else: false
-
         # Reload Editorview. This is not the actual terminal view.
         node.view.reload(
           b.buffer,
@@ -871,26 +896,28 @@ proc update*(status: var EditorStatus) =
             node.view.updateSidebarBufferForSyntaxChecker(
               b.syntaxCheckResults)
 
+        node.view.updateEditorViewConfig(status.settings)
+
         block updateTerminalBuffer:
-          let selectedRange = Range(
-            first: b.selectedArea.startLine,
-            last: b.selectedArea.endLine)
+          if node.view.editorMode != b.mode: node.view.editorMode = b.mode
+
+          if node.view.selectedRange.first != b.selectedArea.startLine:
+            node.view.selectedRange.first = b.selectedArea.startLine
+          if node.view.selectedRange.last != b.selectedArea.endLine:
+            node.view.selectedRange.last = b.selectedArea.endLine
+
+          node.view.isCurrentWin =
+            if node.windowIndex == currentMainWindowNode.windowIndex: true
+            else: false
 
           node.view.update(
             node.window.get,
-            settings.view,
-            isCurrentMainWin,
-            b.isVisualMode,
-            b.isConfigMode,
             b.buffer,
             highlight,
-            settings.standard.editorColorTheme,
-            status.settings.standard.colorMode,
             node.currentLine,
-            selectedRange,
             currentLineColorPair)
 
-        if isCurrentMainWin:
+        if node.view.isCurrentWin:
           # Update the cursor position.
           node.cursor.update(node.view, node.currentLine, node.currentColumn)
 
@@ -907,7 +934,7 @@ proc update*(status: var EditorStatus) =
   if not currentBufStatus.isFilerMode:
     let
       y = currentMainWindowNode.cursor.y
-      x = currentMainWindowNode.view.leftMargin +
+      x = currentMainWindowNode.view.sidebarWidth +
           currentMainWindowNode.view.widthOfLineNum +
           currentMainWindowNode.cursor.x
     currentMainWindowNode.window.get.moveCursor(y, x)

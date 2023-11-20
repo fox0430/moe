@@ -204,9 +204,9 @@ suite "buffermanager: openSelectedBuffer":
     check mainWindow.numOfMainWindow == 3
     let nodes = mainWindowNode.getAllWindowNode
     check nodes.len == 3
-    check nodes[0].bufferIndex == 1
-    check nodes[1].bufferIndex == 0
-    check nodes[2].bufferIndex == 0
+    for n in nodes:
+      if n.windowIndex == 1: check n.bufferIndex == 1
+      else: check n.bufferIndex == 0
 
     status.update
 

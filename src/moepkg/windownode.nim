@@ -412,7 +412,7 @@ proc absolutePosition*(
         windowNode.x +
         relativeX +
         windowNode.view.widthOfLineNum +
-        windowNode.view.leftMargin
+        windowNode.view.sidebarWidth
 
     return (y, x)
 
