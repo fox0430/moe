@@ -26,8 +26,8 @@ proc isDebugModeCommand*(command: Runes): InputState =
   if command.len == 1:
     let key = command[0]
     if key == ord(':') or
-       isControlK(key) or
-       isControlJ(key) or
+       isCtrlK(key) or
+       isCtrlJ(key) or
        key == ord('k') or isUpKey(key) or
        key == ord('j') or isDownKey(key) or
        key == ord('g') or
@@ -53,9 +53,9 @@ proc execDebugModeCommand*(status: var EditorStatus, command: Runes) =
     if key == ord(':'):
       currentBufStatus.changeModeToExMode(status.commandLine)
 
-    elif isControlK(key):
+    elif isCtrlK(key):
       status.moveNextWindow
-    elif isControlJ(key):
+    elif isCtrlJ(key):
       status.movePrevWindow
 
     elif key == ord('k') or isUpKey(key):

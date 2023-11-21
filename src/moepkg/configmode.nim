@@ -1408,7 +1408,7 @@ proc insertCharacter(
       bufStatus.buffer[windowNode.currentLine] = newLine
 
 proc editFiguresSetting(status: var EditorStatus, table, name: string) =
-  setCursor(true)
+  showCursor()
   if not status.settings.standard.disableChangeCursor:
     changeCursorType(status.settings.standard.insertModeCursor)
 
@@ -1459,9 +1459,7 @@ proc editFiguresSetting(status: var EditorStatus, table, name: string) =
   while not isBreak and not isCancel:
     status.update
 
-    var key = ERR_KEY
-    while key == ERR_KEY:
-      key = currentMainWindowNode.getKey
+    let key = currentMainWindowNode.getKeyBlocking
 
     if isResizeKey(key):
       status.resize
@@ -1543,7 +1541,7 @@ proc editFiguresSetting(status: var EditorStatus, table, name: string) =
       else:
         discard
 
-  setCursor(false)
+  hideCursor()
   currentMainWindowNode.currentColumn = 0
   if not status.settings.standard.disableChangeCursor:
     changeCursorType(status.settings.standard.normalModeCursor)
@@ -1620,11 +1618,9 @@ proc editTextSetting(status: var EditorStatus, table, name, position: string) =
     status.update
 
     # status.update clears the cursor, so enable it every time.
-    setCursor(true)
+    showCursor()
 
-    var key = ERR_KEY
-    while key == ERR_KEY:
-      key = currentMainWindowNode.getKey
+    let key = currentMainWindowNode.getKeyBlocking
 
     if isResizeKey(key):
       status.resize
@@ -1661,7 +1657,7 @@ proc editTextSetting(status: var EditorStatus, table, name, position: string) =
   currentMainWindowNode.currentColumn = 0
 
   if isCancel:
-    setCursor(false)
+    hideCursor()
   else:
     template buildOnSaveTable() =
       case name:
@@ -1758,7 +1754,7 @@ proc editEnumAndBoolSettings(
 
       popupWindow.update
 
-      let key = currentMainWindowNode.getKey
+      let key = currentMainWindowNode.getKeyBlocking
 
       if isTabKey(key) or isDownKey(key) or key == ord('j'):
         if suggestIndex == settingValues.high: suggestIndex = 0
@@ -2304,14 +2300,14 @@ proc isConfigModeCommand*(command: Runes): InputState =
 
   if command.len == 1:
     let key = command[0]
-    if isControlK(key) or
-       isControlJ(key) or
+    if isCtrlK(key) or
+       isCtrlJ(key) or
        key == ord(':') or
        key == ord('h') or isLeftKey(key) or
        key == ord('l') or isRightKey(key) or
        isEnterKey(key) or
-       isControlU(key) or
-       isControlD(key) or
+       isCtrlU(key) or
+       isCtrlD(key) or
        isPageUpKey(key) or
        isPageDownKey(key) or ## Page down and Ctrl - F
        key == ord('k') or isUpKey(key) or
@@ -2334,9 +2330,9 @@ proc execConfigCommand*(status: var EditorStatus, command: Runes) =
 
   if command.len == 1:
     let key = command[0]
-    if isControlK(key):
+    if isCtrlK(key):
       status.moveNextWindow
-    elif isControlJ(key):
+    elif isCtrlJ(key):
       status.movePrevWindow
     elif key == ord(':'):
       status.changeMode(Mode.ex)
@@ -2345,9 +2341,9 @@ proc execConfigCommand*(status: var EditorStatus, command: Runes) =
       status.selectAndChangeEditorSettings(arrayIndex)
       currentBufStatus.buffer = initConfigModeBuffer(status.settings)
       currentBufStatus.isUpdate = true
-    elif isControlU(key):
+    elif isCtrlU(key):
       status.halfPageUp
-    elif isControlD(key):
+    elif isCtrlD(key):
       status.halfPageDown
     elif isPageUpKey(key):
       status.pageUp

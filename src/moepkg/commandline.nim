@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[sequtils]
+import std/[sequtils, options]
 import ui, unicodeext, color, independentutils
 
 type
@@ -239,10 +239,15 @@ proc setBufferPositionY*(commandLine: var CommandLine, y: int) {.inline.} =
   commandLine.bufferPosition.y = y
   commandLine.isUpdate = true
 
-proc getKey*(commandLine: var CommandLine): Rune {.inline.} =
+proc getKey*(commandLine: var CommandLine): Option[Rune] {.inline.} =
   ## Return a single Key.
 
-  commandLine.window.getKey
+  return getKey()
+
+proc getKeyBlocking*(commandLine: var CommandLine): Rune {.inline.} =
+  ## Return a single Key.
+
+  return getKeyBlocking()
 
 proc isUpdate*(commandLine: CommandLine): bool {.inline.} =
   commandLine.isUpdate
@@ -261,27 +266,29 @@ proc getKeys*(commandLine: var CommandLine, prompt: string): bool =
   while true:
     commandLine.update
 
-    let key = commandLine.getKey
+    var key: Option[Rune]
+    while key.isNone:
+      key = commandLine.getKey
 
-    if isEnterKey(key):
+    if isEnterKey(key.get):
       return true
-    elif isEscKey(key) or pressCtrlC:
+    elif isEscKey(key.get) or ctrlCPressed:
       commandLine.clear
       return false
 
-    elif isBackspaceKey(key):
+    elif isBackspaceKey(key.get):
       commandLine.deleteChar
-    elif isDcKey(key):
+    elif isDeleteKey(key.get):
       commandLine.deleteCurrentChar
 
-    elif isLeftKey(key):
+    elif isLeftKey(key.get):
       commandLine.moveLeft
-    elif isRightKey(key):
+    elif isRightKey(key.get):
       commandLine.moveRight
-    elif isHomeKey(key):
+    elif isHomeKey(key.get):
       commandLine.moveTop
-    elif isEndKey(key):
+    elif isEndKey(key.get):
       commandLine.moveEnd
 
     else:
-      commandLine.insert(key)
+      commandLine.insert(key.get)

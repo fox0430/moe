@@ -110,7 +110,7 @@ proc undoOrMoveCursor(bufStatus: var BufferStatus, windowNode: var WindowNode) =
 proc isReplaceModeCommand*(command: Runes): InputState =
   result = InputState.Invalid
 
-  if pressCtrlC or command.len == 1:
+  if isCtrlC(command) or command.len == 1:
     return InputState.Valid
 
 # TODO: Fix replace mode
@@ -121,7 +121,7 @@ proc execReplaceModeCommand*(status: var EditorStatus, command: Runes) =
 
   let key = command[0]
 
-  if isControlC(key) or isEscKey(key) or isControlSquareBracketsRight(key):
+  if isCtrlC(key) or isEscKey(key) or isCtrlSquareBracketsRight(key):
     undoLastSuitId = none(int)
     status.changeMode(currentBufStatus.prevMode)
   elif isRightKey(key):

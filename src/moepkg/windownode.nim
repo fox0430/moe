@@ -442,8 +442,15 @@ proc moveCursor*(node: var WindowNode) {.inline.} =
 proc refreshWindow*(node: var WindowNode) {.inline.} =
   if node.window.isSome: node.window.get.refresh
 
-proc getKey*(node: var WindowNode): Rune {.inline.} =
-  if node.window.isSome: result = node.window.get.getKey
+proc getKey*(node: var WindowNode): Option[Rune] {.inline.} =
+  if node.window.isSome:
+    node.moveCursor
+    return getKey()
+
+proc getKeyBlocking*(node: var WindowNode): Rune {.inline.} =
+  if node.window.isSome:
+    node.moveCursor
+    return getKeyBlocking()
 
 proc eraseWindow*(node: var WindowNode) {.inline.} =
   if node.window.isSome: node.window.get.erase

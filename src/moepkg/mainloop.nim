@@ -340,7 +340,7 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
     if searchHistoryIndex.isResetSearchHistoryIndex(key):
       searchHistoryIndex = none(int)
 
-    if isEscKey(key) or isControlC(key):
+    if isEscKey(key) or isCtrlC(key):
       isCancel = true
       if suggestWin.isSome:
         suggestWin.closeSuggestWindow
@@ -410,7 +410,7 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
       status.commandLine.moveEnd
     elif isBackspaceKey(key):
       status.commandLine.deleteChar
-    elif isDcKey(key):
+    elif isDeleteKey(key):
       status.commandLine.deleteCurrentChar
     else:
       status.commandLine.insert(key)

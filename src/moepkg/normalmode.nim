@@ -1156,9 +1156,9 @@ proc isStopRecordingOperationsCommand*(
     bufStatus.mode.isNormalMode and $command == "q"
 
 proc isMovementKey(key: Rune): bool {.inline.} =
-  isControlK(key) or
-  isControlJ(key) or
-  isControlV(key) or
+  isCtrlK(key) or
+  isCtrlJ(key) or
+  isCtrlV(key) or
   key == ord('h') or isLeftKey(key) or isBackspaceKey(key) or
   key == ord('l') or isRightKey(key) or
   key == ord('k') or isUpKey(key) or
@@ -1171,8 +1171,8 @@ proc isMovementKey(key: Rune): bool {.inline.} =
   key == ord('+') or
   key == ord('g') or
   key == ord('G') or
-  isControlU(key) or
-  isControlD(key) or
+  isCtrlU(key) or
+  isCtrlD(key) or
   isPageUpKey(key) or
   isPageDownKey(key) or
   key == ord('w') or
@@ -1183,7 +1183,7 @@ proc isMovementKey(key: Rune): bool {.inline.} =
 
 proc isChangeModeKey(key: Rune): bool {.inline.} =
    key == ord('v') or
-   isControlV(key) or
+   isCtrlV(key) or
    key == ord('R') or
    key == ord('i') or
    key == ord('I') or
@@ -1206,7 +1206,7 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
 
   if commands.len == 0:
     return
-  elif isControlC(commands[^1]):
+  elif isCtrlC(commands[^1]):
     # Cnacel commands and show the exit help
     status.commandLine.writeExitHelp
   elif commands.len > 1 and isEscKey(commands[0]):
@@ -1221,11 +1221,11 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
 
     key = commands[0]
 
-  if isControlK(key):
+  if isCtrlK(key):
     status.moveNextWindow
-  elif isControlJ(key):
+  elif isCtrlJ(key):
     status.movePrevWindow
-  elif isControlV(key):
+  elif isCtrlV(key):
     status.changeModeToVisualBlockMode
   elif key == ord('h') or isLeftKey(key) or isBackspaceKey(key):
     for i in 0 ..< cmdLoop: currentMainWindowNode.keyLeft
@@ -1235,7 +1235,7 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
     for i in 0 ..< cmdLoop: currentBufStatus.keyUp(currentMainWindowNode)
   elif key == ord('j') or isDownKey(key) or isEnterKey(key):
     for i in 0 ..< cmdLoop: currentBufStatus.keyDown(currentMainWindowNode)
-  elif key == ord('x') or isDcKey(key):
+  elif key == ord('x') or isDeleteKey(key):
     status.deleteCharacters
   elif key == ord('X'):
     status.cutCharacterBeforeCursor
@@ -1263,13 +1263,13 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
       status.showCurrentCharInfoCommand(currentMainWindowNode)
   elif key == ord('G'):
     currentBufStatus.moveToLastLine(currentMainWindowNode)
-  elif isControlU(key):
+  elif isCtrlU(key):
     return status.halfPageUpCommand
-  elif isControlD(key):
+  elif isCtrlD(key):
     return status.halfPageDownCommand
   elif isPageUpKey(key):
     return status.pageUpCommand
-  elif isPageDownKey(key): ## Page down and Ctrl - F
+  elif isPageDownKey(key) or isCtrlF(key):
     return status.pageDownCommand
   elif key == ord('w'):
     for i in 0 ..< cmdLoop:
@@ -1394,9 +1394,9 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
       currentBufStatus.autoIndentCurrentLine(currentMainWindowNode)
   elif key == ord('J'):
     currentBufStatus.joinLine(currentMainWindowNode)
-  elif isControlA(key):
+  elif isCtrlA(key):
     currentBufStatus.modifyNumberTextUnderCurosr(currentMainWindowNode, cmdLoop)
-  elif isControlX(key):
+  elif isCtrlX(key):
     currentBufStatus.modifyNumberTextUnderCurosr(currentMainWindowNode,
                                                  -cmdLoop)
   elif key == ord('~'):
@@ -1461,7 +1461,7 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
     status.moveToEndOfLineAndEnterInsertMode
   elif key == ord('u'):
     status.bufStatus[currentBufferIndex].undo(currentMainWindowNode)
-  elif isControlR(key):
+  elif isCtrlR(key):
     currentBufStatus.redo(currentMainWindowNode)
   elif key == ord('Z'):
     let secondKey = commands[1]
@@ -1469,7 +1469,7 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
       status.writeFileAndExit
     elif secondKey == ord('Q'):
       status.forceExit
-  elif isControlW(key):
+  elif isCtrlW(key):
     let secondKey = commands[1]
     if secondKey == ord('c'):
       status.closeCurrentWindow
@@ -1498,7 +1498,7 @@ proc isNormalModeCommand*(
 
     if command.len == 0:
       return InputState.Continue
-    elif isControlC(command[^1]):
+    elif isCtrlC(command[^1]):
       result = InputState.Valid
     elif isEscKey(command[0]):
       if command.len == 1:
@@ -1518,15 +1518,15 @@ proc isNormalModeCommand*(
       if $command == "/" or
          $command == "?" or
          $command == ":" or
-         isControlK(command) or
-         isControlJ(command) or
-         isControlV(command) or
+         isCtrlK(command) or
+         isCtrlJ(command) or
+         isCtrlV(command) or
          $command == "h" or isLeftKey(command) or isBackspaceKey(command[0]) or
          $command == "l" or isRightKey(command) or
          $command == "k" or isUpKey(command) or
          $command == "j" or isDownKey(command) or
          isEnterKey(command) or
-         $command == "x" or isDcKey(command) or
+         $command == "x" or isDeleteKey(command) or
          $command == "X" or
          $command == "^" or $command == "_" or
          $command == "0" or isHomeKey(command) or
@@ -1536,11 +1536,10 @@ proc isNormalModeCommand*(
          $command == "-" or
          $command == "+" or
          $command == "G" or
-         isControlU(command) or
-         isControlD(command) or
+         isCtrlU(command) or
+         isCtrlD(command) or
          isPageUpKey(command) or
-         ## Page down and Ctrl - F
-         isPageDownKey(command) or
+         isPageDownKey(command) or isCtrlF(command) or
          $command == "w" or
          $command == "b" or
          $command == "e" or
@@ -1554,8 +1553,8 @@ proc isNormalModeCommand*(
          $command == ">" or
          $command == "<" or
          $command == "J" or
-         isControlA(command) or
-         isControlX(command) or
+         isCtrlA(command) or
+         isCtrlX(command) or
          $command == "~" or
          $command == "n" or
          $command == "N" or
@@ -1568,7 +1567,7 @@ proc isNormalModeCommand*(
          $command == "a" or
          $command == "A" or
          $command == "u" or
-         isControlR(command) or
+         isCtrlR(command) or
          $command == "." or
          $command == "Y" or
          $command == "V" or
@@ -1713,7 +1712,7 @@ proc isNormalModeCommand*(
           if command[1] == ord('Z') or command[1] == ord('Q'):
             result = InputState.Valid
 
-      elif isControlW(command[0]):
+      elif isCtrlW(command[0]):
         if command.len == 1:
           result = InputState.Continue
         elif command.len == 2:

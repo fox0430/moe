@@ -60,8 +60,7 @@ proc askCreateDirPrompt*(
     commndLine.write(mess.toRunes)
     addMessageLog mess.toRunes
 
-    let key = commndLine.getKey
-
+    let key = commndLine.getKeyBlocking
     if key == ord('y'): result = true
     else: result = false
 
@@ -73,8 +72,7 @@ proc askBackupRestorePrompt*(
     commndLine.write(mess.toRunes)
     addMessageLog mess
 
-    let key = commndLine.getKey
-
+    let key = commndLine.getKeyBlocking
     if key == ord('y'): result = true
     else: result = false
 
@@ -86,8 +84,7 @@ proc askDeleteBackupPrompt*(
     commndLine.write(mess.toRunes)
     addMessageLog mess
 
-    let key = commndLine.getKey
-
+    let key = commndLine.getKeyBlocking
     if key == ord('y'): result = true
     else: result = false
 
@@ -96,14 +93,14 @@ proc askFileChangedSinceReading*(commndLine: var CommandLine): bool =
     const Mess = "WARNING: The file has been changed since reading it!: Press any key"
     commndLine.write(Mess.toRunes)
     addMessageLog Mess.toRunes
-    discard commndLine.getKey
+    discard commndLine.getKeyBlocking
 
   block:
     const Mess = "Do you really want to write to it: y/n ?"
     commndLine.write(Mess.toRunes)
     addMessageLog Mess.toRunes
-    let key = commndLine.getKey
 
+    let key = commndLine.getKeyBlocking
     if key == ord('y'): result = true
     else: result = false
 

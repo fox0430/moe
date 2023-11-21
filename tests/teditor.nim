@@ -2026,7 +2026,7 @@ suite "Editor: Replace characters":
       AutoDeleteParen = false
       TabStop = 2
       Loop = 1
-    let character = toRune(KEY_ENTER)
+    let character = toRune(EnterKey)
 
     currentBufStatus.replaceCharacters(
       currentMainWindowNode,
@@ -2050,7 +2050,7 @@ suite "Editor: Replace characters":
       AutoDeleteParen = false
       TabStop = 2
       Loop = 3
-    let character = toRune(KEY_ENTER)
+    let character = toRune(EnterKey)
 
     currentBufStatus.replaceCharacters(
       currentMainWindowNode,

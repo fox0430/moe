@@ -18,7 +18,7 @@
 #[############################################################################]#
 
 import std/[unittest, importutils, sequtils, sugar, os, options, strformat]
-import pkg/[ncurses, results]
+import pkg/results
 import moepkg/syntax/highlite
 import moepkg/[registers, settings, editorstatus, gapbuffer, unicodeext,
                bufferstatus, ui, windownode, quickrunutils]
@@ -279,7 +279,7 @@ suite "Normal mode: Page down":
     status.resize(100, 100)
     status.update
 
-    const Key = @[KEY_NPAGE.toRune]
+    const Key = @[PageDownKey.toRune]
     check status.normalCommand(Key).isNone
     status.update
 
@@ -302,12 +302,12 @@ suite "Normal mode: Page up":
     status.update
 
     block:
-      const Key = @[KEY_NPAGE.toRune]
+      const Key = @[PageDownKey.toRune]
       check status.normalCommand(Key).isNone
     status.update
 
     block:
-      const Key = @[KEY_PPAGE.toRune]
+      const Key = @[PageUpKey.toRune]
       check status.normalCommand(Key).isNone
     status.update
 
@@ -1853,15 +1853,15 @@ suite "Normal mode: Validate normal mode command":
     check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
 
   test "y ESC (Expect to Invalid)":
-    const Command = @['y'.toRune, KEY_ESC.toRune]
+    const Command = @['y'.toRune, EscKey.toRune]
     check isNormalModeCommand(Command, none(Rune)) == InputState.Invalid
 
   test "1 y ESC (Expect to Invalid)":
-    const Command = @['1'.toRune, 'y'.toRune, KEY_ESC.toRune]
+    const Command = @['1'.toRune, 'y'.toRune, EscKey.toRune]
     check isNormalModeCommand(Command, none(Rune)) == InputState.Invalid
 
   test "10 y ESC (Expect to invalid)":
-    const Command = @['1'.toRune, '0'.toRune, 'y'.toRune, KEY_ESC.toRune]
+    const Command = @['1'.toRune, '0'.toRune, 'y'.toRune, EscKey.toRune]
     check isNormalModeCommand(Command, none(Rune)) == InputState.Invalid
 
 suite "Normal mode: Yank and delete words":
@@ -2509,7 +2509,7 @@ suite "Normal mode: execNormalModeCommand":
 
     status.isSearchHighlight = true
 
-    const Commands = @[KEY_ESC.toRune, KEY_ESC.toRune]
+    const Commands = @[EscKey.toRune, EscKey.toRune]
     check status.execNormalModeCommand(Commands).isNone
 
     check currentBufStatus == beforeBufStatus
@@ -2522,7 +2522,7 @@ suite "Normal mode: execNormalModeCommand":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
 
-    const Commands = @[KEY_ESC.toRune, '/'.toRune]
+    const Commands = @[EscKey.toRune, '/'.toRune]
     check status.execNormalModeCommand(Commands).isNone
 
     status.resize(100, 100)
