@@ -17,7 +17,8 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strformat, osproc, strutils, terminal, options, tables, posix]
+import std/[strformat, osproc, strutils, terminal, options, tables, posix,
+            sequtils]
 import pkg/[ncurses, results]
 import unicodeext, independentutils
 
@@ -471,12 +472,20 @@ proc parseKey(buffer: seq[int]): Option[Rune] =
       else:
         return some(ch.toRune)
   else:
-    var inputSeq = ""
-    for ch in buffer: inputSeq &= ch.char
-    for keyCode, sequences in KeySequences.pairs:
-      for s in sequences:
-        if s == inputSeq:
-          return some(keyCode.Rune)
+    block specialKeys:
+      var input = ""
+      for ch in buffer: input &= ch.char
+      for keyCode, sequences in KeySequences.pairs:
+        for s in sequences:
+          if s == input:
+            return some(keyCode.Rune)
+
+    block multiByteCharacter:
+      let
+        s = buffer.mapIt(it.char)
+        runes = s.toRunes
+      if runes.len == 1:
+        return some(runes[0])
 
 proc kbhit(timeout: int = 10): int =
   ## Check stdin buffer using poll(2).
