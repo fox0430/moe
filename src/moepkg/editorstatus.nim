@@ -1186,9 +1186,8 @@ proc smoothScrollUpNumberOfLines(
 
       currentBufStatus.keyUp(currentMainWindowNode)
       status.update
-      currentMainWindowNode.setTimeout(delays[delayIndex])
 
-      let key = getKey(currentMainWindowNode)
+      let key = currentMainWindowNode.getKey(delays[delayIndex])
       if key.isSome:
         return key
 
@@ -1257,9 +1256,8 @@ proc smoothScrollDownNumberOfLines(
 
       currentBufStatus.keyDown(currentMainWindowNode)
       status.update
-      currentMainWindowNode.setTimeout(delays[delayIndex])
 
-      let key = getKey(currentMainWindowNode)
+      let key = currentMainWindowNode.getKey(delays[delayIndex])
       if key.isSome:
         return key
 

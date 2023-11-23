@@ -443,11 +443,23 @@ proc refreshWindow*(node: var WindowNode) {.inline.} =
   if node.window.isSome: node.window.get.refresh
 
 proc getKey*(node: var WindowNode): Option[Rune] {.inline.} =
+  ## Non-blocking read.
+
   if node.window.isSome:
     node.moveCursor
     return getKey()
 
+proc getKey*(node: var WindowNode, timeout: int): Option[Rune] {.inline.} =
+  ## Non-blocking read.
+  ## `timeout` is milliSeconds.
+
+  if node.window.isSome:
+    node.moveCursor
+    return getKey(timeout)
+
 proc getKeyBlocking*(node: var WindowNode): Rune {.inline.} =
+  ## Blocking read.
+
   if node.window.isSome:
     node.moveCursor
     return getKeyBlocking()
