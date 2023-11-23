@@ -120,10 +120,10 @@ const
   DownKey*     = 1003
   RightKey*    = 1004
   LeftKey*     = 1005
-  HomeKey*     = 1006
-  InsertKey*   = 1007
-  DeleteKey*   = 1008
-  EndKey*      = 1009
+  EndKey*      = 1006
+  HomeKey*     = 1007
+  InsertKey*   = 1008
+  DeleteKey*   = 1009
   PageUpKey*   = 1010
   PageDownKey* = 1011
 
@@ -133,10 +133,10 @@ const
     RightKey:    @["\eOC", "\e[C"],
     LeftKey:     @["\eOD", "\e[D"],
 
+    EndKey:      @["\e[4~", "\e[8~", "\eOF", "\e[F"],
     HomeKey:     @["\e[1~", "\e[7~", "\eOH", "\e[H"],
     InsertKey:   @["\e[2~"],
     DeleteKey:   @["\e[3~"],
-    EndKey:      @["\e[4~", "\e[8~", "\eOF", "\e[F"],
     PageUpKey:   @["\e[5~"],
     PageDownKey: @["\e[6~"]
   }.toTable
@@ -565,6 +565,9 @@ proc isHomeKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == HomeKey
 
 proc isEndKey*(key: Rune): bool {.inline.} = key == EndKey
 proc isEndKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == EndKey
+
+proc isInsertKey*(key: Rune): bool {.inline.} = key == InsertKey
+proc isInsertKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == InsertKey
 
 proc isDeleteKey*(key: Rune): bool {.inline.} = key == DeleteKey
 proc isDeleteKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == DeleteKey

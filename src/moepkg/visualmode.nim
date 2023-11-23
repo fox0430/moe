@@ -705,7 +705,7 @@ proc isVisualModeCommand*(command: Runes): InputState =
     return InputState.Continue
   elif command.len == 1:
     let c = command[0]
-    if isCtrlC(c) or isEscKey(c) or isCtrlSquareBracketsRight(c) or
+    if isCtrlC(c) or isEscKey(c) or
        c == ord('h') or isLeftKey(c) or isBackspaceKey(c) or
        c == ord('l') or isRightKey(c) or
        c == ord('k') or isUpKey(c) or
@@ -736,7 +736,7 @@ proc execVisualModeCommand*(status: var EditorStatus, command: Runes) =
 
   let key = command[0]
 
-  if isCtrlC(key) or isEscKey(key) or isCtrlSquareBracketsRight(key):
+  if isCtrlC(key) or isEscKey(key):
     status.exitVisualMode
   elif key == ord('h') or isLeftKey(key) or isBackspaceKey(key):
     currentMainWindowNode.keyLeft

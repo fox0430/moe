@@ -121,7 +121,7 @@ proc execReplaceModeCommand*(status: var EditorStatus, command: Runes) =
 
   let key = command[0]
 
-  if isCtrlC(key) or isEscKey(key) or isCtrlSquareBracketsRight(key):
+  if isCtrlC(key) or isEscKey(key):
     undoLastSuitId = none(int)
     status.changeMode(currentBufStatus.prevMode)
   elif isRightKey(key):
