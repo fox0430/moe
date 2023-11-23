@@ -17,8 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strformat, osproc, strutils, terminal, options, tables, posix,
-            sequtils]
+import std/[strformat, osproc, strutils, terminal, options, tables, posix]
 import pkg/[ncurses, results]
 import unicodeext, independentutils
 
@@ -478,9 +477,10 @@ proc parseKey(buffer: seq[int]): Option[Rune] =
             return some(keyCode.Rune)
 
     block multiByteCharacter:
-      let
-        s = buffer.mapIt(it.char)
-        runes = s.toRunes
+      proc toString(s: seq[int]): string {.inline.} =
+        for n in s: result &= n.char
+
+      let runes = buffer.toString.toRunes
       if runes.len == 1:
         return some(runes[0])
 
