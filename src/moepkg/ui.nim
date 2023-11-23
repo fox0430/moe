@@ -246,9 +246,6 @@ proc keyEcho*(keyecho: bool) =
   if keyecho == true: echo()
   elif keyecho == false: noecho()
 
-proc setTimeout*(win: var Window, time: int = 100) {.inline.} =
-  win.cursesWindow.wtimeout(cint(time))
-
 proc checkColorSupportedTerminal*(): ColorMode =
   ## Check how many colors are supported on the terminal and return ColorMode.
   ## Check "$COLORTERM" first, then check "tput colors" if it fails.

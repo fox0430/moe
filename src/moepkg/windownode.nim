@@ -50,7 +50,6 @@ type
 
 proc newWindow(): Window {.inline.} =
   result = initWindow(1, 1, 0, 0, EditorColorPairIndex.default.ord)
-  result.setTimeout
 
 proc initWindowNode*(): WindowNode =
   var
@@ -466,12 +465,6 @@ proc getKeyBlocking*(node: var WindowNode): Rune {.inline.} =
 
 proc eraseWindow*(node: var WindowNode) {.inline.} =
   if node.window.isSome: node.window.get.erase
-
-proc setTimeout*(node: var WindowNode) {.inline.} =
-  if node.window.isSome: node.window.get.setTimeout
-
-proc setTimeout*(node: var WindowNode, time: int) {.inline.} =
-  if node.window.isSome: node.window.get.setTimeout(time)
 
 proc getHeight*(node: var WindowNode): int {.inline.} = node.window.get.height
 

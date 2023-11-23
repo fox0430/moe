@@ -1193,9 +1193,6 @@ proc smoothScrollUpNumberOfLines(
 
       if i > destination + 1: delayIndex.inc
 
-    # Set default time out setting
-    currentMainWindowNode.setTimeout
-
 proc pageUp*(status: var EditorStatus) {.inline.} =
   status.scrollUpNumberOfLines(currentMainWindowNode.view.height)
 
@@ -1262,9 +1259,6 @@ proc smoothScrollDownNumberOfLines(
         return key
 
       if i < destination: delayIndex.inc
-
-    # Set default time out setting
-    currentMainWindowNode.setTimeout
 
 proc pageDown*(status: var EditorStatus) {.inline.} =
   status.scrollDownNumberOfLines(currentMainWindowNode.view.height)

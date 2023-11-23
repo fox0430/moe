@@ -62,7 +62,6 @@ proc initCommandLine*(): CommandLine =
     w = getTerminalWidth()
     h = getTerminalHeight() - 1
   result.window = initWindow(h, w, t, l, color.int16)
-  result.window.setTimeout()
 
 proc resize*(commandLine: var CommandLine, y, x, h, w: int) {.inline.} =
   commandLine.window.resize(h, w, y, x)
