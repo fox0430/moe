@@ -83,7 +83,7 @@ const
 
   TabKey        = 9
   EnterKey*     = 10
-  EscKey*       = 27
+  EscKey*       = 27 # or Ctrl-[
   BackSpaceKey* = 127
 
   CtrlA* = 1
@@ -464,11 +464,11 @@ proc parseKey(buffer: seq[int]): Option[Rune] =
     case ch:
       of 0, 29, 30, 31:
         # Ignore
-        discard
+        return none(Rune)
       else:
         return some(ch.toRune)
   else:
-    block specialKeys:
+    block specialKey:
       var input = ""
       for ch in buffer: input &= ch.char
       for keyCode, sequences in KeySequences.pairs:
@@ -481,12 +481,16 @@ proc parseKey(buffer: seq[int]): Option[Rune] =
         for n in s: result &= n.char
 
       let runes = buffer.toString.toRunes
+      # The runes length should be 1.
       if runes.len == 1:
         return some(runes[0])
 
 proc kbhit(timeout: int = 10): int =
   ## Check stdin buffer using poll(2).
-  ## Timeout is milliseconds.
+  ##
+  ## poll(2) return POLLERR if it detects a signal.
+  ##
+  ## `timeout` is milliseconds.
 
   # Init pollFd.
   var pollFd: TPollfd
@@ -508,13 +512,20 @@ proc getKey*(timeout: int = 100): Option[Rune] =
     buffer: seq[int]
     readable = kbhit()
   while readable > 0:
-    var ch: int
-    if read(0, ch.addr, 1) > 0: buffer.add ch
+    # Read all from stdin.
+
+    block read:
+      const
+        Fd = STDIN_FILENO
+        Size = 1
+
+      var ch: int
+      if read(Fd, ch.addr, Size) > 0: buffer.add ch
 
     readable = kbhit()
 
   if readable < 0:
-    # Check signals. poll(2) return POLLERR if it detects a signal.
+    # Check signals.
     if ctrlCPressed:
       ctrlCPressed = false
       return some(CtrlC.Rune)
@@ -645,14 +656,6 @@ proc isCtrlY*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlY
 
 proc isCtrlZ*(key: Rune): bool {.inline.} = key == CtrlZ
 proc isCtrlZ*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlZ
-
-proc isCtrlSquareBracketsRight*(key: Rune): bool {.inline.} =
-  # Ctrl - [
-
-  key == 27
-
-proc isCtrlSquareBracketsRight*(r: Runes): bool {.inline.} =
-  r.len == 1 and r[0] == 27
 
 proc isShiftTab*(key: Rune): bool {.inline.} = key == ShiftTab
 proc isShiftTab*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isShiftTab

@@ -30,7 +30,7 @@ proc exitInsertMode(status: var EditorStatus) =
 proc execInsertModeCommand*(status: var EditorStatus, command: Runes) =
   let key = command[0]
 
-  if isCtrlC(key) or isEscKey(key) or isCtrlSquareBracketsRight(key):
+  if isCtrlC(key) or isEscKey(key):
     status.exitInsertMode
   elif isCtrlU(key):
     currentBufStatus.deleteBeforeCursorToFirstNonBlank(
