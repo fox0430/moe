@@ -532,7 +532,7 @@ proc isFilerModeCommand*(command: Runes): InputState =
        key == ord('N') or
        key == ord('v') or
        isEscKey(key) or
-       isControlJ(key) or
-       isControlK(key) or
+       isCtrlJ(key) or
+       isCtrlK(key) or
        isEnterKey(key):
          return InputState.Valid

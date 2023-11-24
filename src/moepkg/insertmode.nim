@@ -30,10 +30,9 @@ proc exitInsertMode(status: var EditorStatus) =
 proc execInsertModeCommand*(status: var EditorStatus, command: Runes) =
   let key = command[0]
 
-  if pressCtrlC or isEscKey(key) or isControlSquareBracketsRight(key):
+  if isCtrlC(key) or isEscKey(key):
     status.exitInsertMode
-    pressCtrlC = false
-  elif isControlU(key):
+  elif isCtrlU(key):
     currentBufStatus.deleteBeforeCursorToFirstNonBlank(
       currentMainWindowNode)
   elif isLeftKey(key):
@@ -52,12 +51,12 @@ proc execInsertModeCommand*(status: var EditorStatus, command: Runes) =
     currentMainWindowNode.moveToFirstOfLine
   elif isEndKey(key):
     currentBufStatus.moveToLastOfLine(currentMainWindowNode)
-  elif isDcKey(key):
+  elif isDeleteKey(key):
     currentBufStatus.deleteCharacter(
       currentMainWindowNode.currentLine,
       currentMainWindowNode.currentColumn,
       status.settings.standard.autoDeleteParen)
-  elif isBackspaceKey(key) or isControlH(key):
+  elif isBackspaceKey(key) or isCtrlH(key):
     currentBufStatus.keyBackspace(
       currentMainWindowNode,
       status.settings.standard.autoDeleteParen,
@@ -68,33 +67,33 @@ proc execInsertModeCommand*(status: var EditorStatus, command: Runes) =
       currentMainWindowNode,
       status.settings.standard.autoIndent,
       status.settings.standard.tabStop)
-  elif isTabKey(key) or isControlI(key):
+  elif isTabKey(key) or isCtrlI(key):
     insertTab(
       currentBufStatus,
       currentMainWindowNode,
       status.settings.standard.tabStop,
       status.settings.standard.autoCloseParen)
-  elif isControlE(key):
+  elif isCtrlE(key):
     currentBufStatus.insertCharacterBelowCursor(
       currentMainWindowNode)
-  elif isControlY(key):
+  elif isCtrlY(key):
     currentBufStatus.insertCharacterAboveCursor(
       currentMainWindowNode)
-  elif isControlW(key):
+  elif isCtrlW(key):
     const loop = 1
     currentBufStatus.deleteWordBeforeCursor(
       currentMainWindowNode,
       status.registers,
       loop,
       status.settings)
-  elif isControlU(key):
+  elif isCtrlU(key):
     currentBufStatus.deleteCharactersBeforeCursorInCurrentLine(
       currentMainWindowNode)
-  elif isControlT(key):
+  elif isCtrlT(key):
     currentBufStatus.indentInCurrentLine(
       currentMainWindowNode,
       status.settings.view.tabStop)
-  elif isControlD(key):
+  elif isCtrlD(key):
     currentBufStatus.unindentInCurrentLine(
       currentMainWindowNode,
       status.settings.view.tabStop)

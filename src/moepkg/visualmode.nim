@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, sequtils]
+import std/[strutils, sequtils, options]
 import editorstatus, ui, gapbuffer, unicodeext, windownode, movement, editor,
        bufferstatus, settings, registers, messages, commandline,
        independentutils, viewhighlight
@@ -441,47 +441,47 @@ proc getInsertBuffer(status: var EditorStatus): Runes =
   while true:
     status.update
 
-    var key = ERR_KEY
-    while key == ERR_KEY:
+    var key: Option[Rune]
+    while key.isNone:
       status.runBackgroundTasks
-      key = getKey(currentMainWindowNode)
+      key = currentMainWindowNode.getKey
 
-    if isEscKey(key):
+    if isEscKey(key.get):
       break
-    if isResizeKey(key):
+    if isResizeKey(key.get):
       status.resize
-    elif isEnterKey(key):
+    elif isEnterKey(key.get):
       currentBufStatus.keyEnter(
         currentMainWindowNode,
         status.settings.standard.autoIndent,
         status.settings.standard.tabStop)
       break
-    elif isDcKey(key):
+    elif isDeleteKey(key.get):
       currentBufStatus.deleteCharacter(
         currentMainWindowNode.currentLine,
         currentMainWindowNode.currentColumn,
         status.settings.standard.autoDeleteParen)
       break
-    elif isBackspaceKey(key):
+    elif isBackspaceKey(key.get):
       currentBufStatus.keyBackspace(
         currentMainWindowNode,
         status.settings.standard.autoDeleteParen,
         status.settings.standard.tabStop)
       if result.len > 0:
         result.delete(result.high)
-    elif isTabKey(key):
-      result.add(key)
+    elif isTabKey(key.get):
+      result.add key.get
       insertTab(
         currentBufStatus,
         currentMainWindowNode,
         status.settings.standard.tabStop,
         status.settings.standard.autoCloseParen)
     else:
-      result.add(key)
+      result.add key.get
       currentBufStatus.insertCharacter(
         currentMainWindowNode,
         status.settings.standard.autoCloseParen,
-        key)
+        key.get)
 
 proc enterInsertMode(status: var EditorStatus) =
   if currentBufStatus.isReadonly:
@@ -557,7 +557,7 @@ proc visualCommand(
     else:
       area.swapSelectedArea
 
-    if key == ord('y') or isDcKey(key):
+    if key == ord('y') or isDeleteKey(key):
       currentBufStatus.yankBuffer(
         status.registers,
         currentMainWindowNode,
@@ -650,7 +650,7 @@ proc visualBlockCommand(
 
     area.swapSelectedArea
 
-    if key == ord('y') or isDcKey(key):
+    if key == ord('y') or isDeleteKey(key):
       currentBufStatus.yankBufferBlock(
         status.registers,
         currentMainWindowNode,
@@ -705,7 +705,7 @@ proc isVisualModeCommand*(command: Runes): InputState =
     return InputState.Continue
   elif command.len == 1:
     let c = command[0]
-    if isControlC(c) or isEscKey(c) or isControlSquareBracketsRight(c) or
+    if isCtrlC(c) or isEscKey(c) or
        c == ord('h') or isLeftKey(c) or isBackspaceKey(c) or
        c == ord('l') or isRightKey(c) or
        c == ord('k') or isUpKey(c) or
@@ -720,7 +720,7 @@ proc isVisualModeCommand*(command: Runes): InputState =
        c == ord('g') or
        c == ord('{') or
        c == ord('}') or
-       c == ord('y') or isDcKey(c) or
+       c == ord('y') or isDeleteKey(c) or
        c == ord('x') or c == ord('d') or
        c == ord('>') or
        c == ord('<') or
@@ -736,7 +736,7 @@ proc execVisualModeCommand*(status: var EditorStatus, command: Runes) =
 
   let key = command[0]
 
-  if isControlC(key) or isEscKey(key) or isControlSquareBracketsRight(key):
+  if isCtrlC(key) or isEscKey(key):
     status.exitVisualMode
   elif key == ord('h') or isLeftKey(key) or isBackspaceKey(key):
     currentMainWindowNode.keyLeft

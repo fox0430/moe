@@ -91,8 +91,8 @@ proc isBufferManagerCommand*(command: Runes): InputState =
 
   if command.len == 1:
     let key = command[0]
-    if isControlK(key) or
-       isControlJ(key) or
+    if isCtrlK(key) or
+       isCtrlJ(key) or
        key == ord(':') or
        key == ord('k') or isUpKey(key) or
        key == ord('j') or isDownKey(key) or
@@ -104,9 +104,9 @@ proc isBufferManagerCommand*(command: Runes): InputState =
 proc execBufferManagerCommand*(status: var EditorStatus, command: Runes) =
   let key = command[0]
 
-  if isControlK(key):
+  if isCtrlK(key):
     status.moveNextWindow
-  elif isControlJ(key):
+  elif isCtrlJ(key):
     status.movePrevWindow
   elif key == ord(':'):
     status.changeMode(Mode.ex)

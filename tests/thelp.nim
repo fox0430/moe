@@ -19,14 +19,11 @@
 
 import std/[unittest, strutils, importutils]
 import moepkg/[unicodeext, gapbuffer, editorstatus, bufferstatus, ui]
-import pkg/[ncurses, results]
+import pkg/results
 
 import moepkg/helputils {.all.}
 import moepkg/help {.all.}
 import moepkg/commandline {.all.}
-
-let CONTROL_J = 10
-let CONTROL_K = 11
 
 proc initHelpMode(): EditorStatus =
   result = initEditorStatus()
@@ -46,15 +43,15 @@ suite "initHelpModeBuffer":
 suite "isHelpCommand":
   test "valid commands":
     let commands = @[
-      @[CONTROL_J.Rune],
-      @[CONTROL_K.Rune],
+      @[CtrlJ.Rune],
+      @[CtrlK.Rune],
       ":".toRunes,
-      "k".toRunes, @[KEY_UP.Rune],
-      "j".toRunes, @[KEY_DOWN.Rune],
-      "h".toRunes, @[KEY_LEFT.Rune], @[KEY_BACKSPACE.Rune],
-      "l".toRunes, @[KEY_RIGHT.Rune],
-      "0".toRunes, @[KEY_HOME.Rune],
-      "$".toRunes, @[KEY_END.Rune],
+      "k".toRunes, @[UpKey.Rune],
+      "j".toRunes, @[DownKey.Rune],
+      "h".toRunes, @[LeftKey.Rune], @[BackSpaceKey.Rune],
+      "l".toRunes, @[RightKey.Rune],
+      "0".toRunes, @[HomeKey.Rune],
+      "$".toRunes, @[EndKey.Rune],
       "G".toRunes,
       "gg".toRunes
     ]

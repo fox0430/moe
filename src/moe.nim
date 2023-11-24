@@ -139,7 +139,9 @@ proc initEditor(): EditorStatus =
   initOperationRegisters()
 
   disableControlC()
+  catchTerminalResize()
 
+  showCursor()
   setBlinkingBlockCursor()
 
 proc main() =

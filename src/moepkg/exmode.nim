@@ -990,10 +990,13 @@ proc listAllBufferCommand(status: var EditorStatus) =
 
   while true:
     status.update
-    setCursor(false)
-    let key = getKey(currentMainWindowNode)
-    if isResizeKey(key): status.resize
-    elif key == ERR_KEY: discard
+    hideCursor()
+
+    var key: Option[Rune]
+    while key.isNone:
+      key = getKey(currentMainWindowNode)
+
+    if isResizeKey(key.get): status.resize
     else: break
 
   status.settings.view.currentLineNumber = swapCurrentLineNumStting

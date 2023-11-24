@@ -226,7 +226,7 @@ proc executeOnExit(settings: EditorSettings, platform: Platforms) {.inline.} =
 
   # Without this, the cursor disappears in Windows terminal
   if platform ==  Platforms.wsl:
-    unhideCursor()
+    showCursor()
 
 # Save Ex command history to the file
 proc saveExCommandHistory(history: seq[Runes]) =
@@ -516,7 +516,7 @@ proc resize*(status: var EditorStatus) =
 
   if currentBufStatus.isCursor:
     # Disable the cursor while updating views.
-    setCursor(false)
+    hideCursor()
 
   # Get the current terminal from ui.terminalSize.
   let terminalSize = getTerminalSize()
@@ -629,7 +629,7 @@ proc resize*(status: var EditorStatus) =
   status.commandLine.resize(y, X, CommandLineWindowHeight, terminalWidth)
 
   if currentBufStatus.isCursor:
-    setCursor(true)
+    showCursor()
 
 proc updateStatusLine(status: var EditorStatus) =
   if not status.settings.statusLine.multipleStatusLine:
@@ -791,8 +791,8 @@ proc updateEditorViewConfig(view: var EditorView, settings: EditorSettings) =
 proc update*(status: var EditorStatus) =
   ## Update all views, highlighting, cursor, etc.
 
-  # Disable the cursor while updating.
-  setCursor(false)
+  # Hide the cursor while updating.
+  hideCursor()
 
   let settings = status.settings
 
@@ -952,7 +952,7 @@ proc update*(status: var EditorStatus) =
          status.recodingOperationRegister.get)
 
   if currentBufStatus.isCursor:
-    setCursor(true)
+    showCursor()
 
 # Update currentLine and currentColumn from status.lastPosition
 proc restoreCursorPostion*(
@@ -1186,16 +1186,12 @@ proc smoothScrollUpNumberOfLines(
 
       currentBufStatus.keyUp(currentMainWindowNode)
       status.update
-      currentMainWindowNode.setTimeout(delays[delayIndex])
 
-      let key = getKey(currentMainWindowNode)
-      if key != ERR_KEY:
-        return some(key)
+      let key = currentMainWindowNode.getKey(delays[delayIndex])
+      if key.isSome:
+        return key
 
       if i > destination + 1: delayIndex.inc
-
-    # Set default time out setting
-    currentMainWindowNode.setTimeout
 
 proc pageUp*(status: var EditorStatus) {.inline.} =
   status.scrollUpNumberOfLines(currentMainWindowNode.view.height)
@@ -1257,16 +1253,12 @@ proc smoothScrollDownNumberOfLines(
 
       currentBufStatus.keyDown(currentMainWindowNode)
       status.update
-      currentMainWindowNode.setTimeout(delays[delayIndex])
 
-      let key = getKey(currentMainWindowNode)
-      if key != ERR_KEY:
-        return some(key)
+      let key = currentMainWindowNode.getKey(delays[delayIndex])
+      if key.isSome:
+        return key
 
       if i < destination: delayIndex.inc
-
-    # Set default time out setting
-    currentMainWindowNode.setTimeout
 
 proc pageDown*(status: var EditorStatus) {.inline.} =
   status.scrollDownNumberOfLines(currentMainWindowNode.view.height)
@@ -1562,25 +1554,23 @@ proc runBackgroundTasks*(status: var EditorStatus) =
 proc getKeyFromMainWindow*(status: var EditorStatus): Rune =
   ## Get a key from the main current window and execute the event loop.
 
-  result = ERR_KEY
-  while isError(result):
-    result = currentMainWindowNode.getKey
-    if pressCtrlC:
-      pressCtrlC = false
-      return Rune(3)
+  var key: Option[Rune]
+  while key.isNone:
+    key = currentMainWindowNode.getKey
 
     status.runBackgroundTasks
     if status.bufStatus.isUpdate:
       status.update
 
+  return key.get
+
 proc getKeyFromCommandLine*(status: var EditorStatus): Rune =
   ## Get a key from the command line window and execute the event loop.
 
-  result = ERR_KEY
-  while isError(result):
-    result = status.commandLine.getKey
-    if pressCtrlC:
-      pressCtrlC = false
-      return Rune(3)
+  var key: Option[Rune]
+  while key.isNone:
+    key = status.commandLine.getKey
 
     status.runBackgroundTasks
+
+  return key.get

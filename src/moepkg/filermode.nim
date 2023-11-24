@@ -130,9 +130,9 @@ proc execFilerModeCommand*(status: var EditorStatus, command: Runes) =
       addMessageLog r.error
   elif key == ord('v'):
     status.openNewWinAndOpenFilerOrDir(currentFilerStatus)
-  elif isControlJ(key):
+  elif isCtrlJ(key):
     status.movePrevWindow
-  elif isControlK(key):
+  elif isCtrlK(key):
     status.moveNextWindow
   elif isEnterKey(key):
     let r = status.bufStatus.openFileOrDir(

@@ -17,12 +17,12 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strformat, osproc, strutils, terminal]
+import std/[strformat, osproc, strutils, terminal, options, tables, posix]
 import pkg/[ncurses, results]
 import unicodeext, independentutils
 
 when not defined unitTest:
-  import std/[posix, os]
+  import std/os
 
 type
   Attribute* {.pure.} = enum
@@ -62,23 +62,91 @@ type
     Cancel
 
   ColorMode* {.pure.} = enum
-    # No color support
     none = 1
-    # 8 colors
+      # No color support
     c8 = 8
-    # 16 colors
+      # 8 colors
     c16 = 16
-    # 256 colors
+      # 16 colors
     c256 = 256
-    # 24 bit colors (Truecolor)
+      # 256 colors
     c24bit = 16777216
+      # 24 bit colors (True color)
 
-const DefaultColorPair: int16 = 0
+  Key* = Rune
+
+const
+  DefaultColorPair*: int16 = 0
+
+  SIGWINCH: int = 28
+    # SIGWINCH signal
+
+  TabKey        = 9
+  EnterKey*     = 10
+  EscKey*       = 27 # or Ctrl-[
+  BackSpaceKey* = 127
+
+  CtrlA* = 1
+  CtrlB* = 2
+  CtrlC* = 3
+  CtrlD* = 4
+  CtrlE* = 5
+  CtrlF* = 6
+  CtrlG* = 7
+  CtrlH* = 8
+  CtrlI* = 9 # or Tab
+  CtrlJ* = 10
+  CtrlK* = 11
+  CtrlL* = 12
+  CtrlM* = 13 # or Enter
+  CtrlN* = 14
+  CtrlO* = 15
+  CtrlP* = 16
+  CtrlQ* = 17
+  CtrlR* = 18
+  CtrlS* = 19
+  CtrlT* = 20
+  CtrlU* = 21
+  CtrlV* = 22
+  CtrlW* = 23
+  CtrlX* = 24
+  CtrlY* = 25
+  CtrlZ* = 26
+
+  ShiftTab* = 353
+
+  ResizeKey*   = 1001
+  UpKey*       = 1002
+  DownKey*     = 1003
+  RightKey*    = 1004
+  LeftKey*     = 1005
+  EndKey*      = 1006
+  HomeKey*     = 1007
+  InsertKey*   = 1008
+  DeleteKey*   = 1009
+  PageUpKey*   = 1010
+  PageDownKey* = 1011
+
+  KeySequences = {
+    UpKey:       @["\eOA", "\e[A"],
+    DownKey:     @["\eOB", "\e[B"],
+    RightKey:    @["\eOC", "\e[C"],
+    LeftKey:     @["\eOD", "\e[D"],
+
+    EndKey:      @["\e[4~", "\e[8~", "\eOF", "\e[F"],
+    HomeKey:     @["\e[1~", "\e[7~", "\eOH", "\e[H"],
+    InsertKey:   @["\e[2~"],
+    DeleteKey:   @["\e[3~"],
+    PageUpKey:   @["\e[5~"],
+    PageDownKey: @["\e[6~"]
+  }.toTable
 
 var
-  # if press ctrl-c key, set true in setControlCHook()
-  # TODO: Rename
-  pressCtrlC* = false
+  ctrlCPressed* = false
+    # Set true if Ctrl-c key is pressed.
+
+  terminalResized* = false
+    # Set true if the terminal size is resized.
 
   terminalSize: Size
 
@@ -141,10 +209,15 @@ proc setTerminalDefaultCursor*() {.inline.} =
     # Don't change when running unit tests
     discard execShellCmd("printf '\x1B[0 q'")
 
-proc unhideCursor*() {.inline.} =
+proc showCursor*() {.inline.} =
   when not defined unitTest:
     # Don't change when running unit tests
     discard execShellCmd("printf '\e[?25h'")
+
+proc hideCursor*() {.inline.} =
+  when not defined unitTest:
+    # Don't change when running unit tests
+    discard execShellCmd("printf '\e[?25l'")
 
 proc changeCursorType*(cursorType: CursorType) =
   case cursorType
@@ -155,23 +228,22 @@ proc changeCursorType*(cursorType: CursorType) =
     of noneBlinkIbeam: setNoneBlinkingIbeamCursor()
 
 proc disableControlC*() {.inline.} =
-  setControlCHook(proc() {.noconv.} = pressCtrlC = true)
+  setControlCHook(proc() {.noconv.} = ctrlCPressed = true)
+
+proc catchTerminalResize*() {.inline.} =
+  onSignal(SIGWINCH.cint): terminalResized = true
 
 proc restoreTerminalModes*() {.inline.} = reset_prog_mode()
 
 proc saveCurrentTerminalModes*() {.inline.} = def_prog_mode()
 
-proc setCursor*(cursor: bool) =
+proc setCursor(cursor: bool) =
   if cursor == true: curs_set(1)      ## enable cursor
   elif cursor == false: curs_set(0)   ## disable cursor
 
 proc keyEcho*(keyecho: bool) =
   if keyecho == true: echo()
   elif keyecho == false: noecho()
-
-proc setTimeout*(win: var Window, time: int = 100) {.inline.} =
-  win.cursesWindow.wtimeout(cint(time))
-
 
 proc checkColorSupportedTerminal*(): ColorMode =
   ## Check how many colors are supported on the terminal and return ColorMode.
@@ -214,10 +286,10 @@ proc startUi*() =
 
     discard setlocale(LC_ALL, "")   # enable UTF-8
 
-    initscr()   ## start terminal control
-    cbreak()    ## enable cbreak mode
-    nonl()      ## exit new line mode and improve move cursor performance
-    setCursor(true)
+    initscr() # Start terminal control
+    cbreak() # Enable cbreak mode
+    nonl() # Exit new line mode and improve move cursor performance
+    setCursor(false) # Hide Ncurses cursor
 
     if can_change_color():
       # Enable Ncurses color
@@ -386,150 +458,237 @@ proc moveCursor*(win: Window, y, x: int) {.inline.} =
 
 proc deleteWindow*(win: var Window) {.inline.} = delwin(win.cursesWindow)
 
-const ERR_KEY* = Rune(ERR)
-const KEY_ESC* = 27
-var KEY_RESIZE {.header: "<ncurses.h>", importc: "KEY_RESIZE".}: int
-var KEY_DOWN {.header: "<ncurses.h>", importc: "KEY_DOWN".}: int
-var KEY_UP {.header: "<ncurses.h>", importc: "KEY_UP".}: int
-var KEY_LEFT {.header: "<ncurses.h>", importc: "KEY_LEFT".}: int
-var KEY_RIGHT {.header: "<ncurses.h>", importc: "KEY_RIGHT".}: int
-var KEY_HOME {.header: "<ncurses.h>", importc: "KEY_HOME".}: int
-var KEY_END {.header: "<ncurses.h>", importc: "KEY_END".}: int
-var KEY_BACKSPACE {.header: "<ncurses.h>", importc: "KEY_BACKSPACE".}: int
-var KEY_DC {.header: "<ncurses.h>", importc: "KEY_DC".}: int
-var KEY_ENTER {.header: "<ncurses.h>", importc: "KEY_ENTER".}: int
-var KEY_PPAGE {.header: "<ncurses.h>", importc: "KEY_PPAGE".}: int
-var KEY_NPAGE {.header: "<ncurses.h>", importc: "KEY_NPAGE".}: int
+proc parseKey(buffer: seq[int]): Option[Rune] =
+  if buffer.len == 0: return
 
-proc getKey*(win: Window): Rune =
-  var
-    s = ""
-    len = 0
+  if buffer.len == 1:
+    let ch = buffer[0]
+    case ch:
+      of 0, 29, 30, 31:
+        # Ignore
+        return none(Rune)
+      else:
+        return some(ch.toRune)
+  else:
+    block specialKey:
+      var input = ""
+      for ch in buffer: input &= ch.char
+      for keyCode, sequences in KeySequences.pairs:
+        for s in sequences:
+          if s == input:
+            return some(keyCode.Rune)
 
-  block getfirst:
-    let key = wgetch(win.cursesWindow)
+    block multiByteCharacter:
+      proc toString(s: seq[int]): string {.inline.} =
+        for n in s: result &= n.char
 
-    if Rune(key) == ERR_KEY:
-      return ERR_KEY
-    if not (key <= 0x7F or (0xC2 <= key and key <= 0xF0) or key == 0xF3):
-      return Rune(key)
+      let runes = buffer.toString.toRunes
+      # The runes length should be 1.
+      if runes.len == 1:
+        return some(runes[0])
 
-    s.add(char(key))
-    len = numberOfBytes(char(key))
+proc kbhit(timeout: int = 10): int =
+  ## Check stdin buffer using poll(2).
+  ##
+  ## poll(2) return POLLERR if it detects a signal.
+  ##
+  ## `timeout` is milliseconds.
 
-  for i in 0 ..< len-1: s.add(char(wgetch(win.cursesWindow)))
+  # Init pollFd.
+  var pollFd: TPollfd
+  pollFd.addr.zeroMem(sizeof(pollFd))
 
-  let runes = toRunes(s)
-  doAssert(runes.len == 1, fmt"runes length shoud be 1.")
-  return runes[0]
+  # Registers fd and events.
+  pollFd.fd = STDIN_FILENO
+  pollFd.events = POLLIN or POLLERR
 
-proc isEscKey*(key: Rune): bool {.inline.} = key == KEY_ESC
-proc isEscKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == KEY_ESC
+  # Wait stdin.
+  const FdLen = 1
+  return pollFd.addr.poll(FdLen.Tnfds, timeout)
 
-proc isResizeKey*(key: Rune): bool {.inline.} = key == KEY_RESIZE
-proc isResizeKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == KEY_RESIZE
+proc read(fd: int): Option[int] =
+  ## Read 1 byte.
 
-proc isDownKey*(key: Rune): bool {.inline.} = key == KEY_DOWN
-proc isDownKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == KEY_DOWN
+  const Size = 1
+  var ch: int
+  if read(fd.cint, ch.addr, Size) > 0: return some(ch)
 
-proc isUpKey*(key: Rune): bool {.inline.} = key == KEY_UP
-proc isUpKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == KEY_UP
+proc isSingle(ch: int): bool {.inline.} =
+  not (ch <= 0x7F or (0xC2 <= ch and ch <= 0xF0) or ch == 0xF3)
 
-proc isLeftKey*(key: Rune): bool {.inline.} = key == KEY_LEFT
-proc isLeftKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == KEY_LEFT
+proc getKey*(timeout: int = 100): Option[Rune] =
+  ## Non-blocking read from stdin.
+  ## timeout is milliseconds.
 
-proc isRightKey*(key: Rune): bool {.inline.} = key == KEY_RIGHT
-proc isRightKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == KEY_RIGHT
+  let readable = kbhit()
+  if readable > 0:
+    # Read a char from stdin.
 
-proc isHomeKey*(key: Rune): bool {.inline.} = key == KEY_HOME
-proc isHomeKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == KEY_HOME
+    const
+      Fd = STDIN_FILENO
+      Size = 1
 
-proc isEndKey*(key: Rune): bool {.inline.} = key == KEY_END
-proc isEndKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == KEY_END
+    let firstCh = Fd.read
+    if firstCh.isSome:
+      var buffer = @[firstCh.get]
 
-proc isDcKey*(key: Rune): bool {.inline.} = key == KEY_DC
-proc isDcKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == KEY_DC
+      if firstCh.get.isSingle:
+        return parseKey(buffer)
+      elif firstCh.get == EscKey:
+        const Timeout = 1
+        while kbhit(Timeout) > 0:
+          let ch = Fd.read
+          if ch.isSome: buffer.add ch.get
+        return parseKey(buffer)
+      else:
+        let length = firstCh.get.char.numberOfBytes
+        if length > 1:
+          for _ in 1 ..< length:
+            var ch: int
+            if read(Fd, ch.addr, Size) > 0: buffer.add ch
+        return parseKey(buffer)
+  elif readable < 0:
+    # Check signals.
+    if ctrlCPressed:
+      ctrlCPressed = false
+      return some(CtrlC.Rune)
+    elif terminalResized:
+      terminalResized = false
+      return some(ResizeKey.Rune)
 
-proc isPageUpKey*(key: Rune): bool {.inline.} = key == KEY_PPAGE or key == 2
-proc isPageUpKey*(r: Runes): bool {.inline.} =
-  r.len == 1 and (r[0] == KEY_PPAGE or r[0] == 2)
+proc getKeyBlocking*(): Rune {.inline.} =
+  ## Blocking read from stdin.
 
-proc isPageDownKey*(key: Rune): bool {.inline.} = key == KEY_NPAGE or key == 6
+  const Timeout = -1
+  return getKey(Timeout).get
+
+proc isEscKey*(key: Rune): bool {.inline.} = key == EscKey
+proc isEscKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == EscKey
+
+proc isResizeKey*(key: Rune): bool {.inline.} = key == ResizeKey
+proc isResizeKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == ResizeKey
+
+proc isUpKey*(key: Rune): bool {.inline.} = key == UpKey
+proc isUpKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == UpKey
+
+proc isDownKey*(key: Rune): bool {.inline.} = key == DownKey
+proc isDownKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == DownKey
+
+proc isRightKey*(key: Rune): bool {.inline.} = key == RightKey
+proc isRightKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == RightKey
+
+proc isLeftKey*(key: Rune): bool {.inline.} = key == LeftKey
+proc isLeftKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == LeftKey
+
+proc isHomeKey*(key: Rune): bool {.inline.} = key == HomeKey
+proc isHomeKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == HomeKey
+
+proc isEndKey*(key: Rune): bool {.inline.} = key == EndKey
+proc isEndKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == EndKey
+
+proc isInsertKey*(key: Rune): bool {.inline.} = key == InsertKey
+proc isInsertKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == InsertKey
+
+proc isDeleteKey*(key: Rune): bool {.inline.} = key == DeleteKey
+proc isDeleteKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == DeleteKey
+
+proc isPageUpKey*(key: Rune): bool {.inline.} = key == PageUpKey
+proc isPageUpKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == PageUpKey
+
+proc isPageDownKey*(key: Rune): bool {.inline.} = key == PageDownKey
 proc isPageDownKey*(r: Runes): bool {.inline.} =
-  r.len == 1 and (r[0] == KEY_NPAGE or r[0] == 6)
+  r.len == 1 and r[0] == PageDownKey
 
-proc isTabKey*(key: Rune): bool {.inline.} = key == ord('\t') or key == 9
-proc isTabKey*(r: Runes): bool {.inline.} =
-  r.len == 1 and (r[0] == ord('\t') or r[0] == 9)
+proc isTabKey*(key: Rune): bool {.inline.} = key == ord('\t') or key == TabKey
+proc isTabKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isTabKey
 
-proc isControlA*(key: Rune): bool {.inline.} = key == 1
-proc isControlA*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == 1
+proc isCtrlA*(key: Rune): bool {.inline.} = key == CtrlA
+proc isCtrlA*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlA
 
-proc isControlC*(key: Rune): bool {.inline.} = key == 3
-proc isControlC*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == 3
+proc isCtrlB*(key: Rune): bool {.inline.} = key == CtrlB
+proc isCtrlB*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlB
 
-proc isControlX*(key: Rune): bool {.inline.} = key == 24
-proc isControlX*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == 24
+proc isCtrlC*(key: Rune): bool {.inline.} = key == CtrlC
+proc isCtrlC*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlC
 
-proc isControlR*(key: Rune): bool {.inline.} = key == 18
-proc isControlR*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == 18
+proc isCtrlD*(key: Rune): bool {.inline.} = key == CtrlD
+proc isCtrlD*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlD
 
-proc isControlJ*(key: Rune): bool {.inline.} = key == 10
-proc isControlJ*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == 10
+proc isCtrlE*(key: Rune): bool {.inline.} = key == CtrlE
+proc isCtrlE*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlE
 
-proc isControlK*(key: Rune): bool {.inline.} = key == 11
-proc isControlK*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == 11
+proc isCtrlF*(key: Rune): bool {.inline.} = key == CtrlF
+proc isCtrlF*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlF
 
-proc isControlL*(key: Rune): bool {.inline.} = key == 12
-proc isControlL*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == 12
+proc isCtrlG*(key: Rune): bool {.inline.} = key == CtrlG
+proc isCtrlG*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlG
 
-proc isControlU*(key: Rune): bool {.inline.} = key == 21
-proc isControlU*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == 21
+proc isCtrlH*(key: Rune): bool {.inline.} = key == CtrlH
+proc isCtrlH*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlH
 
-proc isControlD*(key: Rune): bool {.inline.} = key == 4
-proc isControlD*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == 4
+proc isCtrlI*(key: Rune): bool {.inline.} = key == CtrlI
+proc isCtrlI*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlI
 
-proc isControlV*(key: Rune): bool {.inline.} = key == 22
-proc isControlV*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == 22
+proc isCtrlJ*(key: Rune): bool {.inline.} = key == CtrlJ
+proc isCtrlJ*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlJ
 
-proc isControlH*(key: Rune): bool {.inline.} = key == 263
-proc isControlH*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == 263
+proc isCtrlK*(key: Rune): bool {.inline.} = key == CtrlK
+proc isCtrlK*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlK
 
-proc isControlW*(key: Rune): bool {.inline.} = key == 23
-proc isControlW*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == 23
+proc isCtrlL*(key: Rune): bool {.inline.} = key == CtrlL
+proc isCtrlL*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlL
 
-proc isControlE*(key: Rune): bool {.inline.} = key == 5
-proc isControlE*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == 5
+proc isCtrlM*(key: Rune): bool {.inline.} = key == CtrlM
+proc isCtrlM*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlM
 
-proc isControlY*(key: Rune): bool {.inline.} = key == 25
-proc isControlY*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == 25
+proc isCtrlN*(key: Rune): bool {.inline.} = key == CtrlN
+proc isCtrlN*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlN
 
-proc isControlI*(key: Rune): bool {.inline.} = key == 9
-proc isControlI*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == 9
+proc isCtrlO*(key: Rune): bool {.inline.} = key == CtrlO
+proc isCtrlO*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlO
 
-proc isControlT*(key: Rune): bool {.inline.} = key == 20
-proc isControlT*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == 20
+proc isCtrlP*(key: Rune): bool {.inline.} = key == CtrlP
+proc isCtrlP*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlP
 
-proc isControlSquareBracketsRight*(key: Rune): bool {.inline.} =
-  # Ctrl - [
+proc isCtrlQ*(key: Rune): bool {.inline.} = key == CtrlQ
+proc isCtrlQ*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlQ
 
-  key == 27
+proc isCtrlR*(key: Rune): bool {.inline.} = key == CtrlR
+proc isCtrlR*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlR
 
-proc isControlSquareBracketsRight*(r: Runes): bool {.inline.} =
-  r.len == 1 and r[0] == 27
+proc isCtrlS*(key: Rune): bool {.inline.} = key == CtrlS
+proc isCtrlS*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlS
 
-proc isShiftTab*(key: Rune): bool {.inline.} = key == 353
-proc isShiftTab*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == 353
+proc isCtrlT*(key: Rune): bool {.inline.} = key == CtrlT
+proc isCtrlT*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlT
+
+proc isCtrlU*(key: Rune): bool {.inline.} = key == CtrlU
+proc isCtrlU*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlU
+
+proc isCtrlV*(key: Rune): bool {.inline.} = key == CtrlV
+proc isCtrlV*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlV
+
+proc isCtrlW*(key: Rune): bool {.inline.} = key == CtrlW
+proc isCtrlW*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlW
+
+proc isCtrlX*(key: Rune): bool {.inline.} = key == CtrlX
+proc isCtrlX*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlA
+
+proc isCtrlY*(key: Rune): bool {.inline.} = key == CtrlX
+proc isCtrlY*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlY
+
+proc isCtrlZ*(key: Rune): bool {.inline.} = key == CtrlZ
+proc isCtrlZ*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlZ
+
+proc isShiftTab*(key: Rune): bool {.inline.} = key == ShiftTab
+proc isShiftTab*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isShiftTab
 
 proc isBackspaceKey*(key: Rune): bool {.inline.} =
-  key == KEY_BACKSPACE or key == 8 or key == 127
+  key == BackSpaceKey or key == 8 or key == 127
 proc isBackspaceKey*(r: Runes): bool {.inline.} =
-  r.len == 1 and (r[0] == KEY_BACKSPACE or r[0] == 8 or r[0] == 127)
+  r.len == 1 and r[0].isBackspaceKey
 
 proc isEnterKey*(key: Rune): bool {.inline.} =
-  key == KEY_ENTER or key == ord('\n') or key == 13
+  key == EnterKey or key == ord('\n') or key == 13
 proc isEnterKey*(r: Runes): bool {.inline.} =
-  r.len == 1 and (r[0] == KEY_ENTER or r[0] == ord('\n') or r[0] == 13)
-
-proc isError*(key: Rune): bool = key == ERR_KEY
-proc isError*(r: Runes): bool = r.len == 1 and r[0] == ERR_KEY
+  r.len == 1 and r[0] == EnterKey or r[0].isEnterKey
