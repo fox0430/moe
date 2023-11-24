@@ -3,5 +3,5 @@
 Fixed
 .....
 
-- `#1942`_ ci: Fix CI for Unit test
+- `#1941`_ ci: Fix CI for Unit test
 
