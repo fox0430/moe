@@ -46,6 +46,7 @@ jobs:
   test:
     name: build ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     needs: before
     strategy:
       matrix:
@@ -63,16 +64,6 @@ jobs:
     - uses: jiro4989/setup-nim-action@v1.4.10
       with:
         nim-version: ${{ env.NIM_VERSION }}
-
-    - name: Install integration tools
-      run: |
-        # shpec
-        sudo sh -c "$(curl -L https://raw.githubusercontent.com/rylnd/shpec/master/install.sh)"
-        # abduco
-        wget https://github.com/martanne/abduco/releases/download/v0.6/abduco-0.6.tar.gz
-        tar -zxvf abduco-0.6.tar.gz
-        cd abduco-0.6
-        make && sudo make install
 
     - name: Install nimlsp
       run: |
