@@ -459,6 +459,8 @@ proc moveCursor*(win: Window, y, x: int) {.inline.} =
 proc deleteWindow*(win: var Window) {.inline.} = delwin(win.cursesWindow)
 
 proc parseKey(buffer: seq[int]): Option[Rune] =
+  if buffer.len == 0: return
+
   if buffer.len == 1:
     let ch = buffer[0]
     case ch:
@@ -504,31 +506,48 @@ proc kbhit(timeout: int = 10): int =
   const FdLen = 1
   return pollFd.addr.poll(FdLen.Tnfds, timeout)
 
+proc read(fd: int): Option[int] =
+  ## Read 1 byte.
+
+  const Size = 1
+  var ch: int
+  if read(fd.cint, ch.addr, Size) > 0: return some(ch)
+
+proc isSingle(ch: int): bool {.inline.} =
+  not (ch <= 0x7F or (0xC2 <= ch and ch <= 0xF0) or ch == 0xF3)
+
 proc getKey*(timeout: int = 100): Option[Rune] =
   ## Non-blocking read from stdin.
   ## timeout is milliseconds.
 
-  const Limit = 100
-  var
-    count = 0
-    buffer: seq[int]
-    readable = kbhit()
-  while readable > 0 and count < Limit:
-    # Read all from stdin.
+  let readable = kbhit()
+  if readable > 0:
+    # Read a char from stdin.
 
-    block read:
-      const
-        Fd = STDIN_FILENO
-        Size = 1
+    const
+      Fd = STDIN_FILENO
+      Size = 1
 
-      var ch: int
-      if read(Fd, ch.addr, Size) > 0: buffer.add ch
+    let firstCh = Fd.read
+    if firstCh.isSome:
+      var buffer = @[firstCh.get]
 
-    readable = kbhit()
-
-    count.inc
-
-  if readable < 0:
+      if firstCh.get.isSingle:
+        return parseKey(buffer)
+      elif firstCh.get == EscKey:
+        const Timeout = 1
+        while kbhit(Timeout) > 0:
+          let ch = Fd.read
+          if ch.isSome: buffer.add ch.get
+        return parseKey(buffer)
+      else:
+        let length = firstCh.get.char.numberOfBytes
+        if length > 1:
+          for _ in 1 ..< length:
+            var ch: int
+            if read(Fd, ch.addr, Size) > 0: buffer.add ch
+        return parseKey(buffer)
+  elif readable < 0:
     # Check signals.
     if ctrlCPressed:
       ctrlCPressed = false
@@ -536,9 +555,6 @@ proc getKey*(timeout: int = 100): Option[Rune] =
     elif terminalResized:
       terminalResized = false
       return some(ResizeKey.Rune)
-  else:
-    if buffer.len > 0:
-      return parseKey(buffer)
 
 proc getKeyBlocking*(): Rune {.inline.} =
   ## Blocking read from stdin.
