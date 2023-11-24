@@ -508,10 +508,12 @@ proc getKey*(timeout: int = 100): Option[Rune] =
   ## Non-blocking read from stdin.
   ## timeout is milliseconds.
 
+  const Limit = 100
   var
+    count = 0
     buffer: seq[int]
     readable = kbhit()
-  while readable > 0:
+  while readable > 0 and count < Limit:
     # Read all from stdin.
 
     block read:
@@ -523,6 +525,8 @@ proc getKey*(timeout: int = 100): Option[Rune] =
       if read(Fd, ch.addr, Size) > 0: buffer.add ch
 
     readable = kbhit()
+
+    count.inc
 
   if readable < 0:
     # Check signals.
