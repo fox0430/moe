@@ -115,17 +115,20 @@ const
 
   ShiftTab* = 353
 
-  ResizeKey*   = 1001
-  UpKey*       = 1002
-  DownKey*     = 1003
-  RightKey*    = 1004
-  LeftKey*     = 1005
-  EndKey*      = 1006
-  HomeKey*     = 1007
-  InsertKey*   = 1008
-  DeleteKey*   = 1009
-  PageUpKey*   = 1010
-  PageDownKey* = 1011
+  ResizeKey*           = 1001
+  UpKey*               = 1002
+  DownKey*             = 1003
+  RightKey*            = 1004
+  LeftKey*             = 1005
+  EndKey*              = 1006
+  HomeKey*             = 1007
+  InsertKey*           = 1008
+  DeleteKey*           = 1009
+  PageUpKey*           = 1010
+  PageDownKey*         = 1011
+  PasteKey*            = 1012
+  BracketedPasteStart* = 1013
+  BracketedPasteEnd*   = 1014
 
   KeySequences = {
     UpKey:       @["\eOA", "\e[A"],
@@ -138,7 +141,10 @@ const
     InsertKey:   @["\e[2~"],
     DeleteKey:   @["\e[3~"],
     PageUpKey:   @["\e[5~"],
-    PageDownKey: @["\e[6~"]
+    PageDownKey: @["\e[6~"],
+
+    BracketedPasteStart: @["\e[200~"],
+    BracketedPasteEnd: @["\e[201~"]
   }.toTable
 
 var
@@ -147,6 +153,8 @@ var
 
   terminalResized* = false
     # Set true if the terminal size is resized.
+
+  pasteBuffer*: seq[Runes]
 
   terminalSize: Size
 
@@ -278,6 +286,9 @@ proc checkColorSupportedTerminal*(): ColorMode =
         of 256: return ColorMode.c256
         else: return ColorMode.none
 
+proc enableBracketedPasteMode() {.inline.} =
+  discard execShellCmd("printf '\x1b[?2004h'")
+
 proc startUi*() =
   # Not start when running unit tests
   when not defined unitTest:
@@ -301,6 +312,8 @@ proc startUi*() =
     erase()
     keyEcho(false)
     set_escdelay(25)
+
+    enableBracketedPasteMode()
 
 proc exitUi*() {.inline.} = endwin()
 
@@ -458,6 +471,17 @@ proc moveCursor*(win: Window, y, x: int) {.inline.} =
 
 proc deleteWindow*(win: var Window) {.inline.} = delwin(win.cursesWindow)
 
+proc toString(s: seq[int]): string {.inline.} =
+  for n in s: result &= n.char
+
+proc isBracketedPaste(s: string): bool {.inline.} =
+  template startSeq: string = KeySequences[BracketedPasteStart][0]
+  template endSeq: string = KeySequences[BracketedPasteEnd][0]
+
+  s.startsWith(startSeq) and
+  s.endsWith(endSeq) and
+  s.len > startSeq.len + endSeq.len
+
 proc parseKey(buffer: seq[int]): Option[Rune] =
   if buffer.len == 0: return
 
@@ -475,13 +499,18 @@ proc parseKey(buffer: seq[int]): Option[Rune] =
       for ch in buffer: input &= ch.char
       for keyCode, sequences in KeySequences.pairs:
         for s in sequences:
-          if s == input:
-            return some(keyCode.Rune)
+          case keyCode:
+            of BracketedPasteStart:
+              if input.isBracketedPaste:
+                let
+                  first = KeySequences[BracketedPasteStart][0].len
+                  last = input.high - KeySequences[BracketedPasteEnd][0].len
+                pasteBuffer = input[first .. last].toRunes.splitLines
+                return some(PasteKey.Rune)
+            else:
+              if s == input: return some(keyCode.Rune)
 
     block multiByteCharacter:
-      proc toString(s: seq[int]): string {.inline.} =
-        for n in s: result &= n.char
-
       let runes = buffer.toString.toRunes
       # The runes length should be 1.
       if runes.len == 1:
@@ -567,6 +596,19 @@ proc isEscKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == EscKey
 
 proc isResizeKey*(key: Rune): bool {.inline.} = key == ResizeKey
 proc isResizeKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == ResizeKey
+
+proc isBracketedPasteStart*(key: Rune): bool {.inline.} =
+  key == BracketedPasteStart
+proc isBracketedPasteStart*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0].isBracketedPasteStart
+
+proc isBracketedPasteEnd*(key: Rune): bool {.inline.} =
+  key == BracketedPasteEnd
+proc isBracketedPasteEnd*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0].isBracketedPasteEnd
+
+proc isPasteKey*(key: Rune): bool {.inline.} = key == PasteKey
+proc isPasteKey*(r: Runes): bool {.inline.} =  r.len == 1 and r[0] == PasteKey
 
 proc isUpKey*(key: Rune): bool {.inline.} = key == UpKey
 proc isUpKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == UpKey

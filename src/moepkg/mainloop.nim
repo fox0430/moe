@@ -24,7 +24,7 @@ import editorstatus, bufferstatus, windownode, unicodeext, gapbuffer, ui,
        exmode, replacemode, filermode, buffermanager, logviewer, help,
        recentfilemode, quickrun, backupmanager, diffviewer, configmode,
        debugmode, commandline, search, commandlineutils, popupwindow,
-       filermodeutils, messages, registers, exmodeutils
+       filermodeutils, messages, registers, exmodeutils, editor
 
 proc invokeCommand(
   currentMode: Mode,
@@ -243,6 +243,31 @@ proc execEditorCommand(status: var EditorStatus, command: Runes): Option[Rune] =
   else:
     return status.execCommand(command)
 
+proc insertPasteBuffer(status: var EditorStatus) =
+  ## Insert text to the buffer if insert mode or command line mode.
+
+  if pasteBuffer == @[ru""]: return
+
+  if currentBufStatus.isInsertMode:
+    let isLine = pasteBuffer.len > 1
+    status.registers.addRegister(pasteBuffer, isLine, status.settings)
+    currentBufStatus.pasteAfterCursor(
+      currentMainWindowNode,
+      status.registers.noNameRegisters)
+  elif currentBufStatus.isExMode:
+    for lineNum, line in pasteBuffer:
+      status.commandLine.insert(line)
+      if lineNum < pasteBuffer.high:
+        # Not Newline
+        status.commandLine.insert(ru"\n")
+  elif currentBufStatus.isSearchMode:
+    for lineNum, line in pasteBuffer:
+      status.commandLine.insert(line)
+      if lineNum < pasteBuffer.high:
+        # Not Newline
+        status.commandLine.insert(ru"\n")
+    status.searchHistory[^1] = status.commandLine.buffer.replaceToNewLines
+
 proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
   ## Get keys and update view.
   ## Return the key typed during command execution if needed.
@@ -332,6 +357,9 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
     if isResizeKey(key):
       updateTerminalSize()
       status.resize
+      continue
+    elif isPasteKey(key):
+      status.insertPasteBuffer
       continue
 
     if exCommandHistoryIndex.isResetExCommandHistoryIndex(key):
@@ -511,6 +539,9 @@ proc editorMainLoop*(status: var EditorStatus) =
     if isResizeKey(key):
       updateTerminalSize()
       status.resize
+      continue
+    elif isPasteKey(key):
+      status.insertPasteBuffer
       continue
 
     command.add key
