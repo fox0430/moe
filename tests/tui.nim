@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, strutils, sequtils]
+import std/[unittest, options, sequtils]
 import pkg/results
 import moepkg/unicodeext
 

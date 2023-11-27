@@ -287,7 +287,9 @@ proc checkColorSupportedTerminal*(): ColorMode =
         else: return ColorMode.none
 
 proc enableBracketedPasteMode() {.inline.} =
-  discard execShellCmd("printf '\x1b[?2004h'")
+  when not defined unitTest:
+      # Don't start when running unit tests
+    discard execShellCmd("printf '\x1b[?2004h'")
 
 proc startUi*() =
   # Not start when running unit tests
