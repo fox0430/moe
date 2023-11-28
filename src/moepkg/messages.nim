@@ -33,7 +33,13 @@ proc writeMessageOnCommandLine*(
     commandLine.writeMessageOnCommandLine(message, EditorColorPairIndex.commandLine)
 
 proc writeError*(c: var CommandLine, message: string) =
+  # TODO: Add "Error:" prefix.
   c.writeMessageOnCommandLine(message, EditorColorPairIndex.errorMessage)
+  addMessageLog message
+
+proc writeWarn*(c: var CommandLine, message: string) =
+  let mess = "WARN: " & message
+  c.writeMessageOnCommandLine(mess, EditorColorPairIndex.warnMessage)
   addMessageLog message
 
 proc writeNoWriteError*(commandLine: var CommandLine) =
@@ -306,8 +312,8 @@ proc writeCurrentCharInfo*(commandLine: var CommandLine, r: Rune) {.inline.} =
   commandLine.writeMessageOnCommandLine(mess)
 
 proc writeReadonlyModeWarning*(commandLine: var CommandLine) {.inline.} =
-  const Mess = "Warning: Readonly mode"
-  commandLine.writeMessageOnCommandLine(Mess, EditorColorPairIndex.errorMessage)
+  const Mess = "Readonly mode"
+  commandLine.writeWarn(Mess)
 
 proc writeManualCommandError*(
   commandLine: var CommandLine,
@@ -335,9 +341,8 @@ proc writeGitInfoUpdateError*(commandLine: var CommandLine, message: string) =
   addMessageLog mess
 
 proc writeBufferChangedWarn*(commandLine: var CommandLine, filename: Runes) =
-  let mess = fmt"Warn: File {filename} has changed and the buffer was changed in Moe as well."
-  commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
-  addMessageLog mess
+  let mess = fmt"File {filename} has changed and the buffer was changed in Moe as well."
+  commandLine.writeWarn(mess)
 
 proc writeLspInitializeError*(
   commandLine: var CommandLine,
@@ -356,6 +361,5 @@ proc writeLspHoverError*(commandLine: var CommandLine, errorMessage: string) =
   addMessageLog mess
 
 proc writePasteIgnoreWarn*(commandLine: var CommandLine) =
-  const Mess = "WARN: Paste is ignored in this mode"
-  commandLine.writeMessageOnCommandLine(Mess, EditorColorPairIndex.errorMessage)
-  addMessageLog Mess
+  const Mess = "Paste is ignored in this mode"
+  commandLine.writeWarn(Mess)

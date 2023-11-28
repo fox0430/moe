@@ -269,6 +269,9 @@ const TomlStr = """
   errorMessage = "#000000"
   errorMessageBg = "#000000"
 
+  warnMessage = "#000000"
+  warnMessageBg = "#000000"
+
   searchResult = "#000000"
   searchResultBg = "#000000"
 

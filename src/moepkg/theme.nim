@@ -236,6 +236,15 @@ const
         index: EditorColorIndex.errorMessageBg,
         rgb: "#000000".hexToRgb.get)),
 
+    # Warning message
+    EditorColorPairIndex.warnMessage: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.warnMessage,
+        rgb: "#ffff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.warnMessageBg,
+        rgb: "#000000".hexToRgb.get)),
+
     # Search result highlighting
     EditorColorPairIndex.searchResult: ColorPair(
       foreground: Color(
@@ -882,6 +891,15 @@ const
         index: EditorColorIndex.errorMessageBg,
         rgb: "#ffffff".hexToRgb.get)),
 
+    # Warning message
+    EditorColorPairIndex.warnMessage: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.warnMessage,
+        rgb: "#ffff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.warnMessageBg,
+        rgb: "#ffffff".hexToRgb.get)),
+
     # Search result highlighting
     EditorColorPairIndex.searchResult: ColorPair(
       foreground: Color(
@@ -1526,6 +1544,15 @@ const
         rgb: "#ff0000".hexToRgb.get),
       background: Color(
         index: EditorColorIndex.errorMessageBg,
+        rgb: "#000000".hexToRgb.get)),
+
+    # Warning message
+    EditorColorPairIndex.warnMessage: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.warnMessage,
+        rgb: "#ffff00".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.warnMessageBg,
         rgb: "#000000".hexToRgb.get)),
 
     # Search result highlighting
