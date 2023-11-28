@@ -378,12 +378,17 @@ type
     tabBg
     currentTab
     currentTabBg
-    # command bar
+
+    # command line
     commandLine
     commandLineBg
     # error message
     errorMessage
     errorMessageBg
+    # warning message
+    warnMessage
+    warnMessageBg
+
     # search result highlighting
     searchResult
     searchResultBg
@@ -554,10 +559,14 @@ type
     tab
     # tab line
     currentTab
-    # command bar
+
+    # command line
     commandLine
     # error message
     errorMessage
+    # warning message
+    warnMessage
+
     # search result highlighting
     searchResult
     # selected area in visual mode

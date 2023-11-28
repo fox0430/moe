@@ -1049,6 +1049,14 @@ errorMessage
 errorMessageBg
 ```
 
+Character color of warning messages
+```
+warnMessage
+```
+```
+warnMessageBg
+```
+
 Character color of search result highlighting
 ```
 searchResult
