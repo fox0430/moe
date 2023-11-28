@@ -21,9 +21,9 @@ import std/[unittest, os, oids, options]
 import moepkg/[editorstatus, cmdlineoption, bufferstatus, unicodeext, gapbuffer,
                windownode, settings]
 
-import moe {.all.}
+import moepkg/init {.all.}
 
-suite "moe: addBufferStatus":
+suite "init: addBufferStatus":
   test "No args":
     var status = initEditorStatus()
     const ParsedList = CmdParsedList()
