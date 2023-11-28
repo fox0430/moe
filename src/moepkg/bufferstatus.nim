@@ -70,6 +70,7 @@ type
     isGitUpdate*: bool
     changedLines*: seq[Diff]
     syntaxCheckResults*: seq[SyntaxError]
+    isPasteMode*: bool
 
 var
   countAddedBuffer = 0

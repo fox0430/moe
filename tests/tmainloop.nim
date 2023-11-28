@@ -19,9 +19,12 @@
 
 import std/[unittest, tables, options]
 import pkg/results
-import moepkg/[unicodeext, bufferstatus, gapbuffer, editorstatus, ui, windownode]
+import moepkg/[unicodeext, bufferstatus, gapbuffer, editorstatus, ui,
+               windownode, commandLine]
 
 import moepkg/registers {.all.}
+import moepkg/backupmanager {.all.}
+import moepkg/exmode {.all.}
 import moepkg/mainloop {.all.}
 
 proc resize(status: var EditorStatus, h, w: int) =
@@ -287,3 +290,260 @@ suite "mainloop: execEditorCommand":
     check status.execEditorCommand(Command).isNone
 
     check currentBufStatus.buffer.toSeqRunes == @[""].toSeqRunes
+
+suite "mainloop: insertPasteBuffer":
+  test "Ignore":
+    for mode in Mode:
+      case mode:
+        of insert, replace, ex, searchForward, searchBackward:
+          continue
+        else:
+          var status = initEditorStatus()
+
+          case mode:
+            of filer:
+              discard status.addNewBufferInCurrentWin("./", mode).get
+            of backup:
+              discard status.addNewBufferInCurrentWin().get
+              status.startBackupManager
+            of diff:
+              discard status.addNewBufferInCurrentWin().get
+              status.openDiffViewer("")
+            else:
+              discard status.addNewBufferInCurrentWin(mode).get
+
+          currentBufStatus.buffer = @[""].toSeqRunes.initGapBuffer
+
+          status.resize(100, 100)
+          status.update
+
+          let beforeBuffer = currentBufStatus.buffer
+
+          const PasteBuffer = @["abc"].toSeqRunes
+          status.insertPasteBuffer(PasteBuffer)
+
+          check currentBufStatus.buffer == beforeBuffer
+
+  test "Insert mode":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin(Mode.insert).get
+    currentBufStatus.buffer = @[""].toSeqRunes.initGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const PasteBuffer = @["abc"].toSeqRunes
+    status.insertPasteBuffer(PasteBuffer)
+
+    check currentBufStatus.buffer.toSeqRunes == @["abc"].toSeqRunes
+
+    check status.registers.noNameRegisters == Register(
+      name: "",
+      buffer: @["abc"].toSeqRunes,
+      isLine: false)
+
+  test "Insert mode 2":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin(Mode.insert).get
+    currentBufStatus.buffer = @["abc"].toSeqRunes.initGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const PasteBuffer = @["xyz"].toSeqRunes
+    status.insertPasteBuffer(PasteBuffer)
+
+    check currentBufStatus.buffer.toSeqRunes == @["axyzbc"].toSeqRunes
+
+    check status.registers.noNameRegisters == Register(
+      name: "",
+      buffer: @["xyz"].toSeqRunes,
+      isLine: false)
+
+  test "Insert mode 3":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin(Mode.insert).get
+    currentBufStatus.buffer = @[""].toSeqRunes.initGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const PasteBuffer = @["a", "b", "c"].toSeqRunes
+    status.insertPasteBuffer(PasteBuffer)
+
+    check currentBufStatus.buffer.toSeqRunes == @["", "a", "b", "c"].toSeqRunes
+
+    check status.registers.noNameRegisters == Register(
+      name: "",
+      buffer: @["a", "b", "c"].toSeqRunes,
+      isLine: true)
+
+  test "Replace mode":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin(Mode.replace).get
+    currentBufStatus.buffer = @[""].toSeqRunes.initGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const PasteBuffer = @["abc"].toSeqRunes
+    status.insertPasteBuffer(PasteBuffer)
+
+    check currentBufStatus.buffer.toSeqRunes == @["abc"].toSeqRunes
+
+    check status.registers.noNameRegisters == Register(
+      name: "",
+      buffer: @["abc"].toSeqRunes,
+      isLine: false)
+
+  test "Replace mode 2":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin(Mode.replace).get
+    currentBufStatus.buffer = @["abc"].toSeqRunes.initGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const PasteBuffer = @["xyz"].toSeqRunes
+    status.insertPasteBuffer(PasteBuffer)
+
+    check currentBufStatus.buffer.toSeqRunes == @["xyz"].toSeqRunes
+
+    check status.registers.noNameRegisters == Register(
+      name: "",
+      buffer: @["xyz"].toSeqRunes,
+      isLine: false)
+
+  test "Replace mode 3":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin(Mode.replace).get
+    currentBufStatus.buffer = @["abcd"].toSeqRunes.initGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const PasteBuffer = @["x", "y", "z"].toSeqRunes
+    status.insertPasteBuffer(PasteBuffer)
+
+    check currentBufStatus.buffer.toSeqRunes == @["x", "y", "zd"].toSeqRunes
+
+    check status.registers.noNameRegisters == Register(
+      name: "",
+      buffer: @["x", "y", "z"].toSeqRunes,
+      isLine: true)
+
+  test "Ex mode":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin(Mode.ex).get
+
+    status.resize(100, 100)
+    status.update
+
+    const PasteBuffer = @["abc"].toSeqRunes
+    status.insertPasteBuffer(PasteBuffer)
+
+    check status.commandLine.buffer == ru"abc"
+
+  test "Ex mode 2":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin(Mode.ex).get
+    status.commandLine.buffer = ru"abc"
+    status.commandLine.moveEnd
+
+    status.resize(100, 100)
+    status.update
+
+    const PasteBuffer = @["xyz"].toSeqRunes
+    status.insertPasteBuffer(PasteBuffer)
+
+    check status.commandLine.buffer == ru"abcxyz"
+
+  test "Ex mode 3":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin(Mode.ex).get
+    status.commandLine.buffer = ru"abc"
+    status.commandLine.moveEnd
+
+    status.resize(100, 100)
+    status.update
+
+    const PasteBuffer = @["xyz"].toSeqRunes
+    status.insertPasteBuffer(PasteBuffer)
+
+    check status.commandLine.buffer == ru"abcxyz"
+
+  test "Ex mode 4":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin(Mode.ex).get
+    status.commandLine.buffer = ru""
+    status.commandLine.moveEnd
+
+    status.resize(100, 100)
+    status.update
+
+    const PasteBuffer = @["a", "b", "c"].toSeqRunes
+    status.insertPasteBuffer(PasteBuffer)
+
+    check status.commandLine.buffer == ru"a\nb\nc"
+
+  test "Search mode":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin(Mode.searchForward).get
+
+    status.searchHistory = @[ru""]
+
+    status.resize(100, 100)
+    status.update
+
+    const PasteBuffer = @["abc"].toSeqRunes
+    status.insertPasteBuffer(PasteBuffer)
+
+    check status.commandLine.buffer == ru"abc"
+
+  test "Search mode 2":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin(Mode.searchForward).get
+    status.commandLine.buffer = ru"abc"
+    status.commandLine.moveEnd
+
+    status.searchHistory = @[ru""]
+
+    status.resize(100, 100)
+    status.update
+
+    const PasteBuffer = @["xyz"].toSeqRunes
+    status.insertPasteBuffer(PasteBuffer)
+
+    check status.commandLine.buffer == ru"abcxyz"
+
+  test "Search mode 3":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin(Mode.searchForward).get
+    status.commandLine.buffer = ru"abc"
+    status.commandLine.moveEnd
+
+    status.searchHistory = @[ru""]
+
+    status.resize(100, 100)
+    status.update
+
+    const PasteBuffer = @["xyz"].toSeqRunes
+    status.insertPasteBuffer(PasteBuffer)
+
+    check status.commandLine.buffer == ru"abcxyz"
+
+  test "Search mode 4":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin(Mode.searchForward).get
+    status.commandLine.buffer = ru""
+    status.commandLine.moveEnd
+
+    status.searchHistory = @[ru""]
+
+    status.resize(100, 100)
+    status.update
+
+    const PasteBuffer = @["a", "b", "c"].toSeqRunes
+    status.insertPasteBuffer(PasteBuffer)
+
+    check status.commandLine.buffer == ru"a\nb\nc"

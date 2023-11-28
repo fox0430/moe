@@ -24,7 +24,7 @@ import editorstatus, bufferstatus, windownode, unicodeext, gapbuffer, ui,
        exmode, replacemode, filermode, buffermanager, logviewer, help,
        recentfilemode, quickrun, backupmanager, diffviewer, configmode,
        debugmode, commandline, search, commandlineutils, popupwindow,
-       filermodeutils, messages, registers, exmodeutils
+       filermodeutils, messages, registers, exmodeutils, editor
 
 proc invokeCommand(
   currentMode: Mode,
@@ -243,6 +243,50 @@ proc execEditorCommand(status: var EditorStatus, command: Runes): Option[Rune] =
   else:
     return status.execCommand(command)
 
+proc insertPasteBuffer(status: var EditorStatus, pasteBuffer: seq[Runes]) =
+  ## Insert text to the buffer if Insert mode, Replace mode and Command line
+  ## mode (Ex and Search).
+
+  if currentBufStatus.isCommandLineMode:
+    # Command line modes (Ex, Search).
+
+    for lineNum, line in pasteBuffer:
+      status.commandLine.insert(line)
+      if lineNum < pasteBuffer.high:
+        # Insert "\n". Don't insert '\n' (Newline).
+        status.commandLine.insert(ru"\n")
+
+    if currentBufStatus.isSearchMode:
+      # Assign the buffer to the latest search history.
+      status.searchHistory[^1] = status.commandLine.buffer.replaceToNewLines
+  else:
+    # File edit modes (Insert, Replace).
+
+    # Assign the pasteBuffer to the no name register.
+    let isLine = pasteBuffer.len > 1
+    status.registers.addRegister(pasteBuffer, isLine, status.settings)
+
+    if currentBufStatus.isInsertMode:
+      currentBufStatus.pasteAfterCursor(
+        currentMainWindowNode,
+        status.registers.noNameRegisters)
+    elif currentBufStatus.isReplaceMode:
+      for lineNum, line in pasteBuffer:
+        for r in line:
+          currentBufStatus.replaceCurrentCharAndMoveToRight(
+            currentMainWindowNode,
+            status.settings.standard.autoCloseParen,
+            r)
+        if lineNum < pasteBuffer.high:
+          # Insert a new line and move to the next line.
+          currentBufStatus.keyEnter(
+            currentMainWindowNode,
+            status.settings.standard.autoIndent,
+            status.settings.standard.tabStop)
+          currentMainWindowNode.currentColumn = 0
+    else:
+      status.commandLine.writePasteIgnoreWarn
+
 proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
   ## Get keys and update view.
   ## Return the key typed during command execution if needed.
@@ -332,6 +376,10 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
     if isResizeKey(key):
       updateTerminalSize()
       status.resize
+      continue
+    elif isPasteKey(key):
+      let pasteBuffer = getPasteBuffer()
+      if pasteBuffer.isSome: status.insertPasteBuffer(pasteBuffer.get)
       continue
 
     if exCommandHistoryIndex.isResetExCommandHistoryIndex(key):
@@ -511,6 +559,10 @@ proc editorMainLoop*(status: var EditorStatus) =
     if isResizeKey(key):
       updateTerminalSize()
       status.resize
+      continue
+    elif isPasteKey(key):
+      let pasteBuffer = getPasteBuffer()
+      if pasteBuffer.isSome: status.insertPasteBuffer(pasteBuffer.get)
       continue
 
     command.add key

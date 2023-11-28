@@ -2066,3 +2066,28 @@ proc modifyNumberTextUnderCurosr*(
 
     inc(bufStatus.countChange)
     bufStatus.isUpdate = true
+
+proc replaceCurrentCharAndMoveToRight*(
+  bufStatus: var BufferStatus,
+  windowNode: var WindowNode,
+  isAutoDeleteParen: bool,
+  r: Rune) =
+    ## Repace the current chracter or insert the character and move to the
+    ## right.
+
+    if windowNode.currentColumn < bufStatus.buffer[windowNode.currentLine].len:
+      let
+        currentLine = windowNode.currentLine
+        currentColumn = windowNode.currentColumn
+        oldLine = bufStatus.buffer[currentLine]
+      var newLine = bufStatus.buffer[currentLine]
+      newLine[currentColumn] = r
+
+      if oldLine != newLine: bufStatus.buffer[currentLine] = newLine
+    else:
+      bufStatus.insertCharacter(windowNode, isAutoDeleteParen, r)
+
+    bufStatus.keyRight(windowNode)
+
+    bufStatus.countChange.inc
+    bufStatus.isUpdate = true

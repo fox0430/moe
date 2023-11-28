@@ -155,18 +155,22 @@ proc insert*(commandLine: var CommandLine, r: Rune) {.inline.} =
   ## Insert text to the command line buffer and move to Right.
 
   commandLine.insert(r, commandLine.bufferPosition.x)
+  commandLine.isUpdate = true
 
 proc insert*(commandLine: var CommandLine, runes: Runes, pos: int) =
   ## Insert text to the command line buffer and move to Right.
 
   commandLine.buffer.insert(runes, pos)
   if commandLine.bufferPosition.x < commandLine.buffer.len:
-    commandLine.bufferPosition.x.inc
+    commandLine.bufferPosition.x += runes.len
+
+  commandLine.isUpdate = true
 
 proc insert*(commandLine: var CommandLine, runes: Runes) {.inline.} =
   ## Insert text to the command line buffer and move to Right.
 
   commandLine.insert(runes, commandLine.bufferPosition.x)
+  commandLine.isUpdate = true
 
 proc write*(commandLine: var CommandLine, runes: Runes) =
   ## Clear and show messages.
