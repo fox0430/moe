@@ -284,6 +284,8 @@ proc insertPasteBuffer(status: var EditorStatus, pasteBuffer: seq[Runes]) =
             status.settings.standard.autoIndent,
             status.settings.standard.tabStop)
           currentMainWindowNode.currentColumn = 0
+    else:
+      status.commandLine.writePasteIgnoreWarn
 
 proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
   ## Get keys and update view.

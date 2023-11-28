@@ -354,3 +354,8 @@ proc writeLspHoverError*(commandLine: var CommandLine, errorMessage: string) =
   let mess = fmt"lsp: hover failed: {errorMessage}"
   commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
   addMessageLog mess
+
+proc writePasteIgnoreWarn*(commandLine: var CommandLine) =
+  const Mess = "WARN: Paste is ignored in this mode"
+  commandLine.writeMessageOnCommandLine(Mess, EditorColorPairIndex.errorMessage)
+  addMessageLog Mess
