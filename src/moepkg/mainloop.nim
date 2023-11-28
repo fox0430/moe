@@ -243,30 +243,47 @@ proc execEditorCommand(status: var EditorStatus, command: Runes): Option[Rune] =
   else:
     return status.execCommand(command)
 
-proc insertPasteBuffer(status: var EditorStatus) =
-  ## Insert text to the buffer if insert mode or command line mode.
+proc insertPasteBuffer(status: var EditorStatus, pasteBuffer: seq[Runes]) =
+  ## Insert text to the buffer if Insert mode, Replace mode and Command line
+  ## mode (Ex and Search).
 
-  if pasteBuffer == @[ru""]: return
+  if currentBufStatus.isCommandLineMode:
+    # Command line modes (Ex, Search).
 
-  if currentBufStatus.isInsertMode:
+    for lineNum, line in pasteBuffer:
+      status.commandLine.insert(line)
+      if lineNum < pasteBuffer.high:
+        # Insert "\n". Don't insert '\n' (Newline).
+        status.commandLine.insert(ru"\n")
+
+    if currentBufStatus.isSearchMode:
+      # Assign the buffer to the latest search history.
+      status.searchHistory[^1] = status.commandLine.buffer.replaceToNewLines
+  else:
+    # File edit modes (Insert, Replace).
+
+    # Assign the pasteBuffer to the no name register.
     let isLine = pasteBuffer.len > 1
     status.registers.addRegister(pasteBuffer, isLine, status.settings)
-    currentBufStatus.pasteAfterCursor(
-      currentMainWindowNode,
-      status.registers.noNameRegisters)
-  elif currentBufStatus.isExMode:
-    for lineNum, line in pasteBuffer:
-      status.commandLine.insert(line)
-      if lineNum < pasteBuffer.high:
-        # Not Newline
-        status.commandLine.insert(ru"\n")
-  elif currentBufStatus.isSearchMode:
-    for lineNum, line in pasteBuffer:
-      status.commandLine.insert(line)
-      if lineNum < pasteBuffer.high:
-        # Not Newline
-        status.commandLine.insert(ru"\n")
-    status.searchHistory[^1] = status.commandLine.buffer.replaceToNewLines
+
+    if currentBufStatus.isInsertMode:
+      currentBufStatus.pasteAfterCursor(
+        currentMainWindowNode,
+        status.registers.noNameRegisters)
+    elif currentBufStatus.isReplaceMode:
+      for lineNum, line in pasteBuffer:
+        for r in line:
+          currentBufStatus.replaceCurrentCharAndMoveToRight(
+            currentMainWindowNode,
+            status.settings.standard.autoCloseParen,
+            r)
+        if lineNum < pasteBuffer.high:
+          # Insert a new line and move to the next line.
+          currentBufStatus.keyEnter(
+            currentMainWindowNode,
+            status.settings.standard.autoIndent,
+            status.settings.standard.tabStop)
+          currentMainWindowNode.currentColumn = 0
 
 proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
   ## Get keys and update view.
@@ -359,7 +376,8 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
       status.resize
       continue
     elif isPasteKey(key):
-      status.insertPasteBuffer
+      let pasteBuffer = getPasteBuffer()
+      if pasteBuffer.isSome: status.insertPasteBuffer(pasteBuffer.get)
       continue
 
     if exCommandHistoryIndex.isResetExCommandHistoryIndex(key):
@@ -541,7 +559,8 @@ proc editorMainLoop*(status: var EditorStatus) =
       status.resize
       continue
     elif isPasteKey(key):
-      status.insertPasteBuffer
+      let pasteBuffer = getPasteBuffer()
+      if pasteBuffer.isSome: status.insertPasteBuffer(pasteBuffer.get)
       continue
 
     command.add key

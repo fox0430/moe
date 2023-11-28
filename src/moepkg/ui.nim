@@ -154,9 +154,12 @@ var
   terminalResized* = false
     # Set true if the terminal size is resized.
 
-  pasteBuffer*: seq[Runes]
+  pasteBuffer: Option[seq[Runes]]
 
   terminalSize: Size
+
+proc getPasteBuffer*(): Option[seq[Runes]] =
+  return pasteBuffer
 
 proc parseColorMode*(str: string): Result[ColorMode, string] =
   case str:
@@ -507,7 +510,7 @@ proc parseKey(buffer: seq[int]): Option[Rune] =
                 let
                   first = KeySequences[BracketedPasteStart][0].len
                   last = input.high - KeySequences[BracketedPasteEnd][0].len
-                pasteBuffer = input[first .. last].toRunes.splitLines
+                pasteBuffer = input[first .. last].toRunes.splitLines.some
                 return some(PasteKey.Rune)
             else:
               if s == input: return some(keyCode.Rune)
