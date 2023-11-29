@@ -41,9 +41,11 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       matrix:
+        os: [ 'ubuntu-latest', 'macOS-latest' ]
         nim: [ '1.6.2', 'stable', 'devel' ]
     name: Build on ${{ matrix.nim }}
     steps:
