@@ -18,7 +18,25 @@
 #[############################################################################]#
 
 import ui, editorstatus, windownode, movement, editor, bufferstatus, settings,
-       unicodeext
+       unicodeext, independentutils, gapbuffer
+
+proc toBufferPositionsForInsert(area: SelectedArea): seq[BufferPosition] =
+  ## Return positions based on the selected area for inserting into multiple
+  ## positions.
+
+  for lineNum in area.startLine .. area.endLine:
+    result.add BufferPosition(line: lineNum, column: area.startColumn)
+
+proc bufferPositionsForDelete(status: var EditorStatus): seq[BufferPosition] =
+  ## Return positions for deleting from multiple positions.
+
+  let
+    startLine = currentBufStatus.selectedArea.startLine
+    endLine = currentBufStatus.selectedArea.endLine
+  for lineNum in startLine .. endLine:
+    result.add BufferPosition(
+      line: lineNum,
+      column: currentMainWindowNode.currentColumn)
 
 proc exitInsertMode(status: var EditorStatus) =
   if currentMainWindowNode.currentColumn > 0:
@@ -26,6 +44,49 @@ proc exitInsertMode(status: var EditorStatus) =
     currentMainWindowNode.expandedColumn = currentMainWindowNode.currentColumn
   changeCursorType(status.settings.standard.normalModeCursor)
   status.changeMode(currentBufStatus.prevMode)
+
+proc deleteBeforeCursorAndMoveToLeft(status: var EditorStatus) {.inline.} =
+  if currentBufStatus.isInsertMultiMode:
+    const NumOfDelete = 1
+    currentBufStatus.deleteMultiplePositions(
+      status.bufferPositionsForDelete,
+      NumOfDelete)
+    currentMainWindowNode.keyLeft
+  else:
+    currentBufStatus.keyBackspace(
+      currentMainWindowNode,
+      status.settings.standard.autoDeleteParen,
+      status.settings.standard.tabStop)
+
+proc deleteCurrentCursor(status: var EditorStatus) {.inline.} =
+  if currentBufStatus.isInsertMultiMode:
+    const NumOfDelete = 1
+    currentBufStatus.deleteCurrentMultiplePositions(
+      status.bufferPositionsForDelete,
+      NumOfDelete)
+
+    template currentLineHigh: int =
+      currentBufStatus.buffer[currentMainWindowNode.currentLine].high
+    if currentMainWindowNode.currentColumn > currentLineHigh:
+       currentMainWindowNode.currentColumn = currentLineHigh
+  else:
+    currentBufStatus.deleteCharacter(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn,
+      status.settings.standard.autoDeleteParen)
+
+proc insertToBuffer(status: var EditorStatus, r: Rune) {.inline.} =
+  if currentBufStatus.isInsertMultiMode:
+    currentBufStatus.insertMultiplePositions(
+      currentBufStatus.selectedArea.toBufferPositionsForInsert,
+      r)
+    currentBufStatus.keyRight(currentMainWindowNode)
+  else:
+    insertCharacter(
+      currentBufStatus,
+      currentMainWindowNode,
+      status.settings.standard.autoCloseParen,
+      r)
 
 proc execInsertModeCommand*(status: var EditorStatus, command: Runes) =
   let key = command[0]
@@ -52,15 +113,9 @@ proc execInsertModeCommand*(status: var EditorStatus, command: Runes) =
   elif isEndKey(key):
     currentBufStatus.moveToLastOfLine(currentMainWindowNode)
   elif isDeleteKey(key):
-    currentBufStatus.deleteCharacter(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn,
-      status.settings.standard.autoDeleteParen)
+    status.deleteCurrentCursor
   elif isBackspaceKey(key) or isCtrlH(key):
-    currentBufStatus.keyBackspace(
-      currentMainWindowNode,
-      status.settings.standard.autoDeleteParen,
-      status.settings.standard.tabStop)
+    status.deleteBeforeCursorAndMoveToLeft
   elif isEnterKey(key):
     keyEnter(
       currentBufStatus,
@@ -98,8 +153,4 @@ proc execInsertModeCommand*(status: var EditorStatus, command: Runes) =
       currentMainWindowNode,
       status.settings.view.tabStop)
   else:
-    insertCharacter(
-      currentBufStatus,
-      currentMainWindowNode,
-      status.settings.standard.autoCloseParen,
-      key)
+    status.insertToBuffer(key)

@@ -92,6 +92,41 @@ proc insertCharacter*(
       moveRight()
       inserted()
 
+proc insertMultiplePositions*(
+  bufStatus: var BufferStatus,
+  positions: seq[BufferPosition],
+  r: Runes | Rune) =
+    ## Insert runes to multiple positions.
+    ## positions should be sorted.
+
+    let runes = r.toRunes
+    var
+      addedLine = 0
+      addedCol = 0
+      beforeLine = -1
+
+    for i, p in positions:
+      if beforeLine != p.line: addedCol = 0
+
+      let
+        lineNum = p.line + addedLine
+        colNum = p.column + addedCol
+
+      if lineNum <= bufStatus.buffer.len and
+         colNum <= bufStatus.buffer[lineNum].len:
+
+           var newLine = bufStatus.buffer[lineNum]
+           newLine.insert(runes, colNum)
+           if bufStatus.buffer[lineNum] != newLine:
+             bufStatus.buffer[lineNum] = newLine
+             addedCol += runes.len
+
+           beforeLine = p.line
+
+    if addedLine > 0 or addedCol > 0:
+      bufStatus.countChange.inc
+      if not bufStatus.isUpdate: bufStatus.isUpdate = true
+
 proc deleteParen*(
   bufStatus: var BufferStatus,
   currentLine, currentColumn: int,
@@ -183,6 +218,80 @@ proc countSpaceBeginOfLine(line: Runes, tabStop, currentColumn: int): int =
   for i in 0 ..< min(line.len, currentColumn):
     if isWhiteSpace(line[i]): result.inc
     else: break
+
+proc deleteMultiplePositions*(
+  bufStatus: var BufferStatus,
+  positions: seq[BufferPosition],
+  numOfDelete: int) =
+    ## Delete runes from multiple positions. Similar behavior to Backspace key.
+    ##
+    ## positions should be sorted.
+
+    var
+      isChanged = false
+      deletedCol = 0
+      beforeLine = -1
+
+    for i, p in positions:
+      if beforeLine != p.line: deletedCol = 0
+
+      if p.column > 0 and bufStatus.buffer[p.line].len > 0:
+        var newLine = bufStatus.buffer[p.line]
+        let
+          colNum = p.column - deletedCol
+          first = max(0, colNum - numOfDelete)
+          last = min(bufStatus.buffer[p.line].len, colNum - 1)
+
+        newLine.delete(first .. last)
+        if bufStatus.buffer[p.line] != newLine:
+          bufStatus.buffer[p.line] = newLine
+          deletedCol += last - first + 1
+          if not isChanged: isChanged = true
+
+        beforeLine = p.line
+
+    if isChanged:
+      bufStatus.countChange.inc
+      if not bufStatus.isUpdate: bufStatus.isUpdate = true
+
+proc deleteCurrentMultiplePositions*(
+  bufStatus: var BufferStatus,
+  positions: seq[BufferPosition],
+  numOfDelete: int) =
+    ## Delete runes from multiple positions. Similar behavior to Delete key.
+    ##
+    ## positions should be sorted.
+
+    var
+      isChanged = false
+      deletedCol = 0
+      beforeLine = -1
+
+    for i, p in positions:
+      if beforeLine != p.line: deletedCol = 0
+
+      if bufStatus.buffer[p.line].len > 0:
+        let colNum = p.column - deletedCol
+        var newLine = bufStatus.buffer[p.line]
+        let
+          num = min(newLine.len, numOfDelete)
+          first = colNum
+          last = colNum + num - 1
+
+        if last < bufStatus.buffer[p.line].len:
+          newLine.delete(first .. last)
+        elif first > 0:
+          newLine.delete(first - 1 .. last - 1)
+
+        if bufStatus.buffer[p.line] != newLine:
+          bufStatus.buffer[p.line] = newLine
+          deletedCol += num
+
+        beforeLine = p.line
+
+    if isChanged:
+      bufStatus.countChange.inc
+      if not bufStatus.isUpdate: bufStatus.isUpdate = true
 
 proc keyBackspace*(
   bufStatus: var BufferStatus,
