@@ -242,13 +242,14 @@ proc deleteMultiplePositions*(
           first = max(0, colNum - numOfDelete)
           last = min(bufStatus.buffer[p.line].len, colNum - 1)
 
-        newLine.delete(first .. last)
-        if bufStatus.buffer[p.line] != newLine:
-          bufStatus.buffer[p.line] = newLine
-          deletedCol += last - first + 1
-          if not isChanged: isChanged = true
+        if last < newLine.len:
+          newLine.delete(first .. last)
+          if bufStatus.buffer[p.line] != newLine:
+            bufStatus.buffer[p.line] = newLine
+            deletedCol += last - first + 1
+            if not isChanged: isChanged = true
 
-        beforeLine = p.line
+          beforeLine = p.line
 
     if isChanged:
       bufStatus.countChange.inc
@@ -278,16 +279,14 @@ proc deleteCurrentMultiplePositions*(
           first = colNum
           last = colNum + num - 1
 
-        if last < bufStatus.buffer[p.line].len:
+        if last < newLine.len:
           newLine.delete(first .. last)
-        elif first > 0:
-          newLine.delete(first - 1 .. last - 1)
 
-        if bufStatus.buffer[p.line] != newLine:
-          bufStatus.buffer[p.line] = newLine
-          deletedCol += num
+          if bufStatus.buffer[p.line] != newLine:
+            bufStatus.buffer[p.line] = newLine
+            deletedCol += num
 
-        beforeLine = p.line
+          beforeLine = p.line
 
     if isChanged:
       bufStatus.countChange.inc

@@ -59,16 +59,22 @@ proc deleteBeforeCursorAndMoveToLeft(status: var EditorStatus) {.inline.} =
       status.settings.standard.tabStop)
 
 proc deleteCurrentCursor(status: var EditorStatus) {.inline.} =
+  template currentLineHigh: int =
+    currentBufStatus.buffer[currentMainWindowNode.currentLine].high
+
   if currentBufStatus.isInsertMultiMode:
     const NumOfDelete = 1
-    currentBufStatus.deleteCurrentMultiplePositions(
-      status.bufferPositionsForDelete,
-      NumOfDelete)
 
-    template currentLineHigh: int =
-      currentBufStatus.buffer[currentMainWindowNode.currentLine].high
     if currentMainWindowNode.currentColumn > currentLineHigh:
-       currentMainWindowNode.currentColumn = currentLineHigh
+      # Delete before cursor and move to left.
+      currentBufStatus.deleteMultiplePositions(
+        status.bufferPositionsForDelete,
+        NumOfDelete)
+      currentMainWindowNode.keyLeft
+    else:
+      currentBufStatus.deleteCurrentMultiplePositions(
+        status.bufferPositionsForDelete,
+        NumOfDelete)
   else:
     currentBufStatus.deleteCharacter(
       currentMainWindowNode.currentLine,

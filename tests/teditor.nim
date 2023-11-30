@@ -3257,6 +3257,20 @@ suite "Editor: deleteMultiplePositions":
 
     check b.buffer.toSeqRunes == @["b", "e"].toSeqRunes
 
+  test "Multiple line 3":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["123456", "123", "123456"].toSeqRunes.toGapBuffer
+
+    let positions = @[
+      BufferPosition(line: 0, column: 6),
+      BufferPosition(line: 1, column: 6),
+      BufferPosition(line: 2, column: 6)
+    ]
+    const NumOfDelete = 1
+    b.deleteMultiplePositions(positions, NumOfDelete)
+
+    check b.buffer.toSeqRunes == @["12345", "123", "12345"].toSeqRunes
+
 suite "Editor: deleteCurrentMultiplePositions":
   test "Ignore":
     var b = initBufferStatus(Mode.normal).get
@@ -3353,3 +3367,17 @@ suite "Editor: deleteCurrentMultiplePositions":
     b.deleteCurrentMultiplePositions(positions, NumOfDelete)
 
     check b.buffer.toSeqRunes == @["", ""].toSeqRunes
+
+  test "Multiple line 3":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["123456", "123", "123456"].toSeqRunes.toGapBuffer
+
+    let positions = @[
+      BufferPosition(line: 0, column: 5),
+      BufferPosition(line: 1, column: 5),
+      BufferPosition(line: 2, column: 5)
+    ]
+    const NumOfDelete = 1
+    b.deleteCurrentMultiplePositions(positions, NumOfDelete)
+
+    check b.buffer.toSeqRunes == @["12345", "123", "12345"].toSeqRunes
