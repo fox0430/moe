@@ -101,7 +101,7 @@ proc insertMultiplePositions*(
 
     let runes = r.toRunes
     var
-      addedLine = 0
+      isChanged = false
       addedCol = 0
       beforeLine = -1
 
@@ -109,21 +109,21 @@ proc insertMultiplePositions*(
       if beforeLine != p.line: addedCol = 0
 
       let
-        lineNum = p.line + addedLine
         colNum = p.column + addedCol
 
-      if lineNum <= bufStatus.buffer.len and
-         colNum <= bufStatus.buffer[lineNum].len:
+      if p.line <= bufStatus.buffer.len and
+         colNum <= bufStatus.buffer[p.line].len:
 
-           var newLine = bufStatus.buffer[lineNum]
+           var newLine = bufStatus.buffer[p.line]
            newLine.insert(runes, colNum)
-           if bufStatus.buffer[lineNum] != newLine:
-             bufStatus.buffer[lineNum] = newLine
+           if bufStatus.buffer[p.line] != newLine:
+             bufStatus.buffer[p.line] = newLine
              addedCol += runes.len
+             if not isChanged: isChanged = true
 
            beforeLine = p.line
 
-    if addedLine > 0 or addedCol > 0:
+    if isChanged:
       bufStatus.countChange.inc
       if not bufStatus.isUpdate: bufStatus.isUpdate = true
 

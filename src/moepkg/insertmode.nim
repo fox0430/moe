@@ -20,15 +20,8 @@
 import ui, editorstatus, windownode, movement, editor, bufferstatus, settings,
        unicodeext, independentutils, gapbuffer
 
-proc toBufferPositionsForInsert(area: SelectedArea): seq[BufferPosition] =
-  ## Return positions based on the selected area for inserting into multiple
-  ## positions.
-
-  for lineNum in area.startLine .. area.endLine:
-    result.add BufferPosition(line: lineNum, column: area.startColumn)
-
-proc bufferPositionsForDelete(status: var EditorStatus): seq[BufferPosition] =
-  ## Return positions for deleting from multiple positions.
+proc bufferPositionsForMultipleEdit(status: var EditorStatus): seq[BufferPosition] =
+  ## Return positions for multiple positions edtting.
 
   let
     startLine = currentBufStatus.selectedArea.startLine
@@ -49,7 +42,7 @@ proc deleteBeforeCursorAndMoveToLeft(status: var EditorStatus) {.inline.} =
   if currentBufStatus.isInsertMultiMode:
     const NumOfDelete = 1
     currentBufStatus.deleteMultiplePositions(
-      status.bufferPositionsForDelete,
+      status.bufferPositionsForMultipleEdit,
       NumOfDelete)
     currentMainWindowNode.keyLeft
   else:
@@ -68,12 +61,12 @@ proc deleteCurrentCursor(status: var EditorStatus) {.inline.} =
     if currentMainWindowNode.currentColumn > currentLineHigh:
       # Delete before cursor and move to left.
       currentBufStatus.deleteMultiplePositions(
-        status.bufferPositionsForDelete,
+        status.bufferPositionsForMultipleEdit,
         NumOfDelete)
       currentMainWindowNode.keyLeft
     else:
       currentBufStatus.deleteCurrentMultiplePositions(
-        status.bufferPositionsForDelete,
+        status.bufferPositionsForMultipleEdit,
         NumOfDelete)
   else:
     currentBufStatus.deleteCharacter(
@@ -84,7 +77,7 @@ proc deleteCurrentCursor(status: var EditorStatus) {.inline.} =
 proc insertToBuffer(status: var EditorStatus, r: Rune) {.inline.} =
   if currentBufStatus.isInsertMultiMode:
     currentBufStatus.insertMultiplePositions(
-      currentBufStatus.selectedArea.toBufferPositionsForInsert,
+      status.bufferPositionsForMultipleEdit,
       r)
     currentBufStatus.keyRight(currentMainWindowNode)
   else:
