@@ -3048,3 +3048,336 @@ suite "Editor: replaceOnlyFirstWordInLines":
     b.replaceOnlyFirstWordInLines(lineRange, Sub, By)
 
     check b.buffer.toSeqRunes == @["xyz", "xyz", "xyz", "xyz", "xyz"].toSeqRunes
+
+suite "Editor: insertMultiplePositions":
+  test "Ignore":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
+
+    block:
+      let positions = @[BufferPosition(line: 0, column: 4)]
+      b.insertMultiplePositions(positions, ru"jkl")
+
+      check b.buffer.toSeqRunes == @["abc", "def", "ghi"].toSeqRunes
+
+    block:
+      let positions = @[BufferPosition(line: 4, column: 0)]
+      b.insertMultiplePositions(positions, ru"jkl")
+
+      check b.buffer.toSeqRunes == @["abc", "def", "ghi"].toSeqRunes
+
+    block:
+      let positions = @[BufferPosition(line: 4, column: 4)]
+      b.insertMultiplePositions(positions, ru"jkl")
+
+      check b.buffer.toSeqRunes == @["abc", "def", "ghi"].toSeqRunes
+
+  test "Single line":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
+
+    block:
+      let positions = @[BufferPosition(line: 0, column: 0)]
+      b.insertMultiplePositions(positions, ru"jkl")
+
+      check b.buffer.toSeqRunes == @["jklabc", "def", "ghi"].toSeqRunes
+
+    block:
+      let positions = @[BufferPosition(line: 1, column: 1)]
+      b.insertMultiplePositions(positions, ru"mno")
+
+      check b.buffer.toSeqRunes == @["jklabc", "dmnoef", "ghi"].toSeqRunes
+
+    block:
+      let positions = @[BufferPosition(line: 2, column: 3)]
+      b.insertMultiplePositions(positions, ru"pqr")
+
+      check b.buffer.toSeqRunes == @["jklabc", "dmnoef", "ghipqr"].toSeqRunes
+
+  test "Single line 2":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
+
+    let positions = @[
+      BufferPosition(line: 0, column: 0),
+      BufferPosition(line: 0, column: 2)
+    ]
+    b.insertMultiplePositions(positions, ru"jkl")
+
+    check b.buffer.toSeqRunes == @["jklabjklc", "def", "ghi"].toSeqRunes
+
+  test "Multiple line":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
+
+    let positions = @[
+      BufferPosition(line: 0, column: 0),
+      BufferPosition(line: 1, column: 0),
+      BufferPosition(line: 2, column: 0)
+    ]
+    b.insertMultiplePositions(positions, ru"jkl")
+
+    check b.buffer.toSeqRunes == @["jklabc", "jkldef", "jklghi"].toSeqRunes
+
+  test "Multiple line 2":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
+
+    let positions = @[
+      BufferPosition(line: 0, column: 0),
+      BufferPosition(line: 0, column: 1),
+      BufferPosition(line: 1, column: 0),
+      BufferPosition(line: 1, column: 2),
+      BufferPosition(line: 2, column: 0),
+      BufferPosition(line: 2, column: 3)
+    ]
+    b.insertMultiplePositions(positions, ru"jkl")
+
+    check b.buffer.toSeqRunes == @["jklajklbc", "jkldejklf", "jklghijkl"]
+      .toSeqRunes
+
+  test "Multiple line 3":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["a", "", "a"].toSeqRunes.toGapBuffer
+
+    let positions = @[
+      BufferPosition(line: 0, column: 0),
+      BufferPosition(line: 1, column: 0),
+      BufferPosition(line: 2, column: 0)
+    ]
+    b.insertMultiplePositions(positions, ru"bc")
+
+    check b.buffer.toSeqRunes == @["bca", "bc", "bca"].toSeqRunes
+
+  test "Multiple line 4":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["a", "", "a"].toSeqRunes.toGapBuffer
+
+    let positions = @[
+      BufferPosition(line: 0, column: 1),
+      BufferPosition(line: 1, column: 1),
+      BufferPosition(line: 2, column: 1)
+    ]
+    b.insertMultiplePositions(positions, ru"bc")
+
+    check b.buffer.toSeqRunes == @["abc", "", "abc"].toSeqRunes
+
+suite "Editor: deleteMultiplePositions":
+  test "Ignore":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @[""].toSeqRunes.toGapBuffer
+
+    let positions = @[BufferPosition(line: 0, column: 2)]
+    const NumOfDelete = 1
+    b.deleteMultiplePositions(positions, NumOfDelete)
+
+    check b.buffer.toSeqRunes == @[""].toSeqRunes
+
+  test "Ignore 2":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["abc"].toSeqRunes.toGapBuffer
+
+    let positions = @[BufferPosition(line: 0, column: 0)]
+    const NumOfDelete = 1
+    b.deleteMultiplePositions(positions, NumOfDelete)
+
+    check b.buffer.toSeqRunes == @["abc"].toSeqRunes
+
+  test "Single line":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["abc"].toSeqRunes.toGapBuffer
+
+    let positions = @[BufferPosition(line: 0, column: 2)]
+    const NumOfDelete = 1
+    b.deleteMultiplePositions(positions, NumOfDelete)
+
+    check b.buffer.toSeqRunes == @["ac"].toSeqRunes
+
+  test "Single line 2":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["abcdef"].toSeqRunes.toGapBuffer
+
+    let positions = @[BufferPosition(line: 0, column: 5)]
+    const NumOfDelete = 4
+    b.deleteMultiplePositions(positions, NumOfDelete)
+
+    check b.buffer.toSeqRunes == @["af"].toSeqRunes
+
+  test "Single line 3":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["abcdef"].toSeqRunes.toGapBuffer
+
+    let positions = @[
+      BufferPosition(line: 0, column: 1),
+      BufferPosition(line: 0, column: 5)
+    ]
+    const NumOfDelete = 1
+    b.deleteMultiplePositions(positions, NumOfDelete)
+
+    check b.buffer.toSeqRunes == @["bcdf"].toSeqRunes
+
+  test "Single line 4":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["abcdef"].toSeqRunes.toGapBuffer
+
+    let positions = @[
+      BufferPosition(line: 0, column: 1),
+      BufferPosition(line: 0, column: 6)
+    ]
+    const NumOfDelete = 5
+    b.deleteMultiplePositions(positions, NumOfDelete)
+
+    check b.buffer.toSeqRunes == @[""].toSeqRunes
+
+  test "Multiple line":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["abc", "def"].toSeqRunes.toGapBuffer
+
+    let positions = @[
+      BufferPosition(line: 0, column: 1),
+      BufferPosition(line: 1, column: 1)
+    ]
+    const NumOfDelete = 1
+    b.deleteMultiplePositions(positions, NumOfDelete)
+
+    check b.buffer.toSeqRunes == @["bc", "ef"].toSeqRunes
+
+  test "Multiple line 2":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["abc", "def"].toSeqRunes.toGapBuffer
+
+    let positions = @[
+      BufferPosition(line: 0, column: 1),
+      BufferPosition(line: 0, column: 3),
+      BufferPosition(line: 1, column: 1),
+      BufferPosition(line: 1, column: 3)
+    ]
+    const NumOfDelete = 1
+    b.deleteMultiplePositions(positions, NumOfDelete)
+
+    check b.buffer.toSeqRunes == @["b", "e"].toSeqRunes
+
+  test "Multiple line 3":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["123456", "123", "123456"].toSeqRunes.toGapBuffer
+
+    let positions = @[
+      BufferPosition(line: 0, column: 6),
+      BufferPosition(line: 1, column: 6),
+      BufferPosition(line: 2, column: 6)
+    ]
+    const NumOfDelete = 1
+    b.deleteMultiplePositions(positions, NumOfDelete)
+
+    check b.buffer.toSeqRunes == @["12345", "123", "12345"].toSeqRunes
+
+suite "Editor: deleteCurrentMultiplePositions":
+  test "Ignore":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @[""].toSeqRunes.toGapBuffer
+
+    let positions = @[BufferPosition(line: 0, column: 0)]
+    const NumOfDelete = 1
+    b.deleteCurrentMultiplePositions(positions, NumOfDelete)
+
+    check b.buffer.toSeqRunes == @[""].toSeqRunes
+
+  test "Single line":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["abc"].toSeqRunes.toGapBuffer
+
+    let positions = @[BufferPosition(line: 0, column: 0)]
+    const NumOfDelete = 1
+    b.deleteCurrentMultiplePositions(positions, NumOfDelete)
+
+    check b.buffer.toSeqRunes == @["bc"].toSeqRunes
+
+  test "Single line 2":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["abc"].toSeqRunes.toGapBuffer
+
+    let positions = @[BufferPosition(line: 0, column: 0)]
+    const NumOfDelete = 5
+    b.deleteCurrentMultiplePositions(positions, NumOfDelete)
+
+    check b.buffer.toSeqRunes == @[""].toSeqRunes
+
+  test "Single line 3":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["abcdef"].toSeqRunes.toGapBuffer
+
+    let positions = @[
+      BufferPosition(line: 0, column: 1)
+    ]
+    const NumOfDelete = 4
+    b.deleteCurrentMultiplePositions(positions, NumOfDelete)
+
+    check b.buffer.toSeqRunes == @["af"].toSeqRunes
+
+  test "Single line 4":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["abc"].toSeqRunes.toGapBuffer
+
+    let positions = @[
+      BufferPosition(line: 0, column: 0),
+      BufferPosition(line: 0, column: 2)
+    ]
+    const NumOfDelete = 1
+    b.deleteCurrentMultiplePositions(positions, NumOfDelete)
+
+    check b.buffer.toSeqRunes == @["b"].toSeqRunes
+
+  test "Single line 5":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["abc"].toSeqRunes.toGapBuffer
+
+    let positions = @[
+      BufferPosition(line: 0, column: 0),
+      BufferPosition(line: 0, column: 2)
+    ]
+    const NumOfDelete = 2
+    b.deleteCurrentMultiplePositions(positions, NumOfDelete)
+
+    check b.buffer.toSeqRunes == @[""].toSeqRunes
+
+  test "Multiple line":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["abc", "def"].toSeqRunes.toGapBuffer
+
+    let positions = @[
+      BufferPosition(line: 0, column: 0),
+      BufferPosition(line: 1, column: 0)
+    ]
+    const NumOfDelete = 2
+    b.deleteCurrentMultiplePositions(positions, NumOfDelete)
+
+    check b.buffer.toSeqRunes == @["c", "f"].toSeqRunes
+
+  test "Multiple line 2":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["abc", "def"].toSeqRunes.toGapBuffer
+
+    let positions = @[
+      BufferPosition(line: 0, column: 0),
+      BufferPosition(line: 0, column: 2),
+      BufferPosition(line: 1, column: 0),
+      BufferPosition(line: 1, column: 2)
+    ]
+    const NumOfDelete = 2
+    b.deleteCurrentMultiplePositions(positions, NumOfDelete)
+
+    check b.buffer.toSeqRunes == @["", ""].toSeqRunes
+
+  test "Multiple line 3":
+    var b = initBufferStatus(Mode.normal).get
+    b.buffer = @["123456", "123", "123456"].toSeqRunes.toGapBuffer
+
+    let positions = @[
+      BufferPosition(line: 0, column: 5),
+      BufferPosition(line: 1, column: 5),
+      BufferPosition(line: 2, column: 5)
+    ]
+    const NumOfDelete = 1
+    b.deleteCurrentMultiplePositions(positions, NumOfDelete)
+
+    check b.buffer.toSeqRunes == @["12345", "123", "12345"].toSeqRunes

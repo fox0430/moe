@@ -63,7 +63,7 @@ proc displayPath(bufStatus: BufferStatus): Runes =
 
 proc statusLineColor(mode: Mode, isActiveWindow: bool): EditorColorPairIndex =
   case mode:
-    of Mode.insert:
+    of Mode.insert, Mode.insertMulti:
       if isActiveWindow: return EditorColorPairIndex.statusLineInsertMode
       else: return EditorColorPairIndex.statusLineInsertModeInactive
     of Mode.visual, Mode.visualBlock, Mode.visualLine:
@@ -405,6 +405,8 @@ proc modeLablel(mode: Mode): string =
   case mode:
     of Mode.insert:
       "INSERT"
+    of Mode.insertMulti:
+      "INSERT MULTI"
     of Mode.visual:
       "VISUAL"
     of Mode.visualBlock:
@@ -438,7 +440,7 @@ proc modeLablel(mode: Mode): string =
 
 proc modeLablelColor(mode: Mode): EditorColorPairIndex =
   case mode
-    of Mode.insert:
+    of Mode.insert, Mode.insertMulti:
       EditorColorPairIndex.statusLineInsertModeLabel
     of Mode.visual, Mode.visualBlock, Mode.visualLine:
       EditorColorPairIndex.statusLineVisualModeLabel

@@ -295,8 +295,13 @@ suite "mainloop: insertPasteBuffer":
   test "Ignore":
     for mode in Mode:
       case mode:
-        of insert, replace, ex, searchForward, searchBackward:
-          continue
+        of insert,
+           insertMulti,
+           replace,
+           ex,
+           searchForward,
+           searchBackward:
+             continue
         else:
           var status = initEditorStatus()
 

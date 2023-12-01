@@ -27,6 +27,7 @@ type
   Mode* = enum
     normal
     insert
+    insertMulti
     visual
     visualBlock
     visualLine
@@ -144,9 +145,16 @@ proc isNormalMode*(b: BufferStatus): bool {.inline.} =
   (b.isExMode and b.prevMode == Mode.normal) or
   (b.isSearchMode and b.prevMode == Mode.normal)
 
-proc isInsertMode*(mode: Mode): bool {.inline.} = mode == Mode.insert
+proc isInsertMultiMode*(mode: Mode): bool {.inline.} = mode == Mode.insertMulti
 
-proc isInsertMode*(b: BufferStatus): bool {.inline.} = b.mode == Mode.insert
+proc isInsertMultiMode*(b: BufferStatus): bool {.inline.} =
+  b.mode == Mode.insertMulti
+
+proc isInsertMode*(mode: Mode): bool {.inline.} =
+  mode == Mode.insert or mode == Mode.insertMulti
+
+proc isInsertMode*(b: BufferStatus): bool {.inline.} =
+  b.mode == Mode.insert or b.mode == Mode.insertMulti
 
 proc isReplaceMode*(mode: Mode): bool {.inline.} = mode == Mode.replace
 

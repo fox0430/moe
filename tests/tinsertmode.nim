@@ -23,12 +23,13 @@ import moepkg/[highlight, editorstatus, gapbuffer, unicodeext, editor,
                bufferstatus, movement, autocomplete, windownode, ui]
 
 import moepkg/suggestionwindow {.all.}
+import moepkg/insertmode {.all.}
 
 proc resize(status: var EditorStatus, h, w: int) =
   updateTerminalSize(h, w)
   status.resize
 
-suite "Insert mode":
+suite "insert: Insert characters":
   test "Issue #474":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
@@ -291,6 +292,222 @@ suite "Insert mode":
 
     check currentMainWindowNode.currentColumn == 3
 
+suite "insertMulti: Insert characters to multiple positions":
+  test "Insert characters to 3 lines":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["abc", "abc", "abc"].toSeqRunes.toGapBuffer
+    currentBufStatus.mode = Mode.insertMulti
+
+    currentBufStatus.selectedArea.startLine = 0
+    currentBufStatus.selectedArea.endLine = 2
+    currentBufStatus.selectedArea.startColumn = 0
+    currentBufStatus.selectedArea.endColumn = 0
+
+    let keys = ru"xyz"
+    for k in keys: status.insertToBuffer(k)
+
+    check currentBufStatus.buffer.toSeqRunes == @["xyzabc", "xyzabc", "xyzabc"]
+      .toSeqRunes
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 3
+
+  test "Insert characters to 3 lines 2":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["abc", "abc", "abc"].toSeqRunes.toGapBuffer
+    currentBufStatus.mode = Mode.insertMulti
+
+    currentBufStatus.selectedArea.startLine = 0
+    currentBufStatus.selectedArea.endLine = 2
+    currentBufStatus.selectedArea.startColumn = 1
+    currentBufStatus.selectedArea.endColumn = 1
+
+    currentMainWindowNode.currentColumn = 1
+
+    let keys = ru"xyz"
+    for k in keys: status.insertToBuffer(k)
+
+    check currentBufStatus.buffer.toSeqRunes == @["axyzbc", "axyzbc", "axyzbc"]
+      .toSeqRunes
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 4
+
+  test "Insert characters to 3 lines 3":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["abc", "abc", "abc"].toSeqRunes.toGapBuffer
+    currentBufStatus.mode = Mode.insertMulti
+
+    currentBufStatus.selectedArea.startLine = 0
+    currentBufStatus.selectedArea.endLine = 2
+    currentBufStatus.selectedArea.startColumn = 2
+    currentBufStatus.selectedArea.endColumn = 2
+
+    currentMainWindowNode.currentColumn = 2
+
+    let keys = ru"xyz"
+    for k in keys: status.insertToBuffer(k)
+
+    check currentBufStatus.buffer.toSeqRunes == @["abxyzc", "abxyzc", "abxyzc"]
+      .toSeqRunes
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 5
+
+suite "insertMulti: Delete characters from multiple positions":
+  test "Ignore":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["", "", ""].toSeqRunes.toGapBuffer
+    currentBufStatus.mode = Mode.insertMulti
+
+    currentBufStatus.selectedArea.startLine = 0
+    currentBufStatus.selectedArea.endLine = 2
+    currentBufStatus.selectedArea.startColumn = 2
+    currentBufStatus.selectedArea.endColumn = 2
+
+    currentMainWindowNode.currentColumn = 0
+
+    status.deleteBeforeCursorAndMoveToLeft
+
+    check currentBufStatus.buffer.toSeqRunes == @["", "", ""].toSeqRunes
+    check currentMainWindowNode.currentColumn == 0
+
+  test "Delete characters from 3 lines":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["abc", "abc", "abc"].toSeqRunes.toGapBuffer
+    currentBufStatus.mode = Mode.insertMulti
+
+    currentBufStatus.selectedArea.startLine = 0
+    currentBufStatus.selectedArea.endLine = 2
+    currentBufStatus.selectedArea.startColumn = 2
+    currentBufStatus.selectedArea.endColumn = 2
+
+    currentMainWindowNode.currentColumn = 3
+
+    for i in 0 .. 2:
+      status.deleteBeforeCursorAndMoveToLeft
+
+    check currentBufStatus.buffer.toSeqRunes == @["", "", ""].toSeqRunes
+    check currentMainWindowNode.currentColumn == 0
+
+  test "Delete characters from 3 lines 2":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["abc", "", "abc"].toSeqRunes.toGapBuffer
+    currentBufStatus.mode = Mode.insertMulti
+
+    currentBufStatus.selectedArea.startLine = 0
+    currentBufStatus.selectedArea.endLine = 2
+    currentBufStatus.selectedArea.startColumn = 2
+    currentBufStatus.selectedArea.endColumn = 2
+
+    currentMainWindowNode.currentColumn = 3
+
+    for i in 0 .. 1:
+      status.deleteBeforeCursorAndMoveToLeft
+
+    check currentBufStatus.buffer.toSeqRunes == @["a", "", "a"].toSeqRunes
+    check currentMainWindowNode.currentColumn == 1
+
+suite "insertMulti: Delete current characters from multiple positions":
+  test "Ignore":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["", "", ""].toSeqRunes.toGapBuffer
+    currentBufStatus.mode = Mode.insertMulti
+
+    currentBufStatus.selectedArea.startLine = 0
+    currentBufStatus.selectedArea.endLine = 2
+    currentBufStatus.selectedArea.startColumn = 2
+    currentBufStatus.selectedArea.endColumn = 2
+
+    currentMainWindowNode.currentColumn = 0
+
+    status.deleteCurrentCursor
+
+    check currentBufStatus.buffer.toSeqRunes == @["", "", ""].toSeqRunes
+    check currentMainWindowNode.currentColumn == 0
+
+  test "Delete current characters from 3 lines":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["abc", "abc", "abc"].toSeqRunes.toGapBuffer
+    currentBufStatus.mode = Mode.insertMulti
+
+    currentBufStatus.selectedArea.startLine = 0
+    currentBufStatus.selectedArea.endLine = 2
+    currentBufStatus.selectedArea.startColumn = 2
+    currentBufStatus.selectedArea.endColumn = 2
+
+    currentMainWindowNode.currentColumn = 0
+
+    for i in 0 .. 2:
+      status.deleteCurrentCursor
+
+    check currentBufStatus.buffer.toSeqRunes == @["", "", ""].toSeqRunes
+    check currentMainWindowNode.currentColumn == 0
+
+  test "Delete current characters from 3 lines 2":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["abc", "", "abc"].toSeqRunes.toGapBuffer
+    currentBufStatus.mode = Mode.insertMulti
+
+    currentBufStatus.selectedArea.startLine = 0
+    currentBufStatus.selectedArea.endLine = 2
+    currentBufStatus.selectedArea.startColumn = 2
+    currentBufStatus.selectedArea.endColumn = 2
+
+    currentMainWindowNode.currentColumn = 0
+
+    for i in 0 .. 1:
+      status.deleteCurrentCursor
+
+    check currentBufStatus.buffer.toSeqRunes == @["c", "", "c"].toSeqRunes
+    check currentMainWindowNode.currentColumn == 0
+
+  test "Delete current characters from 3 lines 3":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["abc", "abc", "abc"].toSeqRunes.toGapBuffer
+    currentBufStatus.mode = Mode.insertMulti
+
+    currentBufStatus.selectedArea.startLine = 0
+    currentBufStatus.selectedArea.endLine = 2
+    currentBufStatus.selectedArea.startColumn = 2
+    currentBufStatus.selectedArea.endColumn = 2
+
+    currentMainWindowNode.currentColumn = 1
+
+    status.deleteCurrentCursor
+
+    check currentBufStatus.buffer.toSeqRunes == @["ac", "ac", "ac"].toSeqRunes
+    check currentMainWindowNode.currentColumn == 1
+
+  test "Delete current characters from 3 lines 4":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["abc", "abc", "abc"].toSeqRunes.toGapBuffer
+    currentBufStatus.mode = Mode.insertMulti
+
+    currentBufStatus.selectedArea.startLine = 0
+    currentBufStatus.selectedArea.endLine = 2
+    currentBufStatus.selectedArea.startColumn = 2
+    currentBufStatus.selectedArea.endColumn = 2
+
+    currentMainWindowNode.currentColumn = 3
+
+    status.deleteCurrentCursor
+
+    check currentBufStatus.buffer.toSeqRunes == @["ab", "ab", "ab"].toSeqRunes
+    check currentMainWindowNode.currentColumn == 2
+
+suite "insert: Insert characters with autocomplete":
   proc prepareInsertMode(
     buffer: openArray[string],
     line, column, height, width: int): EditorStatus =

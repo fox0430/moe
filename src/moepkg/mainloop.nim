@@ -32,7 +32,7 @@ proc invokeCommand(
   recodingOperationRegister: Option[Rune]): InputState =
 
     case currentMode:
-      of Mode.insert, Mode.searchForward, Mode.searchBackward:
+      of Mode.insert, Mode.insertMulti, Mode.searchForward, Mode.searchBackward:
         InputState.Valid
       of Mode.ex:
         isExCommandBuffer(command)
@@ -69,7 +69,7 @@ proc execCommand(status: var EditorStatus, command: Runes): Option[Rune] =
 
   let currentMode = currentBufStatus.mode
   case currentMode:
-    of Mode.insert:
+    of Mode.insert, Mode.insertMulti:
       status.execInsertModeCommand(command)
     of Mode.ex:
       status.execExCommand(command)

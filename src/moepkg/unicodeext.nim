@@ -186,6 +186,7 @@ proc ru*(array: seq[string]): Runes =
   for s in array:
     result.add s.toRunes
 
+
 proc toCh*(r: Rune): char {.inline.} =
   result = ($r)[0]
 
@@ -268,6 +269,8 @@ proc countRepeat*(runes: Runes, charSet: set[char], start: int): int =
     let s = $runes[i]
     if s.len > 1 or (not (s[0] in charSet)): break
     inc(result)
+
+proc toRunes*(r: Runes): Runes {.inline.} = r
 
 proc toRunes*(num: int): Runes {.inline.} = toRunes($num)
 

@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, sequtils, options]
+import std/[strutils, sequtils]
 import editorstatus, ui, gapbuffer, unicodeext, windownode, movement, editor,
        bufferstatus, settings, registers, messages, commandline,
        independentutils, viewhighlight
@@ -436,53 +436,6 @@ proc toUpperStringBlock(
 
     windowNode.moveCursor(firstCursorPosition)
 
-# TODO: Remove
-proc getInsertBuffer(status: var EditorStatus): Runes =
-  while true:
-    status.update
-
-    var key: Option[Rune]
-    while key.isNone:
-      status.runBackgroundTasks
-      key = currentMainWindowNode.getKey
-
-    if isEscKey(key.get):
-      break
-    if isResizeKey(key.get):
-      status.resize
-    elif isEnterKey(key.get):
-      currentBufStatus.keyEnter(
-        currentMainWindowNode,
-        status.settings.standard.autoIndent,
-        status.settings.standard.tabStop)
-      break
-    elif isDeleteKey(key.get):
-      currentBufStatus.deleteCharacter(
-        currentMainWindowNode.currentLine,
-        currentMainWindowNode.currentColumn,
-        status.settings.standard.autoDeleteParen)
-      break
-    elif isBackspaceKey(key.get):
-      currentBufStatus.keyBackspace(
-        currentMainWindowNode,
-        status.settings.standard.autoDeleteParen,
-        status.settings.standard.tabStop)
-      if result.len > 0:
-        result.delete(result.high)
-    elif isTabKey(key.get):
-      result.add key.get
-      insertTab(
-        currentBufStatus,
-        currentMainWindowNode,
-        status.settings.standard.tabStop,
-        status.settings.standard.autoCloseParen)
-    else:
-      result.add key.get
-      currentBufStatus.insertCharacter(
-        currentMainWindowNode,
-        status.settings.standard.autoCloseParen,
-        key.get)
-
 proc enterInsertMode(status: var EditorStatus) =
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
@@ -532,15 +485,17 @@ proc changeModeToNormalMode(status: var EditorStatus) =
   status.changeMode(Mode.normal)
 
 proc exitVisualMode(status: var EditorStatus) =
-    var highlight = currentMainWindowNode.highlight
-    highlight.updateViewHighlight(
-      currentBufStatus,
-      currentMainWindowNode,
-      status.isSearchHighlight,
-      status.searchHistory,
-      status.settings)
+  ## Update highlighting and changing mode.
 
-    status.changeModeToNormalMode
+  var highlight = currentMainWindowNode.highlight
+  highlight.updateViewHighlight(
+    currentBufStatus,
+    currentMainWindowNode,
+    status.isSearchHighlight,
+    status.searchHistory,
+    status.settings)
+
+  status.changeModeToNormalMode
 
 proc visualCommand(
   status: var EditorStatus,
@@ -608,36 +563,20 @@ proc visualCommand(
     if currentBufStatus.isVisualMode:
       status.changeMode(currentBufStatus.prevMode)
 
-proc insertCharacterMultipleLines(
+proc changeModeToInsertMulti(
   status: var EditorStatus,
   area: SelectedArea) =
+    ## Rest the current position and changing the mode to the insertMulti mode.
 
     if currentBufStatus.isReadonly:
       status.commandLine.writeReadonlyModeWarning
       return
 
-    let prevMode =  currentBufStatus.prevMode
-
-    currentBufStatus.changeMode(Mode.insert)
-
     currentMainWindowNode.currentLine = area.startLine
     currentMainWindowNode.currentColumn = area.startColumn
-    let insertBuffer = status.getInsertBuffer
 
-    if insertBuffer.len > 0:
-      currentBufStatus.insertCharBlock(
-        currentMainWindowNode,
-        insertBuffer,
-        area,
-        status.settings.standard.tabStop,
-        status.settings.standard.autoCloseParen,
-        status.commandLine)
-    else:
-      currentMainWindowNode.currentLine = area.startLine
-      currentMainWindowNode.currentColumn = area.startColumn
-
-    currentBufStatus.prevMode = prevMode
-    currentBufStatus.mode = currentBufStatus.prevMode
+    currentBufStatus.mode = Mode.insertMulti
+    changeCursorType(status.settings.standard.insertModeCursor)
 
 proc visualBlockCommand(
   status: var EditorStatus,
@@ -693,7 +632,7 @@ proc visualBlockCommand(
       if not isEscKey(ch):
         currentBufStatus.replaceCharacterBlock(area, ch, status.commandLine)
     elif key == ord('I'):
-      status.insertCharacterMultipleLines(area)
+      status.changeModeToInsertMulti(area)
 
     if currentBufStatus.isVisualBlockMode:
       status.changeMode(currentBufStatus.prevMode)
