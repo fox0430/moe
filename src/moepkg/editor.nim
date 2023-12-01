@@ -98,6 +98,7 @@ proc insertMultiplePositions*(
   r: Runes | Rune) =
     ## Insert runes to multiple positions.
     ## positions should be sorted.
+    ## Cannot insert new lines.
 
     let runes = r.toRunes
     var
@@ -224,8 +225,8 @@ proc deleteMultiplePositions*(
   positions: seq[BufferPosition],
   numOfDelete: int) =
     ## Delete runes from multiple positions. Similar behavior to Backspace key.
-    ##
     ## positions should be sorted.
+    ## Cannot delete new lines.
 
     var
       isChanged = false
@@ -260,8 +261,8 @@ proc deleteCurrentMultiplePositions*(
   positions: seq[BufferPosition],
   numOfDelete: int) =
     ## Delete runes from multiple positions. Similar behavior to Delete key.
-    ##
     ## positions should be sorted.
+    ## Cannot delete new lines.
 
     var
       isChanged = false
