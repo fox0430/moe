@@ -23,12 +23,13 @@ import moepkg/[highlight, editorstatus, gapbuffer, unicodeext, editor,
                bufferstatus, movement, autocomplete, windownode, ui]
 
 import moepkg/suggestionwindow {.all.}
+import moepkg/insertmode {.all.}
 
 proc resize(status: var EditorStatus, h, w: int) =
   updateTerminalSize(h, w)
   status.resize
 
-suite "Insert mode":
+suite "insert: Insert characters":
   test "Issue #474":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
@@ -291,6 +292,72 @@ suite "Insert mode":
 
     check currentMainWindowNode.currentColumn == 3
 
+suite "insertMulti: Insert characters to multiple positions":
+  test "Insert characters to 3 lines":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["abc", "abc", "abc"].toSeqRunes.toGapBuffer
+    currentBufStatus.mode = Mode.insertMulti
+
+    currentBufStatus.selectedArea.startLine = 0
+    currentBufStatus.selectedArea.endLine = 2
+    currentBufStatus.selectedArea.startColumn = 0
+    currentBufStatus.selectedArea.endColumn = 0
+
+    let keys = ru"xyz"
+    for k in keys: status.insertToBuffer(k)
+
+    check currentBufStatus.buffer.toSeqRunes == @["xyzabc", "xyzabc", "xyzabc"]
+      .toSeqRunes
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 3
+
+  test "Insert characters to 3 lines 2":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["abc", "abc", "abc"].toSeqRunes.toGapBuffer
+    currentBufStatus.mode = Mode.insertMulti
+
+    currentBufStatus.selectedArea.startLine = 0
+    currentBufStatus.selectedArea.endLine = 2
+    currentBufStatus.selectedArea.startColumn = 1
+    currentBufStatus.selectedArea.endColumn = 1
+
+    currentMainWindowNode.currentColumn = 1
+
+    let keys = ru"xyz"
+    for k in keys: status.insertToBuffer(k)
+
+    check currentBufStatus.buffer.toSeqRunes == @["axyzbc", "axyzbc", "axyzbc"]
+      .toSeqRunes
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 4
+
+  test "Insert characters to 3 lines 3":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["abc", "abc", "abc"].toSeqRunes.toGapBuffer
+    currentBufStatus.mode = Mode.insertMulti
+
+    currentBufStatus.selectedArea.startLine = 0
+    currentBufStatus.selectedArea.endLine = 2
+    currentBufStatus.selectedArea.startColumn = 2
+    currentBufStatus.selectedArea.endColumn = 2
+
+    currentMainWindowNode.currentColumn = 2
+
+    let keys = ru"xyz"
+    for k in keys: status.insertToBuffer(k)
+
+    check currentBufStatus.buffer.toSeqRunes == @["abxyzc", "abxyzc", "abxyzc"]
+      .toSeqRunes
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 5
+
+suite "insert: Insert characters with autocomplete":
   proc prepareInsertMode(
     buffer: openArray[string],
     line, column, height, width: int): EditorStatus =
