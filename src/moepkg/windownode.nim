@@ -445,7 +445,7 @@ proc getKey*(node: var WindowNode): Option[Rune] {.inline.} =
   ## Non-blocking read.
 
   if node.window.isSome:
-    node.moveCursor
+    node.refreshWindow
     return getKey()
 
 proc getKey*(node: var WindowNode, timeout: int): Option[Rune] {.inline.} =
@@ -453,14 +453,14 @@ proc getKey*(node: var WindowNode, timeout: int): Option[Rune] {.inline.} =
   ## `timeout` is milliSeconds.
 
   if node.window.isSome:
-    node.moveCursor
+    node.refreshWindow
     return getKey(timeout)
 
 proc getKeyBlocking*(node: var WindowNode): Rune {.inline.} =
   ## Blocking read.
 
   if node.window.isSome:
-    node.moveCursor
+    node.refreshWindow
     return getKeyBlocking()
 
 proc eraseWindow*(node: var WindowNode) {.inline.} =
