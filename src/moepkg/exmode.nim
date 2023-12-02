@@ -1134,7 +1134,7 @@ proc exModeCommand*(status: var EditorStatus, command: seq[Runes]) =
   elif isManualCommand(command):
     status.manualCommand(command.join(" "))
   elif isReplaceCommand(command):
-    status.replaceBuffer(command[0][3 .. command[0].high])
+    status.replaceBuffer(command[0])
   elif isChangeNextBufferCommand(command):
     status.changeNextBufferCommand
   elif isChangePreveBufferCommand(command):
