@@ -1006,7 +1006,7 @@ proc listAllBufferCommand(status: var EditorStatus) =
 
   currentBufStatus.isUpdate = true
 
-proc replaceBuffer(status: var EditorStatus, command: Runes) =
+proc replaceBuffer*(status: var EditorStatus, command: Runes) =
   ## Repace runes in the current buffer.
   ## "%s/abc/xyz" or "%s/abc/xyz/g" command.
 
@@ -1024,6 +1024,13 @@ proc replaceBuffer(status: var EditorStatus, command: Runes) =
         Range(first: 0, last: currentBufStatus.buffer.high),
         replaceInfo.sub,
         replaceInfo.by)
+
+proc replaceBufferCommand*(
+  status: var EditorStatus,
+  command: Runes) {.inline.} =
+    ## Repace buffer and change to prev mode.
+
+    status.replaceBuffer(command)
 
     status.commandLine.clear
     status.changeMode(currentBufStatus.prevMode)
@@ -1134,7 +1141,7 @@ proc exModeCommand*(status: var EditorStatus, command: seq[Runes]) =
   elif isManualCommand(command):
     status.manualCommand(command.join(" "))
   elif isReplaceCommand(command):
-    status.replaceBuffer(command[0])
+    status.replaceBufferCommand(command[0])
   elif isChangeNextBufferCommand(command):
     status.changeNextBufferCommand
   elif isChangePreveBufferCommand(command):
