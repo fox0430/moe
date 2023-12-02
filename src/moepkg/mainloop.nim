@@ -291,7 +291,7 @@ proc jumpAndHighlightInReplaceCommand(status: var EditorStatus) =
   # Jump and highlight in replace command.
   if not status.isSearchHighlight: status.isSearchHighlight = true
 
-  let info = parseReplaceCommand(status.commandLine.buffer[2 .. ^1])
+  let info = parseReplaceCommand(status.commandLine.buffer)
   if info.sub.len > 0:
     status.searchHistory[^1] = info.sub
     currentBufStatus.jumpToSearchForwardResults(
