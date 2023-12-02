@@ -3,5 +3,5 @@
 Changed
 .......
 
-- `#1955`_ refactor: Change type BufferStatus.selectedArea type
+- `#1955`_ refactor: Change BufferStatus.selectedArea type
 
