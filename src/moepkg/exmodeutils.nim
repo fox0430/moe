@@ -704,9 +704,7 @@ proc isManualCommand*(command: seq[Runes]): bool {.inline.} =
   command.len > 1 and cmpIgnoreCase($command[0], "man") == 0
 
 proc isReplaceCommand*(command: seq[Runes]): bool {.inline.} =
-  command.len >= 1 and
-  command[0].len > 4 and
-  command[0][0 .. 2] == ru"%s/"
+  command.len == 1 and command[0].startsWith(ru"%s/")
 
 proc isCreateNewEmptyBufferCommand*(command: seq[Runes]): bool {.inline.} =
   command.len == 1 and cmpIgnoreCase($command[0], "ene") == 0
@@ -837,11 +835,13 @@ proc getDescription*(command: Runes): Result[Runes, string] =
 
 proc parseReplaceCommand*(command: Runes): ReplaceCommandInfo =
   ## Parse the replace command.
-  ## Examples: "/xxx", "/xxx/yyy", "/xxx/yyy/g"
+  ## Examples: "%s/xxx", "%s/xxx/yyy", "%s/xxx/yyy/g"
+
+  if not command.startsWith(ru"%s/"): return
 
   const RemoveEmptyEntries = true
   let
-    commandSplit = command.split(ru'/', RemoveEmptyEntries)
+    commandSplit = command[2 .. ^1].split(ru'/', RemoveEmptyEntries)
 
     sub =
       if commandSplit.len > 0: commandSplit[0].replaceToNewLines
