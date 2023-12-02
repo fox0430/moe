@@ -698,17 +698,17 @@ suite "exmodeutils: isValidFileOpenCommand":
 
 suite "exmodeutils: parseReplaceCommand":
   test "Basic":
-    check parseReplaceCommand(ru"/abc/xyz") ==
+    check parseReplaceCommand(ru"%s/abc/xyz") ==
       (sub: ru"abc", by: ru"xyz", isGlobal: false)
 
   test "Basic 2":
-    check parseReplaceCommand(ru"/abc/xyz/") ==
+    check parseReplaceCommand(ru"%s/abc/xyz/") ==
       (sub: ru"abc", by: ru"xyz", isGlobal: false)
 
   test "Global":
-    check parseReplaceCommand(ru"/abc/xyz/g") ==
+    check parseReplaceCommand(ru"%s/abc/xyz/g") ==
       (sub: ru"abc", by: ru"xyz", isGlobal: true)
 
   test "With newlines":
-    check parseReplaceCommand(ru"/\nabc/xyz\n/") ==
+    check parseReplaceCommand(ru"%s/\nabc/xyz\n/") ==
       (sub: "\nabc".toRunes, by: "xyz\n".toRunes, isGlobal: false)
