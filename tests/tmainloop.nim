@@ -552,3 +552,53 @@ suite "mainloop: insertPasteBuffer":
     status.insertPasteBuffer(PasteBuffer)
 
     check status.commandLine.buffer == ru"a\nb\nc"
+
+suite "mainloop: jumpAndHighlightInReplaceCommand":
+  test "Check jump":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.buffer = @["abc", "abc", "abc"].toSeqRunes.toGapBuffer
+    status.searchHistory = @[ru""]
+
+    currentMainWindowNode.currentLine = 1
+
+    status.resize(100, 100)
+    status.update
+
+    status.commandLine.buffer = ru"%s/a"
+    status.jumpAndHighlightInReplaceCommand
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0
+
+    status.commandLine.buffer = ru"%s/ab"
+    status.jumpAndHighlightInReplaceCommand
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0
+
+    status.commandLine.buffer = ru"%s/abc"
+    status.jumpAndHighlightInReplaceCommand
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0
+  test "Check jump 2":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.buffer = @["", "abc", "", "abc"].toSeqRunes.toGapBuffer
+    status.searchHistory = @[ru""]
+
+    status.resize(100, 100)
+    status.update
+
+    status.commandLine.buffer = ru"%s/a"
+    status.jumpAndHighlightInReplaceCommand
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0
+
+    status.commandLine.buffer = ru"%s/ab"
+    status.jumpAndHighlightInReplaceCommand
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0
+
+    status.commandLine.buffer = ru"%s/abc"
+    status.jumpAndHighlightInReplaceCommand
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0

@@ -24,7 +24,7 @@ import editorstatus, bufferstatus, windownode, unicodeext, gapbuffer, ui,
        exmode, replacemode, filermode, buffermanager, logviewer, help,
        recentfilemode, quickrun, backupmanager, diffviewer, configmode,
        debugmode, commandline, search, commandlineutils, popupwindow,
-       filermodeutils, messages, registers, exmodeutils, editor
+       filermodeutils, messages, registers, exmodeutils, editor, movement
 
 proc invokeCommand(
   currentMode: Mode,
@@ -287,6 +287,19 @@ proc insertPasteBuffer(status: var EditorStatus, pasteBuffer: seq[Runes]) =
     else:
       status.commandLine.writePasteIgnoreWarn
 
+proc jumpAndHighlightInReplaceCommand(status: var EditorStatus) =
+  # Jump and highlight in replace command.
+  if not status.isSearchHighlight: status.isSearchHighlight = true
+
+  let info = parseReplaceCommand(status.commandLine.buffer)
+  if info.sub.len > 0:
+    status.searchHistory[^1] = info.sub
+    currentBufStatus.jumpToSearchForwardResults(
+      currentMainWindowNode,
+      info.sub,
+      status.settings.standard.ignorecase,
+      status.settings.standard.smartcase)
+
 proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
   ## Get keys and update view.
   ## Return the key typed during command execution if needed.
@@ -314,14 +327,6 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
       status.settings.standard.incrementalSearch and
       status.commandLine.isReplaceCommand and
       status.commandLine.buffer.len > 3
-
-  proc jumpAndHighlightInReplaceCommand(status: var EditorStatus) =
-    # Jump and highlight in replace command.
-    if not status.isSearchHighlight: status.isSearchHighlight = true
-
-    let info = parseReplaceCommand(status.commandLine.buffer)
-    if info.sub.len > 0:
-      status.execSearchCommand(info.sub)
 
   if currentBufStatus.isSearchMode:
     status.searchHistory.add "".toRunes
