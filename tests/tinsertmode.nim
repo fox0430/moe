@@ -20,7 +20,7 @@
 import std/[unittest, random, options, sequtils, sugar, importutils]
 import pkg/results
 import moepkg/[highlight, editorstatus, gapbuffer, unicodeext, editor,
-               bufferstatus, movement, autocomplete, windownode, ui]
+               bufferstatus, movement, autocomplete, windownode, ui, visualmode]
 
 import moepkg/suggestionwindow {.all.}
 import moepkg/insertmode {.all.}
@@ -28,6 +28,12 @@ import moepkg/insertmode {.all.}
 proc resize(status: var EditorStatus, h, w: int) =
   updateTerminalSize(h, w)
   status.resize
+
+proc initSelectedArea(status: EditorStatus) =
+  currentBufStatus.selectedArea = initSelectedArea(
+    currentMainWindowNode.currentLine,
+    currentMainWindowNode.currentColumn)
+    .some
 
 suite "insert: Insert characters":
   test "Issue #474":
@@ -299,10 +305,12 @@ suite "insertMulti: Insert characters to multiple positions":
     currentBufStatus.buffer = @["abc", "abc", "abc"].toSeqRunes.toGapBuffer
     currentBufStatus.mode = Mode.insertMulti
 
-    currentBufStatus.selectedArea.startLine = 0
-    currentBufStatus.selectedArea.endLine = 2
-    currentBufStatus.selectedArea.startColumn = 0
-    currentBufStatus.selectedArea.endColumn = 0
+    status.initSelectedArea
+
+    currentBufStatus.selectedArea.get.startLine = 0
+    currentBufStatus.selectedArea.get.endLine = 2
+    currentBufStatus.selectedArea.get.startColumn = 0
+    currentBufStatus.selectedArea.get.endColumn = 0
 
     let keys = ru"xyz"
     for k in keys: status.insertToBuffer(k)
@@ -319,10 +327,12 @@ suite "insertMulti: Insert characters to multiple positions":
     currentBufStatus.buffer = @["abc", "abc", "abc"].toSeqRunes.toGapBuffer
     currentBufStatus.mode = Mode.insertMulti
 
-    currentBufStatus.selectedArea.startLine = 0
-    currentBufStatus.selectedArea.endLine = 2
-    currentBufStatus.selectedArea.startColumn = 1
-    currentBufStatus.selectedArea.endColumn = 1
+    status.initSelectedArea
+
+    currentBufStatus.selectedArea.get.startLine = 0
+    currentBufStatus.selectedArea.get.endLine = 2
+    currentBufStatus.selectedArea.get.startColumn = 1
+    currentBufStatus.selectedArea.get.endColumn = 1
 
     currentMainWindowNode.currentColumn = 1
 
@@ -341,10 +351,12 @@ suite "insertMulti: Insert characters to multiple positions":
     currentBufStatus.buffer = @["abc", "abc", "abc"].toSeqRunes.toGapBuffer
     currentBufStatus.mode = Mode.insertMulti
 
-    currentBufStatus.selectedArea.startLine = 0
-    currentBufStatus.selectedArea.endLine = 2
-    currentBufStatus.selectedArea.startColumn = 2
-    currentBufStatus.selectedArea.endColumn = 2
+    status.initSelectedArea
+
+    currentBufStatus.selectedArea.get.startLine = 0
+    currentBufStatus.selectedArea.get.endLine = 2
+    currentBufStatus.selectedArea.get.startColumn = 2
+    currentBufStatus.selectedArea.get.endColumn = 2
 
     currentMainWindowNode.currentColumn = 2
 
@@ -364,10 +376,12 @@ suite "insertMulti: Delete characters from multiple positions":
     currentBufStatus.buffer = @["", "", ""].toSeqRunes.toGapBuffer
     currentBufStatus.mode = Mode.insertMulti
 
-    currentBufStatus.selectedArea.startLine = 0
-    currentBufStatus.selectedArea.endLine = 2
-    currentBufStatus.selectedArea.startColumn = 2
-    currentBufStatus.selectedArea.endColumn = 2
+    status.initSelectedArea
+
+    currentBufStatus.selectedArea.get.startLine = 0
+    currentBufStatus.selectedArea.get.endLine = 2
+    currentBufStatus.selectedArea.get.startColumn = 2
+    currentBufStatus.selectedArea.get.endColumn = 2
 
     currentMainWindowNode.currentColumn = 0
 
@@ -382,10 +396,12 @@ suite "insertMulti: Delete characters from multiple positions":
     currentBufStatus.buffer = @["abc", "abc", "abc"].toSeqRunes.toGapBuffer
     currentBufStatus.mode = Mode.insertMulti
 
-    currentBufStatus.selectedArea.startLine = 0
-    currentBufStatus.selectedArea.endLine = 2
-    currentBufStatus.selectedArea.startColumn = 2
-    currentBufStatus.selectedArea.endColumn = 2
+    status.initSelectedArea
+
+    currentBufStatus.selectedArea.get.startLine = 0
+    currentBufStatus.selectedArea.get.endLine = 2
+    currentBufStatus.selectedArea.get.startColumn = 2
+    currentBufStatus.selectedArea.get.endColumn = 2
 
     currentMainWindowNode.currentColumn = 3
 
@@ -401,10 +417,12 @@ suite "insertMulti: Delete characters from multiple positions":
     currentBufStatus.buffer = @["abc", "", "abc"].toSeqRunes.toGapBuffer
     currentBufStatus.mode = Mode.insertMulti
 
-    currentBufStatus.selectedArea.startLine = 0
-    currentBufStatus.selectedArea.endLine = 2
-    currentBufStatus.selectedArea.startColumn = 2
-    currentBufStatus.selectedArea.endColumn = 2
+    status.initSelectedArea
+
+    currentBufStatus.selectedArea.get.startLine = 0
+    currentBufStatus.selectedArea.get.endLine = 2
+    currentBufStatus.selectedArea.get.startColumn = 2
+    currentBufStatus.selectedArea.get.endColumn = 2
 
     currentMainWindowNode.currentColumn = 3
 
@@ -421,10 +439,12 @@ suite "insertMulti: Delete current characters from multiple positions":
     currentBufStatus.buffer = @["", "", ""].toSeqRunes.toGapBuffer
     currentBufStatus.mode = Mode.insertMulti
 
-    currentBufStatus.selectedArea.startLine = 0
-    currentBufStatus.selectedArea.endLine = 2
-    currentBufStatus.selectedArea.startColumn = 2
-    currentBufStatus.selectedArea.endColumn = 2
+    status.initSelectedArea
+
+    currentBufStatus.selectedArea.get.startLine = 0
+    currentBufStatus.selectedArea.get.endLine = 2
+    currentBufStatus.selectedArea.get.startColumn = 2
+    currentBufStatus.selectedArea.get.endColumn = 2
 
     currentMainWindowNode.currentColumn = 0
 
@@ -439,10 +459,12 @@ suite "insertMulti: Delete current characters from multiple positions":
     currentBufStatus.buffer = @["abc", "abc", "abc"].toSeqRunes.toGapBuffer
     currentBufStatus.mode = Mode.insertMulti
 
-    currentBufStatus.selectedArea.startLine = 0
-    currentBufStatus.selectedArea.endLine = 2
-    currentBufStatus.selectedArea.startColumn = 2
-    currentBufStatus.selectedArea.endColumn = 2
+    status.initSelectedArea
+
+    currentBufStatus.selectedArea.get.startLine = 0
+    currentBufStatus.selectedArea.get.endLine = 2
+    currentBufStatus.selectedArea.get.startColumn = 2
+    currentBufStatus.selectedArea.get.endColumn = 2
 
     currentMainWindowNode.currentColumn = 0
 
@@ -458,10 +480,12 @@ suite "insertMulti: Delete current characters from multiple positions":
     currentBufStatus.buffer = @["abc", "", "abc"].toSeqRunes.toGapBuffer
     currentBufStatus.mode = Mode.insertMulti
 
-    currentBufStatus.selectedArea.startLine = 0
-    currentBufStatus.selectedArea.endLine = 2
-    currentBufStatus.selectedArea.startColumn = 2
-    currentBufStatus.selectedArea.endColumn = 2
+    status.initSelectedArea
+
+    currentBufStatus.selectedArea.get.startLine = 0
+    currentBufStatus.selectedArea.get.endLine = 2
+    currentBufStatus.selectedArea.get.startColumn = 2
+    currentBufStatus.selectedArea.get.endColumn = 2
 
     currentMainWindowNode.currentColumn = 0
 
@@ -477,10 +501,12 @@ suite "insertMulti: Delete current characters from multiple positions":
     currentBufStatus.buffer = @["abc", "abc", "abc"].toSeqRunes.toGapBuffer
     currentBufStatus.mode = Mode.insertMulti
 
-    currentBufStatus.selectedArea.startLine = 0
-    currentBufStatus.selectedArea.endLine = 2
-    currentBufStatus.selectedArea.startColumn = 2
-    currentBufStatus.selectedArea.endColumn = 2
+    status.initSelectedArea
+
+    currentBufStatus.selectedArea.get.startLine = 0
+    currentBufStatus.selectedArea.get.endLine = 2
+    currentBufStatus.selectedArea.get.startColumn = 2
+    currentBufStatus.selectedArea.get.endColumn = 2
 
     currentMainWindowNode.currentColumn = 1
 
@@ -495,10 +521,12 @@ suite "insertMulti: Delete current characters from multiple positions":
     currentBufStatus.buffer = @["abc", "abc", "abc"].toSeqRunes.toGapBuffer
     currentBufStatus.mode = Mode.insertMulti
 
-    currentBufStatus.selectedArea.startLine = 0
-    currentBufStatus.selectedArea.endLine = 2
-    currentBufStatus.selectedArea.startColumn = 2
-    currentBufStatus.selectedArea.endColumn = 2
+    status.initSelectedArea
+
+    currentBufStatus.selectedArea.get.startLine = 0
+    currentBufStatus.selectedArea.get.endLine = 2
+    currentBufStatus.selectedArea.get.startColumn = 2
+    currentBufStatus.selectedArea.get.endColumn = 2
 
     currentMainWindowNode.currentColumn = 3
 

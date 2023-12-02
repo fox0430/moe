@@ -54,7 +54,7 @@ type
     language*: SourceLanguage
     fileType*: FileType
     extension*: Runes
-    selectedArea*: SelectedArea
+    selectedArea*: Option[SelectedArea]
     path*: Runes
     openDir*: Runes
     positionRecord*: Table[int, tuple[line, column, expandedColumn: int]]

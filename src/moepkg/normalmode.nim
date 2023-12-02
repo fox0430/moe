@@ -43,18 +43,21 @@ proc changeModeToVisualMode(status: var EditorStatus) {.inline.} =
   currentBufStatus.selectedArea = initSelectedArea(
     currentMainWindowNode.currentLine,
     currentMainWindowNode.currentColumn)
+    .some
 
 proc changeModeToVisualBlockMode(status: var EditorStatus) {.inline.} =
   status.changeMode(Mode.visualBlock)
   currentBufStatus.selectedArea = initSelectedArea(
     currentMainWindowNode.currentLine,
     currentMainWindowNode.currentColumn)
+    .some
 
 proc changeModeToVisualLineMode(status: var EditorStatus) {.inline.} =
   status.changeMode(Mode.visualLine)
   currentBufStatus.selectedArea = initSelectedArea(
     currentMainWindowNode.currentLine,
     currentMainWindowNode.currentColumn)
+    .some
 
 proc changeModeToExMode*(
   bufStatus: var BufferStatus,
