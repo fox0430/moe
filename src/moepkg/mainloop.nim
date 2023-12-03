@@ -303,8 +303,9 @@ proc jumpAndHighlightInReplaceCommand(status: var EditorStatus) =
   if not status.isSearchHighlight: status.isSearchHighlight = true
 
   let info = parseReplaceCommand(status.commandLine.buffer)
-  if info.sub.len > 0:
-    status.searchHistory[^1] = info.sub
+  if info.sub.len > 0 and info.by.len == 0:
+    # TODO: Don't use `status.searchHistory`.
+    status.searchHistory.add info.sub
     currentBufStatus.jumpToSearchForwardResults(
       currentMainWindowNode,
       info.sub,
@@ -511,7 +512,10 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
     if status.settings.standard.incrementalSearch and
        currentBufStatus.isSearchMode:
          status.execSearchCommand(status.commandLine.buffer)
-    elif status.isIncrementalReplace:
+    elif status.isJumpAndHighlightInReplaceCommand:
+      status.jumpAndHighlightInReplaceCommand
+
+    if status.isIncrementalReplace:
       let info = parseReplaceCommand(status.commandLine.buffer)
       if incReplaceInfo.isNone:
         incReplaceInfo = IncrementalReplaceInfo(
@@ -520,17 +524,20 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
           isGlobal: info.isGlobal,
           beforeLines: status.initBeforeLineForIncrementalReplace)
           .some
-      elif incReplaceInfo.get.by != info.by:
-        # Restore lines before ex mode.
-        for beforeLine in incReplaceInfo.get.beforeLines:
-          currentBufStatus.buffer[beforeLine.lineNumber] = beforeLine.lineBuffer
+      elif incReplaceInfo.get.by != info.by or
+           incReplaceInfo.get.isGlobal != info.isGlobal:
+             # Restore lines before ex mode.
+             for beforeLine in incReplaceInfo.get.beforeLines:
+               currentBufStatus.buffer[beforeLine.lineNumber] = beforeLine.lineBuffer
 
-        incReplaceInfo.get.beforeLines = status.initBeforeLineForIncrementalReplace
-        incReplaceInfo.get.by = info.by
+             if incReplaceInfo.get.by != info.by:
+               incReplaceInfo.get.beforeLines = status.initBeforeLineForIncrementalReplace
+               incReplaceInfo.get.by = info.by
+
+             if incReplaceInfo.get.isGlobal != info.isGlobal:
+               incReplaceInfo.get.isGlobal = info.isGlobal
 
       status.execIncrementalReplace
-    elif status.isJumpAndHighlightInReplaceCommand:
-      status.jumpAndHighlightInReplaceCommand
 
     if suggestWin.isSome:
       suggestWin.closeSuggestWindow
