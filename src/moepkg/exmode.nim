@@ -1006,34 +1006,33 @@ proc listAllBufferCommand(status: var EditorStatus) =
 
   currentBufStatus.isUpdate = true
 
-proc replaceBuffer*(status: var EditorStatus, command: Runes) =
+proc replaceBuffer*(status: var EditorStatus, replaceInfo: ReplaceCommandInfo) =
   ## Repace runes in the current buffer.
-  ## "%s/abc/xyz" or "%s/abc/xyz/g" command.
 
-  let replaceInfo = parseReplaceCommand(command)
-  if replaceInfo.sub.len > 0 and replaceInfo.by.len > 0:
-    if replaceInfo.isGlobal:
-      # Replace all
-      currentBufStatus.replaceAll(
-        Range(first: 0, last: currentBufStatus.buffer.high),
-        replaceInfo.sub,
-        replaceInfo.by)
-    else:
-      # Replace only the first words in lines.
-      currentBufStatus.replaceOnlyFirstWordInLines(
-        Range(first: 0, last: currentBufStatus.buffer.high),
-        replaceInfo.sub,
-        replaceInfo.by)
+  if replaceInfo.isGlobal:
+    # Replace all
+    currentBufStatus.replaceAll(
+      Range(first: 0, last: currentBufStatus.buffer.high),
+      replaceInfo.sub,
+      replaceInfo.by)
+  else:
+    # Replace only the first words in lines.
+    currentBufStatus.replaceOnlyFirstWordInLines(
+      Range(first: 0, last: currentBufStatus.buffer.high),
+      replaceInfo.sub,
+      replaceInfo.by)
 
 proc replaceBufferCommand*(
   status: var EditorStatus,
   command: Runes) {.inline.} =
     ## Repace buffer and change to prev mode.
 
-    status.replaceBuffer(command)
+    let replaceInfo = parseReplaceCommand(command)
+    if replaceInfo.sub.len > 0 and replaceInfo.by.len > 0:
+      status.replaceBuffer(replaceInfo)
 
-    status.commandLine.clear
-    status.changeMode(currentBufStatus.prevMode)
+      status.commandLine.clear
+      status.changeMode(currentBufStatus.prevMode)
 
 proc createNewEmptyBufferCommand*(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)

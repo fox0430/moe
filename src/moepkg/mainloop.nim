@@ -312,15 +312,17 @@ proc jumpAndHighlightInReplaceCommand(status: var EditorStatus) =
       status.settings.standard.ignorecase,
       status.settings.standard.smartcase)
 
-proc isReplaceCommand(commandLine: CommandLine): bool {.inline.} =
-  commandLine.buffer.startsWith(ru"%s/")
+proc isReplaceCommand(status: EditorStatus): bool {.inline.} =
+  ## Return true if the valid replace command ("%s/xxx/yyy").
+
+  currentBufStatus.isExMode and
+  status.commandLine.buffer.startsWith(ru"%s/") and
+  status.commandLine.buffer.count(ru'/') > 1 and
+  status.commandLine.buffer.count(ru'/') < 4
 
 proc isIncrementalReplace(status: EditorStatus): bool {.inline.} =
   status.settings.standard.incrementalSearch and
-  currentBufStatus.isExMode and
-  status.commandLine.isReplaceCommand and
-  status.commandLine.buffer.count(ru'/') > 1 and
-  status.commandLine.buffer.count(ru'/') < 3
+  status.isReplaceCommand
 
 proc initBeforeLineForIncrementalReplace(
   status: var EditorStatus): seq[BeforeLine] =
@@ -339,8 +341,14 @@ proc initBeforeLineForIncrementalReplace(
             lineNumber: p.line,
             lineBuffer: currentBufStatus.buffer[p.line])
 
-proc execIncrementalReplace(status: var EditorStatus,) {.inline.} =
-  status.replaceBuffer(status.commandLine.buffer)
+proc execIncrementalReplace(
+  status: var EditorStatus,
+  incReplaceInfo: IncrementalReplaceInfo) {.inline.} =
+
+    status.replaceBuffer((
+      sub: incReplaceInfo.sub,
+      by: incReplaceInfo.by,
+      isGlobal: incReplaceInfo.isGlobal))
 
 proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
   ## Get keys and update view.
@@ -364,8 +372,8 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
   proc isJumpAndHighlightInReplaceCommand(
     status: EditorStatus): bool {.inline.} =
       status.settings.standard.incrementalSearch and
-      status.commandLine.isReplaceCommand and
-      status.commandLine.buffer.len > 3
+      currentBufStatus.isExMode and
+      status.commandLine.buffer.startsWith(ru"%s/")
 
   if currentBufStatus.isSearchMode:
     status.searchHistory.add "".toRunes
@@ -537,7 +545,7 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
              if incReplaceInfo.get.isGlobal != info.isGlobal:
                incReplaceInfo.get.isGlobal = info.isGlobal
 
-      status.execIncrementalReplace
+      status.execIncrementalReplace(incReplaceInfo.get)
 
     if suggestWin.isSome:
       suggestWin.closeSuggestWindow
