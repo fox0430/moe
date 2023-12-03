@@ -105,7 +105,9 @@ proc searchNextOccurrence(status: var EditorStatus, keyword: Runes) =
 
   if keyword.len == 0: return
 
-  status.highlightingText = HighlightingText(kind: search, text: @[keyword])
+  status.highlightingText = HighlightingText(
+    kind: HighlightingTextKind.search,
+    text: @[keyword])
     .some
 
   var highlight = currentMainWindowNode.highlight
@@ -162,7 +164,9 @@ proc searchNextOccurrenceReversely(
 
     if keyword.len == 0: return
 
-    status.highlightingText = HighlightingText(kind: search, text: @[keyword])
+    status.highlightingText = HighlightingText(
+      kind: HighlightingTextKind.search,
+      text: @[keyword])
       .some
 
     var highlight = currentMainWindowNode.highlight

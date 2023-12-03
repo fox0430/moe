@@ -2508,7 +2508,7 @@ suite "Normal mode: execNormalModeCommand":
     let beforeBufStatus = currentBufStatus
 
     status.highlightingText = HighlightingText(
-      kind: search,
+      kind: HighlightingTextKind.search,
       text: @["a"].toSeqRunes)
       .some
 

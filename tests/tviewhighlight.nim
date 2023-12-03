@@ -337,7 +337,7 @@ suite "viewhighlight: Highlight trailing spaces":
     status.verticalSplitWindow
 
     status.highlightingText = HighlightingText(
-      kind: search,
+      kind: HighlightingTextKind.search,
       text: @["abc"].toSeqRunes)
       .some
 
@@ -1018,7 +1018,7 @@ suite "viewhighlight: highlightText":
     let
       bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
       highlightText = HighlightingText(
-        kind: search,
+        kind: HighlightingTextKind.search,
         text: @["ghi"].toSeqRunes)
 
     h.highlightText(bufferInView, highlightText)
@@ -1062,7 +1062,7 @@ suite "viewhighlight: highlightText":
     let
       bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
       highlightText = HighlightingText(
-        kind: search,
+        kind: HighlightingTextKind.search,
         text: @["cde"].toSeqRunes)
 
     h.highlightText(bufferInView, highlightText)
@@ -1113,7 +1113,7 @@ suite "viewhighlight: highlightText":
     let
       bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
       highlightText = HighlightingText(
-        kind: search,
+        kind: HighlightingTextKind.search,
         text: @["c", "gh"].toSeqRunes)
 
     h.highlightText(bufferInView, highlightText)
@@ -1171,7 +1171,7 @@ suite "viewhighlight: highlightText":
     let
       bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
       highlightText = HighlightingText(
-        kind: search,
+        kind: HighlightingTextKind.search,
         text: @["abc", "", "", "def"].toSeqRunes)
 
     h.highlightText(bufferInView, highlightText)
@@ -1224,7 +1224,7 @@ suite "viewhighlight: highlightText":
     let
       bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
       highlightText = HighlightingText(
-        kind: search,
+        kind: HighlightingTextKind.search,
         text: @["\n"].toSeqRunes)
 
     h.highlightText(bufferInView, highlightText)

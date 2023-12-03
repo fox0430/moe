@@ -23,7 +23,7 @@ import independentutils, bufferstatus, highlight, color, windownode, gapbuffer,
        theme
 
 type
-  HighlightingTextKind* = enum
+  HighlightingTextKind* {.pure.} = enum
     search
     replace
 
@@ -290,7 +290,7 @@ proc highlightText(
 
       color =
         case highlightingText.kind:
-          of search: EditorColorPairIndex.searchResult
+          of HighlightingTextKind.search: EditorColorPairIndex.searchResult
           else: EditorColorPairIndex.replaceText
 
     for p in positions:

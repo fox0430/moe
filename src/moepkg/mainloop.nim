@@ -305,7 +305,7 @@ proc jumpAndHighlightInReplaceCommand(status: var EditorStatus) =
   let info = parseReplaceCommand(status.commandLine.buffer)
   if info.sub.len > 0 and info.by.len == 0:
     status.highlightingText = HighlightingText(
-      kind: replace,
+      kind: HighlightingTextKind.replace,
       text: info.sub.replaceToNewLines.splitLines)
       .some
 
@@ -562,7 +562,7 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
 
     if currentBufStatus.isSearchMode:
       status.highlightingText = HighlightingText(
-        kind: search,
+        kind: HighlightingTextKind.search,
         text: status.searchHistory[^1].replaceToNewLines.splitLines,
         isIgnorecase: status.settings.standard.ignorecase,
         isSmartcase: status.settings.standard.smartcase)
