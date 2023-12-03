@@ -491,8 +491,7 @@ proc exitVisualMode(status: var EditorStatus) =
   highlight.updateViewHighlight(
     currentBufStatus,
     currentMainWindowNode,
-    status.isSearchHighlight,
-    status.searchHistory,
+    status.highlightingText,
     status.settings)
 
   status.changeModeToNormalMode

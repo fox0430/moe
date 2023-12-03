@@ -25,7 +25,7 @@ import editorstatus, bufferstatus, windownode, unicodeext, gapbuffer, ui,
        recentfilemode, quickrun, backupmanager, diffviewer, configmode,
        debugmode, commandline, search, commandlineutils, popupwindow,
        filermodeutils, messages, registers, exmodeutils, editor, movement,
-       searchutils, independentutils
+       searchutils, independentutils, viewhighlight
 
 type
   BeforeLine = object
@@ -299,13 +299,16 @@ proc insertPasteBuffer(status: var EditorStatus, pasteBuffer: seq[Runes]) =
       status.commandLine.writePasteIgnoreWarn
 
 proc jumpAndHighlightInReplaceCommand(status: var EditorStatus) =
-  # Jump and highlight in replace command.
-  if not status.isSearchHighlight: status.isSearchHighlight = true
+  ## Jump and highlight in replace command.
+  ## Don't highlight and jump if info.sub is confirmed.
 
   let info = parseReplaceCommand(status.commandLine.buffer)
   if info.sub.len > 0 and info.by.len == 0:
-    # TODO: Don't use `status.searchHistory`.
-    status.searchHistory.add info.sub
+    status.highlightingText = HighlightingText(
+      kind: replace,
+      text: info.sub.replaceToNewLines.splitLines)
+      .some
+
     currentBufStatus.jumpToSearchForwardResults(
       currentMainWindowNode,
       info.sub,
@@ -350,6 +353,13 @@ proc execIncrementalReplace(
       by: incReplaceInfo.by,
       isGlobal: incReplaceInfo.isGlobal))
 
+proc isUpdateIncReplceInfo(
+  incReplaceInfo: IncrementalReplaceInfo,
+  replaceCommandInfo: ReplaceCommandInfo): bool {.inline.} =
+
+    incReplaceInfo.by != replaceCommandInfo.by or
+    incReplaceInfo.isGlobal != replaceCommandInfo.isGlobal
+
 proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
   ## Get keys and update view.
   ## Return the key typed during command execution if needed.
@@ -377,8 +387,6 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
 
   if currentBufStatus.isSearchMode:
     status.searchHistory.add "".toRunes
-
-    if not status.isSearchHighlight: status.isSearchHighlight = true
 
   var
     isCancel = false
@@ -420,7 +428,6 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
     else:
       status.update
 
-    # TODO: Move to editorstatus.update?
     if currentBufStatus.isSearchMode:
       status.commandLine.buffer = status.searchHistory[suggestList.currentIndex]
       status.commandLine.update
@@ -526,46 +533,59 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
     if status.isIncrementalReplace:
       let info = parseReplaceCommand(status.commandLine.buffer)
       if incReplaceInfo.isNone:
+        # Init IncrementalReplaceInfo
         incReplaceInfo = IncrementalReplaceInfo(
           sub: info.sub,
           by: info.by,
           isGlobal: info.isGlobal,
           beforeLines: status.initBeforeLineForIncrementalReplace)
           .some
-      elif incReplaceInfo.get.by != info.by or
-           incReplaceInfo.get.isGlobal != info.isGlobal:
-             # Restore lines before ex mode.
-             for beforeLine in incReplaceInfo.get.beforeLines:
-               currentBufStatus.buffer[beforeLine.lineNumber] = beforeLine.lineBuffer
+        status.execIncrementalReplace(incReplaceInfo.get)
+      elif incReplaceInfo.get.isUpdateIncReplceInfo(info):
+        # Update IncrementalReplaceInfo
 
-             if incReplaceInfo.get.by != info.by:
-               incReplaceInfo.get.beforeLines = status.initBeforeLineForIncrementalReplace
-               incReplaceInfo.get.by = info.by
+        # Restore lines before ex mode.
+        for beforeLine in incReplaceInfo.get.beforeLines:
+          currentBufStatus.buffer[beforeLine.lineNumber] = beforeLine.lineBuffer
 
-             if incReplaceInfo.get.isGlobal != info.isGlobal:
-               incReplaceInfo.get.isGlobal = info.isGlobal
+        if incReplaceInfo.get.by != info.by:
+          incReplaceInfo.get.by = info.by
+          incReplaceInfo.get.beforeLines =
+            status.initBeforeLineForIncrementalReplace
 
-      status.execIncrementalReplace(incReplaceInfo.get)
+        if incReplaceInfo.get.isGlobal != info.isGlobal:
+          incReplaceInfo.get.isGlobal = info.isGlobal
 
+        status.execIncrementalReplace(incReplaceInfo.get)
     if suggestWin.isSome:
       suggestWin.closeSuggestWindow
 
+    if currentBufStatus.isSearchMode:
+      status.highlightingText = HighlightingText(
+        kind: search,
+        text: status.searchHistory[^1].replaceToNewLines.splitLines,
+        isIgnorecase: status.settings.standard.ignorecase,
+        isSmartcase: status.settings.standard.smartcase)
+        .some
+
   if isCancel:
-    if incReplaceInfo.isSome:
-      # Restore lines before ex mode.
-      for beforeLine in incReplaceInfo.get.beforeLines:
-        currentBufStatus.buffer[beforeLine.lineNumber] = beforeLine.lineBuffer
-
-      currentBufStatus.isUpdate = true
-
-    status.changeMode(currentBufStatus.prevMode)
-
     if currentBufStatus.isSearchMode:
       if status.searchHistory[^1].len == 0:
         status.searchHistory.delete(status.searchHistory.high)
 
-      if status.settings.standard.incrementalSearch:
-        status.isSearchHighlight = false
+      status.highlightingText = none(HighlightingText)
+      currentBufStatus.isUpdate = true
+
+      status.changeMode(currentBufStatus.prevMode)
+    elif incReplaceInfo.isSome:
+      # Restore lines before ex mode.
+      for beforeLine in incReplaceInfo.get.beforeLines:
+        currentBufStatus.buffer[beforeLine.lineNumber] = beforeLine.lineBuffer
+
+      status.highlightingText = none(HighlightingText)
+      currentBufStatus.isUpdate = true
+
+      status.changeMode(currentBufStatus.prevMode)
   else:
     if isExMode(currentBufStatus.mode):
       let command = status.commandLine.buffer

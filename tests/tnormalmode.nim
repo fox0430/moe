@@ -21,7 +21,7 @@ import std/[unittest, importutils, sequtils, sugar, os, options, strformat]
 import pkg/results
 import moepkg/syntax/highlite
 import moepkg/[registers, settings, editorstatus, gapbuffer, unicodeext,
-               bufferstatus, ui, windownode, quickrunutils]
+               bufferstatus, ui, windownode, quickrunutils, viewhighlight]
 
 import moepkg/normalmode {.all.}
 
@@ -2507,14 +2507,17 @@ suite "Normal mode: execNormalModeCommand":
 
     let beforeBufStatus = currentBufStatus
 
-    status.isSearchHighlight = true
+    status.highlightingText = HighlightingText(
+      kind: search,
+      text: @["a"].toSeqRunes)
+      .some
 
     const Commands = @[EscKey.toRune, EscKey.toRune]
     check status.execNormalModeCommand(Commands).isNone
 
     check currentBufStatus == beforeBufStatus
 
-    check not status.isSearchHighlight
+    check status.highlightingText.isNone
 
   test "\"ESC /\" keys":
     # Remove ESC from top of the command and exec commands.

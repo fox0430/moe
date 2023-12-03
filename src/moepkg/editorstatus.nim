@@ -60,7 +60,6 @@ type
     popupWindow*: Window
     lastOperatingTime*: DateTime
     autoBackupStatus*: AutoBackupStatus
-    isSearchHighlight*: bool
     lastPosition*: seq[LastCursorPosition]
     isReadonly*: bool
     wordDictionary*: WordDictionary
@@ -69,6 +68,7 @@ type
     colorMode*: ColorMode
     backgroundTasks*: BackgroundTasks
     recodingOperationRegister*: Option[Rune]
+    highlightingText*: Option[HighlightingText]
 
     lspClients*: Table[string, LspClient]
       # key is languageId
@@ -877,8 +877,7 @@ proc update*(status: var EditorStatus) =
           highlight.updateViewHighlight(
             b,
             node,
-            status.isSearchHighlight,
-            status.searchHistory,
+            status.highlightingText,
             settings)
 
         if node.view.sidebar.isSome:
