@@ -590,7 +590,6 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
       status.highlightingText = none(HighlightingText)
       currentBufStatus.isUpdate = true
 
-      status.changeMode(currentBufStatus.prevMode)
     elif incReplaceInfo.isSome:
       # Restore lines before ex mode.
       for beforeLine in incReplaceInfo.get.beforeLines:
@@ -599,7 +598,7 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
       status.highlightingText = none(HighlightingText)
       currentBufStatus.isUpdate = true
 
-      status.changeMode(currentBufStatus.prevMode)
+    status.changeMode(currentBufStatus.prevMode)
   else:
     if isExMode(currentBufStatus.mode):
       let command = status.commandLine.buffer
