@@ -108,14 +108,16 @@ proc searchNextOccurrence(status: var EditorStatus, keyword: Runes) =
 
   if keyword.len == 0: return
 
-  status.isSearchHighlight = true
+  status.highlightingText = HighlightingText(
+    kind: HighlightingTextKind.search,
+    text: @[keyword])
+    .some
 
   var highlight = currentMainWindowNode.highlight
   highlight.updateViewHighlight(
     currentBufStatus,
     currentMainWindowNode,
-    status.isSearchHighlight,
-    status.searchHistory,
+    status.highlightingText,
     status.settings)
 
   status.searchHistory.saveSearchHistory(keyword, status.searchHistoryLimit)
@@ -165,14 +167,16 @@ proc searchNextOccurrenceReversely(
 
     if keyword.len == 0: return
 
-    status.isSearchHighlight = true
+    status.highlightingText = HighlightingText(
+      kind: HighlightingTextKind.search,
+      text: @[keyword])
+      .some
 
     var highlight = currentMainWindowNode.highlight
     highlight.updateViewHighlight(
       currentBufStatus,
       currentMainWindowNode,
-      status.isSearchHighlight,
-      status.searchHistory,
+      status.highlightingText,
       status.settings)
 
     status.searchHistory.saveSearchHistory(keyword, status.searchHistoryLimit)
@@ -223,9 +227,9 @@ proc searchNextOccurrenceReversely(status: var EditorStatus) {.inline.} =
   if status.searchHistory.len > 0:
     status.searchNextOccurrenceReversely(status.searchHistory[^1])
 
-proc turnOffHighlighting*(status: var EditorStatus) =
-  status.isSearchHighlight = false
-  status.update
+proc turnOffHighlighting*(status: var EditorStatus) {.inline.} =
+  if status.highlightingText.isSome:
+    status.highlightingText = none(HighlightingText)
 
 proc pageUpCommand(status: var EditorStatus): Option[Rune] =
   ## Interrupt scrolling and return a key If a key is pressed while scrolling.
@@ -931,8 +935,7 @@ proc openBlankLineAboveAndEnterInsertMode(status: var EditorStatus) =
   highlight.updateViewHighlight(
     currentBufStatus,
     currentMainWindowNode,
-    status.isSearchHighlight,
-    status.searchHistory,
+    status.highlightingText,
     status.settings)
 
   status.changeModeToInsertMode

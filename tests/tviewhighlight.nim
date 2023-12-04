@@ -260,8 +260,7 @@ suite "viewhighlight: Highlight trailing spaces":
     highlight.updateViewHighlight(
       currentBufStatus,
       currentMainWindowNode,
-      status.isSearchHighlight,
-      status.searchHistory,
+      status.highlightingText,
       status.settings)
 
     status.resize(100, 100)
@@ -288,8 +287,7 @@ suite "viewhighlight: Highlight trailing spaces":
     highlight.updateViewHighlight(
       currentBufStatus,
       currentMainWindowNode,
-      status.isSearchHighlight,
-      status.searchHistory,
+      status.highlightingText,
       status.settings)
 
     check highlight[0].color == EditorColorPairIndex.default
@@ -320,13 +318,49 @@ suite "viewhighlight: Highlight trailing spaces":
     highlight.updateViewHighlight(
       currentBufStatus,
       currentMainWindowNode,
-      status.isSearchHighlight,
-      status.searchHistory,
+      status.highlightingText,
       status.settings)
 
     check highlight[0].color == EditorColorPairIndex.default
     check highlight[0].firstColumn == 0
     check highlight[0].lastColumn == 0
+
+  test "Highlight search results in two windows":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin("test.nim").get
+    currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
+
+    updateTerminalSize(100, 100)
+    status.resize
+    status.update
+
+    status.verticalSplitWindow
+
+    status.highlightingText = HighlightingText(
+      kind: HighlightingTextKind.search,
+      text: @["abc"].toSeqRunes)
+      .some
+
+    var queue = initHeapQueue[WindowNode]()
+    for node in mainWindowNode.child:
+      queue.push(node)
+
+    while queue.len > 0:
+      for i in  0 ..< queue.len:
+        var node = queue.pop
+
+        if node.window.isSome:
+          var highlight = node.highlight
+          highlight.updateViewHighlight(
+            currentBufStatus,
+            node,
+            status.highlightingText,
+            status.settings)
+
+          check highlight.len == 3
+          check highlight[0].color == EditorColorPairIndex.searchResult
+          check highlight[1].color == EditorColorPairIndex.whitespace
+          check highlight[2].color == EditorColorPairIndex.identifier
 
 suite "viewhighlight: highlightPairOfParen":
   const
@@ -793,68 +827,6 @@ suite "viewhighlight: highlightPairOfParen":
 
     highlight.highlightPairOfParen(bufferInView)
 
-suite "viewhighlight: Update search highlight":
-  test "single window":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin("test.nim").get
-    currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
-
-    updateTerminalSize(100, 100)
-    status.resize
-    status.update
-
-    status.searchHistory = @[ru "abc"]
-    status.isSearchHighlight = true
-
-    var highlight = currentMainWindowNode.highlight
-    highlight.updateViewHighlight(
-      currentBufStatus,
-      currentMainWindowNode,
-      status.isSearchHighlight,
-      status.searchHistory,
-      status.settings)
-
-    check highlight.len == 3
-    check highlight[0].color == EditorColorPairIndex.searchResult
-    check highlight[1].color == EditorColorPairIndex.whitespace
-    check highlight[2].color == EditorColorPairIndex.identifier
-
-  test "two windows":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin("test.nim").get
-    currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
-
-    updateTerminalSize(100, 100)
-    status.resize
-    status.update
-
-    status.verticalSplitWindow
-
-    status.searchHistory = @[ru "abc"]
-    status.isSearchHighlight = true
-
-    var queue = initHeapQueue[WindowNode]()
-    for node in mainWindowNode.child:
-      queue.push(node)
-
-    while queue.len > 0:
-      for i in  0 ..< queue.len:
-        var node = queue.pop
-
-        if node.window.isSome:
-          var highlight = node.highlight
-          highlight.updateViewHighlight(
-            currentBufStatus,
-            node,
-            status.isSearchHighlight,
-            status.searchHistory,
-            status.settings)
-
-          check highlight.len == 3
-          check highlight[0].color == EditorColorPairIndex.searchResult
-          check highlight[1].color == EditorColorPairIndex.whitespace
-          check highlight[2].color == EditorColorPairIndex.identifier
-
 suite "viewhighlight: highlightGitConflicts":
   test "Highlight Git conflicts":
     const Buffer = """
@@ -1027,7 +999,7 @@ echo "test"
     for cs in h.colorSegments:
       check cs.color != EditorColorPairIndex.gitConflict
 
-suite "viewhighlight: highlightKeyword":
+suite "viewhighlight: highlightText":
   const ReservedWords: seq[ReservedWord] = @[]
 
   test "Basic":
@@ -1043,13 +1015,13 @@ suite "viewhighlight: highlightKeyword":
       ReservedWords,
       SourceLanguage.langNone)
 
-    let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
+    let
+      bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
+      highlightText = HighlightingText(
+        kind: HighlightingTextKind.search,
+        text: @["ghi"].toSeqRunes)
 
-    const
-      keyword = ru"ghi"
-      IsSearchHighlight = true
-
-    h.highlightKeyword(bufferInView, keyword, status.settings, IsSearchHighlight)
+    h.highlightText(bufferInView, highlightText)
 
     check h.colorSegments == @[
       ColorSegment(
@@ -1087,13 +1059,13 @@ suite "viewhighlight: highlightKeyword":
       ReservedWords,
       SourceLanguage.langNone)
 
-    let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
+    let
+      bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
+      highlightText = HighlightingText(
+        kind: HighlightingTextKind.search,
+        text: @["cde"].toSeqRunes)
 
-    const
-      keyword = ru"cde"
-      IsSearchHighlight = true
-
-    h.highlightKeyword(bufferInView, keyword, status.settings, IsSearchHighlight)
+    h.highlightText(bufferInView, highlightText)
 
     check h.colorSegments == @[
       ColorSegment(
@@ -1138,13 +1110,13 @@ suite "viewhighlight: highlightKeyword":
       ReservedWords,
       SourceLanguage.langNone)
 
-    let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
+    let
+      bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
+      highlightText = HighlightingText(
+        kind: HighlightingTextKind.search,
+        text: @["c", "gh"].toSeqRunes)
 
-    const
-      keyword = "c\ngh".toRunes
-      IsSearchHighlight = true
-
-    h.highlightKeyword(bufferInView, keyword, status.settings, IsSearchHighlight)
+    h.highlightText(bufferInView, highlightText)
 
     check h.colorSegments == @[
       ColorSegment(
@@ -1196,13 +1168,13 @@ suite "viewhighlight: highlightKeyword":
       ReservedWords,
       SourceLanguage.langNone)
 
-    let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
+    let
+      bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
+      highlightText = HighlightingText(
+        kind: HighlightingTextKind.search,
+        text: @["abc", "", "", "def"].toSeqRunes)
 
-    const
-      keyword = "abc\n\n\ndef".toRunes
-      IsSearchHighlight = true
-
-    h.highlightKeyword(bufferInView, keyword, status.settings, IsSearchHighlight)
+    h.highlightText(bufferInView, highlightText)
 
     check h.colorSegments == @[
       ColorSegment(
@@ -1249,12 +1221,14 @@ suite "viewhighlight: highlightKeyword":
 
     let beforeSegments = h.colorSegments
 
-    let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
+    let
+      bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
+      highlightText = HighlightingText(
+        kind: HighlightingTextKind.search,
+        text: @["\n"].toSeqRunes)
 
-    const
-      keyword = "\n".toRunes
-      IsSearchHighlight = true
-
-    h.highlightKeyword(bufferInView, keyword, status.settings, IsSearchHighlight)
+    h.highlightText(bufferInView, highlightText)
 
     check h.colorSegments == beforeSegments
+
+

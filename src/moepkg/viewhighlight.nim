@@ -23,6 +23,15 @@ import independentutils, bufferstatus, highlight, color, windownode, gapbuffer,
        theme
 
 type
+  HighlightingTextKind* {.pure.} = enum
+    search
+    replace
+
+  HighlightingText* = ref object
+    text*: seq[Runes]
+    kind*: HighlightingTextKind
+    isIgnorecase*, isSmartcase*: bool
+
   BufferInView = ref object
     buffer: seq[Runes]
     originalLineRange: Range
@@ -266,38 +275,41 @@ proc highlightFullWidthSpace(
         color: EditorColorPairIndex.highlightFullWidthSpace)
       highlight.overwrite(colorSegment)
 
-proc highlightKeyword(
+proc highlightText(
   highlight: var Highlight,
   bufferInView: BufferInView,
-  keyword: Runes,
-  settings: EditorSettings,
-  isSearchHighlight: bool) =
-    ## Add highlights for the keyword.
-    ## Assuming highlights of search results.
-
-    if keyword.len == 0: return
+  highlightingText: HighlightingText) =
+    ## Add highlights for the text.
+    ## Assuming highlights of search results and replace.
 
     let
-      lines = keyword.replaceToNewLines.splitLines
       positions = bufferInView.buffer.search(
-        lines,
-        settings.standard.ignorecase,
-        settings.standard.smartcase)
+        highlightingText.text,
+        highlightingText.isIgnorecase,
+        highlightingText.isSmartcase)
 
       color =
-        if isSearchHighlight: EditorColorPairIndex.searchResult
-        else: EditorColorPairIndex.replaceText
+        case highlightingText.kind:
+          of HighlightingTextKind.search: EditorColorPairIndex.searchResult
+          else: EditorColorPairIndex.replaceText
 
     for p in positions:
       let
+        lasRow =
+          bufferInView.originalLineRange.first +
+          p.line +
+          highlightingText.text.high
+
         lastCol =
-          if lines.len == 1: p.column + lines[^1].high
-          else: lines[^1].high
+          if highlightingText.text.len == 1:
+            p.column + highlightingText.text[^1].high
+          else:
+            highlightingText.text[^1].high
 
         colorSegment = ColorSegment(
           firstRow: bufferInView.originalLineRange.first + p.line,
           firstColumn: p.column,
-          lastRow: bufferInView.originalLineRange.first + p.line + lines.high,
+          lastRow: lasRow,
           lastColumn: lastCol,
           color: color)
       highlight.overwrite(colorSegment)
@@ -359,8 +371,7 @@ proc updateViewHighlight*(
   highlight: var Highlight,
   bufStatus: BufferStatus,
   windowNode: var WindowNode,
-  isSearchHighlight: bool,
-  searchHistory: seq[Runes],
+  highlightingText: Option[HighlightingText],
   settings: EditorSettings) =
 
     let bufferInView = initBufferInView(bufStatus, windowNode)
@@ -383,12 +394,8 @@ proc updateViewHighlight*(
     if settings.highlight.fullWidthSpace:
       highlight.highlightFullWidthSpace(windowNode, bufferInView)
 
-    if isSearchHighlight and searchHistory.len > 0:
-      highlight.highlightKeyword(
-        bufferInView,
-        searchHistory[^1],
-        settings,
-        isSearchHighlight)
+    if highlightingText.isSome:
+      highlight.highlightText(bufferInView, highlightingText.get)
 
     if bufStatus.syntaxCheckResults.len > 0:
       highlight.highlightSyntaxCheckerReuslts(
