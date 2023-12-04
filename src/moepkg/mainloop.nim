@@ -332,8 +332,6 @@ proc initBeforeLineForIncrementalReplace(
 
     let info = parseReplaceCommand(status.commandLine.buffer)
     if info.sub.len > 0 and info.by.len > 0:
-      status.searchHistory[^1] = info.by
-
       let positons = currentBufStatus.buffer.toSeqRunes.searchAllOccurrence(
         info.sub,
         false,
@@ -344,6 +342,21 @@ proc initBeforeLineForIncrementalReplace(
             lineNumber: p.line,
             lineBuffer: currentBufStatus.buffer[p.line])
 
+proc isUpdateIncReplceInfo(
+  incReplaceInfo: IncrementalReplaceInfo,
+  replaceCommandInfo: ReplaceCommandInfo): bool {.inline.} =
+
+    incReplaceInfo.by != replaceCommandInfo.by or
+    incReplaceInfo.isGlobal != replaceCommandInfo.isGlobal
+
+proc restoreLinesFromBeforeLines(
+  bufStatus: var BufferStatus,
+  beforeLines: seq[BeforeLine]) {.inline.} =
+    ## Restore lines from beforeLines.
+
+    for line in beforeLines:
+      bufStatus.buffer[line.lineNumber] = line.lineBuffer
+
 proc execIncrementalReplace(
   status: var EditorStatus,
   incReplaceInfo: IncrementalReplaceInfo) {.inline.} =
@@ -353,12 +366,37 @@ proc execIncrementalReplace(
       by: incReplaceInfo.by,
       isGlobal: incReplaceInfo.isGlobal))
 
-proc isUpdateIncReplceInfo(
-  incReplaceInfo: IncrementalReplaceInfo,
-  replaceCommandInfo: ReplaceCommandInfo): bool {.inline.} =
+proc incrementalReplace(
+  status: var EditorStatus,
+  incReplaceInfo: var Option[IncrementalReplaceInfo]) =
+    ## Update IncrementalReplaceInfo and replacing buffer.
 
-    incReplaceInfo.by != replaceCommandInfo.by or
-    incReplaceInfo.isGlobal != replaceCommandInfo.isGlobal
+    let info = parseReplaceCommand(status.commandLine.buffer)
+    if incReplaceInfo.isNone:
+      # Init IncrementalReplaceInfo
+      incReplaceInfo = IncrementalReplaceInfo(
+        sub: info.sub,
+        by: info.by,
+        isGlobal: info.isGlobal,
+        beforeLines: status.initBeforeLineForIncrementalReplace)
+        .some
+      status.execIncrementalReplace(incReplaceInfo.get)
+    elif incReplaceInfo.get.isUpdateIncReplceInfo(info):
+      # Update IncrementalReplaceInfo
+
+      # Restore lines before ex mode.
+      currentBufStatus.restoreLinesFromBeforeLines(
+        incReplaceInfo.get.beforeLines)
+
+      if incReplaceInfo.get.by != info.by:
+        incReplaceInfo.get.by = info.by
+        incReplaceInfo.get.beforeLines =
+          status.initBeforeLineForIncrementalReplace
+
+      if incReplaceInfo.get.isGlobal != info.isGlobal:
+        incReplaceInfo.get.isGlobal = info.isGlobal
+
+      status.execIncrementalReplace(incReplaceInfo.get)
 
 proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
   ## Get keys and update view.
@@ -531,32 +569,8 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
       status.jumpAndHighlightInReplaceCommand
 
     if status.isIncrementalReplace:
-      let info = parseReplaceCommand(status.commandLine.buffer)
-      if incReplaceInfo.isNone:
-        # Init IncrementalReplaceInfo
-        incReplaceInfo = IncrementalReplaceInfo(
-          sub: info.sub,
-          by: info.by,
-          isGlobal: info.isGlobal,
-          beforeLines: status.initBeforeLineForIncrementalReplace)
-          .some
-        status.execIncrementalReplace(incReplaceInfo.get)
-      elif incReplaceInfo.get.isUpdateIncReplceInfo(info):
-        # Update IncrementalReplaceInfo
+      status.incrementalReplace(incReplaceInfo)
 
-        # Restore lines before ex mode.
-        for beforeLine in incReplaceInfo.get.beforeLines:
-          currentBufStatus.buffer[beforeLine.lineNumber] = beforeLine.lineBuffer
-
-        if incReplaceInfo.get.by != info.by:
-          incReplaceInfo.get.by = info.by
-          incReplaceInfo.get.beforeLines =
-            status.initBeforeLineForIncrementalReplace
-
-        if incReplaceInfo.get.isGlobal != info.isGlobal:
-          incReplaceInfo.get.isGlobal = info.isGlobal
-
-        status.execIncrementalReplace(incReplaceInfo.get)
     if suggestWin.isSome:
       suggestWin.closeSuggestWindow
 
