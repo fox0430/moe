@@ -17,10 +17,10 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, tables, options]
+import std/[unittest, tables, options, importutils]
 import pkg/results
-import moepkg/[unicodeext, bufferstatus, gapbuffer, editorstatus, ui,
-               windownode, commandLine]
+import moepkg/[unicodeext, bufferstatus, gapbuffer, editorstatus, windownode,
+               ui, commandLine, viewhighlight]
 
 import moepkg/registers {.all.}
 import moepkg/backupmanager {.all.}
@@ -602,3 +602,372 @@ suite "mainloop: jumpAndHighlightInReplaceCommand":
     status.jumpAndHighlightInReplaceCommand
     check currentMainWindowNode.currentLine == 1
     check currentMainWindowNode.currentColumn == 0
+
+suite "mainloop: jumpAndHighlightInReplaceCommand":
+  test "Ignore":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.buffer = @["", "abc"].toSeqRunes.toGapBuffer
+
+    status.commandLine.buffer = ru"%s/"
+
+    status.jumpAndHighlightInReplaceCommand
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+
+    check status.highlightingText.isNone
+
+  test "Ignore 2":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.buffer = @["abc", "abc"].toSeqRunes.toGapBuffer
+
+    status.commandLine.buffer = ru"%s/abc/def"
+
+    status.jumpAndHighlightInReplaceCommand
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+
+    check status.highlightingText.isNone
+
+  test "Basic":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.buffer = @["  abc"].toSeqRunes.toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    block:
+      status.commandLine.buffer = ru"%s/a"
+      status.jumpAndHighlightInReplaceCommand
+
+      check currentMainWindowNode.currentLine == 0
+      check currentMainWindowNode.currentColumn == 2
+
+      check status.highlightingText.get.kind ==  HighlightingTextKind.replace
+      check status.highlightingText.get.text == @["a"].toSeqRunes
+
+    block:
+      status.commandLine.buffer = ru"%s/ab"
+      status.jumpAndHighlightInReplaceCommand
+
+      check currentMainWindowNode.currentLine == 0
+      check currentMainWindowNode.currentColumn == 2
+
+      check status.highlightingText.get.kind ==  HighlightingTextKind.replace
+      check status.highlightingText.get.text == @["ab"].toSeqRunes
+
+    block:
+      status.commandLine.buffer = ru"%s/abc"
+      status.jumpAndHighlightInReplaceCommand
+
+      check currentMainWindowNode.currentLine == 0
+      check currentMainWindowNode.currentColumn == 2
+
+      check status.highlightingText.get.kind ==  HighlightingTextKind.replace
+      check status.highlightingText.get.text == @["abc"].toSeqRunes
+
+  test "Basic 2":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.buffer = @["abc", "def"].toSeqRunes.toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    status.commandLine.buffer = ru"%s/def"
+    status.jumpAndHighlightInReplaceCommand
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0
+
+    check status.highlightingText.get.kind ==  HighlightingTextKind.replace
+    check status.highlightingText.get.text == @["def"].toSeqRunes
+
+suite "mainloop: initBeforeLineForIncrementalReplace":
+  privateAccess(BeforeLine)
+
+  test "Ignore":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.buffer = @["abc", "abc def", "", "def abc"]
+      .toSeqRunes
+      .toGapBuffer
+
+    status.commandLine.buffer = ru"%s/abc"
+
+    check status.initBeforeLineForIncrementalReplace.len == 0
+
+  test "Basic":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.buffer = @["abc", "abc def", "", "def abc"]
+      .toSeqRunes
+      .toGapBuffer
+
+    status.commandLine.buffer = ru"%s/abc/xyz"
+
+    check status.initBeforeLineForIncrementalReplace == @[
+      BeforeLine(lineNumber: 0, lineBuffer: ru"abc"),
+      BeforeLine(lineNumber: 1, lineBuffer: ru"abc def"),
+      BeforeLine(lineNumber: 3, lineBuffer: ru"def abc")
+    ]
+
+  test "Replace all":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.buffer = @["abc", "abc def", "", "def abc"]
+      .toSeqRunes
+      .toGapBuffer
+
+    status.commandLine.buffer = ru"%s/abc/xyz/g"
+
+    check status.initBeforeLineForIncrementalReplace == @[
+      BeforeLine(lineNumber: 0, lineBuffer: ru"abc"),
+      BeforeLine(lineNumber: 1, lineBuffer: ru"abc def"),
+      BeforeLine(lineNumber: 3, lineBuffer: ru"def abc")
+    ]
+
+suite "mainloop: execIncrementalReplace":
+  privateAccess(IncrementalReplaceInfo)
+
+  test "Basic":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.buffer = @["abc", "abc def", "", "def abc", "abc abc"]
+      .toSeqRunes
+      .toGapBuffer
+
+    let incReplaceInfo = IncrementalReplaceInfo(
+      sub: ru"abc",
+      by: ru"xyz",
+      isGlobal: false,
+      beforeLines: status.initBeforeLineForIncrementalReplace)
+
+    status.execIncrementalReplace(incReplaceInfo)
+
+    check currentBufStatus.buffer.toSeqRunes == @[
+      "xyz", "xyz def", "", "def xyz", "xyz abc"]
+      .toSeqRunes
+
+  test "Replace all":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.buffer = @["abc", "abc def", "", "def abc", "abc abc"]
+      .toSeqRunes
+      .toGapBuffer
+
+    let incReplaceInfo = IncrementalReplaceInfo(
+      sub: ru"abc",
+      by: ru"xyz",
+      isGlobal: true,
+      beforeLines: status.initBeforeLineForIncrementalReplace)
+
+    status.execIncrementalReplace(incReplaceInfo)
+
+    check currentBufStatus.buffer.toSeqRunes == @[
+      "xyz", "xyz def", "", "def xyz", "xyz xyz"]
+      .toSeqRunes
+
+suite "mainloop: incrementalReplace":
+  privateAccess(BeforeLine)
+  privateAccess(IncrementalReplaceInfo)
+
+  test "Init and replace":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.buffer = @["abc"].toSeqRunes.toGapBuffer
+
+    status.commandLine.buffer = ru"%s/abc/xyz"
+
+    var incReplaceInfo = none(IncrementalReplaceInfo)
+    status.incrementalReplace(incReplaceInfo)
+
+    check incReplaceInfo.get.sub == ru"abc"
+    check incReplaceInfo.get.by == ru"xyz"
+    check not incReplaceInfo.get.isGlobal
+
+    check incReplaceInfo.get.beforeLines[0].lineNumber == 0
+    check incReplaceInfo.get.beforeLines[0].lineBuffer == ru"abc"
+
+  test "Init and replace 2":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.buffer = @["abc"].toSeqRunes.toGapBuffer
+
+    status.commandLine.buffer = ru"%s/abc/xyz/g"
+
+    var incReplaceInfo = none(IncrementalReplaceInfo)
+    status.incrementalReplace(incReplaceInfo)
+
+    check incReplaceInfo.get.sub == ru"abc"
+    check incReplaceInfo.get.by == ru"xyz"
+    check incReplaceInfo.get.isGlobal
+
+    check incReplaceInfo.get.beforeLines[0].lineNumber == 0
+    check incReplaceInfo.get.beforeLines[0].lineBuffer == ru"abc"
+
+    check currentBufStatus.buffer.toSeqRunes == @["xyz"].toSeqRunes
+
+  test "Basic":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.buffer = @["abc", "abc def", "", "def abc", "abc abc"]
+      .toSeqRunes
+      .toGapBuffer
+
+    status.commandLine.buffer = ru"%s/abc/xyz"
+
+    var incReplaceInfo = none(IncrementalReplaceInfo)
+    status.incrementalReplace(incReplaceInfo)
+
+    check incReplaceInfo.get.sub == ru"abc"
+    check incReplaceInfo.get.by == ru"xyz"
+    check not incReplaceInfo.get.isGlobal
+
+    check incReplaceInfo.get.beforeLines[0].lineNumber == 0
+    check incReplaceInfo.get.beforeLines[0].lineBuffer == ru"abc"
+    check incReplaceInfo.get.beforeLines[1].lineNumber == 1
+    check incReplaceInfo.get.beforeLines[1].lineBuffer == ru"abc def"
+    check incReplaceInfo.get.beforeLines[2].lineNumber == 3
+    check incReplaceInfo.get.beforeLines[2].lineBuffer == ru"def abc"
+    check incReplaceInfo.get.beforeLines[3].lineNumber == 4
+    check incReplaceInfo.get.beforeLines[3].lineBuffer == ru"abc abc"
+
+    check currentBufStatus.buffer.toSeqRunes == @[
+      "xyz", "xyz def", "", "def xyz", "xyz abc"]
+      .toSeqRunes
+
+  test "Replace all":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.buffer = @["abc", "abc def", "", "def abc", "abc abc"]
+      .toSeqRunes
+      .toGapBuffer
+
+    status.commandLine.buffer = ru"%s/abc/xyz/g"
+
+    var incReplaceInfo = none(IncrementalReplaceInfo)
+    status.incrementalReplace(incReplaceInfo)
+
+    check incReplaceInfo.get.sub == ru"abc"
+    check incReplaceInfo.get.by == ru"xyz"
+    check incReplaceInfo.get.isGlobal
+
+    check incReplaceInfo.get.beforeLines[0].lineNumber == 0
+    check incReplaceInfo.get.beforeLines[0].lineBuffer == ru"abc"
+    check incReplaceInfo.get.beforeLines[1].lineNumber == 1
+    check incReplaceInfo.get.beforeLines[1].lineBuffer == ru"abc def"
+    check incReplaceInfo.get.beforeLines[2].lineNumber == 3
+    check incReplaceInfo.get.beforeLines[2].lineBuffer == ru"def abc"
+    check incReplaceInfo.get.beforeLines[3].lineNumber == 4
+    check incReplaceInfo.get.beforeLines[3].lineBuffer == ru"abc abc"
+
+    check currentBufStatus.buffer.toSeqRunes == @[
+      "xyz", "xyz def", "", "def xyz", "xyz xyz"]
+      .toSeqRunes
+
+  test "Restore lines":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.buffer = @["abc", "abc def", "", "def abc", "abc abc"]
+      .toSeqRunes
+      .toGapBuffer
+
+    var incReplaceInfo = none(IncrementalReplaceInfo)
+
+    block:
+      status.commandLine.buffer = ru"%s/abc/x"
+      status.incrementalReplace(incReplaceInfo)
+
+      check incReplaceInfo.get.sub == ru"abc"
+      check incReplaceInfo.get.by == ru"x"
+      check not incReplaceInfo.get.isGlobal
+
+      check incReplaceInfo.get.beforeLines[0].lineNumber == 0
+      check incReplaceInfo.get.beforeLines[0].lineBuffer == ru"abc"
+      check incReplaceInfo.get.beforeLines[1].lineNumber == 1
+      check incReplaceInfo.get.beforeLines[1].lineBuffer == ru"abc def"
+      check incReplaceInfo.get.beforeLines[2].lineNumber == 3
+      check incReplaceInfo.get.beforeLines[2].lineBuffer == ru"def abc"
+      check incReplaceInfo.get.beforeLines[3].lineNumber == 4
+      check incReplaceInfo.get.beforeLines[3].lineBuffer == ru"abc abc"
+
+      check currentBufStatus.buffer.toSeqRunes == @[
+        "x", "x def", "", "def x", "x abc"]
+        .toSeqRunes
+
+    block:
+      status.commandLine.buffer = ru"%s/abc/z"
+      status.incrementalReplace(incReplaceInfo)
+
+      check incReplaceInfo.get.sub == ru"abc"
+      check incReplaceInfo.get.by == ru"z"
+      check not incReplaceInfo.get.isGlobal
+
+      check incReplaceInfo.get.beforeLines[0].lineNumber == 0
+      check incReplaceInfo.get.beforeLines[0].lineBuffer == ru"abc"
+      check incReplaceInfo.get.beforeLines[1].lineNumber == 1
+      check incReplaceInfo.get.beforeLines[1].lineBuffer == ru"abc def"
+      check incReplaceInfo.get.beforeLines[2].lineNumber == 3
+      check incReplaceInfo.get.beforeLines[2].lineBuffer == ru"def abc"
+      check incReplaceInfo.get.beforeLines[3].lineNumber == 4
+      check incReplaceInfo.get.beforeLines[3].lineBuffer == ru"abc abc"
+
+      check currentBufStatus.buffer.toSeqRunes == @[
+        "z", "z def", "", "def z", "z abc"]
+        .toSeqRunes
+
+  test "Restore lines 2":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.buffer = @["abc", "abc def", "", "def abc", "abc abc"]
+      .toSeqRunes
+      .toGapBuffer
+
+    var incReplaceInfo = none(IncrementalReplaceInfo)
+
+    block:
+      status.commandLine.buffer = ru"%s/abc/x"
+      status.incrementalReplace(incReplaceInfo)
+
+      check incReplaceInfo.get.sub == ru"abc"
+      check incReplaceInfo.get.by == ru"x"
+      check not incReplaceInfo.get.isGlobal
+
+      check incReplaceInfo.get.beforeLines[0].lineNumber == 0
+      check incReplaceInfo.get.beforeLines[0].lineBuffer == ru"abc"
+      check incReplaceInfo.get.beforeLines[1].lineNumber == 1
+      check incReplaceInfo.get.beforeLines[1].lineBuffer == ru"abc def"
+      check incReplaceInfo.get.beforeLines[2].lineNumber == 3
+      check incReplaceInfo.get.beforeLines[2].lineBuffer == ru"def abc"
+      check incReplaceInfo.get.beforeLines[3].lineNumber == 4
+      check incReplaceInfo.get.beforeLines[3].lineBuffer == ru"abc abc"
+
+      check currentBufStatus.buffer.toSeqRunes == @[
+        "x", "x def", "", "def x", "x abc"]
+        .toSeqRunes
+
+    block:
+      status.commandLine.buffer = ru"%s/abc/x/g"
+      status.incrementalReplace(incReplaceInfo)
+
+      check incReplaceInfo.get.sub == ru"abc"
+      check incReplaceInfo.get.by == ru"x"
+      check incReplaceInfo.get.isGlobal
+
+      check incReplaceInfo.get.beforeLines[0].lineNumber == 0
+      check incReplaceInfo.get.beforeLines[0].lineBuffer == ru"abc"
+      check incReplaceInfo.get.beforeLines[1].lineNumber == 1
+      check incReplaceInfo.get.beforeLines[1].lineBuffer == ru"abc def"
+      check incReplaceInfo.get.beforeLines[2].lineNumber == 3
+      check incReplaceInfo.get.beforeLines[2].lineBuffer == ru"def abc"
+      check incReplaceInfo.get.beforeLines[3].lineNumber == 4
+      check incReplaceInfo.get.beforeLines[3].lineBuffer == ru"abc abc"
+
+      check currentBufStatus.buffer.toSeqRunes == @[
+        "x", "x def", "", "def x", "x x"]
+        .toSeqRunes
