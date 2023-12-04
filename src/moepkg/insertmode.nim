@@ -17,6 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
+import std/options
 import ui, editorstatus, windownode, movement, editor, bufferstatus, settings,
        unicodeext, independentutils, gapbuffer
 
@@ -24,18 +25,23 @@ proc bufferPositionsForMultipleEdit(status: var EditorStatus): seq[BufferPositio
   ## Return positions for multiple positions edtting.
 
   let
-    startLine = currentBufStatus.selectedArea.startLine
-    endLine = currentBufStatus.selectedArea.endLine
+    startLine = currentBufStatus.selectedArea.get.startLine
+    endLine = currentBufStatus.selectedArea.get.endLine
   for lineNum in startLine .. endLine:
     result.add BufferPosition(
       line: lineNum,
       column: currentMainWindowNode.currentColumn)
 
 proc exitInsertMode(status: var EditorStatus) =
+  if currentBufStatus.isInsertMultiMode:
+    currentBufStatus.selectedArea = none(SelectedArea)
+
   if currentMainWindowNode.currentColumn > 0:
     currentMainWindowNode.currentColumn.dec
     currentMainWindowNode.expandedColumn = currentMainWindowNode.currentColumn
+
   changeCursorType(status.settings.standard.normalModeCursor)
+
   status.changeMode(currentBufStatus.prevMode)
 
 proc deleteBeforeCursorAndMoveToLeft(status: var EditorStatus) {.inline.} =

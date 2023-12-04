@@ -736,11 +736,12 @@ proc updateSelectedArea(b: var BufferStatus, windowNode: var WindowNode) =
       column =
         if b.buffer[currentLine].high > 0: b.buffer[currentLine].high
         else: 0
-    b.selectedArea.endLine = currentLine
-    b.selectedArea.endColumn = column
-  else:
-    b.selectedArea.endLine = windowNode.currentLine
-    b.selectedArea.endColumn = windowNode.currentColumn
+    b.selectedArea.get.endLine = currentLine
+    b.selectedArea.get.endColumn = column
+  elif b.isVisualMode:
+    # visual or visualBlock
+    b.selectedArea.get.endLine = windowNode.currentLine
+    b.selectedArea.get.endColumn = windowNode.currentColumn
 
 proc updateCommandLine(status: var EditorStatus) =
   ## Update the command line.
@@ -900,10 +901,11 @@ proc update*(status: var EditorStatus) =
         block updateTerminalBuffer:
           if node.view.editorMode != b.mode: node.view.editorMode = b.mode
 
-          if node.view.selectedRange.first != b.selectedArea.startLine:
-            node.view.selectedRange.first = b.selectedArea.startLine
-          if node.view.selectedRange.last != b.selectedArea.endLine:
-            node.view.selectedRange.last = b.selectedArea.endLine
+          if b.selectedArea.isSome:
+            if node.view.selectedRange.first != b.selectedArea.get.startLine:
+              node.view.selectedRange.first = b.selectedArea.get.startLine
+            if node.view.selectedRange.last != b.selectedArea.get.endLine:
+              node.view.selectedRange.last = b.selectedArea.get.endLine
 
           node.view.isCurrentWin =
             if node.windowIndex == currentMainWindowNode.windowIndex: true

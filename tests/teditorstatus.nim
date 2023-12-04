@@ -22,13 +22,19 @@ import pkg/results
 import moepkg/lsp/protocol/enums
 import moepkg/[editor, gapbuffer, bufferstatus, editorview, unicodeext, ui,
                highlight, windownode, movement, build, backgroundprocess,
-               syntaxcheck, independentutils, tabline, settings]
+               syntaxcheck, independentutils, tabline, settings, visualmode]
 
 import moepkg/editorstatus {.all.}
 
 proc resize(status: var EditorStatus, h, w: int) =
   updateTerminalSize(h, w)
   status.resize
+
+proc initSelectedArea(status: EditorStatus) =
+  currentBufStatus.selectedArea = initSelectedArea(
+    currentMainWindowNode.currentLine,
+    currentMainWindowNode.currentColumn)
+    .some
 
 suite "addNewBufferInCurrentWin":
   test "Empty buffer":
@@ -850,13 +856,15 @@ suite "updateSelectedArea: Visual mode":
     currentBufStatus.buffer = @["abc"].toSeqRunes.toGapBuffer
     status.changeMode(Mode.visual)
 
+    status.initSelectedArea
+
     status.resize(100, 100)
     status.update
 
     currentBufStatus.keyRight(currentMainWindowNode)
     status.update
 
-    check currentBufStatus.selectedArea ==
+    check currentBufStatus.selectedArea.get ==
       SelectedArea(startLine: 0, startColumn: 0, endLine: 0, endColumn: 1)
 
   test "Move to below":
@@ -865,13 +873,15 @@ suite "updateSelectedArea: Visual mode":
     currentBufStatus.buffer = @["abc", "def"].toSeqRunes.toGapBuffer
     status.changeMode(Mode.visual)
 
+    status.initSelectedArea
+
     status.resize(100, 100)
     status.update
 
     currentBufStatus.keyDown(currentMainWindowNode)
     status.update
 
-    check currentBufStatus.selectedArea ==
+    check currentBufStatus.selectedArea.get ==
       SelectedArea(startLine: 0, startColumn: 0, endLine: 1, endColumn: 0)
 
 suite "updateSelectedArea: Visual block mode":
@@ -881,13 +891,15 @@ suite "updateSelectedArea: Visual block mode":
     currentBufStatus.buffer = @["abc"].toSeqRunes.toGapBuffer
     status.changeMode(Mode.visualBlock)
 
+    status.initSelectedArea
+
     status.resize(100, 100)
     status.update
 
     currentBufStatus.keyRight(currentMainWindowNode)
     status.update
 
-    check currentBufStatus.selectedArea ==
+    check currentBufStatus.selectedArea.get ==
       SelectedArea(startLine: 0, startColumn: 0, endLine: 0, endColumn: 1)
 
   test "Move to below":
@@ -896,13 +908,15 @@ suite "updateSelectedArea: Visual block mode":
     currentBufStatus.buffer = @["abc", "def"].toSeqRunes.toGapBuffer
     status.changeMode(Mode.visualblock)
 
+    status.initSelectedArea
+
     status.resize(100, 100)
     status.update
 
     currentBufStatus.keyDown(currentMainWindowNode)
     status.update
 
-    check currentBufStatus.selectedArea ==
+    check currentBufStatus.selectedArea.get ==
       SelectedArea(startLine: 0, startColumn: 0, endLine: 1, endColumn: 0)
 
 suite "updateSelectedArea: Visual line mode":
@@ -912,13 +926,15 @@ suite "updateSelectedArea: Visual line mode":
     currentBufStatus.buffer = @["abc"].toSeqRunes.toGapBuffer
     status.changeMode(Mode.visualLine)
 
+    status.initSelectedArea
+
     status.resize(100, 100)
     status.update
 
     currentBufStatus.keyRight(currentMainWindowNode)
     status.update
 
-    check currentBufStatus.selectedArea ==
+    check currentBufStatus.selectedArea.get ==
       SelectedArea(startLine: 0, startColumn: 0, endLine: 0, endColumn: 2)
 
   test "Move to below":
@@ -927,13 +943,15 @@ suite "updateSelectedArea: Visual line mode":
     currentBufStatus.buffer = @["abc", "def"].toSeqRunes.toGapBuffer
     status.changeMode(Mode.visualLine)
 
+    status.initSelectedArea
+
     status.resize(100, 100)
     status.update
 
     currentBufStatus.keyDown(currentMainWindowNode)
     status.update
 
-    check currentBufStatus.selectedArea ==
+    check currentBufStatus.selectedArea.get ==
       SelectedArea(startLine: 0, startColumn: 0, endLine: 1, endColumn: 2)
 
 suite "editorstatus: smoothScrollDelays":

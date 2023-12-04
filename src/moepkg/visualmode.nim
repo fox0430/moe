@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, sequtils]
+import std/[strutils, sequtils, options]
 import editorstatus, ui, gapbuffer, unicodeext, windownode, movement, editor,
        bufferstatus, settings, registers, messages, commandline,
        independentutils, viewhighlight
@@ -440,45 +440,10 @@ proc enterInsertMode(status: var EditorStatus) =
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
   else:
-    currentMainWindowNode.currentLine = currentBufStatus.selectedArea.startLine
+    currentMainWindowNode.currentLine =
+      currentBufStatus.selectedArea.get.startLine
     currentMainWindowNode.currentColumn = 0
     status.changeMode(Mode.insert)
-
-proc insertCharBlock(
-  bufStatus: var BufferStatus,
-  windowNode: var WindowNode,
-  insertBuffer: Runes,
-  area: SelectedArea,
-  tabStop: int,
-  autoCloseParen: bool,
-  commandLine: var CommandLine) =
-
-    if bufStatus.isReadonly:
-      commandLine.writeReadonlyModeWarning
-      return
-
-    if area.startLine == area.endLine: return
-
-    let beforeLine = windowNode.currentLine
-
-    for i in area.startLine + 1 .. area.endLine:
-      windowNode.currentLine = i
-      windowNode.currentColumn = area.startColumn
-
-      if bufStatus.buffer[i].high >= area.startColumn:
-        for c in insertBuffer:
-          if isTabKey(c):
-            insertTab(
-              bufStatus,
-              windowNode,
-              tabStop,
-              autoCloseParen)
-          else:
-            bufStatus.insertCharacter(
-              windowNode,
-              autoCloseParen,
-              c)
-    windowNode.currentLine = beforeLine
 
 proc changeModeToNormalMode(status: var EditorStatus) =
   setBlinkingBlockCursor()
@@ -486,6 +451,8 @@ proc changeModeToNormalMode(status: var EditorStatus) =
 
 proc exitVisualMode(status: var EditorStatus) =
   ## Update highlighting and changing mode.
+
+  currentBufStatus.selectedArea = none(SelectedArea)
 
   var highlight = currentMainWindowNode.highlight
   highlight.updateViewHighlight(
@@ -560,6 +527,7 @@ proc visualCommand(
       status.enterInsertMode
 
     if currentBufStatus.isVisualMode:
+      currentBufStatus.selectedArea = none(SelectedArea)
       status.changeMode(currentBufStatus.prevMode)
 
 proc changeModeToInsertMulti(
@@ -634,6 +602,7 @@ proc visualBlockCommand(
       status.changeModeToInsertMulti(area)
 
     if currentBufStatus.isVisualBlockMode:
+      currentBufStatus.selectedArea = none(SelectedArea)
       status.changeMode(currentBufStatus.prevMode)
 
 proc isVisualModeCommand*(command: Runes): InputState =
@@ -707,6 +676,6 @@ proc execVisualModeCommand*(status: var EditorStatus, command: Runes) =
     currentBufStatus.moveToNextBlankLine(currentMainWindowNode)
   else:
     if isVisualBlockMode(currentBufStatus.mode):
-      status.visualBlockCommand(currentBufStatus.selectedArea, key)
+      status.visualBlockCommand(currentBufStatus.selectedArea.get, key)
     else:
-      status.visualCommand(currentBufStatus.selectedArea, key)
+      status.visualCommand(currentBufStatus.selectedArea.get, key)

@@ -20,7 +20,7 @@
 import std/[unittest, tables, options, importutils]
 import pkg/results
 import moepkg/[unicodeext, bufferstatus, gapbuffer, editorstatus, windownode,
-               ui, commandLine, viewhighlight]
+               ui, commandLine, viewhighlight, visualmode]
 
 import moepkg/registers {.all.}
 import moepkg/backupmanager {.all.}
@@ -318,6 +318,12 @@ suite "mainloop: insertPasteBuffer":
               discard status.addNewBufferInCurrentWin(mode).get
 
           currentBufStatus.buffer = @[""].toSeqRunes.initGapBuffer
+
+          if currentBufStatus.isVisualMode:
+            currentBufStatus.selectedArea = initSelectedArea(
+              currentMainWindowNode.currentLine,
+              currentMainWindowNode.currentColumn)
+              .some
 
           status.resize(100, 100)
           status.update

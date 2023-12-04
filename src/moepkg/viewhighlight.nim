@@ -89,7 +89,7 @@ proc highlightSelectedArea(
   bufStatus: BufferStatus,
   position: BufferPosition) =
 
-    let area = bufStatus.selectedArea
+    let area = bufStatus.selectedArea.get
 
     var colorSegment = initSelectedAreaColorSegment(
       position,
@@ -124,7 +124,7 @@ proc highlightSelectedArea(
 
     if bufStatus.isVisualBlockMode:
       highlight.overwriteColorSegmentBlock(
-        bufStatus.selectedArea,
+        bufStatus.selectedArea.get,
         bufStatus.buffer)
     elif bufStatus.isVisualMode:
       highlight.overwrite(colorSegment)
@@ -382,7 +382,7 @@ proc updateViewHighlight*(
         settings.standard.editorColorTheme,
         settings.standard.colorMode)
 
-    if isVisualMode(bufStatus.mode):
+    if bufStatus.selectedArea.isSome:
       highlight.highlightSelectedArea(bufStatus, windowNode.initBufferPosition)
 
     if settings.highlight.pairOfParen:
