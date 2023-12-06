@@ -20,7 +20,8 @@
 import std/[unittest, tables, options, importutils]
 import pkg/results
 import moepkg/[unicodeext, bufferstatus, gapbuffer, editorstatus, windownode,
-               ui, commandLine, viewhighlight, visualmode]
+               ui, commandLine, viewhighlight, visualmode, suggestionwindow,
+               independentutils]
 
 import moepkg/registers {.all.}
 import moepkg/backupmanager {.all.}
@@ -977,3 +978,57 @@ suite "mainloop: incrementalReplace":
       check currentBufStatus.buffer.toSeqRunes == @[
         "x", "x def", "", "def x", "x x"]
         .toSeqRunes
+
+suite "mainloop: updateAfterInsertFromSuggestion":
+  privateAccess(SuggestionWindow)
+
+  test "Ignore":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.buffer = @["abc a"].toSeqRunes.toGapBuffer
+    currentBufStatus.mode = Mode.insert
+    currentMainWindowNode.currentColumn = 5
+
+    status.tryOpenSuggestWindow
+    check status.suggestionWindow.get.suggestoins.len == 1
+
+    status.updateAfterInsertFromSuggestion
+
+    check currentBufStatus.buffer.toSeqRunes == @["abc a"].toSeqRunes
+
+  test "Basic":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.buffer = @["abc a"].toSeqRunes.toGapBuffer
+    currentBufStatus.mode = Mode.insert
+    currentMainWindowNode.currentColumn = 5
+
+    status.tryOpenSuggestWindow
+    check status.suggestionWindow.get.suggestoins.len == 1
+
+    status.suggestionWindow.get.selectedSuggestion = 0
+    status.updateAfterInsertFromSuggestion
+
+    check currentBufStatus.buffer.toSeqRunes == @["abc abc"].toSeqRunes
+
+  test "Multi lines":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.buffer = @["abc a", "def xyz", "", "ghi xyz"].toSeqRunes.toGapBuffer
+    currentBufStatus.selectedArea = SelectedArea(
+      startLine: 0,
+      startColumn: 5,
+      endLine: 3,
+      endColumn: 5)
+      .some
+    currentBufStatus.mode = Mode.insertMulti
+    currentMainWindowNode.currentColumn = 5
+
+    status.tryOpenSuggestWindow
+    check status.suggestionWindow.get.suggestoins.len == 1
+
+    status.suggestionWindow.get.selectedSuggestion = 0
+    status.updateAfterInsertFromSuggestion
+
+    check currentBufStatus.buffer.toSeqRunes == @[
+      "abc abc", "def abcxyz", "", "ghi abcxyz"].toSeqRunes
