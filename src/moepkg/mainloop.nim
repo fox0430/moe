@@ -620,11 +620,31 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
     elif isSearchMode(currentBufStatus.mode):
       status.changeMode(currentBufStatus.prevMode)
 
+proc linePositionsForInsertingToMultiLines(
+  status: EditorStatus): seq[int] =
+    ## Return line numbers for inserting to multiple lines based `SelectedArea`.
+
+    let
+      startLine = currentBufStatus.selectedArea.get.startLine
+      endLine = currentBufStatus.selectedArea.get.endLine
+    for lineNum in startLine .. endLine: result.add lineNum
+
 proc updateAfterInsertFromSuggestion(status: var EditorStatus) =
+  ## Insert the selected suggestion to thr buffer.
+
   if status.suggestionWindow.get.isLineChanged:
-    currentBufStatus.buffer[currentMainWindowNode.currentLine] =
-      status.suggestionWindow.get.newLine
-    currentMainWindowNode.expandedColumn = currentMainWindowNode.currentColumn
+    let newLine = status.suggestionWindow.get.newLine
+    if currentBufStatus.isInsertMultiMode:
+      # Insert the suggestion to selected lines.
+      for lineNum in status.linePositionsForInsertingToMultiLines:
+        currentBufStatus.buffer[lineNum] = newLine
+    else:
+      # Insert the suggestion to the current line.
+      currentBufStatus.buffer[currentMainWindowNode.currentLine] = newLine
+      currentMainWindowNode.expandedColumn = currentMainWindowNode.currentColumn
+
+    currentBufStatus.isUpdate = true
+    currentBufStatus.countChange.inc
 
   # Update WordDictionary
   block:
