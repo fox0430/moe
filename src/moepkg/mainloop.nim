@@ -647,7 +647,6 @@ proc updateAfterInsertFromSuggestion(status: var EditorStatus) =
           currentBufStatus.buffer[lineNum] = status.suggestionWindow.get.newLine
         else:
           if currentBufStatus.buffer[lineNum].high >= firstColumn:
-            let oldLine = currentBufStatus.buffer[lineNum]
             currentBufStatus.buffer[lineNum] = lineSuggestionInserted(
               currentBufStatus.buffer[lineNum],
               insertWord,

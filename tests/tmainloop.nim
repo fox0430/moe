@@ -26,6 +26,7 @@ import moepkg/[unicodeext, bufferstatus, gapbuffer, editorstatus, windownode,
 import moepkg/registers {.all.}
 import moepkg/backupmanager {.all.}
 import moepkg/exmode {.all.}
+import moepkg/insertmode {.all.}
 import moepkg/mainloop {.all.}
 
 proc resize(status: var EditorStatus, h, w: int) =
@@ -990,7 +991,7 @@ suite "mainloop: updateAfterInsertFromSuggestion":
     currentMainWindowNode.currentColumn = 5
 
     status.tryOpenSuggestWindow
-    check status.suggestionWindow.get.suggestoins.len == 1
+    check status.suggestionWindow.get.suggestoins == @["abc"].toSeqRunes
 
     status.updateAfterInsertFromSuggestion
 
@@ -1004,7 +1005,7 @@ suite "mainloop: updateAfterInsertFromSuggestion":
     currentMainWindowNode.currentColumn = 5
 
     status.tryOpenSuggestWindow
-    check status.suggestionWindow.get.suggestoins.len == 1
+    check status.suggestionWindow.get.suggestoins == @["abc"].toSeqRunes
 
     status.suggestionWindow.get.selectedSuggestion = 0
     status.updateAfterInsertFromSuggestion
@@ -1014,7 +1015,7 @@ suite "mainloop: updateAfterInsertFromSuggestion":
   test "Multi lines":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin().get
-    currentBufStatus.buffer = @["abc a", "def xyz", "", "ghi xyz"].toSeqRunes.toGapBuffer
+    currentBufStatus.buffer = @["abc ", "def xyz", "", "ghi xyz"].toSeqRunes.toGapBuffer
     currentBufStatus.selectedArea = SelectedArea(
       startLine: 0,
       startColumn: 5,
@@ -1022,12 +1023,14 @@ suite "mainloop: updateAfterInsertFromSuggestion":
       endColumn: 5)
       .some
     currentBufStatus.mode = Mode.insertMulti
-    currentMainWindowNode.currentColumn = 5
+    currentMainWindowNode.currentColumn = 4
+
+    status.insertToBuffer(ru'a')
 
     status.tryOpenSuggestWindow
-    check status.suggestionWindow.get.suggestoins.len == 1
+    check status.suggestionWindow.get.suggestoins == @["axyz", "abc"].toSeqRunes
 
-    status.suggestionWindow.get.selectedSuggestion = 0
+    status.suggestionWindow.get.selectedSuggestion = 1
     status.updateAfterInsertFromSuggestion
 
     check currentBufStatus.buffer.toSeqRunes == @[
