@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[options, times, sequtils]
+import std/[options, times]
 import pkg/results
 import editorstatus, bufferstatus, windownode, unicodeext, gapbuffer, ui,
        normalmode, visualmode, insertmode, autocomplete, suggestionwindow,

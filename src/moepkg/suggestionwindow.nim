@@ -64,7 +64,7 @@ proc lineSuggestionInserted*(
 proc newLine*(s: SuggestionWindow): Runes {.inline.} =
   ## Return the line after the suggestion or input is inserted.
 
-  s.oldLine.insertSuggestion(
+  s.oldLine.lineSuggestionInserted(
     s.selectedWordOrInputWord,
     s.firstColumn,
     s.lastColumn,
