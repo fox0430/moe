@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[options, times]
+import std/[options, times, sequtils]
 import pkg/results
 import editorstatus, bufferstatus, windownode, unicodeext, gapbuffer, ui,
        normalmode, visualmode, insertmode, autocomplete, suggestionwindow,
@@ -630,18 +630,35 @@ proc linePositionsForInsertingToMultiLines(
     for lineNum in startLine .. endLine: result.add lineNum
 
 proc updateAfterInsertFromSuggestion(status: var EditorStatus) =
-  ## Insert the selected suggestion to thr buffer.
+  ## Insert the selected suggestion to the buffer.
 
   if status.suggestionWindow.get.isLineChanged:
-    let newLine = status.suggestionWindow.get.newLine
     if currentBufStatus.isInsertMultiMode:
       # Insert the suggestion to selected lines.
-      for lineNum in status.linePositionsForInsertingToMultiLines:
-        currentBufStatus.buffer[lineNum] = newLine
+
+      let
+        insertWord = status.suggestionWindow.get.selectedWordOrInputWord
+        firstColumn = status.suggestionWindow.get.firstColumn
+        lastColumn = status.suggestionWindow.get.lastColumn
+        isPath = status.suggestionWindow.get.isPath
+      for i, lineNum in status.linePositionsForInsertingToMultiLines:
+        if i == 0:
+          # The first is the current line.
+          currentBufStatus.buffer[lineNum] = status.suggestionWindow.get.newLine
+        else:
+          if currentBufStatus.buffer[lineNum].high >= firstColumn:
+            let oldLine = currentBufStatus.buffer[lineNum]
+            currentBufStatus.buffer[lineNum] = lineSuggestionInserted(
+              currentBufStatus.buffer[lineNum],
+              insertWord,
+              firstColumn,
+              lastColumn,
+              isPath)
     else:
-      # Insert the suggestion to the current line.
-      currentBufStatus.buffer[currentMainWindowNode.currentLine] = newLine
-      currentMainWindowNode.expandedColumn = currentMainWindowNode.currentColumn
+     # Insert the suggestion to the current line.
+     currentBufStatus.buffer[currentMainWindowNode.currentLine] =
+       status.suggestionWindow.get.newLine
+     currentMainWindowNode.expandedColumn = currentMainWindowNode.currentColumn
 
     currentBufStatus.isUpdate = true
     currentBufStatus.countChange.inc
