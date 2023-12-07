@@ -20,11 +20,13 @@
 import std/[unittest, tables, options, importutils]
 import pkg/results
 import moepkg/[unicodeext, bufferstatus, gapbuffer, editorstatus, windownode,
-               ui, commandLine, viewhighlight, visualmode]
+               ui, commandLine, viewhighlight, visualmode, suggestionwindow,
+               independentutils]
 
 import moepkg/registers {.all.}
 import moepkg/backupmanager {.all.}
 import moepkg/exmode {.all.}
+import moepkg/insertmode {.all.}
 import moepkg/mainloop {.all.}
 
 proc resize(status: var EditorStatus, h, w: int) =
@@ -977,3 +979,59 @@ suite "mainloop: incrementalReplace":
       check currentBufStatus.buffer.toSeqRunes == @[
         "x", "x def", "", "def x", "x x"]
         .toSeqRunes
+
+suite "mainloop: updateAfterInsertFromSuggestion":
+  privateAccess(SuggestionWindow)
+
+  test "Ignore":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.buffer = @["abc a"].toSeqRunes.toGapBuffer
+    currentBufStatus.mode = Mode.insert
+    currentMainWindowNode.currentColumn = 5
+
+    status.tryOpenSuggestWindow
+    check status.suggestionWindow.get.suggestoins == @["abc"].toSeqRunes
+
+    status.updateAfterInsertFromSuggestion
+
+    check currentBufStatus.buffer.toSeqRunes == @["abc a"].toSeqRunes
+
+  test "Basic":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.buffer = @["abc a"].toSeqRunes.toGapBuffer
+    currentBufStatus.mode = Mode.insert
+    currentMainWindowNode.currentColumn = 5
+
+    status.tryOpenSuggestWindow
+    check status.suggestionWindow.get.suggestoins == @["abc"].toSeqRunes
+
+    status.suggestionWindow.get.selectedSuggestion = 0
+    status.updateAfterInsertFromSuggestion
+
+    check currentBufStatus.buffer.toSeqRunes == @["abc abc"].toSeqRunes
+
+  test "Multi lines":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.buffer = @["abc ", "def xyz", "", "ghi xyz"].toSeqRunes.toGapBuffer
+    currentBufStatus.selectedArea = SelectedArea(
+      startLine: 0,
+      startColumn: 5,
+      endLine: 3,
+      endColumn: 5)
+      .some
+    currentBufStatus.mode = Mode.insertMulti
+    currentMainWindowNode.currentColumn = 4
+
+    status.insertToBuffer(ru'a')
+
+    status.tryOpenSuggestWindow
+    check status.suggestionWindow.get.suggestoins == @["axyz", "abc"].toSeqRunes
+
+    status.suggestionWindow.get.selectedSuggestion = 1
+    status.updateAfterInsertFromSuggestion
+
+    check currentBufStatus.buffer.toSeqRunes == @[
+      "abc abc", "def abcxyz", "", "ghi abcxyz"].toSeqRunes

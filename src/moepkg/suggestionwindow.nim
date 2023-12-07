@@ -32,23 +32,43 @@ type SuggestionWindow* = object
   popupWindow: Option[PopupWindow]
   isPath: bool
 
-proc selectedWordOrInputWord(suggestionWindow: SuggestionWindow): Runes =
+proc selectedWordOrInputWord*(suggestionWindow: SuggestionWindow): Runes =
   if suggestionWindow.selectedSuggestion == -1:
     suggestionWindow.inputWord
   else:
     suggestionWindow.suggestoins[suggestionWindow.selectedSuggestion]
 
-proc newLine*(suggestionWindow: SuggestionWindow): Runes =
-  suggestionWindow.oldLine.dup(
-    proc (r: var Runes) =
-      let
-        firstColumn = suggestionWindow.firstColumn
-        lastColumn = suggestionWindow.lastColumn
-      r[firstColumn .. lastColumn] =
-        if suggestionWindow.isPath and r.len > 0 and r[firstColumn] == '/'.ru:
-          "/".ru & suggestionWindow.selectedWordOrInputWord
-        else:
-          suggestionWindow.selectedWordOrInputWord)
+proc firstColumn*(s: SuggestionWindow): int {.inline.} = s.firstColumn
+
+proc lastColumn*(s: SuggestionWindow): int {.inline.} = s.lastColumn
+
+proc isPath*(s: SuggestionWindow): bool {.inline.} = s.isPath
+
+proc lineSuggestionInserted*(
+  oldLine, selectedWordOrInputWord: Runes,
+  firstColumn, lastColumn: int,
+  isPath: bool): Runes =
+    ## Return the line after the suggestion or input is inserted.
+
+    oldLine.dup(
+      proc (r: var Runes) =
+        let
+          firstColumn = firstColumn
+          lastColumn = lastColumn
+        r[firstColumn .. lastColumn] =
+          if isPath and r.len > 0 and r[firstColumn] == '/'.ru:
+            "/".ru & selectedWordOrInputWord
+          else:
+            selectedWordOrInputWord)
+
+proc newLine*(s: SuggestionWindow): Runes {.inline.} =
+  ## Return the line after the suggestion or input is inserted.
+
+  s.oldLine.lineSuggestionInserted(
+    s.selectedWordOrInputWord,
+    s.firstColumn,
+    s.lastColumn,
+    s.isPath)
 
 proc close*(suggestionWindow: var SuggestionWindow) =
   suggestionWindow.popupWindow.get.close

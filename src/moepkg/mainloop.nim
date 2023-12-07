@@ -620,11 +620,47 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
     elif isSearchMode(currentBufStatus.mode):
       status.changeMode(currentBufStatus.prevMode)
 
+proc linePositionsForInsertingToMultiLines(
+  status: EditorStatus): seq[int] =
+    ## Return line numbers for inserting to multiple lines based `SelectedArea`.
+
+    let
+      startLine = currentBufStatus.selectedArea.get.startLine
+      endLine = currentBufStatus.selectedArea.get.endLine
+    for lineNum in startLine .. endLine: result.add lineNum
+
 proc updateAfterInsertFromSuggestion(status: var EditorStatus) =
+  ## Insert the selected suggestion to the buffer.
+
   if status.suggestionWindow.get.isLineChanged:
-    currentBufStatus.buffer[currentMainWindowNode.currentLine] =
-      status.suggestionWindow.get.newLine
-    currentMainWindowNode.expandedColumn = currentMainWindowNode.currentColumn
+    if currentBufStatus.isInsertMultiMode:
+      # Insert the suggestion to selected lines.
+
+      let
+        insertWord = status.suggestionWindow.get.selectedWordOrInputWord
+        firstColumn = status.suggestionWindow.get.firstColumn
+        lastColumn = status.suggestionWindow.get.lastColumn
+        isPath = status.suggestionWindow.get.isPath
+      for i, lineNum in status.linePositionsForInsertingToMultiLines:
+        if i == 0:
+          # The first is the current line.
+          currentBufStatus.buffer[lineNum] = status.suggestionWindow.get.newLine
+        else:
+          if currentBufStatus.buffer[lineNum].high >= firstColumn:
+            currentBufStatus.buffer[lineNum] = lineSuggestionInserted(
+              currentBufStatus.buffer[lineNum],
+              insertWord,
+              firstColumn,
+              lastColumn,
+              isPath)
+    else:
+     # Insert the suggestion to the current line.
+     currentBufStatus.buffer[currentMainWindowNode.currentLine] =
+       status.suggestionWindow.get.newLine
+     currentMainWindowNode.expandedColumn = currentMainWindowNode.currentColumn
+
+    currentBufStatus.isUpdate = true
+    currentBufStatus.countChange.inc
 
   # Update WordDictionary
   block:
