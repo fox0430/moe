@@ -201,8 +201,7 @@ proc high*(gapBuffer: GapBuffer): int {.inline.} = gapBuffer.len-1
 
 proc empty*(gapBuffer: GapBuffer): bool {.inline.} = return gapBuffer.len == 0
 
-proc `$`*(gapBuffer: GapBuffer): string =
-  result = ""
+proc toString*(gapBuffer: GapBuffer): string =
   for i in 0 ..< gapBuffer.len: result &= $gapBuffer[i] & "\n"
 
 proc next*(gapBuffer: GapBuffer, line, column: int): (int, int) =

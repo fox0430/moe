@@ -35,7 +35,7 @@ test "insert":
   check(buffer[0] == "1")
   check(buffer[1] == "0")
   check(buffer[2] == "2")
-  check($buffer == "1\n0\n2\n")
+  check(buffer.toString == "1\n0\n2\n")
 
 test "delete(basic)":
   var buffer = initGapBuffer[string]()
@@ -113,7 +113,7 @@ test "undo/redo(only construction)":
   var buffer = initGapBuffer[string]()
   check(not buffer.canUndo)
   check(not buffer.canRedo)
-  check($buffer == "")
+  check(buffer.toString == "")
 
 test "undo/redo(insert)":
   var buffer = initGapBuffer[string]()
@@ -124,33 +124,33 @@ test "undo/redo(insert)":
 
   check(not buffer.canRedo)
 
-  check($buffer == "1\n2\n0\n3\n")
+  check(buffer.toString == "1\n2\n0\n3\n")
 
   buffer.undo # ["1", "2", "0"]
-  check($buffer == "1\n2\n0\n")
+  check(buffer.toString == "1\n2\n0\n")
 
   buffer.undo # ["1", "0"]
-  check($buffer == "1\n0\n")
+  check(buffer.toString == "1\n0\n")
 
   buffer.undo # ["0"]
-  check($buffer == "0\n")
+  check(buffer.toString == "0\n")
 
   buffer.undo # []
-  check($buffer == "")
+  check(buffer.toString == "")
 
   check(not buffer.canUndo)
 
   buffer.redo # ["0"]
-  check($buffer == "0\n")
+  check(buffer.toString == "0\n")
 
   buffer.redo # ["1", "0"]
-  check($buffer == "1\n0\n")
+  check(buffer.toString == "1\n0\n")
 
   buffer.redo # ["1", "2", "0"]
-  check($buffer == "1\n2\n0\n")
+  check(buffer.toString == "1\n2\n0\n")
 
   buffer.redo # ["1", "2", "0", "3"]
-  check($buffer == "1\n2\n0\n3\n")
+  check(buffer.toString == "1\n2\n0\n3\n")
 
   check(not buffer.canRedo)
 
@@ -161,21 +161,21 @@ test "undo/redo(delete)":
 
   check(not buffer.canRedo)
 
-  check($buffer == "")
+  check(buffer.toString == "")
 
   buffer.undo # ["0"]
-  check($buffer == "0\n")
+  check(buffer.toString == "0\n")
 
   buffer.undo # []
-  check($buffer == "")
+  check(buffer.toString == "")
 
   check(not buffer.canUndo)
 
   buffer.redo # ["0"]
-  check($buffer == "0\n")
+  check(buffer.toString == "0\n")
 
   buffer.redo # []
-  check($buffer == "")
+  check(buffer.toString == "")
 
   check(not buffer.canRedo)
 
@@ -186,21 +186,21 @@ test "undo/redo(assign)":
 
   check(not buffer.canRedo)
 
-  check($buffer == "1\n")
+  check(buffer.toString == "1\n")
 
   buffer.undo # ["0"]
-  check($buffer == "0\n")
+  check(buffer.toString == "0\n")
 
   buffer.undo # []
-  check($buffer == "")
+  check(buffer.toString == "")
 
   check(not buffer.canUndo)
 
   buffer.redo # ["0"]
-  check($buffer == "0\n")
+  check(buffer.toString == "0\n")
 
   buffer.redo # ["1"]
-  check($buffer == "1\n")
+  check(buffer.toString == "1\n")
 
   check(not buffer.canRedo)
 
