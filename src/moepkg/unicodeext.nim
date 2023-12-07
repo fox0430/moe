@@ -46,15 +46,6 @@ proc `$`*(encoding: CharacterEncoding): string =
     of CharacterEncoding.utf32Le: return "UTF-32LE"
     of CharacterEncoding.unknown: return "UNKNOWN"
 
-proc echo*(lines: seq[Runes]) =
-  var buf = "@["
-  for i, ln in lines:
-    buf &= '"' & $ln & '"'
-    if i < lines.high:
-      buf &= ", "
-
-  echo buf & "]"
-
 proc validateUtf16Be(s: string): bool =
   if (s.len mod 2) != 0: return false
 
