@@ -22,14 +22,15 @@ from std/os import `/`
 import moepkg/gapbuffer
 import moepkg/unicodeext
 
-test "width 1":
-  check("abc".toRunes.width == 3)
-  check("あいう".toRunes.width == 6)
-  check("abcあいう編集表示".toRunes.width == 17)
+suite "unicodeext: width":
+  test "width 1":
+    check("abc".toRunes.width == 3)
+    check("あいう".toRunes.width == 6)
+    check("abcあいう編集表示".toRunes.width == 17)
 
-test "width 2":
-  check(Rune(0x10FFFF).width == 1)
-  check(Rune(0x110000).width == 1)
+  test "width 2":
+    check(Rune(0x10FFFF).width == 1)
+    check(Rune(0x110000).width == 1)
 
 suite "unicodeext: iterator split":
   test "Basic":
@@ -153,42 +154,47 @@ suite "unicodeext: splitLines":
   test "Without lines":
     check splitLines(ru"abc") == @["abc"].toSeqRunes
 
-test "toRune":
-  check(48.toRune == '0'.toRune)
-  check(65.toRune == 'A'.toRune)
-  check(97.toRune == 'a'.toRune)
+suite "unicodeext: toRune, ru":
+  test "toRune":
+    check(48.toRune == '0'.toRune)
+    check(65.toRune == 'A'.toRune)
+    check(97.toRune == 'a'.toRune)
 
-test "ru":
-  check(($(ru'a'))[0] == 'a')
+  test "ru":
+    check(($(ru'a'))[0] == 'a')
 
-  check($(ru"abcde") == "abcde")
-  check($(ru"あいうえお") == "あいうえお")
-  check($(ru"編集表示") == "編集表示")
+    check($(ru"abcde") == "abcde")
+    check($(ru"あいうえお") == "あいうえお")
+    check($(ru"編集表示") == "編集表示")
 
-test "canConvertToChar, toChar":
-  for x in 0 .. 127:
-    let c = char(x)
-    doAssert(c.toRune.canConvertToChar)
-    doAssert(c.toRune.toChar == c)
+suite "unicodeext: canConvertToChar, toChar":
+  test "canConvertToChar, toChar":
+    for x in 0 .. 127:
+      let c = char(x)
+      doAssert(c.toRune.canConvertToChar)
+      doAssert(c.toRune.toChar == c)
 
-test "numberOfBytes":
-  for x in 0 .. 127:
-    let c = char(x)
-    check(numberOfBytes(c) == 1)
+suite "unicodeext: numberOfBytes":
+  test "numberOfBytes":
+    for x in 0 .. 127:
+      let c = char(x)
+      check(numberOfBytes(c) == 1)
 
-  check(numberOfBytes("Ā"[0]) == 2)
-  check(numberOfBytes("あ"[0]) == 3)
-  check(numberOfBytes("。"[0]) == 3)
-  check(numberOfBytes("１"[0]) == 3)
-  check(numberOfBytes("🀀"[0]) == 4)
+    check(numberOfBytes("Ā"[0]) == 2)
+    check(numberOfBytes("あ"[0]) == 3)
+    check(numberOfBytes("。"[0]) == 3)
+    check(numberOfBytes("１"[0]) == 3)
+    check(numberOfBytes("🀀"[0]) == 4)
 
-test "countRepeat":
-  check(ru"あいうえお   あいう".countRepeat(Whitespace, 5) == 3)
-  check(ru"    ".countRepeat(Whitespace, 1) == 3)
+suite "unicodeext: countRepeat":
+  test "countRepeat":
+    check(ru"あいうえお   あいう".countRepeat(Whitespace, 5) == 3)
+    check(ru"    ".countRepeat(Whitespace, 1) == 3)
 
-test "toRunes":
-  let runes: Runes = @[]
-  check(runes.toGapBuffer.toRunes == runes)
+suite "unicodeext: toRunes":
+  test "toRunes":
+    let runes: Runes = @[]
+    check(runes.toGapBuffer.toRunes == runes)
 
 let s = """Sentences that contain all letters commonly used in a language
 --------------------------------------------------------------
@@ -340,93 +346,99 @@ A much larger collection of such pangrams is now available at
 
   http://en.wikipedia.org/wiki/List_of_pangrams"""
 
+suite "unicodeext: detectCharacterEncoding":
+  test "UTF-8 with BOM":
+    check(("\xEF\xBB\xBF" & s).detectCharacterEncoding == CharacterEncoding.utf8)
 
-test "detectCharacterEncoding: UTF-8 with BOM":
-  check(("\xEF\xBB\xBF" & s).detectCharacterEncoding == CharacterEncoding.utf8)
+  test "UTF-16 with BE BOM":
+    check(("\xFE\xFF" & s).detectCharacterEncoding == CharacterEncoding.utf16)
 
-test "detectCharacterEncoding: UTF-16 with BE BOM":
-  check(("\xFE\xFF" & s).detectCharacterEncoding == CharacterEncoding.utf16)
+  test "UTF-16 with LE BOM":
+    check(("\xFF\xFE" & s).detectCharacterEncoding == CharacterEncoding.utf16)
 
-test "detectCharacterEncoding: UTF-16 with LE BOM":
-  check(("\xFF\xFE" & s).detectCharacterEncoding == CharacterEncoding.utf16)
+  test "UTF-32 with BE BOM":
+    check(("\x00\x00\xFE\xFF" & s).detectCharacterEncoding == CharacterEncoding.utf32)
 
-test "detectCharacterEncoding: UTF-32 with BE BOM":
-  check(("\x00\x00\xFE\xFF" & s).detectCharacterEncoding == CharacterEncoding.utf32)
-
-test "detectCharacterEncoding: UTF-32 with LE BOM":
-  check(("\xFF\xFE\x00\x00" & s).detectCharacterEncoding == CharacterEncoding.utf32)
+  test "UTF-32 with LE BOM":
+    check(("\xFF\xFE\x00\x00" & s).detectCharacterEncoding == CharacterEncoding.utf32)
 
 
-test "detectCharacterEncoding: UTF-8":
-  check(s.detectCharacterEncoding == CharacterEncoding.utf8)
+  test "UTF-8":
+    check(s.detectCharacterEncoding == CharacterEncoding.utf8)
 
-test "detectCharacterEncoding: UTF-16BE":
-  let
-    ec = open("UTF-16BE", "UTF-8")
-    converted = convert(ec, s)
-  check(converted.detectCharacterEncoding == CharacterEncoding.utf16Be)
-  ec.close
+  test "UTF-16BE":
+    let
+      ec = open("UTF-16BE", "UTF-8")
+      converted = convert(ec, s)
+    check(converted.detectCharacterEncoding == CharacterEncoding.utf16Be)
+    ec.close
 
-test "detectCharacterEncoding: UTF-16LE":
-  let
-    ec = open("UTF-16LE", "UTF-8")
-    converted = convert(ec, s)
-  check(converted.detectCharacterEncoding == CharacterEncoding.utf16Le)
-  ec.close
+  test "UTF-16LE":
+    let
+      ec = open("UTF-16LE", "UTF-8")
+      converted = convert(ec, s)
+    check(converted.detectCharacterEncoding == CharacterEncoding.utf16Le)
+    ec.close
 
-test "detectCharacterEncoding: UTF-32BE":
-  let
-    ec = open("UTF-32BE", "UTF-8")
-    converted = convert(ec, s)
-  check(converted.detectCharacterEncoding == CharacterEncoding.utf32Be)
-  ec.close
+  test "UTF-32BE":
+    let
+      ec = open("UTF-32BE", "UTF-8")
+      converted = convert(ec, s)
+    check(converted.detectCharacterEncoding == CharacterEncoding.utf32Be)
+    ec.close
 
-test "detectCharacterEncoding: UTF-32LE":
-  let
-    ec = open("UTF-32LE", "UTF-8")
-    converted = convert(ec, s)
-  check(converted.detectCharacterEncoding == CharacterEncoding.utf32Le)
-  ec.close
+  test "UTF-32LE":
+    let
+      ec = open("UTF-32LE", "UTF-8")
+      converted = convert(ec, s)
+    check(converted.detectCharacterEncoding == CharacterEncoding.utf32Le)
+    ec.close
 
-test "findRune":
-  check find( ru"あaa", ru'a') == 1
-  check find( ru"あaa", ru'b') == -1
+suite "unicodeext: findRune":
+  test "findRune":
+    check find( ru"あaa", ru'a') == 1
+    check find( ru"あaa", ru'b') == -1
 
-test "findRunes":
-  check find(runes = ru"あいういう", sub = ru"いう") == 1
-  check find(runes = ru"あいういういう", sub = ru"いう", start = 2, last = 4) == 3
-  check find(runes = ru"あいういう", sub = ru"いうう") == -1
+  test "findRunes":
+    check find(runes = ru"あいういう", sub = ru"いう") == 1
+    check find(runes = ru"あいういういう", sub = ru"いう", start = 2, last = 4) == 3
+    check find(runes = ru"あいういう", sub = ru"いうう") == -1
 
-test "rfindRune":
-  check rfind(ru"あaa", ru'a') == 2
-  check rfind(ru"あaa", ru'b') == -1
+suite "unicodeext: rfindRune":
+  test "rfindRune":
+    check rfind(ru"あaa", ru'a') == 2
+    check rfind(ru"あaa", ru'b') == -1
 
-test "rfindRunes":
-  check rfind(ru"あいういう", ru"いう") == 3
-  check rfind(ru"あいういう", ru"いう", start = 1, last = 3) == 1
+  test "rfindRunes":
+    check rfind(ru"あいういう", ru"いう") == 3
+    check rfind(ru"あいういう", ru"いう", start = 1, last = 3) == 1
 
-test "substrWithLast":
-  check substr(ru"あいうえお", first = 1, last = 3) == ru"いうえ"
+suite "unicodeext: substrWithLast":
+  test "substrWithLast":
+    check substr(ru"あいうえお", first = 1, last = 3) == ru"いうえ"
 
-test "substr":
-  check substr(ru"あいう", first = 1) == ru"いう"
+suite "unicodeext: substr":
+  test "substr":
+    check substr(ru"あいう", first = 1) == ru"いう"
 
-test "join 1":
-  check @[ru"a", ru"b", ru"c"].join == ru"abc"
+suite "unicodeext: join":
+  test "join 1":
+    check @[ru"a", ru"b", ru"c"].join == ru"abc"
 
-test "join 2":
-  check @[ru"a", ru"b", ru"c"].join(ru" ") == ru"a b c"
+  test "join 2":
+    check @[ru"a", ru"b", ru"c"].join(ru" ") == ru"a b c"
 
-test "/":
-  proc checkJoinPath(head, tail: string) =
-    check head.ru / tail.ru == (head / tail).ru
+suite "unicodeext: '/' (Join paths)":
+  test "'/'":
+    proc checkJoinPath(head, tail: string) =
+      check head.ru / tail.ru == (head / tail).ru
 
-  checkJoinPath("usr", "")
-  checkJoinPath("", "lib")
-  checkJoinPath("", "/lib")
-  checkJoinPath("usr", "/lib")
-  checkJoinPath("usr/", "/lib/")
-  check ru"usr" / ru"lib" / ru"../bin" == ru"usr/bin"
+    checkJoinPath("usr", "")
+    checkJoinPath("", "lib")
+    checkJoinPath("", "/lib")
+    checkJoinPath("usr", "/lib")
+    checkJoinPath("usr/", "/lib/")
+    check ru"usr" / ru"lib" / ru"../bin" == ru"usr/bin"
 
 suite "unicodeext: replaceToNewLines":
   test "Basic":
@@ -440,3 +452,9 @@ suite "unicodeext: replaceToNewLines":
 
   test "Empty":
     check replaceToNewLines(ru"") == ru""
+
+suite "unicodeext: toString":
+  test "Basics":
+    check @[""].toSeqRunes.toString == "\n"
+    check @["abc"].toSeqRunes.toString == "abc\n"
+    check @["abc", "def"].toSeqRunes.toString == "abc\ndef\n"

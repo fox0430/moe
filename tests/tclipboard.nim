@@ -36,7 +36,7 @@ if isXselAvailable():
   suite "Clipboard: Send to clipboad (xsel)":
     test "Send string to clipboard 1 (xsel)":
       const
-        Buffer = @[ru "Clipboard test"]
+        Buffer = @["Clipboard test"].toSeqRunes
         Tool = ClipboardToolOnLinux.xsel
 
       sendToClipboard(Buffer, Tool)
@@ -54,14 +54,14 @@ if isXselAvailable():
 
         check exitCode == 0
         if p == Platforms.linux:
-          check output[0 .. output.high - 1] == $Buffer
+          check output[0 .. output.high - 1] == $Buffer[0]
         else:
           # On the WSL
-          check output[0 .. output.high - 2] == $Buffer
+          check output[0 .. output.high - 2] == $Buffer[0]
 
     test "Send string to clipboard 1 (xclip)":
       const
-        Buffer = @[ru "Clipboard test"]
+        Buffer = @["Clipboard test"].toSeqRunes
         Tool = ClipboardToolOnLinux.xclip
 
       sendToClipboard(Buffer, Tool)
@@ -79,14 +79,14 @@ if isXselAvailable():
 
         check exitCode == 0
         if p == Platforms.linux:
-          check output[0 .. output.high - 1] == $Buffer
+          check output[0 .. output.high - 1] == $Buffer[0]
         else:
           # On the WSL
-          check output[0 .. output.high - 2] == $Buffer
+          check output[0 .. output.high - 2] == $Buffer[0]
 
     test "Send string to clipboard 2 (xsel)":
       const
-        Buffer = @[ru "`````"]
+        Buffer = @["`````"].toSeqRunes
         Tool = ClipboardToolOnLinux.xsel
 
       sendToClipboard(Buffer, Tool)
@@ -104,16 +104,16 @@ if isXselAvailable():
 
         check exitCode == 0
         if p == Platforms.linux:
-          check output[0 .. output.high - 1] == $Buffer
+          check output[0 .. output.high - 1] == $Buffer[0]
         else:
           # On the WSL
-          check output[0 .. output.high - 2] == $Buffer
+          check output[0 .. output.high - 2] == $Buffer[0]
 
 if isXclipAvailable():
   suite "Clipboard: Send string to clipboard (xclip)":
     test "Send string to clipboard (xclip)":
       const
-        Buffer = @[ru "`````"]
+        Buffer = @["`````"].toSeqRunes
         Tool = ClipboardToolOnLinux.xclip
 
       sendToClipboard(Buffer, Tool)
@@ -131,14 +131,14 @@ if isXclipAvailable():
 
         check exitCode == 0
         if p == Platforms.linux:
-          check output[0 .. output.high - 1] == $Buffer
+          check output[0 .. output.high - 1] == $Buffer[0]
         else:
           # On the WSL
-          check output[0 .. output.high - 2] == $Buffer
+          check output[0 .. output.high - 2] == $Buffer[0]
 
     test "Send string to clipboard 2 (xsel)":
       const
-        Buffer = @[ru "$Clipboard test"]
+        Buffer = @["$Clipboard test"].toSeqRunes
         Tool = ClipboardToolOnLinux.xsel
 
       sendToClipboard(Buffer, Tool)
@@ -156,14 +156,14 @@ if isXclipAvailable():
 
         check exitCode == 0
         if p == Platforms.linux:
-          check output[0 .. output.high - 1] == $Buffer
+          check output[0 .. output.high - 1] == $Buffer[0]
         else:
           # On the WSL
-          check output[0 .. output.high - 2] == $Buffer
+          check output[0 .. output.high - 2] == $Buffer[0]
 
     test "Send string to clipboard 3 (xclip)":
       const
-        Buffer = @[ru "$Clipboard test"]
+        Buffer = @["$Clipboard test"].toSeqRunes
         Tool = ClipboardToolOnLinux.xclip
 
       sendToClipboard(Buffer, Tool)
@@ -181,7 +181,7 @@ if isXclipAvailable():
 
         check exitCode == 0
         if p == Platforms.linux:
-          check output[0 .. output.high - 1] == $Buffer
+          check output[0 .. output.high - 1] == $Buffer[0]
         else:
           # On the WSL
-          check output[0 .. output.high - 2] == $Buffer
+          check output[0 .. output.high - 2] == $Buffer[0]

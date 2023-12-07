@@ -46,15 +46,6 @@ proc `$`*(encoding: CharacterEncoding): string =
     of CharacterEncoding.utf32Le: return "UTF-32LE"
     of CharacterEncoding.unknown: return "UNKNOWN"
 
-proc echo*(lines: seq[Runes]) =
-  var buf = "@["
-  for i, ln in lines:
-    buf &= '"' & $ln & '"'
-    if i < lines.high:
-      buf &= ", "
-
-  echo buf & "]"
-
 proc validateUtf16Be(s: string): bool =
   if (s.len mod 2) != 0: return false
 
@@ -298,8 +289,8 @@ proc startsWith*(r1: Runes, r2: Runes | Rune): bool {.inline.} =
 proc endsWith*(r1: Runes, r2: Runes | Rune): bool {.inline.} =
   endsWith($r1, $r2)
 
-proc `$`*(seqRunes: seq[Runes]): string =
-  for runes in seqRunes: result = result & $runes
+proc toString*(lines: seq[Runes]): string =
+  for i, runes in lines: result &= $runes & '\n'
 
 proc `&`*(runes1, runes2: Runes): Runes {.inline.} =
   result = runes1
