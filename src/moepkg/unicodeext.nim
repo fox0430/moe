@@ -186,10 +186,6 @@ proc ru*(array: seq[string]): Runes =
   for s in array:
     result.add s.toRunes
 
-
-proc toCh*(r: Rune): char {.inline.} =
-  result = ($r)[0]
-
 proc canConvertToChar*(c: Rune): bool {.inline.} =
   return ($c).len == 1
 
