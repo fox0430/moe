@@ -17,18 +17,12 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unicode, os]
+import std/[os, strutils]
 import independentutils, platform, settings, unicodeext
 
-proc runesToStrings(runes: seq[Runes]): string =
-  if runes.len == 1:
-    result = $runes[0]
-  else:
-    for i in 0 ..< runes.len:
-      if i == 0:
-        result = $runes[0]
-      else:
-        result &= "\n" & $runes[i]
+proc linesToStrings(lines: seq[Runes]): string =
+  result = lines.toString
+  result.stripLineEnd
 
 proc sendToClipboard*(
   buffer: seq[Runes],
@@ -37,7 +31,7 @@ proc sendToClipboard*(
     if buffer.len < 1: return
 
     let
-      str = runesToStrings(buffer)
+      str = linesToStrings(buffer)
       delimiterStr = genDelimiterStr(str)
 
     case currentPlatform:

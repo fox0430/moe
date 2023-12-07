@@ -1990,7 +1990,11 @@ proc initAutoBackupTableBuffer(settings: AutoBackupSettings): seq[Runes] =
       of "backupDir":
         result.add(ru nameStr & space & $settings.backupDir)
       of "dirToExclude":
-        result.add(ru nameStr & space & $settings.dirToExclude)
+        var dirs = ""
+        for i, d in settings.dirToExclude:
+          dirs &= $d
+          if i < settings.dirToExclude.high: dirs &= ' '
+        result.add(ru nameStr & space & dirs)
 
 proc initQuickRunTableBuffer(settings: QuickRunSettings): seq[Runes] =
   result.add(ru"QuickRun")

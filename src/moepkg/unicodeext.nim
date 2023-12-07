@@ -298,8 +298,8 @@ proc startsWith*(r1: Runes, r2: Runes | Rune): bool {.inline.} =
 proc endsWith*(r1: Runes, r2: Runes | Rune): bool {.inline.} =
   endsWith($r1, $r2)
 
-proc `$`*(seqRunes: seq[Runes]): string =
-  for runes in seqRunes: result = result & $runes
+proc toString*(lines: seq[Runes]): string =
+  for i, runes in lines: result &= $runes & '\n'
 
 proc `&`*(runes1, runes2: Runes): Runes {.inline.} =
   result = runes1
