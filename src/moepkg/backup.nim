@@ -192,8 +192,10 @@ proc backupBuffer*(
         notificationSettings)
       return
 
-    let
-      isSame = diff(baseBackupDir, sourceFilePath.toRunes, $bufStatus.buffer)
+    let isSame = diff(
+      baseBackupDir,
+      sourceFilePath.toRunes,
+      bufStatus.buffer.toString)
     if not isSame:
       commandLine.writeStartAutoBackupMessage(notificationSettings)
 

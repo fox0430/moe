@@ -340,7 +340,7 @@ proc initLsp(
       let err = status.lspClients[langId].textDocumentDidOpen(
         $status.bufStatus[^1].path.absolutePath,
         langId,
-        $status.bufStatus[^1].buffer)
+        status.bufStatus[^1].buffer.toString)
       if err.isErr:
         status.commandLine.writeLspInitializeError(
           status.settings.lsp.languages[langId].command,
@@ -1482,7 +1482,7 @@ proc runBackgroundTasks*(status: var EditorStatus) =
             CharacterEncoding.utf8
           else:
             currentBufStatus.characterEncoding
-        buffer = convert($currentBufStatus.buffer, $encoding, "UTF-8")
+        buffer = convert(currentBufStatus.buffer.toString, $encoding, "UTF-8")
 
       let newTextAndEncoding = openFile(currentBufStatus.path)
       if newTextAndEncoding.isErr:
