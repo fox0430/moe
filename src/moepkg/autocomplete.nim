@@ -116,14 +116,16 @@ proc extractNeighborPath*(
 
       # The starting point of the path is after '"' or ''' or spaces.
       while (first - 1 >= 0) and
-            ((r != '"') and (r != '\'') and (r.toCh notin Whitespace)): dec(first)
+            ((r != '"') and (r != '\'') and (r.toChar notin Whitespace)):
+              dec(first)
 
     block:
       template r: Rune = runes[last + 1]
 
       # The ending point of the path is before '"' or ''' or spaces.
       while (last + 1 <= runes.high) and
-            ((r != '"') and (r != '\'') and (r.toCh notin Whitespace)): inc(last)
+            ((r != '"') and (r != '\'') and (r.toChar notin Whitespace)):
+              inc(last)
 
     return some((runes[first..last], first, last))
 
