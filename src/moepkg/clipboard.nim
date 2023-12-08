@@ -26,7 +26,8 @@ proc linesToStrings(lines: seq[Runes]): string =
 
 proc sendToClipboard*(
   buffer: seq[Runes],
-  tool: ClipboardToolOnLinux) =
+  tool: ClipboardTool) =
+    ## Send the buffer to the OS clipboad (xclip, xsel, etc).
 
     if buffer.len < 1: return
 
@@ -37,11 +38,11 @@ proc sendToClipboard*(
     case currentPlatform:
       of linux:
         let cmd =
-          if tool == ClipboardToolOnLinux.xclip:
+          if tool == ClipboardTool.xclip:
             "xclip -r <<" & "'" & delimiterStr & "'" & "\n" & str & "\n" & delimiterStr & "\n"
-          elif tool == ClipboardToolOnLinux.xsel:
+          elif tool == ClipboardTool.xsel:
             "xsel <<" & "'" & delimiterStr & "'" & "\n" & str & "\n" & delimiterStr & "\n"
-          elif tool == ClipboardToolOnLinux.wlClipboard:
+          elif tool == ClipboardTool.wlClipboard:
             "wl-copy <<" & "'" & delimiterStr & "'" & "\n" & str & "\n" & delimiterStr & "\n"
           else:
             ""
@@ -56,3 +57,8 @@ proc sendToClipboard*(
         discard execShellCmd(cmd)
       else:
         discard
+
+proc sendToClipboard*(buffer: Runes, tool: ClipboardTool) {.inline.} =
+  ## Send the buffer to the OS clipboad (xclip, xsel, etc).
+
+  sendToClipboard(@[buffer], tool)

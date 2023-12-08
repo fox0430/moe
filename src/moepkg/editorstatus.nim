@@ -86,7 +86,8 @@ proc initEditorStatus*(): EditorStatus =
     autoBackupStatus: initAutoBackupStatus(),
     commandLine: initCommandLine(),
     mainWindow: initMainWindow(),
-    statusLine: @[initStatusLine()])
+    statusLine: @[initStatusLine()],
+    registers: initRegisters())
 
 template currentBufStatus*: var BufferStatus =
   mixin status

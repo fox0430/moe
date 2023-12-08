@@ -404,7 +404,7 @@ suite "Parse configuration file":
     check settings.standard.colorMode == ColorMode.none
 
     check not settings.clipboard.enable
-    check settings.clipboard.toolOnLinux == ClipboardToolOnLinux.xclip
+    check settings.clipboard.toolOnLinux == ClipboardTool.xclip
 
     check settings.buildOnSave.enable
     check settings.buildOnSave.workspaceRoot == ru"/home/fox/git/moe"
@@ -552,7 +552,7 @@ suite "Parse configuration file":
     let settings = parseTomlConfigs(toml)
 
     check settings.clipboard.enable
-    check settings.clipboard.toolOnLinux == ClipboardToolOnLinux.xclip
+    check settings.clipboard.toolOnLinux == ClipboardTool.xclip
 
   test "Parse Clipboard setting 2":
     const Str = """
@@ -564,7 +564,7 @@ suite "Parse configuration file":
     let settings = parseTomlConfigs(toml)
 
     check settings.clipboard.enable
-    check settings.clipboard.toolOnLinux == ClipboardToolOnLinux.xsel
+    check settings.clipboard.toolOnLinux == ClipboardTool.xsel
 
   test "Parse Clipboard setting 3":
     const Str = """
@@ -576,7 +576,7 @@ suite "Parse configuration file":
     let settings = parseTomlConfigs(toml)
 
     check settings.clipboard.enable
-    check settings.clipboard.toolOnLinux == ClipboardToolOnLinux.wlClipboard
+    check settings.clipboard.toolOnLinux == ClipboardTool.wlClipboard
 
   test "Parse color Mode setting 1":
     const Str = """

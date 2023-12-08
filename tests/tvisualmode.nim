@@ -20,7 +20,7 @@
 import std/[unittest, osproc, options]
 import pkg/results
 import moepkg/[highlight, independentutils, editorstatus, gapbuffer, unicodeext,
-               bufferstatus, movement, ui]
+               bufferstatus, movement, ui, registers, settings]
 
 import moepkg/visualmode {.all.}
 import moepkg/platform {.all.}
@@ -300,8 +300,8 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
       firstCursorPosition,
       status.settings)
 
-    check status.registers.noNameRegisters.isLine
-    check status.registers.noNameRegisters.buffer == @[ru"abc", ru"def"]
+    check status.registers.getNoNamedRegister.isLine
+    check status.registers.getNoNamedRegister.buffer == @[ru"abc", ru"def"]
 
   test "Yank lines 2":
     var status = initEditorStatus()
@@ -337,8 +337,8 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
       firstCursorPosition,
       status.settings)
 
-    check not status.registers.noNameRegisters.isLine
-    check status.registers.noNameRegisters.buffer == @[ru"abc"]
+    check not status.registers.getNoNamedRegister.isLine
+    check status.registers.getNoNamedRegister.buffer == @[ru"abc"]
 
   test "Yank string (Fix #1124)":
     var status = initEditorStatus()
@@ -372,8 +372,8 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
       firstCursorPosition,
       status.settings)
 
-    check not status.registers.noNameRegisters.isLine
-    check status.registers.noNameRegisters.buffer[^1] == ru"abc"
+    check not status.registers.getNoNamedRegister.isLine
+    check status.registers.getNoNamedRegister.buffer[^1] == ru"abc"
 
   test "Yank lines when the last line is empty (Fix #1183)":
     var status = initEditorStatus()
@@ -407,13 +407,13 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
       firstCursorPosition,
       status.settings)
 
-    check status.registers.noNameRegisters.isLine
-    check status.registers.noNameRegisters.buffer == @[ru"abc", ru""]
+    check status.registers.getNoNamedRegister.isLine
+    check status.registers.getNoNamedRegister.buffer == @[ru"abc", ru""]
 
   test "Yank the empty line":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"", ru"abc"])
+    currentBufStatus.buffer = initGapBuffer(@[ru""])
 
     status.initSelectedArea
 
@@ -440,8 +440,8 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
       firstCursorPosition,
       status.settings)
 
-    check status.registers.noNameRegisters.isLine
-    check status.registers.noNameRegisters.buffer == @[ru""]
+    check status.registers.getNoNamedRegister.isLine
+    check status.registers.getNoNamedRegister.buffer == @[ru""]
 
 suite "Visual block mode: Yank buffer (Disable clipboard)":
   test "Yank lines 1":
@@ -471,8 +471,8 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
       area.get,
       status.settings)
 
-    check status.registers.noNameRegisters.isLine
-    check status.registers.noNameRegisters.buffer == @[ru"a", ru"d"]
+    check status.registers.getNoNamedRegister.isLine
+    check status.registers.getNoNamedRegister.buffer == @[ru"a", ru"d"]
 
   test "Yank lines 2":
     var status = initEditorStatus()
@@ -505,8 +505,8 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
       area.get,
       status.settings)
 
-    check status.registers.noNameRegisters.isLine
-    check status.registers.noNameRegisters.buffer == @[ru"ab", ru"d"]
+    check status.registers.getNoNamedRegister.isLine
+    check status.registers.getNoNamedRegister.buffer == @[ru"ab", ru"d"]
 
   test "Fix #1636":
     var status = initEditorStatus()
@@ -594,7 +594,10 @@ if isXselAvailable():
         firstCursorPosition = BufferPosition(
           line: area.get.startLine,
           column: area.get.startColumn)
+
       status.settings.clipboard.enable = true
+      status.registers.setClipboardTool(ClipboardTool.xsel)
+
       currentBufStatus.yankBuffer(
         status.registers,
         currentMainWindowNode,
@@ -650,7 +653,10 @@ if isXselAvailable():
         firstCursorPosition = BufferPosition(
           line: area.get.startLine,
           column: area.get.startColumn)
+
       status.settings.clipboard.enable = true
+      status.registers.setClipboardTool(ClipboardTool.xsel)
+
       currentBufStatus.yankBuffer(
         status.registers,
         currentMainWindowNode,
@@ -701,7 +707,10 @@ if isXselAvailable():
       status.update
 
       let area = currentBufStatus.selectedArea
+
       status.settings.clipboard.enable = true
+      status.registers.setClipboardTool(ClipboardTool.xsel)
+
       currentBufStatus.yankBufferBlock(
         status.registers,
         currentMainWindowNode,
@@ -740,7 +749,10 @@ if isXselAvailable():
       status.update
 
       let area = currentBufStatus.selectedArea
+
       status.settings.clipboard.enable = true
+      status.registers.setClipboardTool(ClipboardTool.xsel)
+
       currentBufStatus.yankBufferBlock(
         status.registers,
        currentMainWindowNode,
@@ -778,7 +790,10 @@ if isXselAvailable():
       status.update
 
       let area = currentBufStatus.selectedArea
+
       status.settings.clipboard.enable = true
+      status.registers.setClipboardTool(ClipboardTool.xsel)
+
       currentBufStatus.deleteBufferBlock(
         status.registers,
         currentMainWindowNode,
@@ -814,7 +829,10 @@ if isXselAvailable():
         status.update
 
       let area = currentBufStatus.selectedArea
+
       status.settings.clipboard.enable = true
+      status.registers.setClipboardTool(ClipboardTool.xsel)
+
       currentBufStatus.deleteBufferBlock(
         status.registers,
         currentMainWindowNode,
@@ -847,7 +865,10 @@ if isXselAvailable():
         status.update
 
       let area = currentBufStatus.selectedArea
+
       status.settings.clipboard.enable = true
+      status.registers.setClipboardTool(ClipboardTool.xsel)
+
       currentBufStatus.deleteBufferBlock(
         status.registers,
         currentMainWindowNode,
@@ -2040,7 +2061,7 @@ suite "Visual line mode: Yank buffer (Disable clipboard)":
       firstCursorPosition,
       status.settings)
 
-    check status.registers.noNameRegisters.buffer == @[buffer[0]]
+    check status.registers.getNoNamedRegister.buffer == @[buffer[0]]
 
 if isXselAvailable():
   suite "Visual line mode: Yank buffer (Enable clipboard)":
@@ -2074,7 +2095,10 @@ if isXselAvailable():
         firstCursorPosition = BufferPosition(
           line: area.get.startLine,
           column: area.get.startColumn)
+
       status.settings.clipboard.enable = true
+      status.registers.setClipboardTool(ClipboardTool.xsel)
+
       currentBufStatus.yankBuffer(
         status.registers,
         currentMainWindowNode,

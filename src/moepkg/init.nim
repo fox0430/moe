@@ -20,7 +20,7 @@
 import std/[os, times]
 import pkg/results
 import ui, bufferstatus, editorstatus, cmdlineoption, git, editorview, theme,
-       registers, settings, messages, logger
+       settings, messages, logger
 
 proc loadPersistData(status: var EditorStatus) =
   ## Load persisted data (Ex command history, search history and cursor
@@ -135,8 +135,6 @@ proc initEditor*(): EditorStatus =
   result.loadPersistData
 
   result.initSidebar
-
-  initOperationRegisters()
 
   disableControlC()
   catchTerminalResize()

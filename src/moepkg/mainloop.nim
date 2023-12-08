@@ -201,29 +201,33 @@ proc isResetSearchHistoryIndex(
 
     (searchHistoryIndex.isSome) and not (isUpKey(key) or isDownKey(key))
 
-proc isExecMacroCommand(bufStatus: BufferStatus, commands: Runes): bool =
-  if bufStatus.mode.isNormalMode and commands.len > 1:
-    if commands[0].isDigit:
-      # If the first word (text) is a number, it is considered as the number
-      # repetitions.
-      var i = 0
-      while i < commands.high and commands[i].isDigit: i.inc
-      if commands.len - i == 2:
-        return commands[i] == ord('@') and
-          isOperationRegisterName(commands[i + 1]) and
-          getOperationsFromRegister(commands[i + 1]).get.len > 0
-    else:
-      return commands.len == 2 and
-        commands[0] == ord('@') and
-        isOperationRegisterName(commands[1]) and
-        getOperationsFromRegister(commands[1]).get.len > 0
+proc isExecMacroCommand(
+  bufStatus: BufferStatus,
+  registers: Registers,
+  commands: Runes): bool =
+
+    if bufStatus.mode.isNormalMode and commands.len > 1:
+      if commands[0].isDigit:
+        # If the first word (text) is a number, it is considered as the number
+        # repetitions.
+        var i = 0
+        while i < commands.high and commands[i].isDigit: i.inc
+        if commands.len - i == 2:
+          return commands[i] == ord('@') and
+            isOperationRegisterName(commands[i + 1]) and
+            registers.getOperations(commands[i + 1]).get.commands.len > 0
+      else:
+        return commands.len == 2 and
+          commands[0] == ord('@') and
+          isOperationRegisterName(commands[1]) and
+          registers.getOperations(commands[1]).get.commands.len > 0
 
 proc execMacro(status: var EditorStatus, name: Rune) =
   ## Exec commands from the operationRegister.
 
   if isOperationRegisterName(name):
-    let commands = getOperationsFromRegister(name).get
-    for c in commands:
+    let operations = status.registers.getOperations(name).get
+    for c in operations.commands:
       discard status.execCommand(c)
       status.update
 
@@ -233,13 +237,13 @@ proc execEditorCommand(status: var EditorStatus, command: Runes): Option[Rune] =
 
   if status.recodingOperationRegister.isSome:
     if not isStopRecordingOperationsCommand(currentBufStatus, command):
-      discard addOperationToRegister(
+      discard status.registers.addOperation(
         status.recodingOperationRegister.get,
         command).get
 
   status.lastOperatingTime = now()
 
-  if isExecMacroCommand(currentBufStatus, command):
+  if isExecMacroCommand(currentBufStatus, status.registers, command):
     var repeat = 1
     if command[0].isDigit:
       # If the first word (text) is a number, it is considered as the number
@@ -274,13 +278,15 @@ proc insertPasteBuffer(status: var EditorStatus, pasteBuffer: seq[Runes]) =
     # File edit modes (Insert, Replace).
 
     # Assign the pasteBuffer to the no name register.
-    let isLine = pasteBuffer.len > 1
-    status.registers.addRegister(pasteBuffer, isLine, status.settings)
+    if pasteBuffer.len == 1:
+      status.registers.updateYankedRegister(pasteBuffer[0])
+    else:
+      status.registers.updateYankedRegister(pasteBuffer)
 
     if currentBufStatus.isInsertMode:
       currentBufStatus.pasteAfterCursor(
         currentMainWindowNode,
-        status.registers.noNameRegisters)
+        status.registers)
     elif currentBufStatus.isReplaceMode:
       for lineNum, line in pasteBuffer:
         for r in line:

@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, tables, options, importutils]
+import std/[unittest, options, importutils]
 import pkg/results
 import moepkg/[unicodeext, bufferstatus, gapbuffer, editorstatus, windownode,
                ui, commandLine, viewhighlight, visualmode, suggestionwindow,
@@ -35,103 +35,102 @@ proc resize(status: var EditorStatus, h, w: int) =
 
 suite "mainloop: isExecMacroCommand":
   setup:
-    initOperationRegisters()
+    var registers = initRegisters()
 
   test "Except to true":
     let b = initBufferStatus("").get
 
-    const RegisterName = 'a'
-    registers.operationRegisters[RegisterName] = @["yy"].toSeqRunes
+    const
+      RegisterName = ru'a'
+      Operation = ru"yy"
+    check registers.addOperation(RegisterName, Operation).isOk
 
     const Command = ru"@a"
-    check b.isExecMacroCommand(Command)
+    check b.isExecMacroCommand(registers, Command)
 
   test "Except to true 2":
     let b = initBufferStatus("").get
 
-    const RegisterName = '0'
-    registers.operationRegisters[RegisterName] = @["yy"].toSeqRunes
+    const RegisterName = ru'0'
+    check registers.addOperation(RegisterName, ru"yy").isOk
 
     const Command = ru"@0"
-    check b.isExecMacroCommand(Command)
+    check b.isExecMacroCommand(registers, Command)
 
   test "Except to true 3":
     let b = initBufferStatus("").get
 
-    const RegisterName = '0'
-    registers.operationRegisters[RegisterName] = @["yy"].toSeqRunes
+    const RegisterName = ru'0'
+    check registers.addOperation(RegisterName, ru"yy").isOk
 
     const Command = ru"1@0"
-    check b.isExecMacroCommand(Command)
+    check b.isExecMacroCommand(registers, Command)
 
   test "Except to true 4":
     let b = initBufferStatus("").get
 
-    const RegisterName = '0'
-    registers.operationRegisters[RegisterName] = @["yy"].toSeqRunes
+    const RegisterName = ru'0'
+    check registers.addOperation(RegisterName, ru"yy").isOk
 
     const Command = ru"10@0"
-    check b.isExecMacroCommand(Command)
+    check b.isExecMacroCommand(registers, Command)
 
   test "Except to false":
     let b = initBufferStatus("").get
 
-    const RegisterName = 'a'
-    registers.operationRegisters[RegisterName] = @["yy"].toSeqRunes
+    const RegisterName = ru'a'
+    check registers.addOperation(RegisterName, ru"yy").isOk
 
     const Command = ru""
-    check not b.isExecMacroCommand(Command)
+    check not b.isExecMacroCommand(registers, Command)
 
   test "Except to false 2":
     let b = initBufferStatus("").get
 
-    const RegisterName = 'a'
-    registers.operationRegisters[RegisterName] = @["yy"].toSeqRunes
+    const RegisterName = ru'a'
+    check registers.addOperation(RegisterName, ru"yy").isOk
 
     const Command = ru"@"
-    check not b.isExecMacroCommand(Command)
+    check not b.isExecMacroCommand(registers, Command)
 
   test "Except to false 3":
     var b = initBufferStatus("").get
     b.changeMode(Mode.insert)
 
-    const RegisterName = 'a'
-    registers.operationRegisters[RegisterName] = @["yy"].toSeqRunes
+    const RegisterName = ru'a'
+    check registers.addOperation(RegisterName, ru"yy").isOk
 
     const Command = ru"@a"
-    check not b.isExecMacroCommand(Command)
+    check not b.isExecMacroCommand(registers, Command)
 
   test "Except to false 4":
     var b = initBufferStatus("").get
 
-    const RegisterName = 'a'
-    registers.operationRegisters[RegisterName] = @[].toSeqRunes
+    const RegisterName = ru'a'
+    check not registers.addOperation(RegisterName, ru"").isOk
 
     const Command = ru"@a"
-    check not b.isExecMacroCommand(Command)
+    check not b.isExecMacroCommand(registers, Command)
 
   test "Except to false 5":
     var b = initBufferStatus("").get
 
     const Command = ru"1@a"
-    check not b.isExecMacroCommand(Command)
+    check not b.isExecMacroCommand(registers, Command)
 
   test "Except to false 6":
     var b = initBufferStatus("").get
 
     const Command = ru"1@@"
-    check not b.isExecMacroCommand(Command)
+    check not b.isExecMacroCommand(registers, Command)
 
   test "Except to false 7":
     var b = initBufferStatus("").get
 
     const Command = ru"10"
-    check not b.isExecMacroCommand(Command)
+    check not b.isExecMacroCommand(registers, Command)
 
 suite "mainloop: execMacro":
-  setup:
-    initOperationRegisters()
-
   test "Single dd command":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
@@ -140,9 +139,9 @@ suite "mainloop: execMacro":
     status.resize(100, 100)
     status.update
 
-    const RegisterName = 'a'
-    registers.operationRegisters[RegisterName] = @["dd"].toSeqRunes
-    status.execMacro(RegisterName.toRune)
+    const RegisterName = ru'a'
+    check status.registers.addOperation(RegisterName, ru"dd").isOk
+    status.execMacro(RegisterName)
 
     check currentBufStatus.buffer.toSeqRunes == @["2"].toSeqRunes
 
@@ -154,9 +153,10 @@ suite "mainloop: execMacro":
     status.resize(100, 100)
     status.update
 
-    const RegisterName = 'a'
-    registers.operationRegisters[RegisterName] = @["dd", "dd"].toSeqRunes
-    status.execMacro(RegisterName.toRune)
+    const RegisterName = ru'a'
+    for i in 0 .. 1:
+      check status.registers.addOperation(RegisterName, ru"dd").isOk
+    status.execMacro(RegisterName)
 
     check currentBufStatus.buffer.toSeqRunes == @["3"].toSeqRunes
 
@@ -168,16 +168,14 @@ suite "mainloop: execMacro":
     status.resize(100, 100)
     status.update
 
-    const RegisterName = 'a'
-    registers.operationRegisters[RegisterName] = @["j", "dd"].toSeqRunes
-    status.execMacro(RegisterName.toRune)
+    const RegisterName = ru'a'
+    check status.registers.addOperation(RegisterName, ru"j").isOk
+    check status.registers.addOperation(RegisterName, ru"dd").isOk
+    status.execMacro(RegisterName)
 
     check currentBufStatus.buffer.toSeqRunes == @["1", "3"].toSeqRunes
 
 suite "mainloop: execEditorCommand":
-  setup:
-    initOperationRegisters()
-
   test "Exec normal mode commands":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
@@ -213,8 +211,8 @@ suite "mainloop: execEditorCommand":
     status.resize(100, 100)
     status.update
 
-    const RegisterName = 'a'
-    status.recodingOperationRegister = some(RegisterName.toRune)
+    const RegisterName = ru'a'
+    status.recodingOperationRegister = some(RegisterName)
 
     block:
       const Command = ru"dd"
@@ -224,8 +222,8 @@ suite "mainloop: execEditorCommand":
       const Command = ru"yy"
       check status.execEditorCommand(Command).isNone
 
-    check registers.operationRegisters[RegisterName] ==
-      @["dd", "yy"].toSeqRunes
+    check status.registers.addOperation(RegisterName, ru"dd").isOk
+    check status.registers.addOperation(RegisterName, ru"yy").isOk
     check currentBufStatus.buffer.toSeqRunes == @["2"].toSeqRunes
 
   test "Exec macro":
@@ -236,8 +234,9 @@ suite "mainloop: execEditorCommand":
     status.resize(100, 100)
     status.update
 
-    const RegisterName = 'a'
-    registers.operationRegisters[RegisterName] = @["j", "dd"].toSeqRunes
+    const RegisterName = ru'a'
+    check status.registers.addOperation(RegisterName, ru"j").isOk
+    check status.registers.addOperation(RegisterName, ru"dd").isOk
 
     const Command = ru"@a"
     check status.execEditorCommand(Command).isNone
@@ -252,8 +251,8 @@ suite "mainloop: execEditorCommand":
     status.resize(100, 100)
     status.update
 
-    const RegisterName = 'a'
-    registers.operationRegisters[RegisterName] = @["2dd"].toSeqRunes
+    const RegisterName = ru'a'
+    check status.registers.addOperation(RegisterName, ru"2dd").isOk
 
     const Command = ru"@a"
     check status.execEditorCommand(Command).isNone
@@ -268,8 +267,10 @@ suite "mainloop: execEditorCommand":
     status.resize(100, 100)
     status.update
 
-    const RegisterName = 'a'
-    registers.operationRegisters[RegisterName] = @[":", "vs", "dd"].toSeqRunes
+    const RegisterName = ru'a'
+    check status.registers.addOperation(RegisterName, ru":").isOk
+    check status.registers.addOperation(RegisterName, ru"vs").isOk
+    check status.registers.addOperation(RegisterName, ru"dd").isOk
 
     const Command = ru"@a"
     check status.execEditorCommand(Command).isNone
@@ -285,8 +286,8 @@ suite "mainloop: execEditorCommand":
     status.resize(100, 100)
     status.update
 
-    const RegisterName = 'a'
-    registers.operationRegisters[RegisterName] = @["dd"].toSeqRunes
+    const RegisterName = ru'a'
+    check status.registers.addOperation(RegisterName, ru"dd").isOk
 
     const Command = ru"2@a"
     check status.execEditorCommand(Command).isNone
@@ -350,8 +351,7 @@ suite "mainloop: insertPasteBuffer":
 
     check currentBufStatus.buffer.toSeqRunes == @["abc"].toSeqRunes
 
-    check status.registers.noNameRegisters == Register(
-      name: "",
+    check status.registers.getNoNamedRegister == Register(
       buffer: @["abc"].toSeqRunes,
       isLine: false)
 
@@ -368,8 +368,7 @@ suite "mainloop: insertPasteBuffer":
 
     check currentBufStatus.buffer.toSeqRunes == @["axyzbc"].toSeqRunes
 
-    check status.registers.noNameRegisters == Register(
-      name: "",
+    check status.registers.getNoNamedRegister == Register(
       buffer: @["xyz"].toSeqRunes,
       isLine: false)
 
@@ -386,8 +385,7 @@ suite "mainloop: insertPasteBuffer":
 
     check currentBufStatus.buffer.toSeqRunes == @["", "a", "b", "c"].toSeqRunes
 
-    check status.registers.noNameRegisters == Register(
-      name: "",
+    check status.registers.getNoNamedRegister == Register(
       buffer: @["a", "b", "c"].toSeqRunes,
       isLine: true)
 
@@ -404,8 +402,7 @@ suite "mainloop: insertPasteBuffer":
 
     check currentBufStatus.buffer.toSeqRunes == @["abc"].toSeqRunes
 
-    check status.registers.noNameRegisters == Register(
-      name: "",
+    check status.registers.getNoNamedRegister == Register(
       buffer: @["abc"].toSeqRunes,
       isLine: false)
 
@@ -422,8 +419,7 @@ suite "mainloop: insertPasteBuffer":
 
     check currentBufStatus.buffer.toSeqRunes == @["xyz"].toSeqRunes
 
-    check status.registers.noNameRegisters == Register(
-      name: "",
+    check status.registers.getNoNamedRegister == Register(
       buffer: @["xyz"].toSeqRunes,
       isLine: false)
 
@@ -440,8 +436,7 @@ suite "mainloop: insertPasteBuffer":
 
     check currentBufStatus.buffer.toSeqRunes == @["x", "y", "zd"].toSeqRunes
 
-    check status.registers.noNameRegisters == Register(
-      name: "",
+    check status.registers.getNoNamedRegister == Register(
       buffer: @["x", "y", "z"].toSeqRunes,
       isLine: true)
 

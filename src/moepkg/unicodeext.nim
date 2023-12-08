@@ -625,3 +625,6 @@ proc maxLen*(lines: seq[Runes]): int {.inline.} =
 
 proc maxHigh*(lines: seq[Runes]): int {.inline.} =
   lines.mapIt(it.high).max
+
+proc isEmpty*(lines: seq[Runes]): bool {.inline.} =
+  lines.len == 0 or (lines.len == 1 and lines[0].len == 0)

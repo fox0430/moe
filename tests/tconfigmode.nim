@@ -71,7 +71,7 @@ suite "Config mode: Init buffer":
   test "Init ClipBoard table buffer":
     var status = initEditorStatus()
     status.settings.clipboard.enable = true
-    status.settings.clipboard.toolOnLinux = ClipboardToolOnLinux.none
+    status.settings.clipboard.toolOnLinux = ClipboardTool.none
     let buffer = status.settings.clipboard.initClipBoardTableBuffer
 
     const Sample = @[
@@ -864,7 +864,7 @@ suite "Config mode: Get ClipBoard table setting values":
 
   test "Get toolOnLinux value":
     var status = initEditorStatus()
-    status.settings.clipboard.toolOnLinux = ClipboardToolOnLinux.none
+    status.settings.clipboard.toolOnLinux = ClipboardTool.none
     let clipboardSettings = status.settings.clipboard
 
     const Name = "toolOnLinux"
@@ -1849,7 +1849,7 @@ suite "Config mode: Chaging ClipBoard table settings":
       settings = initEditorSettings()
       clipboardSettings = settings.clipboard
 
-    let val = ClipboardToolOnLinux.xclip
+    let val = ClipboardTool.xclip
     clipboardSettings.changeClipBoardTableSettings("toolOnLinux", $val)
 
     check val == clipboardSettings.toolOnLinux
