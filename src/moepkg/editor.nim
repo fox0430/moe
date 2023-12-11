@@ -55,6 +55,14 @@ proc isEmptyLine(
 
     bufStatus.buffer[windowNode.currentLine].len == 0
 
+proc getRegister(r: Registers, name: string = ""): Register =
+  ## Return no named, named or number or small delete register.
+
+  if name.len == 0: return r.getNoNamedRegister
+  elif name.isNamedRegisterName: return r.getNamedRegister(name)
+  elif name.isNumberRegisterName: return r.getNumberRegister(name)
+  elif name.isSmallDeleteRegisterName: return r.getSmallDeleteRegister
+
 proc insertCharacter*(
   bufStatus: var BufferStatus,
   windowNode: WindowNode,
@@ -1716,22 +1724,13 @@ proc pasteAfterCursor*(
 proc pasteAfterCursor*(
   bufStatus: var BufferStatus,
   windowNode: var WindowNode,
-  registers: Registers) {.inline.} =
-    ## The buffer get from the noNameRegister.
-
-    bufStatus.pasteAfterCursor(windowNode, registers.getNoNamedRegister)
-
-proc pasteAfterCursor*(
-  bufStatus: var BufferStatus,
-  windowNode: var WindowNode,
   registers: Registers,
-  registerName: string) =
+  registerName: string = "") =
     ## The buffer get from the named register.
 
-    if registerName.isNamedRegisterName:
-      let register = registers.getNamedRegister(registerName[0])
-      if not register.buffer.isEmpty:
-        bufStatus.pasteAfterCursor(windowNode, register)
+    let r = registers.getRegister(registerName)
+    if not r.buffer.isEmpty:
+      bufStatus.pasteAfterCursor(windowNode, r)
 
 proc pasteBeforeCursor*(
   bufStatus: var BufferStatus,
@@ -1765,21 +1764,12 @@ proc pasteBeforeCursor*(
   bufStatus: var BufferStatus,
   windowNode: var WindowNode,
   registers: Registers,
-  registerName: string) =
+  registerName: string = "") =
     ## The buffer get from the register.
 
-    if registerName.isNamedRegisterName:
-      let register = registers.getNamedRegister(registerName[0])
-      if not register.buffer.isEmpty:
-        bufStatus.pasteBeforeCursor(windowNode, register)
-
-proc pasteBeforeCursor*(
-  bufStatus: var BufferStatus,
-  windowNode: var WindowNode,
-  registers: Registers) {.inline.} =
-    ## The buffer get from the register.
-
-    bufStatus.pasteBeforeCursor(windowNode, registers.getNoNamedRegister)
+    let r = registers.getRegister(registerName)
+    if not r.buffer.isEmpty:
+      bufStatus.pasteBeforeCursor(windowNode, r)
 
 proc replaceCharacters*(
   bufStatus: var BufferStatus,

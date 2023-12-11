@@ -63,6 +63,46 @@ proc resize(status: var EditorStatus, h, w: int) =
   updateTerminalSize(h, w)
   status.resize
 
+suite "Editor: getRegister":
+  test "No named register":
+    var status = initEditorStatus()
+
+    status.registers.setNoNamedRegister(ru"abc")
+
+    check status.registers.getRegister == Register(
+      buffer: @["abc"].toSeqRunes,
+      isLine: false)
+
+  test "Named register":
+    var status = initEditorStatus()
+
+    const RegisterName = 'a'
+    status.registers.setNamedRegister(ru"abc", RegisterName)
+
+    check status.registers.getRegister($RegisterName) == Register(
+      buffer: @["abc"].toSeqRunes,
+      isLine: false)
+
+  test "Samll delete register":
+    var status = initEditorStatus()
+
+    status.registers.setDeletedRegister(ru"abc")
+
+    const RegisterName = '-'
+    check status.registers.getRegister($RegisterName) == Register(
+      buffer: @["abc"].toSeqRunes,
+      isLine: false)
+
+  test "Number register":
+    var status = initEditorStatus()
+
+    status.registers.setDeletedRegister(@["abc"].toSeqRunes)
+
+    const RegisterName = '1'
+    check status.registers.getRegister($RegisterName) == Register(
+      buffer: @["abc"].toSeqRunes,
+      isLine: true)
+
 suite "Editor: Auto indent":
   test "Auto indent in current Line":
     var status = initEditorStatus()
@@ -1713,7 +1753,7 @@ if isXselAvailable():
         Name,
         IsDelete)
 
-      check status.registers.getNoNamedRegister.buffer.isEmpty
+      check status.registers.getNoNamedRegister.buffer == @[""].toSeqRunes
       check not status.registers.getNoNamedRegister.isLine
 
 if isXselAvailable():

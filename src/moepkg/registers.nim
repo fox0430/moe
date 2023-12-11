@@ -98,6 +98,21 @@ proc isNamedRegisterName*(s: string): bool {.inline.} =
 proc isNamedRegisterName*(c: char): bool {.inline.} =
   c in Letters
 
+proc isNumberRegisterName*(n: int): bool {.inline.} =
+  n >= 0 and n <= 9
+
+proc isNumberRegisterName*(c: char): bool {.inline.} =
+  c.int >= '0'.int and c.int <= '9'.int
+
+proc isNumberRegisterName*(s: string): bool {.inline.} =
+  s.len == 1 and s[0].int >= '0'.int and s[0].int <= '9'.int
+
+proc isSmallDeleteRegisterName*(c: char): bool {.inline.} =
+  c == '-'
+
+proc isSmallDeleteRegisterName*(s: string): bool {.inline.} =
+  s.len == 1 and s[0].isSmallDeleteRegisterName
+
 proc getNoNamedRegister*(r: Registers): Register {.inline.} = r.noNamed
 
 proc getNamedRegister*(r: Registers, registerName: char): Register =
@@ -107,10 +122,32 @@ proc getNamedRegister*(r: Registers, registerName: char): Register =
 
   return r.named[registerName]
 
+proc getNamedRegister*(r: Registers, registerName: string): Register =
+  doAssert(
+    registerName.isNamedRegisterName,
+    fmt"Named register: Invalid register name: {registerName}")
+
+  return r.named[registerName[0]]
+
 proc getSmallDeleteRegister*(r: Registers): Register {.inline.} = r.smallDelete
 
 proc getNumberRegister*(r: Registers, num: int): Register {.inline.} =
   r.number[num]
+
+proc getNumberRegister*(r: Registers, registerNumChar: char): Register =
+  doAssert(
+    registerNumChar.isNumberRegisterName,
+    fmt"Number register: Invalid register name: {registerNumChar}")
+
+  const AsciiZero = 48
+  return r.number[registerNumChar.int - AsciiZero]
+
+proc getNumberRegister*(r: Registers, registerNumStr: string): Register =
+  doAssert(
+    registerNumStr.isNumberRegisterName,
+    fmt"Number register: Invalid register name: {registerNumStr}")
+
+  return r.getNumberRegister(registerNumStr[0])
 
 proc set(r: var Register, buffer: Runes) {.inline.} =
   ## Set runes to the register.

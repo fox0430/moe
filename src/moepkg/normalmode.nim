@@ -1067,26 +1067,27 @@ proc addRegister(status: var EditorStatus, command, registerName: string) =
   else:
     discard
 
-proc pasteFromRegister(status: var EditorStatus, command, name: string) =
-  if currentBufStatus.isReadonly:
-    status.commandLine.writeReadonlyModeWarning
-    return
+proc pasteFromRegister(
+  status: var EditorStatus,
+  command, registerName: string) =
+    ## Paste the text to the buffer from the named or number register.
+    ## 'p' and 'P' commands.
 
-  if name.len == 0: return
+    if currentBufStatus.isReadonly:
+      status.commandLine.writeReadonlyModeWarning
+      return
 
-  case command:
-    of "p":
-      currentBufStatus.pasteAfterCursor(
-        currentMainWindowNode,
-        status.registers,
-        name)
-    of "P":
-      currentBufStatus.pasteBeforeCursor(
-        currentMainWindowNode,
-        status.registers,
-        name)
-    else:
-      discard
+    case command:
+      of "p":
+        currentBufStatus.pasteAfterCursor(
+          currentMainWindowNode,
+          status.registers,
+          registerName)
+      of "P":
+        currentBufStatus.pasteBeforeCursor(
+          currentMainWindowNode,
+          status.registers,
+          registerName)
 
 proc registerCommand(status: var EditorStatus, command: Runes) =
   var
