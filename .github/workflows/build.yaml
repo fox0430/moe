@@ -51,7 +51,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4.1.1
       - name: Setup nim
-        uses: jiro4989/setup-nim-action@v1.4.10
+        uses: jiro4989/setup-nim-action@v1.5.0
         with:
           nim-version: ${{ matrix.nim }}
       - run: nimble build -y
