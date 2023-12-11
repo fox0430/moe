@@ -63,6 +63,46 @@ proc resize(status: var EditorStatus, h, w: int) =
   updateTerminalSize(h, w)
   status.resize
 
+suite "Editor: getRegister":
+  test "No named register":
+    var status = initEditorStatus()
+
+    status.registers.setNoNamedRegister(ru"abc")
+
+    check status.registers.getRegister == Register(
+      buffer: @["abc"].toSeqRunes,
+      isLine: false)
+
+  test "Named register":
+    var status = initEditorStatus()
+
+    const RegisterName = 'a'
+    status.registers.setNamedRegister(ru"abc", RegisterName)
+
+    check status.registers.getRegister($RegisterName) == Register(
+      buffer: @["abc"].toSeqRunes,
+      isLine: false)
+
+  test "Samll delete register":
+    var status = initEditorStatus()
+
+    status.registers.setDeletedRegister(ru"abc")
+
+    const RegisterName = '-'
+    check status.registers.getRegister($RegisterName) == Register(
+      buffer: @["abc"].toSeqRunes,
+      isLine: false)
+
+  test "Number register":
+    var status = initEditorStatus()
+
+    status.registers.setDeletedRegister(@["abc"].toSeqRunes)
+
+    const RegisterName = '1'
+    check status.registers.getRegister($RegisterName) == Register(
+      buffer: @["abc"].toSeqRunes,
+      isLine: true)
+
 suite "Editor: Auto indent":
   test "Auto indent in current Line":
     var status = initEditorStatus()
@@ -160,7 +200,7 @@ suite "Editor: Delete word":
       settings)
 
     check currentBufStatus.buffer.toSeqRunes == @[ru""]
-    check status.registers.noNameRegisters.buffer == @[ru"test  "]
+    check status.registers.getNoNamedRegister.buffer == @[ru"test  "]
 
   test "Without space":
     var status = initEditorStatus()
@@ -181,7 +221,7 @@ suite "Editor: Delete word":
       settings)
 
     check currentBufStatus.buffer.toSeqRunes == @[ru"  "]
-    check status.registers.noNameRegisters.buffer == @[ru"test"]
+    check status.registers.getNoNamedRegister.buffer == @[ru"test"]
 
   test "Fix #842":
     var status = initEditorStatus()
@@ -1180,12 +1220,10 @@ suite "Editor: Delete inside paren":
     currentBufStatus.buffer = initGapBuffer(@[ru """abc "def" "ghi""""])
     currentMainWindowNode.currentColumn = 6
 
-    var registers: registers.Registers
-
     let settings = initEditorSettings()
     currentBufStatus.deleteInsideOfParen(
       currentMainWindowNode,
-      registers,
+      status.registers,
       ru'"',
       settings)
 
@@ -1296,8 +1334,8 @@ suite "Editor: pasteAfterCursor":
     status.resize(100, 100)
     status.update
 
-    # Add a empty buffer to No name register.
-    status.registers.addRegister(ru"", status.settings)
+    # Add a empty buffer to the register.
+    status.registers.setYankedRegister(ru"")
 
     currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
 
@@ -1315,8 +1353,8 @@ suite "Editor: pasteAfterCursor":
     status.resize(100, 100)
     status.update
 
-    # Add buffer to No name register.
-    status.registers.addRegister(ru"abc", status.settings)
+    # Add buffer to the register.
+    status.registers.setYankedRegister(ru"abc")
 
     currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
 
@@ -1335,8 +1373,8 @@ suite "Editor: pasteAfterCursor":
     status.resize(100, 100)
     status.update
 
-    # Add buffer to No name register.
-    status.registers.addRegister(ru"def ghi", status.settings)
+    # Add buffer to the register.
+    status.registers.setYankedRegister(ru"def ghi")
 
     currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
 
@@ -1355,8 +1393,8 @@ suite "Editor: pasteAfterCursor":
     status.resize(100, 100)
     status.update
 
-    # Add buffer to No name register.
-    status.registers.addRegister(ru"def ", status.settings)
+    # Add buffer to the register.
+    status.registers.setYankedRegister(ru"def ")
 
     currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
 
@@ -1375,8 +1413,8 @@ suite "Editor: pasteAfterCursor":
     status.resize(100, 100)
     status.update
 
-    # Add buffer to No name register.
-    status.registers.addRegister(ru"d", status.settings)
+    # Add buffer to the register.
+    status.registers.setYankedRegister(ru"d")
 
     currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
 
@@ -1394,8 +1432,8 @@ suite "Editor: pasteAfterCursor":
     status.resize(100, 100)
     status.update
 
-    # Add buffer to No name register.
-    status.registers.addRegister(ru"b", status.settings)
+    # Add buffer to the register.
+    status.registers.setYankedRegister(ru"b")
 
     currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
 
@@ -1413,8 +1451,8 @@ suite "Editor: pasteAfterCursor":
     status.resize(100, 100)
     status.update
 
-    # Add buffer to No name register.
-    status.registers.addRegister(ru"a", status.settings)
+    # Add buffer to the register.
+    status.registers.setYankedRegister(ru"a")
 
     currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
 
@@ -1432,8 +1470,8 @@ suite "Editor: pasteAfterCursor":
     status.resize(100, 100)
     status.update
 
-    # Add buffer to No name register.
-    status.registers.addRegister(@[ru"line2", ru"line3"], status.settings)
+    # Add buffer to the register.
+    status.registers.setYankedRegister(@["line2", "line3"].toSeqRunes)
 
     currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
 
@@ -1454,8 +1492,8 @@ suite "Editor: pasteAfterCursor":
     status.resize(100, 100)
     status.update
 
-    # Add buffer to No name register.
-    status.registers.addRegister(@[ru"  line2"], status.settings)
+    # Add buffer to the register.
+    status.registers.setYankedRegister(@["  line2"].toSeqRunes)
 
     currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
 
@@ -1476,8 +1514,8 @@ suite "Editor: pasteAfterCursor":
     status.resize(100, 100)
     status.update
 
-    # Add buffer to No name register.
-    status.registers.addRegister(@[ru"line2"], status.settings)
+    # Add buffer to the register.
+    status.registers.setYankedRegister(@["line2"].toSeqRunes)
 
     currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
 
@@ -1499,8 +1537,8 @@ suite "Editor: pasteBeforeCursor":
     status.resize(100, 100)
     status.update
 
-    # Add a empty buffer to No name register.
-    status.registers.addRegister(ru"", status.settings)
+    # Add buffer to the register.
+    status.registers.setYankedRegister(ru"")
 
     currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
 
@@ -1518,8 +1556,8 @@ suite "Editor: pasteBeforeCursor":
     status.resize(100, 100)
     status.update
 
-    # Add buffer to No name register.
-    status.registers.addRegister(ru"abc", status.settings)
+    # Add buffer to the register.
+    status.registers.setYankedRegister(ru"abc")
 
     currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
 
@@ -1537,8 +1575,8 @@ suite "Editor: pasteBeforeCursor":
     status.resize(100, 100)
     status.update
 
-    # Add buffer to No name register.
-    status.registers.addRegister(ru"abc def", status.settings)
+    # Add buffer to the register.
+    status.registers.setYankedRegister(ru"abc def")
 
     currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
 
@@ -1557,8 +1595,8 @@ suite "Editor: pasteBeforeCursor":
     status.resize(100, 100)
     status.update
 
-    # Add buffer to No name register.
-    status.registers.addRegister(ru"def ", status.settings)
+    # Add buffer to the register.
+    status.registers.setYankedRegister(ru"def ")
 
     currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
 
@@ -1577,8 +1615,8 @@ suite "Editor: pasteBeforeCursor":
     status.resize(100, 100)
     status.update
 
-    # Add buffer to No name register.
-    status.registers.addRegister(ru"a", status.settings)
+    # Add buffer to the register.
+    status.registers.setYankedRegister(ru"a")
 
     currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
 
@@ -1597,8 +1635,8 @@ suite "Editor: pasteBeforeCursor":
     status.resize(100, 100)
     status.update
 
-    # Add buffer to No name register.
-    status.registers.addRegister(ru"b", status.settings)
+    # Add buffer to the register.
+    status.registers.setYankedRegister(ru"b")
 
     currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
 
@@ -1616,8 +1654,8 @@ suite "Editor: pasteBeforeCursor":
     status.resize(100, 100)
     status.update
 
-    # Add buffer to No name register.
-    status.registers.addRegister(ru"a", status.settings)
+    # Add buffer to the register.
+    status.registers.setYankedRegister(ru"a")
 
     currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
 
@@ -1635,8 +1673,8 @@ suite "Editor: pasteBeforeCursor":
     status.resize(100, 100)
     status.update
 
-    # Add buffer to No name register.
-    status.registers.addRegister(@[ru"line1", ru"line2"], status.settings)
+    # Add buffer to the register.
+    status.registers.setYankedRegister(@["line1", "line2"].toSeqRunes)
 
     currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
 
@@ -1657,20 +1695,19 @@ suite "Editor: pasteBeforeCursor":
     status.resize(100, 100)
     status.update
 
-    # Add buffer to No name register.
-    status.registers.addRegister(@[ru"  line1"], status.settings)
+    # Add buffer to the register.
+    status.registers.setYankedRegister(@["  line1"].toSeqRunes)
 
     currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
 
-    check currentBufStatus.buffer.toSeqRunes == @[
-      ru"  line1",
-      ru"line2"]
+    check currentBufStatus.buffer.toSeqRunes == @["  line1", "line2"].toSeqRunes
     check currentBufStatus.countChange == 1
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 2
 
   test "Paste lines 3":
+
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"line1", ru"line3"])
@@ -1679,8 +1716,8 @@ suite "Editor: pasteBeforeCursor":
     status.resize(100, 100)
     status.update
 
-    # Add buffer to No name register.
-    status.registers.addRegister(@[ru"line2"], status.settings)
+    # Add buffer to the register.
+    status.registers.setYankedRegister(@["line2"].toSeqRunes)
 
     currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
 
@@ -1695,10 +1732,13 @@ suite "Editor: pasteBeforeCursor":
 
 if isXselAvailable():
   suite "Editor: Yank characters":
+
     test "Yank a string with name in the empty line":
       var status = initEditorStatus()
       discard status.addNewBufferInCurrentWin.get
       currentBufStatus.buffer = initGapBuffer(@[ru ""])
+
+      status.registers.setClipboardTool(ClipboardTool.xsel)
 
       const
         Length = 1
@@ -1713,7 +1753,8 @@ if isXselAvailable():
         Name,
         IsDelete)
 
-      check status.registers.noNameRegisters.buffer.len == 0
+      check status.registers.getNoNamedRegister.buffer == @[""].toSeqRunes
+      check not status.registers.getNoNamedRegister.isLine
 
 if isXselAvailable():
   suite "Editor: Yank words":
@@ -1722,6 +1763,8 @@ if isXselAvailable():
       discard status.addNewBufferInCurrentWin.get
       currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
 
+      status.registers.setClipboardTool(ClipboardTool.xsel)
+
       const Loop = 1
       currentBufStatus.yankWord(
         status.registers,
@@ -1729,10 +1772,9 @@ if isXselAvailable():
         Loop,
         status.settings)
 
-      check status.registers.noNameRegisters ==  registers.Register(
+      check status.registers.getNoNamedRegister == Register(
         buffer: @[ru "abc "],
-        isLine: false,
-        name: "")
+        isLine: false)
 
       # Check clipboad
       let p = initPlatform()
@@ -1866,7 +1908,7 @@ suite "Editor: Delete from the previous blank line to the current line":
     check currentBufStatus.buffer[0] == ru "abc"
     check currentBufStatus.buffer[1] == ru "ghi"
 
-    check status.registers.noNameRegisters == registers.Register(
+    check status.registers.getNoNamedRegister == Register(
       buffer: @[ru "", ru "def"],
       isLine: true)
 
@@ -1892,7 +1934,7 @@ suite "Editor: Delete from the previous blank line to the current line":
     check currentBufStatus.buffer[0] == ru "abc"
     check currentBufStatus.buffer[1] == ru "hi"
 
-    check status.registers.noNameRegisters == registers.Register(
+    check status.registers.getNoNamedRegister == Register(
       buffer: @[ru "", ru "def", ru "g"],
       isLine: true)
 
@@ -1917,7 +1959,7 @@ suite "Editor: Delete from the current line to the next blank line":
     check currentBufStatus.buffer[0] == ru ""
     check currentBufStatus.buffer[1] == ru "ghi"
 
-    check status.registers.noNameRegisters == registers.Register(
+    check status.registers.getNoNamedRegister == Register(
       buffer: @[ru "abc", ru "def"],
       isLine: true)
 
@@ -1942,7 +1984,7 @@ suite "Editor: Delete from the current line to the next blank line":
     check currentBufStatus.buffer[1] == ru ""
     check currentBufStatus.buffer[2] == ru "ghi"
 
-    check status.registers.noNameRegisters == registers.Register(
+    check status.registers.getNoNamedRegister == Register(
       buffer: @[ru "bc", ru "def"],
       isLine: true)
 

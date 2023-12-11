@@ -37,7 +37,7 @@ if isXselAvailable():
     test "Send string to clipboard 1 (xsel)":
       const
         Buffer = @["Clipboard test"].toSeqRunes
-        Tool = ClipboardToolOnLinux.xsel
+        Tool = ClipboardTool.xsel
 
       sendToClipboard(Buffer, Tool)
 
@@ -62,7 +62,7 @@ if isXselAvailable():
     test "Send string to clipboard 1 (xclip)":
       const
         Buffer = @["Clipboard test"].toSeqRunes
-        Tool = ClipboardToolOnLinux.xclip
+        Tool = ClipboardTool.xclip
 
       sendToClipboard(Buffer, Tool)
 
@@ -87,7 +87,7 @@ if isXselAvailable():
     test "Send string to clipboard 2 (xsel)":
       const
         Buffer = @["`````"].toSeqRunes
-        Tool = ClipboardToolOnLinux.xsel
+        Tool = ClipboardTool.xsel
 
       sendToClipboard(Buffer, Tool)
 
@@ -114,7 +114,7 @@ if isXclipAvailable():
     test "Send string to clipboard (xclip)":
       const
         Buffer = @["`````"].toSeqRunes
-        Tool = ClipboardToolOnLinux.xclip
+        Tool = ClipboardTool.xclip
 
       sendToClipboard(Buffer, Tool)
 
@@ -139,7 +139,7 @@ if isXclipAvailable():
     test "Send string to clipboard 2 (xsel)":
       const
         Buffer = @["$Clipboard test"].toSeqRunes
-        Tool = ClipboardToolOnLinux.xsel
+        Tool = ClipboardTool.xsel
 
       sendToClipboard(Buffer, Tool)
 
@@ -164,7 +164,7 @@ if isXclipAvailable():
     test "Send string to clipboard 3 (xclip)":
       const
         Buffer = @["$Clipboard test"].toSeqRunes
-        Tool = ClipboardToolOnLinux.xclip
+        Tool = ClipboardTool.xclip
 
       sendToClipboard(Buffer, Tool)
 

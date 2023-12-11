@@ -299,7 +299,7 @@ proc getClipboardTableSettingsValues(
         else:
           result = @[ru "false", ru "true"]
       of "toolOnLinux":
-        for toolName in ClipboardToolOnLinux:
+        for toolName in ClipboardTool:
           if $toolName == "wlClipboard":
             result.add ru "wl-clipboard"
           else:
@@ -778,7 +778,7 @@ proc changeClipBoardTableSettings(
         settings.enable = parseBool(settingVal)
       of "toolOnLinux":
         let name = if settingVal == "wl-clipboard": "wlClipboard" else: settingVal
-        settings.toolOnLinux = parseEnum[ClipboardToolOnLinux](name)
+        settings.toolOnLinux = parseEnum[ClipboardTool](name)
       else:
         discard
 

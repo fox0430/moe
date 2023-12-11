@@ -17,238 +17,299 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[options, strutils, sequtils, tables]
+import std/[options, strutils, sequtils, tables, strformat]
 import pkg/results
-import independentutils, clipboard, settings, unicodeext
+import clipboard, settings, unicodeext
 
 type
   Register* = object
-    ## A register for buffers.
-    name*: string
-    buffer*: seq[Runes]
     isLine*: bool
+    buffer*: seq[Runes]
 
-  Registers* = object
-    noNameRegisters*: Register
-    smallDeleteRegisters*: Register
-    numberRegisters*: array[10, Register]
-    namedRegisters*: seq[Register]
+  NoNamedRegister* = Register
 
-var
-  ## A retister for normal mode operations (commands).
-  ## Records all normal mode operations.
-  normalModeOperationsRegister: seq[Runes]
+  SmallDeleteRegister* = Register
 
-  ## Registers named '0' ~ '9', 'A' ~ 'Z' 'a' ~ 'z' for recoding
-  ## the editor operations.
-  ##
-  ## key: Rgister name
-  ## value: Operations (editor commands)
-  operationRegisters: OrderedTable[char, seq[Runes]]
+  NumberRegisters* = array[10, Register]
 
-proc initOperationRegisters*() =
-  operationRegisters = concat(
-    toSeq('0'..'9'),
-    toSeq('A'..'Z'),
-    toSeq('a'..'z'),
-  )
-  .mapIt((it, newSeq[Runes]()))
-  .toOrderedTable
+  NamedRegisters* = OrderedTable[char, Register]
 
-proc addRegister(
-  registers: var Registers,
-  r: Register,
-  isDelete: bool,
-  settings: EditorSettings) =
-    ## Add/Overwrite the number register
+  OperationRegister* = object
+    commands*: seq[Runes]
 
-    if isDelete:
-      # If the buffer is deleted line, write to the register 1.
-      # Previous registers are stored 2 ~ 9.
-      if r.isLine:
-        for i in countdown(8, 1):
-          registers.numberRegisters[i + 1] = registers.numberRegisters[i]
-        registers.numberRegisters[1] = r
-      else:
-        registers.smallDeleteRegisters = r
-    else:
-      # If the buffer is yanked line, overwrite the register 0.
-      registers.numberRegisters[0] = r
+  NormalModeOperationsRegister* = OperationRegister
 
-    registers.noNameRegisters = r
+  OperationRegisters* = OrderedTable[char, OperationRegister]
 
-    if settings.clipboard.enable:
-      r.buffer.sendToClipboard(settings.clipboard.toolOnLinux)
+  Registers* = ref object
+    clipboardTool: Option[ClipboardTool]
 
-proc addRegister*(
-  registers: var Registers,
-  buffer: Runes,
-  settings: EditorSettings) =
+    noNamed: NoNamedRegister
+      ## The latest updating register buffer.
 
-    let r = Register(buffer: @[buffer], isLine: false)
-    const IsDelete = false
-    registers.addRegister(r, IsDelete, settings)
+    smallDelete: SmallDeleteRegister
+      ## Register name: '-'.
+      ## Small delete (Deleted in the line).
 
-proc addRegister*(
-  registers: var Registers,
-  buffer: Runes,
-  isLine: bool,
-  settings: EditorSettings) =
+    number: array[10, Register]
+      ## Register names: '0'~ '9'.
+      ## '0': Yanked lines.
+      ## '1' ~ '9': Deleted lines.
 
-    let r = Register(buffer: @[buffer], isLine: isLine)
-    const IsDelete = false
-    registers.addRegister(r, IsDelete, settings)
+    named: OrderedTable[char, Register]
+      ## Register names: 'A' ~ 'Z', 'a' ~ 'z'.
+      ## You can use these registers.
 
-proc addRegister*(
-  registers: var Registers,
+    normalModeOperations: NormalModeOperationsRegister
+      ## A retister for normal mode operations (commands).
+      ## Records all normal mode operations.
+
+    operations: OperationRegisters
+      ## Register names: '0' ~ '9', 'A' ~ 'Z' 'a' ~ 'z'.
+      ## Registers for the editor operations.
+      ##
+      ## key: Rgister name
+      ## value: Operations (editor commands)
+
+proc initOperationRegisters*(): OperationRegisters =
+  concat(toSeq('0'..'9'), toSeq('A'..'Z'), toSeq('a'..'z'))
+    .mapIt((it, OperationRegister()))
+    .toOrderedTable
+
+proc initNamedRegisters*(): NamedRegisters =
+  concat(toSeq('A'..'Z'), toSeq('a'..'z'))
+    .mapIt((it, Register()))
+    .toOrderedTable
+
+proc initRegisters*(): Registers =
+  result = Registers()
+
+  result.named = initNamedRegisters()
+  result.operations = initOperationRegisters()
+
+proc setClipboardTool*(r: var Registers, tool: ClipboardTool) {.inline.} =
+  ## Set the clipboard tool for Linux.
+
+  r.clipboardTool = some(tool)
+
+proc isNamedRegisterName*(s: string): bool {.inline.} =
+  s.len == 1 and s[0] in Letters
+
+proc isNamedRegisterName*(c: char): bool {.inline.} =
+  c in Letters
+
+proc isNumberRegisterName*(n: int): bool {.inline.} =
+  n >= 0 and n <= 9
+
+proc isNumberRegisterName*(c: char): bool {.inline.} =
+  c.int >= '0'.int and c.int <= '9'.int
+
+proc isNumberRegisterName*(s: string): bool {.inline.} =
+  s.len == 1 and s[0].int >= '0'.int and s[0].int <= '9'.int
+
+proc isSmallDeleteRegisterName*(c: char): bool {.inline.} =
+  c == '-'
+
+proc isSmallDeleteRegisterName*(s: string): bool {.inline.} =
+  s.len == 1 and s[0].isSmallDeleteRegisterName
+
+proc getNoNamedRegister*(r: Registers): Register {.inline.} = r.noNamed
+
+proc getNamedRegister*(r: Registers, registerName: char): Register =
+  doAssert(
+    registerName.isNamedRegisterName,
+    fmt"Named register: Invalid register name: {registerName}")
+
+  return r.named[registerName]
+
+proc getNamedRegister*(r: Registers, registerName: string): Register =
+  doAssert(
+    registerName.isNamedRegisterName,
+    fmt"Named register: Invalid register name: {registerName}")
+
+  return r.named[registerName[0]]
+
+proc getSmallDeleteRegister*(r: Registers): Register {.inline.} = r.smallDelete
+
+proc getNumberRegister*(r: Registers, num: int): Register {.inline.} =
+  r.number[num]
+
+proc getNumberRegister*(r: Registers, registerNumChar: char): Register =
+  doAssert(
+    registerNumChar.isNumberRegisterName,
+    fmt"Number register: Invalid register name: {registerNumChar}")
+
+  const AsciiZero = 48
+  return r.number[registerNumChar.int - AsciiZero]
+
+proc getNumberRegister*(r: Registers, registerNumStr: string): Register =
+  doAssert(
+    registerNumStr.isNumberRegisterName,
+    fmt"Number register: Invalid register name: {registerNumStr}")
+
+  return r.getNumberRegister(registerNumStr[0])
+
+proc set(r: var Register, buffer: Runes) {.inline.} =
+  ## Set runes to the register.
+
+  r.isLine = false
+  r.buffer = @[buffer]
+
+proc set(r: var Register, buffer: seq[Runes]) {.inline.} =
+  ## Set lines to the register.
+
+  r.isLine = true
+  r.buffer = buffer
+
+proc setNoNamedRegister*(
+  r: var Registers,
+  buffer: Runes | seq[Runes]) {.inline.} =
+    ## set the no named register and OS clipboard.
+
+    r.noNamed.set(buffer)
+
+    if r.clipboardTool.isSome:
+      buffer.sendToClipboard(r.clipboardTool.get)
+
+proc set(
+  r: var NumberRegisters,
+  buffer: Runes | seq[Runes],
+  registerNumber: int,
+  isShift: bool) =
+    ## set the number register.
+    ## If `isShift` is true, moving previous registers to next numbers.
+    ##
+    ## '0': Yanked lines.
+    ## '1' ~ '9': Deleted lines.
+
+    doAssert(
+      registerNumber >= 0 and registerNumber <= 9,
+      fmt"Number register: Invalid number: {registerNumber}")
+
+    if isShift and registerNumber > 0 and registerNumber < 9:
+      # Latest deleted register.
+      for i in countdown(8, registerNumber):
+        # Shift previous registers.
+        r[i + 1] = r[i]
+
+    r[registerNumber].set(buffer)
+
+proc set(
+  r: var NamedRegisters,
+  buffer: Runes | seq[Runes],
+  registerName: char) =
+    ## set the named register.
+    ## Register names: 'A' ~ 'Z', 'a' ~ 'z'.
+
+    doAssert(
+      registerName in Letters,
+      fmt"Named register: Invalid name: {registerName}")
+
+    r[registerName].set(buffer)
+
+proc setSmallDeleteRegister*(
+  r: var Registers,
+  buffer: Runes) {.inline.} =
+    ## set the small delete register, no named register and OS clipboard.
+
+    r.smallDelete.set(buffer)
+    r.setNoNamedRegister(buffer)
+
+proc setNumberRegister(
+  r: var Registers,
+  buffer: Runes | seq[Runes],
+  registerNumber: int,
+  isShift: bool = false) {.inline.} =
+    ## set the number register, no named register and OS clipboard.
+    ## If `isShift` is true, moving previous registers to next numbers.
+    ##
+    ## '0': Yanked lines.
+    ## '1' ~ '9': Delete lines.
+
+    r.number.set(buffer, registerNumber, isShift)
+    r.setNoNamedRegister(buffer)
+
+proc setYankedRegister*(
+  r: var Registers,
+  buffer: Runes | seq[Runes]) =
+    ## set the number register for yank ('0'), no named register and OS
+    ## clipboard.
+
+    const RegisterNumber = 0
+    r.setNumberRegister(buffer,  RegisterNumber)
+    r.setNoNamedRegister(buffer)
+
+proc setDeletedRegister*(
+  r: var Registers,
+  buffer: Runes) {.inline.} =
+    ## set the small delete register, no named register and OS clipboard.
+
+    r.setSmallDeleteRegister(buffer)
+    r.setNoNamedRegister(buffer)
+
+proc setDeletedRegister*(
+  r: var Registers,
+  buffer: seq[Runes]) =
+    ## set the number register for deleted lines (Register '1'), no named
+    ## register and OS clipboard.
+    ## And move previous registers to next numbers.
+
+    const
+      IsShift = true
+      RegisterNumber = 1
+    r.setNumberRegister(buffer, RegisterNumber, IsShift)
+    r.setNoNamedRegister(buffer)
+
+proc setDeletedRegister*(
+  r: var Registers,
   buffer: seq[Runes],
-  settings: EditorSettings) =
+  registerNumber: int) =
+    ## set the number register for deleted lines (Register '1'), no named
+    ## register and OS clipboard.
 
-    let r = Register(buffer: buffer, isLine: true)
-    const IsDelete = false
-    registers.addRegister(r, IsDelete, settings)
+    r.setNumberRegister(buffer, registerNumber)
+    r.setNoNamedRegister(buffer)
 
-proc addRegister*(
-  registers: var Registers,
-  buffer: seq[Runes],
-  isLine: bool,
-  settings: EditorSettings) =
+proc setNamedRegister*(
+  r: var Registers,
+  buffer: Runes | seq[Runes],
+  registerName: char) {.inline.} =
+    ## set the named register, no named register and OS clipboard.
+    ## Register numbers: 'A' ~ 'Z', 'a' ~ 'z'.
 
-    let r = Register(buffer: buffer, isLine: isLine)
-    const IsDelete = false
-    registers.addRegister(r, IsDelete, settings)
+    r.named.set(buffer, registerName)
+    r.setNoNamedRegister(buffer)
 
-proc addRegister*(
-  registers: var Registers,
-  buffer: Runes,
-  isLine, isDelete: bool,
-  settings: EditorSettings) =
+proc setNamedRegister*(
+  r: var Registers,
+  buffer: Runes | seq[Runes],
+  registerName: Rune) =
+    ## set the named register, no named register and OS clipboard.
+    ## Register numbers: 'A' ~ 'Z', 'a' ~ 'z'.
 
-    let r = Register(buffer: @[buffer], isLine: isLine)
-    registers.addRegister(r, isDelete, settings)
+    doAssert(
+      r.canConvertToChar,
+      fmt"Named register: Invalid register name: {registerName}")
 
-proc addRegister*(
-  registers: var Registers,
-  buffer: seq[Runes],
-  isLine, isDelete: bool,
-  settings: EditorSettings) =
+    r.named.set(buffer, registerName.toChar)
+    r.setNoNamedRegister(buffer)
 
-    let r = Register(buffer: buffer, isLine: isLine)
-    registers.addRegister(r, isDelete, settings)
+proc addNormalModeOperation*(
+  r: var Registers,
+  command: Runes) {.inline.} =
+    ## Add an operation to normalModeOperationsRegister.
 
-proc addRegister(
-  registers: var Registers,
-  register: Register,
-  settings: EditorSettings) =
+    r.normalModeOperations.commands.add command
 
-    let name = register.name
+proc getNormalModeOperations*(
+  r: Registers): NormalModeOperationsRegister {.inline.} =
+    ## Return all operations from normalModeOperationsRegister.
 
-    if name.len == 0:
-      registers.noNameRegisters = register
-    elif name != "_":
-      # Add/Overwrite the named register
-      var isOverwrite = false
+    r.normalModeOperations
 
-      # Overwrite the register if exist the same name.
-      for i, r in registers.namedRegisters:
-        if r.name == name:
-          registers.namedRegisters[i] = register
-        isOverwrite = true
-
-      if not isOverwrite:
-        registers.namedRegisters.add register
-
-      if settings.clipboard.enable:
-        register.buffer.sendToClipboard(settings.clipboard.toolOnLinux)
-
-proc addRegister*(
-  registers: var Registers,
-  buffer: Runes,
-  name: string,
-  settings: EditorSettings) =
-    ## Add/Overwrite the named register
-
-    if name.len > 0:
-      let register = Register(
-        buffer: @[buffer],
-        isLine: false,
-        name: name)
-      registers.addRegister(register, settings)
-
-proc addRegister*(
-  registers: var Registers,
-  buffer: Runes,
-  isLine: bool,
-  name: string,
-  settings: EditorSettings) =
-
-    if name.len > 0:
-      let register = Register(
-        buffer: @[buffer],
-        isLine: isLine,
-        name: name)
-      registers.addRegister(register, settings)
-
-proc addRegister*(
-  registers: var Registers,
-  buffer: seq[Runes],
-  name: string,
-  settings: EditorSettings) =
-
-    if name.len > 0:
-      let register = Register(
-        buffer: buffer,
-        isLine: true,
-        name: name)
-      registers.addRegister(register, settings)
-
-proc addRegister*(
-  registers: var Registers,
-  buffer: seq[Runes],
-  isLine: bool,
-  name: string,
-  settings: EditorSettings) =
-
-    if name.len > 0:
-      let register = Register(
-        buffer: buffer,
-        isLine: isLine,
-        name: name)
-      registers.addRegister(register, settings)
-
-proc searchByName*(registers: Registers, name: string): Option[Register] =
-  ## Search a register by the string
-
-  if name == "-":
-    let r = registers.smallDeleteRegisters
-    if r.buffer.len > 0:
-      return some(r)
-  elif isInt(name):
-    # Search a register in the number register
-    let
-      number = name.parseInt
-      r = registers.numberRegisters[number]
-    if r.buffer.len > 0:
-      return some(r)
-  else:
-    # Search a register in the named register
-    for r in registers.namedRegisters:
-      if r.name == name:
-        return some(r)
-
-proc addOperationToNormalModeOperationsRegister*(command: Runes) {.inline.} =
-  ## Add an operation to normalModeOperationsRegister.
-
-  normalModeOperationsRegister.add command
-
-proc getOperationsFromNormalModeOperationsRegister*(): seq[Runes] {.inline.} =
-  ## Return all operations from normalModeOperationsRegister.
-
-  normalModeOperationsRegister
-
-proc getLatestNormalModeOperation*(): Option[Runes] =
-  if normalModeOperationsRegister.len > 0:
-    return some(normalModeOperationsRegister[^1])
+proc getLatestNormalModeOperation*(r: Registers): Option[Runes] =
+  if r.normalModeOperations.commands.len > 0:
+    return some(r.normalModeOperations.commands[^1])
 
 proc isOperationRegisterName*(name: Rune): bool {.inline.} =
   ## Return true if valid operation register name.
@@ -257,16 +318,19 @@ proc isOperationRegisterName*(name: Rune): bool {.inline.} =
   char(name) >= 'A' and char(name) <= 'Z' or
   char(name) >= 'a' and char(name) <= 'z'
 
-proc clearOperationToRegister*(name: Rune): Result[(), string] =
-  ## Clear the operationRegister.
+proc clearOperations*(
+  r: var Registers,
+  name: Rune): Result[(), string] =
+    ## Clear the operationRegister.
 
-  if isOperationRegisterName(name):
-    operationRegisters[char(name)] = @[]
-    return Result[(), string].ok ()
-  else:
-    return Result[(), string].err "Invalid register name"
+    if isOperationRegisterName(name):
+      r.operations[char(name)] = OperationRegister()
+      return Result[(), string].ok ()
+    else:
+      return Result[(), string].err "Invalid register name"
 
-proc addOperationToRegister*(
+proc addOperation*(
+  r: var Registers,
   name: Rune,
   operation: Runes): Result[(), string] =
     ## Add an editor operation to the operationRegister.
@@ -276,13 +340,15 @@ proc addOperationToRegister*(
     elif operation.len == 0:
       return Result[(), string].err "Invalid operation"
     else:
-      operationRegisters[char(name)].add operation
+      r.operations[char(name)].commands.add operation
       return Result[(), string].ok ()
 
-proc getOperationsFromRegister*(name: Rune): Result[seq[Runes], string] =
+proc getOperations*(
+  r: Registers,
+  name: Rune): Result[OperationRegister, string] =
     ## Return editor operations from the operationRegister.
 
     if isOperationRegisterName(name):
-      return Result[seq[Runes], string].ok operationRegisters[char(name)]
+      return Result[OperationRegister, string].ok r.operations[char(name)]
     else:
-      return Result[seq[Runes], string].err "Invalid register name"
+      return Result[OperationRegister, string].err "Invalid register name"

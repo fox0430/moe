@@ -1067,26 +1067,27 @@ proc addRegister(status: var EditorStatus, command, registerName: string) =
   else:
     discard
 
-proc pasteFromRegister(status: var EditorStatus, command, name: string) =
-  if currentBufStatus.isReadonly:
-    status.commandLine.writeReadonlyModeWarning
-    return
+proc pasteFromRegister(
+  status: var EditorStatus,
+  command, registerName: string) =
+    ## Paste the text to the buffer from the named or number register.
+    ## 'p' and 'P' commands.
 
-  if name.len == 0: return
+    if currentBufStatus.isReadonly:
+      status.commandLine.writeReadonlyModeWarning
+      return
 
-  case command:
-    of "p":
-      currentBufStatus.pasteAfterCursor(
-        currentMainWindowNode,
-        status.registers,
-        name)
-    of "P":
-      currentBufStatus.pasteBeforeCursor(
-        currentMainWindowNode,
-        status.registers,
-        name)
-    else:
-      discard
+    case command:
+      of "p":
+        currentBufStatus.pasteAfterCursor(
+          currentMainWindowNode,
+          status.registers,
+          registerName)
+      of "P":
+        currentBufStatus.pasteBeforeCursor(
+          currentMainWindowNode,
+          status.registers,
+          registerName)
 
 proc registerCommand(status: var EditorStatus, command: Runes) =
   var
@@ -1145,7 +1146,7 @@ proc startRecordingOperations(status: var EditorStatus, name: Rune) =
   ## Start recoding editor operations for macro.
 
   if isOperationRegisterName(name):
-    discard clearOperationToRegister(name).get
+    discard status.registers.clearOperations(name).get
     status.recodingOperationRegister = some(name)
   else:
     let errMess = fmt"Error: Invalid operation register name: {name}"
@@ -1494,7 +1495,7 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
 
   if not isMovementKey(key):
     # Save a command if not a movement command.
-    addOperationToNormalModeOperationsRegister(commands)
+    status.registers.addNormalModeOperation(commands)
 
 proc isNormalModeCommand*(
   command: Runes,
@@ -1805,7 +1806,7 @@ proc repeatNormalModeCommand(status: var EditorStatus): Option[Rune] =
   ## Not executed for movement and mode change commands.
   ## Return the key typed during command execution if needed.
 
-  let command = getLatestNormalModeOperation()
+  let command = status.registers.getLatestNormalModeOperation
   if command.isSome:
     if not isMovementKey(command.get[0]) and
        not isChangeModeKey(command.get[0]):

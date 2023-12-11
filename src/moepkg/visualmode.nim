@@ -58,18 +58,13 @@ proc yankBuffer(
   firstCursorPosition: BufferPosition,
   settings: EditorSettings) =
 
-    var
-      yankedBuffer: seq[Runes]
-      isLine = true
-
     if area.startLine == area.endLine:
       if bufStatus.buffer[windowNode.currentLine].len < 1:
           # Yank the empty string if the empty line
-          yankedBuffer.add(@[ru ""])
+          registers.setYankedRegister(@[ru""])
       else:
         # Yank the text in the line.
-        isLine = false
-        var runes = ru ""
+        var yankRunes = ru ""
         let
           endColumn =
             if area.endColumn > bufStatus.buffer[area.startLine].high:
@@ -77,23 +72,25 @@ proc yankBuffer(
             else:
               area.endColumn
         for j in area.startColumn .. endColumn:
-          runes.add(bufStatus.buffer[area.startLine][j])
-        yankedBuffer = @[runes]
+          yankRunes.add(bufStatus.buffer[area.startLine][j])
+
+        registers.setYankedRegister(yankRunes)
     else:
+      var yankLines: seq[Runes]
       for i in area.startLine .. area.endLine:
         if i == area.startLine and area.startColumn > 0:
-          yankedBuffer.add(ru"")
+          yankLines.add(ru"")
           for j in area.startColumn ..< bufStatus.buffer[area.startLine].len:
-            yankedBuffer[^1].add(bufStatus.buffer[area.startLine][j])
+            yankLines[^1].add(bufStatus.buffer[area.startLine][j])
         elif i == area.endLine and
              area.endColumn < bufStatus.buffer[area.endLine].len:
-          yankedBuffer.add(ru"")
+          yankLines.add(ru"")
           for j in 0 .. area.endColumn:
-            yankedBuffer[^1].add(bufStatus.buffer[area.endLine][j])
+            yankLines[^1].add(bufStatus.buffer[area.endLine][j])
         else:
-          yankedBuffer.add(bufStatus.buffer[i])
+          yankLines.add(bufStatus.buffer[i])
 
-    registers.addRegister(yankedBuffer, isLine, settings)
+      registers.setYankedRegister(yankLines)
 
     windowNode.moveCursor(firstCursorPosition)
 
@@ -114,7 +111,7 @@ proc yankBufferBlock(
       for j in area.startColumn .. min(bufStatus.buffer[i].high, area.endColumn):
         yankedBuffer[^1].add(bufStatus.buffer[i][j])
 
-    registers.addRegister(yankedBuffer, settings)
+    registers.setYankedRegister(yankedBuffer)
 
 proc deleteBuffer(
   bufStatus: var BufferStatus,

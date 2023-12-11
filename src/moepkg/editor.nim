@@ -55,6 +55,14 @@ proc isEmptyLine(
 
     bufStatus.buffer[windowNode.currentLine].len == 0
 
+proc getRegister(r: Registers, name: string = ""): Register =
+  ## Return no named, named or number or small delete register.
+
+  if name.len == 0: return r.getNoNamedRegister
+  elif name.isNamedRegisterName: return r.getNamedRegister(name)
+  elif name.isNumberRegisterName: return r.getNumberRegister(name)
+  elif name.isSmallDeleteRegisterName: return r.getSmallDeleteRegister
+
 proc insertCharacter*(
   bufStatus: var BufferStatus,
   windowNode: WindowNode,
@@ -796,13 +804,10 @@ proc deleteWord*(
         windowNode.expandedColumn = currentColumn
         windowNode.currentColumn = currentColumn
 
-    if registerName.len > 0:
-      registers.addRegister(deletedBuffer, registerName, settings)
+    if registerName.isNamedRegisterName:
+      registers.setNamedRegister(deletedBuffer, registerName[0])
     else:
-      const
-        IsLine = false
-        IsDelete = true
-      registers.addRegister(deletedBuffer, IsLine, IsDelete, settings)
+      registers.setDeletedRegister(deletedBuffer)
 
     inc(bufStatus.countChange)
     bufStatus.isUpdate = true
@@ -1022,14 +1027,10 @@ proc deleteCharacters*(
     if oldLine != newLine:
       bufStatus.buffer[line] = newLine
 
-      const
-        IsLine = false
-        IsDelete = true
-
-      if registerName.len > 0:
-        registers.addRegister(deletedBuffer, registerName, settings)
+      if registerName.isNamedRegisterName:
+        registers.setNamedRegister(deletedBuffer, registerName[0])
       else:
-        registers.addRegister(deletedBuffer, IsLine, IsDelete, settings)
+        registers.setDeletedRegister(deletedBuffer)
 
       inc(bufStatus.countChange)
       bufStatus.isUpdate = true
@@ -1248,12 +1249,10 @@ proc deleteLines*(
 
       for i in startLine .. endLine: deleteLines.add(buffer[i])
 
-      const isLine = true
-      if registerName.len > 0:
-        registers.addRegister(deleteLines, isLine, registerName, settings)
+      if registerName.isNamedRegisterName:
+        registers.setNamedRegister(deleteLines, registerName[0])
       else:
-        const isDelete = true
-        registers.addRegister(deleteLines, isLine, isDelete, settings)
+        registers.setDeletedRegister(deleteLines)
 
     bufStatus.buffer.delete(startLine, endLine)
 
@@ -1376,13 +1375,10 @@ proc deleteTillPreviousBlankLine*(
 
         if oldLine != newLine: bufStatus.buffer[currentLine] = newLine
 
-    if registerName.len > 0:
-      registers.addRegister(deletedBuffer, registerName, settings)
+    if registerName.isNamedRegisterName:
+      registers.setNamedRegister(deletedBuffer, registerName[0])
     else:
-      const
-        IsLine = true
-        IsDelete = true
-      registers.addRegister(deletedBuffer, IsLine, IsDelete, settings)
+      registers.setDeletedRegister(deletedBuffer)
 
     windowNode.currentLine = min(bufStatus.buffer.high, windowNode.currentLine)
     windowNode.currentColumn = 0
@@ -1430,13 +1426,10 @@ proc deleteTillNextBlankLine*(
 
       bufStatus.buffer.delete(startLine, blankLine - 1)
 
-    if registerName.len > 0:
-      registers.addRegister(deletedBuffer, registerName, settings)
+    if registerName.isNamedRegisterName:
+      registers.setNamedRegister(deletedBuffer, registerName[0])
     else:
-      const
-        IsLine = true
-        IsDelete = true
-      registers.addRegister(deletedBuffer, IsLine, IsDelete, settings)
+      registers.setDeletedRegister(deletedBuffer)
 
     inc(bufStatus.countChange)
     bufStatus.isUpdate = true
@@ -1447,7 +1440,7 @@ proc yankLines*(
   commandLine: var CommandLine,
   notificationSettings: NotificationSettings,
   first, last: int,
-  name: string,
+  registerName: string,
   isDelete: bool,
   settings: EditorSettings) =
     ## name is the register name
@@ -1456,11 +1449,10 @@ proc yankLines*(
     for i in first .. last:
       yankedBuffer.add bufStatus.buffer[i]
 
-    if name.len > 0:
-      registers.addRegister(yankedBuffer, name, settings)
+    if registerName.isNamedRegisterName:
+      registers.setNamedRegister(yankedBuffer, registerName[0])
     else:
-      const IsLine = true
-      registers.addRegister(yankedBuffer, IsLine, isDelete, settings)
+      registers.setYankedRegister(yankedBuffer)
 
     commandLine.writeMessageYankedLine(
       yankedBuffer.len,
@@ -1543,10 +1535,10 @@ proc yankCharacters*(
           line = windowNode.currentLine
         yankedBuffer.add bufStatus.buffer[line][col]
 
-      if registerName.len > 0:
-        registers.addRegister(yankedBuffer, registerName, settings)
-      else:
-        registers.addRegister(yankedBuffer, settings)
+    if registerName.isNamedRegisterName:
+      registers.setNamedRegister(yankedBuffer, registerName[0])
+    else:
+      registers.setYankedRegister(yankedBuffer)
 
     commandLine.writeMessageYankedCharactor(
       yankedBuffer.len,
@@ -1557,28 +1549,28 @@ proc yankWord*(
   registers: var Registers,
   windowNode: WindowNode,
   loop: int,
-  name: string,
+  registerName: string,
   isDelete: bool,
   settings: EditorSettings) =
 
-    var yankedBuffer: seq[Runes] = @[ru ""]
+    var yankedBuffer: Runes
 
     let line = bufStatus.buffer[windowNode.currentLine]
     var startColumn = windowNode.currentColumn
 
     for i in 0 ..< loop:
       if line.len < 1:
-        yankedBuffer = @[ru ""]
+        yankedBuffer = ru""
         return
       if isPunct(line[startColumn]):
-        yankedBuffer[0].add(line[startColumn])
+        yankedBuffer.add line[startColumn]
         return
 
       for j in startColumn ..< line.len:
         let rune = line[j]
         if isWhiteSpace(rune):
           for k in j ..< line.len:
-            if isWhiteSpace(line[k]): yankedBuffer[0].add(rune)
+            if isWhiteSpace(line[k]): yankedBuffer.add rune
             else:
               startColumn = k
               break
@@ -1586,13 +1578,12 @@ proc yankWord*(
         elif not isAlpha(rune) or isPunct(rune) or isDigit(rune):
           startColumn = j
           break
-        else: yankedBuffer[0].add(rune)
+        else: yankedBuffer.add rune
 
-    const IsLine = false
-    if name.len > 0:
-      registers.addRegister(yankedBuffer, IsLine, name, settings)
+    if registerName.isNamedRegisterName:
+      registers.setNamedRegister(yankedBuffer, registerName[0])
     else:
-      registers.addRegister(yankedBuffer, IsLine, isDelete, settings)
+      registers.setYankedRegister(yankedBuffer)
 
 proc yankWord*(
   bufStatus: var BufferStatus,
@@ -1654,13 +1645,12 @@ proc yankCharactersOfLines*(
   registerName: string,
   settings: EditorSettings) =
 
-    let line = bufStatus.buffer[windowNode.currentLine]
+    let line: Runes = bufStatus.buffer[windowNode.currentLine]
 
-    const IsLine = false
-    if registerName.len > 0:
-      registers.addRegister(line, IsLine, registerName, settings)
+    if registerName.isNamedRegisterName:
+      registers.setNamedRegister(line, registerName[0])
     else:
-      registers.addRegister(line, IsLine, isDelete, settings)
+      registers.setYankedRegister(line)
 
 proc insertRunesFromRegister(
   bufStatus: var BufferStatus,
@@ -1734,21 +1724,13 @@ proc pasteAfterCursor*(
 proc pasteAfterCursor*(
   bufStatus: var BufferStatus,
   windowNode: var WindowNode,
-  registers: Registers) {.inline.} =
-    ## The buffer get from the noNameRegister.
-
-    bufStatus.pasteAfterCursor(windowNode, registers.noNameRegisters)
-
-proc pasteAfterCursor*(
-  bufStatus: var BufferStatus,
-  windowNode: var WindowNode,
   registers: Registers,
-  registerName: string) =
-    ## The buffer get from the register.
+  registerName: string = "") =
+    ## The buffer get from the named register.
 
-    let register = registers.searchByName(registerName)
-    if register.isSome:
-      bufStatus.pasteAfterCursor(windowNode, register.get)
+    let r = registers.getRegister(registerName)
+    if not r.buffer.isEmpty:
+      bufStatus.pasteAfterCursor(windowNode, r)
 
 proc pasteBeforeCursor*(
   bufStatus: var BufferStatus,
@@ -1781,21 +1763,13 @@ proc pasteBeforeCursor*(
 proc pasteBeforeCursor*(
   bufStatus: var BufferStatus,
   windowNode: var WindowNode,
-  registers: Registers) =
-    ## The buffer get from the noNameRegister.
-
-    bufStatus.pasteBeforeCursor(windowNode, registers.noNameRegisters)
-
-proc pasteBeforeCursor*(
-  bufStatus: var BufferStatus,
-  windowNode: var WindowNode,
   registers: Registers,
-  registerName: string) =
+  registerName: string = "") =
     ## The buffer get from the register.
 
-    let register = registers.searchByName(registerName)
-    if register.isSome:
-      bufStatus.pasteBeforeCursor(windowNode, register.get)
+    let r = registers.getRegister(registerName)
+    if not r.buffer.isEmpty:
+      bufStatus.pasteBeforeCursor(windowNode, r)
 
 proc replaceCharacters*(
   bufStatus: var BufferStatus,
@@ -2070,13 +2044,10 @@ proc deleteInsideOfParen*(
         newLine.delete(openParenPosition + 1)
 
       if oldLine != newLine:
-        if registerName.len > 0:
-          registers.addRegister(deleteBuffer, registerName, settings)
+        if registerName.isNamedRegisterName:
+          registers.setNamedRegister(deleteBuffer, registerName[0])
         else:
-          const
-            IsLine = false
-            IsDelete = true
-          registers.addRegister(deleteBuffer, IsLine, IsDelete, settings)
+          registers.setDeletedRegister(deleteBuffer)
 
         bufStatus.buffer[currentLine] = newLine
         windowNode.currentColumn = openParenPosition

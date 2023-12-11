@@ -17,243 +17,498 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, tables]
+import std/[unittest, options, tables, importutils, osproc]
 import pkg/results
-import moepkg/[unicodeext, settings]
+import moepkg/[unicodeext, settings, independentutils]
 
 import moepkg/registers {.all.}
 
-suite "registers: Add a buffer to the no name register":
-  test "Add a string to the no name register":
-    var registers: Registers
-    let settings = initEditorSettings()
+proc isXAvailable(): bool {.inline.} =
+  execCmdExNoOutput("xset q") == 0
 
-    registers.addRegister(ru "abc", settings)
+proc isXselAvailable(): bool {.inline.} =
+  isXAvailable() and execCmdExNoOutput("xsel --version") == 0
 
+proc isXclipAvailable(): bool {.inline.} =
+  isXAvailable() and execCmdExNoOutput("xclip -version") == 0
 
-    check registers.smallDeleteRegisters == Register()
+proc getClipboardBuffer(tool: ClipboardTool): string =
+  case tool:
+    of none:
+      discard
+    of xsel:
+      let r = execCmdEx("xsel -o")
+      return r.output[0 .. r.output.high - 1]
+    of xclip:
+      let r =execCmdEx("xclip -o")
+      return r.output[0 .. r.output.high - 1]
+    of wlClipboard:
+      let r = execCmdEx("wl-paste")
+      return r.output[0 .. r.output.high - 1]
+    of wslDefault:
+      # On the WSL
+      let r = execCmdEx("powershell.exe -Command Get-Clipboard")
+      return r.output[0 .. r.output.high - 2]
+    of macOsDefault:
+      let r = execCmdEx("pbpaste -o")
+      return r.output[0 .. r.output.high - 1]
 
-    for i, r in registers.numberRegisters:
-      if i == 0:
-        check r == Register(name: "", buffer: @[ru"abc"])
-      else:
-        check r == Register()
-
-    check registers.namedRegisters.len == 0
-
-    check registers.noNameRegisters == Register(
-      buffer: @[ru "abc"],
-      isLine: false,
-      name: "")
-
-  test "Overwrite a string in the no name register":
-    var registers: Registers
-    registers.noNameRegisters = Register(buffer: @[ru "abc"])
-    let settings = initEditorSettings()
-
-    registers.addRegister(ru "def", settings)
-
-    check registers.noNameRegisters == Register(
-      buffer: @[ru "def"],
-      isLine: false,
-      name: "")
-
-  test "Add a line to the no name register":
-    var registers: Registers
-    let settings = initEditorSettings()
-
-    const IsLine = true
-    registers.addRegister(ru "abc", IsLine, settings)
-
-    check registers.noNameRegisters == Register(
-      buffer: @[ru "abc"],
-      isLine: true,
-      name: "")
-
-  test "Add 2 lines to the no name register":
-    var registers: Registers
-    let settings = initEditorSettings()
-
-    const IsLine = true
-    registers.addRegister(@[ru "abc", ru "def"], IsLine, settings)
-
-    check registers.noNameRegisters == Register(
-      buffer: @[ru "abc", ru "def"],
-      isLine: true,
-      name: "")
-
-suite "registers: Add a buffer to the named register":
-  test "Add a string to the named register":
-    var registers: Registers
-    let settings = initEditorSettings()
-
-    const Name = "a"
-    registers.addRegister(ru "abc", Name, settings)
-
-    check registers.noNameRegisters == Register()
-    check registers.smallDeleteRegisters == Register()
-    for r in registers.numberRegisters: check r == Register()
-
-    check registers.namedRegisters[0] == Register(
-      buffer: @[ru "abc"],
-      name: Name)
-
-  test "Overwrite a string to the named register":
-    var registers: Registers
-    let settings = initEditorSettings()
-
-    const Name = "a"
-    registers.namedRegisters.add Register(
-      buffer: @[ru "abc"],
-      isLine: false,
-      name: Name)
-
-    registers.addRegister(ru "def", Name, settings)
-
-    check registers.namedRegisters[0] == Register(
-      buffer: @[ru "def"],
-      isLine: false,
-      name: Name)
-
-  test "Overwrite a line to the named register":
-    var registers: Registers
-    let settings = initEditorSettings()
-
-    const Name = "a"
-    registers.namedRegisters.add Register(
-      buffer: @[ru "abc"],
-      isLine: false,
-      name: Name)
-
-    const isLine = true
-    registers.addRegister(ru "def", isLine, Name, settings)
-
-    check registers.namedRegisters[0] == Register(
-      buffer: @[ru "def"],
-      isLine: true,
-      name: Name)
-
-  test "Not added to the register (_ register)":
-    var registers: Registers
-    let settings = initEditorSettings()
-
-    const Name = "_"
-    registers.addRegister(ru "def", Name, settings)
-
-    check registers.namedRegisters.len == 0
-    check registers.noNameRegisters == Register()
-
-suite "registers: Add a buffer to the small delete register":
-  test "Add a deleted string to the small deleted register":
-    var registers: Registers
-    let settings = initEditorSettings()
-
-    const
-      IsLine = false
-      IsDelete = true
-    registers.addRegister(ru "abc", IsLine, IsDelete, settings)
-    registers.addRegister(ru "def", IsLine, IsDelete, settings)
-
-    check registers.noNameRegisters == Register(buffer: @[ru "def"])
-
-    check registers.smallDeleteRegisters == Register(buffer: @[ru "def"])
-
-    for i in 0 ..< 10:
-      let r = registers.numberRegisters[i]
-      check r == Register()
-
-suite "registers: Add a buffer to the number register":
-  test "Add a yanked string to the number register":
-    var registers: Registers
-    let settings = initEditorSettings()
-
-    registers.addRegister(ru "abc", settings)
-    registers.addRegister(ru "def", settings)
-
-    for i in 0 ..< 10:
-      let r  = registers.numberRegisters[i]
-      if i == 0:
-        check r == Register(buffer: @[ru "def"])
-      else:
-        check r == Register()
-
-  test "Add a line to the number register":
-    var registers: Registers
-    let settings = initEditorSettings()
-
-    registers.addRegister(@[ru "abc"], settings)
-
-    const
-      IsDelete = true
-      IsLine = true
-    registers.addRegister(ru "def", IsLine, IsDelete, settings)
-
-    for i in 0 ..< 10:
-      let r = registers.numberRegisters[i]
-      if i == 0:
-        check r == Register(buffer: @[ru "abc"], isLine: true)
-      elif i == 1:
-        check r == Register(buffer: @[ru "def"], isLine: true)
-      else:
-        check r == Register()
-
-suite "registers: Search a register by name":
-  test "Search a register by name":
-    var registers: Registers
-    const
-      R1 = Register(buffer: @[ru "abc"], name: "a")
-      R2 = Register(buffer: @[ru "def"], name: "b")
-      R3 = Register(buffer: @[ru "ghi"], name: "c")
-
-    registers.namedRegisters = @[R1, R2, R3]
-
-    check registers.searchByName("b").isSome
-    check registers.searchByName("b").get == R2
-
-  test "Search a register by number string":
-    var registers: Registers
-    const
-      R1 = Register(buffer: @[ru "abc"], name: "a")
-      R2 = Register(buffer: @[ru "def"], name: "b")
-      R3 = Register(buffer: @[ru "ghi"], name: "0")
-
-    registers.namedRegisters = @[R1, R2]
-    registers.numberRegisters[0] = R3
-
-    check registers.searchByName("0").isSome
-    check registers.searchByName("0").get == R3
-
-  test "Return empty":
-    var registers: Registers
-    const
-      R1 = Register(buffer: @[ru "abc"], name: "a")
-      R2 = Register(buffer: @[ru "def"], name: "b")
-      R3 = Register(buffer: @[ru "ghi"], name: "c")
-
-    registers.namedRegisters = @[R1, R2, R3]
-
-    check registers.searchByName("z").isNone
-
-suite "registers: addOperationToNormalModeOperationsRegister":
+suite "registers: update (Register)":
   setup:
-    normalModeOperationsRegister = @[]
+    var r = Register()
 
-  test "Add operations":
-    addOperationToNormalModeOperationsRegister(ru"yy")
-    addOperationToNormalModeOperationsRegister(ru"dd")
+  test "Runes":
+    r.set(ru"abc")
 
-    check normalModeOperationsRegister == @["yy", "dd"].toSeqRunes
+    check r == Register(buffer: @["abc"].toSeqRunes, isLine: false)
 
-suite "registers: getOperationsFromNormalModeOperationsRegister":
+  test "Lines":
+    r.set(@["abc"].toSeqRunes)
+
+    check r == Register(buffer: @["abc"].toSeqRunes, isLine: true)
+
+  test "Lines 2":
+    r.set(@["abc", "def"].toSeqRunes)
+
+    check r == Register(buffer: @["abc", "def"].toSeqRunes, isLine: true)
+
+  test "Overwrite":
+    r.set(ru"abc")
+    check r == Register(buffer: @["abc"].toSeqRunes, isLine: false)
+
+    r.set(ru"def")
+    check r == Register(buffer: @["def"].toSeqRunes, isLine: false)
+
+suite "registers: setNoNamedRegister":
+  privateAccess(Registers)
+
   setup:
-    normalModeOperationsRegister = @[]
+    var r = initRegisters()
 
-  test "Get operations":
-    addOperationToNormalModeOperationsRegister(ru"yy")
-    addOperationToNormalModeOperationsRegister(ru"dd")
+  test "Runes":
+    r.setNoNamedRegister(ru"abc")
 
-    check getOperationsFromNormalModeOperationsRegister() ==
-      @["yy", "dd"].toSeqRunes
+    check r.noNamed == Register(buffer: @["abc"].toSeqRunes, isLine: false)
+
+  test "Lines":
+    r.setNoNamedRegister(@["abc"].toSeqRunes)
+
+    check r.noNamed == Register(buffer: @["abc"].toSeqRunes, isLine: true)
+
+  test "Lines 2":
+    r.setNoNamedRegister(@["abc", "def"].toSeqRunes)
+
+    check r.noNamed == Register(
+      buffer: @["abc", "def"].toSeqRunes,
+      isLine: true)
+
+  test "Overwrite":
+    r.setNoNamedRegister(ru"abc")
+    check r.noNamed == Register(buffer: @["abc"].toSeqRunes, isLine: false)
+
+    r.setNoNamedRegister(ru"def")
+    check r.noNamed == Register(buffer: @["def"].toSeqRunes, isLine: false)
+
+  test "Runes with Clipboad (xsel)":
+    if not isXAvailable(): skip()
+
+    r.setClipboardTool(ClipboardTool.xsel)
+    r.setNoNamedRegister(ru"abc")
+
+    check "abc" == getClipboardBuffer(ClipboardTool.xsel)
+
+  test "Lines with Clipboad (xsel)":
+    if not isXAvailable(): skip()
+
+    r.setClipboardTool(ClipboardTool.xsel)
+    r.setNoNamedRegister(@["abc", "def"].toSeqRunes)
+
+    check "abc\ndef" == getClipboardBuffer(ClipboardTool.xsel)
+
+suite "registers: update (NumberRegister)":
+  setup:
+    var r: NumberRegisters
+
+  test "Runes (Register 0)":
+    const
+      IsShift = false
+      RegisterNumber = 0
+    r.set(ru"abc", RegisterNumber, IsShift)
+
+    check r[0] == Register(buffer: @["abc"].toSeqRunes, isLine: false)
+
+  test "Lines (Register 0)":
+    const
+      IsShift = false
+      RegisterNumber = 0
+    r.set(@["abc"].toSeqRunes, RegisterNumber, IsShift)
+
+    check r[0] == Register(buffer: @["abc"].toSeqRunes, isLine: true)
+
+  test "Overwrite Yank register (Register 0)":
+    const
+      IsShift = false
+      RegisterNumber = 0
+
+    r.set(ru"abc", RegisterNumber, IsShift)
+    check r[0] == Register(buffer: @["abc"].toSeqRunes, isLine: false)
+
+    r.set(ru"def", RegisterNumber, IsShift)
+    check r[0] == Register(buffer: @["def"].toSeqRunes, isLine: false)
+
+  test "Latest delete runes (Register 1)":
+    const
+      IsShift = true
+      RegisterNumber = 1
+    r.set(ru"abc", RegisterNumber, IsShift)
+
+    check r[1] == Register(buffer: @["abc"].toSeqRunes, isLine: false)
+
+  test "Latest delete lines (Register 1)":
+    const
+      IsShift = true
+      RegisterNumber = 1
+    r.set(@["abc"].toSeqRunes, RegisterNumber, IsShift)
+
+    check r[1] == Register(buffer: @["abc"].toSeqRunes, isLine: true)
+
+  test "Shift previous registers (Register 1 ~ 9)":
+    for i in 1 .. 9:
+      const
+        IsShift = true
+        RegisterNumber = 1
+      r.set(toRunes($i), RegisterNumber, IsShift)
+
+    var exceptBuffer = 9
+    for i in 1 .. 9:
+      check r[i] == Register(buffer: @[toRunes($exceptBuffer)], isLine: false)
+      exceptBuffer.dec
+
+    # Stat shift
+    for i in 1 .. 10:
+      const
+        IsShift = true
+        RegisterNumber = 1
+      r.set(toRunes($(i + 10)), RegisterNumber, IsShift)
+
+      if i > 1 and i < 10:
+        for j in countdown(i, 1):
+          check r[j] == Register(
+            buffer: @[$(i + 11 - j)].toSeqRunes,
+            isLine: false)
+
+  test "Don't shift":
+    for i in 1 .. 9:
+      # Prepare registers
+      const
+        IsShift = true
+        RegisterNumber = 1
+      r.set(toRunes($i), RegisterNumber, IsShift)
+
+    block:
+      # Set to 1
+      const
+        IsShift = false
+        RegisterNumber = 1
+      r.set(ru"a", RegisterNumber, IsShift)
+
+      var exceptBuffer = 9
+      for i in 1 .. 9:
+        if i == 1:
+          check r[i] == Register(buffer: @["a"].toSeqRunes, isLine: false)
+        else:
+          check r[i] == Register(buffer: @[$exceptBuffer].toSeqRunes, isLine: false)
+
+        exceptBuffer.dec
+
+    block:
+      # Set to 5
+      const
+        IsShift = false
+        RegisterNumber = 5
+      r.set(ru"b", RegisterNumber, IsShift)
+
+      var exceptBuffer = 9
+      for i in 1 .. 9:
+        if i == 1:
+          check r[i] == Register(buffer: @["a"].toSeqRunes, isLine: false)
+        elif i == 5:
+          check r[i] == Register(buffer: @["b"].toSeqRunes, isLine: false)
+        else:
+          check r[i] == Register(buffer: @[$exceptBuffer].toSeqRunes, isLine: false)
+
+        exceptBuffer.dec
+
+suite "registers: setNumberRegister":
+  privateAccess(Registers)
+
+  setup:
+    var r = initRegisters()
+
+  test "Runes (Register 0)":
+    const
+      IsShift = false
+      RegisterNumber = 0
+    r.setNumberRegister(ru"abc", RegisterNumber, IsShift)
+
+    for i in 0 .. 9:
+      if i == 0:
+        check r.number[i] == Register(buffer: @["abc"].toSeqRunes, isLine: false)
+      else:
+        check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
+
+  test "Lines (Register 0)":
+    const
+      IsShift = false
+      RegisterNumber = 0
+    r.setNumberRegister(@["abc"].toSeqRunes, RegisterNumber, IsShift)
+
+    for i in 0 .. 9:
+      if i == 0:
+        check r.number[i] == Register(buffer: @["abc"].toSeqRunes, isLine: true)
+      else:
+        check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
+
+  test "Runes (Register 1)":
+    const
+      IsShift = false
+      RegisterNumber = 1
+
+    block:
+      r.setNumberRegister(ru"abc", RegisterNumber, IsShift)
+      for i in 0 .. 9:
+        if i == 1:
+          check r.number[i] == Register(buffer: @["abc"].toSeqRunes, isLine: false)
+        else:
+          check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
+
+    block:
+      # Again.
+      r.setNumberRegister(ru"def", RegisterNumber, IsShift)
+      for i in 0 .. 9:
+        if i == 1:
+          check r.number[i] == Register(buffer: @["def"].toSeqRunes, isLine: false)
+        else:
+          check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
+
+  test "Lines (Register 1)":
+    const
+      IsShift = false
+      RegisterNumber = 1
+
+    block:
+      r.setNumberRegister(@["abc"].toSeqRunes, RegisterNumber, IsShift)
+      for i in 0 .. 9:
+        if i == 1:
+          check r.number[i] == Register(buffer: @["abc"].toSeqRunes, isLine: true)
+        else:
+          check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
+
+    block:
+      # Again.
+      r.setNumberRegister(@["def"].toSeqRunes, RegisterNumber, IsShift)
+      for i in 0 .. 9:
+        if i == 1:
+          check r.number[i] == Register(buffer: @["def"].toSeqRunes, isLine: true)
+        else:
+          check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
+
+  test "Runes and shift (Register 1)":
+    const
+      IsShift = true
+      RegisterNumber = 1
+
+    block:
+      r.setNumberRegister(ru"abc", RegisterNumber, IsShift)
+      for i in 0 .. 9:
+        if i == 1:
+          check r.number[i] == Register(buffer: @["abc"].toSeqRunes, isLine: false)
+        else:
+          check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
+
+    block:
+      # Again.
+      r.setNumberRegister(ru"def", RegisterNumber, IsShift)
+      for i in 0 .. 9:
+        if i == 1:
+          check r.number[i] == Register(buffer: @["def"].toSeqRunes, isLine: false)
+        elif i == 2:
+          check r.number[i] == Register(buffer: @["abc"].toSeqRunes, isLine: false)
+        else:
+          check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
+
+  test "Lines and shift (Register 1)":
+    const
+      IsShift = true
+      RegisterNumber = 1
+
+    block:
+      r.setNumberRegister(@["abc"].toSeqRunes, RegisterNumber, IsShift)
+      for i in 0 .. 9:
+        if i == 1:
+          check r.number[i] == Register(buffer: @["abc"].toSeqRunes, isLine: true)
+        else:
+          check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
+
+    block:
+      # Again.
+      r.setNumberRegister(@["def"].toSeqRunes, RegisterNumber, IsShift)
+      for i in 0 .. 9:
+        if i == 1:
+          check r.number[i] == Register(buffer: @["def"].toSeqRunes, isLine: true)
+        elif i == 2:
+          check r.number[i] == Register(buffer: @["abc"].toSeqRunes, isLine: true)
+        else:
+          check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
+
+suite "registers: setYankedRegister":
+  privateAccess(Registers)
+
+  setup:
+    var r = initRegisters()
+
+  test "Runes":
+    block:
+      r.setYankedRegister(ru"abc")
+      for i in 0 .. 9:
+        if i == 0:
+          check r.number[i] == Register(buffer: @["abc"].toSeqRunes, isLine: false)
+        else:
+          check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
+
+    block:
+      # Again.
+      r.setYankedRegister(ru"def")
+      for i in 0 .. 9:
+        if i == 0:
+          check r.number[i] == Register(buffer: @["def"].toSeqRunes, isLine: false)
+        else:
+          check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
+
+  test "Lines":
+    block:
+      r.setYankedRegister(@["abc"].toSeqRunes)
+      for i in 0 .. 9:
+        if i == 0:
+          check r.number[i] == Register(buffer: @["abc"].toSeqRunes, isLine: true)
+        else:
+          check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
+
+    block:
+      # Again.
+      r.setYankedRegister(@["def"].toSeqRunes)
+      for i in 0 .. 9:
+        if i == 0:
+          check r.number[i] == Register(buffer: @["def"].toSeqRunes, isLine: true)
+        else:
+          check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
+
+suite "registers: setDeletedRegister":
+  privateAccess(Registers)
+
+  setup:
+    var r = initRegisters()
+
+  test "Runes (Small delete)":
+    block:
+      r.setDeletedRegister(ru"abc")
+      check r.smallDelete == Register(buffer: @["abc"].toSeqRunes, isLine: false)
+
+    block:
+      # Again.
+      r.setDeletedRegister(ru"def")
+      check r.smallDelete == Register(buffer: @["def"].toSeqRunes, isLine: false)
+
+  test "Lines":
+    block:
+      r.setDeletedRegister(@["abc"].toSeqRunes)
+      check r.smallDelete == Register(buffer: @[].toSeqRunes, isLine: false)
+      for i in 0 .. 9:
+        if i == 1:
+          check r.number[i] == Register(buffer: @["abc"].toSeqRunes, isLine: true)
+        else:
+          check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
+
+    block:
+      # Again.
+      r.setDeletedRegister(@["def"].toSeqRunes)
+      check r.smallDelete == Register(buffer: @[].toSeqRunes, isLine: false)
+      for i in 0 .. 9:
+        if i == 1:
+          check r.number[i] == Register(buffer: @["def"].toSeqRunes, isLine: true)
+        elif i == 2:
+          check r.number[i] == Register(buffer: @["abc"].toSeqRunes, isLine: true)
+        else:
+          check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
+
+suite "registers: setNamedRegister":
+  privateAccess(Registers)
+
+  setup:
+    var r = initRegisters()
+
+  test "Runes":
+    block:
+      const RegisterName = 'a'
+
+      r.setNamedRegister(ru"abc", RegisterName)
+      check r.named[RegisterName] == Register(buffer: @["abc"].toSeqRunes, isLine: false)
+
+    block:
+      const RegisterName = 'A'
+
+      r.setNamedRegister(ru"abc", RegisterName)
+      check r.named[RegisterName] == Register(buffer: @["abc"].toSeqRunes, isLine: false)
+
+  test "Lines":
+    block:
+      const RegisterName = 'a'
+
+      r.setNamedRegister(@["abc"].toSeqRunes, RegisterName)
+      check r.named[RegisterName] == Register(buffer: @["abc"].toSeqRunes, isLine: true)
+
+    block:
+      const RegisterName = 'A'
+
+      r.setNamedRegister(@["abc"].toSeqRunes, RegisterName)
+      check r.named[RegisterName] == Register(buffer: @["abc"].toSeqRunes, isLine: true)
+
+  test "Overwrite":
+    const RegisterName = 'a'
+
+    block:
+      r.setNamedRegister(ru"abc", RegisterName)
+      check r.named[RegisterName] == Register(buffer: @["abc"].toSeqRunes, isLine: false)
+
+    block:
+      # Again.
+      r.setNamedRegister(ru"def", RegisterName)
+      check r.named[RegisterName] == Register(buffer: @["def"].toSeqRunes, isLine: false)
+
+
+suite "registers: addNormalModeOperation":
+  privateAccess(Registers)
+
+  setup:
+    var r = initRegisters()
+
+  test "Add 2 operations":
+    r.addNormalModeOperation(ru"yy")
+    r.addNormalModeOperation(ru"dd")
+
+    check r.normalModeOperations == NormalModeOperationsRegister(
+      commands: @["yy", "dd"].toSeqRunes)
+
+suite "registers: getNormalModeOperations":
+  setup:
+    var r = initRegisters()
+
+  test "Get 2 operations":
+    r.addNormalModeOperation(ru"yy")
+    r.addNormalModeOperation(ru"dd")
+
+    check r.getNormalModeOperations == NormalModeOperationsRegister(
+      commands: @["yy", "dd"].toSeqRunes)
 
 suite "registers: isOperationRegisterName":
   test "Except to true":
@@ -272,52 +527,62 @@ suite "registers: isOperationRegisterName":
     check not isOperationRegisterName(ru'@')
 
 suite "registers: getLatestNormalModeOperation":
+  privateAccess(Registers)
+
   setup:
-    normalModeOperationsRegister = @[]
+    var r = initRegisters()
 
-  test "Get operations":
-    normalModeOperationsRegister = @["yy", "dd"].toSeqRunes
+  test "Get 2 operations":
+    r.addNormalModeOperation ru"yy"
+    r.addNormalModeOperation ru"dd"
 
-    check getLatestNormalModeOperation() == some(ru"dd")
+    check r.getLatestNormalModeOperation == some(ru"dd")
 
   test "Except to none":
-    check getLatestNormalModeOperation().isNone
+    check r.getLatestNormalModeOperation.isNone
 
-suite "registers: clearOperationToRegister":
+suite "registers: clearOperations":
+  privateAccess(Registers)
+
   setup:
-    initOperationRegisters()
+    var r = initRegisters()
 
   test "Clear the operation register":
     const RegisterName = 'a'
-    registers.operationRegisters[RegisterName] = @["yy"].toSeqRunes
+    check r.addOperation(RegisterName.toRune, ru"yy").isOk
 
-    check clearOperationToRegister(RegisterName.toRune).isOk
-    check registers.operationRegisters[RegisterName].len == 0
+    check r.clearOperations(RegisterName.toRune).isOk
+    check r.operations[RegisterName].commands.len == 0
 
-suite "registers: addOperationToRegister":
+suite "registers: addOperation":
+  privateAccess(Registers)
+
   setup:
-    initOperationRegisters()
+    var r = initRegisters()
 
-  test "Add operations":
+  test "Add 2 operations":
     const RegisterName = 'a'
 
     block:
       const Operation = ru"yy"
-      check addOperationToRegister(RegisterName.toRune, Operation).isOk
+      check r.addOperation(RegisterName.toRune, Operation).isOk
 
     block:
       const Operation = ru"dd"
-      check addOperationToRegister(RegisterName.toRune, Operation).isOk
+      check r.addOperation(RegisterName.toRune, Operation).isOk
 
-    check registers.operationRegisters[RegisterName] == @["yy", "dd"].toSeqRunes
+    check r.operations[RegisterName].commands == @["yy", "dd"].toSeqRunes
 
-suite "registers: getOperationsFromRegister":
+suite "registers: getOperations":
+  privateAccess(Registers)
+
   setup:
-    initOperationRegisters()
+    var r = initRegisters()
 
-  test "Get operations":
+  test "Get 2 operations":
     const RegisterName = 'a'
-    registers.operationRegisters[RegisterName] = @["yy", "dd"].toSeqRunes
+    check r.addOperation(RegisterName.toRune, ru"yy").isOk
+    check r.addOperation(RegisterName.toRune, ru"dd").isOk
 
-    check getOperationsFromRegister(RegisterName.toRune).get ==
+    check r.getOperations(RegisterName.toRune).get.commands ==
       @["yy", "dd"].toSeqRunes

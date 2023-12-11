@@ -33,11 +33,13 @@ type
     VSCodium
     VSCode
 
-  ClipboardToolOnLinux* = enum
+  ClipboardTool* = enum
     none
     xsel
     xclip
     wlClipboard
+    wslDefault # powershell.exe/clip.ext
+    macOsDefault # pbcopy/pbpaste
 
   WindowSplitType* {.pure.} = enum
     vertical
@@ -200,7 +202,7 @@ type
 
   ClipboardSettings* = object
     enable*: bool
-    toolOnLinux*: ClipboardToolOnLinux
+    toolOnLinux*: ClipboardTool
 
   GitSettings* = object
     showChangedLine*: bool
@@ -411,8 +413,8 @@ proc initPersistSettings(): PersistSettings =
   result.cursorPosition = true
 
 # Automatically set the clipboard tool on GNU/Linux
-proc autoSetClipboardTool(): ClipboardToolOnLinux =
-  result = ClipboardToolOnLinux.none
+proc autoSetClipboardTool(): ClipboardTool =
+  result = ClipboardTool.none
 
   case currentPlatform:
     of linux:
@@ -420,7 +422,7 @@ proc autoSetClipboardTool(): ClipboardToolOnLinux =
       if execCmdExNoOutput("xset q") == 0:
 
         if execCmdExNoOutput("xsel --version") == 0:
-          result = ClipboardToolOnLinux.xsel
+          result = ClipboardTool.xsel
         elif execCmdExNoOutput("xclip -version") == 0:
           let (output, _) = execCmdEx("xclip -version")
           # Check xclip version
@@ -428,16 +430,16 @@ proc autoSetClipboardTool(): ClipboardToolOnLinux =
             lines = output.splitLines
             versionStr = (strutils.splitWhitespace(lines[0]))[2]
           if parseFloat(versionStr) >= 0.13:
-            result = ClipboardToolOnLinux.xclip
+            result = ClipboardTool.xclip
         elif execCmdExNoOutput("wl-copy -v") == 0:
-          result = ClipboardToolOnLinux.wlClipboard
+          result = ClipboardTool.wlClipboard
     else:
       discard
 
 proc initClipboardSettings(): ClipboardSettings =
   result.toolOnLinux = autoSetClipboardTool()
 
-  if ClipboardToolOnLinux.none != result.toolOnLinux:
+  if ClipboardTool.none != result.toolOnLinux:
     result.enable = true
 
 proc initGitSettings(): GitSettings =
@@ -1197,13 +1199,13 @@ proc parseClipboardTable(
       let str = clipboardConfigs["toolOnLinux"].getStr
       case str:
         of "xsel":
-          s.clipboard.toolOnLinux = ClipboardToolOnLinux.xsel
+          s.clipboard.toolOnLinux = ClipboardTool.xsel
         of "xclip":
-          s.clipboard.toolOnLinux = ClipboardToolOnLinux.xclip
+          s.clipboard.toolOnLinux = ClipboardTool.xclip
         of "wl-clipboard":
-          s.clipboard.toolOnLinux = ClipboardToolOnLinux.wlClipboard
+          s.clipboard.toolOnLinux = ClipboardTool.wlClipboard
         else:
-          s.clipboard.toolOnLinux = ClipboardToolOnLinux.xsel
+          s.clipboard.toolOnLinux = ClipboardTool.xsel
 
 proc parseTabLineTable(s: var EditorSettings, tablineConfigs: TomlValueRef) =
   if tablineConfigs.contains("allBuffer"):
