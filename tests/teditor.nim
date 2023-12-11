@@ -1295,7 +1295,7 @@ suite "Editor: pasteAfterCursor":
     status.update
 
     # Add a empty buffer to the register.
-    status.registers.updateYankedRegister(ru"")
+    status.registers.setYankedRegister(ru"")
 
     currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
 
@@ -1314,7 +1314,7 @@ suite "Editor: pasteAfterCursor":
     status.update
 
     # Add buffer to the register.
-    status.registers.updateYankedRegister(ru"abc")
+    status.registers.setYankedRegister(ru"abc")
 
     currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
 
@@ -1334,7 +1334,7 @@ suite "Editor: pasteAfterCursor":
     status.update
 
     # Add buffer to the register.
-    status.registers.updateYankedRegister(ru"def ghi")
+    status.registers.setYankedRegister(ru"def ghi")
 
     currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
 
@@ -1354,7 +1354,7 @@ suite "Editor: pasteAfterCursor":
     status.update
 
     # Add buffer to the register.
-    status.registers.updateYankedRegister(ru"def ")
+    status.registers.setYankedRegister(ru"def ")
 
     currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
 
@@ -1374,7 +1374,7 @@ suite "Editor: pasteAfterCursor":
     status.update
 
     # Add buffer to the register.
-    status.registers.updateYankedRegister(ru"d")
+    status.registers.setYankedRegister(ru"d")
 
     currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
 
@@ -1393,7 +1393,7 @@ suite "Editor: pasteAfterCursor":
     status.update
 
     # Add buffer to the register.
-    status.registers.updateYankedRegister(ru"b")
+    status.registers.setYankedRegister(ru"b")
 
     currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
 
@@ -1412,7 +1412,7 @@ suite "Editor: pasteAfterCursor":
     status.update
 
     # Add buffer to the register.
-    status.registers.updateYankedRegister(ru"a")
+    status.registers.setYankedRegister(ru"a")
 
     currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
 
@@ -1431,7 +1431,7 @@ suite "Editor: pasteAfterCursor":
     status.update
 
     # Add buffer to the register.
-    status.registers.updateYankedRegister(@["line2", "line3"].toSeqRunes)
+    status.registers.setYankedRegister(@["line2", "line3"].toSeqRunes)
 
     currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
 
@@ -1453,7 +1453,7 @@ suite "Editor: pasteAfterCursor":
     status.update
 
     # Add buffer to the register.
-    status.registers.updateYankedRegister(@["  line2"].toSeqRunes)
+    status.registers.setYankedRegister(@["  line2"].toSeqRunes)
 
     currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
 
@@ -1475,7 +1475,7 @@ suite "Editor: pasteAfterCursor":
     status.update
 
     # Add buffer to the register.
-    status.registers.updateYankedRegister(@["line2"].toSeqRunes)
+    status.registers.setYankedRegister(@["line2"].toSeqRunes)
 
     currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
 
@@ -1498,7 +1498,7 @@ suite "Editor: pasteBeforeCursor":
     status.update
 
     # Add buffer to the register.
-    status.registers.updateYankedRegister(ru"")
+    status.registers.setYankedRegister(ru"")
 
     currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
 
@@ -1517,7 +1517,7 @@ suite "Editor: pasteBeforeCursor":
     status.update
 
     # Add buffer to the register.
-    status.registers.updateYankedRegister(ru"abc")
+    status.registers.setYankedRegister(ru"abc")
 
     currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
 
@@ -1536,7 +1536,7 @@ suite "Editor: pasteBeforeCursor":
     status.update
 
     # Add buffer to the register.
-    status.registers.updateYankedRegister(ru"abc def")
+    status.registers.setYankedRegister(ru"abc def")
 
     currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
 
@@ -1556,7 +1556,7 @@ suite "Editor: pasteBeforeCursor":
     status.update
 
     # Add buffer to the register.
-    status.registers.updateYankedRegister(ru"def ")
+    status.registers.setYankedRegister(ru"def ")
 
     currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
 
@@ -1576,7 +1576,7 @@ suite "Editor: pasteBeforeCursor":
     status.update
 
     # Add buffer to the register.
-    status.registers.updateYankedRegister(ru"a")
+    status.registers.setYankedRegister(ru"a")
 
     currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
 
@@ -1596,7 +1596,7 @@ suite "Editor: pasteBeforeCursor":
     status.update
 
     # Add buffer to the register.
-    status.registers.updateYankedRegister(ru"b")
+    status.registers.setYankedRegister(ru"b")
 
     currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
 
@@ -1615,7 +1615,7 @@ suite "Editor: pasteBeforeCursor":
     status.update
 
     # Add buffer to the register.
-    status.registers.updateYankedRegister(ru"a")
+    status.registers.setYankedRegister(ru"a")
 
     currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
 
@@ -1634,7 +1634,7 @@ suite "Editor: pasteBeforeCursor":
     status.update
 
     # Add buffer to the register.
-    status.registers.updateYankedRegister(@["line1", "line2"].toSeqRunes)
+    status.registers.setYankedRegister(@["line1", "line2"].toSeqRunes)
 
     currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
 
@@ -1656,7 +1656,7 @@ suite "Editor: pasteBeforeCursor":
     status.update
 
     # Add buffer to the register.
-    status.registers.updateYankedRegister(@["  line1"].toSeqRunes)
+    status.registers.setYankedRegister(@["  line1"].toSeqRunes)
 
     currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
 
@@ -1677,7 +1677,7 @@ suite "Editor: pasteBeforeCursor":
     status.update
 
     # Add buffer to the register.
-    status.registers.updateYankedRegister(@["line2"].toSeqRunes)
+    status.registers.setYankedRegister(@["line2"].toSeqRunes)
 
     currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
 

@@ -797,9 +797,9 @@ proc deleteWord*(
         windowNode.currentColumn = currentColumn
 
     if registerName.isNamedRegisterName:
-      registers.updateNamedRegister(registerName[0], deletedBuffer)
+      registers.setNamedRegister(deletedBuffer, registerName[0])
     else:
-      registers.updateLatestDeletedRegister(deletedBuffer)
+      registers.setDeletedRegister(deletedBuffer)
 
     inc(bufStatus.countChange)
     bufStatus.isUpdate = true
@@ -1020,9 +1020,9 @@ proc deleteCharacters*(
       bufStatus.buffer[line] = newLine
 
       if registerName.isNamedRegisterName:
-        registers.updateNamedRegister(registerName[0], deletedBuffer)
+        registers.setNamedRegister(deletedBuffer, registerName[0])
       else:
-        registers.updateLatestDeletedRegister(deletedBuffer)
+        registers.setDeletedRegister(deletedBuffer)
 
       inc(bufStatus.countChange)
       bufStatus.isUpdate = true
@@ -1242,9 +1242,9 @@ proc deleteLines*(
       for i in startLine .. endLine: deleteLines.add(buffer[i])
 
       if registerName.isNamedRegisterName:
-        registers.updateNamedRegister(registerName[0], deleteLines)
+        registers.setNamedRegister(deleteLines, registerName[0])
       else:
-        registers.updateLatestDeletedRegister(deleteLines)
+        registers.setDeletedRegister(deleteLines)
 
     bufStatus.buffer.delete(startLine, endLine)
 
@@ -1368,9 +1368,9 @@ proc deleteTillPreviousBlankLine*(
         if oldLine != newLine: bufStatus.buffer[currentLine] = newLine
 
     if registerName.isNamedRegisterName:
-      registers.updateNamedRegister(registerName[0], deletedBuffer)
+      registers.setNamedRegister(deletedBuffer, registerName[0])
     else:
-      registers.updateLatestDeletedRegister(deletedBuffer)
+      registers.setDeletedRegister(deletedBuffer)
 
     windowNode.currentLine = min(bufStatus.buffer.high, windowNode.currentLine)
     windowNode.currentColumn = 0
@@ -1419,9 +1419,9 @@ proc deleteTillNextBlankLine*(
       bufStatus.buffer.delete(startLine, blankLine - 1)
 
     if registerName.isNamedRegisterName:
-      registers.updateNamedRegister(registerName[0], deletedBuffer)
+      registers.setNamedRegister(deletedBuffer, registerName[0])
     else:
-      registers.updateLatestDeletedRegister(deletedBuffer)
+      registers.setDeletedRegister(deletedBuffer)
 
     inc(bufStatus.countChange)
     bufStatus.isUpdate = true
@@ -1442,9 +1442,9 @@ proc yankLines*(
       yankedBuffer.add bufStatus.buffer[i]
 
     if registerName.isNamedRegisterName:
-      registers.updateNamedRegister(registerName[0], yankedBuffer)
+      registers.setNamedRegister(yankedBuffer, registerName[0])
     else:
-      registers.updateYankedRegister(yankedBuffer)
+      registers.setYankedRegister(yankedBuffer)
 
     commandLine.writeMessageYankedLine(
       yankedBuffer.len,
@@ -1528,9 +1528,9 @@ proc yankCharacters*(
         yankedBuffer.add bufStatus.buffer[line][col]
 
     if registerName.isNamedRegisterName:
-      registers.updateNamedRegister(registerName[0], yankedBuffer)
+      registers.setNamedRegister(yankedBuffer, registerName[0])
     else:
-      registers.updateYankedRegister(yankedBuffer)
+      registers.setYankedRegister(yankedBuffer)
 
     commandLine.writeMessageYankedCharactor(
       yankedBuffer.len,
@@ -1573,9 +1573,9 @@ proc yankWord*(
         else: yankedBuffer.add rune
 
     if registerName.isNamedRegisterName:
-      registers.updateNamedRegister(registerName[0], yankedBuffer)
+      registers.setNamedRegister(yankedBuffer, registerName[0])
     else:
-      registers.updateYankedRegister(yankedBuffer)
+      registers.setYankedRegister(yankedBuffer)
 
 proc yankWord*(
   bufStatus: var BufferStatus,
@@ -1640,9 +1640,9 @@ proc yankCharactersOfLines*(
     let line: Runes = bufStatus.buffer[windowNode.currentLine]
 
     if registerName.isNamedRegisterName:
-      registers.updateNamedRegister(registerName[0], line)
+      registers.setNamedRegister(line, registerName[0])
     else:
-      registers.updateYankedRegister(line)
+      registers.setYankedRegister(line)
 
 proc insertRunesFromRegister(
   bufStatus: var BufferStatus,
@@ -2055,9 +2055,9 @@ proc deleteInsideOfParen*(
 
       if oldLine != newLine:
         if registerName.isNamedRegisterName:
-          registers.updateNamedRegister(registerName[0], deleteBuffer)
+          registers.setNamedRegister(deleteBuffer, registerName[0])
         else:
-          registers.updateLatestDeletedRegister(deleteBuffer)
+          registers.setDeletedRegister(deleteBuffer)
 
         bufStatus.buffer[currentLine] = newLine
         windowNode.currentColumn = openParenPosition

@@ -112,34 +112,34 @@ proc getSmallDeleteRegister*(r: Registers): Register {.inline.} = r.smallDelete
 proc getNumberRegister*(r: Registers, num: int): Register {.inline.} =
   r.number[num]
 
-proc update(r: var Register, buffer: Runes) {.inline.} =
+proc set(r: var Register, buffer: Runes) {.inline.} =
   ## Set runes to the register.
 
   r.isLine = false
   r.buffer = @[buffer]
 
-proc update(r: var Register, buffer: seq[Runes]) {.inline.} =
+proc set(r: var Register, buffer: seq[Runes]) {.inline.} =
   ## Set lines to the register.
 
   r.isLine = true
   r.buffer = buffer
 
-proc updateNoNamedRegister*(
+proc setNoNamedRegister*(
   r: var Registers,
   buffer: Runes | seq[Runes]) {.inline.} =
-    ## Update the no named register and OS clipboard.
+    ## set the no named register and OS clipboard.
 
-    r.noNamed.update(buffer)
+    r.noNamed.set(buffer)
 
     if r.clipboardTool.isSome:
       buffer.sendToClipboard(r.clipboardTool.get)
 
-proc update(
+proc set(
   r: var NumberRegisters,
-  isShift: bool,
+  buffer: Runes | seq[Runes],
   registerNumber: int,
-  buffer: Runes | seq[Runes]) =
-    ## Update the number register.
+  isShift: bool) =
+    ## set the number register.
     ## If `isShift` is true, moving previous registers to next numbers.
     ##
     ## '0': Yanked lines.
@@ -155,99 +155,107 @@ proc update(
         # Shift previous registers.
         r[i + 1] = r[i]
 
-    r[registerNumber].update(buffer)
+    r[registerNumber].set(buffer)
 
-proc update(
+proc set(
   r: var NamedRegisters,
-  registerName: char,
-  buffer: Runes | seq[Runes]) =
-    ## Update the named register.
+  buffer: Runes | seq[Runes],
+  registerName: char) =
+    ## set the named register.
     ## Register names: 'A' ~ 'Z', 'a' ~ 'z'.
 
     doAssert(
       registerName in Letters,
       fmt"Named register: Invalid name: {registerName}")
 
-    r[registerName].update(buffer)
+    r[registerName].set(buffer)
 
-proc updateSmallDeleteRegister*(
+proc setSmallDeleteRegister*(
   r: var Registers,
   buffer: Runes) {.inline.} =
-    ## Update the small delete register, no named register and OS clipboard.
+    ## set the small delete register, no named register and OS clipboard.
 
-    r.smallDelete.update(buffer)
-    r.updateNoNamedRegister(buffer)
+    r.smallDelete.set(buffer)
+    r.setNoNamedRegister(buffer)
 
-proc updateNumberRegister(
+proc setNumberRegister(
   r: var Registers,
-  isShift: bool,
+  buffer: Runes | seq[Runes],
   registerNumber: int,
-  buffer: Runes | seq[Runes]) {.inline.} =
-    ## Update the number register, no named register and OS clipboard.
+  isShift: bool = false) {.inline.} =
+    ## set the number register, no named register and OS clipboard.
     ## If `isShift` is true, moving previous registers to next numbers.
     ##
     ## '0': Yanked lines.
     ## '1' ~ '9': Delete lines.
 
-    r.number.update(isShift, registerNumber, buffer)
-    r.updateNoNamedRegister(buffer)
+    r.number.set(buffer, registerNumber, isShift)
+    r.setNoNamedRegister(buffer)
 
-proc updateYankedRegister*(
+proc setYankedRegister*(
   r: var Registers,
   buffer: Runes | seq[Runes]) =
-    ## Update the number register for yank ('0'), no named register and OS
+    ## set the number register for yank ('0'), no named register and OS
     ## clipboard.
 
-    const
-      isShift = false
-      RegisterNumber = 0
-    r.updateNumberRegister(isShift, RegisterNumber, buffer)
-    r.updateNoNamedRegister(buffer)
+    const RegisterNumber = 0
+    r.setNumberRegister(buffer,  RegisterNumber)
+    r.setNoNamedRegister(buffer)
 
-proc updateLatestDeletedRegister*(
+proc setDeletedRegister*(
   r: var Registers,
   buffer: Runes) {.inline.} =
-    ## Update the small delete register, no named register and OS clipboard.
+    ## set the small delete register, no named register and OS clipboard.
 
-    r.updateSmallDeleteRegister(buffer)
-    r.updateNoNamedRegister(buffer)
+    r.setSmallDeleteRegister(buffer)
+    r.setNoNamedRegister(buffer)
 
-proc updateLatestDeletedRegister*(
+proc setDeletedRegister*(
   r: var Registers,
   buffer: seq[Runes]) =
-    ## Update the number register for deleted lines (Register '1'), no named
+    ## set the number register for deleted lines (Register '1'), no named
     ## register and OS clipboard.
     ## And move previous registers to next numbers.
 
     const
-      isShift = true
+      IsShift = true
       RegisterNumber = 1
-    r.updateNumberRegister(isShift, RegisterNumber, buffer)
-    r.updateNoNamedRegister(buffer)
+    r.setNumberRegister(buffer, RegisterNumber, IsShift)
+    r.setNoNamedRegister(buffer)
 
-proc updateNamedRegister*(
+proc setDeletedRegister*(
   r: var Registers,
-  registerName: char,
-  buffer: Runes | seq[Runes]) {.inline.} =
-    ## Update the named register, no named register and OS clipboard.
+  buffer: seq[Runes],
+  registerNumber: int) =
+    ## set the number register for deleted lines (Register '1'), no named
+    ## register and OS clipboard.
+
+    r.setNumberRegister(buffer, registerNumber)
+    r.setNoNamedRegister(buffer)
+
+proc setNamedRegister*(
+  r: var Registers,
+  buffer: Runes | seq[Runes],
+  registerName: char) {.inline.} =
+    ## set the named register, no named register and OS clipboard.
     ## Register numbers: 'A' ~ 'Z', 'a' ~ 'z'.
 
-    r.named.update(registerName, buffer)
-    r.updateNoNamedRegister(buffer)
+    r.named.set(buffer, registerName)
+    r.setNoNamedRegister(buffer)
 
-proc updateNamedRegister*(
+proc setNamedRegister*(
   r: var Registers,
-  registerName: Rune,
-  buffer: Runes | seq[Runes]) =
-    ## Update the named register, no named register and OS clipboard.
+  buffer: Runes | seq[Runes],
+  registerName: Rune) =
+    ## set the named register, no named register and OS clipboard.
     ## Register numbers: 'A' ~ 'Z', 'a' ~ 'z'.
 
     doAssert(
       r.canConvertToChar,
       fmt"Named register: Invalid register name: {registerName}")
 
-    r.named.update(registerName.toChar, buffer)
-    r.updateNoNamedRegister(buffer)
+    r.named.set(buffer, registerName.toChar)
+    r.setNoNamedRegister(buffer)
 
 proc addNormalModeOperation*(
   r: var Registers,

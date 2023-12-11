@@ -279,9 +279,9 @@ proc insertPasteBuffer(status: var EditorStatus, pasteBuffer: seq[Runes]) =
 
     # Assign the pasteBuffer to the no name register.
     if pasteBuffer.len == 1:
-      status.registers.updateYankedRegister(pasteBuffer[0])
+      status.registers.setYankedRegister(pasteBuffer[0])
     else:
-      status.registers.updateYankedRegister(pasteBuffer)
+      status.registers.setYankedRegister(pasteBuffer)
 
     if currentBufStatus.isInsertMode:
       currentBufStatus.pasteAfterCursor(

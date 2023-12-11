@@ -58,62 +58,62 @@ suite "registers: update (Register)":
     var r = Register()
 
   test "Runes":
-    r.update(ru"abc")
+    r.set(ru"abc")
 
     check r == Register(buffer: @["abc"].toSeqRunes, isLine: false)
 
   test "Lines":
-    r.update(@["abc"].toSeqRunes)
+    r.set(@["abc"].toSeqRunes)
 
     check r == Register(buffer: @["abc"].toSeqRunes, isLine: true)
 
   test "Lines 2":
-    r.update(@["abc", "def"].toSeqRunes)
+    r.set(@["abc", "def"].toSeqRunes)
 
     check r == Register(buffer: @["abc", "def"].toSeqRunes, isLine: true)
 
   test "Overwrite":
-    r.update(ru"abc")
+    r.set(ru"abc")
     check r == Register(buffer: @["abc"].toSeqRunes, isLine: false)
 
-    r.update(ru"def")
+    r.set(ru"def")
     check r == Register(buffer: @["def"].toSeqRunes, isLine: false)
 
-suite "registers: updateNoNamedRegister":
+suite "registers: setNoNamedRegister":
   privateAccess(Registers)
 
   setup:
     var r = initRegisters()
 
   test "Runes":
-    r.updateNoNamedRegister(ru"abc")
+    r.setNoNamedRegister(ru"abc")
 
     check r.noNamed == Register(buffer: @["abc"].toSeqRunes, isLine: false)
 
   test "Lines":
-    r.updateNoNamedRegister(@["abc"].toSeqRunes)
+    r.setNoNamedRegister(@["abc"].toSeqRunes)
 
     check r.noNamed == Register(buffer: @["abc"].toSeqRunes, isLine: true)
 
   test "Lines 2":
-    r.updateNoNamedRegister(@["abc", "def"].toSeqRunes)
+    r.setNoNamedRegister(@["abc", "def"].toSeqRunes)
 
     check r.noNamed == Register(
       buffer: @["abc", "def"].toSeqRunes,
       isLine: true)
 
   test "Overwrite":
-    r.updateNoNamedRegister(ru"abc")
+    r.setNoNamedRegister(ru"abc")
     check r.noNamed == Register(buffer: @["abc"].toSeqRunes, isLine: false)
 
-    r.updateNoNamedRegister(ru"def")
+    r.setNoNamedRegister(ru"def")
     check r.noNamed == Register(buffer: @["def"].toSeqRunes, isLine: false)
 
   test "Runes with Clipboad (xsel)":
     if not isXAvailable(): skip()
 
     r.setClipboardTool(ClipboardTool.xsel)
-    r.updateNoNamedRegister(ru"abc")
+    r.setNoNamedRegister(ru"abc")
 
     check "abc" == getClipboardBuffer(ClipboardTool.xsel)
 
@@ -121,7 +121,7 @@ suite "registers: updateNoNamedRegister":
     if not isXAvailable(): skip()
 
     r.setClipboardTool(ClipboardTool.xsel)
-    r.updateNoNamedRegister(@["abc", "def"].toSeqRunes)
+    r.setNoNamedRegister(@["abc", "def"].toSeqRunes)
 
     check "abc\ndef" == getClipboardBuffer(ClipboardTool.xsel)
 
@@ -133,7 +133,7 @@ suite "registers: update (NumberRegister)":
     const
       IsShift = false
       RegisterNumber = 0
-    r.update(IsShift, RegisterNumber, ru"abc")
+    r.set(ru"abc", RegisterNumber, IsShift)
 
     check r[0] == Register(buffer: @["abc"].toSeqRunes, isLine: false)
 
@@ -141,7 +141,7 @@ suite "registers: update (NumberRegister)":
     const
       IsShift = false
       RegisterNumber = 0
-    r.update(IsShift, RegisterNumber, @["abc"].toSeqRunes)
+    r.set(@["abc"].toSeqRunes, RegisterNumber, IsShift)
 
     check r[0] == Register(buffer: @["abc"].toSeqRunes, isLine: true)
 
@@ -150,17 +150,17 @@ suite "registers: update (NumberRegister)":
       IsShift = false
       RegisterNumber = 0
 
-    r.update(IsShift, RegisterNumber, ru"abc")
+    r.set(ru"abc", RegisterNumber, IsShift)
     check r[0] == Register(buffer: @["abc"].toSeqRunes, isLine: false)
 
-    r.update(IsShift, RegisterNumber, ru"def")
+    r.set(ru"def", RegisterNumber, IsShift)
     check r[0] == Register(buffer: @["def"].toSeqRunes, isLine: false)
 
   test "Latest delete runes (Register 1)":
     const
       IsShift = true
       RegisterNumber = 1
-    r.update(IsShift, RegisterNumber, ru"abc")
+    r.set(ru"abc", RegisterNumber, IsShift)
 
     check r[1] == Register(buffer: @["abc"].toSeqRunes, isLine: false)
 
@@ -168,7 +168,7 @@ suite "registers: update (NumberRegister)":
     const
       IsShift = true
       RegisterNumber = 1
-    r.update(IsShift, RegisterNumber, @["abc"].toSeqRunes)
+    r.set(@["abc"].toSeqRunes, RegisterNumber, IsShift)
 
     check r[1] == Register(buffer: @["abc"].toSeqRunes, isLine: true)
 
@@ -177,7 +177,7 @@ suite "registers: update (NumberRegister)":
       const
         IsShift = true
         RegisterNumber = 1
-      r.update(IsShift, RegisterNumber, toRunes($i))
+      r.set(toRunes($i), RegisterNumber, IsShift)
 
     var exceptBuffer = 9
     for i in 1 .. 9:
@@ -189,7 +189,7 @@ suite "registers: update (NumberRegister)":
       const
         IsShift = true
         RegisterNumber = 1
-      r.update(IsShift, RegisterNumber, toRunes($(i + 10)))
+      r.set(toRunes($(i + 10)), RegisterNumber, IsShift)
 
       if i > 1 and i < 10:
         for j in countdown(i, 1):
@@ -203,14 +203,14 @@ suite "registers: update (NumberRegister)":
       const
         IsShift = true
         RegisterNumber = 1
-      r.update(IsShift, RegisterNumber, toRunes($i))
+      r.set(toRunes($i), RegisterNumber, IsShift)
 
     block:
       # Set to 1
       const
         IsShift = false
         RegisterNumber = 1
-      r.update(IsShift, RegisterNumber, ru"a")
+      r.set(ru"a", RegisterNumber, IsShift)
 
       var exceptBuffer = 9
       for i in 1 .. 9:
@@ -226,7 +226,7 @@ suite "registers: update (NumberRegister)":
       const
         IsShift = false
         RegisterNumber = 5
-      r.update(IsShift, RegisterNumber, ru"b")
+      r.set(ru"b", RegisterNumber, IsShift)
 
       var exceptBuffer = 9
       for i in 1 .. 9:
@@ -239,7 +239,7 @@ suite "registers: update (NumberRegister)":
 
         exceptBuffer.dec
 
-suite "registers: updateNumberRegister":
+suite "registers: setNumberRegister":
   privateAccess(Registers)
 
   setup:
@@ -249,7 +249,7 @@ suite "registers: updateNumberRegister":
     const
       IsShift = false
       RegisterNumber = 0
-    r.updateNumberRegister(IsShift, RegisterNumber, ru"abc")
+    r.setNumberRegister(ru"abc", RegisterNumber, IsShift)
 
     for i in 0 .. 9:
       if i == 0:
@@ -261,7 +261,7 @@ suite "registers: updateNumberRegister":
     const
       IsShift = false
       RegisterNumber = 0
-    r.updateNumberRegister(IsShift, RegisterNumber, @["abc"].toSeqRunes)
+    r.setNumberRegister(@["abc"].toSeqRunes, RegisterNumber, IsShift)
 
     for i in 0 .. 9:
       if i == 0:
@@ -275,7 +275,7 @@ suite "registers: updateNumberRegister":
       RegisterNumber = 1
 
     block:
-      r.updateNumberRegister(IsShift, RegisterNumber, ru"abc")
+      r.setNumberRegister(ru"abc", RegisterNumber, IsShift)
       for i in 0 .. 9:
         if i == 1:
           check r.number[i] == Register(buffer: @["abc"].toSeqRunes, isLine: false)
@@ -284,7 +284,7 @@ suite "registers: updateNumberRegister":
 
     block:
       # Again.
-      r.updateNumberRegister(IsShift, RegisterNumber, ru"def")
+      r.setNumberRegister(ru"def", RegisterNumber, IsShift)
       for i in 0 .. 9:
         if i == 1:
           check r.number[i] == Register(buffer: @["def"].toSeqRunes, isLine: false)
@@ -297,7 +297,7 @@ suite "registers: updateNumberRegister":
       RegisterNumber = 1
 
     block:
-      r.updateNumberRegister(IsShift, RegisterNumber, @["abc"].toSeqRunes)
+      r.setNumberRegister(@["abc"].toSeqRunes, RegisterNumber, IsShift)
       for i in 0 .. 9:
         if i == 1:
           check r.number[i] == Register(buffer: @["abc"].toSeqRunes, isLine: true)
@@ -306,7 +306,7 @@ suite "registers: updateNumberRegister":
 
     block:
       # Again.
-      r.updateNumberRegister(IsShift, RegisterNumber, @["def"].toSeqRunes)
+      r.setNumberRegister(@["def"].toSeqRunes, RegisterNumber, IsShift)
       for i in 0 .. 9:
         if i == 1:
           check r.number[i] == Register(buffer: @["def"].toSeqRunes, isLine: true)
@@ -319,7 +319,7 @@ suite "registers: updateNumberRegister":
       RegisterNumber = 1
 
     block:
-      r.updateNumberRegister(IsShift, RegisterNumber, ru"abc")
+      r.setNumberRegister(ru"abc", RegisterNumber, IsShift)
       for i in 0 .. 9:
         if i == 1:
           check r.number[i] == Register(buffer: @["abc"].toSeqRunes, isLine: false)
@@ -328,7 +328,7 @@ suite "registers: updateNumberRegister":
 
     block:
       # Again.
-      r.updateNumberRegister(IsShift, RegisterNumber, ru"def")
+      r.setNumberRegister(ru"def", RegisterNumber, IsShift)
       for i in 0 .. 9:
         if i == 1:
           check r.number[i] == Register(buffer: @["def"].toSeqRunes, isLine: false)
@@ -343,7 +343,7 @@ suite "registers: updateNumberRegister":
       RegisterNumber = 1
 
     block:
-      r.updateNumberRegister(IsShift, RegisterNumber, @["abc"].toSeqRunes)
+      r.setNumberRegister(@["abc"].toSeqRunes, RegisterNumber, IsShift)
       for i in 0 .. 9:
         if i == 1:
           check r.number[i] == Register(buffer: @["abc"].toSeqRunes, isLine: true)
@@ -352,7 +352,7 @@ suite "registers: updateNumberRegister":
 
     block:
       # Again.
-      r.updateNumberRegister(IsShift, RegisterNumber, @["def"].toSeqRunes)
+      r.setNumberRegister(@["def"].toSeqRunes, RegisterNumber, IsShift)
       for i in 0 .. 9:
         if i == 1:
           check r.number[i] == Register(buffer: @["def"].toSeqRunes, isLine: true)
@@ -361,7 +361,7 @@ suite "registers: updateNumberRegister":
         else:
           check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
 
-suite "registers: updateYankedRegister":
+suite "registers: setYankedRegister":
   privateAccess(Registers)
 
   setup:
@@ -369,7 +369,7 @@ suite "registers: updateYankedRegister":
 
   test "Runes":
     block:
-      r.updateYankedRegister(ru"abc")
+      r.setYankedRegister(ru"abc")
       for i in 0 .. 9:
         if i == 0:
           check r.number[i] == Register(buffer: @["abc"].toSeqRunes, isLine: false)
@@ -378,7 +378,7 @@ suite "registers: updateYankedRegister":
 
     block:
       # Again.
-      r.updateYankedRegister(ru"def")
+      r.setYankedRegister(ru"def")
       for i in 0 .. 9:
         if i == 0:
           check r.number[i] == Register(buffer: @["def"].toSeqRunes, isLine: false)
@@ -387,7 +387,7 @@ suite "registers: updateYankedRegister":
 
   test "Lines":
     block:
-      r.updateYankedRegister(@["abc"].toSeqRunes)
+      r.setYankedRegister(@["abc"].toSeqRunes)
       for i in 0 .. 9:
         if i == 0:
           check r.number[i] == Register(buffer: @["abc"].toSeqRunes, isLine: true)
@@ -396,14 +396,14 @@ suite "registers: updateYankedRegister":
 
     block:
       # Again.
-      r.updateYankedRegister(@["def"].toSeqRunes)
+      r.setYankedRegister(@["def"].toSeqRunes)
       for i in 0 .. 9:
         if i == 0:
           check r.number[i] == Register(buffer: @["def"].toSeqRunes, isLine: true)
         else:
           check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
 
-suite "registers: updateLatestDeletedRegister":
+suite "registers: setDeletedRegister":
   privateAccess(Registers)
 
   setup:
@@ -411,17 +411,17 @@ suite "registers: updateLatestDeletedRegister":
 
   test "Runes (Small delete)":
     block:
-      r.updateLatestDeletedRegister(ru"abc")
+      r.setDeletedRegister(ru"abc")
       check r.smallDelete == Register(buffer: @["abc"].toSeqRunes, isLine: false)
 
     block:
       # Again.
-      r.updateLatestDeletedRegister(ru"def")
+      r.setDeletedRegister(ru"def")
       check r.smallDelete == Register(buffer: @["def"].toSeqRunes, isLine: false)
 
   test "Lines":
     block:
-      r.updateLatestDeletedRegister(@["abc"].toSeqRunes)
+      r.setDeletedRegister(@["abc"].toSeqRunes)
       check r.smallDelete == Register(buffer: @[].toSeqRunes, isLine: false)
       for i in 0 .. 9:
         if i == 1:
@@ -431,7 +431,7 @@ suite "registers: updateLatestDeletedRegister":
 
     block:
       # Again.
-      r.updateLatestDeletedRegister(@["def"].toSeqRunes)
+      r.setDeletedRegister(@["def"].toSeqRunes)
       check r.smallDelete == Register(buffer: @[].toSeqRunes, isLine: false)
       for i in 0 .. 9:
         if i == 1:
@@ -441,7 +441,7 @@ suite "registers: updateLatestDeletedRegister":
         else:
           check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
 
-suite "registers: updateNamedRegister":
+suite "registers: setNamedRegister":
   privateAccess(Registers)
 
   setup:
@@ -451,38 +451,38 @@ suite "registers: updateNamedRegister":
     block:
       const RegisterName = 'a'
 
-      r.updateNamedRegister(RegisterName, ru"abc")
+      r.setNamedRegister(ru"abc", RegisterName)
       check r.named[RegisterName] == Register(buffer: @["abc"].toSeqRunes, isLine: false)
 
     block:
       const RegisterName = 'A'
 
-      r.updateNamedRegister(RegisterName, ru"abc")
+      r.setNamedRegister(ru"abc", RegisterName)
       check r.named[RegisterName] == Register(buffer: @["abc"].toSeqRunes, isLine: false)
 
   test "Lines":
     block:
       const RegisterName = 'a'
 
-      r.updateNamedRegister(RegisterName, @["abc"].toSeqRunes)
+      r.setNamedRegister(@["abc"].toSeqRunes, RegisterName)
       check r.named[RegisterName] == Register(buffer: @["abc"].toSeqRunes, isLine: true)
 
     block:
       const RegisterName = 'A'
 
-      r.updateNamedRegister(RegisterName, @["abc"].toSeqRunes)
+      r.setNamedRegister(@["abc"].toSeqRunes, RegisterName)
       check r.named[RegisterName] == Register(buffer: @["abc"].toSeqRunes, isLine: true)
 
   test "Overwrite":
     const RegisterName = 'a'
 
     block:
-      r.updateNamedRegister(RegisterName, ru"abc")
+      r.setNamedRegister(ru"abc", RegisterName)
       check r.named[RegisterName] == Register(buffer: @["abc"].toSeqRunes, isLine: false)
 
     block:
       # Again.
-      r.updateNamedRegister(RegisterName, ru"def")
+      r.setNamedRegister(ru"def", RegisterName)
       check r.named[RegisterName] == Register(buffer: @["def"].toSeqRunes, isLine: false)
 
 

@@ -2131,7 +2131,7 @@ suite "Normal mode: Run command when Readonly mode":
     var settings = initEditorSettings()
     settings.clipboard.enable = false
 
-    status.registers.updateYankedRegister(ru"def")
+    status.registers.setYankedRegister(ru"def")
 
     const Command = ru "p"
     check status.normalCommand(Command).isNone
@@ -3040,7 +3040,7 @@ suite "Normal mode: pasteAfterCursor":
     status.resize(100, 100)
     status.update
 
-    status.registers.updateYankedRegister(@[ru"line"])
+    status.registers.setYankedRegister(@[ru"line"])
     status.pasteAfterCursor
 
     check currentBufStatus.buffer.toSeqRunes == @[ru"", ru"line"]
@@ -3055,7 +3055,7 @@ suite "Normal mode: pasteAfterCursor":
     status.resize(100, 100)
     status.update
 
-    status.registers.updateYankedRegister(@[ru"  line"])
+    status.registers.setYankedRegister(@[ru"  line"])
     status.pasteAfterCursor
 
     check currentBufStatus.buffer.toSeqRunes == @[ru"", ru"  line", ru""]
@@ -3070,7 +3070,7 @@ suite "Normal mode: pasteBeforeCursor":
     status.resize(100, 100)
     status.update
 
-    status.registers.updateYankedRegister(@[ru"line"])
+    status.registers.setYankedRegister(@[ru"line"])
     status.pasteBeforeCursor
 
     check currentBufStatus.buffer.toSeqRunes == @[ru"line", ru""]
@@ -3085,7 +3085,7 @@ suite "Normal mode: pasteBeforeCursor":
     status.resize(100, 100)
     status.update
 
-    status.registers.updateYankedRegister(@[ru"  line"])
+    status.registers.setYankedRegister(@[ru"  line"])
     status.pasteBeforeCursor
 
     check currentBufStatus.buffer.toSeqRunes == @[ru"  line", ru"", ru""]

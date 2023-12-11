@@ -61,7 +61,7 @@ proc yankBuffer(
     if area.startLine == area.endLine:
       if bufStatus.buffer[windowNode.currentLine].len < 1:
           # Yank the empty string if the empty line
-          registers.updateYankedRegister(@[ru""])
+          registers.setYankedRegister(@[ru""])
       else:
         # Yank the text in the line.
         var yankRunes = ru ""
@@ -74,7 +74,7 @@ proc yankBuffer(
         for j in area.startColumn .. endColumn:
           yankRunes.add(bufStatus.buffer[area.startLine][j])
 
-        registers.updateYankedRegister(yankRunes)
+        registers.setYankedRegister(yankRunes)
     else:
       var yankLines: seq[Runes]
       for i in area.startLine .. area.endLine:
@@ -90,7 +90,7 @@ proc yankBuffer(
         else:
           yankLines.add(bufStatus.buffer[i])
 
-      registers.updateYankedRegister(yankLines)
+      registers.setYankedRegister(yankLines)
 
     windowNode.moveCursor(firstCursorPosition)
 
@@ -111,7 +111,7 @@ proc yankBufferBlock(
       for j in area.startColumn .. min(bufStatus.buffer[i].high, area.endColumn):
         yankedBuffer[^1].add(bufStatus.buffer[i][j])
 
-    registers.updateYankedRegister(yankedBuffer)
+    registers.setYankedRegister(yankedBuffer)
 
 proc deleteBuffer(
   bufStatus: var BufferStatus,
