@@ -139,18 +139,20 @@ suite "registers: setNoNamedRegister":
     check not r.noNamed.isLine
 
   test "Runes with Clipboad (xsel)":
-    if not isXAvailable(): skip()
-
-    r.setClipboardTool(ClipboardTool.xsel)
-    r.setNoNamedRegister(ru"abc")
+    if not isXAvailable():
+      skip()
+    else:
+      r.setClipboardTool(ClipboardTool.xsel)
+      r.setNoNamedRegister(ru"abc")
 
     check "abc" == getClipboardBuffer(ClipboardTool.xsel)
 
   test "Lines with Clipboad (xsel)":
-    if not isXAvailable(): skip()
-
-    r.setClipboardTool(ClipboardTool.xsel)
-    r.setNoNamedRegister(@["abc", "def"].toSeqRunes)
+    if not isXAvailable():
+      skip()
+    else:
+      r.setClipboardTool(ClipboardTool.xsel)
+      r.setNoNamedRegister(@["abc", "def"].toSeqRunes)
 
     check "abc\ndef" == getClipboardBuffer(ClipboardTool.xsel)
 
@@ -598,140 +600,148 @@ suite "registers: trySetClipBoardRegister":
     var r = initRegisters()
 
   test "xsel: Runes":
-    if not isXselAvailable(): skip()
+    if not isXselAvailable():
+      skip()
+    else:
+      r.setClipboardTool(ClipboardTool.xsel)
 
-    r.setClipboardTool(ClipboardTool.xsel)
+      assert clearXsel()
+      assert setBufferToXsel("abc")
 
-    assert clearXsel()
-    assert setBufferToXsel("abc")
+      check r.trySetClipBoardRegister
 
-    check r.trySetClipBoardRegister
+      check r.clipboard.buffer == @["abc"].toSeqRunes
+      check not r.clipboard.isLine
 
-    check r.clipboard.buffer == @["abc"].toSeqRunes
-    check not r.clipboard.isLine
-
-    check r.noNamed.buffer == @["abc"].toSeqRunes
-    check not r.noNamed.isLine
+      check r.noNamed.buffer == @["abc"].toSeqRunes
+      check not r.noNamed.isLine
 
   test "xsel: Lines":
-    if not isXselAvailable(): skip()
+    if not isXselAvailable():
+      skip()
+    else:
+      r.setClipboardTool(ClipboardTool.xsel)
 
-    r.setClipboardTool(ClipboardTool.xsel)
+      assert clearXsel()
+      assert setBufferToXsel("abc\ndef")
 
-    assert clearXsel()
-    assert setBufferToXsel("abc\ndef")
+      check r.trySetClipBoardRegister
 
-    check r.trySetClipBoardRegister
+      check r.clipboard.buffer == @["abc", "def"].toSeqRunes
+      check r.clipboard.isLine
 
-    check r.clipboard.buffer == @["abc", "def"].toSeqRunes
-    check r.clipboard.isLine
-
-    check r.noNamed.buffer == @["abc", "def"].toSeqRunes
-    check r.noNamed.isLine
+      check r.noNamed.buffer == @["abc", "def"].toSeqRunes
+      check r.noNamed.isLine
 
   test "xclip: Runes":
-    if not isXclipAvailable(): skip()
+    if not isXclipAvailable():
+      skip()
+    else:
+      r.setClipboardTool(ClipboardTool.xclip)
 
-    r.setClipboardTool(ClipboardTool.xclip)
+      assert clearXclip()
+      assert setBufferToXclip("abc")
 
-    assert clearXclip()
-    assert setBufferToXclip("abc")
+      check r.trySetClipBoardRegister
 
-    check r.trySetClipBoardRegister
+      check r.clipboard.buffer == @["abc"].toSeqRunes
+      check not r.clipboard.isLine
 
-    check r.clipboard.buffer == @["abc"].toSeqRunes
-    check not r.clipboard.isLine
-
-    check r.noNamed.buffer == @["abc"].toSeqRunes
-    check not r.noNamed.isLine
+      check r.noNamed.buffer == @["abc"].toSeqRunes
+      check not r.noNamed.isLine
 
   test "xclip: Lines":
-    if not isXselAvailable(): skip()
+    if not isXselAvailable():
+      skip()
+    else:
+      r.setClipboardTool(ClipboardTool.xclip)
 
-    r.setClipboardTool(ClipboardTool.xclip)
+      assert clearXclip()
+      assert setBufferToXsel("abc\ndef")
 
-    assert clearXclip()
-    assert setBufferToXsel("abc\ndef")
+      check r.trySetClipBoardRegister
 
-    check r.trySetClipBoardRegister
+      check r.clipboard.buffer == @["abc", "def"].toSeqRunes
+      check r.clipboard.isLine
 
-    check r.clipboard.buffer == @["abc", "def"].toSeqRunes
-    check r.clipboard.isLine
-
-    check r.noNamed.buffer == @["abc", "def"].toSeqRunes
-    check r.noNamed.isLine
+      check r.noNamed.buffer == @["abc", "def"].toSeqRunes
+      check r.noNamed.isLine
 
   test "wl-clipboard: Runes":
-    if not isWlClipboardAvailable(): skip()
+    if not isWlClipboardAvailable():
+      skip()
+    else:
+      r.setClipboardTool(ClipboardTool.wlClipboard)
 
-    r.setClipboardTool(ClipboardTool.wlClipboard)
+      assert clearWlClipboard()
+      assert setBufferToWlClipboard("abc")
 
-    assert clearWlClipboard()
-    assert setBufferToWlClipboard("abc")
+      check r.trySetClipBoardRegister
 
-    check r.trySetClipBoardRegister
+      check r.clipboard.buffer == @["abc"].toSeqRunes
+      check not r.clipboard.isLine
 
-    check r.clipboard.buffer == @["abc"].toSeqRunes
-    check not r.clipboard.isLine
-
-    check r.noNamed.buffer == @["abc"].toSeqRunes
-    check not r.noNamed.isLine
+      check r.noNamed.buffer == @["abc"].toSeqRunes
+      check not r.noNamed.isLine
 
   test "wl-clipboard: Lines":
-    if not isWlClipboardAvailable(): skip()
+    if not isWlClipboardAvailable():
+      skip()
+    else:
+      r.setClipboardTool(ClipboardTool.wlClipboard)
 
-    r.setClipboardTool(ClipboardTool.wlClipboard)
+      assert clearWlClipboard()
+      assert setBufferToWlClipboard("abc\ndef")
 
-    assert clearWlClipboard()
-    assert setBufferToWlClipboard("abc\ndef")
+      check r.trySetClipBoardRegister
 
-    check r.trySetClipBoardRegister
+      check r.clipboard.buffer == @["abc", "def"].toSeqRunes
+      check r.clipboard.isLine
 
-    check r.clipboard.buffer == @["abc", "def"].toSeqRunes
-    check r.clipboard.isLine
-
-    check r.noNamed.buffer == @["abc", "def"].toSeqRunes
-    check r.noNamed.isLine
+      check r.noNamed.buffer == @["abc", "def"].toSeqRunes
+      check r.noNamed.isLine
 
   test "Don't set":
-    if not isXclipAvailable(): skip()
+    if not isXclipAvailable():
+      skip()
+    else:
+      r.setClipboardTool(ClipboardTool.xclip)
 
-    r.setClipboardTool(ClipboardTool.xclip)
+      assert clearXclip()
+      assert setBufferToXclip("abc")
 
-    assert clearXclip()
-    assert setBufferToXclip("abc")
+      check r.trySetClipBoardRegister
+      r.setYankedRegister(ru"def")
 
-    check r.trySetClipBoardRegister
-    r.setYankedRegister(ru"def")
+      # Again and ignore.
+      check r.trySetClipBoardRegister
 
-    # Again and ignore.
-    check r.trySetClipBoardRegister
+      check r.clipboard.buffer == @["def"].toSeqRunes
+      check not r.clipboard.isLine
 
-    check r.clipboard.buffer == @["def"].toSeqRunes
-    check not r.clipboard.isLine
-
-    check r.noNamed.buffer == @["def"].toSeqRunes
-    check not r.noNamed.isLine
+      check r.noNamed.buffer == @["def"].toSeqRunes
+      check not r.noNamed.isLine
 
 suite "registers: getClipBoardRegister":
   privateAccess(Registers)
 
   test "Basic":
-    if not isXclipAvailable(): skip()
+    if not isXclipAvailable():
+      skip()
+    else:
+      var registers = initRegisters()
 
-    var registers = initRegisters()
+      registers.setClipboardTool(ClipboardTool.xclip)
 
-    registers.setClipboardTool(ClipboardTool.xclip)
+      assert clearXclip()
+      assert setBufferToXclip("abc")
 
-    assert clearXclip()
-    assert setBufferToXclip("abc")
+      check registers.trySetClipBoardRegister
 
-    check registers.trySetClipBoardRegister
+      let r = registers.getClipBoardRegister
 
-    let r = registers.getClipBoardRegister
-
-    check r.buffer == @["abc"].toSeqRunes
-    check not r.isLine
+      check r.buffer == @["abc"].toSeqRunes
+      check not r.isLine
 
 suite "registers: addNormalModeOperation":
   privateAccess(Registers)
