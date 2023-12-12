@@ -69,9 +69,8 @@ suite "Editor: getRegister":
 
     status.registers.setNoNamedRegister(ru"abc")
 
-    check status.registers.getRegister == Register(
-      buffer: @["abc"].toSeqRunes,
-      isLine: false)
+    check status.registers.getRegister.buffer == @["abc"].toSeqRunes
+    check not status.registers.getRegister.isLine
 
   test "Named register":
     var status = initEditorStatus()
@@ -79,9 +78,9 @@ suite "Editor: getRegister":
     const RegisterName = 'a'
     status.registers.setNamedRegister(ru"abc", RegisterName)
 
-    check status.registers.getRegister($RegisterName) == Register(
-      buffer: @["abc"].toSeqRunes,
-      isLine: false)
+    let r = status.registers.getRegister($RegisterName)
+    check r.buffer == @["abc"].toSeqRunes
+    check not r.isLine
 
   test "Samll delete register":
     var status = initEditorStatus()
@@ -89,9 +88,9 @@ suite "Editor: getRegister":
     status.registers.setDeletedRegister(ru"abc")
 
     const RegisterName = '-'
-    check status.registers.getRegister($RegisterName) == Register(
-      buffer: @["abc"].toSeqRunes,
-      isLine: false)
+    let r = status.registers.getRegister($RegisterName)
+    check r.buffer == @["abc"].toSeqRunes
+    check not r.isLine
 
   test "Number register":
     var status = initEditorStatus()
@@ -99,9 +98,9 @@ suite "Editor: getRegister":
     status.registers.setDeletedRegister(@["abc"].toSeqRunes)
 
     const RegisterName = '1'
-    check status.registers.getRegister($RegisterName) == Register(
-      buffer: @["abc"].toSeqRunes,
-      isLine: true)
+    let r = status.registers.getRegister($RegisterName)
+    check r.buffer == @["abc"].toSeqRunes
+    check r.isLine
 
 suite "Editor: Auto indent":
   test "Auto indent in current Line":
@@ -1235,10 +1234,9 @@ suite "Editor: insertLinesFromRegister":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
 
-    const
-      Register = Register(buffer: @[ru""], isLine: true)
-      Position = 1
-    currentBufStatus.insertLinesFromRegister(Position, Register)
+    const Position = 1
+    let register = Register(buffer: @[ru""], isLine: true)
+    currentBufStatus.insertLinesFromRegister(Position, register)
 
     check currentBufStatus.buffer.len == 2
     check currentBufStatus.buffer.toSeqRunes == @[ru"abc", ru""]
@@ -1248,10 +1246,9 @@ suite "Editor: insertLinesFromRegister":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
 
-    const
-      Register = Register(buffer: @[ru"def", ru"ghi"], isLine: true)
-      Position = 0
-    currentBufStatus.insertLinesFromRegister(Position, Register)
+    const Position = 0
+    let register = Register(buffer: @[ru"def", ru"ghi"], isLine: true)
+    currentBufStatus.insertLinesFromRegister(Position, register)
 
     check currentBufStatus.buffer.len == 3
     check currentBufStatus.buffer.toSeqRunes == @[ru"def", ru"ghi", ru"abc"]
@@ -1265,10 +1262,9 @@ suite "Editor: insertRunesFromRegister":
     status.resize(100, 100)
     status.update
 
-    const
-      Register = Register(buffer: @[ru""])
-      Position = BufferPosition(line: 0, column: 0)
-    currentBufStatus.insertRunesFromRegister(Position, Register)
+    const Position = BufferPosition(line: 0, column: 0)
+    let register = Register(buffer: @[ru""])
+    currentBufStatus.insertRunesFromRegister(Position, register)
 
     check currentBufStatus.buffer.toSeqRunes == @[ru"abc"]
     check currentBufStatus.countChange == 0
@@ -1282,10 +1278,9 @@ suite "Editor: insertRunesFromRegister":
     status.resize(100, 100)
     status.update
 
-    const
-      Register = Register(buffer: @[ru"abc"])
-      Position = BufferPosition(line: 0, column: 0)
-    currentBufStatus.insertRunesFromRegister(Position, Register)
+    const Position = BufferPosition(line: 0, column: 0)
+    let register = Register(buffer: @[ru"abc"])
+    currentBufStatus.insertRunesFromRegister(Position, register)
 
     check currentBufStatus.buffer.toSeqRunes == @[ru"abc"]
     check currentBufStatus.countChange == 1
@@ -1299,10 +1294,9 @@ suite "Editor: insertRunesFromRegister":
     status.resize(100, 100)
     status.update
 
-    const
-      Register = Register(buffer: @[ru"def"])
-      Position = BufferPosition(line: 0, column: 3)
-    currentBufStatus.insertRunesFromRegister(Position, Register)
+    const Position = BufferPosition(line: 0, column: 3)
+    let register = Register(buffer: @[ru"def"])
+    currentBufStatus.insertRunesFromRegister(Position, register)
 
     check currentBufStatus.buffer.toSeqRunes == @[ru"abcdef"]
     check currentBufStatus.countChange == 1
@@ -1316,10 +1310,9 @@ suite "Editor: insertRunesFromRegister":
     status.resize(100, 100)
     status.update
 
-    const
-      Register = Register(buffer: @[ru"def"])
-      Position = BufferPosition(line: 0, column: 1)
-    currentBufStatus.insertRunesFromRegister(Position, Register)
+    const Position = BufferPosition(line: 0, column: 1)
+    let register = Register(buffer: @[ru"def"])
+    currentBufStatus.insertRunesFromRegister(Position, register)
 
     check currentBufStatus.buffer.toSeqRunes == @[ru"adefbc"]
     check currentBufStatus.countChange == 1
@@ -1772,9 +1765,8 @@ if isXselAvailable():
         Loop,
         status.settings)
 
-      check status.registers.getNoNamedRegister == Register(
-        buffer: @[ru "abc "],
-        isLine: false)
+      check status.registers.getNoNamedRegister.buffer == @["abc "].toSeqRunes
+      check not status.registers.getNoNamedRegister.isLine
 
       # Check clipboad
       let p = initPlatform()
@@ -1908,9 +1900,8 @@ suite "Editor: Delete from the previous blank line to the current line":
     check currentBufStatus.buffer[0] == ru "abc"
     check currentBufStatus.buffer[1] == ru "ghi"
 
-    check status.registers.getNoNamedRegister == Register(
-      buffer: @[ru "", ru "def"],
-      isLine: true)
+    check status.registers.getNoNamedRegister.buffer == @["", "def"].toSeqRunes
+    check status.registers.getNoNamedRegister.isLine
 
   test "Delete lines 2":
     var status = initEditorStatus()
@@ -1934,9 +1925,9 @@ suite "Editor: Delete from the previous blank line to the current line":
     check currentBufStatus.buffer[0] == ru "abc"
     check currentBufStatus.buffer[1] == ru "hi"
 
-    check status.registers.getNoNamedRegister == Register(
-      buffer: @[ru "", ru "def", ru "g"],
-      isLine: true)
+    check status.registers.getNoNamedRegister.buffer == @["", "def", "g"]
+      .toSeqRunes
+    check status.registers.getNoNamedRegister.isLine
 
 suite "Editor: Delete from the current line to the next blank line":
   test "Delete lines":
@@ -1959,9 +1950,9 @@ suite "Editor: Delete from the current line to the next blank line":
     check currentBufStatus.buffer[0] == ru ""
     check currentBufStatus.buffer[1] == ru "ghi"
 
-    check status.registers.getNoNamedRegister == Register(
-      buffer: @[ru "abc", ru "def"],
-      isLine: true)
+    check status.registers.getNoNamedRegister.buffer == @["abc", "def"]
+      .toSeqRunes
+    check status.registers.getNoNamedRegister.isLine
 
   test "Delete lines 2":
     var status = initEditorStatus()
@@ -1984,9 +1975,9 @@ suite "Editor: Delete from the current line to the next blank line":
     check currentBufStatus.buffer[1] == ru ""
     check currentBufStatus.buffer[2] == ru "ghi"
 
-    check status.registers.getNoNamedRegister == Register(
-      buffer: @[ru "bc", ru "def"],
-      isLine: true)
+    check status.registers.getNoNamedRegister.buffer == @["bc", "def"]
+      .toSeqRunes
+    check status.registers.getNoNamedRegister.isLine
 
 suite "Editor: Replace characters":
   test "Repace a character":
