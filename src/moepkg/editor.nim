@@ -55,13 +55,14 @@ proc isEmptyLine(
 
     bufStatus.buffer[windowNode.currentLine].len == 0
 
-proc getRegister(r: Registers, name: string = ""): Register =
-  ## Return no named, named or number or small delete register.
+proc getRegister(r: var Registers, name: string = ""): Register =
+  ## Return no named, named or number or small delete or clipboard register.
 
   if name.len == 0: return r.getNoNamedRegister
   elif name.isNamedRegisterName: return r.getNamedRegister(name)
   elif name.isNumberRegisterName: return r.getNumberRegister(name)
   elif name.isSmallDeleteRegisterName: return r.getSmallDeleteRegister
+  elif name.isClipBoardRegisterName: return r.getClipBoardRegister
 
 proc insertCharacter*(
   bufStatus: var BufferStatus,
@@ -1724,7 +1725,7 @@ proc pasteAfterCursor*(
 proc pasteAfterCursor*(
   bufStatus: var BufferStatus,
   windowNode: var WindowNode,
-  registers: Registers,
+  registers: var Registers,
   registerName: string = "") =
     ## The buffer get from the named register.
 
@@ -1763,7 +1764,7 @@ proc pasteBeforeCursor*(
 proc pasteBeforeCursor*(
   bufStatus: var BufferStatus,
   windowNode: var WindowNode,
-  registers: Registers,
+  registers: var Registers,
   registerName: string = "") =
     ## The buffer get from the register.
 
