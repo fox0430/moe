@@ -67,7 +67,7 @@ proc sendToClipboard*(buffer: Runes, tool: ClipboardTool) {.inline.} =
 proc getBufferFromClipboard*(tool: ClipboardTool): Result[Runes, string] =
   ## Return the buffer from the OS clipboard.
 
-  if tool == none: return
+  if tool == ClipboardTool.none: return
 
   let cmd =
     case tool:

@@ -114,7 +114,7 @@ proc initRegisters*(): Registers =
 proc setClipboardTool*(r: var Registers, tool: ClipboardTool) {.inline.} =
   ## Set the clipboard tool for Linux and init the clipboard register.
 
-  if tool != none:
+  if tool != ClipboardTool.none:
     r.clipboardTool = some(tool)
     r.clipboard = initClipBoardRegister(now())
 
