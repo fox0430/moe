@@ -20,7 +20,7 @@
 import std/[os, times]
 import pkg/results
 import ui, bufferstatus, editorstatus, cmdlineoption, git, editorview, theme,
-       settings, messages, logger
+       settings, messages, logger, registers
 
 proc loadPersistData(status: var EditorStatus) =
   ## Load persisted data (Ex command history, search history and cursor
@@ -135,6 +135,8 @@ proc initEditor*(): EditorStatus =
   result.loadPersistData
 
   result.initSidebar
+
+  result.registers.setClipBoardTool(result.settings.clipboard.toolOnLinux)
 
   disableControlC()
   catchTerminalResize()

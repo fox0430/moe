@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, tables, importutils, osproc]
+import std/[unittest, options, tables, importutils, osproc, os]
 import pkg/results
 import moepkg/[unicodeext, settings, independentutils]
 
@@ -26,11 +26,32 @@ import moepkg/registers {.all.}
 proc isXAvailable(): bool {.inline.} =
   execCmdExNoOutput("xset q") == 0
 
-proc isXselAvailable(): bool {.inline.} =
+template isXselAvailable(): bool =
   isXAvailable() and execCmdExNoOutput("xsel --version") == 0
 
-proc isXclipAvailable(): bool {.inline.} =
+template isXclipAvailable(): bool =
   isXAvailable() and execCmdExNoOutput("xclip -version") == 0
+
+template isWlClipboardAvailable(): bool =
+  isXAvailable() and execCmdExNoOutput("wl-paste --version") == 0
+
+template setBufferToXsel(buf: string): bool =
+  execShellCmd("printf '" & buf & "' | xsel -pi") == 0
+
+template setBufferToXclip(buf: string): bool =
+  execShellCmd("printf '" & buf & "' | xclip") == 0
+
+template setBufferToWlClipboard(buf: string): bool =
+  execShellCmd("printf '" & buf & "' | wl-copy") == 0
+
+template clearXsel(): bool =
+  execShellCmd("printf '' | xsel") == 0
+
+template clearXclip(): bool =
+  execShellCmd("printf '' | xclip") == 0
+
+template clearWlClipboard(): bool =
+  execShellCmd("printf '' | wl-copy") == 0
 
 proc getClipboardBuffer(tool: ClipboardTool): string =
   case tool:
@@ -60,24 +81,29 @@ suite "registers: update (Register)":
   test "Runes":
     r.set(ru"abc")
 
-    check r == Register(buffer: @["abc"].toSeqRunes, isLine: false)
+    check r.buffer == @["abc"].toSeqRunes
+    check not r.isLine
 
   test "Lines":
     r.set(@["abc"].toSeqRunes)
 
-    check r == Register(buffer: @["abc"].toSeqRunes, isLine: true)
+    check r.buffer == @["abc"].toSeqRunes
+    check r.isLine
 
   test "Lines 2":
     r.set(@["abc", "def"].toSeqRunes)
 
-    check r == Register(buffer: @["abc", "def"].toSeqRunes, isLine: true)
+    check r.buffer == @["abc", "def"].toSeqRunes
+    check r.isLine
 
   test "Overwrite":
     r.set(ru"abc")
-    check r == Register(buffer: @["abc"].toSeqRunes, isLine: false)
+    check r.buffer == @["abc"].toSeqRunes
+    check not r.isLine
 
     r.set(ru"def")
-    check r == Register(buffer: @["def"].toSeqRunes, isLine: false)
+    check r.buffer == @["def"].toSeqRunes
+    check not r.isLine
 
 suite "registers: setNoNamedRegister":
   privateAccess(Registers)
@@ -88,40 +114,45 @@ suite "registers: setNoNamedRegister":
   test "Runes":
     r.setNoNamedRegister(ru"abc")
 
-    check r.noNamed == Register(buffer: @["abc"].toSeqRunes, isLine: false)
+    check r.noNamed.buffer == @["abc"].toSeqRunes
+    check not r.noNamed.isLine
 
   test "Lines":
     r.setNoNamedRegister(@["abc"].toSeqRunes)
 
-    check r.noNamed == Register(buffer: @["abc"].toSeqRunes, isLine: true)
+    check r.noNamed.buffer == @["abc"].toSeqRunes
+    check r.noNamed.isLine
 
   test "Lines 2":
     r.setNoNamedRegister(@["abc", "def"].toSeqRunes)
 
-    check r.noNamed == Register(
-      buffer: @["abc", "def"].toSeqRunes,
-      isLine: true)
+    check r.noNamed.buffer == @["abc", "def"].toSeqRunes
+    check r.noNamed.isLine
 
   test "Overwrite":
     r.setNoNamedRegister(ru"abc")
-    check r.noNamed == Register(buffer: @["abc"].toSeqRunes, isLine: false)
+    check r.noNamed.buffer == @["abc"].toSeqRunes
+    check not r.noNamed.isLine
 
     r.setNoNamedRegister(ru"def")
-    check r.noNamed == Register(buffer: @["def"].toSeqRunes, isLine: false)
+    check r.noNamed.buffer == @["def"].toSeqRunes
+    check not r.noNamed.isLine
 
   test "Runes with Clipboad (xsel)":
-    if not isXAvailable(): skip()
-
-    r.setClipboardTool(ClipboardTool.xsel)
-    r.setNoNamedRegister(ru"abc")
+    if not isXAvailable():
+      skip()
+    else:
+      r.setClipboardTool(ClipboardTool.xsel)
+      r.setNoNamedRegister(ru"abc")
 
     check "abc" == getClipboardBuffer(ClipboardTool.xsel)
 
   test "Lines with Clipboad (xsel)":
-    if not isXAvailable(): skip()
-
-    r.setClipboardTool(ClipboardTool.xsel)
-    r.setNoNamedRegister(@["abc", "def"].toSeqRunes)
+    if not isXAvailable():
+      skip()
+    else:
+      r.setClipboardTool(ClipboardTool.xsel)
+      r.setNoNamedRegister(@["abc", "def"].toSeqRunes)
 
     check "abc\ndef" == getClipboardBuffer(ClipboardTool.xsel)
 
@@ -135,7 +166,8 @@ suite "registers: update (NumberRegister)":
       RegisterNumber = 0
     r.set(ru"abc", RegisterNumber, IsShift)
 
-    check r[0] == Register(buffer: @["abc"].toSeqRunes, isLine: false)
+    check r[0].buffer == @["abc"].toSeqRunes
+    check not r[0].isLine
 
   test "Lines (Register 0)":
     const
@@ -143,7 +175,8 @@ suite "registers: update (NumberRegister)":
       RegisterNumber = 0
     r.set(@["abc"].toSeqRunes, RegisterNumber, IsShift)
 
-    check r[0] == Register(buffer: @["abc"].toSeqRunes, isLine: true)
+    check r[0].buffer == @["abc"].toSeqRunes
+    check r[0].isLine
 
   test "Overwrite Yank register (Register 0)":
     const
@@ -151,10 +184,12 @@ suite "registers: update (NumberRegister)":
       RegisterNumber = 0
 
     r.set(ru"abc", RegisterNumber, IsShift)
-    check r[0] == Register(buffer: @["abc"].toSeqRunes, isLine: false)
+    check r[0].buffer == @["abc"].toSeqRunes
+    check not r[0].isLine
 
     r.set(ru"def", RegisterNumber, IsShift)
-    check r[0] == Register(buffer: @["def"].toSeqRunes, isLine: false)
+    check r[0].buffer == @["def"].toSeqRunes
+    check not r[0].isLine
 
   test "Latest delete runes (Register 1)":
     const
@@ -162,7 +197,8 @@ suite "registers: update (NumberRegister)":
       RegisterNumber = 1
     r.set(ru"abc", RegisterNumber, IsShift)
 
-    check r[1] == Register(buffer: @["abc"].toSeqRunes, isLine: false)
+    check r[1].buffer == @["abc"].toSeqRunes
+    check not r[1].isLine
 
   test "Latest delete lines (Register 1)":
     const
@@ -170,7 +206,8 @@ suite "registers: update (NumberRegister)":
       RegisterNumber = 1
     r.set(@["abc"].toSeqRunes, RegisterNumber, IsShift)
 
-    check r[1] == Register(buffer: @["abc"].toSeqRunes, isLine: true)
+    check r[1].buffer == @["abc"].toSeqRunes
+    check r[1].isLine
 
   test "Shift previous registers (Register 1 ~ 9)":
     for i in 1 .. 9:
@@ -181,7 +218,9 @@ suite "registers: update (NumberRegister)":
 
     var exceptBuffer = 9
     for i in 1 .. 9:
-      check r[i] == Register(buffer: @[toRunes($exceptBuffer)], isLine: false)
+      check r[i].buffer == @[$exceptBuffer].toSeqRunes
+      check not r[i].isLine
+
       exceptBuffer.dec
 
     # Stat shift
@@ -193,9 +232,8 @@ suite "registers: update (NumberRegister)":
 
       if i > 1 and i < 10:
         for j in countdown(i, 1):
-          check r[j] == Register(
-            buffer: @[$(i + 11 - j)].toSeqRunes,
-            isLine: false)
+          check r[j].buffer == @[$(i + 11 - j)].toSeqRunes
+          check not r[j].isLine
 
   test "Don't shift":
     for i in 1 .. 9:
@@ -215,9 +253,11 @@ suite "registers: update (NumberRegister)":
       var exceptBuffer = 9
       for i in 1 .. 9:
         if i == 1:
-          check r[i] == Register(buffer: @["a"].toSeqRunes, isLine: false)
+          check r[i].buffer == @["a"].toSeqRunes
+          check not r[i].isLine
         else:
-          check r[i] == Register(buffer: @[$exceptBuffer].toSeqRunes, isLine: false)
+          check r[i].buffer == @[$exceptBuffer].toSeqRunes
+          check not r[i].isLine
 
         exceptBuffer.dec
 
@@ -231,11 +271,14 @@ suite "registers: update (NumberRegister)":
       var exceptBuffer = 9
       for i in 1 .. 9:
         if i == 1:
-          check r[i] == Register(buffer: @["a"].toSeqRunes, isLine: false)
+          check r[i].buffer == @["a"].toSeqRunes
+          check not r[i].isLine
         elif i == 5:
-          check r[i] == Register(buffer: @["b"].toSeqRunes, isLine: false)
+          check r[i].buffer == @["b"].toSeqRunes
+          check not r[i].isLine
         else:
-          check r[i] == Register(buffer: @[$exceptBuffer].toSeqRunes, isLine: false)
+          check r[i].buffer == @[$exceptBuffer].toSeqRunes
+          check not r[i].isLine
 
         exceptBuffer.dec
 
@@ -253,9 +296,11 @@ suite "registers: setNumberRegister":
 
     for i in 0 .. 9:
       if i == 0:
-        check r.number[i] == Register(buffer: @["abc"].toSeqRunes, isLine: false)
+        check r.number[i].buffer == @["abc"].toSeqRunes
+        check not r.number[i].isLine
       else:
-        check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
+        check r.number[i].buffer == @[].toSeqRunes
+        check not r.number[i].isLine
 
   test "Lines (Register 0)":
     const
@@ -265,9 +310,11 @@ suite "registers: setNumberRegister":
 
     for i in 0 .. 9:
       if i == 0:
-        check r.number[i] == Register(buffer: @["abc"].toSeqRunes, isLine: true)
+        check r.number[i].buffer == @["abc"].toSeqRunes
+        check r.number[i].isLine
       else:
-        check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
+        check r.number[i].buffer == @[].toSeqRunes
+        check not r.number[i].isLine
 
   test "Runes (Register 1)":
     const
@@ -278,18 +325,22 @@ suite "registers: setNumberRegister":
       r.setNumberRegister(ru"abc", RegisterNumber, IsShift)
       for i in 0 .. 9:
         if i == 1:
-          check r.number[i] == Register(buffer: @["abc"].toSeqRunes, isLine: false)
+          check r.number[i].buffer == @["abc"].toSeqRunes
+          check not r.number[i].isLine
         else:
-          check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
+          check r.number[i].buffer == @[].toSeqRunes
+          check not r.number[i].isLine
 
     block:
       # Again.
       r.setNumberRegister(ru"def", RegisterNumber, IsShift)
       for i in 0 .. 9:
         if i == 1:
-          check r.number[i] == Register(buffer: @["def"].toSeqRunes, isLine: false)
+          check r.number[i].buffer == @["def"].toSeqRunes
+          check not r.number[i].isLine
         else:
-          check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
+          check r.number[i].buffer == @[].toSeqRunes
+          check not r.number[i].isLine
 
   test "Lines (Register 1)":
     const
@@ -300,18 +351,22 @@ suite "registers: setNumberRegister":
       r.setNumberRegister(@["abc"].toSeqRunes, RegisterNumber, IsShift)
       for i in 0 .. 9:
         if i == 1:
-          check r.number[i] == Register(buffer: @["abc"].toSeqRunes, isLine: true)
+          check r.number[i].buffer == @["abc"].toSeqRunes
+          check r.number[i].isLine
         else:
-          check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
+          check r.number[i].buffer == @[].toSeqRunes
+          check not r.number[i].isLine
 
     block:
       # Again.
       r.setNumberRegister(@["def"].toSeqRunes, RegisterNumber, IsShift)
       for i in 0 .. 9:
         if i == 1:
-          check r.number[i] == Register(buffer: @["def"].toSeqRunes, isLine: true)
+          check r.number[i].buffer == @["def"].toSeqRunes
+          check r.number[i].isLine
         else:
-          check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
+          check r.number[i].buffer == @[].toSeqRunes
+          check not r.number[i].isLine
 
   test "Runes and shift (Register 1)":
     const
@@ -322,20 +377,25 @@ suite "registers: setNumberRegister":
       r.setNumberRegister(ru"abc", RegisterNumber, IsShift)
       for i in 0 .. 9:
         if i == 1:
-          check r.number[i] == Register(buffer: @["abc"].toSeqRunes, isLine: false)
+          check r.number[i].buffer == @["abc"].toSeqRunes
+          check not r.number[i].isLine
         else:
-          check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
+          check r.number[i].buffer == @[].toSeqRunes
+          check not r.number[i].isLine
 
     block:
       # Again.
       r.setNumberRegister(ru"def", RegisterNumber, IsShift)
       for i in 0 .. 9:
         if i == 1:
-          check r.number[i] == Register(buffer: @["def"].toSeqRunes, isLine: false)
+          check r.number[i].buffer == @["def"].toSeqRunes
+          check not r.number[i].isLine
         elif i == 2:
-          check r.number[i] == Register(buffer: @["abc"].toSeqRunes, isLine: false)
+          check r.number[i].buffer == @["abc"].toSeqRunes
+          check not r.number[i].isLine
         else:
-          check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
+          check r.number[i].buffer == @[].toSeqRunes
+          check not r.number[i].isLine
 
   test "Lines and shift (Register 1)":
     const
@@ -346,20 +406,25 @@ suite "registers: setNumberRegister":
       r.setNumberRegister(@["abc"].toSeqRunes, RegisterNumber, IsShift)
       for i in 0 .. 9:
         if i == 1:
-          check r.number[i] == Register(buffer: @["abc"].toSeqRunes, isLine: true)
+          check r.number[i].buffer == @["abc"].toSeqRunes
+          check r.number[i].isLine
         else:
-          check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
+          check r.number[i].buffer == @[].toSeqRunes
+          check not r.number[i].isLine
 
     block:
       # Again.
       r.setNumberRegister(@["def"].toSeqRunes, RegisterNumber, IsShift)
       for i in 0 .. 9:
         if i == 1:
-          check r.number[i] == Register(buffer: @["def"].toSeqRunes, isLine: true)
+          check r.number[i].buffer == @["def"].toSeqRunes
+          check r.number[i].isLine
         elif i == 2:
-          check r.number[i] == Register(buffer: @["abc"].toSeqRunes, isLine: true)
+          check r.number[i].buffer == @["abc"].toSeqRunes
+          check r.number[i].isLine
         else:
-          check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
+          check r.number[i].buffer == @[].toSeqRunes
+          check not r.number[i].isLine
 
 suite "registers: setYankedRegister":
   privateAccess(Registers)
@@ -372,36 +437,44 @@ suite "registers: setYankedRegister":
       r.setYankedRegister(ru"abc")
       for i in 0 .. 9:
         if i == 0:
-          check r.number[i] == Register(buffer: @["abc"].toSeqRunes, isLine: false)
+          check r.number[i].buffer == @["abc"].toSeqRunes
+          check not r.number[i].isLine
         else:
-          check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
+          check r.number[i].buffer == @[].toSeqRunes
+          check not r.number[i].isLine
 
     block:
       # Again.
       r.setYankedRegister(ru"def")
       for i in 0 .. 9:
         if i == 0:
-          check r.number[i] == Register(buffer: @["def"].toSeqRunes, isLine: false)
+          check r.number[i].buffer == @["def"].toSeqRunes
+          check not r.number[i].isLine
         else:
-          check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
+          check r.number[i].buffer == @[].toSeqRunes
+          check not r.number[i].isLine
 
   test "Lines":
     block:
       r.setYankedRegister(@["abc"].toSeqRunes)
       for i in 0 .. 9:
         if i == 0:
-          check r.number[i] == Register(buffer: @["abc"].toSeqRunes, isLine: true)
+          check r.number[i].buffer == @["abc"].toSeqRunes
+          check r.number[i].isLine
         else:
-          check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
+          check r.number[i].buffer == @[].toSeqRunes
+          check not r.number[i].isLine
 
     block:
       # Again.
       r.setYankedRegister(@["def"].toSeqRunes)
       for i in 0 .. 9:
         if i == 0:
-          check r.number[i] == Register(buffer: @["def"].toSeqRunes, isLine: true)
+          check r.number[i].buffer == @["def"].toSeqRunes
+          check r.number[i].isLine
         else:
-          check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
+          check r.number[i].buffer == @[].toSeqRunes
+          check not r.number[i].isLine
 
 suite "registers: setDeletedRegister":
   privateAccess(Registers)
@@ -412,34 +485,45 @@ suite "registers: setDeletedRegister":
   test "Runes (Small delete)":
     block:
       r.setDeletedRegister(ru"abc")
-      check r.smallDelete == Register(buffer: @["abc"].toSeqRunes, isLine: false)
+      check r.smallDelete.buffer == @["abc"].toSeqRunes
+      check not r.smallDelete.isLine
 
     block:
       # Again.
       r.setDeletedRegister(ru"def")
-      check r.smallDelete == Register(buffer: @["def"].toSeqRunes, isLine: false)
+      check r.smallDelete.buffer == @["def"].toSeqRunes
+      check not r.smallDelete.isLine
 
   test "Lines":
     block:
       r.setDeletedRegister(@["abc"].toSeqRunes)
-      check r.smallDelete == Register(buffer: @[].toSeqRunes, isLine: false)
+      check r.smallDelete.buffer == @[].toSeqRunes
+      check not r.smallDelete.isLine
+
       for i in 0 .. 9:
         if i == 1:
-          check r.number[i] == Register(buffer: @["abc"].toSeqRunes, isLine: true)
+          check r.number[i].buffer == @["abc"].toSeqRunes
+          check r.number[i].isLine
         else:
-          check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
+          check r.number[i].buffer == @[].toSeqRunes
+          check not r.number[i].isLine
 
     block:
       # Again.
       r.setDeletedRegister(@["def"].toSeqRunes)
-      check r.smallDelete == Register(buffer: @[].toSeqRunes, isLine: false)
+
+      check r.smallDelete.buffer == @[].toSeqRunes
+      check not r.smallDelete.isLine
       for i in 0 .. 9:
         if i == 1:
-          check r.number[i] == Register(buffer: @["def"].toSeqRunes, isLine: true)
+          check r.number[i].buffer == @["def"].toSeqRunes
+          check r.number[i].isLine
         elif i == 2:
-          check r.number[i] == Register(buffer: @["abc"].toSeqRunes, isLine: true)
+          check r.number[i].buffer == @["abc"].toSeqRunes
+          check r.number[i].isLine
         else:
-          check r.number[i] == Register(buffer: @[].toSeqRunes, isLine: false)
+          check r.number[i].buffer == @[].toSeqRunes
+          check not r.number[i].isLine
 
 suite "registers: setNamedRegister":
   privateAccess(Registers)
@@ -452,39 +536,212 @@ suite "registers: setNamedRegister":
       const RegisterName = 'a'
 
       r.setNamedRegister(ru"abc", RegisterName)
-      check r.named[RegisterName] == Register(buffer: @["abc"].toSeqRunes, isLine: false)
+      check r.named[RegisterName].buffer == @["abc"].toSeqRunes
+      check not r.named[RegisterName].isLine
 
     block:
       const RegisterName = 'A'
 
       r.setNamedRegister(ru"abc", RegisterName)
-      check r.named[RegisterName] == Register(buffer: @["abc"].toSeqRunes, isLine: false)
+      check r.named[RegisterName].buffer == @["abc"].toSeqRunes
+      check not r.named[RegisterName].isLine
 
   test "Lines":
     block:
       const RegisterName = 'a'
 
       r.setNamedRegister(@["abc"].toSeqRunes, RegisterName)
-      check r.named[RegisterName] == Register(buffer: @["abc"].toSeqRunes, isLine: true)
+      check r.named[RegisterName].buffer == @["abc"].toSeqRunes
+      check r.named[RegisterName].isLine
 
     block:
       const RegisterName = 'A'
 
       r.setNamedRegister(@["abc"].toSeqRunes, RegisterName)
-      check r.named[RegisterName] == Register(buffer: @["abc"].toSeqRunes, isLine: true)
+      check r.named[RegisterName].buffer == @["abc"].toSeqRunes
+      check r.named[RegisterName].isLine
 
   test "Overwrite":
     const RegisterName = 'a'
 
     block:
       r.setNamedRegister(ru"abc", RegisterName)
-      check r.named[RegisterName] == Register(buffer: @["abc"].toSeqRunes, isLine: false)
+      check r.named[RegisterName].buffer == @["abc"].toSeqRunes
+      check not r.named[RegisterName].isLine
 
     block:
       # Again.
       r.setNamedRegister(ru"def", RegisterName)
-      check r.named[RegisterName] == Register(buffer: @["def"].toSeqRunes, isLine: false)
+      check r.named[RegisterName].buffer == @["def"].toSeqRunes
+      check not r.named[RegisterName].isLine
 
+suite "registers: setClipBoardRegister":
+  privateAccess(Registers)
+
+  setup:
+    var r = initRegisters()
+
+  test "Runes":
+    r.setClipBoardRegister(ru"abc")
+
+    check r.clipboard.buffer == @["abc"].toSeqRunes
+    check not r.clipboard.isLine
+
+  test "Lines":
+    r.setClipBoardRegister(@["abc"].toSeqRunes)
+
+    check r.clipboard.buffer == @["abc"].toSeqRunes
+    check r.clipboard.isLine
+
+suite "registers: trySetClipBoardRegister":
+  privateAccess(Registers)
+
+  setup:
+    var r = initRegisters()
+
+  test "xsel: Runes":
+    if not isXselAvailable():
+      skip()
+    else:
+      r.setClipboardTool(ClipboardTool.xsel)
+
+      assert clearXsel()
+      assert setBufferToXsel("abc")
+
+      check r.trySetClipBoardRegister
+
+      check r.clipboard.buffer == @["abc"].toSeqRunes
+      check not r.clipboard.isLine
+
+      check r.noNamed.buffer == @["abc"].toSeqRunes
+      check not r.noNamed.isLine
+
+  test "xsel: Lines":
+    if not isXselAvailable():
+      skip()
+    else:
+      r.setClipboardTool(ClipboardTool.xsel)
+
+      assert clearXsel()
+      assert setBufferToXsel("abc\ndef")
+
+      check r.trySetClipBoardRegister
+
+      check r.clipboard.buffer == @["abc", "def"].toSeqRunes
+      check r.clipboard.isLine
+
+      check r.noNamed.buffer == @["abc", "def"].toSeqRunes
+      check r.noNamed.isLine
+
+  test "xclip: Runes":
+    if not isXclipAvailable():
+      skip()
+    else:
+      r.setClipboardTool(ClipboardTool.xclip)
+
+      assert clearXclip()
+      assert setBufferToXclip("abc")
+
+      check r.trySetClipBoardRegister
+
+      check r.clipboard.buffer == @["abc"].toSeqRunes
+      check not r.clipboard.isLine
+
+      check r.noNamed.buffer == @["abc"].toSeqRunes
+      check not r.noNamed.isLine
+
+  test "xclip: Lines":
+    if not isXselAvailable():
+      skip()
+    else:
+      r.setClipboardTool(ClipboardTool.xclip)
+
+      assert clearXclip()
+      assert setBufferToXsel("abc\ndef")
+
+      check r.trySetClipBoardRegister
+
+      check r.clipboard.buffer == @["abc", "def"].toSeqRunes
+      check r.clipboard.isLine
+
+      check r.noNamed.buffer == @["abc", "def"].toSeqRunes
+      check r.noNamed.isLine
+
+  test "wl-clipboard: Runes":
+    if not isWlClipboardAvailable():
+      skip()
+    else:
+      r.setClipboardTool(ClipboardTool.wlClipboard)
+
+      assert clearWlClipboard()
+      assert setBufferToWlClipboard("abc")
+
+      check r.trySetClipBoardRegister
+
+      check r.clipboard.buffer == @["abc"].toSeqRunes
+      check not r.clipboard.isLine
+
+      check r.noNamed.buffer == @["abc"].toSeqRunes
+      check not r.noNamed.isLine
+
+  test "wl-clipboard: Lines":
+    if not isWlClipboardAvailable():
+      skip()
+    else:
+      r.setClipboardTool(ClipboardTool.wlClipboard)
+
+      assert clearWlClipboard()
+      assert setBufferToWlClipboard("abc\ndef")
+
+      check r.trySetClipBoardRegister
+
+      check r.clipboard.buffer == @["abc", "def"].toSeqRunes
+      check r.clipboard.isLine
+
+      check r.noNamed.buffer == @["abc", "def"].toSeqRunes
+      check r.noNamed.isLine
+
+  test "Don't set":
+    if not isXclipAvailable():
+      skip()
+    else:
+      r.setClipboardTool(ClipboardTool.xclip)
+
+      assert clearXclip()
+      assert setBufferToXclip("abc")
+
+      check r.trySetClipBoardRegister
+      r.setYankedRegister(ru"def")
+
+      # Again and ignore.
+      check r.trySetClipBoardRegister
+
+      check r.clipboard.buffer == @["def"].toSeqRunes
+      check not r.clipboard.isLine
+
+      check r.noNamed.buffer == @["def"].toSeqRunes
+      check not r.noNamed.isLine
+
+suite "registers: getClipBoardRegister":
+  privateAccess(Registers)
+
+  test "Basic":
+    if not isXclipAvailable():
+      skip()
+    else:
+      var registers = initRegisters()
+
+      registers.setClipboardTool(ClipboardTool.xclip)
+
+      assert clearXclip()
+      assert setBufferToXclip("abc")
+
+      check registers.trySetClipBoardRegister
+
+      let r = registers.getClipBoardRegister
+
+      check r.buffer == @["abc"].toSeqRunes
+      check not r.isLine
 
 suite "registers: addNormalModeOperation":
   privateAccess(Registers)

@@ -17,7 +17,8 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[os, strutils]
+import std/[os, osproc, strformat, strutils]
+import pkg/results
 import independentutils, platform, settings, unicodeext
 
 proc linesToStrings(lines: seq[Runes]): string =
@@ -27,7 +28,7 @@ proc linesToStrings(lines: seq[Runes]): string =
 proc sendToClipboard*(
   buffer: seq[Runes],
   tool: ClipboardTool) =
-    ## Send the buffer to the OS clipboad (xclip, xsel, etc).
+    ## Send the buffer to the OS clipboard (xclip, xsel, etc).
 
     if buffer.len < 1: return
 
@@ -59,6 +60,28 @@ proc sendToClipboard*(
         discard
 
 proc sendToClipboard*(buffer: Runes, tool: ClipboardTool) {.inline.} =
-  ## Send the buffer to the OS clipboad (xclip, xsel, etc).
+  ## Send the buffer to the OS clipboard (xclip, xsel, etc).
 
   sendToClipboard(@[buffer], tool)
+
+proc getBufferFromClipboard*(tool: ClipboardTool): Result[Runes, string] =
+  ## Return the buffer from the OS clipboard.
+
+  if tool == ClipboardTool.none: return
+
+  let cmd =
+    case tool:
+      of xsel: "xsel -o"
+      of xclip: "xclip -o"
+      of wlClipboard: "wl-paste"
+      of wslDefault: "powershell.exe -Command Get-Clipboard"
+      of macOsDefault: "pbpaste"
+      else: ""
+
+  let cmdResult = execCmdEx(cmd)
+  if cmdResult.exitCode != 0:
+    return Result[Runes, string].err fmt"clipboard: Failed to get clipboard buffer: {$cmdResult}"
+
+  var buf = cmdResult.output
+  buf.stripLineEnd
+  return Result[Runes, string].ok buf.toRunes

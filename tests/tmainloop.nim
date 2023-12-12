@@ -351,9 +351,9 @@ suite "mainloop: insertPasteBuffer":
 
     check currentBufStatus.buffer.toSeqRunes == @["abc"].toSeqRunes
 
-    check status.registers.getNoNamedRegister == Register(
-      buffer: @["abc"].toSeqRunes,
-      isLine: false)
+    let r = status.registers.getNoNamedRegister
+    check r.buffer == @["abc"].toSeqRunes
+    check not r.isLine
 
   test "Insert mode 2":
     var status = initEditorStatus()
@@ -368,9 +368,9 @@ suite "mainloop: insertPasteBuffer":
 
     check currentBufStatus.buffer.toSeqRunes == @["axyzbc"].toSeqRunes
 
-    check status.registers.getNoNamedRegister == Register(
-      buffer: @["xyz"].toSeqRunes,
-      isLine: false)
+    let r = status.registers.getNoNamedRegister
+    check r.buffer == @["xyz"].toSeqRunes
+    check not r.isLine
 
   test "Insert mode 3":
     var status = initEditorStatus()
@@ -385,9 +385,9 @@ suite "mainloop: insertPasteBuffer":
 
     check currentBufStatus.buffer.toSeqRunes == @["", "a", "b", "c"].toSeqRunes
 
-    check status.registers.getNoNamedRegister == Register(
-      buffer: @["a", "b", "c"].toSeqRunes,
-      isLine: true)
+    let r = status.registers.getNoNamedRegister
+    check r.buffer == @["a", "b", "c"].toSeqRunes
+    check r.isLine
 
   test "Replace mode":
     var status = initEditorStatus()
@@ -402,9 +402,9 @@ suite "mainloop: insertPasteBuffer":
 
     check currentBufStatus.buffer.toSeqRunes == @["abc"].toSeqRunes
 
-    check status.registers.getNoNamedRegister == Register(
-      buffer: @["abc"].toSeqRunes,
-      isLine: false)
+    let r = status.registers.getNoNamedRegister
+    check r.buffer == @["abc"].toSeqRunes
+    check not r.isLine
 
   test "Replace mode 2":
     var status = initEditorStatus()
@@ -419,9 +419,9 @@ suite "mainloop: insertPasteBuffer":
 
     check currentBufStatus.buffer.toSeqRunes == @["xyz"].toSeqRunes
 
-    check status.registers.getNoNamedRegister == Register(
-      buffer: @["xyz"].toSeqRunes,
-      isLine: false)
+    let r = status.registers.getNoNamedRegister
+    check r.buffer == @["xyz"].toSeqRunes
+    check not r.isLine
 
   test "Replace mode 3":
     var status = initEditorStatus()
@@ -436,9 +436,9 @@ suite "mainloop: insertPasteBuffer":
 
     check currentBufStatus.buffer.toSeqRunes == @["x", "y", "zd"].toSeqRunes
 
-    check status.registers.getNoNamedRegister == Register(
-      buffer: @["x", "y", "z"].toSeqRunes,
-      isLine: true)
+    let r = status.registers.getNoNamedRegister
+    check r.buffer == @["x", "y", "z"].toSeqRunes
+    check r.isLine
 
   test "Ex mode":
     var status = initEditorStatus()
