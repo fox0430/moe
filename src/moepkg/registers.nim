@@ -114,9 +114,8 @@ proc initRegisters*(): Registers =
 proc setClipboardTool*(r: var Registers, tool: ClipboardTool) {.inline.} =
   ## Set the clipboard tool for Linux and init the clipboard register.
 
-  if tool != ClipboardTool.none:
-    r.clipboardTool = some(tool)
-    r.clipboard = initClipBoardRegister(now())
+  r.clipboardTool = some(tool)
+  r.clipboard = initClipBoardRegister(now())
 
 proc isNamedRegisterName*(c: char): bool {.inline.} =
   c in Letters
@@ -167,7 +166,7 @@ proc setNoNamedRegister*(
     r.noNamed.set(buffer)
 
     if r.clipboardTool.isSome:
-      buffer.sendToClipboard(r.clipboardTool.get)
+      discard buffer.sendToClipboard(r.clipboardTool.get)
 
 proc set(
   r: var NumberRegisters,
@@ -308,7 +307,7 @@ proc trySetClipBoardRegister(r: var Registers): bool =
   if r.clipboardTool.isSome:
     # Check the OS clipboard and update clipboard and no named registers.
 
-    let buf = getBufferFromClipboard(r.clipboardTool.get)
+    let buf = getFromClipboard(r.clipboardTool.get)
     if buf.isOk and buf.get.len > 0:
       let lines = buf.get.splitLines
       if r.isUpdateClipBoardRegister(lines):

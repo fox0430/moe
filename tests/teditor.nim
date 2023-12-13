@@ -22,13 +22,10 @@ import pkg/results
 import moepkg/[independentutils, gapbuffer, unicodeext, bufferstatus,
                editorstatus, settings, registers, windownode]
 import moepkg/syntax/highlite
+import utils
 
 import moepkg/editor {.all.}
 import moepkg/ui {.all.}
-import moepkg/platform {.all.}
-
-proc isXselAvailable(): bool {.inline.} =
-  execCmdExNoOutput("xset q") == 0 and execCmdExNoOutput("xsel --version") == 0
 
 proc sourceLangToStr(lang: SourceLanguage): string =
   case lang:
@@ -1723,10 +1720,13 @@ suite "Editor: pasteBeforeCursor":
     check currentMainWindowNode.currentLine == 1
     check currentMainWindowNode.currentColumn == 0
 
-if isXselAvailable():
-  suite "Editor: Yank characters":
+suite "Editor: Yank characters":
+  test "Yank a string with name in the empty line":
+    if not isXselAvailable():
+      skip()
+    else:
+      assert clearXsel()
 
-    test "Yank a string with name in the empty line":
       var status = initEditorStatus()
       discard status.addNewBufferInCurrentWin.get
       currentBufStatus.buffer = initGapBuffer(@[ru ""])
@@ -1749,9 +1749,13 @@ if isXselAvailable():
       check status.registers.getNoNamedRegister.buffer == @[""].toSeqRunes
       check not status.registers.getNoNamedRegister.isLine
 
-if isXselAvailable():
-  suite "Editor: Yank words":
-    test "Yank a word":
+suite "Editor: Yank words":
+  test "Yank a word":
+    if not isXselAvailable():
+      skip()
+    else:
+      assert clearXsel()
+
       var status = initEditorStatus()
       discard status.addNewBufferInCurrentWin.get
       currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
@@ -1768,26 +1772,10 @@ if isXselAvailable():
       check status.registers.getNoNamedRegister.buffer == @["abc "].toSeqRunes
       check not status.registers.getNoNamedRegister.isLine
 
-      # Check clipboad
-      let p = initPlatform()
-      if p == Platforms.linux or p == Platforms.wsl:
-        let
-          cmd =
-            if p == Platforms.linux:
-              execCmdEx("xsel -o")
-            else:
-              # On the WSL
-              execCmdEx("powershell.exe -Command Get-Clipboard")
-          (output, exitCode) = cmd
+      let r = execCmdEx("xsel -o")
+      check r.exitCode == 0
 
-        check exitCode == 0
-
-        const Str = "abc "
-        if p == Platforms.linux:
-          check output[0 .. output.high - 1] == Str
-        else:
-          # On the WSL
-          check output[0 .. output.high - 2] == Str
+      check r.output[0 .. r.output.high - 1] == "abc "
 
 suite "Editor: Modify the number string under the cursor":
   test "Increment the number string":

@@ -20,43 +20,12 @@
 import std/[unittest, options, tables, importutils, osproc, os]
 import pkg/results
 import moepkg/[unicodeext, settings, independentutils]
+import utils
 
 import moepkg/registers {.all.}
 
-proc isXAvailable(): bool {.inline.} =
-  execCmdExNoOutput("xset q") == 0
-
-template isXselAvailable(): bool =
-  isXAvailable() and execCmdExNoOutput("xsel --version") == 0
-
-template isXclipAvailable(): bool =
-  isXAvailable() and execCmdExNoOutput("xclip -version") == 0
-
-template isWlClipboardAvailable(): bool =
-  isXAvailable() and execCmdExNoOutput("wl-paste --version") == 0
-
-template setBufferToXsel(buf: string): bool =
-  execShellCmd("printf '" & buf & "' | xsel -pi") == 0
-
-template setBufferToXclip(buf: string): bool =
-  execShellCmd("printf '" & buf & "' | xclip") == 0
-
-template setBufferToWlClipboard(buf: string): bool =
-  execShellCmd("printf '" & buf & "' | wl-copy") == 0
-
-template clearXsel(): bool =
-  execShellCmd("printf '' | xsel") == 0
-
-template clearXclip(): bool =
-  execShellCmd("printf '' | xclip") == 0
-
-template clearWlClipboard(): bool =
-  execShellCmd("printf '' | wl-copy") == 0
-
 proc getClipboardBuffer(tool: ClipboardTool): string =
   case tool:
-    of none:
-      discard
     of xsel:
       let r = execCmdEx("xsel -o")
       return r.output[0 .. r.output.high - 1]

@@ -34,7 +34,6 @@ type
     VSCode
 
   ClipboardTool* = enum
-    none
     xsel
     xclip
     wlClipboard
@@ -202,7 +201,7 @@ type
 
   ClipboardSettings* = object
     enable*: bool
-    toolOnLinux*: ClipboardTool
+    tool*: ClipboardTool
 
   GitSettings* = object
     showChangedLine*: bool
@@ -412,9 +411,8 @@ proc initPersistSettings(): PersistSettings =
   result.searchHistoryLimit = 1000
   result.cursorPosition = true
 
-# Automatically set the clipboard tool on GNU/Linux
-proc autoSetClipboardTool(): ClipboardTool =
-  result = ClipboardTool.none
+proc autoSetClipboardTool(): Option[ClipboardTool] =
+  ## Automatically set the clipboard tool for your environment.
 
   case currentPlatform:
     of linux:
@@ -422,7 +420,7 @@ proc autoSetClipboardTool(): ClipboardTool =
       if execCmdExNoOutput("xset q") == 0:
 
         if execCmdExNoOutput("xsel --version") == 0:
-          result = ClipboardTool.xsel
+          result = some(ClipboardTool.xsel)
         elif execCmdExNoOutput("xclip -version") == 0:
           let (output, _) = execCmdEx("xclip -version")
           # Check xclip version
@@ -430,16 +428,18 @@ proc autoSetClipboardTool(): ClipboardTool =
             lines = output.splitLines
             versionStr = (strutils.splitWhitespace(lines[0]))[2]
           if parseFloat(versionStr) >= 0.13:
-            result = ClipboardTool.xclip
+            result = some(ClipboardTool.xclip)
         elif execCmdExNoOutput("wl-copy -v") == 0:
-          result = ClipboardTool.wlClipboard
+          result = some(ClipboardTool.wlClipboard)
+    of mac:
+      result = some(ClipboardTool.macOsDefault)
     else:
-      discard
+      result = none(ClipboardTool)
 
 proc initClipboardSettings(): ClipboardSettings =
-  result.toolOnLinux = autoSetClipboardTool()
-
-  if ClipboardTool.none != result.toolOnLinux:
+  let tool = autoSetClipboardTool()
+  if tool.isSome:
+    result.tool = tool.get
     result.enable = true
 
 proc initGitSettings(): GitSettings =
@@ -1195,17 +1195,19 @@ proc parseClipboardTable(
     if clipboardConfigs.contains("enable"):
       s.clipboard.enable = clipboardConfigs["enable"].getBool
 
-    if clipboardConfigs.contains("toolOnLinux"):
-      let str = clipboardConfigs["toolOnLinux"].getStr
+    if clipboardConfigs.contains("tool"):
+      let str = clipboardConfigs["tool"].getStr
       case str:
-        of "xsel":
-          s.clipboard.toolOnLinux = ClipboardTool.xsel
         of "xclip":
-          s.clipboard.toolOnLinux = ClipboardTool.xclip
+          s.clipboard.tool = ClipboardTool.xclip
         of "wl-clipboard":
-          s.clipboard.toolOnLinux = ClipboardTool.wlClipboard
+          s.clipboard.tool = ClipboardTool.wlClipboard
+        of "wsl-default":
+          s.clipboard.tool = ClipboardTool.wslDefault
+        of "macOS-default":
+          s.clipboard.tool = ClipboardTool.macOsDefault
         else:
-          s.clipboard.toolOnLinux = ClipboardTool.xsel
+          s.clipboard.tool = ClipboardTool.xsel
 
 proc parseTabLineTable(s: var EditorSettings, tablineConfigs: TomlValueRef) =
   if tablineConfigs.contains("allBuffer"):
@@ -1892,18 +1894,17 @@ proc validateStandardTable(table: TomlValueRef): Option[InvalidItem] =
         return some(InvalidItem(name: $key, val: $val))
 
 proc validateClipboardTable(table: TomlValueRef): Option[InvalidItem] =
+  template isValidTool(s: string): bool =
+    s in [ "xclip", "xsel", "wl-clipboard", "wsl-defaut", "macOS-default"]
+
   for key, val in table.getTable:
     case key:
       of "enable":
         if not (val.kind == TomlValueKind.Bool):
           return some(InvalidItem(name: $key, val: $val))
-      of "toolOnLinux":
-        if not (
-          (val.kind == TomlValueKind.String) and
-          (val.getStr == "none" or
-           val.getStr == "xclip" or
-           val.getStr == "xsel" or
-           val.getStr == "wl-clipboard")): return some(InvalidItem(name: $key, val: $val))
+      of "tool":
+        if not (val.kind == TomlValueKind.String and val.getStr.isValidTool):
+          return some(InvalidItem(name: $key, val: $val))
       else:
         return some(InvalidItem(name: $key, val: $val))
 
@@ -2415,7 +2416,7 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
 
   result.addLine fmt "[Clipboard]"
   result.addLine fmt "enable = {$settings.clipboard.enable}"
-  result.addLine fmt "toolOnLinux = \"{$settings.clipboard.toolOnLinux}\""
+  result.addLine fmt "tool = \"{$settings.clipboard.tool}\""
 
   result.addLine ""
 

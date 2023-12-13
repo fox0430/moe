@@ -19,69 +19,94 @@
 
 import std/[os, osproc, strformat, strutils]
 import pkg/results
-import independentutils, platform, settings, unicodeext
+import independentutils, settings, unicodeext
 
-proc linesToStrings(lines: seq[Runes]): string =
+proc linesToString(lines: Runes | seq[Runes]): string =
   result = lines.toString
   result.stripLineEnd
 
+proc genHereDocument(cmd, delimiterStr, buf: string): string {.inline.} =
+  cmd &
+  " <<" &
+  "'" &
+  delimiterStr &
+  "'" &
+  "\n" &
+  buf &
+  "\n" &
+  delimiterStr &
+  "\n"
+
+proc xselCopyCommand(delimiterStr, buf: string): string {.inline.} =
+  genHereDocument("xsel", delimiterStr, buf)
+
+proc xclipCopyCommand(delimiterStr, buf: string): string {.inline.} =
+  genHereDocument("xclip", delimiterStr, buf)
+
+proc wlClipboardCopyComand(delimiterStr, buf: string): string {.inline.} =
+  genHereDocument("wl-copy", delimiterStr, buf)
+
+proc wslDefaultCopyCommand(delimiterStr, buf: string): string {.inline.} =
+  genHereDocument("clip.exe", delimiterStr, buf)
+
+proc macOsDefaultCopyCommand(delimiterStr, buf: string): string {.inline.} =
+ genHereDocument("pbcopy", delimiterStr, buf)
+
+proc xselPasteCommand(): string {.inline.} = "xsel -o"
+
+proc xclipPasteCommand(): string {.inline.} = "xclip -o"
+
+proc wlClipboardPasteCommand(): string {.inline.} = "wl-paste"
+
+proc wslDefaultPasteCommand(): string {.inline.} =
+  "powershell.exe -Command Get-Clipboard"
+
+proc macOsDefaultPasteCommand(): string {.inline.} = "pbpaste"
+
 proc sendToClipboard*(
-  buffer: seq[Runes],
-  tool: ClipboardTool) =
+  buffer: Runes | seq[Runes],
+  tool: ClipboardTool): Result[(), string] =
     ## Send the buffer to the OS clipboard (xclip, xsel, etc).
 
-    if buffer.len < 1: return
+    if buffer.isEmpty: return
 
     let
-      str = linesToStrings(buffer)
-      delimiterStr = genDelimiterStr(str)
+      buf = linesToString(buffer)
+      delimiterStr = genDelimiterStr(buf)
+      cmd =
+        case tool:
+          of xsel: xselCopyCommand(delimiterStr, buf)
+          of xclip: xclipCopyCommand(delimiterStr, buf)
+          of wlClipboard: wlClipboardCopyComand(delimiterStr, buf)
+          of wslDefault: wslDefaultCopyCommand(delimiterStr, buf)
+          of macOsDefault: macOsDefaultCopyCommand(delimiterStr, buf)
 
-    case currentPlatform:
-      of linux:
-        let cmd =
-          if tool == ClipboardTool.xclip:
-            "xclip -r <<" & "'" & delimiterStr & "'" & "\n" & str & "\n" & delimiterStr & "\n"
-          elif tool == ClipboardTool.xsel:
-            "xsel <<" & "'" & delimiterStr & "'" & "\n" & str & "\n" & delimiterStr & "\n"
-          elif tool == ClipboardTool.wlClipboard:
-            "wl-copy <<" & "'" & delimiterStr & "'" & "\n" & str & "\n" & delimiterStr & "\n"
-          else:
-            ""
+    if execShellCmd(cmd) != 0:
+      return Result[(), string].err "Error: Clipboard: copy failed"
 
-        if cmd.len > 0:
-          discard execShellCmd(cmd)
-      of wsl:
-        let cmd = "clip.exe <<" & "'" & delimiterStr & "'" & "\n" & str & "\n"  & delimiterStr & "\n"
-        discard execShellCmd(cmd)
-      of mac:
-        let cmd = "pbcopy <<" & "'" & delimiterStr & "'" & "\n" & str & "\n"  & delimiterStr & "\n"
-        discard execShellCmd(cmd)
-      else:
-        discard
+    return Result[(), string].ok ()
 
-proc sendToClipboard*(buffer: Runes, tool: ClipboardTool) {.inline.} =
-  ## Send the buffer to the OS clipboard (xclip, xsel, etc).
-
-  sendToClipboard(@[buffer], tool)
-
-proc getBufferFromClipboard*(tool: ClipboardTool): Result[Runes, string] =
+proc getFromClipboard*(tool: ClipboardTool): Result[Runes, string] =
   ## Return the buffer from the OS clipboard.
-
-  if tool == ClipboardTool.none: return
 
   let cmd =
     case tool:
-      of xsel: "xsel -o"
-      of xclip: "xclip -o"
-      of wlClipboard: "wl-paste"
-      of wslDefault: "powershell.exe -Command Get-Clipboard"
-      of macOsDefault: "pbpaste"
-      else: ""
+      of xsel: xselPasteCommand()
+      of xclip: xclipPasteCommand()
+      of wlClipboard: wlClipboardPasteCommand()
+      of wslDefault: wslDefaultPasteCommand()
+      of macOsDefault: macOsDefaultPasteCommand()
 
   let cmdResult = execCmdEx(cmd)
   if cmdResult.exitCode != 0:
-    return Result[Runes, string].err fmt"clipboard: Failed to get clipboard buffer: {$cmdResult}"
+    return Result[Runes, string].err fmt"Error: Clipboard: Failed to get clipboard buffer: {$cmdResult}"
 
   var buf = cmdResult.output
-  buf.stripLineEnd
+  case tool:
+    of wlClipboard, wslDefault:
+      # Remove two newlines.
+      for i in 0 .. 1: buf.stripLineEnd
+    else:
+      buf.stripLineEnd
+
   return Result[Runes, string].ok buf.toRunes

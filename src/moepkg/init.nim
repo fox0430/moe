@@ -136,7 +136,8 @@ proc initEditor*(): EditorStatus =
 
   result.initSidebar
 
-  result.registers.setClipBoardTool(result.settings.clipboard.toolOnLinux)
+  if result.settings.clipboard.enable:
+    result.registers.setClipBoardTool(result.settings.clipboard.tool)
 
   disableControlC()
   catchTerminalResize()

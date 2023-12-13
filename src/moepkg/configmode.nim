@@ -298,7 +298,7 @@ proc getClipboardTableSettingsValues(
           result = @[ru "true", ru "false"]
         else:
           result = @[ru "false", ru "true"]
-      of "toolOnLinux":
+      of "tool":
         for toolName in ClipboardTool:
           if $toolName == "wlClipboard":
             result.add ru "wl-clipboard"
@@ -776,9 +776,9 @@ proc changeClipBoardTableSettings(
     case settingName:
       of "enable":
         settings.enable = parseBool(settingVal)
-      of "toolOnLinux":
+      of "tool":
         let name = if settingVal == "wl-clipboard": "wlClipboard" else: settingVal
-        settings.toolOnLinux = parseEnum[ClipboardTool](name)
+        settings.tool = parseEnum[ClipboardTool](name)
       else:
         discard
 
@@ -1181,7 +1181,7 @@ proc getSettingType(table, name: string): SettingType =
     case name:
       of "enable":
         result = SettingType.bool
-      of "toolOnLinux":
+      of "tool":
         result = SettingType.enums
       else:
         result = SettingType.none
@@ -1886,8 +1886,8 @@ proc initClipBoardTableBuffer(settings: ClipboardSettings): seq[Runes] =
     case $name:
       of "enable":
         result.add(ru nameStr & space & $settings.enable)
-      of "toolOnLinux":
-        result.add(ru nameStr & space & $settings.toolOnLinux)
+      of "tool":
+        result.add(ru nameStr & space & $settings.tool)
 
 proc initBuildOnSaveTableBuffer(settings: BuildOnSaveSettings): seq[Runes] =
   result.add(ru"BuildOnSave")

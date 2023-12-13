@@ -49,9 +49,10 @@ liveReloadOfFile = false
 colorMode = "24bit"
 
 [Clipboard]
+
 enable = true
 
-# toolOnLinux = "xsel"
+tool = "xsel"
 
 [BuildOnSave]
 

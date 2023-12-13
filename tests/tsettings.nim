@@ -50,7 +50,7 @@ const TomlStr = """
 
   [Clipboard]
   enable = false
-  toolOnLinux = "xclip"
+  tool = "xclip"
 
   [BuildOnSave]
   enable = true
@@ -404,7 +404,7 @@ suite "Parse configuration file":
     check settings.standard.colorMode == ColorMode.none
 
     check not settings.clipboard.enable
-    check settings.clipboard.toolOnLinux == ClipboardTool.xclip
+    check settings.clipboard.tool == ClipboardTool.xclip
 
     check settings.buildOnSave.enable
     check settings.buildOnSave.workspaceRoot == ru"/home/fox/git/moe"
@@ -546,37 +546,61 @@ suite "Parse configuration file":
     const Str = """
       [Clipboard]
       enable = true
-      toolOnLinux = "xclip""""
+      tool = "xclip""""
 
     let toml = parsetoml.parseString(Str)
     let settings = parseTomlConfigs(toml)
 
     check settings.clipboard.enable
-    check settings.clipboard.toolOnLinux == ClipboardTool.xclip
+    check settings.clipboard.tool == ClipboardTool.xclip
 
   test "Parse Clipboard setting 2":
     const Str = """
       [Clipboard]
       enable = true
-      toolOnLinux = "xsel""""
+      tool = "xsel""""
 
     let toml = parsetoml.parseString(Str)
     let settings = parseTomlConfigs(toml)
 
     check settings.clipboard.enable
-    check settings.clipboard.toolOnLinux == ClipboardTool.xsel
+    check settings.clipboard.tool == ClipboardTool.xsel
 
   test "Parse Clipboard setting 3":
     const Str = """
       [Clipboard]
       enable = true
-      toolOnLinux = "wl-clipboard""""
+      tool = "wl-clipboard""""
 
     let toml = parsetoml.parseString(Str)
     let settings = parseTomlConfigs(toml)
 
     check settings.clipboard.enable
-    check settings.clipboard.toolOnLinux == ClipboardTool.wlClipboard
+    check settings.clipboard.tool == ClipboardTool.wlClipboard
+
+  test "Parse Clipboard setting 4":
+    const Str = """
+      [Clipboard]
+      enable = true
+      tool = "wsl-default""""
+
+    let toml = parsetoml.parseString(Str)
+    let settings = parseTomlConfigs(toml)
+
+    check settings.clipboard.enable
+    check settings.clipboard.tool == ClipboardTool.wslDefault
+
+  test "Parse Clipboard setting 5":
+    const Str = """
+      [Clipboard]
+      enable = true
+      tool = "macOS-default""""
+
+    let toml = parsetoml.parseString(Str)
+    let settings = parseTomlConfigs(toml)
+
+    check settings.clipboard.enable
+    check settings.clipboard.tool == ClipboardTool.macOsDefault
 
   test "Parse color Mode setting 1":
     const Str = """
