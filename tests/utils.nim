@@ -92,4 +92,4 @@ template clearWslDefaultClipboard*(): bool =
   execShellCmd("printf '' | clip.exe") == 0
 
 template isWsl*(): bool =
-  platform.currentPlatform == Platforms.wsl
+  getPlatform() == Platform.wsl

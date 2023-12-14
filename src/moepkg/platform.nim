@@ -18,22 +18,64 @@
 #[############################################################################]#
 
 import std/[osproc, strutils]
+import independentutils
 
-type Platforms* = enum
-  linux, wsl, mac, freebsd, openbsd, other
+type
+  Platform* = enum
+    ## Operating system
+    linux
+    wsl
+    mac
+    freebsd
+    openbsd
+    other
 
-proc initPlatform(): Platforms =
+  Gui* {.pure.} = enum
+    ## GUI environment.
+    console
+    x11
+    wayland
+    other
+
+proc initPlatform(): Platform =
   if defined linux:
     if execProcess("uname -r").contains("microsoft"):
-      result = Platforms.wsl
-    else: result = Platforms.linux
+      return Platform.wsl
+    else:
+      return Platform.linux
   elif defined macosx:
-    result = Platforms.mac
+    return Platform.mac
   elif defined freebsd:
-    result = Platforms.freebsd
+    return Platform.freebsd
   elif defined openbsd:
-    result = Platforms.openbsd
+    return Platform.openbsd
   else:
-    result = Platforms.other
+    return Platform.other
 
-let currentPlatform* = initPlatform()
+proc getXdgSessionType(): string =
+  let r = execCmdEx("echo $XDG_SESSION_TYPE")
+  if r.exitCode == 0: return r.output
+
+proc isX11*(): bool {.inline.} =
+  if getXdgSessionType().contains("x11"): return true
+  else: return execCmdExNoOutput("xset q") == 0
+
+proc isWayland*(): bool {.inline.} =
+  getXdgSessionType().contains("wayland")
+
+proc initGui(platform: Platform): Gui =
+  case platform:
+    of mac, wsl:
+      return Gui.other
+    else:
+      if isWayland(): return Gui.wayland
+      elif isX11(): return Gui.x11
+      else: return Gui.console
+
+let
+  platform = initPlatform()
+  gui = initGui(platform)
+
+proc getPlatform*(): Platform {.inline.} = platform
+
+proc getGuiEnv*(): Gui {.inline.} = gui

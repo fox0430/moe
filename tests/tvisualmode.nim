@@ -21,12 +21,9 @@ import std/[unittest, osproc, options]
 import pkg/results
 import moepkg/[highlight, independentutils, editorstatus, gapbuffer, unicodeext,
                bufferstatus, movement, ui, registers, settings]
+import utils
 
 import moepkg/visualmode {.all.}
-import moepkg/platform {.all.}
-
-proc isXselAvailable(): bool {.inline.} =
-  execCmdExNoOutput("xset q") == 0 and execCmdExNoOutput("xsel --version") == 0
 
 proc resize(status: var EditorStatus, h, w: int) =
   updateTerminalSize(h, w)
@@ -566,9 +563,13 @@ suite "Visual block mode: Delete buffer (Disable clipboard)":
     check(currentBufStatus.buffer[0] == ru"bc")
     check(currentBufStatus.buffer[1] == ru"ef")
 
-if isXselAvailable():
-  suite "Visual mode: Yank buffer (Enable clipboard)":
-    test "Yank string":
+suite "Visual mode: Yank buffer (Enable clipboard)":
+  test "Yank string":
+    if not isXselAvailable():
+      skip()
+    else:
+      assert clearXsel()
+
       var status = initEditorStatus()
 
       discard status.addNewBufferInCurrentWin.get
@@ -605,25 +606,14 @@ if isXselAvailable():
         firstCursorPosition,
         status.settings)
 
-      if currentPlatform == Platforms.linux or currentPlatform == Platforms.wsl:
-        let
-          cmd =
-            if currentPlatform == Platforms.linux:
-              execCmdEx("xsel -o")
-            else:
-              # On the WSL
-             execCmdEx("powershell.exe -Command Get-Clipboard")
-          (output, exitCode) = cmd
+      check getXselBuffer().removeLineEnd == "abc"
 
-        check exitCode == 0
+  test "Yank lines":
+    if not isXselAvailable():
+      skip()
+    else:
+      assert clearXsel()
 
-        if currentPlatform == Platforms.linux:
-          check output[0 .. output.high - 1] == "abc"
-        else:
-          # On the WSL
-          check output[0 .. output.high - 2] == "abc"
-
-    test "Yank lines":
       var status = initEditorStatus()
       discard status.addNewBufferInCurrentWin.get
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
@@ -664,27 +654,15 @@ if isXselAvailable():
         firstCursorPosition,
         status.settings)
 
-      if currentPlatform == Platforms.linux or currentPlatform == Platforms.wsl:
-        let
-          cmd =
-            if currentPlatform == Platforms.linux:
-              execCmdEx("xsel -o")
-            else:
-              # On the WSL
-              execCmdEx("powershell.exe -Command Get-Clipboard")
-          (output, exitCode) = cmd
+      check getXselBuffer().removeLineEnd == "abc\ndef"
 
-        check exitCode == 0
+suite "Visual block mode: Yank buffer (Enable clipboard) 1":
+  test "Yank lines 1":
+    if not isXselAvailable():
+      skip()
+    else:
+      assert clearXsel()
 
-        if currentPlatform == Platforms.linux:
-          check output[0 .. output.high - 1] == "abc\ndef"
-        else:
-          # On the WSL
-          check output[0 .. output.high - 2] == "abc\ndef"
-
-if isXselAvailable():
-  suite "Visual block mode: Yank buffer (Enable clipboard) 1":
-    test "Yank lines 1":
       var status = initEditorStatus()
       discard status.addNewBufferInCurrentWin.get
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
@@ -717,13 +695,14 @@ if isXselAvailable():
         area.get,
         status.settings)
 
-      if currentPlatform == Platforms.linux:
-        let (output, exitCode) = execCmdEx("xsel -o")
+      check getXselBuffer().removeLineEnd == "a\nd"
 
-        check exitCode == 0
-        check output[0 .. output.high - 1] == "a\nd"
+  test "Yank lines 2":
+    if not isXselAvailable():
+      skip()
+    else:
+      assert clearXsel()
 
-    test "Yank lines 2":
       var status = initEditorStatus()
       discard status.addNewBufferInCurrentWin.get
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"d"])
@@ -755,19 +734,19 @@ if isXselAvailable():
 
       currentBufStatus.yankBufferBlock(
         status.registers,
-       currentMainWindowNode,
-       area.get,
-       status.settings)
+        currentMainWindowNode,
+        area.get,
+        status.settings)
 
-      if currentPlatform == Platforms.linux:
-        let (output, exitCode) = execCmdEx("xsel -o")
+      check getXselBuffer().removeLineEnd == "ab\nd"
 
-        check exitCode == 0
-        check output[0 .. output.high - 1] == "ab\nd"
+suite "Visual block mode: Delete buffer":
+  test "Delete buffer (Enable clipboard) 1":
+    if not isXselAvailable():
+      skip()
+    else:
+      assert clearXsel()
 
-if isXselAvailable():
-  suite "Visual block mode: Delete buffer":
-    test "Delete buffer (Enable clipboard) 1":
       var status = initEditorStatus()
       discard status.addNewBufferInCurrentWin.get
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
@@ -801,11 +780,14 @@ if isXselAvailable():
         status.settings,
         status.commandLine)
 
-      if currentPlatform == Platforms.linux:
-        let (output, exitCode) = execCmdEx("xsel -o")
-        check(exitCode == 0 and output[0 .. output.high - 1] == "a\nd")
+      check getXselBuffer().removeLineEnd == "a\nd"
 
-    test "Delete buffer (Enable clipboard) 2":
+  test "Delete buffer (Enable clipboard) 2":
+    if not isXselAvailable():
+      skip()
+    else:
+      assert clearXsel()
+
       var status = initEditorStatus()
       discard status.addNewBufferInCurrentWin.get
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"", ru"edf"])
@@ -840,7 +822,12 @@ if isXselAvailable():
         status.settings,
         status.commandLine)
 
-    test "Fix #885":
+  test "Fix #885":
+    if not isXselAvailable():
+      skip()
+    else:
+      assert clearXsel()
+
       var status = initEditorStatus()
       discard status.addNewBufferInCurrentWin.get
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"de", ru"fgh"])
@@ -2063,9 +2050,13 @@ suite "Visual line mode: Yank buffer (Disable clipboard)":
 
     check status.registers.getNoNamedRegister.buffer == @[buffer[0]]
 
-if isXselAvailable():
-  suite "Visual line mode: Yank buffer (Enable clipboard)":
-    test "Yank lines":
+suite "Visual line mode: Yank buffer (Enable clipboard)":
+  test "Yank lines":
+    if not isXselAvailable():
+      skip()
+    else:
+      assert clearXsel()
+
       var status = initEditorStatus()
       discard status.addNewBufferInCurrentWin.get
       let buffer = @[ru"a", ru"b", ru"c", ru"d"]
@@ -2106,11 +2097,7 @@ if isXselAvailable():
         firstCursorPosition,
         status.settings)
 
-      if currentPlatform == Platforms.linux:
-        let (output, exitCode) = execCmdEx("xsel -o")
-
-        check exitCode == 0
-        check output[0 .. output.high - 1] == "a"
+      check getXselBuffer().removeLineEnd == "a"
 
 suite "Visual line mode: idenet":
   test "Add the indent (\">\" command)":

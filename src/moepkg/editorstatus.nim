@@ -221,12 +221,12 @@ proc loadLastCursorPosition*(): seq[LastCursorPosition] =
 
           result.add position
 
-proc executeOnExit(settings: EditorSettings, platform: Platforms) {.inline.} =
+proc executeOnExit(settings: EditorSettings, platform: Platform) {.inline.} =
   if not settings.standard.disableChangeCursor:
     changeCursorType(settings.standard.defaultCursor)
 
   # Without this, the cursor disappears in Windows terminal
-  if platform ==  Platforms.wsl:
+  if platform ==  Platform.wsl:
     showCursor()
 
 # Save Ex command history to the file
@@ -290,7 +290,7 @@ proc exitEditor*(status: EditorStatus) =
 
   exitUi()
 
-  executeOnExit(status.settings, currentPlatform)
+  executeOnExit(status.settings, getPlatform())
 
   quit()
 
