@@ -411,33 +411,46 @@ proc initPersistSettings(): PersistSettings =
   result.searchHistoryLimit = 1000
   result.cursorPosition = true
 
-proc autoSetClipboardTool(): Option[ClipboardTool] =
+proc detectClipboardTool(): Option[ClipboardTool] =
   ## Automatically set the clipboard tool for your environment.
+  ##
+  ## X11: xsel or xclip
+  ## Wayland: wl-clipboard
+  ## macOS: pbcopy/pbpaste
+  ## WSL: clip.exe/powershell.exe
 
-  case currentPlatform:
-    of linux:
-      # Check if X server is running
-      if execCmdExNoOutput("xset q") == 0:
+  proc isXsel(): bool {.inline.} = execCmdExNoOutput("xsel --version") == 0
 
-        if execCmdExNoOutput("xsel --version") == 0:
-          result = some(ClipboardTool.xsel)
-        elif execCmdExNoOutput("xclip -version") == 0:
-          let (output, _) = execCmdEx("xclip -version")
-          # Check xclip version
-          let
-            lines = output.splitLines
-            versionStr = (strutils.splitWhitespace(lines[0]))[2]
-          if parseFloat(versionStr) >= 0.13:
-            result = some(ClipboardTool.xclip)
-        elif execCmdExNoOutput("wl-copy -v") == 0:
-          result = some(ClipboardTool.wlClipboard)
-    of mac:
-      result = some(ClipboardTool.macOsDefault)
-    else:
-      result = none(ClipboardTool)
+  proc isXclip(): bool =
+    if execCmdExNoOutput("xclip -version") == 0:
+      let (output, _) = execCmdEx("xclip -version")
+      # Check xclip version. Need 0.13 or higher.
+      let
+        lines = output.splitLines
+        versionStr = (strutils.splitWhitespace(lines[0]))[2]
+      return parseFloat(versionStr) >= 0.13
+
+  case getGuiEnv():
+    of Gui.x11:
+      # X11 on UNIX system.
+      if isXsel():
+        return some(ClipboardTool.xsel)
+      elif isXclip():
+        return some(ClipboardTool.xclip)
+    of Gui.wayland:
+      # Wayland on UNIX system.
+      return some(ClipboardTool.wlClipboard)
+    of Gui.other:
+      if getPlatform() == mac:
+        # macOS
+        return some(macOsDefault)
+      elif getPlatform() == wsl:
+        return some(wslDefault)
+    of Gui.console:
+      return none(ClipboardTool)
 
 proc initClipboardSettings(): ClipboardSettings =
-  let tool = autoSetClipboardTool()
+  let tool = detectClipboardTool()
   if tool.isSome:
     result.tool = tool.get
     result.enable = true
@@ -2382,6 +2395,14 @@ proc toConfigStr*(colorMode: ColorMode): string =
     of ColorMode.c256: "256"
     of ColorMode.c24bit: "24bit"
 
+proc toConfigStr(tool: ClipboardTool): string =
+  case tool:
+    of xsel: "xsel"
+    of xclip: "xclip"
+    of wlClipboard: "wl-clipboard"
+    of wslDefault: "wsl-defaut"
+    of macOsDefault: "macOS-defaut"
+
 proc genTomlConfigStr*(settings: EditorSettings): string =
   ## Generate a string of the configuration file of TOML.
 
@@ -2416,7 +2437,7 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
 
   result.addLine fmt "[Clipboard]"
   result.addLine fmt "enable = {$settings.clipboard.enable}"
-  result.addLine fmt "tool = \"{$settings.clipboard.tool}\""
+  result.addLine fmt "tool = \"{settings.clipboard.tool.toConfigStr}\""
 
   result.addLine ""
 

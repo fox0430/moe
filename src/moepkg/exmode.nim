@@ -85,9 +85,7 @@ proc startRecentFileMode(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 
   # :recent is only supported on Unix or Unix-like (BSD and Linux)
-  if not (currentPlatform == Platforms.linux or
-          currentPlatform == Platforms.freebsd or
-          currentPlatform == Platforms.openbsd): return
+  if not (getPlatform() in {linux, freebsd, openbsd}): return
 
   if not fileExists(getHomeDir() / ".local/share/recently-used.xbel"):
     status.commandLine.writeOpenRecentlyUsedXbelError
