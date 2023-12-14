@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[os, osproc, strformat, strutils]
+import std/[osproc, strformat, strutils]
 import pkg/results
 import independentutils, settings, unicodeext
 
@@ -81,7 +81,7 @@ proc sendToClipboard*(
           of wslDefault: wslDefaultCopyCommand(delimiterStr, buf)
           of macOsDefault: macOsDefaultCopyCommand(delimiterStr, buf)
 
-    if execShellCmd(cmd) != 0:
+    if execCmdEx(cmd).exitCode != 0:
       return Result[(), string].err "Error: Clipboard: copy failed"
 
     return Result[(), string].ok ()
