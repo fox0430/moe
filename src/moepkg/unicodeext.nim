@@ -285,6 +285,8 @@ proc startsWith*(r1: Runes, r2: Runes | Rune): bool {.inline.} =
 proc endsWith*(r1: Runes, r2: Runes | Rune): bool {.inline.} =
   endsWith($r1, $r2)
 
+proc toString*(runes: Runes): string {.inline.} = $runes
+
 proc toString*(lines: seq[Runes]): string =
   for i, runes in lines: result &= $runes & '\n'
 
@@ -625,3 +627,13 @@ proc maxLen*(lines: seq[Runes]): int {.inline.} =
 
 proc maxHigh*(lines: seq[Runes]): int {.inline.} =
   lines.mapIt(it.high).max
+
+proc removeNewLineAtEnd*(runes: Runes): Runes =
+  result = runes
+
+  var countNewline = 0
+  for i in countdown(runes.high, 0):
+    if runes[i] in [ru'\n', ru'\r']: countNewline.inc
+    else: break
+
+  if countNewline > 0: return result[0 .. countNewline]

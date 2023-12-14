@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, strformat, os]
+import std/[unittest, strformat, os, options]
 import pkg/results
 import moepkg/[unicodeext, editorstatus, bufferstatus, color, ui, rgb, theme]
 
@@ -71,13 +71,13 @@ suite "Config mode: Init buffer":
   test "Init ClipBoard table buffer":
     var status = initEditorStatus()
     status.settings.clipboard.enable = true
-    status.settings.clipboard.toolOnLinux = ClipboardTool.none
+    status.settings.clipboard.tool = ClipboardTool.xsel
     let buffer = status.settings.clipboard.initClipBoardTableBuffer
 
     const Sample = @[
       "ClipBoard",
       "  enable                         true",
-      "  toolOnLinux                    none"].toSeqRunes
+      "  toolOnLinux                    xsel"].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
@@ -862,14 +862,14 @@ suite "Config mode: Get ClipBoard table setting values":
 
     checkBoolSettingValue(default, values)
 
-  test "Get toolOnLinux value":
+  test "Get tool value (none)":
     var status = initEditorStatus()
-    status.settings.clipboard.toolOnLinux = ClipboardTool.none
+    status.settings.clipboard.tool = ClipboardTool.xsel
     let clipboardSettings = status.settings.clipboard
 
-    const Name = "toolOnLinux"
+    const Name = "tool"
     let
-      default = clipboardSettings.toolOnLinux
+      default = clipboardSettings.tool
       values = clipboardSettings.getClipboardTableSettingsValues(Name)
 
     check $default == $values[0]
@@ -1850,9 +1850,9 @@ suite "Config mode: Chaging ClipBoard table settings":
       clipboardSettings = settings.clipboard
 
     let val = ClipboardTool.xclip
-    clipboardSettings.changeClipBoardTableSettings("toolOnLinux", $val)
+    clipboardSettings.changeClipBoardTableSettings("tool", $val)
 
-    check val == clipboardSettings.toolOnLinux
+    check val == clipboardSettings.tool
 
   test "Set invalid value":
     var
