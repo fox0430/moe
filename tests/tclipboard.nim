@@ -35,14 +35,6 @@ proc removeLineEnd(buf: string, tool: ClipboardTool): string =
     else:
       return buf.removeLineEnd
 
-template isToolAvailable(tool: ClipboardTool): bool =
-  case tool:
-    of xsel: isXselAvailable()
-    of xclip: isXclipAvailable()
-    of wlClipboard: isWlClipboardAvailable()
-    of wslDefault: isWsl()
-    else: false
-
 template getClipboardBuffer(tool: ClipboardTool): string =
   case tool:
     of xsel: getXselBuffer()
