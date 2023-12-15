@@ -19,7 +19,7 @@
 
 import std/[os, osproc, strformat, strutils]
 import pkg/results
-import independentutils, settings, unicodeext
+import independentutils, settings, unicodeext, platform
 
 proc linesToString(lines: Runes | seq[Runes]): string =
   result = lines.toString
@@ -37,31 +37,55 @@ proc genHereDocument(cmd, delimiterStr, buf: string): string {.inline.} =
   delimiterStr &
   "\n"
 
-proc xselCopyCommand(delimiterStr, buf: string): string {.inline.} =
+template xselCopyCommand(delimiterStr, buf: string): string =
   genHereDocument("xsel", delimiterStr, buf)
 
-proc xclipCopyCommand(delimiterStr, buf: string): string {.inline.} =
+template xclipCopyCommand(delimiterStr, buf: string): string =
   genHereDocument("xclip", delimiterStr, buf)
 
-proc wlClipboardCopyComand(delimiterStr, buf: string): string {.inline.} =
+template wlClipboardCopyComand(delimiterStr, buf: string): string =
   genHereDocument("wl-copy", delimiterStr, buf)
 
-proc wslDefaultCopyCommand(delimiterStr, buf: string): string {.inline.} =
+template wslDefaultCopyCommand(delimiterStr, buf: string): string =
   genHereDocument("clip.exe", delimiterStr, buf)
 
-proc macOsDefaultCopyCommand(delimiterStr, buf: string): string {.inline.} =
- genHereDocument("pbcopy", delimiterStr, buf)
+template macOsDefaultCopyCommand(delimiterStr, buf: string): string =
+  genHereDocument("pbcopy", delimiterStr, buf)
 
-proc xselPasteCommand(): string {.inline.} = "xsel -o"
+template xselPasteCommand(): string = "xsel -o"
 
-proc xclipPasteCommand(): string {.inline.} = "xclip -o"
+template xclipPasteCommand(): string = "xclip -o"
 
-proc wlClipboardPasteCommand(): string {.inline.} = "wl-paste"
+template wlClipboardPasteCommand(): string = "wl-paste"
 
-proc wslDefaultPasteCommand(): string {.inline.} =
+template wslDefaultPasteCommand(): string =
   "powershell.exe -Command Get-Clipboard"
 
-proc macOsDefaultPasteCommand(): string {.inline.} = "pbpaste"
+template macOsDefaultPasteCommand(): string = "pbpaste"
+
+template isXAvailable*(): bool =
+  execCmdExNoOutput("xset q") == 0
+
+template isWaylandAvailable*(): bool =
+  let r = execCmdEx("echo $XDG_SESSION_TYPE")
+  r.exitCode == 0 and r.output.contains("wayland")
+
+template isXselAvailable*(): bool =
+  isXAvailable() and execCmdEx("xsel --version").exitCode == 0
+
+template isXclipAvailable*(): bool =
+  isXAvailable() and execCmdEx("xclip -version").exitCode == 0
+
+template isWlClipboardAvailable*(): bool =
+  isWaylandAvailable() and execCmdEx("wl-paste --version").exitCode == 0
+
+template isToolAvailable*(tool: ClipboardTool): bool =
+  case tool:
+    of xsel: isXselAvailable()
+    of xclip: isXclipAvailable()
+    of wlClipboard: isWlClipboardAvailable()
+    of wslDefault: getPlatform() == Platform.wsl
+    else: false
 
 proc sendToClipboard*(
   buffer: Runes | seq[Runes],
@@ -80,6 +104,9 @@ proc sendToClipboard*(
           of wlClipboard: wlClipboardCopyComand(delimiterStr, buf)
           of wslDefault: wslDefaultCopyCommand(delimiterStr, buf)
           of macOsDefault: macOsDefaultCopyCommand(delimiterStr, buf)
+
+    if not isToolAvailable(tool):
+      return Result[(), string].err fmt"Error: Clipboard: {tool} not found"
 
     if execShellCmd(cmd) != 0:
       return Result[(), string].err "Error: Clipboard: copy failed"
