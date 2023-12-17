@@ -554,7 +554,7 @@ proc getKey*(timeout: int = 100): Option[Rune] =
   ## Non-blocking read from stdin.
   ## timeout is milliseconds.
 
-  let readable = kbhit()
+  let readable = kbhit(timeout)
   if readable > 0:
     # Read a char from stdin.
 
