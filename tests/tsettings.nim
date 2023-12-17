@@ -19,13 +19,12 @@
 
 import std/[unittest, options, importutils]
 import pkg/[parsetoml, results]
-import moepkg/[color, unicodeext, ui, rgb, theme]
+import moepkg/[unicodeext, ui]
 
 import moepkg/settings {.all.}
 
 const TomlStr = """
   [Standard]
-  theme = "config"
   number = false
   currentNumber = false
   cursorLine = true
@@ -200,187 +199,15 @@ const TomlStr = """
   bufferLen = false
 
   [Theme]
-  baseTheme = "dark"
-
-  background = "#000000"
-  foreground = "#000000"
-
-  lineNum = "#000000"
-  lineNumBg = "#000000"
-
-  currentLineNum = "#000000"
-  currentLineNumBg = "#000000"
-
-  statusLineNormalMode = "#000000"
-  statusLineNormalModeBg = "#000000"
-  statusLineNormalModeLabel = "#000000"
-  statusLineNormalModeLabelBg = "#000000"
-  statusLineNormalModeInactive = "#000000"
-  statusLineNormalModeInactiveBg = "#000000"
-
-  statusLineInsertMode = "#000000"
-  statusLineInsertModeBg = "#000000"
-  statusLineInsertModeLabel = "#000000"
-  statusLineInsertModeLabelBg = "#000000"
-  statusLineInsertModeInactive = "#000000"
-  statusLineInsertModeInactiveBg = "#000000"
-
-  statusLineVisualMode = "#000000"
-  statusLineVisualModeBg = "#000000"
-  statusLineVisualModeLabel = "#000000"
-  statusLineVisualModeLabelBg = "#000000"
-  statusLineVisualModeInactive = "#000000"
-  statusLineVisualModeInactiveBg = "#000000"
-
-  statusLineReplaceMode = "#000000"
-  statusLineReplaceModeBg = "#000000"
-  statusLineReplaceModeLabel = "#000000"
-  statusLineReplaceModeLabelBg = "#000000"
-  statusLineReplaceModeInactive = "#000000"
-  statusLineReplaceModeInactiveBg = "#000000"
-
-  statusLineFilerMode = "#000000"
-  statusLineFilerModeBg = "#000000"
-  statusLineFilerModeLabel = "#000000"
-  statusLineFilerModeLabelBg = "#000000"
-  statusLineFilerModeInactive = "#000000"
-  statusLineFilerModeInactiveBg = "#000000"
-
-  statusLineExMode = "#000000"
-  statusLineExModeBg = "#000000"
-  statusLineExModeLabel = "#000000"
-  statusLineExModeLabelBg = "#000000"
-  statusLineExModeInactive = "#000000"
-  statusLineExModeInactiveBg = "#000000"
-
-  statusLineGitChangedLines = "#000000"
-  statusLineGitChangedLinesBg = "#000000"
-  statusLineGitBranch = "#000000"
-  statusLineGitBranchBg = "#000000"
-
-  tab = "#000000"
-  tabBg = "#000000"
-  currentTab = "#000000"
-  currentTabBg = "#000000"
-
-  commandLine = "#000000"
-  commandLineBg = "#000000"
-
-  errorMessage = "#000000"
-  errorMessageBg = "#000000"
-
-  warnMessage = "#000000"
-  warnMessageBg = "#000000"
-
-  searchResult = "#000000"
-  searchResultBg = "#000000"
-
-  visualMode = "#000000"
-  visualModeBg = "#000000"
-
-  keyword = "#000000"
-  functionName = "#000000"
-  typeName = "#000000"
-  boolean = "#000000"
-  charLit = "#000000"
-  stringLit = "#000000"
-  specialVar = "#000000"
-  builtin = "#000000"
-  binNumber = "#000000"
-  decNumber = "#000000"
-  floatNumber = "#000000"
-  hexNumber = "#000000"
-  octNumber = "#000000"
-  comment = "#000000"
-  longComment = "#000000"
-  whitespace = "#000000"
-  preprocessor = "#000000"
-  pragma = "#000000"
-  identifier = "#000000"
-  table = "#000000"
-  date = "#000000"
-  operator = "#000000"
-
-  currentFile = "#000000"
-  currentFileBg = "#000000"
-  file = "#000000"
-  fileBg = "#000000"
-  dir = "#000000"
-  dirBg = "#000000"
-  pcLink = "#000000"
-  pcLinkBg = "#000000"
-
-  popupWindow = "#000000"
-  popupWindowBg = "#000000"
-  popupWinCurrentLine = "#000000"
-  popupWinCurrentLineBg = "#000000"
-
-  replaceText = "#000000"
-  replaceTextBg = "#000000"
-
-  parenPair = "#000000"
-  parenPairBg = "#000000"
-
-  currentWord = "#000000"
-  currentWordBg = "#000000"
-
-  highlightFullWidthSpace = "#000000"
-  highlightFullWidthSpaceBg = "#000000"
-
-  highlightTrailingSpaces = "#000000"
-  highlightTrailingSpacesBg = "#000000"
-
-  reservedWord = "#000000"
-  reservedWordBg = "#000000"
-
-  syntaxCheckInfo = "#000000"
-  syntaxCheckInfoBg = "#000000"
-  syntaxCheckHint = "#000000"
-  syntaxCheckHintBg = "#000000"
-  syntaxCheckWarn = "#000000"
-  syntaxCheckWarnBg = "#000000"
-  syntaxCheckErr = "#000000"
-  syntaxCheckErrBg = "#000000"
-
-  gitConflict = "#000000"
-  gitConflictBg = "#000000"
-
-  backupManagerCurrentLine = "#000000"
-  backupManagerCurrentLineBg = "#000000"
-
-  diffViewerAddedLine = "#000000"
-  diffViewerAddedLineBg = "#000000"
-  diffViewerDeletedLine = "#000000"
-  diffViewerDeletedLineBg = "#000000"
-
-  configModeCurrentLine = "#000000"
-  configModeCurrentLineBg = "#000000"
-
-  currentLineBg = "#000000"
-
-  sidebarGitAddedSign = "#000000"
-  sidebarGitAddedSignBg = "#000000"
-  sidebarGitDeletedSign = "#000000"
-  sidebarGitDeletedSignBg = "#000000"
-  sidebarGitChangedSign = "#000000"
-  sidebarGitChangedSignBg = "#000000"
-
-  sidebarSyntaxCheckInfoSign = "#000000"
-  sidebarSyntaxCheckInfoSignBg = "#000000"
-  sidebarSyntaxCheckHintSign = "#000000"
-  sidebarSyntaxCheckHintSignBg = "#000000"
-  sidebarSyntaxCheckWarnSign = "#000000"
-  sidebarSyntaxCheckWarnSignBg = "#000000"
-  sidebarSyntaxCheckErrSign = "#000000"
-  sidebarSyntaxCheckErrSignBg = "#000000"
+  kind = "config"
+  path = "~/user/.config/moe/themes/my_theme.toml"
 """
 
 suite "Parse configuration file":
   test "Parse all settings":
-    let toml = parsetoml.parseString(TomlStr)
-    var settings = parseTomlConfigs(toml)
+    var settings = initEditorSettings()
+    settings.applyTomlConfigs(parsetoml.parseString(TomlStr))
 
-    check settings.standard.editorColorTheme == ColorTheme.config
     check not settings.view.lineNumber
     check not settings.view.currentLineNumber
     check settings.view.cursorLine
@@ -538,9 +365,8 @@ suite "Parse configuration file":
     check not settings.git.showChangedLine
     check settings.git.updateInterval == 1
 
-    for pair in ColorThemeTable[ColorTheme.config]:
-      check pair.foreground.rgb == "#000000".hexToRgb.get
-      check pair.background.rgb == "#000000".hexToRgb.get
+    check settings.theme.kind == ColorThemeKind.config
+    check settings.theme.path == "~/user/.config/moe/themes/my_theme.toml"
 
   test "Parse Clipboard setting 1":
     const Str = """
@@ -548,8 +374,8 @@ suite "Parse configuration file":
       enable = true
       tool = "xclip""""
 
-    let toml = parsetoml.parseString(Str)
-    let settings = parseTomlConfigs(toml)
+    var settings = initEditorSettings()
+    settings.applyTomlConfigs(parsetoml.parseString(Str))
 
     check settings.clipboard.enable
     check settings.clipboard.tool == ClipboardTool.xclip
@@ -560,8 +386,8 @@ suite "Parse configuration file":
       enable = true
       tool = "xsel""""
 
-    let toml = parsetoml.parseString(Str)
-    let settings = parseTomlConfigs(toml)
+    var settings = initEditorSettings()
+    settings.applyTomlConfigs(parsetoml.parseString(Str))
 
     check settings.clipboard.enable
     check settings.clipboard.tool == ClipboardTool.xsel
@@ -572,8 +398,8 @@ suite "Parse configuration file":
       enable = true
       tool = "wl-clipboard""""
 
-    let toml = parsetoml.parseString(Str)
-    let settings = parseTomlConfigs(toml)
+    var settings = initEditorSettings()
+    settings.applyTomlConfigs(parsetoml.parseString(Str))
 
     check settings.clipboard.enable
     check settings.clipboard.tool == ClipboardTool.wlClipboard
@@ -584,8 +410,8 @@ suite "Parse configuration file":
       enable = true
       tool = "wsl-default""""
 
-    let toml = parsetoml.parseString(Str)
-    let settings = parseTomlConfigs(toml)
+    var settings = initEditorSettings()
+    settings.applyTomlConfigs(parsetoml.parseString(Str))
 
     check settings.clipboard.enable
     check settings.clipboard.tool == ClipboardTool.wslDefault
@@ -596,8 +422,8 @@ suite "Parse configuration file":
       enable = true
       tool = "macOS-default""""
 
-    let toml = parsetoml.parseString(Str)
-    let settings = parseTomlConfigs(toml)
+    var settings = initEditorSettings()
+    settings.applyTomlConfigs(parsetoml.parseString(Str))
 
     check settings.clipboard.enable
     check settings.clipboard.tool == ClipboardTool.macOsDefault
@@ -608,8 +434,8 @@ suite "Parse configuration file":
       colorMode = "none"
     """
 
-    let toml = parsetoml.parseString(Str)
-    let settings = parseTomlConfigs(toml)
+    var settings = initEditorSettings()
+    settings.applyTomlConfigs(parsetoml.parseString(Str))
 
     check ColorMode.none == settings.standard.colorMode
 
@@ -619,8 +445,8 @@ suite "Parse configuration file":
       colorMode = "8"
     """
 
-    let toml = parsetoml.parseString(Str)
-    let settings = parseTomlConfigs(toml)
+    var settings = initEditorSettings()
+    settings.applyTomlConfigs(parsetoml.parseString(Str))
 
     check ColorMode.c8 == settings.standard.colorMode
 
@@ -630,8 +456,8 @@ suite "Parse configuration file":
       colorMode = "256"
     """
 
-    let toml = parsetoml.parseString(Str)
-    let settings = parseTomlConfigs(toml)
+    var settings = initEditorSettings()
+    settings.applyTomlConfigs(parsetoml.parseString(Str))
 
     check ColorMode.c256  == settings.standard.colorMode
 
@@ -641,8 +467,8 @@ suite "Parse configuration file":
       colorMode = "24bit"
     """
 
-    let toml = parsetoml.parseString(Str)
-    let settings = parseTomlConfigs(toml)
+    var settings = initEditorSettings()
+    settings.applyTomlConfigs(parsetoml.parseString(Str))
 
     check ColorMode.c24bit == settings.standard.colorMode
 
@@ -734,90 +560,56 @@ suite "Validate Standard.theme":
     check result == some(InvalidItem(name: "theme", val: "a"))
 
 suite "Validate theme tables":
-  test "Color code":
+  test "Invalid":
     const TomlThemeConfig ="""
-      [Standard]
-      theme = "config"
-
       [Theme]
-      baseTheme = "dark"
-      foreground = "#000000"
+      kind = "abc"
+    """
+    let toml = parsetoml.parseString(TomlThemeConfig)
+    let result = toml.validateTomlConfig
+
+    check result.isSome
+
+  test "Theme.kind: default":
+    const TomlThemeConfig ="""
+      [Theme]
+      kind = "default"
     """
     let toml = parsetoml.parseString(TomlThemeConfig)
     let result = toml.validateTomlConfig
 
     check result.isNone
 
-  test "termDefaultFg":
+  test "Theme.kind: config":
     const TomlThemeConfig ="""
-      [Standard]
-      theme = "config"
-
       [Theme]
-      baseTheme = "dark"
-      foreground = "termDefaultFg"
+      kind = "config"
     """
     let toml = parsetoml.parseString(TomlThemeConfig)
     let result = toml.validateTomlConfig
 
     check result.isNone
 
-  test "termDefaultBg":
+  test "Theme.kind: vscode":
     const TomlThemeConfig ="""
-      [Standard]
-      theme = "config"
-
       [Theme]
-      baseTheme = "dark"
-      background = "termDefaultBg"
+      kind = "config"
     """
     let toml = parsetoml.parseString(TomlThemeConfig)
     let result = toml.validateTomlConfig
 
     check result.isNone
 
-  test "Invalid key":
+  test "Theme.path":
     const TomlThemeConfig ="""
-      [Standard]
-      theme = "config"
-
       [Theme]
-      a = "dark"
+      kind = "config"
+      path = "./theme.toml"
     """
     let toml = parsetoml.parseString(TomlThemeConfig)
     let result = toml.validateTomlConfig
 
-    privateAccess InvalidItem
-    check result == some(InvalidItem(name: "a", val: "dark"))
-
-  test "Invalid value 1":
-    const TomlThemeConfig ="""
-      [Standard]
-      theme = "config"
-
-      [Theme]
-      baseTheme = "a"
-    """
-    let toml = parsetoml.parseString(TomlThemeConfig)
-    let result = toml.validateTomlConfig
-
-    privateAccess InvalidItem
-    check result == some(InvalidItem(name: "baseTheme", val: "a"))
-
-  test "Invalid value 2":
-    const TomlThemeConfig ="""
-      [Standard]
-      theme = "config"
-
-      [Theme]
-      baseTheme = "dark"
-      foreground = "0"
-    """
-    let toml = parsetoml.parseString(TomlThemeConfig)
-    let result = toml.validateTomlConfig
-
-    privateAccess InvalidItem
-    check result == some(InvalidItem(name: "foreground", val: "0"))
+    check result.isNone
 
 suite "Configuration example":
   test "Check moerc.toml":

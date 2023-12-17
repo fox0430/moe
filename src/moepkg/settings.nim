@@ -44,6 +44,11 @@ type
     vertical
     horizontal
 
+  ColorThemeKind* {.pure.} = enum
+    default
+    vscode
+    config
+
   DebugWindowNodeSettings* = object
     enable*: bool
     currentWindow*: bool
@@ -222,6 +227,11 @@ type
   StartUpSettings* = object
     fileOpen*: StartUpFileOpenSettings
 
+  ThemeSettings* = object
+    kind*: ColorThemeKind
+    path*: string
+    colors*: ThemeColors
+
   LspLanguageSettings* = object
     extensions*: seq[Runes]
     command*: Runes
@@ -235,7 +245,6 @@ type
 
   StandardSettings* = object
     syntax*: bool
-    editorColorTheme*: ColorTheme
     disableChangeCursor*: bool
     defaultCursor*: CursorType
     normalModeCursor*: CursorType
@@ -272,6 +281,7 @@ type
     syntaxChecker*: SyntaxCheckerSettings
     startUp*: StartUpSettings
     autoSave*: AutoSaveSettings
+    theme*: ThemeSettings
 
     lsp*: LspSettings
 
@@ -474,6 +484,10 @@ proc initStartUpFileOpenSettings(): StartUpFileOpenSettings =
 proc initStartUpSettings(): StartUpSettings =
   result.fileOpen = initStartUpFileOpenSettings()
 
+proc initThemeSettings(): ThemeSettings =
+  result.kind = ColorThemeKind.default
+  result.colors = DefaultColors
+
 proc initLspSettigns(): LspSettings =
   result.enable = false
 
@@ -483,7 +497,6 @@ proc initLspSettigns(): LspSettings =
     trace: TraceValue.verbose)
 
 proc initStandardSettings(): StandardSettings =
-  result.editorColorTheme = ColorTheme.dark
   result.syntax = true
   result.autoCloseParen = true
   result.autoIndent = true
@@ -517,7 +530,11 @@ proc initEditorSettings*(): EditorSettings =
   result.git = initGitSettings()
   result.syntaxChecker = initSyntaxCheckerSettings()
   result.startUp = initStartUpSettings()
+  result.theme = initThemeSettings()
   result.lsp = initLspSettigns()
+
+proc configFilePath*():  string {.inline.} =
+  getConfigDir() / "moe" / "moerc.toml"
 
 proc languageIdFromLspLanguageSettings*(
   s: LspSettings,
@@ -527,15 +544,6 @@ proc languageIdFromLspLanguageSettings*(
     for key, val in s.languages.pairs:
       if val.extensions.contains(ext):
         return some(key)
-
-proc parseColorTheme(theme: string): Result[ColorTheme, string] =
-  case theme:
-    of "dark": Result[ColorTheme, string].ok ColorTheme.dark
-    of "light": Result[ColorTheme, string].ok ColorTheme.light
-    of "vivid": Result[ColorTheme, string].ok ColorTheme.vivid
-    of "config": Result[ColorTheme, string].ok ColorTheme.config
-    of "vscode": Result[ColorTheme, string].ok ColorTheme.vscode
-    else: Result[ColorTheme, string].err fmt"Invalid value {theme}"
 
 proc colorFromNode(node: JsonNode): Rgb =
   if node == nil:
@@ -558,8 +566,8 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
   # Load the theme file of VSCode and adapt it as the theme of moe.
   # Reproduce the original theme as much as possible.
 
-  # The base theme is dark.
-  result = ColorThemeTable[ColorTheme.dark]
+  # The base theme is the default theme.
+  result = DefaultColors
 
   var tokenNodes = initTable[string, JsonNode]()
   for node in jsonNode{"tokenColors"}:
@@ -1068,14 +1076,14 @@ proc parseVsCodeThemeJson(
                 try: some(json.parseFile(themeFilePath))
                 except CatchableError: none(JsonNode)
 
-proc loadVSCodeTheme*(): Result[ColorTheme, string] =
+proc loadVSCodeTheme*(): Result[ThemeColors, string] =
   ## If no vscode theme can be found, this defaults to the dark theme.
   ## Hopefully other contributors will come and add support for Windows,
   ## and other systems.
 
   let vsCodeFlavor = detectVsCodeFlavor()
   if vsCodeFlavor.isNone:
-    return Result[ColorTheme, string].err fmt"Failed to load VSCode theme: Could not find VSCode"
+    return Result[ThemeColors, string].err "Failed to load VSCode theme: Could not find VSCode"
 
   let
     # load the VSCode user settings json
@@ -1084,12 +1092,12 @@ proc loadVSCodeTheme*(): Result[ColorTheme, string] =
       try:
         json.parseFile(settingsFilePath)
       except CatchableError as e:
-        return Result[ColorTheme, string].err fmt"Failed to load VSCode theme: {e.msg}"
+        return Result[ThemeColors, string].err fmt"Failed to load VSCode theme: {e.msg}"
 
   # The current theme name
   if settingsJson{"workbench.colorTheme"} == nil or
      settingsJson{"workbench.colorTheme"}.getStr == "":
-       return Result[ColorTheme, string].err fmt"Failed to load VSCode theme: Failed to get the current theme"
+       return Result[ThemeColors, string].err "Failed to load VSCode theme: Failed to get the current theme"
 
   let
     currentThemeName = settingsJson{"workbench.colorTheme"}.getStr
@@ -1113,20 +1121,14 @@ proc loadVSCodeTheme*(): Result[ColorTheme, string] =
             currentThemeName,
             file)
           if themeJson.isSome:
-            ColorThemeTable[ColorTheme.vscode] =
-              makecolorThemeFromVSCodeThemeFile(themeJson.get)
+            let colors = makecolorThemeFromVSCodeThemeFile(themeJson.get)
+            return Result[ThemeColors, string].ok colors
 
-            return Result[ColorTheme, string].ok ColorTheme.vscode
-
-  return Result[ColorTheme, string].err fmt"Failed to load VSCode theme: Could not find files for the current theme"
+  return Result[ThemeColors, string].err "Failed to load VSCode theme: Could not find files for the current theme"
 
 proc parseStandardTable(s: var EditorSettings, standardConfigs: TomlValueRef) =
-  template cursorType(str: string): untyped =
+  template cursorType(str: string): CursorType =
     parseEnum[CursorType](str)
-
-  if standardConfigs.contains("theme"):
-    let themeString = standardConfigs["theme"].getStr
-    s.standard.editorColorTheme = themeString.parseColorTheme.get
 
   if standardConfigs.contains("number"):
     s.view.lineNumber = standardConfigs["number"].getBool
@@ -1677,179 +1679,139 @@ proc parseStartUpSettingsTable(
           .parseWindowSplitType
           .get
 
-proc parseLspTable(
-  s: var EditorSettings,
-  lspConfigs: TomlValueRef) =
+proc parseThemeTable(s: var EditorSettings, themeConfigs: TomlValueRef) =
+  if themeConfigs.contains("kind"):
+    s.theme.kind = parseEnum[ColorThemeKind]themeConfigs["kind"].getStr
 
-    for key, val in lspConfigs.getTable:
-      case key:
-        of "enable":
-          s.lsp.enable = lspConfigs["enable"].getBool
-        else:
-          let langId = key
-          var langSettings = LspLanguageSettings()
-          for key, val in val.getTable:
-            case key:
-              of "extensions":
-                for i in 0 ..< val.len:
-                  langSettings.extensions.add val[i].getStr.toRunes
-              of "command":
-                langSettings.command = val.getStr.toRunes
-              of "trace":
-                langSettings.trace = val.getStr.parseTraceValue.get
+  if themeConfigs.contains("path"):
+    s.theme.path = themeConfigs["path"].getStr
 
-          s.lsp.languages[langId] = langSettings
-
-proc parseThemeTable(
-  s: var EditorSettings,
-  themeConfigs: Option[TomlValueRef]) =
-
-    proc toRgb(s: string): Rgb =
-      case s:
-        of "termDefaultFg", "termDefaultBg":
-          TerminalDefaultRgb
-        else:
-          s.hexToRgb.get
-
-    proc setFgColorToConfig(index: EditorColorPairIndex, rgb: Rgb) {.inline.} =
-      ColorThemeTable[ColorTheme.config][index].foreground.rgb = rgb
-
-    proc setBgColorToConfig(index: EditorColorPairIndex, rgb: Rgb) {.inline.} =
-      ColorThemeTable[ColorTheme.config][index].background.rgb = rgb
-
-    proc setEditorColorPairIndexForegrounds(colorStr: string) =
-      let rgb = themeConfigs.get["foreground"].getStr.toRgb
-
-      EditorColorPairIndex.default.setFgColorToConfig(rgb)
-      EditorColorPairIndex.currentLineBg.setFgColorToConfig(rgb)
-
-    proc setEditorColorPairIndexBackgrounds(colorStr: string) =
-      let rgb = themeConfigs.get["background"].getStr.toRgb
-
-      EditorColorPairIndex.default.setBgColorToConfig(rgb)
-      EditorColorPairIndex.keyword.setBgColorToConfig(rgb)
-      EditorColorPairIndex.functionName.setBgColorToConfig(rgb)
-      EditorColorPairIndex.typeName.setBgColorToConfig(rgb)
-      EditorColorPairIndex.boolean.setBgColorToConfig(rgb)
-      EditorColorPairIndex.specialVar.setBgColorToConfig(rgb)
-      EditorColorPairIndex.builtin.setBgColorToConfig(rgb)
-      EditorColorPairIndex.stringLit.setBgColorToConfig(rgb)
-      EditorColorPairIndex.binNumber.setBgColorToConfig(rgb)
-      EditorColorPairIndex.decNumber.setBgColorToConfig(rgb)
-      EditorColorPairIndex.floatNumber.setBgColorToConfig(rgb)
-      EditorColorPairIndex.hexNumber.setBgColorToConfig(rgb)
-      EditorColorPairIndex.octNumber.setBgColorToConfig(rgb)
-      EditorColorPairIndex.comment.setBgColorToConfig(rgb)
-      EditorColorPairIndex.longComment.setBgColorToConfig(rgb)
-      EditorColorPairIndex.whitespace.setBgColorToConfig(rgb)
-      EditorColorPairIndex.preprocessor.setBgColorToConfig(rgb)
-      EditorColorPairIndex.pragma.setBgColorToConfig(rgb)
-
-    if themeConfigs.isSome and themeConfigs.get.contains("baseTheme"):
-      # Set a base theme for config and vscode.
-      let t = themeConfigs.get["baseTheme"].getStr.parseColorTheme.get
-      ColorThemeTable[ColorTheme.config] = ColorThemeTable[t]
-
-    case s.standard.editorColorTheme:
-      of ColorTheme.config:
-        for index in EditorColorIndex:
-          if themeConfigs.isSome and themeConfigs.get.contains($index):
-            case index:
-              of EditorColorIndex.foreground:
-                setEditorColorPairIndexForegrounds($index)
-              of EditorColorIndex.background:
-                setEditorColorPairIndexBackgrounds($index)
-              of EditorColorIndex.currentLineBg:
-                EditorColorPairIndex.currentLineBg.setBgColorToConfig(
-                  themeConfigs.get[$index].getStr.toRgb)
-              else:
-                if endsWith($index, "Bg"):
-                  # Set background colors
-                  let
-                    # Remove "Bg" and parse enum.
-                    indexStr = ($index)[0 .. ($index).high - 2]
-                    pairIndex = parseEnum[EditorColorPairIndex](indexStr)
-                    rgb = themeConfigs.get[$index].getStr.toRgb
-                  pairIndex.setBgColorToConfig(rgb)
-                else:
-                  # Set foreground colors
-                  let
-                    pairIndex = parseEnum[EditorColorPairIndex]($index)
-                    rgb = themeConfigs.get[$index].getStr.toRgb
-                  pairIndex.setFgColorToConfig(rgb)
-      of ColorTheme.vscode:
-        let vsCodeTheme = loadVSCodeTheme()
-        if vsCodeTheme.isOk:
-          s.standard.editorColorTheme = vsCodeTheme.get
+proc parseLspTable(s: var EditorSettings, lspConfigs: TomlValueRef) =
+  for key, val in lspConfigs.getTable:
+    case key:
+      of "enable":
+        s.lsp.enable = lspConfigs["enable"].getBool
       else:
-        discard
+        let langId = key
+        var langSettings = LspLanguageSettings()
+        for key, val in val.getTable:
+          case key:
+            of "extensions":
+              for i in 0 ..< val.len:
+                langSettings.extensions.add val[i].getStr.toRunes
+            of "command":
+              langSettings.command = val.getStr.toRunes
+            of "trace":
+              langSettings.trace = val.getStr.parseTraceValue.get
 
-proc parseTomlConfigs*(tomlConfigs: TomlValueRef): EditorSettings =
-  result = initEditorSettings()
+        s.lsp.languages[langId] = langSettings
 
+proc toThemeColors*(config: TomlValueRef): ThemeColors =
+  ## Return ThemeColors based on the TOML theme colors config.
+
+  template toRgb(s: string): Rgb =
+    case s:
+      of "termDefaultFg", "termDefaultBg":
+        TerminalDefaultRgb
+      else:
+        s.hexToRgb.get
+
+  template configColors: TomlValueRef = config["Colors"]
+
+  # the base color is DefaultColors.
+  result = DefaultColors
+
+  for index in EditorColorIndex:
+    if configColors.contains($index):
+      case index:
+        of EditorColorIndex.foreground:
+          let rgb = configColors["foreground"].getStr.toRgb
+          result[EditorColorPairIndex.default].foreground.rgb = rgb
+          result[EditorColorPairIndex.currentLineBg].foreground.rgb = rgb
+        of EditorColorIndex.background:
+          let rgb = configColors["background"].getStr.toRgb
+          result[EditorColorPairIndex.default].background.rgb = rgb
+          for i in EditorColorPairIndex.keyword .. EditorColorPairIndex.operator:
+            result[i].background.rgb = rgb
+        of EditorColorIndex.currentLineBg:
+          result[EditorColorPairIndex.currentLineBg].background.rgb =
+            configColors[$index].getStr.toRgb
+        else:
+          if endsWith($index, "Bg"):
+            # Set background colors
+            let
+              # Remove "Bg" and parse enum.
+              indexStr = ($index)[0 .. ($index).high - 2]
+              pairIndex = parseEnum[EditorColorPairIndex](indexStr)
+              rgb = configColors[$index].getStr.toRgb
+            result[pairIndex].background.rgb = rgb
+          else:
+            # Set foreground colors
+            let
+              pairIndex = parseEnum[EditorColorPairIndex]($index)
+              rgb = configColors[$index].getStr.toRgb
+            result[pairIndex].foreground.rgb = rgb
+
+proc applyTomlConfigs*(s: var EditorSettings, tomlConfigs: TomlValueRef) =
   if tomlConfigs.contains("Standard"):
-    result.parseStandardTable(tomlConfigs["Standard"])
+    s.parseStandardTable(tomlConfigs["Standard"])
 
   if tomlConfigs.contains("Clipboard"):
-    result.parseClipboardTable(tomlConfigs["Clipboard"])
+    s.parseClipboardTable(tomlConfigs["Clipboard"])
 
   if tomlConfigs.contains("TabLine"):
-    result.parseTabLineTable(tomlConfigs["TabLine"])
+    s.parseTabLineTable(tomlConfigs["TabLine"])
 
   if tomlConfigs.contains("StatusLine"):
-    result.parseStatusLineTable(tomlConfigs["StatusLine"])
+    s.parseStatusLineTable(tomlConfigs["StatusLine"])
 
   if tomlConfigs.contains("BuildOnSave"):
-    result.parseBuildOnSaveTable(tomlConfigs["BuildOnSave"])
+    s.parseBuildOnSaveTable(tomlConfigs["BuildOnSave"])
 
   if tomlConfigs.contains("Highlight"):
-    result.parseHighlightTable(tomlConfigs["Highlight"])
+    s.parseHighlightTable(tomlConfigs["Highlight"])
 
   if tomlConfigs.contains("AutoBackup"):
-    result.parseAutoBackupTable(tomlConfigs["AutoBackup"])
+    s.parseAutoBackupTable(tomlConfigs["AutoBackup"])
 
   if tomlConfigs.contains("QuickRun"):
-    result.parseQuickRunTable(tomlConfigs["QuickRun"])
+    s.parseQuickRunTable(tomlConfigs["QuickRun"])
 
   if tomlConfigs.contains("Notification"):
-    result.parseNotificationTable(tomlConfigs["Notification"])
+    s.parseNotificationTable(tomlConfigs["Notification"])
 
   if tomlConfigs.contains("Filer"):
-    result.parseFilerTable(tomlConfigs["Filer"])
+    s.parseFilerTable(tomlConfigs["Filer"])
 
   if tomlConfigs.contains("Autocomplete"):
-    result.parseAutocompleteTable(tomlConfigs["Autocomplete"])
+    s.parseAutocompleteTable(tomlConfigs["Autocomplete"])
 
   if tomlConfigs.contains("AutoSave"):
-    result.parseAutoSaveTable(tomlConfigs["AutoSave"])
+    s.parseAutoSaveTable(tomlConfigs["AutoSave"])
 
   if tomlConfigs.contains("Persist"):
-    result.parsePersistTable(tomlConfigs["Persist"])
+    s.parsePersistTable(tomlConfigs["Persist"])
 
   if tomlConfigs.contains("Debug"):
-    result.parseDebugTable(tomlConfigs["Debug"])
+    s.parseDebugTable(tomlConfigs["Debug"])
 
   if tomlConfigs.contains("Git"):
-    result.parseGitTable(tomlConfigs["Git"])
+    s.parseGitTable(tomlConfigs["Git"])
 
   if tomlConfigs.contains("SyntaxChecker"):
-    result.parseSyntaxCheckerTable(tomlConfigs["SyntaxChecker"])
+    s.parseSyntaxCheckerTable(tomlConfigs["SyntaxChecker"])
 
   if tomlConfigs.contains("SmoothScroll"):
-    result.parseSmoothScrollTable(tomlConfigs["SmoothScroll"])
+    s.parseSmoothScrollTable(tomlConfigs["SmoothScroll"])
 
   if tomlConfigs.contains("StartUp"):
-    result.parseStartUpSettingsTable(tomlConfigs["StartUp"])
+    s.parseStartUpSettingsTable(tomlConfigs["StartUp"])
+
+  if tomlConfigs.contains("Theme"):
+    s.parseThemeTable(tomlConfigs["Theme"])
 
   if tomlConfigs.contains("Lsp"):
-    result.parseLspTable(tomlConfigs["Lsp"])
-
-  if result.standard.editorColorTheme == ColorTheme.config or
-     result.standard.editorColorTheme == ColorTheme.vscode:
-       if tomlConfigs.contains("Theme"):
-         result.parseThemeTable(tomlConfigs["Theme"].some)
-       else:
-         result.parseThemeTable(TomlValueRef.none)
+    s.parseLspTable(tomlConfigs["Lsp"])
 
 proc validateStandardTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
@@ -2195,28 +2157,6 @@ proc validateDebugTable(table: TomlValueRef): Option[InvalidItem] =
       else:
         return some(InvalidItem(name: $key, val: $val))
 
-proc validateThemeTable(table: TomlValueRef): Option[InvalidItem] =
-  proc ColorThemeNames(): seq[string] {.compileTime.} =
-    ColorTheme.mapIt(it.symbolName)
-
-  proc EditorColorIndexNames(): seq[string] {.compileTime.} =
-    EditorColorIndex.mapIt(it.symbolName)
-
-  proc isColorVal(val: string): bool {.inline.} =
-    val == "termDefaultFg" or val == "termDefaultBg" or val.isHexColor
-
-  for key, val in table.getTable:
-    if val.kind != TomlValueKind.String:
-      return some(InvalidItem(name: $key, val: $val))
-
-    case key:
-      of "baseTheme":
-        if not ColorThemeNames().contains(val.getStr):
-          return some(InvalidItem(name: $key, val: $val))
-      else:
-        if not EditorColorIndexNames().contains(key) or not val.getStr.isColorVal:
-          return some(InvalidItem(name: $key, val: $val))
-
 proc validateGitTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
     case key:
@@ -2269,7 +2209,21 @@ proc validateStartUpTable(table: TomlValueRef): Option[InvalidItem] =
       else:
         return some(InvalidItem(name: $key, val: $val))
 
-proc validateLspSettings(table: TomlValueRef): Option[InvalidItem] =
+proc validateThemeTable(table: TomlValueRef): Option[InvalidItem] =
+  template isColorThemeKind(s: string): bool = s in ColorThemeKind.mapIt($it)
+
+  for key, val in table.getTable:
+    case key:
+      of "kind":
+        if val.kind != TomlValueKind.String or not isColorThemeKind(val.getStr):
+          return some(InvalidItem(name: $key, val: $val))
+      of "path":
+        if val.kind != TomlValueKind.String:
+          return some(InvalidItem(name: $key, val: $val))
+      else:
+        return some(InvalidItem(name: $key, val: $val))
+
+proc validateLspTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
     case key:
       of "enable":
@@ -2325,9 +2279,6 @@ proc validateTomlConfig(toml: TomlValueRef): Option[InvalidItem] =
       of "Filer":
         let r = validateFilerTable(val)
         if r.isSome: return r
-      of "Theme":
-        let r = validateThemeTable(val)
-        if r.isSome: return r
       of "Autocomplete":
         let r = validateAutocompleteTable(val)
         if r.isSome: return r
@@ -2352,8 +2303,11 @@ proc validateTomlConfig(toml: TomlValueRef): Option[InvalidItem] =
       of "StartUp":
         let r = validateStartUpTable(val)
         if r.isSome: return r
+      of "Theme":
+        let r = validateThemeTable(val)
+        if r.isSome: return r
       of "Lsp":
-        let r = validateLspSettings(val)
+        let r = validateLspTable(val)
         if r.isSome: return r
       else:
         return some(InvalidItem(name: $key, val: $val))
@@ -2369,21 +2323,85 @@ proc toValidateErrorMessage(invalidItem: InvalidItem): string =
 
   result = fmt"(name: {invalidItem.name}, val: {val})"
 
-proc loadSettingFile*(): EditorSettings =
-  let filename = getConfigDir() / "moe" / "moerc.toml"
+proc loadConfigFile*(path: string): Result[TomlValueRef, string] =
+  ## Load and validate.
 
-  if not fileExists(filename):
-    return initEditorSettings()
+  var toml: TomlValueRef
+  try:
+    toml = parsetoml.parseFile(path)
+  except CatchableError as e:
+    return Result[TomlValueRef, string].err e.msg
 
-  let
-    toml = parsetoml.parseFile(filename)
-    invalidItem = toml.validateTomlConfig
+  let invalidItem = toml.validateTomlConfig
+  if invalidItem.isSome:
+    return Result[TomlValueRef, string].err toValidateErrorMessage(
+      invalidItem.get)
 
-  if invalidItem != none(InvalidItem):
-    let errorMessage = toValidateErrorMessage(invalidItem.get)
-    raise newException(InvalidItemError, $errorMessage)
-  else:
-    return parseTomlConfigs(toml)
+  return Result[TomlValueRef, string].ok toml
+
+proc validateThemeConfig(toml: TomlValueRef): Option[InvalidItem] =
+  proc editorColorIndexNames(): seq[string] {.compileTime.} =
+    EditorColorIndex.mapIt(it.symbolName)
+
+  template isValidKey(key: string): bool =
+    editorColorIndexNames().contains(key)
+
+  template isColorVal(val: string): bool =
+    val == "termDefaultFg" or val == "termDefaultBg" or val.isHexColor
+
+  for key, val in toml.getTable:
+    if toml.contains("Colors"):
+      for key, val in toml["Colors"].getTable:
+        if val.kind != TomlValueKind.String or
+           not key.isValidKey or
+           not val.getStr.isColorVal:
+             return some(InvalidItem(name: $key, val: $val))
+    else:
+      return some(InvalidItem(name: $key, val: ""))
+
+proc loadThemeFile*(path: string): Result[TomlValueRef, string] =
+  ## Load and validate.
+
+  let fullPath =  expandTilde(path)
+
+  if not fileExists(fullPath):
+    return Result[TomlValueRef, string].err fmt"File not found: {path}"
+
+  var toml: TomlValueRef
+  try:
+    toml = parsetoml.parseFile(fullPath)
+  except CatchableError as e:
+    return Result[TomlValueRef, string].err e.msg
+
+  let invalidItem = validateThemeConfig(toml)
+  if invalidItem.isSome:
+    return Result[TomlValueRef, string].err toValidateErrorMessage(
+      invalidItem.get)
+
+  return Result[TomlValueRef, string].ok toml
+
+proc loadConfigs*(s: var EditorSettings): Result[(), string] =
+  ## Load config and theme files and init EditorSettings.
+
+  if fileExists(configFilePath()):
+    let toml = loadConfigFile(configFilePath())
+    if toml.isErr: return Result[(), string].err toml.tryError
+
+    s.applyTomlConfigs(toml.get)
+
+  case s.theme.kind:
+    of ColorThemeKind.default:
+      s.theme.colors = DefaultColors
+    of ColorThemeKind.config:
+      let toml = loadThemeFile(s.theme.path)
+      if toml.isErr: return Result[(), string].err toml.tryError
+      s.theme.colors = toml.get.toThemeColors
+    of ColorThemeKind.vscode:
+      let colors = loadVSCodeTheme()
+      if colors.isErr: return Result[(), string].err colors.error
+      s.theme.colors = colors.get
+
+  return Result[(), string].ok ()
 
 proc toConfigStr*(colorMode: ColorMode): string =
   ## Convert ColorMode to string for the config file.
@@ -2409,7 +2427,6 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
   proc addLine(buf: var string, str: string) {.inline.} = buf &= "\n" & str
 
   result = "[Standard]"
-  result.addLine fmt "theme = \"{$settings.standard.editorcolorTheme}\""
   result.addLine fmt "number = {$settings.view.lineNumber}"
   result.addLine fmt "currentNumber = {$settings.view.currentLineNumber}"
   result.addLine fmt "statusLine = {$settings.statusLine.enable}"
@@ -2648,30 +2665,10 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
 
   result.addLine ""
 
-  proc fgColor(t: ColorTheme, index: EditorColorPairIndex): string =
-    let hexColor = t.foregroundRgb(index).toHex
-    if hexColor.isSome: return hexColor.get
-    else: "termDefautFg"
-
-  proc bgColor(t: ColorTheme, index: EditorColorPairIndex): string =
-    let hexColor = t.backgroundRgb(index).toHex
-    if hexColor.isSome: return hexColor.get
-    else: "termDefautBg"
-
-  let theme = settings.standard.editorcolorTheme
   result.addLine fmt "[Theme]"
-  result.addLine fmt "baseTheme = \"{$theme}\""
-
-  for index in EditorColorPairIndex:
-    case index:
-      of EditorColorPairIndex.default:
-        result.addLine fmt "foreground = \"{theme.fgColor(index)}\""
-        result.addLine fmt "background = \"{theme.bgColor(index)}\""
-      of EditorColorPairIndex.currentLineBg:
-        result.addLine fmt "{$index} = \"{theme.bgColor(index)}\""
-      else:
-        result.addLine fmt "{$index} = \"{theme.fgColor(index)}\""
-        result.addLine fmt "{$index}Bg = \"{theme.bgColor(index)}\""
+  result.addLine fmt "kind = \"{$settings.theme.kind}\""
+  if settings.theme.kind == ColorThemeKind.config:
+    result.addLine fmt "path = \"{$settings.theme.path}\""
 
 # Generate a string of the default TOML configuration.
 proc genDefaultTomlConfigStr*(): string {.inline.} =

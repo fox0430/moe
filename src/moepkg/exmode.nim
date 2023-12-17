@@ -24,8 +24,7 @@ import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
        unicodeext, independentutils, highlight, windownode, movement, build,
        bufferstatus, editor, settings, quickrunutils, messages, commandline,
        debugmodeutils, platform, commandlineutils, recentfilemode, messagelog,
-       buffermanager, viewhighlight, configmode, git, syntaxcheck, theme,
-       exmodeutils
+       buffermanager, viewhighlight, configmode, git, syntaxcheck, exmodeutils
 
 proc startDebugMode(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
@@ -254,18 +253,17 @@ proc liveReloadOfConfSettingCommand(status: var EditorStatus, command: Runes) =
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
 proc changeThemeSettingCommand(status: var EditorStatus, command: Runes) =
-  if command == ru"dark":
-    status.settings.standard.editorColorTheme = ColorTheme.dark
-  elif command == ru"light":
-    status.settings.standard.editorColorTheme = ColorTheme.light
-  elif command == ru"vivid":
-    status.settings.standard.editorColorTheme = ColorTheme.vivid
-  elif command == ru"config":
-    status.settings.standard.editorColorTheme = ColorTheme.config
-  elif command == ru"vscode":
-    status.settings.standard.editorColorTheme = ColorTheme.vscode
+  case $command:
+    of "defaut":
+      status.settings.theme.kind = ColorThemeKind.default
+    of "vscode":
+      status.settings.theme.kind = ColorThemeKind.vscode
+    of "config":
+      status.settings.theme.kind = ColorThemeKind.config
+    else:
+      discard
 
-  let r = status.changeTheme
+  let r = status.settings.changeTheme
   # TODO: Add error message
   if r.isOk:
     status.resize

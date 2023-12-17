@@ -27,7 +27,6 @@ type
     highlights: seq[seq[EditorColorPairIndex]]
 
   EditorViewConfig* = object
-    theme*: ColorTheme
     colorMode*: ColorMode
     isCursorLine*: bool
     isLineNumber*: bool
@@ -359,7 +358,6 @@ proc writeCurrentLine(
   y, x, i, last: int) =
 
     if view.config.isHighlightCurrentLine and not view.editorMode.isVisualMode:
-      let themeColors = ColorThemeTable[view.config.theme]
 
       # Change background color to white if background color is editorBg
       let
@@ -378,8 +376,7 @@ proc writeCurrentLine(
       let
         bufferFg = originalColorPair.foreground
 
-        originalBgRgb = view.config.theme.backgroundRgb(
-          EditorColorPairIndex.default)
+        originalBgRgb = backgroundRgb(EditorColorPairIndex.default)
         bufferBg =
           if originalColorPair.background.rgb == originalBgRgb:
             themeColors[EditorColorPairIndex.currentLineBg].background

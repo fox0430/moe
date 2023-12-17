@@ -1,0 +1,173 @@
+[Colors]
+
+foreground = "#f8f5e3"
+background = "#000000"
+
+lineNum = "#8a8a8a"
+lineNumBg = "#000000"
+
+currentLineNum = "#ff0087"
+currentLineNumBg = "#000000"
+
+statusLineNormalMode = "#000000"
+statusLineNormalModeBg = "#ff0087"
+statusLineNormalModeLabel = "#000000"
+statusLineNormalModeLabelBg = "#ffffff"
+statusLineNormalModeInactive = "#ff0087"
+statusLineNormalModeInactiveBg = "#ffffff"
+
+statusLineInsertMode = "#000000"
+statusLineInsertModeBg = "#ff0087"
+statusLineInsertModeLabel = "#000000"
+statusLineInsertModeLabelBg = "#ffffff"
+statusLineInsertModeInactive = "#ff0087"
+statusLineInsertModeInactiveBg = "#ffffff"
+
+statusLineVisualMode = "#000000"
+statusLineVisualModeBg = "#ff0087"
+statusLineVisualModeLabel = "#000000"
+statusLineVisualModeLabelBg = "#ffffff"
+statusLineVisualModeInactive = "#ff0087"
+statusLineVisualModeInactiveBg = "#ffffff"
+
+statusLineReplaceMode = "#000000"
+statusLineReplaceModeBg = "#ff0087"
+statusLineReplaceModeLabel = "#000000"
+statusLineReplaceModeLabelBg = "#ffffff"
+statusLineReplaceModeInactive = "#ff0087"
+statusLineReplaceModeInactiveBg = "#ffffff"
+
+statusLineFilerMode = "#000000"
+statusLineFilerModeBg = "#ff0087"
+statusLineFilerModeLabel = "#000000"
+statusLineFilerModeLabelBg = "#ffffff"
+statusLineFilerModeInactive = "#ff0087"
+statusLineFilerModeInactiveBg = "#ffffff"
+
+statusLineExMode = "#000000"
+statusLineExModeBg = "#ff0087"
+statusLineExModeLabel = "#000000"
+statusLineExModeLabelBg = "#ffffff"
+statusLineExModeInactive = "#ff0087"
+statusLineExModeInactiveBg = "#ffffff"
+
+statusLineGitChangedLines = "#ff0087"
+statusLineGitChangedLinesBg = "#000000"
+statusLineGitBranch = "#ff0087"
+statusLineGitBranchBg = "#000000"
+
+tab = "#ffffff"
+tabBg = "#000000"
+currentTab = "#000000"
+currentTabBg = "#ff0087"
+
+commandLine = "#ffffff"
+commandLineBg = "#000000"
+
+errorMessage = "#ff0000"
+errorMessageBg = "#000000"
+
+warnMessage = "#ffff00"
+warnMessageBg = "#000000"
+
+searchResult = "#ffffff"
+searchResultBg = "#ff0087"
+
+visualMode = "#ffffff"
+visualModeBg = "#ff0087"
+
+keyword = "#ff0087"
+functionName = "#ffd700"
+typeName = "#ffd700"
+boolean = "#ffff00"
+charLit = "#ff0087"
+stringLit = "#ff0087"
+specialVar = "#008000"
+builtin = "#00ffff"
+binNumber = "#00ffff"
+decNumber = "#00ffff"
+floatNumber = "#00ffff"
+hexNumber = "#00ffff"
+octNumber = "#00ffff"
+comment = "#808080"
+longComment = "#808080"
+whitespace = "#808080"
+preprocessor = "#808080"
+pragma = "#ffff00"
+identifier = "#ffffff"
+table = "#ffff00"
+date = "#ffff00"
+operator = "#ffd700"
+
+currentFile = "#ffffff"
+currentFileBg = "#ff0087"
+file = "#ffffff"
+fileBg = "#000000"
+dir = "#ff0087"
+dirBg = "#000000"
+pcLink = "#00ffff"
+pcLinkBg = "#000000"
+
+popupWindow = "#ffffff"
+popupWindowBg = "#000000"
+popupWinCurrentLine = "#ff0087"
+popupWinCurrentLineBg = "#000000"
+
+replaceText = "#000000"
+replaceTextBg = "#ff0087"
+
+parenPair = "#000000"
+parenPairBg = "#808080"
+
+currentWord = "#000000"
+currentWordBg = "#808080"
+
+highlightFullWidthSpace = "#ff0000"
+highlightFullWidthSpaceBg = "#ff0000"
+
+highlightTrailingSpaces = "#ff0000"
+highlightTrailingSpacesBg = "#ff0000"
+
+reservedWord = "#ff0087"
+reservedWordBg = "#808080"
+
+syntaxCheckInfo = "#ffff00"
+syntaxCheckInfoBg = "#000000"
+syntaxCheckHint = "#ffff00"
+syntaxCheckHintBg = "#000000"
+syntaxCheckWarn = "#ffff00"
+syntaxCheckWarnBg = "#000000"
+syntaxCheckErr = "#ff0000"
+syntaxCheckErrBg = "#000000"
+
+gitConflict = "#00ff00"
+gitConflictBg = "#000000"
+
+backupManagerCurrentLine = "#ffffff"
+backupManagerCurrentLineBg = "#ff0087"
+
+diffViewerAddedLine = "#008000"
+diffViewerAddedLineBg = "#000000"
+diffViewerDeletedLine = "#ff0000"
+diffViewerDeletedLineBg = "#000000"
+
+configModeCurrentLine = "#ffffff"
+configModeCurrentLineBg = "#ff0087"
+
+currentLineBg = "#444444"
+
+sidebarGitAddedSign = "#008000"
+sidebarGitAddedSignBg = "#000000"
+sidebarGitDeletedSign = "#ff0000"
+sidebarGitDeletedSignBg = "#000000"
+sidebarGitChangedSign = "#ffff00"
+sidebarGitChangedSignBg = "#000000"
+
+sidebarSyntaxCheckInfoSign = "#ffff00"
+sidebarSyntaxCheckInfoSignBg = "#000000"
+sidebarSyntaxCheckHintSign = "#ffff00"
+sidebarSyntaxCheckHintSignBg = "#000000"
+sidebarSyntaxCheckWarnSign = "#ffff00"
+sidebarSyntaxCheckWarnSignBg = "#000000"
+sidebarSyntaxCheckErrSign = "#ff0000"
+sidebarSyntaxCheckErrSignBg = "#000000"

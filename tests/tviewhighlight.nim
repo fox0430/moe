@@ -102,7 +102,6 @@ suite "viewhighlight: highlightCurrentWordElsewhere":
     var highlight = currentMainWindowNode.highlight
     highlight.highlightCurrentWordElsewhere(
       bufferInView,
-      status.settings.standard.editorColorTheme,
       status.settings.standard.colorMode)
 
     check highlight[0].color == EditorColorPairIndex.default
@@ -120,7 +119,6 @@ suite "viewhighlight: highlightCurrentWordElsewhere":
     var highlight = currentMainWindowNode.highlight
     highlight.highlightCurrentWordElsewhere(
       bufferInView,
-      status.settings.standard.editorColorTheme,
       status.settings.standard.colorMode)
 
     check highlight[0].color == EditorColorPairIndex.default
@@ -139,7 +137,6 @@ suite "viewhighlight: highlightCurrentWordElsewhere":
     var highlight = currentMainWindowNode.highlight
     highlight.highlightCurrentWordElsewhere(
       bufferInView,
-      status.settings.standard.editorColorTheme,
       status.settings.standard.colorMode)
 
     check highlight[0].color == EditorColorPairIndex.default
@@ -158,7 +155,6 @@ suite "viewhighlight: highlightCurrentWordElsewhere":
     var highlight = currentMainWindowNode.highlight
     highlight.highlightCurrentWordElsewhere(
       bufferInView,
-      status.settings.standard.editorColorTheme,
       status.settings.standard.colorMode)
 
     check highlight[0].color == EditorColorPairIndex.default

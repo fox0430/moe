@@ -19,7 +19,7 @@
 
 import std/[strutils, os, strformat, tables, times, heapqueue, deques, options,
             encodings, math]
-import pkg/results
+import pkg/[results, parsetoml]
 import syntax/highlite
 import lsp/client
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
@@ -769,9 +769,6 @@ proc updateEditorViewConfig(view: var EditorView, settings: EditorSettings) =
   if viewConf.colorMode != settings.standard.colorMode:
     viewConf.colorMode = settings.standard.colorMode
 
-  if viewConf.theme != settings.standard.editorColorTheme:
-    viewConf.theme = settings.standard.editorColorTheme
-
   if viewConf.isCursorLine != settings.view.cursorLine:
     viewConf.isCursorLine = settings.view.cursorLine
 
@@ -1275,19 +1272,21 @@ proc smoothHalfPageDown*(status: var EditorStatus): Option[Rune] {.inline.} =
   status.smoothScrollDownNumberOfLines(
     int(currentMainWindowNode.view.height / 2))
 
-proc changeTheme*(status: var EditorStatus): Result[(), string] =
-  if status.settings.standard.editorColorTheme == ColorTheme.vscode:
-    let vsCodeTheme = loadVSCodeTheme()
-    if vsCodeTheme.isOk:
-      status.settings.standard.editorColorTheme = vsCodeTheme.get
-    else:
-      status.commandLine.writeError(
-        fmt"Error: Failed to switch to VSCode theme: {vsCodeTheme.error}")
+proc changeTheme*(s: var EditorSettings): Result[(), string] =
+  case s.theme.kind:
+    of ColorThemeKind.default:
+      s.theme.colors = DefaultColors
+    of ColorThemeKind.config:
+      let toml = loadThemeFile(s.theme.path)
+      if toml.isErr: return Result[(), string].err toml.tryError
+      s.theme.colors = toml.get.toThemeColors
+    of ColorThemeKind.vscode:
+      let colors = loadVSCodeTheme()
+      if colors.isErr: return Result[(), string].err colors.error
+      s.theme.colors = colors.get
 
-  let r = status.settings.standard.editorColorTheme.initEditrorColor(
-    status.settings.standard.colorMode)
-  if r.isErr:
-    return Result[(), string].err r.error
+  let r = s.theme.colors.initEditrorColor(s.standard.colorMode)
+  if r.isErr: return Result[(), string].err r.error
 
   return Result[(), string].ok ()
 
@@ -1309,19 +1308,10 @@ proc autoSave(status: var EditorStatus) =
       status.bufStatus[index].lastSaveTime = now()
 
 proc loadConfigurationFile*(status: var EditorStatus) =
-  status.settings =
-    try:
-      loadSettingFile()
-    except InvalidItemError:
-      let invalidItem = getCurrentExceptionMsg()
-      status.commandLine.writeInvalidItemInConfigurationFileError(
-        invalidItem)
-      initEditorSettings()
-    except IOError, TomlError:
-      let failureCause = getCurrentExceptionMsg()
-      status.commandLine.writeFailedToLoadConfigurationFileError(
-        failureCause)
-      initEditorSettings()
+  if fileExists(configFilePath()):
+    let r = status.settings.loadConfigs()
+    if r.isErr:
+      status.commandLine.writeInvalidItemInConfigurationFileError(r.error)
 
 proc checkBackgroundBuild(status: var EditorStatus) =
   var i = 0
@@ -1456,13 +1446,13 @@ proc runBackgroundTasks*(status: var EditorStatus) =
      status.timeConfFileLastReloaded + 1.seconds < now():
        # Live reload of configuration file
 
-       let beforeTheme = status.settings.standard.editorColorTheme
+       let beforeTheme = status.settings.theme.colors
 
        status.loadConfigurationFile
 
        status.timeConfFileLastReloaded = now()
-       if beforeTheme != status.settings.standard.editorColorTheme:
-         let r = changeTheme(status)
+       if beforeTheme != status.settings.theme.colors:
+         let r = status.settings.changeTheme
          if r.isErr:
            # Exit the editor if it failed.
            exitUi()

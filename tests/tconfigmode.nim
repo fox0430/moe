@@ -40,7 +40,6 @@ suite "Config mode: Init buffer":
 
     const Sample = @[
       "Standard",
-      "  theme                          dark",
       "  number                         true",
       "  currentNumber                  true",
       "  cursorLine                     false",
@@ -614,15 +613,6 @@ proc checkBoolSettingValue(default: bool, values: seq[Runes]) =
     check values == @[ru "false", ru "true"]
 
 suite "Config mode: Get standard table setting values":
-  test "Get theme values":
-    var status = initEditorStatus()
-    let settings = status.settings
-
-    const Name = "theme"
-    let values = settings.getStandardTableSettingValues(Name)
-
-    check values == @[ru"dark", ru"light",ru "vivid", ru"config", ru"vscode"]
-
   test "Get defaultCursor values":
     var status = initEditorStatus()
     let settings = status.settings
@@ -1644,12 +1634,6 @@ suite "Config mode: Get Git table setting values":
     check s.getGitTableSettingsValues(Name).len == 0
 
 suite "Config mode: Chaging Standard table settings":
-  test "Chaging theme":
-    var settings = initEditorSettings()
-    settings.changeStandardTableSetting("theme", "vivid")
-
-    check settings.standard.editorColorTheme == ColorTheme.vivid
-
   test "Chaging number":
     var settings = initEditorSettings()
 
@@ -2448,8 +2432,7 @@ suite "Config mode: Change Theme table settings":
         $pairIndex,
         "#000000").isOk
 
-      assert "#000000".hexToRgb.get ==
-        settings.standard.editorColorTheme.foregroundRgb(pairIndex)
+      assert "#000000".hexToRgb.get == foregroundRgb(pairIndex)
 
   test "change background":
     var settings = initEditorSettings()
@@ -2460,8 +2443,7 @@ suite "Config mode: Change Theme table settings":
         $pairIndex,
         "#000000").isOk
 
-      assert "#000000".hexToRgb.get ==
-        settings.standard.editorColorTheme.backgroundRgb(pairIndex)
+      assert "#000000".hexToRgb.get == backgroundRgb(pairIndex)
 
 suite "Config mode: Get BuildOnSave table setting type":
   test "Get enable setting type":

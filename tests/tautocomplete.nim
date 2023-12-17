@@ -126,20 +126,18 @@ suite "autocomplete: extractNeighborPath":
     extractNeighborPathTest(i, c.expectVal, c.text, c.position)
 
 suite "autocomplete: getPathList":
-  block:
-    proc getPathListTest(testIndex: int, expectVal, path: Runes) =
-      ## Check return values of suggestionwindow.getPathList
+  proc runGetPathListTest(testIndex: int, expectVal, path: Runes) =
+    ## Check return values of suggestionwindow.getPathList
 
-      let testTitle = "Case :" & $testIndex & $path
-      test testTitle:
-        check expectVal == getPathList(path)
+    test "Case :" & $testIndex & $path:
+      check expectVal == getPathList(path)
 
-    const TestCases: seq[tuple[expectVal, path: Runes]] = @[
-      (expectVal: "moerc.toml ".ru, path: "./example/".ru),
-      (expectVal: "moerc.toml ".ru, path: "./example/m".ru)]
+  const TestCases: seq[tuple[expectVal, path: Runes]] = @[
+    (expectVal: ru"themes moerc.toml ", path: ru"./example/"),
+    (expectVal: ru"moerc.toml ", path: ru"./example/m")]
 
-    for i, c in TestCases:
-      getPathListTest(i, c.expectVal, c.path)
+  for i, c in TestCases:
+    runGetPathListTest(i, c.expectVal, c.path)
 
 suite "getTextInLangKeywords":
   test "C":

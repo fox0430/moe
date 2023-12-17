@@ -17,14 +17,17 @@
 #                                                                              #
 #[############################################################################]#
 
-import moepkg/[editorstatus, init, mainloop]
+import pkg/results
+import moepkg/[editorstatus, init, mainloop, ui]
 
 proc main() =
   var status = initEditor()
+  if status.isErr:
+    exitUi()
+    raise newException(InitError, status.error)
 
-  status.editorMainLoop
+  status.get.editorMainLoop
 
-  status.exitEditor
+  status.get.exitEditor
 
 when isMainModule: main()
-

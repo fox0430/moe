@@ -22,6 +22,9 @@ import pkg/results
 import ui, bufferstatus, editorstatus, cmdlineoption, git, editorview, theme,
        settings, messages, logger, registers
 
+type
+  InitError* = CatchableError
+
 proc loadPersistData(status: var EditorStatus) =
   ## Load persisted data (Ex command history, search history and cursor
   ## postion)
@@ -100,47 +103,45 @@ proc initSidebar(status: var EditorStatus) =
   if status.settings.view.sidebar:
     currentMainWindowNode.view.initSidebar
 
-proc initEditor*(): EditorStatus =
+proc initEditor*(): Result[EditorStatus, string] =
   let parsedList = parseCommandLineOption(commandLineParams())
 
   startUi()
 
-  result = initEditorStatus()
-  result.loadConfigurationFile
-  result.timeConfFileLastReloaded = now()
+  var s = initEditorStatus()
 
-  if result.settings.lsp.enable:
+  s.loadConfigurationFile
+  s.timeConfFileLastReloaded = now()
+
+  if s.settings.lsp.enable:
     # Force enable logger if enabled LSP.
     initLogger()
 
   block initColors:
-    # TODO: Show error messages when failing to the load VSCode theme.
-    let r = result.settings.standard.editorColorTheme.initEditrorColor(
-      result.settings.standard.colorMode)
-    if r.isErr:
-      exitUi()
-      echo r.error
-      # TODO: Fix raise
-      raise
+    let r = s.settings.theme.colors.initEditrorColor(
+      s.settings.standard.colorMode)
+    if r.isErr: return Result[EditorStatus, string].err r.error
 
   setControlCHook(proc() {.noconv.} =
     exitUi()
     quit())
 
   if parsedList.isReadonly:
-    result.isReadonly = true
+    s.isReadonly = true
 
-  result.addBufferStatus(parsedList)
+  s.addBufferStatus(parsedList)
 
-  result.loadPersistData
+  s.loadPersistData
 
-  result.initSidebar
+  s.initSidebar
 
-  if result.settings.clipboard.enable:
-    result.registers.setClipBoardTool(result.settings.clipboard.tool)
+  if s.settings.clipboard.enable:
+    s.registers.setClipBoardTool(s.settings.clipboard.tool)
 
   disableControlC()
   catchTerminalResize()
 
   showCursor()
   setBlinkingBlockCursor()
+
+  return Result[EditorStatus, string].ok s
