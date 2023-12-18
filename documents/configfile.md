@@ -12,15 +12,6 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 ## Setting items
 
 ### Standard table
-Color theme (String)
-`"vivid"` or `"dark"` or `"light"` or `"vscode"`
-default is `"dark"`.
-```
-theme
-```
-
-Note: `"vscode"` is you can use current VSCode/VSCodium theme. Check [#648](https://github.com/fox0430/moe/pull/648)
-
 Display line numbers (bool)  
 default is true
 ```
