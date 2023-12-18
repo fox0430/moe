@@ -421,5 +421,5 @@ proc overwriteColorSegmentBlock*[T](
         firstColumn: startColumn,
         lastRow: i,
         lastColumn: min(endColumn, buffer[i].high),
-        color: EditorColorPairIndex.visualMode)
+        color: EditorColorPairIndex.selectArea)
       highlight.overwrite(colorSegment)

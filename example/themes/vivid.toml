@@ -73,8 +73,8 @@ warnMessageBg = "#000000"
 searchResult = "#ffffff"
 searchResultBg = "#ff0087"
 
-visualMode = "#ffffff"
-visualModeBg = "#ff0087"
+selectArea = "#ffffff"
+selectAreaBg = "#ff0087"
 
 keyword = "#ff0087"
 functionName = "#ffd700"

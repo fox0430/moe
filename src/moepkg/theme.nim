@@ -255,12 +255,12 @@ const
         rgb: "#ff0000".hexToRgb.get)),
 
     # Selected area in Visual mode
-    EditorColorPairIndex.visualMode: ColorPair(
+    EditorColorPairIndex.selectArea: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.visualMode,
+        index: EditorColorIndex.selectArea,
         rgb: "#ffffff".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.visualModeBg,
+        index: EditorColorIndex.selectAreaBg,
         rgb: "#800080".hexToRgb.get)),
 
     # Color scheme

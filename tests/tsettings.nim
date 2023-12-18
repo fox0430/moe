@@ -19,7 +19,7 @@
 
 import std/[unittest, options, importutils]
 import pkg/[parsetoml, results]
-import moepkg/[unicodeext, ui, color, rgb]
+import moepkg/[unicodeext, ui, rgb, color]
 
 import moepkg/settings {.all.}
 
@@ -279,8 +279,8 @@ warnMessageBg = "#111111"
 searchResult = "#111111"
 searchResultBg = "#111111"
 
-visualMode = "#111111"
-visualModeBg = "#111111"
+selectArea = "#111111"
+selectAreaBg = "#111111"
 
 keyword = "#111111"
 functionName = "#111111"

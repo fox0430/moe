@@ -19,7 +19,7 @@
 
 import std/[unittest, strformat, os, options]
 import pkg/results
-import moepkg/[unicodeext, editorstatus, bufferstatus, color, ui, rgb, theme]
+import moepkg/[unicodeext, editorstatus, bufferstatus, ui]
 
 import moepkg/settings {.all.}
 import moepkg/configmode {.all.}
