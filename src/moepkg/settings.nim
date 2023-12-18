@@ -598,7 +598,7 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
     result[EditorColorPairIndex.searchResult].foreground.rgb =
       colorFromNode(jsonNode{"colors", "editor.foreground"})
 
-    result[EditorColorPairIndex.visualMode].foreground.rgb =
+    result[EditorColorPairIndex.selectArea].foreground.rgb =
       colorFromNode(jsonNode{"colors", "editor.foreground"})
 
   if jsonNode["colors"].contains("editor.background"):
@@ -963,7 +963,7 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
     result[EditorColorPairIndex.searchResult].background.rgb =
       colorFromNode(jsonNode{"colors", "tab.activeBorder"})
 
-    result[EditorColorPairIndex.visualMode].background.rgb =
+    result[EditorColorPairIndex.selectArea].background.rgb =
       colorFromNode(jsonNode{"colors", "tab.activeBorder"})
 
   if jsonNode["colors"].contains("dir.inserted"):

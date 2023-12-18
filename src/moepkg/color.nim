@@ -392,9 +392,8 @@ type
     # search result highlighting
     searchResult
     searchResultBg
-    # selected area in visual mode
-    visualMode
-    visualModeBg
+    selectArea
+    selectAreaBg
 
     # color scheme
     keyword
@@ -569,8 +568,9 @@ type
 
     # search result highlighting
     searchResult
+
     # selected area in visual mode
-    visualMode
+    selectArea
 
     # Color scheme
     keyword

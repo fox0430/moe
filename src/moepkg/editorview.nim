@@ -462,7 +462,7 @@ proc writeAllLines*[T](
         if view.editorMode.isVisualMode and
            (view.originalLine[y] >= view.selectedRange.first and
            view.selectedRange.last >= view.originalLine[y]):
-             view.write(win, y, x, ru" ", EditorColorPairIndex.visualMode)
+             view.write(win, y, x, ru" ", EditorColorPairIndex.selectArea)
         else:
           view.write(win, y, x, view.lines[y], EditorColorPairIndex.default)
 

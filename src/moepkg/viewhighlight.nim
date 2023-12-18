@@ -93,7 +93,7 @@ proc highlightSelectedArea(
 
     var colorSegment = initSelectedAreaColorSegment(
       position,
-      EditorColorPairIndex.visualMode)
+      EditorColorPairIndex.selectArea)
 
     if area.startLine == area.endLine:
       colorSegment.firstRow = area.startLine

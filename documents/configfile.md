@@ -1084,10 +1084,10 @@ searchResultBg
 
 Character color selected in visual mode
 ```
-visualMode
+selectArea
 ```
 ```
-visualModeBg
+selectAreaBg
 ```
 
 Syntax highlighting color
