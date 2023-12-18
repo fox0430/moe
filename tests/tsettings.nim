@@ -19,194 +19,370 @@
 
 import std/[unittest, options, importutils]
 import pkg/[parsetoml, results]
-import moepkg/[unicodeext, ui]
+import moepkg/[unicodeext, ui, color, rgb]
 
 import moepkg/settings {.all.}
 
-const TomlStr = """
-  [Standard]
-  number = false
-  currentNumber = false
-  cursorLine = true
-  statusLine = false
-  tabLine = false
-  syntax = false
-  indentationLines = false
-  tabStop = 4
-  autoCloseParen = false
-  autoIndent = false
-  ignorecase = false
-  smartcase = false
-  disableChangeCursor = true
-  defaultCursor = "blinkIbeam"
-  normalModeCursor = "blinkIbeam"
-  insertModeCursor = "blinkBlock"
-  liveReloadOfConf = true
-  incrementalSearch = false
-  popupWindowInExmode = false
-  autoDeleteParen = false
-  colorMode = "none"
+const MoercStr = """
+[Standard]
+number = false
+currentNumber = false
+cursorLine = true
+statusLine = false
+tabLine = false
+syntax = false
+indentationLines = false
+tabStop = 4
+autoCloseParen = false
+autoIndent = false
+ignorecase = false
+smartcase = false
+disableChangeCursor = true
+defaultCursor = "blinkIbeam"
+normalModeCursor = "blinkIbeam"
+insertModeCursor = "blinkBlock"
+liveReloadOfConf = true
+incrementalSearch = false
+popupWindowInExmode = false
+autoDeleteParen = false
+colorMode = "none"
 
-  [Clipboard]
-  enable = false
-  tool = "xclip"
+[Clipboard]
+enable = false
+tool = "xclip"
 
-  [BuildOnSave]
-  enable = true
-  workspaceRoot = "/home/fox/git/moe"
-  command = "cd /home/fox/git/moe && nimble build"
+[BuildOnSave]
+enable = true
+workspaceRoot = "/home/fox/git/moe"
+command = "cd /home/fox/git/moe && nimble build"
 
-  [TabLine]
-  allBuffer = true
+[TabLine]
+allBuffer = true
 
-  [StatusLine]
-  multipleStatusLine = false
-  merge = true
-  mode = false
-  filename = false
-  chanedMark = false
-  directory = false
-  gitChangedLines = false
-  gitBranchName = false
-  showGitInactive = true
-  showModeInactive = true
-  setupText = "{lineNumber}/{totalLines}"
+[StatusLine]
+multipleStatusLine = false
+merge = true
+mode = false
+filename = false
+chanedMark = false
+directory = false
+gitChangedLines = false
+gitBranchName = false
+showGitInactive = true
+showModeInactive = true
+setupText = "{lineNumber}/{totalLines}"
 
-  [Highlight]
-  currentLine = true
-  reservedWord = ["TEST", "TEST2"]
-  replaceText = false
-  pairOfParen = false
-  fullWidthSpace = false
-  trailingSpaces = false
-  currentWord = false
+[Highlight]
+currentLine = true
+reservedWord = ["TEST", "TEST2"]
+replaceText = false
+pairOfParen = false
+fullWidthSpace = false
+trailingSpaces = false
+currentWord = false
 
-  [AutoBackup]
-  enable = false
-  idleTime = 1
-  interval = 1
-  backupDir = "/tmp"
-  dirToExclude = ["/tmp"]
+[AutoBackup]
+enable = false
+idleTime = 1
+interval = 1
+backupDir = "/tmp"
+dirToExclude = ["/tmp"]
 
-  [QuickRun]
-  saveBufferWhenQuickRun = false
-  command = "nimble build"
-  timeout = 1
-  nimAdvancedCommand = "js"
-  clangOptions = "-Wall"
-  cppOptions = "-Wall"
-  nimOptions = "--debugger:native"
-  shOptions = "-c"
-  bashOptions = "-c"
+[QuickRun]
+saveBufferWhenQuickRun = false
+command = "nimble build"
+timeout = 1
+nimAdvancedCommand = "js"
+clangOptions = "-Wall"
+cppOptions = "-Wall"
+nimOptions = "--debugger:native"
+shOptions = "-c"
+bashOptions = "-c"
 
-  [Notification]
-  screenNotifications = false
-  logNotifications = false
-  autoBackupScreenNotify = false
-  autoBackupLogNotify = false
-  autoSaveScreenNotify = false
-  autoSaveLogNotify = false
-  yankScreenNotify = false
-  yankLogNotify = false
-  deleteScreenNotify = false
-  deleteLogNotify = false
-  saveScreenNotify = false
-  saveLogNotify = false
-  quickRunScreenNotify = false
-  quickRunLogNotify = false
-  buildOnSaveScreenNotify = false
-  buildOnSaveLogNotify = false
-  filerScreenNotify = false
-  filerLogNotify = false
-  restoreScreenNotify = false
-  restoreLogNotify = false
+[Notification]
+screenNotifications = false
+logNotifications = false
+autoBackupScreenNotify = false
+autoBackupLogNotify = false
+autoSaveScreenNotify = false
+autoSaveLogNotify = false
+yankScreenNotify = false
+yankLogNotify = false
+deleteScreenNotify = false
+deleteLogNotify = false
+saveScreenNotify = false
+saveLogNotify = false
+quickRunScreenNotify = false
+quickRunLogNotify = false
+buildOnSaveScreenNotify = false
+buildOnSaveLogNotify = false
+filerScreenNotify = false
+filerLogNotify = false
+restoreScreenNotify = false
+restoreLogNotify = false
 
-  [Filer]
-  showIcons = false
+[Filer]
+showIcons = false
 
-  [Autocomplete]
-  enable = false
+[Autocomplete]
+enable = false
 
-  [AutoSave]
-  enable = false
-  interval = 1
+[AutoSave]
+enable = false
+interval = 1
 
-  [Persist]
-  exCommand = false
-  exCommandHistoryLimit = 1
-  search = false
-  searchHistoryLimit = 1
-  cursorPosition = false
+[Persist]
+exCommand = false
+exCommandHistoryLimit = 1
+search = false
+searchHistoryLimit = 1
+cursorPosition = false
 
-  [Git]
-  showChangedLine = false
-  updateInterval = 1
+[Git]
+showChangedLine = false
+updateInterval = 1
 
-  [SyntaxChecker]
-  enable = true
+[SyntaxChecker]
+enable = true
 
-  [SmoothScroll]
-  enable = false
-  minDelay = 1
-  maxDelay = 1
+[SmoothScroll]
+enable = false
+minDelay = 1
+maxDelay = 1
 
-  [StartUp.FileOpen]
-  autoSplit = false
-  splitType = "horizontal"
+[StartUp.FileOpen]
+autoSplit = false
+splitType = "horizontal"
 
-  [Lsp]
-  enable = true
+[Lsp]
+enable = true
 
-  [Lsp.nim]
-  extensions = ["nim"]
-  command = "nimlangserver"
+[Lsp.nim]
+extensions = ["nim"]
+command = "nimlangserver"
 
-  [Lsp.rust]
-  extensions = ["rs"]
-  command = "rust-analyzer"
+[Lsp.rust]
+extensions = ["rs"]
+command = "rust-analyzer"
 
-  [Debug.WindowNode]
-  enable = false
-  currentWindow = false
-  index = false
-  windowIndex = false
-  bufferIndex = false
-  parentIndex = false
-  childLen = false
-  splitType = false
-  haveCursesWin = false
-  y = false
-  x = false
-  h = false
-  w = false
-  currentLine = false
-  currentColumn = false
-  expandedColumn = false
-  cursor = false
+[Debug.WindowNode]
+enable = false
+currentWindow = false
+index = false
+windowIndex = false
+bufferIndex = false
+parentIndex = false
+childLen = false
+splitType = false
+haveCursesWin = false
+y = false
+x = false
+h = false
+w = false
+currentLine = false
+currentColumn = false
+expandedColumn = false
+cursor = false
 
-  [Debug.BufferStatus]
-  enable = false
-  bufferIndex = false
-  path = false
-  openDir = false
-  currentMode = false
-  prevMode = false
-  language = false
-  encoding = false
-  countChange = false
-  cmdLoop = false
-  lastSaveTime = false
-  bufferLen = false
+[Debug.BufferStatus]
+enable = false
+bufferIndex = false
+path = false
+openDir = false
+currentMode = false
+prevMode = false
+language = false
+encoding = false
+countChange = false
+cmdLoop = false
+lastSaveTime = false
+bufferLen = false
 
-  [Theme]
-  kind = "config"
-  path = "~/user/.config/moe/themes/my_theme.toml"
+[Theme]
+kind = "config"
+path = "~/user/.config/moe/themes/my_theme.toml"
 """
 
-suite "Parse configuration file":
+const ColorsConfigStr = """
+[Colors]
+
+foreground = "#111111"
+background = "#111111"
+
+lineNum = "#111111"
+lineNumBg = "#111111"
+
+currentLineNum = "#111111"
+currentLineNumBg = "#111111"
+
+statusLineNormalMode = "#111111"
+statusLineNormalModeBg = "#111111"
+statusLineNormalModeLabel = "#111111"
+statusLineNormalModeLabelBg = "#111111"
+statusLineNormalModeInactive = "#111111"
+statusLineNormalModeInactiveBg = "#111111"
+
+statusLineInsertMode = "#111111"
+statusLineInsertModeBg = "#111111"
+statusLineInsertModeLabel = "#111111"
+statusLineInsertModeLabelBg = "#111111"
+statusLineInsertModeInactive = "#111111"
+statusLineInsertModeInactiveBg = "#111111"
+
+statusLineVisualMode = "#111111"
+statusLineVisualModeBg = "#111111"
+statusLineVisualModeLabel = "#111111"
+statusLineVisualModeLabelBg = "#111111"
+statusLineVisualModeInactive = "#111111"
+statusLineVisualModeInactiveBg = "#111111"
+
+statusLineReplaceMode = "#111111"
+statusLineReplaceModeBg = "#111111"
+statusLineReplaceModeLabel = "#111111"
+statusLineReplaceModeLabelBg = "#111111"
+statusLineReplaceModeInactive = "#111111"
+statusLineReplaceModeInactiveBg = "#111111"
+
+statusLineFilerMode = "#111111"
+statusLineFilerModeBg = "#111111"
+statusLineFilerModeLabel = "#111111"
+statusLineFilerModeLabelBg = "#111111"
+statusLineFilerModeInactive = "#111111"
+statusLineFilerModeInactiveBg = "#111111"
+
+statusLineExMode = "#111111"
+statusLineExModeBg = "#111111"
+statusLineExModeLabel = "#111111"
+statusLineExModeLabelBg = "#111111"
+statusLineExModeInactive = "#111111"
+statusLineExModeInactiveBg = "#111111"
+
+statusLineGitChangedLines = "#111111"
+statusLineGitChangedLinesBg = "#111111"
+statusLineGitBranch = "#111111"
+statusLineGitBranchBg = "#111111"
+
+tab = "#111111"
+tabBg = "#111111"
+currentTab = "#111111"
+currentTabBg = "#111111"
+
+commandLine = "#111111"
+commandLineBg = "#111111"
+
+errorMessage = "#111111"
+errorMessageBg = "#111111"
+
+warnMessage = "#111111"
+warnMessageBg = "#111111"
+
+searchResult = "#111111"
+searchResultBg = "#111111"
+
+visualMode = "#111111"
+visualModeBg = "#111111"
+
+keyword = "#111111"
+functionName = "#111111"
+typeName = "#111111"
+boolean = "#111111"
+charLit = "#111111"
+stringLit = "#111111"
+specialVar = "#111111"
+builtin = "#111111"
+binNumber = "#111111"
+decNumber = "#111111"
+floatNumber = "#111111"
+hexNumber = "#111111"
+octNumber = "#111111"
+comment = "#111111"
+longComment = "#111111"
+whitespace = "#111111"
+preprocessor = "#111111"
+pragma = "#111111"
+identifier = "#111111"
+table = "#111111"
+date = "#111111"
+operator = "#111111"
+
+currentFile = "#111111"
+currentFileBg = "#111111"
+file = "#111111"
+fileBg = "#111111"
+dir = "#111111"
+dirBg = "#111111"
+pcLink = "#111111"
+pcLinkBg = "#111111"
+
+popupWindow = "#111111"
+popupWindowBg = "#111111"
+popupWinCurrentLine = "#111111"
+popupWinCurrentLineBg = "#111111"
+
+replaceText = "#111111"
+replaceTextBg = "#111111"
+
+parenPair = "#111111"
+parenPairBg = "#111111"
+
+currentWord = "#111111"
+currentWordBg = "#111111"
+
+highlightFullWidthSpace = "#111111"
+highlightFullWidthSpaceBg = "#111111"
+
+highlightTrailingSpaces = "#111111"
+highlightTrailingSpacesBg = "#111111"
+
+reservedWord = "#111111"
+reservedWordBg = "#111111"
+
+syntaxCheckInfo = "#111111"
+syntaxCheckInfoBg = "#111111"
+syntaxCheckHint = "#111111"
+syntaxCheckHintBg = "#111111"
+syntaxCheckWarn = "#111111"
+syntaxCheckWarnBg = "#111111"
+syntaxCheckErr = "#111111"
+syntaxCheckErrBg = "#111111"
+
+gitConflict = "#111111"
+gitConflictBg = "#111111"
+
+backupManagerCurrentLine = "#111111"
+backupManagerCurrentLineBg = "#111111"
+
+diffViewerAddedLine = "#111111"
+diffViewerAddedLineBg = "#111111"
+diffViewerDeletedLine = "#111111"
+diffViewerDeletedLineBg = "#111111"
+
+configModeCurrentLine = "#111111"
+configModeCurrentLineBg = "#111111"
+
+currentLineBg = "#111111"
+
+sidebarGitAddedSign = "#111111"
+sidebarGitAddedSignBg = "#111111"
+sidebarGitDeletedSign = "#111111"
+sidebarGitDeletedSignBg = "#111111"
+sidebarGitChangedSign = "#111111"
+sidebarGitChangedSignBg = "#111111"
+
+sidebarSyntaxCheckInfoSign = "#111111"
+sidebarSyntaxCheckInfoSignBg = "#111111"
+sidebarSyntaxCheckHintSign = "#111111"
+sidebarSyntaxCheckHintSignBg = "#111111"
+sidebarSyntaxCheckWarnSign = "#111111"
+sidebarSyntaxCheckWarnSignBg = "#111111"
+sidebarSyntaxCheckErrSign = "#111111"
+sidebarSyntaxCheckErrSignBg = "#111111"
+"""
+
+suite "settings: Parse configuration file":
   test "Parse all settings":
     var settings = initEditorSettings()
-    settings.applyTomlConfigs(parsetoml.parseString(TomlStr))
+    settings.applyTomlConfigs(parsetoml.parseString(MoercStr))
 
     check not settings.view.lineNumber
     check not settings.view.currentLineNumber
@@ -472,9 +648,9 @@ suite "Parse configuration file":
 
     check ColorMode.c24bit == settings.standard.colorMode
 
-suite "Validate toml config":
+suite "settings: Validate editor config":
   test "Except for success":
-    let toml = parsetoml.parseString(TomlStr)
+    let toml = parsetoml.parseString(MoercStr)
     let result = toml.validateTomlConfig
 
     privateAccess InvalidItem
@@ -491,7 +667,7 @@ suite "Validate toml config":
 
     check isSome(result)
 
-suite "Validate Standard.theme":
+suite "settings: Validate Standard.theme":
   test "Dark":
     const TomlThemeConfig ="""
       [Standard]
@@ -559,7 +735,7 @@ suite "Validate Standard.theme":
     privateAccess InvalidItem
     check result == some(InvalidItem(name: "theme", val: "a"))
 
-suite "Validate theme tables":
+suite "settings: Validate theme table":
   test "Invalid":
     const TomlThemeConfig ="""
       [Theme]
@@ -611,15 +787,75 @@ suite "Validate theme tables":
 
     check result.isNone
 
-suite "Configuration example":
+suite "settings: Validate theme colors":
+  test "Invalid table":
+    const Toml ="""
+      [A]
+      background = "#ffffff"
+    """
+    check parsetoml.parseString(Toml).validateThemeColorsConfig.isSome
+
+  test "Invalid item":
+    const Toml ="""
+      [Colors]
+      background = "#ffffff"
+      invalidItem = "#ffffff"
+    """
+    check parsetoml.parseString(Toml).validateThemeColorsConfig.isSome
+
+  test "Valid":
+    check parsetoml.parseString(ColorsConfigStr)
+      .validateThemeColorsConfig.isNone
+
+suite "settings: toThemeColors":
+  test "All #111111":
+    let
+      toml = parsetoml.parseString(ColorsConfigStr)
+      themeColors = toml.toThemeColors
+
+    for color in themeColors:
+      check color.foreground.rgb == "#111111".hexToRgb.get
+      check color.background.rgb == "#111111".hexToRgb.get
+
+suite "settings: Validate configuration examples":
   test "Check moerc.toml":
     let
-      filename = "./example/moerc.toml"
-      toml = parsetoml.parseFile(filename)
+      path = "./example/moerc.toml"
+      toml = parsetoml.parseFile(path)
 
-    check toml.validateTomlConfig == none(InvalidItem)
+    check validateTomlConfig(toml).isNone
 
-suite "Generate toml current config":
+  test "Check themes/dark.toml":
+    let
+      path = "./example/themes/dark.toml"
+      toml = parsetoml.parseFile(path)
+
+    check validateThemeColorsConfig(toml).isNone
+
+  test "Check themes/light.toml":
+    let
+      path = "./example/themes/light.toml"
+      toml = parsetoml.parseFile(path)
+
+    check validateThemeColorsConfig(toml).isNone
+
+  test "Check themes/vivid.toml":
+    let
+      path = "./example/themes/vivid.toml"
+      toml = parsetoml.parseFile(path)
+
+    check validateThemeColorsConfig(toml).isNone
+
+suite "settings: LoadConfigFile":
+  test "Load example/moerc.toml":
+    var s = initEditorSettings()
+    s.theme.path = "before"
+
+    s.applyTomlConfigs(loadConfigFile("./example/moerc.toml").get)
+
+    check s.theme.path != "before"
+
+suite "settings: Generate toml current config":
   test "Generate current config":
     let
       settings = initEditorSettings()
@@ -630,7 +866,7 @@ suite "Generate toml current config":
 
     check result == none(InvalidItem)
 
-suite "Generate toml default config":
+suite "settings: Generate toml default config":
   test "Generate current config":
     let
       str = genDefaultTomlConfigStr()
@@ -640,48 +876,48 @@ suite "Generate toml default config":
 
     check result == none(InvalidItem)
 
-suite "Error message":
+suite "settings: Error message":
   test "Single line":
-    const TomlStr = """
+    const MoercStr = """
       [test]
       test = "test"
     """
 
     let
-      toml = parseString(TomlStr)
+      toml = parseString(MoercStr)
       result = toml.validateTomlConfig
       errorMessage = result.get.toValidateErrorMessage
 
     check errorMessage == """(name: test, val: test = "test")"""
 
   test "Single line 2":
-    const TomlStr = """
+    const MoercStr = """
       [Standard]
       test = "test"
     """
 
     let
-      toml = parseString(TomlStr)
+      toml = parseString(MoercStr)
       result = toml.validateTomlConfig
       errorMessage = result.get.toValidateErrorMessage
 
     check errorMessage == """(name: test, val: test)"""
 
   test "Multiple lines":
-    const TomlStr = """
+    const MoercStr = """
       [test]
       test1 = "test1"
       test2 = "test2"
     """
 
     let
-      toml = parseString(TomlStr)
+      toml = parseString(MoercStr)
       result = toml.validateTomlConfig
       errorMessage = result.get.toValidateErrorMessage
 
     check errorMessage == """(name: test, val: test1 = "test1" test2 = "test2")"""
 
-suite "ColorMode to string for the config file":
+suite "settings: ColorMode to string for the config file":
   test "from ColorMode.none":
     check "none" == ColorMode.none.toConfigStr
 

@@ -289,10 +289,6 @@ type
     name: string
     val: string
 
-  # Warning: inherit from a more precise exception type like ValueError, IOError or OSError.
-  # If these don't suit, inherit from CatchableError or Defect. [InheritFromException]
-  InvalidItemError* = object of ValueError
-
 proc initDebugModeSettings(): DebugModeSettings =
   result.windowNode = DebugWindowNodeSettings(
     enable: true,
@@ -2339,7 +2335,7 @@ proc loadConfigFile*(path: string): Result[TomlValueRef, string] =
 
   return Result[TomlValueRef, string].ok toml
 
-proc validateThemeConfig(toml: TomlValueRef): Option[InvalidItem] =
+proc validateThemeColorsConfig(toml: TomlValueRef): Option[InvalidItem] =
   proc editorColorIndexNames(): seq[string] {.compileTime.} =
     EditorColorIndex.mapIt(it.symbolName)
 
@@ -2373,7 +2369,7 @@ proc loadThemeFile*(path: string): Result[TomlValueRef, string] =
   except CatchableError as e:
     return Result[TomlValueRef, string].err e.msg
 
-  let invalidItem = validateThemeConfig(toml)
+  let invalidItem = validateThemeColorsConfig(toml)
   if invalidItem.isSome:
     return Result[TomlValueRef, string].err toValidateErrorMessage(
       invalidItem.get)
