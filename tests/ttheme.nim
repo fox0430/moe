@@ -23,34 +23,32 @@ import moepkg/[ui, rgb, color]
 
 import moepkg/theme {.all.}
 
-const DarkTheme = ColorTheme.dark
+template DefaultThemeFg: var Color =
+  themeColors[EditorColorPairIndex.default].foreground
 
-template darkDefaultFg: var Color =
-  ColorThemeTable[DarkTheme][EditorColorPairIndex.default].foreground
-
-template darkDefaultBg: var Color =
-  ColorThemeTable[DarkTheme][EditorColorPairIndex.default].background
+template DefaultThemeBg: var Color =
+  themeColors[EditorColorPairIndex.default].background
 
 suite "color: Get Color from ColorThemeTable":
   test "foregroundRgb":
-    darkDefaultFg.rgb = "#111111".hexToRgb.get
+    DefaultThemeFg.rgb = "#111111".hexToRgb.get
 
-    assert darkDefaultFg == Color(
+    assert DefaultThemeFg == Color(
       index: EditorColorIndex.foreground,
       rgb: "#111111".hexToRgb.get)
 
   test "backgroundRgb":
-    darkDefaultBg.rgb = "#111111".hexToRgb.get
+    DefaultThemeBg.rgb = "#111111".hexToRgb.get
 
-    assert darkDefaultBg == Color(
+    assert DefaultThemeBg == Color(
       index: EditorColorIndex.background,
       rgb: "#111111".hexToRgb.get)
 
   test "rgbPairFromEditorColorPair":
-    darkDefaultFg.rgb = "#222222".hexToRgb.get
-    darkDefaultBg.rgb = "#222222".hexToRgb.get
+    DefaultThemeFg.rgb = "#222222".hexToRgb.get
+    DefaultThemeBg.rgb = "#222222".hexToRgb.get
 
-    assert DarkTheme.rgbPairFromEditorColorPair(EditorColorPairIndex.default) ==
+    assert rgbPairFromEditorColorPair(EditorColorPairIndex.default) ==
       RgbPair(
         foreground: Rgb(red: 34, green: 34, blue: 34),
         background: Rgb(red: 34, green: 34, blue: 34))
@@ -58,17 +56,17 @@ suite "color: Get Color from ColorThemeTable":
 suite "color: Set index to ColorThemeTable":
   test "setForegroundIndex 1":
     for i in EditorColorIndex:
-      DarkTheme.setForegroundIndex(EditorColorPairIndex.default, i)
+      setForegroundIndex(EditorColorPairIndex.default, i)
 
     for i in EditorColorIndex:
-      DarkTheme.setForegroundIndex(EditorColorPairIndex.default, i.int)
+      setForegroundIndex(EditorColorPairIndex.default, i.int)
 
   test "setForegroundIndex 2":
     let invalidValue = EditorColorIndex.high.int + 1
     var isErr = false
 
     try:
-      DarkTheme.setForegroundIndex(EditorColorPairIndex.default, invalidValue)
+      setForegroundIndex(EditorColorPairIndex.default, invalidValue)
     except RangeDefect:
       isErr = true
 
@@ -76,17 +74,17 @@ suite "color: Set index to ColorThemeTable":
 
   test "setBackgroundIndex 1":
     for i in EditorColorIndex:
-      DarkTheme.setBackgroundIndex(EditorColorPairIndex.default, i)
+      setBackgroundIndex(EditorColorPairIndex.default, i)
 
     for i in EditorColorIndex:
-      DarkTheme.setBackgroundIndex(EditorColorPairIndex.default, i.int)
+      setBackgroundIndex(EditorColorPairIndex.default, i.int)
 
   test "setBackgroundIndex 2":
     let invalidValue = EditorColorIndex.high.int + 1
     var isErr = false
 
     try:
-      DarkTheme.setBackgroundIndex(EditorColorPairIndex.default, invalidValue)
+      setBackgroundIndex(EditorColorPairIndex.default, invalidValue)
     except RangeDefect:
       isErr = true
 
@@ -94,18 +92,18 @@ suite "color: Set index to ColorThemeTable":
 
 suite "color: Set Rgb to ColorThemeTable":
   test "setForegroundRgb":
-    DarkTheme.setForegroundRgb(
+    setForegroundRgb(
       EditorColorPairIndex.default,
       "#333333".hexToRgb.get)
 
-    assert darkDefaultFg.rgb == "#333333".hexToRgb.get
+    assert DefaultThemeFg.rgb == "#333333".hexToRgb.get
 
   test "setBackgroundRgb":
-    DarkTheme.setBackgroundRgb(
+    setBackgroundRgb(
       EditorColorPairIndex.default,
       "#333333".hexToRgb.get)
 
-    assert darkDefaultBg.rgb == "#333333".hexToRgb.get
+    assert DefaultThemeBg.rgb == "#333333".hexToRgb.get
 
 suite "color: Downgrade":
   test "rgbToColor8":

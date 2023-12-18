@@ -25,7 +25,6 @@ import gapbuffer, ui, editorstatus, unicodeext, windownode, movement, settings,
 
 type
   StandardTableNames {.pure.} = enum
-    theme
     number
     currentNumber
     cursorLine
@@ -157,9 +156,13 @@ type
     minDelay
     maxDelay
 
-  StartUpFileOpenSettingsTableNames {.pure.} = enum
+  StartUpFileOpenTableNames {.pure.} = enum
     autoSplit
     splitType
+
+  ThemeTableNames {.pure.} = enum
+    kind
+    path
 
   SettingType {.pure.} = enum
     none
@@ -194,19 +197,13 @@ proc positionOfSetVal(): int {.compileTime.} =
   for name in GitTableNames: names.add $name
   for name in SyntaxCheckerTableNames: names.add $name
   for name in SmoothScrollTableNames: names.add $name
-  for name in StartUpFileOpenSettingsTableNames: names.add $name
-  for name in EditorColorPairIndex: names.add $name
+  for name in StartUpFileOpenTableNames: names.add $name
+  for name in ThemeTableNames: names.add $name
 
   for name in names:
     if result < name.len: result = name.len
 
   result += NumOfIndent
-
-proc getColorThemeSettingValues(currentVal: ColorTheme): seq[Runes] =
-  result.add ru $currentVal
-  for theme in ColorTheme:
-    if theme != currentVal:
-      result.add ru $theme
 
 proc getCursorTypeSettingValues(currentVal: CursorType): seq[Runes] =
   result.add ru $currentVal
@@ -225,10 +222,7 @@ proc getStandardTableSettingValues(
   settings: EditorSettings,
   name: string): seq[Runes] =
 
-    if name == "theme":
-      let theme = settings.standard.editorColorTheme
-      result = getColorThemeSettingValues(theme)
-    elif name == "defaultCursor":
+    if name == "defaultCursor":
       let currentCursorType = settings.standard.defaultCursor
       result = getCursorTypeSettingValues(currentCursorType)
     elif name == "normalModeCursor":
@@ -637,6 +631,15 @@ proc getStartUpFileOpenSettingsValues(
         else:
           result = @[ru "horizontal", ru "vertical"]
 
+proc getThemeSettingsValues(s: ThemeSettings, name: string): seq[Runes] =
+  case name:
+    of "kind":
+      result.add name.toRunes
+      for k in ColorThemeKind:
+        if $k != name: result.add toRunes($k)
+    of "path":
+      return @[s.path].toSeqRunes
+
 proc getSettingValues(
   settings: EditorSettings,
   settingType: SettingType,
@@ -685,7 +688,7 @@ proc getSettingValues(
       of "StartUp.FileOpen":
         result = settings.startUp.fileOpen.getStartUpFileOpenSettingsValues(name)
       of "Theme":
-        discard
+        result = settings.theme.getThemeSettingsValues(name)
       else:
         discard
 
@@ -705,23 +708,22 @@ proc initConfigModeHighlight[T](
   currentLine: int,
   reservedWords: seq[ReservedWord]): Highlight =
 
+    result = Highlight()
+
     for i in 0 ..< buffer.len:
-      if i == currentLine:
-        result.colorSegments.add(
-          ColorSegment(
-            firstRow: i,
-            firstColumn: 0,
-            lastRow: i,
-            lastColumn: buffer[i].len,
-            color: EditorColorPairIndex.default))
+      result.colorSegments.add(
+        ColorSegment(
+          firstRow: i,
+          firstColumn: 0,
+          lastRow: i,
+          lastColumn: buffer[i].len,
+          color: EditorColorPairIndex.default))
 
 proc changeStandardTableSetting(
   settings: var EditorSettings,
   settingName, settingVal: string) =
 
     case settingName:
-      of "theme":
-        settings.standard.editorColorTheme = parseEnum[ColorTheme](settingVal)
       of "number":
         settings.view.lineNumber = parseBool(settingVal)
       of "currentNumber":
@@ -1016,47 +1018,22 @@ proc changeStartUpFileOpenSettingsTableSettings(
       of "splitType":
         s.splitType = settingVal.parseWindowSplitType.get
 
-proc toColorLayer(s: string): Result[ColorLayer, string] =
-  var cl: ColorLayer
-  try:
-    cl = parseEnum[ColorLayer](s)
-  except ValueError as e:
-    return Result[ColorLayer, string].err fmt"Invalid value: {s}: {e.msg}"
-
-  return Result[ColorLayer, string].ok cl
-
 proc changeThemeTableSetting(
-  settings: EditorSettings,
-  colorLayer: ColorLayer,
-  settingName, settingVal: string): Result[(), string] =
+  s: var ThemeSettings,
+  settingName, settingVal: string) =
 
-    if settingName.isEditorColorPairIndex and settingVal.isHexColor(false):
-      let
-        pairIndex = parseEnum[EditorColorPairIndex](settingName)
-        rgb = settingVal.hexToRgb.get
-
-      case colorLayer:
-        of ColorLayer.foreground:
-          settings.standard.editorColorTheme.setForegroundRgb(pairIndex, rgb)
-        of ColorLayer.background:
-          settings.standard.editorColorTheme.setBackgroundRgb(pairIndex, rgb)
-
-      return Result[(), string].ok ()
+    case settingName:
+      of "kind":
+        s.kind = parseEnum[ColorThemeKind](settingVal)
 
 proc changeEditorSettings(
   status: var EditorStatus,
-  table, settingName, position, settingVal: string) =
+  table, settingName, settingVal: string) =
 
     template settings: var EditorSettings = status.settings
 
     template changeStandardTableSetting() =
-      let currentTheme = status.settings.standard.editorColorTheme
-
       status.settings.changeStandardTableSetting(settingName, settingVal)
-
-      if status.settings.standard.editorColorTheme != currentTheme:
-        # TODO: Add error handling
-        discard status.changeTheme
 
     template clipboardSettings: var ClipboardSettings =
       status.settings.clipboard
@@ -1094,14 +1071,17 @@ proc changeEditorSettings(
     template gitSettings: var GitSettings =
       status.settings.git
 
-    template SyntaxCheckerSettings: var SyntaxCheckerSettings =
+    template syntaxCheckerSettings: var SyntaxCheckerSettings =
       status.settings.syntaxChecker
 
-    template SmoothScrollSettings: var SmoothScrollSettings =
+    template smoothScrollSettings: var SmoothScrollSettings =
       status.settings.smoothScroll
 
-    template StartUpFileOpenSettings: var StartUpFileOpenSettings =
+    template startUpFileOpenSettings: var StartUpFileOpenSettings =
       status.settings.startUp.fileOpen
+
+    template themeSettings: var ThemeSettings =
+      status.settings.theme
 
     case table:
       of "Standard":
@@ -1135,13 +1115,15 @@ proc changeEditorSettings(
       of "Git":
         gitSettings.changeGitTableSettings(settingName, settingVal)
       of "SyntaxChecker":
-        SyntaxCheckerSettings.changeSyntaxCheckerTableSettings(settingName, settingVal)
+        syntaxCheckerSettings.changeSyntaxCheckerTableSettings(settingName, settingVal)
       of "SmoothScroll":
-        SmoothScrollSettings.changeSmoothScrollTableSettings(settingName, settingVal)
+        smoothScrollSettings.changeSmoothScrollTableSettings(settingName, settingVal)
       of "StartUp.FileOpen":
-        StartUpFileOpenSettings.changeStartUpFileOpenSettingsTableSettings(
+        startUpFileOpenSettings.changeStartUpFileOpenSettingsTableSettings(
           settingName,
           settingVal)
+      of "Theme":
+        themeSettings.changeThemeTableSetting(settingName, settingVal)
       else:
         discard
 
@@ -1343,6 +1325,13 @@ proc getSettingType(table, name: string): SettingType =
       of "splitType":
         result = SettingType.enums
 
+  template themeTable() =
+    case name:
+      of "kind":
+        result = SettingType.enums
+      of "path":
+        result = SettingType.text
+
   case table:
     of "Standard":
       standardTable()
@@ -1377,18 +1366,7 @@ proc getSettingType(table, name: string): SettingType =
     of "StartUp.FileOpen":
       startUpFileOpenTable()
     of "Theme":
-      return SettingType.text
-
-proc getEditorColorPairIndexStr(
-  buffer: GapBuffer[Runes],
-  lineSplit: seq[Runes],
-  currentLine: int): string =
-
-    if (lineSplit[0] == ru "foreground") or
-       (buffer[currentLine - 2] == ru "Theme"):
-      return $(buffer[currentLine - 1].splitWhitespace)[0]
-    else:
-      return $(buffer[currentLine - 2].splitWhitespace)[0]
+      themeTable()
 
 proc insertCharacter(
   bufStatus: var BufferStatus,
@@ -1546,70 +1524,57 @@ proc editFiguresSetting(status: var EditorStatus, table, name: string) =
   if not status.settings.standard.disableChangeCursor:
     changeCursorType(status.settings.standard.normalModeCursor)
 
-## Return a hex color string
-proc getCurrentColorVal(s: EditorSettings, name, position: string): string =
-  let
-    pairIndex = parseEnum[EditorColorPairIndex](name)
-  case parseEnum[ColorLayer](position):
-    of ColorLayer.foreground:
-      let fgHex = s.standard.editorColorTheme.foregroundRgb(pairIndex).toHex
-      if fgHex.isSome: return fgHex.get
-      else: return "termDefautFg"
-    of ColorLayer.background:
-      let bgHex = s.standard.editorColorTheme.backgroundRgb(pairIndex).toHex
-      if bgHex.isSome: return bgHex.get
-      else: return "termDefautBg"
+proc getTextSettingVal(s: EditorSettings, table, name: string): Runes =
+  case table:
+    of "BuildOnSave":
+      case name:
+        of "workspaceRoot":
+          return s.buildOnSave.workspaceRoot
+        of "command":
+          return s.buildOnSave.command
+    of "Highlight":
+      case name:
+        of "reservedWords":
+          for i, reservedWord in s.highlight.reservedWords:
+            result &= reservedWord.word.toRunes & ru" "
+    of "AutoBackup":
+      case name:
+        of "backupDir":
+          return s.autoBackup.backupDir
+    of "QuickRun":
+      case name:
+        of "nimAdvancedCommand":
+          return s.quickRun.nimAdvancedCommand.toRunes
+        of "ClangOptions":
+          return s.quickRun.clangOptions.toRunes
+        of "CppOptions":
+          return s.quickRun.cppOptions.toRunes
+        of "NimOptions":
+          return s.quickRun.nimOptions.toRunes
+        of "shOptions":
+          return s.quickRun.shOptions.toRunes
+        of "bashOptions":
+          return s.quickRun.bashOptions.toRunes
+    of "Theme":
+      case name:
+        of "kind":
+          return toRunes($s.theme.kind)
+        of "path":
+          return s.theme.path.toRunes
 
-proc getTextSettingVal(
-  s: EditorSettings,
-  table, name, position: string): Runes =
-
-    case table:
-      of "BuildOnSave":
-        case name:
-          of "workspaceRoot":
-            return s.buildOnSave.workspaceRoot
-          of "command":
-            return s.buildOnSave.command
-      of "Highlight":
-        case name:
-          of "reservedWords":
-            for i, reservedWord in s.highlight.reservedWords:
-              result &= reservedWord.word.toRunes & ru" "
-      of "AutoBackup":
-        case name:
-          of "backupDir":
-            return s.autoBackup.backupDir
-      of "QuickRun":
-        case name:
-          of "nimAdvancedCommand":
-            return s.quickRun.nimAdvancedCommand.toRunes
-          of "ClangOptions":
-            return s.quickRun.clangOptions.toRunes
-          of "CppOptions":
-            return s.quickRun.cppOptions.toRunes
-          of "NimOptions":
-            return s.quickRun.nimOptions.toRunes
-          of "shOptions":
-            return s.quickRun.shOptions.toRunes
-          of "bashOptions":
-            return s.quickRun.bashOptions.toRunes
-      of "Theme":
-        return s.getCurrentColorVal(name, position).toRunes
-
-proc editTextSetting(status: var EditorStatus, table, name, position: string) =
+proc editTextSetting(status: var EditorStatus, table, name: string) =
   const MinColumn = NumOfIndent + positionOfSetVal()
 
   currentMainWindowNode.currentColumn =
     positionOfSetVal() +
     NumOfIndent +
-    getTextSettingVal(status.settings, table, name, position).len
+    getTextSettingVal(status.settings, table, name).len
 
   if not status.settings.standard.disableChangeCursor:
     changeCursorType(status.settings.standard.insertModeCursor)
 
   var
-    buffer = getTextSettingVal(status.settings, table, name, position)
+    buffer = getTextSettingVal(status.settings, table, name)
     isCancel = false
     isBreak = false
   while not isBreak and not isCancel:
@@ -1702,15 +1667,7 @@ proc editTextSetting(status: var EditorStatus, table, name, position: string) =
           discard
 
     template themeTable() =
-      let r = status.settings.changeThemeTableSetting(
-        position.toColorLayer.get,
-        name,
-        $buffer)
-      if r.isOk:
-        # TODO: Add error handling
-        discard status.changeTheme
-      else:
-        status.commandLine.writeError(ru"Invalid value")
+      status.settings.theme.path = $buffer
 
     # Change setting
     case table:
@@ -1763,12 +1720,10 @@ proc editEnumAndBoolSettings(
         if suggestIndex == 0: suggestIndex = settingValues.high
         else: suggestIndex.dec
       elif isEnterKey(key):
-        let
-          settingVal = $settingValues[suggestIndex]
-          # position is "foreground" or "background" or ""
-          position = if selectedTable == "Theme": $lineSplit[0] else: ""
-        status.changeEditorSettings(
-          selectedTable, selectedSetting, position, settingVal)
+        let settingVal = $settingValues[suggestIndex]
+        status.changeEditorSettings(selectedTable, selectedSetting, settingVal)
+        if selectedTable == "Theme":
+          discard status.settings.changeTheme
         break
       elif isEscKey(key):
         break
@@ -1780,7 +1735,7 @@ proc selectAndChangeEditorSettings(status: var EditorStatus, arrayIndex: int) =
   let
     currentLine = currentMainWindowNode.currentLine
     line = currentBufStatus.buffer[currentLine]
-    lineSplit = line.splitWhitespace
+    lineSplit = line.splitWhitespace.filterIt(it.len > 0)
 
   if lineSplit.len < 2: return
 
@@ -1789,12 +1744,7 @@ proc selectAndChangeEditorSettings(status: var EditorStatus, arrayIndex: int) =
       currentBufStatus.buffer,
       currentMainWindowNode.currentLine)
 
-    selectedSetting =
-      if selectedTable == "Theme":
-        currentBufStatus.buffer.getEditorColorPairIndexStr(
-          lineSplit,currentLine)
-       else:
-        $lineSplit[0]
+    selectedSetting = $lineSplit[0]
 
     settingType = getSettingType(selectedTable, selectedSetting)
 
@@ -1811,7 +1761,7 @@ proc selectAndChangeEditorSettings(status: var EditorStatus, arrayIndex: int) =
     of SettingType.number:
       status.editFiguresSetting(selectedTable, selectedSetting)
     of SettingType.text:
-      status.editTextSetting(selectedTable, selectedSetting, position)
+      status.editTextSetting(selectedTable, selectedSetting)
     else:
       status.editEnumAndBoolSettings(
         lineSplit,
@@ -1827,8 +1777,6 @@ proc initStandardTableBuffer(settings: EditorSettings): seq[Runes] =
       nameStr = Indent & $name
       space = " ".repeat(positionOfSetVal() - len($name))
     case $name:
-      of "theme":
-        result.add(ru nameStr & space & $settings.standard.editorColorTheme)
       of "number":
         result.add(ru nameStr & space & $settings.view.lineNumber)
       of "currentNumber":
@@ -2171,26 +2119,39 @@ proc initStartUpFileOpenTableBuffer(
   settings: StartUpFileOpenSettings): seq[Runes] =
     result.add(ru"StartUp.FileOpen")
 
-    for name in StartUpFileOpenSettingsTableNames:
+    for name in StartUpFileOpenTableNames:
       let
         nameStr = Indent & $name
         space = " ".repeat(positionOfSetVal() - len($name))
       case name:
-        of StartUpFileOpenSettingsTableNames.autoSplit:
+        of StartUpFileOpenTableNames.autoSplit:
           result.add(ru nameStr & space & $settings.autoSplit)
-        of StartUpFileOpenSettingsTableNames.splitType:
+        of StartUpFileOpenTableNames.splitType:
           result.add(ru nameStr & space & $settings.splitType)
 
-proc initThemeTableBuffer*(s: EditorSettings): seq[Runes] =
+proc initThemeTableBuffer*(s: ThemeSettings): seq[Runes] =
   result.add(ru"Theme")
+
+  for name in ThemeTableNames:
+    let
+      nameStr = Indent & $name
+      space = " ".repeat(positionOfSetVal() - len($name))
+    case name:
+      of ThemeTableNames.kind:
+        result.add ru nameStr & space & $s.kind
+      of ThemeTableNames.path:
+        result.add ru nameStr & space & s.path
+
+proc initThemeColorsTableBuffer*(s: EditorSettings): seq[Runes] =
+  result.add(ru"Colors")
 
   for pairIndex in EditorColorPairIndex:
     let
       # 10 is "foreground " and "background " length.
       space = " ".repeat(positionOfSetVal() - Indent.len - 10)
 
-      fgHex = s.standard.editorColorTheme.foregroundRgb(pairIndex).toHex
-      bgHex = s.standard.editorColorTheme.backgroundRgb(pairIndex).toHex
+      fgHex = foregroundRgb(pairIndex).toHex
+      bgHex = backgroundRgb(pairIndex).toHex
 
       fgColorText =
         if fgHex.isSome: fgHex.get
@@ -2258,8 +2219,8 @@ proc initConfigModeBuffer*(settings: EditorSettings): GapBuffer[Runes] =
   buffer.add ru""
   buffer.add initStartUpFileOpenTableBuffer(settings.startUp.fileOpen)
 
-  buffer.add(ru"")
-  buffer.add(initThemeTableBuffer(settings))
+  buffer.add ru""
+  buffer.add initThemeTableBuffer(settings.theme)
 
   result = initGapBuffer(buffer)
 

@@ -40,30 +40,29 @@ suite "Config mode: Init buffer":
 
     const Sample = @[
       "Standard",
-      "  theme                          dark",
-      "  number                         true",
-      "  currentNumber                  true",
-      "  cursorLine                     false",
-      "  statusLine                     true",
-      "  tabLine                        true",
-      "  syntax                         true",
-      "  indentationLines               true",
-      "  tabStop                        2",
-      "  sidebar                        true",
-      "  autoCloseParen                 true",
-      "  autoIndent                     true",
-      "  ignorecase                     true",
-      "  smartcase                      true",
-      "  disableChangeCursor            false",
-      "  defaultCursor                  terminalDefault",
-      "  normalModeCursor               blinkBlock",
-      "  insertModeCursor               blinkIbeam",
-      "  liveReloadOfConf               false",
-      "  incrementalSearch              true",
-      "  popupWindowInExmode            true",
-      "  autoDeleteParen                false",
-      "  liveReloadOfFile               false",
-      "  colorMode                      24bit"].toSeqRunes
+      "  number                   true",
+      "  currentNumber            true",
+      "  cursorLine               false",
+      "  statusLine               true",
+      "  tabLine                  true",
+      "  syntax                   true",
+      "  indentationLines         true",
+      "  tabStop                  2",
+      "  sidebar                  true",
+      "  autoCloseParen           true",
+      "  autoIndent               true",
+      "  ignorecase               true",
+      "  smartcase                true",
+      "  disableChangeCursor      false",
+      "  defaultCursor            terminalDefault",
+      "  normalModeCursor         blinkBlock",
+      "  insertModeCursor         blinkIbeam",
+      "  liveReloadOfConf         false",
+      "  incrementalSearch        true",
+      "  popupWindowInExmode      true",
+      "  autoDeleteParen          false",
+      "  liveReloadOfFile         false",
+      "  colorMode                24bit"].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
@@ -76,8 +75,8 @@ suite "Config mode: Init buffer":
 
     const Sample = @[
       "ClipBoard",
-      "  enable                         true",
-      "  toolOnLinux                    xsel"].toSeqRunes
+      "  enable                   true",
+      "  toolOnLinux              xsel"].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
@@ -88,9 +87,9 @@ suite "Config mode: Init buffer":
 
     const Sample = @[
       "BuildOnSave",
-      "  enable                         false",
-      "  workspaceRoot                  ",
-      "  command                        "].toSeqRunes
+      "  enable                   false",
+      "  workspaceRoot            ",
+      "  command                  "].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
@@ -101,7 +100,7 @@ suite "Config mode: Init buffer":
 
     const Sample = @[
       "TabLine",
-      "  allBuffer                      false"].toSeqRunes
+      "  allBuffer                false"].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
@@ -112,17 +111,17 @@ suite "Config mode: Init buffer":
 
     const Sample = @[
       "StatusLine",
-      "  multipleStatusLine             true",
-      "  merge                          false",
-      "  mode                           true",
-      "  filename                       true",
-      "  chanedMark                     true",
-      "  directory                      true",
-      "  gitChangedLines                true",
-      "  gitBranchName                  true",
-      "  showGitInactive                false",
-      "  showModeInactive               false",
-      "  setupText                      {lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {fileType}"
+      "  multipleStatusLine       true",
+      "  merge                    false",
+      "  mode                     true",
+      "  filename                 true",
+      "  chanedMark               true",
+      "  directory                true",
+      "  gitChangedLines          true",
+      "  gitBranchName            true",
+      "  showGitInactive          false",
+      "  showModeInactive         false",
+      "  setupText                {lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {fileType}"
     ].toSeqRunes
 
     for index, line in buffer:
@@ -134,12 +133,12 @@ suite "Config mode: Init buffer":
 
     const Sample = @[
       "Highlight",
-      "  currentLine                    true",
-      "  fullWidthSpace                 true",
-      "  trailingSpaces                 true",
-      "  currentWord                    true",
-      "  replaceText                    true",
-      "  reservedWords                  TODO WIP NOTE "].toSeqRunes
+      "  currentLine              true",
+      "  fullWidthSpace           true",
+      "  trailingSpaces           true",
+      "  currentWord              true",
+      "  replaceText              true",
+      "  reservedWords            TODO WIP NOTE "].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
@@ -150,11 +149,11 @@ suite "Config mode: Init buffer":
 
     const Sample = @[
       "AutoBackup",
-      "  enable                         false",
-      "  idleTime                       10",
-      "  interval                       5",
-      "  backupDir                      {getCacheDir()}/moe/backups".fmt,
-      "  dirToExclude                   /etc"].toSeqRunes
+      "  enable                   false",
+      "  idleTime                 10",
+      "  interval                 5",
+      "  backupDir                {getCacheDir()}/moe/backups".fmt,
+      "  dirToExclude             /etc"].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
@@ -165,15 +164,15 @@ suite "Config mode: Init buffer":
 
     const Sample = @[
       "QuickRun",
-      "  saveBufferWhenQuickRun         true",
-      "  command                        ",
-      "  timeout                        30",
-      "  nimAdvancedCommand             c",
-      "  clangOptions                   ",
-      "  cppOptions                     ",
-      "  nimOptions                     ",
-      "  shOptions                      ",
-      "  bashOptions                    "].toSeqRunes
+      "  saveBufferWhenQuickRun   true",
+      "  command                  ",
+      "  timeout                  30",
+      "  nimAdvancedCommand       c",
+      "  clangOptions             ",
+      "  cppOptions               ",
+      "  nimOptions               ",
+      "  shOptions                ",
+      "  bashOptions              "].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
@@ -186,26 +185,26 @@ suite "Config mode: Init buffer":
 
     const Sample = @[
       "Notification",
-      "  screenNotifications            true",
-      "  logNotifications               true",
-      "  autoBackupScreenNotify         true",
-      "  autoBackupLogNotify            true",
-      "  autoSaveScreenNotify           true",
-      "  autoSaveLogNotify              true",
-      "  yankScreenNotify               true",
-      "  yankLogNotify                  true",
-      "  deleteScreenNotify             true",
-      "  deleteLogNotify                true",
-      "  saveScreenNotify               true",
-      "  saveLogNotify                  true",
-      "  quickRunScreenNotify           true",
-      "  quickRunLogNotify              true",
-      "  buildOnSaveScreenNotify        true",
-      "  buildOnSaveLogNotify           true",
-      "  filerScreenNotify              true",
-      "  filerLogNotify                 true",
-      "  restoreScreenNotify            true",
-      "  restoreLogNotify               true"].toSeqRunes
+      "  screenNotifications      true",
+      "  logNotifications         true",
+      "  autoBackupScreenNotify   true",
+      "  autoBackupLogNotify      true",
+      "  autoSaveScreenNotify     true",
+      "  autoSaveLogNotify        true",
+      "  yankScreenNotify         true",
+      "  yankLogNotify            true",
+      "  deleteScreenNotify       true",
+      "  deleteLogNotify          true",
+      "  saveScreenNotify         true",
+      "  saveLogNotify            true",
+      "  quickRunScreenNotify     true",
+      "  quickRunLogNotify        true",
+      "  buildOnSaveScreenNotify  true",
+      "  buildOnSaveLogNotify     true",
+      "  filerScreenNotify        true",
+      "  filerLogNotify           true",
+      "  restoreScreenNotify      true",
+      "  restoreLogNotify         true"].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
@@ -214,9 +213,10 @@ suite "Config mode: Init buffer":
     var status = initEditorStatus()
     let buffer = status.settings.initFilerTableBuffer
 
+    echo buffer[1]
     const Sample = @[
-      ru"Filer",
-      ru"  showIcons                      true"]
+      "Filer",
+      "  showIcons                true"].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
@@ -226,8 +226,8 @@ suite "Config mode: Init buffer":
     let buffer = status.settings.initAutocompleteTableBuffer
 
     const Sample = @[
-      ru"Autocomplete",
-      ru"  enable                         true"]
+      "Autocomplete",
+      "  enable                   true"].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
@@ -237,9 +237,9 @@ suite "Config mode: Init buffer":
     let buffer = status.settings.initAutoSaveTableBuffer
 
     const Sample = @[
-      ru"AutoSave",
-      ru"  enable                         true",
-      ru"  interval                       5"]
+      "AutoSave",
+      "  enable                   true",
+      "  interval                 5"].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
@@ -250,11 +250,11 @@ suite "Config mode: Init buffer":
 
     const Sample = @[
       "Persist",
-      "  exCommand                      true",
-      "  exCommandHistoryLimit          1000",
-      "  search                         true",
-      "  searchHistoryLimit             1000",
-      "  cursorPosition                 true"].toSeqRunes
+      "  exCommand                true",
+      "  exCommandHistoryLimit    1000",
+      "  search                   true",
+      "  searchHistoryLimit       1000",
+      "  cursorPosition           true"].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
@@ -265,341 +265,20 @@ suite "Config mode: Init buffer":
 
     const Sample = @[
       "Git",
-      "  showChangedLine                true",
-      "  updateInterval                 1000"].toSeqRunes
+      "  showChangedLine          true",
+      "  updateInterval           1000"].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
 
   test "Init Theme table buffer":
     var status = initEditorStatus()
-    let buffer = status.settings.initThemeTableBuffer
+    let buffer = status.settings.theme.initThemeTableBuffer
 
     const Sample = @[
       "Theme",
-      "  default",
-      "    foreground                   #f8f5e3",
-      "    background                   #000000",
-      "",
-      "  lineNum",
-      "    foreground                   #8a8a8a",
-      "    background                   #000000",
-      "",
-      "  currentLineNum",
-      "    foreground                   #008080",
-      "    background                   #000000",
-      "",
-      "  statusLineNormalMode",
-      "    foreground                   #ffffff",
-      "    background                   #09aefa",
-      "",
-      "  statusLineNormalModeLabel",
-      "    foreground                   #000000",
-      "    background                   #ffffff",
-      "",
-      "  statusLineNormalModeInactive",
-      "    foreground                   #09aefa",
-      "    background                   #ffffff",
-      "",
-      "  statusLineInsertMode",
-      "    foreground                   #ffffff",
-      "    background                   #09aefa",
-      "",
-      "  statusLineInsertModeLabel",
-      "    foreground                   #000000",
-      "    background                   #ffffff",
-      "",
-      "  statusLineInsertModeInactive",
-      "    foreground                   #09aefa",
-      "    background                   #ffffff",
-      "",
-      "  statusLineVisualMode",
-      "    foreground                   #ffffff",
-      "    background                   #09aefa",
-      "",
-      "  statusLineVisualModeLabel",
-      "    foreground                   #000000",
-      "    background                   #ffffff",
-      "",
-      "  statusLineVisualModeInactive",
-      "    foreground                   #09aefa",
-      "    background                   #ffffff",
-      "",
-      "  statusLineReplaceMode",
-      "    foreground                   #ffffff",
-      "    background                   #09aefa",
-      "",
-      "  statusLineReplaceModeLabel",
-      "    foreground                   #000000",
-      "    background                   #ffffff",
-      "",
-      "  statusLineReplaceModeInactive",
-      "    foreground                   #09aefa",
-      "    background                   #ffffff",
-      "",
-      "  statusLineFilerMode",
-      "    foreground                   #ffffff",
-      "    background                   #09aefa",
-      "",
-      "  statusLineFilerModeLabel",
-      "    foreground                   #000000",
-      "    background                   #ffffff",
-      "",
-      "  statusLineFilerModeInactive",
-      "    foreground                   #09aefa",
-      "    background                   #ffffff",
-      "",
-      "  statusLineExMode",
-      "    foreground                   #ffffff",
-      "    background                   #09aefa",
-      "",
-      "  statusLineExModeLabel",
-      "    foreground                   #000000",
-      "    background                   #ffffff",
-      "",
-      "  statusLineExModeInactive",
-      "    foreground                   #09aefa",
-      "    background                   #ffffff",
-      "",
-      "  statusLineGitChangedLines",
-      "    foreground                   #ffffff",
-      "    background                   #0040ff",
-      "",
-      "  statusLineGitBranch",
-      "    foreground                   #ffffff",
-      "    background                   #0040ff",
-      "",
-      "  tab",
-      "    foreground                   #ffffff",
-      "    background                   #000000",
-      "",
-      "  currentTab",
-      "    foreground                   #ffffff",
-      "    background                   #09aefa",
-      "",
-      "  commandLine",
-      "    foreground                   #ffffff",
-      "    background                   #000000",
-      "",
-      "  errorMessage",
-      "    foreground                   #ff0000",
-      "    background                   #000000",
-      "",
-      "  warnMessage",
-      "    foreground                   #ffff00",
-      "    background                   #000000",
-      "",
-      "  searchResult",
-      "    foreground                   #ffffff",
-      "    background                   #ff0000",
-      "",
-      "  visualMode",
-      "    foreground                   #ffffff",
-      "    background                   #800080",
-      "",
-      "  keyword",
-      "    foreground                   #87d7ff",
-      "    background                   #000000",
-      "",
-      "  functionName",
-      "    foreground                   #00b7ce",
-      "    background                   #000000",
-      "",
-      "  typeName",
-      "    foreground                   #00ffff",
-      "    background                   #000000",
-      "",
-      "  boolean",
-      "    foreground                   #add8e6",
-      "    background                   #000000",
-      "",
-      "  specialVar",
-      "    foreground                   #0090a8",
-      "    background                   #000000",
-      "",
-      "  builtin",
-      "    foreground                   #add8e6",
-      "    background                   #000000",
-      "",
-      "  charLit",
-      "    foreground                   #add8e6",
-      "    background                   #000000",
-      "",
-      "  stringLit",
-      "    foreground                   #add8e6",
-      "    background                   #000000",
-      "",
-      "  binNumber",
-      "    foreground                   #add8e6",
-      "    background                   #000000",
-      "",
-      "  decNumber",
-      "    foreground                   #add8e6",
-      "    background                   #000000",
-      "",
-      "  floatNumber",
-      "    foreground                   #add8e6",
-      "    background                   #000000",
-      "",
-      "  hexNumber",
-      "    foreground                   #add8e6",
-      "    background                   #000000",
-      "",
-      "  octNumber",
-      "    foreground                   #add8e6",
-      "    background                   #000000",
-      "",
-      "  comment",
-      "    foreground                   #808080",
-      "    background                   #000000",
-      "",
-      "  longComment",
-      "    foreground                   #808080",
-      "    background                   #000000",
-      "",
-      "  whitespace",
-      "    foreground                   #808080",
-      "    background                   #000000",
-      "",
-      "  preprocessor",
-      "    foreground                   #0090a8",
-      "    background                   #000000",
-      "",
-      "  pragma",
-      "    foreground                   #0090a8",
-      "    background                   #000000",
-      "",
-      "  identifier",
-      "    foreground                   #f8f5e3",
-      "    background                   #000000",
-      "",
-      "  table",
-      "    foreground                   #0090a8",
-      "    background                   #000000",
-      "",
-      "  date",
-      "    foreground                   #0090a8",
-      "    background                   #000000",
-      "",
-      "  operator",
-      "    foreground                   #00b7ce",
-      "    background                   #000000",
-      "",
-      "  currentFile",
-      "    foreground                   #ffffff",
-      "    background                   #09aefa",
-      "",
-      "  file",
-      "    foreground                   #ffffff",
-      "    background                   #000000",
-      "",
-      "  dir",
-      "    foreground                   #09aefa",
-      "    background                   #000000",
-      "",
-      "  pcLink",
-      "    foreground                   #008080",
-      "    background                   #000000",
-      "",
-      "  popupWindow",
-      "    foreground                   #ffffff",
-      "    background                   #000000",
-      "",
-      "  popupWinCurrentLine",
-      "    foreground                   #09aefa",
-      "    background                   #000000",
-      "",
-      "  replaceText",
-      "    foreground                   #ffffff",
-      "    background                   #ff0000",
-      "",
-      "  parenPair",
-      "    foreground                   #ffffff",
-      "    background                   #09aefa",
-      "",
-      "  currentWord",
-      "    foreground                   #ffffff",
-      "    background                   #808080",
-      "",
-      "  highlightFullWidthSpace",
-      "    foreground                   #ff0000",
-      "    background                   #ff0000",
-      "",
-      "  highlightTrailingSpaces",
-      "    foreground                   #ff0000",
-      "    background                   #ff0000",
-      "",
-      "  reservedWord",
-      "    foreground                   #ffffff",
-      "    background                   #808080",
-      "",
-      "  syntaxCheckInfo",
-      "    foreground                   #ffff00",
-      "    background                   #000000",
-      "",
-      "  syntaxCheckHint",
-      "    foreground                   #ffff00",
-      "    background                   #000000",
-      "",
-      "  syntaxCheckWarn",
-      "    foreground                   #ffff00",
-      "    background                   #000000",
-      "",
-      "  syntaxCheckErr",
-      "    foreground                   #ff0000",
-      "    background                   #000000",
-      "",
-      "  gitConflict",
-      "    foreground                   #00ff00",
-      "    background                   #000000",
-      "",
-      "  backupManagerCurrentLine",
-      "    foreground                   #ffffff",
-      "    background                   #008080",
-      "",
-      "  diffViewerAddedLine",
-      "    foreground                   #008000",
-      "    background                   #000000",
-      "",
-      "  diffViewerDeletedLine",
-      "    foreground                   #ff0000",
-      "    background                   #000000",
-      "",
-      "  configModeCurrentLine",
-      "    foreground                   #ffffff",
-      "    background                   #008080",
-      "",
-      "  currentLineBg",
-      "    foreground                   termDefautFg",
-      "    background                   #444444",
-      "",
-      "  sidebarGitAddedSign",
-      "    foreground                   #008000",
-      "    background                   #000000",
-      "",
-      "  sidebarGitDeletedSign",
-      "    foreground                   #ff0000",
-      "    background                   #000000",
-      "",
-      "  sidebarGitChangedSign",
-      "    foreground                   #ffff00",
-      "    background                   #000000",
-      "",
-      "  sidebarSyntaxCheckInfoSign",
-      "    foreground                   #ffff00",
-      "    background                   #000000",
-      "",
-      "  sidebarSyntaxCheckHintSign",
-      "    foreground                   #ffff00",
-      "    background                   #000000",
-      "",
-      "  sidebarSyntaxCheckWarnSign",
-      "    foreground                   #ffff00",
-      "    background                   #000000",
-      "",
-      "  sidebarSyntaxCheckErrSign",
-      "    foreground                   #ff0000",
-      "    background                   #000000",
+      "  kind                     default",
+      "  path                     ",
       ""
     ].toSeqRunes
 
@@ -614,15 +293,6 @@ proc checkBoolSettingValue(default: bool, values: seq[Runes]) =
     check values == @[ru "false", ru "true"]
 
 suite "Config mode: Get standard table setting values":
-  test "Get theme values":
-    var status = initEditorStatus()
-    let settings = status.settings
-
-    const Name = "theme"
-    let values = settings.getStandardTableSettingValues(Name)
-
-    check values == @[ru"dark", ru"light",ru "vivid", ru"config", ru"vscode"]
-
   test "Get defaultCursor values":
     var status = initEditorStatus()
     let settings = status.settings
@@ -1644,12 +1314,6 @@ suite "Config mode: Get Git table setting values":
     check s.getGitTableSettingsValues(Name).len == 0
 
 suite "Config mode: Chaging Standard table settings":
-  test "Chaging theme":
-    var settings = initEditorSettings()
-    settings.changeStandardTableSetting("theme", "vivid")
-
-    check settings.standard.editorColorTheme == ColorTheme.vivid
-
   test "Chaging number":
     var settings = initEditorSettings()
 
@@ -2439,29 +2103,11 @@ suite "Config mode: Change Git table sttings":
     check 1 == s.updateInterval
 
 suite "Config mode: Change Theme table settings":
-  test "change foreground":
+  test "change kind":
     var settings = initEditorSettings()
 
-    for pairIndex in EditorColorPairIndex:
-      assert settings.changeThemeTableSetting(
-        ColorLayer.foreground,
-        $pairIndex,
-        "#000000").isOk
-
-      assert "#000000".hexToRgb.get ==
-        settings.standard.editorColorTheme.foregroundRgb(pairIndex)
-
-  test "change background":
-    var settings = initEditorSettings()
-
-    for pairIndex in EditorColorPairIndex:
-      assert settings.changeThemeTableSetting(
-        ColorLayer.background,
-        $pairIndex,
-        "#000000").isOk
-
-      assert "#000000".hexToRgb.get ==
-        settings.standard.editorColorTheme.backgroundRgb(pairIndex)
+    settings.theme.changeThemeTableSetting("kind", "vscode")
+    check settings.theme.kind == ColorThemeKind.vscode
 
 suite "Config mode: Get BuildOnSave table setting type":
   test "Get enable setting type":

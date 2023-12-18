@@ -166,7 +166,6 @@ proc highlightPairOfParen(
 proc highlightCurrentWordElsewhere(
   highlight: var Highlight,
   bufferInView: BufferInView,
-  theme: ColorTheme,
   colorMode: ColorMode) =
     ## Add highlights the word on the cursor.
     ## Ignore symbols, spaces and the word on the cursor.
@@ -216,11 +215,11 @@ proc highlightCurrentWordElsewhere(
                originalPosition.line,
                originalPosition.column)
              originalColorPair =
-               ColorThemeTable[theme][originalEditorColorPairIndex]
+               themeColors[originalEditorColorPairIndex]
            discard EditorColorPairIndex.currentWord.initColorPair(
              colorMode,
              originalColorPair.foreground,
-             ColorThemeTable[theme][EditorColorPairIndex.currentWord]
+             themeColors[EditorColorPairIndex.currentWord]
              .background)
 
            highlight.overwrite(
@@ -379,7 +378,6 @@ proc updateViewHighlight*(
     if settings.highlight.currentWord:
       highlight.highlightCurrentWordElsewhere(
         bufferInView,
-        settings.standard.editorColorTheme,
         settings.standard.colorMode)
 
     if bufStatus.selectedArea.isSome:
