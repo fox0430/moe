@@ -7,7 +7,7 @@ The location is
 ~/.config/moe/moerc.toml
 ```
 
-You can use the example -> https://github.com/fox0430/moe/blob/develop/example/moerc.toml
+You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 
 ## Setting items
 
@@ -837,7 +837,33 @@ The default is `vertical`
 splitType 
 ```
 
-### Color and theme
+### Theme table
+
+Theme kind (string)
+
+`"default"` or `"vscode"` or `"config"`
+
+`defaut`: Load the defaut theme 
+`vscode`: Load VSCode theme
+`config`: Load user theme. Also please set `Theme.path`.
+
+The default is `"default"`
+```
+kind
+```
+
+A path of user theme. (string)
+
+Also Please set `"config"` to `Theme.kind`.
+
+The default is `""` (Empty)
+```
+path
+```
+
+### Color table (Theme)
+Put the toml file that describes the `Colors` table in the path specified by `Theme.path` in `moerc.toml`.
+
 moe supports 24 bit color and set in hexadecimal (#000000 ~ #ffffff).
 And, `termDefaultBg` and `termDefaultFg`.
 
