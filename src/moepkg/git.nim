@@ -19,7 +19,7 @@
 
 import std/[strformat, strutils, osproc, os, times]
 import pkg/results
-import unicodeext, independentutils, backgroundprocess, fileutils
+import unicodeext, backgroundprocess, fileutils
 
 type
   OperationType* = enum
@@ -85,7 +85,7 @@ proc isTrackingByGit*(path: string): bool =
 proc isGitAvailable*(): bool {.inline.} =
   ## Return true if git command is available.
 
-  if execCmdExNoOutput("git -v") == 0: return true
+  if execCmdEx("git -v").exitCode == 0: return true
 
 proc getCurrentGitBranchName*(): Result[Runes, string] =
   ## Return the current git branch name
@@ -250,7 +250,7 @@ proc startBackgroundGitDiff*(
     let
       tmpHeadFilename = fmt"{splitPath($path).tail}_{$now()}_head.tmp"
       tmpHeadPath = cacheDir / tmpHeadFilename
-    if 0 != execCmdExNoOutput(fmt"git show HEAD:{path} > {tmpHeadPath}"):
+    if 0 != execCmdEx(fmt"git show HEAD:{path} > {tmpHeadPath}").exitCode:
       return Result[GitDiffProcess, string].err fmt"Failed to save a tmp file {path}"
 
     let

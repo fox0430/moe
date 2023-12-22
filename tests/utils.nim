@@ -18,14 +18,14 @@
 #[############################################################################]#
 
 import std/[options, os, strutils]
-import moepkg/[independentutils, platform]
+import moepkg/platform
 
 proc removeLineEnd*(buf: string): string =
   result = buf
   result.stripLineEnd
 
 template isXAvailable*(): bool =
-  execCmdExNoOutput("xset q") == 0
+  execCmdEx("xset q").exitCode == 0
 
 template isWaylandAvailable*(): bool =
   let r = execCmdEx("echo $XDG_SESSION_TYPE")
@@ -34,13 +34,13 @@ template isWaylandAvailable*(): bool =
   r.output.contains("wayland")
 
 template isXselAvailable*(): bool =
-  isXAvailable() and execCmdExNoOutput("xsel --version") == 0
+  isXAvailable() and execCmdEx("xsel --version").exitCode == 0
 
 template isXclipAvailable*(): bool =
-  isXAvailable() and execCmdExNoOutput("xclip -version") == 0
+  isXAvailable() and execCmdEx("xclip -version").exitCode == 0
 
 template isWlClipboardAvailable*(): bool =
-  isWaylandAvailable() and execCmdExNoOutput("wl-paste --version") == 0
+  isWaylandAvailable() and execCmdEx("wl-paste --version").exitCode == 0
 
 template setBufferToXsel*(buf: string): bool =
   execShellCmd("printf '" & buf & "' | xsel -pi") == 0

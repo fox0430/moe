@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, random, osproc]
+import std/[strutils, random]
 
 type
   Position* = object
@@ -81,9 +81,6 @@ proc genDelimiterStr*(buffer: string): string =
   while true:
     for _ in 0 .. 10: add(result, char(rand(int('A') .. int('Z'))))
     if buffer != result: break
-
-proc execCmdExNoOutput*(cmd: string): int {.inline.} =
-  execCmdEx(cmd).exitCode
 
 proc isEmpty*[T](s: seq[T]): bool {.inline.} = s.len == 0
 
