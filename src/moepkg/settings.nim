@@ -21,7 +21,7 @@ import std/[os, json, options, strformat, osproc, strutils, sequtils, enumutils,
             tables]
 import pkg/[parsetoml, results, regex]
 import lsp/[protocol/enums, utils]
-import ui, color, unicodeext, highlight, platform, independentutils, rgb, theme
+import ui, color, unicodeext, highlight, platform, rgb, theme
 
 export TomlError
 
@@ -425,10 +425,10 @@ proc detectClipboardTool(): Option[ClipboardTool] =
   ## macOS: pbcopy/pbpaste
   ## WSL: clip.exe/powershell.exe
 
-  proc isXsel(): bool {.inline.} = execCmdExNoOutput("xsel --version") == 0
+  proc isXsel(): bool {.inline.} = execCmdEx("xsel --version").exitCode == 0
 
   proc isXclip(): bool =
-    if execCmdExNoOutput("xclip -version") == 0:
+    if execCmdEx("xclip -version").exitCode == 0:
       let (output, _) = execCmdEx("xclip -version")
       # Check xclip version. Need 0.13 or higher.
       let

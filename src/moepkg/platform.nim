@@ -18,7 +18,6 @@
 #[############################################################################]#
 
 import std/[osproc, strutils]
-import independentutils
 
 type
   Platform* = enum
@@ -58,7 +57,7 @@ proc getXdgSessionType(): string =
 
 proc isX11*(): bool {.inline.} =
   if getXdgSessionType().contains("x11"): return true
-  else: return execCmdExNoOutput("xset q") == 0
+  else: return execCmdEx("xset q").exitCode == 0
 
 proc isWayland*(): bool {.inline.} =
   getXdgSessionType().contains("wayland")

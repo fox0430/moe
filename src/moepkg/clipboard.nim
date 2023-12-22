@@ -64,7 +64,7 @@ template wslDefaultPasteCommand(): string =
 template macOsDefaultPasteCommand(): string = "pbpaste"
 
 template isXAvailable*(): bool =
-  execCmdExNoOutput("xset q") == 0
+  execCmdEx("xset q").exitCode == 0
 
 template isWaylandAvailable*(): bool =
   let r = execCmdEx("echo $XDG_SESSION_TYPE")
