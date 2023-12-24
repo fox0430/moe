@@ -313,39 +313,14 @@ proc initLsp(
 
       status.lspClients[langId] = c.get
 
-    block:
-      # Initialize request
-      let err = status.lspClients[langId].initialize(
-        status.bufStatus[^1].id,
-        initInitializeParams(
-          workspaceRoot,
-          status.settings.lsp.languages[langId].trace))
-      if err.isErr:
-        return Result[(), string].err err.error
-
-    block:
-      # Initialized notification
-      let err = status.lspClients[langId].initialized
-      if err.isErr:
-        return Result[(), string].err err.error
-
-    block:
-      # workspace/didChangeConfiguration notification
-      let err = status.lspClients[langId]
-        .workspaceDidChangeConfiguration
-      if err.isErr:
-        return Result[(), string].err err.error
-
-    block:
-      # textDocument/diOpen notification
-      let err = status.lspClients[langId].textDocumentDidOpen(
-        $status.bufStatus[^1].path.absolutePath,
-        langId,
-        status.bufStatus[^1].buffer.toString)
-      if err.isErr:
-        status.commandLine.writeLspInitializeError(
-          status.settings.lsp.languages[langId].command,
-          err.error)
+    # Initialize request
+    let err = status.lspClients[langId].initialize(
+      status.bufStatus[^1].id,
+      initInitializeParams(
+        workspaceRoot,
+        status.settings.lsp.languages[langId].trace))
+    if err.isErr:
+      return Result[(), string].err err.error
 
     return Result[(), string].ok ()
 
@@ -425,16 +400,8 @@ proc addNewBuffer*(
           if langId.len > 0 and
              status.settings.lsp.languages.contains(langId) and
              not status.lspClients.contains($status.bufStatus[^1].extension):
-               # Init LSP client and server.
-               let langId = $status.bufStatus[^1].extension
-
-               let err = status.initLsp(
-                 $status.bufStatus[^1].openDir,
-                 langId)
-               if err.isOk:
-                 status.commandLine.writeLspInitialized(
-                   status.settings.lsp.languages[langId].command)
-               else:
+               let err = status.initLsp($status.bufStatus[^1].openDir, langId)
+               if err.isErr:
                  status.commandLine.writeLspInitializeError(
                    status.settings.lsp.languages[langId].command,
                    err.error)

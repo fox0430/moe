@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, json]
+import std/[strutils, json, options]
 import pkg/results
 
 import ../independentutils
@@ -28,6 +28,16 @@ import protocol/[enums, types]
 type
   LspPosition* = types.Position
 
+  LspMethod* {.pure.} = enum
+    initialize
+    initialized
+    shutdown
+    workspaceDidChangeConfiguration
+    textDocumentDidOpen
+    textDocumentDidChange
+    textDocumentDidClose
+    textDocumentHover
+
   HoverContent* = object
     title*: Runes
     description*: seq[Runes]
@@ -36,7 +46,20 @@ type
 proc toLspPosition*(p: BufferPosition): LspPosition {.inline.} =
   LspPosition(line: p.line, character: p.column)
 
+proc toLspMethodStr*(m: LspMethod): string =
+  case m:
+    of initialize: "initialize"
+    of initialized: "initialized"
+    of shutdown: "shutdown"
+    of workspaceDidChangeConfiguration: "workspace/didChangeConfiguration"
+    of textDocumentDidOpen: "textDocument/didOpen"
+    of textDocumentDidChange: "textDocument/didChange"
+    of textDocumentDidClose: "textDocument/didClose"
+    of textDocumentHover: "textDocument/hover"
+
 proc parseTraceValue*(s: string): Result[TraceValue, string] =
+  ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#traceValue
+
   try:
     return Result[TraceValue, string].ok parseEnum[TraceValue](s)
   except ValueError:
@@ -60,12 +83,11 @@ proc toHoverContent*(hover: Hover): HoverContent =
     else:
       result.description = contents["value"].getStr.splitLines.toSeqRunes
 
-  let range = %*hover.range
-  result.range.first = BufferPosition(
-    line: range["start"]["line"].getInt,
-    column: range["start"]["character"].getInt)
-  result.range.last = BufferPosition(
-    line: range["end"]["line"].getInt,
-    column: range["end"]["character"].getInt)
-
-
+  if hover.range.isSome:
+    let range = %*hover.range
+    result.range.first = BufferPosition(
+      line: range["start"]["line"].getInt,
+      column: range["start"]["character"].getInt)
+    result.range.last = BufferPosition(
+      line: range["end"]["line"].getInt,
+      column: range["end"]["character"].getInt)

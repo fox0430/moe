@@ -25,7 +25,7 @@ import editorstatus, bufferstatus, windownode, unicodeext, gapbuffer, ui,
        recentfilemode, quickrun, backupmanager, diffviewer, configmode,
        debugmode, commandline, search, commandlineutils, popupwindow,
        filermodeutils, messages, registers, exmodeutils, editor, movement,
-       searchutils, independentutils, viewhighlight
+       searchutils, independentutils, viewhighlight, lsputils
 
 type
   BeforeLine = object
@@ -697,6 +697,9 @@ proc editorMainLoop*(status: var EditorStatus) =
       if currentBufStatus.isBeginNewSuit:
         currentBufStatus.buffer.beginNewSuitIfNeeded
         currentBufStatus.recordCurrentPosition(currentMainWindowNode)
+
+    if status.isLspResponse:
+      status.handleLspResponse
 
     status.update
 

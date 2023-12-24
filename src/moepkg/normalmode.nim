@@ -19,11 +19,10 @@
 
 import std/[times, strutils, sequtils, options, strformat, tables, logging]
 import pkg/results
-import lsp/[client, utils]
+import lsp/client
 import editorstatus, ui, gapbuffer, unicodeext, fileutils, windownode, movement,
        editor, searchutils, bufferstatus, quickrunutils, messages, visualmode,
-       commandline, viewhighlight, messagelog, registers, independentutils,
-       popupwindow
+       commandline, viewhighlight, messagelog, registers, independentutils
 
 proc changeModeToInsertMode(status: var EditorStatus) {.inline.} =
   if currentBufStatus.isReadonly:
@@ -966,15 +965,14 @@ proc closeCurrentWindow(status: var EditorStatus) =
      mainWindowNode.countReferencedWindow(currentBufferIndex) > 1:
     status.closeWindow(currentMainWindowNode)
 
-proc hover(status: var EditorStatus) =
-  ## Display info on a hover. Get info from the LSP server.
-  ## Call textDocument/hover.
-  ## TODO: Add tests after resolving the forever key waiting problem.
+proc requestHover(status: var EditorStatus) =
+  ## Send textDocument/hover request to the LSP server.
 
-  if not status.lspClients.contains($currentBufStatus.extension) or
-     not status.lspClients[$currentBufStatus.extension].isInitialized:
-       debug "lsp client is not ready"
-       return
+  template isAvailable(clients: Table[string, LspClient], ext: string): bool =
+    clients.contains(ext) and clients[ext].isInitialized
+
+  if status.lspClients.isAvailable($currentBufStatus.extension):
+    debug "lsp client is not ready"
 
   let r = status.lspClients[$currentBufStatus.extension].textDocumentHover(
     currentBufStatus.id,
@@ -982,42 +980,6 @@ proc hover(status: var EditorStatus) =
     currentMainWindowNode.bufferPosition)
   if r.isErr:
     status.commandLine.writeLspHoverError(r.error)
-    return
-
-  # Display info on a popup window.
-
-  const Margin = ru" "
-  let hoverContent = r.get.toHoverContent
-  var buffer: seq[Runes]
-  if hoverContent.title.len > 0:
-    buffer = @[Margin & hoverContent.title & Margin, ru""]
-  for line in hoverContent.description:
-    buffer.add Margin & line & Margin
-
-  let
-    absPositon = currentMainWindowNode.absolutePosition
-    expectPosition = Position(y: absPositon.y + 1, x: absPositon.x + 1)
-  var hoverWin = initPopupWindow(
-    expectPosition,
-    Size(h: buffer.len, w: buffer.maxLen),
-    buffer)
-
-  let
-    minPosition = Position(y: mainWindowNode.y, x: mainWindowNode.x)
-    maxPostion = Position(
-      y: mainWindowNode.y + mainWindowNode.h,
-      x: mainWindowNode.x + mainWindowNode.w)
-  hoverWin.autoMoveAndResize(minPosition, maxPostion)
-  hoverWin.update
-
-  # Keep the cursor position on currentMainWindowNode and display the hover
-  # window on the top.
-  hoverWin.overwrite(currentMainWindowNode.window.get)
-  hoverWin.refresh
-
-  # Wait until any key is pressed.
-  discard status.getKeyFromMainWindow
-  hoverWin.close
 
 proc addRegister(status: var EditorStatus, command, registerName: string) =
   if command == "yy":
@@ -1489,7 +1451,7 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
     if commands.len == 1: status.stopRecordingOperations
     elif commands.len == 2: status.startRecordingOperations(commands[1])
   elif key == ord('K'):
-    status.hover
+    status.requestHover
   else:
     return
 

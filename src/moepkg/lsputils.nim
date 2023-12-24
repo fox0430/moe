@@ -1,0 +1,148 @@
+#[###################### GNU General Public License 3.0 ######################]#
+#                                                                              #
+#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#                                                                              #
+#  This program is free software: you can redistribute it and/or modify        #
+#  it under the terms of the GNU General Public License as published by        #
+#  the Free Software Foundation, either version 3 of the License, or           #
+#  (at your option) any later version.                                         #
+#                                                                              #
+#  This program is distributed in the hope that it will be useful,             #
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of              #
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the               #
+#  GNU General Public License for more details.                                #
+#                                                                              #
+#  You should have received a copy of the GNU General Public License           #
+#  along with this program.  If not, see <https://www.gnu.org/licenses/>.      #
+#                                                                              #
+#[############################################################################]#
+
+import std/[options, tables, json]
+import pkg/results
+import editorstatus, windownode, popupwindow, unicodeext, independentutils,
+       gapbuffer, messages
+import lsp/[client, utils]
+
+template lspClient: var LspClient =
+  status.lspClients[$currentBufStatus.extension]
+
+template isLspResponse*(status: EditorStatus): bool =
+  status.lspClients.contains($currentBufStatus.extension) and
+  lspClient.readyOutput.isOk
+
+template isWaitingLspResponse(status: var EditorStatus): bool =
+  status.lspClients[$currentBufStatus.extension].waitingResponse.isSome
+
+proc lspInitialized(
+  status: var EditorStatus,
+  initializeRes: JsonNode): Result[(), string] =
+    ## Send notifications for initialize LSP.
+
+    block:
+      let r = lspClient.initCapacities(initializeRes)
+      if r.isErr:
+        return Result[(), string].err r.error
+
+    block:
+      # Initialized notification
+      let err = lspClient.initialized
+      if err.isErr:
+        return Result[(), string].err err.error
+
+    block:
+      # workspace/didChangeConfiguration notification
+      let err = lspClient.workspaceDidChangeConfiguration
+      if err.isErr:
+        return Result[(), string].err err.error
+
+    let langId = $status.bufStatus[^1].extension
+
+    block:
+      # textDocument/diOpen notification
+      let err = lspClient.textDocumentDidOpen(
+        $status.bufStatus[^1].path.absolutePath,
+        langId,
+        status.bufStatus[^1].buffer.toString)
+      if err.isErr:
+        return Result[(), string].err err.error
+
+    status.commandLine.writeLspInitialized(
+      status.settings.lsp.languages[langId].command)
+
+    return Result[(), string].ok ()
+
+proc initHoverWindow(
+  windowNode: WindowNode,
+  hoverContent: HoverContent): PopupWindow =
+    # Return a popup window for textDocument/hover.
+
+    const Margin = ru" "
+    var buffer: seq[Runes]
+    if hoverContent.title.len > 0:
+      buffer = @[Margin & hoverContent.title & Margin, ru""]
+    for line in hoverContent.description:
+      buffer.add Margin & line & Margin
+
+    let
+      absPositon = windowNode.absolutePosition
+      expectPosition = Position(y: absPositon.y + 1, x: absPositon.x + 1)
+    result = initPopupWindow(
+      expectPosition,
+      Size(h: buffer.len, w: buffer.maxLen),
+      buffer)
+
+    let
+      minPosition = Position(y: windowNode.y, x: windowNode.x)
+      maxPostion = Position(
+        y: windowNode.y + windowNode.h,
+        x: windowNode.x + windowNode.w)
+    result.autoMoveAndResize(minPosition, maxPostion)
+    result.update
+
+proc lspHover*(status: var EditorStatus, hoverContent: HoverContent) =
+  ## Display the hover on a popup window.
+  ## textDocument/hover.
+  ## TODO: Add tests after resolving the forever key waiting problem.
+
+  var hoverWin = initHoverWindow(currentMainWindowNode, hoverContent)
+
+  # Keep the cursor position on currentMainWindowNode and display the hover
+  # window on the top.
+  hoverWin.overwrite(currentMainWindowNode.window.get)
+  hoverWin.refresh
+
+  # Wait until any key is pressed.
+  discard status.getKeyFromMainWindow
+  hoverWin.close
+
+proc handleLspResponse*(status: var EditorStatus) =
+  if not lspClient.running:
+    status.commandLine.writeLspError("server crashed")
+    return
+
+  let resJson = lspClient.read
+  if resJson.isErr:
+    status.commandLine.writeLspError(resJson.error)
+    return
+
+  if resJson.get.isLspError:
+    status.commandLine.writeLspError(resJson.error)
+    return
+
+  if resJson.get.isServerNotify:
+    # TODO: Add server notification supports.
+    discard
+  elif status.isWaitingLspResponse:
+    case lspClient.waitingResponse.get:
+      of LspMethod.initialize:
+        let r = status.lspInitialized(resJson.get)
+        if r.isErr:
+          status.commandLine.writeLspInitializeError(
+            status.bufStatus[^1].extension,
+            r.error)
+      of LspMethod.textDocumentHover:
+        let r = lspClient.parseTextDocumentHoverResponse(resJson.get)
+        if r.isErr: status.commandLine.writeLspHoverError(r.error)
+        else: status.lspHover(r.get.toHoverContent)
+      else:
+        discard
