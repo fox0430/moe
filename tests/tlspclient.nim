@@ -17,10 +17,11 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[json, unittest, importutils, os, options]
+import std/[unittest, importutils, os, options]
 import pkg/results
 import moepkg/independentutils
-import moepkg/lsp/protocol/[enums, types]
+import moepkg/lsp/protocol/enums
+import moepkg/lsp/utils
 
 import moepkg/lsp/client {.all.}
 
@@ -40,16 +41,34 @@ suite "lsp: Send requests":
     let params = initInitializeParams(RootPath, Trace)
 
     check client.initialize(Id, params).isOk
+    check client.waitingResponse.get == LspMethod.initialize
 
   test "Send shutdown":
-    var client = initLspClient(Command).get
-
     const
       Id = 1
       RootPath = ""
-    let params = initInitializeParams(RootPath, Trace)
-    assert client.initialize(Id, params).isOk
-    assert client.initialized.isOk
+
+    var client = initLspClient(Command).get
+
+    block:
+      # Initialize LSP client
+
+      block:
+        let params = initInitializeParams(RootPath, Trace)
+        assert client.initialize(Id, params).isOk
+
+      const Timeout = 5000
+      assert client.readyOutput(Timeout).isOk
+      let initializeRes = client.read.get
+
+      block:
+        let err = client.initCapacities(initializeRes)
+        assert err.isOk
+
+      block:
+        # Initialized notification
+        let err = client.initialized
+        assert err.isOk
 
     check client.shutdown(Id).isOk
 
@@ -69,11 +88,33 @@ suite "lsp: Send requests":
     var client = initLspClient(Command).get
 
     const Id = 1
-    let
-      rootPath = getCurrentDir()
-      params = initInitializeParams(rootPath, Trace)
-    assert client.initialize(Id, params).isOk
-    assert client.initialized.isOk
+
+    block:
+      # Initialize LSP client
+
+      block:
+        let
+          rootPath = getCurrentDir()
+          params = initInitializeParams(rootPath, Trace)
+        assert client.initialize(Id, params).isOk
+
+      const Timeout = 5000
+      assert client.readyOutput(Timeout).isOk
+      let initializeRes = client.read.get
+
+      block:
+        let err = client.initCapacities(initializeRes)
+        assert err.isOk
+
+      block:
+        # Initialized notification
+        let err = client.initialized
+        assert err.isOk
+
+      block:
+        # workspace/didChangeConfiguration notification
+        let err = client.workspaceDidChangeConfiguration
+        assert err.isOk
 
     const LanguageId = "nim"
     let
@@ -85,18 +126,44 @@ suite "lsp: Send requests":
   test "Send textDocument/didChange":
     var client = initLspClient(Command).get
 
-    const Id = 1
-    let
-      rootPath = getCurrentDir()
-      params = initInitializeParams(rootPath, Trace)
-    assert client.initialize(Id, params).isOk
-    assert client.initialized.isOk
-
-    const LanguageId = "nim"
+    const
+      Id = 1
+      LanguageId = "nim"
     let
       path = getCurrentDir() / "src/moe.nim"
       text = readFile(path)
-    assert client.textDocumentDidOpen(path, LanguageId, text).isOk
+
+    block:
+      # Initialize LSP client
+
+      block:
+        let
+          rootPath = getCurrentDir()
+          params = initInitializeParams(rootPath, Trace)
+        assert client.initialize(Id, params).isOk
+
+      const Timeout = 5000
+      assert client.readyOutput(Timeout).isOk
+      let initializeRes = client.read.get
+
+      block:
+        let err = client.initCapacities(initializeRes)
+        assert err.isOk
+
+      block:
+        # Initialized notification
+        let err = client.initialized
+        assert err.isOk
+
+      block:
+        # workspace/didChangeConfiguration notification
+        let err = client.workspaceDidChangeConfiguration
+        assert err.isOk
+
+      block:
+        # textDocument/diOpen notification
+        let err = client.textDocumentDidOpen(path, LanguageId, text)
+        assert err.isOk
 
     block:
       const SecondVersion = 2
@@ -107,102 +174,90 @@ suite "lsp: Send requests":
   test "Send textDocument/didClose":
     var client = initLspClient(Command).get
 
-    const Id = 1
-    let
-      rootPath = getCurrentDir()
-      params = initInitializeParams(rootPath, Trace)
-    assert client.initialize(Id, params).isOk
-    assert client.initialized.isOk
-
-    const LanguageId = "nim"
+    const
+      Id = 1
+      LanguageId = "nim"
     let
       path = getCurrentDir() / "src/moe.nim"
       text = readFile(path)
-    assert client.textDocumentDidOpen(path, LanguageId, text).isOk
+
+    block:
+      # Initialize LSP client
+
+      block:
+        let
+          rootPath = getCurrentDir()
+          params = initInitializeParams(rootPath, Trace)
+        assert client.initialize(Id, params).isOk
+
+      const Timeout = 5000
+      assert client.readyOutput(Timeout).isOk
+      let initializeRes = client.read.get
+
+      block:
+        let err = client.initCapacities(initializeRes)
+        assert err.isOk
+
+      block:
+        # Initialized notification
+        let err = client.initialized
+        assert err.isOk
+
+      block:
+        # workspace/didChangeConfiguration notification
+        let err = client.workspaceDidChangeConfiguration
+        assert err.isOk
+
+      block:
+        # textDocument/diOpen notification
+        let err = client.textDocumentDidOpen(path, LanguageId, text)
+        assert err.isOk
 
     check client.textDocumentDidClose(path).isOk
 
   test "Send textDocument/hover":
     var client = initLspClient(Command).get
+    let rootPath = getCurrentDir()
 
-    const Id = 1
-    let
-      rootPath = getCurrentDir()
-      params = initInitializeParams(rootPath, Trace)
-    assert client.initialize(Id, params).isOk
-    assert client.initialized.isOk
+    const
+      Id = 1
+      LanguageId = "nim"
+      Text = "echo 1" # Use simple text for the test.
 
-    const LanguageId = "nim"
     let
       path = getCurrentDir() / "src/moe.nim"
-      # Use simple text for the test.
-      text = "echo 1"
-    assert client.textDocumentDidOpen(path, LanguageId, text).isOk
+
+    block:
+      # Initialize LSP client
+
+      block:
+        let params = initInitializeParams(rootPath, Trace)
+        assert client.initialize(Id, params).isOk
+
+      const Timeout = 5000
+      assert client.readyOutput(Timeout).isOk
+      let initializeRes = client.read.get
+
+      block:
+        let err = client.initCapacities(initializeRes)
+        assert err.isOk
+
+      block:
+        # Initialized notification
+        let err = client.initialized
+        assert err.isOk
+
+      block:
+        # workspace/didChangeConfiguration notification
+        let err = client.workspaceDidChangeConfiguration
+        assert err.isOk
+
+      block:
+        # textDocument/diOpen notification
+        let err = client.textDocumentDidOpen(path, LanguageId, Text)
+        assert err.isOk
 
     let position = BufferPosition(line: 0, column: 0)
 
-    var hoverResult = none(Hover)
-    for i in 0 .. 10:
-      # Wait for nimlsp to be ready.
-      sleep 1000
-
-      let r = client.textDocumentHover(Id, path, position)
-      if r.isOk:
-        hoverResult = some(r.get)
-        break
-
-    check hoverResult.isSome
-    check hoverResult.get.contents.get.len > 0
-
-  test "Send textDocument/hover 2":
-    var client = initLspClient(Command).get
-
-    const Id = 1
-    let
-      rootPath = getCurrentDir()
-      params = initInitializeParams(rootPath, Trace)
-    assert client.initialize(Id, params).isOk
-    assert client.initialized.isOk
-
-    const LanguageId = "nim"
-    let
-      path = getCurrentDir() / "src/moe.nim"
-      # Use simple text for the test.
-      text = "echo 1"
-    assert client.textDocumentDidOpen(path, LanguageId, text).isOk
-
-    block first:
-      let position = BufferPosition(line: 0, column: 0)
-
-      var hoverResult = none(Hover)
-      for i in 0 .. 10:
-        # Wait for nimlsp to be ready.
-        sleep 1000
-
-        let r = client.textDocumentHover(Id, path, position)
-        if r.isOk:
-          hoverResult = some(r.get)
-          break
-
-      check hoverResult.isSome
-      check hoverResult.get.contents.get.len > 0
-
-    block second:
-      const SecondVersion = 2
-      let changedText = "echo 1\necho 2"
-      assert client.textDocumentDidChange(SecondVersion, path, changedText).isOk
-
-      let position = BufferPosition(line: 1, column: 0)
-
-      var hoverResult = none(Hover)
-      for i in 0 .. 10:
-        # Wait for nimlsp to be ready.
-        sleep 1000
-
-        let r = client.textDocumentHover(Id, path, position)
-        if r.isOk:
-          hoverResult = some(r.get)
-          break
-
-      check hoverResult.isSome
-      check hoverResult.get.contents.get.len > 0
+    check client.textDocumentHover(Id, path, position).isOk
+    check client.waitingResponse.get == LspMethod.textDocumentHover
