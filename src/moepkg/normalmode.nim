@@ -968,10 +968,7 @@ proc closeCurrentWindow(status: var EditorStatus) =
 proc requestHover(status: var EditorStatus) =
   ## Send textDocument/hover request to the LSP server.
 
-  template isAvailable(clients: Table[string, LspClient], ext: string): bool =
-    clients.contains(ext) and clients[ext].isInitialized
-
-  if status.lspClients.isAvailable($currentBufStatus.extension):
+  if status.lspClients.contains($currentBufStatus.extension):
     debug "lsp client is not ready"
 
   let r = status.lspClients[$currentBufStatus.extension].textDocumentHover(

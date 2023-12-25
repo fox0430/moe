@@ -20,7 +20,7 @@
 import std/[options, tables, json]
 import pkg/results
 import editorstatus, windownode, popupwindow, unicodeext, independentutils,
-       gapbuffer, messages
+       gapbuffer, messages, ui
 import lsp/[client, utils]
 
 template lspClient: var LspClient =
@@ -100,7 +100,7 @@ proc initHoverWindow(
     result.update
 
 proc lspHover*(status: var EditorStatus, res: JsonNode): Result[(), string] =
-  ## Display the hover on a popup window.
+  ## Display the hover on a popup window until any key is pressed.
   ## textDocument/hover.
   ## TODO: Add tests after resolving the forever key waiting problem.
 
@@ -122,8 +122,10 @@ proc lspHover*(status: var EditorStatus, res: JsonNode): Result[(), string] =
   hoverWin.refresh
 
   # Wait until any key is pressed.
-  discard status.getKeyFromMainWindow
+  discard getKeyBlocking()
   hoverWin.close
+
+  return Result[(), string].ok ()
 
 proc handleLspResponse*(status: var EditorStatus) =
   if not lspClient.running:

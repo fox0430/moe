@@ -707,7 +707,23 @@ proc editorMainLoop*(status: var EditorStatus) =
     if isSkipGetKey:
       isSkipGetKey = false
     else:
-      key = status.getKeyFromMainWindow
+      # Wait a key and check background tasks, LSP response.
+      var k: Option[Rune]
+      while k.isNone:
+        const Timeout = 100 # 100 milliseconds
+        k = currentMainWindowNode.getKey(Timeout)
+
+        status.runBackgroundTasks
+        if status.bufStatus.isUpdate:
+          continue
+
+        if status.isLspResponse:
+          break
+
+      if status.isLspResponse:
+        continue
+      else:
+        key = k.get
 
     if status.suggestionWindow.isSome:
       if canHandleInSuggestionWindow(key):
