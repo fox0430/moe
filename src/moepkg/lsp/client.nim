@@ -38,6 +38,18 @@ type
     data*: string
       # Error data.
 
+  LspMessageKind* = enum
+    request
+    response
+    notifyFromClient
+    notifyFromServer
+
+  LspMessage* = object
+    kind*: LspMessageKind
+    message*: JsonNode
+
+  LspLog* = seq[LspMessage]
+
   LspCapabilities* = object
     hover*: bool
 
@@ -52,6 +64,8 @@ type
       # LSP server capabilities
     waitingResponse*: Option[LspMethod]
       # The waiting response from the LSP server.
+    log*: LspLog
+      # Request/Response log.
 
 type
   R = Result
@@ -66,7 +80,7 @@ type
   LspDidOpenTextDocumentResult* = R[(), string]
   LspDidChangeTextDocumentResult* = R[(), string]
   LspDidCloseTextDocumentResult* = R[(), string]
-  LspHoverResult* = R[Hover, string]
+  LspHoverResult* = R[Option[Hover], string]
 
 proc pathToUri(path: string): string =
   ## This is a modified copy of encodeUrl in the uri module. This doesn't encode
@@ -103,6 +117,18 @@ proc exit*(c: LspClient) {.inline.} =
   ## TODO: Send a shutdown request?
 
   c.serverProcess.terminate
+
+proc addRequestLog*(c: var LspClient, m: JsonNode) {.inline.} =
+  c.log.add LspMessage(kind: LspMessageKind.request, message: m)
+
+proc addResponseLog*(c: var LspClient, m: JsonNode) {.inline.} =
+  c.log.add LspMessage(kind: LspMessageKind.response, message: m)
+
+proc addNotifyFromClientLog*(c: var LspClient, m: JsonNode) {.inline.} =
+  c.log.add LspMessage(kind: LspMessageKind.notifyFromClient, message: m)
+
+proc addNotifyFromServerLog*(c: var LspClient, m: JsonNode) {.inline.} =
+  c.log.add LspMessage(kind: LspMessageKind.notifyFromServer, message: m)
 
 proc readyOutput*(c: LspClient, timeout: int = 1): Result[(), string] =
   ## Return when output is written from the LSP server or timesout.
@@ -469,8 +495,13 @@ proc parseTextDocumentHoverResponse*(
     defer:
       c.waitingResponse = none(LspMethod)
 
+    if not res.contains("result"):
+      return LspHoverResult.err fmt"textDocument/hover request failed: {res}"
+
+    if res["result"].kind == JNull:
+      return LspHoverResult.ok none(Hover)
     try:
-      return LspHoverResult.ok res["result"].to(Hover)
+      return LspHoverResult.ok some(res["result"].to(Hover))
     except CatchableError as e:
       let msg = fmt"json to Hover failed {e.msg}"
       return LspHoverResult.err fmt"textDocument/hover request failed: {msg}"

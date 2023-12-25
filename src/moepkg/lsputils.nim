@@ -99,12 +99,22 @@ proc initHoverWindow(
     result.autoMoveAndResize(minPosition, maxPostion)
     result.update
 
-proc lspHover*(status: var EditorStatus, hoverContent: HoverContent) =
+proc lspHover*(status: var EditorStatus, res: JsonNode): Result[(), string] =
   ## Display the hover on a popup window.
   ## textDocument/hover.
   ## TODO: Add tests after resolving the forever key waiting problem.
 
-  var hoverWin = initHoverWindow(currentMainWindowNode, hoverContent)
+  let hover = lspClient.parseTextDocumentHoverResponse(res)
+  if hover.isErr:
+    return Result[(), string].err hover.error
+
+  if hover.get.isNone:
+    # Not found
+    return Result[(), string].ok ()
+
+  var hoverWin = initHoverWindow(
+    currentMainWindowNode,
+    hover.get.get.toHoverContent)
 
   # Keep the cursor position on currentMainWindowNode and display the hover
   # window on the top.
@@ -122,7 +132,7 @@ proc handleLspResponse*(status: var EditorStatus) =
 
   let resJson = lspClient.read
   if resJson.isErr:
-    status.commandLine.writeLspError(resJson.error)
+    # Maybe invalid messages. Ignore.
     return
 
   if resJson.get.isLspError:
@@ -130,19 +140,30 @@ proc handleLspResponse*(status: var EditorStatus) =
     return
 
   if resJson.get.isServerNotify:
+    # The notification from the server.
+
+    lspClient.addNotifyFromServerLog(resJson.get)
+
     # TODO: Add server notification supports.
-    discard
-  elif status.isWaitingLspResponse:
-    case lspClient.waitingResponse.get:
-      of LspMethod.initialize:
-        let r = status.lspInitialized(resJson.get)
-        if r.isErr:
-          status.commandLine.writeLspInitializeError(
-            status.bufStatus[^1].extension,
-            r.error)
-      of LspMethod.textDocumentHover:
-        let r = lspClient.parseTextDocumentHoverResponse(resJson.get)
-        if r.isErr: status.commandLine.writeLspHoverError(r.error)
-        else: status.lspHover(r.get.toHoverContent)
-      else:
-        discard
+    # window/logMessage, textDocument/diagnostic, etc....
+  else:
+    # The response from the server.
+
+    lspClient.addResponseLog(resJson.get)
+
+    if status.isWaitingLspResponse:
+      case lspClient.waitingResponse.get:
+        of LspMethod.initialize:
+          let r = status.lspInitialized(resJson.get)
+          if r.isErr:
+            status.commandLine.writeLspInitializeError(
+              status.bufStatus[^1].extension,
+              r.error)
+        of LspMethod.textDocumentHover:
+          let r = status.lspHover(resJson.get)
+          if r.isErr: status.commandLine.writeLspHoverError(r.error)
+        else:
+          discard
+    else:
+      # Should ignore?
+      discard
