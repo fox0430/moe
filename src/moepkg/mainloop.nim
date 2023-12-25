@@ -19,6 +19,7 @@
 
 import std/[options, times]
 import pkg/results
+import lsp/client
 import editorstatus, bufferstatus, windownode, unicodeext, gapbuffer, ui,
        normalmode, visualmode, insertmode, autocomplete, suggestionwindow,
        exmode, replacemode, filermode, buffermanager, logviewer, help,
