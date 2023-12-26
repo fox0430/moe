@@ -285,6 +285,8 @@ proc absolutePath*(bufStatus: BufferStatus): Runes =
   else:
     bufStatus.openDir / bufStatus.path
 
+template langId*(b: BufferStatus): string = $b.extension
+
 proc initId(b: var BufferStatus) {.inline.} =
   ## Assign a unique id and Increment bufferstatus.countAddedBuffer.
 

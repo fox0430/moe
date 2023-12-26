@@ -1099,4 +1099,4 @@ suite "editorstatus: initLsp":
 
     let workspaceRoot = getCurrentDir()
     const LanguageId = "nim"
-    check status.initLsp(workspaceRoot, LanguageId).isOk
+    check status.lspInitialize(workspaceRoot, LanguageId).isOk

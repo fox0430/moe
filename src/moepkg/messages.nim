@@ -344,6 +344,11 @@ proc writeBufferChangedWarn*(commandLine: var CommandLine, filename: Runes) =
   let mess = fmt"File {filename} has changed and the buffer was changed in Moe as well."
   commandLine.writeWarn(mess)
 
+proc writeLspError*(commandLine: var CommandLine, message: string) =
+  let mess = fmt"lsp: {message}"
+  commandLine.writeError(mess)
+  addMessageLog mess
+
 proc writeLspInitializeError*(
   commandLine: var CommandLine,
   command: Runes,

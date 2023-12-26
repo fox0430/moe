@@ -19,13 +19,14 @@
 
 import std/[options, times]
 import pkg/results
+import lsp/client
 import editorstatus, bufferstatus, windownode, unicodeext, gapbuffer, ui,
        normalmode, visualmode, insertmode, autocomplete, suggestionwindow,
        exmode, replacemode, filermode, buffermanager, logviewer, help,
        recentfilemode, quickrun, backupmanager, diffviewer, configmode,
        debugmode, commandline, search, commandlineutils, popupwindow,
        filermodeutils, messages, registers, exmodeutils, editor, movement,
-       searchutils, independentutils, viewhighlight
+       searchutils, independentutils, viewhighlight, lsputils
 
 type
   BeforeLine = object
@@ -698,12 +699,31 @@ proc editorMainLoop*(status: var EditorStatus) =
         currentBufStatus.buffer.beginNewSuitIfNeeded
         currentBufStatus.recordCurrentPosition(currentMainWindowNode)
 
+    if status.isLspResponse:
+      status.handleLspResponse
+
     status.update
 
     if isSkipGetKey:
       isSkipGetKey = false
     else:
-      key = status.getKeyFromMainWindow
+      # Wait a key and check background tasks, LSP response.
+      var k: Option[Rune]
+      while k.isNone:
+        const Timeout = 100 # 100 milliseconds
+        k = currentMainWindowNode.getKey(Timeout)
+
+        status.runBackgroundTasks
+        if status.bufStatus.isUpdate:
+          continue
+
+        if status.isLspResponse:
+          break
+
+      if status.isLspResponse:
+        continue
+      else:
+        key = k.get
 
     if status.suggestionWindow.isSome:
       if canHandleInSuggestionWindow(key):

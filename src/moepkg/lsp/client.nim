@@ -38,6 +38,18 @@ type
     data*: string
       # Error data.
 
+  LspMessageKind* = enum
+    request
+    response
+    notifyFromClient
+    notifyFromServer
+
+  LspMessage* = object
+    kind*: LspMessageKind
+    message*: JsonNode
+
+  LspLog* = seq[LspMessage]
+
   LspCapabilities* = object
     hover*: bool
 
@@ -46,25 +58,25 @@ type
       # LSP server process.
     serverStreams: Streams
       # Input/Output streams for the LSP server process.
-    isInitialized*: bool
-      # Set true if initialized LSP client/server.
-    capabilities*: LspCapabilities
+    capabilities*: Option[LspCapabilities]
       # LSP server capabilities
+    waitingResponse*: Option[LspMethod]
+      # The waiting response from the LSP server.
+    log*: LspLog
+      # Request/Response log.
 
 type
   R = Result
 
+  LspClientReadableResult* = R[bool, string]
+
   initLspClientResult* = R[LspClient, string]
 
   LspErrorParseResult* = R[LspError, string]
+  LspSendRequestResult* = R[(), string]
+  LspSendNotifyResult* = R[(), string]
+
   LspInitializeResult* = R[(), string]
-  LspInitializedResult* = R[(), string]
-  LspWorkspaceDidChangeConfigurationResult* = R[(), string]
-  LspShutdownResult* = R[(), string]
-  LspDidOpenTextDocumentResult* = R[(), string]
-  LspDidChangeTextDocumentResult* = R[(), string]
-  LspDidCloseTextDocumentResult* = R[(), string]
-  LspHoverResult* = R[Hover, string]
 
 proc pathToUri(path: string): string =
   ## This is a modified copy of encodeUrl in the uri module. This doesn't encode
@@ -86,20 +98,43 @@ proc pathToUri(path: string): string =
         result.add '%'
         result.add toHex(ord(c), 2)
 
+proc running*(c: LspClient): bool {.inline.} =
+  ## Return true if the LSP server process running.
+
+  c.serverProcess.running
+
 proc serverProcessId*(c: LspClient): int {.inline.} =
   ## Return a process id of the LSP server process.
 
   c.serverProcess.processID
 
-proc exit*(c: LspClient) =
+proc exit*(c: LspClient) {.inline.} =
   ## Exit a LSP server process.
   ## TODO: Send a shutdown request?
 
   c.serverProcess.terminate
 
-proc readyOutput(c: LspClient, timeout: int): Result[(), string] =
+template isInitialized*(c: LspClient): bool = c.capabilities.isSome
+
+proc addRequestLog*(c: var LspClient, m: JsonNode) {.inline.} =
+  c.log.add LspMessage(kind: LspMessageKind.request, message: m)
+
+proc addResponseLog*(c: var LspClient, m: JsonNode) {.inline.} =
+  c.log.add LspMessage(kind: LspMessageKind.response, message: m)
+
+proc addNotifyFromClientLog*(c: var LspClient, m: JsonNode) {.inline.} =
+  c.log.add LspMessage(kind: LspMessageKind.notifyFromClient, message: m)
+
+proc addNotifyFromServerLog*(c: var LspClient, m: JsonNode) {.inline.} =
+  c.log.add LspMessage(kind: LspMessageKind.notifyFromServer, message: m)
+
+proc clearWaitingResponse*(c: var LspClient) {.inline.} =
+  c.waitingResponse = none(LspMethod)
+
+proc readable*(c: LspClient, timeout: int = 1): LspClientReadableResult =
   ## Return when output is written from the LSP server or timesout.
   ## Wait for the output from process to be written using poll(2).
+  ## Return true if readable and Return false if timeout.
   ## timeout is milliseconds.
 
   # Init pollFd.
@@ -114,44 +149,46 @@ proc readyOutput(c: LspClient, timeout: int): Result[(), string] =
   const FdLen = 1
   let r = pollFd.addr.poll(FdLen.Tnfds, timeout)
   if r == 1:
-    return Result[(), string].ok ()
+    return LspClientReadableResult.ok true
   else:
-    return Result[(), string].err "timeout"
+    # Timeout
+    return LspClientReadableResult.ok false
 
-proc call(
-  c: LspClient,
+proc request(
+  c: var LspClient,
   id: int,
-  methodName: string,
-  params: JsonNode): JsonRpcResponseResult =
-    ## Send a request to the LSP server and return a response.
+  lspMethod: LspMethod,
+  params: JsonNode): Result[(), string] =
+    ## Send a request to the LSP server and set to waitingResponse.
 
-    block send:
-      let r = c.serverStreams.sendRequest(id, methodName, params)
-      if r.isErr:
-        return JsonRpcResponseResult.err r.error
+    let r = c.serverStreams.sendRequest(id, lspMethod.toLspMethodStr, params)
+    if r.isErr:
+      return Result[(), string].err r.error
 
-    block wait:
-      const Timeout = 100
-      let r = c.readyOutput(Timeout)
-      if r.isErr:
-        return JsonRpcResponseResult.err r.error
+    c.waitingResponse = some(lspMethod)
 
-    block read:
-      let r = c.serverStreams.output.read
-      if r.isOk:
-        return JsonRpcResponseResult.ok r.get
-      else:
-        return JsonRpcResponseResult.err r.error
+    return Result[(), string].ok ()
 
 proc notify(
   c: LspClient,
-  methodName: string,
+  lspMethod: LspMethod,
   params: JsonNode): Result[(), string] {.inline.} =
     ## Send a notification to the LSP server.
 
-    return c.serverStreams.sendNotify(methodName, params)
+    return c.serverStreams.sendNotify(lspMethod.toLspMethodStr, params)
 
-proc isLspError(res: JsonNode): bool {.inline.} = res.contains("error")
+proc read*(c: var LspClient): JsonRpcResponseResult =
+  ## Read a response from the LSP server.
+
+  let r = c.serverStreams.output.read
+  if r.isOk:
+    return JsonRpcResponseResult.ok r.get
+  else:
+    return JsonRpcResponseResult.err r.error
+
+template isLspError*(res: JsonNode): bool = res.contains("error")
+
+template isServerNotify*(res: JsonNode): bool = res.contains("method")
 
 proc parseLspError*(res: JsonNode): LspErrorParseResult =
   try:
@@ -188,7 +225,7 @@ proc initLspClient*(command: string): initLspClientResult =
       Env,
       opts)
   except CatchableError as e:
-    return initLspClientResult.err fmt"lsp: server start failed: {e.msg}"
+    return initLspClientResult.err fmt"server start failed: {e.msg}"
 
   block:
     let r = c.serverProcess.setNonBlockingOutput
@@ -249,87 +286,88 @@ proc setCapabilities(c: var LspClient, initResult: InitializeResult) =
   ## Set server capabilities to the LspClient from InitializeResult.
 
   if initResult.capabilities.hoverProvider == some(true):
-    c.capabilities.hover = true
+    c.capabilities = some(LspCapabilities(hover: true))
 
 proc initialize*(
   c: var LspClient,
   id: int,
-  initParams: InitializeParams): LspInitializeResult =
+  initParams: InitializeParams): LspSendRequestResult =
     ## Send a initialize request to the server and check server capabilities.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#initialize
 
     if not c.serverProcess.running:
-      return LspInitializeResult.err fmt"lsp: server crashed"
+      return LspSendRequestResult.err fmt"server crashed"
 
     let params = %* initParams
 
-    let r = c.call(id, "initialize", params)
+    let r = c.request(id, LspMethod.initialize, params)
     if r.isErr:
-      return LspInitializeResult.err fmt"lsp: Initialize request failed: {r.error}"
+      return LspSendRequestResult.err fmt"Initialize request failed: {r.error}"
 
-    if r.get.isLspError:
-      return LspInitializeResult.err fmt"lsp: Initialize request failed: {$r.error}"
+    return LspSendRequestResult.ok ()
+
+proc initCapacities*(
+  c: var LspClient,
+  res: JsonNode): LspInitializeResult =
+    defer:
+      c.clearWaitingResponse
 
     var initResult: InitializeResult
     try:
-      initResult = r.get["result"].to(InitializeResult)
+      initResult = res["result"].to(InitializeResult)
     except CatchableError as e:
       let msg = fmt"json to InitializeResult failed {e.msg}"
-      return LspInitializeResult.err fmt"lsp: Initialize request failed: {msg}"
+      return LspInitializeResult.err fmt"Initialize request failed: {msg}"
 
     c.setCapabilities(initResult)
 
     return LspInitializeResult.ok ()
 
-proc initialized*(c: LspClient): LspInitializedResult =
+proc initialized*(c: LspClient): LspSendNotifyResult =
   ## Send a initialized notification to the server.
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#initialized
 
   if not c.serverProcess.running:
-    return LspInitializeResult.err fmt"lsp: server crashed"
+    return LspSendNotifyResult.err fmt"server crashed"
 
   let params = %* {}
 
-  let err = c.notify("initialized", params)
+  let err = c.notify(LspMethod.initialized, params)
   if err.isErr:
-    return LspInitializedResult.err fmt"Invalid notification failed: {err.error}"
+    return LspSendNotifyResult.err fmt"Invalid notification failed: {err.error}"
 
-  c.isInitialized = true
+  return LspSendNotifyResult.ok ()
 
-  return LspInitializedResult.ok ()
-
-proc shutdown*(c: LspClient, id: int): LspShutdownResult =
+proc shutdown*(c: var LspClient, id: int): LspSendNotifyResult =
   ## Send a shutdown request to the server.
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#shutdown
 
   if not c.serverProcess.running:
-    return LspShutdownResult.err fmt"lsp: server crashed"
+    return LspSendNotifyResult.err fmt"server crashed"
 
-  let r = c.call(id, "shutdown", %*{})
+  let r = c.request(id, LspMethod.shutdown, %*{})
   if r.isErr:
-    return LspShutdownResult.err "lsp: Shutdown request failed: {r.error}"
+    return LspSendNotifyResult.err "Shutdown request failed: {r.error}"
 
-  if r.get.isLspError:
-    return LspShutdownResult.err fmt"lsp: Shutdown request failed: {$r.error}"
+  c.waitingResponse = some(LspMethod.shutdown)
 
-  if r.get["result"].kind == JNull: return LspShutdownResult.ok ()
-  else: return LspShutdownResult.err fmt"lsp: Shutdown request failed: {r.get}"
+  return LspSendNotifyResult.ok ()
 
 proc workspaceDidChangeConfiguration*(
-  c: LspClient): LspWorkspaceDidChangeConfigurationResult =
+  c: LspClient): LspSendNotifyResult =
     ## Send a workspace/didChangeConfiguration notification to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#workspace_didChangeConfiguration
 
     if not c.serverProcess.running:
-      return LspWorkspaceDidChangeConfigurationResult.err fmt"lsp: server crashed"
+      return LspSendNotifyResult.err fmt"server crashed"
 
     let params = %* DidChangeConfigurationParams()
 
-    let err = c.notify("workspace/didChangeConfiguration", params)
+    let err = c.notify(LspMethod.workspaceDidChangeConfiguration, params)
     if err.isErr:
-      return LspWorkspaceDidChangeConfigurationResult.err fmt"Invalid workspace/didChangeConfiguration failed: {err.error}"
+      return LspSendNotifyResult.err fmt"Invalid workspace/didChangeConfiguration failed: {err.error}"
 
-    return LspWorkspaceDidChangeConfigurationResult.ok ()
+    return LspSendNotifyResult.ok ()
 
 proc initTextDocumentDidOpenParams(
   uri, languageId, text: string): DidOpenTextDocumentParams {.inline.} =
@@ -343,23 +381,23 @@ proc initTextDocumentDidOpenParams(
 
 proc textDocumentDidOpen*(
   c: LspClient,
-  path, languageId, text: string): LspDidOpenTextDocumentResult =
+  path, languageId, text: string): LspSendNotifyResult =
     ## Send a textDocument/didOpen notification to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didOpen
 
     if not c.serverProcess.running:
-      return LspDidOpenTextDocumentResult.err fmt"lsp: server crashed"
+      return LspSendNotifyResult.err fmt"server crashed"
 
     let params = %* initTextDocumentDidOpenParams(
       path.pathToUri,
       languageId,
       text)
 
-    let err = c.notify("textDocument/didOpen", params)
+    let err = c.notify(LspMethod.textDocumentDidOpen, params)
     if err.isErr:
-      return LspDidOpenTextDocumentResult.err fmt"lsp: textDocument/didOpen notification failed: {err.error}"
+      return LspSendNotifyResult.err fmt"textDocument/didOpen notification failed: {err.error}"
 
-    return LspDidOpenTextDocumentResult.ok ()
+    return LspSendNotifyResult.ok ()
 
 proc initTextDocumentDidChangeParams(
   version: Natural,
@@ -374,20 +412,20 @@ proc initTextDocumentDidChangeParams(
 proc textDocumentDidChange*(
   c: LspClient,
   version: Natural,
-  path, text: string): LspDidChangeTextDocumentResult =
+  path, text: string): LspSendNotifyResult =
     ## Send a textDocument/didChange notification to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didChange
 
     if not c.serverProcess.running:
-      return LspDidChangeTextDocumentResult.err fmt"lsp: server crashed"
+      return LspSendNotifyResult.err fmt"server crashed"
 
     let params = %* initTextDocumentDidChangeParams(version, path, text)
 
-    let err = c.notify("textDocument/didChange", params)
+    let err = c.notify(LspMethod.textDocumentDidChange, params)
     if err.isErr:
-      return LspDidChangeTextDocumentResult.err fmt"lsp: textDocument/didChange notification failed: {err.error}"
+      return LspSendNotifyResult.err fmt"textDocument/didChange notification failed: {err.error}"
 
-    return LspDidChangeTextDocumentResult.ok ()
+    return LspSendNotifyResult.ok ()
 
 proc initTextDocumentDidClose(
   path: string): DidCloseTextDocumentParams {.inline.} =
@@ -397,20 +435,20 @@ proc initTextDocumentDidClose(
 
 proc textDocumentDidClose*(
   c: LspClient,
-  text: string): LspDidCloseTextDocumentResult =
+  text: string): LspSendNotifyResult =
     ## Send a textDocument/didClose notification to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didClose
 
     if not c.serverProcess.running:
-      return LspDidCloseTextDocumentResult.err fmt"lsp: server crashed"
+      return LspSendNotifyResult.err fmt"server crashed"
 
     let params = %* initTextDocumentDidClose(text)
 
-    let err = c.notify("textDocument/didClose", params)
+    let err = c.notify(LspMethod.textDocumentDidClose, params)
     if err.isErr:
-      return LspDidCloseTextDocumentResult.err fmt"lsp: textDocument/didClose notification failed: {err.error}"
+      return LspSendNotifyResult.err fmt"textDocument/didClose notification failed: {err.error}"
 
-    return LspDidChangeTextDocumentResult.ok ()
+    return LspSendNotifyResult.ok ()
 
 proc initHoverParams(
   path: string,
@@ -421,29 +459,24 @@ proc initHoverParams(
       position: position)
 
 proc textDocumentHover*(
-  c: LspClient,
+  c: var LspClient,
   id: int,
   path: string,
-  position: BufferPosition): LspHoverResult =
+  position: BufferPosition): LspSendRequestResult =
     ## Send a textDocument/hover request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_hover
 
-    if not c.capabilities.hover:
-      return LspHoverResult.err fmt"lsp: textDocument/hover unavailable"
-
     if not c.serverProcess.running:
-      return LspHoverResult.err fmt"lsp: server crashed"
+      return R[(), string].err fmt"server crashed"
+
+    if not c.capabilities.get.hover:
+      return R[(), string].err fmt"textDocument/hover unavailable"
 
     let params = %* initHoverParams(path, position.toLspPosition)
-    let r = c.call(id, "textDocument/hover", params)
+    let r = c.request(id, LspMethod.textDocumentHover, params)
     if r.isErr:
-      return LspHoverResult.err fmt"lsp: textDocument/hover request failed: {r.error}"
+      return R[(), string].err fmt"textDocument/hover request failed: {r.error}"
 
-    if r.get.isLspError:
-      return LspHoverResult.err fmt"lsp: textDocument/hover request failed: {$r.error}"
+    c.waitingResponse = some(LspMethod.textDocumentHover)
 
-    try:
-      return LspHoverResult.ok r.get["result"].to(Hover)
-    except CatchableError as e:
-      let msg = fmt"json to Hover failed {e.msg}"
-      return LspHoverResult.err fmt"lsp: textDocument/hover request failed: {msg}"
+    return R[(), string].ok ()

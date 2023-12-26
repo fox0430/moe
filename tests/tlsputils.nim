@@ -17,60 +17,83 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, json]
+import std/[unittest, oids, options, os]
+
 import pkg/results
-import moepkg/[independentutils, unicodeext]
-import moepkg/lsp/protocol/[enums, types]
 
-import moepkg/lsp/utils {.all.}
+import moepkg/lsp/[client, utils]
+import moepkg/[independentutils, unicodeext, gapbuffer, editorstatus,
+               bufferstatus, windownode, popupwindow]
 
-suite "lsp: toLspPosition":
-  test "toLspPosition 1":
-    check BufferPosition(line: 1, column: 2).toLspPosition[] ==
-      LspPosition(line: 1, character: 2)[]
+import moepkg/editorstatus {.all.}
+import moepkg/lsputils {.all.}
 
-suite "lsp: parseTraceValue":
-  test "off":
-    check parseTraceValue("off").get == TraceValue.off
-  test "messages":
-    check parseTraceValue("messages").get == TraceValue.messages
-  test "off":
-    check parseTraceValue("verbose").get == TraceValue.verbose
-  test "Invalid value":
-    check parseTraceValue("a").isErr
+suite "lsp: lspInitialized":
+  const Buffer = "echo 1"
+  let
+    testDir = getCurrentDir() / "lspInitTestDir"
+    testFilePath = testDir / "test.nim"
 
-suite "lsp: toHoverContent":
+  setup:
+    createDir(testDir)
+    writeFile(testFilePath, Buffer)
+
+  teardown:
+    removeDir(testDir)
+
   test "Basic":
-    let hoverJson = %* {
-      "contents": [
-        {"language": "nim", "value": "title"},
-        {"language": "", "value": "line1\nline2"}
-      ],
-      "range": {
-        "start": {"line": 1, "character": 2},
-        "end": {"line": 3, "character": 4}
-      }
-    }
+    var status = initEditorStatus()
 
-    check toHoverContent(hoverJson.to(Hover)) == HoverContent(
+    status.settings.lsp.enable = true
+
+    assert status.addNewBufferInCurrentWin(testFilePath).isOk
+    assert currentBufStatus.buffer.toSeqRunes == @["echo 1"].toSeqRunes
+
+    let workspaceRoot = testDir
+    const LangId = "nim"
+
+    assert status.lspInitialize(workspaceRoot, LangId).isOk
+
+    const Timeout = 5000
+    assert lspClient.readable(Timeout).get
+
+    let resJson = lspClient.read.get
+    check status.lspInitialized(resJson).isOk
+
+    check lspClient.isInitialized
+
+suite "lsp: initHoverWindow":
+  test "Basic":
+    var node = initWindowNode()
+    node.resize(Position(y: 0, x: 0), Size(h: 100, w: 100))
+
+    let hoverContent = HoverContent(
       title: ru"title",
-      description: @[ru"line1", ru"line2"],
-      range: BufferRange(
-        first: BufferPosition(line: 1, column: 2),
-        last: BufferPosition(line: 3, column: 4)))
+      description: @["1", "2"].toSeqRunes)
 
-  test "Only description":
-    let hoverJson = %* {
-      "contents": {"language": "nim", "value": "description"},
-      "range": {
-        "start": {"line": 1, "character": 2},
-        "end": {"line": 3, "character": 4}
-      }
-    }
+    var hoverWin = initHoverWindow(node, hoverContent)
 
-    check toHoverContent(hoverJson.to(Hover)) == HoverContent(
-      title: ru"",
-      description: @[ru"description"],
-      range: BufferRange(
-        first: BufferPosition(line: 1, column: 2),
-        last: BufferPosition(line: 3, column: 4)))
+    check hoverWin.buffer == @[" title ", "", " 1 ", " 2 "].toSeqRunes
+    check hoverWin.size == Size(h: 4, w: 7)
+
+suite "lsp: handleLspResponse":
+  test "Initialize response":
+    var status = initEditorStatus()
+
+    status.settings.lsp.enable = true
+
+    # Open a new file.
+    let filename = $genOid() & ".nim"
+    assert status.addNewBufferInCurrentWin(filename).isOk
+
+    let workspaceRoot = getCurrentDir()
+    const LangId = "nim"
+    assert status.lspInitialize(workspaceRoot, LangId).isOk
+
+
+    const Timeout = 5000
+    assert lspClient.readable(Timeout).get
+
+    status.handleLspResponse
+
+    check lspClient.isInitialized
