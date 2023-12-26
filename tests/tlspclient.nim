@@ -58,7 +58,7 @@ suite "lsp: Send requests":
         assert client.initialize(Id, params).isOk
 
       const Timeout = 5000
-      assert client.readyOutput(Timeout).isOk
+      assert client.readable(Timeout).isOk
       let initializeRes = client.read.get
 
       block:
@@ -99,7 +99,7 @@ suite "lsp: Send requests":
         assert client.initialize(Id, params).isOk
 
       const Timeout = 5000
-      assert client.readyOutput(Timeout).isOk
+      assert client.readable(Timeout).isOk
       let initializeRes = client.read.get
 
       block:
@@ -143,7 +143,7 @@ suite "lsp: Send requests":
         assert client.initialize(Id, params).isOk
 
       const Timeout = 5000
-      assert client.readyOutput(Timeout).isOk
+      assert client.readable(Timeout).isOk
       let initializeRes = client.read.get
 
       block:
@@ -191,7 +191,7 @@ suite "lsp: Send requests":
         assert client.initialize(Id, params).isOk
 
       const Timeout = 5000
-      assert client.readyOutput(Timeout).isOk
+      assert client.readable(Timeout).isOk
       let initializeRes = client.read.get
 
       block:
@@ -235,7 +235,7 @@ suite "lsp: Send requests":
         assert client.initialize(Id, params).isOk
 
       const Timeout = 5000
-      assert client.readyOutput(Timeout).isOk
+      assert client.readable(Timeout).isOk
       let initializeRes = client.read.get
 
       block:

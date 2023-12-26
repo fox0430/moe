@@ -17,10 +17,12 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, json]
+import std/[unittest, json, options]
+
 import pkg/results
-import moepkg/[independentutils, unicodeext]
+
 import moepkg/lsp/protocol/[enums, types]
+import moepkg/[independentutils, unicodeext]
 
 import moepkg/lsp/utils {.all.}
 
@@ -38,6 +40,120 @@ suite "lsp: parseTraceValue":
     check parseTraceValue("verbose").get == TraceValue.verbose
   test "Invalid value":
     check parseTraceValue("a").isErr
+
+suite "lsp: parseTextDocumentHoverResponse":
+  test "Invalid":
+    let res = %*{"jsonrpc": "2.0", "params": nil}
+    check parseTextDocumentHoverResponse(res).isErr
+
+  test "Not found":
+    let res = %*{"jsonrpc": "2.0", "id": 0, "result": nil}
+    check parseTextDocumentHoverResponse(res).get.isNone
+
+  test "Basic":
+    let res = %*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": {
+        "contents": {
+          "language": "nim",
+          "value": "editorstatus.LastCursorPosition"},
+          "range":{
+            "start": {
+              "line":33,
+              "character":12
+            },
+            "end":{"line":33,"character":30}
+          }
+       }
+     }
+
+    check %*parseTextDocumentHoverResponse(res).get == %*{
+      "contents": {
+        "language": "nim",
+        "value": "editorstatus.LastCursorPosition"
+      },
+      "range": {
+        "start": {
+          "line": 33,
+          "character": 12},
+        "end": {
+          "line": 33,
+          "character": 30
+        }
+      }
+    }
+
+  test "Without range":
+    let res = %*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": {
+        "contents": {
+          "language": "nim",
+          "value": "editorstatus.LastCursorPosition"},
+          "range": nil
+       }
+     }
+
+    check %*parseTextDocumentHoverResponse(res).get == %*{
+      "contents": {
+        "language": "nim",
+        "value": "editorstatus.LastCursorPosition"
+      },
+      "range": nil
+    }
+
+  test "Array contents":
+    let res = %*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": {
+        "contents": [
+          {
+            "language": "nim",
+            "value": "system.echo: proc (x: varargs[typed]){.gcsafe.}"
+          },
+          {
+            "language": "",
+            "value": "description"
+          }
+        ],
+        "range": {
+          "start": {
+            "line": 0,
+            "character": 0
+          },
+          "end": {
+            "line": 0,
+            "character": 4
+          }
+        }
+      }
+    }
+
+    check %*parseTextDocumentHoverResponse(res).get == %*{
+      "contents": [
+        {
+          "language": "nim",
+          "value": "system.echo: proc (x: varargs[typed]){.gcsafe.}"
+        },
+        {
+          "language": "",
+          "value":"description"
+        }
+      ],
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 0
+        },
+        "end": {
+          "line": 0,
+          "character": 4
+        }
+      }
+    }
 
 suite "lsp: toHoverContent":
   test "Basic":
