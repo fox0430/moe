@@ -294,21 +294,16 @@ proc exitEditor*(status: EditorStatus) =
 
   quit()
 
-proc initLsp(
+proc lspInitialize*(
   status: var EditorStatus,
   workspaceRoot, langId: string): Result[(), string] =
     ## Initialize LSP client and server.
-
-    let langId = $status.bufStatus[^1].extension
 
     if not status.lspClients.contains(langId):
       # Init a LSP client and start a LSP server.
       var c = initLspClient(
         $status.settings.lsp.languages[langId].command)
       if c.isErr:
-        status.commandLine.writeLspInitializeError(
-          status.settings.lsp.languages[langId].command,
-          c.error)
         return Result[(), string].err c.error
 
       status.lspClients[langId] = c.get
@@ -325,7 +320,6 @@ proc initLsp(
     return Result[(), string].ok ()
 
 proc addFilerStatus*(status: var EditorStatus) {.inline.} =
-
   ## Add a new FilerStatus and link it to the current bufStatus.
 
   status.filerStatuses.add initFilerStatus()
@@ -395,12 +389,14 @@ proc addNewBuffer*(
                status.commandLine.writeGitInfoUpdateError(gitDiffProcess.error)
 
         if status.settings.lsp.enable:
-          let langId = $status.bufStatus[^1].extension
+          template langId: string = status.bufStatus[^1].langId
 
           if langId.len > 0 and
              status.settings.lsp.languages.contains(langId) and
              not status.lspClients.contains($status.bufStatus[^1].extension):
-               let err = status.initLsp($status.bufStatus[^1].openDir, langId)
+               let err = status.lspInitialize(
+                 $status.bufStatus[^1].openDir,
+                 langId)
                if err.isErr:
                  status.commandLine.writeLspInitializeError(
                    status.settings.lsp.languages[langId].command,

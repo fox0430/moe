@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, json, options]
+import std/[strutils, strformat, json, options]
 import pkg/results
 
 import ../independentutils
@@ -26,6 +26,11 @@ import ../unicodeext
 import protocol/[enums, types]
 
 type
+  R = Result
+
+  LspShutdownResult = R[(), string]
+  LspHoverResult* = R[Option[Hover], string]
+
   LspPosition* = types.Position
 
   LspMethod* {.pure.} = enum
@@ -64,6 +69,23 @@ proc parseTraceValue*(s: string): Result[TraceValue, string] =
     return Result[TraceValue, string].ok parseEnum[TraceValue](s)
   except ValueError:
     return Result[TraceValue, string].err "Invalid value"
+
+proc parseShutdownResponse*(res: JsonNode): LspShutdownResult =
+  if res["result"].kind == JNull: return LspShutdownResult.ok ()
+  else: return LspShutdownResult.err fmt"Shutdown request failed: {res}"
+
+proc parseTextDocumentHoverResponse*(res: JsonNode): LspHoverResult =
+  ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#hover
+  if not res.contains("result"):
+    return LspHoverResult.err fmt"Invalid response: {res}"
+
+  if res["result"].kind == JNull:
+    return LspHoverResult.ok none(Hover)
+  try:
+    return LspHoverResult.ok some(res["result"].to(Hover))
+  except CatchableError as e:
+    let msg = fmt"json to Hover failed {e.msg}"
+    return LspHoverResult.err fmt"Invalid response: {msg}"
 
 proc toHoverContent*(hover: Hover): HoverContent =
   let contents = %*hover.contents

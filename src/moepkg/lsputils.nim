@@ -18,17 +18,19 @@
 #[############################################################################]#
 
 import std/[options, tables, json]
+
 import pkg/results
+
+import lsp/[client, utils]
 import editorstatus, windownode, popupwindow, unicodeext, independentutils,
        gapbuffer, messages, ui
-import lsp/[client, utils]
 
 template lspClient: var LspClient =
   status.lspClients[$currentBufStatus.extension]
 
 template isLspResponse*(status: EditorStatus): bool =
   status.lspClients.contains($currentBufStatus.extension) and
-  lspClient.readyOutput.isOk
+  (let r = lspClient.readable; r.isOk and r.get)
 
 template isWaitingLspResponse(status: var EditorStatus): bool =
   status.lspClients[$currentBufStatus.extension].waitingResponse.isSome
@@ -104,7 +106,9 @@ proc lspHover*(status: var EditorStatus, res: JsonNode): Result[(), string] =
   ## textDocument/hover.
   ## TODO: Add tests after resolving the forever key waiting problem.
 
-  let hover = lspClient.parseTextDocumentHoverResponse(res)
+  lspClient.clearWaitingResponse
+
+  let hover = parseTextDocumentHoverResponse(res)
   if hover.isErr:
     return Result[(), string].err hover.error
 
