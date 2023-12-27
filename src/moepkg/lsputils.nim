@@ -147,11 +147,16 @@ proc showLspServerLog(status: var EditorStatus, notify: JsonNode) =
     return
 
   case m.get.messageType:
-    of error: status.commandLine.writeLspServerError(m.get.message)
-    of warn: status.commandLine.writeLspServerWarn(m.get.message)
-    of info: status.commandLine.writeLspServerInfo(m.get.message)
-    of log: status.commandLine.writeLspServerLog(m.get.message)
-    of debug: status.commandLine.writeLspServerDebug(m.get.message)
+    of LspMessageType.error:
+      status.commandLine.writeLspServerError(m.get.message)
+    of LspMessageType.warn:
+      status.commandLine.writeLspServerWarn(m.get.message)
+    of LspMessageType.info:
+      status.commandLine.writeLspServerInfo(m.get.message)
+    of LspMessageType.log:
+      status.commandLine.writeLspServerLog(m.get.message)
+    of LspMessageType.debug:
+      status.commandLine.writeLspServerDebug(m.get.message)
 
 proc handleLspServerNotify(status: var EditorStatus, notify: JsonNode) =
   # TODO: Add server notification supports.
