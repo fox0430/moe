@@ -10,6 +10,7 @@ Please feedback, bug reports and PRs.
 
 - `Initialize`
 - `shutdown`
+- `window/showMessage`
 - `workspace/didChangeConfiguration`
 - `textDocument/didOpen`
 - `textDocument/didChange`
