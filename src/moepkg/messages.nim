@@ -32,13 +32,27 @@ proc writeMessageOnCommandLine*(
   message: string) {.inline.} =
     commandLine.writeMessageOnCommandLine(message, EditorColorPairIndex.commandLine)
 
+proc writeStandard*(c: var CommandLine, message: string) =
+  c.writeMessageOnCommandLine(message, EditorColorPairIndex.commandLine)
+  addMessageLog message
+
+proc writeInfo*(c: var CommandLine, message: string) =
+  let mess = fmt"INFO: {message}"
+  c.writeMessageOnCommandLine(mess, EditorColorPairIndex.commandLine)
+  addMessageLog message
+
+proc writeDebug*(c: var CommandLine, message: string) =
+  let mess = fmt"DEBUG: {message}"
+  c.writeMessageOnCommandLine(mess, EditorColorPairIndex.commandLine)
+  addMessageLog message
+
 proc writeError*(c: var CommandLine, message: string) =
   # TODO: Add "Error:" prefix.
   c.writeMessageOnCommandLine(message, EditorColorPairIndex.errorMessage)
   addMessageLog message
 
 proc writeWarn*(c: var CommandLine, message: string) =
-  let mess = "WARN: " & message
+  let mess = fmt"WARN: {message}"
   c.writeMessageOnCommandLine(mess, EditorColorPairIndex.warnMessage)
   addMessageLog message
 
@@ -368,3 +382,18 @@ proc writeLspHoverError*(commandLine: var CommandLine, errorMessage: string) =
 proc writePasteIgnoreWarn*(commandLine: var CommandLine) =
   const Mess = "Paste is ignored in this mode"
   commandLine.writeWarn(Mess)
+
+proc writeLspServerError*(commandLine: var CommandLine, message: string) =
+  commandLine.writeError(fmt"ERR: lsp: {message}")
+
+proc writeLspServerWarn*(commandLine: var CommandLine, message: string) =
+  commandLine.writeWarn(fmt"lsp: {message}")
+
+proc writeLspServerInfo*(commandLine: var CommandLine, message: string) =
+  commandLine.writeInfo(fmt"lsp: {message}")
+
+proc writeLspServerLog*(commandLine: var CommandLine, message: string) =
+  commandLine.writeStandard(fmt"lsp: {message}")
+
+proc writeLspServerDebug*(commandLine: var CommandLine, message: string) =
+  commandLine.writeDebug(fmt"lsp: {message}")

@@ -26,27 +26,41 @@ import ../unicodeext
 import protocol/[enums, types]
 
 type
-  R = Result
-
-  LspShutdownResult = R[(), string]
-  LspHoverResult* = R[Option[Hover], string]
-
   LspPosition* = types.Position
 
   LspMethod* {.pure.} = enum
     initialize
     initialized
     shutdown
+    windowShowMessage
     workspaceDidChangeConfiguration
     textDocumentDidOpen
     textDocumentDidChange
     textDocumentDidClose
     textDocumentHover
 
+  LspMessageType* = enum
+    error
+    warn
+    info
+    log
+    debug
+
+  ServerMessage* = object
+    messageType*: LspMessageType
+    message*: string
+
   HoverContent* = object
     title*: Runes
     description*: seq[Runes]
     range*: BufferRange
+
+  R = Result
+  parseLspMessageTypeResult* = R[LspMessageType, string]
+  LspMethodResult* = R[LspMethod, string]
+  LspShutdownResult = R[(), string]
+  LspWindowShowMessageResult = R[ServerMessage, string]
+  LspHoverResult* = R[Option[Hover], string]
 
 proc toLspPosition*(p: BufferPosition): LspPosition {.inline.} =
   LspPosition(line: p.line, character: p.column)
@@ -56,6 +70,7 @@ proc toLspMethodStr*(m: LspMethod): string =
     of initialize: "initialize"
     of initialized: "initialized"
     of shutdown: "shutdown"
+    of windowShowMessage: "window/showMessage"
     of workspaceDidChangeConfiguration: "workspace/didChangeConfiguration"
     of textDocumentDidOpen: "textDocument/didOpen"
     of textDocumentDidChange: "textDocument/didChange"
@@ -73,6 +88,57 @@ proc parseTraceValue*(s: string): Result[TraceValue, string] =
 proc parseShutdownResponse*(res: JsonNode): LspShutdownResult =
   if res["result"].kind == JNull: return LspShutdownResult.ok ()
   else: return LspShutdownResult.err fmt"Shutdown request failed: {res}"
+
+proc lspMetod*(j: JsonNode): LspMethodResult =
+  if not j.contains("method"): return LspMethodResult.err "Invalid value"
+
+  case j["method"].getStr:
+    of "initialize":
+      LspMethodResult.ok initialize
+    of "initialized":
+      LspMethodResult.ok initialized
+    of "shutdown":
+      LspMethodResult.ok shutdown
+    of "window/showMessage":
+      LspMethodResult.ok windowShowMessage
+    of "workspace/didChangeConfiguration":
+      LspMethodResult.ok workspaceDidChangeConfiguration
+    of "textDocument/didOpen":
+      LspMethodResult.ok textDocumentDidOpen
+    of "textDocument/didChange":
+      LspMethodResult.ok textDocumentDidChange
+    of "textDocument/didClose":
+      LspMethodResult.ok textDocumentDidClose
+    of "textDocument/hover":
+      LspMethodResult.ok textDocumentHover
+    else:
+      LspMethodResult.err "Not supported: " & j["method"].getStr
+
+proc parseLspMessageType*(num: int): parseLspMessageTypeResult =
+  case num:
+    of 1: parseLspMessageTypeResult.ok LspMessageType.error
+    of 2: parseLspMessageTypeResult.ok LspMessageType.warn
+    of 3: parseLspMessageTypeResult.ok LspMessageType.info
+    of 4: parseLspMessageTypeResult.ok LspMessageType.log
+    of 5: parseLspMessageTypeResult.ok LspMessageType.debug
+    else: parseLspMessageTypeResult.err "Invalid value"
+
+proc parseWindowShowMessageNotify*(n: JsonNode): LspWindowShowMessageResult =
+  ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#window_showMessageRequest
+
+  # TODO: Add "ShowMessageRequestParams.actions" support.
+  if n.contains("params") and
+     n["params"].contains("type") and n["params"]["type"].kind == JInt and
+     n["params"].contains("message") and n["params"]["message"].kind == JString:
+       let messageType = n["params"]["type"].getInt.parseLspMessageType
+       if messageType.isErr:
+         return LspWindowShowMessageResult.err messageType.error
+
+       return LspWindowShowMessageResult.ok ServerMessage(
+         messageType: messageType.get,
+         message: n["params"]["message"].getStr)
+
+  return LspWindowShowMessageResult.err "Invalid notify"
 
 proc parseTextDocumentHoverResponse*(res: JsonNode): LspHoverResult =
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#hover
