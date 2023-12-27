@@ -41,6 +41,11 @@ proc writeInfo*(c: var CommandLine, message: string) =
   c.writeMessageOnCommandLine(mess, EditorColorPairIndex.commandLine)
   addMessageLog message
 
+proc writeLog*(c: var CommandLine, message: string) =
+  let mess = fmt"LOG: {message}"
+  c.writeMessageOnCommandLine(mess, EditorColorPairIndex.commandLine)
+  addMessageLog message
+
 proc writeDebug*(c: var CommandLine, message: string) =
   let mess = fmt"DEBUG: {message}"
   c.writeMessageOnCommandLine(mess, EditorColorPairIndex.commandLine)
@@ -393,7 +398,7 @@ proc writeLspServerInfo*(commandLine: var CommandLine, message: string) =
   commandLine.writeInfo(fmt"lsp: {message}")
 
 proc writeLspServerLog*(commandLine: var CommandLine, message: string) =
-  commandLine.writeStandard(fmt"lsp: {message}")
+  commandLine.writeLog(fmt"lsp: {message}")
 
 proc writeLspServerDebug*(commandLine: var CommandLine, message: string) =
   commandLine.writeDebug(fmt"lsp: {message}")

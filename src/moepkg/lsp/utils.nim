@@ -89,7 +89,7 @@ proc parseShutdownResponse*(res: JsonNode): LspShutdownResult =
   if res["result"].kind == JNull: return LspShutdownResult.ok ()
   else: return LspShutdownResult.err fmt"Shutdown request failed: {res}"
 
-proc lspMetod*(j: JsonNode): LspMethodResult =
+proc lspMethod*(j: JsonNode): LspMethodResult =
   if not j.contains("method"): return LspMethodResult.err "Invalid value"
 
   case j["method"].getStr:
@@ -115,6 +115,8 @@ proc lspMetod*(j: JsonNode): LspMethodResult =
       LspMethodResult.err "Not supported: " & j["method"].getStr
 
 proc parseLspMessageType*(num: int): parseLspMessageTypeResult =
+  ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#messageType
+
   case num:
     of 1: parseLspMessageTypeResult.ok LspMessageType.error
     of 2: parseLspMessageTypeResult.ok LspMessageType.warn

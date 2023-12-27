@@ -23,7 +23,7 @@ import pkg/results
 
 import lsp/[client, utils]
 import editorstatus, windownode, popupwindow, unicodeext, independentutils,
-       gapbuffer, messages, ui
+       gapbuffer, messages, ui, commandline
 
 template lspClient: var LspClient =
   status.lspClients[$currentBufStatus.extension]
@@ -72,12 +72,6 @@ proc lspInitialized(
       status.settings.lsp.languages[langId].command)
 
     return Result[(), string].ok ()
-
-proc lspLogMessage(status: var EditorStatus, res: JsonNode) =
-  ## Show the LSP log message to the command line.
-  ## window/logMessage
-
-  discard
 
 proc initHoverWindow(
   windowNode: WindowNode,
@@ -137,43 +131,47 @@ proc lspHover*(status: var EditorStatus, res: JsonNode): Result[(), string] =
 
   return Result[(), string].ok ()
 
-proc showLspServerLog(status: var EditorStatus, notify: JsonNode) =
-  ## Show the log to the command line.
-  ## window/showMessage
+proc showLspServerLog(
+  commandLine : var CommandLine,
+  notify: JsonNode): Result[(), string] =
+    ## Show the log to the command line.
+    ## window/showMessage
 
-  let m = parseWindowShowMessageNotify(notify)
-  if m.isErr:
-    error fmt"lsp: Invalid log: {m.error}"
-    return
+    let m = parseWindowShowMessageNotify(notify)
+    if m.isErr:
+      return Result[(), string].err fmt"Invalid log: {m.error}"
 
-  case m.get.messageType:
-    of LspMessageType.error:
-      status.commandLine.writeLspServerError(m.get.message)
-    of LspMessageType.warn:
-      status.commandLine.writeLspServerWarn(m.get.message)
-    of LspMessageType.info:
-      status.commandLine.writeLspServerInfo(m.get.message)
-    of LspMessageType.log:
-      status.commandLine.writeLspServerLog(m.get.message)
-    of LspMessageType.debug:
-      status.commandLine.writeLspServerDebug(m.get.message)
+    case m.get.messageType:
+      of LspMessageType.error:
+        commandLine.writeLspServerError(m.get.message)
+      of LspMessageType.warn:
+        commandLine.writeLspServerWarn(m.get.message)
+      of LspMessageType.info:
+        commandLine.writeLspServerInfo(m.get.message)
+      of LspMessageType.log:
+        commandLine.writeLspServerLog(m.get.message)
+      of LspMessageType.debug:
+        commandLine.writeLspServerDebug(m.get.message)
 
-proc handleLspServerNotify(status: var EditorStatus, notify: JsonNode) =
-  # TODO: Add server notification supports.
-  # window/logMessage, textDocument/diagnostic, etc....
+    return Result[(), string].ok ()
 
-  let lspMetod = notify.lspMetod
-  if lspMetod.isErr:
-    # Ignore.
-    error fmt"lsp: Invalid server notify: {notify}"
-    return
+proc handleLspServerNotify(
+  status: var EditorStatus,
+  notify: JsonNode): Result[(), string] =
+    # TODO: Add server notification supports.
+    # window/workDoneProgres, textDocument/diagnostic, etc....
 
-  case lspMetod.get:
-    of windowShowMessage:
-      status.showLspServerLog(notify)
-    else:
-      # Ignore
-      info fmt"Not supported: {notify}"
+    let lspMethod = notify.lspMethod
+    if lspMethod .isErr:
+      # Ignore.
+      return Result[(), string].err fmt"Invalid server notify: {notify}"
+
+    case lspMethod.get:
+      of windowShowMessage:
+        return status.commandLine.showLspServerLog(notify)
+      else:
+        # Ignore
+        return Result[(), string].err fmt"Not supported: {notify}"
 
 proc handleLspResponse*(status: var EditorStatus) =
   if not lspClient.running:
@@ -195,7 +193,9 @@ proc handleLspResponse*(status: var EditorStatus) =
 
     lspClient.addNotifyFromServerLog(resJson.get)
 
-    status.handleLspServerNotify(resJson.get)
+    let r = status.handleLspServerNotify(resJson.get)
+    if r.isErr:
+      error "lsp: {r.error}"
   else:
     # The response from the server.
 
