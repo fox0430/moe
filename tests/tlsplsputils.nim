@@ -41,6 +41,119 @@ suite "lsp: parseTraceValue":
   test "Invalid value":
     check parseTraceValue("a").isErr
 
+suite "lsp: lspMetod":
+  test "Invalid":
+    check lspMethod(%*{"jsonrpc": "2.0", "result": nil}).isErr
+
+  test "initialize":
+    check LspMethod.initialize == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "initialize",
+      "params": nil
+    }).get
+
+  test "initialized":
+    check LspMethod.initialized == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "initialized",
+      "params": nil
+    }).get
+
+  test "shutdown":
+    check LspMethod.shutdown == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "shutdown",
+      "params": nil
+    }).get
+
+  test "window/showMessage":
+    check LspMethod.windowShowMessage == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "window/showMessage",
+      "params": nil
+    }).get
+
+  test "workspace/didChangeConfiguration":
+    check LspMethod.workspaceDidChangeConfiguration == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "workspace/didChangeConfiguration",
+      "params": nil
+    }).get
+
+  test "textDocument/didOpen":
+    check LspMethod.textDocumentDidOpen == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "textDocument/didOpen",
+      "params": nil
+    }).get
+
+  test "textDocument/didChange":
+    check LspMethod.textDocumentDidChange == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "textDocument/didChange",
+      "params": nil
+    }).get
+
+  test "textDocument/didClose":
+    check LspMethod.textDocumentDidClose == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "textDocument/didClose",
+      "params": nil
+    }).get
+
+  test "textDocument/hover":
+    check LspMethod.textDocumentHover == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "textDocument/hover",
+      "params": nil
+    }).get
+
+suite "lsp: parseLspMessageType":
+  test "Invalid":
+    check parseLspMessageType(-1).isErr
+    check parseLspMessageType(0).isErr
+    check parseLspMessageType(6).isErr
+
+  test "Error":
+    check LspMessageType.error == parseLspMessageType(1).get
+
+  test "Warning":
+    check LspMessageType.warn == parseLspMessageType(2).get
+
+  test "Info":
+    check LspMessageType.info == parseLspMessageType(3).get
+
+  test "Log":
+    check LspMessageType.log == parseLspMessageType(4).get
+
+  test "Debug":
+    check LspMessageType.debug == parseLspMessageType(5).get
+
+suite "lsp: parseWindowShowMessageNotify":
+  test "Invalid":
+    check parseWindowShowMessageNotify(%*{"jsonrpc": "2.0", "result": nil}).isErr
+
+  test "Basic":
+    check ServerMessage(
+      messageType: LspMessageType.info,
+      message: "Nimsuggest initialized for test.nim") == parseWindowShowMessageNotify(%*{
+        "jsonrpc": "2.0",
+        "method": "window/showMessage",
+        "params": {
+          "type": 3,
+          "message": "Nimsuggest initialized for test.nim"
+        }
+      }).get
+
 suite "lsp: parseTextDocumentHoverResponse":
   test "Invalid":
     let res = %*{"jsonrpc": "2.0", "params": nil}

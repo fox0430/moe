@@ -17,13 +17,13 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[options, tables, json]
+import std/[options, tables, json, logging, strformat]
 
 import pkg/results
 
 import lsp/[client, utils]
 import editorstatus, windownode, popupwindow, unicodeext, independentutils,
-       gapbuffer, messages, ui
+       gapbuffer, messages, ui, commandline
 
 template lspClient: var LspClient =
   status.lspClients[$currentBufStatus.extension]
@@ -76,7 +76,7 @@ proc lspInitialized(
 proc initHoverWindow(
   windowNode: WindowNode,
   hoverContent: HoverContent): PopupWindow =
-    # Return a popup window for textDocument/hover.
+    ## Return a popup window for textDocument/hover.
 
     const Margin = ru" "
     var buffer: seq[Runes]
@@ -131,6 +131,48 @@ proc lspHover*(status: var EditorStatus, res: JsonNode): Result[(), string] =
 
   return Result[(), string].ok ()
 
+proc showLspServerLog(
+  commandLine : var CommandLine,
+  notify: JsonNode): Result[(), string] =
+    ## Show the log to the command line.
+    ## window/showMessage
+
+    let m = parseWindowShowMessageNotify(notify)
+    if m.isErr:
+      return Result[(), string].err fmt"Invalid log: {m.error}"
+
+    case m.get.messageType:
+      of LspMessageType.error:
+        commandLine.writeLspServerError(m.get.message)
+      of LspMessageType.warn:
+        commandLine.writeLspServerWarn(m.get.message)
+      of LspMessageType.info:
+        commandLine.writeLspServerInfo(m.get.message)
+      of LspMessageType.log:
+        commandLine.writeLspServerLog(m.get.message)
+      of LspMessageType.debug:
+        commandLine.writeLspServerDebug(m.get.message)
+
+    return Result[(), string].ok ()
+
+proc handleLspServerNotify(
+  status: var EditorStatus,
+  notify: JsonNode): Result[(), string] =
+    # TODO: Add server notification supports.
+    # window/workDoneProgres, textDocument/diagnostic, etc....
+
+    let lspMethod = notify.lspMethod
+    if lspMethod .isErr:
+      # Ignore.
+      return Result[(), string].err fmt"Invalid server notify: {notify}"
+
+    case lspMethod.get:
+      of windowShowMessage:
+        return status.commandLine.showLspServerLog(notify)
+      else:
+        # Ignore
+        return Result[(), string].err fmt"Not supported: {notify}"
+
 proc handleLspResponse*(status: var EditorStatus) =
   if not lspClient.running:
     status.commandLine.writeLspError("server crashed")
@@ -139,6 +181,7 @@ proc handleLspResponse*(status: var EditorStatus) =
   let resJson = lspClient.read
   if resJson.isErr:
     # Maybe invalid messages. Ignore.
+    error fmt"lsp: Invalid message: {resJson}"
     return
 
   if resJson.get.isLspError:
@@ -150,8 +193,9 @@ proc handleLspResponse*(status: var EditorStatus) =
 
     lspClient.addNotifyFromServerLog(resJson.get)
 
-    # TODO: Add server notification supports.
-    # window/logMessage, textDocument/diagnostic, etc....
+    let r = status.handleLspServerNotify(resJson.get)
+    if r.isErr:
+      error "lsp: {r.error}"
   else:
     # The response from the server.
 
@@ -172,4 +216,5 @@ proc handleLspResponse*(status: var EditorStatus) =
           discard
     else:
       # Should ignore?
+      info fmt"lsp: Ignore response: {resJson}"
       discard
