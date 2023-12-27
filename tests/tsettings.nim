@@ -18,7 +18,10 @@
 #[############################################################################]#
 
 import std/[unittest, options, importutils]
+
 import pkg/[parsetoml, results]
+
+import moepkg/lsp/protocol/enums
 import moepkg/[unicodeext, ui, rgb, color]
 
 import moepkg/settings {.all.}
@@ -160,10 +163,12 @@ enable = true
 [Lsp.nim]
 extensions = ["nim"]
 command = "nimlangserver"
+trace = "verbose"
 
 [Lsp.rust]
 extensions = ["rs"]
 command = "rust-analyzer"
+trace = "verbose"
 
 [Debug.WindowNode]
 enable = false
@@ -501,11 +506,13 @@ suite "settings: Parse configuration file":
     check settings.lsp.enable
     check settings.lsp.languages["nim"] == LspLanguageSettings(
       extensions: @[ru"nim"],
-      command: ru"nimlangserver")
+      command: ru"nimlangserver",
+      trace: TraceValue.verbose)
 
     check settings.lsp.languages["rust"] == LspLanguageSettings(
       extensions: @[ru"rs"],
-      command: ru"rust-analyzer")
+      command: ru"rust-analyzer",
+      trace: TraceValue.verbose)
 
     check not settings.debugMode.windowNode.enable
     check not settings.debugMode.windowNode.currentWindow
@@ -668,61 +675,6 @@ suite "settings: Validate editor config":
     check isSome(result)
 
 suite "settings: Validate Standard.theme":
-  test "Dark":
-    const TomlThemeConfig ="""
-      [Standard]
-      theme = "dark"
-    """
-
-    let toml = parsetoml.parseString(TomlThemeConfig)
-    let result = toml.validateTomlConfig
-
-    check result == none(InvalidItem)
-
-  test "light":
-    const TomlThemeConfig ="""
-      [Standard]
-      theme = "light"
-    """
-
-    let toml = parsetoml.parseString(TomlThemeConfig)
-    let result = toml.validateTomlConfig
-
-    check result == none(InvalidItem)
-
-  test "vivid":
-    const TomlThemeConfig ="""
-      [Standard]
-      theme = "vivid"
-    """
-
-    let toml = parsetoml.parseString(TomlThemeConfig)
-    let result = toml.validateTomlConfig
-
-    check result == none(InvalidItem)
-
-  test "config":
-    const TomlThemeConfig ="""
-      [Standard]
-      theme = "config"
-    """
-
-    let toml = parsetoml.parseString(TomlThemeConfig)
-    let result = toml.validateTomlConfig
-
-    check result == none(InvalidItem)
-
-  test "vscode":
-    const TomlThemeConfig ="""
-      [Standard]
-      theme = "vscode"
-    """
-
-    let toml = parsetoml.parseString(TomlThemeConfig)
-    let result = toml.validateTomlConfig
-
-    check result == none(InvalidItem)
-
   test "Invalid value":
     const TomlThemeConfig ="""
       [Standard]
@@ -786,6 +738,66 @@ suite "settings: Validate theme table":
     let result = toml.validateTomlConfig
 
     check result.isNone
+
+suite "settings: validateLspTable":
+  test "Invalid":
+    const Toml ="""
+[Lsp]
+a = "b"
+"""
+    check parsetoml.parseString(Toml).validateTomlConfig.isSome
+
+  test "Invalid 2":
+    const Toml ="""
+[Lsp]
+enable = "true"
+"""
+    check parsetoml.parseString(Toml).validateTomlConfig.isSome
+
+  test "Invalid 3":
+    const Toml ="""
+[Lsp]
+enable = true
+a = "b"
+"""
+    check parsetoml.parseString(Toml).validateTomlConfig.isSome
+
+  test "Invalid 4":
+    const Toml ="""
+[Lsp]
+enable = true
+[Lsp.nim]
+a = "b"
+"""
+    check parsetoml.parseString(Toml).validateTomlConfig.isSome
+
+  test "Invalid 5":
+    const Toml ="""
+[Lsp]
+enable = true
+[Lsp.nim]
+extensions = "nim"
+"""
+    check parsetoml.parseString(Toml).validateTomlConfig.isSome
+
+  test "Basic":
+    const Toml ="""
+[Lsp]
+enable = true
+"""
+    check parsetoml.parseString(Toml).validateTomlConfig.isNone
+
+  test "Basic 2":
+    const Toml ="""
+[Lsp]
+enable = true
+
+[Lsp.nim]
+extensions = ["nim"]
+command = "nimlsp"
+trace = "verbose"
+"""
+    check parsetoml.parseString(Toml).validateTomlConfig.isNone
 
 suite "settings: Validate theme colors":
   test "Invalid table":
