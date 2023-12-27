@@ -1812,16 +1812,6 @@ proc applyTomlConfigs*(s: var EditorSettings, tomlConfigs: TomlValueRef) =
 proc validateStandardTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
     case key:
-      of "theme":
-        var correctValue = false
-        if val.getStr == "vscode":
-          correctValue = true
-        else:
-          for theme in ColorTheme:
-            if $theme == val.getStr:
-              correctValue = true
-        if not correctValue:
-          return some(InvalidItem(name: $key, val: $val))
       of "number",
          "currentNumber",
          "cursorLine",
@@ -2226,6 +2216,9 @@ proc validateLspTable(table: TomlValueRef): Option[InvalidItem] =
         if val.kind != TomlValueKind.Bool:
           return some(InvalidItem(name: $key, val: $val))
       else:
+        if val.kind != TomlValueKind.Table:
+          return some(InvalidItem(name: $key, val: $val))
+
         # Languages settings
         for key, val in val.getTable:
           case key:
