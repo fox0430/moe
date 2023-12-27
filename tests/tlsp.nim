@@ -17,13 +17,15 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, oids, options, os, json]
+import std/[unittest, oids, options, os, osproc, json]
 
 import pkg/results
 
 import moepkg/lsp/[client, utils]
 import moepkg/[independentutils, unicodeext, gapbuffer, bufferstatus,
                windownode, popupwindow, commandline]
+
+import utils
 
 import moepkg/editorstatus {.all.}
 import moepkg/lsp {.all.}
@@ -45,21 +47,24 @@ suite "lsp: lspInitialized":
     removeDir(testDir)
 
   test "Basic":
-    assert status.addNewBufferInCurrentWin(testFilePath).isOk
-    assert currentBufStatus.buffer.toSeqRunes == @["echo 1"].toSeqRunes
+    if not isNimlspAvailable():
+      skip()
+    else:
+      assert status.addNewBufferInCurrentWin(testFilePath).isOk
+      assert currentBufStatus.buffer.toSeqRunes == @["echo 1"].toSeqRunes
 
-    let workspaceRoot = testDir
-    const LangId = "nim"
+      let workspaceRoot = testDir
+      const LangId = "nim"
 
-    assert status.lspInitialize(workspaceRoot, LangId).isOk
+      assert status.lspInitialize(workspaceRoot, LangId).isOk
 
-    const Timeout = 5000
-    assert lspClient.readable(Timeout).get
+      const Timeout = 5000
+      assert lspClient.readable(Timeout).get
 
-    let resJson = lspClient.read.get
-    check status.lspInitialized(resJson).isOk
+      let resJson = lspClient.read.get
+      check status.lspInitialized(resJson).isOk
 
-    check lspClient.isInitialized
+      check lspClient.isInitialized
 
 suite "lsp: initHoverWindow":
   test "Basic":
@@ -164,18 +169,21 @@ suite "lsp: handleLspResponse":
     status.settings.lsp.enable = true
 
   test "Initialize response":
-    # Open a new file.
-    let filename = $genOid() & ".nim"
-    assert status.addNewBufferInCurrentWin(filename).isOk
+    if not isNimlspAvailable():
+      skip()
+    else:
+      # Open a new file.
+      let filename = $genOid() & ".nim"
+      assert status.addNewBufferInCurrentWin(filename).isOk
 
-    let workspaceRoot = getCurrentDir()
-    const LangId = "nim"
-    assert status.lspInitialize(workspaceRoot, LangId).isOk
+      let workspaceRoot = getCurrentDir()
+      const LangId = "nim"
+      assert status.lspInitialize(workspaceRoot, LangId).isOk
 
 
-    const Timeout = 5000
-    assert lspClient.readable(Timeout).get
+      const Timeout = 5000
+      assert lspClient.readable(Timeout).get
 
-    status.handleLspResponse
+      status.handleLspResponse
 
-    check lspClient.isInitialized
+      check lspClient.isInitialized
