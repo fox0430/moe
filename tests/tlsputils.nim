@@ -17,165 +17,289 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, oids, options, os, json]
+import std/[unittest, json, options]
 
 import pkg/results
 
-import moepkg/lsp/[client, utils]
-import moepkg/[independentutils, unicodeext, gapbuffer, bufferstatus,
-               windownode, popupwindow, commandline]
+import moepkg/lsp/protocol/[enums, types]
+import moepkg/[independentutils, unicodeext]
 
-import moepkg/editorstatus {.all.}
-import moepkg/lsputils {.all.}
+import moepkg/lsp/utils {.all.}
 
-suite "lsp: lspInitialized":
-  const Buffer = "echo 1"
-  let
-    testDir = getCurrentDir() / "lspInitTestDir"
-    testFilePath = testDir / "test.nim"
+suite "lsp: toLspPosition":
+  test "toLspPosition 1":
+    check BufferPosition(line: 1, column: 2).toLspPosition[] ==
+      LspPosition(line: 1, character: 2)[]
 
-  setup:
-    createDir(testDir)
-    writeFile(testFilePath, Buffer)
+suite "lsp: parseTraceValue":
+  test "off":
+    check parseTraceValue("off").get == TraceValue.off
+  test "messages":
+    check parseTraceValue("messages").get == TraceValue.messages
+  test "off":
+    check parseTraceValue("verbose").get == TraceValue.verbose
+  test "Invalid value":
+    check parseTraceValue("a").isErr
 
-    var status = initEditorStatus()
-    status.settings.lsp.enable = true
-
-  teardown:
-    removeDir(testDir)
-
-  test "Basic":
-    assert status.addNewBufferInCurrentWin(testFilePath).isOk
-    assert currentBufStatus.buffer.toSeqRunes == @["echo 1"].toSeqRunes
-
-    let workspaceRoot = testDir
-    const LangId = "nim"
-
-    assert status.lspInitialize(workspaceRoot, LangId).isOk
-
-    const Timeout = 5000
-    assert lspClient.readable(Timeout).get
-
-    let resJson = lspClient.read.get
-    check status.lspInitialized(resJson).isOk
-
-    check lspClient.isInitialized
-
-suite "lsp: initHoverWindow":
-  test "Basic":
-    var node = initWindowNode()
-    node.resize(Position(y: 0, x: 0), Size(h: 100, w: 100))
-
-    let hoverContent = HoverContent(
-      title: ru"title",
-      description: @["1", "2"].toSeqRunes)
-
-    var hoverWin = initHoverWindow(node, hoverContent)
-
-    check hoverWin.buffer == @[" title ", "", " 1 ", " 2 "].toSeqRunes
-    check hoverWin.size == Size(h: 4, w: 7)
-
-suite "lsp showLspServerLog":
-  setup:
-    var cli = initCommandLine()
-
+suite "lsp: lspMetod":
   test "Invalid":
-    check cli.showLspServerLog(%*{"jsonrpc": "2.0", "result": nil}).isErr
+    check lspMethod(%*{"jsonrpc": "2.0", "result": nil}).isErr
 
-  test "Error":
-    check cli.showLspServerLog(%*{
+  test "initialize":
+    check LspMethod.initialize == lspMethod(%*{
       "jsonrpc": "2.0",
-      "method": "window/showMessage",
-      "params": {
-        "type": 1,
-        "message": "error message"
-      }
-    }).isOk
-    check cli.buffer == ru"ERR: lsp: error message"
+      "id": 0,
+      "method": "initialize",
+      "params": nil
+    }).get
 
-  test "Warning":
-    check cli.showLspServerLog(%*{
+  test "initialized":
+    check LspMethod.initialized == lspMethod(%*{
       "jsonrpc": "2.0",
-      "method": "window/showMessage",
-      "params": {
-        "type": 2,
-        "message": "warning message"
-      }
-    }).isOk
-    check cli.buffer == ru"WARN: lsp: warning message"
+      "id": 0,
+      "method": "initialized",
+      "params": nil
+    }).get
 
-  test "Info":
-    check cli.showLspServerLog(%*{
+  test "shutdown":
+    check LspMethod.shutdown == lspMethod(%*{
       "jsonrpc": "2.0",
-      "method": "window/showMessage",
-      "params": {
-        "type": 3,
-        "message": "info message"
-      }
-    }).isOk
-    check cli.buffer == ru"INFO: lsp: info message"
-
-  test "Log":
-    check cli.showLspServerLog(%*{
-      "jsonrpc": "2.0",
-      "method": "window/showMessage",
-      "params": {
-        "type": 4,
-        "message": "log message"
-      }
-    }).isOk
-    check cli.buffer == ru"LOG: lsp: log message"
-
-  test "Debug":
-    check cli.showLspServerLog(%*{
-      "jsonrpc": "2.0",
-      "method": "window/showMessage",
-      "params": {
-        "type": 5,
-        "message": "debug message"
-      }
-    }).isOk
-    check cli.buffer == ru"DEBUG: lsp: debug message"
-
-suite "lsp: handleLspServerNotify":
-  setup:
-    var status = initEditorStatus()
-    status.settings.lsp.enable = true
-
-  test "Invalid":
-    check status.handleLspServerNotify(%*{
-      "jsonrpc": "2.0",
-      "result": nil
-    }).isErr
+      "id": 0,
+      "method": "shutdown",
+      "params": nil
+    }).get
 
   test "window/showMessage":
-    check status.handleLspServerNotify(%*{
+    check LspMethod.windowShowMessage == lspMethod(%*{
       "jsonrpc": "2.0",
+      "id": 0,
       "method": "window/showMessage",
-      "params": {
-        "type": 3,
-        "message": "Nimsuggest initialized for test.nim"
+      "params": nil
+    }).get
+
+  test "workspace/didChangeConfiguration":
+    check LspMethod.workspaceDidChangeConfiguration == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "workspace/didChangeConfiguration",
+      "params": nil
+    }).get
+
+  test "textDocument/didOpen":
+    check LspMethod.textDocumentDidOpen == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "textDocument/didOpen",
+      "params": nil
+    }).get
+
+  test "textDocument/didChange":
+    check LspMethod.textDocumentDidChange == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "textDocument/didChange",
+      "params": nil
+    }).get
+
+  test "textDocument/didClose":
+    check LspMethod.textDocumentDidClose == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "textDocument/didClose",
+      "params": nil
+    }).get
+
+  test "textDocument/hover":
+    check LspMethod.textDocumentHover == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "textDocument/hover",
+      "params": nil
+    }).get
+
+suite "lsp: parseLspMessageType":
+  test "Invalid":
+    check parseLspMessageType(-1).isErr
+    check parseLspMessageType(0).isErr
+    check parseLspMessageType(6).isErr
+
+  test "Error":
+    check LspMessageType.error == parseLspMessageType(1).get
+
+  test "Warning":
+    check LspMessageType.warn == parseLspMessageType(2).get
+
+  test "Info":
+    check LspMessageType.info == parseLspMessageType(3).get
+
+  test "Log":
+    check LspMessageType.log == parseLspMessageType(4).get
+
+  test "Debug":
+    check LspMessageType.debug == parseLspMessageType(5).get
+
+suite "lsp: parseWindowShowMessageNotify":
+  test "Invalid":
+    check parseWindowShowMessageNotify(%*{"jsonrpc": "2.0", "result": nil}).isErr
+
+  test "Basic":
+    check ServerMessage(
+      messageType: LspMessageType.info,
+      message: "Nimsuggest initialized for test.nim") == parseWindowShowMessageNotify(%*{
+        "jsonrpc": "2.0",
+        "method": "window/showMessage",
+        "params": {
+          "type": 3,
+          "message": "Nimsuggest initialized for test.nim"
+        }
+      }).get
+
+suite "lsp: parseTextDocumentHoverResponse":
+  test "Invalid":
+    let res = %*{"jsonrpc": "2.0", "params": nil}
+    check parseTextDocumentHoverResponse(res).isErr
+
+  test "Not found":
+    let res = %*{"jsonrpc": "2.0", "id": 0, "result": nil}
+    check parseTextDocumentHoverResponse(res).get.isNone
+
+  test "Basic":
+    let res = %*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": {
+        "contents": {
+          "language": "nim",
+          "value": "editorstatus.LastCursorPosition"},
+          "range":{
+            "start": {
+              "line":33,
+              "character":12
+            },
+            "end":{"line":33,"character":30}
+          }
+       }
+     }
+
+    check %*parseTextDocumentHoverResponse(res).get == %*{
+      "contents": {
+        "language": "nim",
+        "value": "editorstatus.LastCursorPosition"
+      },
+      "range": {
+        "start": {
+          "line": 33,
+          "character": 12},
+        "end": {
+          "line": 33,
+          "character": 30
+        }
       }
-    }).isOk
+    }
 
-suite "lsp: handleLspResponse":
-  setup:
-    var status = initEditorStatus()
-    status.settings.lsp.enable = true
+  test "Without range":
+    let res = %*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": {
+        "contents": {
+          "language": "nim",
+          "value": "editorstatus.LastCursorPosition"},
+          "range": nil
+       }
+     }
 
-  test "Initialize response":
-    # Open a new file.
-    let filename = $genOid() & ".nim"
-    assert status.addNewBufferInCurrentWin(filename).isOk
+    check %*parseTextDocumentHoverResponse(res).get == %*{
+      "contents": {
+        "language": "nim",
+        "value": "editorstatus.LastCursorPosition"
+      },
+      "range": nil
+    }
 
-    let workspaceRoot = getCurrentDir()
-    const LangId = "nim"
-    assert status.lspInitialize(workspaceRoot, LangId).isOk
+  test "Array contents":
+    let res = %*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": {
+        "contents": [
+          {
+            "language": "nim",
+            "value": "system.echo: proc (x: varargs[typed]){.gcsafe.}"
+          },
+          {
+            "language": "",
+            "value": "description"
+          }
+        ],
+        "range": {
+          "start": {
+            "line": 0,
+            "character": 0
+          },
+          "end": {
+            "line": 0,
+            "character": 4
+          }
+        }
+      }
+    }
 
+    check %*parseTextDocumentHoverResponse(res).get == %*{
+      "contents": [
+        {
+          "language": "nim",
+          "value": "system.echo: proc (x: varargs[typed]){.gcsafe.}"
+        },
+        {
+          "language": "",
+          "value":"description"
+        }
+      ],
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 0
+        },
+        "end": {
+          "line": 0,
+          "character": 4
+        }
+      }
+    }
 
-    const Timeout = 5000
-    assert lspClient.readable(Timeout).get
+suite "lsp: toHoverContent":
+  test "Basic":
+    let hoverJson = %* {
+      "contents": [
+        {"language": "nim", "value": "title"},
+        {"language": "", "value": "line1\nline2"}
+      ],
+      "range": {
+        "start": {"line": 1, "character": 2},
+        "end": {"line": 3, "character": 4}
+      }
+    }
 
-    status.handleLspResponse
+    check toHoverContent(hoverJson.to(Hover)) == HoverContent(
+      title: ru"title",
+      description: @[ru"line1", ru"line2"],
+      range: BufferRange(
+        first: BufferPosition(line: 1, column: 2),
+        last: BufferPosition(line: 3, column: 4)))
 
-    check lspClient.isInitialized
+  test "Only description":
+    let hoverJson = %* {
+      "contents": {"language": "nim", "value": "description"},
+      "range": {
+        "start": {"line": 1, "character": 2},
+        "end": {"line": 3, "character": 4}
+      }
+    }
+
+    check toHoverContent(hoverJson.to(Hover)) == HoverContent(
+      title: ru"",
+      description: @[ru"description"],
+      range: BufferRange(
+        first: BufferPosition(line: 1, column: 2),
+        last: BufferPosition(line: 3, column: 4)))

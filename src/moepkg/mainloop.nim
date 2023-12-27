@@ -26,7 +26,7 @@ import editorstatus, bufferstatus, windownode, unicodeext, gapbuffer, ui,
        recentfilemode, quickrun, backupmanager, diffviewer, configmode,
        debugmode, commandline, search, commandlineutils, popupwindow,
        filermodeutils, messages, registers, exmodeutils, editor, movement,
-       searchutils, independentutils, viewhighlight, lsputils
+       searchutils, independentutils, viewhighlight, lsp
 
 type
   BeforeLine = object
