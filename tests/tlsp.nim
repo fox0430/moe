@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, oids, options, os, json]
+import std/[unittest, oids, options, os, osproc, json]
 
 import pkg/results
 
