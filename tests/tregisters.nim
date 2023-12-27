@@ -19,7 +19,7 @@
 
 import std/[unittest, options, tables, importutils, osproc, os]
 import pkg/results
-import moepkg/[unicodeext, settings, independentutils]
+import moepkg/[unicodeext, settings]
 import utils
 
 import moepkg/registers {.all.}

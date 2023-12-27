@@ -17,13 +17,13 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, oids, options, os]
+import std/[unittest, oids, options, os, json]
 
 import pkg/results
 
 import moepkg/lsp/[client, utils]
-import moepkg/[independentutils, unicodeext, gapbuffer, editorstatus,
-               bufferstatus, windownode, popupwindow]
+import moepkg/[independentutils, unicodeext, gapbuffer, bufferstatus,
+               windownode, popupwindow, commandline]
 
 import moepkg/editorstatus {.all.}
 import moepkg/lsputils {.all.}
@@ -38,14 +38,13 @@ suite "lsp: lspInitialized":
     createDir(testDir)
     writeFile(testFilePath, Buffer)
 
+    var status = initEditorStatus()
+    status.settings.lsp.enable = true
+
   teardown:
     removeDir(testDir)
 
   test "Basic":
-    var status = initEditorStatus()
-
-    status.settings.lsp.enable = true
-
     assert status.addNewBufferInCurrentWin(testFilePath).isOk
     assert currentBufStatus.buffer.toSeqRunes == @["echo 1"].toSeqRunes
 
@@ -76,12 +75,95 @@ suite "lsp: initHoverWindow":
     check hoverWin.buffer == @[" title ", "", " 1 ", " 2 "].toSeqRunes
     check hoverWin.size == Size(h: 4, w: 7)
 
-suite "lsp: handleLspResponse":
-  test "Initialize response":
-    var status = initEditorStatus()
+suite "lsp showLspServerLog":
+  setup:
+    var cli = initCommandLine()
 
+  test "Invalid":
+    check cli.showLspServerLog(%*{"jsonrpc": "2.0", "result": nil}).isErr
+
+  test "Error":
+    check cli.showLspServerLog(%*{
+      "jsonrpc": "2.0",
+      "method": "window/showMessage",
+      "params": {
+        "type": 1,
+        "message": "error message"
+      }
+    }).isOk
+    check cli.buffer == ru"ERR: lsp: error message"
+
+  test "Warning":
+    check cli.showLspServerLog(%*{
+      "jsonrpc": "2.0",
+      "method": "window/showMessage",
+      "params": {
+        "type": 2,
+        "message": "warning message"
+      }
+    }).isOk
+    check cli.buffer == ru"WARN: lsp: warning message"
+
+  test "Info":
+    check cli.showLspServerLog(%*{
+      "jsonrpc": "2.0",
+      "method": "window/showMessage",
+      "params": {
+        "type": 3,
+        "message": "info message"
+      }
+    }).isOk
+    check cli.buffer == ru"INFO: lsp: info message"
+
+  test "Log":
+    check cli.showLspServerLog(%*{
+      "jsonrpc": "2.0",
+      "method": "window/showMessage",
+      "params": {
+        "type": 4,
+        "message": "log message"
+      }
+    }).isOk
+    check cli.buffer == ru"LOG: lsp: log message"
+
+  test "Debug":
+    check cli.showLspServerLog(%*{
+      "jsonrpc": "2.0",
+      "method": "window/showMessage",
+      "params": {
+        "type": 5,
+        "message": "debug message"
+      }
+    }).isOk
+    check cli.buffer == ru"DEBUG: lsp: debug message"
+
+suite "lsp: handleLspServerNotify":
+  setup:
+    var status = initEditorStatus()
     status.settings.lsp.enable = true
 
+  test "Invalid":
+    check status.handleLspServerNotify(%*{
+      "jsonrpc": "2.0",
+      "result": nil
+    }).isErr
+
+  test "window/showMessage":
+    check status.handleLspServerNotify(%*{
+      "jsonrpc": "2.0",
+      "method": "window/showMessage",
+      "params": {
+        "type": 3,
+        "message": "Nimsuggest initialized for test.nim"
+      }
+    }).isOk
+
+suite "lsp: handleLspResponse":
+  setup:
+    var status = initEditorStatus()
+    status.settings.lsp.enable = true
+
+  test "Initialize response":
     # Open a new file.
     let filename = $genOid() & ".nim"
     assert status.addNewBufferInCurrentWin(filename).isOk
