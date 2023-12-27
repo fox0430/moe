@@ -17,12 +17,14 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, os, importutils, sequtils, oids, tables]
+import std/[unittest, options, os, osproc, importutils, sequtils, oids, tables]
 import pkg/results
 import moepkg/lsp/protocol/enums
 import moepkg/[editor, gapbuffer, bufferstatus, editorview, unicodeext, ui,
                highlight, windownode, movement, build, backgroundprocess,
                syntaxcheck, independentutils, tabline, settings, visualmode]
+
+import utils
 
 import moepkg/editorstatus {.all.}
 
@@ -1086,17 +1088,20 @@ suite "editorstatus: smoothScrollDownNumberOfLines":
 
 suite "editorstatus: initLsp":
   test "Init wtih nimlsp":
-    let path = $genOid() & ".nim"
-    var status = initEditorStatus()
+    if not isNimlspAvailable():
+      skip()
+    else:
+      let path = $genOid() & ".nim"
+      var status = initEditorStatus()
 
-    status.settings.lsp.enable = true
-    status.settings.lsp.languages["nim"] = LspLanguageSettings(
-      extensions: @[ru"nim"],
-      command: ru"nimlsp",
-      trace: TraceValue.verbose)
+      status.settings.lsp.enable = true
+      status.settings.lsp.languages["nim"] = LspLanguageSettings(
+        extensions: @[ru"nim"],
+        command: ru"nimlsp",
+        trace: TraceValue.verbose)
 
-    status.bufStatus.add initBufferStatus(path, Mode.normal).get
+      status.bufStatus.add initBufferStatus(path, Mode.normal).get
 
-    let workspaceRoot = getCurrentDir()
-    const LanguageId = "nim"
-    check status.lspInitialize(workspaceRoot, LanguageId).isOk
+      let workspaceRoot = getCurrentDir()
+      const LanguageId = "nim"
+      check status.lspInitialize(workspaceRoot, LanguageId).isOk
