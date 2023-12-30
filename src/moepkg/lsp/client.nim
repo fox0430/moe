@@ -269,6 +269,9 @@ proc initInitializeParams*(
           hover: some(HoverCapability(
             dynamicRegistration: some(true),
             contentFormat: some(@["plaintext"])
+          )),
+          publishDiagnostics: some(PublishDiagnosticsCapability(
+            dynamicRegistration: some(true)
           ))
         ))
       ),

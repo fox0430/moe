@@ -21,9 +21,10 @@ import std/[options, tables, json, logging, strformat]
 
 import pkg/results
 
+import lsp/protocol/types
 import lsp/[client, utils]
 import editorstatus, windownode, popupwindow, unicodeext, independentutils,
-       gapbuffer, messages, ui, commandline, bufferstatus
+       gapbuffer, messages, ui, commandline, bufferstatus, syntaxcheck
 
 template isLspResponse*(status: EditorStatus): bool =
   status.lspClients.contains(currentBufStatus.langId) and
@@ -84,15 +85,17 @@ proc initHoverWindow(
 
     let
       absPositon = windowNode.absolutePosition
-      expectPosition = Position(y: absPositon.y + 1, x: absPositon.x + 1)
+      expectPosition = independentutils.Position(
+        y: absPositon.y + 1,
+        x: absPositon.x + 1)
     result = initPopupWindow(
       expectPosition,
       Size(h: buffer.len, w: buffer.maxLen),
       buffer)
 
     let
-      minPosition = Position(y: windowNode.y, x: windowNode.x)
-      maxPostion = Position(
+      minPosition = independentutils.Position(y: windowNode.y, x: windowNode.x)
+      maxPostion = independentutils.Position(
         y: windowNode.y + windowNode.h,
         x: windowNode.x + windowNode.w)
     result.autoMoveAndResize(minPosition, maxPostion)
@@ -152,6 +155,38 @@ proc showLspServerLog(
 
     return Result[(), string].ok ()
 
+proc lspDiagnostics(
+  b: var BufferStatus,
+  notify: JsonNode): Result[(), string] =
+    ## Set BufferStatus.syntaxCheckResults to diagnostics results.
+    ## textDocument/publishDiagnostics
+
+    let diagnostics = parseTextDocumentPublishDiagnosticsNotify(notify)
+    if diagnostics.isErr:
+      return Result[(), string].err fmt"lsp: Invalid diagnostics: {diagnostics.error}"
+
+    if diagnostics.get.get.path != $b.absolutePath:
+      # Ignore if not the current buffer
+      return Result[(), string].ok ()
+
+    # Clear before results
+    b.syntaxCheckResults = @[]
+
+    if diagnostics.get.isNone:
+      # Not found
+      return Result[(), string].ok ()
+
+    for d in diagnostics.get.get.diagnostics:
+      var syntaxErr = SyntaxError()
+      syntaxErr.position = d.range.start.toBufferPosition
+      if d.severity.isSome:
+        syntaxErr.messageType = d.severity.get.toSyntaxCheckMessageType
+      else:
+        syntaxErr.messageType = SyntaxCheckMessageType.info
+      syntaxErr.message = d.message.toRunes
+
+      b.syntaxCheckResults.add syntaxErr
+
 proc handleLspServerNotify(
   status: var EditorStatus,
   notify: JsonNode): Result[(), string] =
@@ -159,13 +194,15 @@ proc handleLspServerNotify(
     # window/workDoneProgres, textDocument/diagnostic, etc....
 
     let lspMethod = notify.lspMethod
-    if lspMethod .isErr:
+    if lspMethod.isErr:
       # Ignore.
       return Result[(), string].err fmt"Invalid server notify: {notify}"
 
     case lspMethod.get:
       of windowShowMessage:
         return status.commandLine.showLspServerLog(notify)
+      of textDocumentPublishDiagnostics:
+        return currentBufStatus.lspDiagnostics(notify)
       else:
         # Ignore
         return Result[(), string].err fmt"Not supported: {notify}"

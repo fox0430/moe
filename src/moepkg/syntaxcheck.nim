@@ -43,6 +43,17 @@ type
     filePath*: Runes
     process*: BackgroundProcess
 
+proc toSyntaxCheckMessageType*(
+  severity: int): SyntaxCheckMessageType {.inline.} =
+    ## Convert LSP DiagnosticSeverity to SyntaxCheckMessageType.
+
+    case severity:
+      of 1: return SyntaxCheckMessageType.error
+      of 2: return SyntaxCheckMessageType.warning
+      of 3: return SyntaxCheckMessageType.info
+      of 4: return SyntaxCheckMessageType.hint
+      else: doAssert(false, "Invalid DiagnosticSeverity")
+
 proc isSyntaxCheckFormatedMessage*(m: string | Runes): bool {.inline.} =
   startsWith($m, "SyntaxError: ")
 

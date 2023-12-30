@@ -38,6 +38,7 @@ type
     textDocumentDidChange
     textDocumentDidSave
     textDocumentDidClose
+    textDocumentPublishDiagnostics
     textDocumentHover
 
   LspMessageType* = enum
@@ -46,6 +47,10 @@ type
     info
     log
     debug
+
+  Diagnostics* = object
+    path*: string
+    diagnostics*: seq[Diagnostic]
 
   ServerMessage* = object
     messageType*: LspMessageType
@@ -61,10 +66,14 @@ type
   LspMethodResult* = R[LspMethod, string]
   LspShutdownResult = R[(), string]
   LspWindowShowMessageResult = R[ServerMessage, string]
+  LspDiagnosticsResult* = R[Option[Diagnostics], string]
   LspHoverResult* = R[Option[Hover], string]
 
 proc toLspPosition*(p: BufferPosition): LspPosition {.inline.} =
   LspPosition(line: p.line, character: p.column)
+
+proc toBufferPosition*(p: LspPosition): BufferPosition {.inline.} =
+  BufferPosition(line: p.line, column: p.character)
 
 proc toLspMethodStr*(m: LspMethod): string =
   case m:
@@ -77,6 +86,7 @@ proc toLspMethodStr*(m: LspMethod): string =
     of textDocumentDidChange: "textDocument/didChange"
     of textDocumentDidSave: "textDocument/didSave"
     of textDocumentDidClose: "textDocument/didClose"
+    of textDocumentPublishDiagnostics: "textDocument/publishDiagnostics"
     of textDocumentHover: "textDocument/hover"
 
 proc parseTraceValue*(s: string): Result[TraceValue, string] =
@@ -113,6 +123,8 @@ proc lspMethod*(j: JsonNode): LspMethodResult =
       LspMethodResult.ok textDocumentDidSave
     of "textDocument/didClose":
       LspMethodResult.ok textDocumentDidClose
+    of "textDocument/publishDiagnostics":
+      LspMethodResult.ok textDocumentPublishDiagnostics
     of "textDocument/hover":
       LspMethodResult.ok textDocumentHover
     else:
@@ -145,6 +157,25 @@ proc parseWindowShowMessageNotify*(n: JsonNode): LspWindowShowMessageResult =
          message: n["params"]["message"].getStr)
 
   return LspWindowShowMessageResult.err "Invalid notify"
+
+proc parseTextDocumentPublishDiagnosticsNotify*(
+  n: JsonNode): LspDiagnosticsResult =
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#publishDiagnosticsParams
+
+    var params: PublishDiagnosticsParams
+    try:
+      params = n["params"].to(PublishDiagnosticsParams)
+    except CatchableError as e:
+      return LspDiagnosticsResult.err fmt"Invalid notify: {e.msg}"
+
+    if params.diagnostics.isNone:
+      return LspDiagnosticsResult.ok none(Diagnostics)
+
+    params.uri.removePrefix("file://")
+
+    return LspDiagnosticsResult.ok some(Diagnostics(
+      path: params.uri,
+      diagnostics: params.diagnostics.get))
 
 proc parseTextDocumentHoverResponse*(res: JsonNode): LspHoverResult =
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#hover
