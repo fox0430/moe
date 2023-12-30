@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, os, times, options, strformat, logging]
+import std/[strutils, os, times, options, strformat, logging, tables]
 import pkg/results
 import syntax/highlite
 import lsp/client
@@ -737,7 +737,7 @@ proc writeCommand(status: var EditorStatus, path: Runes) =
       status.commandLine.writeSaveError
       return
 
-    block:
+    if status.lspClients.contains(currentBufStatus.langId):
       # Send textDocument/didSave notify to the LSP server.
       let err = lspClient.textDocumentDidSave(
         currentBufStatus.version,
@@ -837,7 +837,7 @@ proc writeAndQuitCommand(status: var EditorStatus) =
     status.changeMode(currentBufStatus.prevMode)
     return
 
-  block:
+  if status.lspClients.contains(currentBufStatus.langId):
     # Send textDocument/didSave notify to the LSP server.
     let err = lspClient.textDocumentDidSave(
       currentBufStatus.version,

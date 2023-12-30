@@ -1272,12 +1272,12 @@ proc autoSave(status: var EditorStatus) =
         status.settings.notification)
       status.bufStatus[index].lastSaveTime = now()
 
-      block:
+      if status.lspClients.contains(bufStatus.langId):
         # Send textDocument/didSave notify to the LSP server.
         let err = lspClient.textDocumentDidSave(
-          currentBufStatus.version,
-          $currentBufStatus.path.absolutePath,
-          $currentBufStatus.buffer)
+          bufStatus.version,
+          $bufStatus.path.absolutePath,
+          $bufStatus.buffer)
         if err.isErr: error fmt"lsp: {err.error}"
 
 proc loadConfigurationFile*(status: var EditorStatus) =
