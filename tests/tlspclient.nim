@@ -188,6 +188,55 @@ suite "lsp: Send requests":
 
         check client.textDocumentDidChange(SecondVersion, path, changedText).isOk
 
+  test "Send textDocument/didSave":
+    if not isNimlspAvailable():
+      skip()
+    else:
+      var client = initLspClient(Command).get
+
+      const
+        Id = 1
+        LanguageId = "nim"
+      let
+        path = getCurrentDir() / "src/moe.nim"
+        text = readFile(path)
+
+      block:
+        # Initialize LSP client
+
+        block:
+          let
+            rootPath = getCurrentDir()
+            params = initInitializeParams(rootPath, Trace)
+          assert client.initialize(Id, params).isOk
+
+        const Timeout = 5000
+        assert client.readable(Timeout).isOk
+        let initializeRes = client.read.get
+
+        block:
+          let err = client.initCapacities(initializeRes)
+          assert err.isOk
+
+        block:
+          # Initialized notification
+          let err = client.initialized
+          assert err.isOk
+
+        block:
+          # workspace/didChangeConfiguration notification
+          let err = client.workspaceDidChangeConfiguration
+          assert err.isOk
+
+        block:
+          # textDocument/diOpen notification
+          let err = client.textDocumentDidOpen(path, LanguageId, text)
+          assert err.isOk
+
+      block:
+        const Version = 1
+        check client.textDocumentDidSave(Version, path, text).isOk
+
   test "Send textDocument/didClose":
     if not isNimlspAvailable():
       skip()
