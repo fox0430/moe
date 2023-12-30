@@ -25,9 +25,6 @@ import lsp/[client, utils]
 import editorstatus, windownode, popupwindow, unicodeext, independentutils,
        gapbuffer, messages, ui, commandline
 
-template lspClient: var LspClient =
-  status.lspClients[$currentBufStatus.extension]
-
 template isLspResponse*(status: EditorStatus): bool =
   status.lspClients.contains($currentBufStatus.extension) and
   (let r = lspClient.readable; r.isOk and r.get)

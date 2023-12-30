@@ -427,6 +427,34 @@ proc textDocumentDidChange*(
 
     return LspSendNotifyResult.ok ()
 
+proc initTextDocumentDidSaveParams(
+  version: Natural,
+  path, text: string): DidSaveTextDocumentParams {.inline.} =
+
+    DidSaveTextDocumentParams(
+      textDocument: VersionedTextDocumentIdentifier(
+        uri: path.pathToUri,
+        version: some(%version)),
+      text: some(text))
+
+proc textDocumentDidSave*(
+  c: LspClient,
+  version: Natural,
+  path, text: string): LspSendNotifyResult =
+    ## Send a textDocument/didSave notification to the server.
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didSave
+
+    if not c.serverProcess.running:
+      return LspSendNotifyResult.err fmt"server crashed"
+
+    let params = %* initTextDocumentDidSaveParams(version, path, text)
+
+    let err = c.notify(LspMethod.textDocumentDidChange, params)
+    if err.isErr:
+      return LspSendNotifyResult.err fmt"textDocument/didSave notification failed: {err.error}"
+
+    return LspSendNotifyResult.ok ()
+
 proc initTextDocumentDidClose(
   path: string): DidCloseTextDocumentParams {.inline.} =
 
