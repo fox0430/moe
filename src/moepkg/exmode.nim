@@ -17,9 +17,10 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, os, times, options, strformat]
+import std/[strutils, os, times, options, strformat, logging, tables]
 import pkg/results
 import syntax/highlite
+import lsp/client
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
        unicodeext, independentutils, highlight, windownode, movement, build,
        bufferstatus, editor, settings, quickrunutils, messages, commandline,
@@ -736,6 +737,14 @@ proc writeCommand(status: var EditorStatus, path: Runes) =
       status.commandLine.writeSaveError
       return
 
+    if status.lspClients.contains(currentBufStatus.langId):
+      # Send textDocument/didSave notify to the LSP server.
+      let err = lspClient.textDocumentDidSave(
+        currentBufStatus.version,
+        $currentBufStatus.path.absolutePath,
+        $currentBufStatus.buffer)
+      if err.isErr: error fmt"lsp: {err.error}"
+
     if currentBufStatus.path != path:
       currentBufStatus.path = path
       currentBufStatus.language = detectLanguage($path)
@@ -823,12 +832,21 @@ proc writeAndQuitCommand(status: var EditorStatus) =
     path,
     currentBufStatus.buffer.toRunes,
     currentBufStatus.characterEncoding)
-  if r.isOk:
-    status.changeMode(currentBufStatus.prevMode)
-    status.closeWindow(currentMainWindowNode)
-  else:
+  if r.isErr:
     status.commandLine.writeSaveError
     status.changeMode(currentBufStatus.prevMode)
+    return
+
+  if status.lspClients.contains(currentBufStatus.langId):
+    # Send textDocument/didSave notify to the LSP server.
+    let err = lspClient.textDocumentDidSave(
+      currentBufStatus.version,
+      $currentBufStatus.path.absolutePath,
+      $currentBufStatus.buffer)
+    if err.isErr: error fmt"lsp: {err.error}"
+
+  status.changeMode(currentBufStatus.prevMode)
+  status.closeWindow(currentMainWindowNode)
 
 proc forceWriteAndQuitCommand(status: var EditorStatus) =
   try:

@@ -14,6 +14,7 @@ Please feedback, bug reports and PRs.
 - `workspace/didChangeConfiguration`
 - `textDocument/didOpen`
 - `textDocument/didChange`
+- `textDocument/didSave`
 - `textDocument/didClose`
 - `textDocument/hover`
 

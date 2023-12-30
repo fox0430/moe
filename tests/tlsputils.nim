@@ -101,6 +101,14 @@ suite "lsp: lspMetod":
       "params": nil
     }).get
 
+  test "textDocument/didSave":
+    check LspMethod.textDocumentDidSave == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "textDocument/didSave",
+      "params": nil
+    }).get
+
   test "textDocument/didClose":
     check LspMethod.textDocumentDidClose == lspMethod(%*{
       "jsonrpc": "2.0",

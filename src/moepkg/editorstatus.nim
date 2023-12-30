@@ -18,7 +18,7 @@
 #[############################################################################]#
 
 import std/[strutils, os, strformat, tables, times, heapqueue, deques, options,
-            encodings, math]
+            encodings, math, logging]
 import pkg/[results, parsetoml]
 import syntax/highlite
 import lsp/client
@@ -69,9 +69,7 @@ type
     backgroundTasks*: BackgroundTasks
     recodingOperationRegister*: Option[Rune]
     highlightingText*: Option[HighlightingText]
-
-    lspClients*: Table[string, LspClient]
-      # key is languageId
+    lspClients*: Table[string, LspClient] # key is languageId
 
 const
   TabLineWindowHeight = 1
@@ -112,6 +110,9 @@ template currentFilerStatus*: var FilerStatus =
 template currentLineBuffer*: var Runes =
   mixin status
   currentBufStatus.buffer[currentMainWindowNode.currentLine]
+
+template lspClient*: var LspClient =
+  status.lspClients[$currentBufStatus.extension]
 
 proc changeCurrentBuffer*(
   currentNode: var WindowNode,
@@ -1263,12 +1264,21 @@ proc autoSave(status: var EditorStatus) =
         bufStatus.characterEncoding)
       if r.isErr:
         addMessageLog fmt"Failed to auto save: {bufStatus.path}: {r.get}"
-        .toRunes
+          .toRunes
+        continue
 
       status.commandLine.writeMessageAutoSave(
         bufStatus.path,
         status.settings.notification)
       status.bufStatus[index].lastSaveTime = now()
+
+      if status.lspClients.contains(bufStatus.langId):
+        # Send textDocument/didSave notify to the LSP server.
+        let err = lspClient.textDocumentDidSave(
+          bufStatus.version,
+          $bufStatus.path.absolutePath,
+          $bufStatus.buffer)
+        if err.isErr: error fmt"lsp: {err.error}"
 
 proc loadConfigurationFile*(status: var EditorStatus) =
   if fileExists(configFilePath()):

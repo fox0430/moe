@@ -23,17 +23,14 @@ import pkg/results
 
 import lsp/[client, utils]
 import editorstatus, windownode, popupwindow, unicodeext, independentutils,
-       gapbuffer, messages, ui, commandline
-
-template lspClient: var LspClient =
-  status.lspClients[$currentBufStatus.extension]
+       gapbuffer, messages, ui, commandline, bufferstatus
 
 template isLspResponse*(status: EditorStatus): bool =
-  status.lspClients.contains($currentBufStatus.extension) and
+  status.lspClients.contains(currentBufStatus.langId) and
   (let r = lspClient.readable; r.isOk and r.get)
 
 template isWaitingLspResponse(status: var EditorStatus): bool =
-  status.lspClients[$currentBufStatus.extension].waitingResponse.isSome
+  status.lspClients[currentBufStatus.langId].waitingResponse.isSome
 
 proc lspInitialized(
   status: var EditorStatus,

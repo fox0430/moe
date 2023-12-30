@@ -36,6 +36,7 @@ type
     workspaceDidChangeConfiguration
     textDocumentDidOpen
     textDocumentDidChange
+    textDocumentDidSave
     textDocumentDidClose
     textDocumentHover
 
@@ -74,6 +75,7 @@ proc toLspMethodStr*(m: LspMethod): string =
     of workspaceDidChangeConfiguration: "workspace/didChangeConfiguration"
     of textDocumentDidOpen: "textDocument/didOpen"
     of textDocumentDidChange: "textDocument/didChange"
+    of textDocumentDidSave: "textDocument/didSave"
     of textDocumentDidClose: "textDocument/didClose"
     of textDocumentHover: "textDocument/hover"
 
@@ -107,6 +109,8 @@ proc lspMethod*(j: JsonNode): LspMethodResult =
       LspMethodResult.ok textDocumentDidOpen
     of "textDocument/didChange":
       LspMethodResult.ok textDocumentDidChange
+    of "textDocument/didSave":
+      LspMethodResult.ok textDocumentDidSave
     of "textDocument/didClose":
       LspMethodResult.ok textDocumentDidClose
     of "textDocument/hover":

@@ -17,12 +17,17 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, oids, deques, strformat, importutils]
+import std/[unittest, os, oids, deques, strformat, importutils, osproc]
 import pkg/results
 import moepkg/syntax/highlite
+import moepkg/lsp/client
 import moepkg/[ui, editorstatus, gapbuffer, unicodeext, bufferstatus, settings,
-               windownode, helputils, backgroundprocess, quickrunutils, exmodeutils]
+               windownode, helputils, backgroundprocess, quickrunutils,
+               exmodeutils]
 
+import utils
+
+import moepkg/lsp {.all.}
 import moepkg/exmode {.all.}
 
 proc resize(status: var EditorStatus, h, w: int) =
@@ -135,7 +140,7 @@ suite "Ex mode: Write command":
   teardown:
     removeDir(TestDir)
 
-  test "Write command":
+  test "Basic":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin(TestFilePath).get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a"])
@@ -156,6 +161,33 @@ suite "Ex mode: Write command":
     check status.backgroundTasks.build.len == 1
 
     status.backgroundTasks.build[0].process.kill
+
+  test "Enable LSP":
+    if not isNimlspAvailable():
+      skip()
+    else:
+      var status = initEditorStatus()
+
+      status.settings.lsp.enable = true
+
+      discard status.addNewBufferInCurrentWin(TestFilePath).get
+      status.bufStatus[0].buffer = initGapBuffer(@[ru"echo 1"])
+
+      block initLsp:
+        let workspaceRoot = TestDir
+        const LangId = "nim"
+
+        assert status.lspInitialize(workspaceRoot, LangId).isOk
+
+        const Timeout = 5000
+        assert lspClient.readable(Timeout).get
+
+        let resJson = lspClient.read.get
+        assert status.lspInitialized(resJson).isOk
+        assert lspClient.isInitialized
+
+      const Command = @[ru"w"]
+      status.exModeCommand(Command)
 
 suite "Ex mode: Change next buffer command":
  test "Change next buffer command 1":
