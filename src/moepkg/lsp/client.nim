@@ -78,26 +78,6 @@ type
 
   LspInitializeResult* = R[(), string]
 
-proc pathToUri(path: string): string =
-  ## This is a modified copy of encodeUrl in the uri module. This doesn't encode
-  ## the / character, meaning a full file path can be passed in without breaking
-  ## it.
-
-  # Assume 12% non-alnum-chars
-  result = "file://" & newStringOfCap(path.len + path.len shr 2)
-
-  for c in path:
-    case c
-      # https://tools.ietf.org/html/rfc3986#section-2.3
-      of 'a'..'z', 'A'..'Z', '0'..'9', '-', '.', '_', '~', '/':
-        result.add c
-      of '\\':
-        result.add '%'
-        result.add toHex(ord(c), 2)
-      else:
-        result.add '%'
-        result.add toHex(ord(c), 2)
-
 proc running*(c: LspClient): bool {.inline.} =
   ## Return true if the LSP server process running.
 
@@ -269,6 +249,9 @@ proc initInitializeParams*(
           hover: some(HoverCapability(
             dynamicRegistration: some(true),
             contentFormat: some(@["plaintext"])
+          )),
+          publishDiagnostics: some(PublishDiagnosticsCapability(
+            dynamicRegistration: some(true)
           ))
         ))
       ),

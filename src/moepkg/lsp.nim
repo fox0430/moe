@@ -23,7 +23,7 @@ import pkg/results
 
 import lsp/[client, utils]
 import editorstatus, windownode, popupwindow, unicodeext, independentutils,
-       gapbuffer, messages, ui, commandline, bufferstatus
+       gapbuffer, messages, ui, commandline, bufferstatus, syntaxcheck
 
 template isLspResponse*(status: EditorStatus): bool =
   status.lspClients.contains(currentBufStatus.langId) and
@@ -152,25 +152,74 @@ proc showLspServerLog(
 
     return Result[(), string].ok ()
 
+proc targetBufstatus(
+  bufStatuses: seq[BufferStatus],
+  absPath: string): Option[BufferStatus] {.inline.}  =
+    ## Find a bufStatus with the absolute path.
+
+    for b in bufStatuses:
+      if $b.path.absolutePath == absPath: return some(b)
+
+proc lspDiagnostics(
+  bufStatuses: var seq[BufferStatus],
+  notify: JsonNode): Result[(), string] =
+    ## Set BufferStatus.syntaxCheckResults to diagnostics results.
+    ## textDocument/publishDiagnostics
+
+    let parseResult = parseTextDocumentPublishDiagnosticsNotify(notify)
+    if parseResult.isErr:
+      return Result[(), string].err fmt"lsp: Invalid diagnostics: {parseResult.error}"
+
+    if parseResult.get.isNone:
+      # Not found
+      return Result[(), string].ok ()
+
+    let diagnostics = parseResult.get.get
+
+    var b = bufStatuses.targetBufstatus(diagnostics.path)
+    if b.isNone:
+      # Not found
+      return Result[(), string].ok ()
+
+    # Clear before results
+    b.get.syntaxCheckResults = @[]
+
+    for d in diagnostics.diagnostics:
+      var syntaxErr = SyntaxError()
+      syntaxErr.position = d.range.start.toBufferPosition
+      if d.severity.isSome:
+        syntaxErr.messageType = d.severity.get.toSyntaxCheckMessageType
+      else:
+        syntaxErr.messageType = SyntaxCheckMessageType.info
+      syntaxErr.message = d.message.toRunes
+
+      b.get.syntaxCheckResults.add syntaxErr
+
+    return Result[(), string].ok ()
+
 proc handleLspServerNotify(
   status: var EditorStatus,
   notify: JsonNode): Result[(), string] =
-    # TODO: Add server notification supports.
-    # window/workDoneProgres, textDocument/diagnostic, etc....
+    ## Handle the notification from the server.
+    ## window/showMessage, textDocument/PublishDiagnostics, etc....
 
     let lspMethod = notify.lspMethod
-    if lspMethod .isErr:
+    if lspMethod.isErr:
       # Ignore.
       return Result[(), string].err fmt"Invalid server notify: {notify}"
 
     case lspMethod.get:
       of windowShowMessage:
         return status.commandLine.showLspServerLog(notify)
+      of textDocumentPublishDiagnostics:
+        return status.bufStatus.lspDiagnostics(notify)
       else:
         # Ignore
         return Result[(), string].err fmt"Not supported: {notify}"
 
 proc handleLspResponse*(status: var EditorStatus) =
+  ## Read a Json from the server and handle the response and notification.
+
   if not lspClient.running:
     status.commandLine.writeLspError("server crashed")
     return

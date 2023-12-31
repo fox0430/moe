@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, strformat, json, options]
+import std/[strutils, strformat, json, options, uri, os]
 import pkg/results
 
 import ../independentutils
@@ -38,6 +38,7 @@ type
     textDocumentDidChange
     textDocumentDidSave
     textDocumentDidClose
+    textDocumentPublishDiagnostics
     textDocumentHover
 
   LspMessageType* = enum
@@ -46,6 +47,12 @@ type
     info
     log
     debug
+
+  Diagnostics* = object
+    path*: string
+      # File path
+    diagnostics*: seq[Diagnostic]
+      # Diagnostics results
 
   ServerMessage* = object
     messageType*: LspMessageType
@@ -61,10 +68,45 @@ type
   LspMethodResult* = R[LspMethod, string]
   LspShutdownResult = R[(), string]
   LspWindowShowMessageResult = R[ServerMessage, string]
+  LspDiagnosticsResult* = R[Option[Diagnostics], string]
   LspHoverResult* = R[Option[Hover], string]
+
+proc pathToUri*(path: string): string =
+  ## This is a modified copy of encodeUrl in the uri module. This doesn't encode
+  ## the / character, meaning a full file path can be passed in without breaking
+  ## it.
+
+  # Assume 12% non-alnum-chars
+  result = "file://" & newStringOfCap(path.len + path.len shr 2)
+
+  for c in path:
+    case c
+      # https://tools.ietf.org/html/rfc3986#section-2.3
+      of 'a'..'z', 'A'..'Z', '0'..'9', '-', '.', '_', '~', '/':
+        result.add c
+      of '\\':
+        result.add '%'
+        result.add toHex(ord(c), 2)
+      else:
+        result.add '%'
+        result.add toHex(ord(c), 2)
+
+proc uriToPath*(uri: string): Result[string, string] =
+  ## Convert an RFC 8089 file URI to a native, platform-specific, absolute path.
+
+  let parsed = uri.parseUri
+  if parsed.scheme != "file":
+    return Result[string, string].err fmt"Invalid scheme: {parsed.scheme}, only file is supported"
+  if parsed.hostname != "":
+    return Result[string, string].err fmt"Invalid hostname: {parsed.hostname}, only empty hostname is supported"
+
+  return Result[string, string].ok normalizedPath(parsed.path).decodeUrl
 
 proc toLspPosition*(p: BufferPosition): LspPosition {.inline.} =
   LspPosition(line: p.line, character: p.column)
+
+proc toBufferPosition*(p: LspPosition): BufferPosition {.inline.} =
+  BufferPosition(line: p.line, column: p.character)
 
 proc toLspMethodStr*(m: LspMethod): string =
   case m:
@@ -77,6 +119,7 @@ proc toLspMethodStr*(m: LspMethod): string =
     of textDocumentDidChange: "textDocument/didChange"
     of textDocumentDidSave: "textDocument/didSave"
     of textDocumentDidClose: "textDocument/didClose"
+    of textDocumentPublishDiagnostics: "textDocument/publishDiagnostics"
     of textDocumentHover: "textDocument/hover"
 
 proc parseTraceValue*(s: string): Result[TraceValue, string] =
@@ -113,6 +156,8 @@ proc lspMethod*(j: JsonNode): LspMethodResult =
       LspMethodResult.ok textDocumentDidSave
     of "textDocument/didClose":
       LspMethodResult.ok textDocumentDidClose
+    of "textDocument/publishDiagnostics":
+      LspMethodResult.ok textDocumentPublishDiagnostics
     of "textDocument/hover":
       LspMethodResult.ok textDocumentHover
     else:
@@ -145,6 +190,30 @@ proc parseWindowShowMessageNotify*(n: JsonNode): LspWindowShowMessageResult =
          message: n["params"]["message"].getStr)
 
   return LspWindowShowMessageResult.err "Invalid notify"
+
+proc parseTextDocumentPublishDiagnosticsNotify*(
+  n: JsonNode): LspDiagnosticsResult =
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#publishDiagnosticsParams
+
+    if not n.contains("params") or n["params"].kind != JObject:
+      return LspDiagnosticsResult.err fmt"Invalid notify"
+
+    var params: PublishDiagnosticsParams
+    try:
+      params = n["params"].to(PublishDiagnosticsParams)
+    except CatchableError as e:
+      return LspDiagnosticsResult.err fmt"Invalid notify: {e.msg}"
+
+    if params.diagnostics.isNone:
+      return LspDiagnosticsResult.ok none(Diagnostics)
+
+    let path = params.uri.uriToPath
+    if path.isErr:
+      return LspDiagnosticsResult.err fmt"Invalid uri: {path.error}"
+
+    return LspDiagnosticsResult.ok some(Diagnostics(
+      path: path.get,
+      diagnostics: params.diagnostics.get))
 
 proc parseTextDocumentHoverResponse*(res: JsonNode): LspHoverResult =
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#hover

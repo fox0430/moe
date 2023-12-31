@@ -23,7 +23,7 @@ import pkg/results
 
 import moepkg/lsp/[client, utils]
 import moepkg/[independentutils, unicodeext, gapbuffer, bufferstatus,
-               windownode, popupwindow, commandline]
+               windownode, popupwindow, commandline, syntaxcheck]
 
 import utils
 
@@ -142,6 +142,148 @@ suite "lsp showLspServerLog":
     }).isOk
     check cli.buffer == ru"DEBUG: lsp: debug message"
 
+suite "lsp: lspDiagnostics":
+  const FilePath = "/tmp/test.nim"
+
+  test "Invalid":
+    var status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin(FilePath).isOk
+
+    check status.bufStatus.lspDiagnostics(%*{
+      "jsonrpc": "2.0",
+      "result": nil}).isErr
+
+  test "Basic":
+    var status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin(FilePath).isOk
+
+    check status.bufStatus.lspDiagnostics(%*{
+      "jsonrpc": "2.0",
+      "method": "textDocument/publishDiagnostics",
+      "params": {
+        "uri": "file:///tmp/test.nim",
+        "diagnostics": [
+          {
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0
+              },
+              "end": {
+                "line": 0,
+                "character": 2
+              }
+            },
+            "severity": 1,
+            "code": "nimsuggest chk",
+            "source": "nim",
+            "message": "undeclared identifier: 'cho'",
+            "relatedInformation": nil
+          }
+        ]
+      }
+    }).isOk
+
+    check currentBufStatus.syntaxCheckResults == @[
+      SyntaxError(
+        position: BufferPosition(line: 0, column: 0),
+        messageType: SyntaxCheckMessageType.error,
+        message: "undeclared identifier: 'cho'".toRunes)
+    ]
+
+  test "2 errors":
+    var status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin(FilePath).isOk
+
+    check status.bufStatus.lspDiagnostics(%*{
+      "jsonrpc": "2.0",
+      "method": "textDocument/publishDiagnostics",
+      "params": {
+        "uri": "file:///tmp/test.nim",
+        "diagnostics": [
+          {
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0
+              },
+              "end": {
+                "line": 0,
+                "character": 2
+              }
+            },
+            "severity": 1,
+            "code": "nimsuggest chk",
+            "source": "nim",
+            "message": "undeclared identifier: 'cho'",
+            "relatedInformation": nil
+          },
+          {
+            "range": {
+              "start": {
+                "line": 2,
+                "character": 0
+              },
+              "end": {
+                "line": 2,
+                "character": 2
+              }
+            },
+            "severity": 1,
+            "code": "nimsuggest chk",
+            "source": "nim",
+            "message": "undeclared identifier: 'cho'",
+            "relatedInformation": nil
+          }
+        ]
+      }
+    }).isOk
+
+    check currentBufStatus.syntaxCheckResults == @[
+      SyntaxError(
+        position: BufferPosition(line: 0, column: 0),
+        messageType: SyntaxCheckMessageType.error,
+        message: "undeclared identifier: 'cho'".toRunes),
+      SyntaxError(
+        position: BufferPosition(line: 2, column: 0),
+        messageType: SyntaxCheckMessageType.error,
+        message: "undeclared identifier: 'cho'".toRunes)
+
+    ]
+
+  test "Unopened file results":
+    var status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin(FilePath).isOk
+
+    check status.bufStatus.lspDiagnostics(%*{
+      "jsonrpc": "2.0",
+      "method": "textDocument/publishDiagnostics",
+      "params": {
+        "uri": "file:///tmp/otherfile.nim",
+        "diagnostics": [
+          {
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0
+              },
+              "end": {
+                "line": 0,
+                "character": 2
+              }
+            },
+            "severity": 1,
+            "code": "nimsuggest chk",
+            "source": "nim",
+            "message": "undeclared identifier: 'cho'",
+            "relatedInformation": nil
+          }
+        ]
+      }
+    }).isOk
+
+    check currentBufStatus.syntaxCheckResults.len == 0
+
 suite "lsp: handleLspServerNotify":
   setup:
     var status = initEditorStatus()
@@ -160,6 +302,34 @@ suite "lsp: handleLspServerNotify":
       "params": {
         "type": 3,
         "message": "Nimsuggest initialized for test.nim"
+      }
+    }).isOk
+
+  test "textDocument/publishDiagnostics":
+    check status.handleLspServerNotify(%*{
+      "jsonrpc": "2.0",
+      "method": "textDocument/publishDiagnostics",
+      "params": {
+        "uri": "file:///tmp/test.nim",
+        "diagnostics": [
+          {
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0
+              },
+              "end": {
+                "line": 0,
+                "character": 2
+              }
+            },
+            "severity": 1,
+            "code": "nimsuggest chk",
+            "source": "nim",
+            "message": "undeclared identifier: 'cho'",
+            "relatedInformation": nil
+          }
+        ]
       }
     }).isOk
 
