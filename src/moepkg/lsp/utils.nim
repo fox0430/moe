@@ -33,6 +33,7 @@ type
     initialized
     shutdown
     windowShowMessage
+    windowLogMessage
     workspaceDidChangeConfiguration
     textDocumentDidOpen
     textDocumentDidChange
@@ -68,6 +69,7 @@ type
   LspMethodResult* = R[LspMethod, string]
   LspShutdownResult = R[(), string]
   LspWindowShowMessageResult = R[ServerMessage, string]
+  LspWindowLogMessageResult = R[ServerMessage, string]
   LspDiagnosticsResult* = R[Option[Diagnostics], string]
   LspHoverResult* = R[Option[Hover], string]
 
@@ -114,6 +116,7 @@ proc toLspMethodStr*(m: LspMethod): string =
     of initialized: "initialized"
     of shutdown: "shutdown"
     of windowShowMessage: "window/showMessage"
+    of windowLogMessage: "window/logMessage"
     of workspaceDidChangeConfiguration: "workspace/didChangeConfiguration"
     of textDocumentDidOpen: "textDocument/didOpen"
     of textDocumentDidChange: "textDocument/didChange"
@@ -146,6 +149,8 @@ proc lspMethod*(j: JsonNode): LspMethodResult =
       LspMethodResult.ok shutdown
     of "window/showMessage":
       LspMethodResult.ok windowShowMessage
+    of "window/logMessage":
+      LspMethodResult.ok windowLogMessage
     of "workspace/didChangeConfiguration":
       LspMethodResult.ok workspaceDidChangeConfiguration
     of "textDocument/didOpen":
@@ -190,6 +195,22 @@ proc parseWindowShowMessageNotify*(n: JsonNode): LspWindowShowMessageResult =
          message: n["params"]["message"].getStr)
 
   return LspWindowShowMessageResult.err "Invalid notify"
+
+proc parseWindowLogMessageNotify*(n: JsonNode): LspWindowLogMessageResult =
+  ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#window_logMessage
+
+  if n.contains("params") and
+     n["params"].contains("type") and n["params"]["type"].kind == JInt and
+     n["params"].contains("message") and n["params"]["message"].kind == JString:
+       let messageType = n["params"]["type"].getInt.parseLspMessageType
+       if messageType.isErr:
+         return LspWindowLogMessageResult.err messageType.error
+
+       return LspWindowLogMessageResult.ok ServerMessage(
+         messageType: messageType.get,
+         message: n["params"]["message"].getStr)
+
+  return LspWindowLogMessageResult.err "Invalid notify"
 
 proc parseTextDocumentPublishDiagnosticsNotify*(
   n: JsonNode): LspDiagnosticsResult =

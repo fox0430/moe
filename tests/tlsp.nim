@@ -305,6 +305,16 @@ suite "lsp: handleLspServerNotify":
       }
     }).isOk
 
+  test "window/logMessage":
+    check status.handleLspServerNotify(%*{
+      "jsonrpc": "2.0",
+      "method": "window/logMessage",
+      "params": {
+        "type": 3,
+        "message": "Log message"
+      }
+    }).isOk
+
   test "textDocument/publishDiagnostics":
     check status.handleLspServerNotify(%*{
       "jsonrpc": "2.0",
