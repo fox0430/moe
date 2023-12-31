@@ -11,6 +11,7 @@ Please feedback, bug reports and PRs.
 - `Initialize`
 - `shutdown`
 - `window/showMessage`
+- `textDocument/publishDiagnostics`
 - `workspace/didChangeConfiguration`
 - `textDocument/didOpen`
 - `textDocument/didChange`
@@ -33,6 +34,9 @@ extensions = ["nim"]
 
 # The LSP server command
 command = "nimlsp"
+
+# The level of verbosity 
+trace = "verbose"
 ```
 
 Configure each language by adding table `[Lsp.{languageId}]`.
@@ -44,10 +48,12 @@ enable = true
 [Lsp.nim]
 extensions = ["nim"]
 command = "nimlsp"
+trace = "off"
 
 [Lsp.rust]
 extensions = ["rs"]
 command = "rust-analyzer"
+trace = "messages"
 ```
 
 ## Uses
@@ -57,3 +63,9 @@ command = "rust-analyzer"
 Press `K` on the word in Normal mode.
 
 ![hover](https://github.com/fox0430/moe/assets/15966436/9e1f78d7-c52d-4bf7-bb51-7d86659ffeb5)
+
+### Diagnostics
+
+Results will be received from the LPS server and displayed automatically.
+
+![diagnostics](https://github.com/fox0430/moe/assets/15966436/3cc99b32-c53a-4878-846d-8fd44b4a6fb2)
