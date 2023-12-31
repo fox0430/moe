@@ -77,6 +77,14 @@ suite "lsp: lspMetod":
       "params": nil
     }).get
 
+  test "window/logMessage":
+    check LspMethod.windowLogMessage == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "window/logMessage",
+      "params": nil
+    }).get
+
   test "workspace/didChangeConfiguration":
     check LspMethod.workspaceDidChangeConfiguration == lspMethod(%*{
       "jsonrpc": "2.0",
@@ -114,6 +122,14 @@ suite "lsp: lspMetod":
       "jsonrpc": "2.0",
       "id": 0,
       "method": "textDocument/didClose",
+      "params": nil
+    }).get
+
+  test "window/publishDiagnostics":
+    check LspMethod.textDocumentPublishDiagnostics == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "textDocument/publishDiagnostics",
       "params": nil
     }).get
 
@@ -159,6 +175,22 @@ suite "lsp: parseWindowShowMessageNotify":
         "params": {
           "type": 3,
           "message": "Nimsuggest initialized for test.nim"
+        }
+      }).get
+
+suite "lsp: parseWindowLogMessageNotify":
+  test "Invalid":
+    check parseWindowShowMessageNotify(%*{"jsonrpc": "2.0", "result": nil}).isErr
+
+  test "Basic":
+    check ServerMessage(
+      messageType: LspMessageType.info,
+      message: "Log message") == parseWindowShowMessageNotify(%*{
+        "jsonrpc": "2.0",
+        "method": "window/logMessage",
+        "params": {
+          "type": 3,
+          "message": "Log message"
         }
       }).get
 

@@ -11,6 +11,7 @@ Please feedback, bug reports and PRs.
 - `Initialize`
 - `shutdown`
 - `window/showMessage`
+- `window/logMessage`
 - `textDocument/publishDiagnostics`
 - `workspace/didChangeConfiguration`
 - `textDocument/didOpen`

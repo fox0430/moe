@@ -211,6 +211,9 @@ proc handleLspServerNotify(
     case lspMethod.get:
       of windowShowMessage:
         return status.commandLine.showLspServerLog(notify)
+      of windowLogMessage:
+        # Already logged to LspClint.log.
+        return Result[(), string].ok ()
       of textDocumentPublishDiagnostics:
         return status.bufStatus.lspDiagnostics(notify)
       else:
