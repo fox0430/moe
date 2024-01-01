@@ -240,8 +240,7 @@ type
   LspSettings* = object
     enable*: bool
 
-    languages*: Table[string, LspLanguageSettings]
-      # key is languageId
+    languages*: Table[LanguageId, LspLanguageSettings]
 
   StandardSettings* = object
     syntax*: bool
@@ -532,14 +531,12 @@ proc initEditorSettings*(): EditorSettings =
 proc configFilePath*():  string {.inline.} =
   getConfigDir() / "moe" / "moerc.toml"
 
-proc languageIdFromLspLanguageSettings*(
-  s: LspSettings,
-  ext: Runes): Option[string] =
-    ## Return a languageId if it exists from status.settings.lsp.languages.
+proc langIdFromLspSettings*(s: LspSettings, ext: Runes): Option[LanguageId] =
+  ## Return a languageId if it exists from status.settings.lsp.languages.
 
-    for key, val in s.languages.pairs:
-      if val.extensions.contains(ext):
-        return some(key)
+  for key, val in s.languages.pairs:
+    if val.extensions.contains(ext):
+      return some(key)
 
 proc colorFromNode(node: JsonNode): Rgb =
   if node == nil:

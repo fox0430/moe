@@ -28,6 +28,8 @@ import protocol/[enums, types]
 type
   LspPosition* = types.Position
 
+  LanguageId* = string
+
   LspMethod* {.pure.} = enum
     initialize
     initialized

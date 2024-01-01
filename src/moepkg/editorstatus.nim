@@ -21,7 +21,7 @@ import std/[strutils, os, strformat, tables, times, heapqueue, deques, options,
             encodings, math, logging]
 import pkg/[results, parsetoml]
 import syntax/highlite
-import lsp/client
+import lsp/[client, utils]
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        windownode, color, settings, statusline, bufferstatus, cursor, tabline,
        backup, messages, commandline, registers, platform, movement,
@@ -42,6 +42,8 @@ type
     quickRun*: seq[QuickRunProcess]
     gitDiff*: seq[GitDiffProcess]
     syntaxCheck*: seq[SyntaxCheckProcess]
+
+  LspClientTable* = Table[LanguageId, LspClient]
 
   EditorStatus* = ref object
     bufStatus*: seq[BufferStatus]
@@ -69,7 +71,7 @@ type
     backgroundTasks*: BackgroundTasks
     recodingOperationRegister*: Option[Rune]
     highlightingText*: Option[HighlightingText]
-    lspClients*: Table[string, LspClient] # key is languageId
+    lspClients*: LspClientTable
 
 const
   TabLineWindowHeight = 1
@@ -112,7 +114,7 @@ template currentLineBuffer*: var Runes =
   currentBufStatus.buffer[currentMainWindowNode.currentLine]
 
 template lspClient*: var LspClient =
-  status.lspClients[$currentBufStatus.extension]
+  status.lspClients[currentBufStatus.langId]
 
 proc changeCurrentBuffer*(
   currentNode: var WindowNode,
@@ -378,30 +380,36 @@ proc addNewBuffer*(
           addMessageLog errMessage
           return Result[int, string].err errMessage
 
-        if status.settings.git.showChangedLine and
-           status.bufStatus[^1].isTrackingByGit:
-             let gitDiffProcess = startBackgroundGitDiff(
-               status.bufStatus[^1].path,
-               status.bufStatus[^1].buffer.toRunes,
-               status.bufStatus[^1].characterEncoding)
-             if gitDiffProcess.isOk:
-               status.backgroundTasks.gitDiff.add gitDiffProcess.get
-             else:
-               status.commandLine.writeGitInfoUpdateError(gitDiffProcess.error)
+        template newBufStatus: var BufferStatus = status.bufStatus[^1]
+
+        if status.settings.git.showChangedLine and newBufStatus.isTrackingByGit:
+           let gitDiffProcess = startBackgroundGitDiff(
+             newBufStatus.path,
+             newBufStatus.buffer.toRunes,
+             newBufStatus.characterEncoding)
+           if gitDiffProcess.isOk:
+             status.backgroundTasks.gitDiff.add gitDiffProcess.get
+           else:
+             status.commandLine.writeGitInfoUpdateError(gitDiffProcess.error)
 
         if status.settings.lsp.enable:
-          template langId: string = status.bufStatus[^1].langId
+          if newBufStatus.langId.len == 0:
+            let langId = status.settings.lsp.langIdFromLspSettings(
+              newBufStatus.extension)
+            if langId.isSome:
+              newBufStatus.langId = langId.get
 
-          if langId.len > 0 and
-             status.settings.lsp.languages.contains(langId) and
-             not status.lspClients.contains($status.bufStatus[^1].extension):
-               let err = status.lspInitialize(
-                 $status.bufStatus[^1].openDir,
-                 langId)
-               if err.isErr:
-                 status.commandLine.writeLspInitializeError(
-                   status.settings.lsp.languages[langId].command,
-                   err.error)
+            if newBufStatus.langId.len > 0 and
+               status.settings.lsp.languages.contains(newBufStatus.langId) and
+               not status.lspClients.contains(newBufStatus.langId):
+                 # Start LSP initializtion.
+                 let err = status.lspInitialize(
+                   $newBufStatus.openDir,
+                   newBufStatus.langId)
+                 if err.isErr:
+                   status.commandLine.writeLspInitializeError(
+                     status.settings.lsp.languages[newBufStatus.langId].command,
+                     err.error)
 
     return Result[int, string].ok status.bufStatus.high
 

@@ -968,10 +968,10 @@ proc closeCurrentWindow(status: var EditorStatus) =
 proc requestHover(status: var EditorStatus) =
   ## Send textDocument/hover request to the LSP server.
 
-  if status.lspClients.contains($currentBufStatus.extension):
+  if status.lspClients.contains(currentBufStatus.langId):
     debug "lsp client is not ready"
 
-  let r = status.lspClients[$currentBufStatus.extension].textDocumentHover(
+  let r = status.lspClients[currentBufStatus.langId].textDocumentHover(
     currentBufStatus.id,
     $currentBufStatus.path.absolutePath,
     currentMainWindowNode.bufferPosition)
