@@ -20,7 +20,7 @@
 # NOTE: Language Server Protocol Specification - 3.17
 # https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/
 
-import std/[strformat, strutils, json, options, os, osproc, posix]
+import std/[strformat, strutils, json, options, os, osproc, posix, tables]
 import pkg/results
 
 import ../appinfo
@@ -53,6 +53,10 @@ type
   LspCapabilities* = object
     hover*: bool
 
+  LspProgressValue* = string
+
+  LspProgressTable* = Table[ProgressToken, LspProgressValue]
+
   LspClient* = ref object
     serverProcess: Process
       # LSP server process.
@@ -60,6 +64,8 @@ type
       # Input/Output streams for the LSP server process.
     capabilities*: Option[LspCapabilities]
       # LSP server capabilities
+    progress*: LspProgressTable
+      # Use in window/workDoneProgress
     waitingResponse*: Option[LspMethod]
       # The waiting response from the LSP server.
     log*: LspLog
@@ -110,6 +116,37 @@ proc addNotifyFromServerLog*(c: var LspClient, m: JsonNode) {.inline.} =
 
 proc clearWaitingResponse*(c: var LspClient) {.inline.} =
   c.waitingResponse = none(LspMethod)
+
+proc createLspProgress*(c: var LspClient, token: ProgressToken) =
+  ## Add the token to the LspProgressTable.
+
+  if not c.progress.contains(token):
+    c.progress[token] = LspProgressValue("")
+
+proc updateLspProgress*(
+  c: var LspClient,
+  token: ProgressToken,
+  value: string): Result[(), string] =
+    ## Update the value in the LspProgressTable.
+
+    if not c.progress.contains(token):
+      return Result[(), string].err "token not found"
+
+    c.progress[token] = value
+
+    return Result[(), string].ok ()
+
+proc endLspProgress*(
+  c: var LspClient,
+  token: ProgressToken): Result[(), string] =
+    ## Remove the element from the LspProgressTable.
+
+    if not c.progress.contains(token):
+      return Result[(), string].err "token not found"
+
+    c.progress.del(token)
+
+    return Result[(), string].ok ()
 
 proc readable*(c: LspClient, timeout: int = 1): LspClientReadableResult =
   ## Return when output is written from the LSP server or timesout.
@@ -253,6 +290,9 @@ proc initInitializeParams*(
           publishDiagnostics: some(PublishDiagnosticsCapability(
             dynamicRegistration: some(true)
           ))
+        )),
+        window: some(WindowCapabilities(
+          workDoneProgress: some(true)
         ))
       ),
       workspaceFolders: some(

@@ -36,6 +36,9 @@ type
     shutdown
     windowShowMessage
     windowLogMessage
+    windowWorkDnoneProgressCreate
+    progress
+    workspaceConfiguration
     workspaceDidChangeConfiguration
     textDocumentDidOpen
     textDocumentDidChange
@@ -43,6 +46,10 @@ type
     textDocumentDidClose
     textDocumentPublishDiagnostics
     textDocumentHover
+
+  ProgressToken* = string
+    # ProgressParams.token
+    # Can be also int but the editor only use string.
 
   LspMessageType* = enum
     error
@@ -69,9 +76,13 @@ type
   R = Result
   parseLspMessageTypeResult* = R[LspMessageType, string]
   LspMethodResult* = R[LspMethod, string]
-  LspShutdownResult = R[(), string]
-  LspWindowShowMessageResult = R[ServerMessage, string]
-  LspWindowLogMessageResult = R[ServerMessage, string]
+  LspShutdownResult* = R[(), string]
+  LspWindowShowMessageResult* = R[ServerMessage, string]
+  LspWindowLogMessageResult* = R[ServerMessage, string]
+  LspWindowWorkDnoneProgressCreateResult* = R[ProgressToken, string]
+  LspWorkDoneProgressBeginResult* = R[WorkDoneProgressBegin, string]
+  LspWorkDoneProgressReportResult* = R[WorkDoneProgressReport, string]
+  LspWorkDoneProgressEndResult* = R[ProgressToken, string]
   LspDiagnosticsResult* = R[Option[Diagnostics], string]
   LspHoverResult* = R[Option[Hover], string]
 
@@ -119,6 +130,9 @@ proc toLspMethodStr*(m: LspMethod): string =
     of shutdown: "shutdown"
     of windowShowMessage: "window/showMessage"
     of windowLogMessage: "window/logMessage"
+    of windowWorkDnoneProgressCreate: "window/workDoneProgress/create"
+    of progress: "$/progress"
+    of workspaceConfiguration: "workspace/configuration"
     of workspaceDidChangeConfiguration: "workspace/didChangeConfiguration"
     of textDocumentDidOpen: "textDocument/didOpen"
     of textDocumentDidChange: "textDocument/didChange"
@@ -153,6 +167,12 @@ proc lspMethod*(j: JsonNode): LspMethodResult =
       LspMethodResult.ok windowShowMessage
     of "window/logMessage":
       LspMethodResult.ok windowLogMessage
+    of "window/workDoneProgress/create":
+      LspMethodResult.ok windowWorkDnoneProgressCreate
+    of "$/progress":
+      LspMethodResult.ok progress
+    of "workspace/configuration":
+      LspMethodResult.ok workspaceConfiguration
     of "workspace/didChangeConfiguration":
       LspMethodResult.ok workspaceDidChangeConfiguration
     of "textDocument/didOpen":
@@ -214,12 +234,87 @@ proc parseWindowLogMessageNotify*(n: JsonNode): LspWindowLogMessageResult =
 
   return LspWindowLogMessageResult.err "Invalid notify"
 
+proc parseWindowWorkDnoneProgressCreateNotify*(
+  n: JsonNode): LspWindowWorkDnoneProgressCreateResult =
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#window_workDoneProgress_create
+
+    if not n.contains("params") or n["params"].kind != JObject:
+      return LspWindowWorkDnoneProgressCreateResult.err "Invalid notify"
+
+    var params: WorkDoneProgressCreateParams
+    try:
+      params = n["params"].to(WorkDoneProgressCreateParams)
+    except CatchableError as e:
+      return LspWindowWorkDnoneProgressCreateResult.err fmt"Invalid notify: {e.msg}"
+
+    if params.token.isNone:
+      return LspWindowWorkDnoneProgressCreateResult.err fmt"Invalid notify: token is empty"
+
+    return LspWindowWorkDnoneProgressCreateResult.ok params.token.get.getStr
+
+template isProgressNotify(j: JsonNode): bool =
+  ## `$/ptgoress` notification
+
+  j.contains("params") and
+  j["params"].kind == JObject and
+  j["params"].contains("token") and
+  j["params"].contains("value") and
+  j["params"]["value"].contains("kind") and
+  j["params"]["value"]["kind"].kind == JString
+
+template isWorkDoneProgressBegin*(j: JsonNode): bool =
+  isProgressNotify(j) and
+  "begin" == j["params"]["value"]["kind"].getStr
+
+template isWorkDoneProgressReport*(j: JsonNode): bool =
+  isProgressNotify(j) and
+  "report" == j["params"]["value"]["kind"].getStr
+
+template isWorkDoneProgressEnd*(j: JsonNode): bool =
+  isProgressNotify(j) and
+  "end" == j["params"]["value"]["kind"].getStr
+
+proc parseWorkDoneProgressBegin*(
+  n: JsonNode): LspWorkDoneProgressBeginResult =
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#progress
+
+    if not isWorkDoneProgressBegin(n):
+      return LspWorkDoneProgressBeginResult.err "Invalid notify"
+
+    try:
+      return LspWorkDoneProgressBeginResult.ok n["params"]["value"].to(
+        WorkDoneProgressBegin)
+    except CatchableError as e:
+      return LspWorkDoneProgressBeginResult.err fmt"Invalid notify: {e.msg}"
+
+proc parseWorkDoneProgressReport*(
+  n: JsonNode): LspWorkDoneProgressReportResult =
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#progress
+
+    if not isWorkDoneProgressReport(n):
+      return LspWorkDoneProgressReportResult.err "Invalid notify"
+
+    try:
+      return LspWorkDoneProgressReportResult.ok n["params"]["value"].to(
+        WorkDoneProgressReport)
+    except CatchableError as e:
+      return LspWorkDoneProgressReportResult.err fmt"Invalid notify: {e.msg}"
+
+proc parseWorkDoneProgressEnd*(
+  n: JsonNode): LspWorkDoneProgressEndResult =
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#progress
+
+    if not isWorkDoneProgressEnd(n):
+      return LspWorkDoneProgressEndResult.err "Invalid notify"
+
+    return LspWorkDoneProgressEndResult.ok n["params"]["token"].getStr
+
 proc parseTextDocumentPublishDiagnosticsNotify*(
   n: JsonNode): LspDiagnosticsResult =
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#publishDiagnosticsParams
 
     if not n.contains("params") or n["params"].kind != JObject:
-      return LspDiagnosticsResult.err fmt"Invalid notify"
+      return LspDiagnosticsResult.err "Invalid notify"
 
     var params: PublishDiagnosticsParams
     try:
