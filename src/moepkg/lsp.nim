@@ -54,19 +54,17 @@ proc lspInitialized(
       if err.isErr:
         return Result[(), string].err err.error
 
-    let langId = $status.bufStatus[^1].extension
-
     block:
-      # textDocument/diOpen notification
+      # textDocument/didOpen notification
       let err = lspClient.textDocumentDidOpen(
-        $status.bufStatus[^1].path.absolutePath,
-        langId,
-        status.bufStatus[^1].buffer.toString)
+        $currentBufStatus.path.absolutePath,
+        currentBufStatus.langId,
+        currentBufStatus.buffer.toString)
       if err.isErr:
         return Result[(), string].err err.error
 
     status.commandLine.writeLspInitialized(
-      status.settings.lsp.languages[langId].command)
+      status.settings.lsp.languages[currentBufStatus.langId].command)
 
     return Result[(), string].ok ()
 

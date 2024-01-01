@@ -18,8 +18,8 @@ type
 
 # Anything below here comes from the LSP specification
 type
-  LanguageId* {.pure.} = enum
-    abap = "abap "
+  LanguageIdExtension* {.pure.} = enum
+    abap = "abap"
     bat = "bat"
     bibtex = "bibtex"
     clojure = "clojure "

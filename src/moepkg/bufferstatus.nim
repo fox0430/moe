@@ -20,6 +20,7 @@
 import std/[tables, times, options, os, strformat]
 import pkg/results
 import syntax/highlite
+import lsp/utils
 import gapbuffer, unicodeext, fileutils, highlight, independentutils, git,
        syntaxcheck
 
@@ -54,6 +55,7 @@ type
     language*: SourceLanguage
     fileType*: FileType
     extension*: Runes
+    langId*: string
     selectedArea*: Option[SelectedArea]
     path*: Runes
     openDir*: Runes
@@ -284,8 +286,6 @@ proc absolutePath*(bufStatus: BufferStatus): Runes =
     bufStatus.path
   else:
     bufStatus.openDir / bufStatus.path
-
-template langId*(b: BufferStatus): string = $b.extension
 
 proc initId(b: var BufferStatus) {.inline.} =
   ## Assign a unique id and Increment bufferstatus.countAddedBuffer.
