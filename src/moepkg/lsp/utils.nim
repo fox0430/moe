@@ -51,6 +51,18 @@ type
     # ProgressParams.token
     # Can be also int but the editor only use string.
 
+  ProgressState* = enum
+    create
+    begin
+    report
+    `end`
+
+  ProgressReport* = ref object
+    state*: ProgressState
+    title*: string
+    message*: string
+    percentage*: Option[Natural]
+
   LspMessageType* = enum
     error
     warn
@@ -82,7 +94,7 @@ type
   LspWindowWorkDnoneProgressCreateResult* = R[ProgressToken, string]
   LspWorkDoneProgressBeginResult* = R[WorkDoneProgressBegin, string]
   LspWorkDoneProgressReportResult* = R[WorkDoneProgressReport, string]
-  LspWorkDoneProgressEndResult* = R[ProgressToken, string]
+  LspWorkDoneProgressEndResult* = R[WorkDoneProgressEnd, string]
   LspDiagnosticsResult* = R[Option[Diagnostics], string]
   LspHoverResult* = R[Option[Hover], string]
 
@@ -274,6 +286,9 @@ template isWorkDoneProgressEnd*(j: JsonNode): bool =
   isProgressNotify(j) and
   "end" == j["params"]["value"]["kind"].getStr
 
+template workDoneProgressToken*(j: JsonNode): string =
+  j["params"]["token"].getStr
+
 proc parseWorkDoneProgressBegin*(
   n: JsonNode): LspWorkDoneProgressBeginResult =
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#progress
@@ -307,7 +322,16 @@ proc parseWorkDoneProgressEnd*(
     if not isWorkDoneProgressEnd(n):
       return LspWorkDoneProgressEndResult.err "Invalid notify"
 
-    return LspWorkDoneProgressEndResult.ok n["params"]["token"].getStr
+    try:
+      return LspWorkDoneProgressEndResult.ok n["params"]["value"].to(
+        WorkDoneProgressEnd)
+    except CatchableError as e:
+      return LspWorkDoneProgressEndResult.err fmt"Invalid notify: {e.msg}"
+
+template isCancellable*(
+  p: WorkDoneProgressBegin | WorkDoneProgressReport): bool =
+
+    some(true) == p.cancellable
 
 proc parseTextDocumentPublishDiagnosticsNotify*(
   n: JsonNode): LspDiagnosticsResult =

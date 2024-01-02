@@ -200,38 +200,45 @@ proc lspWorkDoneProgressCreate(
   notify: JsonNode): Result[(), string] =
     ## Init a LSP progress.
 
-    let progressToken = parseWindowWorkDnoneProgressCreateNotify(notify)
-    if progressToken.isErr:
-      return Result[(), string].err fmt"Invalid server notify: {progressToken.error}"
+    let token = parseWindowWorkDnoneProgressCreateNotify(notify)
+    if token.isErr:
+      return Result[(), string].err fmt"Invalid server notify: {token.error}"
 
-    c.createLspProgress(progressToken.get)
+    c.createProgress(token.get)
 
 proc lspWorkDoneProgress(
   status: var EditorStatus,
   notify: JsonNode): Result[(), string] =
-    ## Begin/Update/End the LSP progress.
+    ## Begin/Report/End the LSP progress.
+
+    let token = workDoneProgressToken(notify)
 
     if isWorkDoneProgressBegin(notify):
       let begin = parseWorkDoneProgressBegin(notify)
       if begin.isErr:
         return Result[(), string].err fmt"Invalid server notify: {begin.error}"
 
-      # TODO: Add begin process
+      if isCancellable(begin.get):
+        # Cancel
+        return lspClient.delProgress(token)
 
-      return Result[(), string].ok ()
+      return lspClient.beginProgress(token, begin.get)
     elif isWorkDoneProgressReport(notify):
       let report = parseWorkDoneProgressReport(notify)
       if report.isErr:
         return Result[(), string].err fmt"Invalid server notify: {report.error}"
 
-      # TODO: Add report process
+      if isCancellable(report.get):
+        # Cancel
+        return lspClient.delProgress(token)
 
-      return Result[(), string].ok ()
+      return lspClient.reportProgress(token, report.get)
     elif isWorkDoneProgressEnd(notify):
-      let t = parseWorkDoneProgressEnd(notify)
-      if t.isErr:
-        return Result[(), string].err fmt"Invalid server notify: {t.error}"
-      return lspClient.endLspProgress(t.get)
+      let `end` = parseWorkDoneProgressEnd(notify)
+      if `end`.isErr:
+        return Result[(), string].err fmt"Invalid server notify: {`end`.error}"
+
+      return lspClient.endProgress(token, `end`.get)
     else:
       return Result[(), string].err fmt"Invalid server notify: {notify}"
 
