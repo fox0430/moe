@@ -130,6 +130,7 @@ proc showLspServerLog(
   commandLine : var CommandLine,
   notify: JsonNode): Result[(), string] =
     ## Show the log to the command line.
+    ##
     ## window/showMessage
 
     let m = parseWindowShowMessageNotify(notify)
@@ -162,6 +163,7 @@ proc lspDiagnostics(
   bufStatuses: var seq[BufferStatus],
   notify: JsonNode): Result[(), string] =
     ## Set BufferStatus.syntaxCheckResults to diagnostics results.
+    ##
     ## textDocument/publishDiagnostics
 
     let parseResult = parseTextDocumentPublishDiagnosticsNotify(notify)
@@ -195,10 +197,12 @@ proc lspDiagnostics(
 
     return Result[(), string].ok ()
 
-proc lspWorkDoneProgressCreate(
+proc lspProgressCreate(
   c: var LspClient,
   notify: JsonNode): Result[(), string] =
     ## Init a LSP progress.
+    ##
+    ## window/workDoneProgress/create
 
     let token = parseWindowWorkDnoneProgressCreateNotify(notify)
     if token.isErr:
@@ -206,15 +210,30 @@ proc lspWorkDoneProgressCreate(
 
     c.createProgress(token.get)
 
-proc progressMessage(p: ProgressReport): string {.inline.} =
-  result = fmt"{p.title}: "
-  if p.percentage.isSome: result &= fmt"{$p.percentage}% : "
-  result &= p.message
+    return Result[(), string].ok ()
 
-proc lspWorkDoneProgress(
+proc progressMessage(p: ProgressReport): string {.inline.} =
+  case p.state:
+    of begin:
+      if p.message.len > 0:
+        return fmt"{p.title}: {p.message}"
+      else:
+        return p.title
+    of report:
+      result = fmt"{p.title}: "
+      if p.percentage.isSome: result &= fmt"{$p.percentage.get}%: "
+      result &= p.message
+    of `end`:
+      return fmt"{p.title}: {p.message}"
+    else:
+      return ""
+
+proc lspProgress(
   status: var EditorStatus,
   notify: JsonNode): Result[(), string] =
     ## Begin/Report/End the LSP progress.
+    ##
+    ## $/progress
 
     let token = workDoneProgressToken(notify)
 
@@ -254,11 +273,9 @@ proc lspWorkDoneProgress(
       return Result[(), string].err fmt"Invalid server notify: {notify}"
 
     case lspClient.progress[token].state:
-      of begin, report:
+      of begin, report, `end`:
         status.commandLine.writeLspProgress(
           progressMessage(lspClient.progress[token]))
-      of `end`:
-        status.commandLine.clear
       else:
         discard
 
@@ -281,10 +298,13 @@ proc handleLspServerNotify(
       of windowLogMessage:
         # Already logged to LspClint.log.
         return Result[(), string].ok ()
+      of workspaceConfiguration:
+        # TODO: Configure settings based on notifications if necessary.
+        return Result[(), string].ok ()
       of windowWorkDnoneProgressCreate:
-        return lspClient.lspWorkDoneProgressCreate(notify)
+        return lspClient.lspProgressCreate(notify)
       of progress:
-        return status.lspWorkDoneProgress(notify)
+        return status.lspProgress(notify)
       of textDocumentPublishDiagnostics:
         return status.bufStatus.lspDiagnostics(notify)
       else:

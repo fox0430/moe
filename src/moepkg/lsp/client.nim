@@ -127,14 +127,17 @@ proc beginProgress*(
   p: WorkDoneProgressBegin): Result[(), string] =
     ## Begin the progress in the `LspClint.progress`.
 
-    if c.progress.contains(token):
-      c.progress[token] = ProgressReport(
-        state: ProgressState.begin,
-        title: p.title)
-      if p.message.isSome:
-        c.progress[token].message = p.message.get
-      if p.percentage.isSome:
-        c.progress[token].percentage = some(p.percentage.get.Natural)
+    if not c.progress.contains(token):
+      return Result[(), string].err "token not found"
+
+    c.progress[token].state = ProgressState.begin
+    c.progress[token].title = p.title
+    if p.message.isSome:
+      c.progress[token].message = p.message.get
+    if p.percentage.isSome:
+      c.progress[token].percentage = some(p.percentage.get.Natural)
+
+    return Result[(), string].ok ()
 
 proc reportProgress*(
   c: var LspClient,
