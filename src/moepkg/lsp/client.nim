@@ -20,7 +20,7 @@
 # NOTE: Language Server Protocol Specification - 3.17
 # https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/
 
-import std/[strformat, strutils, json, options, os, osproc, posix]
+import std/[strformat, strutils, json, options, os, osproc, posix, tables]
 import pkg/results
 
 import ../appinfo
@@ -53,6 +53,8 @@ type
   LspCapabilities* = object
     hover*: bool
 
+  LspProgressTable* = Table[ProgressToken, ProgressReport]
+
   LspClient* = ref object
     serverProcess: Process
       # LSP server process.
@@ -60,6 +62,8 @@ type
       # Input/Output streams for the LSP server process.
     capabilities*: Option[LspCapabilities]
       # LSP server capabilities
+    progress*: LspProgressTable
+      # Use in window/workDoneProgress
     waitingResponse*: Option[LspMethod]
       # The waiting response from the LSP server.
     log*: LspLog
@@ -110,6 +114,75 @@ proc addNotifyFromServerLog*(c: var LspClient, m: JsonNode) {.inline.} =
 
 proc clearWaitingResponse*(c: var LspClient) {.inline.} =
   c.waitingResponse = none(LspMethod)
+
+proc createProgress*(c: var LspClient, token: ProgressToken) =
+  ## Add a new progress to the `LspClint.progress`.
+
+  if not c.progress.contains(token):
+    c.progress[token] = ProgressReport(state: ProgressState.create)
+
+proc beginProgress*(
+  c: var LspClient,
+  token: ProgressToken,
+  p: WorkDoneProgressBegin): Result[(), string] =
+    ## Begin the progress in the `LspClint.progress`.
+
+    if not c.progress.contains(token):
+      return Result[(), string].err "token not found"
+
+    c.progress[token].state = ProgressState.begin
+    c.progress[token].title = p.title
+    if p.message.isSome:
+      c.progress[token].message = p.message.get
+    if p.percentage.isSome:
+      c.progress[token].percentage = some(p.percentage.get.Natural)
+
+    return Result[(), string].ok ()
+
+proc reportProgress*(
+  c: var LspClient,
+  token: ProgressToken,
+  report: WorkDoneProgressReport): Result[(), string] =
+    ## Update the progress in the `LspClint.progress`.
+
+    if not c.progress.contains(token):
+      return Result[(), string].err "token not found"
+
+    if ProgressState.report != c.progress[token].state:
+      c.progress[token].state = ProgressState.report
+
+    if report.message.isSome:
+      c.progress[token].message = report.message.get
+    if report.percentage.isSome:
+      c.progress[token].percentage = some(report.percentage.get.Natural)
+
+    return Result[(), string].ok ()
+
+proc endProgress*(
+  c: var LspClient,
+  token: ProgressToken,
+  p: WorkDoneProgressEnd): Result[(), string] =
+    ## End the progress in the `LspClint.progress`.
+
+    if not c.progress.contains(token):
+      return Result[(), string].err "token not found"
+
+    c.progress[token].state = ProgressState.end
+
+    if p.message.isSome:
+      c.progress[token].message = p.message.get
+
+    return Result[(), string].ok ()
+
+proc delProgress*(c: var LspClient, token: ProgressToken): Result[(), string] =
+  ## Delete the progress from the `LspClint.progress`.
+
+  if not c.progress.contains(token):
+    return Result[(), string].err "token not found"
+
+  c.progress.del(token)
+
+  return Result[(), string].ok ()
 
 proc readable*(c: LspClient, timeout: int = 1): LspClientReadableResult =
   ## Return when output is written from the LSP server or timesout.
@@ -253,6 +326,9 @@ proc initInitializeParams*(
           publishDiagnostics: some(PublishDiagnosticsCapability(
             dynamicRegistration: some(true)
           ))
+        )),
+        window: some(WindowCapabilities(
+          workDoneProgress: some(true)
         ))
       ),
       workspaceFolders: some(

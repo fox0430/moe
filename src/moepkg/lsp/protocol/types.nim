@@ -120,9 +120,12 @@ type
     kind*: string
     message*: Option[string]
 
-  ProgressParams* = ref object of RootObj
-    token*: string # can be also int but the server will send strings
-    value*: OptionalNode
+  WorkDoneProgressCreateParams* = ref object of RootObj
+    token*: OptionalNode # int or string (ProgressToken)
+
+  ProgressTokenParams* = ref object of RootObj
+    token*: OptionalNode # int or string (ProgressToken)
+    value*: OptionalNode # T
 
   ConfigurationItem* = ref object of RootObj
     scopeUri*: Option[string]
@@ -262,6 +265,8 @@ type
 
   WindowCapabilities* = ref object of RootObj
     workDoneProgress*: Option[bool]
+    showMessage*: Option[ShowMessageRequestParams]
+    showDocument*: Option[ShowDocumentClientCapabilities]
 
   ClientCapabilities* = ref object of RootObj
     workspace*: Option[WorkspaceClientCapabilities]
@@ -368,6 +373,9 @@ type
     `type`*: int
     message*: string
     actions*: OptionalSeq[MessageActionItem]
+
+  ShowDocumentClientCapabilities* = ref object of RootObj
+    support*: bool
 
   LogMessageParams* = ref object of RootObj
     `type`*: int

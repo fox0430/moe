@@ -125,6 +125,30 @@ suite "lsp: lspMetod":
       "params": nil
     }).get
 
+  test "workspace/configuration":
+    check LspMethod.workspaceConfiguration == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "workspace/configuration",
+      "params": nil
+    }).get
+
+  test "window/workDoneProgress/create":
+    check LspMethod.windowWorkDnoneProgressCreate == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "window/workDoneProgress/create",
+      "params": nil
+    }).get
+
+  test "$/progress":
+    check LspMethod.progress == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "$/progress",
+      "params": nil
+    }).get
+
   test "window/publishDiagnostics":
     check LspMethod.textDocumentPublishDiagnostics == lspMethod(%*{
       "jsonrpc": "2.0",
@@ -193,6 +217,102 @@ suite "lsp: parseWindowLogMessageNotify":
           "message": "Log message"
         }
       }).get
+
+suite "lsp: parseWindowWorkDnoneProgressCreateNotify":
+  test "Invalid":
+    check parseWindowWorkDnoneProgressCreateNotify(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": nil
+    }).isErr
+
+  test "Basic":
+    check "token" == parseWindowWorkDnoneProgressCreateNotify(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "window/workDoneProgress/create",
+      "params": {
+        "token":"token"
+      }
+    }).get
+
+suite "lsp: parseWorkDoneProgressBegin":
+  test "Invalid":
+    check parseWorkDoneProgressBegin(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": nil
+    }).isErr
+
+  test "Basic":
+    check WorkDoneProgressBegin(
+      kind: "begin",
+      title: "title",
+      message: some("message"),
+      cancellable: some(false),
+      percentage: none(int))[] == parseWorkDoneProgressBegin(%*{
+        "jsonrpc": "2.0",
+        "method": "$/progress",
+        "params": {
+          "token": "token",
+          "value": {
+            "kind":"begin",
+            "title":"title",
+            "message": "message",
+            "cancellable":false
+          }
+        }
+      }).get[]
+
+suite "lsp: parseWorkDoneProgressReport":
+  test "Invalid":
+    check parseWorkDoneProgressReport(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": nil
+    }).isErr
+
+  test "Basic":
+    check WorkDoneProgressReport(
+      kind: "report",
+      message: some("message"),
+      cancellable: some(false),
+      percentage: some(50))[] == parseWorkDoneProgressReport(%*{
+        "jsonrpc": "2.0",
+        "method": "$/progress",
+        "params": {
+          "token": "token",
+          "value": {
+            "kind":"report",
+            "message": "message",
+            "cancellable":false,
+            "percentage": 50
+          }
+        }
+      }).get[]
+
+suite "lsp: parseWorkDoneProgressEnd":
+  test "Invalid":
+    check parseWorkDoneProgressEnd(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": nil
+    }).isErr
+
+  test "Basic":
+    check WorkDoneProgressEnd(
+      kind: "end",
+      message: some("message"))[] == parseWorkDoneProgressEnd(%*{
+        "jsonrpc": "2.0",
+        "method": "$/progress",
+        "params": {
+          "token": "token",
+          "value": {
+            "kind":"end",
+            "message": "message",
+          }
+        }
+      }).get[]
 
 suite "lsp: parseTextDocumentHoverResponse":
   test "Invalid":

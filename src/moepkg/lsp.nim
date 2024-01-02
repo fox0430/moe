@@ -130,6 +130,7 @@ proc showLspServerLog(
   commandLine : var CommandLine,
   notify: JsonNode): Result[(), string] =
     ## Show the log to the command line.
+    ##
     ## window/showMessage
 
     let m = parseWindowShowMessageNotify(notify)
@@ -162,6 +163,7 @@ proc lspDiagnostics(
   bufStatuses: var seq[BufferStatus],
   notify: JsonNode): Result[(), string] =
     ## Set BufferStatus.syntaxCheckResults to diagnostics results.
+    ##
     ## textDocument/publishDiagnostics
 
     let parseResult = parseTextDocumentPublishDiagnosticsNotify(notify)
@@ -195,6 +197,90 @@ proc lspDiagnostics(
 
     return Result[(), string].ok ()
 
+proc lspProgressCreate(
+  c: var LspClient,
+  notify: JsonNode): Result[(), string] =
+    ## Init a LSP progress.
+    ##
+    ## window/workDoneProgress/create
+
+    let token = parseWindowWorkDnoneProgressCreateNotify(notify)
+    if token.isErr:
+      return Result[(), string].err fmt"Invalid server notify: {token.error}"
+
+    c.createProgress(token.get)
+
+    return Result[(), string].ok ()
+
+proc progressMessage(p: ProgressReport): string {.inline.} =
+  case p.state:
+    of begin:
+      if p.message.len > 0:
+        return fmt"{p.title}: {p.message}"
+      else:
+        return p.title
+    of report:
+      result = fmt"{p.title}: "
+      if p.percentage.isSome: result &= fmt"{$p.percentage.get}%: "
+      result &= p.message
+    of `end`:
+      return fmt"{p.title}: {p.message}"
+    else:
+      return ""
+
+proc lspProgress(
+  status: var EditorStatus,
+  notify: JsonNode): Result[(), string] =
+    ## Begin/Report/End the LSP progress.
+    ##
+    ## $/progress
+
+    let token = workDoneProgressToken(notify)
+
+    if isWorkDoneProgressBegin(notify):
+      let begin = parseWorkDoneProgressBegin(notify)
+      if begin.isErr:
+        return Result[(), string].err fmt"Invalid server notify: {begin.error}"
+
+      if isCancellable(begin.get):
+        # Cancel
+        return lspClient.delProgress(token)
+
+      let err = lspClient.beginProgress(token, begin.get)
+      if err.isErr:
+        return Result[(), string].err fmt"Invalid server notify: {err.error}"
+    elif isWorkDoneProgressReport(notify):
+      let report = parseWorkDoneProgressReport(notify)
+      if report.isErr:
+        return Result[(), string].err fmt"Invalid server notify: {report.error}"
+
+      if isCancellable(report.get):
+        # Cancel
+        return lspClient.delProgress(token)
+
+      let err = lspClient.reportProgress(token, report.get)
+      if err.isErr:
+        return Result[(), string].err fmt"Invalid server notify: {err.error}"
+    elif isWorkDoneProgressEnd(notify):
+      let `end` = parseWorkDoneProgressEnd(notify)
+      if `end`.isErr:
+        return Result[(), string].err fmt"Invalid server notify: {`end`.error}"
+
+      let err = lspClient.endProgress(token, `end`.get)
+      if err.isErr:
+        return Result[(), string].err fmt"Invalid server notify: {err.error}"
+    else:
+      return Result[(), string].err fmt"Invalid server notify: {notify}"
+
+    case lspClient.progress[token].state:
+      of begin, report, `end`:
+        status.commandLine.writeLspProgress(
+          progressMessage(lspClient.progress[token]))
+      else:
+        discard
+
+    return Result[(), string].ok ()
+
 proc handleLspServerNotify(
   status: var EditorStatus,
   notify: JsonNode): Result[(), string] =
@@ -212,6 +298,13 @@ proc handleLspServerNotify(
       of windowLogMessage:
         # Already logged to LspClint.log.
         return Result[(), string].ok ()
+      of workspaceConfiguration:
+        # TODO: Configure settings based on notifications if necessary.
+        return Result[(), string].ok ()
+      of windowWorkDnoneProgressCreate:
+        return lspClient.lspProgressCreate(notify)
+      of progress:
+        return status.lspProgress(notify)
       of textDocumentPublishDiagnostics:
         return status.bufStatus.lspDiagnostics(notify)
       else:

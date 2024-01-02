@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, oids, options, os, osproc, json]
+import std/[unittest, oids, options, os, osproc, json, tables]
 
 import pkg/results
 
@@ -284,6 +284,178 @@ suite "lsp: lspDiagnostics":
 
     check currentBufStatus.syntaxCheckResults.len == 0
 
+suite "lsp: lspWorkDoneProgressCreate":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    status.settings.lsp.enable = true
+
+    let filename = $genOid() & ".nim"
+    assert status.addNewBufferInCurrentWin(filename).isOk
+
+    status.lspClients["nim"] = LspClient()
+    status.lspClients["nim"].progress["token"] = ProgressReport(
+      title: "",
+      state: ProgressState.create)
+
+  test "Invalid":
+    check lspClient.lspProgressCreate(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": nil
+    }).isErr
+
+  test "Basic":
+    check lspClient.lspProgressCreate(%*{
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "window/workDoneProgress/create",
+      "params": {
+        "token": "token"
+      }
+    }).isOk
+
+    check lspClient.progress["token"].state == ProgressState.create
+
+suite "lsp: lspProgress":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    status.settings.lsp.enable = true
+
+    let filename = $genOid() & ".nim"
+    assert status.addNewBufferInCurrentWin(filename).isOk
+
+    status.lspClients["nim"] = LspClient()
+
+  test "begin":
+    status.lspClients["nim"].progress["token"] = ProgressReport(
+      title: "",
+      state: ProgressState.create)
+
+    check status.lspProgress(%*{
+      "jsonrpc": "2.0",
+      "method": "$/progress",
+      "params": {
+        "token": "token",
+        "value": {
+          "kind": "begin",
+          "title": "begin",
+          "cancellable": false
+        }
+      }
+    }).isOk
+
+    check ProgressState.begin == status.lspClients["nim"].progress["token"].state
+    check "begin" == status.lspClients["nim"].progress["token"].title
+    check "" == status.lspClients["nim"].progress["token"].message
+    check none(Natural) == status.lspClients["nim"].progress["token"].percentage
+
+    check ru"lsp: progress: begin" == status.commandLine.buffer
+
+  test "begin with message":
+    status.lspClients["nim"].progress["token"] = ProgressReport(
+      title: "",
+      state: ProgressState.create)
+
+    check status.lspProgress(%*{
+      "jsonrpc": "2.0",
+      "method": "$/progress",
+      "params": {
+        "token": "token",
+        "value": {
+          "kind": "begin",
+          "title": "begin",
+          "message": "message",
+          "cancellable": false
+        }
+      }
+    }).isOk
+
+    check ProgressState.begin == status.lspClients["nim"].progress["token"].state
+    check "begin" == status.lspClients["nim"].progress["token"].title
+    check "message" == status.lspClients["nim"].progress["token"].message
+    check none(Natural) == status.lspClients["nim"].progress["token"].percentage
+
+    check ru"lsp: progress: begin: message" == status.commandLine.buffer
+
+  test "report":
+    status.lspClients["nim"].progress["token"] = ProgressReport(
+      title: "report",
+      state: ProgressState.begin)
+
+    check status.handleLspServerNotify(%*{
+      "jsonrpc": "2.0",
+      "method": "$/progress",
+      "params": {
+        "token": "token",
+        "value": {
+          "kind":"report",
+          "cancellable": false,
+          "message": "report"
+        }
+      }
+    }).isOk
+
+    check ProgressState.report == status.lspClients["nim"].progress["token"].state
+    check "report" == status.lspClients["nim"].progress["token"].title
+    check "report" == status.lspClients["nim"].progress["token"].message
+    check none(Natural) == status.lspClients["nim"].progress["token"].percentage
+
+    check ru"lsp: progress: report: report" == status.commandLine.buffer
+
+  test "report with percentage":
+    status.lspClients["nim"].progress["token"] = ProgressReport(
+      title: "report",
+      state: ProgressState.begin)
+
+    check status.handleLspServerNotify(%*{
+      "jsonrpc": "2.0",
+      "method": "$/progress",
+      "params": {
+        "token": "token",
+        "value": {
+          "kind":"report",
+          "cancellable": false,
+          "message": "report",
+          "percentage": 50
+        }
+      }
+    }).isOk
+
+    check ProgressState.report == status.lspClients["nim"].progress["token"].state
+    check "report" == status.lspClients["nim"].progress["token"].title
+    check "report" == status.lspClients["nim"].progress["token"].message
+    check some(Natural(50)) == status.lspClients["nim"].progress["token"].percentage
+
+    check ru"lsp: progress: report: 50%: report" == status.commandLine.buffer
+
+  test "end":
+    status.lspClients["nim"].progress["token"] = ProgressReport(
+      title: "end",
+      state: ProgressState.report)
+
+    check status.handleLspServerNotify(%*{
+      "jsonrpc": "2.0",
+      "method": "$/progress",
+      "params": {
+        "token": "token",
+        "value": {
+          "kind":"end",
+          "message": "end"
+        }
+      }
+    }).isOk
+
+    check ProgressState.`end` == status.lspClients["nim"].progress["token"].state
+    check "end" == status.lspClients["nim"].progress["token"].title
+    check "end" == status.lspClients["nim"].progress["token"].message
+    check none(Natural) == status.lspClients["nim"].progress["token"].percentage
+
+    check ru"lsp: progress: end: end" == status.commandLine.buffer
+
 suite "lsp: handleLspServerNotify":
   setup:
     var status = initEditorStatus()
@@ -312,6 +484,132 @@ suite "lsp: handleLspServerNotify":
       "params": {
         "type": 3,
         "message": "Log message"
+      }
+    }).isOk
+
+  test "window/logMessage":
+    check status.handleLspServerNotify(%*{
+      "jsonrpc": "2.0",
+      "method": "window/logMessage",
+      "params": {
+        "type": 3,
+        "message": "Log message"
+      }
+    }).isOk
+
+  test "workspace/configuration":
+    check status.handleLspServerNotify(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "workspace/configuration",
+      "params": {
+        "items": [
+          {"section": "test"}
+        ]
+      }
+    }).isOk
+
+  test "window/workDoneProgress/create":
+    let filename = $genOid() & ".nim"
+    assert status.addNewBufferInCurrentWin(filename).isOk
+    status.lspClients["nim"] = LspClient()
+
+    check status.handleLspServerNotify(%*{
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "window/workDoneProgress/create",
+      "params": {
+        "token":"token"
+      }
+    }).isOk
+
+  test "$/progress (begin)":
+    let filename = $genOid() & ".nim"
+    assert status.addNewBufferInCurrentWin(filename).isOk
+
+    status.lspClients["nim"] = LspClient()
+    status.lspClients["nim"].progress["token"] = ProgressReport(
+      title: "",
+      state: ProgressState.create)
+
+    check status.handleLspServerNotify(%*{
+      "jsonrpc": "2.0",
+      "method": "$/progress",
+      "params": {
+        "token": "token",
+        "value": {
+          "kind": "begin",
+          "title": "begin",
+          "cancellable": false
+        }
+      }
+    }).isOk
+
+  test "$/progress (report)":
+    let filename = $genOid() & ".nim"
+    assert status.addNewBufferInCurrentWin(filename).isOk
+
+    status.lspClients["nim"] = LspClient()
+    status.lspClients["nim"].progress["token"] = ProgressReport(
+      title: "report",
+      state: ProgressState.create)
+
+    check status.handleLspServerNotify(%*{
+      "jsonrpc": "2.0",
+      "method": "$/progress",
+      "params": {
+        "token": "token",
+        "value": {
+          "kind":"report",
+          "cancellable": false,
+          "message": "report"
+        }
+      }
+    }).isOk
+
+    check ru"lsp: progress: report: report" == status.commandLine.buffer
+
+  test "$/progress (report with percentage)":
+    let filename = $genOid() & ".nim"
+    assert status.addNewBufferInCurrentWin(filename).isOk
+
+    status.lspClients["nim"] = LspClient()
+    status.lspClients["nim"].progress["token"] = ProgressReport(
+      title: "report",
+      state: ProgressState.create)
+
+    check status.handleLspServerNotify(%*{
+      "jsonrpc": "2.0",
+      "method": "$/progress",
+      "params": {
+        "token": "token",
+        "value": {
+          "kind":"report",
+          "cancellable": false,
+          "message": "report",
+          "percentage": 50
+        }
+      }
+    }).isOk
+
+  test "$/progress (end)":
+    let filename = $genOid() & ".nim"
+    assert status.addNewBufferInCurrentWin(filename).isOk
+
+    status.lspClients["nim"] = LspClient()
+    status.lspClients["nim"].progress["token"] = ProgressReport(
+      title: "end",
+      state: ProgressState.create)
+
+    check status.handleLspServerNotify(%*{
+      "jsonrpc": "2.0",
+      "method": "$/progress",
+      "params": {
+        "token": "token",
+        "value": {
+          "kind":"end",
+          "message": "end"
+        }
       }
     }).isOk
 
