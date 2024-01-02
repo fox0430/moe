@@ -12,13 +12,16 @@ Please feedback, bug reports and PRs.
 - `shutdown`
 - `window/showMessage`
 - `window/logMessage`
-- `textDocument/publishDiagnostics`
+- `window/workDoneProgress/create`
+- `workspace/configuration`
 - `workspace/didChangeConfiguration`
+- `textDocument/publishDiagnostics`
 - `textDocument/didOpen`
 - `textDocument/didChange`
 - `textDocument/didSave`
 - `textDocument/didClose`
 - `textDocument/hover`
+- `$/progress`
 
 ## Configuration
 
