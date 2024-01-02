@@ -20,7 +20,6 @@
 import std/[tables, times, options, os, strformat]
 import pkg/results
 import syntax/highlite
-import lsp/utils
 import gapbuffer, unicodeext, fileutils, highlight, independentutils, git,
        syntaxcheck
 

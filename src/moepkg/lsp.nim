@@ -206,6 +206,11 @@ proc lspWorkDoneProgressCreate(
 
     c.createProgress(token.get)
 
+proc progressMessage(p: ProgressReport): string {.inline.} =
+  result = fmt"{p.title}: "
+  if p.percentage.isSome: result &= fmt"{$p.percentage}% : "
+  result &= p.message
+
 proc lspWorkDoneProgress(
   status: var EditorStatus,
   notify: JsonNode): Result[(), string] =
@@ -222,7 +227,9 @@ proc lspWorkDoneProgress(
         # Cancel
         return lspClient.delProgress(token)
 
-      return lspClient.beginProgress(token, begin.get)
+      let err = lspClient.beginProgress(token, begin.get)
+      if err.isErr:
+        return Result[(), string].err fmt"Invalid server notify: {err.error}"
     elif isWorkDoneProgressReport(notify):
       let report = parseWorkDoneProgressReport(notify)
       if report.isErr:
@@ -232,15 +239,30 @@ proc lspWorkDoneProgress(
         # Cancel
         return lspClient.delProgress(token)
 
-      return lspClient.reportProgress(token, report.get)
+      let err = lspClient.reportProgress(token, report.get)
+      if err.isErr:
+        return Result[(), string].err fmt"Invalid server notify: {err.error}"
     elif isWorkDoneProgressEnd(notify):
       let `end` = parseWorkDoneProgressEnd(notify)
       if `end`.isErr:
         return Result[(), string].err fmt"Invalid server notify: {`end`.error}"
 
-      return lspClient.endProgress(token, `end`.get)
+      let err = lspClient.endProgress(token, `end`.get)
+      if err.isErr:
+        return Result[(), string].err fmt"Invalid server notify: {err.error}"
     else:
       return Result[(), string].err fmt"Invalid server notify: {notify}"
+
+    case lspClient.progress[token].state:
+      of begin, report:
+        status.commandLine.writeLspProgress(
+          progressMessage(lspClient.progress[token]))
+      of `end`:
+        status.commandLine.clear
+      else:
+        discard
+
+    return Result[(), string].ok ()
 
 proc handleLspServerNotify(
   status: var EditorStatus,

@@ -402,3 +402,6 @@ proc writeLspServerLog*(commandLine: var CommandLine, message: string) =
 
 proc writeLspServerDebug*(commandLine: var CommandLine, message: string) =
   commandLine.writeDebug(fmt"lsp: {message}")
+
+proc writeLspProgress*(commandLine: var CommandLine, message: string) =
+  commandLine.writeStandard(fmt"lsp: progress: {message}")
