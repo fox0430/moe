@@ -26,7 +26,7 @@ import editorstatus, bufferstatus, windownode, unicodeext, gapbuffer, ui,
        recentfilemode, quickrun, backupmanager, diffviewer, configmode,
        debugmode, commandline, search, commandlineutils, popupwindow,
        filermodeutils, messages, registers, exmodeutils, editor, movement,
-       searchutils, independentutils, viewhighlight, lsp
+       searchutils, independentutils, viewhighlight, lsp, completion
 
 type
   BeforeLine = object
@@ -117,13 +117,19 @@ proc execCommand(status: var EditorStatus, command: Runes): Option[Rune] =
 proc isOpenSuggestWindow(status: EditorStatus): bool {.inline.} =
   status.settings.autocomplete.enable and isInsertMode(currentBufStatus.mode)
 
-proc tryOpenSuggestWindow(status: var EditorStatus) {.inline.} =
-  status.suggestionWindow = tryOpenSuggestionWindow(
-    status.wordDictionary,
-    status.bufStatus,
-    currentMainWindowNode.bufferIndex,
-    mainWindowNode,
-    currentMainWindowNode)
+proc tryOpenSuggestWindow(status: var EditorStatus) =
+  if currentBufStatus.completionList.len > 0:
+    # LSP
+    status.suggestionWindow = tryOpenLspSuggestionWindow(
+      currentBufStatus,
+      currentMainWindowNode)
+  else:
+    status.suggestionWindow = tryOpenSuggestionWindow(
+      status.wordDictionary,
+      status.bufStatus,
+      currentMainWindowNode.bufferIndex,
+      mainWindowNode,
+      currentMainWindowNode)
 
 proc decListIndex(list: var SuggestList) =
   if list.currentIndex == 0: list.currentIndex = -1
@@ -669,13 +675,13 @@ proc updateAfterInsertFromSuggestion(status: var EditorStatus) =
     currentBufStatus.isUpdate = true
     currentBufStatus.countChange.inc
 
-  # Update WordDictionary
   block:
+    # Update WordDictionary
     let selectedWord = status.suggestionWindow.get.getSelectedWord
     if selectedWord.len > 0:
       status.wordDictionary.incNumOfUsed(selectedWord)
 
-proc close(suggestWin: var Option[SuggestionWindow]) {.inline.} =
+template close(suggestWin: var Option[SuggestionWindow]) =
   suggestWin.get.close
   suggestWin = none(SuggestionWindow)
 
@@ -699,9 +705,6 @@ proc editorMainLoop*(status: var EditorStatus) =
         currentBufStatus.buffer.beginNewSuitIfNeeded
         currentBufStatus.recordCurrentPosition(currentMainWindowNode)
 
-    if status.isLspResponse:
-      status.handleLspResponse
-
     status.update
 
     if isSkipGetKey:
@@ -721,6 +724,7 @@ proc editorMainLoop*(status: var EditorStatus) =
           break
 
       if status.isLspResponse:
+        status.handleLspResponse
         continue
       else:
         key = k.get
@@ -734,7 +738,8 @@ proc editorMainLoop*(status: var EditorStatus) =
         continue
       else:
         status.updateAfterInsertFromSuggestion
-        status.suggestionWindow.close
+        if status.suggestionWindow.isSome:
+          status.suggestionWindow.close
 
     if isResizeKey(key):
       updateTerminalSize()

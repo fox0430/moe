@@ -28,6 +28,9 @@ import protocol/[enums, types]
 type
   LspPosition* = types.Position
 
+  LspCompletionItem* = types.CompletionItem
+  LspCompletionList* = types.CompletionList
+
   LanguageId* = string
 
   LspMethod* {.pure.} = enum
@@ -46,6 +49,7 @@ type
     textDocumentDidClose
     textDocumentPublishDiagnostics
     textDocumentHover
+    textDocumentCompletion
 
   ProgressToken* = string
     # ProgressParams.token
@@ -152,6 +156,7 @@ proc toLspMethodStr*(m: LspMethod): string =
     of textDocumentDidClose: "textDocument/didClose"
     of textDocumentPublishDiagnostics: "textDocument/publishDiagnostics"
     of textDocumentHover: "textDocument/hover"
+    of textDocumentCompletion: "textDocument/completion"
 
 proc parseTraceValue*(s: string): Result[TraceValue, string] =
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#traceValue
@@ -199,6 +204,8 @@ proc lspMethod*(j: JsonNode): LspMethodResult =
       LspMethodResult.ok textDocumentPublishDiagnostics
     of "textDocument/hover":
       LspMethodResult.ok textDocumentHover
+    of "textDocument/completion":
+      LspMethodResult.ok textDocumentCompletion
     else:
       LspMethodResult.err "Not supported: " & j["method"].getStr
 
@@ -396,3 +403,34 @@ proc toHoverContent*(hover: Hover): HoverContent =
     result.range.last = BufferPosition(
       line: range["end"]["line"].getInt,
       column: range["end"]["character"].getInt)
+
+proc toCompletionList*(res: JsonNode): Result[seq[CompletionItem], string] =
+  if not res.contains("result"):
+    return Result[seq[CompletionItem], string].err fmt"Invalid response: {res}"
+
+  if res["result"].kind == JObject:
+    var list: CompletionList
+
+    try:
+      list = res["result"].to(CompletionList)
+    except CatchableError as e:
+      return Result[seq[CompletionItem], string].err fmt"Invalid response: {e.msg}"
+
+    if list.items.isSome:
+      return Result[seq[CompletionItem], string].ok list.items.get
+    else:
+      # Not found
+      return Result[seq[CompletionItem], string].ok @[]
+  else:
+    # Old LSP verions?
+    var items: seq[CompletionItem]
+    try:
+      items = res["result"].to(seq[CompletionItem])
+    except CatchableError as e:
+      return Result[seq[CompletionItem], string].err fmt"Invalid response: {e.msg}"
+
+    if items.len > 0:
+      return Result[seq[CompletionItem], string].ok items
+    else:
+      # Not found
+      return Result[seq[CompletionItem], string].ok @[]

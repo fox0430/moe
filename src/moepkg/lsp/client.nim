@@ -52,6 +52,7 @@ type
 
   LspCapabilities* = object
     hover*: bool
+    completion*: bool
 
   LspProgressTable* = Table[ProgressToken, ProgressReport]
 
@@ -250,7 +251,7 @@ proc parseLspError*(res: JsonNode): LspErrorParseResult =
     return LspErrorParseResult.err fmt"Invalid error: {$res}"
 
 proc setNonBlockingOutput(p: Process): Result[(), string] =
-  if fcntl(p.outputHandle.cint, F_SETFL, O_NONBLOCK) < 0:
+  if fcntl(p.outputHandle.cint, F_SETFL, 0) < 0:
     return Result[(), string].err "fcntl failed"
 
   return Result[(), string].ok ()
@@ -316,7 +317,9 @@ proc initInitializeParams*(
       )),
       capabilities: ClientCapabilities(
         workspace: some(WorkspaceClientCapabilities(
-          applyEdit: some(true)
+          applyEdit: some(true),
+          didChangeConfiguration: some(DidChangeConfigurationCapability(
+            dynamicRegistration: some(true)))
         )),
         textDocument: some(TextDocumentClientCapabilities(
           hover: some(HoverCapability(
@@ -325,6 +328,15 @@ proc initInitializeParams*(
           )),
           publishDiagnostics: some(PublishDiagnosticsCapability(
             dynamicRegistration: some(true)
+          )),
+          completion: some(CompletionCapability(
+            dynamicRegistration: some(true),
+            completionItem: some(CompletionItemCapability(
+              snippetSupport: some(false),
+              commitCharactersSupport: some(false),
+              deprecatedSupport: some(false)
+            )),
+            contextSupport: some(false)
           ))
         )),
         window: some(WindowCapabilities(
@@ -344,8 +356,15 @@ proc initInitializeParams*(
 proc setCapabilities(c: var LspClient, initResult: InitializeResult) =
   ## Set server capabilities to the LspClient from InitializeResult.
 
+  var capabilities = LspCapabilities()
+
   if initResult.capabilities.hoverProvider == some(true):
-    c.capabilities = some(LspCapabilities(hover: true))
+    capabilities.hover = true
+
+  if initResult.capabilities.completionProvider.isSome:
+    capabilities.completion = true
+
+  c.capabilities = some(capabilities)
 
 proc initialize*(
   c: var LspClient,
@@ -355,7 +374,7 @@ proc initialize*(
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#initialize
 
     if not c.serverProcess.running:
-      return LspSendRequestResult.err fmt"server crashed"
+      return LspSendRequestResult.err "server crashed"
 
     let params = %* initParams
 
@@ -387,7 +406,7 @@ proc initialized*(c: LspClient): LspSendNotifyResult =
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#initialized
 
   if not c.serverProcess.running:
-    return LspSendNotifyResult.err fmt"server crashed"
+    return LspSendNotifyResult.err "server crashed"
 
   let params = %* {}
 
@@ -402,7 +421,7 @@ proc shutdown*(c: var LspClient, id: int): LspSendNotifyResult =
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#shutdown
 
   if not c.serverProcess.running:
-    return LspSendNotifyResult.err fmt"server crashed"
+    return LspSendNotifyResult.err "server crashed"
 
   let r = c.request(id, LspMethod.shutdown, %*{})
   if r.isErr:
@@ -418,7 +437,7 @@ proc workspaceDidChangeConfiguration*(
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#workspace_didChangeConfiguration
 
     if not c.serverProcess.running:
-      return LspSendNotifyResult.err fmt"server crashed"
+      return LspSendNotifyResult.err "server crashed"
 
     let params = %* DidChangeConfigurationParams()
 
@@ -445,7 +464,7 @@ proc textDocumentDidOpen*(
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didOpen
 
     if not c.serverProcess.running:
-      return LspSendNotifyResult.err fmt"server crashed"
+      return LspSendNotifyResult.err "server crashed"
 
     let params = %* initTextDocumentDidOpenParams(
       path.pathToUri,
@@ -476,7 +495,7 @@ proc textDocumentDidChange*(
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didChange
 
     if not c.serverProcess.running:
-      return LspSendNotifyResult.err fmt"server crashed"
+      return LspSendNotifyResult.err "server crashed"
 
     let params = %* initTextDocumentDidChangeParams(version, path, text)
 
@@ -504,7 +523,7 @@ proc textDocumentDidSave*(
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didSave
 
     if not c.serverProcess.running:
-      return LspSendNotifyResult.err fmt"server crashed"
+      return LspSendNotifyResult.err "server crashed"
 
     let params = %* initTextDocumentDidSaveParams(version, path, text)
 
@@ -527,7 +546,7 @@ proc textDocumentDidClose*(
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didClose
 
     if not c.serverProcess.running:
-      return LspSendNotifyResult.err fmt"server crashed"
+      return LspSendNotifyResult.err "server crashed"
 
     let params = %* initTextDocumentDidClose(text)
 
@@ -554,10 +573,10 @@ proc textDocumentHover*(
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_hover
 
     if not c.serverProcess.running:
-      return R[(), string].err fmt"server crashed"
+      return R[(), string].err "server crashed"
 
     if not c.capabilities.get.hover:
-      return R[(), string].err fmt"textDocument/hover unavailable"
+      return R[(), string].err "textDocument/hover unavailable"
 
     let params = %* initHoverParams(path, position.toLspPosition)
     let r = c.request(id, LspMethod.textDocumentHover, params)
@@ -565,5 +584,51 @@ proc textDocumentHover*(
       return R[(), string].err fmt"textDocument/hover request failed: {r.error}"
 
     c.waitingResponse = some(LspMethod.textDocumentHover)
+
+    return R[(), string].ok ()
+
+proc initCompletionParams*(
+  path: string,
+  position: BufferPosition,
+  triggerCharacter: string = ""): CompletionParams =
+
+    let
+      triggerKind =
+        if triggerCharacter.len > 0: 2
+        else: 1
+
+      trirgerChar =
+        if triggerCharacter.len > 0: some(triggerCharacter)
+        else: none(string)
+
+    return CompletionParams(
+      textDocument: TextDocumentIdentifier(uri: path.pathToUri),
+      position: position.toLspPosition,
+      context: some(CompletionContext(
+        triggerKind: triggerKind,
+        triggerCharacter: trirgerChar)))
+
+proc textDocumentCompletion*(
+  c: var LspClient,
+  id: int,
+  path: string,
+  position: BufferPosition,
+  triggerCharacter: string = ""): LspSendRequestResult =
+    ## Send a textDocument/completion request to the server.
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_completion
+
+    if not c.serverProcess.running:
+      return R[(), string].err "server crashed"
+
+    if not c.capabilities.get.completion:
+      return R[(), string].err "textDocument/completion unavailable"
+
+    let params = %* initCompletionParams(path, position, triggerCharacter)
+
+    let r = c.request(id, LspMethod.textDocumentCompletion, params)
+    if r.isErr:
+      return R[(), string].err fmt"textDocument/completion request failed: {r.error}"
+
+    c.waitingResponse = some(LspMethod.textDocumentCompletion)
 
     return R[(), string].ok ()

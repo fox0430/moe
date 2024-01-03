@@ -648,8 +648,9 @@ proc checkBufferStatusUpdate(status: EditorStatus) =
 
       buf.version.inc
 
-      if status.lspClients.contains($buf.extension) and
-         status.lspClients[$buf.extension].isInitialized and
+      if status.lspClients.contains($buf.langId) and
+         status.lspClients[$buf.langId].isInitialized and
+         status.lspClients[$buf.langId].waitingResponse != some(LspMethod.textDocumentCompletion) and
          buf.version > 1:
            # Send a textDocument/didChange notification to the LSP server.
            let err = status.lspClients[buf.langId].textDocumentDidChange(

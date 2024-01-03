@@ -73,3 +73,9 @@ Press `K` on the word in Normal mode.
 Results will be received from the LPS server and displayed automatically.
 
 ![diagnostics](https://github.com/fox0430/moe/assets/15966436/3cc99b32-c53a-4878-846d-8fd44b4a6fb2)
+
+### Completion
+
+The completion is still under development but available.
+
+![moe-completion](https://github.com/fox0430/moe/assets/15966436/c1788c00-45f9-4c45-b80f-ebe00638d91d)
