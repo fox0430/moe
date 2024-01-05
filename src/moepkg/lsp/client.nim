@@ -267,7 +267,7 @@ proc initLspClient*(command: string): initLspClientResult =
     args =
       if commandSplit.len > 1: commandSplit[1 .. ^1]
       else: @[]
-    opts: set[ProcessOption] = {poStdErrToStdOut, poUsePath}
+    opts: set[ProcessOption] = {poUsePath}
 
   var c = LspClient()
 
