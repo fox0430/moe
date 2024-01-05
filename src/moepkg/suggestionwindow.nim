@@ -20,7 +20,7 @@
 import std/[sugar, options, sequtils]
 import syntax/highlite
 import ui, windownode, autocomplete, bufferstatus, gapbuffer, unicodeext, osext,
-       popupwindow, independentutils
+       popupwindow, independentutils, completion
 
 type SuggestionWindow* = object
   wordDictionary: WordDictionary
@@ -28,7 +28,7 @@ type SuggestionWindow* = object
   inputWord: Runes
   firstColumn, lastColumn: int
   suggestoins: seq[Runes]
-  selectedSuggestion: int
+  selectedSuggestion*: int
   popupWindow: Option[PopupWindow]
   isPath: bool
 
@@ -74,7 +74,7 @@ proc close*(suggestionWindow: var SuggestionWindow) =
   suggestionWindow.popupWindow.get.close
   suggestionWindow.popupwindow = none(PopupWindow)
 
-proc canHandleInSuggestionWindow*(key: Rune): bool {.inline.} =
+template canHandleInSuggestionWindow*(key: Rune): bool =
   isTabKey(key) or
   isShiftTab(key) or
   isUpKey(key) or
@@ -163,6 +163,28 @@ proc initSuggestionWindow*(
     suggestionWindow.oldLine = currentLineText
 
     return some(suggestionWindow)
+
+proc initLspSuggestionWindow*(
+  completionList: CompletionList,
+  word, currentLineText: Runes,
+  firstColumn, lastColumn: int): Option[SuggestionWindow] =
+    ## Suggestions are get from `CompletionList`.
+    ## Ignore `WordDictionary`.
+    ## `word` is the inputted text.
+
+    var suggestionWindow: SuggestionWindow
+    suggestionWindow.inputWord = word
+    suggestionWindow.firstColumn = firstColumn
+    suggestionWindow.lastColumn = lastColumn
+    suggestionWindow.isPath = false
+
+    suggestionWindow.suggestoins = completionList.collectLspSuggestions(word)
+
+    if suggestionWindow.suggestoins.len > 0:
+      suggestionWindow.selectedSuggestion = -1
+      suggestionWindow.oldLine = currentLineText
+
+      return some(suggestionWindow)
 
 proc extractWordBeforeCursor(
   bufStatus: BufferStatus,
@@ -284,6 +306,30 @@ proc buildSuggestionWindow*(
         lastColumn,
         isPath)
 
+proc buildLspSuggestionWindow*(
+  bufStatus: BufferStatus,
+  currenWindowNode: WindowNode): Option[SuggestionWindow] =
+    ## Build a suggestoin window from `CompletionList`.
+
+    let
+      (word, firstColumn, lastColumn) = extractWordBeforeCursor(
+        bufStatus,
+        currenWindowNode).get
+
+      # Eliminate the word on the cursor.
+      firstDeletedIndex = bufStatus.buffer.calcIndexInEntireBuffer(
+        currenWindowNode.currentLine,
+        firstColumn,
+        true)
+      lastDeletedIndex = firstDeletedIndex + word.high
+
+    initLspSuggestionWindow(
+      bufStatus.completionList,
+      word,
+      bufStatus.buffer[currenWindowNode.currentLine],
+      firstColumn,
+      lastColumn)
+
 proc tryOpenSuggestionWindow*(
   wordDictionary: var WordDictionary,
   bufStatus: seq[BufferStatus],
@@ -297,6 +343,13 @@ proc tryOpenSuggestionWindow*(
         currentBufferIndex,
         root,
         currenWindowNode)
+
+proc tryOpenLspSuggestionWindow*(
+  bufStatus: BufferStatus,
+  currenWindowNode: WindowNode): Option[SuggestionWindow] =
+
+    if wordExistsBeforeCursor(bufStatus, currenWindowNode):
+      return buildLspSuggestionWindow(bufStatus, currenWindowNode)
 
 proc calcSuggestionWindowPosition*(
   suggestionWindow: SuggestionWindow,

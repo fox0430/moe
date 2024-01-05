@@ -22,8 +22,8 @@ import std/[options, tables, json, logging, strformat]
 import pkg/results
 
 import lsp/[client, utils]
-import editorstatus, windownode, popupwindow, unicodeext, independentutils,
-       gapbuffer, messages, ui, commandline, bufferstatus, syntaxcheck
+import editorstatus, windownode, popupwindow, unicodeext, independentutils, ui,
+       gapbuffer, messages, commandline, bufferstatus, syntaxcheck, completion
 
 template isLspResponse*(status: EditorStatus): bool =
   status.lspClients.contains(currentBufStatus.langId) and
@@ -281,6 +281,32 @@ proc lspProgress(
 
     return Result[(), string].ok ()
 
+proc lspCompletion(b: var BufferStatus, res: JsonNode): Result[(), string] =
+  ## Update the BufferStatus.completionList.
+  ##
+  ## textDocument/completion
+
+  b.completionList.clear
+
+  let list = res.parseTextDocumentCompletionResponse
+  if list.isErr:
+    return Result[(), string].err fmt"Invalid response: {list.error}"
+
+  if list.get.len > 0:
+    for item in list.get:
+      var newItem = CompletionItem()
+
+      newItem.label = item.label.toRunes
+
+      if item.insertText.isSome:
+        newItem.insertText = item.insertText.get.toRunes
+      else:
+        newItem.insertText = item.label.toRunes
+
+      b.completionList.add newItem
+
+  return Result[(), string].ok ()
+
 proc handleLspServerNotify(
   status: var EditorStatus,
   notify: JsonNode): Result[(), string] =
@@ -347,11 +373,14 @@ proc handleLspResponse*(status: var EditorStatus) =
           let r = status.lspInitialized(resJson.get)
           if r.isErr:
             status.commandLine.writeLspInitializeError(
-              status.bufStatus[^1].extension,
+              currentBufStatus.langId.toRunes,
               r.error)
         of LspMethod.textDocumentHover:
           let r = status.lspHover(resJson.get)
           if r.isErr: status.commandLine.writeLspHoverError(r.error)
+        of LspMethod.textDocumentCompletion:
+          let r = currentBufStatus.lspCompletion(resJson.get)
+          if r.isErr: status.commandLine.writeLspCompletionError(r.error)
         else:
           discard
     else:

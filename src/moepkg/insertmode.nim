@@ -17,7 +17,11 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/options
+import std/[options, json, logging, tables]
+
+import pkg/results
+
+import lsp/client
 import ui, editorstatus, windownode, movement, editor, bufferstatus, settings,
        unicodeext, independentutils, gapbuffer
 
@@ -85,6 +89,29 @@ proc deleteCurrentCursor(status: var EditorStatus) {.inline.} =
       currentMainWindowNode.currentColumn,
       status.settings.standard.autoDeleteParen)
 
+proc sendCompletionRequest(status: var EditorStatus): Result[(), string] =
+  ## Send didChange and completion requests to the LSP server.
+
+  block:
+    currentBufStatus.version.inc
+
+    let err = lspClient.textDocumentDidChange(
+      currentBufStatus.version,
+      $currentBufStatus.path.absolutePath,
+      currentBufStatus.buffer.toString)
+    if err.isErr:
+      return Result[(), string ].err err.error
+
+  block:
+    let err = lspClient.textDocumentCompletion(
+      currentBufStatus.id,
+      $currentBufStatus.path.absolutePath,
+      currentMainWindowNode.bufferPosition)
+    if err.isErr:
+      return Result[(), string ].err err.error
+
+  return Result[(), string ].ok ()
+
 proc insertToBuffer(status: var EditorStatus, r: Rune) {.inline.} =
   if currentBufStatus.isInsertMultiMode:
     currentBufStatus.insertMultiplePositions(
@@ -97,6 +124,11 @@ proc insertToBuffer(status: var EditorStatus, r: Rune) {.inline.} =
       currentMainWindowNode,
       status.settings.standard.autoCloseParen,
       r)
+
+  if status.lspClients.contains(currentBufStatus.langId):
+    let err = status.sendCompletionRequest
+    if err.isErr:
+      error err.error
 
 proc execInsertModeCommand*(status: var EditorStatus, command: Runes) =
   let key = command[0]

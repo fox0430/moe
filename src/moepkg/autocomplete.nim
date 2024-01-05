@@ -19,7 +19,7 @@
 
 import std/[sugar, critbits, options, sequtils, strutils]
 import pkg/unicodedb/properties
-import unicodeext, bufferstatus, algorithm, osext, gapbuffer
+import unicodeext, bufferstatus, algorithm, osext, gapbuffer, completion
 import syntax/[highlite, syntaxc, syntaxcpp, syntaxcsharp, syntaxhaskell,
                syntaxjava, syntaxjavascript, syntaxnim, syntaxpython,
                syntaxrust]
@@ -142,6 +142,21 @@ proc collectSuggestions*(
 
     result.add pairs.sortedByIt(it.val).reversed.mapIt(it.key.toRunes)
 
+proc collectLspSuggestions*(
+  list: CompletionList,
+  word: Runes): seq[Runes] {.inline.} =
+    ## Collect words for suggestion from `CompletionList`.
+    ## TODO: Rewrite
+
+    result = collect:
+      for item in list.items:
+        if contains($item.insertText, $word): item.insertText
+
+    proc cmpByName(x, y: Runes): int = cmp($x, $y)
+
+    result.sort(cmpByName)
+    result.reverse
+
 proc getTextInBuffers*(
   bufStatus: seq[BufferStatus],
   firstDeletedIndex, lastDeletedIndex: int): Runes =
@@ -221,3 +236,8 @@ proc getPathList*(path: Runes): Runes =
   for item in paths:
     if item.startsWith(tail):
       result &= (item & " ").ru
+
+proc toWordDictionary*(list: CompletionList): WordDictionary =
+  for i in 0 .. list.high:
+    if not result.contains(list.items[i].insertText):
+      result[$list.items[i].insertText] = 0

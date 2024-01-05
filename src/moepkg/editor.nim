@@ -21,7 +21,7 @@ import std/[strutils, sequtils, strformat, options]
 import syntax/highlite
 import editorstatus, ui, gapbuffer, unicodeext, windownode, bufferstatus,
        movement, messages, settings, registers, commandline, independentutils,
-       searchutils
+       searchutils, completion
 
 proc correspondingCloseParen(c: char): char =
   case c

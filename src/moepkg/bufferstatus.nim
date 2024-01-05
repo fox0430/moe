@@ -21,7 +21,7 @@ import std/[tables, times, options, os, strformat]
 import pkg/results
 import syntax/highlite
 import gapbuffer, unicodeext, fileutils, highlight, independentutils, git,
-       syntaxcheck
+       syntaxcheck, completion
 
 type
   Mode* = enum
@@ -73,6 +73,7 @@ type
     changedLines*: seq[Diff]
     syntaxCheckResults*: seq[SyntaxError]
     isPasteMode*: bool
+    completionList*: CompletionList
 
 var
   countAddedBuffer = 0
@@ -303,7 +304,8 @@ proc initBufferStatus*(
       prevMode: mode,
       mode: mode,
       lastSaveTime: now(),
-      lastGitInfoCheckTime: now())
+      lastGitInfoCheckTime: now(),
+      completionList: initCompletionList())
 
     if isFilerMode(mode):
       if isAccessibleDir(path):
@@ -348,7 +350,8 @@ proc initBufferStatus*(
       mode: mode,
       lastSaveTime: now(),
       lastGitInfoCheckTime: now(),
-      fileType: FileType.unknown)
+      fileType: FileType.unknown,
+      completionList: initCompletionList())
 
     if mode.isFilerMode:
       b.buffer = initGapBuffer(@[ru""])

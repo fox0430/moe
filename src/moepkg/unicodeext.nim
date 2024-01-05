@@ -402,7 +402,7 @@ proc contains*(runes: Runes, sub: Rune): bool {.inline.} =
   find(runes, sub) >= 0
 
 proc contains*(runes, sub: Runes): bool {.inline.} =
-  find(runes, sub) >= 0
+  return find(runes, sub) >= 0
 
 proc contains*(runes: seq[Runes], sub: Runes): bool {.inline.} =
   find(runes, sub) >= 0

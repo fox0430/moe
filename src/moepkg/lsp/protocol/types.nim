@@ -337,7 +337,7 @@ type
   ServerCapabilities* = ref object of RootObj
     textDocumentSync*: OptionalNode # TextDocumentSyncOptions or int
     hoverProvider*: Option[bool]
-    completionProvider*: CompletionOptions
+    completionProvider*: Option[CompletionOptions]
     signatureHelpProvider*: SignatureHelpOptions
     definitionProvider*: Option[bool]
     declarationProvider*: Option[bool]
@@ -481,11 +481,17 @@ type
 
   CompletionList* = ref object of RootObj
     isIncomplete*: bool
-    `items`*: OptionalSeq[CompletionItem]
+    items*: OptionalSeq[CompletionItem]
+
+  CompletionItemLabelDetails* = ref object of RootObj
+    detail*: string
+    description*: Option[string]
 
   CompletionItem* = ref object of RootObj
     label*: string
+    labelDetails*: Option[CompletionItemLabelDetails]
     kind*: Option[int]
+    tags*: OptionalSeq[int]
     detail*: Option[string]
     documentation*: OptionalNode #Option[string or MarkupContent]
     deprecated*: Option[bool]
@@ -495,7 +501,7 @@ type
     insertText*: Option[string]
     insertTextFormat*: Option[int]
     textEdit*: Option[TextEdit]
-    additionalTextEdits*: Option[TextEdit]
+    additionalTextEdits*: OptionalSeq[TextEdit]
     commitCharacters*: OptionalSeq[string]
     command*: Option[Command]
     data*: OptionalNode
