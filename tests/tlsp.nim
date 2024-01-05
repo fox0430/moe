@@ -47,7 +47,7 @@ suite "lsp: lspInitialized":
     removeDir(testDir)
 
   test "Basic":
-    if not isNimlspAvailable():
+    if not isNimlangserverAvailable():
       skip()
     else:
       assert status.addNewBufferInCurrentWin(testFilePath).isOk
@@ -745,7 +745,7 @@ suite "lsp: handleLspResponse":
     status.settings.lsp.enable = true
 
   test "Initialize response":
-    if not isNimlspAvailable():
+    if not isNimlangserverAvailable():
       skip()
     else:
       # Open a new file.
