@@ -423,6 +423,9 @@ proc shutdown*(c: var LspClient, id: int): LspSendNotifyResult =
   if not c.serverProcess.running:
     return LspSendNotifyResult.err "server crashed"
 
+  if not c.isInitialized:
+    return R[(), string].err "lsp unavailable"
+
   let r = c.request(id, LspMethod.shutdown, %*{})
   if r.isErr:
     return LspSendNotifyResult.err "Shutdown request failed: {r.error}"
@@ -438,6 +441,9 @@ proc workspaceDidChangeConfiguration*(
 
     if not c.serverProcess.running:
       return LspSendNotifyResult.err "server crashed"
+
+    if not c.isInitialized:
+      return R[(), string].err "lsp unavailable"
 
     let params = %* DidChangeConfigurationParams()
 
@@ -465,6 +471,9 @@ proc textDocumentDidOpen*(
 
     if not c.serverProcess.running:
       return LspSendNotifyResult.err "server crashed"
+
+    if not c.isInitialized:
+      return R[(), string].err "lsp unavailable"
 
     let params = %* initTextDocumentDidOpenParams(
       path.pathToUri,
@@ -497,6 +506,9 @@ proc textDocumentDidChange*(
     if not c.serverProcess.running:
       return LspSendNotifyResult.err "server crashed"
 
+    if not c.isInitialized:
+      return R[(), string].err "lsp unavailable"
+
     let params = %* initTextDocumentDidChangeParams(version, path, text)
 
     let err = c.notify(LspMethod.textDocumentDidChange, params)
@@ -524,6 +536,9 @@ proc textDocumentDidSave*(
 
     if not c.serverProcess.running:
       return LspSendNotifyResult.err "server crashed"
+
+    if not c.isInitialized:
+      return R[(), string].err "lsp unavailable"
 
     let params = %* initTextDocumentDidSaveParams(version, path, text)
 
@@ -575,6 +590,9 @@ proc textDocumentHover*(
     if not c.serverProcess.running:
       return R[(), string].err "server crashed"
 
+    if not c.isInitialized:
+      return R[(), string].err "lsp unavailable"
+
     if not c.capabilities.get.hover:
       return R[(), string].err "textDocument/hover unavailable"
 
@@ -619,6 +637,9 @@ proc textDocumentCompletion*(
 
     if not c.serverProcess.running:
       return R[(), string].err "server crashed"
+
+    if not c.isInitialized:
+      return R[(), string].err "lsp unavailable"
 
     if not c.capabilities.get.completion:
       return R[(), string].err "textDocument/completion unavailable"
