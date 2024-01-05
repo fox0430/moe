@@ -148,15 +148,13 @@ proc collectLspSuggestions*(
     ## Collect words for suggestion from `CompletionList`.
     ## TODO: Rewrite
 
-    proc sortByLen(x, y: Runes): int =
-      if x.len < y.len: 1
-      else: -1
-
     result = collect:
       for item in list.items:
-        if item.insertText.contains(word): item.insertText
+        if contains($item.insertText, $word): item.insertText
 
-    result.sort(sortByLen)
+    proc cmpByName(x, y: Runes): int = cmp($x, $y)
+
+    result.sort(cmpByName)
     result.reverse
 
 proc getTextInBuffers*(

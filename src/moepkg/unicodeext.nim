@@ -337,7 +337,24 @@ proc isParen*(r: Rune): bool =
   else: return false
 
 proc find*(runes, sub: Runes, start: Natural = 0, last = 0): int =
-  find($runes, $sub)
+  ## If `last` is unspecified, it defaults to `runes.high`(the last element).
+  ## If `sub` is no in `runes`, -1 is returned. Otherwise the index is returned.
+
+  let last = if last == 0: runes.high else: last
+
+  var startAsUtf8, lastAsUtf8: Natural
+  for i, r in runes:
+    let s = $r
+    if i < start: startAsUtf8 += s.len
+    if i <= last: lastAsUtf8 += s.len
+    else: break
+
+  let
+    str = $runes
+    i = find(str, $sub, startAsUtf8, lastAsUtf8)
+
+  if i == -1: return -1
+  else: return runeLen(str[0..<i])
 
 proc find*(
   runes: Runes,

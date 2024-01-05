@@ -718,16 +718,16 @@ proc editorMainLoop*(status: var EditorStatus) =
 
         status.runBackgroundTasks
         if status.bufStatus.isUpdate:
-          continue
-
-        if status.isLspResponse:
           break
 
-      if status.isLspResponse:
-        status.handleLspResponse
-        continue
-      else:
+        if status.isLspResponse:
+          status.handleLspResponse
+          break
+
+      if k.isSome:
         key = k.get
+      else:
+        continue
 
     if status.suggestionWindow.isSome:
       if canHandleInSuggestionWindow(key):
