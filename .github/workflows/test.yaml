@@ -65,10 +65,10 @@ jobs:
       with:
         nim-version: ${{ env.NIM_VERSION }}
 
-    - name: Install nimlsp
+    - name: Install nimlangserver
       run: |
         nimble refresh
-        nimble install nimlsp
+        nimble install nimlangserver@#head
 
     - name: Run unit test
       run: |
