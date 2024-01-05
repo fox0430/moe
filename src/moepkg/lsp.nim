@@ -288,7 +288,7 @@ proc lspCompletion(b: var BufferStatus, res: JsonNode): Result[(), string] =
 
   b.completionList.clear
 
-  let list = res.toCompletionList
+  let list = res.parseTextDocumentCompletionResponse
   if list.isErr:
     return Result[(), string].err fmt"Invalid response: {list.error}"
 

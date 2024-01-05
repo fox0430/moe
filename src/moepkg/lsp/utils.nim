@@ -101,6 +101,7 @@ type
   LspWorkDoneProgressEndResult* = R[WorkDoneProgressEnd, string]
   LspDiagnosticsResult* = R[Option[Diagnostics], string]
   LspHoverResult* = R[Option[Hover], string]
+  LspCompletionResut* = R[seq[CompletionItem], string]
 
 proc pathToUri*(path: string): string =
   ## This is a modified copy of encodeUrl in the uri module. This doesn't encode
@@ -404,7 +405,7 @@ proc toHoverContent*(hover: Hover): HoverContent =
       line: range["end"]["line"].getInt,
       column: range["end"]["character"].getInt)
 
-proc toCompletionList*(res: JsonNode): Result[seq[CompletionItem], string] =
+proc parseTextDocumentCompletionResponse*(res: JsonNode): LspCompletionResut =
   if not res.contains("result"):
     return Result[seq[CompletionItem], string].err fmt"Invalid response: {res}"
 
