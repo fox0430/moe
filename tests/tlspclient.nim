@@ -34,12 +34,15 @@ suite "lsp: Send requests":
     Command = "nimlsp"
     Trace = TraceValue.verbose
 
+  var client: LspClient
+
+  setup:
+    client = initLspClient(Command).get
+
   test "Send initialize":
     if not isNimlspAvailable():
       skip()
     else:
-      var client = initLspClient(Command).get
-
       const
         Id = 1
         RootPath = ""
@@ -55,8 +58,6 @@ suite "lsp: Send requests":
       const
         Id = 1
         RootPath = ""
-
-      var client = initLspClient(Command).get
 
       block:
         # Initialize LSP client
@@ -84,14 +85,28 @@ suite "lsp: Send requests":
     if not isNimlspAvailable():
       skip()
     else:
-      var client = initLspClient(Command).get
+      block:
+        # Initialize LSP client
 
-      const Id = 1
-      let
-        rootPath = getCurrentDir()
-        params = initInitializeParams(rootPath, Trace)
-      assert client.initialize(Id, params).isOk
-      assert client.initialized.isOk
+        const Id = 1
+        let rootPath = getCurrentDir()
+
+        block:
+          let params = initInitializeParams(rootPath, Trace)
+          assert client.initialize(Id, params).isOk
+
+        const Timeout = 5000
+        assert client.readable(Timeout).isOk
+        let initializeRes = client.read.get
+
+        block:
+          let err = client.initCapacities(initializeRes)
+          assert err.isOk
+
+        block:
+          # Initialized notification
+          let err = client.initialized
+          assert err.isOk
 
       check client.workspaceDidChangeConfiguration.isOk
 
@@ -99,8 +114,6 @@ suite "lsp: Send requests":
     if not isNimlspAvailable():
       skip()
     else:
-      var client = initLspClient(Command).get
-
       const Id = 1
 
       block:
@@ -141,8 +154,6 @@ suite "lsp: Send requests":
     if not isNimlspAvailable():
       skip()
     else:
-      var client = initLspClient(Command).get
-
       const
         Id = 1
         LanguageId = "nim"
@@ -192,8 +203,6 @@ suite "lsp: Send requests":
     if not isNimlspAvailable():
       skip()
     else:
-      var client = initLspClient(Command).get
-
       const
         Id = 1
         LanguageId = "nim"
@@ -241,8 +250,6 @@ suite "lsp: Send requests":
     if not isNimlspAvailable():
       skip()
     else:
-      var client = initLspClient(Command).get
-
       const
         Id = 1
         LanguageId = "nim"
@@ -288,7 +295,6 @@ suite "lsp: Send requests":
     if not isNimlspAvailable():
       skip()
     else:
-      var client = initLspClient(Command).get
       let rootPath = getCurrentDir()
 
       const
@@ -338,7 +344,6 @@ suite "lsp: Send requests":
     if not isNimlspAvailable():
       skip()
     else:
-      var client = initLspClient(Command).get
       let rootPath = getCurrentDir()
 
       const
