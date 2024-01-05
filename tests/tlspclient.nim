@@ -333,3 +333,52 @@ suite "lsp: Send requests":
 
       check client.textDocumentHover(Id, path, position).isOk
       check client.waitingResponse.get == LspMethod.textDocumentHover
+
+  test "Send textDocument/completion":
+    if not isNimlspAvailable():
+      skip()
+    else:
+      var client = initLspClient(Command).get
+      let rootPath = getCurrentDir()
+
+      const
+        Id = 1
+        LanguageId = "nim"
+        Text = "echo 1\n" # Use simple text for the test.
+
+      let
+        path = getCurrentDir() / "src/moe.nim"
+
+      block:
+        # Initialize LSP client
+
+        block:
+          let params = initInitializeParams(rootPath, Trace)
+          assert client.initialize(Id, params).isOk
+
+        const Timeout = 5000
+        assert client.readable(Timeout).isOk
+        let initializeRes = client.read.get
+
+        block:
+          let err = client.initCapacities(initializeRes)
+          assert err.isOk
+
+        block:
+          # Initialized notification
+          let err = client.initialized
+          assert err.isOk
+
+        block:
+          # workspace/didChangeConfiguration notification
+          let err = client.workspaceDidChangeConfiguration
+          assert err.isOk
+
+        block:
+          # textDocument/diOpen notification
+          let err = client.textDocumentDidOpen(path, LanguageId, Text)
+          assert err.isOk
+
+      let position = BufferPosition(line: 1, column: 0)
+      check client.textDocumentCompletion(Id, path, position).isOk
+      check client.waitingResponse.get == LspMethod.textDocumentCompletion

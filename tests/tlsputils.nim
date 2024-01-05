@@ -165,6 +165,14 @@ suite "lsp: lspMetod":
       "params": nil
     }).get
 
+  test "textDocument/completion":
+    check LspMethod.textDocumentCompletion == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "textDocument/completion",
+      "params": nil
+    }).get
+
 suite "lsp: parseLspMessageType":
   test "Invalid":
     check parseLspMessageType(-1).isErr
@@ -481,6 +489,201 @@ suite "lsp: parseTextDocumentPublishDiagnosticsNotify":
         }
       ]
     }
+
+suite "lsp: parseTextDocumentCompletionResponse":
+  test "Invalid":
+    let res = %*{"jsonrpc": "2.0", "params": nil}
+    check parseTextDocumentCompletionResponse(res).isErr
+
+  test "lsp: Old specification":
+    check %*parseTextDocumentCompletionResponse(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": [
+        {
+          "label": "a",
+          "kind": 3,
+          "detail": "detail1",
+          "documentation": "documentation1",
+          "deprecated": nil,
+          "preselect": nil,
+          "sortText": nil,
+          "filterText": nil,
+          "insertText": nil,
+          "insertTextFormat": nil,
+          "commitCharacters": nil,
+          "command": nil,
+          "data": nil
+        },
+        {
+          "label": "b",
+          "kind": 3,
+          "detail": "detail2",
+          "documentation": "documentation2",
+          "deprecated": nil,
+          "preselect": nil,
+          "sortText": nil,
+          "filterText": nil,
+          "insertText": nil,
+          "insertTextFormat": nil,
+          "commitCharacters": nil,
+          "command": nil,
+          "data": nil
+        }
+      ]
+    }).get == %*[{
+      "label": "a",
+      "labelDetails": nil,
+      "kind":3 ,
+      "tags": nil,
+      "detail": "detail1",
+      "documentation": "documentation1",
+      "deprecated": nil,
+      "preselect": nil,
+      "sortText": nil,
+      "filterText": nil,
+      "insertText": nil,
+      "insertTextFormat": nil,
+      "textEdit": nil,
+      "additionalTextEdits": nil,
+      "commitCharacters": nil,
+      "command": nil,
+      "data": nil
+    },
+    {
+      "label" : "b",
+      "labelDetails": nil,
+      "kind": 3,
+      "tags": nil,
+      "detail" :"detail2",
+      "documentation": "documentation2",
+      "deprecated": nil,
+      "preselect" :nil,
+      "sortText": nil,
+      "filterText": nil,
+      "insertText": nil,
+      "insertTextFormat": nil,
+      "textEdit": nil,
+      "additionalTextEdits": nil,
+      "commitCharacters": nil,
+      "command":nil,
+      "data":nil
+    }]
+
+  test "lsp: Basic":
+    check %*parseTextDocumentCompletionResponse(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": {
+        "isIncomplete": true,
+        "items": [
+          {
+            "label": "self::",
+            "kind": 14,
+            "deprecated": false,
+            "preselect": true,
+            "sortText": "ffffffef",
+            "filterText": "self::",
+            "textEdit": {
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 4
+                },
+                "end": {
+                  "line": 2,
+                  "character": 5
+                }
+              },
+              "newText": "self::"
+            },
+            "additionalTextEdits": []
+          },
+          {
+            "label": "crate::",
+            "kind": 14,
+            "deprecated": false,
+            "preselect": true,
+            "sortText": "ffffffef",
+            "filterText": "crate::",
+            "textEdit": {
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 4
+                },
+                "end": {
+                  "line": 2,
+                  "character": 5
+                }
+              },
+              "newText": "crate::"
+            },
+            "additionalTextEdits": []
+          }
+        ]
+      }}).get == %*[{
+        "label": "self::",
+        "labelDetails": nil,
+        "kind": 14,
+        "tags": nil,
+        "detail": nil,
+        "documentation": nil,
+        "deprecated": false,
+        "preselect": true,
+        "sortText": "ffffffef",
+        "filterText": "self::",
+        "insertText": nil,
+        "insertTextFormat": nil,
+        "textEdit": {
+          "range": {
+            "start": {
+              "line": 2,
+              "character": 4
+            },
+            "end": {
+              "line": 2,
+              "character": 5
+            }
+          },
+          "newText": "self::"
+        },
+        "additionalTextEdits": [],
+        "commitCharacters": nil,
+        "command": nil,
+        "data": nil
+      },
+      {
+        "label": "crate::",
+        "labelDetails": nil,
+        "kind": 14,
+        "tags": nil,
+        "detail": nil,
+        "documentation": nil,
+        "deprecated": false,
+        "preselect": true,
+        "sortText": "ffffffef",
+        "filterText": "crate::",
+        "insertText": nil,
+        "insertTextFormat": nil,
+        "textEdit": {
+          "range": {
+            "start": {
+              "line": 2,
+              "character": 4
+            },
+            "end": {
+              "line": 2,
+              "character": 5
+            }
+          },
+          "newText": "crate::"
+        },
+        "additionalTextEdits": [],
+        "commitCharacters": nil,
+        "command": nil,
+        "data": nil
+      }]
 
 suite "lsp: toHoverContent":
   test "Basic":

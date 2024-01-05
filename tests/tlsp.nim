@@ -22,8 +22,8 @@ import std/[unittest, oids, options, os, osproc, json, tables]
 import pkg/results
 
 import moepkg/lsp/[client, utils]
-import moepkg/[independentutils, unicodeext, gapbuffer, bufferstatus,
-               windownode, popupwindow, commandline, syntaxcheck]
+import moepkg/[bufferstatus, commandline,  unicodeext, gapbuffer, windownode,
+               independentutils, popupwindow, syntaxcheck, completion]
 
 import utils
 
@@ -455,6 +455,104 @@ suite "lsp: lspProgress":
     check none(Natural) == status.lspClients["nim"].progress["token"].percentage
 
     check ru"lsp: progress: end: end" == status.commandLine.buffer
+
+suite "lsp: lspCompletion":
+  var status = initEditorStatus()
+
+  setup:
+    status = initEditorStatus()
+    status.settings.lsp.enable = true
+
+    let filename = $genOid() & ".nim"
+    assert status.addNewBufferInCurrentWin(filename).isOk
+
+    status.lspClients["nim"] = LspClient()
+
+  test "Basic":
+    check currentBufStatus.lspCompletion(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": [
+        {
+          "label": "a",
+          "kind": 3,
+          "detail": "detail1",
+          "documentation": "documentation1",
+          "deprecated": nil,
+          "preselect": nil,
+          "sortText": nil,
+          "filterText": nil,
+          "insertText": "a1",
+          "insertTextFormat": nil,
+          "commitCharacters": nil,
+          "command": nil,
+          "data": nil
+        },
+        {
+          "label": "b",
+          "kind": 3,
+          "detail": "detail2",
+          "documentation": "documentation2",
+          "deprecated": nil,
+          "preselect": nil,
+          "sortText": nil,
+          "filterText": nil,
+          "insertText": "b1",
+          "insertTextFormat": nil,
+          "commitCharacters": nil,
+          "command": nil,
+          "data": nil
+        }
+      ]
+    }).isOk
+
+    check currentBufStatus.completionList.items == @[
+      CompletionItem(label: ru"a", insertText: ru"a1"),
+      CompletionItem(label: ru"b", insertText: ru"b1"),
+    ]
+
+  test "Without insertText":
+    check currentBufStatus.lspCompletion(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": [
+        {
+          "label": "a",
+          "kind": 3,
+          "detail": "detail1",
+          "documentation": "documentation1",
+          "deprecated": nil,
+          "preselect": nil,
+          "sortText": nil,
+          "filterText": nil,
+          "insertText": nil,
+          "insertTextFormat": nil,
+          "commitCharacters": nil,
+          "command": nil,
+          "data": nil
+        },
+        {
+          "label": "b",
+          "kind": 3,
+          "detail": "detail2",
+          "documentation": "documentation2",
+          "deprecated": nil,
+          "preselect": nil,
+          "sortText": nil,
+          "filterText": nil,
+          "insertText": nil,
+          "insertTextFormat": nil,
+          "commitCharacters": nil,
+          "command": nil,
+          "data": nil
+        }
+      ]
+    }).isOk
+
+    check currentBufStatus.completionList.items == @[
+      CompletionItem(label: ru"a", insertText: ru"a"),
+      CompletionItem(label: ru"b", insertText: ru"b"),
+    ]
 
 suite "lsp: handleLspServerNotify":
   setup:
