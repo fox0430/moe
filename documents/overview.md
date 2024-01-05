@@ -58,7 +58,7 @@ $ nimble release
 
 ### Requires
 
-- [nimlsp](https://github.com/PMunch/nimlsp)
+- [nimlangserver](https://github.com/nim-lang/langserver)
 
 ```
 nimble test

@@ -20,8 +20,8 @@
 import std/[options, os, strutils]
 import moepkg/platform
 
-template isNimlspAvailable*(): bool =
-  execCmdEx("nimlsp --version").exitCode == 0
+template isNimlangserverAvailable*(): bool =
+  execCmdEx("nimlangserver --version").exitCode == 0
 
 proc removeLineEnd*(buf: string): string =
   result = buf
