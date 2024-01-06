@@ -237,7 +237,7 @@ enable = false
 
 extensions = ["nim"]
 
-command = "nimlsp"
+command = "nimlangserver"
 
 trace = "verbose"
 

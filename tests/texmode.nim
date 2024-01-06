@@ -163,7 +163,7 @@ suite "Ex mode: Write command":
     status.backgroundTasks.build[0].process.kill
 
   test "Enable LSP":
-    if not isNimlspAvailable():
+    if not isNimlangserverAvailable():
       skip()
     else:
       var status = initEditorStatus()

@@ -31,7 +31,7 @@ suite "lsp: Send requests":
   privateAccess(LspClient)
 
   const
-    Command = "nimlsp"
+    Command = "nimlangserver"
     Trace = TraceValue.verbose
 
   var client: LspClient
@@ -40,7 +40,7 @@ suite "lsp: Send requests":
     client = initLspClient(Command).get
 
   test "Send initialize":
-    if not isNimlspAvailable():
+    if not isNimlangserverAvailable():
       skip()
     else:
       const
@@ -52,7 +52,7 @@ suite "lsp: Send requests":
       check client.waitingResponse.get == LspMethod.initialize
 
   test "Send shutdown":
-    if not isNimlspAvailable():
+    if not isNimlangserverAvailable():
       skip()
     else:
       const
@@ -82,7 +82,7 @@ suite "lsp: Send requests":
       check client.shutdown(Id).isOk
 
   test "Send workspace/didChangeConfiguration":
-    if not isNimlspAvailable():
+    if not isNimlangserverAvailable():
       skip()
     else:
       block:
@@ -111,7 +111,7 @@ suite "lsp: Send requests":
       check client.workspaceDidChangeConfiguration.isOk
 
   test "Send textDocument/didOpen":
-    if not isNimlspAvailable():
+    if not isNimlangserverAvailable():
       skip()
     else:
       const Id = 1
@@ -151,7 +151,7 @@ suite "lsp: Send requests":
       check client.textDocumentDidOpen(path, LanguageId, text).isOk
 
   test "Send textDocument/didChange":
-    if not isNimlspAvailable():
+    if not isNimlangserverAvailable():
       skip()
     else:
       const
@@ -200,7 +200,7 @@ suite "lsp: Send requests":
         check client.textDocumentDidChange(SecondVersion, path, changedText).isOk
 
   test "Send textDocument/didSave":
-    if not isNimlspAvailable():
+    if not isNimlangserverAvailable():
       skip()
     else:
       const
@@ -247,7 +247,7 @@ suite "lsp: Send requests":
         check client.textDocumentDidSave(Version, path, text).isOk
 
   test "Send textDocument/didClose":
-    if not isNimlspAvailable():
+    if not isNimlangserverAvailable():
       skip()
     else:
       const
@@ -292,7 +292,7 @@ suite "lsp: Send requests":
       check client.textDocumentDidClose(path).isOk
 
   test "Send textDocument/hover":
-    if not isNimlspAvailable():
+    if not isNimlangserverAvailable():
       skip()
     else:
       let rootPath = getCurrentDir()
@@ -341,7 +341,7 @@ suite "lsp: Send requests":
       check client.waitingResponse.get == LspMethod.textDocumentHover
 
   test "Send textDocument/completion":
-    if not isNimlspAvailable():
+    if not isNimlangserverAvailable():
       skip()
     else:
       let rootPath = getCurrentDir()

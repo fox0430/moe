@@ -37,7 +37,7 @@ enable = true
 extensions = ["nim"]
 
 # The LSP server command
-command = "nimlsp"
+command = "nimlangserver"
 
 # The level of verbosity 
 trace = "verbose"
@@ -51,7 +51,7 @@ enable = true
 
 [Lsp.nim]
 extensions = ["nim"]
-command = "nimlsp"
+command = "nimlangserver"
 trace = "off"
 
 [Lsp.rust]

@@ -488,7 +488,7 @@ proc initLspSettigns(): LspSettings =
 
   result.languages["nim"] = LspLanguageSettings(
     extensions: @[ru"nim"],
-    command: ru"nimlsp",
+    command: ru"nimlangserver",
     trace: TraceValue.verbose)
 
 proc initStandardSettings(): StandardSettings =

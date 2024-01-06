@@ -1087,8 +1087,8 @@ suite "editorstatus: smoothScrollDownNumberOfLines":
     check currentMainWindowNode.currentLine == 10
 
 suite "editorstatus: initLsp":
-  test "Init wtih nimlsp":
-    if not isNimlspAvailable():
+  test "Init wtih nimlangserver":
+    if not isNimlangserverAvailable():
       skip()
     else:
       let path = $genOid() & ".nim"
@@ -1097,7 +1097,7 @@ suite "editorstatus: initLsp":
       status.settings.lsp.enable = true
       status.settings.lsp.languages["nim"] = LspLanguageSettings(
         extensions: @[ru"nim"],
-        command: ru"nimlsp",
+        command: ru"nimlangserver",
         trace: TraceValue.verbose)
 
       status.bufStatus.add initBufferStatus(path, Mode.normal).get
