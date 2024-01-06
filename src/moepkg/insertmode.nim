@@ -89,28 +89,34 @@ proc deleteCurrentCursor(status: var EditorStatus) {.inline.} =
       currentMainWindowNode.currentColumn,
       status.settings.standard.autoDeleteParen)
 
-proc sendCompletionRequest(status: var EditorStatus): Result[(), string] =
-  ## Send didChange and completion requests to the LSP server.
+proc sendCompletionRequest(
+  status: var EditorStatus,
+  r: Rune): Result[(), string] =
+    ## Send didChange and completion requests to the LSP server.
 
-  block:
-    currentBufStatus.version.inc
+    block:
+      currentBufStatus.version.inc
 
-    let err = lspClient.textDocumentDidChange(
-      currentBufStatus.version,
-      $currentBufStatus.path.absolutePath,
-      currentBufStatus.buffer.toString)
-    if err.isErr:
-      return Result[(), string ].err err.error
+      let err = lspClient.textDocumentDidChange(
+        currentBufStatus.version,
+        $currentBufStatus.path.absolutePath,
+        currentBufStatus.buffer.toString)
+      if err.isErr:
+        return Result[(), string ].err err.error
 
-  block:
-    let err = lspClient.textDocumentCompletion(
-      currentBufStatus.id,
-      $currentBufStatus.path.absolutePath,
-      currentMainWindowNode.bufferPosition)
-    if err.isErr:
-      return Result[(), string ].err err.error
+    block:
+      let isIncompleteTrigger = status.suggestionwindow.isSome
 
-  return Result[(), string ].ok ()
+      let err = lspClient.textDocumentCompletion(
+        currentBufStatus.id,
+        $currentBufStatus.path.absolutePath,
+        currentMainWindowNode.bufferPosition,
+        isIncompleteTrigger,
+        $r)
+      if err.isErr:
+        return Result[(), string ].err err.error
+
+    return Result[(), string ].ok ()
 
 proc insertToBuffer(status: var EditorStatus, r: Rune) {.inline.} =
   if currentBufStatus.isInsertMultiMode:
@@ -126,7 +132,7 @@ proc insertToBuffer(status: var EditorStatus, r: Rune) {.inline.} =
       r)
 
   if status.lspClients.contains(currentBufStatus.langId):
-    let err = status.sendCompletionRequest
+    let err = status.sendCompletionRequest(r)
     if err.isErr:
       error err.error
 

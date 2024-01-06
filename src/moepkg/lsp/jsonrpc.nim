@@ -119,7 +119,6 @@ proc readFrame(s: OutputStream): ReadFrameResult =
       if contentLen != -1:
         let str = s.readStr(contentLen)
         if str.isErr:
-          debug str.error
           return ReadFrameResult.err fmt"readStr failed: {str.error}"
         debugLog(MessageType.read, "Response: {str.get}")
         return ReadFrameResult.ok str.get

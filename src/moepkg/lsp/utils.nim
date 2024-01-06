@@ -31,6 +31,8 @@ type
   LspCompletionItem* = types.CompletionItem
   LspCompletionList* = types.CompletionList
 
+  LspCompletionTriggerKind* = enums.CompletionTriggerKind
+
   LanguageId* = string
 
   LspMethod* {.pure.} = enum

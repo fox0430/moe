@@ -142,20 +142,11 @@ proc collectSuggestions*(
 
     result.add pairs.sortedByIt(it.val).reversed.mapIt(it.key.toRunes)
 
-proc collectLspSuggestions*(
-  list: CompletionList,
-  word: Runes): seq[Runes] {.inline.} =
-    ## Collect words for suggestion from `CompletionList`.
-    ## TODO: Rewrite
+proc collectLspSuggestions*( list: CompletionList,): seq[Runes]  {.inline.}=
+  ## Collect words for suggestion from `CompletionList`.
+  ## TODO: Rewrite
 
-    result = collect:
-      for item in list.items:
-        if contains($item.insertText, $word): item.insertText
-
-    proc cmpByName(x, y: Runes): int = cmp($x, $y)
-
-    result.sort(cmpByName)
-    result.reverse
+  result = list.items.mapIt(it.insertText)
 
 proc getTextInBuffers*(
   bufStatus: seq[BufferStatus],
