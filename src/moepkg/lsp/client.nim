@@ -215,7 +215,11 @@ proc request(
   params: JsonNode): Result[(), string] =
     ## Send a request to the LSP server and set to waitingResponse.
 
-    let r = c.serverStreams.sendRequest(id, lspMethod.toLspMethodStr, params)
+    let req = newReqest(id, lspMethod.toLspMethodStr, params)
+
+    c.addRequestLog(req)
+
+    let r = c.serverStreams.sendRequest(req)
     if r.isErr:
       return Result[(), string].err r.error
 
@@ -224,12 +228,16 @@ proc request(
     return Result[(), string].ok ()
 
 proc notify(
-  c: LspClient,
+  c: var LspClient,
   lspMethod: LspMethod,
   params: JsonNode): Result[(), string] {.inline.} =
     ## Send a notification to the LSP server.
 
-    return c.serverStreams.sendNotify(lspMethod.toLspMethodStr, params)
+    let notify = newNotify(lspMethod.toLspMethodStr, params)
+
+    c.addNotifyFromClientLog(notify)
+
+    return c.serverStreams.sendNotify(notify)
 
 proc read*(c: var LspClient): JsonRpcResponseResult =
   ## Read a response from the LSP server.
@@ -401,7 +409,7 @@ proc initCapacities*(
 
     return LspInitializeResult.ok ()
 
-proc initialized*(c: LspClient): LspSendNotifyResult =
+proc initialized*(c: var LspClient): LspSendNotifyResult =
   ## Send a initialized notification to the server.
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#initialized
 
@@ -435,7 +443,7 @@ proc shutdown*(c: var LspClient, id: int): LspSendNotifyResult =
   return LspSendNotifyResult.ok ()
 
 proc workspaceDidChangeConfiguration*(
-  c: LspClient): LspSendNotifyResult =
+  c: var LspClient): LspSendNotifyResult =
     ## Send a workspace/didChangeConfiguration notification to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#workspace_didChangeConfiguration
 
@@ -464,7 +472,7 @@ proc initTextDocumentDidOpenParams(
         text: text))
 
 proc textDocumentDidOpen*(
-  c: LspClient,
+  c: var LspClient,
   path, languageId, text: string): LspSendNotifyResult =
     ## Send a textDocument/didOpen notification to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didOpen
@@ -497,7 +505,7 @@ proc initTextDocumentDidChangeParams(
       contentChanges: @[TextDocumentContentChangeEvent(text: text)])
 
 proc textDocumentDidChange*(
-  c: LspClient,
+  c: var LspClient,
   version: Natural,
   path, text: string): LspSendNotifyResult =
     ## Send a textDocument/didChange notification to the server.
@@ -528,7 +536,7 @@ proc initTextDocumentDidSaveParams(
       text: some(text))
 
 proc textDocumentDidSave*(
-  c: LspClient,
+  c: var LspClient,
   version: Natural,
   path, text: string): LspSendNotifyResult =
     ## Send a textDocument/didSave notification to the server.
@@ -555,7 +563,7 @@ proc initTextDocumentDidClose(
       textDocument: TextDocumentIdentifier(uri: path.pathToUri))
 
 proc textDocumentDidClose*(
-  c: LspClient,
+  c: var LspClient,
   text: string): LspSendNotifyResult =
     ## Send a textDocument/didClose notification to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didClose
