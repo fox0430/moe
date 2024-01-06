@@ -57,11 +57,19 @@ jobs:
     env:
       NIM_VERSION: stable
     steps:
-    - uses: actions/checkout@v4.1.1
+    - uses: actions/checkout@v4
     - run: |
         sudo apt-get update -yqq
         sudo apt-get install -y gcc libncursesw5-dev build-essential xvfb x11-xserver-utils xsel xclip
-    - uses: jiro4989/setup-nim-action@v1.5.0
+
+    - name: Cache nimble
+      id: cache-nimble
+      uses: actions/cache@v3
+      with:
+        path: ~/.nimble
+        key: unit-tests-nimble
+
+    - uses: jiro4989/setup-nim-action@v1
       with:
         nim-version: ${{ env.NIM_VERSION }}
 
