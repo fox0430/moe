@@ -384,6 +384,17 @@ suite "lsp: Send requests":
           let err = client.textDocumentDidOpen(path, LanguageId, Text)
           assert err.isOk
 
+      block:
+        const SecondVersion = 2
+        let changedText = "echo 1\ne"
+        check client.textDocumentDidChange(SecondVersion, path, changedText).isOk
+
       let position = BufferPosition(line: 1, column: 0)
-      check client.textDocumentCompletion(Id, path, position).isOk
+      const IsIncompleteTrigger = false
+      check client.textDocumentCompletion(
+        Id,
+        path,
+        position,
+        IsIncompleteTrigger,
+        "e").isOk
       check client.waitingResponse.get == LspMethod.textDocumentCompletion
