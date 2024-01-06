@@ -52,7 +52,7 @@ type
 
   LspCapabilities* = object
     hover*: bool
-    completion*: bool
+    completion*: Option[CompletionOptions]
 
   LspProgressTable* = Table[ProgressToken, ProgressReport]
 
@@ -336,7 +336,7 @@ proc initInitializeParams*(
               commitCharactersSupport: some(false),
               deprecatedSupport: some(false)
             )),
-            contextSupport: some(false)
+            contextSupport: some(true)
           ))
         )),
         window: some(WindowCapabilities(
@@ -362,7 +362,7 @@ proc setCapabilities(c: var LspClient, initResult: InitializeResult) =
     capabilities.hover = true
 
   if initResult.capabilities.completionProvider.isSome:
-    capabilities.completion = true
+    capabilities.completion = initResult.capabilities.completionProvider
 
   c.capabilities = some(capabilities)
 
@@ -605,33 +605,44 @@ proc textDocumentHover*(
 
     return R[(), string].ok ()
 
+template isTriggerCharacter(options: CompletionOptions, ch: string): bool =
+  options.triggerCharacters.isSome and
+  options.triggerCharacters.get.contains(character)
+
 proc initCompletionParams*(
   path: string,
   position: BufferPosition,
-  triggerCharacter: string = ""): CompletionParams =
+  options: CompletionOptions,
+  isIncompleteTrigger: bool,
+  character: string): CompletionParams =
 
     let
-      triggerKind =
-        if triggerCharacter.len > 0: 2
-        else: 1
-
-      trirgerChar =
-        if triggerCharacter.len > 0: some(triggerCharacter)
+      triggerChar =
+        if isTriggerCharacter(options, character): some(character)
         else: none(string)
+
+      triggerKind =
+        if triggerChar.isSome:
+          CompletionTriggerKind.TriggerCharacter.int
+        elif isIncompleteTrigger:
+          CompletionTriggerKind.TriggerForIncompleteCompletions.int
+        else:
+          CompletionTriggerKind.Invoked.int
 
     return CompletionParams(
       textDocument: TextDocumentIdentifier(uri: path.pathToUri),
       position: position.toLspPosition,
       context: some(CompletionContext(
         triggerKind: triggerKind,
-        triggerCharacter: trirgerChar)))
+        triggerCharacter: triggerChar)))
 
 proc textDocumentCompletion*(
   c: var LspClient,
   id: int,
   path: string,
   position: BufferPosition,
-  triggerCharacter: string = ""): LspSendRequestResult =
+  isIncompleteTrigger: bool,
+  character: string): LspSendRequestResult =
     ## Send a textDocument/completion request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_completion
 
@@ -641,10 +652,15 @@ proc textDocumentCompletion*(
     if not c.isInitialized:
       return R[(), string].err "lsp unavailable"
 
-    if not c.capabilities.get.completion:
+    if not c.capabilities.get.completion.isSome:
       return R[(), string].err "textDocument/completion unavailable"
 
-    let params = %* initCompletionParams(path, position, triggerCharacter)
+    let params = %* initCompletionParams(
+      path,
+      position,
+      c.capabilities.get.completion.get,
+      isIncompleteTrigger,
+      character)
 
     let r = c.request(id, LspMethod.textDocumentCompletion, params)
     if r.isErr:

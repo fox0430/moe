@@ -166,19 +166,18 @@ proc initSuggestionWindow*(
 
 proc initLspSuggestionWindow*(
   completionList: CompletionList,
-  word, currentLineText: Runes,
-  firstColumn, lastColumn: int): Option[SuggestionWindow] =
+  currentLineText: Runes,
+  firstColumn: int): Option[SuggestionWindow] =
     ## Suggestions are get from `CompletionList`.
     ## Ignore `WordDictionary`.
     ## `word` is the inputted text.
 
     var suggestionWindow: SuggestionWindow
-    suggestionWindow.inputWord = word
     suggestionWindow.firstColumn = firstColumn
-    suggestionWindow.lastColumn = lastColumn
+    suggestionWindow.lastColumn = -1
     suggestionWindow.isPath = false
 
-    suggestionWindow.suggestoins = completionList.collectLspSuggestions(word)
+    suggestionWindow.suggestoins = completionList.collectLspSuggestions
 
     if suggestionWindow.suggestoins.len > 0:
       suggestionWindow.selectedSuggestion = -1
@@ -311,24 +310,10 @@ proc buildLspSuggestionWindow*(
   currenWindowNode: WindowNode): Option[SuggestionWindow] =
     ## Build a suggestoin window from `CompletionList`.
 
-    let
-      (word, firstColumn, lastColumn) = extractWordBeforeCursor(
-        bufStatus,
-        currenWindowNode).get
-
-      # Eliminate the word on the cursor.
-      firstDeletedIndex = bufStatus.buffer.calcIndexInEntireBuffer(
-        currenWindowNode.currentLine,
-        firstColumn,
-        true)
-      lastDeletedIndex = firstDeletedIndex + word.high
-
     initLspSuggestionWindow(
       bufStatus.completionList,
-      word,
       bufStatus.buffer[currenWindowNode.currentLine],
-      firstColumn,
-      lastColumn)
+      currenWindowNode.currentColumn)
 
 proc tryOpenSuggestionWindow*(
   wordDictionary: var WordDictionary,
@@ -348,8 +333,7 @@ proc tryOpenLspSuggestionWindow*(
   bufStatus: BufferStatus,
   currenWindowNode: WindowNode): Option[SuggestionWindow] =
 
-    if wordExistsBeforeCursor(bufStatus, currenWindowNode):
-      return buildLspSuggestionWindow(bufStatus, currenWindowNode)
+    return buildLspSuggestionWindow(bufStatus, currenWindowNode)
 
 proc calcSuggestionWindowPosition*(
   suggestionWindow: SuggestionWindow,

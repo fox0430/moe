@@ -726,53 +726,52 @@ proc editorMainLoop*(status: var EditorStatus) =
 
       if k.isSome:
         key = k.get
-      else:
-        continue
 
-    if status.suggestionWindow.isSome:
-      if canHandleInSuggestionWindow(key):
-        status.suggestionWindow.get.handleKeyInSuggestionWindow(
-          currentBufStatus,
-          currentMainWindowNode,
-          key)
-        continue
-      else:
-        status.updateAfterInsertFromSuggestion
         if status.suggestionWindow.isSome:
-          status.suggestionWindow.close
+          if canHandleInSuggestionWindow(key):
+            status.suggestionWindow.get.handleKeyInSuggestionWindow(
+              currentBufStatus,
+              currentMainWindowNode,
+              key)
+            continue
+          else:
+            if isEnterKey(key):
+              status.updateAfterInsertFromSuggestion
+            elif isEscKey(key):
+              status.suggestionWindow.close
 
-    if isResizeKey(key):
-      updateTerminalSize()
-      status.resize
-      continue
-    elif isPasteKey(key):
-      let pasteBuffer = getPasteBuffer()
-      if pasteBuffer.isSome: status.insertPasteBuffer(pasteBuffer.get)
-      continue
-
-    command.add key
-
-    let inputState = invokeCommand(
-      currentBufStatus.mode,
-      command,
-      status.recodingOperationRegister)
-    case inputState:
-      of InputState.Continue:
-        continue
-      of InputState.Valid:
-        let interruptKey = status.execEditorCommand(command)
-        if interruptKey.isSome:
-          key = interruptKey.get
-          isSkipGetKey = true
-
-          command.clear
+        if isResizeKey(key):
+          updateTerminalSize()
+          status.resize
           continue
-        else:
-          command.clear
-      of InputState.Invalid, InputState.Cancel:
-        command.clear
-        currentBufStatus.cmdLoop = 0
-        continue
+        elif isPasteKey(key):
+          let pasteBuffer = getPasteBuffer()
+          if pasteBuffer.isSome: status.insertPasteBuffer(pasteBuffer.get)
+          continue
+
+        command.add key
+
+        let inputState = invokeCommand(
+          currentBufStatus.mode,
+          command,
+          status.recodingOperationRegister)
+        case inputState:
+          of InputState.Continue:
+            continue
+          of InputState.Valid:
+            let interruptKey = status.execEditorCommand(command)
+            if interruptKey.isSome:
+              key = interruptKey.get
+              isSkipGetKey = true
+
+              command.clear
+              continue
+            else:
+              command.clear
+          of InputState.Invalid, InputState.Cancel:
+            command.clear
+            currentBufStatus.cmdLoop = 0
+            continue
 
     if status.isOpenSuggestWindow:
       status.tryOpenSuggestWindow
