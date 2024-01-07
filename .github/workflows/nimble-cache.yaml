@@ -1,0 +1,66 @@
+######################## GNU General Public License 3.0 ########################
+##                                                                            ##
+## Copyright (C) 2017─2024 Shuhei Nogawa                                      ##
+##                                                                            ##
+## This program is free software: you can redistribute it and/or modify       ##
+## it under the terms of the GNU General Public License as published by       ##
+## the Free Software Foundation, either version 3 of the License, or          ##
+## (at your option) any later version.                                        ##
+##                                                                            ##
+## This program is distributed in the hope that it will be useful,            ##
+## but WITHOUT ANY WARRANTY; without even the implied warranty of             ##
+## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the              ##
+## GNU General Public License for more details.                               ##
+##                                                                            ##
+## You should have received a copy of the GNU General Public License          ##
+## along with this program.  If not, see <https://www.gnu.org/licenses/>.     ##
+##                                                                            ##
+################################################################################
+
+name: Save nimble cache
+
+## Runs on default branch to save cache.
+
+on:
+  push:
+    branches:
+      - develop
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          # - macOS-latest
+          # - windows-latest
+    env:
+      NIM_VERSION: stable
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Cache nimble
+      id: cache-nimble
+      uses: actions/cache@v3
+      with:
+        path: ~/.nimble
+        key: unit-tests-nimble
+
+    - uses: jiro4989/setup-nim-action@v1
+      with:
+        nim-version: ${{ env.NIM_VERSION }}
+
+    - name: Install nimlangserver
+      run: |
+        nimble refresh
+        nimble install nimlangserver@#head
+
+    - name: Build
+      run: |
+        nimble build
