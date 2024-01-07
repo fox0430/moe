@@ -21,7 +21,7 @@ import std/[tables, times, options, os, strformat]
 import pkg/results
 import syntax/highlite
 import gapbuffer, unicodeext, fileutils, highlight, independentutils, git,
-       syntaxcheck, completion
+       syntaxcheck, completion, logviewerutils
 
 type
   Mode* = enum
@@ -74,6 +74,8 @@ type
     syntaxCheckResults*: seq[SyntaxError]
     isPasteMode*: bool
     completionList*: CompletionList
+    logContent*: LogContentKind # Use only in Logviewer
+    logLspLangId*: string  # Use only in Logviewer
 
 var
   countAddedBuffer = 0

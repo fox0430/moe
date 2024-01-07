@@ -20,7 +20,9 @@
 # NOTE: Language Server Protocol Specification - 3.17
 # https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/
 
-import std/[strformat, strutils, json, options, os, osproc, posix, tables]
+import std/[strformat, strutils, json, options, os, osproc, posix, tables,
+            times]
+
 import pkg/results
 
 import ../appinfo
@@ -45,6 +47,7 @@ type
     notifyFromServer
 
   LspMessage* = object
+    timestamp*: DateTime
     kind*: LspMessageKind
     message*: JsonNode
 
@@ -101,17 +104,29 @@ proc exit*(c: LspClient) {.inline.} =
 
 template isInitialized*(c: LspClient): bool = c.capabilities.isSome
 
-proc addRequestLog*(c: var LspClient, m: JsonNode) {.inline.} =
-  c.log.add LspMessage(kind: LspMessageKind.request, message: m)
+template addRequestLog*(c: var LspClient, m: JsonNode) =
+  c.log.add LspMessage(
+    timestamp: now(),
+    kind: LspMessageKind.request,
+    message: m)
 
-proc addResponseLog*(c: var LspClient, m: JsonNode) {.inline.} =
-  c.log.add LspMessage(kind: LspMessageKind.response, message: m)
+template addResponseLog*(c: var LspClient, m: JsonNode) =
+  c.log.add LspMessage(
+    timestamp: now(),
+    kind: LspMessageKind.response,
+    message: m)
 
-proc addNotifyFromClientLog*(c: var LspClient, m: JsonNode) {.inline.} =
-  c.log.add LspMessage(kind: LspMessageKind.notifyFromClient, message: m)
+template addNotifyFromClientLog*(c: var LspClient, m: JsonNode) =
+  c.log.add LspMessage(
+    timestamp: now(),
+    kind: LspMessageKind.notifyFromClient,
+    message: m)
 
-proc addNotifyFromServerLog*(c: var LspClient, m: JsonNode) {.inline.} =
-  c.log.add LspMessage(kind: LspMessageKind.notifyFromServer, message: m)
+template addNotifyFromServerLog*(c: var LspClient, m: JsonNode) =
+  c.log.add LspMessage(
+    timestamp: now(),
+    kind: LspMessageKind.notifyFromServer,
+    message: m)
 
 proc clearWaitingResponse*(c: var LspClient) {.inline.} =
   c.waitingResponse = none(LspMethod)

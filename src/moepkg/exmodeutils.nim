@@ -169,11 +169,15 @@ const
       argsType: ArgsType.toggle),
     ExCommandInfo(
       command: "log",
-      description: "Open the log viewer",
+      description: "Open a log viewer for editor log",
       argsType: ArgsType.none),
     ExCommandInfo(
       command: "ls",
       description: "Show the all buffer",
+      argsType: ArgsType.none),
+    ExCommandInfo(
+      command: "lspLog",
+      description: "Open the LSP log viewer",
       argsType: ArgsType.none),
     ExCommandInfo(
       command: "man",
@@ -505,8 +509,11 @@ proc isDeleteTrailingSpacesCommand*(command: seq[Runes]): bool {.inline.} =
 proc isOpenHelpCommand*(command: seq[Runes]): bool {.inline.} =
   command.len == 1 and cmpIgnoreCase($command[0], "help") == 0
 
-proc isOpenLogViweerCommand*(command: seq[Runes]): bool {.inline.} =
+proc isOpenEditorLogViewerCommand*(command: seq[Runes]): bool {.inline.} =
   command.len == 1 and cmpIgnoreCase($command[0], "log") == 0
+
+proc isOpenLspLogViewerCommand*(command: seq[Runes]): bool {.inline.} =
+  command.len == 1 and cmpIgnoreCase($command[0], "lsplog") == 0
 
 proc isOpenBufferManagerCommand*(command: seq[Runes]): bool {.inline.} =
   command.len == 1 and cmpIgnoreCase($command[0], "buf") == 0
@@ -782,7 +789,8 @@ proc isValidExCommand*(commandSplit: seq[Runes]): bool =
     isOpenBufferManagerCommand(commandSplit) or
     isLiveReloadOfConfSettingCommand(commandSplit) or
     isIncrementalSearchSettingCommand(commandSplit) or
-    isOpenLogViweerCommand(commandSplit) or
+    isOpenEditorLogViewerCommand(commandSplit) or
+    isOpenLspLogViewerCommand(commandSplit) or
     isHighlightPairOfParenSettigCommand(commandSplit) or
     isAutoDeleteParenSettingCommand(commandSplit) or
     isSmoothScrollSettingCommand(commandSplit) or

@@ -228,7 +228,8 @@
 ```highlightCurrentLine on``` or ```highlightCurrentLine off``` - Change the highlight setting of the current line  
 ```build``` - Build the current buffer
 
-```log``` - Open messages log viwer  
+```log``` - Open a log viewer for editor log
+```lspLog``` - Open a log viewer for LSP log
 
 ```help``` - Open help
 

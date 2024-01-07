@@ -18,7 +18,7 @@
 #[############################################################################]#
 
 import std/[strutils, os, strformat, tables, times, heapqueue, deques, options,
-            encodings, math, logging]
+            encodings, math, logging, json]
 import pkg/[results, parsetoml]
 import syntax/highlite
 import lsp/[client, utils]
@@ -28,7 +28,7 @@ import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        autocomplete, suggestionwindow, filermodeutils, debugmodeutils,
        independentutils, viewhighlight, helputils, backupmanagerutils,
        diffviewerutils, messagelog, globalsidebar, build, quickrunutils, git,
-       syntaxcheck, theme
+       syntaxcheck, theme, logviewerutils
 
 type
   LastCursorPosition* = object
@@ -648,9 +648,9 @@ proc checkBufferStatusUpdate(status: EditorStatus) =
 
       buf.version.inc
 
-      if status.lspClients.contains($buf.langId) and
-         status.lspClients[$buf.langId].isInitialized and
-         status.lspClients[$buf.langId].waitingResponse != some(LspMethod.textDocumentCompletion) and
+      if status.lspClients.contains(buf.langId) and
+         status.lspClients[buf.langId].isInitialized and
+         status.lspClients[buf.langId].waitingResponse != some(LspMethod.textDocumentCompletion) and
          buf.version > 1:
            # Send a textDocument/didChange notification to the LSP server.
            let err = status.lspClients[buf.langId].textDocumentDidChange(
@@ -678,11 +678,26 @@ proc checkBufferStatusUpdate(status: EditorStatus) =
       if node.child.len > 0:
         for node in node.child: queue.push(node)
 
-proc updateLogViewerBuffer(
-  bufStatus: var BufferStatus,
-  logs: seq[Runes]) =
-  if logs.len > 0 and logs[0].len > 0:
-    bufStatus.buffer = logs.toGapBuffer
+proc updateLogViewerEditorBuffer*(b: var BufferStatus) =
+  ## Update the logviewer buffer for editor logs.
+
+  let log = getMessageLog()
+  if log.len > 0 and log[0].len > 0:
+    b.buffer = log.toGapBuffer
+
+proc updateLogViewerLspBuffer*(b: var BufferStatus, log: LspLog) =
+  ## Update the logviewer buffer for LSP logs.
+
+  if log.len > 0:
+    b.buffer = initGapBuffer(@[ru""])
+
+    for l in log:
+      b.buffer.add toRunes(fmt"{$l.timestamp} -- {$l.kind}")
+
+      let lines = l.message.pretty.splitLines.toSeqRunes
+      for line in lines: b.buffer.add line
+
+      b.buffer.add ru""
 
 proc initLogViewerHighlight(buffer: seq[Runes]): Highlight =
   if buffer.len > 0:
@@ -776,19 +791,27 @@ proc update*(status: var EditorStatus) =
       status.bufferIndexInCurrentWindow,
       settings.tabLine.allBuffer)
 
-  for i, buf in status.bufStatus:
-    if buf.isFilerMode and buf.filerStatusIndex.isSome:
-      let filerIndex = buf.filerStatusIndex.get
+  for i in 0 .. status.bufStatus.high:
+    template b: var BufferStatus = status.bufStatus[i]
+
+    if b.isFilerMode and b.filerStatusIndex.isSome:
+      let filerIndex = b.filerStatusIndex.get
       if status.filerStatuses[filerIndex].isUpdatePathList:
         # Update the filer mode buffer.
-        status.filerStatuses[filerIndex].updatePathList(buf.path)
+        status.filerStatuses[filerIndex].updatePathList(b.path)
         status.bufStatus[i].buffer =
           status.filerStatuses[filerIndex].initFilerBuffer(
             settings.filer.showIcons).toGapBuffer
-    elif buf.isLogViewerMode:
+    elif b.isLogViewerMode:
       # Update the logviewer mode buffer.
-      status.bufStatus[i].updateLogViewerBuffer(getMessageLog())
-    elif buf.isDebugMode:
+      case b.logContent:
+        of editor:
+          b.updateLogViewerEditorBuffer
+        of lsp:
+          if status.lspClients.contains(b.logLspLangId):
+            b.updateLogViewerLspBuffer(status.lspClients[b.logLspLangId].log)
+
+    elif b.isDebugMode:
       # Update the debug mode buffer.
       status.bufStatus[i].buffer = status.bufStatus.initDebugModeBuffer(
         status.mainWindow.root,
@@ -1060,7 +1083,7 @@ proc closeWindow*(status: var EditorStatus, node: WindowNode) =
 proc deleteBuffer*(status: var EditorStatus, deleteIndex: int) =
   let beforeWindowIndex = currentMainWindowNode.windowIndex
 
-  let langId = $status.bufStatus[beforeWindowIndex].extension
+  let langId = status.bufStatus[beforeWindowIndex].langId
   if status.lspClients.contains(langId):
     discard status.lspClients[langId].textDocumentDidClose(
       $status.bufStatus[beforeWindowIndex].path.absolutePath)
