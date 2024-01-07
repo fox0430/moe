@@ -45,13 +45,38 @@ jobs:
     timeout-minutes: 30
     strategy:
       matrix:
-        os: [ 'ubuntu-latest', 'macOS-latest' ]
-        nim: [ '1.6.2', 'stable', 'devel' ]
-    name: Build on ${{ matrix.nim }} (${{ matrix.os }})
+        os:
+          - 'ubuntu-latest'
+          - 'macOS-latest'
+        nim-version:
+          - '1.6.2'
+          - 'stable'
+          - 'devel'
+
+    name: Build on ${{ matrix.nim-version }} (${{ matrix.os }})
     steps:
-      - uses: actions/checkout@v4.1.1
-      - name: Setup nim
-        uses: jiro4989/setup-nim-action@v1.5.0
+      - uses: actions/checkout@v4
+
+      - name: Cache choosenim
+        id: cache-choosenim
+        uses: actions/cache@v3
         with:
-          nim-version: ${{ matrix.nim }}
+          path: ~/.choosenim
+          key: ${{ runner.os }}-choosenim-${{ matrix.nim-version }}
+          restore-keys: |
+            ${{ runner.os }}-choosenim-${{ matrix.nim-version }}-
+
+      - name: Cache nimble
+        id: cache-nimble
+        uses: actions/cache@v3
+        with:
+          path: ~/.nimble
+          key: ${{ runner.os }}-nimble-${{ hashFiles('*.nimble') }}
+          restore-keys: |
+            ${{ runner.os }}-nimble-
+
+      - uses: jiro4989/setup-nim-action@v1
+        with:
+          nim-version: "${{ matrix.nim-version }}"
+
       - run: nimble build -y
