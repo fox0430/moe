@@ -163,47 +163,37 @@ proc send(
 
     return Result[(), string].ok ()
 
-proc newReqest(id: int, methodName: string, params: JsonNode): string =
-  result = newStringOfCap(1024)
-  let req = %* {
+template newReqest*(id: int, methodName: string, params: JsonNode): JsonNode =
+  %* {
     "jsonrpc": "2.0",
     "id": id,
     "method": methodName,
     "params": params
   }
-  result.toUgly(req)
 
-proc sendRequest*(
-  streams: Streams,
-  id: int,
-  methodName: string,
-  params: JsonNode): JsonRpcSendResult =
-    ## Send a request and return a response.
+proc sendRequest*(streams: Streams, req: JsonNode): JsonRpcSendResult =
+  ## Send a request and return a response.
 
-    let req = newReqest(id, methodName, params)
+  var s = newStringOfCap(1024)
+  s.toUgly(req)
+  let err = streams.input.send(s)
+  if err.isErr:
+    return JsonRpcSendResult.err err.error
 
-    let err = streams.input.send(req)
-    if err.isErr:
-      return JsonRpcSendResult.err err.error
+  return JsonRpcSendResult.ok ()
 
-    return JsonRpcSendResult.ok ()
-
-proc newNotify(methodName: string, params: JsonNode): string =
-  result = newStringOfCap(1024)
-  let req = %* {
+template newNotify*(methodName: string, params: JsonNode): JsonNode =
+  %* {
     "jsonrpc": "2.0",
     "method": methodName,
     "params": params
   }
-  result.toUgly(req)
 
-proc sendNotify*(
-  s: Streams,
-  methodName: string,
-  params: JsonNode): Result[(), string] =
-    ## Send a notification.
-    ## No response to the notification. Also, no `id` is required in the
-    ## request.
+proc sendNotify*(streams: Streams, notify: JsonNode): Result[(), string] =
+  ## Send a notification.
+  ## No response to the notification. Also, no `id` is required in the
+  ## request.
 
-    let notify = newNotify(methodName, params)
-    return s.input.send(notify)
+  var s = newStringOfCap(1024)
+  s.toUgly(notify)
+  return streams.input.send(s)
