@@ -18,7 +18,9 @@
 #[############################################################################]#
 
 import std/[strformat, strutils, json, parseutils, options, logging, streams]
-import pkg/results
+
+import pkg/[results, jsony]
+
 import ../messagelog
 
 type
@@ -134,7 +136,7 @@ proc read*(s: OutputStream): JsonRpcResponseResult =
 
   var res: JsonNode
   try:
-    res = r.get.parseJson
+    res = r.get.fromJson
   except CatchableError as e:
     return JsonRpcResponseResult.err e.msg
 
