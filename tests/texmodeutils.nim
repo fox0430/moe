@@ -171,12 +171,19 @@ suite "exmodeutils: isOpenHelpCommand":
   test "Invalid":
     check not isOpenHelpCommand(@["a"].toSeqRunes)
 
-suite "exmodeutils: isOpenLogViweerCommand":
+suite "exmodeutils: isOpenEditorLogViewerCommand":
   test "Valid":
-    check isOpenLogViweerCommand(@["log"].toSeqRunes)
+    check isOpenEditorLogViewerCommand(@["log"].toSeqRunes)
 
   test "Invalid":
-    check not isOpenLogViweerCommand(@["a"].toSeqRunes)
+    check not isOpenEditorLogViewerCommand(@["a"].toSeqRunes)
+
+suite "exmodeutils: isOpenLspLogViewerCommand":
+  test "Valid":
+    check isOpenLspLogViewerCommand(@["lspLog"].toSeqRunes)
+
+  test "Invalid":
+    check not isOpenLspLogViewerCommand(@["a"].toSeqRunes)
 
 suite "exmodeutils: isOpenBufferManagerCommand":
   test "Valid":

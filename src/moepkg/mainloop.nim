@@ -22,8 +22,8 @@ import pkg/results
 import lsp/client
 import editorstatus, bufferstatus, windownode, unicodeext, gapbuffer, ui,
        normalmode, visualmode, insertmode, autocomplete, suggestionwindow,
-       exmode, replacemode, filermode, buffermanager, logviewer, help,
-       recentfilemode, quickrun, backupmanager, diffviewer, configmode,
+       exmode, replacemode, filermode, buffermanager, logviewerutils, logviewer,
+       help, recentfilemode, quickrun, backupmanager, diffviewer, configmode,
        debugmode, commandline, search, commandlineutils, popupwindow,
        filermodeutils, messages, registers, exmodeutils, editor, movement,
        searchutils, independentutils, viewhighlight, lsp, completion

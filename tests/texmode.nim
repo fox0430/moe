@@ -17,13 +17,16 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, oids, deques, strformat, importutils, osproc]
+import std/[unittest, os, oids, deques, strformat, importutils, osproc, tables,
+            json, times]
+
 import pkg/results
+
 import moepkg/syntax/highlite
 import moepkg/lsp/client
 import moepkg/[ui, editorstatus, gapbuffer, unicodeext, bufferstatus, settings,
                windownode, helputils, backgroundprocess, quickrunutils,
-               exmodeutils]
+               exmodeutils, gapbuffer]
 
 import utils
 
@@ -526,8 +529,8 @@ suite "Ex mode: Open buffer manager":
     const Command = @[ru"buf"]
     status.exModeCommand(Command)
 
-suite "Ex mode: Open log viewer":
-  test "Open log viewer":
+suite "Ex mode: Open editor log viewer":
+  test "Basic":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
 
@@ -536,6 +539,85 @@ suite "Ex mode: Open log viewer":
 
     check status.mainWindow.numOfMainWindow == 2
     check currentMainWindowNode.view.height > 1
+
+suite "Ex mode: Open LSP log viewer":
+  var status: EditorStatus
+
+  setup:
+    var status = initEditorStatus()
+
+  test "Ininitialize LSP":
+    let filename = $genOid() & ".nim"
+
+    discard status.addNewBufferInCurrentWin(filename).get
+
+    const Command = @[ru"lspLog"]
+    status.exModeCommand(Command)
+
+    status.update
+
+    check status.mainWindow.numOfMainWindow == 2
+    check currentMainWindowNode.view.height > 1
+
+    check currentBufStatus.buffer.toSeqRunes == @[""].toSeqRunes
+
+  test "Without log":
+    let filename = $genOid() & ".nim"
+
+    discard status.addNewBufferInCurrentWin(filename).get
+    currentBufStatus.langId = "nim"
+
+    status.lspClients["nim"] = LspClient()
+
+    const Command = @[ru"lspLog"]
+    status.exModeCommand(Command)
+
+    status.update
+
+    check status.mainWindow.numOfMainWindow == 2
+    check currentMainWindowNode.view.height > 1
+
+    check currentBufStatus.buffer.toSeqRunes == @[ ""].toSeqRunes
+
+  test "Basic":
+    let filename = $genOid() & ".nim"
+
+    discard status.addNewBufferInCurrentWin(filename).get
+    currentBufStatus.langId = "nim"
+
+    status.lspClients["nim"] = LspClient()
+    status.lspClients["nim"].log = @[
+      LspMessage(
+        timestamp: now(),
+        kind: LspMessageKind.request,
+        message: %*{"message1": "message1"}),
+      LspMessage(
+        timestamp: now(),
+        kind: LspMessageKind.response,
+        message: %*{"message2": "message2"})
+    ]
+
+    const Command = @[ru"lspLog"]
+    status.exModeCommand(Command)
+
+    status.update
+
+    check status.mainWindow.numOfMainWindow == 2
+    check currentMainWindowNode.view.height > 1
+
+    check currentBufStatus.buffer.toSeqRunes == @[
+      "",
+      $status.lspClients["nim"].log[0].timestamp & " -- " & "request",
+      "{",
+      """  "message1": "message1"""",
+      "}",
+      "",
+      $status.lspClients["nim"].log[1].timestamp & " -- " & "response",
+      "{",
+      """  "message2": "message2"""",
+      "}",
+      ""
+    ].toSeqRunes
 
 suite "Ex mode: Highlight pair of paren settig command":
   test "Highlight pair of paren settig command":

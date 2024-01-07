@@ -25,7 +25,8 @@ import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
        unicodeext, independentutils, highlight, windownode, movement, build,
        bufferstatus, editor, settings, quickrunutils, messages, commandline,
        debugmodeutils, platform, commandlineutils, recentfilemode, messagelog,
-       buffermanager, viewhighlight, configmode, git, syntaxcheck, exmodeutils
+       buffermanager, viewhighlight, configmode, git, syntaxcheck, exmodeutils,
+       logviewerutils
 
 proc startDebugMode(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
@@ -193,7 +194,27 @@ proc openHelp(status: var EditorStatus) =
 
   status.resize
 
-proc openLogViewer(status: var EditorStatus) =
+proc openEditorLogViewer(status: var EditorStatus) =
+  ## Open a new log viewe for editor logs.
+
+  status.changeMode(currentBufStatus.prevMode)
+
+  status.verticalSplitWindow
+  status.resize
+  status.moveNextWindow
+
+  discard status.addNewBufferInCurrentWin(Mode.logviewer)
+  status.resize
+
+  currentBufStatus.logContent = LogContentKind.editor
+
+  status.changeCurrentBuffer(status.bufStatus.high)
+
+proc openLspLogViewer(status: var EditorStatus) =
+  ## Open a new log viewe for LSP logs.
+
+  let langId = currentBufStatus.langId
+
   status.changeMode(currentBufStatus.prevMode)
 
   status.verticalSplitWindow
@@ -204,6 +225,9 @@ proc openLogViewer(status: var EditorStatus) =
   status.resize
 
   status.changeCurrentBuffer(status.bufStatus.high)
+
+  currentBufStatus.logContent = LogContentKind.lsp
+  currentBufStatus.logLspLangId = langId
 
 proc openBufferManager(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
@@ -923,7 +947,7 @@ proc buildCommand(status: var EditorStatus) =
 
   status.settings.buildOnSave.enable = currentSetting
 
-  status.openLogViewer
+  status.openEditorLogViewer
 
 proc shellCommand(status: var EditorStatus, shellCommand: string) =
   saveCurrentTerminalModes()
@@ -1208,8 +1232,10 @@ proc exModeCommand*(status: var EditorStatus, command: seq[Runes]) =
     status.liveReloadOfConfSettingCommand(command[1])
   elif isIncrementalSearchSettingCommand(command):
     status.incrementalSearchSettingCommand(command[1])
-  elif isOpenLogViweerCommand(command):
-    status.openLogViewer
+  elif isOpenEditorLogViewerCommand(command):
+    status.openEditorLogViewer
+  elif isOpenLspLogViewerCommand(command):
+    status.openLspLogViewer
   elif isHighlightPairOfParenSettigCommand(command):
     status.highlightPairOfParenSettigCommand(command[1])
   elif isAutoDeleteParenSettingCommand(command):
