@@ -211,6 +211,14 @@ proc wordExistsBeforeCursor(
     let wordFirstLast = extractWordBeforeCursor(bufStatus, windowNode)
     wordFirstLast.isSome and wordFirstLast.get.word.len > 0
 
+template characterExistBeforeCursor(
+  bufStatus: BufferStatus,
+  currentPosition: BufferPosition): bool =
+
+    currentPosition.column > 0 and
+    not isWhiteSpace(
+      bufStatus.buffer[currentPosition.line][currentPosition.column - 1])
+
 proc getBufferAndLangKeyword(
   checkBuffers: seq[BufferStatus],
   firstDeletedIndex, lastDeletedIndex: int,
@@ -331,9 +339,10 @@ proc tryOpenSuggestionWindow*(
 
 proc tryOpenLspSuggestionWindow*(
   bufStatus: BufferStatus,
-  currenWindowNode: WindowNode): Option[SuggestionWindow] =
+  currentWindowNode: WindowNode): Option[SuggestionWindow] =
 
-    return buildLspSuggestionWindow(bufStatus, currenWindowNode)
+    if characterExistBeforeCursor(bufStatus, currentWindowNode.bufferPosition):
+      return buildLspSuggestionWindow(bufStatus, currentWindowNode)
 
 proc calcSuggestionWindowPosition*(
   suggestionWindow: SuggestionWindow,
