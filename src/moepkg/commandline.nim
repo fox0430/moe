@@ -73,7 +73,7 @@ proc getDisplayRange(commandLine: CommandLine): tuple[first, last: int] =
     result.last = min(commandLine.buffer.high, commandLine.window.width)
   else:
     result.first = 0
-    result.last = commandLine.buffer.high
+    result.last = min(commandLine.buffer.high, commandLine.window.width)
 
 proc seekCursor*(commandLine: CommandLine): Position {.inline.} =
   ## Return the cursor position.
