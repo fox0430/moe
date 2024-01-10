@@ -27,6 +27,7 @@ import protocol/[enums, types]
 
 type
   LspPosition* = types.Position
+  LspRange* = types.Range
 
   LspCompletionItem* = types.CompletionItem
   LspCompletionList* = types.CompletionList
@@ -141,6 +142,12 @@ proc toLspPosition*(p: BufferPosition): LspPosition {.inline.} =
 
 proc toBufferPosition*(p: LspPosition): BufferPosition {.inline.} =
   BufferPosition(line: p.line, column: p.character)
+
+proc toLspRange*(r: BufferRange): LspRange {.inline.} =
+  LspRange(start: r.first.toLspPosition, `end`: r.last.toLspPosition)
+
+proc toBufferRange*(r: LspRange): BufferRange {.inline.} =
+  BufferRange(first: r.start.toBufferPosition, last: r.`end`.toBufferPosition)
 
 proc toLspMethodStr*(m: LspMethod): string =
   case m:

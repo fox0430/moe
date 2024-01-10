@@ -511,18 +511,33 @@ proc textDocumentDidOpen*(
 
 proc initTextDocumentDidChangeParams(
   version: Natural,
-  path, text: string): DidChangeTextDocumentParams {.inline.} =
+  path, text: string,
+  range: Option[BufferRange] = none(BufferRange)): DidChangeTextDocumentParams {.inline.} =
 
-    DidChangeTextDocumentParams(
-      textDocument: VersionedTextDocumentIdentifier(
-        uri: path.pathToUri,
-        version: some(%version)),
-      contentChanges: @[TextDocumentContentChangeEvent(text: text)])
+    if range.isSome:
+      ## Send range
+      return DidChangeTextDocumentParams(
+        textDocument: VersionedTextDocumentIdentifier(
+          uri: path.pathToUri,
+          version: some(%version)),
+        contentChanges: @[
+          TextDocumentContentChangeEvent(
+            text: text,
+            range: some(range.get.toLspRange))
+        ])
+    else:
+      ## Send all text
+      return DidChangeTextDocumentParams(
+        textDocument: VersionedTextDocumentIdentifier(
+          uri: path.pathToUri,
+          version: some(%version)),
+        contentChanges: @[TextDocumentContentChangeEvent(text: text)])
 
 proc textDocumentDidChange*(
   c: var LspClient,
   version: Natural,
-  path, text: string): LspSendNotifyResult =
+  path, text: string,
+  range: Option[BufferRange] = none(BufferRange)): LspSendNotifyResult =
     ## Send a textDocument/didChange notification to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didChange
 
@@ -532,7 +547,7 @@ proc textDocumentDidChange*(
     if not c.isInitialized:
       return R[(), string].err "lsp unavailable"
 
-    let params = %* initTextDocumentDidChangeParams(version, path, text)
+    let params = %* initTextDocumentDidChangeParams(version, path, text, range)
 
     let err = c.notify(LspMethod.textDocumentDidChange, params)
     if err.isErr:
