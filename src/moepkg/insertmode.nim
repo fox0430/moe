@@ -97,10 +97,15 @@ proc sendCompletionRequest(
     block:
       currentBufStatus.version.inc
 
+      let range = BufferRange(
+        first: currentMainWindowNode.bufferPosition,
+        last: currentMainWindowNode.bufferPosition)
+
       let err = lspClient.textDocumentDidChange(
         currentBufStatus.version,
         $currentBufStatus.path.absolutePath,
-        currentBufStatus.buffer.toString)
+        currentBufStatus.buffer.toString,
+        some(range))
       if err.isErr:
         return Result[(), string ].err err.error
 
