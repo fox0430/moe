@@ -114,23 +114,6 @@ proc execCommand(status: var EditorStatus, command: Runes): Option[Rune] =
     of Mode.debug:
       status.execDebugModeCommand(command)
 
-proc isOpenSuggestWindow(status: EditorStatus): bool {.inline.} =
-  status.settings.autocomplete.enable and isInsertMode(currentBufStatus.mode)
-
-proc tryOpenSuggestWindow(status: var EditorStatus) =
-  if currentBufStatus.completionList.len > 0:
-    # LSP
-    status.suggestionWindow = tryOpenLspSuggestionWindow(
-      currentBufStatus,
-      currentMainWindowNode)
-  else:
-    status.suggestionWindow = tryOpenSuggestionWindow(
-      status.wordDictionary,
-      status.bufStatus,
-      currentMainWindowNode.bufferIndex,
-      mainWindowNode,
-      currentMainWindowNode)
-
 proc decListIndex(list: var SuggestList) =
   if list.currentIndex == 0: list.currentIndex = -1
   elif list.currentIndex == -1: list.currentIndex = list.suggestions.high
@@ -688,6 +671,36 @@ template close(suggestWin: var Option[SuggestionWindow]) =
 proc isBeginNewSuit(bufStatus: BufferStatus): bool {.inline.} =
   not bufStatus.isInsertMode and not bufStatus.isReplaceMode
 
+proc isOpenSuggestWindow(status: EditorStatus): bool {.inline.} =
+  status.settings.autocomplete.enable and isInsertMode(currentBufStatus.mode)
+
+proc tryOpenSuggestWindow(status: var EditorStatus) =
+  if currentBufStatus.completionList.len > 0:
+    # LSP
+    status.suggestionWindow = tryOpenLspSuggestionWindow(
+      currentBufStatus,
+      currentMainWindowNode)
+  else:
+    status.suggestionWindow = tryOpenSuggestionWindow(
+      status.wordDictionary,
+      status.bufStatus,
+      currentMainWindowNode.bufferIndex,
+      mainWindowNode,
+      currentMainWindowNode)
+
+proc updateSuggestions(status: var EditorStatus) =
+  if currentBufStatus.completionList.len > 0:
+    # LSP
+    status.suggestionWindow.get.updateLspSuggestions(
+      currentBufStatus.completionList,
+      currentBufStatus.buffer[currentMainWindowNode.currentLine],
+      currentMainWindowNode.currentColumn)
+  else:
+    status.suggestionWindow.get.updateSuggestions(
+      status.wordDictionary,
+      currentBufStatus.buffer[currentMainWindowNode.currentLine],
+      currentMainWindowNode.currentColumn)
+
 proc editorMainLoop*(status: var EditorStatus) =
   ## Get keys, exec commands and update view.
 
@@ -737,6 +750,8 @@ proc editorMainLoop*(status: var EditorStatus) =
           else:
             if isEnterKey(key):
               status.updateAfterInsertFromSuggestion
+            elif isSpace(key):
+              status.updateAfterInsertFromSuggestion
             elif isEscKey(key):
               status.suggestionWindow.close
 
@@ -774,7 +789,8 @@ proc editorMainLoop*(status: var EditorStatus) =
             continue
 
     if status.isOpenSuggestWindow:
-      status.tryOpenSuggestWindow
+      if status.suggestionWindow.isSome: status.updateSuggestions
+      else: status.tryOpenSuggestWindow
 
     if currentBufStatus.isCommandLineMode:
       let interruptKey = status.commandLineLoop

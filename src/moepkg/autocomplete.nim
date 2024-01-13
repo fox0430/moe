@@ -18,7 +18,10 @@
 #[############################################################################]#
 
 import std/[sugar, critbits, options, sequtils, strutils]
+
+import pkg/fuzzy
 import pkg/unicodedb/properties
+
 import unicodeext, bufferstatus, algorithm, osext, gapbuffer, completion
 import syntax/[highlite, syntaxc, syntaxcpp, syntaxcsharp, syntaxhaskell,
                syntaxjava, syntaxjavascript, syntaxnim, syntaxpython,
@@ -27,6 +30,10 @@ import syntax/[highlite, syntaxc, syntaxcpp, syntaxcsharp, syntaxhaskell,
 type
   # `WordDictionary.val` is number of times used in the autocomplete.
   WordDictionary* = CritBitTree[int]
+
+  FuzzyResult* = object
+    text*: Runes
+    score*: float
 
 const
   LetterCharacter = ctgLu + ctgLl + ctgLt + ctgLm + ctgLo + ctgNl
@@ -137,16 +144,28 @@ proc collectSuggestions*(
   word: Runes): seq[Runes] =
     ## Collect words for suggestion from `wordDictionary`
 
-    let pairs = collect:
-      for item in wordDictionary.pairsWithPrefix($word): item
+    let fuzzyResults = collect:
+      for item in wordDictionary:
+        let score = fuzzyMatch($word, item)
+        if score > 0.0: FuzzyResult(text: item.toRunes, score: score)
 
-    result.add pairs.sortedByIt(it.val).reversed.mapIt(it.key.toRunes)
+    fuzzyResults
+      .sortedByIt(it.score)
+      .reversed
+      .mapIt(it.text)
 
-proc collectLspSuggestions*( list: CompletionList,): seq[Runes]  {.inline.}=
+proc collectLspSuggestions*(list: CompletionList, word: Runes): seq[Runes] =
   ## Collect words for suggestion from `CompletionList`.
-  ## TODO: Rewrite
 
-  result = list.items.mapIt(it.insertText)
+  let fuzzyResults = collect:
+    for item in list.items:
+      let score = fuzzyMatch($word, $item.insertText)
+      if score > 0.0: FuzzyResult(text: item.insertText, score: score)
+
+  fuzzyResults
+    .sortedByIt(it.score)
+   .reversed
+   .mapIt(it.text)
 
 proc getTextInBuffers*(
   bufStatus: seq[BufferStatus],
