@@ -136,6 +136,8 @@ const
     RightKey:    @["\eOC", "\e[C"],
     LeftKey:     @["\eOD", "\e[D"],
 
+    ShiftTab:     @["\eOZ", "\e[Z"],
+
     EndKey:      @["\e[4~", "\e[8~", "\eOF", "\e[F"],
     HomeKey:     @["\e[1~", "\e[7~", "\eOH", "\e[H"],
     InsertKey:   @["\e[2~"],
