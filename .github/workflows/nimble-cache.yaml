@@ -47,7 +47,7 @@ jobs:
 
     - name: Cache nimble
       id: cache-nimble
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.nimble
         key: unit-tests-nimble
