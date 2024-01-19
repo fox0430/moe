@@ -281,12 +281,14 @@ proc lspProgress(
 
     return Result[(), string].ok ()
 
-proc lspCompletion(b: var BufferStatus, res: JsonNode): Result[(), string] =
+proc lspCompletion(status: var EditorStatus, res: JsonNode): Result[(), string] =
   ## Update the BufferStatus.completionList.
   ##
   ## textDocument/completion
 
-  b.completionList.clear
+  lspClient.clearWaitingResponse
+
+  currentBufStatus.lspCompletionList.clear
 
   let list = res.parseTextDocumentCompletionResponse
   if list.isErr:
@@ -303,7 +305,7 @@ proc lspCompletion(b: var BufferStatus, res: JsonNode): Result[(), string] =
       else:
         newItem.insertText = item.label.toRunes
 
-      b.completionList.add newItem
+      currentBufStatus.lspCompletionList.add newItem
 
   return Result[(), string].ok ()
 
@@ -379,7 +381,7 @@ proc handleLspResponse*(status: var EditorStatus) =
           let r = status.lspHover(resJson.get)
           if r.isErr: status.commandLine.writeLspHoverError(r.error)
         of LspMethod.textDocumentCompletion:
-          let r = currentBufStatus.lspCompletion(resJson.get)
+          let r = status.lspCompletion(resJson.get)
           if r.isErr: status.commandLine.writeLspCompletionError(r.error)
         else:
           discard

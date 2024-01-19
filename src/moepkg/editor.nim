@@ -19,9 +19,9 @@
 
 import std/[strutils, sequtils, strformat, options]
 import syntax/highlite
-import editorstatus, ui, gapbuffer, unicodeext, windownode, bufferstatus,
-       movement, messages, settings, registers, commandline, independentutils,
-       searchutils, completion
+import ui, gapbuffer, unicodeext, windownode, bufferstatus, movement, messages,
+       settings, registers, commandline, independentutils, searchutils,
+       completion
 
 proc correspondingCloseParen(c: char): char =
   case c
@@ -100,6 +100,26 @@ proc insertCharacter*(
       insert()
       moveRight()
       inserted()
+
+proc selectedLineNumbers*(selectedArea: SelectedArea): seq[int] =
+  ## Return line numbers in selected area.
+
+  for lineNum in selectedArea.startLine .. selectedArea.endLine:
+    result.add lineNum
+
+proc bufferPositionsForMultipleEdit*(
+  selectedArea: SelectedArea, column: int): seq[BufferPosition] =
+    ## Return positions for multiple positions edtting.
+
+    for lineNum in selectedArea.startLine .. selectedArea.endLine:
+      result.add BufferPosition(line: lineNum, column: column)
+
+proc bufferPositionsForMultipleEdit*(
+  bufStatus: BufferStatus,
+  column: int): seq[BufferPosition] {.inline.} =
+    ## Return positions for multiple positions edtting.
+
+    bufferPositionsForMultipleEdit(bufStatus.selectedArea.get, column)
 
 proc insertMultiplePositions*(
   bufStatus: var BufferStatus,
@@ -1973,7 +1993,9 @@ proc undo*(bufStatus: var BufferStatus, windowNode: WindowNode) =
   if not bufStatus.buffer.canUndo: return
 
   bufStatus.buffer.undo
-  bufStatus.revertPosition(windowNode, bufStatus.buffer.lastSuitId)
+  windowNode.revertPosition(
+    bufStatus.positionRecord,
+    bufStatus.buffer.lastSuitId)
 
   if (bufStatus.mode.isInsertMode or bufStatus.mode.isReplaceMode) and
      windowNode.currentColumn > bufStatus.buffer[windowNode.currentLine].len and
@@ -1994,8 +2016,12 @@ proc undo*(bufStatus: var BufferStatus, windowNode: WindowNode) =
 
 proc redo*(bufStatus: var BufferStatus, windowNode: WindowNode) =
   if not bufStatus.buffer.canRedo: return
+
   bufStatus.buffer.redo
-  bufStatus.revertPosition(windowNode, bufStatus.buffer.lastSuitId)
+  windowNode.revertPosition(
+    bufStatus.positionRecord,
+    bufStatus.buffer.lastSuitId)
+
   inc(bufStatus.countChange)
   bufStatus.isUpdate = true
 

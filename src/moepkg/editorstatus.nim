@@ -25,10 +25,10 @@ import lsp/[client, utils]
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
        windownode, color, settings, statusline, bufferstatus, cursor, tabline,
        backup, messages, commandline, registers, platform, movement,
-       autocomplete, suggestionwindow, filermodeutils, debugmodeutils,
-       independentutils, viewhighlight, helputils, backupmanagerutils,
-       diffviewerutils, messagelog, globalsidebar, build, quickrunutils, git,
-       syntaxcheck, theme, logviewerutils
+       filermodeutils, debugmodeutils, independentutils, viewhighlight,
+       helputils, backupmanagerutils, diffviewerutils, messagelog,
+       globalsidebar, build, quickrunutils, git, syntaxcheck, theme,
+       logviewerutils, completionwindow, worddictionary
 
 type
   LastCursorPosition* = object
@@ -65,7 +65,7 @@ type
     lastPosition*: seq[LastCursorPosition]
     isReadonly*: bool
     wordDictionary*: WordDictionary
-    suggestionWindow*: Option[SuggestionWindow]
+    completionWindow*: Option[CompletionWindow]
     sidebar*: Option[GlobalSidebar]
     colorMode*: ColorMode
     backgroundTasks*: BackgroundTasks
@@ -510,7 +510,7 @@ proc resize*(status: var EditorStatus) =
   while queue.len > 0:
     let queueLength = queue.len
     for i in  0 ..< queueLength:
-      let node = queue.pop
+      var node = queue.pop
       if node.window.isSome:
         let
           bufIndex = node.bufferIndex
@@ -530,10 +530,7 @@ proc resize*(status: var EditorStatus) =
           widthOfLineNum)
 
         if status.bufStatus[bufIndex].isCursor:
-          node.view.seekCursor(
-            status.bufStatus[bufIndex].buffer,
-            node.currentLine,
-            node.currentColumn)
+          node.seekCursor(status.bufStatus[bufIndex].buffer)
 
         # Resize multiple status line.
         let
@@ -704,22 +701,6 @@ proc initLogViewerHighlight(buffer: seq[Runes]): Highlight =
     const EmptyReservedWord: seq[ReservedWord] = @[]
     return buffer.initHighlight(EmptyReservedWord, SourceLanguage.langNone)
 
-proc updateSuggestWindow(status: var EditorStatus) =
-  let
-    mainWindowY =
-      if status.settings.tabLine.enable: 1
-      else: 0
-    mainWindowHeight = status.settings.getMainWindowHeight
-    (y, x) = status.suggestionWindow.get.calcSuggestionWindowPosition(
-      currentMainWindowNode,
-      mainWindowHeight)
-
-  status.suggestionWindow.get.writeSuggestionWindow(
-    currentMainWindowNode,
-    y, x,
-    mainWindowY,
-    status.settings.statusLine.enable)
-
 proc updateSelectedArea(b: var BufferStatus, windowNode: var WindowNode) =
   if b.isVisualLineMode:
     let
@@ -849,12 +830,9 @@ proc update*(status: var EditorStatus) =
              node.currentColumn = b.buffer[node.currentLine].high
 
         # Reload Editorview. This is not the actual terminal view.
-        node.view.reload(
-          b.buffer,
-          min(node.view.originalLine[0],
-          b.buffer.high))
+        node.reloadEditorView(b.buffer)
 
-        node.view.seekCursor(b.buffer, node.currentLine, node.currentColumn)
+        node.seekCursor(b.buffer)
 
         # NOTE: node.highlight is not directly change here for performance.
         var highlight = node.highlight
@@ -924,9 +902,8 @@ proc update*(status: var EditorStatus) =
       if node.child.len > 0:
         for node in node.child: queue.push(node)
 
-  # Update the suggestion window
-  if status.suggestionWindow.isSome:
-    status.updateSuggestWindow
+  if status.completionWindow.isSome and status.completionWindow.get.isOpen:
+    status.completionWindow.get.update
 
   if not currentBufStatus.isFilerMode:
     let
@@ -1130,19 +1107,6 @@ proc recordCurrentPosition*(
       windowNode.currentLine,
       windowNode.currentColumn,
       windowNode.expandedColumn)
-
-proc revertPosition*(
-  bufStatus: var BufferStatus,
-  windowNode: WindowNode,
-  id: int) =
-
-    let mess =
-      fmt"The id not recorded was requested. [bufStatus.positionRecord = {bufStatus.positionRecord}, id = {id}]"
-    doAssert(bufStatus.positionRecord.contains(id), mess)
-
-    windowNode.currentLine = bufStatus.positionRecord[id].line
-    windowNode.currentColumn = bufStatus.positionRecord[id].column
-    windowNode.expandedColumn = bufStatus.positionRecord[id].expandedColumn
 
 proc smoothScrollDelays(totalLines, minDelay, maxDelay: int): seq[int] =
   ## Return all delay values for the smooth scrolling.

@@ -23,24 +23,7 @@ import pkg/results
 
 import lsp/client
 import ui, editorstatus, windownode, movement, editor, bufferstatus, settings,
-       unicodeext, independentutils, gapbuffer
-
-proc bufferPositionsForMultipleEdit(
-  selectedArea: SelectedArea, currentColumn: int): seq[BufferPosition] =
-    ## Return positions for multiple positions edtting.
-
-    for lineNum in selectedArea.startLine .. selectedArea.endLine:
-      result.add BufferPosition(
-        line: lineNum,
-        column: currentColumn)
-
-proc bufferPositionsForMultipleEdit*(
-  status: EditorStatus): seq[BufferPosition] {.inline.} =
-    ## Return positions for multiple positions edtting.
-
-    bufferPositionsForMultipleEdit(
-      currentBufStatus.selectedArea.get,
-      currentMainWindowNode.currentColumn)
+       unicodeext, independentutils, gapbuffer, completion
 
 proc exitInsertMode(status: var EditorStatus) =
   if currentBufStatus.isInsertMultiMode:
@@ -58,7 +41,8 @@ proc deleteBeforeCursorAndMoveToLeft(status: var EditorStatus) {.inline.} =
   if currentBufStatus.isInsertMultiMode:
     const NumOfDelete = 1
     currentBufStatus.deleteMultiplePositions(
-      status.bufferPositionsForMultipleEdit,
+      currentBufStatus.bufferPositionsForMultipleEdit(
+        currentMainWindowNode.currentColumn),
       NumOfDelete)
     currentMainWindowNode.keyLeft
   else:
@@ -76,12 +60,14 @@ proc deleteCurrentCursor(status: var EditorStatus) {.inline.} =
     if currentMainWindowNode.currentColumn > currentLineHigh:
       # Delete before cursor and move to left.
       currentBufStatus.deleteMultiplePositions(
-        status.bufferPositionsForMultipleEdit,
+        currentBufStatus.bufferPositionsForMultipleEdit(
+          currentMainWindowNode.currentColumn),
         NumOfDelete)
       currentMainWindowNode.keyLeft
     else:
       currentBufStatus.deleteCurrentMultiplePositions(
-        status.bufferPositionsForMultipleEdit,
+        currentBufStatus.bufferPositionsForMultipleEdit(
+          currentMainWindowNode.currentColumn),
         NumOfDelete)
   else:
     currentBufStatus.deleteCharacter(
@@ -105,7 +91,7 @@ proc sendCompletionRequest(
         return Result[(), string ].err err.error
 
     block:
-      let isIncompleteTrigger = status.suggestionwindow.isSome
+      let isIncompleteTrigger = status.completionWindow.isSome
 
       let err = lspClient.textDocumentCompletion(
         currentBufStatus.id,
@@ -121,7 +107,8 @@ proc sendCompletionRequest(
 proc insertToBuffer(status: var EditorStatus, r: Rune) {.inline.} =
   if currentBufStatus.isInsertMultiMode:
     currentBufStatus.insertMultiplePositions(
-      status.bufferPositionsForMultipleEdit,
+      currentBufStatus.bufferPositionsForMultipleEdit(
+        currentMainWindowNode.currentColumn),
       r)
     currentBufStatus.keyRight(currentMainWindowNode)
   else:
@@ -131,10 +118,11 @@ proc insertToBuffer(status: var EditorStatus, r: Rune) {.inline.} =
       status.settings.standard.autoCloseParen,
       r)
 
-  if status.lspClients.contains(currentBufStatus.langId):
-    let err = status.sendCompletionRequest(r)
-    if err.isErr:
-      error err.error
+  if status.lspClients.contains(currentBufStatus.langId) and
+     isCompletionCharacter(r):
+       let err = status.sendCompletionRequest(r)
+       if err.isErr:
+         error err.error
 
 proc execInsertModeCommand*(status: var EditorStatus, command: Runes) =
   let key = command[0]
