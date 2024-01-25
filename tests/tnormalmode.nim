@@ -3578,3 +3578,19 @@ suite "Normal mode: searchNextOccurrenceReversely":
     status.update
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
+
+suite "Normal mode: requestHover":
+  test "Disable LSP":
+    var status = initEditorStatus()
+    status.settings.lsp.enable = false
+
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["echo 1"].toSeqRunes.toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    # Nothing to do
+    status.requestHover
+
+    status.update
