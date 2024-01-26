@@ -351,7 +351,7 @@ proc handleLspResponse*(status: var EditorStatus) =
     return
 
   if resJson.get.isLspError:
-    status.commandLine.writeLspError(resJson.error)
+    status.commandLine.writeLspError($resJson.get["error"])
     return
 
   if resJson.get.isServerNotify:
