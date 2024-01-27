@@ -621,7 +621,7 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
 template isOpenCompletionWindow(status: EditorStatus, key: Rune): bool =
   status.completionwindow.isNone and
   status.settings.autocomplete.enable and
-  (isInsertMode(currentBufStatus) or isInsertMultiMode(currentBufStatus)) and
+  currentBufStatus.isInsertMode and
   isCompletionCharacter(key)
 
 proc completionWindowPosition(status: EditorStatus): Position =
