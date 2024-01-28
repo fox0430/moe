@@ -624,7 +624,7 @@ template isOpenCompletionWindow(status: EditorStatus, key: Rune): bool =
   currentBufStatus.isInsertMode and
   isCompletionCharacter(key)
 
-template completionWindowPosition(status: var EditorStatus): Position =
+proc completionWindowPosition(status: var EditorStatus): Position {.inline.} =
   currentMainWindowNode.completionWindowPosition(currentBufStatus)
 
 proc openCompletionWindow(status: var EditorStatus) =
