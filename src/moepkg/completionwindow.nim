@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[options, sequtils]
+import std/[options, sequtils, deques]
 
 import ui, unicodeext, independentutils, completion, popupwindow, bufferstatus,
        windownode, gapbuffer, worddictionary, editor
@@ -251,3 +251,16 @@ proc reopen*(
     c.popupWindow = some(initPopupWindow(windowPosition, size))
 
 proc isOpen*(c: CompletionWindow): bool {.inline.} = c.popupWindow.isSome
+
+proc completionWindowPosition*(
+  windowNode: var WindowNode,
+  bufStatus: BufferStatus): Position =
+    ## Return a position for the completion window.
+
+    # Reload Editorview. This is not the actual terminal view.
+    windowNode.reloadEditorView(bufStatus.buffer)
+    # Seek cursor before getting the absolute cursor position.
+    windowNode.seekCursor(bufStatus.buffer)
+
+    let absCursorPositon = windowNode.absolutePosition
+    return Position(y: absCursorPositon.y + 1, x: absCursorPositon.x - 2)

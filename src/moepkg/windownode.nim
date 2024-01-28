@@ -485,7 +485,7 @@ proc seekCursor*[T](node: var WindowNode, buffer: T) {.inline.} =
     node.currentColumn)
 
 proc revertPosition*(
-  windowNode: WindowNode,
+  windowNode: var WindowNode,
   positionRecord: PositionRecord,
   id: int) =
 
@@ -496,5 +496,3 @@ proc revertPosition*(
     windowNode.currentLine = positionRecord[id].line
     windowNode.currentColumn = positionRecord[id].column
     windowNode.expandedColumn = positionRecord[id].expandedColumn
-
-

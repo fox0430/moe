@@ -624,16 +624,8 @@ template isOpenCompletionWindow(status: EditorStatus, key: Rune): bool =
   currentBufStatus.isInsertMode and
   isCompletionCharacter(key)
 
-proc completionWindowPosition(status: EditorStatus): Position =
-  ## Return a position for the completion window.
-
-  # Reload Editorview. This is not the actual terminal view.
-  currentMainWindowNode.reloadEditorView(currentBufStatus.buffer)
-  # Seek cursor before getting the absolute cursor position.
-  currentMainWindowNode.seekCursor(currentBufStatus.buffer)
-
-  let absCursorPositon = currentMainWindowNode.absolutePosition
-  return Position(y: absCursorPositon.y + 1, x: absCursorPositon.x - 2)
+template completionWindowPosition(status: var EditorStatus): Position =
+  currentMainWindowNode.completionWindowPosition(currentBufStatus)
 
 proc openCompletionWindow(status: var EditorStatus) =
   var bufferPosition = currentMainWindowNode.bufferPosition

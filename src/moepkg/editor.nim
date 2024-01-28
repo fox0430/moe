@@ -1989,7 +1989,7 @@ proc deleteTrailingSpaces*(bufStatus: var BufferStatus) =
     inc(bufStatus.countChange)
     bufStatus.isUpdate = true
 
-proc undo*(bufStatus: var BufferStatus, windowNode: WindowNode) =
+proc undo*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
   if not bufStatus.buffer.canUndo: return
 
   bufStatus.buffer.undo
@@ -2014,7 +2014,7 @@ proc undo*(bufStatus: var BufferStatus, windowNode: WindowNode) =
   inc(bufStatus.countChange)
   bufStatus.isUpdate = true
 
-proc redo*(bufStatus: var BufferStatus, windowNode: WindowNode) =
+proc redo*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
   if not bufStatus.buffer.canRedo: return
 
   bufStatus.buffer.redo
