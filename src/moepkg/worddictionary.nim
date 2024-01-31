@@ -49,8 +49,8 @@ proc add*(d: var WordDictionary, word: Runes) {.inline.} =
 
   if not d.contains(word): d[$word] = 0
 
-proc incNumOfUsed*(d: var WordDictionary, word: Runes) {.inline.} =
-  ## Increment `WordDictionary.numOfUsed`
+proc inc*(d: var WordDictionary, word: Runes) {.inline.} =
+  ## Increment a value
 
   d.inc($word)
 
@@ -139,12 +139,12 @@ iterator enumerateWords*(text: Runes): Runes =
 proc update*(
   d: var WordDictionary,
   text: Runes,
-  exclude: Runes = ru"",
+  exclude: Runes,
   lang: SourceLanguage = SourceLanguage.langNone) =
     ## Update word dictionary from the text.
 
     for word in text.enumerateWords:
-      if exclude != word: d.add word
+      if exclude != word and not d.contains(word): d.add word
 
     # Get reserved words for the language.
     d.add getTextFromLangKeywords(lang)
@@ -152,11 +152,11 @@ proc update*(
 proc update*(
   d: var WordDictionary,
   buffers: seq[Runes],
-  exclude: Runes = ru"",
+  exclude: Runes,
   lang: SourceLanguage = SourceLanguage.langNone) =
     ## Update word dictionary from the text.
 
     var runes: Runes
-    for b in buffers: runes.add b
+    for b in buffers: runes.add b & ru' '
 
     d.update(runes, exclude, lang)
