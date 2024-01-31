@@ -81,7 +81,7 @@ const
   SIGWINCH: int = 28
     # SIGWINCH signal
 
-  TabKey        = 9
+  TabKey*       = 9
   EnterKey*     = 10
   EscKey*       = 27 # or Ctrl-[
   BackSpaceKey* = 127

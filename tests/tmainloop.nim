@@ -18,13 +18,19 @@
 #[############################################################################]#
 
 import std/[unittest, options, importutils]
+
 import pkg/results
+
+import moepkg/syntax/highlite
 import moepkg/[unicodeext, bufferstatus, gapbuffer, editorstatus, windownode,
-               ui, commandLine, viewhighlight, visualmode]
+               ui, commandLine, viewhighlight, visualmode, independentutils,
+               completion]
 
 import moepkg/registers {.all.}
 import moepkg/backupmanager {.all.}
 import moepkg/exmode {.all.}
+import moepkg/completionwindow {.all.}
+import moepkg/popupwindow {.all.}
 import moepkg/mainloop {.all.}
 
 proc resize(status: var EditorStatus, h, w: int) =
@@ -972,3 +978,234 @@ suite "mainloop: incrementalReplace":
       check currentBufStatus.buffer.toSeqRunes == @[
         "x", "x def", "", "def x", "x x"]
         .toSeqRunes
+
+suite "mainloop: openCompletionWindow":
+  privateAccess(CompletionWindow)
+
+  test "Basic":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.language = SourceLanguage.langNim
+    currentBufStatus.buffer = @["echo 1", "e"].toSeqRunes.toGapBuffer
+    currentBufStatus.mode = Mode.insert
+    currentMainWindowNode.currentLine = 1
+    currentMainWindowNode.currentColumn = 1
+
+    status.settings.view.lineNumber = false
+    status.settings.tabLine.enable = false
+
+    status.resize(100, 100)
+    status.update
+
+    status.openCompletionWindow
+
+    check status.completionWindow.get.popupWindow.get.position == Position(y: 2, x: 1)
+    check status.completionWindow.get.startPosition == BufferPosition(
+      line: 1,
+      column: 0)
+
+  test "Basic 2":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.language = SourceLanguage.langNim
+    currentBufStatus.buffer = @["echo 1", "echo 2"].toSeqRunes.toGapBuffer
+    currentBufStatus.mode = Mode.insert
+    currentMainWindowNode.currentLine = 1
+    currentMainWindowNode.currentColumn = 2
+
+    status.settings.view.lineNumber = false
+    status.settings.tabLine.enable = false
+
+    status.resize(100, 100)
+    status.update
+
+    status.openCompletionWindow
+
+    check status.completionWindow.get.popupWindow.get.position == Position(y: 2, x: 2)
+    check status.completionWindow.get.startPosition == BufferPosition(
+      line: 1,
+      column: 1)
+
+suite "mainloop: updateCompletionWindowBuffer":
+  privateAccess(CompletionWindow)
+
+  test "With LSP":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.language = SourceLanguage.langNim
+    currentBufStatus.buffer = @["echo 1", "e"].toSeqRunes.toGapBuffer
+    currentBufStatus.mode = Mode.insert
+    currentMainWindowNode.currentLine = 1
+    currentMainWindowNode.currentColumn = 1
+
+    status.settings.view.lineNumber = false
+    status.settings.tabLine.enable = false
+
+    status.resize(100, 100)
+    status.update
+
+    status.openCompletionWindow
+
+    block:
+      currentBufStatus.lspCompletionList.items = @[
+        CompletionItem(label: ru"ea", insertText: ru"ea"),
+        CompletionItem(label: ru"eb", insertText: ru"eb"),
+        CompletionItem(label: ru"ec", insertText: ru"ec"),
+      ]
+
+      status.completionWindow.get.addInput(ru'e')
+      status.updateCompletionWindowBuffer
+
+      check status.completionWindow.get.inputText == ru"e"
+      check status.completionWindow.get.list.len == 3
+      check status.completionWindow.get.startPosition == BufferPosition(
+        line: 1,
+        column: 0)
+
+      check status.completionWindow.get.popupWindow.get.size == Size(h: 3, w: 4)
+      check status.completionWindow.get.popupWindow.get.position == Position(
+        y: 2, x: 1)
+
+    block:
+      currentBufStatus.lspCompletionList.items = @[
+        CompletionItem(label: ru"ec", insertText: ru"ec"),
+      ]
+
+      currentBufStatus.buffer[1] = ru"ec"
+
+      status.completionWindow.get.addInput(ru'c')
+      status.updateCompletionWindowBuffer
+
+      check status.completionWindow.get.inputText == ru"ec"
+      check status.completionWindow.get.list.len == 1
+      check status.completionWindow.get.startPosition == BufferPosition(
+        line: 1,
+        column: 0)
+
+      check status.completionWindow.get.popupWindow.get.size == Size(h: 1, w: 4)
+      check status.completionWindow.get.popupWindow.get.position == Position(
+        y: 2, x: 1)
+
+  test "Without LSP (WordDictionary)":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.language = SourceLanguage.langNim
+    currentBufStatus.buffer = @["echo 1", "e"].toSeqRunes.toGapBuffer
+    currentBufStatus.mode = Mode.insert
+    currentMainWindowNode.currentLine = 1
+    currentMainWindowNode.currentColumn = 1
+
+    status.settings.view.lineNumber = false
+    status.settings.tabLine.enable = false
+
+    status.resize(100, 100)
+    status.update
+
+    status.openCompletionWindow
+
+    block:
+      status.completionWindow.get.addInput(ru'e')
+      status.updateCompletionWindowBuffer
+
+      check status.completionWindow.get.inputText == ru"e"
+      check status.completionWindow.get.list.len > 0
+      check status.completionWindow.get.startPosition == BufferPosition(
+        line: 1,
+        column: 0)
+
+      check status.completionWindow.get.popupWindow.get.size.h > 0
+      check status.completionWindow.get.popupWindow.get.size.w > 0
+      check status.completionWindow.get.popupWindow.get.position == Position(
+        y: 2, x: 1)
+
+    block:
+      currentBufStatus.buffer[1] = ru"ec"
+
+      status.completionWindow.get.addInput(ru'c')
+      status.updateCompletionWindowBuffer
+
+      check status.completionWindow.get.inputText == ru"ec"
+      check status.completionWindow.get.list.len == 1
+      check status.completionWindow.get.startPosition == BufferPosition(
+        line: 1,
+        column: 0)
+
+      check status.completionWindow.get.popupWindow.get.size.h > 0
+      check status.completionWindow.get.popupWindow.get.size.w > 0
+      check status.completionWindow.get.popupWindow.get.position == Position(
+        y: 2, x: 1)
+
+suite "mainloop: confirmCompletion":
+  privateAccess(CompletionWindow)
+
+  test "Not selected":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.language = SourceLanguage.langNim
+    currentBufStatus.buffer = @["echo 1", "ec"].toSeqRunes.toGapBuffer
+    currentBufStatus.mode = Mode.insert
+    currentMainWindowNode.currentLine = 1
+    currentMainWindowNode.currentColumn = 2
+
+    status.settings.view.lineNumber = false
+    status.settings.tabLine.enable = false
+
+    status.resize(100, 100)
+    status.update
+
+    currentBufStatus.lspCompletionList.items = @[
+      CompletionItem(label: ru"echo", insertText: ru"echo")
+    ]
+
+    status.completionWindow = some(CompletionWindow(
+      startPosition: BufferPosition(line: 1, column: 0),
+      popupWindow: some(initPopupWindow(
+        Position(y: 2, x: 0),
+        Size(h: 1, w: 6))),
+      inputText: ru"ec",
+      selectedIndex: -1))
+
+    status.confirmCompletion
+
+    check status.completionWindow.isNone
+    check currentBufStatus.buffer.toSeqRunes == @["echo 1", "ec"].toSeqRunes
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 2
+
+  test "Selected":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.language = SourceLanguage.langNim
+    currentBufStatus.buffer = @["echo 1", "e"].toSeqRunes.toGapBuffer
+    currentBufStatus.mode = Mode.insert
+    currentMainWindowNode.currentLine = 1
+    currentMainWindowNode.currentColumn = 1
+
+    status.settings.view.lineNumber = false
+    status.settings.tabLine.enable = false
+
+    status.resize(100, 100)
+    status.update
+
+    currentBufStatus.lspCompletionList.items = @[
+      CompletionItem(label: ru"echo", insertText: ru"echo")
+    ]
+
+    status.openCompletionWindow
+
+    currentBufStatus.buffer[1] = ru"ec"
+    status.completionWindow.get.inputText = ru"ec"
+    currentMainWindowNode.currentColumn = 2
+    status.updateCompletionWindowBuffer
+
+    status.completionWindow.get.handleKey(
+      currentBufStatus,
+      currentMainWindowNode,
+      Rune(TabKey))
+
+    status.confirmCompletion
+
+    check status.completionWindow.isNone
+    check currentBufStatus.buffer.toSeqRunes == @["echo 1", "echo"].toSeqRunes
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 4

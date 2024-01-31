@@ -618,6 +618,9 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
     elif isSearchMode(currentBufStatus.mode):
       status.changeMode(currentBufStatus.prevMode)
 
+template isBeginNewSuit(bufStatus: BufferStatus): bool =
+  not bufStatus.isInsertMode and not bufStatus.isReplaceMode
+
 template isOpenCompletionWindow(status: EditorStatus, key: Rune): bool =
   status.completionwindow.isNone and
   status.settings.autocomplete.enable and
@@ -678,7 +681,7 @@ proc updateCompletionWindowBuffer(status: var EditorStatus) =
       status.completionWindow.get.inputText)
   elif currentBufStatus.lspCompletionList.len == 0:
     # If LSP completion items are not found, get items from WordDictionary.
-    status.wordDictionary.updateWordDictionary(
+    status.wordDictionary.update(
       status.bufStatus.mapIt(it.buffer.toRunes),
       status.completionWindow.get.inputText,
       currentBufStatus.language)
@@ -720,9 +723,6 @@ proc confirmCompletionAndContinue(status: var EditorStatus) =
   status.completionWindow.get.inputText =
     status.completionWindow.get.selectedText
   status.completionWindow.get.selectedIndex = -1
-
-template isBeginNewSuit(bufStatus: BufferStatus): bool =
-  not bufStatus.isInsertMode and not bufStatus.isReplaceMode
 
 template isChangeModeToInsert(b: BufferStatus, prevMode: Mode): bool =
  b.mode.isInsertMode and not prevMode.isInsertMode

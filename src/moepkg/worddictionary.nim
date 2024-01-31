@@ -136,7 +136,7 @@ iterator enumerateWords*(text: Runes): Runes =
 
       yield word
 
-proc updateWordDictionary*(
+proc update*(
   d: var WordDictionary,
   text: Runes,
   exclude: Runes = ru"",
@@ -149,7 +149,7 @@ proc updateWordDictionary*(
     # Get reserved words for the language.
     d.add getTextFromLangKeywords(lang)
 
-proc updateWordDictionary*(
+proc update*(
   d: var WordDictionary,
   buffers: seq[Runes],
   exclude: Runes = ru"",
@@ -159,4 +159,4 @@ proc updateWordDictionary*(
     var runes: Runes
     for b in buffers: runes.add b
 
-    d.updateWordDictionary(runes, exclude, lang)
+    d.update(runes, exclude, lang)
