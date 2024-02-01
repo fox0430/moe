@@ -62,7 +62,7 @@ proc add*(list: var CompletionList, item: CompletionItem) {.inline.} =
   list.items.add item
 
 proc del*(list: var CompletionList, index: int) {.inline.} =
-  list.items.del(index)
+  list.items.del index
 
 proc del*(list: var CompletionList, label: Runes) =
   for i in 0 .. list.items.high:
@@ -80,7 +80,8 @@ proc clear*(list: var CompletionList) {.inline.} =
   list.items = @[]
 
 proc isCompletionCharacter*(r: Rune): bool {.inline.} =
-  r in [ru'.', ru'/'] or
+  # '/' is path completion.
+  r in [ru'/'] or
   r.unicodeCategory in LetterCharacter
 
 proc isPathCompletion*(r: Rune | Runes): bool {.inline.} =
@@ -93,11 +94,13 @@ proc pathCompletionList*(path: Runes): CompletionList =
 
   if path[^1] == ru'/':
     for k in walkDir($path):
+      let p = k.path.splitPath.tail.toRunes
       result.items.add CompletionItem(
-        label: k.path.toRunes,
-        insertText: k.path.toRunes)
+        label: p,
+        insertText: p)
   else:
-    for p in walkPattern($path & '*').toSeq:
+    for path in walkPattern($path & '*').toSeq:
+      let p = path.splitPath.tail.toRunes
       result.items.add CompletionItem(
-        label: p.toRunes,
-        insertText: p.toRunes)
+        label: p,
+        insertText: p)
