@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[tables, times, options, os, strformat]
+import std/[times, options, os, strformat]
 import pkg/results
 import syntax/highlite
 import gapbuffer, unicodeext, fileutils, highlight, independentutils, git,
@@ -58,7 +58,7 @@ type
     selectedArea*: Option[SelectedArea]
     path*: Runes
     openDir*: Runes
-    positionRecord*: Table[int, tuple[line, column, expandedColumn: int]]
+    positionRecord*: PositionRecord
     countChange*: int # Counting temporary changes
     version*: Natural # Counting total changes
     cmdLoop*: int
@@ -73,7 +73,7 @@ type
     changedLines*: seq[Diff]
     syntaxCheckResults*: seq[SyntaxError]
     isPasteMode*: bool
-    completionList*: CompletionList
+    lspCompletionList*: CompletionList
     logContent*: LogContentKind # Use only in Logviewer
     logLspLangId*: string  # Use only in Logviewer
 
@@ -307,7 +307,7 @@ proc initBufferStatus*(
       mode: mode,
       lastSaveTime: now(),
       lastGitInfoCheckTime: now(),
-      completionList: initCompletionList())
+      lspCompletionList: initCompletionList())
 
     if isFilerMode(mode):
       if isAccessibleDir(path):
@@ -353,7 +353,7 @@ proc initBufferStatus*(
       lastSaveTime: now(),
       lastGitInfoCheckTime: now(),
       fileType: FileType.unknown,
-      completionList: initCompletionList())
+      lspCompletionList: initCompletionList())
 
     if mode.isFilerMode:
       b.buffer = initGapBuffer(@[ru""])

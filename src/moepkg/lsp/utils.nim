@@ -31,6 +31,7 @@ type
 
   LspCompletionItem* = types.CompletionItem
   LspCompletionList* = types.CompletionList
+  LspCompletionOptions* = types.CompletionOptions
 
   LspCompletionTriggerKind* = enums.CompletionTriggerKind
 
@@ -413,6 +414,13 @@ proc toHoverContent*(hover: Hover): HoverContent =
     result.range.last = BufferPosition(
       line: range["end"]["line"].getInt,
       column: range["end"]["character"].getInt)
+
+proc isTriggerCharacter*(
+  options: LspCompletionOptions,
+  ch: string): bool {.inline.} =
+
+    options.triggerCharacters.isSome and
+    options.triggerCharacters.get.contains(ch)
 
 proc parseTextDocumentCompletionResponse*(res: JsonNode): LspCompletionResut =
   if not res.contains("result"):

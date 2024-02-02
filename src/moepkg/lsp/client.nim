@@ -55,7 +55,7 @@ type
 
   LspCapabilities* = object
     hover*: bool
-    completion*: Option[CompletionOptions]
+    completion*: Option[LspCompletionOptions]
 
   LspProgressTable* = Table[ProgressToken, ProgressReport]
 
@@ -643,14 +643,10 @@ proc textDocumentHover*(
 
     return R[(), string].ok ()
 
-template isTriggerCharacter(options: CompletionOptions, ch: string): bool =
-  options.triggerCharacters.isSome and
-  options.triggerCharacters.get.contains(character)
-
 proc initCompletionParams*(
   path: string,
   position: BufferPosition,
-  options: CompletionOptions,
+  options: LspCompletionOptions,
   isIncompleteTrigger: bool,
   character: string): CompletionParams =
 

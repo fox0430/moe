@@ -38,6 +38,8 @@ type
       oldElement, newElement*: T
       assignPosition*: int
 
+  PositionRecord* = Table[int, tuple[line, column, expandedColumn: int]]
+
 proc newInsertCommand*[T](element: T, position: int): Command[T] {.inline.} =
   Command[T](kind: insert, insertElement: element, insertPosition: position)
 

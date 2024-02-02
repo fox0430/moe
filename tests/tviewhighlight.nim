@@ -19,16 +19,16 @@
 
 import std/[unittest, heapqueue, options, strutils, strformat, importutils,
             sequtils]
+
 import pkg/results
+
 import moepkg/syntax/highlite
 import moepkg/[editorstatus, highlight, color, gapbuffer, unicodeext, movement,
                windownode, ui, independentutils, bufferstatus]
 
-import moepkg/viewhighlight {.all.}
+import utils
 
-proc resize(status: var EditorStatus, h, w: int) =
-  updateTerminalSize(h, w)
-  status.resize
+import moepkg/viewhighlight {.all.}
 
 proc initHighlight(status: EditorStatus) {.inline.} =
   currentMainWindowNode.highlight = initHighlight(

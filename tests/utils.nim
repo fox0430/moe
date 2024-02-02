@@ -18,7 +18,11 @@
 #[############################################################################]#
 
 import std/[options, os, strutils]
-import moepkg/platform
+import moepkg/[platform, editorstatus, ui]
+
+proc resize*(status: var EditorStatus, h, w: int) =
+  updateTerminalSize(h, w)
+  status.resize
 
 template isNimlangserverAvailable*(): bool =
   execCmdEx("nimlangserver --version").exitCode == 0

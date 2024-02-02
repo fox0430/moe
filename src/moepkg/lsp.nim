@@ -281,31 +281,35 @@ proc lspProgress(
 
     return Result[(), string].ok ()
 
-proc lspCompletion(b: var BufferStatus, res: JsonNode): Result[(), string] =
-  ## Update the BufferStatus.completionList.
-  ##
-  ## textDocument/completion
+proc lspCompletion(
+  status: var EditorStatus,
+  res: JsonNode): Result[(), string] =
+    ## Update the BufferStatus.completionList.
+    ##
+    ## textDocument/completion
 
-  b.completionList.clear
+    lspClient.clearWaitingResponse
 
-  let list = res.parseTextDocumentCompletionResponse
-  if list.isErr:
-    return Result[(), string].err fmt"Invalid response: {list.error}"
+    currentBufStatus.lspCompletionList.clear
 
-  if list.get.len > 0:
-    for item in list.get:
-      var newItem = CompletionItem()
+    let list = res.parseTextDocumentCompletionResponse
+    if list.isErr:
+      return Result[(), string].err fmt"Invalid response: {list.error}"
 
-      newItem.label = item.label.toRunes
+    if list.get.len > 0:
+      for item in list.get:
+        var newItem = CompletionItem()
 
-      if item.insertText.isSome:
-        newItem.insertText = item.insertText.get.toRunes
-      else:
-        newItem.insertText = item.label.toRunes
+        newItem.label = item.label.toRunes
 
-      b.completionList.add newItem
+        if item.insertText.isSome:
+          newItem.insertText = item.insertText.get.toRunes
+        else:
+          newItem.insertText = item.label.toRunes
 
-  return Result[(), string].ok ()
+        currentBufStatus.lspCompletionList.add newItem
+
+    return Result[(), string].ok ()
 
 proc handleLspServerNotify(
   status: var EditorStatus,
@@ -379,7 +383,7 @@ proc handleLspResponse*(status: var EditorStatus) =
           let r = status.lspHover(resJson.get)
           if r.isErr: status.commandLine.writeLspHoverError(r.error)
         of LspMethod.textDocumentCompletion:
-          let r = currentBufStatus.lspCompletion(resJson.get)
+          let r = status.lspCompletion(resJson.get)
           if r.isErr: status.commandLine.writeLspCompletionError(r.error)
         else:
           discard

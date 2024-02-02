@@ -18,7 +18,7 @@
 #[############################################################################]#
 
 import std/[unicode, sequtils, strutils, strformat, os, times, oids]
-import pkg/unicodedb/widths
+import pkg/unicodedb/[properties, widths]
 
 export unicode
 
@@ -34,6 +34,13 @@ type
     utf32Be
     utf32Le
     unknown
+
+const
+  LetterCharacter* = ctgLu + ctgLl + ctgLt + ctgLm + ctgLo + ctgNl
+  CombiningCharacter* = ctgMn + ctgMc
+  DecimalDigitCharacter* = ctgNd
+  ConnectingCharacter* = ctgPc
+  FormattingCharacter* = ctgCf
 
 proc `$`*(encoding: CharacterEncoding): string =
   case encoding

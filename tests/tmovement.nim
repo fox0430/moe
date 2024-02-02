@@ -18,13 +18,13 @@
 #[############################################################################]#
 
 import std/[unittest, sequtils]
-import pkg/results
-import moepkg/[editorstatus, gapbuffer, unicodeext, highlight, movement,
-               bufferstatus, ui]
 
-proc resize(status: var EditorStatus, h, w: int) =
-  updateTerminalSize(h, w)
-  status.resize
+import pkg/results
+
+import moepkg/[editorstatus, gapbuffer, unicodeext, highlight, movement,
+               bufferstatus]
+
+import utils
 
 test "Move right":
   var status = initEditorStatus()

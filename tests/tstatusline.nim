@@ -18,14 +18,14 @@
 #[############################################################################]#
 
 import std/[unittest, os, strutils, strformat, importutils]
+
 import pkg/results
-import moepkg/[bufferstatus, unicodeext, editorstatus, ui, gapbuffer, git, color]
+
+import moepkg/[bufferstatus, unicodeext, editorstatus, gapbuffer, git, color]
+
+import utils
 
 import moepkg/statusline {.all.}
-
-proc resize(status: var EditorStatus, h, w: int) =
-  updateTerminalSize(h, w)
-  status.resize
 
 suite "statusline: displayPath":
   test "Empty":

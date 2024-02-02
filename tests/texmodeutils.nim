@@ -677,7 +677,7 @@ suite "exmodeutils: isValidFileOpenCommand":
     check isValidFileOpenCommand(ru"e src/moe.nim")
 
   test "Valid 3":
-    check isValidFileOpenCommand(ru"e ./src/moepkg/autocomplete.nim")
+    check isValidFileOpenCommand(ru"e ./src/moepkg/completion.nim")
 
   test "Valid 4":
     check isValidFileOpenCommand(ru"vs moe.nimble")

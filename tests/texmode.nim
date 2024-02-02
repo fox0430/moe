@@ -26,16 +26,12 @@ import moepkg/syntax/highlite
 import moepkg/lsp/client
 import moepkg/[ui, editorstatus, gapbuffer, unicodeext, bufferstatus, settings,
                windownode, helputils, backgroundprocess, quickrunutils,
-               exmodeutils, gapbuffer]
+               exmodeutils]
 
 import utils
 
 import moepkg/lsp {.all.}
 import moepkg/exmode {.all.}
-
-proc resize(status: var EditorStatus, h, w: int) =
-  updateTerminalSize(h, w)
-  status.resize
 
 proc isValidWindowSize(n: WindowNode) =
   check n.w > 0

@@ -17,9 +17,9 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[heapqueue, options]
+import std/[heapqueue, options, strformat, tables]
 import ui, editorview, gapbuffer, color, cursor, highlight, unicodeext,
-       independentutils, settings
+       independentutils, settings, undoredostack
 
 type
   SplitType* = enum
@@ -399,17 +399,15 @@ proc countReferencedWindow*(root: WindowNode, bufferIndex: int): int =
 proc absolutePosition*(
   windowNode: WindowNode,
   line, column: int): tuple[y, x: int] =
-    ## Calculates the absolute position of (`line`, `column`).
-
-    let (_, relativeY, relativeX) = windowNode.view.findCursorPosition(
-      line,
-      column)
+    ## Calculates the absolute cursor position from line and column.
 
     let
-      y = windowNode.y + relativeY
+      relativePosition = windowNode.view.findCursorPosition(line, column)
+
+      y = windowNode.y + relativePosition.y
       x =
         windowNode.x +
-        relativeX +
+        relativePosition.x +
         windowNode.view.widthOfLineNum +
         windowNode.view.sidebarWidth
 
@@ -474,3 +472,27 @@ proc bufferPosition*(windowNode: WindowNode): BufferPosition {.inline.} =
   ## Return the current position.
 
   BufferPosition(line: windowNode.currentLine, column: windowNode.currentColumn)
+
+proc reloadEditorView*[T](node: var WindowNode, buffer: T) {.inline.} =
+  node.view.reload(
+    buffer,
+    min(node.view.originalLine[0], buffer.high))
+
+proc seekCursor*[T](node: var WindowNode, buffer: T) {.inline.} =
+  node.view.seekCursor(
+    buffer,
+    node.currentLine,
+    node.currentColumn)
+
+proc revertPosition*(
+  windowNode: var WindowNode,
+  positionRecord: PositionRecord,
+  id: int) =
+
+    let mess =
+      fmt"The id not recorded was requested. [positionRecord = {positionRecord}, id = {id}]"
+    doAssert(positionRecord.contains(id), mess)
+
+    windowNode.currentLine = positionRecord[id].line
+    windowNode.currentColumn = positionRecord[id].column
+    windowNode.expandedColumn = positionRecord[id].expandedColumn

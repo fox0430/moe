@@ -18,15 +18,15 @@
 #[############################################################################]#
 
 import std/[unittest, strutils, strformat, importutils]
+
 import pkg/results
+
 import moepkg/[bufferstatus, editorstatus, ui, color, independentutils,
                unicodeext]
 
-import moepkg/tabline {.all.}
+import utils
 
-proc resize(status: var EditorStatus, size: Size) =
-  updateTerminalSize(size)
-  status.resize
+import moepkg/tabline {.all.}
 
 suite "tabline: initBuffers":
   test "Basic":
@@ -94,7 +94,7 @@ suite "tabline: update":
   test "Single buffer":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
-    status.resize(Size(h: 100, w: 100))
+    status.resize(100, 100)
 
     const
       CurrentBufferIndex = 0
@@ -121,7 +121,7 @@ suite "tabline: update":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.path = Path
-    status.resize(Size(h: 100, w: 100))
+    status.resize(100, 100)
 
     const
       CurrentBufferIndex = 0
@@ -149,7 +149,7 @@ suite "tabline: update":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.path = Path
-    status.resize(Size(h: 100, w: 5))
+    status.resize(100, 5)
 
     const
       CurrentBufferIndex = 0
@@ -182,7 +182,7 @@ suite "tabline: update":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.path = Path2
 
-    status.resize(Size(h: 100, w: 100))
+    status.resize(100, 100)
 
     const
       CurrentBufferIndex = 0
@@ -217,7 +217,7 @@ suite "tabline: update":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.path = Path2
 
-    status.resize(Size(h: 100, w: 100))
+    status.resize(100, 100)
 
     const
       CurrentBufferIndex = 0

@@ -469,7 +469,7 @@ suite "lsp: lspCompletion":
     status.lspClients["nim"] = LspClient()
 
   test "Basic":
-    check currentBufStatus.lspCompletion(%*{
+    check status.lspCompletion(%*{
       "jsonrpc": "2.0",
       "id": 0,
       "result": [
@@ -506,13 +506,13 @@ suite "lsp: lspCompletion":
       ]
     }).isOk
 
-    check currentBufStatus.completionList.items == @[
+    check currentBufStatus.lspCompletionList.items == @[
       CompletionItem(label: ru"a", insertText: ru"a1"),
       CompletionItem(label: ru"b", insertText: ru"b1"),
     ]
 
   test "Without insertText":
-    check currentBufStatus.lspCompletion(%*{
+    check status.lspCompletion(%*{
       "jsonrpc": "2.0",
       "id": 0,
       "result": [
@@ -549,7 +549,7 @@ suite "lsp: lspCompletion":
       ]
     }).isOk
 
-    check currentBufStatus.completionList.items == @[
+    check currentBufStatus.lspCompletionList.items == @[
       CompletionItem(label: ru"a", insertText: ru"a"),
       CompletionItem(label: ru"b", insertText: ru"b"),
     ]

@@ -18,15 +18,14 @@
 #[############################################################################]#
 
 import std/unittest
+
 import pkg/results
-import moepkg/[editorstatus, bufferstatus, unicodeext, ui, gapbuffer,
-               windownode]
+
+import moepkg/[editorstatus, bufferstatus, unicodeext, gapbuffer, windownode]
+
+import utils
 
 import moepkg/buffermanager {.all.}
-
-proc resize(status: var EditorStatus, h, w: int) =
-  updateTerminalSize(h, w)
-  status.resize
 
 proc openBufferManager(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)

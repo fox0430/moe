@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -17,49 +17,50 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/unittest
+import std/[unittest, os]
 
-import pkg/results
+import moepkg/unicodeext
 
-import moepkg/[editorstatus, logviewer, bufferstatus, unicodeext, ui,
-               messagelog]
+import moepkg/completion {.all.}
 
-import utils
+suite "completion: isCompletionCharacter":
+  test "Basics":
+    check isCompletionCharacter(ru'a')
+    check isCompletionCharacter("あ".toRunes[0])
+    check isCompletionCharacter(ru'/')
 
-suite "Log viewer":
-  test "Open the log viewer (Fix #1455)":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
+    check not isCompletionCharacter(ru'.')
+    check not isCompletionCharacter(ru'=')
 
-    status.resize(100, 100)
-    status.update
+suite "completion: pathCompletionList":
+  const TestDir = "pathCompletionListTest"
 
-    addMessageLog "test"
+  setup:
+    createDir(TestDir)
 
-    status.verticalSplitWindow
-    status.resize(100, 100)
-    status.moveNextWindow
+  teardown:
+    removeDir(TestDir)
 
-    discard status.addNewBufferInCurrentWin.get
-    status.changeCurrentBuffer(status.bufStatus.high)
-    status.changeMode(bufferstatus.Mode.logviewer)
+  test "Basic":
+    createDir(TestDir / "dir1")
+    createDir(TestDir / "dir2")
+    writeFile(TestDir / "file1", "hello")
 
-    # In the log viewer
-    currentBufStatus.path = ru"Log viewer"
+    check pathCompletionList(TestDir.toRunes & ru'/').items == @[
+      CompletionItem(label: ru"dir2", insertText: ru"dir2"),
+      CompletionItem(label: ru"dir1", insertText: ru"dir1"),
+      CompletionItem(label: ru"file1", insertText: ru"file1")
+    ]
 
-    status.resize(100, 100)
-    status.update
+  test "Basic 2":
+    createDir(TestDir / "dir1")
+    createDir(TestDir / "dir2")
+    writeFile(TestDir / "file1", "hello")
 
-    status.update
+    check pathCompletionList(TestDir.toRunes / ru"di").items == @[
+      CompletionItem(label: ru"dir1", insertText: ru"dir1"),
+      CompletionItem(label: ru"dir2", insertText: ru"dir2"),
+    ]
 
-  test "Exit viewer":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin("Log viewer", Mode.logViewer).get
-
-    status.resize(100, 100)
-    status.update
-
-    status.exitLogViewer
-
-    status.resize(100, 100)
-    status.update
+  test "Root dir":
+    check pathCompletionList(ru"/").items.len > 0
