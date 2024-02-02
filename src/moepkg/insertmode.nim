@@ -21,7 +21,7 @@ import std/[options, json, logging, tables]
 
 import pkg/results
 
-import lsp/client
+import lsp/[client, utils]
 import ui, editorstatus, windownode, movement, editor, bufferstatus, settings,
        unicodeext, independentutils, gapbuffer, completion
 
@@ -104,6 +104,13 @@ proc sendCompletionRequest(
 
     return Result[(), string ].ok ()
 
+template isCompletionCharacter(c: LspClient, r: Rune): bool =
+  if c.capabilities.isSome and c.capabilities.get.completion.isSome:
+    isTriggerCharacter(c.capabilities.get.completion.get, $r) or
+    isCompletionCharacter(r)
+  else:
+    isCompletionCharacter(r)
+
 proc insertToBuffer(status: var EditorStatus, r: Rune) {.inline.} =
   if currentBufStatus.isInsertMultiMode:
     currentBufStatus.insertMultiplePositions(
@@ -119,7 +126,7 @@ proc insertToBuffer(status: var EditorStatus, r: Rune) {.inline.} =
       r)
 
   if status.lspClients.contains(currentBufStatus.langId) and
-     isCompletionCharacter(r):
+     lspClient.isCompletionCharacter(r):
        let err = status.sendCompletionRequest(r)
        if err.isErr:
          error err.error
