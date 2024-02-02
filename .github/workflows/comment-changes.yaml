@@ -53,7 +53,7 @@ jobs:
           rustup update
 
       - name: Install aeruginous-rs
-        uses: baptiste0928/cargo-install@v2
+        uses: baptiste0928/cargo-install@v3
         with:
           crate: aeruginous
 
