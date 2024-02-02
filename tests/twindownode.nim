@@ -18,14 +18,14 @@
 #[############################################################################]#
 
 import std/unittest
+
 import pkg/results
-import moepkg/[editorstatus, editorview, ui]
+
+import moepkg/[editorstatus, editorview]
+
+import utils
 
 import moepkg/windownode {.all.}
-
-proc resize(status: var EditorStatus, h, w: int) =
-  updateTerminalSize(h, w)
-  status.resize
 
 suite "windownode: absolutePosition":
   test "Eanble EditorView.Sidebar":

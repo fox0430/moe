@@ -18,15 +18,15 @@
 #[############################################################################]#
 
 import std/[unittest, options]
+
 import pkg/results
+
 import moepkg/[highlight, editorstatus, gapbuffer, unicodeext, editor, movement,
-               bufferstatus, windownode, ui, visualmode]
+               bufferstatus, windownode, visualmode]
+
+import utils
 
 import moepkg/insertmode {.all.}
-
-proc resize(status: var EditorStatus, h, w: int) =
-  updateTerminalSize(h, w)
-  status.resize
 
 proc initSelectedArea(status: EditorStatus) =
   currentBufStatus.selectedArea = initSelectedArea(

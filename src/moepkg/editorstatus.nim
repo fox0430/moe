@@ -514,11 +514,17 @@ proc resize*(status: var EditorStatus) =
       if node.window.isSome:
         let
           bufIndex = node.bufferIndex
-          widthOfLineNum = node.view.widthOfLineNum
+
+          widthOfLineNum =
+            if status.settings.view.lineNumber: node.view.widthOfLineNum
+            else: 0
+
           h = node.h - StatusLineHeight
+
           sidebarWidth =
             if node.view.sidebar.isSome: 2
             else: 2
+
           adjustedHeight = max(h, 4)
           adjustedWidth = max(node.w - widthOfLineNum - sidebarWidth, 4)
 

@@ -20,7 +20,7 @@
 import std/[unittest, critbits, sequtils]
 
 import moepkg/syntax/highlite
-import moepkg/[unicodeext, bufferstatus, gapbuffer]
+import moepkg/unicodeext
 
 import moepkg/worddictionary {.all.}
 

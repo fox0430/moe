@@ -18,16 +18,16 @@
 #[############################################################################]#
 
 import std/[unittest, importutils, sequtils, sugar, os, options, strformat]
+
 import pkg/results
+
 import moepkg/syntax/highlite
 import moepkg/[registers, settings, editorstatus, gapbuffer, unicodeext,
                bufferstatus, ui, windownode, quickrunutils, viewhighlight]
 
-import moepkg/normalmode {.all.}
+import utils
 
-proc resize(status: var EditorStatus, h, w: int) =
-  updateTerminalSize(h, w)
-  status.resize
+import moepkg/normalmode {.all.}
 
 suite "Normal mode: Move to the right":
   test "Move tow to the right":

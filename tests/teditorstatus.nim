@@ -18,19 +18,17 @@
 #[############################################################################]#
 
 import std/[unittest, options, os, osproc, importutils, sequtils, oids, tables]
+
 import pkg/results
+
 import moepkg/lsp/protocol/enums
-import moepkg/[editor, gapbuffer, bufferstatus, editorview, unicodeext, ui,
-               highlight, windownode, movement, build, backgroundprocess,
-               syntaxcheck, independentutils, tabline, settings, visualmode]
+import moepkg/[editor, gapbuffer, bufferstatus, editorview, unicodeext, build,
+               highlight, windownode, movement, backgroundprocess, syntaxcheck,
+               independentutils, tabline, settings, visualmode]
 
 import utils
 
 import moepkg/editorstatus {.all.}
-
-proc resize(status: var EditorStatus, h, w: int) =
-  updateTerminalSize(h, w)
-  status.resize
 
 proc initSelectedArea(status: EditorStatus) =
   currentBufStatus.selectedArea = initSelectedArea(

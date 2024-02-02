@@ -18,10 +18,13 @@
 #[############################################################################]#
 
 import std/[unittest, osproc]
+
 import pkg/results
+
+import moepkg/syntax/highlite
 import moepkg/[independentutils, gapbuffer, unicodeext, bufferstatus,
                editorstatus, settings, registers, windownode]
-import moepkg/syntax/highlite
+
 import utils
 
 import moepkg/editor {.all.}
@@ -55,10 +58,6 @@ proc sourceLangToStr(lang: SourceLanguage): string =
       "Yaml"
     else:
       "Plain text"
-
-proc resize(status: var EditorStatus, h, w: int) =
-  updateTerminalSize(h, w)
-  status.resize
 
 suite "Editor: getRegister":
   test "No named register":

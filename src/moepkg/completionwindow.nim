@@ -121,6 +121,7 @@ proc next*(c: var CompletionWindow) =
 proc removeInsertedText*(
   bufStatus: var BufferStatus,
   completionWindow: CompletionWindow) =
+    ## Remove text temporarily inserted by completion.
 
     var newLine = bufStatus.buffer[completionWindow.startPosition.line]
     let
@@ -135,7 +136,7 @@ proc removeInsertedText*(
   bufStatus: var BufferStatus,
   completionWindow: CompletionWindow,
   lines: seq[int]) =
-    # Remove the selected text from multiple lines.
+    ## Remove text temporarily inserted by completion.
 
     for lineNum in lines:
       var newLine = bufStatus.buffer[lineNum]
@@ -151,6 +152,7 @@ proc removeInsertedText*(
 proc insertSelectedText*(
   bufStatus: var BufferStatus,
   completionWindow: CompletionWindow) =
+    # Insert the selected text to the line.
 
     var newLine = bufStatus.buffer[completionWindow.startPosition.line]
     let text = completionWindow.selectedText
@@ -166,9 +168,9 @@ proc insertSelectedText*(
   lines: seq[int]) =
     # Insert the selected text to multiple lines.
 
-    let positons = bufferPositionsForMultipleEdit(
-      bufStatus.selectedArea.get,
-      completionWindow.startColumn)
+    let positons = lines.mapIt(BufferPosition(
+      line: it,
+      column: completionWindow.startColumn))
     bufStatus.insertMultiplePositions(
       positons,
       completionWindow.selectedText)
@@ -263,4 +265,6 @@ proc completionWindowPosition*(
     windowNode.seekCursor(bufStatus.buffer)
 
     let absCursorPositon = windowNode.absolutePosition
-    return Position(y: absCursorPositon.y + 1, x: absCursorPositon.x - 2)
+    return Position(
+      y: (absCursorPositon.y + 1).clamp(0, getTerminalHeight()),
+      x: (absCursorPositon.x - 2).clamp(0, getTerminalWidth()))

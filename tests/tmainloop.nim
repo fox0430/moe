@@ -26,16 +26,14 @@ import moepkg/[unicodeext, bufferstatus, gapbuffer, editorstatus, windownode,
                ui, commandLine, viewhighlight, visualmode, independentutils,
                completion]
 
+import utils
+
 import moepkg/registers {.all.}
 import moepkg/backupmanager {.all.}
 import moepkg/exmode {.all.}
 import moepkg/completionwindow {.all.}
 import moepkg/popupwindow {.all.}
 import moepkg/mainloop {.all.}
-
-proc resize(status: var EditorStatus, h, w: int) =
-  updateTerminalSize(h, w)
-  status.resize
 
 suite "mainloop: isExecMacroCommand":
   setup:

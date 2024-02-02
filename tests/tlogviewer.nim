@@ -18,13 +18,13 @@
 #[############################################################################]#
 
 import std/unittest
+
 import pkg/results
+
 import moepkg/[editorstatus, logviewer, bufferstatus, unicodeext, ui,
                messagelog]
 
-proc resize(status: var EditorStatus, h, w: int) =
-  updateTerminalSize(h, w)
-  status.resize
+import utils
 
 suite "Log viewer":
   test "Open the log viewer (Fix #1455)":
