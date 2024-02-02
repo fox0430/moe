@@ -46,36 +46,74 @@ type
     searchForward
     searchBackward
 
-  BufferStatus* = ref object
+  BufferStatusKind* = enum
+    editor
+    log
+
+  BufferStatusBase* = ref object of RootObj
     buffer*: GapBuffer[Runes]
-    id: int # A unique id. Don't overwrite
+      # The buffer
+    id: int
+      # A unique id. Don't overwrite
     isUpdate*: bool
-    characterEncoding*: CharacterEncoding
-    language*: SourceLanguage
-    fileType*: FileType
-    extension*: Runes
-    langId*: string
+      # Set to ture if need to update the view, etc.
     selectedArea*: Option[SelectedArea]
-    path*: Runes
-    openDir*: Runes
+      # Selection range. Used in visual mode etc.
     positionRecord*: PositionRecord
-    countChange*: int # Counting temporary changes
-    version*: Natural # Counting total changes
+      # Recording cursor position. Used in undo/redo.
+    countChange*: int
+      # Counting temporary changes
+    version*: Natural
+      # Counting total changes
     cmdLoop*: int
-    mode* : Mode
+      # Loop counter for editor operations
+    mode*: Mode
+      # Editor mode
     prevMode* : Mode
-    lastSaveTime*: DateTime
+      # Previous editor mode
     isReadonly*: bool
-    filerStatusIndex*: Option[int]
-    isTrackingByGit*: bool
-    lastGitInfoCheckTime*: DateTime
-    isGitUpdate*: bool
-    changedLines*: seq[Diff]
-    syntaxCheckResults*: seq[SyntaxError]
+      # Readonly mode
     isPasteMode*: bool
-    lspCompletionList*: CompletionList
-    logContent*: LogContentKind # Use only in Logviewer
-    logLspLangId*: string  # Use only in Logviewer
+      # Set to true if paste is detected
+
+  BufferStatus* = ref object of BufferStatusBase
+    case kind: BufferStatusKind
+      of log:
+        logContent*: LogContentKind
+          # Kind of the log
+        lspLangId*: Option[string]
+          # The language Id of LSP
+      else:
+        characterEncoding*: CharacterEncoding
+          # Encoding
+        language*: SourceLanguage
+          # Language
+        fileType*: FileType
+          # File type
+        extension*: Runes
+          # File extension
+        langId*: string
+          # Language Id of LSP
+        path*: Runes
+          # File path. The path entered by the user is set
+        openDir*: Runes
+          # The path whe opening editor
+        lastSaveTime*: DateTime
+          # The time the file was last saved
+        isTrackingByGit*: bool
+          # Set to true if the file is tracked by git
+        lastGitInfoCheckTime*: DateTime
+          # Time when last git diff was checked
+        isGitUpdate*: bool
+          # Set to true if the contents of the git diff have been updated
+        changedLines*: seq[Diff]
+          # Used in git diff.
+        syntaxCheckResults*: seq[SyntaxError]
+          # Used in Syntax checker and LSP diagnostics
+        lspCompletionList*: CompletionList
+          # Used in LSP completion
+        filerStatusIndex*: Option[int]
+          # The index for EditorStatus.filerStatuses
 
 var
   countAddedBuffer = 0
@@ -295,19 +333,31 @@ proc initId(b: var BufferStatus) {.inline.} =
   b.id = countAddedBuffer
   countAddedBuffer.inc
 
+proc newBufferStatus(mode: Mode): BufferStatus =
+  case mode:
+    of Mode.logViewer:
+      BufferStatus(
+        kind: log,
+        isUpdate: true,
+        prevMode: mode,
+        mode: mode)
+    else:
+      BufferStatus(
+        kind: editor,
+        isUpdate: true,
+        openDir: getCurrentDir().toRunes,
+        prevMode: mode,
+        mode: mode,
+        lastSaveTime: now(),
+        lastGitInfoCheckTime: now(),
+        lspCompletionList: initCompletionList())
+
 proc initBufferStatus*(
   path: string,
   mode: Mode): Result[BufferStatus, string] =
     ## Open file or dir and return a new BufferStatus.
 
-    var b = BufferStatus(
-      isUpdate: true,
-      openDir: getCurrentDir().toRunes,
-      prevMode: mode,
-      mode: mode,
-      lastSaveTime: now(),
-      lastGitInfoCheckTime: now(),
-      lspCompletionList: initCompletionList())
+    var b = newBufferStatus(mode)
 
     if isFilerMode(mode):
       if isAccessibleDir(path):
@@ -345,15 +395,7 @@ proc initBufferStatus*(
   mode: Mode): Result[BufferStatus, string] =
     ## Return a BufferStatus for a new empty buffer.
 
-    var b = BufferStatus(
-      isUpdate: true,
-      openDir: getCurrentDir().toRunes,
-      prevMode: mode,
-      mode: mode,
-      lastSaveTime: now(),
-      lastGitInfoCheckTime: now(),
-      fileType: FileType.unknown,
-      lspCompletionList: initCompletionList())
+    var b = newBufferStatus(mode)
 
     if mode.isFilerMode:
       b.buffer = initGapBuffer(@[ru""])

@@ -227,7 +227,7 @@ proc openLspLogViewer(status: var EditorStatus) =
   status.changeCurrentBuffer(status.bufStatus.high)
 
   currentBufStatus.logContent = LogContentKind.lsp
-  currentBufStatus.logLspLangId = langId
+  currentBufStatus.lspLangId = some(langId)
 
 proc openBufferManager(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)

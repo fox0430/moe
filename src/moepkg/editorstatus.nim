@@ -795,8 +795,8 @@ proc update*(status: var EditorStatus) =
         of editor:
           b.updateLogViewerEditorBuffer
         of lsp:
-          if status.lspClients.contains(b.logLspLangId):
-            b.updateLogViewerLspBuffer(status.lspClients[b.logLspLangId].log)
+          if status.lspClients.contains(b.lspLangId.get):
+            b.updateLogViewerLspBuffer(status.lspClients[b.lspLangId.get].log)
 
     elif b.isDebugMode:
       # Update the debug mode buffer.
