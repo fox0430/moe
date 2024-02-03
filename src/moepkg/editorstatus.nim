@@ -437,7 +437,8 @@ proc addNewBufferInCurrentWin*(
     if mode.isFilerMode:
       status.addFilerStatus
 
-    currentBufStatus.isReadonly = status.isReadonly
+    if status.isReadonly:
+      currentBufStatus.isReadonly = status.isReadonly
 
     return Result[(), string].ok ()
 

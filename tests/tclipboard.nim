@@ -23,7 +23,6 @@ import moepkg/[settings, unicodeext, clipboard]
 import utils
 
 import moepkg/platform {.all.}
-import moepkg/independentutils {.all.}
 
 proc removeLineEnd(buf: string, tool: ClipboardTool): string =
   case tool:

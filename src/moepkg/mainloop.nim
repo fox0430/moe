@@ -24,11 +24,11 @@ import pkg/results
 import lsp/[client, utils]
 import editorstatus, bufferstatus, windownode, unicodeext, gapbuffer, ui, help,
        normalmode, visualmode, insertmode, exmode, filermode, replacemode,
-       buffermanager, logviewerutils, logviewer, recentfilemode, quickrun,
-       backupmanager, diffviewer, configmode, debugmode, commandline, search,
-       commandlineutils, popupwindow, messages, filermodeutils, editor,
-       registers, exmodeutils, movement, searchutils, independentutils, lsp,
-       viewhighlight, completion, completionwindow, worddictionary
+       buffermanager, recentfilemode, quickrun, backupmanager, diffviewer,
+       configmode, debugmode, commandline, search, commandlineutils,
+       popupwindow, messages, filermodeutils, editor, registers, exmodeutils,
+       movement, searchutils, independentutils, lsp, viewhighlight, completion,
+       completionwindow, worddictionary
 
 type
   BeforeLine = object
@@ -50,7 +50,7 @@ proc invokeCommand(
         InputState.Valid
       of Mode.ex:
         isExCommandBuffer(command)
-      of Mode.normal:
+      of Mode.normal, Mode.logViewer:
         isNormalModeCommand(command, recodingOperationRegister)
       of Mode.visual, Mode.visualBlock, Mode.visualLine:
         isVisualModeCommand(command)
@@ -60,8 +60,6 @@ proc invokeCommand(
         isFilerModeCommand(command)
       of Mode.bufManager:
         isBufferManagerCommand(command)
-      of Mode.logViewer:
-        isLogViewerCommand(command)
       of Mode.help:
         isHelpCommand(command)
       of Mode.recentFile:
@@ -87,7 +85,7 @@ proc execCommand(status: var EditorStatus, command: Runes): Option[Rune] =
       status.execInsertModeCommand(command)
     of Mode.ex:
       status.execExCommand(command)
-    of Mode.normal:
+    of Mode.normal, Mode.logViewer:
       return status.execNormalModeCommand(command)
     of Mode.visual, Mode.visualBlock, Mode.visualLine:
       status.execVisualModeCommand(command)
@@ -99,8 +97,6 @@ proc execCommand(status: var EditorStatus, command: Runes): Option[Rune] =
       status.execFilerModeCommand(command)
     of Mode.bufManager:
       status.execBufferManagerCommand(command)
-    of Mode.logviewer:
-      status.execLogViewerCommand(command)
     of Mode.help:
       status.execHelpCommand(command)
     of Mode.recentFile:

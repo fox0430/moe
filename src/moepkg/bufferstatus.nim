@@ -309,37 +309,38 @@ proc initBufferStatus*(
       lastGitInfoCheckTime: now(),
       lspCompletionList: initCompletionList())
 
-    if isFilerMode(mode):
-      if isAccessibleDir(path):
-        b.path = absolutePath(path).toRunes
+    case mode:
+      of Mode.filer:
+        if isAccessibleDir(path):
+          b.path = absolutePath(path).toRunes
+          b.buffer = initGapBuffer(@[ru""])
+        else:
+          return Result[BufferStatus, string].err "Can not open dir"
+      of Mode.logViewer:
         b.buffer = initGapBuffer(@[ru""])
-        b.initId
-        return Result[BufferStatus, string].ok b
+        b.isReadonly = true
       else:
-        return Result[BufferStatus, string].err "Can not open dir"
-    else:
-      b.path = path.toRunes
+        b.path = path.toRunes
 
-      b.fileType = getFileType(path)
-      b.extension = getFileExtension(b.path)
+        b.fileType = getFileType(path)
+        b.extension = getFileExtension(b.path)
 
-      if not fileExists($b.path):
-        b.buffer = newFile()
-      else:
-        let textAndEncoding = openFile(b.path)
-        if textAndEncoding.isErr:
-          return Result[BufferStatus, string].err fmt"Failed to init BufferStatus: {textAndEncoding.error}"
+        if not fileExists($b.path):
+          b.buffer = newFile()
+        else:
+          let textAndEncoding = openFile(b.path)
+          if textAndEncoding.isErr:
+            return Result[BufferStatus, string].err fmt"Failed to init BufferStatus: {textAndEncoding.error}"
 
-        b.buffer = textAndEncoding.get.text.toGapBuffer
-        b.characterEncoding = textAndEncoding.get.encoding
+          b.buffer = textAndEncoding.get.text.toGapBuffer
+          b.characterEncoding = textAndEncoding.get.encoding
 
-        b.isTrackingByGit = isTrackingByGit(path)
+          b.isTrackingByGit = isTrackingByGit(path)
 
-      b.language = detectLanguage($b.path)
+        b.language = detectLanguage($b.path)
 
-      b.initId
-
-      return Result[BufferStatus, string].ok b
+    b.initId
+    return Result[BufferStatus, string].ok b
 
 proc initBufferStatus*(
   mode: Mode): Result[BufferStatus, string] =
@@ -355,10 +356,14 @@ proc initBufferStatus*(
       fileType: FileType.unknown,
       lspCompletionList: initCompletionList())
 
-    if mode.isFilerMode:
-      b.buffer = initGapBuffer(@[ru""])
-    else:
-      b.buffer = newFile()
+    case mode:
+      of Mode.filer:
+        b.buffer = initGapBuffer(@[ru""])
+      of Mode.logViewer:
+        b.buffer = initGapBuffer(@[ru""])
+        b.isReadonly = true
+      else:
+        b.buffer = newFile()
 
     b.initId
 
