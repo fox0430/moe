@@ -21,8 +21,7 @@ import std/unittest
 
 import pkg/results
 
-import moepkg/[editorstatus, logviewer, bufferstatus, unicodeext, ui,
-               messagelog]
+import moepkg/[editorstatus, bufferstatus, unicodeext, messagelog, gapbuffer]
 
 import utils
 
@@ -34,32 +33,19 @@ suite "Log viewer":
     status.resize(100, 100)
     status.update
 
-    addMessageLog "test"
+    addMessageLog "line1"
+    addMessageLog "line2"
 
     status.verticalSplitWindow
     status.resize(100, 100)
     status.moveNextWindow
 
-    discard status.addNewBufferInCurrentWin.get
+    discard status.addNewBufferInCurrentWin(Mode.logViewer).get
+    status.resize(100, 100)
+
     status.changeCurrentBuffer(status.bufStatus.high)
-    status.changeMode(bufferstatus.Mode.logviewer)
-
-    # In the log viewer
-    currentBufStatus.path = ru"Log viewer"
-
-    status.resize(100, 100)
-    status.update
 
     status.update
 
-  test "Exit viewer":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin("Log viewer", Mode.logViewer).get
-
-    status.resize(100, 100)
-    status.update
-
-    status.exitLogViewer
-
-    status.resize(100, 100)
-    status.update
+    check currentBufStatus.isReadonly
+    check currentBufStatus.buffer.toSeqRunes == @["line1", "line2"].toSeqRunes
