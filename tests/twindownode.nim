@@ -17,11 +17,11 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/unittest
+import std/[unittest, options]
 
 import pkg/results
 
-import moepkg/[editorstatus, editorview]
+import moepkg/[editorstatus, editorview, independentutils]
 
 import utils
 
@@ -47,3 +47,38 @@ suite "windownode: absolutePosition":
     status.update
 
     check currentMainWindowNode.absolutePosition(0, 0) == (y: 1, x: 2)
+
+suite "windownode: moveCursor":
+  test "Basic":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    status.resize(100, 100)
+    status.update
+
+    let beforeWindowPoistion = Position(
+      y: currentMainWindowNode.y,
+      x: currentMainWindowNode.x)
+
+    currentMainWindowNode.moveCursor(BufferPosition(line: 10, column: 5))
+
+    check currentMainWindowNode.currentLine == 10
+    check currentMainWindowNode.currentColumn == 5
+    check currentMainWindowNode.window.get.y == beforeWindowPoistion.y
+    check currentMainWindowNode.window.get.x == beforeWindowPoistion.x
+
+  test "Basic 2":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    status.resize(100, 100)
+    status.update
+
+    let beforeWindowPoistion = Position(
+      y: currentMainWindowNode.y,
+      x: currentMainWindowNode.x)
+
+    currentMainWindowNode.moveCursor(10, 5)
+
+    check currentMainWindowNode.currentLine == 10
+    check currentMainWindowNode.currentColumn == 5
+    check currentMainWindowNode.window.get.y == beforeWindowPoistion.y
+    check currentMainWindowNode.window.get.x == beforeWindowPoistion.x

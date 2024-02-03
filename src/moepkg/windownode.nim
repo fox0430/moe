@@ -425,7 +425,7 @@ proc moveCursor*(node: var WindowNode, line, column: int) =
   if node.window.isSome:
     node.currentLine = line
     node.currentColumn = column
-    node.window.get.move(line, column)
+    node.window.get.moveCursor(line, column)
     node.window.get.refresh
 
 proc moveCursor*(node: var WindowNode, position: BufferPosition) {.inline.} =
@@ -433,7 +433,7 @@ proc moveCursor*(node: var WindowNode, position: BufferPosition) {.inline.} =
 
 proc moveCursor*(node: var WindowNode) {.inline.} =
   if node.window.isSome:
-    node.window.get.move(node.y, node.x)
+    node.window.get.moveCursor(node.y, node.x)
     node.window.get.refresh
 
 proc refreshWindow*(node: var WindowNode) {.inline.} =
