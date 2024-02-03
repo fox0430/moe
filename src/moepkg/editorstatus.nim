@@ -841,21 +841,23 @@ proc update*(status: var EditorStatus) =
 
         node.seekCursor(b.buffer)
 
-        # NOTE: node.highlight is not directly change here for performance.
-        var highlight = node.highlight
-
-        # Update highlights
+        # Update the highlight.
         if b.isLogViewerMode:
-          highlight = initLogViewerHighlight(b.buffer.toSeqRunes)
+          node.highlight = initLogViewerHighlight(b.buffer.toSeqRunes)
         elif b.isDiffViewerMode:
-          highlight = b.buffer.toRunes.initDiffViewerHighlight
+          node.highlight = b.buffer.toRunes.initDiffViewerHighlight
         elif b.isFilerMode and
              status.filerStatuses[b.filerStatusIndex.get].isUpdateView:
-               highlight = initFilerHighlight(
+               node.highlight = initFilerHighlight(
                  status.filerStatuses[b.filerStatusIndex.get],
                  b.buffer,
                  node.currentLine)
-        elif b.isEditMode:
+
+        # NOTE: node.highlight is not directly change here for performance.
+        var highlight = node.highlight
+
+        # Update the highlight for the view.
+        if b.isEditMode:
           highlight.updateViewHighlight(
             b,
             node,

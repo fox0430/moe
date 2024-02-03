@@ -21,11 +21,18 @@ import std/unittest
 
 import pkg/results
 
-import moepkg/[editorstatus, bufferstatus, unicodeext, messagelog, gapbuffer]
+import moepkg/[editorstatus, bufferstatus, unicodeext, messagelog, gapbuffer,
+               logviewerutils]
+
+import moepkg/exmode {.all.}
+import moepkg/normalmode {.all.}
 
 import utils
 
-suite "Log viewer":
+suite "Log editor viewer":
+  setup:
+    clearMessageLog()
+
   test "Open the log viewer (Fix #1455)":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
@@ -36,16 +43,30 @@ suite "Log viewer":
     addMessageLog "line1"
     addMessageLog "line2"
 
-    status.verticalSplitWindow
-    status.resize(100, 100)
-    status.moveNextWindow
-
-    discard status.addNewBufferInCurrentWin(Mode.logViewer).get
-    status.resize(100, 100)
-
-    status.changeCurrentBuffer(status.bufStatus.high)
-
+    status.openEditorLogViewer
     status.update
 
     check currentBufStatus.isReadonly
+    check currentBufStatus.logContent == LogContentKind.editor
     check currentBufStatus.buffer.toSeqRunes == @["line1", "line2"].toSeqRunes
+
+  test "Enter visual mode (Fix #2017)":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+
+    status.resize(100, 100)
+    status.update
+
+    status.openEditorLogViewer
+    status.update
+
+    status.movePrevWindow
+    addMessageLog "test"
+    status.update
+
+    status.moveNextWindow
+    status.update
+
+    status.changeModeToVisualMode
+    status.update
+
