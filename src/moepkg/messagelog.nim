@@ -40,3 +40,7 @@ proc addMessageLog*(message: string) =
 proc getMessageLog*(): seq[Runes] =
   ## Return `logger.messageLog`.
   messageLog
+
+proc clearMessageLog*() =
+  ## Clear all message.
+  messageLog = @[]
