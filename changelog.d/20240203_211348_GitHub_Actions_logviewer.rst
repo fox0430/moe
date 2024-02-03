@@ -3,5 +3,5 @@
 Changed
 .......
 
-- `#2015`_ Enhance Log viewer
+- `#2016`_ Enhance Log viewer
 
