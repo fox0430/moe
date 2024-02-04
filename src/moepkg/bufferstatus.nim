@@ -21,7 +21,7 @@ import std/[times, options, os, strformat]
 import pkg/results
 import syntax/highlite
 import gapbuffer, unicodeext, fileutils, highlight, independentutils, git,
-       syntaxcheck, completion, logviewerutils
+       syntaxcheck, completion, logviewerutils, helputils
 
 type
   Mode* = enum
@@ -319,6 +319,9 @@ proc initBufferStatus*(
       of Mode.logViewer, Mode.diff:
         b.buffer = initGapBuffer(@[ru""])
         b.isReadonly = true
+      of Mode.help:
+        b.buffer = initHelpModeBuffer().toGapBuffer
+        b.isReadonly = true
       else:
         b.path = path.toRunes
 
@@ -361,6 +364,9 @@ proc initBufferStatus*(
         b.buffer = initGapBuffer(@[ru""])
       of Mode.logViewer, Mode.diff:
         b.buffer = initGapBuffer(@[ru""])
+        b.isReadonly = true
+      of Mode.help:
+        b.buffer = initHelpModeBuffer().toGapBuffer
         b.isReadonly = true
       else:
         b.buffer = newFile()
