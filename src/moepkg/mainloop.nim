@@ -24,11 +24,11 @@ import pkg/results
 import lsp/[client, utils]
 import editorstatus, bufferstatus, windownode, unicodeext, gapbuffer, ui, help,
        normalmode, visualmode, insertmode, exmode, filermode, replacemode,
-       buffermanager, recentfilemode, quickrun, backupmanager, diffviewer,
-       configmode, debugmode, commandline, search, commandlineutils,
-       popupwindow, messages, filermodeutils, editor, registers, exmodeutils,
-       movement, searchutils, independentutils, lsp, viewhighlight, completion,
-       completionwindow, worddictionary
+       buffermanager, recentfilemode, quickrun, backupmanager, configmode,
+       debugmode, commandline, search, commandlineutils, popupwindow, messages,
+       filermodeutils, editor, registers, exmodeutils, movement, searchutils,
+       independentutils, lsp, viewhighlight, completion, completionwindow,
+       worddictionary
 
 type
   BeforeLine = object
@@ -50,7 +50,7 @@ proc invokeCommand(
         InputState.Valid
       of Mode.ex:
         isExCommandBuffer(command)
-      of Mode.normal, Mode.logViewer:
+      of Mode.normal, Mode.logViewer, Mode.diff:
         isNormalModeCommand(command, recodingOperationRegister)
       of Mode.visual, Mode.visualBlock, Mode.visualLine:
         isVisualModeCommand(command)
@@ -68,8 +68,6 @@ proc invokeCommand(
         isQuickRunCommand(command)
       of Mode.backup:
         isBackupManagerCommand(command)
-      of Mode.diff:
-        isDiffViewerCommand(command)
       of Mode.config:
         isConfigModeCommand(command)
       of Mode.debug:
@@ -85,7 +83,7 @@ proc execCommand(status: var EditorStatus, command: Runes): Option[Rune] =
       status.execInsertModeCommand(command)
     of Mode.ex:
       status.execExCommand(command)
-    of Mode.normal, Mode.logViewer:
+    of Mode.normal, Mode.logViewer, Mode.diff:
       return status.execNormalModeCommand(command)
     of Mode.visual, Mode.visualBlock, Mode.visualLine:
       status.execVisualModeCommand(command)
@@ -105,8 +103,6 @@ proc execCommand(status: var EditorStatus, command: Runes): Option[Rune] =
       status.execQuickRunCommand(command)
     of Mode.backup:
       status.execBackupManagerCommand(command)
-    of Mode.diff:
-      status.execDiffViewerCommand(command)
     of Mode.config:
       status.execConfigCommand(command)
     of Mode.debug:

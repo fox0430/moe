@@ -316,7 +316,7 @@ proc initBufferStatus*(
           b.buffer = initGapBuffer(@[ru""])
         else:
           return Result[BufferStatus, string].err "Can not open dir"
-      of Mode.logViewer:
+      of Mode.logViewer, Mode.diff:
         b.buffer = initGapBuffer(@[ru""])
         b.isReadonly = true
       else:
@@ -359,7 +359,7 @@ proc initBufferStatus*(
     case mode:
       of Mode.filer:
         b.buffer = initGapBuffer(@[ru""])
-      of Mode.logViewer:
+      of Mode.logViewer, Mode.diff:
         b.buffer = initGapBuffer(@[ru""])
         b.isReadonly = true
       else:
