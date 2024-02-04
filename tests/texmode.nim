@@ -814,6 +814,7 @@ suite "Ex mode: help command":
     currentMainWindowNode.isValidWindowSize
 
     check status.bufStatus[1].mode == Mode.help
+    check status.bufStatus[1].isReadonly
 
     let help = initHelpModeBuffer()
     for i, line in help:

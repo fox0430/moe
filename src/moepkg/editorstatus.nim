@@ -22,13 +22,12 @@ import std/[strutils, os, strformat, tables, times, heapqueue, deques, options,
 import pkg/[results, parsetoml]
 import syntax/highlite
 import lsp/[client, utils]
-import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
-       windownode, color, settings, statusline, bufferstatus, cursor, tabline,
-       backup, messages, commandline, registers, platform, movement,
-       filermodeutils, debugmodeutils, independentutils, viewhighlight,
-       helputils, backupmanagerutils, diffviewerutils, messagelog,
-       globalsidebar, build, quickrunutils, git, syntaxcheck, theme,
-       logviewerutils, completionwindow, worddictionary
+import gapbuffer, editorview, ui, unicodeext, highlight, fileutils, windownode,
+       color, settings, statusline, bufferstatus, cursor, tabline, backup,
+       messages, commandline, registers, platform, movement, filermodeutils,
+       debugmodeutils, independentutils, viewhighlight, backupmanagerutils,
+       diffviewerutils, messagelog, globalsidebar, build, quickrunutils, git,
+       syntaxcheck, theme, logviewerutils, completionwindow, worddictionary
 
 type
   LastCursorPosition* = object
@@ -344,7 +343,6 @@ proc addNewBuffer*(
     case mode:
       of Mode.help:
         status.bufStatus.add initBufferStatus(mode).get
-        status.bufStatus[^1].buffer = initHelpModeBuffer().toGapBuffer
       of Mode.backup:
         # Get a backup history of the current buffer.
         let sourceFilePath = currentBufStatus.absolutePath

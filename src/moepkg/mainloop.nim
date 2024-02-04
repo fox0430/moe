@@ -22,7 +22,7 @@ import std/[options, times, sequtils]
 import pkg/results
 
 import lsp/[client, utils]
-import editorstatus, bufferstatus, windownode, unicodeext, gapbuffer, ui, help,
+import editorstatus, bufferstatus, windownode, unicodeext, gapbuffer, ui,
        normalmode, visualmode, insertmode, exmode, filermode, replacemode,
        buffermanager, recentfilemode, quickrun, backupmanager, diffviewer,
        configmode, debugmode, commandline, search, commandlineutils,
@@ -50,7 +50,7 @@ proc invokeCommand(
         InputState.Valid
       of Mode.ex:
         isExCommandBuffer(command)
-      of Mode.normal, Mode.logViewer:
+      of Mode.normal, Mode.logViewer, Mode.help:
         isNormalModeCommand(command, recodingOperationRegister)
       of Mode.visual, Mode.visualBlock, Mode.visualLine:
         isVisualModeCommand(command)
@@ -60,8 +60,6 @@ proc invokeCommand(
         isFilerModeCommand(command)
       of Mode.bufManager:
         isBufferManagerCommand(command)
-      of Mode.help:
-        isHelpCommand(command)
       of Mode.recentFile:
         isRecentFileCommand(command)
       of Mode.quickRun:
@@ -85,7 +83,7 @@ proc execCommand(status: var EditorStatus, command: Runes): Option[Rune] =
       status.execInsertModeCommand(command)
     of Mode.ex:
       status.execExCommand(command)
-    of Mode.normal, Mode.logViewer:
+    of Mode.normal, Mode.logViewer, Mode.help:
       return status.execNormalModeCommand(command)
     of Mode.visual, Mode.visualBlock, Mode.visualLine:
       status.execVisualModeCommand(command)
@@ -97,8 +95,6 @@ proc execCommand(status: var EditorStatus, command: Runes): Option[Rune] =
       status.execFilerModeCommand(command)
     of Mode.bufManager:
       status.execBufferManagerCommand(command)
-    of Mode.help:
-      status.execHelpCommand(command)
     of Mode.recentFile:
       status.execRecentFileCommand(command)
     of Mode.quickRun:
