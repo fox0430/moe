@@ -243,6 +243,8 @@ proc initSuggestList*(rawInput: Runes): SuggestList =
   result.updateSuggestions
 
 proc initSuggestBuffer*(suggestList: SuggestList): seq[Runes] =
+  template insertMargin(r: var Runes) = r = ru" " & r & ru" "
+
   case suggestList.suggestType:
     of SuggestType.exCommand:
       # Add formatted command descriptions.
@@ -258,6 +260,7 @@ proc initSuggestBuffer*(suggestList: SuggestList): seq[Runes] =
             # the ex command suggestion.
             let spaces = " ".repeat(maxCommandLen - l.len).toRunes
             result.add l & spaces & ru" | " & info.description.toRunes
+            result[^1].insertMargin
     of SuggestType.exCommandOption:
       if isPath(suggestList.argsType.get):
         for index, path in suggestList.suggestions:
@@ -269,6 +272,7 @@ proc initSuggestBuffer*(suggestList: SuggestList): seq[Runes] =
             result.add(path[p.rfind(ru'/') + 1 ..< path.len])
           else:
             result.add(path)
+          result[^1].insertMargin
       else:
         return suggestList.suggestions
 
