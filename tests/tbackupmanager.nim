@@ -125,6 +125,7 @@ suite "Backup Manager: openDiffViewer":
 
     check status.bufStatus.len == 3
     check currentBufStatus.mode == Mode.diff
+    check currentBufStatus.isReadonly
 
 suite "Backup Manager: restoreBackupFile":
   let
