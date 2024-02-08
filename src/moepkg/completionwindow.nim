@@ -20,7 +20,8 @@
 import std/[options, sequtils, deques]
 
 import ui, unicodeext, independentutils, completion, popupwindow, bufferstatus,
-       windownode, gapbuffer, worddictionary, editor
+       windownode, gapbuffer, worddictionary, editor, commandline,
+       commandlineutils
 
 export popupwindow
 
@@ -94,6 +95,11 @@ proc setList*(
     for word in dictionary.collect(c.inputText):
       c.list.add CompletionItem(label: word, insertText: word)
 
+proc setList*(c: var CompletionWindow, exModeSuggestList: SuggestList) =
+  c.list = initCompletionList()
+  for s in exModeSuggestList.suggestions:
+    c.list.add CompletionItem(label: s, insertText: s)
+
 proc selectedText*(c: CompletionWindow): Runes =
   if c.selectedIndex == -1:
     return c.inputText
@@ -149,6 +155,16 @@ proc removeInsertedText*(
         if bufStatus.buffer[lineNum] != newLine:
           bufStatus.buffer[lineNum] = newLine
 
+proc removeInsertedText*(
+  commandLine: var CommandLine,
+  completionWindow: CompletionWindow) =
+    ## Remove text temporarily inserted by completion.
+
+    let
+      first = completionWindow.startPosition.column
+      last = first + completionWindow.selectedText.high
+    commandLine.delete(first .. last)
+
 proc insertSelectedText*(
   bufStatus: var BufferStatus,
   completionWindow: CompletionWindow) =
@@ -175,7 +191,18 @@ proc insertSelectedText*(
       positons,
       completionWindow.selectedText)
 
-template canHandleInCompletionWindow*(key: Rune): bool =
+proc insertSelectedText*(
+  commandLine: var CommandLine,
+  completionWindow: CompletionWindow) =
+    # Insert the selected text to the line.
+
+    let text = completionWindow.selectedText
+    for i in 0 .. text.high:
+      commandLine.insert(
+        text[i],
+        completionWindow.startPosition.column + i)
+
+proc canHandleInCompletionWindow*(key: Rune): bool {.inline.} =
   isTabKey(key) or
   isShiftTab(key) or
   isUpKey(key) or
@@ -186,6 +213,7 @@ proc handleKey*(
   bufStatus: var BufferStatus,
   windowNode: var WindowNode,
   key: Rune) =
+    ## Them completion window in main window.
 
     when not defined(release):
       doAssert(canHandleInCompletionWindow(key))
@@ -225,8 +253,43 @@ proc handleKey*(
 
         bufStatus.isUpdate = true
 
+proc handleKey*(
+  c: var CompletionWindow,
+  commandLine: var CommandLine,
+  key: Rune) =
+    ## The completion window in command line.
+
+    when not defined(release):
+      doAssert(canHandleInCompletionWindow(key))
+
+    if isTabKey(key) or isDownKey(key):
+      # Move to the next item and inserting text.
+      if c.list.len > 0:
+        if commandLine.buffer.len > 0:
+          commandLine.removeInsertedText(c)
+        c.next
+        commandLine.insertSelectedText(c)
+
+        # Move cursor to the last position of the inserted text.
+        commandLine.setBufferPositionX(
+          c.startPosition.column + c.selectedText.len)
+    elif isShiftTab(key) or isUpKey(key):
+      # Move to the prev item and inserting text.
+      if c.list.len > 0:
+        if commandLine.buffer.len > 0:
+          commandLine.removeInsertedText(c)
+        c.prev
+        commandLine.insertSelectedText(c)
+
+        # Move cursor to the last position of the inserted text.
+        commandLine.setBufferPositionX(
+          c.startPosition.column + c.selectedText.len)
+
 proc resize*(c: var CompletionWindow, size: Size) {.inline.} =
   if c.popupWindow.isSome: c.popupWindow.get.resize(size)
+
+proc move*(c: var CompletionWindow, position: Position) {.inline.} =
+  if c.popupWindow.isSome: c.popupWindow.get.move(position)
 
 proc updateBuffer*(c: var CompletionWindow) =
   ## Update display buffer.

@@ -54,6 +54,7 @@ type
     cursesWindow*: PWindow
     height*, width*: int
     y*, x*: int
+    cursorY, cursorX: int
 
   InputState* = enum
     Continue
@@ -403,7 +404,7 @@ proc write*(
   str: string,
   color: int16 = DefaultColorPair,
   attribute: Attribute = Attribute.normal,
-  storeX: bool = true) =
+  storeCursorPosition: bool = true) =
 
     when not defined unitTest:
       # Not write when running unit tests
@@ -415,11 +416,11 @@ proc write*(
       win.attrOff(attribute)
       win.attrOff(color)
 
-      if storeX:
-        # WARNING: If `storeX` is true, this procedure will change the window position.
-        # Should we remove the default parameter?
-        win.y = y
-        win.x = x + str.toRunes.width
+      if storeCursorPosition:
+        # WARNING: If `storeCursorPosition` is true, this procedure will change
+        # the window position. Should we remove the default parameter?
+        win.cursorY = y
+        win.cursorX = x + str.toRunes.width
 
 proc write*(
   win: var Window,
@@ -427,9 +428,9 @@ proc write*(
   runes: Runes,
   color:  int16 = DefaultColorPair,
   attribute: Attribute = Attribute.normal,
-  storeX: bool = true) {.inline.} =
+  storeCursorPosition: bool = true) {.inline.} =
 
-    win.write(y, x, $runes, color, attribute, storeX)
+    win.write(y, x, $runes, color, attribute, storeCursorPosition)
 
 proc erase*(win: var Window) =
   werase(win.cursesWindow)
@@ -475,6 +476,11 @@ proc resize*(win: var Window, rect: Rect) {.inline.} =
 
 proc moveCursor*(win: Window, y, x: int) {.inline.} =
   wmove(win.cursesWindow, cint(y), cint(x))
+
+proc getCursorPosition*(win: Window): Position =
+  var x, y: cint
+  win.cursesWindow.getyx(x, y)
+  return Position(x: x.int, y: y.int)
 
 proc deleteWindow*(win: var Window) {.inline.} = delwin(win.cursesWindow)
 

@@ -18,9 +18,10 @@
 #[############################################################################]#
 
 import std/[strutils, sequtils, strformat, os, algorithm, options]
+
 import pkg/results
-import ui, unicodeext, fileutils, commandline, popupwindow, messagelog, theme,
-       exmodeutils, independentutils
+
+import unicodeext, fileutils, commandline, messagelog, theme, exmodeutils
 
 type
   SuggestType* = enum
@@ -235,7 +236,7 @@ proc updateSuggestions*(list: var SuggestList) =
   else:
     list.suggestions = suggestions
 
-proc initSuggestList*(rawInput: Runes): SuggestList =
+proc initExmodeSuggestList*(rawInput: Runes): SuggestList =
   result.rawInput = rawInput
   result.commandLineCmd = rawInput.initCommandLineCommand
   result.updateSuggestType
@@ -295,78 +296,3 @@ proc calcXWhenSuggestPath*(commandLineCmd: CommandLineCommand): int =
         0
 
   return commandLineCmd.command.len + PromptAndSpaceWidth + positionInInputPath
-
-proc calcPopupWindowSize*(buffer: seq[Runes]): Size =
-  let
-    height =
-      if buffer.len > getTerminalHeight() - 2: getTerminalHeight() - 2
-      else: buffer.len
-
-    maxLen = buffer.maxLen
-    width =
-      # 2 is side spaces
-      if maxLen + 2 > getTerminalWidth() - 1: getTerminalWidth() - 1
-      else: maxLen + 2
-
-  return Size(h: height, w: width)
-
-proc calcPopupWindowPosition(
-  suggestWin: PopupWindow,
-  suggestList: SuggestList): Position =
-
-    const CommandLineHeight = 1
-
-    result = Position()
-    result.y = getTerminalHeight() - suggestWin.size.h - CommandLineHeight
-    result.x =
-      case suggestList.suggestType:
-        of SuggestType.exCommand:
-          1
-        of SuggestType.exCommandOption:
-          if isPath(suggestList.argsType.get):
-            calcXWhenSuggestPath(suggestList.commandLineCmd)
-          else:
-            suggestList.commandLineCmd.command.len + 1
-
-# TODO: Fix the return type to `SuggestionWindow`.
-proc tryOpenSuggestWindow*(): Option[PopupWindow] {.inline.} =
-  initPopupWindow(
-    Position(y: getTerminalHeight() - 1, x: 0),
-    Size(h: 0, w: 0))
-    .some
-
-proc insertSuggestion*(commandLine: var CommandLine, suggestList: SuggestList) =
-  ## Insert the current suggestion to the command line buffer and
-  ## move the cursor position to the end + 1.
-
-  case suggestList.suggestType:
-    of exCommand:
-      if suggestList.currentIndex > -1:
-        commandLine.buffer = suggestList.currentSuggestion
-      else:
-        commandLine.buffer = suggestList.rawInput
-    else:
-      if suggestList.currentIndex > -1:
-        commandLine.buffer =
-          suggestList.commandLineCmd.command &
-          ru" " &
-          suggestList.currentSuggestion
-      else:
-        commandLine.buffer = suggestList.rawInput
-
-  commandLine.moveEnd
-  commandLine.moveRight
-
-proc updateSuggestWindow*(suggestWin: var PopupWindow, suggestList: SuggestList) =
-  suggestWin.buffer = suggestList.initSuggestBuffer
-
-  suggestWin.size = calcPopupWindowSize(suggestWin.buffer)
-  suggestWin.position = calcPopupWindowPosition(suggestWin, suggestList)
-
-  suggestWin.currentLine =
-    if suggestList.currentIndex > -1: some(suggestList.currentIndex)
-    else: none(int)
-
-  suggestWin.resize
-  suggestWin.move
-  suggestWin.update

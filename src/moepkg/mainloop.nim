@@ -104,14 +104,15 @@ proc execCommand(status: var EditorStatus, command: Runes): Option[Rune] =
     of Mode.debug:
       status.execDebugModeCommand(command)
 
-proc decListIndex(list: var SuggestList) =
-  if list.currentIndex == 0: list.currentIndex = -1
-  elif list.currentIndex == -1: list.currentIndex = list.suggestions.high
-  else: list.currentIndex.dec
-
-proc incListIndex(list: var SuggestList) =
-  if list.currentIndex == list.suggestions.high: list.currentIndex = -1
-  else: list.currentIndex.inc
+# TODO: Remove?
+#proc decListIndex(list: var SuggestList) =
+#  if list.currentIndex == 0: list.currentIndex = -1
+#  elif list.currentIndex == -1: list.currentIndex = list.suggestions.high
+#  else: list.currentIndex.dec
+#
+#proc incListIndex(list: var SuggestList) =
+#  if list.currentIndex == list.suggestions.high: list.currentIndex = -1
+#  else: list.currentIndex.inc
 
 proc assignNextExCommandHistory(
   status: var EditorStatus,
@@ -384,24 +385,170 @@ proc incrementalReplace(
 
       status.execIncrementalReplace(incReplaceInfo.get)
 
+template isOpenCompletionWindow(status: EditorStatus, key: Rune): bool =
+  status.completionwindow.isNone and
+  ((status.settings.autocomplete.enable and currentBufStatus.isInsertMode) or
+  (status.settings.standard.popupWindowInExmode and currentBufStatus.isExMode)) and
+  isCompletionCharacter(key)
+
+proc completionWindowPosition(status: EditorStatus): Position =
+  if currentBufStatus.isExMode:
+    # Command line
+    return Position(
+      y: status.commandLine.window.y,
+      x: status.commandLine.getPrompt.len + status.commandLine.cursorPosition.x)
+  else:
+    return currentMainWindowNode.completionWindowPosition(currentBufStatus)
+
+proc openCompletionWindow(status: var EditorStatus) =
+  if currentBufStatus.isExMode:
+    # Command line
+    let
+      bufferPosition = BufferPosition(
+      line: 0,
+      column: max(0, status.commandLine.bufferPosition.x - 1))
+    status.completionWindow = some(initCompletionWindow(
+      startPosition = bufferPosition,
+      windowPosition = status.completionWindowPosition,
+      list = initCompletionList()))
+
+    status.completionWindow.get.setList initExmodeSuggestList(
+      status.commandLine.buffer)
+  else:
+    let bufferPosition = BufferPosition(
+      line: currentMainWindowNode.bufferPosition.line,
+      column: currentMainWindowNode.bufferPosition.column - 1)
+
+    status.completionWindow = some(initCompletionWindow(
+      startPosition = bufferPosition,
+      windowPosition = status.completionWindowPosition,
+      list = currentBufStatus.lspCompletionList))
+
+template closeCompletionWindow(status: var EditorStatus) =
+  ## Close the completion window and reset completionList.
+
+  status.completionWindow.get.close
+  status.completionWindow = none(CompletionWindow)
+
+  if currentBufStatus.lspCompletionList.len > 0:
+    currentBufStatus.lspCompletionList.clear
+
+proc confirmCompletion(status: var EditorStatus) =
+  ## Insert the selected suggestion to the buffer and close the completion
+  ## window.
+
+  if currentBufStatus.isEditMode and
+     status.completionWindow.get.selectedIndex > -1:
+       currentBufStatus.isUpdate = true
+       currentBufStatus.countChange.inc
+
+  status.closeCompletionWindow
+
+proc confirmCompletionAndContinue(status: var EditorStatus) =
+  ## Confirm the current selected and continue the completion.
+
+  status.completionWindow.get.inputText =
+    status.completionWindow.get.selectedText
+  status.completionWindow.get.selectedIndex = -1
+
+template isConfirmCompletionAndContinue(
+  status: var EditorStatus,
+  key: Rune): bool =
+
+    isCompletionCharacter(key) and
+    status.completionWindow.get.selectedIndex > -1
+
+proc updateCompletionWindowBuffer(status: var EditorStatus) =
+  ## Update the buffer for the completion window and move, resize the
+  ## completion window.
+
+  if currentBufStatus.isExMode:
+    # Commnad line
+    if status.completionWindow.get.selectedIndex > -1:
+      # Remove the temporary selection from the buffer before update.
+
+      status.commandline.removeInsertedText(status.completionWindow.get)
+      status.completionWindow.get.selectedIndex = -1
+      status.commandline.insertSelectedText(status.completionWindow.get)
+
+      status.commandline.setBufferPositionX(
+        status.completionWindow.get.startColumn)
+
+    let
+      # Calc min/max positions for the completion window.
+      minPosition = Position(y: 0, x: 0)
+      maxPosition = Position(
+        y: status.commandLine.window.y,
+        x: getTerminalWidth() - 1)
+
+    if status.completionWindow.get.list.len > 0:
+      if status.completionWindow.get.popupWindow.isNone:
+        status.completionWindow.get.reopen(status.completionWindowPosition)
+
+      status.completionWindow.get.updateBuffer
+
+      status.completionWindow.get.popupWindow.get.position = Position(
+        y: status.commandLine.window.y,
+        x: status.completionWindow.get.startColumn)
+      status.completionWindow.get.autoMoveAndResize(minPosition, maxPosition)
+
+      status.completionWindow.get.update
+    else:
+      # Temporary close the ncurses window
+      status.completionWindow.get.close
+  else:
+    if status.completionWindow.get.selectedIndex > -1:
+      # Remove the temporary selection from the buffer before update.
+
+      if currentBufStatus.isInsertMultiMode:
+        let lines = currentBufStatus.selectedArea.get.selectedLineNumbers
+        currentBufStatus.removeInsertedText(status.completionWindow.get, lines)
+        status.completionWindow.get.selectedIndex = -1
+        currentBufStatus.insertSelectedText(status.completionWindow.get, lines)
+      else:
+        currentBufStatus.removeInsertedText(status.completionWindow.get)
+        status.completionWindow.get.selectedIndex = -1
+        currentBufStatus.insertSelectedText(status.completionWindow.get)
+
+      currentMainWindowNode.currentColumn =
+        status.completionWindow.get.startColumn
+
+    let
+      # Calc min/max positions for the completion window.
+      minPosition = Position(
+        y: currentMainWindowNode.y,
+        x: currentMainWindowNode.x)
+      maxPosition = Position(
+        y: currentMainWindowNode.y + currentMainWindowNode.h - 1,
+        x: currentMainWindowNode.x + currentMainWindowNode.w)
+
+    if status.completionWindow.get.isPathCompletion:
+      status.completionWindow.get.setList pathCompletionList(
+        status.completionWindow.get.inputText)
+    elif currentBufStatus.lspCompletionList.len == 0:
+      # If LSP completion items are not found, get items from WordDictionary.
+      status.wordDictionary.update(
+        status.bufStatus.mapIt(it.buffer.toRunes),
+        status.completionWindow.get.inputText,
+        currentBufStatus.language)
+      status.completionWindow.get.setList status.wordDictionary
+    else:
+      status.completionWindow.get.setList currentBufStatus.lspCompletionList
+
+    if status.completionWindow.get.list.len > 0:
+      if status.completionWindow.get.popupWindow.isNone:
+        status.completionWindow.get.reopen(status.completionWindowPosition)
+
+      status.completionWindow.get.updateBuffer
+      status.completionWindow.get.autoMoveAndResize(minPosition, maxPosition)
+      status.completionWindow.get.update
+    else:
+      # Temporary close the ncurses window
+      status.completionWindow.get.close
+
 proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
   ## Get keys and update view.
   ## Return the key typed during command execution if needed.
-
-  proc openSuggestWindow(
-    commandLine: var CommandLine,
-    suggestList: var SuggestList): Option[PopupWindow] =
-      ## If there is only one candidate, insert it without opening a window.
-
-      suggestList = commandLine.buffer.initSuggestList
-      if suggestList.suggestions.len == 1:
-        commandLine.insertSuggestion(suggestList)
-      elif suggestList.suggestions.len > 1:
-        return tryOpenSuggestWindow()
-
-  proc closeSuggestWindow(suggestWin: var Option[PopupWindow]) {.inline.} =
-    suggestWin.get.close
-    suggestWin = none(PopupWindow)
 
   proc isJumpAndHighlightInReplaceCommand(
     status: EditorStatus): bool {.inline.} =
@@ -414,9 +561,6 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
 
   var
     isCancel = false
-
-    # TODO: Change type to `SuggestionWindow`.
-    suggestWin = none(PopupWindow)
 
     # Use when Ex mode and search mode.
     # TODO: Move
@@ -434,23 +578,7 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
     suggestList.currentIndex = status.searchHistory.high
 
   while not isCancel:
-    if suggestWin.isSome:
-      # Update suggestion window and command line.
-
-      suggestList.updateSuggestions
-      if suggestList.suggestions.len == 0:
-        suggestWin.closeSuggestWindow
-      elif suggestList.suggestions.len == 1:
-        # If there is only one candidate, remove the window and insert it.
-        suggestWin.closeSuggestWindow
-        status.commandLine.insertSuggestion(suggestList)
-      elif suggestList.suggestions.len > 1:
-        suggestWin.get.updateSuggestWindow(suggestList)
-        status.commandLine.insertSuggestion(suggestList)
-
-      status.commandLine.update
-    else:
-      status.update
+    status.update
 
     if currentBufStatus.isSearchMode:
       status.commandLine.buffer = status.searchHistory[suggestList.currentIndex]
@@ -473,69 +601,58 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
     if searchHistoryIndex.isResetSearchHistoryIndex(key):
       searchHistoryIndex = none(int)
 
-    if isEscKey(key) or isCtrlC(key):
-      isCancel = true
-      if suggestWin.isSome:
-        suggestWin.closeSuggestWindow
-    elif isEnterKey(key):
-      if suggestWin.isSome:
-        suggestWin.closeSuggestWindow
-        if suggestList.currentindex > -1:
-          # Insert the current selection and continue the current mode.
-          status.commandLine.insertSuggestion(suggestList)
-
-          if isValidFileOpenCommand(status.commandLine.buffer):
-            # If the command is valid command to open the file,
-            # it will open the file immediately.
-            break
+    var isClosedCompletionWindow = false
+    if status.completionWindow.isSome:
+      if canHandleInCompletionWindow(key):
+        status.completionWindow.get.handleKey(
+          status.commandLine,
+          key)
+        continue
       else:
-        # Exit the current mode.
+        if isEnterKey(key):
+          status.confirmCompletion
+          isClosedCompletionWindow = true
+        elif isConfirmCompletionAndContinue(status, key):
+          status.confirmCompletionAndContinue
+        elif isEscKey(key):
+          status.confirmCompletion
+        elif isBackspaceKey(key):
+          status.confirmCompletionAndContinue
+        elif not isCompletionCharacter(key):
+          status.confirmCompletion
+          isClosedCompletionWindow = true
+
+    if isEnterKey(key):
+      if status.completionWindow.isNone and not isClosedCompletionWindow:
+        # Confirm
         break
 
+    elif isEscKey(key) or isCtrlC(key):
+      isCancel = true
+      if status.completionWindow.isSome:
+        status.closeCompletionWindow
+
     elif isTabKey(key):
-      if currentBufStatus.isExMode:
-        if suggestWin.isNone:
-          suggestWin = status.commandLine.openSuggestWindow(suggestList)
-        else:
-          suggestList.incListIndex
-        continue
-    elif isShiftTab(key):
-      if currentBufStatus.isExMode:
-        if suggestWin.isNone:
-          suggestWin = status.commandLine.openSuggestWindow(suggestList)
-        else:
-          suggestList.decListIndex
-        continue
+      if status.completionWindow.isNone:
+        status.openCompletionWindow
 
     elif isLeftKey(key):
       status.commandLine.moveLeft
     elif isRightKey(key):
       status.commandLine.moveRight
-      if status.settings.standard.popupWindowInExmode:
-        if status.popupWindow != nil:
-          status.popupWindow.deleteWindow
-          continue
 
     elif isUpKey(key):
-      if suggestWin.isSome and currentBufStatus.isExMode:
-        # The suggestion window is used only when suggesting ex commands.
-        suggestList.decListIndex
+      if currentBufStatus.isSearchMode:
+        status.assignPrevSearchHistory(searchHistoryIndex)
       else:
-        if currentBufStatus.isSearchMode:
-          status.assignPrevSearchHistory(searchHistoryIndex)
-        else:
-          status.assignPrevExCommandHistory(exCommandHistoryIndex)
-          continue
+        status.assignPrevExCommandHistory(exCommandHistoryIndex)
+        continue
     elif isDownKey(key):
-      if suggestWin.isSome and currentBufStatus.isExMode:
-        # The suggestion window is used only when suggesting ex commands.
-        suggestList.incListIndex
+      if currentBufStatus.isSearchMode:
+        status.assignNextSearchHistory(searchHistoryIndex)
       else:
-        if currentBufStatus.isSearchMode:
-          status.assignNextSearchHistory(searchHistoryIndex)
-        else:
-          status.assignNextExCommandHistory(exCommandHistoryIndex)
-          continue
+        status.assignNextExCommandHistory(exCommandHistoryIndex)
+        continue
 
     elif isHomeKey(key):
       status.commandLine.moveTop
@@ -557,16 +674,30 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
     if status.isIncrementalReplace:
       status.incrementalReplace(incReplaceInfo)
 
-    if suggestWin.isSome:
-      suggestWin.closeSuggestWindow
-
-    if currentBufStatus.isSearchMode:
+    elif currentBufStatus.isSearchMode:
       status.highlightingText = HighlightingText(
         kind: HighlightingTextKind.search,
         text: status.searchHistory[^1].replaceToNewLines.splitLines,
         isIgnorecase: status.settings.standard.ignorecase,
         isSmartcase: status.settings.standard.smartcase)
         .some
+
+    if not isClosedCompletionWindow and
+       status.isOpenCompletionWindow(key):
+         status.openCompletionWindow
+
+    if status.completionWindow.isSome:
+      if isBackspaceKey(key):
+        if status.completionWindow.get.inputText.len == 1:
+          status.closeCompletionWindow
+        else:
+          status.completionWindow.get.removeInput
+          status.updateCompletionWindowBuffer
+      elif isTabKey(key):
+        status.updateCompletionWindowBuffer
+      else:
+        status.completionWindow.get.addInput(key)
+        status.updateCompletionWindowBuffer
 
   if isCancel:
     if currentBufStatus.isSearchMode:
@@ -609,115 +740,8 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
 template isBeginNewSuit(bufStatus: BufferStatus): bool =
   not bufStatus.isInsertMode and not bufStatus.isReplaceMode
 
-template isOpenCompletionWindow(status: EditorStatus, key: Rune): bool =
-  status.completionwindow.isNone and
-  status.settings.autocomplete.enable and
-  currentBufStatus.isInsertMode and
-  isCompletionCharacter(key)
-
-proc completionWindowPosition(status: var EditorStatus): Position {.inline.} =
-  currentMainWindowNode.completionWindowPosition(currentBufStatus)
-
-proc openCompletionWindow(status: var EditorStatus) =
-  var bufferPosition = currentMainWindowNode.bufferPosition
-  bufferPosition.column.dec
-
-  status.completionWindow = some(initCompletionWindow(
-    startPosition = bufferPosition,
-    windowPosition = status.completionWindowPosition,
-    list = currentBufStatus.lspCompletionList))
-
-template closeCompletionWindow(status: var EditorStatus) =
-  ## Close the completion window and reset completionList.
-
-  status.completionWindow.get.close
-  status.completionWindow = none(CompletionWindow)
-
-  currentBufStatus.lspCompletionList.clear
-
-proc updateCompletionWindowBuffer(status: var EditorStatus) =
-  ## Update the buffer for the completion window and move, resize the
-  ## completion window.
-
-  if status.completionWindow.get.selectedIndex > -1:
-    # Remove the temporary selection from the buffer before update.
-
-    if currentBufStatus.isInsertMultiMode:
-      let lines = currentBufStatus.selectedArea.get.selectedLineNumbers
-      currentBufStatus.removeInsertedText(status.completionWindow.get, lines)
-      status.completionWindow.get.selectedIndex = -1
-      currentBufStatus.insertSelectedText(status.completionWindow.get, lines)
-    else:
-      currentBufStatus.removeInsertedText(status.completionWindow.get)
-      status.completionWindow.get.selectedIndex = -1
-      currentBufStatus.insertSelectedText(status.completionWindow.get)
-
-    currentMainWindowNode.currentColumn =
-      status.completionWindow.get.startColumn
-
-  let
-    # Calc min/max positions for the completion window.
-    minPosition = Position(
-      y: currentMainWindowNode.y,
-      x: currentMainWindowNode.x)
-    maxPosition = Position(
-      y: currentMainWindowNode.y + currentMainWindowNode.h - 1,
-      x: currentMainWindowNode.x + currentMainWindowNode.w)
-
-  if status.completionWindow.get.isPathCompletion:
-    status.completionWindow.get.setList pathCompletionList(
-      status.completionWindow.get.inputText)
-  elif currentBufStatus.lspCompletionList.len == 0:
-    # If LSP completion items are not found, get items from WordDictionary.
-    status.wordDictionary.update(
-      status.bufStatus.mapIt(it.buffer.toRunes),
-      status.completionWindow.get.inputText,
-      currentBufStatus.language)
-    status.completionWindow.get.setList status.wordDictionary
-  else:
-    status.completionWindow.get.setList currentBufStatus.lspCompletionList
-
-  if status.completionWindow.get.list.len > 0:
-    if status.completionWindow.get.popupWindow.isNone:
-      status.completionWindow.get.reopen(status.completionWindowPosition)
-
-    status.completionWindow.get.updateBuffer
-    status.completionWindow.get.autoMoveAndResize(minPosition, maxPosition)
-    status.completionWindow.get.update
-  else:
-    # Temporary close the ncurses window
-    status.completionWindow.get.close
-
-proc confirmCompletion(status: var EditorStatus) =
-  ## Insert the selected suggestion to the buffer and close the completion
-  ## window.
-
-  if status.completionWindow.get.selectedIndex > -1:
-    currentBufStatus.isUpdate = true
-    currentBufStatus.countChange.inc
-
-  status.closeCompletionWindow
-
-template isConfirmCompletionAndContinue(
-  status: var EditorStatus,
-  key: Rune): bool =
-
-    isCompletionCharacter(key) and
-    status.completionWindow.get.selectedIndex > -1
-
-proc confirmCompletionAndContinue(status: var EditorStatus) =
-  ## Confirm the current selected and continue the completion.
-
-  status.completionWindow.get.inputText =
-    status.completionWindow.get.selectedText
-  status.completionWindow.get.selectedIndex = -1
-
 template isChangeModeToInsert(b: BufferStatus, prevMode: Mode): bool =
  b.mode.isInsertMode and not prevMode.isInsertMode
-
-template resetKeyAndContinue(key: var Option[Rune]) =
-  key = none(Rune)
-  continue
 
 template isUpdateCompletionWindow(
   status: EditorStatus,
@@ -726,6 +750,10 @@ template isUpdateCompletionWindow(
     status.completionWindow.isSome and
     beforeWaitingResponse == some(LspMethod.textDocumentCompletion) and
     lspClient.waitingResponse.isNone
+
+template resetKeyAndContinue(key: var Option[Rune]) =
+  key = none(Rune)
+  continue
 
 proc editorMainLoop*(status: var EditorStatus) =
   ## Get keys, exec commands and update view.

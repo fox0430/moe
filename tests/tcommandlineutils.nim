@@ -131,7 +131,7 @@ suite "commandlineutils: getExCommandCandidates":
 
     check commands == getExCommandCandidates(Input)
 
-suite "commandlineutils: initSuggestList":
+suite "commandlineutils: initExmodeSuggestList":
   test "Suggest ex commands":
     const RawInput = ru"h"
     let expectSuggestions = ExCommandInfoList
@@ -145,7 +145,7 @@ suite "commandlineutils: initSuggestList":
       suggestType: SuggestType.exCommand,
       argsType: none(ArgsType),
       currentIndex: 0,
-      suggestions: expectSuggestions) == initSuggestList(RawInput)
+      suggestions: expectSuggestions) == initExmodeSuggestList(RawInput)
 
   test "Suggest ex commands 2":
     const RawInput = ru"e"
@@ -160,7 +160,7 @@ suite "commandlineutils: initSuggestList":
       suggestType: SuggestType.exCommand,
       argsType: none(ArgsType),
       currentIndex: 0,
-      suggestions: expectSuggestions) == initSuggestList(RawInput)
+      suggestions: expectSuggestions) == initExmodeSuggestList(RawInput)
 
   test "Suggest toggle options":
     const RawInput = ru"cursorline "
@@ -173,7 +173,7 @@ suite "commandlineutils: initSuggestList":
       suggestType: SuggestType.exCommandOption,
       argsType: some(ArgsType.toggle),
       currentIndex: 0,
-      suggestions: expectSuggestions) == initSuggestList(RawInput)
+      suggestions: expectSuggestions) == initExmodeSuggestList(RawInput)
 
   test "Suggest toggle options 2":
     const RawInput = ru"cursorline of"
@@ -186,7 +186,7 @@ suite "commandlineutils: initSuggestList":
       suggestType: SuggestType.exCommandOption,
       argsType: some(ArgsType.toggle),
       currentIndex: 0,
-      suggestions: expectSuggestions) == initSuggestList(RawInput)
+      suggestions: expectSuggestions) == initExmodeSuggestList(RawInput)
 
   test "Suggest toggle themes":
     const RawInput = ru"theme "
@@ -199,7 +199,7 @@ suite "commandlineutils: initSuggestList":
       suggestType: SuggestType.exCommandOption,
       argsType: some(ArgsType.theme),
       currentIndex: 0,
-      suggestions: expectSuggestions) == initSuggestList(RawInput)
+      suggestions: expectSuggestions) == initExmodeSuggestList(RawInput)
 
   test "Suggest toggle themes 2":
     const RawInput = ru"theme d"
@@ -212,7 +212,7 @@ suite "commandlineutils: initSuggestList":
       suggestType: SuggestType.exCommandOption,
       argsType: some(ArgsType.theme),
       currentIndex: 0,
-      suggestions: expectSuggestions) == initSuggestList(RawInput)
+      suggestions: expectSuggestions) == initExmodeSuggestList(RawInput)
 
   test "Suggest paths":
     const RawInput = ru"e ./"
@@ -232,7 +232,7 @@ suite "commandlineutils: initSuggestList":
       suggestType: SuggestType.exCommandOption,
       argsType: some(ArgsType.path),
       currentIndex: 0,
-      suggestions: expectSuggestions) == initSuggestList(RawInput)
+      suggestions: expectSuggestions) == initExmodeSuggestList(RawInput)
 
   test "Suggest paths 2":
     const RawInput = ru"e src/m"
@@ -253,4 +253,4 @@ suite "commandlineutils: initSuggestList":
       suggestType: SuggestType.exCommandOption,
       argsType: some(ArgsType.path),
       currentIndex: 0,
-      suggestions: expectSuggestions) == initSuggestList(RawInput)
+      suggestions: expectSuggestions) == initExmodeSuggestList(RawInput)

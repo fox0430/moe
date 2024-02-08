@@ -909,9 +909,6 @@ proc update*(status: var EditorStatus) =
       if node.child.len > 0:
         for node in node.child: queue.push(node)
 
-  if status.completionWindow.isSome and status.completionWindow.get.isOpen:
-    status.completionWindow.get.update
-
   if not currentBufStatus.isFilerMode:
     let
       y = currentMainWindowNode.cursor.y
@@ -923,6 +920,9 @@ proc update*(status: var EditorStatus) =
   if status.settings.statusLine.enable: status.updateStatusLine
 
   if status.sidebar.isSome: status.sidebar.get.update
+
+  if status.completionWindow.isSome and status.completionWindow.get.isOpen:
+    status.completionWindow.get.update
 
   status.updateCommandLine
 
