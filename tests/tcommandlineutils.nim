@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -17,8 +17,9 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, sequtils, strutils, options, sugar, algorithm]
-import moepkg/[unicodeext, theme, exmodeutils]
+import std/[unittest, os, sequtils, strutils, sugar]
+
+import moepkg/[unicodeext, theme, exmodeutils, completion]
 
 import moepkg/commandlineutils {.all.}
 
@@ -41,18 +42,26 @@ suite "commandlineutils: initCommandLineCommand":
 
 suite "commandlineutils: getSuggestType":
   test "SuggestType.exCommand":
-    const Command = ru"h"
-    check getSuggestType(Command) == SuggestType.exCommand
+    const RawInput = ru"h"
+    check getSuggestType(RawInput) == SuggestType.exCommand
+
+  test "SuggestType.exCommand 2":
+    const RawInput = ru"e"
+    check getSuggestType(RawInput) == SuggestType.exCommand
 
   test "SuggestType.exCommandOption":
-    const Command = ru"cursorLine"
-    check getSuggestType(Command) == SuggestType.exCommandOption
+    const RawInput = ru"cursorLine "
+    check getSuggestType(RawInput) == SuggestType.exCommandOption
+
+  test "SuggestType.exCommandOption with arg":
+    const RawInput = ru"cursorLine o"
+    check getSuggestType(RawInput) == SuggestType.exCommandOption
 
   test "SuggestType.exCommandOption lower case":
-    const Command = ru"cursorline"
-    check getSuggestType(Command) == SuggestType.exCommandOption
+    const RawInput = ru"cursorline "
+    check getSuggestType(RawInput) == SuggestType.exCommandOption
 
-suite "commandlineutils: getFilePathCandidates":
+suite "commandlineutils: getPathCompletionList":
   test "Expect file and dir in current path":
     var files: seq[string] = @[]
     for pathComponent in walkDir("./"):
@@ -62,7 +71,7 @@ suite "commandlineutils: getFilePathCandidates":
       files.add(p)
 
     let buffer = "e ".toRunes
-    for path in getFilePathCandidates(buffer):
+    for path in getPathCompletionList(buffer).items:
       check files.contains($path)
 
   test "Expect file and dir in \"/\"":
@@ -75,182 +84,164 @@ suite "commandlineutils: getFilePathCandidates":
       files.add(p)
 
     let buffer = "e /".toRunes
-    for path in getFilePathCandidates(buffer):
+    for path in getPathCompletionList(buffer).items:
       check files.contains($path)
 
   test "Expect the absolute path of the home dir":
     const Input = ru"~"
-    check @[getHomeDir().toRunes] == getFilePathCandidates(Input)
+    check @[initCompletionItem(getHomeDir().toRunes)] == getPathCompletionList(
+      Input).items
 
-suite "commandlineutils: getExCommandOptionCandidates":
+suite "commandlineutils: getExCommandOptionCompletionList":
   test "Expect \"on\" and \"off\"":
     let commands = ExCommandInfoList.filterIt(it.argsType == ArgsType.toggle)
 
     for c in commands:
       const Args: seq[Runes] = @[]
-      check @[ru"on", ru"off"] == getExCommandOptionCandidates(
-        c.command.toRunes,
-        Args,
-        ArgsType.toggle)
+      check @[
+        initCompletionItem(ru"on"),
+        initCompletionItem(ru"off")] == getExCommandOptionCompletionList(
+          c.command.toRunes,
+          Args,
+          ArgsType.toggle).items
 
   test "Expect ColorTheme values":
     const
       Command = "theme".toRunes
       Args: seq[Runes] = @[]
-    check ColorTheme.mapIt(toRunes($it)) == getExCommandOptionCandidates(
-      Command,
-      Args,
-        ArgsType.theme)
+    check ColorTheme
+      .mapIt(initCompletionItem(toRunes($it))) == getExCommandOptionCompletionList(
+        Command,
+        Args,
+        ArgsType.theme).items
 
-suite "commandlineutils: getExCommandCandidates":
+suite "commandlineutils: getExCommandCompletionList":
   test "Expect all ex command":
-    check ExCommandInfoList.mapIt(it.command.toRunes) == getExCommandCandidates(
-      ru"")
+    # TODO: Check labels
+    check ExCommandInfoList
+      .mapIt(initCompletionItem(
+        it.command.toRunes).insertText) == getExCommandCompletionList(
+          ru"").items.mapIt(it.insertText)
 
   test "Expect ex commands starting with \"b\"":
     const Input = ru"b"
     let commands = ExCommandInfoList
       .filterIt(it.command.startsWith("b"))
-      .mapIt(it.command.toRunes)
+      .mapIt(initCompletionItem(it.command.toRunes).insertText)
 
-    check commands == getExCommandCandidates(Input)
+    # TODO: Check labels
+    check commands == getExCommandCompletionList(Input)
+      .items
+      .mapIt(it.insertText)
 
   test "Expect \"cursorLine\"":
     const Input = ru"cursorl"
     let commands = ExCommandInfoList
       .filterIt(it.command == "cursorLine")
-      .mapIt(it.command.toRunes)
+      .mapIt(initCompletionItem(it.command.toRunes).insertText)
 
-    check commands == getExCommandCandidates(Input)
+    # TODO: Check labels
+    check commands == getExCommandCompletionList(Input)
+      .items
+      .mapIt(it.insertText)
 
   test "Expect \"cursorLine\" 2":
     const Input = ru"cursorL"
     let commands = ExCommandInfoList
       .filterIt(it.command == "cursorLine")
-      .mapIt(it.command.toRunes)
+      .mapIt(initCompletionItem(it.command.toRunes).insertText)
 
-    check commands == getExCommandCandidates(Input)
+    # TODO: Check labels
+    check commands == getExCommandCompletionList(Input)
+      .items
+      .mapIt(it.insertText)
 
-suite "commandlineutils: initExmodeSuggestList":
-  test "Suggest ex commands":
+suite "commandlineutils: initExmodeCompletionList":
+  test "Ex commands":
     const RawInput = ru"h"
-    let expectSuggestions = ExCommandInfoList
+    let expectList = ExCommandInfoList
       .filterIt(it.command.toRunes.startsWith(RawInput))
-      .mapIt(it.command.toRunes)
-    check expectSuggestions.len > 0
+      .mapIt(initCompletionItem(it.command.toRunes).insertText)
 
-    check SuggestList(
-      rawInput: ru"h",
-      commandLineCmd: CommandLineCommand(command: ru"h", args: @[]),
-      suggestType: SuggestType.exCommand,
-      argsType: none(ArgsType),
-      currentIndex: 0,
-      suggestions: expectSuggestions) == initExmodeSuggestList(RawInput)
+    # TODO: Check labels
+    check expectList == initExmodeCompletionList(RawInput)
+      .items
+      .mapIt(it.insertText)
 
-  test "Suggest ex commands 2":
+  test "Ex commands 2":
     const RawInput = ru"e"
-    let expectSuggestions = ExCommandInfoList
+    let expectList = ExCommandInfoList
       .filterIt(it.command.toRunes.startsWith(RawInput))
-      .mapIt(it.command.toRunes)
-    check expectSuggestions.len > 0
+      .mapIt(initCompletionItem(it.command.toRunes).insertText)
 
-    check SuggestList(
-      rawInput: ru"e",
-      commandLineCmd: CommandLineCommand(command: ru"e", args: @[]),
-      suggestType: SuggestType.exCommand,
-      argsType: none(ArgsType),
-      currentIndex: 0,
-      suggestions: expectSuggestions) == initExmodeSuggestList(RawInput)
+    # TODO: Check labels
+    check expectList == initExmodeCompletionList(RawInput)
+      .items
+      .mapIt(it.insertText)
 
-  test "Suggest toggle options":
+  test "Toggle options":
     const RawInput = ru"cursorline "
-    let expectSuggestions = @[ru"on", ru"off"]
-    check expectSuggestions.len > 0
+    let expectList = @[ru"on", ru"off"]
 
-    check SuggestList(
-      rawInput: ru"cursorline ",
-      commandLineCmd: CommandLineCommand(command: ru"cursorline", args: @[]),
-      suggestType: SuggestType.exCommandOption,
-      argsType: some(ArgsType.toggle),
-      currentIndex: 0,
-      suggestions: expectSuggestions) == initExmodeSuggestList(RawInput)
+    # TODO: Check labels
+    check expectList == initExmodeCompletionList(RawInput)
+      .items
+      .mapIt(it.insertText)
 
-  test "Suggest toggle options 2":
+  test "Toggle options 2":
     const RawInput = ru"cursorline of"
-    let expectSuggestions = @[ru"off"]
-    check expectSuggestions.len > 0
+    let expectList = @[ru"off"]
 
-    check SuggestList(
-      rawInput: ru"cursorline of",
-      commandLineCmd: CommandLineCommand(command: ru"cursorline", args: @[ru"of"]),
-      suggestType: SuggestType.exCommandOption,
-      argsType: some(ArgsType.toggle),
-      currentIndex: 0,
-      suggestions: expectSuggestions) == initExmodeSuggestList(RawInput)
+    # TODO: Check labels
+    check expectList == initExmodeCompletionList(RawInput)
+      .items
+      .mapIt(it.insertText)
 
   test "Suggest toggle themes":
     const RawInput = ru"theme "
-    let expectSuggestions = ColorTheme.mapIt(toRunes($it))
-    check expectSuggestions.len > 0
+    let expectList = ColorTheme.mapIt(toRunes($it))
 
-    check SuggestList(
-      rawInput: ru"theme ",
-      commandLineCmd: CommandLineCommand(command: ru"theme", args: @[]),
-      suggestType: SuggestType.exCommandOption,
-      argsType: some(ArgsType.theme),
-      currentIndex: 0,
-      suggestions: expectSuggestions) == initExmodeSuggestList(RawInput)
+    # TODO: Check labels
+    check expectList == initExmodeCompletionList(RawInput)
+      .items
+      .mapIt(it.insertText)
 
   test "Suggest toggle themes 2":
     const RawInput = ru"theme d"
-    let expectSuggestions = @[ru"dark"]
-    check expectSuggestions.len > 0
+    let expectList = @[ru"dark"]
 
-    check SuggestList(
-      rawInput: ru"theme d",
-      commandLineCmd: CommandLineCommand(command: ru"theme", args: @[ru"d"]),
-      suggestType: SuggestType.exCommandOption,
-      argsType: some(ArgsType.theme),
-      currentIndex: 0,
-      suggestions: expectSuggestions) == initExmodeSuggestList(RawInput)
+    # TODO: Check labels
+    check expectList == initExmodeCompletionList(RawInput)
+      .items
+      .mapIt(it.insertText)
 
   test "Suggest paths":
     const RawInput = ru"e ./"
 
-    var expectSuggestions = collect:
+    var expectList = collect:
       for k in walkDir("./"):
         if k.kind == pcDir:
           toRunes(k.path & "/")
         else:
           k.path.toRunes
-    expectSuggestions.sort(proc (a, b: Runes): int = cmp($a, $b))
-    check expectSuggestions.len > 0
 
-    check SuggestList(
-      rawInput: ru"e ./",
-      commandLineCmd: CommandLineCommand(command: ru"e", args: @[ru"./"]),
-      suggestType: SuggestType.exCommandOption,
-      argsType: some(ArgsType.path),
-      currentIndex: 0,
-      suggestions: expectSuggestions) == initExmodeSuggestList(RawInput)
+    # TODO: Check labels
+    check expectList == initExmodeCompletionList(RawInput)
+      .items
+      .mapIt(it.insertText)
 
   test "Suggest paths 2":
     const RawInput = ru"e src/m"
 
-    var expectSuggestions = collect:
+    var expectList = collect:
       for k in walkDir("src/"):
         if k.path.splitPath.tail.startsWith("m"):
           if k.kind == pcDir:
             toRunes(k.path & "/")
           else:
             k.path.toRunes
-    expectSuggestions.sort(proc (a, b: Runes): int = cmp($a, $b))
-    check expectSuggestions.len > 0
 
-    check SuggestList(
-      rawInput: ru"e src/m",
-      commandLineCmd: CommandLineCommand(command: ru"e", args: @[ru"src/m"]),
-      suggestType: SuggestType.exCommandOption,
-      argsType: some(ArgsType.path),
-      currentIndex: 0,
-      suggestions: expectSuggestions) == initExmodeSuggestList(RawInput)
+    # TODO: Check labels
+    check expectList == initExmodeCompletionList(RawInput)
+      .items
+      .mapIt(it.insertText)

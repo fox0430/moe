@@ -401,28 +401,35 @@ proc completionWindowPosition(status: EditorStatus): Position =
     return currentMainWindowNode.completionWindowPosition(currentBufStatus)
 
 proc openCompletionWindow(status: var EditorStatus) =
-  if currentBufStatus.isExMode:
-    # Command line
+  ## Open a completion window for the editor.
+
+  let bufferPosition = BufferPosition(
+    line: currentMainWindowNode.bufferPosition.line,
+    column: currentMainWindowNode.bufferPosition.column - 1)
+
+  status.completionWindow = some(initCompletionWindow(
+    startPosition = bufferPosition,
+    windowPosition = status.completionWindowPosition,
+    list = currentBufStatus.lspCompletionList))
+
+proc openCompletionWindowInCommandLine(
+  status: var EditorStatus,
+  isTabKey: bool) =
+    ## Open a completion window for the command line.
+
     let
-      bufferPosition = BufferPosition(
-      line: 0,
-      column: max(0, status.commandLine.bufferPosition.x - 1))
+      column =
+        if isTabKey: status.commandLine.bufferPosition.x
+        else: max(0, status.commandLine.bufferPosition.x - 1)
+      bufferPosition = BufferPosition(line: 0, column: column)
+
     status.completionWindow = some(initCompletionWindow(
       startPosition = bufferPosition,
       windowPosition = status.completionWindowPosition,
       list = initCompletionList()))
 
-    status.completionWindow.get.setList initExmodeSuggestList(
+    status.completionWindow.get.setList initExmodeCompletionList(
       status.commandLine.buffer)
-  else:
-    let bufferPosition = BufferPosition(
-      line: currentMainWindowNode.bufferPosition.line,
-      column: currentMainWindowNode.bufferPosition.column - 1)
-
-    status.completionWindow = some(initCompletionWindow(
-      startPosition = bufferPosition,
-      windowPosition = status.completionWindowPosition,
-      list = currentBufStatus.lspCompletionList))
 
 template closeCompletionWindow(status: var EditorStatus) =
   ## Close the completion window and reset completionList.
@@ -562,10 +569,6 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
   var
     isCancel = false
 
-    # Use when Ex mode and search mode.
-    # TODO: Move
-    suggestList: SuggestList
-
     # TODO: Remove
     exCommandHistoryIndex: Option[int]
 
@@ -574,15 +577,8 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
 
     incReplaceInfo: Option[IncrementalReplaceInfo]
 
-  if currentBufStatus.isSearchMode:
-    suggestList.currentIndex = status.searchHistory.high
-
   while not isCancel:
     status.update
-
-    if currentBufStatus.isSearchMode:
-      status.commandLine.buffer = status.searchHistory[suggestList.currentIndex]
-      status.commandLine.update
 
     let key = status.getKeyFromCommandLine
 
@@ -634,7 +630,7 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
 
     elif isTabKey(key):
       if status.completionWindow.isNone:
-        status.openCompletionWindow
+        status.openCompletionWindowInCommandLine(isTabKey(key))
 
     elif isLeftKey(key):
       status.commandLine.moveLeft
@@ -684,7 +680,7 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
 
     if not isClosedCompletionWindow and
        status.isOpenCompletionWindow(key):
-         status.openCompletionWindow
+         status.openCompletionWindowInCommandLine(isTabKey(key))
 
     if status.completionWindow.isSome:
       if isBackspaceKey(key):

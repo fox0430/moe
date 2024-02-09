@@ -34,6 +34,12 @@ type
     items*: seq[CompletionItem]
       # Items for completion.
 
+proc initCompletionItem*(label: Runes): CompletionItem {.inline.} =
+  CompletionItem(label: label, insertText: label)
+
+proc initCompletionItem*(label, insertText: Runes): CompletionItem {.inline.} =
+  CompletionItem(label: label, insertText: insertText)
+
 proc initCompletionList*(): CompletionList {.inline.} =
   CompletionList()
 

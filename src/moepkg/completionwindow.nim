@@ -20,8 +20,7 @@
 import std/[options, sequtils, deques]
 
 import ui, unicodeext, independentutils, completion, popupwindow, bufferstatus,
-       windownode, gapbuffer, worddictionary, editor, commandline,
-       commandlineutils
+       windownode, gapbuffer, worddictionary, editor, commandline
 
 export popupwindow
 
@@ -95,11 +94,6 @@ proc setList*(
     for word in dictionary.collect(c.inputText):
       c.list.add CompletionItem(label: word, insertText: word)
 
-proc setList*(c: var CompletionWindow, exModeSuggestList: SuggestList) =
-  c.list = initCompletionList()
-  for s in exModeSuggestList.suggestions:
-    c.list.add CompletionItem(label: s, insertText: s)
-
 proc selectedText*(c: CompletionWindow): Runes =
   if c.selectedIndex == -1:
     return c.inputText
@@ -160,10 +154,11 @@ proc removeInsertedText*(
   completionWindow: CompletionWindow) =
     ## Remove text temporarily inserted by completion.
 
-    let
-      first = completionWindow.startPosition.column
-      last = first + completionWindow.selectedText.high
-    commandLine.delete(first .. last)
+    if completionWindow.selectedText.len > 0:
+      let
+        first = completionWindow.startPosition.column
+        last = first + completionWindow.selectedText.high
+      commandLine.delete(first .. last)
 
 proc insertSelectedText*(
   bufStatus: var BufferStatus,
