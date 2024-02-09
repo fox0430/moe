@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os]
+import std/[unittest, os, algorithm]
 
 import moepkg/unicodeext
 
@@ -46,11 +46,13 @@ suite "completion: pathCompletionList":
     createDir(TestDir / "dir2")
     writeFile(TestDir / "file1", "hello")
 
-    check pathCompletionList(TestDir.toRunes & ru'/').items == @[
-      CompletionItem(label: ru"dir2", insertText: ru"dir2"),
-      CompletionItem(label: ru"dir1", insertText: ru"dir1"),
-      CompletionItem(label: ru"file1", insertText: ru"file1")
-    ]
+    check pathCompletionList(TestDir.toRunes & ru'/')
+      .items
+      .sortedByIt($it.label) == @[
+        CompletionItem(label: ru"dir1", insertText: ru"dir1"),
+        CompletionItem(label: ru"dir2", insertText: ru"dir2"),
+        CompletionItem(label: ru"file1", insertText: ru"file1")
+      ]
 
   test "Basic 2":
     createDir(TestDir / "dir1")
