@@ -488,15 +488,29 @@ proc updateCompletionWindowBuffer(status: var EditorStatus) =
         y: status.commandLine.window.y,
         x: getTerminalWidth() - 1)
 
+    # Update list
+    status.completionWindow.get.setList initExmodeCompletionList(
+      status.commandLine.buffer)
+
     if status.completionWindow.get.list.len > 0:
       if status.completionWindow.get.popupWindow.isNone:
         status.completionWindow.get.reopen(status.completionWindowPosition)
 
+      # Update completion window buffer
       status.completionWindow.get.updateBuffer
 
-      status.completionWindow.get.popupWindow.get.position = Position(
-        y: status.commandLine.window.y,
-        x: status.completionWindow.get.startColumn)
+      status.completionWindow.get.setWindowPositionY(
+        status.commandLine.window.y)
+
+      # Shift window position for path completion.
+      let p = status.commandLine.buffer.rfind(ru'/')
+      if p > -1:
+        status.completionWindow.get.setWindowPositionX(
+          status.commandLine.buffer.rfind(ru'/'))
+      else:
+        status.completionWindow.get.setWindowPositionX(
+          status.completionWindow.get.startColumn)
+
       status.completionWindow.get.autoMoveAndResize(minPosition, maxPosition)
 
       status.completionWindow.get.update
@@ -529,6 +543,7 @@ proc updateCompletionWindowBuffer(status: var EditorStatus) =
         y: currentMainWindowNode.y + currentMainWindowNode.h - 1,
         x: currentMainWindowNode.x + currentMainWindowNode.w)
 
+    # Update list
     if status.completionWindow.get.isPathCompletion:
       status.completionWindow.get.setList pathCompletionList(
         status.completionWindow.get.inputText)
@@ -546,6 +561,7 @@ proc updateCompletionWindowBuffer(status: var EditorStatus) =
       if status.completionWindow.get.popupWindow.isNone:
         status.completionWindow.get.reopen(status.completionWindowPosition)
 
+      # Update completion window buffer and move/resize
       status.completionWindow.get.updateBuffer
       status.completionWindow.get.autoMoveAndResize(minPosition, maxPosition)
       status.completionWindow.get.update

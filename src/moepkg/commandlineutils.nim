@@ -17,12 +17,11 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, sequtils, strformat, os, options]
+import std/[strutils, sequtils, strformat, options, os]
 
 import pkg/results
 
-import unicodeext, fileutils, commandline, messagelog, theme, exmodeutils,
-       completion
+import unicodeext, commandline, messagelog, theme, exmodeutils, completion
 
 type
   SuggestType* = enum
@@ -32,14 +31,6 @@ type
   CommandLineCommand* = object
     command*: Runes
     args*: seq[Runes]
-
-proc isPath(a: ArgsType): bool {.inline.} = a == ArgsType.path
-
-proc isExCommand*(suggestType: SuggestType): bool {.inline.} =
-  suggestType == SuggestType.exCommand
-
-proc isExCommandOption*(suggestType: SuggestType): bool {.inline.} =
-  suggestType == SuggestType.exCommandOption
 
 proc askCreateDirPrompt*(
   commndLine: var CommandLine,
@@ -94,47 +85,22 @@ proc askFileChangedSinceReading*(commndLine: var CommandLine): bool =
     else: result = false
 
 proc getPathCompletionList*(inputPath: Runes): CompletionList =
-  ## Return completion items for path suggestions.
+  ## Return completion list for path suggestions.
   ## Return all files and dirs in the current dir if `inputPath` is empty.
 
-  result = CompletionList()
-
-  if inputPath == ru"~":
-    # Return an absolute path of the home dir.
-    return CompletionList(items: @[initCompletionItem(getHomeDir().toRunes)])
-  elif inputPath.contains(ru'/'):
-    let (inputPathHead, inputPathTail) = splitAndNormalizedPath(inputPath)
-    for kind, path in walkDir($inputPathHead):
-      if path.splitPath.tail.startsWith($inputPathTail):
-        if inputPath[0] == ru'~':
-          let
-            pathHigh = path.toRunes.high
-            homeDirHigh = high(getHomeDir())
-            addPath = ru"~" & path.toRunes[homeDirHigh .. pathHigh]
-          # If the path is a directory, add '/'
-          if dirExists($addPath):
-            result.add initCompletionItem(addPath & ru"/")
-          else:
-            result.add initCompletionItem(addPath)
-        else:
-          # If the path is a directory, add '/'
-          if dirExists(path):
-            result.add initCompletionItem(toRunes(path & "/"))
-          else:
-            result.add initCompletionItem(path.toRunes)
+  if inputPath.len == 0:
+    return pathCompletionList(ru"./")
   else:
-    for kind, path in walkDir("./"):
-      let normalizePath = normalizedPath(path.toRunes)
-      if inputPath.len == 0 or normalizePath.startsWith(inputPath):
-        let p = normalizedPath(path.toRunes)
-        # If the path is a directory, add '/'
-        if dirExists($p):
-          result.add initCompletionItem(p & ru"/")
-        else:
-          result.add initCompletionItem(p)
+    result = pathCompletionList(inputPath)
+    if result.len > 0:
+      let pathSplit = splitPath($inputPath)
+      if pathSplit.head.len > 0:
+        let pathHead = pathSplit.head.toRunes
+        for i in 0 .. result.items.high:
+          result.items[i].insertText = pathHead / result.items[i].insertText
 
 proc getExCommandCompletionList*(input: Runes): CompletionList =
-  ## Return completion items for ex command suggestion.
+  ## Return completion list for ex command suggestion.
   ## Interpreting upper and lowercase letters as being the same.
 
   result = CompletionList()
@@ -163,40 +129,6 @@ proc getSuggestType*(rawInput: Runes): SuggestType =
   else:
     return SuggestType.exCommandOption
 
-proc getExCommandOptionCompletionList*(
-  command: Runes,
-  args: seq[Runes],
-  argsType: ArgsType): CompletionList =
-    ## Return completion items for ex command option suggestion.
-    ## Interpreting upper and lowercase letters as being the same.
-
-    result = CompletionList()
-
-    case argsType:
-      of ArgsType.toggle:
-        if args.len == 0:
-          return CompletionList(items: @[
-            initCompletionItem(ru"on"),
-            initCompletionItem(ru"off"),
-          ])
-        elif args.len == 1:
-          let arg = args[0]
-          for s in [ru"on", ru"off"]:
-            if s.startsWith(arg): result.add initCompletionItem(s)
-      of ArgsType.path:
-        if args.len == 1:
-          return getPathCompletionList(args[0])
-      of ArgsType.theme:
-        if args.len == 0:
-          return CompletionList(items:
-            ColorTheme.mapIt(initCompletionItem(toRunes($it))))
-        elif args.len == 1:
-          for theme in ColorTheme.mapIt(toRunes($it)):
-            if args[0].len < theme.len and theme.startsWith(args[0]):
-              result.add CompletionItem(label: theme, insertText: theme)
-      else:
-        discard
-
 proc initCommandLineCommand(rawInput: Runes): CommandLineCommand =
   ## Return CommandLineCommand from a raw input.
 
@@ -207,6 +139,44 @@ proc initCommandLineCommand(rawInput: Runes): CommandLineCommand =
     if commandSplit.len > 1:
       result.args = commandSplit[1 .. ^1]
 
+proc getExCommandOptionCompletionList*(
+  rawInput: Runes,
+  commandLineCmd: CommandLineCommand): CompletionList =
+    ## Return completion list for ex command option suggestion.
+    ## Interpreting upper and lowercase letters as being the same.
+
+    result = CompletionList()
+
+    let argsType = getArgsType(commandLineCmd.command).get
+
+    case argsType:
+      of ArgsType.toggle:
+        if commandLineCmd.args.len == 0:
+          return CompletionList(items: @[
+            initCompletionItem(ru"on"),
+            initCompletionItem(ru"off")
+          ])
+        elif commandLineCmd.args.len == 1:
+          for s in [ru"on", ru"off"]:
+            if s.startsWith(commandLineCmd.args[0]):
+              result.add initCompletionItem(s)
+      of ArgsType.path:
+        if commandLineCmd.args.len == 0:
+          return getPathCompletionList(ru"")
+        else:
+          return getPathCompletionList(commandLineCmd.args[0])
+      of ArgsType.theme:
+        if commandLineCmd.args.len == 0:
+          return CompletionList(items:
+            ColorTheme.mapIt(initCompletionItem(toRunes($it))))
+        elif commandLineCmd.args.len == 1:
+          for theme in ColorTheme.mapIt(toRunes($it)):
+            if commandLineCmd.args[0].len < theme.len and
+               theme.startsWith(commandLineCmd.args[0]):
+                 result.add CompletionItem(label: theme, insertText: theme)
+      else:
+        discard
+
 proc initExmodeCompletionList*(rawInput: Runes): CompletionList =
   let
     commandLineCmd = initCommandLineCommand(rawInput)
@@ -216,21 +186,7 @@ proc initExmodeCompletionList*(rawInput: Runes): CompletionList =
     of SuggestType.exCommand:
       return getExCommandCompletionList(rawInput)
     of SuggestType.exCommandOption:
-      let argsType = getArgsType(commandLineCmd.command).get
-
-      var list: CompletionList
-
-      if isPath(argsType):
-        let path =
-          if commandLineCmd.args.len == 1: commandLineCmd.args[0]
-          else: ru""
-        list = getPathCompletionList(path)
-      else:
-        list = getExCommandOptionCompletionList(
-          commandLineCmd.command,
-          commandLineCmd.args,
-          argsType)
-
+      let list = getExCommandOptionCompletionList(rawInput, commandLineCmd)
       if list.items.len == 1 and
          commandLineCmd.args.len > 0 and
          commandLineCmd.args[^1] == list.items[0].label:

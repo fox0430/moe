@@ -66,6 +66,18 @@ proc listHigh*(c: CompletionWindow): int {.inline.} = c.list.high
 
 proc listLen*(c: CompletionWindow): int {.inline.} = c.list.len
 
+proc setWindowPosition*(c: var CompletionWindow, position: Position) {.inline.} =
+  if c.popupWindow.isSome:
+    c.popupWindow.get.position = position
+
+proc setWindowPositionY*(c: var CompletionWindow, y: int) {.inline.} =
+  if c.popupWindow.isSome:
+    c.popupWindow.get.position.y = y
+
+proc setWindowPositionX*(c: var CompletionWindow, x: int) {.inline.} =
+  if c.popupWindow.isSome:
+    c.popupWindow.get.position.x = x
+
 proc autoMoveAndResize*(
   c: var CompletionWindow,
   min, max: Position) {.inline.} =
@@ -296,6 +308,9 @@ proc updateBuffer*(c: var CompletionWindow) =
       c.popupWindow.get.buffer.add ru" " & item.label & ru" "
 
 proc update*(c: var CompletionWindow) {.inline.} =
+  if c.selectedIndex == -1: c.popupWindow.get.currentLine = none(int)
+  else: c.popupWindow.get.currentLine = some(c.selectedIndex)
+
   c.popupWindow.get.update
 
 proc close*(c: var CompletionWindow) {.inline.} =

@@ -101,12 +101,8 @@ proc pathCompletionList*(path: Runes): CompletionList =
   if path[^1] == ru'/':
     for k in walkDir($path):
       let p = k.path.splitPath.tail.toRunes
-      result.items.add CompletionItem(
-        label: p,
-        insertText: p)
+      result.items.add initCompletionItem(p)
   else:
     for path in walkPattern($path & '*').toSeq:
       let p = path.splitPath.tail.toRunes
-      result.items.add CompletionItem(
-        label: p,
-        insertText: p)
+      result.items.add initCompletionItem(p)
