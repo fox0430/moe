@@ -139,6 +139,11 @@ proc initCommandLineCommand(rawInput: Runes): CommandLineCommand =
     if commandSplit.len > 1:
       result.args = commandSplit[1 .. ^1]
 
+proc isPathCompletionInCommandLine*(rawInput: Runes): bool =
+  let commandSplit = splitExCommandBuffer(rawInput)
+  if commandSplit.len > 0:
+    return commandSplit[0].isPathArgsCommand
+
 proc getExCommandOptionCompletionList*(
   rawInput: Runes,
   commandLineCmd: CommandLineCommand): CompletionList =

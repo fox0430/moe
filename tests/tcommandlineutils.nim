@@ -97,23 +97,22 @@ suite "commandlineutils: getExCommandOptionCompletionList":
     let commands = ExCommandInfoList.filterIt(it.argsType == ArgsType.toggle)
 
     for c in commands:
-      const Args: seq[Runes] = @[]
+      let
+        rawInput = c.command.toRunes
+        commandLineCmd = initCommandLineCommand(rawInput)
       check @[
         initCompletionItem(ru"on"),
         initCompletionItem(ru"off")] == getExCommandOptionCompletionList(
-          c.command.toRunes,
-          Args,
-          ArgsType.toggle).items
+          rawInput,
+          commandLineCmd).items
 
   test "Expect ColorTheme values":
-    const
-      Command = "theme".toRunes
-      Args: seq[Runes] = @[]
+    const RawInput = "theme".toRunes
+    let commandLineCmd = initCommandLineCommand(RawInput)
     check ColorTheme
       .mapIt(initCompletionItem(toRunes($it))) == getExCommandOptionCompletionList(
-        Command,
-        Args,
-        ArgsType.theme).items
+        RawInput,
+        commandLineCmd).items
 
 suite "commandlineutils: getExCommandCompletionList":
   test "Expect all ex command":

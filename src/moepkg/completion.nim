@@ -86,8 +86,8 @@ proc clear*(list: var CompletionList) {.inline.} =
   list.items = @[]
 
 proc isCompletionCharacter*(r: Rune): bool {.inline.} =
-  # '/' is path completion.
-  r in [ru'/'] or
+  # '/' and '.' are path completion.
+  r in [ru'/', ru'.'] or
   r.unicodeCategory in LetterCharacter
 
 proc isPathCompletion*(r: Rune | Runes): bool {.inline.} =

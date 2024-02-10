@@ -27,9 +27,9 @@ suite "completion: isCompletionCharacter":
   test "Basics":
     check isCompletionCharacter(ru'a')
     check isCompletionCharacter("あ".toRunes[0])
+    check isCompletionCharacter(ru'.')
     check isCompletionCharacter(ru'/')
 
-    check not isCompletionCharacter(ru'.')
     check not isCompletionCharacter(ru'=')
 
 suite "completion: pathCompletionList":

@@ -503,13 +503,14 @@ proc updateCompletionWindowBuffer(status: var EditorStatus) =
         status.commandLine.window.y)
 
       # Shift window position for path completion.
-      let p = status.commandLine.buffer.rfind(ru'/')
-      if p > -1:
-        status.completionWindow.get.setWindowPositionX(
-          status.commandLine.buffer.rfind(ru'/'))
-      else:
-        status.completionWindow.get.setWindowPositionX(
-          status.completionWindow.get.startColumn)
+      if status.commandLine.buffer.isPathCompletionInCommandLine:
+        let p = status.commandLine.buffer.rfind(ru'/')
+        if p > -1:
+          status.completionWindow.get.setWindowPositionX(
+            status.commandLine.buffer.rfind(ru'/'))
+        else:
+          status.completionWindow.get.setWindowPositionX(
+            status.completionWindow.get.startColumn)
 
       status.completionWindow.get.autoMoveAndResize(minPosition, maxPosition)
 
