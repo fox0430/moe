@@ -293,7 +293,7 @@ proc updateBuffer*(c: var CompletionWindow) =
     c.popupWindow.get.buffer = @[]
 
     for item in c.list.items:
-      c.popupWindow.get.buffer.add ru" " & item.insertText & ru" "
+      c.popupWindow.get.buffer.add ru" " & item.label & ru" "
 
 proc update*(c: var CompletionWindow) {.inline.} =
   c.popupWindow.get.update
