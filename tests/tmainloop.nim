@@ -995,7 +995,7 @@ suite "mainloop: openCompletionWindow":
     status.resize(100, 100)
     status.update
 
-    status.openCompletionWindow
+    status.openCompletionWindowInEditor
 
     check status.completionWindow.get.popupWindow.get.position == Position(y: 2, x: 1)
     check status.completionWindow.get.startPosition == BufferPosition(
@@ -1017,7 +1017,7 @@ suite "mainloop: openCompletionWindow":
     status.resize(100, 100)
     status.update
 
-    status.openCompletionWindow
+    status.openCompletionWindowInEditor
 
     check status.completionWindow.get.popupWindow.get.position == Position(y: 2, x: 2)
     check status.completionWindow.get.startPosition == BufferPosition(
@@ -1042,7 +1042,7 @@ suite "mainloop: updateCompletionWindowBuffer":
     status.resize(100, 100)
     status.update
 
-    status.openCompletionWindow
+    status.openCompletionWindowInEditor
 
     block:
       currentBufStatus.lspCompletionList.items = @[
@@ -1052,7 +1052,7 @@ suite "mainloop: updateCompletionWindowBuffer":
       ]
 
       status.completionWindow.get.addInput(ru'e')
-      status.updateCompletionWindowBuffer
+      status.updateCompletionWindowBufferInEditor
 
       check status.completionWindow.get.inputText == ru"e"
       check status.completionWindow.get.list.len == 3
@@ -1072,7 +1072,7 @@ suite "mainloop: updateCompletionWindowBuffer":
       currentBufStatus.buffer[1] = ru"ec"
 
       status.completionWindow.get.addInput(ru'c')
-      status.updateCompletionWindowBuffer
+      status.updateCompletionWindowBufferInEditor
 
       check status.completionWindow.get.inputText == ru"ec"
       check status.completionWindow.get.list.len == 1
@@ -1099,11 +1099,11 @@ suite "mainloop: updateCompletionWindowBuffer":
     status.resize(100, 100)
     status.update
 
-    status.openCompletionWindow
+    status.openCompletionWindowInEditor
 
     block:
       status.completionWindow.get.addInput(ru'e')
-      status.updateCompletionWindowBuffer
+      status.updateCompletionWindowBufferInEditor
 
       check status.completionWindow.get.inputText == ru"e"
       check status.completionWindow.get.list.len > 0
@@ -1120,7 +1120,7 @@ suite "mainloop: updateCompletionWindowBuffer":
       currentBufStatus.buffer[1] = ru"ec"
 
       status.completionWindow.get.addInput(ru'c')
-      status.updateCompletionWindowBuffer
+      status.updateCompletionWindowBufferInEditor
 
       check status.completionWindow.get.inputText == ru"ec"
       check status.completionWindow.get.list.len == 1
@@ -1189,12 +1189,12 @@ suite "mainloop: confirmCompletion":
       CompletionItem(label: ru"echo", insertText: ru"echo")
     ]
 
-    status.openCompletionWindow
+    status.openCompletionWindowInEditor
 
     currentBufStatus.buffer[1] = ru"ec"
     status.completionWindow.get.inputText = ru"ec"
     currentMainWindowNode.currentColumn = 2
-    status.updateCompletionWindowBuffer
+    status.updateCompletionWindowBufferInEditor
 
     status.completionWindow.get.handleKey(
       currentBufStatus,

@@ -203,11 +203,12 @@ proc insertSelectedText*(
   completionWindow: CompletionWindow) =
     # Insert the selected text to the line.
 
-    let text = completionWindow.selectedText
-    for i in 0 .. text.high:
-      commandLine.insert(
-        text[i],
-        completionWindow.startPosition.column + i)
+    if completionWindow.selectedText.len > 0:
+      let text = completionWindow.selectedText
+      for i in 0 .. text.high:
+        commandLine.insert(
+          text[i],
+          completionWindow.startPosition.column + i)
 
 proc canHandleInCompletionWindow*(key: Rune): bool {.inline.} =
   isTabKey(key) or

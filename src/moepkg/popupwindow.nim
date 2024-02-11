@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -180,3 +180,6 @@ proc close*(p: var PopupWindow) =
 
   if p.window != nil:
     p.window.deleteWindow
+
+proc windowPosition*(p: PopupWindow): Position {.inline.} =
+  Position(y: p.window.y, x: p.window.x)

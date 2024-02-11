@@ -479,8 +479,13 @@ proc moveCursor*(win: Window, y, x: int) {.inline.} =
 
 proc getCursorPosition*(win: Window): Position =
   var x, y: cint
-  win.cursesWindow.getyx(x, y)
-  return Position(x: x.int, y: y.int)
+  win.cursesWindow.getyx(y, x)
+  return Position(y: y.int, x: x.int)
+
+proc getAbsCursorPosition*(win: Window): Position =
+  var x, y: cint
+  win.cursesWindow.getyx(y, x)
+  return Position(y: y.int + win.y, x: x.int + win.x)
 
 proc deleteWindow*(win: var Window) {.inline.} = delwin(win.cursesWindow)
 

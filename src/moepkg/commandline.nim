@@ -246,6 +246,12 @@ proc setBufferPositionY*(commandLine: var CommandLine, y: int) {.inline.} =
 proc cursorPosition*(commandLine: CommandLine): Position {.inline.} =
   commandLine.window.getCursorPosition
 
+proc absCursorPosition*(commandLine: CommandLine): Position {.inline.} =
+  commandLine.window.getAbsCursorPosition
+
+proc windowPosition*(commandLine: CommandLine): Position {.inline.} =
+  Position(y: commandLine.window.y, x: commandLine.window.x)
+
 proc getKey*(commandLine: var CommandLine): Option[Rune] {.inline.} =
   ## Return a single Key.
 

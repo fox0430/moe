@@ -17,11 +17,11 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[options, os, sequtils]
+import std/[options, os, strutils]
 
 import pkg/unicodedb/properties
 
-import unicodeext
+import unicodeext, fileutils
 
 type
   CompletionLabel* = Runes
@@ -86,23 +86,29 @@ proc clear*(list: var CompletionList) {.inline.} =
   list.items = @[]
 
 proc isCompletionCharacter*(r: Rune): bool {.inline.} =
-  # '/' and '.' are path completion.
-  r in [ru'/', ru'.'] or
+  # '/', '.' and '~' are path completion.
+  r in [ru'/', ru'.', ru'~'] or
   r.unicodeCategory in LetterCharacter
 
 proc isPathCompletion*(r: Rune | Runes): bool {.inline.} =
-  r.toRunes.startsWith(ru"/") or r.toRunes.startsWith(ru"./")
+  r.toRunes.startsWith(ru"/") or
+  r.toRunes.startsWith(ru"./") or
+  r.toRunes.startsWith(ru"~/")
 
 proc pathCompletionList*(path: Runes): CompletionList =
   result = initCompletionList()
 
   if path.len == 0: return
 
-  if path[^1] == ru'/':
-    for k in walkDir($path):
-      let p = k.path.splitPath.tail.toRunes
-      result.items.add initCompletionItem(p)
-  else:
-    for path in walkPattern($path & '*').toSeq:
-      let p = path.splitPath.tail.toRunes
-      result.items.add initCompletionItem(p)
+  let
+    (inputPathHead, inputPathTail) = splitPath(path)
+    pattern =
+      if inputPathHead.len == 0: getCurrentDir()
+      elif inputPathHead.startsWith(ru'~'): expandTilde($inputPathHead)
+      else: $inputPathHead
+
+  for k in walkDir(pattern):
+    let p = k.path.splitPath.tail.toRunes
+    if inputPathTail.len == 0 or p.startsWith(inputPathTail):
+      if k.kind == pcDir: result.items.add initCompletionItem(p & ru"/")
+      else: result.items.add initCompletionItem(p)

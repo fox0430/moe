@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, sequtils, strutils, sugar]
+import std/[unittest, os, sequtils, strutils, sugar, algorithm]
 
 import moepkg/[unicodeext, theme, exmodeutils, completion]
 
@@ -87,10 +87,19 @@ suite "commandlineutils: getPathCompletionList":
     for path in getPathCompletionList(buffer).items:
       check files.contains($path)
 
-  test "Expect the absolute path of the home dir":
-    const Input = ru"~"
-    check @[initCompletionItem(getHomeDir().toRunes)] == getPathCompletionList(
-      Input).items
+  test "Expect files and dirs in the home dir":
+    const Input = ru"~/"
+    let expectList = collect:
+      for k in walkDir(getHomeDir()):
+        if k.kind == pcDir:
+          k.path.replace(getHomeDir(), "") & '/'
+        else:
+          k.path.replace(getHomeDir(), "")
+
+    check expectList.sorted == getPathCompletionList(Input)
+      .items
+      .mapIt($it.insertText)
+      .sorted
 
 suite "commandlineutils: getExCommandOptionCompletionList":
   test "Expect \"on\" and \"off\"":
@@ -217,30 +226,29 @@ suite "commandlineutils: initExmodeCompletionList":
   test "Suggest paths":
     const RawInput = ru"e ./"
 
-    var expectList = collect:
+    let expectList = collect:
       for k in walkDir("./"):
-        if k.kind == pcDir:
-          toRunes(k.path & "/")
-        else:
-          k.path.toRunes
+        if k.kind == pcDir: k.path.replace("./", "") & "/"
+        else: k.path.replace("./", "")
 
     # TODO: Check labels
-    check expectList == initExmodeCompletionList(RawInput)
+    check expectList.sorted == initExmodeCompletionList(RawInput)
       .items
-      .mapIt(it.insertText)
+      .mapIt($it.insertText)
+      .sorted
 
   test "Suggest paths 2":
     const RawInput = ru"e src/m"
 
-    var expectList = collect:
-      for k in walkDir("src/"):
-        if k.path.splitPath.tail.startsWith("m"):
-          if k.kind == pcDir:
-            toRunes(k.path & "/")
-          else:
-            k.path.toRunes
+    let expectList = collect:
+      for k in walkDir("./src/"):
+        let tail = k.path.splitPath.tail
+        if tail.startsWith('m'):
+          if k.kind == pcDir: tail & "/"
+          else: tail
 
     # TODO: Check labels
-    check expectList == initExmodeCompletionList(RawInput)
+    check expectList.sorted == initExmodeCompletionList(RawInput)
       .items
-      .mapIt(it.insertText)
+      .mapIt($it.insertText)
+      .sorted

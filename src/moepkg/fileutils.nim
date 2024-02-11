@@ -256,3 +256,5 @@ proc isAccessibleDir*(path: string): bool =
 
   if dirExists(path):
     for _ in walkDir(path): return true
+
+proc expandTilde*(path: Runes): Runes {.inline.} = expandTilde($path).toRunes

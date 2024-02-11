@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, sequtils, strformat, options, os]
+import std/[strutils, sequtils, strformat, options]
 
 import pkg/results
 
@@ -91,13 +91,7 @@ proc getPathCompletionList*(inputPath: Runes): CompletionList =
   if inputPath.len == 0:
     return pathCompletionList(ru"./")
   else:
-    result = pathCompletionList(inputPath)
-    if result.len > 0:
-      let pathSplit = splitPath($inputPath)
-      if pathSplit.head.len > 0:
-        let pathHead = pathSplit.head.toRunes
-        for i in 0 .. result.items.high:
-          result.items[i].insertText = pathHead / result.items[i].insertText
+    return pathCompletionList(inputPath)
 
 proc getExCommandCompletionList*(input: Runes): CompletionList =
   ## Return completion list for ex command suggestion.
@@ -139,8 +133,8 @@ proc initCommandLineCommand(rawInput: Runes): CommandLineCommand =
     if commandSplit.len > 1:
       result.args = commandSplit[1 .. ^1]
 
-proc isPathCompletionInCommandLine*(rawInput: Runes): bool =
-  let commandSplit = splitExCommandBuffer(rawInput)
+proc isPathCompletionInCommandLine*(commandLine: CommandLine): bool =
+  let commandSplit = splitExCommandBuffer(commandLine.buffer)
   if commandSplit.len > 0:
     return commandSplit[0].isPathArgsCommand
 
@@ -156,6 +150,7 @@ proc getExCommandOptionCompletionList*(
 
     case argsType:
       of ArgsType.toggle:
+        # "on" or "off"
         if commandLineCmd.args.len == 0:
           return CompletionList(items: @[
             initCompletionItem(ru"on"),
@@ -166,11 +161,13 @@ proc getExCommandOptionCompletionList*(
             if s.startsWith(commandLineCmd.args[0]):
               result.add initCompletionItem(s)
       of ArgsType.path:
+        # File paths
         if commandLineCmd.args.len == 0:
           return getPathCompletionList(ru"")
         else:
           return getPathCompletionList(commandLineCmd.args[0])
       of ArgsType.theme:
+        # Color themes
         if commandLineCmd.args.len == 0:
           return CompletionList(items:
             ColorTheme.mapIt(initCompletionItem(toRunes($it))))
