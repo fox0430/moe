@@ -66,12 +66,12 @@ proc getDisplayRange(commandLine: CommandLine): tuple[first, last: int] =
     result.first = 0
     result.last = min(commandLine.buffer.high, commandLine.window.width)
 
-proc seekCursor*(commandLine: CommandLine): Position {.inline.} =
-  ## Return the cursor position.
+proc seekCursor*(commandLine: var CommandLine) =
+  ## Move the cursor position.
 
-  Position(
-    x: commandLine.prompt.len + commandLine.bufferPosition.x,
-    y: commandLine.bufferPosition.y)
+  commandLine.window.moveCursor(
+    commandLine.bufferPosition.y,
+    commandLine.prompt.len + commandLine.bufferPosition.x)
 
 proc update*(commandLine: var CommandLine) =
   ## Update the command line view and window.
@@ -85,8 +85,7 @@ proc update*(commandLine: var CommandLine) =
   commandLine.window.erase
   commandLine.window.write(0, 0, buffer, commandLine.color.int16)
 
-  let cursorPos = commandLine.seekCursor
-  commandLine.window.moveCursor(cursorPos.y, cursorPos.x)
+  commandLine.seekCursor
 
   commandLine.window.refresh
 
