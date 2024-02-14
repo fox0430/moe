@@ -396,8 +396,8 @@ proc openCompletionWindowInCommandLine(
       startPosition = BufferPosition(line: 0, column: column)
 
       windowPosition = Position(
-        y: status.commandLine.absCursorPosition.y,
-        x: status.commandLine.absCursorPosition.x - 1)
+        y: max(0, status.commandLine.absCursorPosition.y),
+        x: max(0, status.commandLine.absCursorPosition.x - 1))
 
     status.completionWindow = some(initCompletionWindow(
       startPosition = startPosition,
@@ -443,45 +443,43 @@ proc updateCompletionWindowBufferInCommandLine(status: var EditorStatus) =
   ## Update the buffer for the completion window and move, resize the
   ## completion window.
 
-  if currentBufStatus.isExMode:
-    # Commnad line
-    if status.completionWindow.get.selectedIndex > -1:
-      # Remove the temporary selection from the buffer before update.
+  if status.completionWindow.get.selectedIndex > -1:
+    # Remove the temporary selection from the buffer before update.
 
-      status.commandline.removeInsertedText(status.completionWindow.get)
-      status.completionWindow.get.selectedIndex = -1
-      status.commandline.insertSelectedText(status.completionWindow.get)
+    status.commandline.removeInsertedText(status.completionWindow.get)
+    status.completionWindow.get.selectedIndex = -1
+    status.commandline.insertSelectedText(status.completionWindow.get)
 
-      status.commandline.setBufferPositionX(
-        status.completionWindow.get.startColumn)
+    status.commandline.setBufferPositionX(
+      status.completionWindow.get.startColumn)
 
-    let
-      # Calc min/max positions for the completion window.
-      minPosition = Position(y: 0, x: 0)
-      maxPosition = Position(
-        y: status.commandLine.window.y,
-        x: getTerminalWidth() - 1)
+  let
+    # Calc min/max positions for the completion window.
+    minPosition = Position(y: 0, x: 0)
+    maxPosition = Position(
+      y: status.commandLine.window.y,
+      x: getTerminalWidth() - 1)
 
-    # Update list
-    status.completionWindow.get.setList initExmodeCompletionList(
-      status.commandLine.buffer)
+  # Update list
+  status.completionWindow.get.setList initExmodeCompletionList(
+    status.commandLine.buffer)
 
-    if status.completionWindow.get.list.len > 0:
-      if status.completionWindow.get.popupWindow.isNone:
-        status.completionWindow.get.reopen(
-          currentMainWindowNode.completionWindowPosition(currentBufStatus))
+  if status.completionWindow.get.list.len > 0:
+    if status.completionWindow.get.popupWindow.isNone:
+      status.completionWindow.get.reopen(
+        currentMainWindowNode.completionWindowPosition(currentBufStatus))
 
-      # Update completion window buffer
-      status.completionWindow.get.updateBuffer
+    # Update completion window buffer
+    status.completionWindow.get.updateBuffer
 
-      status.completionWindow.get.setWindowPositionY(
-        status.commandline.windowPosition.y)
+    status.completionWindow.get.setWindowPositionY(
+      status.commandline.windowPosition.y)
 
-      status.completionWindow.get.autoMoveAndResize(minPosition, maxPosition)
-      status.completionWindow.get.update
-    else:
-      # Temporary close the ncurses window
-      status.completionWindow.get.close
+    status.completionWindow.get.autoMoveAndResize(minPosition, maxPosition)
+    status.completionWindow.get.update
+  else:
+    # Temporary close the ncurses window
+    status.completionWindow.get.close
 
 proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
   ## Get keys and update view.

@@ -85,6 +85,18 @@ proc clear*(list: var CompletionList) {.inline.} =
 
   list.items = @[]
 
+proc maxLabelLen*(list: CompletionList): int =
+  ## Return a max length of `list.label`.
+
+  for item in list.items:
+    if item.label.len > result: result = item.label.len
+
+proc maxInsertTextLen*(list: CompletionList): int =
+  ## Return a max length of `list.insertText`.
+
+  for item in list.items:
+    if item.insertText.len > result: result = item.insertText.len
+
 proc isCompletionCharacter*(r: Rune): bool {.inline.} =
   # '/', '.' and '~' are path completion.
   r in [ru'/', ru'.', ru'~'] or
