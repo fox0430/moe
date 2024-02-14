@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -977,7 +977,7 @@ suite "mainloop: incrementalReplace":
         "x", "x def", "", "def x", "x x"]
         .toSeqRunes
 
-suite "mainloop: openCompletionWindow":
+suite "mainloop: openCompletionWindow in editor":
   privateAccess(CompletionWindow)
 
   test "Basic":
@@ -1024,7 +1024,52 @@ suite "mainloop: openCompletionWindow":
       line: 1,
       column: 1)
 
-suite "mainloop: updateCompletionWindowBuffer":
+suite "mainloop: openCompletionWindow in commandLine":
+  privateAccess(CompletionWindow)
+
+  test "Empty buffer":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.mode = Mode.ex
+
+    status.settings.view.lineNumber = false
+    status.settings.tabLine.enable = false
+
+    status.resize(100, 100)
+    status.update
+
+    status.openCompletionWindowInCommandLine(true)
+
+    check status.completionWindow.get.popupWindow.get.position == Position(
+      y: 99 - status.commandLine.window.height,
+      x: 0)
+    check status.completionWindow.get.startPosition == BufferPosition(
+      line: 0,
+      column: 0)
+
+  test "Basic":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.mode = Mode.ex
+
+    status.settings.view.lineNumber = false
+    status.settings.tabLine.enable = false
+
+    status.commandLine.buffer.insert(ru'e')
+
+    status.resize(100, 100)
+    status.update
+
+    status.openCompletionWindowInCommandLine(true)
+
+    check status.completionWindow.get.popupWindow.get.position == Position(
+      y: 99 - status.commandLine.window.height,
+      x: 0)
+    check status.completionWindow.get.startPosition == BufferPosition(
+      line: 0,
+      column: 0)
+
+suite "mainloop: updateCompletionWindowBuffer in editor":
   privateAccess(CompletionWindow)
 
   test "With LSP":
@@ -1133,7 +1178,61 @@ suite "mainloop: updateCompletionWindowBuffer":
       check status.completionWindow.get.popupWindow.get.position == Position(
         y: 2, x: 1)
 
-suite "mainloop: confirmCompletion":
+suite "mainloop: updateCompletionWindowBuffer in command line":
+  privateAccess(CompletionWindow)
+
+  test "Basic":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.mode = Mode.ex
+
+    status.settings.view.lineNumber = false
+    status.settings.tabLine.enable = false
+
+    status.commandLine.buffer = ru"c"
+
+    status.resize(100, 100)
+    status.update
+
+    status.openCompletionWindowInCommandLine(false)
+
+    block:
+      status.completionWindow.get.addInput(ru'c')
+      status.updateCompletionWindowBufferInCommandLine
+
+      check status.completionWindow.get.inputText == ru"c"
+      check status.completionWindow.get.list.len > 1
+      check status.completionWindow.get.startPosition == BufferPosition(
+        line: 0,
+        column: 0)
+
+      check status.completionWindow.get.popupWindow.get.size == Size(
+        h: status.completionWindow.get.list.len,
+        w: status.completionWindow.get.list.maxLabelLen + 2)
+      check status.completionWindow.get.popupWindow.get.position == Position(
+        y: 99 - status.completionWindow.get.list.len,
+        x: 0)
+
+    block:
+      status.commandLine.buffer = ru"cl"
+
+      status.completionWindow.get.addInput(ru'l')
+      status.updateCompletionWindowBufferInCommandLine
+
+      check status.completionWindow.get.inputText == ru"cl"
+      check status.completionWindow.get.list.len == 1
+      check status.completionWindow.get.startPosition == BufferPosition(
+        line: 0,
+        column: 0)
+
+      check status.completionWindow.get.popupWindow.get.size == Size(
+        h: 1,
+        w: status.completionWindow.get.list.maxLabelLen + 2)
+      check status.completionWindow.get.popupWindow.get.position == Position(
+        y: 98,
+        x: 0)
+
+suite "mainloop: confirmCompletion in editor":
   privateAccess(CompletionWindow)
 
   test "Not selected":
@@ -1207,3 +1306,82 @@ suite "mainloop: confirmCompletion":
     check currentBufStatus.buffer.toSeqRunes == @["echo 1", "echo"].toSeqRunes
     check currentMainWindowNode.currentLine == 1
     check currentMainWindowNode.currentColumn == 4
+
+suite "mainloop: confirmCompletion in comamnd line":
+  privateAccess(CompletionWindow)
+
+  test "Not selected":
+    var status = initEditorStatus()
+
+    status.settings.view.lineNumber = false
+    status.settings.tabLine.enable = false
+
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.mode = Mode.ex
+
+    status.commandLine.buffer = ru"a"
+    status.commandLine.setBufferPosition Position(y: 0, x: 1)
+
+    status.resize(100, 100)
+    status.update
+
+    let list = CompletionList(items: @[
+      initCompletionItem(ru"aa"),
+      initCompletionItem(ru"ab"),
+      initCompletionItem(ru"ac"),
+    ])
+
+    status.completionWindow = some(CompletionWindow(
+      startPosition: BufferPosition(line: 0, column: 0),
+      popupWindow: some(initPopupWindow(
+        Position(y: 98, x: 0),
+        Size(h: list.len, w: list.maxInsertTextLen))),
+      inputText: ru"a",
+      selectedIndex: -1))
+
+    status.completionWindow.get.setList list
+
+    status.confirmCompletion
+
+    check status.completionWindow.isNone
+    check status.commandLine.buffer == ru"a"
+
+  test "Selected":
+    var status = initEditorStatus()
+
+    status.settings.view.lineNumber = false
+    status.settings.tabLine.enable = false
+
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.mode = Mode.ex
+
+    status.commandLine.buffer = ru"a"
+    status.commandLine.setBufferPosition Position(y: 0, x: 1)
+
+    status.resize(100, 100)
+    status.update
+
+    let list = CompletionList(items: @[
+      initCompletionItem(ru"aa"),
+      initCompletionItem(ru"ab"),
+      initCompletionItem(ru"ac"),
+    ])
+
+    status.completionWindow = some(CompletionWindow(
+      startPosition: BufferPosition(line: 0, column: 0),
+      popupWindow: some(initPopupWindow(
+        Position(y: 98, x: 0),
+        Size(h: list.len, w: list.maxInsertTextLen))),
+      inputText: ru"a",
+      selectedIndex: -1))
+
+    status.completionWindow.get.setList list
+
+    status.completionWindow.get.handleKey(
+      status.commandLine,
+      Rune(TabKey))
+
+    status.confirmCompletion
+
+    check status.completionWindow.isNone
+    check status.commandLine.buffer == ru"aa"
