@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -328,14 +328,13 @@ proc writeLineNum(
   colorPair: EditorColorPairIndex) =
 
     const
-      rightMargin = " "
-      storeX = false
+      RightMargin = " "
     let
       x = view.sidebarWidth
       buffer =
-        strutils.align($(line + 1), view.widthOfLineNum - 1) & rightMargin
+        strutils.align($(line + 1), view.widthOfLineNum - 1) & RightMargin
 
-    win.write(y, x, buffer, colorPair.int16, Attribute.normal, storeX)
+    win.write(y, x, buffer, colorPair.int16, Attribute.normal, false)
 
 proc write(
   view: EditorView,

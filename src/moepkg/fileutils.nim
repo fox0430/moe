@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -256,3 +256,5 @@ proc isAccessibleDir*(path: string): bool =
 
   if dirExists(path):
     for _ in walkDir(path): return true
+
+proc expandTilde*(path: Runes): Runes {.inline.} = expandTilde($path).toRunes

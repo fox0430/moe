@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -17,10 +17,11 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, sequtils, strformat, os, algorithm, options]
+import std/[strutils, sequtils, strformat, options]
+
 import pkg/results
-import ui, unicodeext, fileutils, commandline, popupwindow, messagelog, theme,
-       exmodeutils, independentutils
+
+import unicodeext, commandline, messagelog, theme, exmodeutils, completion
 
 type
   SuggestType* = enum
@@ -30,27 +31,6 @@ type
   CommandLineCommand* = object
     command*: Runes
     args*: seq[Runes]
-
-  SuggestList* = object
-    rawInput*: Runes
-    commandLineCmd*: CommandLineCommand
-    suggestType*: SuggestType
-    argsType*: Option[ArgsType]
-    currentIndex*: int
-    suggestions*: seq[Runes]
-
-proc isPath(a: ArgsType): bool {.inline.} = a == ArgsType.path
-
-proc isExCommand*(suggestType: SuggestType): bool {.inline.} =
-  suggestType == SuggestType.exCommand
-
-proc isExCommandOption*(suggestType: SuggestType): bool {.inline.} =
-  suggestType == SuggestType.exCommandOption
-
-proc isExCommand(list: SuggestList): bool {.inline.} =
-  ## Return true if valid ex command text with space in the raw input.
-
-  list.rawInput.contains(ru' ') and list.commandLineCmd.command.isExCommand
 
 proc askCreateDirPrompt*(
   commndLine: var CommandLine,
@@ -104,89 +84,44 @@ proc askFileChangedSinceReading*(commndLine: var CommandLine): bool =
     if key == ord('y'): result = true
     else: result = false
 
-proc getFilePathCandidates*(inputPath: Runes): seq[Runes] =
-  ## Return paths for suggestions from `inputPath`.
+proc getPathCompletionList*(inputPath: Runes): CompletionList =
+  ## Return completion list for path suggestions.
   ## Return all files and dirs in the current dir if `inputPath` is empty.
 
-  if inputPath == ru"~":
-    # Return an absolute path of the home dir.
-    return @[getHomeDir().toRunes]
-  elif inputPath.contains(ru'/'):
-    let (inputPathHead, inputPathTail) = splitAndNormalizedPath(inputPath)
-    for kind, path in walkDir($inputPathHead):
-      if path.splitPath.tail.startsWith($inputPathTail):
-        if inputPath[0] == ru'~':
-          let
-            pathHigh = path.toRunes.high
-            homeDirHigh = high(getHomeDir())
-            addPath = ru"~" & path.toRunes[homeDirHigh .. pathHigh]
-          # If the path is a directory, add '/'
-          if dirExists($addPath): result.add addPath & ru"/"
-          else: result.add addPath
-        else:
-          # If the path is a directory, add '/'
-          if dirExists(path): result.add toRunes(path & "/")
-          else: result.add path.toRunes
+  if inputPath.len == 0:
+    return pathCompletionList(ru"./")
   else:
-    for kind, path in walkDir("./"):
-      let normalizePath = normalizedPath(path.toRunes)
-      if inputPath.len == 0 or normalizePath.startsWith(inputPath):
-        let p = normalizedPath(path.toRunes)
-        # If the path is a directory, add '/'
-        if dirExists($p): result.add p & ru"/"
-        else: result.add p
+    return pathCompletionList(inputPath)
 
-  result.sort(proc (a, b: Runes): int = cmp($a, $b))
-
-proc getExCommandCandidates*(input: Runes): seq[Runes] =
-  ## Return candidates for ex command suggestion.
+proc getExCommandCompletionList*(input: Runes): CompletionList =
+  ## Return completion list for ex command suggestion.
   ## Interpreting upper and lowercase letters as being the same.
 
+  result = CompletionList()
+
   let lowerInput = toLower(input)
-  for list in ExCommandInfoList:
-    let lowerCmd = list.command.toLowerAscii.toRunes
+  var
+    suggestions: seq[ExCommandInfo]
+    maxCommandLen = 0
+  for info in ExCommandInfoList:
+    let lowerCmd = info.command.toLowerAscii.toRunes
     if lowerInput.len <= lowerCmd.len and lowerCmd.startsWith(lowerInput):
-      result.add list.command.toRunes
+      suggestions.add info
+      if info.command.len > maxCommandLen: maxCommandLen = info.command.len
 
-proc getSuggestType*(command: Runes): SuggestType =
-  if isExCommand(command):
-    SuggestType.exCommandOption
+  for s in suggestions:
+    # Insert spaces and dividers to descriptions for the ex command suggestion.
+    let spaces = " ".repeat(maxCommandLen - s.command.len)
+    result.add CompletionItem(
+      label: toRunes(fmt"{s.command}{spaces} | {s.description}"),
+      insertText: s.command.toRunes)
+
+proc getSuggestType*(rawInput: Runes): SuggestType =
+  let commandSplit = splitExCommandBuffer(rawInput)
+  if commandSplit.len == 0 or (commandSplit.len == 1 and rawInput[^1] != ru' '):
+    return SuggestType.exCommand
   else:
-    SuggestType.exCommand
-
-proc getExCommandOptionCandidates*(
-  command: Runes,
-  args: seq[Runes],
-  argsType: ArgsType): seq[Runes] =
-    ## Return candidates for ex command option suggestion.
-    ## Interpreting upper and lowercase letters as being the same.
-
-    case argsType:
-      of ArgsType.toggle:
-        if args.len == 0:
-          return @[ru"on", ru"off"]
-        elif args.len == 1:
-          let arg = args[0]
-          for candidate in [ru"on", ru"off"]:
-            if arg.len < candidate.len and candidate.startsWith(arg):
-              result.add candidate
-      of ArgsType.path:
-        if args.len == 1:
-          return getFilePathCandidates(args[0])
-      of ArgsType.theme:
-        if args.len == 0:
-          return ColorTheme.mapIt(toRunes($it))
-        elif args.len == 1:
-          for theme in ColorTheme.mapIt(toRunes($it)):
-            if args[0].len < theme.len and theme.startsWith(args[0]):
-              result.add theme
-      else:
-        discard
-
-proc currentSuggestion(list: SuggestList): Runes {.inline.} =
-  ## Return the current suggestion.
-
-  list.suggestions[list.currentIndex]
+    return SuggestType.exCommandOption
 
 proc initCommandLineCommand(rawInput: Runes): CommandLineCommand =
   ## Return CommandLineCommand from a raw input.
@@ -198,175 +133,66 @@ proc initCommandLineCommand(rawInput: Runes): CommandLineCommand =
     if commandSplit.len > 1:
       result.args = commandSplit[1 .. ^1]
 
-proc updateSuggestType(list: var SuggestList) =
-  if list.isExCommand:
-    list.suggestType = getSuggestType(list.commandLineCmd.command)
+proc isPathArgs*(commandLine: CommandLine): bool =
+  let commandSplit = splitExCommandBuffer(commandLine.buffer)
+  if commandSplit.len > 0:
+    return commandSplit[0].isPathArgsCommand
 
-proc updateArgsType(list: var SuggestList) =
-  if list.suggestType != SuggestType.exCommand:
-    let argsType = getArgsType(list.commandLineCmd.command)
-    if argsType.isOk:
-      list.argsType = some(argsType.get)
+proc getExCommandOptionCompletionList*(
+  rawInput: Runes,
+  commandLineCmd: CommandLineCommand): CompletionList =
+    ## Return completion list for ex command option suggestion.
+    ## Interpreting upper and lowercase letters as being the same.
 
-proc updateSuggestions*(list: var SuggestList) =
-  ## Update SuggestList.suggestions.
+    result = CompletionList()
 
-  var suggestions: seq[Runes]
-  case list.suggestType:
-    of SuggestType.exCommand:
-      suggestions = getExCommandCandidates(list.rawInput)
-    of SuggestType.exCommandOption:
-      if isPath(list.argsType.get):
-        let path =
-          if list.commandLineCmd.args.len == 1: list.commandLineCmd.args[0]
-          else: ru""
-        suggestions = getFilePathCandidates(path)
+    let argsType = getArgsType(commandLineCmd.command).get
+
+    case argsType:
+      of ArgsType.toggle:
+        # "on" or "off"
+        if commandLineCmd.args.len == 0:
+          return CompletionList(items: @[
+            initCompletionItem(ru"on"),
+            initCompletionItem(ru"off")
+          ])
+        elif commandLineCmd.args.len == 1:
+          for s in [ru"on", ru"off"]:
+            if s.startsWith(commandLineCmd.args[0]):
+              result.add initCompletionItem(s)
+      of ArgsType.path:
+        # File paths
+        if commandLineCmd.args.len == 0:
+          return getPathCompletionList(ru"")
+        else:
+          return getPathCompletionList(commandLineCmd.args[0])
+      of ArgsType.theme:
+        # Color themes
+        if commandLineCmd.args.len == 0:
+          return CompletionList(items:
+            ColorTheme.mapIt(initCompletionItem(toRunes($it))))
+        elif commandLineCmd.args.len == 1:
+          for theme in ColorTheme.mapIt(toRunes($it)):
+            if commandLineCmd.args[0].len < theme.len and
+               theme.startsWith(commandLineCmd.args[0]):
+                 result.add CompletionItem(label: theme, insertText: theme)
       else:
-        suggestions = getExCommandOptionCandidates(
-          list.commandLineCmd.command,
-          list.commandLineCmd.args,
-          list.argsType.get)
+        discard
 
-  if suggestions.len == 1 and
-     list.commandLineCmd.args.len > 0 and
-     list.commandLineCmd.args[^1] == suggestions[0]:
-       # Don't assign a new suggestion if it same as the end of the args.
-       list.suggestions = @[]
-  else:
-    list.suggestions = suggestions
-
-proc initSuggestList*(rawInput: Runes): SuggestList =
-  result.rawInput = rawInput
-  result.commandLineCmd = rawInput.initCommandLineCommand
-  result.updateSuggestType
-  result.updateArgsType
-  result.updateSuggestions
-
-proc initSuggestBuffer*(suggestList: SuggestList): seq[Runes] =
-  template insertMargin(r: var Runes) = r = ru" " & r & ru" "
-
-  case suggestList.suggestType:
-    of SuggestType.exCommand:
-      # Add formatted command descriptions.
-
-      var maxCommandLen = 0
-      for l in suggestList.suggestions:
-        if l.len > maxCommandLen: maxCommandLen = l.len
-
-      for l in suggestList.suggestions:
-        for info in ExCommandInfoList:
-          if l.toLower == info.command.toLowerAscii.toRunes:
-            # Insert spaces and dividers to descriptions for
-            # the ex command suggestion.
-            let spaces = " ".repeat(maxCommandLen - l.len).toRunes
-            result.add l & spaces & ru" | " & info.description.toRunes
-            result[^1].insertMargin
-    of SuggestType.exCommandOption:
-      if isPath(suggestList.argsType.get):
-        for index, path in suggestList.suggestions:
-          # Remove '/' end of the path string
-          let p =
-            if path.len > 0: path[0 .. path.high - 1]
-            else: "".toRunes
-          if p.contains(ru '/'):
-            result.add(path[p.rfind(ru'/') + 1 ..< path.len])
-          else:
-            result.add(path)
-          result[^1].insertMargin
-      else:
-        return suggestList.suggestions
-
-proc calcXWhenSuggestPath*(commandLineCmd: CommandLineCommand): int =
-  const PromptAndSpaceWidth = 2
-
-  if commandLineCmd.args.len == 0:
-    return commandLineCmd.command.high + PromptAndSpaceWidth
-
+proc initExmodeCompletionList*(rawInput: Runes): CompletionList =
   let
-    inputPath = commandLineCmd.args[0]
-    # TODO: Refactor
-    positionInInputPath =
-      if inputPath.len > 0 and
-         (inputPath.count('/'.toRune) > 1 or
-         (not inputPath.startsWith(ru"./")) or
-         (inputPath.count(ru'/') == 1 and inputPath[^1] != ru'/')):
-           inputPath.rfind(ru'/')
+    commandLineCmd = initCommandLineCommand(rawInput)
+    suggestType = getSuggestType(rawInput)
+
+  case suggestType:
+    of SuggestType.exCommand:
+      return getExCommandCompletionList(rawInput)
+    of SuggestType.exCommandOption:
+      let list = getExCommandOptionCompletionList(rawInput, commandLineCmd)
+      if list.items.len == 1 and
+         commandLineCmd.args.len > 0 and
+         commandLineCmd.args[^1] == list.items[0].label:
+           # Don't assign a new suggestion if it same as the end of the args.
+           return CompletionList()
       else:
-        0
-
-  return commandLineCmd.command.len + PromptAndSpaceWidth + positionInInputPath
-
-proc calcPopupWindowSize*(buffer: seq[Runes]): Size =
-  let
-    height =
-      if buffer.len > getTerminalHeight() - 2: getTerminalHeight() - 2
-      else: buffer.len
-
-    maxLen = buffer.maxLen
-    width =
-      # 2 is side spaces
-      if maxLen + 2 > getTerminalWidth() - 1: getTerminalWidth() - 1
-      else: maxLen + 2
-
-  return Size(h: height, w: width)
-
-proc calcPopupWindowPosition(
-  suggestWin: PopupWindow,
-  suggestList: SuggestList): Position =
-
-    const CommandLineHeight = 1
-
-    result = Position()
-    result.y = getTerminalHeight() - suggestWin.size.h - CommandLineHeight
-    result.x =
-      case suggestList.suggestType:
-        of SuggestType.exCommand:
-          1
-        of SuggestType.exCommandOption:
-          if isPath(suggestList.argsType.get):
-            calcXWhenSuggestPath(suggestList.commandLineCmd)
-          else:
-            suggestList.commandLineCmd.command.len + 1
-
-# TODO: Fix the return type to `SuggestionWindow`.
-proc tryOpenSuggestWindow*(): Option[PopupWindow] {.inline.} =
-  initPopupWindow(
-    Position(y: getTerminalHeight() - 1, x: 0),
-    Size(h: 0, w: 0))
-    .some
-
-proc insertSuggestion*(commandLine: var CommandLine, suggestList: SuggestList) =
-  ## Insert the current suggestion to the command line buffer and
-  ## move the cursor position to the end + 1.
-
-  case suggestList.suggestType:
-    of exCommand:
-      if suggestList.currentIndex > -1:
-        commandLine.buffer = suggestList.currentSuggestion
-      else:
-        commandLine.buffer = suggestList.rawInput
-    else:
-      if suggestList.currentIndex > -1:
-        commandLine.buffer =
-          suggestList.commandLineCmd.command &
-          ru" " &
-          suggestList.currentSuggestion
-      else:
-        commandLine.buffer = suggestList.rawInput
-
-  commandLine.moveEnd
-  commandLine.moveRight
-
-proc updateSuggestWindow*(suggestWin: var PopupWindow, suggestList: SuggestList) =
-  suggestWin.buffer = suggestList.initSuggestBuffer
-
-  suggestWin.size = calcPopupWindowSize(suggestWin.buffer)
-  suggestWin.position = calcPopupWindowPosition(suggestWin, suggestList)
-
-  suggestWin.currentLine =
-    if suggestList.currentIndex > -1: some(suggestList.currentIndex)
-    else: none(int)
-
-  suggestWin.resize
-  suggestWin.move
-  suggestWin.update
+        return list
