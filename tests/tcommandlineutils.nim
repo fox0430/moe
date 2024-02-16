@@ -167,88 +167,77 @@ suite "commandlineutils: getExCommandCompletionList":
 suite "commandlineutils: initExmodeCompletionList":
   test "Ex commands":
     const RawInput = ru"h"
-    let expectList = ExCommandInfoList
-      .filterIt(it.command.toRunes.startsWith(RawInput))
-      .mapIt(initCompletionItem(it.command.toRunes).insertText)
-
-    # TODO: Check labels
-    check expectList == initExmodeCompletionList(RawInput)
-      .items
-      .mapIt(it.insertText)
+    check initExmodeCompletionList(RawInput).items == @[
+      CompletionItem(
+        label: ru"help                 | Open the help",
+        insertText: ru"help"),
+      CompletionItem(
+        label: ru"highlightCurrentLine | Change setting to the highlightCurrentLine",
+        insertText: ru"highlightCurrentLine"),
+      CompletionItem(
+        label: ru"highlightCurrentWord | Change setting to the highlightCurrentWord",
+        insertText: ru"highlightCurrentWord"),
+      CompletionItem(
+        label: ru"highlightFullSpace   | Change setting to the highlightFullSpace",
+        insertText: ru"highlightFullSpace"),
+      CompletionItem(
+        label: ru"highlightParen       | Change setting to the highlightParen",
+        insertText: ru"highlightParen")
+    ]
 
   test "Ex commands 2":
     const RawInput = ru"e"
-    let expectList = ExCommandInfoList
-      .filterIt(it.command.toRunes.startsWith(RawInput))
-      .mapIt(initCompletionItem(it.command.toRunes).insertText)
-
-    # TODO: Check labels
-    check expectList == initExmodeCompletionList(RawInput)
-      .items
-      .mapIt(it.insertText)
+    check initExmodeCompletionList(RawInput).items == @[
+      CompletionItem(label: ru"e   | Open file", insertText: ru"e"),
+      CompletionItem(label: ru"ene | Create the empty buffer", insertText: ru"ene")
+    ]
 
   test "Toggle options":
     const RawInput = ru"cursorline "
-    let expectList = @[ru"on", ru"off"]
-
-    # TODO: Check labels
-    check expectList == initExmodeCompletionList(RawInput)
-      .items
-      .mapIt(it.insertText)
+    check initExmodeCompletionList(RawInput).items == @[
+      CompletionItem(label: ru"on", insertText: ru"on"),
+      CompletionItem(label: ru"off", insertText: ru"off"),
+    ]
 
   test "Toggle options 2":
     const RawInput = ru"cursorline of"
-    let expectList = @[ru"off"]
-
-    # TODO: Check labels
-    check expectList == initExmodeCompletionList(RawInput)
-      .items
-      .mapIt(it.insertText)
+    check initExmodeCompletionList(RawInput).items == @[
+      CompletionItem(label: ru"off", insertText: ru"off")
+    ]
 
   test "Suggest toggle themes":
     const RawInput = ru"theme "
-    let expectList = ColorTheme.mapIt(toRunes($it))
-
-    # TODO: Check labels
-    check expectList == initExmodeCompletionList(RawInput)
-      .items
-      .mapIt(it.insertText)
+    check initExmodeCompletionList(RawInput).items == @[
+      CompletionItem(label: ru"dark", insertText: ru"dark"),
+      CompletionItem(label: ru"light", insertText: ru"light"),
+      CompletionItem(label: ru"vivid", insertText: ru"vivid"),
+      CompletionItem(label: ru"config", insertText: ru"config"),
+      CompletionItem(label: ru"vscode", insertText: ru"vscode")
+    ]
 
   test "Suggest toggle themes 2":
     const RawInput = ru"theme d"
-    let expectList = @[ru"dark"]
-
     # TODO: Check labels
-    check expectList == initExmodeCompletionList(RawInput)
-      .items
-      .mapIt(it.insertText)
+    check initExmodeCompletionList(RawInput).items == @[
+      CompletionItem(label: ru"dark", insertText: ru"dark")
+    ]
 
   test "Suggest paths":
-    const RawInput = ru"e ./"
-
     let expectList = collect:
       for k in walkDir("./"):
-        if k.kind == pcDir: k.path.replace("./", "") & "/"
-        else: k.path.replace("./", "")
+        if k.kind == pcDir: initCompletionItem(toRunes(k.path.replace("./", "") & "/"))
+        else: initCompletionItem(k.path.replace("./", "").toRunes)
 
-    # TODO: Check labels
-    check expectList.sorted == initExmodeCompletionList(RawInput)
-      .items
-      .mapIt($it.insertText)
-      .sorted
+    const RawInput = ru"e ./"
+    check initExmodeCompletionList(RawInput).items == expectList
 
   test "Suggest paths 2":
-    const RawInput = ru"e src/m"
-
     let expectList = collect:
       for k in walkDir("./src/"):
         let tail = k.path.splitPath.tail
         if tail.startsWith('m'):
-          if k.kind == pcDir: tail & "/"
-          else: tail
+          if k.kind == pcDir: initCompletionItem(toRunes(tail & "/"))
+          else: initCompletionItem(tail.toRunes)
 
-    # TODO: Check labels
-    check expectList.sorted == initExmodeCompletionList(RawInput)
-      .items
-      .mapIt($it.insertText)
-      .sorted
+    const RawInput = ru"e src/m"
+    check initExmodeCompletionList(RawInput).items == expectList
