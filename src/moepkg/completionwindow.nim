@@ -328,10 +328,10 @@ proc reopen*(
 
 proc isOpen*(c: CompletionWindow): bool {.inline.} = c.popupWindow.isSome
 
-proc completionWindowPosition*(
+proc completionWindowPositionInEditor*(
   windowNode: var WindowNode,
   bufStatus: BufferStatus): Position =
-    ## Return a position for the completion window.
+    ## Return a position for the completion window for editor.
 
     # Reload Editorview. This is not the actual terminal view.
     windowNode.reloadEditorView(bufStatus.buffer)

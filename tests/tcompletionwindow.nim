@@ -22,7 +22,7 @@ import std/[unittest, options, sequtils]
 import pkg/results
 
 import moepkg/[unicodeext, completion, independentutils, bufferstatus, ui,
-               windownode, gapbuffer, editorstatus]
+               windownode, gapbuffer, editorstatus, commandline]
 
 import utils
 
@@ -120,7 +120,7 @@ suite "completionwindow: next":
       c.next
       check c.selectedIndex == -1
 
-suite "completionwindow: removeInsertedText":
+suite "completionwindow: removeInsertedText in editor":
   test "Remove input text":
     var bufStatus = initBufferStatus("").get
     bufStatus.buffer = @["a"].toSeqRunes.toGapBuffer
@@ -199,7 +199,66 @@ suite "completionwindow: removeInsertedText":
     check bufStatus.buffer.toSeqRunes == @["abc ", "defghi", "", "jkl "]
       .toSeqRunes
 
-suite "completionwindow: insertSelectedText":
+suite "completionwindow: removeInsertedText in command line":
+  test "Remove input text":
+    var commandLine = initCommandLine()
+    commandLine.insert(ru'a')
+
+    var c = initCompletionWindow(
+      BufferPosition(line: 0, column: 0),
+      inputText = ru"a")
+
+    commandLine.removeInsertedText(c)
+    check commandLine.buffer == ru""
+
+  test "Remove input text 2":
+    var commandLine = initCommandLine()
+    commandLine.insert(ru"abc d")
+
+    var list = initCompletionList()
+    list.add CompletionItem(label: ru"def", insertText: ru"def")
+
+    var c = initCompletionWindow(
+      BufferPosition(line: 0, column: 4),
+      list = list,
+      inputText = ru"d")
+
+    commandLine.removeInsertedText(c)
+    check commandLine.buffer == ru"abc "
+
+  test "Remove suggestion":
+    var commandLine = initCommandLine()
+    commandLine.insert(ru"abc")
+
+    var list = initCompletionList()
+    list.add CompletionItem(label: ru"abc", insertText: ru"abc")
+
+    var c = initCompletionWindow(
+      BufferPosition(line: 0, column: 0),
+      list = list,
+      inputText = ru"a")
+    c.selectedIndex = 0
+
+    commandLine.removeInsertedText(c)
+    check commandLine.buffer == ru""
+
+  test "Remove suggestion 2":
+    var commandLine = initCommandLine()
+    commandLine.insert(ru"abc def")
+
+    var list = initCompletionList()
+    list.add CompletionItem(label: ru"def", insertText: ru"def")
+
+    var c = initCompletionWindow(
+      BufferPosition(line: 0, column: 4),
+      list = list,
+      inputText = ru"d")
+    c.selectedIndex = 0
+
+    commandLine.removeInsertedText(c)
+    check commandLine.buffer == ru"abc "
+
+suite "completionwindow: insertSelectedText in editor":
   test "Insert input text":
     var bufStatus = initBufferStatus("").get
     bufStatus.buffer = @[""].toSeqRunes.toGapBuffer
@@ -280,7 +339,68 @@ suite "completionwindow: insertSelectedText":
     check bufStatus.buffer.toSeqRunes == @["abc xyz", "defgxyzhi", "", "jkl xyz"]
       .toSeqRunes
 
-suite "completionwindow: handleKey":
+suite "completionwindow: insertSelectedText in command line":
+  test "Insert input text":
+    var commandLine = initCommandLine()
+
+    var list = initCompletionList()
+    list.add CompletionItem(label: ru"abc", insertText: ru"abc")
+
+    var c = initCompletionWindow(
+      BufferPosition(line: 0, column: 0),
+      list = list,
+      inputText = ru"a")
+
+    commandLine.insertSelectedText(c)
+    check commandLine.buffer == ru"a"
+
+  test "Insert input text 2":
+    var commandLine = initCommandLine()
+    commandLine.buffer = ru"abc "
+
+    var list = initCompletionList()
+    list.add CompletionItem(label: ru"def", insertText: ru"def")
+
+    var c = initCompletionWindow(
+      BufferPosition(line: 0, column: 4),
+      list = list,
+      inputText = ru"d")
+
+    commandLine.insertSelectedText(c)
+    check commandLine.buffer == ru"abc d"
+
+  test "Insert suggestion":
+    var commandLine = initCommandLine()
+
+    var list = initCompletionList()
+    list.add CompletionItem(label: ru"abc", insertText: ru"abc")
+
+    var c = initCompletionWindow(
+      BufferPosition(line: 0, column: 0),
+      list = list,
+      inputText = ru"a")
+    c.selectedIndex = 0
+
+    commandLine.insertSelectedText(c)
+    check commandLine.buffer == ru"abc"
+
+  test "Insert suggestion 2":
+    var commandLine = initCommandLine()
+    commandLine.buffer.insert(ru"abc ")
+
+    var list = initCompletionList()
+    list.add CompletionItem(label: ru"def", insertText: ru"def")
+
+    var c = initCompletionWindow(
+      BufferPosition(line: 0, column: 4),
+      list = list,
+      inputText = ru"d")
+    c.selectedIndex = 0
+
+    commandLine.insertSelectedText(c)
+    check commandLine.buffer == ru"abc def"
+
+suite "completionwindow: handleKey in editor":
   test "Next suggest":
     for key in @[TabKey, DownKey]:
       var bufStatus = initBufferStatus("").get
@@ -376,6 +496,91 @@ suite "completionwindow: handleKey":
       check bufStatus.isUpdate
       check winNode.currentColumn == 1
 
+  test "Next suggest":
+    for key in @[TabKey, DownKey]:
+      var commandLine = initCommandLine()
+      commandLine.insert(ru'a')
+
+      var list = initCompletionList()
+      list.add CompletionItem(label: ru"ab", insertText: ru"ab")
+      list.add CompletionItem(label: ru"ac", insertText: ru"ac")
+      list.add CompletionItem(label: ru"ad", insertText: ru"ad")
+
+      var c = initCompletionWindow(
+        BufferPosition(line: 0, column: 0),
+        list = list,
+        inputText = ru"a")
+
+      c.handleKey(commandLine, key.Rune)
+      check c.selectedIndex == 0
+      check commandLine.buffer == ru"ab"
+      check commandLine.isUpdate
+
+  test "Next suggest 2":
+    for key in @[TabKey, DownKey]:
+      var commandLine = initCommandLine()
+      commandLine.insert(ru"ad")
+
+      var list = initCompletionList()
+      list.add CompletionItem(label: ru"ab", insertText: ru"ab")
+      list.add CompletionItem(label: ru"ac", insertText: ru"ac")
+      list.add CompletionItem(label: ru"ad", insertText: ru"ad")
+
+      var c = initCompletionWindow(
+        BufferPosition(line: 0, column: 0),
+        list = list,
+        inputText = ru"a")
+      c.selectedIndex = 2
+
+      c.handleKey(commandLine, key.Rune)
+      check c.selectedIndex == -1
+      check commandLine.buffer == ru"a"
+      check commandLine.isUpdate
+
+  test "Prev suggest":
+    for key in @[ShiftTab, UpKey]:
+      var commandLine = initCommandLine()
+      commandLine.insert(ru"ad")
+
+      var list = initCompletionList()
+      list.add CompletionItem(label: ru"ab", insertText: ru"ab")
+      list.add CompletionItem(label: ru"ac", insertText: ru"ac")
+      list.add CompletionItem(label: ru"ad", insertText: ru"ad")
+
+      var c = initCompletionWindow(
+        BufferPosition(line: 0, column: 0),
+        list = list,
+        inputText = ru"a")
+      c.selectedIndex = 2
+
+      c.handleKey(commandLine, key.Rune)
+      check c.selectedIndex == 1
+      check commandLine.buffer == ru"ac"
+      check commandLine.isUpdate
+
+  test "Prev suggest 2":
+    for key in @[ShiftTab, UpKey]:
+      var commandLine = initCommandLine()
+      commandLine.insert(ru"ab")
+
+      var winNode = initWindowNode()
+
+      var list = initCompletionList()
+      list.add CompletionItem(label: ru"ab", insertText: ru"ab")
+      list.add CompletionItem(label: ru"ac", insertText: ru"ac")
+      list.add CompletionItem(label: ru"ad", insertText: ru"ad")
+
+      var c = initCompletionWindow(
+        BufferPosition(line: 0, column: 0),
+        list = list,
+        inputText = ru"a")
+      c.selectedIndex = 0
+
+      c.handleKey(commandLine, key.Rune)
+      check c.selectedIndex == -1
+      check commandLine.buffer == ru"a"
+      check commandLine.isUpdate
+
 suite "completionwindow: updateBuffer":
   test "Basic":
     var list = initCompletionList()
@@ -393,7 +598,22 @@ suite "completionwindow: updateBuffer":
     c.updateBuffer
     check c.popupwindow.get.buffer == @[" ab ", " ac ", " ad "].toSeqRunes
 
-suite "completionwindow: completionWindowPosition":
+  test "Basic 2":
+    var list = initCompletionList()
+    list.add CompletionItem(label: ru"abcdef", insertText: ru"abc")
+    list.add CompletionItem(label: ru"abcghi", insertText: ru"abc")
+
+    var c = initCompletionWindow(
+      BufferPosition(line: 0, column: 0),
+      list = list,
+      inputText = ru"a")
+
+    c.popupwindow.get.buffer = @["a"].toSeqRunes
+
+    c.updateBuffer
+    check c.popupwindow.get.buffer == @[" abcdef ", " abcghi "].toSeqRunes
+
+suite "completionwindow: completionWindowPositionInEditor":
   test "Basic":
     var status = initEditorStatus()
 
@@ -410,7 +630,7 @@ suite "completionwindow: completionWindowPosition":
     status.resize(100, 100)
     status.update
 
-    check Position(y: 1, x: 0) == completionWindowPosition(
+    check Position(y: 1, x: 0) == completionWindowPositionInEditor(
       currentMainWindowNode,
       currentBufStatus)
 
@@ -433,5 +653,6 @@ suite "completionwindow: completionWindowPosition":
     status.resize(100, 100)
     status.update
 
-    check completionWindowPosition(currentMainWindowNode, currentBufStatus) ==
-      Position(y: 7, x: 7)
+    check Position(y: 7, x: 7) == completionWindowPositionInEditor(
+      currentMainWindowNode,
+      currentBufStatus)

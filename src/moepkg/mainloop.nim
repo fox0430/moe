@@ -467,7 +467,8 @@ proc updateCompletionWindowBufferInCommandLine(status: var EditorStatus) =
   if status.completionWindow.get.list.len > 0:
     if status.completionWindow.get.popupWindow.isNone:
       status.completionWindow.get.reopen(
-        currentMainWindowNode.completionWindowPosition(currentBufStatus))
+        currentMainWindowNode.completionWindowPositionInEditor(
+          currentBufStatus))
 
     # Update completion window buffer
     status.completionWindow.get.updateBuffer
@@ -695,7 +696,7 @@ proc openCompletionWindowInEditor(status: var EditorStatus) =
       line: currentMainWindowNode.bufferPosition.line,
       column: currentMainWindowNode.bufferPosition.column - 1)
 
-    windowPosition = currentMainWindowNode.completionWindowPosition(
+    windowPosition = currentMainWindowNode.completionWindowPositionInEditor(
       currentBufStatus)
 
   status.completionWindow = some(initCompletionWindow(
@@ -749,7 +750,7 @@ proc updateCompletionWindowBufferInEditor(status: var EditorStatus) =
   if status.completionWindow.get.list.len > 0:
     if status.completionWindow.get.popupWindow.isNone:
       status.completionWindow.get.reopen(
-        currentMainWindowNode.completionWindowPosition(currentBufStatus))
+        currentMainWindowNode.completionWindowPositionInEditor(currentBufStatus))
 
     # Update completion window buffer and move/resize
     status.completionWindow.get.updateBuffer
