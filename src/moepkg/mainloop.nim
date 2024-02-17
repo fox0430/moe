@@ -745,7 +745,9 @@ proc updateCompletionWindowBufferInEditor(status: var EditorStatus) =
       currentBufStatus.language)
     status.completionWindow.get.setList status.wordDictionary
   else:
+    # From LSP
     status.completionWindow.get.setList currentBufStatus.lspCompletionList
+    status.completionWindow.get.sort
 
   if status.completionWindow.get.list.len > 0:
     if status.completionWindow.get.popupWindow.isNone:

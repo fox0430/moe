@@ -122,3 +122,17 @@ suite "completion: pathCompletionList":
       .items
       .mapIt($it.insertText)
       .sorted
+
+suite "completion: fuzzySort":
+  test "Basic":
+    var list = initCompletionList()
+    list.add initCompletionItem(ru"abcdefghij")
+    list.add initCompletionItem(ru"texteditor")
+    list.add initCompletionItem(ru"te")
+
+    list.fuzzySort(ru"t")
+    check list.items == @[
+      initCompletionItem(ru"te"),
+      initCompletionItem(ru"texteditor"),
+      initCompletionItem(ru"abcdefghij")
+    ]
