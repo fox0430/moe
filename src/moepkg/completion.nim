@@ -17,11 +17,11 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[options, os, strutils]
+import std/[options, os, strutils, sequtils, algorithm]
 
 import pkg/unicodedb/properties
 
-import unicodeext, fileutils
+import unicodeext, fileutils, algo
 
 type
   CompletionLabel* = Runes
@@ -124,3 +124,10 @@ proc pathCompletionList*(path: Runes): CompletionList =
     if inputPathTail.len == 0 or p.startsWith(inputPathTail):
       if k.kind == pcDir: result.items.add initCompletionItem(p & ru"/")
       else: result.items.add initCompletionItem(p)
+
+proc fuzzySort*(list: var CompletionList, runes: Runes) =
+  var scores: seq[tuple[index, score: int]]
+  for i, item in list.items:
+    scores.add (index: i, score: runes.fuzzyScore(item.insertText))
+
+  list.items = scores.sortedByIt(it.score).reversed.mapIt(list.items[it.index])

@@ -342,3 +342,7 @@ proc completionWindowPositionInEditor*(
     return Position(
       y: (absCursorPositon.y + 1).clamp(0, getTerminalHeight()),
       x: (absCursorPositon.x - 2).clamp(0, getTerminalWidth()))
+
+proc sort*(c: var CompletionWindow) {.inline.} =
+  exitUi()
+  c.list.fuzzySort(c.inputText)
