@@ -17,8 +17,8 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[os, re]
-import pkg/results
+import std/os
+import pkg/[regex, results]
 import editorstatus, ui, unicodeext, bufferstatus, movement, gapbuffer,
        messages, windownode
 
@@ -38,10 +38,11 @@ proc initRecentFileModeBuffer*(bufStatus: var BufferStatus) =
   let text = f.readAll
   f.close
 
-  let recentUsedFiles = text.findAll(re"""(?<=file://).*?(?=")""")
-  for index, str in recentUsedFiles:
-    if index == 0: bufStatus.buffer[0] = str.toRunes
-    else: bufStatus.buffer.add(str.toRunes)
+  var newBuffer: seq[Runes]
+  for m in text.findAll(re2"""(?<=file://).*?(?=")"""):
+    newBuffer.add text[m.boundaries].toRunes
+
+  bufStatus.buffer = newBuffer.initGapBuffer
 
 proc isRecentFileCommand*(command: Runes): InputState =
   result = InputState.Invalid
