@@ -33,16 +33,27 @@ proc openSelectedBuffer(status: var EditorStatus) =
   else:
     status.commandLine.writeFileNotFoundError(filename)
 
-proc initRecentFileModeBuffer*(bufStatus: var BufferStatus) =
-  var f = open(getHomeDir() / ".local/share/recently-used.xbel")
-  let text = f.readAll
-  f.close
+proc getRecentUsedFiles*(xbelPath: string): Result[seq[Runes], string] =
+  ## Return paths from recently-used.xbel.
 
-  var newBuffer: seq[Runes]
-  for m in text.findAll(re2"""(?<=file://).*?(?=")"""):
-    newBuffer.add text[m.boundaries].toRunes
+  if fileExists(xbelPath):
+    var xbelBuffer: string
+    try:
+      xbelBuffer = readFile(xbelPath)
+    except CatchableError:
+      return Result[seq[Runes], string].err xbelPath
 
-  bufStatus.buffer = newBuffer.initGapBuffer
+    var files: seq[Runes]
+    for m in xbelBuffer.findAll(re2"""(?<=file://).*?(?=")"""):
+      files.add xbelBuffer[m.boundaries].toRunes
+
+    return Result[seq[Runes], string].ok files
+
+proc initRecentFileModeBuffer*(
+  b: var BufferStatus,
+  files: seq[Runes]) {.inline.} =
+
+    b.buffer = files.initGapbuffer
 
 proc isRecentFileCommand*(command: Runes): InputState =
   result = InputState.Invalid
