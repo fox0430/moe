@@ -853,7 +853,7 @@ proc editorMainLoop*(status: var EditorStatus) =
               isClosedCompletionWindow = true
 
         if key.isSome:
-            command.add key.get
+          command.add key.get
 
         let inputState = invokeCommand(
           currentBufStatus.mode,

@@ -138,7 +138,7 @@ proc insertToBuffer(status: var EditorStatus, r: Rune) {.inline.} =
 
 proc execInsertModeCommand*(status: var EditorStatus, command: Runes) =
   if command.len == 0:
-      return
+    return
   let key = command[0]
 
   if isCtrlC(key) or isEscKey(key):
