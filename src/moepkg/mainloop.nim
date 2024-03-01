@@ -378,7 +378,6 @@ proc incrementalReplace(
 template isOpenCompletionWindowInCommandLine(
   status: EditorStatus,
   key: Rune): bool =
-
     status.completionwindow.isNone and
     currentBufStatus.isExmode and
     status.settings.standard.popupWindowInExmode and
@@ -853,7 +852,8 @@ proc editorMainLoop*(status: var EditorStatus) =
               status.confirmCompletion
               isClosedCompletionWindow = true
 
-        command.add key.get
+        if key.isSome:
+            command.add key.get
 
         let inputState = invokeCommand(
           currentBufStatus.mode,
