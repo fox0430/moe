@@ -838,7 +838,7 @@ proc editorMainLoop*(status: var EditorStatus) =
               key.get)
             key.resetKeyAndContinue
           else:
-            if isEnterKey(key.get):
+            if isEnterKey(key.get) and listLen(status.completionWindow.get) > 0:
               status.confirmCompletion
               key = none(Rune)
               isClosedCompletionWindow = true
@@ -851,7 +851,6 @@ proc editorMainLoop*(status: var EditorStatus) =
             elif not isCompletionCharacter(key.get):
               status.confirmCompletion
               isClosedCompletionWindow = true
-
         if key.isSome:
           command.add key.get
 
