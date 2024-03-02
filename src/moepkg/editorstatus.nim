@@ -1260,9 +1260,12 @@ proc changeTheme*(s: var EditorSettings): Result[(), string] =
   return Result[(), string].ok ()
 
 proc autoSave(status: var EditorStatus) =
+  template isAutosave(b: BufferStatus, interval: TimeInterVal): bool =
+    b.isEditMode and b.path != ru"" and now() > b.lastSaveTime + interval
+
   let interval = status.settings.autoSave.interval.minutes
   for index, bufStatus in status.bufStatus:
-    if bufStatus.path != ru"" and now() > bufStatus.lastSaveTime + interval:
+    if bufStatus.isAutosave(interval):
       let r = saveFile(
         bufStatus.path,
         bufStatus.buffer.toRunes,
@@ -1272,18 +1275,18 @@ proc autoSave(status: var EditorStatus) =
           .toRunes
         continue
 
-      status.commandLine.writeMessageAutoSave(
-        bufStatus.path,
-        status.settings.notification)
-      status.bufStatus[index].lastSaveTime = now()
-
       if status.lspClients.contains(bufStatus.langId):
         # Send textDocument/didSave notify to the LSP server.
-        let err = lspClient.textDocumentDidSave(
+        let err = status.lspClients[bufStatus.langId].textDocumentDidSave(
           bufStatus.version,
           $bufStatus.path.absolutePath,
           $bufStatus.buffer)
         if err.isErr: error fmt"lsp: {err.error}"
+
+      status.commandLine.writeMessageAutoSave(
+        bufStatus.path,
+        status.settings.notification)
+      status.bufStatus[index].lastSaveTime = now()
 
 proc loadConfigurationFile*(status: var EditorStatus) =
   if fileExists(configFilePath()):
