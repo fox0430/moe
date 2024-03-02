@@ -28,6 +28,7 @@ import moepkg/[editor, gapbuffer, bufferstatus, editorview, unicodeext, build,
 
 import utils
 
+import moepkg/exmode {.all.}
 import moepkg/editorstatus {.all.}
 
 proc initSelectedArea(status: EditorStatus) =
@@ -1103,3 +1104,46 @@ suite "editorstatus: initLsp":
       let workspaceRoot = getCurrentDir()
       const LanguageId = "nim"
       check status.lspInitialize(workspaceRoot, LanguageId).isOk
+
+suite "editorstatus: autoSave":
+  const TestDir = "autoSaveTest"
+  var filePath = ""
+
+  setup:
+    createDir(TestDir)
+    filePath = TestDir / $genOid() & ".nim"
+
+  teardown:
+    if dirExists(TestDir):
+      removeDir(TestDir)
+
+  test "Basic":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin(filePath).get
+
+    status.settings.autoSave.enable = true
+    status.settings.autoSave.interval = 0
+
+    status.autoSave
+    check fileExists(filePath)
+
+  test "With lsp log":
+    var status = initEditorStatus()
+
+    status.settings.autoSave.enable = true
+    status.settings.autoSave.interval = 0
+
+    status.settings.lsp.enable = true
+    status.settings.lsp.languages["nim"] = LspLanguageSettings(
+      extensions: @[ru"nim"],
+      command: ru"nimlangserver",
+      trace: TraceValue.verbose)
+
+    discard status.addNewBufferInCurrentWin(filePath).get
+
+    status.openLspLogViewer
+    assert status.bufStatus.len == 2
+    assert currentBufStatus.mode == Mode.logViewer
+
+    status.autoSave
+    check fileExists(filePath)
