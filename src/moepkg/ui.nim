@@ -251,10 +251,6 @@ proc restoreTerminalModes*() {.inline.} = reset_prog_mode()
 
 proc saveCurrentTerminalModes*() {.inline.} = def_prog_mode()
 
-proc setCursor(cursor: bool) =
-  if cursor == true: curs_set(1)      ## enable cursor
-  elif cursor == false: curs_set(0)   ## disable cursor
-
 proc keyEcho*(keyecho: bool) =
   if keyecho == true: echo()
   elif keyecho == false: noecho()
@@ -292,23 +288,21 @@ proc checkColorSupportedTerminal*(): ColorMode =
         of 256: return ColorMode.c256
         else: return ColorMode.none
 
-proc enableBracketedPasteMode() {.inline.} =
-  when not defined unitTest:
-      # Don't start when running unit tests
-    discard execShellCmd("printf '\x1b[?2004h'")
+template enableBracketedPasteMode() =
+  discard execShellCmd("printf '\x1b[?2004h'")
 
 proc startUi*() =
-  # Not start when running unit tests
   when not defined unitTest:
-    # Set the current terminal size.
-    updateTerminalSize()
+    # Don't start when running unit tests
+
+    updateTerminalSize() # Set the current terminal size.
 
     discard setlocale(LC_ALL, "")   # enable UTF-8
 
     initscr() # Start terminal control
     cbreak() # Enable cbreak mode
     nonl() # Exit new line mode and improve move cursor performance
-    setCursor(false) # Hide Ncurses cursor
+    curs_set(1) # Hide cursor
 
     if can_change_color():
       # Enable Ncurses color
