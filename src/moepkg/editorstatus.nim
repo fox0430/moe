@@ -629,56 +629,53 @@ proc updateStatusLine(status: var EditorStatus) =
         isActiveWindow,
         status.settings)
 
-proc checkBufferStatusUpdate(status: EditorStatus) =
+proc initLogViewerHighlight(buffer: seq[Runes]): Highlight =
+  if buffer.len > 0:
+    const EmptyReservedWord: seq[ReservedWord] = @[]
+    return buffer.initHighlight(EmptyReservedWord, SourceLanguage.langNone)
+
+proc updateSyntaxHighlightings(status: EditorStatus) =
   ## Update syntax highlightings in all buffers.
   ## And send textDocument/didChange to LSP servers.
 
-  var newHighlights: seq[tuple[bufIndex: int, highlight: Highlight]]
   for i in 0 .. status.bufStatus.high:
-    template buf: var BufferStatus = status.bufStatus[i]
+    template b: var BufferStatus = status.bufStatus[i]
 
-    # The filer syntax highlight is initialized/updated in filermode module.
-    if not buf.isFilerMode and buf.isUpdate:
-      let
-        lang =
-          if not status.settings.standard.syntax: SourceLanguage.langNone
-          else: buf.language
-        h = initHighlight(
-          buf.buffer.toSeqRunes,
-          status.settings.highlight.reservedWords, lang)
-      newHighlights.add (bufIndex: i, highlight: h)
+    if b.isFilerMode:
+      if status.filerStatuses[b.filerStatusIndex.get].isUpdateView:
+        let n = mainWindowNode.searchByWindowIndex(i)
+        b.highlight = initFilerHighlight(
+          status.filerStatuses[b.filerStatusIndex.get],
+          b.buffer,
+          n.currentLine)
+    elif b.isLogViewerMode:
+      b.highlight = initLogViewerHighlight(b.buffer.toSeqRunes)
+    elif b.isDiffViewerMode:
+      b.highlight = initDiffViewerHighlight(b.buffer.toRunes)
+    elif b.isUpdate:
+      let lang =
+        if not status.settings.standard.syntax: SourceLanguage.langNone
+        else: b.language
+      b.highlight = initHighlight(
+        b.buffer.toSeqRunes,
+        status.settings.highlight.reservedWords,
+        lang)
 
-      buf.version.inc
+      b.version.inc
+      b.isUpdate = false
 
-      if status.lspClients.contains(buf.langId) and
-         status.lspClients[buf.langId].isInitialized and
-         status.lspClients[buf.langId].waitingResponse != some(LspMethod.textDocumentCompletion) and
-         buf.version > 1:
-           # Send a textDocument/didChange notification to the LSP server.
-           let err = status.lspClients[buf.langId].textDocumentDidChange(
-             buf.version,
-             $buf.path.absolutePath,
-             buf.buffer.toString)
-           if err.isErr:
-             error fmt"lsp: {err.error}"
-
-      buf.isUpdate = false
-
-  var queue = initHeapQueue[WindowNode]()
-  for node in mainWindowNode.child: queue.push(node)
-  while queue.len > 0:
-    for i in  0 ..< queue.len:
-      var node = queue.pop
-      if node.window.isSome:
-        for h in newHighlights:
-          if h.bufIndex == node.bufferIndex and h.highlight != node.highlight:
-            node.highlight = h.highlight
-
-            if status.bufStatus[h.bufIndex].isTrackingByGit:
-              status.bufStatus[h.bufIndex].isGitUpdate = true
-
-      if node.child.len > 0:
-        for node in node.child: queue.push(node)
+      if status.lspClients.contains(b.langId):
+        template client: LspClient = status.lspClients[b.langId]
+        if client.isInitialized and
+           client.waitingResponse != some(LspMethod.textDocumentCompletion) and
+           b.version > 1:
+             # Send a textDocument/didChange notification to the LSP server.
+             let err = client.textDocumentDidChange(
+               b.version,
+               $b.path.absolutePath,
+               b.buffer.toString)
+             if err.isErr:
+               error fmt"lsp: {err.error}"
 
 proc updateLogViewerEditorBuffer*(b: var BufferStatus) =
   ## Update the logviewer buffer for editor logs.
@@ -700,11 +697,6 @@ proc updateLogViewerLspBuffer*(b: var BufferStatus, log: LspLog) =
       for line in lines: b.buffer.add line
 
       b.buffer.add ru""
-
-proc initLogViewerHighlight(buffer: seq[Runes]): Highlight =
-  if buffer.len > 0:
-    const EmptyReservedWord: seq[ReservedWord] = @[]
-    return buffer.initHighlight(EmptyReservedWord, SourceLanguage.langNone)
 
 proc updateSelectedArea(b: var BufferStatus, windowNode: var WindowNode) =
   if b.isVisualLineMode:
@@ -804,7 +796,7 @@ proc update*(status: var EditorStatus) =
         currentMainWindowNode.windowIndex,
         status.settings.debugMode).toGapBuffer
 
-  status.checkBufferStatusUpdate
+  status.updateSyntaxHighlightings
 
   if currentBufStatus.isVisualMode:
     currentBufStatus.updateSelectedArea(currentMainWindowNode)
@@ -825,7 +817,6 @@ proc update*(status: var EditorStatus) =
         if b.buffer.high < node.currentLine:
           node.currentLine = b.buffer.high
 
-        # TODO: Remove
         if not b.isInsertMode and
            not b.isReplaceMode and
            not b.isConfigMode and
@@ -839,22 +830,9 @@ proc update*(status: var EditorStatus) =
 
         node.seekCursor(b.buffer)
 
-        # Update the highlight.
-        if b.isLogViewerMode:
-          node.highlight = initLogViewerHighlight(b.buffer.toSeqRunes)
-        elif b.isDiffViewerMode:
-          node.highlight = b.buffer.toRunes.initDiffViewerHighlight
-        elif b.isFilerMode and
-             status.filerStatuses[b.filerStatusIndex.get].isUpdateView:
-               node.highlight = initFilerHighlight(
-                 status.filerStatuses[b.filerStatusIndex.get],
-                 b.buffer,
-                 node.currentLine)
+        # The highlight for the view.
+        var highlight = b.highlight
 
-        # NOTE: node.highlight is not directly change here for performance.
-        var highlight = node.highlight
-
-        # Update the highlight for the view.
         if b.isEditMode:
           highlight.updateViewHighlight(
             b,

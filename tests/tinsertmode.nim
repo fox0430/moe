@@ -40,7 +40,7 @@ suite "insert: Insert characters":
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru""])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       status.bufStatus[0].buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       status.bufStatus[0].language)

@@ -391,6 +391,7 @@ proc initFilerBuffer*(
   filerStatus: var FilerStatus,
   isShowIcons: bool): seq[Runes] =
 
+    exitUi()
     for index, dir in filerStatus.pathList:
       let
         filename = dir.path
@@ -465,7 +466,7 @@ proc writeFileDetail*(
     bufStatus.buffer.add(("last write  : " & $fileInfo.lastWriteTime).toRunes)
     bufStatus.buffer.add(("last access : " & $fileInfo.lastAccessTime).toRunes)
 
-    windowNode.highlight = initFileDeitalHighlight(bufStatus.buffer)
+    bufStatus.highlight = initFileDeitalHighlight(bufStatus.buffer)
 
     let
       useStatusBar = if settings.statusLine.enable: 1 else: 0

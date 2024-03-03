@@ -42,7 +42,7 @@ suite "Visual mode: Delete buffer":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abcd"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -69,7 +69,7 @@ suite "Visual mode: Delete buffer":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"b", ru"c"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -96,7 +96,7 @@ suite "Visual mode: Delete buffer":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"ab", ru"cdef"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -125,7 +125,7 @@ suite "Visual mode: Delete buffer":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"defg"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -158,7 +158,7 @@ suite "Visual mode: Delete buffer":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -188,7 +188,7 @@ suite "Visual mode: Delete buffer":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -212,7 +212,7 @@ suite "Visual mode: Delete buffer":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"", ru"a"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -239,7 +239,7 @@ suite "Visual mode: Delete buffer":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"a b c"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -266,7 +266,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -304,7 +304,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -343,7 +343,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
     status.initSelectedArea
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -378,7 +378,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
     status.initSelectedArea
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -413,7 +413,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
     status.initSelectedArea
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -445,7 +445,7 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -475,7 +475,7 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"d"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -509,7 +509,7 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"d"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -536,7 +536,7 @@ suite "Visual block mode: Delete buffer (Disable clipboard)":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -576,7 +576,7 @@ suite "Visual mode: Yank buffer (Enable clipboard)":
 
       status.initSelectedArea
 
-      currentMainWindowNode.highlight = initHighlight(
+      currentBufStatus.highlight = initHighlight(
         currentBufStatus.buffer.toSeqRunes,
         status.settings.highlight.reservedWords,
         currentBufStatus.language)
@@ -617,7 +617,7 @@ suite "Visual mode: Yank buffer (Enable clipboard)":
       discard status.addNewBufferInCurrentWin.get
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
-      currentMainWindowNode.highlight = initHighlight(
+      currentBufStatus.highlight = initHighlight(
         currentBufStatus.buffer.toSeqRunes,
         status.settings.highlight.reservedWords,
         currentBufStatus.language)
@@ -666,7 +666,7 @@ suite "Visual block mode: Yank buffer (Enable clipboard) 1":
       discard status.addNewBufferInCurrentWin.get
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
-      currentMainWindowNode.highlight = initHighlight(
+      currentBufStatus.highlight = initHighlight(
         currentBufStatus.buffer.toSeqRunes,
         status.settings.highlight.reservedWords,
         currentBufStatus.language)
@@ -706,7 +706,7 @@ suite "Visual block mode: Yank buffer (Enable clipboard) 1":
       discard status.addNewBufferInCurrentWin.get
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"d"])
 
-      currentMainWindowNode.highlight = initHighlight(
+      currentBufStatus.highlight = initHighlight(
         currentBufStatus.buffer.toSeqRunes,
         status.settings.highlight.reservedWords,
         currentBufStatus.language)
@@ -750,7 +750,7 @@ suite "Visual block mode: Delete buffer":
       discard status.addNewBufferInCurrentWin.get
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
-      currentMainWindowNode.highlight = initHighlight(
+      currentBufStatus.highlight = initHighlight(
         currentBufStatus.buffer.toSeqRunes,
         status.settings.highlight.reservedWords,
         currentBufStatus.language)
@@ -791,7 +791,7 @@ suite "Visual block mode: Delete buffer":
       discard status.addNewBufferInCurrentWin.get
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"", ru"edf"])
 
-      currentMainWindowNode.highlight = initHighlight(
+      currentBufStatus.highlight = initHighlight(
         currentBufStatus.buffer.toSeqRunes,
         status.settings.highlight.reservedWords,
         currentBufStatus.language)
@@ -831,7 +831,7 @@ suite "Visual block mode: Delete buffer":
       discard status.addNewBufferInCurrentWin.get
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"de", ru"fgh"])
 
-      currentMainWindowNode.highlight = initHighlight(
+      currentBufStatus.highlight = initHighlight(
         currentBufStatus.buffer.toSeqRunes,
         status.settings.highlight.reservedWords,
         currentBufStatus.language)
@@ -872,7 +872,7 @@ suite "Visual mode: Join lines":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -900,7 +900,7 @@ suite "Visual block mode: Join lines":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -932,7 +932,7 @@ suite "Visual mode: Add indent":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -960,7 +960,7 @@ suite "Visual block mode: Add indent":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -988,7 +988,7 @@ suite "Visual mode: Delete indent":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"  abc", ru"  def", ru"  ghi"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1016,7 +1016,7 @@ suite "Visual block mode: Delete indent":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"  abc", ru"  def", ru"  ghi"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1044,7 +1044,7 @@ suite "Visual mode: Converts string into lower-case string":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"ABC"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1068,7 +1068,7 @@ suite "Visual mode: Converts string into lower-case string":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"AあbC"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1092,7 +1092,7 @@ suite "Visual mode: Converts string into lower-case string":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"ABC", ru"DEF"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1115,7 +1115,7 @@ suite "Visual mode: Converts string into lower-case string":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"ABC", ru"", ru"DEF", ru""])
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1141,7 +1141,7 @@ suite "Visual block mode: Converts string into lower-case string":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"ABC"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1165,7 +1165,7 @@ suite "Visual block mode: Converts string into lower-case string":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"ABC", ru"DEF"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1193,7 +1193,7 @@ suite "Visual mode: Converts string into upper-case string":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1217,7 +1217,7 @@ suite "Visual mode: Converts string into upper-case string":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"aあBc"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1241,7 +1241,7 @@ suite "Visual mode: Converts string into upper-case string":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1264,7 +1264,7 @@ suite "Visual mode: Converts string into upper-case string":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"", ru"def", ru""])
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1290,7 +1290,7 @@ suite "Visual mode: Movement":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1312,7 +1312,7 @@ suite "Visual block mode: Converts string into upper-case string":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1336,7 +1336,7 @@ suite "Visual block mode: Converts string into upper-case string":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1402,7 +1402,7 @@ suite "Visual mode: Replace characters":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru""])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1428,7 +1428,7 @@ suite "Visual block mode: Replace characters":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru""])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1455,7 +1455,7 @@ suite "Visual mode: Run command when Readonly mode":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1479,7 +1479,7 @@ suite "Visual mode: Run command when Readonly mode":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1503,7 +1503,7 @@ suite "Visual mode: Run command when Readonly mode":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1527,7 +1527,7 @@ suite "Visual mode: Run command when Readonly mode":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru "def"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1556,7 +1556,7 @@ suite "Visual mode: Run command when Readonly mode":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1580,7 +1580,7 @@ suite "Visual mode: Run command when Readonly mode":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1604,7 +1604,7 @@ suite "Visual mode: Run command when Readonly mode":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1631,7 +1631,7 @@ suite "Visual mode: Run command when Readonly mode":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1693,7 +1693,7 @@ suite "Visual block mode: Run command when Readonly mode":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1717,7 +1717,7 @@ suite "Visual block mode: Run command when Readonly mode":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1740,7 +1740,7 @@ suite "Visual block mode: Run command when Readonly mode":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1764,7 +1764,7 @@ suite "Visual block mode: Run command when Readonly mode":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1788,7 +1788,7 @@ suite "Visual block mode: Run command when Readonly mode":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru "def"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1817,7 +1817,7 @@ suite "Visual block mode: Run command when Readonly mode":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1841,7 +1841,7 @@ suite "Visual block mode: Run command when Readonly mode":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1865,7 +1865,7 @@ suite "Visual block mode: Run command when Readonly mode":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1891,7 +1891,7 @@ suite "Visual block mode: Movement":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1916,7 +1916,7 @@ suite "Visual line mode: Delete buffer":
 
     status.initSelectedArea
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1941,7 +1941,7 @@ suite "Visual line mode: Delete buffer":
 
     status.initSelectedArea
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1968,7 +1968,7 @@ suite "Visual line mode: Delete buffer":
 
     status.initSelectedArea
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -1993,7 +1993,7 @@ suite "Visual line mode: Delete buffer":
 
     status.initSelectedArea
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -2020,7 +2020,7 @@ suite "Visual line mode: Yank buffer (Disable clipboard)":
 
     status.initSelectedArea
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -2063,7 +2063,7 @@ suite "Visual line mode: Yank buffer (Enable clipboard)":
 
       status.initSelectedArea
 
-      currentMainWindowNode.highlight = initHighlight(
+      currentBufStatus.highlight = initHighlight(
         currentBufStatus.buffer.toSeqRunes,
         status.settings.highlight.reservedWords,
         currentBufStatus.language)
@@ -2107,7 +2107,7 @@ suite "Visual line mode: idenet":
 
     status.initSelectedArea
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
@@ -2133,7 +2133,7 @@ suite "Visual line mode: idenet":
 
     status.initSelectedArea
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
