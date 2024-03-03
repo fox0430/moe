@@ -36,7 +36,6 @@ type
     splitType*: SplitType
     window*: Option[Window]
     view*: EditorView
-    highlight*: Highlight
     cursor*: CursorPosition
     currentLine*, currentColumn*, expandedColumn*: int
     bufferIndex*: int
@@ -84,7 +83,6 @@ proc verticalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
       splitType: SplitType.vertical,
       window: some(newWindow()),
       view: initEditorView(buffer, 1, 1),
-      highlight: n.highlight,
       bufferIndex: n.bufferIndex,
       h: 1,
       w: 1)
@@ -103,7 +101,6 @@ proc verticalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
         splitType: SplitType.vertical,
         window: some(newWindow()),
         view: initEditorView(buffer, 1, 1),
-        highlight: n.highlight,
         bufferIndex: n.bufferIndex)
       node2 = WindowNode(
         parent: n,
@@ -111,7 +108,6 @@ proc verticalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
         splitType: SplitType.vertical,
         window: some(newWindow()),
         view: initEditorView(buffer, 1, 1),
-        highlight: n.highlight,
         bufferIndex: n.bufferIndex)
 
     if parent.view.sidebar.isSome:
@@ -136,7 +132,6 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
       splitType: SplitType.horizontal,
       window: some(newWindow()),
       view: initEditorView(buffer, 1, 1),
-      highlight: n.highlight,
       bufferIndex: n.bufferIndex)
 
     if parent.child[^1].view.sidebar.isSome:
@@ -153,7 +148,6 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
       splitType: SplitType.vertical,
       window: some(newWindow()),
       view: initEditorView(buffer, 1, 1),
-      highlight: n.highlight,
       bufferIndex: n.bufferIndex)
 
     if parent.child[^1].view.sidebar.isSome:
@@ -171,7 +165,6 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
         splitType: SplitType.vertical,
         window: some(newWindow()),
         view: initEditorView(buffer, 1, 1),
-        highlight: n.highlight,
         bufferIndex: n.bufferIndex)
       node2 = WindowNode(
         parent: n,
@@ -179,7 +172,6 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
         splitType: SplitType.vertical,
         window: some(newWindow()),
         view: initEditorView(buffer, 1, 1),
-        highlight: n.highlight,
         bufferIndex: n.bufferIndex)
 
     if parent.view.sidebar.isSome:

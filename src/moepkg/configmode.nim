@@ -1465,7 +1465,7 @@ proc editFiguresSetting(status: var EditorStatus, table, name: string) =
       numStr &= key
       currentBufStatus.insertCharacter(currentMainWindowNode, key)
       let reservedWords = status.settings.highlight.reservedWords
-      currentMainWindowNode.highlight =
+      currentBufStatus.highlight =
         currentBufStatus.buffer.initConfigModeHighlight(
           currentLine,
           reservedWords)
@@ -1614,7 +1614,7 @@ proc editTextSetting(status: var EditorStatus, table, name: string) =
       buffer &= key
       currentBufStatus.insertCharacter(currentMainWindowNode, key)
       let reservedWords = status.settings.highlight.reservedWords
-      currentMainWindowNode.highlight =
+      currentBufStatus.highlight =
         currentBufStatus.buffer.initConfigModeHighlight(
           currentMainWindowNode.currentLine,
           reservedWords)

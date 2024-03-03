@@ -313,7 +313,7 @@ proc syntaxSettingCommand(status: var EditorStatus, command: Runes) =
   let sourceLang = if status.settings.standard.syntax: currentBufStatus.language
                    else: SourceLanguage.langNone
 
-  currentMainWindowNode.highlight = initHighlight(
+  currentBufStatus.highlight = initHighlight(
     currentBufStatus.buffer.toSeqRunes,
     status.settings.highlight.reservedWords,
     sourceLang)
@@ -1021,7 +1021,7 @@ proc listAllBufferCommand(status: var EditorStatus) =
 
   currentMainWindowNode.currentLine = 0
 
-  var highlight = currentMainWindowNode.highlight
+  var highlight = currentBufStatus.highlight
   highlight.updateViewHighlight(
     currentBufStatus,
     currentMainWindowNode,

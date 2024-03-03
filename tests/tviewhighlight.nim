@@ -31,7 +31,7 @@ import utils
 import moepkg/viewhighlight {.all.}
 
 proc initHighlight(status: EditorStatus) {.inline.} =
-  currentMainWindowNode.highlight = initHighlight(
+  currentBufStatus.highlight = initHighlight(
     currentBufStatus.buffer.toSeqRunes,
     status.settings.highlight.reservedWords,
     currentBufStatus.language)
@@ -99,7 +99,7 @@ suite "viewhighlight: highlightCurrentWordElsewhere":
     status.update
 
     let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
-    var highlight = currentMainWindowNode.highlight
+    var highlight = currentBufStatus.highlight
     highlight.highlightCurrentWordElsewhere(
       bufferInView,
       status.settings.standard.colorMode)
@@ -116,7 +116,7 @@ suite "viewhighlight: highlightCurrentWordElsewhere":
     status.update
 
     let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
-    var highlight = currentMainWindowNode.highlight
+    var highlight = currentBufStatus.highlight
     highlight.highlightCurrentWordElsewhere(
       bufferInView,
       status.settings.standard.colorMode)
@@ -134,7 +134,7 @@ suite "viewhighlight: highlightCurrentWordElsewhere":
     status.update
 
     let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
-    var highlight = currentMainWindowNode.highlight
+    var highlight = currentBufStatus.highlight
     highlight.highlightCurrentWordElsewhere(
       bufferInView,
       status.settings.standard.colorMode)
@@ -152,7 +152,7 @@ suite "viewhighlight: highlightCurrentWordElsewhere":
     status.update
 
     let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
-    var highlight = currentMainWindowNode.highlight
+    var highlight = currentBufStatus.highlight
     highlight.highlightCurrentWordElsewhere(
       bufferInView,
       status.settings.standard.colorMode)
@@ -174,7 +174,7 @@ suite "viewhighlight: highlightFullWidthSpace":
     status.update
 
     let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
-    var highlight = currentMainWindowNode.highlight
+    var highlight = currentBufStatus.highlight
     highlight.highlightFullWidthSpace(
       currentMainWindowNode,
       bufferInView)
@@ -194,7 +194,7 @@ suite "viewhighlight: highlightFullWidthSpace":
     status.update
 
     let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
-    var highlight = currentMainWindowNode.highlight
+    var highlight = currentBufStatus.highlight
     highlight.highlightFullWidthSpace(
       currentMainWindowNode,
       bufferInView)
@@ -214,7 +214,7 @@ suite "viewhighlight: highlightFullWidthSpace":
     status.update
 
     let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
-    var highlight = currentMainWindowNode.highlight
+    var highlight = currentBufStatus.highlight
     highlight.highlightFullWidthSpace(currentMainWindowNode, bufferInView)
 
     check highlight[0].color == EditorColorPairIndex.highlightFullWidthSpace
@@ -231,7 +231,7 @@ suite "viewhighlight: highlightFullWidthSpace":
     status.update
 
     let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
-    var highlight = currentMainWindowNode.highlight
+    var highlight = currentBufStatus.highlight
     highlight.highlightFullWidthSpace(currentMainWindowNode, bufferInView)
 
     check highlight[0].color == EditorColorPairIndex.default
@@ -245,14 +245,14 @@ suite "viewhighlight: Highlight trailing spaces":
 
     status.settings.highlight.currentWord = false
 
-    currentMainWindowNode.highlight = initHighlight(
+    currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
       currentBufStatus.language)
 
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
-    var highlight = currentMainWindowNode.highlight
+    var highlight = currentBufStatus.highlight
     highlight.updateViewHighlight(
       currentBufStatus,
       currentMainWindowNode,
@@ -262,10 +262,9 @@ suite "viewhighlight: Highlight trailing spaces":
     status.resize(100, 100)
     status.update
 
-    let node = currentMainWindowNode
-    check node.highlight[0].color == EditorColorPairIndex.default
-    check node.highlight[0].firstColumn == 0
-    check node.highlight[0].lastColumn == 2
+    check currentBufStatus.highlight[0].color == EditorColorPairIndex.default
+    check currentBufStatus.highlight[0].firstColumn == 0
+    check currentBufStatus.highlight[0].lastColumn == 2
 
   test "Highlight trailing spaces 2":
     var status = initEditorStatus()
@@ -279,7 +278,7 @@ suite "viewhighlight: Highlight trailing spaces":
     status.resize(100, 100)
     status.update
 
-    var highlight = currentMainWindowNode.highlight
+    var highlight = currentBufStatus.highlight
     highlight.updateViewHighlight(
       currentBufStatus,
       currentMainWindowNode,
@@ -310,7 +309,7 @@ suite "viewhighlight: Highlight trailing spaces":
     status.resize(100, 100)
     status.update
 
-    var highlight = currentMainWindowNode.highlight
+    var highlight = currentBufStatus.highlight
     highlight.updateViewHighlight(
       currentBufStatus,
       currentMainWindowNode,
@@ -344,11 +343,12 @@ suite "viewhighlight: Highlight trailing spaces":
     while queue.len > 0:
       for i in  0 ..< queue.len:
         var node = queue.pop
+        template b: var BufferStatus = status.bufStatus[node.bufferIndex]
 
         if node.window.isSome:
-          var highlight = node.highlight
+          var highlight = b.highlight
           highlight.updateViewHighlight(
-            currentBufStatus,
+            b,
             node,
             status.highlightingText,
             status.settings)
@@ -393,7 +393,7 @@ suite "viewhighlight: highlightPairOfParen":
           currentBufStatus,
           currentMainWindowNode)
 
-        var highlight = currentMainWindowNode.highlight
+        var highlight = currentBufStatus.highlight
         highlight.highlightPairOfParen(bufferInView)
 
         check highlight[] == `expectHighlight`[]
@@ -783,7 +783,7 @@ suite "viewhighlight: highlightPairOfParen":
     status.resize(100, 100)
     status.update
 
-    var highlight = currentMainWindowNode.highlight
+    var highlight = currentBufStatus.highlight
     let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
     highlight.highlightPairOfParen(bufferInView)
 
@@ -801,7 +801,7 @@ suite "viewhighlight: highlightPairOfParen":
     status.resize(100, 100)
     status.update
 
-    var highlight = currentMainWindowNode.highlight
+    var highlight = currentBufStatus.highlight
     let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
     highlight.highlightPairOfParen(bufferInView)
 

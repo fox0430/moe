@@ -31,7 +31,7 @@ test "Move right":
   discard status.addNewBufferInCurrentWin.get
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
 
-  currentMainWindowNode.highlight = initHighlight(
+  currentBufStatus.highlight = initHighlight(
     status.bufStatus[0].buffer.toSeqRunes,
     status.settings.highlight.reservedWords,
     status.bufStatus[0].language)
@@ -46,7 +46,7 @@ test "Move left":
   discard status.addNewBufferInCurrentWin.get
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
 
-  currentMainWindowNode.highlight = initHighlight(
+  currentBufStatus.highlight = initHighlight(
     status.bufStatus[0].buffer.toSeqRunes,
     status.settings.highlight.reservedWords,
     status.bufStatus[0].language)
@@ -62,7 +62,7 @@ test "Move down":
   discard status.addNewBufferInCurrentWin.get
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"efg", ru"hij"])
 
-  currentMainWindowNode.highlight = initHighlight(
+  currentBufStatus.highlight = initHighlight(
     status.bufStatus[0].buffer.toSeqRunes,
     status.settings.highlight.reservedWords,
     status.bufStatus[0].language)
@@ -77,7 +77,7 @@ test "Move up":
   discard status.addNewBufferInCurrentWin.get
   status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"efg", ru"hij"])
 
-  currentMainWindowNode.highlight = initHighlight(
+  currentBufStatus.highlight = initHighlight(
     status.bufStatus[0].buffer.toSeqRunes,
     status.settings.highlight.reservedWords,
     status.bufStatus[0].language)

@@ -21,7 +21,7 @@ import std/[times, options, os, strformat]
 import pkg/results
 import syntax/highlite
 import gapbuffer, unicodeext, fileutils, highlight, independentutils, git,
-       syntaxcheck, completion, logviewerutils, helputils
+       syntaxcheck, completion, logviewerutils, helputils, highlight
 
 type
   Mode* = enum
@@ -48,6 +48,7 @@ type
 
   BufferStatus* = ref object
     buffer*: GapBuffer[Runes]
+    highlight*: Highlight # Syntax highlighting
     id: int # A unique id. Don't overwrite
     isUpdate*: bool
     characterEncoding*: CharacterEncoding

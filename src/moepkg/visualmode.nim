@@ -451,7 +451,7 @@ proc exitVisualMode(status: var EditorStatus) =
 
   currentBufStatus.selectedArea = none(SelectedArea)
 
-  var highlight = currentMainWindowNode.highlight
+  var highlight = currentBufStatus.highlight
   highlight.updateViewHighlight(
     currentBufStatus,
     currentMainWindowNode,

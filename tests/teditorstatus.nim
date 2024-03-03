@@ -194,7 +194,7 @@ test "resize 1":
   status.resize(100, 100)
   currentBufStatus.buffer = initGapBuffer(@[ru"a"])
 
-  currentMainWindowNode.highlight =
+  currentBufStatus.highlight =
     initHighlight(currentBufStatus.buffer.toSeqRunes,
     status.settings.highlight.reservedWords,
     currentBufStatus.language)
@@ -210,7 +210,7 @@ test "resize 2":
   status.resize(100, 100)
   currentBufStatus.buffer = initGapBuffer(@[ru"a"])
 
-  currentMainWindowNode.highlight =
+  currentBufStatus.highlight =
     initHighlight(currentBufStatus.buffer.toSeqRunes,
     status.settings.highlight.reservedWords,
     currentBufStatus.language)
@@ -725,28 +725,6 @@ suite "editorstatus: Updates/Restore the last cursor postion":
 
     currentMainWindowNode.currentLine = 2
     currentMainWindowNode.currentColumn = 0
-
-suite "Fix #1361":
-  test "Insert a character after split window":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin("test.nim").get
-    currentBufStatus.buffer = initGapBuffer(@[ru ""])
-
-    status.resize(100, 100)
-    status.update
-
-    status.verticalSplitWindow
-
-    const Key = ru 'a'
-    currentBufStatus.insertCharacter(
-      currentMainWindowNode,
-      status.settings.standard.autoCloseParen,
-      Key)
-
-    status.update
-
-    let nodes = mainWindowNode.getAllWindowNode
-    check nodes[0].highlight == nodes[1].highlight
 
 suite "BackgroundTasks":
   const
