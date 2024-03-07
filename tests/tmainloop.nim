@@ -1093,19 +1093,26 @@ suite "mainloop: updateCompletionWindowBuffer in editor":
       currentBufStatus.lspCompletionList.items = @[
         CompletionItem(label: ru"ea", insertText: ru"ea"),
         CompletionItem(label: ru"eb", insertText: ru"eb"),
-        CompletionItem(label: ru"ec", insertText: ru"ec"),
+        CompletionItem(label: ru"ec", insertText: ru"ec")
       ]
 
       status.completionWindow.get.addInput(ru'e')
       status.updateCompletionWindowBufferInEditor
 
+      check status.completionWindow.get.list.items == @[
+        CompletionItem(label: ru"ec", insertText: ru"ec"),
+        CompletionItem(label: ru"eb", insertText: ru"eb"),
+        CompletionItem(label: ru"ea", insertText: ru"ea"),
+        CompletionItem(label: ru"echo", insertText: ru"echo")
+      ]
+
       check status.completionWindow.get.inputText == ru"e"
-      check status.completionWindow.get.list.len == 3
+      check status.completionWindow.get.list.len == 4
       check status.completionWindow.get.startPosition == BufferPosition(
         line: 1,
         column: 0)
 
-      check status.completionWindow.get.popupWindow.get.size == Size(h: 3, w: 4)
+      check status.completionWindow.get.popupWindow.get.size == Size(h: 4, w: 6)
       check status.completionWindow.get.popupWindow.get.position == Position(
         y: 2, x: 1)
 
@@ -1119,13 +1126,18 @@ suite "mainloop: updateCompletionWindowBuffer in editor":
       status.completionWindow.get.addInput(ru'c')
       status.updateCompletionWindowBufferInEditor
 
+      check status.completionWindow.get.list.items == @[
+        CompletionItem(label: ru"ec", insertText: ru"ec"),
+        CompletionItem(label: ru"echo", insertText: ru"echo")
+      ]
+
       check status.completionWindow.get.inputText == ru"ec"
-      check status.completionWindow.get.list.len == 1
+      check status.completionWindow.get.list.len == 2
       check status.completionWindow.get.startPosition == BufferPosition(
         line: 1,
         column: 0)
 
-      check status.completionWindow.get.popupWindow.get.size == Size(h: 1, w: 4)
+      check status.completionWindow.get.popupWindow.get.size == Size(h: 2, w: 6)
       check status.completionWindow.get.popupWindow.get.position == Position(
         y: 2, x: 1)
 

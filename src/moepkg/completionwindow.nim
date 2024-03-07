@@ -98,13 +98,17 @@ proc removeInput*(c: var CompletionWindow) {.inline.} =
 proc setList*(c: var CompletionWindow, list: CompletionList) {.inline.} =
   c.list = list
 
-proc setList*(
-  c: var CompletionWindow,
-  dictionary: WordDictionary) =
+proc setList*(c: var CompletionWindow, dictionary: WordDictionary) {.inline.} =
+  c.list = initCompletionList()
+  for word in dictionary.collect(c.inputText):
+    c.list.add initCompletionItem(word)
 
-    c.list = initCompletionList()
-    for word in dictionary.collect(c.inputText):
-      c.list.add CompletionItem(label: word, insertText: word)
+proc addList*(c: var CompletionWindow, list: CompletionList) {.inline.} =
+  for item in list.items: c.list.add item
+
+proc addList*(c: var CompletionWindow, dictionary: WordDictionary) {.inline.} =
+  for word in dictionary.collect(c.inputText):
+    c.list.add initCompletionItem(word)
 
 proc selectedText*(c: CompletionWindow): Runes =
   if c.selectedIndex == -1:
