@@ -664,18 +664,24 @@ proc updateSyntaxHighlightings(status: EditorStatus) =
       b.version.inc
       b.isUpdate = false
 
-      if status.lspClients.contains(b.langId):
-        template client: LspClient = status.lspClients[b.langId]
-        if client.isInitialized and
-           client.waitingResponse != some(LspMethod.textDocumentCompletion) and
-           b.version > 1:
-             # Send a textDocument/didChange notification to the LSP server.
-             let err = client.textDocumentDidChange(
-               b.version,
-               $b.path.absolutePath,
-               b.buffer.toString)
-             if err.isErr:
-               error fmt"lsp: {err.error}"
+      if status.lspClients.contains(b.langId) and
+         status.lspClients[b.langId].isInitialized:
+           template client: LspClient = status.lspClients[b.langId]
+
+           if client.waitingResponse != some(LspMethod.textDocumentCompletion) and
+              b.version > 1:
+                # Send a textDocument/didChange notification to the LSP server.
+                let err = client.textDocumentDidChange(
+                  b.version,
+                  $b.path.absolutePath,
+                  b.buffer.toString)
+                if err.isErr:
+                 error fmt"lsp: {err.error}"
+
+           # Send a textDocument/semanticTokens request to the LSP server.
+           let err = client.textDocumentSemanticTokens(b.id, $b.path.absolutePath)
+           if err.isErr:
+             error fmt"lsp: {err.error}"
 
 proc updateLogViewerEditorBuffer*(b: var BufferStatus) =
   ## Update the logviewer buffer for editor logs.

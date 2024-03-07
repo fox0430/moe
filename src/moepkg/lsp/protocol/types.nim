@@ -103,6 +103,9 @@ type
     trace*: Option[string]
     workspaceFolders*: OptionalSeq[WorkspaceFolder]
 
+  WorkDoneProgressOptions* = ref object of RootObj
+    workDoneProgress*: Option[bool]
+
   WorkDoneProgressBegin* = ref object of RootObj
     kind*: string
     title*: string
@@ -242,6 +245,21 @@ type
   PublishDiagnosticsCapability* = ref object of RootObj
     dynamicRegistration*: Option[bool]
 
+  SemanticTokensClientCapabilitiesRequest* = ref object of RootObj
+    range*: Option[bool]
+    full*: Option[bool]
+
+  SemanticTokensClientCapabilities* = ref object of RootObj
+    dynamicRegistration*: Option[bool]
+    tokenTypes*: seq[string]
+    tokenModifiers*: seq[string]
+    formats*: seq[string]
+    requests*: SemanticTokensClientCapabilitiesRequest
+    overlappingTokenSupport*: Option[bool]
+    multilineTokenSupport*: Option[bool]
+    serverCancelSupport*: Option[bool]
+    augmentsSyntaxTokens*: Option[bool]
+
   TextDocumentClientCapabilities* = ref object of RootObj
     synchronization*: Option[SynchronizationCapability]
     completion*: Option[CompletionCapability]
@@ -262,6 +280,7 @@ type
     colorProvider*: Option[ColorProviderCapability]
     rename*: Option[RenameCapability]
     publishDiagnostics*: Option[PublishDiagnosticsCapability]
+    semanticTokens*: Option[SemanticTokensClientCapabilities]
 
   WindowCapabilities* = ref object of RootObj
     workDoneProgress*: Option[bool]
@@ -318,7 +337,7 @@ type
 
   WorkspaceFolderCapability* = ref object of RootObj
     supported*: Option[bool]
-    changeNotifications*: Option[OptionalNode] # string or bool
+    changeNotifications*: OptionalNode # string or bool
 
   WorkspaceCapability* = ref object of RootObj
     workspaceFolders*: Option[WorkspaceFolderCapability]
@@ -333,6 +352,21 @@ type
     # We support rename, but need to change json
     # depending on if the client supports prepare or not
     supportsPrepare*: bool
+
+  SemanticTokensLegend* = ref object of RootObj
+    tokenTypes*: seq[string]
+    tokenModifiers*: seq[string]
+
+  SemanticTokensOptions* = ref object of WorkDoneProgressOptions
+    legend*: SemanticTokensLegend
+    range*: OptionalNode # bool or JsonNode
+    full*: OptionalNode # bool or JsonNode
+
+  SemanticTokensRegistrationOptions* = ref object of TextDocumentRegistrationOptions
+    id*: Option[string]
+    legend*: SemanticTokensLegend
+    range*: OptionalNode # bool or JsonNode
+    full*: OptionalNode # bool or JsonNode
 
   ServerCapabilities* = ref object of RootObj
     textDocumentSync*: OptionalNode # TextDocumentSyncOptions or int
@@ -354,10 +388,11 @@ type
     documentOnTypeFormattingProvider*: Option[DocumentOnTypeFormattingOptions]
     renameProvider*: JsonNode # bool or RenameOptions
     documentLinkProvider*: Option[DocumentLinkOptions]
-    colorProvider*: Option[OptionalNode] # bool or ColorProviderOptions or TextDocumentAndStaticRegistrationOptions
+    colorProvider*: OptionalNode # bool or ColorProviderOptions or TextDocumentAndStaticRegistrationOptions
     executeCommandProvider*: Option[ExecuteCommandOptions]
     workspace*: Option[WorkspaceCapability]
-    experimental*: Option[OptionalNode]
+    semanticTokensProvider*: OptionalNode # SemanticTokensOptions or SemanticTokensRegistrationOptions
+    experimental*: OptionalNode
 
   InitializedParams* = ref object of RootObj
     DUMMY*: Option[nil]
@@ -651,3 +686,15 @@ type
   ExpandResult* = ref object of RootObj
     range*: Range
     content*: string
+
+  SemanticTokensParams* = ref object of RootObj
+    textDocument*: TextDocumentIdentifier
+    workDoneToken*: OptionalNode # int or string (ProgressToken)
+    partialResultToken*: OptionalNode # int or string (ProgressToken)
+
+  SemanticTokensDeltaParams* = ref object of SemanticTokensParams
+    previousResultId*: string
+
+  SemanticTokens* = ref object of RootObj
+    resultId*: Option[string]
+    data*: seq[int]

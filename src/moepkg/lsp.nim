@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -23,7 +23,8 @@ import pkg/results
 
 import lsp/[client, utils]
 import editorstatus, windownode, popupwindow, unicodeext, independentutils, ui,
-       gapbuffer, messages, commandline, bufferstatus, syntaxcheck, completion
+       gapbuffer, messages, commandline, bufferstatus, syntaxcheck, completion,
+       highlight
 
 template isLspResponse*(status: EditorStatus): bool =
   status.lspClients.contains(currentBufStatus.langId) and
@@ -311,6 +312,27 @@ proc lspCompletion(
 
     return Result[(), string].ok ()
 
+proc lspSemanticTokens(
+  status: var EditorStatus,
+  res: JsonNode): Result[(), string] =
+    ## Update the highlight from semanticTokens.
+    ##
+    ## textDocument/semanticTokens
+
+    lspClient.clearWaitingResponse
+
+    let r = res.parseTextDocumentSemanticTokensResponse(
+      lspClient.capabilities.get.semanticTokens.get)
+    if r.isErr:
+      return Result[(), string].err r.error
+
+    currentBufStatus.highlight = initHighlight(
+      currentBufStatus.buffer.toSeqRunes,
+      r.get,
+      lspClient.capabilities.get.semanticTokens.get)
+
+    return Result[(), string].ok ()
+
 proc handleLspServerNotify(
   status: var EditorStatus,
   notify: JsonNode): Result[(), string] =
@@ -385,6 +407,8 @@ proc handleLspResponse*(status: var EditorStatus) =
         of LspMethod.textDocumentCompletion:
           let r = status.lspCompletion(resJson.get)
           if r.isErr: status.commandLine.writeLspCompletionError(r.error)
+        of LspMethod.textDocumentSemanticTokensFull:
+          let r = status.lspSemanticTokens(resJson.get)
         else:
           discard
     else:
