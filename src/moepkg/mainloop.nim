@@ -732,20 +732,22 @@ proc updateCompletionWindowBufferInEditor(status: var EditorStatus) =
       y: currentMainWindowNode.y + currentMainWindowNode.h - 1,
       x: currentMainWindowNode.x + currentMainWindowNode.w)
 
-  # Update list
   if status.completionWindow.get.isPathCompletion:
+    # File path suggestions
     status.completionWindow.get.setList pathCompletionList(
       status.completionWindow.get.inputText)
-  elif currentBufStatus.lspCompletionList.len == 0:
-    # If LSP completion items are not found, get items from WordDictionary.
+  else:
+    # Text suggestions
     status.wordDictionary.update(
       status.bufStatus.mapIt(it.buffer.toRunes),
       status.completionWindow.get.inputText,
       currentBufStatus.language)
     status.completionWindow.get.setList status.wordDictionary
-  else:
-    # From LSP
-    status.completionWindow.get.setList currentBufStatus.lspCompletionList
+
+    if currentBufStatus.lspCompletionList.len > 0:
+      # From LSP
+      status.completionWindow.get.addList currentBufStatus.lspCompletionList
+
     status.completionWindow.get.sort
 
   if status.completionWindow.get.list.len > 0:
