@@ -2,7 +2,7 @@
 
 Moe supports [LSP](https://microsoft.github.io/language-server-protocol/) but work in progress and not recommended for use yet.
 
-Currently, I tested [Nim language server](https://github.com/nim-lang/langserver).
+Currently, I tested [Nim language server](https://github.com/nim-lang/langserver) and [rust-analyzer](https://rust-analyzer.github.io).
 
 Please feedback, bug reports and PRs.
 
