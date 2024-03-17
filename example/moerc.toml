@@ -236,10 +236,15 @@ enable = false
 [Lsp.nim]
 
 extensions = ["nim"]
-
 command = "nimlangserver"
-
 trace = "verbose"
+
+[Lsp.rust]
+
+extensions = ["rs"]
+command = "rust-analyzer"
+trace = "verbose"
+
 
 [Debug.WindowNode]
 enable = true

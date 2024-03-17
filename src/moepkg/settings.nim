@@ -491,6 +491,11 @@ proc initLspSettigns(): LspSettings =
     command: ru"nimlangserver",
     trace: TraceValue.verbose)
 
+  result.languages["rust"] = LspLanguageSettings(
+    extensions: @[ru"rs"],
+    command: ru"rust-analyzer",
+    trace: TraceValue.verbose)
+
 proc initStandardSettings(): StandardSettings =
   result.syntax = true
   result.autoCloseParen = true
