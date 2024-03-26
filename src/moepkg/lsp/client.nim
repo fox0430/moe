@@ -56,6 +56,7 @@ type
   LspCapabilities* = object
     hover*: bool
     completion*: Option[LspCompletionOptions]
+    semanticTokens*: Option[SemanticTokensLegend]
 
   LspProgressTable* = Table[ProgressToken, ProgressReport]
 
@@ -360,7 +361,16 @@ proc initInitializeParams*(
               deprecatedSupport: some(false)
             )),
             contextSupport: some(true)
-          ))
+          )),
+          semanticTokens: some(SemanticTokensClientCapabilities(
+            dynamicRegistration: some(true),
+            tokenTypes: @[],
+            tokenModifiers: @[],
+            formats: @[],
+            requests: SemanticTokensClientCapabilitiesRequest(
+              range: some(false),
+              full: some(true))
+            ))
         )),
         window: some(WindowCapabilities(
           workDoneProgress: some(true)
@@ -386,6 +396,16 @@ proc setCapabilities(c: var LspClient, initResult: InitializeResult) =
 
   if initResult.capabilities.completionProvider.isSome:
     capabilities.completion = initResult.capabilities.completionProvider
+
+  if initResult.capabilities.semanticTokensProvider.isSome:
+    if initResult.capabilities.semanticTokensProvider.get.contains("legend"):
+      try:
+        capabilities.semanticTokens = some(
+          initResult.capabilities.semanticTokensProvider.get["legend"].to(
+            SemanticTokensLegend))
+      except CatchableError:
+        # Invalid SemanticTokensLegend
+        discard
 
   c.capabilities = some(capabilities)
 
@@ -701,5 +721,35 @@ proc textDocumentCompletion*(
       return R[(), string].err fmt"textDocument/completion request failed: {r.error}"
 
     c.waitingResponse = some(LspMethod.textDocumentCompletion)
+
+    return R[(), string].ok ()
+
+proc initSemanticTokensParams*(path: string): SemanticTokensParams =
+  SemanticTokensParams(
+    textDocument: TextDocumentIdentifier(uri: path.pathToUri))
+
+proc textDocumentSemanticTokens*(
+  c: var LspClient,
+  id: int,
+  path: string): LspSendRequestResult =
+    ## Send a textDocument/semanticTokens/full request to the server.
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_semanticTokens
+
+    if not c.serverProcess.running:
+      return R[(), string].err "server crashed"
+
+    if not c.isInitialized:
+      return R[(), string].err "lsp unavailable"
+
+    if c.capabilities.get.semanticTokens.isNone:
+      return R[(), string].err "textDocument/semanticTokens unavailable"
+
+    let params = %* initSemanticTokensParams(path)
+
+    let r = c.request(id, LspMethod.textDocumentSemanticTokensFull, params)
+    if r.isErr:
+      return R[(), string].err fmt"textDocument/semanticTokens/full request failed: {r.error}"
+
+    c.waitingResponse = some(LspMethod.textDocumentSemanticTokensFull)
 
     return R[(), string].ok ()
