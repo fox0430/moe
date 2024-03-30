@@ -64,11 +64,10 @@ template wslDefaultPasteCommand(): string =
 template macOsDefaultPasteCommand(): string = "pbpaste"
 
 template isXAvailable*(): bool =
-  execCmdEx("xset q").exitCode == 0
+  getEnv("XDG_SESSION_TYPE") == "x11"
 
 template isWaylandAvailable*(): bool =
-  let r = execCmdEx("echo $XDG_SESSION_TYPE")
-  r.exitCode == 0 and r.output.contains("wayland")
+  getEnv("XDG_SESSION_TYPE") == "wayland"
 
 template isXselAvailable*(): bool =
   isXAvailable() and execCmdEx("xsel --version").exitCode == 0
