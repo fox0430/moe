@@ -3,5 +3,5 @@
 Fixed
 .....
 
-- `#1942`_ test: Fix check in filer test
+- `#2042`_ test: Fix check in filer test
 
