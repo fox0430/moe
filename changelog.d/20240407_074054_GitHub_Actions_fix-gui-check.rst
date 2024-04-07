@@ -3,5 +3,5 @@
 Fixed
 .....
 
-- `#2039`_ test: Fix gui environment checking
+- `#2041`_ test: Fix gui environment checking
 
