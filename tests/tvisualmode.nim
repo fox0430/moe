@@ -22,7 +22,7 @@ import std/[unittest, osproc, options]
 import pkg/results
 
 import moepkg/[highlight, independentutils, editorstatus, gapbuffer, unicodeext,
-               bufferstatus, movement, registers, settings]
+               bufferstatus, movement, registers, settings, clipboard]
 
 import utils
 
