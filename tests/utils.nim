@@ -18,7 +18,7 @@
 #[############################################################################]#
 
 import std/[options, os, strutils]
-import moepkg/[platform, editorstatus, ui]
+import moepkg/[platform, editorstatus, ui, Clipboard]
 
 proc resize*(status: var EditorStatus, h, w: int) =
   updateTerminalSize(h, w)
@@ -30,15 +30,6 @@ template isNimlangserverAvailable*(): bool =
 proc removeLineEnd*(buf: string): string =
   result = buf
   result.stripLineEnd
-
-template isXAvailable*(): bool =
-  execCmdEx("xset q").exitCode == 0
-
-template isWaylandAvailable*(): bool =
-  let r = execCmdEx("echo $XDG_SESSION_TYPE")
-  if r.exitCode != 0: assert false
-
-  r.output.contains("wayland")
 
 template isXselAvailable*(): bool =
   isXAvailable() and execCmdEx("xsel --version").exitCode == 0
