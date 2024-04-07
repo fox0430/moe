@@ -23,7 +23,7 @@ import pkg/results
 
 import moepkg/syntax/highlite
 import moepkg/[independentutils, gapbuffer, unicodeext, bufferstatus,
-               editorstatus, settings, registers, windownode]
+               editorstatus, settings, registers, windownode, clipboard]
 
 import utils
 

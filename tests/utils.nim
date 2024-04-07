@@ -31,24 +31,6 @@ proc removeLineEnd*(buf: string): string =
   result = buf
   result.stripLineEnd
 
-template isXAvailable*(): bool =
-  execCmdEx("xset q").exitCode == 0
-
-template isWaylandAvailable*(): bool =
-  let r = execCmdEx("echo $XDG_SESSION_TYPE")
-  if r.exitCode != 0: assert false
-
-  r.output.contains("wayland")
-
-template isXselAvailable*(): bool =
-  isXAvailable() and execCmdEx("xsel --version").exitCode == 0
-
-template isXclipAvailable*(): bool =
-  isXAvailable() and execCmdEx("xclip -version").exitCode == 0
-
-template isWlClipboardAvailable*(): bool =
-  isWaylandAvailable() and execCmdEx("wl-paste --version").exitCode == 0
-
 template setBufferToXsel*(buf: string): bool =
   execShellCmd("printf '" & buf & "' | xsel -pi") == 0
 
