@@ -18,7 +18,7 @@
 #[############################################################################]#
 
 import std/[options, os, strutils]
-import moepkg/[platform, editorstatus, ui, Clipboard]
+import moepkg/[platform, editorstatus, ui]
 
 proc resize*(status: var EditorStatus, h, w: int) =
   updateTerminalSize(h, w)
@@ -30,15 +30,6 @@ template isNimlangserverAvailable*(): bool =
 proc removeLineEnd*(buf: string): string =
   result = buf
   result.stripLineEnd
-
-template isXselAvailable*(): bool =
-  isXAvailable() and execCmdEx("xsel --version").exitCode == 0
-
-template isXclipAvailable*(): bool =
-  isXAvailable() and execCmdEx("xclip -version").exitCode == 0
-
-template isWlClipboardAvailable*(): bool =
-  isWaylandAvailable() and execCmdEx("wl-paste --version").exitCode == 0
 
 template setBufferToXsel*(buf: string): bool =
   execShellCmd("printf '" & buf & "' | xsel -pi") == 0
