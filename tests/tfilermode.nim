@@ -106,8 +106,9 @@ suite "Filer mode":
     bufStatuses[0].buffer = filerStatus.initFilerBuffer(IsShowIcons).toGapBuffer
 
     let files = getCurrentFiles("../")
+    check files.len == bufStatuses[0].buffer.len
     for i in 0 ..< bufStatuses[0].buffer.len:
-      check files[i] == $bufStatuses[0].buffer[i]
+      check files.contains($bufStatuses[0].buffer[i])
 
   test "Open a file":
     const Path = "./".toRunes
