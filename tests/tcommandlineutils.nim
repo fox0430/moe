@@ -123,6 +123,11 @@ suite "commandlineutils: getExCommandOptionCompletionList":
         RawInput,
         commandLineCmd).items
 
+  test "Invalid command":
+    const RawInput = ru"!echo"
+    let commandLineCmd = initCommandLineCommand(RawInput)
+    check getExCommandOptionCompletionList(RawInput, commandLineCmd).len == 0
+
 suite "commandlineutils: getExCommandCompletionList":
   test "Expect all ex command":
     # TODO: Check labels

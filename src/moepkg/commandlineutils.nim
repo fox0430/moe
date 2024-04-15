@@ -146,9 +146,12 @@ proc getExCommandOptionCompletionList*(
 
     result = CompletionList()
 
-    let argsType = getArgsType(commandLineCmd.command).get
+    let argsType = getArgsType(commandLineCmd.command)
+    if argsType.isErr:
+      # Invalid command
+      return
 
-    case argsType:
+    case argsType.get:
       of ArgsType.toggle:
         # "on" or "off"
         if commandLineCmd.args.len == 0:
