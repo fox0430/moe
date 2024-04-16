@@ -421,6 +421,8 @@ type
     namespace
     className
     enumName
+
+    # Semantic tokens
     enumMember
     interfaceName
     typeParameter

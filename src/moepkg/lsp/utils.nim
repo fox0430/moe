@@ -472,9 +472,11 @@ proc parseTextDocumentCompletionResponse*(res: JsonNode): LspCompletionResut =
       # Not found
       return Result[seq[CompletionItem], string].ok @[]
 
+
 proc parseTextDocumentSemanticTokensResponse*(
   res: JsonNode,
   legend: SemanticTokensLegend): LspSemanticTokensResult =
+    ## SemanticTokens full
 
     if res["result"].kind == JNull:
       return LspSemanticTokensResult.err "Invalid response"

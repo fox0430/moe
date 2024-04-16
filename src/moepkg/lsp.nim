@@ -64,6 +64,14 @@ proc lspInitialized(
       if err.isErr:
         return Result[(), string].err err.error
 
+    block:
+      # textDocument/semanticTokens
+      let err = lspClient.textDocumentSemanticTokens(
+        currentBufStatus.id,
+        $currentBufStatus.path.absolutePath)
+      if err.isErr:
+        error fmt"lsp: {err.error}"
+
     status.commandLine.writeLspInitialized(
       status.settings.lsp.languages[currentBufStatus.langId].command)
 
@@ -409,6 +417,7 @@ proc handleLspResponse*(status: var EditorStatus) =
           if r.isErr: status.commandLine.writeLspCompletionError(r.error)
         of LspMethod.textDocumentSemanticTokensFull:
           let r = status.lspSemanticTokens(resJson.get)
+          if r.isErr: status.commandLine.writeLspSemanticTokens(r.error)
         else:
           discard
     else:

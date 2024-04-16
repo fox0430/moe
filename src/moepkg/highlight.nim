@@ -229,11 +229,14 @@ proc getEditorColorPair(
       of gtDate: EditorColorPairIndex.date
       else: EditorColorPairIndex.default
 
-template getEditorColorPair(
+proc getEditorColorPair(
   legend: SemanticTokensLegend,
   semTokenNum: int): EditorColorPairIndex =
 
-    parseEnum[EditorColorPairIndex](legend.tokenTypes[semTokenNum])
+    try:
+      result = parseEnum[EditorColorPairIndex](legend.tokenTypes[semTokenNum])
+    except ValueError:
+      result = EditorColorPairIndex.default
 
 proc initHighlightPlain*(buffer: seq[Runes]): Highlight {.inline.} =
   ## Return highlighting for the plain text.
