@@ -513,6 +513,14 @@ const
         index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
+    EditorColorPairIndex.string: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.string,
+        rgb: "#add8e6".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.background,
+        rgb: "#000000".hexToRgb.get)),
+
     EditorColorPairIndex.event: ColorPair(
       foreground: Color(
         index: EditorColorIndex.event,
@@ -529,17 +537,17 @@ const
         index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
-    EditorColorPairIndex.methodName: ColorPair(
+    EditorColorPairIndex.`method`: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.methodName,
+        index: EditorColorIndex.`method`,
         rgb: "#00b7ce".hexToRgb.get),
       background: Color(
         index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
-    EditorColorPairIndex.macroName: ColorPair(
+    EditorColorPairIndex.`macro`: ColorPair(
       foreground: Color(
-        index: EditorColorIndex.macroName,
+        index: EditorColorIndex.`macro`,
         rgb: "#00b7ce".hexToRgb.get),
       background: Color(
         index: EditorColorIndex.background,

@@ -427,10 +427,11 @@ type
     parameter
     variable
     property
+    string
     event
     function
-    methodName
-    macroName
+    `method`
+    `macro`
     regexp
     decorator
     angle
@@ -630,10 +631,11 @@ type
     parameter
     variable
     property
+    string
     event
     function
-    methodName
-    macroName
+    `method`
+    `macro`
     regexp
     decorator
     angle

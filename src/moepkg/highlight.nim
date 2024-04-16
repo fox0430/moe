@@ -229,6 +229,12 @@ proc getEditorColorPair(
       of gtDate: EditorColorPairIndex.date
       else: EditorColorPairIndex.default
 
+template getEditorColorPair(
+  legend: SemanticTokensLegend,
+  semTokenNum: int): EditorColorPairIndex =
+
+    parseEnum[EditorColorPairIndex](legend.tokenTypes[semTokenNum])
+
 proc initHighlightPlain*(buffer: seq[Runes]): Highlight {.inline.} =
   ## Return highlighting for the plain text.
 
@@ -351,7 +357,7 @@ proc initHighlight*(
         firstColumn: t.column,
         lastRow: t.line,
         lastColumn: t.column + (t.length - 1),
-        color: EditorColorPairIndex.keyword))
+        color: getEditorColorPair(legend, t.tokenType)))
 
 proc indexOf*(highlight: Highlight, row, column: int): int =
   ## calculate the index of the color segment which the pair (row, column) belongs to
