@@ -329,7 +329,7 @@ proc toNcursesColor(element: int16): int16 =
 
   return int16(element.float * (1000.0 / 255.0) + 0.5)
 
-proc initNcursesColor*(color, red, green, blue: int16): Result[(), string] =
+proc initNcursesColor*(color: int, red, green, blue: int16): Result[(), string] =
   let
     r = red.toNcursesColor
     g = green.toNcursesColor
@@ -343,9 +343,9 @@ proc initNcursesColor*(color, red, green, blue: int16): Result[(), string] =
 
   when not defined unitTest:
     # Not start when running unit tests
-    let exitCode = initColor(color.cshort, r.cshort, g.cshort, b.cshort)
+    let exitCode = initExtendedColor(color.cint, r.cshort, g.cshort, b.cshort)
     if 0 != exitCode:
-      return Result[(), string].err fmt"Init Ncurses color failed: (r: {r}, g: {g}, b: {b}): Exit code: {exitCode}"
+      return Result[(), string].err fmt"Init Ncurses color failed: (index: {color}, r: {r}, g: {g}, b: {b}): Exit code: {exitCode}"
 
   return Result[(), string].ok ()
 

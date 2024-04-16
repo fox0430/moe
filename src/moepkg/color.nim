@@ -397,145 +397,75 @@ type
 
     # color scheme
     keyword
-    keywordBg
     functionName
-    functionNameBg
     typeName
-    typeNameBg
     boolean
-    booleanBg
     charLit
-    charLitBg
     stringLit
-    stringLitBg
     specialVar
-    specialVarBg
     builtin
-    builtinBg
     binNumber
-    binNumberBg
     decNumber
-    decNumberBg
     floatNumber
-    floatNumberBg
     hexNumber
-    hexNumberBg
     octNumber
-    octNumberBg
     comment
-    commentBg
     longComment
-    longCommentBg
     whitespace
-    whitespaceBg
     preprocessor
-    preprocessorBg
     pragma
-    pragmaBg
     identifier
-    identifierBg
     table
-    tableBg
     date
-    dateBg
     operator
-    operatorBg
     namespace
-    namespaceBg
     className
-    classNameBg
     enumName
-    enumNameBg
     enumMember
-    enumMemberBg
     interfaceName
-    interfaceNameBg
     typeParameter
-    typeParameterBg
     parameter
-    parameterBg
     variable
-    variableBg
     property
-    propertyBg
     event
-    eventBg
     function
-    functionBg
     methodName
-    methodNameBg
     macroName
-    macroNameBg
     regexp
-    regexpBg
     decorator
-    decoratorBg
     angle
-    angleBg
     arithmetic
-    arithmeticBg
     attribute
-    attributeBg
     attributeBracket
-    attributeBracketBg
     bitwise
-    bitwiseBg
     brace
-    braceBg
     bracket
-    bracketBg
     builtinAttribute
-    builtinAttributeBg
     builtinType
-    builtinTypeBg
     colon
-    colonBg
     comma
-    commaBg
     comparison
-    comparisonBg
     constParameter
-    constParameterBg
     derive
-    deriveBg
     deriveHelper
-    deriveHelperBg
     dot
-    dotBg
     escapeSequence
-    escapeSequenceBg
     invalidEscapeSequence
-    invalidEscapeSequenceBg
     formatSpecifier
-    formatSpecifierBg
     generic
-    genericBg
     label
-    labelBg
     lifetime
-    lifetimeBg
     logical
-    logicalBg
     macroBang
-    macroBangBg
     parenthesis
-    parenthesisBg
     punctuation
-    punctuationBg
     selfKeyword
-    selfKeywordBg
     selfTypeKeyword
-    selfTypeKeywordBg
     semicolon
-    semicolonBg
     typeAlias
-    typeAliasBg
     toolModule
-    toolModuleBg
     union
-    unionBg
     unresolvedReference
-    unresolvedReferenceBg
 
     # filer mode
     currentFile
@@ -1757,7 +1687,7 @@ proc initColor*(c: Color): Result[(), string] =
 
 # Ignore the terminal default color.
   if not c.isTermDefaultColor:
-    let r = c.index.int16.initNcursesColor(c.rgb.red, c.rgb.green, c.rgb.blue)
+    let r = c.index.int.initNcursesColor(c.rgb.red, c.rgb.green, c.rgb.blue)
     if r.isErr: return Result[(), string].err r.error
 
   return Result[(), string].ok ()

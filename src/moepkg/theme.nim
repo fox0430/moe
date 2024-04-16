@@ -269,7 +269,7 @@ const
         index: EditorColorIndex.keyword,
         rgb: "#87d7ff".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.keywordBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.functionName: ColorPair(
@@ -277,7 +277,7 @@ const
         index: EditorColorIndex.functionName,
         rgb: "#00b7ce".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.functionNameBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.typeName: ColorPair(
@@ -285,7 +285,7 @@ const
         index: EditorColorIndex.typeName,
         rgb: "#00ffff".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.typeNameBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.boolean: ColorPair(
@@ -293,7 +293,7 @@ const
         index: EditorColorIndex.boolean,
         rgb: "#add8e6".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.booleanBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.specialVar: ColorPair(
@@ -301,7 +301,7 @@ const
         index: EditorColorIndex.specialVar,
         rgb: "#0090a8".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.specialVarBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.builtin: ColorPair(
@@ -309,7 +309,7 @@ const
         index: EditorColorIndex.builtin,
         rgb: "#add8e6".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.builtinBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.charLit: ColorPair(
@@ -317,7 +317,7 @@ const
         index: EditorColorIndex.charLit,
         rgb: "#add8e6".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.charLitBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.stringLit: ColorPair(
@@ -325,7 +325,7 @@ const
         index: EditorColorIndex.stringLit,
         rgb: "#add8e6".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.stringLitBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.binNumber: ColorPair(
@@ -333,7 +333,7 @@ const
         index: EditorColorIndex.binNumber,
         rgb: "#add8e6".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.binNumberBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.decNumber: ColorPair(
@@ -341,7 +341,7 @@ const
         index: EditorColorIndex.decNumber,
         rgb: "#add8e6".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.decNumberBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.floatNumber: ColorPair(
@@ -349,7 +349,7 @@ const
         index: EditorColorIndex.floatNumber,
         rgb: "#add8e6".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.floatNumberBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.hexNumber: ColorPair(
@@ -357,7 +357,7 @@ const
         index: EditorColorIndex.hexNumber,
         rgb: "#add8e6".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.hexNumberBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.octNumber: ColorPair(
@@ -365,7 +365,7 @@ const
         index: EditorColorIndex.octNumber,
         rgb: "#add8e6".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.octNumber,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.comment: ColorPair(
@@ -373,7 +373,7 @@ const
         index: EditorColorIndex.comment,
         rgb: "#808080".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.commentBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.longComment: ColorPair(
@@ -381,7 +381,7 @@ const
         index: EditorColorIndex.longComment,
         rgb: "#808080".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.longCommentBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.whitespace: ColorPair(
@@ -389,7 +389,7 @@ const
         index: EditorColorIndex.whitespace,
         rgb: "#808080".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.whitespaceBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.preprocessor: ColorPair(
@@ -397,7 +397,7 @@ const
         index: EditorColorIndex.preprocessor,
         rgb: "#0090a8".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.preprocessorBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.pragma: ColorPair(
@@ -405,7 +405,7 @@ const
         index: EditorColorIndex.pragma,
         rgb: "#0090a8".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.pragmaBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.identifier: ColorPair(
@@ -413,7 +413,7 @@ const
         index: EditorColorIndex.identifier,
         rgb: "#f8f5e3".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.identifierBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.table: ColorPair(
@@ -421,7 +421,7 @@ const
         index: EditorColorIndex.table,
         rgb: "#0090a8".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.tableBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.date: ColorPair(
@@ -429,15 +429,15 @@ const
         index: EditorColorIndex.date,
         rgb: "#0090a8".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.dateBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.operator: ColorPair(
       foreground: Color(
         index: EditorColorIndex.operator,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#add8e6".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.operatorBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.namespace: ColorPair(
@@ -445,7 +445,7 @@ const
         index: EditorColorIndex.namespace,
         rgb: "#00b7ce".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.namespaceBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.className: ColorPair(
@@ -453,7 +453,7 @@ const
         index: EditorColorIndex.className,
         rgb: "#00b7ce".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.classNameBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.enumName: ColorPair(
@@ -461,15 +461,16 @@ const
         index: EditorColorIndex.enumName,
         rgb: "#00b7ce".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.enumNameBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
+    # Semantic tokens
     EditorColorPairIndex.enumMember: ColorPair(
       foreground: Color(
         index: EditorColorIndex.enumMember,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#add8e6".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.enumMemberBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.interfaceName: ColorPair(
@@ -477,31 +478,31 @@ const
         index: EditorColorIndex.interfaceName,
         rgb: "#00b7ce".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.interfaceNameBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.typeParameter: ColorPair(
       foreground: Color(
         index: EditorColorIndex.typeParameter,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#add8e6".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.typeParameterBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.parameter: ColorPair(
       foreground: Color(
         index: EditorColorIndex.parameter,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#add8e6".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.parameterBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.variable: ColorPair(
       foreground: Color(
         index: EditorColorIndex.variable,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#f8f5e3".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.variableBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.property: ColorPair(
@@ -509,15 +510,15 @@ const
         index: EditorColorIndex.property,
         rgb: "#00b7ce".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.propertyBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.event: ColorPair(
       foreground: Color(
         index: EditorColorIndex.event,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#f8f5e3".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.eventBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.function: ColorPair(
@@ -525,7 +526,7 @@ const
         index: EditorColorIndex.function,
         rgb: "#00b7ce".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.functionBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.methodName: ColorPair(
@@ -533,7 +534,7 @@ const
         index: EditorColorIndex.methodName,
         rgb: "#00b7ce".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.methodNameBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.macroName: ColorPair(
@@ -541,39 +542,39 @@ const
         index: EditorColorIndex.macroName,
         rgb: "#00b7ce".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.macroNameBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.regexp: ColorPair(
       foreground: Color(
         index: EditorColorIndex.regexp,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#add8e6".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.regexpBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.decorator: ColorPair(
       foreground: Color(
         index: EditorColorIndex.decorator,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#add8e6".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.decoratorBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.angle: ColorPair(
       foreground: Color(
         index: EditorColorIndex.angle,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#f8f5e3".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.angleBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.arithmetic: ColorPair(
       foreground: Color(
         index: EditorColorIndex.arithmetic,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#f8f5e3".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.arithmeticBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.attribute: ColorPair(
@@ -581,7 +582,7 @@ const
         index: EditorColorIndex.attribute,
         rgb: "#00b7ce".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.attributeBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.attributeBracket: ColorPair(
@@ -589,31 +590,31 @@ const
         index: EditorColorIndex.attributeBracket,
         rgb: "#00b7ce".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.attributeBracketBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.bitwise: ColorPair(
       foreground: Color(
         index: EditorColorIndex.bitwise,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#f8f5e3".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.bitwiseBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.brace: ColorPair(
       foreground: Color(
         index: EditorColorIndex.brace,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#f8f5e3".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.braceBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.bracket: ColorPair(
       foreground: Color(
         index: EditorColorIndex.bracket,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#f8f5e3".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.bracketBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.builtinAttribute: ColorPair(
@@ -621,47 +622,47 @@ const
         index: EditorColorIndex.builtinAttribute,
         rgb: "#00b7ce".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.builtinAttributeBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.builtinType: ColorPair(
       foreground: Color(
         index: EditorColorIndex.builtinType,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#00ffff".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.builtinTypeBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.colon: ColorPair(
       foreground: Color(
         index: EditorColorIndex.colon,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#f8f5e3".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.colonBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.comma: ColorPair(
       foreground: Color(
         index: EditorColorIndex.comma,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#f8f5e3".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.commaBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.comparison: ColorPair(
       foreground: Color(
         index: EditorColorIndex.comparison,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#f8f5e3".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.comparisonBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.constParameter: ColorPair(
       foreground: Color(
         index: EditorColorIndex.constParameter,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#0090a8".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.constParameterBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.derive: ColorPair(
@@ -669,7 +670,7 @@ const
         index: EditorColorIndex.derive,
         rgb: "#00b7ce".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.deriveBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.deriveHelper: ColorPair(
@@ -677,135 +678,135 @@ const
         index: EditorColorIndex.deriveHelper,
         rgb: "#00b7ce".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.deriveHelperBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.dot: ColorPair(
       foreground: Color(
         index: EditorColorIndex.dot,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#f8f5e3".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.dotBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.escapeSequence: ColorPair(
       foreground: Color(
         index: EditorColorIndex.escapeSequence,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#f8f5e3".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.escapeSequenceBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.invalidEscapeSequence: ColorPair(
       foreground: Color(
         index: EditorColorIndex.invalidEscapeSequence,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#ff0000".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.invalidEscapeSequenceBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.formatSpecifier: ColorPair(
       foreground: Color(
         index: EditorColorIndex.formatSpecifier,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#f8f5e3".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.formatSpecifierBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.generic: ColorPair(
       foreground: Color(
         index: EditorColorIndex.generic,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#f8f5e3".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.genericBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.label: ColorPair(
       foreground: Color(
         index: EditorColorIndex.label,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#f8f5e3".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.labelBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.lifetime: ColorPair(
       foreground: Color(
         index: EditorColorIndex.lifetime,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#0090a8".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.lifetimeBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.logical: ColorPair(
       foreground: Color(
         index: EditorColorIndex.logical,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#f8f5e3".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.logicalBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.macroBang: ColorPair(
       foreground: Color(
         index: EditorColorIndex.macroBang,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#f8f5e3".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.macroBangBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.parenthesis: ColorPair(
       foreground: Color(
         index: EditorColorIndex.parenthesis,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#f8f5e3".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.parenthesisBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.punctuation: ColorPair(
       foreground: Color(
         index: EditorColorIndex.punctuation,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#f8f5e3".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.punctuationBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.selfKeyword: ColorPair(
       foreground: Color(
         index: EditorColorIndex.selfKeyword,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#f8f5e3".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.selfKeywordBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.selfTypeKeyword: ColorPair(
       foreground: Color(
         index: EditorColorIndex.selfTypeKeyword,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#f8f5e3".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.selfTypeKeywordBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.semicolon: ColorPair(
       foreground: Color(
         index: EditorColorIndex.semicolon,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#f8f5e3".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.semicolonBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.typeAlias: ColorPair(
       foreground: Color(
         index: EditorColorIndex.typeAlias,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#add8e6".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.typeAliasBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.toolModule: ColorPair(
       foreground: Color(
         index: EditorColorIndex.toolModule,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#f8f5e3".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.toolModuleBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.union: ColorPair(
@@ -813,15 +814,15 @@ const
         index: EditorColorIndex.union,
         rgb: "#00b7ce".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.unionBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     EditorColorPairIndex.unresolvedReference: ColorPair(
       foreground: Color(
         index: EditorColorIndex.unresolvedReference,
-        rgb: "#00b7ce".hexToRgb.get),
+        rgb: "#f8f5e3".hexToRgb.get),
       background: Color(
-        index: EditorColorIndex.unresolvedReferenceBg,
+        index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
     # filer mode
