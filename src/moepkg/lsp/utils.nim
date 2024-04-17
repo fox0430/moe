@@ -236,6 +236,10 @@ proc lspMethod*(j: JsonNode): LspMethodResult =
       LspMethodResult.ok textDocumentHover
     of "textDocument/completion":
       LspMethodResult.ok textDocumentCompletion
+    of "textDocument/semanticTokens/full":
+      LspMethodResult.ok textDocumentSemanticTokensFull
+    of "textDocument/semanticTokens/delta":
+      LspMethodResult.ok textDocumentSemanticTokensDelta
     else:
       LspMethodResult.err "Not supported: " & j["method"].getStr
 
