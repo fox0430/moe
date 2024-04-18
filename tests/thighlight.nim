@@ -17,9 +17,12 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, sequtils]
+import std/[unittest, sequtils, strutils]
+
 import moepkg/[color, unicodeext]
 import moepkg/syntax/highlite
+import moepkg/lsp/utils
+import moepkg/lsp/protocol/types
 
 import moepkg/highlight {.all.}
 
@@ -143,6 +146,146 @@ suite "highlight: initHighlight":
           lastRow: 0,
           lastColumn: 8,
           color: EditorColorPairIndex.default)
+    ]
+
+  test "Semantic tokens":
+    const Code = """
+fn main() {
+    println!("Hello, world!");
+} """
+
+    let
+      semTokens = @[
+        LspSemanticToken(
+          line: 0,
+          column: 0,
+          length: 2,
+          tokenType: 6,
+          tokenModifiers: @[]),
+        LspSemanticToken(
+          line: 0,
+          column: 3,
+          length: 4,
+          tokenType: 4,
+          tokenModifiers: @[1]),
+        LspSemanticToken(
+          line: 1,
+          column: 4,
+          length: 7,
+          tokenType: 7,
+          tokenModifiers: @[3, 13]),
+        LspSemanticToken(
+          line: 1,
+          column: 11,
+          length: 1,
+          tokenType: 7,
+          tokenModifiers: @[]),
+        LspSemanticToken(
+          line: 1,
+          column: 13,
+          length: 15,
+          tokenType: 14,
+          tokenModifiers: @[14])
+      ]
+
+      legend = SemanticTokensLegend(
+        tokenTypes: @[
+          "comment", "decorator", "enumMember", "enum", "function", "interface",
+          "keyword", "macro", "method", "namespace", "number", "operator",
+          "parameter", "property", "string", "struct", "typeParameter",
+          "variable", "angle", "arithmetic", "attribute", "attributeBracket",
+          "bitwise", "boolean", "brace", "bracket", "builtinAttribute",
+          "builtinType", "character", "colon", "comma", "comparison",
+          "constParameter", "derive", "deriveHelper", "dot", "escapeSequence",
+          "invalidEscapeSequence", "formatSpecifier", "generic", "label",
+          "lifetime", "logical", "macroBang", "parenthesis", "punctuation",
+          "selfKeyword", "selfTypeKeyword", "semicolon", "typeAlias",
+          "toolModule", "union", "unresolvedReference"],
+        tokenModifiers: @[
+          "documentation", "declaration", "static", "defaultLibrary", "async",
+          "attribute", "callable", "constant", "consuming", "controlFlow",
+          "crateRoot", "injected", "intraDocLink", "library", "macro", "mutable",
+          "public", "reference", "trait", "unsafe"])
+
+    let highlight = initHighlight(Code.splitLines.toSeqRunes, semTokens, legend)
+    check highlight.colorSegments == @[
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 0,
+        lastRow: 0,
+        lastColumn: 1,
+        color: keyword,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 2,
+        lastRow: 0,
+        lastColumn: 2,
+        color: default,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 3,
+        lastRow: 0,
+        lastColumn: 6,
+        color: function,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 7,
+        lastRow: 0,
+        lastColumn: 10,
+        color: default,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 1,
+        firstColumn: 0,
+        lastRow: 1,
+        lastColumn: 3,
+        color: default,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 1,
+        firstColumn: 4,
+        lastRow: 1,
+        lastColumn: 10,
+        color: `macro`,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 1,
+        firstColumn: 11,
+        lastRow: 1,
+        lastColumn: 11,
+        color: `macro`,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 1,
+        firstColumn: 12,
+        lastRow: 1,
+        lastColumn: 12,
+        color: default,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 1,
+        firstColumn: 13,
+        lastRow: 1,
+        lastColumn: 27,
+        color: string,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 1,
+        firstColumn: 28,
+        lastRow: 1,
+        lastColumn: 29,
+        color: default,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 2,
+        firstColumn: 0,
+        lastRow: 2,
+        lastColumn: 1,
+        color: default,
+        attribute: normal)
     ]
 
 suite "highlight: indexOf":

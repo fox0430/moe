@@ -1200,6 +1200,236 @@ Syntax highlighting color
 operator
 ```
 
+syntax highlighting color (LSP Semantic Tokens)
+```
+enumMember
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+interfaceName
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+typeParameter
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+parameter
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+variable
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+property
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+string
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+event
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+function
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+method
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+macro
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+regexp
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+decorator
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+angle
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+arithmetic
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+attribute
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+attributeBracket
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+bitwise
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+brace
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+bracket
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+builtinAttribute
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+builtinType
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+colon
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+comma
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+comparison
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+constParameter
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+derive
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+deriveHelper
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+dot
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+escapeSequence
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+invalidEscapeSequence
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+formatSpecifier
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+generic
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+label
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+lifetime
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+logical
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+macroBang
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+parenthesis
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+punctuation
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+selfKeyword
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+selfTypeKeyword
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+semicolon
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+typeAlias
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+toolModule
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+union
+```
+
+syntax highlighting color (LSP Semantic Tokens)
+```
+unresolvedReference
+```
+
 Character color of current file name in filer mode
 ```
 currentFile

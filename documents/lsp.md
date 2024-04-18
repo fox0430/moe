@@ -21,6 +21,8 @@ Please feedback, bug reports and PRs.
 - `textDocument/didSave`
 - `textDocument/didClose`
 - `textDocument/hover`
+- `textDocument/completion`
+- `textDocument/semanticTokens/full`
 - `$/progress`
 
 ## Configuration
@@ -79,3 +81,9 @@ Results will be received from the LPS server and displayed automatically.
 The completion is still under development but available.
 
 ![moe-completion](https://github.com/fox0430/moe/assets/15966436/c1788c00-45f9-4c45-b80f-ebe00638d91d)
+
+### Semantic Tokens
+
+Syntax highlighting with Semantic Tokens. Currently, only full is supported.
+
+![moe-semantictokens](https://github.com/fox0430/moe/assets/15966436/234ed9d2-7251-4e5c-a242-626b45e091e7)

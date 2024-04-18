@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -54,6 +54,8 @@ type
     textDocumentPublishDiagnostics
     textDocumentHover
     textDocumentCompletion
+    textDocumentSemanticTokensFull
+    textDocumentSemanticTokensDelta
 
   ProgressToken* = string
     # ProgressParams.token
@@ -93,6 +95,20 @@ type
     description*: seq[Runes]
     range*: BufferRange
 
+  SemanticTokenNumber* = int8
+  SemanticTokenModifierNumber* = int8
+
+  LspSemanticToken* = object
+    line*: int
+    column*: int
+    length*: int
+    tokenType*: SemanticTokenNumber
+    tokenModifiers*: seq[SemanticTokenModifierNumber]
+
+  LspSemanticTokens* = object
+    id*: int
+    tokens*: seq[LspSemanticToken]
+
   R = Result
   parseLspMessageTypeResult* = R[LspMessageType, string]
   LspMethodResult* = R[LspMethod, string]
@@ -106,6 +122,7 @@ type
   LspDiagnosticsResult* = R[Option[Diagnostics], string]
   LspHoverResult* = R[Option[Hover], string]
   LspCompletionResut* = R[seq[CompletionItem], string]
+  LspSemanticTokensResult* = R[seq[LspSemanticToken], string]
 
 proc pathToUri*(path: string): string =
   ## This is a modified copy of encodeUrl in the uri module. This doesn't encode
@@ -168,6 +185,8 @@ proc toLspMethodStr*(m: LspMethod): string =
     of textDocumentPublishDiagnostics: "textDocument/publishDiagnostics"
     of textDocumentHover: "textDocument/hover"
     of textDocumentCompletion: "textDocument/completion"
+    of textDocumentSemanticTokensFull: "textDocument/semanticTokens/full"
+    of textDocumentSemanticTokensDelta: "textDocument/semanticTokens/delta"
 
 proc parseTraceValue*(s: string): Result[TraceValue, string] =
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#traceValue
@@ -217,6 +236,10 @@ proc lspMethod*(j: JsonNode): LspMethodResult =
       LspMethodResult.ok textDocumentHover
     of "textDocument/completion":
       LspMethodResult.ok textDocumentCompletion
+    of "textDocument/semanticTokens/full":
+      LspMethodResult.ok textDocumentSemanticTokensFull
+    of "textDocument/semanticTokens/delta":
+      LspMethodResult.ok textDocumentSemanticTokensDelta
     else:
       LspMethodResult.err "Not supported: " & j["method"].getStr
 
@@ -452,3 +475,49 @@ proc parseTextDocumentCompletionResponse*(res: JsonNode): LspCompletionResut =
     else:
       # Not found
       return Result[seq[CompletionItem], string].ok @[]
+
+
+proc parseTextDocumentSemanticTokensResponse*(
+  res: JsonNode,
+  legend: SemanticTokensLegend): LspSemanticTokensResult =
+    ## SemanticTokens full
+
+    if res["result"].kind == JNull:
+      return LspSemanticTokensResult.err "Invalid response"
+
+    var semanticTokens: SemanticTokens
+    try:
+      semanticTokens = res["result"].to(SemanticTokens)
+    except CatchableError as e:
+      return LspSemanticTokensResult.err fmt"Invalid response: {e.msg}"
+
+    var lspSemanticTokens: seq[LspSemanticToken]
+
+    var
+      line = 0
+      col = 0
+    for i in 0 ..< int(semanticTokens.data.len / 5):
+      let startIndex = i * 5
+      var newToken = LspSemanticToken()
+      try:
+        newToken.line = line + semanticTokens.data[startIndex + 0]
+        if newToken.line > line:
+          col = 0
+          line = newToken.line
+
+        newToken.column = col + semanticTokens.data[startIndex + 1]
+        col = newToken.column
+
+        newToken.length = semanticTokens.data[startIndex + 2]
+        newToken.tokenType = semanticTokens.data[startIndex + 3].SemanticTokenNumber
+        for i in 0 ..< legend.tokenModifiers.len:
+          if (semanticTokens.data[startIndex + 4] and (1 shl i)) > 0:
+            newToken.tokenModifiers.add i.SemanticTokenModifierNumber
+      except CatchableError as e:
+        return LspSemanticTokensResult.err fmt"Invalid SemanticTokens: {e.msg}"
+      except RangeDefect as e:
+        return LspSemanticTokensResult.err fmt"Invalid SemanticTokens: {e.msg}"
+
+      lspSemanticTokens.add newToken
+
+    return LspSemanticTokensResult.ok lspSemanticTokens

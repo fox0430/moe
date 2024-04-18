@@ -397,49 +397,78 @@ type
 
     # color scheme
     keyword
-    keywordBg
     functionName
-    functionNameBg
     typeName
-    typeNameBg
     boolean
-    booleanBg
     charLit
-    charLitBg
     stringLit
-    stringLitBg
     specialVar
-    specialVarBg
     builtin
-    builtinBg
     binNumber
-    binNumberBg
     decNumber
-    decNumberBg
     floatNumber
-    floatNumberBg
     hexNumber
-    hexNumberBg
     octNumber
-    octNumberBg
     comment
-    commentBg
     longComment
-    longCommentBg
     whitespace
-    whitespaceBg
     preprocessor
-    preprocessorBg
     pragma
-    pragmaBg
     identifier
-    identifierBg
     table
-    tableBg
     date
-    dateBg
     operator
-    operatorBg
+    namespace
+    className
+    enumName
+
+    # Semantic tokens
+    enumMember
+    interfaceName
+    typeParameter
+    parameter
+    variable
+    property
+    string
+    event
+    function
+    `method`
+    `macro`
+    regexp
+    decorator
+    angle
+    arithmetic
+    attribute
+    attributeBracket
+    bitwise
+    brace
+    bracket
+    builtinAttribute
+    builtinType
+    colon
+    comma
+    comparison
+    constParameter
+    derive
+    deriveHelper
+    dot
+    escapeSequence
+    invalidEscapeSequence
+    formatSpecifier
+    generic
+    label
+    lifetime
+    logical
+    macroBang
+    parenthesis
+    punctuation
+    selfKeyword
+    selfTypeKeyword
+    semicolon
+    typeAlias
+    toolModule
+    union
+    unresolvedReference
 
     # filer mode
     currentFile
@@ -595,6 +624,55 @@ type
     table
     date
     operator
+    namespace
+    className
+    enumName
+    enumMember
+    interfaceName
+    typeParameter
+    parameter
+    variable
+    property
+    string
+    event
+    function
+    `method`
+    `macro`
+    regexp
+    decorator
+    angle
+    arithmetic
+    attribute
+    attributeBracket
+    bitwise
+    brace
+    bracket
+    builtinAttribute
+    builtinType
+    colon
+    comma
+    comparison
+    constParameter
+    derive
+    deriveHelper
+    dot
+    escapeSequence
+    invalidEscapeSequence
+    formatSpecifier
+    generic
+    label
+    lifetime
+    logical
+    macroBang
+    parenthesis
+    punctuation
+    selfKeyword
+    selfTypeKeyword
+    semicolon
+    typeAlias
+    toolModule
+    union
+    unresolvedReference
 
     # filer mode
     currentFile
@@ -1613,7 +1691,7 @@ proc initColor*(c: Color): Result[(), string] =
 
 # Ignore the terminal default color.
   if not c.isTermDefaultColor:
-    let r = c.index.int16.initNcursesColor(c.rgb.red, c.rgb.green, c.rgb.blue)
+    let r = c.index.int.initNcursesColor(c.rgb.red, c.rgb.green, c.rgb.blue)
     if r.isErr: return Result[(), string].err r.error
 
   return Result[(), string].ok ()

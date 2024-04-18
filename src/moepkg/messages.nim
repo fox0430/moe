@@ -387,6 +387,10 @@ proc writeLspCompletionError*(commandLine: var CommandLine, message: string) =
   let mess = fmt"lsp: Error: completion failed: {message}"
   commandLine.writeError(mess)
 
+proc writeLspSemanticTokens*(commandLine: var CommandLine, message: string) =
+  let mess = fmt"lsp: Error: semanticTokens failed: {message}"
+  commandLine.writeError(mess)
+
 proc writePasteIgnoreWarn*(commandLine: var CommandLine) =
   const Mess = "Paste is ignored in this mode"
   commandLine.writeWarn(Mess)

@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -18,7 +18,9 @@
 #[############################################################################]#
 
 import std/[sequtils, os, parseutils, strutils, strformat]
+
 import syntax/highlite
+import lsp/[utils, protocol/types]
 import unicodeext, color, independentutils, ui
 
 type
@@ -227,6 +229,15 @@ proc getEditorColorPair(
       of gtDate: EditorColorPairIndex.date
       else: EditorColorPairIndex.default
 
+proc getEditorColorPair(
+  legend: SemanticTokensLegend,
+  semTokenNum: int): EditorColorPairIndex =
+
+    try:
+      result = parseEnum[EditorColorPairIndex](legend.tokenTypes[semTokenNum])
+    except ValueError:
+      result = EditorColorPairIndex.default
+
 proc initHighlightPlain*(buffer: seq[Runes]): Highlight {.inline.} =
   ## Return highlighting for the plain text.
 
@@ -335,6 +346,21 @@ proc initHighlight*(
       splitByNewline(bufferStr[first..last], color)
 
     return Highlight(colorSegments: colorSegments)
+
+proc initHighlight*(
+  buffer: seq[Runes],
+  semTokens: seq[LspSemanticToken],
+  legend: SemanticTokensLegend): Highlight =
+    ## Initialize Highlight with LSP SemanticTokens.
+
+    result = initHighlightPlain(buffer)
+    for t in semTokens:
+      result.overwrite(ColorSegment(
+        firstRow: t.line,
+        firstColumn: t.column,
+        lastRow: t.line,
+        lastColumn: t.column + (t.length - 1),
+        color: getEditorColorPair(legend, t.tokenType)))
 
 proc indexOf*(highlight: Highlight, row, column: int): int =
   ## calculate the index of the color segment which the pair (row, column) belongs to

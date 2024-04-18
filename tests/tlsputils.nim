@@ -720,3 +720,65 @@ suite "lsp: toHoverContent":
       range: BufferRange(
         first: BufferPosition(line: 1, column: 2),
         last: BufferPosition(line: 3, column: 4)))
+
+suite "lsp: parseTextDocumentSemanticTokensResponse":
+  test "Basic":
+    let legend = SemanticTokensLegend(
+      tokenTypes: @[
+        "comment", "decorator", "enumMember", "enum", "function", "interface",
+        "keyword", "macro", "method", "namespace", "number", "operator",
+        "parameter", "property", "string", "struct", "typeParameter",
+        "variable", "angle", "arithmetic", "attribute", "attributeBracket",
+        "bitwise", "boolean", "brace", "bracket", "builtinAttribute",
+        "builtinType", "character", "colon", "comma", "comparison",
+        "constParameter", "derive", "deriveHelper", "dot", "escapeSequence",
+        "invalidEscapeSequence", "formatSpecifier", "generic", "label",
+        "lifetime", "logical", "macroBang", "parenthesis", "punctuation",
+        "selfKeyword", "selfTypeKeyword", "semicolon", "typeAlias",
+        "toolModule", "union", "unresolvedReference"],
+      tokenModifiers: @[
+        "documentation", "declaration", "static", "defaultLibrary", "async",
+        "attribute", "callable", "constant", "consuming", "controlFlow",
+        "crateRoot", "injected", "intraDocLink", "library", "macro", "mutable",
+        "public", "reference", "trait", "unsafe"])
+
+    check parseTextDocumentSemanticTokensResponse(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": {
+        "resultId": "1",
+        "data": [0,0,2,6,0,0,3,4,4,2,1,4,7,7,8200,0,7,1,7,0,0,2,15,14,16384]
+      }
+    },
+    legend).get == @[
+      LspSemanticToken(
+        line: 0,
+        column: 0,
+        length: 2,
+        tokenType: 6,
+        tokenModifiers: @[]),
+      LspSemanticToken(
+        line: 0,
+        column: 3,
+        length: 4,
+        tokenType: 4,
+        tokenModifiers: @[1]),
+      LspSemanticToken(
+        line: 1,
+        column: 4,
+        length: 7,
+        tokenType: 7,
+        tokenModifiers: @[3, 13]),
+      LspSemanticToken(
+        line: 1,
+        column: 11,
+        length: 1,
+        tokenType: 7,
+        tokenModifiers: @[]),
+      LspSemanticToken(
+        line: 1,
+        column: 13,
+        length: 15,
+        tokenType: 14,
+        tokenModifiers: @[14])
+    ]
