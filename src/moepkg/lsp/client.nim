@@ -65,6 +65,8 @@ type
       # LSP server process.
     serverStreams: Streams
       # Input/Output streams for the LSP server process.
+    pollFd: TPollfd
+      # FD for poll(2)
     capabilities*: Option[LspCapabilities]
       # LSP server capabilities
     progress*: LspProgressTable
@@ -207,17 +209,9 @@ proc readable*(c: LspClient, timeout: int = 1): LspClientReadableResult =
   ## Return true if readable and Return false if timeout.
   ## timeout is milliseconds.
 
-  # Init pollFd.
-  var pollFd: TPollfd
-  pollFd.addr.zeroMem(sizeof(pollFd))
-
-  # Registers fd and events.
-  pollFd.fd = c.serverProcess.outputHandle.cint
-  pollFd.events = POLLIN or POLLERR
-
   # Wait a server response.
   const FdLen = 1
-  let r = pollFd.addr.poll(FdLen.Tnfds, timeout)
+  let r = c.pollFd.addr.poll(FdLen.Tnfds, timeout)
   if r == 1:
     return LspClientReadableResult.ok true
   else:
@@ -309,6 +303,14 @@ proc initLspClient*(command: string): initLspClientResult =
     let r = c.serverProcess.setNonBlockingOutput
     if r.isErr:
       return initLspClientResult.err fmt"setNonBlockingOutput failed: {r.error}"
+
+  block:
+    # Init pollFd.
+    c.pollFd.addr.zeroMem(sizeof(c.pollFd))
+
+    # Registers fd and events.
+    c.pollFd.fd = c.serverProcess.outputHandle.cint
+    c.pollFd.events = POLLIN or POLLERR
 
   c.serverStreams = Streams(
     input: InputStream(stream: c.serverProcess.inputStream),
