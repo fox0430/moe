@@ -28,6 +28,7 @@ import editorstatus, windownode, popupwindow, unicodeext, independentutils, ui,
 
 template isLspResponse*(status: EditorStatus): bool =
   status.lspClients.contains(currentBufStatus.langId) and
+  not lspClient.closed and
   (let r = lspClient.readable; r.isOk and r.get)
 
 template isWaitingLspResponse(status: var EditorStatus): bool =
@@ -374,7 +375,8 @@ proc handleLspServerNotify(
 proc handleLspResponse*(status: var EditorStatus) =
   ## Read a Json from the server and handle the response and notification.
 
-  if not lspClient.running:
+  if not lspClient.closed and  not lspClient.running:
+    lspClient.closed = true
     status.commandLine.writeLspError("server crashed")
     return
 

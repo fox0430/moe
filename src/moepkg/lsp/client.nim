@@ -61,6 +61,8 @@ type
   LspProgressTable* = Table[ProgressToken, ProgressReport]
 
   LspClient* = ref object
+    closed*: bool
+      # Set true if the LSP server closed (crashed).
     serverProcess: Process
       # LSP server process.
     serverStreams: Streams
@@ -419,6 +421,7 @@ proc initialize*(
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#initialize
 
     if not c.serverProcess.running:
+      if not c.closed: c.closed = true
       return LspSendRequestResult.err "server crashed"
 
     let params = %* initParams
@@ -451,6 +454,7 @@ proc initialized*(c: var LspClient): LspSendNotifyResult =
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#initialized
 
   if not c.serverProcess.running:
+    if not c.closed: c.closed = true
     return LspSendNotifyResult.err "server crashed"
 
   let params = %* {}
@@ -466,6 +470,7 @@ proc shutdown*(c: var LspClient, id: int): LspSendNotifyResult =
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#shutdown
 
   if not c.serverProcess.running:
+    if not c.closed: c.closed = true
     return LspSendNotifyResult.err "server crashed"
 
   if not c.isInitialized:
@@ -485,6 +490,7 @@ proc workspaceDidChangeConfiguration*(
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#workspace_didChangeConfiguration
 
     if not c.serverProcess.running:
+      if not c.closed: c.closed = true
       return LspSendNotifyResult.err "server crashed"
 
     if not c.isInitialized:
@@ -515,6 +521,7 @@ proc textDocumentDidOpen*(
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didOpen
 
     if not c.serverProcess.running:
+      if not c.closed: c.closed = true
       return LspSendNotifyResult.err "server crashed"
 
     if not c.isInitialized:
@@ -564,6 +571,7 @@ proc textDocumentDidChange*(
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didChange
 
     if not c.serverProcess.running:
+      if not c.closed: c.closed = true
       return LspSendNotifyResult.err "server crashed"
 
     if not c.isInitialized:
@@ -595,6 +603,7 @@ proc textDocumentDidSave*(
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didSave
 
     if not c.serverProcess.running:
+      if not c.closed: c.closed = true
       return LspSendNotifyResult.err "server crashed"
 
     if not c.isInitialized:
@@ -621,6 +630,7 @@ proc textDocumentDidClose*(
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didClose
 
     if not c.serverProcess.running:
+      if not c.closed: c.closed = true
       return LspSendNotifyResult.err "server crashed"
 
     let params = %* initTextDocumentDidClose(text)
@@ -648,6 +658,7 @@ proc textDocumentHover*(
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_hover
 
     if not c.serverProcess.running:
+      if not c.closed: c.closed = true
       return R[(), string].err "server crashed"
 
     if not c.isInitialized:
@@ -703,6 +714,7 @@ proc textDocumentCompletion*(
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_completion
 
     if not c.serverProcess.running:
+      if not c.closed: c.closed = true
       return R[(), string].err "server crashed"
 
     if not c.isInitialized:
@@ -738,6 +750,7 @@ proc textDocumentSemanticTokens*(
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_semanticTokens
 
     if not c.serverProcess.running:
+      if not c.closed: c.closed = true
       return R[(), string].err "server crashed"
 
     if not c.isInitialized:
