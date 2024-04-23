@@ -260,6 +260,13 @@ type
     serverCancelSupport*: Option[bool]
     augmentsSyntaxTokens*: Option[bool]
 
+  InlayHintClientCapabilitiesResolveSupport* = ref object of RootObj
+    properties*: seq[string]
+
+  InlayHintClientCapabilities* = ref object of RootObj
+    dynamicRegistration*: Option[bool]
+    resolveSupport*: Option[InlayHintClientCapabilitiesResolveSupport]
+
   TextDocumentClientCapabilities* = ref object of RootObj
     synchronization*: Option[SynchronizationCapability]
     completion*: Option[CompletionCapability]
@@ -281,6 +288,7 @@ type
     rename*: Option[RenameCapability]
     publishDiagnostics*: Option[PublishDiagnosticsCapability]
     semanticTokens*: Option[SemanticTokensClientCapabilities]
+    inlayHint*: Option[InlayHintClientCapabilities]
 
   WindowCapabilities* = ref object of RootObj
     workDoneProgress*: Option[bool]
@@ -368,6 +376,9 @@ type
     range*: OptionalNode # bool or JsonNode
     full*: OptionalNode # bool or JsonNode
 
+  InlayHintOptions* = object
+    resolveProvider*: Option[bool]
+
   ServerCapabilities* = ref object of RootObj
     textDocumentSync*: OptionalNode # TextDocumentSyncOptions or int
     hoverProvider*: Option[bool]
@@ -392,6 +403,7 @@ type
     executeCommandProvider*: Option[ExecuteCommandOptions]
     workspace*: Option[WorkspaceCapability]
     semanticTokensProvider*: OptionalNode # SemanticTokensOptions or SemanticTokensRegistrationOptions
+    inlayHintProvider*: Option[InlayHintOptions]  # boolean | InlayHintOptions | InlayHintRegistrationOptions
     experimental*: OptionalNode
 
   InitializedParams* = ref object of RootObj
@@ -698,3 +710,17 @@ type
   SemanticTokens* = ref object of RootObj
     resultId*: Option[string]
     data*: seq[int]
+
+  InlayHintParams* = ref object of RootObj # TODO: extends WorkDoneProgressParams
+    textDocument*: TextDocumentIdentifier
+    range*: Range
+
+  InlayHint* = ref object of RootObj
+    position*: Position
+    label*: string  # string | InlayHintLabelPart[]
+    kind*: Option[int]
+    textEdits*: OptionalSeq[TextEdit]
+    tooltip*: Option[string]  # string | MarkupContent
+    paddingLeft*: Option[bool]
+    paddingRight*: Option[bool]
+    #data*: OptionalNode

@@ -67,11 +67,11 @@ proc getColorPair*(highlight: Highlight, line, col: int): EditorColorPairIndex =
        col >= colorSegment.firstColumn and
        colorSegment.lastColumn >= col: return colorSegment.color
 
-proc isIntersect(s, t: ColorSegment): bool =
+template isIntersect(s, t: ColorSegment): bool =
   not ((t.lastRow, t.lastColumn) < (s.firstRow, s.firstColumn) or
   (s.lastRow, s.lastColumn) < (t.firstRow, t.firstColumn))
 
-proc contains(s, t: ColorSegment): bool =
+template contains(s, t: ColorSegment): bool =
   ((s.firstRow, s.firstColumn) <= (t.firstRow, t.firstColumn) and
   (t.lastRow, t.lastColumn) <= (s.lastRow, s.lastColumn))
 
@@ -165,6 +165,33 @@ proc overwrite*(highlight: var Highlight, colorSegment: ColorSegment) =
   for i in 0 ..< old.colorSegments.len:
     let cs = old.colorSegments[i]
     highlight.colorSegments.add(cs.overwrite(colorSegment))
+
+proc addColorSegment*(
+  h: var Highlight,
+  line, length: int,
+  color: EditorColorPairIndex,
+  attribute = Attribute.normal) =
+    ## Add a colorSegment to end of the line.
+    ## Ignore If need to overwrite.
+
+    var position = -1
+    for i in 0 .. h.colorSegments.high:
+      if h.colorSegments[i].lastRow == line:
+        position = i
+      elif position > -1 and h.colorSegments[i].lastRow > line:
+        break
+
+    if position > -1:
+      h.colorSegments.insert(
+        ColorSegment(
+          firstRow: line,
+          firstColumn: h.colorSegments[position].lastColumn + 1,
+          lastRow: line,
+          lastColumn: h.colorSegments[position].lastColumn + 1 + length,
+          color: color,
+          attribute: attribute
+        ),
+        position + 1)
 
 iterator parseReservedWord(
   buffer: string,

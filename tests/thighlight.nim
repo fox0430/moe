@@ -425,3 +425,108 @@ suite "parseReservedWord":
         ("NOTE", EditorColorPairIndex.reservedWord),
         ("", EditorColorPairIndex.default),
       ]
+
+suite "highlight: addColorSegment":
+  test "Basic":
+    var h = Highlight()
+    h.colorSegments = @[
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 0,
+        lastRow: 0,
+        lastColumn: 2,
+        color: EditorColorPairIndex.keyword,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 3,
+        lastRow: 0,
+        lastColumn: 3,
+        color: EditorColorPairIndex.whitespace,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 4,
+        lastRow: 0,
+        lastColumn: 4,
+        color: EditorColorPairIndex.identifier,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 1,
+        firstColumn: 0,
+        lastRow: 1,
+        lastColumn: 3,
+        color: EditorColorPairIndex.builtin,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 1,
+        firstColumn: 4,
+        lastRow: 1,
+        lastColumn: 4,
+        color: EditorColorPairIndex.whitespace,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 1,
+        firstColumn: 5,
+        lastRow: 1,
+        lastColumn: 5,
+        color: EditorColorPairIndex.identifier,
+        attribute: normal)
+    ]
+
+    const
+      Line = 0
+      Length = 6
+    h.addColorSegment(Line, Length, EditorColorPairIndex.errorMessage)
+
+    check h.colorSegments == @[
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 0,
+        lastRow: 0,
+        lastColumn: 2,
+        color: EditorColorPairIndex.keyword,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 3,
+        lastRow: 0,
+        lastColumn: 3,
+        color: EditorColorPairIndex.whitespace,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 4,
+        lastRow: 0,
+        lastColumn: 4,
+        color: EditorColorPairIndex.identifier,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 5,
+        lastRow: 0,
+        lastColumn: 11,
+        color: EditorColorPairIndex.errorMessage,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 1,
+        firstColumn: 0,
+        lastRow: 1,
+        lastColumn: 3,
+        color: EditorColorPairIndex.builtin,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 1,
+        firstColumn: 4,
+        lastRow: 1,
+        lastColumn: 4,
+        color: EditorColorPairIndex.whitespace,
+        attribute: normal),
+      ColorSegment(
+        firstRow: 1,
+        firstColumn: 5,
+        lastRow: 1,
+        lastColumn: 5,
+        color: EditorColorPairIndex.identifier,
+        attribute: normal)
+    ]

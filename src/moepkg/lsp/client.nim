@@ -57,6 +57,7 @@ type
     hover*: bool
     completion*: Option[LspCompletionOptions]
     semanticTokens*: Option[SemanticTokensLegend]
+    inlayHint*: bool
 
   LspProgressTable* = Table[ProgressToken, ProgressReport]
 
@@ -428,7 +429,11 @@ proc initInitializeParams*(
             requests: SemanticTokensClientCapabilitiesRequest(
               range: some(false),
               full: some(true))
-            ))
+          )),
+          inlayHint: some(InlayHintClientCapabilities(
+            dynamicRegistration: some(true),
+            resolveSupport: none(InlayHintClientCapabilitiesResolveSupport)
+          ))
         )),
         window: some(WindowCapabilities(
           workDoneProgress: some(true)
@@ -464,6 +469,9 @@ proc setCapabilities(c: var LspClient, initResult: InitializeResult) =
       except CatchableError:
         # Invalid SemanticTokensLegend
         discard
+
+  if initResult.capabilities.inlayHintProvider.isSome:
+    capabilities.inlayHint = true
 
   c.capabilities = some(capabilities)
 
@@ -533,8 +541,6 @@ proc shutdown*(c: var LspClient, bufferId: int): LspSendNotifyResult =
   let id = c.request(bufferId, LspMethod.shutdown, %*{})
   if id.isErr:
     return LspSendNotifyResult.err "Shutdown request failed: {id.error}"
-
-  c.setWaitResponse(bufferId, LspMethod.shutdown)
 
   return LspSendNotifyResult.ok ()
 
@@ -726,8 +732,6 @@ proc textDocumentHover*(
     if id.isErr:
       return R[(), string].err fmt"textDocument/hover request failed: {id.error}"
 
-    c.setWaitResponse(bufferId, LspMethod.textDocumentHover)
-
     return R[(), string].ok ()
 
 proc initCompletionParams*(
@@ -788,8 +792,6 @@ proc textDocumentCompletion*(
     if id.isErr:
       return R[(), string].err fmt"textDocument/completion request failed: {id.error}"
 
-    c.setWaitResponse(bufferId, LspMethod.textDocumentCompletion)
-
     return R[(), string].ok ()
 
 proc initSemanticTokensParams*(path: string): SemanticTokensParams =
@@ -819,6 +821,35 @@ proc textDocumentSemanticTokens*(
     if id.isErr:
       return R[(), string].err fmt"textDocument/semanticTokens/full request failed: {id.error}"
 
-    c.setWaitResponse(bufferId, LspMethod.textDocumentSemanticTokensFull)
+    return R[(), string].ok ()
+
+proc initInlayHintParams*(path: string, range: BufferRange): InlayHintParams =
+  InlayHintParams(
+    textDocument: TextDocumentIdentifier(uri: path.pathToUri),
+    range: range.toLspRange)
+
+proc textDocumentInlayHint*(
+  c: var LspClient,
+  bufferId: int,
+  path: string,
+  range: BufferRange): LspSendRequestResult =
+    ## Send a textDocument/InlayHint request to the server.
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_inlayHint
+
+    if not c.serverProcess.running:
+      if not c.closed: c.closed = true
+      return R[(), string].err "server crashed"
+
+    if not c.isInitialized:
+      return R[(), string].err "lsp unavailable"
+
+    if not c.capabilities.get.inlayHint:
+      return R[(), string].err "textDocument/inlayHint unavailable"
+
+    let params = %* initInlayHintParams(path, range)
+
+    let r = c.request(bufferId, LspMethod.textDocumentInlayHint, params)
+    if r.isErr:
+      return R[(), string].err fmt"textDocument/inlayHint request failed: {r.error}"
 
     return R[(), string].ok ()

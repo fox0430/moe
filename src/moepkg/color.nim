@@ -470,6 +470,9 @@ type
     union
     unresolvedReference
 
+    # LSP inlayHint
+    inlayHint
+
     # filer mode
     currentFile
     currentFileBg
@@ -673,6 +676,9 @@ type
     toolModule
     union
     unresolvedReference
+
+    # LSP inlayHint
+    inlayHint
 
     # filer mode
     currentFile

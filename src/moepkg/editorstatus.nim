@@ -670,20 +670,47 @@ proc updateSyntaxHighlightings(status: EditorStatus) =
       if status.lspClients.isInitialized(b.langId):
         template client: LspClient = status.lspClients[b.langId]
 
+        let absPath = $b.path.absolutePath
+
         if b.version > 1 and
            not client.isWaitingResponse(b.id, LspMethod.textDocumentCompletion):
              # Send a textDocument/didChange notification to the LSP server.
              let err = client.textDocumentDidChange(
                b.version,
-               $b.path.absolutePath,
+               absPath,
                b.buffer.toString)
              if err.isErr:
               error fmt"lsp: {err.error}"
 
-        # Send a textDocument/semanticTokens request to the LSP server.
-        let err = client.textDocumentSemanticTokens(b.id, $b.path.absolutePath)
-        if err.isErr:
-          error fmt"lsp: {err.error}"
+        block:
+          # Send a textDocument/semanticTokens request to the LSP server.
+          let err = client.textDocumentSemanticTokens(b.id, absPath)
+          if err.isErr:
+            error fmt"lsp: {err.error}"
+
+        block:
+          # Send textDocument/inlayHint requests to the LSP server.
+
+          # Calc range from all views.
+          let nodes = mainWindowNode.searchByBufferIndex(i)
+          var hintRange = BufferRange()
+          for n in nodes:
+            let r = n.view.rangeOfOriginalLineInView
+            let last = min(r.last, b.buffer.high)
+            if hintRange.first.line > r.first:
+              hintRange.first.line = r.first
+              hintRange.first.column =
+                if b.buffer[r.first].high >= 0: b.buffer[r.first].high
+                else: 0
+            if last > hintRange.last.line:
+              hintRange.last.line = last
+              hintRange.last.column =
+                if b.buffer[last].high >= 0: b.buffer[last].high
+                else: 0
+
+          let err = client.textDocumentInlayHint(b.id, absPath, hintRange)
+          if err.isErr:
+            error fmt"lsp: {err.error}"
 
 proc updateLogViewerEditorBuffer*(b: var BufferStatus) =
   ## Update the logviewer buffer for editor logs.
@@ -839,7 +866,8 @@ proc update*(status: var EditorStatus) =
         node.seekCursor(b.buffer)
 
         # The highlight for the view.
-        var highlight = b.highlight
+        var highlight = Highlight()
+        highlight.colorSegments = b.highlight.colorSegments
 
         if b.isEditMode:
           highlight.updateViewHighlight(
@@ -878,12 +906,42 @@ proc update*(status: var EditorStatus) =
             if node.windowIndex == currentMainWindowNode.windowIndex: true
             else: false
 
-          node.view.update(
-            node.window.get,
-            b.buffer,
-            highlight,
-            node.currentLine,
-            currentLineColorPair)
+          if b.inlayHints.len > 0:
+            # LSP InlayHint
+
+            var buffer = b.buffer.toSeqRunes
+            for hint in b.inlayHints:
+              if hint.textEdits.isSome and hint.textEdits.get.len > 0:
+                let
+                  line = hint.position.line
+                  text = hint.textEdits.get[0].newText.toRunes
+
+                block:
+                  var newLine = buffer[line]
+                  newLine.add ru" " & text
+                  buffer[line] = newLine
+
+                highlight.addColorSegment(
+                  line,
+                  text.len,
+                  EditorColorPairIndex.inlayHint)
+
+            # Apply inlayHint
+            node.reloadEditorView(buffer)
+
+            node.view.update(
+              node.window.get,
+              buffer,
+              highlight,
+              node.currentLine,
+              currentLineColorPair)
+          else:
+            node.view.update(
+              node.window.get,
+              b.buffer,
+              highlight,
+              node.currentLine,
+              currentLineColorPair)
 
         if node.view.isCurrentWin:
           # Update the cursor position.
@@ -921,11 +979,11 @@ proc update*(status: var EditorStatus) =
   if currentBufStatus.isCursor:
     showCursor()
 
-# Update currentLine and currentColumn from status.lastPosition
 proc restoreCursorPostion*(
   node: var WindowNode,
   bufStatus: BufferStatus,
   lastPosition: seq[LastCursorPosition]) =
+    ## Update currentLine and currentColumn from status.lastPosition
 
     let position = lastPosition.getLastCursorPostion(bufStatus.path)
 

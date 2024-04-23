@@ -31,9 +31,6 @@ template isLspResponse*(status: EditorStatus): bool =
   not lspClient.closed and
   (let r = lspClient.readable; r.isOk and r.get)
 
-template isWaitingLspResponse(status: var EditorStatus): bool =
-  status.lspClients[currentBufStatus.langId].waitingResponse.isSome
-
 proc lspInitialized(
   status: var EditorStatus,
   initializeRes: JsonNode): Result[(), string] =
@@ -343,6 +340,35 @@ proc lspSemanticTokens(
 
     return Result[(), string].ok ()
 
+proc lspInlayHint(status: var EditorStatus, res: JsonNode): Result[(), string] =
+  ## textDocument/inlayHint
+
+  let r = parseTextDocumentInlayHint(res)
+  if r.isErr:
+    return Result[(), string].err r.error
+
+  let requestId =
+    try: res["id"].getInt
+    except CatchableError as e: return Result[(), string].err e.msg
+
+  let waitingRes = lspClient.getWaitingResponse(requestId)
+  if waitingRes.isNone:
+    return Result[(), string].err fmt"Not found id: {requestId}"
+
+
+  lspClient.deleteWaitingResponse(requestId)
+
+  let hints = parseTextDocumentInlayHint(res)
+  if hints.isErr:
+    return Result[(), string].err r.error
+
+  for i, b in status.bufStatus:
+    if b.id == waitingRes.get.bufferId:
+      b.inlayHints = hints.get
+      break
+
+  return Result[(), string].ok ()
+
 proc handleLspServerNotify(
   status: var EditorStatus,
   notify: JsonNode): Result[(), string] =
@@ -443,5 +469,7 @@ proc handleLspResponse*(status: var EditorStatus) =
       of LspMethod.textDocumentSemanticTokensFull:
         let r = status.lspSemanticTokens(resJson.get)
         if r.isErr: status.commandLine.writeLspSemanticTokens(r.error)
+      of LspMethod.textDocumentInlayHint:
+        let r = status.lspInlayHint(resJson.get)
       else:
         info fmt"lsp: Ignore response: {resJson}"
