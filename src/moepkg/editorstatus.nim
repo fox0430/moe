@@ -634,6 +634,9 @@ proc initLogViewerHighlight(buffer: seq[Runes]): Highlight =
     const EmptyReservedWord: seq[ReservedWord] = @[]
     return buffer.initHighlight(EmptyReservedWord, SourceLanguage.langNone)
 
+proc isInitialized(t: LspClientTable, langId: string): bool {.inline.} =
+  t.contains(langId) and t[langId].isInitialized
+
 proc updateSyntaxHighlightings(status: EditorStatus) =
   ## Update syntax highlightings in all buffers.
   ## And send textDocument/didChange to LSP servers.
@@ -664,24 +667,23 @@ proc updateSyntaxHighlightings(status: EditorStatus) =
       b.version.inc
       b.isUpdate = false
 
-      if status.lspClients.contains(b.langId) and
-         status.lspClients[b.langId].isInitialized:
-           template client: LspClient = status.lspClients[b.langId]
+      if status.lspClients.isInitialized(b.langId):
+        template client: LspClient = status.lspClients[b.langId]
 
-           if b.version > 1 and
-              client.isWaitingResponse(b.id, LspMethod.textDocumentCompletion):
-                # Send a textDocument/didChange notification to the LSP server.
-                let err = client.textDocumentDidChange(
-                  b.version,
-                  $b.path.absolutePath,
-                  b.buffer.toString)
-                if err.isErr:
-                 error fmt"lsp: {err.error}"
+        if b.version > 1 and
+           not client.isWaitingResponse(b.id, LspMethod.textDocumentCompletion):
+             # Send a textDocument/didChange notification to the LSP server.
+             let err = client.textDocumentDidChange(
+               b.version,
+               $b.path.absolutePath,
+               b.buffer.toString)
+             if err.isErr:
+              error fmt"lsp: {err.error}"
 
-           # Send a textDocument/semanticTokens request to the LSP server.
-           let err = client.textDocumentSemanticTokens(b.id, $b.path.absolutePath)
-           if err.isErr:
-             error fmt"lsp: {err.error}"
+        # Send a textDocument/semanticTokens request to the LSP server.
+        let err = client.textDocumentSemanticTokens(b.id, $b.path.absolutePath)
+        if err.isErr:
+          error fmt"lsp: {err.error}"
 
 proc updateLogViewerEditorBuffer*(b: var BufferStatus) =
   ## Update the logviewer buffer for editor logs.
