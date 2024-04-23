@@ -111,11 +111,11 @@ proc lspHover*(status: var EditorStatus, res: JsonNode): Result[(), string] =
   ## textDocument/hover.
   ## TODO: Add tests after resolving the forever key waiting problem.
 
-  lspClient.clearWaitingResponse
-
   let hover = parseTextDocumentHoverResponse(res)
   if hover.isErr:
     return Result[(), string].err hover.error
+
+  lspClient.deleteWaitingResponse(res["id"].getInt)
 
   if hover.get.isNone:
     # Not found
@@ -298,13 +298,14 @@ proc lspCompletion(
     ##
     ## textDocument/completion
 
-    lspClient.clearWaitingResponse
-
-    currentBufStatus.lspCompletionList.clear
 
     let list = res.parseTextDocumentCompletionResponse
     if list.isErr:
       return Result[(), string].err fmt"Invalid response: {list.error}"
+
+    lspClient.deleteWaitingResponse(res["id"].getInt)
+
+    currentBufStatus.lspCompletionList.clear
 
     if list.get.len > 0:
       for item in list.get:
@@ -328,12 +329,12 @@ proc lspSemanticTokens(
     ##
     ## textDocument/semanticTokens
 
-    lspClient.clearWaitingResponse
-
     let r = res.parseTextDocumentSemanticTokensResponse(
       lspClient.capabilities.get.semanticTokens.get)
     if r.isErr:
       return Result[(), string].err r.error
+
+    lspClient.deleteWaitingResponse(res["id"].getInt)
 
     currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
@@ -372,6 +373,13 @@ proc handleLspServerNotify(
         # Ignore
         return Result[(), string].err fmt"Not supported: {notify}"
 
+proc containsBufferId(
+  bufStatuses: seq[BufferStatus],
+  bufferId: int): bool {.inline.} =
+
+    for b in bufStatuses:
+      if b.id == bufferId: return true
+
 proc handleLspResponse*(status: var EditorStatus) =
   ## Read a Json from the server and handle the response and notification.
 
@@ -403,26 +411,37 @@ proc handleLspResponse*(status: var EditorStatus) =
 
     lspClient.addResponseLog(resJson.get)
 
-    if status.isWaitingLspResponse:
-      case lspClient.waitingResponse.get:
-        of LspMethod.initialize:
-          let r = status.lspInitialized(resJson.get)
-          if r.isErr:
-            status.commandLine.writeLspInitializeError(
-              currentBufStatus.langId.toRunes,
-              r.error)
-        of LspMethod.textDocumentHover:
-          let r = status.lspHover(resJson.get)
-          if r.isErr: status.commandLine.writeLspHoverError(r.error)
-        of LspMethod.textDocumentCompletion:
-          let r = status.lspCompletion(resJson.get)
-          if r.isErr: status.commandLine.writeLspCompletionError(r.error)
-        of LspMethod.textDocumentSemanticTokensFull:
-          let r = status.lspSemanticTokens(resJson.get)
-          if r.isErr: status.commandLine.writeLspSemanticTokens(r.error)
-        else:
-          discard
-    else:
-      # Should ignore?
-      info fmt"lsp: Ignore response: {resJson}"
-      discard
+    let requestId =
+      try:
+        resJson.get["id"].getInt.RequestId
+      except CatchableError:
+        error fmt"lsp: Not found request id: {resJson.get}"
+        return
+
+    let waitingResponse = lspClient.getWaitingResponse(requestId)
+    if waitingResponse.isNone:
+      error fmt"lsp: Not found request id: {resJson.get}"
+      return
+
+    if not status.bufStatus.containsBufferId(waitingResponse.get.bufferId):
+      info fmt"lsp: closed buffer. bufferId: {$waitingResponse.get.bufferId}"
+      return
+
+    case waitingResponse.get.lspMethod:
+      of LspMethod.initialize:
+        let r = status.lspInitialized(resJson.get)
+        if r.isErr:
+          status.commandLine.writeLspInitializeError(
+            currentBufStatus.langId.toRunes,
+            r.error)
+      of LspMethod.textDocumentHover:
+        let r = status.lspHover(resJson.get)
+        if r.isErr: status.commandLine.writeLspHoverError(r.error)
+      of LspMethod.textDocumentCompletion:
+        let r = status.lspCompletion(resJson.get)
+        if r.isErr: status.commandLine.writeLspCompletionError(r.error)
+      of LspMethod.textDocumentSemanticTokensFull:
+        let r = status.lspSemanticTokens(resJson.get)
+        if r.isErr: status.commandLine.writeLspSemanticTokens(r.error)
+      else:
+        info fmt"lsp: Ignore response: {resJson}"

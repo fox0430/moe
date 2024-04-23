@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, importutils, os, osproc, options]
+import std/[unittest, importutils, os, osproc, options, tables]
 import pkg/results
 import moepkg/independentutils
 import moepkg/lsp/protocol/enums
@@ -49,7 +49,7 @@ suite "lsp: Send requests":
       let params = initInitializeParams(RootPath, Trace)
 
       check client.initialize(Id, params).isOk
-      check client.waitingResponse.get == LspMethod.initialize
+      check client.waitingResponses[1].lspMethod == LspMethod.initialize
 
   test "Send shutdown":
     if not isNimlangserverAvailable():
@@ -338,7 +338,7 @@ suite "lsp: Send requests":
       let position = BufferPosition(line: 0, column: 0)
 
       check client.textDocumentHover(Id, path, position).isOk
-      check client.waitingResponse.get == LspMethod.textDocumentHover
+      check client.waitingResponses[2].lspMethod == LspMethod.textDocumentHover
 
   test "Send textDocument/completion":
     if not isNimlangserverAvailable():
@@ -397,4 +397,4 @@ suite "lsp: Send requests":
         position,
         IsIncompleteTrigger,
         "e").isOk
-      check client.waitingResponse.get == LspMethod.textDocumentCompletion
+      check client.waitingResponses[2].lspMethod == LspMethod.textDocumentCompletion

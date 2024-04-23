@@ -243,6 +243,8 @@ proc lspMethod*(j: JsonNode): LspMethodResult =
     else:
       LspMethodResult.err "Not supported: " & j["method"].getStr
 
+proc isLspResponse*(res: JsonNode): bool {.inline.} = res.contains("id")
+
 proc parseLspMessageType*(num: int): parseLspMessageTypeResult =
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#messageType
 
@@ -475,7 +477,6 @@ proc parseTextDocumentCompletionResponse*(res: JsonNode): LspCompletionResut =
     else:
       # Not found
       return Result[seq[CompletionItem], string].ok @[]
-
 
 proc parseTextDocumentSemanticTokensResponse*(
   res: JsonNode,
