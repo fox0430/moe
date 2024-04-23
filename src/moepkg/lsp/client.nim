@@ -60,6 +60,13 @@ type
 
   LspProgressTable* = Table[ProgressToken, ProgressReport]
 
+  WaitLspResponse* = ref object
+    bufferId*: int
+    requestId*: int
+    lspMethod*: LspMethod
+
+  RequestId* = int
+
   LspClient* = ref object
     closed*: bool
       # Set true if the LSP server closed (crashed).
@@ -73,10 +80,12 @@ type
       # LSP server capabilities
     progress*: LspProgressTable
       # Use in window/workDoneProgress
-    waitingResponse*: Option[LspMethod]
-      # The waiting response from the LSP server.
+    waitingResponses*: Table[RequestId, WaitLspResponse]
+      # Waiting responses from the LSP server.
     log*: LspLog
       # Request/Response log.
+    lastId: RequestId
+      # Last request ID
 
 type
   R = Result
@@ -132,9 +141,6 @@ template addNotifyFromServerLog*(c: var LspClient, m: JsonNode) =
     timestamp: now(),
     kind: LspMessageKind.notifyFromServer,
     message: m)
-
-proc clearWaitingResponse*(c: var LspClient) {.inline.} =
-  c.waitingResponse = none(LspMethod)
 
 proc createProgress*(c: var LspClient, token: ProgressToken) =
   ## Add a new progress to the `LspClint.progress`.
@@ -222,22 +228,27 @@ proc readable*(c: LspClient, timeout: int = 1): LspClientReadableResult =
 
 proc request(
   c: var LspClient,
-  id: int,
+  bufferId: int,
   lspMethod: LspMethod,
-  params: JsonNode): Result[(), string] =
+  params: JsonNode): Result[int, string] =
     ## Send a request to the LSP server and set to waitingResponse.
+    ## Return request id.
 
-    let req = newReqest(id, lspMethod.toLspMethodStr, params)
+    c.lastId.inc
+    let req = newReqest(c.lastId, lspMethod.toLspMethodStr, params)
 
     c.addRequestLog(req)
 
     let r = c.serverStreams.sendRequest(req)
     if r.isErr:
-      return Result[(), string].err r.error
+      return Result[int, string].err r.error
 
-    c.waitingResponse = some(lspMethod)
+    c.waitingResponses[c.lastId] = WaitLspResponse(
+      bufferId: bufferId,
+      requestId: c.lastId,
+      lspMethod: lspMethod)
 
-    return Result[(), string].ok ()
+    return Result[int, string].ok c.lastId
 
 proc notify(
   c: var LspClient,
@@ -275,6 +286,49 @@ proc setNonBlockingOutput(p: Process): Result[(), string] =
     return Result[(), string].err "fcntl failed"
 
   return Result[(), string].ok ()
+
+proc setWaitResponse(
+  c: var LspClient,
+  bufferId: int,
+  lspMethod: LspMethod) {.inline.} =
+
+    c.waitingResponses[c.lastId] = WaitLspResponse(
+      bufferId: bufferId,
+      requestId: c.lastId,
+      lspMethod: lspMethod)
+
+proc deleteWaitingResponse*(c: var LspClient, id: RequestId) {.inline.} =
+  if c.waitingResponses.contains(id):
+    c.waitingResponses.del(id)
+
+proc isWaitingResponse*(c: var LspClient, bufferId: int): bool {.inline.} =
+  for v in c.waitingResponses.values:
+    if v.bufferId == bufferId:
+      return true
+
+proc isWaitingResponse*(
+  c: var LspClient,
+  bufferId: int,
+  lspMethod: LspMethod): bool {.inline.} =
+
+    for v in c.waitingResponses.values:
+      if v.bufferId == bufferId and v.lspMethod == lspMethod:
+        return true
+
+proc getWaitingResponse*(
+  c: var LspClient,
+  id: RequestId): Option[WaitLspResponse] {.inline.} =
+
+    if c.waitingResponses.contains(id):
+      return some(c.waitingResponses[id])
+
+proc getLatestWaitingResponse*(c: var LspClient): Option[WaitLspResponse] =
+  var latest = -1
+  for k in c.waitingResponses.keys:
+    if k > latest: latest = k
+
+  if latest > -1:
+    return some(c.waitingResponses[latest])
 
 proc initLspClient*(command: string): initLspClientResult =
   ## Start a LSP server process and init streams.
@@ -415,7 +469,7 @@ proc setCapabilities(c: var LspClient, initResult: InitializeResult) =
 
 proc initialize*(
   c: var LspClient,
-  id: int,
+  bufferId: int,
   initParams: InitializeParams): LspSendRequestResult =
     ## Send a initialize request to the server and check server capabilities.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#initialize
@@ -426,7 +480,7 @@ proc initialize*(
 
     let params = %* initParams
 
-    let r = c.request(id, LspMethod.initialize, params)
+    let r = c.request(bufferId, LspMethod.initialize, params)
     if r.isErr:
       return LspSendRequestResult.err fmt"Initialize request failed: {r.error}"
 
@@ -435,8 +489,6 @@ proc initialize*(
 proc initCapacities*(
   c: var LspClient,
   res: JsonNode): LspInitializeResult =
-    defer:
-      c.clearWaitingResponse
 
     var initResult: InitializeResult
     try:
@@ -446,6 +498,8 @@ proc initCapacities*(
       return LspInitializeResult.err fmt"Initialize request failed: {msg}"
 
     c.setCapabilities(initResult)
+
+    c.deleteWaitingResponse(res["id"].getInt)
 
     return LspInitializeResult.ok ()
 
@@ -465,7 +519,7 @@ proc initialized*(c: var LspClient): LspSendNotifyResult =
 
   return LspSendNotifyResult.ok ()
 
-proc shutdown*(c: var LspClient, id: int): LspSendNotifyResult =
+proc shutdown*(c: var LspClient, bufferId: int): LspSendNotifyResult =
   ## Send a shutdown request to the server.
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#shutdown
 
@@ -476,11 +530,11 @@ proc shutdown*(c: var LspClient, id: int): LspSendNotifyResult =
   if not c.isInitialized:
     return R[(), string].err "lsp unavailable"
 
-  let r = c.request(id, LspMethod.shutdown, %*{})
-  if r.isErr:
-    return LspSendNotifyResult.err "Shutdown request failed: {r.error}"
+  let id = c.request(bufferId, LspMethod.shutdown, %*{})
+  if id.isErr:
+    return LspSendNotifyResult.err "Shutdown request failed: {id.error}"
 
-  c.waitingResponse = some(LspMethod.shutdown)
+  c.setWaitResponse(bufferId, LspMethod.shutdown)
 
   return LspSendNotifyResult.ok ()
 
@@ -651,7 +705,7 @@ proc initHoverParams(
 
 proc textDocumentHover*(
   c: var LspClient,
-  id: int,
+  bufferId: int,
   path: string,
   position: BufferPosition): LspSendRequestResult =
     ## Send a textDocument/hover request to the server.
@@ -668,11 +722,11 @@ proc textDocumentHover*(
       return R[(), string].err "textDocument/hover unavailable"
 
     let params = %* initHoverParams(path, position.toLspPosition)
-    let r = c.request(id, LspMethod.textDocumentHover, params)
-    if r.isErr:
-      return R[(), string].err fmt"textDocument/hover request failed: {r.error}"
+    let id = c.request(bufferId, LspMethod.textDocumentHover, params)
+    if id.isErr:
+      return R[(), string].err fmt"textDocument/hover request failed: {id.error}"
 
-    c.waitingResponse = some(LspMethod.textDocumentHover)
+    c.setWaitResponse(bufferId, LspMethod.textDocumentHover)
 
     return R[(), string].ok ()
 
@@ -705,7 +759,7 @@ proc initCompletionParams*(
 
 proc textDocumentCompletion*(
   c: var LspClient,
-  id: int,
+  bufferId: int,
   path: string,
   position: BufferPosition,
   isIncompleteTrigger: bool,
@@ -730,11 +784,11 @@ proc textDocumentCompletion*(
       isIncompleteTrigger,
       character)
 
-    let r = c.request(id, LspMethod.textDocumentCompletion, params)
-    if r.isErr:
-      return R[(), string].err fmt"textDocument/completion request failed: {r.error}"
+    let id = c.request(bufferId, LspMethod.textDocumentCompletion, params)
+    if id.isErr:
+      return R[(), string].err fmt"textDocument/completion request failed: {id.error}"
 
-    c.waitingResponse = some(LspMethod.textDocumentCompletion)
+    c.setWaitResponse(bufferId, LspMethod.textDocumentCompletion)
 
     return R[(), string].ok ()
 
@@ -744,7 +798,7 @@ proc initSemanticTokensParams*(path: string): SemanticTokensParams =
 
 proc textDocumentSemanticTokens*(
   c: var LspClient,
-  id: int,
+  bufferId: int,
   path: string): LspSendRequestResult =
     ## Send a textDocument/semanticTokens/full request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_semanticTokens
@@ -761,10 +815,10 @@ proc textDocumentSemanticTokens*(
 
     let params = %* initSemanticTokensParams(path)
 
-    let r = c.request(id, LspMethod.textDocumentSemanticTokensFull, params)
-    if r.isErr:
-      return R[(), string].err fmt"textDocument/semanticTokens/full request failed: {r.error}"
+    let id = c.request(bufferId, LspMethod.textDocumentSemanticTokensFull, params)
+    if id.isErr:
+      return R[(), string].err fmt"textDocument/semanticTokens/full request failed: {id.error}"
 
-    c.waitingResponse = some(LspMethod.textDocumentSemanticTokensFull)
+    c.setWaitResponse(bufferId, LspMethod.textDocumentSemanticTokensFull)
 
     return R[(), string].ok ()

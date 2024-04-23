@@ -668,8 +668,8 @@ proc updateSyntaxHighlightings(status: EditorStatus) =
          status.lspClients[b.langId].isInitialized:
            template client: LspClient = status.lspClients[b.langId]
 
-           if client.waitingResponse != some(LspMethod.textDocumentCompletion) and
-              b.version > 1:
+           if b.version > 1 and
+              client.isWaitingResponse(b.id, LspMethod.textDocumentCompletion):
                 # Send a textDocument/didChange notification to the LSP server.
                 let err = client.textDocumentDidChange(
                   b.version,

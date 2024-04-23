@@ -24,6 +24,7 @@ type
   VersionInfo* = object
     major*, minor*, patch*: int
 
+
 proc toSemVerString*(v: VersionInfo): string {.inline.} =
   fmt"{v.major}.{v.minor}.{v.patch}"
 

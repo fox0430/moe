@@ -771,11 +771,12 @@ template isChangeModeToInsert(b: BufferStatus, prevMode: Mode): bool =
 
 template isUpdateCompletionWindow(
   status: EditorStatus,
-  beforeWaitingResponse: Option[LspMethod]): bool =
+  beforeWaitingResponse: Option[WaitLspResponse]): bool =
 
     status.completionWindow.isSome and
-    beforeWaitingResponse == some(LspMethod.textDocumentCompletion) and
-    lspClient.waitingResponse.isNone
+    beforeWaitingResponse.isSome and
+    beforeWaitingResponse.get.lspMethod == LspMethod.textDocumentCompletion and
+    not lspClient.isWaitingResponse(currentBufStatus.id, LspMethod.textDocumentCompletion)
 
 template resetKeyAndContinue(key: var Option[Rune]) =
   key = none(Rune)
@@ -813,7 +814,7 @@ proc editorMainLoop*(status: var EditorStatus) =
           break
 
         if status.isLspResponse:
-          let beforeWaitingResponse = lspClient.waitingResponse
+          let beforeWaitingResponse = lspClient.getLatestWaitingResponse
           status.handleLspResponse
 
           if status.isUpdateCompletionWindow(beforeWaitingResponse):
