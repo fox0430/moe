@@ -1729,7 +1729,7 @@ proc toThemeColors*(config: TomlValueRef): ThemeColors =
         of EditorColorIndex.background:
           let rgb = configColors["background"].getStr.toRgb
           result[EditorColorPairIndex.default].background.rgb = rgb
-          for i in EditorColorPairIndex.keyword .. EditorColorPairIndex.unresolvedReference:
+          for i in EditorColorPairIndex.keyword .. EditorColorPairIndex.inlayHint:
             result[i].background.rgb = rgb
         of EditorColorIndex.currentLineBg:
           result[EditorColorPairIndex.currentLineBg].background.rgb =

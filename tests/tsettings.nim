@@ -359,6 +359,8 @@ toolModule = "#111111"
 union = "#111111"
 unresolvedReference = "#111111"
 
+inlayHint = "#111111"
+
 currentFile = "#111111"
 currentFileBg = "#111111"
 file = "#111111"

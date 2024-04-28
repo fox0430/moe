@@ -146,6 +146,8 @@ toolModule = "#f8f5e3"
 union = "#00b7ce"
 unresolvedReference = "#f8f5e3"
 
+inlayHint = "#808080"
+
 currentFile = "#000000"
 currentFileBg = "#09aefa"
 file = "#000000"
