@@ -22,6 +22,7 @@ import std/[options, tables, json, logging, strformat]
 import pkg/results
 
 import lsp/[client, utils]
+import syntax/highlite
 import editorstatus, windownode, popupwindow, unicodeext, independentutils, ui,
        gapbuffer, messages, commandline, bufferstatus, syntaxcheck, completion,
        highlight
@@ -30,9 +31,6 @@ template isLspResponse*(status: EditorStatus): bool =
   status.lspClients.contains(currentBufStatus.langId) and
   not lspClient.closed and
   (let r = lspClient.readable; r.isOk and r.get)
-
-template isWaitingLspResponse(status: var EditorStatus): bool =
-  status.lspClients[currentBufStatus.langId].waitingResponse.isSome
 
 proc lspInitialized(
   status: var EditorStatus,
@@ -336,10 +334,19 @@ proc lspSemanticTokens(
 
     lspClient.deleteWaitingResponse(res["id"].getInt)
 
-    currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      r.get,
-      lspClient.capabilities.get.semanticTokens.get)
+    if r.get.len > 0:
+      currentBufStatus.highlight = initHighlight(
+        currentBufStatus.buffer.toSeqRunes,
+        r.get,
+        lspClient.capabilities.get.semanticTokens.get)
+    else:
+      let lang =
+        if not status.settings.standard.syntax: SourceLanguage.langNone
+        else: currentBufStatus.language
+      currentBufStatus.highlight = initHighlight(
+        currentBufStatus.buffer.toSeqRunes,
+        status.settings.highlight.reservedWords,
+        lang)
 
     return Result[(), string].ok ()
 
