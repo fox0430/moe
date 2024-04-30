@@ -637,9 +637,36 @@ proc initLogViewerHighlight(buffer: seq[Runes]): Highlight =
 proc isInitialized(t: LspClientTable, langId: string): bool {.inline.} =
   t.contains(langId) and t[langId].isInitialized
 
+proc sendLspInlayHintRequest*(
+  c: var LspClient,
+  b: BufferStatus,
+  bufferIndex: int,
+  mainWindowNode: WindowNode): Result[(), string] =
+    ## Send textDocument/inlayHint requests to the LSP server.
+
+    # Calc range from all views.
+    let nodes = mainWindowNode.searchByBufferIndex(bufferIndex)
+    var hintRange = BufferRange()
+    for n in nodes:
+      let
+        r = n.view.rangeOfOriginalLineInView
+        last = min(r.last, b.buffer.high)
+      if hintRange.first.line > r.first:
+        hintRange.first.line = r.first
+        hintRange.first.column =
+          if b.buffer[r.first].high >= 0: b.buffer[r.first].high
+          else: 0
+      if last > hintRange.last.line:
+        hintRange.last.line = last
+        hintRange.last.column =
+          if b.buffer[last].high >= 0: b.buffer[last].high
+          else: 0
+
+    return c.textDocumentInlayHint(b.id, $b.absolutePath, hintRange)
+
 proc updateSyntaxHighlightings(status: EditorStatus) =
   ## Update syntax highlightings in all buffers.
-  ## And send textDocument/didChange to LSP servers.
+  ## And send requests to LSP servers.
 
   for i in 0 .. status.bufStatus.high:
     template b: var BufferStatus = status.bufStatus[i]
@@ -672,15 +699,18 @@ proc updateSyntaxHighlightings(status: EditorStatus) =
 
         let absPath = $b.path.absolutePath
 
-        if b.version > 1 and
-           not client.isWaitingResponse(b.id, LspMethod.textDocumentCompletion):
-             # Send a textDocument/didChange notification to the LSP server.
-             let err = client.textDocumentDidChange(
-               b.version,
-               absPath,
-               b.buffer.toString)
-             if err.isErr:
-              error fmt"lsp: {err.error}"
+        template isSendDidChange(): bool =
+          b.version > 1 and
+          not client.isWaitingResponse(b.id, LspMethod.textDocumentCompletion)
+
+        if isSendDidChange():
+          # Send a textDocument/didChange notification to the LSP server.
+          let err = client.textDocumentDidChange(
+            b.version,
+            absPath,
+            b.buffer.toString)
+          if err.isErr:
+            error fmt"lsp: {err.error}"
 
         block:
           # Send a textDocument/semanticTokens request to the LSP server.
@@ -689,26 +719,8 @@ proc updateSyntaxHighlightings(status: EditorStatus) =
             error fmt"lsp: {err.error}"
 
         block:
-          # Send textDocument/inlayHint requests to the LSP server.
-
-          # Calc range from all views.
-          let nodes = mainWindowNode.searchByBufferIndex(i)
-          var hintRange = BufferRange()
-          for n in nodes:
-            let r = n.view.rangeOfOriginalLineInView
-            let last = min(r.last, b.buffer.high)
-            if hintRange.first.line > r.first:
-              hintRange.first.line = r.first
-              hintRange.first.column =
-                if b.buffer[r.first].high >= 0: b.buffer[r.first].high
-                else: 0
-            if last > hintRange.last.line:
-              hintRange.last.line = last
-              hintRange.last.column =
-                if b.buffer[last].high >= 0: b.buffer[last].high
-                else: 0
-
-          let err = client.textDocumentInlayHint(b.id, absPath, hintRange)
+          # Send a textDocument/inlayHint request to the LSP server.
+          let err = client.sendLspInlayHintRequest(b, i, mainWindowNode)
           if err.isErr:
             error fmt"lsp: {err.error}"
 

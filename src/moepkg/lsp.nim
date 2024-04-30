@@ -70,6 +70,15 @@ proc lspInitialized(
       if err.isErr:
         error fmt"lsp: {err.error}"
 
+    block:
+      # textDocument/inlayHint
+      let err = lspClient.sendLspInlayHintRequest(
+        currentBufStatus,
+        status.bufferIndexInCurrentWindow,
+        mainWindowNode)
+      if err.isErr:
+        error fmt"lsp: {err.error}"
+
     status.commandLine.writeLspInitialized(
       status.settings.lsp.languages[currentBufStatus.langId].command)
 
@@ -468,8 +477,9 @@ proc handleLspResponse*(status: var EditorStatus) =
         if r.isErr: status.commandLine.writeLspCompletionError(r.error)
       of LspMethod.textDocumentSemanticTokensFull:
         let r = status.lspSemanticTokens(resJson.get)
-        if r.isErr: status.commandLine.writeLspSemanticTokens(r.error)
+        if r.isErr: status.commandLine.writeLspSemanticTokensError(r.error)
       of LspMethod.textDocumentInlayHint:
         let r = status.lspInlayHint(resJson.get)
+        if r.isErr: status.commandLine.writeLspInlayHintError(r.error)
       else:
         info fmt"lsp: Ignore response: {resJson}"

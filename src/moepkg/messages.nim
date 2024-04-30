@@ -387,8 +387,15 @@ proc writeLspCompletionError*(commandLine: var CommandLine, message: string) =
   let mess = fmt"lsp: Error: completion failed: {message}"
   commandLine.writeError(mess)
 
-proc writeLspSemanticTokens*(commandLine: var CommandLine, message: string) =
-  let mess = fmt"lsp: Error: semanticTokens failed: {message}"
+proc writeLspSemanticTokensError*(
+  commandLine: var CommandLine,
+  message: string) =
+
+    let mess = fmt"lsp: Error: semanticTokens failed: {message}"
+    commandLine.writeError(mess)
+
+proc writeLspInlayHintError*(commandLine: var CommandLine, message: string) =
+  let mess = fmt"lsp: Error: inlayHint failed: {message}"
   commandLine.writeError(mess)
 
 proc writePasteIgnoreWarn*(commandLine: var CommandLine) =
