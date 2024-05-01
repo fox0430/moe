@@ -110,7 +110,10 @@ type
     id*: int
     tokens*: seq[LspSemanticToken]
 
-  LspInlayHints* = seq[InlayHint]
+  LspInlayHints* = object
+    range*: independentutils.Range
+      # Line range to request
+    hints*: seq[InlayHint]
 
   R = Result
   parseLspMessageTypeResult* = R[LspMessageType, string]

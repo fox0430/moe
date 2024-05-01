@@ -373,7 +373,7 @@ proc lspInlayHint(status: var EditorStatus, res: JsonNode): Result[(), string] =
 
   for i, b in status.bufStatus:
     if b.id == waitingRes.get.bufferId:
-      b.inlayHints = hints.get
+      b.inlayHints.hints = hints.get
       break
 
   return Result[(), string].ok ()

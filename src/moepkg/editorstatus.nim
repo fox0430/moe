@@ -662,7 +662,12 @@ proc sendLspInlayHintRequest*(
           if b.buffer[last].high >= 0: b.buffer[last].high
           else: 0
 
-    return c.textDocumentInlayHint(b.id, $b.absolutePath, hintRange)
+    let err = c.textDocumentInlayHint(b.id, $b.absolutePath, hintRange)
+    if err.isErr: return err
+
+    b.inlayHints.range = Range(
+      first: hintRange.first.line,
+      last: hintRange.last.line)
 
 proc updateSyntaxHighlightings(status: EditorStatus) =
   ## Update syntax highlightings in all buffers.
@@ -877,6 +882,20 @@ proc update*(status: var EditorStatus) =
 
         node.seekCursor(b.buffer)
 
+        template isSendLspInlayHintRequest(): bool =
+          status.lspClients.contains(b.langId) and
+          lspClient.capabilities.isSome and
+          lspClient.capabilities.get.inlayHint and
+          node.view.rangeOfOriginalLineInView != b.inlayHints.range
+
+        if isSendLspInlayHintRequest():
+          exitUi()
+          let err = lspClient.sendLspInlayHintRequest(
+            b,
+            node.bufferIndex,
+            mainWindowNode)
+          if err.isErr: error "lsp: {err.error}"
+
         # The highlight for the view.
         var highlight = Highlight()
         highlight.colorSegments = b.highlight.colorSegments
@@ -918,25 +937,27 @@ proc update*(status: var EditorStatus) =
             if node.windowIndex == currentMainWindowNode.windowIndex: true
             else: false
 
-          if b.inlayHints.len > 0:
+          if b.inlayHints.hints.len > 0:
             # LSP InlayHint
 
             var buffer = b.buffer.toSeqRunes
-            for hint in b.inlayHints:
-              if hint.textEdits.isSome and hint.textEdits.get.len > 0:
-                let
-                  line = hint.position.line
-                  text = hint.textEdits.get[0].newText.toRunes
+            for hint in b.inlayHints.hints:
+              if hint.textEdits.isSome and
+                 hint.textEdits.get.len > 0 and
+                 hint.position.line < buffer.len:
+                   let
+                     line = hint.position.line
+                     text = hint.textEdits.get[0].newText.toRunes
 
-                block:
-                  var newLine = buffer[line]
-                  newLine.add ru" " & text
-                  buffer[line] = newLine
+                   block:
+                     var newLine = buffer[line]
+                     newLine.add ru" " & text
+                     buffer[line] = newLine
 
-                highlight.addColorSegment(
-                  line,
-                  text.len,
-                  EditorColorPairIndex.inlayHint)
+                   highlight.addColorSegment(
+                     line,
+                     text.len,
+                     EditorColorPairIndex.inlayHint)
 
             # Apply inlayHint
             node.reloadEditorView(buffer)
