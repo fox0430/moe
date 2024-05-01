@@ -23,6 +23,7 @@ Please feedback, bug reports and PRs.
 - `textDocument/hover`
 - `textDocument/completion`
 - `textDocument/semanticTokens/full`
+- `textDocument/inlayHint`
 - `$/progress`
 
 ## Configuration
@@ -87,3 +88,9 @@ The completion is still under development but available.
 Syntax highlighting with Semantic Tokens. Currently, only full is supported.
 
 ![moe-semantictokens](https://github.com/fox0430/moe/assets/15966436/234ed9d2-7251-4e5c-a242-626b45e091e7)
+
+### Inlay Hint
+
+Display types at the end of lines with LSP InlayHint.
+
+![moe-inlayhint](https://github.com/fox0430/moe/assets/15966436/6e096bf4-0561-457d-944f-2526177fe33a)
