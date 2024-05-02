@@ -37,7 +37,8 @@ suite "lsp: Send requests":
   var client: LspClient
 
   setup:
-    client = initLspClient(Command).get
+    if isNimlangserverAvailable():
+      client = initLspClient(Command).get
 
   test "Send initialize":
     if not isNimlangserverAvailable():
@@ -398,3 +399,56 @@ suite "lsp: Send requests":
         IsIncompleteTrigger,
         "e").isOk
       check client.waitingResponses[2].lspMethod == LspMethod.textDocumentCompletion
+
+  test "Send textDocument/inlayHint":
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      let rootPath = getCurrentDir()
+
+      const
+        Id = 1
+        LanguageId = "nim"
+        Text = "let a = 0\n" # Use simple text for the test.
+
+      let
+        path = getCurrentDir() / "src/moe.nim"
+
+      block:
+        # Initialize LSP client
+
+        block:
+          let params = initInitializeParams(rootPath, Trace)
+          assert client.initialize(Id, params).isOk
+
+        const Timeout = 5000
+        assert client.readable(Timeout).isOk
+        let initializeRes = client.read.get
+
+        block:
+          let err = client.initCapacities(initializeRes)
+          assert err.isOk
+
+        block:
+          # Initialized notification
+          let err = client.initialized
+          assert err.isOk
+
+        block:
+          # workspace/didChangeConfiguration notification
+          let err = client.workspaceDidChangeConfiguration
+          assert err.isOk
+
+        block:
+          # textDocument/diOpen notification
+          let err = client.textDocumentDidOpen(path, LanguageId, Text)
+          assert err.isOk
+
+        block:
+         let err = client.textDocumentInlayHint(
+           Id,
+           path,
+           BufferRange(
+             first: BufferPosition(line: 0, column: 0),
+             last: BufferPosition(line: 0, column: Text.high)))
+         assert err.isOk

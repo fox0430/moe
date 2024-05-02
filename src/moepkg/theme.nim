@@ -833,6 +833,14 @@ const
         index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
+    EditorColorPairIndex.inlayHint: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.inlayHint,
+        rgb: "#808080".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.background,
+        rgb: "#000000".hexToRgb.get)),
+
     # filer mode
     EditorColorPairIndex.currentFile: ColorPair(
       foreground: Color(

@@ -337,6 +337,18 @@ proc searchByWindowIndex*(root: WindowNode, index: int): WindowNode =
       if node.child.len > 0:
         for node in node.child: qeue.push(node)
 
+proc searchByBufferIndex*(root: WindowNode, index: int): seq[WindowNode] =
+  var qeue = initHeapQueue[WindowNode]()
+  for node in root.child: qeue.push(node)
+
+  while qeue.len > 0:
+    for i in 0 ..< qeue.len:
+      let node = qeue.pop
+      if node.bufferIndex == index: result.add node
+
+      if node.child.len > 0:
+        for node in node.child: qeue.push(node)
+
 proc getAllWindowNode*(root: WindowNode): seq[WindowNode] =
   var qeue = initHeapQueue[WindowNode]()
   for node in root.child: qeue.push(node)

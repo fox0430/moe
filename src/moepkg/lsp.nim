@@ -71,6 +71,15 @@ proc lspInitialized(
       if err.isErr:
         error fmt"lsp: {err.error}"
 
+    block:
+      # textDocument/inlayHint
+      let err = lspClient.sendLspInlayHintRequest(
+        currentBufStatus,
+        status.bufferIndexInCurrentWindow,
+        mainWindowNode)
+      if err.isErr:
+        error fmt"lsp: {err.error}"
+
     status.commandLine.writeLspInitialized(
       status.settings.lsp.languages[currentBufStatus.langId].command)
 
@@ -350,6 +359,35 @@ proc lspSemanticTokens(
 
     return Result[(), string].ok ()
 
+proc lspInlayHint(status: var EditorStatus, res: JsonNode): Result[(), string] =
+  ## textDocument/inlayHint
+
+  let r = parseTextDocumentInlayHint(res)
+  if r.isErr:
+    return Result[(), string].err r.error
+
+  let requestId =
+    try: res["id"].getInt
+    except CatchableError as e: return Result[(), string].err e.msg
+
+  let waitingRes = lspClient.getWaitingResponse(requestId)
+  if waitingRes.isNone:
+    return Result[(), string].err fmt"Not found id: {requestId}"
+
+
+  lspClient.deleteWaitingResponse(requestId)
+
+  let hints = parseTextDocumentInlayHint(res)
+  if hints.isErr:
+    return Result[(), string].err r.error
+
+  for i, b in status.bufStatus:
+    if b.id == waitingRes.get.bufferId:
+      b.inlayHints.hints = hints.get
+      break
+
+  return Result[(), string].ok ()
+
 proc handleLspServerNotify(
   status: var EditorStatus,
   notify: JsonNode): Result[(), string] =
@@ -449,6 +487,9 @@ proc handleLspResponse*(status: var EditorStatus) =
         if r.isErr: status.commandLine.writeLspCompletionError(r.error)
       of LspMethod.textDocumentSemanticTokensFull:
         let r = status.lspSemanticTokens(resJson.get)
-        if r.isErr: status.commandLine.writeLspSemanticTokens(r.error)
+        if r.isErr: status.commandLine.writeLspSemanticTokensError(r.error)
+      of LspMethod.textDocumentInlayHint:
+        let r = status.lspInlayHint(resJson.get)
+        if r.isErr: status.commandLine.writeLspInlayHintError(r.error)
       else:
         info fmt"lsp: Ignore response: {resJson}"

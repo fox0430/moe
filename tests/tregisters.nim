@@ -114,7 +114,7 @@ suite "registers: setNoNamedRegister":
       r.setClipboardTool(ClipboardTool.xsel)
       r.setNoNamedRegister(ru"abc")
 
-    check "abc" == getClipboardBuffer(ClipboardTool.xsel)
+      check "abc" == getClipboardBuffer(ClipboardTool.xsel)
 
   test "Lines with Clipboad (xsel)":
     if not isXAvailable():
@@ -123,7 +123,7 @@ suite "registers: setNoNamedRegister":
       r.setClipboardTool(ClipboardTool.xsel)
       r.setNoNamedRegister(@["abc", "def"].toSeqRunes)
 
-    check "abc\ndef" == getClipboardBuffer(ClipboardTool.xsel)
+      check "abc\ndef" == getClipboardBuffer(ClipboardTool.xsel)
 
 suite "registers: update (NumberRegister)":
   setup:

@@ -18,7 +18,10 @@
 #[############################################################################]#
 
 import std/[times, options, os, strformat]
+
 import pkg/results
+
+import lsp/utils
 import syntax/highlite
 import gapbuffer, unicodeext, fileutils, highlight, independentutils, git,
        syntaxcheck, completion, logviewerutils, helputils
@@ -77,6 +80,7 @@ type
     lspCompletionList*: CompletionList
     logContent*: LogContentKind # Use only in Logviewer
     logLspLangId*: string  # Use only in Logviewer
+    inlayHints*: LspInlayHints
 
 var
   countAddedBuffer = 0

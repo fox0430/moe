@@ -56,6 +56,7 @@ type
     textDocumentCompletion
     textDocumentSemanticTokensFull
     textDocumentSemanticTokensDelta
+    textDocumentInlayHint
 
   ProgressToken* = string
     # ProgressParams.token
@@ -109,6 +110,11 @@ type
     id*: int
     tokens*: seq[LspSemanticToken]
 
+  LspInlayHints* = object
+    range*: independentutils.Range
+      # Line range to request
+    hints*: seq[InlayHint]
+
   R = Result
   parseLspMessageTypeResult* = R[LspMessageType, string]
   LspMethodResult* = R[LspMethod, string]
@@ -123,6 +129,7 @@ type
   LspHoverResult* = R[Option[Hover], string]
   LspCompletionResut* = R[seq[CompletionItem], string]
   LspSemanticTokensResult* = R[seq[LspSemanticToken], string]
+  LspInlayHintsResult* = R[seq[InlayHint], string]
 
 proc pathToUri*(path: string): string =
   ## This is a modified copy of encodeUrl in the uri module. This doesn't encode
@@ -187,6 +194,7 @@ proc toLspMethodStr*(m: LspMethod): string =
     of textDocumentCompletion: "textDocument/completion"
     of textDocumentSemanticTokensFull: "textDocument/semanticTokens/full"
     of textDocumentSemanticTokensDelta: "textDocument/semanticTokens/delta"
+    of textDocumentInlayHint: "textDocument/inlayHint"
 
 proc parseTraceValue*(s: string): Result[TraceValue, string] =
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#traceValue
@@ -240,6 +248,8 @@ proc lspMethod*(j: JsonNode): LspMethodResult =
       LspMethodResult.ok textDocumentSemanticTokensFull
     of "textDocument/semanticTokens/delta":
       LspMethodResult.ok textDocumentSemanticTokensDelta
+    of "textDocument/inlayHint":
+      LspMethodResult.ok textDocumentInlayHint
     else:
       LspMethodResult.err "Not supported: " & j["method"].getStr
 
@@ -522,3 +532,16 @@ proc parseTextDocumentSemanticTokensResponse*(
       lspSemanticTokens.add newToken
 
     return LspSemanticTokensResult.ok lspSemanticTokens
+
+proc parseTextDocumentInlayHint*(res: JsonNode): LspInlayHintsResult =
+  if res["result"].kind == JNull:
+    return LspInlayHintsResult.err "Invalid response"
+
+  var hints: seq[InlayHint]
+  try:
+    for h in res["result"].items:
+      hints.add h.to(InlayHint)
+  except CatchableError as e:
+    return LspInlayHintsResult.err fmt"Invalid response: {e.msg}"
+
+  return LspInlayHintsResult.ok hints

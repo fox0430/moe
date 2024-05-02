@@ -18,6 +18,7 @@
 #[############################################################################]#
 
 import std/[deques, strutils, math, strformat, options, sequtils]
+
 import gapbuffer, ui, unicodeext, independentutils, color, highlight, git,
        syntaxcheck, theme, bufferstatus
 
@@ -72,7 +73,8 @@ proc loadSingleViewLine[T](
     template isRemaining: bool = start+result.length < bufferLine.len
 
     template calcNextWidth: int =
-      if isRemaining(): unicodeext.width(bufferLine[start+result.length]) else: 0
+      if isRemaining(): unicodeext.width(bufferLine[start+result.length])
+      else: 0
 
     var
       totalWidth = 0
@@ -84,11 +86,13 @@ proc loadSingleViewLine[T](
       nextWidth = calcNextWidth
 
 proc reload*[T](view: var EditorView, buffer: T, topLine: int) =
-  ## Reload from the buffer to the EditorView so that topLine is displayed as the top line of the EditorView.
+  ## Reload from the buffer to the EditorView so that topLine is displayed as
+  ## the top line of the EditorView.
   ##
   ## The computational cost is somewhat high because the entire EditorView is updated.
   ##
-  ## It is intended to be used to synchronize the contents of a buffer with the contents of an EditorView,
+  ## It is intended to be used to synchronize the contents of a buffer with the
+  ## contents of an EditorView,
   ## or after the entire EditorView has become completely different.
 
   view.updated = true
@@ -126,7 +130,8 @@ proc reload*[T](view: var EditorView, buffer: T, topLine: int) =
 proc initEditorView*[T](buffer: T, height, width: int): EditorView =
   ## Initialize EditorView with `width`/`height` and
   ## load from the first character of the first line of the buffer.
-  ## `width` is not the screen width but the number of characters per line of the EditorView.
+  ## `width` is not the screen width but the number of characters per line of
+  ## the EditorView.
   ## So the length of the line number need not be considered.
 
   result.height = height
@@ -382,7 +387,7 @@ proc writeCurrentLine(
           else:
             originalColorPair.background
 
-      # TODO: Return `Result` type.
+      # TODO: Write an error to the log
       discard currentLineColorPair.initColorPair(
         view.config.colorMode,
         bufferFg,
@@ -396,7 +401,7 @@ proc writeCurrentLine(
       let
         afterFg = themeColors[EditorColorPairIndex.default].foreground
         afterBg = themeColors[EditorColorPairIndex.currentLineBg].background
-      # TODO: Return `Result` type.
+      # TODO: Write an error to the log
       discard currentLineColorPair.initColorPair(
         view.config.colorMode,
         afterFg,
@@ -412,6 +417,19 @@ proc writeCurrentLine(
 
     else:
       view.write(win, y, x, runes, highlight[i].color.int16)
+
+template lineNumberColor() =
+  if isCurrentLine and
+     view.isCurrentWin and
+     view.config.isHighlightCurrentLineNumber:
+       EditorColorPairIndex.currentLineNum
+  else:
+    EditorColorPairIndex.lineNum
+
+template isSelectingArea() =
+  view.editorMode.isVisualMode and
+  (view.originalLine[y] >= view.selectedRange.first and
+   view.selectedRange.last >= view.originalLine[y])
 
 proc writeAllLines*[T](
   view: var EditorView,
@@ -431,14 +449,15 @@ proc writeAllLines*[T](
       indents          = 0
       lastOriginalLine = -1
       lineStart        = 0
-    let
-      start = (view.originalLine[0], view.start[0])
-      useHighlight = highlight.len > 0 and
-                     (highlight[0].firstRow, highlight[0].firstColumn) <= start and
-                     start <= (highlight[^1].lastRow, highlight[^1].lastColumn)
+    let start = (view.originalLine[0], view.start[0])
 
-    var i = if useHighlight: highlight.indexOf(view.originalLine[0], view.start[0])
-            else: -1
+    var i =
+      if highlight.len > 0 and
+         (highlight[0].firstRow, highlight[0].firstColumn) <= start and
+         start <= (highlight[^1].lastRow, highlight[^1].lastColumn):
+           highlight.indexOf(view.originalLine[0], view.start[0])
+      else: -1
+
     for y in 0 ..< view.height:
       if view.originalLine[y] == -1: break
 
@@ -447,28 +466,19 @@ proc writeAllLines*[T](
 
       let isCurrentLine = view.originalLine[y] == currentLine
       if view.config.isLineNumber and view.start[y] == 0:
-        let lineNumberColor =
-          if isCurrentLine and
-             view.isCurrentWin and
-             view.config.isHighlightCurrentLineNumber:
-               EditorColorPairIndex.currentLineNum
-           else:
-            EditorColorPairIndex.lineNum
-        view.writeLineNum(win, y, view.originalLine[y], lineNumberColor)
+        view.writeLineNum(win, y, view.originalLine[y], lineNumberColor())
 
       var x = view.sidebarWidth + view.widthOfLineNum
       if view.length[y] == 0:
-        if view.editorMode.isVisualMode and
-           (view.originalLine[y] >= view.selectedRange.first and
-           view.selectedRange.last >= view.originalLine[y]):
-             view.write(win, y, x, ru" ", EditorColorPairIndex.selectArea)
+        if isSelectingArea():
+          view.write(win, y, x, ru" ", EditorColorPairIndex.selectArea)
         else:
           view.write(win, y, x, view.lines[y], EditorColorPairIndex.default)
 
-          if view.config.isHighlightCurrentLine and isCurrentLine and
+          if view.config.isHighlightCurrentLine and
+             isCurrentLine and
              currentLine < buffer.len:
-               writeCurrentLine(
-                 win,
+               win.writeCurrentLine(
                  view,
                  highlight,
                  ru"",
@@ -497,7 +507,8 @@ proc writeAllLines*[T](
           indents = 0
         lastOriginalLine = view.originalLine[y]
 
-      while i < highlight.len and highlight[i].firstRow < view.originalLine[y]: inc(i)
+      while i < highlight.len and highlight[i].firstRow < view.originalLine[y]:
+        inc(i)
 
       while i < highlight.len and highlight[i].firstRow == view.originalLine[y]:
         if (highlight[i].firstRow, highlight[i].firstColumn) > (highlight[i].lastRow, highlight[i].lastColumn):
@@ -538,8 +549,10 @@ proc writeAllLines*[T](
             str,
             highlight[i].color, highlight[i].attribute)
         x += width(str)
-        if last == highlight[i].lastColumn - view.start[y]: inc(i) # consumed a whole segment
-        else: break
+        if last == highlight[i].lastColumn - view.start[y]:
+          inc(i) # consumed a whole segment
+        else:
+          break
 
       if view.config.isIndentationLines:
         # Write indentation lines.
@@ -620,7 +633,8 @@ proc lastOriginLine*(view: EditorView): int =
 proc updateSidebarBufferForChangedLine*(
   view: var EditorView,
   changedLines: seq[Diff]) =
-    ## Update (Overwrite) a sidebar buffer for git diff. It's on left side of EditorView.
+    ## Update (Overwrite) a sidebar buffer for git diff. It's on left side of
+    ## EditorView.
 
     template buffer: var seq[Runes] = view.sidebar.get.buffer
     template highlights: var seq[seq[EditorColorPairIndex]] =
