@@ -37,7 +37,8 @@ suite "lsp: Send requests":
   var client: LspClient
 
   setup:
-    client = initLspClient(Command).get
+    if isNimlangserverAvailable():
+      client = initLspClient(Command).get
 
   test "Send initialize":
     if not isNimlangserverAvailable():
