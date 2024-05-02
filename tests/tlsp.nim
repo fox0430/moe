@@ -21,6 +21,7 @@ import std/[unittest, oids, options, os, osproc, json, tables]
 
 import pkg/results
 
+import moepkg/lsp/protocol/types
 import moepkg/lsp/[client, utils]
 import moepkg/[bufferstatus, commandline,  unicodeext, gapbuffer, windownode,
                independentutils, popupwindow, syntaxcheck, completion]
@@ -69,7 +70,7 @@ suite "lsp: lspInitialized":
 suite "lsp: initHoverWindow":
   test "Basic":
     var node = initWindowNode()
-    node.resize(Position(y: 0, x: 0), Size(h: 100, w: 100))
+    node.resize(independentutils.Position(y: 0, x: 0), Size(h: 100, w: 100))
 
     let hoverContent = HoverContent(
       title: ru"title",
@@ -507,8 +508,8 @@ suite "lsp: lspCompletion":
     }).isOk
 
     check currentBufStatus.lspCompletionList.items == @[
-      CompletionItem(label: ru"a", insertText: ru"a1"),
-      CompletionItem(label: ru"b", insertText: ru"b1"),
+      completion.CompletionItem(label: ru"a", insertText: ru"a1"),
+      completion.CompletionItem(label: ru"b", insertText: ru"b1"),
     ]
 
   test "Without insertText":
@@ -550,9 +551,103 @@ suite "lsp: lspCompletion":
     }).isOk
 
     check currentBufStatus.lspCompletionList.items == @[
-      CompletionItem(label: ru"a", insertText: ru"a"),
-      CompletionItem(label: ru"b", insertText: ru"b"),
+      completion.CompletionItem(label: ru"a", insertText: ru"a"),
+      completion.CompletionItem(label: ru"b", insertText: ru"b"),
     ]
+
+suite "lsp: lspInlayHint":
+  var status = initEditorStatus()
+
+  setup:
+    status = initEditorStatus()
+    status.settings.lsp.enable = true
+
+    let filename = $genOid() & ".nim"
+    assert status.addNewBufferInCurrentWin(filename).isOk
+
+    status.lspClients["nim"] = LspClient()
+
+  test "Empty":
+    currentBufStatus.inlayHints.range = independentutils.Range(
+      first: 0,
+      last: 0)
+
+    lspClient.waitingResponses[0] = WaitLspResponse(
+      bufferId: currentBufStatus.id,
+      requestId: 0,
+      lspMethod: LspMethod.textDocumentInlayHint)
+
+    check status.lspInlayHint(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": []
+    }).isOk
+
+    check currentBufStatus.inlayHints.range == independentutils.Range(
+      first: 0,
+      last: 0)
+
+    check currentBufStatus.inlayHints.hints.len == 0
+
+  test "Basic":
+    currentBufStatus.inlayHints.range = independentutils.Range(
+      first: 0,
+      last: 0)
+
+    lspClient.waitingResponses[0] = WaitLspResponse(
+      bufferId: currentBufStatus.id,
+      requestId: 0,
+      lspMethod: LspMethod.textDocumentInlayHint)
+
+    check status.lspInlayHint(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": [
+        {
+          "position": {
+            "line": 4,
+            "character": 5
+          },
+          "label": ": int",
+          "kind": 1,
+          "textEdits": [
+            {
+              "range": {
+                "start":{
+                  "line": 4,
+                  "character": 5
+                },
+                "end": {
+                  "line": 4,
+                  "character": 5}
+                },
+                "newText": ": int"
+              }
+          ],
+          "tooltip": "",
+          "paddingLeft": false,
+          "paddingRight": false
+        }
+      ]
+    }).isOk
+
+    check currentBufStatus.inlayHints.range == independentutils.Range(
+      first: 0,
+      last: 0)
+
+    let hints = currentBufStatus.inlayHints.hints
+    check hints.len == 1
+    check hints[0].textEdits.get.len == 1
+    check hints[0].textEdits.get[0].range.start[] == types.Position(
+      line: 4,
+      character: 5)[]
+    check hints[0].textEdits.get[0].range.`end`[] == types.Position(
+      line: 4,
+      character: 5)[]
+    check hints[0].textEdits.get[0].newText == ": int"
+    check hints[0].tooltip.get == ""
+    check hints[0].paddingLeft.get == false
+    check hints[0].paddingRight.get == false
 
 suite "lsp: handleLspServerNotify":
   setup:

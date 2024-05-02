@@ -173,6 +173,30 @@ suite "lsp: lspMetod":
       "params": nil
     }).get
 
+  test "textDocument/semanticTokens/full":
+    check LspMethod.textDocumentSemanticTokensFull == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "textDocument/semanticTokens/full",
+      "params": nil
+    }).get
+
+  test "textDocument/semanticTokens/delta":
+    check LspMethod.textDocumentSemanticTokensDelta == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "textDocument/semanticTokens/delta",
+      "params": nil
+    }).get
+
+  test "textDocument/inlayHint":
+    check LspMethod.textDocumentInlayHint == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "textDocument/inlayHint",
+      "params": nil
+    }).get
+
 suite "lsp: parseLspMessageType":
   test "Invalid":
     check parseLspMessageType(-1).isErr
@@ -782,3 +806,91 @@ suite "lsp: parseTextDocumentSemanticTokensResponse":
         tokenType: 14,
         tokenModifiers: @[14])
     ]
+
+suite "lsp: parseTextDocumentInlayHint":
+  test "Basic":
+    let r = parseTextDocumentInlayHint(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": [
+        {
+          "position": {
+            "line": 4,
+            "character": 5
+          },
+          "label": ": int",
+          "kind": 1,
+          "textEdits": [
+            {
+              "range": {
+                "start":{
+                  "line": 4,
+                  "character": 5
+                },
+                "end": {
+                  "line": 4,
+                  "character": 5}
+                },
+                "newText": ": int"
+              }
+          ],
+          "tooltip": "",
+          "paddingLeft": false,
+          "paddingRight": false
+        },
+        {
+          "position": {
+            "line": 6,
+            "character": 5
+          },
+          "label": ": string",
+          "kind": 1,
+          "textEdits": [
+            {
+              "range": {
+                "start": {
+                  "line": 6,
+                  "character": 5
+                  },
+                  "end": {
+                    "line": 6,
+                    "character": 5
+                  }
+              },
+              "newText": ": string"
+            }
+          ],
+          "tooltip": "",
+          "paddingLeft": false,
+          "paddingRight": false
+        }
+      ]
+    }).get
+
+    check r.len == 2
+
+    check r[0].position[] == types.Position(line: 4, character: 5)[]
+    check r[0].label == ": int"
+    check r[0].kind == some(1)
+
+    check r[0].textEdits.get.len == 1
+    check r[0].textEdits.get[0].range.start[] == types.Position(line: 4, character: 5)[]
+    check r[0].textEdits.get[0].range.`end`[] == types.Position(line: 4, character: 5)[]
+    check r[0].textEdits.get[0].newText == ": int"
+
+    check r[0].tooltip.get == ""
+    check r[0].paddingLeft.get == false
+    check r[0].paddingRight.get == false
+
+    check r[1].position[] == types.Position(line: 6, character: 5)[]
+    check r[1].label == ": string"
+    check r[1].kind == some(1)
+
+    check r[1].textEdits.get.len == 1
+    check r[1].textEdits.get[0].range.start[] == types.Position(line: 6, character: 5)[]
+    check r[1].textEdits.get[0].range.`end`[] == types.Position(line: 6, character: 5)[]
+    check r[1].textEdits.get[0].newText == ": string"
+
+    check r[1].tooltip.get == ""
+    check r[1].paddingLeft.get == false
+    check r[1].paddingRight.get == false
