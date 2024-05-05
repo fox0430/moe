@@ -55,8 +55,9 @@ type
   LspLog* = seq[LspMessage]
 
   LspCapabilities* = object
-    hover*: bool
     completion*: Option[LspCompletionOptions]
+    diagnostics*: bool
+    hover*: bool
     semanticTokens*: Option[SemanticTokensLegend]
     inlayHint*: bool
 
@@ -461,6 +462,21 @@ proc setCapabilities(
     if settings.completion.enable and
        initResult.capabilities.completionProvider.isSome:
          capabilities.completion = initResult.capabilities.completionProvider
+
+    if settings.diagnostics.enable and
+       initResult.capabilities.diagnosticProvider.isSome:
+         try:
+           discard initResult.capabilities.diagnosticProvider.get.to(DiagnosticOptions)
+           capabilities.diagnostics = true
+         except CatchableError:
+           discard
+         if not capabilities.diagnostics:
+           try:
+             discard initResult.capabilities.diagnosticProvider.get.to(
+               DiagnosticRegistrationOptions)
+             capabilities.diagnostics = true
+           except CatchableError:
+             discard
 
     if settings.hover.enable and
        initResult.capabilities.hoverProvider == some(true):

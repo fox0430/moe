@@ -76,6 +76,76 @@ suite "lsp: setCapabilities":
 
     check client.capabilities.get.completion.isNone
 
+  test "Enable Diagnostic 1":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          diagnosticProvider: some(%*{
+            "identifier": none(string),
+            "interFileDependencies": false,
+            "workspaceDiagnostics": false
+          })))
+
+      s = LspFeatureSettings(
+        diagnostics: LspDiagnosticsSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.diagnostics
+
+  test "Enable Diagnostic 2":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          diagnosticProvider: some(%*{
+            "identifier": none(string),
+            "interFileDependencies": false,
+            "workspaceDiagnostics": false,
+            "id": none(string)
+          })))
+
+      s = LspFeatureSettings(
+        diagnostics: LspDiagnosticsSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.diagnostics
+
+  test "Disable Diagnostic 1":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          diagnosticProvider: none(JsonNode)))
+
+      s = LspFeatureSettings(
+        diagnostics: LspDiagnosticsSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.diagnostics
+
+  test "Disable Diagnostic 2":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          diagnosticProvider: some(%*{
+            "identifier": none(string),
+            "interFileDependencies": false,
+            "workspaceDiagnostics": false,
+            "id": none(string)
+          })))
+
+      s = LspFeatureSettings(
+        diagnostics: LspDiagnosticsSettings(
+          enable: false))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.diagnostics
+
   test "Enable Hover":
     let
       r = InitializeResult(
