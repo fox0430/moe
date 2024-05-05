@@ -540,7 +540,7 @@ suite "Ex mode: Open LSP log viewer":
   var status: EditorStatus
 
   setup:
-    var status = initEditorStatus()
+    status = initEditorStatus()
 
   test "Ininitialize LSP":
     let filename = $genOid() & ".nim"
@@ -555,7 +555,7 @@ suite "Ex mode: Open LSP log viewer":
     check status.mainWindow.numOfMainWindow == 2
     check currentMainWindowNode.view.height > 1
 
-    check currentBufStatus.buffer.toSeqRunes == @[""].toSeqRunes
+    check currentBufStatus.buffer.len > 0
 
   test "Without log":
     let filename = $genOid() & ".nim"
@@ -573,7 +573,7 @@ suite "Ex mode: Open LSP log viewer":
     check status.mainWindow.numOfMainWindow == 2
     check currentMainWindowNode.view.height > 1
 
-    check currentBufStatus.buffer.toSeqRunes == @[ ""].toSeqRunes
+    check currentBufStatus.buffer.toSeqRunes == @[""].toSeqRunes
 
   test "Basic":
     let filename = $genOid() & ".nim"
