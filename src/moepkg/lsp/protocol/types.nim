@@ -60,6 +60,13 @@ type
     changes*: OptionalNode
     documentChanges*: OptionalSeq[TextDocumentEdit]
 
+  DocumentFilter* = ref object of RootObj
+    language*: Option[string]
+    scheme*: Option[string]
+    pattern*: Option[string]
+
+  DocumentSelector* = DocumentFilter
+
   TextDocumentIdentifier* = ref object of RootObj
     uri*: string
 
@@ -69,20 +76,18 @@ type
     version*: int
     text*: string
 
-  VersionedTextDocumentIdentifier* = ref object of TextDocumentIdentifier
-    version*: OptionalNode # int or float
-
   TextDocumentPositionParams* = ref object of RootObj
     textDocument*: TextDocumentIdentifier
     position*: Position
 
+  TextDocumentRegistrationOptions* = ref object of RootObj
+    documentSelector*: Option[DocumentSelector]
+
+  VersionedTextDocumentIdentifier* = ref object of TextDocumentIdentifier
+    version*: OptionalNode # int or float
+
   ExpandTextDocumentPositionParams* = ref object of TextDocumentPositionParams
     level*: Option[int]
-
-  DocumentFilter* = ref object of RootObj
-    language*: Option[string]
-    scheme*: Option[string]
-    pattern*: Option[string]
 
   MarkupContent* = ref object of RootObj
     kind*: string
@@ -350,9 +355,6 @@ type
   WorkspaceCapability* = ref object of RootObj
     workspaceFolders*: Option[WorkspaceFolderCapability]
 
-  TextDocumentRegistrationOptions* = ref object of RootObj
-    documentSelector*: OptionalSeq[DocumentFilter]
-
   TextDocumentAndStaticRegistrationOptions* = ref object of TextDocumentRegistrationOptions
     id*: Option[string]
 
@@ -379,6 +381,17 @@ type
   InlayHintOptions* = object
     resolveProvider*: Option[bool]
 
+  DiagnosticOptions* = ref object of WorkDoneProgressOptions
+    identifier*: Option[string]
+    interFileDependencies*: bool
+    workspaceDiagnostics*: bool
+
+  DiagnosticRegistrationOptions* = ref object of TextDocumentRegistrationOptions
+    identifier*: Option[string]
+    interFileDependencies*: bool
+    workspaceDiagnostics*: bool
+    id*: Option[string]
+
   ServerCapabilities* = ref object of RootObj
     textDocumentSync*: OptionalNode # TextDocumentSyncOptions or int
     hoverProvider*: Option[bool]
@@ -399,11 +412,12 @@ type
     documentOnTypeFormattingProvider*: Option[DocumentOnTypeFormattingOptions]
     renameProvider*: JsonNode # bool or RenameOptions
     documentLinkProvider*: Option[DocumentLinkOptions]
-    colorProvider*: OptionalNode # bool or ColorProviderOptions or TextDocumentAndStaticRegistrationOptions
+    colorProvider*: OptionalNode # bool or ColorProviderOptions | TextDocumentAndStaticRegistrationOptions
     executeCommandProvider*: Option[ExecuteCommandOptions]
     workspace*: Option[WorkspaceCapability]
     semanticTokensProvider*: OptionalNode # SemanticTokensOptions or SemanticTokensRegistrationOptions
     inlayHintProvider*: Option[InlayHintOptions]  # boolean | InlayHintOptions | InlayHintRegistrationOptions
+    diagnosticProvider*: OptionalNode # DiagnosticOptions | DiagnosticRegistrationOptions
     experimental*: OptionalNode
 
   InitializedParams* = ref object of RootObj
