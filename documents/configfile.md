@@ -797,6 +797,41 @@ defaut is `false`
 enable
 ```
 
+### Lsp.Completion table
+Enable/Disable LSP Completion (bool)  
+defaut is `true`
+```
+enable
+```
+
+### Lsp.Diagnostics table
+Enable/Disable LSP Diagnostics (bool)  
+defaut is `true`
+```
+enable
+```
+
+### Lsp.Hover table
+Enable/Disable LSP Hover (bool)  
+defaut is `true`
+```
+enable
+```
+
+### Lsp.InlayHint table
+Enable/Disable LSP InlayHint (bool)  
+defaut is `true`
+```
+enable
+```
+
+### Lsp.SemanticTokens table
+Enable/Disable LSP SemanticTokens (bool)  
+defaut is `true`
+```
+enable
+```
+
 ### Lsp.{languageId} table
 
 File extensions (Array[string])

@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -27,6 +27,7 @@ import pkg/results
 
 import ../appinfo
 import ../independentutils
+import ../settings
 
 import protocol/[enums, types]
 import jsonrpc, utils
@@ -449,31 +450,38 @@ proc initInitializeParams*(
       trace: some($trace)
     )
 
-proc setCapabilities(c: var LspClient, initResult: InitializeResult) =
-  ## Set server capabilities to the LspClient from InitializeResult.
+proc setCapabilities(
+  c: var LspClient,
+  initResult: InitializeResult,
+  settings: LspFeatureSettings) =
+    ## Set server capabilities to the LspClient from InitializeResult.
 
-  var capabilities = LspCapabilities()
+    var capabilities = LspCapabilities()
 
-  if initResult.capabilities.hoverProvider == some(true):
-    capabilities.hover = true
+    if settings.completion.enable and
+       initResult.capabilities.completionProvider.isSome:
+         capabilities.completion = initResult.capabilities.completionProvider
 
-  if initResult.capabilities.completionProvider.isSome:
-    capabilities.completion = initResult.capabilities.completionProvider
+    if settings.hover.enable and
+       initResult.capabilities.hoverProvider == some(true):
+         capabilities.hover = true
 
-  if initResult.capabilities.semanticTokensProvider.isSome:
-    if initResult.capabilities.semanticTokensProvider.get.contains("legend"):
-      try:
-        capabilities.semanticTokens = some(
-          initResult.capabilities.semanticTokensProvider.get["legend"].to(
-            SemanticTokensLegend))
-      except CatchableError:
-        # Invalid SemanticTokensLegend
-        discard
+    if settings.semanticTokens.enable and
+       initResult.capabilities.semanticTokensProvider.isSome and
+       initResult.capabilities.semanticTokensProvider.get.contains("legend"):
+         try:
+           capabilities.semanticTokens = some(
+             initResult.capabilities.semanticTokensProvider.get["legend"].to(
+               SemanticTokensLegend))
+         except CatchableError:
+           # Invalid SemanticTokensLegend
+           discard
 
-  if initResult.capabilities.inlayHintProvider.isSome:
-    capabilities.inlayHint = true
+    if settings.inlayHint.enable and
+       initResult.capabilities.inlayHintProvider.isSome:
+         capabilities.inlayHint = true
 
-  c.capabilities = some(capabilities)
+    c.capabilities = some(capabilities)
 
 proc initialize*(
   c: var LspClient,
@@ -496,6 +504,7 @@ proc initialize*(
 
 proc initCapacities*(
   c: var LspClient,
+  settings: LspFeatureSettings,
   res: JsonNode): LspInitializeResult =
 
     var initResult: InitializeResult
@@ -505,7 +514,7 @@ proc initCapacities*(
       let msg = fmt"json to InitializeResult failed {e.msg}"
       return LspInitializeResult.err fmt"Initialize request failed: {msg}"
 
-    c.setCapabilities(initResult)
+    c.setCapabilities(initResult, settings)
 
     c.deleteWaitingResponse(res["id"].getInt)
 

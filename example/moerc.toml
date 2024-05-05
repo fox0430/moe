@@ -230,17 +230,29 @@ autoSplit = true
 splitType = "vertical"
 
 [Lsp]
-
 enable = false
 
-[Lsp.nim]
+[Lsp.Completion]
+enable = true
 
+[Lsp.Diagnostics]
+enable = true
+
+[Lsp.Hover]
+enable = true
+
+[Lsp.InlayHint]
+enable = true
+
+[Lsp.SemanticTokens]
+enable = true
+
+[Lsp.nim]
 extensions = ["nim"]
 command = "nimlangserver"
 trace = "verbose"
 
 [Lsp.rust]
-
 extensions = ["rs"]
 command = "rust-analyzer"
 trace = "verbose"

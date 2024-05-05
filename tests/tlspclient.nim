@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -17,15 +17,200 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, importutils, os, osproc, options, tables]
+import std/[unittest, importutils, os, osproc, options, tables, json]
 import pkg/results
 import moepkg/independentutils
-import moepkg/lsp/protocol/enums
+import moepkg/lsp/protocol/[enums, types]
 import moepkg/lsp/utils
 
 import utils
 
+import moepkg/settings {.all.}
 import moepkg/lsp/client {.all.}
+
+suite "lsp: setCapabilities":
+  var client: LspClient
+
+  setup:
+    client = LspClient()
+
+  test "Enable Completion":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          completionProvider: some(CompletionOptions())))
+
+      s = LspFeatureSettings(
+        completion: LspCompletionSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.completion.isSome
+
+  test "Disable Completion 1":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          completionProvider: none(CompletionOptions)))
+
+      s = LspFeatureSettings(
+        completion: LspCompletionSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.completion.isNone
+
+  test "Disable Completion 2":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          completionProvider: some(CompletionOptions())))
+
+      s = LspFeatureSettings(
+        completion: LspCompletionSettings(
+          enable: false))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.completion.isNone
+
+  test "Enable Hover":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          hoverProvider: some(true)))
+
+      s = LspFeatureSettings(
+        hover: LspHoverSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.hover
+
+  test "Disable Hover 1":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          hoverProvider: some(false)))
+
+      s = LspFeatureSettings(
+        hover: LspHoverSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.hover
+
+  test "Disable Hover 2":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          hoverProvider: some(true)))
+
+      s = LspFeatureSettings(
+        hover: LspHoverSettings(
+          enable: false))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.hover
+
+  test "Enable SemanticTokens":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          semanticTokensProvider: some(%*{
+            "legend": {
+              "tokenTypes": @[""],
+              "tokenModifiers": @[""]
+            }
+          })))
+
+      s = LspFeatureSettings(
+        semanticTokens: LspSemanticTokesnSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.semanticTokens.isSome
+
+  test "Disable SemanticTokens 1":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          semanticTokensProvider: none(JsonNode)))
+
+      s = LspFeatureSettings(
+        semanticTokens: LspSemanticTokesnSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.semanticTokens.isNone
+
+  test "Disable SemanticTokens 2":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          semanticTokensProvider: some(%*{
+            "legend": {
+              "tokenTypes": @[""],
+              "tokenModifiers": @[""]
+            }
+          })))
+
+      s = LspFeatureSettings(
+        semanticTokens: LspSemanticTokesnSettings(
+          enable: false))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.semanticTokens.isNone
+
+  test "Enable InlayHint":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          inlayHintProvider: some(InlayHintOptions())))
+
+      s = LspFeatureSettings(
+        inlayHint: LspInlayHintSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.inlayHint
+
+  test "Disable InlayHint 1":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          inlayHintProvider: none(InlayHintOptions)))
+
+      s = LspFeatureSettings(
+        inlayHint: LspInlayHintSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.inlayHint
+
+  test "Disable InlayHint 2":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          inlayHintProvider: some(InlayHintOptions())))
+
+      s = LspFeatureSettings(
+        inlayHint: LspInlayHintSettings(
+          enable: false))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.inlayHint
 
 suite "lsp: Send requests":
   privateAccess(LspClient)
@@ -72,7 +257,9 @@ suite "lsp: Send requests":
         let initializeRes = client.read.get
 
         block:
-          let err = client.initCapacities(initializeRes)
+          let err = client.initCapacities(
+            initLspFeatureSettings(),
+            initializeRes)
           assert err.isOk
 
         block:
@@ -101,7 +288,9 @@ suite "lsp: Send requests":
         let initializeRes = client.read.get
 
         block:
-          let err = client.initCapacities(initializeRes)
+          let err = client.initCapacities(
+            initLspFeatureSettings(),
+            initializeRes)
           assert err.isOk
 
         block:
@@ -131,7 +320,9 @@ suite "lsp: Send requests":
         let initializeRes = client.read.get
 
         block:
-          let err = client.initCapacities(initializeRes)
+          let err = client.initCapacities(
+            initLspFeatureSettings(),
+            initializeRes)
           assert err.isOk
 
         block:
@@ -176,7 +367,9 @@ suite "lsp: Send requests":
         let initializeRes = client.read.get
 
         block:
-          let err = client.initCapacities(initializeRes)
+          let err = client.initCapacities(
+            initLspFeatureSettings(),
+            initializeRes)
           assert err.isOk
 
         block:
@@ -225,7 +418,9 @@ suite "lsp: Send requests":
         let initializeRes = client.read.get
 
         block:
-          let err = client.initCapacities(initializeRes)
+          let err = client.initCapacities(
+            initLspFeatureSettings(),
+            initializeRes)
           assert err.isOk
 
         block:
@@ -272,7 +467,9 @@ suite "lsp: Send requests":
         let initializeRes = client.read.get
 
         block:
-          let err = client.initCapacities(initializeRes)
+          let err = client.initCapacities(
+            initLspFeatureSettings(),
+            initializeRes)
           assert err.isOk
 
         block:
@@ -318,7 +515,9 @@ suite "lsp: Send requests":
         let initializeRes = client.read.get
 
         block:
-          let err = client.initCapacities(initializeRes)
+          let err = client.initCapacities(
+            initLspFeatureSettings(),
+            initializeRes)
           assert err.isOk
 
         block:
@@ -367,7 +566,9 @@ suite "lsp: Send requests":
         let initializeRes = client.read.get
 
         block:
-          let err = client.initCapacities(initializeRes)
+          let err = client.initCapacities(
+            initLspFeatureSettings(),
+            initializeRes)
           assert err.isOk
 
         block:
@@ -426,7 +627,9 @@ suite "lsp: Send requests":
         let initializeRes = client.read.get
 
         block:
-          let err = client.initCapacities(initializeRes)
+          let err = client.initCapacities(
+            initLspFeatureSettings(),
+            initializeRes)
           assert err.isOk
 
         block:

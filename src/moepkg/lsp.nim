@@ -38,7 +38,9 @@ proc lspInitialized(
     ## Send notifications for initialize LSP.
 
     block:
-      let r = lspClient.initCapacities(initializeRes)
+      let r = lspClient.initCapacities(
+        status.settings.lsp.features,
+        initializeRes)
       if r.isErr:
         return Result[(), string].err r.error
 
