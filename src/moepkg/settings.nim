@@ -237,10 +237,32 @@ type
     command*: Runes
     trace*: TraceValue
 
-  LspSettings* = object
+  LspCompletionSettings* = object
     enable*: bool
 
+  LspDiagnosticsSettings* = object
+    enable*: bool
+
+  LspHoverSettings* = object
+    enable*: bool
+
+  LspInlayHintSettings* = object
+    enable*: bool
+
+  LspSemanticTokesnSettings* = object
+    enable*: bool
+
+  LspFeatureSettings* = object
+    completion*: LspCompletionSettings
+    diagnostics*: LspDiagnosticsSettings
+    hover*: LspHoverSettings
+    inlayHint*: LspInlayHintSettings
+    semanticTokens*: LspSemanticTokesnSettings
+
+  LspSettings* = object
+    enable*: bool
     languages*: Table[LanguageId, LspLanguageSettings]
+    features*: LspFeatureSettings
 
   StandardSettings* = object
     syntax*: bool
@@ -281,7 +303,6 @@ type
     startUp*: StartUpSettings
     autoSave*: AutoSaveSettings
     theme*: ThemeSettings
-
     lsp*: LspSettings
 
   InvalidItem = object
@@ -483,8 +504,32 @@ proc initThemeSettings(): ThemeSettings =
   result.kind = ColorThemeKind.default
   result.colors = DefaultColors
 
+proc initLspCompletionSettings(): LspCompletionSettings =
+  result.enable = true
+
+proc initLspDiagnosticsSettings(): LspDiagnosticsSettings =
+  result.enable = true
+
+proc initLspHoverSettings(): LspHoverSettings =
+  result.enable = true
+
+proc initLspInlayHintSettings(): LspInlayHintSettings =
+  result.enable = true
+
+proc initLspSemanticTokesnSettings(): LspSemanticTokesnSettings =
+  result.enable = true
+
+proc initLspFeatureSettings(): LspFeatureSettings =
+  result.completion = initLspCompletionSettings()
+  result.diagnostics = initLspDiagnosticsSettings()
+  result.hover = initLspHoverSettings()
+  result.inlayHint = initLspInlayHintSettings()
+  result.semanticTokens = initLspSemanticTokesnSettings()
+
 proc initLspSettigns(): LspSettings =
-  result.enable = false
+  result.enable = true
+
+  result.features = initLspFeatureSettings()
 
   result.languages["nim"] = LspLanguageSettings(
     extensions: @[ru"nim"],
@@ -1689,6 +1734,41 @@ proc parseLspTable(s: var EditorSettings, lspConfigs: TomlValueRef) =
     case key:
       of "enable":
         s.lsp.enable = lspConfigs["enable"].getBool
+      of "Completion":
+        for key, val in val.getTable:
+          case key:
+            of "enable":
+              s.lsp.features.completion.enable = val.getBool
+            else:
+              discard
+      of "Diagnostics":
+        for key, val in val.getTable:
+          case key:
+            of "enable":
+              s.lsp.features.diagnostics.enable = val.getBool
+            else:
+              discard
+      of "Hover":
+        for key, val in val.getTable:
+          case key:
+            of "enable":
+              s.lsp.features.hover.enable = val.getBool
+            else:
+              discard
+      of "InlayHint":
+        for key, val in val.getTable:
+          case key:
+            of "enable":
+              s.lsp.features.inlayHint.enable = val.getBool
+            else:
+              discard
+      of "SemanticTokens":
+        for key, val in val.getTable:
+          case key:
+            of "enable":
+              s.lsp.features.semanticTokens.enable = val.getBool
+            else:
+              discard
       else:
         let langId = key
         var langSettings = LspLanguageSettings()
@@ -2217,6 +2297,46 @@ proc validateLspTable(table: TomlValueRef): Option[InvalidItem] =
       of "enable":
         if val.kind != TomlValueKind.Bool:
           return some(InvalidItem(name: $key, val: $val))
+      of "Completion":
+        for key, val in val.getTable:
+          case key:
+            of "enable":
+              if val.kind != TomlValueKind.Bool:
+                return some(InvalidItem(name: $key, val: $val))
+            else:
+              return some(InvalidItem(name: $key, val: $val))
+      of "Diagnostics":
+        for key, val in val.getTable:
+          case key:
+            of "enable":
+              if val.kind != TomlValueKind.Bool:
+                return some(InvalidItem(name: $key, val: $val))
+            else:
+              return some(InvalidItem(name: $key, val: $val))
+      of "Hover":
+        for key, val in val.getTable:
+          case key:
+            of "enable":
+              if val.kind != TomlValueKind.Bool:
+                return some(InvalidItem(name: $key, val: $val))
+            else:
+              return some(InvalidItem(name: $key, val: $val))
+      of "InlayHint":
+        for key, val in val.getTable:
+          case key:
+            of "enable":
+              if val.kind != TomlValueKind.Bool:
+                return some(InvalidItem(name: $key, val: $val))
+            else:
+              return some(InvalidItem(name: $key, val: $val))
+      of "SemanticTokens":
+        for key, val in val.getTable:
+          case key:
+            of "enable":
+              if val.kind != TomlValueKind.Bool:
+                return some(InvalidItem(name: $key, val: $val))
+            else:
+              return some(InvalidItem(name: $key, val: $val))
       else:
         if val.kind != TomlValueKind.Table:
           return some(InvalidItem(name: $key, val: $val))
@@ -2598,6 +2718,22 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
 
   result.addLine fmt "[Lsp]"
   result.addLine fmt "enable = {$settings.lsp.enable}"
+
+  result.addLine fmt "[Lsp.Completion]"
+  result.addLine fmt "enable = {$settings.lsp.features.completion.enable}"
+
+  result.addLine fmt "[Lsp.Diagnostics]"
+  result.addLine fmt "enable = {$settings.lsp.features.diagnostics.enable}"
+
+  result.addLine fmt "[Lsp.Hover]"
+  result.addLine fmt "enable = {$settings.lsp.features.hover.enable}"
+
+  result.addLine fmt "[Lsp.InlayHint]"
+  result.addLine fmt "enable = {$settings.lsp.features.inlayHint.enable}"
+
+  result.addLine fmt "[Lsp.SemanticTokens]"
+  result.addLine fmt "enable = {$settings.lsp.features.semanticTokens.enable}"
+
   for key, val in settings.lsp.languages.pairs:
     result.addLine fmt "[Lsp.{key}]"
 

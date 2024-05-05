@@ -160,6 +160,21 @@ splitType = "horizontal"
 [Lsp]
 enable = true
 
+[Lsp.Completion]
+enable = false
+
+[Lsp.Diagnostics]
+enable = false
+
+[Lsp.Hover]
+enable = false
+
+[Lsp.InlayHint]
+enable = false
+
+[Lsp.SemanticTokens]
+enable = false
+
 [Lsp.nim]
 extensions = ["nim"]
 command = "nimlangserver"
@@ -555,6 +570,17 @@ suite "settings: Parse configuration file":
     check settings.startUp.fileOpen.splitType == WindowSplitType.horizontal
 
     check settings.lsp.enable
+
+    check not settings.lsp.features.completion.enable
+
+    check not settings.lsp.features.diagnostics.enable
+
+    check not settings.lsp.features.hover.enable
+
+    check not settings.lsp.features.inlayHint.enable
+
+    check not settings.lsp.features.semanticTokens.enable
+
     check settings.lsp.languages["nim"] == LspLanguageSettings(
       extensions: @[ru"nim"],
       command: ru"nimlangserver",

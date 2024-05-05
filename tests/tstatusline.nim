@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -21,7 +21,8 @@ import std/[unittest, os, strutils, strformat, importutils]
 
 import pkg/results
 
-import moepkg/[bufferstatus, unicodeext, editorstatus, gapbuffer, git, color]
+import moepkg/[bufferstatus, unicodeext, editorstatus, gapbuffer, git, color,
+               messagelog]
 
 import utils
 
@@ -398,6 +399,9 @@ suite "statusline: addBufManagerModeInfo":
     ]
 
 suite "statusline: addLogViewerModeInfo":
+  setup:
+    clearMessageLog()
+
   test "Active window":
     var status = initEditorStatus()
 
