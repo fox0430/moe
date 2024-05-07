@@ -56,6 +56,7 @@ type
 
   LspCapabilities* = object
     completion*: Option[LspCompletionOptions]
+    definition*: bool
     diagnostics*: bool
     hover*: bool
     semanticTokens*: Option[SemanticTokensLegend]
@@ -435,6 +436,9 @@ proc initInitializeParams*(
           inlayHint: some(InlayHintClientCapabilities(
             dynamicRegistration: some(true),
             resolveSupport: none(InlayHintClientCapabilitiesResolveSupport)
+          )),
+          definition: some(DefinitionCapability(
+            dynamicRegistration: some(true)
           ))
         )),
         window: some(WindowCapabilities(
@@ -462,6 +466,10 @@ proc setCapabilities(
     if settings.completion.enable and
        initResult.capabilities.completionProvider.isSome:
          capabilities.completion = initResult.capabilities.completionProvider
+
+    if settings.definition.enable and
+       initResult.capabilities.definitionProvider == some(true):
+         capabilities.definition = true
 
     if settings.diagnostics.enable and
        initResult.capabilities.diagnosticProvider.isSome:
@@ -858,7 +866,7 @@ proc textDocumentInlayHint*(
   bufferId: int,
   path: string,
   range: BufferRange): LspSendRequestResult =
-    ## Send a textDocument/InlayHint request to the server.
+    ## Send a textDocument/inlayHint request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_inlayHint
 
     if not c.serverProcess.running:
@@ -876,5 +884,39 @@ proc textDocumentInlayHint*(
     let r = c.request(bufferId, LspMethod.textDocumentInlayHint, params)
     if r.isErr:
       return R[(), string].err fmt"textDocument/inlayHint request failed: {r.error}"
+
+    return R[(), string].ok ()
+
+proc initDefinitionParams*(
+  path: string,
+  posi: BufferPosition): DefinitionParams =
+
+    DefinitionParams(
+      textDocument: TextDocumentIdentifier(uri: path.pathToUri),
+      position: posi.toLspPosition)
+
+proc textDocumentDefinition*(
+  c: var LspClient,
+  bufferId: int,
+  path: string,
+  posi: BufferPosition): LspSendRequestResult =
+    ## Send a textDocument/definition request to the server.
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_definition
+
+    if not c.serverProcess.running:
+      if not c.closed: c.closed = true
+      return R[(), string].err "server crashed"
+
+    if not c.isInitialized:
+      return R[(), string].err "lsp unavailable"
+
+    if not c.capabilities.get.definition:
+      return R[(), string].err "textDocument/definition unavailable"
+
+    let params = %* initDefinitionParams(path, posi)
+
+    let r = c.request(bufferId, LspMethod.textDocumentDefinition, params)
+    if r.isErr:
+      return R[(), string].err fmt"textDocument/definition request failed: {r.error}"
 
     return R[(), string].ok ()

@@ -240,6 +240,9 @@ type
   LspCompletionSettings* = object
     enable*: bool
 
+  LspDefinitionSettings* = object
+    enable*: bool
+
   LspDiagnosticsSettings* = object
     enable*: bool
 
@@ -254,6 +257,7 @@ type
 
   LspFeatureSettings* = object
     completion*: LspCompletionSettings
+    definition*: LspDefinitionSettings
     diagnostics*: LspDiagnosticsSettings
     hover*: LspHoverSettings
     inlayHint*: LspInlayHintSettings
@@ -507,6 +511,9 @@ proc initThemeSettings(): ThemeSettings =
 proc initLspCompletionSettings(): LspCompletionSettings =
   result.enable = true
 
+proc initLspDefinitionSettings(): LspDefinitionSettings =
+  result.enable = true
+
 proc initLspDiagnosticsSettings(): LspDiagnosticsSettings =
   result.enable = true
 
@@ -521,6 +528,7 @@ proc initLspSemanticTokesnSettings(): LspSemanticTokesnSettings =
 
 proc initLspFeatureSettings(): LspFeatureSettings =
   result.completion = initLspCompletionSettings()
+  result.definition = initLspDefinitionSettings()
   result.diagnostics = initLspDiagnosticsSettings()
   result.hover = initLspHoverSettings()
   result.inlayHint = initLspInlayHintSettings()
@@ -1739,6 +1747,13 @@ proc parseLspTable(s: var EditorSettings, lspConfigs: TomlValueRef) =
           case key:
             of "enable":
               s.lsp.features.completion.enable = val.getBool
+            else:
+              discard
+      of "Definition":
+        for key, val in val.getTable:
+          case key:
+            of "enable":
+              s.lsp.features.definition.enable = val.getBool
             else:
               discard
       of "Diagnostics":

@@ -57,6 +57,7 @@ type
     textDocumentSemanticTokensFull
     textDocumentSemanticTokensDelta
     textDocumentInlayHint
+    textDocumentDefinition
 
   ProgressToken* = string
     # ProgressParams.token
@@ -115,6 +116,10 @@ type
       # Line range to request
     hints*: seq[InlayHint]
 
+  LspDefinition* = object
+    path*: string
+    position*: BufferPosition
+
   R = Result
   parseLspMessageTypeResult* = R[LspMessageType, string]
   LspMethodResult* = R[LspMethod, string]
@@ -130,6 +135,7 @@ type
   LspCompletionResut* = R[seq[CompletionItem], string]
   LspSemanticTokensResult* = R[seq[LspSemanticToken], string]
   LspInlayHintsResult* = R[seq[InlayHint], string]
+  LspDefinitionResult* = R[LspDefinition, string]
 
 proc pathToUri*(path: string): string =
   ## This is a modified copy of encodeUrl in the uri module. This doesn't encode
@@ -195,6 +201,7 @@ proc toLspMethodStr*(m: LspMethod): string =
     of textDocumentSemanticTokensFull: "textDocument/semanticTokens/full"
     of textDocumentSemanticTokensDelta: "textDocument/semanticTokens/delta"
     of textDocumentInlayHint: "textDocument/inlayHint"
+    of textDocumentDefinition: "textDocument/definition"
 
 proc parseTraceValue*(s: string): Result[TraceValue, string] =
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#traceValue
@@ -250,6 +257,8 @@ proc lspMethod*(j: JsonNode): LspMethodResult =
       LspMethodResult.ok textDocumentSemanticTokensDelta
     of "textDocument/inlayHint":
       LspMethodResult.ok textDocumentInlayHint
+    of "textDocument/definition":
+      LspMethodResult.ok textDocumentDefinition
     else:
       LspMethodResult.err "Not supported: " & j["method"].getStr
 
@@ -545,3 +554,21 @@ proc parseTextDocumentInlayHint*(res: JsonNode): LspInlayHintsResult =
     return LspInlayHintsResult.err fmt"Invalid response: {e.msg}"
 
   return LspInlayHintsResult.ok hints
+
+proc parseTextDocumentDefinition*(res: JsonNode): LspDefinitionResult =
+  if res["result"].kind != JArray and res["result"].len == 0:
+    return LspDefinitionResult.err "Invalid response"
+
+  let location =
+    try:
+      res["result"][0].to(Location)
+    except CatchableError as e:
+      return LspDefinitionResult.err fmt"Invalid response: {e.msg}"
+
+  let path = location.uri.uriToPath
+  if path.isErr:
+    return LspDefinitionResult.err "Invalid uri"
+
+  return LspDefinitionResult.ok LspDefinition(
+    path: path.get,
+    position: location.range.start.toBufferPosition)
