@@ -398,6 +398,10 @@ proc writeLspInlayHintError*(commandLine: var CommandLine, message: string) =
   let mess = fmt"lsp: Error: inlayHint failed: {message}"
   commandLine.writeError(mess)
 
+proc writeLspDefinitionError*(commandLine: var CommandLine, message: string) =
+  let mess = fmt"lsp: Error: definition failed: {message}"
+  commandLine.writeError(mess)
+
 proc writePasteIgnoreWarn*(commandLine: var CommandLine) =
   const Mess = "Paste is ignored in this mode"
   commandLine.writeWarn(Mess)

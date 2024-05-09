@@ -394,9 +394,9 @@ proc lspDefinition(
   res: JsonNode): Result[(), string] =
     ## textDocument/definition
 
-    let d = parseTextDocumentDefinition(res)
-    if d.isErr:
-      return Result[(), string].err d.error
+    let parseResult = parseTextDocumentDefinition(res)
+    if parseResult.isErr:
+      return Result[(), string].err parseResult.error
 
     let requestId =
       try: res["id"].getInt
@@ -404,32 +404,39 @@ proc lspDefinition(
 
     lspClient.deleteWaitingResponse(requestId)
 
-    if d.get.path == $currentBufStatus.absolutePath:
-      currentMainWindowNode.currentLine = d.get.position.line
-      currentMainWindowNode.currentColumn = d.get.position.column
+    if parseResult.get.isNone:
+      return Result[(), string].err fmt"Not found"
+
+    let d = parseResult.get.get
+
+    if d.path == $currentBufStatus.absolutePath:
+      currentMainWindowNode.currentLine = d.position.line
+      currentMainWindowNode.currentColumn = d.position.column
     else:
       # Open a buffer in a new window.
       status.verticalSplitWindow
       status.moveNextWindow
 
-      let r = status.addNewBufferInCurrentWin(d.get.path)
+      let r = status.addNewBufferInCurrentWin(d.path)
       if r.isErr:
-        return Result[(), string].err fmt"Cannot open file: {d.get.path}"
+        return Result[(), string].err fmt"Cannot open file: {d.path}"
 
       status.changeCurrentBuffer(status.bufStatus.high)
 
       template canMove(): bool =
-        d.get.position.line < currentBufStatus.buffer.len and
-        d.get.position.column < currentBufStatus.buffer[d.get.position.line].len
+        d.position.line < currentBufStatus.buffer.len and
+        d.position.column < currentBufStatus.buffer[d.position.line].len
 
       if not canMove():
-        return Result[(), string].err fmt"Invalid position: {$d.get.position.line}, {$d.get.position.column}"
+        return Result[(), string].err fmt"Invalid position: {$d.position.line}, {$d.position.column}"
 
       status.resize
       status.update
 
-      jumpLine(currentBufStatus, currentMainWindowNode, d.get.position.line)
-      currentMainWindowNode.currentColumn = d.get.position.column
+      jumpLine(currentBufStatus, currentMainWindowNode, d.position.line)
+      currentMainWindowNode.currentColumn = d.position.column
+
+    return Result[(), string].ok ()
 
 proc handleLspServerNotify(
 
@@ -537,6 +544,6 @@ proc handleLspResponse*(status: var EditorStatus) =
         if r.isErr: status.commandLine.writeLspInlayHintError(r.error)
       of LspMethod.textDocumentDefinition:
         let r = status.lspDefinition(resJson.get)
-        # TODO: Show error
+        if r.isErr: status.commandLine.writeLspDefinitionError(r.error)
       else:
         info fmt"lsp: Ignore response: {resJson}"

@@ -2320,6 +2320,14 @@ proc validateLspTable(table: TomlValueRef): Option[InvalidItem] =
                 return some(InvalidItem(name: $key, val: $val))
             else:
               return some(InvalidItem(name: $key, val: $val))
+      of "Definition":
+        for key, val in val.getTable:
+          case key:
+            of "enable":
+              if val.kind != TomlValueKind.Bool:
+                return some(InvalidItem(name: $key, val: $val))
+            else:
+              return some(InvalidItem(name: $key, val: $val))
       of "Diagnostics":
         for key, val in val.getTable:
           case key:
@@ -2736,6 +2744,9 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
 
   result.addLine fmt "[Lsp.Completion]"
   result.addLine fmt "enable = {$settings.lsp.features.completion.enable}"
+
+  result.addLine fmt "[Lsp.Definition]"
+  result.addLine fmt "enable = {$settings.lsp.features.definition.enable}"
 
   result.addLine fmt "[Lsp.Diagnostics]"
   result.addLine fmt "enable = {$settings.lsp.features.diagnostics.enable}"

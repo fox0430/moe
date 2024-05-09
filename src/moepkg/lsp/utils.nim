@@ -135,7 +135,7 @@ type
   LspCompletionResut* = R[seq[CompletionItem], string]
   LspSemanticTokensResult* = R[seq[LspSemanticToken], string]
   LspInlayHintsResult* = R[seq[InlayHint], string]
-  LspDefinitionResult* = R[LspDefinition, string]
+  LspDefinitionResult* = R[Option[LspDefinition], string]
 
 proc pathToUri*(path: string): string =
   ## This is a modified copy of encodeUrl in the uri module. This doesn't encode
@@ -556,8 +556,11 @@ proc parseTextDocumentInlayHint*(res: JsonNode): LspInlayHintsResult =
   return LspInlayHintsResult.ok hints
 
 proc parseTextDocumentDefinition*(res: JsonNode): LspDefinitionResult =
-  if res["result"].kind != JArray and res["result"].len == 0:
+  if res["result"].kind != JArray:
     return LspDefinitionResult.err "Invalid response"
+  elif res["result"].len == 0:
+    # Not found
+    return LspDefinitionResult.ok none(LspDefinition)
 
   let location =
     try:
@@ -569,6 +572,6 @@ proc parseTextDocumentDefinition*(res: JsonNode): LspDefinitionResult =
   if path.isErr:
     return LspDefinitionResult.err "Invalid uri"
 
-  return LspDefinitionResult.ok LspDefinition(
+  return LspDefinitionResult.ok some(LspDefinition(
     path: path.get,
-    position: location.range.start.toBufferPosition)
+    position: location.range.start.toBufferPosition))
