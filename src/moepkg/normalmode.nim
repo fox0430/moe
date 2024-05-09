@@ -460,7 +460,7 @@ proc showCurrentCharInfoCommand(
 
     status.commandLine.writeCurrentCharInfo(currentChar)
 
-proc gotoDefinition(status: var EditorStatus) =
+proc requestGotoDefinition(status: var EditorStatus) =
   if not status.lspClients.contains(currentBufStatus.langId):
     debug "lsp client is not ready"
     return
@@ -1244,7 +1244,7 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
     elif secondKey == ord('a'):
       status.showCurrentCharInfoCommand(currentMainWindowNode)
     elif secondKey == ord('d'):
-      status.gotoDefinition
+      status.requestGotoDefinition
   elif key == ord('G'):
     currentBufStatus.moveToLastLine(currentMainWindowNode)
   elif isCtrlU(key):
