@@ -135,6 +135,9 @@ type
     token*: OptionalNode # int or string (ProgressToken)
     value*: OptionalNode # T
 
+  WorkDoneProgressParams* = ref object of RootObj
+    workDoneToken*: OptionalNode # ProgressToken
+
   ConfigurationItem* = ref object of RootObj
     scopeUri*: Option[string]
     section*: Option[string]
@@ -738,3 +741,7 @@ type
     paddingLeft*: Option[bool]
     paddingRight*: Option[bool]
     #data*: OptionalNode
+
+  DefinitionParams* = ref object of TextDocumentPositionParams
+    workDoneToken*: OptionalNode # ProgressToken
+    workDoneProgress*: Option[bool]

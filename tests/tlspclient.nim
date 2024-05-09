@@ -717,11 +717,66 @@ suite "lsp: Send requests":
           let err = client.textDocumentDidOpen(path, LanguageId, Text)
           assert err.isOk
 
+        check client.textDocumentInlayHint(
+          Id,
+          path,
+          BufferRange(
+            first: BufferPosition(line: 0, column: 0),
+            last: BufferPosition(line: 0, column: Text.high))).isOk
+
+  test "Send textDocument/definition":
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      let rootPath = getCurrentDir()
+
+      const
+        Id = 1
+        LanguageId = "nim"
+
+        # Use simple text for the test.
+        Text = """
+type number = int
+var num: number
+        """
+
+      let
+        path = getCurrentDir() / "src/moe.nim"
+
+      block:
+        # Initialize LSP client
+
         block:
-         let err = client.textDocumentInlayHint(
-           Id,
-           path,
-           BufferRange(
-             first: BufferPosition(line: 0, column: 0),
-             last: BufferPosition(line: 0, column: Text.high)))
-         assert err.isOk
+          let params = initInitializeParams(rootPath, Trace)
+          assert client.initialize(Id, params).isOk
+
+        const Timeout = 5000
+        assert client.readable(Timeout).isOk
+        let initializeRes = client.read.get
+
+        block:
+          let err = client.initCapacities(
+            initLspFeatureSettings(),
+            initializeRes)
+          assert err.isOk
+
+        block:
+          # Initialized notification
+          let err = client.initialized
+          assert err.isOk
+
+        block:
+          # workspace/didChangeConfiguration notification
+          let err = client.workspaceDidChangeConfiguration
+          assert err.isOk
+
+        block:
+          # textDocument/diOpen notification
+          let err = client.textDocumentDidOpen(path, LanguageId, Text)
+          assert err.isOk
+
+        block:
+          check client.textDocumentDefinition(
+            Id,
+            path,
+            BufferPosition(line: 1, column: 9)).isOk

@@ -25,7 +25,7 @@ import lsp/[client, utils]
 import syntax/highlite
 import editorstatus, windownode, popupwindow, unicodeext, independentutils, ui,
        gapbuffer, messages, commandline, bufferstatus, syntaxcheck, completion,
-       highlight
+       highlight, movement
 
 template isLspResponse*(status: EditorStatus): bool =
   status.lspClients.contains(currentBufStatus.langId) and
@@ -376,7 +376,6 @@ proc lspInlayHint(status: var EditorStatus, res: JsonNode): Result[(), string] =
   if waitingRes.isNone:
     return Result[(), string].err fmt"Not found id: {requestId}"
 
-
   lspClient.deleteWaitingResponse(requestId)
 
   let hints = parseTextDocumentInlayHint(res)
@@ -390,7 +389,57 @@ proc lspInlayHint(status: var EditorStatus, res: JsonNode): Result[(), string] =
 
   return Result[(), string].ok ()
 
+proc lspDefinition(
+  status: var EditorStatus,
+  res: JsonNode): Result[(), string] =
+    ## textDocument/definition
+
+    let parseResult = parseTextDocumentDefinition(res)
+    if parseResult.isErr:
+      return Result[(), string].err parseResult.error
+
+    let requestId =
+      try: res["id"].getInt
+      except CatchableError as e: return Result[(), string].err e.msg
+
+    lspClient.deleteWaitingResponse(requestId)
+
+    if parseResult.get.isNone:
+      return Result[(), string].err fmt"Not found"
+
+    let d = parseResult.get.get
+
+    if d.path == $currentBufStatus.absolutePath:
+      currentMainWindowNode.currentLine = d.position.line
+      currentMainWindowNode.currentColumn = d.position.column
+    else:
+      # Open a buffer in a new window.
+      status.verticalSplitWindow
+      status.moveNextWindow
+
+      let r = status.addNewBufferInCurrentWin(d.path)
+      if r.isErr:
+        return Result[(), string].err fmt"Cannot open file: {d.path}"
+
+      status.changeCurrentBuffer(status.bufStatus.high)
+
+      template canMove(): bool =
+        d.position.line < currentBufStatus.buffer.len and
+        d.position.column < currentBufStatus.buffer[d.position.line].len
+
+      if not canMove():
+        return Result[(), string].err fmt"Invalid position: {$d.position.line}, {$d.position.column}"
+
+      status.resize
+      status.update
+
+      jumpLine(currentBufStatus, currentMainWindowNode, d.position.line)
+      currentMainWindowNode.currentColumn = d.position.column
+
+    return Result[(), string].ok ()
+
 proc handleLspServerNotify(
+
   status: var EditorStatus,
   notify: JsonNode): Result[(), string] =
     ## Handle the notification from the server.
@@ -493,5 +542,8 @@ proc handleLspResponse*(status: var EditorStatus) =
       of LspMethod.textDocumentInlayHint:
         let r = status.lspInlayHint(resJson.get)
         if r.isErr: status.commandLine.writeLspInlayHintError(r.error)
+      of LspMethod.textDocumentDefinition:
+        let r = status.lspDefinition(resJson.get)
+        if r.isErr: status.commandLine.writeLspDefinitionError(r.error)
       else:
         info fmt"lsp: Ignore response: {resJson}"

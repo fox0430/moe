@@ -163,6 +163,9 @@ enable = true
 [Lsp.Completion]
 enable = false
 
+[Lsp.Definition]
+enable = false
+
 [Lsp.Diagnostics]
 enable = false
 
@@ -572,6 +575,8 @@ suite "settings: Parse configuration file":
     check settings.lsp.enable
 
     check not settings.lsp.features.completion.enable
+
+    check not settings.lsp.features.definition.enable
 
     check not settings.lsp.features.diagnostics.enable
 

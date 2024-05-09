@@ -24,6 +24,8 @@ import editorstatus, ui, gapbuffer, unicodeext, fileutils, windownode, movement,
        editor, searchutils, bufferstatus, quickrunutils, messages, visualmode,
        commandline, viewhighlight, messagelog, registers, independentutils
 
+import std/json
+
 proc changeModeToInsertMode(status: var EditorStatus) {.inline.} =
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
@@ -457,6 +459,19 @@ proc showCurrentCharInfoCommand(
       currentChar = currentBufStatus.buffer[currentLine][currentColumn]
 
     status.commandLine.writeCurrentCharInfo(currentChar)
+
+proc requestGotoDefinition(status: var EditorStatus) =
+  if not status.lspClients.contains(currentBufStatus.langId):
+    debug "lsp client is not ready"
+    return
+
+  let r = lspClient.textDocumentDefinition(
+    currentBufStatus.id,
+    $currentBufStatus.absolutePath,
+    currentMainWindowNode.bufferPosition)
+  if r.isErr:
+    # TODO: Show error
+    error fmt"Goto definition failed: {r.error}"
 
 proc yankLines(
   status: var EditorStatus,
@@ -1228,6 +1243,8 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
       currentBufStatus.moveToLastNonBlankOfLine(currentMainWindowNode)
     elif secondKey == ord('a'):
       status.showCurrentCharInfoCommand(currentMainWindowNode)
+    elif secondKey == ord('d'):
+      status.requestGotoDefinition
   elif key == ord('G'):
     currentBufStatus.moveToLastLine(currentMainWindowNode)
   elif isCtrlU(key):
@@ -1562,7 +1579,8 @@ proc isNormalModeCommand*(
         elif command.len == 2:
           if command[1] == ord('g') or
              command[1] == ord('_') or
-             command[1] == ord('a'):
+             command[1] == ord('a') or
+             command[1] == ord('d'):
                result = InputState.Valid
 
       elif command[0] == ord('z'):

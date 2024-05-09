@@ -64,7 +64,7 @@
 | <kbd>**t**</kbd><kbd>**x**</kbd><br> Move to the left of the next ```x``` (any character) on the current line | <kbd>**T**</kbd><kbd>**x**</kbd><br> Move to the right of the back ```x ``` (any character) on the current line | <kbd>**y**</kbd><kbd>**t**</kbd><br><kbd>**Any key**</kbd><br> Yank characters to an any character | <kbd>**c**</kbd><kbd>**f**</kbd><br><kbd>**Any key**</kbd><br> Delete characters to an any character and enter insert mode |
 | <kbd>**H**</kbd></br> Move to the top line of the screen | <kbd>**M**</kbd></br> Move to the center line of the screen | <kbd>**L**</kbd></br> Move to the bottom line of the screen | <kbd>**%**</kbd></br> Move to matching pair of paren |
 | <kbd>**q**</kbd> <kbd>**Any key**</kbd></br> Start recording operations for Macros | <kbd>**q**</kbd></br> Stop recording operations | <kbd>**@**</kbd> <kbd>**Any key**</kbd></br> Exce a macro | <kbd>**c**</kbd> <kbd>**t**</kbd> <kbd>**Any Key**</kbd></br> Delete characters until the any key and enter Insert mode |
-| <kbd>**d**</kbd> <kbd>**t**</kbd> <kbd>**Any Key**</kbd></br> Delete characters until the any key | <kbd>**.**</kbd></br> Repeat the last normal mode command | <kbd>**K**</kbd></br> Hover (Need LSP) |
+| <kbd>**d**</kbd> <kbd>**t**</kbd> <kbd>**Any Key**</kbd></br> Delete characters until the any key | <kbd>**.**</kbd></br> Repeat the last normal mode command | <kbd>**K**</kbd></br> Hover (LSP) | <kbd>**g**</kbd> <kbd>**d**</kbd></br> Goto definition (LSP) |
 
 </details>
 

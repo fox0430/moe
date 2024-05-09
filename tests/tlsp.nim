@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -648,6 +648,65 @@ suite "lsp: lspInlayHint":
     check hints[0].tooltip.get == ""
     check hints[0].paddingLeft.get == false
     check hints[0].paddingRight.get == false
+
+suite "lsp: lspDefinition":
+  var status = initEditorStatus()
+
+  setup:
+    status = initEditorStatus()
+    status.settings.lsp.enable = true
+
+    let filename = $genOid() & ".nim"
+    assert status.addNewBufferInCurrentWin(filename).isOk
+    currentBufStatus.buffer = @[
+      "type number = int",
+      "var a: number"
+    ]
+    .toSeqRunes
+    .toGapBuffer
+
+    status.lspClients["nim"] = LspClient()
+
+  test "Not found":
+    lspClient.waitingResponses[0] = WaitLspResponse(
+      bufferId: currentBufStatus.id,
+      requestId: 0,
+      lspMethod: LspMethod.textDocumentDefinition)
+
+    check status.lspDefinition(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": []
+    }).isErr
+
+  test "Basic":
+    lspClient.waitingResponses[0] = WaitLspResponse(
+      bufferId: currentBufStatus.id,
+      requestId: 0,
+      lspMethod: LspMethod.textDocumentDefinition)
+
+    check status.lspDefinition(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": [
+        {
+          "uri": pathToUri($currentBufStatus.absolutePath),
+          "range": {
+            "start": {
+              "line": 0,
+              "character": 5,
+            },
+            "end": {
+              "line": 0,
+              "character": 5,
+            }
+          }
+        }
+      ]
+    }).isOk
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 5
 
 suite "lsp: handleLspServerNotify":
   setup:
