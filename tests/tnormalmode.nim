@@ -3594,3 +3594,19 @@ suite "Normal mode: requestHover":
     status.requestHover
 
     status.update
+
+suite "Normal mode: requestGotoDefinition":
+  test "Disable LSP":
+    var status = initEditorStatus()
+    status.settings.lsp.enable = false
+
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["echo 1"].toSeqRunes.toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    # Nothing to do
+    status.requestGotoDefinition
+
+    status.update

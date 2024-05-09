@@ -894,3 +894,35 @@ suite "lsp: parseTextDocumentInlayHint":
     check r[1].tooltip.get == ""
     check r[1].paddingLeft.get == false
     check r[1].paddingRight.get == false
+
+suite "lsp: parseTextDocumentInlayHint":
+  test "Not found":
+    check parseTextDocumentDefinition(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": []
+    }).get.isNone
+
+  test "Basic":
+    check parseTextDocumentDefinition(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": [
+        {
+          "uri":  "file:///home/user/text.txt",
+          "range": {
+            "start": {
+              "line": 0,
+              "character": 1,
+            },
+            "end": {
+              "line": 0,
+              "character": 2,
+            }
+          }
+        }
+      ]
+    }).get.get == LspDefinition(
+      path: "/home/user/text.txt",
+      position: BufferPosition(line: 0, column: 1))
+
