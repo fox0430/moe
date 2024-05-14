@@ -514,7 +514,7 @@ proc handleLspResponse*(status: var EditorStatus) =
         error fmt"lsp: Not found request id: {resJson.get}"
         return
 
-    if lspClient.lastId > requestId:
+    if requestId > lspClient.lastId:
       lspClient.lastId = requestId
 
     let waitingResponse = lspClient.getWaitingResponse(requestId)
