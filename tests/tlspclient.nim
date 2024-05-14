@@ -610,7 +610,7 @@ var num: number
       assert client.readable(Timeout).get
       let res = client.read.get
       check res["result"][0] == %* {
-        "uri": "file:///home/fox/git/moe/lspTestDir/test.nim",
+        "uri": "file://" & getCurrentDir() & "/lspTestDir/test.nim",
         "range": {
           "start": {
             "line": 0,
