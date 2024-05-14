@@ -3,5 +3,5 @@
 Fixed
 .....
 
-- `#2054`_ lsp: Fix request id count
+- `#2055`_ lsp: Fix request id count
 
