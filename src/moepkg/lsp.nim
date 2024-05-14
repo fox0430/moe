@@ -479,7 +479,7 @@ proc containsBufferId(
 proc handleLspResponse*(status: var EditorStatus) =
   ## Read a Json from the server and handle the response and notification.
 
-  if not lspClient.closed and  not lspClient.running:
+  if not lspClient.closed and not lspClient.running:
     lspClient.closed = true
     status.commandLine.writeLspError("server crashed")
     return
@@ -513,6 +513,9 @@ proc handleLspResponse*(status: var EditorStatus) =
       except CatchableError:
         error fmt"lsp: Not found request id: {resJson.get}"
         return
+
+    if lspClient.lastId > requestId:
+      lspClient.lastId = requestId
 
     let waitingResponse = lspClient.getWaitingResponse(requestId)
     if waitingResponse.isNone:

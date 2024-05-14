@@ -88,7 +88,7 @@ type
       # Waiting responses from the LSP server.
     log*: LspLog
       # Request/Response log.
-    lastId: RequestId
+    lastId*: RequestId
       # Last request ID
 
 type
@@ -291,7 +291,7 @@ proc setNonBlockingOutput(p: Process): Result[(), string] =
 
   return Result[(), string].ok ()
 
-proc setWaitResponse(
+proc setWaitResponse*(
   c: var LspClient,
   bufferId: int,
   lspMethod: LspMethod) {.inline.} =
