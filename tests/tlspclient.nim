@@ -288,93 +288,41 @@ suite "lsp: Send requests":
   const
     Command = "nimlangserver"
     Trace = TraceValue.verbose
+    Timeout = 5000
+
+  let rootDir = getCurrentDir() / "lspTestDir"
 
   var client: LspClient
 
   setup:
     if isNimlangserverAvailable():
       client = initLspClient(Command).get
+      createDir(rootDir)
+
+  teardown:
+    if dirExists(rootDir):
+      removeDir(rootDir)
 
   test "Send initialize":
     if not isNimlangserverAvailable():
       skip()
     else:
-      const
-        Id = 1
-        RootPath = ""
-      let params = initInitializeParams(RootPath, Trace)
+      const BufferId = 1
+      let params = initInitializeParams(rootDir, Trace)
 
-      check client.initialize(Id, params).isOk
+      check client.initialize(BufferId, params).isOk
       check client.waitingResponses[1].lspMethod == LspMethod.initialize
 
-  test "Send shutdown":
-    if not isNimlangserverAvailable():
-      skip()
-    else:
-      const
-        Id = 1
-        RootPath = ""
-
-      block:
-        # Initialize LSP client
-
-        block:
-          let params = initInitializeParams(RootPath, Trace)
-          assert client.initialize(Id, params).isOk
-
-        const Timeout = 5000
-        assert client.readable(Timeout).isOk
-        let initializeRes = client.read.get
-
-        block:
-          let err = client.initCapacities(
-            initLspFeatureSettings(),
-            initializeRes)
-          assert err.isOk
-
-        block:
-          # Initialized notification
-          let err = client.initialized
-          assert err.isOk
-
-      check client.shutdown(Id).isOk
-
-  test "Send workspace/didChangeConfiguration":
-    if not isNimlangserverAvailable():
-      skip()
-    else:
-      block:
-        # Initialize LSP client
-
-        const Id = 1
-        let rootPath = getCurrentDir()
-
-        block:
-          let params = initInitializeParams(rootPath, Trace)
-          assert client.initialize(Id, params).isOk
-
-        const Timeout = 5000
-        assert client.readable(Timeout).isOk
-        let initializeRes = client.read.get
-
-        block:
-          let err = client.initCapacities(
-            initLspFeatureSettings(),
-            initializeRes)
-          assert err.isOk
-
-        block:
-          # Initialized notification
-          let err = client.initialized
-          assert err.isOk
-
-      check client.workspaceDidChangeConfiguration.isOk
+      assert client.readable(Timeout).get
+      let res = client.read.get
+      check res["id"].getInt == 1
+      check client.initCapacities(initLspFeatureSettings(), res).isOk
 
   test "Send textDocument/didOpen":
     if not isNimlangserverAvailable():
       skip()
     else:
-      const Id = 1
+      const BufferId = 1
 
       block:
         # Initialize LSP client
@@ -383,9 +331,8 @@ suite "lsp: Send requests":
           let
             rootPath = getCurrentDir()
             params = initInitializeParams(rootPath, Trace)
-          assert client.initialize(Id, params).isOk
+          assert client.initialize(BufferId, params).isOk
 
-        const Timeout = 5000
         assert client.readable(Timeout).isOk
         let initializeRes = client.read.get
 
@@ -412,27 +359,71 @@ suite "lsp: Send requests":
 
       check client.textDocumentDidOpen(path, LanguageId, text).isOk
 
-  test "Send textDocument/didChange":
+  template prepareLsp(bufferId: int, langId: LanguageId, path, text: string) =
+    block:
+      let params = initInitializeParams(rootDir, Trace)
+      assert client.initialize(BufferId, params).isOk
+
+    assert client.readable(Timeout).isOk
+    let initializeRes = client.read.get
+    assert client.initCapacities(initLspFeatureSettings(), initializeRes).isOk
+
+    assert client.initialized.isOk
+
+    assert client.workspaceDidChangeConfiguration.isOk
+
+    check client.textDocumentDidOpen(path, langId, text).isOk
+
+    while client.readable(Timeout).get:
+      let res = client.read.get
+      if res.contains("id") and res["id"].getInt > client.lastId:
+        client.lastId = res["id"].getInt
+
+  test "Send shutdown":
     if not isNimlangserverAvailable():
       skip()
     else:
       const
-        Id = 1
-        LanguageId = "nim"
-      let
-        path = getCurrentDir() / "src/moe.nim"
-        text = readFile(path)
+        BufferId = 1
 
+      block:
+        # Initialize
+
+        let params = initInitializeParams(rootDir, Trace)
+
+        check client.initialize(BufferId, params).isOk
+        check client.waitingResponses[1].lspMethod == LspMethod.initialize
+
+        assert client.readable(Timeout).get
+        let res = client.read.get
+        check res["id"].getInt == 1
+        check client.initCapacities(initLspFeatureSettings(), res).isOk
+
+      let requestId = client.lastId + 1
+
+      check client.shutdown(BufferId).isOk
+
+      assert client.readable(Timeout).get
+      check client.waitingResponses[requestId].lspMethod == LspMethod.shutdown
+
+      let res = client.read.get
+      check res["id"].getInt == requestId
+      check res["result"].kind == JNull
+
+  test "Send workspace/didChangeConfiguration":
+    if not isNimlangserverAvailable():
+      skip()
+    else:
       block:
         # Initialize LSP client
 
-        block:
-          let
-            rootPath = getCurrentDir()
-            params = initInitializeParams(rootPath, Trace)
-          assert client.initialize(Id, params).isOk
+        const BufferId = 1
+        let rootPath = getCurrentDir()
 
-        const Timeout = 5000
+        block:
+          let params = initInitializeParams(rootPath, Trace)
+          assert client.initialize(BufferId, params).isOk
+
         assert client.readable(Timeout).isOk
         let initializeRes = client.read.get
 
@@ -447,115 +438,57 @@ suite "lsp: Send requests":
           let err = client.initialized
           assert err.isOk
 
-        block:
-          # workspace/didChangeConfiguration notification
-          let err = client.workspaceDidChangeConfiguration
-          assert err.isOk
+      check client.workspaceDidChangeConfiguration.isOk
 
-        block:
-          # textDocument/diOpen notification
-          let err = client.textDocumentDidOpen(path, LanguageId, text)
-          assert err.isOk
+  test "Send textDocument/didChange":
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      const
+        BufferId = 1
+        LanguageId = "nim"
+        Text = "echo 0"
 
-      block:
-        const SecondVersion = 2
-        let changedText = "echo 1"
+      let path = rootDir / "test.nim"
+      writeFile(path, Text)
 
-        check client.textDocumentDidChange(SecondVersion, path, changedText).isOk
+      prepareLsp(BufferId, LanguageId, path, Text)
+
+      const
+        SecondVersion = 2
+        ChangedText = "echo 1"
+      check client.textDocumentDidChange(SecondVersion, path, ChangedText).isOk
 
   test "Send textDocument/didSave":
     if not isNimlangserverAvailable():
       skip()
     else:
       const
-        Id = 1
+        BufferId = 1
         LanguageId = "nim"
-      let
-        path = getCurrentDir() / "src/moe.nim"
-        text = readFile(path)
+        Text = "echo 0"
 
-      block:
-        # Initialize LSP client
+      let path = rootDir / "test.nim"
+      writeFile(path, Text)
 
-        block:
-          let
-            rootPath = getCurrentDir()
-            params = initInitializeParams(rootPath, Trace)
-          assert client.initialize(Id, params).isOk
+      prepareLsp(BufferId, LanguageId, path, Text)
 
-        const Timeout = 5000
-        assert client.readable(Timeout).isOk
-        let initializeRes = client.read.get
-
-        block:
-          let err = client.initCapacities(
-            initLspFeatureSettings(),
-            initializeRes)
-          assert err.isOk
-
-        block:
-          # Initialized notification
-          let err = client.initialized
-          assert err.isOk
-
-        block:
-          # workspace/didChangeConfiguration notification
-          let err = client.workspaceDidChangeConfiguration
-          assert err.isOk
-
-        block:
-          # textDocument/diOpen notification
-          let err = client.textDocumentDidOpen(path, LanguageId, text)
-          assert err.isOk
-
-      block:
-        const Version = 1
-        check client.textDocumentDidSave(Version, path, text).isOk
+      const Version = 1
+      check client.textDocumentDidSave(Version, path, Text).isOk
 
   test "Send textDocument/didClose":
     if not isNimlangserverAvailable():
       skip()
     else:
       const
-        Id = 1
+        BufferId = 1
         LanguageId = "nim"
-      let
-        path = getCurrentDir() / "src/moe.nim"
-        text = readFile(path)
+        Text = "echo 0"
 
-      block:
-        # Initialize LSP client
+      let path = rootDir / "test.nim"
+      writeFile(path, Text)
 
-        block:
-          let
-            rootPath = getCurrentDir()
-            params = initInitializeParams(rootPath, Trace)
-          assert client.initialize(Id, params).isOk
-
-        const Timeout = 5000
-        assert client.readable(Timeout).isOk
-        let initializeRes = client.read.get
-
-        block:
-          let err = client.initCapacities(
-            initLspFeatureSettings(),
-            initializeRes)
-          assert err.isOk
-
-        block:
-          # Initialized notification
-          let err = client.initialized
-          assert err.isOk
-
-        block:
-          # workspace/didChangeConfiguration notification
-          let err = client.workspaceDidChangeConfiguration
-          assert err.isOk
-
-        block:
-          # textDocument/diOpen notification
-          let err = client.textDocumentDidOpen(path, LanguageId, text)
-          assert err.isOk
+      prepareLsp(BufferId, LanguageId, path, Text)
 
       check client.textDocumentDidClose(path).isOk
 
@@ -563,220 +496,127 @@ suite "lsp: Send requests":
     if not isNimlangserverAvailable():
       skip()
     else:
-      let rootPath = getCurrentDir()
-
       const
-        Id = 1
+        BufferId = 1
         LanguageId = "nim"
-        Text = "echo 1" # Use simple text for the test.
+        Text = "let a: int = 0"
 
-      let
-        path = getCurrentDir() / "src/moe.nim"
+      let path = rootDir / "test.nim"
+      writeFile(path, Text)
 
-      block:
-        # Initialize LSP client
+      prepareLsp(BufferId, LanguageId, path, Text)
 
-        block:
-          let params = initInitializeParams(rootPath, Trace)
-          assert client.initialize(Id, params).isOk
+      let position = BufferPosition(line: 0, column: 7)
+      var requestId = client.lastId + 1
 
-        const Timeout = 5000
-        assert client.readable(Timeout).isOk
-        let initializeRes = client.read.get
+      check client.textDocumentHover(BufferId, path, position).isOk
+      check client.waitingResponses[requestId].lspMethod == LspMethod.textDocumentHover
 
-        block:
-          let err = client.initCapacities(
-            initLspFeatureSettings(),
-            initializeRes)
-          assert err.isOk
-
-        block:
-          # Initialized notification
-          let err = client.initialized
-          assert err.isOk
-
-        block:
-          # workspace/didChangeConfiguration notification
-          let err = client.workspaceDidChangeConfiguration
-          assert err.isOk
-
-        block:
-          # textDocument/diOpen notification
-          let err = client.textDocumentDidOpen(path, LanguageId, Text)
-          assert err.isOk
-
-      let position = BufferPosition(line: 0, column: 0)
-
-      check client.textDocumentHover(Id, path, position).isOk
-      check client.waitingResponses[2].lspMethod == LspMethod.textDocumentHover
+      assert client.readable(Timeout).get
+      let res = client.read.get
+      check res["result"]["contents"][0]["value"].getStr == "system.int: int"
 
   test "Send textDocument/completion":
     if not isNimlangserverAvailable():
       skip()
     else:
-      let rootPath = getCurrentDir()
-
       const
-        Id = 1
+        BufferId = 1
         LanguageId = "nim"
-        Text = "echo 1\n" # Use simple text for the test.
+        Text = "echo 1\n"
 
-      let
-        path = getCurrentDir() / "src/moe.nim"
+      let path = rootDir / "test.nim"
+      writeFile(path, Text)
 
-      block:
-        # Initialize LSP client
-
-        block:
-          let params = initInitializeParams(rootPath, Trace)
-          assert client.initialize(Id, params).isOk
-
-        const Timeout = 5000
-        assert client.readable(Timeout).isOk
-        let initializeRes = client.read.get
-
-        block:
-          let err = client.initCapacities(
-            initLspFeatureSettings(),
-            initializeRes)
-          assert err.isOk
-
-        block:
-          # Initialized notification
-          let err = client.initialized
-          assert err.isOk
-
-        block:
-          # workspace/didChangeConfiguration notification
-          let err = client.workspaceDidChangeConfiguration
-          assert err.isOk
-
-        block:
-          # textDocument/diOpen notification
-          let err = client.textDocumentDidOpen(path, LanguageId, Text)
-          assert err.isOk
+      prepareLsp(BufferId, LanguageId, path, Text)
 
       block:
         const SecondVersion = 2
         let changedText = "echo 1\ne"
         check client.textDocumentDidChange(SecondVersion, path, changedText).isOk
 
+      var requestId = client.lastId + 1
+
       let position = BufferPosition(line: 1, column: 0)
       const IsIncompleteTrigger = false
       check client.textDocumentCompletion(
-        Id,
+        BufferId,
         path,
         position,
         IsIncompleteTrigger,
         "e").isOk
-      check client.waitingResponses[2].lspMethod == LspMethod.textDocumentCompletion
+      check client.waitingResponses[requestId].lspMethod == LspMethod.textDocumentCompletion
+
+      assert client.readable(Timeout).get
+      let res = client.read.get
+      check res["result"][0].len > 0
 
   test "Send textDocument/inlayHint":
     if not isNimlangserverAvailable():
       skip()
     else:
-      let rootPath = getCurrentDir()
-
       const
-        Id = 1
+        BufferId = 1
         LanguageId = "nim"
-        Text = "let a = 0\n" # Use simple text for the test.
+        Text = "let a = 0\n"
 
-      let
-        path = getCurrentDir() / "src/moe.nim"
+      let path = rootDir / "test.nim"
+      writeFile(path, Text)
 
-      block:
-        # Initialize LSP client
+      prepareLsp(BufferId, LanguageId, path, Text)
 
-        block:
-          let params = initInitializeParams(rootPath, Trace)
-          assert client.initialize(Id, params).isOk
+      var requestId = client.lastId + 1
 
-        const Timeout = 5000
-        assert client.readable(Timeout).isOk
-        let initializeRes = client.read.get
+      check client.textDocumentInlayHint(
+        BufferId,
+        path,
+        BufferRange(
+          first: BufferPosition(line: 0, column: 0),
+          last: BufferPosition(line: 0, column: Text.high))).isOk
+      check client.waitingResponses[requestId].lspMethod ==
+        LspMethod.textDocumentInlayHint
 
-        block:
-          let err = client.initCapacities(
-            initLspFeatureSettings(),
-            initializeRes)
-          assert err.isOk
-
-        block:
-          # Initialized notification
-          let err = client.initialized
-          assert err.isOk
-
-        block:
-          # workspace/didChangeConfiguration notification
-          let err = client.workspaceDidChangeConfiguration
-          assert err.isOk
-
-        block:
-          # textDocument/diOpen notification
-          let err = client.textDocumentDidOpen(path, LanguageId, Text)
-          assert err.isOk
-
-        check client.textDocumentInlayHint(
-          Id,
-          path,
-          BufferRange(
-            first: BufferPosition(line: 0, column: 0),
-            last: BufferPosition(line: 0, column: Text.high))).isOk
+      assert client.readable(Timeout).get
+      let res = client.read.get
+      check res["result"][0]["position"]["line"].getInt == 0
+      check res["result"][0]["position"]["character"].getInt == 5
 
   test "Send textDocument/definition":
     if not isNimlangserverAvailable():
       skip()
     else:
-      let rootPath = getCurrentDir()
-
       const
-        Id = 1
+        BufferId = 1
         LanguageId = "nim"
-
-        # Use simple text for the test.
         Text = """
 type number = int
 var num: number
         """
 
-      let
-        path = getCurrentDir() / "src/moe.nim"
+      let path = rootDir / "test.nim"
+      writeFile(path, Text)
 
-      block:
-        # Initialize LSP client
+      prepareLsp(BufferId, LanguageId, path, Text)
 
-        block:
-          let params = initInitializeParams(rootPath, Trace)
-          assert client.initialize(Id, params).isOk
+      let requestId = client.lastId + 1
 
-        const Timeout = 5000
-        assert client.readable(Timeout).isOk
-        let initializeRes = client.read.get
+      check client.textDocumentDefinition(
+        BufferId,
+        path,
+        BufferPosition(line: 1, column: 9)).isOk
+      check client.waitingResponses[requestId].lspMethod ==
+        LspMethod.textDocumentDefinition
 
-        block:
-          let err = client.initCapacities(
-            initLspFeatureSettings(),
-            initializeRes)
-          assert err.isOk
-
-        block:
-          # Initialized notification
-          let err = client.initialized
-          assert err.isOk
-
-        block:
-          # workspace/didChangeConfiguration notification
-          let err = client.workspaceDidChangeConfiguration
-          assert err.isOk
-
-        block:
-          # textDocument/diOpen notification
-          let err = client.textDocumentDidOpen(path, LanguageId, Text)
-          assert err.isOk
-
-        block:
-          check client.textDocumentDefinition(
-            Id,
-            path,
-            BufferPosition(line: 1, column: 9)).isOk
+      assert client.readable(Timeout).get
+      let res = client.read.get
+      check res["result"][0] == %* {
+        "uri": "file:///home/fox/git/moe/lspTestDir/test.nim",
+        "range": {
+          "start": {
+            "line": 0,
+            "character":5
+          },"end": {
+            "line":0,
+            "character":11
+          }}
+      }
