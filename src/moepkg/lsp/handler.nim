@@ -21,11 +21,25 @@ import std/[options, tables, json, logging, strformat]
 
 import pkg/results
 
-import lsp/[client, utils]
-import syntax/highlite
-import editorstatus, windownode, popupwindow, unicodeext, independentutils, ui,
-       gapbuffer, messages, commandline, bufferstatus, syntaxcheck, completion,
-       highlight, movement
+import ../syntax/highlite
+import
+  ../editorstatus,
+  ../windownode,
+  ../popupwindow,
+  ../unicodeext,
+  ../independentutils,
+  ../ui,
+  ../gapbuffer,
+  ../messages,
+  ../commandline,
+  ../bufferstatus,
+  ../syntaxcheck,
+  ../completion,
+  ../highlight,
+  ../movement
+
+import client, utils, hover, completion, message, diagnostics, semantictoken,
+       progress, inlayhint, definition
 
 template isLspResponse*(status: EditorStatus): bool =
   status.lspClients.contains(currentBufStatus.langId) and

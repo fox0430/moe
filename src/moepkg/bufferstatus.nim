@@ -21,7 +21,7 @@ import std/[times, options, os, strformat]
 
 import pkg/results
 
-import lsp/utils
+import lsp/inlayhint
 import syntax/highlite
 import gapbuffer, unicodeext, fileutils, highlight, independentutils, git,
        syntaxcheck, completion, logviewerutils, helputils

@@ -21,7 +21,7 @@ import std/[options, json, logging, tables]
 
 import pkg/results
 
-import lsp/[client, utils]
+import lsp/[client, completion]
 import ui, editorstatus, windownode, movement, editor, bufferstatus, settings,
        unicodeext, independentutils, gapbuffer, completion
 

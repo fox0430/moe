@@ -30,7 +30,7 @@ import moepkg/[ui, editorstatus, gapbuffer, unicodeext, bufferstatus, settings,
 
 import utils
 
-import moepkg/lsp {.all.}
+import moepkg/lsp/handler {.all.}
 import moepkg/exmode {.all.}
 
 proc isValidWindowSize(n: WindowNode) =

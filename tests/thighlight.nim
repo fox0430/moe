@@ -21,7 +21,7 @@ import std/[unittest, sequtils, strutils]
 
 import moepkg/[color, unicodeext]
 import moepkg/syntax/highlite
-import moepkg/lsp/utils
+import moepkg/lsp/semantictoken
 import moepkg/lsp/protocol/types
 
 import moepkg/highlight {.all.}
