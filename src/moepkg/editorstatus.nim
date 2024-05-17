@@ -890,10 +890,10 @@ proc update*(status: var EditorStatus) =
 
         if isSendLspInlayHintRequest():
           exitUi()
-          let err = lspClient.sendLspInlayHintRequest(
+          let err = status.lspClients[b.langId].sendLspInlayHintRequest(
             b,
             node.bufferIndex,
-            mainWindowNode)
+            node)
           if err.isErr: error "lsp: {err.error}"
 
         # The highlight for the view.

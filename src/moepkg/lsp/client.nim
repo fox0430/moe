@@ -31,7 +31,7 @@ import ../settings
 
 import protocol/[enums, types]
 import jsonrpc, utils, completion, progress, hover, semantictoken, inlayhint,
-       definition
+       definition, references
 
 type
   LspError* = object
@@ -62,6 +62,7 @@ type
     hover*: bool
     semanticTokens*: Option[SemanticTokensLegend]
     inlayHint*: bool
+    references*: bool
 
   LspProgressTable* = Table[ProgressToken, ProgressReport]
 
@@ -440,6 +441,9 @@ proc initInitializeParams*(
           )),
           definition: some(DefinitionCapability(
             dynamicRegistration: some(true)
+          )),
+          references: some(ReferencesCapability(
+            dynamicRegistration: some(true)
           ))
         )),
         window: some(WindowCapabilities(
@@ -491,6 +495,14 @@ proc setCapabilities(
        initResult.capabilities.hoverProvider == some(true):
          capabilities.hover = true
 
+    if settings.inlayHint.enable and
+       initResult.capabilities.inlayHintProvider.isSome:
+         capabilities.inlayHint = true
+
+    if settings.references.enable and
+       initResult.capabilities.referencesProvider == some(true):
+         capabilities.references = true
+
     if settings.semanticTokens.enable and
        initResult.capabilities.semanticTokensProvider.isSome and
        initResult.capabilities.semanticTokensProvider.get.contains("legend"):
@@ -501,10 +513,6 @@ proc setCapabilities(
          except CatchableError:
            # Invalid SemanticTokensLegend
            discard
-
-    if settings.inlayHint.enable and
-       initResult.capabilities.inlayHintProvider.isSome:
-         capabilities.inlayHint = true
 
     c.capabilities = some(capabilities)
 
@@ -867,5 +875,31 @@ proc textDocumentDefinition*(
     let r = c.request(bufferId, LspMethod.textDocumentDefinition, params)
     if r.isErr:
       return R[(), string].err fmt"textDocument/definition request failed: {r.error}"
+
+    return R[(), string].ok ()
+
+proc textDocumentReferences*(
+  c: var LspClient,
+  bufferId: int,
+  path: string,
+  posi: BufferPosition): LspSendRequestResult =
+    ## Send a textDocument/references request to the server.
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_references
+
+    if not c.serverProcess.running:
+      if not c.closed: c.closed = true
+      return R[(), string].err "server crashed"
+
+    if not c.isInitialized:
+      return R[(), string].err "lsp unavailable"
+
+    if not c.capabilities.get.definition:
+      return R[(), string].err "textDocument/references unavailable"
+
+    let params = %* initReferenceParams(path, posi.toLspPosition)
+
+    let r = c.request(bufferId, LspMethod.textDocumentReferences, params)
+    if r.isErr:
+      return R[(), string].err fmt"textDocument/references request failed: {r.error}"
 
     return R[(), string].ok ()

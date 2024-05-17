@@ -252,6 +252,9 @@ type
   LspInlayHintSettings* = object
     enable*: bool
 
+  LspReferencesSettings* = object
+    enable*: bool
+
   LspSemanticTokesnSettings* = object
     enable*: bool
 
@@ -261,6 +264,7 @@ type
     diagnostics*: LspDiagnosticsSettings
     hover*: LspHoverSettings
     inlayHint*: LspInlayHintSettings
+    references*: LspReferencesSettings
     semanticTokens*: LspSemanticTokesnSettings
 
   LspSettings* = object
@@ -523,6 +527,9 @@ proc initLspHoverSettings(): LspHoverSettings =
 proc initLspInlayHintSettings(): LspInlayHintSettings =
   result.enable = true
 
+proc initLspReferencesSettings(): LspReferencesSettings =
+  result.enable = true
+
 proc initLspSemanticTokesnSettings(): LspSemanticTokesnSettings =
   result.enable = true
 
@@ -532,6 +539,7 @@ proc initLspFeatureSettings(): LspFeatureSettings =
   result.diagnostics = initLspDiagnosticsSettings()
   result.hover = initLspHoverSettings()
   result.inlayHint = initLspInlayHintSettings()
+  result.references = initLspReferencesSettings()
   result.semanticTokens = initLspSemanticTokesnSettings()
 
 proc initLspSettigns(): LspSettings =
@@ -1777,6 +1785,13 @@ proc parseLspTable(s: var EditorSettings, lspConfigs: TomlValueRef) =
               s.lsp.features.inlayHint.enable = val.getBool
             else:
               discard
+      of "References":
+        for key, val in val.getTable:
+          case key:
+            of "enable":
+              s.lsp.features.references.enable = val.getBool
+            else:
+              discard
       of "SemanticTokens":
         for key, val in val.getTable:
           case key:
@@ -2756,6 +2771,9 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
 
   result.addLine fmt "[Lsp.InlayHint]"
   result.addLine fmt "enable = {$settings.lsp.features.inlayHint.enable}"
+
+  result.addLine fmt "[Lsp.References]"
+  result.addLine fmt "enable = {$settings.lsp.features.references.enable}"
 
   result.addLine fmt "[Lsp.SemanticTokens]"
   result.addLine fmt "enable = {$settings.lsp.features.semanticTokens.enable}"

@@ -43,8 +43,6 @@ proc initHoverParams*(
       textDocument: TextDocumentIdentifier(uri: path.pathToUri),
       position: position)
 
-
-
 proc parseTextDocumentHoverResponse*(res: JsonNode): LspHoverResult =
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#hover
   if not res.contains("result"):
