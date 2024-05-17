@@ -22,14 +22,14 @@ import std/[unittest, oids, options, os, osproc, json, tables]
 import pkg/results
 
 import moepkg/lsp/protocol/types
-import moepkg/lsp/[client, utils]
+import moepkg/lsp/[client, utils, hover, progress]
 import moepkg/[bufferstatus, commandline,  unicodeext, gapbuffer, windownode,
                independentutils, popupwindow, syntaxcheck, completion]
 
 import utils
 
 import moepkg/editorstatus {.all.}
-import moepkg/lsp {.all.}
+import moepkg/lsp/handler {.all.}
 
 suite "lsp: lspInitialized":
   const Buffer = "echo 1"

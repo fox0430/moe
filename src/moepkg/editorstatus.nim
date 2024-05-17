@@ -21,7 +21,7 @@ import std/[strutils, os, strformat, tables, times, heapqueue, deques, options,
             encodings, math, logging, json]
 import pkg/[results, parsetoml]
 import syntax/highlite
-import lsp/[client, utils]
+import lsp/[client, utils, inlayhint]
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils, windownode,
        color, settings, statusline, bufferstatus, cursor, tabline, backup,
        messages, commandline, registers, platform, movement, filermodeutils,

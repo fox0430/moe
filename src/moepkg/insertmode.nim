@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -21,7 +21,11 @@ import std/[options, json, logging, tables]
 
 import pkg/results
 
-import lsp/[client, utils]
+import lsp/client
+
+# Workaround for Nim 1.6.2
+import lsp/completion as lspcompletion
+
 import ui, editorstatus, windownode, movement, editor, bufferstatus, settings,
        unicodeext, independentutils, gapbuffer, completion
 

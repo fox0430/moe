@@ -20,7 +20,7 @@
 import std/[sequtils, os, parseutils, strutils, strformat]
 
 import syntax/highlite
-import lsp/[utils, protocol/types]
+import lsp/[semantictoken, protocol/types]
 import unicodeext, color, independentutils, ui
 
 type

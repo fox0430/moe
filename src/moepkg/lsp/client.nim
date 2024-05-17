@@ -30,7 +30,8 @@ import ../independentutils
 import ../settings
 
 import protocol/[enums, types]
-import jsonrpc, utils
+import jsonrpc, utils, completion, progress, hover, semantictoken, inlayhint,
+       definition
 
 type
   LspError* = object
@@ -734,14 +735,6 @@ proc textDocumentDidClose*(
 
     return LspSendNotifyResult.ok ()
 
-proc initHoverParams(
-  path: string,
-  position: LspPosition): HoverParams {.inline.} =
-
-    HoverParams(
-      textDocument: TextDocumentIdentifier(uri: path.pathToUri),
-      position: position)
-
 proc textDocumentHover*(
   c: var LspClient,
   bufferId: int,
@@ -766,33 +759,6 @@ proc textDocumentHover*(
       return R[(), string].err fmt"textDocument/hover request failed: {id.error}"
 
     return R[(), string].ok ()
-
-proc initCompletionParams*(
-  path: string,
-  position: BufferPosition,
-  options: LspCompletionOptions,
-  isIncompleteTrigger: bool,
-  character: string): CompletionParams =
-
-    let
-      triggerChar =
-        if isTriggerCharacter(options, character): some(character)
-        else: none(string)
-
-      triggerKind =
-        if triggerChar.isSome:
-          CompletionTriggerKind.TriggerCharacter.int
-        elif isIncompleteTrigger:
-          CompletionTriggerKind.TriggerForIncompleteCompletions.int
-        else:
-          CompletionTriggerKind.Invoked.int
-
-    return CompletionParams(
-      textDocument: TextDocumentIdentifier(uri: path.pathToUri),
-      position: position.toLspPosition,
-      context: some(CompletionContext(
-        triggerKind: triggerKind,
-        triggerCharacter: triggerChar)))
 
 proc textDocumentCompletion*(
   c: var LspClient,
@@ -827,10 +793,6 @@ proc textDocumentCompletion*(
 
     return R[(), string].ok ()
 
-proc initSemanticTokensParams*(path: string): SemanticTokensParams =
-  SemanticTokensParams(
-    textDocument: TextDocumentIdentifier(uri: path.pathToUri))
-
 proc textDocumentSemanticTokens*(
   c: var LspClient,
   bufferId: int,
@@ -855,11 +817,6 @@ proc textDocumentSemanticTokens*(
       return R[(), string].err fmt"textDocument/semanticTokens/full request failed: {id.error}"
 
     return R[(), string].ok ()
-
-proc initInlayHintParams*(path: string, range: BufferRange): InlayHintParams =
-  InlayHintParams(
-    textDocument: TextDocumentIdentifier(uri: path.pathToUri),
-    range: range.toLspRange)
 
 proc textDocumentInlayHint*(
   c: var LspClient,
@@ -886,14 +843,6 @@ proc textDocumentInlayHint*(
       return R[(), string].err fmt"textDocument/inlayHint request failed: {r.error}"
 
     return R[(), string].ok ()
-
-proc initDefinitionParams*(
-  path: string,
-  posi: BufferPosition): DefinitionParams =
-
-    DefinitionParams(
-      textDocument: TextDocumentIdentifier(uri: path.pathToUri),
-      position: posi.toLspPosition)
 
 proc textDocumentDefinition*(
   c: var LspClient,

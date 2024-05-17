@@ -21,13 +21,13 @@ import std/[options, times, sequtils]
 
 import pkg/results
 
-import lsp/[client, utils]
+import lsp/[client, utils, handler]
 import editorstatus, bufferstatus, windownode, unicodeext, gapbuffer, ui,
        normalmode, visualmode, insertmode, exmode, filermode, replacemode,
        buffermanager, recentfilemode, quickrun, backupmanager, configmode,
        debugmode, commandline, search, commandlineutils, popupwindow, messages,
        filermodeutils, editor, registers, exmodeutils, movement, searchutils,
-       independentutils, lsp, viewhighlight, completion, completionwindow,
+       independentutils, viewhighlight, completion, completionwindow,
        worddictionary
 
 type
