@@ -38,8 +38,11 @@ import
   ../highlight,
   ../movement
 
-import client, utils, hover, completion, message, diagnostics, semantictoken,
-       progress, inlayhint, definition
+import client, utils, hover, message, diagnostics, semantictoken, progress,
+       inlayhint, definition
+
+# Workaround for Nim 1.6.2
+import completion as lspcompletion
 
 template isLspResponse*(status: EditorStatus): bool =
   status.lspClients.contains(currentBufStatus.langId) and
@@ -465,19 +468,19 @@ proc handleLspServerNotify(
       return Result[(), string].err fmt"Invalid server notify: {notify}"
 
     case lspMethod.get:
-      of windowShowMessage:
+      of LspMethod.windowShowMessage:
         return status.commandLine.showLspServerLog(notify)
-      of windowLogMessage:
+      of LspMethod.windowLogMessage:
         # Already logged to LspClint.log.
         return Result[(), string].ok ()
-      of workspaceConfiguration:
+      of LspMethod.workspaceConfiguration:
         # TODO: Configure settings based on notifications if necessary.
         return Result[(), string].ok ()
-      of windowWorkDnoneProgressCreate:
+      of LspMethod.windowWorkDnoneProgressCreate:
         return lspClient.lspProgressCreate(notify)
-      of progress:
+      of LspMethod.progress:
         return status.lspProgress(notify)
-      of textDocumentPublishDiagnostics:
+      of LspMethod.textDocumentPublishDiagnostics:
         return status.bufStatus.lspDiagnostics(notify)
       else:
         # Ignore
