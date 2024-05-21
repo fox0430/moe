@@ -250,6 +250,9 @@ enable = true
 [Lsp.SemanticTokens]
 enable = true
 
+[Lsp.References]
+enable = true
+
 [Lsp.nim]
 extensions = ["nim"]
 command = "nimlangserver"
