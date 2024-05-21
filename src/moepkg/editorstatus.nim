@@ -899,8 +899,7 @@ proc update*(status: var EditorStatus) =
           node.view.rangeOfOriginalLineInView != b.inlayHints.range
 
         if isSendLspInlayHintRequest():
-          exitUi()
-          let err = lspClient.sendLspInlayHintRequest(
+          let err = status.lspClients[b.langId].sendLspInlayHintRequest(
             b,
             node.bufferIndex,
             mainWindowNode)
