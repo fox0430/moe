@@ -247,10 +247,10 @@ enable = true
 [Lsp.InlayHint]
 enable = true
 
-[Lsp.SemanticTokens]
+[Lsp.References]
 enable = true
 
-[Lsp.References]
+[Lsp.SemanticTokens]
 enable = true
 
 [Lsp.nim]

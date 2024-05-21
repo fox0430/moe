@@ -196,3 +196,11 @@ suite "lsp: lspMetod":
       "method": "textDocument/inlayHint",
       "params": nil
     }).get
+
+  test "textDocument/references":
+    check LspMethod.textDocumentReferences == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "textDocument/references",
+      "params": nil
+    }).get
