@@ -398,16 +398,26 @@ proc addNewBuffer*(
               newBufStatus.langId = langId.get
 
             if newBufStatus.langId.len > 0 and
-               status.settings.lsp.languages.contains(newBufStatus.langId) and
-               not status.lspClients.contains(newBufStatus.langId):
-                 # Start LSP initializtion.
-                 let err = status.lspInitialize(
-                   $newBufStatus.openDir,
-                   newBufStatus.langId)
-                 if err.isErr:
-                   status.commandLine.writeLspInitializeError(
-                     status.settings.lsp.languages[newBufStatus.langId].command,
-                     err.error)
+               status.settings.lsp.languages.contains(newBufStatus.langId):
+                 if status.lspClients.contains(newBufStatus.langId):
+                   # textDocument/didOpen notification
+                   let err = lspClient.textDocumentDidOpen(
+                     $newBufStatus.path.absolutePath,
+                     newBufStatus.langId,
+                     newBufStatus.buffer.toString)
+                   if err.isErr:
+                     status.commandLine.writeLspInitializeError(
+                       status.settings.lsp.languages[newBufStatus.langId].command,
+                       err.error)
+                 else:
+                   # Start LSP initializtion.
+                   let err = status.lspInitialize(
+                     $newBufStatus.openDir,
+                     newBufStatus.langId)
+                   if err.isErr:
+                     status.commandLine.writeLspInitializeError(
+                       status.settings.lsp.languages[newBufStatus.langId].command,
+                       err.error)
 
     return Result[int, string].ok status.bufStatus.high
 
@@ -889,7 +899,6 @@ proc update*(status: var EditorStatus) =
           node.view.rangeOfOriginalLineInView != b.inlayHints.range
 
         if isSendLspInlayHintRequest():
-          exitUi()
           let err = status.lspClients[b.langId].sendLspInlayHintRequest(
             b,
             node.bufferIndex,
