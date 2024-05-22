@@ -435,6 +435,8 @@ proc modeLablel(mode: Mode): string =
       "CONFIG"
     of Mode.debug:
       "DEBUG"
+    of Mode.references:
+      "REFERENCES"
     else:
       "NORMAL"
 
