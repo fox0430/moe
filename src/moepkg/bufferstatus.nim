@@ -267,7 +267,7 @@ proc isCursor*(mode: Mode): bool {.inline.} =
   ## Return true if a mode in which it uses the cursor.
 
   case mode:
-    of filer, bufManager, recentFile, backup, config, debug:
+    of filer, bufManager, recentFile, backup, config, debug, references:
       # Don't use the cursor.
       return false
     else:
