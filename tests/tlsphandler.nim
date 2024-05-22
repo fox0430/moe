@@ -17,14 +17,15 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, oids, options, os, osproc, json, tables]
+import std/[unittest, oids, options, os, osproc, json, tables, strformat]
 
 import pkg/results
 
 import moepkg/lsp/protocol/types
 import moepkg/lsp/[client, utils, hover, progress]
 import moepkg/[bufferstatus, commandline,  unicodeext, gapbuffer, windownode,
-               independentutils, popupwindow, syntaxcheck, completion]
+               independentutils, popupwindow, syntaxcheck, completion,
+               gapbuffer]
 
 import utils
 
@@ -707,6 +708,144 @@ suite "lsp: lspDefinition":
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 5
+
+suite "lsp: lspReferences":
+  var status = initEditorStatus()
+
+  setup:
+    status = initEditorStatus()
+    status.settings.lsp.enable = true
+
+    let filename = $genOid() & ".nim"
+    assert status.addNewBufferInCurrentWin(filename).isOk
+
+    status.lspClients["nim"] = LspClient()
+
+  test "Not found":
+    lspClient.waitingResponses[0] = WaitLspResponse(
+      bufferId: currentBufStatus.id,
+      requestId: 0,
+      lspMethod: LspMethod.textDocumentReferences)
+
+    check status.lspReferences(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": []
+    }).isErr
+
+  test "Same buffer":
+    lspClient.waitingResponses[0] = WaitLspResponse(
+      bufferId: currentBufStatus.id,
+      requestId: 0,
+      lspMethod: LspMethod.textDocumentReferences)
+
+    check status.lspReferences(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": [
+        {
+          "uri": pathToUri($currentBufStatus.absolutePath),
+          "range": {
+            "start": {
+              "line": 0,
+              "character": 0,
+            },
+            "end": {
+              "line": 0,
+              "character": 0,
+            }
+          }
+        },
+        {
+          "uri": pathToUri($currentBufStatus.absolutePath),
+          "range": {
+            "start": {
+              "line": 1,
+              "character": 0,
+            },
+            "end": {
+              "line": 1,
+              "character": 0,
+            }
+          }
+        }
+      ]
+    }).isOk
+
+    let nodes = mainWindowNode.getAllWindowNode
+
+    check nodes.len == 2
+    for i in 0 .. nodes.high: check nodes[i].bufferIndex == i
+
+    check currentMainWindowNode.bufferIndex == 1
+
+    check status.bufStatus.len == 2
+    check status.bufStatus[0].mode == Mode.normal
+    check status.bufStatus[1].mode == Mode.references
+
+    check status.bufStatus[1].buffer.toSeqRunes == @[
+      fmt"{$status.bufStatus[0].absolutePath} 0 Line 0 Col",
+      fmt"{$status.bufStatus[0].absolutePath} 1 Line 0 Col",
+    ]
+    .toSeqRunes
+
+  test "Other buffer":
+    let destFilePath = getCurrentDir() / $genOid() & ".nim"
+
+    lspClient.waitingResponses[0] = WaitLspResponse(
+      bufferId: currentBufStatus.id,
+      requestId: 0,
+      lspMethod: LspMethod.textDocumentReferences)
+
+    check status.lspReferences(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": [
+        {
+          "uri": pathToUri(destFilePath),
+          "range": {
+            "start": {
+              "line": 0,
+              "character": 0,
+            },
+            "end": {
+              "line": 0,
+              "character": 0,
+            }
+          }
+        },
+        {
+          "uri": pathToUri(destFilePath),
+          "range": {
+            "start": {
+              "line": 1,
+              "character": 0,
+            },
+            "end": {
+              "line": 1,
+              "character": 0,
+            }
+          }
+        }
+      ]
+    }).isOk
+
+    let nodes = mainWindowNode.getAllWindowNode
+
+    check nodes.len == 2
+    for i in 0 .. nodes.high: check nodes[i].bufferIndex == i
+
+    check currentMainWindowNode.bufferIndex == 1
+
+    check status.bufStatus.len == 2
+    check status.bufStatus[0].mode == Mode.normal
+    check status.bufStatus[1].mode == Mode.references
+
+    check status.bufStatus[1].buffer.toSeqRunes == @[
+      fmt"{destFilePath} 0 Line 0 Col",
+      fmt"{destFilePath} 1 Line 0 Col",
+    ]
+    .toSeqRunes
 
 suite "lsp: handleLspServerNotify":
   setup:
