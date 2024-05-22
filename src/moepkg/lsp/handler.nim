@@ -460,6 +460,7 @@ proc lspReferences(
   status: var EditorStatus,
   res: JsonNode): Result[(), string] =
     ## textDocument/references
+    ## Start (Open) references mode.
 
     let parseResult = parseTextDocumentReferencesResponse(res)
 
@@ -483,6 +484,8 @@ proc lspReferences(
       .toGapBuffer
 
     status.resize
+
+    return Result[(), string].ok ()
 
 proc handleLspServerNotify(
   status: var EditorStatus,

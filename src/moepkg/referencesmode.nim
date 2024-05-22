@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[os, strformat, sequtils]
+import std/[os, options, strformat, sequtils]
 
 import pkg/results
 
@@ -82,19 +82,27 @@ proc openWindowAndJumpToReference(status: var EditorStatus) =
   status.verticalSplitWindow
   status.moveNextWindow
 
-  for i, b in status.bufStatus:
-    if b.absolutePath == d.get.path:
-      status.changeCurrentBuffer(i)
+  template canMove(): bool =
+    d.get.line < currentBufStatus.buffer.len and
+    d.get.column < currentBufStatus.buffer[d.get.line].len
+
+  let bufferIndex = status.bufStatus.checkBufferExist(d.get.path)
+  if isSome(bufferIndex):
+    # Already exist.
+    status.changeCurrentBuffer(bufferIndex.get)
+    if not canMove():
+      # TODO: Error message
       return
+
+    jumpLine(currentBufStatus, currentMainWindowNode, d.get.line)
+    currentMainWindowNode.currentColumn = d.get.column
+
+    return
 
   let r = status.addNewBufferInCurrentWin($d.get.path)
   if r.isErr:
     # TODO: Error message
     return
-
-  template canMove(): bool =
-    d.get.line < currentBufStatus.buffer.len and
-    d.get.column < currentBufStatus.buffer[d.get.line].len
 
   if not canMove():
     # TODO: Error message
