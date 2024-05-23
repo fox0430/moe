@@ -825,6 +825,13 @@ defaut is `true`
 enable
 ```
 
+### Lsp.References table
+Enable/Disable LSP Find References (bool)  
+defaut is `true`
+```
+enable
+```
+
 ### Lsp.SemanticTokens table
 Enable/Disable LSP SemanticTokens (bool)  
 defaut is `true`
