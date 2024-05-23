@@ -49,15 +49,13 @@ proc parseDestinationLine(line: Runes): Result[Destination, string] =
       try:
         parseInt(lineSplited[1])
       except ValueError:
-        # TODO: Error message
-        return
+        return Result[Destination, string].err "Invalid format: line"
 
     column =
       try:
         parseInt(lineSplited[3])
       except ValueError:
-        # TODO: Error message
-        return
+        return Result[Destination, string].err "Invalid format: column"
 
   return Result[Destination, string].ok (lineSplited[0], line, column)
 
