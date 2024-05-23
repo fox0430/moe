@@ -29,6 +29,20 @@ import moepkg/[bufferstatus, editorstatus, independentutils, gapbuffer,
 
 import moepkg/referencesmode {.all.}
 
+template openReferencesMode(
+  status: var EditorStatus,
+  references: seq[LspReference]) =
+
+    status.horizontalSplitWindow
+    status.moveNextWindow
+
+    discard status.addNewBufferInCurrentWin(Mode.references)
+    currentBufStatus.buffer = initReferencesModeBuffer(references)
+      .toGapBuffer
+
+    status.resize(100, 100)
+
+
 suite "references: initReferencesModeBuffer":
   test "Basic":
     let r = @[
@@ -63,19 +77,6 @@ suite "references: parseDestinationLine":
      ru"/home/user/test.nim", 100, 999)
 
 suite "references: openWindowAndJumpToReference":
-  template openReferencesMode(
-    status: var EditorStatus,
-    references: seq[LspReference]) =
-
-      status.horizontalSplitWindow
-      status.moveNextWindow
-
-      discard status.addNewBufferInCurrentWin(Mode.references)
-      currentBufStatus.buffer = initReferencesModeBuffer(references)
-        .toGapBuffer
-
-      status.resize(100, 100)
-
   var status: EditorStatus
 
   let testDir = getCurrentDir() / "referencesTest"
@@ -141,3 +142,27 @@ suite "references: openWindowAndJumpToReference":
     check currentMainWindowNode.bufferPosition == BufferPosition(
       line: 1,
       column: 0)
+
+suite "references: closeReferencesMode":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin(Mode.normal).isOk
+
+  test "Basic":
+    let references = @[
+      LspReference(path: "a", position: BufferPosition(line: 0, column: 0))
+    ]
+
+    status.openReferencesMode(references)
+
+    status.closeReferencesMode
+
+    let nodes = mainWindowNode.getAllWindowNode
+
+    check nodes.len == 1
+    check nodes[0].bufferIndex == 0
+
+    check status.bufStatus.len == 1
+    check status.bufStatus[0].mode == Mode.normal
