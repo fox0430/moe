@@ -117,6 +117,12 @@ template isMoveUp(command: Runes): bool =
 template isMoveDown(command: Runes): bool =
   command == ru"j" or isDownKey(command)
 
+template isMoveToFirstLine(command: Runes): bool =
+  command == ru"g"
+
+template isMoveToLastLine(command: Runes): bool =
+  command == ru"G"
+
 proc isReferencesModeCommand*(command: Runes): InputState =
   result = InputState.Invalid
 
@@ -136,5 +142,9 @@ proc execReferencesModeCommand*(status: var EditorStatus, command: Runes) =
     currentBufStatus.keyUp(currentMainWindowNode)
   elif isMoveDown(command):
     currentBufStatus.keyDown(currentMainWindowNode)
+  elif isMoveToFirstLine(command):
+    currentBufStatus.moveToFirstLine(currentMainWindowNode)
+  elif isMoveToLastLine(command):
+    currentBufStatus.moveToLastLine(currentMainWindowNode)
   elif isEnterKey(command):
     status.openWindowAndJumpToReference

@@ -25,6 +25,7 @@ Please feedback, bug reports and PRs.
 - `textDocument/semanticTokens/full`
 - `textDocument/inlayHint`
 - `textDocument/definition`
+- `textDocument/references`
 - `$/progress`
 
 ## Configuration
@@ -99,3 +100,9 @@ Display types at the end of lines with LSP InlayHint.
 ### Goto definition
 
 `gd` command in Normal mode. If the file is not currently, it will open in a new window.
+
+### Find References
+
+`gr` command in Normal mode. Open References mode.
+
+![moe-references](https://github.com/fox0430/moe/assets/15966436/fe34a5f9-a68b-4300-ad82-7c8bd7150d01)
