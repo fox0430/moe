@@ -22,7 +22,7 @@ import std/[os, options, strformat, sequtils]
 import pkg/results
 
 import independentutils, ui, unicodeext, editorstatus, movement, gapbuffer,
-       bufferstatus
+       bufferstatus, messages
 
 import lsp/references
 
@@ -66,11 +66,11 @@ proc openWindowAndJumpToReference(status: var EditorStatus) =
     currentBufStatus.buffer[currentMainWindowNode.currentLine])
 
   if d.isErr:
-    # TODO: Error message
+    status.commandLine.writeLspReferencesError(d.error)
     return
 
   if not fileExists($d.get.path):
-    # TODO: Error message
+    status.commandLine.writeLspReferencesError("File not found")
     return
 
   # Close references mode
@@ -91,16 +91,16 @@ proc openWindowAndJumpToReference(status: var EditorStatus) =
     # Already exist.
     status.changeCurrentBuffer(bufferIndex.get)
     if not canMove():
-      # TODO: Error message
+      status.commandLine.writeLspReferencesError("Destination not found")
       return
   else:
     let r = status.addNewBufferInCurrentWin($d.get.path)
     if r.isErr:
-      # TODO: Error message
+      status.commandLine.writeLspReferencesError(r.error)
       return
 
     if not canMove():
-      # TODO: Error message
+      status.commandLine.writeLspReferencesError("Destination not found")
       return
 
   status.resize

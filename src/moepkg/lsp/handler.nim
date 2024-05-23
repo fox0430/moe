@@ -598,5 +598,6 @@ proc handleLspResponse*(status: var EditorStatus) =
         if r.isErr: status.commandLine.writeLspDefinitionError(r.error)
       of LspMethod.textDocumentReferences:
         let r = status.lspReferences(resJson.get)
+        if r.isErr: status.commandLine.writeLspReferencesError(r.error)
       else:
         info fmt"lsp: Ignore response: {resJson}"
