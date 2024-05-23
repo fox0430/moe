@@ -460,7 +460,7 @@ proc lspReferences(
   status: var EditorStatus,
   res: JsonNode): Result[(), string] =
     ## textDocument/references
-    ## Start (Open) references mode.
+    ## Open a references mode window.
 
     let parseResult = parseTextDocumentReferencesResponse(res)
 

@@ -1154,6 +1154,8 @@ proc closeWindow*(status: var EditorStatus, node: WindowNode) =
   status.mainWindow.currentMainWindowNode = node
 
 proc deleteBuffer*(status: var EditorStatus, deleteIndex: int) =
+  ## Delete the buffer with windows.
+
   let beforeWindowIndex = currentMainWindowNode.windowIndex
 
   let langId = status.bufStatus[beforeWindowIndex].langId

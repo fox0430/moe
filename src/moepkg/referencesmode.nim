@@ -37,9 +37,7 @@ proc initReferencesModeBuffer*(references: seq[LspReference]): seq[Runes] =
 proc closeReferencesMode(status: var EditorStatus) =
   ## Close the window and remove the buffer.
 
-  let bufIndex = currentMainWindowNode.bufferIndex
-  status.closeWindow(currentMainWindowNode)
-  status.deleteBuffer(bufIndex)
+  status.deleteBuffer(currentMainWindowNode.bufferIndex)
 
 proc parseDestinationLine(line: Runes): Result[Destination, string] =
   let lineSplited = line.split(ru' ').filterIt(it.len > 0)
@@ -78,6 +76,8 @@ proc openWindowAndJumpToReference(status: var EditorStatus) =
   # Close references mode
   status.closeReferencesMode
 
+  status.resize
+
   # Open a window for the destination.
   status.verticalSplitWindow
   status.moveNextWindow
@@ -93,23 +93,17 @@ proc openWindowAndJumpToReference(status: var EditorStatus) =
     if not canMove():
       # TODO: Error message
       return
+  else:
+    let r = status.addNewBufferInCurrentWin($d.get.path)
+    if r.isErr:
+      # TODO: Error message
+      return
 
-    jumpLine(currentBufStatus, currentMainWindowNode, d.get.line)
-    currentMainWindowNode.currentColumn = d.get.column
-
-    return
-
-  let r = status.addNewBufferInCurrentWin($d.get.path)
-  if r.isErr:
-    # TODO: Error message
-    return
-
-  if not canMove():
-    # TODO: Error message
-    return
+    if not canMove():
+      # TODO: Error message
+      return
 
   status.resize
-  status.update
 
   jumpLine(currentBufStatus, currentMainWindowNode, d.get.line)
   currentMainWindowNode.currentColumn = d.get.column
@@ -137,9 +131,7 @@ proc isReferencesModeCommand*(command: Runes): InputState =
 
 proc execReferencesModeCommand*(status: var EditorStatus, command: Runes) =
   if isCancel(command):
-    let bufIndex = currentMainWindowNode.bufferIndex
-    status.closeWindow(currentMainWindowNode)
-    status.deleteBuffer(bufIndex)
+    status.closeReferencesMode
   elif isMoveUp(command):
     currentBufStatus.keyUp(currentMainWindowNode)
   elif isMoveDown(command):
