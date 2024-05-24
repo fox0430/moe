@@ -362,9 +362,7 @@ type
     id*: Option[string]
 
   RenameOptions* = object
-    # We support rename, but need to change json
-    # depending on if the client supports prepare or not
-    supportsPrepare*: bool
+    prepareProvider*: bool
 
   SemanticTokensLegend* = ref object of RootObj
     tokenTypes*: seq[string]
@@ -413,7 +411,7 @@ type
     documentFormattingProvider*: Option[bool]
     documentRangeFormattingProvider*: Option[bool]
     documentOnTypeFormattingProvider*: Option[DocumentOnTypeFormattingOptions]
-    renameProvider*: JsonNode # bool or RenameOptions
+    renameProvider*: OptionalNode # bool or RenameOptions
     documentLinkProvider*: Option[DocumentLinkOptions]
     colorProvider*: OptionalNode # bool or ColorProviderOptions | TextDocumentAndStaticRegistrationOptions
     executeCommandProvider*: Option[ExecuteCommandOptions]

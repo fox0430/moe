@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[options, tables, json, logging, strformat]
+import std/[options, tables, json, logging, strformat, sequtils]
 
 import pkg/results
 
@@ -40,7 +40,7 @@ import
   ../referencesmode
 
 import client, utils, hover, message, diagnostics, semantictoken, progress,
-       inlayhint, definition, references
+       inlayhint, definition, references, rename
 
 # Workaround for Nim 1.6.2
 import completion as lspcompletion
@@ -419,7 +419,6 @@ proc lspDefinition(
     let requestId =
       try: res["id"].getInt
       except CatchableError as e: return Result[(), string].err e.msg
-
     lspClient.deleteWaitingResponse(requestId)
 
     if parseResult.get.isNone:
@@ -467,7 +466,6 @@ proc lspReferences(
     let requestId =
       try: res["id"].getInt
       except CatchableError as e: return Result[(), string].err e.msg
-
     lspClient.deleteWaitingResponse(requestId)
 
     if parseResult.isErr:
@@ -486,6 +484,35 @@ proc lspReferences(
     status.resize
 
     return Result[(), string].ok ()
+
+proc lspRename(status: var EditorStatus, res: JsonNode): Result[(), string] =
+  ## textDocument/rename
+
+  let parseResult = parseTextDocumentRenameResponse(res)
+
+  try:
+    lspClient.deleteWaitingResponse(res["id"].getInt)
+  except CatchableError as e:
+    return Result[(), string].err e.msg
+
+  if parseResult.isErr:
+    return Result[(), string].err parseResult.error
+
+  if parseResult.get.isNone:
+    return Result[(), string].err "Not found"
+
+  let lspRename = parseResult.get.get
+
+  if $currentBufStatus.absolutePath == lspRename.path:
+    for c in lspRename.changes:
+      var newLine = currentBufStatus.buffer[c.range.first.line]
+
+      for _ in 0 ..< c.range.last.column - c.range.first.column:
+        newLine.delete c.range.first.column
+
+      newLine.insert(c.text.toRunes, c.range.first.column)
+
+      currentBufStatus.buffer[c.range.first.line] = newLine
 
 proc handleLspServerNotify(
   status: var EditorStatus,
@@ -599,5 +626,8 @@ proc handleLspResponse*(status: var EditorStatus) =
       of LspMethod.textDocumentReferences:
         let r = status.lspReferences(resJson.get)
         if r.isErr: status.commandLine.writeLspReferencesError(r.error)
+      of LspMethod.textDocumentRename:
+        let r = status.lspRename(resJson.get)
+        if r.isErr: status.commandLine.writeLspRenameError(r.error)
       else:
         info fmt"lsp: Ignore response: {resJson}"

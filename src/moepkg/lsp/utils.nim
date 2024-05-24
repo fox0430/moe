@@ -53,6 +53,7 @@ type
     textDocumentInlayHint
     textDocumentDefinition
     textDocumentReferences
+    textDocumentRename
 
   LspMethodResult* = Result[LspMethod, string]
   LspShutdownResult* = Result[(), string]
@@ -123,6 +124,7 @@ proc toLspMethodStr*(m: LspMethod): string =
     of textDocumentInlayHint: "textDocument/inlayHint"
     of textDocumentDefinition: "textDocument/definition"
     of textDocumentReferences: "textDocument/references"
+    of textDocumentRename: "textDocument/rename"
 
 proc parseTraceValue*(s: string): Result[TraceValue, string] =
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#traceValue
@@ -182,6 +184,8 @@ proc lspMethod*(j: JsonNode): LspMethodResult =
       LspMethodResult.ok textDocumentDefinition
     of "textDocument/references":
       LspMethodResult.ok textDocumentReferences
+    of "textDocument/rename":
+      LspMethodResult.ok textDocumentRename
     else:
       LspMethodResult.err "Not supported: " & j["method"].getStr
 

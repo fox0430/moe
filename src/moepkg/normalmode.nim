@@ -486,6 +486,23 @@ proc requestFindReferences(status: var EditorStatus) =
     # TODO: Show error
     error fmt"Find references failed: {r.error}"
 
+proc requestRename(status: var EditorStatus) =
+  if not status.lspClients.contains(currentBufStatus.langId):
+    debug "lsp client is not ready"
+    return
+
+  const Prompt = "newName: "
+  if status.commandLine.getKeys(Prompt):
+    let newName = $status.commandLine.buffer
+
+    let r = lspClient.textDocumentRename(
+      currentBufStatus.id,
+      $currentBufStatus.path.absolutePath,
+      currentMainWindowNode.bufferPosition,
+      newName)
+    if r.isErr:
+      status.commandLine.writeLspRenameError(r.error)
+
 proc yankLines(
   status: var EditorStatus,
   start, last: int,
@@ -1482,6 +1499,10 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
     elif commands.len == 2: status.startRecordingOperations(commands[1])
   elif key == ord('K'):
     status.requestHover
+  elif key == ord(' '):
+    let secondKey = commands[1]
+    if secondKey == ord('r'):
+      status.requestRename
   else:
     return
 
@@ -1788,9 +1809,18 @@ proc isNormalModeCommand*(
 
       elif command[0] == '@':
         if command.len == 1:
-            result = InputState.Continue
+          result = InputState.Continue
         elif command.len == 2:
           if isOperationRegisterName(command[1]):
+            result = InputState.Valid
+          else:
+            result = InputState.Invalid
+
+      elif command[0] == ' ':
+        if command.len == 1:
+          result = InputState.Continue
+        elif command.len == 2:
+          if command[1] == 'r':
             result = InputState.Valid
           else:
             result = InputState.Invalid

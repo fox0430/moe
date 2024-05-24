@@ -31,7 +31,7 @@ import ../settings
 
 import protocol/[enums, types]
 import jsonrpc, utils, completion, progress, hover, semantictoken, inlayhint,
-       definition, references
+       definition, references, rename
 
 type
   LspError* = object
@@ -63,6 +63,7 @@ type
     semanticTokens*: Option[SemanticTokensLegend]
     inlayHint*: bool
     references*: bool
+    rename*: bool
 
   LspProgressTable* = Table[ProgressToken, ProgressReport]
 
@@ -444,6 +445,10 @@ proc initInitializeParams*(
           )),
           references: some(ReferencesCapability(
             dynamicRegistration: some(true)
+          )),
+          rename: some(RenameCapability(
+            dynamicRegistration: some(true),
+            prepareSupport: some(false)
           ))
         )),
         window: some(WindowCapabilities(
@@ -479,7 +484,8 @@ proc setCapabilities(
     if settings.diagnostics.enable and
        initResult.capabilities.diagnosticProvider.isSome:
          try:
-           discard initResult.capabilities.diagnosticProvider.get.to(DiagnosticOptions)
+           discard initResult.capabilities.diagnosticProvider.get.to(
+             DiagnosticOptions)
            capabilities.diagnostics = true
          except CatchableError:
            discard
@@ -502,6 +508,19 @@ proc setCapabilities(
     if settings.references.enable and
        initResult.capabilities.referencesProvider == some(true):
          capabilities.references = true
+
+    if settings.rename.enable and
+       initResult.capabilities.renameProvider.isSome:
+         if initResult.capabilities.renameProvider.get.kind == JBool:
+           capabilities.rename =
+             initResult.capabilities.renameProvider.get.getBool
+         else:
+           try:
+             discard initResult.capabilities.renameProvider.get.to(
+               RenameOptions)
+             capabilities.rename = true
+           except CatchableError as e:
+             discard
 
     if settings.semanticTokens.enable and
        initResult.capabilities.semanticTokensProvider.isSome and
@@ -901,5 +920,32 @@ proc textDocumentReferences*(
     let r = c.request(bufferId, LspMethod.textDocumentReferences, params)
     if r.isErr:
       return R[(), string].err fmt"textDocument/references request failed: {r.error}"
+
+    return R[(), string].ok ()
+
+proc textDocumentRename*(
+  c: var LspClient,
+  bufferId: int,
+  path: string,
+  posi: BufferPosition,
+  newName: string): LspSendRequestResult =
+    ## Send a textDocument/rename request to the server.
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_rename
+
+    if not c.serverProcess.running:
+      if not c.closed: c.closed = true
+      return R[(), string].err "server crashed"
+
+    if not c.isInitialized:
+      return R[(), string].err "lsp unavailable"
+
+    if not c.capabilities.get.rename:
+      return R[(), string].err "textDocument/rename unavailable"
+
+    let params = %* initRenameParams(path, posi.toLspPosition, newName)
+
+    let r = c.request(bufferId, LspMethod.textDocumentRename, params)
+    if r.isErr:
+      return R[(), string].err fmt"textDocument/rename request failed: {r.error}"
 
     return R[(), string].ok ()

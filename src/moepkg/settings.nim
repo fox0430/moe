@@ -255,6 +255,9 @@ type
   LspReferencesSettings* = object
     enable*: bool
 
+  LspRenameSettings* = object
+    enable*: bool
+
   LspSemanticTokesnSettings* = object
     enable*: bool
 
@@ -265,6 +268,7 @@ type
     hover*: LspHoverSettings
     inlayHint*: LspInlayHintSettings
     references*: LspReferencesSettings
+    rename*: LspRenameSettings
     semanticTokens*: LspSemanticTokesnSettings
 
   LspSettings* = object
@@ -530,6 +534,9 @@ proc initLspInlayHintSettings(): LspInlayHintSettings =
 proc initLspReferencesSettings(): LspReferencesSettings =
   result.enable = true
 
+proc initLspRenameSettings(): LspRenameSettings =
+  result.enable = true
+
 proc initLspSemanticTokesnSettings(): LspSemanticTokesnSettings =
   result.enable = true
 
@@ -540,6 +547,7 @@ proc initLspFeatureSettings(): LspFeatureSettings =
   result.hover = initLspHoverSettings()
   result.inlayHint = initLspInlayHintSettings()
   result.references = initLspReferencesSettings()
+  result.rename = initLspRenameSettings()
   result.semanticTokens = initLspSemanticTokesnSettings()
 
 proc initLspSettigns(): LspSettings =
@@ -1792,6 +1800,13 @@ proc parseLspTable(s: var EditorSettings, lspConfigs: TomlValueRef) =
               s.lsp.features.references.enable = val.getBool
             else:
               discard
+      of "Rename":
+        for key, val in val.getTable:
+          case key:
+            of "enable":
+              s.lsp.features.rename.enable = val.getBool
+            else:
+              discard
       of "SemanticTokens":
         for key, val in val.getTable:
           case key:
@@ -2368,6 +2383,14 @@ proc validateLspTable(table: TomlValueRef): Option[InvalidItem] =
             else:
               return some(InvalidItem(name: $key, val: $val))
       of "References":
+        for key, val in val.getTable:
+          case key:
+            of "enable":
+              if val.kind != TomlValueKind.Bool:
+                return some(InvalidItem(name: $key, val: $val))
+            else:
+              return some(InvalidItem(name: $key, val: $val))
+      of "Rename":
         for key, val in val.getTable:
           case key:
             of "enable":
