@@ -175,6 +175,9 @@ enable = false
 [Lsp.InlayHint]
 enable = false
 
+[Lsp.References]
+enable = false
+
 [Lsp.SemanticTokens]
 enable = false
 
@@ -583,6 +586,8 @@ suite "settings: Parse configuration file":
     check not settings.lsp.features.hover.enable
 
     check not settings.lsp.features.inlayHint.enable
+
+    check not settings.lsp.features.references.enable
 
     check not settings.lsp.features.semanticTokens.enable
 

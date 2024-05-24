@@ -36,10 +36,11 @@ import
   ../syntaxcheck,
   ../completion,
   ../highlight,
-  ../movement
+  ../movement,
+  ../referencesmode
 
 import client, utils, hover, message, diagnostics, semantictoken, progress,
-       inlayhint, definition
+       inlayhint, definition, references
 
 # Workaround for Nim 1.6.2
 import completion as lspcompletion
@@ -455,8 +456,38 @@ proc lspDefinition(
 
     return Result[(), string].ok ()
 
-proc handleLspServerNotify(
+proc lspReferences(
+  status: var EditorStatus,
+  res: JsonNode): Result[(), string] =
+    ## textDocument/references
+    ## Open a references mode window.
 
+    let parseResult = parseTextDocumentReferencesResponse(res)
+
+    let requestId =
+      try: res["id"].getInt
+      except CatchableError as e: return Result[(), string].err e.msg
+
+    lspClient.deleteWaitingResponse(requestId)
+
+    if parseResult.isErr:
+      return Result[(), string].err parseResult.error
+    elif parseResult.get.len == 0:
+      return Result[(), string].err "References not found"
+
+    # Open a new window with references mode.
+    status.horizontalSplitWindow
+    status.moveNextWindow
+
+    discard status.addNewBufferInCurrentWin(Mode.references)
+    currentBufStatus.buffer = initReferencesModeBuffer(parseResult.get)
+      .toGapBuffer
+
+    status.resize
+
+    return Result[(), string].ok ()
+
+proc handleLspServerNotify(
   status: var EditorStatus,
   notify: JsonNode): Result[(), string] =
     ## Handle the notification from the server.
@@ -565,5 +596,8 @@ proc handleLspResponse*(status: var EditorStatus) =
       of LspMethod.textDocumentDefinition:
         let r = status.lspDefinition(resJson.get)
         if r.isErr: status.commandLine.writeLspDefinitionError(r.error)
+      of LspMethod.textDocumentReferences:
+        let r = status.lspReferences(resJson.get)
+        if r.isErr: status.commandLine.writeLspReferencesError(r.error)
       else:
         info fmt"lsp: Ignore response: {resJson}"

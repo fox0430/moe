@@ -896,13 +896,16 @@ proc update*(status: var EditorStatus) =
           status.lspClients.contains(b.langId) and
           status.lspClients[b.langId].capabilities.isSome and
           status.lspClients[b.langId].capabilities.get.inlayHint and
-          node.view.rangeOfOriginalLineInView != b.inlayHints.range
+          node.view.rangeOfOriginalLineInView != b.inlayHints.range and
+          not status.lspClients[b.langId].isWaitingResponse(
+            b.id,
+            LspMethod.textDocumentInlayHint)
 
         if isSendLspInlayHintRequest():
           let err = status.lspClients[b.langId].sendLspInlayHintRequest(
             b,
             node.bufferIndex,
-            mainWindowNode)
+            node)
           if err.isErr: error "lsp: {err.error}"
 
         # The highlight for the view.
@@ -1151,6 +1154,8 @@ proc closeWindow*(status: var EditorStatus, node: WindowNode) =
   status.mainWindow.currentMainWindowNode = node
 
 proc deleteBuffer*(status: var EditorStatus, deleteIndex: int) =
+  ## Delete the buffer with windows.
+
   let beforeWindowIndex = currentMainWindowNode.windowIndex
 
   let langId = status.bufStatus[beforeWindowIndex].langId

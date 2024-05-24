@@ -473,6 +473,19 @@ proc requestGotoDefinition(status: var EditorStatus) =
     # TODO: Show error
     error fmt"Goto definition failed: {r.error}"
 
+proc requestFindReferences(status: var EditorStatus) =
+  if not status.lspClients.contains(currentBufStatus.langId):
+    debug "lsp client is not ready"
+    return
+
+  let r = lspClient.textDocumentReferences(
+    currentBufStatus.id,
+    $currentBufStatus.path.absolutePath,
+    currentMainWindowNode.bufferPosition)
+  if r.isErr:
+    # TODO: Show error
+    error fmt"Find references failed: {r.error}"
+
 proc yankLines(
   status: var EditorStatus,
   start, last: int,
@@ -1245,6 +1258,8 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
       status.showCurrentCharInfoCommand(currentMainWindowNode)
     elif secondKey == ord('d'):
       status.requestGotoDefinition
+    elif secondKey == ord('r'):
+      status.requestFindReferences
   elif key == ord('G'):
     currentBufStatus.moveToLastLine(currentMainWindowNode)
   elif isCtrlU(key):
@@ -1580,7 +1595,8 @@ proc isNormalModeCommand*(
           if command[1] == ord('g') or
              command[1] == ord('_') or
              command[1] == ord('a') or
-             command[1] == ord('d'):
+             command[1] == ord('d') or
+             command[1] == ord('r'):
                result = InputState.Valid
 
       elif command[0] == ord('z'):

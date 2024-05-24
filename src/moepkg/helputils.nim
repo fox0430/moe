@@ -204,6 +204,15 @@ k  - Go up
 gg - Go to the first line
 G  - Go to the last line
 
+# References mode
+
+j     - Go down
+k     - Go down
+g     - Go to the first line
+G     - Go to the last line
+Enter - Jump to the destination
+ESC   - Quit References mode
+
 # Filer mode
 
 j  - Go down

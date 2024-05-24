@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -48,6 +48,7 @@ type
     debug
     searchForward
     searchBackward
+    references
 
   BufferStatus* = ref object
     buffer*: GapBuffer[Runes]
@@ -266,7 +267,7 @@ proc isCursor*(mode: Mode): bool {.inline.} =
   ## Return true if a mode in which it uses the cursor.
 
   case mode:
-    of filer, bufManager, recentFile, backup, config, debug:
+    of filer, bufManager, recentFile, backup, config, debug, references:
       # Don't use the cursor.
       return false
     else:

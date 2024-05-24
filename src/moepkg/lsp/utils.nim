@@ -52,6 +52,7 @@ type
     textDocumentSemanticTokensDelta
     textDocumentInlayHint
     textDocumentDefinition
+    textDocumentReferences
 
   LspMethodResult* = Result[LspMethod, string]
   LspShutdownResult* = Result[(), string]
@@ -121,6 +122,7 @@ proc toLspMethodStr*(m: LspMethod): string =
     of textDocumentSemanticTokensDelta: "textDocument/semanticTokens/delta"
     of textDocumentInlayHint: "textDocument/inlayHint"
     of textDocumentDefinition: "textDocument/definition"
+    of textDocumentReferences: "textDocument/references"
 
 proc parseTraceValue*(s: string): Result[TraceValue, string] =
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#traceValue
@@ -178,6 +180,8 @@ proc lspMethod*(j: JsonNode): LspMethodResult =
       LspMethodResult.ok textDocumentInlayHint
     of "textDocument/definition":
       LspMethodResult.ok textDocumentDefinition
+    of "textDocument/references":
+      LspMethodResult.ok textDocumentReferences
     else:
       LspMethodResult.err "Not supported: " & j["method"].getStr
 

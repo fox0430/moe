@@ -247,6 +247,9 @@ enable = true
 [Lsp.InlayHint]
 enable = true
 
+[Lsp.References]
+enable = true
+
 [Lsp.SemanticTokens]
 enable = true
 
