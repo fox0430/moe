@@ -94,6 +94,20 @@ This project's goals are easily customizable, high productivity, user friendly, 
 
 - Language Server Protocol (WIP)
 
+  - Diagnostics
+
+  - Completion
+
+  - Inlay Hints
+
+  - Hover
+
+  - Goto definition
+
+  - Find References
+
+  - Semantic Tokens
+
 ## Planned features
 
 - Supports regular expression and PEG
