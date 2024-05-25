@@ -94,6 +94,20 @@ This project's goals are easily customizable, high productivity, user friendly, 
 
 - Language Server Protocol (WIP)
 
+  - Diagnostics
+
+  - Completion
+
+  - Inlay Hints
+
+  - Hover
+
+  - Goto definition
+
+  - Find References
+
+  - Semantic Tokens
+
 ## Planned features
 
 - Supports regular expression and PEG
@@ -133,6 +147,8 @@ We recommend Linux environments.
 - [xclip](https://github.com/astrand/xclip) v0.13 or higher (Option on GNU/Linux)
 
 - [xsel](http://www.kfish.org/software/xsel/) (Option on GNU/Linux)
+
+- [wl-clipboard](https://github.com/bugaevc/wl-clipboard) (Option on GNU/Linux)
 
 ```sh
 # Latest developmental state inside Github repository
