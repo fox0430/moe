@@ -134,6 +134,8 @@ We recommend Linux environments.
 
 - [xsel](http://www.kfish.org/software/xsel/) (Option on GNU/Linux)
 
+- [wl-clipboard](https://github.com/bugaevc/wl-clipboard) (Option on GNU/Linux)
+
 ```sh
 # Latest developmental state inside Github repository
 nimble install moe@#head
