@@ -31,7 +31,7 @@ suite "lsp: parseTextDocumentRenameResponse":
       "jsonrpc": "2.0",
       "id": 0,
       "result": nil
-    }).get.isNone
+    }).get.len == 0
 
   test "Basic":
     check parseTextDocumentRenameResponse(%*{
@@ -70,20 +70,22 @@ suite "lsp: parseTextDocumentRenameResponse":
         },
         "documentChanges": nil
       }
-    }).get.get == LspRename(
-      path: "/home/user/moe/src/moe.nim",
-      changes: @[
-        RenameChange(
-          range: BufferRange(
-            first: BufferPosition(line: 22, column: 5),
-            last: BufferPosition(line: 22, column: 9)),
-          text: "abc"
-        ),
-        RenameChange(
-          range: BufferRange(
-            first: BufferPosition(line: 32, column: 19),
-            last: BufferPosition(line: 32, column: 23)),
-          text: "abc"
-        )
-      ]
-    )
+    }).get == @[
+      LspRename(
+        path: "/home/user/moe/src/moe.nim",
+        changes: @[
+          RenameChange(
+            range: BufferRange(
+              first: BufferPosition(line: 22, column: 5),
+              last: BufferPosition(line: 22, column: 9)),
+            text: "abc"
+          ),
+          RenameChange(
+            range: BufferRange(
+              first: BufferPosition(line: 32, column: 19),
+              last: BufferPosition(line: 32, column: 23)),
+            text: "abc"
+          )
+        ]
+      )
+    ]
