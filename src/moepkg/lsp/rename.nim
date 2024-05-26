@@ -35,7 +35,7 @@ type
     path*: string
     changes*: seq[RenameChange]
 
-  LspRenameResult* = Result[Option[LspRename], string]
+  LspRenamesResult* = Result[seq[LspRename], string]
 
 proc initRenameParams*(
   path: string,
@@ -47,32 +47,33 @@ proc initRenameParams*(
       position: position,
       newName: newName)
 
-proc parseTextDocumentRenameResponse*(res: JsonNode): LspRenameResult =
+proc parseTextDocumentRenameResponse*(res: JsonNode): LspRenamesResult =
   if not res.contains("result"):
-    return LspRenameResult.err fmt"Invalid response: {res}"
+    return LspRenamesResult.err fmt"Invalid response: {res}"
 
   if res["result"].kind == JNull:
     # Not found
-    return LspRenameResult.ok none(LspRename)
+    return LspRenamesResult.ok @[]
 
-  var lspRename = LspRename()
+  var lspRenames: seq[LspRename]
 
   try:
     let wEdit = res["result"].to(WorkspaceEdit)
-    for key, val in wEdit.changes.get.pairs:
-      let path = key.uriToPath
+    for uri, changes in wEdit.changes.get.pairs:
+      lspRenames.add LspRename()
+
+      let path = uri.uriToPath
       if path.isErr:
-        return LspRenameResult.err fmt"Invalid response: {res}"
+        return LspRenamesResult.err fmt"Invalid response: {res}"
+      lspRenames[^1].path = path.get
 
-      lspRename.path = path.get
-
-      for v in val:
-        lspRename.changes.add RenameChange(
+      for v in changes:
+        lspRenames[^1].changes.add RenameChange(
           range: v["range"].to(LspRange).toBufferRange,
           text: v["newText"].getStr)
 
   except CatchableError as e:
     let msg = fmt"Invalid WorkspaceEdit: {e.msg}"
-    return LspRenameResult.err fmt"Invalid response: {msg}"
+    return LspRenamesResult.err fmt"Invalid response: {msg}"
 
-  return LspRenameResult.ok some(lspRename)
+  return LspRenamesResult.ok lspRenames

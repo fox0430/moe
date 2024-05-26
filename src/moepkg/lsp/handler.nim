@@ -17,12 +17,12 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[options, tables, json, logging, strformat, sequtils]
+import std/[options, tables, json, logging, strformat, sequtils, strutils]
 
 import pkg/results
 
-import ../syntax/highlite
 import
+  ../syntax/highlite,
   ../editorstatus,
   ../windownode,
   ../popupwindow,
@@ -37,7 +37,8 @@ import
   ../completion,
   ../highlight,
   ../movement,
-  ../referencesmode
+  ../referencesmode,
+  ../fileutils
 
 import client, utils, hover, message, diagnostics, semantictoken, progress,
        inlayhint, definition, references, rename
@@ -485,34 +486,56 @@ proc lspReferences(
 
     return Result[(), string].ok ()
 
+proc getBufferIndexByAbsPath(status: EditorStatus, path: Runes): Option[int] =
+  for i, b in status.bufStatus:
+    if b.absolutePath == path:
+      return some(i)
+
 proc lspRename(status: var EditorStatus, res: JsonNode): Result[(), string] =
   ## textDocument/rename
 
-  let parseResult = parseTextDocumentRenameResponse(res)
+  let lspRenames = parseTextDocumentRenameResponse(res)
 
   try:
     lspClient.deleteWaitingResponse(res["id"].getInt)
   except CatchableError as e:
     return Result[(), string].err e.msg
 
-  if parseResult.isErr:
-    return Result[(), string].err parseResult.error
+  if lspRenames.isErr:
+    return Result[(), string].err lspRenames.error
 
-  if parseResult.get.isNone:
+  if lspRenames.get.len == 0:
     return Result[(), string].err "Not found"
 
-  let lspRename = parseResult.get.get
+  for r in lspRenames.get:
+    let bufIndex = status.getBufferIndexByAbsPath(r.path.toRunes)
+    if bufIndex.isSome:
+      template b: BufferStatus = status.bufStatus[bufIndex.get]
 
-  if $currentBufStatus.absolutePath == lspRename.path:
-    for c in lspRename.changes:
-      var newLine = currentBufStatus.buffer[c.range.first.line]
+      for c in r.changes:
+        var newLine = b.buffer[c.range.first.line]
+        for _ in 0 ..< c.range.last.column - c.range.first.column:
+          newLine.delete c.range.first.column
+        newLine.insert(c.text.toRunes, c.range.first.column)
 
-      for _ in 0 ..< c.range.last.column - c.range.first.column:
-        newLine.delete c.range.first.column
+        b.buffer[c.range.first.line] = newLine
+    else:
+      let file = openFile(r.path)
+      if file.isErr:
+        return Result[(), string].err fmt"lsp rename: cannot open: {r.path}: {file.error}"
 
-      newLine.insert(c.text.toRunes, c.range.first.column)
+      var lines = file.get.text.splitLines
+      for c in r.changes:
+        lines[c.range.first.line].delete(c.range.first.column .. c.range.last.column)
+        lines[c.range.first.line].insert(c.text.toRunes, c.range.first.column)
 
-      currentBufStatus.buffer[c.range.first.line] = newLine
+      let err = saveFile(r.path, lines.toRunes, file.get.encoding)
+      if err.isErr:
+        return Result[(), string].err fmt"lsp rename: cannot write: {r.path}: {file.error}"
+
+    info fmt"lsp rename success: {r.path}"
+
+  return Result[(), string].ok ()
 
 proc handleLspServerNotify(
   status: var EditorStatus,
