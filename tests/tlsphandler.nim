@@ -847,6 +847,91 @@ suite "lsp: lspReferences":
     ]
     .toSeqRunes
 
+suite "lsp: lspRename":
+  var status = initEditorStatus()
+
+  setup:
+    status = initEditorStatus()
+    status.settings.lsp.enable = true
+
+    let filename = $genOid() & ".nim"
+    assert status.addNewBufferInCurrentWin(filename).isOk
+
+    status.lspClients["nim"] = LspClient()
+
+  test "Not found":
+    lspClient.waitingResponses[0] = WaitLspResponse(
+      bufferId: currentBufStatus.id,
+      requestId: 0,
+      lspMethod: LspMethod.textDocumentRename)
+
+    check status.lspReferences(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": []
+    }).isErr
+
+  test "Basic":
+    let filePath = getCurrentDir() / filename
+
+    const Buffer = @[
+      "type Obj = object",
+      "  n: int",
+      "let n = Obj()",
+    ]
+
+    currentBufStatus.buffer = Buffer.toSeqRunes.toGapBuffer
+
+    lspClient.waitingResponses[0] = WaitLspResponse(
+      bufferId: currentBufStatus.id,
+      requestId: 0,
+      lspMethod: LspMethod.textDocumentRename)
+
+    check status.lspRename(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": {
+        "changes": {
+          filePath.pathToUri: [
+            {
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 5
+                },
+                "end": {
+                  "line": 0,
+                  "character": 8
+                }
+              },
+              "newText": "newName"
+            },
+            {
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 8
+                },
+                "end": {
+                  "line": 2,
+                  "character": 11
+                }
+              },
+              "newText": "newName"
+            }
+          ]
+        },
+        "documentChanges": nil
+      }
+    }).isOk
+
+    check currentBufStatus.buffer.toSeqRunes == @[
+      "type newName = object",
+      "  n: int",
+      "let n = newName()",
+    ].toSeqRunes
+
+
 suite "lsp: handleLspServerNotify":
   setup:
     var status = initEditorStatus()

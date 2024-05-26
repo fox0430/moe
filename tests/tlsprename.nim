@@ -89,3 +89,87 @@ suite "lsp: parseTextDocumentRenameResponse":
         ]
       )
     ]
+
+  test "Basic 2":
+    check parseTextDocumentRenameResponse(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": {
+        "changes": {
+          "file:///home/user/test.nim": [
+            {
+              "range": {
+                "start": {
+                  "line": 22,
+                  "character": 5
+                },
+                "end": {
+                  "line": 22,
+                  "character": 9
+                }
+              },
+              "newText": "abc"
+            },
+            {
+              "range" :{
+                "start": {
+                  "line": 32,
+                  "character": 19
+                },
+                "end": {
+                  "line": 32,
+                  "character": 23
+                }
+              },
+              "newText": "abc"
+            }
+          ],
+          "file:///home/user/test2.nim": [
+            {
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 0
+                },
+                "end": {
+                  "line": 0,
+                  "character": 4
+                }
+              },
+              "newText": "abc"
+            }
+          ],
+        },
+        "documentChanges": nil,
+      }
+    }).get == @[
+      LspRename(
+        path: "/home/user/test.nim",
+        changes: @[
+          RenameChange(
+            range: BufferRange(
+              first: BufferPosition(line: 22, column: 5),
+              last: BufferPosition(line: 22, column: 9)),
+            text: "abc"
+          ),
+          RenameChange(
+            range: BufferRange(
+              first: BufferPosition(line: 32, column: 19),
+              last: BufferPosition(line: 32, column: 23)),
+            text: "abc"
+          )
+        ]
+      ),
+      LspRename(
+        path: "/home/user/test2.nim",
+        changes: @[
+          RenameChange(
+            range: BufferRange(
+              first: BufferPosition(line: 0, column: 0),
+              last: BufferPosition(line: 0, column: 4)),
+            text: "abc"
+          )
+        ]
+      )
+
+    ]

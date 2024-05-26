@@ -620,3 +620,78 @@ var num: number
             "character":11
           }}
       }
+
+  test "Send textDocument/rename":
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      block:
+        const Text = """
+type Obj* = object
+  n*: int
+"""
+
+        let path = rootDir / "test1.nim"
+        writeFile(path, Text)
+
+      const
+        BufferId = 1
+        LanguageId = "nim"
+        Text = """
+import test1
+let o = Obj()
+echo Ojb(n: 1)
+        """
+
+      let path = rootDir / "test2.nim"
+      writeFile(path, Text)
+
+      prepareLsp(BufferId, LanguageId, path, Text)
+
+      let requestId = client.lastId + 1
+
+      check client.textDocumentRename(
+        BufferId,
+        path,
+        BufferPosition(line: 1, column: 8),
+        "newName").isOk
+      check client.waitingResponses[requestId].lspMethod ==
+        LspMethod.textDocumentRename
+
+      assert client.readable(Timeout).get
+      let res = client.read.get
+      check res["result"] == %* {
+        "changes": {
+          "file:///home/fox/git/moe/lspTestDir/test2.nim": [
+            {
+              "range": {
+                "start": {
+                  "line": 1,
+                  "character": 8
+                },
+                "end": {
+                  "line": 1,
+                  "character": 11
+                }
+              },
+              "newText" :"newName"
+            }
+          ],
+          "file:///home/fox/git/moe/lspTestDir/test1.nim": [
+            {
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 5
+                },
+                "end": {
+                  "line": 0,
+                  "character": 8
+                }
+              },
+              "newText": "newName"
+            }
+          ]
+        },
+        "documentChanges": nil
+      }
