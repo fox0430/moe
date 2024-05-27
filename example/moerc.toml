@@ -250,6 +250,9 @@ enable = true
 [Lsp.References]
 enable = true
 
+[Lsp.Rename]
+enable = true
+
 [Lsp.SemanticTokens]
 enable = true
 
