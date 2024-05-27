@@ -913,7 +913,7 @@ proc textDocumentReferences*(
     if not c.isInitialized:
       return R[(), string].err "lsp unavailable"
 
-    if not c.capabilities.get.definition:
+    if not c.capabilities.get.references:
       return R[(), string].err "textDocument/references unavailable"
 
     let params = %* initReferenceParams(path, posi.toLspPosition)
