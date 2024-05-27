@@ -129,6 +129,7 @@ q          - Stop recoding operations
 @ any      - Exec a macro
 K          - Hover (LSP)
 gd         - Goto definition (LSP)
+Space r    - Rename (LSP)
 
 # Register
 
