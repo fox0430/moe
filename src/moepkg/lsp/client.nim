@@ -519,7 +519,8 @@ proc setCapabilities(
              discard initResult.capabilities.renameProvider.get.to(
                RenameOptions)
              capabilities.rename = true
-           except CatchableError as e:
+           except CatchableError:
+             # Invalid renameProvider
              discard
 
     if settings.semanticTokens.enable and
