@@ -513,6 +513,10 @@ proc lspRename(status: var EditorStatus, res: JsonNode): Result[(), string] =
       template b: BufferStatus = status.bufStatus[bufIndex.get]
 
       for c in r.changes:
+        if c.range.first.line > b.buffer.high or
+           c.range.last.column > b.buffer[c.range.first.line].high:
+             return Result[(), string].err fmt"lsp rename: invalid range: {r.path}: {$c.range}"
+
         var newLine = b.buffer[c.range.first.line]
         for _ in 0 ..< c.range.last.column - c.range.first.column:
           newLine.delete c.range.first.column
@@ -526,6 +530,10 @@ proc lspRename(status: var EditorStatus, res: JsonNode): Result[(), string] =
 
       var lines = file.get.text.splitLines
       for c in r.changes:
+        if c.range.first.line > lines.high or
+           c.range.last.column > lines[c.range.first.line].high:
+             return Result[(), string].err fmt"lsp rename: invalid range: {r.path}: {$c.range}"
+
         lines[c.range.first.line].delete(c.range.first.column .. c.range.last.column)
         lines[c.range.first.line].insert(c.text.toRunes, c.range.first.column)
 
