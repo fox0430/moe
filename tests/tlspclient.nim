@@ -282,6 +282,48 @@ suite "lsp: setCapabilities":
 
     check not client.capabilities.get.inlayHint
 
+  test "Enable Rename":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          renameProvider: some(%*{"prepareProvider": true})))
+
+      s = LspFeatureSettings(
+        rename: LspRenameSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.rename
+
+  test "Disable Rename":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          renameProvider: none(JsonNode)))
+
+      s = LspFeatureSettings(
+        rename: LspRenameSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.rename
+
+  test "Disable Rename 2":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          inlayHintProvider: some(InlayHintOptions())))
+
+      s = LspFeatureSettings(
+        rename: LspRenameSettings(
+          enable: false))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.rename
+
 suite "lsp: Send requests":
   privateAccess(LspClient)
 
@@ -619,4 +661,79 @@ var num: number
             "line":0,
             "character":11
           }}
+      }
+
+  test "Send textDocument/rename":
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      block:
+        const Text = """
+type Obj* = object
+  n*: int
+"""
+
+        let path = rootDir / "test1.nim"
+        writeFile(path, Text)
+
+      const
+        BufferId = 1
+        LanguageId = "nim"
+        Text = """
+import test1
+let o = Obj()
+echo Ojb(n: 1)
+        """
+
+      let path = rootDir / "test2.nim"
+      writeFile(path, Text)
+
+      prepareLsp(BufferId, LanguageId, path, Text)
+
+      let requestId = client.lastId + 1
+
+      check client.textDocumentRename(
+        BufferId,
+        path,
+        BufferPosition(line: 1, column: 8),
+        "newName").isOk
+      check client.waitingResponses[requestId].lspMethod ==
+        LspMethod.textDocumentRename
+
+      assert client.readable(Timeout).get
+      let res = client.read.get
+      check res["result"] == %* {
+        "changes": {
+          "file://" & getCurrentDir() & "/lspTestDir/test2.nim": [
+            {
+              "range": {
+                "start": {
+                  "line": 1,
+                  "character": 8
+                },
+                "end": {
+                  "line": 1,
+                  "character": 11
+                }
+              },
+              "newText" :"newName"
+            }
+          ],
+          "file://" & getCurrentDir() & "/lspTestDir/test1.nim": [
+            {
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 5
+                },
+                "end": {
+                  "line": 0,
+                  "character": 8
+                }
+              },
+              "newText": "newName"
+            }
+          ]
+        },
+        "documentChanges": nil
       }

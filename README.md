@@ -106,6 +106,8 @@ This project's goals are easily customizable, high productivity, user friendly, 
 
   - Find References
 
+  - Rename
+
   - Semantic Tokens
 
 ## Planned features

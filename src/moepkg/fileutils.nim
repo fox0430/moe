@@ -209,7 +209,7 @@ proc splitAndNormalizedPath*(path: Runes): tuple[head, tail: Runes] =
   let (head, tail) = splitPath(path)
   return (head: normalizedPath(head), tail: normalizedPath(tail))
 
-proc openFile*(filename: Runes): OpenFileResult =
+proc openFile*(filename: string | Runes): OpenFileResult =
   let raw =
     try:
       readFile($filename)
@@ -234,7 +234,8 @@ proc newFile*(): GapBuffer[Runes] {.inline.} =
   result.add(ru"", false)
 
 proc saveFile*(
-  path, runes: Runes,
+  path: string | Runes,
+  runes: Runes,
   encoding: CharacterEncoding): SaveFileResult =
 
     let
@@ -249,7 +250,6 @@ proc saveFile*(
       return SaveFileResult.err fmt"Failed to save file: {e.msg}"
 
     return SaveFileResult.ok ()
-
 
 proc isAccessibleDir*(path: string): bool =
   ## Return true if the path is a directory and accessible.

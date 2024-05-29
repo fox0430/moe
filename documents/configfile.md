@@ -804,6 +804,13 @@ defaut is `true`
 enable
 ```
 
+### Lsp.Definition table
+Enable/Disable LSP Goto Definition (bool)  
+defaut is `true`
+```
+enable
+```
+
 ### Lsp.Diagnostics table
 Enable/Disable LSP Diagnostics (bool)  
 defaut is `true`
@@ -827,6 +834,13 @@ enable
 
 ### Lsp.References table
 Enable/Disable LSP Find References (bool)  
+defaut is `true`
+```
+enable
+```
+
+### Lsp.Rename table
+Enable/Disable LSP Rename (bool)  
 defaut is `true`
 ```
 enable

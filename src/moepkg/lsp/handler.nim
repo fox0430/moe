@@ -17,12 +17,12 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[options, tables, json, logging, strformat]
+import std/[options, tables, json, logging, strformat, sequtils, strutils]
 
 import pkg/results
 
-import ../syntax/highlite
 import
+  ../syntax/highlite,
   ../editorstatus,
   ../windownode,
   ../popupwindow,
@@ -37,10 +37,11 @@ import
   ../completion,
   ../highlight,
   ../movement,
-  ../referencesmode
+  ../referencesmode,
+  ../fileutils
 
 import client, utils, hover, message, diagnostics, semantictoken, progress,
-       inlayhint, definition, references
+       inlayhint, definition, references, rename
 
 # Workaround for Nim 1.6.2
 import completion as lspcompletion
@@ -419,7 +420,6 @@ proc lspDefinition(
     let requestId =
       try: res["id"].getInt
       except CatchableError as e: return Result[(), string].err e.msg
-
     lspClient.deleteWaitingResponse(requestId)
 
     if parseResult.get.isNone:
@@ -467,7 +467,6 @@ proc lspReferences(
     let requestId =
       try: res["id"].getInt
       except CatchableError as e: return Result[(), string].err e.msg
-
     lspClient.deleteWaitingResponse(requestId)
 
     if parseResult.isErr:
@@ -486,6 +485,65 @@ proc lspReferences(
     status.resize
 
     return Result[(), string].ok ()
+
+proc getBufferIndexByAbsPath(status: EditorStatus, path: Runes): Option[int] =
+  for i, b in status.bufStatus:
+    if b.absolutePath == path:
+      return some(i)
+
+proc lspRename(status: var EditorStatus, res: JsonNode): Result[(), string] =
+  ## textDocument/rename
+
+  let lspRenames = parseTextDocumentRenameResponse(res)
+
+  try:
+    lspClient.deleteWaitingResponse(res["id"].getInt)
+  except CatchableError as e:
+    return Result[(), string].err e.msg
+
+  if lspRenames.isErr:
+    return Result[(), string].err lspRenames.error
+
+  if lspRenames.get.len == 0:
+    return Result[(), string].err "Not found"
+
+  for r in lspRenames.get:
+    let bufIndex = status.getBufferIndexByAbsPath(r.path.toRunes)
+    if bufIndex.isSome:
+      template b: BufferStatus = status.bufStatus[bufIndex.get]
+
+      for c in r.changes:
+        if c.range.first.line > b.buffer.high or
+           c.range.last.column > b.buffer[c.range.first.line].high:
+             return Result[(), string].err fmt"lsp rename: invalid range: {r.path}: {$c.range}"
+
+        var newLine = b.buffer[c.range.first.line]
+        for _ in 0 ..< c.range.last.column - c.range.first.column:
+          newLine.delete c.range.first.column
+        newLine.insert(c.text.toRunes, c.range.first.column)
+
+        b.buffer[c.range.first.line] = newLine
+    else:
+      let file = openFile(r.path)
+      if file.isErr:
+        return Result[(), string].err fmt"lsp rename: cannot open: {r.path}: {file.error}"
+
+      var lines = file.get.text.splitLines
+      for c in r.changes:
+        if c.range.first.line > lines.high or
+           c.range.last.column > lines[c.range.first.line].high:
+             return Result[(), string].err fmt"lsp rename: invalid range: {r.path}: {$c.range}"
+
+        lines[c.range.first.line].delete(c.range.first.column .. c.range.last.column)
+        lines[c.range.first.line].insert(c.text.toRunes, c.range.first.column)
+
+      let err = saveFile(r.path, lines.toRunes, file.get.encoding)
+      if err.isErr:
+        return Result[(), string].err fmt"lsp rename: cannot write: {r.path}: {file.error}"
+
+    info fmt"lsp rename success: {r.path}"
+
+  return Result[(), string].ok ()
 
 proc handleLspServerNotify(
   status: var EditorStatus,
@@ -599,5 +657,8 @@ proc handleLspResponse*(status: var EditorStatus) =
       of LspMethod.textDocumentReferences:
         let r = status.lspReferences(resJson.get)
         if r.isErr: status.commandLine.writeLspReferencesError(r.error)
+      of LspMethod.textDocumentRename:
+        let r = status.lspRename(resJson.get)
+        if r.isErr: status.commandLine.writeLspRenameError(r.error)
       else:
         info fmt"lsp: Ignore response: {resJson}"

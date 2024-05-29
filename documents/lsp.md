@@ -26,6 +26,7 @@ Please feedback, bug reports and PRs.
 - `textDocument/inlayHint`
 - `textDocument/definition`
 - `textDocument/references`
+- `textDocument/rename`
 - `$/progress`
 
 ## Configuration
@@ -106,3 +107,9 @@ Display types at the end of lines with LSP InlayHint.
 `gr` command in Normal mode. Open References mode.
 
 ![moe-references](https://github.com/fox0430/moe/assets/15966436/fe34a5f9-a68b-4300-ad82-7c8bd7150d01)
+
+### Rename
+
+` r` (`Space`-`r`) command in Normal mode. Enter a new name in the command line.
+
+![moe-rename](https://github.com/fox0430/moe/assets/15966436/420ea178-c9fe-4053-8410-849fb845c698)
