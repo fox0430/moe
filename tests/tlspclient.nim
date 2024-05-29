@@ -282,6 +282,48 @@ suite "lsp: setCapabilities":
 
     check not client.capabilities.get.inlayHint
 
+  test "Enable Rename":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          renameProvider: some(%*{"prepareProvider": true})))
+
+      s = LspFeatureSettings(
+        rename: LspRenameSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.rename
+
+  test "Disable Rename":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          renameProvider: none(JsonNode)))
+
+      s = LspFeatureSettings(
+        rename: LspRenameSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.rename
+
+  test "Disable Rename 2":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          inlayHintProvider: some(InlayHintOptions())))
+
+      s = LspFeatureSettings(
+        rename: LspRenameSettings(
+          enable: false))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.rename
+
 suite "lsp: Send requests":
   privateAccess(LspClient)
 
@@ -662,7 +704,7 @@ echo Ojb(n: 1)
       let res = client.read.get
       check res["result"] == %* {
         "changes": {
-          "file:///home/fox/git/moe/lspTestDir/test2.nim": [
+          "file://" & getCurrentDir() & "/lspTestDir/test2.nim": [
             {
               "range": {
                 "start": {
@@ -677,7 +719,7 @@ echo Ojb(n: 1)
               "newText" :"newName"
             }
           ],
-          "file:///home/fox/git/moe/lspTestDir/test1.nim": [
+          "file://" & getCurrentDir() & "/lspTestDir/test1.nim": [
             {
               "range": {
                 "start": {
