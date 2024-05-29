@@ -322,6 +322,14 @@ proc isWaitingResponse*(
       if v.bufferId == bufferId and v.lspMethod == lspMethod:
         return true
 
+proc isWaitingForegroundResponse*(
+  c: var LspClient,
+  bufferId: int): bool {.inline.} =
+
+    for v in c.waitingResponses.values:
+      if v.bufferId == bufferId and v.lspMethod.isForegroundWait:
+        return true
+
 proc getWaitingResponse*(
   c: var LspClient,
   id: RequestId): Option[WaitLspResponse] {.inline.} =
@@ -336,6 +344,14 @@ proc getLatestWaitingResponse*(c: var LspClient): Option[WaitLspResponse] =
 
   if latest > -1:
     return some(c.waitingResponses[latest])
+
+proc getForegroundWaitingResponse*(
+  c: var LspClient,
+  bufferId: int): Option[WaitLspResponse] =
+
+    for v in c.waitingResponses.values:
+      if v.bufferId == bufferId and v.lspMethod.isForegroundWait:
+        return some(v)
 
 proc initLspClient*(command: string): initLspClientResult =
   ## Start a LSP server process and init streams.
@@ -535,6 +551,34 @@ proc setCapabilities(
            discard
 
     c.capabilities = some(capabilities)
+
+proc cancelRequest*(
+  c: var LspClient,
+  bufferId, requestId: int): LspSendRequestResult =
+    ## Send a cancel request to the server.
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#cancelRequest
+
+    if not c.serverProcess.running:
+      if not c.closed: c.closed = true
+      return LspSendRequestResult.err "server crashed"
+
+    c.deleteWaitingResponse(requestId)
+
+    let params = %* CancelParams(id: some(%*requestId))
+
+    let r = c.request(bufferId, LspMethod.cancelRequest, params)
+    if r.isErr:
+      return LspSendRequestResult.err fmt"cancelRequest request failed: {r.error}"
+
+    return LspSendRequestResult.ok ()
+
+proc cancelRequest*(
+  c: var LspClient,
+  waitRes: WaitLspResponse): LspSendRequestResult {.inline.} =
+    ## Send a cancel request to the server.
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#cancelRequest
+
+    c.cancelRequest(waitRes.bufferId, waitRes.requestId)
 
 proc initialize*(
   c: var LspClient,

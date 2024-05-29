@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, strformat, json, uri, os]
+import std/[strutils, strformat, json, uri, os, options]
 
 import pkg/results
 
@@ -31,7 +31,13 @@ type
 
   LanguageId* = string
 
+  WaitType* = enum
+    foreground
+      # foreground request is canceled when a user takes action.
+    background
+
   LspMethod* {.pure.} = enum
+    cancelRequest
     initialize
     initialized
     shutdown
@@ -103,6 +109,7 @@ proc toBufferRange*(r: LspRange): BufferRange {.inline.} =
 
 proc toLspMethodStr*(m: LspMethod): string =
   case m:
+    of cancelRequest: "$/cancelRequest"
     of initialize: "initialize"
     of initialized: "initialized"
     of shutdown: "shutdown"
@@ -142,6 +149,8 @@ proc lspMethod*(j: JsonNode): LspMethodResult =
   if not j.contains("method"): return LspMethodResult.err "Invalid value"
 
   case j["method"].getStr:
+    of "$/cancelRequest":
+      LspMethodResult.ok cancelRequest
     of "initialize":
       LspMethodResult.ok initialize
     of "initialized":
@@ -190,3 +199,23 @@ proc lspMethod*(j: JsonNode): LspMethodResult =
       LspMethodResult.err "Not supported: " & j["method"].getStr
 
 proc isLspResponse*(res: JsonNode): bool {.inline.} = res.contains("id")
+
+proc getWaitingType*(lspMethod: LspMethod): Option[WaitType] =
+  case lspMethod:
+    of initialize: some(WaitType.background)
+    of shutdown: some(WaitType.background)
+    of textDocumentHover: some(WaitType.foreground)
+    of textDocumentCompletion: some(WaitType.foreground)
+    of textDocumentSemanticTokensFull: some(WaitType.background)
+    of textDocumentSemanticTokensDelta: some(WaitType.background)
+    of textDocumentInlayHint: some(WaitType.background)
+    of textDocumentDefinition: some(WaitType.foreground)
+    of textDocumentReferences: some(WaitType.foreground)
+    of textDocumentRename: some(WaitType.foreground)
+    else: none(WaitType)
+
+proc isForegroundWait*(lspMethod: LspMethod): bool {.inline.} =
+  getWaitingType(lspMethod) == some(WaitType.foreground)
+
+proc isBackgroundWait*(lspMethod: LspMethod): bool {.inline.} =
+  getWaitingType(lspMethod) == some(WaitType.background)

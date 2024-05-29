@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[options, times, sequtils]
+import std/[options, times, sequtils, strformat, logging]
 
 import pkg/results
 
@@ -786,6 +786,12 @@ template resetKeyAndContinue(key: var Option[Rune]) =
   key = none(Rune)
   continue
 
+proc cancelLspForegroundRequest(status: var EditorStatus) =
+  let w = lspClient.getForegroundWaitingResponse(currentBufStatus.id)
+  if w.isSome:
+    let err = lspClient.cancelRequest(w.get)
+    if err.isErr: error fmt"lsp: {err.error}"
+
 proc editorMainLoop*(status: var EditorStatus) =
   ## Get keys, exec commands and update view.
 
@@ -833,7 +839,9 @@ proc editorMainLoop*(status: var EditorStatus) =
           key.resetKeyAndContinue
         elif isPasteKey(key.get):
           let pasteBuffer = getPasteBuffer()
-          if pasteBuffer.isSome: status.insertPasteBuffer(pasteBuffer.get)
+          if pasteBuffer.isSome:
+            status.cancelLspForegroundRequest
+            status.insertPasteBuffer(pasteBuffer.get)
           key.resetKeyAndContinue
 
         var isClosedCompletionWindow = false
@@ -869,6 +877,8 @@ proc editorMainLoop*(status: var EditorStatus) =
           of InputState.Continue:
             key.resetKeyAndContinue
           of InputState.Valid:
+            status.cancelLspForegroundRequest
+
             let prevMode = currentBufStatus.mode
 
             let interruptKey = status.execEditorCommand(command)
