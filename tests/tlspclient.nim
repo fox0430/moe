@@ -421,6 +421,30 @@ suite "lsp: Send requests":
       if res.contains("id") and res["id"].getInt > client.lastId:
         client.lastId = res["id"].getInt
 
+  test "Send $/cancelRequest":
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      const
+        BufferId = 1
+        LanguageId = "nim"
+        Text = "let a: int = 0"
+
+      let path = rootDir / "test.nim"
+      writeFile(path, Text)
+
+      prepareLsp(BufferId, LanguageId, path, Text)
+
+      let requestId = client.lastId + 1
+
+      # Send hover request and cancel
+      block:
+        let position = BufferPosition(line: 0, column: 7)
+        check client.textDocumentHover(BufferId, path, position).isOk
+        check client.waitingResponses[requestId].lspMethod == LspMethod.textDocumentHover
+
+      check client.cancelRequest(BufferId, requestId).isOk
+
   test "Send shutdown":
     if not isNimlangserverAvailable():
       skip()

@@ -28,6 +28,7 @@ Please feedback, bug reports and PRs.
 - `textDocument/references`
 - `textDocument/rename`
 - `$/progress`
+- `$/cancelRequest`
 
 ## Configuration
 

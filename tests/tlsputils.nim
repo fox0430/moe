@@ -46,6 +46,12 @@ suite "lsp: lspMetod":
     check lspMethod(%*{"jsonrpc": "2.0", "result": nil}).isErr
 
   test "initialize":
+    check LspMethod.cancelRequest == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "method": "$/cancelRequest",
+      "params": nil
+    }).get
+
     check LspMethod.initialize == lspMethod(%*{
       "jsonrpc": "2.0",
       "id": 0,
@@ -88,7 +94,6 @@ suite "lsp: lspMetod":
   test "workspace/didChangeConfiguration":
     check LspMethod.workspaceDidChangeConfiguration == lspMethod(%*{
       "jsonrpc": "2.0",
-      "id": 0,
       "method": "workspace/didChangeConfiguration",
       "params": nil
     }).get
@@ -96,7 +101,6 @@ suite "lsp: lspMetod":
   test "textDocument/didOpen":
     check LspMethod.textDocumentDidOpen == lspMethod(%*{
       "jsonrpc": "2.0",
-      "id": 0,
       "method": "textDocument/didOpen",
       "params": nil
     }).get
@@ -104,7 +108,6 @@ suite "lsp: lspMetod":
   test "textDocument/didChange":
     check LspMethod.textDocumentDidChange == lspMethod(%*{
       "jsonrpc": "2.0",
-      "id": 0,
       "method": "textDocument/didChange",
       "params": nil
     }).get
@@ -112,7 +115,6 @@ suite "lsp: lspMetod":
   test "textDocument/didSave":
     check LspMethod.textDocumentDidSave == lspMethod(%*{
       "jsonrpc": "2.0",
-      "id": 0,
       "method": "textDocument/didSave",
       "params": nil
     }).get
@@ -120,7 +122,6 @@ suite "lsp: lspMetod":
   test "textDocument/didClose":
     check LspMethod.textDocumentDidClose == lspMethod(%*{
       "jsonrpc": "2.0",
-      "id": 0,
       "method": "textDocument/didClose",
       "params": nil
     }).get
@@ -152,7 +153,6 @@ suite "lsp: lspMetod":
   test "window/publishDiagnostics":
     check LspMethod.textDocumentPublishDiagnostics == lspMethod(%*{
       "jsonrpc": "2.0",
-      "id": 0,
       "method": "textDocument/publishDiagnostics",
       "params": nil
     }).get
