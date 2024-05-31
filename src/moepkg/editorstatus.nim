@@ -296,6 +296,13 @@ proc exitEditor*(status: EditorStatus) =
 
   quit()
 
+proc cancelLspForegroundRequest*(c: var LspClient, bufferId: int) =
+  let err = c.cancelForegroundRequest(bufferId)
+  if err.isErr: error fmt"lsp: {err.error}"
+
+proc cancelLspForegroundRequest*(status: var EditorStatus) {.inline.} =
+  lspClient.cancelLspForegroundRequest(currentBufStatus.id)
+
 proc lspInitialize*(
   status: var EditorStatus,
   workspaceRoot, langId: string): Result[(), string] =
@@ -647,12 +654,36 @@ proc initLogViewerHighlight(buffer: seq[Runes]): Highlight =
 proc isInitialized(t: LspClientTable, langId: string): bool {.inline.} =
   t.contains(langId) and t[langId].isInitialized
 
+proc sendLspSemanticTokenRequest*(
+  c: var LspClient,
+  b: BufferStatus): Result[(), string] =
+    ## Send textDocument/inlayHint requests to the LSP server.
+
+    block:
+      # Cancel before completion request.
+      let err = c.cancelRequest(
+        b.id,
+        LspMethod.textDocumentSemanticTokensFull)
+      if err.isErr:
+        error fmt"lsp: {err.error}"
+
+    block:
+      # Send a textDocument/semanticTokens request to the LSP server.
+      let err = c.textDocumentSemanticTokens(b.id, $b.absolutePath)
+      if err.isErr:
+        error fmt"lsp: {err.error}"
+
 proc sendLspInlayHintRequest*(
   c: var LspClient,
   b: BufferStatus,
   bufferIndex: int,
   mainWindowNode: WindowNode): Result[(), string] =
     ## Send textDocument/inlayHint requests to the LSP server.
+
+    block:
+      # Cancel before inlayHint request.
+      let err = c.cancelRequest(b.id, LspMethod.textDocumentInlayHint)
+      if err.isErr: error fmt"lsp: {err.error}"
 
     # Calc range from all views.
     let nodes = mainWindowNode.searchByBufferIndex(bufferIndex)
@@ -727,13 +758,13 @@ proc updateSyntaxHighlightings(status: EditorStatus) =
           if err.isErr:
             error fmt"lsp: {err.error}"
 
-        block:
+        if client.capabilities.get.semanticTokens.isSome:
           # Send a textDocument/semanticTokens request to the LSP server.
-          let err = client.textDocumentSemanticTokens(b.id, absPath)
+          let err = client.sendLspSemanticTokenRequest(b)
           if err.isErr:
             error fmt"lsp: {err.error}"
 
-        block:
+        if client.capabilities.get.inlayHint:
           # Send a textDocument/inlayHint request to the LSP server.
           let err = client.sendLspInlayHintRequest(b, i, mainWindowNode)
           if err.isErr:

@@ -337,6 +337,15 @@ proc getWaitingResponse*(
     if c.waitingResponses.contains(id):
       return some(c.waitingResponses[id])
 
+proc getWaitingResponse*(
+  c: var LspClient,
+  bufferId: int,
+  lspMethod: LspMethod): Option[WaitLspResponse] {.inline.} =
+
+    for v in c.waitingResponses.values:
+      if v.bufferId == bufferId and v.lspMethod == lspMethod:
+        return some(v)
+
 proc getLatestWaitingResponse*(c: var LspClient): Option[WaitLspResponse] =
   var latest = -1
   for k in c.waitingResponses.keys:
@@ -554,23 +563,24 @@ proc setCapabilities(
 
 proc cancelRequest*(
   c: var LspClient,
-  bufferId, requestId: int): LspSendRequestResult =
-    ## Send a cancel request to the server.
+  bufferId: int,
+  requestId: RequestId): LspSendNotifyResult =
+    ## Send a cancelRequest notification to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#cancelRequest
 
     if not c.serverProcess.running:
       if not c.closed: c.closed = true
-      return LspSendRequestResult.err "server crashed"
+      return LspSendNotifyResult.err "server crashed"
 
     c.deleteWaitingResponse(requestId)
 
     let params = %* CancelParams(id: some(%*requestId))
 
-    let r = c.request(bufferId, LspMethod.cancelRequest, params)
-    if r.isErr:
-      return LspSendRequestResult.err fmt"cancelRequest request failed: {r.error}"
+    let err = c.notify(LspMethod.cancelRequest, params)
+    if err.isErr:
+      return LspSendNotifyResult.err fmt"cancelRequest notification failed: {err.error}"
 
-    return LspSendRequestResult.ok ()
+    return LspSendNotifyResult.ok ()
 
 proc cancelRequest*(
   c: var LspClient,
@@ -579,6 +589,27 @@ proc cancelRequest*(
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#cancelRequest
 
     c.cancelRequest(waitRes.bufferId, waitRes.requestId)
+
+proc cancelRequest*(
+  c: var LspClient,
+  bufferId: int,
+  lspMethod: LspMethod): LspSendRequestResult =
+
+    let w = c.getWaitingResponse(bufferId, lspMethod)
+    if w.isSome:
+      return c.cancelRequest(w.get)
+
+    return LspSendRequestResult.ok ()
+
+proc cancelForegroundRequest*(
+  c: var LspClient,
+  bufferId: int): LspSendRequestResult =
+
+    let w = c.getForegroundWaitingResponse(bufferId)
+    if w.isSome:
+      return c.cancelRequest(w.get)
+
+    return LspSendRequestResult.ok ()
 
 proc initialize*(
   c: var LspClient,

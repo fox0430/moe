@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[options, times, sequtils, strformat, logging]
+import std/[options, times, sequtils]
 
 import pkg/results
 
@@ -785,12 +785,6 @@ template isUpdateCompletionWindow(
 template resetKeyAndContinue(key: var Option[Rune]) =
   key = none(Rune)
   continue
-
-proc cancelLspForegroundRequest(status: var EditorStatus) =
-  let w = lspClient.getForegroundWaitingResponse(currentBufStatus.id)
-  if w.isSome:
-    let err = lspClient.cancelRequest(w.get)
-    if err.isErr: error fmt"lsp: {err.error}"
 
 proc editorMainLoop*(status: var EditorStatus) =
   ## Get keys, exec commands and update view.
