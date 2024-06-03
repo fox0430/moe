@@ -297,11 +297,13 @@ proc exitEditor*(status: EditorStatus) =
   quit()
 
 proc cancelLspForegroundRequest*(c: var LspClient, bufferId: int) =
-  let err = c.cancelForegroundRequest(bufferId)
-  if err.isErr: error fmt"lsp: {err.error}"
+  if c.isInitialized:
+    let err = c.cancelForegroundRequest(bufferId)
+    if err.isErr: error fmt"lsp: {err.error}"
 
 proc cancelLspForegroundRequest*(status: var EditorStatus) {.inline.} =
-  lspClient.cancelLspForegroundRequest(currentBufStatus.id)
+  if status.lspClients.contains(currentBufStatus.langId):
+    lspClient.cancelLspForegroundRequest(currentBufStatus.id)
 
 proc lspInitialize*(
   status: var EditorStatus,
