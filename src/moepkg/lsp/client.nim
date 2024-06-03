@@ -31,7 +31,7 @@ import ../settings
 
 import protocol/[enums, types]
 import jsonrpc, utils, completion, progress, hover, semantictoken, inlayhint,
-       definition, references, rename
+       definition, references, rename, typedefinition
 
 type
   LspError* = object
@@ -64,6 +64,7 @@ type
     inlayHint*: bool
     references*: bool
     rename*: bool
+    typeDefinition*: bool
 
   LspProgressTable* = Table[ProgressToken, ProgressReport]
 
@@ -474,6 +475,10 @@ proc initInitializeParams*(
           rename: some(RenameCapability(
             dynamicRegistration: some(true),
             prepareSupport: some(false)
+          )),
+          typeDefinition: some(TypeDefinitionClientCapabilities(
+            dynamicRegistration: some(true),
+            linkSupport: some(false)
           ))
         )),
         window: some(WindowCapabilities(
@@ -505,6 +510,10 @@ proc setCapabilities(
     if settings.definition.enable and
        initResult.capabilities.definitionProvider == some(true):
          capabilities.definition = true
+
+    if settings.typeDefinition.enable and
+       initResult.capabilities.typeDefinitionProvider == some(true):
+         capabilities.typeDefinition = true
 
     if settings.diagnostics.enable and
        initResult.capabilities.diagnosticProvider.isSome:
@@ -1023,5 +1032,31 @@ proc textDocumentRename*(
     let r = c.request(bufferId, LspMethod.textDocumentRename, params)
     if r.isErr:
       return R[(), string].err fmt"textDocument/rename request failed: {r.error}"
+
+    return R[(), string].ok ()
+
+proc textDocumentTypeDefinition*(
+  c: var LspClient,
+  bufferId: int,
+  path: string,
+  posi: BufferPosition): LspSendRequestResult =
+    ## Send a textDocument/typeDefinition request to the server.
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_typeDefinition
+
+    if not c.serverProcess.running:
+      if not c.closed: c.closed = true
+      return R[(), string].err "server crashed"
+
+    if not c.isInitialized:
+      return R[(), string].err "lsp unavailable"
+
+    if not c.capabilities.get.typeDefinition:
+      return R[(), string].err "textDocument/typeDefinition unavailable"
+
+    let params = %* initTypeDefinitionParams(path, posi)
+
+    let r = c.request(bufferId, LspMethod.textDocumentTypeDefinition, params)
+    if r.isErr:
+      return R[(), string].err fmt"textDocument/typeDefinition request failed: {r.error}"
 
     return R[(), string].ok ()

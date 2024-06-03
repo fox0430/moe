@@ -27,31 +27,31 @@ import protocol/types
 import utils
 
 type
-  LspDefinition* = object
+  LspTypeDefinition* = object
     location*: BufferLocation
 
-  LspDefinitionResult* = Result[Option[LspDefinition], string]
+  LspTypeDefinitionResult* = Result[Option[LspTypeDefinition], string]
 
-proc initDefinitionParams*(
+proc initTypeDefinitionParams*(
   path: string,
-  posi: BufferPosition): DefinitionParams =
+  posi: BufferPosition): TypeDefinitionParams =
 
-    DefinitionParams(
+    TypeDefinitionParams(
       textDocument: TextDocumentIdentifier(uri: path.pathToUri),
       position: posi.toLspPosition)
 
-proc parseTextDocumentDefinition*(res: JsonNode): LspDefinitionResult =
+proc parseTextDocumentTypeDefinition*(res: JsonNode): LspTypeDefinitionResult =
   if res["result"].kind != JArray:
-    return LspDefinitionResult.err "Invalid response"
+    return LspTypeDefinitionResult.err "Invalid response"
   elif res["result"].len == 0:
     # Not found
-    return LspDefinitionResult.ok none(LspDefinition)
+    return LspTypeDefinitionResult.ok none(LspTypeDefinition)
 
   let location =
     try:
       let l = res["result"][0].to(Location)
       l.toBufferLocation
     except CatchableError as e:
-      return LspDefinitionResult.err fmt"Invalid response: {e.msg}"
+      return LspTypeDefinitionResult.err fmt"Invalid response: {e.msg}"
 
-  return LspDefinitionResult.ok some(LspDefinition(location: location))
+  return LspTypeDefinitionResult.ok some(LspTypeDefinition(location: location))

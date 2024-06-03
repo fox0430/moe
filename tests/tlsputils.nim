@@ -204,3 +204,19 @@ suite "lsp: lspMetod":
       "method": "textDocument/references",
       "params": nil
     }).get
+
+  test "textDocument/definition":
+    check LspMethod.textDocumentDefinition == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "textDocument/definition",
+      "params": nil
+    }).get
+
+  test "textDocument/typeDefinition":
+    check LspMethod.textDocumentTypeDefinition == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "textDocument/typeDefinition",
+      "params": nil
+    }).get

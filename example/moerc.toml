@@ -238,6 +238,9 @@ enable = true
 [Lsp.Definition]
 enable = true
 
+[Lsp.TypeDefinition]
+enable = true
+
 [Lsp.Diagnostics]
 enable = true
 

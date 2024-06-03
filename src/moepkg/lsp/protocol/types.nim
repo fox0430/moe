@@ -228,8 +228,9 @@ type
   DefinitionCapability* = ref object of RootObj
     dynamicRegistration*: Option[bool]
 
-  TypeDefinitionCapability* = ref object of RootObj
+  TypeDefinitionClientCapabilities* = ref object of RootObj
     dynamicRegistration*: Option[bool]
+    linkSupport*:  Option[bool]
 
   ImplementationCapability* = ref object of RootObj
     dynamicRegistration*: Option[bool]
@@ -287,7 +288,7 @@ type
     rangeFormatting*: Option[RangeFormattingCapability]
     onTypeFormatting*: Option[OnTypeFormattingCapability]
     definition*: Option[DefinitionCapability]
-    typeDefinition*: Option[TypeDefinitionCapability]
+    typeDefinition*: Option[TypeDefinitionClientCapabilities]
     implementation*: Option[ImplementationCapability]
     codeAction*: Option[CodeActionCapability]
     codeLens*: Option[CodeLensCapability]
@@ -714,10 +715,13 @@ type
     range*: Range
     content*: string
 
+  PartialResultParams* = ref object of RootObj
+    partialResultToken*: OptionalNode # ProgressToken
+
   SemanticTokensParams* = ref object of RootObj
     textDocument*: TextDocumentIdentifier
-    workDoneToken*: OptionalNode # int or string (ProgressToken)
-    partialResultToken*: OptionalNode # int or string (ProgressToken)
+    workDoneToken*: OptionalNode # ProgressToken
+    partialResultToken*: OptionalNode # ProgressToken
 
   SemanticTokensDeltaParams* = ref object of SemanticTokensParams
     previousResultId*: string
@@ -743,3 +747,7 @@ type
   DefinitionParams* = ref object of TextDocumentPositionParams
     workDoneToken*: OptionalNode # ProgressToken
     workDoneProgress*: Option[bool]
+
+  TypeDefinitionParams* = ref object of TextDocumentPositionParams
+    workDoneToken*: OptionalNode # ProgressToken
+    partialResultToken*: OptionalNode # ProgressToken

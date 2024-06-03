@@ -25,7 +25,7 @@ import moepkg/independentutils
 
 import moepkg/lsp/definition {.all.}
 
-suite "lsp: parseTextDocumentInlayHint":
+suite "lsp: parseTextDocumentDefinition":
   test "Not found":
     check parseTextDocumentDefinition(%*{
       "jsonrpc": "2.0",
@@ -53,5 +53,11 @@ suite "lsp: parseTextDocumentInlayHint":
         }
       ]
     }).get.get == LspDefinition(
-      path: "/home/user/text.txt",
-      position: BufferPosition(line: 0, column: 1))
+      location: BufferLocation(
+        path: "/home/user/text.txt",
+        range: BufferRange(
+          first: BufferPosition(line: 0, column: 1),
+          last: BufferPosition(line: 0, column: 2)
+        )
+      )
+    )

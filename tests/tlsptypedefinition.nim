@@ -17,41 +17,47 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strformat, json, options]
+import std/[unittest, json, options]
 
 import pkg/results
 
-import ../independentutils
+import moepkg/independentutils
 
-import protocol/types
-import utils
+import moepkg/lsp/typedefinition {.all.}
 
-type
-  LspDefinition* = object
-    location*: BufferLocation
+suite "lsp: parseTextDocumentTypeDefinition":
+  test "Not found":
+    check parseTextDocumentTypeDefinition(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": []
+    }).get.isNone
 
-  LspDefinitionResult* = Result[Option[LspDefinition], string]
-
-proc initDefinitionParams*(
-  path: string,
-  posi: BufferPosition): DefinitionParams =
-
-    DefinitionParams(
-      textDocument: TextDocumentIdentifier(uri: path.pathToUri),
-      position: posi.toLspPosition)
-
-proc parseTextDocumentDefinition*(res: JsonNode): LspDefinitionResult =
-  if res["result"].kind != JArray:
-    return LspDefinitionResult.err "Invalid response"
-  elif res["result"].len == 0:
-    # Not found
-    return LspDefinitionResult.ok none(LspDefinition)
-
-  let location =
-    try:
-      let l = res["result"][0].to(Location)
-      l.toBufferLocation
-    except CatchableError as e:
-      return LspDefinitionResult.err fmt"Invalid response: {e.msg}"
-
-  return LspDefinitionResult.ok some(LspDefinition(location: location))
+  test "Basic":
+    check parseTextDocumentTypeDefinition(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": [
+        {
+          "uri":  "file:///home/user/text.txt",
+          "range": {
+            "start": {
+              "line": 0,
+              "character": 1,
+            },
+            "end": {
+              "line": 0,
+              "character": 2,
+            }
+          }
+        }
+      ]
+    }).get.get == LspTypeDefinition(
+      location: BufferLocation(
+        path: "/home/user/text.txt",
+        range: BufferRange(
+          first: BufferPosition(line: 0, column: 1),
+          last: BufferPosition(line: 0, column: 2)
+        )
+      )
+    )

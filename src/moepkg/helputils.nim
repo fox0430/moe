@@ -128,7 +128,8 @@ q any      - Start recording operations for Macros
 q          - Stop recoding operations
 @ any      - Exec a macro
 K          - Hover (LSP)
-gd         - Goto definition (LSP)
+gd         - Goto Definition (LSP)
+gy         - Goto Type Definition (LSP)
 Space r    - Rename (LSP)
 
 # Register
