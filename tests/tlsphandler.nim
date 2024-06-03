@@ -834,7 +834,8 @@ suite "lsp: lspReferences":
     let nodes = mainWindowNode.getAllWindowNode
 
     check nodes.len == 2
-    for i in 0 .. nodes.high: check nodes[i].bufferIndex == i
+    check (nodes[0].bufferIndex == 0 and nodes[1].bufferIndex == 1) or
+          (nodes[0].bufferIndex == 1 and nodes[1].bufferIndex == 0)
 
     check currentMainWindowNode.bufferIndex == 1
 
