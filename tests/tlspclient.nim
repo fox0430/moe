@@ -76,6 +76,90 @@ suite "lsp: setCapabilities":
 
     check client.capabilities.get.completion.isNone
 
+  test "Enable Definition":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          definitionProvider: some(true)))
+
+      s = LspFeatureSettings(
+        definition: LspDefinitionSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.definition
+
+  test "Disable Definition":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          definitionProvider: some(false)))
+
+      s = LspFeatureSettings(
+        definition: LspDefinitionSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.definition
+
+  test "Disable Definition 2":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          definitionProvider: some(true)))
+
+      s = LspFeatureSettings(
+        definition: LspDefinitionSettings(
+          enable: false))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.definition
+
+  test "Enable TypeDefinition":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          typeDefinitionProvider: some(true)))
+
+      s = LspFeatureSettings(
+        typeDefinition: LspTypeDefinitionSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.typeDefinition
+
+  test "Disable TypeDefinition":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          typeDefinitionProvider: some(false)))
+
+      s = LspFeatureSettings(
+        typeDefinition: LspTypeDefinitionSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.typeDefinition
+
+  test "Disable TypeDefinition 2":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          typeDefinitionProvider: some(true)))
+
+      s = LspFeatureSettings(
+        typeDefinition: LspTypeDefinitionSettings(
+          enable: false))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.typeDefinition
+
   test "Enable Diagnostic 1":
     let
       r = InitializeResult(
@@ -675,17 +759,62 @@ var num: number
 
       assert client.readable(Timeout).get
       let res = client.read.get
-      check res["result"][0] == %* {
-        "uri": "file://" & getCurrentDir() & "/lspTestDir/test.nim",
-        "range": {
-          "start": {
-            "line": 0,
-            "character":5
-          },"end": {
-            "line":0,
-            "character":11
-          }}
-      }
+      check res["result"] == %* [
+        {
+          "uri": "file://" & getCurrentDir() & "/lspTestDir/test.nim",
+          "range": {
+            "start": {
+              "line": 0,
+              "character":5
+            },"end": {
+              "line":0,
+              "character":11
+            }}
+        }
+      ]
+
+  test "Send textDocument/typeDefinition":
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      const
+        BufferId = 1
+        LanguageId = "nim"
+        Text = """
+type number = int
+var num: number
+        """
+
+      let path = rootDir / "test.nim"
+      writeFile(path, Text)
+
+      prepareLsp(BufferId, LanguageId, path, Text)
+
+      let requestId = client.lastId + 1
+
+      check client.textDocumentTypeDefinition(
+        BufferId,
+        path,
+        BufferPosition(line: 1, column: 9)).isOk
+      check client.waitingResponses[requestId].lspMethod ==
+        LspMethod.textDocumentTypeDefinition
+
+      assert client.readable(Timeout).get
+      let res = client.read.get
+      check res["result"] == %* [
+        {
+          "uri": "file://" & getCurrentDir() & "/lspTestDir/test.nim",
+          "range": {
+            "start": {
+              "line": 0,
+              "character": 5},
+            "end": {
+              "line": 0,
+              "character":11
+            }
+          }
+        }
+      ]
 
   test "Send textDocument/rename":
     if not isNimlangserverAvailable():

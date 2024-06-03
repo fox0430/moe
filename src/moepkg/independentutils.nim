@@ -58,6 +58,10 @@ type
     first*: BufferPosition
     last*: BufferPosition
 
+  BufferLocation* = object
+    path*: string
+    range*: BufferRange
+
 proc numberOfDigits*(x: int): int {.inline.} = x.intToStr.len
 
 proc normalizeHex*(s: string): string =

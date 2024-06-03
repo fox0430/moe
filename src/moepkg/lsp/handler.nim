@@ -41,7 +41,7 @@ import
   ../fileutils
 
 import client, utils, hover, message, diagnostics, semantictoken, progress,
-       inlayhint, definition, references, rename
+       inlayhint, definition, typedefinition, references, rename
 
 # Workaround for Nim 1.6.2
 import completion as lspcompletion
@@ -408,53 +408,77 @@ proc lspInlayHint(status: var EditorStatus, res: JsonNode): Result[(), string] =
 
   return Result[(), string].ok ()
 
+proc openWindowAndGotoDefinition(
+  status: var EditorStatus,
+  l: BufferLocation): Result[(), string] =
+    ## Goto definition and Goto TypeDefinition.
+
+    if l.path == $currentBufStatus.absolutePath:
+      currentMainWindowNode.currentLine = l.range.first.line
+      currentMainWindowNode.currentColumn = l.range.first.column
+    else:
+      # Open a buffer in a new window.
+      status.verticalSplitWindow
+      status.moveNextWindow
+
+      let r = status.addNewBufferInCurrentWin(l.path)
+      if r.isErr:
+        return Result[(), string].err fmt"Cannot open file: {l.path}"
+
+      status.changeCurrentBuffer(status.bufStatus.high)
+
+      template canMove(): bool =
+        l.range.first.line < currentBufStatus.buffer.len and
+        l.range.first.column < currentBufStatus.buffer[l.range.first.line].len
+
+      if not canMove():
+        return Result[(), string].err fmt"Invalid position: {$l.range.first.line}, {$l.range.first.column}"
+
+      status.resize
+      status.update
+
+      jumpLine(currentBufStatus, currentMainWindowNode, l.range.first.line)
+      currentMainWindowNode.currentColumn = l.range.first.column
+
+    return Result[(), string].ok ()
+
 proc lspDefinition(
   status: var EditorStatus,
   res: JsonNode): Result[(), string] =
     ## textDocument/definition
 
     let parseResult = parseTextDocumentDefinition(res)
-    if parseResult.isErr:
-      return Result[(), string].err parseResult.error
 
     let requestId =
       try: res["id"].getInt
       except CatchableError as e: return Result[(), string].err e.msg
     lspClient.deleteWaitingResponse(requestId)
 
+    if parseResult.isErr:
+      return Result[(), string].err parseResult.error
     if parseResult.get.isNone:
       return Result[(), string].err fmt"Not found"
 
-    let d = parseResult.get.get
+    return status.openWindowAndGotoDefinition(parseResult.get.get.location)
 
-    if d.path == $currentBufStatus.absolutePath:
-      currentMainWindowNode.currentLine = d.position.line
-      currentMainWindowNode.currentColumn = d.position.column
-    else:
-      # Open a buffer in a new window.
-      status.verticalSplitWindow
-      status.moveNextWindow
+proc lspTypeDefinition(
+  status: var EditorStatus,
+  res: JsonNode): Result[(), string] =
+    ## textDocument/typeDefinition
 
-      let r = status.addNewBufferInCurrentWin(d.path)
-      if r.isErr:
-        return Result[(), string].err fmt"Cannot open file: {d.path}"
+    let parseResult = parseTextDocumentTypeDefinition(res)
 
-      status.changeCurrentBuffer(status.bufStatus.high)
+    let requestId =
+      try: res["id"].getInt
+      except CatchableError as e: return Result[(), string].err e.msg
+    lspClient.deleteWaitingResponse(requestId)
 
-      template canMove(): bool =
-        d.position.line < currentBufStatus.buffer.len and
-        d.position.column < currentBufStatus.buffer[d.position.line].len
+    if parseResult.isErr:
+      return Result[(), string].err parseResult.error
+    if parseResult.get.isNone:
+      return Result[(), string].err fmt"Not found"
 
-      if not canMove():
-        return Result[(), string].err fmt"Invalid position: {$d.position.line}, {$d.position.column}"
-
-      status.resize
-      status.update
-
-      jumpLine(currentBufStatus, currentMainWindowNode, d.position.line)
-      currentMainWindowNode.currentColumn = d.position.column
-
-    return Result[(), string].ok ()
+    return status.openWindowAndGotoDefinition(parseResult.get.get.location)
 
 proc lspReferences(
   status: var EditorStatus,
@@ -654,6 +678,9 @@ proc handleLspResponse*(status: var EditorStatus) =
       of LspMethod.textDocumentDefinition:
         let r = status.lspDefinition(resJson.get)
         if r.isErr: status.commandLine.writeLspDefinitionError(r.error)
+      of LspMethod.textDocumentTypeDefinition:
+        let r = status.lspTypeDefinition(resJson.get)
+        if r.isErr: status.commandLine.writeLspTypeDefinitionError(r.error)
       of LspMethod.textDocumentReferences:
         let r = status.lspReferences(resJson.get)
         if r.isErr: status.commandLine.writeLspReferencesError(r.error)

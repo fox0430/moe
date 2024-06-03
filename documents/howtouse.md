@@ -65,7 +65,7 @@
 | <kbd>**H**</kbd></br> Move to the top line of the screen | <kbd>**M**</kbd></br> Move to the center line of the screen | <kbd>**L**</kbd></br> Move to the bottom line of the screen | <kbd>**%**</kbd></br> Move to matching pair of paren |
 | <kbd>**q**</kbd> <kbd>**Any key**</kbd></br> Start recording operations for Macros | <kbd>**q**</kbd></br> Stop recording operations | <kbd>**@**</kbd> <kbd>**Any key**</kbd></br> Exce a macro | <kbd>**c**</kbd> <kbd>**t**</kbd> <kbd>**Any Key**</kbd></br> Delete characters until the any key and enter Insert mode |
 | <kbd>**d**</kbd> <kbd>**t**</kbd> <kbd>**Any Key**</kbd></br> Delete characters until the any key | <kbd>**.**</kbd></br> Repeat the last normal mode command | <kbd>**K**</kbd></br> Hover (LSP) | <kbd>**g**</kbd> <kbd>**d**</kbd></br> Goto definition (LSP) |
-| <kbd>**g**</kbd> <kbd>**r**</kbd> Open References mode (LSP Find References) | | | |
+| <kbd>**g**</kbd> <kbd>**y**</kbd></br> Goto typeDefinition (LSP) | <kbd>**g**</kbd> <kbd>**r**</kbd> Open References mode (LSP Find References) | <kbd>**Space**</kbd> <kbd>**r**</kbd> LSP Rename |
 
 </details>
 
