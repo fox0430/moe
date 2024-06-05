@@ -468,6 +468,10 @@ proc initInitializeParams*(
             dynamicRegistration: some(true),
             resolveSupport: none(InlayHintClientCapabilitiesResolveSupport)
           )),
+          declaration: some(DeclarationClientCapabilities(
+            dynamicRegistration: some(true),
+            linkSupport: some(false)
+          )),
           definition: some(DefinitionCapability(
             dynamicRegistration: some(true)
           )),
@@ -512,6 +516,27 @@ proc setCapabilities(
     if settings.completion.enable and
        initResult.capabilities.completionProvider.isSome:
          capabilities.completion = initResult.capabilities.completionProvider
+
+    if settings.declaration.enable and
+       initResult.capabilities.declarationProvider.isSome:
+         if initResult.capabilities.declarationProvider.get.kind == JBool:
+           capabilities.declaration =
+             initResult.capabilities.declarationProvider.get.getBool
+         else:
+           try:
+             discard initResult.capabilities.declarationProvider.get.to(
+               DeclarationOptions)
+             capabilities.declaration = true
+           except CatchableError:
+             discard
+           if not capabilities.declaration:
+             try:
+               discard initResult.capabilities.declarationProvider.get.to(
+                 DeclarationRegistrationOptions)
+               capabilities.declaration = true
+             except CatchableError:
+               # Invalid declarationProvider
+               discard
 
     if settings.definition.enable and
        initResult.capabilities.definitionProvider == some(true):

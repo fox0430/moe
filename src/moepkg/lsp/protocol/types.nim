@@ -277,6 +277,10 @@ type
     dynamicRegistration*: Option[bool]
     resolveSupport*: Option[InlayHintClientCapabilitiesResolveSupport]
 
+  DeclarationClientCapabilities* = ref object of  RootObj
+    dynamicRegistration*: Option[bool]
+    linkSupport*: Option[bool]
+
   TextDocumentClientCapabilities* = ref object of RootObj
     synchronization*: Option[SynchronizationCapability]
     completion*: Option[CompletionCapability]
@@ -299,6 +303,7 @@ type
     publishDiagnostics*: Option[PublishDiagnosticsCapability]
     semanticTokens*: Option[SemanticTokensClientCapabilities]
     inlayHint*: Option[InlayHintClientCapabilities]
+    declaration*: Option[DeclarationClientCapabilities]
 
   WindowCapabilities* = ref object of RootObj
     workDoneProgress*: Option[bool]
@@ -397,13 +402,19 @@ type
 
   ImplementationOptions* = ref object of WorkDoneProgressOptions
 
+  DeclarationOptions* = ref object of WorkDoneProgressOptions
+
+  DeclarationRegistrationOptions* = ref object of TextDocumentPositionParams
+    workDoneToken*: OptionalNode # ProgressToken
+    partialResultToken*: OptionalNode # ProgressToken
+
   ServerCapabilities* = ref object of RootObj
     textDocumentSync*: OptionalNode # TextDocumentSyncOptions or int
     hoverProvider*: Option[bool]
     completionProvider*: Option[CompletionOptions]
     signatureHelpProvider*: SignatureHelpOptions
     definitionProvider*: Option[bool]
-    declarationProvider*: Option[bool]
+    declarationProvider*: OptionalNode # boolean | DeclarationOptions | DeclarationRegistrationOptions
     typeDefinitionProvider*: Option[bool]
     implementationProvider*: OptionalNode # bool | ImplementationOptions | TextDocumentAndStaticRegistrationOptions
     referencesProvider*: Option[bool]
