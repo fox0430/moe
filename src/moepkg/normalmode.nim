@@ -460,6 +460,19 @@ proc showCurrentCharInfoCommand(
 
     status.commandLine.writeCurrentCharInfo(currentChar)
 
+proc requestGotoDeclaration(status: var EditorStatus) =
+  if not status.lspClients.contains(currentBufStatus.langId):
+    debug "lsp client is not ready"
+    return
+
+  let r = lspClient.textDocumentDeclaration(
+    currentBufStatus.id,
+    $currentBufStatus.absolutePath,
+    currentMainWindowNode.bufferPosition)
+  if r.isErr:
+    # TODO: Show error
+    error fmt"Goto declaration failed: {r.error}"
+
 proc requestGotoDefinition(status: var EditorStatus) =
   if not status.lspClients.contains(currentBufStatus.langId):
     debug "lsp client is not ready"
@@ -1299,6 +1312,8 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
       currentBufStatus.moveToLastNonBlankOfLine(currentMainWindowNode)
     elif secondKey == ord('a'):
       status.showCurrentCharInfoCommand(currentMainWindowNode)
+    elif secondKey == ord('c'):
+      status.requestGotoDeclaration
     elif secondKey == ord('d'):
       status.requestGotoDefinition
     elif secondKey == ord('y'):
@@ -1646,6 +1661,7 @@ proc isNormalModeCommand*(
           if command[1] == ord('g') or
              command[1] == ord('_') or
              command[1] == ord('a') or
+             command[1] == ord('c') or
              command[1] == ord('d') or
              command[1] == ord('y') or
              command[1] == ord('i') or

@@ -128,6 +128,7 @@ q any      - Start recording operations for Macros
 q          - Stop recoding operations
 @ any      - Exec a macro
 K          - Hover (LSP)
+gc         - Goto Declaration (LSP)
 gd         - Goto Definition (LSP)
 gy         - Goto Type Definition (LSP)
 gi         - Goto Implementation (LSP)

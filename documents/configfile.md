@@ -804,6 +804,13 @@ defaut is `true`
 enable
 ```
 
+### Lsp.Declaration table
+Enable/Disable LSP Goto Declaration (bool)  
+defaut is `true`
+```
+enable
+```
+
 ### Lsp.Definition table
 Enable/Disable LSP Goto Definition (bool)  
 defaut is `true`
