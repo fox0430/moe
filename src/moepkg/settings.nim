@@ -246,6 +246,9 @@ type
   LspTypeDefinitionSettings* = object
     enable*: bool
 
+  LspImplementationSettings* = object
+    enable*: bool
+
   LspDiagnosticsSettings* = object
     enable*: bool
 
@@ -268,6 +271,7 @@ type
     completion*: LspCompletionSettings
     definition*: LspDefinitionSettings
     typeDefinition*: LspTypeDefinitionSettings
+    implementation*: LspImplementationSettings
     diagnostics*: LspDiagnosticsSettings
     hover*: LspHoverSettings
     inlayHint*: LspInlayHintSettings
@@ -529,6 +533,9 @@ proc initLspDefinitionSettings(): LspDefinitionSettings =
 proc initLspTypeDefinitionSettings(): LspTypeDefinitionSettings =
   result.enable = true
 
+proc initLspImplementationSettings(): LspImplementationSettings =
+  result.enable = true
+
 proc initLspDiagnosticsSettings(): LspDiagnosticsSettings =
   result.enable = true
 
@@ -551,6 +558,7 @@ proc initLspFeatureSettings(): LspFeatureSettings =
   result.completion = initLspCompletionSettings()
   result.definition = initLspDefinitionSettings()
   result.typeDefinition = initLspTypeDefinitionSettings()
+  result.implementation = initLspImplementationSettings()
   result.diagnostics = initLspDiagnosticsSettings()
   result.hover = initLspHoverSettings()
   result.inlayHint = initLspInlayHintSettings()
@@ -1787,6 +1795,13 @@ proc parseLspTable(s: var EditorSettings, lspConfigs: TomlValueRef) =
               s.lsp.features.typeDefinition.enable = val.getBool
             else:
               discard
+      of "Implementation":
+        for key, val in val.getTable:
+          case key:
+            of "enable":
+              s.lsp.features.implementation.enable = val.getBool
+            else:
+              discard
       of "Diagnostics":
         for key, val in val.getTable:
           case key:
@@ -2381,6 +2396,14 @@ proc validateLspTable(table: TomlValueRef): Option[InvalidItem] =
                 return some(InvalidItem(name: $key, val: $val))
             else:
               return some(InvalidItem(name: $key, val: $val))
+      of "Implementation":
+        for key, val in val.getTable:
+          case key:
+            of "enable":
+              if val.kind != TomlValueKind.Bool:
+                return some(InvalidItem(name: $key, val: $val))
+            else:
+              return some(InvalidItem(name: $key, val: $val))
       of "Diagnostics":
         for key, val in val.getTable:
           case key:
@@ -2819,6 +2842,9 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
 
   result.addLine fmt "[Lsp.TypeDefinition]"
   result.addLine fmt "enable = {$settings.lsp.features.typeDefinition.enable}"
+
+  result.addLine fmt "[Lsp.Implementation]"
+  result.addLine fmt "enable = {$settings.lsp.features.implementation.enable}"
 
   result.addLine fmt "[Lsp.Diagnostics]"
   result.addLine fmt "enable = {$settings.lsp.features.diagnostics.enable}"

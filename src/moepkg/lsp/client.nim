@@ -31,7 +31,7 @@ import ../settings
 
 import protocol/[enums, types]
 import jsonrpc, utils, completion, progress, hover, semantictoken, inlayhint,
-       definition, references, rename, typedefinition
+       definition, references, rename, typedefinition, implementation
 
 type
   LspError* = object
@@ -65,6 +65,7 @@ type
     references*: bool
     rename*: bool
     typeDefinition*: bool
+    implementation*: bool
 
   LspProgressTable* = Table[ProgressToken, ProgressReport]
 
@@ -479,6 +480,10 @@ proc initInitializeParams*(
           typeDefinition: some(TypeDefinitionClientCapabilities(
             dynamicRegistration: some(true),
             linkSupport: some(false)
+          )),
+          implementation: some(ImplementationCapability(
+            dynamicRegistration: some(true),
+            linkSupport: some(false)
           ))
         )),
         window: some(WindowCapabilities(
@@ -515,6 +520,27 @@ proc setCapabilities(
        initResult.capabilities.typeDefinitionProvider == some(true):
          capabilities.typeDefinition = true
 
+    if settings.implementation.enable and
+       initResult.capabilities.implementationProvider.isSome:
+         if initResult.capabilities.implementationProvider.get.kind == JBool:
+           capabilities.implementation =
+             initResult.capabilities.implementationProvider.get.getBool
+         else:
+           try:
+             discard initResult.capabilities.implementationProvider.get.to(
+               ImplementationOptions)
+             capabilities.implementation = true
+           except CatchableError:
+             discard
+           if not capabilities.implementation:
+             try:
+               discard initResult.capabilities.implementationProvider.get.to(
+                 TextDocumentAndStaticRegistrationOptions)
+               capabilities.implementation = true
+             except CatchableError:
+               # Invalid implementationProvider
+               discard
+
     if settings.diagnostics.enable and
        initResult.capabilities.diagnosticProvider.isSome:
          try:
@@ -529,6 +555,7 @@ proc setCapabilities(
                DiagnosticRegistrationOptions)
              capabilities.diagnostics = true
            except CatchableError:
+             # Invalid diagnosticProvider
              discard
 
     if settings.hover.enable and
@@ -1058,5 +1085,31 @@ proc textDocumentTypeDefinition*(
     let r = c.request(bufferId, LspMethod.textDocumentTypeDefinition, params)
     if r.isErr:
       return R[(), string].err fmt"textDocument/typeDefinition request failed: {r.error}"
+
+    return R[(), string].ok ()
+
+proc textDocumentImplemenation*(
+  c: var LspClient,
+  bufferId: int,
+  path: string,
+  posi: BufferPosition): LspSendRequestResult =
+    ## Send a textDocument/implementation request to the server.
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_implementation
+
+    if not c.serverProcess.running:
+      if not c.closed: c.closed = true
+      return R[(), string].err "server crashed"
+
+    if not c.isInitialized:
+      return R[(), string].err "lsp unavailable"
+
+    if not c.capabilities.get.implementation:
+      return R[(), string].err "textDocument/implementation unavailable"
+
+    let params = %* initImplementationParams(path, posi)
+
+    let r = c.request(bufferId, LspMethod.textDocumentImplementation, params)
+    if r.isErr:
+      return R[(), string].err fmt"textDocument/implementation request failed: {r.error}"
 
     return R[(), string].ok ()

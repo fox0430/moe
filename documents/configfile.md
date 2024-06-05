@@ -818,6 +818,13 @@ defaut is `true`
 enable
 ```
 
+### Lsp.Implementation table
+Enable/Disable LSP Goto Implementation (bool)  
+defaut is `true`
+```
+enable
+```
+
 ### Lsp.Diagnostics table
 Enable/Disable LSP Diagnostics (bool)  
 defaut is `true`

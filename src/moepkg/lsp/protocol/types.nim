@@ -234,6 +234,7 @@ type
 
   ImplementationCapability* = ref object of RootObj
     dynamicRegistration*: Option[bool]
+    linkSupport*: Option[bool]
 
   CodeActionCapability* = ref object of RootObj
     dynamicRegistration*: Option[bool]
@@ -394,6 +395,8 @@ type
     workspaceDiagnostics*: bool
     id*: Option[string]
 
+  ImplementationOptions* = ref object of WorkDoneProgressOptions
+
   ServerCapabilities* = ref object of RootObj
     textDocumentSync*: OptionalNode # TextDocumentSyncOptions or int
     hoverProvider*: Option[bool]
@@ -402,7 +405,7 @@ type
     definitionProvider*: Option[bool]
     declarationProvider*: Option[bool]
     typeDefinitionProvider*: Option[bool]
-    implementationProvider*: OptionalNode # bool or TextDocumentAndStaticRegistrationOptions
+    implementationProvider*: OptionalNode # bool | ImplementationOptions | TextDocumentAndStaticRegistrationOptions
     referencesProvider*: Option[bool]
     documentHighlightProvider*: Option[bool]
     documentSymbolProvider*: Option[bool]
@@ -749,5 +752,9 @@ type
     workDoneProgress*: Option[bool]
 
   TypeDefinitionParams* = ref object of TextDocumentPositionParams
+    workDoneToken*: OptionalNode # ProgressToken
+    partialResultToken*: OptionalNode # ProgressToken
+
+  ImplementationParams* = ref object of TextDocumentPositionParams
     workDoneToken*: OptionalNode # ProgressToken
     partialResultToken*: OptionalNode # ProgressToken
