@@ -160,6 +160,48 @@ suite "lsp: setCapabilities":
 
     check not client.capabilities.get.typeDefinition
 
+  test "Enable Implementation":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          implementationProvider: some(%*true)))
+
+      s = LspFeatureSettings(
+        implementation: LspImplementationSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.implementation
+
+  test "Disable Implementation":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          implementationProvider: none(JsonNode)))
+
+      s = LspFeatureSettings(
+        implementation: LspImplementationSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.implementation
+
+  test "Disable Implementation 2":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          implementationProvider: some(%*true)))
+
+      s = LspFeatureSettings(
+        implementation: LspImplementationSettings(
+          enable: false))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.implementation
+
   test "Enable Diagnostic 1":
     let
       r = InitializeResult(

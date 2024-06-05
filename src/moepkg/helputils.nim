@@ -130,6 +130,7 @@ q          - Stop recoding operations
 K          - Hover (LSP)
 gd         - Goto Definition (LSP)
 gy         - Goto Type Definition (LSP)
+gi         - Goto Implementation (LSP)
 Space r    - Rename (LSP)
 
 # Register

@@ -402,9 +402,19 @@ proc writeLspDefinitionError*(commandLine: var CommandLine, message: string) =
   let mess = fmt"lsp: Error: definition failed: {message}"
   commandLine.writeError(mess)
 
-proc writeLspTypeDefinitionError*(commandLine: var CommandLine, message: string) =
-  let mess = fmt"lsp: Error: typeDefinition failed: {message}"
-  commandLine.writeError(mess)
+proc writeLspTypeDefinitionError*(
+  commandLine: var CommandLine,
+  message: string) =
+
+    let mess = fmt"lsp: Error: typeDefinition failed: {message}"
+    commandLine.writeError(mess)
+
+proc writeLspImplementationError*(
+  commandLine: var CommandLine,
+  message: string) =
+
+    let mess = fmt"lsp: Error: implementation failed: {message}"
+    commandLine.writeError(mess)
 
 proc writeLspReferencesError*(commandLine: var CommandLine, message: string) =
   let mess = fmt"lsp: Error: references failed: {message}"

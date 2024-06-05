@@ -486,6 +486,19 @@ proc requestGotoTypeDefinition(status: var EditorStatus) =
     # TODO: Show error
     error fmt"Goto TypeDefinition failed: {r.error}"
 
+proc requestGotoImplementation(status: var EditorStatus) =
+  if not status.lspClients.contains(currentBufStatus.langId):
+    debug "lsp client is not ready"
+    return
+
+  let r = lspClient.textDocumentImplemenation(
+    currentBufStatus.id,
+    $currentBufStatus.absolutePath,
+    currentMainWindowNode.bufferPosition)
+  if r.isErr:
+    # TODO: Show error
+    error fmt"Goto Implementation failed: {r.error}"
+
 proc requestFindReferences(status: var EditorStatus) =
   if not status.lspClients.contains(currentBufStatus.langId):
     debug "lsp client is not ready"
@@ -1290,6 +1303,8 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
       status.requestGotoDefinition
     elif secondKey == ord('y'):
       status.requestGotoTypeDefinition
+    elif secondKey == ord('i'):
+      status.requestGotoImplementation
     elif secondKey == ord('r'):
       status.requestFindReferences
   elif key == ord('G'):
@@ -1633,6 +1648,7 @@ proc isNormalModeCommand*(
              command[1] == ord('a') or
              command[1] == ord('d') or
              command[1] == ord('y') or
+             command[1] == ord('i') or
              command[1] == ord('r'):
                result = InputState.Valid
 

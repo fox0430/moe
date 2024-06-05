@@ -26,6 +26,7 @@ Please feedback, bug reports and PRs.
 - `textDocument/inlayHint`
 - `textDocument/definition`
 - `textDocument/typeDefinition`
+- `textDocument/implementation`
 - `textDocument/references`
 - `textDocument/rename`
 - `$/progress`
@@ -107,6 +108,10 @@ Display types at the end of lines with LSP InlayHint.
 ### Goto TypeDefinition
 
 `gy` command in Normal mode. If the file is not currently, it will open in a new window.
+
+### Goto Implementation
+
+`gi` command in Normal mode. If the file is not currently, it will open in a new window.
 
 ### Find References
 

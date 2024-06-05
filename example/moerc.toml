@@ -241,6 +241,9 @@ enable = true
 [Lsp.TypeDefinition]
 enable = true
 
+[Lsp.Implementation]
+enable = true
+
 [Lsp.Diagnostics]
 enable = true
 

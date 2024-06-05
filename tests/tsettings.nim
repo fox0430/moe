@@ -169,6 +169,9 @@ enable = false
 [Lsp.TypeDefinition]
 enable = false
 
+[Lsp.Implementation]
+enable = false
+
 [Lsp.Diagnostics]
 enable = false
 
@@ -588,6 +591,8 @@ suite "settings: Parse configuration file":
     check not settings.lsp.features.definition.enable
 
     check not settings.lsp.features.typeDefinition.enable
+
+    check not settings.lsp.features.implementation.enable
 
     check not settings.lsp.features.diagnostics.enable
 

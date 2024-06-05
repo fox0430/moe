@@ -220,3 +220,11 @@ suite "lsp: lspMetod":
       "method": "textDocument/typeDefinition",
       "params": nil
     }).get
+
+  test "textDocument/implementation":
+    check LspMethod.textDocumentImplementation == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "textDocument/implementation",
+      "params": nil
+    }).get

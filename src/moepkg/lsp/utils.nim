@@ -61,6 +61,7 @@ type
     textDocumentReferences
     textDocumentRename
     textDocumentTypeDefinition
+    textDocumentImplementation
 
   LspMethodResult* = Result[LspMethod, string]
   LspShutdownResult* = Result[(), string]
@@ -137,6 +138,7 @@ proc toLspMethodStr*(m: LspMethod): string =
     of textDocumentReferences: "textDocument/references"
     of textDocumentRename: "textDocument/rename"
     of textDocumentTypeDefinition: "textDocument/typeDefinition"
+    of textDocumentImplementation: "textDocument/implementation"
 
 proc parseTraceValue*(s: string): Result[TraceValue, string] =
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#traceValue
@@ -202,6 +204,8 @@ proc lspMethod*(j: JsonNode): LspMethodResult =
       LspMethodResult.ok textDocumentRename
     of "textDocument/typeDefinition":
       LspMethodResult.ok textDocumentTypeDefinition
+    of "textDocument/implementation":
+      LspMethodResult.ok textDocumentImplementation
     else:
       LspMethodResult.err "Not supported: " & j["method"].getStr
 
@@ -220,6 +224,7 @@ proc getWaitingType*(lspMethod: LspMethod): Option[WaitType] =
     of textDocumentReferences: some(WaitType.foreground)
     of textDocumentRename: some(WaitType.foreground)
     of textDocumentTypeDefinition: some(WaitType.foreground)
+    of textDocumentImplementation: some(WaitType.foreground)
     else: none(WaitType)
 
 proc isForegroundWait*(lspMethod: LspMethod): bool {.inline.} =
