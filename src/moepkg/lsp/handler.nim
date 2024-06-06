@@ -41,7 +41,8 @@ import
   ../fileutils
 
 import client, utils, hover, message, diagnostics, semantictoken, progress,
-       inlayhint, definition, typedefinition, references, rename, implementation
+       inlayhint, definition, typedefinition, references, rename, declaration,
+       implementation
 
 # Workaround for Nim 1.6.2
 import completion as lspcompletion
@@ -442,6 +443,25 @@ proc openWindowAndGotoDefinition(
 
     return Result[(), string].ok ()
 
+proc lspDeclaration(
+  status: var EditorStatus,
+  res: JsonNode): Result[(), string] =
+    ## textDocument/declaration
+
+    let parseResult = parseTextDocumentDeclaration(res)
+
+    let requestId =
+      try: res["id"].getInt
+      except CatchableError as e: return Result[(), string].err e.msg
+    lspClient.deleteWaitingResponse(requestId)
+
+    if parseResult.isErr:
+      return Result[(), string].err parseResult.error
+    if parseResult.get.isNone:
+      return Result[(), string].err fmt"Not found"
+
+    return status.openWindowAndGotoDefinition(parseResult.get.get.location)
+
 proc lspDefinition(
   status: var EditorStatus,
   res: JsonNode): Result[(), string] =
@@ -694,6 +714,8 @@ proc handleLspResponse*(status: var EditorStatus) =
       of LspMethod.textDocumentInlayHint:
         let r = status.lspInlayHint(resJson.get)
         if r.isErr: status.commandLine.writeLspInlayHintError(r.error)
+      of LspMethod.textDocumentDeclaration:
+        let r = status.lspDeclaration(resJson.get)
       of LspMethod.textDocumentDefinition:
         let r = status.lspDefinition(resJson.get)
         if r.isErr: status.commandLine.writeLspDefinitionError(r.error)

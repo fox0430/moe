@@ -76,6 +76,48 @@ suite "lsp: setCapabilities":
 
     check client.capabilities.get.completion.isNone
 
+  test "Enable Declaration":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          declarationProvider: some(%*true)))
+
+      s = LspFeatureSettings(
+        declaration: LspDeclarationSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.declaration
+
+  test "Disable Declaration":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          declarationProvider: none(JsonNode)))
+
+      s = LspFeatureSettings(
+        declaration: LspDeclarationSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.declaration
+
+  test "Disable Declaration 2":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          declarationProvider: some(%*true)))
+
+      s = LspFeatureSettings(
+        declaration: LspDeclarationSettings(
+          enable: false))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.declaration
+
   test "Enable Definition":
     let
       r = InitializeResult(

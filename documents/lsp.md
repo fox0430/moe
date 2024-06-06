@@ -24,6 +24,7 @@ Please feedback, bug reports and PRs.
 - `textDocument/completion`
 - `textDocument/semanticTokens/full`
 - `textDocument/inlayHint`
+- `textDocument/declaration`
 - `textDocument/definition`
 - `textDocument/typeDefinition`
 - `textDocument/implementation`
@@ -100,6 +101,10 @@ Syntax highlighting with Semantic Tokens. Currently, only full is supported.
 Display types at the end of lines with LSP InlayHint.
 
 ![moe-inlayhint](https://github.com/fox0430/moe/assets/15966436/6e096bf4-0561-457d-944f-2526177fe33a)
+
+### Goto Declaration
+
+`gc` command in Normal mode. If the file is not currently, it will open in a new window.
 
 ### Goto Definition
 

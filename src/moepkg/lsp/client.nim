@@ -66,6 +66,7 @@ type
     rename*: bool
     typeDefinition*: bool
     implementation*: bool
+    declaration*: bool
 
   LspProgressTable* = Table[ProgressToken, ProgressReport]
 
@@ -467,6 +468,10 @@ proc initInitializeParams*(
             dynamicRegistration: some(true),
             resolveSupport: none(InlayHintClientCapabilitiesResolveSupport)
           )),
+          declaration: some(DeclarationClientCapabilities(
+            dynamicRegistration: some(true),
+            linkSupport: some(false)
+          )),
           definition: some(DefinitionCapability(
             dynamicRegistration: some(true)
           )),
@@ -511,6 +516,27 @@ proc setCapabilities(
     if settings.completion.enable and
        initResult.capabilities.completionProvider.isSome:
          capabilities.completion = initResult.capabilities.completionProvider
+
+    if settings.declaration.enable and
+       initResult.capabilities.declarationProvider.isSome:
+         if initResult.capabilities.declarationProvider.get.kind == JBool:
+           capabilities.declaration =
+             initResult.capabilities.declarationProvider.get.getBool
+         else:
+           try:
+             discard initResult.capabilities.declarationProvider.get.to(
+               DeclarationOptions)
+             capabilities.declaration = true
+           except CatchableError:
+             discard
+           if not capabilities.declaration:
+             try:
+               discard initResult.capabilities.declarationProvider.get.to(
+                 DeclarationRegistrationOptions)
+               capabilities.declaration = true
+             except CatchableError:
+               # Invalid declarationProvider
+               discard
 
     if settings.definition.enable and
        initResult.capabilities.definitionProvider == some(true):
@@ -1111,5 +1137,31 @@ proc textDocumentImplemenation*(
     let r = c.request(bufferId, LspMethod.textDocumentImplementation, params)
     if r.isErr:
       return R[(), string].err fmt"textDocument/implementation request failed: {r.error}"
+
+    return R[(), string].ok ()
+
+proc textDocumentDeclaration*(
+  c: var LspClient,
+  bufferId: int,
+  path: string,
+  posi: BufferPosition): LspSendRequestResult =
+    ## Send a textDocument/declaration request to the server.
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_declaration
+
+    if not c.serverProcess.running:
+      if not c.closed: c.closed = true
+      return R[(), string].err "server crashed"
+
+    if not c.isInitialized:
+      return R[(), string].err "lsp unavailable"
+
+    if not c.capabilities.get.declaration:
+      return R[(), string].err "textDocument/declaration unavailable"
+
+    let params = %* initImplementationParams(path, posi)
+
+    let r = c.request(bufferId, LspMethod.textDocumentDeclaration, params)
+    if r.isErr:
+      return R[(), string].err fmt"textDocument/declaration request failed: {r.error}"
 
     return R[(), string].ok ()
