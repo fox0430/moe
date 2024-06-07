@@ -608,6 +608,14 @@ proc lspRename(status: var EditorStatus, res: JsonNode): Result[(), string] =
 
   return Result[(), string].ok ()
 
+proc lspPrepareCallHierarchy(
+  status: var EditorStatus,
+  res: JsonNode): Result[(), string] =
+    ## textDocument/prepareCallHierarchy
+
+    exitUi()
+    echo res
+
 proc handleLspServerNotify(
   status: var EditorStatus,
   notify: JsonNode): Result[(), string] =
@@ -731,5 +739,7 @@ proc handleLspResponse*(status: var EditorStatus) =
       of LspMethod.textDocumentRename:
         let r = status.lspRename(resJson.get)
         if r.isErr: status.commandLine.writeLspRenameError(r.error)
+      of LspMethod.textDocumentPrepareCallHierarchy:
+        let r = status.lspPrepareCallHierarchy(resJson.get)
       else:
         info fmt"lsp: Ignore response: {resJson}"

@@ -277,9 +277,12 @@ type
     dynamicRegistration*: Option[bool]
     resolveSupport*: Option[InlayHintClientCapabilitiesResolveSupport]
 
-  DeclarationClientCapabilities* = ref object of  RootObj
+  DeclarationClientCapabilities* = ref object of RootObj
     dynamicRegistration*: Option[bool]
     linkSupport*: Option[bool]
+
+  CallHierarchyClientCapabilities* = ref object of RootObj
+    dynamicRegistration*: Option[bool]
 
   TextDocumentClientCapabilities* = ref object of RootObj
     synchronization*: Option[SynchronizationCapability]
@@ -304,6 +307,7 @@ type
     semanticTokens*: Option[SemanticTokensClientCapabilities]
     inlayHint*: Option[InlayHintClientCapabilities]
     declaration*: Option[DeclarationClientCapabilities]
+    callHierarchy*: Option[CallHierarchyClientCapabilities]
 
   WindowCapabilities* = ref object of RootObj
     workDoneProgress*: Option[bool]
@@ -408,6 +412,12 @@ type
     workDoneToken*: OptionalNode # ProgressToken
     partialResultToken*: OptionalNode # ProgressToken
 
+  CallHierarchyOptions* = ref object of WorkDoneProgressOptions
+
+  CallHierarchyRegistrationOptions* = ref object of TextDocumentRegistrationOptions
+    workDoneProgress*: Option[bool]
+    id*: Option[string]
+
   ServerCapabilities* = ref object of RootObj
     textDocumentSync*: OptionalNode # TextDocumentSyncOptions or int
     hoverProvider*: Option[bool]
@@ -434,6 +444,7 @@ type
     semanticTokensProvider*: OptionalNode # SemanticTokensOptions or SemanticTokensRegistrationOptions
     inlayHintProvider*: Option[InlayHintOptions]  # boolean | InlayHintOptions | InlayHintRegistrationOptions
     diagnosticProvider*: OptionalNode # DiagnosticOptions | DiagnosticRegistrationOptions
+    callHierarchyProvider*: OptionalNode # boolean | CallHierarchyOptions | CallHierarchyRegistrationOptions
     experimental*: OptionalNode
 
   InitializedParams* = ref object of RootObj
@@ -769,3 +780,28 @@ type
   ImplementationParams* = ref object of TextDocumentPositionParams
     workDoneToken*: OptionalNode # ProgressToken
     partialResultToken*: OptionalNode # ProgressToken
+
+  CallHierarchyPrepareParams* = ref object of TextDocumentPositionParams
+    workDoneToken*: OptionalNode # ProgressToken
+
+  CallHierarchyItem* = ref object of RootObj
+    name*: string
+    kind*: SymbolKind
+    tags*: seq[SymbolTag]
+    detail*: Option[string]
+    uri*: string
+    range*: Range
+    selectionRange*: Range
+    data*: Option[JsonNode]
+
+  CallHierarchyIncomingCallsParams* = ref object of WorkDoneProgressParams
+    partialResultToken*: OptionalNode # ProgressToken
+    item*:  Option[CallHierarchyItem]
+
+  CallHierarchyIncomingCall* = ref object of RootObj
+    `from`: CallHierarchyItem
+    fromRanges: seq[Range]
+
+  CallHierarchyOutgoingCallsParams* = ref object of RootObj
+    to: CallHierarchyItem
+    fromRanges: seq[Range]

@@ -31,7 +31,8 @@ import ../settings
 
 import protocol/[enums, types]
 import jsonrpc, utils, completion, progress, hover, semantictoken, inlayhint,
-       definition, references, rename, typedefinition, implementation
+       definition, references, rename, typedefinition, implementation,
+       callhierarchy
 
 type
   LspError* = object
@@ -67,6 +68,7 @@ type
     typeDefinition*: bool
     implementation*: bool
     declaration*: bool
+    callHierarchy*: bool
 
   LspProgressTable* = Table[ProgressToken, ProgressReport]
 
@@ -595,6 +597,27 @@ proc setCapabilities(
     if settings.references.enable and
        initResult.capabilities.referencesProvider == some(true):
          capabilities.references = true
+
+    if settings.callHierarchy.enable and
+       initResult.capabilities.callHierarchyProvider.isSome:
+         if initResult.capabilities.callHierarchyProvider.get.kind == JBool:
+           capabilities.callHierarchy =
+             initResult.capabilities.callHierarchyProvider.get.getBool
+         else:
+           try:
+             discard initResult.capabilities.callHierarchyProvider.get.to(
+               CallHierarchyOptions)
+             capabilities.callHierarchy = true
+           except CatchableError:
+             discard
+           if not capabilities.callHierarchy:
+             try:
+               discard initResult.capabilities.callHierarchyProvider.get.to(
+                 CallHierarchyRegistrationOptions)
+               capabilities.callHierarchy = true
+             except CatchableError:
+               # Invalid callHierarchyProvider
+               discard
 
     if settings.rename.enable and
        initResult.capabilities.renameProvider.isSome:
@@ -1163,5 +1186,31 @@ proc textDocumentDeclaration*(
     let r = c.request(bufferId, LspMethod.textDocumentDeclaration, params)
     if r.isErr:
       return R[(), string].err fmt"textDocument/declaration request failed: {r.error}"
+
+    return R[(), string].ok ()
+
+proc textDocumentPrepareCallHierarchy*(
+  c: var LspClient,
+  bufferId: int,
+  path: string,
+  posi: BufferPosition): LspSendRequestResult =
+    ## Send a textDocument/callHierarchy request to the server.
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_prepareCallHierarchy
+
+    if not c.serverProcess.running:
+      if not c.closed: c.closed = true
+      return R[(), string].err "server crashed"
+
+    if not c.isInitialized:
+      return R[(), string].err "lsp unavailable"
+
+    if not c.capabilities.get.callHierarchy:
+      return R[(), string].err "textDocument/prepareCallHierarchy unavailable"
+
+    let params = %* initCallHierarchyPrepareParams(path, posi)
+
+    let r = c.request(bufferId, LspMethod.textDocumentPrepareCallHierarchy, params)
+    if r.isErr:
+      return R[(), string].err fmt"textDocument/prepareCallHierarchy request failed: {r.error}"
 
     return R[(), string].ok ()

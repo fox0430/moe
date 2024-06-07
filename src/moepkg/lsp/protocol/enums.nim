@@ -110,6 +110,9 @@ type
     Operator = 25,
     TypeParameter = 26
 
+  SymbolTag* {.pure.} = enum
+    Deprecated = 1
+
   CompletionItemKind* {.pure.} = enum
     Text = 1,
     Method = 2,
