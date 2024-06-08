@@ -38,11 +38,12 @@ import
   ../highlight,
   ../movement,
   ../referencesmode,
-  ../fileutils
+  ../fileutils,
+  ../callhierarchyviewer
 
 import client, utils, hover, message, diagnostics, semantictoken, progress,
        inlayhint, definition, typedefinition, references, rename, declaration,
-       implementation
+       implementation, callhierarchy
 
 # Workaround for Nim 1.6.2
 import completion as lspcompletion
@@ -613,8 +614,30 @@ proc lspPrepareCallHierarchy(
   res: JsonNode): Result[(), string] =
     ## textDocument/prepareCallHierarchy
 
-    exitUi()
-    echo res
+    let items = parseTextDocumentPrepareCallHierarchyResponse(res)
+
+    try:
+      lspClient.deleteWaitingResponse(res["id"].getInt)
+    except CatchableError as e:
+      return Result[(), string].err e.msg
+
+    if items.isErr:
+      return Result[(), string].err items.error
+
+    if items.get.len == 0:
+      return Result[(), string].err "Not found"
+
+    # Open a new window with callhierarchy viewer.
+    status.verticalSplitWindow
+    status.moveNextWindow
+
+    discard status.addNewBufferInCurrentWin(Mode.callhierarchyviewer)
+    currentBufStatus.buffer = initCallHierarchyViewBuffer(items.get)
+      .toGapBuffer
+
+    status.resize
+
+    return Result[(), string].ok ()
 
 proc handleLspServerNotify(
   status: var EditorStatus,
@@ -741,5 +764,6 @@ proc handleLspResponse*(status: var EditorStatus) =
         if r.isErr: status.commandLine.writeLspRenameError(r.error)
       of LspMethod.textDocumentPrepareCallHierarchy:
         let r = status.lspPrepareCallHierarchy(resJson.get)
+        if r.isErr: status.commandLine.writeLspCallHierarchyError(r.error)
       else:
         info fmt"lsp: Ignore response: {resJson}"

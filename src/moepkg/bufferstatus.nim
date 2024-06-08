@@ -49,6 +49,7 @@ type
     searchForward
     searchBackward
     references
+    callhierarchyViewer
 
   BufferStatus* = ref object
     buffer*: GapBuffer[Runes]
@@ -267,9 +268,16 @@ proc isCursor*(mode: Mode): bool {.inline.} =
   ## Return true if a mode in which it uses the cursor.
 
   case mode:
-    of filer, bufManager, recentFile, backup, config, debug, references:
-      # Don't use the cursor.
-      return false
+    of filer,
+       bufManager,
+       recentFile,
+       backup,
+       config,
+       debug,
+       references,
+       callhierarchyviewer:
+         # Don't use the cursor.
+         return false
     else:
       return true
 

@@ -786,13 +786,13 @@ type
 
   CallHierarchyItem* = ref object of RootObj
     name*: string
-    kind*: SymbolKind
-    tags*: seq[SymbolTag]
+    kind*: int
+    tags*: OptionalSeq[SymbolTag]
     detail*: Option[string]
     uri*: string
     range*: Range
     selectionRange*: Range
-    data*: Option[JsonNode]
+    data*: OptionalNode # unknown
 
   CallHierarchyIncomingCallsParams* = ref object of WorkDoneProgressParams
     partialResultToken*: OptionalNode # ProgressToken

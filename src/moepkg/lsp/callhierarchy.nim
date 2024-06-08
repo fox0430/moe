@@ -29,13 +29,9 @@ import utils
 type
   LspCallHierarchyItem* = object
     name*: string
-    kind*: SymbolKind
-    tags*: seq[SymbolTag]
-    detail*: string
+    detail*: Option[string]
     path*: string
     range*: BufferRange
-    selectionRange*: BufferRange
-    data*: Option[JsonNode]
 
   LspPrepareCallHierarchyResult* = Result[seq[LspCallHierarchyItem], string]
 
@@ -47,33 +43,32 @@ proc initCallHierarchyPrepareParams*(
       textDocument: TextDocumentIdentifier(uri: path.pathToUri),
       position: posi.toLspPosition)
 
-proc parseTextDocumentDefinition*(res: JsonNode): LspPrepareCallHierarchyResult =
-  if res["result"].kind != JArray:
-    return LspPrepareCallHierarchyResult.err "Invalid response"
-  elif res["result"].len == 0:
-    # Not found
-    return LspPrepareCallHierarchyResult.ok @[]
+proc parseTextDocumentPrepareCallHierarchyResponse*(
+  res: JsonNode): LspPrepareCallHierarchyResult =
 
-  let callHierarchyItems =
-    try:
-      res["result"].to(seq[CallHierarchyItem])
-    except CatchableError as e:
-      return LspPrepareCallHierarchyResult.err fmt"Invalid response: {e.msg}"
+    if res["result"].kind != JArray:
+      return LspPrepareCallHierarchyResult.err "Invalid response"
+    elif res["result"].len == 0:
+      # Not found
+      return LspPrepareCallHierarchyResult.ok @[]
 
-  var items: seq[LspCallHierarchyItem]
-  for c in callHierarchyItems:
-    let path = c.uri.uriToPath
-    if path.isErr:
-      return LspPrepareCallHierarchyResult.err fmt"Invalid response: {path.error}"
+    let callHierarchyItems =
+      try:
+        res["result"].to(seq[CallHierarchyItem])
+      except CatchableError as e:
+        return LspPrepareCallHierarchyResult.err fmt"Invalid response: {e.msg}"
 
-    items.add LspCallHierarchyItem(
-      name: c.name,
-      kind: c.kind,
-      tags: c.tags,
-      path: path.get,
-      range: c.range.toBufferRange,
-      selectionRange: c.selectionRange.toBufferRange,
-      data: c.data
-    )
+    var items: seq[LspCallHierarchyItem]
+    for c in callHierarchyItems:
+      let path = c.uri.uriToPath
+      if path.isErr:
+        return LspPrepareCallHierarchyResult.err fmt"Invalid response: {path.error}"
 
-  return LspPrepareCallHierarchyResult.ok items
+      items.add LspCallHierarchyItem(
+        name: c.name,
+        detail: c.detail,
+        path: path.get,
+        range: c.range.toBufferRange,
+      )
+
+    return LspPrepareCallHierarchyResult.ok items
