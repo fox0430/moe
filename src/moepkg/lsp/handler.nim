@@ -676,94 +676,104 @@ proc containsBufferId(
     for b in bufStatuses:
       if b.id == bufferId: return true
 
+proc readable(status: EditorStatus): bool =
+  let readable = lspClient.readable
+  if readable.isErr:
+    status.commandLine.writeLspError(readable.error)
+    return false
+  else:
+    return readable.get
+
 proc handleLspResponse*(status: var EditorStatus) =
   ## Read a Json from the server and handle the response and notification.
 
-  if not lspClient.closed and not lspClient.running:
-    lspClient.closed = true
-    status.commandLine.writeLspError("server crashed")
-    return
+  while status.readable:
+    if not lspClient.closed and not lspClient.running:
+      lspClient.closed = true
+      status.commandLine.writeLspError("server crashed")
+      return
 
-  let resJson = lspClient.read
-  if resJson.isErr:
-    # Maybe invalid messages. Ignore.
-    error fmt"lsp: Invalid message: {resJson}"
-    return
+    let resJson = lspClient.read
+    if resJson.isErr:
+      # Maybe invalid messages. Ignore.
+      error fmt"lsp: Invalid message: {resJson}"
+      return
 
-  if resJson.get.isLspError:
-    status.commandLine.writeLspError($resJson.get["error"])
-    return
+    if resJson.get.isLspError:
+      status.commandLine.writeLspError($resJson.get["error"])
+      return
 
-  if resJson.get.isServerNotify:
-    # The notification from the server.
+    if resJson.get.isServerNotify:
+      # The notification from the server.
 
-    lspClient.addNotifyFromServerLog(resJson.get)
+      lspClient.addNotifyFromServerLog(resJson.get)
 
-    let r = status.handleLspServerNotify(resJson.get)
-    if r.isErr:
-      error "lsp: {r.error}"
-  else:
-    # The response from the server.
+      let r = status.handleLspServerNotify(resJson.get)
+      if r.isErr:
+        error "lsp: {r.error}"
+    else:
+      # The response from the server.
 
-    lspClient.addResponseLog(resJson.get)
+      lspClient.addResponseLog(resJson.get)
 
-    let requestId =
-      try:
-        resJson.get["id"].getInt.RequestId
-      except CatchableError:
+      let requestId =
+        try:
+          resJson.get["id"].getInt.RequestId
+        except CatchableError:
+          error fmt"lsp: Not found request id: {resJson.get}"
+          return
+
+      if requestId > lspClient.lastId:
+        lspClient.lastId = requestId
+
+      let waitingResponse = lspClient.getWaitingResponse(requestId)
+      if waitingResponse.isNone:
         error fmt"lsp: Not found request id: {resJson.get}"
         return
 
-    if requestId > lspClient.lastId:
-      lspClient.lastId = requestId
+      if not status.bufStatus.containsBufferId(waitingResponse.get.bufferId):
+        info fmt"lsp: closed buffer. bufferId: {$waitingResponse.get.bufferId}"
+        return
 
-    let waitingResponse = lspClient.getWaitingResponse(requestId)
-    if waitingResponse.isNone:
-      error fmt"lsp: Not found request id: {resJson.get}"
-      return
-
-    if not status.bufStatus.containsBufferId(waitingResponse.get.bufferId):
-      info fmt"lsp: closed buffer. bufferId: {$waitingResponse.get.bufferId}"
-      return
-
-    case waitingResponse.get.lspMethod:
-      of LspMethod.initialize:
-        let r = status.lspInitialized(resJson.get)
-        if r.isErr:
-          status.commandLine.writeLspInitializeError(
-            currentBufStatus.langId.toRunes,
-            r.error)
-      of LspMethod.textDocumentHover:
-        let r = status.lspHover(resJson.get)
-        if r.isErr: status.commandLine.writeLspHoverError(r.error)
-      of LspMethod.textDocumentCompletion:
-        let r = status.lspCompletion(resJson.get)
-        if r.isErr: status.commandLine.writeLspCompletionError(r.error)
-      of LspMethod.textDocumentSemanticTokensFull:
-        let r = status.lspSemanticTokens(resJson.get)
-        if r.isErr: status.commandLine.writeLspSemanticTokensError(r.error)
-      of LspMethod.textDocumentInlayHint:
-        let r = status.lspInlayHint(resJson.get)
-        if r.isErr: status.commandLine.writeLspInlayHintError(r.error)
-      of LspMethod.textDocumentDeclaration:
-        let r = status.lspDeclaration(resJson.get)
-      of LspMethod.textDocumentDefinition:
-        let r = status.lspDefinition(resJson.get)
-        if r.isErr: status.commandLine.writeLspDefinitionError(r.error)
-      of LspMethod.textDocumentTypeDefinition:
-        let r = status.lspTypeDefinition(resJson.get)
-        if r.isErr: status.commandLine.writeLspTypeDefinitionError(r.error)
-      of LspMethod.textDocumentImplementation:
-        let r = status.lspImplementation(resJson.get)
-        if r.isErr: status.commandLine.writeLspImplementationError(r.error)
-      of LspMethod.textDocumentReferences:
-        let r = status.lspReferences(resJson.get)
-        if r.isErr: status.commandLine.writeLspReferencesError(r.error)
-      of LspMethod.textDocumentRename:
-        let r = status.lspRename(resJson.get)
-        if r.isErr: status.commandLine.writeLspRenameError(r.error)
+      case waitingResponse.get.lspMethod:
+        of LspMethod.initialize:
+          let r = status.lspInitialized(resJson.get)
+          if r.isErr:
+            status.commandLine.writeLspInitializeError(
+              currentBufStatus.langId.toRunes,
+              r.error)
+        of LspMethod.textDocumentHover:
+          let r = status.lspHover(resJson.get)
+          if r.isErr: status.commandLine.writeLspHoverError(r.error)
+        of LspMethod.textDocumentCompletion:
+          let r = status.lspCompletion(resJson.get)
+          if r.isErr: status.commandLine.writeLspCompletionError(r.error)
+        of LspMethod.textDocumentSemanticTokensFull:
+          let r = status.lspSemanticTokens(resJson.get)
+          if r.isErr: status.commandLine.writeLspSemanticTokensError(r.error)
+        of LspMethod.textDocumentInlayHint:
+          let r = status.lspInlayHint(resJson.get)
+          if r.isErr: status.commandLine.writeLspInlayHintError(r.error)
+        of LspMethod.textDocumentDeclaration:
+          let r = status.lspDeclaration(resJson.get)
+          if r.isErr: status.commandLine.writeLspDeclarationError(r.error)
+        of LspMethod.textDocumentDefinition:
+          let r = status.lspDefinition(resJson.get)
+          if r.isErr: status.commandLine.writeLspDefinitionError(r.error)
+        of LspMethod.textDocumentTypeDefinition:
+          let r = status.lspTypeDefinition(resJson.get)
+          if r.isErr: status.commandLine.writeLspTypeDefinitionError(r.error)
+        of LspMethod.textDocumentImplementation:
+          let r = status.lspImplementation(resJson.get)
+          if r.isErr: status.commandLine.writeLspImplementationError(r.error)
+        of LspMethod.textDocumentReferences:
+          let r = status.lspReferences(resJson.get)
+          if r.isErr: status.commandLine.writeLspReferencesError(r.error)
+        of LspMethod.textDocumentRename:
+          let r = status.lspRename(resJson.get)
+          if r.isErr: status.commandLine.writeLspRenameError(r.error)
       of LspMethod.textDocumentPrepareCallHierarchy:
         let r = status.lspPrepareCallHierarchy(resJson.get)
         if r.isErr: status.commandLine.writeLspCallHierarchyError(r.error)
-      else:
-        info fmt"lsp: Ignore response: {resJson}"
+        else:
+          info fmt"lsp: Ignore response: {resJson}"

@@ -470,8 +470,7 @@ proc requestGotoDeclaration(status: var EditorStatus) =
     $currentBufStatus.absolutePath,
     currentMainWindowNode.bufferPosition)
   if r.isErr:
-    # TODO: Show error
-    error fmt"Goto declaration failed: {r.error}"
+    status.commandLine.writeLspDeclarationError(r.error)
 
 proc requestGotoDefinition(status: var EditorStatus) =
   if not status.lspClients.contains(currentBufStatus.langId):
@@ -483,8 +482,7 @@ proc requestGotoDefinition(status: var EditorStatus) =
     $currentBufStatus.absolutePath,
     currentMainWindowNode.bufferPosition)
   if r.isErr:
-    # TODO: Show error
-    error fmt"Goto definition failed: {r.error}"
+    status.commandLine.writeLspDefinitionError(r.error)
 
 proc requestGotoTypeDefinition(status: var EditorStatus) =
   if not status.lspClients.contains(currentBufStatus.langId):
@@ -496,8 +494,7 @@ proc requestGotoTypeDefinition(status: var EditorStatus) =
     $currentBufStatus.absolutePath,
     currentMainWindowNode.bufferPosition)
   if r.isErr:
-    # TODO: Show error
-    error fmt"Goto TypeDefinition failed: {r.error}"
+    status.commandLine.writeLspTypeDefinitionError(r.error)
 
 proc requestGotoImplementation(status: var EditorStatus) =
   if not status.lspClients.contains(currentBufStatus.langId):
@@ -509,8 +506,7 @@ proc requestGotoImplementation(status: var EditorStatus) =
     $currentBufStatus.absolutePath,
     currentMainWindowNode.bufferPosition)
   if r.isErr:
-    # TODO: Show error
-    error fmt"Goto Implementation failed: {r.error}"
+    status.commandLine.writeLspImplementationError(r.error)
 
 proc requestFindReferences(status: var EditorStatus) =
   if not status.lspClients.contains(currentBufStatus.langId):
@@ -522,8 +518,7 @@ proc requestFindReferences(status: var EditorStatus) =
     $currentBufStatus.path.absolutePath,
     currentMainWindowNode.bufferPosition)
   if r.isErr:
-    # TODO: Show error
-    error fmt"Find references failed: {r.error}"
+    status.commandLine.writeLspReferencesError(r.error)
 
 proc requestPrepareCallHierarchy(status: var EditorStatus) =
   if not status.lspClients.contains(currentBufStatus.langId):

@@ -130,6 +130,8 @@ proc isReferencesModeCommand*(command: Runes): InputState =
     if isCancel(command) or
        isMoveUp(command) or
        isMoveDown(command) or
+       isMoveToFirstLine(command) or
+       isMoveToLastLine(command) or
        isEnterKey(command):
          return InputState.Valid
 
