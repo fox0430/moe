@@ -725,6 +725,7 @@ proc handleLspResponse*(status: var EditorStatus) =
           if r.isErr: status.commandLine.writeLspInlayHintError(r.error)
         of LspMethod.textDocumentDeclaration:
           let r = status.lspDeclaration(resJson.get)
+          if r.isErr: status.commandLine.writeLspDeclarationError(r.error)
         of LspMethod.textDocumentDefinition:
           let r = status.lspDefinition(resJson.get)
           if r.isErr: status.commandLine.writeLspDefinitionError(r.error)
