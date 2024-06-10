@@ -772,8 +772,8 @@ proc handleLspResponse*(status: var EditorStatus) =
         of LspMethod.textDocumentRename:
           let r = status.lspRename(resJson.get)
           if r.isErr: status.commandLine.writeLspRenameError(r.error)
-      of LspMethod.textDocumentPrepareCallHierarchy:
-        let r = status.lspPrepareCallHierarchy(resJson.get)
-        if r.isErr: status.commandLine.writeLspCallHierarchyError(r.error)
+        of LspMethod.textDocumentPrepareCallHierarchy:
+          let r = status.lspPrepareCallHierarchy(resJson.get)
+          if r.isErr: status.commandLine.writeLspCallHierarchyError(r.error)
         else:
           info fmt"lsp: Ignore response: {resJson}"
