@@ -645,18 +645,10 @@ proc containsBufferId(
     for b in bufStatuses:
       if b.id == bufferId: return true
 
-proc readable(status: EditorStatus): bool =
-  let readable = lspClient.readable
-  if readable.isErr:
-    status.commandLine.writeLspError(readable.error)
-    return false
-  else:
-    return readable.get
-
 proc handleLspResponse*(status: var EditorStatus) =
   ## Read a Json from the server and handle the response and notification.
 
-  while status.readable:
+  while status.isLspResponse:
     if not lspClient.closed and not lspClient.running:
       lspClient.closed = true
       status.commandLine.writeLspError("server crashed")
