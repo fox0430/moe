@@ -22,7 +22,7 @@ import std/[options, os, sequtils, strformat]
 import pkg/results
 
 import independentutils, ui, unicodeext, editorstatus, movement, gapbuffer,
-       bufferstatus, messages
+       bufferstatus, messages, commandline
 
 import lsp/callhierarchy
 
@@ -43,23 +43,25 @@ proc closeCallHierarchyViewer(status: var EditorStatus) =
 
 proc parseDestinationLine(line: Runes): Result[Destination, string] =
   let lineSplited = line.split(ru' ').filterIt(it.len > 0)
-  if lineSplited.len != 5:
+  if lineSplited.len < 3:
     return Result[Destination, string].err "Invalid destination"
 
   let
+    lastIndex = lineSplited.high
+
     line =
       try:
-        parseInt(lineSplited[3])
+        parseInt(lineSplited[lastIndex - 1])
       except ValueError:
         return Result[Destination, string].err "Invalid format: line"
 
     column =
       try:
-        parseInt(lineSplited[4])
+        parseInt(lineSplited[lastIndex])
       except ValueError:
         return Result[Destination, string].err "Invalid format: column"
 
-  return Result[Destination, string].ok (lineSplited[2], line, column)
+  return Result[Destination, string].ok (lineSplited[lastIndex - 2], line, column)
 
 template currentLineBuffer: Runes =
   currentBufStatus.buffer[currentMainWindowNode.currentLine]
@@ -111,6 +113,14 @@ proc jumpToDestination(status: var EditorStatus) =
   jumpLine(currentBufStatus, currentMainWindowNode, d.get.line)
   currentMainWindowNode.currentColumn = d.get.column
 
+proc changeModeToExMode*(
+  bufStatus: var BufferStatus,
+  commandLine: var CommandLine) {.inline.} =
+
+    bufStatus.changeMode(Mode.ex)
+    commandLine.clear
+    commandLine.setPrompt(ExModePrompt)
+
 template isMoveUp(command: Runes): bool =
   command == ru"k" or isUpKey(command)
 
@@ -123,14 +133,32 @@ template isMoveToFirstLine(command: Runes): bool =
 template isMoveToLastLine(command: Runes): bool =
   command == ru"G"
 
+template isMoveToPrevWindow(command: Runes): bool =
+ isCtrlJ(command)
+
+template isMoveToNextWindow(command: Runes): bool =
+ isCtrlK(command)
+
+template isEnterExMode(command: Runes): bool =
+  command == ru":"
+
+template isJump(command: Runes): bool =
+  isEnterKey(command)
+
 proc isCallHierarchyViewerCommand*(command: Runes): InputState =
+  result = InputState.Invalid
+
   if command.len == 0:
     return InputState.Continue
   else:
     if isMoveUp(command) or
        isMoveDown(command) or
        isMoveToFirstLine(command) or
-       isMoveToLastLine(command):
+       isMoveToLastLine(command) or
+       isMoveToPrevWindow(command) or
+       isMoveToNextWindow(command) or
+       isEnterExMode(command) or
+       isJump(command):
          return InputState.Valid
 
 proc execCallHierarchyViewerCommand*(status: var EditorStatus, command: Runes) =
@@ -142,3 +170,11 @@ proc execCallHierarchyViewerCommand*(status: var EditorStatus, command: Runes) =
     currentBufStatus.moveToFirstLine(currentMainWindowNode)
   elif isMoveToLastLine(command):
     currentBufStatus.moveToLastLine(currentMainWindowNode)
+  elif isMoveToPrevWindow(command):
+    status.movePrevWindow
+  elif isMoveToNextWindow(command):
+    status.moveNextWindow
+  elif isEnterExMode(command):
+    currentBufStatus.changeModeToExMode(status.commandLine)
+  elif isJump(command):
+    status.jumpToDestination
