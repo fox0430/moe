@@ -616,6 +616,8 @@ proc lspPrepareCallHierarchy(
 
     let items = parseTextDocumentPrepareCallHierarchyResponse(res)
 
+    let waitingRes = lspClient.getWaitingResponse(res["id"].getInt)
+
     try:
       lspClient.deleteWaitingResponse(res["id"].getInt)
     except CatchableError as e:
@@ -623,19 +625,6 @@ proc lspPrepareCallHierarchy(
 
     if items.isErr:
       return Result[(), string].err items.error
-
-    if items.get.len == 0:
-      return Result[(), string].err "Not found"
-
-    # Open a new window with callhierarchy viewer.
-    status.verticalSplitWindow
-    status.moveNextWindow
-
-    discard status.addNewBufferInCurrentWin(Mode.callhierarchyviewer)
-    currentBufStatus.buffer = initCallHierarchyViewBuffer(items.get)
-      .toGapBuffer
-
-    status.resize
 
     return Result[(), string].ok ()
 

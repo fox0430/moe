@@ -799,9 +799,9 @@ type
     item*:  Option[CallHierarchyItem]
 
   CallHierarchyIncomingCall* = ref object of RootObj
-    `from`: CallHierarchyItem
-    fromRanges: seq[Range]
+    `from`*: CallHierarchyItem
+    fromRanges*: seq[Range]
 
   CallHierarchyOutgoingCallsParams* = ref object of RootObj
-    to: CallHierarchyItem
-    fromRanges: seq[Range]
+    to*: CallHierarchyItem
+    fromRanges*: seq[Range]

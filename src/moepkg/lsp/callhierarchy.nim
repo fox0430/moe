@@ -27,13 +27,7 @@ import protocol/[types, enums]
 import utils
 
 type
-  LspCallHierarchyItem* = object
-    name*: string
-    detail*: Option[string]
-    path*: string
-    range*: BufferRange
-
-  LspPrepareCallHierarchyResult* = Result[seq[LspCallHierarchyItem], string]
+  LspPrepareCallHierarchyResult* = Result[seq[CallHierarchyItem], string]
 
 proc initCallHierarchyPrepareParams*(
   path: string,
@@ -42,6 +36,11 @@ proc initCallHierarchyPrepareParams*(
     CallHierarchyPrepareParams(
       textDocument: TextDocumentIdentifier(uri: path.pathToUri),
       position: posi.toLspPosition)
+
+proc initCallHierarchyIncomingParams*(
+  item: CallHierarchyItem): CallHierarchyIncomingCallsParams =
+
+    CallHierarchyIncomingCallsParams(item: some(item))
 
 proc parseTextDocumentPrepareCallHierarchyResponse*(
   res: JsonNode): LspPrepareCallHierarchyResult =
@@ -52,23 +51,10 @@ proc parseTextDocumentPrepareCallHierarchyResponse*(
       # Not found
       return LspPrepareCallHierarchyResult.ok @[]
 
-    let callHierarchyItems =
+    let items =
       try:
         res["result"].to(seq[CallHierarchyItem])
       except CatchableError as e:
         return LspPrepareCallHierarchyResult.err fmt"Invalid response: {e.msg}"
-
-    var items: seq[LspCallHierarchyItem]
-    for c in callHierarchyItems:
-      let path = c.uri.uriToPath
-      if path.isErr:
-        return LspPrepareCallHierarchyResult.err fmt"Invalid response: {path.error}"
-
-      items.add LspCallHierarchyItem(
-        name: c.name,
-        detail: c.detail,
-        path: path.get,
-        range: c.range.toBufferRange,
-      )
 
     return LspPrepareCallHierarchyResult.ok items

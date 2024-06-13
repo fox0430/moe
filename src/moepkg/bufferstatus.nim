@@ -21,7 +21,9 @@ import std/[times, options, os, strformat]
 
 import pkg/results
 
-import lsp/inlayhint
+import
+  lsp/protocol/types,
+  lsp/inlayhint
 import syntax/highlite
 import gapbuffer, unicodeext, fileutils, highlight, independentutils, git,
        syntaxcheck, completion, logviewerutils, helputils
@@ -68,8 +70,12 @@ type
     countChange*: int # Counting temporary changes
     version*: Natural # Counting total changes
     cmdLoop*: int
-    mode* : Mode
-    prevMode* : Mode
+    case mode*: Mode
+    of callhierarchyViewer:
+      items*: seq[CallHierarchyItem]
+    else:
+      discard
+    prevMode*: Mode
     lastSaveTime*: DateTime
     isReadonly*: bool
     filerStatusIndex*: Option[int]

@@ -24,17 +24,20 @@ import pkg/results
 import independentutils, ui, unicodeext, editorstatus, movement, gapbuffer,
        bufferstatus, messages, commandline
 
-import lsp/callhierarchy
+import
+  lsp/protocol/types,
+  lsp/callhierarchy,
+  lsp/utils
 
 type
   Destination = tuple[path: Runes, line, column: int]
 
 proc initCallHierarchyViewBuffer*(
-  items: seq[LspCallHierarchyItem]): seq[Runes] =
+  items: seq[CallHierarchyItem]): seq[Runes] =
 
     for i in items:
       result.add toRunes(
-        fmt"{i.name} {$i.detail} {i.path} {$i.range.first.line} {$i.range.first.column}")
+        fmt"{i.name} {$i.detail} {i.uri.uriToPath} {$i.range.start.line} {$i.range.start.character}")
 
 proc closeCallHierarchyViewer(status: var EditorStatus) =
   ## Close the window and remove the buffer.

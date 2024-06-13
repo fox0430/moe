@@ -1194,7 +1194,7 @@ proc textDocumentPrepareCallHierarchy*(
   bufferId: int,
   path: string,
   posi: BufferPosition): LspSendRequestResult =
-    ## Send a textDocument/callHierarchy request to the server.
+    ## Send a textDocument/prepareCallHierarchy request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_prepareCallHierarchy
 
     if not c.serverProcess.running:
@@ -1212,5 +1212,30 @@ proc textDocumentPrepareCallHierarchy*(
     let r = c.request(bufferId, LspMethod.textDocumentPrepareCallHierarchy, params)
     if r.isErr:
       return R[(), string].err fmt"textDocument/prepareCallHierarchy request failed: {r.error}"
+
+    return R[(), string].ok ()
+
+proc textDocumentIncomingCalls*(
+  c: var LspClient,
+  bufferId: int,
+  item: CallHierarchyItem): LspSendRequestResult =
+    ## Send a textDocument/incomingCalls request to the server.
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_incomingCallHierarchy
+
+    if not c.serverProcess.running:
+      if not c.closed: c.closed = true
+      return R[(), string].err "server crashed"
+
+    if not c.isInitialized:
+      return R[(), string].err "lsp unavailable"
+
+    if not c.capabilities.get.callHierarchy:
+      return R[(), string].err "textDocument/incomingCalls unavailable"
+
+    let params = %* initCallHierarchyIncomingParams(item)
+
+    let r = c.request(bufferId, LspMethod.textDocumentIncomingCalls, params)
+    if r.isErr:
+      return R[(), string].err fmt"textDocument/incomingCalls request failed: {r.error}"
 
     return R[(), string].ok ()
