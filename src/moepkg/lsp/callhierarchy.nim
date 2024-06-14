@@ -26,8 +26,12 @@ import ../independentutils
 import protocol/[types, enums]
 import utils
 
+export CallHierarchyItem, CallHierarchyIncomingCall
+
 type
   LspPrepareCallHierarchyResult* = Result[seq[CallHierarchyItem], string]
+
+  LspIncomingCallsResult* = Result[seq[CallHierarchyIncomingCall], string]
 
 proc initCallHierarchyPrepareParams*(
   path: string,
@@ -40,7 +44,7 @@ proc initCallHierarchyPrepareParams*(
 proc initCallHierarchyIncomingParams*(
   item: CallHierarchyItem): CallHierarchyIncomingCallsParams =
 
-    CallHierarchyIncomingCallsParams(item: some(item))
+    CallHierarchyIncomingCallsParams(item: item)
 
 proc parseTextDocumentPrepareCallHierarchyResponse*(
   res: JsonNode): LspPrepareCallHierarchyResult =
@@ -58,3 +62,20 @@ proc parseTextDocumentPrepareCallHierarchyResponse*(
         return LspPrepareCallHierarchyResult.err fmt"Invalid response: {e.msg}"
 
     return LspPrepareCallHierarchyResult.ok items
+
+proc parseCallhierarchyIncomingCallsResponse*(
+  res: JsonNode): LspIncomingCallsResult =
+
+    if res["result"].kind != JArray:
+      return LspIncomingCallsResult.err "Invalid response"
+    elif res["result"].len == 0:
+      # Not found
+      return LspIncomingCallsResult.ok @[]
+
+    let items =
+      try:
+        res["result"].to(seq[CallHierarchyIncomingCall])
+      except CatchableError as e:
+        return LspIncomingCallsResult.err fmt"Invalid response: {e.msg}"
+
+    return LspIncomingCallsResult.ok items

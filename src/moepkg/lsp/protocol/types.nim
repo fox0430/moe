@@ -796,7 +796,7 @@ type
 
   CallHierarchyIncomingCallsParams* = ref object of WorkDoneProgressParams
     partialResultToken*: OptionalNode # ProgressToken
-    item*:  Option[CallHierarchyItem]
+    item*:  CallHierarchyItem
 
   CallHierarchyIncomingCall* = ref object of RootObj
     `from`*: CallHierarchyItem

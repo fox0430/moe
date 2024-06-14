@@ -17,16 +17,17 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[options, os, sequtils, strformat]
+import std/[options, os, sequtils, strformat, tables]
 
 import pkg/results
 
-import independentutils, ui, unicodeext, editorstatus, movement, gapbuffer,
-       bufferstatus, messages, commandline
+import ui, unicodeext, editorstatus, movement, gapbuffer, bufferstatus,
+       messages, commandline
 
 import
   lsp/protocol/types,
   lsp/callhierarchy,
+  lsp/client,
   lsp/utils
 
 type
@@ -39,10 +40,35 @@ proc initCallHierarchyViewBuffer*(
       result.add toRunes(
         fmt"{i.name} {$i.detail} {i.uri.uriToPath} {$i.range.start.line} {$i.range.start.character}")
 
+proc getLangId(status: EditorStatus): Option[string] =
+  let bufferId = currentBufStatus.callHierarchyInfo.bufferId
+  for b in status.bufStatus:
+    if b.id == bufferId:
+      return some(b.langId)
+
 proc closeCallHierarchyViewer(status: var EditorStatus) =
   ## Close the window and remove the buffer.
 
   status.deleteBuffer(currentMainWindowNode.bufferIndex)
+
+proc inCommingCalls(status: var EditorStatus) =
+
+  let lineNum = currentMainWindowNode.currentLine
+  if lineNum > currentBufStatus.callHierarchyInfo.items.high:
+    # Not found
+    return
+
+  let langId = status.getLangId
+  if langId.isNone:
+    # TODO: Show Error
+    return
+
+  let r = status.lspClients[langId.get].textDocumentIncomingCalls(
+    currentBufStatus.id,
+    currentBufStatus.callHierarchyInfo.items[lineNum])
+  if r.isErr:
+    # TODO: Show error message
+    return
 
 proc parseDestinationLine(line: Runes): Result[Destination, string] =
   let lineSplited = line.split(ru' ').filterIt(it.len > 0)
@@ -148,6 +174,9 @@ template isEnterExMode(command: Runes): bool =
 template isJump(command: Runes): bool =
   isEnterKey(command)
 
+template isIncomingCall(command: Runes): bool =
+  command == ru"i"
+
 proc isCallHierarchyViewerCommand*(command: Runes): InputState =
   result = InputState.Invalid
 
@@ -161,7 +190,8 @@ proc isCallHierarchyViewerCommand*(command: Runes): InputState =
        isMoveToPrevWindow(command) or
        isMoveToNextWindow(command) or
        isEnterExMode(command) or
-       isJump(command):
+       isJump(command) or
+       isIncomingCall(command):
          return InputState.Valid
 
 proc execCallHierarchyViewerCommand*(status: var EditorStatus, command: Runes) =
@@ -181,3 +211,5 @@ proc execCallHierarchyViewerCommand*(status: var EditorStatus, command: Runes) =
     currentBufStatus.changeModeToExMode(status.commandLine)
   elif isJump(command):
     status.jumpToDestination
+  elif isIncomingCall(command):
+    status.inCommingCalls

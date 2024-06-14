@@ -626,6 +626,53 @@ proc lspPrepareCallHierarchy(
     if items.isErr:
       return Result[(), string].err items.error
 
+    if items.get.len == 0:
+      return Result[(), string].err "Not found"
+
+    let langId = currentBufStatus.langId
+
+    # Open a new window with callhierarchy viewer.
+    status.verticalSplitWindow
+    status.moveNextWindow
+
+    discard status.addNewBufferInCurrentWin(Mode.callhierarchyviewer)
+    currentBufStatus.buffer = initCallHierarchyViewBuffer(items.get)
+      .toGapBuffer
+    currentBufStatus.langId = langId
+    currentBufStatus.callHierarchyInfo.items = items.get
+
+    status.resize
+
+    return Result[(), string].ok ()
+
+proc lspInCommingCalls(
+  status: var EditorStatus,
+  res: JsonNode): Result[(), string] =
+    ## textDocument/incomingCalls
+
+    let calls = parseCallhierarchyIncomingCallsResponse(res)
+
+    let waitingRes = lspClient.getWaitingResponse(res["id"].getInt)
+
+    try:
+      lspClient.deleteWaitingResponse(res["id"].getInt)
+    except CatchableError as e:
+      return Result[(), string].err e.msg
+
+    if calls.isErr:
+      return Result[(), string].err calls.error
+
+    if calls.get.len == 0:
+      return Result[(), string].err "Not found"
+
+    # TODO: Fix buffer
+    let items = calls.get.mapIt(it.`from`)
+    currentBufStatus.buffer = initCallHierarchyViewBuffer(items)
+      .toGapBuffer
+    currentBufStatus.callHierarchyInfo.items = items
+
+    status.update
+
     return Result[(), string].ok ()
 
 proc handleLspServerNotify(
@@ -756,5 +803,7 @@ proc handleLspResponse*(status: var EditorStatus) =
         of LspMethod.textDocumentPrepareCallHierarchy:
           let r = status.lspPrepareCallHierarchy(resJson.get)
           if r.isErr: status.commandLine.writeLspCallHierarchyError(r.error)
+        of LspMethod.callHierarchyIncomingCalls:
+          let r = status.lspInCommingCalls(resJson.get)
         else:
           info fmt"lsp: Ignore response: {resJson}"

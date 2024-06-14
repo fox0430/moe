@@ -21,14 +21,16 @@ import std/[times, options, os, strformat]
 
 import pkg/results
 
-import
-  lsp/protocol/types,
-  lsp/inlayhint
+import lsp/[inlayhint, callhierarchy]
 import syntax/highlite
 import gapbuffer, unicodeext, fileutils, highlight, independentutils, git,
        syntaxcheck, completion, logviewerutils, helputils
 
 type
+  CallHierarchyInfo* = object
+    bufferId*: int
+    items*:  seq[CallHierarchyItem]
+
   Mode* = enum
     normal
     insert
@@ -70,11 +72,7 @@ type
     countChange*: int # Counting temporary changes
     version*: Natural # Counting total changes
     cmdLoop*: int
-    case mode*: Mode
-    of callhierarchyViewer:
-      items*: seq[CallHierarchyItem]
-    else:
-      discard
+    mode*: Mode
     prevMode*: Mode
     lastSaveTime*: DateTime
     isReadonly*: bool
@@ -89,6 +87,7 @@ type
     logContent*: LogContentKind # Use only in Logviewer
     logLspLangId*: string  # Use only in Logviewer
     inlayHints*: LspInlayHints
+    callHierarchyInfo*: CallHierarchyInfo # Use only in callhierarchyViewer
 
 var
   countAddedBuffer = 0
