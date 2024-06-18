@@ -178,13 +178,12 @@ proc startBackgroundQuickRun*(
 
     if settings.quickRun.saveBufferWhenQuickRun or useTempFile:
       # Create and use a temporary file if the source code file does not exist.
-      try:
-        saveFile(
-          path.toRunes,
-          bufStatus.buffer.toRunes,
-          bufStatus.characterEncoding)
-      except CatchableError as e:
-        return Result[QuickRunProcess, string].err fmt"Failed to save the current code: {e.msg}"
+      let r = saveFile(
+        path.toRunes,
+        bufStatus.buffer.toRunes,
+        bufStatus.characterEncoding)
+      if r.isErr:
+        return Result[QuickRunProcess, string].err fmt"Failed to save the current code: {r.error}"
 
       if not useTempFile:
         bufStatus.countChange = 0
