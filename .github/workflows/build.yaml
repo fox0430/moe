@@ -57,15 +57,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cache choosenim
-        id: cache-choosenim
-        uses: actions/cache@v4
-        with:
-          path: ~/.choosenim
-          key: ${{ runner.os }}-choosenim-${{ matrix.nim-version }}
-          restore-keys: |
-            ${{ runner.os }}-choosenim-${{ matrix.nim-version }}-
-
       - name: Cache nimble
         id: cache-nimble
         uses: actions/cache@v4
