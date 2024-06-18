@@ -24,6 +24,8 @@ import moepkg/syntax/highlite
 import moepkg/lsp/semantictoken
 import moepkg/lsp/protocol/types
 
+import moepkg/ui
+
 import moepkg/highlight {.all.}
 
 suite "highlight: initHighlight":
@@ -215,77 +217,77 @@ fn main() {
         lastRow: 0,
         lastColumn: 1,
         color: keyword,
-        attribute: normal),
+        attribute: Attribute.normal),
       ColorSegment(
         firstRow: 0,
         firstColumn: 2,
         lastRow: 0,
         lastColumn: 2,
-        color: default,
-        attribute: normal),
+        color: EditorColorPairIndex.default,
+        attribute: Attribute.normal),
       ColorSegment(
         firstRow: 0,
         firstColumn: 3,
         lastRow: 0,
         lastColumn: 6,
         color: function,
-        attribute: normal),
+        attribute: Attribute.normal),
       ColorSegment(
         firstRow: 0,
         firstColumn: 7,
         lastRow: 0,
         lastColumn: 10,
-        color: default,
-        attribute: normal),
+        color: EditorColorPairIndex.default,
+        attribute: Attribute.normal),
       ColorSegment(
         firstRow: 1,
         firstColumn: 0,
         lastRow: 1,
         lastColumn: 3,
-        color: default,
-        attribute: normal),
+        color: EditorColorPairIndex.default,
+        attribute: Attribute.normal),
       ColorSegment(
         firstRow: 1,
         firstColumn: 4,
         lastRow: 1,
         lastColumn: 10,
         color: `macro`,
-        attribute: normal),
+        attribute: Attribute.normal),
       ColorSegment(
         firstRow: 1,
         firstColumn: 11,
         lastRow: 1,
         lastColumn: 11,
         color: `macro`,
-        attribute: normal),
+        attribute: Attribute.normal),
       ColorSegment(
         firstRow: 1,
         firstColumn: 12,
         lastRow: 1,
         lastColumn: 12,
-        color: default,
-        attribute: normal),
+        color: EditorColorPairIndex.default,
+        attribute: Attribute.normal),
       ColorSegment(
         firstRow: 1,
         firstColumn: 13,
         lastRow: 1,
         lastColumn: 27,
-        color: string,
-        attribute: normal),
+        color: EditorColorPairIndex.string,
+        attribute: Attribute.normal),
       ColorSegment(
         firstRow: 1,
         firstColumn: 28,
         lastRow: 1,
         lastColumn: 29,
-        color: default,
-        attribute: normal),
+        color: EditorColorPairIndex.default,
+        attribute: Attribute.normal),
       ColorSegment(
         firstRow: 2,
         firstColumn: 0,
         lastRow: 2,
         lastColumn: 1,
-        color: default,
-        attribute: normal)
+        color: EditorColorPairIndex.default,
+        attribute: Attribute.normal)
     ]
 
 suite "highlight: indexOf":
@@ -436,42 +438,42 @@ suite "highlight: addColorSegment":
         lastRow: 0,
         lastColumn: 2,
         color: EditorColorPairIndex.keyword,
-        attribute: normal),
+        attribute: Attribute.normal),
       ColorSegment(
         firstRow: 0,
         firstColumn: 3,
         lastRow: 0,
         lastColumn: 3,
         color: EditorColorPairIndex.whitespace,
-        attribute: normal),
+        attribute: Attribute.normal),
       ColorSegment(
         firstRow: 0,
         firstColumn: 4,
         lastRow: 0,
         lastColumn: 4,
         color: EditorColorPairIndex.identifier,
-        attribute: normal),
+        attribute: Attribute.normal),
       ColorSegment(
         firstRow: 1,
         firstColumn: 0,
         lastRow: 1,
         lastColumn: 3,
         color: EditorColorPairIndex.builtin,
-        attribute: normal),
+        attribute: Attribute.normal),
       ColorSegment(
         firstRow: 1,
         firstColumn: 4,
         lastRow: 1,
         lastColumn: 4,
         color: EditorColorPairIndex.whitespace,
-        attribute: normal),
+        attribute: Attribute.normal),
       ColorSegment(
         firstRow: 1,
         firstColumn: 5,
         lastRow: 1,
         lastColumn: 5,
         color: EditorColorPairIndex.identifier,
-        attribute: normal)
+        attribute: Attribute.normal)
     ]
 
     const
@@ -486,47 +488,47 @@ suite "highlight: addColorSegment":
         lastRow: 0,
         lastColumn: 2,
         color: EditorColorPairIndex.keyword,
-        attribute: normal),
+        attribute: Attribute.normal),
       ColorSegment(
         firstRow: 0,
         firstColumn: 3,
         lastRow: 0,
         lastColumn: 3,
         color: EditorColorPairIndex.whitespace,
-        attribute: normal),
+        attribute: Attribute.normal),
       ColorSegment(
         firstRow: 0,
         firstColumn: 4,
         lastRow: 0,
         lastColumn: 4,
         color: EditorColorPairIndex.identifier,
-        attribute: normal),
+        attribute: Attribute.normal),
       ColorSegment(
         firstRow: 0,
         firstColumn: 5,
         lastRow: 0,
         lastColumn: 11,
         color: EditorColorPairIndex.errorMessage,
-        attribute: normal),
+        attribute: Attribute.normal),
       ColorSegment(
         firstRow: 1,
         firstColumn: 0,
         lastRow: 1,
         lastColumn: 3,
         color: EditorColorPairIndex.builtin,
-        attribute: normal),
+        attribute: Attribute.normal),
       ColorSegment(
         firstRow: 1,
         firstColumn: 4,
         lastRow: 1,
         lastColumn: 4,
         color: EditorColorPairIndex.whitespace,
-        attribute: normal),
+        attribute: Attribute.normal),
       ColorSegment(
         firstRow: 1,
         firstColumn: 5,
         lastRow: 1,
         lastColumn: 5,
         color: EditorColorPairIndex.identifier,
-        attribute: normal)
+        attribute: Attribute.normal)
     ]

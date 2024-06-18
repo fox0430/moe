@@ -67,7 +67,7 @@ proc getBackupDir*(baseBackupDir, sourceFilePath: Runes): Runes =
 # Exmaple: "2022-10-26T08:28:50+09:00"
 proc validateBackupFileName*(filename: string): bool =
   try:
-    filename.parse("yyyy-MM-dd\'T\'HH:mm:sszzz")
+    discard filename.parse("yyyy-MM-dd\'T\'HH:mm:sszzz")
   except CatchableError:
     return false
 
@@ -109,9 +109,8 @@ proc initBackupDir(baseBackupDir, sourceFilePath: Runes): Runes =
         # `id` is the directory name for `sourceFilePath`.
         id = genOid()
         backupDir = baseBackupDir / id.toRunes
-      try:
-        createDir(backupDir)
-      except CatchableError:
+
+      if not createDir(backupDir):
         return "".toRunes
 
       return backupDir
@@ -139,17 +138,12 @@ proc diff(baseBackupDir, sourceFilePath: Runes, buffer: string): bool =
     else:
       return false
 
-# Return if successful.
+# Return true if successful.
 proc writeBackupFile(
   path, buffer: Runes,
-  encoding: CharacterEncoding): bool =
+  encoding: CharacterEncoding): bool {.inline.} =
 
-    try:
-      saveFile(path, buffer, encoding)
-    except CatchableError:
-      return false
-
-    return true
+    return saveFile(path, buffer, encoding).isOk
 
 # Return true if successful.
 # Save json file for backup info in the same dir of backup files.
