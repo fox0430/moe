@@ -1239,3 +1239,28 @@ proc textDocumentIncomingCalls*(
       return R[(), string].err fmt"callHierarchy/incomingCalls request failed: {r.error}"
 
     return R[(), string].ok ()
+
+proc textDocumentOutgoingCalls*(
+  c: var LspClient,
+  bufferId: int,
+  item: CallHierarchyItem): LspSendRequestResult =
+    ## Send a callHierarchy/outgoingCalls request to the server.
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#callHierarchy_outgoingCalls
+
+    if not c.serverProcess.running:
+      if not c.closed: c.closed = true
+      return R[(), string].err "server crashed"
+
+    if not c.isInitialized:
+      return R[(), string].err "lsp unavailable"
+
+    if not c.capabilities.get.callHierarchy:
+      return R[(), string].err "callHierarchy/outgoingCalls unavailable"
+
+    let params = %* initCallHierarchyOutgoingParams(item)
+
+    let r = c.request(bufferId, LspMethod.callHierarchyOutgoingCalls, params)
+    if r.isErr:
+      return R[(), string].err fmt"callHierarchy/outgoingCalls request failed: {r.error}"
+
+    return R[(), string].ok ()

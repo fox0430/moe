@@ -616,8 +616,6 @@ proc lspPrepareCallHierarchy(
 
     let items = parseTextDocumentPrepareCallHierarchyResponse(res)
 
-    let waitingRes = lspClient.getWaitingResponse(res["id"].getInt)
-
     try:
       lspClient.deleteWaitingResponse(res["id"].getInt)
     except CatchableError as e:
@@ -645,14 +643,12 @@ proc lspPrepareCallHierarchy(
 
     return Result[(), string].ok ()
 
-proc lspInCommingCalls(
+proc lspIncommingCalls(
   status: var EditorStatus,
   res: JsonNode): Result[(), string] =
     ## textDocument/incomingCalls
 
     let calls = parseCallhierarchyIncomingCallsResponse(res)
-
-    let waitingRes = lspClient.getWaitingResponse(res["id"].getInt)
 
     try:
       lspClient.deleteWaitingResponse(res["id"].getInt)
@@ -667,6 +663,34 @@ proc lspInCommingCalls(
 
     # TODO: Fix buffer
     let items = calls.get.mapIt(it.`from`)
+    currentBufStatus.buffer = initCallHierarchyViewBuffer(items)
+      .toGapBuffer
+    currentBufStatus.callHierarchyInfo.items = items
+
+    status.update
+
+    return Result[(), string].ok ()
+
+proc lspOutgoingCalls(
+  status: var EditorStatus,
+  res: JsonNode): Result[(), string] =
+    ## textDocument/outgoingCalls
+
+    let calls = parseCallhierarchyOutgoingCallsResponse(res)
+#    let e = calls.error
+#    if calls.isErr:
+#      return Result[(), string].err calls.error
+
+    try:
+      lspClient.deleteWaitingResponse(res["id"].getInt)
+    except CatchableError as e:
+      return Result[(), string].err e.msg
+
+    if calls.get.len == 0:
+      return Result[(), string].err "Not found"
+
+    # TODO: Fix buffer
+    let items = calls.get.mapIt(it.`to`)
     currentBufStatus.buffer = initCallHierarchyViewBuffer(items)
       .toGapBuffer
     currentBufStatus.callHierarchyInfo.items = items
@@ -804,6 +828,10 @@ proc handleLspResponse*(status: var EditorStatus) =
           let r = status.lspPrepareCallHierarchy(resJson.get)
           if r.isErr: status.commandLine.writeLspCallHierarchyError(r.error)
         of LspMethod.callHierarchyIncomingCalls:
-          let r = status.lspInCommingCalls(resJson.get)
+          let r = status.lspIncommingCalls(resJson.get)
+          if r.isErr: status.commandLine.writeLspCallHierarchyError(r.error)
+        of LspMethod.callHierarchyOutgoingCalls:
+          let r = status.lspOutgoingCalls(resJson.get)
+          if r.isErr: status.commandLine.writeLspCallHierarchyError(r.error)
         else:
           info fmt"lsp: Ignore response: {resJson}"

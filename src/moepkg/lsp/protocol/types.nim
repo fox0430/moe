@@ -802,6 +802,10 @@ type
     `from`*: CallHierarchyItem
     fromRanges*: seq[Range]
 
-  CallHierarchyOutgoingCallsParams* = ref object of RootObj
+  CallHierarchyOutgoingCallsParams* = ref object of WorkDoneProgressParams
+    partialResultToken*: OptionalNode # ProgressToken
+    item*:  CallHierarchyItem
+
+  CallHierarchyOutgoingCall* = ref object of RootObj
     to*: CallHierarchyItem
     fromRanges*: seq[Range]

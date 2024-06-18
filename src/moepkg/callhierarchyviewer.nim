@@ -51,7 +51,7 @@ proc closeCallHierarchyViewer(status: var EditorStatus) =
 
   status.deleteBuffer(currentMainWindowNode.bufferIndex)
 
-proc inCommingCalls(status: var EditorStatus) =
+proc incommingCalls(status: var EditorStatus) =
 
   let lineNum = currentMainWindowNode.currentLine
   if lineNum > currentBufStatus.callHierarchyInfo.items.high:
@@ -64,6 +64,24 @@ proc inCommingCalls(status: var EditorStatus) =
     return
 
   let r = status.lspClients[langId.get].textDocumentIncomingCalls(
+    currentBufStatus.id,
+    currentBufStatus.callHierarchyInfo.items[lineNum])
+  if r.isErr:
+    # TODO: Show error message
+    return
+
+proc outgoingCalls(status: var EditorStatus) =
+  let lineNum = currentMainWindowNode.currentLine
+  if lineNum > currentBufStatus.callHierarchyInfo.items.high:
+    # Not found
+    return
+
+  let langId = status.getLangId
+  if langId.isNone:
+    # TODO: Show Error
+    return
+
+  let r = status.lspClients[langId.get].textDocumentOutgoingCalls(
     currentBufStatus.id,
     currentBufStatus.callHierarchyInfo.items[lineNum])
   if r.isErr:
@@ -177,6 +195,9 @@ template isJump(command: Runes): bool =
 template isIncomingCall(command: Runes): bool =
   command == ru"i"
 
+template isOutgoingCall(command: Runes): bool =
+  command == ru"o"
+
 proc isCallHierarchyViewerCommand*(command: Runes): InputState =
   result = InputState.Invalid
 
@@ -191,7 +212,8 @@ proc isCallHierarchyViewerCommand*(command: Runes): InputState =
        isMoveToNextWindow(command) or
        isEnterExMode(command) or
        isJump(command) or
-       isIncomingCall(command):
+       isIncomingCall(command) or
+       isOutgoingCall(command):
          return InputState.Valid
 
 proc execCallHierarchyViewerCommand*(status: var EditorStatus, command: Runes) =
@@ -212,4 +234,6 @@ proc execCallHierarchyViewerCommand*(status: var EditorStatus, command: Runes) =
   elif isJump(command):
     status.jumpToDestination
   elif isIncomingCall(command):
-    status.inCommingCalls
+    status.incommingCalls
+  elif isOutgoingCall(command):
+    status.outgoingCalls

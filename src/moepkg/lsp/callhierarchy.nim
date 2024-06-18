@@ -26,12 +26,12 @@ import ../independentutils
 import protocol/[types, enums]
 import utils
 
-export CallHierarchyItem, CallHierarchyIncomingCall
+export CallHierarchyItem, CallHierarchyIncomingCall, CallHierarchyOutgoingCall
 
 type
   LspPrepareCallHierarchyResult* = Result[seq[CallHierarchyItem], string]
-
   LspIncomingCallsResult* = Result[seq[CallHierarchyIncomingCall], string]
+  LspOutgoingCallsResult* = Result[seq[CallHierarchyOutgoingCall], string]
 
 proc initCallHierarchyPrepareParams*(
   path: string,
@@ -45,6 +45,11 @@ proc initCallHierarchyIncomingParams*(
   item: CallHierarchyItem): CallHierarchyIncomingCallsParams =
 
     CallHierarchyIncomingCallsParams(item: item)
+
+proc initCallHierarchyOutgoingParams*(
+  item: CallHierarchyItem): CallHierarchyOutgoingCallsParams =
+
+    CallHierarchyOutgoingCallsParams(item: item)
 
 proc parseTextDocumentPrepareCallHierarchyResponse*(
   res: JsonNode): LspPrepareCallHierarchyResult =
@@ -79,3 +84,21 @@ proc parseCallhierarchyIncomingCallsResponse*(
         return LspIncomingCallsResult.err fmt"Invalid response: {e.msg}"
 
     return LspIncomingCallsResult.ok items
+
+proc parseCallhierarchyOutgoingCallsResponse*(
+  res: JsonNode): LspOutgoingCallsResult =
+
+    return LspOutgoingCallsResult.ok @[]
+    if res["result"].kind != JArray:
+      return LspOutgoingCallsResult.err "Invalid response"
+    elif res["result"].len == 0:
+      # Not found
+      return LspOutgoingCallsResult.ok @[]
+
+    let items =
+      try:
+        res["result"].to(seq[CallHierarchyOutgoingCall])
+      except CatchableError as e:
+        return LspOutgoingCallsResult.err fmt"Invalid response: {e.msg}"
+
+    return LspOutgoingCallsResult.ok items
