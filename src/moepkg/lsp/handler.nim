@@ -676,21 +676,23 @@ proc lspOutgoingCalls(
   res: JsonNode): Result[(), string] =
     ## textDocument/outgoingCalls
 
-    let calls = parseCallhierarchyOutgoingCallsResponse(res)
-#    let e = calls.error
-#    if calls.isErr:
-#      return Result[(), string].err calls.error
-
     try:
       lspClient.deleteWaitingResponse(res["id"].getInt)
     except CatchableError as e:
       return Result[(), string].err e.msg
 
-    if calls.get.len == 0:
+    let calls =
+      # Workaround for "Error: generic instantiation too nested"
+      try:
+        parseCallhierarchyOutgoingCallsResponse(res).get
+      except CatchableError as e:
+        return Result[(), string].err e.msg
+
+    if calls.len == 0:
       return Result[(), string].err "Not found"
 
     # TODO: Fix buffer
-    let items = calls.get.mapIt(it.`to`)
+    let items = calls.mapIt(it.`to`)
     currentBufStatus.buffer = initCallHierarchyViewBuffer(items)
       .toGapBuffer
     currentBufStatus.callHierarchyInfo.items = items

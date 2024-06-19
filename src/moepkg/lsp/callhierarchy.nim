@@ -88,7 +88,6 @@ proc parseCallhierarchyIncomingCallsResponse*(
 proc parseCallhierarchyOutgoingCallsResponse*(
   res: JsonNode): LspOutgoingCallsResult =
 
-    return LspOutgoingCallsResult.ok @[]
     if res["result"].kind != JArray:
       return LspOutgoingCallsResult.err "Invalid response"
     elif res["result"].len == 0:
