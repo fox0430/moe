@@ -634,8 +634,11 @@ proc lspPrepareCallHierarchy(
     status.moveNextWindow
 
     discard status.addNewBufferInCurrentWin(Mode.callhierarchyviewer)
-    currentBufStatus.buffer = initCallHierarchyViewBuffer(items.get)
-      .toGapBuffer
+    let buf = initCallHierarchyViewBuffer(items.get)
+    if buf.isErr:
+      return Result[(), string].err buf.error
+
+    currentBufStatus.buffer = buf.get.toGapBuffer
     currentBufStatus.langId = langId
     currentBufStatus.callHierarchyInfo.items = items.get
 
@@ -661,11 +664,15 @@ proc lspIncommingCalls(
     if calls.get.len == 0:
       return Result[(), string].err "Not found"
 
-    # TODO: Fix buffer
     let items = calls.get.mapIt(it.`from`)
-    currentBufStatus.buffer = initCallHierarchyViewBuffer(items)
-      .toGapBuffer
+
+    let buf = initCallHierarchyViewBuffer(items)
+    if buf.isErr:
+      return Result[(), string].err buf.error
+
+    currentBufStatus.buffer = buf.get.toGapBuffer
     currentBufStatus.callHierarchyInfo.items = items
+    currentBufStatus.isUpdate = true
 
     status.update
 
@@ -691,11 +698,15 @@ proc lspOutgoingCalls(
     if calls.len == 0:
       return Result[(), string].err "Not found"
 
-    # TODO: Fix buffer
     let items = calls.mapIt(it.`to`)
-    currentBufStatus.buffer = initCallHierarchyViewBuffer(items)
-      .toGapBuffer
+
+    let buf = initCallHierarchyViewBuffer(items)
+    if buf.isErr:
+      return Result[(), string].err buf.error
+
+    currentBufStatus.buffer = buf.get.toGapBuffer
     currentBufStatus.callHierarchyInfo.items = items
+    currentBufStatus.isUpdate = true
 
     status.update
 

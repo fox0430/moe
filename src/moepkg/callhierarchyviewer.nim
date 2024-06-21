@@ -34,11 +34,18 @@ type
   Destination = tuple[path: Runes, line, column: int]
 
 proc initCallHierarchyViewBuffer*(
-  items: seq[CallHierarchyItem]): seq[Runes] =
+  items: seq[CallHierarchyItem]): Result[seq[Runes], string] =
 
+    var lines: seq[Runes]
     for i in items:
-      result.add toRunes(
-        fmt"{i.name} {$i.detail} {i.uri.uriToPath} {$i.range.start.line} {$i.range.start.character}")
+      let path = i.uri.uriToPath
+      if path.isErr:
+        return Result[seq[Runes], string].err fmt"Invalid uri: {i.uri}"
+
+      lines.add toRunes(
+        fmt"{i.name} {$i.detail} {path.get} {$i.range.start.line} {$i.range.start.character}")
+
+    return Result[seq[Runes], string].ok lines
 
 proc getLangId(status: EditorStatus): Option[string] =
   let bufferId = currentBufStatus.callHierarchyInfo.bufferId
