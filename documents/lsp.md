@@ -30,6 +30,9 @@ Please feedback, bug reports and PRs.
 - `textDocument/implementation`
 - `textDocument/references`
 - `textDocument/rename`
+- `textDocument/prepareCallHierarchy`
+- `callHierarchy/incomingCalls`
+- `callHierarchy/outgoingCalls`
 - `$/progress`
 - `$/cancelRequest`
 
@@ -123,6 +126,12 @@ Display types at the end of lines with LSP InlayHint.
 `gr` command in Normal mode. Open References mode.
 
 ![moe-references](https://github.com/fox0430/moe/assets/15966436/fe34a5f9-a68b-4300-ad82-7c8bd7150d01)
+
+### Call Hierarchy 
+
+`gh` command in Noemal mode. Open Call Hierarchy viewer
+
+![moe-call](https://github.com/fox0430/moe/assets/15966436/0c2bbf9d-f068-4e8c-bdf6-1cf4c3f02a9d)
 
 ### Rename
 
