@@ -67,6 +67,11 @@ type
     callHierarchyIncomingCalls
     callHierarchyOutgoingCalls
 
+  CallHierarchyType* = enum
+    prepare
+    incoming
+    outgoing
+
   LspMethodResult* = Result[LspMethod, string]
   LspShutdownResult* = Result[(), string]
 

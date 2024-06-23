@@ -634,13 +634,17 @@ proc lspPrepareCallHierarchy(
     status.moveNextWindow
 
     discard status.addNewBufferInCurrentWin(Mode.callhierarchyviewer)
-    let buf = initCallHierarchyViewBuffer(items.get)
+    let buf = initCallHierarchyViewBuffer(
+      CallHierarchyType.prepare,
+      items.get)
     if buf.isErr:
       return Result[(), string].err buf.error
 
     currentBufStatus.buffer = buf.get.toGapBuffer
     currentBufStatus.langId = langId
     currentBufStatus.callHierarchyInfo.items = items.get
+
+    currentMainWindowNode.currentLine = CallHierarchyViewHeaderLength
 
     status.resize
 
@@ -666,13 +670,17 @@ proc lspIncommingCalls(
 
     let items = calls.get.mapIt(it.`from`)
 
-    let buf = initCallHierarchyViewBuffer(items)
+    let buf = initCallHierarchyViewBuffer(
+      CallHierarchyType.incoming,
+      items)
     if buf.isErr:
       return Result[(), string].err buf.error
 
     currentBufStatus.buffer = buf.get.toGapBuffer
     currentBufStatus.callHierarchyInfo.items = items
     currentBufStatus.isUpdate = true
+
+    currentMainWindowNode.currentLine = CallHierarchyViewHeaderLength
 
     status.update
 
@@ -700,13 +708,17 @@ proc lspOutgoingCalls(
 
     let items = calls.mapIt(it.`to`)
 
-    let buf = initCallHierarchyViewBuffer(items)
+    let buf = initCallHierarchyViewBuffer(
+      CallHierarchyType.outgoing,
+      items)
     if buf.isErr:
       return Result[(), string].err buf.error
 
     currentBufStatus.buffer = buf.get.toGapBuffer
     currentBufStatus.callHierarchyInfo.items = items
     currentBufStatus.isUpdate = true
+
+    currentMainWindowNode.currentLine = CallHierarchyViewHeaderLength
 
     status.update
 

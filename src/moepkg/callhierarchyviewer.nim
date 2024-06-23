@@ -33,17 +33,35 @@ import
 type
   Destination = tuple[path: Runes, line, column: int]
 
+const
+  # The length pf header lines.
+  CallHierarchyViewHeaderLength* = 2
+
+template headerLines(t: CallHierarchyType): seq[Runes] =
+  case t:
+    of CallHierarchyType.prepare:
+      @["Prepare Call", ""].toSeqRunes
+    of CallHierarchyType.incoming:
+      @["Incoming Call", ""].toSeqRunes
+    of CallHierarchyType.outgoing:
+      @["Outgoing Call", ""].toSeqRunes
+
 proc initCallHierarchyViewBuffer*(
+  callHierarchyType: CallHierarchyType,
   items: seq[CallHierarchyItem]): Result[seq[Runes], string] =
 
-    var lines: seq[Runes]
+    var lines = headerLines(callHierarchyType)
     for i in items:
+      let detail =
+        if i.detail.isSome: i.detail.get
+        else: ""
+
       let path = i.uri.uriToPath
       if path.isErr:
         return Result[seq[Runes], string].err fmt"Invalid uri: {i.uri}"
 
       lines.add toRunes(
-        fmt"{i.name} {$i.detail} {path.get} {$i.range.start.line} {$i.range.start.character}")
+        fmt"{i.name} {detail} {path.get} {$i.range.start.line} {$i.range.start.character}")
 
     return Result[seq[Runes], string].ok lines
 
@@ -59,40 +77,43 @@ proc closeCallHierarchyViewer(status: var EditorStatus) =
   status.deleteBuffer(currentMainWindowNode.bufferIndex)
 
 proc incommingCalls(status: var EditorStatus) =
-
-  let lineNum = currentMainWindowNode.currentLine
-  if lineNum > currentBufStatus.callHierarchyInfo.items.high:
-    # Not found
+  if currentBufStatus.callHierarchyInfo.items.len == 0:
+    status.commandLine.writeLspCallHierarchyError("Not found")
     return
 
   let langId = status.getLangId
   if langId.isNone:
-    # TODO: Show Error
+    status.commandLine.writeLspCallHierarchyError("Lang ID is not found")
     return
+
+  let infoIndex =
+    currentMainWindowNode.currentLine - CallHierarchyViewHeaderLength
 
   let r = status.lspClients[langId.get].textDocumentIncomingCalls(
     currentBufStatus.id,
-    currentBufStatus.callHierarchyInfo.items[lineNum])
+    currentBufStatus.callHierarchyInfo.items[infoIndex])
   if r.isErr:
-    # TODO: Show error message
+    status.commandLine.writeLspCallHierarchyError(r.error)
     return
 
 proc outgoingCalls(status: var EditorStatus) =
-  let lineNum = currentMainWindowNode.currentLine
-  if lineNum > currentBufStatus.callHierarchyInfo.items.high:
-    # Not found
+  if currentBufStatus.callHierarchyInfo.items.len == 0:
+    status.commandLine.writeLspCallHierarchyError("Not found")
     return
 
   let langId = status.getLangId
   if langId.isNone:
-    # TODO: Show Error
+    status.commandLine.writeLspCallHierarchyError("Lang ID is not found")
     return
+
+  let infoIndex =
+    currentMainWindowNode.currentLine - CallHierarchyViewHeaderLength
 
   let r = status.lspClients[langId.get].textDocumentOutgoingCalls(
     currentBufStatus.id,
-    currentBufStatus.callHierarchyInfo.items[lineNum])
+    currentBufStatus.callHierarchyInfo.items[infoIndex])
   if r.isErr:
-    # TODO: Show error message
+    status.commandLine.writeLspCallHierarchyError(r.error)
     return
 
 proc parseDestinationLine(line: Runes): Result[Destination, string] =
@@ -117,16 +138,17 @@ proc parseDestinationLine(line: Runes): Result[Destination, string] =
 
   return Result[Destination, string].ok (lineSplited[lastIndex - 2], line, column)
 
-template currentLineBuffer: Runes =
+template selectedDestination: Runes =
   currentBufStatus.buffer[currentMainWindowNode.currentLine]
 
 proc jumpToDestination(status: var EditorStatus) =
-  if currentLineBuffer.len == 0: return
+  ## Open a new window and go to the destination.
 
-  let d = parseDestinationLine(currentLineBuffer)
+  if currentLineBuffer.len == CallHierarchyViewHeaderLength: return
+
+  let d = parseDestinationLine(selectedDestination)
   if d.isErr:
     status.commandLine.writeLspCallHierarchyError(d.error)
-    # TODO: Show error
     return
 
   if not fileExists($d.get.path):
@@ -225,11 +247,13 @@ proc isCallHierarchyViewerCommand*(command: Runes): InputState =
 
 proc execCallHierarchyViewerCommand*(status: var EditorStatus, command: Runes) =
   if isMoveUp(command):
-    currentBufStatus.keyUp(currentMainWindowNode)
+    currentBufStatus.keyUp(currentMainWindowNode, CallHierarchyViewHeaderLength)
   elif isMoveDown(command):
     currentBufStatus.keyDown(currentMainWindowNode)
   elif isMoveToFirstLine(command):
-    currentBufStatus.moveToFirstLine(currentMainWindowNode)
+    currentBufStatus.moveToFirstLine(
+      currentMainWindowNode,
+      CallHierarchyViewHeaderLength)
   elif isMoveToLastLine(command):
     currentBufStatus.moveToLastLine(currentMainWindowNode)
   elif isMoveToPrevWindow(command):

@@ -44,15 +44,19 @@ proc keyRight*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
   inc(windowNode.currentColumn)
   windowNode.expandedColumn = windowNode.currentColumn
 
-proc keyUp*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
-  if windowNode.currentLine == 0: return
+proc keyUp*(
+  bufStatus: var BufferStatus,
+  windowNode: var WindowNode,
+  firstLine: int = 0) =
 
-  dec(windowNode.currentLine)
+    if windowNode.currentLine == firstLine: return
 
-  let maxColumn = currentLineLen + (if bufStatus.isExpandableMode:0 else: -1)
-  windowNode.currentColumn = min(windowNode.expandedColumn, maxColumn)
+    dec(windowNode.currentLine)
 
-  if windowNode.currentColumn < 0: windowNode.currentColumn = 0
+    let maxColumn = currentLineLen + (if bufStatus.isExpandableMode: 0 else: -1)
+    windowNode.currentColumn = min(windowNode.expandedColumn, maxColumn)
+
+    if windowNode.currentColumn < 0: windowNode.currentColumn = 0
 
 proc keyDown*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
   if windowNode.currentLine + 1 == bufStatus.buffer.len: return
@@ -245,10 +249,10 @@ proc moveToPreviousBlankLine*(
 
 proc moveToFirstLine*(
   bufStatus: BufferStatus,
-  windowNode: var WindowNode) {.inline.} =
+  windowNode: var WindowNode,
+  destination: int = 0) {.inline.} =
 
-    const Direction = 0
-    bufStatus.jumpLine(windowNode, Direction)
+    bufStatus.jumpLine(windowNode, destination)
 
 proc moveToLastLine*(bufStatus: BufferStatus, windowNode: var WindowNode) =
   if bufStatus.cmdLoop > 1:
