@@ -228,3 +228,27 @@ suite "lsp: lspMetod":
       "method": "textDocument/implementation",
       "params": nil
     }).get
+
+  test "textDocument/prepareCallHierarchy":
+    check LspMethod.textDocumentPrepareCallHierarchy == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "textDocument/prepareCallHierarchy",
+      "params": nil
+    }).get
+
+  test "callHierarchy/incomingCalls":
+    check LspMethod.callHierarchyIncomingCalls == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "callHierarchy/incomingCalls",
+      "params": nil
+    }).get
+
+  test "callHierarchy/outgoingCalls":
+    check LspMethod.callHierarchyOutgoingCalls == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "callHierarchy/outgoingCalls",
+      "params": nil
+    }).get
