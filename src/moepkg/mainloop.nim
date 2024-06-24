@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[options, times, sequtils]
+import std/[options, times, sequtils, tables, logging, strformat]
 
 import pkg/results
 
@@ -28,7 +28,7 @@ import editorstatus, bufferstatus, windownode, unicodeext, gapbuffer, ui,
        debugmode, commandline, search, commandlineutils, popupwindow, messages,
        filermodeutils, editor, registers, exmodeutils, movement, searchutils,
        independentutils, viewhighlight, completion, completionwindow,
-       worddictionary, referencesmode, callhierarchyviewer
+       worddictionary, referencesmode, callhierarchyviewer, editorview
 
 type
   BeforeLine = object
@@ -790,6 +790,22 @@ template resetKeyAndContinue(key: var Option[Rune]) =
   key = none(Rune)
   continue
 
+proc isSendLspInlayHintRequest(status: var EditorStatus): bool {.inline.} =
+  proc inViewRange(status: EditorStatus): bool =
+    let viewRange = currentMainWindowNode.view.rangeOfOriginalLineInView
+    return viewRange.first >= currentBufStatus.inlayHints.range.first and
+           viewRange.last <= currentBufStatus.inlayHints.range.last
+
+  template b: BufferStatus = currentBufStatus
+
+  return now() > status.lastOperatingTime + 1.seconds and
+    currentBufStatus.isEditMode and
+    status.lspClients.contains(b.langId) and
+    lspClient.capabilities.isSome and
+    lspClient.capabilities.get.inlayHint and
+    not status.inViewRange and
+    not lspClient.isWaitingResponse(b.id, LspMethod.textDocumentInlayHint)
+
 proc editorMainLoop*(status: var EditorStatus) =
   ## Get keys, exec commands and update view.
 
@@ -829,6 +845,13 @@ proc editorMainLoop*(status: var EditorStatus) =
             status.updateCompletionWindowBufferInEditor
 
           break
+
+        if status.isSendLspInlayHintRequest:
+          let err = lspClient.sendLspInlayHintRequest(
+            currentBufStatus,
+            status.bufferIndexInCurrentWindow,
+            mainWindowNode)
+          if err.isErr: error fmt"lsp: {err.error}"
 
       if key.isSome:
         if isResizeKey(key.get):
