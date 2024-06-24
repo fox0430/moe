@@ -450,6 +450,48 @@ suite "lsp: setCapabilities":
 
     check not client.capabilities.get.inlayHint
 
+  test "Enable CallHierarchy":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          callHierarchyProvider: some(%*{"callHierarchyProvider": true})))
+
+      s = LspFeatureSettings(
+        callHierarchy: LspCallHierarchySettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.callHierarchy
+
+  test "Disable CallHierarchy":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          callHierarchyProvider: none(JsonNode)))
+
+      s = LspFeatureSettings(
+        callHierarchy: LspCallHierarchySettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.callHierarchy
+
+  test "Disable CallHierarchy 2":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          callHierarchyProvider: some(%*{"callHierarchyProvider": true})))
+
+      s = LspFeatureSettings(
+        callHierarchy: LspCallHierarchySettings(
+          enable: false))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.callHierarchy
+
   test "Enable Rename":
     let
       r = InitializeResult(
@@ -482,7 +524,7 @@ suite "lsp: setCapabilities":
     let
       r = InitializeResult(
         capabilities: ServerCapabilities(
-          inlayHintProvider: some(InlayHintOptions())))
+          renameProvider: some(%*{"prepareProvider": true})))
 
       s = LspFeatureSettings(
         rename: LspRenameSettings(

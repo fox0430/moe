@@ -63,6 +63,14 @@ type
     textDocumentTypeDefinition
     textDocumentImplementation
     textDocumentDeclaration
+    textDocumentPrepareCallHierarchy
+    callHierarchyIncomingCalls
+    callHierarchyOutgoingCalls
+
+  CallHierarchyType* = enum
+    prepare
+    incoming
+    outgoing
 
   LspMethodResult* = Result[LspMethod, string]
   LspShutdownResult* = Result[(), string]
@@ -141,6 +149,9 @@ proc toLspMethodStr*(m: LspMethod): string =
     of textDocumentTypeDefinition: "textDocument/typeDefinition"
     of textDocumentImplementation: "textDocument/implementation"
     of textDocumentDeclaration: "textDocument/declaration"
+    of textDocumentPrepareCallHierarchy: "textDocument/prepareCallHierarchy"
+    of callHierarchyIncomingCalls: "callHierarchy/incomingCalls"
+    of callHierarchyOutgoingCalls: "callHierarchy/outgoingCalls"
 
 proc parseTraceValue*(s: string): Result[TraceValue, string] =
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#traceValue
@@ -210,6 +221,12 @@ proc lspMethod*(j: JsonNode): LspMethodResult =
       LspMethodResult.ok textDocumentImplementation
     of "textDocument/declaration":
       LspMethodResult.ok textDocumentDeclaration
+    of "textDocument/prepareCallHierarchy":
+      LspMethodResult.ok textDocumentPrepareCallHierarchy
+    of "callHierarchy/incomingCalls":
+      LspMethodResult.ok callHierarchyIncomingCalls
+    of "callHierarchy/outgoingCalls":
+      LspMethodResult.ok callHierarchyOutgoingCalls
     else:
       LspMethodResult.err "Not supported: " & j["method"].getStr
 
@@ -230,6 +247,9 @@ proc getWaitingType*(lspMethod: LspMethod): Option[WaitType] =
     of textDocumentTypeDefinition: some(WaitType.foreground)
     of textDocumentImplementation: some(WaitType.foreground)
     of textDocumentDeclaration: some(WaitType.foreground)
+    of textDocumentPrepareCallHierarchy : some(WaitType.foreground)
+    of callHierarchyIncomingCalls: some(WaitType.foreground)
+    of callHierarchyOutgoingCalls: some(WaitType.foreground)
     else: none(WaitType)
 
 proc isForegroundWait*(lspMethod: LspMethod): bool {.inline.} =

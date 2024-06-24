@@ -424,6 +424,11 @@ proc writeLspReferencesError*(commandLine: var CommandLine, message: string) =
   let mess = fmt"lsp: Error: references failed: {message}"
   commandLine.writeError(mess)
 
+proc writeLspCallHierarchyError*(
+  commandLine: var CommandLine, message: string) =
+    let mess = fmt"lsp: Error: call hierarchy failed: {message}"
+    commandLine.writeError(mess)
+
 proc writeLspRenameError*(commandLine: var CommandLine, message: string) =
   let mess = fmt"lsp: Error: renamefailed: {message}"
   commandLine.writeError(mess)

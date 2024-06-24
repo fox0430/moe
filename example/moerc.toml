@@ -256,6 +256,9 @@ enable = true
 [Lsp.References]
 enable = true
 
+[Lsp.CallHierarchy]
+enable = true
+
 [Lsp.Rename]
 enable = true
 

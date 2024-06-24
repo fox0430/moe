@@ -860,6 +860,13 @@ defaut is `true`
 enable
 ```
 
+### Lsp.CallHierarchy table
+Enable/Disable LSP CallHierarchy (bool)  
+defaut is `true`
+```
+enable
+```
+
 ### Lsp.Rename table
 Enable/Disable LSP Rename (bool)  
 defaut is `true`

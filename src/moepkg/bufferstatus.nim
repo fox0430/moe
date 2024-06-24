@@ -21,12 +21,16 @@ import std/[times, options, os, strformat]
 
 import pkg/results
 
-import lsp/inlayhint
+import lsp/[inlayhint, callhierarchy]
 import syntax/highlite
 import gapbuffer, unicodeext, fileutils, highlight, independentutils, git,
        syntaxcheck, completion, logviewerutils, helputils
 
 type
+  CallHierarchyInfo* = object
+    bufferId*: int
+    items*:  seq[CallHierarchyItem]
+
   Mode* = enum
     normal
     insert
@@ -49,6 +53,7 @@ type
     searchForward
     searchBackward
     references
+    callhierarchyViewer
 
   BufferStatus* = ref object
     buffer*: GapBuffer[Runes]
@@ -67,8 +72,8 @@ type
     countChange*: int # Counting temporary changes
     version*: Natural # Counting total changes
     cmdLoop*: int
-    mode* : Mode
-    prevMode* : Mode
+    mode*: Mode
+    prevMode*: Mode
     lastSaveTime*: DateTime
     isReadonly*: bool
     filerStatusIndex*: Option[int]
@@ -82,6 +87,7 @@ type
     logContent*: LogContentKind # Use only in Logviewer
     logLspLangId*: string  # Use only in Logviewer
     inlayHints*: LspInlayHints
+    callHierarchyInfo*: CallHierarchyInfo # Use only in callhierarchyViewer
 
 var
   countAddedBuffer = 0
@@ -267,9 +273,16 @@ proc isCursor*(mode: Mode): bool {.inline.} =
   ## Return true if a mode in which it uses the cursor.
 
   case mode:
-    of filer, bufManager, recentFile, backup, config, debug, references:
-      # Don't use the cursor.
-      return false
+    of filer,
+       bufManager,
+       recentFile,
+       backup,
+       config,
+       debug,
+       references,
+       callhierarchyviewer:
+         # Don't use the cursor.
+         return false
     else:
       return true
 

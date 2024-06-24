@@ -187,6 +187,9 @@ enable = false
 [Lsp.References]
 enable = false
 
+[Lsp.CallHierarchy]
+enable = false
+
 [Lsp.Rename]
 enable = false
 
@@ -606,6 +609,8 @@ suite "settings: Parse configuration file":
     check not settings.lsp.features.inlayHint.enable
 
     check not settings.lsp.features.references.enable
+
+    check not settings.lsp.features.callHierarchy.enable
 
     check not settings.lsp.features.rename.enable
 

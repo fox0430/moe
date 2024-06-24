@@ -399,7 +399,7 @@ proc addNewBuffer*(
            else:
              status.commandLine.writeGitInfoUpdateError(gitDiffProcess.error)
 
-        if status.settings.lsp.enable:
+        if status.settings.lsp.enable and newBufStatus.isEditMode:
           if newBufStatus.langId.len == 0:
             let langId = status.settings.lsp.langIdFromLspSettings(
               newBufStatus.extension)
@@ -742,7 +742,7 @@ proc updateSyntaxHighlightings(status: EditorStatus) =
       b.version.inc
       b.isUpdate = false
 
-      if status.lspClients.isInitialized(b.langId):
+      if status.lspClients.isInitialized(b.langId) and b.isEditMode:
         template client: LspClient = status.lspClients[b.langId]
 
         let absPath = $b.path.absolutePath
@@ -926,6 +926,7 @@ proc update*(status: var EditorStatus) =
         node.seekCursor(b.buffer)
 
         template isSendLspInlayHintRequest(): bool =
+          b.isEditMode and
           status.lspClients.contains(b.langId) and
           status.lspClients[b.langId].capabilities.isSome and
           status.lspClients[b.langId].capabilities.get.inlayHint and
@@ -1399,7 +1400,7 @@ proc autoSave(status: var EditorStatus) =
           .toRunes
         continue
 
-      if status.lspClients.contains(bufStatus.langId):
+      if bufStatus.isEditMode and status.lspClients.contains(bufStatus.langId):
         # Send textDocument/didSave notify to the LSP server.
         let err = status.lspClients[bufStatus.langId].textDocumentDidSave(
           bufStatus.version,

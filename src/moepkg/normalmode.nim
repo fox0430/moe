@@ -520,6 +520,19 @@ proc requestFindReferences(status: var EditorStatus) =
   if r.isErr:
     status.commandLine.writeLspReferencesError(r.error)
 
+proc requestPrepareCallHierarchy(status: var EditorStatus) =
+  if not status.lspClients.contains(currentBufStatus.langId):
+    debug "lsp client is not ready"
+    return
+
+  let r = lspClient.textDocumentPrepareCallHierarchy(
+    currentBufStatus.id,
+    $currentBufStatus.path.absolutePath,
+    currentMainWindowNode.bufferPosition)
+  if r.isErr:
+    # TODO: Show error
+    error fmt"Call hierarchy failed: {r.error}"
+
 proc requestRename(status: var EditorStatus) =
   if not status.lspClients.contains(currentBufStatus.langId):
     debug "lsp client is not ready"
@@ -1317,6 +1330,8 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
       status.requestGotoImplementation
     elif secondKey == ord('r'):
       status.requestFindReferences
+    elif secondKey == ord('h'):
+      status.requestPrepareCallHierarchy
   elif key == ord('G'):
     currentBufStatus.moveToLastLine(currentMainWindowNode)
   elif isCtrlU(key):
@@ -1660,7 +1675,8 @@ proc isNormalModeCommand*(
              command[1] == ord('d') or
              command[1] == ord('y') or
              command[1] == ord('i') or
-             command[1] == ord('r'):
+             command[1] == ord('r') or
+             command[1] == ord('h'):
                result = InputState.Valid
 
       elif command[0] == ord('z'):

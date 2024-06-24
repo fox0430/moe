@@ -132,6 +132,7 @@ gc         - Goto Declaration (LSP)
 gd         - Goto Definition (LSP)
 gy         - Goto Type Definition (LSP)
 gi         - Goto Implementation (LSP)
+gh         - Open Call hierarchy viewer (LSP)
 Space r    - Rename (LSP)
 
 # Register
@@ -216,6 +217,16 @@ g     - Go to the first line
 G     - Go to the last line
 Enter - Jump to the destination
 ESC   - Quit References mode
+
+# Call hierarchy viewer mode
+
+j     - Go down
+k     - Go down
+g     - Go to the first line
+G     - Go to the last line
+Enter - Jump to the destination
+i     - Incoming call
+o     - Outgoing call
 
 # Filer mode
 

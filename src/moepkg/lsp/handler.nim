@@ -38,11 +38,12 @@ import
   ../highlight,
   ../movement,
   ../referencesmode,
-  ../fileutils
+  ../fileutils,
+  ../callhierarchyviewer
 
 import client, utils, hover, message, diagnostics, semantictoken, progress,
        inlayhint, definition, typedefinition, references, rename, declaration,
-       implementation
+       implementation, callhierarchy
 
 # Workaround for Nim 1.6.2
 import completion as lspcompletion
@@ -608,6 +609,121 @@ proc lspRename(status: var EditorStatus, res: JsonNode): Result[(), string] =
 
   return Result[(), string].ok ()
 
+proc lspPrepareCallHierarchy(
+  status: var EditorStatus,
+  res: JsonNode): Result[(), string] =
+    ## textDocument/prepareCallHierarchy
+
+    let items = parseTextDocumentPrepareCallHierarchyResponse(res)
+
+    try:
+      lspClient.deleteWaitingResponse(res["id"].getInt)
+    except CatchableError as e:
+      return Result[(), string].err e.msg
+
+    if items.isErr:
+      return Result[(), string].err items.error
+
+    if items.get.len == 0:
+      return Result[(), string].err "Not found"
+
+    let langId = currentBufStatus.langId
+
+    # Open a new window with callhierarchy viewer.
+    status.verticalSplitWindow
+    status.moveNextWindow
+
+    discard status.addNewBufferInCurrentWin(Mode.callhierarchyviewer)
+    let buf = initCallHierarchyViewBuffer(
+      CallHierarchyType.prepare,
+      items.get)
+    if buf.isErr:
+      return Result[(), string].err buf.error
+
+    currentBufStatus.buffer = buf.get.toGapBuffer
+    currentBufStatus.langId = langId
+    currentBufStatus.callHierarchyInfo.items = items.get
+
+    currentMainWindowNode.currentLine = CallHierarchyViewHeaderLength
+
+    status.resize
+
+    return Result[(), string].ok ()
+
+proc lspIncommingCalls(
+  status: var EditorStatus,
+  res: JsonNode): Result[(), string] =
+    ## textDocument/incomingCalls
+
+    let calls = parseCallhierarchyIncomingCallsResponse(res)
+
+    try:
+      lspClient.deleteWaitingResponse(res["id"].getInt)
+    except CatchableError as e:
+      return Result[(), string].err e.msg
+
+    if calls.isErr:
+      return Result[(), string].err calls.error
+
+    if calls.get.len == 0:
+      return Result[(), string].err "Not found"
+
+    let items = calls.get.mapIt(it.`from`)
+
+    let buf = initCallHierarchyViewBuffer(
+      CallHierarchyType.incoming,
+      items)
+    if buf.isErr:
+      return Result[(), string].err buf.error
+
+    currentBufStatus.buffer = buf.get.toGapBuffer
+    currentBufStatus.callHierarchyInfo.items = items
+    currentBufStatus.isUpdate = true
+
+    currentMainWindowNode.currentLine = CallHierarchyViewHeaderLength
+
+    status.update
+
+    return Result[(), string].ok ()
+
+proc lspOutgoingCalls(
+  status: var EditorStatus,
+  res: JsonNode): Result[(), string] =
+    ## textDocument/outgoingCalls
+
+    try:
+      lspClient.deleteWaitingResponse(res["id"].getInt)
+    except CatchableError as e:
+      return Result[(), string].err e.msg
+
+    let calls =
+      # Workaround for "Error: generic instantiation too nested"
+      try:
+        parseCallhierarchyOutgoingCallsResponse(res).get
+      except CatchableError as e:
+        return Result[(), string].err e.msg
+
+    if calls.len == 0:
+      return Result[(), string].err "Not found"
+
+    let items = calls.mapIt(it.`to`)
+
+    let buf = initCallHierarchyViewBuffer(
+      CallHierarchyType.outgoing,
+      items)
+    if buf.isErr:
+      return Result[(), string].err buf.error
+
+    currentBufStatus.buffer = buf.get.toGapBuffer
+    currentBufStatus.callHierarchyInfo.items = items
+    currentBufStatus.isUpdate = true
+
+    currentMainWindowNode.currentLine = CallHierarchyViewHeaderLength
+
+    status.update
+
+    return Result[(), string].ok ()
+
 proc handleLspServerNotify(
   status: var EditorStatus,
   notify: JsonNode): Result[(), string] =
@@ -733,5 +849,14 @@ proc handleLspResponse*(status: var EditorStatus) =
         of LspMethod.textDocumentRename:
           let r = status.lspRename(resJson.get)
           if r.isErr: status.commandLine.writeLspRenameError(r.error)
+        of LspMethod.textDocumentPrepareCallHierarchy:
+          let r = status.lspPrepareCallHierarchy(resJson.get)
+          if r.isErr: status.commandLine.writeLspCallHierarchyError(r.error)
+        of LspMethod.callHierarchyIncomingCalls:
+          let r = status.lspIncommingCalls(resJson.get)
+          if r.isErr: status.commandLine.writeLspCallHierarchyError(r.error)
+        of LspMethod.callHierarchyOutgoingCalls:
+          let r = status.lspOutgoingCalls(resJson.get)
+          if r.isErr: status.commandLine.writeLspCallHierarchyError(r.error)
         else:
           info fmt"lsp: Ignore response: {resJson}"

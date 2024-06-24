@@ -437,6 +437,8 @@ proc modeLablel(mode: Mode): string =
       "DEBUG"
     of Mode.references:
       "REFERENCES"
+    of Mode.callhierarchyViewer:
+      "CALL HIERARCHY"
     else:
       "NORMAL"
 

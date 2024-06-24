@@ -28,7 +28,7 @@ import editorstatus, bufferstatus, windownode, unicodeext, gapbuffer, ui,
        debugmode, commandline, search, commandlineutils, popupwindow, messages,
        filermodeutils, editor, registers, exmodeutils, movement, searchutils,
        independentutils, viewhighlight, completion, completionwindow,
-       worddictionary, referencesmode
+       worddictionary, referencesmode, callhierarchyviewer
 
 type
   BeforeLine = object
@@ -72,6 +72,8 @@ proc invokeCommand(
         isDebugModeCommand(command)
       of Mode.references:
         isReferencesModeCommand(command)
+      of Mode.callhierarchyViewer:
+        isCallHierarchyViewerCommand(command)
 
 proc execCommand(status: var EditorStatus, command: Runes): Option[Rune] =
   ## Exec editor commands.
@@ -107,6 +109,8 @@ proc execCommand(status: var EditorStatus, command: Runes): Option[Rune] =
       status.execDebugModeCommand(command)
     of Mode.references:
       status.execReferencesModeCommand(command)
+    of Mode.callhierarchyViewer:
+      status.execCallHierarchyViewerCommand(command)
 
 proc assignNextExCommandHistory(
   status: var EditorStatus,
