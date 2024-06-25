@@ -259,6 +259,9 @@ enable = true
 [Lsp.CallHierarchy]
 enable = true
 
+[Lsp.DocumentHighlight]
+enable = true
+
 [Lsp.Rename]
 enable = true
 

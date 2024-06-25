@@ -163,7 +163,7 @@ proc highlightPairOfParen(
         lastColumn: originalPosition.column,
         color: EditorColorPairIndex.parenPair))
 
-proc highlightCurrentWordElsewhere(
+proc highlightReferences(
   highlight: var Highlight,
   bufferInView: BufferInView,
   colorMode: ColorMode) =
@@ -229,6 +229,17 @@ proc highlightCurrentWordElsewhere(
                lastRow: originalPosition.line,
                lastColumn: originalPosition.column + highlightWord.word.high,
                color: EditorColorPairIndex.currentWord))
+
+proc highlightDocumentHighlights(h: var Highlight, ranges: seq[BufferRange]) =
+  ## LSP documentHighlight
+
+  for r in ranges:
+    h.overwrite(ColorSegment(
+      firstRow: r.first.line,
+      firstColumn: r.first.column,
+      lastRow: r.last.line,
+      lastColumn: r.last.column,
+      color: EditorColorPairIndex.currentWord))
 
 proc highlightTrailingSpaces(
   highlight: var Highlight,
@@ -367,7 +378,7 @@ proc highlightGitConflicts(
           attribute: Attribute.normal))
 
 proc updateViewHighlight*(
-  highlight: var Highlight,
+  h: var Highlight,
   bufStatus: BufferStatus,
   windowNode: var WindowNode,
   highlightingText: Option[HighlightingText],
@@ -375,29 +386,30 @@ proc updateViewHighlight*(
 
     let bufferInView = initBufferInView(bufStatus, windowNode)
 
-    if settings.highlight.currentWord:
-      highlight.highlightCurrentWordElsewhere(
-        bufferInView,
-        settings.standard.colorMode)
+    # LSP or build-in
+    if bufStatus.documentHighlightInfo.ranges.len > 0:
+      h.highlightDocumentHighlights(bufStatus.documentHighlightInfo.ranges)
+    elif settings.highlight.currentWord:
+      h.highlightReferences(bufferInView, settings.standard.colorMode)
 
     if bufStatus.selectedArea.isSome:
-      highlight.highlightSelectedArea(bufStatus, windowNode.initBufferPosition)
+      h.highlightSelectedArea(bufStatus, windowNode.initBufferPosition)
 
     if settings.highlight.pairOfParen:
-      highlight.highlightPairOfParen(bufferInView)
+      h.highlightPairOfParen(bufferInView)
 
     if settings.highlight.trailingSpaces and bufStatus.isEditMode:
-      highlight.highlightTrailingSpaces(bufferInView)
+      h.highlightTrailingSpaces(bufferInView)
 
     if settings.highlight.fullWidthSpace:
-      highlight.highlightFullWidthSpace(windowNode, bufferInView)
+      h.highlightFullWidthSpace(windowNode, bufferInView)
 
     if highlightingText.isSome:
-      highlight.highlightText(bufferInView, highlightingText.get)
+      h.highlightText(bufferInView, highlightingText.get)
 
     if bufStatus.syntaxCheckResults.len > 0:
-      highlight.highlightSyntaxCheckerReuslts(
+      h.highlightSyntaxCheckerReuslts(
         bufferInView,
         bufStatus.syntaxCheckResults)
 
-    highlight.highlightGitConflicts(bufferInView)
+    h.highlightGitConflicts(bufferInView)

@@ -66,6 +66,7 @@ type
     textDocumentPrepareCallHierarchy
     callHierarchyIncomingCalls
     callHierarchyOutgoingCalls
+    textDocumentDocumentHighlight
 
   CallHierarchyType* = enum
     prepare
@@ -152,6 +153,7 @@ proc toLspMethodStr*(m: LspMethod): string =
     of textDocumentPrepareCallHierarchy: "textDocument/prepareCallHierarchy"
     of callHierarchyIncomingCalls: "callHierarchy/incomingCalls"
     of callHierarchyOutgoingCalls: "callHierarchy/outgoingCalls"
+    of textDocumentDocumentHighlight: "textDocument/documentHighlight"
 
 proc parseTraceValue*(s: string): Result[TraceValue, string] =
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#traceValue
@@ -227,6 +229,8 @@ proc lspMethod*(j: JsonNode): LspMethodResult =
       LspMethodResult.ok callHierarchyIncomingCalls
     of "callHierarchy/outgoingCalls":
       LspMethodResult.ok callHierarchyOutgoingCalls
+    of "textDocument/documentHighlight":
+      LspMethodResult.ok textDocumentDocumentHighlight
     else:
       LspMethodResult.err "Not supported: " & j["method"].getStr
 
@@ -250,6 +254,7 @@ proc getWaitingType*(lspMethod: LspMethod): Option[WaitType] =
     of textDocumentPrepareCallHierarchy : some(WaitType.foreground)
     of callHierarchyIncomingCalls: some(WaitType.foreground)
     of callHierarchyOutgoingCalls: some(WaitType.foreground)
+    of textDocumentDocumentHighlight: some(WaitType.foreground)
     else: none(WaitType)
 
 proc isForegroundWait*(lspMethod: LspMethod): bool {.inline.} =

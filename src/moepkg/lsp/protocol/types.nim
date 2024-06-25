@@ -418,6 +418,9 @@ type
     workDoneProgress*: Option[bool]
     id*: Option[string]
 
+  DocumentHighlightOptions* = ref object of TextDocumentRegistrationOptions
+    workDoneProgress*: Option[bool]
+
   ServerCapabilities* = ref object of RootObj
     textDocumentSync*: OptionalNode # TextDocumentSyncOptions or int
     hoverProvider*: Option[bool]
@@ -428,7 +431,7 @@ type
     typeDefinitionProvider*: Option[bool]
     implementationProvider*: OptionalNode # bool | ImplementationOptions | TextDocumentAndStaticRegistrationOptions
     referencesProvider*: Option[bool]
-    documentHighlightProvider*: Option[bool]
+    documentHighlightProvider*: OptionalNode # boolean | DocumentHighlightOptions
     documentSymbolProvider*: Option[bool]
     workspaceSymbolProvider*: Option[bool]
     codeActionProvider*: Option[bool]
@@ -809,3 +812,7 @@ type
   CallHierarchyOutgoingCall* = ref object of RootObj
     to*: CallHierarchyItem
     fromRanges*: seq[Range]
+
+  DocumentHighlightParams* = ref object of TextDocumentPositionParams
+    workDoneProgress*: Option[bool]
+    partialResultToken*: OptionalNode # ProgressToken

@@ -43,7 +43,7 @@ import
 
 import client, utils, hover, message, diagnostics, semantictoken, progress,
        inlayhint, definition, typedefinition, references, rename, declaration,
-       implementation, callhierarchy
+       implementation, callhierarchy, documenthighlight
 
 # Workaround for Nim 1.6.2
 import completion as lspcompletion
@@ -724,6 +724,25 @@ proc lspOutgoingCalls(
 
     return Result[(), string].ok ()
 
+proc lspDocumentHighlight(
+  status: var EditorStatus,
+  res: JsonNode): Result[(), string] =
+    ## textDocument/documentHighlight
+
+    try:
+      lspClient.deleteWaitingResponse(res["id"].getInt)
+    except CatchableError as e:
+      return Result[(), string].err e.msg
+
+    currentBufStatus.documentHighlightInfo.ranges =
+      # Workaround for "Error: generic instantiation too nested"
+      try:
+        parseDocumentHighlightResponse(res).get
+      except CatchableError as e:
+        return Result[(), string].err e.msg
+
+    return Result[(), string].ok ()
+
 proc handleLspServerNotify(
   status: var EditorStatus,
   notify: JsonNode): Result[(), string] =
@@ -858,5 +877,8 @@ proc handleLspResponse*(status: var EditorStatus) =
         of LspMethod.callHierarchyOutgoingCalls:
           let r = status.lspOutgoingCalls(resJson.get)
           if r.isErr: status.commandLine.writeLspCallHierarchyError(r.error)
+        of LspMethod.textDocumentDocumentHighlight:
+          let r = status.lspDocumentHighlight(resJson.get)
+          if r.isErr: status.commandLine.writeLspDocumentHighlightError(r.error)
         else:
           info fmt"lsp: Ignore response: {resJson}"

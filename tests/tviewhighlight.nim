@@ -88,7 +88,7 @@ suite "viewhighlight: initBufferInView":
     check bufferInView.originalLineRange == Range(first: 13, last: 19)
     check bufferInView.currentPosition == BufferPosition(line: 19, column: 0)
 
-suite "viewhighlight: highlightCurrentWordElsewhere":
+suite "viewhighlight: highlightReferences":
   test "Same line":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
@@ -100,7 +100,7 @@ suite "viewhighlight: highlightCurrentWordElsewhere":
 
     let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
     var highlight = currentBufStatus.highlight
-    highlight.highlightCurrentWordElsewhere(
+    highlight.highlightReferences(
       bufferInView,
       status.settings.standard.colorMode)
 
@@ -117,7 +117,7 @@ suite "viewhighlight: highlightCurrentWordElsewhere":
 
     let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
     var highlight = currentBufStatus.highlight
-    highlight.highlightCurrentWordElsewhere(
+    highlight.highlightReferences(
       bufferInView,
       status.settings.standard.colorMode)
 
@@ -135,7 +135,7 @@ suite "viewhighlight: highlightCurrentWordElsewhere":
 
     let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
     var highlight = currentBufStatus.highlight
-    highlight.highlightCurrentWordElsewhere(
+    highlight.highlightReferences(
       bufferInView,
       status.settings.standard.colorMode)
 
@@ -153,7 +153,7 @@ suite "viewhighlight: highlightCurrentWordElsewhere":
 
     let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
     var highlight = currentBufStatus.highlight
-    highlight.highlightCurrentWordElsewhere(
+    highlight.highlightReferences(
       bufferInView,
       status.settings.standard.colorMode)
 

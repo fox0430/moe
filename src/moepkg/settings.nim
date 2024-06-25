@@ -267,6 +267,9 @@ type
   LspCallHierarchySettings* = object
     enable*: bool
 
+  LspDocumentHighlightSettings* = object
+    enable*: bool
+
   LspRenameSettings* = object
     enable*: bool
 
@@ -284,6 +287,7 @@ type
     inlayHint*: LspInlayHintSettings
     references*: LspReferencesSettings
     callHierarchy*: LspCallHierarchySettings
+    documentHighlight*: LspDocumentHighlightSettings
     rename*: LspRenameSettings
     semanticTokens*: LspSemanticTokesnSettings
 
@@ -562,6 +566,9 @@ proc initLspReferencesSettings(): LspReferencesSettings =
 proc initLspCallHierarchySettings(): LspCallHierarchySettings =
   result.enable = true
 
+proc initLspDocumentHighlightSetting(): LspDocumentHighlightSettings =
+  result.enable = true
+
 proc initLspRenameSettings(): LspRenameSettings =
   result.enable = true
 
@@ -579,6 +586,7 @@ proc initLspFeatureSettings(): LspFeatureSettings =
   result.inlayHint = initLspInlayHintSettings()
   result.references = initLspReferencesSettings()
   result.callHierarchy = initLspCallHierarchySettings()
+  result.documentHighlight = initLspDocumentHighlightSetting()
   result.rename = initLspRenameSettings()
   result.semanticTokens = initLspSemanticTokesnSettings()
 
@@ -1853,6 +1861,13 @@ proc parseLspTable(s: var EditorSettings, lspConfigs: TomlValueRef) =
               s.lsp.features.callHierarchy.enable = val.getBool
             else:
               discard
+      of "DocumentHighlight":
+        for key, val in val.getTable:
+          case key:
+            of "enable":
+              s.lsp.features.documentHighlight.enable = val.getBool
+            else:
+              discard
       of "References":
         for key, val in val.getTable:
           case key:
@@ -2482,6 +2497,14 @@ proc validateLspTable(table: TomlValueRef): Option[InvalidItem] =
                 return some(InvalidItem(name: $key, val: $val))
             else:
               return some(InvalidItem(name: $key, val: $val))
+      of "DocumentHighlight":
+        for key, val in val.getTable:
+          case key:
+            of "enable":
+              if val.kind != TomlValueKind.Bool:
+                return some(InvalidItem(name: $key, val: $val))
+            else:
+              return some(InvalidItem(name: $key, val: $val))
       of "Rename":
         for key, val in val.getTable:
           case key:
@@ -2909,6 +2932,9 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
 
   result.addLine fmt "[Lsp.CallHierarchy]"
   result.addLine fmt "enable = {$settings.lsp.features.callHierarchy.enable}"
+
+  result.addLine fmt "[Lsp.DocumentHighlight]"
+  result.addLine fmt "enable = {$settings.lsp.features.documentHighlight.enable}"
 
   result.addLine fmt "[Lsp.SemanticTokens]"
   result.addLine fmt "enable = {$settings.lsp.features.semanticTokens.enable}"

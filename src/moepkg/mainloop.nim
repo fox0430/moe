@@ -790,21 +790,54 @@ template resetKeyAndContinue(key: var Option[Rune]) =
   key = none(Rune)
   continue
 
+template isSendLspRequests(status: var EditorStatus): bool =
+  currentBufStatus.isEditMode and
+  status.lspClients.contains(currentBufStatus.langId) and
+  lspClient.isInitialized and
+  now() > status.lastOperatingTime + 1.seconds
+
 proc isSendLspInlayHintRequest(status: var EditorStatus): bool {.inline.} =
   proc inViewRange(status: EditorStatus): bool =
     let viewRange = currentMainWindowNode.view.rangeOfOriginalLineInView
     return viewRange.first >= currentBufStatus.inlayHints.range.first and
            viewRange.last <= currentBufStatus.inlayHints.range.last
 
-  template b: BufferStatus = currentBufStatus
-
-  return now() > status.lastOperatingTime + 1.seconds and
-    currentBufStatus.isEditMode and
-    status.lspClients.contains(b.langId) and
-    lspClient.capabilities.isSome and
-    lspClient.capabilities.get.inlayHint and
+  return lspClient.capabilities.get.inlayHint and
     not status.inViewRange and
-    not lspClient.isWaitingResponse(b.id, LspMethod.textDocumentInlayHint)
+    not lspClient.isWaitingResponse(
+      currentBufStatus.id,
+      LspMethod.textDocumentInlayHint)
+
+proc isSendLspDocumentHighlightRequest(
+  status: var EditorStatus): bool {.inline.} =
+
+    template isMoved(status: EditorStatus): bool =
+      currentBufStatus.documentHighlightInfo.position !=
+        currentMainWindowNode.bufferPosition
+
+    return lspClient.capabilities.get.documenthighlight and
+      status.isMoved and
+      not lspClient.isWaitingResponse(
+        currentBufStatus.id,
+        LspMethod.textDocumentDocumentHighlight)
+
+proc sendLspRequests(status: var EditorStatus) =
+  if status.isSendLspInlayHintRequest:
+    let err = lspClient.sendLspInlayHintRequest(
+      currentBufStatus,
+      status.bufferIndexInCurrentWindow,
+      mainWindowNode)
+    if err.isErr: error fmt"lsp: {err.error}"
+
+  if status.isSendLspDocumentHighlightRequest:
+    currentBufStatus.documentHighlightInfo = DocumentHighlightInfo(
+      position: currentMainWindowNode.bufferPosition)
+
+    let err = lspClient.textDocumentDocumentHighlight(
+      currentBufStatus.id,
+      $currentBufStatus.absolutePath,
+      currentMainWindowNode.bufferPosition)
+    if err.isErr: error fmt"lsp: {err.error}"
 
 proc editorMainLoop*(status: var EditorStatus) =
   ## Get keys, exec commands and update view.
@@ -846,12 +879,8 @@ proc editorMainLoop*(status: var EditorStatus) =
 
           break
 
-        if status.isSendLspInlayHintRequest:
-          let err = lspClient.sendLspInlayHintRequest(
-            currentBufStatus,
-            status.bufferIndexInCurrentWindow,
-            mainWindowNode)
-          if err.isErr: error fmt"lsp: {err.error}"
+        if status.isSendLspRequests:
+          status.sendLspRequests
 
       if key.isSome:
         if isResizeKey(key.get):

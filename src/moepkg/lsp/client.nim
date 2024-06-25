@@ -32,7 +32,7 @@ import ../settings
 import protocol/[enums, types]
 import jsonrpc, utils, completion, progress, hover, semantictoken, inlayhint,
        definition, references, rename, typedefinition, implementation,
-       callhierarchy
+       callhierarchy, documenthighlight
 
 type
   LspError* = object
@@ -69,6 +69,7 @@ type
     implementation*: bool
     declaration*: bool
     callHierarchy*: bool
+    documentHighlight*: bool
 
   LspProgressTable* = Table[ProgressToken, ProgressReport]
 
@@ -491,6 +492,9 @@ proc initInitializeParams*(
           implementation: some(ImplementationCapability(
             dynamicRegistration: some(true),
             linkSupport: some(false)
+          )),
+          documentHighlight: some(DocumentHighlightCapability(
+            dynamicRegistration: some(true)
           ))
         )),
         window: some(WindowCapabilities(
@@ -617,6 +621,20 @@ proc setCapabilities(
                capabilities.callHierarchy = true
              except CatchableError:
                # Invalid callHierarchyProvider
+               discard
+
+    if settings.documentHighlight.enable and
+       initResult.capabilities.documentHighlightProvider.isSome:
+         if initResult.capabilities.documentHighlightProvider.get.kind == JBool:
+           capabilities.documentHighlight =
+             initResult.capabilities.documentHighlightProvider.get.getBool
+         else:
+           try:
+             discard initResult.capabilities.documentHighlightProvider.get.to(
+               DocumentHighlightOptions)
+             capabilities.callHierarchy = true
+           except CatchableError:
+               # Invalid documentHighlightProvider
                discard
 
     if settings.rename.enable and
@@ -1262,5 +1280,31 @@ proc textDocumentOutgoingCalls*(
     let r = c.request(bufferId, LspMethod.callHierarchyOutgoingCalls, params)
     if r.isErr:
       return R[(), string].err fmt"callHierarchy/outgoingCalls request failed: {r.error}"
+
+    return R[(), string].ok ()
+
+proc textDocumentDocumentHighlight*(
+  c: var LspClient,
+  bufferId: int,
+  path: string,
+  posi: BufferPosition): LspSendRequestResult =
+    ## Send a textDocument/documentHighlight request to the server.
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_documentHighlight
+
+    if not c.serverProcess.running:
+      if not c.closed: c.closed = true
+      return R[(), string].err "server crashed"
+
+    if not c.isInitialized:
+      return R[(), string].err "lsp unavailable"
+
+    if not c.capabilities.get.documentHighlight:
+      return R[(), string].err "textDocument/documentHighlight unavailable"
+
+    let params = %* initDocumentHighlightParamas(path, posi)
+
+    let r = c.request(bufferId, LspMethod.textDocumentDocumentHighlight, params)
+    if r.isErr:
+      return R[(), string].err fmt"textDocument/documentHighlight request failed: {r.error}"
 
     return R[(), string].ok ()
