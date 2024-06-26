@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -18,6 +18,8 @@
 #[############################################################################]#
 
 import std/[options, deques]
+
+import lsp/client
 import independentutils, bufferstatus, highlight, color, windownode, gapbuffer,
        unicodeext, editorview, searchutils, settings, ui, syntaxcheck, git,
        theme
@@ -170,10 +172,10 @@ proc highlightReferences(
     ## Add highlights the word on the cursor.
     ## Ignore symbols, spaces and the word on the cursor.
 
-    proc isPunctOrSpace(r: Rune): bool {.inline.} =
+    template isPunctOrSpace(r: Rune): bool =
        (r != '_' and isPunct(r)) or isSpace(r)
 
-    proc isHighlightWord(line, word: Runes, position: int): bool {.inline.} =
+    template isHighlightWord(line, word: Runes, position: int): bool =
       template beforeRune: Rune = line[position - 1]
       template nextRune: Rune = line[position + word.high + 1]
 
@@ -182,9 +184,8 @@ proc highlightReferences(
       (position == 0 or isPunctOrSpace(beforeRune)) and
       (position + word.high == line.high or isPunctOrSpace(nextRune))
 
-    proc isOnCursor(
-      currentWordPosition, position: BufferPosition): bool {.inline.} =
-        currentWordPosition == position
+    template isOnCursor(currentWordPosition, position: BufferPosition): bool =
+      currentWordPosition == position
 
     let
       # Get the word on the cursor.
@@ -230,16 +231,28 @@ proc highlightReferences(
                lastColumn: originalPosition.column + highlightWord.word.high,
                color: EditorColorPairIndex.currentWord))
 
-proc highlightDocumentHighlights(h: var Highlight, ranges: seq[BufferRange]) =
-  ## LSP documentHighlight
+proc highlightDocumentHighlights(
+  h: var Highlight,
+  currentPosition: BufferPosition,
+  ranges: seq[BufferRange]) =
+    ## LSP textDocument/documentHighlight
 
-  for r in ranges:
-    h.overwrite(ColorSegment(
-      firstRow: r.first.line,
-      firstColumn: r.first.column,
-      lastRow: r.last.line,
-      lastColumn: r.last.column,
-      color: EditorColorPairIndex.currentWord))
+    template isOnCursor(
+      currentWordPosition: BufferPosition,
+      range: BufferRange): bool =
+        currentWordPosition.line >= range.first.line and
+        currentWordPosition.line <= range.last.line and
+        currentWordPosition.column >= range.first.column and
+        currentWordPosition.column <= range.last.column
+
+    for r in ranges:
+      if not currentPosition.isOnCursor(r):
+        h.overwrite(ColorSegment(
+          firstRow: r.first.line,
+          firstColumn: r.first.column,
+          lastRow: r.last.line,
+          lastColumn: r.last.column,
+          color: EditorColorPairIndex.currentWord))
 
 proc highlightTrailingSpaces(
   highlight: var Highlight,
@@ -382,13 +395,16 @@ proc updateViewHighlight*(
   bufStatus: BufferStatus,
   windowNode: var WindowNode,
   highlightingText: Option[HighlightingText],
-  settings: EditorSettings) =
+  settings: EditorSettings,
+  lspCapabilities: Option[LspCapabilities] = none(LspCapabilities)) =
 
     let bufferInView = initBufferInView(bufStatus, windowNode)
 
     # LSP or build-in
-    if bufStatus.documentHighlightInfo.ranges.len > 0:
-      h.highlightDocumentHighlights(bufStatus.documentHighlightInfo.ranges)
+    if lspCapabilities.isSome and lspCapabilities.get.documentHighlight:
+      h.highlightDocumentHighlights(
+        windowNode.bufferPosition,
+        bufStatus.documentHighlightInfo.ranges)
     elif settings.highlight.currentWord:
       h.highlightReferences(bufferInView, settings.standard.colorMode)
 

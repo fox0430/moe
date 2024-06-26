@@ -794,7 +794,7 @@ template isSendLspRequests(status: var EditorStatus): bool =
   currentBufStatus.isEditMode and
   status.lspClients.contains(currentBufStatus.langId) and
   lspClient.isInitialized and
-  now() > status.lastOperatingTime + 1.seconds
+  now() > status.lastOperatingTime + 500.milliseconds
 
 proc isSendLspInlayHintRequest(status: var EditorStatus): bool {.inline.} =
   proc inViewRange(status: EditorStatus): bool =

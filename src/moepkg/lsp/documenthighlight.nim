@@ -60,7 +60,7 @@ proc parseDocumentHighlightResponse*(
           column: it.range.start.character),
         last: BufferPosition(
           line: it.range.`end`.line,
-          column: it.range.`end`.character)
+          column: it.range.`end`.character - 1)
       ))
 
     return LspDocumentHighlightResult.ok ranges
