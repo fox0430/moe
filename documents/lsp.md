@@ -138,7 +138,7 @@ Display types at the end of lines with LSP InlayHint.
 
 If this feature is enabled, Highlight.currentWord will be forced to disable.
 
-![moe-call](https://github.com/fox0430/moe/assets/15966436/0c2bbf9d-f068-4e8c-bdf6-1cf4c3f02a9d)
+![moe-documenthighlight](https://github.com/fox0430/moe/assets/15966436/371b38e1-3d03-4773-847f-02ade38e6eb7)
 
 ### Rename
 
