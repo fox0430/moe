@@ -867,6 +867,13 @@ defaut is `true`
 enable
 ```
 
+### Lsp.DocumentHighlight table
+Enable/Disable LSP Document Highlight (bool)  
+defaut is `true`
+```
+enable
+```
+
 ### Lsp.Rename table
 Enable/Disable LSP Rename (bool)  
 defaut is `true`

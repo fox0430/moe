@@ -33,6 +33,7 @@ Please feedback, bug reports and PRs.
 - `textDocument/prepareCallHierarchy`
 - `callHierarchy/incomingCalls`
 - `callHierarchy/outgoingCalls`
+- `textDocument/documentHighlight`
 - `$/progress`
 - `$/cancelRequest`
 
@@ -130,6 +131,12 @@ Display types at the end of lines with LSP InlayHint.
 ### Call Hierarchy 
 
 `gh` command in Noemal mode. Open Call Hierarchy viewer
+
+![moe-call](https://github.com/fox0430/moe/assets/15966436/0c2bbf9d-f068-4e8c-bdf6-1cf4c3f02a9d)
+
+### Document Highlight
+
+If this feature is enabled, Highlight.currentWord will be forced to disable.
 
 ![moe-call](https://github.com/fox0430/moe/assets/15966436/0c2bbf9d-f068-4e8c-bdf6-1cf4c3f02a9d)
 
