@@ -492,6 +492,48 @@ suite "lsp: setCapabilities":
 
     check not client.capabilities.get.callHierarchy
 
+  test "Enable DocumentHighlight":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          documentHighlightProvider: some(%*true)))
+
+      s = LspFeatureSettings(
+        documentHighlight: LspDocumentHighlightSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.documentHighlight
+
+  test "Disable DocumentHighlight":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          documentHighlightProvider: some(%*false)))
+
+      s = LspFeatureSettings(
+        documentHighlight: LspDocumentHighlightSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.documentHighlight
+
+  test "Disable DocumentHighlight 2":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          documentHighlightProvider: some(%*true)))
+
+      s = LspFeatureSettings(
+        documentHighlight: LspDocumentHighlightSettings(
+          enable: false))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.documentHighlight
+
   test "Enable Rename":
     let
       r = InitializeResult(
@@ -941,6 +983,93 @@ var num: number
           }
         }
       ]
+
+ test "Send textDocument/documentHighlight":
+   if not isNimlangserverAvailable():
+     skip()
+   else:
+     const
+       BufferId = 1
+       LanguageId = "nim"
+       Text = """
+et a = 0
+et b = a + 1
+cho a
+       """
+
+     let path = rootDir / "test.nim"
+     writeFile(path, Text)
+
+     prepareLsp(BufferId, LanguageId, path, Text)
+
+     let requestId = client.lastId + 1
+
+     check client.textDocumentDocumentHighlight(
+       BufferId,
+       path,
+       BufferPosition(line: 0, column: 4)
+     ).isOk
+     check client.waitingResponses[requestId].lspMethod ==
+       LspMethod.textDocumentDocumentHighlight
+
+     check client.read.get == %*{
+       "jsonrpc": "2.0",
+       "id": requestId,
+       "result": [
+         {
+           "range": {
+             "start": {
+               "line": 0,
+               "character": 4
+             },
+             "end": {
+               "line": 0,
+               "character": 5
+             }
+           },
+           "kind": nil
+         },
+         {
+           "range": {
+             "start": {
+               "line": 0,
+               "character": 4
+             },
+             "end": {
+               "line": 0,
+               "character": 5
+             }
+           },
+           "kind": nil
+         },
+         {
+           "range": {
+             "start": {
+               "line": 1,
+               "character": 8
+             },
+             "end": {
+               "line": 1,
+               "character": 9
+             }
+           },
+           "kind": nil
+         },
+         {
+           "range": {
+             "start": {
+               "line": 2,
+               "character": 5
+             },
+             "end": {
+               "line": 2,
+               "character": 6
+             }
+           },
+           "kind": nil
+         }
+       ]
+     }
 
   test "Send textDocument/rename":
     if not isNimlangserverAvailable():

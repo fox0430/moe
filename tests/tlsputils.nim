@@ -252,3 +252,11 @@ suite "lsp: lspMetod":
       "method": "callHierarchy/outgoingCalls",
       "params": nil
     }).get
+
+  test "textDocument/documentHighlight":
+    check LspMethod.textDocumentDocumentHighlight == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "textDocument/documentHighlight",
+      "params": nil
+    }).get

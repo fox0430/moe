@@ -22,6 +22,7 @@ import std/[unittest, heapqueue, options, strutils, strformat, importutils,
 
 import pkg/results
 
+import moepkg/lsp/client
 import moepkg/syntax/highlite
 import moepkg/[editorstatus, highlight, color, gapbuffer, unicodeext, movement,
                windownode, ui, independentutils, bufferstatus]
@@ -357,6 +358,63 @@ suite "viewhighlight: Highlight trailing spaces":
           check highlight[0].color == EditorColorPairIndex.searchResult
           check highlight[1].color == EditorColorPairIndex.whitespace
           check highlight[2].color == EditorColorPairIndex.identifier
+
+  test "Disable LSP Document Highlight":
+    var status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin("test.nim").isOk
+    currentBufStatus.buffer = @["abc d", "abc d", ""].toSeqRunes.toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    var highlight = currentBufStatus.highlight
+    highlight.updateViewHighlight(
+      currentBufStatus,
+      currentMainWindowNode,
+      status.highlightingText,
+      status.settings)
+
+    for c in highlight.colorSegments:
+      if c.firstRow == 1 and c.lastColumn < 3:
+        check c.color == EditorColorPairIndex.currentWord
+      else:
+        check c.color != EditorColorPairIndex.currentWord
+
+  test "Enable LSP Document Highlight":
+    var status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin("test.nim").isOk
+    currentBufStatus.buffer = @["abc d", "abc d", ""].toSeqRunes.toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    let lspCapabilities = LspCapabilities(
+      documentHighlight: true)
+
+    currentBufStatus.documentHighlightInfo = DocumentHighlightInfo(
+      position: BufferPosition(line: 0, column: 0),
+       # Incorrect ranges for the test
+      ranges: @[
+        BufferRange(
+          first: BufferPosition(line: 0, column: 0),
+          last: BufferPosition(line: 0, column: 3)),
+        BufferRange(
+          first: BufferPosition(line: 1, column: 0),
+          last: BufferPosition(line: 1, column: 3)),
+      ]
+    )
+
+    var highlight = currentBufStatus.highlight
+    highlight.updateViewHighlight(
+      currentBufStatus,
+      currentMainWindowNode,
+      status.highlightingText,
+      status.settings,
+      some(lspCapabilities))
+
+    for c in highlight.colorSegments:
+      if c.lastColumn < 4:
+        check c.color == EditorColorPairIndex.currentWord
 
 suite "viewhighlight: highlightPairOfParen":
   const
@@ -1226,5 +1284,3 @@ suite "viewhighlight: highlightText":
     h.highlightText(bufferInView, highlightText)
 
     check h.colorSegments == beforeSegments
-
-
