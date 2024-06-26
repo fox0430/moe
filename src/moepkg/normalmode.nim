@@ -530,8 +530,7 @@ proc requestPrepareCallHierarchy(status: var EditorStatus) =
     $currentBufStatus.path.absolutePath,
     currentMainWindowNode.bufferPosition)
   if r.isErr:
-    # TODO: Show error
-    error fmt"Call hierarchy failed: {r.error}"
+    status.commandLine.writeLspCallHierarchyError(r.error)
 
 proc requestRename(status: var EditorStatus) =
   if not status.lspClients.contains(currentBufStatus.langId):
