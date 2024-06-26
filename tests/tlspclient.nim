@@ -992,9 +992,9 @@ var num: number
         BufferId = 1
         LanguageId = "nim"
         Text = """
-et a = 0
-et b = a + 1
-cho a
+let a = 0
+let b = a + 1
+echo a
        """
 
       let path = rootDir / "test.nim"
