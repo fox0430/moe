@@ -413,8 +413,10 @@ suite "viewhighlight: Highlight trailing spaces":
       some(lspCapabilities))
 
     for c in highlight.colorSegments:
-      if c.lastColumn < 4:
+      if c.firstRow == 1 and c.lastColumn < 4:
         check c.color == EditorColorPairIndex.currentWord
+      else:
+        check c.color != EditorColorPairIndex.currentWord
 
 suite "viewhighlight: highlightPairOfParen":
   const
