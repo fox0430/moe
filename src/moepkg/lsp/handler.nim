@@ -700,7 +700,7 @@ proc lspOutgoingCalls(
       # Workaround for "Error: generic instantiation too nested"
       try:
         parseCallhierarchyOutgoingCallsResponse(res).get
-      except CatchableError as e:
+      except ResultDefect as e:
         return Result[(), string].err e.msg
 
     if calls.len == 0:
@@ -738,7 +738,7 @@ proc lspDocumentHighlight(
       # Workaround for "Error: generic instantiation too nested"
       try:
         parseDocumentHighlightResponse(res).get
-      except CatchableError as e:
+      except ResultDefect as e:
         return Result[(), string].err e.msg
 
     return Result[(), string].ok ()
