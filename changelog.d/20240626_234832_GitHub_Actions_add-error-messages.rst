@@ -3,5 +3,5 @@
 Fixed
 .....
 
-- `#2081`_ lsp: Show error message in Call hierarchy
+- `#2082`_ lsp: Show error message in Call hierarchy
 
