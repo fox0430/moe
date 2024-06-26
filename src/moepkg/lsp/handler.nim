@@ -653,7 +653,7 @@ proc lspPrepareCallHierarchy(
 proc lspIncommingCalls(
   status: var EditorStatus,
   res: JsonNode): Result[(), string] =
-    ## textDocument/incomingCalls
+    ## callHierarchy/incomingCalls
 
     let calls = parseCallhierarchyIncomingCallsResponse(res)
 
@@ -689,7 +689,7 @@ proc lspIncommingCalls(
 proc lspOutgoingCalls(
   status: var EditorStatus,
   res: JsonNode): Result[(), string] =
-    ## textDocument/outgoingCalls
+    ## callHierarchy/outgoingCalls
 
     try:
       lspClient.deleteWaitingResponse(res["id"].getInt)
