@@ -108,6 +108,8 @@ This project's goals are easily customizable, high productivity, user friendly, 
 
   - Call Hierarchy
 
+  - Document Highlight
+
   - Rename
 
   - Semantic Tokens

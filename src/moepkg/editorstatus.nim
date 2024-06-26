@@ -712,6 +712,14 @@ proc sendLspInlayHintRequest*(
       first: hintRange.first.line,
       last: hintRange.last.line)
 
+proc getLspCapabilities(
+  lspClients: LspClientTable,
+  langId: string): Option[LspCapabilities] =
+
+    if lspClients.contains(langId) and
+       lspClients[langId].isInitialized:
+         return some(lspClients[langId].capabilities.get)
+
 proc updateSyntaxHighlightings(status: EditorStatus) =
   ## Update syntax highlightings in all buffers.
   ## And send requests to LSP servers.
@@ -934,7 +942,8 @@ proc update*(status: var EditorStatus) =
             b,
             node,
             status.highlightingText,
-            settings)
+            settings,
+            status.lspClients.getLspCapabilities(b.langId))
 
         if node.view.sidebar.isSome:
           # Update the EditorView.Sidebar.buffer

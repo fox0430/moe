@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -18,6 +18,8 @@
 #[############################################################################]#
 
 import std/[options, deques]
+
+import lsp/client
 import independentutils, bufferstatus, highlight, color, windownode, gapbuffer,
        unicodeext, editorview, searchutils, settings, ui, syntaxcheck, git,
        theme
@@ -163,17 +165,17 @@ proc highlightPairOfParen(
         lastColumn: originalPosition.column,
         color: EditorColorPairIndex.parenPair))
 
-proc highlightCurrentWordElsewhere(
+proc highlightReferences(
   highlight: var Highlight,
   bufferInView: BufferInView,
   colorMode: ColorMode) =
     ## Add highlights the word on the cursor.
     ## Ignore symbols, spaces and the word on the cursor.
 
-    proc isPunctOrSpace(r: Rune): bool {.inline.} =
+    template isPunctOrSpace(r: Rune): bool =
        (r != '_' and isPunct(r)) or isSpace(r)
 
-    proc isHighlightWord(line, word: Runes, position: int): bool {.inline.} =
+    template isHighlightWord(line, word: Runes, position: int): bool =
       template beforeRune: Rune = line[position - 1]
       template nextRune: Rune = line[position + word.high + 1]
 
@@ -182,9 +184,8 @@ proc highlightCurrentWordElsewhere(
       (position == 0 or isPunctOrSpace(beforeRune)) and
       (position + word.high == line.high or isPunctOrSpace(nextRune))
 
-    proc isOnCursor(
-      currentWordPosition, position: BufferPosition): bool {.inline.} =
-        currentWordPosition == position
+    template isOnCursor(currentWordPosition, position: BufferPosition): bool =
+      currentWordPosition == position
 
     let
       # Get the word on the cursor.
@@ -229,6 +230,29 @@ proc highlightCurrentWordElsewhere(
                lastRow: originalPosition.line,
                lastColumn: originalPosition.column + highlightWord.word.high,
                color: EditorColorPairIndex.currentWord))
+
+proc highlightDocumentHighlights(
+  h: var Highlight,
+  currentPosition: BufferPosition,
+  ranges: seq[BufferRange]) =
+    ## LSP textDocument/documentHighlight
+
+    template isOnCursor(
+      currentWordPosition: BufferPosition,
+      range: BufferRange): bool =
+        currentWordPosition.line >= range.first.line and
+        currentWordPosition.line <= range.last.line and
+        currentWordPosition.column >= range.first.column and
+        currentWordPosition.column <= range.last.column
+
+    for r in ranges:
+      if not currentPosition.isOnCursor(r):
+        h.overwrite(ColorSegment(
+          firstRow: r.first.line,
+          firstColumn: r.first.column,
+          lastRow: r.last.line,
+          lastColumn: r.last.column,
+          color: EditorColorPairIndex.currentWord))
 
 proc highlightTrailingSpaces(
   highlight: var Highlight,
@@ -367,37 +391,41 @@ proc highlightGitConflicts(
           attribute: Attribute.normal))
 
 proc updateViewHighlight*(
-  highlight: var Highlight,
+  h: var Highlight,
   bufStatus: BufferStatus,
   windowNode: var WindowNode,
   highlightingText: Option[HighlightingText],
-  settings: EditorSettings) =
+  settings: EditorSettings,
+  lspCapabilities: Option[LspCapabilities] = none(LspCapabilities)) =
 
     let bufferInView = initBufferInView(bufStatus, windowNode)
 
-    if settings.highlight.currentWord:
-      highlight.highlightCurrentWordElsewhere(
-        bufferInView,
-        settings.standard.colorMode)
+    # LSP or build-in
+    if lspCapabilities.isSome and lspCapabilities.get.documentHighlight:
+      h.highlightDocumentHighlights(
+        windowNode.bufferPosition,
+        bufStatus.documentHighlightInfo.ranges)
+    elif settings.highlight.currentWord:
+      h.highlightReferences(bufferInView, settings.standard.colorMode)
 
     if bufStatus.selectedArea.isSome:
-      highlight.highlightSelectedArea(bufStatus, windowNode.initBufferPosition)
+      h.highlightSelectedArea(bufStatus, windowNode.initBufferPosition)
 
     if settings.highlight.pairOfParen:
-      highlight.highlightPairOfParen(bufferInView)
+      h.highlightPairOfParen(bufferInView)
 
     if settings.highlight.trailingSpaces and bufStatus.isEditMode:
-      highlight.highlightTrailingSpaces(bufferInView)
+      h.highlightTrailingSpaces(bufferInView)
 
     if settings.highlight.fullWidthSpace:
-      highlight.highlightFullWidthSpace(windowNode, bufferInView)
+      h.highlightFullWidthSpace(windowNode, bufferInView)
 
     if highlightingText.isSome:
-      highlight.highlightText(bufferInView, highlightingText.get)
+      h.highlightText(bufferInView, highlightingText.get)
 
     if bufStatus.syntaxCheckResults.len > 0:
-      highlight.highlightSyntaxCheckerReuslts(
+      h.highlightSyntaxCheckerReuslts(
         bufferInView,
         bufStatus.syntaxCheckResults)
 
-    highlight.highlightGitConflicts(bufferInView)
+    h.highlightGitConflicts(bufferInView)

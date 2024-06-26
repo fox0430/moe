@@ -31,6 +31,10 @@ type
     bufferId*: int
     items*:  seq[CallHierarchyItem]
 
+  DocumentHighlightInfo* = object
+    position*: BufferPosition
+    ranges*: seq[BufferRange]
+
   Mode* = enum
     normal
     insert
@@ -88,6 +92,7 @@ type
     logLspLangId*: string  # Use only in Logviewer
     inlayHints*: LspInlayHints
     callHierarchyInfo*: CallHierarchyInfo # Use only in callhierarchyViewer
+    documentHighlightInfo*: DocumentHighlightInfo # Lsp DocumentHighlight
 
 var
   countAddedBuffer = 0
