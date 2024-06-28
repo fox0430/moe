@@ -33,6 +33,13 @@ suite "documenthighlight: parseDocumentHighlightResponse":
       "result": []
     }).get.len == 0
 
+  test "Not found 2":
+    check parseDocumentHighlightResponse(%*{
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": nil
+    }).get.len == 0
+
   test "Basic":
     check parseDocumentHighlightResponse(%*{
       "jsonrpc": "2.0",

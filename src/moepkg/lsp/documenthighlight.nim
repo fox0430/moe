@@ -40,8 +40,11 @@ proc initDocumentHighlightParamas*(
 proc parseDocumentHighlightResponse*(
   res: JsonNode): LspDocumentHighlightResult =
 
-    if res["result"].kind != JArray:
+    if res["result"].kind != JNull and res["result"].kind != JArray:
       return LspDocumentHighlightResult.err "Invalid response"
+    elif res["result"].kind == JNull:
+      # Not found
+      return LspDocumentHighlightResult .ok @[]
     elif res["result"].len == 0:
       # Not found
       return LspDocumentHighlightResult .ok @[]
