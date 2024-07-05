@@ -334,8 +334,20 @@ type
     resolveProvider*: Option[bool]
     triggerCharacters*: OptionalSeq[string]
 
+  HoverOptions* = ref object of WorkDoneProgressOptions
+
   SignatureHelpOptions* = ref object of RootObj
     triggerCharacters*: OptionalSeq[string]
+
+  DefinitionOptions* = ref object of WorkDoneProgressOptions
+
+  TypeDefinitionOptions* = ref object of WorkDoneProgressOptions
+
+  TypeDefinitionRegistrationOptions * = ref object of TextDocumentRegistrationOptions
+    identifier*: Option[string]
+    interFileDependencies*: bool
+    workspaceDiagnostics*: bool
+    partialResultToken*: OptionalNode # ProgressToken
 
   CodeLensOptions* = ref object of RootObj
     resolveProvider*: Option[bool]
@@ -371,6 +383,8 @@ type
 
   TextDocumentAndStaticRegistrationOptions* = ref object of TextDocumentRegistrationOptions
     id*: Option[string]
+
+  ReferenceOptions* = ref object of WorkDoneProgressOptions
 
   RenameOptions* = object
     prepareProvider*: bool
@@ -421,33 +435,46 @@ type
   DocumentHighlightOptions* = ref object of TextDocumentRegistrationOptions
     workDoneProgress*: Option[bool]
 
+  DocumentSymbolOptions* = ref object of WorkDoneProgressOptions
+    label*: Option[string]
+
+  CodeActionOptions* = ref object of WorkDoneProgressOptions
+    codeActionKinds*: seq[string]
+    resolveProvider*: Option[bool]
+
+  DocumentFormattingOptions* = ref object of WorkDoneProgressOptions
+
+  DocumentRangeFormattingOptions* = ref object of WorkDoneProgressOptions
+
+  WorkspaceSymbolOptions* = ref object of WorkDoneProgressOptions
+    resolveProvider*: Option[bool]
+
   ServerCapabilities* = ref object of RootObj
     textDocumentSync*: OptionalNode # TextDocumentSyncOptions or int
-    hoverProvider*: Option[bool]
+    hoverProvider*: OptionalNode # bool | HoverOptions
     completionProvider*: Option[CompletionOptions]
     signatureHelpProvider*: SignatureHelpOptions
-    definitionProvider*: Option[bool]
-    declarationProvider*: OptionalNode # boolean | DeclarationOptions | DeclarationRegistrationOptions
-    typeDefinitionProvider*: Option[bool]
+    declarationProvider*: OptionalNode # bool | DeclarationOptions | DeclarationRegistrationOptions
+    definitionProvider*: OptionalNode # bool | DefinitionOptions
+    typeDefinitionProvider*: OptionalNode # bool | TypeDefinitionOptions | TypeDefinitionRegistrationOptions
     implementationProvider*: OptionalNode # bool | ImplementationOptions | TextDocumentAndStaticRegistrationOptions
-    referencesProvider*: Option[bool]
-    documentHighlightProvider*: OptionalNode # boolean | DocumentHighlightOptions
-    documentSymbolProvider*: Option[bool]
-    workspaceSymbolProvider*: Option[bool]
-    codeActionProvider*: Option[bool]
+    referencesProvider*: OptionalNode # bool | ReferenceOptions
+    documentHighlightProvider*: OptionalNode # bool | DocumentHighlightOptions
+    documentSymbolProvider*: OptionalNode # bool | DocumentSymbolOptions
+    workspaceSymbolProvider*: OptionalNode # bool | WorkspaceSymbolOptions
+    codeActionProvider*: OptionalNode # bool | CodeActionOptions
     codeLensProvider*: Option[CodeLensOptions]
-    documentFormattingProvider*: Option[bool]
-    documentRangeFormattingProvider*: Option[bool]
+    documentFormattingProvider*: OptionalNode # bool | DocumentFormattingOptions
+    documentRangeFormattingProvider*: OptionalNode # bool | DocumentRangeFormattingOptions
     documentOnTypeFormattingProvider*: Option[DocumentOnTypeFormattingOptions]
     renameProvider*: OptionalNode # bool or RenameOptions
     documentLinkProvider*: Option[DocumentLinkOptions]
-    colorProvider*: OptionalNode # bool or ColorProviderOptions | TextDocumentAndStaticRegistrationOptions
-    executeCommandProvider*: Option[ExecuteCommandOptions]
+    colorProvider*: OptionalNode # bool | ColorProviderOptions | TextDocumentAndStaticRegistrationOptions
     workspace*: Option[WorkspaceCapability]
-    semanticTokensProvider*: OptionalNode # SemanticTokensOptions or SemanticTokensRegistrationOptions
-    inlayHintProvider*: Option[InlayHintOptions]  # boolean | InlayHintOptions | InlayHintRegistrationOptions
+    semanticTokensProvider*: OptionalNode # SemanticTokensOptions | SemanticTokensRegistrationOptions
+    inlayHintProvider*: OptionalNode # bool | InlayHintOptions | InlayHintRegistrationOptions
     diagnosticProvider*: OptionalNode # DiagnosticOptions | DiagnosticRegistrationOptions
-    callHierarchyProvider*: OptionalNode # boolean | CallHierarchyOptions | CallHierarchyRegistrationOptions
+    callHierarchyProvider*: OptionalNode # bool | CallHierarchyOptions | CallHierarchyRegistrationOptions
     experimental*: OptionalNode
 
   InitializedParams* = ref object of RootObj

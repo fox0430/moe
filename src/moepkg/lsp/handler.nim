@@ -831,6 +831,9 @@ proc handleLspResponse*(status: var EditorStatus) =
         info fmt"lsp: closed buffer. bufferId: {$waitingResponse.get.bufferId}"
         return
 
+      exitUi()
+      echo resJson.get
+
       case waitingResponse.get.lspMethod:
         of LspMethod.initialize:
           let r = status.lspInitialized(resJson.get)
