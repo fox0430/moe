@@ -422,8 +422,9 @@ proc initInitializeParams*(
       uri =
         if workspaceRoot.len == 0: none(string)
         else: some(workspaceRoot.pathToUri)
-
-      workspaceDir = getCurrentDir()
+      workspaceDir =
+        if workspaceRoot.len == 0: getCurrentDir()
+        else: workspaceRoot
 
     # TODO: WIP. Need to set more correct parameters.
     InitializeParams(
