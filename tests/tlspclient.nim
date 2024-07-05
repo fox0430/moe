@@ -122,7 +122,7 @@ suite "lsp: setCapabilities":
     let
       r = InitializeResult(
         capabilities: ServerCapabilities(
-          definitionProvider: some(true)))
+          definitionProvider: some(%*true)))
 
       s = LspFeatureSettings(
         definition: LspDefinitionSettings(
@@ -136,7 +136,7 @@ suite "lsp: setCapabilities":
     let
       r = InitializeResult(
         capabilities: ServerCapabilities(
-          definitionProvider: some(false)))
+          definitionProvider: some(%*false)))
 
       s = LspFeatureSettings(
         definition: LspDefinitionSettings(
@@ -150,7 +150,7 @@ suite "lsp: setCapabilities":
     let
       r = InitializeResult(
         capabilities: ServerCapabilities(
-          definitionProvider: some(true)))
+          definitionProvider: some(%*true)))
 
       s = LspFeatureSettings(
         definition: LspDefinitionSettings(
@@ -164,7 +164,7 @@ suite "lsp: setCapabilities":
     let
       r = InitializeResult(
         capabilities: ServerCapabilities(
-          typeDefinitionProvider: some(true)))
+          typeDefinitionProvider: some(%*true)))
 
       s = LspFeatureSettings(
         typeDefinition: LspTypeDefinitionSettings(
@@ -178,7 +178,7 @@ suite "lsp: setCapabilities":
     let
       r = InitializeResult(
         capabilities: ServerCapabilities(
-          typeDefinitionProvider: some(false)))
+          typeDefinitionProvider: some(%*false)))
 
       s = LspFeatureSettings(
         typeDefinition: LspTypeDefinitionSettings(
@@ -192,7 +192,7 @@ suite "lsp: setCapabilities":
     let
       r = InitializeResult(
         capabilities: ServerCapabilities(
-          typeDefinitionProvider: some(true)))
+          typeDefinitionProvider: some(%*true)))
 
       s = LspFeatureSettings(
         typeDefinition: LspTypeDefinitionSettings(
@@ -318,7 +318,7 @@ suite "lsp: setCapabilities":
     let
       r = InitializeResult(
         capabilities: ServerCapabilities(
-          hoverProvider: some(true)))
+          hoverProvider: some(%*true)))
 
       s = LspFeatureSettings(
         hover: LspHoverSettings(
@@ -332,7 +332,7 @@ suite "lsp: setCapabilities":
     let
       r = InitializeResult(
         capabilities: ServerCapabilities(
-          hoverProvider: some(false)))
+          hoverProvider: some(%*false)))
 
       s = LspFeatureSettings(
         hover: LspHoverSettings(
@@ -346,7 +346,7 @@ suite "lsp: setCapabilities":
     let
       r = InitializeResult(
         capabilities: ServerCapabilities(
-          hoverProvider: some(true)))
+          hoverProvider: some(%*true)))
 
       s = LspFeatureSettings(
         hover: LspHoverSettings(
@@ -412,7 +412,7 @@ suite "lsp: setCapabilities":
     let
       r = InitializeResult(
         capabilities: ServerCapabilities(
-          inlayHintProvider: some(InlayHintOptions())))
+          inlayHintProvider: some(%*InlayHintOptions())))
 
       s = LspFeatureSettings(
         inlayHint: LspInlayHintSettings(
@@ -426,7 +426,7 @@ suite "lsp: setCapabilities":
     let
       r = InitializeResult(
         capabilities: ServerCapabilities(
-          inlayHintProvider: none(InlayHintOptions)))
+          inlayHintProvider: none(JsonNode)))
 
       s = LspFeatureSettings(
         inlayHint: LspInlayHintSettings(
@@ -440,7 +440,7 @@ suite "lsp: setCapabilities":
     let
       r = InitializeResult(
         capabilities: ServerCapabilities(
-          inlayHintProvider: some(InlayHintOptions())))
+          inlayHintProvider: some(%*InlayHintOptions())))
 
       s = LspFeatureSettings(
         inlayHint: LspInlayHintSettings(

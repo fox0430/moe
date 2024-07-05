@@ -546,12 +546,16 @@ proc setCapabilities(
                discard
 
     if settings.definition.enable and
-       initResult.capabilities.definitionProvider == some(true):
-         capabilities.definition = true
+       initResult.capabilities.definitionProvider.isSome:
+         if initResult.capabilities.definitionProvider.get.kind == JBool:
+           capabilities.definition =
+             initResult.capabilities.definitionProvider.get.getBool
 
     if settings.typeDefinition.enable and
-       initResult.capabilities.typeDefinitionProvider == some(true):
-         capabilities.typeDefinition = true
+       initResult.capabilities.typeDefinitionProvider.isSome:
+         if initResult.capabilities.typeDefinitionProvider.get.kind == JBool:
+           capabilities.typeDefinition =
+             initResult.capabilities.typeDefinitionProvider.get.getBool
 
     if settings.implementation.enable and
        initResult.capabilities.implementationProvider.isSome:
@@ -592,16 +596,20 @@ proc setCapabilities(
              discard
 
     if settings.hover.enable and
-       initResult.capabilities.hoverProvider == some(true):
-         capabilities.hover = true
+       initResult.capabilities.hoverProvider.isSome:
+         if initResult.capabilities.hoverProvider.get.kind == JBool:
+           capabilities.hover =
+             initResult.capabilities.hoverProvider.get.getBool
 
     if settings.inlayHint.enable and
        initResult.capabilities.inlayHintProvider.isSome:
          capabilities.inlayHint = true
 
     if settings.references.enable and
-       initResult.capabilities.referencesProvider == some(true):
-         capabilities.references = true
+       initResult.capabilities.referencesProvider.isSome:
+         if initResult.capabilities.referencesProvider.get.kind == JInt:
+           capabilities.references =
+             initResult.capabilities.referencesProvider.get.getBool
 
     if settings.callHierarchy.enable and
        initResult.capabilities.callHierarchyProvider.isSome:
