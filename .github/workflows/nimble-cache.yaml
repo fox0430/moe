@@ -52,7 +52,7 @@ jobs:
         path: ~/.nimble
         key: unit-tests-nimble
 
-    - uses: jiro4989/setup-nim-action@v1
+    - uses: jiro4989/setup-nim-action@v2
       with:
         nim-version: ${{ env.NIM_VERSION }}
 
