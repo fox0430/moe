@@ -228,7 +228,11 @@ proc readable*(c: LspClient, timeout: int = 1): LspClientReadableResult =
   ## Return when output is written from the LSP server or timesout.
   ## Wait for the output from process to be written using poll(2).
   ## Return true if readable and Return false if timeout.
+  ## Also, if data can be read from the output stream, return true.
   ## timeout is milliseconds.
+
+  if not c.serverStreams.output.atEnd:
+    return LspClientReadableResult.ok true
 
   # Wait a server response.
   const FdLen = 1
@@ -295,7 +299,7 @@ proc parseLspError*(res: JsonNode): LspErrorParseResult =
     return LspErrorParseResult.err fmt"Invalid error: {$res}"
 
 proc setNonBlockingOutput(p: Process): Result[(), string] =
-  if fcntl(p.outputHandle.cint, F_SETFL, 0) < 0:
+  if fcntl(p.outputHandle.cint, F_SETFL, O_NONBLOCK) < 0:
     return Result[(), string].err "fcntl failed"
 
   return Result[(), string].ok ()
