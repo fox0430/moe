@@ -1,6 +1,6 @@
 ######################## GNU General Public License 3.0 ########################
 ##                                                                            ##
-## Copyright (C) 2017─2023 Shuhei Nogawa                                      ##
+## Copyright (C) 2017─2024 Shuhei Nogawa                                      ##
 ##                                                                            ##
 ## This program is free software: you can redistribute it and/or modify       ##
 ## it under the terms of the GNU General Public License as published by       ##
@@ -68,9 +68,10 @@ jobs:
     - run: |
         sudo apt-get update -yqq
         sudo apt-get install -y gcc libncursesw5-dev build-essential
-    - uses: jiro4989/setup-nim-action@v1.5.0
+    - uses: jiro4989/setup-nim-action@v2
       with:
         nim-version: ${{ env.NIM_VERSION }}
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Install integration tools
       run: |
