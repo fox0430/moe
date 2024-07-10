@@ -235,6 +235,9 @@ enable = false
 [Lsp.Completion]
 enable = true
 
+[Lsp.Declaration]
+enable = true
+
 [Lsp.Definition]
 enable = true
 
