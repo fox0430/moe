@@ -243,8 +243,8 @@ proc readable*(c: LspClient, timeout: int = 1): LspClientReadableResult =
   ## Also, if data can be read from the output stream, return true.
   ## timeout is milliseconds.
 
-  # Wait a server response.
   block:
+    # Check a server response.
     const FdLen = 1
     let r = c.pollFd.addr.poll(FdLen.Tnfds, timeout)
     if r == 1:
@@ -254,13 +254,14 @@ proc readable*(c: LspClient, timeout: int = 1): LspClientReadableResult =
     # Workaround for "atEnd" blocking
     # TODO: Need a better solution...
     let r = c.serverProcess.setNonBlockingOutput
-    if r.isErr: error r.error
+    if r.isErr:
+      return LspClientReadableResult.err r.error
 
   let r = not c.serverStreams.output.atEnd
 
   block:
     let r = c.serverProcess.setBlockingOutput
-    if r.isErr: error r.error
+    return LspClientReadableResult.err r.error
 
   return LspClientReadableResult.ok r
 
