@@ -261,7 +261,8 @@ proc readable*(c: LspClient, timeout: int = 1): LspClientReadableResult =
 
   block:
     let r = c.serverProcess.setBlockingOutput
-    return LspClientReadableResult.err r.error
+    if r.isErr:
+      return LspClientReadableResult.err r.error
 
   return LspClientReadableResult.ok r
 
