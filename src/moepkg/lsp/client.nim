@@ -21,7 +21,7 @@
 # https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/
 
 import std/[strformat, strutils, json, options, os, osproc, posix, tables,
-            times]
+            times, logging]
 
 import pkg/results
 
@@ -224,6 +224,18 @@ proc delProgress*(c: var LspClient, token: ProgressToken): Result[(), string] =
 
   return Result[(), string].ok ()
 
+proc setNonBlockingOutput(p: Process): Result[(), string] =
+  if fcntl(p.outputHandle.cint, F_SETFL, O_NONBLOCK) < 0:
+    return Result[(), string].err "fcntl failed"
+
+  return Result[(), string].ok ()
+
+proc setBlockingOutput(p: Process): Result[(), string] =
+  if fcntl(p.outputHandle.cint, F_SETFL, 0) < 0:
+    return Result[(), string].err "fcntl failed"
+
+  return Result[(), string].ok ()
+
 proc readable*(c: LspClient, timeout: int = 1): LspClientReadableResult =
   ## Return when output is written from the LSP server or timesout.
   ## Wait for the output from process to be written using poll(2).
@@ -231,17 +243,26 @@ proc readable*(c: LspClient, timeout: int = 1): LspClientReadableResult =
   ## Also, if data can be read from the output stream, return true.
   ## timeout is milliseconds.
 
-  if not c.serverStreams.output.atEnd:
-    return LspClientReadableResult.ok true
-
   # Wait a server response.
-  const FdLen = 1
-  let r = c.pollFd.addr.poll(FdLen.Tnfds, timeout)
-  if r == 1:
-    return LspClientReadableResult.ok true
-  else:
-    # Timeout
-    return LspClientReadableResult.ok false
+  block:
+    const FdLen = 1
+    let r = c.pollFd.addr.poll(FdLen.Tnfds, timeout)
+    if r == 1:
+      return LspClientReadableResult.ok true
+
+  block:
+    # Workaround for "atEnd" blocking
+    # TODO: Need a better solution...
+    let r = c.serverProcess.setNonBlockingOutput
+    if r.isErr: error r.error
+
+  let r = not c.serverStreams.output.atEnd
+
+  block:
+    let r = c.serverProcess.setBlockingOutput
+    if r.isErr: error r.error
+
+  return LspClientReadableResult.ok r
 
 proc request(
   c: var LspClient,
@@ -297,12 +318,6 @@ proc parseLspError*(res: JsonNode): LspErrorParseResult =
     return LspErrorParseResult.ok res["error"].to(LspError)
   except:
     return LspErrorParseResult.err fmt"Invalid error: {$res}"
-
-proc setNonBlockingOutput(p: Process): Result[(), string] =
-  if fcntl(p.outputHandle.cint, F_SETFL, O_NONBLOCK) < 0:
-    return Result[(), string].err "fcntl failed"
-
-  return Result[(), string].ok ()
 
 proc setWaitResponse*(
   c: var LspClient,
@@ -396,11 +411,6 @@ proc initLspClient*(command: string): initLspClientResult =
       opts)
   except CatchableError as e:
     return initLspClientResult.err fmt"server start failed: {e.msg}"
-
-  block:
-    let r = c.serverProcess.setNonBlockingOutput
-    if r.isErr:
-      return initLspClientResult.err fmt"setNonBlockingOutput failed: {r.error}"
 
   block:
     # Init pollFd.
