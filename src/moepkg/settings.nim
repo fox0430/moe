@@ -2936,6 +2936,9 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "[Lsp.DocumentHighlight]"
   result.addLine fmt "enable = {$settings.lsp.features.documentHighlight.enable}"
 
+  result.addLine fmt "[Lsp.Rename]"
+  result.addLine fmt "enable = {$settings.lsp.features.rename.enable}"
+
   result.addLine fmt "[Lsp.SemanticTokens]"
   result.addLine fmt "enable = {$settings.lsp.features.semanticTokens.enable}"
 
