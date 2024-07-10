@@ -46,6 +46,8 @@ type
     input*: InputStream
     output*: OutputStream
 
+proc atEnd*(s: OutputStream): bool {.inline.} = s.stream.atEnd
+
 proc skipWhitespace(x: string, pos: int): int =
   result = pos
   while result < x.len and x[result] in Whitespace:
