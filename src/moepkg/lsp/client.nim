@@ -564,12 +564,28 @@ proc setCapabilities(
          if initResult.capabilities.definitionProvider.get.kind == JBool:
            capabilities.definition =
              initResult.capabilities.definitionProvider.get.getBool
+         else:
+           try:
+             discard initResult.capabilities.definitionProvider.get.to(
+               DefinitionOptions)
+             capabilities.definition = true
+           except:
+             # Invalid definitionProvider
+             discard
 
     if settings.typeDefinition.enable and
        initResult.capabilities.typeDefinitionProvider.isSome:
          if initResult.capabilities.typeDefinitionProvider.get.kind == JBool:
            capabilities.typeDefinition =
              initResult.capabilities.typeDefinitionProvider.get.getBool
+         else:
+           try:
+             discard initResult.capabilities.typeDefinitionProvider.get.to(
+               TypeDefinitionOptions)
+             capabilities.typeDefinition = true
+           except:
+             # Invalid typeDefinitionProvider
+             discard
 
     if settings.implementation.enable and
        initResult.capabilities.implementationProvider.isSome:
@@ -614,6 +630,13 @@ proc setCapabilities(
          if initResult.capabilities.hoverProvider.get.kind == JBool:
            capabilities.hover =
              initResult.capabilities.hoverProvider.get.getBool
+         else:
+           try:
+             discard initResult.capabilities.hoverProvider.get.to(HoverOptions)
+             capabilities.hover = true
+           except:
+             # Invalid hoverProvider
+             discard
 
     if settings.inlayHint.enable and
        initResult.capabilities.inlayHintProvider.isSome:
@@ -621,9 +644,17 @@ proc setCapabilities(
 
     if settings.references.enable and
        initResult.capabilities.referencesProvider.isSome:
-         if initResult.capabilities.referencesProvider.get.kind == JInt:
+         if initResult.capabilities.referencesProvider.get.kind == JBool:
            capabilities.references =
              initResult.capabilities.referencesProvider.get.getBool
+         else:
+           try:
+             discard initResult.capabilities.referencesProvider.get.to(
+               ReferenceOptions)
+             capabilities.references = true
+           except:
+             # Invalid referencesProvider
+             discard
 
     if settings.callHierarchy.enable and
        initResult.capabilities.callHierarchyProvider.isSome:

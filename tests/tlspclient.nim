@@ -132,6 +132,20 @@ suite "lsp: setCapabilities":
 
     check client.capabilities.get.definition
 
+  test "Enable Definition 2":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          definitionProvider: some(%*{"workDoneProgress": true})))
+
+      s = LspFeatureSettings(
+        definition: LspDefinitionSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.definition
+
   test "Disable Definition":
     let
       r = InitializeResult(
@@ -165,6 +179,20 @@ suite "lsp: setCapabilities":
       r = InitializeResult(
         capabilities: ServerCapabilities(
           typeDefinitionProvider: some(%*true)))
+
+      s = LspFeatureSettings(
+        typeDefinition: LspTypeDefinitionSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.typeDefinition
+
+  test "Enable TypeDefinition 2":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          typeDefinitionProvider: some(%*{"workDoneProgress": true})))
 
       s = LspFeatureSettings(
         typeDefinition: LspTypeDefinitionSettings(
@@ -328,6 +356,20 @@ suite "lsp: setCapabilities":
 
     check client.capabilities.get.hover
 
+  test "Enable Hover 2":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          hoverProvider: some(%*{"workDoneProgress": true})))
+
+      s = LspFeatureSettings(
+        hover: LspHoverSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.hover
+
   test "Disable Hover 1":
     let
       r = InitializeResult(
@@ -355,6 +397,62 @@ suite "lsp: setCapabilities":
     client.setCapabilities(r, s)
 
     check not client.capabilities.get.hover
+
+  test "Enable References":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          referencesProvider: some(%*true)))
+
+      s = LspFeatureSettings(
+        references: LspReferencesSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.references
+
+  test "Enable References 2":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          referencesProvider: some(%*{"workDoneProgress": true})))
+
+      s = LspFeatureSettings(
+        references: LspReferencesSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.references
+
+  test "Disable References":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          referencesProvider: none(JsonNode)))
+
+      s = LspFeatureSettings(
+        references: LspReferencesSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.references
+
+  test "Disable References 2":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          referencesProvider: some(%*true)))
+
+      s = LspFeatureSettings(
+        references: LspReferencesSettings(
+          enable: false))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.references
 
   test "Enable SemanticTokens":
     let
