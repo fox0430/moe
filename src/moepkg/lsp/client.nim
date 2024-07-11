@@ -515,7 +515,7 @@ proc initInitializeParams*(
           ))
         )),
         window: some(WindowCapabilities(
-          workDoneProgress: some(true)
+          workDoneProgress: some(false)
         ))
       ),
       workspaceFolders: some(
