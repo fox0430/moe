@@ -643,12 +643,12 @@ type
 
   SignatureInformation* = ref object of RootObj
     label*: string
-    documentation*: Option[string or MarkupContent]
+    documentation*: OptionalNode # string | MarkupContent
     parameters*: OptionalSeq[ParameterInformation]
 
   ParameterInformation* = ref object of RootObj
     label*: string
-    documentation*: Option[string or MarkupContent]
+    documentation*: OptionalNode # string | MarkupContent
 
   SignatureHelpRegistrationOptions* = ref object of TextDocumentRegistrationOptions
     triggerCharacters*: OptionalSeq[string]
