@@ -105,43 +105,43 @@ when defined(posix):
 else:
   proc isFifo(file: string): bool {.inline.} = false
 
+proc getFileSizeOrDefault(path: string): int64 =
+  try:
+    # `getFileSize` opens files internally. So if `file` is a named pipe,
+    # we don't call `getFileSize` to avoid opening named pipes.
+    if isFifo(path): return 0.int64
+    else: return getFileSize(path)
+  except IOError, OSError:
+    return 0.int64
+
 proc refreshDirList(path: Runes, sortBy: Sort): seq[PathInfo] =
   var
-    pathList  : seq[PathInfo]
-    fileList : seq[PathInfo]
+    pathList: seq[PathInfo]
+    fileList: seq[PathInfo]
 
   for list in walkDir($path):
-    proc getLastModificationTimeOrDefault(file: string): times.Time =
-      try: getLastModificationTime(file)
-      except OSError: initTime(0,0)
-
-    proc getFileSizeOrDefault(file: string): int64 =
-      try:
-        # `getFileSize` opens files internally. So if `file` is a named pipe,
-        # we don't call `getFileSize` to avoid opening named pipes.
-        if isFifo(file): return 0.int64
-
-        getFileSize(file)
-      except IOError, OSError: 0.int64
-
     var item: PathInfo
 
+    let
+      lastModifyTime =
+        try: getLastModificationTime(list.path)
+        except OSError: initTime(0,0)
     case list.kind
     of pcLinkToFile, pcLinkToDir:
       item = (list.kind,
               list.path,
               0.int64,
-              getLastModificationTimeOrDefault(list.path))
+              lastModifyTime)
     of pcFile:
       item = (list.kind,
               list.path,
               getFileSizeOrDefault(list.path),
-              getLastModificationTimeOrDefault(list.path))
+              lastModifyTime)
     else:
       item = (list.kind,
               list.path,
               0.int64,
-              getLastModificationTimeOrDefault(list.path))
+              lastModifyTime)
 
     if item.path.len > 0:
       item.path = $(item.path.toRunes.normalizedPath)
