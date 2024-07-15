@@ -265,6 +265,9 @@ enable = true
 [Lsp.DocumentHighlight]
 enable = true
 
+[Lsp.DocumentLink]
+enable = true
+
 [Lsp.Rename]
 enable = true
 

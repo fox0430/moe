@@ -110,6 +110,8 @@ This project's goals are easily customizable, high productivity, user friendly, 
 
   - Document Highlight
 
+  - Document Link
+
   - Rename
 
   - Semantic Tokens

@@ -190,6 +190,12 @@ enable = false
 [Lsp.CallHierarchy]
 enable = false
 
+[Lsp.DocumentHighlight]
+enable = false
+
+[Lsp.DocumentLink]
+enable = false
+
 [Lsp.Rename]
 enable = false
 
@@ -611,6 +617,10 @@ suite "settings: Parse configuration file":
     check not settings.lsp.features.references.enable
 
     check not settings.lsp.features.callHierarchy.enable
+
+    check not settings.lsp.features.documentHighlight.enable
+
+    check not settings.lsp.features.documentLink.enable
 
     check not settings.lsp.features.rename.enable
 

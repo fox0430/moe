@@ -270,6 +270,9 @@ type
   LspDocumentHighlightSettings* = object
     enable*: bool
 
+  LspDocumentLinkSettings* = object
+    enable*: bool
+
   LspRenameSettings* = object
     enable*: bool
 
@@ -288,6 +291,7 @@ type
     references*: LspReferencesSettings
     callHierarchy*: LspCallHierarchySettings
     documentHighlight*: LspDocumentHighlightSettings
+    documentLink*: LspDocumentLinkSettings
     rename*: LspRenameSettings
     semanticTokens*: LspSemanticTokesnSettings
 
@@ -566,7 +570,10 @@ proc initLspReferencesSettings(): LspReferencesSettings =
 proc initLspCallHierarchySettings(): LspCallHierarchySettings =
   result.enable = true
 
-proc initLspDocumentHighlightSetting(): LspDocumentHighlightSettings =
+proc initLspDocumentHighlightSettings(): LspDocumentHighlightSettings =
+  result.enable = true
+
+proc initLspDocumentLinkSettings(): LspDocumentLinkSettings =
   result.enable = true
 
 proc initLspRenameSettings(): LspRenameSettings =
@@ -586,7 +593,8 @@ proc initLspFeatureSettings(): LspFeatureSettings =
   result.inlayHint = initLspInlayHintSettings()
   result.references = initLspReferencesSettings()
   result.callHierarchy = initLspCallHierarchySettings()
-  result.documentHighlight = initLspDocumentHighlightSetting()
+  result.documentHighlight = initLspDocumentHighlightSettings()
+  result.documentLink = initLspDocumentLinkSettings()
   result.rename = initLspRenameSettings()
   result.semanticTokens = initLspSemanticTokesnSettings()
 
@@ -1868,6 +1876,13 @@ proc parseLspTable(s: var EditorSettings, lspConfigs: TomlValueRef) =
               s.lsp.features.documentHighlight.enable = val.getBool
             else:
               discard
+      of "DocumentLink":
+        for key, val in val.getTable:
+          case key:
+            of "enable":
+              s.lsp.features.documentLink.enable = val.getBool
+            else:
+              discard
       of "References":
         for key, val in val.getTable:
           case key:
@@ -2505,6 +2520,14 @@ proc validateLspTable(table: TomlValueRef): Option[InvalidItem] =
                 return some(InvalidItem(name: $key, val: $val))
             else:
               return some(InvalidItem(name: $key, val: $val))
+      of "DocumentLink":
+        for key, val in val.getTable:
+          case key:
+            of "enable":
+              if val.kind != TomlValueKind.Bool:
+                return some(InvalidItem(name: $key, val: $val))
+            else:
+              return some(InvalidItem(name: $key, val: $val))
       of "Rename":
         for key, val in val.getTable:
           case key:
@@ -2935,6 +2958,9 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
 
   result.addLine fmt "[Lsp.DocumentHighlight]"
   result.addLine fmt "enable = {$settings.lsp.features.documentHighlight.enable}"
+
+  result.addLine fmt "[Lsp.DocumentLink]"
+  result.addLine fmt "enable = {$settings.lsp.features.documentLink.enable}"
 
   result.addLine fmt "[Lsp.Rename]"
   result.addLine fmt "enable = {$settings.lsp.features.rename.enable}"

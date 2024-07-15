@@ -32,7 +32,7 @@ import ../settings
 import protocol/[enums, types]
 import jsonrpc, utils, completion, progress, hover, semantictoken, inlayhint,
        definition, references, rename, typedefinition, implementation,
-       callhierarchy, documenthighlight
+       callhierarchy, documenthighlight, documentlink
 
 type
   LspError* = object
@@ -70,6 +70,7 @@ type
     declaration*: bool
     callHierarchy*: bool
     documentHighlight*: bool
+    documentLink*: bool
 
   LspProgressTable* = Table[ProgressToken, ProgressReport]
 
@@ -442,7 +443,6 @@ proc initInitializeParams*(
         if workspaceRoot.len == 0: getCurrentDir()
         else: workspaceRoot
 
-    # TODO: WIP. Need to set more correct parameters.
     InitializeParams(
       processId: some(%getCurrentProcessId()),
       rootPath: path,
@@ -512,6 +512,10 @@ proc initInitializeParams*(
           )),
           documentHighlight: some(DocumentHighlightCapability(
             dynamicRegistration: some(true)
+          )),
+          documentLink: some(DocumentLinkClientCapabilities(
+            dynamicRegistration: some(true),
+            toolsopSupport: some(false),
           ))
         )),
         window: some(WindowCapabilities(
@@ -692,6 +696,10 @@ proc setCapabilities(
            except CatchableError:
                # Invalid documentHighlightProvider
                discard
+
+    if settings.documentLink.enable and
+       initResult.capabilities.documentLinkProvider.isSome:
+         capabilities.documentLink = true
 
     if settings.rename.enable and
        initResult.capabilities.renameProvider.isSome:
@@ -1362,5 +1370,55 @@ proc textDocumentDocumentHighlight*(
     let r = c.request(bufferId, LspMethod.textDocumentDocumentHighlight, params)
     if r.isErr:
       return R[(), string].err fmt"textDocument/documentHighlight request failed: {r.error}"
+
+    return R[(), string].ok ()
+
+proc textDocumentDocumentLink*(
+  c: var LspClient,
+  bufferId: int,
+  path: string): LspSendRequestResult =
+    ## Send a textDocument/documentLink request to the server.
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_documentLink
+
+    if not c.serverProcess.running:
+      if not c.closed: c.closed = true
+      return R[(), string].err "server crashed"
+
+    if not c.isInitialized:
+      return R[(), string].err "lsp unavailable"
+
+    if not c.capabilities.get.documentLink:
+      return R[(), string].err "textDocument/documentLink unavailable"
+
+    let params = %* initDocumentLinkParams(path)
+
+    let r = c.request(bufferId, LspMethod.textDocumentDocumentLink, params)
+    if r.isErr:
+      return R[(), string].err fmt"textDocument/documentLink request failed: {r.error}"
+
+    return R[(), string].ok ()
+
+proc documentLinkResolve*(
+  c: var LspClient,
+  bufferId: int,
+  documentLink: DocumentLink): LspSendRequestResult =
+    ## Send a documentLink/resolve request to the server.
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#documentLink_resolve
+
+    if not c.serverProcess.running:
+      if not c.closed: c.closed = true
+      return R[(), string].err "server crashed"
+
+    if not c.isInitialized:
+      return R[(), string].err "lsp unavailable"
+
+    if not c.capabilities.get.documentLink:
+      return R[(), string].err "textDocument/documentLink unavailable"
+
+    let params = %* documentLink
+
+    let r = c.request(bufferId, LspMethod.textDocumentDocumentLink, params)
+    if r.isErr:
+      return R[(), string].err fmt"textDocument/documentLink request failed: {r.error}"
 
     return R[(), string].ok ()

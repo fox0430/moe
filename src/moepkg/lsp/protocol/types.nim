@@ -284,6 +284,10 @@ type
   CallHierarchyClientCapabilities* = ref object of RootObj
     dynamicRegistration*: Option[bool]
 
+  DocumentLinkClientCapabilities* = ref object of RootObj
+    dynamicRegistration*: Option[bool]
+    toolsopSupport*: Option[bool]
+
   TextDocumentClientCapabilities* = ref object of RootObj
     synchronization*: Option[SynchronizationCapability]
     completion*: Option[CompletionCapability]
@@ -300,7 +304,7 @@ type
     implementation*: Option[ImplementationCapability]
     codeAction*: Option[CodeActionCapability]
     codeLens*: Option[CodeLensCapability]
-    documentLink*: Option[DocumentLinkCapability]
+    documentLink*: Option[DocumentLinkClientCapabilities]
     colorProvider*: Option[ColorProviderCapability]
     rename*: Option[RenameCapability]
     publishDiagnostics*: Option[PublishDiagnosticsCapability]
@@ -692,12 +696,14 @@ type
   CodeLensRegistrationOptions* = ref object of TextDocumentRegistrationOptions
     resolveProvider*: Option[bool]
 
-  DocumentLinkParams* = ref object of RootObj
+  DocumentLinkParams* = ref object of WorkDoneProgressParams
+    partialResultToken*: OptionalNode # ProgressToken
     textDocument*: TextDocumentIdentifier
 
   DocumentLink* = ref object of RootObj
     `range`*: Range
     target*: Option[string]
+    tooltip*: Option[string]
     data*: OptionalNode
 
   DocumentLinkRegistrationOptions* = ref object of TextDocumentRegistrationOptions

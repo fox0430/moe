@@ -34,6 +34,8 @@ Please feedback, bug reports and PRs.
 - `callHierarchy/incomingCalls`
 - `callHierarchy/outgoingCalls`
 - `textDocument/documentHighlight`
+- `textDocument/documentLink`
+- `documentLink/resolve`
 - `$/progress`
 - `$/cancelRequest`
 
@@ -139,6 +141,10 @@ Display types at the end of lines with LSP InlayHint.
 If this feature is enabled, Highlight.currentWord will be forced to disable.
 
 ![moe-documenthighlight](https://github.com/fox0430/moe/assets/15966436/371b38e1-3d03-4773-847f-02ade38e6eb7)
+
+### Document Link
+
+`gl` command in Normal mode. Jump to a target.
 
 ### Rename
 
