@@ -632,6 +632,48 @@ suite "lsp: setCapabilities":
 
     check not client.capabilities.get.documentHighlight
 
+  test "Enable DocumentLink":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          documentLinkProvider: some(DocumentLinkOptions())))
+
+      s = LspFeatureSettings(
+        documentlink: LspDocumentLinkSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.documentLink
+
+  test "Disable DocumentLink":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          documentLinkProvider: none(DocumentLinkOptions)))
+
+      s = LspFeatureSettings(
+        documentlink: LspDocumentLinkSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.documentLink
+
+  test "Disable DocumentLink 2":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          documentLinkProvider: some(DocumentLinkOptions())))
+
+      s = LspFeatureSettings(
+        documentlink: LspDocumentLinkSettings(
+          enable: false))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.documentLink
+
   test "Enable Rename":
     let
       r = InitializeResult(
