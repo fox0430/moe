@@ -434,6 +434,11 @@ proc writeLspDocumentHighlightError*(
     let mess = fmt"lsp: Error: document highlight failed: {message}"
     commandLine.writeError(mess)
 
+proc writeLspDocumentLinkError*(
+  commandLine: var CommandLine, message: string) =
+    let mess = fmt"lsp: Error: document link failed: {message}"
+    commandLine.writeError(mess)
+
 proc writeLspRenameError*(commandLine: var CommandLine, message: string) =
   let mess = fmt"lsp: Error: renamefailed: {message}"
   commandLine.writeError(mess)

@@ -43,7 +43,7 @@ import
 
 import client, utils, hover, message, diagnostics, semantictoken, progress,
        inlayhint, definition, typedefinition, references, rename, declaration,
-       implementation, callhierarchy, documenthighlight
+       implementation, callhierarchy, documenthighlight, documentlink
 
 # Workaround for Nim 1.6.2
 import completion as lspcompletion
@@ -743,6 +743,60 @@ proc lspDocumentHighlight(
 
     return Result[(), string].ok ()
 
+proc lspDocumentLink(
+  status: var EditorStatus,
+  res: JsonNode): Result[(), string] =
+    ## textDocument/documentLink
+
+    try:
+      lspClient.deleteWaitingResponse(res["id"].getInt)
+    except CatchableError as e:
+      return Result[(), string].err e.msg
+
+    let links =
+      # Workaround for "Error: generic instantiation too nested"
+      try:
+        parseDocumentLinkResponse(res).get
+      except ResultDefect as e:
+        return Result[(), string].err e.msg
+
+    if links.len == 0:
+      return Result[(), string].err "Not found"
+
+    if links[0].isResolve:
+      let r = lspClient.documentLinkResolve(currentBufStatus.id, links[0])
+      if r.isErr:
+        return Result[(), string].err r.error
+
+    return Result[(), string].ok ()
+
+proc lspDocumentLinkResolve(
+  status: var EditorStatus,
+  res: JsonNode): Result[(), string] =
+    ## documentLink/resolve
+
+    try:
+      lspClient.deleteWaitingResponse(res["id"].getInt)
+    except CatchableError as e:
+      return Result[(), string].err e.msg
+
+    let link =
+      # Workaround for "Error: generic instantiation too nested"
+      try:
+        parseDocumentLinkResolveResponse(res).get
+      except ResultDefect as e:
+        return Result[(), string].err e.msg
+
+    if link.target.isNone:
+      return Result[(), string].err "Not found target"
+
+    let path = link.target.get.uriToPath
+    if path.isErr:
+      return Result[(), string].err path.error
+
+    return status.openWindowAndGotoDefinition(
+      BufferLocation(path: path.get))
+
 proc handleLspServerNotify(
   status: var EditorStatus,
   notify: JsonNode): Result[(), string] =
@@ -880,5 +934,8 @@ proc handleLspResponse*(status: var EditorStatus) =
         of LspMethod.textDocumentDocumentHighlight:
           let r = status.lspDocumentHighlight(resJson.get)
           if r.isErr: status.commandLine.writeLspDocumentHighlightError(r.error)
+        of LspMethod.textDocumentDocumentLink:
+          let r = status.lspDocumentLink(resJson.get)
+          if r.isErr: status.commandLine.writeLspDocumentLinkError(r.error)
         else:
           info fmt"lsp: Ignore response: {resJson}"

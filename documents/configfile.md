@@ -874,6 +874,13 @@ defaut is `true`
 enable
 ```
 
+### Lsp.DocumentLink table
+Enable/Disable LSP Document Link (bool)  
+defaut is `true`
+```
+enable
+```
+
 ### Lsp.Rename table
 Enable/Disable LSP Rename (bool)  
 defaut is `true`
