@@ -260,3 +260,43 @@ suite "lsp: lspMetod":
       "method": "textDocument/documentHighlight",
       "params": nil
     }).get
+
+  test "textDocument/documentLink":
+    check LspMethod.textDocumentDocumentLink == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "textDocument/documentLink",
+      "params": nil
+    }).get
+
+  test "documentLink/resolve":
+    check LspMethod.documentLinkResolve == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "documentLink/resolve",
+      "params": nil
+    }).get
+
+  test "documentLink/codeLens":
+    check LspMethod.textDocumentCodeLens == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "textDocument/codeLens",
+      "params": nil
+    }).get
+
+  test "codeLens/resolve":
+    check LspMethod.codeLensResolve == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "codeLens/resolve",
+      "params": nil
+    }).get
+
+  test "textDocument/rename":
+    check LspMethod.textDocumentRename == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "textDocument/rename",
+      "params": nil
+    }).get

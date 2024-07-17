@@ -17,14 +17,16 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[times, strutils, sequtils, options, strformat, tables, logging]
+import std/[times, strutils, sequtils, options, strformat, tables, logging,
+            json]
+
 import pkg/results
+
+import lsp/protocol/types
 import lsp/client
 import editorstatus, ui, gapbuffer, unicodeext, fileutils, windownode, movement,
        editor, searchutils, bufferstatus, quickrunutils, messages, visualmode,
        commandline, viewhighlight, messagelog, registers, independentutils
-
-import std/json
 
 proc changeModeToInsertMode(status: var EditorStatus) {.inline.} =
   if currentBufStatus.isReadonly:
@@ -542,6 +544,25 @@ proc requestDocumentLink(status: var EditorStatus) =
     $currentBufStatus.path.absolutePath)
   if r.isErr:
     status.commandLine.writeLspDocumentLinkError(r.error)
+
+proc codeLensAction(status: var EditorStatus) =
+  let codeLenses = currentBufStatus
+    .codeLenses
+    .filterIt(it.range.start.line == currentMainWindowNode.currentLine)
+
+  if codeLenses.len == 0: return
+
+  # TODO: Add UI for selecting
+  let index = 0
+  if codeLenses[index].command.isNone:
+    let r = lspClient.codeLensResolve(
+      currentBufStatus.id,
+      codeLenses[index])
+    if r.isErr:
+      status.commandLine.writeLspCodeLensError(r.error)
+  else:
+    # TODO: Run commands?
+    discard
 
 proc requestRename(status: var EditorStatus) =
   if not status.lspClients.contains(currentBufStatus.langId):
@@ -1559,6 +1580,7 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
   elif key == ord('\\'):
     let secondKey = commands[1]
     if secondKey == ord('r'): status.runQuickRunCommand
+    elif secondKey == ord('c'): status.codeLensAction
   elif key == ord('"'):
     status.registerCommand(commands)
   elif key == ord('q'):
@@ -1816,8 +1838,9 @@ proc isNormalModeCommand*(
       elif command[0] == ('\\'):
         if command.len == 1:
           result = InputState.Continue
-        elif command[1] == ord('r'):
-          result = InputState.Valid
+        elif command[1] == ord('r') or
+             command[1] == ord('c'):
+               result = InputState.Valid
 
       elif command[0] == ord('"'):
         if command.len < 3:

@@ -841,6 +841,14 @@ const
         index: EditorColorIndex.background,
         rgb: "#000000".hexToRgb.get)),
 
+    EditorColorPairIndex.codeLens: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.codeLens,
+        rgb: "#808080".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.background,
+        rgb: "#000000".hexToRgb.get)),
+
     # filer mode
     EditorColorPairIndex.currentFile: ColorPair(
       foreground: Color(

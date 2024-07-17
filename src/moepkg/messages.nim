@@ -439,6 +439,11 @@ proc writeLspDocumentLinkError*(
     let mess = fmt"lsp: Error: document link failed: {message}"
     commandLine.writeError(mess)
 
+proc writeLspCodeLensError*(
+  commandLine: var CommandLine, message: string) =
+    let mess = fmt"lsp: Error: code lens failed: {message}"
+    commandLine.writeError(mess)
+
 proc writeLspRenameError*(commandLine: var CommandLine, message: string) =
   let mess = fmt"lsp: Error: renamefailed: {message}"
   commandLine.writeError(mess)

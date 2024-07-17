@@ -21,20 +21,12 @@ import std/[times, options, os, strformat]
 
 import pkg/results
 
-import lsp/[inlayhint, callhierarchy]
+import lsp/[inlayhint, callhierarchy, codelens]
 import syntax/highlite
 import gapbuffer, unicodeext, fileutils, highlight, independentutils, git,
        syntaxcheck, completion, logviewerutils, helputils
 
 type
-  CallHierarchyInfo* = object
-    bufferId*: int
-    items*:  seq[CallHierarchyItem]
-
-  DocumentHighlightInfo* = object
-    position*: BufferPosition
-    ranges*: seq[BufferRange]
-
   Mode* = enum
     normal
     insert
@@ -58,6 +50,14 @@ type
     searchBackward
     references
     callhierarchyViewer
+
+  CallHierarchyInfo* = object
+    bufferId*: int
+    items*:  seq[CallHierarchyItem]
+
+  DocumentHighlightInfo* = object
+    position*: BufferPosition
+    ranges*: seq[BufferRange]
 
   BufferStatus* = ref object
     buffer*: GapBuffer[Runes]
@@ -93,6 +93,7 @@ type
     inlayHints*: LspInlayHints
     callHierarchyInfo*: CallHierarchyInfo # Use only in callhierarchyViewer
     documentHighlightInfo*: DocumentHighlightInfo # Lsp DocumentHighlight
+    codeLenses*: seq[CodeLens] # Lsp CodeLens
 
 var
   countAddedBuffer = 0

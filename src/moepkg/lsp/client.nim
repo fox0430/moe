@@ -32,7 +32,7 @@ import ../settings
 import protocol/[enums, types]
 import jsonrpc, utils, completion, progress, hover, semantictoken, inlayhint,
        definition, references, rename, typedefinition, implementation,
-       callhierarchy, documenthighlight, documentlink
+       callhierarchy, documenthighlight, documentlink, codelens
 
 type
   LspError* = object
@@ -71,6 +71,7 @@ type
     callHierarchy*: bool
     documentHighlight*: bool
     documentLink*: bool
+    codeLens*: bool
 
   LspProgressTable* = Table[ProgressToken, ProgressReport]
 
@@ -700,6 +701,10 @@ proc setCapabilities(
     if settings.documentLink.enable and
        initResult.capabilities.documentLinkProvider.isSome:
          capabilities.documentLink = true
+
+    if settings.codeLens.enable and
+       initResult.capabilities.codeLensProvider.isSome:
+         capabilities.codeLens = true
 
     if settings.rename.enable and
        initResult.capabilities.renameProvider.isSome:
@@ -1420,5 +1425,55 @@ proc documentLinkResolve*(
     let r = c.request(bufferId, LspMethod.textDocumentDocumentLink, params)
     if r.isErr:
       return R[(), string].err fmt"textDocument/documentLink request failed: {r.error}"
+
+    return R[(), string].ok ()
+
+proc textDocumentCodeLens*(
+  c: var LspClient,
+  bufferId: int,
+  path: string): LspSendRequestResult =
+    ## Send a textDocument/codeLens request to the server.
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_codeLens
+
+    if not c.serverProcess.running:
+      if not c.closed: c.closed = true
+      return R[(), string].err "server crashed"
+
+    if not c.isInitialized:
+      return R[(), string].err "lsp unavailable"
+
+    if not c.capabilities.get.codeLens:
+      return R[(), string].err "textDocument/codeLens unavailable"
+
+    let params = %* initCodeLensParams(path)
+
+    let r = c.request(bufferId, LspMethod.textDocumentCodeLens, params)
+    if r.isErr:
+      return R[(), string].err fmt"textDocument/codeLens request failed: {r.error}"
+
+    return R[(), string].ok ()
+
+proc codeLensResolve*(
+  c: var LspClient,
+  bufferId: int,
+  codeLens: CodeLens): LspSendRequestResult =
+    ## Send a codeLens/resolve request to the server.
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#codeLens_resolve
+
+    if not c.serverProcess.running:
+      if not c.closed: c.closed = true
+      return R[(), string].err "server crashed"
+
+    if not c.isInitialized:
+      return R[(), string].err "lsp unavailable"
+
+    if not c.capabilities.get.codeLens:
+      return R[(), string].err "codeLens/resolve unavailable"
+
+    let params = %* codeLens
+
+    let r = c.request(bufferId, LspMethod.codeLensResolve, params)
+    if r.isErr:
+      return R[(), string].err fmt"codeLens/resolve request failed: {r.error}"
 
     return R[(), string].ok ()
