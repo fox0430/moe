@@ -1902,7 +1902,7 @@ proc parseLspTable(s: var EditorSettings, lspConfigs: TomlValueRef) =
         for key, val in val.getTable:
           case key:
             of "enable":
-              s.lsp.features.documentLink.enable = val.getBool
+              s.lsp.features.codeLens.enable = val.getBool
             else:
               discard
       of "Rename":
@@ -1959,7 +1959,7 @@ proc toThemeColors*(config: TomlValueRef): ThemeColors =
         of EditorColorIndex.background:
           let rgb = configColors["background"].getStr.toRgb
           result[EditorColorPairIndex.default].background.rgb = rgb
-          for i in EditorColorPairIndex.keyword .. EditorColorPairIndex.inlayHint:
+          for i in EditorColorPairIndex.keyword .. EditorColorPairIndex.codeLens:
             result[i].background.rgb = rgb
         of EditorColorIndex.currentLineBg:
           result[EditorColorPairIndex.currentLineBg].background.rgb =

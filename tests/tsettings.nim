@@ -196,6 +196,9 @@ enable = false
 [Lsp.DocumentLink]
 enable = false
 
+[Lsp.CodeLens]
+enable = true
+
 [Lsp.Rename]
 enable = false
 
@@ -402,6 +405,7 @@ union = "#111111"
 unresolvedReference = "#111111"
 
 inlayHint = "#111111"
+codeLens = "#111111"
 
 currentFile = "#111111"
 currentFileBg = "#111111"
@@ -621,6 +625,8 @@ suite "settings: Parse configuration file":
     check not settings.lsp.features.documentHighlight.enable
 
     check not settings.lsp.features.documentLink.enable
+
+    check settings.lsp.features.codeLens.enable
 
     check not settings.lsp.features.rename.enable
 
