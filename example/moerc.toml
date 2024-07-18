@@ -268,6 +268,9 @@ enable = true
 [Lsp.DocumentLink]
 enable = true
 
+[Lsp.CodeLens]
+enable = false
+
 [Lsp.Rename]
 enable = true
 

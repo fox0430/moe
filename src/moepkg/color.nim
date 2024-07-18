@@ -473,6 +473,9 @@ type
     # LSP inlayHint
     inlayHint
 
+    # LSP CodeLens
+    codeLens
+
     # filer mode
     currentFile
     currentFileBg
@@ -679,6 +682,9 @@ type
 
     # LSP inlayHint
     inlayHint
+
+    # LSP CodeLens
+    codeLens
 
     # filer mode
     currentFile

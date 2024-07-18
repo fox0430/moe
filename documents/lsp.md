@@ -36,6 +36,8 @@ Please feedback, bug reports and PRs.
 - `textDocument/documentHighlight`
 - `textDocument/documentLink`
 - `documentLink/resolve`
+- `textDocument/codeLens`
+- `codeLens/resolve`
 - `$/progress`
 - `$/cancelRequest`
 
@@ -145,6 +147,10 @@ If this feature is enabled, Highlight.currentWord will be forced to disable.
 ### Document Link
 
 `gl` command in Normal mode. Jump to a target.
+
+### Code Lens
+
+Work in prgoress
 
 ### Rename
 

@@ -656,30 +656,28 @@ proc initLogViewerHighlight(buffer: seq[Runes]): Highlight =
 proc isInitialized(t: LspClientTable, langId: string): bool {.inline.} =
   t.contains(langId) and t[langId].isInitialized
 
-proc sendLspSemanticTokenRequest*(
-  c: var LspClient,
-  b: BufferStatus): Result[(), string] =
-    ## Send textDocument/inlayHint requests to the LSP server.
+proc sendLspSemanticTokenRequest*(c: var LspClient, b: BufferStatus) =
+  ## Send textDocument/inlayHint requests to the LSP server.
 
-    block:
-      # Cancel before completion request.
-      let err = c.cancelRequest(
-        b.id,
-        LspMethod.textDocumentSemanticTokensFull)
-      if err.isErr:
-        error fmt"lsp: {err.error}"
+  block:
+    # Cancel before completion request.
+    let err = c.cancelRequest(
+      b.id,
+      LspMethod.textDocumentSemanticTokensFull)
+    if err.isErr:
+      error fmt"lsp: {err.error}"
 
-    block:
-      # Send a textDocument/semanticTokens request to the LSP server.
-      let err = c.textDocumentSemanticTokens(b.id, $b.absolutePath)
-      if err.isErr:
-        error fmt"lsp: {err.error}"
+  block:
+    # Send a textDocument/semanticTokens request to the LSP server.
+    let err = c.textDocumentSemanticTokens(b.id, $b.absolutePath)
+    if err.isErr:
+      error fmt"lsp: {err.error}"
 
 proc sendLspInlayHintRequest*(
   c: var LspClient,
   b: BufferStatus,
   bufferIndex: int,
-  mainWindowNode: WindowNode): Result[(), string] =
+  mainWindowNode: WindowNode) =
     ## Send textDocument/inlayHint requests to the LSP server.
 
     block:
@@ -706,11 +704,18 @@ proc sendLspInlayHintRequest*(
           else: 0
 
     let err = c.textDocumentInlayHint(b.id, $b.absolutePath, hintRange)
-    if err.isErr: return err
+    if err.isErr: error fmt"lsp: {err.error}"
 
     b.inlayHints.range = Range(
       first: hintRange.first.line,
       last: hintRange.last.line)
+
+proc sendLspCodeLens*(c: var LspClient, b: BufferStatus) =
+  ## Send textDocument/codeLens requests to the LSP server.
+
+  let err = c.textDocumentCodeLens(b.id, $b.absolutePath)
+  if err.isErr:
+    error fmt"lsp: {err.error}"
 
 proc getLspCapabilities(
   lspClients: LspClientTable,
@@ -770,15 +775,15 @@ proc updateSyntaxHighlightings(status: EditorStatus) =
 
         if client.capabilities.get.semanticTokens.isSome:
           # Send a textDocument/semanticTokens request to the LSP server.
-          let err = client.sendLspSemanticTokenRequest(b)
-          if err.isErr:
-            error fmt"lsp: {err.error}"
+           client.sendLspSemanticTokenRequest(b)
 
         if client.capabilities.get.inlayHint:
           # Send a textDocument/inlayHint request to the LSP server.
-          let err = client.sendLspInlayHintRequest(b, i, mainWindowNode)
-          if err.isErr:
-            error fmt"lsp: {err.error}"
+          client.sendLspInlayHintRequest(b, i, mainWindowNode)
+
+        if client.capabilities.get.codeLens:
+          # Send a textDocument/codeLens request to the LSP server.
+          client.sendLspCodeLens(b)
 
 proc updateLogViewerEditorBuffer*(b: var BufferStatus) =
   ## Update the logviewer buffer for editor logs.
@@ -975,29 +980,63 @@ proc update*(status: var EditorStatus) =
             if node.windowIndex == currentMainWindowNode.windowIndex: true
             else: false
 
-          if b.inlayHints.hints.len > 0:
-            # LSP InlayHint
+          template isOverwriteViewBuffer(b: BufferStatus): bool =
+            b.inlayHints.hints.len > 0 or b.codeLenses.len > 0
 
+          if isOverwriteViewBuffer(b):
+            # This copy is maybe bad performance
             var buffer = b.buffer.toSeqRunes
-            for hint in b.inlayHints.hints:
-              if hint.textEdits.isSome and
-                 hint.textEdits.get.len > 0 and
-                 hint.position.line < buffer.len:
-                   let
-                     line = hint.position.line
-                     text = hint.textEdits.get[0].newText.toRunes
 
-                   block:
-                     var newLine = buffer[line]
-                     newLine.add ru" " & text
-                     buffer[line] = newLine
+            if b.inlayHints.hints.len > 0:
+              # LSP InlayHint
+              for hint in b.inlayHints.hints:
+                if hint.textEdits.isSome and
+                   hint.textEdits.get.len > 0 and
+                   hint.position.line < buffer.len:
+                     let
+                       line = hint.position.line
+                       text = hint.textEdits.get[0].newText.toRunes
 
-                   highlight.addColorSegment(
-                     line,
-                     text.len,
-                     EditorColorPairIndex.inlayHint)
+                     block:
+                       var newLine = buffer[line]
+                       newLine.add ru" " & text
+                       buffer[line] = newLine
 
-            # Apply inlayHint
+                     highlight.addColorSegment(
+                       line,
+                       text.len,
+                       EditorColorPairIndex.inlayHint)
+
+            if b.codeLenses.len > 0:
+              # LSP CodeLens
+
+              var addTexts: seq[tuple[line: int, text: Runes]]
+
+              for l in b.codeLenses:
+                if l.command.isSome:
+                  var index = -1
+                  for i, t in addTexts:
+                    if t.line == l.range.start.line: index = i
+
+                  if index > -1:
+                    addTexts[index].text &= ru" | " & l.command.get.title.toRunes
+                  else:
+                    addTexts.add (
+                      line: l.range.start.line,
+                      text: l.command.get.title.toRunes)
+
+              for t in addTexts:
+                block:
+                  var newLine = buffer[t.line]
+                  newLine.add ru" " & t.text
+                  buffer[t.line] = newLine
+
+                highlight.addColorSegment(
+                  t.line,
+                  t.text.len,
+                  EditorColorPairIndex.codeLens)
+
+            # Apply overwrite
             node.reloadEditorView(buffer)
 
             node.view.update(

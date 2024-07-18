@@ -273,6 +273,9 @@ type
   LspDocumentLinkSettings* = object
     enable*: bool
 
+  LspCodeLensSettings* = object
+    enable*: bool
+
   LspRenameSettings* = object
     enable*: bool
 
@@ -292,6 +295,7 @@ type
     callHierarchy*: LspCallHierarchySettings
     documentHighlight*: LspDocumentHighlightSettings
     documentLink*: LspDocumentLinkSettings
+    codeLens*: LspCodeLensSettings
     rename*: LspRenameSettings
     semanticTokens*: LspSemanticTokesnSettings
 
@@ -576,6 +580,9 @@ proc initLspDocumentHighlightSettings(): LspDocumentHighlightSettings =
 proc initLspDocumentLinkSettings(): LspDocumentLinkSettings =
   result.enable = true
 
+proc initLspCodeLensSettings(): LspCodeLensSettings =
+  result.enable = false
+
 proc initLspRenameSettings(): LspRenameSettings =
   result.enable = true
 
@@ -595,6 +602,7 @@ proc initLspFeatureSettings(): LspFeatureSettings =
   result.callHierarchy = initLspCallHierarchySettings()
   result.documentHighlight = initLspDocumentHighlightSettings()
   result.documentLink = initLspDocumentLinkSettings()
+  result.codeLens = initLspCodeLensSettings()
   result.rename = initLspRenameSettings()
   result.semanticTokens = initLspSemanticTokesnSettings()
 
@@ -1862,6 +1870,13 @@ proc parseLspTable(s: var EditorSettings, lspConfigs: TomlValueRef) =
               s.lsp.features.inlayHint.enable = val.getBool
             else:
               discard
+      of "References":
+        for key, val in val.getTable:
+          case key:
+            of "enable":
+              s.lsp.features.references.enable = val.getBool
+            else:
+              discard
       of "CallHierarchy":
         for key, val in val.getTable:
           case key:
@@ -1883,11 +1898,11 @@ proc parseLspTable(s: var EditorSettings, lspConfigs: TomlValueRef) =
               s.lsp.features.documentLink.enable = val.getBool
             else:
               discard
-      of "References":
+      of "CodeLens":
         for key, val in val.getTable:
           case key:
             of "enable":
-              s.lsp.features.references.enable = val.getBool
+              s.lsp.features.codeLens.enable = val.getBool
             else:
               discard
       of "Rename":
@@ -1944,7 +1959,7 @@ proc toThemeColors*(config: TomlValueRef): ThemeColors =
         of EditorColorIndex.background:
           let rgb = configColors["background"].getStr.toRgb
           result[EditorColorPairIndex.default].background.rgb = rgb
-          for i in EditorColorPairIndex.keyword .. EditorColorPairIndex.inlayHint:
+          for i in EditorColorPairIndex.keyword .. EditorColorPairIndex.codeLens:
             result[i].background.rgb = rgb
         of EditorColorIndex.currentLineBg:
           result[EditorColorPairIndex.currentLineBg].background.rgb =
@@ -2528,6 +2543,14 @@ proc validateLspTable(table: TomlValueRef): Option[InvalidItem] =
                 return some(InvalidItem(name: $key, val: $val))
             else:
               return some(InvalidItem(name: $key, val: $val))
+      of "CodeLens":
+        for key, val in val.getTable:
+          case key:
+            of "enable":
+              if val.kind != TomlValueKind.Bool:
+                return some(InvalidItem(name: $key, val: $val))
+            else:
+              return some(InvalidItem(name: $key, val: $val))
       of "Rename":
         for key, val in val.getTable:
           case key:
@@ -2961,6 +2984,9 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
 
   result.addLine fmt "[Lsp.DocumentLink]"
   result.addLine fmt "enable = {$settings.lsp.features.documentLink.enable}"
+
+  result.addLine fmt "[Lsp.CodeLens]"
+  result.addLine fmt "enable = {$settings.lsp.features.codeLens.enable}"
 
   result.addLine fmt "[Lsp.Rename]"
   result.addLine fmt "enable = {$settings.lsp.features.rename.enable}"

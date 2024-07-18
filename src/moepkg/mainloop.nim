@@ -823,11 +823,10 @@ proc isSendLspDocumentHighlightRequest(
 
 proc sendLspRequests(status: var EditorStatus) =
   if status.isSendLspInlayHintRequest:
-    let err = lspClient.sendLspInlayHintRequest(
+    lspClient.sendLspInlayHintRequest(
       currentBufStatus,
       status.bufferIndexInCurrentWindow,
       mainWindowNode)
-    if err.isErr: error fmt"lsp: {err.error}"
 
   if status.isSendLspDocumentHighlightRequest:
     currentBufStatus.documentHighlightInfo = DocumentHighlightInfo(

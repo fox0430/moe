@@ -674,6 +674,48 @@ suite "lsp: setCapabilities":
 
     check not client.capabilities.get.documentLink
 
+  test "Enable CodeLens":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          codeLensProvider: some(CodeLensOptions())))
+
+      s = LspFeatureSettings(
+        codeLens: LspCodeLensSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.codeLens
+
+  test "Disable CodeLens":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          codeLensProvider: none(CodeLensOptions)))
+
+      s = LspFeatureSettings(
+        codeLens: LspCodeLensSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.codeLens
+
+  test "Disable CodeLens 2":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          codeLensProvider: some(CodeLensOptions())))
+
+      s = LspFeatureSettings(
+        codeLens: LspCodeLensSettings(
+          enable: false))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.codeLens
+
   test "Enable Rename":
     let
       r = InitializeResult(

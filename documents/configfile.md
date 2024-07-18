@@ -881,6 +881,13 @@ defaut is `true`
 enable
 ```
 
+### Lsp.CodeLens table
+Enable/Disable LSP Code Lens (bool)  
+defaut is `false`
+```
+enable
+```
+
 ### Lsp.Rename table
 Enable/Disable LSP Rename (bool)  
 defaut is `true`

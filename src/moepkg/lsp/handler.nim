@@ -43,7 +43,7 @@ import
 
 import client, utils, hover, message, diagnostics, semantictoken, progress,
        inlayhint, definition, typedefinition, references, rename, declaration,
-       implementation, callhierarchy, documenthighlight, documentlink
+       implementation, callhierarchy, documenthighlight, documentlink, codelens
 
 # Workaround for Nim 1.6.2
 import completion as lspcompletion
@@ -94,14 +94,14 @@ proc lspInitialized(
       if err.isErr:
         error fmt"lsp: {err.error}"
 
-    block:
       # textDocument/inlayHint
-      let err = lspClient.sendLspInlayHintRequest(
+      lspClient.sendLspInlayHintRequest(
         currentBufStatus,
         status.bufferIndexInCurrentWindow,
         mainWindowNode)
-      if err.isErr:
-        error fmt"lsp: {err.error}"
+
+      # textDocument/codelens
+      lspClient.sendLspCodeLens(currentBufStatus)
 
     status.commandLine.writeLspInitialized(
       status.settings.lsp.languages[currentBufStatus.langId].command)
@@ -797,6 +797,58 @@ proc lspDocumentLinkResolve(
     return status.openWindowAndGotoDefinition(
       BufferLocation(path: path.get))
 
+proc lspCodeLens(status: var EditorStatus, res: JsonNode): Result[(), string] =
+  ## textDocument/codeLens
+
+  let requestId =
+    try: res["id"].getInt
+    except CatchableError as e: return Result[(), string].err e.msg
+
+  let waitingRes = lspClient.getWaitingResponse(requestId)
+  if waitingRes.isNone:
+    return Result[(), string].err fmt"Not found id: {requestId}"
+
+  lspClient.deleteWaitingResponse(res["id"].getInt)
+
+  let r =
+    # Workaround for "Error: generic instantiation too nested"
+    try:
+      parseCodeLensResponse(res).get
+    except ResultDefect as e:
+      return Result[(), string].err e.msg
+
+  for b in status.bufStatus:
+    if b.id == waitingRes.get.bufferId:
+      b.codeLenses = r
+
+  return Result[(), string].ok ()
+
+proc lspCodeLensResolve(
+  status: var EditorStatus,
+  res: JsonNode): Result[(), string] =
+    ## codeLens/resolve
+
+    let requestId =
+      try: res["id"].getInt
+      except CatchableError as e: return Result[(), string].err e.msg
+
+    let waitingRes = lspClient.getWaitingResponse(requestId)
+    if waitingRes.isNone:
+      return Result[(), string].err fmt"Not found id: {requestId}"
+
+    lspClient.deleteWaitingResponse(res["id"].getInt)
+
+    let _ =
+      # Workaround for "Error: generic instantiation too nested"
+      try:
+        parseCodeLensResolveResponse(res).get
+      except ResultDefect as e:
+        return Result[(), string].err e.msg
+
+    # TODO: Run commands?
+
+    return Result[(), string].ok ()
+
 proc handleLspServerNotify(
   status: var EditorStatus,
   notify: JsonNode): Result[(), string] =
@@ -937,5 +989,11 @@ proc handleLspResponse*(status: var EditorStatus) =
         of LspMethod.textDocumentDocumentLink:
           let r = status.lspDocumentLink(resJson.get)
           if r.isErr: status.commandLine.writeLspDocumentLinkError(r.error)
+        of LspMethod.textDocumentCodeLens:
+          let r = status.lspCodeLens(resJson.get)
+          if r.isErr: status.commandLine.writeLspCodeLensError(r.error)
+        of LspMethod.codeLensResolve:
+          let r = status.lspCodeLensResolve(resJson.get)
+          if r.isErr: status.commandLine.writeLspCodeLensError(r.error)
         else:
           info fmt"lsp: Ignore response: {resJson}"

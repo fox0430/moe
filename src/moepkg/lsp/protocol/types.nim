@@ -353,7 +353,7 @@ type
     workspaceDiagnostics*: bool
     partialResultToken*: OptionalNode # ProgressToken
 
-  CodeLensOptions* = ref object of RootObj
+  CodeLensOptions* = ref object of WorkDoneProgressOptions
     resolveProvider*: Option[bool]
 
   DocumentOnTypeFormattingOptions* = ref object of RootObj
@@ -685,7 +685,8 @@ type
   CodeActionContext* = ref object of RootObj
     diagnostics*: OptionalSeq[Diagnostic]
 
-  CodeLensParams* = ref object of RootObj
+  CodeLensParams* = ref object of WorkDoneProgressParams
+    partialResultToken*: OptionalNode # ProgressToken
     textDocument*: TextDocumentIdentifier
 
   CodeLens* = ref object of RootObj
@@ -694,7 +695,11 @@ type
     data*: OptionalNode
 
   CodeLensRegistrationOptions* = ref object of TextDocumentRegistrationOptions
+    workDoneProgress*: Option[bool]
     resolveProvider*: Option[bool]
+
+  CodeLensWorkspaceClientCapabilities* = ref object of RootObj
+    refreshSupport*: Option[bool]
 
   DocumentLinkParams* = ref object of WorkDoneProgressParams
     partialResultToken*: OptionalNode # ProgressToken
