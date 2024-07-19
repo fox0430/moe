@@ -448,6 +448,13 @@ proc writeLspRenameError*(commandLine: var CommandLine, message: string) =
   let mess = fmt"lsp: Error: renamefailed: {message}"
   commandLine.writeError(mess)
 
+proc writeLspExecuteCommandError*(
+  commandLine: var CommandLine,
+  message: string) =
+
+    let mess = fmt"lsp: Error: execute commnad: {message}"
+    commandLine.writeError(mess)
+
 proc writePasteIgnoreWarn*(commandLine: var CommandLine) =
   const Mess = "Paste is ignored in this mode"
   commandLine.writeWarn(Mess)

@@ -71,6 +71,7 @@ type
     documentLinkResolve
     textDocumentCodeLens
     codeLensResolve
+    workspaceExecuteCommand
 
   CallHierarchyType* = enum
     prepare
@@ -162,6 +163,7 @@ proc toLspMethodStr*(m: LspMethod): string =
     of documentLinkResolve: "documentLink/resolve"
     of textDocumentCodeLens: "textDocument/codeLens"
     of codeLensResolve: "codeLens/resolve"
+    of workspaceExecuteCommand: "workspace/executeCommand"
 
 proc parseTraceValue*(s: string): Result[TraceValue, string] =
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#traceValue
@@ -247,6 +249,8 @@ proc lspMethod*(j: JsonNode): LspMethodResult =
       LspMethodResult.ok textDocumentCodeLens
     of "codeLens/resolve":
       LspMethodResult.ok codeLensResolve
+    of "workspace/executeCommand":
+     LspMethodResult.ok workspaceExecuteCommand
     else:
       LspMethodResult.err "Not supported: " & j["method"].getStr
 
@@ -275,6 +279,7 @@ proc getWaitingType*(lspMethod: LspMethod): Option[WaitType] =
     of documentLinkResolve: some(WaitType.foreground)
     of textDocumentCodeLens: some(WaitType.foreground)
     of codeLensResolve: some(WaitType.foreground)
+    of workspaceExecuteCommand: some(WaitType.foreground)
     else: none(WaitType)
 
 proc isForegroundWait*(lspMethod: LspMethod): bool {.inline.} =

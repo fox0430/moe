@@ -43,7 +43,8 @@ import
 
 import client, utils, hover, message, diagnostics, semantictoken, progress,
        inlayhint, definition, typedefinition, references, rename, declaration,
-       implementation, callhierarchy, documenthighlight, documentlink, codelens
+       implementation, callhierarchy, documenthighlight, documentlink,
+       codelens, executecommand
 
 # Workaround for Nim 1.6.2
 import completion as lspcompletion
@@ -849,6 +850,28 @@ proc lspCodeLensResolve(
 
     return Result[(), string].ok ()
 
+proc lspExecuteCommand(
+  status: var EditorStatus,
+  res: JsonNode): Result[(), string] =
+    ## workspace/executeCommand
+
+    try:
+      lspClient.deleteWaitingResponse(res["id"].getInt)
+    except CatchableError as e:
+      return Result[(), string].err e.msg
+
+    let res =
+      # Workaround for "Error: generic instantiation too nested"
+      try:
+        parseExecuteCommandResponse(res).get
+      except ResultDefect as e:
+        return Result[(), string].err e.msg
+
+    if res.isSome:
+      status.commandLine.write(toRunes($res.get))
+
+    return Result[(), string].ok ()
+
 proc handleLspServerNotify(
   status: var EditorStatus,
   notify: JsonNode): Result[(), string] =
@@ -995,5 +1018,8 @@ proc handleLspResponse*(status: var EditorStatus) =
         of LspMethod.codeLensResolve:
           let r = status.lspCodeLensResolve(resJson.get)
           if r.isErr: status.commandLine.writeLspCodeLensError(r.error)
+        of LspMethod.workspaceExecuteCommand:
+          let r = status.lspExecuteCommand(resJson.get)
+          if r.isErr: status.commandLine.writeLspExecuteCommandError(r.error)
         else:
           info fmt"lsp: Ignore response: {resJson}"

@@ -161,7 +161,7 @@ type
     dynamicRegistration*: Option[bool]
     symbolKind*: Option[SymbolKindCapability]
 
-  ExecuteCommandCapability* = ref object of RootObj
+  ExecuteCommandClientCapability* = ref object of RootObj
     dynamicRegistration*: Option[bool]
 
   WorkspaceClientCapabilities* = ref object of RootObj
@@ -170,7 +170,7 @@ type
     didChangeConfiguration*: Option[DidChangeConfigurationCapability]
     didChangeWatchedFiles*: Option[DidChangeWatchedFilesCapability]
     symbol*: Option[SymbolCapability]
-    executeCommand*: Option[ExecuteCommandCapability]
+    executeCommand*: Option[ExecuteCommandClientCapability]
     workspaceFolders*: Option[bool]
     configuration*: Option[bool]
 
@@ -363,8 +363,8 @@ type
   DocumentLinkOptions* = ref object of RootObj
     resolveProvider*: Option[bool]
 
-  ExecuteCommandOptions* = ref object of RootObj
-   commands*: OptionalSeq[string]
+  ExecuteCommandOptions* = ref object of WorkDoneProgressOptions
+   commands*: seq[string]
 
   SaveOptions* = ref object of RootObj
     includeText*: Option[bool]
@@ -479,6 +479,7 @@ type
     inlayHintProvider*: OptionalNode # bool | InlayHintOptions | InlayHintRegistrationOptions
     diagnosticProvider*: OptionalNode # DiagnosticOptions | DiagnosticRegistrationOptions
     callHierarchyProvider*: OptionalNode # bool | CallHierarchyOptions | CallHierarchyRegistrationOptions
+    executeCommandProvider*: Option[ExecuteCommandOptions]
     experimental*: OptionalNode
 
   InitializedParams* = ref object of RootObj
@@ -545,7 +546,7 @@ type
   WorkspaceSymbolParams* = ref object of RootObj
     query*: string
 
-  ExecuteCommandParams* = ref object of RootObj
+  ExecuteCommandParams* = ref object of WorkDoneProgressParams
     command*: string
     arguments*: seq[JsonNode]
 

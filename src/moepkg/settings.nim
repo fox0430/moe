@@ -282,6 +282,9 @@ type
   LspSemanticTokesnSettings* = object
     enable*: bool
 
+  LspExecuteCommandSettings* = object
+    enable*: bool
+
   LspFeatureSettings* = object
     completion*: LspCompletionSettings
     declaration*: LspDeclarationSettings
@@ -298,6 +301,7 @@ type
     codeLens*: LspCodeLensSettings
     rename*: LspRenameSettings
     semanticTokens*: LspSemanticTokesnSettings
+    executeCommand*: LspExecuteCommandSettings
 
   LspSettings* = object
     enable*: bool
@@ -589,6 +593,9 @@ proc initLspRenameSettings(): LspRenameSettings =
 proc initLspSemanticTokesnSettings(): LspSemanticTokesnSettings =
   result.enable = true
 
+proc initLspExecuteCommandSettings(): LspExecuteCommandSettings =
+  result.enable = true
+
 proc initLspFeatureSettings(): LspFeatureSettings =
   result.completion = initLspCompletionSettings()
   result.declaration = initLspDeclarationSettings()
@@ -605,6 +612,7 @@ proc initLspFeatureSettings(): LspFeatureSettings =
   result.codeLens = initLspCodeLensSettings()
   result.rename = initLspRenameSettings()
   result.semanticTokens = initLspSemanticTokesnSettings()
+  result.executeCommand = initLspExecuteCommandSettings()
 
 proc initLspSettigns(): LspSettings =
   result.enable = true
@@ -1919,6 +1927,13 @@ proc parseLspTable(s: var EditorSettings, lspConfigs: TomlValueRef) =
               s.lsp.features.semanticTokens.enable = val.getBool
             else:
               discard
+      of "ExecuteCommand":
+        for key, val in val.getTable:
+          case key:
+            of "enable":
+              s.lsp.features.executeCommand.enable = val.getBool
+            else:
+              discard
       else:
         let langId = key
         var langSettings = LspLanguageSettings()
@@ -2567,6 +2582,14 @@ proc validateLspTable(table: TomlValueRef): Option[InvalidItem] =
                 return some(InvalidItem(name: $key, val: $val))
             else:
               return some(InvalidItem(name: $key, val: $val))
+      of "ExecuteCommand":
+        for key, val in val.getTable:
+          case key:
+            of "enable":
+              if val.kind != TomlValueKind.Bool:
+                return some(InvalidItem(name: $key, val: $val))
+            else:
+              return some(InvalidItem(name: $key, val: $val))
       else:
         if val.kind != TomlValueKind.Table:
           return some(InvalidItem(name: $key, val: $val))
@@ -2993,6 +3016,9 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
 
   result.addLine fmt "[Lsp.SemanticTokens]"
   result.addLine fmt "enable = {$settings.lsp.features.semanticTokens.enable}"
+
+  result.addLine fmt "[Lsp.ExecuteCommand]"
+  result.addLine fmt "enable = {$settings.lsp.features.executeCommand.enable}"
 
   for key, val in settings.lsp.languages.pairs:
     result.addLine fmt "[Lsp.{key}]"

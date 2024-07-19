@@ -32,7 +32,7 @@ import ../settings
 import protocol/[enums, types]
 import jsonrpc, utils, completion, progress, hover, semantictoken, inlayhint,
        definition, references, rename, typedefinition, implementation,
-       callhierarchy, documenthighlight, documentlink, codelens
+       callhierarchy, documenthighlight, documentlink, codelens, executecommand
 
 type
   LspError* = object
@@ -72,6 +72,7 @@ type
     documentHighlight*: bool
     documentLink*: bool
     codeLens*: bool
+    executeCommand*: Option[seq[string]]
 
   LspProgressTable* = Table[ProgressToken, ProgressReport]
 
@@ -457,6 +458,8 @@ proc initInitializeParams*(
         workspace: some(WorkspaceClientCapabilities(
           applyEdit: some(true),
           didChangeConfiguration: some(DidChangeConfigurationCapability(
+            dynamicRegistration: some(true))),
+          executeCommand: some(ExecuteCommandClientCapability(
             dynamicRegistration: some(true)))
         )),
         textDocument: some(TextDocumentClientCapabilities(
@@ -730,6 +733,11 @@ proc setCapabilities(
          except CatchableError:
            # Invalid SemanticTokensLegend
            discard
+
+    if settings.executeCommand.enable and
+       initResult.capabilities.executeCommandProvider.isSome:
+         capabilities.executeCommand = some(
+           initResult.capabilities.executeCommandProvider.get.commands)
 
     c.capabilities = some(capabilities)
 
@@ -1475,5 +1483,31 @@ proc codeLensResolve*(
     let r = c.request(bufferId, LspMethod.codeLensResolve, params)
     if r.isErr:
       return R[(), string].err fmt"codeLens/resolve request failed: {r.error}"
+
+    return R[(), string].ok ()
+
+proc workspaceExecuteCommand*(
+  c: var LspClient,
+  bufferId: int,
+  command: string,
+  args: seq[string]): LspSendRequestResult =
+    ## Send a workspace/executeCommand request to the server.
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#command
+
+    if not c.serverProcess.running:
+      if not c.closed: c.closed = true
+      return R[(), string].err "server crashed"
+
+    if not c.isInitialized:
+      return R[(), string].err "lsp unavailable"
+
+    if not c.capabilities.get.codeLens:
+      return R[(), string].err "workspace/executeCommand unavailable"
+
+    let params = %* initExecuteCommandParams(command, args)
+
+    let r = c.request(bufferId, LspMethod.workspaceExecuteCommand, params)
+    if r.isErr:
+      return R[(), string].err fmt"workspace/executeCommand request failed: {r.error}"
 
     return R[(), string].ok ()
