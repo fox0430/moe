@@ -989,6 +989,9 @@ proc handleLspResponse*(status: var EditorStatus) =
         of LspMethod.textDocumentDocumentLink:
           let r = status.lspDocumentLink(resJson.get)
           if r.isErr: status.commandLine.writeLspDocumentLinkError(r.error)
+        of LspMethod.documentLinkResolve:
+          let r = status.lspDocumentLinkResolve(resJson.get)
+          if r.isErr: status.commandLine.writeLspDocumentLinkError(r.error)
         of LspMethod.textDocumentCodeLens:
           let r = status.lspCodeLens(resJson.get)
           if r.isErr: status.commandLine.writeLspCodeLensError(r.error)
