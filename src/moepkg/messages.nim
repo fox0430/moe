@@ -445,7 +445,7 @@ proc writeLspCodeLensError*(
     commandLine.writeError(mess)
 
 proc writeLspRenameError*(commandLine: var CommandLine, message: string) =
-  let mess = fmt"lsp: Error: renamefailed: {message}"
+  let mess = fmt"lsp: Error: rename failed: {message}"
   commandLine.writeError(mess)
 
 proc writePasteIgnoreWarn*(commandLine: var CommandLine) =
