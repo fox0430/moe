@@ -65,9 +65,9 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ~/.nimble
-        key: ${{ runner.os }}-nimble-v2-${{ hashFiles('*.nimble') }}
+        key: unit-tests-nimble-v2
         restore-keys: |
-          ${{ runner.os }}-nimble-v2-
+          unit-tests-nimble-v2
 
     - uses: jiro4989/setup-nim-action@v2
       with:
