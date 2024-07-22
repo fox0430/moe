@@ -860,15 +860,12 @@ proc lspExecuteCommand(
     except CatchableError as e:
       return Result[(), string].err e.msg
 
-    let res =
-      # Workaround for "Error: generic instantiation too nested"
-      try:
-        parseExecuteCommandResponse(res).get
-      except ResultDefect as e:
-        return Result[(), string].err e.msg
-
-    if res.isSome:
-      status.commandLine.write(toRunes($res.get))
+    # Workaround for "Error: generic instantiation too nested"
+    try:
+      # TODO: Handle Execute command response.
+      discard parseExecuteCommandResponse(res).get
+    except ResultDefect as e:
+      return Result[(), string].err e.msg
 
     return Result[(), string].ok ()
 
