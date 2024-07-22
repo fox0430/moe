@@ -21,9 +21,6 @@ import std/[unittest, json, options]
 
 import pkg/results
 
-import moepkg/lsp/protocol/enums
-import moepkg/independentutils
-
 import moepkg/lsp/executecommand {.all.}
 
 suite "lsp: parseExecuteCommandResponse":
@@ -50,7 +47,7 @@ suite "lsp: parseExecuteCommandResponse":
       "jsonrpc": "2.0",
       "id": 0,
       "result": {
-        "message:" "val"
+        "message": "val"
       }
     })
     .get
