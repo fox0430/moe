@@ -73,6 +73,10 @@ proc parseTextDocumentCompletionResponse*(res: JsonNode): LspCompletionResut =
   if not res.contains("result"):
     return Result[seq[CompletionItem], string].err fmt"Invalid response: {res}"
 
+  if res["result"].kind == JNull:
+    # Not found
+    return Result[seq[CompletionItem], string].ok @[]
+
   if res["result"].kind == JObject:
     var list: CompletionList
 
@@ -87,7 +91,6 @@ proc parseTextDocumentCompletionResponse*(res: JsonNode): LspCompletionResut =
       # Not found
       return Result[seq[CompletionItem], string].ok @[]
   else:
-    # Old LSP verions?
     var items: seq[CompletionItem]
     try:
       items = res["result"].to(seq[CompletionItem])
