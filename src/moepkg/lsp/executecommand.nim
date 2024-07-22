@@ -41,4 +41,7 @@ proc parseExecuteCommandResponse*(res: JsonNode): ExecuteCommandResult =
   if res["result"].kind == JNull:
     return ExecuteCommandResult.ok none(JsonNode)
 
+  if res["result"].kind == JArray and res["result"].len == 0:
+    return ExecuteCommandResult.ok none(JsonNode)
+
   return ExecuteCommandResult.ok some(res["result"])
