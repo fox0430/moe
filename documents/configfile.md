@@ -902,6 +902,13 @@ defaut is `true`
 enable
 ```
 
+### Lsp.ExecuteCommand table
+Enable/Disable LSP Execute Command (bool)  
+defaut is `true`
+```
+enable
+```
+
 ### Lsp.{languageId} table
 
 File extensions (Array[string])

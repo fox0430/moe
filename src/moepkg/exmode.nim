@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, os, times, options, strformat, logging, tables]
+import std/[strutils, os, times, options, strformat, logging, tables, sequtils]
 import pkg/results
 import syntax/highlite
 import lsp/client
@@ -1105,6 +1105,33 @@ proc newEmptyBufferInSplitWindowVertically*(status: var EditorStatus) =
 
   status.resize
 
+proc lspExecuteCommand(status: var EditorStatus, command: seq[Runes]) =
+  status.changeMode(currentBufStatus.prevMode)
+
+  if not status.lspClients.contains(currentBufStatus.langId) or
+     not lspClient.isInitialized:
+       status.commandLine.writeLspExecuteCommandError(
+         "lsp: client is not ready")
+       return
+
+  if lspClient.capabilities.get.executeCommand.isNone:
+    status.commandLine.writeLspExecuteCommandError(
+      "lsp: execute command is unavailable")
+    return
+
+  let lspCommand = $command[0]
+
+  if lspCommand notin lspClient.capabilities.get.executeCommand.get:
+    status.commandLine.writeLspExecuteCommandError("lsp: unknow command")
+    return
+
+  let r = lspClient.workspaceExecuteCommand(
+    currentBufStatus.id,
+    lspCommand,
+    command[1 .. ^1].mapIt($it))
+  if r.isErr:
+    status.commandLine.writeLspExecuteCommandError(r.error)
+
 proc saveExCommandHistory(
   exCommandHistory: var seq[Runes],
   command: seq[Runes],
@@ -1297,6 +1324,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[Runes]) =
     status.highlightCurrentLineSettingCommand(command[1])
   elif isBuildCommand(command):
     status.buildCommand
+  elif isLspExeCommand(command):
+    status.lspExecuteCommand(command[1 .. ^1])
   else:
     status.commandLine.writeNotEditorCommandError(command)
     status.changeMode(currentBufStatus.prevMode)

@@ -37,6 +37,7 @@ Please feedback, bug reports and PRs.
 - `textDocument/documentLink`
 - `documentLink/resolve`
 - `textDocument/codeLens`
+- `workspace/executeCommand`
 - `codeLens/resolve`
 - `$/progress`
 - `$/cancelRequest`
@@ -157,3 +158,7 @@ Work in prgoress
 ` r` (`Space`-`r`) command in Normal mode. Enter a new name in the command line.
 
 ![moe-rename](https://github.com/fox0430/moe/assets/15966436/420ea178-c9fe-4053-8410-849fb845c698)
+
+### Execute Command
+
+Work in prgoress

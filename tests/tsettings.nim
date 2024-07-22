@@ -205,6 +205,9 @@ enable = false
 [Lsp.SemanticTokens]
 enable = false
 
+[Lsp.ExecuteCommand]
+enable = false
+
 [Lsp.nim]
 extensions = ["nim"]
 command = "nimlangserver"
@@ -631,6 +634,8 @@ suite "settings: Parse configuration file":
     check not settings.lsp.features.rename.enable
 
     check not settings.lsp.features.semanticTokens.enable
+
+    check not settings.lsp.features.executeCommand.enable
 
     check settings.lsp.languages["nim"] == LspLanguageSettings(
       extensions: @[ru"nim"],

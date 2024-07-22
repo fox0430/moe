@@ -176,6 +176,10 @@ const
       description: "Show the all buffer",
       argsType: ArgsType.none),
     ExCommandInfo(
+      command: "lspExeCommand",
+      description: "LSP Execute a commnad",
+      argsType: ArgsType.text),
+    ExCommandInfo(
       command: "lspLog",
       description: "Open the LSP log viewer",
       argsType: ArgsType.none),
@@ -744,6 +748,9 @@ proc isStartDebugModeCommand*(command: seq[Runes]): bool {.inline.} =
 proc isBuildCommand*(command: seq[Runes]): bool {.inline.} =
   command.len == 1 and cmpIgnoreCase($command[0], "build") == 0
 
+proc isLspExeCommand*(command: seq[Runes]): bool {.inline.} =
+  command.len > 1 and cmpIgnoreCase($command[0], "lspexecommand") == 0
+
 proc isValidExCommand*(commandSplit: seq[Runes]): bool =
   ## Return true if valid ex command and valid args.
 
@@ -819,7 +826,8 @@ proc isValidExCommand*(commandSplit: seq[Runes]): bool =
     isForceWriteAndQuitCommand(commandSplit) or
     isStartDebugModeCommand(commandSplit) or
     isHighlightCurrentLineSettingCommand(commandSplit) or
-    isBuildCommand(commandSplit)
+    isBuildCommand(commandSplit) or
+    isLspExeCommand(commandSplit)
 
 proc getArgsType*(command: Runes): Result[ArgsType, string] =
   ## Return ArgsType if valid ex command.

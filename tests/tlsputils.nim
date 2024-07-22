@@ -300,3 +300,11 @@ suite "lsp: lspMetod":
       "method": "textDocument/rename",
       "params": nil
     }).get
+
+  test "workspace/executeCommand":
+    check LspMethod.workspaceExecuteCommand == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "workspace/executeCommand",
+      "params": nil
+    }).get
