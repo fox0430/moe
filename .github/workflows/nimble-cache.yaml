@@ -50,9 +50,9 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ~/.nimble
-        key: unit-tests-nimble
+        key: unit-tests-nimble-v2
 
-    - uses: jiro4989/setup-nim-action@v1
+    - uses: jiro4989/setup-nim-action@v2
       with:
         nim-version: ${{ env.NIM_VERSION }}
 
