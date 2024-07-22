@@ -758,6 +758,48 @@ suite "lsp: setCapabilities":
 
     check not client.capabilities.get.rename
 
+  test "Enable ExecuteCommand":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          executeCommandProvider: some(ExecuteCommandOptions())))
+
+      s = LspFeatureSettings(
+        executeCommand: LspExecuteCommandSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.executeCommand.isSome
+
+  test "Disable ExecuteCommand":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          executeCommandProvider: none(ExecuteCommandOptions)))
+
+      s = LspFeatureSettings(
+        executeCommand: LspExecuteCommandSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.executeCommand.isNone
+
+  test "Disable ExecuteCommand 2":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          executeCommandProvider: some(ExecuteCommandOptions())))
+
+      s = LspFeatureSettings(
+        executeCommand: LspExecuteCommandSettings(
+          enable: false))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.executeCommand.isNone
+
 suite "lsp: Send requests":
   privateAccess(LspClient)
 
