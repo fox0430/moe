@@ -30,7 +30,7 @@ suite "lsp: parseTextDocumentCompletionResponse":
     let res = %*{"jsonrpc": "2.0", "params": nil}
     check parseTextDocumentCompletionResponse(res).isErr
 
-  test "lsp: Old specification":
+  test "lsp: CompletionItem[]":
     check %*parseTextDocumentCompletionResponse(%*{
       "jsonrpc": "2.0",
       "id": 0,
@@ -105,7 +105,7 @@ suite "lsp: parseTextDocumentCompletionResponse":
       "data":nil
     }]
 
-  test "lsp: Basic":
+  test "lsp: CompletionList":
     check %*parseTextDocumentCompletionResponse(%*{
       "jsonrpc": "2.0",
       "id": 0,
