@@ -3,5 +3,5 @@
 Changed
 .......
 
-- `#2110`_ lsp: Better Codelens support
+- `#2111`_ lsp: Better Codelens support
 
