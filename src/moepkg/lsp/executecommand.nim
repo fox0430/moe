@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strformat, json, options, sequtils]
+import std/[strformat, json, options]
 
 import pkg/results
 
@@ -28,11 +28,11 @@ type
 
 proc initExecuteCommandParams*(
   command: string,
-  args: seq[string]): ExecuteCommandParams =
+  args: JsonNode): ExecuteCommandParams =
 
     ExecuteCommandParams(
       command: command,
-      arguments: args.mapIt(%*it))
+      arguments: args)
 
 proc parseExecuteCommandResponse*(res: JsonNode): ExecuteCommandResult =
   if not res.contains("result"):
