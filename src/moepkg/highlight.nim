@@ -185,7 +185,7 @@ proc addColorSegment*(
       template beforeSegment: ColorSegment = h.colorSegments[position]
 
       if beforeSegment.firstColumn > beforeSegment.lastColumn:
-        beforeSegment.firstColumn = beforeSegment.lastColumn
+        beforeSegment.lastColumn = beforeSegment.firstColumn
 
       h.colorSegments.insert(
         ColorSegment(

@@ -386,9 +386,9 @@ proc lspSemanticTokens(
 proc lspInlayHint(status: var EditorStatus, res: JsonNode): Result[(), string] =
   ## textDocument/inlayHint
 
-  let r = parseTextDocumentInlayHint(res)
-  if r.isErr:
-    return Result[(), string].err r.error
+  let hints = parseTextDocumentInlayHintResponse(res)
+  if hints.isErr:
+    return Result[(), string].err hints.error
 
   let requestId =
     try: res["id"].getInt
@@ -399,10 +399,6 @@ proc lspInlayHint(status: var EditorStatus, res: JsonNode): Result[(), string] =
     return Result[(), string].err fmt"Not found id: {requestId}"
 
   lspClient.deleteWaitingResponse(requestId)
-
-  let hints = parseTextDocumentInlayHint(res)
-  if hints.isErr:
-    return Result[(), string].err r.error
 
   for i, b in status.bufStatus:
     if b.id == waitingRes.get.bufferId:

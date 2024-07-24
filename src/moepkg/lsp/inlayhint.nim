@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[json, strformat, options]
+import std/[json, strformat]
 
 import pkg/results
 
@@ -39,9 +39,10 @@ proc initInlayHintParams*(path: string, range: BufferRange): InlayHintParams =
     textDocument: TextDocumentIdentifier(uri: path.pathToUri),
     range: range.toLspRange)
 
-proc parseTextDocumentInlayHint*(res: JsonNode): LspInlayHintsResult =
+proc parseTextDocumentInlayHintResponse*(res: JsonNode): LspInlayHintsResult =
   if res["result"].kind == JNull:
-    return LspInlayHintsResult.err "Invalid response"
+    # Not found
+    return LspInlayHintsResult.ok @[]
 
   var hints: seq[InlayHint]
   try:
