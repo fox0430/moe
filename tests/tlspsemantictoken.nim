@@ -26,6 +26,19 @@ import moepkg/lsp/protocol/types
 import moepkg/lsp/semantictoken
 
 suite "lsp: parseTextDocumentSemanticTokensResponse":
+  test "Not found":
+    let legend = SemanticTokensLegend()
+    check parseTextDocumentSemanticTokensResponse(
+      %*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": nil
+      },
+      legend
+    )
+    .get
+    .len == 0
+
   test "Basic":
     let legend = SemanticTokensLegend(
       tokenTypes: @[
