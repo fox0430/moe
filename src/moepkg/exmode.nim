@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -1158,7 +1158,6 @@ proc saveExCommandHistory(
         exCommandHistory = exCommandHistory[first .. last]
 
 proc isExCommandBuffer*(line: Runes): InputState =
-  ## Returns true if the line is a valid ex command.
   ## It is assumed to receive the raw command line buffer.
 
   let commandSplit = line.splitExCommandBuffer
