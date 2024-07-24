@@ -51,7 +51,8 @@ proc parseTextDocumentSemanticTokensResponse*(
     ## SemanticTokens full
 
     if res["result"].kind == JNull:
-      return LspSemanticTokensResult.err "Invalid response"
+      # Not found
+      return LspSemanticTokensResult.ok @[]
 
     var semanticTokens: SemanticTokens
     try:
