@@ -545,7 +545,7 @@ proc requestDocumentLink(status: var EditorStatus) =
   if r.isErr:
     status.commandLine.writeLspDocumentLinkError(r.error)
 
-proc codeLensAction(status: var EditorStatus) =
+proc runCodeLensCommand(status: var EditorStatus) =
   let codeLenses = currentBufStatus
     .codeLenses
     .filterIt(it.range.start.line == currentMainWindowNode.currentLine)
@@ -561,8 +561,18 @@ proc codeLensAction(status: var EditorStatus) =
     if r.isErr:
       status.commandLine.writeLspCodeLensError(r.error)
   else:
-    # TODO: Run commands?
-    discard
+    let args: JsonNode =
+      if codeLenses[index].command.get.arguments.isSome:
+        codeLenses[index].command.get.arguments.get
+      else:
+        newJArray()
+
+    let r = lspClient.workspaceExecuteCommand(
+      currentBufStatus.id,
+      codeLenses[index].command.get.command,
+      args)
+    if r.isErr:
+      status.commandLine.writeLspCodeLensError(r.error)
 
 proc requestRename(status: var EditorStatus) =
   if not status.lspClients.contains(currentBufStatus.langId):
@@ -1580,7 +1590,7 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
   elif key == ord('\\'):
     let secondKey = commands[1]
     if secondKey == ord('r'): status.runQuickRunCommand
-    elif secondKey == ord('c'): status.codeLensAction
+    elif secondKey == ord('c'): status.runCodeLensCommand
   elif key == ord('"'):
     status.registerCommand(commands)
   elif key == ord('q'):

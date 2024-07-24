@@ -458,9 +458,14 @@ proc initInitializeParams*(
         workspace: some(WorkspaceClientCapabilities(
           applyEdit: some(true),
           didChangeConfiguration: some(DidChangeConfigurationCapability(
-            dynamicRegistration: some(true))),
+            dynamicRegistration: some(true)
+          )),
           executeCommand: some(ExecuteCommandClientCapability(
-            dynamicRegistration: some(true)))
+            dynamicRegistration: some(true)
+          )),
+          codeLens: some(CodeLensWorkspaceClientCapabilities(
+            refreshSupport: some(false)
+          ))
         )),
         textDocument: some(TextDocumentClientCapabilities(
           hover: some(HoverCapability(
@@ -513,6 +518,9 @@ proc initInitializeParams*(
           implementation: some(ImplementationCapability(
             dynamicRegistration: some(true),
             linkSupport: some(false)
+          )),
+          codeLens: some(CodeLensClientClientCapabilities(
+            dynamicRegistration: some(true)
           )),
           documentHighlight: some(DocumentHighlightCapability(
             dynamicRegistration: some(true)
@@ -1490,7 +1498,7 @@ proc workspaceExecuteCommand*(
   c: var LspClient,
   bufferId: int,
   command: string,
-  args: seq[string]): LspSendRequestResult =
+  args: JsonNode): LspSendRequestResult =
     ## Send a workspace/executeCommand request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#command
 

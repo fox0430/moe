@@ -173,6 +173,7 @@ type
     executeCommand*: Option[ExecuteCommandClientCapability]
     workspaceFolders*: Option[bool]
     configuration*: Option[bool]
+    codeLens*: Option[CodeLensWorkspaceClientCapabilities]
 
   SynchronizationCapability* = ref object of RootObj
     dynamicRegistration*: Option[bool]
@@ -239,7 +240,7 @@ type
   CodeActionCapability* = ref object of RootObj
     dynamicRegistration*: Option[bool]
 
-  CodeLensCapability* = ref object of RootObj
+  CodeLensClientClientCapabilities* = ref object of RootObj
     dynamicRegistration*: Option[bool]
 
   DocumentLinkCapability* = ref object of RootObj
@@ -303,7 +304,7 @@ type
     typeDefinition*: Option[TypeDefinitionClientCapabilities]
     implementation*: Option[ImplementationCapability]
     codeAction*: Option[CodeActionCapability]
-    codeLens*: Option[CodeLensCapability]
+    codeLens*: Option[CodeLensClientClientCapabilities]
     documentLink*: Option[DocumentLinkClientCapabilities]
     colorProvider*: Option[ColorProviderCapability]
     rename*: Option[RenameCapability]
@@ -548,7 +549,7 @@ type
 
   ExecuteCommandParams* = ref object of WorkDoneProgressParams
     command*: string
-    arguments*: seq[JsonNode]
+    arguments*: JsonNode # LSPAny[]
 
   ExecuteCommandRegistrationOptions* = ref object of RootObj
     commands*: OptionalSeq[string]

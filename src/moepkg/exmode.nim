@@ -17,8 +17,11 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, os, times, options, strformat, logging, tables, sequtils]
+import std/[strutils, os, times, options, strformat, logging, tables, sequtils,
+            json]
+
 import pkg/results
+
 import syntax/highlite
 import lsp/client
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
@@ -1128,7 +1131,7 @@ proc lspExecuteCommand(status: var EditorStatus, command: seq[Runes]) =
   let r = lspClient.workspaceExecuteCommand(
     currentBufStatus.id,
     lspCommand,
-    command[1 .. ^1].mapIt($it))
+    %*command[1 .. ^1].mapIt($it))
   if r.isErr:
     status.commandLine.writeLspExecuteCommandError(r.error)
 
