@@ -26,6 +26,15 @@ import moepkg/lsp/protocol/types
 import moepkg/lsp/inlayhint {.all.}
 
 suite "lsp: parseTextDocumentInlayHintResponse":
+  test "Not found":
+    check parseTextDocumentInlayHintResponse(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": nil
+    })
+    .get
+    .len == 0
+
   test "Basic":
     let r = parseTextDocumentInlayHintResponse(%*{
       "jsonrpc": "2.0",
