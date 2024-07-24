@@ -561,8 +561,17 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
 
     if isEnterKey(key):
       if status.completionWindow.isNone and not isClosedCompletionWindow:
-        # Confirm
+        # Confirm.
         break
+      elif InputState.Valid == status.commandLine.buffer.isExCommandBuffer:
+        let splited = status.commandLine.buffer.splitExCommandBuffer
+
+        let t = splited[0].getArgsType
+        if t.isOk and t.get != ArgsType.text and t.get != ArgsType.path:
+          # Confirm.
+          # If the command entered from the suggestions is complete, it will be
+          # executed immediately.
+          break
 
     elif isEscKey(key) or isCtrlC(key):
       isCancel = true
