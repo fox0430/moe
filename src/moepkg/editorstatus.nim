@@ -837,6 +837,8 @@ proc updateCommandLine(status: var EditorStatus) =
   if status.commandLine.isUpdate:
     status.commandLine.update
 
+  status.commandLine.window.refresh
+
 proc updateEditorViewConfig(view: var EditorView, settings: EditorSettings) =
   ## Update `EditorView.config` based on `EditorSettings`.
 
