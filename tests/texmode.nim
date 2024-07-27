@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -26,7 +26,7 @@ import moepkg/syntax/highlite
 import moepkg/lsp/client
 import moepkg/[ui, editorstatus, gapbuffer, unicodeext, bufferstatus, settings,
                windownode, helputils, backgroundprocess, quickrunutils,
-               exmodeutils]
+               exmodeutils, messagelog, logviewerutils]
 
 import utils
 
@@ -525,16 +525,54 @@ suite "Ex mode: Open buffer manager":
     const Command = @[ru"buf"]
     status.exModeCommand(Command)
 
-suite "Ex mode: Open editor log viewer":
-  test "Basic":
+suite "Ex mode: Open Editor log viewer":
+  test "Empty":
     var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
+    assert status.addNewBufferInCurrentWin.isOk
+
+    status.resize(100, 100)
+    status.update
+
+    clearMessageLog()
 
     const Command = @[ru"log"]
     status.exModeCommand(Command)
 
+    status.update
+
     check status.mainWindow.numOfMainWindow == 2
     check currentMainWindowNode.view.height > 1
+
+    check currentBufStatus.isReadonly
+    check currentBufStatus.logContent == LogContentKind.editor
+    check currentBufStatus.buffer.toSeqRunes == @[""].toSeqRunes
+
+  test "Basic":
+    var status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+    status.resize(100, 100)
+    status.update
+
+    addMessageLog "line1"
+    addMessageLog "line2"
+
+    const Command = @[ru"log"]
+    status.exModeCommand(Command)
+
+    status.update
+
+    check status.mainWindow.numOfMainWindow == 2
+    check currentMainWindowNode.view.height > 1
+
+    check currentBufStatus.isReadonly
+    check currentBufStatus.logContent == LogContentKind.editor
+    check currentBufStatus.buffer.toSeqRunes == @[
+      "line1",
+      "",
+      "line2"
+    ]
+    .toSeqRunes
 
 suite "Ex mode: Open LSP log viewer":
   var status: EditorStatus
