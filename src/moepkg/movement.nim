@@ -181,15 +181,18 @@ proc jumpLine*(
     if not (view.originalLine[0] <= destination and
        (view.originalLine[view.height - 1] == -1 or
        destination <= view.originalLine[view.height - 1])):
-      var startOfPrintedLines = 0
-      if destination > bufStatus.buffer.high - windowNode.getHeight - 1:
-        startOfPrintedLines = bufStatus.buffer.high - windowNode.getHeight - 1
-      else:
-        startOfPrintedLines = max(
-          destination - (currentLine - windowNode.view.originalLine[0]),
-          0)
 
-      windowNode.view.reload(bufStatus.buffer, startOfPrintedLines)
+         var startOfPrintedLines = 0
+         if destination > bufStatus.buffer.high - windowNode.getHeight - 1:
+           startOfPrintedLines = max(
+             bufStatus.buffer.high - windowNode.getHeight - 1,
+             0)
+         else:
+           startOfPrintedLines = max(
+             destination - (currentLine - windowNode.view.originalLine[0]),
+             0)
+
+         windowNode.view.reload(bufStatus.buffer, startOfPrintedLines)
 
 proc findNextBlankLine*(bufStatus: BufferStatus, currentLine: int): int =
   ## Return a next blank line number.
