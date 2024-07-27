@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -158,20 +158,33 @@ test "Move to first line":
   currentBufStatus.moveToFirstLine(currentMainWindowNode)
   check(currentMainWindowNode.currentLine == 0)
 
-test "Move to last line":
-  var status = initEditorStatus()
-  discard status.addNewBufferInCurrentWin.get
-  status.bufStatus[0].buffer = initGapBuffer(@[
-    "abc",
-    "efg",
-    "hij",
-    "klm",
-    "nop",
-    "qrs"].toSeqRunes)
+suite "Move to last line":
+  test "Baisc":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    status.bufStatus[0].buffer = initGapBuffer(@[
+      "abc",
+      "efg",
+      "hij",
+      "klm",
+      "nop",
+      "qrs"].toSeqRunes)
 
-  currentMainWindowNode.currentLine = 1
-  currentBufStatus.moveToLastLine(currentMainWindowNode)
-  check(currentMainWindowNode.currentLine == 5)
+    currentMainWindowNode.currentLine = 1
+    currentBufStatus.moveToLastLine(currentMainWindowNode)
+    check(currentMainWindowNode.currentLine == 5)
+
+  test "Long line":
+    var status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+    status.bufStatus[0].buffer = @[ru"a".repeat(1000)].toGapBuffer
+    for _ in 0 .. 20: status.bufStatus[0].buffer.add ru""
+
+    status.resize(30, 30)
+    status.update
+
+    currentBufStatus.moveToLastLine(currentMainWindowNode)
+    check currentMainWindowNode.currentLine == 21
 
 test "Move to forward word":
   var status = initEditorStatus()
