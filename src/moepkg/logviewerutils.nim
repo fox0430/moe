@@ -53,9 +53,9 @@ proc initLspLogViewrBuffer*(log: LspLog): seq[Runes] =
     result.add toRunes(fmt"{$l.timestamp} -- {$l.kind}")
 
     let lines = l.message.pretty.splitLines.toSeqRunes
-    for i in 0 .. lines.high:
-      result.add lines[i]
-      result.add ru""
+    for i in 0 .. lines.high: result.add lines[i]
+
+    result.add ru""
 
 proc initLogViewerHighlight*(buffer: seq[Runes]): Highlight =
   if buffer.len > 0:

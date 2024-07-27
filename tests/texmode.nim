@@ -602,7 +602,6 @@ suite "Ex mode: Open LSP log viewer":
     check currentMainWindowNode.view.height > 1
 
     check currentBufStatus.buffer.toSeqRunes == @[
-      "",
       $status.lspClients["nim"].log[0].timestamp & " -- " & "request",
       "{",
       """  "message1": "message1"""",
