@@ -30,8 +30,11 @@ type
 proc countLogLine[T](buf: T): int =
   ## `buf` is `seq[Runes]`, `GapBuffer[T]` or etc
 
+  if buf.len == 1 and buf[0].len == 0: return 0
+
   result = 1
   for i in 0 .. buf.high:
+    # Count empty lines after log lines.
     if buf[i].len == 0: result.inc
 
 proc initEditorLogViewrBuffer*(): seq[Runes] =
@@ -49,15 +52,17 @@ proc initLspLogViewrBuffer*(log: LspLog): seq[Runes] =
   if log.len == 0:
     return @[ru""]
 
-  for l in log:
-    result.add toRunes(fmt"{$l.timestamp} -- {$l.kind}")
+  for i in 0 .. log.high:
+    result.add toRunes(fmt"{$log[i].timestamp} -- {$log[i].kind}")
 
-    let lines = l.message.pretty.splitLines.toSeqRunes
+    let lines = log[i].message.pretty.splitLines.toSeqRunes
     for i in 0 .. lines.high: result.add lines[i]
 
-    result.add ru""
+    if i < log.high: result.add ru""
 
 proc initLogViewerHighlight*(buffer: seq[Runes]): Highlight =
+  ## TODO: Move to highlight module?
+
   if buffer.len > 0:
     const EmptyReservedWord: seq[ReservedWord] = @[]
     return buffer.initHighlight(EmptyReservedWord, SourceLanguage.langNone)
