@@ -210,11 +210,15 @@ proc openEditorLogViewer(status: var EditorStatus) =
   status.moveNextWindow
 
   discard status.addNewBufferInCurrentWin(Mode.logviewer)
-  status.resize
-
   currentBufStatus.logContent = LogContentKind.editor
 
   status.changeCurrentBuffer(status.bufStatus.high)
+
+  let buf = initEditorLogViewrBuffer()
+  currentBufStatus.buffer = buf.toGapBuffer
+  currentBufStatus.highlight = buf.initLogViewerHighlight
+
+  status.resize
 
 proc openLspLogViewer(status: var EditorStatus) =
   ## Open a new log viewe for LSP logs.
@@ -228,12 +232,13 @@ proc openLspLogViewer(status: var EditorStatus) =
   status.moveNextWindow
 
   discard status.addNewBufferInCurrentWin(Mode.logviewer)
-  status.resize
 
   status.changeCurrentBuffer(status.bufStatus.high)
 
   currentBufStatus.logContent = LogContentKind.lsp
   currentBufStatus.logLspLangId = langId
+
+  status.resize
 
 proc openBufferManager(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)

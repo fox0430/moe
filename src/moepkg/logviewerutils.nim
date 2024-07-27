@@ -17,12 +17,60 @@
 #                                                                              #
 #[############################################################################]#
 
-import ui, unicodeext
+import std/[json, strformat, strutils, times]
+
+import lsp/client
+import ui, unicodeext, messagelog, highlight
 
 type
   LogContentKind* = enum
     editor
     lsp
+
+proc countLogLine[T](buf: T): int =
+  ## `buf` is `seq[Runes]`, `GapBuffer[T]` or etc
+
+  result = 1
+  for i in 0 .. buf.high:
+    if buf[i].len == 0: result.inc
+
+proc initEditorLogViewrBuffer*(): seq[Runes] =
+  let log = getMessageLog()
+
+  if log.len == 0:
+    return @[ru""]
+
+  for i, l in log:
+    result.add l
+    if i < log.high:
+      result.add ru""
+
+proc initLspLogViewrBuffer*(log: LspLog): seq[Runes] =
+  if log.len == 0:
+    return @[ru""]
+
+  for l in log:
+    result.add toRunes(fmt"{$l.timestamp} -- {$l.kind}")
+
+    let lines = l.message.pretty.splitLines.toSeqRunes
+    for i in 0 .. lines.high:
+      result.add lines[i]
+      result.add ru""
+
+proc initLogViewerHighlight*(buffer: seq[Runes]): Highlight =
+  if buffer.len > 0:
+    const EmptyReservedWord: seq[ReservedWord] = @[]
+    return buffer.initHighlight(EmptyReservedWord, SourceLanguage.langNone)
+
+proc isUpdateEditorLogViwer*[T](buf: var T): bool {.inline.} =
+  ## `buf` is `seq[Runes]`, `GapBuffer[T]` or etc
+
+  return messageLogLen() > buf.countLogLine
+
+proc isUpdateLspLogViwer*[T](buf: var T, log: var LspLog): bool {.inline.} =
+  ## `buf` is `seq[Runes]`, `GapBuffer[T]` or etc
+
+  log.len > buf.countLogLine
 
 proc isLogViewerCommand*(command: Runes): InputState =
   result = InputState.Invalid

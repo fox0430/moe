@@ -28,7 +28,8 @@ import editorstatus, bufferstatus, windownode, unicodeext, gapbuffer, ui,
        debugmode, commandline, search, commandlineutils, popupwindow, messages,
        filermodeutils, editor, registers, exmodeutils, movement, searchutils,
        independentutils, viewhighlight, completion, completionwindow,
-       worddictionary, referencesmode, callhierarchyviewer, editorview
+       worddictionary, referencesmode, callhierarchyviewer, editorview,
+       logviewerutils
 
 type
   BeforeLine = object
@@ -847,6 +848,20 @@ proc sendLspRequests(status: var EditorStatus) =
       currentMainWindowNode.bufferPosition)
     if err.isErr: error fmt"lsp: {err.error}"
 
+template isUpdateEditorLogViwer(status: var EditorStatus): bool =
+  currentBufStatus.logContent == LogContentKind.editor and
+  currentBufStatus.buffer.isUpdateEditorLogViwer
+
+template isUpdateLspLogViwer(status: var EditorStatus): bool =
+  currentBufStatus.logContent == LogContentKind.lsp and
+  status.lspClients.contains(currentBufStatus.logLspLangId) and
+  currentBufStatus.buffer.isUpdateLspLogViwer(
+    status.lspClients[currentBufStatus.logLspLangId].log)
+
+template isUpdateLogViwer(status: var EditorStatus): bool =
+  status.isUpdateEditorLogViwer or
+  status.isUpdateLspLogViwer
+
 proc editorMainLoop*(status: var EditorStatus) =
   ## Get keys, exec commands and update view.
 
@@ -875,6 +890,10 @@ proc editorMainLoop*(status: var EditorStatus) =
         key = currentMainWindowNode.getKey(Timeout)
 
         status.runBackgroundTasks
+
+        if currentBufStatus.isLogViewerMode and status.isUpdateLogViwer:
+          currentBufStatus.isUpdate = true
+
         if status.bufStatus.isUpdate:
           break
 

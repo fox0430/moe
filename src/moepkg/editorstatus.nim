@@ -648,11 +648,6 @@ proc updateStatusLine(status: var EditorStatus) =
         isActiveWindow,
         status.settings)
 
-proc initLogViewerHighlight(buffer: seq[Runes]): Highlight =
-  if buffer.len > 0:
-    const EmptyReservedWord: seq[ReservedWord] = @[]
-    return buffer.initHighlight(EmptyReservedWord, SourceLanguage.langNone)
-
 proc isInitialized(t: LspClientTable, langId: string): bool {.inline.} =
   t.contains(langId) and t[langId].isInitialized
 
@@ -741,6 +736,7 @@ proc updateSyntaxHighlightings(status: EditorStatus) =
           n.currentLine)
     elif b.isLogViewerMode:
       b.highlight = initLogViewerHighlight(b.buffer.toSeqRunes)
+      b.isUpdate = false
     elif b.isDiffViewerMode:
       b.highlight = initDiffViewerHighlight(b.buffer.toRunes)
     elif b.isUpdate:
@@ -785,26 +781,14 @@ proc updateSyntaxHighlightings(status: EditorStatus) =
           # Send a textDocument/codeLens request to the LSP server.
           client.sendLspCodeLens(b)
 
-proc updateLogViewerEditorBuffer*(b: var BufferStatus) =
-  ## Update the logviewer buffer for editor logs.
-
-  let log = getMessageLog()
-  if log.len > 0 and log[0].len > 0:
-    b.buffer = log.toGapBuffer
-
-proc updateLogViewerLspBuffer*(b: var BufferStatus, log: LspLog) =
-  ## Update the logviewer buffer for LSP logs.
-
-  if log.len > 0:
-    b.buffer = initGapBuffer(@[ru""])
-
-    for l in log:
-      b.buffer.add toRunes(fmt"{$l.timestamp} -- {$l.kind}")
-
-      let lines = l.message.pretty.splitLines.toSeqRunes
-      for line in lines: b.buffer.add line
-
-      b.buffer.add ru""
+template updateLogViewerBuffer(b: var BufferStatus) =
+  case b.logContent:
+    of editor:
+      b.buffer = initEditorLogViewrBuffer().toGapBuffer
+    of lsp:
+      if status.lspClients.contains(b.logLspLangId):
+        b.buffer = initLspLogViewrBuffer(status.lspClients[b.logLspLangId].log)
+          .toGapBuffer
 
 proc updateSelectedArea(b: var BufferStatus, windowNode: var WindowNode) =
   if b.isVisualLineMode:
@@ -892,12 +876,7 @@ proc update*(status: var EditorStatus) =
             settings.filer.showIcons).toGapBuffer
     elif b.isLogViewerMode:
       # Update the logviewer mode buffer.
-      case b.logContent:
-        of editor:
-          b.updateLogViewerEditorBuffer
-        of lsp:
-          if status.lspClients.contains(b.logLspLangId):
-            b.updateLogViewerLspBuffer(status.lspClients[b.logLspLangId].log)
+      b.updateLogViewerBuffer
 
     elif b.isDebugMode:
       # Update the debug mode buffer.
