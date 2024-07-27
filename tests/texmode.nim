@@ -648,8 +648,7 @@ suite "Ex mode: Open LSP log viewer":
       $status.lspClients["nim"].log[1].timestamp & " -- " & "response",
       "{",
       """  "message2": "message2"""",
-      "}",
-      ""
+      "}"
     ].toSeqRunes
 
 suite "Ex mode: Highlight pair of paren settig command":
