@@ -57,6 +57,19 @@ suite "logviewerutils: initEditorLogViewrBuffer":
     ]
     .toSeqRunes
 
+  test "With new line":
+    addMessageLog "line1.0\nline1.1"
+    addMessageLog "line2.0\nline2.1"
+
+    check initEditorLogViewrBuffer() == @[
+      "line1.0",
+      "line1.1",
+      "",
+      "line2.0",
+      "line2.1"
+    ]
+    .toSeqRunes
+
 suite "logviewerutils: initLspLogViewrBuffer":
   setup:
     clearMessageLog()
