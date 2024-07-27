@@ -44,3 +44,8 @@ proc getMessageLog*(): seq[Runes] =
 proc clearMessageLog*() =
   ## Clear all message.
   messageLog = @[]
+
+proc messageLogLen*(): int =
+  ## Returns the number of lines in the log.
+
+  messageLog.len

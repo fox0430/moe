@@ -23,6 +23,8 @@ import syntax/highlite
 import lsp/[semantictoken, protocol/types]
 import unicodeext, color, independentutils, ui
 
+export SourceLanguage
+
 type
   ColorSegment* = object
     firstRow*, firstColumn*, lastRow*, lastColumn*: int

@@ -24,7 +24,7 @@ import pkg/results
 import moepkg/syntax/highlite
 import moepkg/[unicodeext, bufferstatus, gapbuffer, editorstatus, windownode,
                ui, commandLine, viewhighlight, visualmode, independentutils,
-               completion]
+               completion, messagelog]
 
 import utils
 
@@ -1397,3 +1397,26 @@ suite "mainloop: confirmCompletion in comamnd line":
 
     check status.completionWindow.isNone
     check status.commandLine.buffer == ru"aa"
+
+suite "mainloop: Log viewer":
+  test "Enter visual mode (Fix #2017)":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+
+    status.resize(100, 100)
+    status.update
+
+    status.openEditorLogViewer
+    status.update
+
+    status.movePrevWindow
+    addMessageLog "test"
+    status.update
+
+    status.moveNextWindow
+    status.update
+
+    discard status.execCommand(ru"v")
+    status.update
+
+    assert currentBufStatus.isVisualMode
