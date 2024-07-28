@@ -43,8 +43,8 @@ proc initEditorLogViewrBuffer*(): seq[Runes] =
   if log.len == 0:
     return @[ru""]
 
-  for i, l in log:
-    result.add l
+  for i, line in log:
+    for l in line.splitLines: result.add l
     if i < log.high:
       result.add ru""
 
