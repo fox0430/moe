@@ -19,14 +19,10 @@
 
 import std/[unittest, times, json, strformat]
 
-import pkg/results
-
 import moepkg/lsp/client
-import moepkg/[editorstatus, bufferstatus, unicodeext, messagelog]
+import moepkg/[unicodeext, messagelog]
 
 import moepkg/logviewerutils {.all.}
-
-import utils
 
 suite "logviewerutils: countLogLine":
   test "Basic":
