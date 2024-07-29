@@ -29,6 +29,7 @@ import ../appinfo
 import ../independentutils
 import ../settings
 
+import serverspecific/rustanalyzer
 import protocol/[enums, types]
 import jsonrpc, utils, completion, progress, hover, semantictoken, inlayhint,
        definition, references, rename, typedefinition, implementation,
@@ -42,19 +43,6 @@ type
       # Error message.
     data*: string
       # Error data.
-
-  LspMessageKind* = enum
-    request
-    response
-    notifyFromClient
-    notifyFromServer
-
-  LspMessage* = object
-    timestamp*: DateTime
-    kind*: LspMessageKind
-    message*: JsonNode
-
-  LspLog* = seq[LspMessage]
 
   LspCapabilities* = object
     completion*: Option[LspCompletionOptions]
@@ -102,6 +90,7 @@ type
       # Request/Response log.
     lastId*: RequestId
       # Last request ID
+    serverName*: string
 
 type
   R = Result
@@ -429,11 +418,14 @@ proc initLspClient*(command: string): initLspClientResult =
     input: InputStream(stream: c.serverProcess.inputStream),
     output: OutputStream(stream: c.serverProcess.outputStream))
 
+  c.serverName = commandSplit[0]
+
   return initLspClientResult.ok c
 
 proc initInitializeParams*(
-  workspaceRoot: string,
+  serverName, workspaceRoot: string,
   trace: TraceValue): InitializeParams =
+
     let
       path =
         if workspaceRoot.len == 0: none(string)
@@ -445,7 +437,7 @@ proc initInitializeParams*(
         if workspaceRoot.len == 0: getCurrentDir()
         else: workspaceRoot
 
-    InitializeParams(
+    result = InitializeParams(
       processId: some(%getCurrentProcessId()),
       rootPath: path,
       rootUri: uri,
@@ -543,6 +535,12 @@ proc initInitializeParams*(
       ),
       trace: some($trace)
     )
+
+    case serverName:
+      of "rust-analyzer":
+        result.capabilities.experimental = some(experimentClientCapabilities())
+      else:
+        discard
 
 proc setCapabilities(
   c: var LspClient,

@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, strformat, json, uri, os, options]
+import std/[strutils, strformat, json, uri, os, options, times]
 
 import pkg/results
 
@@ -77,6 +77,19 @@ type
     prepare
     incoming
     outgoing
+
+  LspMessageKind* = enum
+    request
+    response
+    notifyFromClient
+    notifyFromServer
+
+  LspMessage* = object
+    timestamp*: DateTime
+    kind*: LspMessageKind
+    message*: JsonNode
+
+  LspLog* = seq[LspMessage]
 
   LspMethodResult* = Result[LspMethod, string]
   LspShutdownResult* = Result[(), string]
