@@ -21,7 +21,8 @@ import std/[json, sequtils, strformat, options, os]
 
 import pkg/results
 
-import ../../[backgroundprocess, quickrunutils]
+import ../../backgroundprocess
+import ../../quickrunutils
 import ../protocol/types
 
 type
