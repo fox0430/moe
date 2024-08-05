@@ -3,5 +3,5 @@
 Added
 .....
 
-- `#2121`_ lsp: Add rust-analyzer.runSingle support
+- `#2122`_ lsp: Add rust-analyzer.runSingle support
 
