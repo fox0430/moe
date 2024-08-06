@@ -289,6 +289,7 @@ trace = "verbose"
 extensions = ["rs"]
 command = "rust-analyzer"
 trace = "verbose"
+rustAnalyzerSingleRun = true
 
 
 [Debug.WindowNode]
