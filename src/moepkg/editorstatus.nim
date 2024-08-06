@@ -323,6 +323,7 @@ proc lspInitialize*(
     let err = status.lspClients[langId].initialize(
       status.bufStatus[^1].id,
       initInitializeParams(
+        status.lspClients[langId].serverName,
         workspaceRoot,
         status.settings.lsp.languages[langId].trace))
     if err.isErr:

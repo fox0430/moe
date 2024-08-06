@@ -19,7 +19,7 @@
 
 import std/[unittest, times, json, strformat]
 
-import moepkg/lsp/client
+import moepkg/lsp/utils
 import moepkg/[unicodeext, messagelog]
 
 import moepkg/logviewerutils {.all.}

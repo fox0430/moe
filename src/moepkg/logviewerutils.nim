@@ -19,7 +19,7 @@
 
 import std/[json, strformat, strutils, times]
 
-import lsp/client
+import lsp/utils
 import ui, unicodeext, messagelog, highlight
 
 type

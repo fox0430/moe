@@ -21,6 +21,8 @@ import std/[json, strformat]
 
 import pkg/results
 
+import ../quickrunutils
+import serverspecific/rustanalyzer
 import protocol/types
 import utils
 
@@ -30,6 +32,8 @@ type
   CodeLensResult* = Result[seq[CodeLens], string]
 
   CodeLensResolveResult* = Result[CodeLens, string]
+
+  RunCodeLensCommandResult* = Result[QuickRunProcess, string]
 
 proc initCodeLensParams*(path: string): CodeLensParams =
   CodeLensParams(
@@ -69,3 +73,13 @@ proc parseCodeLensResolveResponse*(res: JsonNode): CodeLensResolveResult =
       return CodeLensResolveResult.err fmt"Invalid response: {e.msg}"
 
   return CodeLensResolveResult.ok codeLens
+
+proc runCodeLensCommand*(
+  lens: CodeLens,
+  serverName, path: string): RunCodeLensCommandResult =
+
+    case serverName:
+      of "rust-analyzer":
+        return lens.runCodeLensCommand(path)
+      else:
+        return RunCodeLensCommandResult.err "Unknown command"

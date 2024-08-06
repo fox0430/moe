@@ -922,6 +922,13 @@ A LSP server command (string)
 command
 ```
 
+Enable/Disable rust-analyzer.runSingle (bool)  
+Only effective with rust-analyzer and if `Lsp.CodeLens` is enabled.  
+defaut is `true`
+```
+rustAnalyzerRunSingle
+```
+
 Please check more [details](https://github.com/fox0430/moe/blob/develop/documents/lsp.md)
 
 ### StartUp.FileOpen table

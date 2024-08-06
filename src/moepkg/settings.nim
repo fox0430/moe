@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -303,10 +303,17 @@ type
     semanticTokens*: LspSemanticTokesnSettings
     executeCommand*: LspExecuteCommandSettings
 
+  LspRustAnalyzerSettings* = object
+    runSingle*: bool
+
+  LspServerSettings* = object
+    rustAnalyzer*: LspRustAnalyzerSettings
+
   LspSettings* = object
     enable*: bool
     languages*: Table[LanguageId, LspLanguageSettings]
     features*: LspFeatureSettings
+    servers*: LspServerSettings
 
   StandardSettings* = object
     syntax*: bool
@@ -614,6 +621,12 @@ proc initLspFeatureSettings(): LspFeatureSettings =
   result.semanticTokens = initLspSemanticTokesnSettings()
   result.executeCommand = initLspExecuteCommandSettings()
 
+proc initLspRustAnalyzerSettings(): LspRustAnalyzerSettings =
+  result.runSingle = true
+
+proc initLspServerSettings(): LspServerSettings =
+  result.rustAnalyzer = initLspRustAnalyzerSettings()
+
 proc initLspSettigns(): LspSettings =
   result.enable = true
 
@@ -628,6 +641,8 @@ proc initLspSettigns(): LspSettings =
     extensions: @[ru"rs"],
     command: ru"rust-analyzer",
     trace: TraceValue.verbose)
+
+  result.servers = initLspServerSettings()
 
 proc initStandardSettings(): StandardSettings =
   result.syntax = true
@@ -1936,7 +1951,9 @@ proc parseLspTable(s: var EditorSettings, lspConfigs: TomlValueRef) =
               discard
       else:
         let langId = key
-        var langSettings = LspLanguageSettings()
+        var
+          serverSettings = initLspServerSettings()
+          langSettings = LspLanguageSettings()
         for key, val in val.getTable:
           case key:
             of "extensions":
@@ -1946,8 +1963,19 @@ proc parseLspTable(s: var EditorSettings, lspConfigs: TomlValueRef) =
               langSettings.command = val.getStr.toRunes
             of "trace":
               langSettings.trace = val.getStr.parseTraceValue.get
+            else:
+              case langId:
+                of "rust":
+                  case key:
+                    of "rustAnalyzerRunSingle":
+                      serverSettings.rustAnalyzer.runSingle = val.getBool
+                    else:
+                      discard
+                else:
+                  discard
 
         s.lsp.languages[langId] = langSettings
+        s.lsp.servers = serverSettings
 
 proc toThemeColors*(config: TomlValueRef): ThemeColors =
   ## Return ThemeColors based on the TOML theme colors config.
@@ -2604,6 +2632,9 @@ proc validateLspTable(table: TomlValueRef): Option[InvalidItem] =
               if val.kind != TomlValueKind.String and
                  val.getStr.parseTraceValue.isErr:
                    return some(InvalidItem(name: $key, val: $val))
+            of "rustAnalyzerRunSingle":
+              if val.kind != TomlValueKind.Bool:
+                return some(InvalidItem(name: $key, val: $val))
             else:
               return some(InvalidItem(name: $key, val: $val))
 
@@ -3031,6 +3062,12 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
     result.addLine fmt "extensions = {exts}"
 
     result.addLine fmt "command = \"{$val.command}\""
+
+    case key:
+      of "rust":
+        result.addLine fmt"rustAnalyzerRunSingle = {$settings.lsp.servers.rustAnalyzer.runSingle}"
+      else:
+        discard
 
   result.addLine fmt "[Debug.WindowNode]"
   result.addLine fmt "enable = {$settings.debugMode.windowNode.enable}"

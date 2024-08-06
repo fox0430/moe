@@ -323,7 +323,7 @@ type
     workspace*: Option[WorkspaceClientCapabilities]
     textDocument*: Option[TextDocumentClientCapabilities]
     window*: Option[WindowCapabilities]
-    # experimental*: OptionalNode
+    experimental*: OptionalNode
 
   WorkspaceFolder* = ref object of RootObj
     uri*: string

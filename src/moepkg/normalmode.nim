@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -23,7 +23,7 @@ import std/[times, strutils, sequtils, options, strformat, tables, logging,
 import pkg/results
 
 import lsp/protocol/types
-import lsp/client
+import lsp/[client, codelens]
 import editorstatus, ui, gapbuffer, unicodeext, fileutils, windownode, movement,
        editor, searchutils, bufferstatus, quickrunutils, messages, visualmode,
        commandline, viewhighlight, messagelog, registers, independentutils
@@ -299,18 +299,8 @@ proc writeFileAndExit(status: var EditorStatus) =
 proc forceExit(status: var EditorStatus) {.inline.} =
   status.closeWindow(currentMainWindowNode)
 
-proc runQuickRunCommand(status: var EditorStatus) =
-  let quickRunProcess = startBackgroundQuickRun(
-    status.bufStatus[currentMainWindowNode.bufferIndex],
-    status.settings)
-  if quickRunProcess.isErr:
-    status.commandLine.writeError(quickRunProcess.error.toRunes)
-    addMessageLog quickRunProcess.error.toRunes
-    return
-
-  status.backgroundTasks.quickRun.add quickRunProcess.get
-
-  let index = status.bufStatus.quickRunBufferIndex(quickRunProcess.get.filePath)
+template initQuickRunWindow(status: var EditorStatus, filePath: string) =
+  let index = status.bufStatus.quickRunBufferIndex(filePath)
 
   if index.isSome:
     # Overwrite the quickrun buffer.
@@ -324,12 +314,25 @@ proc runQuickRunCommand(status: var EditorStatus) =
 
     discard status.addNewBufferInCurrentWin
     status.changeCurrentBuffer(status.bufStatus.high)
-    currentBufStatus.path = quickRunProcess.get.filePath.toRunes
+    currentBufStatus.path = filePath.toRunes
     currentBufStatus.buffer[0] =
       quickRunStartupMessage($currentBufStatus.path).toRunes
     status.changeMode(Mode.quickRun)
 
     status.resize
+
+proc runQuickRunCommand(status: var EditorStatus) =
+  let quickRunProcess = startBackgroundQuickRun(
+    status.bufStatus[currentMainWindowNode.bufferIndex],
+    status.settings)
+  if quickRunProcess.isErr:
+    status.commandLine.writeError(quickRunProcess.error.toRunes)
+    addMessageLog quickRunProcess.error.toRunes
+    return
+
+  status.backgroundTasks.quickRun.add quickRunProcess.get
+
+  status.initQuickRunWindow(quickRunProcess.get.filePath)
 
   status.commandLine.writeRunQuickRunMessage(status.settings.notification)
 
@@ -561,18 +564,19 @@ proc runCodeLensCommand(status: var EditorStatus) =
     if r.isErr:
       status.commandLine.writeLspCodeLensError(r.error)
   else:
-    let args: JsonNode =
-      if codeLenses[index].command.get.arguments.isSome:
-        codeLenses[index].command.get.arguments.get
-      else:
-        newJArray()
+    let p = runCodeLensCommand(
+      codeLenses[index],
+      lspClient.serverName,
+      $currentBufStatus.path)
+    if p.isErr:
+      status.commandLine.writeLspCodeLensError(p.error)
+      return
 
-    let r = lspClient.workspaceExecuteCommand(
-      currentBufStatus.id,
-      codeLenses[index].command.get.command,
-      args)
-    if r.isErr:
-      status.commandLine.writeLspCodeLensError(r.error)
+    status.backgroundTasks.quickRun.add p.get
+
+    status.initQuickRunWindow(p.get.filePath)
+
+    status.commandLine.writeRunQuickRunMessage(status.settings.notification)
 
 proc requestRename(status: var EditorStatus) =
   if not status.lspClients.contains(currentBufStatus.langId):

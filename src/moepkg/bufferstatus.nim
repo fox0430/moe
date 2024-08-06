@@ -21,12 +21,15 @@ import std/[times, options, os, strformat]
 
 import pkg/results
 
-import lsp/[inlayhint, callhierarchy, codelens]
+import lsp/protocol/types
+import lsp/inlayhint
 import syntax/highlite
 import gapbuffer, unicodeext, fileutils, highlight, independentutils, git,
        syntaxcheck, completion, logviewerutils, helputils
 
 type
+  CompletionList = completion.CompletionList
+
   Mode* = enum
     normal
     insert
