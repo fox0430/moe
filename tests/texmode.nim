@@ -23,7 +23,7 @@ import std/[unittest, os, oids, deques, strformat, importutils, osproc, tables,
 import pkg/results
 
 import moepkg/syntax/highlite
-import moepkg/lsp/client
+import moepkg/lsp/[client, utils]
 import moepkg/[ui, editorstatus, gapbuffer, unicodeext, bufferstatus, settings,
                windownode, helputils, backgroundprocess, quickrunutils,
                exmodeutils, messagelog, logviewerutils]

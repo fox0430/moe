@@ -804,6 +804,7 @@ suite "lsp: Send requests":
   privateAccess(LspClient)
 
   const
+    ServerName = "nimlangserver"
     Command = "nimlangserver"
     Trace = TraceValue.verbose
     Timeout = 5000
@@ -826,7 +827,7 @@ suite "lsp: Send requests":
       skip()
     else:
       const BufferId = 1
-      let params = initInitializeParams(rootDir, Trace)
+      let params = initInitializeParams(ServerName, rootDir, Trace)
 
       check client.initialize(BufferId, params).isOk
       check client.waitingResponses[1].lspMethod == LspMethod.initialize
@@ -848,7 +849,7 @@ suite "lsp: Send requests":
         block:
           let
             rootPath = getCurrentDir()
-            params = initInitializeParams(rootPath, Trace)
+            params = initInitializeParams(ServerName, rootPath, Trace)
           assert client.initialize(BufferId, params).isOk
 
         assert client.readable(Timeout).isOk
@@ -879,7 +880,7 @@ suite "lsp: Send requests":
 
   template prepareLsp(bufferId: int, langId: LanguageId, path, text: string) =
     block:
-      let params = initInitializeParams(rootDir, Trace)
+      let params = initInitializeParams(ServerName, rootDir, Trace)
       assert client.initialize(BufferId, params).isOk
 
     assert client.readable(Timeout).isOk
@@ -931,7 +932,7 @@ suite "lsp: Send requests":
       block:
         # Initialize
 
-        let params = initInitializeParams(rootDir, Trace)
+        let params = initInitializeParams(ServerName, rootDir, Trace)
 
         check client.initialize(BufferId, params).isOk
         check client.waitingResponses[1].lspMethod == LspMethod.initialize
@@ -963,7 +964,7 @@ suite "lsp: Send requests":
         let rootPath = getCurrentDir()
 
         block:
-          let params = initInitializeParams(rootPath, Trace)
+          let params = initInitializeParams(ServerName, rootPath, Trace)
           assert client.initialize(BufferId, params).isOk
 
         assert client.readable(Timeout).isOk
