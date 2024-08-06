@@ -41,7 +41,8 @@ proc experimentClientCapabilities*(): JsonNode =
   %*{
     "commands": {
       "commands": [
-        "rust-analyzer.runSingle"
+        "rust-analyzer.runSingle",
+        "rust-analyzer.debugSingle"
       ]
     }
   }
@@ -86,6 +87,49 @@ proc runSingle*(lens: CodeLens, path: string): RACodeLensResult =
     filePath: path,
     process: p.get)
 
+proc debugSingle*(lens: CodeLens, path: string): RACodeLensResult =
+  if lens.command.isNone or
+     lens.command.get.arguments.isNone or
+     lens.command.get.arguments.get.kind != JArray or
+     lens.command.get.arguments.get.len != 1:
+       return RACodeLensResult.err fmt"Invalid command"
+
+  let
+    codeLensArgs =
+      try:
+        lens.command.get.arguments.get[0]["args"].to(CodeLensArgs)
+      except CatchableError as e:
+        return RACodeLensResult.err fmt"Invalid command: {e.msg}"
+
+  var
+    cmd = ""
+    args: seq[string]
+  try:
+    cmd = lens.command.get.arguments.get[0]["kind"].getStr
+
+    case codeLensArgs.cargoArgs[0]
+      of "test": args.add "--no-run"
+      of "run": args.add "build"
+    args.add codeLensArgs.cargoArgs[1 .. codeLensArgs.cargoArgs.high].mapIt(it)
+
+    args.add codeLensArgs.executableArgs.mapIt(it)
+  except CatchableError as e:
+    return RACodeLensResult.err fmt"Invalid command: {e.msg}"
+
+  let command = BackgroundProcessCommand(
+    cmd: cmd,
+    args: args,
+    workingDir: getCurrentDir())
+
+  let p = startBackgroundProcess(command)
+  if p.isErr:
+    return RACodeLensResult.err fmt"rust-analyzer.debugSingle failed: {p.error}"
+
+  return RACodeLensResult.ok QuickRunProcess(
+    command: command,
+    filePath: path,
+    process: p.get)
+
 proc runCodeLensCommand*(lens: CodeLens, path: string): RACodeLensResult =
   if lens.command.isNone:
     return RACodeLensResult.err fmt"Invalid command"
@@ -93,5 +137,7 @@ proc runCodeLensCommand*(lens: CodeLens, path: string): RACodeLensResult =
   case lens.command.get.command:
     of "rust-analyzer.runSingle":
       return lens.runSingle(path)
+    of "rust-analyzer.debugSingle":
+      return lens.debugSingle(path)
     else:
       return RACodeLensResult.err fmt"Unknown command"
