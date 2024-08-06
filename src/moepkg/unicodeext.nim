@@ -644,3 +644,11 @@ proc removeNewLineAtEnd*(runes: Runes): Runes =
     else: break
 
   if countNewline > 0: return result[0 .. countNewline]
+
+proc addMargins*(lines: seq[Runes], width: int = 1): seq[Runes] =
+  let maxLen = lines.maxLen
+  for line in lines:
+    if line.len == maxLen:
+      result.add ru" " & line & ru" "
+    else:
+      result.add ru" " & line

@@ -26,7 +26,8 @@ import lsp/protocol/types
 import lsp/[client, codelens]
 import editorstatus, ui, gapbuffer, unicodeext, fileutils, windownode, movement,
        editor, searchutils, bufferstatus, quickrunutils, messages, visualmode,
-       commandline, viewhighlight, messagelog, registers, independentutils
+       commandline, viewhighlight, messagelog, registers, independentutils,
+       popupwindow
 
 proc changeModeToInsertMode(status: var EditorStatus) {.inline.} =
   if currentBufStatus.isReadonly:
@@ -548,35 +549,85 @@ proc requestDocumentLink(status: var EditorStatus) =
   if r.isErr:
     status.commandLine.writeLspDocumentLinkError(r.error)
 
+proc initCodeLensSelectorWindow(
+  status: var EditorStatus,
+  buffer: seq[Runes]): PopupWindow =
+
+    const MARGIN = 2
+    result = initPopupWindow(
+      independentutils.Position(
+        y: currentMainWindowNode.currentLine,
+        x: currentMainWindowNode.currentColumn),
+      Size(
+        h: buffer.len,
+        w: buffer.maxLen + MARGIN))
+
+    result.buffer = buffer.addMargins
+
+    result.currentLine = some(0)
+
 proc runCodeLensCommand(status: var EditorStatus) =
   let codeLenses = currentBufStatus
     .codeLenses
-    .filterIt(it.range.start.line == currentMainWindowNode.currentLine)
-
+    .filterIt(
+      it.range.start.line == currentMainWindowNode.currentLine and
+      it.command.isSome)
   if codeLenses.len == 0: return
 
-  # TODO: Add UI for selecting
-  let index = 0
-  if codeLenses[index].command.isNone:
-    let r = lspClient.codeLensResolve(
-      currentBufStatus.id,
-      codeLenses[index])
-    if r.isErr:
-      status.commandLine.writeLspCodeLensError(r.error)
-  else:
-    let p = runCodeLensCommand(
-      codeLenses[index],
-      lspClient.serverName,
-      $currentBufStatus.path)
-    if p.isErr:
-      status.commandLine.writeLspCodeLensError(p.error)
+  var index = 0
+  if codeLenses.len > 1:
+    # Open a popup window to select a lens.
+
+    hideCursor()
+
+    var popupWin = status.initCodeLensSelectorWindow(
+      codelenses.mapIt(it.command.get.command.toRunes))
+
+    while true:
+      popupWin.update
+      let key = currentMainWindowNode.getKeyBlocking
+
+      if isTabKey(key) or isDownKey(key) or key == ord('j'):
+        if popupWin.currentLine.get == codelenses.high:
+          popupWin.currentLine = some(0)
+        else:
+          popupWin.currentLine.get.inc
+      elif isShiftTab(key) or isUpKey(key) or key == ord('k'):
+        if popupWin.currentLine.get == 0:
+          popupWin.currentLine = some(codeLenses.high)
+        else:
+          popupWin.currentLine.get.dec
+      elif isEnterKey(key):
+        # Confirm
+        break
+      elif isEscKey(key) or isCtrlC(key):
+        # Cancel
+        popupWin.currentLine = none(int)
+        break
+
+    popupWin.close
+    showCursor()
+
+    if popupWin.currentLine.isSome:
+      # Confirm
+      index = popupWin.currentLine.get
+    else:
+      # Cancel
       return
 
-    status.backgroundTasks.quickRun.add p.get
+  let p = runCodeLensCommand(
+    codeLenses[index],
+    lspClient.serverName,
+    $currentBufStatus.path)
+  if p.isErr:
+    status.commandLine.writeLspCodeLensError(p.error)
+    return
 
-    status.initQuickRunWindow(p.get.filePath)
+  status.backgroundTasks.quickRun.add p.get
 
-    status.commandLine.writeRunQuickRunMessage(status.settings.notification)
+  status.initQuickRunWindow(p.get.filePath)
+
+  status.commandLine.writeRunQuickRunMessage(status.settings.notification)
 
 proc requestRename(status: var EditorStatus) =
   if not status.lspClients.contains(currentBufStatus.langId):
