@@ -151,7 +151,9 @@ If this feature is enabled, Highlight.currentWord will be forced to disable.
 
 ### Code Lens
 
-Work in prgoress
+Currently, Only supported in rust-analyzer.
+
+Please set true to `Lps.CodeLens.enable` and `Lsp.rust.rustAnalyzer.singleRun`.
 
 ### Rename
 
