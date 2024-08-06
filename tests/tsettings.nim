@@ -217,6 +217,7 @@ trace = "verbose"
 extensions = ["rs"]
 command = "rust-analyzer"
 trace = "verbose"
+rustAnalyzerSingleRun = false
 
 [Debug.WindowNode]
 enable = false
@@ -646,6 +647,8 @@ suite "settings: Parse configuration file":
       extensions: @[ru"rs"],
       command: ru"rust-analyzer",
       trace: TraceValue.verbose)
+
+    check not settings.lsp.servers.rustAnalyzer.singleRun
 
     check not settings.debugMode.windowNode.enable
     check not settings.debugMode.windowNode.currentWindow
