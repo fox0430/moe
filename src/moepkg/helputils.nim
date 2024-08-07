@@ -134,6 +134,7 @@ gy         - Goto Type Definition (LSP)
 gi         - Goto Implementation (LSP)
 gh         - Open Call hierarchy viewer (LSP)
 Space r    - Rename (LSP)
+\ r        - Code Lens (LSP)
 
 # Register
 
