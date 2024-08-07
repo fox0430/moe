@@ -26,6 +26,10 @@ import ../../quickrunutils
 import ../protocol/types
 
 type
+  RustAnalyzerConfigs* = object
+    runSingle*: bool
+    debugSingle*: bool
+
   CodeLensArgs* = ref object
     overrideCargo*: JsonNode
     workspaceRoot*: string
@@ -35,15 +39,18 @@ type
 
   RACodeLensResult* = Result[QuickRunProcess, string]
 
-proc experimentClientCapabilities*(): JsonNode =
+proc experimentClientCapabilities*(c: RustAnalyzerConfigs): JsonNode =
   ## Experimental client capabilities for rust-analyzer
 
-  %*{
+  var commands: seq[string]
+  if c.runSingle:
+    commands.add "rust-analyzer.runSingle"
+  if c.debugSingle:
+    commands.add "rust-analyzer.debugSingle"
+
+  return %*{
     "commands": {
-      "commands": [
-        "rust-analyzer.runSingle",
-        "rust-analyzer.debugSingle"
-      ]
+      "commands": commands
     }
   }
 
