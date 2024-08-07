@@ -155,6 +155,10 @@ Currently, Only supported in rust-analyzer.
 
 Please set true to `Lps.CodeLens.enable` and `Lsp.rust.rustAnalyzer.runSingle`.
 
+`\c` command in Normal mode on A code lens line.
+
+![moe-codelens](https://github.com/user-attachments/assets/6c178bb1-578a-44f0-8beb-1c0bfbd7bed1)
+
 ### Rename
 
 ` r` (`Space`-`r`) command in Normal mode. Enter a new name in the command line.

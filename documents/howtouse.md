@@ -66,7 +66,7 @@
 | <kbd>**q**</kbd> <kbd>**Any key**</kbd></br> Start recording operations for Macros | <kbd>**q**</kbd></br> Stop recording operations | <kbd>**@**</kbd> <kbd>**Any key**</kbd></br> Exce a macro | <kbd>**c**</kbd> <kbd>**t**</kbd> <kbd>**Any Key**</kbd></br> Delete characters until the any key and enter Insert mode |
 | <kbd>**d**</kbd> <kbd>**t**</kbd> <kbd>**Any Key**</kbd></br> Delete characters until the any key | <kbd>**.**</kbd></br> Repeat the last normal mode command | <kbd>**K**</kbd></br> Hover (LSP) | <kbd>**g**</kbd> <kbd>**c**</kbd></br> Goto Declaration (LSP) |
 | <kbd>**g**</kbd> <kbd>**d**</kbd></br> Goto Definition (LSP) | <kbd>**g**</kbd> <kbd>**y**</kbd></br> Goto TypeDefinition (LSP) | <kbd>**g**</kbd> <kbd>**i**</kbd></br> Goto Implementation (LSP) | <kbd>**g**</kbd> <kbd>**r**</kbd></br> Open References mode (LSP Find References) |
-| <kbd>**g**</kbd> <kbd>**h**</kbd></br> Open Call Hierarchy Viewer (LSP Call Hierarchy) | <kbd>**g**</kbd> <kbd>**l**</kbd></br> Document Link (LSP) | <kbd>**Space**</kbd> <kbd>**r**</kbd></br> Rename (LSP) |
+| <kbd>**g**</kbd> <kbd>**h**</kbd></br> Open Call Hierarchy Viewer (LSP Call Hierarchy) | <kbd>**g**</kbd> <kbd>**l**</kbd></br> Document Link (LSP) | <kbd>**Space**</kbd> <kbd>**r**</kbd></br> Rename (LSP) | <kbd>**\\**</kbd> <kbd>**c**</kbd></br> Code Lens (LSP) |
 
 </details>
 
