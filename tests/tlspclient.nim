@@ -28,6 +28,61 @@ import utils
 import moepkg/settings {.all.}
 import moepkg/lsp/client {.all.}
 
+suite "lsp: initInitializeParams":
+  const Trace = TraceValue.verbose
+
+  test "Disable experimental":
+    const
+      ServerName = "rust-analyzer"
+      WorkspaceRoot = "/"
+
+    let r = initInitializeParams(
+      ServerName,
+      WorkspaceRoot,
+      Trace)
+
+    check r.capabilities.experimental.isNone
+
+  test "Enable rust-analyzer.runSingle":
+    const
+      ServerName = "rust-analyzer"
+      WorkspaceRoot = "/"
+    let experimental = %* {
+        "commands": {
+          "commands": [
+            "rust-analyzer.runSingle"
+          ]
+        }
+      }
+
+    let r = initInitializeParams(
+      ServerName,
+      WorkspaceRoot,
+      Trace,
+      some(experimental))
+
+    check r.capabilities.experimental.get == experimental
+
+  test "Enable rust-analyzer.debugSingle":
+    const
+      ServerName = "rust-analyzer"
+      WorkspaceRoot = "/"
+    let experimental = %* {
+        "commands": {
+          "commands": [
+            "rust-analyzer.debugSingle"
+          ]
+        }
+      }
+
+    let r = initInitializeParams(
+      ServerName,
+      WorkspaceRoot,
+      Trace,
+      some(experimental))
+
+    check r.capabilities.experimental.get == experimental
+
 suite "lsp: setCapabilities":
   var client: LspClient
 
