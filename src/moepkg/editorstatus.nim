@@ -19,9 +19,11 @@
 
 import std/[strutils, os, strformat, tables, times, heapqueue, deques, options,
             encodings, math, logging, json]
+
 import pkg/[results, parsetoml]
+
 import syntax/highlite
-import lsp/[client, utils, inlayhint]
+import lsp/[client, utils, inlayhint, serverspecific]
 import gapbuffer, editorview, ui, unicodeext, highlight, fileutils, windownode,
        color, settings, statusline, bufferstatus, cursor, tabline, backup,
        messages, commandline, registers, platform, movement, filermodeutils,
@@ -305,6 +307,19 @@ proc cancelLspForegroundRequest*(status: var EditorStatus) {.inline.} =
   if status.lspClients.contains(currentBufStatus.langId):
     lspClient.cancelLspForegroundRequest(currentBufStatus.id)
 
+proc initLspExperimentalParams(
+  serverName: string,
+  settings: LspServerSettings): Option[JsonNode] =
+
+    case serverName:
+      of "rust-analyzer":
+        return some(experimentClientCapabilities(
+          RustAnalyzerConfigs(
+            runSingle: settings.rustAnalyzer.runSingle,
+            debugSingle: settings.rustAnalyzer.debugSingle)))
+      else:
+        discard
+
 proc lspInitialize*(
   status: var EditorStatus,
   workspaceRoot, langId: string): Result[(), string] =
@@ -325,7 +340,10 @@ proc lspInitialize*(
       initInitializeParams(
         status.lspClients[langId].serverName,
         workspaceRoot,
-        status.settings.lsp.languages[langId].trace))
+        status.settings.lsp.languages[langId].trace,
+        initLspExperimentalParams(
+          status.lspClients[langId].serverName,
+          status.settings.lsp.servers)))
     if err.isErr:
       return Result[(), string].err err.error
 

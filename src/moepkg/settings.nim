@@ -305,6 +305,7 @@ type
 
   LspRustAnalyzerSettings* = object
     runSingle*: bool
+    debugSingle*: bool
 
   LspServerSettings* = object
     rustAnalyzer*: LspRustAnalyzerSettings
@@ -623,6 +624,7 @@ proc initLspFeatureSettings(): LspFeatureSettings =
 
 proc initLspRustAnalyzerSettings(): LspRustAnalyzerSettings =
   result.runSingle = true
+  result.debugSingle = true
 
 proc initLspServerSettings(): LspServerSettings =
   result.rustAnalyzer = initLspRustAnalyzerSettings()
@@ -1969,6 +1971,8 @@ proc parseLspTable(s: var EditorSettings, lspConfigs: TomlValueRef) =
                   case key:
                     of "rustAnalyzerRunSingle":
                       serverSettings.rustAnalyzer.runSingle = val.getBool
+                    of "rustAnalyzerDebugSingle":
+                      serverSettings.rustAnalyzer.debugSingle = val.getBool
                     else:
                       discard
                 else:
@@ -2632,7 +2636,7 @@ proc validateLspTable(table: TomlValueRef): Option[InvalidItem] =
               if val.kind != TomlValueKind.String and
                  val.getStr.parseTraceValue.isErr:
                    return some(InvalidItem(name: $key, val: $val))
-            of "rustAnalyzerRunSingle":
+            of "rustAnalyzerRunSingle", "rustAnalyzerDebugSingle":
               if val.kind != TomlValueKind.Bool:
                 return some(InvalidItem(name: $key, val: $val))
             else:
@@ -3066,6 +3070,7 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
     case key:
       of "rust":
         result.addLine fmt"rustAnalyzerRunSingle = {$settings.lsp.servers.rustAnalyzer.runSingle}"
+        result.addLine fmt"rustAnalyzerDebugSingle = {$settings.lsp.servers.rustAnalyzer.debugSingle}"
       else:
         discard
 

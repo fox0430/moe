@@ -29,7 +29,6 @@ import ../appinfo
 import ../independentutils
 import ../settings
 
-import serverspecific/rustanalyzer
 import protocol/[enums, types]
 import jsonrpc, utils, completion, progress, hover, semantictoken, inlayhint,
        definition, references, rename, typedefinition, implementation,
@@ -424,7 +423,8 @@ proc initLspClient*(command: string): initLspClientResult =
 
 proc initInitializeParams*(
   serverName, workspaceRoot: string,
-  trace: TraceValue): InitializeParams =
+  trace: TraceValue,
+  experimental: Option[JsonNode] = none(JsonNode)): InitializeParams =
 
     let
       path =
@@ -524,7 +524,8 @@ proc initInitializeParams*(
         )),
         window: some(WindowCapabilities(
           workDoneProgress: some(false)
-        ))
+        )),
+        experimental: experimental
       ),
       workspaceFolders: some(
         @[
@@ -535,12 +536,6 @@ proc initInitializeParams*(
       ),
       trace: some($trace)
     )
-
-    case serverName:
-      of "rust-analyzer":
-        result.capabilities.experimental = some(experimentClientCapabilities())
-      else:
-        discard
 
 proc setCapabilities(
   c: var LspClient,

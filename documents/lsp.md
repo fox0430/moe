@@ -153,7 +153,11 @@ If this feature is enabled, Highlight.currentWord will be forced to disable.
 
 Currently, Only supported in rust-analyzer.
 
-Please set true to `Lps.CodeLens.enable` and `Lsp.rust.rustAnalyzer.runSingle`.
+Please set true to `Lps.CodeLens.enable`, `Lsp.rust.rustAnalyzerRunSingle`, `Lsp.rust.rustAnalyzerDebugSingle`.
+
+`\c` command in Normal mode on A code lens line.
+
+![moe-codelens](https://github.com/user-attachments/assets/6c178bb1-578a-44f0-8beb-1c0bfbd7bed1)
 
 ### Rename
 

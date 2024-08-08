@@ -290,6 +290,7 @@ extensions = ["rs"]
 command = "rust-analyzer"
 trace = "verbose"
 rustAnalyzerRunSingle = true
+rustAnalyzerDebugSingle = true
 
 
 [Debug.WindowNode]

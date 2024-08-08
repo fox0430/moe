@@ -22,9 +22,8 @@ import std/[json, strformat]
 import pkg/results
 
 import ../quickrunutils
-import serverspecific/rustanalyzer
 import protocol/types
-import utils
+import utils, serverspecific
 
 export CodeLens
 

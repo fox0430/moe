@@ -929,6 +929,13 @@ defaut is `true`
 rustAnalyzerRunSingle
 ```
 
+Enable/Disable rust-analyzer.debugSingle (bool)  
+Only effective with rust-analyzer and if `Lsp.CodeLens` is enabled.  
+defaut is `true`
+```
+rustAnalyzerDebugSingle
+```
+
 Please check more [details](https://github.com/fox0430/moe/blob/develop/documents/lsp.md)
 
 ### StartUp.FileOpen table
