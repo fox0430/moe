@@ -164,6 +164,9 @@ type
   ExecuteCommandClientCapability* = ref object of RootObj
     dynamicRegistration*: Option[bool]
 
+  InlayHintWorkspaceClientCapabilities* = ref object of RootObj
+    refreshSupport*: Option[bool]
+
   WorkspaceClientCapabilities* = ref object of RootObj
     applyEdit*: Option[bool]
     workspaceEdit*: Option[WorkspaceEditCapability]
@@ -174,6 +177,7 @@ type
     workspaceFolders*: Option[bool]
     configuration*: Option[bool]
     codeLens*: Option[CodeLensWorkspaceClientCapabilities]
+    inlayHint*: Option[InlayHintWorkspaceClientCapabilities]
 
   SynchronizationCapability* = ref object of RootObj
     dynamicRegistration*: Option[bool]

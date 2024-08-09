@@ -24,6 +24,7 @@ Please feedback, bug reports and PRs.
 - `textDocument/completion`
 - `textDocument/semanticTokens/full`
 - `textDocument/inlayHint`
+- `workspace/inlayHint/refresh`
 - `textDocument/declaration`
 - `textDocument/definition`
 - `textDocument/typeDefinition`

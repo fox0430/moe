@@ -304,7 +304,11 @@ proc read*(c: var LspClient): JsonRpcResponseResult =
 
 template isLspError*(res: JsonNode): bool = res.contains("error")
 
-template isServerNotify*(res: JsonNode): bool = res.contains("method")
+template isRequest*(res: JsonNode): bool =
+  res.contains("id") and res.contains("method")
+
+template isNotify*(res: JsonNode): bool =
+  res.contains("method")
 
 proc parseLspError*(res: JsonNode): LspErrorParseResult =
   try:
@@ -457,6 +461,9 @@ proc initInitializeParams*(
           )),
           codeLens: some(CodeLensWorkspaceClientCapabilities(
             refreshSupport: some(false)
+          )),
+          inlayHint: some(InlayHintWorkspaceClientCapabilities(
+            refreshSupport: some(true)
           ))
         )),
         textDocument: some(TextDocumentClientCapabilities(
