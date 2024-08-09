@@ -57,6 +57,7 @@ type
     textDocumentSemanticTokensFull
     textDocumentSemanticTokensDelta
     textDocumentInlayHint
+    workspaceInlayHintRefresh
     textDocumentDefinition
     textDocumentReferences
     textDocumentRename
@@ -162,6 +163,7 @@ proc toLspMethodStr*(m: LspMethod): string =
     of textDocumentSemanticTokensFull: "textDocument/semanticTokens/full"
     of textDocumentSemanticTokensDelta: "textDocument/semanticTokens/delta"
     of textDocumentInlayHint: "textDocument/inlayHint"
+    of workspaceInlayHintRefresh: "workspace/inlayHint/refresh"
     of textDocumentDefinition: "textDocument/definition"
     of textDocumentReferences: "textDocument/references"
     of textDocumentRename: "textDocument/rename"
@@ -234,6 +236,8 @@ proc lspMethod*(j: JsonNode): LspMethodResult =
       LspMethodResult.ok textDocumentSemanticTokensDelta
     of "textDocument/inlayHint":
       LspMethodResult.ok textDocumentInlayHint
+    of "workspace/inlayHint/refresh":
+      LspMethodResult.ok workspaceInlayHintRefresh
     of "textDocument/definition":
       LspMethodResult.ok textDocumentDefinition
     of "textDocument/references":

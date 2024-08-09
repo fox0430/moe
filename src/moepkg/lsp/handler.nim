@@ -865,6 +865,28 @@ proc lspExecuteCommand(
 
     return Result[(), string].ok ()
 
+proc handleLspServerRequest(
+  status: var EditorStatus,
+  req: JsonNode): Result[(), string] =
+    ## Handle the request from the server.
+    ## workspace/inlayHint/refresh, etc....
+
+    let lspMethod = req.lspMethod
+    if lspMethod.isErr:
+      # Ignore.
+      return Result[(), string].err fmt"Invalid server request: {req}"
+
+    case lspMethod.get:
+      of LspMethod.workspaceInlayHintRefresh:
+        lspClient.sendLspInlayHintRequest(
+          currentBufStatus,
+          status.bufferIndexInCurrentWindow,
+          mainWindowNode)
+        return Result[(), string].ok ()
+      else:
+        # Ignore
+        return Result[(), string].err fmt"Not supported: {req}"
+
 proc handleLspServerNotify(
   status: var EditorStatus,
   notify: JsonNode): Result[(), string] =
@@ -921,7 +943,15 @@ proc handleLspResponse*(status: var EditorStatus) =
       status.commandLine.writeLspError($resJson.get["error"])
       return
 
-    if resJson.get.isServerNotify:
+    if resJson.get.isRequest:
+      # The request from the server.
+
+      lspClient.addRequestLog(resJson.get)
+
+      let r = status.handleLspServerRequest(resJson.get)
+      if r.isErr:
+        error "lsp: {r.error}"
+    elif resJson.get.isNotify:
       # The notification from the server.
 
       lspClient.addNotifyFromServerLog(resJson.get)
