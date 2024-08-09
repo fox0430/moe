@@ -23,6 +23,7 @@ Please feedback, bug reports and PRs.
 - `textDocument/hover`
 - `textDocument/completion`
 - `textDocument/semanticTokens/full`
+- `workspace/semanticTokens/refresh`
 - `textDocument/inlayHint`
 - `workspace/inlayHint/refresh`
 - `textDocument/declaration`

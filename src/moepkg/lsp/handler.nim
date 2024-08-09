@@ -877,15 +877,18 @@ proc handleLspServerRequest(
       return Result[(), string].err fmt"Invalid server request: {req}"
 
     case lspMethod.get:
+      of LspMethod.workspaceSemanticTokensRefresh:
+        lspClient.sendLspSemanticTokenRequest(currentBufStatus)
       of LspMethod.workspaceInlayHintRefresh:
         lspClient.sendLspInlayHintRequest(
           currentBufStatus,
           status.bufferIndexInCurrentWindow,
           mainWindowNode)
-        return Result[(), string].ok ()
       else:
         # Ignore
         return Result[(), string].err fmt"Not supported: {req}"
+
+    return Result[(), string].ok ()
 
 proc handleLspServerNotify(
   status: var EditorStatus,

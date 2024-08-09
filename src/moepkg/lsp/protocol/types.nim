@@ -164,6 +164,9 @@ type
   ExecuteCommandClientCapability* = ref object of RootObj
     dynamicRegistration*: Option[bool]
 
+  SemanticTokensWorkspaceClientCapabilities* = ref object of RootObj
+    refreshSupport*: Option[bool]
+
   InlayHintWorkspaceClientCapabilities* = ref object of RootObj
     refreshSupport*: Option[bool]
 
@@ -177,6 +180,7 @@ type
     workspaceFolders*: Option[bool]
     configuration*: Option[bool]
     codeLens*: Option[CodeLensWorkspaceClientCapabilities]
+    semanticTokens*: Option[SemanticTokensWorkspaceClientCapabilities]
     inlayHint*: Option[InlayHintWorkspaceClientCapabilities]
 
   SynchronizationCapability* = ref object of RootObj

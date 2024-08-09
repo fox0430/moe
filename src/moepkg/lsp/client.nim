@@ -462,6 +462,9 @@ proc initInitializeParams*(
           codeLens: some(CodeLensWorkspaceClientCapabilities(
             refreshSupport: some(false)
           )),
+          semanticTokens: some(SemanticTokensWorkspaceClientCapabilities(
+            refreshSupport: some(true)
+          )),
           inlayHint: some(InlayHintWorkspaceClientCapabilities(
             refreshSupport: some(true)
           ))
