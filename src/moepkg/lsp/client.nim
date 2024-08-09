@@ -460,7 +460,7 @@ proc initInitializeParams*(
             dynamicRegistration: some(true)
           )),
           codeLens: some(CodeLensWorkspaceClientCapabilities(
-            refreshSupport: some(false)
+            refreshSupport: some(true)
           )),
           semanticTokens: some(SemanticTokensWorkspaceClientCapabilities(
             refreshSupport: some(true)
