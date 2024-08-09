@@ -27,12 +27,17 @@ import lsp/[client, codelens]
 import editorstatus, ui, gapbuffer, unicodeext, fileutils, windownode, movement,
        editor, searchutils, bufferstatus, quickrunutils, messages, visualmode,
        commandline, viewhighlight, messagelog, registers, independentutils,
-       popupwindow
+       popupwindow, editorview
 
 proc changeModeToInsertMode(status: var EditorStatus) {.inline.} =
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
   else:
+    let foldingRange = currentMainWindowNode.view.findFoldingRange(
+      currentMainWindowNode.currentLine)
+    if foldingRange.isSome:
+      currentMainWindowNode.view.removeFoldingRange(foldingRange.get)
+
     changeCursorType(status.settings.standard.insertModeCursor)
     status.changeMode(Mode.insert)
 
@@ -1167,6 +1172,15 @@ proc requestHover(status: var EditorStatus) =
   if r.isErr:
     status.commandLine.writeLspHoverError(r.error)
 
+template isFoldingStartLine(status: EditorStatus): bool =
+  currentMainWindowNode.view.isFoldingStartLine(
+    currentMainWindowNode.currentLine)
+
+proc expandFoldingLines(status: var EditorStatus) {.inline.} =
+  if status.isFoldingStartLine:
+    currentMainWindowNode.view.removeFoldingRange(
+      currentMainWindowNode.currentLine)
+
 proc addRegister(status: var EditorStatus, command, registerName: string) =
   if command == "yy":
     status.yankLines(registerName)
@@ -1457,6 +1471,8 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
       currentBufStatus.scrollScreenTop(currentMainWindowNode)
     elif secondKey == ord('b'):
       currentBufStatus.scrollScreenBottom(currentMainWindowNode)
+    elif secondKey == ord('o'):
+      status.expandFoldingLines
   elif key == ord('H'):
     currentBufStatus.moveToTopOfScreen(currentMainWindowNode)
   elif key == ord('M'):
@@ -1785,7 +1801,8 @@ proc isNormalModeCommand*(
         elif command.len == 2:
           if command[1] == ord('.') or
              command[1] == ord('t') or
-             command[1] == ord('b'):
+             command[1] == ord('b') or
+             command[1] == ord('o'):
                result = InputState.Valid
 
       elif command[0] == ord('c'):

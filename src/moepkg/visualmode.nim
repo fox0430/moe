@@ -20,7 +20,7 @@
 import std/[strutils, sequtils, options]
 import editorstatus, ui, gapbuffer, unicodeext, windownode, movement, editor,
        bufferstatus, settings, registers, messages, commandline,
-       independentutils, viewhighlight
+       independentutils, viewhighlight, editorview, folding
 
 proc initSelectedArea*(startLine, startColumn: int): SelectedArea =
   result.startLine = startLine
@@ -433,13 +433,33 @@ proc toUpperStringBlock(
 
     windowNode.moveCursor(firstCursorPosition)
 
-proc enterInsertMode(status: var EditorStatus) =
+proc addFoldingRange(
+  windowNode: var WindowNode,
+  bufStatus: BufferStatus,
+  firstCursorPosition: BufferPosition) {.inline.} =
+
+    template area: SelectedArea = bufStatus.selectedArea.get
+
+    if area.startLine - area.endLine < 2: return
+
+    windowNode.view.foldingRanges.addFoldingRange(area.startLine, area.endLine)
+
+    windowNode.moveCursor(
+      BufferPosition(line: firstCursorPosition.line, column: 0))
+
+proc changeModeToInsertMode(status: var EditorStatus) =
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
   else:
     currentMainWindowNode.currentLine =
       currentBufStatus.selectedArea.get.startLine
     currentMainWindowNode.currentColumn = 0
+
+    let foldingRange = currentMainWindowNode.view.findFoldingRange(
+      currentMainWindowNode.currentLine)
+    if foldingRange.isSome:
+      currentMainWindowNode.view.removeFoldingRange(foldingRange.get)
+
     status.changeMode(Mode.insert)
 
 proc changeModeToNormalMode(status: var EditorStatus) =
@@ -463,7 +483,7 @@ proc exitVisualMode(status: var EditorStatus) =
 proc visualCommand(
   status: var EditorStatus,
   area: var SelectedArea,
-  key: Rune) =
+  command: Runes) =
 
     # The position of entered visual mode.
     let firstCursorPosition = BufferPosition(
@@ -475,53 +495,61 @@ proc visualCommand(
     else:
       area.swapSelectedArea
 
-    if key == ord('y') or isDeleteKey(key):
-      currentBufStatus.yankBuffer(
-        status.registers,
-        currentMainWindowNode,
-        area,
-        firstCursorPosition,
-        status.settings)
-    elif key == ord('x') or key == ord('d'):
-      currentBufStatus.deleteBuffer(
-        status.registers,
-        currentMainWindowNode,
-        area,
-        firstCursorPosition,
-        status.settings,
-        status.commandLine)
-    elif key == ord('>'):
-      currentBufStatus.addIndent(
-        currentMainWindowNode,
-        area,
-        status.settings.standard.tabStop,
-        status.commandLine)
-    elif key == ord('<'):
-      currentBufStatus.deleteIndent(
-        currentMainWindowNode,
-        area,
-        status.settings.standard.tabStop,
-        status.commandLine)
-    elif key == ord('J'):
-      currentBufStatus.joinLines(currentMainWindowNode, area, status.commandLine)
-    elif key == ord('u'):
-      currentBufStatus.toLowerString(
-        currentMainWindowNode,
-        area,
-        firstCursorPosition,
-        status.commandLine)
-    elif key == ord('U'):
-      currentBufStatus.toUpperString(
-        currentMainWindowNode,
-        area,
-        firstCursorPosition,
-        status.commandLine)
-    elif key == ord('r'):
-      let ch = status.getKeyFromMainWindow
-      if not isEscKey(ch):
-        currentBufStatus.replaceCharacter(area, ch, status.commandLine)
-    elif key == ord('I'):
-      status.enterInsertMode
+    if command.len == 0:
+      let key = command[0]
+      if key == ord('y') or isDeleteKey(key):
+        currentBufStatus.yankBuffer(
+          status.registers,
+          currentMainWindowNode,
+          area,
+          firstCursorPosition,
+          status.settings)
+      elif key == ord('x') or key == ord('d'):
+        currentBufStatus.deleteBuffer(
+          status.registers,
+          currentMainWindowNode,
+          area,
+          firstCursorPosition,
+          status.settings,
+          status.commandLine)
+      elif key == ord('>'):
+        currentBufStatus.addIndent(
+          currentMainWindowNode,
+          area,
+          status.settings.standard.tabStop,
+          status.commandLine)
+      elif key == ord('<'):
+        currentBufStatus.deleteIndent(
+          currentMainWindowNode,
+          area,
+          status.settings.standard.tabStop,
+          status.commandLine)
+      elif key == ord('J'):
+        currentBufStatus.joinLines(currentMainWindowNode, area, status.commandLine)
+      elif key == ord('u'):
+        currentBufStatus.toLowerString(
+          currentMainWindowNode,
+          area,
+          firstCursorPosition,
+          status.commandLine)
+      elif key == ord('U'):
+        currentBufStatus.toUpperString(
+          currentMainWindowNode,
+          area,
+          firstCursorPosition,
+          status.commandLine)
+      elif key == ord('r'):
+        let ch = status.getKeyFromMainWindow
+        if not isEscKey(ch):
+          currentBufStatus.replaceCharacter(area, ch, status.commandLine)
+      elif key == ord('I'):
+        status.changeModeToInsertMode
+    elif command.len == 2:
+      if command[0] == ord('z'):
+        if command[1] == ord('f'):
+          currentMainWindowNode.addFoldingRange(
+            currentBufStatus,
+            firstCursorPosition)
 
     if currentBufStatus.isVisualMode:
       currentBufStatus.selectedArea = none(SelectedArea)
@@ -544,7 +572,8 @@ proc changeModeToInsertMulti(
 
 proc visualBlockCommand(
   status: var EditorStatus,
-  area: var SelectedArea, key: Rune) =
+  area: var SelectedArea,
+  command: Runes) =
 
     # The position of entered visual mode.
     let firstCursorPosition = BufferPosition(
@@ -553,50 +582,58 @@ proc visualBlockCommand(
 
     area.swapSelectedArea
 
-    if key == ord('y') or isDeleteKey(key):
-      currentBufStatus.yankBufferBlock(
-        status.registers,
-        currentMainWindowNode,
-        area,
-        status.settings)
-    elif key == ord('x') or key == ord('d'):
-      currentBufStatus.deleteBufferBlock(
-        status.registers,
-        currentMainWindowNode,
-        area,
-        status.settings,
-        status.commandLine)
-    elif key == ord('>'):
-      currentBufStatus.insertIndent(
-        area,
-        status.settings.standard.tabStop,
-        status.commandLine)
-    elif key == ord('<'):
-      currentBufStatus.deleteIndent(
-        currentMainWindowNode,
-        area,
-        status.settings.standard.tabStop,
-        status.commandLine)
-    elif key == ord('J'):
-      currentBufStatus.joinLines(currentMainWindowNode, area, status.commandLine)
-    elif key == ord('u'):
-      currentBufStatus.toLowerStringBlock(
-        currentMainWindowNode,
-        area,
-        firstCursorPosition,
-        status.commandLine)
-    elif key == ord('U'):
-      currentBufStatus.toUpperStringBlock(
-        currentMainWindowNode,
-        area,
-        firstCursorPosition,
-        status.commandLine)
-    elif key == ord('r'):
-      let ch = status.getKeyFromMainWindow
-      if not isEscKey(ch):
-        currentBufStatus.replaceCharacterBlock(area, ch, status.commandLine)
-    elif key == ord('I'):
-      status.changeModeToInsertMulti(area)
+    if command.len == 1:
+      let key = command[0]
+      if key == ord('y') or isDeleteKey(key):
+        currentBufStatus.yankBufferBlock(
+          status.registers,
+          currentMainWindowNode,
+          area,
+          status.settings)
+      elif key == ord('x') or key == ord('d'):
+        currentBufStatus.deleteBufferBlock(
+          status.registers,
+          currentMainWindowNode,
+          area,
+          status.settings,
+          status.commandLine)
+      elif key == ord('>'):
+        currentBufStatus.insertIndent(
+          area,
+          status.settings.standard.tabStop,
+          status.commandLine)
+      elif key == ord('<'):
+        currentBufStatus.deleteIndent(
+          currentMainWindowNode,
+          area,
+          status.settings.standard.tabStop,
+          status.commandLine)
+      elif key == ord('J'):
+        currentBufStatus.joinLines(currentMainWindowNode, area, status.commandLine)
+      elif key == ord('u'):
+        currentBufStatus.toLowerStringBlock(
+          currentMainWindowNode,
+          area,
+          firstCursorPosition,
+          status.commandLine)
+      elif key == ord('U'):
+        currentBufStatus.toUpperStringBlock(
+          currentMainWindowNode,
+          area,
+          firstCursorPosition,
+          status.commandLine)
+      elif key == ord('r'):
+        let ch = status.getKeyFromMainWindow
+        if not isEscKey(ch):
+          currentBufStatus.replaceCharacterBlock(area, ch, status.commandLine)
+      elif key == ord('I'):
+        status.changeModeToInsertMulti(area)
+    elif command.len == 2:
+      if command[0] == ord('z'):
+        if command[1] == ord('f'):
+          currentMainWindowNode.addFoldingRange(
+            currentBufStatus,
+            firstCursorPosition)
 
     if currentBufStatus.isVisualBlockMode:
       currentBufStatus.selectedArea = none(SelectedArea)
@@ -634,6 +671,12 @@ proc isVisualModeCommand*(command: Runes): InputState =
        c == ord('r') or
        c == ord('I'):
          return InputState.Valid
+    elif c == ord('z'):
+      return InputState.Continue
+  elif command.len == 2:
+    if command[0] == ord('z'):
+      if command[1] == ord('f'):
+        return InputState.Valid
 
 proc execVisualModeCommand*(status: var EditorStatus, command: Runes) =
   ## Execute the visual command and change the mode to a previous mode.
@@ -673,6 +716,6 @@ proc execVisualModeCommand*(status: var EditorStatus, command: Runes) =
     currentBufStatus.moveToNextBlankLine(currentMainWindowNode)
   else:
     if isVisualBlockMode(currentBufStatus.mode):
-      status.visualBlockCommand(currentBufStatus.selectedArea.get, key)
+      status.visualBlockCommand(currentBufStatus.selectedArea.get, command)
     else:
-      status.visualCommand(currentBufStatus.selectedArea.get, key)
+      status.visualCommand(currentBufStatus.selectedArea.get, command)

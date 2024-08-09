@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -23,6 +23,19 @@ import editorview, gapbuffer, unicodeext, windownode, bufferstatus,
 
 template currentLineLen: int = bufStatus.buffer[windowNode.currentLine].len
 
+template findFoldingRange(n: WindowNode): Option[Range] =
+  n.view.findFoldingRange(windowNode.currentLine)
+
+template removeFoldingRange(n: WindowNode) =
+  let foldingRange = n.findFoldingRange
+  if foldingRange.isSome:
+    n.view.removeFoldingRange(foldingRange.get)
+
+template removeFoldingRange(n: WindowNode, line: int) =
+  let foldingRange = n.view.findFoldingRange(line)
+  if foldingRange.isSome:
+    n.view.removeFoldingRange(foldingRange.get)
+
 proc isExpandPosition*(
   bufStatus: BufferStatus,
   windowNode: WindowNode): bool {.inline.} =
@@ -38,6 +51,11 @@ proc keyLeft*(windowNode: var WindowNode) =
   windowNode.expandedColumn = windowNode.currentColumn
 
 proc keyRight*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
+  let foldingRange = windowNode.findFoldingRange
+  if foldingRange.isSome:
+    windowNode.view.removeFoldingRange(foldingRange.get)
+    windowNode.view.reload(bufStatus.buffer, windowNode.view.originalLine[0])
+
   let maxColumn = currentLineLen + (if bufStatus.isExpandableMode: 1 else: 0)
   if windowNode.currentColumn + 1 >= maxColumn: return
 
@@ -53,20 +71,32 @@ proc keyUp*(
 
     dec(windowNode.currentLine)
 
-    let maxColumn = currentLineLen + (if bufStatus.isExpandableMode: 0 else: -1)
-    windowNode.currentColumn = min(windowNode.expandedColumn, maxColumn)
+    let foldingRange = windowNode.findFoldingRange
+    if foldingRange.isSome:
+      windowNode.currentLine = foldingRange.get.first
+      windowNode.currentColumn = 0
+    else:
+      let maxColumn =
+        currentLineLen + (if bufStatus.isExpandableMode: 0 else: -1)
+      windowNode.currentColumn = min(windowNode.expandedColumn, maxColumn)
 
-    if windowNode.currentColumn < 0: windowNode.currentColumn = 0
+      if windowNode.currentColumn < 0: windowNode.currentColumn = 0
 
 proc keyDown*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
   if windowNode.currentLine + 1 == bufStatus.buffer.len: return
 
-  inc(windowNode.currentLine)
+  let foldingRange = windowNode.findFoldingRange
+  if foldingRange.isSome:
+    # Skip
+    windowNode.currentLine = foldingRange.get.last + 1
+    windowNode.currentColumn = 0
+  else:
+    windowNode.currentLine.inc
 
-  let maxColumn = currentLineLen + (if bufStatus.isExpandableMode: 0 else: -1)
-  windowNode.currentColumn = min(windowNode.expandedColumn, maxColumn)
+    let maxColumn = currentLineLen + (if bufStatus.isExpandableMode: 0 else: -1)
+    windowNode.currentColumn = min(windowNode.expandedColumn, maxColumn)
 
-  if windowNode.currentColumn < 0: windowNode.currentColumn = 0
+    if windowNode.currentColumn < 0: windowNode.currentColumn = 0
 
 proc getFirstNonBlankOfLine*(
   bufStatus: BufferStatus,
@@ -125,16 +155,22 @@ proc moveToFirstNonBlankOfLine*(
       windowNode)
     windowNode.expandedColumn = windowNode.currentColumn
 
+    windowNode.removeFoldingRange
+
 proc moveToLastNonBlankOfLine*(
-  bufStatus: var BufferStatus,
+  bufStatus: BufferStatus,
   windowNode: var WindowNode) =
 
     windowNode.currentColumn = bufStatus.getLastNonBlankOfLine(windowNode)
     windowNode.expandedColumn = windowNode.currentColumn
 
+    windowNode.removeFoldingRange
+
 proc moveToFirstOfLine*(windowNode: var WindowNode) =
   windowNode.currentColumn = 0
   windowNode.expandedColumn = windowNode.currentColumn
+
+  windowNode.removeFoldingRange
 
 proc moveToLastOfLine*(
   bufStatus: var BufferStatus,
@@ -148,6 +184,8 @@ proc moveToLastOfLine*(
 
     windowNode.currentColumn = max(destination, 0)
     windowNode.expandedColumn = windowNode.currentColumn
+
+    windowNode.removeFoldingRange
 
 proc moveToFirstOfPreviousLine*(
   bufStatus: var BufferStatus,
@@ -177,6 +215,10 @@ proc jumpLine*(
     windowNode.currentLine = destination
     windowNode.currentColumn = 0
     windowNode.expandedColumn = 0
+
+    let foldingRange = windowNode.findFoldingRange
+    if foldingRange.isSome:
+      windowNode.currentLine = foldingRange.get.first
 
     if not (view.originalLine[0] <= destination and
        (view.originalLine[view.height - 1] == -1 or
@@ -235,9 +277,10 @@ proc moveToNextBlankLine*(bufStatus: BufferStatus, windowNode: var WindowNode) =
   let nextBlankLine = bufStatus.findNextBlankLine(windowNode.currentLine)
   if nextBlankLine >= 0: bufStatus.jumpLine(windowNode, nextBlankLine)
 
-  windowNode.currentColumn = max(
-    bufStatus.buffer[windowNode.currentLine].high,
-    0)
+  if windowNode.findFoldingRange.isNone:
+    windowNode.currentColumn = max(
+      bufStatus.buffer[windowNode.currentLine].high,
+      0)
 
 proc moveToPreviousBlankLine*(
   bufStatus: BufferStatus,
@@ -317,6 +360,8 @@ proc moveToForwardWord*(
 
     windowNode.expandedColumn = windowNode.currentColumn
 
+    windowNode.removeFoldingRange
+
 proc moveToBackwardWord*(
   bufStatus: var BufferStatus,
   windowNode: var WindowNode) =
@@ -352,6 +397,8 @@ proc moveToBackwardWord*(
       if currType != backType: break
 
     windowNode.expandedColumn = windowNode.currentColumn
+
+    windowNode.removeFoldingRange
 
 proc moveToForwardEndOfWord*(
   bufStatus: var BufferStatus,
@@ -403,6 +450,8 @@ proc moveToForwardEndOfWord*(
       inc(windowNode.currentColumn)
 
     windowNode.expandedColumn = windowNode.currentColumn
+
+    windowNode.removeFoldingRange
 
 proc moveToTopOfScreen*(bufStatus: BufferStatus, windowNode: var WindowNode) =
   ## Move to the top line of the screen.
@@ -516,6 +565,8 @@ proc moveToPairOfParen*(
       windowNode.currentLine = correspondParenPosition.get.line
       windowNode.currentColumn = correspondParenPosition.get.column
 
+    windowNode.removeFoldingRange
+
 proc jumpToSearchForwardResults*(
   bufStatus: var BufferStatus,
   windowNode: var WindowNode,
@@ -539,6 +590,7 @@ proc jumpToSearchForwardResults*(
         isSmartcase)
 
     if searchResult.isSome:
+      windowNode.removeFoldingRange(searchResult.get.line)
       bufStatus.jumpLine(windowNode, searchResult.get.line)
       for column in 0 ..< searchResult.get.column:
         bufStatus.keyRight(windowNode)
@@ -566,6 +618,7 @@ proc jumpToSearchBackwordResults*(
         isSmartcase)
 
     if searchResult.isSome:
+      windowNode.removeFoldingRange(searchResult.get.line)
       bufStatus.jumpLine(windowNode, searchResult.get.line)
       for column in 0 ..< searchResult.get.column:
         bufStatus.keyRight(windowNode)
