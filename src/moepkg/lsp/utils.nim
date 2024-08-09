@@ -73,6 +73,7 @@ type
     documentLinkResolve
     textDocumentCodeLens
     codeLensResolve
+    workspaceCodeLensRefresh
     workspaceExecuteCommand
 
   CallHierarchyType* = enum
@@ -180,6 +181,7 @@ proc toLspMethodStr*(m: LspMethod): string =
     of documentLinkResolve: "documentLink/resolve"
     of textDocumentCodeLens: "textDocument/codeLens"
     of codeLensResolve: "codeLens/resolve"
+    of workspaceCodeLensRefresh: "workspace/codeLens/refresh"
     of workspaceExecuteCommand: "workspace/executeCommand"
 
 proc parseTraceValue*(s: string): Result[TraceValue, string] =
@@ -270,6 +272,8 @@ proc lspMethod*(j: JsonNode): LspMethodResult =
       LspMethodResult.ok textDocumentCodeLens
     of "codeLens/resolve":
       LspMethodResult.ok codeLensResolve
+    of "workspace/codeLens/refresh":
+      LspMethodResult.ok workspaceCodeLensRefresh
     of "workspace/executeCommand":
      LspMethodResult.ok workspaceExecuteCommand
     else:

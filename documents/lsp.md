@@ -39,8 +39,9 @@ Please feedback, bug reports and PRs.
 - `textDocument/documentLink`
 - `documentLink/resolve`
 - `textDocument/codeLens`
-- `workspace/executeCommand`
+- `workspace/codeLens/refresh`
 - `codeLens/resolve`
+- `workspace/executeCommand`
 - `$/progress`
 - `$/cancelRequest`
 

@@ -877,6 +877,8 @@ proc handleLspServerRequest(
       return Result[(), string].err fmt"Invalid server request: {req}"
 
     case lspMethod.get:
+      of LspMethod.workspaceCodeLensRefresh:
+        lspClient.sendLspCodeLens(currentBufStatus)
       of LspMethod.workspaceSemanticTokensRefresh:
         lspClient.sendLspSemanticTokenRequest(currentBufStatus)
       of LspMethod.workspaceInlayHintRefresh:
