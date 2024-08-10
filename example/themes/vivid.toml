@@ -206,6 +206,9 @@ configModeCurrentLineBg = "#ff0087"
 
 currentLineBg = "#444444"
 
+foldingLine = "#808080"
+foldingLineBg = "#3f3f3f"
+
 sidebarGitAddedSign = "#008000"
 sidebarGitAddedSignBg = "#000000"
 sidebarGitDeletedSign = "#ff0000"
