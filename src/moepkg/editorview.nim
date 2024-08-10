@@ -459,7 +459,7 @@ proc foldingLineBuffer(
     if line.high > width:
       line = line[0 .. width]
     else:
-      line = line & ' '.repeat(width - line.high)
+      line = line & "·".repeat(width - line.high)
 
     return line.toRunes
 
@@ -532,7 +532,7 @@ proc writeAllLines*[T](
             foldingRange.get,
             buffer[view.originalLine[y]],
             view.width),
-          EditorColorPairIndex.selectArea)
+          EditorColorPairIndex.foldingLine)
         continue
 
       if view.length[y] == 0:

@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -440,7 +440,7 @@ proc addFoldingRange(
 
     template area: SelectedArea = bufStatus.selectedArea.get
 
-    if area.startLine - area.endLine < 2: return
+    if area.endLine - area.startLine < 1: return
 
     windowNode.view.foldingRanges.addFoldingRange(area.startLine, area.endLine)
 
@@ -495,7 +495,7 @@ proc visualCommand(
     else:
       area.swapSelectedArea
 
-    if command.len == 0:
+    if command.len == 1:
       let key = command[0]
       if key == ord('y') or isDeleteKey(key):
         currentBufStatus.yankBuffer(

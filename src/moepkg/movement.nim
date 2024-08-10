@@ -24,7 +24,7 @@ import editorview, gapbuffer, unicodeext, windownode, bufferstatus,
 template currentLineLen: int = bufStatus.buffer[windowNode.currentLine].len
 
 template findFoldingRange(n: WindowNode): Option[Range] =
-  n.view.findFoldingRange(windowNode.currentLine)
+  n.view.findFoldingRange(n.currentLine)
 
 template removeFoldingRange(n: WindowNode) =
   let foldingRange = n.findFoldingRange

@@ -29,12 +29,16 @@ import editorstatus, ui, gapbuffer, unicodeext, fileutils, windownode, movement,
        commandline, viewhighlight, messagelog, registers, independentutils,
        popupwindow, editorview
 
+template findFoldingRange(
+  status: EditorStatus): Option[independentutils.Range] =
+
+    currentMainWindowNode.view.findFoldingRange(currentMainWindowNode.currentLine)
+
 proc changeModeToInsertMode(status: var EditorStatus) {.inline.} =
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
   else:
-    let foldingRange = currentMainWindowNode.view.findFoldingRange(
-      currentMainWindowNode.currentLine)
+    let foldingRange = status.findFoldingRange
     if foldingRange.isSome:
       currentMainWindowNode.view.removeFoldingRange(foldingRange.get)
 
@@ -1106,6 +1110,11 @@ proc openBlankLineBelowAndEnterInsertMode(status: var EditorStatus) =
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
     return
+
+  let foldingRange = status.findFoldingRange
+  if foldingRange.isSome:
+    # Skip folding lines
+    currentMainWindowNode.currentLine = foldingRange.get.last
 
   currentBufStatus.openBlankLineBelow(
     currentMainWindowNode,
