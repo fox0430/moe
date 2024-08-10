@@ -124,7 +124,7 @@ proc readFrame(s: OutputStream): ReadFrameResult =
         let str = s.readStr(contentLen)
         if str.isErr:
           return ReadFrameResult.err fmt"readStr failed: {str.error}"
-        debugLog(MessageType.read, "Response: {str.get}")
+        debugLog(MessageType.read, fmt"Response: {str.get}")
         return ReadFrameResult.ok str.get
       else:
         return ReadFrameResult.err "Missing Content-Length header"
