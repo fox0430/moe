@@ -87,6 +87,9 @@ proc verticalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
       h: 1,
       w: 1)
 
+    if n.view.foldingRanges.len > 0:
+      node.view.foldingRanges = n.view.foldingRanges
+
     if parent.child[^1].view.sidebar.isSome:
       node.view.initSidebar
 
@@ -109,6 +112,10 @@ proc verticalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
         window: some(newWindow()),
         view: initEditorView(buffer, 1, 1),
         bufferIndex: n.bufferIndex)
+
+    if n.view.foldingRanges.len > 0:
+      node1.view.foldingRanges = n.view.foldingRanges
+      node2.view.foldingRanges = n.view.foldingRanges
 
     if parent.view.sidebar.isSome:
       node1.view.initSidebar
@@ -134,14 +141,17 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
       view: initEditorView(buffer, 1, 1),
       bufferIndex: n.bufferIndex)
 
+    if n.view.foldingRanges.len > 0:
+      node.view.foldingRanges = n.view.foldingRanges
+
     if parent.child[^1].view.sidebar.isSome:
       node.view.initSidebar
 
     parent.child.add(node)
 
     return n
-  # if parent is root and one window
   elif parent.parent == nil and parent.child.len == 1:
+    # If parent is root and one window
     var node = WindowNode(
       parent: n.parent,
       child: @[],
@@ -149,6 +159,9 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
       window: some(newWindow()),
       view: initEditorView(buffer, 1, 1),
       bufferIndex: n.bufferIndex)
+
+    if n.view.foldingRanges.len > 0:
+      node.view.foldingRanges = n.view.foldingRanges
 
     if parent.child[^1].view.sidebar.isSome:
       node.view.initSidebar
@@ -173,6 +186,10 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
         window: some(newWindow()),
         view: initEditorView(buffer, 1, 1),
         bufferIndex: n.bufferIndex)
+
+    if n.view.foldingRanges.len > 0:
+      node1.view.foldingRanges = n.view.foldingRanges
+      node2.view.foldingRanges = n.view.foldingRanges
 
     if parent.view.sidebar.isSome:
       node1.view.initSidebar
