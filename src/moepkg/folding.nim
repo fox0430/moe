@@ -19,58 +19,53 @@
 
 import std/[options]
 
-import independentutils
-
 type
-  FoldingRange* = Range
-    # First line .. Last line
+  FoldingRange* = object
+    first*, last*: int
 
   FoldingRanges* = seq[FoldingRange]
 
-proc isFoldingStartLine*(ranges: FoldingRanges, line: int): bool =
+proc isStartLine*(ranges: FoldingRanges, line: int): bool =
   for r in ranges:
     if line == r.first: return true
 
-proc inFoldingRange*(ranges: FoldingRanges, line: int): bool =
+proc inRange*(ranges: FoldingRanges, line: int): bool =
   for r in ranges:
     if line >= r.first and line <= r.last: return true
 
-proc findFoldingRange*(ranges: FoldingRanges, line: int): Option[FoldingRange] =
+proc find*(ranges: FoldingRanges, line: int): Option[FoldingRange] =
   for r in ranges:
     if line >= r.first and line <= r.last: return some(r)
 
-proc findFoldingRange*(
-  ranges: FoldingRanges,
-  range: FoldingRange): Option[int] =
+proc find*(ranges: FoldingRanges, range: FoldingRange): Option[int] =
+  for i, r in ranges:
+    if r == range: return some(i)
 
-    for i, r in ranges:
-      if r == range: return some(i)
-
-proc removeFoldingRange*(ranges: var FoldingRanges, range: FoldingRange) =
+proc remove*(ranges: var FoldingRanges, range: FoldingRange) =
   for i, r in ranges:
     if r == range:
       ranges.del(i)
       break
 
-proc removeFoldingRange*(ranges: var FoldingRanges, line: int) =
+proc remove*(ranges: var FoldingRanges, line: int) =
   for i, r in ranges:
     if line >= r.first and line <= r.last:
       ranges.del(i)
       break
 
-proc addFoldingRange*(ranges: var FoldingRanges, range: FoldingRange) =
+proc add*(ranges: var FoldingRanges, range: FoldingRange) =
+  ## Added ranges are sorted from smallest to largest by `FoldingRange.first`.
+
   var insertPosi = 0
   if ranges.len > 0 and range.last > ranges[0].first:
     for i in 0 .. ranges.high:
-      if ranges[i].last > range.first:
+      if range.first < ranges[i].first:
         insertPosi = i
+        break
       elif insertPosi == 0 and i == ranges.high:
         insertPosi = ranges.len
 
   ranges.insert(range, insertPosi)
 
-proc addFoldingRange*(
-  ranges: var FoldingRanges,
-  firstLine, lastLine: int) {.inline.} =
-
-    ranges.addFoldingRange(FoldingRange(first: firstLine, last: lastLine))
+proc add*(ranges: var FoldingRanges, firstLine, lastLine: int) {.inline.} =
+  ranges.add(FoldingRange(first: firstLine, last: lastLine))

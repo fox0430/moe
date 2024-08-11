@@ -27,12 +27,13 @@ import lsp/[client, codelens]
 import editorstatus, ui, gapbuffer, unicodeext, fileutils, windownode, movement,
        editor, searchutils, bufferstatus, quickrunutils, messages, visualmode,
        commandline, viewhighlight, messagelog, registers, independentutils,
-       popupwindow, editorview
+       popupwindow, editorview, folding
 
 template findFoldingRange(
-  status: EditorStatus): Option[independentutils.Range] =
+  status: EditorStatus): Option[FoldingRange] =
 
-    currentMainWindowNode.view.findFoldingRange(currentMainWindowNode.currentLine)
+    currentMainWindowNode.view.findFoldingRange(
+      currentMainWindowNode.currentLine)
 
 proc changeModeToInsertMode(status: var EditorStatus) {.inline.} =
   if currentBufStatus.isReadonly:

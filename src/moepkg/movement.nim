@@ -19,11 +19,11 @@
 
 import std/[deques, options]
 import editorview, gapbuffer, unicodeext, windownode, bufferstatus,
-       independentutils, searchutils
+       independentutils, searchutils, folding
 
 template currentLineLen: int = bufStatus.buffer[windowNode.currentLine].len
 
-template findFoldingRange(n: WindowNode): Option[Range] =
+template findFoldingRange(n: WindowNode): Option[FoldingRange] =
   n.view.findFoldingRange(n.currentLine)
 
 template removeFoldingRange(n: WindowNode) =

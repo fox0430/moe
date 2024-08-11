@@ -442,7 +442,7 @@ proc addFoldingRange(
 
     if area.endLine - area.startLine < 1: return
 
-    windowNode.view.foldingRanges.addFoldingRange(area.startLine, area.endLine)
+    windowNode.view.foldingRanges.add(area.startLine, area.endLine)
 
     windowNode.moveCursor(
       BufferPosition(line: firstCursorPosition.line, column: 0))

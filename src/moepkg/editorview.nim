@@ -87,19 +87,22 @@ proc loadSingleViewLine[T](
       nextWidth = calcNextWidth
 
 proc isFoldingStartLine*(view: EditorView, line: int): bool {.inline.} =
-  view.foldingRanges.isFoldingStartLine(line)
+  view.foldingRanges.isStartLine(line)
 
 proc inFoldingRange*(view: EditorView, line: int): bool {.inline.} =
-  view.foldingRanges.inFoldingRange(line)
+  view.foldingRanges.inRange(line)
 
-proc findFoldingRange*(view: EditorView, line: int): Option[Range] {.inline.} =
-  view.foldingRanges.findFoldingRange(line)
+proc findFoldingRange*(
+  view: EditorView,
+  line: int): Option[FoldingRange] {.inline.} =
 
-proc removeFoldingRange*(view: var EditorView, range: Range) {.inline.} =
-  view.foldingRanges.removeFoldingRange(range)
+    view.foldingRanges.find(line)
+
+proc removeFoldingRange*(view: var EditorView, range: FoldingRange) {.inline.} =
+  view.foldingRanges.remove(range)
 
 proc removeFoldingRange*(view: var EditorView, line: int) {.inline.} =
-  view.foldingRanges.removeFoldingRange(line)
+  view.foldingRanges.remove(line)
 
 proc reload*[T](view: var EditorView, buffer: T, topLine: int) =
   ## Reload from the buffer to the EditorView so that topLine is displayed as
@@ -124,7 +127,7 @@ proc reload*[T](view: var EditorView, buffer: T, topLine: int) =
   var
     lineNumber = topLine
     start = 0
-    foldingRange: Option[Range]
+    foldingRange: Option[FoldingRange]
     y = 0
   while y < height:
     if lineNumber >= buffer.len: break
@@ -135,7 +138,7 @@ proc reload*[T](view: var EditorView, buffer: T, topLine: int) =
     if foldingRange.isSome and lineNumber > foldingRange.get.first:
       # Skip folding lines.
       if foldingRange.get.last == lineNumber:
-        foldingRange = none(Range)
+        foldingRange = none(FoldingRange)
       lineNumber.inc
       continue
 
@@ -450,7 +453,7 @@ proc writeCurrentLine(
       view.write(win, y, x, runes, highlight[i].color.int16)
 
 proc foldingLineBuffer(
-  foldingRange: Range,
+  foldingRange: FoldingRange,
   originalFirstLine: Runes,
   width: int): Runes =
 
