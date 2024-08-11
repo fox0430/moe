@@ -59,31 +59,15 @@ proc removeFoldingRange*(ranges: var FoldingRanges, line: int) =
       break
 
 proc addFoldingRange*(ranges: var FoldingRanges, range: FoldingRange) =
-  let index = ranges.findFoldingRange(range)
-  if index.isNone:
-    var insertPosi = 0
-    for i in 0 .. ranges.high - 1:
-      if ranges[i].last > range.first and range.first < ranges[i + 1].first:
+  var insertPosi = 0
+  if ranges.len > 0 and range.last > ranges[0].first:
+    for i in 0 .. ranges.high:
+      if ranges[i].last > range.first:
         insertPosi = i
-    ranges.insert(range, insertPosi)
-  else:
-    let first = min(ranges[index.get].first, range.first)
-    var
-      last = max(ranges[index.get].last, range.last)
-      removeRanges = 0
-    for i in index.get .. ranges.high:
-      if last < ranges[i].first:
-        break
-      elif last < ranges[i].last:
-        last = ranges[i].last
-        removeRanges.inc
-        break
-      else:
-        removeRanges.inc
+      elif insertPosi == 0 and i == ranges.high:
+        insertPosi = ranges.len
 
-    for _ in 0 .. removeRanges: ranges.del(index.get)
-
-    ranges[index.get] = FoldingRange(first: first, last: last)
+  ranges.insert(range, insertPosi)
 
 proc addFoldingRange*(
   ranges: var FoldingRanges,
