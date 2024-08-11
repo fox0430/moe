@@ -104,6 +104,12 @@ proc removeFoldingRange*(view: var EditorView, range: FoldingRange) {.inline.} =
 proc removeFoldingRange*(view: var EditorView, line: int) {.inline.} =
   view.foldingRanges.remove(line)
 
+proc removeAllFoldingRange*(
+  view: var EditorView,
+  range: FoldingRange) {.inline.} =
+
+    view.foldingRanges.removeAll(range)
+
 proc reload*[T](view: var EditorView, buffer: T, topLine: int) =
   ## Reload from the buffer to the EditorView so that topLine is displayed as
   ## the top line of the EditorView.

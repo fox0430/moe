@@ -53,6 +53,26 @@ proc remove*(ranges: var FoldingRanges, line: int) =
       ranges.del(i)
       break
 
+proc removeAll*(ranges: var FoldingRanges, range: FoldingRange) =
+  var i = 0
+  while i < ranges.len:
+    if ranges[i].first >= range.first and ranges[i].last <= range.last:
+      ranges.del(i)
+    elif ranges[i].last > range.first:
+      break
+    else:
+      i.inc
+
+proc removeAll*(ranges: var FoldingRanges, line: int) =
+  var i = 0
+  while i < ranges.len:
+    if ranges[i].first >= line and ranges[i].last <= line:
+      ranges.del(i)
+    elif ranges[i].last > line:
+      break
+    else:
+      i.inc
+
 proc add*(ranges: var FoldingRanges, range: FoldingRange) =
   ## Added ranges are sorted from smallest to largest by `FoldingRange.first`.
 

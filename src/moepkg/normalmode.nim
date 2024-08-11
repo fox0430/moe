@@ -719,18 +719,35 @@ proc deleteLines(status: var EditorStatus, registerName: string = "") =
     status.commandLine.writeReadonlyModeWarning
     return
 
-  let
-    startLine = currentMainWindowNode.currentLine
-    count = min(
-      currentBufStatus.cmdLoop - 1,
+  let foldingRange = status.findFoldingRange
+  if foldingRange.isSome:
+    let count = min(
+      currentBufStatus.cmdLoop - 1 + foldingRange.get.last - foldingRange.get.first,
       currentBufStatus.buffer.len - currentMainWindowNode.currentLine)
-  currentBufStatus.deleteLines(
-    status.registers,
-   currentMainWindowNode,
-   registerName,
-   startLine,
-   count,
-   status.settings)
+
+    currentBufStatus.deleteLines(
+      status.registers,
+     currentMainWindowNode,
+     registerName,
+     foldingRange.get.first,
+     count,
+     status.settings)
+
+    currentMainWindowNode.view.removeAllFoldingRange(foldingRange.get)
+  else:
+    let
+      startLine = currentMainWindowNode.currentLine
+      count = min(
+        currentBufStatus.cmdLoop - 1,
+        currentBufStatus.buffer.len - currentMainWindowNode.currentLine)
+
+    currentBufStatus.deleteLines(
+      status.registers,
+     currentMainWindowNode,
+     registerName,
+     startLine,
+     count,
+     status.settings)
 
 proc yankCharacters(status: var EditorStatus, registerName: string = "") =
   const IsDelete = false
