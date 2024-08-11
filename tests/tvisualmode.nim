@@ -58,7 +58,7 @@ suite "Visual mode: Delete buffer":
       currentBufStatus.keyRight(currentMainWindowNode)
       status.update
 
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'x')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"x")
 
     check(currentBufStatus.buffer[0] == ru"d")
 
@@ -84,7 +84,7 @@ suite "Visual mode: Delete buffer":
       currentBufStatus.keyDown(currentMainWindowNode)
       status.update
 
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'x')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"x")
 
     check(currentBufStatus.buffer.len == 1)
     check(currentBufStatus.buffer[0] == ru"")
@@ -113,7 +113,7 @@ suite "Visual mode: Delete buffer":
     currentBufStatus.keyRight(currentMainWindowNode)
     status.update
 
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'x')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"x")
 
     check(currentBufStatus.buffer.len == 1)
     check(currentBufStatus.buffer[0] == ru"ef")
@@ -145,7 +145,7 @@ suite "Visual mode: Delete buffer":
     currentBufStatus.keyRight(currentMainWindowNode)
     status.update
 
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'x')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"x")
 
     check(currentBufStatus.buffer.len == 2)
     check(currentBufStatus.buffer[0] == ru"a")
@@ -175,7 +175,7 @@ suite "Visual mode: Delete buffer":
       currentBufStatus.keyDown(currentMainWindowNode)
       status.update
 
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'x')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"x")
 
     check(currentBufStatus.buffer.len == 2)
     check(currentBufStatus.buffer[0] == ru"a")
@@ -202,7 +202,7 @@ suite "Visual mode: Delete buffer":
     currentBufStatus.moveToLastOfLine(currentMainWindowNode)
     status.update
 
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'x')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"x")
 
     check currentBufStatus.buffer[0] == ru"def"
     check currentBufStatus.buffer[1] == ru"ghi"
@@ -228,7 +228,7 @@ suite "Visual mode: Delete buffer":
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'x')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"x")
 
     check currentBufStatus.buffer.len == 2
     check currentBufStatus.buffer[0] == ru"a"
@@ -255,7 +255,7 @@ suite "Visual mode: Delete buffer":
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'x')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"x")
 
     check currentBufStatus.buffer[0] == ru"a  c"
     check currentMainWindowNode.currentColumn == 2
@@ -525,7 +525,7 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
     status.settings.clipboard.enable = false
 
     var area = currentBufStatus.selectedArea
-    const Key = ru'y'
+    const Key = ru"y"
     status.visualBlockCommand(area.get, Key)
 
     check currentBufStatus.isNormalMode
@@ -948,7 +948,7 @@ suite "Visual mode: Add indent":
       status.update
 
     status.update
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'>')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru">")
 
     check(currentBufStatus.buffer[0] == ru"  abc")
     check(currentBufStatus.buffer[1] == ru"  def")
@@ -976,7 +976,7 @@ suite "Visual block mode: Add indent":
       status.update
 
     status.update
-    status.visualBlockCommand(currentBufStatus.selectedArea.get, ru'>')
+    status.visualBlockCommand(currentBufStatus.selectedArea.get, ru">")
 
     check(currentBufStatus.buffer[0] == ru"  abc")
     check(currentBufStatus.buffer[1] == ru"  def")
@@ -1004,7 +1004,7 @@ suite "Visual mode: Delete indent":
       status.update
 
     status.update
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'<')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"<")
 
     check(currentBufStatus.buffer[0] == ru"abc")
     check(currentBufStatus.buffer[1] == ru"def")
@@ -1032,7 +1032,7 @@ suite "Visual block mode: Delete indent":
       status.update
 
     status.update
-    status.visualBlockCommand(currentBufStatus.selectedArea.get, ru'<')
+    status.visualBlockCommand(currentBufStatus.selectedArea.get, ru"<")
 
     check(currentBufStatus.buffer[0] == ru"abc")
     check(currentBufStatus.buffer[1] == ru"def")
@@ -1059,7 +1059,7 @@ suite "Visual mode: Converts string into lower-case string":
     status.update
 
     status.update
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'u')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"u")
 
     check(currentBufStatus.buffer[0] == ru"abc")
 
@@ -1083,7 +1083,7 @@ suite "Visual mode: Converts string into lower-case string":
     status.update
 
     status.update
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'u')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"u")
 
     check(currentBufStatus.buffer[0] == ru"aあbc")
 
@@ -1106,7 +1106,7 @@ suite "Visual mode: Converts string into lower-case string":
     currentBufStatus.keyDown(currentMainWindowNode)
     status.update
 
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'u')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"u")
 
     check(currentBufStatus.buffer[0] == ru"abc")
     check(currentBufStatus.buffer[1] == ru"dEF")
@@ -1129,7 +1129,7 @@ suite "Visual mode: Converts string into lower-case string":
       currentBufStatus.keyDown(currentMainWindowNode)
       status.update
 
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'u')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"u")
 
     check(currentBufStatus.buffer[0] == ru"abc")
     check(currentBufStatus.buffer[1] == ru"")
@@ -1156,7 +1156,7 @@ suite "Visual block mode: Converts string into lower-case string":
     status.update
 
     status.update
-    status.visualBlockCommand(currentBufStatus.selectedArea.get, ru'u')
+    status.visualBlockCommand(currentBufStatus.selectedArea.get, ru"u")
 
     check(currentBufStatus.buffer[0] == ru"abc")
 
@@ -1182,7 +1182,7 @@ suite "Visual block mode: Converts string into lower-case string":
     currentBufStatus.keyDown(currentMainWindowNode)
     status.update
 
-    status.visualBlockCommand(currentBufStatus.selectedArea.get, ru'u')
+    status.visualBlockCommand(currentBufStatus.selectedArea.get, ru"u")
 
     check(currentBufStatus.buffer[0] == ru"abC")
     check(currentBufStatus.buffer[1] == ru"deF")
@@ -1208,7 +1208,7 @@ suite "Visual mode: Converts string into upper-case string":
     status.update
 
     status.update
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'U')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"U")
 
     check(currentBufStatus.buffer[0] == ru"ABC")
 
@@ -1232,7 +1232,7 @@ suite "Visual mode: Converts string into upper-case string":
     status.update
 
     status.update
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'U')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"U")
 
     check(currentBufStatus.buffer[0] == ru"AあBC")
 
@@ -1255,7 +1255,7 @@ suite "Visual mode: Converts string into upper-case string":
     currentBufStatus.keyDown(currentMainWindowNode)
     status.update
 
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'U')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"U")
 
     check(currentBufStatus.buffer[0] == ru"ABC")
     check(currentBufStatus.buffer[1] == ru"Def")
@@ -1279,7 +1279,7 @@ suite "Visual mode: Converts string into upper-case string":
       currentBufStatus.keyDown(currentMainWindowNode)
       status.update
 
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'U')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"U")
 
     check(currentBufStatus.buffer[0] == ru"ABC")
     check(currentBufStatus.buffer[1] == ru"")
@@ -1327,7 +1327,7 @@ suite "Visual block mode: Converts string into upper-case string":
     status.update
 
     status.update
-    status.visualBlockCommand(currentBufStatus.selectedArea.get, ru'U')
+    status.visualBlockCommand(currentBufStatus.selectedArea.get, ru"U")
 
     check(currentBufStatus.buffer[0] == ru"ABC")
 
@@ -1352,7 +1352,7 @@ suite "Visual block mode: Converts string into upper-case string":
     currentBufStatus.keyDown(currentMainWindowNode)
     status.update
 
-    status.visualBlockCommand(currentBufStatus.selectedArea.get, ru'U')
+    status.visualBlockCommand(currentBufStatus.selectedArea.get, ru"U")
 
     check(currentBufStatus.buffer[0] == ru"ABc")
     check(currentBufStatus.buffer[1] == ru"DEf")
@@ -1468,7 +1468,7 @@ suite "Visual mode: Run command when Readonly mode":
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'x')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"x")
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1492,7 +1492,7 @@ suite "Visual mode: Run command when Readonly mode":
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'>')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru">")
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1516,7 +1516,7 @@ suite "Visual mode: Run command when Readonly mode":
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'<')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"<")
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1544,7 +1544,7 @@ suite "Visual mode: Run command when Readonly mode":
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'J')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"J")
 
     check currentBufStatus.buffer.len == 2
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1569,7 +1569,7 @@ suite "Visual mode: Run command when Readonly mode":
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'u')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"u")
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1593,7 +1593,7 @@ suite "Visual mode: Run command when Readonly mode":
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'U')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"U")
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1644,7 +1644,7 @@ suite "Visual mode: Run command when Readonly mode":
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'I')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"I")
 
     check currentBufStatus.mode == Mode.normal
 
@@ -1706,7 +1706,7 @@ suite "Visual block mode: Run command when Readonly mode":
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'x')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"x")
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1730,7 +1730,7 @@ suite "Visual block mode: Run command when Readonly mode":
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'I')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"I")
 
     check currentBufStatus.mode == Mode.normal
 
@@ -1753,7 +1753,7 @@ suite "Visual block mode: Run command when Readonly mode":
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'>')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru">")
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1777,7 +1777,7 @@ suite "Visual block mode: Run command when Readonly mode":
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'<')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"<")
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1805,7 +1805,7 @@ suite "Visual block mode: Run command when Readonly mode":
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'J')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"J")
 
     check currentBufStatus.buffer.len == 2
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1830,7 +1830,7 @@ suite "Visual block mode: Run command when Readonly mode":
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'u')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"u")
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1854,7 +1854,7 @@ suite "Visual block mode: Run command when Readonly mode":
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'U')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"U")
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1926,7 +1926,7 @@ suite "Visual line mode: Delete buffer":
     status.resize(100, 100)
     status.update
 
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'x')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"x")
 
     check currentBufStatus.buffer[0] == ru"b"
     check currentBufStatus.buffer[1] == ru"c"
@@ -1955,7 +1955,7 @@ suite "Visual line mode: Delete buffer":
       currentBufStatus.keyDown(currentMainWindowNode)
       status.update
 
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'x')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"x")
 
     check(currentBufStatus.buffer[0] == ru"d")
 
@@ -1978,7 +1978,7 @@ suite "Visual line mode: Delete buffer":
     status.resize(100, 100)
     status.update
 
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'd')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"d")
 
     check currentBufStatus.buffer[0] == ru"b"
     check currentBufStatus.buffer[1] == ru"c"
@@ -2007,7 +2007,7 @@ suite "Visual line mode: Delete buffer":
       currentBufStatus.keyDown(currentMainWindowNode)
       status.update
 
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'd')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"d")
 
     check(currentBufStatus.buffer[0] == ru"d")
 
@@ -2120,7 +2120,7 @@ suite "Visual line mode: idenet":
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'>')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru">")
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
@@ -2146,7 +2146,7 @@ suite "Visual line mode: idenet":
 
     status.update
 
-    status.visualCommand(currentBufStatus.selectedArea.get, ru'<')
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"<")
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
