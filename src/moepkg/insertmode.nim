@@ -27,7 +27,15 @@ import lsp/client
 import lsp/completion as lspcompletion
 
 import ui, editorstatus, windownode, movement, editor, bufferstatus, settings,
-       unicodeext, independentutils, gapbuffer, completion
+       unicodeext, independentutils, gapbuffer, completion, folding
+
+proc shiftFoldingRanges*(status: var EditorStatus, start, shift: int) =
+  let nodes = mainWindowNode.searchByBufferIndex(
+    status.bufferIndexInCurrentWindow)
+
+  for i in 0 .. nodes.high:
+    if nodes[i].view.foldingRanges.len > 0:
+      nodes[i].view.foldingRanges.shiftLines(start, shift)
 
 proc exitInsertMode(status: var EditorStatus) =
   if currentBufStatus.isInsertMultiMode:
@@ -143,7 +151,10 @@ proc insertToBuffer(status: var EditorStatus, r: Rune) {.inline.} =
 proc execInsertModeCommand*(status: var EditorStatus, command: Runes) =
   if command.len == 0:
     return
-  let key = command[0]
+
+  let
+    beforeBufferLen = currentBufStatus.buffer.len
+    key = command[0]
 
   if isCtrlC(key) or isEscKey(key):
     status.exitInsertMode
@@ -208,3 +219,10 @@ proc execInsertModeCommand*(status: var EditorStatus, command: Runes) =
       status.settings.view.tabStop)
   else:
     status.insertToBuffer(key)
+
+  if currentBufStatus.buffer.len != beforeBufferLen:
+    status.shiftFoldingRanges(
+      currentMainWindowNode.currentLine,
+      currentBufStatus.buffer.len - beforeBufferLen)
+
+

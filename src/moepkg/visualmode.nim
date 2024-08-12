@@ -570,6 +570,14 @@ proc changeModeToInsertMulti(
     currentBufStatus.mode = Mode.insertMulti
     changeCursorType(status.settings.standard.insertModeCursor)
 
+proc shiftFoldingRanges*(status: var EditorStatus, start, shift: int) =
+  let nodes = mainWindowNode.searchByBufferIndex(
+    status.bufferIndexInCurrentWindow)
+
+  for i in 0 .. nodes.high:
+    if nodes[i].view.foldingRanges.len > 0:
+      nodes[i].view.foldingRanges.shiftLines(start, shift)
+
 proc visualBlockCommand(
   status: var EditorStatus,
   area: var SelectedArea,
@@ -715,7 +723,14 @@ proc execVisualModeCommand*(status: var EditorStatus, command: Runes) =
   elif key == ord('}'):
     currentBufStatus.moveToNextBlankLine(currentMainWindowNode)
   else:
+    let beforeBufferLen = currentBufStatus.buffer.len
+
     if isVisualBlockMode(currentBufStatus.mode):
       status.visualBlockCommand(currentBufStatus.selectedArea.get, command)
     else:
       status.visualCommand(currentBufStatus.selectedArea.get, command)
+
+    # Update folding ranges
+    status.shiftFoldingRanges(
+      currentMainWindowNode.currentLine,
+      currentBufStatus.buffer.len - beforeBufferLen)

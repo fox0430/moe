@@ -89,3 +89,9 @@ proc add*(ranges: var FoldingRanges, range: FoldingRange) =
 
 proc add*(ranges: var FoldingRanges, firstLine, lastLine: int) {.inline.} =
   ranges.add(FoldingRange(first: firstLine, last: lastLine))
+
+proc shiftLines*(ranges: var FoldingRanges, startLine, shiftLen: int) =
+  for i in 0 .. ranges.high:
+    if ranges[i].first >= startLine:
+      ranges[i].first += shiftLen
+      ranges[i].last += shiftLen
