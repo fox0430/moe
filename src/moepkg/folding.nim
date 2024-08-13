@@ -44,20 +44,20 @@ proc find*(ranges: FoldingRanges, range: FoldingRange): Option[int] =
 proc remove*(ranges: var FoldingRanges, range: FoldingRange) =
   for i, r in ranges:
     if r == range:
-      ranges.del(i)
+      ranges.delete(i)
       break
 
 proc remove*(ranges: var FoldingRanges, line: int) =
   for i, r in ranges:
     if line >= r.first and line <= r.last:
-      ranges.del(i)
+      ranges.delete(i)
       break
 
 proc removeAll*(ranges: var FoldingRanges, range: FoldingRange) =
   var i = 0
   while i < ranges.len:
     if ranges[i].first >= range.first and ranges[i].last <= range.last:
-      ranges.del(i)
+      ranges.delete(i)
     elif ranges[i].last > range.first:
       break
     else:
@@ -66,8 +66,8 @@ proc removeAll*(ranges: var FoldingRanges, range: FoldingRange) =
 proc removeAll*(ranges: var FoldingRanges, line: int) =
   var i = 0
   while i < ranges.len:
-    if ranges[i].first >= line and ranges[i].last <= line:
-      ranges.del(i)
+    if line >= ranges[i].first  and line <= ranges[i].last:
+      ranges.delete(i)
     elif ranges[i].last > line:
       break
     else:
