@@ -29,22 +29,27 @@ import editorstatus, ui, gapbuffer, unicodeext, fileutils, windownode, movement,
        commandline, viewhighlight, messagelog, registers, independentutils,
        popupwindow, editorview, folding
 
+template removeAllFoldingRange(status: var EditorStatus) =
+  currentMainWindowNode.removeAllFoldingRange(currentMainWindowNode.currentLine)
+
 proc changeModeToInsertMode(status: var EditorStatus) {.inline.} =
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
-  else:
-    let foldingRange = status.findFoldingRange
-    if foldingRange.isSome:
-      currentMainWindowNode.view.removeAllFoldingRange(foldingRange.get)
+    return
 
-    changeCursorType(status.settings.standard.insertModeCursor)
-    status.changeMode(Mode.insert)
+  status.removeAllFoldingRange
+
+  changeCursorType(status.settings.standard.insertModeCursor)
+  status.changeMode(Mode.insert)
 
 proc changeModeToReplaceMode(status: var EditorStatus) {.inline.} =
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
-  else:
-    status.changeMode(Mode.replace)
+    return
+
+  status.removeAllFoldingRange
+
+  status.changeMode(Mode.replace)
 
 proc changeModeToVisualMode(status: var EditorStatus) {.inline.} =
   status.changeMode(Mode.visual)
@@ -357,6 +362,8 @@ proc deleteWordWithSpace(
       status.commandLine.writeReadonlyModeWarning
       return
 
+    status.removeAllFoldingRange
+
     const WithSpace = true
     currentBufStatus.deleteWord(
       currentMainWindowNode,
@@ -370,6 +377,8 @@ proc deleteWordWithoutSpace(status: var EditorStatus) =
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
     return
+
+  status.removeAllFoldingRange
 
   const
     WithSpace = false
@@ -391,6 +400,8 @@ proc changeInnerCommand(
     if currentBufStatus.isReadonly:
       status.commandLine.writeReadonlyModeWarning
       return
+
+    status.removeAllFoldingRange
 
     let
       currentLine = currentMainWindowNode.currentLine
@@ -433,6 +444,8 @@ proc deleteInnerCommand(
     if currentBufStatus.isReadonly:
       status.commandLine.writeReadonlyModeWarning
       return
+
+    status.removeAllFoldingRange
 
     if isParen(key):
       # Delete inside paren and enter insert mode
@@ -839,6 +852,8 @@ proc deleteCharacters(status: var EditorStatus, registerName: string = "") =
     status.commandLine.writeReadonlyModeWarning
     return
 
+  status.removeAllFoldingRange
+
   currentBufStatus.deleteCharacters(
     status.registers,
     registerName,
@@ -1101,6 +1116,8 @@ proc enterInsertModeAfterCursor(status: var EditorStatus) =
     status.commandLine.writeReadonlyModeWarning
     return
 
+  status.removeAllFoldingRange
+
   let lineWidth = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
   if lineWidth == 0: discard
   elif lineWidth == currentMainWindowNode.currentColumn: discard
@@ -1112,6 +1129,8 @@ proc toggleCharacterAndMoveRight(status: var EditorStatus) =
     status.commandLine.writeReadonlyModeWarning
     return
 
+  status.removeAllFoldingRange
+
   currentBufStatus.toggleCharacters(
     currentMainWindowNode,
     currentBufStatus.cmdLoop)
@@ -1120,6 +1139,8 @@ proc replaceCurrentCharacter(status: var EditorStatus, newCharacter: Rune) =
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
     return
+
+  status.removeAllFoldingRange
 
   currentBufStatus.replaceCharacters(
     currentMainWindowNode,

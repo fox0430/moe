@@ -19,7 +19,7 @@
 
 import std/[heapqueue, options, strformat, tables]
 import ui, editorview, gapbuffer, color, cursor, highlight, unicodeext,
-       independentutils, settings, undoredostack
+       independentutils, settings, undoredostack, folding
 
 type
   SplitType* = enum
@@ -517,3 +517,21 @@ proc revertPosition*(
     windowNode.currentLine = positionRecord[id].line
     windowNode.currentColumn = positionRecord[id].column
     windowNode.expandedColumn = positionRecord[id].expandedColumn
+
+proc findFoldingRange*(n: WindowNode): Option[FoldingRange] =
+  n.view.findFoldingRange(n.currentLine)
+
+proc removeFoldingRange*(n: WindowNode) =
+  let foldingRange = n.findFoldingRange
+  if foldingRange.isSome:
+    n.view.removeFoldingRange(foldingRange.get)
+
+proc removeFoldingRange*(n: WindowNode, line: int) =
+  let foldingRange = n.view.findFoldingRange(line)
+  if foldingRange.isSome:
+    n.view.removeFoldingRange(foldingRange.get)
+
+proc removeAllFoldingRange*(n: WindowNode, line: int) =
+  let foldingRange = n.view.findFoldingRange(line)
+  if foldingRange.isSome:
+    n.view.removeAllFoldingRange(foldingRange.get)

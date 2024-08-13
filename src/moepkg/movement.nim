@@ -19,22 +19,9 @@
 
 import std/[deques, options]
 import editorview, gapbuffer, unicodeext, windownode, bufferstatus,
-       independentutils, searchutils, folding
+       independentutils, searchutils
 
 template currentLineLen: int = bufStatus.buffer[windowNode.currentLine].len
-
-template findFoldingRange(n: WindowNode): Option[FoldingRange] =
-  n.view.findFoldingRange(n.currentLine)
-
-template removeFoldingRange(n: WindowNode) =
-  let foldingRange = n.findFoldingRange
-  if foldingRange.isSome:
-    n.view.removeFoldingRange(foldingRange.get)
-
-template removeFoldingRange(n: WindowNode, line: int) =
-  let foldingRange = n.view.findFoldingRange(line)
-  if foldingRange.isSome:
-    n.view.removeFoldingRange(foldingRange.get)
 
 proc isExpandPosition*(
   bufStatus: BufferStatus,
