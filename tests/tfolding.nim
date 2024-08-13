@@ -107,7 +107,10 @@ suite "folding: remove with FoldingRange":
     ]
     r.remove(FoldingRange(first: 0, last: 3))
 
-    check r.len == 2
+    check r == @[
+      FoldingRange(first: 0, last: 2),
+      FoldingRange(first: 5, last: 6)
+    ]
 
   test "Not found 2":
     var r = @[
@@ -116,7 +119,10 @@ suite "folding: remove with FoldingRange":
     ]
     r.remove(FoldingRange(first: 4, last: 5))
 
-    check r.len == 2
+    check r == @[
+      FoldingRange(first: 0, last: 2),
+      FoldingRange(first: 5, last: 6)
+    ]
 
   test "Basic":
     var r = @[
@@ -125,7 +131,7 @@ suite "folding: remove with FoldingRange":
     ]
     r.remove(FoldingRange(first: 0, last: 2))
 
-    check r.len == 1
+    check r == @[FoldingRange(first: 5, last: 6)]
 
 suite "folding: remove with line":
   test "Empty":
@@ -141,7 +147,10 @@ suite "folding: remove with line":
     ]
     r.remove(3)
 
-    check r.len == 2
+    check r == @[
+      FoldingRange(first: 0, last: 2),
+      FoldingRange(first: 5, last: 6)
+    ]
 
   test "Basic":
     var r = @[
@@ -150,7 +159,7 @@ suite "folding: remove with line":
     ]
     r.remove(0)
 
-    check r.len == 1
+    check r == @[FoldingRange(first: 5, last: 6)]
 
   test "Basic 2":
     var r = @[
@@ -159,7 +168,122 @@ suite "folding: remove with line":
     ]
     r.remove(1)
 
-    check r.len == 1
+    check r == @[FoldingRange(first: 5, last: 6)]
+
+suite "folding: removeAll with FoldingRange":
+  test "Empty":
+    var r: FoldingRanges = @[]
+    r.removeAll(FoldingRange())
+
+    check r.len == 0
+
+  test "Not found":
+    var r = @[
+      FoldingRange(first: 3, last: 5),
+      FoldingRange(first: 5, last: 6)
+    ]
+    r.removeAll(FoldingRange(first: 1, last: 2))
+
+    check r == @[
+      FoldingRange(first: 3, last: 5),
+      FoldingRange(first: 5, last: 6)
+    ]
+
+  test "Not found 2":
+    var r = @[
+      FoldingRange(first: 0, last: 2),
+      FoldingRange(first: 5, last: 6)
+    ]
+    r.removeAll(FoldingRange(first: 3, last: 4))
+
+    check r == @[
+      FoldingRange(first: 0, last: 2),
+      FoldingRange(first: 5, last: 6)
+    ]
+
+  test "Basic":
+    var r = @[
+      FoldingRange(first: 0, last: 2),
+      FoldingRange(first: 5, last: 6)
+    ]
+    r.removeAll(FoldingRange(first: 0, last: 2))
+
+    check r == @[FoldingRange(first: 5, last: 6)]
+
+  test "Basic 2":
+    echo "---------------------------"
+    var r = @[
+      FoldingRange(first: 0, last: 1),
+      FoldingRange(first: 2, last: 10),
+      FoldingRange(first: 2, last: 7),
+      FoldingRange(first: 2, last: 3),
+      FoldingRange(first: 20, last: 30)
+    ]
+    r.removeAll(FoldingRange(first: 2, last: 10))
+
+    check r == @[
+      FoldingRange(first: 0, last: 1),
+      FoldingRange(first: 20, last: 30)
+    ]
+
+suite "folding: removeAll with line":
+  test "Empty":
+    var r: FoldingRanges = @[]
+    r.removeAll(FoldingRange())
+
+    check r.len == 0
+
+  test "Not found":
+    var r = @[
+      FoldingRange(first: 3, last: 5),
+      FoldingRange(first: 5, last: 6)
+    ]
+    r.removeAll(2)
+
+    check r == @[
+      FoldingRange(first: 3, last: 5),
+      FoldingRange(first: 5, last: 6)
+    ]
+
+  test "Not found 2":
+    var r = @[
+      FoldingRange(first: 0, last: 2),
+      FoldingRange(first: 5, last: 6)
+    ]
+    r.removeAll(10)
+
+    check r == @[
+      FoldingRange(first: 0, last: 2),
+      FoldingRange(first: 5, last: 6)
+    ]
+
+  test "Basic":
+    var r = @[
+      FoldingRange(first: 0, last: 2),
+      FoldingRange(first: 3, last: 4),
+      FoldingRange(first: 5, last: 6)
+    ]
+    r.removeAll(3)
+
+    check r == @[
+      FoldingRange(first: 0, last: 2),
+      FoldingRange(first: 5, last: 6)
+    ]
+
+  test "Basic 2":
+    var r = @[
+      FoldingRange(first: 0, last: 2),
+      FoldingRange(first: 3, last: 10),
+      FoldingRange(first: 3, last: 4),
+      FoldingRange(first: 3, last: 7),
+      FoldingRange(first: 10, last: 20)
+    ]
+    r.removeAll(3)
+
+    check r == @[
+      FoldingRange(first: 0, last: 2),
+      FoldingRange(first: 10, last: 20)
+    ]
 
 suite "folding: add":
   test "Basic":
@@ -244,4 +368,73 @@ suite "folding: add":
       FoldingRange(first: 0, last: 8),
       FoldingRange(first: 3, last: 4),
       FoldingRange(first: 6, last: 7)
+    ]
+
+suite "folding: shiftLines":
+  test "+2 lines":
+    var r = @[
+      FoldingRange(first: 0, last: 2),
+      FoldingRange(first: 5, last: 6),
+      FoldingRange(first: 5, last: 10),
+      FoldingRange(first: 20, last: 30)
+    ]
+
+    r.shiftLines(0, 2)
+
+    check r == @[
+      FoldingRange(first: 2, last: 4),
+      FoldingRange(first: 7, last: 8),
+      FoldingRange(first: 7, last: 12),
+      FoldingRange(first: 22, last: 32)
+    ]
+
+  test "+2 lines from the 4th line":
+    var r = @[
+      FoldingRange(first: 0, last: 2),
+      FoldingRange(first: 5, last: 6),
+      FoldingRange(first: 5, last: 10),
+      FoldingRange(first: 20, last: 30)
+    ]
+
+    r.shiftLines(4, 2)
+
+    check r == @[
+      FoldingRange(first: 0, last: 2),
+      FoldingRange(first: 7, last: 8),
+      FoldingRange(first: 7, last: 12),
+      FoldingRange(first: 22, last: 32)
+    ]
+
+  test "-2 lines":
+    var r = @[
+      FoldingRange(first: 2, last: 4),
+      FoldingRange(first: 7, last: 8),
+      FoldingRange(first: 7, last: 12),
+      FoldingRange(first: 22, last: 32)
+    ]
+
+    r.shiftLines(0, -2)
+
+    check r == @[
+      FoldingRange(first: 0, last: 2),
+      FoldingRange(first: 5, last: 6),
+      FoldingRange(first: 5, last: 10),
+      FoldingRange(first: 20, last: 30)
+    ]
+
+  test "-2 lines from the 6th line":
+    var r = @[
+      FoldingRange(first: 2, last: 4),
+      FoldingRange(first: 7, last: 8),
+      FoldingRange(first: 7, last: 12),
+      FoldingRange(first: 22, last: 32)
+    ]
+
+    r.shiftLines(6, -2)
+
+    check r == @[
+      FoldingRange(first: 2, last: 4),
+      FoldingRange(first: 5, last: 6),
+      FoldingRange(first: 5, last: 10),
+      FoldingRange(first: 20, last: 30)
     ]
