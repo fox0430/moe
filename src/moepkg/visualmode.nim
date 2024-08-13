@@ -570,14 +570,6 @@ proc changeModeToInsertMulti(
     currentBufStatus.mode = Mode.insertMulti
     changeCursorType(status.settings.standard.insertModeCursor)
 
-proc shiftFoldingRanges*(status: var EditorStatus, start, shift: int) =
-  let nodes = mainWindowNode.searchByBufferIndex(
-    status.bufferIndexInCurrentWindow)
-
-  for i in 0 .. nodes.high:
-    if nodes[i].view.foldingRanges.len > 0:
-      nodes[i].view.foldingRanges.shiftLines(start, shift)
-
 proc visualBlockCommand(
   status: var EditorStatus,
   area: var SelectedArea,

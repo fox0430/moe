@@ -27,15 +27,7 @@ import lsp/client
 import lsp/completion as lspcompletion
 
 import ui, editorstatus, windownode, movement, editor, bufferstatus, settings,
-       unicodeext, independentutils, gapbuffer, completion, folding
-
-proc shiftFoldingRanges*(status: var EditorStatus, start, shift: int) =
-  let nodes = mainWindowNode.searchByBufferIndex(
-    status.bufferIndexInCurrentWindow)
-
-  for i in 0 .. nodes.high:
-    if nodes[i].view.foldingRanges.len > 0:
-      nodes[i].view.foldingRanges.shiftLines(start, shift)
+       unicodeext, independentutils, gapbuffer, completion
 
 proc exitInsertMode(status: var EditorStatus) =
   if currentBufStatus.isInsertMultiMode:

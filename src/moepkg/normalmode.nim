@@ -29,20 +29,6 @@ import editorstatus, ui, gapbuffer, unicodeext, fileutils, windownode, movement,
        commandline, viewhighlight, messagelog, registers, independentutils,
        popupwindow, editorview, folding
 
-template findFoldingRange(
-  status: EditorStatus): Option[FoldingRange] =
-
-    currentMainWindowNode.view.findFoldingRange(
-      currentMainWindowNode.currentLine)
-
-proc shiftFoldingRanges*(status: var EditorStatus, start, shift: int) =
-  let nodes = mainWindowNode.searchByBufferIndex(
-    status.bufferIndexInCurrentWindow)
-
-  for i in 0 .. nodes.high:
-    if nodes[i].view.foldingRanges.len > 0:
-      nodes[i].view.foldingRanges.shiftLines(start, shift)
-
 proc changeModeToInsertMode(status: var EditorStatus) {.inline.} =
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
