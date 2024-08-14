@@ -37,6 +37,47 @@ proc initSelectedArea(status: EditorStatus) =
     currentMainWindowNode.currentColumn)
     .some
 
+suite "addNewBuffer":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+
+  test "Empty buffer":
+    check status.addNewBuffer("", Mode.normal).get == 0
+
+    check status.bufStatus.len == 1
+    check currentBufStatus.buffer.toSeqRunes == @[""].toSeqRunes
+    check currentBufStatus.path == ru""
+    check currentBufStatus.mode == Mode.normal
+
+  test "2 Empty buffers":
+    block:
+      let path = $genOid()
+      check status.addNewBuffer(path, Mode.normal).get == 0
+
+      check status.bufStatus.len == 1
+      check currentBufStatus.buffer.toSeqRunes == @[""].toSeqRunes
+      check currentBufStatus.path == path.toRunes
+      check currentBufStatus.mode == Mode.normal
+
+    block:
+      let path = $genOid()
+      check status.addNewBuffer(path, Mode.normal).get == 1
+
+      check status.bufStatus.len == 2
+      check status.bufStatus[1].buffer.toSeqRunes == @[""].toSeqRunes
+      check status.bufStatus[1].path == path.toRunes
+      check status.bufStatus[1].mode == Mode.normal
+
+  test "Read only mode":
+    status.isReadonly = true
+
+    check status.addNewBuffer("", Mode.normal).get == 0
+
+    check status.bufStatus.len == 1
+    check currentBufStatus.isReadonly
+
 suite "addNewBufferInCurrentWin":
   test "Empty buffer":
     # Create a file for the test.
