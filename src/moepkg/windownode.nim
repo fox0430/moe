@@ -518,20 +518,23 @@ proc revertPosition*(
     windowNode.currentColumn = positionRecord[id].column
     windowNode.expandedColumn = positionRecord[id].expandedColumn
 
-proc findFoldingRange*(n: WindowNode): Option[FoldingRange] =
+proc findFoldingRange*(n: WindowNode): Option[FoldingRange] {.inline.} =
   n.view.findFoldingRange(n.currentLine)
 
-proc removeFoldingRange*(n: WindowNode) =
+proc removeFoldingRange*(n: var WindowNode) =
   let foldingRange = n.findFoldingRange
   if foldingRange.isSome:
     n.view.removeFoldingRange(foldingRange.get)
 
-proc removeFoldingRange*(n: WindowNode, line: int) =
+proc removeFoldingRange*(n: var WindowNode, line: int) =
   let foldingRange = n.view.findFoldingRange(line)
   if foldingRange.isSome:
     n.view.removeFoldingRange(foldingRange.get)
 
-proc removeAllFoldingRange*(n: WindowNode, line: int) =
+proc removeAllFoldingRange*(n: var WindowNode, line: int) =
   let foldingRange = n.view.findFoldingRange(line)
   if foldingRange.isSome:
     n.view.removeAllFoldingRange(foldingRange.get)
+
+proc removeAllFoldingRange*(n: var WindowNode, range: FoldingRange) {.inline.} =
+  n.view.removeAllFoldingRange(range)

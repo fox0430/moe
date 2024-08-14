@@ -885,6 +885,9 @@ proc shiftFoldingRanges*(status: var EditorStatus, start, shift: int) =
     if nodes[i].view.foldingRanges.len > 0:
       nodes[i].view.foldingRanges.shiftLines(start, shift)
 
+template removeAllFoldingRange(status: var EditorStatus) =
+  currentMainWindowNode.removeAllFoldingRange(currentMainWindowNode.currentLine)
+
 proc update*(status: var EditorStatus) =
   ## Update all views, highlighting, cursor, etc.
 

@@ -1389,6 +1389,16 @@ proc unindent(status: var EditorStatus) =
       currentMainWindowNode,
       status.settings.standard.tabStop)
 
+proc joinLines(status: var EditorStatus) =
+  if currentBufStatus.isReadonly:
+    status.commandLine.writeReadonlyModeWarning
+    return
+
+  status.removeAllFoldingRange
+
+  for i in 0 ..< currentBufStatus.cmdLoop:
+    currentBufStatus.joinLine(currentMainWindowNode)
+
 proc startRecordingOperations(status: var EditorStatus, name: Rune) =
   ## Start recoding editor operations for macro.
 
@@ -1658,7 +1668,7 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
     if secondKey == ord('='):
       currentBufStatus.autoIndentCurrentLine(currentMainWindowNode)
   elif key == ord('J'):
-    currentBufStatus.joinLine(currentMainWindowNode)
+    status.joinLines
   elif isCtrlA(key):
     currentBufStatus.modifyNumberTextUnderCurosr(currentMainWindowNode, cmdLoop)
   elif isCtrlX(key):

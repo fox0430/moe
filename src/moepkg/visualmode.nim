@@ -321,13 +321,16 @@ proc replaceCharacterBlock(
 
 proc joinLines(
   bufStatus: var BufferStatus,
-  windowNode: WindowNode,
+  windowNode: var WindowNode,
   area: SelectedArea,
   commandLine: var CommandLine) =
 
     if bufStatus.isReadonly:
       commandLine.writeReadonlyModeWarning
       return
+
+    windowNode.removeAllFoldingRange(
+      FoldingRange(first: area.startLine, last: area.endLine))
 
     for i in area.startLine ..< area.endLine:
       windowNode.currentLine = area.startLine
@@ -525,7 +528,10 @@ proc visualCommand(
           status.settings.standard.tabStop,
           status.commandLine)
       elif key == ord('J'):
-        currentBufStatus.joinLines(currentMainWindowNode, area, status.commandLine)
+        currentBufStatus.joinLines(
+          currentMainWindowNode,
+          area,
+          status.commandLine)
       elif key == ord('u'):
         currentBufStatus.toLowerString(
           currentMainWindowNode,
