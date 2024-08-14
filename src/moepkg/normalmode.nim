@@ -32,12 +32,15 @@ import editorstatus, ui, gapbuffer, unicodeext, fileutils, windownode, movement,
 template removeAllFoldingRange(status: var EditorStatus) =
   currentMainWindowNode.removeAllFoldingRange(currentMainWindowNode.currentLine)
 
-proc changeModeToInsertMode(status: var EditorStatus) {.inline.} =
+proc changeModeToInsertMode(
+  status: var EditorStatus,
+  removeFoldingRange: bool = true) {.inline.} =
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
     return
 
-  status.removeAllFoldingRange
+  if removeFoldingRange:
+    status.removeAllFoldingRange
 
   changeCursorType(status.settings.standard.insertModeCursor)
   status.changeMode(Mode.insert)
@@ -1184,7 +1187,7 @@ proc openBlankLineAboveAndEnterInsertMode(status: var EditorStatus) =
     status.highlightingText,
     status.settings)
 
-  status.changeModeToInsertMode
+  status.changeModeToInsertMode(false)
 
 proc moveToFirstNonBlankOfLineAndEnterInsertMode(status: var EditorStatus) =
   if currentBufStatus.isReadonly:
