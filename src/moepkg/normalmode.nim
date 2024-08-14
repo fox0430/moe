@@ -1365,6 +1365,30 @@ proc pasteBeforeCursor(status: var EditorStatus) =
 
   currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
 
+proc indent(status: var EditorStatus) =
+  if currentBufStatus.isReadonly:
+    status.commandLine.writeReadonlyModeWarning
+    return
+
+  status.removeAllFoldingRange
+
+  for i in 0 ..< currentBufStatus.cmdLoop:
+    currentBufStatus.indent(
+      currentMainWindowNode,
+      status.settings.standard.tabStop)
+
+proc unindent(status: var EditorStatus) =
+  if currentBufStatus.isReadonly:
+    status.commandLine.writeReadonlyModeWarning
+    return
+
+  status.removeAllFoldingRange
+
+  for i in 0 ..< currentBufStatus.cmdLoop:
+    currentBufStatus.unindent(
+      currentMainWindowNode,
+      status.settings.standard.tabStop)
+
 proc startRecordingOperations(status: var EditorStatus, name: Rune) =
   ## Start recoding editor operations for macro.
 
@@ -1626,15 +1650,9 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
   elif key == ord('P'):
     status.pasteBeforeCursor
   elif key == ord('>'):
-    for i in 0 ..< cmdLoop:
-      currentBufStatus.indent(
-        currentMainWindowNode,
-        status.settings.standard.tabStop)
+    status.indent
   elif key == ord('<'):
-    for i in 0 ..< cmdLoop:
-      currentBufStatus.unindent(
-        currentMainWindowNode,
-        status.settings.standard.tabStop)
+    status.unindent
   elif key == ord('='):
     let secondKey = commands[1]
     if secondKey == ord('='):
