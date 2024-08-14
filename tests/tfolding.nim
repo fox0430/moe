@@ -211,7 +211,6 @@ suite "folding: removeAll with FoldingRange":
     check r == @[FoldingRange(first: 5, last: 6)]
 
   test "Basic 2":
-    echo "---------------------------"
     var r = @[
       FoldingRange(first: 0, last: 1),
       FoldingRange(first: 2, last: 10),
