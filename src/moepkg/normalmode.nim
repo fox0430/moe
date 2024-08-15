@@ -246,6 +246,18 @@ proc searchNextOccurrenceReversely(status: var EditorStatus) {.inline.} =
   if status.searchHistory.len > 0:
     status.searchNextOccurrenceReversely(status.searchHistory[^1])
 
+proc moveToForwardWordInCurrentLine(status: var EditorStatus, r: Rune) =
+  let pos = currentBufStatus.searchOneCharacterToEndOfLine(
+    currentMainWindowNode,
+    r)
+
+  if pos != -1:
+    currentMainWindowNode.currentColumn = pos
+
+    let foldingRange = status.findFoldingRange
+    if foldingRange.isSome:
+      status.removeAllFoldingRange
+
 proc turnOffHighlighting*(status: var EditorStatus) {.inline.} =
   if status.highlightingText.isSome:
     status.highlightingText = none(HighlightingText)
@@ -1698,13 +1710,7 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
     let word = currentBufStatus.getWordUnderCursor(currentMainWindowNode)[1]
     status.searchNextOccurrenceReversely(word)
   elif key == ord('f'):
-    let secondKey = commands[1]
-    let pos =
-      currentBufStatus.searchOneCharacterToEndOfLine(
-        currentMainWindowNode,
-        secondKey)
-    if pos != -1:
-      currentMainWindowNode.currentColumn = pos
+    status.moveToForwardWordInCurrentLine(commands[1])
   elif key == ord('t'):
     let secondKey = commands[1]
     let pos =
