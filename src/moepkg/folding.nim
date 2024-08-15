@@ -53,15 +53,18 @@ proc remove*(ranges: var FoldingRanges, line: int) =
       ranges.delete(i)
       break
 
-proc removeAll*(ranges: var FoldingRanges, range: FoldingRange) =
+proc removeAll*(ranges: var FoldingRanges, first, last: int) =
   var i = 0
   while i < ranges.len:
-    if ranges[i].first >= range.first and ranges[i].last <= range.last:
+    if ranges[i].first >= first and ranges[i].last <= last:
       ranges.delete(i)
-    elif ranges[i].last > range.first:
+    elif ranges[i].last > first:
       break
     else:
       i.inc
+
+proc removeAll*(ranges: var FoldingRanges, range: FoldingRange) {.inline.} =
+  ranges.removeAll(range.first, range.last)
 
 proc removeAll*(ranges: var FoldingRanges, line: int) =
   var i = 0

@@ -32,6 +32,9 @@ import editorstatus, ui, gapbuffer, unicodeext, fileutils, windownode, movement,
 template removeAllFoldingRange(status: var EditorStatus) =
   currentMainWindowNode.removeAllFoldingRange(currentMainWindowNode.currentLine)
 
+template removeAllFoldingRange(status: var EditorStatus, first, last: int) =
+  currentMainWindowNode.removeAllFoldingRange(first, last)
+
 proc changeModeToInsertMode(
   status: var EditorStatus,
   removeFoldingRange: bool = true) {.inline.} =
@@ -917,6 +920,9 @@ proc deleteFromCurrentLineToLastLine(
     let
       startLine = currentMainWindowNode.currentLine
       count = currentBufStatus.buffer.len - currentMainWindowNode.currentLine
+
+    status.removeAllFoldingRange(startLine, startLine + count)
+
     currentBufStatus.deleteLines(
       status.registers,
       currentMainWindowNode,
@@ -937,6 +943,9 @@ proc deleteLineFromFirstLineToCurrentLine(
 
     const StartLine = 0
     let count = currentMainWindowNode.currentLine
+
+    status.removeAllFoldingRange(StartLine, StartLine + count)
+
     currentBufStatus.deleteLines(
       status.registers,
       currentMainWindowNode,
