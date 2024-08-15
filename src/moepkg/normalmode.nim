@@ -1068,6 +1068,8 @@ proc deleteCharactersUntilCharacterInLine(status: var EditorStatus, r: Rune) =
     status.commandLine.writeReadonlyModeWarning
     return
 
+  status.removeAllFoldingRange
+
   currentBufStatus.deleteCharactersUntilCharacterInLine(
     currentMainWindowNode,
     r)
