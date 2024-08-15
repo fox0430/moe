@@ -169,3 +169,18 @@ suite "init: addBufferStatus":
 
     check currentMainWindowNode.bufferIndex == 0
 
+  test "Read only mode":
+    var status = initEditorStatus()
+    const ParsedList = CmdParsedList(isReadonly: true)
+
+    status.isReadonly = true
+
+    status.addBufferStatus(ParsedList)
+
+    check status.bufStatus.len == 1
+    check currentBufStatus.buffer.toSeqRunes == @[ru""]
+    check currentBufStatus.path == ru""
+    check currentBufStatus.mode == Mode.normal
+    check currentBufStatus.isReadonly
+
+    check mainWindowNode.getAllWindowNode.len == 1
