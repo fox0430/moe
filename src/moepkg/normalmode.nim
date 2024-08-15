@@ -258,6 +258,18 @@ proc moveToForwardWordInCurrentLine(status: var EditorStatus, r: Rune) =
     if foldingRange.isSome:
       status.removeAllFoldingRange
 
+proc moveToBeforeOfNextAnyCharacter(status: var EditorStatus, r: Rune) =
+  let pos = currentBufStatus.searchOneCharacterToEndOfLine(
+    currentMainWindowNode,
+    r)
+
+  if pos > 0:
+    currentMainWindowNode.currentColumn = pos - 1
+
+    let foldingRange = status.findFoldingRange
+    if foldingRange.isSome:
+      status.removeAllFoldingRange
+
 proc turnOffHighlighting*(status: var EditorStatus) {.inline.} =
   if status.highlightingText.isSome:
     status.highlightingText = none(HighlightingText)
@@ -1712,13 +1724,7 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
   elif key == ord('f'):
     status.moveToForwardWordInCurrentLine(commands[1])
   elif key == ord('t'):
-    let secondKey = commands[1]
-    let pos =
-      currentBufStatus.searchOneCharacterToEndOfLine(
-        currentMainWindowNode,
-        secondKey)
-    if pos != -1:
-      currentMainWindowNode.currentColumn = pos - 1
+    status.moveToBeforeOfNextAnyCharacter(commands[1])
   elif key == ord('F'):
     let secondKey = commands[1]
     let pos =
