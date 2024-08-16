@@ -521,6 +521,9 @@ proc revertPosition*(
 proc findFoldingRange*(n: WindowNode): Option[FoldingRange] {.inline.} =
   n.view.findFoldingRange(n.currentLine)
 
+proc isFoldingStartLine*(n: WindowNode, line: int): bool {.inline.} =
+  n.view.foldingRanges.isStartLine(line)
+
 proc removeFoldingRange*(n: var WindowNode) =
   let foldingRange = n.findFoldingRange
   if foldingRange.isSome:

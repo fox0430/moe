@@ -50,6 +50,12 @@ proc swapSelectedAreaVisualLine(
       else:
         0
 
+proc moveRight(windowNode: var WindowNode, bufStatus: var BufferStatus) =
+  if windowNode.isFoldingStartLine(windowNode.currentLine):
+    return
+
+  bufStatus.keyRight(windowNode)
+
 proc yankBuffer(
   bufStatus: var BufferStatus,
   registers: var Registers,
@@ -728,7 +734,7 @@ proc execVisualModeCommand*(status: var EditorStatus, command: Runes) =
   elif key == ord('h') or isLeftKey(key) or isBackspaceKey(key):
     currentMainWindowNode.keyLeft
   elif key == ord('l') or isRightKey(key):
-    currentBufStatus.keyRight(currentMainWindowNode)
+    currentMainWindowNode.moveRight(currentBufStatus)
   elif key == ord('k') or isUpKey(key):
     currentBufStatus.keyUp(currentMainWindowNode)
   elif key == ord('j') or isDownKey(key) or isEnterKey(key):

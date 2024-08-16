@@ -40,7 +40,7 @@ proc keyLeft*(windowNode: var WindowNode) =
 proc keyRight*(bufStatus: var BufferStatus, windowNode: var WindowNode) =
   let foldingRange = windowNode.findFoldingRange
   if foldingRange.isSome:
-    windowNode.view.removeFoldingRange(foldingRange.get)
+    windowNode.removeAllFoldingRange(windowNode.currentLine)
     windowNode.view.reload(bufStatus.buffer, windowNode.view.originalLine[0])
 
   let maxColumn = currentLineLen + (if bufStatus.isExpandableMode: 1 else: 0)
