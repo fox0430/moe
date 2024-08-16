@@ -1270,9 +1270,10 @@ template isFoldingStartLine(status: EditorStatus): bool =
     currentMainWindowNode.currentLine)
 
 proc expandFoldingLines(status: var EditorStatus) {.inline.} =
-  if status.isFoldingStartLine:
-    currentMainWindowNode.view.removeFoldingRange(
-      currentMainWindowNode.currentLine)
+  for i in 0 .. currentBufStatus.cmdLoop - 1:
+    if status.isFoldingStartLine:
+      currentMainWindowNode.view.removeFoldingRange(
+        currentMainWindowNode.currentLine)
 
 proc addRegister(status: var EditorStatus, command, registerName: string) =
   if command == "yy":

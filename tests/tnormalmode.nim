@@ -3094,7 +3094,7 @@ suite "Normal mode: Delete characters to any characters and Enter insert mode":
 
     check currentMainWindowNode.view.foldingRanges.len == 0
 
-suite "Normal mode: Unfolding":
+suite "Normal mode: Expand folding lines":
   var status: EditorStatus
 
   setup:
@@ -3160,6 +3160,29 @@ suite "Normal mode: Unfolding":
     check currentMainWindowNode.view.foldingRanges == @[
       FoldingRange(first: 0, last: 1)
     ]
+
+  test "Nested 2 (2zo command)":
+    const Buffer = @["a", "b", "c", "d"].toSeqRunes
+    currentBufStatus.buffer = Buffer.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[
+      FoldingRange(first: 0, last: 2),
+      FoldingRange(first: 0, last: 1)
+    ]
+
+    status.resize(100, 100)
+    status.update
+
+    currentBufStatus.cmdLoop = 2
+    const Command = ru"zo"
+    check status.normalCommand(Command).isNone
+
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == Buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+    check currentMainWindowNode.view.foldingRanges.len == 0
 
 suite "Normal mode: execNormalModeCommand":
   test "'/' key":
