@@ -876,16 +876,24 @@ proc handleLspServerRequest(
       # Ignore.
       return Result[(), string].err fmt"Invalid server request: {req}"
 
+    template isReady(status: EditorStatus): bool =
+      currentBufStatus.langId.len > 0 and
+      status.lspClients.contains(currentBufStatus.langId) and
+      lspClient.isInitialized
+
     case lspMethod.get:
       of LspMethod.workspaceCodeLensRefresh:
-        lspClient.sendLspCodeLens(currentBufStatus)
+        if status.isReady:
+          lspClient.sendLspCodeLens(currentBufStatus)
       of LspMethod.workspaceSemanticTokensRefresh:
-        lspClient.sendLspSemanticTokenRequest(currentBufStatus)
+        if status.isReady:
+          lspClient.sendLspSemanticTokenRequest(currentBufStatus)
       of LspMethod.workspaceInlayHintRefresh:
-        lspClient.sendLspInlayHintRequest(
-          currentBufStatus,
-          status.bufferIndexInCurrentWindow,
-          mainWindowNode)
+        if status.isReady:
+          lspClient.sendLspInlayHintRequest(
+            currentBufStatus,
+            status.bufferIndexInCurrentWindow,
+            mainWindowNode)
       else:
         # Ignore
         return Result[(), string].err fmt"Not supported: {req}"

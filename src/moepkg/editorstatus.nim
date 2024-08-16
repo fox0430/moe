@@ -409,6 +409,8 @@ proc addNewBuffer*(
 
         template newBufStatus: var BufferStatus = status.bufStatus[^1]
 
+        if status.isReadonly: newBufStatus.isReadonly = true
+
         if status.settings.git.showChangedLine and newBufStatus.isTrackingByGit:
            let gitDiffProcess = startBackgroundGitDiff(
              newBufStatus.path,
@@ -473,9 +475,6 @@ proc addNewBufferInCurrentWin*(
 
     if mode.isFilerMode:
       status.addFilerStatus
-
-    if status.isReadonly:
-      currentBufStatus.isReadonly = status.isReadonly
 
     return Result[(), string].ok ()
 

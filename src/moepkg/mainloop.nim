@@ -534,7 +534,9 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
     if searchHistoryIndex.isResetSearchHistoryIndex(key):
       searchHistoryIndex = none(int)
 
-    var isClosedCompletionWindow = false
+    var
+      isClosedCompletionWindow = false
+      isIgnoreCompletionWindow = false
     if status.completionWindow.isSome:
       if canHandleInCompletionWindow(key):
         status.completionWindow.get.handleKey(
@@ -543,6 +545,8 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
         continue
       else:
         if isEnterKey(key):
+          if status.completionWindow.get.selectedIndex == -1:
+            isIgnoreCompletionWindow = true
           status.confirmCompletion
           isClosedCompletionWindow = true
         elif isEscKey(key):
@@ -561,9 +565,10 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
           isClosedCompletionWindow = true
 
     if isEnterKey(key):
-      if status.completionWindow.isNone and not isClosedCompletionWindow:
-        # Confirm.
-        break
+      if status.completionWindow.isNone:
+        if not isClosedCompletionWindow or isIgnoreCompletionWindow:
+          # Confirm.
+          break
       elif InputState.Valid == status.commandLine.buffer.isExCommandBuffer:
         let splited = status.commandLine.buffer.splitExCommandBuffer
 

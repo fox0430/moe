@@ -1434,6 +1434,26 @@ proc joinLines(status: var EditorStatus) =
   for i in 0 ..< currentBufStatus.cmdLoop:
     currentBufStatus.joinLine(currentMainWindowNode)
 
+proc indent(status: var EditorStatus) =
+  if currentBufStatus.isReadonly:
+    status.commandLine.writeReadonlyModeWarning
+    return
+
+  for i in 0 ..< currentBufStatus.cmdLoop:
+    currentBufStatus.indent(
+      currentMainWindowNode,
+      status.settings.standard.tabStop)
+
+proc unindent(status: var EditorStatus) =
+  if currentBufStatus.isReadonly:
+    status.commandLine.writeReadonlyModeWarning
+    return
+
+  for i in 0 ..< currentBufStatus.cmdLoop:
+    currentBufStatus.unindent(
+      currentMainWindowNode,
+      status.settings.standard.tabStop)
+
 proc startRecordingOperations(status: var EditorStatus, name: Rune) =
   ## Start recoding editor operations for macro.
 
