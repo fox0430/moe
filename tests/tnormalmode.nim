@@ -970,6 +970,33 @@ suite "Normal mode: Delete lines":
       check r.buffer == @["a", "b"].toSeqRunes
       check r.isLine
 
+  test "Before folding line":
+    currentBufStatus.buffer = @["a", "b", "c"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 1, last: 2)]
+
+    status.resize(100, 100)
+    status.update
+
+    const Command = ru"dd"
+    check status.normalCommand(Command).isNone
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @["b", "c"].toSeqRunes
+
+    check currentMainWindowNode.view.foldingRanges == @[
+      FoldingRange(first: 0, last: 1)
+    ]
+
+    block:
+      let r = status.registers.getNoNamedRegister
+      check r.buffer == @["a"].toSeqRunes
+      check r.isLine
+
+    block:
+      let r = status.registers.getNumberRegister(1)
+      check r.buffer == @["a"].toSeqRunes
+      check r.isLine
+
 suite "Normal mode: Delete lines from the current line to the last line":
   var status: EditorStatus
 
@@ -1679,9 +1706,14 @@ suite "Normal mode: Yank lines":
     check status.normalCommand(Commands).isNone
     status.update
 
+    check currentMainWindowNode.view.foldingRanges == @[
+      FoldingRange(first: 0, last: 1)
+    ]
+
     check status.registers.getNoNamedRegister.isLine
     check status.registers.getNoNamedRegister.buffer == @["abc", "def"]
       .toSeqRunes
+
 
 suite "Normal mode: Delete the characters from current column to end of line":
   var status: EditorStatus
@@ -3062,6 +3094,73 @@ suite "Normal mode: Delete characters to any characters and Enter insert mode":
 
     check currentMainWindowNode.view.foldingRanges.len == 0
 
+suite "Normal mode: Unfolding":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Nothing to do (zo command)":
+    const Buffer = @["a", "b", "c"].toSeqRunes
+    currentBufStatus.buffer = Buffer.toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const Command = ru"zo"
+    check status.normalCommand(Command).isNone
+
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == Buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+
+  test "Basic (zo command)":
+    const Buffer = @["a", "b", "c"].toSeqRunes
+    currentBufStatus.buffer = Buffer.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    status.resize(100, 100)
+    status.update
+
+    const Command = ru"zo"
+    check status.normalCommand(Command).isNone
+
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == Buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+    check currentMainWindowNode.view.foldingRanges.len == 0
+
+  test "Nested (zo command)":
+    const Buffer = @["a", "b", "c", "d"].toSeqRunes
+    currentBufStatus.buffer = Buffer.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[
+      FoldingRange(first: 0, last: 2),
+      FoldingRange(first: 0, last: 1)
+    ]
+
+    status.resize(100, 100)
+    status.update
+
+    const Command = ru"zo"
+    check status.normalCommand(Command).isNone
+
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == Buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+    check currentMainWindowNode.view.foldingRanges == @[
+      FoldingRange(first: 0, last: 1)
+    ]
+
 suite "Normal mode: execNormalModeCommand":
   test "'/' key":
     # Change mode to searchForward
@@ -3638,64 +3737,124 @@ suite "Normal mode: stopRecordingOperations":
     check status.commandLine.buffer.len == 0
 
 suite "Normal mode: pasteAfterCursor":
-  test "Paste the line 1":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
+  var status: EditorStatus
 
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Paste the line (p command)":
     status.resize(100, 100)
     status.update
 
     status.registers.setYankedRegister(@[ru"line"])
-    status.pasteAfterCursor
 
-    check currentBufStatus.buffer.toSeqRunes == @[ru"", ru"line"]
+    const Command = ru"p"
+    check status.normalCommand(Command).isNone
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @["", "line"].toSeqRunes
+
     check currentMainWindowNode.currentLine == 1
     check currentMainWindowNode.currentColumn == 0
 
-  test "Paste the line 2":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = toGapBuffer(@[ru"", ru""])
+  test "Paste the line 2 (p command)":
+    currentBufStatus.buffer = @["", ""].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
 
     status.registers.setYankedRegister(@[ru"  line"])
-    status.pasteAfterCursor
 
-    check currentBufStatus.buffer.toSeqRunes == @[ru"", ru"  line", ru""]
+    const Command = ru"p"
+    check status.normalCommand(Command).isNone
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @["", "  line", ""].toSeqRunes
+
     check currentMainWindowNode.currentLine == 1
     check currentMainWindowNode.currentColumn == 2
+
+  test "Before folding line":
+    currentBufStatus.buffer = @["a", "b", "c"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 1, last: 2)]
+
+    status.resize(100, 100)
+    status.update
+
+    status.registers.setYankedRegister(@[ru"d"])
+
+    const Command = ru"p"
+    check status.normalCommand(Command).isNone
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @["a", "d", "b", "c"].toSeqRunes
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0
+    check currentMainWindowNode.view.foldingRanges == @[
+      FoldingRange(first: 2, last: 3)
+    ]
 
 suite "Normal mode: pasteBeforeCursor":
-  test "Paste the line 1":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
+  var status: EditorStatus
 
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Paste the line (P command)":
     status.resize(100, 100)
     status.update
 
     status.registers.setYankedRegister(@[ru"line"])
-    status.pasteBeforeCursor
 
-    check currentBufStatus.buffer.toSeqRunes == @[ru"line", ru""]
+    const Command = ru"P"
+    check status.normalCommand(Command).isNone
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @["line", ""].toSeqRunes
+
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
 
-  test "Paste the line 2":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = toGapBuffer(@[ru"", ru""])
+  test "Paste the line 2 (P command)":
+    currentBufStatus.buffer = @["", ""].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
 
     status.registers.setYankedRegister(@[ru"  line"])
-    status.pasteBeforeCursor
 
-    check currentBufStatus.buffer.toSeqRunes == @[ru"  line", ru"", ru""]
+    const Command = ru"P"
+    check status.normalCommand(Command).isNone
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @["  line", "", ""].toSeqRunes
+
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 2
+
+  test "Before folding line (P command)":
+    currentBufStatus.buffer = @["a", "b", "c"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 1, last: 2)]
+
+    status.resize(100, 100)
+    status.update
+
+    status.registers.setYankedRegister(@[ru"d"])
+
+    const Command = ru"P"
+    check status.normalCommand(Command).isNone
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @["d", "a", "b", "c"].toSeqRunes
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+    check currentMainWindowNode.view.foldingRanges == @[
+      FoldingRange(first: 2, last: 3)
+    ]
 
 suite "Normal mode: Delete characters until the character and enter Insert mode (ct`x` command)":
   var status: EditorStatus
