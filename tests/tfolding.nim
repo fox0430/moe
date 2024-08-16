@@ -369,6 +369,17 @@ suite "folding: add":
       FoldingRange(first: 6, last: 7)
     ]
 
+  test "Same start":
+    var r: FoldingRanges = @[]
+
+    r.add FoldingRange(first: 1, last: 2)
+    r.add FoldingRange(first: 1, last: 3)
+
+    check r == @[
+      FoldingRange(first: 1, last: 3),
+      FoldingRange(first: 1, last: 2)
+    ]
+
 suite "folding: shiftLines":
   test "+2 lines":
     var r = @[

@@ -82,7 +82,13 @@ proc add*(ranges: var FoldingRanges, range: FoldingRange) =
   var insertPosi = 0
   if ranges.len > 0 and range.last > ranges[0].first:
     for i in 0 .. ranges.high:
-      if range.first < ranges[i].first:
+      if range.first == ranges[i].first:
+        for j in i .. ranges.high:
+          if ranges[i].last > range.last:
+            insertPosi = i - 1
+            break
+        break
+      elif range.first < ranges[i].first:
         insertPosi = i
         break
       elif insertPosi == 0 and i == ranges.high:
