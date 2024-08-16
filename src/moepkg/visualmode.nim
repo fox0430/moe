@@ -136,6 +136,8 @@ proc deleteBuffer(
       firstCursorPosition,
       settings)
 
+    windowNode.removeAllFoldingRange(area.startLine, area.endLine)
+
     var currentLine = area.startLine
     for i in area.startLine .. area.endLine:
       let oldLine = bufStatus.buffer[currentLine]
@@ -185,7 +187,7 @@ proc deleteBuffer(
 proc deleteBufferBlock(
   bufStatus: var BufferStatus,
   registers: var Registers,
-  windowNode: WindowNode,
+  windowNode: var WindowNode,
   area: SelectedArea,
   settings: EditorSettings,
   commandLine: var CommandLine) =
@@ -196,11 +198,14 @@ proc deleteBufferBlock(
 
     if bufStatus.buffer.len == 1 and
        bufStatus.buffer[windowNode.currentLine].len < 1: return
+
     bufStatus.yankBufferBlock(
       registers,
       windowNode,
       area,
       settings)
+
+    windowNode.removeAllFoldingRange(area.startLine, area.endLine)
 
     if area.startLine == area.endLine and bufStatus.buffer[area.startLine].len < 1:
       bufStatus.buffer.delete(area.startLine, area.startLine + 1)
@@ -223,7 +228,7 @@ proc deleteBufferBlock(
 
 proc addIndent(
   bufStatus: var BufferStatus,
-  windowNode: WindowNode,
+  windowNode: var WindowNode,
   area: SelectedArea,
   tabStop: int,
   commandLine: var CommandLine) =
@@ -231,6 +236,8 @@ proc addIndent(
     if bufStatus.isReadonly:
       commandLine.writeReadonlyModeWarning
       return
+
+    windowNode.removeAllFoldingRange(area.startLine, area.endLine)
 
     windowNode.currentLine = area.startLine
     for i in area.startLine .. area.endLine:
@@ -241,7 +248,7 @@ proc addIndent(
 
 proc deleteIndent(
   bufStatus: var BufferStatus,
-  windowNode: WindowNode,
+  windowNode: var WindowNode,
   area: SelectedArea,
   tabStop: int,
   commandLine: var CommandLine) =
@@ -249,6 +256,8 @@ proc deleteIndent(
     if bufStatus.isReadonly:
       commandLine.writeReadonlyModeWarning
       return
+
+    windowNode.removeAllFoldingRange(area.startLine, area.endLine)
 
     windowNode.currentLine = area.startLine
     for i in area.startLine .. area.endLine:
@@ -259,6 +268,7 @@ proc deleteIndent(
 
 proc insertIndent(
   bufStatus: var BufferStatus,
+  windowNode: var WindowNode,
   area: SelectedArea,
   tabStop: int,
   commandLine: var CommandLine) =
@@ -266,6 +276,8 @@ proc insertIndent(
     if bufStatus.isReadonly:
       commandLine.writeReadonlyModeWarning
       return
+
+    windowNode.removeAllFoldingRange(area.startLine, area.endLine)
 
     for i in area.startLine .. area.endLine:
       let oldLine = bufStatus.buffer[i]
@@ -278,6 +290,7 @@ proc insertIndent(
 
 proc replaceCharacter(
   bufStatus: var BufferStatus,
+  windowNode: var WindowNode,
   area: SelectedArea,
   ch: Rune,
   commandLine: var CommandLine) =
@@ -285,6 +298,8 @@ proc replaceCharacter(
     if bufStatus.isReadonly:
       commandLine.writeReadonlyModeWarning
       return
+
+    windowNode.removeAllFoldingRange(area.startLine, area.endLine)
 
     for i in area.startLine .. area.endLine:
       if bufStatus.buffer[i].len > 0:
@@ -304,6 +319,7 @@ proc replaceCharacter(
 
 proc replaceCharacterBlock(
   bufStatus: var BufferStatus,
+  windowNode: var WindowNode,
   area: SelectedArea,
   ch: Rune,
   commandLine: var CommandLine) =
@@ -311,6 +327,8 @@ proc replaceCharacterBlock(
     if bufStatus.isReadonly:
       commandLine.writeReadonlyModeWarning
       return
+
+    windowNode.removeAllFoldingRange(area.startLine, area.endLine)
 
     for i in area.startLine .. area.endLine:
       let oldLine = bufStatus.buffer[i]
@@ -329,8 +347,7 @@ proc joinLines(
       commandLine.writeReadonlyModeWarning
       return
 
-    windowNode.removeAllFoldingRange(
-      FoldingRange(first: area.startLine, last: area.endLine))
+    windowNode.removeAllFoldingRange(area.startLine, area.endLine)
 
     for i in area.startLine ..< area.endLine:
       windowNode.currentLine = area.startLine
@@ -346,6 +363,8 @@ proc toLowerString(
     if bufStatus.isReadonly:
       commandLine.writeReadonlyModeWarning
       return
+
+    windowNode.removeAllFoldingRange(area.startLine, area.endLine)
 
     for i in area.startLine .. area.endLine:
       let oldLine = bufStatus.buffer[i]
@@ -377,6 +396,8 @@ proc toLowerStringBlock(
       commandLine.writeReadonlyModeWarning
       return
 
+    windowNode.removeAllFoldingRange(area.startLine, area.endLine)
+
     for i in area.startLine .. area.endLine:
       let oldLine = bufStatus.buffer[i]
       var newLine = bufStatus.buffer[i]
@@ -396,6 +417,8 @@ proc toUpperString(
     if bufStatus.isReadonly:
       commandLine.writeReadonlyModeWarning
       return
+
+    windowNode.removeAllFoldingRange(area.startLine, area.endLine)
 
     for i in area.startLine .. area.endLine:
       let oldLine = bufStatus.buffer[i]
@@ -426,6 +449,8 @@ proc toUpperStringBlock(
     if bufStatus.isReadonly:
       commandLine.writeReadonlyModeWarning
       return
+
+    windowNode.removeAllFoldingRange(area.startLine, area.endLine)
 
     for i in area.startLine .. area.endLine:
       let oldLine = bufStatus.buffer[i]
@@ -547,7 +572,11 @@ proc visualCommand(
       elif key == ord('r'):
         let ch = status.getKeyFromMainWindow
         if not isEscKey(ch):
-          currentBufStatus.replaceCharacter(area, ch, status.commandLine)
+          currentBufStatus.replaceCharacter(
+            currentMainWindowNode,
+            area,
+            ch,
+            status.commandLine)
       elif key == ord('I'):
         status.changeModeToInsertMode
     elif command.len == 2:
@@ -605,6 +634,7 @@ proc visualBlockCommand(
           status.commandLine)
       elif key == ord('>'):
         currentBufStatus.insertIndent(
+          currentMainWindowNode,
           area,
           status.settings.standard.tabStop,
           status.commandLine)
@@ -631,7 +661,11 @@ proc visualBlockCommand(
       elif key == ord('r'):
         let ch = status.getKeyFromMainWindow
         if not isEscKey(ch):
-          currentBufStatus.replaceCharacterBlock(area, ch, status.commandLine)
+          currentBufStatus.replaceCharacterBlock(
+            currentMainWindowNode,
+            area,
+            ch,
+            status.commandLine)
       elif key == ord('I'):
         status.changeModeToInsertMulti(area)
     elif command.len == 2:
