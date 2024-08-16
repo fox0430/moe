@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -22,7 +22,7 @@ import std/[unittest, osproc, options]
 import pkg/results
 
 import moepkg/[highlight, independentutils, editorstatus, gapbuffer, unicodeext,
-               bufferstatus, movement, registers, settings, clipboard]
+               bufferstatus, movement, registers, settings, clipboard, folding]
 
 import utils
 
@@ -260,6 +260,66 @@ suite "Visual mode: Delete buffer":
     check currentBufStatus.buffer[0] == ru"a  c"
     check currentMainWindowNode.currentColumn == 2
 
+  test "Contains folding lines":
+    var status = initEditorStatus()
+    status.settings.clipboard.enable = false
+
+    assert status.addNewBufferInCurrentWin.isOk
+    currentBufStatus.buffer = @["a", "b", "c"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    currentBufStatus.highlight = initHighlight(
+      currentBufStatus.buffer.toSeqRunes,
+      status.settings.highlight.reservedWords,
+      currentBufStatus.language)
+
+    status.changeMode(Mode.visual)
+    status.resize(100, 100)
+
+    status.initSelectedArea
+
+    status.update
+
+    currentBufStatus.keyDown(currentMainWindowNode)
+    status.update
+
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"x")
+
+    check currentBufStatus.buffer.toSeqRunes == @[""].toSeqRunes
+
+    check currentMainWindowNode.view.foldingRanges.len == 0
+
+  test "Before folding lines":
+    var status = initEditorStatus()
+    status.settings.clipboard.enable = false
+
+    assert status.addNewBufferInCurrentWin.isOk
+    currentBufStatus.buffer = @["a", "b", "c"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 1, last: 2)]
+
+    currentBufStatus.highlight = initHighlight(
+      currentBufStatus.buffer.toSeqRunes,
+      status.settings.highlight.reservedWords,
+      currentBufStatus.language)
+
+    status.changeMode(Mode.visual)
+    status.resize(100, 100)
+
+    status.initSelectedArea
+
+    status.update
+
+    currentBufStatus.moveToLastOfLine(currentMainWindowNode)
+    status.update
+
+    status.execVisualModeCommand(ru"x")
+
+    check currentBufStatus.buffer.toSeqRunes == @["b", "c"].toSeqRunes
+
+    check currentMainWindowNode.view.foldingRanges == @[
+      FoldingRange(first: 0, last: 1)
+    ]
+
 suite "Visual mode: Yank buffer (Disable clipboard)":
   test "Yank lines":
     var status = initEditorStatus()
@@ -438,6 +498,46 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
     check status.registers.getNoNamedRegister.isLine
     check status.registers.getNoNamedRegister.buffer == @[ru""]
+
+  test "Contains folding lines":
+    var status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+    currentBufStatus.buffer = @["a", "b", "c"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    currentBufStatus.highlight = initHighlight(
+      currentBufStatus.buffer.toSeqRunes,
+      status.settings.highlight.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visual)
+
+    status.initSelectedArea
+
+    currentBufStatus.keyDown(currentMainWindowNode)
+    status.update
+
+    let
+      area = currentBufStatus.selectedArea
+      firstCursorPosition = BufferPosition(
+        line: area.get.startLine,
+        column: area.get.startColumn)
+    status.settings.clipboard.enable = false
+    currentBufStatus.yankBuffer(
+      status.registers,
+      currentMainWindowNode,
+      area.get,
+      firstCursorPosition,
+      status.settings)
+
+    check status.registers.getNoNamedRegister.isLine
+    check status.registers.getNoNamedRegister.buffer == @["a", "b", "c"].toSeqRunes
+
+    check currentMainWindowNode.view.foldingRanges == @[
+      FoldingRange(first: 0, last: 1)
+    ]
 
 suite "Visual block mode: Yank buffer (Disable clipboard)":
   test "Yank lines 1":
@@ -867,10 +967,14 @@ suite "Visual block mode: Delete buffer":
       check currentBufStatus.buffer[2] == ru"h"
 
 suite "Visual mode: Join lines":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
   test "Join 2 lines":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
+    currentBufStatus.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
 
     currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
@@ -893,6 +997,34 @@ suite "Visual mode: Join lines":
       status.commandLine)
 
     check currentBufStatus.buffer.toSeqRunes == @["abcdef", "ghi"].toSeqRunes
+
+  test "Contains folding lines":
+    currentBufStatus.buffer = @["a", "b", "c"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    currentBufStatus.highlight = initHighlight(
+      currentBufStatus.buffer.toSeqRunes,
+      status.settings.highlight.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visual)
+
+    status.initSelectedArea
+
+    currentBufStatus.keyDown(currentMainWindowNode)
+    status.update
+
+    let area = currentBufStatus.selectedArea
+    currentBufStatus.joinLines(
+      currentMainWindowNode,
+      area.get,
+      status.commandLine)
+
+    check currentBufStatus.buffer.toSeqRunes == @["abc"].toSeqRunes
+
+    check currentMainWindowNode.view.foldingRanges.len == 0
 
 suite "Visual block mode: Join lines":
   test "Join 3 lines":
@@ -927,10 +1059,14 @@ suite "Visual block mode: Join lines":
     check(currentBufStatus.buffer[0] == ru"abcdefghi")
 
 suite "Visual mode: Add indent":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
   test "Add 1 indent":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
+    currentBufStatus.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
 
     currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
@@ -950,9 +1086,33 @@ suite "Visual mode: Add indent":
     status.update
     status.visualCommand(currentBufStatus.selectedArea.get, ru">")
 
-    check(currentBufStatus.buffer[0] == ru"  abc")
-    check(currentBufStatus.buffer[1] == ru"  def")
-    check(currentBufStatus.buffer[2] == ru"  ghi")
+    check currentBufStatus.buffer.toSeqRunes == @["  abc", "  def", "  ghi"]
+      .toSeqRunes
+
+  test "Contains folding lines":
+    currentBufStatus.buffer = @["a", "b", "c"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    currentBufStatus.highlight = initHighlight(
+      currentBufStatus.buffer.toSeqRunes,
+      status.settings.highlight.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visual)
+
+    status.initSelectedArea
+
+    currentBufStatus.keyDown(currentMainWindowNode)
+    status.update
+
+    status.visualCommand(currentBufStatus.selectedArea.get, ru">")
+
+    check currentBufStatus.buffer.toSeqRunes == @["  a", "  b", "  c"]
+      .toSeqRunes
+
+    check currentMainWindowNode.view.foldingRanges.len == 0
 
 suite "Visual block mode: Add indent":
   test "Add 1 indent":
@@ -983,10 +1143,16 @@ suite "Visual block mode: Add indent":
     check(currentBufStatus.buffer[2] == ru"  ghi")
 
 suite "Visual mode: Delete indent":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
   test "Delete 1 indent":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"  abc", ru"  def", ru"  ghi"])
+    currentBufStatus.buffer = @["  abc", "  def", "  ghi"]
+      .toSeqRunes
+      .toGapBuffer
 
     currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
@@ -1003,12 +1169,33 @@ suite "Visual mode: Delete indent":
       currentBufStatus.keyDown(currentMainWindowNode)
       status.update
 
-    status.update
     status.visualCommand(currentBufStatus.selectedArea.get, ru"<")
 
-    check(currentBufStatus.buffer[0] == ru"abc")
-    check(currentBufStatus.buffer[1] == ru"def")
-    check(currentBufStatus.buffer[2] == ru"ghi")
+    check currentBufStatus.buffer.toSeqRunes == @["abc", "def", "ghi"].toSeqRunes
+
+  test "Contains folding line":
+    currentBufStatus.buffer = @["  a", "  b", "  c"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    currentBufStatus.highlight = initHighlight(
+      currentBufStatus.buffer.toSeqRunes,
+      status.settings.highlight.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visual)
+
+    status.initSelectedArea
+
+    currentBufStatus.keyDown(currentMainWindowNode)
+    status.update
+
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"<")
+
+    check currentBufStatus.buffer.toSeqRunes == @["a", "b", "c"].toSeqRunes
+
+    check currentMainWindowNode.view.foldingRanges.len == 0
 
 suite "Visual block mode: Delete indent":
   test "Delete 1 indent":
@@ -1396,11 +1583,15 @@ suite "Visual mode: move to the next blank line":
     check currentMainWindowNode.currentLine == 2
 
 suite "Visual mode: Replace characters":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
   test "Empty buffer":
     # NOTE: https://github.com/fox0430/moe/issues/1856
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru""])
+    currentBufStatus.buffer = @[""].toSeqRunes.toGapBuffer
 
     currentBufStatus.highlight = initHighlight(
       currentBufStatus.buffer.toSeqRunes,
@@ -1416,11 +1607,75 @@ suite "Visual mode: Replace characters":
     status.update
 
     currentBufStatus.replaceCharacter(
+      currentMainWindowNode,
       currentBufStatus.selectedArea.get,
       ru 'a',
       status.commandLine)
 
     check currentBufStatus.buffer.toSeqRunes == @[ru""]
+
+  test "Basic":
+    currentBufStatus.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
+
+    currentBufStatus.highlight = initHighlight(
+      currentBufStatus.buffer.toSeqRunes,
+      status.settings.highlight.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visual)
+
+    status.initSelectedArea
+    status.update
+
+    var selectedArea = SelectedArea(
+      startLine: 0,
+      startColumn: 0,
+      endLine: 2,
+      endColumn: 2)
+
+    currentBufStatus.replaceCharacter(
+      currentMainWindowNode,
+      selectedArea,
+      ru'z',
+      status.commandLine)
+
+    check currentBufStatus.buffer.toSeqRunes == @["zzz", "zzz", "zzz"]
+      .toSeqRunes
+
+  test "Contains folding lines":
+    currentBufStatus.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    currentBufStatus.highlight = initHighlight(
+      currentBufStatus.buffer.toSeqRunes,
+      status.settings.highlight.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visual)
+
+    status.initSelectedArea
+    status.update
+
+    var selectedArea = SelectedArea(
+      startLine: 0,
+      startColumn: 0,
+      endLine: 2,
+      endColumn: 2)
+
+    currentBufStatus.replaceCharacter(
+      currentMainWindowNode,
+      selectedArea,
+      ru'z',
+      status.commandLine)
+
+    check currentBufStatus.buffer.toSeqRunes == @["zzz", "zzz", "zzz"]
+      .toSeqRunes
+
+    check currentMainWindowNode.view.foldingRanges.len == 0
 
 suite "Visual block mode: Replace characters":
   test "Empty buffer":
@@ -1442,6 +1697,7 @@ suite "Visual block mode: Replace characters":
     status.update
 
     currentBufStatus.replaceCharacterBlock(
+      currentMainWindowNode,
       currentBufStatus.selectedArea.get,
       ru 'a',
       status.commandLine)
@@ -1618,6 +1874,7 @@ suite "Visual mode: Run command when Readonly mode":
     status.update
 
     currentBufStatus.replaceCharacter(
+      currentMainWindowNode,
       currentBufStatus.selectedArea.get,
       ru 'z',
       status.commandLine)
@@ -1879,6 +2136,7 @@ suite "Visual block mode: Run command when Readonly mode":
     status.update
 
     currentBufStatus.replaceCharacter(
+      currentMainWindowNode,
       currentBufStatus.selectedArea.get,
       ru 'z',
       status.commandLine)
@@ -2150,3 +2408,133 @@ suite "Visual line mode: idenet":
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
+
+suite "Visual mode: Add folding range":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Ignore":
+    currentBufStatus.buffer = @["a", "b", "c"].toSeqRunes.toGapBuffer
+
+    currentBufStatus.highlight = initHighlight(
+      currentBufStatus.buffer.toSeqRunes,
+      status.settings.highlight.reservedWords,
+      currentBufStatus.language)
+
+    status.changeMode(Mode.visual)
+
+    status.initSelectedArea
+
+    status.resize(100, 100)
+    status.update
+
+    currentBufStatus.selectedArea = some(SelectedArea(
+      startLine: 0,
+      startColumn: 0,
+      endLine: 0,
+      endColumn: 0,
+    ))
+
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"zf")
+
+    check currentMainWindowNode.view.foldingRanges.len == 0
+
+  test "Basic":
+    currentBufStatus.buffer = @["a", "b", "c"].toSeqRunes.toGapBuffer
+
+    currentBufStatus.highlight = initHighlight(
+      currentBufStatus.buffer.toSeqRunes,
+      status.settings.highlight.reservedWords,
+      currentBufStatus.language)
+
+    status.changeMode(Mode.visual)
+
+    status.initSelectedArea
+
+    status.resize(100, 100)
+    status.update
+
+    currentBufStatus.selectedArea = some(SelectedArea(
+      startLine: 0,
+      startColumn: 0,
+      endLine: 1,
+      endColumn: 0,
+    ))
+    currentMainWindowNode.currentLine = 1
+
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"zf")
+
+    check currentMainWindowNode.view.foldingRanges == @[
+      FoldingRange(first: 0, last: 1)
+    ]
+
+  test "Nest":
+    currentBufStatus.buffer = @["a", "b", "c"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    currentBufStatus.highlight = initHighlight(
+      currentBufStatus.buffer.toSeqRunes,
+      status.settings.highlight.reservedWords,
+      currentBufStatus.language)
+
+    status.changeMode(Mode.visual)
+
+    status.initSelectedArea
+
+    status.resize(100, 100)
+    status.update
+
+    currentBufStatus.selectedArea = some(SelectedArea(
+      startLine: 0,
+      startColumn: 0,
+      endLine: 2,
+      endColumn: 0,
+    ))
+    currentMainWindowNode.currentLine = 2
+
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"zf")
+
+    check currentMainWindowNode.view.foldingRanges == @[
+      FoldingRange(first: 0, last: 2),
+      FoldingRange(first: 0, last: 1)
+    ]
+
+  test "Nest 2":
+    currentBufStatus.buffer = @["a", "b", "c", "d", "e", "f", "g"]
+      .toSeqRunes
+      .toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[
+      FoldingRange(first: 1, last: 2),
+      FoldingRange(first: 4, last: 5)
+    ]
+
+    currentBufStatus.highlight = initHighlight(
+      currentBufStatus.buffer.toSeqRunes,
+      status.settings.highlight.reservedWords,
+      currentBufStatus.language)
+
+    status.changeMode(Mode.visual)
+
+    status.initSelectedArea
+
+    status.resize(100, 100)
+    status.update
+
+    currentBufStatus.selectedArea = some(SelectedArea(
+      startLine: 0,
+      startColumn: 0,
+      endLine: 6,
+      endColumn: 0,
+    ))
+    currentMainWindowNode.currentLine = 6
+
+    status.visualCommand(currentBufStatus.selectedArea.get, ru"zf")
+
+    check currentMainWindowNode.view.foldingRanges == @[
+      FoldingRange(first: 0, last: 6),
+      FoldingRange(first: 1, last: 2),
+      FoldingRange(first: 4, last: 5)
+    ]
