@@ -466,8 +466,10 @@ proc foldingLineBuffer(
   originalFirstLine: Runes,
   width: int): Runes =
 
-    let originalLineStr = strutils.strip($originalFirstLine)
-    var line = fmt"+-- {foldingRange.last - foldingRange.first} lines {originalLineStr}"
+    let
+      originalLineStr = strutils.strip($originalFirstLine)
+      count = foldingRange.last - foldingRange.first + 1
+    var line = fmt"+-- {count} lines {originalLineStr}"
     if line.high > width:
       line = line[0 .. width]
     else:
