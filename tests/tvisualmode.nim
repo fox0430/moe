@@ -34,6 +34,38 @@ proc initSelectedArea(status: var EditorStatus) =
     currentMainWindowNode.currentColumn)
     .some
 
+suite "Visual mode: Move right":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Basic":
+    currentBufStatus.buffer = @["abc"].toSeqRunes.toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    status.changeMode(Mode.visual)
+
+    status.execVisualModeCommand(ru"l")
+
+    check currentMainWindowNode.currentColumn == 1
+
+  test "On folding line":
+    currentBufStatus.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    status.resize(100, 100)
+    status.update
+
+    status.changeMode(Mode.visual)
+
+    status.execVisualModeCommand(ru"l")
+
+    check currentMainWindowNode.currentColumn == 0
+
 suite "Visual mode: Delete buffer":
   test "Delete buffer 1":
     var status = initEditorStatus()
@@ -538,6 +570,43 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     check currentMainWindowNode.view.foldingRanges == @[
       FoldingRange(first: 0, last: 1)
     ]
+
+  test "Contains folding line":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["a", "b", "c"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+    status.settings.clipboard.enable = false
+
+    currentBufStatus.highlight = initHighlight(
+      currentBufStatus.buffer.toSeqRunes,
+      status.settings.highlight.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visual)
+
+    status.initSelectedArea
+
+    currentBufStatus.keyDown(currentMainWindowNode)
+    status.update
+
+    let
+      area = currentBufStatus.selectedArea
+      firstCursorPosition = BufferPosition(
+        line: area.get.startLine,
+        column: area.get.startColumn)
+    currentBufStatus.yankBuffer(
+      status.registers,
+      currentMainWindowNode,
+      area.get,
+      firstCursorPosition,
+      status.settings)
+
+    check status.registers.getNoNamedRegister.isLine
+    check status.registers.getNoNamedRegister.buffer == @["a", "b", "c"]
+      .toSeqRunes
 
 suite "Visual block mode: Yank buffer (Disable clipboard)":
   test "Yank lines 1":
