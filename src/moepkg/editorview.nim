@@ -98,6 +98,15 @@ proc findFoldingRange*(
 
     view.foldingRanges.find(line)
 
+proc addFoldingRange*(view: var EditorView, range: FoldingRange) {.inline.} =
+  view.foldingRanges.add range
+
+proc addFoldingRange*(
+  view: var EditorView, firstLine,
+  lastLine: int) {.inline.} =
+
+    view.foldingRanges.add(firstLine, lastLine)
+
 proc removeFoldingRange*(view: var EditorView, range: FoldingRange) {.inline.} =
   view.foldingRanges.remove(range)
 

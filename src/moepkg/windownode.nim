@@ -524,6 +524,12 @@ proc findFoldingRange*(n: WindowNode): Option[FoldingRange] {.inline.} =
 proc isFoldingStartLine*(n: WindowNode, line: int): bool {.inline.} =
   n.view.foldingRanges.isStartLine(line)
 
+proc addFoldingRange*(n: var WindowNode, range: FoldingRange) {.inline.} =
+  n.view.addFoldingRange(range)
+
+proc addFoldingRange*(n: var WindowNode, firstLine, lastLine: int) {.inline.} =
+  n.view.addFoldingRange(firstLine, lastLine)
+
 proc removeFoldingRange*(n: var WindowNode) =
   let foldingRange = n.findFoldingRange
   if foldingRange.isSome:

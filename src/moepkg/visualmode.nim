@@ -20,7 +20,7 @@
 import std/[strutils, sequtils, options]
 import editorstatus, ui, gapbuffer, unicodeext, windownode, movement, editor,
        bufferstatus, settings, registers, messages, commandline,
-       independentutils, viewhighlight, editorview, folding
+       independentutils, viewhighlight, editorview
 
 proc initSelectedArea*(startLine, startColumn: int): SelectedArea =
   result.startLine = startLine
@@ -476,7 +476,7 @@ proc addFoldingRange(
 
     if area.endLine - area.startLine < 1: return
 
-    windowNode.view.foldingRanges.add(area.startLine, area.endLine)
+    windowNode.addFoldingRange(area.startLine, area.endLine)
 
     windowNode.moveCursor(
       BufferPosition(line: firstCursorPosition.line, column: 0))
