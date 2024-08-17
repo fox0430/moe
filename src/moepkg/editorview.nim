@@ -483,7 +483,7 @@ proc foldingLineBuffer(
       count = foldingRange.last - foldingRange.first + 1
     var line = fmt"+-- {count} lines {originalLineStr}"
     if line.high > width:
-      line = line[0 .. width]
+      line = line[0 ..< width]
     else:
       line = line & "·".repeat(width - line.high)
 
