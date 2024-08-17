@@ -19,7 +19,7 @@
 
 import std/[unittest, deques]
 
-import moepkg/[gapbuffer, unicodeext]
+import moepkg/[gapbuffer, unicodeext, folding]
 
 import moepkg/editorview {.all.}
 
@@ -52,6 +52,46 @@ suite "editorview: initEditorView":
     check view.originalLine[5] == -1
     check view.originalLine[6] == -1
     check view.originalLine[7] == -1
+
+suite "editorview: reload":
+  test "Basic":
+    let buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
+    var view = initEditorView(buffer, 5, 5)
+
+    view.reload(buffer, 0)
+
+    check view.lines.toSeqRunes == @["abc", "def", "ghi", "", ""].toSeqRunes
+    check view.originalLine == @[0, 1, 2, -1, -1].toDeque
+
+  test "Contains folding lines":
+    let buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
+    var view = initEditorView(buffer, 3, 3)
+
+    view.addFoldingRange(0, 1)
+    view.reload(buffer, 0)
+
+    check view.lines.toSeqRunes == @["abc", "ghi", ""].toSeqRunes
+    check view.originalLine == @[0, 2, -1].toDeque
+
+  test "Contains nedted folding lines":
+    let buffer = @["a", "b", "c", "d", "e"].toSeqRunes.toGapBuffer
+    var view = initEditorView(buffer, 6, 5)
+
+    view.addFoldingRange(1, 2)
+    view.addFoldingRange(0, 3)
+    view.reload(buffer, 0)
+
+    check view.lines.toSeqRunes == @["a", "e", "", "", "", ""].toSeqRunes
+    check view.originalLine == @[0, 4, -1, -1, -1, -1].toDeque
+
+suite "editorview: foldingLineBuffer":
+  test "Basic":
+    let r = foldingLineBuffer(FoldingRange(first: 0, last: 1), ru"aaa", 20)
+    check r == ru"+-- 2 lines aaa······"
+
+  test "Tiny view":
+    let r = foldingLineBuffer(FoldingRange(first: 0, last: 1), ru"aaa", 3)
+    check r == ru"+--"
 
 suite "editorview: seekCursor":
   test "Basic":
