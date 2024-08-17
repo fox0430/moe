@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -18,67 +18,67 @@
 #[############################################################################]#
 
 import std/[unittest, deques]
-import moepkg/[editorview, gapbuffer, unicodeext]
 
-test "initEditorView 1":
-  const Lines = @[ru"abc", ru"def"]
-  let
-    buffer = initGapBuffer[Runes](Lines)
-    view = initEditorView(buffer, 2, 3)
+import moepkg/[gapbuffer, unicodeext]
 
-  check(view.lines[0] == ru"abc")
-  check(view.lines[1] == ru"def")
+import moepkg/editorview {.all.}
 
-test "initEditorView 2":
-  const Lines = @[ru"abcあd", ru"いうefgh", ru"ij"]
-  let
-    buffer = initGapBuffer[Runes](Lines)
-    view = initEditorView(buffer, 8, 4)
+suite "editorview: initEditorView":
+  test "Basic":
+    let
+      buffer = @["abc", "def"].toSeqRunes.toGapBuffer
+      view = initEditorView(buffer, 2, 3)
 
-  check(view.lines[0] == ru"abc")
-  check(view.lines[1] == ru"あd")
-  check(view.lines[2] == ru"いう")
-  check(view.lines[3] == ru"efgh")
-  check(view.lines[4] == ru"ij")
-  check(view.originalLine[5] == -1)
-  check(view.originalLine[6] == -1)
-  check(view.originalLine[7] == -1)
+    check view.lines.toSeqRunes == @["abc", "def"].toSeqRunes
 
-test "seekCursor 1":
-  const Lines = @[ru"aaa", ru"bbbb", ru"ccccc", ru"ddd"]
-  let buffer = initGapBuffer[Runes](Lines)
-  var view = initEditorView(buffer, 2, 3)
+  test "Basic 2":
+    let
+      buffer = @["abcあd", "いうefgh", "ij"]
+        .toSeqRunes
+        .toGapBuffer
+      view = initEditorView(buffer, 8, 4)
 
-  check(view.lines[0] == ru"aaa")
-  check(view.lines[1] == ru"bbb")
+    check view.lines.toSeqRunes == @[
+      "abc",
+      "あd",
+      "いう",
+      "efgh",
+      "ij",
+      "",
+      "",
+      ""]
+      .toSeqRunes
 
-  view.seekCursor(buffer, 2, 3)
-  check(view.lines[0] == ru"ccc")
-  check(view.lines[1] == ru"cc")
+    check view.originalLine[5] == -1
+    check view.originalLine[6] == -1
+    check view.originalLine[7] == -1
 
-  view.seekCursor(buffer, 3, 1)
-  check(view.lines[0] == ru"cc")
-  check(view.lines[1] == ru"ddd")
+suite "editorview: seekCursor":
+  test "Basic":
+    let buffer = @["aaa", "bbbb", "ccccc", "ddd"]
+      .toSeqRunes.
+      toGapBuffer
+    var view = initEditorView(buffer, 2, 3)
 
-test "seekCursor 2":
-  const Lines = @[ru"aaaaaaa", ru"bbbb", ru"ccc", ru"d"]
-  let buffer = initGapBuffer(Lines)
-  var view = initEditorView(buffer, 2, 3)
+    check view.lines.toSeqRunes == @["aaa", "bbb"].toSeqRunes
 
-  check(view.lines[0] == ru"aaa")
-  check(view.lines[1] == ru"aaa")
+    view.seekCursor(buffer, 2, 3)
+    check view.lines.toSeqRunes == @["ccc", "cc"].toSeqRunes
 
-  view.seekCursor(buffer, 3, 0)
+    view.seekCursor(buffer, 3, 1)
+    check view.lines.toSeqRunes == @["cc", "ddd"].toSeqRunes
 
-  check(view.lines[0] == ru"ccc")
-  check(view.lines[1] == ru"d")
+  test "Basic 2":
+    let buffer = @["aaaaaaa", "bbbb", "ccc", "d"].toSeqRunes.toGapBuffer
+    var view = initEditorView(buffer, 2, 3)
 
-  view.seekCursor(buffer, 1, 3)
+    check view.lines.toSeqRunes == @["aaa", "aaa"].toSeqRunes
 
-  check(view.lines[0] == ru"b")
-  check(view.lines[1] == ru"ccc")
+    view.seekCursor(buffer, 3, 0)
+    check view.lines.toSeqRunes == @["ccc", "d"].toSeqRunes
 
-  view.seekCursor(buffer, 0, 6)
+    view.seekCursor(buffer, 1, 3)
+    check view.lines.toSeqRunes == @["b", "ccc"].toSeqRunes
 
-  check(view.lines[0] == ru"a")
-  check(view.lines[1] == ru"bbb")
+    view.seekCursor(buffer, 0, 6)
+    check view.lines.toSeqRunes == @["a", "bbb"].toSeqRunes

@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -17,7 +17,8 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unicode, sequtils, strutils, strformat, os, times, oids]
+import std/[unicode, sequtils, strutils, strformat, os, times, oids, deques]
+
 import pkg/unicodedb/[properties, widths]
 
 export unicode
@@ -285,6 +286,9 @@ proc toRunes*(r: seq[Runes]): Runes {.inline.} =
 proc toSeqRunes*(s: seq[string]): seq[Runes] {.inline.} =
   for l in s:
     result.add l.toRunes
+
+proc toSeqRunes*(r: Deque[Runes]): seq[Runes] {.inline.} =
+  for l in r: result.add l
 
 proc startsWith*(r1: Runes, r2: Runes | Rune): bool {.inline.} =
   startsWith($r1, $r2)
