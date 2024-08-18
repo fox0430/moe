@@ -76,6 +76,8 @@ proc removeAll*(ranges: var FoldingRanges, line: int) =
     else:
       i.inc
 
+proc clear*(ranges: var FoldingRanges) {.inline.} = ranges = @[]
+
 proc add*(ranges: var FoldingRanges, range: FoldingRange) =
   ## Added ranges are sorted from smallest to largest by `FoldingRange.first`.
 

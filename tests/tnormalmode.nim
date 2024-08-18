@@ -3184,6 +3184,57 @@ suite "Normal mode: Expand folding lines":
     check currentMainWindowNode.currentColumn == 0
     check currentMainWindowNode.view.foldingRanges.len == 0
 
+suite "Normal mode: Expand all folding lines":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Basic (zR command)":
+    const Buffer = @["a", "b", "c", "d", "e", "f"].toSeqRunes
+    currentBufStatus.buffer = Buffer.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[
+      FoldingRange(first: 0, last: 1),
+      FoldingRange(first: 3, last: 4)
+    ]
+
+    status.resize(100, 100)
+    status.update
+
+    const Command = ru"zR"
+    check status.normalCommand(Command).isNone
+
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == Buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+    check currentMainWindowNode.view.foldingRanges.len == 0
+
+  test "Contains nested (zR command)":
+    const Buffer = @["a", "b", "c", "d", "e", "f"].toSeqRunes
+    currentBufStatus.buffer = Buffer.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[
+      FoldingRange(first: 1, last: 2),
+      FoldingRange(first: 0, last: 3)
+    ]
+
+    status.resize(100, 100)
+    status.update
+
+    const Command = ru"zR"
+    check status.normalCommand(Command).isNone
+
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == Buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+    check currentMainWindowNode.view.foldingRanges.len == 0
+
 suite "Normal mode: execNormalModeCommand":
   test "'/' key":
     # Change mode to searchForward
