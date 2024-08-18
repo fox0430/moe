@@ -1269,13 +1269,13 @@ template isFoldingStartLine(status: EditorStatus): bool =
   currentMainWindowNode.view.isFoldingStartLine(
     currentMainWindowNode.currentLine)
 
-proc expandFoldingLines(status: var EditorStatus) {.inline.} =
+proc deleteFoldingLines(status: var EditorStatus) {.inline.} =
   for i in 0 .. currentBufStatus.cmdLoop - 1:
     if status.isFoldingStartLine:
       currentMainWindowNode.view.removeFoldingRange(
         currentMainWindowNode.currentLine)
 
-proc expandAllFoldingLines(status: var EditorStatus) {.inline.} =
+proc deleteAllFoldingLines(status: var EditorStatus) {.inline.} =
   currentMainWindowNode.clearFoldingRange
 
 proc addRegister(status: var EditorStatus, command, registerName: string) =
@@ -1606,10 +1606,10 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
       currentBufStatus.scrollScreenTop(currentMainWindowNode)
     elif secondKey == ord('b'):
       currentBufStatus.scrollScreenBottom(currentMainWindowNode)
-    elif secondKey == ord('o'):
-      status.expandFoldingLines
-    elif secondKey == ord('R'):
-      status.expandAllFoldingLines
+    elif secondKey == ord('d'):
+      status.deleteFoldingLines
+    elif secondKey == ord('D'):
+      status.deleteAllFoldingLines
   elif key == ord('H'):
     currentBufStatus.moveToTopOfScreen(currentMainWindowNode)
   elif key == ord('M'):
@@ -1926,8 +1926,8 @@ proc isNormalModeCommand*(
           if command[1] == ord('.') or
              command[1] == ord('t') or
              command[1] == ord('b') or
-             command[1] == ord('o') or
-             command[1] == ord('R'):
+             command[1] == ord('d') or
+             command[1] == ord('D'):
                result = InputState.Valid
 
       elif command[0] == ord('c'):
