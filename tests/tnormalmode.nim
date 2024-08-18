@@ -3094,21 +3094,21 @@ suite "Normal mode: Delete characters to any characters and Enter insert mode":
 
     check currentMainWindowNode.view.foldingRanges.len == 0
 
-suite "Normal mode: Expand folding lines":
+suite "Normal mode: Delete folding lines":
   var status: EditorStatus
 
   setup:
     status = initEditorStatus()
     assert status.addNewBufferInCurrentWin.isOk
 
-  test "Nothing to do (zo command)":
+  test "Nothing to do (zd command)":
     const Buffer = @["a", "b", "c"].toSeqRunes
     currentBufStatus.buffer = Buffer.toGapBuffer
 
     status.resize(100, 100)
     status.update
 
-    const Command = ru"zo"
+    const Command = ru"zd"
     check status.normalCommand(Command).isNone
 
     status.update
@@ -3118,7 +3118,7 @@ suite "Normal mode: Expand folding lines":
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
 
-  test "Basic (zo command)":
+  test "Basic (zd command)":
     const Buffer = @["a", "b", "c"].toSeqRunes
     currentBufStatus.buffer = Buffer.toGapBuffer
     currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
@@ -3126,7 +3126,7 @@ suite "Normal mode: Expand folding lines":
     status.resize(100, 100)
     status.update
 
-    const Command = ru"zo"
+    const Command = ru"zd"
     check status.normalCommand(Command).isNone
 
     status.update
@@ -3137,7 +3137,7 @@ suite "Normal mode: Expand folding lines":
     check currentMainWindowNode.currentColumn == 0
     check currentMainWindowNode.view.foldingRanges.len == 0
 
-  test "Nested (zo command)":
+  test "Nested (zd command)":
     const Buffer = @["a", "b", "c", "d"].toSeqRunes
     currentBufStatus.buffer = Buffer.toGapBuffer
     currentMainWindowNode.view.foldingRanges = @[
@@ -3148,7 +3148,7 @@ suite "Normal mode: Expand folding lines":
     status.resize(100, 100)
     status.update
 
-    const Command = ru"zo"
+    const Command = ru"zd"
     check status.normalCommand(Command).isNone
 
     status.update
@@ -3161,7 +3161,7 @@ suite "Normal mode: Expand folding lines":
       FoldingRange(first: 0, last: 1)
     ]
 
-  test "Nested 2 (2zo command)":
+  test "Nested 2 (2zd command)":
     const Buffer = @["a", "b", "c", "d"].toSeqRunes
     currentBufStatus.buffer = Buffer.toGapBuffer
     currentMainWindowNode.view.foldingRanges = @[
@@ -3173,7 +3173,7 @@ suite "Normal mode: Expand folding lines":
     status.update
 
     currentBufStatus.cmdLoop = 2
-    const Command = ru"zo"
+    const Command = ru"zd"
     check status.normalCommand(Command).isNone
 
     status.update
@@ -3184,14 +3184,14 @@ suite "Normal mode: Expand folding lines":
     check currentMainWindowNode.currentColumn == 0
     check currentMainWindowNode.view.foldingRanges.len == 0
 
-suite "Normal mode: Expand all folding lines":
+suite "Normal mode: Delete all folding lines":
   var status: EditorStatus
 
   setup:
     status = initEditorStatus()
     assert status.addNewBufferInCurrentWin.isOk
 
-  test "Basic (zR command)":
+  test "Basic (zD command)":
     const Buffer = @["a", "b", "c", "d", "e", "f"].toSeqRunes
     currentBufStatus.buffer = Buffer.toGapBuffer
     currentMainWindowNode.view.foldingRanges = @[
@@ -3202,7 +3202,7 @@ suite "Normal mode: Expand all folding lines":
     status.resize(100, 100)
     status.update
 
-    const Command = ru"zR"
+    const Command = ru"zD"
     check status.normalCommand(Command).isNone
 
     status.update
@@ -3213,7 +3213,7 @@ suite "Normal mode: Expand all folding lines":
     check currentMainWindowNode.currentColumn == 0
     check currentMainWindowNode.view.foldingRanges.len == 0
 
-  test "Contains nested (zR command)":
+  test "Contains nested (zD command)":
     const Buffer = @["a", "b", "c", "d", "e", "f"].toSeqRunes
     currentBufStatus.buffer = Buffer.toGapBuffer
     currentMainWindowNode.view.foldingRanges = @[
@@ -3224,7 +3224,7 @@ suite "Normal mode: Expand all folding lines":
     status.resize(100, 100)
     status.update
 
-    const Command = ru"zR"
+    const Command = ru"zD"
     check status.normalCommand(Command).isNone
 
     status.update

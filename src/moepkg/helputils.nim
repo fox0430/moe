@@ -135,8 +135,8 @@ gi         - Goto Implementation (LSP)
 gh         - Open Call hierarchy viewer (LSP)
 Space r    - Rename (LSP)
 \ r        - Code Lens (LSP)
-zo         - Expand folding lines
-zR         - Expand all folding lines
+zd         - Delete folding lines
+zD         - Delete all folding lines
 
 # Register
 
