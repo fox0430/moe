@@ -136,6 +136,7 @@ gh         - Open Call hierarchy viewer (LSP)
 Space r    - Rename (LSP)
 \ r        - Code Lens (LSP)
 zo         - Expand folding lines
+zR         - Expand all folding lines
 
 # Register
 

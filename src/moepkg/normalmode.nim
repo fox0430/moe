@@ -1275,6 +1275,9 @@ proc expandFoldingLines(status: var EditorStatus) {.inline.} =
       currentMainWindowNode.view.removeFoldingRange(
         currentMainWindowNode.currentLine)
 
+proc expandAllFoldingLines(status: var EditorStatus) {.inline.} =
+  currentMainWindowNode.clearFoldingRange
+
 proc addRegister(status: var EditorStatus, command, registerName: string) =
   if command == "yy":
     status.yankLines(registerName)
@@ -1605,6 +1608,8 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
       currentBufStatus.scrollScreenBottom(currentMainWindowNode)
     elif secondKey == ord('o'):
       status.expandFoldingLines
+    elif secondKey == ord('R'):
+      status.expandAllFoldingLines
   elif key == ord('H'):
     currentBufStatus.moveToTopOfScreen(currentMainWindowNode)
   elif key == ord('M'):
@@ -1921,7 +1926,8 @@ proc isNormalModeCommand*(
           if command[1] == ord('.') or
              command[1] == ord('t') or
              command[1] == ord('b') or
-             command[1] == ord('o'):
+             command[1] == ord('o') or
+             command[1] == ord('R'):
                result = InputState.Valid
 
       elif command[0] == ord('c'):

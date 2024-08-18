@@ -550,3 +550,6 @@ proc removeAllFoldingRange*(n: var WindowNode, range: FoldingRange) {.inline.} =
 
 proc removeAllFoldingRange*(n: var WindowNode, first, last: int) {.inline.} =
   n.view.removeAllFoldingRange(first, last)
+
+proc clearFoldingRange*(n: var WindowNode) {.inline.} =
+  n.view.clearFoldingRange
