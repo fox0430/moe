@@ -1713,6 +1713,35 @@ suite "Visual mode: Replace characters":
     check currentBufStatus.buffer.toSeqRunes == @["zzz", "zzz", "zzz"]
       .toSeqRunes
 
+  test "Over end of the line":
+    currentBufStatus.buffer = @["abc"].toSeqRunes.toGapBuffer
+
+    currentBufStatus.highlight = initHighlight(
+      currentBufStatus.buffer.toSeqRunes,
+      status.settings.highlight.reservedWords,
+      currentBufStatus.language)
+
+    status.resize(100, 100)
+
+    status.changeMode(Mode.visual)
+
+    status.initSelectedArea
+    status.update
+
+    var selectedArea = SelectedArea(
+      startLine: 0,
+      startColumn: 0,
+      endLine: 0,
+      endColumn: 3)
+
+    currentBufStatus.replaceCharacter(
+      currentMainWindowNode,
+      selectedArea,
+      ru'z',
+      status.commandLine)
+
+    check currentBufStatus.buffer.toSeqRunes == @["zzz"].toSeqRunes
+
   test "Contains folding lines":
     currentBufStatus.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
     currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
