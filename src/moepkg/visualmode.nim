@@ -312,11 +312,13 @@ proc replaceCharacter(
         let oldLine = bufStatus.buffer[i]
         var newLine = bufStatus.buffer[i]
         if area.startLine == area.endLine:
-          for j in area.startColumn .. area.endColumn: newLine[j] = ch
+          let endCol = min(area.endColumn, newLine.high)
+          for j in area.startColumn .. endCol: newLine[j] = ch
         elif i == area.startLine:
           for j in area.startColumn .. bufStatus.buffer[i].high: newLine[j] = ch
         elif i == area.endLine:
-          for j in 0 .. area.endColumn: newLine[j] = ch
+          let endCol = min(area.endColumn, newLine.high)
+          for j in 0 .. endCol: newLine[j] = ch
         else:
           for j in 0 .. bufStatus.buffer[i].high: newLine[j] = ch
         if oldLine != newLine: bufStatus.buffer[i] = newLine
