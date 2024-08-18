@@ -20,7 +20,7 @@
 import std/[deques, strutils, math, strformat, options, sequtils]
 
 import gapbuffer, ui, unicodeext, independentutils, color, highlight, git,
-       syntaxcheck, theme, bufferstatus
+       syntaxcheck, theme, bufferstatus, folding
 
 type
   Sidebar = object
@@ -46,6 +46,7 @@ type
     start*: Deque[int]
     length*: Deque[int]
     selectedRange*: Range
+    foldingRanges*: FoldingRanges
     updated*: bool
     editorMode*: Mode
     isCurrentWin*: bool
@@ -85,15 +86,55 @@ proc loadSingleViewLine[T](
       totalWidth += nextWidth
       nextWidth = calcNextWidth
 
+proc isFoldingStartLine*(view: EditorView, line: int): bool {.inline.} =
+  view.foldingRanges.isStartLine(line)
+
+proc inFoldingRange*(view: EditorView, line: int): bool {.inline.} =
+  view.foldingRanges.inRange(line)
+
+proc findFoldingRange*(
+  view: EditorView,
+  line: int): Option[FoldingRange] {.inline.} =
+
+    view.foldingRanges.find(line)
+
+proc addFoldingRange*(view: var EditorView, range: FoldingRange) {.inline.} =
+  view.foldingRanges.add range
+
+proc addFoldingRange*(
+  view: var EditorView, firstLine,
+  lastLine: int) {.inline.} =
+
+    view.foldingRanges.add(firstLine, lastLine)
+
+proc removeFoldingRange*(view: var EditorView, range: FoldingRange) {.inline.} =
+  view.foldingRanges.remove(range)
+
+proc removeFoldingRange*(view: var EditorView, line: int) {.inline.} =
+  view.foldingRanges.remove(line)
+
+proc removeAllFoldingRange*(
+  view: var EditorView,
+  range: FoldingRange) {.inline.} =
+
+    view.foldingRanges.removeAll(range)
+
+proc removeAllFoldingRange*(view: var EditorView, first, last: int) {.inline.} =
+  view.foldingRanges.removeAll(first, last)
+
+proc removeAllFoldingRange*(view: var EditorView, line: int) {.inline.} =
+  view.foldingRanges.removeAll(line)
+
 proc reload*[T](view: var EditorView, buffer: T, topLine: int) =
   ## Reload from the buffer to the EditorView so that topLine is displayed as
   ## the top line of the EditorView.
   ##
-  ## The computational cost is somewhat high because the entire EditorView is updated.
+  ## The computational cost is somewhat high because the entire EditorView is
+  ## updated.
   ##
   ## It is intended to be used to synchronize the contents of a buffer with the
-  ## contents of an EditorView,
-  ## or after the entire EditorView has become completely different.
+  ## contents of an EditorView, or after the entire EditorView has become
+  ## completely different.
 
   view.updated = true
 
@@ -107,25 +148,39 @@ proc reload*[T](view: var EditorView, buffer: T, topLine: int) =
   var
     lineNumber = topLine
     start = 0
-  for y in 0 ..< height:
+    foldingRange: Option[FoldingRange]
+    y = 0
+  while y < height:
     if lineNumber >= buffer.len: break
+
+    if foldingRange.isNone:
+      foldingRange = view.findFoldingRange(lineNumber)
+
+    if foldingRange.isSome and lineNumber > foldingRange.get.first:
+      # Skip folding lines.
+      if foldingRange.get.last == lineNumber:
+        foldingRange = none(FoldingRange)
+      lineNumber.inc
+      continue
+
     if buffer[lineNumber].len == 0:
       view.originalLine[y] = lineNumber
       view.start[y] = 0
       view.length[y] = 0
-      inc(lineNumber)
-      continue
+      lineNumber.inc
+    else:
+      let singleLine = loadSingleViewLine(view, buffer, lineNumber, start)
+      view.lines[y] = singleLine.line
+      view.originalLine[y] = singleLine.originalLine
+      view.start[y] = singleLine.start
+      view.length[y] = singleLine.length
 
-    let singleLine = loadSingleViewLine(view, buffer, lineNumber, start)
-    view.lines[y] = singleLine.line
-    view.originalLine[y] = singleLine.originalLine
-    view.start[y] = singleLine.start
-    view.length[y] = singleLine.length
+      start += view.length[y]
+      if start >= buffer[lineNumber].len:
+        lineNumber.inc
+        start = 0
 
-    start += view.length[y]
-    if start >= buffer[lineNumber].len:
-      inc(lineNumber)
-      start = 0
+    y.inc
 
 proc initEditorView*[T](buffer: T, height, width: int): EditorView =
   ## Initialize EditorView with `width`/`height` and
@@ -418,15 +473,34 @@ proc writeCurrentLine(
     else:
       view.write(win, y, x, runes, highlight[i].color.int16)
 
-template lineNumberColor() =
-  if isCurrentLine and
-     view.isCurrentWin and
-     view.config.isHighlightCurrentLineNumber:
-       EditorColorPairIndex.currentLineNum
-  else:
-    EditorColorPairIndex.lineNum
+proc foldingLineBuffer(
+  foldingRange: FoldingRange,
+  originalFirstLine: Runes,
+  width: int): Runes =
 
-template isSelectingArea() =
+    let
+      originalLineStr = strutils.strip($originalFirstLine)
+      count = foldingRange.last - foldingRange.first + 1
+    var line = fmt"+-- {count} lines {originalLineStr}"
+    if line.high > width:
+      line = line[0 ..< width]
+    else:
+      line = line & "·".repeat(width - line.high)
+
+    return line.toRunes
+
+proc lineNumberColor(
+  view: EditorView,
+  isCurrentLine: bool): EditorColorPairIndex {.inline.} =
+
+    if isCurrentLine and
+       view.isCurrentWin and
+       view.config.isHighlightCurrentLineNumber:
+         EditorColorPairIndex.currentLineNum
+    else:
+      EditorColorPairIndex.lineNum
+
+template isSelectingArea(view: EditorView): bool =
   view.editorMode.isVisualMode and
   (view.originalLine[y] >= view.selectedRange.first and
    view.selectedRange.last >= view.originalLine[y])
@@ -466,11 +540,29 @@ proc writeAllLines*[T](
 
       let isCurrentLine = view.originalLine[y] == currentLine
       if view.config.isLineNumber and view.start[y] == 0:
-        view.writeLineNum(win, y, view.originalLine[y], lineNumberColor())
+        view.writeLineNum(
+          win,
+          y,
+          view.originalLine[y],
+          view.lineNumberColor(isCurrentLine))
 
       var x = view.sidebarWidth + view.widthOfLineNum
+
+      if view.isFoldingStartLine(view.originalLine[y]):
+        let foldingRange = view.findFoldingRange(view.originalLine[y])
+        view.write(
+          win,
+          y,
+          x,
+          foldingLineBuffer(
+            foldingRange.get,
+            buffer[view.originalLine[y]],
+            view.width),
+          EditorColorPairIndex.foldingLine)
+        continue
+
       if view.length[y] == 0:
-        if isSelectingArea():
+        if view.isSelectingArea:
           view.write(win, y, x, ru" ", EditorColorPairIndex.selectArea)
         else:
           view.write(win, y, x, view.lines[y], EditorColorPairIndex.default)

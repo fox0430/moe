@@ -29,7 +29,8 @@ import gapbuffer, editorview, ui, unicodeext, highlight, fileutils, windownode,
        messages, commandline, registers, platform, movement, filermodeutils,
        debugmodeutils, independentutils, viewhighlight, backupmanagerutils,
        diffviewerutils, messagelog, globalsidebar, build, quickrunutils, git,
-       syntaxcheck, theme, logviewerutils, completionwindow, worddictionary
+       syntaxcheck, theme, logviewerutils, completionwindow, worddictionary,
+       folding
 
 type
   LastCursorPosition* = object
@@ -867,6 +868,22 @@ proc updateEditorViewConfig(view: var EditorView, settings: EditorSettings) =
   if viewConf.tabStop != settings.standard.tabStop:
     viewConf.tabStop = settings.standard.tabStop
 
+template findFoldingRange*(status: EditorStatus): Option[FoldingRange] =
+  currentMainWindowNode.view.findFoldingRange(
+    currentMainWindowNode.currentLine)
+
+template isFindFoldingStartLine*(status: EditorStatus): bool =
+  currentMainWindowNode.view.isFoldingStartLine(
+    currentMainWindowNode.currentLine)
+
+proc shiftFoldingRanges*(status: var EditorStatus, start, shift: int) =
+  let nodes = mainWindowNode.searchByBufferIndex(
+    status.bufferIndexInCurrentWindow)
+
+  for i in 0 .. nodes.high:
+    if nodes[i].view.foldingRanges.len > 0:
+      nodes[i].view.foldingRanges.shiftLines(start, shift)
+
 proc update*(status: var EditorStatus) =
   ## Update all views, highlighting, cursor, etc.
 
@@ -924,7 +941,9 @@ proc update*(status: var EditorStatus) =
         if b.buffer.high < node.currentLine:
           node.currentLine = b.buffer.high
 
-        if not b.isInsertMode and
+        if node.view.isFoldingStartLine(node.currentLine):
+          if node.currentColumn > 0: node.currentColumn = 0
+        elif not b.isInsertMode and
            not b.isReplaceMode and
            not b.isConfigMode and
            not b.isVisualMode and

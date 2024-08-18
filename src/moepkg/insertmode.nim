@@ -143,7 +143,10 @@ proc insertToBuffer(status: var EditorStatus, r: Rune) {.inline.} =
 proc execInsertModeCommand*(status: var EditorStatus, command: Runes) =
   if command.len == 0:
     return
-  let key = command[0]
+
+  let
+    beforeBufferLen = currentBufStatus.buffer.len
+    key = command[0]
 
   if isCtrlC(key) or isEscKey(key):
     status.exitInsertMode
@@ -208,3 +211,10 @@ proc execInsertModeCommand*(status: var EditorStatus, command: Runes) =
       status.settings.view.tabStop)
   else:
     status.insertToBuffer(key)
+
+  if currentBufStatus.buffer.len != beforeBufferLen:
+    status.shiftFoldingRanges(
+      currentMainWindowNode.currentLine,
+      currentBufStatus.buffer.len - beforeBufferLen)
+
+

@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -23,17 +23,22 @@ import pkg/results
 
 import moepkg/syntax/highlite
 import moepkg/[registers, settings, editorstatus, gapbuffer, unicodeext,
-               bufferstatus, ui, windownode, quickrunutils, viewhighlight]
+               bufferstatus, ui, windownode, quickrunutils, viewhighlight,
+               folding, editorview]
 
 import utils
 
 import moepkg/normalmode {.all.}
 
 suite "Normal mode: Move to the right":
-  test "Move tow to the right":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Move 2 col":
+    status.bufStatus[0].buffer = @["abc"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -43,7 +48,35 @@ suite "Normal mode: Move to the right":
     check status.normalCommand(Key).isNone
     status.update
 
-    check(currentMainWindowNode.currentColumn == 2)
+    check currentMainWindowNode.currentColumn == 2
+
+  test "Ignore":
+    status.bufStatus[0].buffer = @["abc"].toSeqRunes.toGapBuffer
+
+    currentMainWindowNode.currentColumn = 2
+
+    status.resize(100, 100)
+    status.update
+
+    const Key = @[ru'l']
+    check status.normalCommand(Key).isNone
+    status.update
+
+    check currentMainWindowNode.currentColumn == 2
+
+  test "On Folding line":
+    status.bufStatus[0].buffer = @["abc", "def"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    status.resize(100, 100)
+    status.update
+
+    const Key = @[ru'l']
+    check status.normalCommand(Key).isNone
+    status.update
+
+    check currentMainWindowNode.currentColumn == 1
+    check currentMainWindowNode.view.foldingRanges.len == 0
 
 suite "Normal mode: Move to the left":
   test "Move one to the left":
@@ -95,10 +128,14 @@ suite "Normal mode: Move to the up":
     check(currentMainWindowNode.currentLine == 0)
 
 suite "Normal mode: Delete current character":
-  test "Delete two current character":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Delete 2 characters":
+    status.bufStatus[0].buffer = @["abc"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -119,6 +156,20 @@ suite "Normal mode: Delete current character":
       let r = status.registers.getSmallDeleteRegister
       check r.buffer == @[ru "ab"]
       check not r.isLine
+
+  test "On folding line":
+    status.bufStatus[0].buffer = @["abc", "def"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    status.resize(100, 100)
+    status.update
+
+    const Key = @[ru'x']
+    check status.normalCommand(Key).isNone
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @["bc", "def"].toSeqRunes
+    check currentMainWindowNode.view.foldingRanges.len == 0
 
 suite "Normal mode: Move to last of line":
   test "Move to last of line":
@@ -320,10 +371,14 @@ suite "Normal mode: Page up":
     check(currentMainWindowNode.currentLine == 0)
 
 suite "Normal mode: Move to forward word":
-  test "Move to forward word":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    status.bufStatus[0].buffer = initGapBuffer(@[ru"abc def ghi"])
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Basic":
+    status.bufStatus[0].buffer = @["abc def ghi"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -333,13 +388,31 @@ suite "Normal mode: Move to forward word":
     check status.normalCommand(Key).isNone
     status.update
 
-    check(currentMainWindowNode.currentColumn == 8)
+    check currentMainWindowNode.currentColumn == 8
+
+  test "On folding line":
+    status.bufStatus[0].buffer = @["abc def ghi", "jkl"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    status.resize(100, 100)
+    status.update
+
+    const Key = @[ru'w']
+    check status.normalCommand(Key).isNone
+    status.update
+
+    check currentMainWindowNode.currentColumn == 4
+    check currentMainWindowNode.view.foldingRanges.len == 0
 
 suite "Normal mode: Move to backward word":
-  test "Move to backward word":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    status.bufStatus[0].buffer = initGapBuffer(@[ru"abc def ghi"])
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Basic":
+    status.bufStatus[0].buffer = @["abc def ghi"].toSeqRunes.toGapBuffer
     currentMainWindowNode.currentColumn = 8
 
     status.resize(100, 100)
@@ -350,13 +423,32 @@ suite "Normal mode: Move to backward word":
     check status.normalCommand(Key).isNone
     status.update
 
-    check(currentMainWindowNode.currentColumn == 4)
+    check currentMainWindowNode.currentColumn == 4
+
+  test "On folding line":
+    status.bufStatus[0].buffer = @["abc def ghi", "jkl"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.currentLine = 1
+
+    status.resize(100, 100)
+    status.update
+
+    const Key = @[ru'b']
+    check status.normalCommand(Key).isNone
+    status.update
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 8
+    check currentMainWindowNode.view.foldingRanges.len == 0
 
 suite "Normal mode: Move to forward end of word":
-  test "Move to forward end of word":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    status.bufStatus[0].buffer = initGapBuffer(@[ru"abc def ghi"])
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Basic":
+    status.bufStatus[0].buffer = @["abc def ghi"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -366,13 +458,31 @@ suite "Normal mode: Move to forward end of word":
     check status.normalCommand(Key).isNone
     status.update
 
-    check(currentMainWindowNode.currentColumn == 6)
+    check currentMainWindowNode.currentColumn == 6
+
+  test "On folding line":
+    status.bufStatus[0].buffer = @["abc def ghi", "jkl"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    status.resize(100, 100)
+    status.update
+
+    const Key = @[ru'e']
+    check status.normalCommand(Key).isNone
+    status.update
+
+    check currentMainWindowNode.currentColumn == 2
+    check currentMainWindowNode.view.foldingRanges.len == 0
 
 suite "Normal mode: Open blank line below":
-  test "Open blank line below":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    status.bufStatus[0].buffer = initGapBuffer(@[ru"a"])
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Basic":
+    status.bufStatus[0].buffer = @["a"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -381,19 +491,41 @@ suite "Normal mode: Open blank line below":
     check status.normalCommand(Key).isNone
     status.update
 
-    check(status.bufStatus[0].buffer.len == 2)
-    check(status.bufStatus[0].buffer[0] == ru"a")
-    check(status.bufStatus[0].buffer[1] == ru"")
+    check currentBufStatus.buffer.toSeqRunes == @["a", ""].toSeqRunes
 
-    check(currentMainWindowNode.currentLine == 1)
+    check currentMainWindowNode.currentLine == 1
 
-    check(status.bufStatus[0].mode == Mode.insert)
+    check currentBufStatus.mode == Mode.insert
+
+  test "On folding line":
+    status.bufStatus[0].buffer = @["a", "b", "c"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 2)]
+
+    status.resize(100, 100)
+    status.update
+
+    const Key = @[ru'o']
+    check status.normalCommand(Key).isNone
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @["a", "b", "c", ""].toSeqRunes
+
+    check currentMainWindowNode.currentLine == 3
+    check currentMainWindowNode.view.foldingRanges == @[
+      FoldingRange(first: 0, last: 2)
+    ]
+
+    check currentBufStatus.mode == Mode.insert
 
 suite "Normal mode: Open blank line below":
-  test "Open blank line below":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    status.bufStatus[0].buffer = initGapBuffer(@[ru"a"])
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Basic":
+    status.bufStatus[0].buffer = @["a"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -402,19 +534,42 @@ suite "Normal mode: Open blank line below":
     check status.normalCommand(Key).isNone
     status.update
 
-    check(status.bufStatus[0].buffer.len == 2)
-    check(status.bufStatus[0].buffer[0] == ru"")
-    check(status.bufStatus[0].buffer[1] == ru"a")
+    check currentBufStatus.buffer.toSeqRunes == @["", "a"].toSeqRunes
 
-    check(currentMainWindowNode.currentLine == 0)
+    check currentMainWindowNode.currentLine == 0
 
-    check(status.bufStatus[0].mode == Mode.insert)
+    check currentBufStatus.mode == Mode.insert
 
-suite "Normal mode: Add indent":
-  test "Add indent":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    status.bufStatus[0].buffer = initGapBuffer(@[ru"a"])
+  test "On folding line":
+    status.bufStatus[0].buffer = @["a", "b"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    status.resize(100, 100)
+    status.update
+
+    const Key = @[ru'O']
+    check status.normalCommand(Key).isNone
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @["", "a", "b"].toSeqRunes
+
+    check currentMainWindowNode.currentLine == 0
+
+    check currentBufStatus.mode == Mode.insert
+
+    check currentMainWindowNode.view.foldingRanges == @[
+      FoldingRange(first: 1, last: 2)
+    ]
+
+suite "Normal mode: Indent":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Basic":
+    currentBufStatus.buffer = @["a"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -423,13 +578,32 @@ suite "Normal mode: Add indent":
     check status.normalCommand(Key).isNone
     status.update
 
-    check(status.bufStatus[0].buffer[0] == ru"  a")
+    check currentBufStatus.buffer.toSeqRunes == @["  a"].toSeqRunes
 
-suite "Normal mode: Delete indent":
-  test "Normal mode: Delete indent":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    status.bufStatus[0].buffer = initGapBuffer(@[ru"  a"])
+  test "On folding line":
+    currentBufStatus.buffer = @["a", "b"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    status.resize(100, 100)
+    status.update
+
+    const Key = @[ru'>']
+    check status.normalCommand(Key).isNone
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @["  a", "b"].toSeqRunes
+
+    check currentMainWindowNode.view.foldingRanges.len == 0
+
+suite "Normal mode: Unindent":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Basic":
+    currentBufStatus.buffer = @["  a"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -438,13 +612,32 @@ suite "Normal mode: Delete indent":
     check status.normalCommand(Key).isNone
     status.update
 
-    check(status.bufStatus[0].buffer[0] == ru"a")
+    check currentBufStatus.buffer.toSeqRunes == @["a"].toSeqRunes
+
+  test "On folding line":
+    currentBufStatus.buffer = @["  a", "b"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    status.resize(100, 100)
+    status.update
+
+    const Key = @[ru'<']
+    check status.normalCommand(Key).isNone
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @["a", "b"].toSeqRunes
+
+    check currentMainWindowNode.view.foldingRanges.len == 0
 
 suite "Normal mode: Join line":
-  test "Join line":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"b"])
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Basic":
+    currentBufStatus.buffer = @["a", "b"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -453,13 +646,32 @@ suite "Normal mode: Join line":
     check status.normalCommand(Key).isNone
     status.update
 
-    check(status.bufStatus[0].buffer[0] == ru"ab")
+    check currentBufStatus.buffer.toSeqRunes == @["ab"].toSeqRunes
 
-suite "Normal mode: Replace mode":
-  test "Replace mode":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    status.bufStatus[0].buffer = initGapBuffer(@[ru"a"])
+  test "On folding line":
+    currentBufStatus.buffer = @["a", "b", "c"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    status.resize(100, 100)
+    status.update
+
+    const Key = @[ru'J']
+    check status.normalCommand(Key).isNone
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @["ab", "c"].toSeqRunes
+
+    check currentMainWindowNode.view.foldingRanges.len == 0
+
+suite "Normal mode: Change mode to Replace mode":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Basic":
+    currentBufStatus.buffer = @["a"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -468,13 +680,32 @@ suite "Normal mode: Replace mode":
     check status.normalCommand(Key).isNone
     status.update
 
-    check(status.bufStatus[0].mode == Mode.replace)
+    check currentBufStatus.mode == Mode.replace
+
+  test "On folding line":
+    currentBufStatus.buffer = @["a", "b"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    status.resize(100, 100)
+    status.update
+
+    const Key = @[ru'R']
+    check status.normalCommand(Key).isNone
+    status.update
+
+    check currentBufStatus.mode == Mode.replace
+
+    check currentMainWindowNode.view.foldingRanges.len == 0
 
 suite "Normal mode: Move right and enter insert mode":
-  test "Move right and enter insert mode":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    status.bufStatus[0].buffer = initGapBuffer(@[ru"a"])
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Basic":
+    currentBufStatus.buffer = @["a"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -483,14 +714,34 @@ suite "Normal mode: Move right and enter insert mode":
     check status.normalCommand(Key).isNone
     status.update
 
-    check(status.bufStatus[0].mode == Mode.insert)
-    check(currentMainWindowNode.currentColumn == 1)
+    check currentBufStatus.mode == Mode.insert
+    check currentMainWindowNode.currentColumn == 1
+
+  test "On folding line":
+    currentBufStatus.buffer = @["a", "b"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    status.resize(100, 100)
+    status.update
+
+    const Key = @[ru'a']
+    check status.normalCommand(Key).isNone
+    status.update
+
+    check currentBufStatus.mode == Mode.insert
+
+    check currentMainWindowNode.currentColumn == 1
+    check currentMainWindowNode.view.foldingRanges.len == 0
 
 suite "Normal mode: Move last of line and enter insert mode":
-  test "Move last of line and enter insert mode":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Basic":
+    currentBufStatus.buffer = @["abc"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -499,8 +750,24 @@ suite "Normal mode: Move last of line and enter insert mode":
     check status.normalCommand(Key).isNone
     status.update
 
-    check(status.bufStatus[0].mode == Mode.insert)
-    check(currentMainWindowNode.currentColumn == 3)
+    check currentBufStatus.mode == Mode.insert
+    check currentMainWindowNode.currentColumn == 3
+
+  test "On folding line":
+    currentBufStatus.buffer = @["abc", "d"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    status.resize(100, 100)
+    status.update
+
+    const Key = @[ru'A']
+    check status.normalCommand(Key).isNone
+    status.update
+
+    check currentBufStatus.mode == Mode.insert
+
+    check currentMainWindowNode.currentColumn == 3
+    check currentMainWindowNode.view.foldingRanges.len == 0
 
 suite "Normal mode: Repeat last command":
   test "Repeat last command":
@@ -649,23 +916,24 @@ suite "Normal mode: Repeat last command":
 
       check currentBufStatus.buffer.toSeqRunes == @[ru"ghi"]
 
-suite "Normal mode: Delete the current line":
-  test "Delete the current line":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"b", ru"c", ru"d"])
+suite "Normal mode: Delete lines":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Basic":
+    currentBufStatus.buffer = @["a", "b", "c", "d"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
 
-    const Command = @[ru'd', ru'd']
+    const Command = ru"dd"
     check status.normalCommand(Command).isNone
     status.update
 
-    check currentBufStatus.buffer.len == 3
-    check currentBufStatus.buffer[0] == ru "b"
-    check currentBufStatus.buffer[1] == ru "c"
-    check currentBufStatus.buffer[2] == ru "d"
+    check currentBufStatus.buffer.toSeqRunes == @["b", "c", "d"].toSeqRunes
 
     block:
       let r = status.registers.getNoNamedRegister
@@ -677,11 +945,67 @@ suite "Normal mode: Delete the current line":
       check r.buffer == @[ru "a"]
       check r.isLine
 
-suite "Normal mode: Delete the line from current line to last line":
-  test "Delete the line from current line to last line":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"b", ru"c", ru"d"])
+  test "On folding line":
+    currentBufStatus.buffer = @["a", "b", "c", "d"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    status.resize(100, 100)
+    status.update
+
+    const Command = ru"dd"
+    check status.normalCommand(Command).isNone
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @["c", "d"].toSeqRunes
+
+    check currentMainWindowNode.view.foldingRanges.len == 0
+
+    block:
+      let r = status.registers.getNoNamedRegister
+      check r.buffer == @["a", "b"].toSeqRunes
+      check r.isLine
+
+    block:
+      let r = status.registers.getNumberRegister(1)
+      check r.buffer == @["a", "b"].toSeqRunes
+      check r.isLine
+
+  test "Before folding line":
+    currentBufStatus.buffer = @["a", "b", "c"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 1, last: 2)]
+
+    status.resize(100, 100)
+    status.update
+
+    const Command = ru"dd"
+    check status.normalCommand(Command).isNone
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @["b", "c"].toSeqRunes
+
+    check currentMainWindowNode.view.foldingRanges == @[
+      FoldingRange(first: 0, last: 1)
+    ]
+
+    block:
+      let r = status.registers.getNoNamedRegister
+      check r.buffer == @["a"].toSeqRunes
+      check r.isLine
+
+    block:
+      let r = status.registers.getNumberRegister(1)
+      check r.buffer == @["a"].toSeqRunes
+      check r.isLine
+
+suite "Normal mode: Delete lines from the current line to the last line":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Basic":
+    currentBufStatus.buffer = @["a", "b", "c", "d"].toSeqRunes.toGapBuffer
     currentMainWindowNode.currentLine = 1
 
     status.resize(100, 100)
@@ -694,16 +1018,43 @@ suite "Normal mode: Delete the line from current line to last line":
     check status.normalCommand(Command).isNone
     status.update
 
-    let buffer = currentBufStatus.buffer
-    check buffer.len == 1 and buffer[0] == ru"a"
+    check currentBufStatus.buffer.toSeqRunes == @["a"].toSeqRunes
 
-    check status.registers.getNoNamedRegister.buffer == @[ru"b", ru"c", ru"d"]
+    check status.registers.getNoNamedRegister.buffer == @["b", "c", "d"]
+      .toSeqRunes
 
-suite "Normal mode: Delete the line from first line to current line":
-  test "Delete the line from first line to current line":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"b", ru"c", ru"d"])
+  test "On folding line":
+    currentBufStatus.buffer = @["a", "b", "c", "d"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 1, last: 2)]
+    currentMainWindowNode.currentLine = 1
+
+    status.resize(100, 100)
+    status.update
+
+    const Command = @[ru'd', ru'G']
+
+    check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
+
+    check status.normalCommand(Command).isNone
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @["a"].toSeqRunes
+
+    check currentMainWindowNode.view.foldingRanges.len == 0
+
+    check status.registers.getNoNamedRegister.buffer == @["b", "c", "d"]
+      .toSeqRunes
+
+suite "Normal mode: Delete lines from the first line to the current line":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Basic":
+    currentBufStatus.buffer = @["a", "b", "c", "d"].toSeqRunes.toGapBuffer
+    currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"b", ru"c", ru"d"])
     currentMainWindowNode.currentLine = 2
 
     status.resize(100, 100)
@@ -713,16 +1064,39 @@ suite "Normal mode: Delete the line from first line to current line":
     check status.normalCommand(Commands).isNone
     status.update
 
-    let buffer = status.bufStatus[0].buffer
-    check buffer.len == 1 and buffer[0] == ru"d"
+    check currentBufStatus.buffer.toSeqRunes == @["d"].toSeqRunes
 
-    check status.registers.getNoNamedRegister.buffer == @[ru "a", ru "b", ru "c"]
+    check status.registers.getNoNamedRegister.buffer == @["a", "b", "c"]
+      .toSeqRunes
+
+  test "On folding line":
+    currentBufStatus.buffer = @["a", "b", "c", "d"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+    currentMainWindowNode.currentLine = 2
+
+    status.resize(100, 100)
+    status.update
+
+    const Commands = @[ru'd', ru'g', ru'g']
+    check status.normalCommand(Commands).isNone
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @["d"].toSeqRunes
+
+    check currentMainWindowNode.view.foldingRanges.len == 0
+
+    check status.registers.getNoNamedRegister.buffer == @["a", "b", "c"]
+      .toSeqRunes
 
 suite "Normal mode: Delete inside paren and enter insert mode":
-  test "Delete inside double quotes and enter insert mode (ci\" command)":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru """abc "def" "ghi""""])
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Basic (ci\" command)":
+    currentBufStatus.buffer = @["""abc "def" "ghi""""].toSeqRunes.toGapBuffer
     currentMainWindowNode.currentColumn = 6
 
     status.resize(100, 100)
@@ -732,12 +1106,12 @@ suite "Normal mode: Delete inside paren and enter insert mode":
     check status.normalCommand(Commands).isNone
     status.update
 
-    check currentBufStatus.buffer[0] == ru """abc "" "ghi""""
+    check currentBufStatus.buffer.toSeqRunes == @["""abc "" "ghi""""].toSeqRunes
     check currentBufStatus.mode == Mode.insert
 
     check currentMainWindowNode.currentColumn == 5
 
-    check status.registers.getNoNamedRegister.buffer[0] == ru"def"
+    check status.registers.getNoNamedRegister.buffer == @["def"].toSeqRunes
 
   test "Delete inside double quotes and enter insert mode (ci' command)":
     var status = initEditorStatus()
@@ -820,10 +1194,14 @@ suite "Normal mode: Delete inside paren and enter insert mode":
     check status.registers.getNoNamedRegister.buffer[0] == ru"def"
 
 suite "Normal mode: Delete current word and enter insert mode (ciw command)":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
   test "First of the line":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
+    currentBufStatus.buffer = @["abc def"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -832,17 +1210,15 @@ suite "Normal mode: Delete current word and enter insert mode (ciw command)":
     check status.normalCommand(Commands).isNone
     status.update
 
-    check currentBufStatus.buffer[0] == ru " def"
+    check currentBufStatus.buffer.toSeqRunes == @[" def"].toSeqRunes
     check currentBufStatus.mode == Mode.insert
 
     check currentMainWindowNode.currentColumn == 0
 
-    check status.registers.getNoNamedRegister.buffer[0] == ru"abc"
+    check status.registers.getNoNamedRegister.buffer == @["abc"].toSeqRunes
 
   test "Empty line":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"", ru"abc"])
+    currentBufStatus.buffer = @["", "abc"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -851,17 +1227,14 @@ suite "Normal mode: Delete current word and enter insert mode (ciw command)":
     check status.normalCommand(Commands).isNone
     status.update
 
-    check currentBufStatus.buffer[0] == ru""
-    check currentBufStatus.buffer[1] == ru"abc"
+    check currentBufStatus.buffer.toSeqRunes == @["", "abc"].toSeqRunes
     check currentBufStatus.mode == Mode.insert
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
 
   test "Basic 1":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
+    currentBufStatus.buffer = @["abc def"].toSeqRunes.toGapBuffer
 
     currentMainWindowNode.currentColumn = 1
 
@@ -872,17 +1245,15 @@ suite "Normal mode: Delete current word and enter insert mode (ciw command)":
     check status.normalCommand(Commands).isNone
     status.update
 
-    check currentBufStatus.buffer[0] == ru " def"
+    check currentBufStatus.buffer.toSeqRunes == @[" def"].toSeqRunes
     check currentBufStatus.mode == Mode.insert
 
     check currentMainWindowNode.currentColumn == 0
 
-    check status.registers.getNoNamedRegister.buffer[0] == ru"abc"
+    check status.registers.getNoNamedRegister.buffer == @["abc"].toSeqRunes
 
   test "Basic 2":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
+    currentBufStatus.buffer = @["abc def"].toSeqRunes.toGapBuffer
 
     currentMainWindowNode.currentColumn = 4
 
@@ -893,18 +1264,40 @@ suite "Normal mode: Delete current word and enter insert mode (ciw command)":
     check status.normalCommand(Commands).isNone
     status.update
 
-    check currentBufStatus.buffer[0] == ru "abc "
+    check currentBufStatus.buffer.toSeqRunes == @["abc "].toSeqRunes
     check currentBufStatus.mode == Mode.insert
 
     check currentMainWindowNode.currentColumn == 4
 
-    check status.registers.getNoNamedRegister.buffer[0] == ru"def"
+    check status.registers.getNoNamedRegister.buffer == @["def"].toSeqRunes
+
+  test "On folding line":
+    currentBufStatus.buffer = @["abc def", "g"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    status.resize(100, 100)
+    status.update
+
+    const Commands = ru"ciw"
+    check status.normalCommand(Commands).isNone
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @[" def", "g"].toSeqRunes
+    check currentBufStatus.mode == Mode.insert
+
+    check currentMainWindowNode.view.foldingRanges.len == 0
+
+    check status.registers.getNoNamedRegister.buffer == @["abc"].toSeqRunes
 
 suite "Normal mode: Delete inside paren":
-  test "Delete inside double quotes and enter insert mode (di\" command)":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru """abc "def" "ghi""""])
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Basic (di\" command)":
+    currentBufStatus.buffer = @["""abc "def" "ghi""""].toSeqRunes.toGapBuffer
     currentMainWindowNode.currentColumn = 6
 
     status.resize(100, 100)
@@ -996,11 +1389,28 @@ suite "Normal mode: Delete inside paren":
 
     check status.registers.getNoNamedRegister.buffer[0] == ru"def"
 
+  test "On folding line":
+    currentBufStatus.buffer = @["\"abc\"", "d"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    status.resize(100, 100)
+    status.update
+
+    const Commands = @[ru'd', ru'i', ru'"']
+    check status.normalCommand(Commands).isNone
+    status.update
+
+    check currentMainWindowNode.view.foldingRanges.len == 0
+
 suite "Normal mode: Delete current word (diw command)":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
   test "First of line":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
+    currentBufStatus.buffer = @["abc def"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -1009,16 +1419,14 @@ suite "Normal mode: Delete current word (diw command)":
     check status.normalCommand(Commands).isNone
     status.update
 
-    check currentBufStatus.buffer[0] == ru " def"
+    check currentBufStatus.buffer.toSeqRunes == @[" def"].toSeqRunes
 
     check currentMainWindowNode.currentColumn == 0
 
-    check status.registers.getNoNamedRegister.buffer[0] == ru"abc"
+    check status.registers.getNoNamedRegister.buffer == @["abc"].toSeqRunes
 
   test "Empty line":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"", ru"abc"])
+    currentBufStatus.buffer = @["", "abc"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -1027,16 +1435,13 @@ suite "Normal mode: Delete current word (diw command)":
     check status.normalCommand(Commands).isNone
     status.update
 
-    check currentBufStatus.buffer[0] == ru""
-    check currentBufStatus.buffer[1] == ru"abc"
+    check currentBufStatus.buffer.toSeqRunes == @["", "abc"].toSeqRunes
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
 
   test "Basic 1":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
+    currentBufStatus.buffer = @["abc def"].toSeqRunes.toGapBuffer
     currentMainWindowNode.currentColumn = 1
 
     status.resize(100, 100)
@@ -1046,16 +1451,14 @@ suite "Normal mode: Delete current word (diw command)":
     check status.normalCommand(Commands).isNone
     status.update
 
-    check currentBufStatus.buffer[0] == ru " def"
+    check currentBufStatus.buffer.toSeqRunes == @[" def"].toSeqRunes
 
     check currentMainWindowNode.currentColumn == 0
 
-    check status.registers.getNoNamedRegister.buffer[0] == ru"abc"
+    check status.registers.getNoNamedRegister.buffer == @["abc"].toSeqRunes
 
   test "Basic 2":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
+    currentBufStatus.buffer = @["abc def"].toSeqRunes.toGapBuffer
     currentMainWindowNode.currentColumn = 4
 
     status.resize(100, 100)
@@ -1065,17 +1468,38 @@ suite "Normal mode: Delete current word (diw command)":
     check status.normalCommand(Commands).isNone
     status.update
 
-    check currentBufStatus.buffer[0] == ru "abc "
+    check currentBufStatus.buffer.toSeqRunes == @["abc "].toSeqRunes
 
     check currentMainWindowNode.currentColumn == 3
 
-    check status.registers.getNoNamedRegister.buffer[0] == ru"def"
+    check status.registers.getNoNamedRegister.buffer == @["def"].toSeqRunes
+
+  test "On folding line":
+    currentBufStatus.buffer = @["abc def", "g"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    status.resize(100, 100)
+    status.update
+
+    const Commands = ru"diw"
+    check status.normalCommand(Commands).isNone
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @[" def", "g"].toSeqRunes
+
+    check currentMainWindowNode.view.foldingRanges.len == 0
+
+    check status.registers.getNoNamedRegister.buffer == @["abc"].toSeqRunes
 
 suite "Normal mode: Delete current character and enter insert mode":
-  test "Delete current character and enter insert mode (s command)":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Basic (s command)":
+    currentBufStatus.buffer = @["abc"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -1089,10 +1513,8 @@ suite "Normal mode: Delete current character and enter insert mode":
 
     check status.registers.getNoNamedRegister.buffer[0] == ru"a"
 
-  test "Delete current character and enter insert mode when empty line (s command)":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"", ru"", ru""])
+  test "Basic 2 (s command)":
+    currentBufStatus.buffer = @["", "", ""].toSeqRunes.toGapBuffer
     currentMainWindowNode.currentLine = 1
 
     status.resize(100, 100)
@@ -1108,10 +1530,8 @@ suite "Normal mode: Delete current character and enter insert mode":
 
     check currentBufStatus.mode == Mode.insert
 
-  test "Delete 3 characters and enter insert mode(3s command)":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"abcdef"])
+  test "Basic 3 (3s command)":
+    currentBufStatus.buffer = @["abcdef"].toSeqRunes.toGapBuffer
     currentMainWindowNode.currentLine = 1
 
     status.resize(100, 100)
@@ -1127,10 +1547,8 @@ suite "Normal mode: Delete current character and enter insert mode":
 
     check status.registers.getNoNamedRegister.buffer[0] == ru"abc"
 
-  test "Delete current character and enter insert mode (cu command)":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
+  test "Basic 4 (cu command)":
+    currentBufStatus.buffer = @["abc"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -1139,13 +1557,11 @@ suite "Normal mode: Delete current character and enter insert mode":
     check status.normalCommand(Commands).isNone
     status.update
 
-    check currentBufStatus.buffer[0] == ru"bc"
+    check currentBufStatus.buffer.toSeqRunes == @["bc"].toSeqRunes
     check currentBufStatus.mode == Mode.insert
 
-  test "Delete current character and enter insert mode when empty line (s command)":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"", ru"", ru""])
+  test "Basic 5 (s command)":
+    currentBufStatus.buffer = @["", "", ""].toSeqRunes.toGapBuffer
     currentMainWindowNode.currentLine = 1
 
     status.resize(100, 100)
@@ -1155,11 +1571,27 @@ suite "Normal mode: Delete current character and enter insert mode":
     check status.normalCommand(Commands).isNone
     status.update
 
-    check currentBufStatus.buffer.len == 3
-    for i in  0 ..< currentBufStatus.buffer.len:
-      check currentBufStatus.buffer[i] == ru""
+    check currentBufStatus.buffer.toSeqRunes == @["", "", ""].toSeqRunes
 
     check currentBufStatus.mode == Mode.insert
+
+  test "On folding line":
+    currentBufStatus.buffer = @["abc", "d"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    status.resize(100, 100)
+    status.update
+
+    const Commands = @[ru's']
+    check status.normalCommand(Commands).isNone
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @["bc", "d"].toSeqRunes
+    check currentBufStatus.mode == Mode.insert
+
+    check currentMainWindowNode.view.foldingRanges.len == 0
+
+    check status.registers.getNoNamedRegister.buffer == @["a"].toSeqRunes
 
 suite "Normal mode: Yank lines":
   test "Yank to the previous blank line (y{ command)":
@@ -1261,11 +1693,37 @@ suite "Normal mode: Yank lines":
     check status.registers.getNoNamedRegister.isLine
     check status.registers.getNoNamedRegister.buffer[0] == ru "abc"
 
-suite "Normal mode: Delete the characters from current column to end of line":
-  test "Delete 5 characters (d$ command)":
+  test "On folding line (yy command)":
     var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"abcdefgh"])
+    assert status.addNewBufferInCurrentWin.isOk
+    currentBufStatus.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    status.resize(100, 100)
+    status.update
+
+    const Commands = @[ru'y', ru'y']
+    check status.normalCommand(Commands).isNone
+    status.update
+
+    check currentMainWindowNode.view.foldingRanges == @[
+      FoldingRange(first: 0, last: 1)
+    ]
+
+    check status.registers.getNoNamedRegister.isLine
+    check status.registers.getNoNamedRegister.buffer == @["abc", "def"]
+      .toSeqRunes
+
+
+suite "Normal mode: Delete the characters from current column to end of line":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Delete 5 characters (d$ command)":
+    currentBufStatus.buffer = @["abcdefgh"].toSeqRunes.toGapBuffer
     currentMainWindowNode.currentColumn = 3
 
     status.resize(100, 100)
@@ -1275,15 +1733,37 @@ suite "Normal mode: Delete the characters from current column to end of line":
     check status.normalCommand(Commands).isNone
     status.update
 
-    check currentBufStatus.buffer[0] == ru"abc"
+    check currentBufStatus.buffer.toSeqRunes == @["abc"].toSeqRunes
 
-    check status.registers.getNoNamedRegister.buffer[0] == ru"defgh"
+    check status.registers.getNoNamedRegister.buffer == @["defgh"].toSeqRunes
+
+  test "On folding line (d$ command)":
+    currentBufStatus.buffer = @["abc", "def"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    status.resize(100, 100)
+    status.update
+
+    const Commands = ru"d$"
+    check status.normalCommand(Commands).isNone
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @[""].toSeqRunes
+
+    check currentMainWindowNode.view.foldingRanges.len == 0
+
+    check status.registers.getNoNamedRegister.buffer == @["abc", "def"]
+      .toSeqRunes
 
 suite "Normal mode: delete from the beginning of the line to current column":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
   test "Delete 5 characters (d0 command)":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"abcdefgh"])
+    currentBufStatus.buffer = @["abcdefgh"].toSeqRunes.toGapBuffer
     currentMainWindowNode.currentColumn = 5
 
     status.resize(100, 100)
@@ -1298,10 +1778,14 @@ suite "Normal mode: delete from the beginning of the line to current column":
     check status.registers.getNoNamedRegister.buffer[0] == ru"abcde"
 
 suite "Normal mode: Yank characters":
-  test "yank character (yl command)":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"abcdefgh"])
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Yank character (yl command)":
+    currentBufStatus.buffer = @["abcdefgh"].toSeqRunes.toGapBuffer
 
     const Commands = @[ru'y', ru'l']
     check status.normalCommand(Commands).isNone
@@ -1311,10 +1795,8 @@ suite "Normal mode: Yank characters":
 
     check status.registers.getNoNamedRegister.buffer[0] == ru"a"
 
-  test "yank 3 characters (3yl command)":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"abcde"])
+  test "Yank 3 characters (3yl command)":
+    currentBufStatus.buffer = @["abcde"].toSeqRunes.toGapBuffer
 
     currentBufStatus.cmdLoop = 3
     const Commands = @[ru'y', ru'l']
@@ -1325,10 +1807,8 @@ suite "Normal mode: Yank characters":
 
     check status.registers.getNoNamedRegister.buffer[0] == ru"abc"
 
-  test "yank 5 characters (10yl command)":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"abcde"])
+  test "Yank 5 characters (10yl command)":
+    currentBufStatus.buffer = @["abcde"].toSeqRunes.toGapBuffer
 
     currentBufStatus.cmdLoop = 10
     const Commands = @[ru'y', ru'l']
@@ -1339,54 +1819,44 @@ suite "Normal mode: Yank characters":
 
     check status.registers.getNoNamedRegister.buffer[0] == ru"abcde"
 
-suite "Normal mode: yank characters from the begin of the line":
+suite "Normal mode: Yank characters from the begin of the line":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
   test "y0 command":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"abcde"])
+    currentBufStatus.buffer = @["abcde"].toSeqRunes.toGapBuffer
     currentMainWindowNode.currentColumn = 2
 
     const Command = ru"y0"
-    check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
     check status.normalCommand(Command).isNone
 
     check status.registers.getNoNamedRegister.buffer[0] == ru"ab"
 
-  test "Basic 1":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"abcde"])
-    currentMainWindowNode.currentColumn = 1
-
-    status.yankCharactersFromBeginOfLine
-
-    check status.registers.getNoNamedRegister.buffer[0] == ru"a"
-
   test "Basic 2":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"abcde"])
+    currentBufStatus.buffer = @["abcde"].toSeqRunes.toGapBuffer
     currentMainWindowNode.currentColumn = 4
 
-    status.yankCharactersFromBeginOfLine
+    const Command = ru"y0"
+    check status.normalCommand(Command).isNone
 
     check status.registers.getNoNamedRegister.buffer[0] == ru"abcd"
 
   test "currentColumn == 0":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"abcde"])
+    currentBufStatus.buffer = @["abcde"].toSeqRunes.toGapBuffer
 
-    status.yankCharactersFromBeginOfLine
+    const Command = ru"y0"
+    check status.normalCommand(Command).isNone
 
     check status.registers.getNoNamedRegister.buffer.len == 0
 
   test "Empty line":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru""])
+    currentBufStatus.buffer = @[""].toSeqRunes.toGapBuffer
 
-    status.yankCharactersFromBeginOfLine
+    const Command = ru"y0"
+    check status.normalCommand(Command).isNone
 
     check status.registers.getNoNamedRegister.buffer.len == 0
 
@@ -1932,10 +2402,14 @@ suite "Normal mode: Validate normal mode command":
     check isNormalModeCommand(Command, none(Rune)) == InputState.Invalid
 
 suite "Normal mode: Yank and delete words":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
   test "Ynak and delete a word (dw command)":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"abc def ghi"])
+    currentBufStatus.buffer = @["abc def ghi"].toSeqRunes.toGapBuffer
 
     const Command = ru"dw"
     check status.normalCommand(Command).isNone
@@ -1943,23 +2417,20 @@ suite "Normal mode: Yank and delete words":
     status.resize(100, 100)
     status.update
 
-    check currentBufStatus.buffer.len == 1
-    check currentBufStatus.buffer[0] == ru "def ghi"
+    check currentBufStatus.buffer.toSeqRunes == @["def ghi"].toSeqRunes
 
     block:
       let r = status.registers.getNoNamedRegister
-      check r.buffer == @[ru "abc "]
+      check r.buffer == @["abc "].toSeqRunes
       check not r.isLine
 
     block:
       let r = status.registers.getSmallDeleteRegister
-      check r.buffer == @[ru "abc "]
+      check r.buffer == @["abc "].toSeqRunes
       check not r.isLine
 
   test "Ynak and delete 2 words (2dw command)":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"abc def ghi"])
+    currentBufStatus.buffer = @["abc def ghi"].toSeqRunes.toGapBuffer
 
     const Command = ru"dw"
     currentBufStatus.cmdLoop = 2
@@ -1968,17 +2439,40 @@ suite "Normal mode: Yank and delete words":
     status.resize(100, 100)
     status.update
 
-    check currentBufStatus.buffer.len == 1
-    check currentBufStatus.buffer[0] == ru "ghi"
+    check currentBufStatus.buffer.toSeqRunes == @["ghi"].toSeqRunes
 
     block:
       let r = status.registers.getNoNamedRegister
-      check r.buffer == @[ru "abc def "]
+      check r.buffer == @["abc def "].toSeqRunes
       check not r.isLine
 
     block:
       let r = status.registers.getSmallDeleteRegister
-      check r.buffer == @[ru "abc def "]
+      check r.buffer == @["abc def "].toSeqRunes
+      check not r.isLine
+
+  test "On folding line (dw command)":
+    currentBufStatus.buffer = @["abc def ghi", "jkl"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    const Command = ru"dw"
+    check status.normalCommand(Command).isNone
+
+    status.resize(100, 100)
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @["def ghi", "jkl"].toSeqRunes
+
+    check currentMainWindowNode.view.foldingRanges.len == 0
+
+    block:
+      let r = status.registers.getNoNamedRegister
+      check r.buffer == @["abc "].toSeqRunes
+      check not r.isLine
+
+    block:
+      let r = status.registers.getSmallDeleteRegister
+      check r.buffer == @["abc "].toSeqRunes
       check not r.isLine
 
 suite "Editor: Yank characters in the current line":
@@ -2033,10 +2527,14 @@ suite "Editor: Yank characters in the current line":
       check not r.isLine
 
 suite "Normal mode: Open the blank line below and enter insert mode":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
   test "Open the blank line (\"o\" command)":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+    currentBufStatus.buffer = @["abc"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -2044,16 +2542,12 @@ suite "Normal mode: Open the blank line below and enter insert mode":
     const Command = ru "o"
     check status.normalCommand(Command).isNone
 
-    check currentBufStatus.buffer.len == 2
-    check currentBufStatus.buffer[0] == ru "abc"
-    check currentBufStatus.buffer[1] == ru ""
+    check currentBufStatus.buffer.toSeqRunes == @["abc", ""].toSeqRunes
 
     check currentMainWindowNode.currentLine == 1
 
   test "Open the blank line 2 (\"3o\" command)":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+    currentBufStatus.buffer = @["abc"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -2062,17 +2556,33 @@ suite "Normal mode: Open the blank line below and enter insert mode":
     currentBufStatus.cmdLoop = 3
     check status.normalCommand(Command).isNone
 
-    check currentBufStatus.buffer.len == 2
-    check currentBufStatus.buffer[0] == ru "abc"
-    check currentBufStatus.buffer[1] == ru ""
+    check currentBufStatus.buffer.toSeqRunes == @["abc", ""].toSeqRunes
 
     check currentMainWindowNode.currentLine == 1
 
+  test "On folding line (\"o\" command)":
+    currentBufStatus.buffer = @["a", "b", "c"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    status.resize(100, 100)
+    status.update
+
+    const Command = ru "o"
+    check status.normalCommand(Command).isNone
+
+    check currentBufStatus.buffer.toSeqRunes == @["a", "b", "", "c"].toSeqRunes
+
+    check currentMainWindowNode.currentLine == 2
+
 suite "Normal mode: Open the blank line above and enter insert mode":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
   test "Open the blank line (\"O\" command)":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+    currentBufStatus.buffer = @["abc"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -2081,17 +2591,12 @@ suite "Normal mode: Open the blank line above and enter insert mode":
     currentBufStatus.cmdLoop = 1
     check status.normalCommand(Command).isNone
 
-
-    check currentBufStatus.buffer.len == 2
-    check currentBufStatus.buffer[0] == ru ""
-    check currentBufStatus.buffer[1] == ru "abc"
+    check currentBufStatus.buffer.toSeqRunes == @["", "abc"].toSeqRunes
 
     check currentMainWindowNode.currentLine == 0
 
   test "Open the blank line (\"3O\" command)":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
+    currentBufStatus.buffer = @["abc"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -2100,9 +2605,22 @@ suite "Normal mode: Open the blank line above and enter insert mode":
     currentBufStatus.cmdLoop = 3
     check status.normalCommand(Command).isNone
 
-    check currentBufStatus.buffer.len == 2
-    check currentBufStatus.buffer[0] == ru ""
-    check currentBufStatus.buffer[1] == ru "abc"
+    check currentBufStatus.buffer.toSeqRunes == @["", "abc"].toSeqRunes
+
+    check currentMainWindowNode.currentLine == 0
+
+  test "On folding line (\"O\" command)":
+    currentBufStatus.buffer = @["a", "b"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    status.resize(100, 100)
+    status.update
+
+    const Command = ru "O"
+    currentBufStatus.cmdLoop = 1
+    check status.normalCommand(Command).isNone
+
+    check currentBufStatus.buffer.toSeqRunes == @["", "a", "b"].toSeqRunes
 
     check currentMainWindowNode.currentLine == 0
 
@@ -2216,182 +2734,207 @@ suite "Normal mode: Run command when Readonly mode":
     check currentBufStatus.buffer[0] == ru "abc"
 
 suite "Normal mode: Move to the next any character on the current line":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
   test "Move to the next 'c' (\"fc\" command)":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
+    const Buffer = @["abc def ghi"].toSeqRunes
+    currentBufStatus.buffer = Buffer.toGapBuffer
 
     status.resize(100, 100)
     status.update
 
-    const Buffer = ru "abc def ghi"
-    currentBufStatus.buffer = initGapBuffer(@[Buffer])
-
     const Command = ru "fc"
     check status.normalCommand(Command).isNone
 
-    check currentBufStatus.buffer.len == 1
-    check currentBufStatus.buffer[0] == Buffer
+    check currentBufStatus.buffer.toSeqRunes == Buffer
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 2
 
   test "Move to the next 'i' (\"fi\" command)":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
+    const Buffer = @["abc def ghi"].toSeqRunes
+    currentBufStatus.buffer = Buffer.toGapBuffer
 
     status.resize(100, 100)
     status.update
-
-    const Buffer = ru "abc def ghi"
-    currentBufStatus.buffer = initGapBuffer(@[Buffer])
 
     const Command = ru "fi"
     check status.normalCommand(Command).isNone
 
-    check currentBufStatus.buffer.len == 1
-    check currentBufStatus.buffer[0] == Buffer
+    check currentBufStatus.buffer.toSeqRunes == Buffer
 
     check currentMainWindowNode.currentLine == 0
-    check currentMainWindowNode.currentColumn == Buffer.high
+    check currentMainWindowNode.currentColumn == Buffer[0].high
 
   test "Do nothing (\"fz\" command)":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
+    const Buffer = @["abc def ghi"].toSeqRunes
+    currentBufStatus.buffer = Buffer.toGapBuffer
 
     status.resize(100, 100)
     status.update
-
-    const Buffer = ru "abc def ghi"
-    currentBufStatus.buffer = initGapBuffer(@[Buffer])
 
     const Command = ru "fz"
     check status.normalCommand(Command).isNone
 
-    check currentBufStatus.buffer.len == 1
-    check currentBufStatus.buffer[0] == Buffer
+    check currentBufStatus.buffer.toSeqRunes == Buffer
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
 
-suite "Normal mode: Move to forward word in the current line":
-  test "Move to the before 'e' (\"Fe\" command)":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
+  test "On folding line (\"fc\" command)":
+    const Buffer = @["abc", "def"].toSeqRunes
+    currentBufStatus.buffer = Buffer.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
 
     status.resize(100, 100)
     status.update
 
-    const Buffer = ru "abc def ghi"
-    currentBufStatus.buffer = initGapBuffer(@[Buffer])
+    const Command = ru "fc"
+    check status.normalCommand(Command).isNone
 
-    currentMainWindowNode.currentColumn = Buffer.high
+    check currentBufStatus.buffer.toSeqRunes == Buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 2
+    check currentMainWindowNode.view.foldingRanges.len == 0
+
+suite "Normal mode: Move to forward word in the current line":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Move to the before 'e' (\"Fe\" command)":
+    const Buffer = @["abc def ghi"].toSeqRunes
+    currentBufStatus.buffer = Buffer.toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    currentMainWindowNode.currentColumn = Buffer[0].high
 
     const Command = ru "Fe"
     check status.normalCommand(Command).isNone
 
     check currentBufStatus.buffer.len == 1
-    check currentBufStatus.buffer[0] == Buffer
+    check currentBufStatus.buffer.toSeqRunes == Buffer
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 5
 
   test "Do nothing (\"Fz\" command)":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
+    const Buffer = @["abc def ghi"].toSeqRunes
+    currentBufStatus.buffer = Buffer.initGapBuffer
 
     status.resize(100, 100)
     status.update
 
-    const Buffer = ru "abc def ghi"
-    currentBufStatus.buffer = initGapBuffer(@[Buffer])
-
-    currentMainWindowNode.currentColumn = Buffer.high
+    currentMainWindowNode.currentColumn = Buffer[0].high
 
     const Command = ru "Fz"
     check status.normalCommand(Command).isNone
 
     check currentBufStatus.buffer.len == 1
-    check currentBufStatus.buffer[0] == Buffer
+    check currentBufStatus.buffer.toSeqRunes == Buffer
 
     check currentMainWindowNode.currentLine == 0
-    check currentMainWindowNode.currentColumn == Buffer.high
+    check currentMainWindowNode.currentColumn == Buffer[0].high
 
-suite "Normal mode: Move to the left of the next any character":
-  test "Move to the character next the next 'e' (\"tf\" command)":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
+suite "Normal mode: Move to the before of the next any character":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Move to the next 'e' (\"tf\" command)":
+    const Buffer = @["abc def ghi"].toSeqRunes
+    currentBufStatus.buffer = Buffer.initGapBuffer
 
     status.resize(100, 100)
     status.update
-
-    const Buffer = ru "abc def ghi"
-    currentBufStatus.buffer = initGapBuffer(@[Buffer])
 
     const Command = ru "tf"
     check status.normalCommand(Command).isNone
 
     check currentBufStatus.buffer.len == 1
-    check currentBufStatus.buffer[0] == Buffer
+    check currentBufStatus.buffer.toSeqRunes == Buffer
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 5
 
   test "Do nothing (\"tz\" command)":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
+    const Buffer = @["abc def ghi"].toSeqRunes
+    currentBufStatus.buffer = Buffer.toGapBuffer
 
     status.resize(100, 100)
     status.update
-
-    const Buffer = ru "abc def ghi"
-    currentBufStatus.buffer = initGapBuffer(@[Buffer])
 
     const Command = ru "tz"
     check status.normalCommand(Command).isNone
 
-    check currentBufStatus.buffer.len == 1
-    check currentBufStatus.buffer[0] == Buffer
+    check currentBufStatus.buffer.toSeqRunes == Buffer
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
 
-suite "Normal mode: Move to the right of the back character":
-  test "Move to the character before the next 'f' (\"Te\" command)":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
+  test "On folding line (\"tf\" command)":
+    const Buffer = @["abc def ghi", "jkl"].toSeqRunes
+    currentBufStatus.buffer = Buffer.initGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
 
     status.resize(100, 100)
     status.update
 
-    const Buffer = ru "abc def ghi"
-    currentBufStatus.buffer = initGapBuffer(@[Buffer])
+    const Command = ru "tf"
+    check status.normalCommand(Command).isNone
 
-    currentMainWindowNode.currentColumn = Buffer.high
+    check currentBufStatus.buffer.toSeqRunes == Buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 5
+    check currentMainWindowNode.view.foldingRanges.len == 0
+
+suite "Normal mode: Move to the next of the back character":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Move to the character the befor 'f' (\"Te\" command)":
+    const Buffer = @["abc def ghi"].toSeqRunes
+    currentBufStatus.buffer = Buffer.toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    currentMainWindowNode.currentColumn = Buffer[0].high
 
     const Command = ru "Te"
     check status.normalCommand(Command).isNone
 
-    check currentBufStatus.buffer.len == 1
-    check currentBufStatus.buffer[0] == Buffer
+    check currentBufStatus.buffer.toSeqRunes == Buffer
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 6
 
   test "Do nothing (\"Tz\" command)":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
+    const Buffer = @["abc def ghi"].toSeqRunes
+    currentBufStatus.buffer = Buffer.toGapBuffer
 
     status.resize(100, 100)
     status.update
 
-    const Buffer = ru "abc def ghi"
-    currentBufStatus.buffer = initGapBuffer(@[Buffer])
-
     const Command = ru "Tz"
     check status.normalCommand(Command).isNone
 
-    check currentBufStatus.buffer.len == 1
-    check currentBufStatus.buffer[0] == Buffer
+    check currentBufStatus.buffer.toSeqRunes == Buffer
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
@@ -2492,46 +3035,154 @@ suite "Normal mode: Yank characters to any character":
     check status.registers.getNoNamedRegister.buffer.len == 0
 
 suite "Normal mode: Delete characters to any characters and Enter insert mode":
-  test "Case 1: Delete characters to 'd' and enter insert mode (\"cfd\" command)":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Delete characters to 'd' and enter insert mode (\"cfd\" command)":
+    const Buffer = @["abcd"].toSeqRunes
+    currentBufStatus.buffer = Buffer.toGapBuffer
 
     status.resize(100, 100)
     status.update
-
-    const Buffer = ru "abcd"
-    currentBufStatus.buffer = initGapBuffer(@[Buffer])
 
     const Command = ru "cfd"
     check status.normalCommand(Command).isNone
 
-    check currentBufStatus.buffer.len == 1
-    check currentBufStatus.buffer[0] == ru ""
+    check currentBufStatus.buffer.toSeqRunes == @[""].toSeqRunes
 
     check not status.registers.getNoNamedRegister.isLine
-    check status.registers.getNoNamedRegister.buffer[0] == ru "abcd"
+    check status.registers.getNoNamedRegister.buffer == Buffer
 
     check currentBufStatus.mode == Mode.insert
 
-  test "Case 1: Do nothing (\"cfz\" command)":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
+  test "Do nothing (\"cfz\" command)":
+    const Buffer = @["abcd"].toSeqRunes
+    currentBufStatus.buffer = Buffer.toGapBuffer
 
     status.resize(100, 100)
     status.update
 
-    const Buffer = ru "abcd"
-    currentBufStatus.buffer = initGapBuffer(@[Buffer])
-
     const Command = ru "cfz"
     check status.normalCommand(Command).isNone
 
-    check currentBufStatus.buffer.len == 1
-    check currentBufStatus.buffer[0] == Buffer
+    check currentBufStatus.buffer.toSeqRunes == Buffer
 
-    check status.registers.getNoNamedRegister.buffer.len == 0
+    check status.registers.getNoNamedRegister.buffer == @[].toSeqRunes
 
     check currentBufStatus.mode == Mode.normal
+
+  test "On folding line (\"cfd\" command)":
+    const Buffer = @["abcd"].toSeqRunes
+    currentBufStatus.buffer = Buffer.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    status.resize(100, 100)
+    status.update
+
+    const Command = ru "cfd"
+    check status.normalCommand(Command).isNone
+
+    check currentBufStatus.buffer.toSeqRunes == @[""].toSeqRunes
+
+    check not status.registers.getNoNamedRegister.isLine
+    check status.registers.getNoNamedRegister.buffer == Buffer
+
+    check currentBufStatus.mode == Mode.insert
+
+    check currentMainWindowNode.view.foldingRanges.len == 0
+
+suite "Normal mode: Expand folding lines":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Nothing to do (zo command)":
+    const Buffer = @["a", "b", "c"].toSeqRunes
+    currentBufStatus.buffer = Buffer.toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    const Command = ru"zo"
+    check status.normalCommand(Command).isNone
+
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == Buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+
+  test "Basic (zo command)":
+    const Buffer = @["a", "b", "c"].toSeqRunes
+    currentBufStatus.buffer = Buffer.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    status.resize(100, 100)
+    status.update
+
+    const Command = ru"zo"
+    check status.normalCommand(Command).isNone
+
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == Buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+    check currentMainWindowNode.view.foldingRanges.len == 0
+
+  test "Nested (zo command)":
+    const Buffer = @["a", "b", "c", "d"].toSeqRunes
+    currentBufStatus.buffer = Buffer.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[
+      FoldingRange(first: 0, last: 2),
+      FoldingRange(first: 0, last: 1)
+    ]
+
+    status.resize(100, 100)
+    status.update
+
+    const Command = ru"zo"
+    check status.normalCommand(Command).isNone
+
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == Buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+    check currentMainWindowNode.view.foldingRanges == @[
+      FoldingRange(first: 0, last: 1)
+    ]
+
+  test "Nested 2 (2zo command)":
+    const Buffer = @["a", "b", "c", "d"].toSeqRunes
+    currentBufStatus.buffer = Buffer.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[
+      FoldingRange(first: 0, last: 2),
+      FoldingRange(first: 0, last: 1)
+    ]
+
+    status.resize(100, 100)
+    status.update
+
+    currentBufStatus.cmdLoop = 2
+    const Command = ru"zo"
+    check status.normalCommand(Command).isNone
+
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == Buffer
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+    check currentMainWindowNode.view.foldingRanges.len == 0
 
 suite "Normal mode: execNormalModeCommand":
   test "'/' key":
@@ -3109,183 +3760,273 @@ suite "Normal mode: stopRecordingOperations":
     check status.commandLine.buffer.len == 0
 
 suite "Normal mode: pasteAfterCursor":
-  test "Paste the line 1":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
+  var status: EditorStatus
 
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Paste the line (p command)":
     status.resize(100, 100)
     status.update
 
     status.registers.setYankedRegister(@[ru"line"])
-    status.pasteAfterCursor
 
-    check currentBufStatus.buffer.toSeqRunes == @[ru"", ru"line"]
+    const Command = ru"p"
+    check status.normalCommand(Command).isNone
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @["", "line"].toSeqRunes
+
     check currentMainWindowNode.currentLine == 1
     check currentMainWindowNode.currentColumn == 0
 
-  test "Paste the line 2":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = toGapBuffer(@[ru"", ru""])
+  test "Paste the line 2 (p command)":
+    currentBufStatus.buffer = @["", ""].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
 
     status.registers.setYankedRegister(@[ru"  line"])
-    status.pasteAfterCursor
 
-    check currentBufStatus.buffer.toSeqRunes == @[ru"", ru"  line", ru""]
+    const Command = ru"p"
+    check status.normalCommand(Command).isNone
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @["", "  line", ""].toSeqRunes
+
     check currentMainWindowNode.currentLine == 1
     check currentMainWindowNode.currentColumn == 2
+
+  test "Before folding line":
+    currentBufStatus.buffer = @["a", "b", "c"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 1, last: 2)]
+
+    status.resize(100, 100)
+    status.update
+
+    status.registers.setYankedRegister(@[ru"d"])
+
+    const Command = ru"p"
+    check status.normalCommand(Command).isNone
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @["a", "d", "b", "c"].toSeqRunes
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0
+    check currentMainWindowNode.view.foldingRanges == @[
+      FoldingRange(first: 2, last: 3)
+    ]
 
 suite "Normal mode: pasteBeforeCursor":
-  test "Paste the line 1":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
+  var status: EditorStatus
 
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Paste the line (P command)":
     status.resize(100, 100)
     status.update
 
     status.registers.setYankedRegister(@[ru"line"])
-    status.pasteBeforeCursor
 
-    check currentBufStatus.buffer.toSeqRunes == @[ru"line", ru""]
+    const Command = ru"P"
+    check status.normalCommand(Command).isNone
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @["line", ""].toSeqRunes
+
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
 
-  test "Paste the line 2":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = toGapBuffer(@[ru"", ru""])
+  test "Paste the line 2 (P command)":
+    currentBufStatus.buffer = @["", ""].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
 
     status.registers.setYankedRegister(@[ru"  line"])
-    status.pasteBeforeCursor
 
-    check currentBufStatus.buffer.toSeqRunes == @[ru"  line", ru"", ru""]
+    const Command = ru"P"
+    check status.normalCommand(Command).isNone
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @["  line", "", ""].toSeqRunes
+
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 2
 
-suite "Normal mode: Delete characters until the character and enter Insert mode (ct(x) command)":
+  test "Before folding line (P command)":
+    currentBufStatus.buffer = @["a", "b", "c"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 1, last: 2)]
+
+    status.resize(100, 100)
+    status.update
+
+    status.registers.setYankedRegister(@[ru"d"])
+
+    const Command = ru"P"
+    check status.normalCommand(Command).isNone
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @["d", "a", "b", "c"].toSeqRunes
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+    check currentMainWindowNode.view.foldingRanges == @[
+      FoldingRange(first: 2, last: 3)
+    ]
+
+suite "Normal mode: Delete characters until the character and enter Insert mode (ct`x` command)":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
   test "Not found":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = toGapBuffer(@[ru"abc"])
+    currentBufStatus.buffer = @["abc"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
 
     const Command = ru"ctz"
-    check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
     check status.normalCommand(Command).isNone
 
     status.update
 
-    check currentBufStatus.buffer.toSeqRunes == @[ru"abc"]
+    check currentBufStatus.buffer.toSeqRunes == @["abc"].toSeqRunes
     check currentBufStatus.isNormalMode
 
   test "Basic 1":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = toGapBuffer(@[ru"abcdef"])
+    currentBufStatus.buffer = @["abcdef"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
 
     const Command = ru"ctf"
-    check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
     check status.normalCommand(Command).isNone
 
     status.update
 
-    check currentBufStatus.buffer.toSeqRunes == @[ru"f"]
+    check currentBufStatus.buffer.toSeqRunes == @["f"].toSeqRunes
     check currentBufStatus.isInsertMode
 
   test "Basic 2":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = toGapBuffer(@[ru"abc def"])
+    currentBufStatus.buffer = @["abc def"].toSeqRunes.toGapBuffer
     currentMainWindowNode.currentColumn = 1
 
     status.resize(100, 100)
     status.update
 
     const Command = ru"ctd"
-    check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
     check status.normalCommand(Command).isNone
 
     status.update
 
-    check currentBufStatus.buffer.toSeqRunes == @[ru"adef"]
+    check currentBufStatus.buffer.toSeqRunes == @["adef"].toSeqRunes
     check currentBufStatus.isInsertMode
 
     check currentMainWindowNode.currentColumn == 1
 
-suite "Normal mode: Delete characters until the character (dt(x) command)":
+  test "On folding line":
+    currentBufStatus.buffer = @["abcdef"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    status.resize(100, 100)
+    status.update
+
+    const Command = ru"ctf"
+    check status.normalCommand(Command).isNone
+
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @["f"].toSeqRunes
+    check currentBufStatus.isInsertMode
+
+    check currentMainWindowNode.view.foldingRanges.len == 0
+
+suite "Normal mode: Delete characters until the character (dt`x` command)":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
   test "Not found":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = toGapBuffer(@[ru"abc"])
+    currentBufStatus.buffer = @["abc"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
 
     const Command = ru"dtz"
-    check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
     check status.normalCommand(Command).isNone
 
     status.update
 
-    check currentBufStatus.buffer.toSeqRunes == @[ru"abc"]
+    check currentBufStatus.buffer.toSeqRunes == @["abc"].toSeqRunes
     check currentBufStatus.isNormalMode
 
   test "Basic 1":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = toGapBuffer(@[ru"abcdef"])
+    currentBufStatus.buffer = @["abcdef"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
 
     const Command = ru"dtf"
-    check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
     check status.normalCommand(Command).isNone
 
     status.update
 
-    check currentBufStatus.buffer.toSeqRunes == @[ru"f"]
+    check currentBufStatus.buffer.toSeqRunes == @["f"].toSeqRunes
     check currentBufStatus.isNormalMode
 
   test "Basic 2":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = toGapBuffer(@[ru"abc def"])
+    currentBufStatus.buffer = @["abc def"].toSeqRunes.toGapBuffer
     currentMainWindowNode.currentColumn = 1
 
     status.resize(100, 100)
     status.update
 
     const Command = ru"dtd"
-    check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
     check status.normalCommand(Command).isNone
 
     status.update
 
-    check currentBufStatus.buffer.toSeqRunes == @[ru"adef"]
+    check currentBufStatus.buffer.toSeqRunes == @["adef"].toSeqRunes
     check currentBufStatus.isNormalMode
 
     check currentMainWindowNode.currentColumn == 1
 
+  test "On folding line":
+    currentBufStatus.buffer = @["abcdef", "ghi"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    status.resize(100, 100)
+    status.update
+
+    const Command = ru"dtf"
+    check status.normalCommand(Command).isNone
+
+    status.update
+
+    check currentBufStatus.buffer.toSeqRunes == @["f", "ghi"].toSeqRunes
+    check currentBufStatus.isNormalMode
+
+    check currentMainWindowNode.view.foldingRanges.len == 0
+
 suite "Normal mode: searchNextOccurrence":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
   test "Empty":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
     currentMainWindowNode.currentColumn = 1
-    currentBufStatus.buffer = @["abcdef"]
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer = @["abcdef"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -3298,12 +4039,8 @@ suite "Normal mode: searchNextOccurrence":
     check currentMainWindowNode.currentColumn == 1
 
   test "Not found":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
     currentMainWindowNode.currentColumn = 1
-    currentBufStatus.buffer = @["abcdef"]
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer = @["abcdef"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -3316,11 +4053,7 @@ suite "Normal mode: searchNextOccurrence":
     check currentMainWindowNode.currentColumn == 1
 
   test "Basic":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = @["abcdef"]
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer = @["abcdef"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -3333,11 +4066,7 @@ suite "Normal mode: searchNextOccurrence":
     check currentMainWindowNode.currentColumn == 3
 
   test "Basic 2":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = @["abc", "def", "ghi"]
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -3350,13 +4079,9 @@ suite "Normal mode: searchNextOccurrence":
     check currentMainWindowNode.currentColumn == 0
 
   test "Basic 3":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
     currentMainWindowNode.currentLine = 1
     currentMainWindowNode.currentColumn = 1
-    currentBufStatus.buffer = @["abc", "def", "ghi"]
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -3369,13 +4094,9 @@ suite "Normal mode: searchNextOccurrence":
     check currentMainWindowNode.currentColumn == 1
 
   test "Basic 4":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
     currentMainWindowNode.currentLine = 1
     currentMainWindowNode.currentColumn = 0
-    currentBufStatus.buffer = @["abc", "def", "ghi"]
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -3388,11 +4109,7 @@ suite "Normal mode: searchNextOccurrence":
     check currentMainWindowNode.currentColumn == 0
 
   test "With newline":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = @["abc", "def", "ghi"]
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -3405,8 +4122,6 @@ suite "Normal mode: searchNextOccurrence":
     check currentMainWindowNode.currentColumn == 1
 
   test "Move twice":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["abc", "def", "abc", "def"]
       .toSeqRunes
       .toGapBuffer
@@ -3426,14 +4141,31 @@ suite "Normal mode: searchNextOccurrence":
     check currentMainWindowNode.currentLine == 3
     check currentMainWindowNode.currentColumn == 0
 
+  test "On folding line":
+    currentBufStatus.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 1, last: 2)]
+
+    status.resize(100, 100)
+    status.update
+
+    const Keyword = ru"ef"
+    status.searchNextOccurrence(Keyword)
+    status.update
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 1
+    check currentMainWindowNode.view.foldingRanges.len == 0
+
 suite "Normal mode: searchNextOccurrenceReversely":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
   test "Empty":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
     currentMainWindowNode.currentColumn = 1
-    currentBufStatus.buffer = @["abcdef"]
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer = @["abcdef"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -3446,12 +4178,8 @@ suite "Normal mode: searchNextOccurrenceReversely":
     check currentMainWindowNode.currentColumn == 1
 
   test "Not found":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
     currentMainWindowNode.currentColumn = 1
-    currentBufStatus.buffer = @["abcdef"]
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer = @["abcdef"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -3464,12 +4192,8 @@ suite "Normal mode: searchNextOccurrenceReversely":
     check currentMainWindowNode.currentColumn == 1
 
   test "Basic":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
     currentMainWindowNode.currentColumn = 5
-    currentBufStatus.buffer = @["abcdef"]
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer = @["abcdef"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -3482,12 +4206,8 @@ suite "Normal mode: searchNextOccurrenceReversely":
     check currentMainWindowNode.currentColumn == 1
 
   test "Basic 2":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
     currentMainWindowNode.currentColumn = 2
-    currentBufStatus.buffer = @["abc", "def", "ghi"]
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -3500,13 +4220,9 @@ suite "Normal mode: searchNextOccurrenceReversely":
     check currentMainWindowNode.currentColumn == 0
 
   test "Basic 3":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
     currentMainWindowNode.currentLine = 1
     currentMainWindowNode.currentColumn = 1
-    currentBufStatus.buffer = @["abc", "def", "ghi"]
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -3519,12 +4235,8 @@ suite "Normal mode: searchNextOccurrenceReversely":
     check currentMainWindowNode.currentColumn == 1
 
   test "Basic 4":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
     currentMainWindowNode.currentLine = 1
-    currentBufStatus.buffer = @["abc", "def", "ghi"]
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -3537,13 +4249,9 @@ suite "Normal mode: searchNextOccurrenceReversely":
     check currentMainWindowNode.currentColumn == 0
 
   test "With newline":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
     currentMainWindowNode.currentLine = 2
     currentMainWindowNode.currentColumn = 2
-    currentBufStatus.buffer = @["abc", "def", "ghi"]
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -3556,8 +4264,6 @@ suite "Normal mode: searchNextOccurrenceReversely":
     check currentMainWindowNode.currentColumn == 1
 
   test "Move twice":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
     currentMainWindowNode.currentLine = 3
     currentMainWindowNode.currentColumn = 2
     currentBufStatus.buffer = @["abc", "def", "abc", "def"]
@@ -3574,10 +4280,26 @@ suite "Normal mode: searchNextOccurrenceReversely":
     check currentMainWindowNode.currentLine == 2
     check currentMainWindowNode.currentColumn == 0
 
-    status.searchNextOccurrence(Keyword)
+    status.searchNextOccurrenceReversely(Keyword)
     status.update
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
+
+  test "Basic":
+    currentBufStatus.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+    currentMainWindowNode.currentLine = 2
+
+    status.resize(100, 100)
+    status.update
+
+    const Keyword = ru"bc"
+    status.searchNextOccurrenceReversely(Keyword)
+    status.update
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 1
+    check currentMainWindowNode.view.foldingRanges.len == 0
 
 suite "Normal mode: requestHover":
   test "Disable LSP":

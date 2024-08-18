@@ -67,6 +67,7 @@
 | <kbd>**d**</kbd> <kbd>**t**</kbd> <kbd>**Any Key**</kbd></br> Delete characters until the any key | <kbd>**.**</kbd></br> Repeat the last normal mode command | <kbd>**K**</kbd></br> Hover (LSP) | <kbd>**g**</kbd> <kbd>**c**</kbd></br> Goto Declaration (LSP) |
 | <kbd>**g**</kbd> <kbd>**d**</kbd></br> Goto Definition (LSP) | <kbd>**g**</kbd> <kbd>**y**</kbd></br> Goto TypeDefinition (LSP) | <kbd>**g**</kbd> <kbd>**i**</kbd></br> Goto Implementation (LSP) | <kbd>**g**</kbd> <kbd>**r**</kbd></br> Open References mode (LSP Find References) |
 | <kbd>**g**</kbd> <kbd>**h**</kbd></br> Open Call Hierarchy Viewer (LSP Call Hierarchy) | <kbd>**g**</kbd> <kbd>**l**</kbd></br> Document Link (LSP) | <kbd>**Space**</kbd> <kbd>**r**</kbd></br> Rename (LSP) | <kbd>**\\**</kbd> <kbd>**c**</kbd></br> Code Lens (LSP) |
+| <kbd>**z**</kbd> <kbd>**o**</kbd></br> Expand fold lines |
 
 </details>
 
@@ -85,7 +86,7 @@
  
 </details>
 
-## Visual block mode
+## Visual mode
 
 <details open>
   <summary>Visual Selection</summary>
@@ -95,7 +96,7 @@
 | <kbd>**d**</kbd> OR <kbd>**x**</kbd><br> Delete text | <kbd>**y**</kbd><br> Copy text | <kbd>**r**</kbd><br> Replace character | <kbd>**J**</kbd><br> Join lines | <kbd>**J**</kbd><br> Join lines |
 | <kbd>**u**</kbd><br> Convert to Lowercase | <kbd>**U**</kbd><br> Convert to Uppercase | <kbd>**>**</kbd><br> Indent | <kbd>**<**</kbd><br> Unindent | <kbd>**~**</kbd><br> Toggle case of character under cursor |
 | <kbd>**Ctrl**</kbd> <kbd>**a**</kbd><br> Increase number under cursor | <kbd>**Ctrl**</kbd> <kbd>**x**</kbd><br> Decrease number under cursor | <kbd>**I**</kbd><br> Insert character, multiple lines | <kbd>**Esc**</kbd><br> Go to Normal mode | <kbd>**j**</kbd><br> Go Down :arrow_down: |
-| <kbd>**k**</kbd><br> Go Up :arrow_up: | <kbd>**j**</kbd><br> Go Left :arrow_left: | <kbd>**k**</kbd><br> Go Up :arrow_up: |
+| <kbd>**k**</kbd><br> Go Up :arrow_up: | <kbd>**j**</kbd><br> Go Left :arrow_left: | <kbd>**k**</kbd><br> Go Up :arrow_up: | <kbd>**z**</kbd> <kbd>**f**</kbd><br> Fold lines |
 
 </details>
 

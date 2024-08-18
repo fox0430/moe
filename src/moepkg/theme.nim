@@ -1035,6 +1035,14 @@ const
         index: EditorColorIndex.currentLineBg,
         rgb: "#444444".hexToRgb.get)),
 
+    EditorColorPairIndex.foldingLine: ColorPair(
+      foreground: Color(
+        index: EditorColorIndex.foldingLine,
+        rgb: "#808080".hexToRgb.get),
+      background: Color(
+        index: EditorColorIndex.foldingLineBg,
+        rgb: "#3f3f3f".hexToRgb.get)),
+
     # Side bar
     EditorColorPairIndex.sidebarGitAddedSign: ColorPair(
       foreground: Color(

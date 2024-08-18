@@ -135,6 +135,7 @@ gi         - Goto Implementation (LSP)
 gh         - Open Call hierarchy viewer (LSP)
 Space r    - Rename (LSP)
 \ r        - Code Lens (LSP)
+zo         - Expand folding lines
 
 # Register
 
@@ -173,6 +174,7 @@ U       - Convert to uppercase
 Ctrl, a - Increase number under cursor
 Ctrl, x - Decrease number under cursor
 I       - Insert character, multiple lines
+zf      - Fold selected lines
 Esc     - Go to Normal mode
 
 # Replace mode

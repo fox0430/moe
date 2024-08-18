@@ -22,25 +22,44 @@ import std/[unittest, sequtils]
 import pkg/results
 
 import moepkg/[editorstatus, gapbuffer, unicodeext, highlight, movement,
-               bufferstatus]
+               bufferstatus, folding]
 
 import utils
 
 suite "Move right":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
   test "Basic":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin.get
-    status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
+    currentBufStatus.buffer = @["abc"].toSeqRunes.toGapBuffer
 
     currentBufStatus.highlight = initHighlight(
-      status.bufStatus[0].buffer.toSeqRunes,
+      currentBufStatus.buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
-      status.bufStatus[0].language)
+      currentBufStatus.language)
 
     for i in 0 ..< 3:
-      status.bufStatus[0].keyRight(currentMainWindowNode)
+      currentBufStatus.keyRight(currentMainWindowNode)
 
-    check(currentMainWindowNode.currentColumn == 2)
+    check currentMainWindowNode.currentColumn == 2
+
+  test "On folding line":
+    currentBufStatus.buffer = @["abc"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
+
+    currentBufStatus.highlight = initHighlight(
+      currentBufStatus.buffer.toSeqRunes,
+      status.settings.highlight.reservedWords,
+      currentBufStatus.language)
+
+    currentBufStatus.keyRight(currentMainWindowNode)
+
+    check currentMainWindowNode.currentColumn == 1
+
+    check currentMainWindowNode.view.foldingRanges.len == 0
 
 suite "Move left":
   test "Basic":
