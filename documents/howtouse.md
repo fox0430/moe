@@ -13,7 +13,7 @@
 - [Call Hierarchy Mode](#call-hierarchy-mode)
 - [Filer Mode](#filer-mode)
 - [Configuration Mode](#configuration-mode)
-- [Ex Mode](#ex-mode) | [Diff Mode](#diff-mode)
+- [Ex Mode](#ex-mode)
 
 
 ## Exiting
