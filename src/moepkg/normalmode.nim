@@ -27,7 +27,7 @@ import lsp/[client, codelens]
 import editorstatus, ui, gapbuffer, unicodeext, fileutils, windownode, movement,
        editor, searchutils, bufferstatus, quickrunutils, messages, visualmode,
        commandline, viewhighlight, messagelog, registers, independentutils,
-       popupwindow, editorview, folding
+       popupwindow, editorview, folding, keybindings
 
 template removeAllFoldingRange(status: var EditorStatus) =
   currentMainWindowNode.removeAllFoldingRange(currentMainWindowNode.currentLine)

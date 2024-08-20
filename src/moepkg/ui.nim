@@ -75,6 +75,7 @@ type
       # 24 bit colors (True color)
 
   Key* = Rune
+  Keys* = seq[Rune]
 
 const
   DefaultColorPair*: int16 = 0
@@ -160,6 +161,13 @@ var
   pasteBuffer: Option[seq[Runes]]
 
   terminalSize: Size
+
+proc toKeys*(s: string): Keys {.inline.} =
+  for ch in s: result.add ch.Key
+
+proc toKeys*(k: Key): Keys {.inline.} = @[k]
+
+proc toKeys*(i: int): Keys {.inline.} = @[i.Key]
 
 proc getPasteBuffer*(): Option[seq[Runes]] =
   return pasteBuffer
