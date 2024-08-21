@@ -86,6 +86,22 @@ proc changeModeToExMode*(
     commandLine.clear
     commandLine.setPrompt(ExModePrompt)
 
+template moveCursorLeft(status: var EditorStatus) =
+  for i in 0 ..< currentBufStatus.cmdLoop:
+    currentMainWindowNode.keyLeft
+
+template moveCursorRight(status: var EditorStatus) =
+  for i in 0 ..< currentBufStatus.cmdLoop:
+    currentBufStatus.keyRight(currentMainWindowNode)
+
+template moveCursorUp(status: var EditorStatus) =
+  for i in 0 ..< currentBufStatus.cmdLoop:
+    currentBufStatus.keyUp(currentMainWindowNode)
+
+template moveCursorDwon(status: var EditorStatus) =
+  for i in 0 ..< currentBufStatus.cmdLoop:
+    currentBufStatus.keyDown(currentMainWindowNode)
+
 proc searchOneCharacterToEndOfLine(
   bufStatus: var BufferStatus,
   windowNode: WindowNode,
@@ -317,6 +333,57 @@ proc halfPageDownCommand(status: var EditorStatus): Option[Rune] =
         return interruptKey
     else:
       status.halfPageDown
+
+proc moveToFirstLine(status: var EditorStatus) =
+  let dest = currentBufStatus.cmdLoop - 1
+  currentBufStatus.jumpLine(currentMainWindowNode, dest)
+
+template moveToForwardWord(status: var EditorStatus) =
+  for i in 0 ..< currentBufStatus.cmdLoop:
+    currentBufStatus.moveToForwardWord(currentMainWindowNode)
+
+template moveToBackwardWord(status: var EditorStatus) =
+  for i in 0 ..< currentBufStatus.cmdLoop:
+    currentBufStatus.moveToBackwardWord(currentMainWindowNode)
+
+template moveToForwardEndOfWord(status: var EditorStatus) =
+  for i in 0 ..< currentBufStatus.cmdLoop:
+    currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
+
+template incNumberTextUnderCurosr(status: var EditorStatus) =
+  currentBufStatus.modifyNumberTextUnderCurosr(
+    currentMainWindowNode,
+    currentBufStatus.cmdLoop)
+
+template decNumberTextUnderCurosr(status: var EditorStatus) =
+  currentBufStatus.modifyNumberTextUnderCurosr(
+    currentMainWindowNode,
+    -currentBufStatus.cmdLoop)
+
+proc nextOccurrenceCurrentWord(status: var EditorStatus) =
+  let word = currentBufStatus.getWordUnderCursor(currentMainWindowNode)[1]
+  status.searchNextOccurrence(word)
+
+proc prevOccurrenceCurrentWord(status: var EditorStatus) =
+  let word = currentBufStatus.getWordUnderCursor(currentMainWindowNode)[1]
+  status.searchNextOccurrenceReversely(word)
+
+proc moveToPrevCharacter(status: var EditorStatus, key: Rune) =
+  let
+    pos = currentBufStatus.searchOneCharacterToBeginOfLine(
+      currentMainWindowNode,
+      key)
+  if pos != -1:
+    currentMainWindowNode.currentColumn = pos
+
+proc moveUntilPrevCharacter(status: var EditorStatus, key: Rune) =
+  let
+    lineHigh = currentBufStatus.buffer[currentMainWindowNode.currentLine].high
+    pos = currentBufStatus.searchOneCharacterToBeginOfLine(
+      currentMainWindowNode,
+      key)
+  if pos != -1 and pos < lineHigh:
+    currentMainWindowNode.currentColumn = pos + 1
 
 proc changeModeToNormalMode(status: var EditorStatus) {.inline.} =
   status.changeMode(Mode.normal)
@@ -1520,9 +1587,6 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
 
   let
     beforeBufferLen = currentBufStatus.buffer.len
-    currentBufferIndex = status.bufferIndexInCurrentWindow
-    cmdLoop = currentBufStatus.cmdLoop
-
     key = commands[0]
 
   if isCtrlK(key):
@@ -1532,13 +1596,13 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
   elif isCtrlV(key):
     status.changeModeToVisualBlockMode
   elif key == ord('h') or isLeftKey(key) or isBackspaceKey(key):
-    for i in 0 ..< cmdLoop: currentMainWindowNode.keyLeft
+    status.moveCursorLeft
   elif key == ord('l') or isRightKey(key):
-    for i in 0 ..< cmdLoop: currentBufStatus.keyRight(currentMainWindowNode)
+    status.moveCursorRight
   elif key == ord('k') or isUpKey(key):
-    for i in 0 ..< cmdLoop: currentBufStatus.keyUp(currentMainWindowNode)
+    status.moveCursorUp
   elif key == ord('j') or isDownKey(key) or isEnterKey(key):
-    for i in 0 ..< cmdLoop: currentBufStatus.keyDown(currentMainWindowNode)
+    status.moveCursorDwon
   elif key == ord('x') or isDeleteKey(key):
     status.deleteCharacters
   elif key == ord('X'):
@@ -1560,7 +1624,7 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
   elif key == ord('g'):
     let secondKey = commands[1]
     if secondKey == ord('g'):
-      currentBufStatus.jumpLine(currentMainWindowNode, cmdLoop - 1)
+      status.moveToFirstLine
     elif secondKey == ord('_'):
       currentBufStatus.moveToLastNonBlankOfLine(currentMainWindowNode)
     elif secondKey == ord('a'):
@@ -1590,14 +1654,11 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
   elif isPageDownKey(key) or isCtrlF(key):
     return status.pageDownCommand
   elif key == ord('w'):
-    for i in 0 ..< cmdLoop:
-      currentBufStatus.moveToForwardWord(currentMainWindowNode)
+    status.moveToForwardWord
   elif key == ord('b'):
-    for i in 0 ..< cmdLoop:
-      currentBufStatus.moveToBackwardWord(currentMainWindowNode)
+    status.moveToBackwardWord
   elif key == ord('e'):
-    for i in 0 ..< cmdLoop:
-      currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
+    status.moveToForwardEndOfWord
   elif key == ord('z'):
     let secondKey = commands[1]
     if secondKey == ord('.'):
@@ -1711,10 +1772,9 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
   elif key == ord('J'):
     status.joinLines
   elif isCtrlA(key):
-    currentBufStatus.modifyNumberTextUnderCurosr(currentMainWindowNode, cmdLoop)
+    status.incNumberTextUnderCurosr
   elif isCtrlX(key):
-    currentBufStatus.modifyNumberTextUnderCurosr(currentMainWindowNode,
-                                                 -cmdLoop)
+    status.decNumberTextUnderCurosr
   elif key == ord('~'):
     status.toggleCharacterAndMoveRight
   elif key == ord('r'):
@@ -1724,31 +1784,17 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
   elif key == ord('N'):
     status.searchNextOccurrenceReversely
   elif key == ord('*'):
-    let word = currentBufStatus.getWordUnderCursor(currentMainWindowNode)[1]
-    status.searchNextOccurrence(word)
+    status.nextOccurrenceCurrentWord
   elif key == ord('#'):
-    let word = currentBufStatus.getWordUnderCursor(currentMainWindowNode)[1]
-    status.searchNextOccurrenceReversely(word)
+    status.prevOccurrenceCurrentWord
   elif key == ord('f'):
     status.moveToForwardWordInCurrentLine(commands[1])
   elif key == ord('t'):
     status.moveToBeforeOfNextAnyCharacter(commands[1])
   elif key == ord('F'):
-    let secondKey = commands[1]
-    let pos =
-      currentBufStatus.searchOneCharacterToBeginOfLine(
-        currentMainWindowNode,
-        secondKey)
-    if pos != -1:
-      currentMainWindowNode.currentColumn = pos
+    status.moveToPrevCharacter(commands[1])
   elif key == ord('T'):
-    let secondKey = commands[1]
-    let pos =
-      currentBufStatus.searchOneCharacterToBeginOfLine(
-        currentMainWindowNode,
-        secondKey)
-    if pos != -1:
-      currentMainWindowNode.currentColumn = pos + 1
+    status.moveUntilPrevCharacter(commands[1])
   elif key == ord('R'):
     status.changeModeToReplaceMode
   elif key == ord('i'):
@@ -1764,7 +1810,7 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
   elif key == ord('A'):
     status.moveToEndOfLineAndEnterInsertMode
   elif key == ord('u'):
-    status.bufStatus[currentBufferIndex].undo(currentMainWindowNode)
+    currentBufStatus.undo(currentMainWindowNode)
   elif isCtrlR(key):
     currentBufStatus.redo(currentMainWindowNode)
   elif key == ord('Z'):
@@ -1779,13 +1825,17 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
       status.closeCurrentWindow
   elif key == ord('\\'):
     let secondKey = commands[1]
-    if secondKey == ord('r'): status.runQuickRunCommand
-    elif secondKey == ord('c'): status.runCodeLensCommand
+    if secondKey == ord('r'):
+      status.runQuickRunCommand
+    elif secondKey == ord('c'):
+      status.runCodeLensCommand
   elif key == ord('"'):
     status.registerCommand(commands)
   elif key == ord('q'):
-    if commands.len == 1: status.stopRecordingOperations
-    elif commands.len == 2: status.startRecordingOperations(commands[1])
+    if commands.len == 1:
+      status.stopRecordingOperations
+    elif commands.len == 2:
+      status.startRecordingOperations(commands[1])
   elif key == ord('K'):
     status.requestHover
   elif key == ord(' '):
