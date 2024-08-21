@@ -90,15 +90,21 @@ template moveCursorLeft(status: var EditorStatus) =
   for i in 0 ..< currentBufStatus.cmdLoop:
     currentMainWindowNode.keyLeft
 
-template moveCursorRight(status: var EditorStatus) =
+proc moveCursorRight(status: var EditorStatus) {.inline.} =
+  ## Use proc not template for a workaround for Nim 1.6.2.
+
   for i in 0 ..< currentBufStatus.cmdLoop:
     currentBufStatus.keyRight(currentMainWindowNode)
 
-template moveCursorUp(status: var EditorStatus) =
+proc moveCursorUp(status: var EditorStatus) {.inline.} =
+  ## Use proc not template for a workaround for Nim 1.6.2.
+
   for i in 0 ..< currentBufStatus.cmdLoop:
     currentBufStatus.keyUp(currentMainWindowNode)
 
-template moveCursorDwon(status: var EditorStatus) =
+proc moveCursorDwon(status: var EditorStatus) {.inline.} =
+  ## Use proc not template for a workaround for Nim 1.6.2.
+
   for i in 0 ..< currentBufStatus.cmdLoop:
     currentBufStatus.keyDown(currentMainWindowNode)
 
@@ -338,24 +344,34 @@ proc moveToFirstLine(status: var EditorStatus) =
   let dest = currentBufStatus.cmdLoop - 1
   currentBufStatus.jumpLine(currentMainWindowNode, dest)
 
-template moveToForwardWord(status: var EditorStatus) =
+proc moveToForwardWord(status: var EditorStatus) {.inline.} =
+  ## Use proc for workaround for Nim 1.6.2.
+
   for i in 0 ..< currentBufStatus.cmdLoop:
     currentBufStatus.moveToForwardWord(currentMainWindowNode)
 
-template moveToBackwardWord(status: var EditorStatus) =
+proc moveToBackwardWord(status: var EditorStatus) {.inline.} =
+  ## Use proc for workaround for Nim 1.6.2.
+
   for i in 0 ..< currentBufStatus.cmdLoop:
     currentBufStatus.moveToBackwardWord(currentMainWindowNode)
 
-template moveToForwardEndOfWord(status: var EditorStatus) =
+proc moveToForwardEndOfWord(status: var EditorStatus) {.inline.} =
+  ## Use proc for workaround for Nim 1.6.2.
+
   for i in 0 ..< currentBufStatus.cmdLoop:
     currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
 
-template incNumberTextUnderCurosr(status: var EditorStatus) =
+proc incNumberTextUnderCurosr(status: var EditorStatus) {.inline.} =
+  ## Use proc for workaround for Nim 1.6.2.
+
   currentBufStatus.modifyNumberTextUnderCurosr(
     currentMainWindowNode,
     currentBufStatus.cmdLoop)
 
-template decNumberTextUnderCurosr(status: var EditorStatus) =
+proc decNumberTextUnderCurosr(status: var EditorStatus) {.inline.} =
+  ## Use proc for workaround for Nim 1.6.2.
+
   currentBufStatus.modifyNumberTextUnderCurosr(
     currentMainWindowNode,
     -currentBufStatus.cmdLoop)
