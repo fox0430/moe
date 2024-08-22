@@ -312,11 +312,18 @@ proc updateBuffer*(c: var CompletionWindow) =
     for item in c.list.items:
       c.popupWindow.get.buffer.add ru" " & item.label & ru" "
 
-proc updateHighlightingText*(c: var CompletionWindow, runes: Runes) {.inline.} =
-  c.popupWindow.get.highlightText = runes
+proc updateHighlightingText*(
+  c: var CompletionWindow,
+  text: Runes,
+  isIgnorecase, isSmartcase: bool) {.inline.} =
+
+    c.popupWindow.get.updateHighlightText(text, isIgnorecase, isSmartcase)
+
+proc clearHighlightingText*(c: var CompletionWindow) {.inline.} =
+  c.popupWindow.get.clearHighlightText
 
 proc isHighlightingText*(c: var CompletionWindow): bool {.inline.} =
-  c.popupWindow.get.highlightText.len > 0
+  c.popupWindow.get.highlightText.isSome
 
 proc update*(c: var CompletionWindow) {.inline.} =
   if c.selectedIndex == -1: c.popupWindow.get.currentLine = none(int)

@@ -732,11 +732,13 @@ template updateCompletionWindowHighlightingText(status: var EditorStatus) =
      status.highlightingText.get.text.len == 1:
        # Ignore multiple lines
        status.completionWindow.get.updateHighlightingText(
-         status.highlightingText.get.text[0])
+         status.highlightingText.get.text[0],
+         status.highlightingText.get.isIgnorecase,
+         status.highlightingText.get.isSmartcase)
   elif status.highlightingText.isNone and
        status.completionWindow.get.isHighlightingText:
          # Clear highlight
-         status.completionWindow.get.updateHighlightingText(ru"")
+         status.completionWindow.get.clearHighlightingText
 
 proc updateCompletionWindowBufferInEditor(status: var EditorStatus) =
   ## Update the buffer for the completion window and move, resize the
