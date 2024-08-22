@@ -146,7 +146,7 @@ suite "worddictionary: update":
       (key: "nop", val: 0)
     ]
 
-  test "Basic 2":
+  test "With build-in":
     var d: WordDictionary
 
     const Buffer = @["a"].toSeqRunes
