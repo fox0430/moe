@@ -71,39 +71,39 @@ proc getTextFromBuffer*[T](
 
     result.add buffer.toRunes
 
-proc getCKeywords(): Runes {.compileTime.} =
-  for s in cKeywords: result.add toRunes(s & " ")
+proc getCKeywords(): seq[Runes] {.compileTime.} =
+  for s in cKeywords: result.add s.toRunes
 
-proc getCppKeywords(): Runes {.compileTime.} =
-  for s in cppKeywords: result.add toRunes(s & " ")
+proc getCppKeywords(): seq[Runes] {.compileTime.} =
+  for s in cppKeywords: result.add s.toRunes
 
-proc getCsharpKeywords(): Runes {.compileTime.} =
-  for s in csharpKeywords: result.add toRunes(s & " ")
+proc getCsharpKeywords(): seq[Runes] {.compileTime.} =
+  for s in csharpKeywords: result.add s.toRunes
 
-proc getHaskellKeywords(): Runes {.compileTime.} =
-  for s in haskellKeywords: result.add toRunes(s & " ")
+proc getHaskellKeywords(): seq[Runes] {.compileTime.} =
+  for s in haskellKeywords: result.add s.toRunes
 
-proc getJavaKeywords(): Runes {.compileTime.} =
-  for s in javaKeywords: result.add toRunes(s & " ")
+proc getJavaKeywords(): seq[Runes] {.compileTime.} =
+  for s in javaKeywords: result.add s.toRunes
 
-proc getJavaScriptKeywords(): Runes {.compileTime.} =
-  for s in javaScriptkeywords: result.add toRunes(s & " ")
+proc getJavaScriptKeywords(): seq[Runes] {.compileTime.} =
+  for s in javaScriptkeywords: result.add s.toRunes
 
-proc getNimKeywords(): Runes {.compileTime.} =
-  for s in NimKeywords: result.add toRunes(s & " ")
-  for s in NimBooleans: result.add toRunes(s & " ")
-  for s in NimSpecialVars: result.add toRunes(s & " ")
-  for s in NimPragmas: result.add toRunes(s & " ")
-  for s in NimBuiltins: result.add toRunes(s & " ")
-  for s in NimStdLibs: result.add toRunes(s & " ")
+proc getNimKeywords(): seq[Runes] {.compileTime.} =
+  for s in NimKeywords: result.add s.toRunes
+  for s in NimBooleans: result.add s.toRunes
+  for s in NimSpecialVars: result.add s.toRunes
+  for s in NimPragmas: result.add s.toRunes
+  for s in NimBuiltins: result.add s.toRunes
+  for s in NimStdLibs: result.add s.toRunes
 
-proc getPythonKeywords(): Runes {.compileTime.} =
-  for s in pythonKeywords: result.add toRunes(s & " ")
+proc getPythonKeywords(): seq[Runes] {.compileTime.} =
+  for s in pythonKeywords: result.add s.toRunes
 
-proc getRustKeywords(): Runes {.compileTime.} =
-  for s in rustKeywords: result.add toRunes(s & " ")
+proc getRustKeywords(): seq[Runes] {.compileTime.} =
+  for s in rustKeywords: result.add s.toRunes
 
-proc getTextFromLangKeywords*(lang: SourceLanguage): Runes =
+proc getTextFromLangKeywords*(lang: SourceLanguage): seq[Runes] =
   case lang:
     of SourceLanguage.langC:
       result = getCKeywords()
@@ -147,7 +147,8 @@ proc update*(
       if exclude != word and not d.contains(word): d.add word
 
     # Get reserved words for the language.
-    d.add getTextFromLangKeywords(lang)
+    for word in getTextFromLangKeywords(lang):
+      if exclude != word and not d.contains(word): d.add word
 
 proc update*(
   d: var WordDictionary,

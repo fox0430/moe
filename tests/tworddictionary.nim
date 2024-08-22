@@ -102,7 +102,6 @@ suite "worddictionary: update":
       Exclude = ru"no"
     d.update(Text, Exclude, SourceLanguage.langNone)
     check d.pairs.toSeq == @[
-      (key: "", val: 0),
       (key: "abc", val: 0),
       (key: "def", val: 0),
       (key: "ghi", val: 0),
@@ -116,7 +115,6 @@ suite "worddictionary: update":
     d.update(Buffer, ru"", SourceLanguage.langNone)
 
     check d.pairs.toSeq == @[
-      (key: "", val: 0),
       (key: "abc", val: 0),
       (key: "def", val: 0),
       (key: "ghi", val: 0),
@@ -141,10 +139,17 @@ suite "worddictionary: update":
       d.update(Text, Exclude, SourceLanguage.langNone)
 
     check d.pairs.toSeq == @[
-      (key: "", val: 0),
       (key: "abc", val: 1),
       (key: "def", val: 0),
       (key: "ghi", val: 1),
       (key: "jkl", val: 0),
       (key: "nop", val: 0)
     ]
+
+  test "Basic 2":
+    var d: WordDictionary
+
+    const Buffer = @["a"].toSeqRunes
+    d.update(Buffer, ru"", SourceLanguage.langNim)
+
+    for w in d.keys: check not w.contains(' ')
