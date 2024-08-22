@@ -177,7 +177,7 @@ proc checkRequireNcursesVersion*(): bool =
   ## Return true if v6.2 or higher.
 
   let v = getNcursesVersion()
-  return v.major >= 6 and v.minor >= 2
+  return v.major >= 6 and v.minor >= 1
 
 proc getPasteBuffer*(): Option[seq[Runes]] =
   return pasteBuffer
