@@ -25,6 +25,9 @@ when not defined unitTest:
   import std/os
 
 type
+  NcursesVersion* = object
+    major*, minor*, date*: int
+
   Attribute* {.pure.} = enum
     normal = A_NORMAL
     standout = A_STANDOUT
@@ -160,6 +163,21 @@ var
   pasteBuffer: Option[seq[Runes]]
 
   terminalSize: Size
+
+proc `$`*(v: NcursesVersion): string = fmt"{v.major}.{v.minor}.{v.date}"
+
+proc getNcursesVersion*(): NcursesVersion =
+  let v = split($curses_version(), ' ')[1].split('.')
+  return NcursesVersion(
+    major: v[0].parseInt,
+    minor: v[1].parseInt,
+    date: v[2].parseInt)
+
+proc checkRequireNcursesVersion*(): bool =
+  ## Return true if v6.2 or higher.
+
+  let v = getNcursesVersion()
+  return v.major >= 6 and v.minor >= 2
 
 proc getPasteBuffer*(): Option[seq[Runes]] =
   return pasteBuffer
