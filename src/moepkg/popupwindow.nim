@@ -18,9 +18,14 @@
 #[############################################################################]#
 
 import std/options
-import ui, color, unicodeext, independentutils
+
+import ui, color, unicodeext, independentutils, searchutils
 
 type
+  HighlightText = object
+    text: Runes
+    isIgnorecase, isSmartcase: bool
+
   PopupWindow* = ref object
     window: Window
       # Ncurses window
@@ -32,6 +37,8 @@ type
       # contents
     currentLine*: Option[int]
       # Current line number
+    highlightText*: Option[HighlightText]
+      # Change the color of matching texts
 
 proc initPopupWindow*(
   position: Position,
@@ -139,6 +146,19 @@ proc autoMoveAndResize*(
     p.resize(Size(h: max(1, h), w: max(1, w)))
     p.move(Position(y: y, x: x))
 
+proc updateHighlightText*(
+  p: var PopUpWindow,
+  text: Runes,
+  isIgnorecase, isSmartcase: bool) {.inline.} =
+
+    p.highlightText = some(HighlightText(
+      text: text,
+      isIgnorecase: isIgnorecase,
+      isSmartcase: isSmartcase))
+
+proc clearHighlightText*(p: var PopupWindow) {.inline.} =
+  p.highlightText = none(HighlightText)
+
 proc update*(p: var PopupWindow) =
   ## Write a popup window to the UI.
   ##
@@ -156,21 +176,52 @@ proc update*(p: var PopupWindow) =
   p.window.erase
 
   for i in 0 ..< min(p.size.h, p.buffer.len):
+    const WindowMargin = 2
+
     let
       line = p.buffer[i + startLine]
+
       color =
         if p.currentLine.isSome and i + startLine == p.currentLine.get:
           EditorColorPairIndex.popUpWinCurrentLine
         else:
           EditorColorPairIndex.popUpWindow
 
-    p.window.write(
-      i,
-      0,
-      line[0 .. min(line.high, p.size.w)],
-      color.int16,
-      Attribute.normal,
-      false)
+      highlightPosi =
+        if p.highlightText.isSome and line.len > WindowMargin:
+          line.search(
+            p.highlightText.get.text,
+            p.highlightText.get.isIgnorecase,
+            p.highlightText.get.isSmartcase)
+        else:
+          none(int)
+
+
+    if highlightPosi.isSome:
+      template isHighlight(col, highlightPosi: int, highlightText: Runes): bool =
+        j >= highlightPosi and j < highlightPosi + highlightText.len
+
+      for j, r in line[0 .. min(line.high, p.size.w)]:
+        if isHighlight(j, highlightPosi.get, p.highlightText.get.text):
+          # Change color for highlightText
+          let highlightColor = EditorColorPairIndex.searchResult
+          p.window.write(
+            i,
+            j,
+            r.toRunes,
+            highlightColor.int16,
+            Attribute.normal,
+            false)
+        else:
+          p.window.write(i, j, r.toRunes, color.int16, Attribute.normal, false)
+    else:
+      p.window.write(
+        i,
+        0,
+        line[0 .. min(line.high, p.size.w)],
+        color.int16,
+        Attribute.normal,
+        false)
 
   p.refresh
 

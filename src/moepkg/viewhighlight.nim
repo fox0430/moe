@@ -39,6 +39,12 @@ type
     originalLineRange: Range
     currentPosition: BufferPosition
 
+proc isSearch*(h: HighlightingText): bool {.inline.} =
+  h.kind == HighlightingTextKind.search
+
+proc isReplace*(h: HighlightingText): bool {.inline.} =
+  h.kind == HighlightingTextKind.replace
+
 proc initBufferPosition(
   n: WindowNode): BufferPosition {.inline.} =
 

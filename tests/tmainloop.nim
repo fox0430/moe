@@ -1398,6 +1398,50 @@ suite "mainloop: confirmCompletion in comamnd line":
     check status.completionWindow.isNone
     check status.commandLine.buffer == ru"aa"
 
+suite "mainloop: updateCompletionWindowHighlightingText":
+  privateAccess(HighlightText)
+
+  test "Basic":
+    var status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin().isOk
+    currentBufStatus.mode = Mode.insert
+
+    status.resize(100, 100)
+    status.update
+
+    status.openCompletionWindowInEditor
+
+    template getHighlightText(status: EditorStatus): Option[HighlightText] =
+      status.completionWindow.get.popupWindow.get.highlightText
+
+    block:
+      status.highlightingText = some(HighlightingText(
+        text: @["a"].toSeqRunes,
+        kind: HighlightingTextKind.search,
+        isIgnorecase: true))
+
+      status.updateCompletionWindowBufferInEditor
+      check status.getHighlightText.get == HighlightText(
+        text: ru"a",
+        isIgnorecase: true)
+
+    block:
+      status.highlightingText = some(HighlightingText(
+        text: @["b"].toSeqRunes,
+        kind: HighlightingTextKind.search,
+        isSmartcase: true))
+
+      status.updateCompletionWindowBufferInEditor
+      check status.getHighlightText.get == HighlightText(
+        text: ru"b",
+        isSmartcase: true)
+
+    block:
+      status.highlightingText = none(HighlightingText)
+
+      status.updateCompletionWindowBufferInEditor
+      check status.getHighlightText.isNone
+
 suite "mainloop: Log viewer":
   test "Enter visual mode (Fix #2017)":
     var status = initEditorStatus()
