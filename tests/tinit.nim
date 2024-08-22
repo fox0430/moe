@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -18,6 +18,9 @@
 #[############################################################################]#
 
 import std/[unittest, os, oids, options]
+
+import pkg/results
+
 import moepkg/[editorstatus, cmdlineoption, bufferstatus, unicodeext, gapbuffer,
                windownode, settings]
 
@@ -184,3 +187,7 @@ suite "init: addBufferStatus":
     check currentBufStatus.isReadonly
 
     check mainWindowNode.getAllWindowNode.len == 1
+
+suite "init: checkNcurses":
+  test "Basic":
+    check checkNcurses().isOk

@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -17,8 +17,10 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[os, times]
+import std/[os, times, strformat]
+
 import pkg/results
+
 import ui, bufferstatus, editorstatus, cmdlineoption, git, editorview, theme,
        settings, messages, logger, registers
 
@@ -103,7 +105,25 @@ proc initSidebar(status: var EditorStatus) =
   if status.settings.view.sidebar:
     currentMainWindowNode.view.initSidebar
 
+proc checkNcurses(): Result[(), string] =
+  let v = getNcursesVersion()
+  if not checkRequireNcursesVersion():
+    let errorMsg =
+      "Error: This Ncurses version is not supported\n\n" &
+      fmt"Current version: v{$v}" & '\n' &
+      "Require: v6.2 or higher\n"
+
+    return Result[(), string].err errorMsg
+
+  return Result[(), string].ok ()
+
 proc initEditor*(): Result[EditorStatus, string] =
+  block:
+    let r = checkNcurses()
+    if r.isErr:
+      echo r.error
+      quit()
+
   let parsedList = parseCommandLineOption(commandLineParams())
 
   startUi()
