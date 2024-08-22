@@ -32,6 +32,8 @@ type
       # contents
     currentLine*: Option[int]
       # Current line number
+    highlightText*: Runes
+      # Change the color of matching texts
 
 proc initPopupWindow*(
   position: Position,
@@ -164,13 +166,34 @@ proc update*(p: var PopupWindow) =
         else:
           EditorColorPairIndex.popUpWindow
 
-    p.window.write(
-      i,
-      0,
-      line[0 .. min(line.high, p.size.w)],
-      color.int16,
-      Attribute.normal,
-      false)
+      highlightPosi =
+        if p.highlightText.len > 0 and line.len > 1:
+          line.find(p.highlightText, 1, line.high - 1)
+        else:
+          -1
+
+    if highlightPosi > -1:
+      for j, r in line[0 .. min(line.high, p.size.w)]:
+        if j >= highlightPosi and j < highlightPosi + p.highlightText.len:
+          # Change color for highlightText
+          let highlightColor = EditorColorPairIndex.searchResult
+          p.window.write(
+            i,
+            j,
+            r.toRunes,
+            highlightColor.int16,
+            Attribute.normal,
+            false)
+        else:
+          p.window.write(i, j, r.toRunes, color.int16, Attribute.normal, false)
+    else:
+      p.window.write(
+        i,
+        0,
+        line[0 .. min(line.high, p.size.w)],
+        color.int16,
+        Attribute.normal,
+        false)
 
   p.refresh
 

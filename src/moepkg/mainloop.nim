@@ -726,6 +726,18 @@ proc openCompletionWindowInEditor(status: var EditorStatus) =
     windowPosition = windowPosition,
     list = currentBufStatus.lspCompletionList))
 
+template updateCompletionWindowHighlightingText(status: var EditorStatus) =
+  if status.highlightingText.isSome and
+     status.highlightingText.get.isSearch and
+     status.highlightingText.get.text.len == 1:
+       # Ignore multiple lines
+       status.completionWindow.get.updateHighlightingText(
+         status.highlightingText.get.text[0])
+  elif status.highlightingText.isNone and
+       status.completionWindow.get.isHighlightingText:
+         # Clear highlight
+         status.completionWindow.get.updateHighlightingText(ru"")
+
 proc updateCompletionWindowBufferInEditor(status: var EditorStatus) =
   ## Update the buffer for the completion window and move, resize the
   ## completion window.
@@ -778,8 +790,9 @@ proc updateCompletionWindowBufferInEditor(status: var EditorStatus) =
       status.completionWindow.get.reopen(
         currentMainWindowNode.completionWindowPositionInEditor(currentBufStatus))
 
-    # Update completion window buffer and move/resize
+    # Update completion window buffer, highlight and move/resize
     status.completionWindow.get.updateBuffer
+    status.updateCompletionWindowHighlightingText
     status.completionWindow.get.autoMoveAndResize(minPosition, maxPosition)
     status.completionWindow.get.update
   else:

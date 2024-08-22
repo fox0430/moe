@@ -312,6 +312,12 @@ proc updateBuffer*(c: var CompletionWindow) =
     for item in c.list.items:
       c.popupWindow.get.buffer.add ru" " & item.label & ru" "
 
+proc updateHighlightingText*(c: var CompletionWindow, runes: Runes) {.inline.} =
+  c.popupWindow.get.highlightText = runes
+
+proc isHighlightingText*(c: var CompletionWindow): bool {.inline.} =
+  c.popupWindow.get.highlightText.len > 0
+
 proc update*(c: var CompletionWindow) {.inline.} =
   if c.selectedIndex == -1: c.popupWindow.get.currentLine = none(int)
   else: c.popupWindow.get.currentLine = some(c.selectedIndex)
