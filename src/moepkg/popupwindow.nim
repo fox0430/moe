@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/options
+import std/[options, strutils]
 
 import ui, color, unicodeext, independentutils, searchutils
 
@@ -176,6 +176,8 @@ proc update*(p: var PopupWindow) =
   p.window.erase
 
   for i in 0 ..< min(p.size.h, p.buffer.len):
+    template removeMargin(line: Runes): Runes = line[1 .. (line.high - 1)]
+
     const WindowMargin = 2
 
     let
@@ -189,39 +191,43 @@ proc update*(p: var PopupWindow) =
 
       highlightPosi =
         if p.highlightText.isSome and line.len > WindowMargin:
-          line.search(
+          line.removeMargin.search(
             p.highlightText.get.text,
             p.highlightText.get.isIgnorecase,
             p.highlightText.get.isSmartcase)
         else:
           none(int)
 
-
     if highlightPosi.isSome:
       template isHighlight(col, highlightPosi: int, highlightText: Runes): bool =
         j >= highlightPosi and j < highlightPosi + highlightText.len
 
-      for j, r in line[0 .. min(line.high, p.size.w)]:
-        if isHighlight(j, highlightPosi.get, p.highlightText.get.text):
+      for j in 0 .. p.size.w:
+        if j > line.high:
+          p.window.write(i, j, ru" ", color.int16, Attribute.normal, false)
+        elif isHighlight(j, highlightPosi.get, p.highlightText.get.text):
           # Change color for highlightText
           let highlightColor = EditorColorPairIndex.searchResult
           p.window.write(
             i,
             j,
-            r.toRunes,
+            line[j].toRunes,
             highlightColor.int16,
             Attribute.normal,
             false)
         else:
-          p.window.write(i, j, r.toRunes, color.int16, Attribute.normal, false)
+          p.window.write(
+            i,
+            j,
+            line[j].toRunes,
+            color.int16,
+            Attribute.normal,
+            false)
     else:
-      p.window.write(
-        i,
-        0,
-        line[0 .. min(line.high, p.size.w)],
-        color.int16,
-        Attribute.normal,
-        false)
+      let buffer =
+        if p.size.w > line.high: line & " ".repeat(p.size.w - line.high).toRunes
+        else: line[0 .. p.size.w]
+      p.window.write(i, 0, buffer, color.int16, Attribute.normal, false)
 
   p.refresh
 
