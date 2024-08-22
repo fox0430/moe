@@ -157,15 +157,8 @@ suite "popupwindow: autoMoveAndResize":
     check p.size == Size(h: 2, w: 5)
 
 suite "popupwindow: update":
-  test "update 1":
-    var p = initPopupWindow(
-      Position(y: 1, x: 1),
-      Size(h: 2, w: 5),
-      @[ru"line1", ru"line2"])
+  privateAccess(HighlightText)
 
-    p.update
-
-suite "popupwindow: update":
   test "update 1":
     var p = initPopupWindow(
       Position(y: 1, x: 1),
@@ -207,5 +200,15 @@ suite "popupwindow: update":
       toSeq(0..10).mapIt(toRunes($it)))
 
     p.currentLine = some(5)
+
+    p.update
+
+  test "update 6":
+    var p = initPopupWindow(
+      Position(y: 1, x: 1),
+      Size(h: 5, w: 1),
+      toSeq(0..10).mapIt(toRunes($it)))
+
+    p.highlightText = some(HighlightText(text: ru"a"))
 
     p.update
