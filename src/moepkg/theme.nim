@@ -1146,7 +1146,7 @@ proc setBackgroundRgb*(
     themeColors[pairIndex].background.rgb = rgb
 
 proc downgrade*(mode: ColorMode) =
-  ## Donwgrade theme colors to 256 or 16 or 8.
+  ## Downgrade theme colors to 256 or 16 or 8.
   ## Do nothing if greater than 256.
 
   if mode.int > 256: return

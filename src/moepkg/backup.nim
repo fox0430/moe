@@ -64,7 +64,7 @@ proc getBackupDir*(baseBackupDir, sourceFilePath: Runes): Runes =
         return file.splitPath.head.toRunes
 
 # Valid filename is DateTime string.
-# Exmaple: "2022-10-26T08:28:50+09:00"
+# Example: "2022-10-26T08:28:50+09:00"
 proc validateBackupFileName*(filename: string): bool =
   try:
     discard filename.parse("yyyy-MM-dd\'T\'HH:mm:sszzz")

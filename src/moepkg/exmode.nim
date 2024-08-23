@@ -290,7 +290,7 @@ proc liveReloadOfConfSettingCommand(status: var EditorStatus, command: Runes) =
 
 proc changeThemeSettingCommand(status: var EditorStatus, command: Runes) =
   case $command:
-    of "defaut":
+    of "default":
       status.settings.theme.kind = ColorThemeKind.default
     of "vscode":
       status.settings.theme.kind = ColorThemeKind.vscode
@@ -410,7 +410,7 @@ proc incrementalSearchSettingCommand(status: var EditorStatus, command: Runes) =
 
   status.changeMode(currentBufStatus.prevMode)
 
-proc highlightPairOfParenSettigCommand(
+proc highlightPairOfParenSettingCommand(
   status: var EditorStatus,
   command: Runes) =
 
@@ -577,7 +577,7 @@ proc changeLastBufferCommand(status: var EditorStatus) =
   status.commandLine.clear
   status.changeMode(bufferstatus.Mode.normal)
 
-proc opneBufferByNumberCommand(status: var EditorStatus, number: int) =
+proc openBufferByNumberCommand(status: var EditorStatus, number: int) =
   if number < 0 or number > status.bufStatus.high: return
 
   status.changeCurrentBuffer(number)
@@ -614,7 +614,7 @@ proc jumpCommand(status: var EditorStatus, line: int) =
 proc editCommand(status: var EditorStatus, path: Runes) =
   status.changeMode(currentBufStatus.prevMode)
 
-  status.updateLastCursorPostion
+  status.updateLastCursorPosition
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   if currentBufStatus.countChange > 0 and
@@ -642,7 +642,7 @@ proc editCommand(status: var EditorStatus, path: Runes) =
     status.resize
 
     if not isFilerMode(currentBufStatus.mode):
-      currentMainWindowNode.restoreCursorPostion(
+      currentMainWindowNode.restoreCursorPosition(
         currentBufStatus,
         status.lastPosition)
 
@@ -948,7 +948,7 @@ proc writeAndQuitAllBufferCommand(status: var EditorStatus) =
       status.changeMode(currentBufStatus.prevMode)
       return
 
-# Save buffer, buid and open log viewer
+# Save buffer, build and open log viewer
 proc buildCommand(status: var EditorStatus) =
   # Force enable a build on save temporarily.
   let currentSetting = status.settings.buildOnSave.enable
@@ -1055,7 +1055,7 @@ proc listAllBufferCommand(status: var EditorStatus) =
   currentBufStatus.isUpdate = true
 
 proc replaceBuffer*(status: var EditorStatus, replaceInfo: ReplaceCommandInfo) =
-  ## Repace runes in the current buffer.
+  ## Replace runes in the current buffer.
 
   if replaceInfo.isGlobal:
     # Replace all
@@ -1073,7 +1073,7 @@ proc replaceBuffer*(status: var EditorStatus, replaceInfo: ReplaceCommandInfo) =
 proc replaceBufferCommand*(
   status: var EditorStatus,
   command: Runes) {.inline.} =
-    ## Repace buffer and change to prev mode.
+    ## Replace buffer and change to prev mode.
 
     let replaceInfo = parseReplaceCommand(command)
     if replaceInfo.sub.len > 0 and replaceInfo.by.len > 0:
@@ -1220,7 +1220,7 @@ proc exModeCommand*(status: var EditorStatus, command: seq[Runes]) =
   elif isChangePreveBufferCommand(command):
     status.changePreveBufferCommand
   elif isOpenBufferByNumberCommand(command):
-    status.opneBufferByNumberCommand(($command[1]).parseInt)
+    status.openBufferByNumberCommand(($command[1]).parseInt)
   elif isChangeFirstBufferCommand(command):
     status.changeFirstBufferCommand
   elif isChangeLastBufferCommand(command):
@@ -1273,8 +1273,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[Runes]) =
     status.openEditorLogViewer
   elif isOpenLspLogViewerCommand(command):
     status.openLspLogViewer
-  elif isHighlightPairOfParenSettigCommand(command):
-    status.highlightPairOfParenSettigCommand(command[1])
+  elif isHighlightPairOfParenSettingCommand(command):
+    status.highlightPairOfParenSettingCommand(command[1])
   elif isAutoDeleteParenSettingCommand(command):
     status.autoDeleteParenSettingCommand(command[1])
   elif isSmoothScrollSettingCommand(command):

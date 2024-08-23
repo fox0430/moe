@@ -327,13 +327,13 @@ suite "exmodeutils: isIncrementalSearchSettingCommand":
   test "Invalid":
     check not isIncrementalSearchSettingCommand(@["a"].toSeqRunes)
 
-suite "exmodeutils: isHighlightPairOfParenSettigCommand":
+suite "exmodeutils: isHighlightPairOfParenSettingCommand":
   test "Valid":
-    check isHighlightPairOfParenSettigCommand(
+    check isHighlightPairOfParenSettingCommand(
       @["highlightParen", "on"].toSeqRunes)
 
   test "Invalid":
-    check not isHighlightPairOfParenSettigCommand(@["a"].toSeqRunes)
+    check not isHighlightPairOfParenSettingCommand(@["a"].toSeqRunes)
 
 suite "exmodeutils: isAutoDeleteParenSettingCommand":
   test "Valid":

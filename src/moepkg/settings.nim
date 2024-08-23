@@ -629,7 +629,7 @@ proc initLspRustAnalyzerSettings(): LspRustAnalyzerSettings =
 proc initLspServerSettings(): LspServerSettings =
   result.rustAnalyzer = initLspRustAnalyzerSettings()
 
-proc initLspSettigns(): LspSettings =
+proc initLspSettings(): LspSettings =
   result.enable = true
 
   result.features = initLspFeatureSettings()
@@ -681,7 +681,7 @@ proc initEditorSettings*(): EditorSettings =
   result.syntaxChecker = initSyntaxCheckerSettings()
   result.startUp = initStartUpSettings()
   result.theme = initThemeSettings()
-  result.lsp = initLspSettigns()
+  result.lsp = initLspSettings()
 
 proc configFilePath*():  string {.inline.} =
   getConfigDir() / "moe" / "moerc.toml"
@@ -2135,7 +2135,7 @@ proc validateStandardTable(table: TomlValueRef): Option[InvalidItem] =
 
 proc validateClipboardTable(table: TomlValueRef): Option[InvalidItem] =
   template isValidTool(s: string): bool =
-    s in [ "xclip", "xsel", "wl-clipboard", "wsl-defaut", "macOS-default"]
+    s in [ "xclip", "xsel", "wl-clipboard", "wsl-default", "macOS-default"]
 
   for key, val in table.getTable:
     case key:
@@ -2817,8 +2817,8 @@ proc toConfigStr(tool: ClipboardTool): string =
     of xsel: "xsel"
     of xclip: "xclip"
     of wlClipboard: "wl-clipboard"
-    of wslDefault: "wsl-defaut"
-    of macOsDefault: "macOS-defaut"
+    of wslDefault: "wsl-default"
+    of macOsDefault: "macOS-default"
 
 proc genTomlConfigStr*(settings: EditorSettings): string =
   ## Generate a string of the configuration file of TOML.

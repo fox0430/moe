@@ -124,13 +124,13 @@ proc searchReversely(
   isIgnorecase, isSmartcase: bool): Option[int] =
     ## Return a position in a line if a keyword matches.
 
-    for startPostion in countdown(line.len - keyword.len, 0):
+    for startPosition in countdown(line.len - keyword.len, 0):
       let
-        endPosition = startPostion + keyword.high
-        runes = line[startPostion .. endPosition]
+        endPosition = startPosition + keyword.high
+        runes = line[startPosition .. endPosition]
 
       if compare(runes, keyword, isIgnorecase, isSmartcase):
-        return startPostion.some
+        return startPosition.some
 
 proc searchBuffer*(
   bufStatus: BufferStatus,

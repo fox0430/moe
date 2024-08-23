@@ -120,7 +120,7 @@ proc statusLineInfoBuffer(
   b: BufferStatus,
   node: WindowNode,
   setupText: Runes): Runes =
-    ## Buit and returns a buffer based on the setupText.
+    ## Built and returns a buffer based on the setupText.
     ## Also see settings.StatusLineItem.
     ## Text example: "{lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {fileType}"
 
@@ -401,7 +401,7 @@ proc addGitInfo(
         color: EditorColorPairIndex.statusLineGitBranch)
       s.buffer.add branchNameBuffer
 
-proc modeLablel(mode: Mode): string =
+proc modeLabel(mode: Mode): string =
   case mode:
     of Mode.insert:
       "INSERT"
@@ -442,7 +442,7 @@ proc modeLablel(mode: Mode): string =
     else:
       "NORMAL"
 
-proc modeLablelColor(mode: Mode): EditorColorPairIndex =
+proc modeLabelColor(mode: Mode): EditorColorPairIndex =
   case mode
     of Mode.insert, Mode.insertMulti:
       EditorColorPairIndex.statusLineInsertModeLabel
@@ -470,7 +470,7 @@ proc addModeLabel(
         if not isActiveWindow and not settings.showModeInactive:
           none(string)
         else:
-          some(modeLablel(bufStatus.mode))
+          some(modeLabel(bufStatus.mode))
 
     if modeLabel.isSome:
       let
@@ -481,7 +481,7 @@ proc addModeLabel(
       s.highlight.segments.add StatusLineColorSegment(
         first: 0,
         last: buffer.high,
-        color: modeLablelColor(bufStatus.mode))
+        color: modeLabelColor(bufStatus.mode))
       s.buffer.add buffer
 
 proc clear(s: var StatusLine) =

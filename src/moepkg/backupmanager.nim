@@ -60,7 +60,7 @@ proc restoreBackupFile(
   sourceFilePath: Runes,
   isForceRestore: bool) =
     ## Restore the current buffer from backupFile.
-    ## the filename is the curent line.
+    ## the filename is the current line.
 
     if not fileExists($sourceFilePath): return
 
@@ -141,7 +141,7 @@ proc removeBackupFile(
   sourceFilePath: Runes,
   isForceRemove: bool) =
     ## Remove the backup file.
-    ## the filename is the curent line.
+    ## the filename is the current line.
 
     let
       backupFilename = currentBufStatus.buffer[currentMainWindowNode.currentLine]

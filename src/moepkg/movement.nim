@@ -582,7 +582,7 @@ proc jumpToSearchForwardResults*(
       for column in 0 ..< searchResult.get.column:
         bufStatus.keyRight(windowNode)
 
-proc jumpToSearchBackwordResults*(
+proc jumpToSearchBackwardResults*(
   bufStatus: var BufferStatus,
   windowNode: var WindowNode,
   keyword: Runes,

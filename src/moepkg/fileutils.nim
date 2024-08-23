@@ -184,7 +184,7 @@ proc getFileType*(path: string): FileType =
 
 proc getFileExtension*(path: Runes): Runes =
   ## Return a file extension from path.
-  ## Return empty string if dosen't exist.
+  ## Return empty string if doesn't exist.
 
   if not dirExists($path) and path.contains(ru'.'):
     let position = path.rfind(ru'.')

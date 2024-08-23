@@ -177,7 +177,7 @@ const
       argsType: ArgsType.none),
     ExCommandInfo(
       command: "lspExeCommand",
-      description: "LSP Execute a commnad",
+      description: "LSP Execute a command",
       argsType: ArgsType.text),
     ExCommandInfo(
       command: "lspLog",
@@ -581,7 +581,7 @@ proc isStatusLineSettingCommand*(command: seq[Runes]): bool {.inline.} =
 proc isIncrementalSearchSettingCommand*(command: seq[Runes]): bool {.inline.} =
   command.len == 2 and cmpIgnoreCase($command[0], "incrementalsearch") == 0
 
-proc isHighlightPairOfParenSettigCommand*(command: seq[Runes]): bool {.inline.} =
+proc isHighlightPairOfParenSettingCommand*(command: seq[Runes]): bool {.inline.} =
   command.len == 2 and cmpIgnoreCase($command[0], "highlightparen") == 0
 
 proc isAutoDeleteParenSettingCommand*(command: seq[Runes]): bool {.inline.} =
@@ -798,7 +798,7 @@ proc isValidExCommand*(commandSplit: seq[Runes]): bool =
     isIncrementalSearchSettingCommand(commandSplit) or
     isOpenEditorLogViewerCommand(commandSplit) or
     isOpenLspLogViewerCommand(commandSplit) or
-    isHighlightPairOfParenSettigCommand(commandSplit) or
+    isHighlightPairOfParenSettingCommand(commandSplit) or
     isAutoDeleteParenSettingCommand(commandSplit) or
     isSmoothScrollSettingCommand(commandSplit) or
     isSmoothScrollMinDelaySettingCommand(commandSplit) or

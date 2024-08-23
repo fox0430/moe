@@ -552,7 +552,7 @@ suite "jumpToSearchForwardResults":
     check currentMainWindowNode.currentLine == 1
     check currentMainWindowNode.currentColumn == 4
 
-suite "jumpToSearchBackwordResults":
+suite "jumpToSearchBackwardResults":
   test "Basic":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
@@ -564,7 +564,7 @@ suite "jumpToSearchBackwordResults":
       "mno abc"].toSeqRunes)
 
     const Keyword = ru"abc"
-    currentBufStatus.jumpToSearchBackwordResults(
+    currentBufStatus.jumpToSearchBackwardResults(
       currentMainWindowNode,
       Keyword,
       status.settings.standard.ignorecase,
@@ -584,7 +584,7 @@ suite "jumpToSearchBackwordResults":
       "mno pqr"].toSeqRunes)
 
     const Keyword = ru"xyz"
-    currentBufStatus.jumpToSearchBackwordResults(
+    currentBufStatus.jumpToSearchBackwardResults(
       currentMainWindowNode,
       Keyword,
       status.settings.standard.ignorecase,
@@ -606,7 +606,7 @@ suite "jumpToSearchBackwordResults":
       .initGapBuffer
 
     const Keyword = "def\nghi".toRunes
-    currentBufStatus.jumpToSearchBackwordResults(
+    currentBufStatus.jumpToSearchBackwardResults(
       currentMainWindowNode,
       Keyword,
       status.settings.standard.ignorecase,

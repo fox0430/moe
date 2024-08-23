@@ -107,7 +107,7 @@ suite "registers: setNoNamedRegister":
     check r.noNamed.buffer == @["def"].toSeqRunes
     check not r.noNamed.isLine
 
-  test "Runes with Clipboad (xsel)":
+  test "Runes with Clipboard (xsel)":
     if not isXAvailable():
       skip()
     else:
@@ -116,7 +116,7 @@ suite "registers: setNoNamedRegister":
 
       check "abc" == getClipboardBuffer(ClipboardTool.xsel)
 
-  test "Lines with Clipboad (xsel)":
+  test "Lines with Clipboard (xsel)":
     if not isXAvailable():
       skip()
     else:

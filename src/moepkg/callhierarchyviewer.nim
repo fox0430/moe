@@ -76,7 +76,7 @@ proc closeCallHierarchyViewer(status: var EditorStatus) =
 
   status.deleteBuffer(currentMainWindowNode.bufferIndex)
 
-proc incommingCalls(status: var EditorStatus) =
+proc incomingCalls(status: var EditorStatus) =
   if currentBufStatus.callHierarchyInfo.items.len == 0:
     status.commandLine.writeLspCallHierarchyError("Not found")
     return
@@ -117,26 +117,26 @@ proc outgoingCalls(status: var EditorStatus) =
     return
 
 proc parseDestinationLine(line: Runes): Result[Destination, string] =
-  let lineSplited = line.split(ru' ').filterIt(it.len > 0)
-  if lineSplited.len < 3:
+  let lineSplit = line.split(ru' ').filterIt(it.len > 0)
+  if lineSplit.len < 3:
     return Result[Destination, string].err "Invalid destination"
 
   let
-    lastIndex = lineSplited.high
+    lastIndex = lineSplit.high
 
     line =
       try:
-        parseInt(lineSplited[lastIndex - 1])
+        parseInt(lineSplit[lastIndex - 1])
       except ValueError:
         return Result[Destination, string].err "Invalid format: line"
 
     column =
       try:
-        parseInt(lineSplited[lastIndex])
+        parseInt(lineSplit[lastIndex])
       except ValueError:
         return Result[Destination, string].err "Invalid format: column"
 
-  return Result[Destination, string].ok (lineSplited[lastIndex - 2], line, column)
+  return Result[Destination, string].ok (lineSplit[lastIndex - 2], line, column)
 
 template selectedDestination: Runes =
   currentBufStatus.buffer[currentMainWindowNode.currentLine]
@@ -265,6 +265,6 @@ proc execCallHierarchyViewerCommand*(status: var EditorStatus, command: Runes) =
   elif isJump(command):
     status.jumpToDestination
   elif isIncomingCall(command):
-    status.incommingCalls
+    status.incomingCalls
   elif isOutgoingCall(command):
     status.outgoingCalls

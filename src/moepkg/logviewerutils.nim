@@ -67,12 +67,12 @@ proc initLogViewerHighlight*(buffer: seq[Runes]): Highlight =
     const EmptyReservedWord: seq[ReservedWord] = @[]
     return buffer.initHighlight(EmptyReservedWord, SourceLanguage.langNone)
 
-proc isUpdateEditorLogViwer*[T](buf: var T): bool {.inline.} =
+proc isUpdateEditorLogViewer*[T](buf: var T): bool {.inline.} =
   ## `buf` is `seq[Runes]`, `GapBuffer[T]` or etc
 
   return messageLogLen() > buf.countLogLine
 
-proc isUpdateLspLogViwer*[T](buf: var T, log: var LspLog): bool {.inline.} =
+proc isUpdateLspLogViewer*[T](buf: var T, log: var LspLog): bool {.inline.} =
   ## `buf` is `seq[Runes]`, `GapBuffer[T]` or etc
 
   log.len > buf.countLogLine

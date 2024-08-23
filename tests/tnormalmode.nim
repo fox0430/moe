@@ -2316,7 +2316,7 @@ suite "Add buffer to the register":
     check r.buffer == @["abc"].toSeqRunes
     check not r.isLine
 
-  test "Delete and yank characters befor cursor (\"adh command)":
+  test "Delete and yank characters before cursor (\"adh command)":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
@@ -2907,7 +2907,7 @@ suite "Normal mode: Move to the next of the back character":
     status = initEditorStatus()
     assert status.addNewBufferInCurrentWin.isOk
 
-  test "Move to the character the befor 'f' (\"Te\" command)":
+  test "Move to the character the before 'f' (\"Te\" command)":
     const Buffer = @["abc def ghi"].toSeqRunes
     currentBufStatus.buffer = Buffer.toGapBuffer
 
@@ -3294,7 +3294,7 @@ suite "Normal mode: execNormalModeCommand":
     check status.commandLine.prompt == ":".toRunes
 
   test "\"ESC ESC\" keys":
-    # Trun off highlightings
+    # Turn off highlightings
 
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
@@ -3431,7 +3431,7 @@ suite "Normal mode: execNormalModeCommand":
     check currentMainWindowNode.currentColumn == 2
 
   test "'*' command":
-    # Search the currnet words.
+    # Search the current words.
 
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
@@ -3467,7 +3467,7 @@ suite "Normal mode: execNormalModeCommand":
     check status.searchHistory == @["def".toRunes, "abc".toRunes]
 
   test "'#' command":
-    # Search the currnet words.
+    # Search the current words.
 
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
@@ -3505,7 +3505,7 @@ suite "Normal mode: execNormalModeCommand":
 
     check status.searchHistory == @["def".toRunes, "abc".toRunes]
 
-suite "Ex mode: Quickrun command wihtout file":
+suite "Ex mode: Quickrun command without file":
   test "Exec Quickrun without file":
     # Create a file for the test.
     var status = initEditorStatus()

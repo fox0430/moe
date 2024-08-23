@@ -122,8 +122,8 @@ proc initHoverWindow(
       buffer.add Margin & line & Margin
 
     let
-      absPositon = windowNode.absolutePosition
-      expectPosition = Position(y: absPositon.y + 1, x: absPositon.x + 1)
+      absPosition = windowNode.absolutePosition
+      expectPosition = Position(y: absPosition.y + 1, x: absPosition.x + 1)
     result = initPopupWindow(
       expectPosition,
       Size(h: buffer.len, w: buffer.maxLen),
@@ -131,10 +131,10 @@ proc initHoverWindow(
 
     let
       minPosition = Position(y: windowNode.y, x: windowNode.x)
-      maxPostion = Position(
+      maxPosition = Position(
         y: windowNode.y + windowNode.h,
         x: windowNode.x + windowNode.w)
-    result.autoMoveAndResize(minPosition, maxPostion)
+    result.autoMoveAndResize(minPosition, maxPosition)
     result.update
 
 proc lspHover*(status: var EditorStatus, res: JsonNode): Result[(), string] =
@@ -647,7 +647,7 @@ proc lspPrepareCallHierarchy(
 
     return Result[(), string].ok ()
 
-proc lspIncommingCalls(
+proc lspIncomingCalls(
   status: var EditorStatus,
   res: JsonNode): Result[(), string] =
     ## callHierarchy/incomingCalls
@@ -1037,7 +1037,7 @@ proc handleLspResponse*(status: var EditorStatus) =
           let r = status.lspPrepareCallHierarchy(resJson.get)
           if r.isErr: status.commandLine.writeLspCallHierarchyError(r.error)
         of LspMethod.callHierarchyIncomingCalls:
-          let r = status.lspIncommingCalls(resJson.get)
+          let r = status.lspIncomingCalls(resJson.get)
           if r.isErr: status.commandLine.writeLspCallHierarchyError(r.error)
         of LspMethod.callHierarchyOutgoingCalls:
           let r = status.lspOutgoingCalls(resJson.get)

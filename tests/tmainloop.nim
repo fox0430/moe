@@ -1320,7 +1320,7 @@ suite "mainloop: confirmCompletion in editor":
     check currentMainWindowNode.currentLine == 1
     check currentMainWindowNode.currentColumn == 4
 
-suite "mainloop: confirmCompletion in comamnd line":
+suite "mainloop: confirmCompletion in command line":
   privateAccess(CompletionWindow)
 
   test "Not selected":

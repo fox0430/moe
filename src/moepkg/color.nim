@@ -541,7 +541,7 @@ type
     configModeCurrentLine
     configModeCurrentLineBg
 
-    # highlight curent line background
+    # highlight current line background
     currentLineBg
 
     foldingLine
@@ -729,7 +729,7 @@ type
     # configuration mode
     configModeCurrentLine
 
-    # highlight curent line background
+    # highlight current line background
     currentLineBg
 
     foldingLine
@@ -759,7 +759,7 @@ const
   DefaultForegroundColor* = Color(
     index: termDefaultForeground,
     rgb: TerminalDefaultRgb)
-  DefaultBackgoundColor* = Color(
+  DefaultBackgroundColor* = Color(
     index: termDefaultBackground,
     rgb: TerminalDefaultRgb)
 
@@ -1640,48 +1640,48 @@ proc isEditorColorPairIndex*(s: string): bool =
   for i in EditorColorPairIndex:
     if $i == s: return true
 
-proc rgbToColor8*(orignRgb: Rgb): Color8 =
+proc rgbToColor8*(originRgb: Rgb): Color8 =
   ## Converts an rgb value to a color,
   ## the closest color is approximated
 
-  if orignRgb.isTermDefaultColor: return Color8.default
+  if originRgb.isTermDefaultColor: return Color8.default
 
   var lowestDifference = 100000
 
   for name in Color8:
-    let difference = calcRGBDifference(orignRgb, name.rgb)
+    let difference = calcRGBDifference(originRgb, name.rgb)
     if difference < lowestDifference:
       lowestDifference = difference
       result = name
       if difference == 0:
         break
 
-proc rgbToColor16*(orignRgb: Rgb): Color16 =
+proc rgbToColor16*(originRgb: Rgb): Color16 =
   ## Converts an rgb value to a color,
   ## the closest color is approximated
 
-  if orignRgb.isTermDefaultColor: return Color16.default
+  if originRgb.isTermDefaultColor: return Color16.default
 
   var lowestDifference = 100000
 
   for name in Color16:
-    let difference = calcRGBDifference(orignRgb, name.rgb)
+    let difference = calcRGBDifference(originRgb, name.rgb)
     if difference < lowestDifference:
       lowestDifference = difference
       result = name
       if difference == 0:
         break
 
-proc rgbToColor256*(orignRgb: Rgb): Color256 =
+proc rgbToColor256*(originRgb: Rgb): Color256 =
   ## Converts an rgb value to a color,
   ## the closest color is approximated
 
-  if orignRgb.isTermDefaultColor: return Color256.default
+  if originRgb.isTermDefaultColor: return Color256.default
 
   var lowestDifference = 100000
 
   for name in Color256:
-    let difference = calcRGBDifference(orignRgb, name.rgb)
+    let difference = calcRGBDifference(originRgb, name.rgb)
     if difference < lowestDifference:
       lowestDifference = difference
       result = name
@@ -1689,7 +1689,7 @@ proc rgbToColor256*(orignRgb: Rgb): Color256 =
         break
 
 proc downgrade*(rgb: Rgb, mode: ColorMode): Rgb =
-  ## Donwgrade rgb to 256 or 16 or 8.
+  ## Downgrade rgb to 256 or 16 or 8.
   ## Do nothing if greater than 256.
 
   case mode:

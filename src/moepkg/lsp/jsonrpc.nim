@@ -167,7 +167,7 @@ proc send(
 
     return Result[(), string].ok ()
 
-template newReqest*(id: int, methodName: string, params: JsonNode): JsonNode =
+template newRequest*(id: int, methodName: string, params: JsonNode): JsonNode =
   %* {
     "jsonrpc": "2.0",
     "id": id,

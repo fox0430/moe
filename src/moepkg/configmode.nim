@@ -2155,11 +2155,11 @@ proc initThemeColorsTableBuffer*(s: EditorSettings): seq[Runes] =
 
       fgColorText =
         if fgHex.isSome: fgHex.get
-        else: "termDefautFg"
+        else: "termDefaultFg"
 
       bgColorText =
         if bgHex.isSome: bgHex.get
-        else: "termDefautBg"
+        else: "termDefaultBg"
 
     result.add(ru fmt"{Indent}{$pairIndex}")
     result.add(ru fmt"{Indent.repeat(2)}foreground{space}{fgColorText}")

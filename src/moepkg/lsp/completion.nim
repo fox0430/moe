@@ -33,7 +33,7 @@ type
 
   LspCompletionTriggerKind* = enums.CompletionTriggerKind
 
-  LspCompletionResut* = Result[seq[CompletionItem], string]
+  LspCompletionResult* = Result[seq[CompletionItem], string]
 
 proc isTriggerCharacter*(
   options: LspCompletionOptions,
@@ -69,7 +69,7 @@ proc initCompletionParams*(
         triggerKind: triggerKind,
         triggerCharacter: triggerChar)))
 
-proc parseTextDocumentCompletionResponse*(res: JsonNode): LspCompletionResut =
+proc parseTextDocumentCompletionResponse*(res: JsonNode): LspCompletionResult =
   if not res.contains("result"):
     return Result[seq[CompletionItem], string].err fmt"Invalid response: {res}"
 

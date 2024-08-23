@@ -54,15 +54,15 @@ proc toSyntaxCheckMessageType*(
       of 4: return SyntaxCheckMessageType.hint
       else: doAssert(false, "Invalid DiagnosticSeverity")
 
-proc isSyntaxCheckFormatedMessage*(m: string | Runes): bool {.inline.} =
+proc isSyntaxCheckFormattedMessage*(m: string | Runes): bool {.inline.} =
   startsWith($m, "SyntaxError: ")
 
-proc formatedMessage*(
+proc formattedMessage*(
   syntaxErrors: seq[SyntaxError],
   line: int): Option[Runes] =
-    ## Return a formated syntax error message with the position for
+    ## Return a formatted syntax error message with the position for
     ## the specified line, if it exists.
-    ## Message exmaple: "SyntaxError: (1, 2) Syntax error!"
+    ## Message example: "SyntaxError: (1, 2) Syntax error!"
 
     for se in syntaxErrors:
       if line == se.position.line:

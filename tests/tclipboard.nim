@@ -110,26 +110,26 @@ template runClipboardGetTests(tool: ClipboardTool) =
       let buf = getFromClipboard(tool).get
       check buf == "abc\ndef".toRunes
 
-suite fmt"clipboard: Send to clipboad (xsel)":
+suite fmt"clipboard: Send to clipboard (xsel)":
   runClipboardSendTests(ClipboardTool.xsel)
 
-suite fmt"clipboard: Send to clipboad (xclip)":
+suite fmt"clipboard: Send to clipboard (xclip)":
   runClipboardSendTests(ClipboardTool.xclip)
 
-suite fmt"clipboard: Send to clipboad (wl-clipboard)":
+suite fmt"clipboard: Send to clipboard (wl-clipboard)":
   runClipboardSendTests(ClipboardTool.wlClipboard)
 
-suite fmt"clipboard: Send to clipboad (WSL)":
+suite fmt"clipboard: Send to clipboard (WSL)":
   runClipboardSendTests(ClipboardTool.wslDefault)
 
-suite fmt"clipboard: Get from clipboad (xsel)":
+suite fmt"clipboard: Get from clipboard (xsel)":
   runClipboardGetTests(ClipboardTool.xsel)
 
-suite fmt"clipboard: Get from clipboad (xclip)":
+suite fmt"clipboard: Get from clipboard (xclip)":
   runClipboardGetTests(ClipboardTool.xclip)
 
-suite fmt"clipboard: Get from clipboad (wl-clipboad)":
+suite fmt"clipboard: Get from clipboard (wl-clipboard)":
   runClipboardGetTests(ClipboardTool.wlClipboard)
 
-suite fmt"clipboard: Get from clipboad (WSL)":
+suite fmt"clipboard: Get from clipboard (WSL)":
   runClipboardGetTests(ClipboardTool.wslDefault)

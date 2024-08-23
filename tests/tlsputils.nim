@@ -41,7 +41,7 @@ suite "lsp: parseTraceValue":
   test "Invalid value":
     check parseTraceValue("a").isErr
 
-suite "lsp: lspMetod":
+suite "lsp: lspMethod":
   test "Invalid":
     check lspMethod(%*{"jsonrpc": "2.0", "result": nil}).isErr
 
