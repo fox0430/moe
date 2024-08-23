@@ -52,7 +52,7 @@ jobs:
           - '1.6.2'
           - '1.6.16'
           - 'stable'
-#          - 'devel'
+          - 'devel'
 
     name: Build on ${{ matrix.nim-version }} (${{ matrix.os }})
     steps:
