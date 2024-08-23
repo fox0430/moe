@@ -33,54 +33,54 @@ type
     args*: seq[Runes]
 
 proc askCreateDirPrompt*(
-  commndLine: var CommandLine,
+  commandLine: var CommandLine,
   path: string): bool =
 
     let mess = fmt"{path} does not exists. Create it now?: y/n"
-    commndLine.write(mess.toRunes)
+    commandLine.write(mess.toRunes)
     addMessageLog mess.toRunes
 
-    let key = commndLine.getKeyBlocking
+    let key = commandLine.getKeyBlocking
     if key == ord('y'): result = true
     else: result = false
 
 proc askBackupRestorePrompt*(
-  commndLine: var CommandLine,
+  commandLine: var CommandLine,
   filename: Runes): bool =
 
     let mess = fmt"Restore {filename}?: y/n"
-    commndLine.write(mess.toRunes)
+    commandLine.write(mess.toRunes)
     addMessageLog mess
 
-    let key = commndLine.getKeyBlocking
+    let key = commandLine.getKeyBlocking
     if key == ord('y'): result = true
     else: result = false
 
 proc askDeleteBackupPrompt*(
-  commndLine: var CommandLine,
+  commandLine: var CommandLine,
   filename: Runes): bool =
 
     let mess = fmt"Delete {filename}?: y/n"
-    commndLine.write(mess.toRunes)
+    commandLine.write(mess.toRunes)
     addMessageLog mess
 
-    let key = commndLine.getKeyBlocking
+    let key = commandLine.getKeyBlocking
     if key == ord('y'): result = true
     else: result = false
 
-proc askFileChangedSinceReading*(commndLine: var CommandLine): bool =
+proc askFileChangedSinceReading*(commandLine: var CommandLine): bool =
   block:
     const Mess = "WARNING: The file has been changed since reading it!: Press any key"
-    commndLine.write(Mess.toRunes)
+    commandLine.write(Mess.toRunes)
     addMessageLog Mess.toRunes
-    discard commndLine.getKeyBlocking
+    discard commandLine.getKeyBlocking
 
   block:
     const Mess = "Do you really want to write to it: y/n ?"
-    commndLine.write(Mess.toRunes)
+    commandLine.write(Mess.toRunes)
     addMessageLog Mess.toRunes
 
-    let key = commndLine.getKeyBlocking
+    let key = commandLine.getKeyBlocking
     if key == ord('y'): result = true
     else: result = false
 

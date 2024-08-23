@@ -64,7 +64,7 @@ type
       ## You can use these registers.
 
     clipboard: ClipBoardRegister
-      ## Register names: '*', '+' and '~'. These registers are same currnetly.
+      ## Register names: '*', '+' and '~'. These registers are same currently.
       ## Read only from editor users.
       ## Store the buffer from OS clipboard.
 
@@ -76,7 +76,7 @@ type
       ## Register names: '0' ~ '9', 'A' ~ 'Z' 'a' ~ 'z'.
       ## Registers for the editor operations.
       ##
-      ## key: Rgister name
+      ## key: Register name
       ## value: Operations (editor commands)
 
 proc initOperationRegisters(): OperationRegisters =

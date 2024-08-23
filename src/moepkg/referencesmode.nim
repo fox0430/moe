@@ -40,24 +40,24 @@ proc closeReferencesMode(status: var EditorStatus) =
   status.deleteBuffer(currentMainWindowNode.bufferIndex)
 
 proc parseDestinationLine(line: Runes): Result[Destination, string] =
-  let lineSplited = line.split(ru' ').filterIt(it.len > 0)
-  if lineSplited.len != 5:
+  let lineSplit = line.split(ru' ').filterIt(it.len > 0)
+  if lineSplit.len != 5:
     return Result[Destination, string].err "Invalid destination"
 
   let
     line =
       try:
-        parseInt(lineSplited[1])
+        parseInt(lineSplit[1])
       except ValueError:
         return Result[Destination, string].err "Invalid format: line"
 
     column =
       try:
-        parseInt(lineSplited[3])
+        parseInt(lineSplit[3])
       except ValueError:
         return Result[Destination, string].err "Invalid format: column"
 
-  return Result[Destination, string].ok (lineSplited[0], line, column)
+  return Result[Destination, string].ok (lineSplit[0], line, column)
 
 proc openWindowAndJumpToReference(status: var EditorStatus) =
   let d = parseDestinationLine(

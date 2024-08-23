@@ -149,8 +149,8 @@ proc changeMode*(status: var EditorStatus, mode: Mode) =
   currentBufStatus.prevMode = currentMode
   currentBufStatus.mode = mode
 
-# Set the current cursor postion to status.lastPosition
-proc updateLastCursorPostion*(status: var EditorStatus) =
+# Set the current cursor position to status.lastPosition
+proc updateLastCursorPosition*(status: var EditorStatus) =
   for i, p in status.lastPosition:
     if p.path.absolutePath == currentBufStatus.path.absolutePath:
       status.lastPosition[i].line = currentMainWindowNode.currentLine
@@ -163,7 +163,7 @@ proc updateLastCursorPostion*(status: var EditorStatus) =
       line: currentMainWindowNode.currentLine,
       column: currentMainWindowNode.currentColumn)
 
-proc getLastCursorPostion*(
+proc getLastCursorPosition*(
   lastPosition: seq[LastCursorPosition],
   path: Runes): Option[LastCursorPosition] =
 
@@ -173,7 +173,7 @@ proc getLastCursorPostion*(
 
 proc changeCurrentWin*(status: var EditorStatus, index: int) =
   if index < status.mainWindow.numOfMainWindow and index > 0:
-    status.updateLastCursorPostion
+    status.updateLastCursorPosition
 
     var node = mainWindowNode.searchByWindowIndex(index)
     currentMainWindowNode = node
@@ -441,7 +441,7 @@ proc addNewBuffer*(
                        status.settings.lsp.languages[newBufStatus.langId].command,
                        err.error)
                  else:
-                   # Start LSP initializtion.
+                   # Start LSP initialization.
                    let err = status.lspInitialize(
                      $newBufStatus.openDir,
                      newBufStatus.langId)
@@ -828,12 +828,12 @@ proc updateCommandLine(status: var EditorStatus) =
 
   if currentBufStatus.mode.isEditMode and
      currentBufStatus.syntaxCheckResults.len > 0:
-       let message = currentBufStatus.syntaxCheckResults.formatedMessage(
+       let message = currentBufStatus.syntaxCheckResults.formattedMessage(
          currentMainWindowNode.currentLine)
        if message.isSome:
           # Write messages for syntax checker reuslts.
          status.commandLine.write message.get
-       elif status.commandLine.buffer.isSyntaxCheckFormatedMessage:
+       elif status.commandLine.buffer.isSyntaxCheckFormattedMessage:
          # Clear if messages for other lines are still displayed.
          status.commandLine.clear
 
@@ -1107,13 +1107,13 @@ proc update*(status: var EditorStatus) =
   if currentBufStatus.isCursor:
     showCursor()
 
-proc restoreCursorPostion*(
+proc restoreCursorPosition*(
   node: var WindowNode,
   bufStatus: BufferStatus,
   lastPosition: seq[LastCursorPosition]) =
     ## Update currentLine and currentColumn from status.lastPosition
 
-    let position = lastPosition.getLastCursorPostion(bufStatus.path)
+    let position = lastPosition.getLastCursorPosition(bufStatus.path)
 
     if isSome(position):
       let posi = position.get
@@ -1135,22 +1135,22 @@ proc moveCurrentMainWindow*(status: var EditorStatus, index: int) =
   if index < 0 or
      status.mainWindow.numOfMainWindow <= index: return
 
-  status.updateLastCursorPostion
+  status.updateLastCursorPosition
 
   currentMainWindowNode = mainWindowNode.searchByWindowIndex(index)
 
 proc moveNextWindow*(status: var EditorStatus) {.inline.} =
-  status.updateLastCursorPostion
+  status.updateLastCursorPosition
 
   status.moveCurrentMainWindow(currentMainWindowNode.windowIndex + 1)
 
 proc movePrevWindow*(status: var EditorStatus) {.inline.} =
-  status.updateLastCursorPostion
+  status.updateLastCursorPosition
 
   status.moveCurrentMainWindow(currentMainWindowNode.windowIndex - 1)
 
 proc verticalSplitWindow*(status: var EditorStatus) =
-  status.updateLastCursorPostion
+  status.updateLastCursorPosition
 
   # Create the new window
   let buffer = currentBufStatus.buffer
@@ -1159,16 +1159,16 @@ proc verticalSplitWindow*(status: var EditorStatus) =
 
   if currentBufStatus.isFilerMode:
     # Add a new buffer if the filer mode because need to a new filerStatus.
-    let bufSatusIndex = status.addNewBuffer($currentBufStatus.path, Mode.filer)
-    if bufSatusIndex.isErr: return
-    status.addFilerStatus(bufSatusIndex.get)
+    let bufStatusIndex = status.addNewBuffer($currentBufStatus.path, Mode.filer)
+    if bufStatusIndex.isErr: return
+    status.addFilerStatus(bufStatusIndex.get)
 
     status.statusLine.add(initStatusLine())
 
     status.resize
 
     status.moveNextWindow
-    currentMainWindowNode.bufferIndex = bufSatusIndex.get
+    currentMainWindowNode.bufferIndex = bufStatusIndex.get
     status.movePrevWindow
   else:
     status.statusLine.add(initStatusLine())
@@ -1176,10 +1176,10 @@ proc verticalSplitWindow*(status: var EditorStatus) =
 
   var newNode = mainWindowNode.searchByWindowIndex(
     currentMainWindowNode.windowIndex + 1)
-  newNode.restoreCursorPostion(currentBufStatus, status.lastPosition)
+  newNode.restoreCursorPosition(currentBufStatus, status.lastPosition)
 
 proc horizontalSplitWindow*(status: var EditorStatus) =
-  status.updateLastCursorPostion
+  status.updateLastCursorPosition
 
   let buffer = currentBufStatus.buffer
   currentMainWindowNode = currentMainWindowNode.horizontalSplit(buffer)
@@ -1187,16 +1187,16 @@ proc horizontalSplitWindow*(status: var EditorStatus) =
 
   if currentBufStatus.isFilerMode:
     # Add a new buffer if the filer mode because need to a new filerStatus.
-    let bufSatusIndex = status.addNewBuffer($currentBufStatus.path, Mode.filer)
-    if bufSatusIndex.isErr: return
-    status.addFilerStatus(bufSatusIndex.get)
+    let bufStatusIndex = status.addNewBuffer($currentBufStatus.path, Mode.filer)
+    if bufStatusIndex.isErr: return
+    status.addFilerStatus(bufStatusIndex.get)
 
     status.statusLine.add(initStatusLine())
 
     status.resize
 
     status.moveNextWindow
-    currentMainWindowNode.bufferIndex = bufSatusIndex.get
+    currentMainWindowNode.bufferIndex = bufStatusIndex.get
     status.movePrevWindow
   else:
     status.statusLine.add(initStatusLine())
@@ -1204,12 +1204,12 @@ proc horizontalSplitWindow*(status: var EditorStatus) =
 
   var newNode = mainWindowNode.searchByWindowIndex(
     currentMainWindowNode.windowIndex + 1)
-  newNode.restoreCursorPostion(currentBufStatus, status.lastPosition)
+  newNode.restoreCursorPosition(currentBufStatus, status.lastPosition)
 
 proc closeWindow*(status: var EditorStatus, node: WindowNode) =
   if isNormalMode(currentBufStatus.mode, currentBufStatus.prevMode) or
      isFilerMode(currentBufStatus.mode, currentBufStatus.prevMode):
-    status.updateLastCursorPostion
+    status.updateLastCursorPosition
 
   if status.mainWindow.numOfMainWindow == 1:
     status.exitEditor

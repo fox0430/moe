@@ -29,7 +29,7 @@ type
 
 proc loadPersistData(status: var EditorStatus) =
   ## Load persisted data (Ex command history, search history and cursor
-  ## postion)
+  ## position)
 
   if status.settings.persist.exCommand:
     let limit = status.settings.persist.exCommandHistoryLimit
@@ -41,7 +41,7 @@ proc loadPersistData(status: var EditorStatus) =
 
   if status.settings.persist.cursorPosition:
     status.lastPosition = loadLastCursorPosition()
-    currentMainWindowNode.restoreCursorPostion(
+    currentMainWindowNode.restoreCursorPosition(
       currentBufStatus,
       status.lastPosition)
 

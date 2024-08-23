@@ -702,7 +702,7 @@ test "Change current buffer":
   status.resize(100, 100)
   status.update
 
-suite "editorstatus: Updates/Restore the last cursor postion":
+suite "editorstatus: Updates/Restore the last cursor position":
   test "Update the last cursor position (3 lines)":
     var status = initEditorStatus()
 
@@ -711,7 +711,7 @@ suite "editorstatus: Updates/Restore the last cursor postion":
     currentMainWindowNode.currentLine = 1
     currentMainWindowNode.currentColumn = 1
 
-    status.updateLastCursorPostion
+    status.updateLastCursorPosition
 
     privateAccess(status.lastPosition[0].type)
 
@@ -730,12 +730,12 @@ suite "editorstatus: Updates/Restore the last cursor postion":
     status.resize(100, 100)
     status.update
 
-    status.updateLastCursorPostion
+    status.updateLastCursorPosition
 
     # Edit buffer after update the last cursor position
     currentBufStatus.buffer[1] = ru ""
 
-    currentMainWindowNode.restoreCursorPostion(currentBufStatus,
+    currentMainWindowNode.restoreCursorPosition(currentBufStatus,
                                                status.lastPosition)
     status.update
 
@@ -756,9 +756,9 @@ suite "editorstatus: Updates/Restore the last cursor postion":
     currentMainWindowNode.currentLine = currentBufStatus.buffer.high
     status.update
 
-    status.updateLastCursorPostion
+    status.updateLastCursorPosition
 
-    currentMainWindowNode.restoreCursorPostion(
+    currentMainWindowNode.restoreCursorPosition(
       currentBufStatus,
       status.lastPosition)
 
@@ -1105,7 +1105,7 @@ suite "editorstatus: smoothScrollDownNumberOfLines":
     check currentMainWindowNode.currentLine == 10
 
 suite "editorstatus: initLsp":
-  test "Init wtih nimlangserver":
+  test "Init with nimlangserver":
     if not isNimlangserverAvailable():
       skip()
     else:

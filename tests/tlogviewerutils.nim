@@ -98,7 +98,7 @@ suite "logviewerutils: initLspLogViewrBuffer":
     ]
     .toSeqRunes
 
-suite "logviewerutils: isUpdateEditorLogViwer":
+suite "logviewerutils: isUpdateEditorLogViewer":
   setup:
     clearMessageLog()
 
@@ -106,22 +106,22 @@ suite "logviewerutils: isUpdateEditorLogViwer":
     var buffer = @[""]
     addMessageLog "line1"
 
-    check isUpdateEditorLogViwer(buffer)
+    check isUpdateEditorLogViewer(buffer)
 
   test "Expect true 2":
     addMessageLog "line1"
     var buffer = @["line1"]
     addMessageLog "line2"
 
-    check isUpdateEditorLogViwer(buffer)
+    check isUpdateEditorLogViewer(buffer)
 
   test "Expect false":
     addMessageLog "line1"
     var buffer = @["line1"]
 
-    check not isUpdateEditorLogViwer(buffer)
+    check not isUpdateEditorLogViewer(buffer)
 
-suite "logviewerutils: isUpdateLspLogViwer":
+suite "logviewerutils: isUpdateLspLogViewer":
   setup:
     clearMessageLog()
 
@@ -134,7 +134,7 @@ suite "logviewerutils: isUpdateLspLogViwer":
       kind: LspMessageKind.request,
       message: %*{"message1": "val1"})
 
-    check isUpdateLspLogViwer(buffer, log)
+    check isUpdateLspLogViewer(buffer, log)
 
   test "Expect true 2":
     var log: LspLog
@@ -156,7 +156,7 @@ suite "logviewerutils: isUpdateLspLogViwer":
       kind: LspMessageKind.request,
       message: %*{"message2": "val2"})
 
-    check isUpdateLspLogViwer(buffer, log)
+    check isUpdateLspLogViewer(buffer, log)
 
   test "Expect false":
     var log: LspLog
@@ -172,4 +172,4 @@ suite "logviewerutils: isUpdateLspLogViwer":
       "}"
     ]
 
-    check not isUpdateLspLogViwer(buffer, log)
+    check not isUpdateLspLogViewer(buffer, log)

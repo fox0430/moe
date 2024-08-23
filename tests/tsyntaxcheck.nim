@@ -26,17 +26,17 @@ import moepkg/[independentutils, backgroundprocess, unicodeext]
 
 import moepkg/syntaxcheck {.all.}
 
-suite "syntaxCheck: isSyntaxCheckFormatedMessage":
+suite "syntaxCheck: isSyntaxCheckFormattedMessage":
   test "Valid runes":
-    check "SyntaxError: (10, 0) Error!".toRunes.isSyntaxCheckFormatedMessage
+    check "SyntaxError: (10, 0) Error!".toRunes.isSyntaxCheckFormattedMessage
 
   test "Valid string":
-    check "SyntaxError: (10, 0) Error!".isSyntaxCheckFormatedMessage
+    check "SyntaxError: (10, 0) Error!".isSyntaxCheckFormattedMessage
 
   test "Invalid":
-    check not "Error!".isSyntaxCheckFormatedMessage
+    check not "Error!".isSyntaxCheckFormattedMessage
 
-suite "syntaxCheck: formatedMessage":
+suite "syntaxCheck: formattedMessage":
   test "Some messages and none":
     let results = @[
       SyntaxError(
@@ -51,15 +51,15 @@ suite "syntaxCheck: formatedMessage":
 
     block checkLine0:
       const Line = 0
-      check ru"SyntaxError: (0, 0) Error1" == results.formatedMessage(Line).get
+      check ru"SyntaxError: (0, 0) Error1" == results.formattedMessage(Line).get
 
     block checkLine5:
       const Line = 5
-      check ru"SyntaxError: (5, 10) Error2" == results.formatedMessage(Line).get
+      check ru"SyntaxError: (5, 10) Error2" == results.formattedMessage(Line).get
 
     block checkNone:
       const Line = 10
-      check results.formatedMessage(Line).isNone
+      check results.formattedMessage(Line).isNone
 
 suite "syntaxCheck: syntaxCheckCommand":
   test "Nim":

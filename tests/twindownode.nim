@@ -28,7 +28,7 @@ import utils
 import moepkg/windownode {.all.}
 
 suite "windownode: absolutePosition":
-  test "Eanble EditorView.Sidebar":
+  test "Enable EditorView.Sidebar":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
     currentMainWindowNode.view.initSidebar
@@ -55,7 +55,7 @@ suite "windownode: moveCursor":
     status.resize(100, 100)
     status.update
 
-    let beforeWindowPoistion = Position(
+    let beforeWindowPosition = Position(
       y: currentMainWindowNode.y,
       x: currentMainWindowNode.x)
 
@@ -63,8 +63,8 @@ suite "windownode: moveCursor":
 
     check currentMainWindowNode.currentLine == 10
     check currentMainWindowNode.currentColumn == 5
-    check currentMainWindowNode.window.get.y == beforeWindowPoistion.y
-    check currentMainWindowNode.window.get.x == beforeWindowPoistion.x
+    check currentMainWindowNode.window.get.y == beforeWindowPosition.y
+    check currentMainWindowNode.window.get.x == beforeWindowPosition.x
 
   test "Basic 2":
     var status = initEditorStatus()
@@ -72,7 +72,7 @@ suite "windownode: moveCursor":
     status.resize(100, 100)
     status.update
 
-    let beforeWindowPoistion = Position(
+    let beforeWindowPosition = Position(
       y: currentMainWindowNode.y,
       x: currentMainWindowNode.x)
 
@@ -80,5 +80,5 @@ suite "windownode: moveCursor":
 
     check currentMainWindowNode.currentLine == 10
     check currentMainWindowNode.currentColumn == 5
-    check currentMainWindowNode.window.get.y == beforeWindowPoistion.y
-    check currentMainWindowNode.window.get.x == beforeWindowPoistion.x
+    check currentMainWindowNode.window.get.y == beforeWindowPosition.y
+    check currentMainWindowNode.window.get.x == beforeWindowPosition.x

@@ -133,7 +133,7 @@ suite "statusline: statusLineInfoBuffer":
       currentMainWindowNode,
       SetupText)
 
-  test "Wihtout items":
+  test "Without items":
     var status = initEditorStatus()
 
     const Path = "test.txt"
@@ -867,81 +867,81 @@ suite "statusline: addGitInfo":
 
 suite "statusline: modeLabel":
   test "Insert mode":
-    check modeLablel(Mode.insert) == "INSERT"
+    check modeLabel(Mode.insert) == "INSERT"
 
   test "Visual mode":
-    check modeLablel(Mode.visual) == "VISUAL"
+    check modeLabel(Mode.visual) == "VISUAL"
 
   test "Visual block mode":
-    check modeLablel(Mode.visualBlock) == "VISUAL BLOCK"
+    check modeLabel(Mode.visualBlock) == "VISUAL BLOCK"
 
   test "Visual line mode":
-    check modeLablel(Mode.visualLine) == "VISUAL LINE"
+    check modeLabel(Mode.visualLine) == "VISUAL LINE"
 
   test "Replace mode":
-    check modeLablel(Mode.replace) == "REPLACE"
+    check modeLabel(Mode.replace) == "REPLACE"
 
   test "Filer mode":
-    check modeLablel(Mode.filer) == "FILER"
+    check modeLabel(Mode.filer) == "FILER"
 
   test "Buffer Manager mode":
-    check modeLablel(Mode.bufManager) == "BUFFER"
+    check modeLabel(Mode.bufManager) == "BUFFER"
 
   test "Ex mode":
-    check modeLablel(Mode.ex) == "EX"
+    check modeLabel(Mode.ex) == "EX"
 
   test "Log viewer mode":
-    check modeLablel(Mode.logViewer) == "LOG"
+    check modeLabel(Mode.logViewer) == "LOG"
 
   test "Recent file mode":
-    check modeLablel(Mode.recentFile) == "RECENT"
+    check modeLabel(Mode.recentFile) == "RECENT"
 
   test "QuickRun mode":
-    check modeLablel(Mode.quickRun) == "QUICKRUN"
+    check modeLabel(Mode.quickRun) == "QUICKRUN"
 
   test "Backup mode":
-    check modeLablel(Mode.backup) == "BACKUP"
+    check modeLabel(Mode.backup) == "BACKUP"
 
   test "Diff mode":
-    check modeLablel(Mode.diff) == "DIFF"
+    check modeLabel(Mode.diff) == "DIFF"
 
   test "Config mode":
-    check modeLablel(Mode.config) == "CONFIG"
+    check modeLabel(Mode.config) == "CONFIG"
 
   test "Debug mode":
-    check modeLablel(Mode.debug) == "DEBUG"
+    check modeLabel(Mode.debug) == "DEBUG"
 
-suite "statusline: modeLablelColor":
+suite "statusline: modeLabelColor":
   test "Insert mode":
-    check modeLablelColor(Mode.insert) ==
+    check modeLabelColor(Mode.insert) ==
       EditorColorPairIndex.statusLineInsertModeLabel
 
   test "Viausl mode":
-    check modeLablelColor(Mode.visual) ==
+    check modeLabelColor(Mode.visual) ==
       EditorColorPairIndex.statusLineVisualModeLabel
 
   test "Viausl block mode":
-    check modeLablelColor(Mode.visualBlock) ==
+    check modeLabelColor(Mode.visualBlock) ==
       EditorColorPairIndex.statusLineVisualModeLabel
 
   test "Viausl line mode":
-    check modeLablelColor(Mode.visualLine) ==
+    check modeLabelColor(Mode.visualLine) ==
       EditorColorPairIndex.statusLineVisualModeLabel
 
   test "Replace mode":
-    check modeLablelColor(Mode.replace) ==
+    check modeLabelColor(Mode.replace) ==
       EditorColorPairIndex.statusLineReplaceModeLabel
 
   test "Filer mode":
-    check modeLablelColor(Mode.filer) ==
+    check modeLabelColor(Mode.filer) ==
       EditorColorPairIndex.statusLineFilerModeLabel
 
   test "Ex mode":
-    check modeLablelColor(Mode.ex) ==
+    check modeLabelColor(Mode.ex) ==
       EditorColorPairIndex.statusLineExModeLabel
 
   test "Normal mode":
-    check modeLablelColor(Mode.normal) ==
+    check modeLabelColor(Mode.normal) ==
       EditorColorPairIndex.statusLineNormalModeLabel
 
 suite "statusline: addModeLabel":

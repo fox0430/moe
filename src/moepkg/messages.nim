@@ -120,7 +120,7 @@ proc writeMessageYankedLine*(
     if settings.logNotifications and settings.yankLogNotify:
       addMessageLog mess
 
-proc writeMessageYankedCharactor*(
+proc writeMessageYankedCharacter*(
   commandLine: var CommandLine,
   numOfChar: int,
   settings: NotificationSettings) =
@@ -452,7 +452,7 @@ proc writeLspExecuteCommandError*(
   commandLine: var CommandLine,
   message: string) =
 
-    let mess = fmt"lsp: Error: execute commnad: {message}"
+    let mess = fmt"lsp: Error: execute command: {message}"
     commandLine.writeError(mess)
 
 proc writePasteIgnoreWarn*(commandLine: var CommandLine) =

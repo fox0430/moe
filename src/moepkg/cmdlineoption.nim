@@ -67,7 +67,7 @@ proc writeCmdLineError(kind: CmdLineKind, arg: string) =
   let optionStr = if kind == cmdShortOption: "-" else: "--"
 
   echo fmt"Unknown option argument: {optionStr}{arg}"
-  echo """Pelase check "moe -h""""
+  echo """Please check "moe -h""""
   quit()
 
 proc initDefaultConfigFile() =

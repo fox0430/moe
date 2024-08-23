@@ -195,11 +195,11 @@ proc insertSelectedText*(
   lines: seq[int]) =
     # Insert the selected text to multiple lines.
 
-    let positons = lines.mapIt(BufferPosition(
+    let positions = lines.mapIt(BufferPosition(
       line: it,
       column: completionWindow.startColumn))
     bufStatus.insertMultiplePositions(
-      positons,
+      positions,
       completionWindow.selectedText)
 
 proc insertSelectedText*(
@@ -355,10 +355,10 @@ proc completionWindowPositionInEditor*(
     # Seek cursor before getting the absolute cursor position.
     windowNode.seekCursor(bufStatus.buffer)
 
-    let absCursorPositon = windowNode.absolutePosition
+    let absCursorPosition = windowNode.absolutePosition
     return Position(
-      y: (absCursorPositon.y + 1).clamp(0, getTerminalHeight()),
-      x: (absCursorPositon.x - 2).clamp(0, getTerminalWidth()))
+      y: (absCursorPosition.y + 1).clamp(0, getTerminalHeight()),
+      x: (absCursorPosition.x - 2).clamp(0, getTerminalWidth()))
 
 proc sort*(c: var CompletionWindow) {.inline.} =
   c.list.fuzzySort(c.inputText)

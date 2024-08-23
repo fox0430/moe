@@ -651,8 +651,8 @@ suite "Ex mode: Open LSP log viewer":
       "}"
     ].toSeqRunes
 
-suite "Ex mode: Highlight pair of paren settig command":
-  test "Highlight pair of paren settig command":
+suite "Ex mode: Highlight pair of paren setting command":
+  test "Highlight pair of paren setting command":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
 
@@ -1070,7 +1070,7 @@ suite "Ex mode: Show/Hide git branch name in status line when inactive window":
       status.exModeCommand(Command)
       check status.settings.statusLine.showGitInactive
 
-suite "Ex mode: Quickrun command wihtout file":
+suite "Ex mode: Quickrun command without file":
   test "Exec Quickrun without file":
     # Create a file for the test.
     var status = initEditorStatus()
@@ -1335,7 +1335,7 @@ suite "Ex mode: Change ignorecase setting command":
 
     check status.settings.standard.ignorecase
 
-  test "Disale ignorecase":
+  test "Disable ignorecase":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
     status.settings.standard.ignorecase = true
@@ -1356,7 +1356,7 @@ suite "Ex mode: Change smartcase setting command":
 
     check status.settings.standard.ignorecase
 
-  test "Disale smartcase":
+  test "Disable smartcase":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
     status.settings.standard.smartcase = true

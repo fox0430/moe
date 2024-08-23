@@ -78,7 +78,7 @@ suite "Editor: getRegister":
     check r.buffer == @["abc"].toSeqRunes
     check not r.isLine
 
-  test "Samll delete register":
+  test "Small delete register":
     var status = initEditorStatus()
 
     status.registers.setDeletedRegister(ru"abc")
@@ -725,7 +725,7 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
     const Keyword = ":"
     newLineTestInNimCase5(Keyword)
   block:
-    const Keyword = "objecT"
+    const Keyword = "objectT"
     newLineTestInNimCase5(Keyword)
   block:
     const Keyword = "="
@@ -1967,7 +1967,7 @@ suite "Editor: Delete from the current line to the next blank line":
     check status.registers.getNoNamedRegister.isLine
 
 suite "Editor: Replace characters":
-  test "Repace a character":
+  test "Replace a character":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
@@ -1990,7 +1990,7 @@ suite "Editor: Replace characters":
     check currentBufStatus.buffer[0] == ru "zbcdef"
     check currentMainWindowNode.currentColumn == 0
 
-  test "Repace characters":
+  test "Replace characters":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
@@ -2013,7 +2013,7 @@ suite "Editor: Replace characters":
     check currentBufStatus.buffer[0] == ru "zzzdef"
     check currentMainWindowNode.currentColumn == 2
 
-  test "Repace characters 2":
+  test "Replace characters 2":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
@@ -2036,7 +2036,7 @@ suite "Editor: Replace characters":
     check currentBufStatus.buffer[0] == ru "zzzzzz"
     check currentMainWindowNode.currentColumn == 5
 
-  test "Repace characters 3":
+  test "Replace characters 3":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
@@ -2060,7 +2060,7 @@ suite "Editor: Replace characters":
     check currentBufStatus.buffer[0] == ru ""
     check currentBufStatus.buffer[1] == ru "bcdef"
 
-  test "Repace characters 4":
+  test "Replace characters 4":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])

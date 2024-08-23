@@ -637,7 +637,7 @@ proc requestGotoImplementation(status: var EditorStatus) =
     debug "lsp client is not ready"
     return
 
-  let r = lspClient.textDocumentImplemenation(
+  let r = lspClient.textDocumentImplementation(
     currentBufStatus.id,
     $currentBufStatus.absolutePath,
     currentMainWindowNode.bufferPosition)

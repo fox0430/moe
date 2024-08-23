@@ -24,10 +24,10 @@ export os
 
 proc splitPathExt*(path: string): tuple[head, tail: string] =
   ## The difference with `std/os.splitPath` is that it does not delete '/'.
-  ## Exmaple:
+  ## Example:
   ##   os.splitPath("../dir") == (head: "..", tail: "dir")
   ##   osext.splitPathExt("../dir") == (head: "../", tail: "dir")
-  ## Exmaple 2:
+  ## Example 2:
   ##   os.splitPath("/dir/a") == (head: "/dir", tail: "a")
   ##   osext.splitPathExt("/dir/a") == (head: "/dir/", tail: "a")
 

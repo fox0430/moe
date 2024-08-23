@@ -47,7 +47,7 @@
 | <kbd>**h**</kbd><br> | Go Left :arrow_left: |
 | <kbd>**j**</kbd><br> | Go Down :arrow_down: |
 | <kbd>**k**</kbd><br> | Go Up :arrow_up: |
-| <kbd>**l**</kbd><br> | Go Rigth :arrow_right: |
+| <kbd>**l**</kbd><br> | Go Right :arrow_right: |
 | <kbd>**w**</kbd><br> | Go forwards to the start of a word :arrow_right: |
 | <kbd>**e**</kbd><br> | Go forwards to the end of a word :arrow_right: |
 | <kbd>**b**</kbd><br> | Go backwards to the start of a word :arrow_left: |
@@ -93,7 +93,7 @@
 | <kbd> * </kbd><bt> | Search forwards for the word under cursor |
 | <kbd>**#**</kbd><bt> | Search backwards for the word under cursor |
 | <kbd>**f**</kbd><bt> | Jump to next occurrence |
-| <kbd>**F**</kbd><bt> |Jump to previous occurence |
+| <kbd>**F**</kbd><bt> |Jump to previous occurrence |
 | <kbd>**Ctrl**</kbd> <kbd>**k**</kbd><bt> |Move next window |
 | <kbd>**Ctrl**</kbd> <kbd>**j**</kbd><bt> |Move prev window  |
 | <kbd>**z**</kbd> <kbd>**t**</kbd><bt> | Scroll the screen so the cursor is at the top |
@@ -105,7 +105,7 @@
 | <kbd>**?**</kbd><bt> |`keyword` Search backwards |
 | <kbd>**/**</kbd><bt> |`keyword` Search forwards |
 | <kbd>**\\**</kbd> <kbd>**r**</kbd><bt> | Quick Run |
-| <kbd>**s**</kbd> OR <kbd>**c**</kbd><kbd>**u**</kbd><bt> | Delete current charater and enter insert mode |
+| <kbd>**s**</kbd> OR <kbd>**c**</kbd><kbd>**u**</kbd><bt> | Delete current character and enter insert mode |
 | <kbd>**y**</kbd><kbd>**{**</kbd><bt> | Yank to the previous blank line |
 | <kbd>**y**</kbd><kbd>**}**</kbd><bt> | Yank to the next blank line |
 | <kbd>**y**</kbd><kbd>**l**</kbd><bt> | Yank a character |
@@ -318,11 +318,11 @@
 | `theme themeName` | Change color theme : Example `theme dark` |
 | `tab on` or `tab off` | Change setting to tab line |
 | `syntax on` or `syntax off` | Change setting to syntax highlighting |
-| `tabstop number` | Change setting to tabStop : Exmaple `tabstop 2`  |
+| `tabstop number` | Change setting to tabStop : Example `tabstop 2`  |
 | `paren on` or `paren off` | Change setting to auto close paren |
-| `indent on` or `indent off` | Chnage sestting to auto indent |
-| `linenum on` or `linenum off` | Change setting to dispaly line number |
-| `statusLine on` or `statusLine on` | Change setting to display stattus line|
+| `indent on` or `indent off` | Change sestting to auto indent |
+| `linenum on` or `linenum off` | Change setting to display line number |
+| `statusLine on` or `statusLine on` | Change setting to display status line|
 | `realtimesearch on` or `realtimesearch off` | Change setting to real-time search |
 | `deleteparen on` or `deleteparen off` | Change setting to auto delete paren |
 | `smoothscroll on` or `smoothscroll off` | Change setting to smooth scroll |

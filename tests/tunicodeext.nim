@@ -209,7 +209,7 @@ Danish (da)
 
   Quizdeltagerne spiste jordbær med fløde, mens cirkusklovnen
   Wolther spillede på xylofon.
-  (= Quiz contestants were eating strawbery with cream while Wolther
+  (= Quiz contestants were eating strawberry with cream while Wolther
   the circus clown played on xylophone.)
 
 German (de)
@@ -250,7 +250,7 @@ Spanish (es)
 French (fr)
 -----------
 
-  Portez ce vieux whisky au juge blond qui fume sur son île intérieure, à
+  Portez ce vieux whisky au judge blond qui fume sure son île intérieure, à
   côté de l'alcôve ovoïde, où les bûches se consument dans l'âtre, ce
   qui lui permet de penser à la cænogenèse de l'être dont il est question
   dans la cause ambiguë entendue à Moÿ, dans un capharnaüm qui,

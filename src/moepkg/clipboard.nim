@@ -43,7 +43,7 @@ template xselCopyCommand(delimiterStr, buf: string): string =
 template xclipCopyCommand(delimiterStr, buf: string): string =
   genHereDocument("xclip", delimiterStr, buf)
 
-template wlClipboardCopyComand(delimiterStr, buf: string): string =
+template wlClipboardCopyCommand(delimiterStr, buf: string): string =
   genHereDocument("wl-copy", delimiterStr, buf)
 
 template wslDefaultCopyCommand(delimiterStr, buf: string): string =
@@ -100,7 +100,7 @@ proc sendToClipboard*(
         case tool:
           of xsel: xselCopyCommand(delimiterStr, buf)
           of xclip: xclipCopyCommand(delimiterStr, buf)
-          of wlClipboard: wlClipboardCopyComand(delimiterStr, buf)
+          of wlClipboard: wlClipboardCopyCommand(delimiterStr, buf)
           of wslDefault: wslDefaultCopyCommand(delimiterStr, buf)
           of macOsDefault: macOsDefaultCopyCommand(delimiterStr, buf)
 

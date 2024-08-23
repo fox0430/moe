@@ -70,7 +70,7 @@ proc replaceCurrentCharacter(
   windowNode: var WindowNode,
   settings: EditorSettings,
   key: Rune) =
-    ## Repace the current chracter or insert the character and move to the right
+    ## Replace the current character or insert the character and move to the right
 
     if windowNode.currentColumn < bufStatus.buffer[windowNode.currentLine].len:
       let

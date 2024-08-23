@@ -128,7 +128,7 @@ liveReloadOfFile
 ```
 
 Terminal color mode (string) `none` or `8` or `16` or `256` or `24bit`
-defualt is "24bit"
+default is "24bit"
 ```
 colorMode
 ```
@@ -150,7 +150,7 @@ tool
 ```
 
 ### TabLine table
-Show all bufer in tab line (bool)  
+Show all buffer in tab line (bool)  
 default is false  
 ```
 allBuffer
@@ -194,7 +194,7 @@ gitbranchName
 ```
 
 Show number of changed lines (bool)  
-defualt is true
+default is true
 ```
 showChangedLine
 ```
@@ -217,7 +217,7 @@ Items: `lineNumber`, `totalLines` `columnNumber`, `totalColumns`,  `encoding`, `
 
 You can display information in the status lien by enclosing the above items in parentheses. Example: `{lineNumber}`
 
-defaut is `"{lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {fileType}"`
+default is `"{lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {fileType}"`
 ```
 setupText
 ```
@@ -243,7 +243,7 @@ command
 ### Highlight table
 
 Highlight the current line (bool)  
-defaut is true
+default is true
 ```
 currentLine
 
@@ -251,7 +251,7 @@ currentLine
 
 Highlight any word (array)  
 
-defaut
+default
 ```
 ["TODO", "WIP", "NOTE"]
 ```
@@ -541,7 +541,7 @@ exCommand
 ```
 
 The maximum entries of ex command history to save (int).
-The defaut value is 1000.
+The default value is 1000.
 ```
 exCommandHistoryLimit
 ```
@@ -553,7 +553,7 @@ search
 ```
 
 The maximum entries of search history to save (int).
-The defaut value is 1000.
+The default value is 1000.
 ```
 searchHistoryLimit
 ```
@@ -792,119 +792,119 @@ maxDelay
 ### Lsp table
 
 Enable/Disable LSP (bool)  
-defaut is `false`
+default is `false`
 ```
 enable
 ```
 
 ### Lsp.Completion table
 Enable/Disable LSP Completion (bool)  
-defaut is `true`
+default is `true`
 ```
 enable
 ```
 
 ### Lsp.Declaration table
 Enable/Disable LSP Goto Declaration (bool)  
-defaut is `true`
+default is `true`
 ```
 enable
 ```
 
 ### Lsp.Definition table
 Enable/Disable LSP Goto Definition (bool)  
-defaut is `true`
+default is `true`
 ```
 enable
 ```
 
 ### Lsp.TypeDefinition table
 Enable/Disable LSP Goto TypeDefinition (bool)  
-defaut is `true`
+default is `true`
 ```
 enable
 ```
 
 ### Lsp.Implementation table
 Enable/Disable LSP Goto Implementation (bool)  
-defaut is `true`
+default is `true`
 ```
 enable
 ```
 
 ### Lsp.Diagnostics table
 Enable/Disable LSP Diagnostics (bool)  
-defaut is `true`
+default is `true`
 ```
 enable
 ```
 
 ### Lsp.Hover table
 Enable/Disable LSP Hover (bool)  
-defaut is `true`
+default is `true`
 ```
 enable
 ```
 
 ### Lsp.InlayHint table
 Enable/Disable LSP InlayHint (bool)  
-defaut is `true`
+default is `true`
 ```
 enable
 ```
 
 ### Lsp.References table
 Enable/Disable LSP Find References (bool)  
-defaut is `true`
+default is `true`
 ```
 enable
 ```
 
 ### Lsp.CallHierarchy table
 Enable/Disable LSP CallHierarchy (bool)  
-defaut is `true`
+default is `true`
 ```
 enable
 ```
 
 ### Lsp.DocumentHighlight table
 Enable/Disable LSP Document Highlight (bool)  
-defaut is `true`
+default is `true`
 ```
 enable
 ```
 
 ### Lsp.DocumentLink table
 Enable/Disable LSP Document Link (bool)  
-defaut is `true`
+default is `true`
 ```
 enable
 ```
 
 ### Lsp.CodeLens table
 Enable/Disable LSP Code Lens (bool)  
-defaut is `false`
+default is `false`
 ```
 enable
 ```
 
 ### Lsp.Rename table
 Enable/Disable LSP Rename (bool)  
-defaut is `true`
+default is `true`
 ```
 enable
 ```
 
 ### Lsp.SemanticTokens table
 Enable/Disable LSP SemanticTokens (bool)  
-defaut is `true`
+default is `true`
 ```
 enable
 ```
 
 ### Lsp.ExecuteCommand table
 Enable/Disable LSP Execute Command (bool)  
-defaut is `true`
+default is `true`
 ```
 enable
 ```
@@ -924,14 +924,14 @@ command
 
 Enable/Disable rust-analyzer.runSingle (bool)  
 Only effective with rust-analyzer and if `Lsp.CodeLens` is enabled.  
-defaut is `true`
+default is `true`
 ```
 rustAnalyzerRunSingle
 ```
 
 Enable/Disable rust-analyzer.debugSingle (bool)  
 Only effective with rust-analyzer and if `Lsp.CodeLens` is enabled.  
-defaut is `true`
+default is `true`
 ```
 rustAnalyzerDebugSingle
 ```
@@ -960,7 +960,7 @@ Theme kind (string)
 
 `"default"` or `"vscode"` or `"config"`
 
-`defaut`: Load the defaut theme 
+`default`: Load the default theme 
 `vscode`: Load VSCode theme
 `config`: Load user theme. Also please set `Theme.path`.
 
@@ -1684,7 +1684,7 @@ syntaxCheckErr
 syntaxCheckErrBg
 ```
 
-Git confict marker color
+Git conflict marker color
 ```
 gitConflict
 ```

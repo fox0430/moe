@@ -1561,7 +1561,7 @@ proc yankCharacters*(
     else:
       registers.setYankedRegister(yankedBuffer)
 
-    commandLine.writeMessageYankedCharactor(
+    commandLine.writeMessageYankedCharacter(
       yankedBuffer.len,
       settings.notification)
 
@@ -1757,7 +1757,7 @@ proc pasteBeforeCursor*(
   bufStatus: var BufferStatus,
   windowNode: var WindowNode,
   register: Register) =
-    ## Paste buffer lines befor the current cursor position.
+    ## Paste buffer lines before the current cursor position.
     ## The buffer get from the register.
     ## if runes, Move the cursor position to the end of the runes.
     ## if lines, Move the cursor position to the first of the inserted lines.
@@ -1951,7 +1951,7 @@ proc autoIndentCurrentLine*(
 
     if oldLine != newLine: bufStatus.buffer[windowNode.currentLine] = newLine
 
-    # Update colmn in current line
+    # Update column in current line
     windowNode.currentColumn = prevLineIndent
 
     inc(bufStatus.countChange)
@@ -2098,7 +2098,7 @@ proc deleteInsideOfParen*(
 proc getWordUnderCursor*(
   bufStatus: BufferStatus,
   windowNode: WindowNode): (int, Runes) =
-    ## Return the colmn and word
+    ## Return the column and word
 
     let line = bufStatus.buffer[windowNode.currentLine]
     if line.len <= windowNode.currentColumn:
@@ -2179,7 +2179,7 @@ proc replaceCurrentCharAndMoveToRight*(
   windowNode: var WindowNode,
   isAutoDeleteParen: bool,
   r: Rune) =
-    ## Repace the current chracter or insert the character and move to the
+    ## Replace the current character or insert the character and move to the
     ## right.
 
     if windowNode.currentColumn < bufStatus.buffer[windowNode.currentLine].len:

@@ -62,7 +62,7 @@ proc gitProjectRoot(): string =
   if cmdResult.output.len > 0:
     return cmdResult.output
 
-proc getAllTrakedFilesByGit(): seq[string] =
+proc getAllTrackedFilesByGit(): seq[string] =
   ## Returns all tracked file names by git in a current project.
 
   let cmdResult = execCmdEx("git ls-tree --full-tree --name-only -r HEAD")
@@ -72,7 +72,7 @@ proc getAllTrakedFilesByGit(): seq[string] =
 proc isTrackingByGit*(path: string): bool =
   ## Return true if tracked by git.
 
-  let trackedList = getAllTrakedFilesByGit()
+  let trackedList = getAllTrackedFilesByGit()
 
   if path.isAbsolute:
     let root = gitProjectRoot()

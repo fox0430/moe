@@ -318,11 +318,11 @@ proc initBeforeLineForIncrementalReplace(
 
     let info = parseReplaceCommand(status.commandLine.buffer)
     if info.sub.len > 0 and info.by.len > 0:
-      let positons = currentBufStatus.buffer.toSeqRunes.searchAllOccurrence(
+      let positions = currentBufStatus.buffer.toSeqRunes.searchAllOccurrence(
         info.sub,
         false,
         false)
-      for p in positons:
+      for p in positions:
         if result.len == 0 or result[^1].lineNumber != p.line:
           result.add BeforeLine(
             lineNumber: p.line,
@@ -570,9 +570,9 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
           # Confirm.
           break
       elif InputState.Valid == status.commandLine.buffer.isExCommandBuffer:
-        let splited = status.commandLine.buffer.splitExCommandBuffer
+        let split = status.commandLine.buffer.splitExCommandBuffer
 
-        let t = splited[0].getArgsType
+        let t = split[0].getArgsType
         if t.isOk and t.get != ArgsType.text and t.get != ArgsType.path:
           # Confirm.
           # If the command entered from the suggestions is complete, it will be
@@ -868,19 +868,19 @@ proc sendLspRequests(status: var EditorStatus) =
       currentMainWindowNode.bufferPosition)
     if err.isErr: error fmt"lsp: {err.error}"
 
-template isUpdateEditorLogViwer(status: var EditorStatus): bool =
+template isUpdateEditorLogViewer(status: var EditorStatus): bool =
   currentBufStatus.logContent == LogContentKind.editor and
-  currentBufStatus.buffer.isUpdateEditorLogViwer
+  currentBufStatus.buffer.isUpdateEditorLogViewer
 
-template isUpdateLspLogViwer(status: var EditorStatus): bool =
+template isUpdateLspLogViewer(status: var EditorStatus): bool =
   currentBufStatus.logContent == LogContentKind.lsp and
   status.lspClients.contains(currentBufStatus.logLspLangId) and
-  currentBufStatus.buffer.isUpdateLspLogViwer(
+  currentBufStatus.buffer.isUpdateLspLogViewer(
     status.lspClients[currentBufStatus.logLspLangId].log)
 
-template isUpdateLogViwer(status: var EditorStatus): bool =
-  status.isUpdateEditorLogViwer or
-  status.isUpdateLspLogViwer
+template isUpdateLogViewer(status: var EditorStatus): bool =
+  status.isUpdateEditorLogViewer or
+  status.isUpdateLspLogViewer
 
 proc editorMainLoop*(status: var EditorStatus) =
   ## Get keys, exec commands and update view.
@@ -911,7 +911,7 @@ proc editorMainLoop*(status: var EditorStatus) =
 
         status.runBackgroundTasks
 
-        if currentBufStatus.isLogViewerMode and status.isUpdateLogViwer:
+        if currentBufStatus.isLogViewerMode and status.isUpdateLogViewer:
           currentBufStatus.isUpdate = true
 
         if status.bufStatus.isUpdate:

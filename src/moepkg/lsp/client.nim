@@ -266,7 +266,7 @@ proc request(
     ## Return request id.
 
     c.lastId.inc
-    let req = newReqest(c.lastId, lspMethod.toLspMethodStr, params)
+    let req = newRequest(c.lastId, lspMethod.toLspMethodStr, params)
 
     c.addRequestLog(req)
 
@@ -1243,7 +1243,7 @@ proc textDocumentTypeDefinition*(
 
     return R[(), string].ok ()
 
-proc textDocumentImplemenation*(
+proc textDocumentImplementation*(
   c: var LspClient,
   bufferId: int,
   path: string,

@@ -213,7 +213,7 @@ proc result*(p: var QuickRunProcess): Result[seq[string], string] =
   if p.isTempFile:
     # Cleanup temporary a source code file.
     if p.filePath.fileExists: removeFile(p.filePath)
-    # Cleanup temporary a excutable.
+    # Cleanup temporary a executable.
     if p.filePath.split(".")[0].fileExists: removeFile(p.filePath.split(".")[0])
 
   let r = p.process.result
