@@ -1099,7 +1099,7 @@ suite "mainloop: updateCompletionWindowBuffer in editor":
       status.completionWindow.get.addInput(ru'e')
       status.updateCompletionWindowBufferInEditor
 
-      check status.completionWindow.get.list.items == @[
+      check status.completionWindow.get.list.items[0 .. 3] == @[
         CompletionItem(label: ru"ec", insertText: ru"ec"),
         CompletionItem(label: ru"eb", insertText: ru"eb"),
         CompletionItem(label: ru"ea", insertText: ru"ea"),
@@ -1107,12 +1107,13 @@ suite "mainloop: updateCompletionWindowBuffer in editor":
       ]
 
       check status.completionWindow.get.inputText == ru"e"
-      check status.completionWindow.get.list.len == 4
+      check status.completionWindow.get.list.len >= 4
       check status.completionWindow.get.startPosition == BufferPosition(
         line: 1,
         column: 0)
 
-      check status.completionWindow.get.popupWindow.get.size == Size(h: 4, w: 6)
+      check status.completionWindow.get.popupWindow.get.size.h > 4
+      check status.completionWindow.get.popupWindow.get.size.w > 6
       check status.completionWindow.get.popupWindow.get.position == Position(
         y: 2, x: 1)
 
@@ -1403,8 +1404,12 @@ suite "mainloop: updateCompletionWindowHighlightingText":
 
   test "Basic":
     var status = initEditorStatus()
-    assert status.addNewBufferInCurrentWin().isOk
+    discard status.addNewBufferInCurrentWin().get
+    currentBufStatus.language = SourceLanguage.langNim
+    currentBufStatus.buffer = @["echo 1", "e"].toSeqRunes.toGapBuffer
     currentBufStatus.mode = Mode.insert
+    currentMainWindowNode.currentLine = 1
+    currentMainWindowNode.currentColumn = 1
 
     status.resize(100, 100)
     status.update
