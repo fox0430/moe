@@ -791,6 +791,9 @@ proc updateCompletionWindowBufferInEditor(status: var EditorStatus) =
     if status.completionWindow.get.popupWindow.isNone:
       status.completionWindow.get.reopen(
         currentMainWindowNode.completionWindowPositionInEditor(currentBufStatus))
+    else:
+      status.completionWindow.get.popupWindow.get.position =
+        currentMainWindowNode.completionWindowPositionInEditor(currentBufStatus)
 
     # Update completion window buffer, highlight and move/resize
     status.completionWindow.get.updateBuffer

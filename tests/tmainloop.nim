@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, importutils]
+import std/[unittest, options, importutils, sequtils]
 
 import pkg/results
 
@@ -1141,6 +1141,35 @@ suite "mainloop: updateCompletionWindowBuffer in editor":
       check status.completionWindow.get.popupWindow.get.size == Size(h: 2, w: 6)
       check status.completionWindow.get.popupWindow.get.position == Position(
         y: 2, x: 1)
+
+  test "Above the cursor":
+    var status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin().isOk
+    currentBufStatus.language = SourceLanguage.langNim
+    currentBufStatus.buffer = toSeq(0..50).mapIt("").toSeqRunes.toGapBuffer
+    currentBufStatus.buffer[40] = ru"i"
+    currentBufStatus.mode = Mode.insert
+    currentMainWindowNode.currentLine = 40
+    currentMainWindowNode.currentColumn = 1
+
+    status.settings.view.lineNumber = false
+    status.settings.tabLine.enable = false
+
+    status.resize(50, 50)
+    status.update
+
+    status.openCompletionWindowInEditor
+
+    status.updateCompletionWindowBufferInEditor
+    check status.completionWindow.get.popupWindow.get.position == Position(
+      y: 0,
+      x: 1)
+
+    status.completionWindow.get.inputText = ru"im"
+    status.updateCompletionWindowBufferInEditor
+    check status.completionWindow.get.popupWindow.get.position == Position(
+      y: 41,
+      x: 1)
 
   test "Without LSP (WordDictionary)":
     var status = initEditorStatus()
