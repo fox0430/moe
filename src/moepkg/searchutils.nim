@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -191,19 +191,23 @@ proc searchBufferReversely*(
 
     let startLine = currentPosition.line
     for i in 0 ..< bufStatus.buffer.len + 1:
-      var lineNumber = (startLine - i) mod bufStatus.buffer.len
-      if lineNumber < 0: lineNumber = bufStatus.buffer.len - i
-      let
-        endPosition =
-          if lineNumber == startLine and i == 0: currentPosition.column
-          else: bufStatus.buffer[lineNumber].len
+      let lineNumber =
+        if (startLine - i) mod bufStatus.buffer.len >= 0:
+          (startLine - i) mod bufStatus.buffer.len
+        else:
+          bufStatus.buffer.len + (startLine - i) mod bufStatus.buffer.len
 
-        position = searchReversely(
-          bufStatus.buffer[lineNumber][0 ..< endPosition],
+      if bufStatus.buffer[lineNumber].len == 0: continue
+
+      let endPosition =
+        if lineNumber == startLine: currentPosition.column
+        else: bufStatus.buffer[lineNumber].high
+
+      let position = searchReversely(
+          bufStatus.buffer[lineNumber][0 .. endPosition],
           keyword,
           isIgnorecase,
           isSmartcase)
-
       if position.isSome:
         return SearchResult(line: lineNumber, column: position.get).some
 
