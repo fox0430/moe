@@ -137,8 +137,8 @@ proc autoMoveAndResize*(
       # buffer length will be maximized.
 
       h =
-        if isBelow: min(p.buffer.len, belowHeight)
-        else: min(p.buffer.len, aboveHeight)
+        if isBelow: min(p.buffer.len, belowHeight - 1)
+        else: min(p.buffer.len, aboveHeight - 1)
       w =
         if isRight: min(bufferMaxLen, rightWidth)
         else: min(bufferMaxLen, leftWidth)
