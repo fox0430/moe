@@ -3,5 +3,5 @@
 Fixed
 .....
 
-- `#2153`_ Fix completion window position when above the cursor
+- `#2154`_ Fix completion window position when above the cursor
 
