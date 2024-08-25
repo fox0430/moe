@@ -4207,7 +4207,7 @@ suite "Normal mode: searchNextOccurrence":
     check currentMainWindowNode.currentColumn == 1
     check currentMainWindowNode.view.foldingRanges.len == 0
 
-suite "Normal mode: searchNextOccurrenceReversely":
+suite "Normal mode: searchPrevOccurrence":
   var status: EditorStatus
 
   setup:
@@ -4236,7 +4236,7 @@ suite "Normal mode: searchNextOccurrenceReversely":
     status.update
 
     const Keyword = ru"xyz"
-    status.searchNextOccurrenceReversely(Keyword)
+    status.searchPrevOccurrence(Keyword)
     status.update
 
     check currentMainWindowNode.currentLine == 0
@@ -4250,7 +4250,7 @@ suite "Normal mode: searchNextOccurrenceReversely":
     status.update
 
     const Keyword = ru"bc"
-    status.searchNextOccurrenceReversely(Keyword)
+    status.searchPrevOccurrence(Keyword)
     status.update
 
     check currentMainWindowNode.currentLine == 0
@@ -4264,7 +4264,7 @@ suite "Normal mode: searchNextOccurrenceReversely":
     status.update
 
     const Keyword = ru"abc"
-    status.searchNextOccurrenceReversely(Keyword)
+    status.searchPrevOccurrence(Keyword)
     status.update
 
     check currentMainWindowNode.currentLine == 0
@@ -4279,7 +4279,7 @@ suite "Normal mode: searchNextOccurrenceReversely":
     status.update
 
     const Keyword = ru"ef"
-    status.searchNextOccurrenceReversely(Keyword)
+    status.searchPrevOccurrence(Keyword)
     status.update
 
     check currentMainWindowNode.currentLine == 1
@@ -4293,7 +4293,7 @@ suite "Normal mode: searchNextOccurrenceReversely":
     status.update
 
     const Keyword = ru"ghi"
-    status.searchNextOccurrenceReversely(Keyword)
+    status.searchPrevOccurrence(Keyword)
     status.update
 
     check currentMainWindowNode.currentLine == 2
@@ -4308,7 +4308,7 @@ suite "Normal mode: searchNextOccurrenceReversely":
     status.update
 
     const Keyword = "ef\ngh".toRunes
-    status.searchNextOccurrenceReversely(Keyword)
+    status.searchPrevOccurrence(Keyword)
     status.update
 
     check currentMainWindowNode.currentLine == 1
@@ -4326,12 +4326,12 @@ suite "Normal mode: searchNextOccurrenceReversely":
 
     const Keyword = ru"abc"
 
-    status.searchNextOccurrenceReversely(Keyword)
+    status.searchPrevOccurrence(Keyword)
     status.update
     check currentMainWindowNode.currentLine == 2
     check currentMainWindowNode.currentColumn == 0
 
-    status.searchNextOccurrenceReversely(Keyword)
+    status.searchPrevOccurrence(Keyword)
     status.update
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
@@ -4345,7 +4345,7 @@ suite "Normal mode: searchNextOccurrenceReversely":
     status.update
 
     const Keyword = ru"bc"
-    status.searchNextOccurrenceReversely(Keyword)
+    status.searchPrevOccurrence(Keyword)
     status.update
 
     check currentMainWindowNode.currentLine == 0

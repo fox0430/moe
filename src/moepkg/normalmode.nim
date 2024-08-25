@@ -201,7 +201,7 @@ proc searchNextOccurrence(status: var EditorStatus) {.inline.} =
   if status.searchHistory.len > 0:
     status.searchNextOccurrence(status.searchHistory[^1])
 
-proc searchNextOccurrenceReversely(
+proc searchPrevOccurrence(
   status: var EditorStatus,
   keyword: Runes) =
     ## Search and move to the previous result.
@@ -222,51 +222,28 @@ proc searchNextOccurrenceReversely(
 
     status.searchHistory.saveSearchHistory(keyword, status.searchHistoryLimit)
 
-    block:
-      let position = currentMainWindowNode.bufferPosition
-
-      template b: BufferStatus = currentBufStatus
-
-      # Move the cursor position before search
-      if position.column == 0:
-        if position.line == 0 and b.buffer.len > 0:
-          currentMainWindowNode.currentLine = b.buffer.high
-        elif b.buffer.len > 0 and position.line > 0:
-          b.keyUp(currentMainWindowNode)
-
-        if position.line != currentMainWindowNode.currentLine:
-          currentMainWindowNode.currentColumn =
-            if b.buffer[currentMainWindowNode.currentLine].high > -1:
-              b.buffer[currentMainWindowNode.currentLine].high
-          else:
-            0
-      else:
-        currentMainWindowNode.keyLeft
-
     let lines = keyword.replaceToNewLines.splitLines
-    var searchResult: Option[BufferPosition]
-    if lines.len == 1:
-      searchResult = currentBufStatus.searchBufferReversely(
-        currentMainWindowNode.bufferPosition,
-        keyword,
-        status.settings.standard.ignorecase,
-        status.settings.standard.smartcase)
-    else:
-      searchResult = currentBufStatus.searchBufferReversely(
-        currentMainWindowNode.bufferPosition,
-        lines,
-        status.settings.standard.ignorecase,
-        status.settings.standard.smartcase)
+    var searchResult =
+      if lines.len == 1:
+        currentBufStatus.searchBufferReversely(
+          currentMainWindowNode.bufferPosition,
+          keyword,
+          status.settings.standard.ignorecase,
+          status.settings.standard.smartcase)
+      else:
+        currentBufStatus.searchBufferReversely(
+          currentMainWindowNode.bufferPosition,
+          lines,
+          status.settings.standard.ignorecase,
+          status.settings.standard.smartcase)
     if searchResult.isSome:
       currentBufStatus.jumpLine(currentMainWindowNode, searchResult.get.line)
       for column in 0 ..< searchResult.get.column:
         currentBufStatus.keyRight(currentMainWindowNode)
-    else:
-      currentBufStatus.keyRight(currentMainWindowNode)
 
-proc searchNextOccurrenceReversely(status: var EditorStatus) {.inline.} =
+proc searchPrevOccurrence(status: var EditorStatus) {.inline.} =
   if status.searchHistory.len > 0:
-    status.searchNextOccurrenceReversely(status.searchHistory[^1])
+    status.searchPrevOccurrence(status.searchHistory[^1])
 
 proc moveToForwardWordInCurrentLine(status: var EditorStatus, r: Rune) =
   let pos = currentBufStatus.searchOneCharacterToEndOfLine(
@@ -382,7 +359,7 @@ proc nextOccurrenceCurrentWord(status: var EditorStatus) =
 
 proc prevOccurrenceCurrentWord(status: var EditorStatus) =
   let word = currentBufStatus.getWordUnderCursor(currentMainWindowNode)[1]
-  status.searchNextOccurrenceReversely(word)
+  status.searchPrevOccurrence(word)
 
 proc moveToPrevCharacter(status: var EditorStatus, key: Rune) =
   let
@@ -1798,7 +1775,7 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
   elif key == ord('n'):
     status.searchNextOccurrence
   elif key == ord('N'):
-    status.searchNextOccurrenceReversely
+    status.searchPrevOccurrence
   elif key == ord('*'):
     status.nextOccurrenceCurrentWord
   elif key == ord('#'):
