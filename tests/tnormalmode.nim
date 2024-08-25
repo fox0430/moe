@@ -4207,6 +4207,28 @@ suite "Normal mode: searchNextOccurrence":
     check currentMainWindowNode.currentColumn == 1
     check currentMainWindowNode.view.foldingRanges.len == 0
 
+  test "Check ignorecase/smartcase":
+    currentBufStatus.buffer = @["abc", "Abc"].toSeqRunes.toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    status.settings.standard.ignorecase = true
+    status.settings.standard.smartcase = true
+
+    const Keyword = ru"abc"
+    status.searchNextOccurrence(Keyword)
+    status.update
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0
+
+    check status.highlightingText.get[] == HighlightingText(
+      kind: HighlightingTextKind.search,
+      text: @["abc"].toSeqRunes,
+      isIgnorecase: true,
+      isSmartcase: true)[]
+
 suite "Normal mode: searchPrevOccurrence":
   var status: EditorStatus
 
@@ -4336,7 +4358,7 @@ suite "Normal mode: searchPrevOccurrence":
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
 
-  test "Basic":
+  test "With folding lines":
     currentBufStatus.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
     currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
     currentMainWindowNode.currentLine = 2
@@ -4351,6 +4373,29 @@ suite "Normal mode: searchPrevOccurrence":
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 1
     check currentMainWindowNode.view.foldingRanges.len == 0
+
+  test "Check ignorecase/smartcase":
+    currentBufStatus.buffer = @["Abc", "abc"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.currentLine = 1
+
+    status.resize(100, 100)
+    status.update
+
+    status.settings.standard.ignorecase = true
+    status.settings.standard.smartcase = true
+
+    const Keyword = ru"abc"
+    status.searchPrevOccurrence(Keyword)
+    status.update
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+
+    check status.highlightingText.get[] == HighlightingText(
+      kind: HighlightingTextKind.search,
+      text: @["abc"].toSeqRunes,
+      isIgnorecase: true,
+      isSmartcase: true)[]
 
 suite "Normal mode: requestHover":
   test "Disable LSP":

@@ -151,8 +151,11 @@ proc searchNextOccurrence(status: var EditorStatus, keyword: Runes) =
 
   status.highlightingText = HighlightingText(
     kind: HighlightingTextKind.search,
-    text: @[keyword])
-    .some
+    text: @[keyword],
+    isIgnorecase: status.settings.standard.ignorecase,
+    isSmartcase: status.settings.standard.smartcase
+  )
+  .some
 
   var highlight = currentBufStatus.highlight
   highlight.updateViewHighlight(
@@ -210,8 +213,11 @@ proc searchPrevOccurrence(
 
     status.highlightingText = HighlightingText(
       kind: HighlightingTextKind.search,
-      text: @[keyword])
-      .some
+      text: @[keyword],
+      isIgnorecase: status.settings.standard.ignorecase,
+      isSmartcase: status.settings.standard.smartcase
+    )
+    .some
 
     var highlight = currentBufStatus.highlight
     highlight.updateViewHighlight(
