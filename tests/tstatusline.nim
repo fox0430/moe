@@ -315,6 +315,51 @@ suite "statusline: addFilerModeInfo":
         color: EditorColorPairIndex.statusLineFilerModeInactive)
     ]
 
+  test "With message":
+    var status = initEditorStatus()
+
+    assert status.addNewBufferInCurrentWin(path, Mode.filer).isOk
+
+    status.resize(100, 100)
+    status.update
+
+    status.statusLine[0].clear
+
+    const IsActiveWindow = true
+
+    status.statusLine[0].addModeLabel(
+      currentBufStatus,
+      currentMainWindowNode,
+      IsActiveWindow,
+      status.settings.statusLine)
+
+    status.statusLine[0].message = ru"message"
+
+    status.statusLine[0].addFilerModeInfo(
+      currentBufStatus,
+      currentMainWindowNode,
+      IsActiveWindow,
+      status.settings)
+
+    privateAccess(status.statusLine[0].type)
+    check startsWith($status.statusLine[0].buffer, fmt" FILER  {path} message")
+    check endsWith($status.statusLine[0].buffer, fmt"1/{NumOfFiles} ")
+    for i in fmt" FILER  {path}".len .. fmt"1/{NumOfFiles} ".len:
+      check " " == $status.statusLine[0].buffer[i]
+
+    privateAccess(status.statusLine[0].highlight.type)
+    privateAccess(StatusLineColorSegment.type)
+    check status.statusLine[0].highlight.segments == @[
+      StatusLineColorSegment(
+        first: 0,
+        last: 6,
+        color: EditorColorPairIndex.statusLineFilerModeLabel),
+      StatusLineColorSegment(
+        first: 7,
+        last: 99,
+        color: EditorColorPairIndex.statusLineFilerMode)
+    ]
+
 suite "statusline: addBufManagerModeInfo":
   test "Active window":
     var status = initEditorStatus()
@@ -397,6 +442,53 @@ suite "statusline: addBufManagerModeInfo":
         last: 99,
         color: EditorColorPairIndex.statusLineNormalModeInactive)
     ]
+
+  test "With message":
+    var status = initEditorStatus()
+
+    const Path = ""
+    assert status.addNewBufferInCurrentWin(Path, Mode.bufManager).isOk
+
+    status.resize(100, 100)
+    status.update
+
+    status.statusLine[0].clear
+
+    const IsActiveWindow = true
+
+    status.statusLine[0].addModeLabel(
+      currentBufStatus,
+      currentMainWindowNode,
+      IsActiveWindow,
+      status.settings.statusLine)
+
+    status.statusLine[0].message = ru"message"
+
+    status.statusLine[0].addBufManagerModeInfo(
+      currentBufStatus,
+      currentMainWindowNode,
+      IsActiveWindow,
+      status.settings)
+
+    privateAccess(status.statusLine[0].type)
+    check status.statusLine[0].buffer ==
+      " BUFFER  message                                                                                1/1 "
+      .toRunes
+
+    privateAccess(status.statusLine[0].highlight.type)
+    privateAccess(StatusLineColorSegment.type)
+    check status.statusLine[0].highlight.segments == @[
+      StatusLineColorSegment(
+        first: 0,
+        last: 7,
+        color: EditorColorPairIndex.statusLineNormalModeLabel),
+      StatusLineColorSegment(
+        first: 8,
+        last: 99,
+        color: EditorColorPairIndex.statusLineNormalMode)
+    ]
+
+
 
 suite "statusline: addLogViewerModeInfo":
   setup:
@@ -484,6 +576,51 @@ suite "statusline: addLogViewerModeInfo":
         color: EditorColorPairIndex.statusLineNormalModeInactive)
     ]
 
+  test "With message":
+    var status = initEditorStatus()
+
+    const Path = ""
+    assert status.addNewBufferInCurrentWin(Path, Mode.logViewer).isOk
+
+    status.resize(100, 100)
+    status.update
+
+    status.statusLine[0].clear
+
+    const IsActiveWindow = true
+
+    status.statusLine[0].addModeLabel(
+      currentBufStatus,
+      currentMainWindowNode,
+      IsActiveWindow,
+      status.settings.statusLine)
+
+    status.statusLine[0].message = ru"message"
+
+    status.statusLine[0].addLogViewerModeInfo(
+      currentBufStatus,
+      currentMainWindowNode,
+      IsActiveWindow,
+      status.settings)
+
+    privateAccess(status.statusLine[0].type)
+    check status.statusLine[0].buffer ==
+      " LOG  message                                                                                   1/1 "
+      .toRunes
+
+    privateAccess(status.statusLine[0].highlight.type)
+    privateAccess(StatusLineColorSegment.type)
+    check status.statusLine[0].highlight.segments == @[
+      StatusLineColorSegment(
+        first: 0,
+        last: 4,
+        color: EditorColorPairIndex.statusLineNormalModeLabel),
+      StatusLineColorSegment(
+        first: 5,
+        last: 99,
+        color: EditorColorPairIndex.statusLineNormalMode)
+    ]
+
 suite "statusline: addQuickRunModeInfo":
   test "Active window":
     var status = initEditorStatus()
@@ -567,6 +704,51 @@ suite "statusline: addQuickRunModeInfo":
         color: EditorColorPairIndex.statusLineNormalModeInactive)
     ]
 
+  test "With message":
+    var status = initEditorStatus()
+
+    const Path = ""
+    assert status.addNewBufferInCurrentWin(Path, Mode.quickRun).isOk
+
+    status.resize(100, 100)
+    status.update
+
+    status.statusLine[0].clear
+
+    const IsActiveWindow = true
+
+    status.statusLine[0].addModeLabel(
+      currentBufStatus,
+      currentMainWindowNode,
+      IsActiveWindow,
+      status.settings.statusLine)
+
+    status.statusLine[0].message = ru"message"
+
+    status.statusLine[0].addQuickRunModeInfo(
+      currentBufStatus,
+      currentMainWindowNode,
+      IsActiveWindow,
+      status.settings)
+
+    privateAccess(status.statusLine[0].type)
+    check status.statusLine[0].buffer ==
+      " QUICKRUN  message                                                                              1/1 "
+      .toRunes
+
+    privateAccess(status.statusLine[0].highlight.type)
+    privateAccess(StatusLineColorSegment.type)
+    check status.statusLine[0].highlight.segments == @[
+      StatusLineColorSegment(
+        first: 0,
+        last: 9,
+        color: EditorColorPairIndex.statusLineNormalModeLabel),
+      StatusLineColorSegment(
+        first: 10,
+        last: 99,
+        color: EditorColorPairIndex.statusLineNormalMode)
+    ]
+
 suite "statusline: addNormalModeInfo":
   test "Active window":
     var status = initEditorStatus()
@@ -611,7 +793,7 @@ suite "statusline: addNormalModeInfo":
         color: EditorColorPairIndex.statusLineNormalMode)
     ]
 
-  test "Active window":
+  test "Inactive window":
     var status = initEditorStatus()
 
     const Path = ""
@@ -648,6 +830,51 @@ suite "statusline: addNormalModeInfo":
         first: 0,
         last: 99,
         color: EditorColorPairIndex.statusLineNormalModeInactive)
+    ]
+
+  test "With message":
+    var status = initEditorStatus()
+
+    const Path = ""
+    assert status.addNewBufferInCurrentWin(Path, Mode.normal).isOk
+
+    status.resize(100, 100)
+    status.update
+
+    status.statusLine[0].clear
+
+    const IsActiveWindow = true
+
+    status.statusLine[0].addModeLabel(
+      currentBufStatus,
+      currentMainWindowNode,
+      IsActiveWindow,
+      status.settings.statusLine)
+
+    status.statusLine[0].message = ru"message"
+
+    status.statusLine[0].addNormalModeInfo(
+      currentBufStatus,
+      currentMainWindowNode,
+      IsActiveWindow,
+      status.settings)
+
+    privateAccess(status.statusLine[0].type)
+    check status.statusLine[0].buffer ==
+      " NORMAL  No name message                                                        1/1 1/0 UTF-8 Plain "
+      .toRunes
+
+    privateAccess(status.statusLine[0].highlight.type)
+    privateAccess(StatusLineColorSegment.type)
+    check status.statusLine[0].highlight.segments == @[
+      StatusLineColorSegment(
+        first: 0,
+        last: 7,
+        color: EditorColorPairIndex.statusLineNormalModeLabel),
+      StatusLineColorSegment(
+        first: 8,
+        last: 99,
+        color: EditorColorPairIndex.statusLineNormalMode)
     ]
 
 suite "statusline: gitBranchNameBuffer":

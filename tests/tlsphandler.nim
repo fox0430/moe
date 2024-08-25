@@ -24,8 +24,7 @@ import pkg/results
 import moepkg/lsp/protocol/types
 import moepkg/lsp/[client, utils, hover, progress]
 import moepkg/[bufferstatus, commandline,  unicodeext, gapbuffer, windownode,
-               independentutils, popupwindow, syntaxcheck, completion,
-               gapbuffer]
+               independentutils, popupwindow, syntaxcheck, completion]
 
 import utils
 
@@ -67,6 +66,8 @@ suite "lsp: lspInitialized":
       check status.lspInitialized(resJson).isOk
 
       check lspClient.isInitialized
+
+      check status.statusLine[0].message == ru"nimlangserver"
 
 suite "lsp: initHoverWindow":
   test "Basic":

@@ -39,7 +39,8 @@ import
   ../movement,
   ../referencesmode,
   ../fileutils,
-  ../callhierarchyviewer
+  ../callhierarchyviewer,
+  ../statusline
 
 import client, utils, hover, message, diagnostics, semantictoken, progress,
        inlayhint, definition, typedefinition, references, rename, declaration,
@@ -53,6 +54,14 @@ template isLspResponse*(status: EditorStatus): bool =
   status.lspClients.contains(currentBufStatus.langId) and
   not lspClient.closed and
   (let r = lspClient.readable; r.isOk and r.get)
+
+proc setServerNameToStatusLine(status: var EditorStatus) =
+  let
+    langId = currentBufStatus.langId
+    serverName = lspClient.serverName.toRunes
+  for i in 0 ..< status.statusLine.len:
+    if langId == status.bufStatus[status.statusLine[i].bufferIndex].langId:
+      status.statusLine[i].updateMessage(serverName)
 
 proc lspInitialized(
   status: var EditorStatus,
@@ -106,6 +115,8 @@ proc lspInitialized(
 
     status.commandLine.writeLspInitialized(
       status.settings.lsp.languages[currentBufStatus.langId].command)
+
+    status.setServerNameToStatusLine
 
     return Result[(), string].ok ()
 
