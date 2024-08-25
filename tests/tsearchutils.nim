@@ -119,6 +119,16 @@ suite "searchutils: searchReversely":
 
       check position.isNone
 
+  test "searchReversely 3":
+      let
+        line = ru"abc efg hijkl"
+        keyword = ru"abc"
+        isIgnorecase = true
+        isSmartcase = true
+        position = line.searchReversely(keyword, isIgnorecase, isSmartcase)
+
+      check position.get == 0
+
 suite "searchutils: searchBuffer":
   test "Basic":
     var status = initEditorStatus()
@@ -292,6 +302,27 @@ suite "searchutils: searchBufferReversely":
         isSmartcase)
 
     check r.get == BufferPosition(line: 1, column: 1)
+
+  test "Move to the first of the prev line":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["abc", "abc"]
+      .toSeqRunes
+      .toGapBuffer
+    currentMainWindowNode.currentLine = 1
+
+    let
+      keyword = ru"abc"
+      isIgnorecase = true
+      isSmartcase = true
+
+    let r = currentBufStatus.searchBufferReversely(
+        currentMainWindowNode.bufferPosition,
+        keyword,
+        isIgnorecase,
+        isSmartcase)
+
+    check r.get == BufferPosition(line: 0, column: 0)
 
 suite "searchutils: searchAllOccurrence":
   test "searchAllOccurrence":
