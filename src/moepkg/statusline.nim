@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -37,6 +37,7 @@ type
     highlight: StatusLineHighlight
     windowIndex*: int
     bufferIndex*: int
+    message*: Runes
 
 proc initStatusLine*(): StatusLine {.inline.} =
   const
@@ -151,6 +152,9 @@ proc statusLineInfoBuffer(
 
     if result.len > 0: result.add ru' '
 
+template addMessage(b: var Runes, statusLine: StatusLine) =
+  if s.message.len > 0: b.add ru" " & s.message
+
 proc statusLineFilerInfoBuffer(
   b: BufferStatus,
   node: WindowNode): Runes {.inline.} =
@@ -169,6 +173,8 @@ proc addFilerModeInfo(
 
     if settings.statusLine.directory:
       buffer.add ru" " & bufStatus.path
+
+    buffer.addMessage(s)
 
     let info = statusLineFilerInfoBuffer(bufStatus, windowNode)
 
@@ -201,6 +207,8 @@ proc addBufManagerModeInfo(
 
     var buffer: Runes
 
+    buffer.addMessage(s)
+
     let info = statusLineBufManagerInfoBuffer(bufStatus, windowNode)
 
     if s.statusLineWidth > buffer.len + s.buffer.len + info.len:
@@ -231,6 +239,8 @@ proc addLogViewerModeInfo(
   settings: EditorSettings) =
 
     var buffer: Runes
+
+    buffer.addMessage(s)
 
     let info = statusLineLogViewerModeInfoBuffer(bufStatus, windowNode)
 
@@ -263,6 +273,8 @@ proc addQuickRunModeInfo(
 
     var buffer: Runes
 
+    buffer.addMessage(s)
+
     let info = statusLineQuickRunModeInfoBuffer(bufStatus, windowNode)
 
     if s.statusLineWidth > buffer.len + s.buffer.len + info.len:
@@ -293,6 +305,8 @@ proc addNormalModeInfo(
     if bufStatus.countChange > 0 and settings.statusLine.chanedMark:
       const ChangedMark = ru"[+]"
       buffer.add ru" " & ChangedMark
+
+    buffer.addMessage(s)
 
     let info = statusLineInfoBuffer(
       bufStatus,
@@ -543,3 +557,6 @@ proc updateStatusLine*(
     s.window.erase
     s.write
     s.window.refresh
+
+proc updateMessage*(s: var StatusLine, message: Runes) {.inline.} =
+  s.message = message
