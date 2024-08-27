@@ -11,7 +11,9 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 
 ## Configuration Items
 
-### Cursor Shape
+### CursorShape
+
+- type: string
 
 | Name |
 |:-----------------------------|
@@ -22,7 +24,9 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | noneBlinkIbeam |
 
 
-### Terminal Color Mode
+### TerminalColorMode
+
+- type: string
 
 | Name |
 |:-----------------------------|
@@ -33,7 +37,9 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | 24bit |
 
 
-### Clipbloard Tool
+### ClipbloardTool
+
+- type: string
 
 | Name |
 |:-----------------------------|
@@ -44,7 +50,9 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | macOS-default |
 
 
-### Status Line Items
+### StatusLineItem
+
+- type: string
 
 | Name |
 |:-----------------------------|
@@ -56,6 +64,16 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | fileType |
 | fileTypeIcon |
 
+
+### ThemeKind
+
+- type: string
+
+| Name | Description |
+|:-----------------------------|
+| default | The default theme |
+| vscode | VSCode theme |
+| config | User theme. Also please set `Theme.path` |
 
 ### Standard table
 
@@ -73,14 +91,14 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | autoDeleteParen | bool | | Automatic delete brackets |
 | autoIndent | bool | true | Automatic indentation |
 | disableChangeCursor | bool | false | Disable change of the cursor shape |
-| defaultCursor | string | terminalDefault | The cursor shape of the terminal emulator you are using |
-| normalModeCursor | string |terminalDefault | The cursor shape in Normal mode |
-| insertModeCursor | string | blinkIbeam | The cursor shape in insert mode |
+| defaultCursor | CursorShape | terminalDefault | The cursor shape of the terminal emulator you are using |
+| normalModeCursor | CursorShape |terminalDefault | The cursor shape in Normal mode |
+| insertModeCursor | CursorShape | blinkIbeam | The cursor shape in insert mode |
 | liveReloadOfConf | bool | false | Enable live reload of the configuration file |
 | liveReloadOfFile | bool | false | Enable live reload of opening files |
 | incrementalSearch | bool | false | Enable incremental search |
 | popUpWindowInExmode | bool | true | Show Pop-up window in Ex mode |
-| colorMode | string | 24bit | Terminal color mode |
+| colorMode | TerminalColorMode | 24bit | Terminal color mode |
 
 
 ### Clipboard table
@@ -88,7 +106,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | Name | Type | Default Value | Description |
 |:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
 | enable | bool | true | Enable system clipboard |
-| tool | string | xsel | The clipboard tool for Linux |
+| tool | ClipbloardTool | xsel | The clipboard tool for Linux |
 
 
 ### TabLine table
@@ -111,7 +129,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | showChangedLine | bool | true | Display number of changed lines |
 | showGitInactive | bool | false | Display the git branch name on the status line in inactive windows |
 | showModeInactive | bool | false | Display the mode on the status line in inactive windows |
-| setupText | string | {lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {fileType} | Text to customize the items displayed in the status line |
+| setupText | string | {lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {fileType} | Text to customize the items displayed in the status line. Please check StatusLineItem |
 
 
 ### BuildOnSave table
@@ -440,16 +458,8 @@ Please check more [details](https://github.com/fox0430/moe/blob/develop/document
 ### Theme table
 | Name | Type | Default Value | Description |
 |:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| kind | string | default | Theme kind |
+| kind | ThemeKind | default | Theme kind |
 | path | string | | A path of user theme. Also Please set `"config"` to `Theme.kind`. |
-
-`"default"` or `"vscode"` or `"config"`
-
-`default`: Load the default theme 
-
-`vscode`: Load VSCode theme
-
-`config`: Load user theme. Also please set `Theme.path`.
 
 
 ### Color table (Theme)
@@ -499,7 +509,7 @@ And, `termDefaultBg` and `termDefaultFg`.
 | statusLineFilerModeInactiveBg | Background color of Status line in Filer mode when inactive |
 | statusLineExMode | Text color of Status line in Ex mode |
 | statusLineExModeBg | Background color of Status line in Ex mode |
-| statusLineExModeLabel | Mode label character color in status line in Ex mode |
+| statusLineExModeLabel | Mode label text color in status line in Ex mode |
 | statusLineExModeLabelBg | Mode label background color in status line in Ex mode |
 | statusLineExModeInactive | Text color of status line in Ex mode when inactive |
 | statusLineExModeInactiveBg | Background color of Status line in Ex mode when inactive |
@@ -590,10 +600,10 @@ And, `termDefaultBg` and `termDefaultFg`.
 | currentFile | Text color of current file name in Filer mode |
 | file | Text color of file name in Filer mode |
 | fileBg | Background color of file name in Filer mode |
-| dir | Character color of directory name in filer mode |
-| dirBg | Character color of directory name in filer mode |
-| pcLink | Character color of symbolic links to file in filer mode |
-| pcLinkBg | Character color of symbolic links to file in filer mode |
+| dir | Text of directory name in filer mode |
+| dirBg | Background of directory name in filer mode |
+| pcLink | Text of symbolic links to file in filer mode |
+| pcLinkBg | Background of symbolic links to file in filer mode |
 | popUpWindow | Pop-up window text color |
 | popUpWindowBg | Pop-up window background color |
 | popUpWinCurrentLine | Pop-up window current line text color |
