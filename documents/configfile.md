@@ -616,7 +616,6 @@ And, `termDefaultBg` and `termDefaultFg`.
 | currentWordBg | Current word highlighting |
 | highlightFullWidthSpace | Full-width space color |
 | highlightTrailingSpaces | Trailing space color |
-| highlightTrailingSpacesBg | Trailing space color |
 | reservedWord | Reserved word text color |
 | reservedWordBg | Reserved word text color |
 | syntaxCheckInfo | A info color of syntax checker result highlighting |
