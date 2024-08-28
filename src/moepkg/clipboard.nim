@@ -21,9 +21,14 @@ import std/[os, osproc, strformat, strutils]
 import pkg/results
 import independentutils, settings, unicodeext, platform
 
-proc linesToString(lines: Runes | seq[Runes]): string =
-  result = lines.toString
+proc toStringForClipboard(runes: Runes): string =
+  result = runes.toString
   result.stripLineEnd
+
+proc toStringForClipboard(lines: seq[Runes]): string =
+  result = lines.toString
+  if lines.len > 1:
+    result.stripLineEnd
 
 proc genHereDocument(cmd, delimiterStr, buf: string): string {.inline.} =
   cmd &
@@ -94,7 +99,7 @@ proc sendToClipboard*(
     if buffer.isEmpty: return
 
     let
-      buf = linesToString(buffer)
+      buf = toStringForClipboard(buffer)
       delimiterStr = genDelimiterStr(buf)
       cmd =
         case tool:

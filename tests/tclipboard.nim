@@ -63,6 +63,17 @@ template runClipboardSendTests(tool: ClipboardTool) =
       let buf = getClipboardBuffer(tool).removeLineEnd(tool)
       check buf == $Buffer
 
+  test "Single Line":
+    if not isToolAvailable(tool):
+      skip()
+    else:
+      clearClipboard(tool)
+
+      const Buffer = @["abc"].toSeqRunes
+      check sendToClipboard(Buffer, tool).isOk
+
+      check "abc\n" == getClipboardBuffer(tool).removeLineEnd(tool)
+
   test "Lines":
     if not isToolAvailable(tool):
       skip()
@@ -79,7 +90,7 @@ template runClipboardSendTests(tool: ClipboardTool) =
     if not isToolAvailable(tool):
       skip()
     else:
-      const Buffer = @["`````"].toSeqRunes
+      const Buffer = ru"`````"
       check sendToClipboard(Buffer, tool).isOk
 
       let buf = getClipboardBuffer(tool).removeLineEnd(tool)
@@ -97,6 +108,17 @@ template runClipboardGetTests(tool: ClipboardTool) =
 
       let buf = getFromClipboard(tool).get
       check buf == Buffer
+
+  test "Single Line":
+    if not isToolAvailable(tool):
+      skip()
+    else:
+      clearClipboard(tool)
+
+      const Buffer = @["abc"].toSeqRunes
+      assert sendToClipboard(Buffer, tool).isOk
+
+      check "abc\n".toRunes == getFromClipboard(tool).get
 
   test "Lines":
     if not isToolAvailable(tool):
