@@ -32,7 +32,8 @@ import ../settings
 import protocol/[enums, types]
 import jsonrpc, utils, completion, progress, hover, semantictoken, inlayhint,
        definition, references, rename, typedefinition, implementation,
-       callhierarchy, documenthighlight, documentlink, codelens, executecommand
+       callhierarchy, documenthighlight, documentlink, codelens,
+       executecommand, foldingrange
 
 type
   LspError* = object
@@ -60,6 +61,7 @@ type
     documentLink*: bool
     codeLens*: bool
     executeCommand*: Option[seq[string]]
+    foldingRange*: bool
 
   LspProgressTable* = Table[ProgressToken, ProgressReport]
 
@@ -749,6 +751,10 @@ proc setCapabilities(
        initResult.capabilities.executeCommandProvider.isSome:
          capabilities.executeCommand = some(
            initResult.capabilities.executeCommandProvider.get.commands)
+
+    if settings.foldingRange.enable and
+       initResult.capabilities.foldingRangeProvider.isSome:
+         capabilities.foldingRange = true
 
     c.capabilities = some(capabilities)
 
@@ -1520,5 +1526,30 @@ proc workspaceExecuteCommand*(
     let r = c.request(bufferId, LspMethod.workspaceExecuteCommand, params)
     if r.isErr:
       return R[(), string].err fmt"workspace/executeCommand request failed: {r.error}"
+
+    return R[(), string].ok ()
+
+proc foldingRange*(
+  c: var LspClient,
+  bufferId: int,
+  path: string): LspSendRequestResult =
+    ## Send a textDocument/foldingRange request to the server.
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_foldingRange
+
+    if not c.serverProcess.running:
+      if not c.closed: c.closed = true
+      return R[(), string].err "server crashed"
+
+    if not c.isInitialized:
+      return R[(), string].err "lsp unavailable"
+
+    if not c.capabilities.get.foldingRange:
+      return R[(), string].err "textDocument/foldingRange unavailable"
+
+    let params = %* initFoldingRangeParam(path)
+
+    let r = c.request(bufferId, LspMethod.textDocumentFoldingRange, params)
+    if r.isErr:
+      return R[(), string].err fmt"textDocument/foldingRange request failed: {r.error}"
 
     return R[(), string].ok ()

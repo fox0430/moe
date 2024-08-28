@@ -455,6 +455,10 @@ proc writeLspExecuteCommandError*(
     let mess = fmt"lsp: Error: execute command: {message}"
     commandLine.writeError(mess)
 
+proc writeLspFoldingRangeError*(commandLine: var CommandLine, message: string) =
+  let mess = fmt"lsp: Error: folding range: {message}"
+  commandLine.writeError(mess)
+
 proc writePasteIgnoreWarn*(commandLine: var CommandLine) =
   const Mess = "Paste is ignored in this mode"
   commandLine.writeWarn(Mess)

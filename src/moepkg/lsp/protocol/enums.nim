@@ -226,3 +226,8 @@ type
     modification
     documentation
     defaultLibrary
+
+  FoldingRangeKind* {.pure.} = enum
+    comment
+    imports
+    region

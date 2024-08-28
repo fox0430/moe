@@ -45,7 +45,7 @@ import
 import client, utils, hover, message, diagnostics, semantictoken, progress,
        inlayhint, definition, typedefinition, references, rename, declaration,
        implementation, callhierarchy, documenthighlight, documentlink,
-       codelens, executecommand
+       codelens, executecommand, foldingrange
 
 # Workaround for Nim 1.6.2
 import completion as lspcompletion
@@ -876,6 +876,28 @@ proc lspExecuteCommand(
 
     return Result[(), string].ok ()
 
+proc lspFoldingRange(
+  status: var EditorStatus,
+  res: JsonNode): Result[(), string] =
+    ## textDocument/foldingRange
+
+    try:
+      lspClient.deleteWaitingResponse(res["id"].getInt)
+    except CatchableError as e:
+      return Result[(), string].err e.msg
+
+    # Workaround for "Error: generic instantiation too nested"
+    let ranges =
+      try:
+        parseFoldingRangeResponse(res).get
+      except ResultDefect as e:
+        return Result[(), string].err e.msg
+
+    # TODO: Fix cursor position
+    currentMainWindowNode.view.foldingRanges = ranges
+
+    return Result[(), string].ok ()
+
 proc handleLspServerRequest(
   status: var EditorStatus,
   req: JsonNode): Result[(), string] =
@@ -1071,5 +1093,8 @@ proc handleLspResponse*(status: var EditorStatus) =
         of LspMethod.workspaceExecuteCommand:
           let r = status.lspExecuteCommand(resJson.get)
           if r.isErr: status.commandLine.writeLspExecuteCommandError(r.error)
+        of LspMethod.textDocumentFoldingRange:
+          let r = status.lspFoldingRange(resJson.get)
+          if r.isErr: status.commandLine.writeLspFoldingRangeError(r.error)
         else:
           info fmt"lsp: Ignore response: {resJson}"
