@@ -505,7 +505,6 @@ type
 
     # trailing spaces
     highlightTrailingSpaces
-    highlightTrailingSpacesBg
 
     # reserved words
     reservedWord

@@ -175,7 +175,6 @@ currentWordBg = "#808080"
 highlightFullWidthSpace = "#ff0000"
 
 highlightTrailingSpaces = "#ff0000"
-highlightTrailingSpacesBg = "#ff0000"
 
 reservedWord = "#ffffff"
 reservedWordBg = "#808080"

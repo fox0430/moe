@@ -935,11 +935,9 @@ const
 
     # highlight trailing spaces
     EditorColorPairIndex.highlightTrailingSpaces: ColorPair(
-      foreground: Color(
-        index: EditorColorIndex.highlightTrailingSpaces,
-        rgb: "#ff0000".hexToRgb.get),
+      foreground: DefaultForegroundColor,
       background: Color(
-        index: EditorColorIndex.highlightTrailingSpacesBg,
+        index: EditorColorIndex.highlightTrailingSpaces,
         rgb: "#ff0000".hexToRgb.get)),
 
     # highlight reserved words
