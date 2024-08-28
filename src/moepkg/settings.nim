@@ -2003,6 +2003,8 @@ proc toThemeColors*(config: TomlValueRef): ThemeColors =
           let rgb = configColors["foreground"].getStr.toRgb
           result[EditorColorPairIndex.default].foreground.rgb = rgb
           result[EditorColorPairIndex.currentLineBg].foreground.rgb = rgb
+          result[EditorColorPairIndex.highlightFullWidthSpace].foreground.rgb =
+            rgb
         of EditorColorIndex.background:
           let rgb = configColors["background"].getStr.toRgb
           result[EditorColorPairIndex.default].background.rgb = rgb
@@ -2010,6 +2012,9 @@ proc toThemeColors*(config: TomlValueRef): ThemeColors =
             result[i].background.rgb = rgb
         of EditorColorIndex.currentLineBg:
           result[EditorColorPairIndex.currentLineBg].background.rgb =
+            configColors[$index].getStr.toRgb
+        of EditorColorIndex.highlightFullWidthSpace:
+          result[EditorColorPairIndex.highlightFullWidthSpace].background.rgb =
             configColors[$index].getStr.toRgb
         else:
           if endsWith($index, "Bg"):
