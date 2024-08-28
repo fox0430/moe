@@ -501,9 +501,7 @@ type
     currentWord
     currentWordBg
 
-    # full width space
     highlightFullWidthSpace
-    highlightFullWidthSpaceBg
 
     # trailing spaces
     highlightTrailingSpaces

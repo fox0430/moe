@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -927,11 +927,10 @@ const
 
     # highlight full width space
     EditorColorPairIndex.highlightFullWidthSpace: ColorPair(
-      foreground: Color(
-        index: EditorColorIndex.highlightFullWidthSpace,
-        rgb: "#ff0000".hexToRgb.get),
+      # Don't use the foreground.
+      foreground: DefaultForegroundColor,
       background: Color(
-        index: EditorColorIndex.highlightFullWidthSpaceBg,
+        index: EditorColorIndex.highlightFullWidthSpace,
         rgb: "#ff0000".hexToRgb.get)),
 
     # highlight trailing spaces

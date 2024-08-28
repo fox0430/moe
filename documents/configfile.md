@@ -614,8 +614,7 @@ And, `termDefaultBg` and `termDefaultFg`.
 | parenPairBg | Pair of bracket highlighting |
 | currentWord | Current word highlighting |
 | currentWordBg | Current word highlighting |
-| highlightFullWidthSpace | Full-width space text color |
-| highlightFullWidthSpaceBg | Full-width space background color |
+| highlightFullWidthSpace | Full-width space color |
 | highlightTrailingSpaces | Trailing space color |
 | highlightTrailingSpacesBg | Trailing space color |
 | reservedWord | Reserved word text color |
