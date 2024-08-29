@@ -893,8 +893,14 @@ proc lspFoldingRange(
       except ResultDefect as e:
         return Result[(), string].err e.msg
 
-    # TODO: Fix cursor position
+    if ranges.len == 0:
+      return Result[(), string].err "Not found"
+
     currentMainWindowNode.view.foldingRanges = ranges
+
+    let foldingRange = currentMainWindowNode.findFoldingRange
+    if foldingRange.isSome:
+      currentMainWindowNode.currentLine = foldingRange.get.first
 
     return Result[(), string].ok ()
 
