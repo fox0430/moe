@@ -70,7 +70,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 - type: string
 
 | Name | Description |
-|:-----------------------------|
+|:-----------------------------|:-----------------------------|
 | default | The default theme |
 | vscode | VSCode theme |
 | config | User theme. Also please set `Theme.path` |
