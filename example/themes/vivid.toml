@@ -173,10 +173,8 @@ currentWord = "#000000"
 currentWordBg = "#808080"
 
 highlightFullWidthSpace = "#ff0000"
-highlightFullWidthSpaceBg = "#ff0000"
 
 highlightTrailingSpaces = "#ff0000"
-highlightTrailingSpacesBg = "#ff0000"
 
 reservedWord = "#ff0087"
 reservedWordBg = "#808080"

@@ -9,1778 +9,644 @@ The location is
 
 You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 
-## Setting items
+## Configuration Items
+
+### CursorShape
+
+- type: string
+
+| Name |
+|:-----------------------------|
+| terminalDefault |
+| blinkBlock |
+| blinkIbeam |
+| noneBlinkBlock |
+| noneBlinkIbeam |
+
+
+### TerminalColorMode
+
+- type: string
+
+| Name |
+|:-----------------------------|
+| none |
+| 8 |
+| 16 |
+| 256 |
+| 24bit |
+
+
+### ClipbloardTool
+
+- type: string
+
+| Name |
+|:-----------------------------|
+| xsel |
+| xclip |
+| wl-clipboard |
+| wsl-default |
+| macOS-default |
+
+
+### StatusLineItem
+
+- type: string
+
+| Name |
+|:-----------------------------|
+| lineNumber |
+| totalLines |
+| columnNumber |
+| totalColumns |
+| encoding |
+| fileType |
+| fileTypeIcon |
+
+
+### ThemeKind
+
+- type: string
+
+| Name | Description |
+|:-----------------------------|
+| default | The default theme |
+| vscode | VSCode theme |
+| config | User theme. Also please set `Theme.path` |
 
 ### Standard table
-Display line numbers (bool)  
-default is true
-```
-number
-```
 
-Display status line (bool)  
-default is true
-```
-statusLine
-```
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| number | bool | true | Display line numbers |
+| statusLine | bool | true | Display status lines |
+| syntax | bool | true | Enable syntax highlighting |
+| indentationLines | bool | true | Enable indentation lines |
+| tabStop | integer | 2 | Tab width |
+| sidebar | bool | true | Enable Sidebars for editor views |
+| ignorecase | bool | true | Enable ignorecase when searching |
+| smartcase | bool | true | Enable semartcase when searching |
+| autoCloseParen | bool | true | Automatic closing brackets |
+| autoDeleteParen | bool | | Automatic delete brackets |
+| autoIndent | bool | true | Automatic indentation |
+| disableChangeCursor | bool | false | Disable change of the cursor shape |
+| defaultCursor | CursorShape | terminalDefault | The cursor shape of the terminal emulator you are using |
+| normalModeCursor | CursorShape |terminalDefault | The cursor shape in Normal mode |
+| insertModeCursor | CursorShape | blinkIbeam | The cursor shape in insert mode |
+| liveReloadOfConf | bool | false | Enable live reload of the configuration file |
+| liveReloadOfFile | bool | false | Enable live reload of opening files |
+| incrementalSearch | bool | false | Enable incremental search |
+| popUpWindowInExmode | bool | true | Show Pop-up window in Ex mode |
+| colorMode | TerminalColorMode | 24bit | Terminal color mode |
 
-Enable syntax highlighting (bool)  
-default is true
-```
-syntax
-```
-
-Enable/Disable indentation lines (bool)  
-default is true
-```
-indentationLines
-```
-
-Set tab width (integer)  
-default is 2
-```
-tabStop
-```
-
-Enable/Disable sidebars for editor views (bool)
-default is true
-```
-sidebar
-```
-
-Enable/Disable ignorecase (bool)  
-default is true
-```
-ignorecase
-```
-
-Enable/Disable smartcase (bool)  
-default is true
-```
-smartcase
-```
-
-Automatic closing brackets (bool)  
-default is true
-```
-autoCloseParen
-```
-
-Automatic indentation (bool)  
-default is true
-```
-autoIndent
-```
-
-Disable change of the cursor shape (bool)  
-default is false
-```
-disableChangeCursor
-```
-
-Set cursor shape of the terminal emulator you are using (String) `"terminalDefault"` or `"blinkBlock"` or `"blinkIbeam"` or `noneBlinkBlock` or `noneBlinkIbeam`  
-default is `"terminalDefault"`
-```
-defaultCursor
-```
-
-Set cursor shape in normal mode (String) `"terminalDefault"` or `"blinkBlock"` or `"blinkIbeam"` or `noneBlinkBlock` or `noneBlinkIbeam`  
-default is `"blinkBlock"`
-```
-normalModeCursor
-```
-
-Set cursor shape in insert mode (String) `"terminalDefault"` or `"blinkBlock"` or `"blinkIbeam"` or `noneBlinkBlock` or `noneBlinkIbeam`  
-default is `"blinkIbeam"`
-
-```
-insertModeCursor
-```
-
-Live reload of configuration file (bool)  
-default is false
-```
-liveReloadOfConf
-```
-
-Incremental search (bool)  
-default is true
-```
-incrementalSearch
-```
-
-Pop-up window in ex mode (bool)  
-default is true
-```
-popUpWindowInExmode 
-```
-
-Auto delete paren (bool)  
-default is false
-```
-autoDeleteParen
-```
-
-Live reloading open files (bool)  
-default is false
-```
-liveReloadOfFile
-```
-
-Terminal color mode (string) `none` or `8` or `16` or `256` or `24bit`
-default is "24bit"
-```
-colorMode
-```
 
 ### Clipboard table
-Enable/Disable system clipboard (bool)  
-default is true
-```
-enable
-```
 
-Set clipboard tool for Linux (string)  
-default is xsel
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | Enable system clipboard |
+| tool | ClipbloardTool | xsel | The clipboard tool for Linux |
 
-`xsel`, `xclip`, `wl-clipboard`, `wsl-default`, `macOS-default`.
-
-```
-tool
-```
 
 ### TabLine table
-Show all buffer in tab line (bool)  
-default is false  
-```
-allBuffer
-```
+
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| allBuffer | bool | false | Display all buffer in tab line |
+
 
 ### StatusLine table
-Multiple status line (bool)  
-default is true
-```
-multipleStatusLine
-```
 
-Enable/Disable merging status line with command line (bool)  
-default is true
-```
-merge
-```
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| multipleStatusLine | bool | true | Show multiple status lines |
+| merge | bool | fale | Enable merge the status line with the command line |
+| mode | bool | true | Display the current mode |
+| chanedMark | bool | true | Display the buffer changed mark |
+| directory | bool | true | Display the directory of the path |
+| gitbranchName | bool | true | Display the current git branch name |
+| showChangedLine | bool | true | Display number of changed lines |
+| showGitInactive | bool | false | Display the git branch name on the status line in inactive windows |
+| showModeInactive | bool | false | Display the mode on the status line in inactive windows |
+| setupText | string | {lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {fileType} | Text to customize the items displayed in the status line. Please check StatusLineItem |
 
-Show current mode (bool)  
-default is true
-```
-mode
-```
-
-Show edit history mark (bool)  
-default is true
-```
-chanedMark
-```
-
-Show file location (bool)  
-default is true
-```
-directory
-```
-
-Show current git branch name (bool)  
-default is true
-```
-gitbranchName
-```
-
-Show number of changed lines (bool)  
-default is true
-```
-showChangedLine
-```
-
-Show/Hide git branch name in status line when window is inactive (bool)  
-default is false
-```
-showGitInactive
-```
-
-Show/Hide mode string in status line when window is inactive (bool)  
-default is false
-```
-showModeInactive
-```
-
-Text to customize the items displayed in the status line (string)
-
-Items: `lineNumber`, `totalLines` `columnNumber`, `totalColumns`,  `encoding`, `fileType`, `fileTypeIcon`
-
-You can display information in the status lien by enclosing the above items in parentheses. Example: `{lineNumber}`
-
-default is `"{lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {fileType}"`
-```
-setupText
-```
 
 ### BuildOnSave table
 
-Enable/Disable build on save (bool)  
-default is false
-```
-buildOnSave
-```
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| buildOnSave | bool | false | Enable build on save |
+| workspaceRoot | string | | Project root directory |
+| command | string | | Override commands executed at build |
 
-Project root directory (string)  
-```
-workspaceRoot
-```
-
-Override commands executed at build (string)  
-```
-command
-```
 
 ### Highlight table
 
-Highlight the current line (bool)  
-default is true
-```
-currentLine
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| currentLine | bool | true | Highlight the current line background |
+| reservedWord | Array of string | ["TODO", "WIP", "NOTE"] | Highlight any words |
+| replaceText | bool | true | Highlight replacement text |
+| pairOfParen | bool | true | Highlight a pair of brackets |
+| fullWidthSpace | bool | true | Highlight full-width spaces |
+| trailingSpaces | bool | true | Highlight trailing spaces |
+| currentWord | bool | true | Highlight other uses of the current word under the cursor |
 
-```
-
-Highlight any word (array)  
-
-default
-```
-["TODO", "WIP", "NOTE"]
-```
-```
-reservedWord
-```
-
-Highlight replacement text (bool)  
-default is true
-```
-replaceText
-```
-
-Highlight a pair of paren (bool)  
-default is true
-```
-pairOfParen
-```
-
-Highlight full-width space (bool)  
-default is true
-```
-fullWidthSpace
-```
-
-Highlight trailing spaces (bool)  
-default is true
-```
-trailingSpaces
-```
-
-highlight other uses of the current word under the cursor (bool)  
-default is true
-```
-currentWord
-```
 
 ### AutoBackup table
 
-Enable/Disable automatic backups (bool)  
-default is false
-```
-enable
-```
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | false | Enable automatic backups |
+| idleTime | integer | 10 | Start backup when there is no operation times (seconds) |
+| interval | integer | 5 | Backup interval (minutes) |
+| backupDir | string | ~/.cache/moe/backups | Directory to save backup files |
+| dirToExclude | Array of string | ["/etc"] | Exclude dirs for where you don't want to produce automatic backups |
 
-Start backup when there is no operation for the set number of seconds (int)  
-default is 10 (10 second)  
-```
-idleTime
-```
-
-Backup interval (int)  
-default is 5 (5 minute)    
-```
-interval
-```
-
-Directory to save backup files (string)  
-default is "" (`~/.cache/moe/backups`)    
-```
-backupDir
-```
-
-Exclude settings for where you don't want to produce automatic backups (array)  
-default
-```
-["/etc"]
-```
-
-```
-dirToExclude
-```
 
 ### QuickRun table
 
-Save buffer when run QuickRun (bool)  
-default is true
-```
-saveBufferWhenQuickRun
-```
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| saveBufferWhenQuickRun | bool | true | Save buffer when run QuickRun |
+| command | string | | Commands to be executed by quick run |
+| timeout | integer | 30 | Command timeout (seconds) |
+| nimAdvancedCommand | string | c | Nim compiler advanced args |
+| clangOptions | string | | C lang compileer options. The default compiler is gcc  |
+| cppOptions | string | | C++ compiler options. The default compiler is gcc |
+| nimOptions | string | | Nim compiler options |
+| shOptions | string | | sh options |
+| bashOptions | string | | bash options |
 
-Setting commands to be executed by quick run (string)  
-default is "" (None)
-```
-command
-```
-
-Command timeout (int)  
-default is 30 (30 second)
-```
-timeout
-```
-
-Nim compiler advanced command setting (string)  
-default is "c"
-```
-nimAdvancedCommand
-```
-
-gcc compileer option setting (string)  
-default is "" (None)
-```
-ClangOptions
-```
-
-g++ compiler option setting (string)  
-default is "" (None)
-```
-CppOptions
-```
-
-Nim compiler option setting (string)  
-default is "" (None)
-```
-NimOptions
-```
-
-sh option setting (string)  
-default is "" (None)
-```
-shOptions
-```
-
-bash option setting (string)  
-default is "" (None)
-```
-bashOptions
-```
 
 ### Notification table
 
-Enable/disable all messages/notifications in status line (bool)  
-default is true
-```
-screenNotifications
-```
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| screenNotifications | bool | true | Show all messages/notifications in the command line |
+| logNotifications | bool | true | Record all messages/notifications to the log |
+| autoBackupScreenNotify | bool | true | Auto backups messages/notifications in the command line |
+| autoBackupLogNotify | bool | true | Auto backups messages/notifications to the log |
+| autoSaveScreenNotify | bool | true | Auto save messages/notifications in the command line |
+| autoSaveLogNotify | bool | true | Auto save messages/notifications to the log |
+| yankScreenNotify | bool | true | Yank messages/notifications in the command line |
+| yankLogNotify | bool | true | Yank messages/notifications to the log |
+| deleteScreenNotify | bool | true | Delete buffer messages/notifications in the command line |
+| deleteLogNotify | bool | true | Delete buffer messages/notifications to the log |
+| saveScreenNotify | bool | true | Save messages/notifications in the command line |
+| saveLogNotify | bool | true | Save messages/notifications to the log (bool) |
+| quickRunScreenNotify | bool | true | QuickRun messages/notifications in the command line |
+| quickRunLogNotify | bool | true | QuickRun messages/notifications to the log |
+| buildOnSaveScreenNotify | bool | true | Build on save messages/notifications in the command line |
+| buildOnSaveLogNotify | bool | true | Build on save messages/notifications to the log |
+| filerScreenNotify | bool | true | Filer messages/notifications in the command line |
+| filerLogNotify | bool | true | Filer messages/notifications to the log |
+| restoreScreenNotify | bool | true | Restore messages/notifications in the command line |
+| restoreLogNotify | bool | true | Restore messages/notifications to the log |
 
-Enable/disable all messages/notifications in log (bool)  
-default is true
-```
-logNotifications
-```
-
-Enable/disable auto backups messages/notifications in status line (bool)  
-default is true
-```
-autoBackupScreenNotify
-```
-
-Enable/disable auto backups messages/notifications in log (bool)  
-default is true
-```
-autoBackupLogNotify
-```
-
-Enable/disable auto save messages/notifications in status line (bool)  
-default is true
-```
-autoSaveScreenNotify
-```
-
-Enable/disable auto save messages/notifications in log (bool)  
-default is true
-```
-autoSaveLogNotify
-```
-
-Enable/disable yank messages/notifications in status line (bool)  
-default is true
-```
-yankScreenNotify
-```
-
-Enable/disable yank messages/notifications in log (bool)  
-default is true
-```
-yankLogNotify
-```
-
-Enable/disable delete buffer messages/notifications in status line (bool)  
-default is true
-```
-deleteScreenNotify
-```
-
-Enable/disable delete buffer messages/notifications in log (bool)  
-default is true
-```
-deleteLogNotify
-```
-
-Enable/disable save messages/notifications in status line (bool)  
-default is true
-```
-saveScreenNotify
-```
-
-Enable/disable save messages/notifications in log (bool)  
-default is true
-```
-saveLogNotify
-```
-
-Enable/disable QuickRun messages/notifications in status line (bool)  
-default is true
-```
-quickRunScreenNotify
-```
-
-Enable/disable QuickRun messages/notifications in log (bool)  
-default is true
-```
-quickRunLogNotify
-```
-
-Enable/disable build on save messages/notifications in status line (bool)  
-default is true
-```
-buildOnSaveScreenNotify
-```
-
-Enable/disable build on save messages/notifications in log (bool)  
-default is true
-```
-buildOnSaveLogNotify
-```
-
-Enable/disable filer messages/notifications in status line (bool)  
-default is true
-```
-filerScreenNotify
-```
-
-Enable/disable filer messages/notifications in log (bool)  
-default is true
-```
-filerLogNotify
-```
-
-Enable/disable restore messages/notifications in status line (bool)  
-default is true
-```
-restoreScreenNotify
-```
-
-Enable/disable restore messages/notifications in log (bool)  
-default is true
-```
-restoreLogNotify
-```
 
 ### Filer table
 
-Show/hidden unicode icons (bool)  
-default is true
-```
-showIcons
-```
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| showIcons | bool | true | Show/Hidden file type icons |
+
 
 ### Autocomplete table
 
-Enable/Disable general-purpose autocomplete (bool).
-The default value is true.
-```
-enable
-```
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | General-purpose autocompletion |
+
 
 ### AutoSave table
-Enable/Disable auto save (bool)  
-default is true
-```
-enable
-```
 
-Auto save interval (minits) (int)  
-default is 5 (5 minits)
-```
-interval
-```
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | Auto save |
+| interval | integer | 5 | Auto save interval (Minits) |
+
 
 ### Persist table
 
-Enable/Disable saving Ex command history (bool).
-The default value is true.
-```
-exCommand
-```
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| exCommand | bool | true | Saving Ex command history |
+| exCommandHistoryLimit | integer | 1000 | The maximum entries of Ex command history to save |
+| search | bool | true | Saving search history |
+| searchHistoryLimit | integer | 1000 | The maximum entries of search history to save |
+| curosrPosition | bool | true | Saving last cursor position |
 
-The maximum entries of ex command history to save (int).
-The default value is 1000.
-```
-exCommandHistoryLimit
-```
-
-Enable/Disable saving search history (bool).
-The default value is true.
-```
-search
-```
-
-The maximum entries of search history to save (int).
-The default value is 1000.
-```
-searchHistoryLimit
-```
-
-Enable/Disable saving last cursor position (bool).
-The default value is true.
-```
-curosrPosition
-```
 
 ### Debug.WindowNode table
 
-Show/Hidden all windowNode info in debug mode (bool)
-```
-enable
-```
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | All WindowNode info |
+| currentWindow | bool | true | Whether the current window or not |
+| index | bool | true | WindowNode.index |
+| windowIndex | bool | true | WindowNode.windowIndex |
+| bufferIndex | bool | true | WindowNode.bufferIndex |
+| parentIndex | bool | true | Parent node's WindoeNode.index |
+| childLen | bool | true | WindoeNode.child.len |
+| splitType | bool | true | WindoeNode.splitType |
+| haveCursesWin | bool | true | Whether windoeNode have cursesWindow or not |
+| y | bool | true | WindowNode.y |
+| x | bool | true | WindowNode.x |
+| h | bool | true | WindowNode.h |
+| w | bool | true | WindowNode.w |
+| currentLine | bool | true | WindowNode.currentLine |
+| currentColumn | bool | true | WindowNode.currentColumn |
+| expandedColumn | bool | true | WindowNode.expandedColumn |
+| cursor | bool | true | WindowNode.curosr |
 
-Show/Hidden whether the current window or not in debug mode (bool)
-```
-currentWindow
-```
-
-Show/Hidden windowNode.index in debug mode (bool)
-```
-index
-```
-
-Show/Hidden windowNode.windowIndex in debug mode (bool)
-```
-windowIndex
-```
-
-Show/Hidden windowNode.bufferIndex in debug mode (bool)
-```
-bufferIndex
-```
-
-Show/Hidden parent node's windoeNode.index in debug mode (bool)
-```
-parentIndex
-```
-
-Show/Hidden windoeNode.child.len in debug mode (bool)
-```
-childLen
-```
-
-Show/Hidden windoeNode.splitType in debug mode (bool)
-```
-splitType
-```
-
-Show/Hidden whether windoeNode have cursesWindow or not in debug mode (bool)
-```
-haveCursesWin
-```
-
-Show/Hidden windowNode.y in debug mode (bool)
-```
-y
-```
-
-Show/Hidden windowNode.x in debug mode (bool)
-```
-x
-```
-
-Show/Hidden windowNode.h in debug mode (bool)
-```
-h
-```
-
-Show/Hidden windowNode.w in debug mode (bool)
-```
-w
-```
-
-Show/Hidden windowNode.currentLine in debug mode (bool)
-```
-currentLine
-```
-
-Show/Hidden windowNode.currentColumn in debug mode (bool)
-```
-currentColumn
-```
-
-Show/Hidden windowNode.expandedColumn in debug mode (bool)
-```
-expandedColumn
-```
-
-Show/Hidden windowNode.curosr in debug mode (bool)
-```
-cursor
-```
 
 ### Debug.EditorView table
-Show/Hidden all editorview info in debug mode (bool)
-```
-enable
-```
 
-Show/Hidden editorview.widthOfLineNum in debug mode (bool)
-```
-widthOfLineNum
-```
-
-Show/Hidden editorview.height in debug mode (bool)
-```
-height
-```
-
-Show/Hidden editorview.width in debug mode (bool)
-```
-width
-```
-
-Show/Hidden editorview.originalLine in debug mode (bool)
-```
-originalLine
-```
-
-Show/Hidden editorview.start in debug mode (bool)
-```
-start
-```
-
-Show/Hidden editorview.length in debug mode (bool)
-```
-length
-```
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | All Editorview info |
+| widthOfLineNum | bool | true | Editorview.widthOfLineNum |
+| height | bool | true | Editorview.height |
+| width | bool | true | Editorview.width |
+| originalLine | bool | true | Editorview.originalLine |
+| start | bool | true | Editorview.start |
+| length | bool | true | Editorview.length |
 
 ### Debug.BufStatus table
 
-Show/Hidden all bufStatus info in debug mode (bool)
-```
-enable
-```
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | All BufStatus info |
+| bufferIndex | bool | true | The index of BufStatus |
+| path | bool | true | BufStatus.path |
+| openDir | bool | true | BufStatus.openDir |
+| currentMode | bool | true | BufStatus.mode |
+| prevMode | bool | true | BufStatus.prevMode  |
+| language | bool | true | BufStatus.language |
+| encoding | bool | true | BufStatus.characterEncoding  |
+| countChange | bool | true | BufStatus.countChange  |
+| cmdLoop | bool | true | BufStatus.cmdLoop  |
+| lastSaveTime | bool | true | BufStatus.lastSaveTime  |
+| bufferLen | bool | true | BufStatus.buffer.len |
 
-Show/Hidden bufStatus index in debug mode (bool)
-```
-bufferIndex
-```
-
-Show/Hidden bufStatus.path in debug mode (bool)
-```
-path
-```
-
-Show/Hidden bufStatus.openDir in debug mode (bool)
-```
-openDir
-```
-
-Show/Hidden bufStatus.mode in debug mode (bool)
-```
-currentMode
-
-```
-
-Show/Hidden bufStatus.prevMode in debug mode (bool)
-```
-prevMode
-```
-
-Show/Hidden bufStatus.language in debug mode (bool)
-```
-language
-```
-
-Show/Hidden bufStatus.characterEncoding in debug mode (bool)
-```
-encoding 
-```
-
-Show/Hidden bufStatus.countChange in debug mode (bool)
-```
-countChange
-```
-
-Show/Hidden bufStatus.cmdLoop in debug mode (bool)
-```
-cmdLoop
-```
-
-Show/Hidden bufStatus.lastSaveTime in debug mode (bool)
-```
-lastSaveTime
-```
-
-Show/Hidden bufStatus.buffer.len in debug mode (bool)
-```
-bufferLen
-```
 
 ### Git table
 
-Show/Hidden line changes on sidebars (bool)
-```
-showChangedLine
-```
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| showChangedLine | bool | true | Line changes on sidebars |
+| updateInterval | integer | 1000 | Interval for updating Git information. (Milli seconds) |
 
-Interval for updating Git information. (Milli seconds) (integer)
-```
-1000
-```
 
 ### SyntaxChecker table
 
-Enable/Disable syntax checker (bool)
-```
-enable
-```
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | Syntax checker |
+
 
 ### SmoothScroll table
 
-Enable/Disable Smooth scroll (bool)  
-default is true
-```
-enable
-```
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | Smooth scroll |
+| minDelay | integer | 5 | Minimum delay |
+| maxDelay | integer | 20 | Maximum delay |
 
-Smooth scroll minimum delay (int)  
-default is 5
-```
-minDelay
-```
-
-Smooth scroll maximum delay (int)  
-default is 20
-```
-maxDelay
-```
 
 ### Lsp table
 
-Enable/Disable LSP (bool)  
-default is `false`
-```
-enable
-```
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | LSP (Language Server Protocol) Client |
+
 
 ### Lsp.Completion table
-Enable/Disable LSP Completion (bool)  
-default is `true`
-```
-enable
-```
+
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | LSP Completion |
+
 
 ### Lsp.Declaration table
-Enable/Disable LSP Goto Declaration (bool)  
-default is `true`
-```
-enable
-```
+
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | LSP Goto Declaration |
+
 
 ### Lsp.Definition table
-Enable/Disable LSP Goto Definition (bool)  
-default is `true`
-```
-enable
-```
+
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | LSP Goto Definition |
+
 
 ### Lsp.TypeDefinition table
-Enable/Disable LSP Goto TypeDefinition (bool)  
-default is `true`
-```
-enable
-```
+
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | LSP TypeDefinition |
+
 
 ### Lsp.Implementation table
-Enable/Disable LSP Goto Implementation (bool)  
-default is `true`
-```
-enable
-```
+
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | LSP Implementation |
+
 
 ### Lsp.Diagnostics table
-Enable/Disable LSP Diagnostics (bool)  
-default is `true`
-```
-enable
-```
+
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | LSP Diagnostics |
+
 
 ### Lsp.Hover table
-Enable/Disable LSP Hover (bool)  
-default is `true`
-```
-enable
-```
+
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | LSP Hover |
+
 
 ### Lsp.InlayHint table
-Enable/Disable LSP InlayHint (bool)  
-default is `true`
-```
-enable
-```
+
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | LSP InlayHint |
+
 
 ### Lsp.References table
-Enable/Disable LSP Find References (bool)  
-default is `true`
-```
-enable
-```
+
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | LSP Find References |
+
 
 ### Lsp.CallHierarchy table
-Enable/Disable LSP CallHierarchy (bool)  
-default is `true`
-```
-enable
-```
+
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | LSP Call Hierarchy |
+
 
 ### Lsp.DocumentHighlight table
-Enable/Disable LSP Document Highlight (bool)  
-default is `true`
-```
-enable
-```
+
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | LSP Document Highlight |
+
 
 ### Lsp.DocumentLink table
-Enable/Disable LSP Document Link (bool)  
-default is `true`
-```
-enable
-```
+
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | LSP Document Link |
+
 
 ### Lsp.CodeLens table
-Enable/Disable LSP Code Lens (bool)  
-default is `false`
-```
-enable
-```
+
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | LSP Code Lens |
+
 
 ### Lsp.Rename table
-Enable/Disable LSP Rename (bool)  
-default is `true`
-```
-enable
-```
+
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | LSP Rename |
+
 
 ### Lsp.SemanticTokens table
-Enable/Disable LSP SemanticTokens (bool)  
-default is `true`
-```
-enable
-```
+
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | LSP Semantic Tokens |
+
 
 ### Lsp.ExecuteCommand table
-Enable/Disable LSP Execute Command (bool)  
-default is `true`
-```
-enable
-```
+
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | LSP Execute Command |
+
 
 ### Lsp.{languageId} table
 
-File extensions (Array[string])
-```
-extensions
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| extensions | Array of string | | File extensions |
+| command | string | | LSP server command |
+| rustAnalyzerRunSingle | bool | true | `rust-analyzer.runSingle`. Only effective with rust-analyzer and if `Lsp.CodeLens` is enabled. |
+| rustAnalyzerDebugSingle | bool | true | `rust-analyzer.debugSingle`. Only effective with rust-analyzer and if `Lsp.CodeLens` is enabled. |
 
-```
-
-A LSP server command (string)  
-```
-command
-```
-
-Enable/Disable rust-analyzer.runSingle (bool)  
-Only effective with rust-analyzer and if `Lsp.CodeLens` is enabled.  
-default is `true`
-```
-rustAnalyzerRunSingle
-```
-
-Enable/Disable rust-analyzer.debugSingle (bool)  
-Only effective with rust-analyzer and if `Lsp.CodeLens` is enabled.  
-default is `true`
-```
-rustAnalyzerDebugSingle
-```
 
 Please check more [details](https://github.com/fox0430/moe/blob/develop/documents/lsp.md)
 
 ### StartUp.FileOpen table
 
-Display all buffers in multiple views if multiple paths are received when starting the editor (bool)  
-The default is `true`
-```
-autoSplit
-```
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| autoSplit | bool | true | Display all buffers in multiple views if multiple paths are received when starting the editor |
+| splitType | string | vertical | The split type for `StartUp.FileOpen.autoSplit` |
 
-Setting the split type for `StartUp.FileOpen.autoSplit`. (string)  
-`vertical` or `horizontal`  
-The default is `vertical`
-
-```
-splitType 
-```
 
 ### Theme table
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| kind | ThemeKind | default | Theme kind |
+| path | string | | A path of user theme. Also Please set `"config"` to `Theme.kind`. |
 
-Theme kind (string)
-
-`"default"` or `"vscode"` or `"config"`
-
-`default`: Load the default theme 
-`vscode`: Load VSCode theme
-`config`: Load user theme. Also please set `Theme.path`.
-
-The default is `"default"`
-```
-kind
-```
-
-A path of user theme. (string)
-
-Also Please set `"config"` to `Theme.kind`.
-
-The default is `""` (Empty)
-```
-path
-```
 
 ### Color table (Theme)
 Put the toml file that describes the `Colors` table in the path specified by `Theme.path` in `moerc.toml`.
 
-moe supports 24 bit color and set in hexadecimal (#000000 ~ #ffffff).
+moe supports 24 bit color and set in hexadecimal (`#000000` ~ `#ffffff`).
 And, `termDefaultBg` and `termDefaultFg`.
 
-Default character color
-```
-foreground
-```
-```
-background
-```
-
-Line number color
-```
-lineNum
-```
-```
-lineNumBg
-```
-Current line number highlighting color
-
-```
-currentLineNum
-```
-```
-currentLineNumBg
-```
-
-Character color of Status line in normal mode
-```
-statusLineNormalMode
-```
-```
-statusLineNormalModeBg
-```
-
-Mode label color in the status line in normal mode
-```
-statusLineNormalModeLabel
-```
-```
-statusLineNormalModeLabelBg
-```
-
-Character color of Status line in normal mode when inactive  
-```
-statusLineNormalModeInactive
-```
-```
-statusLineNormalModeInactiveBg
-```
-
-Character color of Status line in insert mode
-```
-statusLineInsertMode
-```
-```
-statusLineInsertModeBg
-```
-
-Mode label color in the status line in insert mode
-```
-statusLineInsertModeLabel
-```
-```
-statusLineInsertModeLabelBg
-```
-
-Character color of Status line in insert mode when inactive
-```
-statusLineInsertModeInactive
-```
-```
-statusLineInsertModeInactiveBg
-```
-
-Character color of Status line in visual mode
-```
-statusLineVisualMode
-```
-```
-statusLineVisualModeBg
-```
-
-Mode label color in the status line in visual mode
-```
-statusLineVisualModeLabel
-```
-```
-statusLineVisualModeLabelBg
-```
-
-Character color of Status line in visual mode when inactive
-```
-statusLineVisualModeInactive
-```
-```
-statusLineVisualModeInactiveBg
-```
-
-Character color of Status line replace in mode
-```
-statusLineReplaceMode
-```
-```
-statusLineReplaceModeBg
-```
-
-Mode label color in the status line in replace mode
-```
-statusLineReplaceModeLabel
-```
-```
-statusLineReplaceModeLabelBg
-```
-
-Character color of Status line replace in mode when inactive
-```
-statusLineReplaceModeInactive
-```
-```
-statusLineReplaceModeInactiveBg
-```
-
-Character color of Status line in filer mode
-```
-statusLineFilerMode
-```
-```
-statusLineFilerModeBg
-```
-
-Mode label color in the status line in filer mode
-```
-statusLineFilerModeLabel
-```
-```
-statusLineFilerModeLabelBg
-```
-
-Character color of Status line in filer mode when inactive
-```
-statusLineFilerModeInactive
-```
-```
-statusLineFilerModeInactiveBg
-```
-
-Character color of Status line in ex mode
-```
-statusLineExMode
-```
-```
-statusLineExModeBg
-```
-
-Mode label color in the status line in ex mode
-```
-statusLineExModeLabel
-```
-```
-statusLineExModeLabelBg
-```
-
-Character color of Status line in ex mode when inactive
-```
-statusLineExModeInactive
-```
-```
-statusLineExModeInactiveBg
-```
-
-Current git branch text color
-```
-statusLineGitBranch
-```
-```
-statusLineGitBranchBg
-```
-
-Character color of tab title in tab line
-```
-tab
-```
-```
-tabBg
-```
-
-Character color of current tab title in tab line
-```
-currentTab
-```
-```
-currentTabBg
-```
-
-Character color in command bar
-```
-commandLine
-```
-```
-commandLineBg
-```
-
-Character color of error messages
-```
-errorMessage
-```
-```
-errorMessageBg
-```
-
-Character color of warning messages
-```
-warnMessage
-```
-```
-warnMessageBg
-```
-
-Character color of search result highlighting
-```
-searchResult
-```
-```
-searchResultBg
-```
-
-Character color selected in visual mode
-```
-selectArea
-```
-```
-selectAreaBg
-```
-
-Syntax highlighting color
-```
-keyword
-```
-
-Syntax highlighting color
-```
-functionName
-```
-
-Syntax highlighting color
-```
-typeName
-```
-
-Syntax highlighting color
-```
-boolean
-```
-
-Syntax highlighting color
-```
-specialVar
-```
-
-Syntax highlighting color
-```
-builtin
-```
-
-Syntax highlighting color
-```
-charLit
-```
-
-Syntax highlighting color
-```
-stringLit
-```
-
-Syntax highlighting color
-```
-binNumber
-```
-
-Syntax highlighting color
-```
-decNumber
-```
-
-Syntax highlighting color
-```
-floatNumber
-```
-
-Syntax highlighting color
-```
-hexNumber
-```
-
-Syntax highlighting color
-```
-octNumber
-```
-
-Syntax highlighting color
-```
-comment
-```
-
-Syntax highlighting color
-```
-longComment
-```
-
-Syntax highlighting color
-```
-whitespace
-```
-
-Syntax highlighting color
-```
-preprocessor
-```
-
-Syntax highlighting color
-```
-pragma
-```
-
-Syntax highlighting color
-```
-identifier
-```
-
-Syntax highlighting color
-```
-table
-```
-
-Syntax highlighting color
-```
-date
-```
-
-Syntax highlighting color
-```
-operator
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-enumMember
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-interfaceName
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-typeParameter
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-parameter
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-variable
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-property
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-string
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-event
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-function
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-method
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-macro
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-regexp
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-decorator
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-angle
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-arithmetic
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-attribute
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-attributeBracket
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-bitwise
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-brace
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-bracket
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-builtinAttribute
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-builtinType
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-colon
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-comma
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-comparison
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-constParameter
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-derive
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-deriveHelper
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-dot
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-escapeSequence
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-invalidEscapeSequence
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-formatSpecifier
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-generic
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-label
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-lifetime
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-logical
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-macroBang
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-parenthesis
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-punctuation
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-selfKeyword
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-selfTypeKeyword
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-semicolon
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-typeAlias
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-toolModule
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-union
-```
-
-syntax highlighting color (LSP Semantic Tokens)
-```
-unresolvedReference
-```
-
-Character color of current file name in filer mode
-```
-currentFile
-```
-```
-currentFileBg
-```
-
-Character color of file name in filer mode
-```
-file
-```
-```
-fileBg
-```
-
-Character color of directory name in filer mode
-```
-dir
-```
-```
-dirBg
-```
-
-Character color of symbolic links to file in filer mode
-```
-pcLink
-```
-```
-pcLinkBg
-```
-
-Pop-up window text color
-```
-popUpWindow
-```
-```
-popUpWindowBg
-```
-
-Pop-up window current line text color
-```
-popUpWinCurrentLine
-```
-```
-popUpWinCurrentLineBg
-```
-
-Text color when replace text 
-```
-replaceText
-```
-```
-replaceTextBg
-```
-
-Pair of paren highlighting
-```
-parenPair
-```
-```
-parenPairBg 
-```
-
-Current word highlighting
-```
-currentWord
-```
-```
-currentWordBg
-```
-
-Full width space text color
-```
-highlightFullWidthSpace
-```
-```
-highlightFullWidthSpaceBg
-```
-
-Trailing space color
-```
-highlightTrailingSpaces
-```
-```
-highlightTrailingSpacesBg
-```
-
-Reserved word text color
-```
-reservedWord
-```
-```
-reservedWordBg
-```
-
-A info color of Syntax checker result highlighting
-```
-syntaxCheckInfo
-```
-```
-syntaxCheckInfoBg
-```
-
-A hint color of Syntax checker result highlighting
-```
-syntaxCheckHint
-```
-```
-syntaxCheckHintBg
-```
-
-A warning color of Syntax checker result highlighting
-```
-syntaxCheckWarn
-```
-```
-syntaxCheckWarnBg
-```
-
-An error color of Syntax checker result highlighting
-```
-syntaxCheckErr
-```
-```
-syntaxCheckErrBg
-```
-
-Git conflict marker color
-```
-gitConflict
-```
-```
-gitConflictBg
-```
-
-Added line color on Diff viewer
-```
-diffViewerAddedLine 
-```
-```
-diffViewerAddedLineBg
-```
-
-Deleted line color on Diff viewer
-```
-diffViewerDeletedLine
-```
-```
-diffViewerDeletedLineBg
-```
-
-Current line color on Backup manager
-```
-backupManagerCurrentLine
-```
-```
-backupManagerCurrentLineBg 
-```
-
-Current line color in configuration mode
-```
-configModeCurrentLine
-```
-```
-configModeCurrentLineBg
-```
-
-Current line background color
-```
-currentLineBg
-```
-
-An added lines sign color of Git in sidebars
-```
-sidebarGitAddedSign
-```
-```
-sidebarGitAddedSignBg
-```
-
-A deleted lines sign color of Git in sidebars
-```
-sidebarGitDeletedSign
-```
-```
-sidebarGitDeletedSignBg
-```
-
-A changed lines sign color of Git in sidebars.
-```
-sidebarGitChangedSign
-```
-```
-sidebarGitChangedSignBg
-```
-
-An info sign color of syntax checker results in sidebars.
-```
-sidebarSyntaxCheckInfoSign 
-```
-```
-sidebarSyntaxCheckInfoSignBg 
-```
-
-A hint sign color of syntax checker results in sidebars.
-```
-sidebarSyntaxCheckHintSign 
-```
-```
-sidebarSyntaxCheckHintSignBg
-```
-
-A warning color of syntax checker results in sidebars.
-```
-sidebarSyntaxCheckWarnSign 
-```
-```
-sidebarSyntaxCheckWarnSignBg
-```
-
-An error color of syntax checker results in sidebars.
-```
-sidebarSyntaxCheckErrSign 
-```
-```
-sidebarSyntaxCheckErrSignBg
-```
+| Name |  Description |
+|:-----------------------------|:-----------------------------|
+| foreground | Default text color |
+| background | Default background olor |
+| currentLineBg | Background color of the editor current line |
+| lineNum | Text color of line numbers  |
+| lineNumBg | Background color of line numbers |
+| currentLineNum | Text color of current line number highlighting |
+| currentLineNumBg | Background color of current line number highlighting |
+| statusLineNormalMode | Text color of Status line in Normal mode |
+| statusLineNormalModeBg | Background color of Status line in Normal mode |
+| statusLineNormalModeLabel | Mode label text color in status line in Normal mode |
+| statusLineNormalModeLabelBg | Mode label background color in status line in Normal mode |
+| statusLineNormalModeInactive | Text color of status line in Normal mode when inactive |
+| statusLineNormalModeInactiveBg | Background color of status line in Normal mode when inactive |
+| statusLineInsertMode | Text color of status line in Insert mode |
+| statusLineInsertModeBg | Background color of status line in Insert mode |
+| statusLineInsertModeLabel | Mode label text color in status line in Insert mode |
+| statusLineInsertModeLabelBg | Mode label background color in status line in Insert mode |
+| statusLineInsertModeInactive | Text color of status line in Insert mode when inactive |
+| statusLineInsertModeInactiveBg | Background color of status line in Insert mode when inactive |
+| statusLineVisualMode | Text color of Status line in Visual mode |
+| statusLineVisualModeBg | Background color of Status line in Visual mode |
+| statusLineVisualModeLabel | Mode label text color in status line in visual mode |
+| statusLineVisualModeLabelBg | Mode label background color in status line in visual mode |
+| statusLineVisualModeInactive | Text color of Status line in Visual mode when inactive |
+| statusLineVisualModeInactiveBg | Background color of status line in Visual mode when inactive |
+| statusLineReplaceMode | Text color of Status line Replace in mode |
+| statusLineReplaceModeBg | Background color of status line Replace in mode |
+| statusLineReplaceModeLabel | Mode label text color in status line in Replace mode |
+| statusLineReplaceModeLabelBg | Mode label background color in status line in Replace mode |
+| statusLineReplaceModeInactive | Text color of Status line Replace in mode when inactive |
+| statusLineReplaceModeInactiveBg | Background color of Status line Replace in mode when inactive |
+| statusLineFilerMode | Text color of Status line in Filer mode |
+| statusLineFilerModeBg | Background color of Status line in Filer mode |
+| statusLineFilerModeLabel | Mode label text color in status line in Filer mode |
+| statusLineFilerModeLabelBg | Mode label background color in status line in Filer mode |
+| statusLineFilerModeInactive | Text color of status line in Filer mode when inactive |
+| statusLineFilerModeInactiveBg | Background color of Status line in Filer mode when inactive |
+| statusLineExMode | Text color of Status line in Ex mode |
+| statusLineExModeBg | Background color of Status line in Ex mode |
+| statusLineExModeLabel | Mode label text color in status line in Ex mode |
+| statusLineExModeLabelBg | Mode label background color in status line in Ex mode |
+| statusLineExModeInactive | Text color of status line in Ex mode when inactive |
+| statusLineExModeInactiveBg | Background color of Status line in Ex mode when inactive |
+| statusLineGitBranch | Text color of git branch |
+| statusLineGitBranchBg | Background color of git branch |
+| tab | Text color of tab title in tab line |
+| tabBg | Background color of tab title in tab line |
+| currentTab | Text color of current tab title in tab line |
+| currentTabBg | Background color of current tab title in tab line |
+| commandLine | Text color in command line |
+| commandLineBg | Background color in command line |
+| errorMessage | Text color of error messages |
+| errorMessageBg | Background color of error messages |
+| warnMessage | Text color of warning messages |
+| warnMessageBg | Background color of warning messages |
+| searchResult | Text color of search result highlighting |
+| searchResultBg | Background color of search result highlighting |
+| selectArea | Text color selected in visual mode |
+| selectAreaBg | Background color selected in visual mode |
+| keyword | Syntax highlighting color |
+| functionName | Syntax highlighting color |
+| typeName | Syntax highlighting color |
+| boolean | Syntax highlighting color |
+| specialVar | Syntax highlighting color |
+| builtin | Syntax highlighting color |
+| charLit | Syntax highlighting color |
+| stringLit | Syntax highlighting color |
+| binNumber | Syntax highlighting color |
+| decNumber | Syntax highlighting color |
+| floatNumber | Syntax highlighting color |
+| hexNumber | Syntax highlighting color |
+| octNumber | Syntax highlighting color |
+| comment | Syntax highlighting color |
+| longComment | Syntax highlighting color |
+| whitespace | Syntax highlighting color |
+| preprocessor | Syntax highlighting color |
+| pragma | Syntax highlighting color |
+| identifier | Syntax highlighting color |
+| table | Syntax highlighting color |
+| date | Syntax highlighting color |
+| operator | Syntax highlighting color |
+| enumMember | Syntax highlighting color (LSP Semantic Tokens) |
+| interfaceName | Syntax highlighting color (LSP Semantic Tokens) |
+| typeParameter | Syntax highlighting color (LSP Semantic Tokens) |
+| parameter | Syntax highlighting color (LSP Semantic Tokens) |
+| variable | Syntax highlighting color (LSP Semantic Tokens) |
+| property | Syntax highlighting color (LSP Semantic Tokens) |
+| string | Syntax highlighting color (LSP Semantic Tokens) |
+| event | Syntax highlighting color (LSP Semantic Tokens) |
+| function | Syntax highlighting color (LSP Semantic Tokens) |
+| method | Syntax highlighting color (LSP Semantic Tokens) |
+| macro | Syntax highlighting color (LSP Semantic Tokens) |
+| regexp | Syntax highlighting color (LSP Semantic Tokens) |
+| decorator | Syntax highlighting color (LSP Semantic Tokens) |
+| angle | Syntax highlighting color (LSP Semantic Tokens) |
+| arithmetic | Syntax highlighting color (LSP Semantic Tokens) |
+| attribute | Syntax highlighting color (LSP Semantic Tokens) |
+| attributeBracket | Syntax highlighting color (LSP Semantic Tokens) |
+| bitwise | Syntax highlighting color (LSP Semantic Tokens) |
+| brace | Syntax highlighting color (LSP Semantic Tokens) |
+| bracket | Syntax highlighting color (LSP Semantic Tokens) |
+| builtinAttribute | Syntax highlighting color (LSP Semantic Tokens) |
+| builtinType | Syntax highlighting color (LSP Semantic Tokens) |
+| colon | Syntax highlighting color (LSP Semantic Tokens) |
+| comma | Syntax highlighting color (LSP Semantic Tokens) |
+| comparison | Syntax highlighting color (LSP Semantic Tokens) |
+| constParameter | Syntax highlighting color (LSP Semantic Tokens) |
+| derive | Syntax highlighting color (LSP Semantic Tokens) |
+| deriveHelper | Syntax highlighting color (LSP Semantic Tokens) |
+| dot | Syntax highlighting color (LSP Semantic Tokens) |
+| escapeSequence | Syntax highlighting color (LSP Semantic Tokens) |
+| invalidEscapeSequence | Syntax highlighting color (LSP Semantic Tokens) |
+| formatSpecifier | Syntax highlighting color (LSP Semantic Tokens) |
+| generic | Syntax highlighting color (LSP Semantic Tokens) |
+| label | Syntax highlighting color (LSP Semantic Tokens) |
+| lifetime | Syntax highlighting color (LSP Semantic Tokens) |
+| logical | Syntax highlighting color (LSP Semantic Tokens) |
+| macroBang | Syntax highlighting color (LSP Semantic Tokens) |
+| parenthesis | Syntax highlighting color (LSP Semantic Tokens) |
+| punctuation | Syntax highlighting color |
+| selfKeyword | Syntax highlighting color (LSP Semantic Tokens) |
+| selfTypeKeyword | Syntax highlighting color (LSP Semantic Tokens) |
+| semicolon | Syntax highlighting color (LSP Semantic Tokens) |
+| typeAlias | Syntax highlighting color (LSP Semantic Tokens) |
+| toolModule | Syntax highlighting color (LSP Semantic Tokens) |
+| union | Syntax highlighting color (LSP Semantic Tokens) |
+| unresolvedReference | Syntax highlighting color (LSP Semantic Tokens) |
+| currentFile | Text color of current file name in Filer mode |
+| file | Text color of file name in Filer mode |
+| fileBg | Background color of file name in Filer mode |
+| dir | Text of directory name in filer mode |
+| dirBg | Background of directory name in filer mode |
+| pcLink | Text of symbolic links to file in filer mode |
+| pcLinkBg | Background of symbolic links to file in filer mode |
+| popUpWindow | Pop-up window text color |
+| popUpWindowBg | Pop-up window background color |
+| popUpWinCurrentLine | Pop-up window current line text color |
+| popUpWinCurrentLineBg | Pop-up window current line background color |
+| replaceText | Text color of replacing text |
+| replaceTextBg | Background color of replacing text |
+| parenPair | Pair of bracket highlighting |
+| parenPairBg | Pair of bracket highlighting |
+| currentWord | Current word highlighting |
+| currentWordBg | Current word highlighting |
+| highlightFullWidthSpace | Full-width space color |
+| highlightTrailingSpaces | Trailing space color |
+| reservedWord | Reserved word text color |
+| reservedWordBg | Reserved word text color |
+| syntaxCheckInfo | A info color of syntax checker result highlighting |
+| syntaxCheckInfoBg | A info color of syntax checker result highlighting |
+| syntaxCheckHint | A hint color of syntax checker result highlighting |
+| syntaxCheckHintBg | A hint color of syntax checker result highlighting |
+| syntaxCheckWarn | A warning color of syntax checker result highlighting |
+| syntaxCheckWarnBg | A warning color of syntax checker result highlighting |
+| syntaxCheckErr | An error color of syntax checker result highlighting |
+| syntaxCheckErrBg | An error color of syntax checker result highlighting |
+| gitConflict | Git conflict marker color |
+| gitConflictBg | Git conflict marker color |
+| diffViewerAddedLine  | Added line color on Diff viewer |
+| diffViewerAddedLineBg  | Added line color on Diff viewer |
+| diffViewerDeletedLine | Deleted line color on Diff viewer |
+| diffViewerDeletedLineBg | Deleted line color on Diff viewer |
+| backupManagerCurrentLine | Current line color on Backup manager |
+| backupManagerCurrentLineBg | Current line color on Backup manager |
+| configModeCurrentLine | Current line color in Configuration mode |
+| configModeCurrentLineBg | Current line color in Configuration mode |
+| sidebarGitAddedSign | An added lines sign color of Git in sidebars |
+| sidebarGitAddedSignBg | An added lines sign color of Git in sidebars |
+| sidebarGitDeletedSign | A deleted lines sign color of Git in sidebars |
+| sidebarGitDeletedSignBg | A deleted lines sign color of Git in sidebars |
+| sidebarGitChangedSign | A changed lines sign color of Git in sidebars |
+| sidebarGitChangedSignBg | A changed lines sign color of Git in sidebars |
+| sidebarSyntaxCheckInfoSign  | A info sign color of syntax checker results in sidebars |
+| sidebarSyntaxCheckInfoSignBg  | A info sign color of syntax checker results in sidebars |
+| sidebarSyntaxCheckHintSign | A hint sign color of syntax checker results in sidebars |
+| sidebarSyntaxCheckHintSignBg | A hint sign color of syntax checker results in sidebars |
+| sidebarSyntaxCheckWarnSign | A warning color of syntax checker results in sidebars |
+| sidebarSyntaxCheckWarnSignBg | A warning color of syntax checker results in sidebars |
+| sidebarSyntaxCheckErrSign | An error color of syntax checker results in sidebars |
+| sidebarSyntaxCheckErrSignBg | An error color of syntax checker results in sidebars |

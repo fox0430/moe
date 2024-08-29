@@ -439,10 +439,8 @@ currentWord = "#111111"
 currentWordBg = "#111111"
 
 highlightFullWidthSpace = "#111111"
-highlightFullWidthSpaceBg = "#111111"
 
 highlightTrailingSpaces = "#111111"
-highlightTrailingSpacesBg = "#111111"
 
 reservedWord = "#111111"
 reservedWordBg = "#111111"

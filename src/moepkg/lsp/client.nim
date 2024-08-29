@@ -1518,7 +1518,7 @@ proc workspaceExecuteCommand*(
     if not c.isInitialized:
       return R[(), string].err "lsp unavailable"
 
-    if not c.capabilities.get.codeLens:
+    if c.capabilities.get.executeCommand.isNone:
       return R[(), string].err "workspace/executeCommand unavailable"
 
     let params = %* initExecuteCommandParams(command, args)
