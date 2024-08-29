@@ -250,6 +250,9 @@ enable = true
 [Lsp.Diagnostics]
 enable = true
 
+[Lsp.FoldingRange]
+enable = true
+
 [Lsp.Hover]
 enable = true
 

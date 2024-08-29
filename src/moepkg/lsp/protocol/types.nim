@@ -264,6 +264,19 @@ type
   PublishDiagnosticsCapability* = ref object of RootObj
     dynamicRegistration*: Option[bool]
 
+  FoldingRangeKindValueSet* = ref object of RootObj
+    valueSet*: seq[FoldingRangeKind]
+
+  FoldingRangeFoldingRange* = ref object of RootObj
+    collapsedText*: seq[bool]
+
+  FoldingRangeClientCapabilities* = ref object of RootObj
+    dynamicRegistration*: Option[bool]
+    rangeLimit*: Option[uint]
+    ineFoldingOnly*: Option[bool]
+    foldingRangeKind*: Option[FoldingRangeKindValueSet]
+    foldingRange*: Option[FoldingRangeFoldingRange]
+
   SemanticTokensClientCapabilitiesRequest* = ref object of RootObj
     range*: Option[bool]
     full*: Option[bool]
@@ -317,6 +330,7 @@ type
     colorProvider*: Option[ColorProviderCapability]
     rename*: Option[RenameCapability]
     publishDiagnostics*: Option[PublishDiagnosticsCapability]
+    foldingRange*: Option[FoldingRangeClientCapabilities]
     semanticTokens*: Option[SemanticTokensClientCapabilities]
     inlayHint*: Option[InlayHintClientCapabilities]
     declaration*: Option[DeclarationClientCapabilities]
@@ -396,7 +410,6 @@ type
 
   TextDocumentAndStaticRegistrationOptions* = ref object of TextDocumentRegistrationOptions
     id*: Option[string]
-
   ReferenceOptions* = ref object of WorkDoneProgressOptions
 
   RenameOptions* = object
@@ -430,6 +443,8 @@ type
     interFileDependencies*: bool
     workspaceDiagnostics*: bool
     id*: Option[string]
+
+  FoldingRangeOptions* = ref object of WorkDoneProgressOptions
 
   ImplementationOptions* = ref object of WorkDoneProgressOptions
 
@@ -487,6 +502,7 @@ type
     semanticTokensProvider*: OptionalNode # SemanticTokensOptions | SemanticTokensRegistrationOptions
     inlayHintProvider*: OptionalNode # bool | InlayHintOptions | InlayHintRegistrationOptions
     diagnosticProvider*: OptionalNode # DiagnosticOptions | DiagnosticRegistrationOptions
+    foldingRangeProvider*: OptionalNode # bool | FoldingRangeOptions
     callHierarchyProvider*: OptionalNode # bool | CallHierarchyOptions | CallHierarchyRegistrationOptions
     executeCommandProvider*: Option[ExecuteCommandOptions]
     experimental*: OptionalNode
@@ -864,3 +880,15 @@ type
   DocumentHighlightParams* = ref object of TextDocumentPositionParams
     workDoneProgress*: Option[bool]
     partialResultToken*: OptionalNode # ProgressToken
+
+  FoldingRangeParams* = ref object of WorkDoneProgressParams
+    partialResultToken*: OptionalNode # ProgressToken
+    textDocument*: TextDocumentIdentifier
+
+  FoldingRange* = ref object of RootObj
+    startLine*: uint
+    starCharacter*: Option[uint]
+    endLine*: uint
+    endCharacter*: Option[uint]
+    kind*: Option[FoldingRangeKind]
+    collapsedText*: Option[string]

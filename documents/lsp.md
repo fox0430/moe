@@ -44,6 +44,7 @@ Please feedback, bug reports and PRs.
 - `workspace/executeCommand`
 - `$/progress`
 - `$/cancelRequest`
+- `textDocument/foldingRange`
 
 ## Configuration
 
@@ -95,6 +96,10 @@ Press `K` on the word in Normal mode.
 Results will be received from the LPS server and displayed automatically.
 
 ![diagnostics](https://github.com/fox0430/moe/assets/15966436/3cc99b32-c53a-4878-846d-8fd44b4a6fb2)
+
+`lspFold` in Ex mode. All existing folds will be expande.
+
+![moe](https://github.com/user-attachments/assets/9fac0f03-fa70-49f8-9da0-ea9ae0c0ce04)
 
 ### Completion
 

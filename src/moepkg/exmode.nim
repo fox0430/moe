@@ -1140,6 +1140,26 @@ proc lspExecuteCommand(status: var EditorStatus, command: seq[Runes]) =
   if r.isErr:
     status.commandLine.writeLspExecuteCommandError(r.error)
 
+proc lspFoldingRange(status: var EditorStatus) =
+  status.changeMode(currentBufStatus.prevMode)
+
+  if not status.lspClients.contains(currentBufStatus.langId) or
+     not lspClient.isInitialized:
+       status.commandLine.writeLspExecuteCommandError(
+         "lsp: client is not ready")
+       return
+
+  if not lspClient.capabilities.get.foldingRange:
+    status.commandLine.writeLspFoldingRangeError(
+      "lsp: folding range is unavailable")
+    return
+
+  let r = lspClient.foldingRange(
+    currentBufStatus.id,
+    $currentBufStatus.absolutePath)
+  if r.isErr:
+    status.commandLine.writeLspFoldingRangeError(r.error)
+
 proc saveExCommandHistory(
   exCommandHistory: var seq[Runes],
   command: seq[Runes],
@@ -1333,6 +1353,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[Runes]) =
     status.buildCommand
   elif isLspExeCommand(command):
     status.lspExecuteCommand(command[1 .. ^1])
+  elif isLspFoldingCommand(command):
+    status.lspFoldingRange
   else:
     status.commandLine.writeNotEditorCommandError(command)
     status.changeMode(currentBufStatus.prevMode)

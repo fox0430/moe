@@ -178,6 +178,9 @@ enable = false
 [Lsp.Diagnostics]
 enable = false
 
+[Lsp.FoldingRange]
+enable = false
+
 [Lsp.Hover]
 enable = false
 
@@ -619,6 +622,8 @@ suite "settings: Parse configuration file":
     check not settings.lsp.features.implementation.enable
 
     check not settings.lsp.features.diagnostics.enable
+
+    check not settings.lsp.features.foldingRange.enable
 
     check not settings.lsp.features.hover.enable
 

@@ -118,6 +118,8 @@ This project's goals are easily customizable, high productivity, user friendly, 
 
   - Semantic Tokens
 
+  - Folding Range
+
 ## Planned features
 
 - Supports regular expression and PEG

@@ -348,7 +348,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 
 | Name | Type | Default Value | Description |
 |:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| enable | bool | true | LSP TypeDefinition |
+| enable | bool | true | LSP Type Definition |
 
 
 ### Lsp.Implementation table
@@ -363,6 +363,13 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | Name | Type | Default Value | Description |
 |:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
 | enable | bool | true | LSP Diagnostics |
+
+
+### Lsp.FoldingRange table
+
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | LSP Folding Range |
 
 
 ### Lsp.Hover table

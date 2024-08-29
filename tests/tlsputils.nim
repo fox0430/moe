@@ -308,3 +308,11 @@ suite "lsp: lspMethod":
       "method": "workspace/executeCommand",
       "params": nil
     }).get
+
+  test "textDocument/foldingRange":
+    check LspMethod.textDocumentFoldingRange== lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "textDocument/foldingRange",
+      "params": nil
+    }).get

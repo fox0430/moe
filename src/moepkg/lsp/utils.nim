@@ -75,6 +75,7 @@ type
     codeLensResolve
     workspaceCodeLensRefresh
     workspaceExecuteCommand
+    textDocumentFoldingRange
 
   CallHierarchyType* = enum
     prepare
@@ -183,6 +184,7 @@ proc toLspMethodStr*(m: LspMethod): string =
     of codeLensResolve: "codeLens/resolve"
     of workspaceCodeLensRefresh: "workspace/codeLens/refresh"
     of workspaceExecuteCommand: "workspace/executeCommand"
+    of textDocumentFoldingRange: "textDocument/foldingRange"
 
 proc parseTraceValue*(s: string): Result[TraceValue, string] =
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#traceValue
@@ -276,6 +278,8 @@ proc lspMethod*(j: JsonNode): LspMethodResult =
       LspMethodResult.ok workspaceCodeLensRefresh
     of "workspace/executeCommand":
      LspMethodResult.ok workspaceExecuteCommand
+    of "textDocument/foldingRange":
+      LspMethodResult.ok textDocumentFoldingRange
     else:
       LspMethodResult.err "Not supported: " & j["method"].getStr
 
