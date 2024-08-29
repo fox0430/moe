@@ -855,6 +855,48 @@ suite "lsp: setCapabilities":
 
     check client.capabilities.get.executeCommand.isNone
 
+  test "Enable Folding Range":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          foldingRangeProvider: some(%*true)))
+
+      s = LspFeatureSettings(
+        foldingRange: LspFoldingRangeSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.foldingRange
+
+  test "Disable Folding Range":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          foldingRangeProvider: none(JsonNode)))
+
+      s = LspFeatureSettings(
+        foldingRange: LspFoldingRangeSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.foldingRange
+
+  test "Disable Folding Range 2":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          foldingRangeProvider: some(%*true)))
+
+      s = LspFeatureSettings(
+        foldingRange: LspFoldingRangeSettings(
+          enable: false))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.foldingRange
+
 suite "lsp: Send requests":
   privateAccess(LspClient)
 

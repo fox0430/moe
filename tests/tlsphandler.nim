@@ -17,14 +17,15 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, oids, options, os, osproc, json, tables, strformat]
+import std/[unittest, oids, options, os, osproc, json, tables, strformat,
+            sequtils]
 
 import pkg/results
 
 import moepkg/lsp/protocol/types
 import moepkg/lsp/[client, utils, hover, progress]
 import moepkg/[bufferstatus, commandline,  unicodeext, gapbuffer, windownode,
-               independentutils, popupwindow, syntaxcheck, completion]
+               independentutils, popupwindow, syntaxcheck, completion, folding]
 
 import utils
 
@@ -1052,6 +1053,66 @@ suite "lsp: lspRename":
       "let n = newName()",
     ].toSeqRunes
 
+suite "lsp: lspFoldingRange":
+  var status = initEditorStatus()
+
+  setup:
+    status = initEditorStatus()
+
+    let filename = $genOid()
+    assert status.addNewBufferInCurrentWin(filename).isOk
+
+  test "Not found":
+    check status.lspFoldingRange(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": []
+    }).isErr
+
+  test "Basic":
+    currentBufStatus.buffer = toSeq(0..5).mapIt(it.toRunes & ru" ").toGapBuffer
+    currentMainWindowNode.currentLine = 1
+    currentMainWindowNode.currentColumn = 1
+
+    status.resize(100, 100)
+    status.update
+
+    currentBufStatus.langId = "dummy"
+    status.lspClients["dummy"] = LspClient()
+
+    lspClient.waitingResponses[0] = WaitLspResponse(
+      bufferId: currentBufStatus.id,
+      requestId: 0,
+      lspMethod: LspMethod.textDocumentFoldingRange)
+
+    check status.lspFoldingRange(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": [
+        {
+          "startLine": 0,
+          "startCharacter": 0,
+          "endLine": 1,
+          "endCharacter": 0
+        },
+        {
+          "startLine": 3,
+          "startCharacter": 0,
+          "endLine": 4,
+          "endCharacter": 0
+        }
+      ]
+    }).isOk
+
+    status.update
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+
+    check currentMainWindowNode.view.foldingRanges == @[
+      folding.FoldingRange(first: 0, last: 1),
+      folding.FoldingRange(first: 3, last: 4)
+    ]
 
 suite "lsp: handleLspServerNotify":
   setup:
