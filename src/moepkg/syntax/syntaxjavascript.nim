@@ -68,8 +68,9 @@ const
     "var", "void", "volatile", "while", "window", "yield"
   ]
 
-# javaScriptNextToken is Incomplete
 proc javaScriptNextToken*(g: var GeneralTokenizer) =
+  ## javaScriptNextToken is Incomplete
+
   const
     hexChars = {'0'..'9', 'A'..'F', 'a'..'f'}
     octChars = {'0'..'7'}

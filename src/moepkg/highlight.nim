@@ -449,6 +449,8 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langToml
   of ".cff", ".yaml", ".yml":
     return SourceLanguage.langYaml
+  of ".json":
+    return SourceLanguage.langJson
   else:
     return SourceLanguage.langNone
 

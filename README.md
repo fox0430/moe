@@ -41,6 +41,7 @@ This project's goals are easily customizable, high productivity, user friendly, 
     - Bash
   - TOML
   - YAML
+  - JSON
 
 - Auto-complete
 
