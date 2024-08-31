@@ -3,5 +3,5 @@
 Added
 .....
 
-- `#2165`_ Add JSON syntax highlighting support
+- `#2166`_ Add JSON syntax highlighting support
 
