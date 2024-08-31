@@ -70,14 +70,47 @@ from std/algorithm import binarySearch
 
 type
   TokenClass* = enum
-    gtEof, gtNone, gtWhitespace, gtDecNumber, gtBinNumber, gtHexNumber,
-    gtOctNumber, gtFloatNumber, gtIdentifier, gtKeyword, gtStringLit,
-    gtLongStringLit, gtCharLit, gtEscapeSequence, # escape sequence like \xff
-    gtOperator, gtPunctuation, gtComment, gtLongComment, gtRegularExpression,
-    gtTagStart, gtTagEnd, gtKey, gtValue, gtRawData, gtAssembler,
-    gtPreprocessor, gtDirective, gtCommand, gtRule, gtHyperlink, gtLabel,
-    gtReference, gtOther, gtBoolean, gtSpecialVar, gtBuiltin, gtFunctionName,
-    gtTypeName, gtPragma, gtTable, gtDate
+    gtEof
+    gtNone
+    gtWhitespace
+    gtDecNumber
+    gtBinNumber
+    gtHexNumber
+    gtOctNumber
+    gtFloatNumber
+    gtIdentifier
+    gtKeyword
+    gtStringLit
+    gtLongStringLit
+    gtCharLit
+    gtEscapeSequence # escape sequence like \xff
+    gtOperator
+    gtPunctuation
+    gtComment
+    gtLongComment
+    gtRegularExpression,
+    gtTagStart
+    gtTagEnd
+    gtKey
+    gtValue
+    gtRawData
+    gtAssembler
+    gtPreprocessor
+    gtDirective
+    gtCommand
+    gtRule
+    gtHyperlink
+    gtLabel
+    gtReference
+    gtOther
+    gtBoolean
+    gtSpecialVar
+    gtBuiltin
+    gtFunctionName
+    gtTypeName
+    gtPragma
+    gtTable
+    gtDate
 
   GeneralTokenizer* = object of RootObj
     kind*: TokenClass
@@ -87,20 +120,21 @@ type
     state*: TokenClass
 
   SourceLanguage* = enum
-    langNone,
-    langC,
-    langCpp,
-    langCsharp,
-    langHaskell,
-    langJava,
-    langJavaScript,
-    langMarkdown,
-    langNim,
-    langPython,
-    langRust,
-    langShell,
-    langToml,
+    langNone
+    langC
+    langCpp
+    langCsharp
+    langHaskell
+    langJava
+    langJavaScript
+    langMarkdown
+    langNim
+    langPython
+    langRust
+    langShell
+    langToml
     langYaml
+    langJson
 
 const
   ## Characters ending a line.
@@ -155,7 +189,8 @@ const
     "Rust",
     "Shell",
     "Toml",
-    "Yaml"
+    "Yaml",
+    "Json"
   ]
 
 
@@ -166,7 +201,7 @@ proc getSourceLanguage*(name: string): SourceLanguage =
       return i
   result = langNone
 
-proc initGeneralTokenizer*(g: var GeneralTokenizer, buf: cstring) =
+proc initGeneralTokenizer*(g: var GeneralTokenizer, buf: string) =
   g.buf = buf
   g.kind = low(TokenClass)
   g.start = 0
@@ -175,9 +210,6 @@ proc initGeneralTokenizer*(g: var GeneralTokenizer, buf: cstring) =
   var pos = 0                     # skip initial whitespace:
   while g.buf[pos] in {' ', '\x09'..'\x0D'}: inc(pos)
   g.pos = pos
-
-proc initGeneralTokenizer*(g: var GeneralTokenizer, buf: string) =
-  initGeneralTokenizer(g, cstring(buf))
 
 proc generalNumber*(g: var GeneralTokenizer, position: int): int =
   const decChars = {'0'..'9'}
@@ -232,7 +264,7 @@ proc isKeyword*(x: openArray[string], y: string): int =
 
 import syntaxc, syntaxcpp, syntaxcsharp, syntaxhaskell, syntaxjava,
        syntaxjavascript, syntaxmarkdown, syntaxnim, syntaxpython, syntaxrust,
-       syntaxshell, syntaxyaml, syntaxtoml
+       syntaxshell, syntaxyaml, syntaxtoml, syntaxjson
 
 proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   case lang
@@ -249,4 +281,5 @@ proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   of langShell: g.shellNextToken
   of langToml: g.tomlNextToken
   of langYaml: g.yamlNextToken
+  of langJson: g.jsonNextToken
   else: discard
