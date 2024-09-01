@@ -40,12 +40,13 @@ import
   ../referencesmode,
   ../fileutils,
   ../callhierarchyviewer,
-  ../statusline
+  ../statusline,
+  ../visualmode
 
 import client, utils, hover, message, diagnostics, semantictoken, progress,
        inlayhint, definition, typedefinition, references, rename, declaration,
        implementation, callhierarchy, documenthighlight, documentlink,
-       codelens, executecommand, foldingrange
+       codelens, executecommand, foldingrange, selectionrange
 
 # Workaround for Nim 1.6.2
 import completion as lspcompletion
@@ -168,7 +169,7 @@ proc lspHover*(status: var EditorStatus, res: JsonNode): Result[(), string] =
     hover.get.get.toHoverContent)
 
   # Keep the cursor position on currentMainWindowNode and display the hover
-  # window on the top.
+  # window on the top., selectionrange
   hoverWin.overwrite(currentMainWindowNode.window.get)
   hoverWin.refresh
 
@@ -904,6 +905,58 @@ proc lspFoldingRange(
 
     return Result[(), string].ok ()
 
+proc lspSelectionRange(
+  status: var EditorStatus,
+  res: JsonNode): Result[(), string] =
+    ## textDocument/selectionRange
+
+    try:
+      lspClient.deleteWaitingResponse(res["id"].getInt)
+    except CatchableError as e:
+      return Result[(), string].err e.msg
+
+    # Workaround for "Error: generic instantiation too nested"
+    let ranges =
+      try:
+        parseTextDocumentSelectionRangeResponse(res).get
+      except ResultDefect as e:
+        return Result[(), string].err e.msg
+
+    if ranges.len == 0:
+      return Result[(), string].err "Not found"
+
+    var selectRange = ranges[0]
+    while selectRange.parent.isSome and
+          selectRange.range.start[] == selectRange.range.`end`[]:
+            selectRange = selectRange.parent.get
+
+    let r = selectRange.range
+
+    if r.start.line > currentBufStatus.buffer.high or
+       r.start.character > currentBufStatus.buffer[r.start.line].high:
+         return Result[(), string].err fmt"Invalid position: {r.start.line}, {r.start.character}"
+    if r.`end`.line > currentBufStatus.buffer.high or
+       r.`end`.character > currentBufStatus.buffer[r.`end`.line].high:
+         return Result[(), string].err fmt"Invalid position: {r.end.line}, {r.end.character}"
+
+    currentMainWindowNode.currentLine = r.start.line
+    currentMainWindowNode.currentColumn = r.start.character
+
+    # Enter to Visual mode
+    status.changeMode(Mode.visual)
+    currentBufStatus.selectedArea = initSelectedArea(
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn)
+      .some
+
+    currentMainWindowNode.currentLine = r.`end`.line
+    currentMainWindowNode.currentColumn = r.`end`.character
+
+    if selectRange.parent.isSome:
+      currentBufStatus.selectionRanges = @[selectRange.parent.get]
+
+    return Result[(), string].ok ()
+
 proc handleLspServerRequest(
   status: var EditorStatus,
   req: JsonNode): Result[(), string] =
@@ -1102,5 +1155,8 @@ proc handleLspResponse*(status: var EditorStatus) =
         of LspMethod.textDocumentFoldingRange:
           let r = status.lspFoldingRange(resJson.get)
           if r.isErr: status.commandLine.writeLspFoldingRangeError(r.error)
+        of LspMethod.textDocumentSelectionRange:
+          let r = status.lspSelectionRange(resJson.get)
+          if r.isErr: status.commandLine.writeLspSelectionRangeError(r.error)
         else:
           info fmt"lsp: Ignore response: {resJson}"

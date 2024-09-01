@@ -258,6 +258,9 @@ type
   LspFoldingRangeSettings* = object
     enable*: bool
 
+  LspSelectionRangeSettings* = object
+    enable*: bool
+
   LspHoverSettings* = object
     enable*: bool
 
@@ -296,6 +299,7 @@ type
     implementation*: LspImplementationSettings
     diagnostics*: LspDiagnosticsSettings
     foldingRange*: LspFoldingRangeSettings
+    selectionRange*: LspSelectionRangeSettings
     hover*: LspHoverSettings
     inlayHint*: LspInlayHintSettings
     references*: LspReferencesSettings
@@ -581,6 +585,9 @@ proc initLspDiagnosticsSettings(): LspDiagnosticsSettings =
 proc initFoldingRangeSettings(): LspFoldingRangeSettings =
   result.enable = true
 
+proc initSelectionRangeSettings(): LspSelectionRangeSettings =
+  result.enable = true
+
 proc initLspHoverSettings(): LspHoverSettings =
   result.enable = true
 
@@ -619,6 +626,7 @@ proc initLspFeatureSettings(): LspFeatureSettings =
   result.implementation = initLspImplementationSettings()
   result.diagnostics = initLspDiagnosticsSettings()
   result.foldingRange = initFoldingRangeSettings()
+  result.selectionRange = initSelectionRangeSettings()
   result.hover = initLspHoverSettings()
   result.inlayHint = initLspInlayHintSettings()
   result.references = initLspReferencesSettings()
@@ -1896,6 +1904,13 @@ proc parseLspTable(s: var EditorSettings, lspConfigs: TomlValueRef) =
               s.lsp.features.foldingRange.enable = val.getBool
             else:
               discard
+      of "SelectionRange":
+        for key, val in val.getTable:
+          case key:
+            of "enable":
+              s.lsp.features.selectionRange.enable = val.getBool
+            else:
+              discard
       of "Hover":
         for key, val in val.getTable:
           case key:
@@ -2575,6 +2590,14 @@ proc validateLspTable(table: TomlValueRef): Option[InvalidItem] =
                 return some(InvalidItem(name: $key, val: $val))
             else:
               return some(InvalidItem(name: $key, val: $val))
+      of "SelectionRange":
+        for key, val in val.getTable:
+          case key:
+            of "enable":
+              if val.kind != TomlValueKind.Bool:
+                return some(InvalidItem(name: $key, val: $val))
+            else:
+              return some(InvalidItem(name: $key, val: $val))
       of "Hover":
         for key, val in val.getTable:
           case key:
@@ -3060,6 +3083,9 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
 
   result.addLine fmt "[Lsp.FoldingRange]"
   result.addLine fmt "enable = {$settings.lsp.features.foldingRange.enable}"
+
+  result.addLine fmt "[Lsp.SelectionRange]"
+  result.addLine fmt "enable = {$settings.lsp.features.selectionRange.enable}"
 
   result.addLine fmt "[Lsp.Hover]"
   result.addLine fmt "enable = {$settings.lsp.features.hover.enable}"

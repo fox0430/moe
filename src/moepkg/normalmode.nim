@@ -759,6 +759,20 @@ proc requestRename(status: var EditorStatus) =
     if r.isErr:
       status.commandLine.writeLspRenameError(r.error)
 
+proc requestSelectionRange(status: var EditorStatus) =
+  ## LSP Selection Range
+
+  if not status.lspClients.contains(currentBufStatus.langId):
+    debug "lsp client is not ready"
+    return
+
+  let r = lspClient.textDocumentSelectionRange(
+    currentBufStatus.id,
+    $currentBufStatus.path.absolutePath,
+    @[currentMainWindowNode.bufferPosition])
+  if r.isErr:
+    status.commandLine.writeLspSelectionRangeError(r.error)
+
 proc yankLines(
   status: var EditorStatus,
   start, last: int,
@@ -1841,6 +1855,8 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
     let secondKey = commands[1]
     if secondKey == ord('r'):
       status.requestRename
+  elif isCtrlS(key):
+    status.requestSelectionRange
   else:
     return
 
@@ -1938,7 +1954,8 @@ proc isNormalModeCommand*(
          $command == "M" or
          $command == "L" or
          $command == "%" or
-         $command == "K":
+         $command == "K" or
+         isCtrlS(command):
            result = InputState.Valid
 
       elif isDigit(command[0]):

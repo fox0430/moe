@@ -277,6 +277,9 @@ type
     foldingRangeKind*: Option[FoldingRangeKindValueSet]
     foldingRange*: Option[FoldingRangeFoldingRange]
 
+  SelectionRangeClientCapabilities* = ref object of RootObj
+    dynamicRegistration*: Option[bool]
+
   SemanticTokensClientCapabilitiesRequest* = ref object of RootObj
     range*: Option[bool]
     full*: Option[bool]
@@ -331,6 +334,7 @@ type
     rename*: Option[RenameCapability]
     publishDiagnostics*: Option[PublishDiagnosticsCapability]
     foldingRange*: Option[FoldingRangeClientCapabilities]
+    selectionRange*: Option[SelectionRangeClientCapabilities]
     semanticTokens*: Option[SemanticTokensClientCapabilities]
     inlayHint*: Option[InlayHintClientCapabilities]
     declaration*: Option[DeclarationClientCapabilities]
@@ -446,6 +450,13 @@ type
 
   FoldingRangeOptions* = ref object of WorkDoneProgressOptions
 
+  SelectionRangeOptions* = ref object of WorkDoneProgressOptions
+
+  SelectionRangeRegistrationOptions* = ref object of WorkDoneProgressParams
+    workDoneProgress*: Option[bool]
+    documentSelector*: Option[DocumentSelector]
+    id*: Option[string]
+
   ImplementationOptions* = ref object of WorkDoneProgressOptions
 
   DeclarationOptions* = ref object of WorkDoneProgressOptions
@@ -503,6 +514,7 @@ type
     inlayHintProvider*: OptionalNode # bool | InlayHintOptions | InlayHintRegistrationOptions
     diagnosticProvider*: OptionalNode # DiagnosticOptions | DiagnosticRegistrationOptions
     foldingRangeProvider*: OptionalNode # bool | FoldingRangeOptions
+    selectionRangeProvider*: OptionalNode # bool | SelectionRangeOptions | SelectionRangeRegistrationOptions
     callHierarchyProvider*: OptionalNode # bool | CallHierarchyOptions | CallHierarchyRegistrationOptions
     executeCommandProvider*: Option[ExecuteCommandOptions]
     experimental*: OptionalNode
@@ -892,3 +904,11 @@ type
     endCharacter*: Option[uint]
     kind*: Option[FoldingRangeKind]
     collapsedText*: Option[string]
+
+  SelectionRangeParams* = ref object of WorkDoneProgressParams
+    textDocument*: TextDocumentIdentifier
+    positions*: seq[Position]
+
+  SelectionRange* = ref object of RootObj
+    range*: Range
+    parent*: Option[SelectionRange]
