@@ -309,6 +309,7 @@ proc getWaitingType*(lspMethod: LspMethod): Option[WaitType] =
     of textDocumentCodeLens: some(WaitType.foreground)
     of codeLensResolve: some(WaitType.foreground)
     of workspaceExecuteCommand: some(WaitType.foreground)
+    of textDocumentFoldingRange: some(WaitType.foreground)
     else: none(WaitType)
 
 proc isForegroundWait*(lspMethod: LspMethod): bool {.inline.} =

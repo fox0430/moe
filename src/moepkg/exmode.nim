@@ -1154,7 +1154,7 @@ proc lspFoldingRange(status: var EditorStatus) =
       "lsp: folding range is unavailable")
     return
 
-  let r = lspClient.foldingRange(
+  let r = lspClient.textDocumentFoldingRange(
     currentBufStatus.id,
     $currentBufStatus.absolutePath)
   if r.isErr:

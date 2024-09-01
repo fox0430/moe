@@ -27,21 +27,21 @@ import moepkg/lsp/foldingrange {.all.}
 
 suite "lsp: parseFoldingRangeResponse":
   test "Not found":
-    check parseFoldingRangeResponse(%*{
+    check parseTextDocumentFoldingRangeResponse(%*{
       "jsonrpc": "2.0",
       "id": 0,
       "result": []
     }).get.len == 0
 
   test "Not found 2":
-    check parseFoldingRangeResponse(%*{
+    check parseTextDocumentFoldingRangeResponse(%*{
       "jsonrpc": "2.0",
       "id": 0,
       "result": nil
     }).get.len == 0
 
   test "Basic":
-    check parseFoldingRangeResponse(%*{
+    check parseTextDocumentFoldingRangeResponse(%*{
       "jsonrpc": "2.0",
       "id": 0,
       "result": [

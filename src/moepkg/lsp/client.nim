@@ -754,7 +754,17 @@ proc setCapabilities(
 
     if settings.foldingRange.enable and
        initResult.capabilities.foldingRangeProvider.isSome:
-         capabilities.foldingRange = true
+         if initResult.capabilities.foldingRangeProvider.get.kind == JBool:
+           capabilities.foldingRange =
+             initResult.capabilities.foldingRangeProvider.get.getBool
+         else:
+           try:
+             discard initResult.capabilities.foldingRangeProvider.get.to(
+               FoldingRangeOptions)
+             capabilities.rename = true
+           except CatchableError:
+             # Invalid foldingRangeProvider
+             discard
 
     c.capabilities = some(capabilities)
 
@@ -1529,7 +1539,7 @@ proc workspaceExecuteCommand*(
 
     return R[(), string].ok ()
 
-proc foldingRange*(
+proc textDocumentFoldingRange*(
   c: var LspClient,
   bufferId: int,
   path: string): LspSendRequestResult =

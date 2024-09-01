@@ -23,7 +23,7 @@ import pkg/results
 
 import ../folding
 
-import protocol/[types, enums]
+import protocol/types
 import utils
 
 type
@@ -35,21 +35,23 @@ proc initFoldingRangeParam*(path: string): FoldingRangeParams =
   FoldingRangeParams(
     textDocument: TextDocumentIdentifier(uri: path.pathToUri))
 
-proc parseFoldingRangeResponse*(res: JsonNode): LspFoldingRangeResult =
-  if res["result"].kind == JNull:
-    # Not found
-    return LspFoldingRangeResult.ok @[]
-  elif res["result"].kind != JArray:
-    return LspFoldingRangeResult.err "Invalid response"
+proc parseTextDocumentFoldingRangeResponse*(
+  res: JsonNode): LspFoldingRangeResult =
 
-  let lspRanges =
-    try:
-      res["result"].to(seq[LspFoldingRange])
-    except CatchableError as e:
-      return LspFoldingRangeResult.err fmt"Invalid response: {e.msg}"
+    if res["result"].kind == JNull:
+      # Not found
+      return LspFoldingRangeResult.ok @[]
+    elif res["result"].kind != JArray:
+      return LspFoldingRangeResult.err "Invalid response"
 
-  var ranges: FoldingRanges
-  for r in lspRanges:
-    ranges.add(r.startLine.int, r.endLine.int)
+    let lspRanges =
+      try:
+        res["result"].to(seq[LspFoldingRange])
+      except CatchableError as e:
+        return LspFoldingRangeResult.err fmt"Invalid response: {e.msg}"
 
-  return LspFoldingRangeResult.ok ranges
+    var ranges: FoldingRanges
+    for r in lspRanges:
+      ranges.add(r.startLine.int, r.endLine.int)
+
+    return LspFoldingRangeResult.ok ranges
