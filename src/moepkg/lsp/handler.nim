@@ -889,7 +889,7 @@ proc lspFoldingRange(
     # Workaround for "Error: generic instantiation too nested"
     let ranges =
       try:
-        parseFoldingRangeResponse(res).get
+        parseTextDocumentFoldingRangeResponse(res).get
       except ResultDefect as e:
         return Result[(), string].err e.msg
 
