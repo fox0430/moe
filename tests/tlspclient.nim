@@ -897,6 +897,48 @@ suite "lsp: setCapabilities":
 
     check not client.capabilities.get.foldingRange
 
+  test "Enable Selection Range":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          selectionRangeProvider: some(%*true)))
+
+      s = LspFeatureSettings(
+        selectionRange: LspSelectionRangeSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.selectionRange
+
+  test "Disable Selection Range":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          selectionRangeProvider: none(JsonNode)))
+
+      s = LspFeatureSettings(
+        selectionRange: LspSelectionRangeSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.selectionRange
+
+  test "Disable Selection Range 2":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          selectionRangeProvider: some(%*true)))
+
+      s = LspFeatureSettings(
+        selectionRange: LspSelectionRangeSettings(
+          enable: false))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.selectionRange
+
 suite "lsp: Send requests":
   privateAccess(LspClient)
 

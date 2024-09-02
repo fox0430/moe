@@ -310,9 +310,17 @@ suite "lsp: lspMethod":
     }).get
 
   test "textDocument/foldingRange":
-    check LspMethod.textDocumentFoldingRange== lspMethod(%*{
+    check LspMethod.textDocumentFoldingRange == lspMethod(%*{
       "jsonrpc": "2.0",
       "id": 0,
       "method": "textDocument/foldingRange",
+      "params": nil
+    }).get
+
+  test "textDocument/selectionRange":
+    check LspMethod.textDocumentSelectionRange == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "textDocument/selectionRange",
       "params": nil
     }).get
