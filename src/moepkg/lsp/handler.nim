@@ -932,15 +932,8 @@ proc lspSelectionRange(
 
     let r = selectRange.range
 
-    if r.start.line > currentBufStatus.buffer.high or
-       r.start.character > currentBufStatus.buffer[r.start.line].high:
-         return Result[(), string].err fmt"Invalid position: {r.start.line}, {r.start.character}"
-    if r.`end`.line > currentBufStatus.buffer.high or
-       r.`end`.character > currentBufStatus.buffer[r.`end`.line].high:
-         return Result[(), string].err fmt"Invalid position: {r.end.line}, {r.end.character}"
-
-    currentMainWindowNode.currentLine = r.start.line
-    currentMainWindowNode.currentColumn = r.start.character
+    # The start position
+    currentMainWindowNode.moveCursor(currentBufStatus, r.start)
 
     # Enter to Visual mode
     status.changeMode(Mode.visual)
@@ -949,8 +942,8 @@ proc lspSelectionRange(
       currentMainWindowNode.currentColumn)
       .some
 
-    currentMainWindowNode.currentLine = r.`end`.line
-    currentMainWindowNode.currentColumn = r.`end`.character
+    # The end position
+    currentMainWindowNode.moveCursor(currentBufStatus, r.`end`)
 
     if selectRange.parent.isSome:
       currentBufStatus.selectionRanges = @[selectRange.parent.get]

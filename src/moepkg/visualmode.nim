@@ -17,11 +17,16 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strformat, strutils, sequtils, options]
+import std/[strutils, sequtils, options]
 
+import lsp/utils
 import editorstatus, ui, gapbuffer, unicodeext, windownode, movement, editor,
        bufferstatus, settings, registers, messages, commandline, editorview,
        independentutils, viewhighlight
+
+proc moveCursor*(w: var WindowNode, bufStatus: BufferStatus, posi: LspPosition) =
+  w.currentLine = min(posi.line, bufStatus.buffer.high - 1)
+  w.currentColumn = min(posi.character, bufStatus.buffer[w.currentLine].high)
 
 proc initSelectedArea*(startLine, startColumn: int): SelectedArea =
   result.startLine = startLine
@@ -496,23 +501,16 @@ proc selectionRange(status: var EditorStatus) =
 
   let r = selectRange.range
 
-  if r.start.line > currentBufStatus.buffer.high or
-     r.start.character > currentBufStatus.buffer[r.start.line].high:
-       status.commandLine.writeLspSelectionRangeError(fmt"Invalid position: {$r.start.line}, {$r.start.character}")
-  if r.`end`.line > currentBufStatus.buffer.high or
-     r.`end`.character > currentBufStatus.buffer[r.`end`.line].high:
-       status.commandLine.writeLspSelectionRangeError(fmt"Invalid position: {r.end.line}, {r.end.character}")
-
-  currentMainWindowNode.currentLine = r.start.line
-  currentMainWindowNode.currentColumn = r.start.character
+  # The start position
+  currentMainWindowNode.moveCursor(currentBufStatus, r.start)
 
   currentBufStatus.selectedArea = initSelectedArea(
     currentMainWindowNode.currentLine,
     currentMainWindowNode.currentColumn)
     .some
 
-  currentMainWindowNode.currentLine = r.`end`.line
-  currentMainWindowNode.currentColumn = r.`end`.character
+  # The end position
+  currentMainWindowNode.moveCursor(currentBufStatus, r.`end`)
 
   currentBufStatus.selectedArea.get.endLine = currentMainWindowNode.currentLine
   currentBufStatus.selectedArea.get.endColumn =
@@ -809,6 +807,10 @@ proc execVisualModeCommand*(status: var EditorStatus, command: Runes) =
       status.visualBlockCommand(currentBufStatus.selectedArea.get, command)
     else:
       status.visualCommand(currentBufStatus.selectedArea.get, command)
+
+    if currentBufStatus.selectionRanges.len > 0:
+      # Clear LSP selection ranges when exit Visual mode.
+      currentBufStatus.selectionRanges = @[]
 
     # Update folding ranges
     status.shiftFoldingRanges(
