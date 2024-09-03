@@ -253,6 +253,9 @@ enable = true
 [Lsp.FoldingRange]
 enable = true
 
+[Lsp.SelectionRange]
+enable = true
+
 [Lsp.Hover]
 enable = true
 

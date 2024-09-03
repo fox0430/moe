@@ -18,9 +18,15 @@
 #[############################################################################]#
 
 import std/[strutils, sequtils, options]
+
+import lsp/utils
 import editorstatus, ui, gapbuffer, unicodeext, windownode, movement, editor,
-       bufferstatus, settings, registers, messages, commandline,
-       independentutils, viewhighlight, editorview
+       bufferstatus, settings, registers, messages, commandline, editorview,
+       independentutils, viewhighlight
+
+proc moveCursor*(w: var WindowNode, bufStatus: BufferStatus, posi: LspPosition) =
+  w.currentLine = min(posi.line, bufStatus.buffer.high - 1)
+  w.currentColumn = min(posi.character, bufStatus.buffer[w.currentLine].high)
 
 proc initSelectedArea*(startLine, startColumn: int): SelectedArea =
   result.startLine = startLine
@@ -483,6 +489,36 @@ proc addFoldingRange(
     windowNode.moveCursor(
       BufferPosition(line: firstCursorPosition.line, column: 0))
 
+proc selectionRange(status: var EditorStatus) =
+  # LSP Selection Range
+
+  if currentBufStatus.selectionRanges.len == 0: return
+
+  var selectRange = currentBufStatus.selectionRanges[0]
+  while selectRange.parent.isSome and
+        selectRange.range.start[] == selectRange.range.`end`[]:
+          selectRange = selectRange.parent.get
+
+  let r = selectRange.range
+
+  # The start position
+  currentMainWindowNode.moveCursor(currentBufStatus, r.start)
+
+  currentBufStatus.selectedArea = initSelectedArea(
+    currentMainWindowNode.currentLine,
+    currentMainWindowNode.currentColumn)
+    .some
+
+  # The end position
+  currentMainWindowNode.moveCursor(currentBufStatus, r.`end`)
+
+  currentBufStatus.selectedArea.get.endLine = currentMainWindowNode.currentLine
+  currentBufStatus.selectedArea.get.endColumn =
+    currentMainWindowNode.currentColumn
+
+  if selectRange.parent.isSome:
+    currentBufStatus.selectionRanges = @[selectRange.parent.get]
+
 proc changeModeToInsertMode(status: var EditorStatus) =
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
@@ -717,7 +753,7 @@ proc isVisualModeCommand*(command: Runes): InputState =
        c == ord('u') or
        c == ord('U') or
        c == ord('r') or
-       c == ord('I'):
+       isCtrlS(c):
          return InputState.Valid
     elif c == ord('z'):
       return InputState.Continue
@@ -762,6 +798,8 @@ proc execVisualModeCommand*(status: var EditorStatus, command: Runes) =
     currentBufStatus.moveToPreviousBlankLine(currentMainWindowNode)
   elif key == ord('}'):
     currentBufStatus.moveToNextBlankLine(currentMainWindowNode)
+  elif isCtrlS(key):
+    status.selectionRange
   else:
     let beforeBufferLen = currentBufStatus.buffer.len
 
@@ -769,6 +807,10 @@ proc execVisualModeCommand*(status: var EditorStatus, command: Runes) =
       status.visualBlockCommand(currentBufStatus.selectedArea.get, command)
     else:
       status.visualCommand(currentBufStatus.selectedArea.get, command)
+
+    if currentBufStatus.selectionRanges.len > 0:
+      # Clear LSP selection ranges when exit Visual mode.
+      currentBufStatus.selectionRanges = @[]
 
     # Update folding ranges
     status.shiftFoldingRanges(

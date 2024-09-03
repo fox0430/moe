@@ -139,6 +139,7 @@ Space r    - Rename (LSP)
 \ r        - Code Lens (LSP)
 zd         - Delete folding lines
 zD         - Delete all folding lines
+Ctrl-s     - Selection Range (LSP)
 
 # Register
 
@@ -174,10 +175,11 @@ U       - Convert to uppercase
 >       - Indent
 <       - Unindent
 ~       - Toggle case of character under cursor
-Ctrl, a - Increase number under cursor
-Ctrl, x - Decrease number under cursor
+Ctrl-a  - Increase number under cursor
+Ctrl-x  - Decrease number under cursor
 I       - Insert character, multiple lines
 zf      - Fold selected lines
+Ctrl-s  - Selection Range (LSP)
 Esc     - Go to Normal mode
 
 # Replace mode

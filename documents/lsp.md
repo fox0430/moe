@@ -45,6 +45,7 @@ Please feedback, bug reports and PRs.
 - `$/progress`
 - `$/cancelRequest`
 - `textDocument/foldingRange`
+- `textDocument/selectionRange`
 
 ## Configuration
 
@@ -97,9 +98,15 @@ Results will be received from the LPS server and displayed automatically.
 
 ![diagnostics](https://github.com/fox0430/moe/assets/15966436/3cc99b32-c53a-4878-846d-8fd44b4a6fb2)
 
+### Folding Range
+
 `lspFold` in Ex mode. All existing folds will be expande.
 
 ![moe](https://github.com/user-attachments/assets/9fac0f03-fa70-49f8-9da0-ea9ae0c0ce04)
+
+### Selection Range
+
+`Ctrl-s` in Normal mode. Enter Visual mode and you can repeat it.
 
 ### Completion
 

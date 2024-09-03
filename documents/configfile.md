@@ -372,6 +372,13 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | enable | bool | true | LSP Folding Range |
 
 
+### Lsp.SelectionRange table
+
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | LSP Selection Range |
+
+
 ### Lsp.Hover table
 
 | Name | Type | Default Value | Description |

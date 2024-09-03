@@ -33,7 +33,7 @@ import protocol/[enums, types]
 import jsonrpc, utils, completion, progress, hover, semantictoken, inlayhint,
        definition, references, rename, typedefinition, implementation,
        callhierarchy, documenthighlight, documentlink, codelens,
-       executecommand, foldingrange
+       executecommand, foldingrange, selectionrange
 
 type
   LspError* = object
@@ -62,6 +62,7 @@ type
     codeLens*: bool
     executeCommand*: Option[seq[string]]
     foldingRange*: bool
+    selectionRange*: bool
 
   LspProgressTable* = Table[ProgressToken, ProgressReport]
 
@@ -492,6 +493,9 @@ proc initInitializeParams*(
             )),
             contextSupport: some(true)
           )),
+          selectionRange: some(SelectionRangeClientCapabilities(
+            dynamicRegistration: some(true),
+          )),
           semanticTokens: some(SemanticTokensClientCapabilities(
             dynamicRegistration: some(true),
             tokenTypes: @[],
@@ -769,6 +773,27 @@ proc setCapabilities(
            except CatchableError:
              # Invalid foldingRangeProvider
              discard
+
+    if settings.selectionRange.enable and
+       initResult.capabilities.selectionRangeProvider.isSome:
+         if initResult.capabilities.selectionRangeProvider.get.kind == JBool:
+           capabilities.selectionRange =
+             initResult.capabilities.selectionRangeProvider.get.getBool
+         else:
+           try:
+             discard initResult.capabilities.selectionRangeProvider.get.to(
+               SelectionRangeOptions)
+             capabilities.selectionRange = true
+           except CatchableError:
+             discard
+           if not capabilities.selectionRange:
+            try:
+              discard initResult.capabilities.selectionRangeProvider.get.to(
+                SelectionRangeRegistrationOptions)
+              capabilities.selectionRange = true
+            except CatchableError:
+              # Invalid selectionRangeProvider
+              discard
 
     c.capabilities = some(capabilities)
 
@@ -1565,5 +1590,31 @@ proc textDocumentFoldingRange*(
     let r = c.request(bufferId, LspMethod.textDocumentFoldingRange, params)
     if r.isErr:
       return R[(), string].err fmt"textDocument/foldingRange request failed: {r.error}"
+
+    return R[(), string].ok ()
+
+proc textDocumentSelectionRange*(
+  c: var LspClient,
+  bufferId: int,
+  path: string,
+  positions: seq[BufferPosition]): LspSendRequestResult =
+    ## Send a textDocument/selectionRange request to the server.
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_selectionRange
+
+    if not c.serverProcess.running:
+      if not c.closed: c.closed = true
+      return R[(), string].err "server crashed"
+
+    if not c.isInitialized:
+      return R[(), string].err "lsp unavailable"
+
+    if not c.capabilities.get.selectionRange:
+      return R[(), string].err "textDocument/foldingRange unavailable"
+
+    let params = %* initSelectionRangeParams(path, positions)
+
+    let r = c.request(bufferId, LspMethod.textDocumentSelectionRange, params)
+    if r.isErr:
+      return R[(), string].err fmt"textDocument/selectionRange request failed: {r.error}"
 
     return R[(), string].ok ()

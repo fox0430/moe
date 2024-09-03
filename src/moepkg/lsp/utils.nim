@@ -76,6 +76,7 @@ type
     workspaceCodeLensRefresh
     workspaceExecuteCommand
     textDocumentFoldingRange
+    textDocumentSelectionRange
 
   CallHierarchyType* = enum
     prepare
@@ -185,6 +186,7 @@ proc toLspMethodStr*(m: LspMethod): string =
     of workspaceCodeLensRefresh: "workspace/codeLens/refresh"
     of workspaceExecuteCommand: "workspace/executeCommand"
     of textDocumentFoldingRange: "textDocument/foldingRange"
+    of textDocumentSelectionRange: "textDocument/selectionRange"
 
 proc parseTraceValue*(s: string): Result[TraceValue, string] =
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#traceValue
@@ -280,6 +282,8 @@ proc lspMethod*(j: JsonNode): LspMethodResult =
      LspMethodResult.ok workspaceExecuteCommand
     of "textDocument/foldingRange":
       LspMethodResult.ok textDocumentFoldingRange
+    of "textDocument/selectionRange":
+       LspMethodResult.ok textDocumentSelectionRange
     else:
       LspMethodResult.err "Not supported: " & j["method"].getStr
 
@@ -310,6 +314,7 @@ proc getWaitingType*(lspMethod: LspMethod): Option[WaitType] =
     of codeLensResolve: some(WaitType.foreground)
     of workspaceExecuteCommand: some(WaitType.foreground)
     of textDocumentFoldingRange: some(WaitType.foreground)
+    of textDocumentSelectionRange: some(WaitType.foreground)
     else: none(WaitType)
 
 proc isForegroundWait*(lspMethod: LspMethod): bool {.inline.} =

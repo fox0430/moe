@@ -97,6 +97,7 @@ type
     callHierarchyInfo*: CallHierarchyInfo # Use only in callhierarchyViewer
     documentHighlightInfo*: DocumentHighlightInfo # Lsp DocumentHighlight
     codeLenses*: seq[CodeLens] # Lsp CodeLens
+    selectionRanges*: seq[SelectionRange] # Lsp SelectionRange
 
 var
   countAddedBuffer = 0
