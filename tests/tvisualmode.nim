@@ -17,12 +17,14 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, osproc, options]
+import std/[unittest, osproc, options, sequtils, json]
 
 import pkg/results
 
+import moepkg/lsp/selectionrange
 import moepkg/[highlight, independentutils, editorstatus, gapbuffer, unicodeext,
-               bufferstatus, movement, registers, settings, clipboard, folding]
+               bufferstatus, movement, registers, settings, clipboard, folding,
+               ui]
 
 import utils
 
@@ -2636,3 +2638,128 @@ suite "Visual mode: Add folding range":
       FoldingRange(first: 1, last: 2),
       FoldingRange(first: 4, last: 5)
     ]
+
+suite "Visual mode: selectionrange":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Not found":
+    currentBufStatus.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.currentLine = 1
+    currentMainWindowNode.currentColumn = 1
+
+    status.changeMode(Mode.visual)
+    status.resize(100, 100)
+
+    status.initSelectedArea
+
+    status.update
+
+    status.selectionRange
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 1
+
+  test "Basic":
+    currentBufStatus.buffer = toSeq(0..10)
+      .mapIt(" ".repeat(10).toRunes)
+      .toGapBuffer
+
+    status.changeMode(Mode.visual)
+    status.resize(100, 100)
+
+    status.initSelectedArea
+
+    status.update
+
+    let ranges = parseTextDocumentSelectionRangeResponse(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": [
+        {
+          "range": {
+            "start": {
+              "line": 0,
+              "character": 0
+            },
+            "end": {
+              "line": 2,
+              "character": 1
+            }
+          },
+          "parent": {
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0
+              },
+              "end": {
+                "line": 9,
+                "character": 0
+              }
+            }
+          }
+        }
+      ]
+    })
+    .get
+
+    currentBufStatus.selectionRanges = ranges
+
+    block:
+      status.selectionRange
+
+      check currentMainWindowNode.currentLine == 2
+      check currentMainWindowNode.currentColumn == 1
+
+    block:
+      status.selectionRange
+
+      check currentMainWindowNode.currentLine == 9
+      check currentMainWindowNode.currentColumn == 0
+
+    block:
+      # Not found
+      status.selectionRange
+
+      check currentMainWindowNode.currentLine == 9
+      check currentMainWindowNode.currentColumn == 0
+
+  test "Check selectRanges clean up":
+    status.changeMode(Mode.visual)
+    status.resize(100, 100)
+
+    status.initSelectedArea
+
+    let ranges = parseTextDocumentSelectionRangeResponse(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": [
+        {
+          "range": {
+            "start": {
+              "line": 0,
+              "character": 0
+            },
+            "end": {
+              "line": 2,
+              "character": 1
+            }
+          }
+        }
+      ]
+    })
+    .get
+
+    currentBufStatus.selectionRanges = ranges
+
+    check currentBufStatus.selectionRanges.len == 1
+
+    status.update
+
+    status.execVisualModeCommand(CtrlC.toRunes)
+
+    check currentBufStatus.selectionRanges.len == 0

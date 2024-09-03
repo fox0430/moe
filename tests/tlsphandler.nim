@@ -1114,6 +1114,195 @@ suite "lsp: lspFoldingRange":
       folding.FoldingRange(first: 3, last: 4)
     ]
 
+suite "lsp: Selection Range":
+  var status = initEditorStatus()
+
+  setup:
+    status = initEditorStatus()
+
+    let filename = $genOid()
+    assert status.addNewBufferInCurrentWin(filename).isOk
+
+  test "Not found":
+    check status.lspFoldingRange(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": []
+    }).isErr
+
+  test "Basic":
+    currentBufStatus.buffer = toSeq(0..10)
+      .mapIt(" ".repeat(10).toRunes)
+      .toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    currentBufStatus.langId = "dummy"
+    status.lspClients["dummy"] = LspClient()
+
+    lspClient.waitingResponses[0] = WaitLspResponse(
+      bufferId: currentBufStatus.id,
+      requestId: 0,
+      lspMethod: LspMethod.textDocumentSelectionRange)
+
+    let res = %*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": [
+        {
+          "range": {
+            "start": {
+              "line": 0,
+              "character": 0
+            },
+            "end": {
+              "line": 0,
+              "character": 0
+            }
+          },
+          "parent": {
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0
+              },
+              "end": {
+                "line": 0,
+                "character": 2
+              }
+            },
+            "parent": {
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 0
+                },
+                "end": {
+                  "line": 2,
+                  "character": 1
+                }
+              },
+              "parent": {
+                "range": {
+                  "start": {
+                    "line": 0,
+                    "character": 0
+                  },
+                  "end": {
+                    "line": 9,
+                    "character": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+
+    check status.lspSelectionRange(res).isOk
+
+    status.update
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 2
+
+    check currentBufStatus.selectionRanges.len == 1
+
+    var r = currentBufStatus.selectionRanges[0]
+    check r.range.start[] == LspPosition(line: 0, character: 0)[]
+    check r.range.`end`[] == LspPosition(line: 2, character: 1)[]
+
+    r = r.parent.get
+    check r.range.start[] == LspPosition(line: 0, character: 0)[]
+    check r.range.`end`[] == LspPosition(line: 9, character: 0)[]
+
+    check r.parent.isNone
+
+  test "Over buffer len":
+    currentBufStatus.buffer = toSeq(0..2)
+      .mapIt(" ".repeat(10).toRunes)
+      .toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    currentBufStatus.langId = "dummy"
+    status.lspClients["dummy"] = LspClient()
+
+    lspClient.waitingResponses[0] = WaitLspResponse(
+      bufferId: currentBufStatus.id,
+      requestId: 0,
+      lspMethod: LspMethod.textDocumentSelectionRange)
+
+    check status.lspSelectionRange(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": [
+        {
+          "range": {
+            "start": {
+              "line": 0,
+              "character": 0
+            },
+            "end": {
+              "line": 3,
+              "character": 0
+            }
+          }
+        }
+      ]
+    })
+    .isOk
+
+    status.update
+
+    # Generally, the last line is ignored since it's only a newline.
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0
+
+  test "Over line len":
+    currentBufStatus.buffer = toSeq(0..2)
+      .mapIt(" ".repeat(10).toRunes)
+      .toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    currentBufStatus.langId = "dummy"
+    status.lspClients["dummy"] = LspClient()
+
+    lspClient.waitingResponses[0] = WaitLspResponse(
+      bufferId: currentBufStatus.id,
+      requestId: 0,
+      lspMethod: LspMethod.textDocumentSelectionRange)
+
+    check status.lspSelectionRange(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": [
+        {
+          "range": {
+            "start": {
+              "line": 0,
+              "character": 0
+            },
+            "end": {
+              "line": 0,
+              "character": 10
+            }
+          }
+        }
+      ]
+    })
+    .isOk
+
+    status.update
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 9
+
 suite "lsp: handleLspServerNotify":
   setup:
     var status = initEditorStatus()
