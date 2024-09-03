@@ -3,5 +3,5 @@
 Fixed
 .....
 
-- `#2174`_ lsp: Fix crash when editing with code lens enabled
+- `#2175`_ lsp: Fix crash when editing with code lens enabled
 
