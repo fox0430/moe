@@ -21,7 +21,8 @@ import std/[unittest, options, os, osproc, importutils, sequtils, oids, tables]
 
 import pkg/results
 
-import moepkg/lsp/protocol/enums
+import moepkg/lsp/utils
+import moepkg/lsp/protocol/[types, enums]
 import moepkg/[editor, gapbuffer, bufferstatus, editorview, unicodeext, build,
                highlight, windownode, movement, backgroundprocess, syntaxcheck,
                independentutils, tabline, settings, visualmode]
@@ -1166,3 +1167,27 @@ suite "editorstatus: autoSave":
 
     status.autoSave
     check fileExists(filePath)
+
+suite "editorstatus: update":
+  type LspCommand = types.Command
+
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+
+    assert status.addNewBufferInCurrentWin("").isOk
+
+  test "LSP code lens with invalid position":
+    currentBufStatus.codeLenses = @[
+      CodeLens(
+        range: LspRange(
+          start: LspPosition(line: 1, character: 0),
+          `end`: LspPosition(line: 1, character: 0)
+        ),
+        command: some(LspCommand())
+      )
+    ]
+
+    status.resize(100, 100)
+    status.update

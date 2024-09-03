@@ -1044,6 +1044,10 @@ proc update*(status: var EditorStatus) =
                       text: l.command.get.title.toRunes)
 
               for t in addTexts:
+                if t.line < 0 or t.line > buffer.high:
+                  error fmt"Invalid position: {$t}"
+                  continue
+
                 block:
                   var newLine = buffer[t.line]
                   newLine.add ru" " & t.text
