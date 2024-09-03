@@ -273,7 +273,7 @@ type
   FoldingRangeClientCapabilities* = ref object of RootObj
     dynamicRegistration*: Option[bool]
     rangeLimit*: Option[uint]
-    ineFoldingOnly*: Option[bool]
+    lineFoldingOnly*: Option[bool]
     foldingRangeKind*: Option[FoldingRangeKindValueSet]
     foldingRange*: Option[FoldingRangeFoldingRange]
 

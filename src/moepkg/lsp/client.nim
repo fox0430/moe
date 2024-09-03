@@ -479,6 +479,10 @@ proc initInitializeParams*(
           publishDiagnostics: some(PublishDiagnosticsCapability(
             dynamicRegistration: some(true)
           )),
+          foldingRange: some(FoldingRangeClientCapabilities(
+            dynamicRegistration: some(true),
+            lineFoldingOnly: some(true)
+          )),
           completion: some(CompletionCapability(
             dynamicRegistration: some(true),
             completionItem: some(CompletionItemCapability(
