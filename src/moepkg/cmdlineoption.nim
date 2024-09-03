@@ -18,11 +18,13 @@
 #[############################################################################]#
 
 import std/[parseopt, os, strformat, terminal]
-import logger, settings, appinfo
+
+import settings, appinfo
 
 type CmdParsedList* = object
   path*: seq[string]
   isReadonly*: bool
+  isLogger*: bool
 
 proc writeError(msg: string) {.inline.} =
   stderr.styledWriteLine(ForegroundColor.fgRed, "Error: " & msg)
@@ -119,7 +121,7 @@ proc parseCommandLineOption*(line: seq[string]): CmdParsedList =
           else: writeCmdLineError(kind, key)
       of cmdLongOption:
         case key:
-          of "log": initLogger()
+          of "log": result.isLogger = true
           of "init": initDefaultConfigFile()
           of "version": writeVersion()
           of "help": writeHelp()
