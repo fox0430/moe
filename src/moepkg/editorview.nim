@@ -651,12 +651,16 @@ proc writeAllLines*[T](
 
       if view.config.isIndentationLines:
         # Write indentation lines.
+        let color =
+          if view.isSelectingArea: EditorColorPairIndex.selectArea
+          else: EditorColorPairIndex.whitespace
+
         for i in 0 ..< indents:
           view.write(
             win,
             y, lineStart + (view.config.tabStop * i),
             ru("┊"),
-            EditorColorPairIndex.whitespace)
+            color)
 
 proc update*[T](
   view: var EditorView,
