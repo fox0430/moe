@@ -137,6 +137,7 @@
 | <kbd>**\\**</kbd> <kbd>**c**</kbd></br> | Code Lens (LSP) |
 | <kbd>**z**</kbd> <kbd>**d**</kbd></br> | Delete fold lines |
 | <kbd>**z**</kbd> <kbd>**R**</kbd></br> | Delete fold lines |
+| <kbd>**Ctrl**</kbd> <kbd>**s**</kbd></br> | Selection Range (LSP) |
 
 </details>
 
@@ -190,6 +191,7 @@
 | <kbd>**Ctrl**</kbd> <kbd>**x**</kbd><br> | Decrease number |
 | <kbd>**I**</kbd><br> | Insert characters to multiple lines |
 | <kbd>**z**</kbd> <kbd>**f**</kbd><br> | Fold lines |
+| <kbd>**Ctrl**</kbd> <kbd>**s**</kbd></br> | Selection Range (LSP) |
 
 </details>
 
