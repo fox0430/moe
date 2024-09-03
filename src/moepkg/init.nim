@@ -133,7 +133,7 @@ proc initEditor*(): Result[EditorStatus, string] =
   s.loadConfigurationFile
   s.timeConfFileLastReloaded = now()
 
-  if s.settings.lsp.enable:
+  if parsedList.isLogger or s.settings.lsp.enable:
     # Force enable logger if enabled LSP.
     initLogger()
 
