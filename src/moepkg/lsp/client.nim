@@ -224,6 +224,12 @@ proc setNonBlockingOutput(p: Process): Result[(), string] =
 
   return Result[(), string].ok ()
 
+proc setNonBlockingInput(p: Process): Result[(), string] =
+  if fcntl(p.inputHandle.cint, F_SETFL, O_NONBLOCK) < 0:
+    return Result[(), string].err "fcntl failed"
+
+  return Result[(), string].ok ()
+
 proc setBlockingOutput(p: Process): Result[(), string] =
   if fcntl(p.outputHandle.cint, F_SETFL, 0) < 0:
     return Result[(), string].err "fcntl failed"
@@ -248,6 +254,11 @@ proc readable*(c: LspClient, timeout: int = 1): LspClientReadableResult =
     # Workaround for "atEnd" blocking
     # TODO: Need a better solution...
     let r = c.serverProcess.setNonBlockingOutput
+    if r.isErr:
+      return LspClientReadableResult.err r.error
+
+  block:
+    let r = c.serverProcess.setNonBlockingInput
     if r.isErr:
       return LspClientReadableResult.err r.error
 
