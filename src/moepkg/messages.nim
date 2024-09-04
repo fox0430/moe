@@ -463,6 +463,13 @@ proc writeLspSelectionRangeError*(commandLine: var CommandLine, message: string)
   let mess = fmt"lsp: Error: selection range: {message}"
   commandLine.writeError(mess)
 
+proc writeLspDocumentSymbolError*(
+  commandLine: var CommandLine,
+  message: string) =
+
+    let mess = fmt"lsp: Error: document symbol: {message}"
+    commandLine.writeError(mess)
+
 proc writePasteIgnoreWarn*(commandLine: var CommandLine) =
   const Mess = "Paste is ignored in this mode"
   commandLine.writeWarn(Mess)

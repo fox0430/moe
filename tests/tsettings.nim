@@ -184,6 +184,9 @@ enable = false
 [Lsp.SelectionRange]
 enable = false
 
+[Lsp.DocumentSymbol]
+enable = false
+
 [Lsp.Hover]
 enable = false
 
@@ -629,6 +632,8 @@ suite "settings: Parse configuration file":
     check not settings.lsp.features.foldingRange.enable
 
     check not settings.lsp.features.selectionRange.enable
+
+    check not settings.lsp.features.documentSymbol.enable
 
     check not settings.lsp.features.hover.enable
 

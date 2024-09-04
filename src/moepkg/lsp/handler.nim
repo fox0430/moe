@@ -46,7 +46,7 @@ import
 import client, utils, hover, message, diagnostics, semantictoken, progress,
        inlayhint, definition, typedefinition, references, rename, declaration,
        implementation, callhierarchy, documenthighlight, documentlink,
-       codelens, executecommand, foldingrange, selectionrange
+       codelens, executecommand, foldingrange, selectionrange, documentsymbol
 
 # Workaround for Nim 1.6.2
 import completion as lspcompletion
@@ -950,6 +950,33 @@ proc lspSelectionRange(
 
     return Result[(), string].ok ()
 
+proc lspDocumentSymbol(
+  status: var EditorStatus,
+  res: JsonNode): Result[(), string] =
+    ## textDocument/documentSymbol
+
+    try:
+      lspClient.deleteWaitingResponse(res["id"].getInt)
+    except CatchableError as e:
+      return Result[(), string].err e.msg
+
+    # Workaround for "Error: generic instantiation too nested"
+    let symbols =
+      try:
+        some(parseTextDocumentDocumentSymbolsResponse(res).get)
+      except ResultDefect:
+        none(seq[DocumentSymbol])
+    if symbols.isSome:
+      discard
+    else:
+      let info =
+        try:
+          some(parseTextDocumentSymbolInformationsResponse(res).get)
+        except ResultDefect as e:
+          return Result[(), string].err e.msg
+
+    return Result[(), string].ok ()
+
 proc handleLspServerRequest(
   status: var EditorStatus,
   req: JsonNode): Result[(), string] =
@@ -1151,5 +1178,8 @@ proc handleLspResponse*(status: var EditorStatus) =
         of LspMethod.textDocumentSelectionRange:
           let r = status.lspSelectionRange(resJson.get)
           if r.isErr: status.commandLine.writeLspSelectionRangeError(r.error)
+        of LspMethod.textDocumentDocumentSymbol:
+          let r = status.lspDocumentSymbol(resJson.get)
+          if r.isErr: status.commandLine.writeLspDocumentSymbolError(r.error)
         else:
           info fmt"lsp: Ignore response: {resJson}"

@@ -33,7 +33,7 @@ import protocol/[enums, types]
 import jsonrpc, utils, completion, progress, hover, semantictoken, inlayhint,
        definition, references, rename, typedefinition, implementation,
        callhierarchy, documenthighlight, documentlink, codelens,
-       executecommand, foldingrange, selectionrange
+       executecommand, foldingrange, selectionrange, documentsymbol
 
 type
   LspError* = object
@@ -63,6 +63,7 @@ type
     executeCommand*: Option[seq[string]]
     foldingRange*: bool
     selectionRange*: bool
+    documentSymbol*: bool
 
   LspProgressTable* = Table[ProgressToken, ProgressReport]
 
@@ -805,6 +806,20 @@ proc setCapabilities(
             except CatchableError:
               # Invalid selectionRangeProvider
               discard
+
+    if settings.documentSymbol.enable and
+       initResult.capabilities.documentSymbolProvider.isSome:
+         if initResult.capabilities.documentSymbolProvider.get.kind == JBool:
+           capabilities.documentSymbol =
+             initResult.capabilities.documentSymbolProvider.get.getBool
+         else:
+           try:
+             discard initResult.capabilities.documentSymbolProvider.get.to(
+               DocumentSymbolOptions)
+             capabilities.documentSymbol = true
+           except CatchableError:
+             discard
+             # Invalid documentSymbolProvider
 
     c.capabilities = some(capabilities)
 
@@ -1627,5 +1642,30 @@ proc textDocumentSelectionRange*(
     let r = c.request(bufferId, LspMethod.textDocumentSelectionRange, params)
     if r.isErr:
       return R[(), string].err fmt"textDocument/selectionRange request failed: {r.error}"
+
+    return R[(), string].ok ()
+
+proc textDocumentDocumentSymbol*(
+  c: var LspClient,
+  bufferId: int,
+  path: string): LspSendRequestResult =
+    ## Send a textDocument/symbol request to the server.
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_documentSymbol
+
+    if not c.serverProcess.running:
+      if not c.closed: c.closed = true
+      return R[(), string].err "server crashed"
+
+    if not c.isInitialized:
+      return R[(), string].err "lsp unavailable"
+
+    if not c.capabilities.get.documentSymbol:
+      return R[(), string].err "textDocument/documentSymbol unavailable"
+
+    let params = %* initDocumentSymbolParams(path)
+
+    let r = c.request(bufferId, LspMethod.textDocumentDocumentSymbol, params)
+    if r.isErr:
+      return R[(), string].err fmt"textDocument/documentSymbol request failed: {r.error}"
 
     return R[(), string].ok ()

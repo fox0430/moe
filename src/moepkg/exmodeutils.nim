@@ -176,6 +176,10 @@ const
       description: "Show the all buffer",
       argsType: ArgsType.none),
     ExCommandInfo(
+      command: "lspDocSymbol",
+      description: "LSP Document Symbol",
+      argsType: ArgsType.none),
+    ExCommandInfo(
       command: "lspExeCommand",
       description: "LSP Execute a command",
       argsType: ArgsType.text),
@@ -752,6 +756,9 @@ proc isStartDebugModeCommand*(command: seq[Runes]): bool {.inline.} =
 proc isBuildCommand*(command: seq[Runes]): bool {.inline.} =
   command.len == 1 and cmpIgnoreCase($command[0], "build") == 0
 
+proc isLspDocSymbolCommand*(command: seq[Runes]): bool {.inline.} =
+  command.len == 1 and cmpIgnoreCase($command[0], "lspdocsymbol") == 0
+
 proc isLspExeCommand*(command: seq[Runes]): bool {.inline.} =
   command.len > 1 and cmpIgnoreCase($command[0], "lspexecommand") == 0
 
@@ -835,7 +842,8 @@ proc isValidExCommand*(commandSplit: seq[Runes]): bool =
     isHighlightCurrentLineSettingCommand(commandSplit) or
     isBuildCommand(commandSplit) or
     isLspExeCommand(commandSplit) or
-    isLspFoldingCommand(commandSplit)
+    isLspFoldingCommand(commandSplit) or
+    isLspDocSymbolCommand(commandSplit)
 
 proc getArgsType*(command: Runes): Result[ArgsType, string] =
   ## Return ArgsType if valid ex command.

@@ -1160,6 +1160,26 @@ proc lspFoldingRange(status: var EditorStatus) =
   if r.isErr:
     status.commandLine.writeLspFoldingRangeError(r.error)
 
+proc lspDocSymbol(status: var EditorStatus) =
+  status.changeMode(currentBufStatus.prevMode)
+
+  if not status.lspClients.contains(currentBufStatus.langId) or
+     not lspClient.isInitialized:
+       status.commandLine.writeLspDocumentSymbolError(
+         "client is not ready")
+       return
+
+  if not lspClient.capabilities.get.documentSymbol:
+    status.commandLine.writeLspDocumentSymbolError(
+      "unavailable")
+    return
+
+  let r = lspClient.textDocumentDocumentSymbol(
+    currentBufStatus.id,
+    $currentBufStatus.absolutePath)
+  if r.isErr:
+    status.commandLine.writeLspDocumentSymbolError(r.error)
+
 proc saveExCommandHistory(
   exCommandHistory: var seq[Runes],
   command: seq[Runes],
@@ -1355,6 +1375,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[Runes]) =
     status.lspExecuteCommand(command[1 .. ^1])
   elif isLspFoldingCommand(command):
     status.lspFoldingRange
+  elif isLspDocSymbolCommand(command):
+    status.lspDocSymbol
   else:
     status.commandLine.writeNotEditorCommandError(command)
     status.changeMode(currentBufStatus.prevMode)
