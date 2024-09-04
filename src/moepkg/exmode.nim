@@ -1119,18 +1119,18 @@ proc lspExecuteCommand(status: var EditorStatus, command: seq[Runes]) =
   if not status.lspClients.contains(currentBufStatus.langId) or
      not lspClient.isInitialized:
        status.commandLine.writeLspExecuteCommandError(
-         "lsp: client is not ready")
+         "client is not ready")
        return
 
   if lspClient.capabilities.get.executeCommand.isNone:
     status.commandLine.writeLspExecuteCommandError(
-      "lsp: execute command is unavailable")
+      "execute command is unavailable")
     return
 
   let lspCommand = $command[0]
 
   if lspCommand notin lspClient.capabilities.get.executeCommand.get:
-    status.commandLine.writeLspExecuteCommandError("lsp: unknow command")
+    status.commandLine.writeLspExecuteCommandError("unknow command")
     return
 
   let r = lspClient.workspaceExecuteCommand(
@@ -1145,13 +1145,13 @@ proc lspFoldingRange(status: var EditorStatus) =
 
   if not status.lspClients.contains(currentBufStatus.langId) or
      not lspClient.isInitialized:
-       status.commandLine.writeLspExecuteCommandError(
-         "lsp: client is not ready")
+       status.commandLine.writeLspFoldingRangeError(
+         "client is not ready")
        return
 
   if not lspClient.capabilities.get.foldingRange:
     status.commandLine.writeLspFoldingRangeError(
-      "lsp: folding range is unavailable")
+      "folding range is unavailable")
     return
 
   let r = lspClient.textDocumentFoldingRange(
