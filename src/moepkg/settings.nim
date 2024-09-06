@@ -1923,7 +1923,7 @@ proc parseLspTable(s: var EditorSettings, lspConfigs: TomlValueRef) =
         for key, val in val.getTable:
           case key:
             of "enable":
-              s.lsp.features.selectionRange.enable = val.getBool
+              s.lsp.features.documentSymbol.enable = val.getBool
             else:
               discard
       of "Hover":
