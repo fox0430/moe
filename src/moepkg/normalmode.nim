@@ -84,7 +84,7 @@ proc changeModeToExMode*(
 
     bufStatus.changeMode(Mode.ex)
     commandLine.clear
-    commandLine.setPrompt(ExModePrompt)
+    commandLine.setPrompt(Ex)
 
 template moveCursorLeft(status: var EditorStatus) =
   for i in 0 ..< currentBufStatus.cmdLoop:
@@ -661,6 +661,19 @@ proc requestDocumentLink(status: var EditorStatus) =
     $currentBufStatus.path.absolutePath)
   if r.isErr:
     status.commandLine.writeLspDocumentLinkError(r.error)
+
+proc requestDocumentSymbol(status: var EditorStatus) =
+  if not status.lspClients.contains(currentBufStatus.langId) or
+     not lspClient.isInitialized:
+       status.commandLine.writeLspDocumentSymbolError(
+         "client is not ready")
+       return
+
+  let r = lspClient.textDocumentDocumentSymbol(
+    currentBufStatus.id,
+    $currentBufStatus.absolutePath)
+  if r.isErr:
+    status.commandLine.writeLspDocumentSymbolError(r.error)
 
 proc initCodeLensSelectorWindow(
   status: var EditorStatus,
@@ -1576,12 +1589,12 @@ proc isChangeModeKey(key: Rune): bool {.inline.} =
 proc changeModeToSearchForwardMode(status: var EditorStatus) =
   currentBufStatus.changeMode(Mode.searchForward)
   status.commandLine.clear
-  status.commandLine.setPrompt(SearchForwardModePrompt)
+  status.commandLine.setPrompt(SearchForward)
 
 proc changeModeToSearchBackwardMode(status: var EditorStatus) =
   currentBufStatus.changeMode(Mode.searchBackward)
   status.commandLine.clear
-  status.commandLine.setPrompt(SearchBackwardModePrompt)
+  status.commandLine.setPrompt(SearchBackward)
 
 proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
   ## Exec normal mode commands.
@@ -1855,6 +1868,8 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
     let secondKey = commands[1]
     if secondKey == ord('r'):
       status.requestRename
+    elif secondKey == ord('o'):
+      status.requestDocumentSymbol
   elif isCtrlS(key):
     status.requestSelectionRange
   else:
@@ -2188,7 +2203,8 @@ proc isNormalModeCommand*(
         if command.len == 1:
           result = InputState.Continue
         elif command.len == 2:
-          if command[1] == 'r':
+          if command[1] == 'r' or
+             command[1] == 'o':
             result = InputState.Valid
           else:
             result = InputState.Invalid

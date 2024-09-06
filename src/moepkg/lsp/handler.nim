@@ -41,7 +41,8 @@ import
   ../fileutils,
   ../callhierarchyviewer,
   ../statusline,
-  ../visualmode
+  ../visualmode,
+  ../commandline
 
 import client, utils, hover, message, diagnostics, semantictoken, progress,
        inlayhint, definition, typedefinition, references, rename, declaration,
@@ -954,6 +955,8 @@ proc lspDocumentSymbol(
   status: var EditorStatus,
   res: JsonNode): Result[(), string] =
     ## textDocument/documentSymbol
+    ##
+    ## Parse a response and enter DocumentSymbol mode.
 
     try:
       lspClient.deleteWaitingResponse(res["id"].getInt)
@@ -967,13 +970,31 @@ proc lspDocumentSymbol(
       except ResultDefect:
         none(seq[DocumentSymbol])
     if symbols.isSome:
-      discard
+      if symbols.get.len == 0:
+        return Result[(), string].err "Not found"
+
+      currentBufStatus.documentSymbols = symbols.get
     else:
-      let info =
+      let infos =
         try:
           some(parseTextDocumentSymbolInformationsResponse(res).get)
         except ResultDefect as e:
           return Result[(), string].err e.msg
+
+      if infos.get.len == 0:
+        return Result[(), string].err "Not found"
+
+      currentBufStatus.documentSymbols = infos.get.mapIt(DocumentSymbol(
+        name: it.name,
+        kind: it.kind,
+        tags: it.tags,
+        range: some(it.location.range),
+        deprecated: it.deprecated))
+
+    status.commandLine.clear
+    status.commandLine.setPrompt(CommandLinePrompt.DocumentSymbol)
+
+    currentBufStatus.changeMode(Mode.documentSymbol)
 
     return Result[(), string].ok ()
 

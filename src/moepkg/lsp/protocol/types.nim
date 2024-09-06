@@ -718,7 +718,7 @@ type
   DocumentSymbol* = ref object of RootObj
     name*: string
     detail*: Option[string]
-    kind*: SymbolKind
+    kind*: int
     tags*: seq[SymbolTag]
     deprecated*: Option[bool]
     range*: Option[Range]
@@ -728,7 +728,7 @@ type
   SymbolInformation* = ref object of RootObj
     name*: string
     kind*: int
-    tag*: seq[SymbolTag]
+    tags*: seq[SymbolTag]
     deprecated*: Option[bool]
     location*: Location
     containerName*: Option[string]

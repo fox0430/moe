@@ -21,6 +21,7 @@ import std/[strutils, sequtils, strformat, options]
 
 import pkg/results
 
+import lsp/documentsymbol
 import unicodeext, commandline, messagelog, theme, exmodeutils, completion
 
 type
@@ -183,6 +184,8 @@ proc getExCommandOptionCompletionList*(
         discard
 
 proc initExmodeCompletionList*(rawInput: Runes): CompletionList =
+  ## Ex mode commands
+
   let
     commandLineCmd = initCommandLineCommand(rawInput)
     suggestType = getSuggestType(rawInput)
@@ -199,3 +202,26 @@ proc initExmodeCompletionList*(rawInput: Runes): CompletionList =
            return CompletionList()
       else:
         return list
+
+proc toCompletionItem(s: DocumentSymbol): CompletionItem =
+  var label = s.name
+  if s.detail.isSome:
+    label &= " " & s.detail.get
+  if s.range.isSome:
+    label &= fmt" {s.range.get.start.line}, {$s.range.get.start.character}"
+  return CompletionItem(label: label.toRunes, insertText: s.name.toRunes)
+
+proc initDocSymbolCompletionList*(
+  symbols: seq[DocumentSymbol],
+  rawInput: Runes): CompletionList =
+    ## LSP Docmument Symbol
+
+    if rawInput.len == 0:
+      # Return all
+      return CompletionList(items: symbols.mapIt(it.toCompletionItem))
+
+    result = CompletionList()
+    let rawInputStr = $rawInput
+    for s in symbols:
+      if s.name.startsWith(rawInputStr):
+        result.items.add s.toCompletionItem
