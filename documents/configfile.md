@@ -379,6 +379,13 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | enable | bool | true | LSP Selection Range |
 
 
+### Lsp.DocumentSymbol table
+
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | true | LSP Document Symbol |
+
+
 ### Lsp.Hover table
 
 | Name | Type | Default Value | Description |

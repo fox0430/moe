@@ -46,6 +46,7 @@ Please feedback, bug reports and PRs.
 - `$/cancelRequest`
 - `textDocument/foldingRange`
 - `textDocument/selectionRange`
+- `textDocument/documentSymbol`
 
 ## Configuration
 
@@ -107,6 +108,12 @@ Results will be received from the LPS server and displayed automatically.
 ### Selection Range
 
 `Ctrl-s` in Normal mode. Enter Visual mode and you can repeat it.
+
+### Document Symbol
+
+`Space-o` in Normal mode. You can select a symbol in the list and you can jump.
+
+![moe-symbol](https://github.com/user-attachments/assets/67f15598-1e66-4c83-a99b-b0f1b21ef2b9)
 
 ### Completion
 
@@ -176,7 +183,7 @@ Please set true to `Lps.CodeLens.enable`, `Lsp.rust.rustAnalyzerRunSingle`, `Lsp
 
 ### Rename
 
-` r` (`Space`-`r`) command in Normal mode. Enter a new name in the command line.
+`Space-r` command in Normal mode. Enter a new name in the command line.
 
 ![moe-rename](https://github.com/fox0430/moe/assets/15966436/420ea178-c9fe-4053-8410-849fb845c698)
 
