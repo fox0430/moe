@@ -1022,6 +1022,18 @@ proc containsBufferId(
     for b in bufStatuses:
       if b.id == bufferId: return true
 
+proc handleLspError(status: var EditorStatus, res: JsonNode) =
+  if not res.contains("id") or res["id"].kind != JInt: return
+
+  for k, c in status.lspClients.pairs:
+    let r = c.getWaitingResponse(res["id"].getInt)
+    if r.isSome:
+      if r.get.lspMethod.isForegroundWait:
+        status.commandLine.writeLspError($res["error"])
+
+      status.lspClients[k].deleteWaitingResponse(res["id"].getInt)
+      return
+
 proc handleLspResponse*(status: var EditorStatus) =
   ## Read a Json from the server and handle the response and notification.
 
@@ -1038,7 +1050,7 @@ proc handleLspResponse*(status: var EditorStatus) =
       return
 
     if resJson.get.isLspError:
-      status.commandLine.writeLspError($resJson.get["error"])
+      status.handleLspError(resJson.get)
       return
 
     if resJson.get.isRequest:

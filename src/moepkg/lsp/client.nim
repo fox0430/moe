@@ -367,14 +367,14 @@ proc isWaitingForegroundResponse*(
         return true
 
 proc getWaitingResponse*(
-  c: var LspClient,
+  c: LspClient,
   id: RequestId): Option[WaitLspResponse] {.inline.} =
 
     if c.waitingResponses.contains(id):
       return some(c.waitingResponses[id])
 
 proc getWaitingResponse*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int,
   lspMethod: LspMethod): Option[WaitLspResponse] {.inline.} =
 
