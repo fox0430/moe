@@ -485,18 +485,18 @@ proc initInitializeParams*(
           ))
         )),
         textDocument: some(TextDocumentClientCapabilities(
-          hover: some(HoverCapability(
+          hover: some(HoverClientCapabilities(
             dynamicRegistration: some(true),
             contentFormat: some(@["plaintext"])
           )),
-          publishDiagnostics: some(PublishDiagnosticsCapability(
+          publishDiagnostics: some(PublishDiagnosticsClientCapabilities(
             dynamicRegistration: some(true)
           )),
           foldingRange: some(FoldingRangeClientCapabilities(
             dynamicRegistration: some(true),
             lineFoldingOnly: some(true)
           )),
-          completion: some(CompletionCapability(
+          completion: some(CompletionClientCapabilities(
             dynamicRegistration: some(true),
             completionItem: some(CompletionItemCapability(
               snippetSupport: some(false),
@@ -525,13 +525,13 @@ proc initInitializeParams*(
             dynamicRegistration: some(true),
             linkSupport: some(false)
           )),
-          definition: some(DefinitionCapability(
+          definition: some(DefinitionClientCapabilities(
             dynamicRegistration: some(true)
           )),
-          references: some(ReferencesCapability(
+          references: some(ReferenceClientCapabilities(
             dynamicRegistration: some(true)
           )),
-          rename: some(RenameCapability(
+          rename: some(RenameClientCapabilities(
             dynamicRegistration: some(true),
             prepareSupport: some(false)
           )),
@@ -539,14 +539,14 @@ proc initInitializeParams*(
             dynamicRegistration: some(true),
             linkSupport: some(false)
           )),
-          implementation: some(ImplementationCapability(
+          implementation: some(ImplementationClientCapabilities(
             dynamicRegistration: some(true),
             linkSupport: some(false)
           )),
           codeLens: some(CodeLensClientClientCapabilities(
             dynamicRegistration: some(true)
           )),
-          documentHighlight: some(DocumentHighlightCapability(
+          documentHighlight: some(DocumentHighlightClientCapabilies(
             dynamicRegistration: some(true)
           )),
           documentLink: some(DocumentLinkClientCapabilities(

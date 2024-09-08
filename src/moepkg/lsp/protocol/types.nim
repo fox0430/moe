@@ -183,7 +183,7 @@ type
     semanticTokens*: Option[SemanticTokensWorkspaceClientCapabilities]
     inlayHint*: Option[InlayHintWorkspaceClientCapabilities]
 
-  SynchronizationCapability* = ref object of RootObj
+  TextDocumentSyncClientCapabilities* = ref object of RootObj
     dynamicRegistration*: Option[bool]
     willSave*: Option[bool]
     willSaveWaitUntil*: Option[bool]
@@ -198,60 +198,60 @@ type
   CompletionItemKindCapability* = ref object of RootObj
     valueSet*: OptionalSeq[int]
 
-  CompletionCapability* = ref object of RootObj
+  CompletionClientCapabilities* = ref object of RootObj
     dynamicRegistration*: Option[bool]
     completionItem*: Option[CompletionItemCapability]
     completionItemKind*: Option[CompletionItemKindCapability]
     contextSupport*: Option[bool]
 
-  HoverCapability* = ref object of RootObj
+  HoverClientCapabilities* = ref object of RootObj
     dynamicRegistration*: Option[bool]
     contentFormat*: OptionalSeq[string]
 
   SignatureInformationCapability* = ref object of RootObj
     documentationFormat*: OptionalSeq[string]
 
-  SignatureHelpCapability* = ref object of RootObj
+  SignatureHelpClientCapabilities* = ref object of RootObj
     dynamicRegistration*: Option[bool]
     signatureInformation*: Option[SignatureInformationCapability]
 
-  ReferencesCapability* = ref object of RootObj
+  ReferenceClientCapabilities* = ref object of RootObj
     dynamicRegistration*: Option[bool]
 
-  DocumentHighlightCapability* = ref object of RootObj
+  DocumentHighlightClientCapabilies* = ref object of RootObj
     dynamicRegistration*: Option[bool]
 
   TagSupportCapability* = ref object of RootObj
     valueSet*: seq[SymbolTag]
 
-  DocumentSymbolClientCapability* = ref object of RootObj
+  DocumentSymbolClientCapabilies* = ref object of RootObj
     dynamicRegistration*: Option[bool]
     symbolKind*: Option[SymbolKindCapability]
     hierarchicalDocumentSymbolSupport*: Option[bool]
     tagSupport*: Option[TagSupportCapability]
     labelSupport*: Option[bool]
 
-  FormattingCapability* = ref object of RootObj
+  DocumentFormattingClientCapabilities* = ref object of RootObj
     dynamicRegistration*: Option[bool]
 
-  RangeFormattingCapability* = ref object of RootObj
+  DocumentRangeFormattingClientCapabilities* = ref object of RootObj
     dynamicRegistration*: Option[bool]
 
-  OnTypeFormattingCapability* = ref object of RootObj
+  DocumentOnTypeFormattingClientCapabilities* = ref object of RootObj
     dynamicRegistration*: Option[bool]
 
-  DefinitionCapability* = ref object of RootObj
+  DefinitionClientCapabilities* = ref object of RootObj
     dynamicRegistration*: Option[bool]
 
   TypeDefinitionClientCapabilities* = ref object of RootObj
     dynamicRegistration*: Option[bool]
     linkSupport*:  Option[bool]
 
-  ImplementationCapability* = ref object of RootObj
+  ImplementationClientCapabilities* = ref object of RootObj
     dynamicRegistration*: Option[bool]
     linkSupport*: Option[bool]
 
-  CodeActionCapability* = ref object of RootObj
+  CodeActionClientCapabilities* = ref object of RootObj
     dynamicRegistration*: Option[bool]
 
   CodeLensClientClientCapabilities* = ref object of RootObj
@@ -260,14 +260,14 @@ type
   DocumentLinkCapability* = ref object of RootObj
     dynamicRegistration*: Option[bool]
 
-  ColorProviderCapability* = ref object of RootObj
+  DocumentColorClientCapabilities* = ref object of RootObj
     dynamicRegistration*: Option[bool]
 
-  RenameCapability* = ref object of RootObj
+  RenameClientCapabilities* = ref object of RootObj
     dynamicRegistration*: Option[bool]
     prepareSupport*: Option[bool]
 
-  PublishDiagnosticsCapability* = ref object of RootObj
+  PublishDiagnosticsClientCapabilities* = ref object of RootObj
     dynamicRegistration*: Option[bool]
 
   FoldingRangeKindValueSet* = ref object of RootObj
@@ -320,31 +320,31 @@ type
     toolsopSupport*: Option[bool]
 
   TextDocumentClientCapabilities* = ref object of RootObj
-    synchronization*: Option[SynchronizationCapability]
-    completion*: Option[CompletionCapability]
-    hover*: Option[HoverCapability]
-    signatureHelp*: Option[SignatureHelpCapability]
-    references*: Option[ReferencesCapability]
-    documentHighlight*: Option[DocumentHighlightCapability]
-    documentSymbol*: Option[DocumentSymbolClientCapability]
-    formatting*: Option[FormattingCapability]
-    rangeFormatting*: Option[RangeFormattingCapability]
-    onTypeFormatting*: Option[OnTypeFormattingCapability]
-    definition*: Option[DefinitionCapability]
+    synchronization*: Option[TextDocumentSyncClientCapabilities]
+    completion*: Option[CompletionClientCapabilities]
+    hover*: Option[HoverClientCapabilities]
+    signatureHelp*: Option[SignatureHelpClientCapabilities]
+    declaration*: Option[DeclarationClientCapabilities]
+    definition*: Option[DefinitionClientCapabilities]
     typeDefinition*: Option[TypeDefinitionClientCapabilities]
-    implementation*: Option[ImplementationCapability]
-    codeAction*: Option[CodeActionCapability]
+    implementation*: Option[ImplementationClientCapabilities]
+    references*: Option[ReferenceClientCapabilities]
+    documentHighlight*: Option[DocumentHighlightClientCapabilies]
+    documentSymbol*: Option[DocumentSymbolClientCapabilies]
+    codeAction*: Option[CodeActionClientCapabilities]
     codeLens*: Option[CodeLensClientClientCapabilities]
     documentLink*: Option[DocumentLinkClientCapabilities]
-    colorProvider*: Option[ColorProviderCapability]
-    rename*: Option[RenameCapability]
-    publishDiagnostics*: Option[PublishDiagnosticsCapability]
+    colorProvider*: Option[DocumentColorClientCapabilities]
+    formatting*: Option[DocumentFormattingClientCapabilities]
+    rangeFormatting*: Option[DocumentRangeFormattingClientCapabilities]
+    onTypeFormatting*: Option[DocumentOnTypeFormattingClientCapabilities]
+    rename*: Option[RenameClientCapabilities]
+    publishDiagnostics*: Option[PublishDiagnosticsClientCapabilities]
     foldingRange*: Option[FoldingRangeClientCapabilities]
     selectionRange*: Option[SelectionRangeClientCapabilities]
+    callHierarchy*: Option[CallHierarchyClientCapabilities]
     semanticTokens*: Option[SemanticTokensClientCapabilities]
     inlayHint*: Option[InlayHintClientCapabilities]
-    declaration*: Option[DeclarationClientCapabilities]
-    callHierarchy*: Option[CallHierarchyClientCapabilities]
 
   WindowCapabilities* = ref object of RootObj
     workDoneProgress*: Option[bool]
