@@ -195,7 +195,7 @@ proc changeModeToExMode*(
 
     bufStatus.changeMode(Mode.ex)
     commandLine.clear
-    commandLine.setPrompt(ExModePrompt)
+    commandLine.setPrompt(Ex)
 
 template isMoveUp(command: Runes): bool =
   command == ru"k" or isUpKey(command)

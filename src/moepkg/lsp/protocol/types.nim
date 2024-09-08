@@ -221,9 +221,15 @@ type
   DocumentHighlightCapability* = ref object of RootObj
     dynamicRegistration*: Option[bool]
 
-  DocumentSymbolCapability* = ref object of RootObj
+  TagSupportCapability* = ref object of RootObj
+    valueSet*: seq[SymbolTag]
+
+  DocumentSymbolClientCapability* = ref object of RootObj
     dynamicRegistration*: Option[bool]
     symbolKind*: Option[SymbolKindCapability]
+    hierarchicalDocumentSymbolSupport*: Option[bool]
+    tagSupport*: Option[TagSupportCapability]
+    labelSupport*: Option[bool]
 
   FormattingCapability* = ref object of RootObj
     dynamicRegistration*: Option[bool]
@@ -320,7 +326,7 @@ type
     signatureHelp*: Option[SignatureHelpCapability]
     references*: Option[ReferencesCapability]
     documentHighlight*: Option[DocumentHighlightCapability]
-    documentSymbol*: Option[DocumentSymbolCapability]
+    documentSymbol*: Option[DocumentSymbolClientCapability]
     formatting*: Option[FormattingCapability]
     rangeFormatting*: Option[RangeFormattingCapability]
     onTypeFormatting*: Option[OnTypeFormattingCapability]
@@ -705,12 +711,24 @@ type
     `range`*: Range
     kind*: Option[int]
 
-  DocumentSymbolParams* = ref object of RootObj
+  DocumentSymbolParams* = ref object of WorkDoneProgressParams
+    partialResultToken*: OptionalNode # ProgressToken
     textDocument*: TextDocumentIdentifier
+
+  DocumentSymbol* = ref object of RootObj
+    name*: string
+    detail*: Option[string]
+    kind*: int # SymbolKind
+    tags*: Option[seq[SymbolTag]]
+    deprecated*: Option[bool]
+    range*: Option[Range]
+    selectionRange*: Option[Range]
+    children*: Option[seq[DocumentSymbol]]
 
   SymbolInformation* = ref object of RootObj
     name*: string
-    kind*: int
+    kind*: int # SymbolKind
+    tags*: Option[seq[SymbolTag]]
     deprecated*: Option[bool]
     location*: Location
     containerName*: Option[string]

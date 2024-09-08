@@ -36,10 +36,12 @@ type
     isUpdate: bool
       ## Update flag
 
-const
-  ExModePrompt* = ":"
-  SearchForwardModePrompt* = "/"
-  SearchBackwardModePrompt* = "?"
+type
+  CommandLinePrompt* = enum
+    Ex = ":"
+    SearchForward = "/"
+    SearchBackward = "?"
+    DocumentSymbol = "#"
 
 proc initCommandLine*(): CommandLine =
   result.color = EditorColorPairIndex.default
@@ -200,11 +202,13 @@ proc getPrompt*(commandLine: CommandLine): Runes {.inline.} =
 
   commandLine.prompt
 
-proc setPrompt*(commandLine: var CommandLine, s: string) {.inline.} =
-  ## Set test to commandLine.prompt
+proc setPrompt*(
+  commandLine: var CommandLine,
+  p: CommandLinePrompt | string) {.inline.} =
+    ## Set a prompt to commandLine.prompt
 
-  commandLine.prompt = s.toRunes
-  commandLine.isUpdate = true
+    commandLine.prompt = toRunes($p)
+    commandLine.isUpdate = true
 
 proc setPrompt*(commandLine: var CommandLine, r: Runes) {.inline.} =
   commandLine.setPrompt($r)

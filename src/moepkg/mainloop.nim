@@ -29,7 +29,7 @@ import editorstatus, bufferstatus, windownode, unicodeext, gapbuffer, ui,
        filermodeutils, editor, registers, exmodeutils, movement, searchutils,
        independentutils, viewhighlight, completion, completionwindow,
        worddictionary, referencesmode, callhierarchyviewer, editorview,
-       logviewerutils
+       logviewerutils, documentsymbol
 
 type
   BeforeLine = object
@@ -47,8 +47,12 @@ proc invokeCommand(
   recodingOperationRegister: Option[Rune]): InputState =
 
     case currentMode:
-      of Mode.insert, Mode.insertMulti, Mode.searchForward, Mode.searchBackward:
-        InputState.Valid
+      of Mode.insert,
+         Mode.insertMulti,
+         Mode.searchForward,
+         Mode.searchBackward,
+         Mode.documentSymbol:
+           InputState.Valid
       of Mode.ex:
         isExCommandBuffer(command)
       of Mode.normal, Mode.logViewer, Mode.help, Mode.diff:
@@ -112,6 +116,8 @@ proc execCommand(status: var EditorStatus, command: Runes): Option[Rune] =
       status.execReferencesModeCommand(command)
     of Mode.callhierarchyViewer:
       status.execCallHierarchyViewerCommand(command)
+    of Mode.documentSymbol:
+      status.execDocumentSymbolCommand(command)
 
 proc assignNextExCommandHistory(
   status: var EditorStatus,
@@ -469,8 +475,13 @@ proc updateCompletionWindowBufferInCommandLine(status: var EditorStatus) =
       x: getTerminalWidth() - 1)
 
   # Update list
-  status.completionWindow.get.setList initExmodeCompletionList(
-    status.commandLine.buffer)
+  if currentBufStatus.isExmode:
+    status.completionWindow.get.setList initExmodeCompletionList(
+      status.commandLine.buffer)
+  elif currentBufStatus.isDocumentSymbolMode:
+    status.completionWindow.get.setList initDocSymbolCompletionList(
+      currentBufStatus.documentSymbols,
+      status.commandLine.buffer)
 
   if status.completionWindow.get.list.len > 0:
     if status.completionWindow.get.popupWindow.isNone:
@@ -513,6 +524,11 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
     searchHistoryIndex: Option[int]
 
     incReplaceInfo: Option[IncrementalReplaceInfo]
+
+  if currentBufStatus.isDocumentSymbolMode:
+    status.commandLine.update
+    status.openCompletionWindowInCommandLine(true)
+    status.updateCompletionWindowBufferInCommandLine
 
   while not isCancel:
     status.update
@@ -569,15 +585,18 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
         if not isClosedCompletionWindow or isIgnoreCompletionWindow:
           # Confirm.
           break
-      elif InputState.Valid == status.commandLine.buffer.isExCommandBuffer:
-        let split = status.commandLine.buffer.splitExCommandBuffer
+      elif currentBufStatus.isDocumentSymbolMode:
+        break
+      elif currentBufStatus.isExmode and
+           InputState.Valid == status.commandLine.buffer.isExCommandBuffer:
+             let split = status.commandLine.buffer.splitExCommandBuffer
 
-        let t = split[0].getArgsType
-        if t.isOk and t.get != ArgsType.text and t.get != ArgsType.path:
-          # Confirm.
-          # If the command entered from the suggestions is complete, it will be
-          # executed immediately.
-          break
+             let t = split[0].getArgsType
+             if t.isOk and t.get != ArgsType.text and t.get != ArgsType.path:
+               # Confirm.
+               # If the command entered from the suggestions is complete,
+               # it will be executed immediately.
+               break
 
     elif isEscKey(key) or isCtrlC(key):
       isCancel = true
@@ -673,7 +692,9 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
 
       status.highlightingText = none(HighlightingText)
       currentBufStatus.isUpdate = true
-
+    elif currentBufStatus.isDocumentSymbolMode:
+      if currentBufStatus.documentSymbols.len > 0:
+        currentBufStatus.documentSymbols = @[]
     elif incReplaceInfo.isSome:
       # Restore lines before ex mode.
       for beforeLine in incReplaceInfo.get.beforeLines:
@@ -702,6 +723,10 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
       if isExMode(currentBufStatus.mode):
         status.changeMode(currentBufStatus.prevMode)
     elif isSearchMode(currentBufStatus.mode):
+      status.changeMode(currentBufStatus.prevMode)
+    elif isDocumentSymbolMode(currentBufStatus.mode):
+      let command = status.commandLine.buffer
+      discard status.execEditorCommand(command)
       status.changeMode(currentBufStatus.prevMode)
 
 template isOpenCompletionWindowInEditor(status: EditorStatus, key: Rune): bool =

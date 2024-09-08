@@ -53,6 +53,7 @@ type
     searchBackward
     references
     callhierarchyViewer
+    documentSymbol
 
   CallHierarchyInfo* = object
     bufferId*: int
@@ -98,6 +99,7 @@ type
     documentHighlightInfo*: DocumentHighlightInfo # Lsp DocumentHighlight
     codeLenses*: seq[CodeLens] # Lsp CodeLens
     selectionRanges*: seq[SelectionRange] # Lsp SelectionRange
+    documentSymbols*: seq[DocumentSymbol] # Lsp DocumentSybol
 
 var
   countAddedBuffer = 0
@@ -247,6 +249,12 @@ proc isRecentFileMode*(mode, prevMode: Mode): bool {.inline.} =
 proc isRecentFileMode*(b: BufferStatus): bool {.inline.} =
   isRecentFileMode(b.mode, b.prevMode)
 
+proc isDocumentSymbolMode*(mode: Mode): bool {.inline.} =
+  mode == Mode.documentSymbol
+
+proc isDocumentSymbolMode*(b: BufferStatus): bool {.inline.} =
+  isDocumentSymbolMode(b.mode)
+
 proc isEditMode*(mode, prevMode: Mode): bool {.inline.} =
   ## Modes for editing text
 
@@ -274,10 +282,10 @@ proc isExpandableMode*(bufStatus: BufferStatus): bool {.inline.} =
   bufStatus.isReplaceMode or
   bufStatus.isVisualMode
 
-proc isCommandLineMode*(bufStatus: BufferStatus): bool {.inline.} =
-  ## Returns true if the mode uses the command line.
+proc isCommandLineMode*(b: BufferStatus): bool {.inline.} =
+  ## Return true if the mode uses the command line.
 
-  bufStatus.isExMode or bufStatus.isSearchMode
+  b.isExMode or b.isSearchMode or b.isDocumentSymbolMode
 
 proc isCursor*(mode: Mode): bool {.inline.} =
   ## Return true if a mode in which it uses the cursor.

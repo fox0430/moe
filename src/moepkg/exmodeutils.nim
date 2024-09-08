@@ -752,6 +752,7 @@ proc isStartDebugModeCommand*(command: seq[Runes]): bool {.inline.} =
 proc isBuildCommand*(command: seq[Runes]): bool {.inline.} =
   command.len == 1 and cmpIgnoreCase($command[0], "build") == 0
 
+
 proc isLspExeCommand*(command: seq[Runes]): bool {.inline.} =
   command.len > 1 and cmpIgnoreCase($command[0], "lspexecommand") == 0
 

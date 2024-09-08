@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -45,7 +45,7 @@ proc changeModeToExMode(
   commandLine: var CommandLine)  =
     bufStatus.changeMode(Mode.ex)
     commandLine.clear
-    commandLine.setPrompt(ExModePrompt)
+    commandLine.setPrompt(Ex)
 
 proc execDebugModeCommand*(status: var EditorStatus, command: Runes) =
   if command.len == 1:

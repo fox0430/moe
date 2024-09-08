@@ -1303,6 +1303,201 @@ suite "lsp: Selection Range":
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 9
 
+suite "lsp: Selection Range":
+  var status = initEditorStatus()
+
+  setup:
+    status = initEditorStatus()
+
+    let filename = $genOid()
+    assert status.addNewBufferInCurrentWin(filename).isOk
+
+  test "Not found":
+    check status.lspDocumentSymbol(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": []
+    })
+    .isErr
+
+    check currentBufStatus.documentSymbols.len == 0
+
+    check currentBufStatus.mode != Mode.documentsymbol
+
+  test "Parse DocumentSymbol[]":
+    status.resize(100, 100)
+    status.update
+
+    currentBufStatus.langId = "dummy"
+    status.lspClients["dummy"] = LspClient()
+
+    lspClient.waitingResponses[0] = WaitLspResponse(
+      bufferId: currentBufStatus.id,
+      requestId: 0,
+      lspMethod: LspMethod.textDocumentDocumentSymbol)
+
+    check status.lspDocumentSymbol(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": [
+        {
+          "name": "a",
+          "detail": "1",
+          "kind": 1,
+          "deprecated": false,
+          "range": {
+            "start": {
+              "line": 0,
+              "character": 1
+            },
+            "end": {
+              "line": 2,
+              "character": 3
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 4,
+              "character": 5
+            },
+            "end": {
+              "line": 6,
+              "character": 7
+            }
+          }
+        },
+        {
+          "name": "b",
+          "detail": "2",
+          "kind": 2,
+          "deprecated": true,
+          "range": {
+            "start": {
+              "line": 8,
+              "character": 9
+            },
+            "end": {
+              "line": 10,
+              "character": 11
+            }
+          },
+          "selectionRange": {
+            "start": {
+              "line": 12,
+              "character": 13
+            },
+            "end": {
+              "line": 14,
+              "character": 15
+            }
+          }
+        }
+      ]
+    })
+    .isOk
+
+    check currentBufStatus.documentSymbols.len == 2
+
+    check currentBufStatus.documentSymbols[0].name == "a"
+    check currentBufStatus.documentSymbols[0].detail.get == "1"
+    check currentBufStatus.documentSymbols[0].kind == 1
+    check currentBufStatus.documentSymbols[0].range.get.start[] == LspPosition(
+      line: 0,
+      character: 1)[]
+    check currentBufStatus.documentSymbols[0].range.get.`end`[] == LspPosition(
+      line: 2,
+      character: 3)[]
+
+    check currentBufStatus.documentSymbols[1].name == "b"
+    check currentBufStatus.documentSymbols[1].detail.get == "2"
+    check currentBufStatus.documentSymbols[1].kind == 2
+    check currentBufStatus.documentSymbols[1].range.get.start[] == LspPosition(
+      line: 8,
+      character: 9)[]
+    check currentBufStatus.documentSymbols[1].range.get.`end`[] == LspPosition(
+      line: 10,
+      character: 11)[]
+
+    check currentBufStatus.mode == Mode.documentsymbol
+
+  test "Parse SymbolInformation[]":
+    status.resize(100, 100)
+    status.update
+
+    currentBufStatus.langId = "dummy"
+    status.lspClients["dummy"] = LspClient()
+
+    lspClient.waitingResponses[0] = WaitLspResponse(
+      bufferId: currentBufStatus.id,
+      requestId: 0,
+      lspMethod: LspMethod.textDocumentDocumentSymbol)
+
+    check status.lspDocumentSymbol(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "result": [
+        {
+          "name": "a",
+          "kind": 1,
+          "deprecated": false,
+          "location": {
+            "uri": "file:///test.txt",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 1
+              },
+              "end": {
+                "line": 2,
+                "character": 3
+              }
+            }
+          }
+        },
+        {
+          "name": "b",
+          "kind": 2,
+          "deprecated": false,
+          "location": {
+            "uri": "file:///test.txt",
+            "range": {
+              "start": {
+                "line": 4,
+                "character": 5
+              },
+              "end": {
+                "line": 6,
+                "character": 7
+              }
+            }
+          }
+        }
+      ]
+    })
+    .isOk
+
+    check currentBufStatus.documentSymbols.len == 2
+
+    check currentBufStatus.documentSymbols[0].name == "a"
+    check currentBufStatus.documentSymbols[0].kind == 1
+    check currentBufStatus.documentSymbols[0].range.get.start[] == LspPosition(
+      line: 0,
+      character: 1)[]
+    check currentBufStatus.documentSymbols[0].range.get.`end`[] == LspPosition(
+      line: 2,
+      character: 3)[]
+
+    check currentBufStatus.documentSymbols[1].name == "b"
+    check currentBufStatus.documentSymbols[1].kind == 2
+    check currentBufStatus.documentSymbols[1].range.get.start[] == LspPosition(
+      line: 4,
+      character: 5)[]
+    check currentBufStatus.documentSymbols[1].range.get.`end`[] == LspPosition(
+      line: 6,
+      character: 7)[]
+
+    check currentBufStatus.mode == Mode.documentsymbol
+
 suite "lsp: handleLspServerNotify":
   setup:
     var status = initEditorStatus()

@@ -256,6 +256,9 @@ enable = true
 [Lsp.SelectionRange]
 enable = true
 
+[Lsp.DocumentSymbol]
+enable = true
+
 [Lsp.Hover]
 enable = true
 

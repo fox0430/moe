@@ -41,12 +41,13 @@ import
   ../fileutils,
   ../callhierarchyviewer,
   ../statusline,
-  ../visualmode
+  ../visualmode,
+  ../commandline
 
 import client, utils, hover, message, diagnostics, semantictoken, progress,
        inlayhint, definition, typedefinition, references, rename, declaration,
        implementation, callhierarchy, documenthighlight, documentlink,
-       codelens, executecommand, foldingrange, selectionrange
+       codelens, executecommand, foldingrange, selectionrange, documentsymbol
 
 # Workaround for Nim 1.6.2
 import completion as lspcompletion
@@ -950,6 +951,54 @@ proc lspSelectionRange(
 
     return Result[(), string].ok ()
 
+proc lspDocumentSymbol(
+  status: var EditorStatus,
+  res: JsonNode): Result[(), string] =
+    ## textDocument/documentSymbol
+    ##
+    ## Parse a response and enter DocumentSymbol mode.
+
+    try:
+      lspClient.deleteWaitingResponse(res["id"].getInt)
+    except CatchableError as e:
+      return Result[(), string].err e.msg
+
+    let infos =
+      try:
+        # Workaround for "Error: generic instantiation too nested"
+        some(parseTextDocumentSymbolInformationsResponse(res).get)
+      except ResultDefect:
+        none(seq[SymbolInformation])
+    if infos.isSome:
+      if infos.get.len == 0:
+        return Result[(), string].err "Not found"
+
+      currentBufStatus.documentSymbols = infos.get.mapIt(DocumentSymbol(
+        name: it.name,
+        kind: it.kind,
+        tags: it.tags,
+        range: some(it.location.range),
+        deprecated: it.deprecated))
+    else:
+      let symbols =
+        try:
+          # Workaround for "Error: generic instantiation too nested"
+          parseTextDocumentDocumentSymbolsResponse(res).get
+        except ResultDefect as e:
+          return Result[(), string].err e.msg
+
+      if symbols.len == 0:
+        return Result[(), string].err "Not found"
+
+      currentBufStatus.documentSymbols = symbols
+
+    status.commandLine.clear
+    status.commandLine.setPrompt(CommandLinePrompt.DocumentSymbol)
+
+    currentBufStatus.changeMode(Mode.documentSymbol)
+
+    return Result[(), string].ok ()
+
 proc handleLspServerRequest(
   status: var EditorStatus,
   req: JsonNode): Result[(), string] =
@@ -1151,5 +1200,8 @@ proc handleLspResponse*(status: var EditorStatus) =
         of LspMethod.textDocumentSelectionRange:
           let r = status.lspSelectionRange(resJson.get)
           if r.isErr: status.commandLine.writeLspSelectionRangeError(r.error)
+        of LspMethod.textDocumentDocumentSymbol:
+          let r = status.lspDocumentSymbol(resJson.get)
+          if r.isErr: status.commandLine.writeLspDocumentSymbolError(r.error)
         else:
           info fmt"lsp: Ignore response: {resJson}"

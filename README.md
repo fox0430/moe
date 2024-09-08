@@ -123,6 +123,8 @@ This project's goals are easily customizable, high productivity, user friendly, 
 
   - Selection Range
 
+  - Document Symbol
+
 ## Planned features
 
 - Supports regular expression and PEG
