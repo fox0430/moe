@@ -939,6 +939,48 @@ suite "lsp: setCapabilities":
 
     check not client.capabilities.get.selectionRange
 
+  test "Enable Document Symbol":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          documentSymbolProvider: some(%*true)))
+
+      s = LspFeatureSettings(
+        documentSymbol: LspDocumentSymbolSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.documentSymbol
+
+  test "Disable Document Symbol":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          documentSymbolProvider: none(JsonNode)))
+
+      s = LspFeatureSettings(
+        documentSymbol: LspDocumentSymbolSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.documentSymbol
+
+  test "Disable Document Symbol 2":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          documentSymbolProvider: some(%*true)))
+
+      s = LspFeatureSettings(
+        documentSymbol: LspDocumentSymbolSettings(
+          enable: false))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.documentSymbol
+
 suite "lsp: Send requests":
   privateAccess(LspClient)
 

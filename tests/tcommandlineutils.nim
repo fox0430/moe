@@ -17,9 +17,12 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, sequtils, strutils, sugar, algorithm]
+import std/[unittest, os, sequtils, strutils, sugar, algorithm, options]
 
 import moepkg/[unicodeext, theme, exmodeutils, completion]
+
+import moepkg/lsp/utils
+import moepkg/lsp/documentsymbol
 
 import moepkg/commandlineutils {.all.}
 
@@ -246,3 +249,89 @@ suite "commandlineutils: initExmodeCompletionList":
 
     const RawInput = ru"e src/m"
     check initExmodeCompletionList(RawInput).items == expectList
+
+suite "commandlineutils: initDocSymbolCompletionList":
+  test "Basic":
+    let
+      symbols = @[
+        DocumentSymbol(
+          name: "a",
+          kind: 1,
+          range: some(LspRange(
+            start: LspPosition(line: 0, character: 1),
+            `end`: LspPosition(line: 2, character: 3)
+          ))
+        ),
+        DocumentSymbol(
+          name: "b",
+          kind: 2,
+          range: some(LspRange(
+            start: LspPosition(line: 4, character: 5),
+            `end`: LspPosition(line: 6, character: 7)
+          ))
+        ),
+        DocumentSymbol(
+          name: "c",
+          kind: 3,
+          range: some(LspRange(
+            start: LspPosition(line: 8, character: 9),
+            `end`: LspPosition(line: 10, character: 11)
+          ))
+        )
+      ]
+
+      rawInput = ru""
+
+    let r = initDocSymbolCompletionList(symbols, rawInput)
+
+    check r.items.len == 3
+
+    check r.items[0].label == ru"a File 0, 1"
+    check r.items[0].insertText == ru"a"
+
+    check r.items[1].label == ru"b Module 4, 5"
+    check r.items[1].insertText == ru"b"
+
+    check r.items[2].label == ru"c Namespace 8, 9"
+    check r.items[2].insertText == ru"c"
+
+  test "Basic 2":
+    let
+      symbols = @[
+        DocumentSymbol(
+          name: "aba",
+          kind: 1,
+          range: some(LspRange(
+            start: LspPosition(line: 0, character: 1),
+            `end`: LspPosition(line: 2, character: 3)
+          ))
+        ),
+        DocumentSymbol(
+          name: "abb",
+          kind: 2,
+          range: some(LspRange(
+            start: LspPosition(line: 4, character: 5),
+            `end`: LspPosition(line: 6, character: 7)
+          ))
+        ),
+        DocumentSymbol(
+          name: "ccc",
+          kind: 3,
+          range: some(LspRange(
+            start: LspPosition(line: 8, character: 9),
+            `end`: LspPosition(line: 10, character: 11)
+          ))
+        )
+      ]
+
+      rawInput = ru"a"
+
+    let r = initDocSymbolCompletionList(symbols, rawInput)
+
+    check r.items.len == 2
+
+    check r.items[0].label == ru"aba File 0, 1"
+    check r.items[0].insertText == ru"aba"
+
+    check r.items[1].label == ru"abb Module 4, 5"
+    check r.items[1].insertText == ru"abb"

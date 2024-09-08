@@ -324,3 +324,11 @@ suite "lsp: lspMethod":
       "method": "textDocument/selectionRange",
       "params": nil
     }).get
+
+  test "textDocument/documentSymbol":
+    check LspMethod.textDocumentDocumentSymbol == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "textDocument/documentSymbol",
+      "params": nil
+    }).get
