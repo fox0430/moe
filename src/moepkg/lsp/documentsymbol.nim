@@ -21,10 +21,10 @@ import std/[json, strformat]
 
 import pkg/results
 
-import protocol/types
+import protocol/[enums, types]
 import utils
 
-export DocumentSymbol, SymbolInformation
+export SymbolKind, DocumentSymbol, SymbolInformation
 
 type
   DocumentSymbolsResult* = Result[seq[DocumentSymbol], string]
@@ -43,11 +43,18 @@ proc parseTextDocumentDocumentSymbolsResponse*(
       # Not found
       return DocumentSymbolsResult.ok @[]
 
-    let symbols =
-      try:
-        res["result"].to(seq[DocumentSymbol])
-      except CatchableError as e:
-        return DocumentSymbolsResult.err fmt"Invalid response: {e.msg}"
+    var symbols: seq[DocumentSymbol]
+    for r in res["result"]:
+      let s =
+        try:
+          r.to(DocumentSymbol)
+        except CatchableError as e:
+          return DocumentSymbolsResult.err fmt"Invalid response: {e.msg}"
+
+      if s.kind < 1 or s.kind > 26:
+        return DocumentSymbolsResult.err fmt"Invalid response: kind: {r.kind}"
+
+      symbols.add s
 
     return DocumentSymbolsResult.ok symbols
 
@@ -60,10 +67,17 @@ proc parseTextDocumentSymbolInformationsResponse*(
       # Not found
       return SymbolInformationsResult.ok @[]
 
-    let infos =
-      try:
-        res["result"].to(seq[SymbolInformation])
-      except CatchableError as e:
-        return SymbolInformationsResult.err fmt"Invalid response: {e.msg}"
+    var infos: seq[SymbolInformation]
+    for r in res["result"]:
+      let i =
+        try:
+          r.to(SymbolInformation)
+        except CatchableError as e:
+          return SymbolInformationsResult.err fmt"Invalid response: {e.msg}"
+
+      if i.kind < 1 or i.kind > 26:
+        return SymbolInformationsResult.err fmt"Invalid response: kind: {r.kind}"
+
+      infos.add i
 
     return SymbolInformationsResult.ok infos

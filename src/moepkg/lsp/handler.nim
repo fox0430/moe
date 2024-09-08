@@ -963,24 +963,13 @@ proc lspDocumentSymbol(
     except CatchableError as e:
       return Result[(), string].err e.msg
 
-    # Workaround for "Error: generic instantiation too nested"
-    let symbols =
+    let infos =
       try:
-        some(parseTextDocumentDocumentSymbolsResponse(res).get)
+        # Workaround for "Error: generic instantiation too nested"
+        some(parseTextDocumentSymbolInformationsResponse(res).get)
       except ResultDefect:
-        none(seq[DocumentSymbol])
-    if symbols.isSome:
-      if symbols.get.len == 0:
-        return Result[(), string].err "Not found"
-
-      currentBufStatus.documentSymbols = symbols.get
-    else:
-      let infos =
-        try:
-          some(parseTextDocumentSymbolInformationsResponse(res).get)
-        except ResultDefect as e:
-          return Result[(), string].err e.msg
-
+        none(seq[SymbolInformation])
+    if infos.isSome:
       if infos.get.len == 0:
         return Result[(), string].err "Not found"
 
@@ -990,6 +979,18 @@ proc lspDocumentSymbol(
         tags: it.tags,
         range: some(it.location.range),
         deprecated: it.deprecated))
+    else:
+      let symbols =
+        try:
+          # Workaround for "Error: generic instantiation too nested"
+          parseTextDocumentDocumentSymbolsResponse(res).get
+        except ResultDefect as e:
+          return Result[(), string].err e.msg
+
+      if symbols.len == 0:
+        return Result[(), string].err "Not found"
+
+      currentBufStatus.documentSymbols = symbols
 
     status.commandLine.clear
     status.commandLine.setPrompt(CommandLinePrompt.DocumentSymbol)

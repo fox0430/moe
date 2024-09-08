@@ -205,10 +205,15 @@ proc initExmodeCompletionList*(rawInput: Runes): CompletionList =
 
 proc toCompletionItem(s: DocumentSymbol): CompletionItem =
   var label = s.name
+
+  label &= " " & $SymbolKind(s.kind)
+
   if s.detail.isSome:
     label &= " " & s.detail.get
+
   if s.range.isSome:
     label &= fmt" {s.range.get.start.line}, {$s.range.get.start.character}"
+
   return CompletionItem(label: label.toRunes, insertText: s.name.toRunes)
 
 proc initDocSymbolCompletionList*(

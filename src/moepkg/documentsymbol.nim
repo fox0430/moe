@@ -25,6 +25,10 @@ import unicodeext, editorstatus, bufferstatus, messages, gapbuffer
 proc jumpToSymbol(status: var EditorStatus, symbolName: Runes) =
   # LSP Document Symbol
 
+  if symbolName.len == 0:
+    status.commandLine.writeLspDocumentSymbolError("Not found")
+    return
+
   var symbol: Option[DocumentSymbol]
   for s in currentBufStatus.documentSymbols:
     if s.name == $symbolName:
@@ -33,18 +37,20 @@ proc jumpToSymbol(status: var EditorStatus, symbolName: Runes) =
 
   if symbol.isNone:
     status.commandLine.writeLspDocumentSymbolError("Not found")
+    return
 
   if symbol.get.range.isNone:
     status.commandLine.writeLspDocumentSymbolError("Unknown position")
+    return
 
   let dest = symbol.get.range.get.start
 
   currentMainWindowNode.currentLine = min(
     dest.line,
-    currentBufStatus.buffer.high)
+    max(0, currentBufStatus.buffer.high))
   currentMainWindowNode.currentColumn = min(
     dest.character,
-    currentBufStatus.buffer[dest.line].high)
+    max(0, currentBufStatus.buffer[currentMainWindowNode.currentLine].high))
 
 proc execDocumentSymbolCommand*(
   status: var EditorStatus,
