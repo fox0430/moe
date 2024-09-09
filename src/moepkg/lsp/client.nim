@@ -94,6 +94,9 @@ type
     lastId*: RequestId
       # Last request ID
     serverName*: string
+      # The LSP server name
+    command*: string
+      # The LSP server start command
 
 type
   R = Result
@@ -101,6 +104,8 @@ type
   LspClientReadableResult* = R[bool, string]
 
   initLspClientResult* = R[LspClient, string]
+
+  LspRestartClientResult* = R[(), string]
 
   LspErrorParseResult* = R[LspError, string]
   LspSendRequestResult* = R[(), string]
@@ -438,7 +443,26 @@ proc initLspClient*(command: string): initLspClientResult =
 
   c.serverName = commandSplit[0]
 
+  c.command = command
+
   return initLspClientResult.ok c
+
+proc restart*(c: var LspClient): LspRestartClientResult =
+  ## Restart the LSP server process.
+  ## Logs will be taken over.
+
+  if c.serverProcess.running: c.exit
+
+  let beforeLog = c.log
+
+  var newClient = initLspClient(c.command)
+  if newClient.isErr:
+    return LspRestartClientResult.err newClient.error
+
+  c = newClient.get
+  c.log = beforeLog
+
+  return LspRestartClientResult.ok ()
 
 proc initInitializeParams*(
   serverName, workspaceRoot: string,
