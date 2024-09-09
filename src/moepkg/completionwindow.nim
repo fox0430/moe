@@ -347,7 +347,8 @@ proc isOpen*(c: CompletionWindow): bool {.inline.} = c.popupWindow.isSome
 
 proc completionWindowPositionInEditor*(
   windowNode: var WindowNode,
-  bufStatus: BufferStatus): Position =
+  bufStatus: BufferStatus,
+  inputText = ru""): Position =
     ## Return a position for the completion window for editor.
 
     # Reload Editorview. This is not the actual terminal view.
@@ -358,7 +359,7 @@ proc completionWindowPositionInEditor*(
     let absCursorPosition = windowNode.absolutePosition
     return Position(
       y: (absCursorPosition.y + 1).clamp(0, getTerminalHeight()),
-      x: (absCursorPosition.x - 2).clamp(0, getTerminalWidth()))
+      x: (absCursorPosition.x - 1 - inputText.len).clamp(0, getTerminalWidth()))
 
 proc sort*(c: var CompletionWindow) {.inline.} =
   c.list.fuzzySort(c.inputText)

@@ -977,7 +977,7 @@ suite "mainloop: incrementalReplace":
         "x", "x def", "", "def x", "x x"]
         .toSeqRunes
 
-suite "mainloop: openCompletionWindow in editor":
+suite "mainloop: openCompletionWindowInEditor":
   privateAccess(CompletionWindow)
 
   test "Basic":
@@ -997,7 +997,9 @@ suite "mainloop: openCompletionWindow in editor":
 
     status.openCompletionWindowInEditor
 
-    check status.completionWindow.get.popupWindow.get.position == Position(y: 2, x: 1)
+    check status.completionWindow.get.popupWindow.get.position == Position(
+      y: 2,
+      x: 2)
     check status.completionWindow.get.startPosition == BufferPosition(
       line: 1,
       column: 0)
@@ -1019,12 +1021,14 @@ suite "mainloop: openCompletionWindow in editor":
 
     status.openCompletionWindowInEditor
 
-    check status.completionWindow.get.popupWindow.get.position == Position(y: 2, x: 2)
+    check status.completionWindow.get.popupWindow.get.position == Position(
+      y: 2,
+      x: 3)
     check status.completionWindow.get.startPosition == BufferPosition(
       line: 1,
       column: 1)
 
-suite "mainloop: openCompletionWindow in commandLine":
+suite "mainloop: openCompletionWindowInCommandLine":
   privateAccess(CompletionWindow)
 
   test "Empty buffer":
@@ -1069,7 +1073,7 @@ suite "mainloop: openCompletionWindow in commandLine":
       line: 0,
       column: 0)
 
-suite "mainloop: updateCompletionWindowBuffer in editor":
+suite "mainloop: updateCompletionWindowBufferInEditor":
   privateAccess(CompletionWindow)
 
   test "With LSP":
@@ -1123,6 +1127,7 @@ suite "mainloop: updateCompletionWindowBuffer in editor":
       ]
 
       currentBufStatus.buffer[1] = ru"ec"
+      currentMainWindowNode.currentColumn.inc
 
       status.completionWindow.get.addInput(ru'c')
       status.updateCompletionWindowBufferInEditor
@@ -1147,9 +1152,9 @@ suite "mainloop: updateCompletionWindowBuffer in editor":
     assert status.addNewBufferInCurrentWin().isOk
     currentBufStatus.language = SourceLanguage.langNim
     currentBufStatus.buffer = toSeq(0..50).mapIt("").toSeqRunes.toGapBuffer
-    currentBufStatus.buffer[40] = ru"i"
+    currentBufStatus.buffer[45] = ru"i"
     currentBufStatus.mode = Mode.insert
-    currentMainWindowNode.currentLine = 40
+    currentMainWindowNode.currentLine = 45
     currentMainWindowNode.currentColumn = 1
 
     status.settings.view.lineNumber = false
@@ -1160,15 +1165,21 @@ suite "mainloop: updateCompletionWindowBuffer in editor":
 
     status.openCompletionWindowInEditor
 
+    status.completionWindow.get.inputText = ru"i"
     status.updateCompletionWindowBufferInEditor
+
     check status.completionWindow.get.popupWindow.get.position == Position(
-      y: 0,
+      y: 17,
       x: 1)
+
+    currentBufStatus.buffer[currentMainWindowNode.currentLine] = ru"im"
+    currentMainWindowNode.currentColumn.inc
 
     status.completionWindow.get.inputText = ru"im"
     status.updateCompletionWindowBufferInEditor
+
     check status.completionWindow.get.popupWindow.get.position == Position(
-      y: 41,
+      y: 42,
       x: 1)
 
   test "Without LSP (WordDictionary)":
@@ -1206,6 +1217,8 @@ suite "mainloop: updateCompletionWindowBuffer in editor":
     block:
       currentBufStatus.buffer[1] = ru"ec"
 
+      currentMainWindowNode.currentColumn.inc
+
       status.completionWindow.get.addInput(ru'c')
       status.updateCompletionWindowBufferInEditor
 
@@ -1220,7 +1233,7 @@ suite "mainloop: updateCompletionWindowBuffer in editor":
       check status.completionWindow.get.popupWindow.get.position == Position(
         y: 2, x: 1)
 
-suite "mainloop: updateCompletionWindowBuffer in command line":
+suite "mainloop: updateCompletionWindowBufferInCommandLine":
   privateAccess(CompletionWindow)
 
   test "Basic":
