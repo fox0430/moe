@@ -1160,6 +1160,34 @@ proc lspFoldingRange(status: var EditorStatus) =
   if r.isErr:
     status.commandLine.writeLspFoldingRangeError(r.error)
 
+proc lspRestartClient(status: var EditorStatus) =
+  status.changeMode(currentBufStatus.prevMode)
+
+  if not status.lspClients.contains(currentBufStatus.langId):
+    status.commandLine.writeLspError("Client not found")
+    return
+
+  let r = lspClient.restart
+  if r.isOk:
+    status.commandLine.writeStandard(fmt"lsp: restarted client: {lspClient.serverName}")
+  else:
+    status.commandLine.writeLspError("Client not found")
+
+  let langId = currentBufStatus.langId
+  for b in status.bufStatus:
+    if b.langId == langId:
+      let r = lspClient.initialize(
+        status.bufStatus[^1].id,
+        initInitializeParams(
+          lspClient.serverName,
+          $b.openDir,
+          status.settings.lsp.languages[langId].trace,
+          initLspExperimentalParams(
+            status.lspClients[langId].serverName,
+            status.settings.lsp.servers)))
+      if r.isErr:
+        status.commandLine.writeLspError(r.error)
+
 proc saveExCommandHistory(
   exCommandHistory: var seq[Runes],
   command: seq[Runes],
@@ -1355,6 +1383,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[Runes]) =
     status.lspExecuteCommand(command[1 .. ^1])
   elif isLspFoldingCommand(command):
     status.lspFoldingRange
+  elif isLspRestartCommand(command):
+    status.lspRestartClient
   else:
     status.commandLine.writeNotEditorCommandError(command)
     status.changeMode(currentBufStatus.prevMode)

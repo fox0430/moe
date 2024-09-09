@@ -138,6 +138,7 @@
 | <kbd>**z**</kbd> <kbd>**d**</kbd></br> | Delete fold lines |
 | <kbd>**z**</kbd> <kbd>**R**</kbd></br> | Delete fold lines |
 | <kbd>**Ctrl**</kbd> <kbd>**s**</kbd></br> | Selection Range (LSP) |
+| <kbd>**Space**</kbd> <kbd>**o**</kbd></br> | Document Symbol (LSP) |
 
 </details>
 
@@ -346,6 +347,7 @@
 | `lspFold` | LSP Folding Range |
 | `log` | Open a log viewer for editor log |
 | `lspLog` | Open a log viewer for LSP log |
+| `lspRestart` | Result the current LSP server |
 | `help` | Open help |
 | `putConfigFile` | Put a sample configuration file in ~/.config/moe |
 | `run` | Quick run |

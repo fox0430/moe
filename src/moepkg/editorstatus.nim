@@ -308,7 +308,7 @@ proc cancelLspForegroundRequest*(status: var EditorStatus) {.inline.} =
   if status.lspClients.contains(currentBufStatus.langId):
     lspClient.cancelLspForegroundRequest(currentBufStatus.id)
 
-proc initLspExperimentalParams(
+proc initLspExperimentalParams*(
   serverName: string,
   settings: LspServerSettings): Option[JsonNode] =
 

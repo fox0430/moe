@@ -18,7 +18,9 @@
 #[############################################################################]#
 
 import std/[unittest, importutils, os, osproc, options, tables, json]
+
 import pkg/results
+
 import moepkg/independentutils
 import moepkg/lsp/protocol/[enums, types]
 import moepkg/lsp/utils
@@ -82,6 +84,58 @@ suite "lsp: initInitializeParams":
       some(experimental))
 
     check r.capabilities.experimental.get == experimental
+
+suite "lsp: restart":
+  privateAccess(LspClient)
+
+  const
+    ServerName = "nimlangserver"
+    Command = "nimlangserver"
+    Trace = TraceValue.verbose
+
+  var client: LspClient
+
+  setup:
+    if isNimlangserverAvailable():
+      client = initLspClient(Command).get
+
+  test "Basic 1":
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      const BufferId = 1
+      let params = initInitializeParams(ServerName, "/", Trace)
+      check client.initialize(BufferId, params).isOk
+
+      let
+        beforePid = client.serverProcessId
+        beforeLogLen = client.log.len
+
+      check client.running
+
+      check client.restart.isOk
+
+      check beforePid != client.serverProcessId
+      check client.log.len == beforeLogLen
+
+  test "Basic 2":
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      const BufferId = 1
+      let params = initInitializeParams(ServerName, "/", Trace)
+      check client.initialize(BufferId, params).isOk
+
+      let
+        beforePid = client.serverProcessId
+        beforeLogLen = client.log.len
+
+      client.serverProcess.kill
+
+      check client.restart.isOk
+
+      check beforePid != client.serverProcessId
+      check client.log.len == beforeLogLen
 
 suite "lsp: setCapabilities":
   var client: LspClient

@@ -188,6 +188,10 @@ const
       description: "Open the LSP log viewer",
       argsType: ArgsType.none),
     ExCommandInfo(
+      command: "lspRestart",
+      description: "Restart the current LSP server",
+      argsType: ArgsType.none),
+    ExCommandInfo(
       command: "man",
       description: "Show the given UNIX manual page, if available",
       argsType: ArgsType.toggle),
@@ -759,6 +763,9 @@ proc isLspExeCommand*(command: seq[Runes]): bool {.inline.} =
 proc isLspFoldingCommand*(command: seq[Runes]): bool {.inline.} =
   command.len == 1 and cmpIgnoreCase($command[0], "lspfold") == 0
 
+proc isLspRestartCommand*(command: seq[Runes]): bool {.inline.} =
+  command.len == 1 and cmpIgnoreCase($command[0], "lsprestart") == 0
+
 proc isValidExCommand*(commandSplit: seq[Runes]): bool =
   ## Return true if valid ex command and valid args.
 
@@ -836,7 +843,8 @@ proc isValidExCommand*(commandSplit: seq[Runes]): bool =
     isHighlightCurrentLineSettingCommand(commandSplit) or
     isBuildCommand(commandSplit) or
     isLspExeCommand(commandSplit) or
-    isLspFoldingCommand(commandSplit)
+    isLspFoldingCommand(commandSplit) or
+    isLspRestartCommand(commandSplit)
 
 proc getArgsType*(command: Runes): Result[ArgsType, string] =
   ## Return ArgsType if valid ex command.

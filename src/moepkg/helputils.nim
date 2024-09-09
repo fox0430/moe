@@ -306,6 +306,8 @@ lspFold - LSP Folding Range
 log - Open a log viewer for editor log
 lspLog- Open a log viewer for LSP log
 
+lspRestart - Restart the current LSP server
+
 help - Open this help
 
 putConfigFile - Put a sample configuration file in ~/.config/moe
