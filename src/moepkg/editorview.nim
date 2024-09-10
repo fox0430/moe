@@ -45,7 +45,7 @@ type
     originalLine*: Deque[int]
     start*: Deque[int]
     length*: Deque[int]
-    selectedRange*: Range
+    selectedArea*: Option[SelectedArea]
     foldingRanges*: FoldingRanges
     updated*: bool
     editorMode*: Mode
@@ -503,10 +503,22 @@ proc lineNumberColor(
     else:
       EditorColorPairIndex.lineNum
 
-template isSelectingArea(view: EditorView): bool =
+template isSelectingArea(view: EditorView, viewLine: int): bool =
   view.editorMode.isVisualMode and
-  (view.originalLine[y] >= view.selectedRange.first and
-   view.selectedRange.last >= view.originalLine[y])
+  view.selectedArea.isSome and
+  view.originalLine[viewLine] >= view.selectedArea.get.startLine and
+  view.selectedArea.get.endLine >= view.originalLine[viewLine]
+
+template isSelectingArea(
+  view: EditorView,
+  viewLine, originalColumn: int): bool =
+
+    view.editorMode.isVisualMode and
+    view.selectedArea.isSome and
+    view.originalLine[viewLine] >= view.selectedArea.get.startLine and
+    view.selectedArea.get.endLine >= view.originalLine[viewLine] and
+    originalColumn >= view.selectedArea.get.startColumn and
+    view.selectedArea.get.endColumn >= originalColumn
 
 proc writeAllLines*[T](
   view: var EditorView,
@@ -565,7 +577,7 @@ proc writeAllLines*[T](
         continue
 
       if view.length[y] == 0:
-        if view.isSelectingArea:
+        if view.isSelectingArea(y):
           view.write(win, y, x, ru" ", EditorColorPairIndex.selectArea)
         else:
           view.write(win, y, x, view.lines[y], EditorColorPairIndex.default)
@@ -651,11 +663,11 @@ proc writeAllLines*[T](
 
       if view.config.isIndentationLines:
         # Write indentation lines.
-        let color =
-          if view.isSelectingArea: EditorColorPairIndex.selectArea
-          else: EditorColorPairIndex.whitespace
-
         for i in 0 ..< indents:
+          let color =
+            if view.isSelectingArea(y, i): EditorColorPairIndex.selectArea
+            else: EditorColorPairIndex.whitespace
+
           view.write(
             win,
             y, lineStart + (view.config.tabStop * i),

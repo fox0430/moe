@@ -988,11 +988,8 @@ proc update*(status: var EditorStatus) =
         block updateTerminalBuffer:
           if node.view.editorMode != b.mode: node.view.editorMode = b.mode
 
-          if b.selectedArea.isSome:
-            if node.view.selectedRange.first != b.selectedArea.get.startLine:
-              node.view.selectedRange.first = b.selectedArea.get.startLine
-            if node.view.selectedRange.last != b.selectedArea.get.endLine:
-              node.view.selectedRange.last = b.selectedArea.get.endLine
+          if b.selectedArea.isSome and node.view.selectedArea != b.selectedArea:
+            node.view.selectedArea = b.selectedArea
 
           node.view.isCurrentWin =
             if node.windowIndex == currentMainWindowNode.windowIndex: true
