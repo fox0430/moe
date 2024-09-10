@@ -655,4 +655,5 @@ suite "completionwindow: completionWindowPositionInEditor":
 
     check Position(y: 7, x: 7) == completionWindowPositionInEditor(
       currentMainWindowNode,
-      currentBufStatus)
+      currentBufStatus,
+      ru"a")
