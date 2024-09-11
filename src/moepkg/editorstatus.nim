@@ -724,6 +724,43 @@ proc sendLspInlayHintRequest*(
       first: hintRange.first.line,
       last: hintRange.last.line)
 
+proc sendLspInlineValueRequest*(
+  c: var LspClient,
+  b: BufferStatus,
+  bufferIndex: int,
+  mainWindowNode: WindowNode) =
+    ## Send textDocument/inlineValue requests to the LSP server.
+
+    block:
+      # Cancel before inlineValue request.
+      let err = c.cancelRequest(b.id, LspMethod.textDocumentInlineValue)
+      if err.isErr: error fmt"lsp: {err.error}"
+
+    # Calc range from all views.
+    let nodes = mainWindowNode.searchByBufferIndex(bufferIndex)
+    var valueRange = BufferRange()
+    for n in nodes:
+      let
+        r = n.view.rangeOfOriginalLineInView
+        last = min(r.last, b.buffer.high)
+      if valueRange.first.line > r.first:
+        valueRange.first.line = r.first
+        valueRange.first.column =
+          if b.buffer[r.first].high >= 0: b.buffer[r.first].high
+          else: 0
+      if last > valueRange.last.line:
+        valueRange.last.line = last
+        valueRange.last.column =
+          if b.buffer[last].high >= 0: b.buffer[last].high
+          else: 0
+
+    let err = c.textDocumentInlineValue(b.id, $b.absolutePath, valueRange)
+    if err.isErr: error fmt"lsp: {err.error}"
+
+    b.inlineValues.range = Range(
+      first: valueRange.first.line,
+      last: valueRange.last.line)
+
 proc sendLspCodeLens*(c: var LspClient, b: BufferStatus) =
   ## Send textDocument/codeLens requests to the LSP server.
 
@@ -795,6 +832,10 @@ proc updateSyntaxHighlightings(status: EditorStatus) =
         if client.capabilities.get.inlayHint:
           # Send a textDocument/inlayHint request to the LSP server.
           client.sendLspInlayHintRequest(b, i, mainWindowNode)
+
+        if client.capabilities.get.inlineValue:
+          # Send a textDocument/inlineValue request to the LSP server.
+          client.sendLspInlineValueRequest(b, i, mainWindowNode)
 
         if client.capabilities.get.codeLens:
           # Send a textDocument/codeLens request to the LSP server.
@@ -996,7 +1037,9 @@ proc update*(status: var EditorStatus) =
             else: false
 
           template isOverwriteViewBuffer(b: BufferStatus): bool =
-            b.inlayHints.hints.len > 0 or b.codeLenses.len > 0
+            b.inlayHints.hints.len > 0 or
+            b.codeLenses.len > 0 or
+            b.inlineValues.values.len > 0
 
           if isOverwriteViewBuffer(b):
             # This copy is maybe bad performance
@@ -1021,6 +1064,24 @@ proc update*(status: var EditorStatus) =
                        line,
                        text.len,
                        EditorColorPairIndex.inlayHint)
+
+            if b.inlineValues.values.len > 0:
+              # LSP InlineValue
+              for val in b.inlineValues.values:
+                if val.range.start.line < b.buffer.len:
+                  let
+                    line = val.range.start.line
+                    text = val.text.toRunes
+
+                  block:
+                    var newLine = buffer[line]
+                    newLine.add ru" " & text
+                    buffer[line] = newLine
+
+                  highlight.addColorSegment(
+                    line,
+                    text.len,
+                    EditorColorPairIndex.inlineValue)
 
             if b.codeLenses.len > 0:
               # LSP CodeLens

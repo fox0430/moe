@@ -193,6 +193,9 @@ enable = false
 [Lsp.InlayHint]
 enable = false
 
+[Lsp.InlineValue]
+enable = true
+
 [Lsp.References]
 enable = false
 
@@ -419,6 +422,7 @@ union = "#111111"
 unresolvedReference = "#111111"
 
 inlayHint = "#111111"
+inlineValue = "#111111"
 codeLens = "#111111"
 
 currentFile = "#111111"
@@ -638,6 +642,8 @@ suite "settings: Parse configuration file":
     check not settings.lsp.features.hover.enable
 
     check not settings.lsp.features.inlayHint.enable
+
+    check settings.lsp.features.inlineValue.enable
 
     check not settings.lsp.features.references.enable
 

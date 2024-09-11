@@ -78,6 +78,7 @@ type
     textDocumentFoldingRange
     textDocumentSelectionRange
     textDocumentDocumentSymbol
+    textDocumentInlineValue
 
   CallHierarchyType* = enum
     prepare
@@ -189,6 +190,7 @@ proc toLspMethodStr*(m: LspMethod): string =
     of textDocumentFoldingRange: "textDocument/foldingRange"
     of textDocumentSelectionRange: "textDocument/selectionRange"
     of textDocumentDocumentSymbol: "textDocument/documentSymbol"
+    of textDocumentInlineValue: "textDocument/InlineValue"
 
 proc parseTraceValue*(s: string): Result[TraceValue, string] =
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#traceValue
@@ -285,9 +287,11 @@ proc lspMethod*(j: JsonNode): LspMethodResult =
     of "textDocument/foldingRange":
       LspMethodResult.ok textDocumentFoldingRange
     of "textDocument/selectionRange":
-       LspMethodResult.ok textDocumentSelectionRange
+      LspMethodResult.ok textDocumentSelectionRange
     of "textDocument/documentSymbol":
-        LspMethodResult.ok textDocumentDocumentSymbol
+      LspMethodResult.ok textDocumentDocumentSymbol
+    of "textDocument/InlineValue":
+      LspMethodResult.ok textDocumentInlineValue
     else:
       LspMethodResult.err "Not supported: " & j["method"].getStr
 

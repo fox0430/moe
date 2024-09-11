@@ -32,8 +32,8 @@ import ../settings
 import protocol/[enums, types]
 import jsonrpc, utils, completion, progress, hover, semantictoken, inlayhint,
        definition, references, rename, typedefinition, implementation,
-       callhierarchy, documenthighlight, documentlink, codelens,
-       executecommand, foldingrange, selectionrange, documentsymbol
+       callhierarchy, documenthighlight, documentlink, codelens, foldingrange,
+       executecommand, selectionrange, documentsymbol, inlinevalue
 
 type
   LspError* = object
@@ -51,6 +51,7 @@ type
     hover*: bool
     semanticTokens*: Option[SemanticTokensLegend]
     inlayHint*: bool
+    inlineValue*: bool
     references*: bool
     rename*: bool
     typeDefinition*: bool
@@ -545,6 +546,9 @@ proc initInitializeParams*(
             dynamicRegistration: some(true),
             resolveSupport: none(InlayHintClientCapabilitiesResolveSupport)
           )),
+          inlineValue: some(InlineValueClientCapabilitie(
+            dynamicRegistration: some(true)
+          )),
           declaration: some(DeclarationClientCapabilities(
             dynamicRegistration: some(true),
             linkSupport: some(false)
@@ -708,6 +712,27 @@ proc setCapabilities(
     if settings.inlayHint.enable and
        initResult.capabilities.inlayHintProvider.isSome:
          capabilities.inlayHint = true
+
+    if settings.inlineValue.enable and
+       initResult.capabilities.inlineValueProvider.isSome:
+         if initResult.capabilities.inlineValueProvider.get.kind == JBool:
+           capabilities.inlineValue =
+            initResult.capabilities.inlineValueProvider.get.getBool
+         else:
+           try:
+             discard initResult.capabilities.inlineValueProvider.get.to(
+               InlineValueOptions)
+             capabilities.inlineValue = true
+           except:
+             discard
+           if not capabilities.inlineValue:
+             try:
+               discard initResult.capabilities.inlineValueProvider.get.to(
+                 InlineValueRegistrationOptions)
+               capabilities.inlineValue = true
+             except:
+               # Invalid inlineValueProvider
+               discard
 
     if settings.references.enable and
        initResult.capabilities.referencesProvider.isSome:
@@ -1691,5 +1716,35 @@ proc textDocumentDocumentSymbol*(
     let r = c.request(bufferId, LspMethod.textDocumentDocumentSymbol, params)
     if r.isErr:
       return R[(), string].err fmt"textDocument/documentSymbol request failed: {r.error}"
+
+    return R[(), string].ok ()
+
+proc textDocumentInlineValue*(
+  c: var LspClient,
+  bufferId: int,
+  path: string,
+  range: BufferRange): LspSendRequestResult =
+    ## Send a textDocument/symbol request to the server.
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_inlineValue
+
+    if not c.serverProcess.running:
+      if not c.closed: c.closed = true
+      return R[(), string].err "server crashed"
+
+    if not c.isInitialized:
+      return R[(), string].err "lsp unavailable"
+
+    if not c.capabilities.get.inlineValue:
+      return R[(), string].err "textDocument/inlineValue unavailable"
+
+    # TODO: Fix frameId
+    let context = InlineValueContext(
+      frameId: 0,
+      stoppedLocation: range.toLspRange)
+    let params = %* initInlineValueParams(path, range.toLspRange, context)
+
+    let r = c.request(bufferId, LspMethod.textDocumentInlineValue, params)
+    if r.isErr:
+      return R[(), string].err fmt"textDocument/inlineValue request failed: {r.error}"
 
     return R[(), string].ok ()

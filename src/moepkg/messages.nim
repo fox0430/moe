@@ -398,6 +398,10 @@ proc writeLspInlayHintError*(commandLine: var CommandLine, message: string) =
   let mess = fmt"lsp: Error: inlayHint failed: {message}"
   commandLine.writeError(mess)
 
+proc writeLspInlineValueError*(commandLine: var CommandLine, message: string) =
+  let mess = fmt"lsp: Error: inline value failed: {message}"
+  commandLine.writeError(mess)
+
 proc writeLspDeclarationError*(commandLine: var CommandLine, message: string) =
   let mess = fmt"lsp: Error: declaration failed: {message}"
   commandLine.writeError(mess)

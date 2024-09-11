@@ -265,6 +265,9 @@ enable = true
 [Lsp.InlayHint]
 enable = true
 
+[Lsp.InlineValue]
+enable = false
+
 [Lsp.References]
 enable = true
 

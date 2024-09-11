@@ -47,7 +47,8 @@ import
 import client, utils, hover, message, diagnostics, semantictoken, progress,
        inlayhint, definition, typedefinition, references, rename, declaration,
        implementation, callhierarchy, documenthighlight, documentlink,
-       codelens, executecommand, foldingrange, selectionrange, documentsymbol
+       codelens, executecommand, foldingrange, selectionrange, documentsymbol,
+       inlinevalue
 
 # Workaround for Nim 1.6.2
 import completion as lspcompletion
@@ -419,6 +420,35 @@ proc lspInlayHint(status: var EditorStatus, res: JsonNode): Result[(), string] =
       break
 
   return Result[(), string].ok ()
+
+proc lspInlineValue(
+  status: var EditorStatus,
+  res: JsonNode): Result[(), string] =
+    ## textDocument/inlineValue
+
+    let requestId =
+      try: res["id"].getInt
+      except CatchableError as e: return Result[(), string].err e.msg
+
+    let waitingRes = lspClient.getWaitingResponse(requestId)
+    if waitingRes.isNone:
+      return Result[(), string].err fmt"Not found id: {requestId}"
+
+    lspClient.deleteWaitingResponse(requestId)
+
+    let values =
+      # Workaround for "Error: generic instantiation too nested"
+      try:
+        parseInlineValueTextResponse(res).get
+      except ResultDefect as e:
+        return Result[(), string].err e.msg
+
+    for i, b in status.bufStatus:
+      if b.id == waitingRes.get.bufferId:
+        b.inlineValues.values = values
+        break
+
+    return Result[(), string].ok ()
 
 proc openWindowAndGotoDefinition(
   status: var EditorStatus,
@@ -1161,6 +1191,9 @@ proc handleLspResponse*(status: var EditorStatus) =
         of LspMethod.textDocumentInlayHint:
           let r = status.lspInlayHint(resJson.get)
           if r.isErr: status.commandLine.writeLspInlayHintError(r.error)
+        of LspMethod.textDocumentInlineValue:
+          let r = status.lspInlineValue(resJson.get)
+          if r.isErr: status.commandLine.writeLspInlineValueError(r.error)
         of LspMethod.textDocumentDeclaration:
           let r = status.lspDeclaration(resJson.get)
           if r.isErr: status.commandLine.writeLspDeclarationError(r.error)

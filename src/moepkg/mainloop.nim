@@ -856,17 +856,24 @@ template isSendLspRequests(status: var EditorStatus): bool =
   lspClient.isInitialized and
   now() > status.lastOperatingTime + 500.milliseconds
 
-proc isSendLspInlayHintRequest(status: var EditorStatus): bool {.inline.} =
-  proc inViewRange(status: EditorStatus): bool =
-    let viewRange = currentMainWindowNode.view.rangeOfOriginalLineInView
-    return viewRange.first >= currentBufStatus.inlayHints.range.first and
-           viewRange.last <= currentBufStatus.inlayHints.range.last
+proc inViewRange(status: EditorStatus): bool =
+  let viewRange = currentMainWindowNode.view.rangeOfOriginalLineInView
+  return viewRange.first >= currentBufStatus.inlayHints.range.first and
+         viewRange.last <= currentBufStatus.inlayHints.range.last
 
+proc isSendLspInlayHintRequest(status: var EditorStatus): bool {.inline.} =
   return lspClient.capabilities.get.inlayHint and
-    not status.inViewRange and
-    not lspClient.isWaitingResponse(
-      currentBufStatus.id,
-      LspMethod.textDocumentInlayHint)
+         not status.inViewRange and
+         not lspClient.isWaitingResponse(
+           currentBufStatus.id,
+           LspMethod.textDocumentInlayHint)
+
+proc isSendLspInlineValueRequest(status: var EditorStatus): bool {.inline.} =
+  return lspClient.capabilities.get.inlineValue and
+         not status.inViewRange and
+         not lspClient.isWaitingResponse(
+           currentBufStatus.id,
+           LspMethod.textDocumentInlineValue)
 
 proc isSendLspDocumentHighlightRequest(
   status: var EditorStatus): bool {.inline.} =
@@ -884,6 +891,12 @@ proc isSendLspDocumentHighlightRequest(
 proc sendLspRequests(status: var EditorStatus) =
   if status.isSendLspInlayHintRequest:
     lspClient.sendLspInlayHintRequest(
+      currentBufStatus,
+      status.bufferIndexInCurrentWindow,
+      mainWindowNode)
+
+  if status.isSendLspInlineValueRequest:
+    lspClient.sendLspInlineValueRequest(
       currentBufStatus,
       status.bufferIndexInCurrentWindow,
       mainWindowNode)
