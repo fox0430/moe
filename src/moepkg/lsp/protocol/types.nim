@@ -170,6 +170,9 @@ type
   InlayHintWorkspaceClientCapabilities* = ref object of RootObj
     refreshSupport*: Option[bool]
 
+  InlineValueWorkspaceClientCapabilities* = ref object of RootObj
+    refreshSupport*: Option[bool]
+
   WorkspaceClientCapabilities* = ref object of RootObj
     applyEdit*: Option[bool]
     workspaceEdit*: Option[WorkspaceEditCapability]
@@ -182,6 +185,7 @@ type
     codeLens*: Option[CodeLensWorkspaceClientCapabilities]
     semanticTokens*: Option[SemanticTokensWorkspaceClientCapabilities]
     inlayHint*: Option[InlayHintWorkspaceClientCapabilities]
+    innlineValue*: Option[InlineValueWorkspaceClientCapabilities]
 
   TextDocumentSyncClientCapabilities* = ref object of RootObj
     dynamicRegistration*: Option[bool]
@@ -308,6 +312,9 @@ type
     dynamicRegistration*: Option[bool]
     resolveSupport*: Option[InlayHintClientCapabilitiesResolveSupport]
 
+  InlineValueClientCapabilitie* = ref object of RootObj
+    dynamicRegistration*: Option[bool]
+
   DeclarationClientCapabilities* = ref object of RootObj
     dynamicRegistration*: Option[bool]
     linkSupport*: Option[bool]
@@ -345,6 +352,7 @@ type
     callHierarchy*: Option[CallHierarchyClientCapabilities]
     semanticTokens*: Option[SemanticTokensClientCapabilities]
     inlayHint*: Option[InlayHintClientCapabilities]
+    inlineValue*: Option[InlineValueClientCapabilitie]
 
   WindowCapabilities* = ref object of RootObj
     workDoneProgress*: Option[bool]
@@ -422,7 +430,7 @@ type
     id*: Option[string]
   ReferenceOptions* = ref object of WorkDoneProgressOptions
 
-  RenameOptions* = object
+  RenameOptions* = ref object of RootObj
     prepareProvider*: bool
 
   SemanticTokensLegend* = ref object of RootObj
@@ -440,8 +448,14 @@ type
     range*: OptionalNode # bool or JsonNode
     full*: OptionalNode # bool or JsonNode
 
-  InlayHintOptions* = object
+  InlayHintOptions* = ref object of RootObj
     resolveProvider*: Option[bool]
+
+  InlineValueOptions* = ref object of WorkDoneProgressOptions
+
+  InlineValueRegistrationOptions* = ref object of InlineValueOptions
+    documentSelector*: Option[DocumentSelector]
+    id*: Option[string]
 
   DiagnosticOptions* = ref object of WorkDoneProgressOptions
     identifier*: Option[string]
@@ -518,6 +532,7 @@ type
     workspace*: Option[WorkspaceCapability]
     semanticTokensProvider*: OptionalNode # SemanticTokensOptions | SemanticTokensRegistrationOptions
     inlayHintProvider*: OptionalNode # bool | InlayHintOptions | InlayHintRegistrationOptions
+    inlineValueProvider*: OptionalNode # bool InlineValueOptions | InlineValueRegistrationOptions
     diagnosticProvider*: OptionalNode # DiagnosticOptions | DiagnosticRegistrationOptions
     foldingRangeProvider*: OptionalNode # bool | FoldingRangeOptions
     selectionRangeProvider*: OptionalNode # bool | SelectionRangeOptions | SelectionRangeRegistrationOptions
@@ -865,6 +880,28 @@ type
     paddingLeft*: Option[bool]
     paddingRight*: Option[bool]
     #data*: OptionalNode
+
+  InlineValueContext* = ref object of RootObj
+    frameId*: int
+    stoppedLocation*: Range
+
+  InlineValueParams* = ref object of WorkDoneProgressParams
+    textDocument*: TextDocumentIdentifier
+    range*: Range
+    context*: InlineValueContext
+
+  InlineValueText* = ref object of RootObj
+    range*: Range
+    text*: string
+
+  InlineValueVariableLookup* = ref object of RootObj
+    range*: Range
+    variableName*: Option[string]
+    caseSensitiveLookup: bool
+
+  InlineValueEvaluatableExpression* = ref object of RootObj
+    range: Range
+    expression: Option[string]
 
   DefinitionParams* = ref object of TextDocumentPositionParams
     workDoneToken*: OptionalNode # ProgressToken

@@ -22,7 +22,7 @@ import std/[times, options, os, strformat]
 import pkg/results
 
 import lsp/protocol/types
-import lsp/inlayhint
+import lsp/[inlayhint, inlinevalue]
 import syntax/highlite
 import gapbuffer, unicodeext, fileutils, highlight, independentutils, git,
        syntaxcheck, completion, logviewerutils, helputils
@@ -94,7 +94,8 @@ type
     lspCompletionList*: CompletionList
     logContent*: LogContentKind # Use only in Logviewer
     logLspLangId*: string  # Use only in Logviewer
-    inlayHints*: LspInlayHints
+    inlayHints*: LspInlayHints # LSP InlayHint
+    inlineValues*: LspInlineValues # LSP InlineValue
     callHierarchyInfo*: CallHierarchyInfo # Use only in callhierarchyViewer
     documentHighlightInfo*: DocumentHighlightInfo # Lsp DocumentHighlight
     codeLenses*: seq[CodeLens] # Lsp CodeLens

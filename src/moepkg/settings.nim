@@ -270,6 +270,9 @@ type
   LspInlayHintSettings* = object
     enable*: bool
 
+  LspInlineValueSettings* = object
+    enable*: bool
+
   LspReferencesSettings* = object
     enable*: bool
 
@@ -306,6 +309,7 @@ type
     documentSymbol*: LspDocumentSymbolSettings
     hover*: LspHoverSettings
     inlayHint*: LspInlayHintSettings
+    inlineValue*: LspInlineValueSettings
     references*: LspReferencesSettings
     callHierarchy*: LspCallHierarchySettings
     documentHighlight*: LspDocumentHighlightSettings
@@ -601,6 +605,9 @@ proc initLspHoverSettings(): LspHoverSettings =
 proc initLspInlayHintSettings(): LspInlayHintSettings =
   result.enable = true
 
+proc initLspInlineValueSettings(): LspInlineValueSettings =
+  result.enable = false
+
 proc initLspReferencesSettings(): LspReferencesSettings =
   result.enable = true
 
@@ -637,6 +644,7 @@ proc initLspFeatureSettings(): LspFeatureSettings =
   result.documentSymbol = initDocumentSymbolSettings()
   result.hover = initLspHoverSettings()
   result.inlayHint = initLspInlayHintSettings()
+  result.inlineValue = initLspInlineValueSettings()
   result.references = initLspReferencesSettings()
   result.callHierarchy = initLspCallHierarchySettings()
   result.documentHighlight = initLspDocumentHighlightSettings()
@@ -1940,6 +1948,13 @@ proc parseLspTable(s: var EditorSettings, lspConfigs: TomlValueRef) =
               s.lsp.features.inlayHint.enable = val.getBool
             else:
               discard
+      of "InlineValue":
+        for key, val in val.getTable:
+          case key:
+            of "enable":
+              s.lsp.features.inlineValue.enable = val.getBool
+            else:
+              discard
       of "References":
         for key, val in val.getTable:
           case key:
@@ -2637,6 +2652,14 @@ proc validateLspTable(table: TomlValueRef): Option[InvalidItem] =
                 return some(InvalidItem(name: $key, val: $val))
             else:
               return some(InvalidItem(name: $key, val: $val))
+      of "InlineValue":
+        for key, val in val.getTable:
+          case key:
+            of "enable":
+              if val.kind != TomlValueKind.Bool:
+                return some(InvalidItem(name: $key, val: $val))
+            else:
+              return some(InvalidItem(name: $key, val: $val))
       of "References":
         for key, val in val.getTable:
           case key:
@@ -3118,6 +3141,9 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
 
   result.addLine fmt "[Lsp.InlayHint]"
   result.addLine fmt "enable = {$settings.lsp.features.inlayHint.enable}"
+
+  result.addLine fmt "[Lsp.InlineValue]"
+  result.addLine fmt "enable = {$settings.lsp.features.inlineValue.enable}"
 
   result.addLine fmt "[Lsp.References]"
   result.addLine fmt "enable = {$settings.lsp.features.references.enable}"

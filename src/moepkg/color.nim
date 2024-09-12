@@ -472,6 +472,10 @@ type
 
     # LSP inlayHint
     inlayHint
+
+    # LSP inlineValue
+    inlineValue
+
     # LSP CodeLens
     codeLens
 
@@ -681,6 +685,9 @@ type
 
     # LSP inlayHint
     inlayHint
+
+    # LSP inlineValue
+    inlineValue
 
     # LSP CodeLens
     codeLens

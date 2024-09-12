@@ -147,6 +147,7 @@ union = "#00b7ce"
 unresolvedReference = "#f8f5e3"
 
 inlayHint = "#808080"
+inlineValue = "#808080"
 codeLens = "#808080"
 
 currentFile = "#000000"

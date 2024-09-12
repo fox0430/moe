@@ -101,6 +101,8 @@ This project's goals are easily customizable, high productivity, user friendly, 
 
   - Inlay Hints
 
+  - Inline Value
+
   - Hover
 
   - Goto definition
