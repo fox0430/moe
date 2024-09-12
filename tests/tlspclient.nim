@@ -1035,6 +1035,48 @@ suite "lsp: setCapabilities":
 
     check not client.capabilities.get.documentSymbol
 
+  test "Enable Inline Value":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          inlineValueProvider: some(%*true)))
+
+      s = LspFeatureSettings(
+        inlineValue: LspInlineValueSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.inlineValue
+
+  test "Disable Inline Value":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          inlineValueProvider: none(JsonNode)))
+
+      s = LspFeatureSettings(
+        inlineValue: LspInlineValueSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.inlineValue
+
+  test "Disable Inline Value 2":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          inlineValueProvider: some(%*true)))
+
+      s = LspFeatureSettings(
+        inlineValue: LspInlineValueSettings(
+          enable: false))
+
+    client.setCapabilities(r, s)
+
+    check not client.capabilities.get.inlineValue
+
 suite "lsp: Send requests":
   privateAccess(LspClient)
 
