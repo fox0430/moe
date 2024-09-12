@@ -26,6 +26,7 @@ Please feedback, bug reports and PRs.
 - `workspace/semanticTokens/refresh`
 - `textDocument/inlayHint`
 - `workspace/inlayHint/refresh`
+- `textDocument/inlineValue`
 - `textDocument/declaration`
 - `textDocument/definition`
 - `textDocument/typeDefinition`
@@ -132,6 +133,10 @@ Syntax highlighting with Semantic Tokens. Currently, only full is supported.
 Display types at the end of lines with LSP InlayHint.
 
 ![moe-inlayhint](https://github.com/fox0430/moe/assets/15966436/6e096bf4-0561-457d-944f-2526177fe33a)
+
+### Inline Value
+
+This is experimental feature. Not tested.
 
 ### Goto Declaration
 

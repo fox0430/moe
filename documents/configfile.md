@@ -400,6 +400,13 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | enable | bool | true | LSP InlayHint |
 
 
+### Lsp.InlineValue table
+
+| Name | Type | Default Value | Description |
+|:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
+| enable | bool | false | LSP InlineValue |
+
+
 ### Lsp.References table
 
 | Name | Type | Default Value | Description |
