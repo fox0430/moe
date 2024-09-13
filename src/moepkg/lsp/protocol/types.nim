@@ -212,8 +212,14 @@ type
     dynamicRegistration*: Option[bool]
     contentFormat*: OptionalSeq[string]
 
+  ParameterInformationCapability* = ref object of RootObj
+    labelOffsetSupport*: Option[bool]
+
   SignatureInformationCapability* = ref object of RootObj
     documentationFormat*: OptionalSeq[string]
+    parameterInformation*: ParameterInformationCapability
+    activeParameterSupport*: Option[bool]
+    contextSupport*: Option[bool]
 
   SignatureHelpClientCapabilities* = ref object of RootObj
     dynamicRegistration*: Option[bool]
@@ -381,8 +387,9 @@ type
 
   HoverOptions* = ref object of WorkDoneProgressOptions
 
-  SignatureHelpOptions* = ref object of RootObj
+  SignatureHelpOptions* = ref object of WorkDoneProgressParams
     triggerCharacters*: OptionalSeq[string]
+    retriggerCharacters*: OptionalSeq[string]
 
   DefinitionOptions* = ref object of WorkDoneProgressOptions
 
@@ -512,7 +519,7 @@ type
     textDocumentSync*: OptionalNode # TextDocumentSyncOptions or int
     hoverProvider*: OptionalNode # bool | HoverOptions
     completionProvider*: Option[CompletionOptions]
-    signatureHelpProvider*: SignatureHelpOptions
+    signatureHelpProvider*: Option[SignatureHelpOptions]
     declarationProvider*: OptionalNode # bool | DeclarationOptions | DeclarationRegistrationOptions
     definitionProvider*: OptionalNode # bool | DefinitionOptions
     typeDefinitionProvider*: OptionalNode # bool | TypeDefinitionOptions | TypeDefinitionRegistrationOptions
@@ -700,7 +707,7 @@ type
   HoverParams* = ref object of TextDocumentPositionParams
 
   SignatureHelp* = ref object of RootObj
-    signatures*: OptionalSeq[SignatureInformation]
+    signatures*: seq[SignatureInformation]
     activeSignature*: Option[int]
     activeParameter*: Option[int]
 
@@ -710,11 +717,13 @@ type
     parameters*: OptionalSeq[ParameterInformation]
 
   ParameterInformation* = ref object of RootObj
-    label*: string
+    label*: OptionalNode # string | seq[int]
     documentation*: OptionalNode # string | MarkupContent
 
   SignatureHelpRegistrationOptions* = ref object of TextDocumentRegistrationOptions
+    workDoneToken*: OptionalNode # ProgressToken
     triggerCharacters*: OptionalSeq[string]
+    retriggerCharacters*: OptionalSeq[string]
 
   ReferenceParams* = ref object of TextDocumentPositionParams
     context*: ReferenceContext
@@ -843,7 +852,7 @@ type
     triggerKind*: int
     triggerCharacter*: Option[string]
     isRetrigger*: bool
-    activeSignatureHelp*: SignatureHelp
+    activeSignatureHelp*: Option[SignatureHelp]
 
   SignatureHelpParams* = ref object of TextDocumentPositionParams
     context*: SignatureHelpContext
