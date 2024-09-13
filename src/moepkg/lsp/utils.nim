@@ -190,7 +190,7 @@ proc toLspMethodStr*(m: LspMethod): string =
     of textDocumentFoldingRange: "textDocument/foldingRange"
     of textDocumentSelectionRange: "textDocument/selectionRange"
     of textDocumentDocumentSymbol: "textDocument/documentSymbol"
-    of textDocumentInlineValue: "textDocument/InlineValue"
+    of textDocumentInlineValue: "textDocument/inlineValue"
 
 proc parseTraceValue*(s: string): Result[TraceValue, string] =
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#traceValue
@@ -290,7 +290,7 @@ proc lspMethod*(j: JsonNode): LspMethodResult =
       LspMethodResult.ok textDocumentSelectionRange
     of "textDocument/documentSymbol":
       LspMethodResult.ok textDocumentDocumentSymbol
-    of "textDocument/InlineValue":
+    of "textDocument/inlineValue":
       LspMethodResult.ok textDocumentInlineValue
     else:
       LspMethodResult.err "Not supported: " & j["method"].getStr

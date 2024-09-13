@@ -1724,7 +1724,7 @@ proc textDocumentInlineValue*(
   bufferId: int,
   path: string,
   range: BufferRange): LspSendRequestResult =
-    ## Send a textDocument/symbol request to the server.
+    ## Send a textDocument/inlineValue request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_inlineValue
 
     if not c.serverProcess.running:
