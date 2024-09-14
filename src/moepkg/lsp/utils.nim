@@ -191,7 +191,7 @@ proc toLspMethodStr*(m: LspMethod): string =
     of textDocumentFoldingRange: "textDocument/foldingRange"
     of textDocumentSelectionRange: "textDocument/selectionRange"
     of textDocumentDocumentSymbol: "textDocument/documentSymbol"
-    of textDocumentInlineValue: "textDocument/InlineValue"
+    of textDocumentInlineValue: "textDocument/inlineValue"
     of textDocumentSignatureHelp: "textDocument/signatureHelp"
 
 proc parseTraceValue*(s: string): Result[TraceValue, string] =
@@ -292,7 +292,7 @@ proc lspMethod*(j: JsonNode): LspMethodResult =
       LspMethodResult.ok textDocumentSelectionRange
     of "textDocument/documentSymbol":
       LspMethodResult.ok textDocumentDocumentSymbol
-    of "textDocument/InlineValue":
+    of "textDocument/inlineValue":
       LspMethodResult.ok textDocumentInlineValue
     of "textDocument/signatureHelp":
       LspMethodResult.ok textDocumentSignatureHelp
