@@ -48,7 +48,7 @@ import client, utils, hover, message, diagnostics, semantictoken, progress,
        inlayhint, definition, typedefinition, references, rename, declaration,
        implementation, callhierarchy, documenthighlight, documentlink,
        codelens, executecommand, foldingrange, selectionrange, documentsymbol,
-       inlinevalue
+       inlinevalue, signaturehelp
 
 # Workaround for Nim 1.6.2
 import completion as lspcompletion
@@ -447,6 +447,86 @@ proc lspInlineValue(
       if b.id == waitingRes.get.bufferId:
         b.inlineValues.values = values
         break
+
+    return Result[(), string].ok ()
+
+proc initSignatureHelpWindow(
+  windowNode: WindowNode,
+  sigInfo: SignatureInformation): PopupWindow =
+    ## Return a popup window for textDocument/signatureHelp.
+
+    const Margin = ru" "
+
+    # Label
+    var buffer = @[Margin & sigInfo.label.toRunes & Margin, ru""]
+
+    # Documentation
+    if sigInfo.documentation.isSome:
+      for l in ($sigInfo.documentation.get).splitLines:
+        buffer.add l.toRunes
+      buffer.add ru""
+
+    # Parameters
+    if sigInfo.parameters.isSome and sigInfo.parameters.get.len > 0:
+      for p in sigInfo.parameters.get:
+        buffer.add toRunes($p.label)
+        if p.documentation.isSome:
+          const Indent = "  "
+          buffer.add toRunes(Indent & $p.documentation)
+
+    let
+      absPosition = windowNode.absolutePosition
+      expectPosition = Position(y: absPosition.y + 1, x: absPosition.x + 1)
+    result = initPopupWindow(
+      expectPosition,
+      Size(h: buffer.len, w: buffer.maxLen),
+      buffer)
+
+    let
+      minPosition = Position(y: windowNode.y, x: windowNode.x)
+      maxPosition = Position(
+        y: windowNode.y + windowNode.h,
+        x: windowNode.x + windowNode.w)
+    result.autoMoveAndResize(minPosition, maxPosition)
+    result.update
+
+proc lspSignatureHelp(
+  status: var EditorStatus,
+  res: JsonNode): Result[(), string] =
+    ## textDocument/signatureHelp
+
+    let requestId =
+      try: res["id"].getInt
+      except CatchableError as e: return Result[(), string].err e.msg
+
+    let waitingRes = lspClient.getWaitingResponse(requestId)
+    if waitingRes.isNone:
+      return Result[(), string].err fmt"Not found id: {requestId}"
+
+    lspClient.deleteWaitingResponse(requestId)
+
+    let sig =
+      # Workaround for "Error: generic instantiation too nested"
+      try:
+        parseSignatureHelpResponse(res).get
+      except ResultDefect as e:
+        return Result[(), string].err e.msg
+
+    if sig.isNone or sig.get.signatures.len == 0:
+      return Result[(), string].err "Not found"
+
+    var win = initSignatureHelpWindow(
+      currentMainWindowNode,
+      sig.get.signatures[0])
+
+    # Keep the cursor position on currentMainWindowNode and display the hover
+    # window on the top.
+    win.overwrite(currentMainWindowNode.window.get)
+    win.refresh
+
+    # Wait until any key is pressed.
+    discard getKeyBlocking()
+    win.close
 
     return Result[(), string].ok ()
 
@@ -1194,6 +1274,9 @@ proc handleLspResponse*(status: var EditorStatus) =
         of LspMethod.textDocumentInlineValue:
           let r = status.lspInlineValue(resJson.get)
           if r.isErr: status.commandLine.writeLspInlineValueError(r.error)
+        of LspMethod.textDocumentSignatureHelp:
+          let r = status.lspSignatureHelp(resJson.get)
+          if r.isErr: status.commandLine.writeLspSignatureHelpError(r.error)
         of LspMethod.textDocumentDeclaration:
           let r = status.lspDeclaration(resJson.get)
           if r.isErr: status.commandLine.writeLspDeclarationError(r.error)

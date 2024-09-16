@@ -48,6 +48,7 @@ Please feedback, bug reports and PRs.
 - `textDocument/foldingRange`
 - `textDocument/selectionRange`
 - `textDocument/documentSymbol`
+- `textDocument/signatureHelp`
 
 ## Configuration
 
@@ -86,7 +87,7 @@ command = "rust-analyzer"
 trace = "messages"
 ```
 
-## Uses
+## Features
 
 ### Hover
 
@@ -99,6 +100,12 @@ Press `K` on the word in Normal mode.
 Results will be received from the LPS server and displayed automatically.
 
 ![diagnostics](https://github.com/fox0430/moe/assets/15966436/3cc99b32-c53a-4878-846d-8fd44b4a6fb2)
+
+### Signature Help
+
+`Ctrl-r` in Normal mode. Show the signature help on the hover.
+
+![moe-signature](https://github.com/user-attachments/assets/7c8f2487-7cd9-4bb5-8833-2e495fdd21b3)
 
 ### Folding Range
 

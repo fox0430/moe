@@ -222,8 +222,9 @@
 | <kbd>**Ctrl**</kbd> <kbd>**h**</kbd> OR <kbd>**Backspace**</kbd><br> | Delete the character before the cursor |
 | <kbd>**Ctrl**</kbd> <kbd>**t**</kbd><br> | Indent |
 | <kbd>**Ctrl**</kbd> <kbd>**d**</kbd><br> | UnIndent |
-| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd><br> |Delete the word before the cursor |
+| <kbd>**Ctrl**</kbd> <kbd>**w**</kbd><br> | Delete the word before the cursor |
 | <kbd>**Ctrl**</kbd> <kbd>**u**</kbd><br> | Delete characters before the cursor |
+| <kbd>**Ctrl**</kbd> <kbd>**r**</kbd><br> | Signature Help (LSP) |
 
 </details>
 

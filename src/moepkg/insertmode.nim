@@ -26,8 +26,10 @@ import lsp/client
 # Workaround for Nim 1.6.2
 import lsp/completion as lspcompletion
 
+import lsp/signaturehelp
+
 import ui, editorstatus, windownode, movement, editor, bufferstatus, settings,
-       unicodeext, independentutils, gapbuffer, completion
+       unicodeext, independentutils, gapbuffer, completion, messages
 
 proc exitInsertMode(status: var EditorStatus) =
   if currentBufStatus.isInsertMultiMode:
@@ -79,25 +81,32 @@ proc deleteCurrentCursor(status: var EditorStatus) {.inline.} =
       currentMainWindowNode.currentColumn,
       status.settings.standard.autoDeleteParen)
 
+proc sendDidChangeNotify(status: var EditorStatus): Result[(), string] =
+  currentBufStatus.version.inc
+
+  let range = BufferRange(
+    first: currentMainWindowNode.bufferPosition,
+    last: currentMainWindowNode.bufferPosition)
+
+  let err = lspClient.textDocumentDidChange(
+    currentBufStatus.version,
+    $currentBufStatus.path.absolutePath,
+    currentBufStatus.buffer.toString,
+    some(range))
+  if err.isErr:
+    return Result[(), string].err err.error
+
+  return Result[(), string].ok ()
+
 proc sendCompletionRequest(
   status: var EditorStatus,
   r: Rune): Result[(), string] =
     ## Send didChange and completion requests to the LSP server.
 
     block:
-      currentBufStatus.version.inc
-
-      let range = BufferRange(
-        first: currentMainWindowNode.bufferPosition,
-        last: currentMainWindowNode.bufferPosition)
-
-      let err = lspClient.textDocumentDidChange(
-        currentBufStatus.version,
-        $currentBufStatus.path.absolutePath,
-        currentBufStatus.buffer.toString,
-        some(range))
+      let err = status.sendDidChangeNotify
       if err.isErr:
-        return Result[(), string ].err err.error
+        return Result[(), string].err err.error
 
     block:
       let isIncompleteTrigger = status.completionWindow.isSome
@@ -109,11 +118,41 @@ proc sendCompletionRequest(
         isIncompleteTrigger,
         $r)
       if err.isErr:
-        return Result[(), string ].err err.error
+        return Result[(), string].err err.error
+
+    return Result[(), string].ok ()
+
+proc sendSignatureHelpRequest(
+  status: var EditorStatus,
+  r: Option[Rune] = none(Rune)): Result[(), string] =
+    ## Send didChange and signatureHelp requests to the LSP server.
+
+    block:
+      let err = status.sendDidChangeNotify
+      if err.isErr:
+        return Result[(), string].err err.error
+
+    block:
+      let
+        triggerChar =
+          if r.isSome: some($r)
+          else: none(string)
+        triggerKind =
+          if r.isSome: SignatureHelpTriggerKind.TriggerCharacter
+          else: SignatureHelpTriggerKind.Invoked
+
+      let err = lspClient.textDocumentSignatureHelp(
+        currentBufStatus.id,
+        $currentBufStatus.path.absolutePath,
+        currentMainWindowNode.bufferPosition,
+        triggerKind,
+        triggerChar)
+      if err.isErr:
+        return Result[(), string].err err.error
 
     return Result[(), string ].ok ()
 
-template isCompletionCharacter(c: LspClient, r: Rune): bool =
+template isCompletionTrigger(c: LspClient, r: Rune): bool =
   if c.capabilities.isSome and c.capabilities.get.completion.isSome:
     isTriggerCharacter(c.capabilities.get.completion.get, $r) or
     isCompletionCharacter(r)
@@ -125,7 +164,7 @@ proc insertToBuffer(status: var EditorStatus, r: Rune) {.inline.} =
     currentBufStatus.insertMultiplePositions(
       currentBufStatus.bufferPositionsForMultipleEdit(
         currentMainWindowNode.currentColumn),
-      r)
+        r)
     currentBufStatus.keyRight(currentMainWindowNode)
   else:
     insertCharacter(
@@ -134,11 +173,17 @@ proc insertToBuffer(status: var EditorStatus, r: Rune) {.inline.} =
       status.settings.standard.autoCloseParen,
       r)
 
+  if status.lspClients.contains(currentBufStatus.langId):
+    if lspClient.isCompletionTrigger(r):
+      let err = status.sendCompletionRequest(r)
+      if err.isErr: error err.error
+
+proc showSignatureHelp(status: var EditorStatus) =
   if status.lspClients.contains(currentBufStatus.langId) and
-     lspClient.isCompletionCharacter(r):
-       let err = status.sendCompletionRequest(r)
-       if err.isErr:
-         error err.error
+     lspClient.capabilities.isSome and
+     lspClient.capabilities.get.signatureHelp.isSome:
+       let err = status.sendSignatureHelpRequest
+       if err.isErr: status.commandLine.writeLspSignatureHelpError(err.error)
 
 proc execInsertModeCommand*(status: var EditorStatus, command: Runes) =
   if command.len == 0:
@@ -209,6 +254,8 @@ proc execInsertModeCommand*(status: var EditorStatus, command: Runes) =
     currentBufStatus.unindentInCurrentLine(
       currentMainWindowNode,
       status.settings.view.tabStop)
+  elif isCtrlR(key):
+    status.showSignatureHelp
   else:
     status.insertToBuffer(key)
 
@@ -216,5 +263,3 @@ proc execInsertModeCommand*(status: var EditorStatus, command: Runes) =
     status.shiftFoldingRanges(
       currentMainWindowNode.currentLine,
       currentBufStatus.buffer.len - beforeBufferLen)
-
-

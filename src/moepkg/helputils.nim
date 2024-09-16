@@ -198,6 +198,7 @@ Ctrl-t              - Add an indent in current line
 Ctrl-d              - Remove an indent in current line
 Ctrl-w              - Delete the word before the cursor
 Ctrl-u              - Delete all characters before the cursor in the current line
+Ctrl-r              - Signature Help (LSP)
 Esc                 - Go to Normal mode
 
 # Backup mode

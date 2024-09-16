@@ -95,9 +95,11 @@ This project's goals are easily customizable, high productivity, user friendly, 
 
 - Language Server Protocol (WIP)
 
+  - Completion
+
   - Diagnostics
 
-  - Completion
+  - Signature Help
 
   - Inlay Hints
 

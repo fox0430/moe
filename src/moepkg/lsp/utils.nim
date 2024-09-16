@@ -79,6 +79,7 @@ type
     textDocumentSelectionRange
     textDocumentDocumentSymbol
     textDocumentInlineValue
+    textDocumentSignatureHelp
 
   CallHierarchyType* = enum
     prepare
@@ -191,6 +192,7 @@ proc toLspMethodStr*(m: LspMethod): string =
     of textDocumentSelectionRange: "textDocument/selectionRange"
     of textDocumentDocumentSymbol: "textDocument/documentSymbol"
     of textDocumentInlineValue: "textDocument/inlineValue"
+    of textDocumentSignatureHelp: "textDocument/signatureHelp"
 
 proc parseTraceValue*(s: string): Result[TraceValue, string] =
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#traceValue
@@ -292,6 +294,8 @@ proc lspMethod*(j: JsonNode): LspMethodResult =
       LspMethodResult.ok textDocumentDocumentSymbol
     of "textDocument/inlineValue":
       LspMethodResult.ok textDocumentInlineValue
+    of "textDocument/signatureHelp":
+      LspMethodResult.ok textDocumentSignatureHelp
     else:
       LspMethodResult.err "Not supported: " & j["method"].getStr
 

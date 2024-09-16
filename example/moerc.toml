@@ -250,6 +250,9 @@ enable = true
 [Lsp.Diagnostics]
 enable = true
 
+[Lsp.SignatureHelp]
+enable = true
+
 [Lsp.FoldingRange]
 enable = true
 

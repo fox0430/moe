@@ -33,7 +33,8 @@ import protocol/[enums, types]
 import jsonrpc, utils, completion, progress, hover, semantictoken, inlayhint,
        definition, references, rename, typedefinition, implementation,
        callhierarchy, documenthighlight, documentlink, codelens, foldingrange,
-       executecommand, selectionrange, documentsymbol, inlinevalue
+       executecommand, selectionrange, documentsymbol, inlinevalue,
+       signaturehelp
 
 type
   LspError* = object
@@ -65,6 +66,7 @@ type
     foldingRange*: bool
     selectionRange*: bool
     documentSymbol*: bool
+    signatureHelp*: Option[SignatureHelpOptions]
 
   LspProgressTable* = Table[ProgressToken, ProgressReport]
 
@@ -514,6 +516,12 @@ proc initInitializeParams*(
             dynamicRegistration: some(true),
             contentFormat: some(@["plaintext"])
           )),
+          signatureHelp: some(SignatureHelpClientCapabilities(
+            dynamicRegistration: some(true),
+            signatureInformation: some(SignatureInformationCapability(
+              documentationFormat: some(@["plaintext"])
+            ))
+          )),
           publishDiagnostics: some(PublishDiagnosticsClientCapabilities(
             dynamicRegistration: some(true)
           )),
@@ -695,6 +703,11 @@ proc setCapabilities(
            except CatchableError:
              # Invalid diagnosticProvider
              discard
+
+    if settings.signatureHelp.enable and
+       initResult.capabilities.signatureHelpProvider.isSome:
+         capabilities.signatureHelp =
+           initResult.capabilities.signatureHelpProvider
 
     if settings.hover.enable and
        initResult.capabilities.hoverProvider.isSome:
@@ -1746,5 +1759,39 @@ proc textDocumentInlineValue*(
     let r = c.request(bufferId, LspMethod.textDocumentInlineValue, params)
     if r.isErr:
       return R[(), string].err fmt"textDocument/inlineValue request failed: {r.error}"
+
+    return R[(), string].ok ()
+
+proc textDocumentSignatureHelp*(
+  c: var LspClient,
+  bufferId: int,
+  path: string,
+  position: BufferPosition,
+  kind: SignatureHelpTriggerKind,
+  triggerChar: Option[string] = none(string),
+  active: Option[SignatureHelp] = none(SignatureHelp)): LspSendRequestResult =
+    ## Send a textDocument/signatureHelp request to the server.
+    ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_signatureHelp
+
+    if not c.serverProcess.running:
+      if not c.closed: c.closed = true
+      return R[(), string].err "server crashed"
+
+    if not c.isInitialized:
+      return R[(), string].err "lsp unavailable"
+
+    if not c.capabilities.get.signatureHelp.isSome:
+      return R[(), string].err "textDocument/signatureHelp unavailable"
+
+    let params = %* initSignatureHelpParams(
+      path,
+      position.toLspPosition,
+      kind,
+      triggerChar,
+      active)
+
+    let r = c.request(bufferId, LspMethod.textDocumentSignatureHelp, params)
+    if r.isErr:
+      return R[(), string].err fmt"textDocument/signatureHelp request failed: {r.error}"
 
     return R[(), string].ok ()

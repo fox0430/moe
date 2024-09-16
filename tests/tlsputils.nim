@@ -332,3 +332,11 @@ suite "lsp: lspMethod":
       "method": "textDocument/documentSymbol",
       "params": nil
     }).get
+
+  test "textDocument/signatureHelp":
+    check LspMethod.textDocumentSignatureHelp == lspMethod(%*{
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "textDocument/signatureHelp",
+      "params": nil
+    }).get

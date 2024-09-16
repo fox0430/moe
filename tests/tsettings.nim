@@ -178,6 +178,9 @@ enable = false
 [Lsp.Diagnostics]
 enable = false
 
+[Lsp.SignatureHelp]
+enable = false
+
 [Lsp.FoldingRange]
 enable = false
 
@@ -632,6 +635,8 @@ suite "settings: Parse configuration file":
     check not settings.lsp.features.implementation.enable
 
     check not settings.lsp.features.diagnostics.enable
+
+    check not settings.lsp.features.signatureHelp.enable
 
     check not settings.lsp.features.foldingRange.enable
 
