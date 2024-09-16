@@ -1077,6 +1077,48 @@ suite "lsp: setCapabilities":
 
     check not client.capabilities.get.inlineValue
 
+  test "Enable Signature Help":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          signatureHelpProvider: some(SignatureHelpOptions())))
+
+      s = LspFeatureSettings(
+        signatureHelp: LspSignatureHelpSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.signatureHelp.isSome
+
+  test "Disable Signature Help":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          signatureHelpProvider: none(SignatureHelpOptions)))
+
+      s = LspFeatureSettings(
+        signatureHelp: LspSignatureHelpSettings(
+          enable: true))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.signatureHelp.isNone
+
+  test "Disable Signature Help 2":
+    let
+      r = InitializeResult(
+        capabilities: ServerCapabilities(
+          signatureHelpProvider: some(SignatureHelpOptions())))
+
+      s = LspFeatureSettings(
+        signatureHelp: LspSignatureHelpSettings(
+          enable: false))
+
+    client.setCapabilities(r, s)
+
+    check client.capabilities.get.signatureHelp.isNone
+
 suite "lsp: Send requests":
   privateAccess(LspClient)
 
