@@ -27,7 +27,7 @@ import utils
 export SignatureHelp, SignatureHelpTriggerKind, SignatureInformation
 
 type
-  SignatureHelpResult* = Result[SignatureHelp, string]
+  SignatureHelpResult* = Result[Option[SignatureHelp], string]
 
 proc isTriggerCharacter*(o: SignatureHelpOptions, str: string): bool {.inline.} =
   str in o.triggerCharacters.get
@@ -52,7 +52,8 @@ proc parseSignatureHelpResponse*(res: JsonNode): SignatureHelpResult =
   if not res.contains("result"):
     return SignatureHelpResult.err fmt"Invalid response: {res}"
   elif res["result"].kind == JNull:
-    return SignatureHelpResult.err fmt"Not found"
+    # Not found
+    return SignatureHelpResult.ok none(SignatureHelp)
 
   let sig =
     try:
@@ -60,4 +61,4 @@ proc parseSignatureHelpResponse*(res: JsonNode): SignatureHelpResult =
     except CatchableError as e:
       return SignatureHelpResult.err fmt"Invalid response: {e.msg}"
 
-  return SignatureHelpResult.ok sig
+  return SignatureHelpResult.ok some(sig)

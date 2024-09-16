@@ -512,17 +512,21 @@ proc lspSignatureHelp(
       except ResultDefect as e:
         return Result[(), string].err e.msg
 
-    if sig.signatures.len > 0:
-      var win = initSignatureHelpWindow(currentMainWindowNode, sig.signatures[0])
+    if sig.isNone or sig.get.signatures.len == 0:
+      return Result[(), string].err "Not found"
 
-      # Keep the cursor position on currentMainWindowNode and display the hover
-      # window on the top.
-      win.overwrite(currentMainWindowNode.window.get)
-      win.refresh
+    var win = initSignatureHelpWindow(
+      currentMainWindowNode,
+      sig.get.signatures[0])
 
-      # Wait until any key is pressed.
-      discard getKeyBlocking()
-      win.close
+    # Keep the cursor position on currentMainWindowNode and display the hover
+    # window on the top.
+    win.overwrite(currentMainWindowNode.window.get)
+    win.refresh
+
+    # Wait until any key is pressed.
+    discard getKeyBlocking()
+    win.close
 
     return Result[(), string].ok ()
 
