@@ -1188,6 +1188,19 @@ proc lspRestartClient(status: var EditorStatus) =
       if r.isErr:
         status.commandLine.writeLspError(r.error)
 
+proc lspDocumentFormatting(status: var EditorStatus) =
+  status.changeMode(currentBufStatus.prevMode)
+
+  if not status.lspClients.contains(currentBufStatus.langId):
+    status.commandLine.writeLspError("Client not found")
+    return
+
+  let r = lspClient.textDocumentDocumentFormatting(
+    currentBufStatus.id,
+    $currentBufStatus.absolutePath)
+  if r.isErr:
+    status.commandLine.writeLspDocumentFormattingHelpError(r.error)
+
 proc saveExCommandHistory(
   exCommandHistory: var seq[Runes],
   command: seq[Runes],
@@ -1385,6 +1398,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[Runes]) =
     status.lspFoldingRange
   elif isLspRestartCommand(command):
     status.lspRestartClient
+  elif isLspFormatCommand(command):
+    status.lspDocumentFormatting
   else:
     status.commandLine.writeNotEditorCommandError(command)
     status.changeMode(currentBufStatus.prevMode)

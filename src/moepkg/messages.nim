@@ -406,6 +406,13 @@ proc writeLspSignatureHelpError*(commandLine: var CommandLine, message: string) 
   let mess = fmt"lsp: Error: signatureHelp failed: {message}"
   commandLine.writeError(mess)
 
+proc writeLspDocumentFormattingHelpError*(
+  commandLine: var CommandLine,
+  message: string) =
+
+    let mess = fmt"lsp: Error: document formatting failed: {message}"
+    commandLine.writeError(mess)
+
 proc writeLspDeclarationError*(commandLine: var CommandLine, message: string) =
   let mess = fmt"lsp: Error: declaration failed: {message}"
   commandLine.writeError(mess)

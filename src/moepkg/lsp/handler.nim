@@ -48,7 +48,7 @@ import client, utils, hover, message, diagnostics, semantictoken, progress,
        inlayhint, definition, typedefinition, references, rename, declaration,
        implementation, callhierarchy, documenthighlight, documentlink,
        codelens, executecommand, foldingrange, selectionrange, documentsymbol,
-       inlinevalue, signaturehelp
+       inlinevalue, signaturehelp, documentformatting
 
 # Workaround for Nim 1.6.2
 import completion as lspcompletion
@@ -529,6 +529,57 @@ proc lspSignatureHelp(
     win.close
 
     return Result[(), string].ok ()
+
+proc lspDocumentFormatting(
+  status: var EditorStatus,
+  res: JsonNode): Result[(), string] =
+    ## textDocument/documentFormatting
+
+    let requestId =
+      try: res["id"].getInt
+      except CatchableError as e: return Result[(), string].err e.msg
+
+    let waitingRes = lspClient.getWaitingResponse(requestId)
+    if waitingRes.isNone:
+      return Result[(), string].err fmt"Not found id: {requestId}"
+
+    lspClient.deleteWaitingResponse(requestId)
+
+    let textEdits =
+      # Workaround for "Error: generic instantiation too nested"
+      try:
+        parseDocumentFormattingResponse(res).get
+      except ResultDefect as e:
+        return Result[(), string].err e.msg
+
+    for e in textEdits:
+      var newTextIndex = 0
+      for lineNum in e.range.start.line .. e.range.`end`.line:
+        let
+          startCol =
+            if lineNum == e.range.start.line: e.range.start.character
+            else: 0
+          endCol =
+            if lineNum == e.range.`end`.line:
+              min(
+                max(currentBufStatus.buffer[lineNum].high, 0),
+                e.range.`end`.character)
+            else:
+              max(currentBufStatus.buffer[lineNum].high, 0)
+
+        var newLine = currentBufStatus.buffer[lineNum]
+
+        if e.newText.len == 0:
+          for colNum in startCol .. endCol: newLine.delete(colNum)
+        else:
+          for colNum in startCol .. endCol:
+            newLine[colNum] = e.newText[newTextIndex].toRune
+            newTextIndex.inc
+            if newTextIndex > e.newText.high: break
+
+        currentBufStatus.buffer[lineNum] = newLine
+
+        if newTextIndex > e.newText.high: break
 
 proc openWindowAndGotoDefinition(
   status: var EditorStatus,
@@ -1277,6 +1328,9 @@ proc handleLspResponse*(status: var EditorStatus) =
         of LspMethod.textDocumentSignatureHelp:
           let r = status.lspSignatureHelp(resJson.get)
           if r.isErr: status.commandLine.writeLspSignatureHelpError(r.error)
+        of LspMethod.textDocumentDocumentFormatting:
+          let r = status.lspDocumentFormatting(resJson.get)
+          if r.isErr: status.commandLine.writeLspDocumentFormattingHelpError(r.error)
         of LspMethod.textDocumentDeclaration:
           let r = status.lspDeclaration(resJson.get)
           if r.isErr: status.commandLine.writeLspDeclarationError(r.error)
