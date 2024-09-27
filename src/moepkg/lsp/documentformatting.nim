@@ -27,6 +27,8 @@ import utils
 type
   DocumentFormattingResponseResult* = Result[seq[TextEdit], string]
 
+export TextEdit
+
 proc initDocumentFormattingParams*(path: string): DocumentFormattingParams =
   DocumentFormattingParams(
     textDocument: TextDocumentIdentifier(uri: path.pathToUri),

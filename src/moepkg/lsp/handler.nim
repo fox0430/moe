@@ -53,6 +53,42 @@ import client, utils, hover, message, diagnostics, semantictoken, progress,
 # Workaround for Nim 1.6.2
 import completion as lspcompletion
 
+proc applyTextEdit(b: var BufferStatus, edit: TextEdit): Result[(), string] =
+  let
+    startLine = edit.range.start.line
+    startChar = edit.range.start.character
+    endLine = edit.range.`end`.line
+
+  if startLine > b.buffer.high:
+    return Result[(), string].err fmt"Invalid start line: {startLine}"
+
+  if startLine == endLine:
+    # Single line
+    let
+      line = b.buffer[startLine]
+      endChar = min(line.high, edit.range.`end`.character)
+    b.buffer[startLine] =
+      line[0 ..< startChar] & edit.newText.toRunes & line[endChar .. ^1]
+  else:
+    var newLines = edit.newText.splitLines.toSeqRunes
+
+    newLines[0] = b.buffer[startLine][0 ..< startChar] & newLines[0]
+
+    if edit.range.`end`.character > 0:
+      block:
+        let endChar = min(b.buffer[endLine].high, edit.range.`end`.character)
+        if endChar >= 0:
+          newLines[^1] &= b.buffer[endLine][endChar..^1]
+
+    for i in 0 .. newLines.high:
+      let lineNum = startLine + i
+      if lineNum < b.buffer.len:
+        b.buffer[startLine + i] = newLines[i]
+      else:
+        b.buffer.add newLines[i]
+
+  return Result[(), string].ok ()
+
 template isLspResponse*(status: EditorStatus): bool =
   status.lspClients.contains(currentBufStatus.langId) and
   not lspClient.closed and
@@ -553,33 +589,9 @@ proc lspDocumentFormatting(
         return Result[(), string].err e.msg
 
     for e in textEdits:
-      var newTextIndex = 0
-      for lineNum in e.range.start.line .. e.range.`end`.line:
-        let
-          startCol =
-            if lineNum == e.range.start.line: e.range.start.character
-            else: 0
-          endCol =
-            if lineNum == e.range.`end`.line:
-              min(
-                max(currentBufStatus.buffer[lineNum].high, 0),
-                e.range.`end`.character)
-            else:
-              max(currentBufStatus.buffer[lineNum].high, 0)
+      discard currentBufStatus.applyTextEdit(e)
 
-        var newLine = currentBufStatus.buffer[lineNum]
-
-        if e.newText.len == 0:
-          for colNum in startCol .. endCol: newLine.delete(colNum)
-        else:
-          for colNum in startCol .. endCol:
-            newLine[colNum] = e.newText[newTextIndex].toRune
-            newTextIndex.inc
-            if newTextIndex > e.newText.high: break
-
-        currentBufStatus.buffer[lineNum] = newLine
-
-        if newTextIndex > e.newText.high: break
+    return Result[(), string].ok ()
 
 proc openWindowAndGotoDefinition(
   status: var EditorStatus,
