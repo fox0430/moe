@@ -32,8 +32,175 @@ import utils
 import moepkg/editorstatus {.all.}
 import moepkg/lsp/handler {.all.}
 
+template handleLspInitialize(status: var EditorStatus) =
+  const Timeout = 1000
+
+  for _ in 0 .. 20:
+    assert lspClient.readable(Timeout).isOk
+    let res = lspClient.read.get
+    if res.contains("id"):
+      assert res["id"].getInt == 1
+      assert status.lspInitialized(res).isOk
+      assert lspClient.isInitialized
+      break
+
+suite "lsp: applyEdit":
+  test "Single line":
+    block:
+      var b = initBufferStatus(Mode.normal).get
+      b.buffer = @["abc"].toSeqRunes.toGapBuffer
+
+      check b.applyTextEdit(TextEdit(
+        range: types.Range(
+          start: types.Position(line: 0, character: 0),
+          `end`: types.Position(line: 0, character: 2)
+        ),
+        newText: "xyz"
+      ))
+      .isOk
+
+      check b.buffer.toSeqRunes == @["xyzc"].toSeqRunes
+
+    block:
+      var b = initBufferStatus(Mode.normal).get
+      b.buffer = @["abc"].toSeqRunes.toGapBuffer
+
+      check b.applyTextEdit(TextEdit(
+        range: types.Range(
+          start: types.Position(line: 0, character: 0),
+          `end`: types.Position(line: 0, character: 2)
+        ),
+        newText: "x"
+      ))
+      .isOk
+
+      check b.buffer.toSeqRunes == @["xc"].toSeqRunes
+
+    block:
+      var b = initBufferStatus(Mode.normal).get
+      b.buffer = @["abc"].toSeqRunes.toGapBuffer
+
+      check b.applyTextEdit(TextEdit(
+        range: types.Range(
+          start: types.Position(line: 0, character: 0),
+          `end`: types.Position(line: 0, character: 2)
+        ),
+        newText: "abcxyz"
+      ))
+      .isOk
+
+      check b.buffer.toSeqRunes == @["abcxyzc"].toSeqRunes
+
+    block:
+      var b = initBufferStatus(Mode.normal).get
+      b.buffer = @["abc"].toSeqRunes.toGapBuffer
+
+      check b.applyTextEdit(TextEdit(
+        range: types.Range(
+          start: types.Position(line: 0, character: 1),
+          `end`: types.Position(line: 0, character: 2)
+        ),
+        newText: "xyz"
+      ))
+      .isOk
+
+      check b.buffer.toSeqRunes == @["axyzc"].toSeqRunes
+
+    block:
+      var b = initBufferStatus(Mode.normal).get
+      b.buffer = @["abc"].toSeqRunes.toGapBuffer
+
+      check b.applyTextEdit(TextEdit(
+        range: types.Range(
+          start: types.Position(line: 0, character: 0),
+          `end`: types.Position(line: 1, character: 0)
+        ),
+        newText: "xyz"
+      ))
+      .isOk
+
+      check b.buffer.toSeqRunes == @["xyz"].toSeqRunes
+
+    block:
+      var b = initBufferStatus(Mode.normal).get
+      b.buffer = @["abc"].toSeqRunes.toGapBuffer
+
+      check b.applyTextEdit(TextEdit(
+        range: types.Range(
+          start: types.Position(line: 0, character: 0),
+          `end`: types.Position(line: 0, character: 99)
+        ),
+        newText: "abcxyz"
+      ))
+      .isOk
+
+      check b.buffer.toSeqRunes == @["abcxyzc"].toSeqRunes
+
+  test "Multiple lines":
+    block:
+      var b = initBufferStatus(Mode.normal).get
+      b.buffer = @["abc", "def"].toSeqRunes.toGapBuffer
+
+      check b.applyTextEdit(TextEdit(
+        range: types.Range(
+          start: types.Position(line: 0, character: 0),
+          `end`: types.Position(line: 2, character: 0)
+        ),
+        newText: "rst\nuvw\nxyz"
+      ))
+      .isOk
+
+      check b.buffer.toSeqRunes == @["rst", "uvw", "xyz"].toSeqRunes
+
+    block:
+      var b = initBufferStatus(Mode.normal).get
+      b.buffer = @["abc", "def"].toSeqRunes.toGapBuffer
+
+      check b.applyTextEdit(TextEdit(
+        range: types.Range(
+          start: types.Position(line: 0, character: 0),
+          `end`: types.Position(line: 2, character: 0)
+        ),
+        newText: "uvw\nxyz"
+      ))
+      .isOk
+
+      check b.buffer.toSeqRunes == @["uvw", "xyz"].toSeqRunes
+
+    block:
+      var b = initBufferStatus(Mode.normal).get
+      b.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
+
+      check b.applyTextEdit(TextEdit(
+        range: types.Range(
+          start: types.Position(line: 0, character: 0),
+          `end`: types.Position(line: 3, character: 0)
+        ),
+        newText: "rst\nuvw\nxyz"
+      ))
+      .isOk
+
+      check b.buffer.toSeqRunes == @["rst", "uvw", "xyz"].toSeqRunes
+
+    block:
+      var b = initBufferStatus(Mode.normal).get
+      b.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
+
+      check b.applyTextEdit(TextEdit(
+        range: types.Range(
+          start: types.Position(line: 0, character: 0),
+          `end`: types.Position(line: 99, character: 0)
+        ),
+        newText: "rst\nuvw\nxyz"
+      ))
+      .isOk
+
+      check b.buffer.toSeqRunes == @["rst", "uvw", "xyz"].toSeqRunes
+
 suite "lsp: lspInitialized":
-  const Buffer = "echo 1"
+  const
+    Timeout = 1000
+    Buffer = "echo 1"
   let
     testDir = getCurrentDir() / "lspInitTestDir"
     testFilePath = testDir / "test.nim"
@@ -60,13 +227,14 @@ suite "lsp: lspInitialized":
 
       assert status.lspInitialize(workspaceRoot, LangId).isOk
 
-      const Timeout = 5000
-      assert lspClient.readable(Timeout).get
-
-      let resJson = lspClient.read.get
-      check status.lspInitialized(resJson).isOk
-
-      check lspClient.isInitialized
+      for _ in 0 .. 20:
+        check lspClient.readable(Timeout).isOk
+        let res= lspClient.read.get
+        if res.contains("id"):
+          check res["id"].getInt == 1
+          check status.lspInitialized(res).isOk
+          check lspClient.isInitialized
+          break
 
       check status.statusLine[0].message == ru"nimlangserver"
 
@@ -1700,9 +1868,7 @@ suite "lsp: handleLspResponse":
       const LangId = "nim"
       assert status.lspInitialize(workspaceRoot, LangId).isOk
 
-
-      const Timeout = 5000
-      assert lspClient.readable(Timeout).get
+      status.handleLspInitialize
 
       status.handleLspResponse
 
