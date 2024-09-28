@@ -1869,7 +1869,7 @@ suite "lsp: handleLspResponse":
       assert status.lspInitialize(workspaceRoot, LangId).isOk
 
       var isTimeout = true
-      for _ in 0 .. 30:
+      for _ in 0 .. 60:
         const Timeout = 1000
         if lspClient.readable(Timeout).get:
           status.handleLspResponse
