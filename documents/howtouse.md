@@ -346,6 +346,7 @@
 | `highlightCurrentLine on` or `highlightCurrentLine off` | Change the highlight setting of the current line |
 | `build` | Build the current buffer |
 | `lspFold` | LSP Folding Range |
+| `lspFormat` | LSP Document Formatting |
 | `log` | Open a log viewer for editor log |
 | `lspLog` | Open a log viewer for LSP log |
 | `lspRestart` | Result the current LSP server |

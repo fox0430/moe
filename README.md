@@ -119,6 +119,8 @@ This project's goals are easily customizable, high productivity, user friendly, 
 
   - Code Lens
 
+  - Document Formatting
+
   - Rename
 
   - Semantic Tokens
