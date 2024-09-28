@@ -570,8 +570,6 @@ proc lspDocumentFormatting(
   res: JsonNode): Result[(), string] =
     ## textDocument/documentFormatting
 
-    exitUi()
-    echo res
     let requestId =
       try: res["id"].getInt
       except CatchableError as e: return Result[(), string].err e.msg
