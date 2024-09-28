@@ -341,10 +341,10 @@ suite "lsp: lspMethod":
       "params": nil
     }).get
 
-  test "textDocument/documentFormatting":
-    check LspMethod.textDocumentDocumentFormatting == lspMethod(%*{
+  test "textDocument/formatting":
+    check LspMethod.textDocumentFormatting == lspMethod(%*{
       "jsonrpc": "2.0",
       "id": 0,
-      "method": "textDocument/documentFormatting",
+      "method": "textDocument/formatting",
       "params": nil
     }).get

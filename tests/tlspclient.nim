@@ -1229,27 +1229,27 @@ suite "lsp: Send requests":
 
           return Result[(), string].ok ()
 
-#  test "Send textDocument/didOpen":
-#    if not isNimlangserverAvailable():
-#      skip()
-#    else:
-#      const BufferId = 1
-#
-#      block:
-#        let
-#          rootPath = getCurrentDir()
-#          params = initInitializeParams(ServerName, rootPath, Trace)
-#        assert client.lspInitialize(BufferId, params).isOk
-#
-#        # workspace/didChangeConfiguration notification
-#        assert client.workspaceDidChangeConfiguration.isOk
-#
-#      const LanguageId = "nim"
-#      let
-#        path = getCurrentDir() / "src/moe.nim"
-#        text = readFile(path)
-#
-#      check client.textDocumentDidOpen(path, LanguageId, text).isOk
+  test "Send textDocument/didOpen":
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      const BufferId = 1
+
+      block:
+        let
+          rootPath = getCurrentDir()
+          params = initInitializeParams(ServerName, rootPath, Trace)
+        assert client.lspInitialize(BufferId, params).isOk
+
+        # workspace/didChangeConfiguration notification
+        assert client.workspaceDidChangeConfiguration.isOk
+
+      const LanguageId = "nim"
+      let
+        path = getCurrentDir() / "src/moe.nim"
+        text = readFile(path)
+
+      check client.textDocumentDidOpen(path, LanguageId, text).isOk
 
   template prepareLsp(bufferId: int, langId: LanguageId, rootDir, path, text: string) =
     block:
@@ -1785,7 +1785,7 @@ echo Ojb(n: 1)
 
       check not isTimeout
 
-  test "Send textDocument/documentFormatting":
+  test "Send textDocument/formatting":
     if not isNimlangserverAvailable():
       skip()
     else:
@@ -1801,10 +1801,11 @@ echo Ojb(n: 1)
 
       let requestId = client.lastId + 1
 
-      check client.textDocumentDocumentFormatting(
+      check client.textDocumentFormatting(
         BufferId,
-        path).isOk
+        path,
+        FormattingOptions()).isOk
       check client.waitingResponses[requestId].lspMethod ==
-        LspMethod.textDocumentDocumentFormatting
+        LspMethod.textDocumentFormatting
 
       # TODO: Add response check
