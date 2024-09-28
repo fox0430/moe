@@ -1799,13 +1799,17 @@ echo Ojb(n: 1)
 
       prepareLsp(BufferId, LanguageId, rootDir, path, Text)
 
-      let requestId = client.lastId + 1
+      if not client.capabilities.get.formatting:
+        # TODO: Enable textDocument/formatting on Actions
+        skip()
+      else:
+        let requestId = client.lastId + 1
 
-      check client.textDocumentFormatting(
-        BufferId,
-        path,
-        FormattingOptions()).isOk
-      check client.waitingResponses[requestId].lspMethod ==
-        LspMethod.textDocumentFormatting
+        check client.textDocumentFormatting(
+          BufferId,
+          path,
+          FormattingOptions()).isOk
+        check client.waitingResponses[requestId].lspMethod ==
+          LspMethod.textDocumentFormatting
 
-      # TODO: Add response check
+        # TODO: Add response check

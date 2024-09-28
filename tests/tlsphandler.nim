@@ -1868,8 +1868,14 @@ suite "lsp: handleLspResponse":
       const LangId = "nim"
       assert status.lspInitialize(workspaceRoot, LangId).isOk
 
-      status.handleLspInitialize
+      var isTimeout = true
+      for _ in 0 .. 30:
+        const Timeout = 1000
+        if lspClient.readable(Timeout).get:
+          status.handleLspResponse
 
-      status.handleLspResponse
+          if lspClient.isInitialized:
+            isTimeout = false
+            break
 
-      check lspClient.isInitialized
+      check not isTimeout

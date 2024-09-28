@@ -1203,6 +1203,7 @@ suite "Ex mode: Quickrun command with file":
     writeFile(TestfilePath, "echo 1")
 
   teardown:
+    removeFile(TestfilePath)
     removeDir(TestfileDir)
 
   test "Exec Quickrun with file":
