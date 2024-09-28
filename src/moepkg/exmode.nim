@@ -23,7 +23,7 @@ import std/[strutils, os, times, options, strformat, logging, tables, sequtils,
 import pkg/results
 
 import syntax/highlite
-import lsp/client
+import lsp/[client, formatting]
 import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
        unicodeext, independentutils, highlight, windownode, movement, build,
        bufferstatus, editor, settings, quickrunutils, messages, commandline,
@@ -1195,9 +1195,15 @@ proc lspDocumentFormatting(status: var EditorStatus) =
     status.commandLine.writeLspError("Client not found")
     return
 
-  let r = lspClient.textDocumentDocumentFormatting(
+  let options = FormattingOptions(
+    tabSize: status.settings.standard.tabStop,
+    insertSpaces: true,
+    insertFinalNewline: some(true))
+
+  let r = lspClient.textDocumentFormatting(
     currentBufStatus.id,
-    $currentBufStatus.absolutePath)
+    $currentBufStatus.absolutePath,
+    options)
   if r.isErr:
     status.commandLine.writeLspDocumentFormattingHelpError(r.error)
 

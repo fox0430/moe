@@ -41,14 +41,13 @@ import
   ../fileutils,
   ../callhierarchyviewer,
   ../statusline,
-  ../visualmode,
-  ../commandline
+  ../visualmode
 
 import client, utils, hover, message, diagnostics, semantictoken, progress,
        inlayhint, definition, typedefinition, references, rename, declaration,
        implementation, callhierarchy, documenthighlight, documentlink,
        codelens, executecommand, foldingrange, selectionrange, documentsymbol,
-       inlinevalue, signaturehelp, documentformatting
+       inlinevalue, signaturehelp, formatting
 
 # Workaround for Nim 1.6.2
 import completion as lspcompletion
@@ -571,6 +570,8 @@ proc lspDocumentFormatting(
   res: JsonNode): Result[(), string] =
     ## textDocument/documentFormatting
 
+    exitUi()
+    echo res
     let requestId =
       try: res["id"].getInt
       except CatchableError as e: return Result[(), string].err e.msg
@@ -588,8 +589,13 @@ proc lspDocumentFormatting(
       except ResultDefect as e:
         return Result[(), string].err e.msg
 
+    if textEdits.len == 0:
+      return Result[(), string].ok ()
+
     for e in textEdits:
       discard currentBufStatus.applyTextEdit(e)
+
+    currentBufStatus.isUpdate = true
 
     return Result[(), string].ok ()
 
@@ -1340,7 +1346,7 @@ proc handleLspResponse*(status: var EditorStatus) =
         of LspMethod.textDocumentSignatureHelp:
           let r = status.lspSignatureHelp(resJson.get)
           if r.isErr: status.commandLine.writeLspSignatureHelpError(r.error)
-        of LspMethod.textDocumentDocumentFormatting:
+        of LspMethod.textDocumentFormatting:
           let r = status.lspDocumentFormatting(resJson.get)
           if r.isErr: status.commandLine.writeLspDocumentFormattingHelpError(r.error)
         of LspMethod.textDocumentDeclaration:

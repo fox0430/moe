@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[json, options, strformat]
+import std/[json, strformat]
 
 import pkg/results
 
@@ -27,13 +27,16 @@ import utils
 type
   DocumentFormattingResponseResult* = Result[seq[TextEdit], string]
 
-export TextEdit
+export TextEdit, FormattingOptions
 
-proc initDocumentFormattingParams*(path: string): DocumentFormattingParams =
-  DocumentFormattingParams(
-    textDocument: TextDocumentIdentifier(uri: path.pathToUri),
-    options: none(JsonNode) # FormattingOptions
-  )
+proc initDocumentFormattingParams*(
+  path: string,
+  options: FormattingOptions): DocumentFormattingParams =
+
+    DocumentFormattingParams(
+      textDocument: TextDocumentIdentifier(uri: path.pathToUri),
+      options: options
+    )
 
 proc parseDocumentFormattingResponse*(
   res: JsonNode): DocumentFormattingResponseResult =
@@ -49,7 +52,7 @@ proc parseDocumentFormattingResponse*(
 
     let edits =
       try:
-        res.to(seq[TextEdit])
+        res["result"].to(seq[TextEdit])
       except CatchableError as e:
         return DocumentFormattingResponseResult.err fmt"Invalid response: {e.msg}"
 

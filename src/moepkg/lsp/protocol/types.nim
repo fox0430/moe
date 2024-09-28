@@ -823,11 +823,10 @@ type
     trimTrailingWhitespace*: Option[bool]
     insertFinalNewline*: Option[bool]
     trimFinalNewlines*: Option[bool]
-#   key
 
   DocumentFormattingParams* = ref object of RootObj
     textDocument*: TextDocumentIdentifier
-    options*: OptionalNode # FormattingOptions
+    options*: FormattingOptions
 
   DocumentRangeFormattingParams* = ref object of RootObj
     textDocument*: TextDocumentIdentifier

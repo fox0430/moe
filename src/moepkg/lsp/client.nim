@@ -34,7 +34,7 @@ import jsonrpc, utils, completion, progress, hover, semantictoken, inlayhint,
        definition, references, rename, typedefinition, implementation,
        callhierarchy, documenthighlight, documentlink, codelens, foldingrange,
        executecommand, selectionrange, documentsymbol, inlinevalue,
-       signaturehelp, documentformatting
+       signaturehelp, formatting
 
 type
   LspError* = object
@@ -1815,27 +1815,29 @@ proc textDocumentSignatureHelp*(
 
     return R[(), string].ok ()
 
-proc textDocumentDocumentFormatting*(
+proc textDocumentFormatting*(
   c: var LspClient,
   bufferId: int,
-  path: string): LspSendRequestResult =
+  path: string,
+  options: FormattingOptions): LspSendRequestResult =
     ## Send a textDocument/documentFormatting request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_formatting
 
     if not c.serverProcess.running:
       if not c.closed: c.closed = true
-      return R[(), string].err "server crashed"
+      return LspSendRequestResult.err "server crashed"
 
     if not c.isInitialized:
-      return R[(), string].err "lsp unavailable"
+      return LspSendRequestResult.err "lsp unavailable"
 
     if not c.capabilities.get.formatting:
-      return R[(), string].err "textDocument/documentFormatting unavailable"
+      return LspSendRequestResult.err "textDocument/formatting unavailable"
 
-    let params = %* initDocumentFormattingParams(path)
+    let params = %* initDocumentFormattingParams(path, options)
 
-    let r = c.request(bufferId, LspMethod.textDocumentDocumentFormatting, params)
+    let r = c.request(bufferId, LspMethod.textDocumentFormatting, params)
     if r.isErr:
-      return R[(), string].err fmt"textDocument/documentFormatting request failed: {r.error}"
+      return
+        LspSendRequestResult.err fmt"textDocument/formatting request failed: {r.error}"
 
-    return R[(), string].ok ()
+    return LspSendRequestResult.ok ()
