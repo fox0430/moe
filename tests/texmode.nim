@@ -1081,6 +1081,7 @@ suite "Ex mode: Quickrun command without file":
   test "Exec Quickrun without file":
     # Create a file for the test.
     var status = initEditorStatus()
+    status.settings.lsp.enable = false
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].language = SourceLanguage.langNim
     status.bufStatus[0].buffer = toGapBuffer(@[ru"echo 1"])
@@ -1121,6 +1122,7 @@ suite "Ex mode: Quickrun command without file":
 
   test "Exec Quickrun without file twice":
     var status = initEditorStatus()
+    status.settings.lsp.enable = false
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].language = SourceLanguage.langNim
     status.bufStatus[0].buffer = toGapBuffer(@[ru"echo 1"])
@@ -1209,6 +1211,7 @@ suite "Ex mode: Quickrun command with file":
   test "Exec Quickrun with file":
     # Create a file for the test.
     var status = initEditorStatus()
+    status.settings.lsp.enable = false
     discard status.addNewBufferInCurrentWin(TestfilePath, Mode.normal).get
 
     const Command = @[ru"run"]
@@ -1247,6 +1250,7 @@ suite "Ex mode: Quickrun command with file":
 
   test "Exec Quickrun with file twice":
     var status = initEditorStatus()
+    status.settings.lsp.enable = false
     discard status.addNewBufferInCurrentWin(TestfilePath, Mode.normal).get
 
     const Command = @[ru"run"]
