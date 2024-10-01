@@ -19,14 +19,7 @@
 
 name: Unit tests
 
-on:
-  pull_request:
-    paths:
-      - '.github/workflows/test.yaml'
-      - 'example/**'
-      - 'moe.nimble'
-      - 'src/**'
-      - 'tests/**'
+on: push
 
 permissions:
   contents: read
