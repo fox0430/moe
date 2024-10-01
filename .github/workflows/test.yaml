@@ -74,5 +74,6 @@ jobs:
 
     - name: Run unit test
       run: |
+        nimble install nph
         nimble build
         nim c -r tests/tlspclient.nim
