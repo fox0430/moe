@@ -1825,6 +1825,4 @@ echo Ojb(n: 1)
             isTimeout = false
             break
 
-        if not isTimeout: break
-
-        check not isTimeout
+      check not isTimeout
