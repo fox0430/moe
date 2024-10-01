@@ -1871,11 +1871,13 @@ suite "lsp: handleLspResponse":
       var isTimeout = true
       for _ in 0 .. 60:
         const Timeout = 1000
-        if lspClient.readable(Timeout).get:
+        while lspClient.readable(Timeout).get:
           status.handleLspResponse
 
           if lspClient.isInitialized:
             isTimeout = false
             break
+
+        if not isTimeout: break
 
       check not isTimeout
