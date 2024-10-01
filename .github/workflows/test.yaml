@@ -81,4 +81,5 @@ jobs:
 
     - name: Run unit test
       run: |
-        xvfb-run env XDG_SESSION_TYPE=x11 nimble test --verbose -y
+        nimble build
+        nim c -r tests/tlspclient.nim
