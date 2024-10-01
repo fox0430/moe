@@ -817,9 +817,16 @@ type
     textEdit*: Option[TextEdit]
     additionalTextEdits*: OptionalSeq[TextEdit]
 
+  FormattingOptions* = ref object of RootObj
+    tabSize*: int
+    insertSpaces*: bool
+    trimTrailingWhitespace*: Option[bool]
+    insertFinalNewline*: Option[bool]
+    trimFinalNewlines*: Option[bool]
+
   DocumentFormattingParams* = ref object of RootObj
     textDocument*: TextDocumentIdentifier
-    options*: OptionalNode
+    options*: FormattingOptions
 
   DocumentRangeFormattingParams* = ref object of RootObj
     textDocument*: TextDocumentIdentifier

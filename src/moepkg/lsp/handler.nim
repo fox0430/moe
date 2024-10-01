@@ -41,17 +41,52 @@ import
   ../fileutils,
   ../callhierarchyviewer,
   ../statusline,
-  ../visualmode,
-  ../commandline
+  ../visualmode
 
 import client, utils, hover, message, diagnostics, semantictoken, progress,
        inlayhint, definition, typedefinition, references, rename, declaration,
        implementation, callhierarchy, documenthighlight, documentlink,
        codelens, executecommand, foldingrange, selectionrange, documentsymbol,
-       inlinevalue, signaturehelp
+       inlinevalue, signaturehelp, formatting
 
 # Workaround for Nim 1.6.2
 import completion as lspcompletion
+
+proc applyTextEdit(b: var BufferStatus, edit: TextEdit): Result[(), string] =
+  let
+    startLine = edit.range.start.line
+    startChar = edit.range.start.character
+    endLine = edit.range.`end`.line
+
+  if startLine > b.buffer.high:
+    return Result[(), string].err fmt"Invalid start line: {startLine}"
+
+  if startLine == endLine:
+    # Single line
+    let
+      line = b.buffer[startLine]
+      endChar = min(line.high, edit.range.`end`.character)
+    b.buffer[startLine] =
+      line[0 ..< startChar] & edit.newText.toRunes & line[endChar .. ^1]
+  else:
+    var newLines = edit.newText.splitLines.toSeqRunes
+
+    newLines[0] = b.buffer[startLine][0 ..< startChar] & newLines[0]
+
+    if edit.range.`end`.character > 0:
+      block:
+        let endChar = min(b.buffer[endLine].high, edit.range.`end`.character)
+        if endChar >= 0:
+          newLines[^1] &= b.buffer[endLine][endChar..^1]
+
+    for i in 0 .. newLines.high:
+      let lineNum = startLine + i
+      if lineNum < b.buffer.len:
+        b.buffer[startLine + i] = newLines[i]
+      else:
+        b.buffer.add newLines[i]
+
+  return Result[(), string].ok ()
 
 template isLspResponse*(status: EditorStatus): bool =
   status.lspClients.contains(currentBufStatus.langId) and
@@ -527,6 +562,38 @@ proc lspSignatureHelp(
     # Wait until any key is pressed.
     discard getKeyBlocking()
     win.close
+
+    return Result[(), string].ok ()
+
+proc lspDocumentFormatting(
+  status: var EditorStatus,
+  res: JsonNode): Result[(), string] =
+    ## textDocument/documentFormatting
+
+    let requestId =
+      try: res["id"].getInt
+      except CatchableError as e: return Result[(), string].err e.msg
+
+    let waitingRes = lspClient.getWaitingResponse(requestId)
+    if waitingRes.isNone:
+      return Result[(), string].err fmt"Not found id: {requestId}"
+
+    lspClient.deleteWaitingResponse(requestId)
+
+    let textEdits =
+      # Workaround for "Error: generic instantiation too nested"
+      try:
+        parseDocumentFormattingResponse(res).get
+      except ResultDefect as e:
+        return Result[(), string].err e.msg
+
+    if textEdits.len == 0:
+      return Result[(), string].ok ()
+
+    for e in textEdits:
+      discard currentBufStatus.applyTextEdit(e)
+
+    currentBufStatus.isUpdate = true
 
     return Result[(), string].ok ()
 
@@ -1277,6 +1344,9 @@ proc handleLspResponse*(status: var EditorStatus) =
         of LspMethod.textDocumentSignatureHelp:
           let r = status.lspSignatureHelp(resJson.get)
           if r.isErr: status.commandLine.writeLspSignatureHelpError(r.error)
+        of LspMethod.textDocumentFormatting:
+          let r = status.lspDocumentFormatting(resJson.get)
+          if r.isErr: status.commandLine.writeLspDocumentFormattingHelpError(r.error)
         of LspMethod.textDocumentDeclaration:
           let r = status.lspDeclaration(resJson.get)
           if r.isErr: status.commandLine.writeLspDeclarationError(r.error)

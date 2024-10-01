@@ -183,6 +183,10 @@ const
       command: "lspFold",
       description: "LSP Folding Range",
       argsType: ArgsType.none),
+   ExCommandInfo(
+      command: "lspFormat",
+      description: "LSP Document Formatting",
+      argsType: ArgsType.none),
     ExCommandInfo(
       command: "lspLog",
       description: "Open the LSP log viewer",
@@ -763,6 +767,9 @@ proc isLspExeCommand*(command: seq[Runes]): bool {.inline.} =
 proc isLspFoldingCommand*(command: seq[Runes]): bool {.inline.} =
   command.len == 1 and cmpIgnoreCase($command[0], "lspfold") == 0
 
+proc isLspFormatCommand*(command: seq[Runes]): bool {.inline.} =
+  command.len == 1 and cmpIgnoreCase($command[0], "lspformat") == 0
+
 proc isLspRestartCommand*(command: seq[Runes]): bool {.inline.} =
   command.len == 1 and cmpIgnoreCase($command[0], "lsprestart") == 0
 
@@ -844,7 +851,8 @@ proc isValidExCommand*(commandSplit: seq[Runes]): bool =
     isBuildCommand(commandSplit) or
     isLspExeCommand(commandSplit) or
     isLspFoldingCommand(commandSplit) or
-    isLspRestartCommand(commandSplit)
+    isLspRestartCommand(commandSplit) or
+    isLspFormatCommand(commandSplit)
 
 proc getArgsType*(command: Runes): Result[ArgsType, string] =
   ## Return ArgsType if valid ex command.

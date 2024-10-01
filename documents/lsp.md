@@ -49,6 +49,7 @@ Please feedback, bug reports and PRs.
 - `textDocument/selectionRange`
 - `textDocument/documentSymbol`
 - `textDocument/signatureHelp`
+- `textDocument/formatting`
 
 ## Configuration
 
@@ -106,6 +107,10 @@ Results will be received from the LPS server and displayed automatically.
 `Ctrl-r` in Normal mode. Show the signature help on the hover.
 
 ![moe-signature](https://github.com/user-attachments/assets/7c8f2487-7cd9-4bb5-8833-2e495fdd21b3)
+
+### Document Formatting
+
+`lspFormat` in Ex mode. Format the buffer.
 
 ### Folding Range
 

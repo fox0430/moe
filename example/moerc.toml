@@ -253,6 +253,9 @@ enable = true
 [Lsp.SignatureHelp]
 enable = true
 
+[Lsp.DocumentFormatting]
+enable = true
+
 [Lsp.FoldingRange]
 enable = true
 

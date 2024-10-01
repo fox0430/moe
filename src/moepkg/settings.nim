@@ -240,6 +240,9 @@ type
   LspCompletionSettings* = object
     enable*: bool
 
+  LspDocumentFormattingSettings* = object
+    enable*: bool
+
   LspDeclarationSettings* = object
     enable*: bool
 
@@ -302,6 +305,7 @@ type
 
   LspFeatureSettings* = object
     completion*: LspCompletionSettings
+    formatting*: LspDocumentFormattingSettings
     declaration*: LspDeclarationSettings
     definition*: LspDefinitionSettings
     typeDefinition*: LspTypeDefinitionSettings
@@ -579,6 +583,9 @@ proc initThemeSettings(): ThemeSettings =
 proc initLspCompletionSettings(): LspCompletionSettings =
   result.enable = true
 
+proc initLspDocumentFormattingSettings(): LspDocumentFormattingSettings =
+  result.enable = true
+
 proc initLspDeclarationSettings(): LspDeclarationSettings =
   result.enable = true
 
@@ -641,6 +648,7 @@ proc initLspExecuteCommandSettings(): LspExecuteCommandSettings =
 
 proc initLspFeatureSettings(): LspFeatureSettings =
   result.completion = initLspCompletionSettings()
+  result.formatting = initLspDocumentFormattingSettings()
   result.declaration = initLspDeclarationSettings()
   result.definition = initLspDefinitionSettings()
   result.typeDefinition = initLspTypeDefinitionSettings()
@@ -1886,6 +1894,13 @@ proc parseLspTable(s: var EditorSettings, lspConfigs: TomlValueRef) =
               s.lsp.features.completion.enable = val.getBool
             else:
               discard
+      of "DocumentFormatting":
+        for key, val in val.getTable:
+          case key:
+            of "enable":
+              s.lsp.features.formatting.enable = val.getBool
+            else:
+              discard
       of "Declaration":
         for key, val in val.getTable:
           case key:
@@ -2587,6 +2602,14 @@ proc validateLspTable(table: TomlValueRef): Option[InvalidItem] =
                 return some(InvalidItem(name: $key, val: $val))
             else:
               return some(InvalidItem(name: $key, val: $val))
+      of "DocumentFormatting":
+        for key, val in val.getTable:
+          case key:
+            of "enable":
+              if val.kind != TomlValueKind.Bool:
+                return some(InvalidItem(name: $key, val: $val))
+            else:
+              return some(InvalidItem(name: $key, val: $val))
       of "Declaration":
         for key, val in val.getTable:
           case key:
@@ -3134,6 +3157,9 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
 
   result.addLine fmt "[Lsp.Completion]"
   result.addLine fmt "enable = {$settings.lsp.features.completion.enable}"
+
+  result.addLine fmt "[Lsp.DocumentFormatting]"
+  result.addLine fmt "enable = {$settings.lsp.features.formatting.enable}"
 
   result.addLine fmt "[Lsp.Declaration]"
   result.addLine fmt "enable = {$settings.lsp.features.declaration.enable}"

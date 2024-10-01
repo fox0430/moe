@@ -43,6 +43,18 @@ proc isValidWindowSize(n: WindowNode) =
   check n.view.originalLine.len > 1
   check n.view.length.len > 1
 
+template handleLspInitialize(status: var EditorStatus) =
+  const Timeout = 1000
+
+  for _ in 0 .. 20:
+    assert lspClient.readable(Timeout).isOk
+    let res = lspClient.read.get
+    if res.contains("id"):
+      assert res["id"].getInt == 1
+      assert status.lspInitialized(res).isOk
+      assert lspClient.isInitialized
+      break
+
 suite "Ex mode: isExCommandBuffer":
   ## Generate test code
   template isExCommandBufferTest(command: Runes, exceptInputState: InputState) =
@@ -178,12 +190,7 @@ suite "Ex mode: Write command":
 
         assert status.lspInitialize(workspaceRoot, LangId).isOk
 
-        const Timeout = 5000
-        assert lspClient.readable(Timeout).get
-
-        let resJson = lspClient.read.get
-        assert status.lspInitialized(resJson).isOk
-        assert lspClient.isInitialized
+        status.handleLspInitialize
 
       const Command = @[ru"w"]
       status.exModeCommand(Command)
@@ -1074,6 +1081,7 @@ suite "Ex mode: Quickrun command without file":
   test "Exec Quickrun without file":
     # Create a file for the test.
     var status = initEditorStatus()
+    status.settings.lsp.enable = false
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].language = SourceLanguage.langNim
     status.bufStatus[0].buffer = toGapBuffer(@[ru"echo 1"])
@@ -1114,6 +1122,7 @@ suite "Ex mode: Quickrun command without file":
 
   test "Exec Quickrun without file twice":
     var status = initEditorStatus()
+    status.settings.lsp.enable = false
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].language = SourceLanguage.langNim
     status.bufStatus[0].buffer = toGapBuffer(@[ru"echo 1"])
@@ -1196,11 +1205,13 @@ suite "Ex mode: Quickrun command with file":
     writeFile(TestfilePath, "echo 1")
 
   teardown:
+    removeFile(TestfilePath)
     removeDir(TestfileDir)
 
   test "Exec Quickrun with file":
     # Create a file for the test.
     var status = initEditorStatus()
+    status.settings.lsp.enable = false
     discard status.addNewBufferInCurrentWin(TestfilePath, Mode.normal).get
 
     const Command = @[ru"run"]
@@ -1239,6 +1250,7 @@ suite "Ex mode: Quickrun command with file":
 
   test "Exec Quickrun with file twice":
     var status = initEditorStatus()
+    status.settings.lsp.enable = false
     discard status.addNewBufferInCurrentWin(TestfilePath, Mode.normal).get
 
     const Command = @[ru"run"]
