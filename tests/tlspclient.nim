@@ -1799,17 +1799,32 @@ echo Ojb(n: 1)
 
       prepareLsp(BufferId, LanguageId, rootDir, path, Text)
 
-      if not client.capabilities.get.formatting:
-        # TODO: Enable textDocument/formatting on Actions
-        skip()
-      else:
-        let requestId = client.lastId + 1
+      let requestId = client.lastId + 1
 
-        check client.textDocumentFormatting(
-          BufferId,
-          path,
-          FormattingOptions()).isOk
-        check client.waitingResponses[requestId].lspMethod ==
-          LspMethod.textDocumentFormatting
+      check client.textDocumentFormatting(
+        BufferId,
+        path,
+        FormattingOptions()).isOk
+      check client.waitingResponses[requestId].lspMethod ==
+        LspMethod.textDocumentFormatting
 
-        # TODO: Add response check
+      proc isPending(r: JsonNode): bool =
+        if r.contains("params") and
+           r["params"].contains("pendingRequests") and
+           r["params"]["pendingRequests"].len > 0:
+             for p in r["params"]["pendingRequests"]:
+               if p.contains("name") and
+                  p["name"].getStr == "textDocument/formatting":
+                    return true
+
+      var isTimeout = true
+      for _ in 0 .. 20:
+        if client.readable(Timeout).get:
+          let res = client.read.get
+          if res.isPending:
+            isTimeout = false
+            break
+
+        if not isTimeout: break
+
+        check not isTimeout
