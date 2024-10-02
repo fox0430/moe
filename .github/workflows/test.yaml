@@ -77,7 +77,7 @@ jobs:
     - name: Install nimlangserver
       run: |
         nimble refresh
-        nimble install nimlangserver
+        nimble install nimlangserver nph
 
     - name: Run unit test
       run: |
