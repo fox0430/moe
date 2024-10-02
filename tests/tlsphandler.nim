@@ -197,6 +197,21 @@ suite "lsp: applyEdit":
 
       check b.buffer.toSeqRunes == @["rst", "uvw", "xyz"].toSeqRunes
 
+    block:
+      var b = initBufferStatus(Mode.normal).get
+      b.buffer = @["abc", ""].toSeqRunes.toGapBuffer
+
+      check b.applyTextEdit(TextEdit(
+        range: types.Range(
+          start: types.Position(line: 0, character: 0),
+          `end`: types.Position(line: 99, character: 99)
+        ),
+        newText: "rst\n"
+      ))
+      .isOk
+
+      check b.buffer.toSeqRunes == @["rst", ""].toSeqRunes
+
 suite "lsp: lspInitialized":
   const
     Timeout = 1000
