@@ -51,6 +51,7 @@ jobs:
         nim-version:
           - '1.6.2'
           - '1.6.16'
+          - '2.0.10'
           - 'stable'
           - 'devel'
 
