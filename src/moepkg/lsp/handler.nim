@@ -69,15 +69,21 @@ proc applyTextEdit(b: var BufferStatus, edit: TextEdit): Result[(), string] =
     b.buffer[startLine] =
       line[0 ..< startChar] & edit.newText.toRunes & line[endChar .. ^1]
   else:
+    # Multiple lines
     var newLines = edit.newText.splitLines.toSeqRunes
 
     newLines[0] = b.buffer[startLine][0 ..< startChar] & newLines[0]
 
     if edit.range.`end`.character > 0:
       block:
-        let endChar = min(b.buffer[endLine].high, edit.range.`end`.character)
+        let
+          line =
+            if endLine > b.buffer.high: b.buffer.high
+            else: endLine
+          endChar = min(b.buffer[line].high, edit.range.`end`.character)
+
         if endChar >= 0:
-          newLines[^1] &= b.buffer[endLine][endChar..^1]
+          newLines[^1] &= b.buffer[line][endChar..^1]
 
     for i in 0 .. newLines.high:
       let lineNum = startLine + i
