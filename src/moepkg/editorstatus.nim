@@ -299,14 +299,28 @@ proc exitEditor*(status: EditorStatus) =
 
   quit()
 
-proc cancelLspForegroundRequest*(c: var LspClient, bufferId: int) =
-  if c.isInitialized:
-    let err = c.cancelForegroundRequest(bufferId)
-    if err.isErr: error fmt"lsp: {err.error}"
+proc cancelLspForegroundRequest*(
+  c: var LspClient,
+  bufferId: int): Result[LspMethod, string] =
 
-proc cancelLspForegroundRequest*(status: var EditorStatus) {.inline.} =
-  if status.lspClients.contains(currentBufStatus.langId):
-    lspClient.cancelLspForegroundRequest(currentBufStatus.id)
+    if c.isInitialized:
+      let fgRes = c.getForegroundWaitingResponse(bufferId)
+      if fgRes.isSome:
+        let err = c.cancelForegroundRequest(bufferId)
+        if err.isOk:
+          return Result[LspMethod, string].ok fgRes.get.lspMethod
+        else:
+          return Result[LspMethod, string].err err.error
+
+proc cancelLspForegroundRequest*(status: var EditorStatus) =
+  if status.lspClients.contains(currentBufStatus.langId) and
+     lspClient.isInitialized and
+     lspClient.isWaitingForegroundResponse(currentBufStatus.id):
+       let r = lspClient.cancelLspForegroundRequest(currentBufStatus.id)
+       if r.isOk:
+         status.commandLine.writeStandard(fmt"lsp: {$r.get} canceled")
+       else:
+         status.commandLine.writeLspError(r.error)
 
 proc initLspExperimentalParams*(
   serverName: string,
