@@ -20,10 +20,11 @@
 # NOTE: Language Server Protocol Specification - 3.17
 # https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/
 
-import std/[strformat, strutils, json, options, os, osproc, posix, tables,
-            times, logging]
+import std/[strformat, strutils, json, options, os, posix, tables, times,
+            logging]
 
 import pkg/results
+import pkg/[chronos, chronos/asyncproc]
 
 import ../appinfo
 import ../independentutils
@@ -81,7 +82,7 @@ type
   LspClient* = ref object
     closed*: bool
       # Set true if the LSP server closed (crashed).
-    serverProcess: Process
+    serverProcess: AsyncProcessRef
       # LSP server process.
     serverStreams: Streams
       # Input/Output streams for the LSP server process.
@@ -120,7 +121,9 @@ type
 proc running*(c: LspClient): bool {.inline.} =
   ## Return true if the LSP server process running.
 
-  c.serverProcess.running
+  let r = c.serverProcess.running
+  if r.isOk: return r.get
+  else: false
 
 proc serverProcessId*(c: LspClient): int {.inline.} =
   ## Return a process id of the LSP server process.
@@ -131,7 +134,7 @@ proc exit*(c: LspClient) {.inline.} =
   ## Exit a LSP server process.
   ## TODO: Send a shutdown request?
 
-  c.serverProcess.terminate
+  discard c.serverProcess.terminate
 
 template isInitialized*(c: LspClient): bool = c.capabilities.isSome
 
@@ -228,23 +231,23 @@ proc delProgress*(c: var LspClient, token: ProgressToken): Result[(), string] =
 
   return Result[(), string].ok ()
 
-proc setNonBlockingOutput(p: Process): Result[(), string] =
-  if fcntl(p.outputHandle.cint, F_SETFL, O_NONBLOCK) < 0:
-    return Result[(), string].err "fcntl failed"
-
-  return Result[(), string].ok ()
-
-proc setNonBlockingInput(p: Process): Result[(), string] =
-  if fcntl(p.inputHandle.cint, F_SETFL, O_NONBLOCK) < 0:
-    return Result[(), string].err "fcntl failed"
-
-  return Result[(), string].ok ()
-
-proc setBlockingOutput(p: Process): Result[(), string] =
-  if fcntl(p.outputHandle.cint, F_SETFL, 0) < 0:
-    return Result[(), string].err "fcntl failed"
-
-  return Result[(), string].ok ()
+#proc setNonBlockingOutput(p: Process): Result[(), string] =
+#  if fcntl(p.outputHandle.cint, F_SETFL, O_NONBLOCK) < 0:
+#    return Result[(), string].err "fcntl failed"
+#
+#  return Result[(), string].ok ()
+#
+#proc setNonBlockingInput(p: Process): Result[(), string] =
+#  if fcntl(p.inputHandle.cint, F_SETFL, O_NONBLOCK) < 0:
+#    return Result[(), string].err "fcntl failed"
+#
+#  return Result[(), string].ok ()
+#
+#proc setBlockingOutput(p: Process): Result[(), string] =
+#  if fcntl(p.outputHandle.cint, F_SETFL, 0) < 0:
+#    return Result[(), string].err "fcntl failed"
+#
+#  return Result[(), string].ok ()
 
 proc readable*(c: LspClient, timeout: int = 1): LspClientReadableResult =
   ## Return when output is written from the LSP server or timesout.
@@ -253,33 +256,31 @@ proc readable*(c: LspClient, timeout: int = 1): LspClientReadableResult =
   ## Also, if data can be read from the output stream, return true.
   ## timeout is milliseconds.
 
-  block:
-    # Check a server response.
-    const FdLen = 1
-    let r = c.pollFd.addr.poll(FdLen.Tnfds, timeout)
-    if r == 1:
-      return LspClientReadableResult.ok true
+  # Check a server response.
+  const FdLen = 1
+  let r = c.pollFd.addr.poll(FdLen.Tnfds, timeout)
+  return LspClientReadableResult.ok r == 1
 
-  block:
-    # Workaround for "atEnd" blocking
-    # TODO: Need a better solution...
-    let r = c.serverProcess.setNonBlockingOutput
-    if r.isErr:
-      return LspClientReadableResult.err r.error
+#  block:
+#    # Workaround for "atEnd" blocking
+#    # TODO: Need a better solution...
+#    let r = c.serverProcess.setNonBlockingOutput
+#    if r.isErr:
+#      return LspClientReadableResult.err r.error
+#
+#  block:
+#    let r = c.serverProcess.setNonBlockingInput
+#    if r.isErr:
+#      return LspClientReadableResult.err r.error
 
-  block:
-    let r = c.serverProcess.setNonBlockingInput
-    if r.isErr:
-      return LspClientReadableResult.err r.error
+#  let r = not c.serverProcess.stdoutStream.atEof
 
-  let r = not c.serverStreams.output.atEnd
-
-  block:
-    let r = c.serverProcess.setBlockingOutput
-    if r.isErr:
-      return LspClientReadableResult.err r.error
-
-  return LspClientReadableResult.ok r
+#  block:
+#    let r = c.serverProcess.setBlockingOutput
+#    if r.isErr:
+#      return LspClientReadableResult.err r.error
+#
+#  return LspClientReadableResult.ok r
 
 proc request(
   c: var LspClient,
@@ -294,7 +295,7 @@ proc request(
 
     c.addRequestLog(req)
 
-    let r = c.serverStreams.sendRequest(req)
+    let r = c.serverProcess.stdinStream.sendRequest(req)
     if r.isErr:
       return Result[int, string].err r.error
 
@@ -315,12 +316,12 @@ proc notify(
 
     c.addNotifyFromClientLog(notify)
 
-    return c.serverStreams.sendNotify(notify)
+    return c.serverProcess.stdinStream.sendNotify(notify)
 
 proc read*(c: var LspClient): JsonRpcResponseResult =
   ## Read a response from the LSP server.
 
-  let r = c.serverStreams.output.read
+  let r = jsonrpc.read(c.serverProcess.stdoutStream)
   if r.isOk:
     return JsonRpcResponseResult.ok r.get
   else:
@@ -408,6 +409,9 @@ proc getForegroundWaitingResponse*(
       if v.bufferId == bufferId and v.lspMethod.isForegroundWait:
         return some(v)
 
+proc getFdStdout(p: AsyncProcessRef): AsyncFD {.inline.} =
+  p.stdoutStream.tsource.fd
+
 proc initLspClient*(command: string): initLspClientResult =
   ## Start a LSP server process and init streams.
 
@@ -419,17 +423,19 @@ proc initLspClient*(command: string): initLspClientResult =
     args =
       if commandSplit.len > 1: commandSplit[1 .. ^1]
       else: @[]
-    opts: set[ProcessOption] = {poUsePath}
+    opts: set[AsyncProcessOption] = {UsePath, EvalCommand, StdErrToStdOut}
 
   var c = LspClient()
 
   try:
-    c.serverProcess = startProcess(
+    c.serverProcess = waitFor startProcess(
       commandSplit[0],
       WorkingDir,
       args,
       Env,
-      opts)
+      opts,
+      stdoutHandle = AsyncProcess.Pipe,
+      stdinHandle = AsyncProcess.Pipe)
   except CatchableError as e:
     return initLspClientResult.err fmt"server start failed: {e.msg}"
 
@@ -438,12 +444,12 @@ proc initLspClient*(command: string): initLspClientResult =
     c.pollFd.addr.zeroMem(sizeof(c.pollFd))
 
     # Registers fd and events.
-    c.pollFd.fd = c.serverProcess.outputHandle.cint
+    c.pollFd.fd = c.serverProcess.getFdStdout.cint
     c.pollFd.events = POLLIN or POLLERR
 
   c.serverStreams = Streams(
-    input: InputStream(stream: c.serverProcess.inputStream),
-    output: OutputStream(stream: c.serverProcess.outputStream))
+    input: InputStream(stream: c.serverProcess.stdinStream),
+    output: OutputStream(stream: c.serverProcess.stdoutStream))
 
   c.serverName = commandSplit[0]
 
@@ -455,7 +461,7 @@ proc restart*(c: var LspClient): LspRestartClientResult =
   ## Restart the LSP server process.
   ## Logs will be taken over.
 
-  if c.serverProcess.running: c.exit
+  if c.running: c.exit
 
   let beforeLog = c.log
 
@@ -911,7 +917,7 @@ proc cancelRequest*(
     ## Send a cancelRequest notification to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#cancelRequest
 
-    if not c.serverProcess.running:
+    if not c.running:
       if not c.closed: c.closed = true
       return LspSendNotifyResult.err "server crashed"
 
@@ -961,7 +967,7 @@ proc initialize*(
     ## Send a initialize request to the server and check server capabilities.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#initialize
 
-    if not c.serverProcess.running:
+    if not c.running:
       if not c.closed: c.closed = true
       return LspSendRequestResult.err "server crashed"
 
@@ -995,7 +1001,7 @@ proc initialized*(c: var LspClient): LspSendNotifyResult =
   ## Send a initialized notification to the server.
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#initialized
 
-  if not c.serverProcess.running:
+  if not c.running:
     if not c.closed: c.closed = true
     return LspSendNotifyResult.err "server crashed"
 
@@ -1011,7 +1017,7 @@ proc shutdown*(c: var LspClient, bufferId: int): LspSendNotifyResult =
   ## Send a shutdown request to the server.
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#shutdown
 
-  if not c.serverProcess.running:
+  if not c.running:
     if not c.closed: c.closed = true
     return LspSendNotifyResult.err "server crashed"
 
@@ -1029,7 +1035,7 @@ proc workspaceDidChangeConfiguration*(
     ## Send a workspace/didChangeConfiguration notification to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#workspace_didChangeConfiguration
 
-    if not c.serverProcess.running:
+    if not c.running:
       if not c.closed: c.closed = true
       return LspSendNotifyResult.err "server crashed"
 
@@ -1060,7 +1066,7 @@ proc textDocumentDidOpen*(
     ## Send a textDocument/didOpen notification to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didOpen
 
-    if not c.serverProcess.running:
+    if not c.running:
       if not c.closed: c.closed = true
       return LspSendNotifyResult.err "server crashed"
 
@@ -1110,7 +1116,7 @@ proc textDocumentDidChange*(
     ## Send a textDocument/didChange notification to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didChange
 
-    if not c.serverProcess.running:
+    if not c.running:
       if not c.closed: c.closed = true
       return LspSendNotifyResult.err "server crashed"
 
@@ -1142,7 +1148,7 @@ proc textDocumentDidSave*(
     ## Send a textDocument/didSave notification to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didSave
 
-    if not c.serverProcess.running:
+    if not c.running:
       if not c.closed: c.closed = true
       return LspSendNotifyResult.err "server crashed"
 
@@ -1169,7 +1175,7 @@ proc textDocumentDidClose*(
     ## Send a textDocument/didClose notification to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didClose
 
-    if not c.serverProcess.running:
+    if not c.running:
       if not c.closed: c.closed = true
       return LspSendNotifyResult.err "server crashed"
 
@@ -1189,7 +1195,7 @@ proc textDocumentHover*(
     ## Send a textDocument/hover request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_hover
 
-    if not c.serverProcess.running:
+    if not c.running:
       if not c.closed: c.closed = true
       return R[(), string].err "server crashed"
 
@@ -1216,7 +1222,7 @@ proc textDocumentCompletion*(
     ## Send a textDocument/completion request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_completion
 
-    if not c.serverProcess.running:
+    if not c.running:
       if not c.closed: c.closed = true
       return R[(), string].err "server crashed"
 
@@ -1246,7 +1252,7 @@ proc textDocumentSemanticTokens*(
     ## Send a textDocument/semanticTokens/full request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_semanticTokens
 
-    if not c.serverProcess.running:
+    if not c.running:
       if not c.closed: c.closed = true
       return R[(), string].err "server crashed"
 
@@ -1272,7 +1278,7 @@ proc textDocumentInlayHint*(
     ## Send a textDocument/inlayHint request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_inlayHint
 
-    if not c.serverProcess.running:
+    if not c.running:
       if not c.closed: c.closed = true
       return R[(), string].err "server crashed"
 
@@ -1298,7 +1304,7 @@ proc textDocumentDefinition*(
     ## Send a textDocument/definition request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_definition
 
-    if not c.serverProcess.running:
+    if not c.running:
       if not c.closed: c.closed = true
       return R[(), string].err "server crashed"
 
@@ -1324,7 +1330,7 @@ proc textDocumentReferences*(
     ## Send a textDocument/references request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_references
 
-    if not c.serverProcess.running:
+    if not c.running:
       if not c.closed: c.closed = true
       return R[(), string].err "server crashed"
 
@@ -1351,7 +1357,7 @@ proc textDocumentRename*(
     ## Send a textDocument/rename request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_rename
 
-    if not c.serverProcess.running:
+    if not c.running:
       if not c.closed: c.closed = true
       return R[(), string].err "server crashed"
 
@@ -1377,7 +1383,7 @@ proc textDocumentTypeDefinition*(
     ## Send a textDocument/typeDefinition request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_typeDefinition
 
-    if not c.serverProcess.running:
+    if not c.running:
       if not c.closed: c.closed = true
       return R[(), string].err "server crashed"
 
@@ -1403,7 +1409,7 @@ proc textDocumentImplementation*(
     ## Send a textDocument/implementation request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_implementation
 
-    if not c.serverProcess.running:
+    if not c.running:
       if not c.closed: c.closed = true
       return R[(), string].err "server crashed"
 
@@ -1429,7 +1435,7 @@ proc textDocumentDeclaration*(
     ## Send a textDocument/declaration request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_declaration
 
-    if not c.serverProcess.running:
+    if not c.running:
       if not c.closed: c.closed = true
       return R[(), string].err "server crashed"
 
@@ -1455,7 +1461,7 @@ proc textDocumentPrepareCallHierarchy*(
     ## Send a textDocument/prepareCallHierarchy request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_prepareCallHierarchy
 
-    if not c.serverProcess.running:
+    if not c.running:
       if not c.closed: c.closed = true
       return R[(), string].err "server crashed"
 
@@ -1480,7 +1486,7 @@ proc textDocumentIncomingCalls*(
     ## Send a callHierarchy/incomingCalls request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#callHierarchy_incomingCalls
 
-    if not c.serverProcess.running:
+    if not c.running:
       if not c.closed: c.closed = true
       return R[(), string].err "server crashed"
 
@@ -1505,7 +1511,7 @@ proc textDocumentOutgoingCalls*(
     ## Send a callHierarchy/outgoingCalls request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#callHierarchy_outgoingCalls
 
-    if not c.serverProcess.running:
+    if not c.running:
       if not c.closed: c.closed = true
       return R[(), string].err "server crashed"
 
@@ -1531,7 +1537,7 @@ proc textDocumentDocumentHighlight*(
     ## Send a textDocument/documentHighlight request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_documentHighlight
 
-    if not c.serverProcess.running:
+    if not c.running:
       if not c.closed: c.closed = true
       return R[(), string].err "server crashed"
 
@@ -1556,7 +1562,7 @@ proc textDocumentDocumentLink*(
     ## Send a textDocument/documentLink request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_documentLink
 
-    if not c.serverProcess.running:
+    if not c.running:
       if not c.closed: c.closed = true
       return R[(), string].err "server crashed"
 
@@ -1581,7 +1587,7 @@ proc documentLinkResolve*(
     ## Send a documentLink/resolve request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#documentLink_resolve
 
-    if not c.serverProcess.running:
+    if not c.running:
       if not c.closed: c.closed = true
       return R[(), string].err "server crashed"
 
@@ -1606,7 +1612,7 @@ proc textDocumentCodeLens*(
     ## Send a textDocument/codeLens request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_codeLens
 
-    if not c.serverProcess.running:
+    if not c.running:
       if not c.closed: c.closed = true
       return R[(), string].err "server crashed"
 
@@ -1631,7 +1637,7 @@ proc codeLensResolve*(
     ## Send a codeLens/resolve request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#codeLens_resolve
 
-    if not c.serverProcess.running:
+    if not c.running:
       if not c.closed: c.closed = true
       return R[(), string].err "server crashed"
 
@@ -1657,7 +1663,7 @@ proc workspaceExecuteCommand*(
     ## Send a workspace/executeCommand request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#command
 
-    if not c.serverProcess.running:
+    if not c.running:
       if not c.closed: c.closed = true
       return R[(), string].err "server crashed"
 
@@ -1682,7 +1688,7 @@ proc textDocumentFoldingRange*(
     ## Send a textDocument/foldingRange request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_foldingRange
 
-    if not c.serverProcess.running:
+    if not c.running:
       if not c.closed: c.closed = true
       return R[(), string].err "server crashed"
 
@@ -1708,7 +1714,7 @@ proc textDocumentSelectionRange*(
     ## Send a textDocument/selectionRange request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_selectionRange
 
-    if not c.serverProcess.running:
+    if not c.running:
       if not c.closed: c.closed = true
       return R[(), string].err "server crashed"
 
@@ -1733,7 +1739,7 @@ proc textDocumentDocumentSymbol*(
     ## Send a textDocument/symbol request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_documentSymbol
 
-    if not c.serverProcess.running:
+    if not c.running:
       if not c.closed: c.closed = true
       return R[(), string].err "server crashed"
 
@@ -1759,7 +1765,7 @@ proc textDocumentInlineValue*(
     ## Send a textDocument/inlineValue request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_inlineValue
 
-    if not c.serverProcess.running:
+    if not c.running:
       if not c.closed: c.closed = true
       return R[(), string].err "server crashed"
 
@@ -1792,7 +1798,7 @@ proc textDocumentSignatureHelp*(
     ## Send a textDocument/signatureHelp request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_signatureHelp
 
-    if not c.serverProcess.running:
+    if not c.running:
       if not c.closed: c.closed = true
       return R[(), string].err "server crashed"
 
@@ -1823,7 +1829,7 @@ proc textDocumentFormatting*(
     ## Send a textDocument/documentFormatting request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_formatting
 
-    if not c.serverProcess.running:
+    if not c.running:
       if not c.closed: c.closed = true
       return LspSendRequestResult.err "server crashed"
 
