@@ -81,8 +81,12 @@ proc readFrame(s: AsyncStreamReader): ReadFrameResult =
         let
           f = s.readLine(sep="\n")
           r = waitFor f.withTimeout(10.milliseconds)
-        if not r: ""
-        else: f.value
+        if not r:
+          ""
+        else:
+          var ln = f.value
+          ln.removeSuffix("\r")
+          ln
       except CatchableError as e:
         return ReadFrameResult.err fmt"readLine failed: {e.msg}"
 
@@ -121,7 +125,7 @@ proc readFrame(s: AsyncStreamReader): ReadFrameResult =
               let f = s.read(1)
               discard waitFor f.withTimeout(10.milliseconds)
             let
-              f = s.read(contentLen)
+              f = s.read(contentLen + 1)
               r = waitFor f.withTimeout(10.milliseconds)
             if not r: @[]
             else: f.value

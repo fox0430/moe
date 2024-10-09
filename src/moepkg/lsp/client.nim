@@ -231,24 +231,6 @@ proc delProgress*(c: var LspClient, token: ProgressToken): Result[(), string] =
 
   return Result[(), string].ok ()
 
-#proc setNonBlockingOutput(p: Process): Result[(), string] =
-#  if fcntl(p.outputHandle.cint, F_SETFL, O_NONBLOCK) < 0:
-#    return Result[(), string].err "fcntl failed"
-#
-#  return Result[(), string].ok ()
-#
-#proc setNonBlockingInput(p: Process): Result[(), string] =
-#  if fcntl(p.inputHandle.cint, F_SETFL, O_NONBLOCK) < 0:
-#    return Result[(), string].err "fcntl failed"
-#
-#  return Result[(), string].ok ()
-#
-#proc setBlockingOutput(p: Process): Result[(), string] =
-#  if fcntl(p.outputHandle.cint, F_SETFL, 0) < 0:
-#    return Result[(), string].err "fcntl failed"
-#
-#  return Result[(), string].ok ()
-
 proc readable*(c: LspClient, timeout: int = 1): LspClientReadableResult =
   ## Return when output is written from the LSP server or timesout.
   ## Wait for the output from process to be written using poll(2).
@@ -260,27 +242,6 @@ proc readable*(c: LspClient, timeout: int = 1): LspClientReadableResult =
   const FdLen = 1
   let r = c.pollFd.addr.poll(FdLen.Tnfds, timeout)
   return LspClientReadableResult.ok r == 1
-
-#  block:
-#    # Workaround for "atEnd" blocking
-#    # TODO: Need a better solution...
-#    let r = c.serverProcess.setNonBlockingOutput
-#    if r.isErr:
-#      return LspClientReadableResult.err r.error
-#
-#  block:
-#    let r = c.serverProcess.setNonBlockingInput
-#    if r.isErr:
-#      return LspClientReadableResult.err r.error
-
-#  let r = not c.serverProcess.stdoutStream.atEof
-
-#  block:
-#    let r = c.serverProcess.setBlockingOutput
-#    if r.isErr:
-#      return LspClientReadableResult.err r.error
-#
-#  return LspClientReadableResult.ok r
 
 proc request(
   c: var LspClient,
