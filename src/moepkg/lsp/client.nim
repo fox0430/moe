@@ -136,6 +136,15 @@ proc exit*(c: LspClient) {.inline.} =
 
   discard c.serverProcess.terminate
 
+proc kill*(c: LspClient): Result[(), string] =
+  ## kill a LSP server process.
+
+  let r = c.serverProcess.kill
+  if r.isErr:
+    return Result[(), string].err $r.error
+
+  return Result[(), string].ok ()
+
 template isInitialized*(c: LspClient): bool = c.capabilities.isSome
 
 template addRequestLog*(c: var LspClient, m: JsonNode) =
@@ -238,7 +247,6 @@ proc readable*(c: LspClient, timeout: int = 1): LspClientReadableResult =
   ## Also, if data can be read from the output stream, return true.
   ## timeout is milliseconds.
 
-  # Check a server response.
   const FdLen = 1
   let r = c.pollFd.addr.poll(FdLen.Tnfds, timeout)
   return LspClientReadableResult.ok r == 1
@@ -370,8 +378,8 @@ proc getForegroundWaitingResponse*(
       if v.bufferId == bufferId and v.lspMethod.isForegroundWait:
         return some(v)
 
-proc getFdStdout(p: AsyncProcessRef): AsyncFD {.inline.} =
-  p.stdoutStream.tsource.fd
+proc getFdStdout(p: AsyncProcessRef): cint {.inline.} =
+  p.stdoutStream.tsource.fd.cint
 
 proc initLspClient*(command: string): initLspClientResult =
   ## Start a LSP server process and init streams.
@@ -405,7 +413,7 @@ proc initLspClient*(command: string): initLspClientResult =
     c.pollFd.addr.zeroMem(sizeof(c.pollFd))
 
     # Registers fd and events.
-    c.pollFd.fd = c.serverProcess.getFdStdout.cint
+    c.pollFd.fd = c.serverProcess.getFdStdout
     c.pollFd.events = POLLIN or POLLERR
 
   c.serverStreams = Streams(

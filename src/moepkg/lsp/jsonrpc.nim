@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -46,6 +46,8 @@ type
     input*: InputStream
     output*: OutputStream
 
+let Timeout = 10.milliseconds
+
 proc skipWhitespace(x: string, pos: int): int =
   result = pos
   while result < x.len and x[result] in Whitespace:
@@ -71,71 +73,63 @@ proc debugLog(messageType: MessageType, message: string) =
 proc readFrame(s: AsyncStreamReader): ReadFrameResult =
   ## Read text from the stream and return json node.
 
-  var
-    contentLen = -1
-    headerStarted = false
-
   while true:
-    let ln =
+    let buf =
       try:
-        let
-          f = s.readLine(sep="\n")
-          r = waitFor f.withTimeout(10.milliseconds)
-        if not r:
-          ""
+        let f = s.readLine(sep="\n")
+        if waitFor f.withTimeout(Timeout):
+          f.value
         else:
-          var ln = f.value
-          ln.removeSuffix("\r")
-          ln
+          return ReadFrameResult.err fmt"readLine: timeout"
       except CatchableError as e:
         return ReadFrameResult.err fmt"readLine failed: {e.msg}"
 
-    if ln.len == 0:
-      return ReadFrameResult.err fmt"readLine: timeout"
+    if buf.len == 0:
+      return ReadFrameResult.err fmt"readLine: empty"
 
-    debugLog(MessageType.read, fmt"readLine: {ln}")
+    debugLog(MessageType.read, fmt"readLine: {buf}")
 
-    let sep = ln.find(':')
-    if sep == -1:
+    var header: Option[tuple[ln: string, sep: int]]
+    for ln in buf.splitLines:
+      if ln.startsWith("Content-"):
+        let sep = ln.find(':')
+        if sep > -1:
+          header = some((ln, sep))
+          break
+
+    if header.isNone:
       # Skip line if not JSON-RPC.
       continue
 
-    headerStarted = true
+    let valueStart = header.get.ln.skipWhitespace(header.get.sep + 1)
 
-    let valueStart = ln.skipWhitespace(sep + 1)
-
-    case ln[0 ..< sep]
+    var contentLen = -1
+    case header.get.ln[0 ..< header.get.sep]
       of "Content-Type":
-        if isInvalidContentType(ln, valueStart):
+        if isInvalidContentType(header.get.ln, valueStart):
           return ReadFrameResult.err "Only utf-8 is supported"
       of "Content-Length":
-        if parseInt(ln, contentLen, valueStart) == 0:
-          return ReadFrameResult.err fmt"Invalid Content-Length: {ln.substr(valueStart)}"
+        if parseInt(header.get.ln, contentLen, valueStart) == 0:
+          return
+            ReadFrameResult.err fmt"Invalid Content-Length: {header.get.ln.substr(valueStart)}"
       else:
         # Unrecognized headers are ignored
-        discard
+        continue
 
-    if not headerStarted:
-      continue
-    else:
-      if contentLen != -1:
-        let bytes =
-          try:
-            block removeCr:
-              let f = s.read(1)
-              discard waitFor f.withTimeout(10.milliseconds)
-            let
-              f = s.read(contentLen + 1)
-              r = waitFor f.withTimeout(10.milliseconds)
-            if not r: @[]
-            else: f.value
-          except:
+    if contentLen != -1:
+      let buf=
+        try:
+          let f = s.read(contentLen + 1)
+          if waitFor f.withTimeout(Timeout):
+            string.fromBytes(f.value)
+          else:
             return ReadFrameResult.err fmt"readStr failed"
-        let str = string.fromBytes(bytes)
-        debugLog(MessageType.read, fmt"Response: {str}")
-        return ReadFrameResult.ok str
-      else:
-        return ReadFrameResult.err "Missing Content-Length header"
+        except:
+          return ReadFrameResult.err fmt"readStr failed"
+      debugLog(MessageType.read, fmt"Response: {buf}")
+      return ReadFrameResult.ok buf
+    else:
+      return ReadFrameResult.err "Missing Content-Length header"
 
 proc read*(s: AsyncStreamReader): JsonRpcResponseResult =
   ## Return a json-rpc response from the stream.
@@ -165,7 +159,7 @@ proc send(
     debugLog(MessageType.write, req)
 
     try:
-      if not waitFor s.write(req).withTimeout(100.milliseconds):
+      if not waitFor s.write(req).withTimeout(Timeout):
         return Result[(), string].err "write: Timeout"
     except CatchableError as e:
       return Result[(), string].err e.msg
