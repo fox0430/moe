@@ -46,7 +46,7 @@ type
     input*: InputStream
     output*: OutputStream
 
-let Timeout = 10.milliseconds
+let Timeout = 1000.milliseconds
 
 proc skipWhitespace(x: string, pos: int): int =
   result = pos
@@ -76,7 +76,7 @@ proc readFrame(s: AsyncStreamReader): ReadFrameResult =
   while true:
     let buf =
       try:
-        let f = s.readLine(sep="\n")
+        let f = s.readLine
         if waitFor f.withTimeout(Timeout):
           f.value
         else:

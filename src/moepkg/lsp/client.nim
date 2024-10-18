@@ -290,7 +290,7 @@ proc notify(
 proc read*(c: var LspClient): JsonRpcResponseResult =
   ## Read a response from the LSP server.
 
-  let r = jsonrpc.read(c.serverProcess.stdoutStream)
+  let r = jsonrpc.read(c.serverStreams.output.stream)
   if r.isOk:
     return JsonRpcResponseResult.ok r.get
   else:
@@ -378,8 +378,8 @@ proc getForegroundWaitingResponse*(
       if v.bufferId == bufferId and v.lspMethod.isForegroundWait:
         return some(v)
 
-proc getFdStdout(p: AsyncProcessRef): cint {.inline.} =
-  p.stdoutStream.tsource.fd.cint
+template getFdStdout(c: LspClient): cint =
+  c.serverStreams.output.stream.tsource.fd.cint
 
 proc initLspClient*(command: string): initLspClientResult =
   ## Start a LSP server process and init streams.
@@ -408,17 +408,17 @@ proc initLspClient*(command: string): initLspClientResult =
   except CatchableError as e:
     return initLspClientResult.err fmt"server start failed: {e.msg}"
 
+  c.serverStreams = Streams(
+    input: InputStream(stream: c.serverProcess.stdinStream),
+    output: OutputStream(stream: c.serverProcess.stdoutStream))
+
   block:
     # Init pollFd.
     c.pollFd.addr.zeroMem(sizeof(c.pollFd))
 
     # Registers fd and events.
-    c.pollFd.fd = c.serverProcess.getFdStdout
+    c.pollFd.fd = c.getFdStdout
     c.pollFd.events = POLLIN or POLLERR
-
-  c.serverStreams = Streams(
-    input: InputStream(stream: c.serverProcess.stdinStream),
-    output: OutputStream(stream: c.serverProcess.stdoutStream))
 
   c.serverName = commandSplit[0]
 
