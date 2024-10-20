@@ -88,7 +88,7 @@ proc sendDidChangeNotify(status: var EditorStatus): Result[(), string] =
     first: currentMainWindowNode.bufferPosition,
     last: currentMainWindowNode.bufferPosition)
 
-  let err = lspClient.textDocumentDidChange(
+  let err = waitFor lspClient.textDocumentDidChange(
     currentBufStatus.version,
     $currentBufStatus.path.absolutePath,
     currentBufStatus.buffer.toString,
@@ -111,7 +111,7 @@ proc sendCompletionRequest(
     block:
       let isIncompleteTrigger = status.completionWindow.isSome
 
-      let err = lspClient.textDocumentCompletion(
+      let err = waitFor lspClient.textDocumentCompletion(
         currentBufStatus.id,
         $currentBufStatus.path.absolutePath,
         currentMainWindowNode.bufferPosition,
@@ -141,7 +141,7 @@ proc sendSignatureHelpRequest(
           if r.isSome: SignatureHelpTriggerKind.TriggerCharacter
           else: SignatureHelpTriggerKind.Invoked
 
-      let err = lspClient.textDocumentSignatureHelp(
+      let err = waitFor lspClient.textDocumentSignatureHelp(
         currentBufStatus.id,
         $currentBufStatus.path.absolutePath,
         currentMainWindowNode.bufferPosition,
