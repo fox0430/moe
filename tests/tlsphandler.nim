@@ -37,7 +37,7 @@ template handleLspInitialize(status: var EditorStatus) =
 
   for _ in 0 .. 20:
     assert lspClient.readable(Timeout).isOk
-    let res = lspClient.read.get
+    let res = (waitFor lspClient.read).get
     if res.contains("id"):
       assert res["id"].getInt == 1
       assert status.lspInitialized(res).isOk
@@ -244,7 +244,7 @@ suite "lsp: lspInitialized":
 
       for _ in 0 .. 20:
         check lspClient.readable(Timeout).isOk
-        let res= lspClient.read.get
+        let res= (waitFor lspClient.read).get
         if res.contains("id"):
           check res["id"].getInt == 1
           check status.lspInitialized(res).isOk
