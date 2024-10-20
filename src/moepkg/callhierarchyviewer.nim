@@ -89,7 +89,7 @@ proc incomingCalls(status: var EditorStatus) =
   let infoIndex =
     currentMainWindowNode.currentLine - CallHierarchyViewHeaderLength
 
-  let r = status.lspClients[langId.get].textDocumentIncomingCalls(
+  let r = waitFor status.lspClients[langId.get].textDocumentIncomingCalls(
     currentBufStatus.id,
     currentBufStatus.callHierarchyInfo.items[infoIndex])
   if r.isErr:
@@ -109,7 +109,7 @@ proc outgoingCalls(status: var EditorStatus) =
   let infoIndex =
     currentMainWindowNode.currentLine - CallHierarchyViewHeaderLength
 
-  let r = status.lspClients[langId.get].textDocumentOutgoingCalls(
+  let r = waitFor status.lspClients[langId.get].textDocumentOutgoingCalls(
     currentBufStatus.id,
     currentBufStatus.callHierarchyInfo.items[infoIndex])
   if r.isErr:

@@ -774,7 +774,7 @@ proc writeCommand(status: var EditorStatus, path: Runes) =
 
     if status.lspClients.contains(currentBufStatus.langId):
       # Send textDocument/didSave notify to the LSP server.
-      let err = lspClient.textDocumentDidSave(
+      let err = waitFor lspClient.textDocumentDidSave(
         currentBufStatus.version,
         $currentBufStatus.path.absolutePath,
         $currentBufStatus.buffer)
@@ -874,7 +874,7 @@ proc writeAndQuitCommand(status: var EditorStatus) =
 
   if status.lspClients.contains(currentBufStatus.langId):
     # Send textDocument/didSave notify to the LSP server.
-    let err = lspClient.textDocumentDidSave(
+    let err = waitFor lspClient.textDocumentDidSave(
       currentBufStatus.version,
       $currentBufStatus.path.absolutePath,
       $currentBufStatus.buffer)
@@ -1133,7 +1133,7 @@ proc lspExecuteCommand(status: var EditorStatus, command: seq[Runes]) =
     status.commandLine.writeLspExecuteCommandError("unknow command")
     return
 
-  let r = lspClient.workspaceExecuteCommand(
+  let r = waitFor lspClient.workspaceExecuteCommand(
     currentBufStatus.id,
     lspCommand,
     %*command[1 .. ^1].mapIt($it))
@@ -1154,7 +1154,7 @@ proc lspFoldingRange(status: var EditorStatus) =
       "folding range is unavailable")
     return
 
-  let r = lspClient.textDocumentFoldingRange(
+  let r = waitFor lspClient.textDocumentFoldingRange(
     currentBufStatus.id,
     $currentBufStatus.absolutePath)
   if r.isErr:
@@ -1167,7 +1167,7 @@ proc lspRestartClient(status: var EditorStatus) =
     status.commandLine.writeLspError("Client not found")
     return
 
-  let r = lspClient.restart
+  let r = waitFor lspClient.restart
   if r.isOk:
     status.commandLine.writeStandard(fmt"lsp: restarted client: {lspClient.serverName}")
   else:
@@ -1176,7 +1176,7 @@ proc lspRestartClient(status: var EditorStatus) =
   let langId = currentBufStatus.langId
   for b in status.bufStatus:
     if b.langId == langId:
-      let r = lspClient.initialize(
+      let r = waitFor lspClient.initialize(
         status.bufStatus[^1].id,
         initInitializeParams(
           lspClient.serverName,
@@ -1200,7 +1200,7 @@ proc lspDocumentFormatting(status: var EditorStatus) =
     insertSpaces: true,
     insertFinalNewline: some(true))
 
-  let r = lspClient.textDocumentFormatting(
+  let r = waitFor lspClient.textDocumentFormatting(
     currentBufStatus.id,
     $currentBufStatus.absolutePath,
     options)

@@ -37,6 +37,8 @@ import jsonrpc, utils, completion, progress, hover, semantictoken, inlayhint,
        executecommand, selectionrange, documentsymbol, inlinevalue,
        signaturehelp, formatting
 
+export chronos
+
 type
   LspError* = object
     code*: int
@@ -147,38 +149,38 @@ proc kill*(c: LspClient): Result[(), string] =
 
 template isInitialized*(c: LspClient): bool = c.capabilities.isSome
 
-template addRequestLog*(c: var LspClient, m: JsonNode) =
+template addRequestLog*(c: LspClient, m: JsonNode) =
   c.log.add LspMessage(
     timestamp: now(),
     kind: LspMessageKind.request,
     message: m)
 
-template addResponseLog*(c: var LspClient, m: JsonNode) =
+template addResponseLog*(c: LspClient, m: JsonNode) =
   c.log.add LspMessage(
     timestamp: now(),
     kind: LspMessageKind.response,
     message: m)
 
-template addNotifyFromClientLog*(c: var LspClient, m: JsonNode) =
+template addNotifyFromClientLog*(c: LspClient, m: JsonNode) =
   c.log.add LspMessage(
     timestamp: now(),
     kind: LspMessageKind.notifyFromClient,
     message: m)
 
-template addNotifyFromServerLog*(c: var LspClient, m: JsonNode) =
+template addNotifyFromServerLog*(c: LspClient, m: JsonNode) =
   c.log.add LspMessage(
     timestamp: now(),
     kind: LspMessageKind.notifyFromServer,
     message: m)
 
-proc createProgress*(c: var LspClient, token: ProgressToken) =
+proc createProgress*(c: LspClient, token: ProgressToken) =
   ## Add a new progress to the `LspClint.progress`.
 
   if not c.progress.contains(token):
     c.progress[token] = ProgressReport(state: ProgressState.create)
 
 proc beginProgress*(
-  c: var LspClient,
+  c: LspClient,
   token: ProgressToken,
   p: WorkDoneProgressBegin): Result[(), string] =
     ## Begin the progress in the `LspClint.progress`.
@@ -196,7 +198,7 @@ proc beginProgress*(
     return Result[(), string].ok ()
 
 proc reportProgress*(
-  c: var LspClient,
+  c: LspClient,
   token: ProgressToken,
   report: WorkDoneProgressReport): Result[(), string] =
     ## Update the progress in the `LspClint.progress`.
@@ -215,7 +217,7 @@ proc reportProgress*(
     return Result[(), string].ok ()
 
 proc endProgress*(
-  c: var LspClient,
+  c: LspClient,
   token: ProgressToken,
   p: WorkDoneProgressEnd): Result[(), string] =
     ## End the progress in the `LspClint.progress`.
@@ -230,7 +232,7 @@ proc endProgress*(
 
     return Result[(), string].ok ()
 
-proc delProgress*(c: var LspClient, token: ProgressToken): Result[(), string] =
+proc delProgress*(c: LspClient, token: ProgressToken): Result[(), string] =
   ## Delete the progress from the `LspClint.progress`.
 
   if not c.progress.contains(token):
@@ -252,10 +254,10 @@ proc readable*(c: LspClient, timeout: int = 1): LspClientReadableResult =
   return LspClientReadableResult.ok r == 1
 
 proc request(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int,
   lspMethod: LspMethod,
-  params: JsonNode): Result[int, string] =
+  params: JsonNode): Future[Result[int, string]] {.async.} =
     ## Send a request to the LSP server and set to waitingResponse.
     ## Return request id.
 
@@ -264,7 +266,7 @@ proc request(
 
     c.addRequestLog(req)
 
-    let r = c.serverProcess.stdinStream.sendRequest(req)
+    let r = await c.serverStreams.input.sendRequest(req)
     if r.isErr:
       return Result[int, string].err r.error
 
@@ -276,21 +278,21 @@ proc request(
     return Result[int, string].ok c.lastId
 
 proc notify(
-  c: var LspClient,
+  c: LspClient,
   lspMethod: LspMethod,
-  params: JsonNode): Result[(), string] {.inline.} =
+  params: JsonNode): Future[Result[(), string]] {.async.} =
     ## Send a notification to the LSP server.
 
     let notify = newNotify(lspMethod.toLspMethodStr, params)
 
     c.addNotifyFromClientLog(notify)
 
-    return c.serverProcess.stdinStream.sendNotify(notify)
+    return await c.serverStreams.input.sendNotify(notify)
 
-proc read*(c: var LspClient): JsonRpcResponseResult =
+proc read*(c: LspClient): Future[JsonRpcResponseResult] {.async.} =
   ## Read a response from the LSP server.
 
-  let r = jsonrpc.read(c.serverStreams.output.stream)
+  let r = await read(c.serverStreams.output)
   if r.isOk:
     return JsonRpcResponseResult.ok r.get
   else:
@@ -311,7 +313,7 @@ proc parseLspError*(res: JsonNode): LspErrorParseResult =
     return LspErrorParseResult.err fmt"Invalid error: {$res}"
 
 proc setWaitResponse*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int,
   lspMethod: LspMethod) {.inline.} =
 
@@ -320,17 +322,17 @@ proc setWaitResponse*(
       requestId: c.lastId,
       lspMethod: lspMethod)
 
-proc deleteWaitingResponse*(c: var LspClient, id: RequestId) {.inline.} =
+proc deleteWaitingResponse*(c: LspClient, id: RequestId) {.inline.} =
   if c.waitingResponses.contains(id):
     c.waitingResponses.del(id)
 
-proc isWaitingResponse*(c: var LspClient, bufferId: int): bool {.inline.} =
+proc isWaitingResponse*(c: LspClient, bufferId: int): bool {.inline.} =
   for v in c.waitingResponses.values:
     if v.bufferId == bufferId:
       return true
 
 proc isWaitingResponse*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int,
   lspMethod: LspMethod): bool {.inline.} =
 
@@ -339,7 +341,7 @@ proc isWaitingResponse*(
         return true
 
 proc isWaitingForegroundResponse*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int): bool {.inline.} =
 
     for v in c.waitingResponses.values:
@@ -362,7 +364,7 @@ proc getWaitingResponse*(
       if v.bufferId == bufferId and v.lspMethod == lspMethod:
         return some(v)
 
-proc getLatestWaitingResponse*(c: var LspClient): Option[WaitLspResponse] =
+proc getLatestWaitingResponse*(c: LspClient): Option[WaitLspResponse] =
   var latest = -1
   for k in c.waitingResponses.keys:
     if k > latest: latest = k
@@ -371,7 +373,7 @@ proc getLatestWaitingResponse*(c: var LspClient): Option[WaitLspResponse] =
     return some(c.waitingResponses[latest])
 
 proc getForegroundWaitingResponse*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int): Option[WaitLspResponse] =
 
     for v in c.waitingResponses.values:
@@ -381,7 +383,7 @@ proc getForegroundWaitingResponse*(
 template getFdStdout(c: LspClient): cint =
   c.serverStreams.output.stream.tsource.fd.cint
 
-proc initLspClient*(command: string): initLspClientResult =
+proc initLspClient*(command: string): Future[initLspClientResult] {.async.} =
   ## Start a LSP server process and init streams.
 
   const
@@ -397,7 +399,7 @@ proc initLspClient*(command: string): initLspClientResult =
   var c = LspClient()
 
   try:
-    c.serverProcess = waitFor startProcess(
+    c.serverProcess = await startProcess(
       commandSplit[0],
       WorkingDir,
       args,
@@ -426,7 +428,7 @@ proc initLspClient*(command: string): initLspClientResult =
 
   return initLspClientResult.ok c
 
-proc restart*(c: var LspClient): LspRestartClientResult =
+proc restart*(c: LspClient): Future[LspRestartClientResult] {.async.} =
   ## Restart the LSP server process.
   ## Logs will be taken over.
 
@@ -434,11 +436,42 @@ proc restart*(c: var LspClient): LspRestartClientResult =
 
   let beforeLog = c.log
 
-  var newClient = initLspClient(c.command)
-  if newClient.isErr:
-    return LspRestartClientResult.err newClient.error
+  const
+    WorkingDir = ""
+    Env = nil
+  let
+    commandSplit = c.command.split(' ')
+    args =
+      if commandSplit.len > 1: commandSplit[1 .. ^1]
+      else: @[]
+    opts: set[AsyncProcessOption] = {UsePath, EvalCommand, StdErrToStdOut}
 
-  c = newClient.get
+  try:
+    c.serverProcess = await startProcess(
+      commandSplit[0],
+      WorkingDir,
+      args,
+      Env,
+      opts,
+      stdoutHandle = AsyncProcess.Pipe,
+      stdinHandle = AsyncProcess.Pipe)
+  except CatchableError as e:
+    return LspRestartClientResult.err fmt"server start failed: {e.msg}"
+
+  c.serverStreams = Streams(
+    input: InputStream(stream: c.serverProcess.stdinStream),
+    output: OutputStream(stream: c.serverProcess.stdoutStream))
+
+  block:
+    # Init pollFd.
+    c.pollFd.addr.zeroMem(sizeof(c.pollFd))
+
+    # Registers fd and events.
+    c.pollFd.fd = c.getFdStdout
+    c.pollFd.events = POLLIN or POLLERR
+
+  c.serverName = commandSplit[0]
+
   c.log = beforeLog
 
   return LspRestartClientResult.ok ()
@@ -585,7 +618,7 @@ proc initInitializeParams*(
     )
 
 proc setCapabilities(
-  c: var LspClient,
+  c: LspClient,
   initResult: InitializeResult,
   settings: LspFeatureSettings) =
     ## Set server capabilities to the LspClient from InitializeResult.
@@ -880,9 +913,9 @@ proc setCapabilities(
     c.capabilities = some(capabilities)
 
 proc cancelRequest*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int,
-  requestId: RequestId): LspSendNotifyResult =
+  requestId: RequestId): Future[LspSendNotifyResult] {.async.} =
     ## Send a cancelRequest notification to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#cancelRequest
 
@@ -894,45 +927,45 @@ proc cancelRequest*(
 
     let params = %* CancelParams(id: some(%*requestId))
 
-    let err = c.notify(LspMethod.cancelRequest, params)
+    let err = await c.notify(LspMethod.cancelRequest, params)
     if err.isErr:
       return LspSendNotifyResult.err fmt"cancelRequest notification failed: {err.error}"
 
     return LspSendNotifyResult.ok ()
 
 proc cancelRequest*(
-  c: var LspClient,
-  waitRes: WaitLspResponse): LspSendRequestResult {.inline.} =
+  c: LspClient,
+  waitRes: WaitLspResponse): Future[LspSendRequestResult] {.async.} =
     ## Send a cancel request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#cancelRequest
 
-    c.cancelRequest(waitRes.bufferId, waitRes.requestId)
+    return await c.cancelRequest(waitRes.bufferId, waitRes.requestId)
 
 proc cancelRequest*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int,
-  lspMethod: LspMethod): LspSendRequestResult =
+  lspMethod: LspMethod): Future[LspSendRequestResult] {.async.} =
 
     let w = c.getWaitingResponse(bufferId, lspMethod)
     if w.isSome:
-      return c.cancelRequest(w.get)
+      return await c.cancelRequest(w.get)
 
     return LspSendRequestResult.ok ()
 
 proc cancelForegroundRequest*(
-  c: var LspClient,
-  bufferId: int): LspSendRequestResult =
+  c: LspClient,
+  bufferId: int): Future[LspSendRequestResult] {.async.} =
 
     let w = c.getForegroundWaitingResponse(bufferId)
     if w.isSome:
-      return c.cancelRequest(w.get)
+      return await c.cancelRequest(w.get)
 
     return LspSendRequestResult.ok ()
 
 proc initialize*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int,
-  initParams: InitializeParams): LspSendRequestResult =
+  initParams: InitializeParams): Future[LspSendRequestResult] {.async.} =
     ## Send a initialize request to the server and check server capabilities.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#initialize
 
@@ -942,14 +975,14 @@ proc initialize*(
 
     let params = %* initParams
 
-    let r = c.request(bufferId, LspMethod.initialize, params)
+    let r = await c.request(bufferId, LspMethod.initialize, params)
     if r.isErr:
       return LspSendRequestResult.err fmt"Initialize request failed: {r.error}"
 
     return LspSendRequestResult.ok ()
 
 proc initCapacities*(
-  c: var LspClient,
+  c: LspClient,
   settings: LspFeatureSettings,
   res: JsonNode): LspInitializeResult =
 
@@ -966,7 +999,7 @@ proc initCapacities*(
 
     return LspInitializeResult.ok ()
 
-proc initialized*(c: var LspClient): LspSendNotifyResult =
+proc initialized*(c: LspClient): Future[LspSendNotifyResult] {.async.} =
   ## Send a initialized notification to the server.
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#initialized
 
@@ -976,13 +1009,13 @@ proc initialized*(c: var LspClient): LspSendNotifyResult =
 
   let params = %* {}
 
-  let err = c.notify(LspMethod.initialized, params)
+  let err = await c.notify(LspMethod.initialized, params)
   if err.isErr:
     return LspSendNotifyResult.err fmt"Invalid notification failed: {err.error}"
 
   return LspSendNotifyResult.ok ()
 
-proc shutdown*(c: var LspClient, bufferId: int): LspSendNotifyResult =
+proc shutdown*(c: LspClient, bufferId: int): Future[LspSendNotifyResult] {.async.} =
   ## Send a shutdown request to the server.
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#shutdown
 
@@ -993,14 +1026,14 @@ proc shutdown*(c: var LspClient, bufferId: int): LspSendNotifyResult =
   if not c.isInitialized:
     return R[(), string].err "lsp unavailable"
 
-  let id = c.request(bufferId, LspMethod.shutdown, %*{})
+  let id = await c.request(bufferId, LspMethod.shutdown, %*{})
   if id.isErr:
     return LspSendNotifyResult.err "Shutdown request failed: {id.error}"
 
   return LspSendNotifyResult.ok ()
 
 proc workspaceDidChangeConfiguration*(
-  c: var LspClient): LspSendNotifyResult =
+  c: LspClient): Future[LspSendNotifyResult] {.async.} =
     ## Send a workspace/didChangeConfiguration notification to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#workspace_didChangeConfiguration
 
@@ -1013,7 +1046,7 @@ proc workspaceDidChangeConfiguration*(
 
     let params = %* DidChangeConfigurationParams()
 
-    let err = c.notify(LspMethod.workspaceDidChangeConfiguration, params)
+    let err = await c.notify(LspMethod.workspaceDidChangeConfiguration, params)
     if err.isErr:
       return LspSendNotifyResult.err fmt"Invalid workspace/didChangeConfiguration failed: {err.error}"
 
@@ -1030,8 +1063,8 @@ proc initTextDocumentDidOpenParams(
         text: text))
 
 proc textDocumentDidOpen*(
-  c: var LspClient,
-  path, languageId, text: string): LspSendNotifyResult =
+  c: LspClient,
+  path, languageId, text: string): Future[LspSendNotifyResult] {.async.} =
     ## Send a textDocument/didOpen notification to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didOpen
 
@@ -1047,7 +1080,7 @@ proc textDocumentDidOpen*(
       languageId,
       text)
 
-    let err = c.notify(LspMethod.textDocumentDidOpen, params)
+    let err = await c.notify(LspMethod.textDocumentDidOpen, params)
     if err.isErr:
       return LspSendNotifyResult.err fmt"textDocument/didOpen notification failed: {err.error}"
 
@@ -1078,10 +1111,10 @@ proc initTextDocumentDidChangeParams(
         contentChanges: @[TextDocumentContentChangeEvent(text: text)])
 
 proc textDocumentDidChange*(
-  c: var LspClient,
+  c: LspClient,
   version: Natural,
   path, text: string,
-  range: Option[BufferRange] = none(BufferRange)): LspSendNotifyResult =
+  range: Option[BufferRange] = none(BufferRange)): Future[LspSendNotifyResult] {.async.} =
     ## Send a textDocument/didChange notification to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didChange
 
@@ -1094,7 +1127,7 @@ proc textDocumentDidChange*(
 
     let params = %* initTextDocumentDidChangeParams(version, path, text, range)
 
-    let err = c.notify(LspMethod.textDocumentDidChange, params)
+    let err = await c.notify(LspMethod.textDocumentDidChange, params)
     if err.isErr:
       return LspSendNotifyResult.err fmt"textDocument/didChange notification failed: {err.error}"
 
@@ -1111,9 +1144,9 @@ proc initTextDocumentDidSaveParams(
       text: some(text))
 
 proc textDocumentDidSave*(
-  c: var LspClient,
+  c: LspClient,
   version: Natural,
-  path, text: string): LspSendNotifyResult =
+  path, text: string): Future[LspSendNotifyResult] {.async.} =
     ## Send a textDocument/didSave notification to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didSave
 
@@ -1126,7 +1159,7 @@ proc textDocumentDidSave*(
 
     let params = %* initTextDocumentDidSaveParams(version, path, text)
 
-    let err = c.notify(LspMethod.textDocumentDidChange, params)
+    let err = await c.notify(LspMethod.textDocumentDidChange, params)
     if err.isErr:
       return LspSendNotifyResult.err fmt"textDocument/didSave notification failed: {err.error}"
 
@@ -1139,8 +1172,8 @@ proc initTextDocumentDidClose(
       textDocument: TextDocumentIdentifier(uri: path.pathToUri))
 
 proc textDocumentDidClose*(
-  c: var LspClient,
-  text: string): LspSendNotifyResult =
+  c: LspClient,
+  text: string): Future[LspSendNotifyResult] {.async.} =
     ## Send a textDocument/didClose notification to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_didClose
 
@@ -1150,17 +1183,17 @@ proc textDocumentDidClose*(
 
     let params = %* initTextDocumentDidClose(text)
 
-    let err = c.notify(LspMethod.textDocumentDidClose, params)
+    let err = await c.notify(LspMethod.textDocumentDidClose, params)
     if err.isErr:
       return LspSendNotifyResult.err fmt"textDocument/didClose notification failed: {err.error}"
 
     return LspSendNotifyResult.ok ()
 
 proc textDocumentHover*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int,
   path: string,
-  position: BufferPosition): LspSendRequestResult =
+  position: BufferPosition): Future[LspSendRequestResult] {.async.} =
     ## Send a textDocument/hover request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_hover
 
@@ -1175,19 +1208,19 @@ proc textDocumentHover*(
       return R[(), string].err "textDocument/hover unavailable"
 
     let params = %* initHoverParams(path, position.toLspPosition)
-    let id = c.request(bufferId, LspMethod.textDocumentHover, params)
+    let id = await c.request(bufferId, LspMethod.textDocumentHover, params)
     if id.isErr:
       return R[(), string].err fmt"textDocument/hover request failed: {id.error}"
 
     return R[(), string].ok ()
 
 proc textDocumentCompletion*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int,
   path: string,
   position: BufferPosition,
   isIncompleteTrigger: bool,
-  character: string): LspSendRequestResult =
+  character: string): Future[LspSendRequestResult] {.async.} =
     ## Send a textDocument/completion request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_completion
 
@@ -1208,16 +1241,16 @@ proc textDocumentCompletion*(
       isIncompleteTrigger,
       character)
 
-    let id = c.request(bufferId, LspMethod.textDocumentCompletion, params)
+    let id = await c.request(bufferId, LspMethod.textDocumentCompletion, params)
     if id.isErr:
       return R[(), string].err fmt"textDocument/completion request failed: {id.error}"
 
     return R[(), string].ok ()
 
 proc textDocumentSemanticTokens*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int,
-  path: string): LspSendRequestResult =
+  path: string): Future[LspSendRequestResult] {.async.} =
     ## Send a textDocument/semanticTokens/full request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_semanticTokens
 
@@ -1233,17 +1266,17 @@ proc textDocumentSemanticTokens*(
 
     let params = %* initSemanticTokensParams(path)
 
-    let id = c.request(bufferId, LspMethod.textDocumentSemanticTokensFull, params)
+    let id = await c.request(bufferId, LspMethod.textDocumentSemanticTokensFull, params)
     if id.isErr:
       return R[(), string].err fmt"textDocument/semanticTokens/full request failed: {id.error}"
 
     return R[(), string].ok ()
 
 proc textDocumentInlayHint*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int,
   path: string,
-  range: BufferRange): LspSendRequestResult =
+  range: BufferRange): Future[LspSendRequestResult] {.async.} =
     ## Send a textDocument/inlayHint request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_inlayHint
 
@@ -1259,17 +1292,17 @@ proc textDocumentInlayHint*(
 
     let params = %* initInlayHintParams(path, range)
 
-    let r = c.request(bufferId, LspMethod.textDocumentInlayHint, params)
+    let r = await c.request(bufferId, LspMethod.textDocumentInlayHint, params)
     if r.isErr:
       return R[(), string].err fmt"textDocument/inlayHint request failed: {r.error}"
 
     return R[(), string].ok ()
 
 proc textDocumentDefinition*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int,
   path: string,
-  posi: BufferPosition): LspSendRequestResult =
+  posi: BufferPosition): Future[LspSendRequestResult] {.async.}  =
     ## Send a textDocument/definition request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_definition
 
@@ -1285,17 +1318,17 @@ proc textDocumentDefinition*(
 
     let params = %* initDefinitionParams(path, posi)
 
-    let r = c.request(bufferId, LspMethod.textDocumentDefinition, params)
+    let r = await c.request(bufferId, LspMethod.textDocumentDefinition, params)
     if r.isErr:
       return R[(), string].err fmt"textDocument/definition request failed: {r.error}"
 
     return R[(), string].ok ()
 
 proc textDocumentReferences*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int,
   path: string,
-  posi: BufferPosition): LspSendRequestResult =
+  posi: BufferPosition): Future[LspSendRequestResult] {.async.} =
     ## Send a textDocument/references request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_references
 
@@ -1311,18 +1344,18 @@ proc textDocumentReferences*(
 
     let params = %* initReferenceParams(path, posi.toLspPosition)
 
-    let r = c.request(bufferId, LspMethod.textDocumentReferences, params)
+    let r = await c.request(bufferId, LspMethod.textDocumentReferences, params)
     if r.isErr:
       return R[(), string].err fmt"textDocument/references request failed: {r.error}"
 
     return R[(), string].ok ()
 
 proc textDocumentRename*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int,
   path: string,
   posi: BufferPosition,
-  newName: string): LspSendRequestResult =
+  newName: string): Future[LspSendRequestResult] {.async.} =
     ## Send a textDocument/rename request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_rename
 
@@ -1338,17 +1371,17 @@ proc textDocumentRename*(
 
     let params = %* initRenameParams(path, posi.toLspPosition, newName)
 
-    let r = c.request(bufferId, LspMethod.textDocumentRename, params)
+    let r = await c.request(bufferId, LspMethod.textDocumentRename, params)
     if r.isErr:
       return R[(), string].err fmt"textDocument/rename request failed: {r.error}"
 
     return R[(), string].ok ()
 
 proc textDocumentTypeDefinition*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int,
   path: string,
-  posi: BufferPosition): LspSendRequestResult =
+  posi: BufferPosition): Future[LspSendRequestResult] {.async.} =
     ## Send a textDocument/typeDefinition request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_typeDefinition
 
@@ -1364,17 +1397,17 @@ proc textDocumentTypeDefinition*(
 
     let params = %* initTypeDefinitionParams(path, posi)
 
-    let r = c.request(bufferId, LspMethod.textDocumentTypeDefinition, params)
+    let r = await c.request(bufferId, LspMethod.textDocumentTypeDefinition, params)
     if r.isErr:
       return R[(), string].err fmt"textDocument/typeDefinition request failed: {r.error}"
 
     return R[(), string].ok ()
 
 proc textDocumentImplementation*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int,
   path: string,
-  posi: BufferPosition): LspSendRequestResult =
+  posi: BufferPosition): Future[LspSendRequestResult] {.async.} =
     ## Send a textDocument/implementation request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_implementation
 
@@ -1390,17 +1423,17 @@ proc textDocumentImplementation*(
 
     let params = %* initImplementationParams(path, posi)
 
-    let r = c.request(bufferId, LspMethod.textDocumentImplementation, params)
+    let r = await c.request(bufferId, LspMethod.textDocumentImplementation, params)
     if r.isErr:
       return R[(), string].err fmt"textDocument/implementation request failed: {r.error}"
 
     return R[(), string].ok ()
 
 proc textDocumentDeclaration*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int,
   path: string,
-  posi: BufferPosition): LspSendRequestResult =
+  posi: BufferPosition): Future[LspSendRequestResult] {.async.} =
     ## Send a textDocument/declaration request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_declaration
 
@@ -1416,17 +1449,17 @@ proc textDocumentDeclaration*(
 
     let params = %* initImplementationParams(path, posi)
 
-    let r = c.request(bufferId, LspMethod.textDocumentDeclaration, params)
+    let r = await c.request(bufferId, LspMethod.textDocumentDeclaration, params)
     if r.isErr:
       return R[(), string].err fmt"textDocument/declaration request failed: {r.error}"
 
     return R[(), string].ok ()
 
 proc textDocumentPrepareCallHierarchy*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int,
   path: string,
-  posi: BufferPosition): LspSendRequestResult =
+  posi: BufferPosition): Future[LspSendRequestResult] {.async.} =
     ## Send a textDocument/prepareCallHierarchy request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_prepareCallHierarchy
 
@@ -1442,16 +1475,16 @@ proc textDocumentPrepareCallHierarchy*(
 
     let params = %* initCallHierarchyPrepareParams(path, posi)
 
-    let r = c.request(bufferId, LspMethod.textDocumentPrepareCallHierarchy, params)
+    let r = await c.request(bufferId, LspMethod.textDocumentPrepareCallHierarchy, params)
     if r.isErr:
       return R[(), string].err fmt"textDocument/prepareCallHierarchy request failed: {r.error}"
 
     return R[(), string].ok ()
 
 proc textDocumentIncomingCalls*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int,
-  item: CallHierarchyItem): LspSendRequestResult =
+  item: CallHierarchyItem): Future[LspSendRequestResult] {.async.} =
     ## Send a callHierarchy/incomingCalls request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#callHierarchy_incomingCalls
 
@@ -1467,16 +1500,16 @@ proc textDocumentIncomingCalls*(
 
     let params = %* initCallHierarchyIncomingParams(item)
 
-    let r = c.request(bufferId, LspMethod.callHierarchyIncomingCalls, params)
+    let r = await c.request(bufferId, LspMethod.callHierarchyIncomingCalls, params)
     if r.isErr:
       return R[(), string].err fmt"callHierarchy/incomingCalls request failed: {r.error}"
 
     return R[(), string].ok ()
 
 proc textDocumentOutgoingCalls*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int,
-  item: CallHierarchyItem): LspSendRequestResult =
+  item: CallHierarchyItem): Future[LspSendRequestResult] {.async.} =
     ## Send a callHierarchy/outgoingCalls request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#callHierarchy_outgoingCalls
 
@@ -1492,17 +1525,17 @@ proc textDocumentOutgoingCalls*(
 
     let params = %* initCallHierarchyOutgoingParams(item)
 
-    let r = c.request(bufferId, LspMethod.callHierarchyOutgoingCalls, params)
+    let r = await c.request(bufferId, LspMethod.callHierarchyOutgoingCalls, params)
     if r.isErr:
       return R[(), string].err fmt"callHierarchy/outgoingCalls request failed: {r.error}"
 
     return R[(), string].ok ()
 
 proc textDocumentDocumentHighlight*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int,
   path: string,
-  posi: BufferPosition): LspSendRequestResult =
+  posi: BufferPosition): Future[LspSendRequestResult] {.async.} =
     ## Send a textDocument/documentHighlight request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_documentHighlight
 
@@ -1518,16 +1551,16 @@ proc textDocumentDocumentHighlight*(
 
     let params = %* initDocumentHighlightParamas(path, posi)
 
-    let r = c.request(bufferId, LspMethod.textDocumentDocumentHighlight, params)
+    let r = await c.request(bufferId, LspMethod.textDocumentDocumentHighlight, params)
     if r.isErr:
       return R[(), string].err fmt"textDocument/documentHighlight request failed: {r.error}"
 
     return R[(), string].ok ()
 
 proc textDocumentDocumentLink*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int,
-  path: string): LspSendRequestResult =
+  path: string): Future[LspSendRequestResult] {.async.} =
     ## Send a textDocument/documentLink request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_documentLink
 
@@ -1543,16 +1576,16 @@ proc textDocumentDocumentLink*(
 
     let params = %* initDocumentLinkParams(path)
 
-    let r = c.request(bufferId, LspMethod.textDocumentDocumentLink, params)
+    let r = await c.request(bufferId, LspMethod.textDocumentDocumentLink, params)
     if r.isErr:
       return R[(), string].err fmt"textDocument/documentLink request failed: {r.error}"
 
     return R[(), string].ok ()
 
 proc documentLinkResolve*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int,
-  documentLink: DocumentLink): LspSendRequestResult =
+  documentLink: DocumentLink): Future[LspSendRequestResult] {.async.} =
     ## Send a documentLink/resolve request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#documentLink_resolve
 
@@ -1568,16 +1601,16 @@ proc documentLinkResolve*(
 
     let params = %* documentLink
 
-    let r = c.request(bufferId, LspMethod.textDocumentDocumentLink, params)
+    let r = await c.request(bufferId, LspMethod.textDocumentDocumentLink, params)
     if r.isErr:
       return R[(), string].err fmt"textDocument/documentLink request failed: {r.error}"
 
     return R[(), string].ok ()
 
 proc textDocumentCodeLens*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int,
-  path: string): LspSendRequestResult =
+  path: string): Future[LspSendRequestResult] {.async.} =
     ## Send a textDocument/codeLens request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_codeLens
 
@@ -1593,16 +1626,16 @@ proc textDocumentCodeLens*(
 
     let params = %* initCodeLensParams(path)
 
-    let r = c.request(bufferId, LspMethod.textDocumentCodeLens, params)
+    let r = await c.request(bufferId, LspMethod.textDocumentCodeLens, params)
     if r.isErr:
       return R[(), string].err fmt"textDocument/codeLens request failed: {r.error}"
 
     return R[(), string].ok ()
 
 proc codeLensResolve*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int,
-  codeLens: CodeLens): LspSendRequestResult =
+  codeLens: CodeLens): Future[LspSendRequestResult] {.async.} =
     ## Send a codeLens/resolve request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#codeLens_resolve
 
@@ -1618,17 +1651,17 @@ proc codeLensResolve*(
 
     let params = %* codeLens
 
-    let r = c.request(bufferId, LspMethod.codeLensResolve, params)
+    let r = await c.request(bufferId, LspMethod.codeLensResolve, params)
     if r.isErr:
       return R[(), string].err fmt"codeLens/resolve request failed: {r.error}"
 
     return R[(), string].ok ()
 
 proc workspaceExecuteCommand*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int,
   command: string,
-  args: JsonNode): LspSendRequestResult =
+  args: JsonNode): Future[LspSendRequestResult] {.async.} =
     ## Send a workspace/executeCommand request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#command
 
@@ -1644,16 +1677,16 @@ proc workspaceExecuteCommand*(
 
     let params = %* initExecuteCommandParams(command, args)
 
-    let r = c.request(bufferId, LspMethod.workspaceExecuteCommand, params)
+    let r = await c.request(bufferId, LspMethod.workspaceExecuteCommand, params)
     if r.isErr:
       return R[(), string].err fmt"workspace/executeCommand request failed: {r.error}"
 
     return R[(), string].ok ()
 
 proc textDocumentFoldingRange*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int,
-  path: string): LspSendRequestResult =
+  path: string): Future[LspSendRequestResult] {.async.} =
     ## Send a textDocument/foldingRange request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_foldingRange
 
@@ -1669,17 +1702,17 @@ proc textDocumentFoldingRange*(
 
     let params = %* initFoldingRangeParam(path)
 
-    let r = c.request(bufferId, LspMethod.textDocumentFoldingRange, params)
+    let r = await c.request(bufferId, LspMethod.textDocumentFoldingRange, params)
     if r.isErr:
       return R[(), string].err fmt"textDocument/foldingRange request failed: {r.error}"
 
     return R[(), string].ok ()
 
 proc textDocumentSelectionRange*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int,
   path: string,
-  positions: seq[BufferPosition]): LspSendRequestResult =
+  positions: seq[BufferPosition]): Future[LspSendRequestResult] {.async.} =
     ## Send a textDocument/selectionRange request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_selectionRange
 
@@ -1695,16 +1728,16 @@ proc textDocumentSelectionRange*(
 
     let params = %* initSelectionRangeParams(path, positions)
 
-    let r = c.request(bufferId, LspMethod.textDocumentSelectionRange, params)
+    let r = await c.request(bufferId, LspMethod.textDocumentSelectionRange, params)
     if r.isErr:
       return R[(), string].err fmt"textDocument/selectionRange request failed: {r.error}"
 
     return R[(), string].ok ()
 
 proc textDocumentDocumentSymbol*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int,
-  path: string): LspSendRequestResult =
+  path: string): Future[LspSendRequestResult] {.async.} =
     ## Send a textDocument/symbol request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_documentSymbol
 
@@ -1720,17 +1753,17 @@ proc textDocumentDocumentSymbol*(
 
     let params = %* initDocumentSymbolParams(path)
 
-    let r = c.request(bufferId, LspMethod.textDocumentDocumentSymbol, params)
+    let r = await c.request(bufferId, LspMethod.textDocumentDocumentSymbol, params)
     if r.isErr:
       return R[(), string].err fmt"textDocument/documentSymbol request failed: {r.error}"
 
     return R[(), string].ok ()
 
 proc textDocumentInlineValue*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int,
   path: string,
-  range: BufferRange): LspSendRequestResult =
+  range: BufferRange): Future[LspSendRequestResult] {.async.} =
     ## Send a textDocument/inlineValue request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_inlineValue
 
@@ -1750,20 +1783,20 @@ proc textDocumentInlineValue*(
       stoppedLocation: range.toLspRange)
     let params = %* initInlineValueParams(path, range.toLspRange, context)
 
-    let r = c.request(bufferId, LspMethod.textDocumentInlineValue, params)
+    let r = await c.request(bufferId, LspMethod.textDocumentInlineValue, params)
     if r.isErr:
       return R[(), string].err fmt"textDocument/inlineValue request failed: {r.error}"
 
     return R[(), string].ok ()
 
 proc textDocumentSignatureHelp*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int,
   path: string,
   position: BufferPosition,
   kind: SignatureHelpTriggerKind,
   triggerChar: Option[string] = none(string),
-  active: Option[SignatureHelp] = none(SignatureHelp)): LspSendRequestResult =
+  active: Option[SignatureHelp] = none(SignatureHelp)): Future[LspSendRequestResult] {.async.} =
     ## Send a textDocument/signatureHelp request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_signatureHelp
 
@@ -1784,17 +1817,17 @@ proc textDocumentSignatureHelp*(
       triggerChar,
       active)
 
-    let r = c.request(bufferId, LspMethod.textDocumentSignatureHelp, params)
+    let r = await c.request(bufferId, LspMethod.textDocumentSignatureHelp, params)
     if r.isErr:
       return R[(), string].err fmt"textDocument/signatureHelp request failed: {r.error}"
 
     return R[(), string].ok ()
 
 proc textDocumentFormatting*(
-  c: var LspClient,
+  c: LspClient,
   bufferId: int,
   path: string,
-  options: FormattingOptions): LspSendRequestResult =
+  options: FormattingOptions): Future[LspSendRequestResult] {.async.} =
     ## Send a textDocument/documentFormatting request to the server.
     ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_formatting
 
@@ -1810,7 +1843,7 @@ proc textDocumentFormatting*(
 
     let params = %* initDocumentFormattingParams(path, options)
 
-    let r = c.request(bufferId, LspMethod.textDocumentFormatting, params)
+    let r = await c.request(bufferId, LspMethod.textDocumentFormatting, params)
     if r.isErr:
       return
         LspSendRequestResult.err fmt"textDocument/formatting request failed: {r.error}"

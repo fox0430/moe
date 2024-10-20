@@ -24,6 +24,8 @@ import pkg/[results, jsony, chronos]
 
 import ../messagelog
 
+export chronos
+
 type
   ReadFrameResult = Result[string, string]
   JsonRpcResponseResult* = Result[JsonNode, string]
@@ -59,25 +61,28 @@ proc isInvalidContentType(s: string, valueStart: int): bool {.inline.} =
 proc isValidJsonRpc(json: JsonNode): bool {.inline.} =
   json.contains("jsonrpc")
 
-proc debugLog(messageType: MessageType, message: string) =
-  let debugMessage =
-    case messageType:
-      of read:
-        "lsp: Read messages: \n" & message & '\n'
-      of write:
-        "lsp: Write messages: \n" & message & '\n'
+proc debugLog(messageType: MessageType, message: string) {.raises: [].} =
+  try:
+    let debugMessage =
+      case messageType:
+        of read:
+          "lsp: Read messages: \n" & message & '\n'
+        of write:
+          "lsp: Write messages: \n" & message & '\n'
 
-  debug debugMessage
-  addMessageLog debugMessage
+    debug debugMessage
+    addMessageLog debugMessage
+  except:
+    discard
 
-proc readFrame(s: AsyncStreamReader): ReadFrameResult =
+proc readFrame(s: AsyncStreamReader): Future[ReadFrameResult] {.async.} =
   ## Read text from the stream and return json node.
 
   while true:
     let buf =
       try:
-        let f = s.readLine
-        if waitFor f.withTimeout(Timeout):
+        let f = s.readLine(sep="\r\n\r\n")
+        if await f.withTimeout(Timeout):
           f.value
         else:
           return ReadFrameResult.err fmt"readLine: timeout"
@@ -119,8 +124,8 @@ proc readFrame(s: AsyncStreamReader): ReadFrameResult =
     if contentLen != -1:
       let buf=
         try:
-          let f = s.read(contentLen + 1)
-          if waitFor f.withTimeout(Timeout):
+          let f = s.read(contentLen)
+          if await f.withTimeout(Timeout):
             string.fromBytes(f.value)
           else:
             return ReadFrameResult.err fmt"readStr failed"
@@ -131,10 +136,10 @@ proc readFrame(s: AsyncStreamReader): ReadFrameResult =
     else:
       return ReadFrameResult.err "Missing Content-Length header"
 
-proc read*(s: AsyncStreamReader): JsonRpcResponseResult =
+proc read*(s: OutputStream): Future[JsonRpcResponseResult] {.async.} =
   ## Return a json-rpc response from the stream.
 
-  let r = s.readFrame
+  let r = await s.stream.readFrame
   if r.isErr:
     return JsonRpcResponseResult.err r.error
 
@@ -150,8 +155,8 @@ proc read*(s: AsyncStreamReader): JsonRpcResponseResult =
     return JsonRpcResponseResult.err fmt"Invalid jsonrpc: {$res}"
 
 proc send(
-  s: AsyncStreamWriter,
-  frame: string): Result[(), string] =
+  s: InputStream,
+  frame: string): Future[Result[(), string]] {.async.} =
     ## Write json-rpc message to the stream.
 
     let req = "Content-Length: " & $frame.len & "\r\n\r\n" & frame
@@ -159,7 +164,7 @@ proc send(
     debugLog(MessageType.write, req)
 
     try:
-      if not waitFor s.write(req).withTimeout(Timeout):
+      if not await s.stream.write(req).withTimeout(Timeout):
         return Result[(), string].err "write: Timeout"
     except CatchableError as e:
       return Result[(), string].err e.msg
@@ -174,12 +179,12 @@ template newRequest*(id: int, methodName: string, params: JsonNode): JsonNode =
     "params": params
   }
 
-proc sendRequest*(stream: AsyncStreamWriter, req: JsonNode): JsonRpcSendResult =
+proc sendRequest*(s: InputStream, req: JsonNode): Future[JsonRpcSendResult] {.async.} =
   ## Send a request and return a response.
 
-  var s = newStringOfCap(1024)
-  s.toUgly(req)
-  let err = stream.send(s)
+  var str = newStringOfCap(1024)
+  str.toUgly(req)
+  let err = await s.send(str)
   if err.isErr:
     return JsonRpcSendResult.err err.error
 
@@ -192,11 +197,11 @@ template newNotify*(methodName: string, params: JsonNode): JsonNode =
     "params": params
   }
 
-proc sendNotify*(stream: AsyncStreamWriter, notify: JsonNode): Result[(), string] =
+proc sendNotify*(s: InputStream, notify: JsonNode): Future[Result[(), string]] {.async.} =
   ## Send a notification.
   ## No response to the notification. Also, no `id` is required in the
   ## request.
 
-  var s = newStringOfCap(1024)
-  s.toUgly(notify)
-  return stream.send(s)
+  var str = newStringOfCap(1024)
+  str.toUgly(notify)
+  return await s.send(str)

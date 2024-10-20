@@ -130,7 +130,7 @@ suite "lsp: restart":
         beforePid = client.serverProcessId
         beforeLogLen = client.log.len
 
-      client.serverProcess.kill
+      discard client.kill
 
       check client.restart.isOk
 
