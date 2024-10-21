@@ -32,18 +32,6 @@ import utils
 import moepkg/editorstatus {.all.}
 import moepkg/lsp/handler {.all.}
 
-template handleLspInitialize(status: var EditorStatus) =
-  const Timeout = 1000
-
-  for _ in 0 .. 20:
-    assert lspClient.readable(Timeout).isOk
-    let res = (waitFor lspClient.read).get
-    if res.contains("id"):
-      assert res["id"].getInt == 1
-      assert status.lspInitialized(res).isOk
-      assert lspClient.isInitialized
-      break
-
 suite "lsp: applyEdit":
   test "Single line":
     block:
@@ -219,15 +207,18 @@ suite "lsp: lspInitialized":
   let
     testDir = getCurrentDir() / "lspInitTestDir"
     testFilePath = testDir / "test.nim"
+  var
+    status: EditorStatus
 
   setup:
     createDir(testDir)
     writeFile(testFilePath, Buffer)
 
-    var status = initEditorStatus()
+    status = initEditorStatus()
     status.settings.lsp.enable = true
 
   teardown:
+    discard lspClient.kill
     removeDir(testDir)
 
   test "Basic":
@@ -242,9 +233,10 @@ suite "lsp: lspInitialized":
 
       assert status.lspInitialize(workspaceRoot, LangId).isOk
 
-      for _ in 0 .. 20:
+      for _ in 0 .. 50:
+        sleep 100
         check lspClient.readable(Timeout).isOk
-        let res= (waitFor lspClient.read).get
+        let res = (waitFor lspClient.read).get
         if res.contains("id"):
           check res["id"].getInt == 1
           check status.lspInitialized(res).isOk
@@ -481,10 +473,12 @@ suite "lsp: lspWorkDoneProgressCreate":
     let filename = $genOid() & ".nim"
     assert status.addNewBufferInCurrentWin(filename).isOk
 
-    status.lspClients["nim"] = LspClient()
     status.lspClients["nim"].progress["token"] = ProgressReport(
       title: "",
       state: ProgressState.create)
+
+  teardown:
+    discard lspClient.kill
 
   test "Invalid":
     check lspClient.lspProgressCreate(%*{
@@ -515,7 +509,8 @@ suite "lsp: lspProgress":
     let filename = $genOid() & ".nim"
     assert status.addNewBufferInCurrentWin(filename).isOk
 
-    status.lspClients["nim"] = LspClient()
+  teardown:
+    discard lspClient.kill
 
   test "begin":
     status.lspClients["nim"].progress["token"] = ProgressReport(
@@ -644,7 +639,7 @@ suite "lsp: lspProgress":
     check ru"lsp: progress: end: end" == status.commandLine.buffer
 
 suite "lsp: lspCompletion":
-  var status = initEditorStatus()
+  var status: EditorStatus
 
   setup:
     status = initEditorStatus()
@@ -653,7 +648,8 @@ suite "lsp: lspCompletion":
     let filename = $genOid() & ".nim"
     assert status.addNewBufferInCurrentWin(filename).isOk
 
-    status.lspClients["nim"] = LspClient()
+  teardown:
+    discard lspClient.kill
 
   test "Basic":
     check status.lspCompletion(%*{
@@ -742,7 +738,7 @@ suite "lsp: lspCompletion":
     ]
 
 suite "lsp: lspInlayHint":
-  var status = initEditorStatus()
+  var status: EditorStatus
 
   setup:
     status = initEditorStatus()
@@ -751,7 +747,8 @@ suite "lsp: lspInlayHint":
     let filename = $genOid() & ".nim"
     assert status.addNewBufferInCurrentWin(filename).isOk
 
-    status.lspClients["nim"] = LspClient()
+  teardown:
+    discard lspClient.kill
 
   test "Empty":
     currentBufStatus.inlayHints.range = independentutils.Range(
@@ -836,7 +833,7 @@ suite "lsp: lspInlayHint":
     check hints[0].paddingRight.get == false
 
 suite "lsp: lspDeclaration":
-  var status = initEditorStatus()
+  var status: EditorStatus
 
   setup:
     status = initEditorStatus()
@@ -851,7 +848,8 @@ suite "lsp: lspDeclaration":
     .toSeqRunes
     .toGapBuffer
 
-    status.lspClients["nim"] = LspClient()
+  teardown:
+    discard lspClient.kill
 
   test "Not found":
     lspClient.waitingResponses[0] = WaitLspResponse(
@@ -895,7 +893,7 @@ suite "lsp: lspDeclaration":
     check currentMainWindowNode.currentColumn == 5
 
 suite "lsp: lspDefinition":
-  var status = initEditorStatus()
+  var status: EditorStatus
 
   setup:
     status = initEditorStatus()
@@ -910,7 +908,8 @@ suite "lsp: lspDefinition":
     .toSeqRunes
     .toGapBuffer
 
-    status.lspClients["nim"] = LspClient()
+  teardown:
+    discard lspClient.kill
 
   test "Not found":
     lspClient.waitingResponses[0] = WaitLspResponse(
@@ -954,7 +953,7 @@ suite "lsp: lspDefinition":
     check currentMainWindowNode.currentColumn == 5
 
 suite "lsp: lspTypeDefinition":
-  var status = initEditorStatus()
+  var status: EditorStatus
 
   setup:
     status = initEditorStatus()
@@ -969,7 +968,8 @@ suite "lsp: lspTypeDefinition":
     .toSeqRunes
     .toGapBuffer
 
-    status.lspClients["nim"] = LspClient()
+  teardown:
+    discard lspClient.kill
 
   test "Not found":
     lspClient.waitingResponses[0] = WaitLspResponse(
@@ -1013,7 +1013,7 @@ suite "lsp: lspTypeDefinition":
     check currentMainWindowNode.currentColumn == 5
 
 suite "lsp: lspReferences":
-  var status = initEditorStatus()
+  var status: EditorStatus
 
   setup:
     status = initEditorStatus()
@@ -1022,7 +1022,8 @@ suite "lsp: lspReferences":
     let filename = $genOid() & ".nim"
     assert status.addNewBufferInCurrentWin(filename).isOk
 
-    status.lspClients["nim"] = LspClient()
+  teardown:
+    discard status.lspClients["nim"].kill
 
   test "Not found":
     lspClient.waitingResponses[0] = WaitLspResponse(
@@ -1153,7 +1154,7 @@ suite "lsp: lspReferences":
     .toSeqRunes
 
 suite "lsp: lspRename":
-  var status = initEditorStatus()
+  var status: EditorStatus
 
   setup:
     status = initEditorStatus()
@@ -1162,7 +1163,8 @@ suite "lsp: lspRename":
     let filename = $genOid() & ".nim"
     assert status.addNewBufferInCurrentWin(filename).isOk
 
-    status.lspClients["nim"] = LspClient()
+  teardown:
+    discard lspClient.kill
 
   test "Not found":
     lspClient.waitingResponses[0] = WaitLspResponse(
@@ -1237,10 +1239,11 @@ suite "lsp: lspRename":
     ].toSeqRunes
 
 suite "lsp: lspFoldingRange":
-  var status = initEditorStatus()
+  var status: EditorStatus
 
   setup:
     status = initEditorStatus()
+    status.settings.lsp.enable = false
 
     let filename = $genOid()
     assert status.addNewBufferInCurrentWin(filename).isOk
@@ -1298,13 +1301,17 @@ suite "lsp: lspFoldingRange":
     ]
 
 suite "lsp: Selection Range":
-  var status = initEditorStatus()
+  var status: EditorStatus
 
   setup:
     status = initEditorStatus()
+    status.settings.lsp.enable = false
 
     let filename = $genOid()
     assert status.addNewBufferInCurrentWin(filename).isOk
+
+    currentBufStatus.langId = "dummy"
+    status.lspClients["dummy"] = LspClient()
 
   test "Not found":
     check status.lspFoldingRange(%*{
@@ -1320,9 +1327,6 @@ suite "lsp: Selection Range":
 
     status.resize(100, 100)
     status.update
-
-    currentBufStatus.langId = "dummy"
-    status.lspClients["dummy"] = LspClient()
 
     lspClient.waitingResponses[0] = WaitLspResponse(
       bufferId: currentBufStatus.id,
@@ -1411,9 +1415,6 @@ suite "lsp: Selection Range":
     status.resize(100, 100)
     status.update
 
-    currentBufStatus.langId = "dummy"
-    status.lspClients["dummy"] = LspClient()
-
     lspClient.waitingResponses[0] = WaitLspResponse(
       bufferId: currentBufStatus.id,
       requestId: 0,
@@ -1453,9 +1454,6 @@ suite "lsp: Selection Range":
     status.resize(100, 100)
     status.update
 
-    currentBufStatus.langId = "dummy"
-    status.lspClients["dummy"] = LspClient()
-
     lspClient.waitingResponses[0] = WaitLspResponse(
       bufferId: currentBufStatus.id,
       requestId: 0,
@@ -1487,13 +1485,20 @@ suite "lsp: Selection Range":
     check currentMainWindowNode.currentColumn == 9
 
 suite "lsp: Selection Range":
-  var status = initEditorStatus()
+  var status: EditorStatus
 
   setup:
     status = initEditorStatus()
+    status.settings.lsp.enable = false
 
     let filename = $genOid()
     assert status.addNewBufferInCurrentWin(filename).isOk
+
+    currentBufStatus.langId = "dummy"
+    status.lspClients["dummy"] = LspClient()
+
+    status.resize(100, 100)
+    status.update
 
   test "Not found":
     check status.lspDocumentSymbol(%*{
@@ -1508,12 +1513,6 @@ suite "lsp: Selection Range":
     check currentBufStatus.mode != Mode.documentsymbol
 
   test "Parse DocumentSymbol[]":
-    status.resize(100, 100)
-    status.update
-
-    currentBufStatus.langId = "dummy"
-    status.lspClients["dummy"] = LspClient()
-
     lspClient.waitingResponses[0] = WaitLspResponse(
       bufferId: currentBufStatus.id,
       requestId: 0,
@@ -1604,12 +1603,6 @@ suite "lsp: Selection Range":
     check currentBufStatus.mode == Mode.documentsymbol
 
   test "Parse SymbolInformation[]":
-    status.resize(100, 100)
-    status.update
-
-    currentBufStatus.langId = "dummy"
-    status.lspClients["dummy"] = LspClient()
-
     lspClient.waitingResponses[0] = WaitLspResponse(
       bufferId: currentBufStatus.id,
       requestId: 0,
@@ -1682,9 +1675,15 @@ suite "lsp: Selection Range":
     check currentBufStatus.mode == Mode.documentsymbol
 
 suite "lsp: handleLspServerNotify":
+  var status: EditorStatus
+
   setup:
-    var status = initEditorStatus()
+    status = initEditorStatus()
     status.settings.lsp.enable = true
+
+  teardown:
+    if status.lspClients.contains("nim"):
+      discard lspClient.kill
 
   test "Invalid":
     check status.handleLspServerNotify(%*{
@@ -1737,7 +1736,6 @@ suite "lsp: handleLspServerNotify":
   test "window/workDoneProgress/create":
     let filename = $genOid() & ".nim"
     assert status.addNewBufferInCurrentWin(filename).isOk
-    status.lspClients["nim"] = LspClient()
 
     check status.handleLspServerNotify(%*{
       "jsonrpc": "2.0",
@@ -1752,7 +1750,6 @@ suite "lsp: handleLspServerNotify":
     let filename = $genOid() & ".nim"
     assert status.addNewBufferInCurrentWin(filename).isOk
 
-    status.lspClients["nim"] = LspClient()
     status.lspClients["nim"].progress["token"] = ProgressReport(
       title: "",
       state: ProgressState.create)
@@ -1774,7 +1771,6 @@ suite "lsp: handleLspServerNotify":
     let filename = $genOid() & ".nim"
     assert status.addNewBufferInCurrentWin(filename).isOk
 
-    status.lspClients["nim"] = LspClient()
     status.lspClients["nim"].progress["token"] = ProgressReport(
       title: "report",
       state: ProgressState.create)
@@ -1798,7 +1794,6 @@ suite "lsp: handleLspServerNotify":
     let filename = $genOid() & ".nim"
     assert status.addNewBufferInCurrentWin(filename).isOk
 
-    status.lspClients["nim"] = LspClient()
     status.lspClients["nim"].progress["token"] = ProgressReport(
       title: "report",
       state: ProgressState.create)
@@ -1821,7 +1816,6 @@ suite "lsp: handleLspServerNotify":
     let filename = $genOid() & ".nim"
     assert status.addNewBufferInCurrentWin(filename).isOk
 
-    status.lspClients["nim"] = LspClient()
     status.lspClients["nim"].progress["token"] = ProgressReport(
       title: "end",
       state: ProgressState.create)
@@ -1867,9 +1861,14 @@ suite "lsp: handleLspServerNotify":
     }).isOk
 
 suite "lsp: handleLspResponse":
+  var status: EditorStatus
+
   setup:
-    var status = initEditorStatus()
+    status = initEditorStatus()
     status.settings.lsp.enable = true
+
+  teardown:
+    discard lspClient.kill
 
   test "Initialize response":
     if not isNimlangserverAvailable():
@@ -1884,9 +1883,12 @@ suite "lsp: handleLspResponse":
       assert status.lspInitialize(workspaceRoot, LangId).isOk
 
       var isTimeout = true
-      for _ in 0 .. 60:
-        const Timeout = 1000
-        while lspClient.readable(Timeout).get:
+      for _ in 0 .. 100:
+        const Timeout = 100
+        let readable = lspClient.readable(Timeout).get
+        if not readable:
+          sleep 100
+        else:
           status.handleLspResponse
 
           if lspClient.isInitialized:
