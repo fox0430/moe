@@ -306,7 +306,7 @@ proc cancelLspForegroundRequest*(
     if c.isInitialized:
       let fgRes = c.getForegroundWaitingResponse(bufferId)
       if fgRes.isSome:
-        let err = c.cancelForegroundRequest(bufferId)
+        let err = waitFor c.cancelForegroundRequest(bufferId)
         if err.isOk:
           return Result[LspMethod, string].ok fgRes.get.lspMethod
         else:
@@ -342,7 +342,7 @@ proc lspInitialize*(
 
     if not status.lspClients.contains(langId):
       # Init a LSP client and start a LSP server.
-      var c = initLspClient(
+      var c = waitFor initLspClient(
         $status.settings.lsp.languages[langId].command)
       if c.isErr:
         return Result[(), string].err c.error
@@ -350,7 +350,7 @@ proc lspInitialize*(
       status.lspClients[langId] = c.get
 
     # Initialize request
-    let err = status.lspClients[langId].initialize(
+    let err = waitFor status.lspClients[langId].initialize(
       status.bufStatus[^1].id,
       initInitializeParams(
         status.lspClients[langId].serverName,
@@ -446,7 +446,7 @@ proc addNewBuffer*(
                status.settings.lsp.languages.contains(newBufStatus.langId):
                  if status.lspClients.contains(newBufStatus.langId):
                    # textDocument/didOpen notification
-                   let err = lspClient.textDocumentDidOpen(
+                   let err = waitFor lspClient.textDocumentDidOpen(
                      $newBufStatus.path.absolutePath,
                      newBufStatus.langId,
                      newBufStatus.buffer.toString)
@@ -689,7 +689,7 @@ proc sendLspSemanticTokenRequest*(c: var LspClient, b: BufferStatus) =
 
   block:
     # Cancel before completion request.
-    let err = c.cancelRequest(
+    let err = waitFor c.cancelRequest(
       b.id,
       LspMethod.textDocumentSemanticTokensFull)
     if err.isErr:
@@ -697,7 +697,7 @@ proc sendLspSemanticTokenRequest*(c: var LspClient, b: BufferStatus) =
 
   block:
     # Send a textDocument/semanticTokens request to the LSP server.
-    let err = c.textDocumentSemanticTokens(b.id, $b.absolutePath)
+    let err = waitFor c.textDocumentSemanticTokens(b.id, $b.absolutePath)
     if err.isErr:
       error fmt"lsp: {err.error}"
 
@@ -710,7 +710,7 @@ proc sendLspInlayHintRequest*(
 
     block:
       # Cancel before inlayHint request.
-      let err = c.cancelRequest(b.id, LspMethod.textDocumentInlayHint)
+      let err = waitFor c.cancelRequest(b.id, LspMethod.textDocumentInlayHint)
       if err.isErr: error fmt"lsp: {err.error}"
 
     # Calc range from all views.
@@ -731,7 +731,7 @@ proc sendLspInlayHintRequest*(
           if b.buffer[last].high >= 0: b.buffer[last].high
           else: 0
 
-    let err = c.textDocumentInlayHint(b.id, $b.absolutePath, hintRange)
+    let err = waitFor c.textDocumentInlayHint(b.id, $b.absolutePath, hintRange)
     if err.isErr: error fmt"lsp: {err.error}"
 
     b.inlayHints.range = Range(
@@ -747,7 +747,7 @@ proc sendLspInlineValueRequest*(
 
     block:
       # Cancel before inlineValue request.
-      let err = c.cancelRequest(b.id, LspMethod.textDocumentInlineValue)
+      let err = waitFor c.cancelRequest(b.id, LspMethod.textDocumentInlineValue)
       if err.isErr: error fmt"lsp: {err.error}"
 
     # Calc range from all views.
@@ -768,7 +768,7 @@ proc sendLspInlineValueRequest*(
           if b.buffer[last].high >= 0: b.buffer[last].high
           else: 0
 
-    let err = c.textDocumentInlineValue(b.id, $b.absolutePath, valueRange)
+    let err = waitFor c.textDocumentInlineValue(b.id, $b.absolutePath, valueRange)
     if err.isErr: error fmt"lsp: {err.error}"
 
     b.inlineValues.range = Range(
@@ -778,7 +778,7 @@ proc sendLspInlineValueRequest*(
 proc sendLspCodeLens*(c: var LspClient, b: BufferStatus) =
   ## Send textDocument/codeLens requests to the LSP server.
 
-  let err = c.textDocumentCodeLens(b.id, $b.absolutePath)
+  let err = waitFor c.textDocumentCodeLens(b.id, $b.absolutePath)
   if err.isErr:
     error fmt"lsp: {err.error}"
 
@@ -832,7 +832,7 @@ proc updateSyntaxHighlightings(status: EditorStatus) =
 
         if isSendDidChange():
           # Send a textDocument/didChange notification to the LSP server.
-          let err = client.textDocumentDidChange(
+          let err = waitFor client.textDocumentDidChange(
             b.version,
             absPath,
             b.buffer.toString)
@@ -1527,7 +1527,7 @@ proc autoSave(status: var EditorStatus) =
 
       if bufStatus.isEditMode and status.lspClients.contains(bufStatus.langId):
         # Send textDocument/didSave notify to the LSP server.
-        let err = status.lspClients[bufStatus.langId].textDocumentDidSave(
+        let err = waitFor status.lspClients[bufStatus.langId].textDocumentDidSave(
           bufStatus.version,
           $bufStatus.path.absolutePath,
           $bufStatus.buffer)

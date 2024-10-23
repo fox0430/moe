@@ -20,7 +20,7 @@
 import unicodeext
 
 ## Log messages displayed on the command line.
-var messageLog: seq[Runes]
+var messageLog {.threadvar.}: seq[Runes]
 
 proc addMessageLog*(message: Runes) =
   ## Add messages to `logger.messageLog`.

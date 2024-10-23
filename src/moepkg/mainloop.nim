@@ -905,7 +905,7 @@ proc sendLspRequests(status: var EditorStatus) =
     currentBufStatus.documentHighlightInfo = DocumentHighlightInfo(
       position: currentMainWindowNode.bufferPosition)
 
-    let err = lspClient.textDocumentDocumentHighlight(
+    let err = waitFor lspClient.textDocumentDocumentHighlight(
       currentBufStatus.id,
       $currentBufStatus.absolutePath,
       currentMainWindowNode.bufferPosition)

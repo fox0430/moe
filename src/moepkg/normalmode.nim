@@ -584,7 +584,7 @@ proc requestGotoDeclaration(status: var EditorStatus) =
     debug "lsp client is not ready"
     return
 
-  let r = lspClient.textDocumentDeclaration(
+  let r = waitFor lspClient.textDocumentDeclaration(
     currentBufStatus.id,
     $currentBufStatus.absolutePath,
     currentMainWindowNode.bufferPosition)
@@ -596,7 +596,7 @@ proc requestGotoDefinition(status: var EditorStatus) =
     debug "lsp client is not ready"
     return
 
-  let r = lspClient.textDocumentDefinition(
+  let r = waitFor lspClient.textDocumentDefinition(
     currentBufStatus.id,
     $currentBufStatus.absolutePath,
     currentMainWindowNode.bufferPosition)
@@ -608,7 +608,7 @@ proc requestGotoTypeDefinition(status: var EditorStatus) =
     debug "lsp client is not ready"
     return
 
-  let r = lspClient.textDocumentTypeDefinition(
+  let r = waitFor lspClient.textDocumentTypeDefinition(
     currentBufStatus.id,
     $currentBufStatus.absolutePath,
     currentMainWindowNode.bufferPosition)
@@ -620,7 +620,7 @@ proc requestGotoImplementation(status: var EditorStatus) =
     debug "lsp client is not ready"
     return
 
-  let r = lspClient.textDocumentImplementation(
+  let r = waitFor lspClient.textDocumentImplementation(
     currentBufStatus.id,
     $currentBufStatus.absolutePath,
     currentMainWindowNode.bufferPosition)
@@ -632,7 +632,7 @@ proc requestFindReferences(status: var EditorStatus) =
     debug "lsp client is not ready"
     return
 
-  let r = lspClient.textDocumentReferences(
+  let r = waitFor lspClient.textDocumentReferences(
     currentBufStatus.id,
     $currentBufStatus.path.absolutePath,
     currentMainWindowNode.bufferPosition)
@@ -644,7 +644,7 @@ proc requestPrepareCallHierarchy(status: var EditorStatus) =
     debug "lsp client is not ready"
     return
 
-  let r = lspClient.textDocumentPrepareCallHierarchy(
+  let r = waitFor lspClient.textDocumentPrepareCallHierarchy(
     currentBufStatus.id,
     $currentBufStatus.path.absolutePath,
     currentMainWindowNode.bufferPosition)
@@ -656,7 +656,7 @@ proc requestDocumentLink(status: var EditorStatus) =
     debug "lsp client is not ready"
     return
 
-  let r = lspClient.textDocumentDocumentLink(
+  let r = waitFor lspClient.textDocumentDocumentLink(
     currentBufStatus.id,
     $currentBufStatus.path.absolutePath)
   if r.isErr:
@@ -669,7 +669,7 @@ proc requestDocumentSymbol(status: var EditorStatus) =
          "client is not ready")
        return
 
-  let r = lspClient.textDocumentDocumentSymbol(
+  let r = waitFor lspClient.textDocumentDocumentSymbol(
     currentBufStatus.id,
     $currentBufStatus.absolutePath)
   if r.isErr:
@@ -764,7 +764,7 @@ proc requestRename(status: var EditorStatus) =
   if status.commandLine.getKeys(Prompt):
     let newName = $status.commandLine.buffer
 
-    let r = lspClient.textDocumentRename(
+    let r = waitFor lspClient.textDocumentRename(
       currentBufStatus.id,
       $currentBufStatus.path.absolutePath,
       currentMainWindowNode.bufferPosition,
@@ -779,7 +779,7 @@ proc requestSelectionRange(status: var EditorStatus) =
     debug "lsp client is not ready"
     return
 
-  let r = lspClient.textDocumentSelectionRange(
+  let r = waitFor lspClient.textDocumentSelectionRange(
     currentBufStatus.id,
     $currentBufStatus.path.absolutePath,
     @[currentMainWindowNode.bufferPosition])
@@ -1351,7 +1351,7 @@ proc requestHover(status: var EditorStatus) =
     debug "lsp client is not ready"
     return
 
-  let r = status.lspClients[currentBufStatus.langId].textDocumentHover(
+  let r = waitFor lspClient.textDocumentHover(
     currentBufStatus.id,
     $currentBufStatus.path.absolutePath,
     currentMainWindowNode.bufferPosition)

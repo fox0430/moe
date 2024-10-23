@@ -48,10 +48,10 @@ template handleLspInitialize(status: var EditorStatus) =
 
   for _ in 0 .. 20:
     assert lspClient.readable(Timeout).isOk
-    let res = lspClient.read.get
-    if res.contains("id"):
-      assert res["id"].getInt == 1
-      assert status.lspInitialized(res).isOk
+    let res = waitFor lspClient.read
+    if res.get.contains("id"):
+      assert res.get["id"].getInt == 1
+      assert status.lspInitialized(res.get).isOk
       assert lspClient.isInitialized
       break
 

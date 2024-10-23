@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -17,14 +17,16 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strformat, strutils, json, parseutils, options, logging, streams]
+import std/[strformat, strutils, json, parseutils, options, logging]
 
-import pkg/[results, jsony]
+import pkg/stew/byteutils
+import pkg/[results, jsony, chronos]
 
 import ../messagelog
 
+export chronos
+
 type
-  ReadResult = Result[string, string]
   ReadFrameResult = Result[string, string]
   JsonRpcResponseResult* = Result[JsonNode, string]
   JsonRpcSendResult* = Result[(), string]
@@ -37,16 +39,16 @@ type
     input*, output*: FileHandle
 
   InputStream* = ref object
-    stream*: Stream
+    stream*: AsyncStreamWriter
 
   OutputStream* = ref object
-    stream*: Stream
+    stream*: AsyncStreamReader
 
   Streams* = ref object
     input*: InputStream
     output*: OutputStream
 
-proc atEnd*(s: OutputStream): bool {.inline.} = s.stream.atEnd
+let Timeout = 1000.milliseconds
 
 proc skipWhitespace(x: string, pos: int): int =
   result = pos
@@ -59,80 +61,85 @@ proc isInvalidContentType(s: string, valueStart: int): bool {.inline.} =
 proc isValidJsonRpc(json: JsonNode): bool {.inline.} =
   json.contains("jsonrpc")
 
-proc debugLog(messageType: MessageType, message: string) =
-  let debugMessage =
-    case messageType:
-      of read:
-        "lsp: Read messages: \n" & message & '\n'
-      of write:
-        "lsp: Write messages: \n" & message & '\n'
-
-  debug debugMessage
-  addMessageLog debugMessage
-
-proc readStr(s: OutputStream, len: int): ReadResult =
+proc debugLog(messageType: MessageType, message: string) {.raises: [].} =
   try:
-    return ReadResult.ok s.stream.readStr(len)
-  except CatchableError as e:
-    return ReadResult.err e.msg
+    let debugMessage =
+      case messageType:
+        of read:
+          "lsp: Read messages: \n" & message & '\n'
+        of write:
+          "lsp: Write messages: \n" & message & '\n'
 
-proc readLine(s: OutputStream): ReadResult =
-  try:
-    return ReadResult.ok s.stream.readLine
-  except CatchableError as e:
-    return ReadResult.err e.msg
+    debug debugMessage
+    addMessageLog debugMessage
+  except:
+    discard
 
-proc readFrame(s: OutputStream): ReadFrameResult =
+proc readFrame(s: AsyncStreamReader): Future[ReadFrameResult] {.async.} =
   ## Read text from the stream and return json node.
 
-  var
-    contentLen = -1
-    headerStarted = false
-
   while true:
-    let ln = s.readLine
-    if ln.isErr:
-      debug ln.error
-      return ReadFrameResult.err fmt"readLine failed: {ln.error}"
+    let buf =
+      try:
+        let f = s.readLine(sep="\r\n\r\n")
+        if await f.withTimeout(Timeout):
+          f.value
+        else:
+          return ReadFrameResult.err fmt"readLine: timeout"
+      except CatchableError as e:
+        return ReadFrameResult.err fmt"readLine failed: {e.msg}"
 
-    if ln.get.len != 0:
-      debugLog(MessageType.read, fmt"readLine: {ln.get}")
+    if buf.len == 0:
+      return ReadFrameResult.err fmt"readLine: empty"
 
-      let sep = ln.get.find(':')
-      if sep == -1:
-        # Skip line if not json.
+    debugLog(MessageType.read, fmt"readLine: {buf}")
+
+    var header: Option[tuple[ln: string, sep: int]]
+    for ln in buf.splitLines:
+      if ln.startsWith("Content-"):
+        let sep = ln.find(':')
+        if sep > -1:
+          header = some((ln, sep))
+          break
+
+    if header.isNone:
+      # Skip line if not JSON-RPC.
+      continue
+
+    let valueStart = header.get.ln.skipWhitespace(header.get.sep + 1)
+
+    var contentLen = -1
+    case header.get.ln[0 ..< header.get.sep]
+      of "Content-Type":
+        if isInvalidContentType(header.get.ln, valueStart):
+          return ReadFrameResult.err "Only utf-8 is supported"
+      of "Content-Length":
+        if parseInt(header.get.ln, contentLen, valueStart) == 0:
+          return
+            ReadFrameResult.err fmt"Invalid Content-Length: {header.get.ln.substr(valueStart)}"
+      else:
+        # Unrecognized headers are ignored
         continue
 
-      headerStarted = true
-
-      let valueStart = ln.get.skipWhitespace(sep + 1)
-
-      case ln.get[0 ..< sep]
-        of "Content-Type":
-          if isInvalidContentType(ln.get, valueStart):
-            return ReadFrameResult.err "Only utf-8 is supported"
-        of "Content-Length":
-          if parseInt(ln.get, contentLen, valueStart) == 0:
-            return ReadFrameResult.err fmt"Invalid Content-Length: {ln.get.substr(valueStart)}"
-        else:
-          # Unrecognized headers are ignored
-          discard
-    elif not headerStarted:
-      continue
+    if contentLen != -1:
+      let buf=
+        try:
+          let f = s.read(contentLen)
+          if await f.withTimeout(Timeout):
+            string.fromBytes(f.value)
+          else:
+            return ReadFrameResult.err fmt"readStr failed"
+        except:
+          return ReadFrameResult.err fmt"readStr failed"
+      debugLog(MessageType.read, fmt"Response: {buf}")
+      return ReadFrameResult.ok buf
     else:
-      if contentLen != -1:
-        let str = s.readStr(contentLen)
-        if str.isErr:
-          return ReadFrameResult.err fmt"readStr failed: {str.error}"
-        debugLog(MessageType.read, fmt"Response: {str.get}")
-        return ReadFrameResult.ok str.get
-      else:
-        return ReadFrameResult.err "Missing Content-Length header"
+      return ReadFrameResult.err "Missing Content-Length header"
 
-proc read*(s: OutputStream): JsonRpcResponseResult =
+proc read*(s: OutputStream): Future[JsonRpcResponseResult] {.async.} =
   ## Return a json-rpc response from the stream.
 
-  let r = s.readFrame
+  let r = await s.stream.readFrame
   if r.isErr:
     return JsonRpcResponseResult.err r.error
 
@@ -147,13 +154,9 @@ proc read*(s: OutputStream): JsonRpcResponseResult =
   else:
     return JsonRpcResponseResult.err fmt"Invalid jsonrpc: {$res}"
 
-proc write(s: InputStream, buffer: string) {.inline.} =
-  s.stream.write(buffer)
-  s.stream.flush
-
 proc send(
   s: InputStream,
-  frame: string): Result[(), string] =
+  frame: string): Future[Result[(), string]] {.async.} =
     ## Write json-rpc message to the stream.
 
     let req = "Content-Length: " & $frame.len & "\r\n\r\n" & frame
@@ -161,7 +164,8 @@ proc send(
     debugLog(MessageType.write, req)
 
     try:
-      s.write req
+      if not await s.stream.write(req).withTimeout(Timeout):
+        return Result[(), string].err "write: Timeout"
     except CatchableError as e:
       return Result[(), string].err e.msg
 
@@ -175,12 +179,12 @@ template newRequest*(id: int, methodName: string, params: JsonNode): JsonNode =
     "params": params
   }
 
-proc sendRequest*(streams: Streams, req: JsonNode): JsonRpcSendResult =
+proc sendRequest*(s: InputStream, req: JsonNode): Future[JsonRpcSendResult] {.async.} =
   ## Send a request and return a response.
 
-  var s = newStringOfCap(1024)
-  s.toUgly(req)
-  let err = streams.input.send(s)
+  var str = newStringOfCap(1024)
+  str.toUgly(req)
+  let err = await s.send(str)
   if err.isErr:
     return JsonRpcSendResult.err err.error
 
@@ -193,11 +197,11 @@ template newNotify*(methodName: string, params: JsonNode): JsonNode =
     "params": params
   }
 
-proc sendNotify*(streams: Streams, notify: JsonNode): Result[(), string] =
+proc sendNotify*(s: InputStream, notify: JsonNode): Future[Result[(), string]] {.async.} =
   ## Send a notification.
   ## No response to the notification. Also, no `id` is required in the
   ## request.
 
-  var s = newStringOfCap(1024)
-  s.toUgly(notify)
-  return streams.input.send(s)
+  var str = newStringOfCap(1024)
+  str.toUgly(notify)
+  return await s.send(str)

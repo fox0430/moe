@@ -121,19 +121,19 @@ proc lspInitialized(
 
     block:
       # Initialized notification
-      let err = lspClient.initialized
+      let err = waitFor lspClient.initialized
       if err.isErr:
         return Result[(), string].err err.error
 
     block:
       # workspace/didChangeConfiguration notification
-      let err = lspClient.workspaceDidChangeConfiguration
+      let err = waitFor lspClient.workspaceDidChangeConfiguration
       if err.isErr:
         return Result[(), string].err err.error
 
     block:
       # textDocument/didOpen notification
-      let err = lspClient.textDocumentDidOpen(
+      let err = waitFor lspClient.textDocumentDidOpen(
         $currentBufStatus.path.absolutePath,
         currentBufStatus.langId,
         currentBufStatus.buffer.toString)
@@ -142,7 +142,7 @@ proc lspInitialized(
 
     block:
       # textDocument/semanticTokens
-      let err = lspClient.textDocumentSemanticTokens(
+      let err = waitFor lspClient.textDocumentSemanticTokens(
         currentBufStatus.id,
         $currentBufStatus.path.absolutePath)
       if err.isErr:
@@ -957,7 +957,7 @@ proc lspDocumentLink(
       return Result[(), string].err "Not found"
 
     if links[0].isResolve:
-      let r = lspClient.documentLinkResolve(currentBufStatus.id, links[0])
+      let r = waitFor lspClient.documentLinkResolve(currentBufStatus.id, links[0])
       if r.isErr:
         return Result[(), string].err r.error
 
@@ -1275,7 +1275,7 @@ proc handleLspResponse*(status: var EditorStatus) =
       status.commandLine.writeLspError("server crashed")
       return
 
-    let resJson = lspClient.read
+    let resJson = waitFor lspClient.read
     if resJson.isErr:
       # Maybe invalid messages. Ignore.
       error fmt"lsp: Invalid message: {resJson}"
