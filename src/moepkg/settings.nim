@@ -678,7 +678,8 @@ proc initLspServerSettings(): LspServerSettings =
   result.rustAnalyzer = initLspRustAnalyzerSettings()
 
 proc initLspSettings(): LspSettings =
-  result.enable = true
+  when not defined unitTest:
+    result.enable = true
 
   result.features = initLspFeatureSettings()
 

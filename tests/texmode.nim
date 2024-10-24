@@ -195,6 +195,8 @@ suite "Ex mode: Write command":
       const Command = @[ru"w"]
       status.exModeCommand(Command)
 
+      discard lspClient.kill
+
 suite "Ex mode: Change next buffer command":
  test "Change next buffer command 1":
    var status = initEditorStatus()
