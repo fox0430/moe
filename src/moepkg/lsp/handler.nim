@@ -43,14 +43,13 @@ import
   ../statusline,
   ../visualmode
 
+import completion as lspcompletion
+
 import client, utils, hover, message, diagnostics, semantictoken, progress,
        inlayhint, definition, typedefinition, references, rename, declaration,
        implementation, callhierarchy, documenthighlight, documentlink,
        codelens, executecommand, foldingrange, selectionrange, documentsymbol,
        inlinevalue, signaturehelp, formatting
-
-# Workaround for Nim 1.6.2
-import completion as lspcompletion
 
 proc applyTextEdit(b: var BufferStatus, edit: TextEdit): Result[(), string] =
   let

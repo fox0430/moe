@@ -38,15 +38,16 @@ template removeAllFoldingRange(status: var EditorStatus, first, last: int) =
 proc changeModeToInsertMode(
   status: var EditorStatus,
   removeFoldingRange: bool = true) {.inline.} =
-  if currentBufStatus.isReadonly:
-    status.commandLine.writeReadonlyModeWarning
-    return
 
-  if removeFoldingRange:
-    status.removeAllFoldingRange
+    if currentBufStatus.isReadonly:
+      status.commandLine.writeReadonlyModeWarning
+      return
 
-  changeCursorType(status.settings.standard.insertModeCursor)
-  status.changeMode(Mode.insert)
+    if removeFoldingRange:
+      status.removeAllFoldingRange
+
+    changeCursorType(status.settings.standard.insertModeCursor)
+    status.changeMode(Mode.insert)
 
 proc changeModeToReplaceMode(status: var EditorStatus) {.inline.} =
   if currentBufStatus.isReadonly:
@@ -57,30 +58,30 @@ proc changeModeToReplaceMode(status: var EditorStatus) {.inline.} =
 
   status.changeMode(Mode.replace)
 
-proc changeModeToVisualMode(status: var EditorStatus) {.inline.} =
+template changeModeToVisualMode(status: var EditorStatus) =
   status.changeMode(Mode.visual)
   currentBufStatus.selectedArea = initSelectedArea(
     currentMainWindowNode.currentLine,
     currentMainWindowNode.currentColumn)
     .some
 
-proc changeModeToVisualBlockMode(status: var EditorStatus) {.inline.} =
+template changeModeToVisualBlockMode(status: var EditorStatus) =
   status.changeMode(Mode.visualBlock)
   currentBufStatus.selectedArea = initSelectedArea(
     currentMainWindowNode.currentLine,
     currentMainWindowNode.currentColumn)
     .some
 
-proc changeModeToVisualLineMode(status: var EditorStatus) {.inline.} =
+template changeModeToVisualLineMode(status: var EditorStatus) =
   status.changeMode(Mode.visualLine)
   currentBufStatus.selectedArea = initSelectedArea(
     currentMainWindowNode.currentLine,
     currentMainWindowNode.currentColumn)
     .some
 
-proc changeModeToExMode*(
+template changeModeToExMode*(
   bufStatus: var BufferStatus,
-  commandLine: var CommandLine) {.inline.} =
+  commandLine: var CommandLine) =
 
     bufStatus.changeMode(Mode.ex)
     commandLine.clear
@@ -90,21 +91,15 @@ template moveCursorLeft(status: var EditorStatus) =
   for i in 0 ..< currentBufStatus.cmdLoop:
     currentMainWindowNode.keyLeft
 
-proc moveCursorRight(status: var EditorStatus) {.inline.} =
-  ## Use proc not template for a workaround for Nim 1.6.2.
-
+template moveCursorRight(status: var EditorStatus) =
   for i in 0 ..< currentBufStatus.cmdLoop:
     currentBufStatus.keyRight(currentMainWindowNode)
 
-proc moveCursorUp(status: var EditorStatus) {.inline.} =
-  ## Use proc not template for a workaround for Nim 1.6.2.
-
+template moveCursorUp(status: var EditorStatus) =
   for i in 0 ..< currentBufStatus.cmdLoop:
     currentBufStatus.keyUp(currentMainWindowNode)
 
-proc moveCursorDwon(status: var EditorStatus) {.inline.} =
-  ## Use proc not template for a workaround for Nim 1.6.2.
-
+template moveCursorDwon(status: var EditorStatus) =
   for i in 0 ..< currentBufStatus.cmdLoop:
     currentBufStatus.keyDown(currentMainWindowNode)
 
@@ -327,34 +322,24 @@ proc moveToFirstLine(status: var EditorStatus) =
   let dest = currentBufStatus.cmdLoop - 1
   currentBufStatus.jumpLine(currentMainWindowNode, dest)
 
-proc moveToForwardWord(status: var EditorStatus) {.inline.} =
-  ## Use proc for workaround for Nim 1.6.2.
-
+template moveToForwardWord(status: var EditorStatus) =
   for i in 0 ..< currentBufStatus.cmdLoop:
     currentBufStatus.moveToForwardWord(currentMainWindowNode)
 
-proc moveToBackwardWord(status: var EditorStatus) {.inline.} =
-  ## Use proc for workaround for Nim 1.6.2.
-
+template moveToBackwardWord(status: var EditorStatus) =
   for i in 0 ..< currentBufStatus.cmdLoop:
     currentBufStatus.moveToBackwardWord(currentMainWindowNode)
 
-proc moveToForwardEndOfWord(status: var EditorStatus) {.inline.} =
-  ## Use proc for workaround for Nim 1.6.2.
-
+template moveToForwardEndOfWord(status: var EditorStatus) =
   for i in 0 ..< currentBufStatus.cmdLoop:
     currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
 
-proc incNumberTextUnderCurosr(status: var EditorStatus) {.inline.} =
-  ## Use proc for workaround for Nim 1.6.2.
-
+template incNumberTextUnderCurosr(status: var EditorStatus) =
   currentBufStatus.modifyNumberTextUnderCurosr(
     currentMainWindowNode,
     currentBufStatus.cmdLoop)
 
-proc decNumberTextUnderCurosr(status: var EditorStatus) {.inline.} =
-  ## Use proc for workaround for Nim 1.6.2.
-
+template decNumberTextUnderCurosr(status: var EditorStatus) =
   currentBufStatus.modifyNumberTextUnderCurosr(
     currentMainWindowNode,
     -currentBufStatus.cmdLoop)

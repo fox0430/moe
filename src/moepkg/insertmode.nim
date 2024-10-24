@@ -21,12 +21,8 @@ import std/[options, json, logging, tables]
 
 import pkg/results
 
-import lsp/client
-
-# Workaround for Nim 1.6.2
+import lsp/[client, signaturehelp]
 import lsp/completion as lspcompletion
-
-import lsp/signaturehelp
 
 import ui, editorstatus, windownode, movement, editor, bufferstatus, settings,
        unicodeext, independentutils, gapbuffer, completion, messages
