@@ -250,7 +250,7 @@ proc readable*(c: LspClient, timeout: int = 1): LspClientReadableResult =
   ## timeout is milliseconds.
 
   const FdLen = 1
-  let r = c.pollFd.addr.poll(FdLen.Tnfds, timeout)
+  let r = c.pollFd.addr.poll(FdLen.Tnfds, timeout.cint)
   return LspClientReadableResult.ok r == 1
 
 proc request(

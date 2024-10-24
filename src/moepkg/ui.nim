@@ -563,7 +563,7 @@ proc kbhit(timeout: int = 10): int =
 
   # Wait stdin.
   const FdLen = 1
-  return pollFd.addr.poll(FdLen.Tnfds, timeout)
+  return pollFd.addr.poll(FdLen.Tnfds, timeout.cint)
 
 proc read(fd: int): Option[int] =
   ## Read 1 byte.
