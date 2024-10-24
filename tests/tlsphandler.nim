@@ -1883,7 +1883,7 @@ suite "lsp: handleLspResponse":
       assert status.lspInitialize(workspaceRoot, LangId).isOk
 
       var isTimeout = true
-      for i in 0 .. 120:
+      for _ in 0 .. 120:
         const Timeout = 1000
         let readable = lspClient.readable(Timeout).get
         if not readable:
