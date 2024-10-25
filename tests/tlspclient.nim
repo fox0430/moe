@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, importutils, os, osproc, options, tables, json]
+import std/[unittest, importutils, os, osproc, options, tables, json, strformat]
 
 import pkg/results
 
@@ -93,11 +93,21 @@ suite "lsp: restart":
     Command = "nimlangserver"
     Trace = TraceValue.verbose
 
-  var client: LspClient
+  var
+    client: LspClient
+    beforePid: int
 
   setup:
+    beforePid = -1
+
     if isNimlangserverAvailable():
       client = (waitFor initLspClient(Command)).get
+
+  teardown:
+    if beforePid > -1:
+      discard execCmd(fmt"kill -9 {$beforePid}")
+
+    discard client.kill
 
   test "Basic 1":
     if not isNimlangserverAvailable():
@@ -107,9 +117,9 @@ suite "lsp: restart":
       let params = initInitializeParams(ServerName, "/", Trace)
       check (waitFor client.initialize(BufferId, params)).isOk
 
-      let
-        beforePid = client.serverProcessId
-        beforeLogLen = client.log.len
+      beforePid = client.serverProcessId
+
+      let beforeLogLen = client.log.len
 
       check client.running
 
@@ -1182,6 +1192,8 @@ suite "lsp: Send requests":
   teardown:
     if dirExists(rootDir):
       removeDir(rootDir)
+
+    discard client.kill
 
   test "Send initialize":
     if not isNimlangserverAvailable():
