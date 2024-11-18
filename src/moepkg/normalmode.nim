@@ -1682,7 +1682,7 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
       status.requestDocumentLink
   elif key == ord('G'):
     currentBufStatus.moveToLastLine(currentMainWindowNode)
-  elif isCtrlR(key):
+  elif isCtrlO(key):
     status.jumpBackFromGotoDefinitionSource
   elif isCtrlU(key):
     return status.halfPageUpCommand
@@ -1983,7 +1983,8 @@ proc isNormalModeCommand*(
          $command == "L" or
          $command == "%" or
          $command == "K" or
-         isCtrlS(command):
+         isCtrlS(command) or
+         isCtrlO(command):
            result = InputState.Valid
 
       elif isDigit(command[0]):
