@@ -600,6 +600,32 @@ proc requestGotoTypeDefinition(status: var EditorStatus) =
   if r.isErr:
     status.commandLine.writeLspTypeDefinitionError(r.error)
 
+proc jumpBackFromGotoDefinitionSource(status: var EditorStatus) =
+  let location = currentBufStatus.getGotoDefinitionSource
+  if location.isNone:
+    # Not found
+    return
+
+  let
+    path = location.get.path
+    bufferIndex = status.bufStatus.checkBufferExist(path)
+  if bufferIndex.isSome:
+    status.changeCurrentBuffer(bufferIndex.get)
+  else:
+    let err = status.addNewBufferInCurrentWin($path)
+    if err.isErr:
+      status.commandLine.writeFileOpenError(location.get.path)
+      return
+
+  currentMainWindowNode.currentLine = min(
+    currentBufStatus.buffer.high,
+    location.get.range.first.line)
+  currentMainWindowNode.currentColumn = min(
+    currentBufStatus.buffer[currentMainWindowNode.currentLine].high,
+    location.get.range.first.column)
+
+  status.update
+
 proc requestGotoImplementation(status: var EditorStatus) =
   if not status.lspClients.contains(currentBufStatus.langId):
     debug "lsp client is not ready"
@@ -1656,6 +1682,8 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
       status.requestDocumentLink
   elif key == ord('G'):
     currentBufStatus.moveToLastLine(currentMainWindowNode)
+  elif isCtrlR(key):
+    status.jumpBackFromGotoDefinitionSource
   elif isCtrlU(key):
     return status.halfPageUpCommand
   elif isCtrlD(key):

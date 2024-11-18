@@ -101,6 +101,7 @@ type
     codeLenses*: seq[CodeLens] # Lsp CodeLens
     selectionRanges*: seq[SelectionRange] # Lsp SelectionRange
     documentSymbols*: seq[DocumentSymbol] # Lsp DocumentSybol
+    gotoDefinitionSource: Option[BufferLocation] # The position before LSP Goto definition
 
 var
   countAddedBuffer = 0
@@ -316,10 +317,14 @@ proc isUpdate*(bufStatuses: seq[BufferStatus]): bool =
   for b in bufStatuses:
     if b.isUpdate: return true
 
-proc checkBufferExist*(bufStatus: seq[BufferStatus], path: Runes): Option[int] =
-  for index, buf in bufStatus:
-    if buf.path == path:
-      return some(index)
+proc checkBufferExist*(
+  bufStatus: seq[BufferStatus],
+  path: Runes | string): Option[int] =
+
+    let runes = path.toRunes
+    for index, buf in bufStatus:
+      if buf.path == runes:
+        return some(index)
 
 proc absolutePath*(bufStatus: BufferStatus): Runes =
   if isAbsolute($bufStatus.path):
@@ -451,3 +456,16 @@ proc updateSyntaxCheckerResults*(
     bufStatus.syntaxCheckResults = r.get
 
     return Result[(), string].ok ()
+
+proc setGotoDefinitionSource*(b: BufferStatus, l: BufferLocation) {.inline.} =
+  b.gotoDefinitionSource = some(l)
+
+proc getGotoDefinitionSource*(
+  b: BufferStatus,
+  clear: bool = true): Option[BufferLocation] =
+
+    if b.gotoDefinitionSource.isSome:
+      let l = b.gotoDefinitionSource
+      if clear:
+        b.gotoDefinitionSource = none(BufferLocation)
+      return l
