@@ -617,14 +617,14 @@ proc jumpBackFromGotoDefinitionSource(status: var EditorStatus) =
       status.commandLine.writeFileOpenError(location.get.path)
       return
 
+    status.resize
+
   currentMainWindowNode.currentLine = min(
     currentBufStatus.buffer.high,
     location.get.range.first.line)
   currentMainWindowNode.currentColumn = min(
     currentBufStatus.buffer[currentMainWindowNode.currentLine].high,
     location.get.range.first.column)
-
-  status.update
 
 proc requestGotoImplementation(status: var EditorStatus) =
   if not status.lspClients.contains(currentBufStatus.langId):

@@ -389,7 +389,7 @@ proc initBufferStatus*(
     return Result[BufferStatus, string].ok b
 
 proc initBufferStatus*(
-  mode: Mode): Result[BufferStatus, string] =
+  mode: Mode = Mode.normal): Result[BufferStatus, string] =
     ## Return a BufferStatus for a new empty buffer.
 
     var b = BufferStatus(

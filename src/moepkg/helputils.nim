@@ -141,6 +141,7 @@ zd         - Delete folding lines
 zD         - Delete all folding lines
 Ctrl-s     - Selection Range (LSP)
 Space o    - Document Symbol (LSP)
+Ctrl-o     - Jump Back from LSP Goto Definition
 
 # Register
 
