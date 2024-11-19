@@ -607,6 +607,10 @@ proc openWindowAndGotoDefinition(
   l: BufferLocation): Result[(), string] =
     ## Goto definition and Goto TypeDefinition.
 
+    let
+      beforePath = $currentBufStatus.path
+      beforePosition = currentMainWindowNode.bufferPosition
+
     if l.path == $currentBufStatus.absolutePath:
       currentMainWindowNode.currentLine = l.range.first.line
       currentMainWindowNode.currentColumn = l.range.first.column
@@ -633,6 +637,16 @@ proc openWindowAndGotoDefinition(
 
       jumpLine(currentBufStatus, currentMainWindowNode, l.range.first.line)
       currentMainWindowNode.currentColumn = l.range.first.column
+
+    block:
+      let p = BufferPosition(
+        line: beforePosition.line,
+        column: beforePosition.column)
+      currentBufStatus.setGotoDefinitionSource(BufferLocation(
+        path: beforePath,
+        range: BufferRange(
+          first: p,
+          last: p)))
 
     return Result[(), string].ok ()
 
