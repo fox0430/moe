@@ -154,6 +154,13 @@ proc read*(s: OutputStream): Future[JsonRpcResponseResult] {.async.} =
   else:
     return JsonRpcResponseResult.err fmt"Invalid jsonrpc: {$res}"
 
+proc write(s: InputStream, req: string) {.async.} =
+  try:
+    await s.stream.write(req)
+  except:
+    # TODO: Add messages to error log.
+    discard
+
 proc send(
   s: InputStream,
   frame: string): Future[Result[(), string]] {.async.} =
@@ -163,10 +170,7 @@ proc send(
 
     debugLog(MessageType.write, req)
 
-    try:
-      asyncSpawn s.stream.write(req)
-    except CatchableError as e:
-      return Result[(), string].err e.msg
+    asyncSpawn s.write(req)
 
     return Result[(), string].ok ()
 
