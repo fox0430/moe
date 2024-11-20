@@ -335,6 +335,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | Name | Type | Default Value | Description |
 |:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
 | enable | bool | true | LSP Goto Declaration |
+| openWindow | bool | false | Open a new window and jump |
 
 
 ### Lsp.Definition table
@@ -342,6 +343,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | Name | Type | Default Value | Description |
 |:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
 | enable | bool | true | LSP Goto Definition |
+| openWindow | bool | false | Open a new window and jump |
 
 
 ### Lsp.TypeDefinition table
@@ -349,6 +351,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | Name | Type | Default Value | Description |
 |:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
 | enable | bool | true | LSP Type Definition |
+| openWindow | bool | false | Open a new window and jump |
 
 
 ### Lsp.Implementation table
@@ -356,6 +359,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | Name | Type | Default Value | Description |
 |:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
 | enable | bool | true | LSP Implementation |
+| openWindow | bool | false | Open a new window and jump |
 
 
 ### Lsp.Diagnostics table
