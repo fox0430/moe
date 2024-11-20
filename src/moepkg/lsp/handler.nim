@@ -602,10 +602,11 @@ proc lspDocumentFormatting(
 
     return Result[(), string].ok ()
 
-proc openWindowAndGotoDefinition(
+proc jumpToDefinition(
   status: var EditorStatus,
-  l: BufferLocation): Result[(), string] =
-    ## Goto definition and Goto TypeDefinition.
+  l: BufferLocation,
+  openWin: bool): Result[(), string] =
+    ## Goto Declaration, Goto Definition and etc.
 
     let
       beforePath = $currentBufStatus.path
@@ -615,9 +616,10 @@ proc openWindowAndGotoDefinition(
       currentMainWindowNode.currentLine = l.range.first.line
       currentMainWindowNode.currentColumn = l.range.first.column
     else:
-      # Open a buffer in a new window.
-      status.verticalSplitWindow
-      status.moveNextWindow
+      if openWin:
+        # Open a buffer in a new window.
+        status.verticalSplitWindow
+        status.moveNextWindow
 
       let r = status.addNewBufferInCurrentWin(l.path)
       if r.isErr:
@@ -667,7 +669,9 @@ proc lspDeclaration(
     if parseResult.get.isNone:
       return Result[(), string].err fmt"Not found"
 
-    return status.openWindowAndGotoDefinition(parseResult.get.get.location)
+    return status.jumpToDefinition(
+      parseResult.get.get.location,
+      status.settings.lsp.features.declaration.openWindow)
 
 proc lspDefinition(
   status: var EditorStatus,
@@ -686,7 +690,9 @@ proc lspDefinition(
     if parseResult.get.isNone:
       return Result[(), string].err fmt"Not found"
 
-    return status.openWindowAndGotoDefinition(parseResult.get.get.location)
+    return status.jumpToDefinition(
+      parseResult.get.get.location,
+      status.settings.lsp.features.definition.openWindow)
 
 proc lspTypeDefinition(
   status: var EditorStatus,
@@ -705,7 +711,9 @@ proc lspTypeDefinition(
     if parseResult.get.isNone:
       return Result[(), string].err fmt"Not found"
 
-    return status.openWindowAndGotoDefinition(parseResult.get.get.location)
+    return status.jumpToDefinition(
+      parseResult.get.get.location,
+      status.settings.lsp.features.typeDefinition.openWindow)
 
 proc lspImplementation(
   status: var EditorStatus,
@@ -724,7 +732,9 @@ proc lspImplementation(
     if parseResult.get.isNone:
       return Result[(), string].err fmt"Not found"
 
-    return status.openWindowAndGotoDefinition(parseResult.get.get.location)
+    return status.jumpToDefinition(
+      parseResult.get.get.location,
+      status.settings.lsp.features.implementation.openWindow)
 
 proc lspReferences(
   status: var EditorStatus,
@@ -1000,8 +1010,9 @@ proc lspDocumentLinkResolve(
     if path.isErr:
       return Result[(), string].err path.error
 
-    return status.openWindowAndGotoDefinition(
-      BufferLocation(path: path.get))
+    return status.jumpToDefinition(
+      BufferLocation(path: path.get),
+      true)
 
 proc lspCodeLens(status: var EditorStatus, res: JsonNode): Result[(), string] =
   ## textDocument/codeLens

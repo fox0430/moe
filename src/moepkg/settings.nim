@@ -245,15 +245,19 @@ type
 
   LspDeclarationSettings* = object
     enable*: bool
+    openWindow*: bool
 
   LspDefinitionSettings* = object
     enable*: bool
+    openWindow*: bool
 
   LspTypeDefinitionSettings* = object
     enable*: bool
+    openWindow*: bool
 
   LspImplementationSettings* = object
     enable*: bool
+    openWindow*: bool
 
   LspDiagnosticsSettings* = object
     enable*: bool
@@ -1907,6 +1911,8 @@ proc parseLspTable(s: var EditorSettings, lspConfigs: TomlValueRef) =
           case key:
             of "enable":
               s.lsp.features.declaration.enable = val.getBool
+            of "openWindow":
+              s.lsp.features.declaration.openWindow = val.getBool
             else:
               discard
       of "Definition":
@@ -1914,6 +1920,8 @@ proc parseLspTable(s: var EditorSettings, lspConfigs: TomlValueRef) =
           case key:
             of "enable":
               s.lsp.features.definition.enable = val.getBool
+            of "openWindow":
+              s.lsp.features.definition.openWindow = val.getBool
             else:
               discard
       of "TypeDefinition":
@@ -1921,6 +1929,8 @@ proc parseLspTable(s: var EditorSettings, lspConfigs: TomlValueRef) =
           case key:
             of "enable":
               s.lsp.features.typeDefinition.enable = val.getBool
+            of "openWindow":
+              s.lsp.features.typeDefinition.openWindow = val.getBool
             else:
               discard
       of "Implementation":
@@ -1928,6 +1938,8 @@ proc parseLspTable(s: var EditorSettings, lspConfigs: TomlValueRef) =
           case key:
             of "enable":
               s.lsp.features.implementation.enable = val.getBool
+            of "openWindow":
+              s.lsp.features.implementation.openWindow = val.getBool
             else:
               discard
       of "Diagnostics":
@@ -2614,7 +2626,7 @@ proc validateLspTable(table: TomlValueRef): Option[InvalidItem] =
       of "Declaration":
         for key, val in val.getTable:
           case key:
-            of "enable":
+            of "enable", "openWindow":
               if val.kind != TomlValueKind.Bool:
                 return some(InvalidItem(name: $key, val: $val))
             else:
@@ -2622,7 +2634,7 @@ proc validateLspTable(table: TomlValueRef): Option[InvalidItem] =
       of "Definition":
         for key, val in val.getTable:
           case key:
-            of "enable":
+            of "enable", "openWindow":
               if val.kind != TomlValueKind.Bool:
                 return some(InvalidItem(name: $key, val: $val))
             else:
@@ -2630,7 +2642,7 @@ proc validateLspTable(table: TomlValueRef): Option[InvalidItem] =
       of "TypeDefinition":
         for key, val in val.getTable:
           case key:
-            of "enable":
+            of "enable", "openWindow":
               if val.kind != TomlValueKind.Bool:
                 return some(InvalidItem(name: $key, val: $val))
             else:
@@ -2638,7 +2650,7 @@ proc validateLspTable(table: TomlValueRef): Option[InvalidItem] =
       of "Implementation":
         for key, val in val.getTable:
           case key:
-            of "enable":
+            of "enable", "openWindow":
               if val.kind != TomlValueKind.Bool:
                 return some(InvalidItem(name: $key, val: $val))
             else:
@@ -3164,15 +3176,19 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
 
   result.addLine fmt "[Lsp.Declaration]"
   result.addLine fmt "enable = {$settings.lsp.features.declaration.enable}"
+  result.addLine fmt "openWindow = {$settings.lsp.features.implementation.openWindow}"
 
   result.addLine fmt "[Lsp.Definition]"
   result.addLine fmt "enable = {$settings.lsp.features.definition.enable}"
+  result.addLine fmt "openWindow = {$settings.lsp.features.implementation.openWindow}"
 
   result.addLine fmt "[Lsp.TypeDefinition]"
   result.addLine fmt "enable = {$settings.lsp.features.typeDefinition.enable}"
+  result.addLine fmt "openWindow = {$settings.lsp.features.implementation.openWindow}"
 
   result.addLine fmt "[Lsp.Implementation]"
   result.addLine fmt "enable = {$settings.lsp.features.implementation.enable}"
+  result.addLine fmt "openWindow = {$settings.lsp.features.implementation.openWindow}"
 
   result.addLine fmt "[Lsp.Diagnostics]"
   result.addLine fmt "enable = {$settings.lsp.features.diagnostics.enable}"

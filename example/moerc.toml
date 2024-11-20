@@ -237,15 +237,19 @@ enable = true
 
 [Lsp.Declaration]
 enable = true
+openWindow = false
 
 [Lsp.Definition]
 enable = true
+openWindow = false
 
 [Lsp.TypeDefinition]
 enable = true
+openWindow = false
 
 [Lsp.Implementation]
 enable = true
+openWindow = false
 
 [Lsp.Diagnostics]
 enable = true
