@@ -164,8 +164,7 @@ proc send(
     debugLog(MessageType.write, req)
 
     try:
-      if not await s.stream.write(req).withTimeout(Timeout):
-        return Result[(), string].err "write: Timeout"
+      asyncSpawn s.stream.write(req)
     except CatchableError as e:
       return Result[(), string].err e.msg
 
