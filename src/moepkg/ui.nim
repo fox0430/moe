@@ -18,7 +18,9 @@
 #[############################################################################]#
 
 import std/[strformat, osproc, strutils, terminal, options, tables, posix]
-import pkg/[ncurses, results]
+
+import pkg/[ncurses, results, chronos]
+
 import unicodeext, independentutils
 
 when not defined unitTest:
@@ -546,7 +548,7 @@ proc parseKey(buffer: seq[int]): Option[Rune] =
       if runes.len == 1:
         return some(runes[0])
 
-proc kbhit(timeout: int = 10): int =
+proc kbhitAsync(timeout: int = 10): Future[int] {.async.} =
   ## Check stdin buffer using poll(2).
   ##
   ## poll(2) return POLLERR if it detects a signal.
@@ -564,6 +566,8 @@ proc kbhit(timeout: int = 10): int =
   # Wait stdin.
   const FdLen = 1
   return pollFd.addr.poll(FdLen.Tnfds, timeout.cint)
+
+proc kbhit(timeout: int = 10): int = waitFor kbhitAsync(timeout)
 
 proc read(fd: int): Option[int] =
   ## Read 1 byte.
