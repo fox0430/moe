@@ -548,24 +548,40 @@ proc parseKey(buffer: seq[int]): Option[Rune] =
       if runes.len == 1:
         return some(runes[0])
 
-proc kbhitAsync(timeout: int = 10): Future[int] {.async.} =
+proc pollAsync*(fd: cint, timeout: int = -1): Future[int] {.async: (raw: true).} =
   ## Check stdin buffer using poll(2).
   ##
   ## poll(2) return POLLERR if it detects a signal.
   ##
   ## `timeout` is milliseconds.
 
-  # Init pollFd.
+  var retFuture = newFuture[int]("ui.pollAsync")
+
   var pollFd: TPollfd
   pollFd.addr.zeroMem(sizeof(pollFd))
-
-  # Registers fd and events.
-  pollFd.fd = STDIN_FILENO
+  pollFd.fd = fd
   pollFd.events = POLLIN or POLLERR
 
-  # Wait stdin.
-  const FdLen = 1
-  return pollFd.addr.poll(FdLen.Tnfds, timeout.cint)
+  proc pollProc(arg: pointer) {.gcsafe.} =
+    try:
+      let res = poll(pollFd.addr, 1.Tnfds, timeout.cint)
+      if not retFuture.finished:
+        retFuture.complete(res)
+    except CatchableError as e:
+      if not retFuture.finished:
+        retFuture.fail(e)
+    except Exception as e:
+      if not retFuture.finished:
+        retFuture.fail(newException(IOError, e.msg))
+
+  callSoon(pollProc, nil)
+
+  return retFuture
+
+proc kbhitAsync(timeout: int = 10): Future[int] {.async.} =
+  ## `timeout` is milliseconds.
+
+  return await pollAsync(STDIN_FILENO, timeout)
 
 proc kbhit(timeout: int = 10): int = waitFor kbhitAsync(timeout)
 
@@ -619,7 +635,7 @@ proc getKey*(timeout: int = 100): Option[Rune] =
       terminalResized = false
       return some(ResizeKey.Rune)
 
-proc getKeyBlocking*(): Rune {.inline.} =
+proc getKeyBlocking*(): Rune =
   ## Blocking read from stdin.
 
   const Timeout = -1
