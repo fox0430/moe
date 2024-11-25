@@ -46,13 +46,13 @@ proc isValidWindowSize(n: WindowNode) =
 template handleLspInitialize(status: var EditorStatus) =
   for _ in 0 .. 20:
     waitFor sleepAsync(chronos.timer.seconds(1))
-    assert lspClient.readable().isOk
-    let res = waitFor lspClient.read
-    if res.get.contains("id"):
-      assert res.get["id"].getInt == 1
-      assert status.lspInitialized(res.get).isOk
-      assert lspClient.isInitialized
-      break
+    if lspClient.readable.get:
+      let res = waitFor lspClient.read
+      if res.get.contains("id"):
+        assert res.get["id"].getInt == 1
+        assert status.lspInitialized(res.get).isOk
+        assert lspClient.isInitialized
+        break
 
 suite "Ex mode: isExCommandBuffer":
   ## Generate test code
