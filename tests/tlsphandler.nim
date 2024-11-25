@@ -201,9 +201,7 @@ suite "lsp: applyEdit":
       check b.buffer.toSeqRunes == @["rst", ""].toSeqRunes
 
 suite "lsp: lspInitialized":
-  const
-    Timeout = 1000
-    Buffer = "echo 1"
+  const Buffer = "echo 1"
   let
     testDir = getCurrentDir() / "lspInitTestDir"
     testFilePath = testDir / "test.nim"
@@ -234,8 +232,8 @@ suite "lsp: lspInitialized":
       assert status.lspInitialize(workspaceRoot, LangId).isOk
 
       for _ in 0 .. 50:
-        sleep 100
-        check lspClient.readable(Timeout).isOk
+        waitFor sleepAsync(chronos.timer.milliseconds(100))
+        check lspClient.readable().isOk
         let res = (waitFor lspClient.read).get
         if res.contains("id"):
           check res["id"].getInt == 1
@@ -1884,11 +1882,8 @@ suite "lsp: handleLspResponse":
 
       var isTimeout = true
       for _ in 0 .. 180:
-        const Timeout = 1000
-        let readable = lspClient.readable(Timeout).get
-        if not readable:
-          sleep 1000
-        else:
+        waitFor sleepAsync(chronos.timer.seconds(1))
+        if lspClient.readable().get:
           status.handleLspResponse
 
           if lspClient.isInitialized:

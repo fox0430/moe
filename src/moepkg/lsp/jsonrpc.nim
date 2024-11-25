@@ -48,8 +48,6 @@ type
     input*: InputStream
     output*: OutputStream
 
-let Timeout = 1000.milliseconds
-
 proc skipWhitespace(x: string, pos: int): int =
   result = pos
   while result < x.len and x[result] in Whitespace:
@@ -81,11 +79,7 @@ proc readFrame(s: AsyncStreamReader): Future[ReadFrameResult] {.async.} =
   while true:
     let buf =
       try:
-        let f = s.readLine(sep="\r\n\r\n")
-        if await f.withTimeout(Timeout):
-          f.value
-        else:
-          return ReadFrameResult.err fmt"readLine: timeout"
+        await s.readLine(sep="\r\n\r\n")
       except CatchableError as e:
         return ReadFrameResult.err fmt"readLine failed: {e.msg}"
 
@@ -124,11 +118,8 @@ proc readFrame(s: AsyncStreamReader): Future[ReadFrameResult] {.async.} =
     if contentLen != -1:
       let buf=
         try:
-          let f = s.read(contentLen)
-          if await f.withTimeout(Timeout):
-            string.fromBytes(f.value)
-          else:
-            return ReadFrameResult.err fmt"readStr failed"
+          let bytes = await s.read(contentLen)
+          string.fromBytes(bytes)
         except:
           return ReadFrameResult.err fmt"readStr failed"
       debugLog(MessageType.read, fmt"Response: {buf}")

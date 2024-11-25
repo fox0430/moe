@@ -20,7 +20,7 @@
 import std/[unittest, os, oids, deques, strformat, importutils, osproc, tables,
             json, times]
 
-import pkg/results
+import pkg/[results, chronos]
 
 import moepkg/syntax/highlite
 import moepkg/lsp/[client, utils]
@@ -44,10 +44,9 @@ proc isValidWindowSize(n: WindowNode) =
   check n.view.length.len > 1
 
 template handleLspInitialize(status: var EditorStatus) =
-  const Timeout = 1000
-
   for _ in 0 .. 20:
-    assert lspClient.readable(Timeout).isOk
+    waitFor sleepAsync(chronos.timer.seconds(1))
+    assert lspClient.readable().isOk
     let res = waitFor lspClient.read
     if res.get.contains("id"):
       assert res.get["id"].getInt == 1

@@ -88,6 +88,8 @@ type
       # LSP server process.
     serverStreams: Streams
       # Input/Output streams for the LSP server process.
+    outputStreamFuture: Future[JsonRpcResponseResult]
+      # The feture of the output stream.
     pollFd: TPollfd
       # FD for poll(2)
     capabilities*: Option[LspCapabilities]
@@ -242,16 +244,23 @@ proc delProgress*(c: LspClient, token: ProgressToken): Result[(), string] =
 
   return Result[(), string].ok ()
 
-proc readable*(c: LspClient, timeout: int = 1): LspClientReadableResult =
-  ## Return when output is written from the LSP server or timesout.
-  ## Wait for the output from process to be written using poll(2).
-  ## Return true if readable and Return false if timeout.
-  ## Also, if data can be read from the output stream, return true.
-  ## timeout is milliseconds.
+proc readable*(c: LspClient): LspClientReadableResult =
+  if c.outputStreamFuture.isNil:
+    return LspClientReadableResult.ok false
 
-  const FdLen = 1
-  let r = c.pollFd.addr.poll(FdLen.Tnfds, timeout.cint)
-  return LspClientReadableResult.ok r == 1
+  return LspClientReadableResult.ok c.outputStreamFuture.finished
+
+proc read*(c: LspClient): Future[JsonRpcResponseResult] {.async.} =
+  ## Read a response from the LSP server.
+
+  let r = await c.outputStreamFuture
+
+  c.outputStreamFuture = c.serverStreams.output.read
+
+  if r.isOk:
+    return JsonRpcResponseResult.ok r.get
+  else:
+    return JsonRpcResponseResult.err r.error
 
 proc request(
   c: LspClient,
@@ -288,15 +297,6 @@ proc notify(
     c.addNotifyFromClientLog(notify)
 
     return await c.serverStreams.input.sendNotify(notify)
-
-proc read*(c: LspClient): Future[JsonRpcResponseResult] {.async.} =
-  ## Read a response from the LSP server.
-
-  let r = await read(c.serverStreams.output)
-  if r.isOk:
-    return JsonRpcResponseResult.ok r.get
-  else:
-    return JsonRpcResponseResult.err r.error
 
 template isLspError*(res: JsonNode): bool = res.contains("error")
 
@@ -414,13 +414,15 @@ proc initLspClient*(command: string): Future[initLspClientResult] {.async.} =
     input: InputStream(stream: c.serverProcess.stdinStream),
     output: OutputStream(stream: c.serverProcess.stdoutStream))
 
-  block:
-    # Init pollFd.
-    c.pollFd.addr.zeroMem(sizeof(c.pollFd))
+  c.outputStreamFuture = c.serverStreams.output.read
 
-    # Registers fd and events.
-    c.pollFd.fd = c.getFdStdout
-    c.pollFd.events = POLLIN or POLLERR
+#  block:
+#    # Init pollFd.
+#    c.pollFd.addr.zeroMem(sizeof(c.pollFd))
+#
+#    # Registers fd and events.
+#    c.pollFd.fd = c.getFdStdout
+#    c.pollFd.events = POLLIN or POLLERR
 
   c.serverName = commandSplit[0]
 

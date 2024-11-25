@@ -1206,7 +1206,8 @@ suite "lsp: Send requests":
       check client.waitingResponses[1].lspMethod == LspMethod.initialize
 
       for _ in 0 .. 20:
-        assert client.readable(Timeout).get
+        waitFor sleepAsync(chronos.timer.seconds(1))
+        assert client.readable().get
         let res = (waitFor client.read).get
         if res.contains("id"):
           check res["id"].getInt == 1
@@ -1224,7 +1225,7 @@ suite "lsp: Send requests":
           return Result[(), string].err err.error
 
       for _ in 0 .. 30:
-        assert c.readable(Timeout).isOk
+        waitFor sleepAsync(chronos.timer.seconds(1))
         let res = (waitFor c.read).get
         if res.contains("id"):
           if res["id"].getInt != 1:
@@ -1321,8 +1322,8 @@ suite "lsp: Send requests":
       check client.waitingResponses[requestId].lspMethod == LspMethod.shutdown
 
       var isTimeout= true
-      for _ in 0 .. 5:
-        assert client.readable(Timeout).get
+      for _ in 0 .. 20:
+        waitFor sleepAsync(chronos.timer.seconds(1))
         let res = (waitFor client.read).get
         if res.contains("id"):
           check res["id"].getInt == requestId
@@ -1426,7 +1427,8 @@ suite "lsp: Send requests":
 
       var isTimeout = true
       for _ in 0 .. 20:
-        if client.readable(Timeout).get:
+        waitFor sleepAsync(chronos.timer.seconds(1))
+        if client.readable().get:
           let res = (waitFor client.read).get
           if res.contains("id"):
             check res["result"]["contents"][0]["value"].getStr == "system.int: int"
@@ -1469,7 +1471,8 @@ suite "lsp: Send requests":
 
       var isTimeout = true
       for _ in 0 .. 20:
-        if client.readable(Timeout).get:
+        waitFor sleepAsync(chronos.timer.seconds(1))
+        if client.readable().get:
           let res = (waitFor client.read).get
           if res.contains("id"):
             check res["result"][0].len > 0
@@ -1507,7 +1510,8 @@ suite "lsp: Send requests":
 
       var isTimeout = true
       for _ in 0 .. 20:
-        if client.readable(Timeout).get:
+        waitFor sleepAsync(chronos.timer.seconds(1))
+        if client.readable().get:
           let res = (waitFor client.read).get
           if res.contains("id"):
             check res["result"][0]["position"]["line"].getInt == 0
@@ -1544,10 +1548,12 @@ var num: number
       check client.waitingResponses[requestId].lspMethod ==
         LspMethod.textDocumentDefinition
 
-      assert client.readable(Timeout).get
+      waitFor sleepAsync(chronos.timer.seconds(1))
+      assert client.readable().get
       var isTimeout = true
       for _ in 0 .. 20:
-        if client.readable(Timeout).get:
+        waitFor sleepAsync(chronos.timer.seconds(1))
+        if client.readable().get:
           let res = (waitFor client.read).get
           if res.contains("id"):
             check res["result"] == %* [
@@ -1597,7 +1603,8 @@ var num: number
 
       var isTimeout = true
       for _ in 0 .. 20:
-        if client.readable(Timeout).get:
+        waitFor sleepAsync(chronos.timer.seconds(1))
+        if client.readable().get:
           let res = (waitFor client.read).get
           if res.contains("id"):
             check res["result"] == %* [
@@ -1649,7 +1656,8 @@ echo a
 
       var isTimeout = true
       for _ in 0 .. 20:
-        if client.readable(Timeout).get:
+        waitFor sleepAsync(chronos.timer.seconds(1))
+        if client.readable().get:
           let res = (waitFor client.read).get
           if res.contains("id"):
             check res == %*{
@@ -1753,7 +1761,8 @@ echo Ojb(n: 1)
 
       var isTimeout = true
       for _ in 0 .. 20:
-        if client.readable(Timeout).get:
+        waitFor sleepAsync(chronos.timer.seconds(1))
+        if client.readable().get:
           let res = (waitFor client.read).get
           if res.contains("id"):
             check res["result"] == %* {
@@ -1831,7 +1840,8 @@ echo Ojb(n: 1)
 
       var isTimeout = true
       for _ in 0 .. 20:
-        if client.readable(Timeout).get:
+        waitFor sleepAsync(chronos.timer.seconds(1))
+        if client.readable().get:
           let res = (waitFor client.read).get
           if res.isPending:
             isTimeout = false
