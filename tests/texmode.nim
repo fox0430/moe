@@ -48,8 +48,7 @@ template handleLspInitialize(status: var EditorStatus) =
     waitFor sleepAsync(chronos.timer.seconds(1))
     if lspClient.readable.get:
       let res = waitFor lspClient.read
-      if res.get.contains("id"):
-        assert res.get["id"].getInt == 1
+      if res.get.contains("id") and res.get["id"].getInt == 1:
         assert status.lspInitialized(res.get).isOk
         assert lspClient.isInitialized
         break
