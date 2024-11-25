@@ -56,10 +56,10 @@ jobs:
       with:
         nim-version: ${{ env.NIM_VERSION }}
 
-    - name: Install nimlangserver
+    - name: Install nimlangserver and nph
       run: |
         nimble refresh
-        nimble install nimlangserver@#head
+        nimble install nimlangserver nph
 
     - name: Build
       run: |
