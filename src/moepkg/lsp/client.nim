@@ -416,14 +416,6 @@ proc initLspClient*(command: string): Future[initLspClientResult] {.async.} =
 
   c.outputStreamFuture = c.serverStreams.output.read
 
-#  block:
-#    # Init pollFd.
-#    c.pollFd.addr.zeroMem(sizeof(c.pollFd))
-#
-#    # Registers fd and events.
-#    c.pollFd.fd = c.getFdStdout
-#    c.pollFd.events = POLLIN or POLLERR
-
   c.serverName = commandSplit[0]
 
   c.command = command
