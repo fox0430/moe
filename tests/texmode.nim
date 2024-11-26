@@ -179,20 +179,15 @@ suite "Ex mode: Write command":
     if not isNimlangserverAvailable():
       skip()
     else:
+      writeFile(TestFilePath, "echo 1")
+
       var status = initEditorStatus()
 
       status.settings.lsp.enable = true
 
-      discard status.addNewBufferInCurrentWin(TestFilePath).get
-      status.bufStatus[0].buffer = initGapBuffer(@[ru"echo 1"])
+      assert status.addNewBufferInCurrentWin(TestFilePath).isOk
 
-      block initLsp:
-        let workspaceRoot = TestDir
-        const LangId = "nim"
-
-        assert status.lspInitialize(workspaceRoot, LangId).isOk
-
-        status.handleLspInitialize
+      status.handleLspInitialize
 
       const Command = @[ru"w"]
       status.exModeCommand(Command)
