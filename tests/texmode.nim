@@ -20,7 +20,7 @@
 import std/[unittest, os, oids, deques, strformat, importutils, osproc, tables,
             json, times]
 
-import pkg/results
+import pkg/[results, chronos]
 
 import moepkg/syntax/highlite
 import moepkg/lsp/[client, utils]
@@ -44,16 +44,18 @@ proc isValidWindowSize(n: WindowNode) =
   check n.view.length.len > 1
 
 template handleLspInitialize(status: var EditorStatus) =
-  const Timeout = 1000
-
   for _ in 0 .. 20:
-    assert lspClient.readable(Timeout).isOk
-    let res = waitFor lspClient.read
-    if res.get.contains("id"):
-      assert res.get["id"].getInt == 1
-      assert status.lspInitialized(res.get).isOk
-      assert lspClient.isInitialized
-      break
+    waitFor sleepAsync(chronos.timer.seconds(1))
+    if lspClient.readable.get:
+      let res = waitFor lspClient.read
+      if res.get.contains("id") and res.get["id"].getInt == 1:
+        let r = status.lspInitialized(res.get)
+        if r.isErr:
+          echo r.error
+          assert r.isOk
+
+        assert lspClient.isInitialized
+        break
 
 suite "Ex mode: isExCommandBuffer":
   ## Generate test code
@@ -177,20 +179,15 @@ suite "Ex mode: Write command":
     if not isNimlangserverAvailable():
       skip()
     else:
+      writeFile(TestFilePath, "echo 1")
+
       var status = initEditorStatus()
 
       status.settings.lsp.enable = true
 
-      discard status.addNewBufferInCurrentWin(TestFilePath).get
-      status.bufStatus[0].buffer = initGapBuffer(@[ru"echo 1"])
+      assert status.addNewBufferInCurrentWin(TestFilePath).isOk
 
-      block initLsp:
-        let workspaceRoot = TestDir
-        const LangId = "nim"
-
-        assert status.lspInitialize(workspaceRoot, LangId).isOk
-
-        status.handleLspInitialize
+      status.handleLspInitialize
 
       const Command = @[ru"w"]
       status.exModeCommand(Command)
