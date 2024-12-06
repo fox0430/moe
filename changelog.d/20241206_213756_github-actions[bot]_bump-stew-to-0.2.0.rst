@@ -3,5 +3,5 @@
 Changed
 .......
 
-- `#2209`_ Bump stew to 0.2.0
+- `#2212`_ Bump stew to 0.2.0
 
