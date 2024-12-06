@@ -63,4 +63,6 @@ jobs:
 
     - name: Build
       run: |
+        nimble install stew # Workaround
+
         nimble build
