@@ -469,3 +469,6 @@ proc getGotoDefinitionSource*(
       if clear:
         b.gotoDefinitionSource = none(BufferLocation)
       return l
+
+proc clearDocumentHighlightInfo*(b: BufferStatus) {.inline.} =
+  b.documentHighlightInfo = DocumentHighlightInfo()

@@ -93,9 +93,12 @@ proc applyTextEdit(b: var BufferStatus, edit: TextEdit): Result[(), string] =
 
   return Result[(), string].ok ()
 
-template isLspResponse*(status: EditorStatus): bool =
+template isLspClientInitialized*(status: EditorStatus): bool =
   status.lspClients.contains(currentBufStatus.langId) and
-  not lspClient.closed and
+  not lspClient.closed
+
+template isLspResponse*(status: EditorStatus): bool =
+  status.isLspClientInitialized and
   (let r = lspClient.readable; r.isOk and r.get)
 
 proc setServerNameToStatusLine(status: var EditorStatus) =
