@@ -93,3 +93,9 @@ proc isEmpty*(s: string): bool {.inline.} = s.len == 0
 proc dec*(n: var Natural) {.inline.} = n -= 1
 
 proc inc*(n: var Natural) {.inline.} = n += 1
+
+proc `in`*(r: BufferRange, p: BufferPosition): bool =
+  p.line >= r.first.line and
+  p.column >= r.first.column and
+  p.line <= r.last.line and
+  p.column <= r.last.column

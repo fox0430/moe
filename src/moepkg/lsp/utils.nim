@@ -323,7 +323,6 @@ proc getWaitingType*(lspMethod: LspMethod): Option[WaitType] =
     of textDocumentPrepareCallHierarchy : some(WaitType.foreground)
     of callHierarchyIncomingCalls: some(WaitType.foreground)
     of callHierarchyOutgoingCalls: some(WaitType.foreground)
-    of textDocumentDocumentHighlight: some(WaitType.foreground)
     of textDocumentDocumentLink: some(WaitType.foreground)
     of documentLinkResolve: some(WaitType.foreground)
     of textDocumentCodeLens: some(WaitType.foreground)

@@ -875,18 +875,18 @@ proc isSendLspInlineValueRequest(status: var EditorStatus): bool {.inline.} =
            currentBufStatus.id,
            LspMethod.textDocumentInlineValue)
 
-proc isSendLspDocumentHighlightRequest(
-  status: var EditorStatus): bool {.inline.} =
+proc inRangeLspdocumentHighlight(status: EditorStatus): bool {.inline.} =
+  for r in currentBufStatus.documentHighlightInfo.ranges:
+    if r in currentMainWindowNode.bufferPosition:
+      return true
 
-    template isMoved(status: EditorStatus): bool =
-      currentBufStatus.documentHighlightInfo.position !=
-        currentMainWindowNode.bufferPosition
-
-    return lspClient.capabilities.get.documenthighlight and
-      status.isMoved and
-      not lspClient.isWaitingResponse(
-        currentBufStatus.id,
-        LspMethod.textDocumentDocumentHighlight)
+template isSendLspDocumentHighlightRequest(status: var EditorStatus): bool =
+  lspClient.capabilities.get.documenthighlight and
+  currentBufStatus.isNormalMode and
+  currentBufStatus.documentHighlightInfo.ranges.len == 0 and
+  not lspClient.isWaitingResponse(
+    currentBufStatus.id,
+    LspMethod.textDocumentDocumentHighlight)
 
 proc sendLspRequests(status: var EditorStatus) =
   if status.isSendLspInlayHintRequest:
@@ -924,6 +924,12 @@ template isUpdateLspLogViewer(status: var EditorStatus): bool =
 template isUpdateLogViewer(status: var EditorStatus): bool =
   status.isUpdateEditorLogViewer or
   status.isUpdateLspLogViewer
+
+proc isClearDocumentHighlightInfo(status: var EditorStatus): bool =
+  return status.isLspClientInitialized and
+    currentBufStatus.documentHighlightInfo.ranges.len > 0 and
+    (not status.inRangeLspdocumentHighlight or
+     not currentBufStatus.isNormalMode)
 
 proc editorMainLoop*(status: var EditorStatus) =
   ## Get keys, exec commands and update view.
@@ -971,6 +977,9 @@ proc editorMainLoop*(status: var EditorStatus) =
 
         if status.isSendLspRequests:
           status.sendLspRequests
+
+        if status.isClearDocumentHighlightInfo:
+          currentBufStatus.clearDocumentHighlightInfo
 
       if key.isSome:
         if isResizeKey(key.get):
