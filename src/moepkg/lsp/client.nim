@@ -378,9 +378,6 @@ proc getForegroundWaitingResponse*(
       if v.bufferId == bufferId and v.lspMethod.isForegroundWait:
         return some(v)
 
-template getFdStdout(c: LspClient): cint =
-  c.serverStreams.output.stream.tsource.fd.cint
-
 proc initLspClient*(command: string): Future[initLspClientResult] {.async.} =
   ## Start a LSP server process and init streams.
 
