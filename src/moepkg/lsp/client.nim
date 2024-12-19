@@ -90,8 +90,6 @@ type
       # Input/Output streams for the LSP server process.
     outputStreamFuture: Future[JsonRpcResponseResult]
       # The feture of the output stream.
-    pollFd: TPollfd
-      # FD for poll(2)
     capabilities*: Option[LspCapabilities]
       # LSP server capabilities
     progress*: LspProgressTable
@@ -380,9 +378,6 @@ proc getForegroundWaitingResponse*(
       if v.bufferId == bufferId and v.lspMethod.isForegroundWait:
         return some(v)
 
-template getFdStdout(c: LspClient): cint =
-  c.serverStreams.output.stream.tsource.fd.cint
-
 proc initLspClient*(command: string): Future[initLspClientResult] {.async.} =
   ## Start a LSP server process and init streams.
 
@@ -455,14 +450,6 @@ proc restart*(c: LspClient): Future[LspRestartClientResult] {.async.} =
   c.serverStreams = Streams(
     input: InputStream(stream: c.serverProcess.stdinStream),
     output: OutputStream(stream: c.serverProcess.stdoutStream))
-
-  block:
-    # Init pollFd.
-    c.pollFd.addr.zeroMem(sizeof(c.pollFd))
-
-    # Registers fd and events.
-    c.pollFd.fd = c.getFdStdout
-    c.pollFd.events = POLLIN or POLLERR
 
   c.serverName = commandSplit[0]
 
