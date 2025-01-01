@@ -11,7 +11,7 @@ bin           = @["moe"]
 
 requires "nim >= 1.6.16"
 requires "ncurses >= 1.0.2"
-requires "unicodedb >= 0.13.0"
+requires "unicodedb >= 0.13.2"
 requires "parsetoml >= 0.7.1"
 requires "regex >= 0.26.1"
 requires "results >= 0.4.0"
