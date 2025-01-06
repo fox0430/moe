@@ -107,7 +107,8 @@ suite "lsp: restart":
     if beforePid > -1:
       discard execCmd(fmt"kill -9 {$beforePid}")
 
-    discard client.kill
+    if not client.isNil and not client.serverProcess.isNil:
+      discard client.kill
 
   test "Basic 1":
     if not isNimlangserverAvailable():
