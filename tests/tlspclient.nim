@@ -141,7 +141,8 @@ suite "lsp: restart":
         beforePid = client.serverProcessId
         beforeLogLen = client.log.len
 
-      discard client.kill
+      if not client.isNil and not client.serverProcess.isNil:
+        discard client.kill
 
       check (waitFor client.restart).isOk
 
@@ -1193,7 +1194,8 @@ suite "lsp: Send requests":
     if dirExists(rootDir):
       removeDir(rootDir)
 
-    discard client.kill
+    if not client.isNil and not client.serverProcess.isNil:
+      discard client.kill
 
   proc readResponse(
     c: LspClient,
