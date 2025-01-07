@@ -58,7 +58,7 @@ jobs:
     - uses: actions/checkout@v4
     - run: |
         sudo apt-get update -yqq
-        sudo apt-get install -y gcc libncursesw5-dev build-essential xvfb x11-xserver-utils xsel xclip
+        sudo apt-get install -y gcc libncursesw5-dev build-essential xvfb x11-xserver-utils xsel xclip libpcre3
 
     - name: Cache nimble
       id: cache-nimble
@@ -78,6 +78,7 @@ jobs:
       run: |
         nimble refresh
         nimble install nimlangserver nph
+        nimlangserver --version
 
     - name: Run unit test
       run: |
