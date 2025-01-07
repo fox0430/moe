@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -200,6 +200,21 @@ suite "lsp: applyEdit":
 
       check b.buffer.toSeqRunes == @["rst", ""].toSeqRunes
 
+proc readResponse(
+  c: LspClient,
+  timeout=10.seconds): Result[JsonNode, string] =
+
+    let
+      res = c.read
+      fut = waitFor res.withTimeout(timeout)
+    if not fut:
+      return Result[JsonNode, string].err "timeout"
+
+    if res.value.isErr:
+      return Result[JsonNode, string].err res.value.error
+
+    return Result[JsonNode, string].ok res.value.get
+
 suite "lsp: lspInitialized":
   const Buffer = "echo 1"
   let
@@ -232,12 +247,10 @@ suite "lsp: lspInitialized":
       assert status.lspInitialize(workspaceRoot, LangId).isOk
 
       for _ in 0 .. 50:
-        waitFor sleepAsync(chronos.timer.milliseconds(100))
-        check lspClient.readable().isOk
-        let res = (waitFor lspClient.read).get
-        if res.contains("id"):
-          check res["id"].getInt == 1
-          check status.lspInitialized(res).isOk
+        let res = lspClient.readResponse
+        if res.isOk and res.get.contains("id"):
+          check res.get["id"].getInt == 1
+          check status.lspInitialized(res.get).isOk
           check lspClient.isInitialized
           break
 
@@ -1881,8 +1894,8 @@ suite "lsp: handleLspResponse":
       assert status.lspInitialize(workspaceRoot, LangId).isOk
 
       var isTimeout = true
-      for _ in 0 .. 180:
-        waitFor sleepAsync(chronos.timer.seconds(1))
+      for _ in 0 .. 60:
+        waitFor sleepAsync(chronos.timer.seconds(3))
         if lspClient.readable().get:
           status.handleLspResponse
 

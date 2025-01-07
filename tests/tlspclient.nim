@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -107,7 +107,8 @@ suite "lsp: restart":
     if beforePid > -1:
       discard execCmd(fmt"kill -9 {$beforePid}")
 
-    discard client.kill
+    if not client.isNil and not client.serverProcess.isNil:
+      discard client.kill
 
   test "Basic 1":
     if not isNimlangserverAvailable():
@@ -140,7 +141,8 @@ suite "lsp: restart":
         beforePid = client.serverProcessId
         beforeLogLen = client.log.len
 
-      discard client.kill
+      if not client.isNil and not client.serverProcess.isNil:
+        discard client.kill
 
       check (waitFor client.restart).isOk
 
@@ -1178,7 +1180,6 @@ suite "lsp: Send requests":
     ServerName = "nimlangserver"
     Command = "nimlangserver"
     Trace = TraceValue.verbose
-    Timeout = 1000
 
   let rootDir = getCurrentDir() / "lspTestDir"
 
@@ -1193,7 +1194,23 @@ suite "lsp: Send requests":
     if dirExists(rootDir):
       removeDir(rootDir)
 
-    discard client.kill
+    if not client.isNil and not client.serverProcess.isNil:
+      discard client.kill
+
+  proc readResponse(
+    c: LspClient,
+    timeout=10.seconds): Result[JsonNode, string] =
+
+      let
+        res = c.read
+        fut = waitFor res.withTimeout(timeout)
+      if not fut:
+        return Result[JsonNode, string].err "timeout"
+
+      if res.value.isErr:
+        return Result[JsonNode, string].err res.value.error
+
+      return Result[JsonNode, string].ok res.value.get
 
   test "Send initialize":
     if not isNimlangserverAvailable():
@@ -1206,12 +1223,10 @@ suite "lsp: Send requests":
       check client.waitingResponses[1].lspMethod == LspMethod.initialize
 
       for _ in 0 .. 20:
-        waitFor sleepAsync(chronos.timer.seconds(1))
-        assert client.readable().get
-        let res = (waitFor client.read).get
-        if res.contains("id"):
-          check res["id"].getInt == 1
-          check client.initCapacities(initLspFeatureSettings(), res).isOk
+        let res = client.readResponse
+        if res.isOk and res.get.contains("id"):
+          check res.get["id"].getInt == 1
+          check client.initCapacities(initLspFeatureSettings(), res.get).isOk
           break
 
   proc lspInitialize(
@@ -1225,14 +1240,13 @@ suite "lsp: Send requests":
           return Result[(), string].err err.error
 
       for _ in 0 .. 30:
-        waitFor sleepAsync(chronos.timer.seconds(1))
-        let res = (waitFor c.read).get
-        if res.contains("id"):
-          if res["id"].getInt != 1:
+        let res = client.readResponse
+        if res.isOk and res.get.contains("id"):
+          if res.get["id"].getInt != 1:
             return Result[(), string].err "Invalid id"
 
           block:
-            let err = c.initCapacities(initLspFeatureSettings(), res)
+            let err = c.initCapacities(initLspFeatureSettings(), res.get)
             if err.isErr:
               return Result[(), string].err err.error
 
@@ -1323,11 +1337,10 @@ suite "lsp: Send requests":
 
       var isTimeout= true
       for _ in 0 .. 20:
-        waitFor sleepAsync(chronos.timer.seconds(1))
-        let res = (waitFor client.read).get
-        if res.contains("id"):
-          check res["id"].getInt == requestId
-          check res["result"].kind == JNull
+        let res = client.readResponse
+        if res.isOk and res.get.contains("id"):
+          check res.get["id"].getInt == requestId
+          check res.get["result"].kind == JNull
           isTimeout = false
           break
 
@@ -1427,13 +1440,11 @@ suite "lsp: Send requests":
 
       var isTimeout = true
       for _ in 0 .. 20:
-        waitFor sleepAsync(chronos.timer.seconds(1))
-        if client.readable().get:
-          let res = (waitFor client.read).get
-          if res.contains("id"):
-            check res["result"]["contents"][0]["value"].getStr == "system.int: int"
-            isTimeout = false
-            break
+        let res = client.readResponse
+        if res.isOk and res.get.contains("id"):
+          check res.get["result"]["contents"][0]["value"].getStr == "system.int: int"
+          isTimeout = false
+          break
 
       check not isTimeout
 
@@ -1471,13 +1482,11 @@ suite "lsp: Send requests":
 
       var isTimeout = true
       for _ in 0 .. 20:
-        waitFor sleepAsync(chronos.timer.seconds(1))
-        if client.readable().get:
-          let res = (waitFor client.read).get
-          if res.contains("id"):
-            check res["result"][0].len > 0
-            isTimeout = false
-            break
+        let res = client.readResponse
+        if res.isOk and res.get.contains("id"):
+          check res.get["result"][0].len > 0
+          isTimeout = false
+          break
 
       check not isTimeout
 
@@ -1510,14 +1519,12 @@ suite "lsp: Send requests":
 
       var isTimeout = true
       for _ in 0 .. 20:
-        waitFor sleepAsync(chronos.timer.seconds(1))
-        if client.readable().get:
-          let res = (waitFor client.read).get
-          if res.contains("id"):
-            check res["result"][0]["position"]["line"].getInt == 0
-            check res["result"][0]["position"]["character"].getInt == 5
-            isTimeout = false
-            break
+        let res = client.readResponse
+        if res.isOk and res.get.contains("id"):
+          check res.get["result"][0]["position"]["line"].getInt == 0
+          check res.get["result"][0]["position"]["character"].getInt == 5
+          isTimeout = false
+          break
 
       check not isTimeout
 
@@ -1548,29 +1555,25 @@ var num: number
       check client.waitingResponses[requestId].lspMethod ==
         LspMethod.textDocumentDefinition
 
-      waitFor sleepAsync(chronos.timer.seconds(1))
-      assert client.readable().get
       var isTimeout = true
       for _ in 0 .. 20:
-        waitFor sleepAsync(chronos.timer.seconds(1))
-        if client.readable().get:
-          let res = (waitFor client.read).get
-          if res.contains("id"):
-            check res["result"] == %* [
-              {
-                "uri": "file://" & getCurrentDir() & "/lspTestDir/test.nim",
-                "range": {
-                  "start": {
-                    "line": 0,
-                    "character":5
-                  },"end": {
-                    "line":0,
-                    "character":11
-                  }}
-              }
-            ]
-            isTimeout = false
-            break
+        let res = client.readResponse
+        if res.isOk and res.get.contains("id"):
+          check res.get["result"] == %* [
+            {
+              "uri": "file://" & getCurrentDir() & "/lspTestDir/test.nim",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character":5
+                },"end": {
+                  "line":0,
+                  "character":11
+                }}
+            }
+          ]
+          isTimeout = false
+          break
 
       check not isTimeout
 
@@ -1603,26 +1606,24 @@ var num: number
 
       var isTimeout = true
       for _ in 0 .. 20:
-        waitFor sleepAsync(chronos.timer.seconds(1))
-        if client.readable().get:
-          let res = (waitFor client.read).get
-          if res.contains("id"):
-            check res["result"] == %* [
-              {
-                "uri": "file://" & getCurrentDir() & "/lspTestDir/test.nim",
-                "range": {
-                  "start": {
-                    "line": 0,
-                    "character": 5},
-                  "end": {
-                    "line": 0,
-                    "character":11
-                  }
+        let res = client.readResponse
+        if res.isOk and res.get.contains("id"):
+          check res.get["result"] == %* [
+            {
+              "uri": "file://" & getCurrentDir() & "/lspTestDir/test.nim",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 5},
+                "end": {
+                  "line": 0,
+                  "character":11
                 }
               }
-            ]
-            isTimeout = false
-            break
+            }
+          ]
+          isTimeout = false
+          break
 
       check not isTimeout
 
@@ -1656,70 +1657,68 @@ echo a
 
       var isTimeout = true
       for _ in 0 .. 20:
-        waitFor sleepAsync(chronos.timer.seconds(1))
-        if client.readable().get:
-          let res = (waitFor client.read).get
-          if res.contains("id"):
-            check res == %*{
-              "jsonrpc": "2.0",
-              "id": requestId,
-              "result": [
-                {
-                  "range": {
-                    "start": {
-                      "line": 0,
-                      "character": 4
-                    },
-                    "end": {
-                      "line": 0,
-                      "character": 5
-                    }
+        let res = client.readResponse
+        if res.isOk and res.get.contains("id"):
+          check res.get == %*{
+            "jsonrpc": "2.0",
+            "id": requestId,
+            "result": [
+              {
+                "range": {
+                  "start": {
+                    "line": 0,
+                    "character": 4
                   },
-                  "kind": nil
+                  "end": {
+                    "line": 0,
+                    "character": 5
+                  }
                 },
-                {
-                  "range": {
-                    "start": {
-                      "line": 0,
-                      "character": 4
-                    },
-                    "end": {
-                      "line": 0,
-                      "character": 5
-                    }
+                "kind": nil
+              },
+              {
+                "range": {
+                  "start": {
+                    "line": 0,
+                    "character": 4
                   },
-                  "kind": nil
+                  "end": {
+                    "line": 0,
+                    "character": 5
+                  }
                 },
-                {
-                  "range": {
-                    "start": {
-                      "line": 1,
-                      "character": 8
-                    },
-                    "end": {
-                      "line": 1,
-                      "character": 9
-                    }
+                "kind": nil
+              },
+              {
+                "range": {
+                  "start": {
+                    "line": 1,
+                    "character": 8
                   },
-                  "kind": nil
+                  "end": {
+                    "line": 1,
+                    "character": 9
+                  }
                 },
-                {
-                  "range": {
-                    "start": {
-                      "line": 2,
-                      "character": 5
-                    },
-                    "end": {
-                      "line": 2,
-                      "character": 6
-                    }
+                "kind": nil
+              },
+              {
+                "range": {
+                  "start": {
+                    "line": 2,
+                    "character": 5
                   },
-                  "kind": nil
-                }
-              ]
-            }
-            isTimeout = false
-            break
+                  "end": {
+                    "line": 2,
+                    "character": 6
+                  }
+                },
+                "kind": nil
+              }
+            ]
+          }
+          isTimeout = false
+          break
 
   test "Send textDocument/rename":
     if not isNimlangserverAvailable():
@@ -1761,47 +1760,45 @@ echo Ojb(n: 1)
 
       var isTimeout = true
       for _ in 0 .. 20:
-        waitFor sleepAsync(chronos.timer.seconds(1))
-        if client.readable().get:
-          let res = (waitFor client.read).get
-          if res.contains("id"):
-            check res["result"] == %* {
-              "changes": {
-                "file://" & getCurrentDir() & "/lspTestDir/test2.nim": [
-                  {
-                    "range": {
-                      "start": {
-                        "line": 1,
-                        "character": 8
-                      },
-                      "end": {
-                        "line": 1,
-                        "character": 11
-                      }
+        let res = client.readResponse
+        if res.isOk and res.get.contains("id"):
+          check res.get["result"] == %* {
+            "changes": {
+              "file://" & getCurrentDir() & "/lspTestDir/test2.nim": [
+                {
+                  "range": {
+                    "start": {
+                      "line": 1,
+                      "character": 8
                     },
-                    "newText" :"newName"
-                  }
-                ],
-                "file://" & getCurrentDir() & "/lspTestDir/test1.nim": [
-                  {
-                    "range": {
-                      "start": {
-                        "line": 0,
-                        "character": 5
-                      },
-                      "end": {
-                        "line": 0,
-                        "character": 8
-                      }
+                    "end": {
+                      "line": 1,
+                      "character": 11
+                    }
+                  },
+                  "newText" :"newName"
+                }
+              ],
+              "file://" & getCurrentDir() & "/lspTestDir/test1.nim": [
+                {
+                  "range": {
+                    "start": {
+                      "line": 0,
+                      "character": 5
                     },
-                    "newText": "newName"
-                  }
-                ]
-              },
-              "documentChanges": nil
-            }
-            isTimeout = false
-            break
+                    "end": {
+                      "line": 0,
+                      "character": 8
+                    }
+                  },
+                  "newText": "newName"
+                }
+              ]
+            },
+            "documentChanges": nil
+          }
+          isTimeout = false
+          break
 
       check not isTimeout
 
@@ -1840,11 +1837,9 @@ echo Ojb(n: 1)
 
       var isTimeout = true
       for _ in 0 .. 20:
-        waitFor sleepAsync(chronos.timer.seconds(1))
-        if client.readable().get:
-          let res = (waitFor client.read).get
-          if res.isPending:
-            isTimeout = false
-            break
+        let res = client.readResponse
+        if res.isOk and res.get.isPending:
+          isTimeout = false
+          break
 
       check not isTimeout
