@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -123,27 +123,34 @@ type
 proc running*(c: LspClient): bool {.inline.} =
   ## Return true if the LSP server process running.
 
-  let r = c.serverProcess.running
-  if r.isOk: return r.get
-  else: false
+  result = false
+
+  if not c.isNil and not c.serverProcess.isNil:
+    let r = c.serverProcess.running
+    if r.isOk: return r.get
 
 proc serverProcessId*(c: LspClient): int {.inline.} =
   ## Return a process id of the LSP server process.
 
-  c.serverProcess.processID
+  result = -1
+
+  if c.running:
+    return c.serverProcess.processID
 
 proc exit*(c: LspClient) {.inline.} =
   ## Exit a LSP server process.
   ## TODO: Send a shutdown request?
 
-  discard c.serverProcess.terminate
+  if c.running:
+    discard c.serverProcess.terminate
 
 proc kill*(c: LspClient): Result[(), string] =
   ## kill a LSP server process.
 
-  let r = c.serverProcess.kill
-  if r.isErr:
-    return Result[(), string].err $r.error
+  if c.running:
+    let r = c.serverProcess.kill
+    if r.isErr:
+      return Result[(), string].err $r.error
 
   return Result[(), string].ok ()
 
