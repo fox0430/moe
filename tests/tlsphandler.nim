@@ -1810,10 +1810,6 @@ suite "lsp: handleLspServerNotify":
       status = initEditorStatus()
       status.settings.lsp.enable = true
 
-  teardown:
-    if isNimlangserverAvailable():
-      discard lspClient.kill
-
   test "Invalid":
     if not isNimlangserverAvailable():
       skip()
