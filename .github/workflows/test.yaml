@@ -74,20 +74,19 @@ jobs:
         nim-version: 2.2.0
         repo-token: ${{ secrets.GITHUB_TOKEN }}
 
+    - uses: nim-lang/setup-nimble-action@v1
+      with:
+        nimble-version: 'latest'
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+
     - name: Install nimlangserver and nph
       run: |
-        nimble refresh
-        nimble install nimble
-
         nimble install nimlangserver
         nimlangserver --version
 
-        nimble uninstall nph
         nimble install nph
         nph -v
 
     - name: Run unit test
       run: |
-        nimble install stew # Workaround
-
         xvfb-run env XDG_SESSION_TYPE=x11 nimble test --verbose -y
