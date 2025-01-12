@@ -104,10 +104,10 @@ suite "lsp: restart":
       client = (waitFor initLspClient(Command)).get
 
   teardown:
-    if beforePid > -1:
-      discard execCmd(fmt"kill -9 {$beforePid}")
+    if isNimlangserverAvailable():
+      if beforePid > -1:
+        discard execCmd(fmt"kill -9 {$beforePid}")
 
-    if not client.isNil and not client.serverProcess.isNil:
       discard client.kill
 
   test "Basic 1":
@@ -1191,8 +1191,9 @@ suite "lsp: Send requests":
       createDir(rootDir)
 
   teardown:
-    if dirExists(rootDir):
-      removeDir(rootDir)
+    if isNimlangserverAvailable():
+      if dirExists(rootDir):
+        removeDir(rootDir)
 
     if not client.isNil and not client.serverProcess.isNil:
       discard client.kill
