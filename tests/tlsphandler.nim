@@ -224,15 +224,17 @@ suite "lsp: lspInitialized":
     status: EditorStatus
 
   setup:
-    createDir(testDir)
-    writeFile(testFilePath, Buffer)
+    if isNimlangserverAvailable():
+      createDir(testDir)
+      writeFile(testFilePath, Buffer)
 
-    status = initEditorStatus()
-    status.settings.lsp.enable = true
+      status = initEditorStatus()
+      status.settings.lsp.enable = true
 
   teardown:
-    discard lspClient.kill
-    removeDir(testDir)
+    if isNimlangserverAvailable():
+      discard lspClient.kill
+      removeDir(testDir)
 
   test "Basic":
     if not isNimlangserverAvailable():
@@ -478,888 +480,976 @@ suite "lsp: lspWorkDoneProgressCreate":
   var status: EditorStatus
 
   setup:
-    status = initEditorStatus()
-    status.settings.lsp.enable = true
+    if isNimlangserverAvailable():
+      status = initEditorStatus()
+      status.settings.lsp.enable = true
 
-    let filename = $genOid() & ".nim"
-    assert status.addNewBufferInCurrentWin(filename).isOk
+      let filename = $genOid() & ".nim"
+      assert status.addNewBufferInCurrentWin(filename).isOk
 
-    status.lspClients["nim"].progress["token"] = ProgressReport(
-      title: "",
-      state: ProgressState.create)
+      status.lspClients["nim"].progress["token"] = ProgressReport(
+        title: "",
+        state: ProgressState.create)
 
   teardown:
-    discard lspClient.kill
+    if isNimlangserverAvailable():
+      discard lspClient.kill
 
   test "Invalid":
-    check lspClient.lspProgressCreate(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": nil
-    }).isErr
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      check lspClient.lspProgressCreate(%*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": nil
+      }).isErr
 
   test "Basic":
-    check lspClient.lspProgressCreate(%*{
-      "jsonrpc": "2.0",
-      "id": 1,
-      "method": "window/workDoneProgress/create",
-      "params": {
-        "token": "token"
-      }
-    }).isOk
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      check lspClient.lspProgressCreate(%*{
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "window/workDoneProgress/create",
+        "params": {
+          "token": "token"
+        }
+      }).isOk
 
-    check lspClient.progress["token"].state == ProgressState.create
+      check lspClient.progress["token"].state == ProgressState.create
 
 suite "lsp: lspProgress":
   var status: EditorStatus
 
   setup:
-    status = initEditorStatus()
-    status.settings.lsp.enable = true
+    if isNimlangserverAvailable():
+      status = initEditorStatus()
+      status.settings.lsp.enable = true
 
-    let filename = $genOid() & ".nim"
-    assert status.addNewBufferInCurrentWin(filename).isOk
+      let filename = $genOid() & ".nim"
+      assert status.addNewBufferInCurrentWin(filename).isOk
 
   teardown:
-    discard lspClient.kill
+    if isNimlangserverAvailable():
+      discard lspClient.kill
 
   test "begin":
-    status.lspClients["nim"].progress["token"] = ProgressReport(
-      title: "",
-      state: ProgressState.create)
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      status.lspClients["nim"].progress["token"] = ProgressReport(
+        title: "",
+        state: ProgressState.create)
 
-    check status.lspProgress(%*{
-      "jsonrpc": "2.0",
-      "method": "$/progress",
-      "params": {
-        "token": "token",
-        "value": {
-          "kind": "begin",
-          "title": "begin",
-          "cancellable": false
+      check status.lspProgress(%*{
+        "jsonrpc": "2.0",
+        "method": "$/progress",
+        "params": {
+          "token": "token",
+          "value": {
+            "kind": "begin",
+            "title": "begin",
+            "cancellable": false
+          }
         }
-      }
-    }).isOk
+      }).isOk
 
-    check ProgressState.begin == status.lspClients["nim"].progress["token"].state
-    check "begin" == status.lspClients["nim"].progress["token"].title
-    check "" == status.lspClients["nim"].progress["token"].message
-    check none(Natural) == status.lspClients["nim"].progress["token"].percentage
+      check ProgressState.begin == status.lspClients["nim"].progress["token"].state
+      check "begin" == status.lspClients["nim"].progress["token"].title
+      check "" == status.lspClients["nim"].progress["token"].message
+      check none(Natural) == status.lspClients["nim"].progress["token"].percentage
 
-    check ru"lsp: progress: begin" == status.commandLine.buffer
+      check ru"lsp: progress: begin" == status.commandLine.buffer
 
   test "begin with message":
-    status.lspClients["nim"].progress["token"] = ProgressReport(
-      title: "",
-      state: ProgressState.create)
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      status.lspClients["nim"].progress["token"] = ProgressReport(
+        title: "",
+        state: ProgressState.create)
 
-    check status.lspProgress(%*{
-      "jsonrpc": "2.0",
-      "method": "$/progress",
-      "params": {
-        "token": "token",
-        "value": {
-          "kind": "begin",
-          "title": "begin",
-          "message": "message",
-          "cancellable": false
+      check status.lspProgress(%*{
+        "jsonrpc": "2.0",
+        "method": "$/progress",
+        "params": {
+          "token": "token",
+          "value": {
+            "kind": "begin",
+            "title": "begin",
+            "message": "message",
+            "cancellable": false
+          }
         }
-      }
-    }).isOk
+      }).isOk
 
-    check ProgressState.begin == status.lspClients["nim"].progress["token"].state
-    check "begin" == status.lspClients["nim"].progress["token"].title
-    check "message" == status.lspClients["nim"].progress["token"].message
-    check none(Natural) == status.lspClients["nim"].progress["token"].percentage
+      check ProgressState.begin == status.lspClients["nim"].progress["token"].state
+      check "begin" == status.lspClients["nim"].progress["token"].title
+      check "message" == status.lspClients["nim"].progress["token"].message
+      check none(Natural) == status.lspClients["nim"].progress["token"].percentage
 
-    check ru"lsp: progress: begin: message" == status.commandLine.buffer
+      check ru"lsp: progress: begin: message" == status.commandLine.buffer
 
   test "report":
-    status.lspClients["nim"].progress["token"] = ProgressReport(
-      title: "report",
-      state: ProgressState.begin)
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      status.lspClients["nim"].progress["token"] = ProgressReport(
+        title: "report",
+        state: ProgressState.begin)
 
-    check status.handleLspServerNotify(%*{
-      "jsonrpc": "2.0",
-      "method": "$/progress",
-      "params": {
-        "token": "token",
-        "value": {
-          "kind":"report",
-          "cancellable": false,
-          "message": "report"
+      check status.handleLspServerNotify(%*{
+        "jsonrpc": "2.0",
+        "method": "$/progress",
+        "params": {
+          "token": "token",
+          "value": {
+            "kind":"report",
+            "cancellable": false,
+            "message": "report"
+          }
         }
-      }
-    }).isOk
+      }).isOk
 
-    check ProgressState.report == status.lspClients["nim"].progress["token"].state
-    check "report" == status.lspClients["nim"].progress["token"].title
-    check "report" == status.lspClients["nim"].progress["token"].message
-    check none(Natural) == status.lspClients["nim"].progress["token"].percentage
+      check ProgressState.report == status.lspClients["nim"].progress["token"].state
+      check "report" == status.lspClients["nim"].progress["token"].title
+      check "report" == status.lspClients["nim"].progress["token"].message
+      check none(Natural) == status.lspClients["nim"].progress["token"].percentage
 
-    check ru"lsp: progress: report: report" == status.commandLine.buffer
+      check ru"lsp: progress: report: report" == status.commandLine.buffer
 
   test "report with percentage":
-    status.lspClients["nim"].progress["token"] = ProgressReport(
-      title: "report",
-      state: ProgressState.begin)
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      status.lspClients["nim"].progress["token"] = ProgressReport(
+        title: "report",
+        state: ProgressState.begin)
 
-    check status.handleLspServerNotify(%*{
-      "jsonrpc": "2.0",
-      "method": "$/progress",
-      "params": {
-        "token": "token",
-        "value": {
-          "kind":"report",
-          "cancellable": false,
-          "message": "report",
-          "percentage": 50
+      check status.handleLspServerNotify(%*{
+        "jsonrpc": "2.0",
+        "method": "$/progress",
+        "params": {
+          "token": "token",
+          "value": {
+            "kind":"report",
+            "cancellable": false,
+            "message": "report",
+            "percentage": 50
+          }
         }
-      }
-    }).isOk
+      }).isOk
 
-    check ProgressState.report == status.lspClients["nim"].progress["token"].state
-    check "report" == status.lspClients["nim"].progress["token"].title
-    check "report" == status.lspClients["nim"].progress["token"].message
-    check some(Natural(50)) == status.lspClients["nim"].progress["token"].percentage
+      check ProgressState.report == status.lspClients["nim"].progress["token"].state
+      check "report" == status.lspClients["nim"].progress["token"].title
+      check "report" == status.lspClients["nim"].progress["token"].message
+      check some(Natural(50)) == status.lspClients["nim"].progress["token"].percentage
 
-    check ru"lsp: progress: report: 50%: report" == status.commandLine.buffer
+      check ru"lsp: progress: report: 50%: report" == status.commandLine.buffer
 
   test "end":
-    status.lspClients["nim"].progress["token"] = ProgressReport(
-      title: "end",
-      state: ProgressState.report)
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      status.lspClients["nim"].progress["token"] = ProgressReport(
+        title: "end",
+        state: ProgressState.report)
 
-    check status.handleLspServerNotify(%*{
-      "jsonrpc": "2.0",
-      "method": "$/progress",
-      "params": {
-        "token": "token",
-        "value": {
-          "kind":"end",
-          "message": "end"
+      check status.handleLspServerNotify(%*{
+        "jsonrpc": "2.0",
+        "method": "$/progress",
+        "params": {
+          "token": "token",
+          "value": {
+            "kind":"end",
+            "message": "end"
+          }
         }
-      }
-    }).isOk
+      }).isOk
 
-    check ProgressState.`end` == status.lspClients["nim"].progress["token"].state
-    check "end" == status.lspClients["nim"].progress["token"].title
-    check "end" == status.lspClients["nim"].progress["token"].message
-    check none(Natural) == status.lspClients["nim"].progress["token"].percentage
+      check ProgressState.`end` == status.lspClients["nim"].progress["token"].state
+      check "end" == status.lspClients["nim"].progress["token"].title
+      check "end" == status.lspClients["nim"].progress["token"].message
+      check none(Natural) == status.lspClients["nim"].progress["token"].percentage
 
-    check ru"lsp: progress: end: end" == status.commandLine.buffer
+      check ru"lsp: progress: end: end" == status.commandLine.buffer
 
 suite "lsp: lspCompletion":
   var status: EditorStatus
 
   setup:
-    status = initEditorStatus()
-    status.settings.lsp.enable = true
+    if isNimlangserverAvailable():
+      status = initEditorStatus()
+      status.settings.lsp.enable = true
 
-    let filename = $genOid() & ".nim"
-    assert status.addNewBufferInCurrentWin(filename).isOk
+      let filename = $genOid() & ".nim"
+      assert status.addNewBufferInCurrentWin(filename).isOk
 
   teardown:
-    discard lspClient.kill
+    if isNimlangserverAvailable():
+      discard lspClient.kill
 
   test "Basic":
-    check status.lspCompletion(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": [
-        {
-          "label": "a",
-          "kind": 3,
-          "detail": "detail1",
-          "documentation": "documentation1",
-          "deprecated": nil,
-          "preselect": nil,
-          "sortText": nil,
-          "filterText": nil,
-          "insertText": "a1",
-          "insertTextFormat": nil,
-          "commitCharacters": nil,
-          "command": nil,
-          "data": nil
-        },
-        {
-          "label": "b",
-          "kind": 3,
-          "detail": "detail2",
-          "documentation": "documentation2",
-          "deprecated": nil,
-          "preselect": nil,
-          "sortText": nil,
-          "filterText": nil,
-          "insertText": "b1",
-          "insertTextFormat": nil,
-          "commitCharacters": nil,
-          "command": nil,
-          "data": nil
-        }
-      ]
-    }).isOk
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      check status.lspCompletion(%*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": [
+          {
+            "label": "a",
+            "kind": 3,
+            "detail": "detail1",
+            "documentation": "documentation1",
+            "deprecated": nil,
+            "preselect": nil,
+            "sortText": nil,
+            "filterText": nil,
+            "insertText": "a1",
+            "insertTextFormat": nil,
+            "commitCharacters": nil,
+            "command": nil,
+            "data": nil
+          },
+          {
+            "label": "b",
+            "kind": 3,
+            "detail": "detail2",
+            "documentation": "documentation2",
+            "deprecated": nil,
+            "preselect": nil,
+            "sortText": nil,
+            "filterText": nil,
+            "insertText": "b1",
+            "insertTextFormat": nil,
+            "commitCharacters": nil,
+            "command": nil,
+            "data": nil
+          }
+        ]
+      }).isOk
 
-    check currentBufStatus.lspCompletionList.items == @[
-      completion.CompletionItem(label: ru"a", insertText: ru"a1"),
-      completion.CompletionItem(label: ru"b", insertText: ru"b1"),
-    ]
+      check currentBufStatus.lspCompletionList.items == @[
+        completion.CompletionItem(label: ru"a", insertText: ru"a1"),
+        completion.CompletionItem(label: ru"b", insertText: ru"b1"),
+      ]
 
   test "Without insertText":
-    check status.lspCompletion(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": [
-        {
-          "label": "a",
-          "kind": 3,
-          "detail": "detail1",
-          "documentation": "documentation1",
-          "deprecated": nil,
-          "preselect": nil,
-          "sortText": nil,
-          "filterText": nil,
-          "insertText": nil,
-          "insertTextFormat": nil,
-          "commitCharacters": nil,
-          "command": nil,
-          "data": nil
-        },
-        {
-          "label": "b",
-          "kind": 3,
-          "detail": "detail2",
-          "documentation": "documentation2",
-          "deprecated": nil,
-          "preselect": nil,
-          "sortText": nil,
-          "filterText": nil,
-          "insertText": nil,
-          "insertTextFormat": nil,
-          "commitCharacters": nil,
-          "command": nil,
-          "data": nil
-        }
-      ]
-    }).isOk
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      check status.lspCompletion(%*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": [
+          {
+            "label": "a",
+            "kind": 3,
+            "detail": "detail1",
+            "documentation": "documentation1",
+            "deprecated": nil,
+            "preselect": nil,
+            "sortText": nil,
+            "filterText": nil,
+            "insertText": nil,
+            "insertTextFormat": nil,
+            "commitCharacters": nil,
+            "command": nil,
+            "data": nil
+          },
+          {
+            "label": "b",
+            "kind": 3,
+            "detail": "detail2",
+            "documentation": "documentation2",
+            "deprecated": nil,
+            "preselect": nil,
+            "sortText": nil,
+            "filterText": nil,
+            "insertText": nil,
+            "insertTextFormat": nil,
+            "commitCharacters": nil,
+            "command": nil,
+            "data": nil
+          }
+        ]
+      }).isOk
 
-    check currentBufStatus.lspCompletionList.items == @[
-      completion.CompletionItem(label: ru"a", insertText: ru"a"),
-      completion.CompletionItem(label: ru"b", insertText: ru"b"),
-    ]
+      check currentBufStatus.lspCompletionList.items == @[
+        completion.CompletionItem(label: ru"a", insertText: ru"a"),
+        completion.CompletionItem(label: ru"b", insertText: ru"b"),
+      ]
 
 suite "lsp: lspInlayHint":
   var status: EditorStatus
 
   setup:
-    status = initEditorStatus()
-    status.settings.lsp.enable = true
+    if isNimlangserverAvailable():
+      status = initEditorStatus()
+      status.settings.lsp.enable = true
 
-    let filename = $genOid() & ".nim"
-    assert status.addNewBufferInCurrentWin(filename).isOk
+      let filename = $genOid() & ".nim"
+      assert status.addNewBufferInCurrentWin(filename).isOk
 
   teardown:
-    discard lspClient.kill
+    if isNimlangserverAvailable():
+      discard lspClient.kill
 
   test "Empty":
-    currentBufStatus.inlayHints.range = independentutils.Range(
-      first: 0,
-      last: 0)
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      currentBufStatus.inlayHints.range = independentutils.Range(
+        first: 0,
+        last: 0)
 
-    lspClient.waitingResponses[0] = WaitLspResponse(
-      bufferId: currentBufStatus.id,
-      requestId: 0,
-      lspMethod: LspMethod.textDocumentInlayHint)
+      lspClient.waitingResponses[0] = WaitLspResponse(
+        bufferId: currentBufStatus.id,
+        requestId: 0,
+        lspMethod: LspMethod.textDocumentInlayHint)
 
-    check status.lspInlayHint(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": []
-    }).isOk
+      check status.lspInlayHint(%*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": []
+      }).isOk
 
-    check currentBufStatus.inlayHints.range == independentutils.Range(
-      first: 0,
-      last: 0)
+      check currentBufStatus.inlayHints.range == independentutils.Range(
+        first: 0,
+        last: 0)
 
-    check currentBufStatus.inlayHints.hints.len == 0
+      check currentBufStatus.inlayHints.hints.len == 0
 
   test "Basic":
-    currentBufStatus.inlayHints.range = independentutils.Range(
-      first: 0,
-      last: 0)
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      currentBufStatus.inlayHints.range = independentutils.Range(
+        first: 0,
+        last: 0)
 
-    lspClient.waitingResponses[0] = WaitLspResponse(
-      bufferId: currentBufStatus.id,
-      requestId: 0,
-      lspMethod: LspMethod.textDocumentInlayHint)
+      lspClient.waitingResponses[0] = WaitLspResponse(
+        bufferId: currentBufStatus.id,
+        requestId: 0,
+        lspMethod: LspMethod.textDocumentInlayHint)
 
-    check status.lspInlayHint(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": [
-        {
-          "position": {
-            "line": 4,
-            "character": 5
-          },
-          "label": ": int",
-          "kind": 1,
-          "textEdits": [
-            {
-              "range": {
-                "start":{
-                  "line": 4,
-                  "character": 5
-                },
-                "end": {
-                  "line": 4,
-                  "character": 5}
-                },
-                "newText": ": int"
-              }
-          ],
-          "tooltip": "",
-          "paddingLeft": false,
-          "paddingRight": false
-        }
-      ]
-    }).isOk
+      check status.lspInlayHint(%*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": [
+          {
+            "position": {
+              "line": 4,
+              "character": 5
+            },
+            "label": ": int",
+            "kind": 1,
+            "textEdits": [
+              {
+                "range": {
+                  "start":{
+                    "line": 4,
+                    "character": 5
+                  },
+                  "end": {
+                    "line": 4,
+                    "character": 5}
+                  },
+                  "newText": ": int"
+                }
+            ],
+            "tooltip": "",
+            "paddingLeft": false,
+            "paddingRight": false
+          }
+        ]
+      }).isOk
 
-    check currentBufStatus.inlayHints.range == independentutils.Range(
-      first: 0,
-      last: 0)
+      check currentBufStatus.inlayHints.range == independentutils.Range(
+        first: 0,
+        last: 0)
 
-    let hints = currentBufStatus.inlayHints.hints
-    check hints.len == 1
-    check hints[0].textEdits.get.len == 1
-    check hints[0].textEdits.get[0].range.start[] == types.Position(
-      line: 4,
-      character: 5)[]
-    check hints[0].textEdits.get[0].range.`end`[] == types.Position(
-      line: 4,
-      character: 5)[]
-    check hints[0].textEdits.get[0].newText == ": int"
-    check hints[0].tooltip.get == ""
-    check hints[0].paddingLeft.get == false
-    check hints[0].paddingRight.get == false
+      let hints = currentBufStatus.inlayHints.hints
+      check hints.len == 1
+      check hints[0].textEdits.get.len == 1
+      check hints[0].textEdits.get[0].range.start[] == types.Position(
+        line: 4,
+        character: 5)[]
+      check hints[0].textEdits.get[0].range.`end`[] == types.Position(
+        line: 4,
+        character: 5)[]
+      check hints[0].textEdits.get[0].newText == ": int"
+      check hints[0].tooltip.get == ""
+      check hints[0].paddingLeft.get == false
+      check hints[0].paddingRight.get == false
 
 suite "lsp: lspDeclaration":
   var status: EditorStatus
 
   setup:
-    status = initEditorStatus()
-    status.settings.lsp.enable = true
+    if isNimlangserverAvailable():
+      status = initEditorStatus()
+      status.settings.lsp.enable = true
 
-    let filename = $genOid() & ".nim"
-    assert status.addNewBufferInCurrentWin(filename).isOk
-    currentBufStatus.buffer = @[
-      "type number = int",
-      "var a: number"
-    ]
-    .toSeqRunes
-    .toGapBuffer
+      let filename = $genOid() & ".nim"
+      assert status.addNewBufferInCurrentWin(filename).isOk
+      currentBufStatus.buffer = @[
+        "type number = int",
+        "var a: number"
+      ]
+      .toSeqRunes
+      .toGapBuffer
 
   teardown:
-    discard lspClient.kill
+    if isNimlangserverAvailable():
+      discard lspClient.kill
 
   test "Not found":
-    lspClient.waitingResponses[0] = WaitLspResponse(
-      bufferId: currentBufStatus.id,
-      requestId: 0,
-      lspMethod: LspMethod.textDocumentDeclaration)
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      lspClient.waitingResponses[0] = WaitLspResponse(
+        bufferId: currentBufStatus.id,
+        requestId: 0,
+        lspMethod: LspMethod.textDocumentDeclaration)
 
-    check status.lspDeclaration(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": []
-    }).isErr
+      check status.lspDeclaration(%*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": []
+      }).isErr
 
   test "Basic":
-    lspClient.waitingResponses[0] = WaitLspResponse(
-      bufferId: currentBufStatus.id,
-      requestId: 0,
-      lspMethod: LspMethod.textDocumentDeclaration)
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      lspClient.waitingResponses[0] = WaitLspResponse(
+        bufferId: currentBufStatus.id,
+        requestId: 0,
+        lspMethod: LspMethod.textDocumentDeclaration)
 
-    check status.lspDeclaration(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": [
-        {
-          "uri": pathToUri($currentBufStatus.absolutePath),
-          "range": {
-            "start": {
-              "line": 0,
-              "character": 5,
-            },
-            "end": {
-              "line": 0,
-              "character": 5,
+      check status.lspDeclaration(%*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": [
+          {
+            "uri": pathToUri($currentBufStatus.absolutePath),
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 5,
+              },
+              "end": {
+                "line": 0,
+                "character": 5,
+              }
             }
           }
-        }
-      ]
-    }).isOk
+        ]
+      }).isOk
 
-    check currentMainWindowNode.currentLine == 0
-    check currentMainWindowNode.currentColumn == 5
+      check currentMainWindowNode.currentLine == 0
+      check currentMainWindowNode.currentColumn == 5
 
 suite "lsp: lspDefinition":
   var status: EditorStatus
 
   setup:
-    status = initEditorStatus()
-    status.settings.lsp.enable = true
+    if isNimlangserverAvailable():
+      status = initEditorStatus()
+      status.settings.lsp.enable = true
 
-    let filename = $genOid() & ".nim"
-    assert status.addNewBufferInCurrentWin(filename).isOk
-    currentBufStatus.buffer = @[
-      "type number = int",
-      "var a: number"
-    ]
-    .toSeqRunes
-    .toGapBuffer
+      let filename = $genOid() & ".nim"
+      assert status.addNewBufferInCurrentWin(filename).isOk
+      currentBufStatus.buffer = @[
+        "type number = int",
+        "var a: number"
+      ]
+      .toSeqRunes
+      .toGapBuffer
 
   teardown:
-    discard lspClient.kill
+    if isNimlangserverAvailable():
+      discard lspClient.kill
 
   test "Not found":
-    lspClient.waitingResponses[0] = WaitLspResponse(
-      bufferId: currentBufStatus.id,
-      requestId: 0,
-      lspMethod: LspMethod.textDocumentDefinition)
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      lspClient.waitingResponses[0] = WaitLspResponse(
+        bufferId: currentBufStatus.id,
+        requestId: 0,
+        lspMethod: LspMethod.textDocumentDefinition)
 
-    check status.lspDefinition(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": []
-    }).isErr
+      check status.lspDefinition(%*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": []
+      }).isErr
 
   test "Basic":
-    lspClient.waitingResponses[0] = WaitLspResponse(
-      bufferId: currentBufStatus.id,
-      requestId: 0,
-      lspMethod: LspMethod.textDocumentDefinition)
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      lspClient.waitingResponses[0] = WaitLspResponse(
+        bufferId: currentBufStatus.id,
+        requestId: 0,
+        lspMethod: LspMethod.textDocumentDefinition)
 
-    check status.lspDefinition(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": [
-        {
-          "uri": pathToUri($currentBufStatus.absolutePath),
-          "range": {
-            "start": {
-              "line": 0,
-              "character": 5,
-            },
-            "end": {
-              "line": 0,
-              "character": 5,
+      check status.lspDefinition(%*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": [
+          {
+            "uri": pathToUri($currentBufStatus.absolutePath),
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 5,
+              },
+              "end": {
+                "line": 0,
+                "character": 5,
+              }
             }
           }
-        }
-      ]
-    }).isOk
+        ]
+      }).isOk
 
-    check currentMainWindowNode.currentLine == 0
-    check currentMainWindowNode.currentColumn == 5
+      check currentMainWindowNode.currentLine == 0
+      check currentMainWindowNode.currentColumn == 5
 
 suite "lsp: lspTypeDefinition":
   var status: EditorStatus
 
   setup:
-    status = initEditorStatus()
-    status.settings.lsp.enable = true
+    if isNimlangserverAvailable():
+      status = initEditorStatus()
+      status.settings.lsp.enable = true
 
-    let filename = $genOid() & ".nim"
-    assert status.addNewBufferInCurrentWin(filename).isOk
-    currentBufStatus.buffer = @[
-      "type number = int",
-      "var a: number"
-    ]
-    .toSeqRunes
-    .toGapBuffer
+      let filename = $genOid() & ".nim"
+      assert status.addNewBufferInCurrentWin(filename).isOk
+      currentBufStatus.buffer = @[
+        "type number = int",
+        "var a: number"
+      ]
+      .toSeqRunes
+      .toGapBuffer
 
   teardown:
-    discard lspClient.kill
+    if isNimlangserverAvailable():
+      discard lspClient.kill
 
   test "Not found":
-    lspClient.waitingResponses[0] = WaitLspResponse(
-      bufferId: currentBufStatus.id,
-      requestId: 0,
-      lspMethod: LspMethod.textDocumentTypeDefinition)
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      lspClient.waitingResponses[0] = WaitLspResponse(
+        bufferId: currentBufStatus.id,
+        requestId: 0,
+        lspMethod: LspMethod.textDocumentTypeDefinition)
 
-    check status.lspTypeDefinition(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": []
-    }).isErr
+      check status.lspTypeDefinition(%*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": []
+      }).isErr
 
   test "Basic":
-    lspClient.waitingResponses[0] = WaitLspResponse(
-      bufferId: currentBufStatus.id,
-      requestId: 0,
-      lspMethod: LspMethod.textDocumentTypeDefinition)
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      lspClient.waitingResponses[0] = WaitLspResponse(
+        bufferId: currentBufStatus.id,
+        requestId: 0,
+        lspMethod: LspMethod.textDocumentTypeDefinition)
 
-    check status.lspTypeDefinition(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": [
-        {
-          "uri": pathToUri($currentBufStatus.absolutePath),
-          "range": {
-            "start": {
-              "line": 0,
-              "character": 5,
-            },
-            "end": {
-              "line": 0,
-              "character": 5,
+      check status.lspTypeDefinition(%*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": [
+          {
+            "uri": pathToUri($currentBufStatus.absolutePath),
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 5,
+              },
+              "end": {
+                "line": 0,
+                "character": 5,
+              }
             }
           }
-        }
-      ]
-    }).isOk
+        ]
+      }).isOk
 
-    check currentMainWindowNode.currentLine == 0
-    check currentMainWindowNode.currentColumn == 5
+      check currentMainWindowNode.currentLine == 0
+      check currentMainWindowNode.currentColumn == 5
 
 suite "lsp: lspReferences":
   var status: EditorStatus
 
   setup:
-    status = initEditorStatus()
-    status.settings.lsp.enable = true
+    if isNimlangserverAvailable():
+      status = initEditorStatus()
+      status.settings.lsp.enable = true
 
-    let filename = $genOid() & ".nim"
-    assert status.addNewBufferInCurrentWin(filename).isOk
+      let filename = $genOid() & ".nim"
+      assert status.addNewBufferInCurrentWin(filename).isOk
 
   teardown:
-    discard status.lspClients["nim"].kill
+    if isNimlangserverAvailable():
+      discard status.lspClients["nim"].kill
 
   test "Not found":
-    lspClient.waitingResponses[0] = WaitLspResponse(
-      bufferId: currentBufStatus.id,
-      requestId: 0,
-      lspMethod: LspMethod.textDocumentReferences)
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      lspClient.waitingResponses[0] = WaitLspResponse(
+        bufferId: currentBufStatus.id,
+        requestId: 0,
+        lspMethod: LspMethod.textDocumentReferences)
 
-    check status.lspReferences(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": []
-    }).isErr
+      check status.lspReferences(%*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": []
+      }).isErr
 
   test "Same buffer":
-    lspClient.waitingResponses[0] = WaitLspResponse(
-      bufferId: currentBufStatus.id,
-      requestId: 0,
-      lspMethod: LspMethod.textDocumentReferences)
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      lspClient.waitingResponses[0] = WaitLspResponse(
+        bufferId: currentBufStatus.id,
+        requestId: 0,
+        lspMethod: LspMethod.textDocumentReferences)
 
-    check status.lspReferences(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": [
-        {
-          "uri": pathToUri($currentBufStatus.absolutePath),
-          "range": {
-            "start": {
-              "line": 0,
-              "character": 0,
-            },
-            "end": {
-              "line": 0,
-              "character": 0,
+      check status.lspReferences(%*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": [
+          {
+            "uri": pathToUri($currentBufStatus.absolutePath),
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0,
+              },
+              "end": {
+                "line": 0,
+                "character": 0,
+              }
+            }
+          },
+          {
+            "uri": pathToUri($currentBufStatus.absolutePath),
+            "range": {
+              "start": {
+                "line": 1,
+                "character": 0,
+              },
+              "end": {
+                "line": 1,
+                "character": 0,
+              }
             }
           }
-        },
-        {
-          "uri": pathToUri($currentBufStatus.absolutePath),
-          "range": {
-            "start": {
-              "line": 1,
-              "character": 0,
-            },
-            "end": {
-              "line": 1,
-              "character": 0,
-            }
-          }
-        }
+        ]
+      }).isOk
+
+      let nodes = mainWindowNode.getAllWindowNode
+
+      check nodes.len == 2
+      check (nodes[0].bufferIndex == 0 and nodes[1].bufferIndex == 1) or
+            (nodes[0].bufferIndex == 1 and nodes[1].bufferIndex == 0)
+
+      check currentMainWindowNode.bufferIndex == 1
+
+      check status.bufStatus.len == 2
+      check status.bufStatus[0].mode == Mode.normal
+      check status.bufStatus[1].mode == Mode.references
+
+      check status.bufStatus[1].buffer.toSeqRunes == @[
+        fmt"{$status.bufStatus[0].absolutePath} 0 Line 0 Col",
+        fmt"{$status.bufStatus[0].absolutePath} 1 Line 0 Col",
       ]
-    }).isOk
-
-    let nodes = mainWindowNode.getAllWindowNode
-
-    check nodes.len == 2
-    check (nodes[0].bufferIndex == 0 and nodes[1].bufferIndex == 1) or
-          (nodes[0].bufferIndex == 1 and nodes[1].bufferIndex == 0)
-
-    check currentMainWindowNode.bufferIndex == 1
-
-    check status.bufStatus.len == 2
-    check status.bufStatus[0].mode == Mode.normal
-    check status.bufStatus[1].mode == Mode.references
-
-    check status.bufStatus[1].buffer.toSeqRunes == @[
-      fmt"{$status.bufStatus[0].absolutePath} 0 Line 0 Col",
-      fmt"{$status.bufStatus[0].absolutePath} 1 Line 0 Col",
-    ]
-    .toSeqRunes
+      .toSeqRunes
 
   test "Other buffer":
-    let destFilePath = getCurrentDir() / $genOid() & ".nim"
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      let destFilePath = getCurrentDir() / $genOid() & ".nim"
 
-    lspClient.waitingResponses[0] = WaitLspResponse(
-      bufferId: currentBufStatus.id,
-      requestId: 0,
-      lspMethod: LspMethod.textDocumentReferences)
+      lspClient.waitingResponses[0] = WaitLspResponse(
+        bufferId: currentBufStatus.id,
+        requestId: 0,
+        lspMethod: LspMethod.textDocumentReferences)
 
-    check status.lspReferences(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": [
-        {
-          "uri": pathToUri(destFilePath),
-          "range": {
-            "start": {
-              "line": 0,
-              "character": 0,
-            },
-            "end": {
-              "line": 0,
-              "character": 0,
+      check status.lspReferences(%*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": [
+          {
+            "uri": pathToUri(destFilePath),
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0,
+              },
+              "end": {
+                "line": 0,
+                "character": 0,
+              }
+            }
+          },
+          {
+            "uri": pathToUri(destFilePath),
+            "range": {
+              "start": {
+                "line": 1,
+                "character": 0,
+              },
+              "end": {
+                "line": 1,
+                "character": 0,
+              }
             }
           }
-        },
-        {
-          "uri": pathToUri(destFilePath),
-          "range": {
-            "start": {
-              "line": 1,
-              "character": 0,
-            },
-            "end": {
-              "line": 1,
-              "character": 0,
-            }
-          }
-        }
+        ]
+      }).isOk
+
+      let nodes = mainWindowNode.getAllWindowNode
+
+      check nodes.len == 2
+      check nodes[0].bufferIndex == 0 or nodes[0].bufferIndex == 1
+      check nodes[1].bufferIndex == 0 or nodes[1].bufferIndex == 1
+
+      check currentMainWindowNode.bufferIndex == 1
+
+      check status.bufStatus.len == 2
+      check status.bufStatus[0].mode == Mode.normal
+      check status.bufStatus[1].mode == Mode.references
+
+      check status.bufStatus[1].buffer.toSeqRunes == @[
+        fmt"{destFilePath} 0 Line 0 Col",
+        fmt"{destFilePath} 1 Line 0 Col",
       ]
-    }).isOk
-
-    let nodes = mainWindowNode.getAllWindowNode
-
-    check nodes.len == 2
-    check nodes[0].bufferIndex == 0 or nodes[0].bufferIndex == 1
-    check nodes[1].bufferIndex == 0 or nodes[1].bufferIndex == 1
-
-    check currentMainWindowNode.bufferIndex == 1
-
-    check status.bufStatus.len == 2
-    check status.bufStatus[0].mode == Mode.normal
-    check status.bufStatus[1].mode == Mode.references
-
-    check status.bufStatus[1].buffer.toSeqRunes == @[
-      fmt"{destFilePath} 0 Line 0 Col",
-      fmt"{destFilePath} 1 Line 0 Col",
-    ]
-    .toSeqRunes
+      .toSeqRunes
 
 suite "lsp: lspRename":
-  var status: EditorStatus
+  var
+    status: EditorStatus
+    filename: string
 
   setup:
-    status = initEditorStatus()
-    status.settings.lsp.enable = true
+    if isNimlangserverAvailable():
+      status = initEditorStatus()
+      status.settings.lsp.enable = true
 
-    let filename = $genOid() & ".nim"
-    assert status.addNewBufferInCurrentWin(filename).isOk
+      filename = $genOid() & ".nim"
+      assert status.addNewBufferInCurrentWin(filename).isOk
 
   teardown:
-    discard lspClient.kill
+    if isNimlangserverAvailable():
+      discard lspClient.kill
 
   test "Not found":
-    lspClient.waitingResponses[0] = WaitLspResponse(
-      bufferId: currentBufStatus.id,
-      requestId: 0,
-      lspMethod: LspMethod.textDocumentRename)
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      lspClient.waitingResponses[0] = WaitLspResponse(
+        bufferId: currentBufStatus.id,
+        requestId: 0,
+        lspMethod: LspMethod.textDocumentRename)
 
-    check status.lspReferences(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": []
-    }).isErr
+      check status.lspReferences(%*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": []
+      }).isErr
 
   test "Basic":
-    let filePath = getCurrentDir() / filename
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      let filePath = getCurrentDir() / filename
 
-    const Buffer = @[
-      "type Obj = object",
-      "  n: int",
-      "let n = Obj()",
-    ]
+      const Buffer = @[
+        "type Obj = object",
+        "  n: int",
+        "let n = Obj()",
+      ]
 
-    currentBufStatus.buffer = Buffer.toSeqRunes.toGapBuffer
+      currentBufStatus.buffer = Buffer.toSeqRunes.toGapBuffer
+      lspClient.waitingResponses[0] = WaitLspResponse(
+        bufferId: currentBufStatus.id,
+        requestId: 0,
+        lspMethod: LspMethod.textDocumentRename)
 
-    lspClient.waitingResponses[0] = WaitLspResponse(
-      bufferId: currentBufStatus.id,
-      requestId: 0,
-      lspMethod: LspMethod.textDocumentRename)
-
-    check status.lspRename(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": {
-        "changes": {
-          filePath.pathToUri: [
-            {
-              "range": {
-                "start": {
-                  "line": 0,
-                  "character": 5
+      check status.lspRename(%*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": {
+          "changes": {
+            filePath.pathToUri: [
+              {
+                "range": {
+                  "start": {
+                    "line": 0,
+                    "character": 5
+                  },
+                  "end": {
+                    "line": 0,
+                    "character": 8
+                  }
                 },
-                "end": {
-                  "line": 0,
-                  "character": 8
-                }
+                "newText": "newName"
               },
-              "newText": "newName"
-            },
-            {
-              "range": {
-                "start": {
-                  "line": 2,
-                  "character": 8
+              {
+                "range": {
+                  "start": {
+                    "line": 2,
+                    "character": 8
+                  },
+                  "end": {
+                    "line": 2,
+                    "character": 11
+                  }
                 },
-                "end": {
-                  "line": 2,
-                  "character": 11
-                }
-              },
-              "newText": "newName"
-            }
-          ]
-        },
-        "documentChanges": nil
-      }
-    }).isOk
+                "newText": "newName"
+              }
+            ]
+          },
+          "documentChanges": nil
+        }
+      }).isOk
 
-    check currentBufStatus.buffer.toSeqRunes == @[
-      "type newName = object",
-      "  n: int",
-      "let n = newName()",
-    ].toSeqRunes
+      check currentBufStatus.buffer.toSeqRunes == @[
+        "type newName = object",
+        "  n: int",
+        "let n = newName()",
+      ].toSeqRunes
 
 suite "lsp: lspFoldingRange":
   var status: EditorStatus
 
   setup:
-    status = initEditorStatus()
-    status.settings.lsp.enable = false
+    if isNimlangserverAvailable():
+      status = initEditorStatus()
+      status.settings.lsp.enable = false
 
-    let filename = $genOid()
-    assert status.addNewBufferInCurrentWin(filename).isOk
+      let filename = $genOid()
+      assert status.addNewBufferInCurrentWin(filename).isOk
 
   test "Not found":
-    check status.lspFoldingRange(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": []
-    }).isErr
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      check status.lspFoldingRange(%*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": []
+      }).isErr
 
   test "Basic":
-    currentBufStatus.buffer = toSeq(0..5).mapIt(it.toRunes & ru" ").toGapBuffer
-    currentMainWindowNode.currentLine = 1
-    currentMainWindowNode.currentColumn = 1
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      currentBufStatus.buffer = toSeq(0..5).mapIt(it.toRunes & ru" ").toGapBuffer
+      currentMainWindowNode.currentLine = 1
+      currentMainWindowNode.currentColumn = 1
 
-    status.resize(100, 100)
-    status.update
+      status.resize(100, 100)
+      status.update
 
-    currentBufStatus.langId = "dummy"
-    status.lspClients["dummy"] = LspClient()
+      currentBufStatus.langId = "dummy"
+      status.lspClients["dummy"] = LspClient()
 
-    lspClient.waitingResponses[0] = WaitLspResponse(
-      bufferId: currentBufStatus.id,
-      requestId: 0,
-      lspMethod: LspMethod.textDocumentFoldingRange)
+      lspClient.waitingResponses[0] = WaitLspResponse(
+        bufferId: currentBufStatus.id,
+        requestId: 0,
+        lspMethod: LspMethod.textDocumentFoldingRange)
 
-    check status.lspFoldingRange(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": [
-        {
-          "startLine": 0,
-          "startCharacter": 0,
-          "endLine": 1,
-          "endCharacter": 0
-        },
-        {
-          "startLine": 3,
-          "startCharacter": 0,
-          "endLine": 4,
-          "endCharacter": 0
-        }
+      check status.lspFoldingRange(%*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": [
+          {
+            "startLine": 0,
+            "startCharacter": 0,
+            "endLine": 1,
+            "endCharacter": 0
+          },
+          {
+            "startLine": 3,
+            "startCharacter": 0,
+            "endLine": 4,
+            "endCharacter": 0
+          }
+        ]
+      }).isOk
+
+      status.update
+
+      check currentMainWindowNode.currentLine == 0
+      check currentMainWindowNode.currentColumn == 0
+
+      check currentMainWindowNode.view.foldingRanges == @[
+        folding.FoldingRange(first: 0, last: 1),
+        folding.FoldingRange(first: 3, last: 4)
       ]
-    }).isOk
-
-    status.update
-
-    check currentMainWindowNode.currentLine == 0
-    check currentMainWindowNode.currentColumn == 0
-
-    check currentMainWindowNode.view.foldingRanges == @[
-      folding.FoldingRange(first: 0, last: 1),
-      folding.FoldingRange(first: 3, last: 4)
-    ]
 
 suite "lsp: Selection Range":
   var status: EditorStatus
 
   setup:
-    status = initEditorStatus()
-    status.settings.lsp.enable = false
+    if isNimlangserverAvailable():
+      status = initEditorStatus()
+      status.settings.lsp.enable = false
 
-    let filename = $genOid()
-    assert status.addNewBufferInCurrentWin(filename).isOk
+      let filename = $genOid()
+      assert status.addNewBufferInCurrentWin(filename).isOk
 
-    currentBufStatus.langId = "dummy"
-    status.lspClients["dummy"] = LspClient()
+      currentBufStatus.langId = "dummy"
+      status.lspClients["dummy"] = LspClient()
 
   test "Not found":
-    check status.lspFoldingRange(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": []
-    }).isErr
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      check status.lspFoldingRange(%*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": []
+      }).isErr
 
   test "Basic":
-    currentBufStatus.buffer = toSeq(0..10)
-      .mapIt(" ".repeat(10).toRunes)
-      .toGapBuffer
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      currentBufStatus.buffer = toSeq(0..10)
+        .mapIt(" ".repeat(10).toRunes)
+        .toGapBuffer
 
-    status.resize(100, 100)
-    status.update
+      status.resize(100, 100)
+      status.update
 
-    lspClient.waitingResponses[0] = WaitLspResponse(
-      bufferId: currentBufStatus.id,
-      requestId: 0,
-      lspMethod: LspMethod.textDocumentSelectionRange)
+      lspClient.waitingResponses[0] = WaitLspResponse(
+        bufferId: currentBufStatus.id,
+        requestId: 0,
+        lspMethod: LspMethod.textDocumentSelectionRange)
 
-    let res = %*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": [
-        {
-          "range": {
-            "start": {
-              "line": 0,
-              "character": 0
-            },
-            "end": {
-              "line": 0,
-              "character": 0
-            }
-          },
-          "parent": {
+      let res = %*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": [
+          {
             "range": {
               "start": {
                 "line": 0,
@@ -1367,7 +1457,7 @@ suite "lsp: Selection Range":
               },
               "end": {
                 "line": 0,
-                "character": 2
+                "character": 0
               }
             },
             "parent": {
@@ -1377,8 +1467,8 @@ suite "lsp: Selection Range":
                   "character": 0
                 },
                 "end": {
-                  "line": 2,
-                  "character": 1
+                  "line": 0,
+                  "character": 2
                 }
               },
               "parent": {
@@ -1388,247 +1478,180 @@ suite "lsp: Selection Range":
                     "character": 0
                   },
                   "end": {
-                    "line": 9,
-                    "character": 0
+                    "line": 2,
+                    "character": 1
+                  }
+                },
+                "parent": {
+                  "range": {
+                    "start": {
+                      "line": 0,
+                      "character": 0
+                    },
+                    "end": {
+                      "line": 9,
+                      "character": 0
+                    }
                   }
                 }
               }
             }
           }
-        }
-      ]
-    }
+        ]
+      }
 
-    check status.lspSelectionRange(res).isOk
+      check status.lspSelectionRange(res).isOk
 
-    status.update
+      status.update
 
-    check currentMainWindowNode.currentLine == 0
-    check currentMainWindowNode.currentColumn == 2
+      check currentMainWindowNode.currentLine == 0
+      check currentMainWindowNode.currentColumn == 2
 
-    check currentBufStatus.selectionRanges.len == 1
+      check currentBufStatus.selectionRanges.len == 1
 
-    var r = currentBufStatus.selectionRanges[0]
-    check r.range.start[] == LspPosition(line: 0, character: 0)[]
-    check r.range.`end`[] == LspPosition(line: 2, character: 1)[]
+      var r = currentBufStatus.selectionRanges[0]
+      check r.range.start[] == LspPosition(line: 0, character: 0)[]
+      check r.range.`end`[] == LspPosition(line: 2, character: 1)[]
 
-    r = r.parent.get
-    check r.range.start[] == LspPosition(line: 0, character: 0)[]
-    check r.range.`end`[] == LspPosition(line: 9, character: 0)[]
+      r = r.parent.get
+      check r.range.start[] == LspPosition(line: 0, character: 0)[]
+      check r.range.`end`[] == LspPosition(line: 9, character: 0)[]
 
-    check r.parent.isNone
+      check r.parent.isNone
 
   test "Over buffer len":
-    currentBufStatus.buffer = toSeq(0..2)
-      .mapIt(" ".repeat(10).toRunes)
-      .toGapBuffer
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      currentBufStatus.buffer = toSeq(0..2)
+        .mapIt(" ".repeat(10).toRunes)
+        .toGapBuffer
 
-    status.resize(100, 100)
-    status.update
+      status.resize(100, 100)
+      status.update
 
-    lspClient.waitingResponses[0] = WaitLspResponse(
-      bufferId: currentBufStatus.id,
-      requestId: 0,
-      lspMethod: LspMethod.textDocumentSelectionRange)
+      lspClient.waitingResponses[0] = WaitLspResponse(
+        bufferId: currentBufStatus.id,
+        requestId: 0,
+        lspMethod: LspMethod.textDocumentSelectionRange)
 
-    check status.lspSelectionRange(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": [
-        {
-          "range": {
-            "start": {
-              "line": 0,
-              "character": 0
-            },
-            "end": {
-              "line": 3,
-              "character": 0
+      check status.lspSelectionRange(%*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": [
+          {
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0
+              },
+              "end": {
+                "line": 3,
+                "character": 0
+              }
             }
           }
-        }
-      ]
-    })
-    .isOk
+        ]
+      })
+      .isOk
 
-    status.update
+      status.update
 
-    # Generally, the last line is ignored since it's only a newline.
-    check currentMainWindowNode.currentLine == 1
-    check currentMainWindowNode.currentColumn == 0
+      # Generally, the last line is ignored since it's only a newline.
+      check currentMainWindowNode.currentLine == 1
+      check currentMainWindowNode.currentColumn == 0
 
   test "Over line len":
-    currentBufStatus.buffer = toSeq(0..2)
-      .mapIt(" ".repeat(10).toRunes)
-      .toGapBuffer
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      currentBufStatus.buffer = toSeq(0..2)
+        .mapIt(" ".repeat(10).toRunes)
+        .toGapBuffer
 
-    status.resize(100, 100)
-    status.update
+      status.resize(100, 100)
+      status.update
 
-    lspClient.waitingResponses[0] = WaitLspResponse(
-      bufferId: currentBufStatus.id,
-      requestId: 0,
-      lspMethod: LspMethod.textDocumentSelectionRange)
+      lspClient.waitingResponses[0] = WaitLspResponse(
+        bufferId: currentBufStatus.id,
+        requestId: 0,
+        lspMethod: LspMethod.textDocumentSelectionRange)
 
-    check status.lspSelectionRange(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": [
-        {
-          "range": {
-            "start": {
-              "line": 0,
-              "character": 0
-            },
-            "end": {
-              "line": 0,
-              "character": 10
+      check status.lspSelectionRange(%*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": [
+          {
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0
+              },
+              "end": {
+                "line": 0,
+                "character": 10
+              }
             }
           }
-        }
-      ]
-    })
-    .isOk
+        ]
+      })
+      .isOk
 
-    status.update
+      status.update
 
-    check currentMainWindowNode.currentLine == 0
-    check currentMainWindowNode.currentColumn == 9
+      check currentMainWindowNode.currentLine == 0
+      check currentMainWindowNode.currentColumn == 9
 
 suite "lsp: Selection Range":
   var status: EditorStatus
 
   setup:
-    status = initEditorStatus()
-    status.settings.lsp.enable = false
+    if isNimlangserverAvailable():
+      status = initEditorStatus()
+      status.settings.lsp.enable = false
 
-    let filename = $genOid()
-    assert status.addNewBufferInCurrentWin(filename).isOk
+      let filename = $genOid()
+      assert status.addNewBufferInCurrentWin(filename).isOk
 
-    currentBufStatus.langId = "dummy"
-    status.lspClients["dummy"] = LspClient()
+      currentBufStatus.langId = "dummy"
+      status.lspClients["dummy"] = LspClient()
 
-    status.resize(100, 100)
-    status.update
+      status.resize(100, 100)
+      status.update
 
   test "Not found":
-    check status.lspDocumentSymbol(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": []
-    })
-    .isErr
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      check status.lspDocumentSymbol(%*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": []
+      })
+      .isErr
 
-    check currentBufStatus.documentSymbols.len == 0
+      check currentBufStatus.documentSymbols.len == 0
 
-    check currentBufStatus.mode != Mode.documentsymbol
+      check currentBufStatus.mode != Mode.documentsymbol
 
   test "Parse DocumentSymbol[]":
-    lspClient.waitingResponses[0] = WaitLspResponse(
-      bufferId: currentBufStatus.id,
-      requestId: 0,
-      lspMethod: LspMethod.textDocumentDocumentSymbol)
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      lspClient.waitingResponses[0] = WaitLspResponse(
+        bufferId: currentBufStatus.id,
+        requestId: 0,
+        lspMethod: LspMethod.textDocumentDocumentSymbol)
 
-    check status.lspDocumentSymbol(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": [
-        {
-          "name": "a",
-          "detail": "1",
-          "kind": 1,
-          "deprecated": false,
-          "range": {
-            "start": {
-              "line": 0,
-              "character": 1
-            },
-            "end": {
-              "line": 2,
-              "character": 3
-            }
-          },
-          "selectionRange": {
-            "start": {
-              "line": 4,
-              "character": 5
-            },
-            "end": {
-              "line": 6,
-              "character": 7
-            }
-          }
-        },
-        {
-          "name": "b",
-          "detail": "2",
-          "kind": 2,
-          "deprecated": true,
-          "range": {
-            "start": {
-              "line": 8,
-              "character": 9
-            },
-            "end": {
-              "line": 10,
-              "character": 11
-            }
-          },
-          "selectionRange": {
-            "start": {
-              "line": 12,
-              "character": 13
-            },
-            "end": {
-              "line": 14,
-              "character": 15
-            }
-          }
-        }
-      ]
-    })
-    .isOk
-
-    check currentBufStatus.documentSymbols.len == 2
-
-    check currentBufStatus.documentSymbols[0].name == "a"
-    check currentBufStatus.documentSymbols[0].detail.get == "1"
-    check currentBufStatus.documentSymbols[0].kind == 1
-    check currentBufStatus.documentSymbols[0].range.get.start[] == LspPosition(
-      line: 0,
-      character: 1)[]
-    check currentBufStatus.documentSymbols[0].range.get.`end`[] == LspPosition(
-      line: 2,
-      character: 3)[]
-
-    check currentBufStatus.documentSymbols[1].name == "b"
-    check currentBufStatus.documentSymbols[1].detail.get == "2"
-    check currentBufStatus.documentSymbols[1].kind == 2
-    check currentBufStatus.documentSymbols[1].range.get.start[] == LspPosition(
-      line: 8,
-      character: 9)[]
-    check currentBufStatus.documentSymbols[1].range.get.`end`[] == LspPosition(
-      line: 10,
-      character: 11)[]
-
-    check currentBufStatus.mode == Mode.documentsymbol
-
-  test "Parse SymbolInformation[]":
-    lspClient.waitingResponses[0] = WaitLspResponse(
-      bufferId: currentBufStatus.id,
-      requestId: 0,
-      lspMethod: LspMethod.textDocumentDocumentSymbol)
-
-    check status.lspDocumentSymbol(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": [
-        {
-          "name": "a",
-          "kind": 1,
-          "deprecated": false,
-          "location": {
-            "uri": "file:///test.txt",
+      check status.lspDocumentSymbol(%*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": [
+          {
+            "name": "a",
+            "detail": "1",
+            "kind": 1,
+            "deprecated": false,
             "range": {
               "start": {
                 "line": 0,
@@ -1638,16 +1661,8 @@ suite "lsp: Selection Range":
                 "line": 2,
                 "character": 3
               }
-            }
-          }
-        },
-        {
-          "name": "b",
-          "kind": 2,
-          "deprecated": false,
-          "location": {
-            "uri": "file:///test.txt",
-            "range": {
+            },
+            "selectionRange": {
               "start": {
                 "line": 4,
                 "character": 5
@@ -1657,229 +1672,367 @@ suite "lsp: Selection Range":
                 "character": 7
               }
             }
+          },
+          {
+            "name": "b",
+            "detail": "2",
+            "kind": 2,
+            "deprecated": true,
+            "range": {
+              "start": {
+                "line": 8,
+                "character": 9
+              },
+              "end": {
+                "line": 10,
+                "character": 11
+              }
+            },
+            "selectionRange": {
+              "start": {
+                "line": 12,
+                "character": 13
+              },
+              "end": {
+                "line": 14,
+                "character": 15
+              }
+            }
           }
-        }
-      ]
-    })
-    .isOk
+        ]
+      })
+      .isOk
 
-    check currentBufStatus.documentSymbols.len == 2
+      check currentBufStatus.documentSymbols.len == 2
 
-    check currentBufStatus.documentSymbols[0].name == "a"
-    check currentBufStatus.documentSymbols[0].kind == 1
-    check currentBufStatus.documentSymbols[0].range.get.start[] == LspPosition(
-      line: 0,
-      character: 1)[]
-    check currentBufStatus.documentSymbols[0].range.get.`end`[] == LspPosition(
-      line: 2,
-      character: 3)[]
+      check currentBufStatus.documentSymbols[0].name == "a"
+      check currentBufStatus.documentSymbols[0].detail.get == "1"
+      check currentBufStatus.documentSymbols[0].kind == 1
+      check currentBufStatus.documentSymbols[0].range.get.start[] == LspPosition(
+        line: 0,
+        character: 1)[]
+      check currentBufStatus.documentSymbols[0].range.get.`end`[] == LspPosition(
+        line: 2,
+        character: 3)[]
 
-    check currentBufStatus.documentSymbols[1].name == "b"
-    check currentBufStatus.documentSymbols[1].kind == 2
-    check currentBufStatus.documentSymbols[1].range.get.start[] == LspPosition(
-      line: 4,
-      character: 5)[]
-    check currentBufStatus.documentSymbols[1].range.get.`end`[] == LspPosition(
-      line: 6,
-      character: 7)[]
+      check currentBufStatus.documentSymbols[1].name == "b"
+      check currentBufStatus.documentSymbols[1].detail.get == "2"
+      check currentBufStatus.documentSymbols[1].kind == 2
+      check currentBufStatus.documentSymbols[1].range.get.start[] == LspPosition(
+        line: 8,
+        character: 9)[]
+      check currentBufStatus.documentSymbols[1].range.get.`end`[] == LspPosition(
+        line: 10,
+        character: 11)[]
 
-    check currentBufStatus.mode == Mode.documentsymbol
+      check currentBufStatus.mode == Mode.documentsymbol
+
+  test "Parse SymbolInformation[]":
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      lspClient.waitingResponses[0] = WaitLspResponse(
+        bufferId: currentBufStatus.id,
+        requestId: 0,
+        lspMethod: LspMethod.textDocumentDocumentSymbol)
+
+      check status.lspDocumentSymbol(%*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": [
+          {
+            "name": "a",
+            "kind": 1,
+            "deprecated": false,
+            "location": {
+              "uri": "file:///test.txt",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 1
+                },
+                "end": {
+                  "line": 2,
+                  "character": 3
+                }
+              }
+            }
+          },
+          {
+            "name": "b",
+            "kind": 2,
+            "deprecated": false,
+            "location": {
+              "uri": "file:///test.txt",
+              "range": {
+                "start": {
+                  "line": 4,
+                  "character": 5
+                },
+                "end": {
+                  "line": 6,
+                  "character": 7
+                }
+              }
+            }
+          }
+        ]
+      })
+      .isOk
+
+      check currentBufStatus.documentSymbols.len == 2
+
+      check currentBufStatus.documentSymbols[0].name == "a"
+      check currentBufStatus.documentSymbols[0].kind == 1
+      check currentBufStatus.documentSymbols[0].range.get.start[] == LspPosition(
+        line: 0,
+        character: 1)[]
+      check currentBufStatus.documentSymbols[0].range.get.`end`[] == LspPosition(
+        line: 2,
+        character: 3)[]
+
+      check currentBufStatus.documentSymbols[1].name == "b"
+      check currentBufStatus.documentSymbols[1].kind == 2
+      check currentBufStatus.documentSymbols[1].range.get.start[] == LspPosition(
+        line: 4,
+        character: 5)[]
+      check currentBufStatus.documentSymbols[1].range.get.`end`[] == LspPosition(
+        line: 6,
+        character: 7)[]
+
+      check currentBufStatus.mode == Mode.documentsymbol
 
 suite "lsp: handleLspServerNotify":
   var status: EditorStatus
 
   setup:
-    status = initEditorStatus()
-    status.settings.lsp.enable = true
+    if isNimlangserverAvailable():
+      status = initEditorStatus()
+      status.settings.lsp.enable = true
 
   teardown:
-    if status.lspClients.contains("nim"):
+    if isNimlangserverAvailable():
       discard lspClient.kill
 
   test "Invalid":
-    check status.handleLspServerNotify(%*{
-      "jsonrpc": "2.0",
-      "result": nil
-    }).isErr
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      check status.handleLspServerNotify(%*{
+        "jsonrpc": "2.0",
+        "result": nil
+      }).isErr
 
   test "window/showMessage":
-    check status.handleLspServerNotify(%*{
-      "jsonrpc": "2.0",
-      "method": "window/showMessage",
-      "params": {
-        "type": 3,
-        "message": "Nimsuggest initialized for test.nim"
-      }
-    }).isOk
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      check status.handleLspServerNotify(%*{
+        "jsonrpc": "2.0",
+        "method": "window/showMessage",
+        "params": {
+          "type": 3,
+          "message": "Nimsuggest initialized for test.nim"
+        }
+      }).isOk
 
   test "window/logMessage":
-    check status.handleLspServerNotify(%*{
-      "jsonrpc": "2.0",
-      "method": "window/logMessage",
-      "params": {
-        "type": 3,
-        "message": "Log message"
-      }
-    }).isOk
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      check status.handleLspServerNotify(%*{
+        "jsonrpc": "2.0",
+        "method": "window/logMessage",
+        "params": {
+          "type": 3,
+          "message": "Log message"
+        }
+      }).isOk
 
   test "window/logMessage":
-    check status.handleLspServerNotify(%*{
-      "jsonrpc": "2.0",
-      "method": "window/logMessage",
-      "params": {
-        "type": 3,
-        "message": "Log message"
-      }
-    }).isOk
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      check status.handleLspServerNotify(%*{
+        "jsonrpc": "2.0",
+        "method": "window/logMessage",
+        "params": {
+          "type": 3,
+          "message": "Log message"
+        }
+      }).isOk
 
   test "workspace/configuration":
-    check status.handleLspServerNotify(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "workspace/configuration",
-      "params": {
-        "items": [
-          {"section": "test"}
-        ]
-      }
-    }).isOk
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      check status.handleLspServerNotify(%*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "method": "workspace/configuration",
+        "params": {
+          "items": [
+            {"section": "test"}
+          ]
+        }
+      }).isOk
 
   test "window/workDoneProgress/create":
-    let filename = $genOid() & ".nim"
-    assert status.addNewBufferInCurrentWin(filename).isOk
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      let filename = $genOid() & ".nim"
+      assert status.addNewBufferInCurrentWin(filename).isOk
 
-    check status.handleLspServerNotify(%*{
-      "jsonrpc": "2.0",
-      "id": 1,
-      "method": "window/workDoneProgress/create",
-      "params": {
-        "token":"token"
-      }
-    }).isOk
+      check status.handleLspServerNotify(%*{
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "window/workDoneProgress/create",
+        "params": {
+          "token":"token"
+        }
+      }).isOk
 
   test "$/progress (begin)":
-    let filename = $genOid() & ".nim"
-    assert status.addNewBufferInCurrentWin(filename).isOk
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      let filename = $genOid() & ".nim"
+      assert status.addNewBufferInCurrentWin(filename).isOk
 
-    status.lspClients["nim"].progress["token"] = ProgressReport(
-      title: "",
-      state: ProgressState.create)
+      status.lspClients["nim"].progress["token"] = ProgressReport(
+        title: "",
+        state: ProgressState.create)
 
-    check status.handleLspServerNotify(%*{
-      "jsonrpc": "2.0",
-      "method": "$/progress",
-      "params": {
-        "token": "token",
-        "value": {
-          "kind": "begin",
-          "title": "begin",
-          "cancellable": false
+      check status.handleLspServerNotify(%*{
+        "jsonrpc": "2.0",
+        "method": "$/progress",
+        "params": {
+          "token": "token",
+          "value": {
+            "kind": "begin",
+            "title": "begin",
+            "cancellable": false
+          }
         }
-      }
-    }).isOk
+      }).isOk
 
   test "$/progress (report)":
-    let filename = $genOid() & ".nim"
-    assert status.addNewBufferInCurrentWin(filename).isOk
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      let filename = $genOid() & ".nim"
+      assert status.addNewBufferInCurrentWin(filename).isOk
 
-    status.lspClients["nim"].progress["token"] = ProgressReport(
-      title: "report",
-      state: ProgressState.create)
+      status.lspClients["nim"].progress["token"] = ProgressReport(
+        title: "report",
+        state: ProgressState.create)
 
-    check status.handleLspServerNotify(%*{
-      "jsonrpc": "2.0",
-      "method": "$/progress",
-      "params": {
-        "token": "token",
-        "value": {
-          "kind":"report",
-          "cancellable": false,
-          "message": "report"
+      check status.handleLspServerNotify(%*{
+        "jsonrpc": "2.0",
+        "method": "$/progress",
+        "params": {
+          "token": "token",
+          "value": {
+            "kind":"report",
+            "cancellable": false,
+            "message": "report"
+          }
         }
-      }
-    }).isOk
+      }).isOk
 
-    check ru"lsp: progress: report: report" == status.commandLine.buffer
+      check ru"lsp: progress: report: report" == status.commandLine.buffer
 
   test "$/progress (report with percentage)":
-    let filename = $genOid() & ".nim"
-    assert status.addNewBufferInCurrentWin(filename).isOk
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      let filename = $genOid() & ".nim"
+      assert status.addNewBufferInCurrentWin(filename).isOk
 
-    status.lspClients["nim"].progress["token"] = ProgressReport(
-      title: "report",
-      state: ProgressState.create)
+      status.lspClients["nim"].progress["token"] = ProgressReport(
+        title: "report",
+        state: ProgressState.create)
 
-    check status.handleLspServerNotify(%*{
-      "jsonrpc": "2.0",
-      "method": "$/progress",
-      "params": {
-        "token": "token",
-        "value": {
-          "kind":"report",
-          "cancellable": false,
-          "message": "report",
-          "percentage": 50
+      check status.handleLspServerNotify(%*{
+        "jsonrpc": "2.0",
+        "method": "$/progress",
+        "params": {
+          "token": "token",
+          "value": {
+            "kind":"report",
+            "cancellable": false,
+            "message": "report",
+            "percentage": 50
+          }
         }
-      }
-    }).isOk
+      }).isOk
 
   test "$/progress (end)":
-    let filename = $genOid() & ".nim"
-    assert status.addNewBufferInCurrentWin(filename).isOk
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      let filename = $genOid() & ".nim"
+      assert status.addNewBufferInCurrentWin(filename).isOk
 
-    status.lspClients["nim"].progress["token"] = ProgressReport(
-      title: "end",
-      state: ProgressState.create)
+      status.lspClients["nim"].progress["token"] = ProgressReport(
+        title: "end",
+        state: ProgressState.create)
 
-    check status.handleLspServerNotify(%*{
-      "jsonrpc": "2.0",
-      "method": "$/progress",
-      "params": {
-        "token": "token",
-        "value": {
-          "kind":"end",
-          "message": "end"
+      check status.handleLspServerNotify(%*{
+        "jsonrpc": "2.0",
+        "method": "$/progress",
+        "params": {
+          "token": "token",
+          "value": {
+            "kind":"end",
+            "message": "end"
+          }
         }
-      }
-    }).isOk
+      }).isOk
 
   test "textDocument/publishDiagnostics":
-    check status.handleLspServerNotify(%*{
-      "jsonrpc": "2.0",
-      "method": "textDocument/publishDiagnostics",
-      "params": {
-        "uri": "file:///tmp/test.nim",
-        "diagnostics": [
-          {
-            "range": {
-              "start": {
-                "line": 0,
-                "character": 0
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      check status.handleLspServerNotify(%*{
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "uri": "file:///tmp/test.nim",
+          "diagnostics": [
+            {
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 0
+                },
+                "end": {
+                  "line": 0,
+                  "character": 2
+                }
               },
-              "end": {
-                "line": 0,
-                "character": 2
-              }
-            },
-            "severity": 1,
-            "code": "nimsuggest chk",
-            "source": "nim",
-            "message": "undeclared identifier: 'cho'",
-            "relatedInformation": nil
-          }
-        ]
-      }
-    }).isOk
+              "severity": 1,
+              "code": "nimsuggest chk",
+              "source": "nim",
+              "message": "undeclared identifier: 'cho'",
+              "relatedInformation": nil
+            }
+          ]
+        }
+      }).isOk
 
 suite "lsp: handleLspResponse":
   var status: EditorStatus
 
   setup:
-    status = initEditorStatus()
-    status.settings.lsp.enable = true
+    if isNimlangserverAvailable():
+      status = initEditorStatus()
+      status.settings.lsp.enable = true
 
   teardown:
-    discard lspClient.kill
+    if isNimlangserverAvailable():
+      discard lspClient.kill
 
   test "Initialize response":
     if not isNimlangserverAvailable():
