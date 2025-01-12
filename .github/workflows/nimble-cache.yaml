@@ -1,6 +1,6 @@
 ######################## GNU General Public License 3.0 ########################
 ##                                                                            ##
-## Copyright (C) 2017─2024 Shuhei Nogawa                                      ##
+## Copyright (C) 2017─2025 Shuhei Nogawa                                      ##
 ##                                                                            ##
 ## This program is free software: you can redistribute it and/or modify       ##
 ## it under the terms of the GNU General Public License as published by       ##
@@ -41,7 +41,7 @@ jobs:
           # - macOS-latest
           # - windows-latest
     env:
-      NIM_VERSION: 2.0.14
+      NIM_VERSION: 2.2.0
     steps:
     - uses: actions/checkout@v4
 
@@ -56,13 +56,19 @@ jobs:
       with:
         nim-version: ${{ env.NIM_VERSION }}
 
+    - uses: nim-lang/setup-nimble-action@v1
+      with:
+        nimble-version: 'latest'
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+
     - name: Install nimlangserver and nph
       run: |
-        nimble refresh
-        nimble install nimlangserver nph
+        nimble install nimlangserver
+        nimlangserver --version
+
+        nimble install nph
+        nph -v
 
     - name: Build
       run: |
-        nimble install stew # Workaround
-
         nimble build
