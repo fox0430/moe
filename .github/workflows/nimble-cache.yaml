@@ -41,7 +41,7 @@ jobs:
           # - macOS-latest
           # - windows-latest
     env:
-      NIM_VERSION: stable
+      NIM_VERSION: 2.0.14
     steps:
     - uses: actions/checkout@v4
 
@@ -50,17 +50,19 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ~/.nimble
-        key: unit-tests-nimble-v2
+        key: unit-tests-nimble-v2-${{ github.sha }}
 
     - uses: jiro4989/setup-nim-action@v2
       with:
         nim-version: ${{ env.NIM_VERSION }}
 
-    - name: Install nimlangserver
+    - name: Install nimlangserver and nph
       run: |
         nimble refresh
-        nimble install nimlangserver@#head
+        nimble install nimlangserver nph
 
     - name: Build
       run: |
+        nimble install stew # Workaround
+
         nimble build

@@ -321,68 +321,35 @@ const
       argsType: ArgsType.none)
   ]
 
-when (NimMajor, NimMinor) >= (1, 9):
-  # These codes can't compile in Nim 1.6. Maybe compiler bug.
+proc noArgsCommandList*(): seq[Runes] {.compileTime.} =
+  ExCommandInfoList
+    .filterIt(it.argsType == ArgsType.none)
+    .mapIt(it.command.toRunes)
 
-  proc noArgsCommandList*(): seq[Runes] {.compileTime.} =
-    ExCommandInfoList
-      .filterIt(it.argsType == ArgsType.none)
-      .mapIt(it.command.toRunes)
+proc toggleArgsCommandList*(): seq[Runes] {.compileTime.} =
+  ExCommandInfoList
+    .filterIt(it.argsType == ArgsType.toggle)
+    .mapIt(it.command.toRunes)
 
-  proc toggleArgsCommandList*(): seq[Runes] {.compileTime.} =
-    ExCommandInfoList
-      .filterIt(it.argsType == ArgsType.toggle)
-      .mapIt(it.command.toRunes)
+proc numberArgsCommandList*(): seq[Runes] {.compileTime.} =
+  ExCommandInfoList
+    .filterIt(it.argsType == ArgsType.number)
+    .mapIt(it.command.toRunes)
 
-  proc numberArgsCommandList*(): seq[Runes] {.compileTime.} =
-    ExCommandInfoList
-      .filterIt(it.argsType == ArgsType.number)
-      .mapIt(it.command.toRunes)
+proc textArgsCommandList*(): seq[Runes] {.compileTime.} =
+  ExCommandInfoList
+    .filterIt(it.argsType == ArgsType.text)
+    .mapIt(it.command.toRunes)
 
-  proc textArgsCommandList*(): seq[Runes] {.compileTime.} =
-    ExCommandInfoList
-      .filterIt(it.argsType == ArgsType.text)
-      .mapIt(it.command.toRunes)
+proc pathArgsCommandList*(): seq[Runes] {.compileTime.} =
+  ExCommandInfoList
+    .filterIt(it.argsType == ArgsType.path)
+    .mapIt(it.command.toRunes)
 
-  proc pathArgsCommandList*(): seq[Runes] {.compileTime.} =
-    ExCommandInfoList
-      .filterIt(it.argsType == ArgsType.path)
-      .mapIt(it.command.toRunes)
-
-  proc themeArgsCommandList*(): seq[Runes] {.compileTime.} =
-    ExCommandInfoList
-      .filterIt(it.argsType == ArgsType.theme)
-      .mapIt(it.command.toRunes)
-else:
-  proc noArgsCommandList*(): seq[Runes] =
-    ExCommandInfoList
-      .filterIt(it.argsType == ArgsType.none)
-      .mapIt(it.command.toRunes)
-
-  proc toggleArgsCommandList*(): seq[Runes] =
-    ExCommandInfoList
-      .filterIt(it.argsType == ArgsType.toggle)
-      .mapIt(it.command.toRunes)
-
-  proc numberArgsCommandList*(): seq[Runes] =
-    ExCommandInfoList
-      .filterIt(it.argsType == ArgsType.number)
-      .mapIt(it.command.toRunes)
-
-  proc textArgsCommandList*(): seq[Runes] =
-    ExCommandInfoList
-      .filterIt(it.argsType == ArgsType.text)
-      .mapIt(it.command.toRunes)
-
-  proc pathArgsCommandList*(): seq[Runes] =
-    ExCommandInfoList
-      .filterIt(it.argsType == ArgsType.path)
-      .mapIt(it.command.toRunes)
-
-  proc themeArgsCommandList*(): seq[Runes] =
-    ExCommandInfoList
-      .filterIt(it.argsType == ArgsType.theme)
-      .mapIt(it.command.toRunes)
+proc themeArgsCommandList*(): seq[Runes] {.compileTime.} =
+  ExCommandInfoList
+    .filterIt(it.argsType == ArgsType.theme)
+    .mapIt(it.command.toRunes)
 
 proc exCommandList*(): array[ExCommandInfoList.len, Runes] {.compileTime.} =
   for i, info in ExCommandInfoList: result[i] = info.command.toRunes

@@ -21,12 +21,8 @@ import std/[options, json, logging, tables]
 
 import pkg/results
 
-import lsp/client
-
-# Workaround for Nim 1.6.2
+import lsp/[client, signaturehelp]
 import lsp/completion as lspcompletion
-
-import lsp/signaturehelp
 
 import ui, editorstatus, windownode, movement, editor, bufferstatus, settings,
        unicodeext, independentutils, gapbuffer, completion, messages
@@ -88,7 +84,7 @@ proc sendDidChangeNotify(status: var EditorStatus): Result[(), string] =
     first: currentMainWindowNode.bufferPosition,
     last: currentMainWindowNode.bufferPosition)
 
-  let err = lspClient.textDocumentDidChange(
+  let err = waitFor lspClient.textDocumentDidChange(
     currentBufStatus.version,
     $currentBufStatus.path.absolutePath,
     currentBufStatus.buffer.toString,
@@ -111,7 +107,7 @@ proc sendCompletionRequest(
     block:
       let isIncompleteTrigger = status.completionWindow.isSome
 
-      let err = lspClient.textDocumentCompletion(
+      let err = waitFor lspClient.textDocumentCompletion(
         currentBufStatus.id,
         $currentBufStatus.path.absolutePath,
         currentMainWindowNode.bufferPosition,
@@ -141,7 +137,7 @@ proc sendSignatureHelpRequest(
           if r.isSome: SignatureHelpTriggerKind.TriggerCharacter
           else: SignatureHelpTriggerKind.Invoked
 
-      let err = lspClient.textDocumentSignatureHelp(
+      let err = waitFor lspClient.textDocumentSignatureHelp(
         currentBufStatus.id,
         $currentBufStatus.path.absolutePath,
         currentMainWindowNode.bufferPosition,

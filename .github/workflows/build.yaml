@@ -49,8 +49,8 @@ jobs:
           - 'ubuntu-latest'
           - 'macOS-latest'
         nim-version:
-          - '1.6.2'
           - '1.6.16'
+          - '2.0.14'
           - 'stable'
           - 'devel'
 

@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -338,7 +338,12 @@ echo "Hello world"
     let r = testFilePath.parseNimCheckResult(output).get
 
     check r.len == 1
-    check r[0].position == BufferPosition(line: 0, column: 10)
+
+    when (NimMajor, NimMinor) >= (2, 2):
+      check r[0].position == BufferPosition(line: 0, column: 11)
+    else:
+      check r[0].position == BufferPosition(line: 0, column: 10)
+
     check r[0].messageType == SyntaxCheckMessageType.warning
     check r[0].message.len > 0
 
@@ -378,11 +383,19 @@ echo "Hello world"
 
     check r.len == 2
 
-    check r[0].position == BufferPosition(line: 0, column: 10)
+    when (NimMajor, NimMinor) >= (2, 2):
+      check r[0].position == BufferPosition(line: 0, column: 11)
+    else:
+      check r[0].position == BufferPosition(line: 0, column: 10)
+
     check r[0].messageType == SyntaxCheckMessageType.warning
     check r[0].message.len > 0
 
-    check r[1].position == BufferPosition(line: 1, column: 10)
+    when (NimMajor, NimMinor) >= (2, 2):
+      check r[1].position == BufferPosition(line: 1, column: 11)
+    else:
+      check r[1].position == BufferPosition(line: 1, column: 10)
+
     check r[1].messageType == SyntaxCheckMessageType.warning
     check r[1].message.len > 0
 
@@ -431,7 +444,11 @@ echo "Hello world"
     check r[0].messageType == SyntaxCheckMessageType.hint
     check r[0].message.len > 0
 
-    check r[1].position == BufferPosition(line: 0, column: 10)
+    when (NimMajor, NimMinor) >= (2, 2):
+      check r[1].position == BufferPosition(line: 0, column: 11)
+    else:
+      check r[1].position == BufferPosition(line: 0, column: 10)
+
     check r[1].messageType == SyntaxCheckMessageType.warning
     check r[1].message.len > 0
 

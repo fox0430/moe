@@ -165,15 +165,19 @@ enable = false
 
 [Lsp.Declaration]
 enable = false
+openWindow = true
 
 [Lsp.Definition]
 enable = false
+openWindow = true
 
 [Lsp.TypeDefinition]
 enable = false
+openWindow = true
 
 [Lsp.Implementation]
 enable = false
+openWindow = true
 
 [Lsp.Diagnostics]
 enable = false
@@ -630,12 +634,16 @@ suite "settings: Parse configuration file":
     check not settings.lsp.features.completion.enable
 
     check not settings.lsp.features.declaration.enable
+    check settings.lsp.features.declaration.openWindow
 
     check not settings.lsp.features.definition.enable
+    check settings.lsp.features.definition.openWindow
 
     check not settings.lsp.features.typeDefinition.enable
+    check settings.lsp.features.typeDefinition.openWindow
 
     check not settings.lsp.features.implementation.enable
+    check settings.lsp.features.implementation.openWindow
 
     check not settings.lsp.features.diagnostics.enable
 

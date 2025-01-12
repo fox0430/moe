@@ -38,15 +38,16 @@ template removeAllFoldingRange(status: var EditorStatus, first, last: int) =
 proc changeModeToInsertMode(
   status: var EditorStatus,
   removeFoldingRange: bool = true) {.inline.} =
-  if currentBufStatus.isReadonly:
-    status.commandLine.writeReadonlyModeWarning
-    return
 
-  if removeFoldingRange:
-    status.removeAllFoldingRange
+    if currentBufStatus.isReadonly:
+      status.commandLine.writeReadonlyModeWarning
+      return
 
-  changeCursorType(status.settings.standard.insertModeCursor)
-  status.changeMode(Mode.insert)
+    if removeFoldingRange:
+      status.removeAllFoldingRange
+
+    changeCursorType(status.settings.standard.insertModeCursor)
+    status.changeMode(Mode.insert)
 
 proc changeModeToReplaceMode(status: var EditorStatus) {.inline.} =
   if currentBufStatus.isReadonly:
@@ -57,30 +58,30 @@ proc changeModeToReplaceMode(status: var EditorStatus) {.inline.} =
 
   status.changeMode(Mode.replace)
 
-proc changeModeToVisualMode(status: var EditorStatus) {.inline.} =
+template changeModeToVisualMode(status: var EditorStatus) =
   status.changeMode(Mode.visual)
   currentBufStatus.selectedArea = initSelectedArea(
     currentMainWindowNode.currentLine,
     currentMainWindowNode.currentColumn)
     .some
 
-proc changeModeToVisualBlockMode(status: var EditorStatus) {.inline.} =
+template changeModeToVisualBlockMode(status: var EditorStatus) =
   status.changeMode(Mode.visualBlock)
   currentBufStatus.selectedArea = initSelectedArea(
     currentMainWindowNode.currentLine,
     currentMainWindowNode.currentColumn)
     .some
 
-proc changeModeToVisualLineMode(status: var EditorStatus) {.inline.} =
+template changeModeToVisualLineMode(status: var EditorStatus) =
   status.changeMode(Mode.visualLine)
   currentBufStatus.selectedArea = initSelectedArea(
     currentMainWindowNode.currentLine,
     currentMainWindowNode.currentColumn)
     .some
 
-proc changeModeToExMode*(
+template changeModeToExMode*(
   bufStatus: var BufferStatus,
-  commandLine: var CommandLine) {.inline.} =
+  commandLine: var CommandLine) =
 
     bufStatus.changeMode(Mode.ex)
     commandLine.clear
@@ -90,21 +91,15 @@ template moveCursorLeft(status: var EditorStatus) =
   for i in 0 ..< currentBufStatus.cmdLoop:
     currentMainWindowNode.keyLeft
 
-proc moveCursorRight(status: var EditorStatus) {.inline.} =
-  ## Use proc not template for a workaround for Nim 1.6.2.
-
+template moveCursorRight(status: var EditorStatus) =
   for i in 0 ..< currentBufStatus.cmdLoop:
     currentBufStatus.keyRight(currentMainWindowNode)
 
-proc moveCursorUp(status: var EditorStatus) {.inline.} =
-  ## Use proc not template for a workaround for Nim 1.6.2.
-
+template moveCursorUp(status: var EditorStatus) =
   for i in 0 ..< currentBufStatus.cmdLoop:
     currentBufStatus.keyUp(currentMainWindowNode)
 
-proc moveCursorDwon(status: var EditorStatus) {.inline.} =
-  ## Use proc not template for a workaround for Nim 1.6.2.
-
+template moveCursorDwon(status: var EditorStatus) =
   for i in 0 ..< currentBufStatus.cmdLoop:
     currentBufStatus.keyDown(currentMainWindowNode)
 
@@ -327,34 +322,24 @@ proc moveToFirstLine(status: var EditorStatus) =
   let dest = currentBufStatus.cmdLoop - 1
   currentBufStatus.jumpLine(currentMainWindowNode, dest)
 
-proc moveToForwardWord(status: var EditorStatus) {.inline.} =
-  ## Use proc for workaround for Nim 1.6.2.
-
+template moveToForwardWord(status: var EditorStatus) =
   for i in 0 ..< currentBufStatus.cmdLoop:
     currentBufStatus.moveToForwardWord(currentMainWindowNode)
 
-proc moveToBackwardWord(status: var EditorStatus) {.inline.} =
-  ## Use proc for workaround for Nim 1.6.2.
-
+template moveToBackwardWord(status: var EditorStatus) =
   for i in 0 ..< currentBufStatus.cmdLoop:
     currentBufStatus.moveToBackwardWord(currentMainWindowNode)
 
-proc moveToForwardEndOfWord(status: var EditorStatus) {.inline.} =
-  ## Use proc for workaround for Nim 1.6.2.
-
+template moveToForwardEndOfWord(status: var EditorStatus) =
   for i in 0 ..< currentBufStatus.cmdLoop:
     currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
 
-proc incNumberTextUnderCurosr(status: var EditorStatus) {.inline.} =
-  ## Use proc for workaround for Nim 1.6.2.
-
+template incNumberTextUnderCurosr(status: var EditorStatus) =
   currentBufStatus.modifyNumberTextUnderCurosr(
     currentMainWindowNode,
     currentBufStatus.cmdLoop)
 
-proc decNumberTextUnderCurosr(status: var EditorStatus) {.inline.} =
-  ## Use proc for workaround for Nim 1.6.2.
-
+template decNumberTextUnderCurosr(status: var EditorStatus) =
   currentBufStatus.modifyNumberTextUnderCurosr(
     currentMainWindowNode,
     -currentBufStatus.cmdLoop)
@@ -584,7 +569,7 @@ proc requestGotoDeclaration(status: var EditorStatus) =
     debug "lsp client is not ready"
     return
 
-  let r = lspClient.textDocumentDeclaration(
+  let r = waitFor lspClient.textDocumentDeclaration(
     currentBufStatus.id,
     $currentBufStatus.absolutePath,
     currentMainWindowNode.bufferPosition)
@@ -596,7 +581,7 @@ proc requestGotoDefinition(status: var EditorStatus) =
     debug "lsp client is not ready"
     return
 
-  let r = lspClient.textDocumentDefinition(
+  let r = waitFor lspClient.textDocumentDefinition(
     currentBufStatus.id,
     $currentBufStatus.absolutePath,
     currentMainWindowNode.bufferPosition)
@@ -608,19 +593,45 @@ proc requestGotoTypeDefinition(status: var EditorStatus) =
     debug "lsp client is not ready"
     return
 
-  let r = lspClient.textDocumentTypeDefinition(
+  let r = waitFor lspClient.textDocumentTypeDefinition(
     currentBufStatus.id,
     $currentBufStatus.absolutePath,
     currentMainWindowNode.bufferPosition)
   if r.isErr:
     status.commandLine.writeLspTypeDefinitionError(r.error)
 
+proc jumpBackFromGotoDefinitionSource(status: var EditorStatus) =
+  let location = currentBufStatus.getGotoDefinitionSource
+  if location.isNone:
+    # Not found
+    return
+
+  let
+    path = location.get.path
+    bufferIndex = status.bufStatus.checkBufferExist(path)
+  if bufferIndex.isSome:
+    status.changeCurrentBuffer(bufferIndex.get)
+  else:
+    let err = status.addNewBufferInCurrentWin($path)
+    if err.isErr:
+      status.commandLine.writeFileOpenError(location.get.path)
+      return
+
+    status.resize
+
+  currentMainWindowNode.currentLine = min(
+    currentBufStatus.buffer.high,
+    location.get.range.first.line)
+  currentMainWindowNode.currentColumn = min(
+    currentBufStatus.buffer[currentMainWindowNode.currentLine].high,
+    location.get.range.first.column)
+
 proc requestGotoImplementation(status: var EditorStatus) =
   if not status.lspClients.contains(currentBufStatus.langId):
     debug "lsp client is not ready"
     return
 
-  let r = lspClient.textDocumentImplementation(
+  let r = waitFor lspClient.textDocumentImplementation(
     currentBufStatus.id,
     $currentBufStatus.absolutePath,
     currentMainWindowNode.bufferPosition)
@@ -632,7 +643,7 @@ proc requestFindReferences(status: var EditorStatus) =
     debug "lsp client is not ready"
     return
 
-  let r = lspClient.textDocumentReferences(
+  let r = waitFor lspClient.textDocumentReferences(
     currentBufStatus.id,
     $currentBufStatus.path.absolutePath,
     currentMainWindowNode.bufferPosition)
@@ -644,7 +655,7 @@ proc requestPrepareCallHierarchy(status: var EditorStatus) =
     debug "lsp client is not ready"
     return
 
-  let r = lspClient.textDocumentPrepareCallHierarchy(
+  let r = waitFor lspClient.textDocumentPrepareCallHierarchy(
     currentBufStatus.id,
     $currentBufStatus.path.absolutePath,
     currentMainWindowNode.bufferPosition)
@@ -656,7 +667,7 @@ proc requestDocumentLink(status: var EditorStatus) =
     debug "lsp client is not ready"
     return
 
-  let r = lspClient.textDocumentDocumentLink(
+  let r = waitFor lspClient.textDocumentDocumentLink(
     currentBufStatus.id,
     $currentBufStatus.path.absolutePath)
   if r.isErr:
@@ -669,7 +680,7 @@ proc requestDocumentSymbol(status: var EditorStatus) =
          "client is not ready")
        return
 
-  let r = lspClient.textDocumentDocumentSymbol(
+  let r = waitFor lspClient.textDocumentDocumentSymbol(
     currentBufStatus.id,
     $currentBufStatus.absolutePath)
   if r.isErr:
@@ -764,7 +775,7 @@ proc requestRename(status: var EditorStatus) =
   if status.commandLine.getKeys(Prompt):
     let newName = $status.commandLine.buffer
 
-    let r = lspClient.textDocumentRename(
+    let r = waitFor lspClient.textDocumentRename(
       currentBufStatus.id,
       $currentBufStatus.path.absolutePath,
       currentMainWindowNode.bufferPosition,
@@ -779,7 +790,7 @@ proc requestSelectionRange(status: var EditorStatus) =
     debug "lsp client is not ready"
     return
 
-  let r = lspClient.textDocumentSelectionRange(
+  let r = waitFor lspClient.textDocumentSelectionRange(
     currentBufStatus.id,
     $currentBufStatus.path.absolutePath,
     @[currentMainWindowNode.bufferPosition])
@@ -1351,7 +1362,7 @@ proc requestHover(status: var EditorStatus) =
     debug "lsp client is not ready"
     return
 
-  let r = status.lspClients[currentBufStatus.langId].textDocumentHover(
+  let r = waitFor lspClient.textDocumentHover(
     currentBufStatus.id,
     $currentBufStatus.path.absolutePath,
     currentMainWindowNode.bufferPosition)
@@ -1671,6 +1682,8 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
       status.requestDocumentLink
   elif key == ord('G'):
     currentBufStatus.moveToLastLine(currentMainWindowNode)
+  elif isCtrlO(key):
+    status.jumpBackFromGotoDefinitionSource
   elif isCtrlU(key):
     return status.halfPageUpCommand
   elif isCtrlD(key):
@@ -1970,7 +1983,8 @@ proc isNormalModeCommand*(
          $command == "L" or
          $command == "%" or
          $command == "K" or
-         isCtrlS(command):
+         isCtrlS(command) or
+         isCtrlO(command):
            result = InputState.Valid
 
       elif isDigit(command[0]):

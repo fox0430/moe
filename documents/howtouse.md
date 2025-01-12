@@ -139,6 +139,7 @@
 | <kbd>**z**</kbd> <kbd>**R**</kbd></br> | Delete fold lines |
 | <kbd>**Ctrl**</kbd> <kbd>**s**</kbd></br> | Selection Range (LSP) |
 | <kbd>**Space**</kbd> <kbd>**o**</kbd></br> | Document Symbol (LSP) |
+| <kbd>**Ctrl**</kbd> <kbd>**o**</kbd></br> | Jump Back from LSP Goto Definition |
 
 </details>
 

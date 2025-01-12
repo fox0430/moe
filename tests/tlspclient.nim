@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, importutils, os, osproc, options, tables, json]
+import std/[unittest, importutils, os, osproc, options, tables, json, strformat]
 
 import pkg/results
 
@@ -93,11 +93,22 @@ suite "lsp: restart":
     Command = "nimlangserver"
     Trace = TraceValue.verbose
 
-  var client: LspClient
+  var
+    client: LspClient
+    beforePid: int
 
   setup:
+    beforePid = -1
+
     if isNimlangserverAvailable():
-      client = initLspClient(Command).get
+      client = (waitFor initLspClient(Command)).get
+
+  teardown:
+    if beforePid > -1:
+      discard execCmd(fmt"kill -9 {$beforePid}")
+
+    if not client.isNil and not client.serverProcess.isNil:
+      discard client.kill
 
   test "Basic 1":
     if not isNimlangserverAvailable():
@@ -105,15 +116,15 @@ suite "lsp: restart":
     else:
       const BufferId = 1
       let params = initInitializeParams(ServerName, "/", Trace)
-      check client.initialize(BufferId, params).isOk
+      check (waitFor client.initialize(BufferId, params)).isOk
 
-      let
-        beforePid = client.serverProcessId
-        beforeLogLen = client.log.len
+      beforePid = client.serverProcessId
+
+      let beforeLogLen = client.log.len
 
       check client.running
 
-      check client.restart.isOk
+      check (waitFor client.restart).isOk
 
       check beforePid != client.serverProcessId
       check client.log.len == beforeLogLen
@@ -124,15 +135,16 @@ suite "lsp: restart":
     else:
       const BufferId = 1
       let params = initInitializeParams(ServerName, "/", Trace)
-      check client.initialize(BufferId, params).isOk
+      check (waitFor client.initialize(BufferId, params)).isOk
 
       let
         beforePid = client.serverProcessId
         beforeLogLen = client.log.len
 
-      client.serverProcess.kill
+      if not client.isNil and not client.serverProcess.isNil:
+        discard client.kill
 
-      check client.restart.isOk
+      check (waitFor client.restart).isOk
 
       check beforePid != client.serverProcessId
       check client.log.len == beforeLogLen
@@ -1168,7 +1180,6 @@ suite "lsp: Send requests":
     ServerName = "nimlangserver"
     Command = "nimlangserver"
     Trace = TraceValue.verbose
-    Timeout = 1000
 
   let rootDir = getCurrentDir() / "lspTestDir"
 
@@ -1176,12 +1187,30 @@ suite "lsp: Send requests":
 
   setup:
     if isNimlangserverAvailable():
-      client = initLspClient(Command).get
+      client = (waitFor initLspClient(Command)).get
       createDir(rootDir)
 
   teardown:
     if dirExists(rootDir):
       removeDir(rootDir)
+
+    if not client.isNil and not client.serverProcess.isNil:
+      discard client.kill
+
+  proc readResponse(
+    c: LspClient,
+    timeout=10.seconds): Result[JsonNode, string] =
+
+      let
+        res = c.read
+        fut = waitFor res.withTimeout(timeout)
+      if not fut:
+        return Result[JsonNode, string].err "timeout"
+
+      if res.value.isErr:
+        return Result[JsonNode, string].err res.value.error
+
+      return Result[JsonNode, string].ok res.value.get
 
   test "Send initialize":
     if not isNimlangserverAvailable():
@@ -1190,15 +1219,14 @@ suite "lsp: Send requests":
       const BufferId = 1
       let params = initInitializeParams(ServerName, rootDir, Trace)
 
-      check client.initialize(BufferId, params).isOk
+      check (waitFor client.initialize(BufferId, params)).isOk
       check client.waitingResponses[1].lspMethod == LspMethod.initialize
 
       for _ in 0 .. 20:
-        assert client.readable(Timeout).get
-        let res = client.read.get
-        if res.contains("id"):
-          check res["id"].getInt == 1
-          check client.initCapacities(initLspFeatureSettings(), res).isOk
+        let res = client.readResponse
+        if res.isOk and res.get.contains("id"):
+          check res.get["id"].getInt == 1
+          check client.initCapacities(initLspFeatureSettings(), res.get).isOk
           break
 
   proc lspInitialize(
@@ -1207,19 +1235,18 @@ suite "lsp: Send requests":
     params: InitializeParams): Result[(), string] =
 
       block:
-        let err = c.initialize(bufferId, params)
+        let err = waitFor c.initialize(bufferId, params)
         if err.isErr:
           return Result[(), string].err err.error
 
       for _ in 0 .. 30:
-        assert c.readable(Timeout).isOk
-        let res = c.read.get
-        if res.contains("id"):
-          if res["id"].getInt != 1:
+        let res = client.readResponse
+        if res.isOk and res.get.contains("id"):
+          if res.get["id"].getInt != 1:
             return Result[(), string].err "Invalid id"
 
           block:
-            let err = c.initCapacities(initLspFeatureSettings(), res)
+            let err = c.initCapacities(initLspFeatureSettings(), res.get)
             if err.isErr:
               return Result[(), string].err err.error
 
@@ -1242,31 +1269,23 @@ suite "lsp: Send requests":
         assert client.lspInitialize(BufferId, params).isOk
 
         # workspace/didChangeConfiguration notification
-        assert client.workspaceDidChangeConfiguration.isOk
+        assert (waitFor client.workspaceDidChangeConfiguration).isOk
 
       const LanguageId = "nim"
       let
         path = getCurrentDir() / "src/moe.nim"
         text = readFile(path)
 
-      check client.textDocumentDidOpen(path, LanguageId, text).isOk
+      check (waitFor client.textDocumentDidOpen(path, LanguageId, text)).isOk
 
   template prepareLsp(bufferId: int, langId: LanguageId, rootDir, path, text: string) =
     block:
       let params = initInitializeParams(ServerName, rootDir, Trace)
       assert client.lspInitialize(bufferId, params).isOk
 
-    assert client.workspaceDidChangeConfiguration.isOk
+    assert (waitFor client.workspaceDidChangeConfiguration).isOk
 
-    check client.textDocumentDidOpen(path, langId, text).isOk
-
-    while true:
-      # Read messages/logs
-      const Timeout = 100
-      if not client.readable(Timeout).get:
-        break
-      else:
-        discard client.read.get
+    check (waitFor client.textDocumentDidOpen(path, langId, text)).isOk
 
   test "Send $/cancelRequest":
     if not isNimlangserverAvailable():
@@ -1287,10 +1306,10 @@ suite "lsp: Send requests":
       # Send hover request and cancel
       block:
         let position = BufferPosition(line: 0, column: 7)
-        check client.textDocumentHover(BufferId, path, position).isOk
+        check (waitFor client.textDocumentHover(BufferId, path, position)).isOk
         check client.waitingResponses[requestId].lspMethod == LspMethod.textDocumentHover
 
-      check client.cancelRequest(BufferId, requestId).isOk
+      check (waitFor client.cancelRequest(BufferId, requestId)).isOk
 
   test "Send shutdown":
     if not isNimlangserverAvailable():
@@ -1313,16 +1332,15 @@ suite "lsp: Send requests":
 
       let requestId = client.lastId + 1
 
-      check client.shutdown(BufferId).isOk
+      check (waitFor client.shutdown(BufferId)).isOk
       check client.waitingResponses[requestId].lspMethod == LspMethod.shutdown
 
       var isTimeout= true
-      for _ in 0 .. 5:
-        assert client.readable(Timeout).get
-        let res = client.read.get
-        if res.contains("id"):
-          check res["id"].getInt == requestId
-          check res["result"].kind == JNull
+      for _ in 0 .. 20:
+        let res = client.readResponse
+        if res.isOk and res.get.contains("id"):
+          check res.get["id"].getInt == requestId
+          check res.get["result"].kind == JNull
           isTimeout = false
           break
 
@@ -1344,7 +1362,7 @@ suite "lsp: Send requests":
 
         prepareLsp(BufferId, LanguageId, rootDir, path, Text)
 
-      check client.workspaceDidChangeConfiguration.isOk
+      check (waitFor client.workspaceDidChangeConfiguration).isOk
 
   test "Send textDocument/didChange":
     if not isNimlangserverAvailable():
@@ -1363,7 +1381,8 @@ suite "lsp: Send requests":
       const
         SecondVersion = 2
         ChangedText = "echo 1"
-      check client.textDocumentDidChange(SecondVersion, path, ChangedText).isOk
+      check (waitFor client.textDocumentDidChange(SecondVersion, path, ChangedText))
+        .isOk
 
   test "Send textDocument/didSave":
     if not isNimlangserverAvailable():
@@ -1380,7 +1399,7 @@ suite "lsp: Send requests":
       prepareLsp(BufferId, LanguageId, rootDir, path, Text)
 
       const Version = 1
-      check client.textDocumentDidSave(Version, path, Text).isOk
+      check (waitFor client.textDocumentDidSave(Version, path, Text)).isOk
 
   test "Send textDocument/didClose":
     if not isNimlangserverAvailable():
@@ -1397,7 +1416,7 @@ suite "lsp: Send requests":
 
       prepareLsp(BufferId, LanguageId, rootDir, path, Text)
 
-      check client.textDocumentDidClose(path).isOk
+      check (waitFor client.textDocumentDidClose(path)).isOk
 
   test "Send textDocument/hover":
     if not isNimlangserverAvailable():
@@ -1416,17 +1435,16 @@ suite "lsp: Send requests":
       let position = BufferPosition(line: 0, column: 7)
       var requestId = client.lastId + 1
 
-      check client.textDocumentHover(BufferId, path, position).isOk
+      check (waitFor client.textDocumentHover(BufferId, path, position)).isOk
       check client.waitingResponses[requestId].lspMethod == LspMethod.textDocumentHover
 
       var isTimeout = true
       for _ in 0 .. 20:
-        if client.readable(Timeout).get:
-          let res = client.read.get
-          if res.contains("id"):
-            check res["result"]["contents"][0]["value"].getStr == "system.int: int"
-            isTimeout = false
-            break
+        let res = client.readResponse
+        if res.isOk and res.get.contains("id"):
+          check res.get["result"]["contents"][0]["value"].getStr == "system.int: int"
+          isTimeout = false
+          break
 
       check not isTimeout
 
@@ -1447,28 +1465,28 @@ suite "lsp: Send requests":
       block:
         const SecondVersion = 2
         let changedText = "echo 1\ne"
-        check client.textDocumentDidChange(SecondVersion, path, changedText).isOk
+        check (waitFor client.textDocumentDidChange(SecondVersion, path, changedText)).isOk
 
       var requestId = client.lastId + 1
 
       let position = BufferPosition(line: 1, column: 0)
       const IsIncompleteTrigger = false
-      check client.textDocumentCompletion(
+      check (waitFor client.textDocumentCompletion(
         BufferId,
         path,
         position,
         IsIncompleteTrigger,
-        "e").isOk
+        "e"))
+        .isOk
       check client.waitingResponses[requestId].lspMethod == LspMethod.textDocumentCompletion
 
       var isTimeout = true
       for _ in 0 .. 20:
-        if client.readable(Timeout).get:
-          let res = client.read.get
-          if res.contains("id"):
-            check res["result"][0].len > 0
-            isTimeout = false
-            break
+        let res = client.readResponse
+        if res.isOk and res.get.contains("id"):
+          check res.get["result"][0].len > 0
+          isTimeout = false
+          break
 
       check not isTimeout
 
@@ -1488,24 +1506,25 @@ suite "lsp: Send requests":
 
       var requestId = client.lastId + 1
 
-      check client.textDocumentInlayHint(
+      check (waitFor client.textDocumentInlayHint(
         BufferId,
         path,
         BufferRange(
           first: BufferPosition(line: 0, column: 0),
-          last: BufferPosition(line: 1, column: 0))).isOk
+          last: BufferPosition(line: 1, column: 0))
+        ))
+        .isOk
       check client.waitingResponses[requestId].lspMethod ==
         LspMethod.textDocumentInlayHint
 
       var isTimeout = true
       for _ in 0 .. 20:
-        if client.readable(Timeout).get:
-          let res = client.read.get
-          if res.contains("id"):
-            check res["result"][0]["position"]["line"].getInt == 0
-            check res["result"][0]["position"]["character"].getInt == 5
-            isTimeout = false
-            break
+        let res = client.readResponse
+        if res.isOk and res.get.contains("id"):
+          check res.get["result"][0]["position"]["line"].getInt == 0
+          check res.get["result"][0]["position"]["character"].getInt == 5
+          isTimeout = false
+          break
 
       check not isTimeout
 
@@ -1528,34 +1547,33 @@ var num: number
 
       let requestId = client.lastId + 1
 
-      check client.textDocumentDefinition(
+      check (waitFor client.textDocumentDefinition(
         BufferId,
         path,
-        BufferPosition(line: 1, column: 9)).isOk
+        BufferPosition(line: 1, column: 9)))
+        .isOk
       check client.waitingResponses[requestId].lspMethod ==
         LspMethod.textDocumentDefinition
 
-      assert client.readable(Timeout).get
       var isTimeout = true
       for _ in 0 .. 20:
-        if client.readable(Timeout).get:
-          let res = client.read.get
-          if res.contains("id"):
-            check res["result"] == %* [
-              {
-                "uri": "file://" & getCurrentDir() & "/lspTestDir/test.nim",
-                "range": {
-                  "start": {
-                    "line": 0,
-                    "character":5
-                  },"end": {
-                    "line":0,
-                    "character":11
-                  }}
-              }
-            ]
-            isTimeout = false
-            break
+        let res = client.readResponse
+        if res.isOk and res.get.contains("id"):
+          check res.get["result"] == %* [
+            {
+              "uri": "file://" & getCurrentDir() & "/lspTestDir/test.nim",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character":5
+                },"end": {
+                  "line":0,
+                  "character":11
+                }}
+            }
+          ]
+          isTimeout = false
+          break
 
       check not isTimeout
 
@@ -1578,34 +1596,34 @@ var num: number
 
       let requestId = client.lastId + 1
 
-      check client.textDocumentTypeDefinition(
+      check (waitFor client.textDocumentTypeDefinition(
         BufferId,
         path,
-        BufferPosition(line: 1, column: 9)).isOk
+        BufferPosition(line: 1, column: 9)))
+        .isOk
       check client.waitingResponses[requestId].lspMethod ==
         LspMethod.textDocumentTypeDefinition
 
       var isTimeout = true
       for _ in 0 .. 20:
-        if client.readable(Timeout).get:
-          let res = client.read.get
-          if res.contains("id"):
-            check res["result"] == %* [
-              {
-                "uri": "file://" & getCurrentDir() & "/lspTestDir/test.nim",
-                "range": {
-                  "start": {
-                    "line": 0,
-                    "character": 5},
-                  "end": {
-                    "line": 0,
-                    "character":11
-                  }
+        let res = client.readResponse
+        if res.isOk and res.get.contains("id"):
+          check res.get["result"] == %* [
+            {
+              "uri": "file://" & getCurrentDir() & "/lspTestDir/test.nim",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 5},
+                "end": {
+                  "line": 0,
+                  "character":11
                 }
               }
-            ]
-            isTimeout = false
-            break
+            }
+          ]
+          isTimeout = false
+          break
 
       check not isTimeout
 
@@ -1629,79 +1647,78 @@ echo a
 
       let requestId = client.lastId + 1
 
-      check client.textDocumentDocumentHighlight(
+      check (waitFor client.textDocumentDocumentHighlight(
         BufferId,
         path,
-        BufferPosition(line: 0, column: 4)
-      ).isOk
+        BufferPosition(line: 0, column: 4)))
+        .isOk
       check client.waitingResponses[requestId].lspMethod ==
         LspMethod.textDocumentDocumentHighlight
 
       var isTimeout = true
       for _ in 0 .. 20:
-        if client.readable(Timeout).get:
-          let res = client.read.get
-          if res.contains("id"):
-            check res == %*{
-              "jsonrpc": "2.0",
-              "id": requestId,
-              "result": [
-                {
-                  "range": {
-                    "start": {
-                      "line": 0,
-                      "character": 4
-                    },
-                    "end": {
-                      "line": 0,
-                      "character": 5
-                    }
+        let res = client.readResponse
+        if res.isOk and res.get.contains("id"):
+          check res.get == %*{
+            "jsonrpc": "2.0",
+            "id": requestId,
+            "result": [
+              {
+                "range": {
+                  "start": {
+                    "line": 0,
+                    "character": 4
                   },
-                  "kind": nil
+                  "end": {
+                    "line": 0,
+                    "character": 5
+                  }
                 },
-                {
-                  "range": {
-                    "start": {
-                      "line": 0,
-                      "character": 4
-                    },
-                    "end": {
-                      "line": 0,
-                      "character": 5
-                    }
+                "kind": nil
+              },
+              {
+                "range": {
+                  "start": {
+                    "line": 0,
+                    "character": 4
                   },
-                  "kind": nil
+                  "end": {
+                    "line": 0,
+                    "character": 5
+                  }
                 },
-                {
-                  "range": {
-                    "start": {
-                      "line": 1,
-                      "character": 8
-                    },
-                    "end": {
-                      "line": 1,
-                      "character": 9
-                    }
+                "kind": nil
+              },
+              {
+                "range": {
+                  "start": {
+                    "line": 1,
+                    "character": 8
                   },
-                  "kind": nil
+                  "end": {
+                    "line": 1,
+                    "character": 9
+                  }
                 },
-                {
-                  "range": {
-                    "start": {
-                      "line": 2,
-                      "character": 5
-                    },
-                    "end": {
-                      "line": 2,
-                      "character": 6
-                    }
+                "kind": nil
+              },
+              {
+                "range": {
+                  "start": {
+                    "line": 2,
+                    "character": 5
                   },
-                  "kind": nil
-                }
-              ]
-            }
-            isTimeout = false
-            break
+                  "end": {
+                    "line": 2,
+                    "character": 6
+                  }
+                },
+                "kind": nil
+              }
+            ]
+          }
+          isTimeout = false
+          break
 
   test "Send textDocument/rename":
     if not isNimlangserverAvailable():
@@ -1732,56 +1749,56 @@ echo Ojb(n: 1)
 
       let requestId = client.lastId + 1
 
-      check client.textDocumentRename(
+      check (waitFor client.textDocumentRename(
         BufferId,
         path,
         BufferPosition(line: 1, column: 8),
-        "newName").isOk
+        "newName"))
+        .isOk
       check client.waitingResponses[requestId].lspMethod ==
         LspMethod.textDocumentRename
 
       var isTimeout = true
       for _ in 0 .. 20:
-        if client.readable(Timeout).get:
-          let res = client.read.get
-          if res.contains("id"):
-            check res["result"] == %* {
-              "changes": {
-                "file://" & getCurrentDir() & "/lspTestDir/test2.nim": [
-                  {
-                    "range": {
-                      "start": {
-                        "line": 1,
-                        "character": 8
-                      },
-                      "end": {
-                        "line": 1,
-                        "character": 11
-                      }
+        let res = client.readResponse
+        if res.isOk and res.get.contains("id"):
+          check res.get["result"] == %* {
+            "changes": {
+              "file://" & getCurrentDir() & "/lspTestDir/test2.nim": [
+                {
+                  "range": {
+                    "start": {
+                      "line": 1,
+                      "character": 8
                     },
-                    "newText" :"newName"
-                  }
-                ],
-                "file://" & getCurrentDir() & "/lspTestDir/test1.nim": [
-                  {
-                    "range": {
-                      "start": {
-                        "line": 0,
-                        "character": 5
-                      },
-                      "end": {
-                        "line": 0,
-                        "character": 8
-                      }
+                    "end": {
+                      "line": 1,
+                      "character": 11
+                    }
+                  },
+                  "newText" :"newName"
+                }
+              ],
+              "file://" & getCurrentDir() & "/lspTestDir/test1.nim": [
+                {
+                  "range": {
+                    "start": {
+                      "line": 0,
+                      "character": 5
                     },
-                    "newText": "newName"
-                  }
-                ]
-              },
-              "documentChanges": nil
-            }
-            isTimeout = false
-            break
+                    "end": {
+                      "line": 0,
+                      "character": 8
+                    }
+                  },
+                  "newText": "newName"
+                }
+              ]
+            },
+            "documentChanges": nil
+          }
+          isTimeout = false
+          break
 
       check not isTimeout
 
@@ -1801,10 +1818,11 @@ echo Ojb(n: 1)
 
       let requestId = client.lastId + 1
 
-      check client.textDocumentFormatting(
+      check (waitFor client.textDocumentFormatting(
         BufferId,
         path,
-        FormattingOptions()).isOk
+        FormattingOptions()))
+        .isOk
       check client.waitingResponses[requestId].lspMethod ==
         LspMethod.textDocumentFormatting
 
@@ -1819,10 +1837,9 @@ echo Ojb(n: 1)
 
       var isTimeout = true
       for _ in 0 .. 20:
-        if client.readable(Timeout).get:
-          let res = client.read.get
-          if res.isPending:
-            isTimeout = false
-            break
+        let res = client.readResponse
+        if res.isOk and res.get.isPending:
+          isTimeout = false
+          break
 
       check not isTimeout

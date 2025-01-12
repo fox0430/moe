@@ -24,7 +24,7 @@ import pkg/results
 import moepkg/syntax/highlite
 import moepkg/[registers, settings, editorstatus, gapbuffer, unicodeext,
                bufferstatus, ui, windownode, quickrunutils, viewhighlight,
-               folding, editorview]
+               folding, editorview, independentutils]
 
 import utils
 
@@ -4428,3 +4428,98 @@ suite "Normal mode: requestGotoDefinition":
     status.requestGotoDefinition
 
     status.update
+
+suite "Normal mode: jumpBackFromGotoDefinitionSource":
+  const TestFileBuffer = "123\n123\n"
+
+  var status: EditorStatus
+
+  let
+    currentDir = getCurrentDir()
+    testDir = currentDir / "jumpBackTest"
+    testFilePath1 = testDir / "file1"
+    testFilePath2 = testDir / "file2"
+
+  setup:
+    createDir(testDir)
+
+
+    writeFile(testFilePath1, TestFileBuffer)
+    writeFile(testFilePath2, "a\n")
+
+    status = initEditorStatus()
+    status.settings.lsp.enable = false
+
+  teardown:
+    removeDir(testDir)
+
+  test "Empty":
+    assert status.addNewBufferInCurrentWin(testFilePath1).isOk
+    assert status.addNewBufferInCurrentWin(testFilePath2).isOk
+
+    status.resize(100, 100)
+    status.update
+
+    status.jumpBackFromGotoDefinitionSource
+
+    status.update
+
+    check currentBufStatus.path == testFilePath2.toRunes
+    check currentBufStatus.getGotoDefinitionSource.isNone
+
+    check currentMainWindowNode.bufferPosition == BufferPosition(
+      line: 0,
+      column: 0)
+
+  test "Basic":
+    assert status.addNewBufferInCurrentWin(testFilePath1).isOk
+    assert status.addNewBufferInCurrentWin(testFilePath2).isOk
+
+    status.resize(100, 100)
+    status.update
+
+    let l = BufferLocation(
+      path: testFilePath1,
+      range: BufferRange(
+        first: BufferPosition(line: 0, column: 1),
+        last: BufferPosition(line: 0, column: 1)))
+
+    currentBufStatus.setGotoDefinitionSource(l)
+
+    status.jumpBackFromGotoDefinitionSource
+
+    status.update
+
+    check currentBufStatus.path == testFilePath1.toRunes
+    check currentBufStatus.buffer.toRunes == TestFileBuffer.toRunes
+    check currentBufStatus.getGotoDefinitionSource.isNone
+
+    check currentMainWindowNode.bufferPosition == BufferPosition(
+      line: 0,
+      column: 1)
+
+  test "Basic 2":
+    assert status.addNewBufferInCurrentWin(testFilePath2).isOk
+
+    status.resize(100, 100)
+    status.update
+
+    let l = BufferLocation(
+      path: testFilePath1,
+      range: BufferRange(
+        first: BufferPosition(line: 0, column: 1),
+        last: BufferPosition(line: 0, column: 1)))
+
+    currentBufStatus.setGotoDefinitionSource(l)
+
+    status.jumpBackFromGotoDefinitionSource
+
+    status.update
+
+    check currentBufStatus.path == testFilePath1.toRunes
+    check currentBufStatus.buffer.toRunes == TestFileBuffer.toRunes
+    check currentBufStatus.getGotoDefinitionSource.isNone
+
+    check currentMainWindowNode.bufferPosition == BufferPosition(
+      line: 0,
+      column: 1)

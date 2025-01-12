@@ -7,7 +7,7 @@ Currently you can use normal mode, visual mode, replace mode, insert mode, ex mo
 # Install and compile
 
 ## Requires
-- [Nim](https://nim-lang.org) 1.6.2 or higher
+- [Nim](https://nim-lang.org) 1.6.16 or higher
 - [Ncurses](https://invisible-island.net/ncurses) 6.1 or higher
 
 ### Install

@@ -43,14 +43,13 @@ import
   ../statusline,
   ../visualmode
 
+import completion as lspcompletion
+
 import client, utils, hover, message, diagnostics, semantictoken, progress,
        inlayhint, definition, typedefinition, references, rename, declaration,
        implementation, callhierarchy, documenthighlight, documentlink,
        codelens, executecommand, foldingrange, selectionrange, documentsymbol,
        inlinevalue, signaturehelp, formatting
-
-# Workaround for Nim 1.6.2
-import completion as lspcompletion
 
 proc applyTextEdit(b: var BufferStatus, edit: TextEdit): Result[(), string] =
   let
@@ -69,15 +68,21 @@ proc applyTextEdit(b: var BufferStatus, edit: TextEdit): Result[(), string] =
     b.buffer[startLine] =
       line[0 ..< startChar] & edit.newText.toRunes & line[endChar .. ^1]
   else:
+    # Multiple lines
     var newLines = edit.newText.splitLines.toSeqRunes
 
     newLines[0] = b.buffer[startLine][0 ..< startChar] & newLines[0]
 
     if edit.range.`end`.character > 0:
       block:
-        let endChar = min(b.buffer[endLine].high, edit.range.`end`.character)
+        let
+          line =
+            if endLine > b.buffer.high: b.buffer.high
+            else: endLine
+          endChar = min(b.buffer[line].high, edit.range.`end`.character)
+
         if endChar >= 0:
-          newLines[^1] &= b.buffer[endLine][endChar..^1]
+          newLines[^1] &= b.buffer[line][endChar..^1]
 
     for i in 0 .. newLines.high:
       let lineNum = startLine + i
@@ -88,9 +93,12 @@ proc applyTextEdit(b: var BufferStatus, edit: TextEdit): Result[(), string] =
 
   return Result[(), string].ok ()
 
-template isLspResponse*(status: EditorStatus): bool =
+template isLspClientInitialized*(status: EditorStatus): bool =
   status.lspClients.contains(currentBufStatus.langId) and
-  not lspClient.closed and
+  not lspClient.closed
+
+template isLspResponse*(status: EditorStatus): bool =
+  status.isLspClientInitialized and
   (let r = lspClient.readable; r.isOk and r.get)
 
 proc setServerNameToStatusLine(status: var EditorStatus) =
@@ -115,19 +123,19 @@ proc lspInitialized(
 
     block:
       # Initialized notification
-      let err = lspClient.initialized
+      let err = waitFor lspClient.initialized
       if err.isErr:
         return Result[(), string].err err.error
 
     block:
       # workspace/didChangeConfiguration notification
-      let err = lspClient.workspaceDidChangeConfiguration
+      let err = waitFor lspClient.workspaceDidChangeConfiguration
       if err.isErr:
         return Result[(), string].err err.error
 
     block:
       # textDocument/didOpen notification
-      let err = lspClient.textDocumentDidOpen(
+      let err = waitFor lspClient.textDocumentDidOpen(
         $currentBufStatus.path.absolutePath,
         currentBufStatus.langId,
         currentBufStatus.buffer.toString)
@@ -136,7 +144,7 @@ proc lspInitialized(
 
     block:
       # textDocument/semanticTokens
-      let err = lspClient.textDocumentSemanticTokens(
+      let err = waitFor lspClient.textDocumentSemanticTokens(
         currentBufStatus.id,
         $currentBufStatus.path.absolutePath)
       if err.isErr:
@@ -597,18 +605,24 @@ proc lspDocumentFormatting(
 
     return Result[(), string].ok ()
 
-proc openWindowAndGotoDefinition(
+proc jumpToDefinition(
   status: var EditorStatus,
-  l: BufferLocation): Result[(), string] =
-    ## Goto definition and Goto TypeDefinition.
+  l: BufferLocation,
+  openWin: bool): Result[(), string] =
+    ## Goto Declaration, Goto Definition and etc.
+
+    let
+      beforePath = $currentBufStatus.path
+      beforePosition = currentMainWindowNode.bufferPosition
 
     if l.path == $currentBufStatus.absolutePath:
       currentMainWindowNode.currentLine = l.range.first.line
       currentMainWindowNode.currentColumn = l.range.first.column
     else:
-      # Open a buffer in a new window.
-      status.verticalSplitWindow
-      status.moveNextWindow
+      if openWin:
+        # Open a buffer in a new window.
+        status.verticalSplitWindow
+        status.moveNextWindow
 
       let r = status.addNewBufferInCurrentWin(l.path)
       if r.isErr:
@@ -629,6 +643,16 @@ proc openWindowAndGotoDefinition(
       jumpLine(currentBufStatus, currentMainWindowNode, l.range.first.line)
       currentMainWindowNode.currentColumn = l.range.first.column
 
+    block:
+      let p = BufferPosition(
+        line: beforePosition.line,
+        column: beforePosition.column)
+      currentBufStatus.setGotoDefinitionSource(BufferLocation(
+        path: beforePath,
+        range: BufferRange(
+          first: p,
+          last: p)))
+
     return Result[(), string].ok ()
 
 proc lspDeclaration(
@@ -648,7 +672,9 @@ proc lspDeclaration(
     if parseResult.get.isNone:
       return Result[(), string].err fmt"Not found"
 
-    return status.openWindowAndGotoDefinition(parseResult.get.get.location)
+    return status.jumpToDefinition(
+      parseResult.get.get.location,
+      status.settings.lsp.features.declaration.openWindow)
 
 proc lspDefinition(
   status: var EditorStatus,
@@ -667,7 +693,9 @@ proc lspDefinition(
     if parseResult.get.isNone:
       return Result[(), string].err fmt"Not found"
 
-    return status.openWindowAndGotoDefinition(parseResult.get.get.location)
+    return status.jumpToDefinition(
+      parseResult.get.get.location,
+      status.settings.lsp.features.definition.openWindow)
 
 proc lspTypeDefinition(
   status: var EditorStatus,
@@ -686,7 +714,9 @@ proc lspTypeDefinition(
     if parseResult.get.isNone:
       return Result[(), string].err fmt"Not found"
 
-    return status.openWindowAndGotoDefinition(parseResult.get.get.location)
+    return status.jumpToDefinition(
+      parseResult.get.get.location,
+      status.settings.lsp.features.typeDefinition.openWindow)
 
 proc lspImplementation(
   status: var EditorStatus,
@@ -705,7 +735,9 @@ proc lspImplementation(
     if parseResult.get.isNone:
       return Result[(), string].err fmt"Not found"
 
-    return status.openWindowAndGotoDefinition(parseResult.get.get.location)
+    return status.jumpToDefinition(
+      parseResult.get.get.location,
+      status.settings.lsp.features.implementation.openWindow)
 
 proc lspReferences(
   status: var EditorStatus,
@@ -951,7 +983,7 @@ proc lspDocumentLink(
       return Result[(), string].err "Not found"
 
     if links[0].isResolve:
-      let r = lspClient.documentLinkResolve(currentBufStatus.id, links[0])
+      let r = waitFor lspClient.documentLinkResolve(currentBufStatus.id, links[0])
       if r.isErr:
         return Result[(), string].err r.error
 
@@ -981,8 +1013,9 @@ proc lspDocumentLinkResolve(
     if path.isErr:
       return Result[(), string].err path.error
 
-    return status.openWindowAndGotoDefinition(
-      BufferLocation(path: path.get))
+    return status.jumpToDefinition(
+      BufferLocation(path: path.get),
+      true)
 
 proc lspCodeLens(status: var EditorStatus, res: JsonNode): Result[(), string] =
   ## textDocument/codeLens
@@ -1269,7 +1302,7 @@ proc handleLspResponse*(status: var EditorStatus) =
       status.commandLine.writeLspError("server crashed")
       return
 
-    let resJson = lspClient.read
+    let resJson = waitFor lspClient.read
     if resJson.isErr:
       # Maybe invalid messages. Ignore.
       error fmt"lsp: Invalid message: {resJson}"
