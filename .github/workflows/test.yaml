@@ -82,6 +82,7 @@ jobs:
         nimble install nimlangserver
         nimlangserver --version
 
+        nimble uninstall nph
         nimble install nph
         nph -v
 
