@@ -1340,12 +1340,14 @@ suite "lsp: lspFoldingRange":
   var status: EditorStatus
 
   setup:
-    if isNimlangserverAvailable():
-      status = initEditorStatus()
-      status.settings.lsp.enable = false
+    status = initEditorStatus()
+    # Use dummy LSP client. Don't start nimlangserver.
+    status.settings.lsp.enable = false
 
-      let filename = $genOid()
-      assert status.addNewBufferInCurrentWin(filename).isOk
+    let filename = $genOid()
+    assert status.addNewBufferInCurrentWin(filename).isOk
+    currentBufStatus.langId = "dummy"
+    status.lspClients["dummy"] = LspClient()
 
   test "Not found":
     if not isNimlangserverAvailable():
@@ -1367,9 +1369,6 @@ suite "lsp: lspFoldingRange":
 
       status.resize(100, 100)
       status.update
-
-      currentBufStatus.langId = "dummy"
-      status.lspClients["dummy"] = LspClient()
 
       lspClient.waitingResponses[0] = WaitLspResponse(
         bufferId: currentBufStatus.id,
@@ -1409,15 +1408,14 @@ suite "lsp: Selection Range":
   var status: EditorStatus
 
   setup:
-    if isNimlangserverAvailable():
-      status = initEditorStatus()
-      status.settings.lsp.enable = false
+    status = initEditorStatus()
+    # Use dummy LSP client. Don't start nimlangserver.
+    status.settings.lsp.enable = false
 
-      let filename = $genOid()
-      assert status.addNewBufferInCurrentWin(filename).isOk
-
-      currentBufStatus.langId = "dummy"
-      status.lspClients["dummy"] = LspClient()
+    let filename = $genOid()
+    assert status.addNewBufferInCurrentWin(filename).isOk
+    currentBufStatus.langId = "dummy"
+    status.lspClients["dummy"] = LspClient()
 
   test "Not found":
     if not isNimlangserverAvailable():
@@ -1619,6 +1617,10 @@ suite "lsp: Selection Range":
       status.resize(100, 100)
       status.update
 
+  teardown:
+    if isNimlangserverAvailable():
+      discard lspClient.kill
+
   test "Not found":
     if not isNimlangserverAvailable():
       skip()
@@ -1809,6 +1811,14 @@ suite "lsp: handleLspServerNotify":
     if isNimlangserverAvailable():
       status = initEditorStatus()
       status.settings.lsp.enable = true
+
+      assert status.addNewBufferInCurrentWin.isOk
+      currentBufStatus.langId = "dummy"
+      status.lspClients["dummy"] = LspClient()
+
+  teardown:
+    if isNimlangserverAvailable():
+      discard lspClient.kill
 
   test "Invalid":
     if not isNimlangserverAvailable():
