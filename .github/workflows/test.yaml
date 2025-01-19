@@ -69,16 +69,20 @@ jobs:
         restore-keys: |
           unit-tests-nimble-v2-
 
-    - uses: jiro4989/setup-nim-action@v2
+    - uses: nim-lang/setup-nimble-action@v1
       with:
-        nim-version: 2.0.14
+        nimble-version: 'latest'
         repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Install nimlangserver
+    - name: Install nimlangserver and nph
       run: |
-        nimble refresh
-        nimble install nimlangserver nph
-        nimlangserver --version
+        nimble install nimlangserver
+        nimble install nph
+
+    - uses: jiro4989/setup-nim-action@v2
+      with:
+        nim-version: 2.2.0
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Run unit test
       run: |

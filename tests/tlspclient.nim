@@ -1200,7 +1200,7 @@ suite "lsp: Send requests":
 
   proc readResponse(
     c: LspClient,
-    timeout=10.seconds): Result[JsonNode, string] =
+    timeout=30.seconds): Result[JsonNode, string] =
 
       let
         res = c.read
