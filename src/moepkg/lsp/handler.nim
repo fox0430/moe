@@ -479,16 +479,13 @@ proc lspInlineValue(
 
     lspClient.deleteWaitingResponse(requestId)
 
-    let values =
-      # Workaround for "Error: generic instantiation too nested"
-      try:
-        parseInlineValueTextResponse(res).get
-      except ResultDefect as e:
-        return Result[(), string].err e.msg
+    let values = parseInlineValueTextResponse(res)
+    if values.isErr:
+      return Result[(), string].err values.error
 
     for i, b in status.bufStatus:
       if b.id == waitingRes.get.bufferId:
-        b.inlineValues.values = values
+        b.inlineValues.values = values.get
         break
 
     return Result[(), string].ok ()
@@ -548,19 +545,16 @@ proc lspSignatureHelp(
 
     lspClient.deleteWaitingResponse(requestId)
 
-    let sig =
-      # Workaround for "Error: generic instantiation too nested"
-      try:
-        parseSignatureHelpResponse(res).get
-      except ResultDefect as e:
-        return Result[(), string].err e.msg
+    let sig = parseSignatureHelpResponse(res)
+    if sig.isErr:
+      return Result[(), string].err sig.error
 
-    if sig.isNone or sig.get.signatures.len == 0:
+    if sig.get.isNone or sig.get.get.signatures.len == 0:
       return Result[(), string].err "Not found"
 
     var win = initSignatureHelpWindow(
       currentMainWindowNode,
-      sig.get.signatures[0])
+      sig.get.get.signatures[0])
 
     # Keep the cursor position on currentMainWindowNode and display the hover
     # window on the top.
@@ -588,17 +582,14 @@ proc lspDocumentFormatting(
 
     lspClient.deleteWaitingResponse(requestId)
 
-    let textEdits =
-      # Workaround for "Error: generic instantiation too nested"
-      try:
-        parseDocumentFormattingResponse(res).get
-      except ResultDefect as e:
-        return Result[(), string].err e.msg
+    let textEdits = parseDocumentFormattingResponse(res)
+    if textEdits.isErr:
+      return Result[(), string].err textEdits.error
 
-    if textEdits.len == 0:
+    if textEdits.get.len == 0:
       return Result[(), string].ok ()
 
-    for e in textEdits:
+    for e in textEdits.get:
       discard currentBufStatus.applyTextEdit(e)
 
     currentBufStatus.isUpdate = true
@@ -915,17 +906,14 @@ proc lspOutgoingCalls(
     except CatchableError as e:
       return Result[(), string].err e.msg
 
-    let calls =
-      # Workaround for "Error: generic instantiation too nested"
-      try:
-        parseCallhierarchyOutgoingCallsResponse(res).get
-      except ResultDefect as e:
-        return Result[(), string].err e.msg
+    let calls = parseCallhierarchyOutgoingCallsResponse(res)
+    if calls.isErr:
+      return Result[(), string].err calls.error
 
-    if calls.len == 0:
+    if calls.get.len == 0:
       return Result[(), string].err "Not found"
 
-    let items = calls.mapIt(it.`to`)
+    let items = calls.get.mapIt(it.`to`)
 
     let buf = initCallHierarchyViewBuffer(
       CallHierarchyType.outgoing,
@@ -953,12 +941,12 @@ proc lspDocumentHighlight(
     except CatchableError as e:
       return Result[(), string].err e.msg
 
-    currentBufStatus.documentHighlightInfo.ranges =
-      # Workaround for "Error: generic instantiation too nested"
-      try:
-        parseDocumentHighlightResponse(res).get
-      except ResultDefect as e:
-        return Result[(), string].err e.msg
+
+    let ranges = parseDocumentHighlightResponse(res)
+    if ranges.isErr:
+      return Result[(), string].err ranges.error
+
+    currentBufStatus.documentHighlightInfo.ranges = ranges.get
 
     return Result[(), string].ok ()
 
@@ -972,18 +960,17 @@ proc lspDocumentLink(
     except CatchableError as e:
       return Result[(), string].err e.msg
 
-    let links =
-      # Workaround for "Error: generic instantiation too nested"
-      try:
-        parseDocumentLinkResponse(res).get
-      except ResultDefect as e:
-        return Result[(), string].err e.msg
+    let links = parseDocumentLinkResponse(res)
+    if links.isErr:
+      return Result[(), string].err links.error
 
-    if links.len == 0:
+    if links.get.len == 0:
       return Result[(), string].err "Not found"
 
-    if links[0].isResolve:
-      let r = waitFor lspClient.documentLinkResolve(currentBufStatus.id, links[0])
+    if links.get[0].isResolve:
+      let r = waitFor lspClient.documentLinkResolve(
+        currentBufStatus.id,
+        links.get[0])
       if r.isErr:
         return Result[(), string].err r.error
 
@@ -999,17 +986,14 @@ proc lspDocumentLinkResolve(
     except CatchableError as e:
       return Result[(), string].err e.msg
 
-    let link =
-      # Workaround for "Error: generic instantiation too nested"
-      try:
-        parseDocumentLinkResolveResponse(res).get
-      except ResultDefect as e:
-        return Result[(), string].err e.msg
+    let link = parseDocumentLinkResolveResponse(res)
+    if link.isErr:
+      return Result[(), string].err link.error
 
-    if link.target.isNone:
+    if link.get.target.isNone:
       return Result[(), string].err "Not found target"
 
-    let path = link.target.get.uriToPath
+    let path = link.get.target.get.uriToPath
     if path.isErr:
       return Result[(), string].err path.error
 
@@ -1030,16 +1014,13 @@ proc lspCodeLens(status: var EditorStatus, res: JsonNode): Result[(), string] =
 
   lspClient.deleteWaitingResponse(res["id"].getInt)
 
-  let r =
-    # Workaround for "Error: generic instantiation too nested"
-    try:
-      parseCodeLensResponse(res).get
-    except ResultDefect as e:
-      return Result[(), string].err e.msg
+  let r = parseCodeLensResponse(res)
+  if r.isErr:
+    return Result[(), string].err r.error
 
   for b in status.bufStatus:
     if b.id == waitingRes.get.bufferId:
-      b.codeLenses = r
+      b.codeLenses = r.get
 
   return Result[(), string].ok ()
 
@@ -1058,12 +1039,9 @@ proc lspCodeLensResolve(
 
     lspClient.deleteWaitingResponse(res["id"].getInt)
 
-    let _ =
-      # Workaround for "Error: generic instantiation too nested"
-      try:
-        parseCodeLensResolveResponse(res).get
-      except ResultDefect as e:
-        return Result[(), string].err e.msg
+    let err = parseCodeLensResolveResponse(res)
+    if err.isErr:
+      return Result[(), string].err err.error
 
     # TODO: Run commands?
 
@@ -1079,12 +1057,10 @@ proc lspExecuteCommand(
     except CatchableError as e:
       return Result[(), string].err e.msg
 
-    # Workaround for "Error: generic instantiation too nested"
-    try:
-      # TODO: Handle Execute command response.
-      discard parseExecuteCommandResponse(res).get
-    except ResultDefect as e:
-      return Result[(), string].err e.msg
+    # TODO: Handle Execute command response.
+    let r = parseExecuteCommandResponse(res)
+    if r.isErr:
+      return Result[(), string].err r.error
 
     return Result[(), string].ok ()
 
@@ -1098,17 +1074,14 @@ proc lspFoldingRange(
     except CatchableError as e:
       return Result[(), string].err e.msg
 
-    # Workaround for "Error: generic instantiation too nested"
-    let ranges =
-      try:
-        parseTextDocumentFoldingRangeResponse(res).get
-      except ResultDefect as e:
-        return Result[(), string].err e.msg
+    let ranges = parseTextDocumentFoldingRangeResponse(res)
+    if ranges.isErr:
+      return Result[(), string].err ranges.error
 
-    if ranges.len == 0:
+    if ranges.get.len == 0:
       return Result[(), string].err "Not found"
 
-    currentMainWindowNode.view.foldingRanges = ranges
+    currentMainWindowNode.view.foldingRanges = ranges.get
 
     let foldingRange = currentMainWindowNode.findFoldingRange
     if foldingRange.isSome:
@@ -1126,17 +1099,14 @@ proc lspSelectionRange(
     except CatchableError as e:
       return Result[(), string].err e.msg
 
-    # Workaround for "Error: generic instantiation too nested"
-    let ranges =
-      try:
-        parseTextDocumentSelectionRangeResponse(res).get
-      except ResultDefect as e:
-        return Result[(), string].err e.msg
+    let ranges = parseTextDocumentSelectionRangeResponse(res)
+    if ranges.isErr:
+      return Result[(), string].err ranges.error
 
-    if ranges.len == 0:
+    if ranges.get.len == 0:
       return Result[(), string].err "Not found"
 
-    var selectRange = ranges[0]
+    var selectRange = ranges.get[0]
     while selectRange.parent.isSome and
           selectRange.range.start[] == selectRange.range.`end`[]:
             selectRange = selectRange.parent.get
@@ -1173,13 +1143,8 @@ proc lspDocumentSymbol(
     except CatchableError as e:
       return Result[(), string].err e.msg
 
-    let infos =
-      try:
-        # Workaround for "Error: generic instantiation too nested"
-        some(parseTextDocumentSymbolInformationsResponse(res).get)
-      except ResultDefect:
-        none(seq[SymbolInformation])
-    if infos.isSome:
+    let infos = parseTextDocumentSymbolInformationsResponse(res)
+    if infos.isOk:
       if infos.get.len == 0:
         return Result[(), string].err "Not found"
 
@@ -1190,17 +1155,14 @@ proc lspDocumentSymbol(
         range: some(it.location.range),
         deprecated: it.deprecated))
     else:
-      let symbols =
-        try:
-          # Workaround for "Error: generic instantiation too nested"
-          parseTextDocumentDocumentSymbolsResponse(res).get
-        except ResultDefect as e:
-          return Result[(), string].err e.msg
+      let symbols = parseTextDocumentDocumentSymbolsResponse(res)
+      if symbols.isErr:
+        return Result[(), string].err symbols.error
 
-      if symbols.len == 0:
+      if symbols.get.len == 0:
         return Result[(), string].err "Not found"
 
-      currentBufStatus.documentSymbols = symbols
+      currentBufStatus.documentSymbols = symbols.get
 
     status.commandLine.clear
     status.commandLine.setPrompt(CommandLinePrompt.DocumentSymbol)
