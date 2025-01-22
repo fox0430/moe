@@ -25,6 +25,9 @@ on:
   push:
     branches:
       - develop
+  pull_request:
+    paths:
+      - '.github/workflows/nimble-cache.yaml'
 
 permissions:
   contents: read
@@ -38,8 +41,6 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
-          # - macOS-latest
-          # - windows-latest
     env:
       NIM_VERSION: 2.2.0
     steps:
