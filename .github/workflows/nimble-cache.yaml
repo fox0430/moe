@@ -59,10 +59,7 @@ jobs:
     - name: Install nimlangserver and nph
       run: |
         nimble install nimlangserver
-        nimlangserver --version
-
         nimble install nph
-        nph -v
 
     - uses: jiro4989/setup-nim-action@v2
       with:
