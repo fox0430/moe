@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -20,7 +20,6 @@
 import highlite
 
 const
-  NumberChars = {'0'..'9'}
   SymChars = {'A'..'Z', 'a'..'z', '0'..'9', '_', '\x80'..'\xFF'}
   JsonKeywords = ["false", "null", "true"]
 
@@ -58,7 +57,7 @@ proc jsonNextToken*(g: var GeneralTokenizer) =
       while g.buf[pos] in {' ', '\x09'..'\x0D'}: inc(pos)
     of 'a'..'z', 'A'..'Z', '_', '\x80'..'\xFF':
       var id = ""
-      while g.buf[pos] in symChars:
+      while g.buf[pos] in SymChars:
         add(id, g.buf[pos])
         inc(pos)
       if isKeyword(JsonKeywords, id) >= 0: g.kind = gtKeyword
