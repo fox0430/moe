@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -210,498 +210,505 @@ suite "Open new buffers in the current window":
     status.resize(100, 100)
     status.update
 
-test "Add new buffer and update editor view when disabling current line highlighting (Fix #1189)":
-  var status = initEditorStatus()
-  discard status.addNewBufferInCurrentWin.get
-  status.settings.view.highlightCurrentLine = false
+  test "Add new buffer and update editor view when disabling current line highlighting (Fix #1189)":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    status.settings.view.highlightCurrentLine = false
 
-  status.resize(100, 100)
-  status.update
-
-test "Vertical split window":
-  var status = initEditorStatus()
-  discard status.addNewBufferInCurrentWin.get
-  status.resize(100, 100)
-  status.verticalSplitWindow
-
-test "Horizontal split window":
-  var status = initEditorStatus()
-  discard status.addNewBufferInCurrentWin.get
-  status.resize(100, 100)
-  status.horizontalSplitWindow
-
-test "resize 1":
-  var status = initEditorStatus()
-  discard status.addNewBufferInCurrentWin.get
-  status.resize(100, 100)
-  currentBufStatus.buffer = initGapBuffer(@[ru"a"])
-
-  currentBufStatus.highlight =
-    initHighlight(currentBufStatus.buffer.toSeqRunes,
-    status.settings.highlight.reservedWords,
-    currentBufStatus.language)
-
-  currentMainWindowNode.view =
-    initEditorView(currentBufStatus.buffer, 1, 1)
-
-  status.resize(0, 0)
-
-test "resize 2":
-  var status = initEditorStatus()
-  discard status.addNewBufferInCurrentWin.get
-  status.resize(100, 100)
-  currentBufStatus.buffer = initGapBuffer(@[ru"a"])
-
-  currentBufStatus.highlight =
-    initHighlight(currentBufStatus.buffer.toSeqRunes,
-    status.settings.highlight.reservedWords,
-    currentBufStatus.language)
-
-  currentMainWindowNode.view =
-    initEditorView(currentBufStatus.buffer, 20, 4)
-
-  status.resize(20, 4)
-
-  currentMainWindowNode.currentColumn = 1
-  status.changeMode(Mode.insert)
-
-  for i in 0 ..< 10:
-    currentBufStatus.keyEnter(
-      currentMainWindowNode,
-      status.settings.standard.autoCloseParen,
-      status.settings.standard.tabStop)
+    status.resize(100, 100)
     status.update
 
-test "Auto delete paren 1":
-  block:
+suite "Vertical split window":
+  test "Basic":
     var status = initEditorStatus()
-    status.settings.standard.autoDeleteParen = true
-
     discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"()"])
-    currentBufStatus.deleteCharacter(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn,
-      status.settings.standard.autoDeleteParen)
+    status.resize(100, 100)
+    status.verticalSplitWindow
 
-    check(currentBufStatus.buffer[0] == ru"")
-
-  block:
+suite "Horizontal split window":
+  test "Basic":
     var status = initEditorStatus()
-    status.settings.standard.autoDeleteParen = true
-
     discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"()"])
-    currentBufStatus.keyRight(currentMainWindowNode)
+    status.resize(100, 100)
+    status.horizontalSplitWindow
 
-    currentBufStatus.deleteCharacter(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn,
-      status.settings.standard.autoDeleteParen)
-
-    check(currentBufStatus.buffer[0] == ru"")
-
-test "Auto delete paren 2":
-  block:
+suite "resize":
+  test "Basic 1":
     var status = initEditorStatus()
-    status.settings.standard.autoDeleteParen = true
-
     discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"(())"])
+    status.resize(100, 100)
+    currentBufStatus.buffer = initGapBuffer(@[ru"a"])
 
-    currentBufStatus.deleteCharacter(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn,
-      status.settings.standard.autoDeleteParen)
+    currentBufStatus.highlight =
+      initHighlight(currentBufStatus.buffer.toSeqRunes,
+      status.settings.highlight.reservedWords,
+      currentBufStatus.language)
 
-    check(currentBufStatus.buffer[0] == ru"()")
+    currentMainWindowNode.view =
+      initEditorView(currentBufStatus.buffer, 1, 1)
 
-  block:
+    status.resize(0, 0)
+
+  test "Basic 2":
     var status = initEditorStatus()
-    status.settings.standard.autoDeleteParen = true
-
     discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"(())"])
-    currentBufStatus.keyRight(currentMainWindowNode)
+    status.resize(100, 100)
+    currentBufStatus.buffer = initGapBuffer(@[ru"a"])
 
-    currentBufStatus.deleteCharacter(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn,
-      status.settings.standard.autoDeleteParen)
+    currentBufStatus.highlight =
+      initHighlight(currentBufStatus.buffer.toSeqRunes,
+      status.settings.highlight.reservedWords,
+      currentBufStatus.language)
 
-    check(currentBufStatus.buffer[0] == ru"()")
+    currentMainWindowNode.view =
+      initEditorView(currentBufStatus.buffer, 20, 4)
 
-  block:
-    var status = initEditorStatus()
-    status.settings.standard.autoDeleteParen = true
+    status.resize(20, 4)
 
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"(())"])
-
-    for i in 0 ..< 2:
-     currentBufStatus.keyRight(currentMainWindowNode)
-
-    currentBufStatus.deleteCharacter(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn,
-      status.settings.standard.autoDeleteParen)
-
-    check(currentBufStatus.buffer[0] == ru"()")
-
-  block:
-    var status = initEditorStatus()
-    status.settings.standard.autoDeleteParen = true
-
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"(())"])
-    for i in 0 ..< 3:
-      currentBufStatus.keyRight(currentMainWindowNode)
-
-    currentBufStatus.deleteCharacter(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn,
-      status.settings.standard.autoDeleteParen)
-
-    check(currentBufStatus.buffer[0] == ru"()")
-
-test "Auto delete paren 3":
-  block:
-    var status = initEditorStatus()
-    status.settings.standard.autoDeleteParen = true
-
-    discard status.addNewBufferInCurrentWin.get
-
-    currentBufStatus.buffer = initGapBuffer(@[ru"(()"])
-
-    currentBufStatus.deleteCharacter(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn,
-      status.settings.standard.autoDeleteParen)
-
-    check(currentBufStatus.buffer[0] == ru"()")
-
-  block:
-    var status = initEditorStatus()
-    status.settings.standard.autoDeleteParen = true
-
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"(()"])
-    currentBufStatus.keyRight(currentMainWindowNode)
-
-    currentBufStatus.deleteCharacter(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn,
-      status.settings.standard.autoDeleteParen)
-
-    check(currentBufStatus.buffer[0] == ru"(")
-
-  block:
-    var status = initEditorStatus()
-    status.settings.standard.autoDeleteParen = true
-
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"(()"])
-    for i in 0 ..< 2:
-      currentBufStatus.keyRight(currentMainWindowNode)
-
-    currentBufStatus.deleteCharacter(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn,
-      status.settings.standard.autoDeleteParen)
-
-    check(currentBufStatus.buffer[0] == ru"(")
-
-  block:
-    var status = initEditorStatus()
-    status.settings.standard.autoDeleteParen = true
-
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"())"])
-
-    currentBufStatus.deleteCharacter(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn,
-      status.settings.standard.autoDeleteParen)
-
-    check(currentBufStatus.buffer[0] == ru")")
-
-  block:
-    var status = initEditorStatus()
-    status.settings.standard.autoDeleteParen = true
-
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"())"])
-    currentBufStatus.keyRight(currentMainWindowNode)
-
-    currentBufStatus.deleteCharacter(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn,
-      status.settings.standard.autoDeleteParen)
-
-    check(currentBufStatus.buffer[0] == ru")")
-
-  block:
-    var status = initEditorStatus()
-    status.settings.standard.autoDeleteParen = true
-
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"())"])
-
-    for i in 0 ..< 3:
-      currentBufStatus.keyRight(currentMainWindowNode)
-
-    currentBufStatus.deleteCharacter(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn,
-      status.settings.standard.autoDeleteParen)
-
-    check(currentBufStatus.buffer[0] == ru"()")
-
-test "Auto delete paren 4":
-  block:
-    var status = initEditorStatus()
-    status.settings.standard.autoDeleteParen = true
-
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"(", ru")"])
-
-    currentBufStatus.deleteCharacter(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn,
-      status.settings.standard.autoDeleteParen)
-
-    check(currentBufStatus.buffer[0] == ru"")
-    check(currentBufStatus.buffer[1] == ru"")
-
-  block:
-    var status = initEditorStatus()
-    status.settings.standard.autoDeleteParen = true
-
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"(", ru")"])
-    currentBufStatus.keyDown(currentMainWindowNode)
-
-    currentBufStatus.deleteCharacter(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn,
-      status.settings.standard.autoDeleteParen)
-
-    check(currentBufStatus.buffer[0] == ru"")
-    check(currentBufStatus.buffer[1] == ru"")
-
-test "Auto delete paren 5":
-  block:
-    var status = initEditorStatus()
-    status.settings.standard.autoDeleteParen = true
-
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"()"])
-    status.changeMode(Mode.insert)
-    currentBufStatus.keyRight(currentMainWindowNode)
-    currentBufStatus.keyBackspace(
-      currentMainWindowNode,
-      status.settings.standard.autoDeleteParen,
-      status.settings.standard.tabStop)
-
-    check(currentBufStatus.buffer[0] == ru"")
-
-  block:
-    var status = initEditorStatus()
-    status.settings.standard.autoDeleteParen = true
-
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"()"])
-    status.changeMode(Mode.insert)
-    for i in 0 ..< 2:
-      currentBufStatus.keyRight(currentMainWindowNode)
-    currentBufStatus.keyBackspace(
-      currentMainWindowNode,
-      status.settings.standard.autoDeleteParen,
-      status.settings.standard.tabStop)
-
-    check(currentBufStatus.buffer[0] == ru"")
-
-test "Auto delete paren 6":
-  block:
-    var status = initEditorStatus()
-    status.settings.standard.autoDeleteParen = true
-
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"(a(a))"])
-
+    currentMainWindowNode.currentColumn = 1
     status.changeMode(Mode.insert)
 
-    for i in 0 ..< 5:
+    for i in 0 ..< 10:
+      currentBufStatus.keyEnter(
+        currentMainWindowNode,
+        status.settings.standard.autoCloseParen,
+        status.settings.standard.tabStop)
+      status.update
+
+suite "Auto delete paren":
+  test "Basic 1":
+    block:
+      var status = initEditorStatus()
+      status.settings.standard.autoDeleteParen = true
+
+      discard status.addNewBufferInCurrentWin.get
+      currentBufStatus.buffer = initGapBuffer(@[ru"()"])
+      currentBufStatus.deleteCharacter(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn,
+        status.settings.standard.autoDeleteParen)
+
+      check(currentBufStatus.buffer[0] == ru"")
+
+    block:
+      var status = initEditorStatus()
+      status.settings.standard.autoDeleteParen = true
+
+      discard status.addNewBufferInCurrentWin.get
+      currentBufStatus.buffer = initGapBuffer(@[ru"()"])
       currentBufStatus.keyRight(currentMainWindowNode)
 
-    currentBufStatus.keyBackspace(
-      currentMainWindowNode,
-      status.settings.standard.autoDeleteParen,
-      status.settings.standard.tabStop)
+      currentBufStatus.deleteCharacter(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn,
+        status.settings.standard.autoDeleteParen)
 
-    check(currentBufStatus.buffer[0] == ru"(aa)")
+      check(currentBufStatus.buffer[0] == ru"")
 
-  block:
-    var status = initEditorStatus()
-    status.settings.standard.autoDeleteParen = true
+  test "Basic 2":
+    block:
+      var status = initEditorStatus()
+      status.settings.standard.autoDeleteParen = true
 
-    discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[ru"(a(a))"])
+      discard status.addNewBufferInCurrentWin.get
+      currentBufStatus.buffer = initGapBuffer(@[ru"(())"])
 
-    status.changeMode(Mode.insert)
+      currentBufStatus.deleteCharacter(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn,
+        status.settings.standard.autoDeleteParen)
 
-    for i in 0 ..< 6:
+      check(currentBufStatus.buffer[0] == ru"()")
+
+    block:
+      var status = initEditorStatus()
+      status.settings.standard.autoDeleteParen = true
+
+      discard status.addNewBufferInCurrentWin.get
+      currentBufStatus.buffer = initGapBuffer(@[ru"(())"])
       currentBufStatus.keyRight(currentMainWindowNode)
 
-    currentBufStatus.keyBackspace(
-      currentMainWindowNode,
-      status.settings.standard.autoDeleteParen,
-      status.settings.standard.tabStop)
+      currentBufStatus.deleteCharacter(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn,
+        status.settings.standard.autoDeleteParen)
 
-    check(currentBufStatus.buffer[0] == ru"a(a)")
+      check(currentBufStatus.buffer[0] == ru"()")
+
+    block:
+      var status = initEditorStatus()
+      status.settings.standard.autoDeleteParen = true
+
+      discard status.addNewBufferInCurrentWin.get
+      currentBufStatus.buffer = initGapBuffer(@[ru"(())"])
+
+      for i in 0 ..< 2:
+       currentBufStatus.keyRight(currentMainWindowNode)
+
+      currentBufStatus.deleteCharacter(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn,
+        status.settings.standard.autoDeleteParen)
+
+      check(currentBufStatus.buffer[0] == ru"()")
+
+    block:
+      var status = initEditorStatus()
+      status.settings.standard.autoDeleteParen = true
+
+      discard status.addNewBufferInCurrentWin.get
+      currentBufStatus.buffer = initGapBuffer(@[ru"(())"])
+      for i in 0 ..< 3:
+        currentBufStatus.keyRight(currentMainWindowNode)
+
+      currentBufStatus.deleteCharacter(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn,
+        status.settings.standard.autoDeleteParen)
+
+      check(currentBufStatus.buffer[0] == ru"()")
+
+  test "Basic 3":
+    block:
+      var status = initEditorStatus()
+      status.settings.standard.autoDeleteParen = true
+
+      discard status.addNewBufferInCurrentWin.get
+
+      currentBufStatus.buffer = initGapBuffer(@[ru"(()"])
+
+      currentBufStatus.deleteCharacter(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn,
+        status.settings.standard.autoDeleteParen)
+
+      check(currentBufStatus.buffer[0] == ru"()")
+
+    block:
+      var status = initEditorStatus()
+      status.settings.standard.autoDeleteParen = true
+
+      discard status.addNewBufferInCurrentWin.get
+      currentBufStatus.buffer = initGapBuffer(@[ru"(()"])
+      currentBufStatus.keyRight(currentMainWindowNode)
+
+      currentBufStatus.deleteCharacter(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn,
+        status.settings.standard.autoDeleteParen)
+
+      check(currentBufStatus.buffer[0] == ru"(")
+
+    block:
+      var status = initEditorStatus()
+      status.settings.standard.autoDeleteParen = true
+
+      discard status.addNewBufferInCurrentWin.get
+      currentBufStatus.buffer = initGapBuffer(@[ru"(()"])
+      for i in 0 ..< 2:
+        currentBufStatus.keyRight(currentMainWindowNode)
+
+      currentBufStatus.deleteCharacter(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn,
+        status.settings.standard.autoDeleteParen)
+
+      check(currentBufStatus.buffer[0] == ru"(")
+
+    block:
+      var status = initEditorStatus()
+      status.settings.standard.autoDeleteParen = true
+
+      discard status.addNewBufferInCurrentWin.get
+      currentBufStatus.buffer = initGapBuffer(@[ru"())"])
+
+      currentBufStatus.deleteCharacter(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn,
+        status.settings.standard.autoDeleteParen)
+
+      check(currentBufStatus.buffer[0] == ru")")
+
+    block:
+      var status = initEditorStatus()
+      status.settings.standard.autoDeleteParen = true
+
+      discard status.addNewBufferInCurrentWin.get
+      currentBufStatus.buffer = initGapBuffer(@[ru"())"])
+      currentBufStatus.keyRight(currentMainWindowNode)
+
+      currentBufStatus.deleteCharacter(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn,
+        status.settings.standard.autoDeleteParen)
+
+      check(currentBufStatus.buffer[0] == ru")")
+
+    block:
+      var status = initEditorStatus()
+      status.settings.standard.autoDeleteParen = true
+
+      discard status.addNewBufferInCurrentWin.get
+      currentBufStatus.buffer = initGapBuffer(@[ru"())"])
+
+      for i in 0 ..< 3:
+        currentBufStatus.keyRight(currentMainWindowNode)
+
+      currentBufStatus.deleteCharacter(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn,
+        status.settings.standard.autoDeleteParen)
+
+      check(currentBufStatus.buffer[0] == ru"()")
+
+  test "Basic 4":
+    block:
+      var status = initEditorStatus()
+      status.settings.standard.autoDeleteParen = true
+
+      discard status.addNewBufferInCurrentWin.get
+      currentBufStatus.buffer = initGapBuffer(@[ru"(", ru")"])
+
+      currentBufStatus.deleteCharacter(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn,
+        status.settings.standard.autoDeleteParen)
+
+      check(currentBufStatus.buffer[0] == ru"")
+      check(currentBufStatus.buffer[1] == ru"")
+
+    block:
+      var status = initEditorStatus()
+      status.settings.standard.autoDeleteParen = true
+
+      discard status.addNewBufferInCurrentWin.get
+      currentBufStatus.buffer = initGapBuffer(@[ru"(", ru")"])
+      currentBufStatus.keyDown(currentMainWindowNode)
+
+      currentBufStatus.deleteCharacter(
+        currentMainWindowNode.currentLine,
+        currentMainWindowNode.currentColumn,
+        status.settings.standard.autoDeleteParen)
+
+      check(currentBufStatus.buffer[0] == ru"")
+      check(currentBufStatus.buffer[1] == ru"")
+
+  test "Basic 5":
+    block:
+      var status = initEditorStatus()
+      status.settings.standard.autoDeleteParen = true
+
+      discard status.addNewBufferInCurrentWin.get
+      currentBufStatus.buffer = initGapBuffer(@[ru"()"])
+      status.changeMode(Mode.insert)
+      currentBufStatus.keyRight(currentMainWindowNode)
+      currentBufStatus.keyBackspace(
+        currentMainWindowNode,
+        status.settings.standard.autoDeleteParen,
+        status.settings.standard.tabStop)
+
+      check(currentBufStatus.buffer[0] == ru"")
+
+    block:
+      var status = initEditorStatus()
+      status.settings.standard.autoDeleteParen = true
+
+      discard status.addNewBufferInCurrentWin.get
+      currentBufStatus.buffer = initGapBuffer(@[ru"()"])
+      status.changeMode(Mode.insert)
+      for i in 0 ..< 2:
+        currentBufStatus.keyRight(currentMainWindowNode)
+      currentBufStatus.keyBackspace(
+        currentMainWindowNode,
+        status.settings.standard.autoDeleteParen,
+        status.settings.standard.tabStop)
+
+      check(currentBufStatus.buffer[0] == ru"")
+
+  test "Basic 6":
+    block:
+      var status = initEditorStatus()
+      status.settings.standard.autoDeleteParen = true
+
+      discard status.addNewBufferInCurrentWin.get
+      currentBufStatus.buffer = initGapBuffer(@[ru"(a(a))"])
+
+      status.changeMode(Mode.insert)
+
+      for i in 0 ..< 5:
+        currentBufStatus.keyRight(currentMainWindowNode)
+
+      currentBufStatus.keyBackspace(
+        currentMainWindowNode,
+        status.settings.standard.autoDeleteParen,
+        status.settings.standard.tabStop)
+
+      check(currentBufStatus.buffer[0] == ru"(aa)")
+
+    block:
+      var status = initEditorStatus()
+      status.settings.standard.autoDeleteParen = true
+
+      discard status.addNewBufferInCurrentWin.get
+      currentBufStatus.buffer = initGapBuffer(@[ru"(a(a))"])
+
+      status.changeMode(Mode.insert)
+
+      for i in 0 ..< 6:
+        currentBufStatus.keyRight(currentMainWindowNode)
+
+      currentBufStatus.keyBackspace(
+        currentMainWindowNode,
+        status.settings.standard.autoDeleteParen,
+        status.settings.standard.tabStop)
+
+      check(currentBufStatus.buffer[0] == ru"a(a)")
 
 test "Write tab line":
-  var status = initEditorStatus()
-  discard status.addNewBufferInCurrentWin("test.txt").get
+  test "Basic":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin("test.txt").get
 
-  status.resize(100, 100)
+    status.resize(100, 100)
 
-  privateAccess(TabLine)
-  check status.tabLine.size.w == 100
+    privateAccess(TabLine)
+    check status.tabLine.size.w == 100
 
-test "Close window":
-  var status = initEditorStatus()
-  discard status.addNewBufferInCurrentWin.get
-  status.resize(100, 100)
-  status.verticalSplitWindow
-  status.closeWindow(currentMainWindowNode)
+suite "Close window":
+  test "Basic":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    status.resize(100, 100)
+    status.verticalSplitWindow
+    status.closeWindow(currentMainWindowNode)
 
-test "Close window 2":
-  var status = initEditorStatus()
-  discard status.addNewBufferInCurrentWin.get
+  test "Basic 2":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
 
-  status.resize(100, 100)
-  status.update
+    status.resize(100, 100)
+    status.update
 
-  status.horizontalSplitWindow
-  status.resize(100, 100)
-  status.update
+    status.horizontalSplitWindow
+    status.resize(100, 100)
+    status.update
 
-  status.closeWindow(currentMainWindowNode)
-  status.resize(100, 100)
-  status.update
+    status.closeWindow(currentMainWindowNode)
+    status.resize(100, 100)
+    status.update
 
-  let windowNodeList = mainWindowNode.getAllWindowNode
+    let windowNodeList = mainWindowNode.getAllWindowNode
 
-  check(windowNodeList.len == 1)
+    check(windowNodeList.len == 1)
 
-  check(currentMainWindowNode.h == 98)
-  check(currentMainWindowNode.w == 100)
+    check(currentMainWindowNode.h == 98)
+    check(currentMainWindowNode.w == 100)
 
-test "Close window 3":
-  var status = initEditorStatus()
-  discard status.addNewBufferInCurrentWin.get
+  test "Basic 3":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
 
-  status.resize(100, 100)
-  status.update
+    status.resize(100, 100)
+    status.update
 
-  status.verticalSplitWindow
-  status.resize(100, 100)
-  status.update
+    status.verticalSplitWindow
+    status.resize(100, 100)
+    status.update
 
-  status.horizontalSplitWindow
-  status.resize(100, 100)
-  status.update
+    status.horizontalSplitWindow
+    status.resize(100, 100)
+    status.update
 
-  status.closeWindow(currentMainWindowNode)
-  status.resize(100, 100)
-  status.update
+    status.closeWindow(currentMainWindowNode)
+    status.resize(100, 100)
+    status.update
 
-  let windowNodeList = mainWindowNode.getAllWindowNode
+    let windowNodeList = mainWindowNode.getAllWindowNode
 
-  check(windowNodeList.len == 2)
+    check(windowNodeList.len == 2)
 
-  for n in windowNodeList:
-    check(n.w == 50)
-    check(n.h == 98)
+    for n in windowNodeList:
+      check(n.w == 50)
+      check(n.h == 98)
 
-test "Close window 4":
-  var status = initEditorStatus()
-  discard status.addNewBufferInCurrentWin.get
+  test "Basic 4":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
 
-  status.resize(100, 100)
-  status.update
+    status.resize(100, 100)
+    status.update
 
-  status.horizontalSplitWindow
-  status.resize(100, 100)
-  status.update
+    status.horizontalSplitWindow
+    status.resize(100, 100)
+    status.update
 
-  status.verticalSplitWindow
-  status.resize(100, 100)
-  status.update
+    status.verticalSplitWindow
+    status.resize(100, 100)
+    status.update
 
-  status.closeWindow(currentMainWindowNode)
-  status.resize(100, 100)
-  status.update
+    status.closeWindow(currentMainWindowNode)
+    status.resize(100, 100)
+    status.update
 
-  let windowNodeList = mainWindowNode.getAllWindowNode
+    let windowNodeList = mainWindowNode.getAllWindowNode
 
-  check(windowNodeList.len == 2)
+    check(windowNodeList.len == 2)
 
-  check(windowNodeList[0].w == 100)
-  check(windowNodeList[0].h == 49)
+    check(windowNodeList[0].w == 100)
+    check(windowNodeList[0].h == 49)
 
-  check(windowNodeList[1].w == 100)
-  check(windowNodeList[1].h == 49)
+    check(windowNodeList[1].w == 100)
+    check(windowNodeList[1].h == 49)
 
-test "Close window 5":
-  var status = initEditorStatus()
-  discard status.addNewBufferInCurrentWin("test.nim").get
+  test "Basic 5":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin("test.nim").get
 
-  status.resize(100, 100)
-  status.update
+    status.resize(100, 100)
+    status.update
 
-  status.verticalSplitWindow
-  status.resize(100, 100)
-  status.update
+    status.verticalSplitWindow
+    status.resize(100, 100)
+    status.update
 
-  status.moveCurrentMainWindow(1)
-  discard status.addNewBufferInCurrentWin("test2.nim").get
-  status.changeCurrentBuffer(1)
-  status.resize(100, 100)
-  status.update
+    status.moveCurrentMainWindow(1)
+    discard status.addNewBufferInCurrentWin("test2.nim").get
+    status.changeCurrentBuffer(1)
+    status.resize(100, 100)
+    status.update
 
-  status.closeWindow(currentMainWindowNode)
-  status.resize(100, 100)
-  status.update
+    status.closeWindow(currentMainWindowNode)
+    status.resize(100, 100)
+    status.update
 
-  check(currentMainWindowNode.bufferIndex == 0)
+    check(currentMainWindowNode.bufferIndex == 0)
 
 # Fix #611
-test "Change current buffer":
-  var status = initEditorStatus()
+suite "changeCurrentBuffer":
+  test "Fix #611":
+    var status = initEditorStatus()
 
-  discard status.addNewBufferInCurrentWin.get
-  currentBufStatus.path = ru"test"
-  currentBufStatus.buffer = initGapBuffer(@[ru"", ru"abc"])
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.path = ru"test"
+    currentBufStatus.buffer = initGapBuffer(@[ru"", ru"abc"])
 
-  status.resize(100, 100)
-  status.update
+    status.resize(100, 100)
+    status.update
 
-  let
-    currentLine = currentBufStatus.buffer.high
-    currentColumn = currentBufStatus.buffer[currentLine].high
-  currentMainWindowNode.currentLine = currentLine
-  currentMainWindowNode.currentColumn = currentColumn
+    let
+      currentLine = currentBufStatus.buffer.high
+      currentColumn = currentBufStatus.buffer[currentLine].high
+    currentMainWindowNode.currentLine = currentLine
+    currentMainWindowNode.currentColumn = currentColumn
 
-  discard status.addNewBufferInCurrentWin.get
-  currentBufStatus.path = ru"test2"
-  currentBufStatus.buffer =  initGapBuffer(@[ru""])
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.path = ru"test2"
+    currentBufStatus.buffer =  initGapBuffer(@[ru""])
 
-  status.changeCurrentBuffer(1)
+    status.changeCurrentBuffer(1)
 
-  status.resize(100, 100)
-  status.update
+    status.resize(100, 100)
+    status.update
 
 suite "editorstatus: Updates/Restore the last cursor position":
   test "Update the last cursor position (3 lines)":
