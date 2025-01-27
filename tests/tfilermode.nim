@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -39,8 +39,8 @@ proc getCurrentFiles(path: string): seq[string] =
       # Delete "./" or "../"
       if p.path.len > 2 and p.path.startsWith("../"):
         files.add p.path[3 .. ^1]
-
-      files.add p.path[2 .. ^1]
+      else:
+        files.add p.path[2 .. ^1]
 
   result = dirs.sortedByIt(it)
   result.add files.sortedByIt(it)
