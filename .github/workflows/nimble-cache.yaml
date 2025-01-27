@@ -41,8 +41,6 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
-    env:
-      NIM_VERSION: 2.2.0
     steps:
     - uses: actions/checkout@v4
 
@@ -52,10 +50,6 @@ jobs:
       with:
         path: ~/.nimble
         key: unit-tests-nimble-v2-${{ github.sha }}
-
-    - uses: jiro4989/setup-nim-action@v2
-      with:
-        nim-version: ${{ env.NIM_VERSION }}
 
     - uses: nim-lang/setup-nimble-action@v1
       with:
@@ -70,6 +64,13 @@ jobs:
         nimble install nph
         nph -v
 
+    - uses: jiro4989/setup-nim-action@v2
+      with:
+        nim-version: 2.2.0
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+
     - name: Build
       run: |
+        nimble install stew # Workaround
+
         nimble build
