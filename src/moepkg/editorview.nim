@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -387,6 +387,7 @@ proc writeSidebarLine(view: EditorView, win: var Window, y: int) =
 proc writeLineNum(
   view: EditorView,
   win: var Window,
+  windowPosition: WindowPosition,
   y, line: int,
   colorPair: EditorColorPairIndex) =
 
@@ -397,11 +398,19 @@ proc writeLineNum(
       buffer =
         strutils.align($(line + 1), view.widthOfLineNum - 1) & RightMargin
 
-    win.write(y, x, buffer, colorPair.int16, Attribute.normal, false)
+      absY =
+        if windowPosition.y > 1: windowPosition.y + y
+        else: y
+      absX =
+        if windowPosition.x > 0: windowPosition.x + x
+        else: x
+
+    win.write(absY, absX, buffer, colorPair.int16, Attribute.normal, false)
 
 proc write(
   view: EditorView,
   win: var Window,
+  windowPosition: WindowPosition,
   y, x: int,
   runes: Runes,
   color: EditorColorPairIndex | int16,
@@ -409,13 +418,28 @@ proc write(
 
     # TODO: use settings file
     const tab = "    "
-    win.write(y, x, replace($runes, "\t", tab), color.int16, attribute, false)
+    let
+      absY =
+        if windowPosition.y > 1: windowPosition.y + y
+        else: y
+      absX =
+        if windowPosition.x > 0: windowPosition.x + x
+        else: x
+
+    win.write(
+      absY,
+      absX,
+      replace($runes, "\t", tab),
+      color.int16,
+      attribute,
+      false)
 
 proc writeCurrentLine(
   win: var Window,
   view: EditorView,
   highlight: Highlight,
   runes: Runes,
+  windowPosition: Position,
   currentLineColorPair: var int,
   y, x, i, last: int) =
 
@@ -451,7 +475,14 @@ proc writeCurrentLine(
         bufferFg,
         bufferBg)
 
-      view.write(win, y, x, runes, currentLineColorPair.int16, attribute)
+      view.write(
+        win,
+        windowPosition,
+        y,
+        x,
+        runes,
+        currentLineColorPair.int16,
+        attribute)
 
       currentLineColorPair.inc
 
@@ -469,12 +500,25 @@ proc writeCurrentLine(
         spaces = ru" ".repeat(view.width - view.lines[y].width)
         x = view.sidebarWidth + view.widthOfLineNum + view.lines[y].width
 
-      view.write(win, y, x, spaces, currentLineColorPair.int16, attribute)
+      view.write(
+        win,
+        windowPosition,
+        y,
+        x,
+        spaces,
+        currentLineColorPair.int16,
+        attribute)
 
       currentLineColorPair.inc
 
     else:
-      view.write(win, y, x, runes, highlight[i].color.int16)
+      view.write(
+        win,
+        windowPosition,
+        y,
+        x,
+        runes,
+        highlight[i].color.int16)
 
 proc foldingLineBuffer(
   foldingRange: FoldingRange,
@@ -525,10 +569,9 @@ proc writeAllLines*[T](
   win: var Window,
   buffer: T,
   highlight: Highlight,
+  windowPosition: Position,
   currentLine: int,
   currentLineColorPair: var int) =
-
-    win.erase
 
     view.widthOfLineNum =
       if view.config.isLineNumber: buffer.len.numberOfDigits + 1
@@ -557,6 +600,7 @@ proc writeAllLines*[T](
       if view.config.isLineNumber and view.start[y] == 0:
         view.writeLineNum(
           win,
+          windowPosition,
           y,
           view.originalLine[y],
           view.lineNumberColor(isCurrentLine))
@@ -567,6 +611,7 @@ proc writeAllLines*[T](
         let foldingRange = view.findFoldingRange(view.originalLine[y])
         view.write(
           win,
+          windowPosition,
           y,
           x,
           foldingLineBuffer(
@@ -578,9 +623,21 @@ proc writeAllLines*[T](
 
       if view.length[y] == 0:
         if view.isSelectingArea(y):
-          view.write(win, y, x, ru" ", EditorColorPairIndex.selectArea)
+          view.write(
+            win,
+            windowPosition,
+            y,
+            x,
+            ru" ",
+            EditorColorPairIndex.selectArea)
         else:
-          view.write(win, y, x, view.lines[y], EditorColorPairIndex.default)
+          view.write(
+            win,
+            windowPosition,
+            y,
+            x,
+            view.lines[y],
+            EditorColorPairIndex.default)
 
           if view.config.isHighlightCurrentLine and
              isCurrentLine and
@@ -589,10 +646,17 @@ proc writeAllLines*[T](
                  view,
                  highlight,
                  ru"",
+                 windowPosition,
                  currentLineColorPair,
                  y, x, i, 0)
           else:
-            view.write(win, y, x, view.lines[y], EditorColorPairIndex.default)
+            view.write(
+              win,
+              windowPosition,
+              y,
+              x,
+              view.lines[y],
+              EditorColorPairIndex.default)
         continue
 
       if view.config.isIndentationLines and not view.editorMode.isConfigMode:
@@ -603,7 +667,7 @@ proc writeAllLines*[T](
             else: ru""
           lineStart = x
           var numSpaces = 0
-          for i in 0..<line.len:
+          for i in 0 ..< line.len:
             if line[i] != Rune(' '):
               numSpaces = i+1
               break
@@ -641,17 +705,25 @@ proc writeAllLines*[T](
 
         let str = view.lines[y][first .. last]
 
-        view.write(win, y, x, str, highlight[i].color)
+        view.write(
+          win,
+          windowPosition,
+          y,
+          x,
+          str,
+          highlight[i].color)
         if isCurrentLine:
           win.writeCurrentLine(
             view,
             highlight,
             str,
+            windowPosition,
             currentLineColorPair,
             y, x, i, last)
         else:
           view.write(
             win,
+            windowPosition,
             y, x,
             str,
             highlight[i].color, highlight[i].attribute)
@@ -670,6 +742,7 @@ proc writeAllLines*[T](
 
           view.write(
             win,
+            windowPosition,
             y, lineStart + (view.config.tabStop * i),
             ru("┊"),
             color)
@@ -679,6 +752,7 @@ proc update*[T](
   win: var Window,
   buffer: T,
   highlight: Highlight,
+  windowPosition: Position,
   currentLine: int,
   currentLineColorPair: var int) =
 
@@ -694,6 +768,7 @@ proc update*[T](
       win,
       buffer,
       highlight,
+      windowPosition,
       currentLine,
       currentLineColorPair)
 

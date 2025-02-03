@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -562,7 +562,8 @@ proc resize*(status: var EditorStatus) =
     let queueLength = queue.len
     for i in  0 ..< queueLength:
       var node = queue.pop
-      if node.window.isSome:
+
+      if node.isActualWin:
         let
           bufIndex = node.bufferIndex
 
@@ -570,13 +571,11 @@ proc resize*(status: var EditorStatus) =
             if status.settings.view.lineNumber: node.view.widthOfLineNum
             else: 0
 
-          h = node.h - StatusLineHeight
-
           sidebarWidth =
             if node.view.sidebar.isSome: 2
             else: 2
 
-          adjustedHeight = max(h, 4)
+          adjustedHeight = max(node.h - StatusLineHeight, 4)
           adjustedWidth = max(node.w - widthOfLineNum - sidebarWidth, 4)
 
         # Resize EditorView.
@@ -596,10 +595,9 @@ proc resize*(status: var EditorStatus) =
           mode = status.bufStatus[bufIndex].mode
         if enableStatusLine and
            (not isMergeStatusLine or (isMergeStatusLine and mode != Mode.ex)):
-             const StatusLineHeight = 1
              let
                width = node.w
-               y = node.y + adjustedHeight
+               y = node.y + node.h
                x = node.x
              status.statusLine[statusLineIndex].window.resize(
                StatusLineHeight,
@@ -988,13 +986,15 @@ proc update*(status: var EditorStatus) =
   # New color pairs are set to number larger than the maximum value of EditorColorPiarIndex.
   var currentLineColorPair: int = ord(EditorColorPairIndex.high) + 1
 
+  var rootNode= mainWindow.root
+
   var queue = initHeapQueue[WindowNode]()
   for node in mainWindowNode.child:
     queue.push(node)
   while queue.len > 0:
     for i in  0 ..< queue.len:
       var node = queue.pop
-      if node.window.isSome:
+      if node.isActualWin:
         template b: var BufferStatus = status.bufStatus[node.bufferIndex]
 
         if b.buffer.high < node.currentLine:
@@ -1137,17 +1137,21 @@ proc update*(status: var EditorStatus) =
             # Apply overwrite
             node.reloadEditorView(buffer)
 
+            node.eraseWindow
             node.view.update(
-              node.window.get,
+              rootNode.window.get,
               buffer,
               highlight,
+              Position(x: node.x, y: node.y),
               node.currentLine,
               currentLineColorPair)
           else:
+            node.eraseWindow
             node.view.update(
-              node.window.get,
+              rootNode.window.get,
               b.buffer,
               highlight,
+              Position(x: node.x, y: node.y),
               node.currentLine,
               currentLineColorPair)
 
@@ -1167,7 +1171,8 @@ proc update*(status: var EditorStatus) =
       x = currentMainWindowNode.view.sidebarWidth +
           currentMainWindowNode.view.widthOfLineNum +
           currentMainWindowNode.cursor.x
-    currentMainWindowNode.window.get.moveCursor(y, x)
+
+    currentMainWindowNode.moveCursor(y, x)
 
   if status.settings.statusLine.enable: status.updateStatusLine
 

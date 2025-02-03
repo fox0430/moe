@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -61,10 +61,10 @@ suite "windownode: moveCursor":
 
     currentMainWindowNode.moveCursor(BufferPosition(line: 10, column: 5))
 
-    check currentMainWindowNode.currentLine == 10
-    check currentMainWindowNode.currentColumn == 5
-    check currentMainWindowNode.window.get.y == beforeWindowPosition.y
-    check currentMainWindowNode.window.get.x == beforeWindowPosition.x
+    check currentMainWindowNode.cursor.y == 10
+    check currentMainWindowNode.cursor.x == 5
+    check currentMainWindowNode.y == beforeWindowPosition.y
+    check currentMainWindowNode.x == beforeWindowPosition.x
 
   test "Basic 2":
     var status = initEditorStatus()
@@ -78,7 +78,7 @@ suite "windownode: moveCursor":
 
     currentMainWindowNode.moveCursor(10, 5)
 
-    check currentMainWindowNode.currentLine == 10
-    check currentMainWindowNode.currentColumn == 5
-    check currentMainWindowNode.window.get.y == beforeWindowPosition.y
-    check currentMainWindowNode.window.get.x == beforeWindowPosition.x
+    check currentMainWindowNode.cursor.y == 10
+    check currentMainWindowNode.cursor.x == 5
+    check currentMainWindowNode.y == beforeWindowPosition.y
+    check currentMainWindowNode.x == beforeWindowPosition.x
