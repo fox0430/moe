@@ -1198,3 +1198,20 @@ suite "editorstatus: update":
 
     status.resize(100, 100)
     status.update
+
+suite "editorstatus: updateSyntaxHighlightings":
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    status.settings.git.showChangedLine = true
+
+    assert status.addNewBufferInCurrentWin("test.txt").isOk
+
+  test "Check isGitUpdate":
+    currentBufStatus.isGitUpdate = false
+    currentBufStatus.isUpdate = true
+    currentBufStatus.isTrackingByGit = true
+    status.updateSyntaxHighlightings
+
+    check currentBufStatus.isGitUpdate

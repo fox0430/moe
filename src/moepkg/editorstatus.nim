@@ -821,6 +821,10 @@ proc updateSyntaxHighlightings(status: EditorStatus) =
       b.version.inc
       b.isUpdate = false
 
+      if status.settings.git.showChangedLine and
+         b.isTrackingByGit:
+           b.isGitUpdate = true
+
       if status.lspClients.isInitialized(b.langId) and b.isEditMode:
         template client: LspClient = status.lspClients[b.langId]
 
@@ -1753,7 +1757,7 @@ proc runBackgroundTasks*(status: var EditorStatus) =
 
           status.autoBackupStatus.lastBackupTime = now()
 
-  block updateGitInfo:
+  if status.settings.git.showChangedLine:
     ## Start background tasks for git info updates.
 
     let
