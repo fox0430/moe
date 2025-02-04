@@ -442,10 +442,10 @@ proc addNewBuffer*(
             if langId.isSome:
               newBufStatus.langId = langId.get
 
-            if newBufStatus.langId.len > 0 and
-               status.settings.lsp.languages.contains(newBufStatus.langId):
-                 if status.lspClients.contains(newBufStatus.langId):
-                   # textDocument/didOpen notification
+            if status.settings.lsp.languages.contains(newBufStatus.langId):
+              if status.lspClients.contains(newBufStatus.langId) and
+                 lspClient.isInitialized:
+                   # Send textDocument/didOpen notify
                    let err = waitFor lspClient.textDocumentDidOpen(
                      $newBufStatus.path.absolutePath,
                      newBufStatus.langId,
@@ -454,18 +454,18 @@ proc addNewBuffer*(
                      status.commandLine.writeLspInitializeError(
                        status.settings.lsp.languages[newBufStatus.langId].command,
                        err.error)
-                 else:
-                   # Start LSP server and initialization.
-                   let err = status.lspInitialize(
-                     $newBufStatus.openDir,
-                     newBufStatus.langId)
-                   if err.isErr:
-                     status.commandLine.writeLspInitializeError(
-                       status.settings.lsp.languages[newBufStatus.langId].command,
-                       err.error)
-                   else:
-                     status.commandLine.writeLspServerStart(
-                       status.settings.lsp.languages[newBufStatus.langId].command)
+              else:
+                # Start LSP server and initialization.
+                let err = status.lspInitialize(
+                  $newBufStatus.openDir,
+                  newBufStatus.langId)
+                if err.isErr:
+                  status.commandLine.writeLspInitializeError(
+                    status.settings.lsp.languages[newBufStatus.langId].command,
+                    err.error)
+                else:
+                  status.commandLine.writeLspServerStart(
+                    status.settings.lsp.languages[newBufStatus.langId].command)
 
     return Result[int, string].ok status.bufStatus.high
 
