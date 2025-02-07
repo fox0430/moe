@@ -84,6 +84,6 @@ jobs:
 
     - name: Run unit test
       run: |
-        nimble install stew # Workaround
+        nimble install stew # Workaround # Workaround
 
-        xvfb-run env XDG_SESSION_TYPE=x11 nimble test --verbose -y
+        xvfb-run env XDG_SESSION_TYPE=x11 nimble --useSystemNim test --verbose -y
