@@ -84,7 +84,7 @@ jobs:
 
     - uses: jiro4989/setup-nim-action@v2
       with:
-        nim-version: 2.2.0
+        nim-version: 2.2.2
         repo-token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Run unit test
