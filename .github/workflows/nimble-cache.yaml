@@ -51,20 +51,15 @@ jobs:
         path: ~/.nimble
         key: unit-tests-nimble-v2-${{ github.sha }}
 
-    - uses: nim-lang/setup-nimble-action@v1
+    - uses: jiro4989/setup-nim-action@v2
       with:
-        nimble-version: 'latest'
+        nim-version: 2.2.2
         repo-token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Install nimlangserver and nph
       run: |
         nimble install nimlangserver
         nimble install nph
-
-    - uses: jiro4989/setup-nim-action@v2
-      with:
-        nim-version: 2.2.2
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Build
       run: |
