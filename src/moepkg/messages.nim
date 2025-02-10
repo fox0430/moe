@@ -259,6 +259,11 @@ proc writeInRecordingOperations*(
     commandLine.writeMessageOnCommandLine(mess)
     addMessageLog mess
 
+proc writeLspServerStart*(commandLine: var CommandLine, command: Runes) =
+  let mess = fmt"LSP server starting: {$command}"
+  commandLine.writeMessageOnCommandLine(mess)
+  addMessageLog mess
+
 proc writeLspInitialized*(commandLine: var CommandLine, command: Runes) =
   let mess = fmt"LSP client initialized: {$command}"
   commandLine.writeMessageOnCommandLine(mess)

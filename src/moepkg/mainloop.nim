@@ -400,7 +400,7 @@ template isOpenCompletionWindowInCommandLine(
 
 proc openCompletionWindowInCommandLine(
   status: var EditorStatus,
-  isCurrentPosition: bool) =
+  isCurrentPosition: bool = false) =
     ## Open a completion window for the command line.
 
     let
@@ -485,9 +485,11 @@ proc updateCompletionWindowBufferInCommandLine(status: var EditorStatus) =
 
   if status.completionWindow.get.list.len > 0:
     if status.completionWindow.get.popupWindow.isNone:
-      status.completionWindow.get.reopen(
-        currentMainWindowNode.completionWindowPositionInEditor(
-          currentBufStatus))
+      let
+        posi = Position(
+          y: status.commandLine.window.y,
+          x: status.completionWindow.get.startPosition.column)
+      status.completionWindow.get.reopen(posi)
 
     # Update completion window buffer
     status.completionWindow.get.updateBuffer
@@ -672,7 +674,10 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
 
     if not isClosedCompletionWindow and
        status.isOpenCompletionWindowInCommandLine(key):
-         status.openCompletionWindowInCommandLine(isTabKey(key))
+         if status.commandLine.isPathArgs:
+           status.openCompletionWindowInCommandLine
+         else:
+           status.openCompletionWindowInCommandLine(isTabKey(key))
 
     if status.completionWindow.isSome:
       if isBackspaceKey(key):

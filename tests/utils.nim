@@ -27,6 +27,9 @@ proc resize*(status: var EditorStatus, h, w: int) =
 template isNimlangserverAvailable*(): bool =
   execCmdEx("nimlangserver --version").exitCode == 0
 
+template isNphAvailable*(): bool =
+  execCmdEx("nph --v").exitCode == 0
+
 proc removeLineEnd*(buf: string): string =
   result = buf
   result.stripLineEnd

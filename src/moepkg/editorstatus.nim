@@ -338,7 +338,7 @@ proc initLspExperimentalParams*(
 proc lspInitialize*(
   status: var EditorStatus,
   workspaceRoot, langId: string): Result[(), string] =
-    ## Initialize LSP client and server.
+    ## Start LSP server and initialize LSP client and server.
 
     if not status.lspClients.contains(langId):
       # Init a LSP client and start a LSP server.
@@ -455,7 +455,7 @@ proc addNewBuffer*(
                        status.settings.lsp.languages[newBufStatus.langId].command,
                        err.error)
                  else:
-                   # Start LSP initialization.
+                   # Start LSP server and initialization.
                    let err = status.lspInitialize(
                      $newBufStatus.openDir,
                      newBufStatus.langId)
@@ -463,6 +463,9 @@ proc addNewBuffer*(
                      status.commandLine.writeLspInitializeError(
                        status.settings.lsp.languages[newBufStatus.langId].command,
                        err.error)
+                   else:
+                     status.commandLine.writeLspServerStart(
+                       status.settings.lsp.languages[newBufStatus.langId].command)
 
     return Result[int, string].ok status.bufStatus.high
 
