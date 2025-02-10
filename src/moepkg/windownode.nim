@@ -73,7 +73,7 @@ proc initMainWindow*(): MainWindow =
   result.currentMainWindowNode = result.root.child[0]
   result.numOfMainWindow = 1
 
-proc verticalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
+proc verticalSplit*[T](n: var WindowNode, buffer: T): WindowNode =
   var parent = n.parent
 
   if parent.splitType == SplitType.vertical:
@@ -126,7 +126,7 @@ proc verticalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
 
     return node1
 
-proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
+proc horizontalSplit*[T](n: var WindowNode, buffer: T): WindowNode =
   var parent = n.parent
 
   if parent.splitType == SplitType.horizontal:
@@ -479,6 +479,8 @@ proc getKeyBlocking*(node: var WindowNode): Rune {.inline.} =
   return getKeyBlocking()
 
 proc eraseWindow*(node: var WindowNode) {.inline.} =
+  ## Erase ncurses window
+
   let
     nodeY =
       if node.y > 1: node.y
