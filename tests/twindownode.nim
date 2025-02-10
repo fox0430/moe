@@ -27,6 +27,137 @@ import utils
 
 import moepkg/windownode {.all.}
 
+suite "windownode: resize":
+  const
+    StatusLineHeight = 1
+    TabLineHeight = 1
+
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Single window":
+    status.resize(100, 100)
+
+    check mainWindow.numOfMainWindow == 1
+    check mainWindow.root.y == 1
+    check mainWindow.root.x == 0
+    check mainWindow.root.h == 100 - StatusLineHeight - TabLineHeight
+    check mainWindow.root.w == 100
+    check not mainWindow.root.isActualWin
+
+    check currentMainWindowNode.y == 0
+    check currentMainWindowNode.x == 0
+    check currentMainWindowNode.h == 100 - StatusLineHeight - TabLineHeight
+    check currentMainWindowNode.w == 100
+    check currentMainWindowNode.isActualWin
+    check currentMainWindowNode.windowIndex == 0
+
+  test "Horizontal split":
+    status.resize(100, 100)
+
+    status.horizontalSplitWindow
+    status.resize(100, 100)
+
+    check mainWindow.numOfMainWindow == 2
+    check mainWindow.root.y == 1
+    check mainWindow.root.x == 0
+    check mainWindow.root.h == 100 - StatusLineHeight - TabLineHeight
+    check mainWindow.root.w == 100
+    check not mainWindow.root.isActualWin
+
+    let nodes = mainWindow.root.getAllWindowNode
+
+    check nodes.len == 2
+
+    check nodes[0].y == 0
+    check nodes[0].x == 0
+    check nodes[0].h == 49
+    check nodes[0].w == 100
+    check nodes[0].isActualWin
+    check nodes[0].windowIndex == 0
+
+    check nodes[1].y == 49
+    check nodes[1].x == 0
+    check nodes[1].h == 49
+    check nodes[1].w == 100
+    check nodes[1].isActualWin
+    check nodes[1].windowIndex == 1
+
+  test "Vertical split":
+    status.resize(100, 100)
+
+    status.verticalSplitWindow
+    status.resize(100, 100)
+
+    check mainWindow.numOfMainWindow == 2
+    check mainWindow.root.y == 1
+    check mainWindow.root.x == 0
+    check mainWindow.root.h == 100 - StatusLineHeight - TabLineHeight
+    check mainWindow.root.w == 100
+    check not mainWindow.root.isActualWin
+
+    let nodes = mainWindow.root.getAllWindowNode
+
+    check nodes.len == 2
+
+    check nodes[0].y == 0
+    check nodes[0].x == 0
+    check nodes[0].h == 100 - StatusLineHeight - TabLineHeight
+    check nodes[0].w == 50
+    check nodes[0].isActualWin
+    check nodes[0].windowIndex == 0
+
+    check nodes[1].y == 0
+    check nodes[1].x == 50
+    check nodes[1].h == 100 - StatusLineHeight - TabLineHeight
+    check nodes[1].w == 50
+    check nodes[1].isActualWin
+    check nodes[1].windowIndex == 1
+
+  test "Vertical split and horizontal split":
+    status.resize(100, 100)
+
+    status.verticalSplitWindow
+    status.resize(100, 100)
+
+    status.horizontalSplitWindow
+    status.resize(100, 100)
+
+    check mainWindow.numOfMainWindow == 3
+    check mainWindow.root.y == 1
+    check mainWindow.root.x == 0
+    check mainWindow.root.h == 100 - StatusLineHeight - TabLineHeight
+    check mainWindow.root.w == 100
+    check not mainWindow.root.isActualWin
+
+    let nodes = mainWindow.root.getAllWindowNode
+
+    check nodes.len == 3
+
+    check nodes[0].y == 0
+    check nodes[0].x == 50
+    check nodes[0].h == 100 - StatusLineHeight - TabLineHeight
+    check nodes[0].w == 50
+    check nodes[0].isActualWin
+    check nodes[0].windowIndex == 0
+
+    check nodes[1].y == 0
+    check nodes[1].x == 0
+    check nodes[1].h == 49
+    check nodes[1].w == 50
+    check nodes[1].isActualWin
+    check nodes[1].windowIndex == 1
+
+    check nodes[2].y == 49
+    check nodes[2].x == 0
+    check nodes[2].h == 49
+    check nodes[2].w == 50
+    check nodes[2].isActualWin
+    check nodes[2].windowIndex == 2
+
 suite "windownode: absolutePosition":
   test "Enable EditorView.Sidebar":
     var status = initEditorStatus()
