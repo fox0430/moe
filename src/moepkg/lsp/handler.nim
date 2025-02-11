@@ -1280,7 +1280,7 @@ proc handleLspResponse*(status: var EditorStatus) =
 
       let r = status.handleLspServerRequest(resJson.get)
       if r.isErr:
-        error "lsp: {r.error}"
+        error fmt"lsp: {r.error}"
     elif resJson.get.isNotify:
       # The notification from the server.
 
@@ -1288,7 +1288,7 @@ proc handleLspResponse*(status: var EditorStatus) =
 
       let r = status.handleLspServerNotify(resJson.get)
       if r.isErr:
-        error "lsp: {r.error}"
+        error fmt"lsp: {r.error}"
     else:
       # The response from the server.
 
