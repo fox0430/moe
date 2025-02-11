@@ -502,14 +502,9 @@ proc searchFileMode*(
 
     if filerStatus.pathList.len == 0:
       # TODO: Fix
+      bufStatus.buffer = @["Not found"].toSeqRunes.toGapBuffer
+
       windowNode.eraseWindow
-
-      windowNode.window.get.write(
-        0,
-        0,
-        "Not found",
-        EditorColorPairIndex.commandLine.int16)
-
       windowNode.refreshWindow
       filerStatus.isUpdatePathList = true
 

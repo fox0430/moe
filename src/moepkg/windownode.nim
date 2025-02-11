@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[heapqueue, options, strformat, tables]
+import std/[heapqueue, options, strformat, strutils, tables]
 import ui, editorview, gapbuffer, color, cursor, highlight, unicodeext,
        independentutils, settings, undoredostack, folding
 
@@ -33,14 +33,14 @@ type
 
     parent*: WindowNode
     child*: seq[WindowNode]
+    window*: Option[Window] # Only root node
     splitType*: SplitType
-    window*: Option[Window]
     view*: EditorView
     cursor*: CursorPosition
     currentLine*, currentColumn*, expandedColumn*: int
     bufferIndex*: int
     windowIndex*: int
-    index*: int   ## Index as seen by parent node
+    index*: int   # Index as seen by parent node
     y*, x*, h*, w*: int
 
   MainWindow* = object
@@ -55,12 +55,12 @@ proc initWindowNode*(): WindowNode =
     node = WindowNode(
       child: @[],
       splitType: SplitType.vertical,
-      window: some(newWindow()),
       h: 1,
       w: 1)
     root = WindowNode(
       child: @[node],
       splitType: SplitType.vertical,
+      window: some(newWindow()),
       y: 0,
       x: 0,
       h: 1,
@@ -73,7 +73,7 @@ proc initMainWindow*(): MainWindow =
   result.currentMainWindowNode = result.root.child[0]
   result.numOfMainWindow = 1
 
-proc verticalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
+proc verticalSplit*[T](n: var WindowNode, buffer: T): WindowNode =
   var parent = n.parent
 
   if parent.splitType == SplitType.vertical:
@@ -81,7 +81,6 @@ proc verticalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
       parent: n.parent,
       child: @[],
       splitType: SplitType.vertical,
-      window: some(newWindow()),
       view: initEditorView(buffer, 1, 1),
       bufferIndex: n.bufferIndex,
       h: 1,
@@ -102,14 +101,12 @@ proc verticalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
         parent: n,
         child: @[],
         splitType: SplitType.vertical,
-        window: some(newWindow()),
         view: initEditorView(buffer, 1, 1),
         bufferIndex: n.bufferIndex)
       node2 = WindowNode(
         parent: n,
         child: @[],
         splitType: SplitType.vertical,
-        window: some(newWindow()),
         view: initEditorView(buffer, 1, 1),
         bufferIndex: n.bufferIndex)
 
@@ -129,7 +126,7 @@ proc verticalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
 
     return node1
 
-proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
+proc horizontalSplit*[T](n: var WindowNode, buffer: T): WindowNode =
   var parent = n.parent
 
   if parent.splitType == SplitType.horizontal:
@@ -137,7 +134,6 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
       parent: parent,
       child: @[],
       splitType: SplitType.horizontal,
-      window: some(newWindow()),
       view: initEditorView(buffer, 1, 1),
       bufferIndex: n.bufferIndex)
 
@@ -156,7 +152,6 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
       parent: n.parent,
       child: @[],
       splitType: SplitType.vertical,
-      window: some(newWindow()),
       view: initEditorView(buffer, 1, 1),
       bufferIndex: n.bufferIndex)
 
@@ -176,14 +171,12 @@ proc horizontalSplit*(n: var WindowNode, buffer: GapBuffer): WindowNode =
         parent: n,
         child: @[],
         splitType: SplitType.vertical,
-        window: some(newWindow()),
         view: initEditorView(buffer, 1, 1),
         bufferIndex: n.bufferIndex)
       node2 = WindowNode(
         parent: n,
         child: @[],
         splitType: SplitType.vertical,
-        window: some(newWindow()),
         view: initEditorView(buffer, 1, 1),
         bufferIndex: n.bufferIndex)
 
@@ -227,17 +220,24 @@ proc deleteWindowNode*(root: var WindowNode, windowIndex: int) =
       if node.child.len > 0:
         for node in node.child: qeue.push(node)
 
+template isActualWin*(n: WindowNode): bool = n.child.len == 0
+
+proc getRootWindowNode*(n: WindowNode): WindowNode =
+  result = n
+  while not result.parent.isNil: result = result.parent
+
 proc resize*(root: var WindowNode, position: Position, size: Size) =
   root.y = position.y
   root.x = position.x
   root.w = size.w
   root.h = size.h
 
+  # Resize curses window
+  root.window.get.resize(root.h, root.w, root.y, root.x)
+
   var
     qeue = initHeapQueue[WindowNode]()
     windowIndex = 0
-
-  const StatusBarLineHeight = 1
 
   for index, node in root.child:
     if root.splitType == SplitType.vertical:
@@ -254,7 +254,6 @@ proc resize*(root: var WindowNode, position: Position, size: Size) =
       else: node.x = root.x + (node.w * index)
 
       node.h = root.h
-      node.y = root.y
     else:
       # Horizontal split
 
@@ -265,20 +264,14 @@ proc resize*(root: var WindowNode, position: Position, size: Size) =
 
       # Calc window y
       if root.h mod root.child.len != 0 and index > 0:
-        node.y = (node.h * index) + (root.h mod root.child.len) + root.y
-      else: node.y = node.h * index + root.y
+        node.y = (node.h * index) + (root.h mod root.child.len)
+      else:
+        node.y = node.h * index
 
       node.w = root.w
       node.x = root.x
 
-    if node.window.isSome:
-      # Resize curses window
-      node.window.get.resize(
-        node.h - StatusBarLineHeight,
-        node.w,
-        node.y,
-        node.x)
-
+    if node.isActualWin:
       # Set windowIndex
       node.windowIndex = windowIndex
       inc(windowIndex)
@@ -325,13 +318,7 @@ proc resize*(root: var WindowNode, position: Position, size: Size) =
         child.w = parent.w
         child.x = parent.x
 
-      if child.window.isSome:
-        # Resize curses window
-        child.window.get.resize(
-          child.h - StatusBarLineHeight,
-          child.w,
-          child.y,
-          child.x)
+      if child.child.len == 0:
         # Set windowIndex
         child.windowIndex = windowIndex
         inc(windowIndex)
@@ -373,7 +360,7 @@ proc getAllWindowNode*(root: WindowNode): seq[WindowNode] =
   while qeue.len > 0:
     for i in 0 ..< qeue.len:
       let node = qeue.pop
-      if node.window.isSome: result.add(node)
+      if node.isActualWin: result.add(node)
 
       if node.child.len > 0:
         for node in node.child: qeue.push(node)
@@ -385,7 +372,7 @@ proc getAllBufferIndex*(root: WindowNode): seq[int]  =
   while qeue.len > 0:
     for i in 0 ..< qeue.len:
       let node = qeue.pop
-      if node.window.isSome:
+      if node.isActualWin:
         var exist = false
         for index in result:
           if index == node.bufferIndex:
@@ -412,7 +399,7 @@ proc countReferencedWindow*(root: WindowNode, bufferIndex: int): int =
   while qeue.len > 0:
     for i in 0 ..< qeue.len:
       let node = qeue.pop
-      if node.window.isSome and bufferIndex == node.bufferIndex: inc(result)
+      if node.isActualWin and bufferIndex == node.bufferIndex: inc(result)
 
       if node.child.len > 0:
         for node in node.child: qeue.push(node)
@@ -424,8 +411,9 @@ proc absolutePosition*(
 
     let
       relativePosition = windowNode.view.findCursorPosition(line, column)
+      root = windowNode.getRootWindowNode
 
-      y = windowNode.y + relativePosition.y
+      y = root.y + windowNode.y + relativePosition.y
       x =
         windowNode.x +
         relativePosition.x +
@@ -442,52 +430,82 @@ proc absolutePosition*(node: WindowNode): tuple[y, x: int] {.inline.} =
 proc rect*(node: WindowNode): WindowRect {.inline.} =
   Rect(y: node.y, x: node.x, w: node.w, h: node.h)
 
-proc moveCursor*(node: var WindowNode, line, column: int) =
-  if node.window.isSome:
-    node.currentLine = line
-    node.currentColumn = column
-    node.window.get.moveCursor(line, column)
-    node.window.get.refresh
+proc moveCursor*(node: var WindowNode, y, x: int) =
+  if node.isActualWin:
+    node.cursor.y = y
+    node.cursor.x = x
+
+    var root = node.getRootWindowNode
+    let
+      cursorY =
+        if node.y > 1: node.y + y
+        else: y
+      cursorX =
+        if node.x > 0: node.x + x
+        else: x
+    root.window.get.moveCursor(cursorY, cursorX)
+    root.window.get.refresh
 
 proc moveCursor*(node: var WindowNode, position: BufferPosition) {.inline.} =
   node.moveCursor(position.line, position.column)
 
-proc moveCursor*(node: var WindowNode) {.inline.} =
-  if node.window.isSome:
-    node.window.get.moveCursor(node.y, node.x)
-    node.window.get.refresh
+proc moveCursor*(node: var WindowNode) =
+  if node.isActualWin:
+    node.moveCursor(node.y, node.x)
 
-proc refreshWindow*(node: var WindowNode) {.inline.} =
-  if node.window.isSome: node.window.get.refresh
+proc refreshWindow*(node: var WindowNode) =
+  var root = node
+  while not root.parent.isNil: root = root.parent
+
+  root.window.get.refresh
 
 proc getKey*(node: var WindowNode): Option[Rune] {.inline.} =
   ## Non-blocking read.
 
-  if node.window.isSome:
-    node.refreshWindow
-    return getKey()
+  node.refreshWindow
+  return getKey()
 
 proc getKey*(node: var WindowNode, timeout: int): Option[Rune] {.inline.} =
   ## Non-blocking read.
   ## `timeout` is milliSeconds.
 
-  if node.window.isSome:
-    node.refreshWindow
-    return getKey(timeout)
+  node.refreshWindow
+  return getKey(timeout)
 
 proc getKeyBlocking*(node: var WindowNode): Rune {.inline.} =
   ## Blocking read.
 
-  if node.window.isSome:
-    node.refreshWindow
-    return getKeyBlocking()
+  node.refreshWindow
+  return getKeyBlocking()
 
 proc eraseWindow*(node: var WindowNode) {.inline.} =
-  if node.window.isSome: node.window.get.erase
+  ## Erase ncurses window
 
-proc getHeight*(node: var WindowNode): int {.inline.} = node.window.get.height
+  let
+    nodeY =
+      if node.y > 1: node.y
+      else: 0
+    nodeX =
+      if node.x > 0: node.x
+      else: 0
 
-proc getWidth*(node: var WindowNode): int {.inline.} = node.window.get.width
+    nodeSize = Size(h : node.h, w: node.w)
+
+  var root = node
+  while not root.parent.isNil: root = root.parent
+
+  for y in nodeY.. nodeY + nodeSize.h:
+    root.window.get.write(
+      y,
+      nodeX,
+      " ".repeat(nodeSize.w),
+      EditorColorPairIndex.default.int16,
+      Attribute.normal,
+      false)
+
+proc getHeight*(node: var WindowNode): int {.inline.} = node.h
+
+proc getWidth*(node: var WindowNode): int {.inline.} = node.w
 
 proc bufferPosition*(windowNode: WindowNode): BufferPosition {.inline.} =
   ## Return the current position.

@@ -212,11 +212,10 @@ proc lspHover*(status: var EditorStatus, res: JsonNode): Result[(), string] =
   var hoverWin = initHoverWindow(
     currentMainWindowNode,
     hover.get.get.toHoverContent)
-
-  # Keep the cursor position on currentMainWindowNode and display the hover
-  # window on the top., selectionrange
-  hoverWin.overwrite(currentMainWindowNode.window.get)
   hoverWin.refresh
+
+  # Keep the cursor position on currentMainWindowNode.
+  currentMainWindowNode.refreshWindow
 
   # Wait until any key is pressed.
   discard getKeyBlocking()
