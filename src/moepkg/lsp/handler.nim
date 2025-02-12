@@ -136,6 +136,8 @@ proc lspInitialized(
     for i in 0 .. status.bufStatus.high:
       template b: BufferStatus = status.bufStatus[i]
 
+      if b.langId != currentBufStatus.langId: continue
+
       block:
         # textDocument/didOpen notify
         let err = waitFor lspClient.textDocumentDidOpen(

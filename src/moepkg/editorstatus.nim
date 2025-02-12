@@ -349,18 +349,18 @@ proc lspInitialize*(
 
       status.lspClients[langId] = c.get
 
-    # Initialize request
-    let err = waitFor status.lspClients[langId].initialize(
-      status.bufStatus[^1].id,
-      initInitializeParams(
-        status.lspClients[langId].serverName,
-        workspaceRoot,
-        status.settings.lsp.languages[langId].trace,
-        initLspExperimentalParams(
+      # Send Initialize request
+      let err = waitFor status.lspClients[langId].initialize(
+        status.bufStatus[^1].id,
+        initInitializeParams(
           status.lspClients[langId].serverName,
-          status.settings.lsp.servers)))
-    if err.isErr:
-      return Result[(), string].err err.error
+          workspaceRoot,
+          status.settings.lsp.languages[langId].trace,
+          initLspExperimentalParams(
+            status.lspClients[langId].serverName,
+            status.settings.lsp.servers)))
+      if err.isErr:
+        return Result[(), string].err err.error
 
     return Result[(), string].ok ()
 
