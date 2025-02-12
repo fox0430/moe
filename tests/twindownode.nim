@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -26,6 +26,137 @@ import moepkg/[editorstatus, editorview, independentutils]
 import utils
 
 import moepkg/windownode {.all.}
+
+suite "windownode: resize":
+  const
+    StatusLineHeight = 1
+    TabLineHeight = 1
+
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Single window":
+    status.resize(100, 100)
+
+    check mainWindow.numOfMainWindow == 1
+    check mainWindow.root.y == 1
+    check mainWindow.root.x == 0
+    check mainWindow.root.h == 100 - StatusLineHeight - TabLineHeight
+    check mainWindow.root.w == 100
+    check not mainWindow.root.isActualWin
+
+    check currentMainWindowNode.y == 0
+    check currentMainWindowNode.x == 0
+    check currentMainWindowNode.h == 100 - StatusLineHeight - TabLineHeight
+    check currentMainWindowNode.w == 100
+    check currentMainWindowNode.isActualWin
+    check currentMainWindowNode.windowIndex == 0
+
+  test "Horizontal split":
+    status.resize(100, 100)
+
+    status.horizontalSplitWindow
+    status.resize(100, 100)
+
+    check mainWindow.numOfMainWindow == 2
+    check mainWindow.root.y == 1
+    check mainWindow.root.x == 0
+    check mainWindow.root.h == 100 - StatusLineHeight - TabLineHeight
+    check mainWindow.root.w == 100
+    check not mainWindow.root.isActualWin
+
+    let nodes = mainWindow.root.getAllWindowNode
+
+    check nodes.len == 2
+
+    check nodes[0].y == 0
+    check nodes[0].x == 0
+    check nodes[0].h == 49
+    check nodes[0].w == 100
+    check nodes[0].isActualWin
+    check nodes[0].windowIndex == 0
+
+    check nodes[1].y == 49
+    check nodes[1].x == 0
+    check nodes[1].h == 49
+    check nodes[1].w == 100
+    check nodes[1].isActualWin
+    check nodes[1].windowIndex == 1
+
+  test "Vertical split":
+    status.resize(100, 100)
+
+    status.verticalSplitWindow
+    status.resize(100, 100)
+
+    check mainWindow.numOfMainWindow == 2
+    check mainWindow.root.y == 1
+    check mainWindow.root.x == 0
+    check mainWindow.root.h == 100 - StatusLineHeight - TabLineHeight
+    check mainWindow.root.w == 100
+    check not mainWindow.root.isActualWin
+
+    let nodes = mainWindow.root.getAllWindowNode
+
+    check nodes.len == 2
+
+    check nodes[0].y == 0
+    check nodes[0].x == 0
+    check nodes[0].h == 100 - StatusLineHeight - TabLineHeight
+    check nodes[0].w == 50
+    check nodes[0].isActualWin
+    check nodes[0].windowIndex == 0
+
+    check nodes[1].y == 0
+    check nodes[1].x == 50
+    check nodes[1].h == 100 - StatusLineHeight - TabLineHeight
+    check nodes[1].w == 50
+    check nodes[1].isActualWin
+    check nodes[1].windowIndex == 1
+
+  test "Vertical split and horizontal split":
+    status.resize(100, 100)
+
+    status.verticalSplitWindow
+    status.resize(100, 100)
+
+    status.horizontalSplitWindow
+    status.resize(100, 100)
+
+    check mainWindow.numOfMainWindow == 3
+    check mainWindow.root.y == 1
+    check mainWindow.root.x == 0
+    check mainWindow.root.h == 100 - StatusLineHeight - TabLineHeight
+    check mainWindow.root.w == 100
+    check not mainWindow.root.isActualWin
+
+    let nodes = mainWindow.root.getAllWindowNode
+
+    check nodes.len == 3
+
+    check nodes[0].y == 0
+    check nodes[0].x == 50
+    check nodes[0].h == 100 - StatusLineHeight - TabLineHeight
+    check nodes[0].w == 50
+    check nodes[0].isActualWin
+    check nodes[0].windowIndex == 0
+
+    check nodes[1].y == 0
+    check nodes[1].x == 0
+    check nodes[1].h == 49
+    check nodes[1].w == 50
+    check nodes[1].isActualWin
+    check nodes[1].windowIndex == 1
+
+    check nodes[2].y == 49
+    check nodes[2].x == 0
+    check nodes[2].h == 49
+    check nodes[2].w == 50
+    check nodes[2].isActualWin
+    check nodes[2].windowIndex == 2
 
 suite "windownode: absolutePosition":
   test "Enable EditorView.Sidebar":
@@ -61,10 +192,10 @@ suite "windownode: moveCursor":
 
     currentMainWindowNode.moveCursor(BufferPosition(line: 10, column: 5))
 
-    check currentMainWindowNode.currentLine == 10
-    check currentMainWindowNode.currentColumn == 5
-    check currentMainWindowNode.window.get.y == beforeWindowPosition.y
-    check currentMainWindowNode.window.get.x == beforeWindowPosition.x
+    check currentMainWindowNode.cursor.y == 10
+    check currentMainWindowNode.cursor.x == 5
+    check currentMainWindowNode.y == beforeWindowPosition.y
+    check currentMainWindowNode.x == beforeWindowPosition.x
 
   test "Basic 2":
     var status = initEditorStatus()
@@ -78,7 +209,7 @@ suite "windownode: moveCursor":
 
     currentMainWindowNode.moveCursor(10, 5)
 
-    check currentMainWindowNode.currentLine == 10
-    check currentMainWindowNode.currentColumn == 5
-    check currentMainWindowNode.window.get.y == beforeWindowPosition.y
-    check currentMainWindowNode.window.get.x == beforeWindowPosition.x
+    check currentMainWindowNode.cursor.y == 10
+    check currentMainWindowNode.cursor.x == 5
+    check currentMainWindowNode.y == beforeWindowPosition.y
+    check currentMainWindowNode.x == beforeWindowPosition.x

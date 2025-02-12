@@ -216,11 +216,10 @@ proc lspHover*(status: var EditorStatus, res: JsonNode): Result[(), string] =
   var hoverWin = initHoverWindow(
     currentMainWindowNode,
     hover.get.get.toHoverContent)
-
-  # Keep the cursor position on currentMainWindowNode and display the hover
-  # window on the top., selectionrange
-  hoverWin.overwrite(currentMainWindowNode.window.get)
   hoverWin.refresh
+
+  # Keep the cursor position on currentMainWindowNode.
+  currentMainWindowNode.refreshWindow
 
   # Wait until any key is pressed.
   discard getKeyBlocking()
@@ -1285,7 +1284,7 @@ proc handleLspResponse*(status: var EditorStatus) =
 
       let r = status.handleLspServerRequest(resJson.get)
       if r.isErr:
-        error "lsp: {r.error}"
+        error fmt"lsp: {r.error}"
     elif resJson.get.isNotify:
       # The notification from the server.
 
@@ -1293,7 +1292,7 @@ proc handleLspResponse*(status: var EditorStatus) =
 
       let r = status.handleLspServerNotify(resJson.get)
       if r.isErr:
-        error "lsp: {r.error}"
+        error fmt"lsp: {r.error}"
     else:
       # The response from the server.
 

@@ -1804,7 +1804,7 @@ echo Ojb(n: 1)
       check not isTimeout
 
   test "Send textDocument/formatting":
-    if not isNimlangserverAvailable():
+    if not isNimlangserverAvailable() or not isNphAvailable():
       skip()
     else:
       const

@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[times, strformat, options]
+import std/[times, strformat]
 import bufferstatus, unicodeext, windownode, settings, gapbuffer
 
 proc getDebugModeBufferIndex*(bufStatuses: seq[BufferStatus]): int =
@@ -39,9 +39,7 @@ proc initDebugModeBuffer*(
     for n in windowNodes:
       result.add ru"-- WindowNode --"
 
-      let
-        haveCursesWin = if n.window.isSome: true else: false
-        isCurrentWindow = if n.windowIndex == currentWindowIndex: true else: false
+      let isCurrentWindow = n.windowIndex == currentWindowIndex
       if debugModeSettings.windowNode.currentWindow:
         result.add toRunes(fmt"  currentWindow           : {isCurrentWindow}")
       if debugModeSettings.windowNode.index:
@@ -57,7 +55,7 @@ proc initDebugModeBuffer*(
       if debugModeSettings.windowNode.splitType:
         result.add toRunes(fmt"  splitType               : {n.splitType}")
       if debugModeSettings.windowNode.haveCursesWin:
-        result.add toRunes(fmt"  HaveCursesWindow        : {haveCursesWin}")
+        result.add toRunes(fmt"  IsActualWin             : {n.isActualWin}")
       if debugModeSettings.windowNode.y:
         result.add toRunes(fmt"  y                       : {n.y}")
       if debugModeSettings.windowNode.x:

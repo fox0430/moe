@@ -30,7 +30,7 @@ type
       # The popup window for completion items.
     firstDisplayItemIndex: int
       # The index of first item to display.
-    startPosition: BufferPosition
+    startPosition*: BufferPosition
       # The first position of inserting text.
     inputText*: Runes
       # The text entered by the user.

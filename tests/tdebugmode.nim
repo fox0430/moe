@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -48,8 +48,8 @@ suite "Init debug mode buffer":
       ru"  parentIndex             : 0",
       ru"  child length            : 0",
       ru"  splitType               : vertical",
-      ru"  HaveCursesWindow        : true",
-      ru"  y                       : 1",
+      ru"  IsActualWin             : true",
+      ru"  y                       : 0",
       ru"  x                       : 0",
       ru"  h                       : 98",
       ru"  w                       : 100",
