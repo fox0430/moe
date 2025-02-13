@@ -86,4 +86,4 @@ jobs:
       run: |
         nimble install stew # Workaround
 
-        xvfb-run env XDG_SESSION_TYPE=x11 nimble --useSystemNim test --verbose -y
+        xvfb-run env XDG_SESSION_TYPE=x11 nimble test --verbose -y

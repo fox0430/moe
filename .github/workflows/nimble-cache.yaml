@@ -65,4 +65,4 @@ jobs:
       run: |
         nimble install stew # Workaround
 
-        nimble --useSystemNim build
+        nimble build
