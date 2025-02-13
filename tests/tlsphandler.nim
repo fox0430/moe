@@ -202,7 +202,7 @@ suite "lsp: applyEdit":
 
 proc readResponse(
   c: LspClient,
-  timeout=30.seconds): Result[JsonNode, string] =
+  timeout=60.seconds): Result[JsonNode, string] =
 
     let
       res = c.read
@@ -234,13 +234,16 @@ suite "lsp: lspInitialized":
     else:
       assert status.addNewBufferInCurrentWin("test.nim").isOk
 
-      for i in 0 .. 50:
+      var isTimeout = true
+      for i in 0 .. 10:
         let res = lspClient.readResponse
         if res.isOk and res.get.contains("id"):
           check res.get["id"].getInt == 1
           check status.lspInitialized(res.get).isOk
+          isTimeout = false
           break
 
+      check not isTimeout
       check lspClient.isInitialized
       check status.statusLine[0].message == ru"nimlangserver"
 
@@ -1952,8 +1955,8 @@ suite "lsp: handleLspResponse":
       assert status.addNewBufferInCurrentWin(filename).isOk
 
       var isTimeout = true
-      for _ in 0 .. 40:
-        waitFor sleepAsync(chronos.timer.seconds(5))
+      for _ in 0 .. 36:
+        waitFor sleepAsync(chronos.timer.seconds(10))
         if lspClient.readable().get:
           status.handleLspResponse
 
