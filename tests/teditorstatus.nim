@@ -1132,6 +1132,31 @@ suite "editorstatus: initLsp":
       const LanguageId = "nim"
       check status.lspInitialize(workspaceRoot, LanguageId).isOk
 
+  test "Don't send initialize request twice":
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      const LanguageId = "nim"
+      let path = $genOid() & ".nim"
+      var status = initEditorStatus()
+
+      status.settings.lsp.enable = true
+      status.settings.lsp.languages["nim"] = LspLanguageSettings(
+        extensions: @[LanguageId.toRunes],
+        command: ru"nimlangserver",
+        trace: TraceValue.verbose)
+
+      assert status.addNewBufferInCurrentWin(path).isOk
+
+      let workspaceRoot = getCurrentDir()
+
+      assert status.lspInitialize(workspaceRoot, LanguageId).isOk
+      let lastId = lspClient.lastId
+
+      # Again
+      assert status.lspInitialize(workspaceRoot, LanguageId).isOk
+      check lastId == lspClient.lastId
+
 suite "editorstatus: autoSave":
   const TestDir = "autoSaveTest"
   var filePath = ""

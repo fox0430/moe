@@ -133,31 +133,37 @@ proc lspInitialized(
       if err.isErr:
         return Result[(), string].err err.error
 
-    block:
-      # textDocument/didOpen notification
-      let err = waitFor lspClient.textDocumentDidOpen(
-        $currentBufStatus.path.absolutePath,
-        currentBufStatus.langId,
-        currentBufStatus.buffer.toString)
-      if err.isErr:
-        return Result[(), string].err err.error
+    for i in 0 .. status.bufStatus.high:
+      template b: BufferStatus = status.bufStatus[i]
 
-    block:
-      # textDocument/semanticTokens
-      let err = waitFor lspClient.textDocumentSemanticTokens(
-        currentBufStatus.id,
-        $currentBufStatus.path.absolutePath)
-      if err.isErr:
-        error fmt"lsp: {err.error}"
+      if b.langId != currentBufStatus.langId: continue
 
-      # textDocument/inlayHint
-      lspClient.sendLspInlayHintRequest(
-        currentBufStatus,
-        status.bufferIndexInCurrentWindow,
-        mainWindowNode)
+      block:
+        # textDocument/didOpen notify
+        let err = waitFor lspClient.textDocumentDidOpen(
+          $b.path.absolutePath,
+          b.langId,
+          b.buffer.toString)
+        if err.isErr:
+          return Result[(), string].err err.error
 
-      # textDocument/codelens
-      lspClient.sendLspCodeLens(currentBufStatus)
+      block:
+        # textDocument/semanticTokens req
+        let err = waitFor lspClient.textDocumentSemanticTokens(
+          b.id,
+          $b.path.absolutePath)
+        if err.isErr:
+          error fmt"lsp: {err.error}"
+
+      block:
+        # textDocument/inlayHint req
+        lspClient.sendLspInlayHintRequest(
+          b,
+          status.bufferIndexInCurrentWindow,
+          mainWindowNode)
+
+      # textDocument/codelens req
+      lspClient.sendLspCodeLens(b)
 
     status.commandLine.writeLspInitialized(
       status.settings.lsp.languages[currentBufStatus.langId].command)
