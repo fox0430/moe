@@ -25,6 +25,7 @@ on:
       - '.github/workflows/test.yaml'
       - 'example/**'
       - 'moe.nimble'
+      - 'nimble.lock'
       - 'src/**'
       - 'tests/**'
 
