@@ -1261,23 +1261,21 @@ suite "lsp: Send requests":
     if not isNimlangserverAvailable():
       skip()
     else:
-      const BufferId = 1
+      const
+        BufferId = 1
+        LanguageId = "nim"
+        Text = "let a: int = 0"
 
       block:
-        let
-          rootPath = getCurrentDir()
-          params = initInitializeParams(ServerName, rootPath, Trace)
+        let params = initInitializeParams(ServerName, rootDir, Trace)
         assert client.lspInitialize(BufferId, params).isOk
 
         # workspace/didChangeConfiguration notification
         assert (waitFor client.workspaceDidChangeConfiguration).isOk
 
-      const LanguageId = "nim"
-      let
-        path = getCurrentDir() / "src/moe.nim"
-        text = readFile(path)
+      let path = rootDir / "test.nim"
 
-      check (waitFor client.textDocumentDidOpen(path, LanguageId, text)).isOk
+      check (waitFor client.textDocumentDidOpen(path, LanguageId, Text)).isOk
 
   template prepareLsp(bufferId: int, langId: LanguageId, rootDir, path, text: string) =
     block:
