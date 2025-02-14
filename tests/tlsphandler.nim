@@ -1868,7 +1868,23 @@ suite "lsp: handleLspServerNotify":
       }
     }).isOk
 
-    check ru"lsp: progress: report: report" == status.commandLine.buffer
+  test "extension/satusUpdate":
+    check status.handleLspServerNotify(%*{
+      "jsonrpc": "2.0",
+      "method": "extension/statusUpdate",
+      "params": {
+        "lspPath":"nimlangserver",
+        "version":"1.8.1",
+        "nimsuggestInstances":[],
+        "openFiles":[],
+        "extensionCapabilities": [
+          "RestartSuggest",
+          "NimbleTask"
+        ],
+        "pendingRequests": [],
+        "projectErrors":[]
+      }
+    }).isOk
 
   test "$/progress (report with percentage)":
     lspClient.progress["token"] = ProgressReport(
