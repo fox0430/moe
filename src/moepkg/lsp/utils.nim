@@ -81,6 +81,7 @@ type
     textDocumentInlineValue
     textDocumentSignatureHelp
     textDocumentFormatting
+    extensionStatusUpdate
 
   CallHierarchyType* = enum
     prepare
@@ -195,6 +196,7 @@ proc toLspMethodStr*(m: LspMethod): string =
     of textDocumentInlineValue: "textDocument/inlineValue"
     of textDocumentSignatureHelp: "textDocument/signatureHelp"
     of textDocumentFormatting: "textDocument/formatting"
+    of extensionStatusUpdate: "extension/statusUpdate"
 
 proc parseTraceValue*(s: string): Result[TraceValue, string] =
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#traceValue
@@ -300,6 +302,8 @@ proc lspMethod*(j: JsonNode): LspMethodResult =
       LspMethodResult.ok textDocumentSignatureHelp
     of "textDocument/formatting":
       LspMethodResult.ok textDocumentFormatting
+    of "extension/statusUpdate":
+      LspMethodResult.ok extensionStatusUpdate
     else:
       LspMethodResult.err "Not supported: " & j["method"].getStr
 

@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -1219,7 +1219,6 @@ proc handleLspServerNotify(
 
     let lspMethod = notify.lspMethod
     if lspMethod.isErr:
-      # Ignore.
       return Result[(), string].err fmt"Invalid server notify: {notify}"
 
     case lspMethod.get:
@@ -1237,8 +1236,10 @@ proc handleLspServerNotify(
         return status.lspProgress(notify)
       of LspMethod.textDocumentPublishDiagnostics:
         return status.bufStatus.lspDiagnostics(notify)
-      else:
+      of LspMethod.extensionStatusUpdate:
         # Ignore
+        return Result[(), string].ok ()
+      else:
         return Result[(), string].err fmt"Not supported: {notify}"
 
 proc containsBufferId(
