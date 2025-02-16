@@ -22,9 +22,11 @@ import std/[unittest, osproc, options, sequtils, json]
 import pkg/results
 
 import moepkg/lsp/selectionrange
-import moepkg/[highlight, independentutils, editorstatus, gapbuffer, unicodeext,
-               bufferstatus, movement, registers, settings, clipboard, folding,
-               ui]
+import
+  moepkg/[
+    highlight, independentutils, editorstatus, gapbuffer, unicodeext, bufferstatus,
+    movement, registers, settings, clipboard, folding, ui,
+  ]
 
 import utils
 
@@ -32,9 +34,8 @@ import moepkg/visualmode {.all.}
 
 proc initSelectedArea(status: var EditorStatus) =
   currentBufStatus.selectedArea = initSelectedArea(
-    currentMainWindowNode.currentLine,
-    currentMainWindowNode.currentColumn)
-    .some
+    currentMainWindowNode.currentLine, currentMainWindowNode.currentColumn
+  ).some
 
 suite "Visual mode: Move right":
   var status: EditorStatus
@@ -77,9 +78,9 @@ suite "Visual mode: Delete buffer":
     currentBufStatus.buffer = initGapBuffer(@[ru"abcd"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.changeMode(Mode.visual)
     status.resize(100, 100)
@@ -104,9 +105,9 @@ suite "Visual mode: Delete buffer":
     currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"b", ru"c"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.changeMode(Mode.visual)
 
@@ -131,9 +132,9 @@ suite "Visual mode: Delete buffer":
     currentBufStatus.buffer = initGapBuffer(@[ru"ab", ru"cdef"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.changeMode(Mode.visual)
 
@@ -160,9 +161,9 @@ suite "Visual mode: Delete buffer":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"defg"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -193,9 +194,9 @@ suite "Visual mode: Delete buffer":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -223,9 +224,9 @@ suite "Visual mode: Delete buffer":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
     status.update
@@ -247,9 +248,9 @@ suite "Visual mode: Delete buffer":
     currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"", ru"a"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -274,9 +275,9 @@ suite "Visual mode: Delete buffer":
     currentBufStatus.buffer = initGapBuffer(@[ru"a b c"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -303,9 +304,9 @@ suite "Visual mode: Delete buffer":
     currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.changeMode(Mode.visual)
     status.resize(100, 100)
@@ -332,9 +333,9 @@ suite "Visual mode: Delete buffer":
     currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 1, last: 2)]
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.changeMode(Mode.visual)
     status.resize(100, 100)
@@ -350,9 +351,7 @@ suite "Visual mode: Delete buffer":
 
     check currentBufStatus.buffer.toSeqRunes == @["b", "c"].toSeqRunes
 
-    check currentMainWindowNode.view.foldingRanges == @[
-      FoldingRange(first: 0, last: 1)
-    ]
+    check currentMainWindowNode.view.foldingRanges == @[FoldingRange(first: 0, last: 1)]
 
 suite "Visual mode: Yank buffer (Disable clipboard)":
   test "Yank lines":
@@ -361,9 +360,9 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -379,16 +378,13 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
     let
       area = currentBufStatus.selectedArea
-      firstCursorPosition = BufferPosition(
-        line: area.get.startLine,
-        column: area.get.startColumn)
+      firstCursorPosition =
+        BufferPosition(line: area.get.startLine, column: area.get.startColumn)
     status.settings.clipboard.enable = false
     currentBufStatus.yankBuffer(
-      status.registers,
-      currentMainWindowNode,
-      area.get,
-      firstCursorPosition,
-      status.settings)
+      status.registers, currentMainWindowNode, area.get, firstCursorPosition,
+      status.settings,
+    )
 
     check status.registers.getNoNamedRegister.isLine
     check status.registers.getNoNamedRegister.buffer == @[ru"abc", ru"def"]
@@ -399,9 +395,9 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -416,16 +412,13 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
     let
       area = currentBufStatus.selectedArea
-      firstCursorPosition = BufferPosition(
-        line: area.get.startLine,
-        column: area.get.startColumn)
+      firstCursorPosition =
+        BufferPosition(line: area.get.startLine, column: area.get.startColumn)
     status.settings.clipboard.enable = false
     currentBufStatus.yankBuffer(
-      status.registers,
-      currentMainWindowNode,
-      area.get,
-      firstCursorPosition,
-      status.settings)
+      status.registers, currentMainWindowNode, area.get, firstCursorPosition,
+      status.settings,
+    )
 
     check not status.registers.getNoNamedRegister.isLine
     check status.registers.getNoNamedRegister.buffer == @[ru"abc"]
@@ -438,9 +431,9 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     status.initSelectedArea
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -451,16 +444,13 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
     let
       area = currentBufStatus.selectedArea
-      firstCursorPosition = BufferPosition(
-        line: area.get.startLine,
-        column: area.get.startColumn)
+      firstCursorPosition =
+        BufferPosition(line: area.get.startLine, column: area.get.startColumn)
     status.settings.clipboard.enable = false
     currentBufStatus.yankBuffer(
-      status.registers,
-      currentMainWindowNode,
-      area.get,
-      firstCursorPosition,
-      status.settings)
+      status.registers, currentMainWindowNode, area.get, firstCursorPosition,
+      status.settings,
+    )
 
     check not status.registers.getNoNamedRegister.isLine
     check status.registers.getNoNamedRegister.buffer[^1] == ru"abc"
@@ -473,9 +463,9 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     status.initSelectedArea
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -486,16 +476,13 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
     let
       area = currentBufStatus.selectedArea
-      firstCursorPosition = BufferPosition(
-        line: area.get.startLine,
-        column: area.get.startColumn)
+      firstCursorPosition =
+        BufferPosition(line: area.get.startLine, column: area.get.startColumn)
     status.settings.clipboard.enable = false
     currentBufStatus.yankBuffer(
-      status.registers,
-      currentMainWindowNode,
-      area.get,
-      firstCursorPosition,
-      status.settings)
+      status.registers, currentMainWindowNode, area.get, firstCursorPosition,
+      status.settings,
+    )
 
     check status.registers.getNoNamedRegister.isLine
     check status.registers.getNoNamedRegister.buffer == @[ru"abc", ru""]
@@ -508,9 +495,9 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     status.initSelectedArea
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -519,16 +506,13 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
     let
       area = currentBufStatus.selectedArea
-      firstCursorPosition = BufferPosition(
-        line: area.get.startLine,
-        column: area.get.startColumn)
+      firstCursorPosition =
+        BufferPosition(line: area.get.startLine, column: area.get.startColumn)
     status.settings.clipboard.enable = false
     currentBufStatus.yankBuffer(
-      status.registers,
-      currentMainWindowNode,
-      area.get,
-      firstCursorPosition,
-      status.settings)
+      status.registers, currentMainWindowNode, area.get, firstCursorPosition,
+      status.settings,
+    )
 
     check status.registers.getNoNamedRegister.isLine
     check status.registers.getNoNamedRegister.buffer == @[ru""]
@@ -540,9 +524,9 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -555,23 +539,18 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
     let
       area = currentBufStatus.selectedArea
-      firstCursorPosition = BufferPosition(
-        line: area.get.startLine,
-        column: area.get.startColumn)
+      firstCursorPosition =
+        BufferPosition(line: area.get.startLine, column: area.get.startColumn)
     status.settings.clipboard.enable = false
     currentBufStatus.yankBuffer(
-      status.registers,
-      currentMainWindowNode,
-      area.get,
-      firstCursorPosition,
-      status.settings)
+      status.registers, currentMainWindowNode, area.get, firstCursorPosition,
+      status.settings,
+    )
 
     check status.registers.getNoNamedRegister.isLine
     check status.registers.getNoNamedRegister.buffer == @["a", "b", "c"].toSeqRunes
 
-    check currentMainWindowNode.view.foldingRanges == @[
-      FoldingRange(first: 0, last: 1)
-    ]
+    check currentMainWindowNode.view.foldingRanges == @[FoldingRange(first: 0, last: 1)]
 
   test "Contains folding line":
     var status = initEditorStatus()
@@ -581,9 +560,9 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     status.settings.clipboard.enable = false
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -596,19 +575,15 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
     let
       area = currentBufStatus.selectedArea
-      firstCursorPosition = BufferPosition(
-        line: area.get.startLine,
-        column: area.get.startColumn)
+      firstCursorPosition =
+        BufferPosition(line: area.get.startLine, column: area.get.startColumn)
     currentBufStatus.yankBuffer(
-      status.registers,
-      currentMainWindowNode,
-      area.get,
-      firstCursorPosition,
-      status.settings)
+      status.registers, currentMainWindowNode, area.get, firstCursorPosition,
+      status.settings,
+    )
 
     check status.registers.getNoNamedRegister.isLine
-    check status.registers.getNoNamedRegister.buffer == @["a", "b", "c"]
-      .toSeqRunes
+    check status.registers.getNoNamedRegister.buffer == @["a", "b", "c"].toSeqRunes
 
 suite "Visual block mode: Yank buffer (Disable clipboard)":
   test "Yank lines 1":
@@ -617,9 +592,9 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -633,10 +608,8 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
     let area = currentBufStatus.selectedArea
     status.settings.clipboard.enable = false
     currentBufStatus.yankBufferBlock(
-      status.registers,
-      currentMainWindowNode,
-      area.get,
-      status.settings)
+      status.registers, currentMainWindowNode, area.get, status.settings
+    )
 
     check status.registers.getNoNamedRegister.isLine
     check status.registers.getNoNamedRegister.buffer == @[ru"a", ru"d"]
@@ -647,9 +620,9 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"d"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -667,10 +640,8 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
     let area = currentBufStatus.selectedArea
     status.settings.clipboard.enable = false
     currentBufStatus.yankBufferBlock(
-      status.registers,
-      currentMainWindowNode,
-      area.get,
-      status.settings)
+      status.registers, currentMainWindowNode, area.get, status.settings
+    )
 
     check status.registers.getNoNamedRegister.isLine
     check status.registers.getNoNamedRegister.buffer == @[ru"ab", ru"d"]
@@ -681,9 +652,9 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"d"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -708,9 +679,9 @@ suite "Visual block mode: Delete buffer (Disable clipboard)":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -724,11 +695,9 @@ suite "Visual block mode: Delete buffer (Disable clipboard)":
     let area = currentBufStatus.selectedArea
     status.settings.clipboard.enable = false
     currentBufStatus.deleteBufferBlock(
-      status.registers,
-      currentMainWindowNode,
-      area.get,
-      status.settings,
-      status.commandLine)
+      status.registers, currentMainWindowNode, area.get, status.settings,
+      status.commandLine,
+    )
 
     check(currentBufStatus.buffer[0] == ru"bc")
     check(currentBufStatus.buffer[1] == ru"ef")
@@ -748,9 +717,9 @@ suite "Visual mode: Yank buffer (Enable clipboard)":
       status.initSelectedArea
 
       currentBufStatus.highlight = initHighlight(
-        currentBufStatus.buffer.toSeqRunes,
-        status.settings.highlight.reservedWords,
-        currentBufStatus.language)
+        currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+        currentBufStatus.language,
+      )
 
       status.changeMode(Mode.visual)
 
@@ -762,19 +731,16 @@ suite "Visual mode: Yank buffer (Enable clipboard)":
 
       let
         area = currentBufStatus.selectedArea
-        firstCursorPosition = BufferPosition(
-          line: area.get.startLine,
-          column: area.get.startColumn)
+        firstCursorPosition =
+          BufferPosition(line: area.get.startLine, column: area.get.startColumn)
 
       status.settings.clipboard.enable = true
       status.registers.setClipboardTool(ClipboardTool.xsel)
 
       currentBufStatus.yankBuffer(
-        status.registers,
-        currentMainWindowNode,
-        area.get,
-        firstCursorPosition,
-        status.settings)
+        status.registers, currentMainWindowNode, area.get, firstCursorPosition,
+        status.settings,
+      )
 
       check getXselBuffer().removeLineEnd == "abc"
 
@@ -789,18 +755,17 @@ suite "Visual mode: Yank buffer (Enable clipboard)":
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
       currentBufStatus.highlight = initHighlight(
-        currentBufStatus.buffer.toSeqRunes,
-        status.settings.highlight.reservedWords,
-        currentBufStatus.language)
+        currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+        currentBufStatus.language,
+      )
 
       status.resize(100, 100)
 
       status.changeMode(Mode.visual)
 
       currentBufStatus.selectedArea = initSelectedArea(
-        currentMainWindowNode.currentLine,
-        currentMainWindowNode.currentColumn)
-        .some
+        currentMainWindowNode.currentLine, currentMainWindowNode.currentColumn
+      ).some
 
       currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
       status.update
@@ -810,19 +775,16 @@ suite "Visual mode: Yank buffer (Enable clipboard)":
 
       let
         area = currentBufStatus.selectedArea
-        firstCursorPosition = BufferPosition(
-          line: area.get.startLine,
-          column: area.get.startColumn)
+        firstCursorPosition =
+          BufferPosition(line: area.get.startLine, column: area.get.startColumn)
 
       status.settings.clipboard.enable = true
       status.registers.setClipboardTool(ClipboardTool.xsel)
 
       currentBufStatus.yankBuffer(
-        status.registers,
-        currentMainWindowNode,
-        area.get,
-        firstCursorPosition,
-        status.settings)
+        status.registers, currentMainWindowNode, area.get, firstCursorPosition,
+        status.settings,
+      )
 
       check getXselBuffer().removeLineEnd == "abc\ndef"
 
@@ -838,18 +800,17 @@ suite "Visual block mode: Yank buffer (Enable clipboard) 1":
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
       currentBufStatus.highlight = initHighlight(
-        currentBufStatus.buffer.toSeqRunes,
-        status.settings.highlight.reservedWords,
-        currentBufStatus.language)
+        currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+        currentBufStatus.language,
+      )
 
       status.resize(100, 100)
 
       status.changeMode(Mode.visualBlock)
 
       currentBufStatus.selectedArea = initSelectedArea(
-        currentMainWindowNode.currentLine,
-        currentMainWindowNode.currentColumn)
-        .some
+        currentMainWindowNode.currentLine, currentMainWindowNode.currentColumn
+      ).some
 
       currentBufStatus.keyDown(currentMainWindowNode)
       status.update
@@ -860,10 +821,8 @@ suite "Visual block mode: Yank buffer (Enable clipboard) 1":
       status.registers.setClipboardTool(ClipboardTool.xsel)
 
       currentBufStatus.yankBufferBlock(
-        status.registers,
-        currentMainWindowNode,
-        area.get,
-        status.settings)
+        status.registers, currentMainWindowNode, area.get, status.settings
+      )
 
       check getXselBuffer().removeLineEnd == "a\nd"
 
@@ -878,18 +837,17 @@ suite "Visual block mode: Yank buffer (Enable clipboard) 1":
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"d"])
 
       currentBufStatus.highlight = initHighlight(
-        currentBufStatus.buffer.toSeqRunes,
-        status.settings.highlight.reservedWords,
-        currentBufStatus.language)
+        currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+        currentBufStatus.language,
+      )
 
       status.resize(100, 100)
 
       status.changeMode(Mode.visualBlock)
 
       currentBufStatus.selectedArea = initSelectedArea(
-        currentMainWindowNode.currentLine,
-        currentMainWindowNode.currentColumn)
-        .some
+        currentMainWindowNode.currentLine, currentMainWindowNode.currentColumn
+      ).some
 
       currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
       status.update
@@ -903,10 +861,8 @@ suite "Visual block mode: Yank buffer (Enable clipboard) 1":
       status.registers.setClipboardTool(ClipboardTool.xsel)
 
       currentBufStatus.yankBufferBlock(
-        status.registers,
-        currentMainWindowNode,
-        area.get,
-        status.settings)
+        status.registers, currentMainWindowNode, area.get, status.settings
+      )
 
       check getXselBuffer().removeLineEnd == "ab\nd"
 
@@ -922,18 +878,17 @@ suite "Visual block mode: Delete buffer":
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
       currentBufStatus.highlight = initHighlight(
-        currentBufStatus.buffer.toSeqRunes,
-        status.settings.highlight.reservedWords,
-        currentBufStatus.language)
+        currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+        currentBufStatus.language,
+      )
 
       status.resize(100, 100)
 
       status.changeMode(Mode.visualBlock)
 
       currentBufStatus.selectedArea = initSelectedArea(
-        currentMainWindowNode.currentLine,
-        currentMainWindowNode.currentColumn)
-        .some
+        currentMainWindowNode.currentLine, currentMainWindowNode.currentColumn
+      ).some
 
       currentBufStatus.keyDown(currentMainWindowNode)
       status.update
@@ -944,11 +899,9 @@ suite "Visual block mode: Delete buffer":
       status.registers.setClipboardTool(ClipboardTool.xsel)
 
       currentBufStatus.deleteBufferBlock(
-        status.registers,
-        currentMainWindowNode,
-        area.get,
-        status.settings,
-        status.commandLine)
+        status.registers, currentMainWindowNode, area.get, status.settings,
+        status.commandLine,
+      )
 
       check getXselBuffer().removeLineEnd == "a\nd"
 
@@ -963,18 +916,17 @@ suite "Visual block mode: Delete buffer":
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"", ru"edf"])
 
       currentBufStatus.highlight = initHighlight(
-        currentBufStatus.buffer.toSeqRunes,
-        status.settings.highlight.reservedWords,
-        currentBufStatus.language)
+        currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+        currentBufStatus.language,
+      )
 
       status.resize(100, 100)
 
       status.changeMode(Mode.visualBlock)
 
       currentBufStatus.selectedArea = initSelectedArea(
-        currentMainWindowNode.currentLine,
-        currentMainWindowNode.currentColumn)
-        .some
+        currentMainWindowNode.currentLine, currentMainWindowNode.currentColumn
+      ).some
 
       for i in 0 ..< 2:
         currentBufStatus.keyDown(currentMainWindowNode)
@@ -986,11 +938,9 @@ suite "Visual block mode: Delete buffer":
       status.registers.setClipboardTool(ClipboardTool.xsel)
 
       currentBufStatus.deleteBufferBlock(
-        status.registers,
-        currentMainWindowNode,
-        area.get,
-        status.settings,
-        status.commandLine)
+        status.registers, currentMainWindowNode, area.get, status.settings,
+        status.commandLine,
+      )
 
   test "Fix #885":
     if not isXselAvailable():
@@ -1003,18 +953,17 @@ suite "Visual block mode: Delete buffer":
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"de", ru"fgh"])
 
       currentBufStatus.highlight = initHighlight(
-        currentBufStatus.buffer.toSeqRunes,
-        status.settings.highlight.reservedWords,
-        currentBufStatus.language)
+        currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+        currentBufStatus.language,
+      )
 
       status.resize(100, 100)
 
       status.changeMode(Mode.visualBlock)
 
       currentBufStatus.selectedArea = initSelectedArea(
-        currentMainWindowNode.currentLine,
-        currentMainWindowNode.currentColumn)
-        .some
+        currentMainWindowNode.currentLine, currentMainWindowNode.currentColumn
+      ).some
 
       currentBufStatus.keyRight(currentMainWindowNode)
       for i in 0 ..< 2:
@@ -1027,11 +976,9 @@ suite "Visual block mode: Delete buffer":
       status.registers.setClipboardTool(ClipboardTool.xsel)
 
       currentBufStatus.deleteBufferBlock(
-        status.registers,
-        currentMainWindowNode,
-        area.get,
-        status.settings,
-        status.commandLine)
+        status.registers, currentMainWindowNode, area.get, status.settings,
+        status.commandLine,
+      )
 
       check currentBufStatus.buffer[0] == ru"c"
       check currentBufStatus.buffer[1] == ru""
@@ -1048,9 +995,9 @@ suite "Visual mode: Join lines":
     currentBufStatus.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1062,10 +1009,7 @@ suite "Visual mode: Join lines":
     status.update
 
     let area = currentBufStatus.selectedArea
-    currentBufStatus.joinLines(
-      currentMainWindowNode,
-      area.get,
-      status.commandLine)
+    currentBufStatus.joinLines(currentMainWindowNode, area.get, status.commandLine)
 
     check currentBufStatus.buffer.toSeqRunes == @["abcdef", "ghi"].toSeqRunes
 
@@ -1074,9 +1018,9 @@ suite "Visual mode: Join lines":
     currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1088,10 +1032,7 @@ suite "Visual mode: Join lines":
     status.update
 
     let area = currentBufStatus.selectedArea
-    currentBufStatus.joinLines(
-      currentMainWindowNode,
-      area.get,
-      status.commandLine)
+    currentBufStatus.joinLines(currentMainWindowNode, area.get, status.commandLine)
 
     check currentBufStatus.buffer.toSeqRunes == @["abc"].toSeqRunes
 
@@ -1104,9 +1045,9 @@ suite "Visual block mode: Join lines":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1121,10 +1062,7 @@ suite "Visual block mode: Join lines":
     let area = currentBufStatus.selectedArea
 
     status.update
-    currentBufStatus.joinLines(
-      currentMainWindowNode,
-      area.get,
-      status.commandLine)
+    currentBufStatus.joinLines(currentMainWindowNode, area.get, status.commandLine)
 
     check(currentBufStatus.buffer.len == 1)
     check(currentBufStatus.buffer[0] == ru"abcdefghi")
@@ -1140,9 +1078,9 @@ suite "Visual mode: Add indent":
     currentBufStatus.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1157,17 +1095,16 @@ suite "Visual mode: Add indent":
     status.update
     status.visualCommand(currentBufStatus.selectedArea.get, ru">")
 
-    check currentBufStatus.buffer.toSeqRunes == @["  abc", "  def", "  ghi"]
-      .toSeqRunes
+    check currentBufStatus.buffer.toSeqRunes == @["  abc", "  def", "  ghi"].toSeqRunes
 
   test "Contains folding lines":
     currentBufStatus.buffer = @["a", "b", "c"].toSeqRunes.toGapBuffer
     currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1180,8 +1117,7 @@ suite "Visual mode: Add indent":
 
     status.visualCommand(currentBufStatus.selectedArea.get, ru">")
 
-    check currentBufStatus.buffer.toSeqRunes == @["  a", "  b", "  c"]
-      .toSeqRunes
+    check currentBufStatus.buffer.toSeqRunes == @["  a", "  b", "  c"].toSeqRunes
 
     check currentMainWindowNode.view.foldingRanges.len == 0
 
@@ -1192,9 +1128,9 @@ suite "Visual block mode: Add indent":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1221,14 +1157,12 @@ suite "Visual mode: Delete indent":
     assert status.addNewBufferInCurrentWin.isOk
 
   test "Delete 1 indent":
-    currentBufStatus.buffer = @["  abc", "  def", "  ghi"]
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer = @["  abc", "  def", "  ghi"].toSeqRunes.toGapBuffer
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1249,9 +1183,9 @@ suite "Visual mode: Delete indent":
     currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1275,9 +1209,9 @@ suite "Visual block mode: Delete indent":
     currentBufStatus.buffer = initGapBuffer(@[ru"  abc", ru"  def", ru"  ghi"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1303,9 +1237,9 @@ suite "Visual mode: Converts string into lower-case string":
     currentBufStatus.buffer = initGapBuffer(@[ru"ABC"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1327,9 +1261,9 @@ suite "Visual mode: Converts string into lower-case string":
     currentBufStatus.buffer = initGapBuffer(@[ru"AあbC"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1351,9 +1285,9 @@ suite "Visual mode: Converts string into lower-case string":
     currentBufStatus.buffer = initGapBuffer(@[ru"ABC", ru"DEF"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1374,9 +1308,9 @@ suite "Visual mode: Converts string into lower-case string":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"ABC", ru"", ru"DEF", ru""])
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1400,9 +1334,9 @@ suite "Visual block mode: Converts string into lower-case string":
     currentBufStatus.buffer = initGapBuffer(@[ru"ABC"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1424,9 +1358,9 @@ suite "Visual block mode: Converts string into lower-case string":
     currentBufStatus.buffer = initGapBuffer(@[ru"ABC", ru"DEF"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1452,9 +1386,9 @@ suite "Visual mode: Converts string into upper-case string":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1476,9 +1410,9 @@ suite "Visual mode: Converts string into upper-case string":
     currentBufStatus.buffer = initGapBuffer(@[ru"aあBc"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1500,9 +1434,9 @@ suite "Visual mode: Converts string into upper-case string":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1523,9 +1457,9 @@ suite "Visual mode: Converts string into upper-case string":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"", ru"def", ru""])
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1549,9 +1483,9 @@ suite "Visual mode: Movement":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1571,9 +1505,9 @@ suite "Visual block mode: Converts string into upper-case string":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1595,9 +1529,9 @@ suite "Visual block mode: Converts string into upper-case string":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1665,9 +1599,9 @@ suite "Visual mode: Replace characters":
     currentBufStatus.buffer = @[""].toSeqRunes.toGapBuffer
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1681,7 +1615,8 @@ suite "Visual mode: Replace characters":
       currentMainWindowNode,
       currentBufStatus.selectedArea.get,
       ru 'a',
-      status.commandLine)
+      status.commandLine,
+    )
 
     check currentBufStatus.buffer.toSeqRunes == @[ru""]
 
@@ -1689,9 +1624,9 @@ suite "Visual mode: Replace characters":
     currentBufStatus.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1700,28 +1635,22 @@ suite "Visual mode: Replace characters":
     status.initSelectedArea
     status.update
 
-    var selectedArea = SelectedArea(
-      startLine: 0,
-      startColumn: 0,
-      endLine: 2,
-      endColumn: 2)
+    var selectedArea =
+      SelectedArea(startLine: 0, startColumn: 0, endLine: 2, endColumn: 2)
 
     currentBufStatus.replaceCharacter(
-      currentMainWindowNode,
-      selectedArea,
-      ru'z',
-      status.commandLine)
+      currentMainWindowNode, selectedArea, ru 'z', status.commandLine
+    )
 
-    check currentBufStatus.buffer.toSeqRunes == @["zzz", "zzz", "zzz"]
-      .toSeqRunes
+    check currentBufStatus.buffer.toSeqRunes == @["zzz", "zzz", "zzz"].toSeqRunes
 
   test "Over end of the line":
     currentBufStatus.buffer = @["abc"].toSeqRunes.toGapBuffer
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1730,17 +1659,12 @@ suite "Visual mode: Replace characters":
     status.initSelectedArea
     status.update
 
-    var selectedArea = SelectedArea(
-      startLine: 0,
-      startColumn: 0,
-      endLine: 0,
-      endColumn: 3)
+    var selectedArea =
+      SelectedArea(startLine: 0, startColumn: 0, endLine: 0, endColumn: 3)
 
     currentBufStatus.replaceCharacter(
-      currentMainWindowNode,
-      selectedArea,
-      ru'z',
-      status.commandLine)
+      currentMainWindowNode, selectedArea, ru 'z', status.commandLine
+    )
 
     check currentBufStatus.buffer.toSeqRunes == @["zzz"].toSeqRunes
 
@@ -1749,9 +1673,9 @@ suite "Visual mode: Replace characters":
     currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1760,20 +1684,14 @@ suite "Visual mode: Replace characters":
     status.initSelectedArea
     status.update
 
-    var selectedArea = SelectedArea(
-      startLine: 0,
-      startColumn: 0,
-      endLine: 2,
-      endColumn: 2)
+    var selectedArea =
+      SelectedArea(startLine: 0, startColumn: 0, endLine: 2, endColumn: 2)
 
     currentBufStatus.replaceCharacter(
-      currentMainWindowNode,
-      selectedArea,
-      ru'z',
-      status.commandLine)
+      currentMainWindowNode, selectedArea, ru 'z', status.commandLine
+    )
 
-    check currentBufStatus.buffer.toSeqRunes == @["zzz", "zzz", "zzz"]
-      .toSeqRunes
+    check currentBufStatus.buffer.toSeqRunes == @["zzz", "zzz", "zzz"].toSeqRunes
 
     check currentMainWindowNode.view.foldingRanges.len == 0
 
@@ -1784,9 +1702,9 @@ suite "Visual block mode: Replace characters":
     currentBufStatus.buffer = initGapBuffer(@[ru""])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1800,7 +1718,8 @@ suite "Visual block mode: Replace characters":
       currentMainWindowNode,
       currentBufStatus.selectedArea.get,
       ru 'a',
-      status.commandLine)
+      status.commandLine,
+    )
 
     check currentBufStatus.buffer.toSeqRunes == @[ru""]
 
@@ -1812,9 +1731,9 @@ suite "Visual mode: Run command when Readonly mode":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1836,9 +1755,9 @@ suite "Visual mode: Run command when Readonly mode":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1860,9 +1779,9 @@ suite "Visual mode: Run command when Readonly mode":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1884,9 +1803,9 @@ suite "Visual mode: Run command when Readonly mode":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru "def"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1913,9 +1832,9 @@ suite "Visual mode: Run command when Readonly mode":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1937,9 +1856,9 @@ suite "Visual mode: Run command when Readonly mode":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1961,9 +1880,9 @@ suite "Visual mode: Run command when Readonly mode":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -1977,7 +1896,8 @@ suite "Visual mode: Run command when Readonly mode":
       currentMainWindowNode,
       currentBufStatus.selectedArea.get,
       ru 'z',
-      status.commandLine)
+      status.commandLine,
+    )
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1989,9 +1909,9 @@ suite "Visual mode: Run command when Readonly mode":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -2051,9 +1971,9 @@ suite "Visual block mode: Run command when Readonly mode":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -2075,9 +1995,9 @@ suite "Visual block mode: Run command when Readonly mode":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -2098,9 +2018,9 @@ suite "Visual block mode: Run command when Readonly mode":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -2122,9 +2042,9 @@ suite "Visual block mode: Run command when Readonly mode":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -2146,9 +2066,9 @@ suite "Visual block mode: Run command when Readonly mode":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru "def"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -2175,9 +2095,9 @@ suite "Visual block mode: Run command when Readonly mode":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -2199,9 +2119,9 @@ suite "Visual block mode: Run command when Readonly mode":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -2223,9 +2143,9 @@ suite "Visual block mode: Run command when Readonly mode":
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -2239,7 +2159,8 @@ suite "Visual block mode: Run command when Readonly mode":
       currentMainWindowNode,
       currentBufStatus.selectedArea.get,
       ru 'z',
-      status.commandLine)
+      status.commandLine,
+    )
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
@@ -2250,9 +2171,9 @@ suite "Visual block mode: Movement":
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -2275,9 +2196,9 @@ suite "Visual line mode: Delete buffer":
     status.initSelectedArea
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.changeMode(Mode.visualLine)
 
@@ -2300,9 +2221,9 @@ suite "Visual line mode: Delete buffer":
     status.initSelectedArea
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.changeMode(Mode.visualLine)
 
@@ -2327,9 +2248,9 @@ suite "Visual line mode: Delete buffer":
     status.initSelectedArea
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.changeMode(Mode.visualLine)
 
@@ -2352,9 +2273,9 @@ suite "Visual line mode: Delete buffer":
     status.initSelectedArea
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.changeMode(Mode.visualLine)
 
@@ -2379,9 +2300,9 @@ suite "Visual line mode: Yank buffer (Disable clipboard)":
     status.initSelectedArea
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
     status.update
@@ -2394,16 +2315,13 @@ suite "Visual line mode: Yank buffer (Disable clipboard)":
 
     let
       area = currentBufStatus.selectedArea
-      firstCursorPosition = BufferPosition(
-        line: area.get.startLine,
-        column: area.get.startColumn)
+      firstCursorPosition =
+        BufferPosition(line: area.get.startLine, column: area.get.startColumn)
     status.settings.clipboard.enable = false
     currentBufStatus.yankBuffer(
-      status.registers,
-      currentMainWindowNode,
-      area.get,
-      firstCursorPosition,
-      status.settings)
+      status.registers, currentMainWindowNode, area.get, firstCursorPosition,
+      status.settings,
+    )
 
     check status.registers.getNoNamedRegister.buffer == @[buffer[0]]
 
@@ -2422,9 +2340,9 @@ suite "Visual line mode: Yank buffer (Enable clipboard)":
       status.initSelectedArea
 
       currentBufStatus.highlight = initHighlight(
-        currentBufStatus.buffer.toSeqRunes,
-        status.settings.highlight.reservedWords,
-        currentBufStatus.language)
+        currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+        currentBufStatus.language,
+      )
 
       status.resize(100, 100)
       status.update
@@ -2432,27 +2350,23 @@ suite "Visual line mode: Yank buffer (Enable clipboard)":
       status.changeMode(Mode.visualBlock)
 
       currentBufStatus.selectedArea = initSelectedArea(
-        currentMainWindowNode.currentLine,
-        currentMainWindowNode.currentColumn)
-        .some
+        currentMainWindowNode.currentLine, currentMainWindowNode.currentColumn
+      ).some
 
       status.update
 
       let
         area = currentBufStatus.selectedArea
-        firstCursorPosition = BufferPosition(
-          line: area.get.startLine,
-          column: area.get.startColumn)
+        firstCursorPosition =
+          BufferPosition(line: area.get.startLine, column: area.get.startColumn)
 
       status.settings.clipboard.enable = true
       status.registers.setClipboardTool(ClipboardTool.xsel)
 
       currentBufStatus.yankBuffer(
-        status.registers,
-        currentMainWindowNode,
-        area.get,
-        firstCursorPosition,
-        status.settings)
+        status.registers, currentMainWindowNode, area.get, firstCursorPosition,
+        status.settings,
+      )
 
       check getXselBuffer().removeLineEnd == "a"
 
@@ -2466,9 +2380,9 @@ suite "Visual line mode: idenet":
     status.initSelectedArea
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -2492,9 +2406,9 @@ suite "Visual line mode: idenet":
     status.initSelectedArea
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.resize(100, 100)
 
@@ -2520,9 +2434,9 @@ suite "Visual mode: Add folding range":
     currentBufStatus.buffer = @["a", "b", "c"].toSeqRunes.toGapBuffer
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.changeMode(Mode.visual)
 
@@ -2531,12 +2445,8 @@ suite "Visual mode: Add folding range":
     status.resize(100, 100)
     status.update
 
-    currentBufStatus.selectedArea = some(SelectedArea(
-      startLine: 0,
-      startColumn: 0,
-      endLine: 0,
-      endColumn: 0,
-    ))
+    currentBufStatus.selectedArea =
+      some(SelectedArea(startLine: 0, startColumn: 0, endLine: 0, endColumn: 0))
 
     status.visualCommand(currentBufStatus.selectedArea.get, ru"zf")
 
@@ -2546,9 +2456,9 @@ suite "Visual mode: Add folding range":
     currentBufStatus.buffer = @["a", "b", "c"].toSeqRunes.toGapBuffer
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.changeMode(Mode.visual)
 
@@ -2557,28 +2467,22 @@ suite "Visual mode: Add folding range":
     status.resize(100, 100)
     status.update
 
-    currentBufStatus.selectedArea = some(SelectedArea(
-      startLine: 0,
-      startColumn: 0,
-      endLine: 1,
-      endColumn: 0,
-    ))
+    currentBufStatus.selectedArea =
+      some(SelectedArea(startLine: 0, startColumn: 0, endLine: 1, endColumn: 0))
     currentMainWindowNode.currentLine = 1
 
     status.visualCommand(currentBufStatus.selectedArea.get, ru"zf")
 
-    check currentMainWindowNode.view.foldingRanges == @[
-      FoldingRange(first: 0, last: 1)
-    ]
+    check currentMainWindowNode.view.foldingRanges == @[FoldingRange(first: 0, last: 1)]
 
   test "Nest":
     currentBufStatus.buffer = @["a", "b", "c"].toSeqRunes.toGapBuffer
     currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.changeMode(Mode.visual)
 
@@ -2587,34 +2491,25 @@ suite "Visual mode: Add folding range":
     status.resize(100, 100)
     status.update
 
-    currentBufStatus.selectedArea = some(SelectedArea(
-      startLine: 0,
-      startColumn: 0,
-      endLine: 2,
-      endColumn: 0,
-    ))
+    currentBufStatus.selectedArea =
+      some(SelectedArea(startLine: 0, startColumn: 0, endLine: 2, endColumn: 0))
     currentMainWindowNode.currentLine = 2
 
     status.visualCommand(currentBufStatus.selectedArea.get, ru"zf")
 
-    check currentMainWindowNode.view.foldingRanges == @[
-      FoldingRange(first: 0, last: 2),
-      FoldingRange(first: 0, last: 1)
-    ]
+    check currentMainWindowNode.view.foldingRanges ==
+      @[FoldingRange(first: 0, last: 2), FoldingRange(first: 0, last: 1)]
 
   test "Nest 2":
-    currentBufStatus.buffer = @["a", "b", "c", "d", "e", "f", "g"]
-      .toSeqRunes
-      .toGapBuffer
-    currentMainWindowNode.view.foldingRanges = @[
-      FoldingRange(first: 1, last: 2),
-      FoldingRange(first: 4, last: 5)
-    ]
+    currentBufStatus.buffer =
+      @["a", "b", "c", "d", "e", "f", "g"].toSeqRunes.toGapBuffer
+    currentMainWindowNode.view.foldingRanges =
+      @[FoldingRange(first: 1, last: 2), FoldingRange(first: 4, last: 5)]
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     status.changeMode(Mode.visual)
 
@@ -2623,21 +2518,18 @@ suite "Visual mode: Add folding range":
     status.resize(100, 100)
     status.update
 
-    currentBufStatus.selectedArea = some(SelectedArea(
-      startLine: 0,
-      startColumn: 0,
-      endLine: 6,
-      endColumn: 0,
-    ))
+    currentBufStatus.selectedArea =
+      some(SelectedArea(startLine: 0, startColumn: 0, endLine: 6, endColumn: 0))
     currentMainWindowNode.currentLine = 6
 
     status.visualCommand(currentBufStatus.selectedArea.get, ru"zf")
 
-    check currentMainWindowNode.view.foldingRanges == @[
-      FoldingRange(first: 0, last: 6),
-      FoldingRange(first: 1, last: 2),
-      FoldingRange(first: 4, last: 5)
-    ]
+    check currentMainWindowNode.view.foldingRanges ==
+      @[
+        FoldingRange(first: 0, last: 6),
+        FoldingRange(first: 1, last: 2),
+        FoldingRange(first: 4, last: 5),
+      ]
 
 suite "Visual mode: selectionrange":
   var status: EditorStatus
@@ -2664,9 +2556,7 @@ suite "Visual mode: selectionrange":
     check currentMainWindowNode.currentColumn == 1
 
   test "Basic":
-    currentBufStatus.buffer = toSeq(0..10)
-      .mapIt(" ".repeat(10).toRunes)
-      .toGapBuffer
+    currentBufStatus.buffer = toSeq(0 .. 10).mapIt(" ".repeat(10).toRunes).toGapBuffer
 
     status.changeMode(Mode.visual)
     status.resize(100, 100)
@@ -2675,37 +2565,23 @@ suite "Visual mode: selectionrange":
 
     status.update
 
-    let ranges = parseTextDocumentSelectionRangeResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": [
-        {
-          "range": {
-            "start": {
-              "line": 0,
-              "character": 0
-            },
-            "end": {
-              "line": 2,
-              "character": 1
-            }
-          },
-          "parent": {
-            "range": {
-              "start": {
-                "line": 0,
-                "character": 0
-              },
-              "end": {
-                "line": 9,
-                "character": 0
+    let ranges = parseTextDocumentSelectionRangeResponse(
+      %*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": [
+          {
+            "range":
+              {"start": {"line": 0, "character": 0}, "end": {"line": 2, "character": 1}},
+            "parent": {
+              "range": {
+                "start": {"line": 0, "character": 0}, "end": {"line": 9, "character": 0}
               }
-            }
+            },
           }
-        }
-      ]
-    })
-    .get
+        ],
+      }
+    ).get
 
     currentBufStatus.selectionRanges = ranges
 
@@ -2734,25 +2610,18 @@ suite "Visual mode: selectionrange":
 
     status.initSelectedArea
 
-    let ranges = parseTextDocumentSelectionRangeResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": [
-        {
-          "range": {
-            "start": {
-              "line": 0,
-              "character": 0
-            },
-            "end": {
-              "line": 2,
-              "character": 1
-            }
+    let ranges = parseTextDocumentSelectionRangeResponse(
+      %*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": [
+          {
+            "range":
+              {"start": {"line": 0, "character": 0}, "end": {"line": 2, "character": 1}}
           }
-        }
-      ]
-    })
-    .get
+        ],
+      }
+    ).get
 
     currentBufStatus.selectionRanges = ranges
 

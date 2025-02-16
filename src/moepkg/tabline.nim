@@ -60,24 +60,22 @@ proc displayPath(b: BufferStatus): string =
   else:
     $b.path
 
-proc initBuffers*(
-  bufStatuses: seq[BufferStatus],
-  winWidth: int): seq[Runes] =
-    ## Return buffers for tablines
+proc initBuffers*(bufStatuses: seq[BufferStatus], winWidth: int): seq[Runes] =
+  ## Return buffers for tablines
 
-    for index, bufStatus in bufStatuses:
-      let
-        title = displayPath(bufStatus)
-        tabWidth = int(ceil(winWidth / bufStatuses.len))
+  for index, bufStatus in bufStatuses:
+    let
+      title = displayPath(bufStatus)
+      tabWidth = int(ceil(winWidth / bufStatuses.len))
 
-      if tabWidth > title.len:
-        let spaces = " ".repeat(tabWidth - title.len)
-        result.add toRunes(fmt" {title}{spaces}")
-      elif tabWidth > 1:
-        let shortTitle = title.substr(0, tabWidth - 2) & "~"
-        result.add toRunes(fmt" {shortTitle}")
-      else:
-        result.add ru" "
+    if tabWidth > title.len:
+      let spaces = " ".repeat(tabWidth - title.len)
+      result.add toRunes(fmt" {title}{spaces}")
+    elif tabWidth > 1:
+      let shortTitle = title.substr(0, tabWidth - 2) & "~"
+      result.add toRunes(fmt" {shortTitle}")
+    else:
+      result.add ru" "
 
 proc initHighlight(buffers: seq[Runes], currentBufferIndex: int): Highlight =
   ## Return a highlight for the tabline.
@@ -87,8 +85,10 @@ proc initHighlight(buffers: seq[Runes], currentBufferIndex: int): Highlight =
   for index, buf in buffers:
     let
       firstCol =
-        if totalWidth > 0: totalWidth + 1
-        else: totalWidth
+        if totalWidth > 0:
+          totalWidth + 1
+        else:
+          totalWidth
       color =
         if currentBufferIndex == index or buffers.len == 1:
           EditorColorPairIndex.currentTab
@@ -101,59 +101,58 @@ proc initHighlight(buffers: seq[Runes], currentBufferIndex: int): Highlight =
       firstColumn: firstCol,
       lastColumn: totalWidth,
       color: color,
-      attribute: Attribute.normal)
+      attribute: Attribute.normal,
+    )
 
 proc initTabLine(
-  bufStatuses: seq[BufferStatus],
-  currentBufferIndex: int,
-  isAllbuffer: bool): TabLine =
+    bufStatuses: seq[BufferStatus], currentBufferIndex: int, isAllbuffer: bool
+): TabLine =
+  const
+    Position = Position(y: 0, x: 0)
+    Color = EditorColorPairIndex.tab.int16
 
-    const
-      Position = Position(y: 0, x: 0)
-      Color = EditorColorPairIndex.tab.int16
+  if isAllBuffer:
+    # Multiple tablines for all buffers.
 
-    if isAllBuffer:
-      # Multiple tablines for all buffers.
+    let buffers = initBuffers(bufStatuses, getTerminalWidth())
 
-      let buffers = initBuffers(bufStatuses, getTerminalWidth())
+    return TabLine(
+      window: initWindow(1, getTerminalWidth(), 0, 0, Color),
+      position: Position,
+      size: Size(h: 1, w: getTerminalWidth()),
+      highlight: initHighlight(buffers, currentBufferIndex),
+      buffer: buffers.join,
+    )
+  else:
+    # Only the current buffer.
+    let buffers = initBuffers(@[bufStatuses[currentBufferIndex]], getTerminalWidth())
 
-      return TabLine(
-        window: initWindow(1, getTerminalWidth(), 0, 0, Color),
-        position: Position,
-        size: Size(h: 1, w: getTerminalWidth()),
-        highlight: initHighlight(buffers, currentBufferIndex),
-        buffer: buffers.join)
-
-    else:
-      # Only the current buffer.
-      let
-        buffers = initBuffers(
-          @[bufStatuses[currentBufferIndex]],
-          getTerminalWidth())
-
-      return TabLine(
-        window: initWindow(1, getTerminalWidth(), 0, 0, Color),
-        position: Position,
-        size: Size(h: 1, w: getTerminalWidth()),
-        highlight: initHighlight(buffers, currentBufferIndex),
-        buffer: buffers[0])
+    return TabLine(
+      window: initWindow(1, getTerminalWidth(), 0, 0, Color),
+      position: Position,
+      size: Size(h: 1, w: getTerminalWidth()),
+      highlight: initHighlight(buffers, currentBufferIndex),
+      buffer: buffers[0],
+    )
 
 proc update*(
-  tabLine: var TabLine,
-  bufStatuses: seq[BufferStatus],
-  currentBufferIndex: int,
-  isAllbuffer: bool) =
-    ## Update tabline and window.
+    tabLine: var TabLine,
+    bufStatuses: seq[BufferStatus],
+    currentBufferIndex: int,
+    isAllbuffer: bool,
+) =
+  ## Update tabline and window.
 
-    tabline = initTabLine(bufStatuses, currentBufferIndex, isAllbuffer)
+  tabline = initTabLine(bufStatuses, currentBufferIndex, isAllbuffer)
 
-    # Update the window
-    tabLine.window.erase
-    for index, cs in tabLine.highlight.colorSegments:
-      tabLine.window.write(
-        tabLine.position.y,
-        cs.firstColumn,
-        tabLine.buffer[cs.firstColumn .. cs.lastColumn],
-        cs.color.int16,
-        cs.attribute)
-    tabLine.window.refresh
+  # Update the window
+  tabLine.window.erase
+  for index, cs in tabLine.highlight.colorSegments:
+    tabLine.window.write(
+      tabLine.position.y,
+      cs.firstColumn,
+      tabLine.buffer[cs.firstColumn .. cs.lastColumn],
+      cs.color.int16,
+      cs.attribute,
+    )
+  tabLine.window.refresh

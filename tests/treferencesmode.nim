@@ -24,57 +24,50 @@ import pkg/results
 import utils
 
 import moepkg/lsp/references
-import moepkg/[bufferstatus, editorstatus, independentutils, gapbuffer,
-               windownode, unicodeext]
+import
+  moepkg/
+    [bufferstatus, editorstatus, independentutils, gapbuffer, windownode, unicodeext]
 
 import moepkg/referencesmode {.all.}
 
-template openReferencesMode(
-  status: var EditorStatus,
-  references: seq[LspReference]) =
+template openReferencesMode(status: var EditorStatus, references: seq[LspReference]) =
+  status.horizontalSplitWindow
+  status.moveNextWindow
 
-    status.horizontalSplitWindow
-    status.moveNextWindow
+  discard status.addNewBufferInCurrentWin(Mode.references)
+  currentBufStatus.buffer = initReferencesModeBuffer(references).toGapBuffer
 
-    discard status.addNewBufferInCurrentWin(Mode.references)
-    currentBufStatus.buffer = initReferencesModeBuffer(references)
-      .toGapBuffer
-
-    status.resize(100, 100)
-
+  status.resize(100, 100)
 
 suite "references: initReferencesModeBuffer":
   test "Basic":
-    let r = @[
-      LspReference(
-        path: "/home/user/test1.nim",
-        position: BufferPosition(line: 0, column: 0)
-      ),
-      LspReference(
-        path: "/home/user/test1.nim",
-        position: BufferPosition(line: 1, column: 0)
-      ),
-      LspReference(
-        path: "/home/user/test2.nim",
-        position: BufferPosition(line: 10, column: 5)
-      )
-    ]
+    let r =
+      @[
+        LspReference(
+          path: "/home/user/test1.nim", position: BufferPosition(line: 0, column: 0)
+        ),
+        LspReference(
+          path: "/home/user/test1.nim", position: BufferPosition(line: 1, column: 0)
+        ),
+        LspReference(
+          path: "/home/user/test2.nim", position: BufferPosition(line: 10, column: 5)
+        ),
+      ]
 
-    check initReferencesModeBuffer(r) == @[
-      "/home/user/test1.nim 0 Line 0 Col",
-      "/home/user/test1.nim 1 Line 0 Col",
-      "/home/user/test2.nim 10 Line 5 Col",
-    ]
-    .toSeqRunes
+    check initReferencesModeBuffer(r) ==
+      @[
+        "/home/user/test1.nim 0 Line 0 Col", "/home/user/test1.nim 1 Line 0 Col",
+        "/home/user/test2.nim 10 Line 5 Col",
+      ].toSeqRunes
 
 suite "references: parseDestinationLine":
   test "Basic 1":
-    check parseDestinationLine(ru"/home/user/test.nim 0 Line 0 Col").get == (
-     ru"/home/user/test.nim", 0, 0)
+    check parseDestinationLine(ru"/home/user/test.nim 0 Line 0 Col").get ==
+      (ru"/home/user/test.nim", 0, 0)
 
   test "Basic 1":
-    check parseDestinationLine(ru"/home/user/test.nim 100 Line 999 Col").get == (
-     ru"/home/user/test.nim", 100, 999)
+    check parseDestinationLine(ru"/home/user/test.nim 100 Line 999 Col").get ==
+      (ru"/home/user/test.nim", 100, 999)
 
 suite "references: openWindowAndJumpToReference":
   var status: EditorStatus
@@ -99,9 +92,8 @@ suite "references: openWindowAndJumpToReference":
     status.resize(100, 100)
     status.update
 
-    let references = @[
-      LspReference(path: filePath, position: BufferPosition(line: 1, column: 0))
-    ]
+    let references =
+      @[LspReference(path: filePath, position: BufferPosition(line: 1, column: 0))]
 
     status.openReferencesMode(references)
 
@@ -111,9 +103,7 @@ suite "references: openWindowAndJumpToReference":
     check currentBufStatus.mode == Mode.normal
     check $currentBufStatus.absolutePath == filePath
 
-    check currentMainWindowNode.bufferPosition == BufferPosition(
-      line: 1,
-      column: 0)
+    check currentMainWindowNode.bufferPosition == BufferPosition(line: 1, column: 0)
 
   test "Other buffer":
     let origFilePath = testDir / $genOid() & ".nim"
@@ -127,9 +117,8 @@ suite "references: openWindowAndJumpToReference":
     status.resize(100, 100)
     status.update
 
-    let references = @[
-      LspReference(path: destFilePath, position: BufferPosition(line: 1, column: 0))
-    ]
+    let references =
+      @[LspReference(path: destFilePath, position: BufferPosition(line: 1, column: 0))]
 
     status.openReferencesMode(references)
 
@@ -139,9 +128,7 @@ suite "references: openWindowAndJumpToReference":
     check currentBufStatus.mode == Mode.normal
     check $currentBufStatus.absolutePath == destFilePath
 
-    check currentMainWindowNode.bufferPosition == BufferPosition(
-      line: 1,
-      column: 0)
+    check currentMainWindowNode.bufferPosition == BufferPosition(line: 1, column: 0)
 
 suite "references: closeReferencesMode":
   var status: EditorStatus
@@ -151,9 +138,8 @@ suite "references: closeReferencesMode":
     assert status.addNewBufferInCurrentWin(Mode.normal).isOk
 
   test "Basic":
-    let references = @[
-      LspReference(path: "a", position: BufferPosition(line: 0, column: 0))
-    ]
+    let references =
+      @[LspReference(path: "a", position: BufferPosition(line: 0, column: 0))]
 
     status.openReferencesMode(references)
 

@@ -42,19 +42,18 @@ proc `$`*(highlight: Highlight): string =
   result = "Highlight: ["
   for i, s in highlight.colorSegments:
     result &=
-      fmt"ColorSegment(firstRow: {$s.firstRow}, " &
-      fmt"firstColumn: {$s.firstColumn}, " &
-      fmt"lastRow: {$s.lastRow}, " &
-      fmt"lastColumn: {$s.lastColumn}, " &
-      fmt"color: {s.color}, " &
-      fmt"attribute: {s.attribute})"
+      fmt"ColorSegment(firstRow: {$s.firstRow}, " & fmt"firstColumn: {$s.firstColumn}, " &
+      fmt"lastRow: {$s.lastRow}, " & fmt"lastColumn: {$s.lastColumn}, " &
+      fmt"color: {s.color}, " & fmt"attribute: {s.attribute})"
     if i < highlight.colorSegments.high:
       result.add ", "
   result.add "]"
 
-proc len*(highlight: Highlight): int {.inline.} = highlight.colorSegments.len
+proc len*(highlight: Highlight): int {.inline.} =
+  highlight.colorSegments.len
 
-proc high*(highlight: Highlight): int {.inline.} = highlight.colorSegments.high
+proc high*(highlight: Highlight): int {.inline.} =
+  highlight.colorSegments.high
 
 proc `[]`*(highlight: Highlight, i: int): ColorSegment {.inline.} =
   highlight.colorSegments[i]
@@ -64,18 +63,21 @@ proc `[]`*(highlight: Highlight, i: BackwardsIndex): ColorSegment {.inline.} =
 
 proc getColorPair*(highlight: Highlight, line, col: int): EditorColorPairIndex =
   for colorSegment in highlight.colorSegments:
-    if line >= colorSegment.firstRow and
-       colorSegment.lastRow >= line and
-       col >= colorSegment.firstColumn and
-       colorSegment.lastColumn >= col: return colorSegment.color
+    if line >= colorSegment.firstRow and colorSegment.lastRow >= line and
+        col >= colorSegment.firstColumn and colorSegment.lastColumn >= col:
+      return colorSegment.color
 
 template isIntersect(s, t: ColorSegment): bool =
-  not ((t.lastRow, t.lastColumn) < (s.firstRow, s.firstColumn) or
-  (s.lastRow, s.lastColumn) < (t.firstRow, t.firstColumn))
+  not (
+    (t.lastRow, t.lastColumn) < (s.firstRow, s.firstColumn) or
+    (s.lastRow, s.lastColumn) < (t.firstRow, t.firstColumn)
+  )
 
 template contains(s, t: ColorSegment): bool =
-  ((s.firstRow, s.firstColumn) <= (t.firstRow, t.firstColumn) and
-  (t.lastRow, t.lastColumn) <= (s.lastRow, s.lastColumn))
+  (
+    (s.firstRow, s.firstColumn) <= (t.firstRow, t.firstColumn) and
+    (t.lastRow, t.lastColumn) <= (s.lastRow, s.lastColumn)
+  )
 
 proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
   ## Overwrite `s` with t
@@ -83,81 +85,107 @@ proc overwrite(s, t: ColorSegment): seq[ColorSegment] =
   type Position = tuple[row, column: int]
 
   proc prev(pos: Position): Position =
-    if pos.column > 0: (pos.row, pos.column-1) else: (pos.row-1, high(int))
+    if pos.column > 0:
+      (pos.row, pos.column - 1)
+    else:
+      (pos.row - 1, high(int))
 
   proc next(pos: Position): Position =
-    (pos.row, pos.column+1)
+    (pos.row, pos.column + 1)
 
-  if not s.isIntersect(t): return @[s]
+  if not s.isIntersect(t):
+    return @[s]
 
   if t.contains(s):
-    return @[ColorSegment(
-      firstRow: s.firstRow,
-      firstColumn: s.firstColumn,
-      lastRow: s.lastRow,
-      lastColumn: s.lastColumn,
-      color: t.color,
-      attribute: t.attribute)]
+    return
+      @[
+        ColorSegment(
+          firstRow: s.firstRow,
+          firstColumn: s.firstColumn,
+          lastRow: s.lastRow,
+          lastColumn: s.lastColumn,
+          color: t.color,
+          attribute: t.attribute,
+        )
+      ]
 
   if s.contains(t):
     if (s.firstRow, s.firstColumn) < (t.firstRow, t.firstColumn):
       let last = prev((t.firstRow, t.firstColumn))
-      result.add(ColorSegment(
-        firstRow: s.firstRow,
-        firstColumn: s.firstColumn,
-        lastRow: last.row,
-        lastColumn: last.column,
-        color: s.color,
-        attribute: t.attribute))
+      result.add(
+        ColorSegment(
+          firstRow: s.firstRow,
+          firstColumn: s.firstColumn,
+          lastRow: last.row,
+          lastColumn: last.column,
+          color: s.color,
+          attribute: t.attribute,
+        )
+      )
 
     result.add(t)
 
     if (t.lastRow, t.lastColumn) < (s.lastRow, s.lastColumn):
       let first = next((t.lastRow, t.lastColumn))
-      result.add(ColorSegment(
-        firstRow: first.row,
-        firstColumn: first.column,
-        lastRow: s.lastRow,
-        lastColumn: s.lastColumn,
-        color: s.color,
-        attribute: t.attribute))
+      result.add(
+        ColorSegment(
+          firstRow: first.row,
+          firstColumn: first.column,
+          lastRow: s.lastRow,
+          lastColumn: s.lastColumn,
+          color: s.color,
+          attribute: t.attribute,
+        )
+      )
 
     return result
 
   if (t.firstRow, t.firstColumn) < (s.firstRow, s.firstColumn):
     let first = next((t.lastRow, t.lastColumn))
-    result.add(ColorSegment(
-      firstRow: s.firstRow,
-      firstColumn: s.firstColumn,
-      lastRow: t.lastRow,
-      lastColumn: t.lastColumn,
-      color: t.color,
-      attribute: t.attribute))
+    result.add(
+      ColorSegment(
+        firstRow: s.firstRow,
+        firstColumn: s.firstColumn,
+        lastRow: t.lastRow,
+        lastColumn: t.lastColumn,
+        color: t.color,
+        attribute: t.attribute,
+      )
+    )
 
-    result.add(ColorSegment(
-      firstRow: first.row,
-      firstColumn: first.column,
-      lastRow: s.lastRow,
-      lastColumn: s.lastColumn,
-      color: s.color,
-      attribute: t.attribute))
+    result.add(
+      ColorSegment(
+        firstRow: first.row,
+        firstColumn: first.column,
+        lastRow: s.lastRow,
+        lastColumn: s.lastColumn,
+        color: s.color,
+        attribute: t.attribute,
+      )
+    )
   else:
     let last = prev((t.firstRow, t.firstColumn))
-    result.add(ColorSegment(
-      firstRow: s.firstRow,
-      firstColumn: s.firstColumn,
-      lastRow: last.row,
-      lastColumn: last.column,
-      color: s.color,
-      attribute: t.attribute))
+    result.add(
+      ColorSegment(
+        firstRow: s.firstRow,
+        firstColumn: s.firstColumn,
+        lastRow: last.row,
+        lastColumn: last.column,
+        color: s.color,
+        attribute: t.attribute,
+      )
+    )
 
-    result.add(ColorSegment(
-      firstRow: t.firstRow,
-      firstColumn: t.firstColumn,
-      lastRow: s.lastRow,
-      lastColumn: s.lastColumn,
-      color: t.color,
-      attribute: t.attribute))
+    result.add(
+      ColorSegment(
+        firstRow: t.firstRow,
+        firstColumn: t.firstColumn,
+        lastRow: s.lastRow,
+        lastColumn: s.lastColumn,
+        color: t.color,
+        attribute: t.attribute,
+      )
+    )
 
 proc overwrite*(highlight: var Highlight, colorSegment: ColorSegment) =
   ## Overwrite `highlight` with colorSegment
@@ -169,44 +197,44 @@ proc overwrite*(highlight: var Highlight, colorSegment: ColorSegment) =
     highlight.colorSegments.add(cs.overwrite(colorSegment))
 
 proc addColorSegment*(
-  h: var Highlight,
-  line, length: int,
-  color: EditorColorPairIndex,
-  attribute = Attribute.normal) =
-    ## Add a colorSegment to end of the line.
-    ## Ignore If need to overwrite.
+    h: var Highlight,
+    line, length: int,
+    color: EditorColorPairIndex,
+    attribute = Attribute.normal,
+) =
+  ## Add a colorSegment to end of the line.
+  ## Ignore If need to overwrite.
 
-    var position = -1
-    for i in 0 .. h.colorSegments.high:
-      if h.colorSegments[i].lastRow == line:
-        position = i
-      elif position > -1 and h.colorSegments[i].lastRow > line:
-        break
+  var position = -1
+  for i in 0 .. h.colorSegments.high:
+    if h.colorSegments[i].lastRow == line:
+      position = i
+    elif position > -1 and h.colorSegments[i].lastRow > line:
+      break
 
-    if position > -1:
-      template beforeSegment: ColorSegment = h.colorSegments[position]
+  if position > -1:
+    template beforeSegment(): ColorSegment =
+      h.colorSegments[position]
 
-      if beforeSegment.firstColumn > beforeSegment.lastColumn:
-        beforeSegment.lastColumn = beforeSegment.firstColumn
+    if beforeSegment.firstColumn > beforeSegment.lastColumn:
+      beforeSegment.lastColumn = beforeSegment.firstColumn
 
-      h.colorSegments.insert(
-        ColorSegment(
-          firstRow: line,
-          firstColumn: beforeSegment.lastColumn + 1,
-          lastRow: line,
-          lastColumn: beforeSegment.lastColumn + 1 + length,
-          color: color,
-          attribute: attribute
-        ),
-        position + 1)
+    h.colorSegments.insert(
+      ColorSegment(
+        firstRow: line,
+        firstColumn: beforeSegment.lastColumn + 1,
+        lastRow: line,
+        lastColumn: beforeSegment.lastColumn + 1 + length,
+        color: color,
+        attribute: attribute,
+      ),
+      position + 1,
+    )
 
 iterator parseReservedWord(
-  buffer: string,
-  reservedWords: seq[ReservedWord],
-  color: EditorColorPairIndex): (string, EditorColorPairIndex) =
-
-  var
-    buffer = buffer
+    buffer: string, reservedWords: seq[ReservedWord], color: EditorColorPairIndex
+): (string, EditorColorPairIndex) =
+  var buffer = buffer
   while true:
     var
       found: bool
@@ -216,7 +244,8 @@ iterator parseReservedWord(
     # search minimum pos
     for r in reservedWords:
       let p = buffer.find(r.word)
-      if p < 0: continue
+      if p < 0:
+        continue
       if p <= pos:
         pos = p
         reservedWord = r
@@ -226,51 +255,72 @@ iterator parseReservedWord(
       break
 
     const First = 0
-    let
-      last = pos + reservedWord.word.len
+    let last = pos + reservedWord.word.len
     yield (buffer[First ..< pos], color)
     yield (buffer[pos ..< last], reservedWord.color)
     buffer = buffer[last ..^ 1]
 
 proc getEditorColorPair(
-  kind: TokenClass,
-  language: SourceLanguage): EditorColorPairIndex =
-
-    case kind:
-      of gtOperator: EditorColorPairIndex.operator
-      of gtBuiltin: EditorColorPairIndex.builtin
-      of gtKeyword: EditorColorPairIndex.keyword
-      of gtBoolean: EditorColorPairIndex.boolean
-      of gtSpecialVar: EditorColorPairIndex.specialVar
-      of gtCharLit: EditorColorPairIndex.charLit
-      of gtStringLit:
-        if language == SourceLanguage.langYaml: EditorColorPairIndex.default
-        else: EditorColorPairIndex.stringLit
-      of gtBinNumber: EditorColorPairIndex.binNumber
-      of gtDecNumber: EditorColorPairIndex.decNumber
-      of gtFloatNumber: EditorColorPairIndex.floatNumber
-      of gtHexNumber: EditorColorPairIndex.hexNumber
-      of gtOctNumber: EditorColorPairIndex.octNumber
-      of gtComment: EditorColorPairIndex.comment
-      of gtLongComment: EditorColorPairIndex.longComment
-      of gtPreprocessor: EditorColorPairIndex.preprocessor
-      of gtFunctionName: EditorColorPairIndex.functionName
-      of gtTypeName: EditorColorPairIndex.typeName
-      of gtWhitespace: EditorColorPairIndex.whitespace
-      of gtPragma: EditorColorPairIndex.pragma
-      of gtIdentifier: EditorColorPairIndex.identifier
-      of gtTable: EditorColorPairIndex.table
-      of gtDate: EditorColorPairIndex.date
-      else: EditorColorPairIndex.default
+    kind: TokenClass, language: SourceLanguage
+): EditorColorPairIndex =
+  case kind
+  of gtOperator:
+    EditorColorPairIndex.operator
+  of gtBuiltin:
+    EditorColorPairIndex.builtin
+  of gtKeyword:
+    EditorColorPairIndex.keyword
+  of gtBoolean:
+    EditorColorPairIndex.boolean
+  of gtSpecialVar:
+    EditorColorPairIndex.specialVar
+  of gtCharLit:
+    EditorColorPairIndex.charLit
+  of gtStringLit:
+    if language == SourceLanguage.langYaml:
+      EditorColorPairIndex.default
+    else:
+      EditorColorPairIndex.stringLit
+  of gtBinNumber:
+    EditorColorPairIndex.binNumber
+  of gtDecNumber:
+    EditorColorPairIndex.decNumber
+  of gtFloatNumber:
+    EditorColorPairIndex.floatNumber
+  of gtHexNumber:
+    EditorColorPairIndex.hexNumber
+  of gtOctNumber:
+    EditorColorPairIndex.octNumber
+  of gtComment:
+    EditorColorPairIndex.comment
+  of gtLongComment:
+    EditorColorPairIndex.longComment
+  of gtPreprocessor:
+    EditorColorPairIndex.preprocessor
+  of gtFunctionName:
+    EditorColorPairIndex.functionName
+  of gtTypeName:
+    EditorColorPairIndex.typeName
+  of gtWhitespace:
+    EditorColorPairIndex.whitespace
+  of gtPragma:
+    EditorColorPairIndex.pragma
+  of gtIdentifier:
+    EditorColorPairIndex.identifier
+  of gtTable:
+    EditorColorPairIndex.table
+  of gtDate:
+    EditorColorPairIndex.date
+  else:
+    EditorColorPairIndex.default
 
 proc getEditorColorPair(
-  legend: SemanticTokensLegend,
-  semTokenNum: int): EditorColorPairIndex =
-
-    try:
-      result = parseEnum[EditorColorPairIndex](legend.tokenTypes[semTokenNum])
-    except ValueError:
-      result = EditorColorPairIndex.default
+    legend: SemanticTokensLegend, semTokenNum: int
+): EditorColorPairIndex =
+  try:
+    result = parseEnum[EditorColorPairIndex](legend.tokenTypes[semTokenNum])
+  except ValueError:
+    result = EditorColorPairIndex.default
 
 proc initHighlightPlain*(buffer: seq[Runes]): Highlight {.inline.} =
   ## Return highlighting for the plain text.
@@ -278,123 +328,141 @@ proc initHighlightPlain*(buffer: seq[Runes]): Highlight {.inline.} =
   var colorSegments: seq[ColorSegment]
   for i in 0 .. buffer.high:
     let lastColumn =
-      if buffer[i].len > 0: buffer[i].high
-      else: -1
+      if buffer[i].len > 0:
+        buffer[i].high
+      else:
+        -1
     colorSegments.add ColorSegment(
       firstRow: i,
       firstColumn: 0,
       lastRow: i,
       lastColumn: lastColumn,
-      color: EditorColorPairIndex.default)
+      color: EditorColorPairIndex.default,
+    )
 
   return Highlight(colorSegments: colorSegments)
 
 proc initHighlight*(
-  buffer: seq[Runes],
-  reservedWords: seq[ReservedWord],
-  language: SourceLanguage): Highlight =
+    buffer: seq[Runes], reservedWords: seq[ReservedWord], language: SourceLanguage
+): Highlight =
+  if language == SourceLanguage.langNone:
+    return initHighlightPlain(buffer)
 
-    if language == SourceLanguage.langNone:
-      return initHighlightPlain(buffer)
+  var bufferStr: string
+  for i in 0 .. buffer.high:
+    bufferStr &= $buffer[i]
+    if i < buffer.high:
+      bufferStr &= '\n'
 
-    var bufferStr: string
-    for i in 0 .. buffer.high:
-      bufferStr &= $buffer[i]
-      if i < buffer.high: bufferStr &= '\n'
+  var
+    currentRow, currentColumn: int
+    colorSegments: seq[ColorSegment]
 
+  template splitByNewline(str, c: typed) =
+    const Newline = Rune('\n')
     var
-      currentRow, currentColumn: int
-      colorSegments: seq[ColorSegment]
-
-    template splitByNewline(str, c: typed) =
-      const Newline = Rune('\n')
-      var
-        cs = ColorSegment(
-          firstRow: currentRow,
-          firstColumn: currentColumn,
-          lastRow: currentRow,
-          lastColumn: currentColumn,
-          color: c)
-        empty = true
-      for r in runes(str):
-        if r == Newline:
-          # push an empty segment
-          if empty:
-            let color = EditorColorPairIndex.default
-            colorSegments.add(ColorSegment(
+      cs = ColorSegment(
+        firstRow: currentRow,
+        firstColumn: currentColumn,
+        lastRow: currentRow,
+        lastColumn: currentColumn,
+        color: c,
+      )
+      empty = true
+    for r in runes(str):
+      if r == Newline:
+        # push an empty segment
+        if empty:
+          let color = EditorColorPairIndex.default
+          colorSegments.add(
+            ColorSegment(
               firstRow: currentRow,
               firstColumn: currentColumn,
               lastRow: currentRow,
               lastColumn: currentColumn - 1,
-              color: color))
-          else:
-            colorSegments.add(cs)
-          inc(currentRow)
-          currentColumn = 0
-          cs.firstRow = currentRow
-          cs.firstColumn = currentColumn
-          cs.lastRow = currentRow
-          cs.lastColumn = currentColumn
-          empty = true
+              color: color,
+            )
+          )
         else:
-          cs.lastColumn = currentColumn
-          inc(currentColumn)
-          empty = false
-      if not empty: colorSegments.add(cs)
+          colorSegments.add(cs)
+        inc(currentRow)
+        currentColumn = 0
+        cs.firstRow = currentRow
+        cs.firstColumn = currentColumn
+        cs.lastRow = currentRow
+        cs.lastColumn = currentColumn
+        empty = true
+      else:
+        cs.lastColumn = currentColumn
+        inc(currentColumn)
+        empty = false
+    if not empty:
+      colorSegments.add(cs)
 
-    var token = GeneralTokenizer()
-    token.initGeneralTokenizer(bufferStr)
-    var pad: string
-    if bufferStr.parseWhile(pad, {' ', '\x09'..'\x0D'}) > 0:
-      splitByNewline(pad, EditorColorPairIndex.default)
+  var token = GeneralTokenizer()
+  token.initGeneralTokenizer(bufferStr)
+  var pad: string
+  if bufferStr.parseWhile(pad, {' ', '\x09' .. '\x0D'}) > 0:
+    splitByNewline(pad, EditorColorPairIndex.default)
 
-    while true:
-      token.getNextToken(language)
+  while true:
+    token.getNextToken(language)
 
-      if token.kind == gtEof: break
+    if token.kind == gtEof:
+      break
 
-      let
-        first = token.start
+    let
+      first = token.start
 
-        # Make it complete even if it's incomplete.
-        last =
-          if first + token.length - 1 > bufferStr.high: bufferStr.high
-          else: first + token.length - 1
+      # Make it complete even if it's incomplete.
+      last =
+        if first + token.length - 1 > bufferStr.high:
+          bufferStr.high
+        else:
+          first + token.length - 1
 
-      block:
-        # Increment `currentRow` if newlines only.
-        let str = bufferStr[first..last]
-        if str != "" and all(str, proc (x: char): bool = x == '\n'):
-          currentRow += last - first + 1
-          currentColumn = 0
-          continue
-
-      let color = getEditorColorPair(token.kind, language)
-
-      if token.kind == gtComment:
-        for r in bufferStr[first..last].parseReservedWord(reservedWords, color):
-          if r[0] == "": continue
-          splitByNewline(r[0], r[1])
+    block:
+      # Increment `currentRow` if newlines only.
+      let str = bufferStr[first .. last]
+      if str != "" and
+          all(
+            str,
+            proc(x: char): bool =
+              x == '\n',
+          ):
+        currentRow += last - first + 1
+        currentColumn = 0
         continue
 
-      splitByNewline(bufferStr[first..last], color)
+    let color = getEditorColorPair(token.kind, language)
 
-    return Highlight(colorSegments: colorSegments)
+    if token.kind == gtComment:
+      for r in bufferStr[first .. last].parseReservedWord(reservedWords, color):
+        if r[0] == "":
+          continue
+        splitByNewline(r[0], r[1])
+      continue
+
+    splitByNewline(bufferStr[first .. last], color)
+
+  return Highlight(colorSegments: colorSegments)
 
 proc initHighlight*(
-  buffer: seq[Runes],
-  semTokens: seq[LspSemanticToken],
-  legend: SemanticTokensLegend): Highlight =
-    ## Initialize Highlight with LSP SemanticTokens.
+    buffer: seq[Runes], semTokens: seq[LspSemanticToken], legend: SemanticTokensLegend
+): Highlight =
+  ## Initialize Highlight with LSP SemanticTokens.
 
-    result = initHighlightPlain(buffer)
-    for t in semTokens:
-      result.overwrite(ColorSegment(
+  result = initHighlightPlain(buffer)
+  for t in semTokens:
+    result.overwrite(
+      ColorSegment(
         firstRow: t.line,
         firstColumn: t.column,
         lastRow: t.line,
         lastColumn: t.column + (t.length - 1),
-        color: getEditorColorPair(legend, t.tokenType)))
+        color: getEditorColorPair(legend, t.tokenType),
+      )
+    )
 
 proc indexOf*(highlight: Highlight, row, column: int): int =
   ## calculate the index of the color segment which the pair (row, column) belongs to
@@ -403,29 +471,32 @@ proc indexOf*(highlight: Highlight, row, column: int): int =
   when not defined(release):
     doAssert(
       (row, column) >= (highlight[0].firstRow, highlight[0].firstColumn),
-      fmt"row = {row}, column = {column}, highlight[0].firstRow = {highlight[0].firstRow}, hightlihgt[0].firstColumn = {highlight[0].firstColumn}")
+      fmt"row = {row}, column = {column}, highlight[0].firstRow = {highlight[0].firstRow}, hightlihgt[0].firstColumn = {highlight[0].firstColumn}",
+    )
     doAssert(
       (row, column) <= (highlight[^1].lastRow, highlight[^1].lastColumn),
-      fmt"row = {row}, column = {column}, highlight[^1].lastRow = {highlight[^1].lastRow}, hightlihgt[^1].lastColumn = {highlight[^1].lastColumn}, highlight = {highlight}")
+      fmt"row = {row}, column = {column}, highlight[^1].lastRow = {highlight[^1].lastRow}, hightlihgt[^1].lastColumn = {highlight[^1].lastColumn}, highlight = {highlight}",
+    )
 
   var
     lb = 0
     ub = highlight.len
-  while ub-lb > 1:
-    let mid = (lb+ub) div 2
+  while ub - lb > 1:
+    let mid = (lb + ub) div 2
     if (row, column) >= (highlight[mid].firstRow, highlight[mid].firstColumn):
       lb = mid
-    else: ub = mid
+    else:
+      ub = mid
 
   return lb
 
 proc detectLanguage*(filename: string): SourceLanguage =
   # TODO: use settings file
-  case filename.splitFile.ext:
+  case filename.splitFile.ext
   of ".c", ".dox", ".h", ".i":
     return SourceLanguage.langC
-  of ".C", ".CPP", ".H", ".HPP", ".c++", ".cc", ".cp", ".cpp", ".cxx", ".h++",
-     ".hh", ".hp", ".hpp", ".hxx", ".ii", ".tcc":
+  of ".C", ".CPP", ".H", ".HPP", ".c++", ".cc", ".cp", ".cpp", ".cxx", ".h++", ".hh",
+      ".hp", ".hpp", ".hxx", ".ii", ".tcc":
     return SourceLanguage.langCpp
   of ".cs":
     return SourceLanguage.langCsharp
@@ -455,33 +526,33 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langNone
 
 proc initSelectedAreaColorSegment*(
-  position: BufferPosition,
-  color: EditorColorPairIndex): ColorSegment {.inline.} =
-
-    result.firstRow = position.line
-    result.firstColumn = position.column
-    result.lastRow = position.line
-    result.lastColumn = position.column
-    result.color = color
+    position: BufferPosition, color: EditorColorPairIndex
+): ColorSegment {.inline.} =
+  result.firstRow = position.line
+  result.firstColumn = position.column
+  result.lastRow = position.line
+  result.lastColumn = position.column
+  result.color = color
 
 proc overwriteColorSegmentBlock*[T](
-  highlight: var Highlight,
-  area: SelectedArea,
-  buffer: T) =
+    highlight: var Highlight, area: SelectedArea, buffer: T
+) =
+  var
+    startLine = area.startLine
+    endLine = area.endLine
+    startColumn = area.startColumn
+    endColumn = area.endColumn
+  if startLine > endLine:
+    swap(startLine, endLine)
+  if startColumn > endColumn:
+    swap(startColumn, endColumn)
 
-    var
-      startLine = area.startLine
-      endLine = area.endLine
-      startColumn = area.startColumn
-      endColumn = area.endColumn
-    if startLine > endLine: swap(startLine, endLine)
-    if startColumn > endColumn: swap(startColumn, endColumn)
-
-    for i in startLine .. endLine:
-      let colorSegment = ColorSegment(
-        firstRow: i,
-        firstColumn: startColumn,
-        lastRow: i,
-        lastColumn: min(endColumn, buffer[i].high),
-        color: EditorColorPairIndex.selectArea)
-      highlight.overwrite(colorSegment)
+  for i in startLine .. endLine:
+    let colorSegment = ColorSegment(
+      firstRow: i,
+      firstColumn: startColumn,
+      lastRow: i,
+      lastColumn: min(endColumn, buffer[i].high),
+      color: EditorColorPairIndex.selectArea,
+    )
+    highlight.overwrite(colorSegment)

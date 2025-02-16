@@ -24,8 +24,9 @@ import pkg/results
 import lsp/protocol/types
 import lsp/[inlayhint, inlinevalue]
 import syntax/highlite
-import gapbuffer, unicodeext, fileutils, highlight, independentutils, git,
-       syntaxcheck, completion, logviewerutils, helputils
+import
+  gapbuffer, unicodeext, fileutils, highlight, independentutils, git, syntaxcheck,
+  completion, logviewerutils, helputils
 
 type
   CompletionList = completion.CompletionList
@@ -57,7 +58,7 @@ type
 
   CallHierarchyInfo* = object
     bufferId*: int
-    items*:  seq[CallHierarchyItem]
+    items*: seq[CallHierarchyItem]
 
   DocumentHighlightInfo* = object
     position*: BufferPosition
@@ -93,7 +94,7 @@ type
     isPasteMode*: bool
     lspCompletionList*: CompletionList
     logContent*: LogContentKind # Use only in Logviewer
-    logLspLangId*: string  # Use only in Logviewer
+    logLspLangId*: string # Use only in Logviewer
     inlayHints*: LspInlayHints # LSP InlayHint
     inlineValues*: LspInlineValues # LSP InlineValue
     callHierarchyInfo*: CallHierarchyInfo # Use only in callhierarchyViewer
@@ -101,23 +102,25 @@ type
     codeLenses*: seq[CodeLens] # Lsp CodeLens
     selectionRanges*: seq[SelectionRange] # Lsp SelectionRange
     documentSymbols*: seq[DocumentSymbol] # Lsp DocumentSybol
-    gotoDefinitionSource: Option[BufferLocation] # The position before LSP Goto definition
+    gotoDefinitionSource: Option[BufferLocation]
+      # The position before LSP Goto definition
 
-var
-  countAddedBuffer = 0
-    # Increment after new BufferStatus is created.
+var countAddedBuffer = 0 # Increment after new BufferStatus is created.
 
-proc id*(b: BufferStatus): int {.inline.} = b.id
+proc id*(b: BufferStatus): int {.inline.} =
+  b.id
 
-proc isExMode*(mode: Mode): bool {.inline.} = mode == Mode.ex
+proc isExMode*(mode: Mode): bool {.inline.} =
+  mode == Mode.ex
 
-proc isExMode*(b: BufferStatus): bool {.inline.} = b.mode == Mode.ex
+proc isExMode*(b: BufferStatus): bool {.inline.} =
+  b.mode == Mode.ex
 
-proc isFilerMode*(mode: Mode): bool = mode == Mode.filer
+proc isFilerMode*(mode: Mode): bool =
+  mode == Mode.filer
 
 proc isFilerMode*(b: BufferStatus): bool {.inline.} =
-  b.mode == Mode.filer or
-  (b.isExMode and b.prevMode == Mode.filer)
+  b.mode == Mode.filer or (b.isExMode and b.prevMode == Mode.filer)
 
 proc isFilerMode*(mode, prevMode: Mode): bool {.inline.} =
   (mode == Mode.filer) or (mode == Mode.ex and prevMode == Mode.filer)
@@ -127,23 +130,23 @@ proc isBackupManagerMode*(mode, prevMode: Mode): bool {.inline.} =
 
 proc isBackupManagerMode*(bufStatus: BufferStatus): bool {.inline.} =
   (bufStatus.mode == Mode.backup) or
-  (bufStatus.mode == Mode.ex and bufStatus.prevMode == Mode.backup)
+    (bufStatus.mode == Mode.ex and bufStatus.prevMode == Mode.backup)
 
 proc isDiffViewerMode*(mode, prevMode: Mode): bool {.inline.} =
   (mode == Mode.diff) or (mode == Mode.ex and prevMode == Mode.diff)
 
 proc isDiffViewerMode*(bufStatus: BufferStatus): bool {.inline.} =
   (bufStatus.mode == Mode.diff) or
-  (bufStatus.mode == Mode.ex and bufStatus.prevMode == Mode.diff)
+    (bufStatus.mode == Mode.ex and bufStatus.prevMode == Mode.diff)
 
-proc isConfigMode*(mode: Mode): bool {.inline.} = mode == Mode.config
+proc isConfigMode*(mode: Mode): bool {.inline.} =
+  mode == Mode.config
 
 proc isConfigMode*(mode, prevMode: Mode): bool {.inline.} =
   (mode == Mode.config) or (mode == Mode.ex and prevMode == Mode.config)
 
 proc isConfigMode*(b: BufferStatus): bool {.inline.} =
-  (b.mode == Mode.config) or
-  (b.isExMode and b.prevMode == Mode.config)
+  (b.mode == Mode.config) or (b.isExMode and b.prevMode == Mode.config)
 
 proc isSearchForwardMode*(mode: Mode): bool {.inline.} =
   mode == Mode.searchForward
@@ -163,19 +166,19 @@ proc isSearchMode*(mode: Mode): bool {.inline.} =
 proc isSearchMode*(b: BufferStatus): bool {.inline.} =
   b.isSearchForwardMode or b.isSearchBackwardMode
 
-proc isNormalMode*(mode: Mode): bool {.inline.} = mode == Mode.normal
+proc isNormalMode*(mode: Mode): bool {.inline.} =
+  mode == Mode.normal
 
 proc isNormalMode*(mode, prevMode: Mode): bool {.inline.} =
-  (mode == Mode.normal) or
-  (mode.isExMode and prevMode == Mode.normal) or
-  (mode.isSearchMode and prevMode == Mode.normal)
+  (mode == Mode.normal) or (mode.isExMode and prevMode == Mode.normal) or
+    (mode.isSearchMode and prevMode == Mode.normal)
 
 proc isNormalMode*(b: BufferStatus): bool {.inline.} =
-  (b.mode == Mode.normal) or
-  (b.isExMode and b.prevMode == Mode.normal) or
-  (b.isSearchMode and b.prevMode == Mode.normal)
+  (b.mode == Mode.normal) or (b.isExMode and b.prevMode == Mode.normal) or
+    (b.isSearchMode and b.prevMode == Mode.normal)
 
-proc isInsertMultiMode*(mode: Mode): bool {.inline.} = mode == Mode.insertMulti
+proc isInsertMultiMode*(mode: Mode): bool {.inline.} =
+  mode == Mode.insertMulti
 
 proc isInsertMultiMode*(b: BufferStatus): bool {.inline.} =
   b.mode == Mode.insertMulti
@@ -186,36 +189,38 @@ proc isInsertMode*(mode: Mode): bool {.inline.} =
 proc isInsertMode*(b: BufferStatus): bool {.inline.} =
   b.mode == Mode.insert or b.mode == Mode.insertMulti
 
-proc isReplaceMode*(mode: Mode): bool {.inline.} = mode == Mode.replace
+proc isReplaceMode*(mode: Mode): bool {.inline.} =
+  mode == Mode.replace
 
-proc isReplaceMode*(b: BufferStatus): bool {.inline.} = b.mode == Mode.replace
+proc isReplaceMode*(b: BufferStatus): bool {.inline.} =
+  b.mode == Mode.replace
 
 proc isDebugMode*(mode, prevMode: Mode): bool {.inline.} =
-  (mode == Mode.debug) or
-  (mode == Mode.ex and prevMode == Mode.debug)
+  (mode == Mode.debug) or (mode == Mode.ex and prevMode == Mode.debug)
 
 proc isDebugMode*(b: BufferStatus): bool {.inline.} =
   (b.mode == Mode.debug) or (b.isExMode and b.prevMode == Mode.debug)
 
-proc isQuickRunMode*(mode: Mode): bool = mode == Mode.quickRun
+proc isQuickRunMode*(mode: Mode): bool =
+  mode == Mode.quickRun
 
 proc isQuickRunMode*(mode, prevMode: Mode): bool {.inline.} =
-  (mode == Mode.quickRun) or
-  (mode == Mode.ex and prevMode == Mode.quickRun)
+  (mode == Mode.quickRun) or (mode == Mode.ex and prevMode == Mode.quickRun)
 
 proc isQuickRunMode*(b: BufferStatus): bool {.inline.} =
   isQuickRunMode(b.mode, b.prevMode)
 
-proc isLogViewerMode*(mode: Mode): bool {.inline.} = mode == Mode.logViewer
+proc isLogViewerMode*(mode: Mode): bool {.inline.} =
+  mode == Mode.logViewer
 
 proc isLogViewerMode*(mode, prevMode: Mode): bool {.inline.} =
-  (mode == Mode.logViewer) or
-  (mode == Mode.ex and prevMode == Mode.logViewer)
+  (mode == Mode.logViewer) or (mode == Mode.ex and prevMode == Mode.logViewer)
 
 proc isLogViewerMode*(b: BufferStatus): bool {.inline.} =
   isLogViewerMode(b.mode, b.prevMode)
 
-proc isBufferManagerMode*(mode: Mode): bool {.inline.} = mode == Mode.bufManager
+proc isBufferManagerMode*(mode: Mode): bool {.inline.} =
+  mode == Mode.bufManager
 
 proc isBufferManagerMode*(b: BufferStatus): bool {.inline.} =
   b.mode == Mode.bufManager
@@ -224,7 +229,7 @@ proc isVisualMode*(mode: Mode): bool {.inline.} =
   mode == Mode.visual or mode == Mode.visualBlock or mode == Mode.visualLine
 
 proc isVisualMode*(b: BufferStatus): bool {.inline.} =
-  b.mode == Mode.visual or b.mode == Mode.visualBlock  or b.mode == Mode.visualLine
+  b.mode == Mode.visual or b.mode == Mode.visualBlock or b.mode == Mode.visualLine
 
 proc isVisualBlockMode*(mode: Mode): bool {.inline.} =
   mode == Mode.visualBlock
@@ -232,21 +237,20 @@ proc isVisualBlockMode*(mode: Mode): bool {.inline.} =
 proc isVisualBlockMode*(b: BufferStatus): bool {.inline.} =
   b.mode == Mode.visualBlock
 
-proc isVisualLineMode*(mode: Mode): bool {.inline.} = mode == Mode.visualLine
+proc isVisualLineMode*(mode: Mode): bool {.inline.} =
+  mode == Mode.visualLine
 
 proc isVisualLineMode*(b: BufferStatus): bool {.inline.} =
   b.mode == Mode.visualLine
 
 proc isHelpMode*(mode, prevMode: Mode): bool {.inline.} =
-  (mode == Mode.help) or
-  (mode == Mode.ex and prevMode == Mode.help)
+  (mode == Mode.help) or (mode == Mode.ex and prevMode == Mode.help)
 
 proc isHelpMode*(b: BufferStatus): bool {.inline.} =
   isHelpMode(b.mode, b.prevMode)
 
 proc isRecentFileMode*(mode, prevMode: Mode): bool {.inline.} =
-  (mode == Mode.recentFile) or
-  (mode == Mode.ex and prevMode == Mode.recentFile)
+  (mode == Mode.recentFile) or (mode == Mode.ex and prevMode == Mode.recentFile)
 
 proc isRecentFileMode*(b: BufferStatus): bool {.inline.} =
   isRecentFileMode(b.mode, b.prevMode)
@@ -260,29 +264,19 @@ proc isDocumentSymbolMode*(b: BufferStatus): bool {.inline.} =
 proc isEditMode*(mode, prevMode: Mode): bool {.inline.} =
   ## Modes for editing text
 
-  isNormalMode(mode, prevMode) or
-  isInsertMode(mode) or
-  isVisualMode(mode) or
-  isReplaceMode(mode)
+  isNormalMode(mode, prevMode) or isInsertMode(mode) or isVisualMode(mode) or
+    isReplaceMode(mode)
 
 proc isEditMode*(mode: Mode): bool {.inline.} =
-  isNormalMode(mode) or
-  isInsertMode(mode) or
-  isVisualMode(mode) or
-  isReplaceMode(mode)
+  isNormalMode(mode) or isInsertMode(mode) or isVisualMode(mode) or isReplaceMode(mode)
 
 proc isEditMode*(b: BufferStatus): bool {.inline.} =
-  b.isNormalMode or
-  b.isInsertMode or
-  b.isVisualMode or
-  b.isReplaceMode
+  b.isNormalMode or b.isInsertMode or b.isVisualMode or b.isReplaceMode
 
 proc isExpandableMode*(bufStatus: BufferStatus): bool {.inline.} =
   ## Can move up to the line.high + 1 in these modes.
 
-  bufStatus.isInsertMode or
-  bufStatus.isReplaceMode or
-  bufStatus.isVisualMode
+  bufStatus.isInsertMode or bufStatus.isReplaceMode or bufStatus.isVisualMode
 
 proc isCommandLineMode*(b: BufferStatus): bool {.inline.} =
   ## Return true if the mode uses the command line.
@@ -292,19 +286,13 @@ proc isCommandLineMode*(b: BufferStatus): bool {.inline.} =
 proc isCursor*(mode: Mode): bool {.inline.} =
   ## Return true if a mode in which it uses the cursor.
 
-  case mode:
-    of filer,
-       bufManager,
-       recentFile,
-       backup,
-       config,
-       debug,
-       references,
-       callhierarchyviewer:
-         # Don't use the cursor.
-         return false
-    else:
-      return true
+  case mode
+  of filer, bufManager, recentFile, backup, config, debug, references,
+      callhierarchyviewer:
+    # Don't use the cursor.
+    return false
+  else:
+    return true
 
 proc isCursor*(bufStatus: BufferStatus): bool {.inline.} =
   ## Return true if a mode in which it uses the cursor.
@@ -315,16 +303,16 @@ proc isUpdate*(bufStatuses: seq[BufferStatus]): bool =
   ## Return true if at least one bufStatus.isUpdate is true.
 
   for b in bufStatuses:
-    if b.isUpdate: return true
+    if b.isUpdate:
+      return true
 
 proc checkBufferExist*(
-  bufStatus: seq[BufferStatus],
-  path: Runes | string): Option[int] =
-
-    let runes = path.toRunes
-    for index, buf in bufStatus:
-      if buf.path == runes:
-        return some(index)
+    bufStatus: seq[BufferStatus], path: Runes | string
+): Option[int] =
+  let runes = path.toRunes
+  for index, buf in bufStatus:
+    if buf.path == runes:
+      return some(index)
 
 proc absolutePath*(bufStatus: BufferStatus): Runes =
   if isAbsolute($bufStatus.path):
@@ -338,89 +326,87 @@ proc initId(b: var BufferStatus) {.inline.} =
   b.id = countAddedBuffer
   countAddedBuffer.inc
 
-proc initBufferStatus*(
-  path: string,
-  mode: Mode): Result[BufferStatus, string] =
-    ## Open file or dir and return a new BufferStatus.
+proc initBufferStatus*(path: string, mode: Mode): Result[BufferStatus, string] =
+  ## Open file or dir and return a new BufferStatus.
 
-    var b = BufferStatus(
-      isUpdate: true,
-      openDir: getCurrentDir().toRunes,
-      prevMode: mode,
-      mode: mode,
-      lastSaveTime: now(),
-      lastGitInfoCheckTime: now(),
-      lspCompletionList: initCompletionList())
+  var b = BufferStatus(
+    isUpdate: true,
+    openDir: getCurrentDir().toRunes,
+    prevMode: mode,
+    mode: mode,
+    lastSaveTime: now(),
+    lastGitInfoCheckTime: now(),
+    lspCompletionList: initCompletionList(),
+  )
 
-    case mode:
-      of Mode.filer:
-        if isAccessibleDir(path):
-          b.path = absolutePath(path).toRunes
-          b.buffer = initGapBuffer(@[ru""])
-        else:
-          return Result[BufferStatus, string].err "Can not open dir"
-      of Mode.logViewer, Mode.diff:
-        b.buffer = initGapBuffer(@[ru""])
-        b.isReadonly = true
-      of Mode.help:
-        b.buffer = initHelpModeBuffer().toGapBuffer
-        b.isReadonly = true
-      else:
-        b.path = path.toRunes
+  case mode
+  of Mode.filer:
+    if isAccessibleDir(path):
+      b.path = absolutePath(path).toRunes
+      b.buffer = initGapBuffer(@[ru""])
+    else:
+      return Result[BufferStatus, string].err "Can not open dir"
+  of Mode.logViewer, Mode.diff:
+    b.buffer = initGapBuffer(@[ru""])
+    b.isReadonly = true
+  of Mode.help:
+    b.buffer = initHelpModeBuffer().toGapBuffer
+    b.isReadonly = true
+  else:
+    b.path = path.toRunes
 
-        b.fileType = getFileType(path)
-        b.extension = getFileExtension(b.path)
+    b.fileType = getFileType(path)
+    b.extension = getFileExtension(b.path)
 
-        if not fileExists($b.path):
-          b.buffer = newFile()
-        else:
-          let textAndEncoding = openFile(b.path)
-          if textAndEncoding.isErr:
-            return Result[BufferStatus, string].err fmt"Failed to init BufferStatus: {textAndEncoding.error}"
+    if not fileExists($b.path):
+      b.buffer = newFile()
+    else:
+      let textAndEncoding = openFile(b.path)
+      if textAndEncoding.isErr:
+        return Result[BufferStatus, string].err fmt"Failed to init BufferStatus: {textAndEncoding.error}"
 
-          b.buffer = textAndEncoding.get.text.toGapBuffer
-          b.characterEncoding = textAndEncoding.get.encoding
+      b.buffer = textAndEncoding.get.text.toGapBuffer
+      b.characterEncoding = textAndEncoding.get.encoding
 
-          b.isTrackingByGit = isTrackingByGit(path)
+      b.isTrackingByGit = isTrackingByGit(path)
 
-        b.language = detectLanguage($b.path)
+    b.language = detectLanguage($b.path)
 
-    b.initId
-    return Result[BufferStatus, string].ok b
+  b.initId
+  return Result[BufferStatus, string].ok b
 
-proc initBufferStatus*(
-  mode: Mode = Mode.normal): Result[BufferStatus, string] =
-    ## Return a BufferStatus for a new empty buffer.
+proc initBufferStatus*(mode: Mode = Mode.normal): Result[BufferStatus, string] =
+  ## Return a BufferStatus for a new empty buffer.
 
-    var b = BufferStatus(
-      isUpdate: true,
-      openDir: getCurrentDir().toRunes,
-      prevMode: mode,
-      mode: mode,
-      lastSaveTime: now(),
-      lastGitInfoCheckTime: now(),
-      fileType: FileType.unknown,
-      lspCompletionList: initCompletionList())
+  var b = BufferStatus(
+    isUpdate: true,
+    openDir: getCurrentDir().toRunes,
+    prevMode: mode,
+    mode: mode,
+    lastSaveTime: now(),
+    lastGitInfoCheckTime: now(),
+    fileType: FileType.unknown,
+    lspCompletionList: initCompletionList(),
+  )
 
-    case mode:
-      of Mode.filer:
-        b.buffer = initGapBuffer(@[ru""])
-      of Mode.logViewer, Mode.diff:
-        b.buffer = initGapBuffer(@[ru""])
-        b.isReadonly = true
-      of Mode.help:
-        b.buffer = initHelpModeBuffer().toGapBuffer
-        b.isReadonly = true
-      else:
-        b.buffer = newFile()
+  case mode
+  of Mode.filer:
+    b.buffer = initGapBuffer(@[ru""])
+  of Mode.logViewer, Mode.diff:
+    b.buffer = initGapBuffer(@[ru""])
+    b.isReadonly = true
+  of Mode.help:
+    b.buffer = initHelpModeBuffer().toGapBuffer
+    b.isReadonly = true
+  else:
+    b.buffer = newFile()
 
-    b.initId
+  b.initId
 
-    return Result[BufferStatus, string].ok b
+  return Result[BufferStatus, string].ok b
 
-proc initBufferStatus*(
-  path: string): Result[BufferStatus, string] {.inline.} =
-    initBufferStatus(path, Mode.normal)
+proc initBufferStatus*(path: string): Result[BufferStatus, string] {.inline.} =
+  initBufferStatus(path, Mode.normal)
 
 proc changeMode*(bufStatus: var BufferStatus, mode: Mode) =
   let currentMode = bufStatus.mode
@@ -432,8 +418,8 @@ proc positionEndOfBuffer*(bufStatus: BufferStatus): BufferPosition {.inline.} =
   ## Return the BufferPosition of the end of the buffer.
 
   BufferPosition(
-    line: bufStatus.buffer.high,
-    column: bufStatus.buffer[bufStatus.buffer.high].high)
+    line: bufStatus.buffer.high, column: bufStatus.buffer[bufStatus.buffer.high].high
+  )
 
 proc updateLastGitInfoCheckTime*(bufStatus: var BufferStatus) {.inline.} =
   bufStatus.lastGitInfoCheckTime = now()
@@ -445,30 +431,29 @@ proc updateChangedLines*(bufStatus: var BufferStatus, diffs: seq[Diff]) =
   bufStatus.updateLastGitInfoCheckTime
 
 proc updateSyntaxCheckerResults*(
-  bufStatus: var BufferStatus,
-  output: seq[string]): Result[(), string]=
-    ## Update BufferStatus.syntaxCheckResults
+    bufStatus: var BufferStatus, output: seq[string]
+): Result[(), string] =
+  ## Update BufferStatus.syntaxCheckResults
 
-    let r = parseNimCheckResult($bufStatus.path.absolutePath, output)
-    if r.isErr:
-      return Result[(), string].err r.error
+  let r = parseNimCheckResult($bufStatus.path.absolutePath, output)
+  if r.isErr:
+    return Result[(), string].err r.error
 
-    bufStatus.syntaxCheckResults = r.get
+  bufStatus.syntaxCheckResults = r.get
 
-    return Result[(), string].ok ()
+  return Result[(), string].ok ()
 
 proc setGotoDefinitionSource*(b: BufferStatus, l: BufferLocation) {.inline.} =
   b.gotoDefinitionSource = some(l)
 
 proc getGotoDefinitionSource*(
-  b: BufferStatus,
-  clear: bool = true): Option[BufferLocation] =
-
-    if b.gotoDefinitionSource.isSome:
-      let l = b.gotoDefinitionSource
-      if clear:
-        b.gotoDefinitionSource = none(BufferLocation)
-      return l
+    b: BufferStatus, clear: bool = true
+): Option[BufferLocation] =
+  if b.gotoDefinitionSource.isSome:
+    let l = b.gotoDefinitionSource
+    if clear:
+      b.gotoDefinitionSource = none(BufferLocation)
+    return l
 
 proc clearDocumentHighlightInfo*(b: BufferStatus) {.inline.} =
   b.documentHighlightInfo = DocumentHighlightInfo()

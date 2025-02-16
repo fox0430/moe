@@ -120,9 +120,9 @@ suite "inverseColor":
 
 suite "calcRgbDifference":
   test "calcRgbDifference 1":
-    check 3 == Rgb(red: 0, green: 0, blue: 0).calcRgbDifference(
-      Rgb(red: 1, green: 1, blue: 1))
+    check 3 ==
+      Rgb(red: 0, green: 0, blue: 0).calcRgbDifference(Rgb(red: 1, green: 1, blue: 1))
 
   test "calcRgbDifference 2":
-    check 3 == Rgb(red: 1, green: 1, blue: 1).calcRgbDifference(
-      Rgb(red: 0, green: 0, blue: 0))
+    check 3 ==
+      Rgb(red: 1, green: 1, blue: 1).calcRgbDifference(Rgb(red: 0, green: 0, blue: 0))

@@ -38,31 +38,23 @@ suite "Config mode: Init buffer":
 
     let buffer = status.settings.initStandardTableBuffer
 
-    const Sample = @[
-      "Standard",
-      "  number                   true",
-      "  currentNumber            true",
-      "  cursorLine               false",
-      "  statusLine               true",
-      "  tabLine                  true",
-      "  syntax                   true",
-      "  indentationLines         true",
-      "  tabStop                  2",
-      "  sidebar                  true",
-      "  autoCloseParen           true",
-      "  autoIndent               true",
-      "  ignorecase               true",
-      "  smartcase                true",
-      "  disableChangeCursor      false",
-      "  defaultCursor            terminalDefault",
-      "  normalModeCursor         blinkBlock",
-      "  insertModeCursor         blinkIbeam",
-      "  liveReloadOfConf         false",
-      "  incrementalSearch        true",
-      "  popupWindowInExmode      true",
-      "  autoDeleteParen          false",
-      "  liveReloadOfFile         false",
-      "  colorMode                24bit"].toSeqRunes
+    const Sample =
+      @[
+        "Standard", "  number                   true",
+        "  currentNumber            true", "  cursorLine               false",
+        "  statusLine               true", "  tabLine                  true",
+        "  syntax                   true", "  indentationLines         true",
+        "  tabStop                  2", "  sidebar                  true",
+        "  autoCloseParen           true", "  autoIndent               true",
+        "  ignorecase               true", "  smartcase                true",
+        "  disableChangeCursor      false",
+        "  defaultCursor            terminalDefault",
+        "  normalModeCursor         blinkBlock",
+        "  insertModeCursor         blinkIbeam", "  liveReloadOfConf         false",
+        "  incrementalSearch        true", "  popupWindowInExmode      true",
+        "  autoDeleteParen          false", "  liveReloadOfFile         false",
+        "  colorMode                24bit",
+      ].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
@@ -73,10 +65,11 @@ suite "Config mode: Init buffer":
     status.settings.clipboard.tool = ClipboardTool.xsel
     let buffer = status.settings.clipboard.initClipBoardTableBuffer
 
-    const Sample = @[
-      "ClipBoard",
-      "  enable                   true",
-      "  toolOnLinux              xsel"].toSeqRunes
+    const Sample =
+      @[
+        "ClipBoard", "  enable                   true",
+        "  toolOnLinux              xsel",
+      ].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
@@ -85,11 +78,11 @@ suite "Config mode: Init buffer":
     var status = initEditorStatus()
     let buffer = status.settings.buildOnSave.initBuildOnSaveTableBuffer
 
-    const Sample = @[
-      "BuildOnSave",
-      "  enable                   false",
-      "  workspaceRoot            ",
-      "  command                  "].toSeqRunes
+    const Sample =
+      @[
+        "BuildOnSave", "  enable                   false",
+        "  workspaceRoot            ", "  command                  ",
+      ].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
@@ -98,9 +91,7 @@ suite "Config mode: Init buffer":
     var status = initEditorStatus()
     let buffer = status.settings.initTabLineTableBuffer
 
-    const Sample = @[
-      "TabLine",
-      "  allBuffer                false"].toSeqRunes
+    const Sample = @["TabLine", "  allBuffer                false"].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
@@ -109,20 +100,16 @@ suite "Config mode: Init buffer":
     var status = initEditorStatus()
     let buffer = status.settings.statusLine.initStatusLineTableBuffer
 
-    const Sample = @[
-      "StatusLine",
-      "  multipleStatusLine       true",
-      "  merge                    false",
-      "  mode                     true",
-      "  filename                 true",
-      "  chanedMark               true",
-      "  directory                true",
-      "  gitChangedLines          true",
-      "  gitBranchName            true",
-      "  showGitInactive          false",
-      "  showModeInactive         false",
-      "  setupText                {lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {fileType}"
-    ].toSeqRunes
+    const Sample =
+      @[
+        "StatusLine", "  multipleStatusLine       true",
+        "  merge                    false", "  mode                     true",
+        "  filename                 true", "  chanedMark               true",
+        "  directory                true", "  gitChangedLines          true",
+        "  gitBranchName            true", "  showGitInactive          false",
+        "  showModeInactive         false",
+        "  setupText                {lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {fileType}",
+      ].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
@@ -131,14 +118,13 @@ suite "Config mode: Init buffer":
     var status = initEditorStatus()
     let buffer = status.settings.initHighlightTableBuffer
 
-    const Sample = @[
-      "Highlight",
-      "  currentLine              true",
-      "  fullWidthSpace           true",
-      "  trailingSpaces           true",
-      "  currentWord              true",
-      "  replaceText              true",
-      "  reservedWords            TODO WIP NOTE "].toSeqRunes
+    const Sample =
+      @[
+        "Highlight", "  currentLine              true",
+        "  fullWidthSpace           true", "  trailingSpaces           true",
+        "  currentWord              true", "  replaceText              true",
+        "  reservedWords            TODO WIP NOTE ",
+      ].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
@@ -147,13 +133,13 @@ suite "Config mode: Init buffer":
     var status = initEditorStatus()
     let buffer = status.settings.autoBackup.initAutoBackupTableBuffer
 
-    const Sample = @[
-      "AutoBackup",
-      "  enable                   false",
-      "  idleTime                 10",
-      "  interval                 5",
-      "  backupDir                {getCacheDir()}/moe/backups".fmt,
-      "  dirToExclude             /etc"].toSeqRunes
+    const Sample =
+      @[
+        "AutoBackup", "  enable                   false",
+        "  idleTime                 10", "  interval                 5",
+        "  backupDir                {getCacheDir()}/moe/backups".fmt,
+        "  dirToExclude             /etc",
+      ].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
@@ -162,17 +148,14 @@ suite "Config mode: Init buffer":
     var status = initEditorStatus()
     let buffer = status.settings.quickRun.initQuickRunTableBuffer
 
-    const Sample = @[
-      "QuickRun",
-      "  saveBufferWhenQuickRun   true",
-      "  command                  ",
-      "  timeout                  30",
-      "  nimAdvancedCommand       c",
-      "  clangOptions             ",
-      "  cppOptions               ",
-      "  nimOptions               ",
-      "  shOptions                ",
-      "  bashOptions              "].toSeqRunes
+    const Sample =
+      @[
+        "QuickRun", "  saveBufferWhenQuickRun   true", "  command                  ",
+        "  timeout                  30", "  nimAdvancedCommand       c",
+        "  clangOptions             ", "  cppOptions               ",
+        "  nimOptions               ", "  shOptions                ",
+        "  bashOptions              ",
+      ].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
@@ -183,28 +166,20 @@ suite "Config mode: Init buffer":
       notificationSettings = status.settings.notification
       buffer = notificationSettings.initNotificationTableBuffer
 
-    const Sample = @[
-      "Notification",
-      "  screenNotifications      true",
-      "  logNotifications         true",
-      "  autoBackupScreenNotify   true",
-      "  autoBackupLogNotify      true",
-      "  autoSaveScreenNotify     true",
-      "  autoSaveLogNotify        true",
-      "  yankScreenNotify         true",
-      "  yankLogNotify            true",
-      "  deleteScreenNotify       true",
-      "  deleteLogNotify          true",
-      "  saveScreenNotify         true",
-      "  saveLogNotify            true",
-      "  quickRunScreenNotify     true",
-      "  quickRunLogNotify        true",
-      "  buildOnSaveScreenNotify  true",
-      "  buildOnSaveLogNotify     true",
-      "  filerScreenNotify        true",
-      "  filerLogNotify           true",
-      "  restoreScreenNotify      true",
-      "  restoreLogNotify         true"].toSeqRunes
+    const Sample =
+      @[
+        "Notification", "  screenNotifications      true",
+        "  logNotifications         true", "  autoBackupScreenNotify   true",
+        "  autoBackupLogNotify      true", "  autoSaveScreenNotify     true",
+        "  autoSaveLogNotify        true", "  yankScreenNotify         true",
+        "  yankLogNotify            true", "  deleteScreenNotify       true",
+        "  deleteLogNotify          true", "  saveScreenNotify         true",
+        "  saveLogNotify            true", "  quickRunScreenNotify     true",
+        "  quickRunLogNotify        true", "  buildOnSaveScreenNotify  true",
+        "  buildOnSaveLogNotify     true", "  filerScreenNotify        true",
+        "  filerLogNotify           true", "  restoreScreenNotify      true",
+        "  restoreLogNotify         true",
+      ].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
@@ -214,9 +189,7 @@ suite "Config mode: Init buffer":
     let buffer = status.settings.initFilerTableBuffer
 
     echo buffer[1]
-    const Sample = @[
-      "Filer",
-      "  showIcons                true"].toSeqRunes
+    const Sample = @["Filer", "  showIcons                true"].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
@@ -225,9 +198,7 @@ suite "Config mode: Init buffer":
     var status = initEditorStatus()
     let buffer = status.settings.initAutocompleteTableBuffer
 
-    const Sample = @[
-      "Autocomplete",
-      "  enable                   true"].toSeqRunes
+    const Sample = @["Autocomplete", "  enable                   true"].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
@@ -236,10 +207,8 @@ suite "Config mode: Init buffer":
     var status = initEditorStatus()
     let buffer = status.settings.initAutoSaveTableBuffer
 
-    const Sample = @[
-      "AutoSave",
-      "  enable                   true",
-      "  interval                 5"].toSeqRunes
+    const Sample =
+      @["AutoSave", "  enable                   true", "  interval                 5"].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
@@ -248,13 +217,12 @@ suite "Config mode: Init buffer":
     var status = initEditorStatus()
     let buffer = status.settings.persist.initPersistTableBuffer
 
-    const Sample = @[
-      "Persist",
-      "  exCommand                true",
-      "  exCommandHistoryLimit    1000",
-      "  search                   true",
-      "  searchHistoryLimit       1000",
-      "  cursorPosition           true"].toSeqRunes
+    const Sample =
+      @[
+        "Persist", "  exCommand                true", "  exCommandHistoryLimit    1000",
+        "  search                   true", "  searchHistoryLimit       1000",
+        "  cursorPosition           true",
+      ].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
@@ -263,10 +231,8 @@ suite "Config mode: Init buffer":
     var status = initEditorStatus()
     let buffer = status.settings.git.initGitTableBuffer
 
-    const Sample = @[
-      "Git",
-      "  showChangedLine          true",
-      "  updateInterval           1000"].toSeqRunes
+    const Sample =
+      @["Git", "  showChangedLine          true", "  updateInterval           1000"].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
@@ -275,12 +241,10 @@ suite "Config mode: Init buffer":
     var status = initEditorStatus()
     let buffer = status.settings.theme.initThemeTableBuffer
 
-    const Sample = @[
-      "Theme",
-      "  kind                     default",
-      "  path                     ",
-      ""
-    ].toSeqRunes
+    const Sample =
+      @[
+        "Theme", "  kind                     default", "  path                     ", ""
+      ].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
@@ -300,26 +264,30 @@ suite "Config mode: Get standard table setting values":
     const Name = "defaultCursor"
     let values = settings.getStandardTableSettingValues(Name)
 
-    check values == @[
-      ru"terminalDefault",
-      ru"blinkBlock",
-      ru"noneBlinkBlock",
-      ru"blinkIbeam",
-      ru"noneBlinkIbeam"]
+    check values ==
+      @[
+        ru"terminalDefault",
+        ru"blinkBlock",
+        ru"noneBlinkBlock",
+        ru"blinkIbeam",
+        ru"noneBlinkIbeam",
+      ]
 
   test "Get normalModeCursor values":
     var status = initEditorStatus()
     let settings = status.settings
 
-    const Name ="normalModeCursor"
+    const Name = "normalModeCursor"
     let values = settings.getStandardTableSettingValues(Name)
 
-    check values == @[
-      ru"blinkBlock",
-      ru"terminalDefault",
-      ru"noneBlinkBlock",
-      ru"blinkIbeam",
-      ru"noneBlinkIbeam"]
+    check values ==
+      @[
+        ru"blinkBlock",
+        ru"terminalDefault",
+        ru"noneBlinkBlock",
+        ru"blinkIbeam",
+        ru"noneBlinkIbeam",
+      ]
 
   test "Get insertModeCursor values":
     var status = initEditorStatus()
@@ -328,12 +296,14 @@ suite "Config mode: Get standard table setting values":
     const Name = "insertModeCursor"
     let values = settings.getStandardTableSettingValues(Name)
 
-    check values == @[
-      ru"blinkIbeam",
-      ru"terminalDefault",
-      ru"blinkBlock",
-      ru"noneBlinkBlock",
-      ru"noneBlinkIbeam"]
+    check values ==
+      @[
+        ru"blinkIbeam",
+        ru"terminalDefault",
+        ru"blinkBlock",
+        ru"noneBlinkBlock",
+        ru"noneBlinkIbeam",
+      ]
 
   test "Get number values":
     var status = initEditorStatus()
@@ -814,9 +784,7 @@ suite "Config mode: Get AutoBackup table setting values":
       SettingType = SettingType.bool
     let
       default = autoBackupSettings.enable
-      values = autoBackupSettings.getAutoBackupTableSettingValues(
-        Name,
-        SettingType)
+      values = autoBackupSettings.getAutoBackupTableSettingValues(Name, SettingType)
 
     checkBoolSettingValue(default, values)
 
@@ -829,9 +797,7 @@ suite "Config mode: Get AutoBackup table setting values":
       SettingType = SettingType.text
     let
       default = autoBackupSettings.backupDir
-      values = autoBackupSettings.getAutoBackupTableSettingValues(
-        Name,
-        SettingType)
+      values = autoBackupSettings.getAutoBackupTableSettingValues(Name, SettingType)
 
     check default == values[0]
 
@@ -842,9 +808,7 @@ suite "Config mode: Get AutoBackup table setting values":
     const
       Name = "test"
       SettingType = SettingType.none
-    let values = autoBackupSettings.getAutoBackupTableSettingValues(
-      Name,
-      SettingType)
+    let values = autoBackupSettings.getAutoBackupTableSettingValues(Name, SettingType)
 
     check values.len == 0
 
@@ -1551,7 +1515,6 @@ suite "Config mode: Chaging BuildOnSave table settings":
 
 suite "Config mode: Chaging TabLine table settings":
   test "Chaging allBuffer":
-
     var
       settings = initEditorSettings()
       tablineSettings = settings.tabline

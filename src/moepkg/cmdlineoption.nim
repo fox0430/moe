@@ -35,17 +35,15 @@ proc generateVersionInfoMessage(): string =
     GitHash = "Git hash: " & gitHash()
     BuildType = "Build type: " & buildType()
 
-  result =
-    VersionInfo & "\n\n" &
-    GitHash & "\n" &
-    BuildType
+  result = VersionInfo & "\n\n" & GitHash & "\n" & BuildType
 
 proc writeVersion() =
   echo generateVersionInfoMessage()
   quit()
 
 proc generateHelpMessage(): string =
-  const HelpMessage = """
+  const HelpMessage =
+    """
 Usage:
   moe [file]       Edit file
 
@@ -110,23 +108,32 @@ proc parseCommandLineOption*(line: seq[string]): CmdParsedList =
     parsedLine = initOptParser(line)
     index = 0
   for kind, key, val in parsedLine.getopt():
-    case kind:
-      of cmdArgument:
-        result.path.add(key)
-      of cmdShortOption:
-        case key:
-          of "v": writeVersion()
-          of "h": writeHelp()
-          of "R": result.isReadonly = true
-          else: writeCmdLineError(kind, key)
-      of cmdLongOption:
-        case key:
-          of "log": result.isLogger = true
-          of "init": initDefaultConfigFile()
-          of "version": writeVersion()
-          of "help": writeHelp()
-          else: writeCmdLineError(kind, key)
-      of cmdEnd:
-        assert(false)
+    case kind
+    of cmdArgument:
+      result.path.add(key)
+    of cmdShortOption:
+      case key
+      of "v":
+        writeVersion()
+      of "h":
+        writeHelp()
+      of "R":
+        result.isReadonly = true
+      else:
+        writeCmdLineError(kind, key)
+    of cmdLongOption:
+      case key
+      of "log":
+        result.isLogger = true
+      of "init":
+        initDefaultConfigFile()
+      of "version":
+        writeVersion()
+      of "help":
+        writeHelp()
+      else:
+        writeCmdLineError(kind, key)
+    of cmdEnd:
+      assert(false)
 
     inc(index)

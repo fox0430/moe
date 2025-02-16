@@ -21,8 +21,7 @@ import std/[unittest, strutils, strformat, importutils]
 
 import pkg/results
 
-import moepkg/[bufferstatus, editorstatus, ui, color, independentutils,
-               unicodeext]
+import moepkg/[bufferstatus, editorstatus, ui, color, independentutils, unicodeext]
 
 import utils
 
@@ -35,8 +34,8 @@ suite "tabline: initBuffers":
       Path = ru"test.txt"
     let bufStatuses = @[BufferStatus(path: Path)]
 
-    check initBuffers(bufStatuses, WinWidth) == @[
-      " test.txt" & " ".repeat(100 - Path.len)].toSeqRunes
+    check initBuffers(bufStatuses, WinWidth) ==
+      @[" test.txt" & " ".repeat(100 - Path.len)].toSeqRunes
 
   test "Short":
     const
@@ -44,7 +43,7 @@ suite "tabline: initBuffers":
       Path = ru"test.txt"
     let bufStatuses = @[BufferStatus(path: Path)]
 
-    check initBuffers(bufStatuses, WinWidth) == @[ " test~"].toSeqRunes
+    check initBuffers(bufStatuses, WinWidth) == @[" test~"].toSeqRunes
 
 suite "tabline: displayedPath":
   test "Backup mode":
@@ -100,21 +99,20 @@ suite "tabline: update":
       CurrentBufferIndex = 0
       IsAllbuffer = true
 
-    status.tabLine.update(
-      status.bufStatus,
-      CurrentBufferIndex,
-      IsAllbuffer)
+    status.tabLine.update(status.bufStatus, CurrentBufferIndex, IsAllbuffer)
 
     check status.tabLine.position == Position(x: 0, y: 0)
     check status.tabLine.size == Size(h: 1, w: 100)
     check status.tabLine.buffer == toRunes(" New file" & " ".repeat(92))
-    check status.tabLine.highlight.colorSegments == @[
-      ColorSegment(
-        firstColumn: 0,
-        lastColumn: 100,
-        color: EditorColorPairIndex.currentTab,
-        attribute: Attribute.normal)
-    ]
+    check status.tabLine.highlight.colorSegments ==
+      @[
+        ColorSegment(
+          firstColumn: 0,
+          lastColumn: 100,
+          color: EditorColorPairIndex.currentTab,
+          attribute: Attribute.normal,
+        )
+      ]
 
   test "Single buffer 2":
     const Path = ru"text.txt"
@@ -127,22 +125,20 @@ suite "tabline: update":
       CurrentBufferIndex = 0
       IsAllbuffer = true
 
-    status.tabLine.update(
-      status.bufStatus,
-      CurrentBufferIndex,
-      IsAllbuffer)
+    status.tabLine.update(status.bufStatus, CurrentBufferIndex, IsAllbuffer)
 
     check status.tabLine.position == Position(x: 0, y: 0)
     check status.tabLine.size == Size(h: 1, w: 100)
-    check status.tabLine.buffer == toRunes(
-      fmt" {$Path}" & ' '.repeat(100 - Path.len))
-    check status.tabLine.highlight.colorSegments == @[
-      ColorSegment(
-        firstColumn: 0,
-        lastColumn: 100,
-        color: EditorColorPairIndex.currentTab,
-        attribute: Attribute.normal)
-    ]
+    check status.tabLine.buffer == toRunes(fmt" {$Path}" & ' '.repeat(100 - Path.len))
+    check status.tabLine.highlight.colorSegments ==
+      @[
+        ColorSegment(
+          firstColumn: 0,
+          lastColumn: 100,
+          color: EditorColorPairIndex.currentTab,
+          attribute: Attribute.normal,
+        )
+      ]
 
   test "Single buffer 3":
     const Path = ru"text.txt"
@@ -155,21 +151,20 @@ suite "tabline: update":
       CurrentBufferIndex = 0
       IsAllbuffer = true
 
-    status.tabLine.update(
-      status.bufStatus,
-      CurrentBufferIndex,
-      IsAllbuffer)
+    status.tabLine.update(status.bufStatus, CurrentBufferIndex, IsAllbuffer)
 
     check status.tabLine.position == Position(x: 0, y: 0)
     check status.tabLine.size == Size(h: 1, w: 5)
     check status.tabLine.buffer == ru" text~"
-    check status.tabLine.highlight.colorSegments == @[
-      ColorSegment(
-        firstColumn: 0,
-        lastColumn: 5,
-        color: EditorColorPairIndex.currentTab,
-        attribute: Attribute.normal)
-    ]
+    check status.tabLine.highlight.colorSegments ==
+      @[
+        ColorSegment(
+          firstColumn: 0,
+          lastColumn: 5,
+          color: EditorColorPairIndex.currentTab,
+          attribute: Attribute.normal,
+        )
+      ]
 
   test "Single buffer 4":
     const
@@ -188,23 +183,20 @@ suite "tabline: update":
       CurrentBufferIndex = 0
       IsAllbuffer = false
 
-    status.tabLine.update(
-      status.bufStatus,
-      CurrentBufferIndex,
-      IsAllbuffer)
+    status.tabLine.update(status.bufStatus, CurrentBufferIndex, IsAllbuffer)
 
     check status.tabLine.position == Position(x: 0, y: 0)
     check status.tabLine.size == Size(h: 1, w: 100)
-    check status.tabLine.buffer == toRunes(
-        fmt" {$Path1}{' '.repeat(100 - Path1.len)}")
-    check status.tabLine.highlight.colorSegments == @[
-      ColorSegment(
-        firstColumn: 0,
-        lastColumn: 100,
-        color: EditorColorPairIndex.currentTab,
-        attribute: Attribute.normal)
-    ]
-
+    check status.tabLine.buffer == toRunes(fmt" {$Path1}{' '.repeat(100 - Path1.len)}")
+    check status.tabLine.highlight.colorSegments ==
+      @[
+        ColorSegment(
+          firstColumn: 0,
+          lastColumn: 100,
+          color: EditorColorPairIndex.currentTab,
+          attribute: Attribute.normal,
+        )
+      ]
 
   test "Multiple buffer":
     const
@@ -223,24 +215,26 @@ suite "tabline: update":
       CurrentBufferIndex = 0
       IsAllbuffer = true
 
-    status.tabLine.update(
-      status.bufStatus,
-      CurrentBufferIndex,
-      IsAllbuffer)
+    status.tabLine.update(status.bufStatus, CurrentBufferIndex, IsAllbuffer)
 
     check status.tabLine.position == Position(x: 0, y: 0)
     check status.tabLine.size == Size(h: 1, w: 100)
-    check status.tabLine.buffer == toRunes(
-        fmt" {$Path1}{' '.repeat(50 - Path1.len)} {Path2}{' '.repeat(50 - Path2.len)}")
-    check status.tabLine.highlight.colorSegments == @[
-      ColorSegment(
-        firstColumn: 0,
-        lastColumn: 50,
-        color: EditorColorPairIndex.currentTab,
-        attribute: Attribute.normal),
-      ColorSegment(
-        firstColumn: 51,
-        lastColumn: 100,
-        color: EditorColorPairIndex.tab,
-        attribute: Attribute.normal)
-    ]
+    check status.tabLine.buffer ==
+      toRunes(
+        fmt" {$Path1}{' '.repeat(50 - Path1.len)} {Path2}{' '.repeat(50 - Path2.len)}"
+      )
+    check status.tabLine.highlight.colorSegments ==
+      @[
+        ColorSegment(
+          firstColumn: 0,
+          lastColumn: 50,
+          color: EditorColorPairIndex.currentTab,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstColumn: 51,
+          lastColumn: 100,
+          color: EditorColorPairIndex.tab,
+          attribute: Attribute.normal,
+        ),
+      ]

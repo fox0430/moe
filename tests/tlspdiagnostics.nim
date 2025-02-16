@@ -31,50 +31,38 @@ suite "lsp: parseTextDocumentPublishDiagnosticsNotify":
     check parseTextDocumentPublishDiagnosticsNotify(res).isErr
 
   test "Basic":
-    check %*parseTextDocumentPublishDiagnosticsNotify(%*{
-      "jsonrpc": "2.0",
-      "method": "textDocument/publishDiagnostics",
-      "params": {
-        "uri": "file:///tmp/test.nim",
+    check %*parseTextDocumentPublishDiagnosticsNotify(
+      %*{
+        "jsonrpc": "2.0",
+        "method": "textDocument/publishDiagnostics",
+        "params": {
+          "uri": "file:///tmp/test.nim",
+          "diagnostics": [
+            {
+              "range": {
+                "start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 2}
+              },
+              "severity": 1,
+              "code": "nimsuggest chk",
+              "source": "nim",
+              "message": "undeclared identifier: 'cho'",
+              "relatedInformation": nil,
+            }
+          ],
+        },
+      }
+    ).get.get ==
+      %*{
+        "path": "/tmp/test.nim",
         "diagnostics": [
           {
-            "range": {
-              "start": {
-                "line": 0,
-                "character": 0
-              },
-              "end": {
-                "line": 0,
-                "character": 2
-              }
-            },
+            "range":
+              {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 2}},
             "severity": 1,
             "code": "nimsuggest chk",
             "source": "nim",
             "message": "undeclared identifier: 'cho'",
-            "relatedInformation": nil
+            "relatedInformation": nil,
           }
-        ]
+        ],
       }
-    }).get.get == %*{
-      "path": "/tmp/test.nim",
-      "diagnostics": [
-        {
-          "range": {
-            "start": {
-              "line": 0,
-              "character": 0
-            },
-            "end": {
-              "line": 0,
-              "character": 2
-            }
-          },
-          "severity": 1,
-          "code": "nimsuggest chk",
-          "source": "nim",
-          "message": "undeclared identifier: 'cho'",
-          "relatedInformation": nil
-        }
-      ]
-    }

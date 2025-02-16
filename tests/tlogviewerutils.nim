@@ -26,14 +26,7 @@ import moepkg/logviewerutils {.all.}
 
 suite "logviewerutils: countLogLine":
   test "Basic":
-    check @[
-      "line1",
-      "",
-      "line2",
-      "",
-      "line3"
-    ]
-    .countLogLine == 3
+    check @["line1", "", "line2", "", "line3"].countLogLine == 3
 
 suite "logviewerutils: initEditorLogViewrBuffer":
   setup:
@@ -46,25 +39,14 @@ suite "logviewerutils: initEditorLogViewrBuffer":
     addMessageLog "line1"
     addMessageLog "line2"
 
-    check initEditorLogViewrBuffer() == @[
-      "line1",
-      "",
-      "line2"
-    ]
-    .toSeqRunes
+    check initEditorLogViewrBuffer() == @["line1", "", "line2"].toSeqRunes
 
   test "With new line":
     addMessageLog "line1.0\nline1.1"
     addMessageLog "line2.0\nline2.1"
 
-    check initEditorLogViewrBuffer() == @[
-      "line1.0",
-      "line1.1",
-      "",
-      "line2.0",
-      "line2.1"
-    ]
-    .toSeqRunes
+    check initEditorLogViewrBuffer() ==
+      @["line1.0", "line1.1", "", "line2.0", "line2.1"].toSeqRunes
 
 suite "logviewerutils: initLspLogViewrBuffer":
   setup:
@@ -75,28 +57,26 @@ suite "logviewerutils: initLspLogViewrBuffer":
 
     let time1 = now()
     log.add LspMessage(
-      timestamp: time1,
-      kind: LspMessageKind.request,
-      message: %*{"message1": "val1"})
+      timestamp: time1, kind: LspMessageKind.request, message: %*{"message1": "val1"}
+    )
 
     let time2 = now()
     log.add LspMessage(
-      timestamp: time2,
-      kind: LspMessageKind.response,
-      message: %*{"message2": "val2"})
+      timestamp: time2, kind: LspMessageKind.response, message: %*{"message2": "val2"}
+    )
 
-    check initLspLogViewrBuffer(log) == @[
-      fmt"{$time1} -- request",
-      "{",
-      """  "message1": "val1"""",
-      "}",
-      "",
-      fmt"{$time2} -- response",
-      "{",
-      """  "message2": "val2"""",
-      "}"
-    ]
-    .toSeqRunes
+    check initLspLogViewrBuffer(log) ==
+      @[
+        fmt"{$time1} -- request",
+        "{",
+        """  "message1": "val1"""",
+        "}",
+        "",
+        fmt"{$time2} -- response",
+        "{",
+        """  "message2": "val2"""",
+        "}",
+      ].toSeqRunes
 
 suite "logviewerutils: isUpdateEditorLogViewer":
   setup:
@@ -130,9 +110,8 @@ suite "logviewerutils: isUpdateLspLogViewer":
 
     var log: LspLog
     log.add LspMessage(
-      timestamp: now(),
-      kind: LspMessageKind.request,
-      message: %*{"message1": "val1"})
+      timestamp: now(), kind: LspMessageKind.request, message: %*{"message1": "val1"}
+    )
 
     check isUpdateLspLogViewer(buffer, log)
 
@@ -140,36 +119,23 @@ suite "logviewerutils: isUpdateLspLogViewer":
     var log: LspLog
 
     log.add LspMessage(
-      timestamp: now(),
-      kind: LspMessageKind.request,
-      message: %*{"message1": "val1"})
+      timestamp: now(), kind: LspMessageKind.request, message: %*{"message1": "val1"}
+    )
 
-    var buffer = @[
-      fmt"{$now()} -- request",
-      "{",
-      """  "message1": "val1"""",
-      "}"
-    ]
+    var buffer = @[fmt"{$now()} -- request", "{", """  "message1": "val1"""", "}"]
 
     log.add LspMessage(
-      timestamp: now(),
-      kind: LspMessageKind.request,
-      message: %*{"message2": "val2"})
+      timestamp: now(), kind: LspMessageKind.request, message: %*{"message2": "val2"}
+    )
 
     check isUpdateLspLogViewer(buffer, log)
 
   test "Expect false":
     var log: LspLog
     log.add LspMessage(
-      timestamp: now(),
-      kind: LspMessageKind.request,
-      message: %*{"message1": "val1"})
+      timestamp: now(), kind: LspMessageKind.request, message: %*{"message1": "val1"}
+    )
 
-    var buffer = @[
-      fmt"{$now()} -- request",
-      "{",
-      """  "message1": "val1"""",
-      "}"
-    ]
+    var buffer = @[fmt"{$now()} -- request", "{", """  "message1": "val1"""", "}"]
 
     check not isUpdateLspLogViewer(buffer, log)

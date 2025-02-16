@@ -62,11 +62,11 @@ proc isValidJsonRpc(json: JsonNode): bool {.inline.} =
 proc debugLog(messageType: MessageType, message: string) {.raises: [].} =
   try:
     let debugMessage =
-      case messageType:
-        of read:
-          "lsp: Read messages: \n" & message & '\n'
-        of write:
-          "lsp: Write messages: \n" & message & '\n'
+      case messageType
+      of read:
+        "lsp: Read messages: \n" & message & '\n'
+      of write:
+        "lsp: Write messages: \n" & message & '\n'
 
     debug debugMessage
     addMessageLog debugMessage
@@ -79,7 +79,7 @@ proc readFrame(s: AsyncStreamReader): Future[ReadFrameResult] {.async.} =
   while true:
     let buf =
       try:
-        await s.readLine(sep="\r\n\r\n")
+        await s.readLine(sep = "\r\n\r\n")
       except CatchableError as e:
         return ReadFrameResult.err fmt"readLine failed: {e.msg}"
 
@@ -104,19 +104,18 @@ proc readFrame(s: AsyncStreamReader): Future[ReadFrameResult] {.async.} =
 
     var contentLen = -1
     case header.get.ln[0 ..< header.get.sep]
-      of "Content-Type":
-        if isInvalidContentType(header.get.ln, valueStart):
-          return ReadFrameResult.err "Only utf-8 is supported"
-      of "Content-Length":
-        if parseInt(header.get.ln, contentLen, valueStart) == 0:
-          return
-            ReadFrameResult.err fmt"Invalid Content-Length: {header.get.ln.substr(valueStart)}"
-      else:
-        # Unrecognized headers are ignored
-        continue
+    of "Content-Type":
+      if isInvalidContentType(header.get.ln, valueStart):
+        return ReadFrameResult.err "Only utf-8 is supported"
+    of "Content-Length":
+      if parseInt(header.get.ln, contentLen, valueStart) == 0:
+        return ReadFrameResult.err fmt"Invalid Content-Length: {header.get.ln.substr(valueStart)}"
+    else:
+      # Unrecognized headers are ignored
+      continue
 
     if contentLen != -1:
-      let buf=
+      let buf =
         try:
           let bytes = await s.read(contentLen)
           string.fromBytes(bytes)
@@ -152,26 +151,19 @@ proc write(s: InputStream, req: string) {.async.} =
     # TODO: Add messages to error log.
     discard
 
-proc send(
-  s: InputStream,
-  frame: string): Future[Result[(), string]] {.async.} =
-    ## Write json-rpc message to the stream.
+proc send(s: InputStream, frame: string): Future[Result[(), string]] {.async.} =
+  ## Write json-rpc message to the stream.
 
-    let req = "Content-Length: " & $frame.len & "\r\n\r\n" & frame
+  let req = "Content-Length: " & $frame.len & "\r\n\r\n" & frame
 
-    debugLog(MessageType.write, req)
+  debugLog(MessageType.write, req)
 
-    asyncSpawn s.write(req)
+  asyncSpawn s.write(req)
 
-    return Result[(), string].ok ()
+  return Result[(), string].ok ()
 
 template newRequest*(id: int, methodName: string, params: JsonNode): JsonNode =
-  %* {
-    "jsonrpc": "2.0",
-    "id": id,
-    "method": methodName,
-    "params": params
-  }
+  %*{"jsonrpc": "2.0", "id": id, "method": methodName, "params": params}
 
 proc sendRequest*(s: InputStream, req: JsonNode): Future[JsonRpcSendResult] {.async.} =
   ## Send a request and return a response.
@@ -185,13 +177,11 @@ proc sendRequest*(s: InputStream, req: JsonNode): Future[JsonRpcSendResult] {.as
   return JsonRpcSendResult.ok ()
 
 template newNotify*(methodName: string, params: JsonNode): JsonNode =
-  %* {
-    "jsonrpc": "2.0",
-    "method": methodName,
-    "params": params
-  }
+  %*{"jsonrpc": "2.0", "method": methodName, "params": params}
 
-proc sendNotify*(s: InputStream, notify: JsonNode): Future[Result[(), string]] {.async.} =
+proc sendNotify*(
+    s: InputStream, notify: JsonNode
+): Future[Result[(), string]] {.async.} =
   ## Send a notification.
   ## No response to the notification. Also, no `id` is required in the
   ## request.

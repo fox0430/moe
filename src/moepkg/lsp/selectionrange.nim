@@ -28,33 +28,30 @@ import utils
 
 export SelectionRange, Range
 
-type
-  LspSelectionRangeResult* = Result[seq[SelectionRange], string]
+type LspSelectionRangeResult* = Result[seq[SelectionRange], string]
 
 proc initSelectionRangeParams*(
-  path: string,
-  positions: seq[BufferPosition]): SelectionRangeParams =
+    path: string, positions: seq[BufferPosition]
+): SelectionRangeParams =
+  SelectionRangeParams(
+    textDocument: TextDocumentIdentifier(uri: path.pathToUri),
+    positions: positions.mapIt(it.toLspPosition),
+  )
 
-    SelectionRangeParams(
-      textDocument: TextDocumentIdentifier(uri: path.pathToUri),
-      positions: positions.mapIt(it.toLspPosition))
+proc parseTextDocumentSelectionRangeResponse*(res: JsonNode): LspSelectionRangeResult =
+  if res["result"].kind == JNull:
+    # Not found
+    return LspSelectionRangeResult.ok @[]
+  elif res["result"].kind != JArray:
+    return LspSelectionRangeResult.err "Invalid response"
+  elif res["result"].len == 0:
+    # Not found
+    return LspSelectionRangeResult.ok @[]
 
-proc parseTextDocumentSelectionRangeResponse*(
-  res: JsonNode): LspSelectionRangeResult =
+  let selectionRanges =
+    try:
+      res["result"].to(seq[SelectionRange])
+    except CatchableError as e:
+      return LspSelectionRangeResult.err fmt"Invalid response: {e.msg}"
 
-    if res["result"].kind == JNull:
-      # Not found
-      return LspSelectionRangeResult.ok @[]
-    elif res["result"].kind != JArray:
-      return LspSelectionRangeResult.err "Invalid response"
-    elif res["result"].len == 0:
-      # Not found
-      return LspSelectionRangeResult.ok @[]
-
-    let selectionRanges =
-      try:
-        res["result"].to(seq[SelectionRange])
-      except CatchableError as e:
-        return LspSelectionRangeResult.err fmt"Invalid response: {e.msg}"
-
-    return LspSelectionRangeResult.ok selectionRanges
+  return LspSelectionRangeResult.ok selectionRanges

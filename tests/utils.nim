@@ -44,30 +44,33 @@ template setBufferToWlClipboard*(buf: string): bool =
   execShellCmd("printf '" & buf & "' | wl-copy") == 0
 
 template setBufferToWslDefaultClipboard*(buf: string): bool =
-  execShellCmd(
-    "printf '" & buf & "' | powershell.exe -Command Get-Clipboard") == 0
+  execShellCmd("printf '" & buf & "' | powershell.exe -Command Get-Clipboard") == 0
 
 template getXselBuffer*(): string =
   let r = execCmdEx("xsel -o")
-  if r.exitCode != 0: assert false
+  if r.exitCode != 0:
+    assert false
 
   r.output
 
 template getXclipBuffer*(): string =
   let r = execCmdEx("xclip -o")
-  if r.exitCode != 0: assert false
+  if r.exitCode != 0:
+    assert false
 
   r.output
 
 template getWlClipboardBuffer*(): string =
   let r = execCmdEx("wl-paste")
-  if r.exitCode != 0: assert false
+  if r.exitCode != 0:
+    assert false
 
   r.output
 
 template getWslDefaultBuffer*(): string =
   let r = execCmdEx("powershell.exe -Command Get-Clipboard")
-  if r.exitCode != 0: assert false
+  if r.exitCode != 0:
+    assert false
 
   r.output
 

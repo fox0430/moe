@@ -19,8 +19,8 @@
 
 import std/os
 import pkg/[regex, results]
-import editorstatus, ui, unicodeext, bufferstatus, movement, gapbuffer,
-       messages, windownode
+import
+  editorstatus, ui, unicodeext, bufferstatus, movement, gapbuffer, messages, windownode
 
 proc openSelectedBuffer(status: var EditorStatus) =
   let
@@ -49,27 +49,20 @@ proc getRecentUsedFiles*(xbelPath: string): Result[seq[Runes], string] =
 
     return Result[seq[Runes], string].ok files
 
-proc initRecentFileModeBuffer*(
-  b: var BufferStatus,
-  files: seq[Runes]) {.inline.} =
-
-    b.buffer = files.initGapbuffer
+proc initRecentFileModeBuffer*(b: var BufferStatus, files: seq[Runes]) {.inline.} =
+  b.buffer = files.initGapbuffer
 
 proc isRecentFileCommand*(command: Runes): InputState =
   result = InputState.Invalid
 
   if command.len == 1:
     let key = command[0]
-    if isCtrlK(key) or
-       isCtrlJ(key) or
-       key == ord(':') or
-       key == ord('k') or isUpKey(key) or
-       key == ord('j') or isDownKey(key) or
-       key == ord('h') or isLeftKey(key) or isBackspaceKey(key) or
-       key == ord('l') or isRightKey(key) or
-       key == ord('G') or
-       isEnterKey(key):
-         return InputState.Valid
+    if isCtrlK(key) or isCtrlJ(key) or key == ord(':') or key == ord('k') or isUpKey(
+      key
+    ) or key == ord('j') or isDownKey(key) or key == ord('h') or isLeftKey(key) or
+        isBackspaceKey(key) or key == ord('l') or isRightKey(key) or key == ord('G') or
+        isEnterKey(key):
+      return InputState.Valid
     elif key == ord('g'):
       return InputState.Continue
   elif command.len == 2:
@@ -84,10 +77,8 @@ proc execRecentFileCommand*(status: var EditorStatus, command: Runes) =
       status.moveNextWindow
     elif isCtrlJ(key):
       status.movePrevWindow
-
     elif key == ord(':'):
       status.changeMode(Mode.ex)
-
     elif key == ord('k') or isUpKey(key):
       currentBufStatus.keyUp(currentMainWindowNode)
     elif key == ord('j') or isDownKey(key):

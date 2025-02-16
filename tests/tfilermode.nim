@@ -19,8 +19,7 @@
 
 import std/[unittest, strutils, algorithm, os]
 import pkg/results
-import moepkg/[unicodeext, bufferstatus, gapbuffer, color, windownode,
-               highlight]
+import moepkg/[unicodeext, bufferstatus, gapbuffer, color, windownode, highlight]
 
 import moepkg/filermodeutils {.all.}
 
@@ -98,9 +97,7 @@ suite "Filer mode":
 
     bufStatuses[0].buffer = filerStatus.initFilerBuffer(IsShowIcons).toGapBuffer
 
-    assert bufStatuses.openFileOrDir(
-      mainWindow.currentMainWindowNode,
-      filerStatus).isOk
+    assert bufStatuses.openFileOrDir(mainWindow.currentMainWindowNode, filerStatus).isOk
 
     filerStatus.updatePathList(bufStatuses[0].path)
     bufStatuses[0].buffer = filerStatus.initFilerBuffer(IsShowIcons).toGapBuffer
@@ -130,8 +127,6 @@ suite "Filer mode":
       else:
         mainWindow.currentMainWindowNode.currentLine.inc
 
-    check bufStatuses.openFileOrDir(
-      mainWindow.currentMainWindowNode,
-      filerStatus).isOk
+    check bufStatuses.openFileOrDir(mainWindow.currentMainWindowNode, filerStatus).isOk
 
     check Mode.normal == bufStatuses[0].mode

@@ -21,20 +21,11 @@
 # Resources.
 #
 
-from endlexer import
-  endLine
+from endlexer import endLine
 
-from ../flags import
-  TokenizerFlag,
-  TokenizerFlags
+from ../flags import TokenizerFlag, TokenizerFlags
 
-from ../highlite import
-  GeneralTokenizer,
-  TokenClass,
-  eolChars,
-  lwsChars
-
-
+from ../highlite import GeneralTokenizer, TokenClass, eolChars, lwsChars
 
 #
 # Procedures.
@@ -49,8 +40,9 @@ from ../highlite import
 ##
 ## - Nim
 
-proc lexDoubleHashBracketComment(lexer: GeneralTokenizer, position: int,
-    nested: bool): int =
+proc lexDoubleHashBracketComment(
+    lexer: GeneralTokenizer, position: int, nested: bool
+): int =
   var depth = 0
   result = position
 
@@ -61,7 +53,6 @@ proc lexDoubleHashBracketComment(lexer: GeneralTokenizer, position: int,
       case lexer.buf[result]
       of '\0':
         break
-
       of '#':
         inc result
 
@@ -73,7 +64,6 @@ proc lexDoubleHashBracketComment(lexer: GeneralTokenizer, position: int,
 
             if nested:
               inc depth
-
       of ']':
         inc result
 
@@ -87,11 +77,8 @@ proc lexDoubleHashBracketComment(lexer: GeneralTokenizer, position: int,
               break
             elif nested:
               dec depth
-
       else:
         inc result
-
-
 
 ## Lex a double hash line comment.
 ##
@@ -106,8 +93,9 @@ proc lexDoubleHashBracketComment(lexer: GeneralTokenizer, position: int,
 ##
 ## - Nim
 
-proc lexDoubleHashLineComment(lexer: GeneralTokenizer, position: int,
-    flags: TokenizerFlags): int =
+proc lexDoubleHashLineComment(
+    lexer: GeneralTokenizer, position: int, flags: TokenizerFlags
+): int =
   result = position
 
   if lexer.buf[result] == '#':
@@ -115,14 +103,11 @@ proc lexDoubleHashLineComment(lexer: GeneralTokenizer, position: int,
 
     if lexer.buf[result] == '[':
       if hasDoubleHashBracketComments in flags:
-        result = lexer.lexDoubleHashBracketComment(result,
-          hasNestedComments in flags)
+        result = lexer.lexDoubleHashBracketComment(result, hasNestedComments in flags)
       else:
         result = lexer.endLine(result)
     else:
       result = lexer.endLine(result)
-
-
 
 ## Lex a hash bracket comment.
 ##
@@ -133,8 +118,7 @@ proc lexDoubleHashLineComment(lexer: GeneralTokenizer, position: int,
 ##
 ## - Nim
 
-proc lexHashBracketComment(lexer: GeneralTokenizer, position: int,
-    nested: bool): int =
+proc lexHashBracketComment(lexer: GeneralTokenizer, position: int, nested: bool): int =
   var depth = 0
   result = position
 
@@ -145,7 +129,6 @@ proc lexHashBracketComment(lexer: GeneralTokenizer, position: int,
       case lexer.buf[result]
       of '\0':
         break
-
       of '#':
         inc result
 
@@ -154,7 +137,6 @@ proc lexHashBracketComment(lexer: GeneralTokenizer, position: int,
 
           if nested:
             inc depth
-
       of ']':
         inc result
 
@@ -165,11 +147,8 @@ proc lexHashBracketComment(lexer: GeneralTokenizer, position: int,
             break
           elif nested:
             dec depth
-
       else:
         inc result
-
-
 
 ## Lex a hash line comment.
 ##
@@ -183,8 +162,9 @@ proc lexHashBracketComment(lexer: GeneralTokenizer, position: int,
 ## - Python
 ## - YAML
 
-proc lexHashLineComment*(lexer: var GeneralTokenizer, position: int,
-    flags: TokenizerFlags): int =
+proc lexHashLineComment*(
+    lexer: var GeneralTokenizer, position: int, flags: TokenizerFlags
+): int =
   result = position
 
   if lexer.buf[result] == '#':
@@ -196,20 +176,17 @@ proc lexHashLineComment*(lexer: var GeneralTokenizer, position: int,
         result = lexer.lexDoubleHashLineComment(result, flags)
       else:
         result = lexer.endLine(result)
-
     of '[':
       if hasHashBracketComments in flags:
         lexer.kind = gtLongComment
         result = lexer.lexHashBracketComment(result, hasNestedComments in flags)
       else:
         result = lexer.endLine(result)
-
     of '!':
       if hasShebang in flags:
         lexer.kind = gtPreprocessor
 
       result = lexer.endLine(result)
-
     else:
       result = lexer.endLine(result)
 

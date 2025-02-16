@@ -42,15 +42,18 @@ proc hexToRgb*(s: string): Result[Rgb, string] =
     return Result[Rgb, string].err "Invalid hex color"
 
   let hexStr =
-    if s.startsWith('#'): s[1 .. 6]
-    else: s
+    if s.startsWith('#'):
+      s[1 .. 6]
+    else:
+      s
 
   var rgb: Rgb
   try:
     rgb = Rgb(
-      red: fromHex[int16](hexStr[0..1]),
-      green: fromHex[int16](hexStr[2..3]),
-      blue: fromHex[int16](hexStr[4..5]))
+      red: fromHex[int16](hexStr[0 .. 1]),
+      green: fromHex[int16](hexStr[2 .. 3]),
+      blue: fromHex[int16](hexStr[4 .. 5]),
+    )
   except CatchableError as e:
     return Result[Rgb, string].err fmt"Failed to parse hex color: {$e.msg}"
 
@@ -68,9 +71,10 @@ proc toHex*(rgb: Rgb, isPrefix: bool = true): Option[string] =
       g = rgb.green.uint64.toHex(2).toLowerAscii
       b = rgb.blue.uint64.toHex(2).toLowerAscii
 
-    if isPrefix: return some(fmt"#{r}{g}{b}")
-    else: return some(fmt"{r}{g}{b}")
-
+    if isPrefix:
+      return some(fmt"#{r}{g}{b}")
+    else:
+      return some(fmt"{r}{g}{b}")
 
 proc isHexColor*(s: string, isPrefix: bool = true): bool =
   ## Return true if valid hex color code.
@@ -80,21 +84,20 @@ proc isHexColor*(s: string, isPrefix: bool = true): bool =
 
   if (not isPrefix and s.len == 6) or (s.startsWith('#') and s.len == 7):
     let hexStr =
-      if s.startsWith('#'): s[1..6]
-      else: s[0..5]
+      if s.startsWith('#'):
+        s[1 .. 6]
+      else:
+        s[0 .. 5]
 
-    var
-      r, g, b: int
+    var r, g, b: int
     try:
-      r = fromHex[int](hexStr[0..1])
-      g = fromHex[int](hexStr[2..3])
-      b = fromHex[int](hexStr[4..5])
+      r = fromHex[int](hexStr[0 .. 1])
+      g = fromHex[int](hexStr[2 .. 3])
+      b = fromHex[int](hexStr[4 .. 5])
     except ValueError:
       return false
 
-    return (r >= 0 and r <= 255) and
-           (g >= 0 and g <= 255) and
-           (b >= 0 and b <= 255)
+    return (r >= 0 and r <= 255) and (g >= 0 and g <= 255) and (b >= 0 and b <= 255)
 
 proc inverseColor*(color: Rgb): Rgb =
   ## Return the inverse color.

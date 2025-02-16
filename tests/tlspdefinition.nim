@@ -27,37 +27,28 @@ import moepkg/lsp/definition {.all.}
 
 suite "lsp: parseTextDocumentDefinition":
   test "Not found":
-    check parseTextDocumentDefinition(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": []
-    }).get.isNone
+    check parseTextDocumentDefinition(%*{"jsonrpc": "2.0", "id": 0, "result": []}).get.isNone
 
   test "Basic":
-    check parseTextDocumentDefinition(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": [
-        {
-          "uri":  "file:///home/user/text.txt",
-          "range": {
-            "start": {
-              "line": 0,
-              "character": 1,
-            },
-            "end": {
-              "line": 0,
-              "character": 2,
-            }
+    check parseTextDocumentDefinition(
+      %*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": [
+          {
+            "uri": "file:///home/user/text.txt",
+            "range":
+              {"start": {"line": 0, "character": 1}, "end": {"line": 0, "character": 2}},
           }
-        }
-      ]
-    }).get.get == LspDefinition(
-      location: BufferLocation(
-        path: "/home/user/text.txt",
-        range: BufferRange(
-          first: BufferPosition(line: 0, column: 1),
-          last: BufferPosition(line: 0, column: 2)
+        ],
+      }
+    ).get.get ==
+      LspDefinition(
+        location: BufferLocation(
+          path: "/home/user/text.txt",
+          range: BufferRange(
+            first: BufferPosition(line: 0, column: 1),
+            last: BufferPosition(line: 0, column: 2),
+          ),
         )
       )
-    )

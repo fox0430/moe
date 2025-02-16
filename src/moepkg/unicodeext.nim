@@ -45,91 +45,116 @@ const
 
 proc `$`*(encoding: CharacterEncoding): string =
   case encoding
-    of CharacterEncoding.utf8: return "UTF-8"
-    of CharacterEncoding.utf16: return "UTF-16"
-    of CharacterEncoding.utf16Be: return "UTF-16BE"
-    of CharacterEncoding.utf16Le: return "UTF-16LE"
-    of CharacterEncoding.utf32: return "UTF-32"
-    of CharacterEncoding.utf32Be: return "UTF-32BE"
-    of CharacterEncoding.utf32Le: return "UTF-32LE"
-    of CharacterEncoding.unknown: return "UNKNOWN"
+  of CharacterEncoding.utf8:
+    return "UTF-8"
+  of CharacterEncoding.utf16:
+    return "UTF-16"
+  of CharacterEncoding.utf16Be:
+    return "UTF-16BE"
+  of CharacterEncoding.utf16Le:
+    return "UTF-16LE"
+  of CharacterEncoding.utf32:
+    return "UTF-32"
+  of CharacterEncoding.utf32Be:
+    return "UTF-32BE"
+  of CharacterEncoding.utf32Le:
+    return "UTF-32LE"
+  of CharacterEncoding.unknown:
+    return "UNKNOWN"
 
 proc validateUtf16Be(s: string): bool =
-  if (s.len mod 2) != 0: return false
+  if (s.len mod 2) != 0:
+    return false
 
   var i = 0
-  proc advance: int =
-    result = 256*ord(s[i])+ord(s[i+1])
+  proc advance(): int =
+    result = 256 * ord(s[i]) + ord(s[i + 1])
     i += 2
 
   while i < s.len:
     let curr = advance()
-    if curr <= 0xD7FF or (0xE000 <= curr and curr <= 0xFFFF): continue
+    if curr <= 0xD7FF or (0xE000 <= curr and curr <= 0xFFFF):
+      continue
     let next = advance()
     if (not (0xD800 <= curr and curr <= 0xDBFF)) or
-       (not (0xDC00 <= next and next <= 0xDFFF)): return false
+        (not (0xDC00 <= next and next <= 0xDFFF)):
+      return false
     let
       higher = (curr and 0b11_1111_1111) shl 10
       lower = (next and 0b11_1111_1111)
       point = higher or lower
-    if point < 0x10000: return false
+    if point < 0x10000:
+      return false
 
   return true
 
 proc validateUtf16Le(s: string): bool =
-  if (s.len mod 2) != 0: return false
+  if (s.len mod 2) != 0:
+    return false
 
   var i = 0
-  proc advance: int =
-    result = ord(s[i])+256*ord(s[i+1])
+  proc advance(): int =
+    result = ord(s[i]) + 256 * ord(s[i + 1])
     i += 2
 
   while i < s.len:
     let curr = advance()
-    if curr <= 0xD7FF or (0xE000 <= curr and curr <= 0xFFFF): continue
+    if curr <= 0xD7FF or (0xE000 <= curr and curr <= 0xFFFF):
+      continue
     let next = advance()
     if (not (0xD800 <= curr and curr <= 0xDBFF)) or
-       (not (0xDC00 <= next and next <= 0xDFFF)): return false
+        (not (0xDC00 <= next and next <= 0xDFFF)):
+      return false
     let
       higher = (curr and 0b11_1111_1111) shl 10
       lower = (next and 0b11_1111_1111)
       point = higher or lower
-    if point < 0x10000: return false
+    if point < 0x10000:
+      return false
 
   return true
 
 proc validateUtf32Be(s: string): bool =
-  if (s.len mod 4) != 0: return false
+  if (s.len mod 4) != 0:
+    return false
 
   var i = 0
-  proc advance: uint32 =
-    result = 0x1000000'u32*uint32(ord(s[i]))+0x10000'u32*uint32(ord(s[i+1]))+0x100'u32*uint32(ord(s[i+2]))+uint32(ord(s[i+3]))
+  proc advance(): uint32 =
+    result =
+      0x1000000'u32 * uint32(ord(s[i])) + 0x10000'u32 * uint32(ord(s[i + 1])) +
+      0x100'u32 * uint32(ord(s[i + 2])) + uint32(ord(s[i + 3]))
     i += 4
 
   while i < s.len:
     let curr = advance()
-    if curr > 0x10FFFF'u32: return false
+    if curr > 0x10FFFF'u32:
+      return false
 
   return true
 
 proc validateUtf32Le(s: string): bool =
-  if (s.len mod 4) != 0: return false
+  if (s.len mod 4) != 0:
+    return false
 
   var i = 0
-  proc advance: uint32 =
-    result = uint32(ord(s[i]))+0x100'u32*uint32(ord(s[i+1]))+0x10000'u32*uint32(ord(s[i+2]))+0x1000000'u32*uint32(ord(s[i+3]))
+  proc advance(): uint32 =
+    result =
+      uint32(ord(s[i])) + 0x100'u32 * uint32(ord(s[i + 1])) +
+      0x10000'u32 * uint32(ord(s[i + 2])) + 0x1000000'u32 * uint32(ord(s[i + 3]))
     i += 4
 
   while i < s.len:
     let curr = advance()
-    if curr > 0x10FFFF'u32: return false
+    if curr > 0x10FFFF'u32:
+      return false
 
   return true
 
 proc count0000(s: string): int =
   var i = 0
-  while i+1 < s.len:
-    if ord(s[i]) == 0x00 and ord(s[i+1]) == 0x00: inc(result)
+  while i + 1 < s.len:
+    if ord(s[i]) == 0x00 and ord(s[i + 1]) == 0x00:
+      inc(result)
     i += 2
 
 proc detectCharacterEncoding*(s: string): CharacterEncoding =
@@ -138,25 +163,31 @@ proc detectCharacterEncoding*(s: string): CharacterEncoding =
   ## Returns `CharacterEncoding.utf8` if only ASCII characters are included.
   ## Returns `CharacterEncoding.unknown` if encoding format is unknown.
 
-
   # Check UTF-8 BOM
-  if s.len >= 3 and s[0..2] == "\xEF\xBB\xBF": return CharacterEncoding.utf8
+  if s.len >= 3 and s[0 .. 2] == "\xEF\xBB\xBF":
+    return CharacterEncoding.utf8
 
   if s.len >= 4:
     # Check UTF-32 BOM
-    if s[0..3] == "\x00\x00\xFE\xFF" or
-       s[0..3] == "\xFF\xFE\x00\x00": return CharacterEncoding.utf32
+    if s[0 .. 3] == "\x00\x00\xFE\xFF" or s[0 .. 3] == "\xFF\xFE\x00\x00":
+      return CharacterEncoding.utf32
 
     # Check UTF-16 BOM
-    if s[0..1] == "\xFE\xFF" or s[0..1] == "\xFF\xFE": return CharacterEncoding.utf16
+    if s[0 .. 1] == "\xFE\xFF" or s[0 .. 1] == "\xFF\xFE":
+      return CharacterEncoding.utf16
 
-  if s.validateUtf8 == -1: return CharacterEncoding.utf8
+  if s.validateUtf8 == -1:
+    return CharacterEncoding.utf8
 
   var validEncodings: seq[CharacterEncoding]
-  if s.validateUtf16Be: validEncodings.add(CharacterEncoding.utf16Be)
-  if s.validateUtf16Le: validEncodings.add(CharacterEncoding.utf16Le)
-  if s.validateUtf32Be: validEncodings.add(CharacterEncoding.utf32Be)
-  if s.validateUtf32Le: validEncodings.add(CharacterEncoding.utf32Le)
+  if s.validateUtf16Be:
+    validEncodings.add(CharacterEncoding.utf16Be)
+  if s.validateUtf16Le:
+    validEncodings.add(CharacterEncoding.utf16Le)
+  if s.validateUtf32Be:
+    validEncodings.add(CharacterEncoding.utf32Be)
+  if s.validateUtf32Le:
+    validEncodings.add(CharacterEncoding.utf32Le)
 
   let threshold = (s.len / 2) * (2 / 5)
   if float(count0000(s)) >= threshold:
@@ -166,7 +197,8 @@ proc detectCharacterEncoding*(s: string): CharacterEncoding =
     if validEncodings.contains(CharacterEncoding.utf16Le):
       validEncodings.delete(validEncodings.find(CharacterEncoding.utf16Le))
 
-  if validEncodings.len == 1: return validEncodings[0]
+  if validEncodings.len == 1:
+    return validEncodings[0]
 
   return CharacterEncoding.unknown
 
@@ -174,13 +206,21 @@ proc toRune*(c: char): Rune {.inline.} =
   doAssert(ord(c) <= 127)
   Rune(c)
 
-proc toRune*(x: int): Rune {.inline.} = Rune(x)
+proc toRune*(x: int): Rune {.inline.} =
+  Rune(x)
 
-proc `==`*(c: Rune, x: int): bool {.inline.} = c == toRune(x)
-proc `==`*(c: Rune, x: char): bool {.inline.} = c == toRune(x)
+proc `==`*(c: Rune, x: int): bool {.inline.} =
+  c == toRune(x)
 
-proc ru*(c: char): Rune {.inline.} = toRune(c)
-proc ru*(s: string): Runes {.inline.} = s.toRunes
+proc `==`*(c: Rune, x: char): bool {.inline.} =
+  c == toRune(x)
+
+proc ru*(c: char): Rune {.inline.} =
+  toRune(c)
+
+proc ru*(s: string): Runes {.inline.} =
+  s.toRunes
+
 proc ru*(array: seq[string]): Runes =
   for s in array:
     result.add s.toRunes
@@ -194,101 +234,93 @@ proc toChar*(c: Rune): char {.inline.} =
 
 proc width*(c: Rune): int =
   const Tab = Rune('\t')
-  if int(c) > 0x10FFFF: return 1
-  if c == Tab: return 4
+  if int(c) > 0x10FFFF:
+    return 1
+  if c == Tab:
+    return 4
   case c.unicodeWidth
-  of UnicodeWidth.uwdtNarrow,
-     UnicodeWidth.uwdtHalf,
-     UnicodeWidth.uwdtAmbiguous,
-     UnicodeWidth.uwdtNeutral: 1
-  else: 2
+  of UnicodeWidth.uwdtNarrow, UnicodeWidth.uwdtHalf, UnicodeWidth.uwdtAmbiguous,
+      UnicodeWidth.uwdtNeutral:
+    1
+  else:
+    2
 
 proc width*(runes: Runes): int {.inline.} =
-  for c in runes: result += width(c)
+  for c in runes:
+    result += width(c)
 
 proc numberOfBytes*(firstByte: char): int =
-  if (int(firstByte) shr 7) == 0b0: return 1
-  if (int(firstByte) shr 5) == 0b110: return 2
-  if (int(firstByte) shr 4) == 0b1110: return 3
-  if (int(firstByte) shr 3) == 0b11110: return 4
+  if (int(firstByte) shr 7) == 0b0:
+    return 1
+  if (int(firstByte) shr 5) == 0b110:
+    return 2
+  if (int(firstByte) shr 4) == 0b1110:
+    return 3
+  if (int(firstByte) shr 3) == 0b11110:
+    return 4
   doAssert(false, "Invalid UTF-8 first byte.")
 
 proc isDigit*(c: Rune): bool =
   let s = $c
   return s.len == 1 and strutils.isDigit(s[0])
 
-proc isDigit*(runes: Runes): bool {.inline.} = all(runes, isDigit)
+proc isDigit*(runes: Runes): bool {.inline.} =
+  all(runes, isDigit)
 
 proc isSpace*(c: Rune): bool {.inline.} =
   return unicode.isSpace($c)
 
 proc isPunct*(c: Rune): bool =
   let s = $c
-  return s.len == 1 and s[0] in {
-    '!',
-    '"',
-    '#',
-    '$',
-    '%',
-    '$',
-    '\'',
-    '(',
-    ')',
-    '*',
-    '+',
-    ',',
-    '-',
-    '.',
-    '/',
-    ':',
-    ';',
-    '<',
-    '=',
-    '>',
-    '?',
-    '@',
-    '[',
-    '\\',
-    ']',
-    '^',
-    '_',
-    '`',
-    '{',
-    '=',
-    '}'}
+  return
+    s.len == 1 and
+    s[0] in {
+      '!', '"', '#', '$', '%', '$', '\'', '(', ')', '*', '+', ',', '-', '.', '/', ':',
+      ';', '<', '=', '>', '?', '@', '[', '\\', ']', '^', '_', '`', '{', '=', '}',
+    }
 
-proc isNewline*(r: Rune): bool {.inline.} = r in [ru'\n', ru'\r']
+proc isNewline*(r: Rune): bool {.inline.} =
+  r in [ru '\n', ru '\r']
 
 proc countRepeat*(runes: Runes, charSet: set[char], start: int): int =
   for i in start ..< runes.len:
     let s = $runes[i]
-    if s.len > 1 or (not (s[0] in charSet)): break
+    if s.len > 1 or (not (s[0] in charSet)):
+      break
     inc(result)
 
-proc toRunes*(r: Runes): Runes {.inline.} = r
+proc toRunes*(r: Runes): Runes {.inline.} =
+  r
 
-proc toRunes*(num: int): Runes {.inline.} = toRunes($num)
+proc toRunes*(num: int): Runes {.inline.} =
+  toRunes($num)
 
-proc toRunes*(dateTime: DateTime): Runes {.inline.} = toRunes($dateTime)
+proc toRunes*(dateTime: DateTime): Runes {.inline.} =
+  toRunes($dateTime)
 
-proc toRunes*(oid: Oid): Runes {.inline.} = toRunes($oid)
+proc toRunes*(oid: Oid): Runes {.inline.} =
+  toRunes($oid)
 
 proc toRunes*(s: seq[string]): Runes {.inline.} =
-  for l in s: result.add l.toRunes
+  for l in s:
+    result.add l.toRunes
 
-proc toRunes*(r: Rune): Runes {.inline.} = @[r]
+proc toRunes*(r: Rune): Runes {.inline.} =
+  @[r]
 
 proc toRunes*(r: seq[Runes]): Runes {.inline.} =
   for i, l in r:
     result.add l
-    if i < r.high: result.add ru'\n'
+    if i < r.high:
+      result.add ru '\n'
 
 proc toSeqRunes*(s: seq[string]): seq[Runes] {.inline.} =
   for l in s:
     result.add l.toRunes
 
 proc toSeqRunes*(r: Deque[Runes]): seq[Runes] {.inline.} =
-  for l in r: result.add l
+  for l in r:
+    result.add l
 
 proc startsWith*(r1: Runes, r2: Runes | Rune): bool {.inline.} =
   startsWith($r1, $r2)
@@ -296,10 +328,12 @@ proc startsWith*(r1: Runes, r2: Runes | Rune): bool {.inline.} =
 proc endsWith*(r1: Runes, r2: Runes | Rune): bool {.inline.} =
   endsWith($r1, $r2)
 
-proc toString*(runes: Runes): string {.inline.} = $runes
+proc toString*(runes: Runes): string {.inline.} =
+  $runes
 
 proc toString*(lines: seq[Runes]): string =
-  for i, runes in lines: result &= $runes & '\n'
+  for i, runes in lines:
+    result &= $runes & '\n'
 
 proc `&`*(runes1, runes2: Runes): Runes {.inline.} =
   result = runes1
@@ -307,45 +341,62 @@ proc `&`*(runes1, runes2: Runes): Runes {.inline.} =
 
 proc correspondingOpenParen*(r: Rune): Rune =
   case r
-  of ru')': return ru'('
-  of ru'}': return ru'{'
-  of ru']': return ru'['
-  of ru'"': return ru '\"'
-  of ru'\'': return ru'\''
-  else: doAssert(false, fmt"Invalid parentheses: {r}")
+  of ru ')':
+    return ru '('
+  of ru '}':
+    return ru '{'
+  of ru ']':
+    return ru '['
+  of ru '"':
+    return ru '\"'
+  of ru '\'':
+    return ru '\''
+  else:
+    doAssert(false, fmt"Invalid parentheses: {r}")
 
 proc correspondingCloseParen*(r: Rune): Rune =
   case r
-  of ru'(': return ru')'
-  of ru'{': return ru'}'
-  of ru'[': return ru']'
-  of ru'"': return ru '\"'
-  of ru'\'': return ru'\''
-  else: doAssert(false, fmt"Invalid parentheses: {r}")
+  of ru '(':
+    return ru ')'
+  of ru '{':
+    return ru '}'
+  of ru '[':
+    return ru ']'
+  of ru '"':
+    return ru '\"'
+  of ru '\'':
+    return ru '\''
+  else:
+    doAssert(false, fmt"Invalid parentheses: {r}")
 
 proc isCorrespondingParen*(openParen, closeParen: Rune): bool =
   let
     open = char(openParen)
     close = char(closeParen)
-  if (open == '(' and close == ')') or
-     (open == '{' and close == '}') or
-     (open == '[' and close == ']') or
-     (open == '"' and close == '\"') or
-     (open == '\'' and close == '\''): return true
+  if (open == '(' and close == ')') or (open == '{' and close == '}') or
+      (open == '[' and close == ']') or (open == '"' and close == '\"') or
+      (open == '\'' and close == '\''):
+    return true
 
 proc isOpenParen*(r: Rune): bool =
   case r
-  of ru'(', ru'{', ru'[', ru'\"', ru'\'': return true
-  else: return false
+  of ru '(', ru '{', ru '[', ru '\"', ru '\'':
+    return true
+  else:
+    return false
 
 proc isCloseParen*(r: Rune): bool =
   case r
-  of ru')', ru'}', ru']', ru'\"', ru'\'': return true
-  else: return false
+  of ru ')', ru '}', ru ']', ru '\"', ru '\'':
+    return true
+  else:
+    return false
 
 proc isParen*(r: Rune): bool =
-  if r.isOpenParen or r.isCloseParen: return true
-  else: return false
+  if r.isOpenParen or r.isCloseParen:
+    return true
+  else:
+    return false
 
 proc find*(runes, sub: Runes, start: Natural = 0, last = 0): int =
   ## If `last` is unspecified, it defaults to `runes.high`(the last element).
@@ -356,24 +407,24 @@ proc find*(runes, sub: Runes, start: Natural = 0, last = 0): int =
   var startAsUtf8, lastAsUtf8: Natural
   for i, r in runes:
     let s = $r
-    if i < start: startAsUtf8 += s.len
-    if i <= last: lastAsUtf8 += s.len
-    else: break
+    if i < start:
+      startAsUtf8 += s.len
+    if i <= last:
+      lastAsUtf8 += s.len
+    else:
+      break
 
   let
     str = $runes
     i = find(str, $sub, startAsUtf8, lastAsUtf8)
 
-  if i == -1: return -1
-  else: return runeLen(str[0..<i])
+  if i == -1:
+    return -1
+  else:
+    return runeLen(str[0 ..< i])
 
-proc find*(
-  runes: Runes,
-  sub: Rune,
-  start: Natural = 0,
-  last = 0): int {.inline.} =
-
-    runes.find(sub.toRunes, start, last)
+proc find*(runes: Runes, sub: Rune, start: Natural = 0, last = 0): int {.inline.} =
+  runes.find(sub.toRunes, start, last)
 
 proc rfind*(runes: Runes, r: Rune, start: Natural = 0, last = -1): int =
   ## If `last` is unspecified, it defaults to `runes.high`(the last element).
@@ -382,7 +433,8 @@ proc rfind*(runes: Runes, r: Rune, start: Natural = 0, last = -1): int =
   let last = if last == -1: runes.high else: last
 
   for i in countdown(last, start):
-    if runes[i] == r: return i
+    if runes[i] == r:
+      return i
 
   return -1
 
@@ -390,17 +442,19 @@ proc rfind*(runes, sub: Runes, start: Natural = 0, last = -1): int =
   ## If `last` is unspecified, it defaults to `runes.high`(the last element).
   ## If `sub` is no in `runes`, -1 is returned. Otherwise the index is returned.
 
-  if sub.len == 0: return -1
+  if sub.len == 0:
+    return -1
 
   let last = if last == -1: runes.high else: last
 
   for i in countdown(last - sub.len + 1, start):
     result = i
     for j in 0 ..< sub.len:
-      if runes[i+j] != sub[j]:
+      if runes[i + j] != sub[j]:
         result = -1
         break
-    if result != -1: return
+    if result != -1:
+      return
   return -1
 
 proc substr*(runes: Runes, first, last: int): Runes {.inline.} =
@@ -428,48 +482,56 @@ proc `in`*(runes: seq[Runes], sub: Runes): bool {.inline.} =
   find(runes, sub) >= 0
 
 iterator split*(
-  runes: Runes,
-  isSep: proc (r: Rune): bool,
-  removeEmptyEntries: bool = false): Runes =
-    ## Splits the runes by `isSep`.
-    ## if `removeEmptyEntries` is false, including empty runes.
+    runes: Runes, isSep: proc(r: Rune): bool, removeEmptyEntries: bool = false
+): Runes =
+  ## Splits the runes by `isSep`.
+  ## if `removeEmptyEntries` is false, including empty runes.
 
-    var first = 0
-    while first <= runes.len:
-      var last = first
-      while last < runes.len and not isSep(runes[last]):
-        last.inc
+  var first = 0
+  while first <= runes.len:
+    var last = first
+    while last < runes.len and not isSep(runes[last]):
+      last.inc
 
-      if first < last: yield runes[first ..< last]
-      if last < runes.len and not removeEmptyEntries: yield ru""
+    if first < last:
+      yield runes[first ..< last]
+    if last < runes.len and not removeEmptyEntries:
+      yield ru""
 
-      first = last + 1
-
-proc split*(
-  runes: Runes,
-  isSep: proc (r: Rune): bool,
-  removeEmptyEntries: bool = false): seq[Runes] {.inline.} =
-
-    if runes.len == 0:
-      if removeEmptyEntries: return @[]
-      else: return @[ru""]
-
-    for r in runes.split(isSep, removeEmptyEntries):
-      if removeEmptyEntries and r.len > 0: result.add r
-      else: result.add r
+    first = last + 1
 
 proc split*(
-  runes: Runes,
-  sep: Rune,
-  removeEmptyEntries: bool = false): seq[Runes] {.inline.} =
+    runes: Runes, isSep: proc(r: Rune): bool, removeEmptyEntries: bool = false
+): seq[Runes] {.inline.} =
+  if runes.len == 0:
+    if removeEmptyEntries:
+      return @[]
+    else:
+      return @[ru""]
 
-    runes.split(proc(r: Rune): bool = r == sep, removeEmptyEntries)
+  for r in runes.split(isSep, removeEmptyEntries):
+    if removeEmptyEntries and r.len > 0:
+      result.add r
+    else:
+      result.add r
+
+proc split*(
+    runes: Runes, sep: Rune, removeEmptyEntries: bool = false
+): seq[Runes] {.inline.} =
+  runes.split(
+    proc(r: Rune): bool =
+      r == sep,
+    removeEmptyEntries,
+  )
 
 proc splitWhitespace*(
-  runes: Runes,
-  removeEmptyEntries: bool = false): seq[Runes] {.inline.} =
-
-    runes.split(proc(r: Rune): bool = r.isWhiteSpace, removeEmptyEntries)
+    runes: Runes, removeEmptyEntries: bool = false
+): seq[Runes] {.inline.} =
+  runes.split(
+    proc(r: Rune): bool =
+      r.isWhiteSpace,
+    removeEmptyEntries,
+  )
 
 iterator splitLines*(runes: Runes): Runes =
   var first = 0
@@ -486,11 +548,14 @@ iterator splitLines*(runes: Runes): Runes =
     first = last + 1
 
 proc splitLines*(runes: Runes): seq[Runes] {.inline.} =
-  for line in runes.splitLines: result.add line
+  for line in runes.splitLines:
+    result.add line
 
-proc parseInt*(rune: Rune): int {.inline.} = parseInt($rune)
+proc parseInt*(rune: Rune): int {.inline.} =
+  parseInt($rune)
 
-proc parseInt*(runes: Runes): int {.inline.} = parseInt($runes)
+proc parseInt*(runes: Runes): int {.inline.} =
+  parseInt($runes)
 
 proc toggleCase*(ch: Rune): Rune =
   result = ch
@@ -560,7 +625,8 @@ proc count*(runes: Runes, r: Rune): int {.inline.} =
   ## Count `r` contained in `runes`
 
   for r2 in runes:
-    if r2 == r: result.inc
+    if r2 == r:
+      result.inc
 
 template clear*(r: var Rune) =
   ## Assign empty rune.
@@ -575,12 +641,14 @@ template clear*(r: var Runes) =
 proc isContainUpper*(runes: Runes): bool =
   for r in runes:
     let ch = ($r)[0]
-    if isUpperAscii(ch): return true
+    if isUpperAscii(ch):
+      return true
 
 proc join*(lines: seq[Runes], sep: Runes = ru""): Runes =
   for index, runes in lines:
     result.add runes
-    if index < lines.high: result.add sep
+    if index < lines.high:
+      result.add sep
 
 proc removePrefix*(runes: var Runes, prefix: Runes) =
   var str = $runes
@@ -593,15 +661,18 @@ proc removeSuffix*(runes: var Runes, suffix: Runes) =
   runes = str.toRunes
 
 proc toLower*(runes: Runes): Runes =
-  for r in runes: result.add toLower(r)
+  for r in runes:
+    result.add toLower(r)
 
 proc toLower*(lines: seq[Runes]): seq[Runes] =
-  for runes in lines: result.add toLower(runes)
+  for runes in lines:
+    result.add toLower(runes)
 
 proc isAllLower*(runes: Runes): bool =
   result = true
   for r in runes:
-    if not r.isLower: return false
+    if not r.isLower:
+      return false
 
 proc stripLineEnd*(runes: Runes): Runes =
   var s = $runes
@@ -619,14 +690,14 @@ proc replaceToNewLines*(runes: Runes): Runes =
     i = 0
     isEscape = false
   while i < runes.len:
-    if runes[i] == ru'\\':
+    if runes[i] == ru '\\':
       if not isEscape:
         isEscape = true
-      elif runes[i - 1] == ru'\\':
+      elif runes[i - 1] == ru '\\':
         isEscape = false
         result.add runes[i]
-    elif isEscape and runes[i] == ru'n':
-      result.add ru'\n'
+    elif isEscape and runes[i] == ru 'n':
+      result.add ru '\n'
       isEscape = false
     else:
       result.add runes[i]
@@ -644,10 +715,13 @@ proc removeNewLineAtEnd*(runes: Runes): Runes =
 
   var countNewline = 0
   for i in countdown(runes.high, 0):
-    if runes[i] in [ru'\n', ru'\r']: countNewline.inc
-    else: break
+    if runes[i] in [ru '\n', ru '\r']:
+      countNewline.inc
+    else:
+      break
 
-  if countNewline > 0: return result[0 .. countNewline]
+  if countNewline > 0:
+    return result[0 .. countNewline]
 
 proc addMargins*(lines: seq[Runes], width: int = 1): seq[Runes] =
   let maxLen = lines.maxLen

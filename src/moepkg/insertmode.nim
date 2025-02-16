@@ -24,8 +24,9 @@ import pkg/results
 import lsp/[client, signaturehelp]
 import lsp/completion as lspcompletion
 
-import ui, editorstatus, windownode, movement, editor, bufferstatus, settings,
-       unicodeext, independentutils, gapbuffer, completion, messages
+import
+  ui, editorstatus, windownode, movement, editor, bufferstatus, settings, unicodeext,
+  independentutils, gapbuffer, completion, messages
 
 proc exitInsertMode(status: var EditorStatus) =
   if currentBufStatus.isInsertMultiMode:
@@ -44,17 +45,19 @@ proc deleteBeforeCursorAndMoveToLeft(status: var EditorStatus) {.inline.} =
     const NumOfDelete = 1
     currentBufStatus.deleteMultiplePositions(
       currentBufStatus.bufferPositionsForMultipleEdit(
-        currentMainWindowNode.currentColumn),
-      NumOfDelete)
+        currentMainWindowNode.currentColumn
+      ),
+      NumOfDelete,
+    )
     currentMainWindowNode.keyLeft
   else:
     currentBufStatus.keyBackspace(
-      currentMainWindowNode,
-      status.settings.standard.autoDeleteParen,
-      status.settings.standard.tabStop)
+      currentMainWindowNode, status.settings.standard.autoDeleteParen,
+      status.settings.standard.tabStop,
+    )
 
 proc deleteCurrentCursor(status: var EditorStatus) {.inline.} =
-  template currentLineHigh: int =
+  template currentLineHigh(): int =
     currentBufStatus.buffer[currentMainWindowNode.currentLine].high
 
   if currentBufStatus.isInsertMultiMode:
@@ -63,95 +66,106 @@ proc deleteCurrentCursor(status: var EditorStatus) {.inline.} =
       # Delete before cursor and move to left.
       currentBufStatus.deleteMultiplePositions(
         currentBufStatus.bufferPositionsForMultipleEdit(
-          currentMainWindowNode.currentColumn),
-        NumOfDelete)
+          currentMainWindowNode.currentColumn
+        ),
+        NumOfDelete,
+      )
       currentMainWindowNode.keyLeft
     else:
       currentBufStatus.deleteCurrentMultiplePositions(
         currentBufStatus.bufferPositionsForMultipleEdit(
-          currentMainWindowNode.currentColumn),
-        NumOfDelete)
+          currentMainWindowNode.currentColumn
+        ),
+        NumOfDelete,
+      )
   else:
     currentBufStatus.deleteCharacter(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn,
-      status.settings.standard.autoDeleteParen)
+      currentMainWindowNode.currentLine, currentMainWindowNode.currentColumn,
+      status.settings.standard.autoDeleteParen,
+    )
 
 proc sendDidChangeNotify(status: var EditorStatus): Result[(), string] =
   currentBufStatus.version.inc
 
   let range = BufferRange(
     first: currentMainWindowNode.bufferPosition,
-    last: currentMainWindowNode.bufferPosition)
+    last: currentMainWindowNode.bufferPosition,
+  )
 
   let err = waitFor lspClient.textDocumentDidChange(
     currentBufStatus.version,
     $currentBufStatus.path.absolutePath,
     currentBufStatus.buffer.toString,
-    some(range))
+    some(range),
+  )
   if err.isErr:
     return Result[(), string].err err.error
 
   return Result[(), string].ok ()
 
-proc sendCompletionRequest(
-  status: var EditorStatus,
-  r: Rune): Result[(), string] =
-    ## Send didChange and completion requests to the LSP server.
+proc sendCompletionRequest(status: var EditorStatus, r: Rune): Result[(), string] =
+  ## Send didChange and completion requests to the LSP server.
 
-    block:
-      let err = status.sendDidChangeNotify
-      if err.isErr:
-        return Result[(), string].err err.error
+  block:
+    let err = status.sendDidChangeNotify
+    if err.isErr:
+      return Result[(), string].err err.error
 
-    block:
-      let isIncompleteTrigger = status.completionWindow.isSome
+  block:
+    let isIncompleteTrigger = status.completionWindow.isSome
 
-      let err = waitFor lspClient.textDocumentCompletion(
-        currentBufStatus.id,
-        $currentBufStatus.path.absolutePath,
-        currentMainWindowNode.bufferPosition,
-        isIncompleteTrigger,
-        $r)
-      if err.isErr:
-        return Result[(), string].err err.error
+    let err = waitFor lspClient.textDocumentCompletion(
+      currentBufStatus.id,
+      $currentBufStatus.path.absolutePath,
+      currentMainWindowNode.bufferPosition,
+      isIncompleteTrigger,
+      $r,
+    )
+    if err.isErr:
+      return Result[(), string].err err.error
 
-    return Result[(), string].ok ()
+  return Result[(), string].ok ()
 
 proc sendSignatureHelpRequest(
-  status: var EditorStatus,
-  r: Option[Rune] = none(Rune)): Result[(), string] =
-    ## Send didChange and signatureHelp requests to the LSP server.
+    status: var EditorStatus, r: Option[Rune] = none(Rune)
+): Result[(), string] =
+  ## Send didChange and signatureHelp requests to the LSP server.
 
-    block:
-      let err = status.sendDidChangeNotify
-      if err.isErr:
-        return Result[(), string].err err.error
+  block:
+    let err = status.sendDidChangeNotify
+    if err.isErr:
+      return Result[(), string].err err.error
 
-    block:
-      let
-        triggerChar =
-          if r.isSome: some($r)
-          else: none(string)
-        triggerKind =
-          if r.isSome: SignatureHelpTriggerKind.TriggerCharacter
-          else: SignatureHelpTriggerKind.Invoked
+  block:
+    let
+      triggerChar =
+        if r.isSome:
+          some($r)
+        else:
+          none(string)
+      triggerKind =
+        if r.isSome:
+          SignatureHelpTriggerKind.TriggerCharacter
+        else:
+          SignatureHelpTriggerKind.Invoked
 
-      let err = waitFor lspClient.textDocumentSignatureHelp(
-        currentBufStatus.id,
-        $currentBufStatus.path.absolutePath,
-        currentMainWindowNode.bufferPosition,
-        triggerKind,
-        triggerChar)
-      if err.isErr:
-        return Result[(), string].err err.error
+    let err = waitFor lspClient.textDocumentSignatureHelp(
+      currentBufStatus.id,
+      $currentBufStatus.path.absolutePath,
+      currentMainWindowNode.bufferPosition,
+      triggerKind,
+      triggerChar,
+    )
+    if err.isErr:
+      return Result[(), string].err err.error
 
-    return Result[(), string ].ok ()
+  return Result[(), string].ok ()
 
 template isCompletionTrigger(c: LspClient, r: Rune): bool =
   if c.capabilities.isSome and c.capabilities.get.completion.isSome:
-    isTriggerCharacter(c.capabilities.get.completion.get, $r) or
-    isCompletionCharacter(r)
+    isTriggerCharacter(c.capabilities.get.completion.get, $r) or isCompletionCharacter(
+      r
+    )
   else:
     isCompletionCharacter(r)
 
@@ -159,27 +173,29 @@ proc insertToBuffer(status: var EditorStatus, r: Rune) {.inline.} =
   if currentBufStatus.isInsertMultiMode:
     currentBufStatus.insertMultiplePositions(
       currentBufStatus.bufferPositionsForMultipleEdit(
-        currentMainWindowNode.currentColumn),
-        r)
+        currentMainWindowNode.currentColumn
+      ),
+      r,
+    )
     currentBufStatus.keyRight(currentMainWindowNode)
   else:
     insertCharacter(
-      currentBufStatus,
-      currentMainWindowNode,
-      status.settings.standard.autoCloseParen,
-      r)
+      currentBufStatus, currentMainWindowNode, status.settings.standard.autoCloseParen,
+      r,
+    )
 
   if status.lspClients.contains(currentBufStatus.langId):
     if lspClient.isCompletionTrigger(r):
       let err = status.sendCompletionRequest(r)
-      if err.isErr: error err.error
+      if err.isErr:
+        error err.error
 
 proc showSignatureHelp(status: var EditorStatus) =
   if status.lspClients.contains(currentBufStatus.langId) and
-     lspClient.capabilities.isSome and
-     lspClient.capabilities.get.signatureHelp.isSome:
-       let err = status.sendSignatureHelpRequest
-       if err.isErr: status.commandLine.writeLspSignatureHelpError(err.error)
+      lspClient.capabilities.isSome and lspClient.capabilities.get.signatureHelp.isSome:
+    let err = status.sendSignatureHelpRequest
+    if err.isErr:
+      status.commandLine.writeLspSignatureHelpError(err.error)
 
 proc execInsertModeCommand*(status: var EditorStatus, command: Runes) =
   if command.len == 0:
@@ -192,8 +208,7 @@ proc execInsertModeCommand*(status: var EditorStatus, command: Runes) =
   if isCtrlC(key) or isEscKey(key):
     status.exitInsertMode
   elif isCtrlU(key):
-    currentBufStatus.deleteBeforeCursorToFirstNonBlank(
-      currentMainWindowNode)
+    currentBufStatus.deleteBeforeCursorToFirstNonBlank(currentMainWindowNode)
   elif isLeftKey(key):
     currentMainWindowNode.keyLeft
   elif isRightKey(key):
@@ -216,40 +231,33 @@ proc execInsertModeCommand*(status: var EditorStatus, command: Runes) =
     status.deleteBeforeCursorAndMoveToLeft
   elif isEnterKey(key):
     keyEnter(
-      currentBufStatus,
-      currentMainWindowNode,
-      status.settings.standard.autoIndent,
-      status.settings.standard.tabStop)
+      currentBufStatus, currentMainWindowNode, status.settings.standard.autoIndent,
+      status.settings.standard.tabStop,
+    )
   elif isTabKey(key) or isCtrlI(key):
     insertTab(
-      currentBufStatus,
-      currentMainWindowNode,
-      status.settings.standard.tabStop,
-      status.settings.standard.autoCloseParen)
+      currentBufStatus, currentMainWindowNode, status.settings.standard.tabStop,
+      status.settings.standard.autoCloseParen,
+    )
   elif isCtrlE(key):
-    currentBufStatus.insertCharacterBelowCursor(
-      currentMainWindowNode)
+    currentBufStatus.insertCharacterBelowCursor(currentMainWindowNode)
   elif isCtrlY(key):
-    currentBufStatus.insertCharacterAboveCursor(
-      currentMainWindowNode)
+    currentBufStatus.insertCharacterAboveCursor(currentMainWindowNode)
   elif isCtrlW(key):
     const loop = 1
     currentBufStatus.deleteWordBeforeCursor(
-      currentMainWindowNode,
-      status.registers,
-      loop,
-      status.settings)
+      currentMainWindowNode, status.registers, loop, status.settings
+    )
   elif isCtrlU(key):
-    currentBufStatus.deleteCharactersBeforeCursorInCurrentLine(
-      currentMainWindowNode)
+    currentBufStatus.deleteCharactersBeforeCursorInCurrentLine(currentMainWindowNode)
   elif isCtrlT(key):
     currentBufStatus.indentInCurrentLine(
-      currentMainWindowNode,
-      status.settings.view.tabStop)
+      currentMainWindowNode, status.settings.view.tabStop
+    )
   elif isCtrlD(key):
     currentBufStatus.unindentInCurrentLine(
-      currentMainWindowNode,
-      status.settings.view.tabStop)
+      currentMainWindowNode, status.settings.view.tabStop
+    )
   elif isCtrlR(key):
     status.showSignatureHelp
   else:
@@ -257,5 +265,5 @@ proc execInsertModeCommand*(status: var EditorStatus, command: Runes) =
 
   if currentBufStatus.buffer.len != beforeBufferLen:
     status.shiftFoldingRanges(
-      currentMainWindowNode.currentLine,
-      currentBufStatus.buffer.len - beforeBufferLen)
+      currentMainWindowNode.currentLine, currentBufStatus.buffer.len - beforeBufferLen
+    )

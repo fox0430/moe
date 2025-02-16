@@ -28,5 +28,5 @@ proc defaultLogPath(): string =
 proc initLogger*() =
   let path = defaultLogPath()
 
-  var fileLog = newFileLogger(path, levelThreshold=lvlDebug)
+  var fileLog = newFileLogger(path, levelThreshold = lvlDebug)
   addHandler(fileLog)

@@ -24,13 +24,11 @@ proc execSearchCommand*(status: var EditorStatus, keyword: Runes) =
 
   if isSearchForwardMode(currentBufStatus.mode):
     currentBufStatus.jumpToSearchForwardResults(
-      currentMainWindowNode,
-      keyword,
-      status.settings.standard.ignorecase,
-      status.settings.standard.smartcase)
+      currentMainWindowNode, keyword, status.settings.standard.ignorecase,
+      status.settings.standard.smartcase,
+    )
   else:
     currentBufStatus.jumpToSearchBackwardResults(
-      currentMainWindowNode,
-      keyword,
-      status.settings.standard.ignorecase,
-      status.settings.standard.smartcase)
+      currentMainWindowNode, keyword, status.settings.standard.ignorecase,
+      status.settings.standard.smartcase,
+    )

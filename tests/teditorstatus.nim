@@ -23,9 +23,12 @@ import pkg/results
 
 import moepkg/lsp/utils
 import moepkg/lsp/protocol/[types, enums]
-import moepkg/[editor, gapbuffer, bufferstatus, editorview, unicodeext, build,
-               highlight, windownode, movement, backgroundprocess, syntaxcheck,
-               independentutils, tabline, settings, visualmode]
+import
+  moepkg/[
+    editor, gapbuffer, bufferstatus, editorview, unicodeext, build, highlight,
+    windownode, movement, backgroundprocess, syntaxcheck, independentutils, tabline,
+    settings, visualmode,
+  ]
 
 import utils
 
@@ -34,9 +37,8 @@ import moepkg/editorstatus {.all.}
 
 proc initSelectedArea(status: EditorStatus) =
   currentBufStatus.selectedArea = initSelectedArea(
-    currentMainWindowNode.currentLine,
-    currentMainWindowNode.currentColumn)
-    .some
+    currentMainWindowNode.currentLine, currentMainWindowNode.currentColumn
+  ).some
 
 suite "addNewBuffer":
   var status: EditorStatus
@@ -88,7 +90,8 @@ suite "addNewBufferInCurrentWin":
     var status = initEditorStatus()
     let r = status.addNewBufferInCurrentWin
 
-    if fileExists(path): removeFile(path)
+    if fileExists(path):
+      removeFile(path)
 
     check r.isOk
     check status.bufStatus.len == 1
@@ -105,7 +108,8 @@ suite "addNewBufferInCurrentWin":
     var status = initEditorStatus()
     let r = status.addNewBufferInCurrentWin(path)
 
-    if fileExists(path): removeFile(path)
+    if fileExists(path):
+      removeFile(path)
 
     check r.isOk
     check status.bufStatus.len == 1
@@ -135,7 +139,8 @@ suite "addNewBufferInCurrentWin":
     var status = initEditorStatus()
     let r = status.addNewBufferInCurrentWin(path)
 
-    if fileExists(path): removeFile(path)
+    if fileExists(path):
+      removeFile(path)
 
     check r.isErr
 
@@ -149,7 +154,8 @@ suite "addNewBufferInCurrentWin":
     var status = initEditorStatus()
     let r = status.addNewBufferInCurrentWin(path, Mode.filer)
 
-    if dirExists(path): removeDir(path)
+    if dirExists(path):
+      removeDir(path)
 
     check r.isErr
 
@@ -239,13 +245,12 @@ suite "resize":
     status.resize(100, 100)
     currentBufStatus.buffer = initGapBuffer(@[ru"a"])
 
-    currentBufStatus.highlight =
-      initHighlight(currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+    currentBufStatus.highlight = initHighlight(
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
-    currentMainWindowNode.view =
-      initEditorView(currentBufStatus.buffer, 1, 1)
+    currentMainWindowNode.view = initEditorView(currentBufStatus.buffer, 1, 1)
 
     status.resize(0, 0)
 
@@ -255,13 +260,12 @@ suite "resize":
     status.resize(100, 100)
     currentBufStatus.buffer = initGapBuffer(@[ru"a"])
 
-    currentBufStatus.highlight =
-      initHighlight(currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+    currentBufStatus.highlight = initHighlight(
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
-    currentMainWindowNode.view =
-      initEditorView(currentBufStatus.buffer, 20, 4)
+    currentMainWindowNode.view = initEditorView(currentBufStatus.buffer, 20, 4)
 
     status.resize(20, 4)
 
@@ -270,9 +274,9 @@ suite "resize":
 
     for i in 0 ..< 10:
       currentBufStatus.keyEnter(
-        currentMainWindowNode,
-        status.settings.standard.autoCloseParen,
-        status.settings.standard.tabStop)
+        currentMainWindowNode, status.settings.standard.autoCloseParen,
+        status.settings.standard.tabStop,
+      )
       status.update
 
 suite "Auto delete paren":
@@ -284,9 +288,9 @@ suite "Auto delete paren":
       discard status.addNewBufferInCurrentWin.get
       currentBufStatus.buffer = initGapBuffer(@[ru"()"])
       currentBufStatus.deleteCharacter(
-        currentMainWindowNode.currentLine,
-        currentMainWindowNode.currentColumn,
-        status.settings.standard.autoDeleteParen)
+        currentMainWindowNode.currentLine, currentMainWindowNode.currentColumn,
+        status.settings.standard.autoDeleteParen,
+      )
 
       check(currentBufStatus.buffer[0] == ru"")
 
@@ -299,9 +303,9 @@ suite "Auto delete paren":
       currentBufStatus.keyRight(currentMainWindowNode)
 
       currentBufStatus.deleteCharacter(
-        currentMainWindowNode.currentLine,
-        currentMainWindowNode.currentColumn,
-        status.settings.standard.autoDeleteParen)
+        currentMainWindowNode.currentLine, currentMainWindowNode.currentColumn,
+        status.settings.standard.autoDeleteParen,
+      )
 
       check(currentBufStatus.buffer[0] == ru"")
 
@@ -314,9 +318,9 @@ suite "Auto delete paren":
       currentBufStatus.buffer = initGapBuffer(@[ru"(())"])
 
       currentBufStatus.deleteCharacter(
-        currentMainWindowNode.currentLine,
-        currentMainWindowNode.currentColumn,
-        status.settings.standard.autoDeleteParen)
+        currentMainWindowNode.currentLine, currentMainWindowNode.currentColumn,
+        status.settings.standard.autoDeleteParen,
+      )
 
       check(currentBufStatus.buffer[0] == ru"()")
 
@@ -329,9 +333,9 @@ suite "Auto delete paren":
       currentBufStatus.keyRight(currentMainWindowNode)
 
       currentBufStatus.deleteCharacter(
-        currentMainWindowNode.currentLine,
-        currentMainWindowNode.currentColumn,
-        status.settings.standard.autoDeleteParen)
+        currentMainWindowNode.currentLine, currentMainWindowNode.currentColumn,
+        status.settings.standard.autoDeleteParen,
+      )
 
       check(currentBufStatus.buffer[0] == ru"()")
 
@@ -343,12 +347,12 @@ suite "Auto delete paren":
       currentBufStatus.buffer = initGapBuffer(@[ru"(())"])
 
       for i in 0 ..< 2:
-       currentBufStatus.keyRight(currentMainWindowNode)
+        currentBufStatus.keyRight(currentMainWindowNode)
 
       currentBufStatus.deleteCharacter(
-        currentMainWindowNode.currentLine,
-        currentMainWindowNode.currentColumn,
-        status.settings.standard.autoDeleteParen)
+        currentMainWindowNode.currentLine, currentMainWindowNode.currentColumn,
+        status.settings.standard.autoDeleteParen,
+      )
 
       check(currentBufStatus.buffer[0] == ru"()")
 
@@ -362,9 +366,9 @@ suite "Auto delete paren":
         currentBufStatus.keyRight(currentMainWindowNode)
 
       currentBufStatus.deleteCharacter(
-        currentMainWindowNode.currentLine,
-        currentMainWindowNode.currentColumn,
-        status.settings.standard.autoDeleteParen)
+        currentMainWindowNode.currentLine, currentMainWindowNode.currentColumn,
+        status.settings.standard.autoDeleteParen,
+      )
 
       check(currentBufStatus.buffer[0] == ru"()")
 
@@ -378,9 +382,9 @@ suite "Auto delete paren":
       currentBufStatus.buffer = initGapBuffer(@[ru"(()"])
 
       currentBufStatus.deleteCharacter(
-        currentMainWindowNode.currentLine,
-        currentMainWindowNode.currentColumn,
-        status.settings.standard.autoDeleteParen)
+        currentMainWindowNode.currentLine, currentMainWindowNode.currentColumn,
+        status.settings.standard.autoDeleteParen,
+      )
 
       check(currentBufStatus.buffer[0] == ru"()")
 
@@ -393,9 +397,9 @@ suite "Auto delete paren":
       currentBufStatus.keyRight(currentMainWindowNode)
 
       currentBufStatus.deleteCharacter(
-        currentMainWindowNode.currentLine,
-        currentMainWindowNode.currentColumn,
-        status.settings.standard.autoDeleteParen)
+        currentMainWindowNode.currentLine, currentMainWindowNode.currentColumn,
+        status.settings.standard.autoDeleteParen,
+      )
 
       check(currentBufStatus.buffer[0] == ru"(")
 
@@ -409,9 +413,9 @@ suite "Auto delete paren":
         currentBufStatus.keyRight(currentMainWindowNode)
 
       currentBufStatus.deleteCharacter(
-        currentMainWindowNode.currentLine,
-        currentMainWindowNode.currentColumn,
-        status.settings.standard.autoDeleteParen)
+        currentMainWindowNode.currentLine, currentMainWindowNode.currentColumn,
+        status.settings.standard.autoDeleteParen,
+      )
 
       check(currentBufStatus.buffer[0] == ru"(")
 
@@ -423,9 +427,9 @@ suite "Auto delete paren":
       currentBufStatus.buffer = initGapBuffer(@[ru"())"])
 
       currentBufStatus.deleteCharacter(
-        currentMainWindowNode.currentLine,
-        currentMainWindowNode.currentColumn,
-        status.settings.standard.autoDeleteParen)
+        currentMainWindowNode.currentLine, currentMainWindowNode.currentColumn,
+        status.settings.standard.autoDeleteParen,
+      )
 
       check(currentBufStatus.buffer[0] == ru")")
 
@@ -438,9 +442,9 @@ suite "Auto delete paren":
       currentBufStatus.keyRight(currentMainWindowNode)
 
       currentBufStatus.deleteCharacter(
-        currentMainWindowNode.currentLine,
-        currentMainWindowNode.currentColumn,
-        status.settings.standard.autoDeleteParen)
+        currentMainWindowNode.currentLine, currentMainWindowNode.currentColumn,
+        status.settings.standard.autoDeleteParen,
+      )
 
       check(currentBufStatus.buffer[0] == ru")")
 
@@ -455,9 +459,9 @@ suite "Auto delete paren":
         currentBufStatus.keyRight(currentMainWindowNode)
 
       currentBufStatus.deleteCharacter(
-        currentMainWindowNode.currentLine,
-        currentMainWindowNode.currentColumn,
-        status.settings.standard.autoDeleteParen)
+        currentMainWindowNode.currentLine, currentMainWindowNode.currentColumn,
+        status.settings.standard.autoDeleteParen,
+      )
 
       check(currentBufStatus.buffer[0] == ru"()")
 
@@ -470,9 +474,9 @@ suite "Auto delete paren":
       currentBufStatus.buffer = initGapBuffer(@[ru"(", ru")"])
 
       currentBufStatus.deleteCharacter(
-        currentMainWindowNode.currentLine,
-        currentMainWindowNode.currentColumn,
-        status.settings.standard.autoDeleteParen)
+        currentMainWindowNode.currentLine, currentMainWindowNode.currentColumn,
+        status.settings.standard.autoDeleteParen,
+      )
 
       check(currentBufStatus.buffer[0] == ru"")
       check(currentBufStatus.buffer[1] == ru"")
@@ -486,9 +490,9 @@ suite "Auto delete paren":
       currentBufStatus.keyDown(currentMainWindowNode)
 
       currentBufStatus.deleteCharacter(
-        currentMainWindowNode.currentLine,
-        currentMainWindowNode.currentColumn,
-        status.settings.standard.autoDeleteParen)
+        currentMainWindowNode.currentLine, currentMainWindowNode.currentColumn,
+        status.settings.standard.autoDeleteParen,
+      )
 
       check(currentBufStatus.buffer[0] == ru"")
       check(currentBufStatus.buffer[1] == ru"")
@@ -503,9 +507,9 @@ suite "Auto delete paren":
       status.changeMode(Mode.insert)
       currentBufStatus.keyRight(currentMainWindowNode)
       currentBufStatus.keyBackspace(
-        currentMainWindowNode,
-        status.settings.standard.autoDeleteParen,
-        status.settings.standard.tabStop)
+        currentMainWindowNode, status.settings.standard.autoDeleteParen,
+        status.settings.standard.tabStop,
+      )
 
       check(currentBufStatus.buffer[0] == ru"")
 
@@ -519,9 +523,9 @@ suite "Auto delete paren":
       for i in 0 ..< 2:
         currentBufStatus.keyRight(currentMainWindowNode)
       currentBufStatus.keyBackspace(
-        currentMainWindowNode,
-        status.settings.standard.autoDeleteParen,
-        status.settings.standard.tabStop)
+        currentMainWindowNode, status.settings.standard.autoDeleteParen,
+        status.settings.standard.tabStop,
+      )
 
       check(currentBufStatus.buffer[0] == ru"")
 
@@ -539,9 +543,9 @@ suite "Auto delete paren":
         currentBufStatus.keyRight(currentMainWindowNode)
 
       currentBufStatus.keyBackspace(
-        currentMainWindowNode,
-        status.settings.standard.autoDeleteParen,
-        status.settings.standard.tabStop)
+        currentMainWindowNode, status.settings.standard.autoDeleteParen,
+        status.settings.standard.tabStop,
+      )
 
       check(currentBufStatus.buffer[0] == ru"(aa)")
 
@@ -558,9 +562,9 @@ suite "Auto delete paren":
         currentBufStatus.keyRight(currentMainWindowNode)
 
       currentBufStatus.keyBackspace(
-        currentMainWindowNode,
-        status.settings.standard.autoDeleteParen,
-        status.settings.standard.tabStop)
+        currentMainWindowNode, status.settings.standard.autoDeleteParen,
+        status.settings.standard.tabStop,
+      )
 
       check(currentBufStatus.buffer[0] == ru"a(a)")
 
@@ -704,7 +708,7 @@ suite "changeCurrentBuffer":
 
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.path = ru"test2"
-    currentBufStatus.buffer =  initGapBuffer(@[ru""])
+    currentBufStatus.buffer = initGapBuffer(@[ru""])
 
     status.changeCurrentBuffer(1)
 
@@ -744,8 +748,7 @@ suite "editorstatus: Updates/Restore the last cursor position":
     # Edit buffer after update the last cursor position
     currentBufStatus.buffer[1] = ru ""
 
-    currentMainWindowNode.restoreCursorPosition(currentBufStatus,
-                                               status.lastPosition)
+    currentMainWindowNode.restoreCursorPosition(currentBufStatus, status.lastPosition)
     status.update
 
     currentMainWindowNode.currentLine = 1
@@ -767,9 +770,7 @@ suite "editorstatus: Updates/Restore the last cursor position":
 
     status.updateLastCursorPosition
 
-    currentMainWindowNode.restoreCursorPosition(
-      currentBufStatus,
-      status.lastPosition)
+    currentMainWindowNode.restoreCursorPosition(currentBufStatus, status.lastPosition)
 
     status.update
 
@@ -795,8 +796,8 @@ suite "BackgroundTasks":
     currentBufStatus.buffer = initGapBuffer(@[Buffer.toRunes])
 
     status.backgroundTasks.build.add startBackgroundBuild(
-      TestFilePath.toRunes,
-      currentBufStatus.language).get
+      TestFilePath.toRunes, currentBufStatus.language
+    ).get
 
     for i in 0 .. 10:
       sleep 1000
@@ -818,8 +819,8 @@ suite "BackgroundTasks":
 
     for i in 0 .. 1:
       status.backgroundTasks.build.add startBackgroundBuild(
-        TestFilePath.toRunes,
-        currentBufStatus.language).get
+        TestFilePath.toRunes, currentBufStatus.language
+      ).get
 
     for i in 0 .. 10:
       sleep 1000
@@ -838,14 +839,13 @@ suite "updateCommandLine":
   test "Write syntax checker messages":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = @["import std/os", "echo 1"]
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer = @["import std/os", "echo 1"].toSeqRunes.toGapBuffer
 
     let syntaxError = SyntaxError(
       position: BufferPosition(line: 0, column: 11),
       messageType: SyntaxCheckMessageType.warning,
-      message: ru"imported and not used: 'os' [UnusedImport]")
+      message: ru"imported and not used: 'os' [UnusedImport]",
+    )
 
     currentBufStatus.syntaxCheckResults = @[syntaxError]
 
@@ -858,14 +858,13 @@ suite "updateCommandLine":
   test "Write syntax checker messages and move line":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = @["import std/os", "echo 1"]
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer = @["import std/os", "echo 1"].toSeqRunes.toGapBuffer
 
     let syntaxError = SyntaxError(
       position: BufferPosition(line: 0, column: 11),
       messageType: SyntaxCheckMessageType.warning,
-      message: ru"imported and not used: 'os' [UnusedImport]")
+      message: ru"imported and not used: 'os' [UnusedImport]",
+    )
 
     currentBufStatus.syntaxCheckResults = @[syntaxError]
 
@@ -990,8 +989,8 @@ suite "editorstatus: smoothScrollDelays":
       MinDelay = 5
       MaxDelay = 20
 
-    check smoothScrollDelays(TotalLines, MinDelay, MaxDelay) == @[
-      13, 10, 8, 7, 6, 6, 6, 7, 8, 10, 13, 16, 20, 25, 30, 36, 42, 49, 56, 64]
+    check smoothScrollDelays(TotalLines, MinDelay, MaxDelay) ==
+      @[13, 10, 8, 7, 6, 6, 6, 7, 8, 10, 13, 16, 20, 25, 30, 36, 42, 49, 56, 64]
 
   test "totalLines: 0, minDelay 5, maxDelay 20":
     const
@@ -1005,7 +1004,7 @@ suite "editorstatus: scrollUpNumberOfLines":
   test "numberOfLines: 20":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = toSeq(0..30).mapIt(it.toRunes).toGapBuffer
+    currentBufStatus.buffer = toSeq(0 .. 30).mapIt(it.toRunes).toGapBuffer
     currentMainWindowNode.currentLine = 30
 
     status.resize(100, 100)
@@ -1019,7 +1018,7 @@ suite "editorstatus: scrollUpNumberOfLines":
   test "numberOfLines: 20 and buffer.len: 10":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = toSeq(0..10).mapIt(it.toRunes).toGapBuffer
+    currentBufStatus.buffer = toSeq(0 .. 10).mapIt(it.toRunes).toGapBuffer
     currentMainWindowNode.currentLine = 10
 
     status.resize(100, 100)
@@ -1034,7 +1033,7 @@ suite "editorstatus: scrollDownNumberOfLines":
   test "numberOfLines: 20":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = toSeq(0..30).mapIt(it.toRunes).toGapBuffer
+    currentBufStatus.buffer = toSeq(0 .. 30).mapIt(it.toRunes).toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -1047,7 +1046,7 @@ suite "editorstatus: scrollDownNumberOfLines":
   test "numberOfLines: 20 and buffer.len: 10":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = toSeq(0..10).mapIt(it.toRunes).toGapBuffer
+    currentBufStatus.buffer = toSeq(0 .. 10).mapIt(it.toRunes).toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -1061,7 +1060,7 @@ suite "editorstatus: smoothScrollUpNumberOfLines":
   test "numberOfLines: 20":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = toSeq(0..30).mapIt(it.toRunes).toGapBuffer
+    currentBufStatus.buffer = toSeq(0 .. 30).mapIt(it.toRunes).toGapBuffer
     currentMainWindowNode.currentLine = 30
 
     status.resize(100, 100)
@@ -1075,7 +1074,7 @@ suite "editorstatus: smoothScrollUpNumberOfLines":
   test "numberOfLines: 20; buffer.len: 10":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = toSeq(0..10).mapIt(it.toRunes).toGapBuffer
+    currentBufStatus.buffer = toSeq(0 .. 10).mapIt(it.toRunes).toGapBuffer
     currentMainWindowNode.currentLine = 10
 
     status.resize(100, 100)
@@ -1090,7 +1089,7 @@ suite "editorstatus: smoothScrollDownNumberOfLines":
   test "numberOfLines: 20":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = toSeq(0..30).mapIt(it.toRunes).toGapBuffer
+    currentBufStatus.buffer = toSeq(0 .. 30).mapIt(it.toRunes).toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -1103,7 +1102,7 @@ suite "editorstatus: smoothScrollDownNumberOfLines":
   test "numberOfLines: 20; buffer.len: 10":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = toSeq(0..10).mapIt(it.toRunes).toGapBuffer
+    currentBufStatus.buffer = toSeq(0 .. 10).mapIt(it.toRunes).toGapBuffer
 
     status.resize(100, 100)
     status.update
@@ -1123,9 +1122,8 @@ suite "editorstatus: initLsp":
 
       status.settings.lsp.enable = true
       status.settings.lsp.languages["nim"] = LspLanguageSettings(
-        extensions: @[ru"nim"],
-        command: ru"nimlangserver",
-        trace: TraceValue.verbose)
+        extensions: @[ru"nim"], command: ru"nimlangserver", trace: TraceValue.verbose
+      )
 
       status.bufStatus.add initBufferStatus(path, Mode.normal).get
 
@@ -1145,7 +1143,8 @@ suite "editorstatus: initLsp":
       status.settings.lsp.languages["nim"] = LspLanguageSettings(
         extensions: @[LanguageId.toRunes],
         command: ru"nimlangserver",
-        trace: TraceValue.verbose)
+        trace: TraceValue.verbose,
+      )
 
       assert status.addNewBufferInCurrentWin(path).isOk
 
@@ -1188,9 +1187,8 @@ suite "editorstatus: autoSave":
 
     status.settings.lsp.enable = true
     status.settings.lsp.languages["nim"] = LspLanguageSettings(
-      extensions: @[ru"nim"],
-      command: ru"nimlangserver",
-      trace: TraceValue.verbose)
+      extensions: @[ru"nim"], command: ru"nimlangserver", trace: TraceValue.verbose
+    )
 
     discard status.addNewBufferInCurrentWin(filePath).get
 
@@ -1212,15 +1210,16 @@ suite "editorstatus: update":
     assert status.addNewBufferInCurrentWin("").isOk
 
   test "LSP code lens with invalid position":
-    currentBufStatus.codeLenses = @[
-      CodeLens(
-        range: LspRange(
-          start: LspPosition(line: 1, character: 0),
-          `end`: LspPosition(line: 1, character: 0)
-        ),
-        command: some(LspCommand())
-      )
-    ]
+    currentBufStatus.codeLenses =
+      @[
+        CodeLens(
+          range: LspRange(
+            start: LspPosition(line: 1, character: 0),
+            `end`: LspPosition(line: 1, character: 0),
+          ),
+          command: some(LspCommand()),
+        )
+      ]
 
     status.resize(100, 100)
     status.update

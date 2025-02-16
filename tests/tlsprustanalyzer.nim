@@ -23,43 +23,22 @@ import moepkg/lsp/serverspecifics/rustanalyzer {.all.}
 
 suite "experimentClientCapabilities":
   test "Disable experimental":
-    check experimentClientCapabilities(RustAnalyzerConfigs()) == %*{
-      "commands": {
-        "commands": []
-      }
-    }
+    check experimentClientCapabilities(RustAnalyzerConfigs()) ==
+      %*{"commands": {"commands": []}}
 
   test "Enable rust-analyzer.runSingle":
-    check experimentClientCapabilities(RustAnalyzerConfigs(
-      runSingle: true
-    )) == %*{
-      "commands": {
-        "commands": [
-          "rust-analyzer.runSingle"
-        ]
-      }
-    }
+    check experimentClientCapabilities(RustAnalyzerConfigs(runSingle: true)) ==
+      %*{"commands": {"commands": ["rust-analyzer.runSingle"]}}
 
   test "Enable rust-analyzer.debugSingle":
-    check experimentClientCapabilities(RustAnalyzerConfigs(
-      debugSingle: true
-    )) == %*{
-      "commands": {
-        "commands": [
-          "rust-analyzer.debugSingle"
-        ]
-      }
-    }
+    check experimentClientCapabilities(RustAnalyzerConfigs(debugSingle: true)) ==
+      %*{"commands": {"commands": ["rust-analyzer.debugSingle"]}}
 
   test "Enable all":
-    check experimentClientCapabilities(RustAnalyzerConfigs(
-      runSingle: true,
-      debugSingle: true
-    )) == %*{
-      "commands": {
-        "commands": [
-          "rust-analyzer.runSingle",
-          "rust-analyzer.debugSingle"
-        ]
+    check experimentClientCapabilities(
+      RustAnalyzerConfigs(runSingle: true, debugSingle: true)
+    ) ==
+      %*{
+        "commands":
+          {"commands": ["rust-analyzer.runSingle", "rust-analyzer.debugSingle"]}
       }
-    }

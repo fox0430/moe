@@ -21,22 +21,11 @@
 # Resources.
 #
 
-from flags import
-  flagsMarkdown
+from flags import flagsMarkdown
 
-from highlite import
-  GeneralTokenizer,
-  TokenClass
+from highlite import GeneralTokenizer, TokenClass
 
-from lexer import
-  lexBacktick,
-  lexDash,
-  lexHash,
-  lexSharp,
-  lexSymbol,
-  lexWhitespace
-
-
+from lexer import lexBacktick, lexDash, lexHash, lexSharp, lexSymbol, lexWhitespace
 
 #
 # Procedures.

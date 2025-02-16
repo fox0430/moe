@@ -30,7 +30,8 @@ proc addMessageLog*(message: Runes) =
 proc addMessageLog*(messages: seq[Runes]) =
   ## Add messages to `logger.messageLog`.
 
-  for l in messages: messageLog.add l
+  for l in messages:
+    messageLog.add l
 
 proc addMessageLog*(message: string) =
   ## Add messages to `logger.messageLog`.

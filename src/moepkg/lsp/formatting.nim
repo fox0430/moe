@@ -24,36 +24,31 @@ import pkg/results
 import protocol/types
 import utils
 
-type
-  DocumentFormattingResponseResult* = Result[seq[TextEdit], string]
+type DocumentFormattingResponseResult* = Result[seq[TextEdit], string]
 
 export TextEdit, FormattingOptions
 
 proc initDocumentFormattingParams*(
-  path: string,
-  options: FormattingOptions): DocumentFormattingParams =
+    path: string, options: FormattingOptions
+): DocumentFormattingParams =
+  DocumentFormattingParams(
+    textDocument: TextDocumentIdentifier(uri: path.pathToUri), options: options
+  )
 
-    DocumentFormattingParams(
-      textDocument: TextDocumentIdentifier(uri: path.pathToUri),
-      options: options
-    )
+proc parseDocumentFormattingResponse*(res: JsonNode): DocumentFormattingResponseResult =
+  if res["result"].kind == JNull:
+    # Not found
+    return DocumentFormattingResponseResult.ok @[]
+  elif res["result"].kind != JArray:
+    return DocumentFormattingResponseResult.err "Invalid response"
+  elif res["result"].len == 0:
+    # Not found
+    return DocumentFormattingResponseResult.ok @[]
 
-proc parseDocumentFormattingResponse*(
-  res: JsonNode): DocumentFormattingResponseResult =
+  let edits =
+    try:
+      res["result"].to(seq[TextEdit])
+    except CatchableError as e:
+      return DocumentFormattingResponseResult.err fmt"Invalid response: {e.msg}"
 
-    if res["result"].kind == JNull:
-      # Not found
-      return DocumentFormattingResponseResult.ok @[]
-    elif res["result"].kind != JArray:
-      return DocumentFormattingResponseResult.err "Invalid response"
-    elif res["result"].len == 0:
-      # Not found
-      return DocumentFormattingResponseResult.ok @[]
-
-    let edits =
-      try:
-        res["result"].to(seq[TextEdit])
-      except CatchableError as e:
-        return DocumentFormattingResponseResult.err fmt"Invalid response: {e.msg}"
-
-    return DocumentFormattingResponseResult.ok edits
+  return DocumentFormattingResponseResult.ok edits

@@ -26,67 +26,39 @@ import moepkg/lsp/selectionrange {.all.}
 
 suite "lsp: parseTextDocumentSelectionRangeResponse":
   test "Not found":
-    check parseTextDocumentSelectionRangeResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": []
-    })
-    .get
-    .len == 0
+    check parseTextDocumentSelectionRangeResponse(
+      %*{"jsonrpc": "2.0", "id": 0, "result": []}
+    ).get.len == 0
 
   test "Not found 2":
-    check parseTextDocumentSelectionRangeResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": nil
-    })
-    .get
-    .len == 0
+    check parseTextDocumentSelectionRangeResponse(
+      %*{"jsonrpc": "2.0", "id": 0, "result": nil}
+    ).get.len == 0
 
   test "Basic":
-    let selectionRanges = parseTextDocumentSelectionRangeResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": [
-        {
-          "range": {
-            "start": {
-              "line": 5,
-              "character": 0
-            },
-            "end": {
-              "line": 5,
-              "character": 0
-            }
-          },
-          "parent": {
-            "range": {
-              "start": {
-                "line": 5,
-                "character": 0
-              },
-              "end": {
-                "line": 6,
-                "character": 0
-              }
-            },
+    let selectionRanges = parseTextDocumentSelectionRangeResponse(
+      %*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": [
+          {
+            "range":
+              {"start": {"line": 5, "character": 0}, "end": {"line": 5, "character": 0}},
             "parent": {
               "range": {
-                "start": {
-                  "line": 4,
-                  "character": 10
-                },
-                "end": {
-                  "line": 7,
-                  "character": 1
+                "start": {"line": 5, "character": 0}, "end": {"line": 6, "character": 0}
+              },
+              "parent": {
+                "range": {
+                  "start": {"line": 4, "character": 10},
+                  "end": {"line": 7, "character": 1},
                 }
-              }
-            }
+              },
+            },
           }
-        }
-      ]
-    })
-    .get
+        ],
+      }
+    ).get
 
     check selectionRanges.len == 1
 

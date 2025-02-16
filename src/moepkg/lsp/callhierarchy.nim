@@ -34,70 +34,66 @@ type
   LspOutgoingCallsResult* = Result[seq[CallHierarchyOutgoingCall], string]
 
 proc initCallHierarchyPrepareParams*(
-  path: string,
-  posi: BufferPosition): CallHierarchyPrepareParams =
-
-    CallHierarchyPrepareParams(
-      textDocument: TextDocumentIdentifier(uri: path.pathToUri),
-      position: posi.toLspPosition)
+    path: string, posi: BufferPosition
+): CallHierarchyPrepareParams =
+  CallHierarchyPrepareParams(
+    textDocument: TextDocumentIdentifier(uri: path.pathToUri),
+    position: posi.toLspPosition,
+  )
 
 proc initCallHierarchyIncomingParams*(
-  item: CallHierarchyItem): CallHierarchyIncomingCallsParams =
-
-    CallHierarchyIncomingCallsParams(item: item)
+    item: CallHierarchyItem
+): CallHierarchyIncomingCallsParams =
+  CallHierarchyIncomingCallsParams(item: item)
 
 proc initCallHierarchyOutgoingParams*(
-  item: CallHierarchyItem): CallHierarchyOutgoingCallsParams =
-
-    CallHierarchyOutgoingCallsParams(item: item)
+    item: CallHierarchyItem
+): CallHierarchyOutgoingCallsParams =
+  CallHierarchyOutgoingCallsParams(item: item)
 
 proc parseTextDocumentPrepareCallHierarchyResponse*(
-  res: JsonNode): LspPrepareCallHierarchyResult =
+    res: JsonNode
+): LspPrepareCallHierarchyResult =
+  if res["result"].kind != JArray:
+    return LspPrepareCallHierarchyResult.err "Invalid response"
+  elif res["result"].len == 0:
+    # Not found
+    return LspPrepareCallHierarchyResult.ok @[]
 
-    if res["result"].kind != JArray:
-      return LspPrepareCallHierarchyResult.err "Invalid response"
-    elif res["result"].len == 0:
-      # Not found
-      return LspPrepareCallHierarchyResult.ok @[]
+  let items =
+    try:
+      res["result"].to(seq[CallHierarchyItem])
+    except CatchableError as e:
+      return LspPrepareCallHierarchyResult.err fmt"Invalid response: {e.msg}"
 
-    let items =
-      try:
-        res["result"].to(seq[CallHierarchyItem])
-      except CatchableError as e:
-        return LspPrepareCallHierarchyResult.err fmt"Invalid response: {e.msg}"
+  return LspPrepareCallHierarchyResult.ok items
 
-    return LspPrepareCallHierarchyResult.ok items
+proc parseCallhierarchyIncomingCallsResponse*(res: JsonNode): LspIncomingCallsResult =
+  if res["result"].kind != JArray:
+    return LspIncomingCallsResult.err "Invalid response"
+  elif res["result"].len == 0:
+    # Not found
+    return LspIncomingCallsResult.ok @[]
 
-proc parseCallhierarchyIncomingCallsResponse*(
-  res: JsonNode): LspIncomingCallsResult =
+  let items =
+    try:
+      res["result"].to(seq[CallHierarchyIncomingCall])
+    except CatchableError as e:
+      return LspIncomingCallsResult.err fmt"Invalid response: {e.msg}"
 
-    if res["result"].kind != JArray:
-      return LspIncomingCallsResult.err "Invalid response"
-    elif res["result"].len == 0:
-      # Not found
-      return LspIncomingCallsResult.ok @[]
+  return LspIncomingCallsResult.ok items
 
-    let items =
-      try:
-        res["result"].to(seq[CallHierarchyIncomingCall])
-      except CatchableError as e:
-        return LspIncomingCallsResult.err fmt"Invalid response: {e.msg}"
+proc parseCallhierarchyOutgoingCallsResponse*(res: JsonNode): LspOutgoingCallsResult =
+  if res["result"].kind != JArray:
+    return LspOutgoingCallsResult.err "Invalid response"
+  elif res["result"].len == 0:
+    # Not found
+    return LspOutgoingCallsResult.ok @[]
 
-    return LspIncomingCallsResult.ok items
+  let items =
+    try:
+      res["result"].to(seq[CallHierarchyOutgoingCall])
+    except CatchableError as e:
+      return LspOutgoingCallsResult.err fmt"Invalid response: {e.msg}"
 
-proc parseCallhierarchyOutgoingCallsResponse*(
-  res: JsonNode): LspOutgoingCallsResult =
-
-    if res["result"].kind != JArray:
-      return LspOutgoingCallsResult.err "Invalid response"
-    elif res["result"].len == 0:
-      # Not found
-      return LspOutgoingCallsResult.ok @[]
-
-    let items =
-      try:
-        res["result"].to(seq[CallHierarchyOutgoingCall])
-      except CatchableError as e:
-        return LspOutgoingCallsResult.err fmt"Invalid response: {e.msg}"
-
-    return LspOutgoingCallsResult.ok items
+  return LspOutgoingCallsResult.ok items

@@ -42,51 +42,50 @@ type
   LspSemanticTokensResult* = Result[seq[LspSemanticToken], string]
 
 proc initSemanticTokensParams*(path: string): SemanticTokensParams =
-  SemanticTokensParams(
-    textDocument: TextDocumentIdentifier(uri: path.pathToUri))
+  SemanticTokensParams(textDocument: TextDocumentIdentifier(uri: path.pathToUri))
 
 proc parseTextDocumentSemanticTokensResponse*(
-  res: JsonNode,
-  legend: SemanticTokensLegend): LspSemanticTokensResult =
-    ## SemanticTokens full
+    res: JsonNode, legend: SemanticTokensLegend
+): LspSemanticTokensResult =
+  ## SemanticTokens full
 
-    if res["result"].kind == JNull:
-      # Not found
-      return LspSemanticTokensResult.ok @[]
+  if res["result"].kind == JNull:
+    # Not found
+    return LspSemanticTokensResult.ok @[]
 
-    var semanticTokens: SemanticTokens
+  var semanticTokens: SemanticTokens
+  try:
+    semanticTokens = res["result"].to(SemanticTokens)
+  except CatchableError as e:
+    return LspSemanticTokensResult.err fmt"Invalid response: {e.msg}"
+
+  var lspSemanticTokens: seq[LspSemanticToken]
+
+  var
+    line = 0
+    col = 0
+  for i in 0 ..< int(semanticTokens.data.len / 5):
+    let startIndex = i * 5
+    var newToken = LspSemanticToken()
     try:
-      semanticTokens = res["result"].to(SemanticTokens)
+      newToken.line = line + semanticTokens.data[startIndex + 0]
+      if newToken.line > line:
+        col = 0
+        line = newToken.line
+
+      newToken.column = col + semanticTokens.data[startIndex + 1]
+      col = newToken.column
+
+      newToken.length = semanticTokens.data[startIndex + 2]
+      newToken.tokenType = semanticTokens.data[startIndex + 3].SemanticTokenNumber
+      for i in 0 ..< legend.tokenModifiers.len:
+        if (semanticTokens.data[startIndex + 4] and (1 shl i)) > 0:
+          newToken.tokenModifiers.add i.SemanticTokenModifierNumber
     except CatchableError as e:
-      return LspSemanticTokensResult.err fmt"Invalid response: {e.msg}"
+      return LspSemanticTokensResult.err fmt"Invalid SemanticTokens: {e.msg}"
+    except RangeDefect as e:
+      return LspSemanticTokensResult.err fmt"Invalid SemanticTokens: {e.msg}"
 
-    var lspSemanticTokens: seq[LspSemanticToken]
+    lspSemanticTokens.add newToken
 
-    var
-      line = 0
-      col = 0
-    for i in 0 ..< int(semanticTokens.data.len / 5):
-      let startIndex = i * 5
-      var newToken = LspSemanticToken()
-      try:
-        newToken.line = line + semanticTokens.data[startIndex + 0]
-        if newToken.line > line:
-          col = 0
-          line = newToken.line
-
-        newToken.column = col + semanticTokens.data[startIndex + 1]
-        col = newToken.column
-
-        newToken.length = semanticTokens.data[startIndex + 2]
-        newToken.tokenType = semanticTokens.data[startIndex + 3].SemanticTokenNumber
-        for i in 0 ..< legend.tokenModifiers.len:
-          if (semanticTokens.data[startIndex + 4] and (1 shl i)) > 0:
-            newToken.tokenModifiers.add i.SemanticTokenModifierNumber
-      except CatchableError as e:
-        return LspSemanticTokensResult.err fmt"Invalid SemanticTokens: {e.msg}"
-      except RangeDefect as e:
-        return LspSemanticTokensResult.err fmt"Invalid SemanticTokens: {e.msg}"
-
-      lspSemanticTokens.add newToken
-
-    return LspSemanticTokensResult.ok lspSemanticTokens
+  return LspSemanticTokensResult.ok lspSemanticTokens

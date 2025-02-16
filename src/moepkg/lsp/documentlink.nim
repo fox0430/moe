@@ -29,11 +29,11 @@ type
 
   DocumentLinkResolveResult* = Result[DocumentLink, string]
 
-proc isResolve*(l: DocumentLink): bool {.inline.} = l.target.isNone
+proc isResolve*(l: DocumentLink): bool {.inline.} =
+  l.target.isNone
 
 proc initDocumentLinkParams*(path: string): DocumentLinkParams =
-  DocumentLinkParams(
-    textDocument: TextDocumentIdentifier(uri: path.pathToUri))
+  DocumentLinkParams(textDocument: TextDocumentIdentifier(uri: path.pathToUri))
 
 proc parseDocumentLinkResponse*(res: JsonNode): DocumentLinkResult =
   if res["result"].kind != JNull and res["result"].kind != JArray:
@@ -53,13 +53,11 @@ proc parseDocumentLinkResponse*(res: JsonNode): DocumentLinkResult =
 
   return DocumentLinkResult.ok links
 
-proc parseDocumentLinkResolveResponse*(
-  res: JsonNode): DocumentLinkResolveResult =
+proc parseDocumentLinkResolveResponse*(res: JsonNode): DocumentLinkResolveResult =
+  let link =
+    try:
+      res["result"].to(DocumentLink)
+    except CatchableError as e:
+      return DocumentLinkResolveResult.err fmt"Invalid response: {e.msg}"
 
-    let link =
-      try:
-        res["result"].to(DocumentLink)
-      except CatchableError as e:
-        return DocumentLinkResolveResult.err fmt"Invalid response: {e.msg}"
-
-    return DocumentLinkResolveResult.ok link
+  return DocumentLinkResolveResult.ok link

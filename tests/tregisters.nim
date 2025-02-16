@@ -25,23 +25,23 @@ import utils
 import moepkg/registers {.all.}
 
 proc getClipboardBuffer(tool: ClipboardTool): string =
-  case tool:
-    of xsel:
-      let r = execCmdEx("xsel -o")
-      return r.output[0 .. r.output.high - 1]
-    of xclip:
-      let r =execCmdEx("xclip -o")
-      return r.output[0 .. r.output.high - 1]
-    of wlClipboard:
-      let r = execCmdEx("wl-paste")
-      return r.output[0 .. r.output.high - 1]
-    of wslDefault:
-      # On the WSL
-      let r = execCmdEx("powershell.exe -Command Get-Clipboard")
-      return r.output[0 .. r.output.high - 2]
-    of macOsDefault:
-      let r = execCmdEx("pbpaste -o")
-      return r.output[0 .. r.output.high - 1]
+  case tool
+  of xsel:
+    let r = execCmdEx("xsel -o")
+    return r.output[0 .. r.output.high - 1]
+  of xclip:
+    let r = execCmdEx("xclip -o")
+    return r.output[0 .. r.output.high - 1]
+  of wlClipboard:
+    let r = execCmdEx("wl-paste")
+    return r.output[0 .. r.output.high - 1]
+  of wslDefault:
+    # On the WSL
+    let r = execCmdEx("powershell.exe -Command Get-Clipboard")
+    return r.output[0 .. r.output.high - 2]
+  of macOsDefault:
+    let r = execCmdEx("pbpaste -o")
+    return r.output[0 .. r.output.high - 1]
 
 suite "registers: update (Register)":
   setup:
@@ -722,8 +722,8 @@ suite "registers: addNormalModeOperation":
     r.addNormalModeOperation(ru"yy")
     r.addNormalModeOperation(ru"dd")
 
-    check r.normalModeOperations == NormalModeOperationsRegister(
-      commands: @["yy", "dd"].toSeqRunes)
+    check r.normalModeOperations ==
+      NormalModeOperationsRegister(commands: @["yy", "dd"].toSeqRunes)
 
 suite "registers: getNormalModeOperations":
   setup:
@@ -733,24 +733,24 @@ suite "registers: getNormalModeOperations":
     r.addNormalModeOperation(ru"yy")
     r.addNormalModeOperation(ru"dd")
 
-    check r.getNormalModeOperations == NormalModeOperationsRegister(
-      commands: @["yy", "dd"].toSeqRunes)
+    check r.getNormalModeOperations ==
+      NormalModeOperationsRegister(commands: @["yy", "dd"].toSeqRunes)
 
 suite "registers: isOperationRegisterName":
   test "Except to true":
-    for ch in '0'..'9':
+    for ch in '0' .. '9':
       check isOperationRegisterName(ch.toRune)
 
   test "Except to true 2":
-    for ch in 'A'..'Z':
+    for ch in 'A' .. 'Z':
       check isOperationRegisterName(ch.toRune)
 
   test "Except to true 3":
-    for ch in 'a'..'z':
+    for ch in 'a' .. 'z':
       check isOperationRegisterName(ch.toRune)
 
   test "Except to false":
-    check not isOperationRegisterName(ru'@')
+    check not isOperationRegisterName(ru '@')
 
 suite "registers: getLatestNormalModeOperation":
   privateAccess(Registers)
@@ -810,5 +810,4 @@ suite "registers: getOperations":
     check r.addOperation(RegisterName.toRune, ru"yy").isOk
     check r.addOperation(RegisterName.toRune, ru"dd").isOk
 
-    check r.getOperations(RegisterName.toRune).get.commands ==
-      @["yy", "dd"].toSeqRunes
+    check r.getOperations(RegisterName.toRune).get.commands == @["yy", "dd"].toSeqRunes

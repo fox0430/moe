@@ -38,10 +38,7 @@ suite "lsp: initInitializeParams":
       ServerName = "rust-analyzer"
       WorkspaceRoot = "/"
 
-    let r = initInitializeParams(
-      ServerName,
-      WorkspaceRoot,
-      Trace)
+    let r = initInitializeParams(ServerName, WorkspaceRoot, Trace)
 
     check r.capabilities.experimental.isNone
 
@@ -49,19 +46,9 @@ suite "lsp: initInitializeParams":
     const
       ServerName = "rust-analyzer"
       WorkspaceRoot = "/"
-    let experimental = %* {
-        "commands": {
-          "commands": [
-            "rust-analyzer.runSingle"
-          ]
-        }
-      }
+    let experimental = %*{"commands": {"commands": ["rust-analyzer.runSingle"]}}
 
-    let r = initInitializeParams(
-      ServerName,
-      WorkspaceRoot,
-      Trace,
-      some(experimental))
+    let r = initInitializeParams(ServerName, WorkspaceRoot, Trace, some(experimental))
 
     check r.capabilities.experimental.get == experimental
 
@@ -69,19 +56,9 @@ suite "lsp: initInitializeParams":
     const
       ServerName = "rust-analyzer"
       WorkspaceRoot = "/"
-    let experimental = %* {
-        "commands": {
-          "commands": [
-            "rust-analyzer.debugSingle"
-          ]
-        }
-      }
+    let experimental = %*{"commands": {"commands": ["rust-analyzer.debugSingle"]}}
 
-    let r = initInitializeParams(
-      ServerName,
-      WorkspaceRoot,
-      Trace,
-      some(experimental))
+    let r = initInitializeParams(ServerName, WorkspaceRoot, Trace, some(experimental))
 
     check r.capabilities.experimental.get == experimental
 
@@ -158,12 +135,10 @@ suite "lsp: setCapabilities":
   test "Enable Completion":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          completionProvider: some(CompletionOptions())))
+        capabilities: ServerCapabilities(completionProvider: some(CompletionOptions()))
+      )
 
-      s = LspFeatureSettings(
-        completion: LspCompletionSettings(
-          enable: true))
+      s = LspFeatureSettings(completion: LspCompletionSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -172,12 +147,10 @@ suite "lsp: setCapabilities":
   test "Disable Completion 1":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          completionProvider: none(CompletionOptions)))
+        capabilities: ServerCapabilities(completionProvider: none(CompletionOptions))
+      )
 
-      s = LspFeatureSettings(
-        completion: LspCompletionSettings(
-          enable: true))
+      s = LspFeatureSettings(completion: LspCompletionSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -186,12 +159,10 @@ suite "lsp: setCapabilities":
   test "Disable Completion 2":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          completionProvider: some(CompletionOptions())))
+        capabilities: ServerCapabilities(completionProvider: some(CompletionOptions()))
+      )
 
-      s = LspFeatureSettings(
-        completion: LspCompletionSettings(
-          enable: false))
+      s = LspFeatureSettings(completion: LspCompletionSettings(enable: false))
 
     client.setCapabilities(r, s)
 
@@ -200,12 +171,10 @@ suite "lsp: setCapabilities":
   test "Enable Declaration":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          declarationProvider: some(%*true)))
+        capabilities: ServerCapabilities(declarationProvider: some(%*true))
+      )
 
-      s = LspFeatureSettings(
-        declaration: LspDeclarationSettings(
-          enable: true))
+      s = LspFeatureSettings(declaration: LspDeclarationSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -214,12 +183,10 @@ suite "lsp: setCapabilities":
   test "Disable Declaration":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          declarationProvider: none(JsonNode)))
+        capabilities: ServerCapabilities(declarationProvider: none(JsonNode))
+      )
 
-      s = LspFeatureSettings(
-        declaration: LspDeclarationSettings(
-          enable: true))
+      s = LspFeatureSettings(declaration: LspDeclarationSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -228,12 +195,10 @@ suite "lsp: setCapabilities":
   test "Disable Declaration 2":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          declarationProvider: some(%*true)))
+        capabilities: ServerCapabilities(declarationProvider: some(%*true))
+      )
 
-      s = LspFeatureSettings(
-        declaration: LspDeclarationSettings(
-          enable: false))
+      s = LspFeatureSettings(declaration: LspDeclarationSettings(enable: false))
 
     client.setCapabilities(r, s)
 
@@ -242,12 +207,10 @@ suite "lsp: setCapabilities":
   test "Enable Definition":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          definitionProvider: some(%*true)))
+        capabilities: ServerCapabilities(definitionProvider: some(%*true))
+      )
 
-      s = LspFeatureSettings(
-        definition: LspDefinitionSettings(
-          enable: true))
+      s = LspFeatureSettings(definition: LspDefinitionSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -256,12 +219,11 @@ suite "lsp: setCapabilities":
   test "Enable Definition 2":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          definitionProvider: some(%*{"workDoneProgress": true})))
+        capabilities:
+          ServerCapabilities(definitionProvider: some(%*{"workDoneProgress": true}))
+      )
 
-      s = LspFeatureSettings(
-        definition: LspDefinitionSettings(
-          enable: true))
+      s = LspFeatureSettings(definition: LspDefinitionSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -270,12 +232,10 @@ suite "lsp: setCapabilities":
   test "Disable Definition":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          definitionProvider: some(%*false)))
+        capabilities: ServerCapabilities(definitionProvider: some(%*false))
+      )
 
-      s = LspFeatureSettings(
-        definition: LspDefinitionSettings(
-          enable: true))
+      s = LspFeatureSettings(definition: LspDefinitionSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -284,12 +244,10 @@ suite "lsp: setCapabilities":
   test "Disable Definition 2":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          definitionProvider: some(%*true)))
+        capabilities: ServerCapabilities(definitionProvider: some(%*true))
+      )
 
-      s = LspFeatureSettings(
-        definition: LspDefinitionSettings(
-          enable: false))
+      s = LspFeatureSettings(definition: LspDefinitionSettings(enable: false))
 
     client.setCapabilities(r, s)
 
@@ -298,12 +256,10 @@ suite "lsp: setCapabilities":
   test "Enable TypeDefinition":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          typeDefinitionProvider: some(%*true)))
+        capabilities: ServerCapabilities(typeDefinitionProvider: some(%*true))
+      )
 
-      s = LspFeatureSettings(
-        typeDefinition: LspTypeDefinitionSettings(
-          enable: true))
+      s = LspFeatureSettings(typeDefinition: LspTypeDefinitionSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -312,12 +268,11 @@ suite "lsp: setCapabilities":
   test "Enable TypeDefinition 2":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          typeDefinitionProvider: some(%*{"workDoneProgress": true})))
+        capabilities:
+          ServerCapabilities(typeDefinitionProvider: some(%*{"workDoneProgress": true}))
+      )
 
-      s = LspFeatureSettings(
-        typeDefinition: LspTypeDefinitionSettings(
-          enable: true))
+      s = LspFeatureSettings(typeDefinition: LspTypeDefinitionSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -326,12 +281,10 @@ suite "lsp: setCapabilities":
   test "Disable TypeDefinition":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          typeDefinitionProvider: some(%*false)))
+        capabilities: ServerCapabilities(typeDefinitionProvider: some(%*false))
+      )
 
-      s = LspFeatureSettings(
-        typeDefinition: LspTypeDefinitionSettings(
-          enable: true))
+      s = LspFeatureSettings(typeDefinition: LspTypeDefinitionSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -340,12 +293,10 @@ suite "lsp: setCapabilities":
   test "Disable TypeDefinition 2":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          typeDefinitionProvider: some(%*true)))
+        capabilities: ServerCapabilities(typeDefinitionProvider: some(%*true))
+      )
 
-      s = LspFeatureSettings(
-        typeDefinition: LspTypeDefinitionSettings(
-          enable: false))
+      s = LspFeatureSettings(typeDefinition: LspTypeDefinitionSettings(enable: false))
 
     client.setCapabilities(r, s)
 
@@ -354,12 +305,10 @@ suite "lsp: setCapabilities":
   test "Enable Implementation":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          implementationProvider: some(%*true)))
+        capabilities: ServerCapabilities(implementationProvider: some(%*true))
+      )
 
-      s = LspFeatureSettings(
-        implementation: LspImplementationSettings(
-          enable: true))
+      s = LspFeatureSettings(implementation: LspImplementationSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -368,12 +317,10 @@ suite "lsp: setCapabilities":
   test "Disable Implementation":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          implementationProvider: none(JsonNode)))
+        capabilities: ServerCapabilities(implementationProvider: none(JsonNode))
+      )
 
-      s = LspFeatureSettings(
-        implementation: LspImplementationSettings(
-          enable: true))
+      s = LspFeatureSettings(implementation: LspImplementationSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -382,12 +329,10 @@ suite "lsp: setCapabilities":
   test "Disable Implementation 2":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          implementationProvider: some(%*true)))
+        capabilities: ServerCapabilities(implementationProvider: some(%*true))
+      )
 
-      s = LspFeatureSettings(
-        implementation: LspImplementationSettings(
-          enable: false))
+      s = LspFeatureSettings(implementation: LspImplementationSettings(enable: false))
 
     client.setCapabilities(r, s)
 
@@ -397,15 +342,17 @@ suite "lsp: setCapabilities":
     let
       r = InitializeResult(
         capabilities: ServerCapabilities(
-          diagnosticProvider: some(%*{
-            "identifier": none(string),
-            "interFileDependencies": false,
-            "workspaceDiagnostics": false
-          })))
+          diagnosticProvider: some(
+            %*{
+              "identifier": none(string),
+              "interFileDependencies": false,
+              "workspaceDiagnostics": false,
+            }
+          )
+        )
+      )
 
-      s = LspFeatureSettings(
-        diagnostics: LspDiagnosticsSettings(
-          enable: true))
+      s = LspFeatureSettings(diagnostics: LspDiagnosticsSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -415,16 +362,18 @@ suite "lsp: setCapabilities":
     let
       r = InitializeResult(
         capabilities: ServerCapabilities(
-          diagnosticProvider: some(%*{
-            "identifier": none(string),
-            "interFileDependencies": false,
-            "workspaceDiagnostics": false,
-            "id": none(string)
-          })))
+          diagnosticProvider: some(
+            %*{
+              "identifier": none(string),
+              "interFileDependencies": false,
+              "workspaceDiagnostics": false,
+              "id": none(string),
+            }
+          )
+        )
+      )
 
-      s = LspFeatureSettings(
-        diagnostics: LspDiagnosticsSettings(
-          enable: true))
+      s = LspFeatureSettings(diagnostics: LspDiagnosticsSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -433,12 +382,10 @@ suite "lsp: setCapabilities":
   test "Disable Diagnostic 1":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          diagnosticProvider: none(JsonNode)))
+        capabilities: ServerCapabilities(diagnosticProvider: none(JsonNode))
+      )
 
-      s = LspFeatureSettings(
-        diagnostics: LspDiagnosticsSettings(
-          enable: true))
+      s = LspFeatureSettings(diagnostics: LspDiagnosticsSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -448,16 +395,18 @@ suite "lsp: setCapabilities":
     let
       r = InitializeResult(
         capabilities: ServerCapabilities(
-          diagnosticProvider: some(%*{
-            "identifier": none(string),
-            "interFileDependencies": false,
-            "workspaceDiagnostics": false,
-            "id": none(string)
-          })))
+          diagnosticProvider: some(
+            %*{
+              "identifier": none(string),
+              "interFileDependencies": false,
+              "workspaceDiagnostics": false,
+              "id": none(string),
+            }
+          )
+        )
+      )
 
-      s = LspFeatureSettings(
-        diagnostics: LspDiagnosticsSettings(
-          enable: false))
+      s = LspFeatureSettings(diagnostics: LspDiagnosticsSettings(enable: false))
 
     client.setCapabilities(r, s)
 
@@ -465,13 +414,10 @@ suite "lsp: setCapabilities":
 
   test "Enable Hover":
     let
-      r = InitializeResult(
-        capabilities: ServerCapabilities(
-          hoverProvider: some(%*true)))
+      r =
+        InitializeResult(capabilities: ServerCapabilities(hoverProvider: some(%*true)))
 
-      s = LspFeatureSettings(
-        hover: LspHoverSettings(
-          enable: true))
+      s = LspFeatureSettings(hover: LspHoverSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -480,12 +426,11 @@ suite "lsp: setCapabilities":
   test "Enable Hover 2":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          hoverProvider: some(%*{"workDoneProgress": true})))
+        capabilities:
+          ServerCapabilities(hoverProvider: some(%*{"workDoneProgress": true}))
+      )
 
-      s = LspFeatureSettings(
-        hover: LspHoverSettings(
-          enable: true))
+      s = LspFeatureSettings(hover: LspHoverSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -493,13 +438,10 @@ suite "lsp: setCapabilities":
 
   test "Disable Hover 1":
     let
-      r = InitializeResult(
-        capabilities: ServerCapabilities(
-          hoverProvider: some(%*false)))
+      r =
+        InitializeResult(capabilities: ServerCapabilities(hoverProvider: some(%*false)))
 
-      s = LspFeatureSettings(
-        hover: LspHoverSettings(
-          enable: true))
+      s = LspFeatureSettings(hover: LspHoverSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -507,13 +449,10 @@ suite "lsp: setCapabilities":
 
   test "Disable Hover 2":
     let
-      r = InitializeResult(
-        capabilities: ServerCapabilities(
-          hoverProvider: some(%*true)))
+      r =
+        InitializeResult(capabilities: ServerCapabilities(hoverProvider: some(%*true)))
 
-      s = LspFeatureSettings(
-        hover: LspHoverSettings(
-          enable: false))
+      s = LspFeatureSettings(hover: LspHoverSettings(enable: false))
 
     client.setCapabilities(r, s)
 
@@ -522,12 +461,10 @@ suite "lsp: setCapabilities":
   test "Enable References":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          referencesProvider: some(%*true)))
+        capabilities: ServerCapabilities(referencesProvider: some(%*true))
+      )
 
-      s = LspFeatureSettings(
-        references: LspReferencesSettings(
-          enable: true))
+      s = LspFeatureSettings(references: LspReferencesSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -536,12 +473,11 @@ suite "lsp: setCapabilities":
   test "Enable References 2":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          referencesProvider: some(%*{"workDoneProgress": true})))
+        capabilities:
+          ServerCapabilities(referencesProvider: some(%*{"workDoneProgress": true}))
+      )
 
-      s = LspFeatureSettings(
-        references: LspReferencesSettings(
-          enable: true))
+      s = LspFeatureSettings(references: LspReferencesSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -550,12 +486,10 @@ suite "lsp: setCapabilities":
   test "Disable References":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          referencesProvider: none(JsonNode)))
+        capabilities: ServerCapabilities(referencesProvider: none(JsonNode))
+      )
 
-      s = LspFeatureSettings(
-        references: LspReferencesSettings(
-          enable: true))
+      s = LspFeatureSettings(references: LspReferencesSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -564,12 +498,10 @@ suite "lsp: setCapabilities":
   test "Disable References 2":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          referencesProvider: some(%*true)))
+        capabilities: ServerCapabilities(referencesProvider: some(%*true))
+      )
 
-      s = LspFeatureSettings(
-        references: LspReferencesSettings(
-          enable: false))
+      s = LspFeatureSettings(references: LspReferencesSettings(enable: false))
 
     client.setCapabilities(r, s)
 
@@ -579,16 +511,12 @@ suite "lsp: setCapabilities":
     let
       r = InitializeResult(
         capabilities: ServerCapabilities(
-          semanticTokensProvider: some(%*{
-            "legend": {
-              "tokenTypes": @[""],
-              "tokenModifiers": @[""]
-            }
-          })))
+          semanticTokensProvider:
+            some(%*{"legend": {"tokenTypes": @[""], "tokenModifiers": @[""]}})
+        )
+      )
 
-      s = LspFeatureSettings(
-        semanticTokens: LspSemanticTokesnSettings(
-          enable: true))
+      s = LspFeatureSettings(semanticTokens: LspSemanticTokesnSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -597,12 +525,10 @@ suite "lsp: setCapabilities":
   test "Disable SemanticTokens 1":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          semanticTokensProvider: none(JsonNode)))
+        capabilities: ServerCapabilities(semanticTokensProvider: none(JsonNode))
+      )
 
-      s = LspFeatureSettings(
-        semanticTokens: LspSemanticTokesnSettings(
-          enable: true))
+      s = LspFeatureSettings(semanticTokens: LspSemanticTokesnSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -612,16 +538,12 @@ suite "lsp: setCapabilities":
     let
       r = InitializeResult(
         capabilities: ServerCapabilities(
-          semanticTokensProvider: some(%*{
-            "legend": {
-              "tokenTypes": @[""],
-              "tokenModifiers": @[""]
-            }
-          })))
+          semanticTokensProvider:
+            some(%*{"legend": {"tokenTypes": @[""], "tokenModifiers": @[""]}})
+        )
+      )
 
-      s = LspFeatureSettings(
-        semanticTokens: LspSemanticTokesnSettings(
-          enable: false))
+      s = LspFeatureSettings(semanticTokens: LspSemanticTokesnSettings(enable: false))
 
     client.setCapabilities(r, s)
 
@@ -630,12 +552,10 @@ suite "lsp: setCapabilities":
   test "Enable InlayHint":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          inlayHintProvider: some(%*InlayHintOptions())))
+        capabilities: ServerCapabilities(inlayHintProvider: some(%*InlayHintOptions()))
+      )
 
-      s = LspFeatureSettings(
-        inlayHint: LspInlayHintSettings(
-          enable: true))
+      s = LspFeatureSettings(inlayHint: LspInlayHintSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -644,12 +564,10 @@ suite "lsp: setCapabilities":
   test "Disable InlayHint 1":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          inlayHintProvider: none(JsonNode)))
+        capabilities: ServerCapabilities(inlayHintProvider: none(JsonNode))
+      )
 
-      s = LspFeatureSettings(
-        inlayHint: LspInlayHintSettings(
-          enable: true))
+      s = LspFeatureSettings(inlayHint: LspInlayHintSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -658,12 +576,10 @@ suite "lsp: setCapabilities":
   test "Disable InlayHint 2":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          inlayHintProvider: some(%*InlayHintOptions())))
+        capabilities: ServerCapabilities(inlayHintProvider: some(%*InlayHintOptions()))
+      )
 
-      s = LspFeatureSettings(
-        inlayHint: LspInlayHintSettings(
-          enable: false))
+      s = LspFeatureSettings(inlayHint: LspInlayHintSettings(enable: false))
 
     client.setCapabilities(r, s)
 
@@ -673,11 +589,11 @@ suite "lsp: setCapabilities":
     let
       r = InitializeResult(
         capabilities: ServerCapabilities(
-          callHierarchyProvider: some(%*{"callHierarchyProvider": true})))
+          callHierarchyProvider: some(%*{"callHierarchyProvider": true})
+        )
+      )
 
-      s = LspFeatureSettings(
-        callHierarchy: LspCallHierarchySettings(
-          enable: true))
+      s = LspFeatureSettings(callHierarchy: LspCallHierarchySettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -686,12 +602,10 @@ suite "lsp: setCapabilities":
   test "Disable CallHierarchy":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          callHierarchyProvider: none(JsonNode)))
+        capabilities: ServerCapabilities(callHierarchyProvider: none(JsonNode))
+      )
 
-      s = LspFeatureSettings(
-        callHierarchy: LspCallHierarchySettings(
-          enable: true))
+      s = LspFeatureSettings(callHierarchy: LspCallHierarchySettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -701,11 +615,11 @@ suite "lsp: setCapabilities":
     let
       r = InitializeResult(
         capabilities: ServerCapabilities(
-          callHierarchyProvider: some(%*{"callHierarchyProvider": true})))
+          callHierarchyProvider: some(%*{"callHierarchyProvider": true})
+        )
+      )
 
-      s = LspFeatureSettings(
-        callHierarchy: LspCallHierarchySettings(
-          enable: false))
+      s = LspFeatureSettings(callHierarchy: LspCallHierarchySettings(enable: false))
 
     client.setCapabilities(r, s)
 
@@ -714,12 +628,12 @@ suite "lsp: setCapabilities":
   test "Enable DocumentHighlight":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          documentHighlightProvider: some(%*true)))
+        capabilities: ServerCapabilities(documentHighlightProvider: some(%*true))
+      )
 
       s = LspFeatureSettings(
-        documentHighlight: LspDocumentHighlightSettings(
-          enable: true))
+        documentHighlight: LspDocumentHighlightSettings(enable: true)
+      )
 
     client.setCapabilities(r, s)
 
@@ -728,12 +642,12 @@ suite "lsp: setCapabilities":
   test "Disable DocumentHighlight":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          documentHighlightProvider: some(%*false)))
+        capabilities: ServerCapabilities(documentHighlightProvider: some(%*false))
+      )
 
       s = LspFeatureSettings(
-        documentHighlight: LspDocumentHighlightSettings(
-          enable: true))
+        documentHighlight: LspDocumentHighlightSettings(enable: true)
+      )
 
     client.setCapabilities(r, s)
 
@@ -742,12 +656,12 @@ suite "lsp: setCapabilities":
   test "Disable DocumentHighlight 2":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          documentHighlightProvider: some(%*true)))
+        capabilities: ServerCapabilities(documentHighlightProvider: some(%*true))
+      )
 
       s = LspFeatureSettings(
-        documentHighlight: LspDocumentHighlightSettings(
-          enable: false))
+        documentHighlight: LspDocumentHighlightSettings(enable: false)
+      )
 
     client.setCapabilities(r, s)
 
@@ -756,12 +670,11 @@ suite "lsp: setCapabilities":
   test "Enable DocumentLink":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          documentLinkProvider: some(DocumentLinkOptions())))
+        capabilities:
+          ServerCapabilities(documentLinkProvider: some(DocumentLinkOptions()))
+      )
 
-      s = LspFeatureSettings(
-        documentlink: LspDocumentLinkSettings(
-          enable: true))
+      s = LspFeatureSettings(documentlink: LspDocumentLinkSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -770,12 +683,11 @@ suite "lsp: setCapabilities":
   test "Disable DocumentLink":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          documentLinkProvider: none(DocumentLinkOptions)))
+        capabilities:
+          ServerCapabilities(documentLinkProvider: none(DocumentLinkOptions))
+      )
 
-      s = LspFeatureSettings(
-        documentlink: LspDocumentLinkSettings(
-          enable: true))
+      s = LspFeatureSettings(documentlink: LspDocumentLinkSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -784,12 +696,11 @@ suite "lsp: setCapabilities":
   test "Disable DocumentLink 2":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          documentLinkProvider: some(DocumentLinkOptions())))
+        capabilities:
+          ServerCapabilities(documentLinkProvider: some(DocumentLinkOptions()))
+      )
 
-      s = LspFeatureSettings(
-        documentlink: LspDocumentLinkSettings(
-          enable: false))
+      s = LspFeatureSettings(documentlink: LspDocumentLinkSettings(enable: false))
 
     client.setCapabilities(r, s)
 
@@ -798,12 +709,10 @@ suite "lsp: setCapabilities":
   test "Enable CodeLens":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          codeLensProvider: some(CodeLensOptions())))
+        capabilities: ServerCapabilities(codeLensProvider: some(CodeLensOptions()))
+      )
 
-      s = LspFeatureSettings(
-        codeLens: LspCodeLensSettings(
-          enable: true))
+      s = LspFeatureSettings(codeLens: LspCodeLensSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -812,12 +721,10 @@ suite "lsp: setCapabilities":
   test "Disable CodeLens":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          codeLensProvider: none(CodeLensOptions)))
+        capabilities: ServerCapabilities(codeLensProvider: none(CodeLensOptions))
+      )
 
-      s = LspFeatureSettings(
-        codeLens: LspCodeLensSettings(
-          enable: true))
+      s = LspFeatureSettings(codeLens: LspCodeLensSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -826,12 +733,10 @@ suite "lsp: setCapabilities":
   test "Disable CodeLens 2":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          codeLensProvider: some(CodeLensOptions())))
+        capabilities: ServerCapabilities(codeLensProvider: some(CodeLensOptions()))
+      )
 
-      s = LspFeatureSettings(
-        codeLens: LspCodeLensSettings(
-          enable: false))
+      s = LspFeatureSettings(codeLens: LspCodeLensSettings(enable: false))
 
     client.setCapabilities(r, s)
 
@@ -840,12 +745,11 @@ suite "lsp: setCapabilities":
   test "Enable Rename":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          renameProvider: some(%*{"prepareProvider": true})))
+        capabilities:
+          ServerCapabilities(renameProvider: some(%*{"prepareProvider": true}))
+      )
 
-      s = LspFeatureSettings(
-        rename: LspRenameSettings(
-          enable: true))
+      s = LspFeatureSettings(rename: LspRenameSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -854,12 +758,10 @@ suite "lsp: setCapabilities":
   test "Disable Rename":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          renameProvider: none(JsonNode)))
+        capabilities: ServerCapabilities(renameProvider: none(JsonNode))
+      )
 
-      s = LspFeatureSettings(
-        rename: LspRenameSettings(
-          enable: true))
+      s = LspFeatureSettings(rename: LspRenameSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -868,12 +770,11 @@ suite "lsp: setCapabilities":
   test "Disable Rename 2":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          renameProvider: some(%*{"prepareProvider": true})))
+        capabilities:
+          ServerCapabilities(renameProvider: some(%*{"prepareProvider": true}))
+      )
 
-      s = LspFeatureSettings(
-        rename: LspRenameSettings(
-          enable: false))
+      s = LspFeatureSettings(rename: LspRenameSettings(enable: false))
 
     client.setCapabilities(r, s)
 
@@ -882,12 +783,11 @@ suite "lsp: setCapabilities":
   test "Enable ExecuteCommand":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          executeCommandProvider: some(ExecuteCommandOptions())))
+        capabilities:
+          ServerCapabilities(executeCommandProvider: some(ExecuteCommandOptions()))
+      )
 
-      s = LspFeatureSettings(
-        executeCommand: LspExecuteCommandSettings(
-          enable: true))
+      s = LspFeatureSettings(executeCommand: LspExecuteCommandSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -896,12 +796,11 @@ suite "lsp: setCapabilities":
   test "Disable ExecuteCommand":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          executeCommandProvider: none(ExecuteCommandOptions)))
+        capabilities:
+          ServerCapabilities(executeCommandProvider: none(ExecuteCommandOptions))
+      )
 
-      s = LspFeatureSettings(
-        executeCommand: LspExecuteCommandSettings(
-          enable: true))
+      s = LspFeatureSettings(executeCommand: LspExecuteCommandSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -910,12 +809,11 @@ suite "lsp: setCapabilities":
   test "Disable ExecuteCommand 2":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          executeCommandProvider: some(ExecuteCommandOptions())))
+        capabilities:
+          ServerCapabilities(executeCommandProvider: some(ExecuteCommandOptions()))
+      )
 
-      s = LspFeatureSettings(
-        executeCommand: LspExecuteCommandSettings(
-          enable: false))
+      s = LspFeatureSettings(executeCommand: LspExecuteCommandSettings(enable: false))
 
     client.setCapabilities(r, s)
 
@@ -924,12 +822,10 @@ suite "lsp: setCapabilities":
   test "Enable Folding Range":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          foldingRangeProvider: some(%*true)))
+        capabilities: ServerCapabilities(foldingRangeProvider: some(%*true))
+      )
 
-      s = LspFeatureSettings(
-        foldingRange: LspFoldingRangeSettings(
-          enable: true))
+      s = LspFeatureSettings(foldingRange: LspFoldingRangeSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -938,12 +834,10 @@ suite "lsp: setCapabilities":
   test "Disable Folding Range":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          foldingRangeProvider: none(JsonNode)))
+        capabilities: ServerCapabilities(foldingRangeProvider: none(JsonNode))
+      )
 
-      s = LspFeatureSettings(
-        foldingRange: LspFoldingRangeSettings(
-          enable: true))
+      s = LspFeatureSettings(foldingRange: LspFoldingRangeSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -952,12 +846,10 @@ suite "lsp: setCapabilities":
   test "Disable Folding Range 2":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          foldingRangeProvider: some(%*true)))
+        capabilities: ServerCapabilities(foldingRangeProvider: some(%*true))
+      )
 
-      s = LspFeatureSettings(
-        foldingRange: LspFoldingRangeSettings(
-          enable: false))
+      s = LspFeatureSettings(foldingRange: LspFoldingRangeSettings(enable: false))
 
     client.setCapabilities(r, s)
 
@@ -966,12 +858,10 @@ suite "lsp: setCapabilities":
   test "Enable Selection Range":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          selectionRangeProvider: some(%*true)))
+        capabilities: ServerCapabilities(selectionRangeProvider: some(%*true))
+      )
 
-      s = LspFeatureSettings(
-        selectionRange: LspSelectionRangeSettings(
-          enable: true))
+      s = LspFeatureSettings(selectionRange: LspSelectionRangeSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -980,12 +870,10 @@ suite "lsp: setCapabilities":
   test "Disable Selection Range":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          selectionRangeProvider: none(JsonNode)))
+        capabilities: ServerCapabilities(selectionRangeProvider: none(JsonNode))
+      )
 
-      s = LspFeatureSettings(
-        selectionRange: LspSelectionRangeSettings(
-          enable: true))
+      s = LspFeatureSettings(selectionRange: LspSelectionRangeSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -994,12 +882,10 @@ suite "lsp: setCapabilities":
   test "Disable Selection Range 2":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          selectionRangeProvider: some(%*true)))
+        capabilities: ServerCapabilities(selectionRangeProvider: some(%*true))
+      )
 
-      s = LspFeatureSettings(
-        selectionRange: LspSelectionRangeSettings(
-          enable: false))
+      s = LspFeatureSettings(selectionRange: LspSelectionRangeSettings(enable: false))
 
     client.setCapabilities(r, s)
 
@@ -1008,12 +894,10 @@ suite "lsp: setCapabilities":
   test "Enable Document Symbol":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          documentSymbolProvider: some(%*true)))
+        capabilities: ServerCapabilities(documentSymbolProvider: some(%*true))
+      )
 
-      s = LspFeatureSettings(
-        documentSymbol: LspDocumentSymbolSettings(
-          enable: true))
+      s = LspFeatureSettings(documentSymbol: LspDocumentSymbolSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -1022,12 +906,10 @@ suite "lsp: setCapabilities":
   test "Disable Document Symbol":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          documentSymbolProvider: none(JsonNode)))
+        capabilities: ServerCapabilities(documentSymbolProvider: none(JsonNode))
+      )
 
-      s = LspFeatureSettings(
-        documentSymbol: LspDocumentSymbolSettings(
-          enable: true))
+      s = LspFeatureSettings(documentSymbol: LspDocumentSymbolSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -1036,12 +918,10 @@ suite "lsp: setCapabilities":
   test "Disable Document Symbol 2":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          documentSymbolProvider: some(%*true)))
+        capabilities: ServerCapabilities(documentSymbolProvider: some(%*true))
+      )
 
-      s = LspFeatureSettings(
-        documentSymbol: LspDocumentSymbolSettings(
-          enable: false))
+      s = LspFeatureSettings(documentSymbol: LspDocumentSymbolSettings(enable: false))
 
     client.setCapabilities(r, s)
 
@@ -1050,12 +930,10 @@ suite "lsp: setCapabilities":
   test "Enable Inline Value":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          inlineValueProvider: some(%*true)))
+        capabilities: ServerCapabilities(inlineValueProvider: some(%*true))
+      )
 
-      s = LspFeatureSettings(
-        inlineValue: LspInlineValueSettings(
-          enable: true))
+      s = LspFeatureSettings(inlineValue: LspInlineValueSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -1064,12 +942,10 @@ suite "lsp: setCapabilities":
   test "Disable Inline Value":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          inlineValueProvider: none(JsonNode)))
+        capabilities: ServerCapabilities(inlineValueProvider: none(JsonNode))
+      )
 
-      s = LspFeatureSettings(
-        inlineValue: LspInlineValueSettings(
-          enable: true))
+      s = LspFeatureSettings(inlineValue: LspInlineValueSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -1078,12 +954,10 @@ suite "lsp: setCapabilities":
   test "Disable Inline Value 2":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          inlineValueProvider: some(%*true)))
+        capabilities: ServerCapabilities(inlineValueProvider: some(%*true))
+      )
 
-      s = LspFeatureSettings(
-        inlineValue: LspInlineValueSettings(
-          enable: false))
+      s = LspFeatureSettings(inlineValue: LspInlineValueSettings(enable: false))
 
     client.setCapabilities(r, s)
 
@@ -1092,12 +966,11 @@ suite "lsp: setCapabilities":
   test "Enable Signature Help":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          signatureHelpProvider: some(SignatureHelpOptions())))
+        capabilities:
+          ServerCapabilities(signatureHelpProvider: some(SignatureHelpOptions()))
+      )
 
-      s = LspFeatureSettings(
-        signatureHelp: LspSignatureHelpSettings(
-          enable: true))
+      s = LspFeatureSettings(signatureHelp: LspSignatureHelpSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -1106,12 +979,11 @@ suite "lsp: setCapabilities":
   test "Disable Signature Help":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          signatureHelpProvider: none(SignatureHelpOptions)))
+        capabilities:
+          ServerCapabilities(signatureHelpProvider: none(SignatureHelpOptions))
+      )
 
-      s = LspFeatureSettings(
-        signatureHelp: LspSignatureHelpSettings(
-          enable: true))
+      s = LspFeatureSettings(signatureHelp: LspSignatureHelpSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -1120,12 +992,11 @@ suite "lsp: setCapabilities":
   test "Disable Signature Help 2":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          signatureHelpProvider: some(SignatureHelpOptions())))
+        capabilities:
+          ServerCapabilities(signatureHelpProvider: some(SignatureHelpOptions()))
+      )
 
-      s = LspFeatureSettings(
-        signatureHelp: LspSignatureHelpSettings(
-          enable: false))
+      s = LspFeatureSettings(signatureHelp: LspSignatureHelpSettings(enable: false))
 
     client.setCapabilities(r, s)
 
@@ -1134,12 +1005,10 @@ suite "lsp: setCapabilities":
   test "Enable Document Formatting":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          documentFormattingProvider: some(%*true)))
+        capabilities: ServerCapabilities(documentFormattingProvider: some(%*true))
+      )
 
-      s = LspFeatureSettings(
-        formatting: LspDocumentFormattingSettings(
-          enable: true))
+      s = LspFeatureSettings(formatting: LspDocumentFormattingSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -1148,12 +1017,10 @@ suite "lsp: setCapabilities":
   test "Disable Document Formatting":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          documentFormattingProvider: none(JsonNode)))
+        capabilities: ServerCapabilities(documentFormattingProvider: none(JsonNode))
+      )
 
-      s = LspFeatureSettings(
-        formatting: LspDocumentFormattingSettings(
-          enable: true))
+      s = LspFeatureSettings(formatting: LspDocumentFormattingSettings(enable: true))
 
     client.setCapabilities(r, s)
 
@@ -1162,12 +1029,10 @@ suite "lsp: setCapabilities":
   test "Disable Document Formatting 2":
     let
       r = InitializeResult(
-        capabilities: ServerCapabilities(
-          documentFormattingProvider: some(%*true)))
+        capabilities: ServerCapabilities(documentFormattingProvider: some(%*true))
+      )
 
-      s = LspFeatureSettings(
-        formatting: LspDocumentFormattingSettings(
-          enable: false))
+      s = LspFeatureSettings(formatting: LspDocumentFormattingSettings(enable: false))
 
     client.setCapabilities(r, s)
 
@@ -1198,20 +1063,17 @@ suite "lsp: Send requests":
     if not client.isNil and not client.serverProcess.isNil:
       discard client.kill
 
-  proc readResponse(
-    c: LspClient,
-    timeout=30.seconds): Result[JsonNode, string] =
+  proc readResponse(c: LspClient, timeout = 30.seconds): Result[JsonNode, string] =
+    let
+      res = c.read
+      fut = waitFor res.withTimeout(timeout)
+    if not fut:
+      return Result[JsonNode, string].err "timeout"
 
-      let
-        res = c.read
-        fut = waitFor res.withTimeout(timeout)
-      if not fut:
-        return Result[JsonNode, string].err "timeout"
+    if res.value.isErr:
+      return Result[JsonNode, string].err res.value.error
 
-      if res.value.isErr:
-        return Result[JsonNode, string].err res.value.error
-
-      return Result[JsonNode, string].ok res.value.get
+    return Result[JsonNode, string].ok res.value.get
 
   test "Send initialize":
     if not isNimlangserverAvailable():
@@ -1231,31 +1093,29 @@ suite "lsp: Send requests":
           break
 
   proc lspInitialize(
-    c: var LspClient,
-    bufferId: int,
-    params: InitializeParams): Result[(), string] =
+      c: var LspClient, bufferId: int, params: InitializeParams
+  ): Result[(), string] =
+    block:
+      let err = waitFor c.initialize(bufferId, params)
+      if err.isErr:
+        return Result[(), string].err err.error
 
-      block:
-        let err = waitFor c.initialize(bufferId, params)
-        if err.isErr:
-          return Result[(), string].err err.error
+    for _ in 0 .. 30:
+      let res = client.readResponse
+      if res.isOk and res.get.contains("id"):
+        if res.get["id"].getInt != 1:
+          return Result[(), string].err "Invalid id"
 
-      for _ in 0 .. 30:
-        let res = client.readResponse
-        if res.isOk and res.get.contains("id"):
-          if res.get["id"].getInt != 1:
-            return Result[(), string].err "Invalid id"
+        block:
+          let err = c.initCapacities(initLspFeatureSettings(), res.get)
+          if err.isErr:
+            return Result[(), string].err err.error
 
-          block:
-            let err = c.initCapacities(initLspFeatureSettings(), res.get)
-            if err.isErr:
-              return Result[(), string].err err.error
+        block:
+          if not c.isInitialized:
+            return Result[(), string].err "Not initialized"
 
-          block:
-            if not c.isInitialized:
-              return Result[(), string].err "Not initialized"
-
-          return Result[(), string].ok ()
+        return Result[(), string].ok ()
 
   test "Send textDocument/didOpen":
     if not isNimlangserverAvailable():
@@ -1314,8 +1174,7 @@ suite "lsp: Send requests":
     if not isNimlangserverAvailable():
       skip()
     else:
-      const
-        BufferId = 1
+      const BufferId = 1
 
       block:
         # Initialize
@@ -1334,7 +1193,7 @@ suite "lsp: Send requests":
       check (waitFor client.shutdown(BufferId)).isOk
       check client.waitingResponses[requestId].lspMethod == LspMethod.shutdown
 
-      var isTimeout= true
+      var isTimeout = true
       for _ in 0 .. 20:
         let res = client.readResponse
         if res.isOk and res.get.contains("id"):
@@ -1380,8 +1239,7 @@ suite "lsp: Send requests":
       const
         SecondVersion = 2
         ChangedText = "echo 1"
-      check (waitFor client.textDocumentDidChange(SecondVersion, path, ChangedText))
-        .isOk
+      check (waitFor client.textDocumentDidChange(SecondVersion, path, ChangedText)).isOk
 
   test "Send textDocument/didSave":
     if not isNimlangserverAvailable():
@@ -1407,7 +1265,8 @@ suite "lsp: Send requests":
       const
         BufferId = 1
         LanguageId = "nim"
-        Text = """
+        Text =
+          """
   echo 0
 """
 
@@ -1470,14 +1329,13 @@ suite "lsp: Send requests":
 
       let position = BufferPosition(line: 1, column: 0)
       const IsIncompleteTrigger = false
-      check (waitFor client.textDocumentCompletion(
-        BufferId,
-        path,
-        position,
-        IsIncompleteTrigger,
-        "e"))
-        .isOk
-      check client.waitingResponses[requestId].lspMethod == LspMethod.textDocumentCompletion
+      check (
+        waitFor client.textDocumentCompletion(
+          BufferId, path, position, IsIncompleteTrigger, "e"
+        )
+      ).isOk
+      check client.waitingResponses[requestId].lspMethod ==
+        LspMethod.textDocumentCompletion
 
       var isTimeout = true
       for _ in 0 .. 20:
@@ -1505,14 +1363,16 @@ suite "lsp: Send requests":
 
       var requestId = client.lastId + 1
 
-      check (waitFor client.textDocumentInlayHint(
-        BufferId,
-        path,
-        BufferRange(
-          first: BufferPosition(line: 0, column: 0),
-          last: BufferPosition(line: 1, column: 0))
-        ))
-        .isOk
+      check (
+        waitFor client.textDocumentInlayHint(
+          BufferId,
+          path,
+          BufferRange(
+            first: BufferPosition(line: 0, column: 0),
+            last: BufferPosition(line: 1, column: 0),
+          ),
+        )
+      ).isOk
       check client.waitingResponses[requestId].lspMethod ==
         LspMethod.textDocumentInlayHint
 
@@ -1534,7 +1394,8 @@ suite "lsp: Send requests":
       const
         BufferId = 1
         LanguageId = "nim"
-        Text = """
+        Text =
+          """
 type number = int
 var num: number
         """
@@ -1546,11 +1407,11 @@ var num: number
 
       let requestId = client.lastId + 1
 
-      check (waitFor client.textDocumentDefinition(
-        BufferId,
-        path,
-        BufferPosition(line: 1, column: 9)))
-        .isOk
+      check (
+        waitFor client.textDocumentDefinition(
+          BufferId, path, BufferPosition(line: 1, column: 9)
+        )
+      ).isOk
       check client.waitingResponses[requestId].lspMethod ==
         LspMethod.textDocumentDefinition
 
@@ -1558,19 +1419,16 @@ var num: number
       for _ in 0 .. 20:
         let res = client.readResponse
         if res.isOk and res.get.contains("id"):
-          check res.get["result"] == %* [
-            {
-              "uri": "file://" & getCurrentDir() & "/lspTestDir/test.nim",
-              "range": {
-                "start": {
-                  "line": 0,
-                  "character":5
-                },"end": {
-                  "line":0,
-                  "character":11
-                }}
-            }
-          ]
+          check res.get["result"] ==
+            %*[
+              {
+                "uri": "file://" & getCurrentDir() & "/lspTestDir/test.nim",
+                "range": {
+                  "start": {"line": 0, "character": 5},
+                  "end": {"line": 0, "character": 11},
+                },
+              }
+            ]
           isTimeout = false
           break
 
@@ -1583,7 +1441,8 @@ var num: number
       const
         BufferId = 1
         LanguageId = "nim"
-        Text = """
+        Text =
+          """
 type number = int
 var num: number
         """
@@ -1595,11 +1454,11 @@ var num: number
 
       let requestId = client.lastId + 1
 
-      check (waitFor client.textDocumentTypeDefinition(
-        BufferId,
-        path,
-        BufferPosition(line: 1, column: 9)))
-        .isOk
+      check (
+        waitFor client.textDocumentTypeDefinition(
+          BufferId, path, BufferPosition(line: 1, column: 9)
+        )
+      ).isOk
       check client.waitingResponses[requestId].lspMethod ==
         LspMethod.textDocumentTypeDefinition
 
@@ -1607,20 +1466,16 @@ var num: number
       for _ in 0 .. 20:
         let res = client.readResponse
         if res.isOk and res.get.contains("id"):
-          check res.get["result"] == %* [
-            {
-              "uri": "file://" & getCurrentDir() & "/lspTestDir/test.nim",
-              "range": {
-                "start": {
-                  "line": 0,
-                  "character": 5},
-                "end": {
-                  "line": 0,
-                  "character":11
-                }
+          check res.get["result"] ==
+            %*[
+              {
+                "uri": "file://" & getCurrentDir() & "/lspTestDir/test.nim",
+                "range": {
+                  "start": {"line": 0, "character": 5},
+                  "end": {"line": 0, "character": 11},
+                },
               }
-            }
-          ]
+            ]
           isTimeout = false
           break
 
@@ -1633,7 +1488,8 @@ var num: number
       const
         BufferId = 1
         LanguageId = "nim"
-        Text = """
+        Text =
+          """
 let a = 0
 let b = a + 1
 echo a
@@ -1646,11 +1502,11 @@ echo a
 
       let requestId = client.lastId + 1
 
-      check (waitFor client.textDocumentDocumentHighlight(
-        BufferId,
-        path,
-        BufferPosition(line: 0, column: 4)))
-        .isOk
+      check (
+        waitFor client.textDocumentDocumentHighlight(
+          BufferId, path, BufferPosition(line: 0, column: 4)
+        )
+      ).isOk
       check client.waitingResponses[requestId].lspMethod ==
         LspMethod.textDocumentDocumentHighlight
 
@@ -1658,64 +1514,41 @@ echo a
       for _ in 0 .. 20:
         let res = client.readResponse
         if res.isOk and res.get.contains("id"):
-          check res.get == %*{
-            "jsonrpc": "2.0",
-            "id": requestId,
-            "result": [
-              {
-                "range": {
-                  "start": {
-                    "line": 0,
-                    "character": 4
+          check res.get ==
+            %*{
+              "jsonrpc": "2.0",
+              "id": requestId,
+              "result": [
+                {
+                  "range": {
+                    "start": {"line": 0, "character": 4},
+                    "end": {"line": 0, "character": 5},
                   },
-                  "end": {
-                    "line": 0,
-                    "character": 5
-                  }
+                  "kind": nil,
                 },
-                "kind": nil
-              },
-              {
-                "range": {
-                  "start": {
-                    "line": 0,
-                    "character": 4
+                {
+                  "range": {
+                    "start": {"line": 0, "character": 4},
+                    "end": {"line": 0, "character": 5},
                   },
-                  "end": {
-                    "line": 0,
-                    "character": 5
-                  }
+                  "kind": nil,
                 },
-                "kind": nil
-              },
-              {
-                "range": {
-                  "start": {
-                    "line": 1,
-                    "character": 8
+                {
+                  "range": {
+                    "start": {"line": 1, "character": 8},
+                    "end": {"line": 1, "character": 9},
                   },
-                  "end": {
-                    "line": 1,
-                    "character": 9
-                  }
+                  "kind": nil,
                 },
-                "kind": nil
-              },
-              {
-                "range": {
-                  "start": {
-                    "line": 2,
-                    "character": 5
+                {
+                  "range": {
+                    "start": {"line": 2, "character": 5},
+                    "end": {"line": 2, "character": 6},
                   },
-                  "end": {
-                    "line": 2,
-                    "character": 6
-                  }
+                  "kind": nil,
                 },
-                "kind": nil
-              }
-            ]
-          }
+              ],
+            }
           isTimeout = false
           break
 
@@ -1724,7 +1557,8 @@ echo a
       skip()
     else:
       block:
-        const Text = """
+        const Text =
+          """
 type Obj* = object
   n*: int
 """
@@ -1735,7 +1569,8 @@ type Obj* = object
       const
         BufferId = 1
         LanguageId = "nim"
-        Text = """
+        Text =
+          """
 import test1
 let o = Obj()
 echo Ojb(n: 1)
@@ -1748,54 +1583,41 @@ echo Ojb(n: 1)
 
       let requestId = client.lastId + 1
 
-      check (waitFor client.textDocumentRename(
-        BufferId,
-        path,
-        BufferPosition(line: 1, column: 8),
-        "newName"))
-        .isOk
-      check client.waitingResponses[requestId].lspMethod ==
-        LspMethod.textDocumentRename
+      check (
+        waitFor client.textDocumentRename(
+          BufferId, path, BufferPosition(line: 1, column: 8), "newName"
+        )
+      ).isOk
+      check client.waitingResponses[requestId].lspMethod == LspMethod.textDocumentRename
 
       var isTimeout = true
       for _ in 0 .. 20:
         let res = client.readResponse
         if res.isOk and res.get.contains("id"):
-          check res.get["result"] == %* {
-            "changes": {
-              "file://" & getCurrentDir() & "/lspTestDir/test2.nim": [
-                {
-                  "range": {
-                    "start": {
-                      "line": 1,
-                      "character": 8
+          check res.get["result"] ==
+            %*{
+              "changes": {
+                "file://" & getCurrentDir() & "/lspTestDir/test2.nim": [
+                  {
+                    "range": {
+                      "start": {"line": 1, "character": 8},
+                      "end": {"line": 1, "character": 11},
                     },
-                    "end": {
-                      "line": 1,
-                      "character": 11
-                    }
-                  },
-                  "newText" :"newName"
-                }
-              ],
-              "file://" & getCurrentDir() & "/lspTestDir/test1.nim": [
-                {
-                  "range": {
-                    "start": {
-                      "line": 0,
-                      "character": 5
+                    "newText": "newName",
+                  }
+                ],
+                "file://" & getCurrentDir() & "/lspTestDir/test1.nim": [
+                  {
+                    "range": {
+                      "start": {"line": 0, "character": 5},
+                      "end": {"line": 0, "character": 8},
                     },
-                    "end": {
-                      "line": 0,
-                      "character": 8
-                    }
-                  },
-                  "newText": "newName"
-                }
-              ]
-            },
-            "documentChanges": nil
-          }
+                    "newText": "newName",
+                  }
+                ],
+              },
+              "documentChanges": nil,
+            }
           isTimeout = false
           break
 
@@ -1817,22 +1639,16 @@ echo Ojb(n: 1)
 
       let requestId = client.lastId + 1
 
-      check (waitFor client.textDocumentFormatting(
-        BufferId,
-        path,
-        FormattingOptions()))
-        .isOk
+      check (waitFor client.textDocumentFormatting(BufferId, path, FormattingOptions())).isOk
       check client.waitingResponses[requestId].lspMethod ==
         LspMethod.textDocumentFormatting
 
       proc isPending(r: JsonNode): bool =
-        if r.contains("params") and
-           r["params"].contains("pendingRequests") and
-           r["params"]["pendingRequests"].len > 0:
-             for p in r["params"]["pendingRequests"]:
-               if p.contains("name") and
-                  p["name"].getStr == "textDocument/formatting":
-                    return true
+        if r.contains("params") and r["params"].contains("pendingRequests") and
+            r["params"]["pendingRequests"].len > 0:
+          for p in r["params"]["pendingRequests"]:
+            if p.contains("name") and p["name"].getStr == "textDocument/formatting":
+              return true
 
       var isTimeout = true
       for _ in 0 .. 20:

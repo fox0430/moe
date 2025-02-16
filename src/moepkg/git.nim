@@ -85,7 +85,8 @@ proc isTrackingByGit*(path: string): bool =
 proc isGitAvailable*(): bool {.inline.} =
   ## Return true if git command is available.
 
-  if execCmdEx("git -v").exitCode == 0: return true
+  if execCmdEx("git -v").exitCode == 0:
+    return true
 
 proc getCurrentGitBranchName*(): Result[Runes, string] =
   ## Return the current git branch name
@@ -104,21 +105,22 @@ proc countChangedLines*(diffs: seq[Diff]): ChangedLines =
   ## Count and return changed lines in seq[Diff].
 
   for d in diffs:
-    case d.operation:
-      of OperationType.added:
-        result.added += d.lastLine - d.firstLine + 1
-      of OperationType.changed:
-        result.changed += d.lastLine - d.firstLine + 1
-      of OperationType.deleted:
-        result.deleted += d.lastLine - d.firstLine + 1
-      of OperationType.changedAndDeleted:
-        result.deleted += d.lastLine - d.firstLine + 1
-        result.changed += + 1
+    case d.operation
+    of OperationType.added:
+      result.added += d.lastLine - d.firstLine + 1
+    of OperationType.changed:
+      result.changed += d.lastLine - d.firstLine + 1
+    of OperationType.deleted:
+      result.deleted += d.lastLine - d.firstLine + 1
+    of OperationType.changedAndDeleted:
+      result.deleted += d.lastLine - d.firstLine + 1
+      result.changed += +1
 
 proc splitGitHunks(output: seq[string]): seq[Section] =
   ## Split the `git diff` command output by "@@".
 
-  if output.len < 5: return
+  if output.len < 5:
+    return
 
   # line 0 ~ 4 are a header.
   for line in output[4 .. ^1]:
@@ -148,30 +150,32 @@ proc parseGitDiffOutput*(output: seq[string]): seq[Diff] =
       originalLine = s.firstOriginalLine
       currentLineNum: int
     while currentLineNum < s.buffer.high:
-      template currentLine: string = s.buffer[currentLineNum]
+      template currentLine(): string =
+        s.buffer[currentLineNum]
 
       var addedLine, deletedLine: int
 
       while s.inRange(currentLineNum) and
-            (currentLine.len == 0 or currentLine.startsWith(' ')):
-              # Skip no changed lines.
-              originalLine.inc
-              currentLineNum.inc
+          (currentLine.len == 0 or currentLine.startsWith(' ')):
+        # Skip no changed lines.
+        originalLine.inc
+        currentLineNum.inc
 
-      if not s.inRange(currentLineNum): break
+      if not s.inRange(currentLineNum):
+        break
 
       let startOriginalLine = originalLine
 
       while s.inRange(currentLineNum) and
-            (currentLine.len == 0 or not currentLine.startsWith(' ')):
-              # Count deleted line or added line.
-              if currentLine.startsWith('-'):
-                deletedLine.inc
-              if currentLine.startsWith('+'):
-                originalLine.inc
-                addedLine.inc
+          (currentLine.len == 0 or not currentLine.startsWith(' ')):
+        # Count deleted line or added line.
+        if currentLine.startsWith('-'):
+          deletedLine.inc
+        if currentLine.startsWith('+'):
+          originalLine.inc
+          addedLine.inc
 
-              currentLineNum.inc
+        currentLineNum.inc
 
       if deletedLine > 0 or addedLine > 0:
         # Treat lines that are both deleted and added as "changed".
@@ -183,7 +187,8 @@ proc parseGitDiffOutput*(output: seq[string]): seq[Diff] =
           addedLine = 0
         elif deletedLine > 0 and addedLine > 0:
           if deletedLine > addedLine:
-            if addedLine > 1: changedLine = addedLine - 1
+            if addedLine > 1:
+              changedLine = addedLine - 1
             changedAndDeletedLine = deletedLine - addedLine
             deletedLine = 0
             addedLine = 0
@@ -196,7 +201,8 @@ proc parseGitDiffOutput*(output: seq[string]): seq[Diff] =
           result.add Diff(
             operation: OperationType.changed,
             firstLine: startOriginalLine,
-            lastLine: startOriginalLine + changedLine - 1)
+            lastLine: startOriginalLine + changedLine - 1,
+          )
           when not defined(release):
             doAssert(result[^1].firstLine <= result[^1].lastLine, $result[^1])
 
@@ -204,7 +210,8 @@ proc parseGitDiffOutput*(output: seq[string]): seq[Diff] =
           result.add Diff(
             operation: OperationType.deleted,
             firstLine: startOriginalLine + changedLine - 1,
-            lastLine: startOriginalLine + changedLine - 1 + deletedLine - 1)
+            lastLine: startOriginalLine + changedLine - 1 + deletedLine - 1,
+          )
           when not defined(release):
             doAssert(result[^1].firstLine <= result[^1].lastLine, $result[^1])
 
@@ -212,7 +219,8 @@ proc parseGitDiffOutput*(output: seq[string]): seq[Diff] =
           result.add Diff(
             operation: OperationType.changedAndDeleted,
             firstLine: startOriginalLine + changedLine,
-            lastLine: startOriginalLine + changedLine + changedAndDeletedLine - 1)
+            lastLine: startOriginalLine + changedLine + changedAndDeletedLine - 1,
+          )
           when not defined(release):
             doAssert(result[^1].firstLine <= result[^1].lastLine, $result[^1])
 
@@ -220,57 +228,58 @@ proc parseGitDiffOutput*(output: seq[string]): seq[Diff] =
           result.add Diff(
             operation: OperationType.added,
             firstLine: startOriginalLine + changedLine,
-            lastLine: startOriginalLine + changedLine + addedLine - 1)
+            lastLine: startOriginalLine + changedLine + addedLine - 1,
+          )
           when not defined(release):
             doAssert(result[^1].firstLine <= result[^1].lastLine, $result[^1])
 
-proc isRunning*(bp: GitDiffProcess): bool {.inline.} = bp.process.isRunning
+proc isRunning*(bp: GitDiffProcess): bool {.inline.} =
+  bp.process.isRunning
 
 proc result*(bp: var GitDiffProcess): Result[seq[string], string] {.inline.} =
   bp.process.result
 
 proc startBackgroundGitDiff*(
-  path: Runes,
-  buffer: Runes,
-  encoding: CharacterEncoding): Result[GitDiffProcess, string] =
-    ## Start a background process for the git diff command.
-    ## Save the current buffer and `path` of HEAD to temporary files before exec
-    ## `git diff --no-index`.
+    path: Runes, buffer: Runes, encoding: CharacterEncoding
+): Result[GitDiffProcess, string] =
+  ## Start a background process for the git diff command.
+  ## Save the current buffer and `path` of HEAD to temporary files before exec
+  ## `git diff --no-index`.
 
-    let cacheDir = gitDiffTmpDir()
-    try:
-      if not dirExists(cacheDir): createDir(cacheDir)
-    except CatchableError as e:
-      return Result[GitDiffProcess, string].err fmt"Failed to save a tmp file {e.msg}"
+  let cacheDir = gitDiffTmpDir()
+  try:
+    if not dirExists(cacheDir):
+      createDir(cacheDir)
+  except CatchableError as e:
+    return Result[GitDiffProcess, string].err fmt"Failed to save a tmp file {e.msg}"
 
-    # TODO: Saving temporary files every time is an expensive cost,
-    # so make it asynchronous(background) or take a workaround.
+  # TODO: Saving temporary files every time is an expensive cost,
+  # so make it asynchronous(background) or take a workaround.
 
-    # A temporary file of the HEAD.
-    let
-      tmpHeadFilename = fmt"{splitPath($path).tail}_{$now()}_head.tmp"
-      tmpHeadPath = cacheDir / tmpHeadFilename
-    if 0 != execCmdEx(fmt"git show HEAD:{path} > {tmpHeadPath}").exitCode:
-      return Result[GitDiffProcess, string].err fmt"Failed to save a tmp file {path}"
+  # A temporary file of the HEAD.
+  let
+    tmpHeadFilename = fmt"{splitPath($path).tail}_{$now()}_head.tmp"
+    tmpHeadPath = cacheDir / tmpHeadFilename
+  if 0 != execCmdEx(fmt"git show HEAD:{path} > {tmpHeadPath}").exitCode:
+    return Result[GitDiffProcess, string].err fmt"Failed to save a tmp file {path}"
 
-    let
-      # A temporary file of the current buffer.
-      tmpBufFilename = fmt"{splitPath($path).tail}_{$now()}_buf.tmp"
-      tmpBufPath = cacheDir / tmpBufFilename
+  let
+    # A temporary file of the current buffer.
+    tmpBufFilename = fmt"{splitPath($path).tail}_{$now()}_buf.tmp"
+    tmpBufPath = cacheDir / tmpBufFilename
 
-    let r = saveFile(tmpBufPath.toRunes, buffer, encoding)
-    if r.isErr:
-      return Result[GitDiffProcess, string].err fmt"Failed to save a tmp file {r.error}"
+  let r = saveFile(tmpBufPath.toRunes, buffer, encoding)
+  if r.isErr:
+    return Result[GitDiffProcess, string].err fmt"Failed to save a tmp file {r.error}"
 
-    let command = BackgroundProcessCommand(
-      cmd: "git",
-      args: @["diff", "--no-index", "--no-color", $tmpHeadPath, $tmpBufPath])
+  let command = BackgroundProcessCommand(
+    cmd: "git", args: @["diff", "--no-index", "--no-color", $tmpHeadPath, $tmpBufPath]
+  )
 
-    let backgroundProcess = startBackgroundProcess(command)
-    if backgroundProcess.isErr:
-      return Result[GitDiffProcess, string].err fmt"Failed to exec git diff commands: {backgroundProcess.error}"
+  let backgroundProcess = startBackgroundProcess(command)
+  if backgroundProcess.isErr:
+    return Result[GitDiffProcess, string].err fmt"Failed to exec git diff commands: {backgroundProcess.error}"
 
-    return Result[GitDiffProcess, string].ok GitDiffProcess(
-      command: command,
-      filePath: path,
-      process: backgroundProcess.get)
+  return Result[GitDiffProcess, string].ok GitDiffProcess(
+    command: command, filePath: path, process: backgroundProcess.get
+  )

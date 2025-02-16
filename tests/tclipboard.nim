@@ -25,30 +25,40 @@ import utils
 import moepkg/platform {.all.}
 
 proc removeLineEnd(buf: string, tool: ClipboardTool): string =
-  case tool:
-    of wslDefault, wlClipboard:
-      result = buf
-      for i in 0 .. 1:
-        # Remove two newlines.
-        result.stripLineEnd
-    else:
-      return buf.removeLineEnd
+  case tool
+  of wslDefault, wlClipboard:
+    result = buf
+    for i in 0 .. 1:
+      # Remove two newlines.
+      result.stripLineEnd
+  else:
+    return buf.removeLineEnd
 
 template getClipboardBuffer(tool: ClipboardTool): string =
-  case tool:
-    of xsel: getXselBuffer()
-    of xclip: getXclipBuffer()
-    of wlClipboard: getWlClipboardBuffer()
-    of wslDefault: getWslDefaultBuffer()
-    else: ""
+  case tool
+  of xsel:
+    getXselBuffer()
+  of xclip:
+    getXclipBuffer()
+  of wlClipboard:
+    getWlClipboardBuffer()
+  of wslDefault:
+    getWslDefaultBuffer()
+  else:
+    ""
 
 template clearClipboard(tool: ClipboardTool) =
   case tool
-    of xsel: assert clearXsel()
-    of xclip: assert clearXclip()
-    of wlClipboard: assert clearWlClipboard()
-    of wslDefault: assert clearWslDefaultClipboard()
-    else: assert false
+  of xsel:
+    assert clearXsel()
+  of xclip:
+    assert clearXclip()
+  of wlClipboard:
+    assert clearWlClipboard()
+  of wslDefault:
+    assert clearWslDefaultClipboard()
+  else:
+    assert false
 
 template runClipboardSendTests(tool: ClipboardTool) =
   test "Runes":

@@ -27,29 +27,24 @@ import moepkg/lsp/progress {.all.}
 
 suite "lsp: parseWindowWorkDnoneProgressCreateNotify":
   test "Invalid":
-    check parseWindowWorkDnoneProgressCreateNotify(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": nil
-    }).isErr
+    check parseWindowWorkDnoneProgressCreateNotify(
+      %*{"jsonrpc": "2.0", "id": 0, "result": nil}
+    ).isErr
 
   test "Basic":
-    check "token" == parseWindowWorkDnoneProgressCreateNotify(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "window/workDoneProgress/create",
-      "params": {
-        "token":"token"
-      }
-    }).get
+    check "token" ==
+      parseWindowWorkDnoneProgressCreateNotify(
+        %*{
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "window/workDoneProgress/create",
+          "params": {"token": "token"},
+        }
+      ).get
 
 suite "lsp: parseWorkDoneProgressBegin":
   test "Invalid":
-    check parseWorkDoneProgressBegin(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": nil
-    }).isErr
+    check parseWorkDoneProgressBegin(%*{"jsonrpc": "2.0", "id": 0, "result": nil}).isErr
 
   test "Basic":
     check WorkDoneProgressBegin(
@@ -57,66 +52,61 @@ suite "lsp: parseWorkDoneProgressBegin":
       title: "title",
       message: some("message"),
       cancellable: some(false),
-      percentage: none(int))[] == parseWorkDoneProgressBegin(%*{
-        "jsonrpc": "2.0",
-        "method": "$/progress",
-        "params": {
-          "token": "token",
-          "value": {
-            "kind":"begin",
-            "title":"title",
-            "message": "message",
-            "cancellable":false
-          }
+      percentage: none(int),
+    )[] ==
+      parseWorkDoneProgressBegin(
+        %*{
+          "jsonrpc": "2.0",
+          "method": "$/progress",
+          "params": {
+            "token": "token",
+            "value": {
+              "kind": "begin",
+              "title": "title",
+              "message": "message",
+              "cancellable": false,
+            },
+          },
         }
-      }).get[]
+      ).get[]
 
 suite "lsp: parseWorkDoneProgressReport":
   test "Invalid":
-    check parseWorkDoneProgressReport(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": nil
-    }).isErr
+    check parseWorkDoneProgressReport(%*{"jsonrpc": "2.0", "id": 0, "result": nil}).isErr
 
   test "Basic":
     check WorkDoneProgressReport(
       kind: "report",
       message: some("message"),
       cancellable: some(false),
-      percentage: some(50))[] == parseWorkDoneProgressReport(%*{
-        "jsonrpc": "2.0",
-        "method": "$/progress",
-        "params": {
-          "token": "token",
-          "value": {
-            "kind":"report",
-            "message": "message",
-            "cancellable":false,
-            "percentage": 50
-          }
+      percentage: some(50),
+    )[] ==
+      parseWorkDoneProgressReport(
+        %*{
+          "jsonrpc": "2.0",
+          "method": "$/progress",
+          "params": {
+            "token": "token",
+            "value": {
+              "kind": "report",
+              "message": "message",
+              "cancellable": false,
+              "percentage": 50,
+            },
+          },
         }
-      }).get[]
+      ).get[]
 
 suite "lsp: parseWorkDoneProgressEnd":
   test "Invalid":
-    check parseWorkDoneProgressEnd(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": nil
-    }).isErr
+    check parseWorkDoneProgressEnd(%*{"jsonrpc": "2.0", "id": 0, "result": nil}).isErr
 
   test "Basic":
-    check WorkDoneProgressEnd(
-      kind: "end",
-      message: some("message"))[] == parseWorkDoneProgressEnd(%*{
-        "jsonrpc": "2.0",
-        "method": "$/progress",
-        "params": {
-          "token": "token",
-          "value": {
-            "kind":"end",
-            "message": "message",
-          }
+    check WorkDoneProgressEnd(kind: "end", message: some("message"))[] ==
+      parseWorkDoneProgressEnd(
+        %*{
+          "jsonrpc": "2.0",
+          "method": "$/progress",
+          "params": {"token": "token", "value": {"kind": "end", "message": "message"}},
         }
-      }).get[]
+      ).get[]

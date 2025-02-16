@@ -64,8 +64,7 @@
 ##   for l in ["C", "c++", "jAvA", "Nim", "c#"]: echo getSourceLanguage(l)
 ##
 
-import
-  std/strutils
+import std/strutils
 from std/algorithm import binarySearch
 
 type
@@ -88,7 +87,7 @@ type
     gtPunctuation
     gtComment
     gtLongComment
-    gtRegularExpression,
+    gtRegularExpression
     gtTagStart
     gtTagEnd
     gtKey
@@ -144,56 +143,21 @@ const
   lwsChars*: set[char] = {'\t', ' '}
 
   ## Common operators.
-  opChars*: set[char] = { '+'
-                        , '-'
-                        , '*'
-                        , '/'
-                        , '\\'
-                        , '<'
-                        , '>'
-                        , '!'
-                        , '?'
-                        , '^'
-                        , '.'
-                        , '|'
-                        , '='
-                        , '%'
-                        , '&'
-                        , '$'
-                        , '@'
-                        , '~'
-                        , ':'
-                        }
+  opChars*: set[char] = {
+    '+', '-', '*', '/', '\\', '<', '>', '!', '?', '^', '.', '|', '=', '%', '&', '$',
+    '@', '~', ':',
+  }
 
   ## Characters denoting a symbol.
-  symChars*: set[char] = { 'A' .. 'Z'
-                         , 'a' .. 'z'
-                         , '0' .. '9'
-                         , '_'
-                         , '\x80' .. '\xFF'
-                         }
+  symChars*: set[char] = {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_', '\x80' .. '\xFF'}
 
   ## All whitespace characters.
   wsChars*: set[char] = {'\t' .. '\r', ' '}
 
-  sourceLanguageToStr*: array[SourceLanguage, string] = [ "none",
-    "C",
-    "C++",
-    "C#",
-    "Haskell",
-    "Java",
-    "JavaScript",
-    "Markdown",
-    "Nim",
-    "Python",
-    "Rust",
-    "Shell",
-    "Toml",
-    "Yaml",
-    "Json"
+  sourceLanguageToStr*: array[SourceLanguage, string] = [
+    "none", "C", "C++", "C#", "Haskell", "Java", "JavaScript", "Markdown", "Nim",
+    "Python", "Rust", "Shell", "Toml", "Yaml", "Json",
   ]
-
-
 
 proc getSourceLanguage*(name: string): SourceLanguage =
   for i in countup(succ(low(SourceLanguage)), high(SourceLanguage)):
@@ -207,34 +171,39 @@ proc initGeneralTokenizer*(g: var GeneralTokenizer, buf: string) =
   g.start = 0
   g.length = 0
   g.state = low(TokenClass)
-  var pos = 0                     # skip initial whitespace:
-  while g.buf[pos] in {' ', '\x09'..'\x0D'}: inc(pos)
+  var pos = 0 # skip initial whitespace:
+  while g.buf[pos] in {' ', '\x09' .. '\x0D'}:
+    inc(pos)
   g.pos = pos
 
 proc generalNumber*(g: var GeneralTokenizer, position: int): int =
-  const decChars = {'0'..'9'}
+  const decChars = {'0' .. '9'}
   var pos = position
   g.kind = gtDecNumber
-  while g.buf[pos] in decChars: inc(pos)
+  while g.buf[pos] in decChars:
+    inc(pos)
   if g.buf[pos] == '.':
     g.kind = gtFloatNumber
     inc(pos)
-    while g.buf[pos] in decChars: inc(pos)
+    while g.buf[pos] in decChars:
+      inc(pos)
   if g.buf[pos] in {'e', 'E'}:
     g.kind = gtFloatNumber
     inc(pos)
-    if g.buf[pos] in {'+', '-'}: inc(pos)
-    while g.buf[pos] in decChars: inc(pos)
+    if g.buf[pos] in {'+', '-'}:
+      inc(pos)
+    while g.buf[pos] in decChars:
+      inc(pos)
   result = pos
 
 proc generalStrLit*(g: var GeneralTokenizer, position: int): int =
   const
-    decChars = {'0'..'9'}
-    hexChars = {'0'..'9', 'A'..'F', 'a'..'f'}
+    decChars = {'0' .. '9'}
+    hexChars = {'0' .. '9', 'A' .. 'F', 'a' .. 'f'}
   var pos = position
   g.kind = gtStringLit
   var c = g.buf[pos]
-  inc(pos)                    # skip " or '
+  inc(pos) # skip " or '
   while true:
     case g.buf[pos]
     of '\0':
@@ -244,13 +213,17 @@ proc generalStrLit*(g: var GeneralTokenizer, position: int): int =
       case g.buf[pos]
       of '\0':
         break
-      of '0'..'9':
-        while g.buf[pos] in decChars: inc(pos)
+      of '0' .. '9':
+        while g.buf[pos] in decChars:
+          inc(pos)
       of 'x', 'X':
         inc(pos)
-        if g.buf[pos] in hexChars: inc(pos)
-        if g.buf[pos] in hexChars: inc(pos)
-      else: inc(pos, 2)
+        if g.buf[pos] in hexChars:
+          inc(pos)
+        if g.buf[pos] in hexChars:
+          inc(pos)
+      else:
+        inc(pos, 2)
     else:
       if g.buf[pos] == c:
         inc(pos)
@@ -262,9 +235,10 @@ proc generalStrLit*(g: var GeneralTokenizer, position: int): int =
 proc isKeyword*(x: openArray[string], y: string): int =
   binarySearch(x, y)
 
-import syntaxc, syntaxcpp, syntaxcsharp, syntaxhaskell, syntaxjava,
-       syntaxjavascript, syntaxmarkdown, syntaxnim, syntaxpython, syntaxrust,
-       syntaxshell, syntaxyaml, syntaxtoml, syntaxjson
+import
+  syntaxc, syntaxcpp, syntaxcsharp, syntaxhaskell, syntaxjava, syntaxjavascript,
+  syntaxmarkdown, syntaxnim, syntaxpython, syntaxrust, syntaxshell, syntaxyaml,
+  syntaxtoml, syntaxjson
 
 proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   case lang

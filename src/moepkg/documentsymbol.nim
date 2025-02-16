@@ -45,15 +45,12 @@ proc jumpToSymbol(status: var EditorStatus, symbolName: Runes) =
 
   let dest = symbol.get.range.get.start
 
-  currentMainWindowNode.currentLine = min(
-    dest.line,
-    max(0, currentBufStatus.buffer.high))
+  currentMainWindowNode.currentLine =
+    min(dest.line, max(0, currentBufStatus.buffer.high))
   currentMainWindowNode.currentColumn = min(
     dest.character,
-    max(0, currentBufStatus.buffer[currentMainWindowNode.currentLine].high))
+    max(0, currentBufStatus.buffer[currentMainWindowNode.currentLine].high),
+  )
 
-proc execDocumentSymbolCommand*(
-  status: var EditorStatus,
-  command: Runes) =
-
-    status.jumpToSymbol(command)
+proc execDocumentSymbolCommand*(status: var EditorStatus, command: Runes) =
+  status.jumpToSymbol(command)

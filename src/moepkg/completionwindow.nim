@@ -19,39 +19,34 @@
 
 import std/[options, sequtils, deques]
 
-import ui, unicodeext, independentutils, completion, popupwindow, bufferstatus,
-       windownode, gapbuffer, worddictionary, editor, commandline
+import
+  ui, unicodeext, independentutils, completion, popupwindow, bufferstatus, windownode,
+  gapbuffer, worddictionary, editor, commandline
 
 export popupwindow
 
-type
-  CompletionWindow* = ref object
-    popupWindow*: Option[PopupWindow]
-      # The popup window for completion items.
-    firstDisplayItemIndex: int
-      # The index of first item to display.
-    startPosition*: BufferPosition
-      # The first position of inserting text.
-    inputText*: Runes
-      # The text entered by the user.
-    list*: CompletionList
-      # Completion items
-    selectedIndex*: int
-      # Index of the selected item. If -1, no selection.
+type CompletionWindow* = ref object
+  popupWindow*: Option[PopupWindow] # The popup window for completion items.
+  firstDisplayItemIndex: int # The index of first item to display.
+  startPosition*: BufferPosition # The first position of inserting text.
+  inputText*: Runes # The text entered by the user.
+  list*: CompletionList # Completion items
+  selectedIndex*: int # Index of the selected item. If -1, no selection.
 
 proc initCompletionWindow*(
-  startPosition: BufferPosition,
-  windowPosition: Position = Position(y: 0, x: 0),
-  size: Size = Size(h: 1, w: 1),
-  list: CompletionList = initCompletionList(),
-  inputText: Runes = ru""): CompletionWindow =
-
-    CompletionWindow(
-      startPosition: startPosition,
-      popupWindow: some(initPopupWindow(windowPosition, size)),
-      list: list,
-      inputText: inputText,
-      selectedIndex: -1)
+    startPosition: BufferPosition,
+    windowPosition: Position = Position(y: 0, x: 0),
+    size: Size = Size(h: 1, w: 1),
+    list: CompletionList = initCompletionList(),
+    inputText: Runes = ru"",
+): CompletionWindow =
+  CompletionWindow(
+    startPosition: startPosition,
+    popupWindow: some(initPopupWindow(windowPosition, size)),
+    list: list,
+    inputText: inputText,
+    selectedIndex: -1,
+  )
 
 proc isPathCompletion*(c: CompletionWindow): bool {.inline.} =
   c.inputText.isPathCompletion
@@ -62,9 +57,11 @@ proc startLine*(c: CompletionWindow): int {.inline.} =
 proc startColumn*(c: CompletionWindow): int {.inline.} =
   c.startPosition.column
 
-proc listHigh*(c: CompletionWindow): int {.inline.} = c.list.high
+proc listHigh*(c: CompletionWindow): int {.inline.} =
+  c.list.high
 
-proc listLen*(c: CompletionWindow): int {.inline.} = c.list.len
+proc listLen*(c: CompletionWindow): int {.inline.} =
+  c.list.len
 
 proc setWindowPosition*(c: var CompletionWindow, position: Position) {.inline.} =
   if c.popupWindow.isSome:
@@ -78,12 +75,9 @@ proc setWindowPositionX*(c: var CompletionWindow, x: int) {.inline.} =
   if c.popupWindow.isSome:
     c.popupWindow.get.position.x = x
 
-proc autoMoveAndResize*(
-  c: var CompletionWindow,
-  min, max: Position) {.inline.} =
-
-    if c.popupWindow.isSome:
-      c.popupWindow.get.autoMoveAndResize(min, max)
+proc autoMoveAndResize*(c: var CompletionWindow, min, max: Position) {.inline.} =
+  if c.popupWindow.isSome:
+    c.popupWindow.get.autoMoveAndResize(min, max)
 
 proc addInput*(c: var CompletionWindow, r: Rune | Runes) {.inline.} =
   c.inputText &= r
@@ -104,7 +98,8 @@ proc setList*(c: var CompletionWindow, dictionary: WordDictionary) {.inline.} =
     c.list.add initCompletionItem(word)
 
 proc addList*(c: var CompletionWindow, list: CompletionList) {.inline.} =
-  for item in list.items: c.list.add item
+  for item in list.items:
+    c.list.add item
 
 proc addList*(c: var CompletionWindow, dictionary: WordDictionary) {.inline.} =
   for word in dictionary.collect(c.inputText):
@@ -116,7 +111,8 @@ proc selectedText*(c: CompletionWindow): Runes =
   else:
     return c.list[c.selectedIndex].insertText
 
-proc inputText*(c: var CompletionWindow): Runes {.inline.} = c.inputText
+proc inputText*(c: var CompletionWindow): Runes {.inline.} =
+  c.inputText
 
 proc prev*(c: var CompletionWindow) =
   if c.selectedIndex == -1:
@@ -135,173 +131,161 @@ proc next*(c: var CompletionWindow) =
     c.popupWindow.get.currentLine = some(c.selectedIndex)
 
 proc removeInsertedText*(
-  bufStatus: var BufferStatus,
-  completionWindow: CompletionWindow) =
-    ## Remove text temporarily inserted by completion.
+    bufStatus: var BufferStatus, completionWindow: CompletionWindow
+) =
+  ## Remove text temporarily inserted by completion.
 
-    var newLine = bufStatus.buffer[completionWindow.startPosition.line]
-    let
-      first = completionWindow.startPosition.column
-      last = first + completionWindow.selectedText.high
-    newLine.delete(first .. last)
+  var newLine = bufStatus.buffer[completionWindow.startPosition.line]
+  let
+    first = completionWindow.startPosition.column
+    last = first + completionWindow.selectedText.high
+  newLine.delete(first .. last)
 
-    if bufStatus.buffer[completionWindow.startPosition.line] != newLine:
-      bufStatus.buffer[completionWindow.startPosition.line] = newLine
-
-proc removeInsertedText*(
-  bufStatus: var BufferStatus,
-  completionWindow: CompletionWindow,
-  lines: seq[int]) =
-    ## Remove text temporarily inserted by completion.
-
-    for lineNum in lines:
-      var newLine = bufStatus.buffer[lineNum]
-      if newLine.high - completionWindow.inputText.len > 0:
-        let
-          first = completionWindow.startPosition.column
-          last = first + completionWindow.selectedText.high
-        newLine.delete(first .. last)
-
-        if bufStatus.buffer[lineNum] != newLine:
-          bufStatus.buffer[lineNum] = newLine
+  if bufStatus.buffer[completionWindow.startPosition.line] != newLine:
+    bufStatus.buffer[completionWindow.startPosition.line] = newLine
 
 proc removeInsertedText*(
-  commandLine: var CommandLine,
-  completionWindow: CompletionWindow) =
-    ## Remove text temporarily inserted by completion.
+    bufStatus: var BufferStatus, completionWindow: CompletionWindow, lines: seq[int]
+) =
+  ## Remove text temporarily inserted by completion.
 
-    if completionWindow.selectedText.len > 0:
+  for lineNum in lines:
+    var newLine = bufStatus.buffer[lineNum]
+    if newLine.high - completionWindow.inputText.len > 0:
       let
         first = completionWindow.startPosition.column
         last = first + completionWindow.selectedText.high
-      commandLine.delete(first .. last)
+      newLine.delete(first .. last)
+
+      if bufStatus.buffer[lineNum] != newLine:
+        bufStatus.buffer[lineNum] = newLine
+
+proc removeInsertedText*(
+    commandLine: var CommandLine, completionWindow: CompletionWindow
+) =
+  ## Remove text temporarily inserted by completion.
+
+  if completionWindow.selectedText.len > 0:
+    let
+      first = completionWindow.startPosition.column
+      last = first + completionWindow.selectedText.high
+    commandLine.delete(first .. last)
 
 proc insertSelectedText*(
-  bufStatus: var BufferStatus,
-  completionWindow: CompletionWindow) =
-    # Insert the selected text to the line.
+    bufStatus: var BufferStatus, completionWindow: CompletionWindow
+) =
+  # Insert the selected text to the line.
 
-    var newLine = bufStatus.buffer[completionWindow.startPosition.line]
+  var newLine = bufStatus.buffer[completionWindow.startPosition.line]
+  let text = completionWindow.selectedText
+  for i in 0 .. text.high:
+    newLine.insert(text[i], completionWindow.startPosition.column + i)
+
+  if bufStatus.buffer[completionWindow.startPosition.line] != newLine:
+    bufStatus.buffer[completionWindow.startPosition.line] = newLine
+
+proc insertSelectedText*(
+    bufStatus: var BufferStatus, completionWindow: CompletionWindow, lines: seq[int]
+) =
+  # Insert the selected text to multiple lines.
+
+  let positions =
+    lines.mapIt(BufferPosition(line: it, column: completionWindow.startColumn))
+  bufStatus.insertMultiplePositions(positions, completionWindow.selectedText)
+
+proc insertSelectedText*(
+    commandLine: var CommandLine, completionWindow: CompletionWindow
+) =
+  # Insert the selected text to the line.
+
+  if completionWindow.selectedText.len > 0:
     let text = completionWindow.selectedText
     for i in 0 .. text.high:
-      newLine.insert(text[i], completionWindow.startPosition.column + i)
-
-    if bufStatus.buffer[completionWindow.startPosition.line] != newLine:
-      bufStatus.buffer[completionWindow.startPosition.line] = newLine
-
-proc insertSelectedText*(
-  bufStatus: var BufferStatus,
-  completionWindow: CompletionWindow,
-  lines: seq[int]) =
-    # Insert the selected text to multiple lines.
-
-    let positions = lines.mapIt(BufferPosition(
-      line: it,
-      column: completionWindow.startColumn))
-    bufStatus.insertMultiplePositions(
-      positions,
-      completionWindow.selectedText)
-
-proc insertSelectedText*(
-  commandLine: var CommandLine,
-  completionWindow: CompletionWindow) =
-    # Insert the selected text to the line.
-
-    if completionWindow.selectedText.len > 0:
-      let text = completionWindow.selectedText
-      for i in 0 .. text.high:
-        commandLine.insert(
-          text[i],
-          completionWindow.startPosition.column + i)
+      commandLine.insert(text[i], completionWindow.startPosition.column + i)
 
 proc canHandleInCompletionWindow*(key: Rune): bool {.inline.} =
-  isTabKey(key) or
-  isShiftTab(key) or
-  isUpKey(key) or
-  isDownKey(key)
+  isTabKey(key) or isShiftTab(key) or isUpKey(key) or isDownKey(key)
 
 proc handleKey*(
-  c: var CompletionWindow,
-  bufStatus: var BufferStatus,
-  windowNode: var WindowNode,
-  key: Rune) =
-    ## Them completion window in main window.
+    c: var CompletionWindow,
+    bufStatus: var BufferStatus,
+    windowNode: var WindowNode,
+    key: Rune,
+) =
+  ## Them completion window in main window.
 
-    when not defined(release):
-      doAssert(canHandleInCompletionWindow(key))
+  when not defined(release):
+    doAssert(canHandleInCompletionWindow(key))
 
-    if isTabKey(key) or isDownKey(key):
-      if c.list.len > 0:
-        # Move to the next item and inserting text.
-        if bufStatus.isInsertMultiMode:
-          let lines = bufStatus.selectedArea.get.selectedLineNumbers
-          bufStatus.removeInsertedText(c, lines)
-          c.next
-          bufStatus.insertSelectedText(c, lines)
-        else:
-          bufStatus.removeInsertedText(c)
-          c.next
-          bufStatus.insertSelectedText(c)
-
-        # Move cursor to the last position of the inserted text.
-        windowNode.currentColumn = c.startPosition.column + c.selectedText.len
-
-        bufStatus.isUpdate = true
-    elif isShiftTab(key) or isUpKey(key):
-      if c.list.len > 0:
-        # Move to the prev item and inserting text.
-        if bufStatus.isInsertMultiMode:
-          let lines = bufStatus.selectedArea.get.selectedLineNumbers
-          bufStatus.removeInsertedText(c, lines)
-          c.prev
-          bufStatus.insertSelectedText(c, lines)
-        else:
-          bufStatus.removeInsertedText(c)
-          c.prev
-          bufStatus.insertSelectedText(c)
-
-        # Move cursor to the last position of the inserted text.
-        windowNode.currentColumn = c.startPosition.column + c.selectedText.len
-
-        bufStatus.isUpdate = true
-
-proc handleKey*(
-  c: var CompletionWindow,
-  commandLine: var CommandLine,
-  key: Rune) =
-    ## The completion window in command line.
-
-    when not defined(release):
-      doAssert(canHandleInCompletionWindow(key))
-
-    if isTabKey(key) or isDownKey(key):
+  if isTabKey(key) or isDownKey(key):
+    if c.list.len > 0:
       # Move to the next item and inserting text.
-      if c.list.len > 0:
-        if commandLine.buffer.len > 0:
-          commandLine.removeInsertedText(c)
+      if bufStatus.isInsertMultiMode:
+        let lines = bufStatus.selectedArea.get.selectedLineNumbers
+        bufStatus.removeInsertedText(c, lines)
         c.next
-        commandLine.insertSelectedText(c)
+        bufStatus.insertSelectedText(c, lines)
+      else:
+        bufStatus.removeInsertedText(c)
+        c.next
+        bufStatus.insertSelectedText(c)
 
-        # Move cursor to the last position of the inserted text.
-        commandLine.setBufferPositionX(
-          c.startPosition.column + c.selectedText.len)
-    elif isShiftTab(key) or isUpKey(key):
+      # Move cursor to the last position of the inserted text.
+      windowNode.currentColumn = c.startPosition.column + c.selectedText.len
+
+      bufStatus.isUpdate = true
+  elif isShiftTab(key) or isUpKey(key):
+    if c.list.len > 0:
       # Move to the prev item and inserting text.
-      if c.list.len > 0:
-        if commandLine.buffer.len > 0:
-          commandLine.removeInsertedText(c)
+      if bufStatus.isInsertMultiMode:
+        let lines = bufStatus.selectedArea.get.selectedLineNumbers
+        bufStatus.removeInsertedText(c, lines)
         c.prev
-        commandLine.insertSelectedText(c)
+        bufStatus.insertSelectedText(c, lines)
+      else:
+        bufStatus.removeInsertedText(c)
+        c.prev
+        bufStatus.insertSelectedText(c)
 
-        # Move cursor to the last position of the inserted text.
-        commandLine.setBufferPositionX(
-          c.startPosition.column + c.selectedText.len)
+      # Move cursor to the last position of the inserted text.
+      windowNode.currentColumn = c.startPosition.column + c.selectedText.len
+
+      bufStatus.isUpdate = true
+
+proc handleKey*(c: var CompletionWindow, commandLine: var CommandLine, key: Rune) =
+  ## The completion window in command line.
+
+  when not defined(release):
+    doAssert(canHandleInCompletionWindow(key))
+
+  if isTabKey(key) or isDownKey(key):
+    # Move to the next item and inserting text.
+    if c.list.len > 0:
+      if commandLine.buffer.len > 0:
+        commandLine.removeInsertedText(c)
+      c.next
+      commandLine.insertSelectedText(c)
+
+      # Move cursor to the last position of the inserted text.
+      commandLine.setBufferPositionX(c.startPosition.column + c.selectedText.len)
+  elif isShiftTab(key) or isUpKey(key):
+    # Move to the prev item and inserting text.
+    if c.list.len > 0:
+      if commandLine.buffer.len > 0:
+        commandLine.removeInsertedText(c)
+      c.prev
+      commandLine.insertSelectedText(c)
+
+      # Move cursor to the last position of the inserted text.
+      commandLine.setBufferPositionX(c.startPosition.column + c.selectedText.len)
 
 proc resize*(c: var CompletionWindow, size: Size) {.inline.} =
-  if c.popupWindow.isSome: c.popupWindow.get.resize(size)
+  if c.popupWindow.isSome:
+    c.popupWindow.get.resize(size)
 
 proc move*(c: var CompletionWindow, position: Position) {.inline.} =
-  if c.popupWindow.isSome: c.popupWindow.get.move(position)
+  if c.popupWindow.isSome:
+    c.popupWindow.get.move(position)
 
 proc updateBuffer*(c: var CompletionWindow) =
   ## Update display buffer.
@@ -313,11 +297,9 @@ proc updateBuffer*(c: var CompletionWindow) =
       c.popupWindow.get.buffer.add ru" " & item.label & ru" "
 
 proc updateHighlightingText*(
-  c: var CompletionWindow,
-  text: Runes,
-  isIgnorecase, isSmartcase: bool) {.inline.} =
-
-    c.popupWindow.get.updateHighlightText(text, isIgnorecase, isSmartcase)
+    c: var CompletionWindow, text: Runes, isIgnorecase, isSmartcase: bool
+) {.inline.} =
+  c.popupWindow.get.updateHighlightText(text, isIgnorecase, isSmartcase)
 
 proc clearHighlightingText*(c: var CompletionWindow) {.inline.} =
   c.popupWindow.get.clearHighlightText
@@ -326,8 +308,10 @@ proc isHighlightingText*(c: var CompletionWindow): bool {.inline.} =
   c.popupWindow.get.highlightText.isSome
 
 proc update*(c: var CompletionWindow) {.inline.} =
-  if c.selectedIndex == -1: c.popupWindow.get.currentLine = none(int)
-  else: c.popupWindow.get.currentLine = some(c.selectedIndex)
+  if c.selectedIndex == -1:
+    c.popupWindow.get.currentLine = none(int)
+  else:
+    c.popupWindow.get.currentLine = some(c.selectedIndex)
 
   c.popupWindow.get.update
 
@@ -337,29 +321,30 @@ proc close*(c: var CompletionWindow) {.inline.} =
     c.popupWindow = none(PopupWindow)
 
 proc reopen*(
-  c: var CompletionWindow,
-  windowPosition: Position = Position(y: 0, x: 0),
-  size: Size = Size(h: 1, w: 1)) =
+    c: var CompletionWindow,
+    windowPosition: Position = Position(y: 0, x: 0),
+    size: Size = Size(h: 1, w: 1),
+) =
+  c.popupWindow = some(initPopupWindow(windowPosition, size))
 
-    c.popupWindow = some(initPopupWindow(windowPosition, size))
-
-proc isOpen*(c: CompletionWindow): bool {.inline.} = c.popupWindow.isSome
+proc isOpen*(c: CompletionWindow): bool {.inline.} =
+  c.popupWindow.isSome
 
 proc completionWindowPositionInEditor*(
-  windowNode: var WindowNode,
-  bufStatus: BufferStatus,
-  inputText = ru""): Position =
-    ## Return a position for the completion window for editor.
+    windowNode: var WindowNode, bufStatus: BufferStatus, inputText = ru""
+): Position =
+  ## Return a position for the completion window for editor.
 
-    # Reload Editorview. This is not the actual terminal view.
-    windowNode.reloadEditorView(bufStatus.buffer)
-    # Seek cursor before getting the absolute cursor position.
-    windowNode.seekCursor(bufStatus.buffer)
+  # Reload Editorview. This is not the actual terminal view.
+  windowNode.reloadEditorView(bufStatus.buffer)
+  # Seek cursor before getting the absolute cursor position.
+  windowNode.seekCursor(bufStatus.buffer)
 
-    let absCursorPosition = windowNode.absolutePosition
-    return Position(
-      y: (absCursorPosition.y + 1).clamp(0, getTerminalHeight()),
-      x: (absCursorPosition.x - 1 - inputText.len).clamp(0, getTerminalWidth()))
+  let absCursorPosition = windowNode.absolutePosition
+  return Position(
+    y: (absCursorPosition.y + 1).clamp(0, getTerminalHeight()),
+    x: (absCursorPosition.x - 1 - inputText.len).clamp(0, getTerminalWidth()),
+  )
 
 proc sort*(c: var CompletionWindow) {.inline.} =
   c.list.fuzzySort(c.inputText)

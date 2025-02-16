@@ -36,8 +36,7 @@ proc deleteBookmark*(bookmarks: var seq[Bookmark], path: string, line: int) =
       bookmarks.delete(i)
 
 proc loadBookmarks*(): seq[Bookmark] =
-  let
-    chaheFile = getHomeDir() / ".cache/moe/bookmark"
+  let chaheFile = getHomeDir() / ".cache/moe/bookmark"
 
   if fileExists(chaheFile):
     let f = open(chaheFile, FileMode.fmRead)

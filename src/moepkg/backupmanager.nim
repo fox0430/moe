@@ -21,9 +21,10 @@
 
 import std/os
 import pkg/results
-import editorstatus, bufferstatus, unicodeext, ui, movement, gapbuffer,
-       highlight, settings, messages, backup, fileutils, editorview,
-       windownode, commandlineutils, backupmanagerutils
+import
+  editorstatus, bufferstatus, unicodeext, ui, movement, gapbuffer, highlight, settings,
+  messages, backup, fileutils, editorview, windownode, commandlineutils,
+  backupmanagerutils
 
 template baseBackupDir*(status: EditorStatus): Runes =
   status.settings.autoBackup.backupDir
@@ -56,116 +57,107 @@ proc openDiffViewer(status: var EditorStatus, sourceFilePath: string) =
   status.resize
 
 proc restoreBackupFile(
-  status: var EditorStatus,
-  sourceFilePath: Runes,
-  isForceRestore: bool) =
-    ## Restore the current buffer from backupFile.
-    ## the filename is the current line.
+    status: var EditorStatus, sourceFilePath: Runes, isForceRestore: bool
+) =
+  ## Restore the current buffer from backupFile.
+  ## the filename is the current line.
 
-    if not fileExists($sourceFilePath): return
+  if not fileExists($sourceFilePath):
+    return
 
-    let
-      backupFilename = currentBufStatus.buffer[currentMainWindowNode.currentLine]
-      baseBackupDir = status.settings.autoBackup.backupDir
-      backupDir = getBackupDir(baseBackupDir, sourceFilePath)
-      restoreFilePath = $backupDir / $backupFilename
+  let
+    backupFilename = currentBufStatus.buffer[currentMainWindowNode.currentLine]
+    baseBackupDir = status.settings.autoBackup.backupDir
+    backupDir = getBackupDir(baseBackupDir, sourceFilePath)
+    restoreFilePath = $backupDir / $backupFilename
 
-    if not fileExists(restoreFilePath): return
+  if not fileExists(restoreFilePath):
+    return
 
-    if not isForceRestore:
-      let isRestore = status.commandLine.askBackupRestorePrompt(
-        backupFilename)
-      if not isRestore: return
-
-    # Backup the current buffer before restore
-    for bufStatus in status.bufStatus:
-      if bufStatus.absolutePath == sourceFilePath and
-         bufStatus.mode == Mode.normal:
-           bufStatus.backupBuffer(
-             status.settings.autoBackup,
-             status.settings.notification,
-             status.commandLine)
-
-    try:
-      copyFile(restoreFilePath, $sourceFilePath)
-    except OSError:
-      status.commandLine.writeBackupRestoreError
+  if not isForceRestore:
+    let isRestore = status.commandLine.askBackupRestorePrompt(backupFilename)
+    if not isRestore:
       return
 
-    # Update restored buffer
-    for i in 0 ..< status.bufStatus.len:
-      if status.bufStatus[i].absolutePath == sourceFilePath:
-        let beforeBufStatus = status.bufStatus[i]
+  # Backup the current buffer before restore
+  for bufStatus in status.bufStatus:
+    if bufStatus.absolutePath == sourceFilePath and bufStatus.mode == Mode.normal:
+      bufStatus.backupBuffer(
+        status.settings.autoBackup, status.settings.notification, status.commandLine
+      )
 
-        let b = initBufferStatus($sourceFilePath)
-        if b.isOk:
-          status.bufStatus[i] = b.get
-        else:
-          status.commandLine.writeBackupRestoreError
-          return
+  try:
+    copyFile(restoreFilePath, $sourceFilePath)
+  except OSError:
+    status.commandLine.writeBackupRestoreError
+    return
 
-        let textAndEncoding = openFile(sourceFilePath)
-        if textAndEncoding.isErr:
-          status.bufStatus[i] = beforeBufStatus
-          status.commandLine.writeBackupRestoreError
-          return
+  # Update restored buffer
+  for i in 0 ..< status.bufStatus.len:
+    if status.bufStatus[i].absolutePath == sourceFilePath:
+      let beforeBufStatus = status.bufStatus[i]
 
-        status.bufStatus[i].buffer = textAndEncoding.get.text.toGapBuffer
-        status.bufStatus[i].characterEncoding = textAndEncoding.get.encoding
-
-        status.bufStatus[i].language = detectLanguage($sourceFilePath)
-
-        currentMainWindowNode.view =
-          status.bufStatus[i].buffer.initEditorView(1, 1)
-
-        status.resize
-
-        let settings = status.settings.notification
-        status.commandLine.writeRestoreFileSuccessMessage(
-          backupFilename,
-          settings)
-
+      let b = initBufferStatus($sourceFilePath)
+      if b.isOk:
+        status.bufStatus[i] = b.get
+      else:
+        status.commandLine.writeBackupRestoreError
         return
 
-    status.commandLine.writeBackupRestoreError
+      let textAndEncoding = openFile(sourceFilePath)
+      if textAndEncoding.isErr:
+        status.bufStatus[i] = beforeBufStatus
+        status.commandLine.writeBackupRestoreError
+        return
 
-template restoreBackupFile(
-  status: var EditorStatus,
-  sourceFilePath: Runes) =
+      status.bufStatus[i].buffer = textAndEncoding.get.text.toGapBuffer
+      status.bufStatus[i].characterEncoding = textAndEncoding.get.encoding
 
-    const IS_FORCE_RESTORE = false
-    status.restoreBackupFile(sourceFilePath, IS_FORCE_RESTORE)
+      status.bufStatus[i].language = detectLanguage($sourceFilePath)
 
-proc removeBackupFile(
-  status: var EditorStatus,
-  sourceFilePath: Runes,
-  isForceRemove: bool) =
-    ## Remove the backup file.
-    ## the filename is the current line.
+      currentMainWindowNode.view = status.bufStatus[i].buffer.initEditorView(1, 1)
 
-    let
-      backupFilename = currentBufStatus.buffer[currentMainWindowNode.currentLine]
-      baseBackupDir = status.settings.autoBackup.backupDir
-      backupDir = backupDir($baseBackupDir, $sourceFilePath)
-      backupFilePath = backupDir / $backupFilename
+      status.resize
 
-    if not fileExists(backupFilePath): return
+      let settings = status.settings.notification
+      status.commandLine.writeRestoreFileSuccessMessage(backupFilename, settings)
 
-    if not isForceRemove:
-      let isRemove = status.commandLine.askDeleteBackupPrompt(
-        backupFilename)
-      if not isRemove: return
-
-    try:
-      removeFile(backupFilePath)
-    except OSError:
-      status.commandLine.writeDeleteBackupError
       return
 
-    let settings = status.settings.notification
-    status.commandLine.writeMessageDeletedFile(
-      $backupFilename,
-      settings)
+  status.commandLine.writeBackupRestoreError
+
+template restoreBackupFile(status: var EditorStatus, sourceFilePath: Runes) =
+  const IS_FORCE_RESTORE = false
+  status.restoreBackupFile(sourceFilePath, IS_FORCE_RESTORE)
+
+proc removeBackupFile(
+    status: var EditorStatus, sourceFilePath: Runes, isForceRemove: bool
+) =
+  ## Remove the backup file.
+  ## the filename is the current line.
+
+  let
+    backupFilename = currentBufStatus.buffer[currentMainWindowNode.currentLine]
+    baseBackupDir = status.settings.autoBackup.backupDir
+    backupDir = backupDir($baseBackupDir, $sourceFilePath)
+    backupFilePath = backupDir / $backupFilename
+
+  if not fileExists(backupFilePath):
+    return
+
+  if not isForceRemove:
+    let isRemove = status.commandLine.askDeleteBackupPrompt(backupFilename)
+    if not isRemove:
+      return
+
+  try:
+    removeFile(backupFilePath)
+  except OSError:
+    status.commandLine.writeDeleteBackupError
+    return
+
+  let settings = status.settings.notification
+  status.commandLine.writeMessageDeletedFile($backupFilename, settings)
 
 template removeBackupFile(status: var EditorStatus, sourceFilePath: Runes) =
   const IS_FORCE_REMOVE = false
@@ -176,17 +168,11 @@ proc isBackupManagerCommand*(command: Runes): InputState =
 
   if command.len == 1:
     let key = command[0]
-    if isCtrlK(key) or
-       isCtrlJ(key) or
-       key == ord(':') or
-       key == ord('k') or isUpKey(key) or
-       key == ord('j') or isDownKey(key) or
-       isEnterKey(key) or
-       key == ord('R') or
-       key == ord('D') or
-       key == ord('r') or
-       key == ord('G'):
-         return InputState.Valid
+    if isCtrlK(key) or isCtrlJ(key) or key == ord(':') or key == ord('k') or isUpKey(
+      key
+    ) or key == ord('j') or isDownKey(key) or isEnterKey(key) or key == ord('R') or
+        key == ord('D') or key == ord('r') or key == ord('G'):
+      return InputState.Valid
     elif key == ord('g'):
       return InputState.Continue
   elif command.len == 2:
@@ -215,14 +201,12 @@ proc execBackupManagerCommand*(status: var EditorStatus, command: Runes) =
       status.restoreBackupFile(sourceFilePath)
     elif key == ord('D'):
       status.removeBackupFile(sourceFilePath)
-      currentBufStatus.buffer = initBackupManagerBuffer(
-        status.baseBackupDir,
-        sourceFilePath).toGapBuffer
+      currentBufStatus.buffer =
+        initBackupManagerBuffer(status.baseBackupDir, sourceFilePath).toGapBuffer
     elif key == ord('r'):
       # Reload backup files
-      currentBufStatus.buffer = initBackupManagerBuffer(
-        status.baseBackupDir,
-        sourceFilePath).toGapBuffer
+      currentBufStatus.buffer =
+        initBackupManagerBuffer(status.baseBackupDir, sourceFilePath).toGapBuffer
     elif key == ord('G'):
       currentBufStatus.moveToLastLine(currentMainWindowNode)
   elif command.len == 2:

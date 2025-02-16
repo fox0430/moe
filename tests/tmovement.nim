@@ -21,8 +21,9 @@ import std/[unittest, sequtils]
 
 import pkg/results
 
-import moepkg/[editorstatus, gapbuffer, unicodeext, highlight, movement,
-               bufferstatus, folding]
+import
+  moepkg/
+    [editorstatus, gapbuffer, unicodeext, highlight, movement, bufferstatus, folding]
 
 import utils
 
@@ -37,9 +38,9 @@ suite "Move right":
     currentBufStatus.buffer = @["abc"].toSeqRunes.toGapBuffer
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     for i in 0 ..< 3:
       currentBufStatus.keyRight(currentMainWindowNode)
@@ -51,9 +52,9 @@ suite "Move right":
     currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     currentBufStatus.keyRight(currentMainWindowNode)
 
@@ -70,7 +71,8 @@ suite "Move left":
     currentBufStatus.highlight = initHighlight(
       status.bufStatus[0].buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
-      status.bufStatus[0].language)
+      status.bufStatus[0].language,
+    )
 
     currentMainWindowNode.currentColumn = 2
     for i in 0 ..< 3:
@@ -87,7 +89,8 @@ suite "Move down":
     currentBufStatus.highlight = initHighlight(
       status.bufStatus[0].buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
-      status.bufStatus[0].language)
+      status.bufStatus[0].language,
+    )
 
     for i in 0 ..< 3:
       status.bufStatus[0].keyDown(currentMainWindowNode)
@@ -103,7 +106,8 @@ suite "Move up":
     currentBufStatus.highlight = initHighlight(
       status.bufStatus[0].buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
-      status.bufStatus[0].language)
+      status.bufStatus[0].language,
+    )
 
     currentMainWindowNode.currentLine = 2
     for i in 0 ..< 3:
@@ -160,13 +164,8 @@ suite "Jump line":
   test "Basic":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
-    status.bufStatus[0].buffer = initGapBuffer(@[
-      "abc",
-      "efg",
-      "hij",
-      "klm",
-      "nop",
-      "qrs"].toSeqRunes)
+    status.bufStatus[0].buffer =
+      initGapBuffer(@["abc", "efg", "hij", "klm", "nop", "qrs"].toSeqRunes)
 
     currentBufStatus.jumpLine(currentMainWindowNode, 1)
     currentBufStatus.jumpLine(currentMainWindowNode, 4)
@@ -176,13 +175,8 @@ suite "Move to first line":
   test "Basic":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
-    status.bufStatus[0].buffer = initGapBuffer(@[
-      "abc",
-      "efg",
-      "hij",
-      "klm",
-      "nop",
-      "qrs"].toSeqRunes)
+    status.bufStatus[0].buffer =
+      initGapBuffer(@["abc", "efg", "hij", "klm", "nop", "qrs"].toSeqRunes)
 
     currentMainWindowNode.currentLine = 4
     currentBufStatus.moveToFirstLine(currentMainWindowNode)
@@ -192,13 +186,8 @@ suite "Move to last line":
   test "Basic":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
-    status.bufStatus[0].buffer = initGapBuffer(@[
-      "abc",
-      "efg",
-      "hij",
-      "klm",
-      "nop",
-      "qrs"].toSeqRunes)
+    status.bufStatus[0].buffer =
+      initGapBuffer(@["abc", "efg", "hij", "klm", "nop", "qrs"].toSeqRunes)
 
     currentMainWindowNode.currentLine = 1
     currentBufStatus.moveToLastLine(currentMainWindowNode)
@@ -208,7 +197,8 @@ suite "Move to last line":
     var status = initEditorStatus()
     assert status.addNewBufferInCurrentWin.isOk
     status.bufStatus[0].buffer = @[ru"a".repeat(1000)].toGapBuffer
-    for _ in 0 .. 20: status.bufStatus[0].buffer.add ru""
+    for _ in 0 .. 20:
+      status.bufStatus[0].buffer.add ru""
 
     status.resize(30, 30)
     status.update
@@ -495,17 +485,14 @@ suite "jumpToSearchForwardResults":
     discard status.addNewBufferInCurrentWin.get
 
     currentMainWindowNode.currentColumn = 1
-    currentBufStatus.buffer = initGapBuffer(@[
-      "abc def",
-      "ghi jkl",
-      "mno jkl"].toSeqRunes)
+    currentBufStatus.buffer =
+      initGapBuffer(@["abc def", "ghi jkl", "mno jkl"].toSeqRunes)
 
     const Keyword = ru"jkl"
     currentBufStatus.jumpToSearchForwardResults(
-      currentMainWindowNode,
-      Keyword,
-      status.settings.standard.ignorecase,
-      status.settings.standard.smartcase)
+      currentMainWindowNode, Keyword, status.settings.standard.ignorecase,
+      status.settings.standard.smartcase,
+    )
 
     check currentMainWindowNode.currentLine == 1
     check currentMainWindowNode.currentColumn == 4
@@ -515,17 +502,14 @@ suite "jumpToSearchForwardResults":
     discard status.addNewBufferInCurrentWin.get
 
     currentMainWindowNode.currentColumn = 1
-    currentBufStatus.buffer = initGapBuffer(@[
-      "abc def",
-      "ghi jkl",
-      "mno pqr"].toSeqRunes)
+    currentBufStatus.buffer =
+      initGapBuffer(@["abc def", "ghi jkl", "mno pqr"].toSeqRunes)
 
     const Keyword = ru"xyz"
     currentBufStatus.jumpToSearchForwardResults(
-      currentMainWindowNode,
-      Keyword,
-      status.settings.standard.ignorecase,
-      status.settings.standard.smartcase)
+      currentMainWindowNode, Keyword, status.settings.standard.ignorecase,
+      status.settings.standard.smartcase,
+    )
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 1
@@ -535,19 +519,13 @@ suite "jumpToSearchForwardResults":
     discard status.addNewBufferInCurrentWin.get
 
     currentMainWindowNode.currentColumn = 0
-    currentBufStatus.buffer = @[
-      "abc def",
-      "ghi jkl",
-      "mno pqr"]
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer = @["abc def", "ghi jkl", "mno pqr"].toSeqRunes.toGapBuffer
 
     const Keyword = "jkl\nmno".toRunes
     currentBufStatus.jumpToSearchForwardResults(
-      currentMainWindowNode,
-      Keyword,
-      status.settings.standard.ignorecase,
-      status.settings.standard.smartcase)
+      currentMainWindowNode, Keyword, status.settings.standard.ignorecase,
+      status.settings.standard.smartcase,
+    )
 
     check currentMainWindowNode.currentLine == 1
     check currentMainWindowNode.currentColumn == 4
@@ -558,17 +536,14 @@ suite "jumpToSearchBackwardResults":
     discard status.addNewBufferInCurrentWin.get
 
     currentMainWindowNode.currentLine = 1
-    currentBufStatus.buffer = initGapBuffer(@[
-      "abc def",
-      "ghi jkl",
-      "mno abc"].toSeqRunes)
+    currentBufStatus.buffer =
+      initGapBuffer(@["abc def", "ghi jkl", "mno abc"].toSeqRunes)
 
     const Keyword = ru"abc"
     currentBufStatus.jumpToSearchBackwardResults(
-      currentMainWindowNode,
-      Keyword,
-      status.settings.standard.ignorecase,
-      status.settings.standard.smartcase)
+      currentMainWindowNode, Keyword, status.settings.standard.ignorecase,
+      status.settings.standard.smartcase,
+    )
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
@@ -578,17 +553,14 @@ suite "jumpToSearchBackwardResults":
     discard status.addNewBufferInCurrentWin.get
 
     currentMainWindowNode.currentColumn = 1
-    currentBufStatus.buffer = initGapBuffer(@[
-      "abc def",
-      "ghi jkl",
-      "mno pqr"].toSeqRunes)
+    currentBufStatus.buffer =
+      initGapBuffer(@["abc def", "ghi jkl", "mno pqr"].toSeqRunes)
 
     const Keyword = ru"xyz"
     currentBufStatus.jumpToSearchBackwardResults(
-      currentMainWindowNode,
-      Keyword,
-      status.settings.standard.ignorecase,
-      status.settings.standard.smartcase)
+      currentMainWindowNode, Keyword, status.settings.standard.ignorecase,
+      status.settings.standard.smartcase,
+    )
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 1
@@ -598,19 +570,14 @@ suite "jumpToSearchBackwardResults":
     discard status.addNewBufferInCurrentWin.get
 
     currentMainWindowNode.currentLine = 2
-    currentBufStatus.buffer = @[
-      "abc def",
-      "ghi jkl",
-      "mno abc"]
-      .toSeqRunes
-      .initGapBuffer
+    currentBufStatus.buffer =
+      @["abc def", "ghi jkl", "mno abc"].toSeqRunes.initGapBuffer
 
     const Keyword = "def\nghi".toRunes
     currentBufStatus.jumpToSearchBackwardResults(
-      currentMainWindowNode,
-      Keyword,
-      status.settings.standard.ignorecase,
-      status.settings.standard.smartcase)
+      currentMainWindowNode, Keyword, status.settings.standard.ignorecase,
+      status.settings.standard.smartcase,
+    )
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 4

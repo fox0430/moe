@@ -31,8 +31,7 @@ else:
 
 type
   LspInlayHints* = object
-    range*: independentutils.Range
-      # Line range to request
+    range*: independentutils.Range # Line range to request
     hints*: seq[InlayHint]
 
   LspInlayHintsResult* = Result[seq[InlayHint], string]

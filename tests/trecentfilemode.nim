@@ -25,7 +25,8 @@ import moepkg/unicodeext
 
 import moepkg/recentfilemode {.all.}
 
-const RecentlyUsedXbelBuffer = """
+const RecentlyUsedXbelBuffer =
+  """
 <?xml version="1.0" encoding="UTF-8"?>
 <xbel version="1.0"
       xmlns:bookmark="http://www.freedesktop.org/standards/desktop-bookmarks"
@@ -59,5 +60,4 @@ suite "getRecentUsedFiles":
     createDir(RecentlyUsedXbelTestDir)
     writeFile(recentlyUsedXbelPath, RecentlyUsedXbelBuffer)
 
-    check @[ru"/home/user/picture.jpg"] == getRecentUsedFiles(
-      recentlyUsedXbelPath).get
+    check @[ru"/home/user/picture.jpg"] == getRecentUsedFiles(recentlyUsedXbelPath).get

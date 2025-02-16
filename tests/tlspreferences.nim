@@ -27,33 +27,26 @@ import moepkg/lsp/references {.all.}
 
 suite "lsp: parseTextDocumentReferencesResponse":
   test "Not found":
-    check parseTextDocumentReferencesResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": []
-    }).get.len == 0
+    check parseTextDocumentReferencesResponse(
+      %*{"jsonrpc": "2.0", "id": 0, "result": []}
+    ).get.len == 0
 
   test "Basic":
-    check parseTextDocumentReferencesResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": [
-        {
-          "uri":  "file:///home/user/text.txt",
-          "range": {
-            "start": {
-              "line": 0,
-              "character": 1,
-            },
-            "end": {
-              "line": 0,
-              "character": 2,
-            }
+    check parseTextDocumentReferencesResponse(
+      %*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": [
+          {
+            "uri": "file:///home/user/text.txt",
+            "range":
+              {"start": {"line": 0, "character": 1}, "end": {"line": 0, "character": 2}},
           }
-        }
+        ],
+      }
+    ).get ==
+      @[
+        LspReference(
+          path: "/home/user/text.txt", position: BufferPosition(line: 0, column: 1)
+        )
       ]
-    }).get == @[
-      LspReference(
-        path: "/home/user/text.txt",
-        position: BufferPosition(line: 0, column: 1))
-    ]

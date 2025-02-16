@@ -30,4 +30,5 @@ proc main() =
 
   status.get.exitEditor
 
-when isMainModule: main()
+when isMainModule:
+  main()

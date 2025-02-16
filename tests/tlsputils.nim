@@ -46,313 +46,306 @@ suite "lsp: lspMethod":
     check lspMethod(%*{"jsonrpc": "2.0", "result": nil}).isErr
 
   test "initialize":
-    check LspMethod.cancelRequest == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "method": "$/cancelRequest",
-      "params": nil
-    }).get
+    check LspMethod.cancelRequest ==
+      lspMethod(%*{"jsonrpc": "2.0", "method": "$/cancelRequest", "params": nil}).get
 
-    check LspMethod.initialize == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "initialize",
-      "params": nil
-    }).get
+    check LspMethod.initialize ==
+      lspMethod(%*{"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": nil}).get
 
   test "initialized":
-    check LspMethod.initialized == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "initialized",
-      "params": nil
-    }).get
+    check LspMethod.initialized ==
+      lspMethod(%*{"jsonrpc": "2.0", "id": 0, "method": "initialized", "params": nil}).get
 
   test "shutdown":
-    check LspMethod.shutdown == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "shutdown",
-      "params": nil
-    }).get
+    check LspMethod.shutdown ==
+      lspMethod(%*{"jsonrpc": "2.0", "id": 0, "method": "shutdown", "params": nil}).get
 
   test "window/showMessage":
-    check LspMethod.windowShowMessage == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "window/showMessage",
-      "params": nil
-    }).get
+    check LspMethod.windowShowMessage ==
+      lspMethod(
+        %*{"jsonrpc": "2.0", "id": 0, "method": "window/showMessage", "params": nil}
+      ).get
 
   test "window/logMessage":
-    check LspMethod.windowLogMessage == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "window/logMessage",
-      "params": nil
-    }).get
+    check LspMethod.windowLogMessage ==
+      lspMethod(
+        %*{"jsonrpc": "2.0", "id": 0, "method": "window/logMessage", "params": nil}
+      ).get
 
   test "workspace/didChangeConfiguration":
-    check LspMethod.workspaceDidChangeConfiguration == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "method": "workspace/didChangeConfiguration",
-      "params": nil
-    }).get
+    check LspMethod.workspaceDidChangeConfiguration ==
+      lspMethod(
+        %*{
+          "jsonrpc": "2.0", "method": "workspace/didChangeConfiguration", "params": nil
+        }
+      ).get
 
   test "textDocument/didOpen":
-    check LspMethod.textDocumentDidOpen == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "method": "textDocument/didOpen",
-      "params": nil
-    }).get
+    check LspMethod.textDocumentDidOpen ==
+      lspMethod(%*{"jsonrpc": "2.0", "method": "textDocument/didOpen", "params": nil}).get
 
   test "textDocument/didChange":
-    check LspMethod.textDocumentDidChange == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "method": "textDocument/didChange",
-      "params": nil
-    }).get
+    check LspMethod.textDocumentDidChange ==
+      lspMethod(%*{"jsonrpc": "2.0", "method": "textDocument/didChange", "params": nil}).get
 
   test "textDocument/didSave":
-    check LspMethod.textDocumentDidSave == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "method": "textDocument/didSave",
-      "params": nil
-    }).get
+    check LspMethod.textDocumentDidSave ==
+      lspMethod(%*{"jsonrpc": "2.0", "method": "textDocument/didSave", "params": nil}).get
 
   test "textDocument/didClose":
-    check LspMethod.textDocumentDidClose == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "method": "textDocument/didClose",
-      "params": nil
-    }).get
+    check LspMethod.textDocumentDidClose ==
+      lspMethod(%*{"jsonrpc": "2.0", "method": "textDocument/didClose", "params": nil}).get
 
   test "workspace/configuration":
-    check LspMethod.workspaceConfiguration == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "workspace/configuration",
-      "params": nil
-    }).get
+    check LspMethod.workspaceConfiguration ==
+      lspMethod(
+        %*{
+          "jsonrpc": "2.0", "id": 0, "method": "workspace/configuration", "params": nil
+        }
+      ).get
 
   test "window/workDoneProgress/create":
-    check LspMethod.windowWorkDnoneProgressCreate == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "window/workDoneProgress/create",
-      "params": nil
-    }).get
+    check LspMethod.windowWorkDnoneProgressCreate ==
+      lspMethod(
+        %*{
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "window/workDoneProgress/create",
+          "params": nil,
+        }
+      ).get
 
   test "$/progress":
-    check LspMethod.progress == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "$/progress",
-      "params": nil
-    }).get
+    check LspMethod.progress ==
+      lspMethod(%*{"jsonrpc": "2.0", "id": 0, "method": "$/progress", "params": nil}).get
 
   test "window/publishDiagnostics":
-    check LspMethod.textDocumentPublishDiagnostics == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "method": "textDocument/publishDiagnostics",
-      "params": nil
-    }).get
+    check LspMethod.textDocumentPublishDiagnostics ==
+      lspMethod(
+        %*{"jsonrpc": "2.0", "method": "textDocument/publishDiagnostics", "params": nil}
+      ).get
 
   test "textDocument/hover":
-    check LspMethod.textDocumentHover == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "textDocument/hover",
-      "params": nil
-    }).get
+    check LspMethod.textDocumentHover ==
+      lspMethod(
+        %*{"jsonrpc": "2.0", "id": 0, "method": "textDocument/hover", "params": nil}
+      ).get
 
   test "textDocument/completion":
-    check LspMethod.textDocumentCompletion == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "textDocument/completion",
-      "params": nil
-    }).get
+    check LspMethod.textDocumentCompletion ==
+      lspMethod(
+        %*{
+          "jsonrpc": "2.0", "id": 0, "method": "textDocument/completion", "params": nil
+        }
+      ).get
 
   test "textDocument/semanticTokens/full":
-    check LspMethod.textDocumentSemanticTokensFull == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "textDocument/semanticTokens/full",
-      "params": nil
-    }).get
+    check LspMethod.textDocumentSemanticTokensFull ==
+      lspMethod(
+        %*{
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "textDocument/semanticTokens/full",
+          "params": nil,
+        }
+      ).get
 
   test "textDocument/semanticTokens/delta":
-    check LspMethod.textDocumentSemanticTokensDelta == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "textDocument/semanticTokens/delta",
-      "params": nil
-    }).get
+    check LspMethod.textDocumentSemanticTokensDelta ==
+      lspMethod(
+        %*{
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "textDocument/semanticTokens/delta",
+          "params": nil,
+        }
+      ).get
 
   test "textDocument/inlayHint":
-    check LspMethod.textDocumentInlayHint == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "textDocument/inlayHint",
-      "params": nil
-    }).get
+    check LspMethod.textDocumentInlayHint ==
+      lspMethod(
+        %*{"jsonrpc": "2.0", "id": 0, "method": "textDocument/inlayHint", "params": nil}
+      ).get
 
   test "textDocument/references":
-    check LspMethod.textDocumentReferences == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "textDocument/references",
-      "params": nil
-    }).get
+    check LspMethod.textDocumentReferences ==
+      lspMethod(
+        %*{
+          "jsonrpc": "2.0", "id": 0, "method": "textDocument/references", "params": nil
+        }
+      ).get
 
   test "textDocument/definition":
-    check LspMethod.textDocumentDefinition == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "textDocument/definition",
-      "params": nil
-    }).get
+    check LspMethod.textDocumentDefinition ==
+      lspMethod(
+        %*{
+          "jsonrpc": "2.0", "id": 0, "method": "textDocument/definition", "params": nil
+        }
+      ).get
 
   test "textDocument/typeDefinition":
-    check LspMethod.textDocumentTypeDefinition == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "textDocument/typeDefinition",
-      "params": nil
-    }).get
+    check LspMethod.textDocumentTypeDefinition ==
+      lspMethod(
+        %*{
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "textDocument/typeDefinition",
+          "params": nil,
+        }
+      ).get
 
   test "textDocument/implementation":
-    check LspMethod.textDocumentImplementation == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "textDocument/implementation",
-      "params": nil
-    }).get
+    check LspMethod.textDocumentImplementation ==
+      lspMethod(
+        %*{
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "textDocument/implementation",
+          "params": nil,
+        }
+      ).get
 
   test "textDocument/prepareCallHierarchy":
-    check LspMethod.textDocumentPrepareCallHierarchy == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "textDocument/prepareCallHierarchy",
-      "params": nil
-    }).get
+    check LspMethod.textDocumentPrepareCallHierarchy ==
+      lspMethod(
+        %*{
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "textDocument/prepareCallHierarchy",
+          "params": nil,
+        }
+      ).get
 
   test "callHierarchy/incomingCalls":
-    check LspMethod.callHierarchyIncomingCalls == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "callHierarchy/incomingCalls",
-      "params": nil
-    }).get
+    check LspMethod.callHierarchyIncomingCalls ==
+      lspMethod(
+        %*{
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "callHierarchy/incomingCalls",
+          "params": nil,
+        }
+      ).get
 
   test "callHierarchy/outgoingCalls":
-    check LspMethod.callHierarchyOutgoingCalls == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "callHierarchy/outgoingCalls",
-      "params": nil
-    }).get
+    check LspMethod.callHierarchyOutgoingCalls ==
+      lspMethod(
+        %*{
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "callHierarchy/outgoingCalls",
+          "params": nil,
+        }
+      ).get
 
   test "textDocument/documentHighlight":
-    check LspMethod.textDocumentDocumentHighlight == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "textDocument/documentHighlight",
-      "params": nil
-    }).get
+    check LspMethod.textDocumentDocumentHighlight ==
+      lspMethod(
+        %*{
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "textDocument/documentHighlight",
+          "params": nil,
+        }
+      ).get
 
   test "textDocument/documentLink":
-    check LspMethod.textDocumentDocumentLink == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "textDocument/documentLink",
-      "params": nil
-    }).get
+    check LspMethod.textDocumentDocumentLink ==
+      lspMethod(
+        %*{
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "textDocument/documentLink",
+          "params": nil,
+        }
+      ).get
 
   test "documentLink/resolve":
-    check LspMethod.documentLinkResolve == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "documentLink/resolve",
-      "params": nil
-    }).get
+    check LspMethod.documentLinkResolve ==
+      lspMethod(
+        %*{"jsonrpc": "2.0", "id": 0, "method": "documentLink/resolve", "params": nil}
+      ).get
 
   test "documentLink/codeLens":
-    check LspMethod.textDocumentCodeLens == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "textDocument/codeLens",
-      "params": nil
-    }).get
+    check LspMethod.textDocumentCodeLens ==
+      lspMethod(
+        %*{"jsonrpc": "2.0", "id": 0, "method": "textDocument/codeLens", "params": nil}
+      ).get
 
   test "codeLens/resolve":
-    check LspMethod.codeLensResolve == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "codeLens/resolve",
-      "params": nil
-    }).get
+    check LspMethod.codeLensResolve ==
+      lspMethod(
+        %*{"jsonrpc": "2.0", "id": 0, "method": "codeLens/resolve", "params": nil}
+      ).get
 
   test "textDocument/rename":
-    check LspMethod.textDocumentRename == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "textDocument/rename",
-      "params": nil
-    }).get
+    check LspMethod.textDocumentRename ==
+      lspMethod(
+        %*{"jsonrpc": "2.0", "id": 0, "method": "textDocument/rename", "params": nil}
+      ).get
 
   test "workspace/executeCommand":
-    check LspMethod.workspaceExecuteCommand == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "workspace/executeCommand",
-      "params": nil
-    }).get
+    check LspMethod.workspaceExecuteCommand ==
+      lspMethod(
+        %*{
+          "jsonrpc": "2.0", "id": 0, "method": "workspace/executeCommand", "params": nil
+        }
+      ).get
 
   test "textDocument/foldingRange":
-    check LspMethod.textDocumentFoldingRange == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "textDocument/foldingRange",
-      "params": nil
-    }).get
+    check LspMethod.textDocumentFoldingRange ==
+      lspMethod(
+        %*{
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "textDocument/foldingRange",
+          "params": nil,
+        }
+      ).get
 
   test "textDocument/selectionRange":
-    check LspMethod.textDocumentSelectionRange == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "textDocument/selectionRange",
-      "params": nil
-    }).get
+    check LspMethod.textDocumentSelectionRange ==
+      lspMethod(
+        %*{
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "textDocument/selectionRange",
+          "params": nil,
+        }
+      ).get
 
   test "textDocument/documentSymbol":
-    check LspMethod.textDocumentDocumentSymbol == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "textDocument/documentSymbol",
-      "params": nil
-    }).get
+    check LspMethod.textDocumentDocumentSymbol ==
+      lspMethod(
+        %*{
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "textDocument/documentSymbol",
+          "params": nil,
+        }
+      ).get
 
   test "textDocument/signatureHelp":
-    check LspMethod.textDocumentSignatureHelp == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "textDocument/signatureHelp",
-      "params": nil
-    }).get
+    check LspMethod.textDocumentSignatureHelp ==
+      lspMethod(
+        %*{
+          "jsonrpc": "2.0",
+          "id": 0,
+          "method": "textDocument/signatureHelp",
+          "params": nil,
+        }
+      ).get
 
   test "textDocument/formatting":
-    check LspMethod.textDocumentFormatting == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "textDocument/formatting",
-      "params": nil
-    }).get
+    check LspMethod.textDocumentFormatting ==
+      lspMethod(
+        %*{
+          "jsonrpc": "2.0", "id": 0, "method": "textDocument/formatting", "params": nil
+        }
+      ).get
 
   test "extension/statusUpdate":
-    check LspMethod.extensionStatusUpdate == lspMethod(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "method": "extension/statusUpdate",
-      "params": nil
-    }).get
+    check LspMethod.extensionStatusUpdate ==
+      lspMethod(
+        %*{"jsonrpc": "2.0", "id": 0, "method": "extension/statusUpdate", "params": nil}
+      ).get

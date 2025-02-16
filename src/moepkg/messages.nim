@@ -21,16 +21,15 @@ import std/[strformat, os, strutils]
 import color, unicodeext, settings, commandline, independentutils, messagelog
 
 proc writeMessageOnCommandLine*(
-  commandLine: var CommandLine,
-  message: string,
-  color: EditorColorPairIndex) {.inline.} =
-    commandLine.write(message.toRunes)
-    commandLine.setColor(color)
+    commandLine: var CommandLine, message: string, color: EditorColorPairIndex
+) {.inline.} =
+  commandLine.write(message.toRunes)
+  commandLine.setColor(color)
 
 proc writeMessageOnCommandLine*(
-  commandLine: var CommandLine,
-  message: string) {.inline.} =
-    commandLine.writeMessageOnCommandLine(message, EditorColorPairIndex.commandLine)
+    commandLine: var CommandLine, message: string
+) {.inline.} =
+  commandLine.writeMessageOnCommandLine(message, EditorColorPairIndex.commandLine)
 
 proc writeStandard*(c: var CommandLine, message: string) =
   c.writeMessageOnCommandLine(message, EditorColorPairIndex.commandLine)
@@ -96,14 +95,13 @@ proc writeCreateDirError*(commandLine: var CommandLine) {.inline.} =
   addMessageLog Mess
 
 proc writeMessageDeletedFile*(
-  commandLine: var CommandLine,
-  filename: string,
-  settings: NotificationSettings) =
-    let mess = "Deleted: " & filename
-    if settings.screenNotifications and settings.filerScreenNotify:
-      commandLine.writeMessageOnCommandLine(mess)
-    if settings.logNotifications and settings.filerLogNotify:
-      addMessageLog mess
+    commandLine: var CommandLine, filename: string, settings: NotificationSettings
+) =
+  let mess = "Deleted: " & filename
+  if settings.screenNotifications and settings.filerScreenNotify:
+    commandLine.writeMessageOnCommandLine(mess)
+  if settings.logNotifications and settings.filerLogNotify:
+    addMessageLog mess
 
 proc writeNoFileNameError*(commandLine: var CommandLine) =
   let mess = "Error: No file name"
@@ -111,85 +109,74 @@ proc writeNoFileNameError*(commandLine: var CommandLine) =
   addMessageLog mess
 
 proc writeMessageYankedLine*(
-  commandLine: var CommandLine,
-  numOfLine: int,
-  settings: NotificationSettings) =
-    let mess = fmt"{numOfLine} line(s) yanked"
-    if settings.screenNotifications and settings.yankScreenNotify:
-      commandLine.writeMessageOnCommandLine(mess)
-    if settings.logNotifications and settings.yankLogNotify:
-      addMessageLog mess
+    commandLine: var CommandLine, numOfLine: int, settings: NotificationSettings
+) =
+  let mess = fmt"{numOfLine} line(s) yanked"
+  if settings.screenNotifications and settings.yankScreenNotify:
+    commandLine.writeMessageOnCommandLine(mess)
+  if settings.logNotifications and settings.yankLogNotify:
+    addMessageLog mess
 
 proc writeMessageYankedCharacter*(
-  commandLine: var CommandLine,
-  numOfChar: int,
-  settings: NotificationSettings) =
-    let mess = fmt"{numOfChar} character(s) yanked"
-    if settings.screenNotifications and settings.yankScreenNotify:
-      commandLine.writeMessageOnCommandLine(mess)
-    if settings.yankLogNotify:
-      addMessageLog mess
+    commandLine: var CommandLine, numOfChar: int, settings: NotificationSettings
+) =
+  let mess = fmt"{numOfChar} character(s) yanked"
+  if settings.screenNotifications and settings.yankScreenNotify:
+    commandLine.writeMessageOnCommandLine(mess)
+  if settings.yankLogNotify:
+    addMessageLog mess
 
 proc writeMessageAutoSave*(
-  commandLine: var CommandLine,
-  filename: Runes,
-  settings: NotificationSettings) =
+    commandLine: var CommandLine, filename: Runes, settings: NotificationSettings
+) =
+  let mess = fmt"Auto saved {filename}"
+  if settings.screenNotifications and settings.autoSaveScreenNotify:
     let mess = fmt"Auto saved {filename}"
-    if settings.screenNotifications and settings.autoSaveScreenNotify:
-      let mess = fmt"Auto saved {filename}"
-      commandLine.writeMessageOnCommandLine(mess)
-    if settings.logNotifications and settings.autoSaveLogNotify:
-      addMessageLog mess
+    commandLine.writeMessageOnCommandLine(mess)
+  if settings.logNotifications and settings.autoSaveLogNotify:
+    addMessageLog mess
 
 proc writeMessageSuccessBuildOnSave*(
-  commandLine: var CommandLine,
-  path: Runes,
-  settings: NotificationSettings) =
-
-    let mess = fmt"Build on save successful: {$path}"
-    if settings.screenNotifications and settings.buildOnSaveScreenNotify:
-      commandLine.writeMessageOnCommandLine(mess)
-    if settings.logNotifications and settings.buildOnSaveLogNotify:
-      addMessageLog mess
+    commandLine: var CommandLine, path: Runes, settings: NotificationSettings
+) =
+  let mess = fmt"Build on save successful: {$path}"
+  if settings.screenNotifications and settings.buildOnSaveScreenNotify:
+    commandLine.writeMessageOnCommandLine(mess)
+  if settings.logNotifications and settings.buildOnSaveLogNotify:
+    addMessageLog mess
 
 proc writeMessageFailedBuildOnSave*(commandLine: var CommandLine, path: Runes) =
   let mess = fmt"Build failed: {$path}"
   commandLine.writeMessageOnCommandLine(mess)
   addMessageLog mess
 
-proc writeNotEditorCommandError*(
-  commandLine: var CommandLine,
-  command: Runes) =
-    let mess = fmt"Error: Not an editor command: {command}"
-    commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
-    addMessageLog mess
+proc writeNotEditorCommandError*(commandLine: var CommandLine, command: Runes) =
+  let mess = fmt"Error: Not an editor command: {command}"
+  commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
+  addMessageLog mess
 
 proc writeNotEditorCommandError*(
-  commandLine: var CommandLine,
-  command: seq[Runes]) {.inline.} =
-    commandLine.writeNotEditorCommandError(command.join(ru" "))
+    commandLine: var CommandLine, command: seq[Runes]
+) {.inline.} =
+  commandLine.writeNotEditorCommandError(command.join(ru" "))
 
 proc writeMessageSaveFile*(
-  commandLine: var CommandLine,
-  filename: Runes,
-  settings: NotificationSettings) =
-
-    let mess = fmt"Saved {filename}"
-    if settings.screenNotifications and settings.saveScreenNotify:
-      commandLine.writeMessageOnCommandLine(mess)
-    if settings.logNotifications and settings.saveLogNotify:
-      addMessageLog mess
+    commandLine: var CommandLine, filename: Runes, settings: NotificationSettings
+) =
+  let mess = fmt"Saved {filename}"
+  if settings.screenNotifications and settings.saveScreenNotify:
+    commandLine.writeMessageOnCommandLine(mess)
+  if settings.logNotifications and settings.saveLogNotify:
+    addMessageLog mess
 
 proc writeMessageSaveFileAndStartBuild*(
-  commandLine: var CommandLine,
-  filename: Runes,
-  settings: NotificationSettings) =
-
-    let mess = fmt"Saved {filename} and start build..."
-    if settings.screenNotifications and settings.buildOnSaveScreenNotify:
-      commandLine.writeMessageOnCommandLine(mess)
-    if settings.logNotifications and settings.buildOnSaveLogNotify:
-      addMessageLog mess
+    commandLine: var CommandLine, filename: Runes, settings: NotificationSettings
+) =
+  let mess = fmt"Saved {filename} and start build..."
+  if settings.screenNotifications and settings.buildOnSaveScreenNotify:
+    commandLine.writeMessageOnCommandLine(mess)
+  if settings.logNotifications and settings.buildOnSaveLogNotify:
+    addMessageLog mess
 
 proc writeNoBufferDeletedError*(commandLine: var CommandLine) =
   let mess = "Error: No buffers were deleted"
@@ -213,51 +200,43 @@ proc writePutConfigFileAlreadyExistError*(commandLine: var CommandLine) =
 
 proc writeOpenRecentlyUsedXbelError*(commandLine: var CommandLine) =
   const Mess =
-    "Error: " &
-    getHomeDir() / ".local/share/recently-used.xbel" &
-    " Not found"
+    "Error: " & getHomeDir() / ".local/share/recently-used.xbel" & " Not found"
   commandLine.writeMessageOnCommandLine(Mess, EditorColorPairIndex.errorMessage)
   addMessageLog Mess
 
-proc writeFileNotFoundError*(
-  commandLine: var CommandLine,
-  filename: Runes) =
-    let mess = "Error: " & $filename & " not found"
-    commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
-    addMessageLog mess
+proc writeFileNotFoundError*(commandLine: var CommandLine, filename: Runes) =
+  let mess = "Error: " & $filename & " not found"
+  commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
+  addMessageLog mess
 
 proc writeStartAutoBackupMessage*(
-  commandLine: var CommandLine,
-  settings: NotificationSettings) =
-    const Mess = "Start automatic backup..."
-    if settings.screenNotifications and settings.autoBackupScreenNotify:
-      commandLine.writeMessageOnCommandLine(Mess)
-    if settings.logNotifications and settings.autoBackupLogNotify:
-      addMessageLog Mess
+    commandLine: var CommandLine, settings: NotificationSettings
+) =
+  const Mess = "Start automatic backup..."
+  if settings.screenNotifications and settings.autoBackupScreenNotify:
+    commandLine.writeMessageOnCommandLine(Mess)
+  if settings.logNotifications and settings.autoBackupLogNotify:
+    addMessageLog Mess
 
 proc writeAutoBackupSuccessMessage*(
-  commandLine: var CommandLine,
-  message: string,
-  settings: NotificationSettings) =
-    if settings.screenNotifications and settings.autoBackupScreenNotify:
-      commandLine.writeMessageOnCommandLine(message)
-    if settings.logNotifications and settings.autoBackupLogNotify:
-      addMessageLog message
+    commandLine: var CommandLine, message: string, settings: NotificationSettings
+) =
+  if settings.screenNotifications and settings.autoBackupScreenNotify:
+    commandLine.writeMessageOnCommandLine(message)
+  if settings.logNotifications and settings.autoBackupLogNotify:
+    addMessageLog message
 
 proc writeRunQuickRunMessage*(
-  commandLine: var CommandLine,
-  settings: NotificationSettings) =
-    const Mess = "Quick run..."
-    if settings.quickRunScreenNotify:
-      commandLine.writeMessageOnCommandLine(Mess)
+    commandLine: var CommandLine, settings: NotificationSettings
+) =
+  const Mess = "Quick run..."
+  if settings.quickRunScreenNotify:
+    commandLine.writeMessageOnCommandLine(Mess)
 
-proc writeInRecordingOperations*(
-  commandLine: var CommandLine,
-  registerName: Rune) =
-
-    let mess = fmt"recording @{$registerName}"
-    commandLine.writeMessageOnCommandLine(mess)
-    addMessageLog mess
+proc writeInRecordingOperations*(commandLine: var CommandLine, registerName: Rune) =
+  let mess = fmt"recording @{$registerName}"
+  commandLine.writeMessageOnCommandLine(mess)
+  addMessageLog mess
 
 proc writeLspServerStart*(commandLine: var CommandLine, command: Runes) =
   let mess = fmt"LSP server starting: {$command}"
@@ -270,53 +249,50 @@ proc writeLspInitialized*(commandLine: var CommandLine, command: Runes) =
   addMessageLog mess
 
 proc writeAutoBackupFailedMessage*(
-  commandLine: var CommandLine,
-  filename: Runes,
-  settings: NotificationSettings) =
-    let message = fmt"Error: Automatic backups failed: {$filename}"
-    if settings.screenNotifications and settings.autoBackupScreenNotify:
-      commandLine.writeMessageOnCommandLine(message, EditorColorPairIndex.errorMessage)
-    if settings.logNotifications and settings.autoBackupLogNotify:
-      addMessageLog message
-
-proc writeRunQuickRunTimeoutMessage*(commandLine: var CommandLine) =
-    const Mess = "Quick run timeout"
-    commandLine.writeMessageOnCommandLine(Mess, EditorColorPairIndex.errorMessage)
-    addMessageLog Mess
-
-proc writeRunQuickRunFailedMessage*(commandLine: var CommandLine) =
-    const Mess = "Quick run failed"
-    commandLine.writeMessageOnCommandLine(Mess, EditorColorPairIndex.errorMessage)
-    addMessageLog Mess
-
-proc writeInvalidItemInConfigurationFileError*(
-  commandLine: var CommandLine,
-  message: string) =
-    let mess = "Error: Failed to load configuration file: Invalid item: " &
-               message
-    commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
+    commandLine: var CommandLine, filename: Runes, settings: NotificationSettings
+) =
+  let message = fmt"Error: Automatic backups failed: {$filename}"
+  if settings.screenNotifications and settings.autoBackupScreenNotify:
+    commandLine.writeMessageOnCommandLine(message, EditorColorPairIndex.errorMessage)
+  if settings.logNotifications and settings.autoBackupLogNotify:
     addMessageLog message
 
+proc writeRunQuickRunTimeoutMessage*(commandLine: var CommandLine) =
+  const Mess = "Quick run timeout"
+  commandLine.writeMessageOnCommandLine(Mess, EditorColorPairIndex.errorMessage)
+  addMessageLog Mess
+
+proc writeRunQuickRunFailedMessage*(commandLine: var CommandLine) =
+  const Mess = "Quick run failed"
+  commandLine.writeMessageOnCommandLine(Mess, EditorColorPairIndex.errorMessage)
+  addMessageLog Mess
+
+proc writeInvalidItemInConfigurationFileError*(
+    commandLine: var CommandLine, message: string
+) =
+  let mess = "Error: Failed to load configuration file: Invalid item: " & message
+  commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
+  addMessageLog message
+
 proc writeFailedToLoadConfigurationFileError*(
-  commandLine: var CommandLine,
-  message: string) =
-    let mess = fmt"Error: Failed to load configuration file: {message}"
-    commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
-    addMessageLog mess
+    commandLine: var CommandLine, message: string
+) =
+  let mess = fmt"Error: Failed to load configuration file: {message}"
+  commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
+  addMessageLog mess
 
 proc writeBackupRestoreError*(commandLine: var CommandLine) {.inline.} =
   const Mess = "Error: Restore failed"
   commandLine.writeMessageOnCommandLine(Mess, EditorColorPairIndex.errorMessage)
 
 proc writeRestoreFileSuccessMessage*(
-  commandLine: var CommandLine,
-  filename: Runes,
-  settings: NotificationSettings) =
-    let message = fmt"Restore successful {filename}"
-    if settings.screenNotifications and settings.restoreScreenNotify:
-      commandLine.writeMessageOnCommandLine(message)
-    if settings.logNotifications and settings.restoreLogNotify:
-      addMessageLog message
+    commandLine: var CommandLine, filename: Runes, settings: NotificationSettings
+) =
+  let message = fmt"Restore successful {filename}"
+  if settings.screenNotifications and settings.restoreScreenNotify:
+    commandLine.writeMessageOnCommandLine(message)
+  if settings.logNotifications and settings.restoreLogNotify:
+    addMessageLog message
 
 proc writeDeleteBackupError*(commandLine: var CommandLine) {.inline.} =
   const Mess = "Error: Delete backup file failed"
@@ -340,24 +316,16 @@ proc writeReadonlyModeWarning*(commandLine: var CommandLine) {.inline.} =
   commandLine.writeWarn(Mess)
 
 proc writeManualCommandError*(
-  commandLine: var CommandLine,
-  message: string) {.inline.} =
+    commandLine: var CommandLine, message: string
+) {.inline.} =
+  let mess = fmt"Error: No manual entry for {message}"
+  commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
+  addMessageLog mess
 
-    let mess = fmt"Error: No manual entry for {message}"
-    commandLine.writeMessageOnCommandLine(
-      mess,
-      EditorColorPairIndex.errorMessage)
-    addMessageLog mess
-
-proc writeSyntaxCheckError*(
-  commandLine: var CommandLine,
-  message: string) {.inline.} =
-
-    let mess = fmt"Error: Syntax check failed: {message}"
-    commandLine.writeMessageOnCommandLine(
-      mess,
-      EditorColorPairIndex.errorMessage)
-    addMessageLog mess
+proc writeSyntaxCheckError*(commandLine: var CommandLine, message: string) {.inline.} =
+  let mess = fmt"Error: Syntax check failed: {message}"
+  commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
+  addMessageLog mess
 
 proc writeGitInfoUpdateError*(commandLine: var CommandLine, message: string) =
   let mess = fmt"Error: Update Git info: {message}"
@@ -374,15 +342,11 @@ proc writeLspError*(commandLine: var CommandLine, message: string) =
   addMessageLog mess
 
 proc writeLspInitializeError*(
-  commandLine: var CommandLine,
-  command: Runes,
-  errorMessage: string) =
-
-    let mess = fmt"lsp: client initialize failed: {$command}: {errorMessage}"
-    commandLine.writeMessageOnCommandLine(
-      mess,
-      EditorColorPairIndex.errorMessage)
-    addMessageLog mess
+    commandLine: var CommandLine, command: Runes, errorMessage: string
+) =
+  let mess = fmt"lsp: client initialize failed: {$command}: {errorMessage}"
+  commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
+  addMessageLog mess
 
 proc writeLspHoverError*(commandLine: var CommandLine, message: string) =
   let mess = fmt"lsp: Error: hover failed: {message}"
@@ -392,12 +356,9 @@ proc writeLspCompletionError*(commandLine: var CommandLine, message: string) =
   let mess = fmt"lsp: Error: completion failed: {message}"
   commandLine.writeError(mess)
 
-proc writeLspSemanticTokensError*(
-  commandLine: var CommandLine,
-  message: string) =
-
-    let mess = fmt"lsp: Error: semanticTokens failed: {message}"
-    commandLine.writeError(mess)
+proc writeLspSemanticTokensError*(commandLine: var CommandLine, message: string) =
+  let mess = fmt"lsp: Error: semanticTokens failed: {message}"
+  commandLine.writeError(mess)
 
 proc writeLspInlayHintError*(commandLine: var CommandLine, message: string) =
   let mess = fmt"lsp: Error: inlayHint failed: {message}"
@@ -412,11 +373,10 @@ proc writeLspSignatureHelpError*(commandLine: var CommandLine, message: string) 
   commandLine.writeError(mess)
 
 proc writeLspDocumentFormattingHelpError*(
-  commandLine: var CommandLine,
-  message: string) =
-
-    let mess = fmt"lsp: Error: document formatting failed: {message}"
-    commandLine.writeError(mess)
+    commandLine: var CommandLine, message: string
+) =
+  let mess = fmt"lsp: Error: document formatting failed: {message}"
+  commandLine.writeError(mess)
 
 proc writeLspDeclarationError*(commandLine: var CommandLine, message: string) =
   let mess = fmt"lsp: Error: declaration failed: {message}"
@@ -426,54 +386,41 @@ proc writeLspDefinitionError*(commandLine: var CommandLine, message: string) =
   let mess = fmt"lsp: Error: definition failed: {message}"
   commandLine.writeError(mess)
 
-proc writeLspTypeDefinitionError*(
-  commandLine: var CommandLine,
-  message: string) =
+proc writeLspTypeDefinitionError*(commandLine: var CommandLine, message: string) =
+  let mess = fmt"lsp: Error: typeDefinition failed: {message}"
+  commandLine.writeError(mess)
 
-    let mess = fmt"lsp: Error: typeDefinition failed: {message}"
-    commandLine.writeError(mess)
-
-proc writeLspImplementationError*(
-  commandLine: var CommandLine,
-  message: string) =
-
-    let mess = fmt"lsp: Error: implementation failed: {message}"
-    commandLine.writeError(mess)
+proc writeLspImplementationError*(commandLine: var CommandLine, message: string) =
+  let mess = fmt"lsp: Error: implementation failed: {message}"
+  commandLine.writeError(mess)
 
 proc writeLspReferencesError*(commandLine: var CommandLine, message: string) =
   let mess = fmt"lsp: Error: references failed: {message}"
   commandLine.writeError(mess)
 
-proc writeLspCallHierarchyError*(
-  commandLine: var CommandLine, message: string) =
-    let mess = fmt"lsp: Error: call hierarchy failed: {message}"
-    commandLine.writeError(mess)
+proc writeLspCallHierarchyError*(commandLine: var CommandLine, message: string) =
+  let mess = fmt"lsp: Error: call hierarchy failed: {message}"
+  commandLine.writeError(mess)
 
-proc writeLspDocumentHighlightError*(
-  commandLine: var CommandLine, message: string) =
-    let mess = fmt"lsp: Error: document highlight failed: {message}"
-    commandLine.writeError(mess)
+proc writeLspDocumentHighlightError*(commandLine: var CommandLine, message: string) =
+  let mess = fmt"lsp: Error: document highlight failed: {message}"
+  commandLine.writeError(mess)
 
-proc writeLspDocumentLinkError*(
-  commandLine: var CommandLine, message: string) =
-    let mess = fmt"lsp: Error: document link failed: {message}"
-    commandLine.writeError(mess)
+proc writeLspDocumentLinkError*(commandLine: var CommandLine, message: string) =
+  let mess = fmt"lsp: Error: document link failed: {message}"
+  commandLine.writeError(mess)
 
-proc writeLspCodeLensError*(
-  commandLine: var CommandLine, message: string) =
-    let mess = fmt"lsp: Error: code lens failed: {message}"
-    commandLine.writeError(mess)
+proc writeLspCodeLensError*(commandLine: var CommandLine, message: string) =
+  let mess = fmt"lsp: Error: code lens failed: {message}"
+  commandLine.writeError(mess)
 
 proc writeLspRenameError*(commandLine: var CommandLine, message: string) =
   let mess = fmt"lsp: Error: rename failed: {message}"
   commandLine.writeError(mess)
 
-proc writeLspExecuteCommandError*(
-  commandLine: var CommandLine,
-  message: string) =
-
-    let mess = fmt"lsp: Error: execute command: {message}"
-    commandLine.writeError(mess)
+proc writeLspExecuteCommandError*(commandLine: var CommandLine, message: string) =
+  let mess = fmt"lsp: Error: execute command: {message}"
+  commandLine.writeError(mess)
 
 proc writeLspFoldingRangeError*(commandLine: var CommandLine, message: string) =
   let mess = fmt"lsp: Error: folding range: {message}"
@@ -483,12 +430,9 @@ proc writeLspSelectionRangeError*(commandLine: var CommandLine, message: string)
   let mess = fmt"lsp: Error: selection range: {message}"
   commandLine.writeError(mess)
 
-proc writeLspDocumentSymbolError*(
-  commandLine: var CommandLine,
-  message: string) =
-
-    let mess = fmt"lsp: Error: document symbol: {message}"
-    commandLine.writeError(mess)
+proc writeLspDocumentSymbolError*(commandLine: var CommandLine, message: string) =
+  let mess = fmt"lsp: Error: document symbol: {message}"
+  commandLine.writeError(mess)
 
 proc writePasteIgnoreWarn*(commandLine: var CommandLine) =
   const Mess = "Paste is ignored in this mode"

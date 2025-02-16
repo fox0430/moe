@@ -27,34 +27,24 @@ type
     isIgnorecase, isSmartcase: bool
 
   PopupWindow* = ref object
-    window: Window
-      # Ncurses window
-    position*: Position
-      # Absolute position
-    size*: Size
-      # Window size
-    buffer*: seq[Runes]
-      # contents
-    currentLine*: Option[int]
-      # Current line number
-    highlightText*: Option[HighlightText]
-      # Change the color of matching texts
+    window: Window # Ncurses window
+    position*: Position # Absolute position
+    size*: Size # Window size
+    buffer*: seq[Runes] # contents
+    currentLine*: Option[int] # Current line number
+    highlightText*: Option[HighlightText] # Change the color of matching texts
 
 proc initPopupWindow*(
-  position: Position,
-  size: Size,
-  buffer: seq[Runes]): PopupWindow {.inline.} =
-
-    PopupWindow(
-      window: initWindow(
-        size.h,
-        size.w,
-        position.y,
-        position.x,
-        EditorColorPairIndex.popUpWindow.ord),
-      position: position,
-      size: size,
-      buffer: buffer)
+    position: Position, size: Size, buffer: seq[Runes]
+): PopupWindow {.inline.} =
+  PopupWindow(
+    window: initWindow(
+      size.h, size.w, position.y, position.x, EditorColorPairIndex.popUpWindow.ord
+    ),
+    position: position,
+    size: size,
+    buffer: buffer,
+  )
 
 proc initPopupWindow*(position: Position, size: Size): PopupWindow {.inline.} =
   initPopupWindow(position, size, @[])
@@ -99,62 +89,64 @@ proc move*(p: var PopupWindow, position: Position) {.inline.} =
 proc move*(p: var PopupWindow) {.inline.} =
   p.window.move(p.position.y, p.position.x)
 
-proc autoMoveAndResize*(
-  p: var PopupWindow,
-  minPosition, maxPosition: Position) =
-    ## Automatically move and resize the popup window to the best position
-    ## within the range.
-    ##
-    ## If the display range is small, display as much as possible.
-    ##
-    ## Priority is given to the below and right side of the current position.
-    ##
-    ## Window size and position are determined from current window position,
-    ## displayable area, and buffer size.
+proc autoMoveAndResize*(p: var PopupWindow, minPosition, maxPosition: Position) =
+  ## Automatically move and resize the popup window to the best position
+  ## within the range.
+  ##
+  ## If the display range is small, display as much as possible.
+  ##
+  ## Priority is given to the below and right side of the current position.
+  ##
+  ## Window size and position are determined from current window position,
+  ## displayable area, and buffer size.
 
-    let
-      bufferMaxLen = p.buffer.maxLen
+  let
+    bufferMaxLen = p.buffer.maxLen
 
-      aboveHeight = max(0, p.position.y - minPosition.y)
-      belowHeight = max(0, maxPosition.y - p.position.y)
-      rightWidth = max(0, maxPosition.x - p.position.x)
-      leftWidth = max(0, p.position.x - minPosition.x)
+    aboveHeight = max(0, p.position.y - minPosition.y)
+    belowHeight = max(0, maxPosition.y - p.position.y)
+    rightWidth = max(0, maxPosition.x - p.position.x)
+    leftWidth = max(0, p.position.x - minPosition.x)
 
-      # If true, display the window below the current `p.position.y`.
-      isBelow = p.buffer.len < belowHeight or belowHeight > aboveHeight
-      # If true, display the window right the current `p.position.x`.
-      isRight = bufferMaxLen < rightWidth or rightWidth > leftWidth
+    # If true, display the window below the current `p.position.y`.
+    isBelow = p.buffer.len < belowHeight or belowHeight > aboveHeight
+    # If true, display the window right the current `p.position.x`.
+    isRight = bufferMaxLen < rightWidth or rightWidth > leftWidth
 
-    let
-      y =
-        if isBelow: p.position.y
-        else: max(minPosition.y, aboveHeight - p.buffer.len)
-      x =
-        if isRight: p.position.x
-        else: max(minPosition.x, leftWidth - bufferMaxLen)
+  let
+    y =
+      if isBelow:
+        p.position.y
+      else:
+        max(minPosition.y, aboveHeight - p.buffer.len)
+    x =
+      if isRight:
+        p.position.x
+      else:
+        max(minPosition.x, leftWidth - bufferMaxLen)
 
-      # If the buffer length is smaller than the displayable area, the
-      # buffer length will be maximized.
+    # If the buffer length is smaller than the displayable area, the
+    # buffer length will be maximized.
+    h =
+      if isBelow:
+        min(p.buffer.len, belowHeight - 1)
+      else:
+        min(p.buffer.len, aboveHeight - 1)
+    w =
+      if isRight:
+        min(bufferMaxLen, rightWidth)
+      else:
+        min(bufferMaxLen, leftWidth)
 
-      h =
-        if isBelow: min(p.buffer.len, belowHeight - 1)
-        else: min(p.buffer.len, aboveHeight - 1)
-      w =
-        if isRight: min(bufferMaxLen, rightWidth)
-        else: min(bufferMaxLen, leftWidth)
-
-    p.resize(Size(h: max(1, h), w: max(1, w)))
-    p.move(Position(y: y, x: x))
+  p.resize(Size(h: max(1, h), w: max(1, w)))
+  p.move(Position(y: y, x: x))
 
 proc updateHighlightText*(
-  p: var PopUpWindow,
-  text: Runes,
-  isIgnorecase, isSmartcase: bool) {.inline.} =
-
-    p.highlightText = some(HighlightText(
-      text: text,
-      isIgnorecase: isIgnorecase,
-      isSmartcase: isSmartcase))
+    p: var PopUpWindow, text: Runes, isIgnorecase, isSmartcase: bool
+) {.inline.} =
+  p.highlightText = some(
+    HighlightText(text: text, isIgnorecase: isIgnorecase, isSmartcase: isSmartcase)
+  )
 
 proc clearHighlightText*(p: var PopupWindow) {.inline.} =
   p.highlightText = none(HighlightText)
@@ -176,7 +168,8 @@ proc update*(p: var PopupWindow) =
   p.window.erase
 
   for i in 0 ..< min(p.size.h, p.buffer.len):
-    template removeMargin(line: Runes): Runes = line[1 .. (line.high - 1)]
+    template removeMargin(line: Runes): Runes =
+      line[1 .. (line.high - 1)]
 
     const WindowMargin = 2
 
@@ -192,9 +185,9 @@ proc update*(p: var PopupWindow) =
       highlightPosi =
         if p.highlightText.isSome and line.len > WindowMargin:
           line.removeMargin.search(
-            p.highlightText.get.text,
-            p.highlightText.get.isIgnorecase,
-            p.highlightText.get.isSmartcase)
+            p.highlightText.get.text, p.highlightText.get.isIgnorecase,
+            p.highlightText.get.isSmartcase,
+          )
         else:
           none(int)
 
@@ -209,24 +202,16 @@ proc update*(p: var PopupWindow) =
           # Change color for highlightText
           let highlightColor = EditorColorPairIndex.searchResult
           p.window.write(
-            i,
-            j,
-            line[j].toRunes,
-            highlightColor.int16,
-            Attribute.normal,
-            false)
+            i, j, line[j].toRunes, highlightColor.int16, Attribute.normal, false
+          )
         else:
-          p.window.write(
-            i,
-            j,
-            line[j].toRunes,
-            color.int16,
-            Attribute.normal,
-            false)
+          p.window.write(i, j, line[j].toRunes, color.int16, Attribute.normal, false)
     else:
       let buffer =
-        if p.size.w > line.high: line & " ".repeat(p.size.w - line.high).toRunes
-        else: line[0 .. p.size.w]
+        if p.size.w > line.high:
+          line & " ".repeat(p.size.w - line.high).toRunes
+        else:
+          line[0 .. p.size.w]
       p.window.write(i, 0, buffer, color.int16, Attribute.normal, false)
 
   p.refresh

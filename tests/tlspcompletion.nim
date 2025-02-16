@@ -31,13 +31,50 @@ suite "lsp: parseTextDocumentCompletionResponse":
     check parseTextDocumentCompletionResponse(res).isErr
 
   test "lsp: CompletionItem[]":
-    check %*parseTextDocumentCompletionResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": [
+    check %*parseTextDocumentCompletionResponse(
+      %*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": [
+          {
+            "label": "a",
+            "kind": 3,
+            "detail": "detail1",
+            "documentation": "documentation1",
+            "deprecated": nil,
+            "preselect": nil,
+            "sortText": nil,
+            "filterText": nil,
+            "insertText": nil,
+            "insertTextFormat": nil,
+            "commitCharacters": nil,
+            "command": nil,
+            "data": nil,
+          },
+          {
+            "label": "b",
+            "kind": 3,
+            "detail": "detail2",
+            "documentation": "documentation2",
+            "deprecated": nil,
+            "preselect": nil,
+            "sortText": nil,
+            "filterText": nil,
+            "insertText": nil,
+            "insertTextFormat": nil,
+            "commitCharacters": nil,
+            "command": nil,
+            "data": nil,
+          },
+        ],
+      }
+    ).get ==
+      %*[
         {
           "label": "a",
+          "labelDetails": nil,
           "kind": 3,
+          "tags": nil,
           "detail": "detail1",
           "documentation": "documentation1",
           "deprecated": nil,
@@ -46,13 +83,17 @@ suite "lsp: parseTextDocumentCompletionResponse":
           "filterText": nil,
           "insertText": nil,
           "insertTextFormat": nil,
+          "textEdit": nil,
+          "additionalTextEdits": nil,
           "commitCharacters": nil,
           "command": nil,
-          "data": nil
+          "data": nil,
         },
         {
           "label": "b",
+          "labelDetails": nil,
           "kind": 3,
+          "tags": nil,
           "detail": "detail2",
           "documentation": "documentation2",
           "deprecated": nil,
@@ -61,161 +102,103 @@ suite "lsp: parseTextDocumentCompletionResponse":
           "filterText": nil,
           "insertText": nil,
           "insertTextFormat": nil,
+          "textEdit": nil,
+          "additionalTextEdits": nil,
           "commitCharacters": nil,
           "command": nil,
-          "data": nil
-        }
+          "data": nil,
+        },
       ]
-    }).get == %*[{
-      "label": "a",
-      "labelDetails": nil,
-      "kind":3 ,
-      "tags": nil,
-      "detail": "detail1",
-      "documentation": "documentation1",
-      "deprecated": nil,
-      "preselect": nil,
-      "sortText": nil,
-      "filterText": nil,
-      "insertText": nil,
-      "insertTextFormat": nil,
-      "textEdit": nil,
-      "additionalTextEdits": nil,
-      "commitCharacters": nil,
-      "command": nil,
-      "data": nil
-    },
-    {
-      "label" : "b",
-      "labelDetails": nil,
-      "kind": 3,
-      "tags": nil,
-      "detail" :"detail2",
-      "documentation": "documentation2",
-      "deprecated": nil,
-      "preselect" :nil,
-      "sortText": nil,
-      "filterText": nil,
-      "insertText": nil,
-      "insertTextFormat": nil,
-      "textEdit": nil,
-      "additionalTextEdits": nil,
-      "commitCharacters": nil,
-      "command":nil,
-      "data":nil
-    }]
 
   test "lsp: CompletionList":
-    check %*parseTextDocumentCompletionResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": {
-        "isIncomplete": true,
-        "items": [
-          {
-            "label": "self::",
-            "kind": 14,
-            "deprecated": false,
-            "preselect": true,
-            "sortText": "ffffffef",
-            "filterText": "self::",
-            "textEdit": {
-              "range": {
-                "start": {
-                  "line": 2,
-                  "character": 4
+    check %*parseTextDocumentCompletionResponse(
+      %*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": {
+          "isIncomplete": true,
+          "items": [
+            {
+              "label": "self::",
+              "kind": 14,
+              "deprecated": false,
+              "preselect": true,
+              "sortText": "ffffffef",
+              "filterText": "self::",
+              "textEdit": {
+                "range": {
+                  "start": {"line": 2, "character": 4},
+                  "end": {"line": 2, "character": 5},
                 },
-                "end": {
-                  "line": 2,
-                  "character": 5
-                }
+                "newText": "self::",
               },
-              "newText": "self::"
+              "additionalTextEdits": [],
             },
-            "additionalTextEdits": []
-          },
-          {
-            "label": "crate::",
-            "kind": 14,
-            "deprecated": false,
-            "preselect": true,
-            "sortText": "ffffffef",
-            "filterText": "crate::",
-            "textEdit": {
-              "range": {
-                "start": {
-                  "line": 2,
-                  "character": 4
+            {
+              "label": "crate::",
+              "kind": 14,
+              "deprecated": false,
+              "preselect": true,
+              "sortText": "ffffffef",
+              "filterText": "crate::",
+              "textEdit": {
+                "range": {
+                  "start": {"line": 2, "character": 4},
+                  "end": {"line": 2, "character": 5},
                 },
-                "end": {
-                  "line": 2,
-                  "character": 5
-                }
+                "newText": "crate::",
               },
-              "newText": "crate::"
+              "additionalTextEdits": [],
             },
-            "additionalTextEdits": []
-          }
-        ]
-      }}).get == %*[{
-        "label": "self::",
-        "labelDetails": nil,
-        "kind": 14,
-        "tags": nil,
-        "detail": nil,
-        "documentation": nil,
-        "deprecated": false,
-        "preselect": true,
-        "sortText": "ffffffef",
-        "filterText": "self::",
-        "insertText": nil,
-        "insertTextFormat": nil,
-        "textEdit": {
-          "range": {
-            "start": {
-              "line": 2,
-              "character": 4
-            },
-            "end": {
-              "line": 2,
-              "character": 5
-            }
-          },
-          "newText": "self::"
+          ],
         },
-        "additionalTextEdits": [],
-        "commitCharacters": nil,
-        "command": nil,
-        "data": nil
-      },
-      {
-        "label": "crate::",
-        "labelDetails": nil,
-        "kind": 14,
-        "tags": nil,
-        "detail": nil,
-        "documentation": nil,
-        "deprecated": false,
-        "preselect": true,
-        "sortText": "ffffffef",
-        "filterText": "crate::",
-        "insertText": nil,
-        "insertTextFormat": nil,
-        "textEdit": {
-          "range": {
-            "start": {
-              "line": 2,
-              "character": 4
-            },
-            "end": {
-              "line": 2,
-              "character": 5
-            }
+      }
+    ).get ==
+      %*[
+        {
+          "label": "self::",
+          "labelDetails": nil,
+          "kind": 14,
+          "tags": nil,
+          "detail": nil,
+          "documentation": nil,
+          "deprecated": false,
+          "preselect": true,
+          "sortText": "ffffffef",
+          "filterText": "self::",
+          "insertText": nil,
+          "insertTextFormat": nil,
+          "textEdit": {
+            "range":
+              {"start": {"line": 2, "character": 4}, "end": {"line": 2, "character": 5}},
+            "newText": "self::",
           },
-          "newText": "crate::"
+          "additionalTextEdits": [],
+          "commitCharacters": nil,
+          "command": nil,
+          "data": nil,
         },
-        "additionalTextEdits": [],
-        "commitCharacters": nil,
-        "command": nil,
-        "data": nil
-      }]
+        {
+          "label": "crate::",
+          "labelDetails": nil,
+          "kind": 14,
+          "tags": nil,
+          "detail": nil,
+          "documentation": nil,
+          "deprecated": false,
+          "preselect": true,
+          "sortText": "ffffffef",
+          "filterText": "crate::",
+          "insertText": nil,
+          "insertTextFormat": nil,
+          "textEdit": {
+            "range":
+              {"start": {"line": 2, "character": 4}, "end": {"line": 2, "character": 5}},
+            "newText": "crate::",
+          },
+          "additionalTextEdits": [],
+          "commitCharacters": nil,
+          "command": nil,
+          "data": nil,
+        },
+      ]

@@ -34,7 +34,9 @@ suite "setGotoDefinitionSource":
       path: "/path",
       range: BufferRange(
         first: BufferPosition(line: 0, column: 1),
-        last: BufferPosition(line: 0, column: 1)))
+        last: BufferPosition(line: 0, column: 1),
+      ),
+    )
 
     b.setGotoDefinitionSource(l)
 
@@ -43,17 +45,23 @@ suite "setGotoDefinitionSource":
   test "Overwrite":
     var b = initBufferStatus().get
 
-    b.setGotoDefinitionSource(BufferLocation(
-      path: "/path",
-      range: BufferRange(
-        first: BufferPosition(line: 0, column: 1),
-        last: BufferPosition(line: 0, column: 1))))
+    b.setGotoDefinitionSource(
+      BufferLocation(
+        path: "/path",
+        range: BufferRange(
+          first: BufferPosition(line: 0, column: 1),
+          last: BufferPosition(line: 0, column: 1),
+        ),
+      )
+    )
 
     let l = BufferLocation(
       path: "/dir/path/",
       range: BufferRange(
         first: BufferPosition(line: 1, column: 2),
-        last: BufferPosition(line: 1, column: 2)))
+        last: BufferPosition(line: 1, column: 2),
+      ),
+    )
 
     b.setGotoDefinitionSource(l)
 
@@ -74,7 +82,9 @@ suite "getGotoDefinitionSource":
       path: "/path",
       range: BufferRange(
         first: BufferPosition(line: 0, column: 1),
-        last: BufferPosition(line: 0, column: 1)))
+        last: BufferPosition(line: 0, column: 1),
+      ),
+    )
 
     b.gotoDefinitionSource = some(l)
 
@@ -88,7 +98,9 @@ suite "getGotoDefinitionSource":
       path: "/path",
       range: BufferRange(
         first: BufferPosition(line: 0, column: 1),
-        last: BufferPosition(line: 0, column: 1)))
+        last: BufferPosition(line: 0, column: 1),
+      ),
+    )
 
     b.gotoDefinitionSource = some(l)
 

@@ -38,52 +38,53 @@ suite "unicodeext: iterator split":
       ExpectedResult = @["abc", "", "def"].toSeqRunes
 
       ActualResult = collect(newSeq):
-        for x in unicodeext.split(ru"abc;def", r => r == ru';'): x
+        for x in unicodeext.split(ru"abc;def", r => r == ru ';'):
+          x
 
     check ActualResult == ExpectedResult
 
   test "Basic 2":
     const
       ExpectedResult =
-        @["", "", "this", "", "is", "", "an", "", "", "example", "", "", ""]
-          .toSeqRunes
+        @["", "", "this", "", "is", "", "an", "", "", "example", "", "", ""].toSeqRunes
 
       Buffer = ru";;this;is;an;;example;;;"
       ActualResult = collect(newSeq):
-        for x in unicodeext.split(Buffer, r => r == ru';'): x
+        for x in unicodeext.split(Buffer, r => r == ru ';'):
+          x
 
     check ActualResult == ExpectedResult
 
   test "Remove empty rntries":
     const
-      ExpectedResult = @["", "", "this", "is", "an", "", "example", "", "", ""]
-        .toSeqRunes
-        .filter(runes => runes.len > 0)
+      ExpectedResult = @["", "", "this", "is", "an", "", "example", "", "", ""].toSeqRunes.filter(
+        runes => runes.len > 0
+      )
 
       Buffer = ru";;this;is;an;;example;;;"
       ActualResult = collect(newSeq):
-        for x in unicodeext.split(Buffer, r => r == ru';', true): x
+        for x in unicodeext.split(Buffer, r => r == ru ';', true):
+          x
 
     check ActualResult == ExpectedResult
 
 suite "unicodeext: split":
   test "Basic":
-    check split(ru"abc;def", ru';') == @["abc", "", "def"].toSeqRunes
+    check split(ru"abc;def", ru ';') == @["abc", "", "def"].toSeqRunes
 
   test "Basic 2":
-    check split(ru";;this;is;an;;example;;;", ru';') ==
-      @["", "", "this", "", "is", "", "an", "", "", "example", "", "", ""]
-        .toSeqRunes
+    check split(ru";;this;is;an;;example;;;", ru ';') ==
+      @["", "", "this", "", "is", "", "an", "", "", "example", "", "", ""].toSeqRunes
 
   test "Remove empty entries":
-    check split(ru";;this;is;an;;example;;;", ru';', true) ==
+    check split(ru";;this;is;an;;example;;;", ru ';', true) ==
       @["this", "is", "an", "example"].toSeqRunes
 
   test "Empty":
-    check split(ru"", ru';') == @[""].toSeqRunes
+    check split(ru"", ru ';') == @[""].toSeqRunes
 
   test "Empty with remove empty entries":
-    check split(ru"", ru';', true).len == 0
+    check split(ru"", ru ';', true).len == 0
 
 suite "unicodeext: splitWhitespace":
   test "Basic":
@@ -109,31 +110,36 @@ suite "unicodeext: splitWhitespace":
 suite "unicodeext: iterator splitLines":
   test "Basic":
     let r = collect:
-      for x in splitLines(toRunes("ABC\nDEF\n")): x
+      for x in splitLines(toRunes("ABC\nDEF\n")):
+        x
 
     check r == @["ABC", "DEF", ""].toSeqRunes
 
   test "Basic 2":
     let r = collect:
-      for x in splitLines(toRunes("\n\nA\nBC\n\n")): x
+      for x in splitLines(toRunes("\n\nA\nBC\n\n")):
+        x
 
     check r == @["", "", "A", "BC", "", ""].toSeqRunes
 
   test "Empty":
     let r = collect:
-      for x in splitLines(toRunes("")): x
+      for x in splitLines(toRunes("")):
+        x
 
     check r == @[""].toSeqRunes
 
   test "Only lines":
     let r = collect:
-      for x in splitLines(toRunes("\n\n\n")): x
+      for x in splitLines(toRunes("\n\n\n")):
+        x
 
     check r == @["", "", "", ""].toSeqRunes
 
   test "Without lines":
     let r = collect:
-      for x in splitLines(toRunes("abc")): x
+      for x in splitLines(toRunes("abc")):
+        x
 
     check r == @["abc"].toSeqRunes
 
@@ -142,8 +148,7 @@ suite "unicodeext: splitLines":
     check splitLines(toRunes("ABC\nDEF\n")) == @["ABC", "DEF", ""].toSeqRunes
 
   test "Basic 2":
-    check splitLines(toRunes("\n\nA\nBC\n\n")) ==
-      @["", "", "A", "BC", "", ""].toSeqRunes
+    check splitLines(toRunes("\n\nA\nBC\n\n")) == @["", "", "A", "BC", "", ""].toSeqRunes
 
   test "Empty":
     check splitLines(ru"") == @[""].toSeqRunes
@@ -161,7 +166,7 @@ suite "unicodeext: toRune, ru":
     check(97.toRune == 'a'.toRune)
 
   test "ru":
-    check(($(ru'a'))[0] == 'a')
+    check(($(ru 'a'))[0] == 'a')
 
     check($(ru"abcde") == "abcde")
     check($(ru"あいうえお") == "あいうえお")
@@ -196,7 +201,8 @@ suite "unicodeext: toRunes":
     let runes: Runes = @[]
     check(runes.toGapBuffer.toRunes == runes)
 
-let s = """Sentences that contain all letters commonly used in a language
+let s =
+  """Sentences that contain all letters commonly used in a language
 --------------------------------------------------------------
 
 Markus Kuhn <http://www.cl.cam.ac.uk/~mgk25/> -- 2012-04-11
@@ -362,7 +368,6 @@ suite "unicodeext: detectCharacterEncoding":
   test "UTF-32 with LE BOM":
     check(("\xFF\xFE\x00\x00" & s).detectCharacterEncoding == CharacterEncoding.utf32)
 
-
   test "UTF-8":
     check(s.detectCharacterEncoding == CharacterEncoding.utf8)
 
@@ -396,18 +401,19 @@ suite "unicodeext: detectCharacterEncoding":
 
 suite "unicodeext: findRune":
   test "findRune":
-    check find( ru"あaa", ru'a') == 1
-    check find( ru"あaa", ru'b') == -1
+    check find(ru"あaa", ru 'a') == 1
+    check find(ru"あaa", ru 'b') == -1
 
   test "findRunes":
     check find(runes = ru"あいういう", sub = ru"いう") == 1
-    check find(runes = ru"あいういういう", sub = ru"いう", start = 2, last = 4) == 3
+    check find(runes = ru"あいういういう", sub = ru"いう", start = 2, last = 4) ==
+      3
     check find(runes = ru"あいういう", sub = ru"いうう") == -1
 
 suite "unicodeext: rfindRune":
   test "rfindRune":
-    check rfind(ru"あaa", ru'a') == 2
-    check rfind(ru"あaa", ru'b') == -1
+    check rfind(ru"あaa", ru 'a') == 2
+    check rfind(ru"あaa", ru 'b') == -1
 
   test "rfindRunes":
     check rfind(ru"あいういう", ru"いう") == 3

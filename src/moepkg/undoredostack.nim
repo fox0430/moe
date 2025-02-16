@@ -21,8 +21,8 @@ import std/[sequtils, tables]
 
 type
   CommandKind = enum
-    insert,
-    delete,
+    insert
+    delete
     assign
 
   Command*[T] = ref CommandObj[T]
@@ -47,48 +47,41 @@ proc newDeleteCommand*[T](element: T, position: int): Command[T] {.inline.} =
   Command[T](kind: delete, deleteElement: element, deletePosition: position)
 
 proc newAssignCommand*[T](
-  oldElement, newElement: T,
-  position: int): Command[T] {.inline.} =
-
-    Command[T](
-      kind: assign,
-      oldElement: oldElement,
-      newElement: newElement,
-      assignPosition: position)
+    oldElement, newElement: T, position: int
+): Command[T] {.inline.} =
+  Command[T](
+    kind: assign,
+    oldElement: oldElement,
+    newElement: newElement,
+    assignPosition: position,
+  )
 
 proc doInsert[T, U](
-  command: Command[T],
-  buffer: var U,
-  pushToStack: bool = true) {.inline.} =
-
-    doAssert(command.kind == CommandKind.insert)
-    buffer.insert(command.insertElement, command.insertPosition, pushToStack)
+    command: Command[T], buffer: var U, pushToStack: bool = true
+) {.inline.} =
+  doAssert(command.kind == CommandKind.insert)
+  buffer.insert(command.insertElement, command.insertPosition, pushToStack)
 
 proc doDelete[T, U](
-  command: Command[T],
-  buffer: var U,
-  pushToStack: bool = true) {.inline.} =
-
-    doAssert(command.kind == CommandKind.delete)
-    buffer.delete(command.deletePosition, pushToStack)
+    command: Command[T], buffer: var U, pushToStack: bool = true
+) {.inline.} =
+  doAssert(command.kind == CommandKind.delete)
+  buffer.delete(command.deletePosition, pushToStack)
 
 proc doAssign[T, U](
-  command: Command[T],
-  buffer: var U,
-  pushToStack: bool = true) {.inline.} =
+    command: Command[T], buffer: var U, pushToStack: bool = true
+) {.inline.} =
+  doAssert(command.kind == CommandKind.assign)
+  buffer.assign(command.newElement, command.assignPosition, pushToStack)
 
-    doAssert(command.kind == CommandKind.assign)
-    buffer.assign(command.newElement, command.assignPosition, pushToStack)
-
-proc doCommand[T, U](
-  command: Command[T],
-  buffer: var U,
-  pushToStack: bool = true) =
-
-    case command.kind:
-    of insert: doInsert(command, buffer, pushToStack)
-    of delete: doDelete(command, buffer, pushToStack)
-    of assign: doAssign(command, buffer, pushToStack)
+proc doCommand[T, U](command: Command[T], buffer: var U, pushToStack: bool = true) =
+  case command.kind
+  of insert:
+    doInsert(command, buffer, pushToStack)
+  of delete:
+    doDelete(command, buffer, pushToStack)
+  of assign:
+    doAssign(command, buffer, pushToStack)
 
 proc inverseOfInsert[T](command: Command[T]): Command[T] {.inline.} =
   doAssert(command.kind == CommandKind.insert)
@@ -100,16 +93,17 @@ proc inverseOfDelete[T](command: Command[T]): Command[T] {.inline.} =
 
 proc inverseOfAssign[T](command: Command[T]): Command[T] {.inline.} =
   doAssert(command.kind == CommandKind.assign)
-  return newAssignCommand[T](
-    command.newElement,
-    command.oldElement,
-    command.assignPosition)
+  return
+    newAssignCommand[T](command.newElement, command.oldElement, command.assignPosition)
 
 proc inverseCommand[T](command: Command[T]): Command[T] =
-  case command.kind:
-  of delete: inverseOfDelete(command)
-  of insert: inverseOfInsert(command)
-  of assign: inverseOfAssign(command)
+  case command.kind
+  of delete:
+    inverseOfDelete(command)
+  of insert:
+    inverseOfInsert(command)
+  of assign:
+    inverseOfAssign(command)
 
 type
   CommandSuit[T] = object
@@ -136,9 +130,8 @@ proc add[T](commandSuit: var CommandSuit[T], x: Command[T]) {.inline.} =
 proc `[]`[T](commandSuit: CommandSuit[T], i: Natural): Command[T] {.inline.} =
   commandSuit.commands[i]
 
-proc `[]`[T](
-  commandSuit: CommandSuit[T],
-  i: BackwardsIndex): Command[T] {.inline.} = commandSuit.commands[i]
+proc `[]`[T](commandSuit: CommandSuit[T], i: BackwardsIndex): Command[T] {.inline.} =
+  commandSuit.commands[i]
 
 proc initUndoRedoStack*[T](): UndoRedoStack[T] {.inline.} =
   result.currentSuit = initCommandSuit[T]()
@@ -151,16 +144,21 @@ proc lockCurrentSuit*[T](undoRedoStack: var UndoRedoStack[T]) =
 proc lastSuitId*[T](undoRedoStack: UndoRedoStack[T]): int =
   ## Return the id that was applied last.
 
-  if undoRedoStack.undoSuits.len == 0: return 0
+  if undoRedoStack.undoSuits.len == 0:
+    return 0
 
-  if undoRedoStack.currentSuit.len > 0: undoRedoStack.currentSuit.id
-  else: undoRedoStack.undoSuits[^1].id
+  if undoRedoStack.currentSuit.len > 0:
+    undoRedoStack.currentSuit.id
+  else:
+    undoRedoStack.undoSuits[^1].id
 
 proc beginNewSuitIfNeeded*[T](undoRedoStack: var UndoRedoStack[T]) {.inline.} =
-  if undoRedoStack.currentSuit.len > 0: undoRedoStack.lockCurrentSuit
+  if undoRedoStack.currentSuit.len > 0:
+    undoRedoStack.lockCurrentSuit
 
 proc push*[T](undoRedoStack: var UndoRedoStack[T], command: Command[T]) =
-  if undoRedoStack.redoSuits.len > 0: undoRedoStack.redoSuits = @[]
+  if undoRedoStack.redoSuits.len > 0:
+    undoRedoStack.redoSuits = @[]
 
   doAssert(not undoRedoStack.currentSuit.locked)
   undoRedoStack.currentSuit.add(command)
@@ -168,18 +166,19 @@ proc push*[T](undoRedoStack: var UndoRedoStack[T], command: Command[T]) =
 proc undo*[T, U](undoRedoStack: var UndoRedoStack[T], buffer: var U) =
   doAssert(undoRedoStack.undoSuits.len > 0)
 
-  for i in 1..undoRedoStack.undoSuits[undoRedoStack.undoSuits.high].len:
-    doCommand[T, U](inverseCommand[T](
-      undoRedoStack.undoSuits[undoRedoStack.undoSuits.high][^i]),
+  for i in 1 .. undoRedoStack.undoSuits[undoRedoStack.undoSuits.high].len:
+    doCommand[T, U](
+      inverseCommand[T](undoRedoStack.undoSuits[undoRedoStack.undoSuits.high][^i]),
       buffer,
-      false)
+      false,
+    )
 
   undoRedoStack.redoSuits.add(undoRedoStack.undoSuits.pop)
 
 proc redo*[T, U](undoRedoStack: var UndoRedoStack[T], buffer: var U) =
   doAssert(undoRedoStack.redoSuits.len > 0)
 
-  for i in 0..<undoRedoStack.redoSuits[undoRedoStack.redoSuits.high].len:
+  for i in 0 ..< undoRedoStack.redoSuits[undoRedoStack.redoSuits.high].len:
     let command = undoRedoStack.redoSuits[undoRedoStack.redoSuits.high][i]
     doCommand[T, U](command, buffer, false)
 

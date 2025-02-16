@@ -33,14 +33,12 @@ type
 
   LspReferencesResult* = Result[seq[LspReference], string]
 
-proc initReferenceParams*(
-  path: string,
-  position: LspPosition): ReferenceParams =
-
-    ReferenceParams(
-      textDocument: TextDocumentIdentifier(uri: path.pathToUri),
-      position: position,
-      context: ReferenceContext(includeDeclaration: true))
+proc initReferenceParams*(path: string, position: LspPosition): ReferenceParams =
+  ReferenceParams(
+    textDocument: TextDocumentIdentifier(uri: path.pathToUri),
+    position: position,
+    context: ReferenceContext(includeDeclaration: true),
+  )
 
 proc parseTextDocumentReferencesResponse*(res: JsonNode): LspReferencesResult =
   if not res.contains("result"):
@@ -60,7 +58,7 @@ proc parseTextDocumentReferencesResponse*(res: JsonNode): LspReferencesResult =
       return LspReferencesResult.err fmt"Invalid response: {path.error}"
 
     references.add LspReference(
-      path: path.get,
-      position: l.range.start.toBufferPosition)
+      path: path.get, position: l.range.start.toBufferPosition
+    )
 
   return LspReferencesResult.ok references

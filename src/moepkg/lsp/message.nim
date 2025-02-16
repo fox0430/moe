@@ -40,43 +40,49 @@ type
 proc parseLspMessageType*(num: int): parseLspMessageTypeResult =
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#messageType
 
-  case num:
-    of 1: parseLspMessageTypeResult.ok LspMessageType.error
-    of 2: parseLspMessageTypeResult.ok LspMessageType.warn
-    of 3: parseLspMessageTypeResult.ok LspMessageType.info
-    of 4: parseLspMessageTypeResult.ok LspMessageType.log
-    of 5: parseLspMessageTypeResult.ok LspMessageType.debug
-    else: parseLspMessageTypeResult.err "Invalid value"
+  case num
+  of 1:
+    parseLspMessageTypeResult.ok LspMessageType.error
+  of 2:
+    parseLspMessageTypeResult.ok LspMessageType.warn
+  of 3:
+    parseLspMessageTypeResult.ok LspMessageType.info
+  of 4:
+    parseLspMessageTypeResult.ok LspMessageType.log
+  of 5:
+    parseLspMessageTypeResult.ok LspMessageType.debug
+  else:
+    parseLspMessageTypeResult.err "Invalid value"
 
 proc parseWindowShowMessageNotify*(n: JsonNode): LspWindowShowMessageResult =
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#window_showMessageRequest
 
   # TODO: Add "ShowMessageRequestParams.actions" support.
-  if n.contains("params") and
-     n["params"].contains("type") and n["params"]["type"].kind == JInt and
-     n["params"].contains("message") and n["params"]["message"].kind == JString:
-       let messageType = n["params"]["type"].getInt.parseLspMessageType
-       if messageType.isErr:
-         return LspWindowShowMessageResult.err messageType.error
+  if n.contains("params") and n["params"].contains("type") and
+      n["params"]["type"].kind == JInt and n["params"].contains("message") and
+      n["params"]["message"].kind == JString:
+    let messageType = n["params"]["type"].getInt.parseLspMessageType
+    if messageType.isErr:
+      return LspWindowShowMessageResult.err messageType.error
 
-       return LspWindowShowMessageResult.ok ServerMessage(
-         messageType: messageType.get,
-         message: n["params"]["message"].getStr)
+    return LspWindowShowMessageResult.ok ServerMessage(
+      messageType: messageType.get, message: n["params"]["message"].getStr
+    )
 
   return LspWindowShowMessageResult.err "Invalid notify"
 
 proc parseWindowLogMessageNotify*(n: JsonNode): LspWindowLogMessageResult =
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#window_logMessage
 
-  if n.contains("params") and
-     n["params"].contains("type") and n["params"]["type"].kind == JInt and
-     n["params"].contains("message") and n["params"]["message"].kind == JString:
-       let messageType = n["params"]["type"].getInt.parseLspMessageType
-       if messageType.isErr:
-         return LspWindowLogMessageResult.err messageType.error
+  if n.contains("params") and n["params"].contains("type") and
+      n["params"]["type"].kind == JInt and n["params"].contains("message") and
+      n["params"]["message"].kind == JString:
+    let messageType = n["params"]["type"].getInt.parseLspMessageType
+    if messageType.isErr:
+      return LspWindowLogMessageResult.err messageType.error
 
-       return LspWindowLogMessageResult.ok ServerMessage(
-         messageType: messageType.get,
-         message: n["params"]["message"].getStr)
+    return LspWindowLogMessageResult.ok ServerMessage(
+      messageType: messageType.get, message: n["params"]["message"].getStr
+    )
 
   return LspWindowLogMessageResult.err "Invalid notify"

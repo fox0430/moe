@@ -30,29 +30,24 @@ export InlineValueContext, InlineValueParams
 
 type
   LspInlineValues* = object
-    range*: independentutils.Range
-      # Line range to request
+    range*: independentutils.Range # Line range to request
     values*: seq[InlineValueText]
 
   LspInlineValueTextResult* = Result[seq[InlineValueText], string]
 
-  LspInlineValueVariableLookupResult* = Result[
-    seq[InlineValueVariableLookup],
-    string]
+  LspInlineValueVariableLookupResult* = Result[seq[InlineValueVariableLookup], string]
 
-  LspInlineValueEvaluatableExpressionResult* = Result[
-    seq[InlineValueEvaluatableExpression],
-    string]
+  LspInlineValueEvaluatableExpressionResult* =
+    Result[seq[InlineValueEvaluatableExpression], string]
 
 proc initInlineValueParams*(
-  path: string,
-  range: LspRange,
-  context: InlineValueContext): InlineValueParams =
-
-    return InlineValueParams(
-      textDocument: TextDocumentIdentifier(uri: path.pathToUri),
-      range: range,
-      context: context)
+    path: string, range: LspRange, context: InlineValueContext
+): InlineValueParams =
+  return InlineValueParams(
+    textDocument: TextDocumentIdentifier(uri: path.pathToUri),
+    range: range,
+    context: context,
+  )
 
 proc parseInlineValueTextResponse*(res: JsonNode): LspInlineValueTextResult =
   if res["result"].kind != JArray:
@@ -70,36 +65,36 @@ proc parseInlineValueTextResponse*(res: JsonNode): LspInlineValueTextResult =
   return LspInlineValueTextResult.ok texts
 
 proc parseInlineValueVariableLookupResponse*(
-  res: JsonNode): LspInlineValueVariableLookupResult =
+    res: JsonNode
+): LspInlineValueVariableLookupResult =
+  if res["result"].kind != JArray:
+    return LspInlineValueVariableLookupResult.err "Invalid response"
+  elif res["result"].len == 0:
+    # Not found
+    return LspInlineValueVariableLookupResult.ok @[]
 
-    if res["result"].kind != JArray:
-      return LspInlineValueVariableLookupResult.err "Invalid response"
-    elif res["result"].len == 0:
-      # Not found
-      return LspInlineValueVariableLookupResult.ok @[]
+  let lookups =
+    try:
+      res["result"].to(seq[InlineValueVariableLookup])
+    except CatchableError as e:
+      return LspInlineValueVariableLookupResult.err fmt"Invalid response: {e.msg}"
 
-    let lookups =
-      try:
-        res["result"].to(seq[InlineValueVariableLookup])
-      except CatchableError as e:
-        return LspInlineValueVariableLookupResult.err fmt"Invalid response: {e.msg}"
-
-    return LspInlineValueVariableLookupResult.ok lookups
+  return LspInlineValueVariableLookupResult.ok lookups
 
 proc parseInlineValueEvaluatableExpressionResponse*(
-  res: JsonNode): LspInlineValueEvaluatableExpressionResult =
+    res: JsonNode
+): LspInlineValueEvaluatableExpressionResult =
+  if res["result"].kind != JArray:
+    return LspInlineValueEvaluatableExpressionResult.err "Invalid response"
+  elif res["result"].len == 0:
+    # Not found
+    return LspInlineValueEvaluatableExpressionResult.ok @[]
 
-    if res["result"].kind != JArray:
-      return LspInlineValueEvaluatableExpressionResult .err "Invalid response"
-    elif res["result"].len == 0:
-      # Not found
-      return LspInlineValueEvaluatableExpressionResult.ok @[]
+  let expressions =
+    try:
+      res["result"].to(seq[InlineValueEvaluatableExpression])
+    except CatchableError as e:
+      return
+        LspInlineValueEvaluatableExpressionResult.err fmt"Invalid response: {e.msg}"
 
-    let expressions =
-      try:
-        res["result"].to(seq[InlineValueEvaluatableExpression])
-      except CatchableError as e:
-        return LspInlineValueEvaluatableExpressionResult.err fmt"Invalid response: {e.msg}"
-
-    return LspInlineValueEvaluatableExpressionResult.ok expressions
-
+  return LspInlineValueEvaluatableExpressionResult.ok expressions

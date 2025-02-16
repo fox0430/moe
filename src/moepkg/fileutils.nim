@@ -92,72 +92,70 @@ type
     unknown
 
 proc fileTypeIcon*(fileType: FileType): Runes =
-  case fileType:
-    of dir:
-      ru"📁"
-    of docker:
-      ru"🐳"
-    of nim:
-      ru"👑"
-    of nimble, rpm, deb:
-      ru"📦"
-    of py:
-      ru"🐍"
-    of ui, glade:
-      ru"🏠"
-    of txt, md, rst:
-      ru"📝"
-    of cpp, cxx, hpp:
-      ru"⧺"
-    of c, h:
-      ru"🅒"
-    of java:
-      ru"🍵"
-    of php:
-      ru"🙈"
-    of js, json:
-      ru"🙉"
-    of rs:
-      ru"🦀"
-    of html, xhtml:
-      ru"🏄"
-    of css:
-      ru"👚"
-    of xml:
-      ru"༕"
-    of cfg, ini:
-      ru"🍳"
-    of sh:
-      ru"🐚"
-    of pdf, doc, odf, ods, odt:
-      ru"🍞"
-    of wav, mp3, ogg:
-      ru"🎼"
-    of zip, bz2, xz, gz, tgz, zstd:
-      ru"🚢"
-    of exe, bin:
-      ru"🏃"
-    of mp4, webm, avi, mpeg:
-      ru"🎞"
-    of patch:
-      ru"💊"
-    of lock:
-      ru"🔒"
-    of pem, crt:
-      ru"🔏"
-    of png, jpeg, jpg, bmp, gif:
-      ru"🎨"
-    else:
-      ru"🍕"
+  case fileType
+  of dir:
+    ru"📁"
+  of docker:
+    ru"🐳"
+  of nim:
+    ru"👑"
+  of nimble, rpm, deb:
+    ru"📦"
+  of py:
+    ru"🐍"
+  of ui, glade:
+    ru"🏠"
+  of txt, md, rst:
+    ru"📝"
+  of cpp, cxx, hpp:
+    ru"⧺"
+  of c, h:
+    ru"🅒"
+  of java:
+    ru"🍵"
+  of php:
+    ru"🙈"
+  of js, json:
+    ru"🙉"
+  of rs:
+    ru"🦀"
+  of html, xhtml:
+    ru"🏄"
+  of css:
+    ru"👚"
+  of xml:
+    ru"༕"
+  of cfg, ini:
+    ru"🍳"
+  of sh:
+    ru"🐚"
+  of pdf, doc, odf, ods, odt:
+    ru"🍞"
+  of wav, mp3, ogg:
+    ru"🎼"
+  of zip, bz2, xz, gz, tgz, zstd:
+    ru"🚢"
+  of exe, bin:
+    ru"🏃"
+  of mp4, webm, avi, mpeg:
+    ru"🎞"
+  of patch:
+    ru"💊"
+  of lock:
+    ru"🔒"
+  of pem, crt:
+    ru"🔏"
+  of png, jpeg, jpg, bmp, gif:
+    ru"🎨"
+  else:
+    ru"🍕"
 
 proc isDockerFile*(filename: string): bool {.inline.} =
   ## Return true if Dockerfile or docker compose file.
 
-  filename == "Dockerfile" or
-  filename == "docker-compose.yml" or
-  filename == "docker-compose.yaml" or
-  filename == "compose.yaml" or
-  filename == "compose.yml"
+  filename == "Dockerfile" or filename == "docker-compose.yml" or
+    filename == "docker-compose.yaml" or filename == "compose.yaml" or
+    filename == "compose.yml"
 
 proc getFileType*(path: string): FileType =
   if dirExists(path):
@@ -186,14 +184,14 @@ proc getFileExtension*(path: Runes): Runes =
   ## Return a file extension from path.
   ## Return empty string if doesn't exist.
 
-  if not dirExists($path) and path.contains(ru'.'):
-    let position = path.rfind(ru'.')
+  if not dirExists($path) and path.contains(ru '.'):
+    let position = path.rfind(ru '.')
     if position < path.high:
       return path[position + 1 .. ^1]
 
 proc normalizedPath*(path: Runes): Runes =
   result = normalizedPath($path).toRunes
-  if path.startsWith(ru'~'):
+  if path.startsWith(ru '~'):
     if path == ru"~" or path == ru"~/":
       return getHomeDir().toRunes
     elif path.startsWith(ru"~/") and path.len > 2:
@@ -220,12 +218,12 @@ proc openFile*(filename: string | Runes): OpenFileResult =
 
   t.encoding = detectCharacterEncoding(raw)
 
-  case t.encoding:
-    of CharacterEncoding.unknown, CharacterEncoding.utf8:
-      # If the character encoding is unknown, convert to UTF-8.
-      t.text = raw.toRunes
-    else:
-      t.text = convert(raw, "UTF-8", $t.encoding).toRunes
+  case t.encoding
+  of CharacterEncoding.unknown, CharacterEncoding.utf8:
+    # If the character encoding is unknown, convert to UTF-8.
+    t.text = raw.toRunes
+  else:
+    t.text = convert(raw, "UTF-8", $t.encoding).toRunes
 
   return OpenFileResult.ok t
 
@@ -234,27 +232,26 @@ proc newFile*(): GapBuffer[Runes] {.inline.} =
   result.add(ru"", false)
 
 proc saveFile*(
-  path: string | Runes,
-  runes: Runes,
-  encoding: CharacterEncoding): SaveFileResult =
+    path: string | Runes, runes: Runes, encoding: CharacterEncoding
+): SaveFileResult =
+  let
+    encode =
+      if encoding == CharacterEncoding.unknown: CharacterEncoding.utf8 else: encoding
+    buffer = convert($runes, $encode, "UTF-8")
 
-    let
-      encode =
-        if encoding == CharacterEncoding.unknown: CharacterEncoding.utf8
-        else: encoding
-      buffer = convert($runes, $encode, "UTF-8")
+  try:
+    writeFile($path, buffer)
+  except IOError as e:
+    return SaveFileResult.err fmt"Failed to save file: {e.msg}"
 
-    try:
-      writeFile($path, buffer)
-    except IOError as e:
-      return SaveFileResult.err fmt"Failed to save file: {e.msg}"
-
-    return SaveFileResult.ok ()
+  return SaveFileResult.ok ()
 
 proc isAccessibleDir*(path: string): bool =
   ## Return true if the path is a directory and accessible.
 
   if dirExists(path):
-    for _ in walkDir(path): return true
+    for _ in walkDir(path):
+      return true
 
-proc expandTilde*(path: Runes): Runes {.inline.} = expandTilde($path).toRunes
+proc expandTilde*(path: Runes): Runes {.inline.} =
+  expandTilde($path).toRunes

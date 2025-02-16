@@ -27,72 +27,53 @@ import moepkg/lsp/inlayhint {.all.}
 
 suite "lsp: parseTextDocumentInlayHintResponse":
   test "Not found":
-    check parseTextDocumentInlayHintResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": nil
-    })
-    .get
-    .len == 0
+    check parseTextDocumentInlayHintResponse(
+      %*{"jsonrpc": "2.0", "id": 0, "result": nil}
+    ).get.len == 0
 
   test "Basic":
-    let r = parseTextDocumentInlayHintResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": [
-        {
-          "position": {
-            "line": 4,
-            "character": 5
-          },
-          "label": ": int",
-          "kind": 1,
-          "textEdits": [
-            {
-              "range": {
-                "start":{
-                  "line": 4,
-                  "character": 5
+    let r = parseTextDocumentInlayHintResponse(
+      %*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": [
+          {
+            "position": {"line": 4, "character": 5},
+            "label": ": int",
+            "kind": 1,
+            "textEdits": [
+              {
+                "range": {
+                  "start": {"line": 4, "character": 5},
+                  "end": {"line": 4, "character": 5},
                 },
-                "end": {
-                  "line": 4,
-                  "character": 5}
-                },
-                "newText": ": int"
+                "newText": ": int",
               }
-          ],
-          "tooltip": "",
-          "paddingLeft": false,
-          "paddingRight": false
-        },
-        {
-          "position": {
-            "line": 6,
-            "character": 5
+            ],
+            "tooltip": "",
+            "paddingLeft": false,
+            "paddingRight": false,
           },
-          "label": ": string",
-          "kind": 1,
-          "textEdits": [
-            {
-              "range": {
-                "start": {
-                  "line": 6,
-                  "character": 5
-                  },
-                  "end": {
-                    "line": 6,
-                    "character": 5
-                  }
-              },
-              "newText": ": string"
-            }
-          ],
-          "tooltip": "",
-          "paddingLeft": false,
-          "paddingRight": false
-        }
-      ]
-    }).get
+          {
+            "position": {"line": 6, "character": 5},
+            "label": ": string",
+            "kind": 1,
+            "textEdits": [
+              {
+                "range": {
+                  "start": {"line": 6, "character": 5},
+                  "end": {"line": 6, "character": 5},
+                },
+                "newText": ": string",
+              }
+            ],
+            "tooltip": "",
+            "paddingLeft": false,
+            "paddingRight": false,
+          },
+        ],
+      }
+    ).get
 
     check r.len == 2
 

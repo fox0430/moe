@@ -43,58 +43,58 @@ type
     filePath*: Runes
     process*: BackgroundProcess
 
-proc toSyntaxCheckMessageType*(
-  severity: int): SyntaxCheckMessageType {.inline.} =
-    ## Convert LSP DiagnosticSeverity to SyntaxCheckMessageType.
+proc toSyntaxCheckMessageType*(severity: int): SyntaxCheckMessageType {.inline.} =
+  ## Convert LSP DiagnosticSeverity to SyntaxCheckMessageType.
 
-    case severity:
-      of 1: return SyntaxCheckMessageType.error
-      of 2: return SyntaxCheckMessageType.warning
-      of 3: return SyntaxCheckMessageType.info
-      of 4: return SyntaxCheckMessageType.hint
-      else: doAssert(false, "Invalid DiagnosticSeverity")
+  case severity
+  of 1:
+    return SyntaxCheckMessageType.error
+  of 2:
+    return SyntaxCheckMessageType.warning
+  of 3:
+    return SyntaxCheckMessageType.info
+  of 4:
+    return SyntaxCheckMessageType.hint
+  else:
+    doAssert(false, "Invalid DiagnosticSeverity")
 
 proc isSyntaxCheckFormattedMessage*(m: string | Runes): bool {.inline.} =
   startsWith($m, "SyntaxError: ")
 
-proc formattedMessage*(
-  syntaxErrors: seq[SyntaxError],
-  line: int): Option[Runes] =
-    ## Return a formatted syntax error message with the position for
-    ## the specified line, if it exists.
-    ## Message example: "SyntaxError: (1, 2) Syntax error!"
+proc formattedMessage*(syntaxErrors: seq[SyntaxError], line: int): Option[Runes] =
+  ## Return a formatted syntax error message with the position for
+  ## the specified line, if it exists.
+  ## Message example: "SyntaxError: (1, 2) Syntax error!"
 
-    for se in syntaxErrors:
-      if line == se.position.line:
-        return fmt"SyntaxError: ({$se.position.line}, {$se.position.column}) {$se.message}"
-          .toRunes
-          .some
+  for se in syntaxErrors:
+    if line == se.position.line:
+      return
+        fmt"SyntaxError: ({$se.position.line}, {$se.position.column}) {$se.message}".toRunes.some
 
 proc syntaxCheckCommand(
-  path: string,
-  lang: SourceLanguage): Result[BackgroundProcessCommand, string] =
-
-    case lang:
-      of SourceLanguage.langNim:
-        # Checks the code for syntax and semantics using "nim check" command.
-        return Result[BackgroundProcessCommand, string].ok BackgroundProcessCommand(
-          cmd: "nim",
-          args: @["check", path])
-      else:
-        return Result[BackgroundProcessCommand, string].err "Unknown language"
+    path: string, lang: SourceLanguage
+): Result[BackgroundProcessCommand, string] =
+  case lang
+  of SourceLanguage.langNim:
+    # Checks the code for syntax and semantics using "nim check" command.
+    return Result[BackgroundProcessCommand, string].ok BackgroundProcessCommand(
+      cmd: "nim", args: @["check", path]
+    )
+  else:
+    return Result[BackgroundProcessCommand, string].err "Unknown language"
 
 proc toSyntaxCheckMessageType(s: string): MessageTypeResult =
-  case s.toLowerAscii:
-    of "error":
-      return MessageTypeResult.ok SyntaxCheckMessageType.error
-    of "warning":
-      return MessageTypeResult.ok SyntaxCheckMessageType.warning
-    of "info":
-      return MessageTypeResult.ok SyntaxCheckMessageType.info
-    of "hint":
-      return MessageTypeResult.ok SyntaxCheckMessageType.hint
-    else:
-      MessageTypeResult.err fmt"Invalid value: {s}"
+  case s.toLowerAscii
+  of "error":
+    return MessageTypeResult.ok SyntaxCheckMessageType.error
+  of "warning":
+    return MessageTypeResult.ok SyntaxCheckMessageType.warning
+  of "info":
+    return MessageTypeResult.ok SyntaxCheckMessageType.info
+  of "hint":
+    return MessageTypeResult.ok SyntaxCheckMessageType.hint
+  else:
+    MessageTypeResult.err fmt"Invalid value: {s}"
 
 # Parse a message type (Error, Warning, etc...) from the line of nim check result.
 proc parseNimSyntaxCheckMessageType(line: string): MessageTypeResult =
@@ -129,39 +129,39 @@ proc parseNimCheckResult*(path: string, cmdResult: seq[string]): SyntaxErrorsRes
         let
           position = BufferPosition(
             line: line[m.captures[0]].parseInt - 1,
-            column: line[m.captures[1]].parseInt - 1)
+            column: line[m.captures[1]].parseInt - 1,
+          )
 
           messageType = ?line.parseNimSyntaxCheckMessageType
           message = ?line.parseNimSyntaxCheckMessage
 
         syntaxErrors.add SyntaxError(
-          position: position,
-          messageType: messageType,
-          message: message.toRunes)
+          position: position, messageType: messageType, message: message.toRunes
+        )
 
   return SyntaxErrorsResult.ok syntaxErrors
 
-proc isRunning*(p: SyntaxCheckProcess): bool {.inline.} = p.process.isRunning
+proc isRunning*(p: SyntaxCheckProcess): bool {.inline.} =
+  p.process.isRunning
 
-proc result*(
-  bp: var SyntaxCheckProcess): Result[seq[string], string] {.inline.} =
-
-    bp.process.result
+proc result*(bp: var SyntaxCheckProcess): Result[seq[string], string] {.inline.} =
+  bp.process.result
 
 proc startBackgroundSyntaxCheck*(
-  path: string, lang: SourceLanguage): Result[SyntaxCheckProcess, string] =
-    ## Start the syntax check on a background process.
-    ## Use commands to check syntax (semantics) of a source code.
+    path: string, lang: SourceLanguage
+): Result[SyntaxCheckProcess, string] =
+  ## Start the syntax check on a background process.
+  ## Use commands to check syntax (semantics) of a source code.
 
-    let command = syntaxCheckCommand(path.absolutePath, lang)
-    if command.isErr:
-      return Result[SyntaxCheckProcess, string].err fmt"Syntax check failed: {command.error}"
+  let command = syntaxCheckCommand(path.absolutePath, lang)
+  if command.isErr:
+    return
+      Result[SyntaxCheckProcess, string].err fmt"Syntax check failed: {command.error}"
 
-    let backgroundProcess = startBackgroundProcess(command.get)
-    if backgroundProcess.isErr:
-      return Result[SyntaxCheckProcess, string].err fmt"Failed to exec build commands: {backgroundProcess.error}"
+  let backgroundProcess = startBackgroundProcess(command.get)
+  if backgroundProcess.isErr:
+    return Result[SyntaxCheckProcess, string].err fmt"Failed to exec build commands: {backgroundProcess.error}"
 
-    return Result[SyntaxCheckProcess, string].ok SyntaxCheckProcess(
-      command: command.get,
-      filePath: path.toRunes,
-      process: backgroundProcess.get)
+  return Result[SyntaxCheckProcess, string].ok SyntaxCheckProcess(
+    command: command.get, filePath: path.toRunes, process: backgroundProcess.get
+  )

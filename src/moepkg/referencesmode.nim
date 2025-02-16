@@ -21,18 +21,17 @@ import std/[os, options, strformat, sequtils]
 
 import pkg/results
 
-import independentutils, ui, unicodeext, editorstatus, movement, gapbuffer,
-       bufferstatus, messages
+import
+  independentutils, ui, unicodeext, editorstatus, movement, gapbuffer, bufferstatus,
+  messages
 
 import lsp/references
 
-type
-  Destination = tuple[path: Runes, line, column: int]
+type Destination = tuple[path: Runes, line, column: int]
 
 proc initReferencesModeBuffer*(references: seq[LspReference]): seq[Runes] =
   for r in references:
-    result.add toRunes(
-      fmt"{r.path} {r.position.line} Line {r.position.column} Col")
+    result.add toRunes(fmt"{r.path} {r.position.line} Line {r.position.column} Col")
 
 proc closeReferencesMode(status: var EditorStatus) =
   ## Close the window and remove the buffer.
@@ -40,7 +39,7 @@ proc closeReferencesMode(status: var EditorStatus) =
   status.deleteBuffer(currentMainWindowNode.bufferIndex)
 
 proc parseDestinationLine(line: Runes): Result[Destination, string] =
-  let lineSplit = line.split(ru' ').filterIt(it.len > 0)
+  let lineSplit = line.split(ru ' ').filterIt(it.len > 0)
   if lineSplit.len != 5:
     return Result[Destination, string].err "Invalid destination"
 
@@ -60,8 +59,8 @@ proc parseDestinationLine(line: Runes): Result[Destination, string] =
   return Result[Destination, string].ok (lineSplit[0], line, column)
 
 proc openWindowAndJumpToReference(status: var EditorStatus) =
-  let d = parseDestinationLine(
-    currentBufStatus.buffer[currentMainWindowNode.currentLine])
+  let d =
+    parseDestinationLine(currentBufStatus.buffer[currentMainWindowNode.currentLine])
 
   if d.isErr:
     status.commandLine.writeLspReferencesError(d.error)
@@ -82,7 +81,7 @@ proc openWindowAndJumpToReference(status: var EditorStatus) =
 
   template canMove(): bool =
     d.get.line < currentBufStatus.buffer.len and
-    d.get.column < currentBufStatus.buffer[d.get.line].len
+      d.get.column < currentBufStatus.buffer[d.get.line].len
 
   let bufferIndex = status.bufStatus.checkBufferExist(d.get.path)
   if isSome(bufferIndex):
@@ -127,13 +126,9 @@ proc isReferencesModeCommand*(command: Runes): InputState =
   if command.len == 0:
     return InputState.Continue
   else:
-    if isCancel(command) or
-       isMoveUp(command) or
-       isMoveDown(command) or
-       isMoveToFirstLine(command) or
-       isMoveToLastLine(command) or
-       isEnterKey(command):
-         return InputState.Valid
+    if isCancel(command) or isMoveUp(command) or isMoveDown(command) or
+        isMoveToFirstLine(command) or isMoveToLastLine(command) or isEnterKey(command):
+      return InputState.Valid
 
 proc execReferencesModeCommand*(status: var EditorStatus, command: Runes) =
   if isCancel(command):

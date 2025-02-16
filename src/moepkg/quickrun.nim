@@ -17,29 +17,22 @@
 #                                                                              #
 #[############################################################################]#
 
-import unicodeext, bufferstatus, ui, editorstatus, movement, windownode,
-       commandline
+import unicodeext, bufferstatus, ui, editorstatus, movement, windownode, commandline
 
-proc changeModeToExMode*(
-  bufStatus: var BufferStatus,
-  commandLine: var CommandLine) =
-
-    bufStatus.changeMode(Mode.ex)
-    commandLine.clear
-    commandLine.setPrompt(Ex)
+proc changeModeToExMode*(bufStatus: var BufferStatus, commandLine: var CommandLine) =
+  bufStatus.changeMode(Mode.ex)
+  commandLine.clear
+  commandLine.setPrompt(Ex)
 
 proc isQuickRunCommand*(command: Runes): InputState =
   result = InputState.Invalid
 
   if command.len == 1:
     let key = command[0]
-    if isCtrlK(key) or
-       isCtrlJ(key) or
-       key == ord(':') or
-       key == ord('k') or isUpKey(key) or
-       key == ord('j') or isDownKey(key) or
-       key == ord('G'):
-         return InputState.Valid
+    if isCtrlK(key) or isCtrlJ(key) or key == ord(':') or key == ord('k') or isUpKey(
+      key
+    ) or key == ord('j') or isDownKey(key) or key == ord('G'):
+      return InputState.Valid
     elif key == ord('g'):
       return InputState.Continue
   elif command.len == 2:

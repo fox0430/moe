@@ -26,10 +26,7 @@ suite "popupwindow: initWindow":
   privateAccess(PopupWindow)
 
   test "initWindow 1":
-    let p = initPopupWindow(
-      Position(y: 50, x: 100),
-      Size(h: 10, w: 20),
-      @[ru"test"])
+    let p = initPopupWindow(Position(y: 50, x: 100), Size(h: 10, w: 20), @[ru"test"])
 
     check p.window != nil
     check p.position.y == 50
@@ -40,9 +37,7 @@ suite "popupwindow: initWindow":
     check p.currentLine.isNone
 
   test "initWindow 2":
-    let p = initPopupWindow(
-      Position(y: 50, x: 100),
-      Size(h: 10, w: 20))
+    let p = initPopupWindow(Position(y: 50, x: 100), Size(h: 10, w: 20))
 
     check p.window != nil
     check p.position.y == 50
@@ -87,10 +82,8 @@ suite "popupwindow: move":
 
 suite "popupwindow: autoMoveAndResize":
   test "autoMoveAndResize 1":
-    var p = initPopupWindow(
-      Position(y: 1, x: 1),
-      Size(h: 10, w: 10),
-      @[ru"line1", ru"line2"])
+    var p =
+      initPopupWindow(Position(y: 1, x: 1), Size(h: 10, w: 10), @[ru"line1", ru"line2"])
 
     let
       min = Position(y: 1, x: 1)
@@ -101,10 +94,8 @@ suite "popupwindow: autoMoveAndResize":
     check p.size == Size(h: 2, w: 5)
 
   test "autoMoveAndResize 2":
-    var p = initPopupWindow(
-      Position(y: 1, x: 1),
-      Size(h: 1, w: 1),
-      @[ru"line1", ru"line2"])
+    var p =
+      initPopupWindow(Position(y: 1, x: 1), Size(h: 1, w: 1), @[ru"line1", ru"line2"])
 
     let
       min = Position(y: 1, x: 1)
@@ -115,10 +106,8 @@ suite "popupwindow: autoMoveAndResize":
     check p.size == Size(h: 2, w: 5)
 
   test "autoMoveAndResize 3":
-    var p = initPopupWindow(
-      Position(y: 99, x: 1),
-      Size(h: 2, w: 5),
-      @[ru"line1", ru"line2"])
+    var p =
+      initPopupWindow(Position(y: 99, x: 1), Size(h: 2, w: 5), @[ru"line1", ru"line2"])
 
     let
       min = Position(y: 1, x: 1)
@@ -129,10 +118,8 @@ suite "popupwindow: autoMoveAndResize":
     check p.size == Size(h: 2, w: 5)
 
   test "autoMoveAndResize 4":
-    var p = initPopupWindow(
-      Position(y: 1, x: 99),
-      Size(h: 2, w: 5),
-      @[ru"line1", ru"line2"])
+    var p =
+      initPopupWindow(Position(y: 1, x: 99), Size(h: 2, w: 5), @[ru"line1", ru"line2"])
 
     let
       min = Position(y: 1, x: 1)
@@ -143,10 +130,8 @@ suite "popupwindow: autoMoveAndResize":
     check p.size == Size(h: 2, w: 5)
 
   test "autoMoveAndResize 5":
-    var p = initPopupWindow(
-      Position(y: 99, x: 99),
-      Size(h: 2, w: 5),
-      @[ru"line1", ru"line2"])
+    var p =
+      initPopupWindow(Position(y: 99, x: 99), Size(h: 2, w: 5), @[ru"line1", ru"line2"])
 
     let
       min = Position(y: 1, x: 1)
@@ -160,34 +145,27 @@ suite "popupwindow: update":
   privateAccess(HighlightText)
 
   test "update 1":
-    var p = initPopupWindow(
-      Position(y: 1, x: 1),
-      Size(h: 2, w: 5),
-      @[ru"line1", ru"line2"])
+    var p =
+      initPopupWindow(Position(y: 1, x: 1), Size(h: 2, w: 5), @[ru"line1", ru"line2"])
 
     p.update
 
   test "update 2":
-    var p = initPopupWindow(
-      Position(y: 1, x: 1),
-      Size(h: 1, w: 5),
-      @[ru"line1", ru"line2"])
+    var p =
+      initPopupWindow(Position(y: 1, x: 1), Size(h: 1, w: 5), @[ru"line1", ru"line2"])
 
     p.update
 
   test "update 3":
-    var p = initPopupWindow(
-      Position(y: 1, x: 1),
-      Size(h: 2, w: 1),
-      @[ru"line1", ru"line2"])
+    var p =
+      initPopupWindow(Position(y: 1, x: 1), Size(h: 2, w: 1), @[ru"line1", ru"line2"])
 
     p.update
 
   test "update 4":
     var p = initPopupWindow(
-      Position(y: 1, x: 1),
-      Size(h: 5, w: 2),
-      toSeq(0..10).mapIt(toRunes($it)))
+      Position(y: 1, x: 1), Size(h: 5, w: 2), toSeq(0 .. 10).mapIt(toRunes($it))
+    )
 
     p.currentLine = some(5)
 
@@ -195,19 +173,16 @@ suite "popupwindow: update":
 
   test "update 5":
     var p = initPopupWindow(
-      Position(y: 1, x: 1),
-      Size(h: 5, w: 1),
-      toSeq(0..10).mapIt(toRunes($it)))
+      Position(y: 1, x: 1), Size(h: 5, w: 1), toSeq(0 .. 10).mapIt(toRunes($it))
+    )
 
     p.currentLine = some(5)
 
     p.update
 
   test "update 6":
-    var p = initPopupWindow(
-      Position(y: 1, x: 1),
-      Size(h: 5, w: 10),
-      @[ru"line1", ru"line2"])
+    var p =
+      initPopupWindow(Position(y: 1, x: 1), Size(h: 5, w: 10), @[ru"line1", ru"line2"])
 
     p.highlightText = some(HighlightText(text: ru"line"))
 

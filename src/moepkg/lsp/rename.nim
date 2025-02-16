@@ -38,14 +38,13 @@ type
   LspRenamesResult* = Result[seq[LspRename], string]
 
 proc initRenameParams*(
-  path: string,
-  position: LspPosition,
-  newName: string): RenameParams =
-
-    RenameParams(
-      textDocument: TextDocumentIdentifier(uri: path.pathToUri),
-      position: position,
-      newName: newName)
+    path: string, position: LspPosition, newName: string
+): RenameParams =
+  RenameParams(
+    textDocument: TextDocumentIdentifier(uri: path.pathToUri),
+    position: position,
+    newName: newName,
+  )
 
 proc parseTextDocumentRenameResponse*(res: JsonNode): LspRenamesResult =
   if not res.contains("result"):
@@ -69,9 +68,8 @@ proc parseTextDocumentRenameResponse*(res: JsonNode): LspRenamesResult =
 
       for v in changes:
         lspRenames[^1].changes.add RenameChange(
-          range: v["range"].to(LspRange).toBufferRange,
-          text: v["newText"].getStr)
-
+          range: v["range"].to(LspRange).toBufferRange, text: v["newText"].getStr
+        )
   except CatchableError as e:
     let msg = fmt"Invalid WorkspaceEdit: {e.msg}"
     return LspRenamesResult.err fmt"Invalid response: {msg}"

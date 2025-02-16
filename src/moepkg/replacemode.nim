@@ -19,8 +19,9 @@
 
 import std/options
 
-import editorstatus, ui, movement, editor, bufferstatus, gapbuffer, windownode,
-       settings, unicodeext
+import
+  editorstatus, ui, movement, editor, bufferstatus, gapbuffer, windownode, settings,
+  unicodeext
 
 # For undo/redo in the replace mode.
 var undoLastSuitId: Option[int]
@@ -31,8 +32,7 @@ proc moveRight(bufStatus: var BufferStatus, windowNode: var WindowNode) =
     beforeColumn = windowNode.currentColumn
   bufStatus.keyRight(windowNode)
 
-  if beforeLine != windowNode.currentLine or
-     beforeColumn != windowNode.currentColumn:
+  if beforeLine != windowNode.currentLine or beforeColumn != windowNode.currentColumn:
     undoLastSuitId = some(bufStatus.buffer.lastSuitId)
 
 proc moveLeft(bufStatus: var BufferStatus, windowNode: var WindowNode) =
@@ -41,8 +41,7 @@ proc moveLeft(bufStatus: var BufferStatus, windowNode: var WindowNode) =
     beforeColumn = windowNode.currentColumn
   windowNode.keyLeft
 
-  if beforeLine != windowNode.currentLine or
-     beforeColumn != windowNode.currentColumn:
+  if beforeLine != windowNode.currentLine or beforeColumn != windowNode.currentColumn:
     undoLastSuitId = some(bufStatus.buffer.lastSuitId)
 
 proc moveUp(bufStatus: var BufferStatus, windowNode: var WindowNode) =
@@ -51,8 +50,7 @@ proc moveUp(bufStatus: var BufferStatus, windowNode: var WindowNode) =
     beforeColumn = windowNode.currentColumn
   bufStatus.keyUp(windowNode)
 
-  if beforeLine != windowNode.currentLine or
-     beforeColumn != windowNode.currentColumn:
+  if beforeLine != windowNode.currentLine or beforeColumn != windowNode.currentColumn:
     undoLastSuitId = some(bufStatus.buffer.lastSuitId)
 
 proc moveDown(bufStatus: var BufferStatus, windowNode: var WindowNode) =
@@ -61,35 +59,33 @@ proc moveDown(bufStatus: var BufferStatus, windowNode: var WindowNode) =
     beforeColumn = windowNode.currentColumn
   bufStatus.keyDown(windowNode)
 
-  if beforeLine != windowNode.currentLine or
-     beforeColumn != windowNode.currentColumn:
+  if beforeLine != windowNode.currentLine or beforeColumn != windowNode.currentColumn:
     undoLastSuitId = some(bufStatus.buffer.lastSuitId)
 
 proc replaceCurrentCharacter(
-  bufStatus: var BufferStatus,
-  windowNode: var WindowNode,
-  settings: EditorSettings,
-  key: Rune) =
-    ## Replace the current character or insert the character and move to the right
+    bufStatus: var BufferStatus,
+    windowNode: var WindowNode,
+    settings: EditorSettings,
+    key: Rune,
+) =
+  ## Replace the current character or insert the character and move to the right
 
-    if windowNode.currentColumn < bufStatus.buffer[windowNode.currentLine].len:
-      let
-        currentLine = windowNode.currentLine
-        currentColumn = windowNode.currentColumn
-        oldLine = bufStatus.buffer[currentLine]
-      var newLine = bufStatus.buffer[currentLine]
-      newLine[currentColumn] = key
+  if windowNode.currentColumn < bufStatus.buffer[windowNode.currentLine].len:
+    let
+      currentLine = windowNode.currentLine
+      currentColumn = windowNode.currentColumn
+      oldLine = bufStatus.buffer[currentLine]
+    var newLine = bufStatus.buffer[currentLine]
+    newLine[currentColumn] = key
 
-      if oldLine != newLine: bufStatus.buffer[currentLine] = newLine
-    else:
-      bufStatus.insertCharacter(
-        windowNode,
-        settings.standard.autoCloseParen,
-        key)
+    if oldLine != newLine:
+      bufStatus.buffer[currentLine] = newLine
+  else:
+    bufStatus.insertCharacter(windowNode, settings.standard.autoCloseParen, key)
 
-    bufStatus.keyRight(windowNode)
+  bufStatus.keyRight(windowNode)
 
-    undoLastSuitId = some(bufStatus.buffer.lastSuitId)
+  undoLastSuitId = some(bufStatus.buffer.lastSuitId)
 
 proc undoOrMoveCursor(bufStatus: var BufferStatus, windowNode: var WindowNode) =
   ## Can undo until you enter Replace mode
@@ -98,8 +94,7 @@ proc undoOrMoveCursor(bufStatus: var BufferStatus, windowNode: var WindowNode) =
   if bufStatus.buffer.lastSuitId > undoLastSuitId.get:
     bufStatus.undo(windowNode)
   else:
-    if windowNode.currentColumn == 0 and
-       windowNode.currentLine > 0:
+    if windowNode.currentColumn == 0 and windowNode.currentLine > 0:
       # Jump to the end of the above line
       bufStatus.keyUp(windowNode)
       bufStatus.moveToLastOfLine(windowNode)
@@ -134,14 +129,12 @@ proc execReplaceModeCommand*(status: var EditorStatus, command: Runes) =
     currentBufStatus.moveDown(currentMainWindowNode)
   elif isEnterKey(key):
     currentBufStatus.keyEnter(
-      currentMainWindowNode,
-      status.settings.standard.autoIndent,
-      status.settings.standard.tabStop)
-
+      currentMainWindowNode, status.settings.standard.autoIndent,
+      status.settings.standard.tabStop,
+    )
   elif isBackspaceKey(key):
     currentBufStatus.undoOrMoveCursor(currentMainWindowNode)
   else:
     currentBufStatus.replaceCurrentCharacter(
-      currentMainWindowNode,
-      status.settings,
-      key)
+      currentMainWindowNode, status.settings, key
+    )

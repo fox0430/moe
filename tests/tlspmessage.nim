@@ -50,28 +50,26 @@ suite "lsp: parseWindowShowMessageNotify":
 
   test "Basic":
     check ServerMessage(
-      messageType: LspMessageType.info,
-      message: "Nimsuggest initialized for test.nim") == parseWindowShowMessageNotify(%*{
-        "jsonrpc": "2.0",
-        "method": "window/showMessage",
-        "params": {
-          "type": 3,
-          "message": "Nimsuggest initialized for test.nim"
+      messageType: LspMessageType.info, message: "Nimsuggest initialized for test.nim"
+    ) ==
+      parseWindowShowMessageNotify(
+        %*{
+          "jsonrpc": "2.0",
+          "method": "window/showMessage",
+          "params": {"type": 3, "message": "Nimsuggest initialized for test.nim"},
         }
-      }).get
+      ).get
 
 suite "lsp: parseWindowLogMessageNotify":
   test "Invalid":
     check parseWindowShowMessageNotify(%*{"jsonrpc": "2.0", "result": nil}).isErr
 
   test "Basic":
-    check ServerMessage(
-      messageType: LspMessageType.info,
-      message: "Log message") == parseWindowShowMessageNotify(%*{
-        "jsonrpc": "2.0",
-        "method": "window/logMessage",
-        "params": {
-          "type": 3,
-          "message": "Log message"
+    check ServerMessage(messageType: LspMessageType.info, message: "Log message") ==
+      parseWindowShowMessageNotify(
+        %*{
+          "jsonrpc": "2.0",
+          "method": "window/logMessage",
+          "params": {"type": 3, "message": "Log message"},
         }
-      }).get
+      ).get

@@ -19,55 +19,52 @@
 
 import std/[os, options]
 import pkg/results
-import editorstatus, ui, windownode, bufferstatus, unicodeext, filermodeutils,
-       messages, commandline, messagelog
+import
+  editorstatus, ui, windownode, bufferstatus, unicodeext, filermodeutils, messages,
+  commandline, messagelog
 
 proc openNewWinAndOpenFilerOrDir(
-  status: var EditorStatus,
-  filerStatus: var FilerStatus) =
+    status: var EditorStatus, filerStatus: var FilerStatus
+) =
+  let path = filerStatus.pathList[currentMainWindowNode.currentLine].path
 
-    let path = filerStatus.pathList[currentMainWindowNode.currentLine].path
+  if dirExists($path):
+    try:
+      setCurrentDir($path)
+    except OSError:
+      status.commandLine.writeFileOpenError($path)
+      return
 
-    if dirExists($path):
-      try:
-        setCurrentDir($path)
-      except OSError:
-        status.commandLine.writeFileOpenError($path)
-        return
+    let b = initBufferStatus(Mode.filer)
+    if b.isErr:
+      status.commandLine.writeFileOpenError($path)
+      return
 
-      let b = initBufferStatus(Mode.filer)
-      if b.isErr:
-        status.commandLine.writeFileOpenError($path)
-        return
+    status.verticalSplitWindow
+    status.resize
+    status.moveNextWindow
 
-      status.verticalSplitWindow
-      status.resize
-      status.moveNextWindow
+    status.bufStatus.add b.get
+  else:
+    let b = initBufferStatus($path)
+    if b.isErr:
+      status.commandLine.writeFileOpenError($path)
+      return
 
-      status.bufStatus.add b.get
-    else:
-      let b = initBufferStatus($path)
-      if b.isErr:
-        status.commandLine.writeFileOpenError($path)
-        return
+    status.verticalSplitWindow
+    status.resize
+    status.moveNextWindow
 
-      status.verticalSplitWindow
-      status.resize
-      status.moveNextWindow
-
-      status.bufStatus.add b.get
-      status.changeCurrentBuffer(status.bufStatus.high)
+    status.bufStatus.add b.get
+    status.changeCurrentBuffer(status.bufStatus.high)
 
 proc currentPathInfo(status: EditorStatus): PathInfo {.inline.} =
   currentFilerStatus.pathList[currentMainWindowNode.currentLine]
 
-proc changeModeToExMode*(
-  bufStatus: var BufferStatus,
-  commandLine: var CommandLine) =
-
-    bufStatus.changeMode(Mode.ex)
-    commandLine.clear
-    commandLine.setPrompt(Ex)
+proc changeModeToExMode*(bufStatus: var BufferStatus, commandLine: var CommandLine) =
+  bufStatus.changeMode(Mode.ex)
+  commandLine.clear
+  commandLine.setPrompt(Ex)
 
 proc execFilerModeCommand*(status: var EditorStatus, command: Runes) =
   let key = command[0]
@@ -79,9 +76,8 @@ proc execFilerModeCommand*(status: var EditorStatus, command: Runes) =
     if status.commandLine.getKeys(Prompt):
       let keyword = status.commandLine.buffer
       currentBufStatus.searchFileMode(
-        currentMainWindowNode,
-        currentFilerStatus,
-        keyword)
+        currentMainWindowNode, currentFilerStatus, keyword
+      )
   elif isEscKey(key):
     if currentFilerStatus.searchMode == true:
       currentFilerStatus.isUpdateView = true
@@ -99,7 +95,8 @@ proc execFilerModeCommand*(status: var EditorStatus, command: Runes) =
       currentMainWindowNode,
       status.settings,
       currentFilerStatus.pathList.len,
-      currentFilerStatus.pathList[currentMainWindowNode.currentLine][1])
+      currentFilerStatus.pathList[currentMainWindowNode.currentLine][1],
+    )
     currentFilerStatus.isUpdateView = true
   elif key == 'j' or isDownKey(key):
     currentFilerStatus.keyDown(currentMainWindowNode.currentLine)
@@ -111,16 +108,12 @@ proc execFilerModeCommand*(status: var EditorStatus, command: Runes) =
     currentFilerStatus.moveToLastOfList(currentMainWindowNode.currentLine)
   elif key == ord('y'):
     currentFilerStatus.copyFile(
-      currentMainWindowNode.currentLine,
-      currentBufStatus.path)
+      currentMainWindowNode.currentLine, currentBufStatus.path
+    )
   elif key == ord('C'):
-    currentFilerStatus.cutFile(
-      currentMainWindowNode.currentLine,
-      currentBufStatus.path)
+    currentFilerStatus.cutFile(currentMainWindowNode.currentLine, currentBufStatus.path)
   elif key == ord('p'):
-    status.commandLine.pasteFile(
-      currentFilerStatus,
-      currentBufStatus.path)
+    status.commandLine.pasteFile(currentFilerStatus, currentBufStatus.path)
   elif key == ord('s'):
     currentFilerStatus.changeSortBy
   elif key == ord('N'):
@@ -135,9 +128,7 @@ proc execFilerModeCommand*(status: var EditorStatus, command: Runes) =
   elif isCtrlK(key):
     status.moveNextWindow
   elif isEnterKey(key):
-    let r = status.bufStatus.openFileOrDir(
-      currentMainWindowNode,
-      currentFilerStatus)
+    let r = status.bufStatus.openFileOrDir(currentMainWindowNode, currentFilerStatus)
     if r.isErr:
       status.commandLine.writeError(r.error.toRunes)
       addMessageLog r.error

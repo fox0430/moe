@@ -34,22 +34,32 @@ proc splitPathExt*(path: string): tuple[head, tail: string] =
   let
     r = splitPath(path)
     head =
-      if path.count('/') > 1: r.head & "/"
-      elif path.startsWith("./"): "./"
-      elif path.startsWith("../"): "../"
-      elif path.startsWith("~/"): "~/"
-      else: r.head
+      if path.count('/') > 1:
+        r.head & "/"
+      elif path.startsWith("./"):
+        "./"
+      elif path.startsWith("../"):
+        "../"
+      elif path.startsWith("~/"):
+        "~/"
+      else:
+        r.head
   return (head: head, tail: r.tail)
 
 proc splitPathExt*(path: Runes): tuple[head, tail: Runes] =
   let
     r = splitPath($path)
     head =
-      if path.count('/'.ru) > 1: r.head.ru & "/".ru
-      elif path.startsWith("./".ru): "./".ru
-      elif path.startsWith("../".ru): "../".ru
-      elif path.startsWith("~/".ru): "~/".ru
-      else: r.head.ru
+      if path.count('/'.ru) > 1:
+        r.head.ru & "/".ru
+      elif path.startsWith("./".ru):
+        "./".ru
+      elif path.startsWith("../".ru):
+        "../".ru
+      elif path.startsWith("~/".ru):
+        "~/".ru
+      else:
+        r.head.ru
   return (head: head, tail: r.tail.ru)
 
 proc getPathTail*(path: string): string {.inline.} =
@@ -58,7 +68,6 @@ proc getPathTail*(path: string): string {.inline.} =
 
 proc isPath*(runes: Runes): bool =
   if runes.len > 0:
-    if runes.startsWith("/".ru) or
-       runes.startsWith("./".ru) or
-       runes.startsWith("../".ru) or
-       runes.startsWith("~/".ru): return true
+    if runes.startsWith("/".ru) or runes.startsWith("./".ru) or
+        runes.startsWith("../".ru) or runes.startsWith("~/".ru):
+      return true

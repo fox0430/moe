@@ -32,13 +32,11 @@ type
 
   LspDefinitionResult* = Result[Option[LspDefinition], string]
 
-proc initDefinitionParams*(
-  path: string,
-  posi: BufferPosition): DefinitionParams =
-
-    DefinitionParams(
-      textDocument: TextDocumentIdentifier(uri: path.pathToUri),
-      position: posi.toLspPosition)
+proc initDefinitionParams*(path: string, posi: BufferPosition): DefinitionParams =
+  DefinitionParams(
+    textDocument: TextDocumentIdentifier(uri: path.pathToUri),
+    position: posi.toLspPosition,
+  )
 
 proc parseTextDocumentDefinition*(res: JsonNode): LspDefinitionResult =
   if res["result"].kind != JArray:

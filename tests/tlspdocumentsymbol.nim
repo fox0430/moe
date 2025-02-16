@@ -25,118 +25,68 @@ import moepkg/lsp/documentsymbol {.all.}
 
 suite "lsp: parseTextDocumentDocumentSymbolsResponse":
   test "Not found":
-    check parseTextDocumentDocumentSymbolsResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": []
-    })
-    .get
-    .len == 0
+    check parseTextDocumentDocumentSymbolsResponse(
+      %*{"jsonrpc": "2.0", "id": 0, "result": []}
+    ).get.len == 0
 
   test "Parse DocumentSymbol[]":
-    check parseTextDocumentDocumentSymbolsResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": [
-        {
-          "name": "1a",
-          "detail": "1b",
-          "kind": 1,
-          "deprecated": false,
-          "range": {
-            "start": {
-              "line": 0,
-              "character": 1
-            },
-            "end": {
-              "line": 2,
-              "character": 3
-            }
+    check parseTextDocumentDocumentSymbolsResponse(
+      %*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": [
+          {
+            "name": "1a",
+            "detail": "1b",
+            "kind": 1,
+            "deprecated": false,
+            "range":
+              {"start": {"line": 0, "character": 1}, "end": {"line": 2, "character": 3}},
+            "selectionRange":
+              {"start": {"line": 4, "character": 5}, "end": {"line": 6, "character": 7}},
           },
-          "selectionRange": {
-            "start": {
-              "line": 4,
-              "character": 5
-            },
-            "end": {
-              "line": 6,
-              "character": 7
-            }
-          }
-        },
-        {
-          "name": "2a",
-          "detail": "2b",
-          "kind": 2,
-          "deprecated": true,
-          "range": {
-            "start": {
-              "line": 0,
-              "character": 1
-            },
-            "end": {
-              "line": 2,
-              "character": 3
-            }
+          {
+            "name": "2a",
+            "detail": "2b",
+            "kind": 2,
+            "deprecated": true,
+            "range":
+              {"start": {"line": 0, "character": 1}, "end": {"line": 2, "character": 3}},
+            "selectionRange":
+              {"start": {"line": 4, "character": 5}, "end": {"line": 6, "character": 7}},
           },
-          "selectionRange": {
-            "start": {
-              "line": 4,
-              "character": 5
-            },
-            "end": {
-              "line": 6,
-              "character": 7
-            }
-          }
-        }
-      ]
-    })
-    .get
-    .len == 2
+        ],
+      }
+    ).get.len == 2
 
   test "Parse SymbolInformation[]":
-    check parseTextDocumentDocumentSymbolsResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": [
-        {
-          "name": "1a",
-          "kind": 1,
-          "deprecated": false,
-          "location": {
-            "uri": "file:///test.txt",
-            "range": {
-              "start": {
-                "line": 0,
-                "character": 1
+    check parseTextDocumentDocumentSymbolsResponse(
+      %*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": [
+          {
+            "name": "1a",
+            "kind": 1,
+            "deprecated": false,
+            "location": {
+              "uri": "file:///test.txt",
+              "range": {
+                "start": {"line": 0, "character": 1}, "end": {"line": 2, "character": 3}
               },
-              "end": {
-                "line": 2,
-                "character": 3
-              }
-            }
-          }
-        },
-        {
-          "name": "2a",
-          "kind": 2,
-          "deprecated": false,
-          "location": {
-            "uri": "file:///test.txt",
-            "range": {
-              "start": {
-                "line": 4,
-                "character": 5
+            },
+          },
+          {
+            "name": "2a",
+            "kind": 2,
+            "deprecated": false,
+            "location": {
+              "uri": "file:///test.txt",
+              "range": {
+                "start": {"line": 4, "character": 5}, "end": {"line": 6, "character": 7}
               },
-              "end": {
-                "line": 6,
-                "character": 7
-              }
-            }
-          }
-        }
-      ]
-    })
-    .get
-    .len == 2
+            },
+          },
+        ],
+      }
+    ).get.len == 2

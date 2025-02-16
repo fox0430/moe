@@ -28,41 +28,29 @@ import moepkg/lsp/documentlink {.all.}
 
 suite "documentlink: parseDocumentLinkResponse":
   test "Not found":
-    check parseDocumentLinkResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 1,
-      "result": []
-    }).get.len == 0
+    check parseDocumentLinkResponse(%*{"jsonrpc": "2.0", "id": 1, "result": []}).get.len ==
+      0
 
   test "Not found 2":
-    check parseDocumentLinkResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 1,
-      "result": nil
-    }).get.len == 0
+    check parseDocumentLinkResponse(%*{"jsonrpc": "2.0", "id": 1, "result": nil}).get.len ==
+      0
 
   test "Basic":
     let targetUri = "/test.nim".pathToUri
 
-    let r = parseDocumentLinkResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 1,
-      "result": [
-        {
-          "range": {
-            "start": {
-              "line": 0,
-              "character": 1
-            }
-            ,"end": {
-              "line": 2,
-              "character": 3
-            }
-          },
-          "target": some(targetUri)
-        }
-      ]
-    }).get
+    let r = parseDocumentLinkResponse(
+      %*{
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": [
+          {
+            "range":
+              {"start": {"line": 0, "character": 1}, "end": {"line": 2, "character": 3}},
+            "target": some(targetUri),
+          }
+        ],
+      }
+    ).get
 
     check r.len == 1
     check r[0].range.start[] == Position(line: 0, character: 1)[]
@@ -73,23 +61,17 @@ suite "documentlink: parseDocumentLinkResolveResponse":
   test "Basic":
     let targetUri = "/test.nim".pathToUri
 
-    let r = parseDocumentLinkResolveResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 1,
-      "result": {
-        "range": {
-          "start": {
-            "line": 0,
-            "character": 1
-          }
-          ,"end": {
-            "line": 2,
-            "character": 3
-          }
+    let r = parseDocumentLinkResolveResponse(
+      %*{
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "range":
+            {"start": {"line": 0, "character": 1}, "end": {"line": 2, "character": 3}},
+          "target": some(targetUri),
         },
-        "target": some(targetUri)
       }
-    }).get
+    ).get
 
     check r.range.start[] == Position(line: 0, character: 1)[]
     check r.range.`end`[] == Position(line: 2, character: 3)[]

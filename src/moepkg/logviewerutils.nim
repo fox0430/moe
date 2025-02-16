@@ -22,20 +22,21 @@ import std/[json, strformat, strutils, times]
 import lsp/utils
 import ui, unicodeext, messagelog, highlight
 
-type
-  LogContentKind* = enum
-    editor
-    lsp
+type LogContentKind* = enum
+  editor
+  lsp
 
 proc countLogLine[T](buf: T): int =
   ## `buf` is `seq[Runes]`, `GapBuffer[T]` or etc
 
-  if buf.len == 1 and buf[0].len == 0: return 0
+  if buf.len == 1 and buf[0].len == 0:
+    return 0
 
   result = 1
   for i in 0 .. buf.high:
     # Count empty lines after log lines.
-    if buf[i].len == 0: result.inc
+    if buf[i].len == 0:
+      result.inc
 
 proc initEditorLogViewrBuffer*(): seq[Runes] =
   let log = getMessageLog()
@@ -44,7 +45,8 @@ proc initEditorLogViewrBuffer*(): seq[Runes] =
     return @[ru""]
 
   for i, line in log:
-    for l in line.splitLines: result.add l
+    for l in line.splitLines:
+      result.add l
     if i < log.high:
       result.add ru""
 
@@ -56,9 +58,11 @@ proc initLspLogViewrBuffer*(log: LspLog): seq[Runes] =
     result.add toRunes(fmt"{$log[i].timestamp} -- {$log[i].kind}")
 
     let lines = log[i].message.pretty.splitLines.toSeqRunes
-    for i in 0 .. lines.high: result.add lines[i]
+    for i in 0 .. lines.high:
+      result.add lines[i]
 
-    if i < log.high: result.add ru""
+    if i < log.high:
+      result.add ru""
 
 proc initLogViewerHighlight*(buffer: seq[Runes]): Highlight =
   ## TODO: Move to highlight module?
@@ -82,18 +86,13 @@ proc isLogViewerCommand*(command: Runes): InputState =
 
   if command.len == 1:
     let key = command[0]
-    if isCtrlK(key) or
-       isCtrlJ(key) or
-       key == ord(':') or
-       key == ord('k') or isUpKey(key) or
-       key == ord('j') or isDownKey(key) or
-       key == ord('h') or isLeftKey(key) or isBackspaceKey(key) or
-       key == ord('l') or isRightKey(key) or
-       key == ord('0') or isHomeKey(key) or
-       key == ord('$') or isEndKey(key) or
-       key == ord('q') or isEscKey(key) or
-       key == ord('G'):
-         return InputState.Valid
+    if isCtrlK(key) or isCtrlJ(key) or key == ord(':') or key == ord('k') or isUpKey(
+      key
+    ) or key == ord('j') or isDownKey(key) or key == ord('h') or isLeftKey(key) or
+        isBackspaceKey(key) or key == ord('l') or isRightKey(key) or key == ord('0') or
+        isHomeKey(key) or key == ord('$') or isEndKey(key) or key == ord('q') or
+        isEscKey(key) or key == ord('G'):
+      return InputState.Valid
     elif key == ord('g'):
       return InputState.Continue
   elif command.len == 2:

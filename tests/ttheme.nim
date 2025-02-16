@@ -23,26 +23,24 @@ import moepkg/[ui, rgb, color]
 
 import moepkg/theme {.all.}
 
-template DefaultThemeFg: var Color =
+template DefaultThemeFg(): var Color =
   themeColors[EditorColorPairIndex.default].foreground
 
-template DefaultThemeBg: var Color =
+template DefaultThemeBg(): var Color =
   themeColors[EditorColorPairIndex.default].background
 
 suite "color: Get Color from ColorThemeTable":
   test "foregroundRgb":
     DefaultThemeFg.rgb = "#111111".hexToRgb.get
 
-    assert DefaultThemeFg == Color(
-      index: EditorColorIndex.foreground,
-      rgb: "#111111".hexToRgb.get)
+    assert DefaultThemeFg ==
+      Color(index: EditorColorIndex.foreground, rgb: "#111111".hexToRgb.get)
 
   test "backgroundRgb":
     DefaultThemeBg.rgb = "#111111".hexToRgb.get
 
-    assert DefaultThemeBg == Color(
-      index: EditorColorIndex.background,
-      rgb: "#111111".hexToRgb.get)
+    assert DefaultThemeBg ==
+      Color(index: EditorColorIndex.background, rgb: "#111111".hexToRgb.get)
 
   test "rgbPairFromEditorColorPair":
     DefaultThemeFg.rgb = "#222222".hexToRgb.get
@@ -51,7 +49,8 @@ suite "color: Get Color from ColorThemeTable":
     assert rgbPairFromEditorColorPair(EditorColorPairIndex.default) ==
       RgbPair(
         foreground: Rgb(red: 34, green: 34, blue: 34),
-        background: Rgb(red: 34, green: 34, blue: 34))
+        background: Rgb(red: 34, green: 34, blue: 34),
+      )
 
 suite "color: Set index to ColorThemeTable":
   test "setForegroundIndex 1":
@@ -92,16 +91,12 @@ suite "color: Set index to ColorThemeTable":
 
 suite "color: Set Rgb to ColorThemeTable":
   test "setForegroundRgb":
-    setForegroundRgb(
-      EditorColorPairIndex.default,
-      "#333333".hexToRgb.get)
+    setForegroundRgb(EditorColorPairIndex.default, "#333333".hexToRgb.get)
 
     assert DefaultThemeFg.rgb == "#333333".hexToRgb.get
 
   test "setBackgroundRgb":
-    setBackgroundRgb(
-      EditorColorPairIndex.default,
-      "#333333".hexToRgb.get)
+    setBackgroundRgb(EditorColorPairIndex.default, "#333333".hexToRgb.get)
 
     assert DefaultThemeBg.rgb == "#333333".hexToRgb.get
 
@@ -128,5 +123,4 @@ suite "color: Downgrade":
       "#800001".hexToRgb.get.downgrade(ColorMode.c256)
 
   test "Do nothing if c24bit":
-    assert "#800001".hexToRgb.get ==
-      "#800001".hexToRgb.get.downgrade(ColorMode.c24bit)
+    assert "#800001".hexToRgb.get == "#800001".hexToRgb.get.downgrade(ColorMode.c24bit)

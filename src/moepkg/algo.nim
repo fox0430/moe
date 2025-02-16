@@ -38,9 +38,7 @@ proc fuzzyScore*(s1, s2: Runes): int =
         matrix[i][j] = 0
       else:
         let
-          score =
-            if s1[i - 1] == s2[j - 1]: MatchScore
-            else: MismatchPenalty
+          score = if s1[i - 1] == s2[j - 1]: MatchScore else: MismatchPenalty
           match = matrix[i - 1][j - 1] + score
           delete = matrix[i - 1][j] + GapPenalty
           insert = matrix[i][j - 1] + GapPenalty
@@ -69,9 +67,7 @@ proc fuzzyScore*(s1, s2: Runes): int =
       diagonalScore = matrix[maxI - 1][maxJ - 1]
       leftScore = matrix[maxI][maxJ - 1]
 
-    let score =
-      if s1[maxI - 1] == s2[maxJ - 1]: MatchScore
-      else: MismatchPenalty
+    let score = if s1[maxI - 1] == s2[maxJ - 1]: MatchScore else: MismatchPenalty
     if currentScore == diagonalScore + score:
       alignedS1.add s1[maxI - 1]
       alignedS2.add s2[maxJ - 1]

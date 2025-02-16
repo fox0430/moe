@@ -33,49 +33,44 @@
 
 import highlite
 
-const
-  javaScriptkeywords* = ["Array", "ArrayBuffer", "Attr", "BigInt64Array",
-    "BigUint64Array", "Boolean", "Buffer", "CDATASection", "CharacterData",
-    "Collator", "Comment", "DOMException", "DOMImplementation",
-    "DOMSTRING_SIZE_ERR", "DataViewDate", "DateTimeFormat", "Document",
-    "DocumentFragment", "DocumentType", "Element", "Entity",
-    "EntityReference", "Float32Array", "Float64Array", "Function",
-    "HIERARCHY_REQUEST_ERR", "INDEX_SIZE_ERR", "INUSE_ATTRIBUTE_ERR",
-    "INVALID_ACCESS_ERR", "INVALID_CHARACTER_ERR", "INVALID_MODIFICATION_ERR",
-    "INVALID_STATE_ERR", "Int16Array", "Int32Array", "Int8Array", "Intl",
-    "Iterator", "JSON", "Map", "MathNumber", "NAMESPACE_ERR",
-    "NOT_FOUND_ERR", "NOT_SUPPORTED_ERR", "NO_DATA_ALLOWED_ERR",
-    "NO_MODIFICATION_ALLOWED_ERR", "NamedNodeMap", "Node", "NodeList",
-    "Notation", "NumberFormat", "Object", "Object", "ParallelArray",
-    "ProcessingInstruction", "PromiseProxy", "Reflect", "RegExp",
-    "SYNTAX_ERR", "Set", "String", "String", "Symbol", "Text", "Uint16Array",
-    "Uint32Array", "Uint8Array", "Uint8ClampedArray", "Uint8ClampedArray",
-    "WRONG_DOCUMENT_ERR", "WeakMap", "WeakSet", "WebAssembly", "abstract",
-    "apply", "arguments", "as", "assert", "async", "await", "boolean",
-    "break", "byte", "catchexport", "char", "charAt", "class", "console",
-    "console", "const", "continue", "decodeURI", "decodeURIComponent",
-    "delete", "do", "document", "double", "else", "encodeURI",
-    "encodeURIComponenteval", "enum", "except", "false", "fetch", "final",
-    "finally", "float", "for", "from", "function", "global", "goto", "if",
-    "implementsprotected", "import", "in", "indexOf", "instanceof", "int",
-    "interface", "is", "isFinite", "isNaN", "join", "keys", "let", "log",
-    "long", "native", "new", "null", "onblur", "onclick", "oncontextmenu",
-    "ondblclick", "onfocus", "onkeydown", "onkeypress", "onkeyup",
-    "onmousedown", "onmousemove", "onmouseout", "onmouseover", "onmouseup",
-    "onresize", "or", "package", "parseFloat", "parseIntuneval", "pass",
-    "private", "public", "push", "require", "return", "short", "switch",
-    "synchronized", "throw", "throws", "transient", "true", "try", "value",
-    "var", "void", "volatile", "while", "window", "yield"
-  ]
+const javaScriptkeywords* = [
+  "Array", "ArrayBuffer", "Attr", "BigInt64Array", "BigUint64Array", "Boolean",
+  "Buffer", "CDATASection", "CharacterData", "Collator", "Comment", "DOMException",
+  "DOMImplementation", "DOMSTRING_SIZE_ERR", "DataViewDate", "DateTimeFormat",
+  "Document", "DocumentFragment", "DocumentType", "Element", "Entity",
+  "EntityReference", "Float32Array", "Float64Array", "Function",
+  "HIERARCHY_REQUEST_ERR", "INDEX_SIZE_ERR", "INUSE_ATTRIBUTE_ERR",
+  "INVALID_ACCESS_ERR", "INVALID_CHARACTER_ERR", "INVALID_MODIFICATION_ERR",
+  "INVALID_STATE_ERR", "Int16Array", "Int32Array", "Int8Array", "Intl", "Iterator",
+  "JSON", "Map", "MathNumber", "NAMESPACE_ERR", "NOT_FOUND_ERR", "NOT_SUPPORTED_ERR",
+  "NO_DATA_ALLOWED_ERR", "NO_MODIFICATION_ALLOWED_ERR", "NamedNodeMap", "Node",
+  "NodeList", "Notation", "NumberFormat", "Object", "Object", "ParallelArray",
+  "ProcessingInstruction", "PromiseProxy", "Reflect", "RegExp", "SYNTAX_ERR", "Set",
+  "String", "String", "Symbol", "Text", "Uint16Array", "Uint32Array", "Uint8Array",
+  "Uint8ClampedArray", "Uint8ClampedArray", "WRONG_DOCUMENT_ERR", "WeakMap", "WeakSet",
+  "WebAssembly", "abstract", "apply", "arguments", "as", "assert", "async", "await",
+  "boolean", "break", "byte", "catchexport", "char", "charAt", "class", "console",
+  "console", "const", "continue", "decodeURI", "decodeURIComponent", "delete", "do",
+  "document", "double", "else", "encodeURI", "encodeURIComponenteval", "enum", "except",
+  "false", "fetch", "final", "finally", "float", "for", "from", "function", "global",
+  "goto", "if", "implementsprotected", "import", "in", "indexOf", "instanceof", "int",
+  "interface", "is", "isFinite", "isNaN", "join", "keys", "let", "log", "long",
+  "native", "new", "null", "onblur", "onclick", "oncontextmenu", "ondblclick",
+  "onfocus", "onkeydown", "onkeypress", "onkeyup", "onmousedown", "onmousemove",
+  "onmouseout", "onmouseover", "onmouseup", "onresize", "or", "package", "parseFloat",
+  "parseIntuneval", "pass", "private", "public", "push", "require", "return", "short",
+  "switch", "synchronized", "throw", "throws", "transient", "true", "try", "value",
+  "var", "void", "volatile", "while", "window", "yield",
+]
 
 proc javaScriptNextToken*(g: var GeneralTokenizer) =
   ## javaScriptNextToken is Incomplete
 
   const
-    hexChars = {'0'..'9', 'A'..'F', 'a'..'f'}
-    octChars = {'0'..'7'}
-    binChars = {'0'..'1'}
-    symChars = {'A'..'Z', 'a'..'z', '0'..'9', '_', '\x80'..'\xFF'}
+    hexChars = {'0' .. '9', 'A' .. 'F', 'a' .. 'f'}
+    octChars = {'0' .. '7'}
+    binChars = {'0' .. '1'}
+    symChars = {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_', '\x80' .. '\xFF'}
   var pos = g.pos
   g.start = g.pos
   if g.state == gtStringLit:
@@ -88,13 +83,17 @@ proc javaScriptNextToken*(g: var GeneralTokenizer) =
         case g.buf[pos]
         of 'x', 'X':
           inc(pos)
-          if g.buf[pos] in hexChars: inc(pos)
-          if g.buf[pos] in hexChars: inc(pos)
-        of '0'..'9':
-          while g.buf[pos] in {'0'..'9'}: inc(pos)
+          if g.buf[pos] in hexChars:
+            inc(pos)
+          if g.buf[pos] in hexChars:
+            inc(pos)
+        of '0' .. '9':
+          while g.buf[pos] in {'0' .. '9'}:
+            inc(pos)
         of '\0':
           g.state = gtNone
-        else: inc(pos)
+        else:
+          inc(pos)
         break
       of '\0', '\x0D', '\x0A':
         g.state = gtNone
@@ -103,17 +102,20 @@ proc javaScriptNextToken*(g: var GeneralTokenizer) =
         inc(pos)
         g.state = gtNone
         break
-      else: inc(pos)
+      else:
+        inc(pos)
   else:
     case g.buf[pos]
-    of ' ', '\x09'..'\x0D':
+    of ' ', '\x09' .. '\x0D':
       g.kind = gtWhitespace
-      while g.buf[pos] in {' ', '\x09'..'\x0D'}: inc(pos)
+      while g.buf[pos] in {' ', '\x09' .. '\x0D'}:
+        inc(pos)
     of '/':
       inc(pos)
       if g.buf[pos] == '/':
         g.kind = gtComment
-        while not (g.buf[pos] in {'\0', '\x0A', '\x0D'}): inc(pos)
+        while not (g.buf[pos] in {'\0', '\x0A', '\x0D'}):
+          inc(pos)
       elif g.buf[pos] == '*':
         g.kind = gtLongComment
         var nested = 0
@@ -124,41 +126,54 @@ proc javaScriptNextToken*(g: var GeneralTokenizer) =
             inc(pos)
             if g.buf[pos] == '/':
               inc(pos)
-              if nested == 0: break
+              if nested == 0:
+                break
           of '/':
             inc(pos)
-            if g.buf[pos] == '*': inc(pos)
+            if g.buf[pos] == '*':
+              inc(pos)
           of '\0':
             break
-          else: inc(pos)
-    of 'a'..'z', 'A'..'Z', '_', '\x80'..'\xFF':
+          else:
+            inc(pos)
+    of 'a' .. 'z', 'A' .. 'Z', '_', '\x80' .. '\xFF':
       var id = ""
       while g.buf[pos] in symChars:
         add(id, g.buf[pos])
         inc(pos)
-      if isKeyword(javaScriptkeywords, id) >= 0: g.kind = gtKeyword
-      else: g.kind = gtIdentifier
+      if isKeyword(javaScriptkeywords, id) >= 0:
+        g.kind = gtKeyword
+      else:
+        g.kind = gtIdentifier
     of '0':
       inc(pos)
       case g.buf[pos]
       of 'b', 'B':
         inc(pos)
-        while g.buf[pos] in binChars: inc(pos)
-        if g.buf[pos] in {'A'..'Z', 'a'..'z'}: inc(pos)
+        while g.buf[pos] in binChars:
+          inc(pos)
+        if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
+          inc(pos)
       of 'x', 'X':
         inc(pos)
-        while g.buf[pos] in hexChars: inc(pos)
-        if g.buf[pos] in {'A'..'Z', 'a'..'z'}: inc(pos)
-      of '0'..'7':
+        while g.buf[pos] in hexChars:
+          inc(pos)
+        if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
+          inc(pos)
+      of '0' .. '7':
         inc(pos)
-        while g.buf[pos] in octChars: inc(pos)
-        if g.buf[pos] in {'A'..'Z', 'a'..'z'}: inc(pos)
+        while g.buf[pos] in octChars:
+          inc(pos)
+        if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
+          inc(pos)
       else:
         pos = generalNumber(g, pos)
-        if g.buf[pos] in {'A'..'Z', 'a'..'z'}: inc(pos)
-    of '1'..'9':
+        if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
+          inc(pos)
+    of '1' .. '9':
       pos = generalNumber(g, pos)
-      if g.buf[pos] in {'A'..'Z', 'a'..'z'}: inc(pos)
+      if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
+        inc(pos)
     of '\"', '\'':
       inc(pos)
       g.kind = gtStringLit
@@ -172,7 +187,8 @@ proc javaScriptNextToken*(g: var GeneralTokenizer) =
         of '\\':
           g.state = g.kind
           break
-        else: inc(pos)
+        else:
+          inc(pos)
     of '(', ')', '[', ']', '{', '}', ':', ',', ';', '.':
       inc(pos)
       g.kind = gtPunctuation
@@ -181,7 +197,8 @@ proc javaScriptNextToken*(g: var GeneralTokenizer) =
     else:
       if g.buf[pos] in opChars:
         g.kind = gtOperator
-        while g.buf[pos] in opChars: inc(pos)
+        while g.buf[pos] in opChars:
+          inc(pos)
       else:
         inc(pos)
         g.kind = gtNone

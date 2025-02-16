@@ -23,16 +23,10 @@ import pkg/results
 
 import protocol/types
 
-type
-  ExecuteCommandResult* = Result[Option[JsonNode], string]
+type ExecuteCommandResult* = Result[Option[JsonNode], string]
 
-proc initExecuteCommandParams*(
-  command: string,
-  args: JsonNode): ExecuteCommandParams =
-
-    ExecuteCommandParams(
-      command: command,
-      arguments: args)
+proc initExecuteCommandParams*(command: string, args: JsonNode): ExecuteCommandParams =
+  ExecuteCommandParams(command: command, arguments: args)
 
 proc parseExecuteCommandResponse*(res: JsonNode): ExecuteCommandResult =
   if not res.contains("result"):
