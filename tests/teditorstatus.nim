@@ -564,15 +564,16 @@ suite "Auto delete paren":
 
       check(currentBufStatus.buffer[0] == ru"a(a)")
 
-test "Write tab line":
-  test "Basic":
-    var status = initEditorStatus()
-    discard status.addNewBufferInCurrentWin("test.txt").get
+suite "Tab line":
+  test "Write tab line":
+    test "Basic":
+      var status = initEditorStatus()
+      discard status.addNewBufferInCurrentWin("test.txt").get
 
-    status.resize(100, 100)
+      status.resize(100, 100)
 
-    privateAccess(TabLine)
-    check status.tabLine.size.w == 100
+      privateAccess(TabLine)
+      check status.tabLine.size.w == 100
 
 suite "Close window":
   test "Basic":
