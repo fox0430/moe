@@ -16,6 +16,6 @@ jobs:
         uses: arnetheduck/nph-action@v1
         with:
           version: latest
-          options: "."
+          options: "src/ tests/"
           fail: true
           suggest: true
