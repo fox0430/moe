@@ -22,8 +22,11 @@ import std/[unittest, osproc]
 import pkg/results
 
 import moepkg/syntax/highlite
-import moepkg/[independentutils, gapbuffer, unicodeext, bufferstatus,
-               editorstatus, settings, registers, windownode, clipboard]
+import
+  moepkg/[
+    independentutils, gapbuffer, unicodeext, bufferstatus, editorstatus, settings,
+    registers, windownode, clipboard,
+  ]
 
 import utils
 
@@ -31,33 +34,20 @@ import moepkg/editor {.all.}
 import moepkg/ui {.all.}
 
 proc sourceLangToStr(lang: SourceLanguage): string =
-  case lang:
-    of SourceLanguage.langC:
-      "C"
-    of SourceLanguage.langCpp:
-      "C++"
-    of SourceLanguage.langCsharp:
-      "C#"
-    of SourceLanguage.langHaskell:
-      "Haskell"
-    of SourceLanguage.langJava:
-      "Java"
-    of SourceLanguage.langJavaScript:
-      "JavaScript"
-    of SourceLanguage.langMarkdown:
-      "Markdown"
-    of SourceLanguage.langNim:
-      "Nim"
-    of SourceLanguage.langPython:
-      "Python"
-    of SourceLanguage.langRust:
-      "Rust"
-    of SourceLanguage.langShell:
-      "Shell"
-    of SourceLanguage.langYaml:
-      "Yaml"
-    else:
-      "Plain text"
+  case lang
+  of SourceLanguage.langC: "C"
+  of SourceLanguage.langCpp: "C++"
+  of SourceLanguage.langCsharp: "C#"
+  of SourceLanguage.langHaskell: "Haskell"
+  of SourceLanguage.langJava: "Java"
+  of SourceLanguage.langJavaScript: "JavaScript"
+  of SourceLanguage.langMarkdown: "Markdown"
+  of SourceLanguage.langNim: "Nim"
+  of SourceLanguage.langPython: "Python"
+  of SourceLanguage.langRust: "Rust"
+  of SourceLanguage.langShell: "Shell"
+  of SourceLanguage.langYaml: "Yaml"
+  else: "Plain text"
 
 suite "Editor: getRegister":
   test "No named register":
@@ -133,8 +123,7 @@ suite "Editor: Auto indent":
 
     currentMainWindowNode.currentLine = 1
 
-    status.bufStatus[0].autoIndentCurrentLine(
-      currentMainWindowNode)
+    status.bufStatus[0].autoIndentCurrentLine(currentMainWindowNode)
 
     check(status.bufStatus[0].buffer[0] == ru"a")
     check(status.bufStatus[0].buffer[1] == ru"b")
@@ -187,12 +176,8 @@ suite "Editor: Delete word":
       WithSpace = true
       RegisterName = ""
     currentBufStatus.deleteWord(
-      currentMainWindowNode,
-      Loop,
-      WithSpace,
-      status.registers,
-      RegisterName,
-      settings)
+      currentMainWindowNode, Loop, WithSpace, status.registers, RegisterName, settings
+    )
 
     check currentBufStatus.buffer.toSeqRunes == @[ru""]
     check status.registers.getNoNamedRegister.buffer == @[ru"test  "]
@@ -208,12 +193,8 @@ suite "Editor: Delete word":
       WithSpace = false
       RegisterName = ""
     currentBufStatus.deleteWord(
-      currentMainWindowNode,
-      Loop,
-      WithSpace,
-      status.registers,
-      RegisterName,
-      settings)
+      currentMainWindowNode, Loop, WithSpace, status.registers, RegisterName, settings
+    )
 
     check currentBufStatus.buffer.toSeqRunes == @[ru"  "]
     check status.registers.getNoNamedRegister.buffer == @[ru"test"]
@@ -231,12 +212,8 @@ suite "Editor: Delete word":
       WithSpace = true
       RegisterName = ""
     currentBufStatus.deleteWord(
-      currentMainWindowNode,
-      Loop,
-      WithSpace,
-      status.registers,
-      RegisterName,
-      settings)
+      currentMainWindowNode, Loop, WithSpace, status.registers, RegisterName, settings
+    )
 
 suite "Editor: keyEnter":
   test "Delete all characters in the previous line if only whitespaces":
@@ -251,9 +228,8 @@ suite "Editor: keyEnter":
     const IsAutoIndent = true
     for i in 0 ..< 2:
       status.bufStatus[0].keyEnter(
-        currentMainWindowNode,
-        IsAutoIndent,
-        status.settings.standard.tabStop)
+        currentMainWindowNode, IsAutoIndent, status.settings.standard.tabStop
+      )
 
     check status.bufStatus[0].buffer[0] == ru"block:"
     check status.bufStatus[0].buffer[1] == ru""
@@ -269,9 +245,8 @@ suite "Editor: keyEnter":
 
     const IsAutoIndent = false
     currentBufStatus.keyEnter(
-      currentMainWindowNode,
-      IsAutoIndent,
-      status.settings.standard.tabStop)
+      currentMainWindowNode, IsAutoIndent, status.settings.standard.tabStop
+    )
 
     check currentBufStatus.buffer.len == 2
     check currentBufStatus.buffer[0] == ru ""
@@ -284,8 +259,7 @@ suite "Editor: keyEnter":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
 
-    currentBufStatus.buffer = initGapBuffer(@[ru"import std/os",
-                                              ru"       a"])
+    currentBufStatus.buffer = initGapBuffer(@[ru"import std/os", ru"       a"])
     currentBufStatus.mode = Mode.insert
 
     currentBufStatus.language = SourceLanguage.langNim
@@ -295,9 +269,8 @@ suite "Editor: keyEnter":
     for i in 0 ..< 2:
       const IsAutoIndent = true
       currentBufStatus.keyEnter(
-        currentMainWindowNode,
-        IsAutoIndent,
-        status.settings.standard.tabStop)
+        currentMainWindowNode, IsAutoIndent, status.settings.standard.tabStop
+      )
 
   proc newLineTestCase1(lang: SourceLanguage, isAutoIndent: bool) =
     ## Enable/Disable autoindent
@@ -307,8 +280,10 @@ suite "Editor: keyEnter":
     let
       langStr = sourceLangToStr(lang)
       testTitle =
-        if isAutoIndent: "Case 1: Enable autoindent: Newline in " & langStr
-        else: "Case 1: Disable autoindent: Newline in " & langStr
+        if isAutoIndent:
+          "Case 1: Enable autoindent: Newline in " & langStr
+        else:
+          "Case 1: Disable autoindent: Newline in " & langStr
 
     # Generate test code
     test testTitle:
@@ -324,9 +299,9 @@ suite "Editor: keyEnter":
         status.mainWindow.currentMainWindowNode.currentColumn = buffer[0].len
 
       status.bufStatus[0].keyEnter(
-        status.mainWindow.currentMainWindowNode,
-        isAutoIndent,
-        status.settings.standard.tabStop)
+        status.mainWindow.currentMainWindowNode, isAutoIndent,
+        status.settings.standard.tabStop,
+      )
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 2
@@ -353,8 +328,10 @@ suite "Editor: keyEnter":
     let
       langStr = sourceLangToStr(lang)
       testTitle =
-        if isAutoIndent: "Case 2: Enable autoindent: Newline in " & langStr
-        else: "Case 2: Disable autoindent: Newline in " & langStr
+        if isAutoIndent:
+          "Case 2: Enable autoindent: Newline in " & langStr
+        else:
+          "Case 2: Disable autoindent: Newline in " & langStr
 
     # Generate test code
     test testTitle:
@@ -368,9 +345,9 @@ suite "Editor: keyEnter":
       status.mainWindow.currentMainWindowNode.currentColumn = 2
 
       status.bufStatus[0].keyEnter(
-        status.mainWindow.currentMainWindowNode,
-        isAutoIndent,
-        status.settings.standard.tabStop)
+        status.mainWindow.currentMainWindowNode, isAutoIndent,
+        status.settings.standard.tabStop,
+      )
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 2
@@ -397,8 +374,10 @@ suite "Editor: keyEnter":
     let
       langStr = sourceLangToStr(lang)
       testTitle =
-        if isAutoIndent: "Case 3: Enable autoindent: Newline in " & langStr
-        else: "Case 3: Disable autoindent: Newline in " & langStr
+        if isAutoIndent:
+          "Case 3: Enable autoindent: Newline in " & langStr
+        else:
+          "Case 3: Disable autoindent: Newline in " & langStr
 
     test testTitle:
       var status = initEditorStatus()
@@ -409,9 +388,9 @@ suite "Editor: keyEnter":
       status.bufStatus[0].mode = Mode.insert
 
       status.bufStatus[0].keyEnter(
-        status.mainWindow.currentMainWindowNode,
-        isAutoIndent,
-        status.settings.standard.tabStop)
+        status.mainWindow.currentMainWindowNode, isAutoIndent,
+        status.settings.standard.tabStop,
+      )
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 2
@@ -438,8 +417,10 @@ suite "Editor: keyEnter":
     let
       langStr = sourceLangToStr(lang)
       testTitle =
-        if isAutoIndent: "Case 4: Enable autoindent: Newline in " & langStr
-        else: "Case 4: Disable autoindent: Newline in " & langStr
+        if isAutoIndent:
+          "Case 4: Enable autoindent: Newline in " & langStr
+        else:
+          "Case 4: Disable autoindent: Newline in " & langStr
 
     test testTitle:
       var status = initEditorStatus()
@@ -450,9 +431,9 @@ suite "Editor: keyEnter":
       status.bufStatus[0].mode = Mode.insert
 
       status.bufStatus[0].keyEnter(
-        status.mainWindow.currentMainWindowNode,
-        isAutoIndent,
-        status.settings.standard.tabStop)
+        status.mainWindow.currentMainWindowNode, isAutoIndent,
+        status.settings.standard.tabStop,
+      )
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 2
@@ -493,9 +474,9 @@ suite "Editor: keyEnter":
 
       const IsAutoIndent = false
       status.bufStatus[0].keyEnter(
-        status.mainWindow.currentMainWindowNode,
-        IsAutoIndent,
-        status.settings.standard.tabStop)
+        status.mainWindow.currentMainWindowNode, IsAutoIndent,
+        status.settings.standard.tabStop,
+      )
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 2
@@ -510,7 +491,6 @@ suite "Editor: keyEnter":
     newLineTestDisableAutoindent1(l)
 
 suite "Editor: keyEnter: Enable autoindent in Nim":
-
   proc newLineTestInNimCase1(keyword: string) =
     ## Disable autoindent
     ## Line break test that case there is some keyword on the current line.
@@ -532,9 +512,9 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
 
       const IsAutoIndent = true
       status.bufStatus[0].keyEnter(
-        status.mainWindow.currentMainWindowNode,
-        IsAutoIndent,
-        status.settings.standard.tabStop)
+        status.mainWindow.currentMainWindowNode, IsAutoIndent,
+        status.settings.standard.tabStop,
+      )
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 2
@@ -578,9 +558,9 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
 
       const IsAutoIndent = true
       status.bufStatus[0].keyEnter(
-        status.mainWindow.currentMainWindowNode,
-        IsAutoIndent,
-        status.settings.standard.tabStop)
+        status.mainWindow.currentMainWindowNode, IsAutoIndent,
+        status.settings.standard.tabStop,
+      )
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 2
@@ -620,9 +600,9 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
 
       const IsAutoIndent = true
       status.bufStatus[0].keyEnter(
-        status.mainWindow.currentMainWindowNode,
-        IsAutoIndent,
-        status.settings.standard.tabStop)
+        status.mainWindow.currentMainWindowNode, IsAutoIndent,
+        status.settings.standard.tabStop,
+      )
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 2
@@ -664,9 +644,9 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
 
       const IsAutoIndent = true
       status.bufStatus[0].keyEnter(
-        status.mainWindow.currentMainWindowNode,
-        IsAutoIndent,
-        status.settings.standard.tabStop)
+        status.mainWindow.currentMainWindowNode, IsAutoIndent,
+        status.settings.standard.tabStop,
+      )
 
       check status.bufStatus[0].buffer[0] == buffer[0]
       check $status.bufStatus[0].buffer[1] == "  "
@@ -707,9 +687,9 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
 
       const IsAutoIndent = true
       status.bufStatus[0].keyEnter(
-        status.mainWindow.currentMainWindowNode,
-        IsAutoIndent,
-        status.settings.standard.tabStop)
+        status.mainWindow.currentMainWindowNode, IsAutoIndent,
+        status.settings.standard.tabStop,
+      )
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer[0] == ru ""
@@ -750,9 +730,9 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
 
       const IsAutoIndent = true
       status.bufStatus[0].keyEnter(
-        status.mainWindow.currentMainWindowNode,
-        IsAutoIndent,
-        status.settings.standard.tabStop)
+        status.mainWindow.currentMainWindowNode, IsAutoIndent,
+        status.settings.standard.tabStop,
+      )
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 2
@@ -774,7 +754,7 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
     ## currentColumn is 0
     ## Line break test when the current line ends with pair of paren.
 
-     # Generate test title
+    # Generate test title
     let testTitle = "Case 7: When the current line ends with " & pair & " in Nim"
 
     test testTitle:
@@ -787,9 +767,9 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
 
       const IsAutoIndent = true
       status.bufStatus[0].keyEnter(
-        status.mainWindow.currentMainWindowNode,
-        IsAutoIndent,
-        status.settings.standard.tabStop)
+        status.mainWindow.currentMainWindowNode, IsAutoIndent,
+        status.settings.standard.tabStop,
+      )
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 2
@@ -826,9 +806,9 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
 
       const IsAutoIndent = true
       status.bufStatus[0].keyEnter(
-        status.mainWindow.currentMainWindowNode,
-        IsAutoIndent,
-        status.settings.standard.tabStop)
+        status.mainWindow.currentMainWindowNode, IsAutoIndent,
+        status.settings.standard.tabStop,
+      )
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 2
@@ -865,9 +845,9 @@ suite "Editor: keyEnter: Enable autoindent in C":
 
       const IsAutoIndent = true
       status.bufStatus[0].keyEnter(
-        status.mainWindow.currentMainWindowNode,
-        IsAutoIndent,
-        status.settings.standard.tabStop)
+        status.mainWindow.currentMainWindowNode, IsAutoIndent,
+        status.settings.standard.tabStop,
+      )
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 3
@@ -903,9 +883,9 @@ suite "Editor: keyEnter: Enable autoindent in C":
 
       const IsAutoIndent = true
       status.bufStatus[0].keyEnter(
-        status.mainWindow.currentMainWindowNode,
-        IsAutoIndent,
-        status.settings.standard.tabStop)
+        status.mainWindow.currentMainWindowNode, IsAutoIndent,
+        status.settings.standard.tabStop,
+      )
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 2
@@ -942,9 +922,9 @@ suite "Editor: keyEnter: Enable autoindent in C":
 
       const IsAutoIndent = true
       status.bufStatus[0].keyEnter(
-        status.mainWindow.currentMainWindowNode,
-        IsAutoIndent,
-        status.settings.standard.tabStop)
+        status.mainWindow.currentMainWindowNode, IsAutoIndent,
+        status.settings.standard.tabStop,
+      )
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 3
@@ -974,10 +954,8 @@ suite "Editor: keyEnter: Enable autoindent in Yaml":
 
     const IsAutoIndent = true
     status.bufStatus[0].keyEnter(
-      currentMainWindowNode,
-      IsAutoIndent,
-      status.settings.standard.tabStop)
-
+      currentMainWindowNode, IsAutoIndent, status.settings.standard.tabStop
+    )
 
     check status.bufStatus[0].buffer[0] == ru"test:"
     check status.bufStatus[0].buffer[1] == ru"  "
@@ -994,9 +972,8 @@ suite "Editor: keyEnter and autoindent in Python":
 
     const IsAutoIndent = true
     status.bufStatus[0].keyEnter(
-      currentMainWindowNode,
-      IsAutoIndent,
-      status.settings.standard.tabStop)
+      currentMainWindowNode, IsAutoIndent, status.settings.standard.tabStop
+    )
 
     check status.bufStatus[0].buffer[0] == ru"if true:"
     check status.bufStatus[0].buffer[1] == ru"  "
@@ -1012,9 +989,8 @@ suite "Editor: keyEnter and autoindent in Python":
 
     const IsAutoIndent = true
     status.bufStatus[0].keyEnter(
-      currentMainWindowNode,
-      IsAutoIndent,
-      status.settings.standard.tabStop)
+      currentMainWindowNode, IsAutoIndent, status.settings.standard.tabStop
+    )
 
     check status.bufStatus[0].buffer[0] == ru"if true and"
     check status.bufStatus[0].buffer[1] == ru"  "
@@ -1030,9 +1006,8 @@ suite "Editor: keyEnter and autoindent in Python":
 
     const IsAutoIndent = true
     status.bufStatus[0].keyEnter(
-      currentMainWindowNode,
-      IsAutoIndent,
-      status.settings.standard.tabStop)
+      currentMainWindowNode, IsAutoIndent, status.settings.standard.tabStop
+    )
 
     check currentBufStatus.buffer[0] == ru"if true or"
     check currentBufStatus.buffer[1] == ru"  "
@@ -1050,9 +1025,8 @@ suite "Editor: keyEnter and autoindent in Python":
     const IsAutoIndent = true
     for i in 0 ..< 2:
       currentBufStatus.keyEnter(
-        currentMainWindowNode,
-        IsAutoIndent,
-        status.settings.standard.tabStop)
+        currentMainWindowNode, IsAutoIndent, status.settings.standard.tabStop
+      )
 
 suite "Delete character before cursor":
   test "Delete one character":
@@ -1066,10 +1040,7 @@ suite "Delete character before cursor":
     const
       AutoCloseParen = true
       TabStop = 2
-    status.bufStatus[0].keyBackspace(
-      currentMainWindowNode,
-      AutoCloseParen,
-      TabStop)
+    status.bufStatus[0].keyBackspace(currentMainWindowNode, AutoCloseParen, TabStop)
 
     check status.bufStatus[0].buffer.len == 1
     check status.bufStatus[0].buffer[0] == ru"tes"
@@ -1085,10 +1056,7 @@ suite "Delete character before cursor":
     const
       AutoCloseParen = true
       TabStop = 2
-    status.bufStatus[0].keyBackspace(
-      currentMainWindowNode,
-      AutoCloseParen,
-      TabStop)
+    status.bufStatus[0].keyBackspace(currentMainWindowNode, AutoCloseParen, TabStop)
 
     check status.bufStatus[0].buffer.len == 1
     check status.bufStatus[0].buffer[0] == ru"  testtest2"
@@ -1105,10 +1073,7 @@ suite "Delete character before cursor":
     const
       AutoCloseParen = true
       TabStop = 2
-    status.bufStatus[0].keyBackspace(
-      currentMainWindowNode,
-      AutoCloseParen,
-      TabStop)
+    status.bufStatus[0].keyBackspace(currentMainWindowNode, AutoCloseParen, TabStop)
 
     check status.bufStatus[0].buffer.len == 1
     check status.bufStatus[0].buffer[0] == ru"test"
@@ -1124,10 +1089,7 @@ suite "Delete character before cursor":
     const
       AutoCloseParen = true
       TabStop = 2
-    status.bufStatus[0].keyBackspace(
-      currentMainWindowNode,
-      AutoCloseParen,
-      TabStop)
+    status.bufStatus[0].keyBackspace(currentMainWindowNode, AutoCloseParen, TabStop)
 
     check status.bufStatus[0].buffer.len == 1
     check status.bufStatus[0].buffer[0] == ru"test"
@@ -1143,10 +1105,7 @@ suite "Delete character before cursor":
     const
       AutoCloseParen = true
       TabStop = 2
-    status.bufStatus[0].keyBackspace(
-      currentMainWindowNode,
-      AutoCloseParen,
-      TabStop)
+    status.bufStatus[0].keyBackspace(currentMainWindowNode, AutoCloseParen, TabStop)
 
     check status.bufStatus[0].buffer.len == 1
     check status.bufStatus[0].buffer[0] == ru"  test"
@@ -1162,10 +1121,7 @@ suite "Delete character before cursor":
     const
       AutoCloseParen = true
       TabStop = 2
-    status.bufStatus[0].keyBackspace(
-      currentMainWindowNode,
-      AutoCloseParen,
-      TabStop)
+    status.bufStatus[0].keyBackspace(currentMainWindowNode, AutoCloseParen, TabStop)
 
     check status.bufStatus[0].buffer.len == 1
     check status.bufStatus[0].buffer[0] == ru"  test"
@@ -1181,10 +1137,7 @@ suite "Delete character before cursor":
     const
       AutoCloseParen = true
       TabStop = 2
-    status.bufStatus[0].keyBackspace(
-      currentMainWindowNode,
-      AutoCloseParen,
-      TabStop)
+    status.bufStatus[0].keyBackspace(currentMainWindowNode, AutoCloseParen, TabStop)
 
     check status.bufStatus[0].buffer.len == 1
     check status.bufStatus[0].buffer[0] == ru" test"
@@ -1200,10 +1153,7 @@ suite "Delete character before cursor":
     const
       AutoCloseParen = true
       TabStop = 2
-    status.bufStatus[0].keyBackspace(
-      currentMainWindowNode,
-      AutoCloseParen,
-      TabStop)
+    status.bufStatus[0].keyBackspace(currentMainWindowNode, AutoCloseParen, TabStop)
 
     check status.bufStatus[0].buffer.len == 1
     check status.bufStatus[0].buffer[0] == ru"  tst"
@@ -1217,10 +1167,8 @@ suite "Editor: Delete inside paren":
 
     let settings = initEditorSettings()
     currentBufStatus.deleteInsideOfParen(
-      currentMainWindowNode,
-      status.registers,
-      ru'"',
-      settings)
+      currentMainWindowNode, status.registers, ru '"', settings
+    )
 
     check currentBufStatus.buffer[0] == ru """abc "" "ghi""""
 
@@ -1464,10 +1412,7 @@ suite "Editor: pasteAfterCursor":
 
     currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
 
-    check currentBufStatus.buffer.toSeqRunes == @[
-      ru"line1",
-      ru"line2",
-      ru"line3"]
+    check currentBufStatus.buffer.toSeqRunes == @[ru"line1", ru"line2", ru"line3"]
     check currentBufStatus.countChange == 1
 
     check currentMainWindowNode.currentLine == 1
@@ -1486,9 +1431,7 @@ suite "Editor: pasteAfterCursor":
 
     currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
 
-    check currentBufStatus.buffer.toSeqRunes == @[
-      ru"line1",
-      ru"  line2"]
+    check currentBufStatus.buffer.toSeqRunes == @[ru"line1", ru"  line2"]
     check currentBufStatus.countChange == 1
 
     check currentMainWindowNode.currentLine == 1
@@ -1508,10 +1451,7 @@ suite "Editor: pasteAfterCursor":
 
     currentBufStatus.pasteAfterCursor(currentMainWindowNode, status.registers)
 
-    check currentBufStatus.buffer.toSeqRunes == @[
-      ru"line1",
-      ru"line2",
-      ru"line3"]
+    check currentBufStatus.buffer.toSeqRunes == @[ru"line1", ru"line2", ru"line3"]
     check currentBufStatus.countChange == 1
 
     check currentMainWindowNode.currentLine == 1
@@ -1667,10 +1607,7 @@ suite "Editor: pasteBeforeCursor":
 
     currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
 
-    check currentBufStatus.buffer.toSeqRunes == @[
-      ru"line1",
-      ru"line2",
-      ru"line3"]
+    check currentBufStatus.buffer.toSeqRunes == @[ru"line1", ru"line2", ru"line3"]
     check currentBufStatus.countChange == 1
 
     check currentMainWindowNode.currentLine == 0
@@ -1696,7 +1633,6 @@ suite "Editor: pasteBeforeCursor":
     check currentMainWindowNode.currentColumn == 2
 
   test "Paste lines 3":
-
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"line1", ru"line3"])
@@ -1710,10 +1646,7 @@ suite "Editor: pasteBeforeCursor":
 
     currentBufStatus.pasteBeforeCursor(currentMainWindowNode, status.registers)
 
-    check currentBufStatus.buffer.toSeqRunes == @[
-      ru"line1",
-      ru"line2",
-      ru"line3"]
+    check currentBufStatus.buffer.toSeqRunes == @[ru"line1", ru"line2", ru"line3"]
     check currentBufStatus.countChange == 1
 
     check currentMainWindowNode.currentLine == 1
@@ -1737,13 +1670,9 @@ suite "Editor: Yank characters":
         Name = "a"
         IsDelete = false
       currentBufStatus.yankCharacters(
-        status.registers,
-        currentMainWindowNode,
-        status.commandline,
-        status.settings,
-        Length,
-        Name,
-        IsDelete)
+        status.registers, currentMainWindowNode, status.commandline, status.settings,
+        Length, Name, IsDelete,
+      )
 
       check status.registers.getNoNamedRegister.buffer == @[""].toSeqRunes
       check not status.registers.getNoNamedRegister.isLine
@@ -1763,10 +1692,8 @@ suite "Editor: Yank words":
 
       const Loop = 1
       currentBufStatus.yankWord(
-        status.registers,
-        currentMainWindowNode,
-        Loop,
-        status.settings)
+        status.registers, currentMainWindowNode, Loop, status.settings
+      )
 
       check status.registers.getNoNamedRegister.buffer == @["abc "].toSeqRunes
       check not status.registers.getNoNamedRegister.isLine
@@ -1783,9 +1710,7 @@ suite "Editor: Modify the number string under the cursor":
     currentBufStatus.buffer = initGapBuffer(@[ru "1"])
 
     const Amount = 1
-    currentBufStatus.modifyNumberTextUnderCurosr(
-      currentMainWindowNode,
-      Amount)
+    currentBufStatus.modifyNumberTextUnderCurosr(currentMainWindowNode, Amount)
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "2"
@@ -1797,9 +1722,7 @@ suite "Editor: Modify the number string under the cursor":
     currentMainWindowNode.currentColumn = 1
 
     const Amount = 1
-    currentBufStatus.modifyNumberTextUnderCurosr(
-      currentMainWindowNode,
-      Amount)
+    currentBufStatus.modifyNumberTextUnderCurosr(currentMainWindowNode, Amount)
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru " 2 "
@@ -1810,9 +1733,7 @@ suite "Editor: Modify the number string under the cursor":
     currentBufStatus.buffer = initGapBuffer(@[ru "9"])
 
     const Amount = 1
-    currentBufStatus.modifyNumberTextUnderCurosr(
-      currentMainWindowNode,
-      Amount)
+    currentBufStatus.modifyNumberTextUnderCurosr(currentMainWindowNode, Amount)
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "10"
@@ -1823,9 +1744,7 @@ suite "Editor: Modify the number string under the cursor":
     currentBufStatus.buffer = initGapBuffer(@[ru "1"])
 
     const Amount = -1
-    currentBufStatus.modifyNumberTextUnderCurosr(
-      currentMainWindowNode,
-      Amount)
+    currentBufStatus.modifyNumberTextUnderCurosr(currentMainWindowNode, Amount)
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "0"
@@ -1836,9 +1755,7 @@ suite "Editor: Modify the number string under the cursor":
     currentBufStatus.buffer = initGapBuffer(@[ru "0"])
 
     const Amount = -1
-    currentBufStatus.modifyNumberTextUnderCurosr(
-      currentMainWindowNode,
-      Amount)
+    currentBufStatus.modifyNumberTextUnderCurosr(currentMainWindowNode, Amount)
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "-1"
@@ -1849,9 +1766,7 @@ suite "Editor: Modify the number string under the cursor":
     currentBufStatus.buffer = initGapBuffer(@[ru "10"])
 
     const Amount = -1
-    currentBufStatus.modifyNumberTextUnderCurosr(
-      currentMainWindowNode,
-      Amount)
+    currentBufStatus.modifyNumberTextUnderCurosr(currentMainWindowNode, Amount)
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "9"
@@ -1862,9 +1777,7 @@ suite "Editor: Modify the number string under the cursor":
     currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
 
     const Amount = 1
-    currentBufStatus.modifyNumberTextUnderCurosr(
-      currentMainWindowNode,
-      Amount)
+    currentBufStatus.modifyNumberTextUnderCurosr(currentMainWindowNode, Amount)
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1878,10 +1791,8 @@ suite "Editor: Delete from the previous blank line to the current line":
 
     const RegisterName = ""
     currentBufStatus.deleteTillPreviousBlankLine(
-      status.registers,
-      currentMainWindowNode,
-      RegisterName,
-      status.settings)
+      status.registers, currentMainWindowNode, RegisterName, status.settings
+    )
 
     check currentBufStatus.buffer.len == 2
     check currentBufStatus.buffer[0] == ru "abc"
@@ -1893,77 +1804,57 @@ suite "Editor: Delete from the previous blank line to the current line":
   test "Delete lines 2":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[
-      "abc",
-      "",
-      "def",
-      "ghi"].toSeqRunes)
+    currentBufStatus.buffer = initGapBuffer(@["abc", "", "def", "ghi"].toSeqRunes)
     currentMainWindowNode.currentLine = 3
     currentMainWindowNode.currentColumn = 1
 
     const RegisterName = ""
     currentBufStatus.deleteTillPreviousBlankLine(
-      status.registers,
-      currentMainWindowNode,
-      RegisterName,
-      status.settings)
+      status.registers, currentMainWindowNode, RegisterName, status.settings
+    )
 
     check currentBufStatus.buffer.len == 2
     check currentBufStatus.buffer[0] == ru "abc"
     check currentBufStatus.buffer[1] == ru "hi"
 
-    check status.registers.getNoNamedRegister.buffer == @["", "def", "g"]
-      .toSeqRunes
+    check status.registers.getNoNamedRegister.buffer == @["", "def", "g"].toSeqRunes
     check status.registers.getNoNamedRegister.isLine
 
 suite "Editor: Delete from the current line to the next blank line":
   test "Delete lines":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[
-      "abc",
-      "def",
-      "",
-      "ghi"].toSeqRunes)
+    currentBufStatus.buffer = initGapBuffer(@["abc", "def", "", "ghi"].toSeqRunes)
 
     const RegisterName = ""
     currentBufStatus.deleteTillNextBlankLine(
-      status.registers,
-      currentMainWindowNode,
-      RegisterName,
-      status.settings)
+      status.registers, currentMainWindowNode, RegisterName, status.settings
+    )
 
     check currentBufStatus.buffer.len == 2
     check currentBufStatus.buffer[0] == ru ""
     check currentBufStatus.buffer[1] == ru "ghi"
 
-    check status.registers.getNoNamedRegister.buffer == @["abc", "def"]
-      .toSeqRunes
+    check status.registers.getNoNamedRegister.buffer == @["abc", "def"].toSeqRunes
     check status.registers.getNoNamedRegister.isLine
 
   test "Delete lines 2":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = initGapBuffer(@[
-      "abc",
-      "def",
-      "","ghi"].toSeqRunes)
+    currentBufStatus.buffer = initGapBuffer(@["abc", "def", "", "ghi"].toSeqRunes)
     currentMainWindowNode.currentColumn = 1
 
     const RegisterName = ""
     currentBufStatus.deleteTillNextBlankLine(
-      status.registers,
-      currentMainWindowNode,
-      RegisterName,
-      status.settings)
+      status.registers, currentMainWindowNode, RegisterName, status.settings
+    )
 
     check currentBufStatus.buffer.len == 3
     check currentBufStatus.buffer[0] == ru "a"
     check currentBufStatus.buffer[1] == ru ""
     check currentBufStatus.buffer[2] == ru "ghi"
 
-    check status.registers.getNoNamedRegister.buffer == @["bc", "def"]
-      .toSeqRunes
+    check status.registers.getNoNamedRegister.buffer == @["bc", "def"].toSeqRunes
     check status.registers.getNoNamedRegister.isLine
 
 suite "Editor: Replace characters":
@@ -1980,12 +1871,8 @@ suite "Editor: Replace characters":
       Character = ru 'z'
 
     currentBufStatus.replaceCharacters(
-      currentMainWindowNode,
-      AutoIndent,
-      AutoDeleteParen,
-      TabStop,
-      Loop,
-      Character)
+      currentMainWindowNode, AutoIndent, AutoDeleteParen, TabStop, Loop, Character
+    )
 
     check currentBufStatus.buffer[0] == ru "zbcdef"
     check currentMainWindowNode.currentColumn == 0
@@ -2003,12 +1890,8 @@ suite "Editor: Replace characters":
       Character = ru 'z'
 
     currentBufStatus.replaceCharacters(
-      currentMainWindowNode,
-      AutoIndent,
-      AutoDeleteParen,
-      TabStop,
-      Loop,
-      Character)
+      currentMainWindowNode, AutoIndent, AutoDeleteParen, TabStop, Loop, Character
+    )
 
     check currentBufStatus.buffer[0] == ru "zzzdef"
     check currentMainWindowNode.currentColumn == 2
@@ -2026,12 +1909,8 @@ suite "Editor: Replace characters":
       Character = ru 'z'
 
     currentBufStatus.replaceCharacters(
-      currentMainWindowNode,
-      AutoIndent,
-      AutoDeleteParen,
-      TabStop,
-      Loop,
-      Character)
+      currentMainWindowNode, AutoIndent, AutoDeleteParen, TabStop, Loop, Character
+    )
 
     check currentBufStatus.buffer[0] == ru "zzzzzz"
     check currentMainWindowNode.currentColumn == 5
@@ -2049,12 +1928,8 @@ suite "Editor: Replace characters":
     let character = toRune(EnterKey)
 
     currentBufStatus.replaceCharacters(
-      currentMainWindowNode,
-      AutoIndent,
-      AutoDeleteParen,
-      TabStop,
-      Loop,
-      character)
+      currentMainWindowNode, AutoIndent, AutoDeleteParen, TabStop, Loop, character
+    )
 
     check currentBufStatus.buffer.len == 2
     check currentBufStatus.buffer[0] == ru ""
@@ -2073,12 +1948,8 @@ suite "Editor: Replace characters":
     let character = toRune(EnterKey)
 
     currentBufStatus.replaceCharacters(
-      currentMainWindowNode,
-      AutoIndent,
-      AutoDeleteParen,
-      TabStop,
-      Loop,
-      character)
+      currentMainWindowNode, AutoIndent, AutoDeleteParen, TabStop, Loop, character
+    )
 
     check currentBufStatus.buffer.len == 2
     check currentBufStatus.buffer[0] == ru ""
@@ -2098,12 +1969,8 @@ suite "Editor: Replace characters":
     let character = toRune('z')
 
     currentBufStatus.replaceCharacters(
-      currentMainWindowNode,
-      AutoIndent,
-      AutoDeleteParen,
-      TabStop,
-      Loop,
-      character)
+      currentMainWindowNode, AutoIndent, AutoDeleteParen, TabStop, Loop, character
+    )
 
     check currentBufStatus.buffer.len == 1
     check currentBufStatus.buffer[0] == ru "abzdef"
@@ -2151,8 +2018,10 @@ suite "Editor: Open the blank line below":
     let
       langStr = sourceLangToStr(lang)
       testTitle =
-        if isAutoIndent: "Case 1: Enable autoindent: Open the blank line below in " & langStr
-        else: "Case 1: Disable autoindent: Open the blank line below in " & langStr
+        if isAutoIndent:
+          "Case 1: Enable autoindent: Open the blank line below in " & langStr
+        else:
+          "Case 1: Disable autoindent: Open the blank line below in " & langStr
 
     test testTitle:
       var status = initEditorStatus()
@@ -2162,9 +2031,9 @@ suite "Editor: Open the blank line below":
       status.bufStatus[0].language = lang
 
       status.bufStatus[0].openBlankLineBelow(
-        status.mainWindow.currentMainWindowNode,
-        isAutoIndent,
-        status.settings.standard.tabStop)
+        status.mainWindow.currentMainWindowNode, isAutoIndent,
+        status.settings.standard.tabStop,
+      )
 
       let
         currentBufStatus = status.bufStatus[0]
@@ -2209,9 +2078,9 @@ suite "Editor: Open the blank line below":
 
       const IsAutoIndent = true
       status.bufStatus[0].openBlankLineBelow(
-        status.mainWindow.currentMainWindowNode,
-        IsAutoIndent,
-        status.settings.standard.tabStop)
+        status.mainWindow.currentMainWindowNode, IsAutoIndent,
+        status.settings.standard.tabStop,
+      )
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 2
@@ -2250,9 +2119,9 @@ suite "Editor: Open the blank line below":
 
       const IsAutoIndent = true
       status.bufStatus[0].openBlankLineBelow(
-        status.mainWindow.currentMainWindowNode,
-        IsAutoIndent,
-        status.settings.standard.tabStop)
+        status.mainWindow.currentMainWindowNode, IsAutoIndent,
+        status.settings.standard.tabStop,
+      )
 
       let currentBufStatus = status.bufStatus[0]
       check $currentBufStatus.buffer[0] == buffer
@@ -2286,8 +2155,10 @@ suite "Editor: Open the blank line below":
     let
       langStr = sourceLangToStr(lang)
       testTitle =
-        if isAutoIndent: "Case 4: Enable autoindent: Open the blank line below in " & langStr
-        else: "Case 4: Disable autoindent: Open the blank line below in " & langStr
+        if isAutoIndent:
+          "Case 4: Enable autoindent: Open the blank line below in " & langStr
+        else:
+          "Case 4: Disable autoindent: Open the blank line below in " & langStr
 
     test testTitle:
       var status = initEditorStatus()
@@ -2297,9 +2168,9 @@ suite "Editor: Open the blank line below":
       status.bufStatus[0].language = lang
 
       status.bufStatus[0].openBlankLineBelow(
-        status.mainWindow.currentMainWindowNode,
-        isAutoIndent,
-        status.settings.standard.tabStop)
+        status.mainWindow.currentMainWindowNode, isAutoIndent,
+        status.settings.standard.tabStop,
+      )
 
       let
         currentBufStatus = status.bufStatus[0]
@@ -2342,9 +2213,9 @@ suite "Editor: Open the blank line below":
 
       const IsAutoIndent = true
       status.bufStatus[0].openBlankLineBelow(
-        status.mainWindow.currentMainWindowNode,
-        IsAutoIndent,
-        status.settings.standard.tabStop)
+        status.mainWindow.currentMainWindowNode, IsAutoIndent,
+        status.settings.standard.tabStop,
+      )
 
       let currentBufStatus = status.bufStatus[0]
       check $currentBufStatus.buffer[0] == buffer
@@ -2373,8 +2244,10 @@ suite "Editor: Open the blank line abave":
     let
       langStr = sourceLangToStr(lang)
       testTitle =
-        if isAutoIndent: "Case 1: Enable autoindent: Open the blank line abave in " & langStr
-        else: "Case 1: Disable autoindent: Open the blank line abave in " & langStr
+        if isAutoIndent:
+          "Case 1: Enable autoindent: Open the blank line abave in " & langStr
+        else:
+          "Case 1: Disable autoindent: Open the blank line abave in " & langStr
 
     test testTitle:
       var status = initEditorStatus()
@@ -2384,9 +2257,9 @@ suite "Editor: Open the blank line abave":
       status.bufStatus[0].language = lang
 
       status.bufStatus[0].openBlankLineAbove(
-        status.mainWindow.currentMainWindowNode,
-        isAutoIndent,
-        status.settings.standard.tabStop)
+        status.mainWindow.currentMainWindowNode, isAutoIndent,
+        status.settings.standard.tabStop,
+      )
 
       let
         currentBufStatus = status.bufStatus[0]
@@ -2415,8 +2288,10 @@ suite "Editor: Open the blank line abave":
     let
       langStr = sourceLangToStr(lang)
       testTitle =
-        if isAutoIndent: "Case 2: Enable autoindent: Open the blank line abave in " & langStr
-        else: "Case 2: Disable autoindent: Open the blank line abave in " & langStr
+        if isAutoIndent:
+          "Case 2: Enable autoindent: Open the blank line abave in " & langStr
+        else:
+          "Case 2: Disable autoindent: Open the blank line abave in " & langStr
 
     test testTitle:
       var status = initEditorStatus()
@@ -2428,9 +2303,9 @@ suite "Editor: Open the blank line abave":
       status.mainWindow.currentMainWindowNode.currentLine = 1
 
       status.bufStatus[0].openBlankLineAbove(
-        status.mainWindow.currentMainWindowNode,
-        isAutoIndent,
-        status.settings.standard.tabStop)
+        status.mainWindow.currentMainWindowNode, isAutoIndent,
+        status.settings.standard.tabStop,
+      )
 
       let
         currentBufStatus = status.bufStatus[0]
@@ -2476,9 +2351,9 @@ suite "Editor: Open the blank line abave":
 
       const IsAutoIndent = true
       status.bufStatus[0].openBlankLineAbove(
-        status.mainWindow.currentMainWindowNode,
-        IsAutoIndent,
-        status.settings.standard.tabStop)
+        status.mainWindow.currentMainWindowNode, IsAutoIndent,
+        status.settings.standard.tabStop,
+      )
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 3
@@ -2519,9 +2394,9 @@ suite "Editor: Open the blank line abave":
 
       const IsAutoIndent = true
       status.bufStatus[0].openBlankLineAbove(
-        status.mainWindow.currentMainWindowNode,
-        IsAutoIndent,
-        status.settings.standard.tabStop)
+        status.mainWindow.currentMainWindowNode, IsAutoIndent,
+        status.settings.standard.tabStop,
+      )
 
       let currentBufStatus = status.bufStatus[0]
 
@@ -2571,9 +2446,9 @@ suite "Editor: Open the blank line abave":
 
       const IsAutoIndent = true
       status.bufStatus[0].openBlankLineAbove(
-        status.mainWindow.currentMainWindowNode,
-        IsAutoIndent,
-        status.settings.standard.tabStop)
+        status.mainWindow.currentMainWindowNode, IsAutoIndent,
+        status.settings.standard.tabStop,
+      )
 
       let currentBufStatus = status.bufStatus[0]
       check currentBufStatus.buffer.len == 3
@@ -2615,8 +2490,8 @@ suite "Editor: Indent":
         status.bufStatus[0].language = lang
 
         status.bufStatus[0].indent(
-          status.mainWindow.currentMainWindowNode,
-          status.settings.standard.tabStop)
+          status.mainWindow.currentMainWindowNode, status.settings.standard.tabStop
+        )
 
         let
           currentBufStatus = status.bufStatus[0]
@@ -2649,8 +2524,8 @@ suite "Editor: Indent":
         status.bufStatus[0].language = lang
 
         status.bufStatus[0].indent(
-          status.mainWindow.currentMainWindowNode,
-          status.settings.standard.tabStop)
+          status.mainWindow.currentMainWindowNode, status.settings.standard.tabStop
+        )
 
         check status.bufStatus[0].buffer.len == 1
         check status.bufStatus[0].buffer[0] == ru"    "
@@ -2678,8 +2553,8 @@ suite "Editor: Indent":
         status.bufStatus[0].language = lang
 
         status.bufStatus[0].indent(
-          status.mainWindow.currentMainWindowNode,
-          status.settings.standard.tabStop)
+          status.mainWindow.currentMainWindowNode, status.settings.standard.tabStop
+        )
 
         let
           currentBufStatus = status.bufStatus[0]
@@ -2714,8 +2589,8 @@ suite "Editor: Indent":
         status.mainWindow.currentMainWindowNode.currentColumn = 1
 
         status.bufStatus[0].indent(
-          status.mainWindow.currentMainWindowNode,
-          status.settings.standard.tabStop)
+          status.mainWindow.currentMainWindowNode, status.settings.standard.tabStop
+        )
 
         let
           currentBufStatus = status.bufStatus[0]
@@ -2749,8 +2624,8 @@ suite "Editor: Indent":
         status.mainWindow.currentMainWindowNode.currentLine = 1
 
         status.bufStatus[0].indent(
-          status.mainWindow.currentMainWindowNode,
-          status.settings.standard.tabStop)
+          status.mainWindow.currentMainWindowNode, status.settings.standard.tabStop
+        )
 
         let
           currentBufStatus = status.bufStatus[0]
@@ -2787,8 +2662,8 @@ suite "Editor: Unindent":
         status.bufStatus[0].language = lang
 
         status.bufStatus[0].unindent(
-          status.mainWindow.currentMainWindowNode,
-          status.settings.standard.tabStop)
+          status.mainWindow.currentMainWindowNode, status.settings.standard.tabStop
+        )
 
         let
           currentBufStatus = status.bufStatus[0]
@@ -2824,8 +2699,8 @@ suite "Editor: Unindent":
         status.mainWindow.currentMainWindowNode.currentColumn = 1
 
         status.bufStatus[0].unindent(
-          status.mainWindow.currentMainWindowNode,
-          status.settings.standard.tabStop)
+          status.mainWindow.currentMainWindowNode, status.settings.standard.tabStop
+        )
 
         let
           currentBufStatus = status.bufStatus[0]
@@ -2859,8 +2734,8 @@ suite "Editor: Unindent":
         status.mainWindow.currentMainWindowNode.currentColumn = 5
 
         status.bufStatus[0].unindent(
-          status.mainWindow.currentMainWindowNode,
-          status.settings.standard.tabStop)
+          status.mainWindow.currentMainWindowNode, status.settings.standard.tabStop
+        )
 
         let
           currentBufStatus = status.bufStatus[0]
@@ -2893,8 +2768,8 @@ suite "Editor: Unindent":
         status.bufStatus[0].language = lang
 
         status.bufStatus[0].unindent(
-          status.mainWindow.currentMainWindowNode,
-          status.settings.standard.tabStop)
+          status.mainWindow.currentMainWindowNode, status.settings.standard.tabStop
+        )
 
         let
           currentBufStatus = status.bufStatus[0]
@@ -2929,8 +2804,8 @@ suite "Editor: Unindent":
         status.mainWindow.currentMainWindowNode.currentLine = 1
 
         status.bufStatus[0].unindent(
-          status.mainWindow.currentMainWindowNode,
-          status.settings.standard.tabStop)
+          status.mainWindow.currentMainWindowNode, status.settings.standard.tabStop
+        )
 
         let
           currentBufStatus = status.bufStatus[0]
@@ -3118,10 +2993,8 @@ suite "Editor: insertMultiplePositions":
     var b = initBufferStatus(Mode.normal).get
     b.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
 
-    let positions = @[
-      BufferPosition(line: 0, column: 0),
-      BufferPosition(line: 0, column: 2)
-    ]
+    let positions =
+      @[BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 2)]
     b.insertMultiplePositions(positions, ru"jkl")
 
     check b.buffer.toSeqRunes == @["jklabjklc", "def", "ghi"].toSeqRunes
@@ -3130,11 +3003,12 @@ suite "Editor: insertMultiplePositions":
     var b = initBufferStatus(Mode.normal).get
     b.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
 
-    let positions = @[
-      BufferPosition(line: 0, column: 0),
-      BufferPosition(line: 1, column: 0),
-      BufferPosition(line: 2, column: 0)
-    ]
+    let positions =
+      @[
+        BufferPosition(line: 0, column: 0),
+        BufferPosition(line: 1, column: 0),
+        BufferPosition(line: 2, column: 0),
+      ]
     b.insertMultiplePositions(positions, ru"jkl")
 
     check b.buffer.toSeqRunes == @["jklabc", "jkldef", "jklghi"].toSeqRunes
@@ -3143,28 +3017,29 @@ suite "Editor: insertMultiplePositions":
     var b = initBufferStatus(Mode.normal).get
     b.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
 
-    let positions = @[
-      BufferPosition(line: 0, column: 0),
-      BufferPosition(line: 0, column: 1),
-      BufferPosition(line: 1, column: 0),
-      BufferPosition(line: 1, column: 2),
-      BufferPosition(line: 2, column: 0),
-      BufferPosition(line: 2, column: 3)
-    ]
+    let positions =
+      @[
+        BufferPosition(line: 0, column: 0),
+        BufferPosition(line: 0, column: 1),
+        BufferPosition(line: 1, column: 0),
+        BufferPosition(line: 1, column: 2),
+        BufferPosition(line: 2, column: 0),
+        BufferPosition(line: 2, column: 3),
+      ]
     b.insertMultiplePositions(positions, ru"jkl")
 
-    check b.buffer.toSeqRunes == @["jklajklbc", "jkldejklf", "jklghijkl"]
-      .toSeqRunes
+    check b.buffer.toSeqRunes == @["jklajklbc", "jkldejklf", "jklghijkl"].toSeqRunes
 
   test "Multiple line 3":
     var b = initBufferStatus(Mode.normal).get
     b.buffer = @["a", "", "a"].toSeqRunes.toGapBuffer
 
-    let positions = @[
-      BufferPosition(line: 0, column: 0),
-      BufferPosition(line: 1, column: 0),
-      BufferPosition(line: 2, column: 0)
-    ]
+    let positions =
+      @[
+        BufferPosition(line: 0, column: 0),
+        BufferPosition(line: 1, column: 0),
+        BufferPosition(line: 2, column: 0),
+      ]
     b.insertMultiplePositions(positions, ru"bc")
 
     check b.buffer.toSeqRunes == @["bca", "bc", "bca"].toSeqRunes
@@ -3173,11 +3048,12 @@ suite "Editor: insertMultiplePositions":
     var b = initBufferStatus(Mode.normal).get
     b.buffer = @["a", "", "a"].toSeqRunes.toGapBuffer
 
-    let positions = @[
-      BufferPosition(line: 0, column: 1),
-      BufferPosition(line: 1, column: 1),
-      BufferPosition(line: 2, column: 1)
-    ]
+    let positions =
+      @[
+        BufferPosition(line: 0, column: 1),
+        BufferPosition(line: 1, column: 1),
+        BufferPosition(line: 2, column: 1),
+      ]
     b.insertMultiplePositions(positions, ru"bc")
 
     check b.buffer.toSeqRunes == @["abc", "", "abc"].toSeqRunes
@@ -3227,10 +3103,8 @@ suite "Editor: deleteMultiplePositions":
     var b = initBufferStatus(Mode.normal).get
     b.buffer = @["abcdef"].toSeqRunes.toGapBuffer
 
-    let positions = @[
-      BufferPosition(line: 0, column: 1),
-      BufferPosition(line: 0, column: 5)
-    ]
+    let positions =
+      @[BufferPosition(line: 0, column: 1), BufferPosition(line: 0, column: 5)]
     const NumOfDelete = 1
     b.deleteMultiplePositions(positions, NumOfDelete)
 
@@ -3240,10 +3114,8 @@ suite "Editor: deleteMultiplePositions":
     var b = initBufferStatus(Mode.normal).get
     b.buffer = @["abcdef"].toSeqRunes.toGapBuffer
 
-    let positions = @[
-      BufferPosition(line: 0, column: 1),
-      BufferPosition(line: 0, column: 6)
-    ]
+    let positions =
+      @[BufferPosition(line: 0, column: 1), BufferPosition(line: 0, column: 6)]
     const NumOfDelete = 5
     b.deleteMultiplePositions(positions, NumOfDelete)
 
@@ -3253,10 +3125,8 @@ suite "Editor: deleteMultiplePositions":
     var b = initBufferStatus(Mode.normal).get
     b.buffer = @["abc", "def"].toSeqRunes.toGapBuffer
 
-    let positions = @[
-      BufferPosition(line: 0, column: 1),
-      BufferPosition(line: 1, column: 1)
-    ]
+    let positions =
+      @[BufferPosition(line: 0, column: 1), BufferPosition(line: 1, column: 1)]
     const NumOfDelete = 1
     b.deleteMultiplePositions(positions, NumOfDelete)
 
@@ -3266,12 +3136,13 @@ suite "Editor: deleteMultiplePositions":
     var b = initBufferStatus(Mode.normal).get
     b.buffer = @["abc", "def"].toSeqRunes.toGapBuffer
 
-    let positions = @[
-      BufferPosition(line: 0, column: 1),
-      BufferPosition(line: 0, column: 3),
-      BufferPosition(line: 1, column: 1),
-      BufferPosition(line: 1, column: 3)
-    ]
+    let positions =
+      @[
+        BufferPosition(line: 0, column: 1),
+        BufferPosition(line: 0, column: 3),
+        BufferPosition(line: 1, column: 1),
+        BufferPosition(line: 1, column: 3),
+      ]
     const NumOfDelete = 1
     b.deleteMultiplePositions(positions, NumOfDelete)
 
@@ -3281,11 +3152,12 @@ suite "Editor: deleteMultiplePositions":
     var b = initBufferStatus(Mode.normal).get
     b.buffer = @["123456", "123", "123456"].toSeqRunes.toGapBuffer
 
-    let positions = @[
-      BufferPosition(line: 0, column: 6),
-      BufferPosition(line: 1, column: 6),
-      BufferPosition(line: 2, column: 6)
-    ]
+    let positions =
+      @[
+        BufferPosition(line: 0, column: 6),
+        BufferPosition(line: 1, column: 6),
+        BufferPosition(line: 2, column: 6),
+      ]
     const NumOfDelete = 1
     b.deleteMultiplePositions(positions, NumOfDelete)
 
@@ -3326,9 +3198,7 @@ suite "Editor: deleteCurrentMultiplePositions":
     var b = initBufferStatus(Mode.normal).get
     b.buffer = @["abcdef"].toSeqRunes.toGapBuffer
 
-    let positions = @[
-      BufferPosition(line: 0, column: 1)
-    ]
+    let positions = @[BufferPosition(line: 0, column: 1)]
     const NumOfDelete = 4
     b.deleteCurrentMultiplePositions(positions, NumOfDelete)
 
@@ -3338,10 +3208,8 @@ suite "Editor: deleteCurrentMultiplePositions":
     var b = initBufferStatus(Mode.normal).get
     b.buffer = @["abc"].toSeqRunes.toGapBuffer
 
-    let positions = @[
-      BufferPosition(line: 0, column: 0),
-      BufferPosition(line: 0, column: 2)
-    ]
+    let positions =
+      @[BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 2)]
     const NumOfDelete = 1
     b.deleteCurrentMultiplePositions(positions, NumOfDelete)
 
@@ -3351,10 +3219,8 @@ suite "Editor: deleteCurrentMultiplePositions":
     var b = initBufferStatus(Mode.normal).get
     b.buffer = @["abc"].toSeqRunes.toGapBuffer
 
-    let positions = @[
-      BufferPosition(line: 0, column: 0),
-      BufferPosition(line: 0, column: 2)
-    ]
+    let positions =
+      @[BufferPosition(line: 0, column: 0), BufferPosition(line: 0, column: 2)]
     const NumOfDelete = 2
     b.deleteCurrentMultiplePositions(positions, NumOfDelete)
 
@@ -3364,10 +3230,8 @@ suite "Editor: deleteCurrentMultiplePositions":
     var b = initBufferStatus(Mode.normal).get
     b.buffer = @["abc", "def"].toSeqRunes.toGapBuffer
 
-    let positions = @[
-      BufferPosition(line: 0, column: 0),
-      BufferPosition(line: 1, column: 0)
-    ]
+    let positions =
+      @[BufferPosition(line: 0, column: 0), BufferPosition(line: 1, column: 0)]
     const NumOfDelete = 2
     b.deleteCurrentMultiplePositions(positions, NumOfDelete)
 
@@ -3377,12 +3241,13 @@ suite "Editor: deleteCurrentMultiplePositions":
     var b = initBufferStatus(Mode.normal).get
     b.buffer = @["abc", "def"].toSeqRunes.toGapBuffer
 
-    let positions = @[
-      BufferPosition(line: 0, column: 0),
-      BufferPosition(line: 0, column: 2),
-      BufferPosition(line: 1, column: 0),
-      BufferPosition(line: 1, column: 2)
-    ]
+    let positions =
+      @[
+        BufferPosition(line: 0, column: 0),
+        BufferPosition(line: 0, column: 2),
+        BufferPosition(line: 1, column: 0),
+        BufferPosition(line: 1, column: 2),
+      ]
     const NumOfDelete = 2
     b.deleteCurrentMultiplePositions(positions, NumOfDelete)
 
@@ -3392,11 +3257,12 @@ suite "Editor: deleteCurrentMultiplePositions":
     var b = initBufferStatus(Mode.normal).get
     b.buffer = @["123456", "123", "123456"].toSeqRunes.toGapBuffer
 
-    let positions = @[
-      BufferPosition(line: 0, column: 5),
-      BufferPosition(line: 1, column: 5),
-      BufferPosition(line: 2, column: 5)
-    ]
+    let positions =
+      @[
+        BufferPosition(line: 0, column: 5),
+        BufferPosition(line: 1, column: 5),
+        BufferPosition(line: 2, column: 5),
+      ]
     const NumOfDelete = 1
     b.deleteCurrentMultiplePositions(positions, NumOfDelete)
 

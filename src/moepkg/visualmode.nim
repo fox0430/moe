@@ -20,9 +20,10 @@
 import std/[strutils, sequtils, options]
 
 import lsp/utils
-import editorstatus, ui, gapbuffer, unicodeext, windownode, movement, editor,
-       bufferstatus, settings, registers, messages, commandline, editorview,
-       independentutils, viewhighlight
+import
+  editorstatus, ui, gapbuffer, unicodeext, windownode, movement, editor, bufferstatus,
+  settings, registers, messages, commandline, editorview, independentutils,
+  viewhighlight
 
 proc moveCursor*(w: var WindowNode, bufStatus: BufferStatus, posi: LspPosition) =
   w.currentLine = min(posi.line, bufStatus.buffer.high - 1)
@@ -42,19 +43,16 @@ proc swapSelectedArea*(area: var SelectedArea) =
     swap(area.startLine, area.endLine)
     swap(area.startColumn, area.endColumn)
 
-proc swapSelectedAreaVisualLine(
-  area: var SelectedArea,
-  bufStatus: BufferStatus) =
+proc swapSelectedAreaVisualLine(area: var SelectedArea, bufStatus: BufferStatus) =
+  if area.endLine < area.startLine:
+    swap(area.startLine, area.endLine)
 
-    if area.endLine < area.startLine:
-      swap(area.startLine, area.endLine)
-
-    area.startColumn = 0
-    area.endColumn =
-      if bufStatus.buffer[area.endLine].high > 0:
-        bufStatus.buffer[area.endLine].high
-      else:
-        0
+  area.startColumn = 0
+  area.endColumn =
+    if bufStatus.buffer[area.endLine].high > 0:
+      bufStatus.buffer[area.endLine].high
+    else:
+      0
 
 proc moveRight(windowNode: var WindowNode, bufStatus: var BufferStatus) =
   if windowNode.isFoldingStartLine(windowNode.currentLine):
@@ -63,441 +61,459 @@ proc moveRight(windowNode: var WindowNode, bufStatus: var BufferStatus) =
   bufStatus.keyRight(windowNode)
 
 proc yankBuffer(
-  bufStatus: var BufferStatus,
-  registers: var Registers,
-  windowNode: var WindowNode,
-  area: SelectedArea,
-  firstCursorPosition: BufferPosition,
-  settings: EditorSettings) =
-
-    if area.startLine == area.endLine:
-      if bufStatus.buffer[windowNode.currentLine].len < 1:
-          # Yank the empty string if the empty line
-          registers.setYankedRegister(@[ru""])
-      else:
-        # Yank the text in the line.
-        var yankRunes = ru ""
-        let
-          endColumn =
-            if area.endColumn > bufStatus.buffer[area.startLine].high:
-              bufStatus.buffer[area.startLine].high
-            else:
-              area.endColumn
-        for j in area.startColumn .. endColumn:
-          yankRunes.add(bufStatus.buffer[area.startLine][j])
-
-        registers.setYankedRegister(yankRunes)
+    bufStatus: var BufferStatus,
+    registers: var Registers,
+    windowNode: var WindowNode,
+    area: SelectedArea,
+    firstCursorPosition: BufferPosition,
+    settings: EditorSettings,
+) =
+  if area.startLine == area.endLine:
+    if bufStatus.buffer[windowNode.currentLine].len < 1:
+      # Yank the empty string if the empty line
+      registers.setYankedRegister(@[ru""])
     else:
-      var yankLines: seq[Runes]
-      for i in area.startLine .. area.endLine:
-        if i == area.startLine and area.startColumn > 0:
-          yankLines.add(ru"")
-          for j in area.startColumn ..< bufStatus.buffer[area.startLine].len:
-            yankLines[^1].add(bufStatus.buffer[area.startLine][j])
-        elif i == area.endLine and
-             area.endColumn < bufStatus.buffer[area.endLine].len:
-          yankLines.add(ru"")
-          for j in 0 .. area.endColumn:
-            yankLines[^1].add(bufStatus.buffer[area.endLine][j])
+      # Yank the text in the line.
+      var yankRunes = ru ""
+      let endColumn =
+        if area.endColumn > bufStatus.buffer[area.startLine].high:
+          bufStatus.buffer[area.startLine].high
         else:
-          yankLines.add(bufStatus.buffer[i])
+          area.endColumn
+      for j in area.startColumn .. endColumn:
+        yankRunes.add(bufStatus.buffer[area.startLine][j])
 
-      registers.setYankedRegister(yankLines)
+      registers.setYankedRegister(yankRunes)
+  else:
+    var yankLines: seq[Runes]
+    for i in area.startLine .. area.endLine:
+      if i == area.startLine and area.startColumn > 0:
+        yankLines.add(ru"")
+        for j in area.startColumn ..< bufStatus.buffer[area.startLine].len:
+          yankLines[^1].add(bufStatus.buffer[area.startLine][j])
+      elif i == area.endLine and area.endColumn < bufStatus.buffer[area.endLine].len:
+        yankLines.add(ru"")
+        for j in 0 .. area.endColumn:
+          yankLines[^1].add(bufStatus.buffer[area.endLine][j])
+      else:
+        yankLines.add(bufStatus.buffer[i])
 
-    windowNode.moveCursor(firstCursorPosition)
+    registers.setYankedRegister(yankLines)
+
+  windowNode.moveCursor(firstCursorPosition)
 
 proc yankBufferBlock(
-  bufStatus: var BufferStatus,
-  registers: var Registers,
-  windowNode: WindowNode,
-  area: SelectedArea,
-  settings: EditorSettings) =
+    bufStatus: var BufferStatus,
+    registers: var Registers,
+    windowNode: WindowNode,
+    area: SelectedArea,
+    settings: EditorSettings,
+) =
+  if bufStatus.buffer.len == 1 and bufStatus.buffer[windowNode.currentLine].len < 1:
+    return
 
-    if bufStatus.buffer.len == 1 and
-       bufStatus.buffer[windowNode.currentLine].len < 1: return
+  var yankedBuffer: seq[Runes]
 
-    var yankedBuffer: seq[Runes]
+  for i in area.startLine .. area.endLine:
+    yankedBuffer.add(@[ru ""])
+    for j in area.startColumn .. min(bufStatus.buffer[i].high, area.endColumn):
+      yankedBuffer[^1].add(bufStatus.buffer[i][j])
 
-    for i in area.startLine .. area.endLine:
-      yankedBuffer.add(@[ru ""])
-      for j in area.startColumn .. min(bufStatus.buffer[i].high, area.endColumn):
-        yankedBuffer[^1].add(bufStatus.buffer[i][j])
-
-    registers.setYankedRegister(yankedBuffer)
+  registers.setYankedRegister(yankedBuffer)
 
 proc deleteBuffer(
-  bufStatus: var BufferStatus,
-  registers: var Registers,
-  windowNode: var WindowNode,
-  area: SelectedArea,
-  firstCursorPosition: BufferPosition,
-  settings: EditorSettings,
-  commandLine: var CommandLine) =
+    bufStatus: var BufferStatus,
+    registers: var Registers,
+    windowNode: var WindowNode,
+    area: SelectedArea,
+    firstCursorPosition: BufferPosition,
+    settings: EditorSettings,
+    commandLine: var CommandLine,
+) =
+  if bufStatus.isReadonly:
+    commandLine.writeReadonlyModeWarning
+    return
 
-    if bufStatus.isReadonly:
-      commandLine.writeReadonlyModeWarning
-      return
+  if bufStatus.buffer.len == 1 and bufStatus.buffer[windowNode.currentLine].len < 1:
+    return
 
-    if bufStatus.buffer.len == 1 and
-       bufStatus.buffer[windowNode.currentLine].len < 1: return
+  bufStatus.yankBuffer(registers, windowNode, area, firstCursorPosition, settings)
 
-    bufStatus.yankBuffer(
-      registers,
-      windowNode,
-      area,
-      firstCursorPosition,
-      settings)
+  windowNode.removeAllFoldingRange(area.startLine, area.endLine)
 
-    windowNode.removeAllFoldingRange(area.startLine, area.endLine)
+  var currentLine = area.startLine
+  for i in area.startLine .. area.endLine:
+    let oldLine = bufStatus.buffer[currentLine]
+    var newLine = bufStatus.buffer[currentLine]
 
-    var currentLine = area.startLine
-    for i in area.startLine .. area.endLine:
-      let oldLine = bufStatus.buffer[currentLine]
-      var newLine = bufStatus.buffer[currentLine]
-
-      if area.startLine == area.endLine:
-        if area.endColumn == bufStatus.buffer[area.startLine].len or
-           bufStatus.isVisualLineMode:
-             # Delete the single line
-             bufStatus.buffer.delete(currentLine, currentLine)
-        elif oldLine.len > 0:
-          # Delete the text in the line.
-          for j in area.startColumn .. area.endColumn:
-            newLine.delete(area.startColumn)
-          if oldLine != newLine: bufStatus.buffer[currentLine] = newLine
-        else:
-          # Delete the single char
-          bufStatus.buffer.delete(currentLine, currentLine)
-      elif i == area.startLine and 0 < area.startColumn:
-        for j in area.startColumn .. bufStatus.buffer[currentLine].high:
+    if area.startLine == area.endLine:
+      if area.endColumn == bufStatus.buffer[area.startLine].len or
+          bufStatus.isVisualLineMode:
+        # Delete the single line
+        bufStatus.buffer.delete(currentLine, currentLine)
+      elif oldLine.len > 0:
+        # Delete the text in the line.
+        for j in area.startColumn .. area.endColumn:
           newLine.delete(area.startColumn)
-        if oldLine != newLine: bufStatus.buffer[currentLine] = newLine
-        inc(currentLine)
-      elif i == area.endLine and area.endColumn < bufStatus.buffer[currentLine].high:
-        for j in 0 .. area.endColumn: newLine.delete(0)
-        if oldLine != newLine: bufStatus.buffer[currentLine] = newLine
-      else: bufStatus.buffer.delete(currentLine, currentLine)
+        if oldLine != newLine:
+          bufStatus.buffer[currentLine] = newLine
+      else:
+        # Delete the single char
+        bufStatus.buffer.delete(currentLine, currentLine)
+    elif i == area.startLine and 0 < area.startColumn:
+      for j in area.startColumn .. bufStatus.buffer[currentLine].high:
+        newLine.delete(area.startColumn)
+      if oldLine != newLine:
+        bufStatus.buffer[currentLine] = newLine
+      inc(currentLine)
+    elif i == area.endLine and area.endColumn < bufStatus.buffer[currentLine].high:
+      for j in 0 .. area.endColumn:
+        newLine.delete(0)
+      if oldLine != newLine:
+        bufStatus.buffer[currentLine] = newLine
+    else:
+      bufStatus.buffer.delete(currentLine, currentLine)
 
-    if bufStatus.buffer.len < 1: bufStatus.buffer.add(ru"")
+  if bufStatus.buffer.len < 1:
+    bufStatus.buffer.add(ru"")
 
-    if area.startLine > bufStatus.buffer.high:
-      windowNode.currentLine = bufStatus.buffer.high
-    else: windowNode.currentLine = area.startLine
+  if area.startLine > bufStatus.buffer.high:
+    windowNode.currentLine = bufStatus.buffer.high
+  else:
+    windowNode.currentLine = area.startLine
 
-    let column =
-      if bufStatus.buffer[currentLine].high > area.startColumn: area.startColumn
-      elif area.startColumn > 0: area.startColumn - 1
-      else: 0
+  let column =
+    if bufStatus.buffer[currentLine].high > area.startColumn:
+      area.startColumn
+    elif area.startColumn > 0:
+      area.startColumn - 1
+    else:
+      0
 
-    windowNode.currentColumn = column
-    windowNode.expandedColumn = column
+  windowNode.currentColumn = column
+  windowNode.expandedColumn = column
 
-    inc(bufStatus.countChange)
+  inc(bufStatus.countChange)
 
-    bufStatus.isUpdate = true
+  bufStatus.isUpdate = true
 
 proc deleteBufferBlock(
-  bufStatus: var BufferStatus,
-  registers: var Registers,
-  windowNode: var WindowNode,
-  area: SelectedArea,
-  settings: EditorSettings,
-  commandLine: var CommandLine) =
+    bufStatus: var BufferStatus,
+    registers: var Registers,
+    windowNode: var WindowNode,
+    area: SelectedArea,
+    settings: EditorSettings,
+    commandLine: var CommandLine,
+) =
+  if bufStatus.isReadonly:
+    commandLine.writeReadonlyModeWarning
+    return
 
-    if bufStatus.isReadonly:
-      commandLine.writeReadonlyModeWarning
-      return
+  if bufStatus.buffer.len == 1 and bufStatus.buffer[windowNode.currentLine].len < 1:
+    return
 
-    if bufStatus.buffer.len == 1 and
-       bufStatus.buffer[windowNode.currentLine].len < 1: return
+  bufStatus.yankBufferBlock(registers, windowNode, area, settings)
 
-    bufStatus.yankBufferBlock(
-      registers,
-      windowNode,
-      area,
-      settings)
+  windowNode.removeAllFoldingRange(area.startLine, area.endLine)
 
-    windowNode.removeAllFoldingRange(area.startLine, area.endLine)
+  if area.startLine == area.endLine and bufStatus.buffer[area.startLine].len < 1:
+    bufStatus.buffer.delete(area.startLine, area.startLine + 1)
+  else:
+    var currentLine = area.startLine
+    for i in area.startLine .. area.endLine:
+      let oldLine = bufStatus.buffer[i]
+      var newLine = bufStatus.buffer[i]
+      for j in area.startColumn .. min(area.endColumn, bufStatus.buffer[i].high):
+        newLine.delete(area.startColumn)
+        inc(currentLine)
+      if oldLine != newLine:
+        bufStatus.buffer[i] = newLine
 
-    if area.startLine == area.endLine and bufStatus.buffer[area.startLine].len < 1:
-      bufStatus.buffer.delete(area.startLine, area.startLine + 1)
-    else:
-      var currentLine = area.startLine
-      for i in area.startLine .. area.endLine:
-        let oldLine = bufStatus.buffer[i]
-        var newLine = bufStatus.buffer[i]
-        for j in area.startColumn.. min(area.endColumn, bufStatus.buffer[i].high):
-          newLine.delete(area.startColumn)
-          inc(currentLine)
-        if oldLine != newLine: bufStatus.buffer[i] = newLine
+  windowNode.currentLine = min(area.startLine, bufStatus.buffer.high)
+  windowNode.currentColumn = area.startColumn
 
-    windowNode.currentLine = min(area.startLine, bufStatus.buffer.high)
-    windowNode.currentColumn = area.startColumn
+  inc(bufStatus.countChange)
 
-    inc(bufStatus.countChange)
-
-    bufStatus.isUpdate = true
+  bufStatus.isUpdate = true
 
 proc addIndent(
-  bufStatus: var BufferStatus,
-  windowNode: var WindowNode,
-  area: SelectedArea,
-  tabStop: int,
-  commandLine: var CommandLine) =
+    bufStatus: var BufferStatus,
+    windowNode: var WindowNode,
+    area: SelectedArea,
+    tabStop: int,
+    commandLine: var CommandLine,
+) =
+  if bufStatus.isReadonly:
+    commandLine.writeReadonlyModeWarning
+    return
 
-    if bufStatus.isReadonly:
-      commandLine.writeReadonlyModeWarning
-      return
+  windowNode.removeAllFoldingRange(area.startLine, area.endLine)
 
-    windowNode.removeAllFoldingRange(area.startLine, area.endLine)
+  windowNode.currentLine = area.startLine
+  for i in area.startLine .. area.endLine:
+    bufStatus.indent(windowNode, tabStop)
+    inc(windowNode.currentLine)
 
-    windowNode.currentLine = area.startLine
-    for i in area.startLine .. area.endLine:
-      bufStatus.indent(windowNode, tabStop)
-      inc(windowNode.currentLine)
-
-    windowNode.currentLine = area.startLine
+  windowNode.currentLine = area.startLine
 
 proc deleteIndent(
-  bufStatus: var BufferStatus,
-  windowNode: var WindowNode,
-  area: SelectedArea,
-  tabStop: int,
-  commandLine: var CommandLine) =
+    bufStatus: var BufferStatus,
+    windowNode: var WindowNode,
+    area: SelectedArea,
+    tabStop: int,
+    commandLine: var CommandLine,
+) =
+  if bufStatus.isReadonly:
+    commandLine.writeReadonlyModeWarning
+    return
 
-    if bufStatus.isReadonly:
-      commandLine.writeReadonlyModeWarning
-      return
+  windowNode.removeAllFoldingRange(area.startLine, area.endLine)
 
-    windowNode.removeAllFoldingRange(area.startLine, area.endLine)
+  windowNode.currentLine = area.startLine
+  for i in area.startLine .. area.endLine:
+    bufStatus.unindent(windowNode, tabStop)
+    inc(windowNode.currentLine)
 
-    windowNode.currentLine = area.startLine
-    for i in area.startLine .. area.endLine:
-      bufStatus.unindent(windowNode, tabStop)
-      inc(windowNode.currentLine)
-
-    windowNode.currentLine = area.startLine
+  windowNode.currentLine = area.startLine
 
 proc insertIndent(
-  bufStatus: var BufferStatus,
-  windowNode: var WindowNode,
-  area: SelectedArea,
-  tabStop: int,
-  commandLine: var CommandLine) =
+    bufStatus: var BufferStatus,
+    windowNode: var WindowNode,
+    area: SelectedArea,
+    tabStop: int,
+    commandLine: var CommandLine,
+) =
+  if bufStatus.isReadonly:
+    commandLine.writeReadonlyModeWarning
+    return
 
-    if bufStatus.isReadonly:
-      commandLine.writeReadonlyModeWarning
-      return
+  windowNode.removeAllFoldingRange(area.startLine, area.endLine)
 
-    windowNode.removeAllFoldingRange(area.startLine, area.endLine)
-
-    for i in area.startLine .. area.endLine:
-      let oldLine = bufStatus.buffer[i]
-      var newLine = bufStatus.buffer[i]
-      newLine.insert(
-        ru' '.repeat(tabStop),
-        min(area.startColumn,
-        bufStatus.buffer[i].high))
-      if oldLine != newLine: bufStatus.buffer[i] = newLine
+  for i in area.startLine .. area.endLine:
+    let oldLine = bufStatus.buffer[i]
+    var newLine = bufStatus.buffer[i]
+    newLine.insert(
+      ru ' '.repeat(tabStop), min(area.startColumn, bufStatus.buffer[i].high)
+    )
+    if oldLine != newLine:
+      bufStatus.buffer[i] = newLine
 
 proc replaceCharacter(
-  bufStatus: var BufferStatus,
-  windowNode: var WindowNode,
-  area: SelectedArea,
-  ch: Rune,
-  commandLine: var CommandLine) =
+    bufStatus: var BufferStatus,
+    windowNode: var WindowNode,
+    area: SelectedArea,
+    ch: Rune,
+    commandLine: var CommandLine,
+) =
+  if bufStatus.isReadonly:
+    commandLine.writeReadonlyModeWarning
+    return
 
-    if bufStatus.isReadonly:
-      commandLine.writeReadonlyModeWarning
-      return
+  windowNode.removeAllFoldingRange(area.startLine, area.endLine)
 
-    windowNode.removeAllFoldingRange(area.startLine, area.endLine)
+  for i in area.startLine .. area.endLine:
+    if bufStatus.buffer[i].len > 0:
+      let oldLine = bufStatus.buffer[i]
+      var newLine = bufStatus.buffer[i]
+      if area.startLine == area.endLine:
+        let endCol = min(area.endColumn, newLine.high)
+        for j in area.startColumn .. endCol:
+          newLine[j] = ch
+      elif i == area.startLine:
+        for j in area.startColumn .. bufStatus.buffer[i].high:
+          newLine[j] = ch
+      elif i == area.endLine:
+        let endCol = min(area.endColumn, newLine.high)
+        for j in 0 .. endCol:
+          newLine[j] = ch
+      else:
+        for j in 0 .. bufStatus.buffer[i].high:
+          newLine[j] = ch
+      if oldLine != newLine:
+        bufStatus.buffer[i] = newLine
 
-    for i in area.startLine .. area.endLine:
-      if bufStatus.buffer[i].len > 0:
-        let oldLine = bufStatus.buffer[i]
-        var newLine = bufStatus.buffer[i]
-        if area.startLine == area.endLine:
-          let endCol = min(area.endColumn, newLine.high)
-          for j in area.startColumn .. endCol: newLine[j] = ch
-        elif i == area.startLine:
-          for j in area.startColumn .. bufStatus.buffer[i].high: newLine[j] = ch
-        elif i == area.endLine:
-          let endCol = min(area.endColumn, newLine.high)
-          for j in 0 .. endCol: newLine[j] = ch
-        else:
-          for j in 0 .. bufStatus.buffer[i].high: newLine[j] = ch
-        if oldLine != newLine: bufStatus.buffer[i] = newLine
-
-    inc(bufStatus.countChange)
+  inc(bufStatus.countChange)
 
 proc replaceCharacterBlock(
-  bufStatus: var BufferStatus,
-  windowNode: var WindowNode,
-  area: SelectedArea,
-  ch: Rune,
-  commandLine: var CommandLine) =
+    bufStatus: var BufferStatus,
+    windowNode: var WindowNode,
+    area: SelectedArea,
+    ch: Rune,
+    commandLine: var CommandLine,
+) =
+  if bufStatus.isReadonly:
+    commandLine.writeReadonlyModeWarning
+    return
 
-    if bufStatus.isReadonly:
-      commandLine.writeReadonlyModeWarning
-      return
+  windowNode.removeAllFoldingRange(area.startLine, area.endLine)
 
-    windowNode.removeAllFoldingRange(area.startLine, area.endLine)
-
-    for i in area.startLine .. area.endLine:
-      let oldLine = bufStatus.buffer[i]
-      var newLine = bufStatus.buffer[i]
-      for j in area.startColumn .. min(area.endColumn, bufStatus.buffer[i].high):
-        newLine[j] = ch
-      if oldLine != newLine: bufStatus.buffer[i] = newLine
+  for i in area.startLine .. area.endLine:
+    let oldLine = bufStatus.buffer[i]
+    var newLine = bufStatus.buffer[i]
+    for j in area.startColumn .. min(area.endColumn, bufStatus.buffer[i].high):
+      newLine[j] = ch
+    if oldLine != newLine:
+      bufStatus.buffer[i] = newLine
 
 proc joinLines(
-  bufStatus: var BufferStatus,
-  windowNode: var WindowNode,
-  area: SelectedArea,
-  commandLine: var CommandLine) =
+    bufStatus: var BufferStatus,
+    windowNode: var WindowNode,
+    area: SelectedArea,
+    commandLine: var CommandLine,
+) =
+  if bufStatus.isReadonly:
+    commandLine.writeReadonlyModeWarning
+    return
 
-    if bufStatus.isReadonly:
-      commandLine.writeReadonlyModeWarning
-      return
+  windowNode.removeAllFoldingRange(area.startLine, area.endLine)
 
-    windowNode.removeAllFoldingRange(area.startLine, area.endLine)
-
-    for i in area.startLine ..< area.endLine:
-      windowNode.currentLine = area.startLine
-      bufStatus.joinLine(windowNode)
+  for i in area.startLine ..< area.endLine:
+    windowNode.currentLine = area.startLine
+    bufStatus.joinLine(windowNode)
 
 proc toLowerString(
-  bufStatus: var BufferStatus,
-  windowNode: var WindowNode,
-  area: SelectedArea,
-  firstCursorPosition: BufferPosition,
-  commandLine: var CommandLine) =
+    bufStatus: var BufferStatus,
+    windowNode: var WindowNode,
+    area: SelectedArea,
+    firstCursorPosition: BufferPosition,
+    commandLine: var CommandLine,
+) =
+  if bufStatus.isReadonly:
+    commandLine.writeReadonlyModeWarning
+    return
 
-    if bufStatus.isReadonly:
-      commandLine.writeReadonlyModeWarning
-      return
+  windowNode.removeAllFoldingRange(area.startLine, area.endLine)
 
-    windowNode.removeAllFoldingRange(area.startLine, area.endLine)
+  for i in area.startLine .. area.endLine:
+    let oldLine = bufStatus.buffer[i]
+    var newLine = bufStatus.buffer[i]
+    if oldLine.len == 0:
+      discard
+    elif area.startLine == area.endLine:
+      for j in area.startColumn .. area.endColumn:
+        newLine[j] = oldLine[j].toLower
+    elif i == area.startLine:
+      for j in area.startColumn .. bufStatus.buffer[i].high:
+        newLine[j] = oldLine[j].toLower
+    elif i == area.endLine:
+      for j in 0 .. area.endColumn:
+        newLine[j] = oldLine[j].toLower
+    else:
+      for j in 0 .. bufStatus.buffer[i].high:
+        newLine[j] = oldLine[j].toLower
+    if oldLine != newLine:
+      bufStatus.buffer[i] = newLine
 
-    for i in area.startLine .. area.endLine:
-      let oldLine = bufStatus.buffer[i]
-      var newLine = bufStatus.buffer[i]
-      if oldLine.len == 0: discard
-      elif area.startLine == area.endLine:
-        for j in area.startColumn .. area.endColumn:
-          newLine[j] = oldLine[j].toLower
-      elif i == area.startLine:
-        for j in area.startColumn .. bufStatus.buffer[i].high:
-          newLine[j] = oldLine[j].toLower
-      elif i == area.endLine:
-        for j in 0 .. area.endColumn: newLine[j] = oldLine[j].toLower
-      else:
-        for j in 0 .. bufStatus.buffer[i].high: newLine[j] = oldLine[j].toLower
-      if oldLine != newLine: bufStatus.buffer[i] = newLine
-
-    inc(bufStatus.countChange)
-    windowNode.moveCursor(firstCursorPosition)
+  inc(bufStatus.countChange)
+  windowNode.moveCursor(firstCursorPosition)
 
 proc toLowerStringBlock(
-  bufStatus: var BufferStatus,
-  windowNode: var WindowNode,
-  area: SelectedArea,
-  firstCursorPosition: BufferPosition,
-  commandLine: var CommandLine) =
+    bufStatus: var BufferStatus,
+    windowNode: var WindowNode,
+    area: SelectedArea,
+    firstCursorPosition: BufferPosition,
+    commandLine: var CommandLine,
+) =
+  if bufStatus.isReadonly:
+    commandLine.writeReadonlyModeWarning
+    return
 
-    if bufStatus.isReadonly:
-      commandLine.writeReadonlyModeWarning
-      return
+  windowNode.removeAllFoldingRange(area.startLine, area.endLine)
 
-    windowNode.removeAllFoldingRange(area.startLine, area.endLine)
+  for i in area.startLine .. area.endLine:
+    let oldLine = bufStatus.buffer[i]
+    var newLine = bufStatus.buffer[i]
+    for j in area.startColumn .. min(area.endColumn, bufStatus.buffer[i].high):
+      newLine[j] = oldLine[j].toLower
+    if oldLine != newLine:
+      bufStatus.buffer[i] = newLine
 
-    for i in area.startLine .. area.endLine:
-      let oldLine = bufStatus.buffer[i]
-      var newLine = bufStatus.buffer[i]
-      for j in area.startColumn .. min(area.endColumn, bufStatus.buffer[i].high):
-        newLine[j] = oldLine[j].toLower
-      if oldLine != newLine: bufStatus.buffer[i] = newLine
-
-    windowNode.moveCursor(firstCursorPosition)
+  windowNode.moveCursor(firstCursorPosition)
 
 proc toUpperString(
-  bufStatus: var BufferStatus,
-  windowNode: var WindowNode,
-  area: SelectedArea,
-  firstCursorPosition: BufferPosition,
-  commandLine: var CommandLine) =
+    bufStatus: var BufferStatus,
+    windowNode: var WindowNode,
+    area: SelectedArea,
+    firstCursorPosition: BufferPosition,
+    commandLine: var CommandLine,
+) =
+  if bufStatus.isReadonly:
+    commandLine.writeReadonlyModeWarning
+    return
 
-    if bufStatus.isReadonly:
-      commandLine.writeReadonlyModeWarning
-      return
+  windowNode.removeAllFoldingRange(area.startLine, area.endLine)
 
-    windowNode.removeAllFoldingRange(area.startLine, area.endLine)
+  for i in area.startLine .. area.endLine:
+    let oldLine = bufStatus.buffer[i]
+    var newLine = bufStatus.buffer[i]
+    if oldLine.len == 0:
+      discard
+    elif area.startLine == area.endLine:
+      for j in area.startColumn .. area.endColumn:
+        newLine[j] = oldLine[j].toUpper
+    elif i == area.startLine:
+      for j in area.startColumn .. bufStatus.buffer[i].high:
+        newLine[j] = oldLine[j].toUpper
+    elif i == area.endLine:
+      for j in 0 .. area.endColumn:
+        newLine[j] = oldLine[j].toUpper
+    else:
+      for j in 0 .. bufStatus.buffer[i].high:
+        newLine[j] = oldLine[j].toUpper
+    if oldLine != newLine:
+      bufStatus.buffer[i] = newLine
 
-    for i in area.startLine .. area.endLine:
-      let oldLine = bufStatus.buffer[i]
-      var newLine = bufStatus.buffer[i]
-      if oldLine.len == 0: discard
-      elif area.startLine == area.endLine:
-        for j in area.startColumn .. area.endColumn:
-          newLine[j] = oldLine[j].toUpper
-      elif i == area.startLine:
-        for j in area.startColumn .. bufStatus.buffer[i].high:
-          newLine[j] = oldLine[j].toUpper
-      elif i == area.endLine:
-        for j in 0 .. area.endColumn: newLine[j] = oldLine[j].toUpper
-      else:
-        for j in 0 .. bufStatus.buffer[i].high: newLine[j] = oldLine[j].toUpper
-      if oldLine != newLine: bufStatus.buffer[i] = newLine
-
-    inc(bufStatus.countChange)
-    windowNode.moveCursor(firstCursorPosition)
+  inc(bufStatus.countChange)
+  windowNode.moveCursor(firstCursorPosition)
 
 proc toUpperStringBlock(
-  bufStatus: var BufferStatus,
-  windowNode: var WindowNode,
-  area: SelectedArea,
-  firstCursorPosition: BufferPosition,
-  commandLine: var CommandLine) =
+    bufStatus: var BufferStatus,
+    windowNode: var WindowNode,
+    area: SelectedArea,
+    firstCursorPosition: BufferPosition,
+    commandLine: var CommandLine,
+) =
+  if bufStatus.isReadonly:
+    commandLine.writeReadonlyModeWarning
+    return
 
-    if bufStatus.isReadonly:
-      commandLine.writeReadonlyModeWarning
-      return
+  windowNode.removeAllFoldingRange(area.startLine, area.endLine)
 
-    windowNode.removeAllFoldingRange(area.startLine, area.endLine)
+  for i in area.startLine .. area.endLine:
+    let oldLine = bufStatus.buffer[i]
+    var newLine = bufStatus.buffer[i]
+    for j in area.startColumn .. min(area.endColumn, bufStatus.buffer[i].high):
+      newLine[j] = oldLine[j].toUpper
+    if oldLine != newLine:
+      bufStatus.buffer[i] = newLine
 
-    for i in area.startLine .. area.endLine:
-      let oldLine = bufStatus.buffer[i]
-      var newLine = bufStatus.buffer[i]
-      for j in area.startColumn .. min(area.endColumn, bufStatus.buffer[i].high):
-        newLine[j] = oldLine[j].toUpper
-      if oldLine != newLine: bufStatus.buffer[i] = newLine
-
-    windowNode.moveCursor(firstCursorPosition)
+  windowNode.moveCursor(firstCursorPosition)
 
 proc addFoldingRange(
-  windowNode: var WindowNode,
-  bufStatus: BufferStatus,
-  firstCursorPosition: BufferPosition) {.inline.} =
+    windowNode: var WindowNode,
+    bufStatus: BufferStatus,
+    firstCursorPosition: BufferPosition,
+) {.inline.} =
+  template area(): SelectedArea =
+    bufStatus.selectedArea.get
 
-    template area: SelectedArea = bufStatus.selectedArea.get
+  if area.endLine - area.startLine < 1:
+    return
 
-    if area.endLine - area.startLine < 1: return
+  windowNode.addFoldingRange(area.startLine, area.endLine)
 
-    windowNode.addFoldingRange(area.startLine, area.endLine)
-
-    windowNode.moveCursor(
-      BufferPosition(line: firstCursorPosition.line, column: 0))
+  windowNode.moveCursor(BufferPosition(line: firstCursorPosition.line, column: 0))
 
 proc selectionRange(status: var EditorStatus) =
   # LSP Selection Range
 
-  if currentBufStatus.selectionRanges.len == 0: return
+  if currentBufStatus.selectionRanges.len == 0:
+    return
 
   var selectRange = currentBufStatus.selectionRanges[0]
   while selectRange.parent.isSome and
-        selectRange.range.start[] == selectRange.range.`end`[]:
-          selectRange = selectRange.parent.get
+      selectRange.range.start[] == selectRange.range.`end`[]:
+    selectRange = selectRange.parent.get
 
   let r = selectRange.range
 
@@ -505,16 +521,14 @@ proc selectionRange(status: var EditorStatus) =
   currentMainWindowNode.moveCursor(currentBufStatus, r.start)
 
   currentBufStatus.selectedArea = initSelectedArea(
-    currentMainWindowNode.currentLine,
-    currentMainWindowNode.currentColumn)
-    .some
+    currentMainWindowNode.currentLine, currentMainWindowNode.currentColumn
+  ).some
 
   # The end position
   currentMainWindowNode.moveCursor(currentBufStatus, r.`end`)
 
   currentBufStatus.selectedArea.get.endLine = currentMainWindowNode.currentLine
-  currentBufStatus.selectedArea.get.endColumn =
-    currentMainWindowNode.currentColumn
+  currentBufStatus.selectedArea.get.endColumn = currentMainWindowNode.currentColumn
 
   if selectRange.parent.isSome:
     currentBufStatus.selectionRanges = @[selectRange.parent.get]
@@ -523,12 +537,11 @@ proc changeModeToInsertMode(status: var EditorStatus) =
   if currentBufStatus.isReadonly:
     status.commandLine.writeReadonlyModeWarning
   else:
-    currentMainWindowNode.currentLine =
-      currentBufStatus.selectedArea.get.startLine
+    currentMainWindowNode.currentLine = currentBufStatus.selectedArea.get.startLine
     currentMainWindowNode.currentColumn = 0
 
-    let foldingRange = currentMainWindowNode.view.findFoldingRange(
-      currentMainWindowNode.currentLine)
+    let foldingRange =
+      currentMainWindowNode.view.findFoldingRange(currentMainWindowNode.currentLine)
     if foldingRange.isSome:
       currentMainWindowNode.view.removeFoldingRange(foldingRange.get)
 
@@ -545,183 +558,139 @@ proc exitVisualMode(status: var EditorStatus) =
 
   var highlight = currentBufStatus.highlight
   highlight.updateViewHighlight(
-    currentBufStatus,
-    currentMainWindowNode,
-    status.highlightingText,
-    status.settings)
+    currentBufStatus, currentMainWindowNode, status.highlightingText, status.settings
+  )
 
   status.changeModeToNormalMode
 
-proc visualCommand(
-  status: var EditorStatus,
-  area: var SelectedArea,
-  command: Runes) =
+proc visualCommand(status: var EditorStatus, area: var SelectedArea, command: Runes) =
+  # The position of entered visual mode.
+  let firstCursorPosition =
+    BufferPosition(line: area.startLine, column: area.startColumn)
 
-    # The position of entered visual mode.
-    let firstCursorPosition = BufferPosition(
-      line: area.startLine,
-      column: area.startColumn)
-
-    if currentBufStatus.isVisualLineMode:
-      area.swapSelectedAreaVisualLine(currentBufStatus)
-    else:
-      area.swapSelectedArea
-
-    if command.len == 1:
-      let key = command[0]
-      if key == ord('y') or isDeleteKey(key):
-        currentBufStatus.yankBuffer(
-          status.registers,
-          currentMainWindowNode,
-          area,
-          firstCursorPosition,
-          status.settings)
-      elif key == ord('x') or key == ord('d'):
-        currentBufStatus.deleteBuffer(
-          status.registers,
-          currentMainWindowNode,
-          area,
-          firstCursorPosition,
-          status.settings,
-          status.commandLine)
-      elif key == ord('>'):
-        currentBufStatus.addIndent(
-          currentMainWindowNode,
-          area,
-          status.settings.standard.tabStop,
-          status.commandLine)
-      elif key == ord('<'):
-        currentBufStatus.deleteIndent(
-          currentMainWindowNode,
-          area,
-          status.settings.standard.tabStop,
-          status.commandLine)
-      elif key == ord('J'):
-        currentBufStatus.joinLines(
-          currentMainWindowNode,
-          area,
-          status.commandLine)
-      elif key == ord('u'):
-        currentBufStatus.toLowerString(
-          currentMainWindowNode,
-          area,
-          firstCursorPosition,
-          status.commandLine)
-      elif key == ord('U'):
-        currentBufStatus.toUpperString(
-          currentMainWindowNode,
-          area,
-          firstCursorPosition,
-          status.commandLine)
-      elif key == ord('r'):
-        let ch = status.getKeyFromMainWindow
-        if not isEscKey(ch):
-          currentBufStatus.replaceCharacter(
-            currentMainWindowNode,
-            area,
-            ch,
-            status.commandLine)
-      elif key == ord('I'):
-        status.changeModeToInsertMode
-    elif command.len == 2:
-      if command[0] == ord('z'):
-        if command[1] == ord('f'):
-          currentMainWindowNode.addFoldingRange(
-            currentBufStatus,
-            firstCursorPosition)
-
-    if currentBufStatus.isVisualMode:
-      currentBufStatus.selectedArea = none(SelectedArea)
-      status.changeMode(currentBufStatus.prevMode)
-
-proc changeModeToInsertMulti(
-  status: var EditorStatus,
-  area: SelectedArea) =
-    ## Rest the current position and changing the mode to the insertMulti mode.
-
-    if currentBufStatus.isReadonly:
-      status.commandLine.writeReadonlyModeWarning
-      return
-
-    currentMainWindowNode.currentLine = area.startLine
-    currentMainWindowNode.currentColumn = area.startColumn
-
-    currentBufStatus.mode = Mode.insertMulti
-    changeCursorType(status.settings.standard.insertModeCursor)
-
-proc visualBlockCommand(
-  status: var EditorStatus,
-  area: var SelectedArea,
-  command: Runes) =
-
-    # The position of entered visual mode.
-    let firstCursorPosition = BufferPosition(
-      line: area.startLine,
-      column: area.startColumn)
-
+  if currentBufStatus.isVisualLineMode:
+    area.swapSelectedAreaVisualLine(currentBufStatus)
+  else:
     area.swapSelectedArea
 
-    if command.len == 1:
-      let key = command[0]
-      if key == ord('y') or isDeleteKey(key):
-        currentBufStatus.yankBufferBlock(
-          status.registers,
-          currentMainWindowNode,
-          area,
-          status.settings)
-      elif key == ord('x') or key == ord('d'):
-        currentBufStatus.deleteBufferBlock(
-          status.registers,
-          currentMainWindowNode,
-          area,
-          status.settings,
-          status.commandLine)
-      elif key == ord('>'):
-        currentBufStatus.insertIndent(
-          currentMainWindowNode,
-          area,
-          status.settings.standard.tabStop,
-          status.commandLine)
-      elif key == ord('<'):
-        currentBufStatus.deleteIndent(
-          currentMainWindowNode,
-          area,
-          status.settings.standard.tabStop,
-          status.commandLine)
-      elif key == ord('J'):
-        currentBufStatus.joinLines(currentMainWindowNode, area, status.commandLine)
-      elif key == ord('u'):
-        currentBufStatus.toLowerStringBlock(
-          currentMainWindowNode,
-          area,
-          firstCursorPosition,
-          status.commandLine)
-      elif key == ord('U'):
-        currentBufStatus.toUpperStringBlock(
-          currentMainWindowNode,
-          area,
-          firstCursorPosition,
-          status.commandLine)
-      elif key == ord('r'):
-        let ch = status.getKeyFromMainWindow
-        if not isEscKey(ch):
-          currentBufStatus.replaceCharacterBlock(
-            currentMainWindowNode,
-            area,
-            ch,
-            status.commandLine)
-      elif key == ord('I'):
-        status.changeModeToInsertMulti(area)
-    elif command.len == 2:
-      if command[0] == ord('z'):
-        if command[1] == ord('f'):
-          currentMainWindowNode.addFoldingRange(
-            currentBufStatus,
-            firstCursorPosition)
+  if command.len == 1:
+    let key = command[0]
+    if key == ord('y') or isDeleteKey(key):
+      currentBufStatus.yankBuffer(
+        status.registers, currentMainWindowNode, area, firstCursorPosition,
+        status.settings,
+      )
+    elif key == ord('x') or key == ord('d'):
+      currentBufStatus.deleteBuffer(
+        status.registers, currentMainWindowNode, area, firstCursorPosition,
+        status.settings, status.commandLine,
+      )
+    elif key == ord('>'):
+      currentBufStatus.addIndent(
+        currentMainWindowNode, area, status.settings.standard.tabStop,
+        status.commandLine,
+      )
+    elif key == ord('<'):
+      currentBufStatus.deleteIndent(
+        currentMainWindowNode, area, status.settings.standard.tabStop,
+        status.commandLine,
+      )
+    elif key == ord('J'):
+      currentBufStatus.joinLines(currentMainWindowNode, area, status.commandLine)
+    elif key == ord('u'):
+      currentBufStatus.toLowerString(
+        currentMainWindowNode, area, firstCursorPosition, status.commandLine
+      )
+    elif key == ord('U'):
+      currentBufStatus.toUpperString(
+        currentMainWindowNode, area, firstCursorPosition, status.commandLine
+      )
+    elif key == ord('r'):
+      let ch = status.getKeyFromMainWindow
+      if not isEscKey(ch):
+        currentBufStatus.replaceCharacter(
+          currentMainWindowNode, area, ch, status.commandLine
+        )
+    elif key == ord('I'):
+      status.changeModeToInsertMode
+  elif command.len == 2:
+    if command[0] == ord('z'):
+      if command[1] == ord('f'):
+        currentMainWindowNode.addFoldingRange(currentBufStatus, firstCursorPosition)
 
-    if currentBufStatus.isVisualBlockMode:
-      currentBufStatus.selectedArea = none(SelectedArea)
-      status.changeMode(currentBufStatus.prevMode)
+  if currentBufStatus.isVisualMode:
+    currentBufStatus.selectedArea = none(SelectedArea)
+    status.changeMode(currentBufStatus.prevMode)
+
+proc changeModeToInsertMulti(status: var EditorStatus, area: SelectedArea) =
+  ## Rest the current position and changing the mode to the insertMulti mode.
+
+  if currentBufStatus.isReadonly:
+    status.commandLine.writeReadonlyModeWarning
+    return
+
+  currentMainWindowNode.currentLine = area.startLine
+  currentMainWindowNode.currentColumn = area.startColumn
+
+  currentBufStatus.mode = Mode.insertMulti
+  changeCursorType(status.settings.standard.insertModeCursor)
+
+proc visualBlockCommand(
+    status: var EditorStatus, area: var SelectedArea, command: Runes
+) =
+  # The position of entered visual mode.
+  let firstCursorPosition =
+    BufferPosition(line: area.startLine, column: area.startColumn)
+
+  area.swapSelectedArea
+
+  if command.len == 1:
+    let key = command[0]
+    if key == ord('y') or isDeleteKey(key):
+      currentBufStatus.yankBufferBlock(
+        status.registers, currentMainWindowNode, area, status.settings
+      )
+    elif key == ord('x') or key == ord('d'):
+      currentBufStatus.deleteBufferBlock(
+        status.registers, currentMainWindowNode, area, status.settings,
+        status.commandLine,
+      )
+    elif key == ord('>'):
+      currentBufStatus.insertIndent(
+        currentMainWindowNode, area, status.settings.standard.tabStop,
+        status.commandLine,
+      )
+    elif key == ord('<'):
+      currentBufStatus.deleteIndent(
+        currentMainWindowNode, area, status.settings.standard.tabStop,
+        status.commandLine,
+      )
+    elif key == ord('J'):
+      currentBufStatus.joinLines(currentMainWindowNode, area, status.commandLine)
+    elif key == ord('u'):
+      currentBufStatus.toLowerStringBlock(
+        currentMainWindowNode, area, firstCursorPosition, status.commandLine
+      )
+    elif key == ord('U'):
+      currentBufStatus.toUpperStringBlock(
+        currentMainWindowNode, area, firstCursorPosition, status.commandLine
+      )
+    elif key == ord('r'):
+      let ch = status.getKeyFromMainWindow
+      if not isEscKey(ch):
+        currentBufStatus.replaceCharacterBlock(
+          currentMainWindowNode, area, ch, status.commandLine
+        )
+    elif key == ord('I'):
+      status.changeModeToInsertMulti(area)
+  elif command.len == 2:
+    if command[0] == ord('z'):
+      if command[1] == ord('f'):
+        currentMainWindowNode.addFoldingRange(currentBufStatus, firstCursorPosition)
+
+  if currentBufStatus.isVisualBlockMode:
+    currentBufStatus.selectedArea = none(SelectedArea)
+    status.changeMode(currentBufStatus.prevMode)
 
 proc isVisualModeCommand*(command: Runes): InputState =
   result = InputState.Invalid
@@ -730,31 +699,17 @@ proc isVisualModeCommand*(command: Runes): InputState =
     return InputState.Continue
   elif command.len == 1:
     let c = command[0]
-    if isCtrlC(c) or isEscKey(c) or
-       c == ord('h') or isLeftKey(c) or isBackspaceKey(c) or
-       c == ord('l') or isRightKey(c) or
-       c == ord('k') or isUpKey(c) or
-       c == ord('j') or isDownKey(c) or isEnterKey(c) or
-       c == ord('^') or
-       c == ord('0') or isHomeKey(c) or
-       c == ord('$') or isEndKey(c) or
-       c == ord('w') or
-       c == ord('b') or
-       c == ord('e') or
-       c == ord('G') or
-       c == ord('g') or
-       c == ord('{') or
-       c == ord('}') or
-       c == ord('y') or isDeleteKey(c) or
-       c == ord('x') or c == ord('d') or
-       c == ord('>') or
-       c == ord('<') or
-       c == ord('J') or
-       c == ord('u') or
-       c == ord('U') or
-       c == ord('r') or
-       isCtrlS(c):
-         return InputState.Valid
+    if isCtrlC(c) or isEscKey(c) or c == ord('h') or isLeftKey(c) or isBackspaceKey(c) or
+        c == ord('l') or isRightKey(c) or c == ord('k') or isUpKey(c) or c == ord('j') or
+        isDownKey(c) or isEnterKey(c) or c == ord('^') or c == ord('0') or isHomeKey(c) or
+        c == ord('$') or isEndKey(c) or c == ord('w') or c == ord('b') or c == ord('e') or
+        c == ord('G') or c == ord('g') or c == ord('{') or c == ord('}') or c == ord(
+      'y'
+    ) or isDeleteKey(c) or c == ord('x') or c == ord('d') or c == ord('>') or
+        c == ord('<') or c == ord('J') or c == ord('u') or c == ord('U') or c == ord(
+      'r'
+    ) or isCtrlS(c):
+      return InputState.Valid
     elif c == ord('z'):
       return InputState.Continue
   elif command.len == 2:
@@ -814,5 +769,5 @@ proc execVisualModeCommand*(status: var EditorStatus, command: Runes) =
 
     # Update folding ranges
     status.shiftFoldingRanges(
-      currentMainWindowNode.currentLine,
-      currentBufStatus.buffer.len - beforeBufferLen)
+      currentMainWindowNode.currentLine, currentBufStatus.buffer.len - beforeBufferLen
+    )

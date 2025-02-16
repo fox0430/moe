@@ -31,38 +31,38 @@ type
 
   StartProcessResult* = Result[BackgroundProcess, string]
 
-proc isRunning*(bp: BackgroundProcess): bool {.inline.} = bp.process.running
+proc isRunning*(bp: BackgroundProcess): bool {.inline.} =
+  bp.process.running
 
-proc isFinish*(bp: BackgroundProcess): bool {.inline.} = not bp.process.running
+proc isFinish*(bp: BackgroundProcess): bool {.inline.} =
+  not bp.process.running
 
-proc cancel*(bp: BackgroundProcess) = bp.process.terminate
+proc cancel*(bp: BackgroundProcess) =
+  bp.process.terminate
 
-proc kill*(bp: BackgroundProcess) = bp.process.kill
+proc kill*(bp: BackgroundProcess) =
+  bp.process.kill
 
-proc close*(bp: BackgroundProcess) = bp.process.close
+proc close*(bp: BackgroundProcess) =
+  bp.process.close
 
-proc outputStream*(bp: BackgroundProcess): Stream = bp.process.outputStream
+proc outputStream*(bp: BackgroundProcess): Stream =
+  bp.process.outputStream
 
-proc startBackgroundProcess*(
-  command: BackgroundProcessCommand): StartProcessResult =
-    ## Start the passed command in a new process and return BackgroundProcess.
+proc startBackgroundProcess*(command: BackgroundProcessCommand): StartProcessResult =
+  ## Start the passed command in a new process and return BackgroundProcess.
 
-    const
-      Env = nil
-      Options = {poUsePath, poDaemon, poStdErrToStdOut}
+  const
+    Env = nil
+    Options = {poUsePath, poDaemon, poStdErrToStdOut}
 
-    var process: Process
-    try:
-      process = startProcess(
-        command.cmd,
-        command.workingDir,
-        command.args,
-        Env,
-        Options)
-    except OSError as e:
-      return StartProcessResult.err fmt"Failed to create a background process: {e.msg}"
+  var process: Process
+  try:
+    process = startProcess(command.cmd, command.workingDir, command.args, Env, Options)
+  except OSError as e:
+    return StartProcessResult.err fmt"Failed to create a background process: {e.msg}"
 
-    return StartProcessResult.ok BackgroundProcess(process: process)
+  return StartProcessResult.ok BackgroundProcess(process: process)
 
 proc result*(bp: var BackgroundProcess): Result[seq[string], string] =
   ## Return results (Stdout) the BackgroundProcess and close the process.

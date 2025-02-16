@@ -55,7 +55,8 @@ suite "worddictionary: inc":
     var d: WordDictionary
     d["abc"] = 0
 
-    for i in 0 .. 1: d.inc("abc")
+    for i in 0 .. 1:
+      d.inc("abc")
     check d["abc"] == 2
 
 suite "worddictionary: collect":
@@ -90,7 +91,8 @@ suite "worddictionary: collect":
 suite "worddictionary: enumerateWords":
   test "Basic":
     var r: seq[Runes]
-    for w in enumerateWords("abc def,ghi\n  jkl m no".toRunes): r.add w
+    for w in enumerateWords("abc def,ghi\n  jkl m no".toRunes):
+      r.add w
 
     check r == @["abc", "def", "ghi", "jkl", "no"].toSeqRunes
 
@@ -101,12 +103,13 @@ suite "worddictionary: update":
       Text = "abc def,ghi\n  jkl m no".toRunes
       Exclude = ru"no"
     d.update(Text, Exclude, SourceLanguage.langNone)
-    check d.pairs.toSeq == @[
-      (key: "abc", val: 0),
-      (key: "def", val: 0),
-      (key: "ghi", val: 0),
-      (key: "jkl", val: 0),
-    ]
+    check d.pairs.toSeq ==
+      @[
+        (key: "abc", val: 0),
+        (key: "def", val: 0),
+        (key: "ghi", val: 0),
+        (key: "jkl", val: 0),
+      ]
 
   test "Basic 2":
     var d: WordDictionary
@@ -114,12 +117,13 @@ suite "worddictionary: update":
     const Buffer = @["abc def", "ghi jkl"].toSeqRunes
     d.update(Buffer, ru"", SourceLanguage.langNone)
 
-    check d.pairs.toSeq == @[
-      (key: "abc", val: 0),
-      (key: "def", val: 0),
-      (key: "ghi", val: 0),
-      (key: "jkl", val: 0),
-    ]
+    check d.pairs.toSeq ==
+      @[
+        (key: "abc", val: 0),
+        (key: "def", val: 0),
+        (key: "ghi", val: 0),
+        (key: "jkl", val: 0),
+      ]
 
   test "Inc and again":
     var d: WordDictionary
@@ -138,13 +142,14 @@ suite "worddictionary: update":
         Exclude = ru"qr"
       d.update(Text, Exclude, SourceLanguage.langNone)
 
-    check d.pairs.toSeq == @[
-      (key: "abc", val: 1),
-      (key: "def", val: 0),
-      (key: "ghi", val: 1),
-      (key: "jkl", val: 0),
-      (key: "nop", val: 0)
-    ]
+    check d.pairs.toSeq ==
+      @[
+        (key: "abc", val: 1),
+        (key: "def", val: 0),
+        (key: "ghi", val: 1),
+        (key: "jkl", val: 0),
+        (key: "nop", val: 0),
+      ]
 
   test "With build-in":
     var d: WordDictionary
@@ -152,4 +157,5 @@ suite "worddictionary: update":
     const Buffer = @["a"].toSeqRunes
     d.update(Buffer, ru"", SourceLanguage.langNim)
 
-    for w in d.keys: check not w.contains(' ')
+    for w in d.keys:
+      check not w.contains(' ')

@@ -48,27 +48,21 @@ proc experimentClientCapabilities*(c: RustAnalyzerConfigs): JsonNode =
   if c.debugSingle:
     commands.add "rust-analyzer.debugSingle"
 
-  return %*{
-    "commands": {
-      "commands": commands
-    }
-  }
+  return %*{"commands": {"commands": commands}}
 
 proc runSingle*(lens: CodeLens, path: string): RACodeLensResult =
   ## `commands.rust-analyzer.runSingle`
 
-  if lens.command.isNone or
-     lens.command.get.arguments.isNone or
-     lens.command.get.arguments.get.kind != JArray or
-     lens.command.get.arguments.get.len != 1:
-       return RACodeLensResult.err fmt"Invalid command"
+  if lens.command.isNone or lens.command.get.arguments.isNone or
+      lens.command.get.arguments.get.kind != JArray or
+      lens.command.get.arguments.get.len != 1:
+    return RACodeLensResult.err fmt"Invalid command"
 
-  let
-    codeLensArgs =
-      try:
-        lens.command.get.arguments.get[0]["args"].to(CodeLensArgs)
-      except CatchableError as e:
-        return RACodeLensResult.err fmt"Invalid command: {e.msg}"
+  let codeLensArgs =
+    try:
+      lens.command.get.arguments.get[0]["args"].to(CodeLensArgs)
+    except CatchableError as e:
+      return RACodeLensResult.err fmt"Invalid command: {e.msg}"
 
   var
     cmd = ""
@@ -80,33 +74,28 @@ proc runSingle*(lens: CodeLens, path: string): RACodeLensResult =
   except CatchableError as e:
     return RACodeLensResult.err fmt"Invalid command: {e.msg}"
 
-  let command = BackgroundProcessCommand(
-    cmd: cmd,
-    args: args,
-    workingDir: getCurrentDir())
+  let command =
+    BackgroundProcessCommand(cmd: cmd, args: args, workingDir: getCurrentDir())
 
   let p = startBackgroundProcess(command)
   if p.isErr:
     return RACodeLensResult.err fmt"rust-analyzer.runSingle failed: {p.error}"
 
   return RACodeLensResult.ok QuickRunProcess(
-    command: command,
-    filePath: path,
-    process: p.get)
+    command: command, filePath: path, process: p.get
+  )
 
 proc debugSingle*(lens: CodeLens, path: string): RACodeLensResult =
-  if lens.command.isNone or
-     lens.command.get.arguments.isNone or
-     lens.command.get.arguments.get.kind != JArray or
-     lens.command.get.arguments.get.len != 1:
-       return RACodeLensResult.err fmt"Invalid command"
+  if lens.command.isNone or lens.command.get.arguments.isNone or
+      lens.command.get.arguments.get.kind != JArray or
+      lens.command.get.arguments.get.len != 1:
+    return RACodeLensResult.err fmt"Invalid command"
 
-  let
-    codeLensArgs =
-      try:
-        lens.command.get.arguments.get[0]["args"].to(CodeLensArgs)
-      except CatchableError as e:
-        return RACodeLensResult.err fmt"Invalid command: {e.msg}"
+  let codeLensArgs =
+    try:
+      lens.command.get.arguments.get[0]["args"].to(CodeLensArgs)
+    except CatchableError as e:
+      return RACodeLensResult.err fmt"Invalid command: {e.msg}"
 
   var
     cmd = ""
@@ -115,36 +104,35 @@ proc debugSingle*(lens: CodeLens, path: string): RACodeLensResult =
     cmd = lens.command.get.arguments.get[0]["kind"].getStr
 
     case codeLensArgs.cargoArgs[0]
-      of "test": args.add "--no-run"
-      of "run": args.add "build"
+    of "test":
+      args.add "--no-run"
+    of "run":
+      args.add "build"
     args.add codeLensArgs.cargoArgs[1 .. codeLensArgs.cargoArgs.high].mapIt(it)
 
     args.add codeLensArgs.executableArgs.mapIt(it)
   except CatchableError as e:
     return RACodeLensResult.err fmt"Invalid command: {e.msg}"
 
-  let command = BackgroundProcessCommand(
-    cmd: cmd,
-    args: args,
-    workingDir: getCurrentDir())
+  let command =
+    BackgroundProcessCommand(cmd: cmd, args: args, workingDir: getCurrentDir())
 
   let p = startBackgroundProcess(command)
   if p.isErr:
     return RACodeLensResult.err fmt"rust-analyzer.debugSingle failed: {p.error}"
 
   return RACodeLensResult.ok QuickRunProcess(
-    command: command,
-    filePath: path,
-    process: p.get)
+    command: command, filePath: path, process: p.get
+  )
 
 proc runCodeLensCommand*(lens: CodeLens, path: string): RACodeLensResult =
   if lens.command.isNone:
     return RACodeLensResult.err fmt"Invalid command"
 
-  case lens.command.get.command:
-    of "rust-analyzer.runSingle":
-      return lens.runSingle(path)
-    of "rust-analyzer.debugSingle":
-      return lens.debugSingle(path)
-    else:
-      return RACodeLensResult.err fmt"Unknown command"
+  case lens.command.get.command
+  of "rust-analyzer.runSingle":
+    return lens.runSingle(path)
+  of "rust-analyzer.debugSingle":
+    return lens.debugSingle(path)
+  else:
+    return RACodeLensResult.err fmt"Unknown command"

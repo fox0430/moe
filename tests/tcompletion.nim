@@ -25,12 +25,12 @@ import moepkg/completion {.all.}
 
 suite "completion: isCompletionCharacter":
   test "Basics":
-    check isCompletionCharacter(ru'a')
+    check isCompletionCharacter(ru 'a')
     check isCompletionCharacter("あ".toRunes[0])
-    check isCompletionCharacter(ru'.')
-    check isCompletionCharacter(ru'/')
+    check isCompletionCharacter(ru '.')
+    check isCompletionCharacter(ru '/')
 
-    check not isCompletionCharacter(ru'=')
+    check not isCompletionCharacter(ru '=')
 
 suite "completion: pathCompletionList":
   const TestDir = "pathCompletionListTest"
@@ -46,12 +46,11 @@ suite "completion: pathCompletionList":
     createDir(TestDir / "dir2")
     writeFile(TestDir / "file1", "hello")
 
-    check pathCompletionList(TestDir.toRunes & ru'/')
-      .items
-      .sortedByIt($it.label) == @[
+    check pathCompletionList(TestDir.toRunes & ru '/').items.sortedByIt($it.label) ==
+      @[
         CompletionItem(label: ru"dir1/", insertText: ru"dir1/"),
         CompletionItem(label: ru"dir2/", insertText: ru"dir2/"),
-        CompletionItem(label: ru"file1", insertText: ru"file1")
+        CompletionItem(label: ru"file1", insertText: ru"file1"),
       ]
 
   test "Basic 2":
@@ -59,9 +58,8 @@ suite "completion: pathCompletionList":
     createDir(TestDir / "dir2")
     writeFile(TestDir / "file1", "hello")
 
-    check pathCompletionList(TestDir.toRunes / ru"di")
-      .items
-      .sortedByIt($it.label) == @[
+    check pathCompletionList(TestDir.toRunes / ru"di").items.sortedByIt($it.label) ==
+      @[
         CompletionItem(label: ru"dir1/", insertText: ru"dir1/"),
         CompletionItem(label: ru"dir2/", insertText: ru"dir2/"),
       ]
@@ -77,10 +75,8 @@ suite "completion: pathCompletionList":
         else:
           k.path.replace(getHomeDir(), "")
 
-    check expectList.sorted == pathCompletionList(ru"~/")
-      .items
-      .mapIt($it.insertText)
-      .sorted
+    check expectList.sorted ==
+      pathCompletionList(ru"~/").items.mapIt($it.insertText).sorted
 
   test "Current dir":
     let expectList = collect:
@@ -90,10 +86,8 @@ suite "completion: pathCompletionList":
         else:
           k.path.splitPath.tail
 
-    check expectList.sorted == pathCompletionList(ru"./")
-      .items
-      .mapIt($it.insertText)
-      .sorted
+    check expectList.sorted ==
+      pathCompletionList(ru"./").items.mapIt($it.insertText).sorted
 
   test "Current dir 2":
     let expectList = collect:
@@ -104,10 +98,8 @@ suite "completion: pathCompletionList":
           else:
             k.path.splitPath.tail
 
-    check expectList.sorted == pathCompletionList(ru"s")
-      .items
-      .mapIt($it.insertText)
-      .sorted
+    check expectList.sorted ==
+      pathCompletionList(ru"s").items.mapIt($it.insertText).sorted
 
   test "Current dir 3":
     let expectList = collect:
@@ -118,10 +110,8 @@ suite "completion: pathCompletionList":
           else:
             k.path.splitPath.tail
 
-    check expectList.sorted == pathCompletionList(ru"./s")
-      .items
-      .mapIt($it.insertText)
-      .sorted
+    check expectList.sorted ==
+      pathCompletionList(ru"./s").items.mapIt($it.insertText).sorted
 
 suite "completion: fuzzySort":
   test "Basic":
@@ -131,8 +121,9 @@ suite "completion: fuzzySort":
     list.add initCompletionItem(ru"te")
 
     list.fuzzySort(ru"t")
-    check list.items == @[
-      initCompletionItem(ru"te"),
-      initCompletionItem(ru"texteditor"),
-      initCompletionItem(ru"abcdefghij")
-    ]
+    check list.items ==
+      @[
+        initCompletionItem(ru"te"),
+        initCompletionItem(ru"texteditor"),
+        initCompletionItem(ru"abcdefghij"),
+      ]

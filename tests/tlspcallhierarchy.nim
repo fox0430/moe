@@ -26,45 +26,29 @@ import moepkg/lsp/callhierarchy {.all.}
 
 suite "lsp: parseTextDocumentPrepareCallHierarchyResponse":
   test "Not found":
-    check parseTextDocumentPrepareCallHierarchyResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": []
-    }).get.len == 0
+    check parseTextDocumentPrepareCallHierarchyResponse(
+      %*{"jsonrpc": "2.0", "id": 0, "result": []}
+    ).get.len == 0
 
   test "Basic":
-    let r = parseTextDocumentPrepareCallHierarchyResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": [
-        {
-          "name": "f",
-          "kind": 0,
-          "detail": "pub fn f()",
-          "uri": "file:///home/user/app/src/test.rs",
-          "range": {
-            "start": {
-              "line": 0,
-              "character": 1
-            },
-            "end": {
-              "line": 2,
-              "character": 3
-            }
-          },
-          "selectionRange": {
-            "start": {
-              "line": 4,
-              "character": 5
-            },
-            "end": {
-              "line": 6,
-              "character": 7
-            }
+    let r = parseTextDocumentPrepareCallHierarchyResponse(
+      %*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": [
+          {
+            "name": "f",
+            "kind": 0,
+            "detail": "pub fn f()",
+            "uri": "file:///home/user/app/src/test.rs",
+            "range":
+              {"start": {"line": 0, "character": 1}, "end": {"line": 2, "character": 3}},
+            "selectionRange":
+              {"start": {"line": 4, "character": 5}, "end": {"line": 6, "character": 7}},
           }
-        }
-    ]
-    }).get
+        ],
+      }
+    ).get
 
     check r.len == 1
     check r[0].name == "f"
@@ -77,98 +61,59 @@ suite "lsp: parseTextDocumentPrepareCallHierarchyResponse":
 
 suite "lsp: parseCallhierarchyIncomingCallsResponse":
   test "Not found":
-    check parseCallhierarchyIncomingCallsResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": []
-    }).get.len == 0
+    check parseCallhierarchyIncomingCallsResponse(
+      %*{"jsonrpc": "2.0", "id": 0, "result": []}
+    ).get.len == 0
 
   test "Basic":
-    let r = parseCallhierarchyIncomingCallsResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": [
-        {
-          "from": {
-            "name": "name0",
-            "kind": 12,
-            "detail": "detail0",
-            "uri": "file:///home/user/app/src/test0.rs",
-            "range": {
-              "start": {
-                "line": 0,
-                "character": 1
+    let r = parseCallhierarchyIncomingCallsResponse(
+      %*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": [
+          {
+            "from": {
+              "name": "name0",
+              "kind": 12,
+              "detail": "detail0",
+              "uri": "file:///home/user/app/src/test0.rs",
+              "range": {
+                "start": {"line": 0, "character": 1}, "end": {"line": 2, "character": 3}
               },
-              "end": {
-                "line": 2,
-                "character": 3
-              }
+              "selectionRange": {
+                "start": {"line": 4, "character": 5}, "end": {"line": 6, "character": 7}
+              },
             },
-            "selectionRange": {
-              "start": {
-                "line": 4,
-                "character": 5
-              },
-              "end": {
-                "line": 6,
-                "character": 7
+            "fromRanges": [
+              {
+                "start": {"line": 8, "character": 9},
+                "end": {"line": 10, "character": 11},
               }
-            }
+            ],
           },
-          "fromRanges": [
-            {
-              "start": {
-                "line": 8,
-                "character": 9
+          {
+            "from": {
+              "name": "name1",
+              "kind": 12,
+              "detail": "detail1",
+              "uri": "file:///home/user/app/src/test1.rs",
+              "range": {
+                "start": {"line": 0, "character": 1}, "end": {"line": 2, "character": 3}
               },
-              "end": {
-                "line": 10,
-                "character": 11
-              }
-            }
-          ]
-        },
-        {
-          "from": {
-            "name": "name1",
-            "kind": 12,
-            "detail": "detail1",
-            "uri": "file:///home/user/app/src/test1.rs",
-            "range": {
-              "start": {
-                "line": 0,
-                "character": 1
+              "selectionRange": {
+                "start": {"line": 4, "character": 5}, "end": {"line": 6, "character": 7}
               },
-              "end": {
-                "line": 2,
-                "character": 3
-              }
             },
-            "selectionRange": {
-              "start": {
-                "line": 4,
-                "character": 5
-              },
-              "end": {
-                "line": 6,
-                "character": 7
+            "fromRanges": [
+              {
+                "start": {"line": 8, "character": 9},
+                "end": {"line": 10, "character": 11},
               }
-            }
+            ],
           },
-          "fromRanges": [
-            {
-              "start": {
-                "line": 8,
-                "character": 9
-              },
-              "end": {
-                "line": 10,
-                "character": 11
-              }
-            }
-          ]
-        }
-      ]}).get
+        ],
+      }
+    ).get
 
     check r.len == 2
 
@@ -192,98 +137,59 @@ suite "lsp: parseCallhierarchyIncomingCallsResponse":
 
 suite "lsp: parseCallhierarchyOutgoingCallsResponse":
   test "Not found":
-    check parseCallhierarchyOutgoingCallsResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": []
-    }).get.len == 0
+    check parseCallhierarchyOutgoingCallsResponse(
+      %*{"jsonrpc": "2.0", "id": 0, "result": []}
+    ).get.len == 0
 
   test "Basic":
-    let r = parseCallhierarchyOutgoingCallsResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": [
-        {
-          "to": {
-            "name": "name0",
-            "kind": 12,
-            "detail": "detail0",
-            "uri": "file:///home/user/app/src/test0.rs",
-            "range": {
-              "start": {
-                "line": 0,
-                "character": 1
+    let r = parseCallhierarchyOutgoingCallsResponse(
+      %*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": [
+          {
+            "to": {
+              "name": "name0",
+              "kind": 12,
+              "detail": "detail0",
+              "uri": "file:///home/user/app/src/test0.rs",
+              "range": {
+                "start": {"line": 0, "character": 1}, "end": {"line": 2, "character": 3}
               },
-              "end": {
-                "line": 2,
-                "character": 3
-              }
+              "selectionRange": {
+                "start": {"line": 4, "character": 5}, "end": {"line": 6, "character": 7}
+              },
             },
-            "selectionRange": {
-              "start": {
-                "line": 4,
-                "character": 5
-              },
-              "end": {
-                "line": 6,
-                "character": 7
+            "fromRanges": [
+              {
+                "start": {"line": 8, "character": 9},
+                "end": {"line": 10, "character": 11},
               }
-            }
+            ],
           },
-          "fromRanges": [
-            {
-              "start": {
-                "line": 8,
-                "character": 9
+          {
+            "to": {
+              "name": "name1",
+              "kind": 12,
+              "detail": "detail1",
+              "uri": "file:///home/user/app/src/test1.rs",
+              "range": {
+                "start": {"line": 0, "character": 1}, "end": {"line": 2, "character": 3}
               },
-              "end": {
-                "line": 10,
-                "character": 11
-              }
-            }
-          ]
-        },
-        {
-          "to": {
-            "name": "name1",
-            "kind": 12,
-            "detail": "detail1",
-            "uri": "file:///home/user/app/src/test1.rs",
-            "range": {
-              "start": {
-                "line": 0,
-                "character": 1
+              "selectionRange": {
+                "start": {"line": 4, "character": 5}, "end": {"line": 6, "character": 7}
               },
-              "end": {
-                "line": 2,
-                "character": 3
-              }
             },
-            "selectionRange": {
-              "start": {
-                "line": 4,
-                "character": 5
-              },
-              "end": {
-                "line": 6,
-                "character": 7
+            "fromRanges": [
+              {
+                "start": {"line": 8, "character": 9},
+                "end": {"line": 10, "character": 11},
               }
-            }
+            ],
           },
-          "fromRanges": [
-            {
-              "start": {
-                "line": 8,
-                "character": 9
-              },
-              "end": {
-                "line": 10,
-                "character": 11
-              }
-            }
-          ]
-        }
-      ]}).get
+        ],
+      }
+    ).get
 
     check r.len == 2
 

@@ -29,8 +29,9 @@ import moepkg/commandlineutils {.all.}
 suite "commandlineutils: initCommandLineCommand":
   test "\"vs\"":
     const Input = ru"vs"
-    check CommandLineCommand(command: ru"vs", args: @[]) ==
-      initCommandLineCommand(Input)
+    check CommandLineCommand(command: ru"vs", args: @[]) == initCommandLineCommand(
+      Input
+    )
 
   test "\"e file.txt\"":
     const Input = ru"e file.txt"
@@ -39,9 +40,8 @@ suite "commandlineutils: initCommandLineCommand":
 
   test "\"! \"echo test\"\"":
     const Input = toRunes("! \"echo test\"")
-    check CommandLineCommand(
-      command: ru"!",
-      args: @[ru"echo test"]) == initCommandLineCommand(Input)
+    check CommandLineCommand(command: ru"!", args: @[ru"echo test"]) ==
+      initCommandLineCommand(Input)
 
 suite "commandlineutils: getSuggestType":
   test "SuggestType.exCommand":
@@ -70,7 +70,11 @@ suite "commandlineutils: getPathCompletionList":
     for pathComponent in walkDir("./"):
       # Delete "./" and if the path is directory, add '/' end of the path
       let path = pathComponent.path[2 .. ^1]
-      let p = if dirExists(path): path & '/' else: path
+      let p =
+        if dirExists(path):
+          path & '/'
+        else:
+          path
       files.add(p)
 
     let buffer = "e ".toRunes
@@ -83,7 +87,11 @@ suite "commandlineutils: getPathCompletionList":
       # if the path is directory, add '/' end of the path
       let
         path = pathComponent.path
-        p = if dirExists(path): path & '/' else: path
+        p =
+          if dirExists(path):
+            path & '/'
+          else:
+            path
       files.add(p)
 
     let buffer = "e /".toRunes
@@ -99,10 +107,8 @@ suite "commandlineutils: getPathCompletionList":
         else:
           k.path.replace(getHomeDir(), "")
 
-    check expectList.sorted == getPathCompletionList(Input)
-      .items
-      .mapIt($it.insertText)
-      .sorted
+    check expectList.sorted ==
+      getPathCompletionList(Input).items.mapIt($it.insertText).sorted
 
 suite "commandlineutils: getExCommandOptionCompletionList":
   test "Expect \"on\" and \"off\"":
@@ -112,19 +118,14 @@ suite "commandlineutils: getExCommandOptionCompletionList":
       let
         rawInput = c.command.toRunes
         commandLineCmd = initCommandLineCommand(rawInput)
-      check @[
-        initCompletionItem(ru"on"),
-        initCompletionItem(ru"off")] == getExCommandOptionCompletionList(
-          rawInput,
-          commandLineCmd).items
+      check @[initCompletionItem(ru"on"), initCompletionItem(ru"off")] ==
+        getExCommandOptionCompletionList(rawInput, commandLineCmd).items
 
   test "Expect ColorTheme values":
     const RawInput = "theme".toRunes
     let commandLineCmd = initCommandLineCommand(RawInput)
-    check ColorTheme
-      .mapIt(initCompletionItem(toRunes($it))) == getExCommandOptionCompletionList(
-        RawInput,
-        commandLineCmd).items
+    check ColorTheme.mapIt(initCompletionItem(toRunes($it))) ==
+      getExCommandOptionCompletionList(RawInput, commandLineCmd).items
 
   test "Invalid command":
     const RawInput = ru"!echo"
@@ -134,107 +135,107 @@ suite "commandlineutils: getExCommandOptionCompletionList":
 suite "commandlineutils: getExCommandCompletionList":
   test "Expect all ex command":
     # TODO: Check labels
-    check ExCommandInfoList
-      .mapIt(initCompletionItem(
-        it.command.toRunes).insertText) == getExCommandCompletionList(
-          ru"").items.mapIt(it.insertText)
+    check ExCommandInfoList.mapIt(initCompletionItem(it.command.toRunes).insertText) ==
+      getExCommandCompletionList(ru"").items.mapIt(it.insertText)
 
   test "Expect ex commands starting with \"b\"":
     const Input = ru"b"
-    let commands = ExCommandInfoList
-      .filterIt(it.command.startsWith("b"))
-      .mapIt(initCompletionItem(it.command.toRunes).insertText)
+    let commands = ExCommandInfoList.filterIt(it.command.startsWith("b")).mapIt(
+        initCompletionItem(it.command.toRunes).insertText
+      )
 
     # TODO: Check labels
-    check commands == getExCommandCompletionList(Input)
-      .items
-      .mapIt(it.insertText)
+    check commands == getExCommandCompletionList(Input).items.mapIt(it.insertText)
 
   test "Expect \"cursorLine\"":
     const Input = ru"cursorl"
-    let commands = ExCommandInfoList
-      .filterIt(it.command == "cursorLine")
-      .mapIt(initCompletionItem(it.command.toRunes).insertText)
+    let commands = ExCommandInfoList.filterIt(it.command == "cursorLine").mapIt(
+        initCompletionItem(it.command.toRunes).insertText
+      )
 
     # TODO: Check labels
-    check commands == getExCommandCompletionList(Input)
-      .items
-      .mapIt(it.insertText)
+    check commands == getExCommandCompletionList(Input).items.mapIt(it.insertText)
 
   test "Expect \"cursorLine\" 2":
     const Input = ru"cursorL"
-    let commands = ExCommandInfoList
-      .filterIt(it.command == "cursorLine")
-      .mapIt(initCompletionItem(it.command.toRunes).insertText)
+    let commands = ExCommandInfoList.filterIt(it.command == "cursorLine").mapIt(
+        initCompletionItem(it.command.toRunes).insertText
+      )
 
     # TODO: Check labels
-    check commands == getExCommandCompletionList(Input)
-      .items
-      .mapIt(it.insertText)
+    check commands == getExCommandCompletionList(Input).items.mapIt(it.insertText)
 
 suite "commandlineutils: initExmodeCompletionList":
   test "Ex commands":
     const RawInput = ru"h"
-    check initExmodeCompletionList(RawInput).items == @[
-      CompletionItem(
-        label: ru"help                 | Open the help",
-        insertText: ru"help"),
-      CompletionItem(
-        label: ru"highlightCurrentLine | Change setting to the highlightCurrentLine",
-        insertText: ru"highlightCurrentLine"),
-      CompletionItem(
-        label: ru"highlightCurrentWord | Change setting to the highlightCurrentWord",
-        insertText: ru"highlightCurrentWord"),
-      CompletionItem(
-        label: ru"highlightFullSpace   | Change setting to the highlightFullSpace",
-        insertText: ru"highlightFullSpace"),
-      CompletionItem(
-        label: ru"highlightParen       | Change setting to the highlightParen",
-        insertText: ru"highlightParen")
-    ]
+    check initExmodeCompletionList(RawInput).items ==
+      @[
+        CompletionItem(
+          label: ru"help                 | Open the help", insertText: ru"help"
+        ),
+        CompletionItem(
+          label: ru"highlightCurrentLine | Change setting to the highlightCurrentLine",
+          insertText: ru"highlightCurrentLine",
+        ),
+        CompletionItem(
+          label: ru"highlightCurrentWord | Change setting to the highlightCurrentWord",
+          insertText: ru"highlightCurrentWord",
+        ),
+        CompletionItem(
+          label: ru"highlightFullSpace   | Change setting to the highlightFullSpace",
+          insertText: ru"highlightFullSpace",
+        ),
+        CompletionItem(
+          label: ru"highlightParen       | Change setting to the highlightParen",
+          insertText: ru"highlightParen",
+        ),
+      ]
 
   test "Ex commands 2":
     const RawInput = ru"e"
-    check initExmodeCompletionList(RawInput).items == @[
-      CompletionItem(label: ru"e   | Open file", insertText: ru"e"),
-      CompletionItem(label: ru"ene | Create the empty buffer", insertText: ru"ene")
-    ]
+    check initExmodeCompletionList(RawInput).items ==
+      @[
+        CompletionItem(label: ru"e   | Open file", insertText: ru"e"),
+        CompletionItem(label: ru"ene | Create the empty buffer", insertText: ru"ene"),
+      ]
 
   test "Toggle options":
     const RawInput = ru"cursorline "
-    check initExmodeCompletionList(RawInput).items == @[
-      CompletionItem(label: ru"on", insertText: ru"on"),
-      CompletionItem(label: ru"off", insertText: ru"off"),
-    ]
+    check initExmodeCompletionList(RawInput).items ==
+      @[
+        CompletionItem(label: ru"on", insertText: ru"on"),
+        CompletionItem(label: ru"off", insertText: ru"off"),
+      ]
 
   test "Toggle options 2":
     const RawInput = ru"cursorline of"
-    check initExmodeCompletionList(RawInput).items == @[
-      CompletionItem(label: ru"off", insertText: ru"off")
-    ]
+    check initExmodeCompletionList(RawInput).items ==
+      @[CompletionItem(label: ru"off", insertText: ru"off")]
 
   test "Suggest toggle themes":
     const RawInput = ru"theme "
-    check initExmodeCompletionList(RawInput).items == @[
-      CompletionItem(label: ru"dark", insertText: ru"dark"),
-      CompletionItem(label: ru"light", insertText: ru"light"),
-      CompletionItem(label: ru"vivid", insertText: ru"vivid"),
-      CompletionItem(label: ru"config", insertText: ru"config"),
-      CompletionItem(label: ru"vscode", insertText: ru"vscode")
-    ]
+    check initExmodeCompletionList(RawInput).items ==
+      @[
+        CompletionItem(label: ru"dark", insertText: ru"dark"),
+        CompletionItem(label: ru"light", insertText: ru"light"),
+        CompletionItem(label: ru"vivid", insertText: ru"vivid"),
+        CompletionItem(label: ru"config", insertText: ru"config"),
+        CompletionItem(label: ru"vscode", insertText: ru"vscode"),
+      ]
 
   test "Suggest toggle themes 2":
     const RawInput = ru"theme d"
     # TODO: Check labels
-    check initExmodeCompletionList(RawInput).items == @[
-      CompletionItem(label: ru"dark", insertText: ru"dark")
-    ]
+    check initExmodeCompletionList(RawInput).items ==
+      @[CompletionItem(label: ru"dark", insertText: ru"dark")]
 
   test "Suggest paths":
     let expectList = collect:
       for k in walkDir("./"):
-        if k.kind == pcDir: initCompletionItem(toRunes(k.path.replace("./", "") & "/"))
-        else: initCompletionItem(k.path.replace("./", "").toRunes)
+        if k.kind == pcDir:
+          initCompletionItem(toRunes(k.path.replace("./", "") & "/"))
+        else:
+          initCompletionItem(k.path.replace("./", "").toRunes)
 
     const RawInput = ru"e ./"
     check initExmodeCompletionList(RawInput).items == expectList
@@ -244,8 +245,10 @@ suite "commandlineutils: initExmodeCompletionList":
       for k in walkDir("./src/"):
         let tail = k.path.splitPath.tail
         if tail.startsWith('m'):
-          if k.kind == pcDir: initCompletionItem(toRunes(tail & "/"))
-          else: initCompletionItem(tail.toRunes)
+          if k.kind == pcDir:
+            initCompletionItem(toRunes(tail & "/"))
+          else:
+            initCompletionItem(tail.toRunes)
 
     const RawInput = ru"e src/m"
     check initExmodeCompletionList(RawInput).items == expectList
@@ -253,32 +256,39 @@ suite "commandlineutils: initExmodeCompletionList":
 suite "commandlineutils: initDocSymbolCompletionList":
   test "Basic":
     let
-      symbols = @[
-        DocumentSymbol(
-          name: "a",
-          kind: 1,
-          range: some(LspRange(
-            start: LspPosition(line: 0, character: 1),
-            `end`: LspPosition(line: 2, character: 3)
-          ))
-        ),
-        DocumentSymbol(
-          name: "b",
-          kind: 2,
-          range: some(LspRange(
-            start: LspPosition(line: 4, character: 5),
-            `end`: LspPosition(line: 6, character: 7)
-          ))
-        ),
-        DocumentSymbol(
-          name: "c",
-          kind: 3,
-          range: some(LspRange(
-            start: LspPosition(line: 8, character: 9),
-            `end`: LspPosition(line: 10, character: 11)
-          ))
-        )
-      ]
+      symbols =
+        @[
+          DocumentSymbol(
+            name: "a",
+            kind: 1,
+            range: some(
+              LspRange(
+                start: LspPosition(line: 0, character: 1),
+                `end`: LspPosition(line: 2, character: 3),
+              )
+            ),
+          ),
+          DocumentSymbol(
+            name: "b",
+            kind: 2,
+            range: some(
+              LspRange(
+                start: LspPosition(line: 4, character: 5),
+                `end`: LspPosition(line: 6, character: 7),
+              )
+            ),
+          ),
+          DocumentSymbol(
+            name: "c",
+            kind: 3,
+            range: some(
+              LspRange(
+                start: LspPosition(line: 8, character: 9),
+                `end`: LspPosition(line: 10, character: 11),
+              )
+            ),
+          ),
+        ]
 
       rawInput = ru""
 
@@ -297,32 +307,39 @@ suite "commandlineutils: initDocSymbolCompletionList":
 
   test "Basic 2":
     let
-      symbols = @[
-        DocumentSymbol(
-          name: "aba",
-          kind: 1,
-          range: some(LspRange(
-            start: LspPosition(line: 0, character: 1),
-            `end`: LspPosition(line: 2, character: 3)
-          ))
-        ),
-        DocumentSymbol(
-          name: "abb",
-          kind: 2,
-          range: some(LspRange(
-            start: LspPosition(line: 4, character: 5),
-            `end`: LspPosition(line: 6, character: 7)
-          ))
-        ),
-        DocumentSymbol(
-          name: "ccc",
-          kind: 3,
-          range: some(LspRange(
-            start: LspPosition(line: 8, character: 9),
-            `end`: LspPosition(line: 10, character: 11)
-          ))
-        )
-      ]
+      symbols =
+        @[
+          DocumentSymbol(
+            name: "aba",
+            kind: 1,
+            range: some(
+              LspRange(
+                start: LspPosition(line: 0, character: 1),
+                `end`: LspPosition(line: 2, character: 3),
+              )
+            ),
+          ),
+          DocumentSymbol(
+            name: "abb",
+            kind: 2,
+            range: some(
+              LspRange(
+                start: LspPosition(line: 4, character: 5),
+                `end`: LspPosition(line: 6, character: 7),
+              )
+            ),
+          ),
+          DocumentSymbol(
+            name: "ccc",
+            kind: 3,
+            range: some(
+              LspRange(
+                start: LspPosition(line: 8, character: 9),
+                `end`: LspPosition(line: 10, character: 11),
+              )
+            ),
+          ),
+        ]
 
       rawInput = ru"a"
 

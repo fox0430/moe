@@ -17,19 +17,18 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, os, times, options, strformat, logging, tables, sequtils,
-            json]
+import std/[strutils, os, times, options, strformat, logging, tables, sequtils, json]
 
 import pkg/results
 
 import syntax/highlite
 import lsp/[client, formatting]
-import editorstatus, ui, normalmode, gapbuffer, fileutils, editorview,
-       unicodeext, independentutils, highlight, windownode, movement, build,
-       bufferstatus, editor, settings, quickrunutils, messages, commandline,
-       debugmodeutils, platform, commandlineutils, recentfilemode, messagelog,
-       buffermanager, viewhighlight, configmode, git, syntaxcheck, exmodeutils,
-       logviewerutils
+import
+  editorstatus, ui, normalmode, gapbuffer, fileutils, editorview, unicodeext,
+  independentutils, highlight, windownode, movement, build, bufferstatus, editor,
+  settings, quickrunutils, messages, commandline, debugmodeutils, platform,
+  commandlineutils, recentfilemode, messagelog, buffermanager, viewhighlight,
+  configmode, git, syntaxcheck, exmodeutils, logviewerutils
 
 proc startDebugMode(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
@@ -42,15 +41,13 @@ proc startDebugMode(status: var EditorStatus) =
   let bufferIndex = status.addNewBuffer(bufferstatus.Mode.debug)
   if bufferIndex.isOk:
     # Initialize the debug mode buffer
-    status.bufStatus[bufferIndex.get].buffer =
-      status.bufStatus.initDebugModeBuffer(
-        mainWindowNode,
-        currentMainWindowNode.windowIndex,
-        status.settings.debugMode).toGapBuffer
+    status.bufStatus[bufferIndex.get].buffer = status.bufStatus.initDebugModeBuffer(
+      mainWindowNode, currentMainWindowNode.windowIndex, status.settings.debugMode
+    ).toGapBuffer
 
     # Link the window and the debug mode buffer.
-    var node = status.mainWindow.root.searchByWindowIndex(
-    currentMainWindowNode.windowIndex + 1)
+    var node =
+      status.mainWindow.root.searchByWindowIndex(currentMainWindowNode.windowIndex + 1)
     node.bufferIndex = bufferIndex.get
 
     status.resize
@@ -73,7 +70,8 @@ proc openConfigMode(status: var EditorStatus) =
 proc startBackupManager(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 
-  if not currentBufStatus.isNormalMode: return
+  if not currentBufStatus.isNormalMode:
+    return
 
   let bufferIndex = status.addNewBuffer(Mode.backup)
   if bufferIndex.isOk:
@@ -89,7 +87,8 @@ proc startRecentFileMode(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 
   # :recent is only supported on Unix or Unix-like (BSD and Linux)
-  if not (getPlatform() in {linux, freebsd, openbsd}): return
+  if not (getPlatform() in {linux, freebsd, openbsd}):
+    return
 
   let recentUsedXbelPath = getHomeDir() / ".local/share/recently-used.xbel"
 
@@ -114,8 +113,8 @@ proc runQuickRunCommand(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 
   let quickRunProcess = startBackgroundQuickRun(
-    status.bufStatus[currentMainWindowNode.bufferIndex],
-    status.settings)
+    status.bufStatus[currentMainWindowNode.bufferIndex], status.settings
+  )
   if quickRunProcess.isErr:
     status.commandLine.writeError(quickRunProcess.error.toRunes)
     addMessageLog quickRunProcess.error.toRunes
@@ -127,8 +126,8 @@ proc runQuickRunCommand(status: var EditorStatus) =
 
   if index.isSome:
     # Overwrite the quickrun buffer.
-    status.bufStatus[index.get].buffer = quickRunStartupMessage(
-      $status.bufStatus[index.get].path).toRunes.toGapBuffer
+    status.bufStatus[index.get].buffer =
+      quickRunStartupMessage($status.bufStatus[index.get].path).toRunes.toGapBuffer
   else:
     # Open a new window and add a buffer for this quickrun.
     status.verticalSplitWindow
@@ -138,8 +137,7 @@ proc runQuickRunCommand(status: var EditorStatus) =
     discard status.addNewBufferInCurrentWin
     status.changeCurrentBuffer(status.bufStatus.high)
     currentBufStatus.path = quickRunProcess.get.filePath.toRunes
-    currentBufStatus.buffer[0] =
-      quickRunStartupMessage($currentBufStatus.path).toRunes
+    currentBufStatus.buffer[0] = quickRunStartupMessage($currentBufStatus.path).toRunes
     status.changeMode(Mode.quickRun)
 
     status.resize
@@ -184,8 +182,10 @@ proc deleteTrailingSpacesCommand(status: var EditorStatus) =
 
   let lineHigh = currentBufStatus.buffer[currentMainWindowNode.currentLine].high
   if currentMainWindowNode.currentColumn > lineHigh:
-    if lineHigh > -1: currentMainWindowNode.currentColumn = lineHigh
-    else: currentMainWindowNode.currentColumn = 0
+    if lineHigh > -1:
+      currentMainWindowNode.currentColumn = lineHigh
+    else:
+      currentMainWindowNode.currentColumn = 0
 
   status.changeMode(currentBufStatus.prevMode)
 
@@ -254,8 +254,10 @@ proc openBufferManager(status: var EditorStatus) =
   status.resize
 
 proc changeCursorLineCommand(status: var EditorStatus, command: Runes) =
-  if command == ru"on" : status.settings.view.cursorLine = true
-  elif command == ru"off": status.settings.view.cursorLine = false
+  if command == ru"on":
+    status.settings.view.cursorLine = true
+  elif command == ru"off":
+    status.settings.view.cursorLine = false
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
@@ -271,8 +273,10 @@ proc horizontalSplitWindowCommand(status: var EditorStatus) =
   status.changeMode(prevMode)
 
 proc filerIconSettingCommand(status: var EditorStatus, command: Runes) =
-  if command == ru "on": status.settings.filer.showIcons = true
-  elif command == ru"off": status.settings.filer.showIcons = false
+  if command == ru "on":
+    status.settings.filer.showIcons = true
+  elif command == ru"off":
+    status.settings.filer.showIcons = false
 
   status.commandLine.clear
 
@@ -280,8 +284,10 @@ proc filerIconSettingCommand(status: var EditorStatus, command: Runes) =
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
 proc liveReloadOfConfSettingCommand(status: var EditorStatus, command: Runes) =
-  if command == ru "on": status.settings.standard.liveReloadOfConf = true
-  elif command == ru"off": status.settings.standard.liveReloadOfConf = false
+  if command == ru "on":
+    status.settings.standard.liveReloadOfConf = true
+  elif command == ru"off":
+    status.settings.standard.liveReloadOfConf = false
 
   status.commandLine.clear
 
@@ -289,15 +295,15 @@ proc liveReloadOfConfSettingCommand(status: var EditorStatus, command: Runes) =
   status.changeMode(status.bufStatus[currentBufferIndex].prevMode)
 
 proc changeThemeSettingCommand(status: var EditorStatus, command: Runes) =
-  case $command:
-    of "default":
-      status.settings.theme.kind = ColorThemeKind.default
-    of "vscode":
-      status.settings.theme.kind = ColorThemeKind.vscode
-    of "config":
-      status.settings.theme.kind = ColorThemeKind.config
-    else:
-      discard
+  case $command
+  of "default":
+    status.settings.theme.kind = ColorThemeKind.default
+  of "vscode":
+    status.settings.theme.kind = ColorThemeKind.vscode
+  of "config":
+    status.settings.theme.kind = ColorThemeKind.config
+  else:
+    discard
 
   let r = status.settings.changeTheme
   # TODO: Add error message
@@ -308,23 +314,30 @@ proc changeThemeSettingCommand(status: var EditorStatus, command: Runes) =
     status.changeMode(currentBufStatus.prevMode)
 
 proc tabLineSettingCommand(status: var EditorStatus, command: Runes) =
-  if command == ru"on": status.settings.tabLine.enable = true
-  elif command == ru"off": status.settings.tabLine.enable = false
+  if command == ru"on":
+    status.settings.tabLine.enable = true
+  elif command == ru"off":
+    status.settings.tabLine.enable = false
 
   status.resize
   status.commandLine.clear
 
 proc syntaxSettingCommand(status: var EditorStatus, command: Runes) =
-  if command == ru"on": status.settings.standard.syntax = true
-  elif command == ru"off": status.settings.standard.syntax = false
+  if command == ru"on":
+    status.settings.standard.syntax = true
+  elif command == ru"off":
+    status.settings.standard.syntax = false
 
-  let sourceLang = if status.settings.standard.syntax: currentBufStatus.language
-                   else: SourceLanguage.langNone
+  let sourceLang =
+    if status.settings.standard.syntax:
+      currentBufStatus.language
+    else:
+      SourceLanguage.langNone
 
   currentBufStatus.highlight = initHighlight(
-    currentBufStatus.buffer.toSeqRunes,
-    status.settings.highlight.reservedWords,
-    sourceLang)
+    currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+    sourceLang,
+  )
 
   status.commandLine.clear
   status.changeMode(currentBufStatus.prevMode)
@@ -337,32 +350,40 @@ proc tabStopSettingCommand(status: var EditorStatus, command: int) =
   status.changeMode(currentBufStatus.prevMode)
 
 proc autoCloseParenSettingCommand(status: var EditorStatus, command: Runes) =
-  if command == ru"on": status.settings.standard.autoCloseParen = true
-  elif command == ru"off": status.settings.standard.autoCloseParen = false
+  if command == ru"on":
+    status.settings.standard.autoCloseParen = true
+  elif command == ru"off":
+    status.settings.standard.autoCloseParen = false
 
   status.commandLine.clear
 
   status.changeMode(currentBufStatus.prevMode)
 
 proc autoIndentSettingCommand(status: var EditorStatus, command: Runes) =
-  if command == ru"on": status.settings.standard.autoIndent = true
-  elif command == ru"off": status.settings.standard.autoIndent = false
+  if command == ru"on":
+    status.settings.standard.autoIndent = true
+  elif command == ru"off":
+    status.settings.standard.autoIndent = false
 
   status.commandLine.clear
 
   status.changeMode(currentBufStatus.prevMode)
 
 proc indentationLinesSettingCommand(status: var EditorStatus, command: Runes) =
-  if command == ru"on": status.settings.view.indentationLines = true
-  elif command == ru"off": status.settings.view.indentationLines = false
+  if command == ru"on":
+    status.settings.view.indentationLines = true
+  elif command == ru"off":
+    status.settings.view.indentationLines = false
 
   status.commandLine.clear
 
   status.changeMode(currentBufStatus.prevMode)
 
 proc lineNumberSettingCommand(status: var EditorStatus, command: Runes) =
-  if command == ru "on": status.settings.view.lineNumber = true
-  elif command == ru"off": status.settings.view.lineNumber = false
+  if command == ru "on":
+    status.settings.view.lineNumber = true
+  elif command == ru"off":
+    status.settings.view.lineNumber = false
 
   let
     numberOfDigitsLen =
@@ -375,15 +396,18 @@ proc lineNumberSettingCommand(status: var EditorStatus, command: Runes) =
   currentMainWindowNode.view = initEditorView(
     status.bufStatus[0].buffer,
     getTerminalHeight() - useStatusLine - 1,
-    getTerminalWidth() - numberOfDigitsLen)
+    getTerminalWidth() - numberOfDigitsLen,
+  )
 
   status.commandLine.clear
 
   status.changeMode(currentBufStatus.prevMode)
 
 proc statusLineSettingCommand(status: var EditorStatus, command: Runes) =
-  if command == ru"on": status.settings.statusLine.enable = true
-  elif command == ru"off": status.settings.statusLine.enable = false
+  if command == ru"on":
+    status.settings.statusLine.enable = true
+  elif command == ru"off":
+    status.settings.statusLine.enable = false
 
   let
     numberOfDigitsLen =
@@ -391,102 +415,103 @@ proc statusLineSettingCommand(status: var EditorStatus, command: Runes) =
         numberOfDigits(status.bufStatus[0].buffer.len) - 2
       else:
         0
-    useStatusLine = if status.settings.statusLine.enable : 1 else: 0
+    useStatusLine = if status.settings.statusLine.enable: 1 else: 0
 
   currentMainWindowNode.view = initEditorView(
     status.bufStatus[0].buffer,
     getTerminalHeight() - useStatusLine - 1,
-    getTerminalWidth() - numberOfDigitsLen)
+    getTerminalWidth() - numberOfDigitsLen,
+  )
 
   status.commandLine.clear
 
   status.changeMode(currentBufStatus.prevMode)
 
 proc incrementalSearchSettingCommand(status: var EditorStatus, command: Runes) =
-  if command == ru"on": status.settings.standard.incrementalSearch = true
-  elif command == ru"off": status.settings.standard.incrementalSearch = false
+  if command == ru"on":
+    status.settings.standard.incrementalSearch = true
+  elif command == ru"off":
+    status.settings.standard.incrementalSearch = false
 
   status.commandLine.clear
 
   status.changeMode(currentBufStatus.prevMode)
 
-proc highlightPairOfParenSettingCommand(
-  status: var EditorStatus,
-  command: Runes) =
+proc highlightPairOfParenSettingCommand(status: var EditorStatus, command: Runes) =
+  if command == ru"on":
+    status.settings.highlight.pairOfParen = true
+  elif command == ru"off":
+    status.settings.highlight.pairOfParen = false
 
-    if command == ru"on": status.settings.highlight.pairOfParen = true
-    elif command == ru"off": status.settings.highlight.pairOfParen = false
+  status.commandLine.clear
 
-    status.commandLine.clear
+  status.changeMode(currentBufStatus.prevMode)
 
-    status.changeMode(currentBufStatus.prevMode)
+proc autoDeleteParenSettingCommand(status: var EditorStatus, command: Runes) =
+  if command == ru"on":
+    status.settings.standard.autoDeleteParen = true
+  elif command == ru"off":
+    status.settings.standard.autoDeleteParen = false
 
-proc autoDeleteParenSettingCommand(
-  status: var EditorStatus,
-  command: Runes) =
+  status.commandLine.clear
 
-    if command == ru"on": status.settings.standard.autoDeleteParen = true
-    elif command == ru"off": status.settings.standard.autoDeleteParen = false
-
-    status.commandLine.clear
-
-    status.changeMode(currentBufStatus.prevMode)
+  status.changeMode(currentBufStatus.prevMode)
 
 proc smoothScrollSettingCommand(status: var EditorStatus, command: Runes) =
-  if command == ru"on": status.settings.smoothScroll.enable = true
-  elif command == ru"off": status.settings.smoothScroll.enable = false
+  if command == ru"on":
+    status.settings.smoothScroll.enable = true
+  elif command == ru"off":
+    status.settings.smoothScroll.enable = false
 
   status.commandLine.clear
 
   status.changeMode(currentBufStatus.prevMode)
 
 proc smoothScrollMaxDelaySettingCommand(status: var EditorStatus, delay: int) =
-  if delay > 0: status.settings.smoothScroll.maxDelay = delay
+  if delay > 0:
+    status.settings.smoothScroll.maxDelay = delay
   status.commandLine.clear
   status.changeMode(currentBufStatus.prevMode)
 
 proc smoothScrollMinDelaySettingCommand(status: var EditorStatus, delay: int) =
-  if delay > 0: status.settings.smoothScroll.minDelay = delay
+  if delay > 0:
+    status.settings.smoothScroll.minDelay = delay
   status.commandLine.clear
   status.changeMode(currentBufStatus.prevMode)
 
-proc highlightCurrentWordSettingCommand(
-  status: var EditorStatus,
-  command: Runes) =
+proc highlightCurrentWordSettingCommand(status: var EditorStatus, command: Runes) =
+  if command == ru"on":
+    status.settings.highlight.currentWord = true
+  if command == ru"off":
+    status.settings.highlight.currentWord = false
 
-    if command == ru"on": status.settings.highlight.currentWord = true
-    if command == ru"off": status.settings.highlight.currentWord = false
+  status.commandLine.clear
 
-    status.commandLine.clear
+  status.changeMode(currentBufStatus.prevMode)
 
-    status.changeMode(currentBufStatus.prevMode)
+proc systemClipboardSettingCommand(status: var EditorStatus, command: Runes) =
+  if command == ru"on":
+    status.settings.clipboard.enable = true
+  elif command == ru"off":
+    status.settings.clipboard.enable = false
 
-proc systemClipboardSettingCommand(
-  status: var EditorStatus,
-  command: Runes) =
+  status.commandLine.clear
 
-    if command == ru"on": status.settings.clipboard.enable = true
-    elif command == ru"off": status.settings.clipboard.enable = false
+  status.changeMode(currentBufStatus.prevMode)
 
-    status.commandLine.clear
+proc highlightFullWidthSpaceSettingCommand(status: var EditorStatus, command: Runes) =
+  if command == ru"on":
+    status.settings.highlight.fullWidthSpace = true
+  elif command == ru"off":
+    status.settings.highlight.fullWidthSpace = false
 
-    status.changeMode(currentBufStatus.prevMode)
+  status.commandLine.clear
 
-proc highlightFullWidthSpaceSettingCommand(
-  status: var EditorStatus,
-  command: Runes) =
-
-    if command == ru"on":
-      status.settings.highlight.fullWidthSpace = true
-    elif command == ru"off":
-      status.settings.highlight.fullWidthSpace = false
-
-    status.commandLine.clear
-
-    status.changeMode(currentBufStatus.prevMode)
+  status.changeMode(currentBufStatus.prevMode)
 
 proc buildOnSaveSettingCommand(status: var EditorStatus, command: Runes) =
-  if command == ru"on": status.settings.buildOnSave.enable = true
+  if command == ru"on":
+    status.settings.buildOnSave.enable = true
   elif command == ru"off":
     status.settings.buildOnSave.enable = false
 
@@ -500,50 +525,49 @@ proc turnOffHighlightingCommand(status: var EditorStatus) =
   status.commandLine.clear
   status.changeMode(bufferstatus.Mode.normal)
 
-proc multipleStatusLineSettingCommand(
-  status: var EditorStatus,
-  command: Runes) =
+proc multipleStatusLineSettingCommand(status: var EditorStatus, command: Runes) =
+  if command == ru"on":
+    status.settings.statusLine.multipleStatusLine = true
+  elif command == ru"off":
+    status.settings.statusLine.multipleStatusLine = false
 
-    if command == ru"on":
-      status.settings.statusLine.multipleStatusLine = true
-    elif command == ru"off":
-      status.settings.statusLine.multipleStatusLine = false
+  status.commandLine.clear
 
-    status.commandLine.clear
+  status.changeMode(currentBufStatus.prevMode)
 
-    status.changeMode(currentBufStatus.prevMode)
+proc showGitInInactiveSettingCommand(status: var EditorStatus, command: Runes) =
+  if command == ru"on":
+    status.settings.statusLine.showGitInactive = true
+  elif command == ru"off":
+    status.settings.statusLine.showGitInactive = false
 
-proc showGitInInactiveSettingCommand(
-  status: var EditorStatus,
-  command: Runes) =
+  status.commandLine.clear
 
-    if command == ru"on": status.settings.statusLine.showGitInactive = true
-    elif command == ru"off": status.settings.statusLine.showGitInactive = false
-
-    status.commandLine.clear
-
-    status.changeMode(currentBufStatus.prevMode)
+  status.changeMode(currentBufStatus.prevMode)
 
 proc ignorecaseSettingCommand(status: var EditorStatus, command: Runes) =
-  if command == ru "on": status.settings.standard.ignorecase = true
-  elif command == ru "off": status.settings.standard.ignorecase = false
+  if command == ru "on":
+    status.settings.standard.ignorecase = true
+  elif command == ru "off":
+    status.settings.standard.ignorecase = false
 
   status.changeMode(currentBufStatus.prevMode)
 
 proc smartcaseSettingCommand(status: var EditorStatus, command: Runes) =
-  if command == ru "on": status.settings.standard.smartcase = true
-  elif command == ru "off": status.settings.standard.smartcase = false
+  if command == ru "on":
+    status.settings.standard.smartcase = true
+  elif command == ru "off":
+    status.settings.standard.smartcase = false
 
   status.changeMode(currentBufStatus.prevMode)
 
-proc highlightCurrentLineSettingCommand(
-  status: var EditorStatus,
-  command: Runes) =
+proc highlightCurrentLineSettingCommand(status: var EditorStatus, command: Runes) =
+  if command == ru "on":
+    status.settings.view.highlightCurrentLine = true
+  elif command == ru "off":
+    status.settings.view.highlightCurrentLine = false
 
-    if command == ru "on": status.settings.view.highlightCurrentLine = true
-    elif command == ru "off": status.settings.view.highlightCurrentLine  = false
-
-    status.changeMode(currentBufStatus.prevMode)
+  status.changeMode(currentBufStatus.prevMode)
 
 proc deleteBufferStatusCommand(status: var EditorStatus, index: int) =
   if index < 0 or index > status.bufStatus.high:
@@ -578,7 +602,8 @@ proc changeLastBufferCommand(status: var EditorStatus) =
   status.changeMode(bufferstatus.Mode.normal)
 
 proc openBufferByNumberCommand(status: var EditorStatus, number: int) =
-  if number < 0 or number > status.bufStatus.high: return
+  if number < 0 or number > status.bufStatus.high:
+    return
 
   status.changeCurrentBuffer(number)
   status.commandLine.clear
@@ -586,7 +611,8 @@ proc openBufferByNumberCommand(status: var EditorStatus, number: int) =
 
 proc changeNextBufferCommand(status: var EditorStatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
-  if currentBufferIndex == status.bufStatus.high: return
+  if currentBufferIndex == status.bufStatus.high:
+    return
 
   status.changeCurrentBuffer(currentBufferIndex + 1)
   currentBufStatus.isUpdate = true
@@ -596,7 +622,8 @@ proc changeNextBufferCommand(status: var EditorStatus) =
 
 proc changePreveBufferCommand(status: var EditorStatus) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
-  if currentBufferIndex < 1: return
+  if currentBufferIndex < 1:
+    return
 
   status.changeCurrentBuffer(currentBufferIndex - 1)
   currentBufStatus.isUpdate = true
@@ -618,7 +645,7 @@ proc editCommand(status: var EditorStatus, path: Runes) =
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   if currentBufStatus.countChange > 0 and
-    countReferencedWindow(mainWindowNode, currentBufferIndex) == 1:
+      countReferencedWindow(mainWindowNode, currentBufferIndex) == 1:
     status.commandLine.writeNoWriteError
   else:
     # Add bufStatus if not exist.
@@ -642,41 +669,36 @@ proc editCommand(status: var EditorStatus, path: Runes) =
     status.resize
 
     if not isFilerMode(currentBufStatus.mode):
-      currentMainWindowNode.restoreCursorPosition(
-        currentBufStatus,
-        status.lastPosition)
+      currentMainWindowNode.restoreCursorPosition(currentBufStatus, status.lastPosition)
 
-proc openInHorizontalSplitWindow(
-  status: var EditorStatus,
-  filename: Runes) =
-    status.horizontalSplitWindow
-    status.resize
+proc openInHorizontalSplitWindow(status: var EditorStatus, filename: Runes) =
+  status.horizontalSplitWindow
+  status.resize
 
-    status.editCommand(filename)
+  status.editCommand(filename)
 
-proc openInVerticalSplitWindowCommand(
-  status: var EditorStatus,
-  filename: Runes) =
-    status.verticalSplitWindow
-    status.resize
+proc openInVerticalSplitWindowCommand(status: var EditorStatus, filename: Runes) =
+  status.verticalSplitWindow
+  status.resize
 
-    status.editCommand(filename)
+  status.editCommand(filename)
 
-proc execCmdResultToMessageLog*(output: string)=
+proc execCmdResultToMessageLog*(output: string) =
   var line = ""
   for ch in output:
     if ch == '\n':
       addMessageLog line.toRunes
       line = ""
-    else: line.add(ch)
+    else:
+      line.add(ch)
 
 proc buildOnSave(status: var EditorStatus) =
   ## Start a background process for the build.
 
   let buildProcess = startBackgroundBuild(
-    currentBufStatus.path,
-    currentBufStatus.language,
-    status.settings.buildOnSave.workspaceRoot)
+    currentBufStatus.path, currentBufStatus.language,
+    status.settings.buildOnSave.workspaceRoot,
+  )
 
   if buildProcess.isErr:
     status.commandLine.writeMessageFailedBuildOnSave(currentBufStatus.path)
@@ -687,29 +709,29 @@ proc updateChangedLines(status: var EditorStatus) =
   ## Start a background process for the git diff.
 
   let gitDiffProcess = startBackgroundGitDiff(
-    currentBufStatus.path,
-    currentBufStatus.buffer.toRunes,
-    currentBufStatus.characterEncoding)
+    currentBufStatus.path, currentBufStatus.buffer.toRunes,
+    currentBufStatus.characterEncoding,
+  )
   if gitDiffProcess.isOk:
     status.backgroundTasks.gitDiff.add gitDiffProcess.get
   else:
     status.commandLine.writeGitInfoUpdateError(gitDiffProcess.error)
 
-proc checkAndCreateDir(
-  commandLine: var CommandLine,
-  filename: Runes): bool =
+proc checkAndCreateDir(commandLine: var CommandLine, filename: Runes): bool =
+  # Not include directory
+  if not filename.contains(ru"/"):
+    return true
 
-    # Not include directory
-    if not filename.contains(ru"/"): return true
+  let pathSplit = splitPath($filename)
 
-    let pathSplit = splitPath($filename)
-
-    result = true
-    if not dirExists(pathSplit.head):
-      let isCreateDir = commandLine.askCreateDirPrompt(pathSplit.head)
-      if isCreateDir:
-        try: createDir(pathSplit.head)
-        except OSError: result = false
+  result = true
+  if not dirExists(pathSplit.head):
+    let isCreateDir = commandLine.askCreateDirPrompt(pathSplit.head)
+    if isCreateDir:
+      try:
+        createDir(pathSplit.head)
+      except OSError:
+        result = false
 
 # Write current editor settings to configuration file
 proc writeConfigurationFile(status: var EditorStatus) =
@@ -727,9 +749,7 @@ proc writeConfigurationFile(status: var EditorStatus) =
     except IOError:
       status.commandLine.writeSaveError
 
-    let r = saveFile(
-      configFilePath.toRunes,
-      buffer.toRunes, CharacterEncoding.utf8)
+    let r = saveFile(configFilePath.toRunes, buffer.toRunes, CharacterEncoding.utf8)
     if r.isOk:
       status.commandLine.writePutConfigFile(configFilePath)
     else:
@@ -765,9 +785,8 @@ proc writeCommand(status: var EditorStatus, path: Runes) =
       return
 
     let r = saveFile(
-      path,
-      currentBufStatus.buffer.toRunes,
-      currentBufStatus.characterEncoding)
+      path, currentBufStatus.buffer.toRunes, currentBufStatus.characterEncoding
+    )
     if r.isErr:
       status.commandLine.writeSaveError
       return
@@ -777,8 +796,10 @@ proc writeCommand(status: var EditorStatus, path: Runes) =
       let err = waitFor lspClient.textDocumentDidSave(
         currentBufStatus.version,
         $currentBufStatus.path.absolutePath,
-        $currentBufStatus.buffer)
-      if err.isErr: error fmt"lsp: {err.error}"
+        $currentBufStatus.buffer,
+      )
+      if err.isErr:
+        error fmt"lsp: {err.error}"
 
     if currentBufStatus.path != path:
       currentBufStatus.path = path
@@ -788,23 +809,19 @@ proc writeCommand(status: var EditorStatus, path: Runes) =
     if status.settings.buildOnSave.enable:
       status.buildOnSave
       status.commandLine.writeMessageSaveFileAndStartBuild(
-        path,
-        status.settings.notification)
+        path, status.settings.notification
+      )
     else:
-      status.commandLine.writeMessageSaveFile(
-        path,
-        status.settings.notification)
+      status.commandLine.writeMessageSaveFile(path, status.settings.notification)
 
     # Update the changedLines for git diff.
-    if status.settings.git.showChangedLine and
-       currentBufStatus.isTrackingByGit:
-         status.updateChangedLines
+    if status.settings.git.showChangedLine and currentBufStatus.isTrackingByGit:
+      status.updateChangedLines
 
     # Update syntax checker reuslts.
     if status.settings.syntaxChecker.enable:
-      let syntaxCheckProcess = startBackgroundSyntaxCheck(
-        $currentBufStatus.path,
-        currentBufStatus.language)
+      let syntaxCheckProcess =
+        startBackgroundSyntaxCheck($currentBufStatus.path, currentBufStatus.language)
       if syntaxCheckProcess.isOk:
         status.backgroundTasks.syntaxCheck.add syntaxCheckProcess.get
       else:
@@ -816,7 +833,7 @@ proc writeCommand(status: var EditorStatus, path: Runes) =
 
 proc forceWriteCommand(status: var EditorStatus, path: Runes) =
   try:
-    setFilePermissions($path, {fpUserRead,fpUserWrite})
+    setFilePermissions($path, {fpUserRead, fpUserWrite})
   except OSError:
     status.commandLine.writeSaveError
     return
@@ -834,8 +851,7 @@ proc quitCommand(status: var EditorStatus) =
       countChange = currentBufStatus.countChange
       canUndo = currentBufStatus.buffer.canUndo
     if (not isNormalMode(currentBufStatus.mode, currentBufStatus.prevMode)) or
-       (countChange == 0 or numberReferenced > 1 or not canUndo):
-
+        (countChange == 0 or numberReferenced > 1 or not canUndo):
       status.changeMode(currentBufStatus.prevMode)
       status.closeWindow(currentMainWindowNode)
     else:
@@ -863,10 +879,8 @@ proc writeAndQuitCommand(status: var EditorStatus) =
     status.commandLine.writeSaveError
     return
 
-  let r = saveFile(
-    path,
-    currentBufStatus.buffer.toRunes,
-    currentBufStatus.characterEncoding)
+  let r =
+    saveFile(path, currentBufStatus.buffer.toRunes, currentBufStatus.characterEncoding)
   if r.isErr:
     status.commandLine.writeSaveError
     status.changeMode(currentBufStatus.prevMode)
@@ -877,15 +891,17 @@ proc writeAndQuitCommand(status: var EditorStatus) =
     let err = waitFor lspClient.textDocumentDidSave(
       currentBufStatus.version,
       $currentBufStatus.path.absolutePath,
-      $currentBufStatus.buffer)
-    if err.isErr: error fmt"lsp: {err.error}"
+      $currentBufStatus.buffer,
+    )
+    if err.isErr:
+      error fmt"lsp: {err.error}"
 
   status.changeMode(currentBufStatus.prevMode)
   status.closeWindow(currentMainWindowNode)
 
 proc forceWriteAndQuitCommand(status: var EditorStatus) =
   try:
-    setFilePermissions($currentBufStatus.path, {fpUserRead,fpUserWrite})
+    setFilePermissions($currentBufStatus.path, {fpUserRead, fpUserWrite})
   except OSError:
     status.commandLine.writeSaveError
     return
@@ -904,8 +920,7 @@ proc allBufferQuitCommand(status: var EditorStatus) =
       node = mainWindowNode.searchByWindowIndex(i)
       bufStatus = status.bufStatus[node.bufferIndex]
 
-    if isNormalMode(bufStatus.mode, bufStatus.prevMode) and
-       bufStatus.countChange > 0:
+    if isNormalMode(bufStatus.mode, bufStatus.prevMode) and bufStatus.countChange > 0:
       status.commandLine.writeNoWriteError
       status.changeMode(bufferstatus.Mode.normal)
       return
@@ -937,10 +952,7 @@ proc writeAndQuitAllBufferCommand(status: var EditorStatus) =
       status.commandLine.writeSaveError
       return
 
-    let r =saveFile(
-      path,
-      bufStatus.buffer.toRunes,
-      bufStatus.characterEncoding)
+    let r = saveFile(path, bufStatus.buffer.toRunes, bufStatus.characterEncoding)
     if r.isOk:
       status.exitEditor
     else:
@@ -1008,14 +1020,16 @@ proc listAllBufferCommand(status: var EditorStatus) =
       currentMode = status.bufStatus[i].mode
       prevMode = status.bufStatus[i].prevMode
     if currentMode == bufferstatus.Mode.filer or
-       (currentMode == bufferstatus.Mode.ex and
-       prevMode == bufferstatus.Mode.filer): line = getCurrentDir().toRunes
+        (currentMode == bufferstatus.Mode.ex and prevMode == bufferstatus.Mode.filer):
+      line = getCurrentDir().toRunes
     else:
       let filename = status.bufStatus[i].path
       line = filename & ru"  line " & ($status.bufStatus[i].buffer.len).toRunes
 
-    if i == 0: currentBufStatus.buffer[0] = line
-    else: currentBufStatus.buffer.insert(line, i)
+    if i == 0:
+      currentBufStatus.buffer[0] = line
+    else:
+      currentBufStatus.buffer.insert(line, i)
 
   let
     useStatusLine = if status.settings.statusLine.enable: 1 else: 0
@@ -1024,17 +1038,15 @@ proc listAllBufferCommand(status: var EditorStatus) =
 
   status.settings.view.currentLineNumber = false
   currentMainWindowNode.view = currentBufStatus.buffer.initEditorView(
-    getTerminalHeight() - useStatusLine - enable - 1,
-    getTerminalWidth())
+    getTerminalHeight() - useStatusLine - enable - 1, getTerminalWidth()
+  )
 
   currentMainWindowNode.currentLine = 0
 
   var highlight = currentBufStatus.highlight
   highlight.updateViewHighlight(
-    currentBufStatus,
-    currentMainWindowNode,
-    status.highlightingText,
-    status.settings)
+    currentBufStatus, currentMainWindowNode, status.highlightingText, status.settings
+  )
 
   while true:
     status.update
@@ -1044,8 +1056,10 @@ proc listAllBufferCommand(status: var EditorStatus) =
     while key.isNone:
       key = getKey(currentMainWindowNode)
 
-    if isResizeKey(key.get): status.resize
-    else: break
+    if isResizeKey(key.get):
+      status.resize
+    else:
+      break
 
   status.settings.view.currentLineNumber = swapCurrentLineNumStting
   status.changeCurrentBuffer(swapCurrentBufferIndex)
@@ -1062,32 +1076,32 @@ proc replaceBuffer*(status: var EditorStatus, replaceInfo: ReplaceCommandInfo) =
     currentBufStatus.replaceAll(
       Range(first: 0, last: currentBufStatus.buffer.high),
       replaceInfo.sub,
-      replaceInfo.by)
+      replaceInfo.by,
+    )
   else:
     # Replace only the first words in lines.
     currentBufStatus.replaceOnlyFirstWordInLines(
       Range(first: 0, last: currentBufStatus.buffer.high),
       replaceInfo.sub,
-      replaceInfo.by)
+      replaceInfo.by,
+    )
 
-proc replaceBufferCommand*(
-  status: var EditorStatus,
-  command: Runes) {.inline.} =
-    ## Replace buffer and change to prev mode.
+proc replaceBufferCommand*(status: var EditorStatus, command: Runes) {.inline.} =
+  ## Replace buffer and change to prev mode.
 
-    let replaceInfo = parseReplaceCommand(command)
-    if replaceInfo.sub.len > 0 and replaceInfo.by.len > 0:
-      status.replaceBuffer(replaceInfo)
+  let replaceInfo = parseReplaceCommand(command)
+  if replaceInfo.sub.len > 0 and replaceInfo.by.len > 0:
+    status.replaceBuffer(replaceInfo)
 
-      status.commandLine.clear
-      status.changeMode(currentBufStatus.prevMode)
+    status.commandLine.clear
+    status.changeMode(currentBufStatus.prevMode)
 
 proc createNewEmptyBufferCommand*(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 
   let currentBufferIndex = status.bufferIndexInCurrentWindow
   if status.bufStatus[currentBufferIndex].countChange == 0 or
-     mainWindowNode.countReferencedWindow(currentBufferIndex) > 1:
+      mainWindowNode.countReferencedWindow(currentBufferIndex) > 1:
     discard status.addNewBufferInCurrentWin
     status.changeCurrentBuffer(status.bufStatus.high)
   else:
@@ -1117,14 +1131,12 @@ proc lspExecuteCommand(status: var EditorStatus, command: seq[Runes]) =
   status.changeMode(currentBufStatus.prevMode)
 
   if not status.lspClients.contains(currentBufStatus.langId) or
-     not lspClient.isInitialized:
-       status.commandLine.writeLspExecuteCommandError(
-         "client is not ready")
-       return
+      not lspClient.isInitialized:
+    status.commandLine.writeLspExecuteCommandError("client is not ready")
+    return
 
   if lspClient.capabilities.get.executeCommand.isNone:
-    status.commandLine.writeLspExecuteCommandError(
-      "execute command is unavailable")
+    status.commandLine.writeLspExecuteCommandError("execute command is unavailable")
     return
 
   let lspCommand = $command[0]
@@ -1134,9 +1146,8 @@ proc lspExecuteCommand(status: var EditorStatus, command: seq[Runes]) =
     return
 
   let r = waitFor lspClient.workspaceExecuteCommand(
-    currentBufStatus.id,
-    lspCommand,
-    %*command[1 .. ^1].mapIt($it))
+    currentBufStatus.id, lspCommand, %*command[1 .. ^1].mapIt($it)
+  )
   if r.isErr:
     status.commandLine.writeLspExecuteCommandError(r.error)
 
@@ -1144,19 +1155,17 @@ proc lspFoldingRange(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 
   if not status.lspClients.contains(currentBufStatus.langId) or
-     not lspClient.isInitialized:
-       status.commandLine.writeLspFoldingRangeError(
-         "client is not ready")
-       return
+      not lspClient.isInitialized:
+    status.commandLine.writeLspFoldingRangeError("client is not ready")
+    return
 
   if not lspClient.capabilities.get.foldingRange:
-    status.commandLine.writeLspFoldingRangeError(
-      "folding range is unavailable")
+    status.commandLine.writeLspFoldingRangeError("folding range is unavailable")
     return
 
   let r = waitFor lspClient.textDocumentFoldingRange(
-    currentBufStatus.id,
-    $currentBufStatus.absolutePath)
+    currentBufStatus.id, $currentBufStatus.absolutePath
+  )
   if r.isErr:
     status.commandLine.writeLspFoldingRangeError(r.error)
 
@@ -1183,8 +1192,10 @@ proc lspRestartClient(status: var EditorStatus) =
           $b.openDir,
           status.settings.lsp.languages[langId].trace,
           initLspExperimentalParams(
-            status.lspClients[langId].serverName,
-            status.settings.lsp.servers)))
+            status.lspClients[langId].serverName, status.settings.lsp.servers
+          ),
+        ),
+      )
       if r.isErr:
         status.commandLine.writeLspError(r.error)
 
@@ -1198,36 +1209,36 @@ proc lspDocumentFormatting(status: var EditorStatus) =
   let options = FormattingOptions(
     tabSize: status.settings.standard.tabStop,
     insertSpaces: true,
-    insertFinalNewline: some(true))
+    insertFinalNewline: some(true),
+  )
 
   let r = waitFor lspClient.textDocumentFormatting(
-    currentBufStatus.id,
-    $currentBufStatus.absolutePath,
-    options)
+    currentBufStatus.id, $currentBufStatus.absolutePath, options
+  )
   if r.isErr:
     status.commandLine.writeLspDocumentFormattingHelpError(r.error)
 
 proc saveExCommandHistory(
-  exCommandHistory: var seq[Runes],
-  command: seq[Runes],
-  limit: int) =
-    ## Save a command to the exCommandHistory.
-    ## If the size exceeds the limit, the oldest will be deleted.
+    exCommandHistory: var seq[Runes], command: seq[Runes], limit: int
+) =
+  ## Save a command to the exCommandHistory.
+  ## If the size exceeds the limit, the oldest will be deleted.
 
-    if limit < 1 or command.len == 0: return
+  if limit < 1 or command.len == 0:
+    return
 
-    let cmd = command.join(ru" ")
+  let cmd = command.join(ru" ")
 
-    if exCommandHistory.len == 0:
-      exCommandHistory.add cmd
-    elif cmpIgnoreCase($cmd, $exCommandHistory[^1]) != 0:
-      exCommandHistory.add cmd
+  if exCommandHistory.len == 0:
+    exCommandHistory.add cmd
+  elif cmpIgnoreCase($cmd, $exCommandHistory[^1]) != 0:
+    exCommandHistory.add cmd
 
-      if exCommandHistory.len > limit:
-        let
-          first = exCommandHistory.len - limit
-          last = first + limit - 1
-        exCommandHistory = exCommandHistory[first .. last]
+    if exCommandHistory.len > limit:
+      let
+        first = exCommandHistory.len - limit
+        last = first + limit - 1
+      exCommandHistory = exCommandHistory[first .. last]
 
 proc isExCommandBuffer*(line: Runes): InputState =
   ## It is assumed to receive the raw command line buffer.
@@ -1245,14 +1256,15 @@ proc exModeCommand*(status: var EditorStatus, command: seq[Runes]) =
   let currentBufferIndex = status.bufferIndexInCurrentWindow
 
   status.exCommandHistory.saveExCommandHistory(
-    command,
-    status.settings.persist.exCommandHistoryLimit)
+    command, status.settings.persist.exCommandHistoryLimit
+  )
 
   if command.len == 0 or command[0].len == 0:
     status.changeMode(currentBufStatus.prevMode)
   elif isJumpCommand(currentBufStatus, command):
     var line = ($command[0]).parseInt - 1
-    if line < 0: line = 0
+    if line < 0:
+      line = 0
     if line >= currentBufStatus.buffer.len:
       line = currentBufStatus.buffer.high
     jumpCommand(status, line)
@@ -1260,13 +1272,19 @@ proc exModeCommand*(status: var EditorStatus, command: seq[Runes]) =
     status.editCommand(command[1].normalizedPath)
   elif isOpenInHorizontalSplitWindowCommand(command):
     let path =
-      if command.len == 2: command[1].normalizedPath
-      else: status.bufStatus[currentBufferIndex].path
+      if command.len == 2:
+        command[1].normalizedPath
+      else:
+        status.bufStatus[currentBufferIndex].path
     status.openInHorizontalSplitWindow(path)
   elif isOpenInVerticalSplitWindowCommand(command):
     status.openInVerticalSplitWindowCommand(command[1])
   elif isWriteCommand(currentBufStatus, command):
-    let path = if command.len < 2: currentBufStatus.path else: command[1]
+    let path =
+      if command.len < 2:
+        currentBufStatus.path
+      else:
+        command[1]
     status.writeCommand(path)
   elif isQuitCommand(command):
     status.quitCommand

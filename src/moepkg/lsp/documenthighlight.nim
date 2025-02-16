@@ -26,44 +26,42 @@ import ../independentutils
 import protocol/types
 import utils
 
-type
-  LspDocumentHighlightResult* = Result[seq[BufferRange], string]
+type LspDocumentHighlightResult* = Result[seq[BufferRange], string]
 
 proc initDocumentHighlightParamas*(
-  path: string,
-  posi: BufferPosition): DocumentHighlightParams =
+    path: string, posi: BufferPosition
+): DocumentHighlightParams =
+  DocumentHighlightParams(
+    textDocument: TextDocumentIdentifier(uri: path.pathToUri),
+    position: posi.toLspPosition,
+  )
 
-    DocumentHighlightParams(
-      textDocument: TextDocumentIdentifier(uri: path.pathToUri),
-      position: posi.toLspPosition)
+proc parseDocumentHighlightResponse*(res: JsonNode): LspDocumentHighlightResult =
+  if res["result"].kind != JNull and res["result"].kind != JArray:
+    return LspDocumentHighlightResult.err "Invalid response"
+  elif res["result"].kind == JNull:
+    # Not found
+    return LspDocumentHighlightResult.ok @[]
+  elif res["result"].len == 0:
+    # Not found
+    return LspDocumentHighlightResult.ok @[]
 
-proc parseDocumentHighlightResponse*(
-  res: JsonNode): LspDocumentHighlightResult =
+  let items =
+    try:
+      res["result"].to(seq[DocumentHighlight])
+    except CatchableError as e:
+      return LspDocumentHighlightResult.err fmt"Invalid response: {e.msg}"
 
-    if res["result"].kind != JNull and res["result"].kind != JArray:
-      return LspDocumentHighlightResult.err "Invalid response"
-    elif res["result"].kind == JNull:
-      # Not found
-      return LspDocumentHighlightResult .ok @[]
-    elif res["result"].len == 0:
-      # Not found
-      return LspDocumentHighlightResult .ok @[]
-
-    let items =
-      try:
-        res["result"].to(seq[DocumentHighlight])
-      except CatchableError as e:
-        return LspDocumentHighlightResult.err fmt"Invalid response: {e.msg}"
-
-    var ranges: seq[BufferRange]
-    for it in items:
-      ranges.add(BufferRange(
-        first: BufferPosition(
-          line: it.range.start.line,
-          column: it.range.start.character),
+  var ranges: seq[BufferRange]
+  for it in items:
+    ranges.add(
+      BufferRange(
+        first:
+          BufferPosition(line: it.range.start.line, column: it.range.start.character),
         last: BufferPosition(
-          line: it.range.`end`.line,
-          column: it.range.`end`.character - 1)
-      ))
+          line: it.range.`end`.line, column: it.range.`end`.character - 1
+        ),
+      )
+    )
 
-    return LspDocumentHighlightResult.ok ranges
+  return LspDocumentHighlightResult.ok ranges

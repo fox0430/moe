@@ -255,7 +255,7 @@ type
 
   TypeDefinitionClientCapabilities* = ref object of RootObj
     dynamicRegistration*: Option[bool]
-    linkSupport*:  Option[bool]
+    linkSupport*: Option[bool]
 
   ImplementationClientCapabilities* = ref object of RootObj
     dynamicRegistration*: Option[bool]
@@ -395,7 +395,7 @@ type
 
   TypeDefinitionOptions* = ref object of WorkDoneProgressOptions
 
-  TypeDefinitionRegistrationOptions * = ref object of TextDocumentRegistrationOptions
+  TypeDefinitionRegistrationOptions* = ref object of TextDocumentRegistrationOptions
     identifier*: Option[string]
     interFileDependencies*: bool
     workspaceDiagnostics*: bool
@@ -412,7 +412,7 @@ type
     resolveProvider*: Option[bool]
 
   ExecuteCommandOptions* = ref object of WorkDoneProgressOptions
-   commands*: seq[string]
+    commands*: seq[string]
 
   SaveOptions* = ref object of RootObj
     includeText*: Option[bool]
@@ -435,6 +435,7 @@ type
 
   TextDocumentAndStaticRegistrationOptions* = ref object of TextDocumentRegistrationOptions
     id*: Option[string]
+
   ReferenceOptions* = ref object of WorkDoneProgressOptions
 
   RenameOptions* = ref object of RootObj
@@ -520,10 +521,13 @@ type
     hoverProvider*: OptionalNode # bool | HoverOptions
     completionProvider*: Option[CompletionOptions]
     signatureHelpProvider*: Option[SignatureHelpOptions]
-    declarationProvider*: OptionalNode # bool | DeclarationOptions | DeclarationRegistrationOptions
+    declarationProvider*: OptionalNode
+      # bool | DeclarationOptions | DeclarationRegistrationOptions
     definitionProvider*: OptionalNode # bool | DefinitionOptions
-    typeDefinitionProvider*: OptionalNode # bool | TypeDefinitionOptions | TypeDefinitionRegistrationOptions
-    implementationProvider*: OptionalNode # bool | ImplementationOptions | TextDocumentAndStaticRegistrationOptions
+    typeDefinitionProvider*: OptionalNode
+      # bool | TypeDefinitionOptions | TypeDefinitionRegistrationOptions
+    implementationProvider*: OptionalNode
+      # bool | ImplementationOptions | TextDocumentAndStaticRegistrationOptions
     referencesProvider*: OptionalNode # bool | ReferenceOptions
     documentHighlightProvider*: OptionalNode # bool | DocumentHighlightOptions
     documentSymbolProvider*: OptionalNode # bool | DocumentSymbolOptions
@@ -531,19 +535,26 @@ type
     codeActionProvider*: OptionalNode # bool | CodeActionOptions
     codeLensProvider*: Option[CodeLensOptions]
     documentFormattingProvider*: OptionalNode # bool | DocumentFormattingOptions
-    documentRangeFormattingProvider*: OptionalNode # bool | DocumentRangeFormattingOptions
+    documentRangeFormattingProvider*: OptionalNode
+      # bool | DocumentRangeFormattingOptions
     documentOnTypeFormattingProvider*: Option[DocumentOnTypeFormattingOptions]
     renameProvider*: OptionalNode # bool or RenameOptions
     documentLinkProvider*: Option[DocumentLinkOptions]
-    colorProvider*: OptionalNode # bool | ColorProviderOptions | TextDocumentAndStaticRegistrationOptions
+    colorProvider*: OptionalNode
+      # bool | ColorProviderOptions | TextDocumentAndStaticRegistrationOptions
     workspace*: Option[WorkspaceCapability]
-    semanticTokensProvider*: OptionalNode # SemanticTokensOptions | SemanticTokensRegistrationOptions
-    inlayHintProvider*: OptionalNode # bool | InlayHintOptions | InlayHintRegistrationOptions
-    inlineValueProvider*: OptionalNode # bool InlineValueOptions | InlineValueRegistrationOptions
+    semanticTokensProvider*: OptionalNode
+      # SemanticTokensOptions | SemanticTokensRegistrationOptions
+    inlayHintProvider*: OptionalNode
+      # bool | InlayHintOptions | InlayHintRegistrationOptions
+    inlineValueProvider*: OptionalNode
+      # bool InlineValueOptions | InlineValueRegistrationOptions
     diagnosticProvider*: OptionalNode # DiagnosticOptions | DiagnosticRegistrationOptions
     foldingRangeProvider*: OptionalNode # bool | FoldingRangeOptions
-    selectionRangeProvider*: OptionalNode # bool | SelectionRangeOptions | SelectionRangeRegistrationOptions
-    callHierarchyProvider*: OptionalNode # bool | CallHierarchyOptions | CallHierarchyRegistrationOptions
+    selectionRangeProvider*: OptionalNode
+      # bool | SelectionRangeOptions | SelectionRangeRegistrationOptions
+    callHierarchyProvider*: OptionalNode
+      # bool | CallHierarchyOptions | CallHierarchyRegistrationOptions
     executeCommandProvider*: Option[ExecuteCommandOptions]
     experimental*: OptionalNode
 
@@ -701,7 +712,8 @@ type
     value*: string
 
   Hover* = ref object of RootObj
-    contents*: OptionalNode # string or MarkedStringOption or [string] or [MarkedStringOption] or MarkupContent
+    contents*: OptionalNode
+      # string or MarkedStringOption or [string] or [MarkedStringOption] or MarkupContent
     range*: Option[Range]
 
   HoverParams* = ref object of TextDocumentPositionParams
@@ -889,13 +901,12 @@ type
 
   InlayHint* = ref object of RootObj
     position*: Position
-    label*: string  # string | InlayHintLabelPart[]
+    label*: string # string | InlayHintLabelPart[]
     kind*: Option[int]
     textEdits*: OptionalSeq[TextEdit]
-    tooltip*: Option[string]  # string | MarkupContent
+    tooltip*: Option[string] # string | MarkupContent
     paddingLeft*: Option[bool]
-    paddingRight*: Option[bool]
-    #data*: OptionalNode
+    paddingRight*: Option[bool] #data*: OptionalNode
 
   InlineValueContext* = ref object of RootObj
     frameId*: int
@@ -946,7 +957,7 @@ type
 
   CallHierarchyIncomingCallsParams* = ref object of WorkDoneProgressParams
     partialResultToken*: OptionalNode # ProgressToken
-    item*:  CallHierarchyItem
+    item*: CallHierarchyItem
 
   CallHierarchyIncomingCall* = ref object of RootObj
     `from`*: CallHierarchyItem
@@ -954,7 +965,7 @@ type
 
   CallHierarchyOutgoingCallsParams* = ref object of WorkDoneProgressParams
     partialResultToken*: OptionalNode # ProgressToken
-    item*:  CallHierarchyItem
+    item*: CallHierarchyItem
 
   CallHierarchyOutgoingCall* = ref object of RootObj
     to*: CallHierarchyItem

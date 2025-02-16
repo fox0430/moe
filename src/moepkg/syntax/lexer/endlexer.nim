@@ -21,13 +21,7 @@
 # Resources.
 #
 
-from ../highlite import
-  GeneralTokenizer,
-  TokenClass,
-  eolChars,
-  lwsChars
-
-
+from ../highlite import GeneralTokenizer, TokenClass, eolChars, lwsChars
 
 #
 # Procedures.
@@ -39,8 +33,6 @@ proc endLine*(lexer: GeneralTokenizer, position: int): int =
 
   while lexer.buf[result] notin eolChars:
     inc result
-
-
 
 ## Proceed until the end of the line whitespace sequence.
 proc endLWS*(lexer: GeneralTokenizer, position: int): int =

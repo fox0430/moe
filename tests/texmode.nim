@@ -17,16 +17,18 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, os, oids, deques, strformat, importutils, osproc, tables,
-            json, times]
+import
+  std/[unittest, os, oids, deques, strformat, importutils, osproc, tables, json, times]
 
 import pkg/[results, chronos]
 
 import moepkg/syntax/highlite
 import moepkg/lsp/[client, utils]
-import moepkg/[ui, editorstatus, gapbuffer, unicodeext, bufferstatus, settings,
-               windownode, helputils, backgroundprocess, quickrunutils,
-               exmodeutils, messagelog, logviewerutils]
+import
+  moepkg/[
+    ui, editorstatus, gapbuffer, unicodeext, bufferstatus, settings, windownode,
+    helputils, backgroundprocess, quickrunutils, exmodeutils, messagelog, logviewerutils,
+  ]
 
 import utils
 
@@ -66,25 +68,25 @@ suite "Ex mode: isExCommandBuffer":
 
   # Check valid Commands
   for cmd in ExCommandInfoList:
-    case cmd.argsType:
-      of ArgsType.none:
-        isExCommandBufferTest(cmd.command.toRunes, InputState.Valid)
-      of ArgsType.toggle:
-        isExCommandBufferTest(toRunes(fmt"{cmd.command} on"), InputState.Valid)
-        isExCommandBufferTest(toRunes(fmt"{cmd.command} off"), InputState.Valid)
-      of ArgsType.number:
-        isExCommandBufferTest(toRunes(fmt"{cmd.command} 0"), InputState.Valid)
-      of ArgsType.text:
-        isExCommandBufferTest(toRunes(fmt"{cmd.command} text"), InputState.Valid)
-      of ArgsType.path:
-        if "e" == cmd.command:
-          isExCommandBufferTest(toRunes(fmt"{cmd.command} /"), InputState.Valid)
-        else:
-          # TODO: Add path And fix tests
-          isExCommandBufferTest(toRunes(fmt"{cmd.command}"), InputState.Valid)
-      of ArgsType.theme:
-        for t in @["vivid", "dark", "light", "config", "vscode"]:
-          isExCommandBufferTest(toRunes(fmt"{cmd.command} {t}"), InputState.Valid)
+    case cmd.argsType
+    of ArgsType.none:
+      isExCommandBufferTest(cmd.command.toRunes, InputState.Valid)
+    of ArgsType.toggle:
+      isExCommandBufferTest(toRunes(fmt"{cmd.command} on"), InputState.Valid)
+      isExCommandBufferTest(toRunes(fmt"{cmd.command} off"), InputState.Valid)
+    of ArgsType.number:
+      isExCommandBufferTest(toRunes(fmt"{cmd.command} 0"), InputState.Valid)
+    of ArgsType.text:
+      isExCommandBufferTest(toRunes(fmt"{cmd.command} text"), InputState.Valid)
+    of ArgsType.path:
+      if "e" == cmd.command:
+        isExCommandBufferTest(toRunes(fmt"{cmd.command} /"), InputState.Valid)
+      else:
+        # TODO: Add path And fix tests
+        isExCommandBufferTest(toRunes(fmt"{cmd.command}"), InputState.Valid)
+    of ArgsType.theme:
+      for t in @["vivid", "dark", "light", "config", "vscode"]:
+        isExCommandBufferTest(toRunes(fmt"{cmd.command} {t}"), InputState.Valid)
   # Check the empty
   isExCommandBufferTest("".toRunes, InputState.Continue)
 
@@ -122,7 +124,8 @@ suite "Fix #1581":
   setup:
     # Create dir and test file
     createDir(dirPath)
-    for p in filePaths: writeFile(p, "1\n2\n3\n")
+    for p in filePaths:
+      writeFile(p, "1\n2\n3\n")
 
   teardown:
     # Clean up the test dir
@@ -195,35 +198,38 @@ suite "Ex mode: Write command":
       discard lspClient.kill
 
 suite "Ex mode: Change next buffer command":
- test "Change next buffer command 1":
-   var status = initEditorStatus()
-   for i in 0 ..< 2: discard status.addNewBufferInCurrentWin.get
-   status.bufStatus[1].isUpdate = false
+  test "Change next buffer command 1":
+    var status = initEditorStatus()
+    for i in 0 ..< 2:
+      discard status.addNewBufferInCurrentWin.get
+    status.bufStatus[1].isUpdate = false
 
-   currentMainWindowNode.bufferIndex = 0
-   const Command = @[ru"bnext"]
-   status.exModeCommand(Command)
+    currentMainWindowNode.bufferIndex = 0
+    const Command = @[ru"bnext"]
+    status.exModeCommand(Command)
 
-   check currentMainWindowNode.bufferIndex == 1
-   check status.bufStatus[1].isUpdate
+    check currentMainWindowNode.bufferIndex == 1
+    check status.bufStatus[1].isUpdate
 
- test "Change next buffer command":
-   var status = initEditorStatus()
-   for i in 0 ..< 2: discard status.addNewBufferInCurrentWin.get
+  test "Change next buffer command":
+    var status = initEditorStatus()
+    for i in 0 ..< 2:
+      discard status.addNewBufferInCurrentWin.get
 
-   status.resize(100, 100)
-   status.update
+    status.resize(100, 100)
+    status.update
 
-   check currentMainWindowNode.bufferIndex == 1
-   const Command = @[ru"bnext"]
-   status.exModeCommand(Command)
+    check currentMainWindowNode.bufferIndex == 1
+    const Command = @[ru"bnext"]
+    status.exModeCommand(Command)
 
-   status.update
+    status.update
 
 suite "Ex mode: Change prev buffer command":
   test "Change prev buffer command 1":
     var status = initEditorStatus()
-    for i in 0 ..< 2: discard status.addNewBufferInCurrentWin.get
+    for i in 0 ..< 2:
+      discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].isUpdate = false
 
     currentMainWindowNode.bufferIndex = 1
@@ -235,7 +241,8 @@ suite "Ex mode: Change prev buffer command":
 
   test "Change prev buffer command 2":
     var status = initEditorStatus()
-    for i in 0 ..< 2: discard status.addNewBufferInCurrentWin.get
+    for i in 0 ..< 2:
+      discard status.addNewBufferInCurrentWin.get
 
     status.resize(100, 100)
     status.update
@@ -249,7 +256,8 @@ suite "Ex mode: Change prev buffer command":
 suite "Ex mode: Open buffer by number command":
   test "Open buffer by number command":
     var status = initEditorStatus()
-    for i in 0 ..< 3: discard status.addNewBufferInCurrentWin.get
+    for i in 0 ..< 3:
+      discard status.addNewBufferInCurrentWin.get
 
     block:
       const Command = @[ru"b", ru"1"]
@@ -266,7 +274,8 @@ suite "Ex mode: Open buffer by number command":
 suite "Ex mode: Change to first buffer command":
   test "Change to first buffer command":
     var status = initEditorStatus()
-    for i in 0 ..< 3: discard status.addNewBufferInCurrentWin.get
+    for i in 0 ..< 3:
+      discard status.addNewBufferInCurrentWin.get
 
     currentMainWindowNode.bufferIndex = 2
     const Command = @[ru"bfirst"]
@@ -277,7 +286,8 @@ suite "Ex mode: Change to first buffer command":
 suite "Ex mode: Change to last buffer command":
   test "Change to last buffer command":
     var status = initEditorStatus()
-    for i in 0 ..< 3: discard status.addNewBufferInCurrentWin.get
+    for i in 0 ..< 3:
+      discard status.addNewBufferInCurrentWin.get
 
     currentMainWindowNode.bufferIndex = 0
     const Command = @[ru"blast"]
@@ -289,8 +299,8 @@ suite "Ex mode: Replace buffer command":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
 
-    status.bufStatus[0].buffer = initGapBuffer(
-      @["xyz", "abcdefghijk", "Hello"].toSeqRunes)
+    status.bufStatus[0].buffer =
+      initGapBuffer(@["xyz", "abcdefghijk", "Hello"].toSeqRunes)
 
     const Command = @[ru"%s/efg/zzzzzz"]
     status.exModeCommand(Command)
@@ -304,40 +314,25 @@ suite "Ex mode: Replace buffer command":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
 
-    status.bufStatus[0].buffer = initGapBuffer(
-      @["abc", "", "def"].toSeqRunes)
+    status.bufStatus[0].buffer = initGapBuffer(@["abc", "", "def"].toSeqRunes)
 
     const Command = @[ru"%s/ab"]
     status.exModeCommand(Command)
 
-    check status.bufStatus[0].buffer.toSeqRunes ==
-      @["abc", "", "def"].toSeqRunes
+    check status.bufStatus[0].buffer.toSeqRunes == @["abc", "", "def"].toSeqRunes
 
   test "Replace all":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
 
-    status.bufStatus[0].buffer = @[
-      "xyzabc",
-      "abcxyz",
-      "abc",
-      "abcxyzabc",
-      "",
-      "xyzabcxyz"]
-      .toSeqRunes
-      .initGapBuffer
+    status.bufStatus[0].buffer =
+      @["xyzabc", "abcxyz", "abc", "abcxyzabc", "", "xyzabcxyz"].toSeqRunes.initGapBuffer
 
     const Command = @[ru"%s/abc/iii/g"]
     status.exModeCommand(Command)
 
-    check status.bufStatus[0].buffer.toSeqRunes == @[
-      "xyziii",
-      "iiixyz",
-      "iii",
-      "iiixyziii",
-      "",
-      "xyziiixyz"]
-      .toSeqRunes
+    check status.bufStatus[0].buffer.toSeqRunes ==
+      @["xyziii", "iiixyz", "iii", "iiixyziii", "", "xyziiixyz"].toSeqRunes
 
 suite "Ex mode: Turn off highlighting command":
   test "Turn off highlighting command":
@@ -573,12 +568,7 @@ suite "Ex mode: Open Editor log viewer":
 
     check currentBufStatus.isReadonly
     check currentBufStatus.logContent == LogContentKind.editor
-    check currentBufStatus.buffer.toSeqRunes == @[
-      "line1",
-      "",
-      "line2"
-    ]
-    .toSeqRunes
+    check currentBufStatus.buffer.toSeqRunes == @["line1", "", "line2"].toSeqRunes
 
 suite "Ex mode: Open LSP log viewer":
   var status: EditorStatus
@@ -626,16 +616,19 @@ suite "Ex mode: Open LSP log viewer":
     currentBufStatus.langId = "nim"
 
     status.lspClients["nim"] = LspClient()
-    status.lspClients["nim"].log = @[
-      LspMessage(
-        timestamp: now(),
-        kind: LspMessageKind.request,
-        message: %*{"message1": "message1"}),
-      LspMessage(
-        timestamp: now(),
-        kind: LspMessageKind.response,
-        message: %*{"message2": "message2"})
-    ]
+    status.lspClients["nim"].log =
+      @[
+        LspMessage(
+          timestamp: now(),
+          kind: LspMessageKind.request,
+          message: %*{"message1": "message1"},
+        ),
+        LspMessage(
+          timestamp: now(),
+          kind: LspMessageKind.response,
+          message: %*{"message2": "message2"},
+        ),
+      ]
 
     const Command = @[ru"lspLog"]
     status.exModeCommand(Command)
@@ -645,17 +638,18 @@ suite "Ex mode: Open LSP log viewer":
     check status.mainWindow.numOfMainWindow == 2
     check currentMainWindowNode.view.height > 1
 
-    check currentBufStatus.buffer.toSeqRunes == @[
-      $status.lspClients["nim"].log[0].timestamp & " -- " & "request",
-      "{",
-      """  "message1": "message1"""",
-      "}",
-      "",
-      $status.lspClients["nim"].log[1].timestamp & " -- " & "response",
-      "{",
-      """  "message2": "message2"""",
-      "}"
-    ].toSeqRunes
+    check currentBufStatus.buffer.toSeqRunes ==
+      @[
+        $status.lspClients["nim"].log[0].timestamp & " -- " & "request",
+        "{",
+        """  "message1": "message1"""",
+        "}",
+        "",
+        $status.lspClients["nim"].log[1].timestamp & " -- " & "response",
+        "{",
+        """  "message2": "message2"""",
+        "}",
+      ].toSeqRunes
 
 suite "Ex mode: Highlight pair of paren setting command":
   test "Highlight pair of paren setting command":
@@ -802,7 +796,8 @@ suite "Ex mode: Highlight full width space command":
 suite "Ex mode: Delete buffer status command":
   test "Delete buffer status command":
     var status = initEditorStatus()
-    for i in 0 ..< 2: discard status.addNewBufferInCurrentWin.get
+    for i in 0 ..< 2:
+      discard status.addNewBufferInCurrentWin.get
 
     const Command = @[ru"bd", ru"0"]
     status.exModeCommand(Command)
@@ -811,7 +806,8 @@ suite "Ex mode: Delete buffer status command":
 
   test "Delete buffer status command 2":
     var status = initEditorStatus()
-    for i in 0 ..< 2: discard status.addNewBufferInCurrentWin.get
+    for i in 0 ..< 2:
+      discard status.addNewBufferInCurrentWin.get
 
     const Command = @[ru"bd", ru"a"]
     status.exModeCommand(Command)
@@ -821,7 +817,8 @@ suite "Ex mode: Delete buffer status command":
 suite "Ex mode: Open buffer by number command":
   test "Open buffer by number command":
     var status = initEditorStatus()
-    for i in 0 ..< 2: discard status.addNewBufferInCurrentWin.get
+    for i in 0 ..< 2:
+      discard status.addNewBufferInCurrentWin.get
 
     const Command = @[ru"b", ru"0"]
     status.exModeCommand(Command)
@@ -830,7 +827,8 @@ suite "Ex mode: Open buffer by number command":
 
   test "Open buffer by number command 2":
     var status = initEditorStatus()
-    for i in 0 ..< 2: discard status.addNewBufferInCurrentWin.get
+    for i in 0 ..< 2:
+      discard status.addNewBufferInCurrentWin.get
 
     const Command = @[ru"b", ru"a"]
     status.exModeCommand(Command)

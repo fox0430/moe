@@ -26,27 +26,28 @@ import utils
 
 export SignatureHelp, SignatureHelpTriggerKind, SignatureInformation
 
-type
-  SignatureHelpResult* = Result[Option[SignatureHelp], string]
+type SignatureHelpResult* = Result[Option[SignatureHelp], string]
 
 proc isTriggerCharacter*(o: SignatureHelpOptions, str: string): bool {.inline.} =
   str in o.triggerCharacters.get
 
 proc initSignatureHelpParams*(
-  path: string,
-  position: LspPosition,
-  kind: SignatureHelpTriggerKind,
-  triggerChar: Option[string] = none(string),
-  active: Option[SignatureHelp] = none(SignatureHelp)): SignatureHelpParams =
-
-    SignatureHelpParams(
-      textDocument: TextDocumentIdentifier(uri: path.pathToUri),
-      position: position,
-      context: SignatureHelpContext(
-        triggerKind: ord(kind),
-        triggerCharacter: triggerChar,
-        isRetrigger: active.isSome,
-        activeSignatureHelp: active))
+    path: string,
+    position: LspPosition,
+    kind: SignatureHelpTriggerKind,
+    triggerChar: Option[string] = none(string),
+    active: Option[SignatureHelp] = none(SignatureHelp),
+): SignatureHelpParams =
+  SignatureHelpParams(
+    textDocument: TextDocumentIdentifier(uri: path.pathToUri),
+    position: position,
+    context: SignatureHelpContext(
+      triggerKind: ord(kind),
+      triggerCharacter: triggerChar,
+      isRetrigger: active.isSome,
+      activeSignatureHelp: active,
+    ),
+  )
 
 proc parseSignatureHelpResponse*(res: JsonNode): SignatureHelpResult =
   if not res.contains("result"):

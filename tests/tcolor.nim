@@ -502,7 +502,8 @@ suite "color: Rgb to Color":
     assert "#afd75f".hexToRgb.get.color256.get == Color256.darkOliveGreen32
     assert "#afd787".hexToRgb.get.color256.get == Color256.darkSeaGreen32
     assert "#afd7af".hexToRgb.get.color256.get == Color256.darkSeaGreen21
-    assert "#afafd7".hexToRgb.get.color256.get == Color256.lightSteelBlue3 # NOTE: lightSteelBlue3 == lightCyan3
+    assert "#afafd7".hexToRgb.get.color256.get == Color256.lightSteelBlue3
+      # NOTE: lightSteelBlue3 == lightCyan3
     assert "#afd7ff".hexToRgb.get.color256.get == Color256.lightSkyBlue1
     assert "#afff00".hexToRgb.get.color256.get == Color256.greenYellow
     assert "#afff5f".hexToRgb.get.color256.get == Color256.darkOliveGreen2
@@ -551,7 +552,8 @@ suite "color: Rgb to Color":
     assert "#ff0087".hexToRgb.get.color256.get == Color256.deepPink11
     assert "#ff00af".hexToRgb.get.color256.get == Color256.deepPink12
     assert "#ff00d7".hexToRgb.get.color256.get == Color256.magenta22
-    assert "#ff00ff".hexToRgb.get.color256.get == Color256.fuchsia # NOTE: fuchsia == magenta1
+    assert "#ff00ff".hexToRgb.get.color256.get == Color256.fuchsia
+      # NOTE: fuchsia == magenta1
     assert "#ff5f00".hexToRgb.get.color256.get == Color256.orangeRed1
     assert "#ff5f5f".hexToRgb.get.color256.get == Color256.indianRed11
     assert "#ff5f87".hexToRgb.get.color256.get == Color256.indianRed12
@@ -576,7 +578,8 @@ suite "color: Rgb to Color":
     assert "#ffd7af".hexToRgb.get.color256.get == Color256.navajoWhite1
     assert "#ffd7d7".hexToRgb.get.color256.get == Color256.mistyRose1
     assert "#ffd7ff".hexToRgb.get.color256.get == Color256.thistle1
-    assert "#ffff00".hexToRgb.get.color256.get == Color256.yellow # NOTE: yellow == yellow1
+    assert "#ffff00".hexToRgb.get.color256.get == Color256.yellow
+      # NOTE: yellow == yellow1
     assert "#ffff5f".hexToRgb.get.color256.get == Color256.lightGoldenrod1
     assert "#ffff87".hexToRgb.get.color256.get == Color256.khaki1
     assert "#ffffaf".hexToRgb.get.color256.get == Color256.wheat1

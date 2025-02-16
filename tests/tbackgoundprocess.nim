@@ -24,9 +24,7 @@ import moepkg/backgroundprocess {.all.}
 
 suite "BackgroundTask: isFinish":
   test "Return true":
-    let command = BackgroundProcessCommand(
-      cmd: "/bin/sh",
-      args:  @["-c", "sleep 0"])
+    let command = BackgroundProcessCommand(cmd: "/bin/sh", args: @["-c", "sleep 0"])
     var bp = command.startBackgroundProcess.get
 
     # Wait just in case
@@ -39,9 +37,7 @@ suite "BackgroundTask: isFinish":
     check isFinish
 
   test "Return false":
-    let command = BackgroundProcessCommand(
-      cmd: "/bin/sh",
-      args:  @["-c", "sleep 0.5"])
+    let command = BackgroundProcessCommand(cmd: "/bin/sh", args: @["-c", "sleep 0.5"])
     var bp = command.startBackgroundProcess.get
 
     let isFinish = bp.isFinish
@@ -55,9 +51,7 @@ suite "BackgroundTask: isFinish":
 
 suite "BackgroundTask: cancel":
   test"Cancel background process":
-    let command = BackgroundProcessCommand(
-      cmd: "/bin/sh",
-      args:  @["-c", "sleep 0.5"])
+    let command = BackgroundProcessCommand(cmd: "/bin/sh", args: @["-c", "sleep 0.5"])
     var bp = command.startBackgroundProcess.get
 
     bp.cancel
@@ -69,9 +63,7 @@ suite "BackgroundTask: cancel":
 
 suite "BackgroundTask: kill":
   test"Kill background process":
-    let command = BackgroundProcessCommand(
-      cmd: "/bin/sh",
-      args:  @["-c", "sleep 0.5"])
+    let command = BackgroundProcessCommand(cmd: "/bin/sh", args: @["-c", "sleep 0.5"])
     var bp = command.startBackgroundProcess.get
 
     bp.kill
@@ -89,9 +81,7 @@ suite "BackgroundTask: Run background process":
 
     for _ in 0 .. 50:
       if bp.isNone:
-        let command = BackgroundProcessCommand(
-          cmd: "/bin/sh",
-          args:  @["-c", "echo 1"])
+        let command = BackgroundProcessCommand(cmd: "/bin/sh", args: @["-c", "echo 1"])
         bp = command.startBackgroundProcess.get.some
       elif bp.get.isFinish:
         output = bp.get.result.get
@@ -108,9 +98,8 @@ suite "BackgroundTask: Run background process":
 
     for _ in 0 .. 50:
       if bp.isNone:
-        let command = BackgroundProcessCommand(
-          cmd: "/bin/sh",
-          args:  @["-c", "echo 1; echo 2"])
+        let command =
+          BackgroundProcessCommand(cmd: "/bin/sh", args: @["-c", "echo 1; echo 2"])
         bp = command.startBackgroundProcess.get.some
       elif bp.get.isFinish:
         output = bp.get.result.get
@@ -121,9 +110,8 @@ suite "BackgroundTask: Run background process":
     check @["1", "2"] == output
 
   test "Exec '/bin/sh -c sleep 1; echo 1' and waitFor":
-    let command = BackgroundProcessCommand(
-      cmd: "/bin/sh",
-      args:  @["-c", "sleep 0.5; echo 1"])
+    let command =
+      BackgroundProcessCommand(cmd: "/bin/sh", args: @["-c", "sleep 0.5; echo 1"])
     var bp = command.startBackgroundProcess.get
 
     check @["1"] == bp.waitFor

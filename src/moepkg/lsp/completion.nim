@@ -35,39 +35,37 @@ type
 
   LspCompletionResult* = Result[seq[CompletionItem], string]
 
-proc isTriggerCharacter*(
-  options: LspCompletionOptions,
-  ch: string): bool {.inline.} =
-
-    options.triggerCharacters.isSome and
-    options.triggerCharacters.get.contains(ch)
+proc isTriggerCharacter*(options: LspCompletionOptions, ch: string): bool {.inline.} =
+  options.triggerCharacters.isSome and options.triggerCharacters.get.contains(ch)
 
 proc initCompletionParams*(
-  path: string,
-  position: BufferPosition,
-  options: LspCompletionOptions,
-  isIncompleteTrigger: bool,
-  character: string): CompletionParams =
+    path: string,
+    position: BufferPosition,
+    options: LspCompletionOptions,
+    isIncompleteTrigger: bool,
+    character: string,
+): CompletionParams =
+  let
+    triggerChar =
+      if isTriggerCharacter(options, character):
+        some(character)
+      else:
+        none(string)
 
-    let
-      triggerChar =
-        if isTriggerCharacter(options, character): some(character)
-        else: none(string)
+    triggerKind =
+      if triggerChar.isSome:
+        CompletionTriggerKind.TriggerCharacter.int
+      elif isIncompleteTrigger:
+        CompletionTriggerKind.TriggerForIncompleteCompletions.int
+      else:
+        CompletionTriggerKind.Invoked.int
 
-      triggerKind =
-        if triggerChar.isSome:
-          CompletionTriggerKind.TriggerCharacter.int
-        elif isIncompleteTrigger:
-          CompletionTriggerKind.TriggerForIncompleteCompletions.int
-        else:
-          CompletionTriggerKind.Invoked.int
-
-    return CompletionParams(
-      textDocument: TextDocumentIdentifier(uri: path.pathToUri),
-      position: position.toLspPosition,
-      context: some(CompletionContext(
-        triggerKind: triggerKind,
-        triggerCharacter: triggerChar)))
+  return CompletionParams(
+    textDocument: TextDocumentIdentifier(uri: path.pathToUri),
+    position: position.toLspPosition,
+    context:
+      some(CompletionContext(triggerKind: triggerKind, triggerCharacter: triggerChar)),
+  )
 
 proc parseTextDocumentCompletionResponse*(res: JsonNode): LspCompletionResult =
   if not res.contains("result"):

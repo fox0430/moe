@@ -34,32 +34,39 @@ suite "documentsymbol: jumpToSymbol":
     assert status.addNewBufferInCurrentWin().isOk
 
   test "Not found":
-    currentBufStatus.documentSymbols = @[
-      DocumentSymbol(
-        name: "aba",
-        kind: 1,
-        range: some(LspRange(
-          start: LspPosition(line: 0, character: 1),
-          `end`: LspPosition(line: 2, character: 3)
-        ))
-      ),
-      DocumentSymbol(
-        name: "abb",
-        kind: 2,
-        range: some(LspRange(
-          start: LspPosition(line: 4, character: 5),
-          `end`: LspPosition(line: 6, character: 7)
-        ))
-      ),
-      DocumentSymbol(
-        name: "ccc",
-        kind: 3,
-        range: some(LspRange(
-          start: LspPosition(line: 8, character: 9),
-          `end`: LspPosition(line: 10, character: 11)
-        ))
-      )
-    ]
+    currentBufStatus.documentSymbols =
+      @[
+        DocumentSymbol(
+          name: "aba",
+          kind: 1,
+          range: some(
+            LspRange(
+              start: LspPosition(line: 0, character: 1),
+              `end`: LspPosition(line: 2, character: 3),
+            )
+          ),
+        ),
+        DocumentSymbol(
+          name: "abb",
+          kind: 2,
+          range: some(
+            LspRange(
+              start: LspPosition(line: 4, character: 5),
+              `end`: LspPosition(line: 6, character: 7),
+            )
+          ),
+        ),
+        DocumentSymbol(
+          name: "ccc",
+          kind: 3,
+          range: some(
+            LspRange(
+              start: LspPosition(line: 8, character: 9),
+              `end`: LspPosition(line: 10, character: 11),
+            )
+          ),
+        ),
+      ]
 
     let symbolName = ru""
 
@@ -69,32 +76,39 @@ suite "documentsymbol: jumpToSymbol":
     check currentMainWindowNode.currentColumn == 0
 
   test "Not found 2":
-    currentBufStatus.documentSymbols = @[
-      DocumentSymbol(
-        name: "aba",
-        kind: 1,
-        range: some(LspRange(
-          start: LspPosition(line: 0, character: 1),
-          `end`: LspPosition(line: 2, character: 3)
-        ))
-      ),
-      DocumentSymbol(
-        name: "abb",
-        kind: 2,
-        range: some(LspRange(
-          start: LspPosition(line: 4, character: 5),
-          `end`: LspPosition(line: 6, character: 7)
-        ))
-      ),
-      DocumentSymbol(
-        name: "ccc",
-        kind: 3,
-        range: some(LspRange(
-          start: LspPosition(line: 8, character: 9),
-          `end`: LspPosition(line: 10, character: 11)
-        ))
-      )
-    ]
+    currentBufStatus.documentSymbols =
+      @[
+        DocumentSymbol(
+          name: "aba",
+          kind: 1,
+          range: some(
+            LspRange(
+              start: LspPosition(line: 0, character: 1),
+              `end`: LspPosition(line: 2, character: 3),
+            )
+          ),
+        ),
+        DocumentSymbol(
+          name: "abb",
+          kind: 2,
+          range: some(
+            LspRange(
+              start: LspPosition(line: 4, character: 5),
+              `end`: LspPosition(line: 6, character: 7),
+            )
+          ),
+        ),
+        DocumentSymbol(
+          name: "ccc",
+          kind: 3,
+          range: some(
+            LspRange(
+              start: LspPosition(line: 8, character: 9),
+              `end`: LspPosition(line: 10, character: 11),
+            )
+          ),
+        ),
+      ]
 
     let symbolName = ru"xyz"
 
@@ -104,37 +118,42 @@ suite "documentsymbol: jumpToSymbol":
     check currentMainWindowNode.currentColumn == 0
 
   test "Basic":
-    currentBufStatus.buffer = toSeq(0..10)
-      .mapIt(" ".repeat(11))
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer =
+      toSeq(0 .. 10).mapIt(" ".repeat(11)).toSeqRunes.toGapBuffer
 
-    currentBufStatus.documentSymbols = @[
-      DocumentSymbol(
-        name: "aba",
-        kind: 1,
-        range: some(LspRange(
-          start: LspPosition(line: 0, character: 1),
-          `end`: LspPosition(line: 2, character: 3)
-        ))
-      ),
-      DocumentSymbol(
-        name: "abb",
-        kind: 2,
-        range: some(LspRange(
-          start: LspPosition(line: 4, character: 5),
-          `end`: LspPosition(line: 6, character: 7)
-        ))
-      ),
-      DocumentSymbol(
-        name: "ccc",
-        kind: 3,
-        range: some(LspRange(
-          start: LspPosition(line: 8, character: 9),
-          `end`: LspPosition(line: 10, character: 11)
-        ))
-      )
-    ]
+    currentBufStatus.documentSymbols =
+      @[
+        DocumentSymbol(
+          name: "aba",
+          kind: 1,
+          range: some(
+            LspRange(
+              start: LspPosition(line: 0, character: 1),
+              `end`: LspPosition(line: 2, character: 3),
+            )
+          ),
+        ),
+        DocumentSymbol(
+          name: "abb",
+          kind: 2,
+          range: some(
+            LspRange(
+              start: LspPosition(line: 4, character: 5),
+              `end`: LspPosition(line: 6, character: 7),
+            )
+          ),
+        ),
+        DocumentSymbol(
+          name: "ccc",
+          kind: 3,
+          range: some(
+            LspRange(
+              start: LspPosition(line: 8, character: 9),
+              `end`: LspPosition(line: 10, character: 11),
+            )
+          ),
+        ),
+      ]
 
     let symbolName = ru"abb"
 
@@ -144,21 +163,22 @@ suite "documentsymbol: jumpToSymbol":
     check currentMainWindowNode.currentColumn == 5
 
   test "Over length position":
-    currentBufStatus.buffer = toSeq(0..10)
-      .mapIt(" ".repeat(11))
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer =
+      toSeq(0 .. 10).mapIt(" ".repeat(11)).toSeqRunes.toGapBuffer
 
-    currentBufStatus.documentSymbols = @[
-      DocumentSymbol(
-        name: "a",
-        kind: 1,
-        range: some(LspRange(
-          start: LspPosition(line: 100, character: 100),
-          `end`: LspPosition(line: 100, character: 100)
-        ))
-      )
-    ]
+    currentBufStatus.documentSymbols =
+      @[
+        DocumentSymbol(
+          name: "a",
+          kind: 1,
+          range: some(
+            LspRange(
+              start: LspPosition(line: 100, character: 100),
+              `end`: LspPosition(line: 100, character: 100),
+            )
+          ),
+        )
+      ]
 
     let symbolName = ru"a"
 
@@ -166,4 +186,3 @@ suite "documentsymbol: jumpToSymbol":
 
     check currentMainWindowNode.currentLine == 10
     check currentMainWindowNode.currentColumn == 10
-

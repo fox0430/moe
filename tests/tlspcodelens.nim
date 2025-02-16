@@ -26,36 +26,79 @@ import moepkg/lsp/codelens {.all.}
 
 suite "lsp: parseCodeLensResponse":
   test "Not found":
-    check parseCodeLensResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": []
-    }).get.len == 0
+    check parseCodeLensResponse(%*{"jsonrpc": "2.0", "id": 0, "result": []}).get.len == 0
 
   test "Not found 2":
-    check parseCodeLensResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": nil
-    }).get.len == 0
-
+    check parseCodeLensResponse(%*{"jsonrpc": "2.0", "id": 0, "result": nil}).get.len ==
+      0
 
   test "Basic":
-    let r = parseCodeLensResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": [
-        {
-          "range": {
-            "start": {
-              "line": 0,
-              "character": 1
+    let r = parseCodeLensResponse(
+      %*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": [
+          {
+            "range":
+              {"start": {"line": 0, "character": 1}, "end": {"line": 2, "character": 3}},
+            "command": {
+              "title": "title",
+              "command": "command",
+              "arguments": [
+                {
+                  "label": "label1",
+                  "location": {
+                    "targetUri": "file:///test",
+                    "targetRange": {
+                      "start": {"line": 0, "character": 1},
+                      "end": {"line": 2, "character": 3},
+                    },
+                    "targetSelectionRange": {
+                      "start": {"line": 0, "character": 1},
+                      "end": {"line": 2, "character": 3},
+                    },
+                  },
+                  "kind": "kind",
+                  "args": {"arg1": "1", "arg2": "2"},
+                }
+              ],
             },
-            "end": {
-              "line": 2,
-              "character": 3
-            }
+          }
+        ],
+      }
+    ).get
+
+    check r.len == 1
+    check r[0].range.start[] == Position(line: 0, character: 1)[]
+    check r[0].range.`end`[] == Position(line: 2, character: 3)[]
+
+    check r[0].command.get.title == "title"
+    check r[0].command.get.command == "command"
+    check r[0].command.get.arguments.get ==
+      %*[
+        {
+          "label": "label1",
+          "location": {
+            "targetUri": "file:///test",
+            "targetRange":
+              {"start": {"line": 0, "character": 1}, "end": {"line": 2, "character": 3}},
+            "targetSelectionRange":
+              {"start": {"line": 0, "character": 1}, "end": {"line": 2, "character": 3}},
           },
+          "kind": "kind",
+          "args": {"arg1": "1", "arg2": "2"},
+        }
+      ]
+
+suite "lsp: parseCodeLensResolveResponse":
+  test "Basic":
+    let r = parseCodeLensResolveResponse(
+      %*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": {
+          "range":
+            {"start": {"line": 0, "character": 1}, "end": {"line": 2, "character": 3}},
           "command": {
             "title": "title",
             "command": "command",
@@ -65,169 +108,40 @@ suite "lsp: parseCodeLensResponse":
                 "location": {
                   "targetUri": "file:///test",
                   "targetRange": {
-                    "start": {
-                      "line": 0,
-                      "character":1
-                    },
-                    "end": {
-                      "line":2,
-                      "character":3
-                    }
+                    "start": {"line": 0, "character": 1},
+                    "end": {"line": 2, "character": 3},
                   },
                   "targetSelectionRange": {
-                    "start": {
-                      "line": 0,
-                      "character": 1
-                    },
-                    "end": {
-                      "line": 2,
-                      "character": 3
-                    }
-                  }
+                    "start": {"line": 0, "character": 1},
+                    "end": {"line": 2, "character": 3},
+                  },
                 },
                 "kind": "kind",
-                "args": {
-                  "arg1": "1",
-                  "arg2": "2",
-                }
+                "args": {"arg1": "1", "arg2": "2"},
               }
-            ]
-          }
-        }
-      ]
-    }).get
-
-    check r.len == 1
-    check r[0].range.start[] == Position(line: 0, character: 1)[]
-    check r[0].range.`end`[] == Position(line: 2, character: 3)[]
-
-    check r[0].command.get.title == "title"
-    check r[0].command.get.command == "command"
-    check r[0].command.get.arguments.get == %*[
-      {
-        "label": "label1",
-        "location": {
-          "targetUri": "file:///test",
-          "targetRange": {
-            "start": {
-              "line": 0,
-              "character": 1
-            },
-            "end": {
-              "line": 2,
-              "character": 3
-            }
+            ],
           },
-          "targetSelectionRange": {
-            "start": {
-              "line": 0,
-              "character": 1
-            },
-            "end": {
-              "line": 2,
-              "character": 3
-            }
-          }
         },
-        "kind": "kind",
-        "args": {
-          "arg1": "1",
-          "arg2": "2"
-        }
       }
-    ]
-
-suite "lsp: parseCodeLensResolveResponse":
-  test "Basic":
-    let r = parseCodeLensResolveResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": {
-        "range": {
-          "start": {
-            "line": 0,
-            "character": 1
-          },
-          "end": {
-            "line": 2,
-            "character": 3
-          }
-        },
-        "command": {
-          "title": "title",
-          "command": "command",
-          "arguments": [
-            {
-              "label": "label1",
-              "location": {
-                "targetUri": "file:///test",
-                "targetRange": {
-                  "start": {
-                    "line": 0,
-                    "character":1
-                  },
-                  "end": {
-                    "line":2,
-                    "character":3
-                  }
-                },
-                "targetSelectionRange": {
-                  "start": {
-                    "line": 0,
-                    "character": 1
-                  },
-                  "end": {
-                    "line": 2,
-                    "character": 3
-                  }
-                }
-              },
-              "kind": "kind",
-              "args": {
-                "arg1": "1",
-                "arg2": "2",
-              }
-            }
-          ]
-        }
-      }
-    }).get
+    ).get
 
     check r.range.start[] == Position(line: 0, character: 1)[]
     check r.range.`end`[] == Position(line: 2, character: 3)[]
 
     check r.command.get.title == "title"
     check r.command.get.command == "command"
-    check r.command.get.arguments.get == %*[
-      {
-        "label": "label1",
-        "location": {
-          "targetUri": "file:///test",
-          "targetRange": {
-            "start": {
-              "line": 0,
-              "character": 1
-            },
-            "end": {
-              "line": 2,
-              "character": 3
-            }
+    check r.command.get.arguments.get ==
+      %*[
+        {
+          "label": "label1",
+          "location": {
+            "targetUri": "file:///test",
+            "targetRange":
+              {"start": {"line": 0, "character": 1}, "end": {"line": 2, "character": 3}},
+            "targetSelectionRange":
+              {"start": {"line": 0, "character": 1}, "end": {"line": 2, "character": 3}},
           },
-          "targetSelectionRange": {
-            "start": {
-              "line": 0,
-              "character": 1
-            },
-            "end": {
-              "line": 2,
-              "character": 3
-            }
-          }
-        },
-        "kind": "kind",
-        "args": {
-          "arg1": "1",
-          "arg2": "2"
+          "kind": "kind",
+          "args": {"arg1": "1", "arg2": "2"},
         }
-      }
-    ]
+      ]

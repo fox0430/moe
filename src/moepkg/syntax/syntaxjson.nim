@@ -20,7 +20,7 @@
 import highlite
 
 const
-  SymChars = {'A'..'Z', 'a'..'z', '0'..'9', '_', '\x80'..'\xFF'}
+  SymChars = {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_', '\x80' .. '\xFF'}
   JsonKeywords = ["false", "null", "true"]
 
 proc jsonNextToken*(g: var GeneralTokenizer) =
@@ -35,7 +35,8 @@ proc jsonNextToken*(g: var GeneralTokenizer) =
       case g.buf[pos]
       of '\0':
         g.state = gtNone
-      else: inc(pos)
+      else:
+        inc(pos)
     else:
       g.kind = gtStringLit
       while true:
@@ -49,22 +50,27 @@ proc jsonNextToken*(g: var GeneralTokenizer) =
           inc(pos)
           g.state = gtNone
           break
-        else: inc(pos)
+        else:
+          inc(pos)
   else:
     case g.buf[pos]
-    of ' ', '\x09'..'\x0D':
+    of ' ', '\x09' .. '\x0D':
       g.kind = gtWhitespace
-      while g.buf[pos] in {' ', '\x09'..'\x0D'}: inc(pos)
-    of 'a'..'z', 'A'..'Z', '_', '\x80'..'\xFF':
+      while g.buf[pos] in {' ', '\x09' .. '\x0D'}:
+        inc(pos)
+    of 'a' .. 'z', 'A' .. 'Z', '_', '\x80' .. '\xFF':
       var id = ""
       while g.buf[pos] in SymChars:
         add(id, g.buf[pos])
         inc(pos)
-      if isKeyword(JsonKeywords, id) >= 0: g.kind = gtKeyword
-      else: g.kind = gtIdentifier
-    of '0'..'9':
+      if isKeyword(JsonKeywords, id) >= 0:
+        g.kind = gtKeyword
+      else:
+        g.kind = gtIdentifier
+    of '0' .. '9':
       pos = generalNumber(g, pos)
-      if g.buf[pos] in {'A'..'Z', 'a'..'z'}: inc(pos)
+      if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
+        inc(pos)
     of '"':
       inc(pos)
       if (g.buf[pos] == '\"') and (g.buf[pos + 1] == '\"'):
@@ -76,11 +82,11 @@ proc jsonNextToken*(g: var GeneralTokenizer) =
             break
           of '\"':
             inc(pos)
-            if g.buf[pos] == '\"' and g.buf[pos+1] == '\"' and
-               g.buf[pos+2] != '\"':
+            if g.buf[pos] == '\"' and g.buf[pos + 1] == '\"' and g.buf[pos + 2] != '\"':
               inc(pos, 2)
               break
-          else: inc(pos)
+          else:
+            inc(pos)
       else:
         g.kind = gtStringLit
         while true:
@@ -93,7 +99,8 @@ proc jsonNextToken*(g: var GeneralTokenizer) =
           of '\\':
             g.state = g.kind
             break
-          else: inc(pos)
+          else:
+            inc(pos)
     of '{', '}', '[', ']':
       inc(pos)
       g.kind = gtPunctuation
@@ -102,7 +109,8 @@ proc jsonNextToken*(g: var GeneralTokenizer) =
     else:
       if g.buf[pos] in opChars:
         g.kind = gtOperator
-        while g.buf[pos] in opChars: inc(pos)
+        while g.buf[pos] in opChars:
+          inc(pos)
       else:
         inc(pos)
         g.kind = gtNone

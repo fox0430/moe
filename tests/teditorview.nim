@@ -33,21 +33,11 @@ suite "editorview: initEditorView":
 
   test "Basic 2":
     let
-      buffer = @["abcあd", "いうefgh", "ij"]
-        .toSeqRunes
-        .toGapBuffer
+      buffer = @["abcあd", "いうefgh", "ij"].toSeqRunes.toGapBuffer
       view = initEditorView(buffer, 8, 4)
 
-    check view.lines.toSeqRunes == @[
-      "abc",
-      "あd",
-      "いう",
-      "efgh",
-      "ij",
-      "",
-      "",
-      ""]
-      .toSeqRunes
+    check view.lines.toSeqRunes ==
+      @["abc", "あd", "いう", "efgh", "ij", "", "", ""].toSeqRunes
 
     check view.originalLine[5] == -1
     check view.originalLine[6] == -1
@@ -95,9 +85,7 @@ suite "editorview: foldingLineBuffer":
 
 suite "editorview: seekCursor":
   test "Basic":
-    let buffer = @["aaa", "bbbb", "ccccc", "ddd"]
-      .toSeqRunes.
-      toGapBuffer
+    let buffer = @["aaa", "bbbb", "ccccc", "ddd"].toSeqRunes.toGapBuffer
     var view = initEditorView(buffer, 2, 3)
 
     check view.lines.toSeqRunes == @["aaa", "bbb"].toSeqRunes

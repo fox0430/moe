@@ -182,7 +182,8 @@ suite "buffermanager: openSelectedBuffer":
     check mainWindow.numOfMainWindow == 2
     let nodes = mainWindowNode.getAllWindowNode
     check nodes.len == 2
-    for n in nodes: check n.bufferIndex == 0
+    for n in nodes:
+      check n.bufferIndex == 0
 
     status.update
 
@@ -204,8 +205,10 @@ suite "buffermanager: openSelectedBuffer":
     let nodes = mainWindowNode.getAllWindowNode
     check nodes.len == 3
     for n in nodes:
-      if n.windowIndex == 1: check n.bufferIndex == 1
-      else: check n.bufferIndex == 0
+      if n.windowIndex == 1:
+        check n.bufferIndex == 1
+      else:
+        check n.bufferIndex == 0
 
     status.update
 

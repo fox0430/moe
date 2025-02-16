@@ -22,11 +22,10 @@
 import std/sequtils
 import ui, unicodeext, highlight, color, independentutils
 
-type
-  GlobalSidebar* = object
-    highlight*: Highlight
-    window: Window
-    terminalBuffer: seq[Runes]
+type GlobalSidebar* = object
+  highlight*: Highlight
+  window: Window
+  terminalBuffer: seq[Runes]
 
 proc x*(sidebar: GlobalSidebar): int {.inline.} =
   ## Return the window position of x.
@@ -88,66 +87,80 @@ proc initGlobalSidebar*(rect: Rect): GlobalSidebar =
   result.initTerminalBuffer
 
   result.highlight = Highlight(
-    colorSegments: @[
-      ColorSegment(
-        firstRow: 0,
-        firstColumn: 0,
-        lastRow: result.terminalBuffer.high,
-        lastColumn: result.terminalBuffer[0].high,
-        color: EditorColorPairIndex.default)])
+    colorSegments:
+      @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: result.terminalBuffer.high,
+          lastColumn: result.terminalBuffer[0].high,
+          color: EditorColorPairIndex.default,
+        )
+      ]
+  )
 
 proc initGlobalSidebar*(): GlobalSidebar {.inline.} =
-  result.window = initWindow(
-    Rect(h: 1, w: 0, y: 0, x: 0),
-    EditorColorPairIndex.default.ord)
+  result.window =
+    initWindow(Rect(h: 1, w: 0, y: 0, x: 0), EditorColorPairIndex.default.ord)
 
   result.initTerminalBuffer
 
   result.highlight = Highlight(
-    colorSegments: @[
-      ColorSegment(
-        firstRow: 0,
-        firstColumn: 0,
-        lastRow: 1,
-        lastColumn: 1,
-        color: EditorColorPairIndex.default)])
+    colorSegments:
+      @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 1,
+          lastColumn: 1,
+          color: EditorColorPairIndex.default,
+        )
+      ]
+  )
 
 proc initHighlight*(sidebar: var GlobalSidebar) =
   ## Init the sidebar highlight
 
   sidebar.highlight = Highlight(
-    colorSegments: @[
-      ColorSegment(
-        firstRow: 0,
-        lastRow: sidebar.terminalBuffer.high,
-        firstColumn: 0,
-        lastColumn: sidebar.terminalBuffer[0].high,
-        color: EditorColorPairIndex.default)])
+    colorSegments:
+      @[
+        ColorSegment(
+          firstRow: 0,
+          lastRow: sidebar.terminalBuffer.high,
+          firstColumn: 0,
+          lastColumn: sidebar.terminalBuffer[0].high,
+          color: EditorColorPairIndex.default,
+        )
+      ]
+  )
 
 proc write*(
-  sidebar: var GlobalSidebar,
-  startPosition: Position,
-  buffer: Runes,
-  color: EditorColorPairIndex = EditorColorPairIndex.default) {.inline.} =
-    ## Write a buffer to the terminalBuffer
-    ## Cut off the buffer if longer than the window sieze.
+    sidebar: var GlobalSidebar,
+    startPosition: Position,
+    buffer: Runes,
+    color: EditorColorPairIndex = EditorColorPairIndex.default,
+) {.inline.} =
+  ## Write a buffer to the terminalBuffer
+  ## Cut off the buffer if longer than the window sieze.
 
-    when not defined(release):
-      assert startPosition.y >= 0 and startPosition.x >= 0
-      assert startPosition.y <= sidebar.terminalBuffer.high
-      assert startPosition.x + buffer.high <= sidebar.terminalBuffer[0].high
+  when not defined(release):
+    assert startPosition.y >= 0 and startPosition.x >= 0
+    assert startPosition.y <= sidebar.terminalBuffer.high
+    assert startPosition.x + buffer.high <= sidebar.terminalBuffer[0].high
 
-    let y = startPosition.y
-    for x in startPosition.x .. min(startPosition.x + buffer.high, sidebar.w):
-      sidebar.terminalBuffer[y][x] = buffer[x - startPosition.x]
+  let y = startPosition.y
+  for x in startPosition.x .. min(startPosition.x + buffer.high, sidebar.w):
+    sidebar.terminalBuffer[y][x] = buffer[x - startPosition.x]
 
-    sidebar.highlight.overwrite(
-      ColorSegment(
-        firstRow: startPosition.y,
-        firstColumn: startPosition.x,
-        lastRow: startPosition.y,
-        lastColumn: startPosition.x + buffer.high,
-        color: color))
+  sidebar.highlight.overwrite(
+    ColorSegment(
+      firstRow: startPosition.y,
+      firstColumn: startPosition.x,
+      lastRow: startPosition.y,
+      lastColumn: startPosition.x + buffer.high,
+      color: color,
+    )
+  )
 
 proc write(sidebar: var GlobalSidebar) =
   ## Write a buffer to the terminal (ui).

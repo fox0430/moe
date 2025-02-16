@@ -34,19 +34,18 @@ proc initDiffViewerBuffer*(sourceFilePath, backupFilePath: string): seq[Runes] =
 proc initDiffViewerHighlight*(buffer: seq[Runes]): Highlight =
   for i, line in buffer:
     let color =
-      if line.len > 0 and line[0] == ru'+':
+      if line.len > 0 and line[0] == ru '+':
         EditorColorPairIndex.diffViewerAddedLine
-      elif line.len > 0 and line[0] == ru'-':
+      elif line.len > 0 and line[0] == ru '-':
         EditorColorPairIndex.diffViewerDeletedLine
       else:
         EditorColorPairIndex.default
 
-    result.colorSegments.add(ColorSegment(
-      firstRow: i,
-      firstColumn: 0,
-      lastRow: i,
-      lastColumn: line.high,
-      color: color))
+    result.colorSegments.add(
+      ColorSegment(
+        firstRow: i, firstColumn: 0, lastRow: i, lastColumn: line.high, color: color
+      )
+    )
 
 proc initDiffViewerHighlight*(buffer: Runes): Highlight =
   return initDiffViewerHighlight(buffer.splitLines)

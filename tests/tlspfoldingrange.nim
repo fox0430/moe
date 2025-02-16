@@ -27,38 +27,26 @@ import moepkg/lsp/foldingrange {.all.}
 
 suite "lsp: parseFoldingRangeResponse":
   test "Not found":
-    check parseTextDocumentFoldingRangeResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": []
-    }).get.len == 0
+    check parseTextDocumentFoldingRangeResponse(
+      %*{"jsonrpc": "2.0", "id": 0, "result": []}
+    ).get.len == 0
 
   test "Not found 2":
-    check parseTextDocumentFoldingRangeResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": nil
-    }).get.len == 0
+    check parseTextDocumentFoldingRangeResponse(
+      %*{"jsonrpc": "2.0", "id": 0, "result": nil}
+    ).get.len == 0
 
   test "Basic":
-    check parseTextDocumentFoldingRangeResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": [
-        {
-          "startLine": 0,
-          "startCharacter": 1,
-          "endLine": 2,
-          "endCharacter": 3
-        },
-        {
-          "startLine": 4,
-          "startCharacter": 5,
-          "endLine": 6,
-          "endCharacter": 7
-        }
+    check parseTextDocumentFoldingRangeResponse(
+      %*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": [
+          {"startLine": 0, "startCharacter": 1, "endLine": 2, "endCharacter": 3},
+          {"startLine": 4, "startCharacter": 5, "endLine": 6, "endCharacter": 7},
+        ],
+      }
+    ).get ==
+      @[
+        folding.FoldingRange(first: 0, last: 2), folding.FoldingRange(first: 4, last: 6)
       ]
-    }).get == @[
-      folding.FoldingRange(first: 0, last: 2),
-      folding.FoldingRange(first: 4, last: 6),
-    ]

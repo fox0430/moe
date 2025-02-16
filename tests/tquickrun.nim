@@ -48,21 +48,17 @@ suite "QuickRun: nimQuickRunCommand":
 
     check nimQuickRunCommand(Path, settings) ==
       BackgroundProcessCommand(
-        cmd: "nim",
-        args: @["c", "-r", "test.nim"],
-        workingDir: "")
+        cmd: "nim", args: @["c", "-r", "test.nim"], workingDir: ""
+      )
 
   test "User settings":
     const Path = "test.nim"
-    let settings = QuickRunSettings(
-      nimAdvancedCommand: "js",
-      nimOptions: "--d:release")
+    let settings = QuickRunSettings(nimAdvancedCommand: "js", nimOptions: "--d:release")
 
     check nimQuickRunCommand(Path, settings) ==
       BackgroundProcessCommand(
-        cmd: "nim",
-        args: @["js", "-r", "--d:release", "test.nim"],
-        workingDir: "")
+        cmd: "nim", args: @["js", "-r", "--d:release", "test.nim"], workingDir: ""
+      )
 
 suite "QuickRun: clangQuickRunCommand":
   test "Default settings":
@@ -71,20 +67,17 @@ suite "QuickRun: clangQuickRunCommand":
 
     check clangQuickRunCommand(Path, settings) ==
       BackgroundProcessCommand(
-        cmd: "/bin/bash",
-        args: @["-c", "'gcc  test.c && ./.out'"],
-        workingDir: "")
+        cmd: "/bin/bash", args: @["-c", "'gcc  test.c && ./.out'"], workingDir: ""
+      )
 
   test "User settings":
     const Path = "test.c"
-    let settings = QuickRunSettings(
-      clangOptions: "--wall")
+    let settings = QuickRunSettings(clangOptions: "--wall")
 
     check clangQuickRunCommand(Path, settings) ==
       BackgroundProcessCommand(
-        cmd: "/bin/bash",
-        args: @["-c", "'gcc --wall test.c && ./.out'"],
-        workingDir: "")
+        cmd: "/bin/bash", args: @["-c", "'gcc --wall test.c && ./.out'"], workingDir: ""
+      )
 
 suite "QuickRun: cppQuickRunCommand":
   test "Default settings":
@@ -93,20 +86,19 @@ suite "QuickRun: cppQuickRunCommand":
 
     check cppQuickRunCommand(Path, settings) ==
       BackgroundProcessCommand(
-        cmd: "/bin/bash",
-        args: @["-c", "'g++  test.cpp && ./.out'"],
-        workingDir: "")
+        cmd: "/bin/bash", args: @["-c", "'g++  test.cpp && ./.out'"], workingDir: ""
+      )
 
   test "User settings":
     const Path = "test.cpp"
-    let settings = QuickRunSettings(
-      cppOptions: "--wall")
+    let settings = QuickRunSettings(cppOptions: "--wall")
 
     check cppQuickRunCommand(Path, settings) ==
       BackgroundProcessCommand(
         cmd: "/bin/bash",
         args: @["-c", "'g++ --wall test.cpp && ./.out'"],
-        workingDir: "")
+        workingDir: "",
+      )
 
 suite "QuickRun: shQuickRunCommand":
   test "Default settings":
@@ -114,20 +106,14 @@ suite "QuickRun: shQuickRunCommand":
     let settings = initQuickRunSettings()
 
     check shQuickRunCommand(Path, settings) ==
-      BackgroundProcessCommand(
-        cmd: "/bin/sh",
-        args: @["test.sh"],
-        workingDir: "")
+      BackgroundProcessCommand(cmd: "/bin/sh", args: @["test.sh"], workingDir: "")
 
   test "User settings":
     const Path = "test.sh"
     let settings = QuickRunSettings(shOptions: "-c")
 
     check shQuickRunCommand(Path, settings) ==
-      BackgroundProcessCommand(
-        cmd: "/bin/sh",
-        args: @["-c", "test.sh"],
-        workingDir: "")
+      BackgroundProcessCommand(cmd: "/bin/sh", args: @["-c", "test.sh"], workingDir: "")
 
 suite "QuickRun: bashQuickRunCommand":
   test "Default settings":
@@ -135,10 +121,7 @@ suite "QuickRun: bashQuickRunCommand":
     let settings = initQuickRunSettings()
 
     check bashQuickRunCommand(Path, settings) ==
-      BackgroundProcessCommand(
-        cmd: "/bin/bash",
-        args: @["test.sh"],
-        workingDir: "")
+      BackgroundProcessCommand(cmd: "/bin/bash", args: @["test.sh"], workingDir: "")
 
   test "User settings":
     const Path = "test.sh"
@@ -146,9 +129,8 @@ suite "QuickRun: bashQuickRunCommand":
 
     check bashQuickRunCommand(Path, settings) ==
       BackgroundProcessCommand(
-        cmd: "/bin/bash",
-        args: @["-c", "test.sh"],
-        workingDir: "")
+        cmd: "/bin/bash", args: @["-c", "test.sh"], workingDir: ""
+      )
 
 suite "QuickRun: quickRunCommand":
   test "Nim":
@@ -159,9 +141,8 @@ suite "QuickRun: quickRunCommand":
 
     check quickRunCommand(Path, SourceLanguage.langNim, Buffer, settings).get ==
       BackgroundProcessCommand(
-        cmd: "nim",
-        args: @["c", "-r", "test.nim"],
-        workingDir: "")
+        cmd: "nim", args: @["c", "-r", "test.nim"], workingDir: ""
+      )
 
   test "C":
     const
@@ -171,9 +152,8 @@ suite "QuickRun: quickRunCommand":
 
     check quickRunCommand(Path, SourceLanguage.langC, Buffer, settings).get ==
       BackgroundProcessCommand(
-        cmd: "/bin/bash",
-        args: @["-c", "'gcc  test.c && ./.out'"],
-        workingDir: "")
+        cmd: "/bin/bash", args: @["-c", "'gcc  test.c && ./.out'"], workingDir: ""
+      )
 
   test "C++":
     const
@@ -183,9 +163,8 @@ suite "QuickRun: quickRunCommand":
 
     check quickRunCommand(Path, SourceLanguage.langCpp, Buffer, settings).get ==
       BackgroundProcessCommand(
-        cmd: "/bin/bash",
-        args: @["-c", "'g++  test.cpp && ./.out'"],
-        workingDir: "")
+        cmd: "/bin/bash", args: @["-c", "'g++  test.cpp && ./.out'"], workingDir: ""
+      )
 
   test "Sh":
     const
@@ -194,10 +173,7 @@ suite "QuickRun: quickRunCommand":
     let settings = initQuickRunSettings()
 
     check quickRunCommand(Path, SourceLanguage.langShell, Buffer, settings).get ==
-      BackgroundProcessCommand(
-        cmd: "/bin/sh",
-        args: @["test.sh"],
-        workingDir: "")
+      BackgroundProcessCommand(cmd: "/bin/sh", args: @["test.sh"], workingDir: "")
 
   test "Bash":
     const
@@ -206,10 +182,7 @@ suite "QuickRun: quickRunCommand":
     let settings = initQuickRunSettings()
 
     check quickRunCommand(Path, SourceLanguage.langShell, Buffer, settings).get ==
-      BackgroundProcessCommand(
-        cmd: "/bin/bash",
-        args: @["test.sh"],
-        workingDir: "")
+      BackgroundProcessCommand(cmd: "/bin/bash", args: @["test.sh"], workingDir: "")
 
 suite "QuickRun: isRunning":
   test "Return true":

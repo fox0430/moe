@@ -31,8 +31,7 @@ type
     insertText*: Runes
 
   CompletionList* = ref object
-    items*: seq[CompletionItem]
-      # Items for completion.
+    items*: seq[CompletionItem] # Items for completion.
 
 proc initCompletionItem*(label: Runes): CompletionItem {.inline.} =
   CompletionItem(label: label, insertText: label)
@@ -52,7 +51,8 @@ proc `[]`*(list: CompletionList, label: Runes): CompletionItem =
   ## Return a item: label == CompletionList.items.label.
 
   for i in 0 .. list.items.high:
-    if label == list.items[i].label: return list.items[i]
+    if label == list.items[i].label:
+      return list.items[i]
 
 proc high*(list: CompletionList): int {.inline.} =
   ## Return CompletionList.items.high
@@ -72,13 +72,15 @@ proc del*(list: var CompletionList, index: int) {.inline.} =
 
 proc del*(list: var CompletionList, label: Runes) =
   for i in 0 .. list.items.high:
-    if label == list.items[i].label: list.items.del(i)
+    if label == list.items[i].label:
+      list.items.del(i)
 
 proc find*(list: CompletionList, label: Runes): Option[CompletionItem] =
   ## Find a item with the label.
 
   for i in 0 .. list.items.high:
-    if label == list.items[i].label: return some(list.items[i])
+    if label == list.items[i].label:
+      return some(list.items[i])
 
 proc clear*(list: var CompletionList) {.inline.} =
   ## Clear `CompletionList.items`.
@@ -89,41 +91,47 @@ proc maxLabelLen*(list: CompletionList): int =
   ## Return a max length of `list.label`.
 
   for item in list.items:
-    if item.label.len > result: result = item.label.len
+    if item.label.len > result:
+      result = item.label.len
 
 proc maxInsertTextLen*(list: CompletionList): int =
   ## Return a max length of `list.insertText`.
 
   for item in list.items:
-    if item.insertText.len > result: result = item.insertText.len
+    if item.insertText.len > result:
+      result = item.insertText.len
 
 proc isCompletionCharacter*(r: Rune): bool {.inline.} =
   # '/', '.' and '~' are path completion.
-  r in [ru'/', ru'.', ru'~'] or
-  r.unicodeCategory in LetterCharacter
+  r in [ru '/', ru '.', ru '~'] or r.unicodeCategory in LetterCharacter
 
 proc isPathCompletion*(r: Rune | Runes): bool {.inline.} =
-  r.toRunes.startsWith(ru"/") or
-  r.toRunes.startsWith(ru"./") or
-  r.toRunes.startsWith(ru"~/")
+  r.toRunes.startsWith(ru"/") or r.toRunes.startsWith(ru"./") or
+    r.toRunes.startsWith(ru"~/")
 
 proc pathCompletionList*(path: Runes): CompletionList =
   result = initCompletionList()
 
-  if path.len == 0: return
+  if path.len == 0:
+    return
 
   let
     (inputPathHead, inputPathTail) = splitPath(path)
     pattern =
-      if inputPathHead.len == 0: getCurrentDir()
-      elif inputPathHead.startsWith(ru'~'): expandTilde($inputPathHead)
-      else: $inputPathHead
+      if inputPathHead.len == 0:
+        getCurrentDir()
+      elif inputPathHead.startsWith(ru '~'):
+        expandTilde($inputPathHead)
+      else:
+        $inputPathHead
 
   for k in walkDir(pattern):
     let p = k.path.splitPath.tail.toRunes
     if inputPathTail.len == 0 or p.startsWith(inputPathTail):
-      if k.kind == pcDir: result.items.add initCompletionItem(p & ru"/")
-      else: result.items.add initCompletionItem(p)
+      if k.kind == pcDir:
+        result.items.add initCompletionItem(p & ru"/")
+      else:
+        result.items.add initCompletionItem(p)
 
 proc fuzzySort*(list: var CompletionList, runes: Runes) =
   var scores: seq[tuple[index, score: int]]

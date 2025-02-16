@@ -27,18 +27,18 @@ import protocol/types
 import utils
 
 type
-  LspImplementation*  = object
+  LspImplementation* = object
     location*: BufferLocation
 
   LspImplementationResult* = Result[Option[LspImplementation], string]
 
 proc initImplementationParams*(
-  path: string,
-  posi: BufferPosition): ImplementationParams =
-
-    ImplementationParams(
-      textDocument: TextDocumentIdentifier(uri: path.pathToUri),
-      position: posi.toLspPosition)
+    path: string, posi: BufferPosition
+): ImplementationParams =
+  ImplementationParams(
+    textDocument: TextDocumentIdentifier(uri: path.pathToUri),
+    position: posi.toLspPosition,
+  )
 
 proc parseTextDocumentImplementation*(res: JsonNode): LspImplementationResult =
   if res["result"].kind != JArray:

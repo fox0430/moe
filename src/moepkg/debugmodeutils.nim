@@ -23,14 +23,15 @@ import bufferstatus, unicodeext, windownode, settings, gapbuffer
 proc getDebugModeBufferIndex*(bufStatuses: seq[BufferStatus]): int =
   result = -1
   for index, bufStatus in bufStatuses:
-    if isDebugMode(bufStatus.mode, bufStatus.prevMode): return index
+    if isDebugMode(bufStatus.mode, bufStatus.prevMode):
+      return index
 
 proc initDebugModeBuffer*(
-  bufStatus: seq[BufferStatus],
-  root: WindowNode,
-  currentWindowIndex: int,
-  debugModeSettings: DebugModeSettings): seq[Runes] =
-
+    bufStatus: seq[BufferStatus],
+    root: WindowNode,
+    currentWindowIndex: int,
+    debugModeSettings: DebugModeSettings,
+): seq[Runes] =
   result.add ru""
 
   if debugModeSettings.windowNode.enable:
@@ -110,13 +111,17 @@ proc initDebugModeBuffer*(
       if debugModeSettings.bufStatus.language:
         result.add toRunes(fmt"  language                : {bufStatus[i].language}")
       if debugModeSettings.bufStatus.encoding:
-        result.add toRunes(fmt"  encoding                : {bufStatus[i].characterEncoding}")
+        result.add toRunes(
+          fmt"  encoding                : {bufStatus[i].characterEncoding}"
+        )
       if debugModeSettings.bufStatus.countChange:
         result.add toRunes(fmt"  countChange             : {bufStatus[i].countChange}")
       if debugModeSettings.bufStatus.cmdLoop:
         result.add toRunes(fmt"  cmdLoop                 : {bufStatus[i].cmdLoop}")
       if debugModeSettings.bufStatus.lastSaveTime:
-        result.add toRunes(fmt"  lastSaveTime            : {$bufStatus[i].lastSaveTime}")
+        result.add toRunes(
+          fmt"  lastSaveTime            : {$bufStatus[i].lastSaveTime}"
+        )
       if debugModeSettings.bufStatus.bufferLen:
         result.add toRunes(fmt"  buffer length           : {bufStatus[i].buffer.len}")
 

@@ -186,9 +186,8 @@ suite "windownode: moveCursor":
     status.resize(100, 100)
     status.update
 
-    let beforeWindowPosition = Position(
-      y: currentMainWindowNode.y,
-      x: currentMainWindowNode.x)
+    let beforeWindowPosition =
+      Position(y: currentMainWindowNode.y, x: currentMainWindowNode.x)
 
     currentMainWindowNode.moveCursor(BufferPosition(line: 10, column: 5))
 
@@ -203,9 +202,8 @@ suite "windownode: moveCursor":
     status.resize(100, 100)
     status.update
 
-    let beforeWindowPosition = Position(
-      y: currentMainWindowNode.y,
-      x: currentMainWindowNode.x)
+    let beforeWindowPosition =
+      Position(y: currentMainWindowNode.y, x: currentMainWindowNode.x)
 
     currentMainWindowNode.moveCursor(10, 5)
 

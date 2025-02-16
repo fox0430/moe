@@ -17,18 +17,15 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[os, strutils, times, algorithm, sequtils,
-            options, strformat]
+import std/[os, strutils, times, algorithm, sequtils, options, strformat]
 import pkg/results
-import ui, fileutils, editorview, gapbuffer, highlight, windownode, color,
-       bufferstatus, settings, messages, commandline, unicodeext
+import
+  ui, fileutils, editorview, gapbuffer, highlight, windownode, color, bufferstatus,
+  settings, messages, commandline, unicodeext
 
 type
-  PathInfo* = tuple[
-    kind: PathComponent,
-    path: string,
-    size: int64,
-    lastWriteTime: times.Time]
+  PathInfo* =
+    tuple[kind: PathComponent, path: string, size: int64, lastWriteTime: times.Time]
 
   Sort = enum
     name = 0
@@ -62,14 +59,13 @@ proc initFilerStatus*(): FilerStatus {.inline.} =
     isUpdatePathList: true,
     pathList: newSeq[PathInfo](),
     sortBy: name,
-    searchMode: false)
+    searchMode: false,
+  )
 
-proc searchFiles(
-  pathList: seq[PathInfo],
-  keyword: string): seq[PathInfo] =
-
+proc searchFiles(pathList: seq[PathInfo], keyword: string): seq[PathInfo] =
   for dir in pathList:
-    if dir.path.contains(keyword): result.add dir
+    if dir.path.contains(keyword):
+      result.add dir
 
 ## Return a message.
 proc deleteFile*(pathInfo: PathInfo): Result[string, string] =
@@ -88,7 +84,7 @@ proc deleteFile*(pathInfo: PathInfo): Result[string, string] =
   return Result[string, string].ok mess
 
 proc sortDirList(pathList: seq[PathInfo], sortBy: Sort): seq[PathInfo] =
-  case sortBy:
+  case sortBy
   of name:
     return pathList.sortedByIt(it.path)
   of fileSize:
@@ -102,15 +98,19 @@ when defined(posix):
 
   proc isFifo(file: string): bool {.inline.} =
     posix.S_ISFIFO(posix_utils.stat(file).st_mode)
+
 else:
-  proc isFifo(file: string): bool {.inline.} = false
+  proc isFifo(file: string): bool {.inline.} =
+    false
 
 proc getFileSizeOrDefault(path: string): int64 =
   try:
     # `getFileSize` opens files internally. So if `file` is a named pipe,
     # we don't call `getFileSize` to avoid opening named pipes.
-    if isFifo(path): return 0.int64
-    else: return getFileSize(path)
+    if isFifo(path):
+      return 0.int64
+    else:
+      return getFileSize(path)
   except IOError, OSError:
     return 0.int64
 
@@ -122,26 +122,18 @@ proc refreshDirList(path: Runes, sortBy: Sort): seq[PathInfo] =
   for list in walkDir($path):
     var item: PathInfo
 
-    let
-      lastModifyTime =
-        try: getLastModificationTime(list.path)
-        except OSError: initTime(0,0)
+    let lastModifyTime =
+      try:
+        getLastModificationTime(list.path)
+      except OSError:
+        initTime(0, 0)
     case list.kind
     of pcLinkToFile, pcLinkToDir:
-      item = (list.kind,
-              list.path,
-              0.int64,
-              lastModifyTime)
+      item = (list.kind, list.path, 0.int64, lastModifyTime)
     of pcFile:
-      item = (list.kind,
-              list.path,
-              getFileSizeOrDefault(list.path),
-              lastModifyTime)
+      item = (list.kind, list.path, getFileSizeOrDefault(list.path), lastModifyTime)
     else:
-      item = (list.kind,
-              list.path,
-              0.int64,
-              lastModifyTime)
+      item = (list.kind, list.path, 0.int64, lastModifyTime)
 
     if item.path.len > 0:
       item.path = $(item.path.toRunes.normalizedPath)
@@ -151,18 +143,14 @@ proc refreshDirList(path: Runes, sortBy: Sort): seq[PathInfo] =
     else:
       fileList.add item
 
-  return @[(pcDir,
-            ParDir,
-            0.int64,
-            getLastModificationTime($path))] &
-            sortDirList(pathList, sortBy) & sortDirList(fileList, sortBy)
+  return
+    @[(pcDir, ParDir, 0.int64, getLastModificationTime($path))] &
+    sortDirList(pathList, sortBy) & sortDirList(fileList, sortBy)
 
-proc updatePathList*(
-  filerStatus: var FilerStatus,
-  path: Runes) =
-    filerStatus.pathList = refreshDirList(path, filerStatus.sortBy)
-    filerStatus.isUpdateView = true
-    filerStatus.isUpdatePathList = false
+proc updatePathList*(filerStatus: var FilerStatus, path: Runes) =
+  filerStatus.pathList = refreshDirList(path, filerStatus.sortBy)
+  filerStatus.isUpdateView = true
+  filerStatus.isUpdatePathList = false
 
 proc keyDown*(filerStatus: var FilerStatus, currentLine: var int) =
   if currentLine < filerStatus.pathList.high:
@@ -182,118 +170,113 @@ proc moveToLastOfList*(filerStatus: var FilerStatus, currentLine: var int) =
   currentLine = filerStatus.pathList.high
   filerStatus.isUpdateView = true
 
-proc copyFile*(
-  filerStatus: var FilerStatus,
-  currentLine: int,
-  currentPath: Runes) =
-    filerStatus.register.copy = true
-    filerStatus.register.cut = false
-    filerStatus.register.filename = filerStatus.pathList[currentLine].path
-    let path = filerStatus.pathList[currentLine].path
-    filerStatus.register.originPath = $currentPath / path
+proc copyFile*(filerStatus: var FilerStatus, currentLine: int, currentPath: Runes) =
+  filerStatus.register.copy = true
+  filerStatus.register.cut = false
+  filerStatus.register.filename = filerStatus.pathList[currentLine].path
+  let path = filerStatus.pathList[currentLine].path
+  filerStatus.register.originPath = $currentPath / path
 
-proc cutFile*(
-  filerStatus: var FilerStatus,
-  currentLine: int,
-  currentPath: Runes) =
-    filerStatus.register.copy = false
-    filerStatus.register.cut = true
-    let path = filerStatus.pathList[currentLine].path
-    filerStatus.register.filename = path
-    filerStatus.register.originPath = $currentPath / path
+proc cutFile*(filerStatus: var FilerStatus, currentLine: int, currentPath: Runes) =
+  filerStatus.register.copy = false
+  filerStatus.register.cut = true
+  let path = filerStatus.pathList[currentLine].path
+  filerStatus.register.filename = path
+  filerStatus.register.originPath = $currentPath / path
 
 proc pasteFile*(
-  commandLine: var CommandLine,
-  filerStatus: var FilerStatus,
-  currentPath: Runes) =
-    try:
-      let filename = filerStatus.register.filename
-      copyFile(filerStatus.register.originPath, $currentPath / filename)
-      filerStatus.isUpdatePathList = true
-      filerStatus.isUpdateView = true
-    except OSError:
-      commandLine.writeCopyFileError
-      return
+    commandLine: var CommandLine, filerStatus: var FilerStatus, currentPath: Runes
+) =
+  try:
+    let filename = filerStatus.register.filename
+    copyFile(filerStatus.register.originPath, $currentPath / filename)
+    filerStatus.isUpdatePathList = true
+    filerStatus.isUpdateView = true
+  except OSError:
+    commandLine.writeCopyFileError
+    return
 
-    if filerStatus.register.cut:
-      let filename = filerStatus.register.filename
-      if tryRemoveFile(filerStatus.register.originPath / filename):
-        filerStatus.register.cut = false
-      else: commandLine.writeRemoveFileError
+  if filerStatus.register.cut:
+    let filename = filerStatus.register.filename
+    if tryRemoveFile(filerStatus.register.originPath / filename):
+      filerStatus.register.cut = false
+    else:
+      commandLine.writeRemoveFileError
 
 ## Get keys for a dir name and create a dir.
 proc createDir*(
-  filerStatus: var FilerStatus,
-  commandLine: var CommandLine): Result[(), string] =
+    filerStatus: var FilerStatus, commandLine: var CommandLine
+): Result[(), string] =
+  const prompt = "Dir name: "
+  if commandLine.getKeys(prompt):
+    let dirName = $commandLine.buffer
+    try:
+      createDir(dirName)
+    except CatchableError as e:
+      return Result[(), string].err fmt"Failed to create directory: {e.msg}"
 
-    const prompt = "Dir name: "
-    if commandLine.getKeys(prompt):
-      let dirName = $commandLine.buffer
-      try:
-        createDir(dirName)
-      except CatchableError as e:
-        return Result[(), string].err fmt"Failed to create directory: {e.msg}"
-
-      filerStatus.isUpdatePathList = true
+    filerStatus.isUpdatePathList = true
 
 proc openFileOrDir*(
-  bufStatuses: var seq[BufferStatus],
-  windowNode: var WindowNode,
-  filerStatus: var FilerStatus): Result[(), string] =
+    bufStatuses: var seq[BufferStatus],
+    windowNode: var WindowNode,
+    filerStatus: var FilerStatus,
+): Result[(), string] =
+  let
+    kind = filerStatus.pathList[windowNode.currentLine].kind
+    path = filerStatus.pathList[windowNode.currentLine].path
+    bufferIndex = windowNode.bufferIndex
 
-    let
-      kind = filerStatus.pathList[windowNode.currentLine].kind
-      path = filerStatus.pathList[windowNode.currentLine].path
-      bufferIndex = windowNode.bufferIndex
-
-    case kind
-      of pcFile, pcLinkToFile:
-        let b = initBufferStatus(path)
-        if b.isOk:
-          bufStatuses[bufferIndex] = b.get
-        else:
-          return Result[(), string].err fmt"Failed to open the file: {b.error}"
-      of pcDir, pcLinkToDir:
-        let currentPath = bufStatuses[bufferIndex].path
-        if path == "..":
-          if not isRootDir($currentPath):
-            let parentDir = parentDir($currentPath).toRunes
-            bufStatuses[bufferIndex].path = parentDir
-        else:
-          bufStatuses[bufferIndex].path = path.toRunes
-
-        windowNode.currentLine = 0
-        filerStatus.isUpdatePathList = true
-
-    return Result[(), string].ok ()
-
-proc setDirListColor(
-  kind: PathComponent,
-  isCurrentLine: bool): EditorColorPairIndex =
-
-    if isCurrentLine: result = EditorColorPairIndex.currentFile
+  case kind
+  of pcFile, pcLinkToFile:
+    let b = initBufferStatus(path)
+    if b.isOk:
+      bufStatuses[bufferIndex] = b.get
     else:
-      case kind
-      of pcFile: result = EditorColorPairIndex.file
-      of pcDir: result = EditorColorPairIndex.dir
-      of pcLinkToDir, pcLinkToFile: result = EditorColorPairIndex.pcLink
+      return Result[(), string].err fmt"Failed to open the file: {b.error}"
+  of pcDir, pcLinkToDir:
+    let currentPath = bufStatuses[bufferIndex].path
+    if path == "..":
+      if not isRootDir($currentPath):
+        let parentDir = parentDir($currentPath).toRunes
+        bufStatuses[bufferIndex].path = parentDir
+    else:
+      bufStatuses[bufferIndex].path = path.toRunes
+
+    windowNode.currentLine = 0
+    filerStatus.isUpdatePathList = true
+
+  return Result[(), string].ok ()
+
+proc setDirListColor(kind: PathComponent, isCurrentLine: bool): EditorColorPairIndex =
+  if isCurrentLine:
+    result = EditorColorPairIndex.currentFile
+  else:
+    case kind
+    of pcFile:
+      result = EditorColorPairIndex.file
+    of pcDir:
+      result = EditorColorPairIndex.dir
+    of pcLinkToDir, pcLinkToFile:
+      result = EditorColorPairIndex.pcLink
 
 proc initFilerHighlight*[T](
-  filerStatus: FilerStatus,
-  buffer: T,
-  currentLine: int): Highlight =
-
-    var colorSegments: seq[ColorSegment]
-    for index, dir in filerStatus.pathList:
-      let color = setDirListColor(dir.kind, index == currentLine)
-      colorSegments.add(ColorSegment(
+    filerStatus: FilerStatus, buffer: T, currentLine: int
+): Highlight =
+  var colorSegments: seq[ColorSegment]
+  for index, dir in filerStatus.pathList:
+    let color = setDirListColor(dir.kind, index == currentLine)
+    colorSegments.add(
+      ColorSegment(
         firstRow: index,
         firstColumn: 0,
         lastRow: index,
         lastColumn: buffer[index].len,
-        color: color))
+        color: color,
+      )
+    )
 
-    return Highlight(colorSegments: colorSegments)
+  return Highlight(colorSegments: colorSegments)
 
 proc pathToIcon(path: string): Runes =
   # TODO: Use fileutils.getFileType
@@ -306,8 +289,7 @@ proc pathToIcon(path: string): Runes =
   # the file or not:
   try:
     let permissions = getFilePermissions(path)
-    if fpUserExec  in permissions or
-      fpGroupExec in permissions:
+    if fpUserExec in permissions or fpGroupExec in permissions:
       return ru"🏃 "
   except CatchableError:
     discard
@@ -322,59 +304,59 @@ proc pathToIcon(path: string): Runes =
     return ru"🐳 "
   else:
     let ext = filename.split(".")[^1]
-    case ext.toLower():
-      of "nim":
-        return ru"👑 "
-      of "nimble", "rpm", "deb":
-        return ru"📦 "
-      of "py":
-        return ru"🐍 "
-      of "ui", "glade":
-        return ru"🏠 "
-      of "txt", "md", "rst":
-        return ru"📝 "
-      of "cpp", "cxx", "hpp":
-        return ru"⧺ "
-      of "c", "h":
-        return ru"🅒 "
-      of "java":
-        return ru"🍵 "
-      of "php":
-        return ru"🙈 "
-      of "js", "json":
-        return ru"🙉 "
-      of "rs":
-        return ru"🦀 "
-      of "html", "xhtml":
-        return ru"🏄 "
-      of "css":
-        return ru"👚 "
-      of "xml":
-        return ru"༕ "
-      of "cfg", "ini":
-        return ru"🍳 "
-      of "sh":
-        return ru"🐚 "
-      of "pdf", "doc", "odf", "ods", "odt":
-        return ru"🍞 "
-      of "wav", "mp3", "ogg":
-        return ru"🎼 "
-      of "zip", "bz2", "xz", "gz", "tgz", "zstd":
-        return ru"🚢 "
-      of "exe", "bin":
-        return ru"🏃 "
-      of "mp4", "webm", "avi", "mpeg":
-        return ru"🎞 "
-      of "patch":
-        return ru"💊 "
-      of "lock":
-        return ru"🔒 "
-      of "pem", "crt":
-        return ru"🔏 "
-      of "png", "jpeg", "jpg", "bmp", "gif":
-        return ru"🎨 "
-      else:
-        return ru"🍕 "
+    case ext.toLower()
+    of "nim":
+      return ru"👑 "
+    of "nimble", "rpm", "deb":
+      return ru"📦 "
+    of "py":
+      return ru"🐍 "
+    of "ui", "glade":
+      return ru"🏠 "
+    of "txt", "md", "rst":
+      return ru"📝 "
+    of "cpp", "cxx", "hpp":
+      return ru"⧺ "
+    of "c", "h":
+      return ru"🅒 "
+    of "java":
+      return ru"🍵 "
+    of "php":
+      return ru"🙈 "
+    of "js", "json":
+      return ru"🙉 "
+    of "rs":
+      return ru"🦀 "
+    of "html", "xhtml":
+      return ru"🏄 "
+    of "css":
+      return ru"👚 "
+    of "xml":
+      return ru"༕ "
+    of "cfg", "ini":
+      return ru"🍳 "
+    of "sh":
+      return ru"🐚 "
+    of "pdf", "doc", "odf", "ods", "odt":
+      return ru"🍞 "
+    of "wav", "mp3", "ogg":
+      return ru"🎼 "
+    of "zip", "bz2", "xz", "gz", "tgz", "zstd":
+      return ru"🚢 "
+    of "exe", "bin":
+      return ru"🏃 "
+    of "mp4", "webm", "avi", "mpeg":
+      return ru"🎞 "
+    of "patch":
+      return ru"💊 "
+    of "lock":
+      return ru"🔒 "
+    of "pem", "crt":
+      return ru"🔏 "
+    of "png", "jpeg", "jpg", "bmp", "gif":
+      return ru"🎨 "
+    else:
+      return ru"🍕 "
 
   # useful unicode symbols: that aren't used here yet:
   # open book        : 📖
@@ -387,148 +369,142 @@ proc expandSymLinkOrFilename(filename: string): string {.inline.} =
   except OSError:
     filename
 
-proc initFilerBuffer*(
-  filerStatus: var FilerStatus,
-  isShowIcons: bool): seq[Runes] =
+proc initFilerBuffer*(filerStatus: var FilerStatus, isShowIcons: bool): seq[Runes] =
+  exitUi()
+  for index, dir in filerStatus.pathList:
+    let
+      filename = dir.path
+      kind = dir.kind
 
-    exitUi()
-    for index, dir in filerStatus.pathList:
-      let
-        filename = dir.path
-        kind = dir.kind
+    var newLine =
+      if kind == pcLinkToFile or kind == pcLinkToDir:
+        filename.toRunes
+      else:
+        toRunes(splitPath(filename).tail)
 
-      var newLine =
-        if kind == pcLinkToFile or kind == pcLinkToDir:
-          filename.toRunes
-        else:
-          toRunes(splitPath(filename).tail)
+    case kind
+    of pcFile:
+      try:
+        if isFifo(filename):
+          newLine.add(ru '|')
+      except OSError:
+        discard
+    of pcDir:
+      newLine.add(ru DirSep)
+    of pcLinkToFile:
+      newLine.add(ru"@ -> " & expandSymLinkOrFilename(filename).toRunes)
+    of pcLinkToDir:
+      newLine.add(ru"@ -> " & toRunes(expandSymLinkOrFilename(filename) / $DirSep))
 
-      case kind
-        of pcFile:
-          try:
-            if isFifo(filename): newLine.add(ru '|')
-          except OSError:
-            discard
-        of pcDir:
-          newLine.add(ru DirSep)
-        of pcLinkToFile:
-          newLine.add(ru"@ -> " & expandSymLinkOrFilename(filename).toRunes)
-        of pcLinkToDir:
-          newLine.add(
-            ru"@ -> " & toRunes(expandSymLinkOrFilename(filename) / $DirSep))
+    # Set icons
+    if isShowIcons:
+      # Add an icon
+      newLine.insert(pathToIcon(filename), 0)
 
-      # Set icons
-      if isShowIcons:
-        # Add an icon
-        newLine.insert(pathToIcon(filename), 0)
-
-      result.add(newLine)
+    result.add(newLine)
 
 proc initFileDeitalHighlight[T](buffer: T): Highlight =
   for i in 0 ..< buffer.len:
-    result.colorSegments.add(ColorSegment(
-      firstRow: i,
-      firstColumn: 0,
-      lastRow: i,
-      lastColumn: buffer[i].len,
-      color: EditorColorPairIndex.default))
+    result.colorSegments.add(
+      ColorSegment(
+        firstRow: i,
+        firstColumn: 0,
+        lastRow: i,
+        lastColumn: buffer[i].len,
+        color: EditorColorPairIndex.default,
+      )
+    )
 
 # TODO: Separate updating buffer and updating view.
 proc writeFileDetail*(
-  bufStatus: var BufferStatus,
-  windowNode: var WindowNode,
-  settings: EditorSettings,
-  numOfFile: int,
-  fileName: string) =
+    bufStatus: var BufferStatus,
+    windowNode: var WindowNode,
+    settings: EditorSettings,
+    numOfFile: int,
+    fileName: string,
+) =
+  bufStatus.buffer = initGapBuffer[Runes]()
 
-    bufStatus.buffer = initGapBuffer[Runes]()
+  let fileInfo = getFileInfo(fileName, false)
 
-    let fileInfo = getFileInfo(fileName, false)
+  # TODO: Insert indent automatically
 
-    # TODO: Insert indent automatically
+  bufStatus.buffer.add(ru"name        : " & fileName.toRunes)
 
-    bufStatus.buffer.add(ru"name        : " & fileName.toRunes)
+  if fileInfo.kind == pcFile:
+    bufStatus.buffer.add(ru"kind        : " & ru"File")
+  elif fileInfo.kind == pcDir:
+    bufStatus.buffer.add(ru"kind        : " & ru"Directory")
+  elif fileInfo.kind == pcLinkToFile:
+    bufStatus.buffer.add(ru"kind        : " & ru"Symbolic link to file")
+  elif fileInfo.kind == pcLinkToDir:
+    bufStatus.buffer.add(ru"kind        : " & ru"Symbolic link to directory")
 
-    if fileInfo.kind == pcFile:
-      bufStatus.buffer.add(ru"kind        : " & ru"File")
-    elif fileInfo.kind == pcDir:
-      bufStatus.buffer.add(ru"kind        : " & ru"Directory")
-    elif fileInfo.kind == pcLinkToFile:
-      bufStatus.buffer.add(ru"kind        : " & ru"Symbolic link to file")
-    elif fileInfo.kind == pcLinkToDir:
-      bufStatus.buffer.add(ru"kind        : " & ru"Symbolic link to directory")
+  bufStatus.buffer.add(("size        : " & $fileInfo.size & " bytes").toRunes)
+  bufStatus.buffer.add(
+    (
+      "permissions : " &
+      substr($fileInfo.permissions, 1, ($fileInfo.permissions).high - 1)
+    ).toRunes
+  )
+  bufStatus.buffer.add(("create time : " & $fileInfo.creationTime).toRunes)
+  bufStatus.buffer.add(("last write  : " & $fileInfo.lastWriteTime).toRunes)
+  bufStatus.buffer.add(("last access : " & $fileInfo.lastAccessTime).toRunes)
 
-    bufStatus.buffer.add(("size        : " & $fileInfo.size & " bytes").toRunes)
-    bufStatus.buffer.add(("permissions : " & substr($fileInfo.permissions,
-                                                    1,
-                                                    ($fileInfo.permissions).high - 1)).toRunes)
-    bufStatus.buffer.add(("create time : " & $fileInfo.creationTime).toRunes)
-    bufStatus.buffer.add(("last write  : " & $fileInfo.lastWriteTime).toRunes)
-    bufStatus.buffer.add(("last access : " & $fileInfo.lastAccessTime).toRunes)
+  bufStatus.highlight = initFileDeitalHighlight(bufStatus.buffer)
 
-    bufStatus.highlight = initFileDeitalHighlight(bufStatus.buffer)
+  let
+    useStatusBar = if settings.statusLine.enable: 1 else: 0
+    tmpCurrentLine = windowNode.currentLine
 
-    let
-      useStatusBar = if settings.statusLine.enable: 1 else: 0
-      tmpCurrentLine = windowNode.currentLine
+  # TODO: Move
+  windowNode.view = initEditorView(
+    bufStatus.buffer,
+    getTerminalHeight() - useStatusBar - 1,
+    getTerminalWidth() - numOfFile,
+  )
 
-    # TODO: Move
-    windowNode.view = initEditorView(
-      bufStatus.buffer,
-      getTerminalHeight() - useStatusBar - 1,
-      getTerminalWidth() - numOfFile)
-
-    windowNode.currentLine = tmpCurrentLine
+  windowNode.currentLine = tmpCurrentLine
 
 proc changeSortBy*(filerStatus: var FilerStatus) =
-  case filerStatus.sortBy:
-    of name: filerStatus.sortBy = fileSize
-    of fileSize: filerStatus.sortBy = time
-    of time: filerStatus.sortBy = name
+  case filerStatus.sortBy
+  of name:
+    filerStatus.sortBy = fileSize
+  of fileSize:
+    filerStatus.sortBy = time
+  of time:
+    filerStatus.sortBy = name
 
   filerStatus.isUpdatePathList = true
 
 proc searchFileMode*(
-  bufStatus: var BufferStatus,
-  windowNode: var WindowNode,
-  filerStatus: var FilerStatus,
-  keyword: Runes) =
+    bufStatus: var BufferStatus,
+    windowNode: var WindowNode,
+    filerStatus: var FilerStatus,
+    keyword: Runes,
+) =
+  filerStatus.searchMode = true
+  filerStatus.pathList = filerStatus.pathList.searchFiles($keyword)
+  filerStatus.isUpdateView = true
 
-    filerStatus.searchMode = true
-    filerStatus.pathList = filerStatus.pathList.searchFiles($keyword)
-    filerStatus.isUpdateView = true
+  windowNode.currentLine = 0
 
-    windowNode.currentLine = 0
+  if filerStatus.pathList.len == 0:
+    # TODO: Fix
+    bufStatus.buffer = @["Not found"].toSeqRunes.toGapBuffer
 
-    if filerStatus.pathList.len == 0:
-      # TODO: Fix
-      bufStatus.buffer = @["Not found"].toSeqRunes.toGapBuffer
-
-      windowNode.eraseWindow
-      windowNode.refreshWindow
-      filerStatus.isUpdatePathList = true
+    windowNode.eraseWindow
+    windowNode.refreshWindow
+    filerStatus.isUpdatePathList = true
 
 proc isFilerModeCommand*(command: Runes): InputState =
   result = InputState.Invalid
 
   if command.len == 1:
     let key = command[0]
-    if key == ord(':') or
-       key == ord('/') or
-       key == ord('D') or
-       key == ord('i') or
-       key == 'j' or isDownKey(key) or
-       key == ord('k') or isUpKey(key) or
-       key == ord('g') or
-       key == ord('G') or
-       key == ord('y') or
-       key == ord('C') or
-       key == ord('p') or
-       key == ord('s') or
-       key == ord('N') or
-       key == ord('v') or
-       isEscKey(key) or
-       isCtrlJ(key) or
-       isCtrlK(key) or
-       isEnterKey(key):
-         return InputState.Valid
+    if key == ord(':') or key == ord('/') or key == ord('D') or key == ord('i') or
+        key == 'j' or isDownKey(key) or key == ord('k') or isUpKey(key) or
+        key == ord('g') or key == ord('G') or key == ord('y') or key == ord('C') or
+        key == ord('p') or key == ord('s') or key == ord('N') or key == ord('v') or
+        isEscKey(key) or isCtrlJ(key) or isCtrlK(key) or isEnterKey(key):
+      return InputState.Valid

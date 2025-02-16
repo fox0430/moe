@@ -33,41 +33,38 @@ type
     command*: Runes
     args*: seq[Runes]
 
-proc askCreateDirPrompt*(
-  commandLine: var CommandLine,
-  path: string): bool =
+proc askCreateDirPrompt*(commandLine: var CommandLine, path: string): bool =
+  let mess = fmt"{path} does not exists. Create it now?: y/n"
+  commandLine.write(mess.toRunes)
+  addMessageLog mess.toRunes
 
-    let mess = fmt"{path} does not exists. Create it now?: y/n"
-    commandLine.write(mess.toRunes)
-    addMessageLog mess.toRunes
+  let key = commandLine.getKeyBlocking
+  if key == ord('y'):
+    result = true
+  else:
+    result = false
 
-    let key = commandLine.getKeyBlocking
-    if key == ord('y'): result = true
-    else: result = false
+proc askBackupRestorePrompt*(commandLine: var CommandLine, filename: Runes): bool =
+  let mess = fmt"Restore {filename}?: y/n"
+  commandLine.write(mess.toRunes)
+  addMessageLog mess
 
-proc askBackupRestorePrompt*(
-  commandLine: var CommandLine,
-  filename: Runes): bool =
+  let key = commandLine.getKeyBlocking
+  if key == ord('y'):
+    result = true
+  else:
+    result = false
 
-    let mess = fmt"Restore {filename}?: y/n"
-    commandLine.write(mess.toRunes)
-    addMessageLog mess
+proc askDeleteBackupPrompt*(commandLine: var CommandLine, filename: Runes): bool =
+  let mess = fmt"Delete {filename}?: y/n"
+  commandLine.write(mess.toRunes)
+  addMessageLog mess
 
-    let key = commandLine.getKeyBlocking
-    if key == ord('y'): result = true
-    else: result = false
-
-proc askDeleteBackupPrompt*(
-  commandLine: var CommandLine,
-  filename: Runes): bool =
-
-    let mess = fmt"Delete {filename}?: y/n"
-    commandLine.write(mess.toRunes)
-    addMessageLog mess
-
-    let key = commandLine.getKeyBlocking
-    if key == ord('y'): result = true
-    else: result = false
+  let key = commandLine.getKeyBlocking
+  if key == ord('y'):
+    result = true
+  else:
+    result = false
 
 proc askFileChangedSinceReading*(commandLine: var CommandLine): bool =
   block:
@@ -82,8 +79,10 @@ proc askFileChangedSinceReading*(commandLine: var CommandLine): bool =
     addMessageLog Mess.toRunes
 
     let key = commandLine.getKeyBlocking
-    if key == ord('y'): result = true
-    else: result = false
+    if key == ord('y'):
+      result = true
+    else:
+      result = false
 
 proc getPathCompletionList*(inputPath: Runes): CompletionList =
   ## Return completion list for path suggestions.
@@ -108,18 +107,20 @@ proc getExCommandCompletionList*(input: Runes): CompletionList =
     let lowerCmd = info.command.toLowerAscii.toRunes
     if lowerInput.len <= lowerCmd.len and lowerCmd.startsWith(lowerInput):
       suggestions.add info
-      if info.command.len > maxCommandLen: maxCommandLen = info.command.len
+      if info.command.len > maxCommandLen:
+        maxCommandLen = info.command.len
 
   for s in suggestions:
     # Insert spaces and dividers to descriptions for the ex command suggestion.
     let spaces = " ".repeat(maxCommandLen - s.command.len)
     result.add CompletionItem(
       label: toRunes(fmt"{s.command}{spaces} | {s.description}"),
-      insertText: s.command.toRunes)
+      insertText: s.command.toRunes,
+    )
 
 proc getSuggestType*(rawInput: Runes): SuggestType =
   let commandSplit = splitExCommandBuffer(rawInput)
-  if commandSplit.len == 0 or (commandSplit.len == 1 and rawInput[^1] != ru' '):
+  if commandSplit.len == 0 or (commandSplit.len == 1 and rawInput[^1] != ru ' '):
     return SuggestType.exCommand
   else:
     return SuggestType.exCommandOption
@@ -140,48 +141,46 @@ proc isPathArgs*(commandLine: CommandLine): bool =
     return commandSplit[0].isPathArgsCommand
 
 proc getExCommandOptionCompletionList*(
-  rawInput: Runes,
-  commandLineCmd: CommandLineCommand): CompletionList =
-    ## Return completion list for ex command option suggestion.
-    ## Interpreting upper and lowercase letters as being the same.
+    rawInput: Runes, commandLineCmd: CommandLineCommand
+): CompletionList =
+  ## Return completion list for ex command option suggestion.
+  ## Interpreting upper and lowercase letters as being the same.
 
-    result = CompletionList()
+  result = CompletionList()
 
-    let argsType = getArgsType(commandLineCmd.command)
-    if argsType.isErr:
-      # Invalid command
-      return
+  let argsType = getArgsType(commandLineCmd.command)
+  if argsType.isErr:
+    # Invalid command
+    return
 
-    case argsType.get:
-      of ArgsType.toggle:
-        # "on" or "off"
-        if commandLineCmd.args.len == 0:
-          return CompletionList(items: @[
-            initCompletionItem(ru"on"),
-            initCompletionItem(ru"off")
-          ])
-        elif commandLineCmd.args.len == 1:
-          for s in [ru"on", ru"off"]:
-            if s.startsWith(commandLineCmd.args[0]):
-              result.add initCompletionItem(s)
-      of ArgsType.path:
-        # File paths
-        if commandLineCmd.args.len == 0:
-          return getPathCompletionList(ru"")
-        else:
-          return getPathCompletionList(commandLineCmd.args[0])
-      of ArgsType.theme:
-        # Color themes
-        if commandLineCmd.args.len == 0:
-          return CompletionList(items:
-            ColorTheme.mapIt(initCompletionItem(toRunes($it))))
-        elif commandLineCmd.args.len == 1:
-          for theme in ColorTheme.mapIt(toRunes($it)):
-            if commandLineCmd.args[0].len < theme.len and
-               theme.startsWith(commandLineCmd.args[0]):
-                 result.add CompletionItem(label: theme, insertText: theme)
-      else:
-        discard
+  case argsType.get
+  of ArgsType.toggle:
+    # "on" or "off"
+    if commandLineCmd.args.len == 0:
+      return CompletionList(
+        items: @[initCompletionItem(ru"on"), initCompletionItem(ru"off")]
+      )
+    elif commandLineCmd.args.len == 1:
+      for s in [ru"on", ru"off"]:
+        if s.startsWith(commandLineCmd.args[0]):
+          result.add initCompletionItem(s)
+  of ArgsType.path:
+    # File paths
+    if commandLineCmd.args.len == 0:
+      return getPathCompletionList(ru"")
+    else:
+      return getPathCompletionList(commandLineCmd.args[0])
+  of ArgsType.theme:
+    # Color themes
+    if commandLineCmd.args.len == 0:
+      return CompletionList(items: ColorTheme.mapIt(initCompletionItem(toRunes($it))))
+    elif commandLineCmd.args.len == 1:
+      for theme in ColorTheme.mapIt(toRunes($it)):
+        if commandLineCmd.args[0].len < theme.len and
+            theme.startsWith(commandLineCmd.args[0]):
+          result.add CompletionItem(label: theme, insertText: theme)
+  else:
+    discard
 
 proc initExmodeCompletionList*(rawInput: Runes): CompletionList =
   ## Ex mode commands
@@ -190,18 +189,17 @@ proc initExmodeCompletionList*(rawInput: Runes): CompletionList =
     commandLineCmd = initCommandLineCommand(rawInput)
     suggestType = getSuggestType(rawInput)
 
-  case suggestType:
-    of SuggestType.exCommand:
-      return getExCommandCompletionList(rawInput)
-    of SuggestType.exCommandOption:
-      let list = getExCommandOptionCompletionList(rawInput, commandLineCmd)
-      if list.items.len == 1 and
-         commandLineCmd.args.len > 0 and
-         commandLineCmd.args[^1] == list.items[0].label:
-           # Don't assign a new suggestion if it same as the end of the args.
-           return CompletionList()
-      else:
-        return list
+  case suggestType
+  of SuggestType.exCommand:
+    return getExCommandCompletionList(rawInput)
+  of SuggestType.exCommandOption:
+    let list = getExCommandOptionCompletionList(rawInput, commandLineCmd)
+    if list.items.len == 1 and commandLineCmd.args.len > 0 and
+        commandLineCmd.args[^1] == list.items[0].label:
+      # Don't assign a new suggestion if it same as the end of the args.
+      return CompletionList()
+    else:
+      return list
 
 proc toCompletionItem(s: DocumentSymbol): CompletionItem =
   var label = s.name
@@ -217,16 +215,16 @@ proc toCompletionItem(s: DocumentSymbol): CompletionItem =
   return CompletionItem(label: label.toRunes, insertText: s.name.toRunes)
 
 proc initDocSymbolCompletionList*(
-  symbols: seq[DocumentSymbol],
-  rawInput: Runes): CompletionList =
-    ## LSP Docmument Symbol
+    symbols: seq[DocumentSymbol], rawInput: Runes
+): CompletionList =
+  ## LSP Docmument Symbol
 
-    if rawInput.len == 0:
-      # Return all
-      return CompletionList(items: symbols.mapIt(it.toCompletionItem))
+  if rawInput.len == 0:
+    # Return all
+    return CompletionList(items: symbols.mapIt(it.toCompletionItem))
 
-    result = CompletionList()
-    let rawInputStr = $rawInput
-    for s in symbols:
-      if s.name.startsWith(rawInputStr):
-        result.items.add s.toCompletionItem
+  result = CompletionList()
+  let rawInputStr = $rawInput
+  for s in symbols:
+    if s.name.startsWith(rawInputStr):
+      result.items.add s.toCompletionItem

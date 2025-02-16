@@ -31,53 +31,50 @@ type
   SymbolInformationsResult* = Result[seq[SymbolInformation], string]
 
 proc initDocumentSymbolParams*(path: string): DocumentSymbolParams =
-  DocumentSymbolParams(
-    textDocument: TextDocumentIdentifier(uri: path.pathToUri))
+  DocumentSymbolParams(textDocument: TextDocumentIdentifier(uri: path.pathToUri))
 
-proc parseTextDocumentDocumentSymbolsResponse*(
-  res: JsonNode): DocumentSymbolsResult =
+proc parseTextDocumentDocumentSymbolsResponse*(res: JsonNode): DocumentSymbolsResult =
+  if res["result"].kind != JArray:
+    return DocumentSymbolsResult.err "Invalid response"
+  elif res["result"].len == 0:
+    # Not found
+    return DocumentSymbolsResult.ok @[]
 
-    if res["result"].kind != JArray:
-      return DocumentSymbolsResult.err "Invalid response"
-    elif res["result"].len == 0:
-      # Not found
-      return DocumentSymbolsResult.ok @[]
+  var symbols: seq[DocumentSymbol]
+  for r in res["result"]:
+    let s =
+      try:
+        r.to(DocumentSymbol)
+      except CatchableError as e:
+        return DocumentSymbolsResult.err fmt"Invalid response: {e.msg}"
 
-    var symbols: seq[DocumentSymbol]
-    for r in res["result"]:
-      let s =
-        try:
-          r.to(DocumentSymbol)
-        except CatchableError as e:
-          return DocumentSymbolsResult.err fmt"Invalid response: {e.msg}"
+    if s.kind < 1 or s.kind > 26:
+      return DocumentSymbolsResult.err fmt"Invalid response: kind: {r.kind}"
 
-      if s.kind < 1 or s.kind > 26:
-        return DocumentSymbolsResult.err fmt"Invalid response: kind: {r.kind}"
+    symbols.add s
 
-      symbols.add s
-
-    return DocumentSymbolsResult.ok symbols
+  return DocumentSymbolsResult.ok symbols
 
 proc parseTextDocumentSymbolInformationsResponse*(
-  res: JsonNode): SymbolInformationsResult =
+    res: JsonNode
+): SymbolInformationsResult =
+  if res["result"].kind != JArray:
+    return SymbolInformationsResult.err "Invalid response"
+  elif res["result"].len == 0:
+    # Not found
+    return SymbolInformationsResult.ok @[]
 
-    if res["result"].kind != JArray:
-      return SymbolInformationsResult.err "Invalid response"
-    elif res["result"].len == 0:
-      # Not found
-      return SymbolInformationsResult.ok @[]
+  var infos: seq[SymbolInformation]
+  for r in res["result"]:
+    let i =
+      try:
+        r.to(SymbolInformation)
+      except CatchableError as e:
+        return SymbolInformationsResult.err fmt"Invalid response: {e.msg}"
 
-    var infos: seq[SymbolInformation]
-    for r in res["result"]:
-      let i =
-        try:
-          r.to(SymbolInformation)
-        except CatchableError as e:
-          return SymbolInformationsResult.err fmt"Invalid response: {e.msg}"
+    if i.kind < 1 or i.kind > 26:
+      return SymbolInformationsResult.err fmt"Invalid response: kind: {r.kind}"
 
-      if i.kind < 1 or i.kind > 26:
-        return SymbolInformationsResult.err fmt"Invalid response: kind: {r.kind}"
+    infos.add i
 
-      infos.add i
-
-    return SymbolInformationsResult.ok infos
+  return SymbolInformationsResult.ok infos

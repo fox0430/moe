@@ -45,11 +45,11 @@ import
 
 import completion as lspcompletion
 
-import client, utils, hover, message, diagnostics, semantictoken, progress,
-       inlayhint, definition, typedefinition, references, rename, declaration,
-       implementation, callhierarchy, documenthighlight, documentlink,
-       codelens, executecommand, foldingrange, selectionrange, documentsymbol,
-       inlinevalue, signaturehelp, formatting
+import
+  client, utils, hover, message, diagnostics, semantictoken, progress, inlayhint,
+  definition, typedefinition, references, rename, declaration, implementation,
+  callhierarchy, documenthighlight, documentlink, codelens, executecommand,
+  foldingrange, selectionrange, documentsymbol, inlinevalue, signaturehelp, formatting
 
 proc applyTextEdit(b: var BufferStatus, edit: TextEdit): Result[(), string] =
   let
@@ -76,13 +76,11 @@ proc applyTextEdit(b: var BufferStatus, edit: TextEdit): Result[(), string] =
     if edit.range.`end`.character > 0:
       block:
         let
-          line =
-            if endLine > b.buffer.high: b.buffer.high
-            else: endLine
+          line = if endLine > b.buffer.high: b.buffer.high else: endLine
           endChar = min(b.buffer[line].high, edit.range.`end`.character)
 
         if endChar >= 0:
-          newLines[^1] &= b.buffer[line][endChar..^1]
+          newLines[^1] &= b.buffer[line][endChar ..^ 1]
 
     for i in 0 .. newLines.high:
       let lineNum = startLine + i
@@ -94,12 +92,10 @@ proc applyTextEdit(b: var BufferStatus, edit: TextEdit): Result[(), string] =
   return Result[(), string].ok ()
 
 template isLspClientInitialized*(status: EditorStatus): bool =
-  status.lspClients.contains(currentBufStatus.langId) and
-  not lspClient.closed
+  status.lspClients.contains(currentBufStatus.langId) and not lspClient.closed
 
 template isLspResponse*(status: EditorStatus): bool =
-  status.isLspClientInitialized and
-  (let r = lspClient.readable; r.isOk and r.get)
+  status.isLspClientInitialized and (let r = lspClient.readable; r.isOk and r.get)
 
 proc setServerNameToStatusLine(status: var EditorStatus) =
   let
@@ -110,95 +106,87 @@ proc setServerNameToStatusLine(status: var EditorStatus) =
       status.statusLine[i].updateMessage(serverName)
 
 proc lspInitialized(
-  status: var EditorStatus,
-  initializeRes: JsonNode): Result[(), string] =
-    ## Send notifications for initialize LSP.
+    status: var EditorStatus, initializeRes: JsonNode
+): Result[(), string] =
+  ## Send notifications for initialize LSP.
+
+  block:
+    let r = lspClient.initCapacities(status.settings.lsp.features, initializeRes)
+    if r.isErr:
+      return Result[(), string].err r.error
+
+  block:
+    # Initialized notification
+    let err = waitFor lspClient.initialized
+    if err.isErr:
+      return Result[(), string].err err.error
+
+  block:
+    # workspace/didChangeConfiguration notification
+    let err = waitFor lspClient.workspaceDidChangeConfiguration
+    if err.isErr:
+      return Result[(), string].err err.error
+
+  for i in 0 .. status.bufStatus.high:
+    template b(): BufferStatus =
+      status.bufStatus[i]
+
+    if b.langId != currentBufStatus.langId:
+      continue
 
     block:
-      let r = lspClient.initCapacities(
-        status.settings.lsp.features,
-        initializeRes)
-      if r.isErr:
-        return Result[(), string].err r.error
-
-    block:
-      # Initialized notification
-      let err = waitFor lspClient.initialized
+      # textDocument/didOpen notify
+      let err = waitFor lspClient.textDocumentDidOpen(
+        $b.path.absolutePath, b.langId, b.buffer.toString
+      )
       if err.isErr:
         return Result[(), string].err err.error
 
     block:
-      # workspace/didChangeConfiguration notification
-      let err = waitFor lspClient.workspaceDidChangeConfiguration
+      # textDocument/semanticTokens req
+      let err = waitFor lspClient.textDocumentSemanticTokens(b.id, $b.path.absolutePath)
       if err.isErr:
-        return Result[(), string].err err.error
+        error fmt"lsp: {err.error}"
 
-    for i in 0 .. status.bufStatus.high:
-      template b: BufferStatus = status.bufStatus[i]
+    block:
+      # textDocument/inlayHint req
+      lspClient.sendLspInlayHintRequest(
+        b, status.bufferIndexInCurrentWindow, mainWindowNode
+      )
 
-      if b.langId != currentBufStatus.langId: continue
+    # textDocument/codelens req
+    lspClient.sendLspCodeLens(b)
 
-      block:
-        # textDocument/didOpen notify
-        let err = waitFor lspClient.textDocumentDidOpen(
-          $b.path.absolutePath,
-          b.langId,
-          b.buffer.toString)
-        if err.isErr:
-          return Result[(), string].err err.error
+  status.commandLine.writeLspInitialized(
+    status.settings.lsp.languages[currentBufStatus.langId].command
+  )
 
-      block:
-        # textDocument/semanticTokens req
-        let err = waitFor lspClient.textDocumentSemanticTokens(
-          b.id,
-          $b.path.absolutePath)
-        if err.isErr:
-          error fmt"lsp: {err.error}"
+  status.setServerNameToStatusLine
 
-      block:
-        # textDocument/inlayHint req
-        lspClient.sendLspInlayHintRequest(
-          b,
-          status.bufferIndexInCurrentWindow,
-          mainWindowNode)
+  return Result[(), string].ok ()
 
-      # textDocument/codelens req
-      lspClient.sendLspCodeLens(b)
+proc initHoverWindow(windowNode: WindowNode, hoverContent: HoverContent): PopupWindow =
+  ## Return a popup window for textDocument/hover.
 
-    status.commandLine.writeLspInitialized(
-      status.settings.lsp.languages[currentBufStatus.langId].command)
+  const Margin = ru" "
+  var buffer: seq[Runes]
+  if hoverContent.title.len > 0:
+    buffer = @[Margin & hoverContent.title & Margin, ru""]
+  for line in hoverContent.description:
+    buffer.add Margin & line & Margin
 
-    status.setServerNameToStatusLine
+  let
+    absPosition = windowNode.absolutePosition
+    expectPosition = Position(y: absPosition.y + 1, x: absPosition.x + 1)
+  result =
+    initPopupWindow(expectPosition, Size(h: buffer.len, w: buffer.maxLen), buffer)
 
-    return Result[(), string].ok ()
-
-proc initHoverWindow(
-  windowNode: WindowNode,
-  hoverContent: HoverContent): PopupWindow =
-    ## Return a popup window for textDocument/hover.
-
-    const Margin = ru" "
-    var buffer: seq[Runes]
-    if hoverContent.title.len > 0:
-      buffer = @[Margin & hoverContent.title & Margin, ru""]
-    for line in hoverContent.description:
-      buffer.add Margin & line & Margin
-
-    let
-      absPosition = windowNode.absolutePosition
-      expectPosition = Position(y: absPosition.y + 1, x: absPosition.x + 1)
-    result = initPopupWindow(
-      expectPosition,
-      Size(h: buffer.len, w: buffer.maxLen),
-      buffer)
-
-    let
-      minPosition = Position(y: windowNode.y, x: windowNode.x)
-      maxPosition = Position(
-        y: windowNode.y + windowNode.h,
-        x: windowNode.x + windowNode.w)
-    result.autoMoveAndResize(minPosition, maxPosition)
-    result.update
+  let
+    minPosition = Position(y: windowNode.y, x: windowNode.x)
+    maxPosition =
+      Position(y: windowNode.y + windowNode.h, x: windowNode.x + windowNode.w)
+  result.autoMoveAndResize(minPosition, maxPosition)
+  result.update
 
 proc lspHover*(status: var EditorStatus, res: JsonNode): Result[(), string] =
   ## Display the hover on a popup window until any key is pressed.
@@ -215,9 +203,7 @@ proc lspHover*(status: var EditorStatus, res: JsonNode): Result[(), string] =
     # Not found
     return Result[(), string].ok ()
 
-  var hoverWin = initHoverWindow(
-    currentMainWindowNode,
-    hover.get.get.toHoverContent)
+  var hoverWin = initHoverWindow(currentMainWindowNode, hover.get.get.toHoverContent)
   hoverWin.refresh
 
   # Keep the cursor position on currentMainWindowNode.
@@ -230,220 +216,214 @@ proc lspHover*(status: var EditorStatus, res: JsonNode): Result[(), string] =
   return Result[(), string].ok ()
 
 proc showLspServerLog(
-  commandLine : var CommandLine,
-  notify: JsonNode): Result[(), string] =
-    ## Show the log to the command line.
-    ##
-    ## window/showMessage
+    commandLine: var CommandLine, notify: JsonNode
+): Result[(), string] =
+  ## Show the log to the command line.
+  ##
+  ## window/showMessage
 
-    let m = parseWindowShowMessageNotify(notify)
-    if m.isErr:
-      return Result[(), string].err fmt"Invalid log: {m.error}"
+  let m = parseWindowShowMessageNotify(notify)
+  if m.isErr:
+    return Result[(), string].err fmt"Invalid log: {m.error}"
 
-    case m.get.messageType:
-      of LspMessageType.error:
-        commandLine.writeLspServerError(m.get.message)
-      of LspMessageType.warn:
-        commandLine.writeLspServerWarn(m.get.message)
-      of LspMessageType.info:
-        commandLine.writeLspServerInfo(m.get.message)
-      of LspMessageType.log:
-        commandLine.writeLspServerLog(m.get.message)
-      of LspMessageType.debug:
-        commandLine.writeLspServerDebug(m.get.message)
+  case m.get.messageType
+  of LspMessageType.error:
+    commandLine.writeLspServerError(m.get.message)
+  of LspMessageType.warn:
+    commandLine.writeLspServerWarn(m.get.message)
+  of LspMessageType.info:
+    commandLine.writeLspServerInfo(m.get.message)
+  of LspMessageType.log:
+    commandLine.writeLspServerLog(m.get.message)
+  of LspMessageType.debug:
+    commandLine.writeLspServerDebug(m.get.message)
 
-    return Result[(), string].ok ()
+  return Result[(), string].ok ()
 
 proc targetBufstatus(
-  bufStatuses: seq[BufferStatus],
-  absPath: string): Option[BufferStatus] {.inline.}  =
-    ## Find a bufStatus with the absolute path.
+    bufStatuses: seq[BufferStatus], absPath: string
+): Option[BufferStatus] {.inline.} =
+  ## Find a bufStatus with the absolute path.
 
-    for b in bufStatuses:
-      if $b.path.absolutePath == absPath: return some(b)
+  for b in bufStatuses:
+    if $b.path.absolutePath == absPath:
+      return some(b)
 
 proc lspDiagnostics(
-  bufStatuses: var seq[BufferStatus],
-  notify: JsonNode): Result[(), string] =
-    ## Set BufferStatus.syntaxCheckResults to diagnostics results.
-    ##
-    ## textDocument/publishDiagnostics
+    bufStatuses: var seq[BufferStatus], notify: JsonNode
+): Result[(), string] =
+  ## Set BufferStatus.syntaxCheckResults to diagnostics results.
+  ##
+  ## textDocument/publishDiagnostics
 
-    let parseResult = parseTextDocumentPublishDiagnosticsNotify(notify)
-    if parseResult.isErr:
-      return Result[(), string].err fmt"lsp: Invalid diagnostics: {parseResult.error}"
+  let parseResult = parseTextDocumentPublishDiagnosticsNotify(notify)
+  if parseResult.isErr:
+    return Result[(), string].err fmt"lsp: Invalid diagnostics: {parseResult.error}"
 
-    if parseResult.get.isNone:
-      # Not found
-      return Result[(), string].ok ()
-
-    let diagnostics = parseResult.get.get
-
-    var b = bufStatuses.targetBufstatus(diagnostics.path)
-    if b.isNone:
-      # Not found
-      return Result[(), string].ok ()
-
-    # Clear before results
-    b.get.syntaxCheckResults = @[]
-
-    for d in diagnostics.diagnostics:
-      var syntaxErr = SyntaxError()
-      syntaxErr.position = d.range.start.toBufferPosition
-      if d.severity.isSome:
-        syntaxErr.messageType = d.severity.get.toSyntaxCheckMessageType
-      else:
-        syntaxErr.messageType = SyntaxCheckMessageType.info
-      syntaxErr.message = d.message.toRunes
-
-      b.get.syntaxCheckResults.add syntaxErr
-
+  if parseResult.get.isNone:
+    # Not found
     return Result[(), string].ok ()
 
-proc lspProgressCreate(
-  c: var LspClient,
-  notify: JsonNode): Result[(), string] =
-    ## Init a LSP progress.
-    ##
-    ## window/workDoneProgress/create
+  let diagnostics = parseResult.get.get
 
-    let token = parseWindowWorkDnoneProgressCreateNotify(notify)
-    if token.isErr:
-      return Result[(), string].err fmt"Invalid server notify: {token.error}"
-
-    c.createProgress(token.get)
-
+  var b = bufStatuses.targetBufstatus(diagnostics.path)
+  if b.isNone:
+    # Not found
     return Result[(), string].ok ()
+
+  # Clear before results
+  b.get.syntaxCheckResults = @[]
+
+  for d in diagnostics.diagnostics:
+    var syntaxErr = SyntaxError()
+    syntaxErr.position = d.range.start.toBufferPosition
+    if d.severity.isSome:
+      syntaxErr.messageType = d.severity.get.toSyntaxCheckMessageType
+    else:
+      syntaxErr.messageType = SyntaxCheckMessageType.info
+    syntaxErr.message = d.message.toRunes
+
+    b.get.syntaxCheckResults.add syntaxErr
+
+  return Result[(), string].ok ()
+
+proc lspProgressCreate(c: var LspClient, notify: JsonNode): Result[(), string] =
+  ## Init a LSP progress.
+  ##
+  ## window/workDoneProgress/create
+
+  let token = parseWindowWorkDnoneProgressCreateNotify(notify)
+  if token.isErr:
+    return Result[(), string].err fmt"Invalid server notify: {token.error}"
+
+  c.createProgress(token.get)
+
+  return Result[(), string].ok ()
 
 proc progressMessage(p: ProgressReport): string {.inline.} =
-  case p.state:
-    of begin:
-      if p.message.len > 0:
-        return fmt"{p.title}: {p.message}"
-      else:
-        return p.title
-    of report:
-      result = fmt"{p.title}: "
-      if p.percentage.isSome: result &= fmt"{$p.percentage.get}%: "
-      result &= p.message
-    of `end`:
+  case p.state
+  of begin:
+    if p.message.len > 0:
       return fmt"{p.title}: {p.message}"
     else:
-      return ""
+      return p.title
+  of report:
+    result = fmt"{p.title}: "
+    if p.percentage.isSome:
+      result &= fmt"{$p.percentage.get}%: "
+    result &= p.message
+  of `end`:
+    return fmt"{p.title}: {p.message}"
+  else:
+    return ""
 
-proc lspProgress(
-  status: var EditorStatus,
-  notify: JsonNode): Result[(), string] =
-    ## Begin/Report/End the LSP progress.
-    ##
-    ## $/progress
+proc lspProgress(status: var EditorStatus, notify: JsonNode): Result[(), string] =
+  ## Begin/Report/End the LSP progress.
+  ##
+  ## $/progress
 
-    let token = workDoneProgressToken(notify)
+  let token = workDoneProgressToken(notify)
 
-    if isWorkDoneProgressBegin(notify):
-      let begin = parseWorkDoneProgressBegin(notify)
-      if begin.isErr:
-        return Result[(), string].err fmt"Invalid server notify: {begin.error}"
+  if isWorkDoneProgressBegin(notify):
+    let begin = parseWorkDoneProgressBegin(notify)
+    if begin.isErr:
+      return Result[(), string].err fmt"Invalid server notify: {begin.error}"
 
-      if isCancellable(begin.get):
-        # Cancel
-        return lspClient.delProgress(token)
+    if isCancellable(begin.get):
+      # Cancel
+      return lspClient.delProgress(token)
 
-      let err = lspClient.beginProgress(token, begin.get)
-      if err.isErr:
-        return Result[(), string].err fmt"Invalid server notify: {err.error}"
-    elif isWorkDoneProgressReport(notify):
-      let report = parseWorkDoneProgressReport(notify)
-      if report.isErr:
-        return Result[(), string].err fmt"Invalid server notify: {report.error}"
+    let err = lspClient.beginProgress(token, begin.get)
+    if err.isErr:
+      return Result[(), string].err fmt"Invalid server notify: {err.error}"
+  elif isWorkDoneProgressReport(notify):
+    let report = parseWorkDoneProgressReport(notify)
+    if report.isErr:
+      return Result[(), string].err fmt"Invalid server notify: {report.error}"
 
-      if isCancellable(report.get):
-        # Cancel
-        return lspClient.delProgress(token)
+    if isCancellable(report.get):
+      # Cancel
+      return lspClient.delProgress(token)
 
-      let err = lspClient.reportProgress(token, report.get)
-      if err.isErr:
-        return Result[(), string].err fmt"Invalid server notify: {err.error}"
-    elif isWorkDoneProgressEnd(notify):
-      let `end` = parseWorkDoneProgressEnd(notify)
-      if `end`.isErr:
-        return Result[(), string].err fmt"Invalid server notify: {`end`.error}"
+    let err = lspClient.reportProgress(token, report.get)
+    if err.isErr:
+      return Result[(), string].err fmt"Invalid server notify: {err.error}"
+  elif isWorkDoneProgressEnd(notify):
+    let `end` = parseWorkDoneProgressEnd(notify)
+    if `end`.isErr:
+      return Result[(), string].err fmt"Invalid server notify: {`end`.error}"
 
-      let err = lspClient.endProgress(token, `end`.get)
-      if err.isErr:
-        return Result[(), string].err fmt"Invalid server notify: {err.error}"
-    else:
-      return Result[(), string].err fmt"Invalid server notify: {notify}"
+    let err = lspClient.endProgress(token, `end`.get)
+    if err.isErr:
+      return Result[(), string].err fmt"Invalid server notify: {err.error}"
+  else:
+    return Result[(), string].err fmt"Invalid server notify: {notify}"
 
-    case lspClient.progress[token].state:
-      of begin, report, `end`:
-        status.commandLine.writeLspProgress(
-          progressMessage(lspClient.progress[token]))
+  case lspClient.progress[token].state
+  of begin, report, `end`:
+    status.commandLine.writeLspProgress(progressMessage(lspClient.progress[token]))
+  else:
+    discard
+
+  return Result[(), string].ok ()
+
+proc lspCompletion(status: var EditorStatus, res: JsonNode): Result[(), string] =
+  ## Update the BufferStatus.completionList.
+  ##
+  ## textDocument/completion
+
+  let list = res.parseTextDocumentCompletionResponse
+  if list.isErr:
+    return Result[(), string].err fmt"Invalid response: {list.error}"
+
+  lspClient.deleteWaitingResponse(res["id"].getInt)
+
+  currentBufStatus.lspCompletionList.clear
+
+  if list.get.len > 0:
+    for item in list.get:
+      var newItem = CompletionItem()
+
+      newItem.label = item.label.toRunes
+
+      if item.insertText.isSome:
+        newItem.insertText = item.insertText.get.toRunes
       else:
-        discard
+        newItem.insertText = item.label.toRunes
 
-    return Result[(), string].ok ()
+      currentBufStatus.lspCompletionList.add newItem
 
-proc lspCompletion(
-  status: var EditorStatus,
-  res: JsonNode): Result[(), string] =
-    ## Update the BufferStatus.completionList.
-    ##
-    ## textDocument/completion
+  return Result[(), string].ok ()
 
+proc lspSemanticTokens(status: var EditorStatus, res: JsonNode): Result[(), string] =
+  ## Update the highlight from semanticTokens.
+  ##
+  ## textDocument/semanticTokens
 
-    let list = res.parseTextDocumentCompletionResponse
-    if list.isErr:
-      return Result[(), string].err fmt"Invalid response: {list.error}"
+  let r = res.parseTextDocumentSemanticTokensResponse(
+    lspClient.capabilities.get.semanticTokens.get
+  )
+  if r.isErr:
+    return Result[(), string].err r.error
 
-    lspClient.deleteWaitingResponse(res["id"].getInt)
+  lspClient.deleteWaitingResponse(res["id"].getInt)
 
-    currentBufStatus.lspCompletionList.clear
+  if r.get.len > 0:
+    currentBufStatus.highlight = initHighlight(
+      currentBufStatus.buffer.toSeqRunes, r.get,
+      lspClient.capabilities.get.semanticTokens.get,
+    )
+  else:
+    let lang =
+      if not status.settings.standard.syntax:
+        SourceLanguage.langNone
+      else:
+        currentBufStatus.language
+    currentBufStatus.highlight = initHighlight(
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords, lang
+    )
 
-    if list.get.len > 0:
-      for item in list.get:
-        var newItem = CompletionItem()
-
-        newItem.label = item.label.toRunes
-
-        if item.insertText.isSome:
-          newItem.insertText = item.insertText.get.toRunes
-        else:
-          newItem.insertText = item.label.toRunes
-
-        currentBufStatus.lspCompletionList.add newItem
-
-    return Result[(), string].ok ()
-
-proc lspSemanticTokens(
-  status: var EditorStatus,
-  res: JsonNode): Result[(), string] =
-    ## Update the highlight from semanticTokens.
-    ##
-    ## textDocument/semanticTokens
-
-    let r = res.parseTextDocumentSemanticTokensResponse(
-      lspClient.capabilities.get.semanticTokens.get)
-    if r.isErr:
-      return Result[(), string].err r.error
-
-    lspClient.deleteWaitingResponse(res["id"].getInt)
-
-    if r.get.len > 0:
-      currentBufStatus.highlight = initHighlight(
-        currentBufStatus.buffer.toSeqRunes,
-        r.get,
-        lspClient.capabilities.get.semanticTokens.get)
-    else:
-      let lang =
-        if not status.settings.standard.syntax: SourceLanguage.langNone
-        else: currentBufStatus.language
-      currentBufStatus.highlight = initHighlight(
-        currentBufStatus.buffer.toSeqRunes,
-        status.settings.highlight.reservedWords,
-        lang)
-
-    return Result[(), string].ok ()
+  return Result[(), string].ok ()
 
 proc lspInlayHint(status: var EditorStatus, res: JsonNode): Result[(), string] =
   ## textDocument/inlayHint
@@ -453,8 +433,10 @@ proc lspInlayHint(status: var EditorStatus, res: JsonNode): Result[(), string] =
     return Result[(), string].err hints.error
 
   let requestId =
-    try: res["id"].getInt
-    except CatchableError as e: return Result[(), string].err e.msg
+    try:
+      res["id"].getInt
+    except CatchableError as e:
+      return Result[(), string].err e.msg
 
   let waitingRes = lspClient.getWaitingResponse(requestId)
   if waitingRes.isNone:
@@ -469,301 +451,292 @@ proc lspInlayHint(status: var EditorStatus, res: JsonNode): Result[(), string] =
 
   return Result[(), string].ok ()
 
-proc lspInlineValue(
-  status: var EditorStatus,
-  res: JsonNode): Result[(), string] =
-    ## textDocument/inlineValue
+proc lspInlineValue(status: var EditorStatus, res: JsonNode): Result[(), string] =
+  ## textDocument/inlineValue
 
-    let requestId =
-      try: res["id"].getInt
-      except CatchableError as e: return Result[(), string].err e.msg
+  let requestId =
+    try:
+      res["id"].getInt
+    except CatchableError as e:
+      return Result[(), string].err e.msg
 
-    let waitingRes = lspClient.getWaitingResponse(requestId)
-    if waitingRes.isNone:
-      return Result[(), string].err fmt"Not found id: {requestId}"
+  let waitingRes = lspClient.getWaitingResponse(requestId)
+  if waitingRes.isNone:
+    return Result[(), string].err fmt"Not found id: {requestId}"
 
-    lspClient.deleteWaitingResponse(requestId)
+  lspClient.deleteWaitingResponse(requestId)
 
-    let values = parseInlineValueTextResponse(res)
-    if values.isErr:
-      return Result[(), string].err values.error
+  let values = parseInlineValueTextResponse(res)
+  if values.isErr:
+    return Result[(), string].err values.error
 
-    for i, b in status.bufStatus:
-      if b.id == waitingRes.get.bufferId:
-        b.inlineValues.values = values.get
-        break
+  for i, b in status.bufStatus:
+    if b.id == waitingRes.get.bufferId:
+      b.inlineValues.values = values.get
+      break
 
-    return Result[(), string].ok ()
+  return Result[(), string].ok ()
 
 proc initSignatureHelpWindow(
-  windowNode: WindowNode,
-  sigInfo: SignatureInformation): PopupWindow =
-    ## Return a popup window for textDocument/signatureHelp.
+    windowNode: WindowNode, sigInfo: SignatureInformation
+): PopupWindow =
+  ## Return a popup window for textDocument/signatureHelp.
 
-    const Margin = ru" "
+  const Margin = ru" "
 
-    # Label
-    var buffer = @[Margin & sigInfo.label.toRunes & Margin, ru""]
+  # Label
+  var buffer = @[Margin & sigInfo.label.toRunes & Margin, ru""]
 
-    # Documentation
-    if sigInfo.documentation.isSome:
-      for l in ($sigInfo.documentation.get).splitLines:
-        buffer.add l.toRunes
-      buffer.add ru""
+  # Documentation
+  if sigInfo.documentation.isSome:
+    for l in ($sigInfo.documentation.get).splitLines:
+      buffer.add l.toRunes
+    buffer.add ru""
 
-    # Parameters
-    if sigInfo.parameters.isSome and sigInfo.parameters.get.len > 0:
-      for p in sigInfo.parameters.get:
-        buffer.add toRunes($p.label)
-        if p.documentation.isSome:
-          const Indent = "  "
-          buffer.add toRunes(Indent & $p.documentation)
+  # Parameters
+  if sigInfo.parameters.isSome and sigInfo.parameters.get.len > 0:
+    for p in sigInfo.parameters.get:
+      buffer.add toRunes($p.label)
+      if p.documentation.isSome:
+        const Indent = "  "
+        buffer.add toRunes(Indent & $p.documentation)
 
-    let
-      absPosition = windowNode.absolutePosition
-      expectPosition = Position(y: absPosition.y + 1, x: absPosition.x + 1)
-    result = initPopupWindow(
-      expectPosition,
-      Size(h: buffer.len, w: buffer.maxLen),
-      buffer)
+  let
+    absPosition = windowNode.absolutePosition
+    expectPosition = Position(y: absPosition.y + 1, x: absPosition.x + 1)
+  result =
+    initPopupWindow(expectPosition, Size(h: buffer.len, w: buffer.maxLen), buffer)
 
-    let
-      minPosition = Position(y: windowNode.y, x: windowNode.x)
-      maxPosition = Position(
-        y: windowNode.y + windowNode.h,
-        x: windowNode.x + windowNode.w)
-    result.autoMoveAndResize(minPosition, maxPosition)
-    result.update
+  let
+    minPosition = Position(y: windowNode.y, x: windowNode.x)
+    maxPosition =
+      Position(y: windowNode.y + windowNode.h, x: windowNode.x + windowNode.w)
+  result.autoMoveAndResize(minPosition, maxPosition)
+  result.update
 
-proc lspSignatureHelp(
-  status: var EditorStatus,
-  res: JsonNode): Result[(), string] =
-    ## textDocument/signatureHelp
+proc lspSignatureHelp(status: var EditorStatus, res: JsonNode): Result[(), string] =
+  ## textDocument/signatureHelp
 
-    let requestId =
-      try: res["id"].getInt
-      except CatchableError as e: return Result[(), string].err e.msg
+  let requestId =
+    try:
+      res["id"].getInt
+    except CatchableError as e:
+      return Result[(), string].err e.msg
 
-    let waitingRes = lspClient.getWaitingResponse(requestId)
-    if waitingRes.isNone:
-      return Result[(), string].err fmt"Not found id: {requestId}"
+  let waitingRes = lspClient.getWaitingResponse(requestId)
+  if waitingRes.isNone:
+    return Result[(), string].err fmt"Not found id: {requestId}"
 
-    lspClient.deleteWaitingResponse(requestId)
+  lspClient.deleteWaitingResponse(requestId)
 
-    let sig = parseSignatureHelpResponse(res)
-    if sig.isErr:
-      return Result[(), string].err sig.error
+  let sig = parseSignatureHelpResponse(res)
+  if sig.isErr:
+    return Result[(), string].err sig.error
 
-    if sig.get.isNone or sig.get.get.signatures.len == 0:
-      return Result[(), string].err "Not found"
+  if sig.get.isNone or sig.get.get.signatures.len == 0:
+    return Result[(), string].err "Not found"
 
-    var win = initSignatureHelpWindow(
-      currentMainWindowNode,
-      sig.get.get.signatures[0])
+  var win = initSignatureHelpWindow(currentMainWindowNode, sig.get.get.signatures[0])
 
-    # Keep the cursor position on currentMainWindowNode and display the hover
-    # window on the top.
-    win.overwrite(currentMainWindowNode.window.get)
-    win.refresh
+  # Keep the cursor position on currentMainWindowNode and display the hover
+  # window on the top.
+  win.overwrite(currentMainWindowNode.window.get)
+  win.refresh
 
-    # Wait until any key is pressed.
-    discard getKeyBlocking()
-    win.close
+  # Wait until any key is pressed.
+  discard getKeyBlocking()
+  win.close
 
-    return Result[(), string].ok ()
+  return Result[(), string].ok ()
 
 proc lspDocumentFormatting(
-  status: var EditorStatus,
-  res: JsonNode): Result[(), string] =
-    ## textDocument/documentFormatting
+    status: var EditorStatus, res: JsonNode
+): Result[(), string] =
+  ## textDocument/documentFormatting
 
-    let requestId =
-      try: res["id"].getInt
-      except CatchableError as e: return Result[(), string].err e.msg
+  let requestId =
+    try:
+      res["id"].getInt
+    except CatchableError as e:
+      return Result[(), string].err e.msg
 
-    let waitingRes = lspClient.getWaitingResponse(requestId)
-    if waitingRes.isNone:
-      return Result[(), string].err fmt"Not found id: {requestId}"
+  let waitingRes = lspClient.getWaitingResponse(requestId)
+  if waitingRes.isNone:
+    return Result[(), string].err fmt"Not found id: {requestId}"
 
-    lspClient.deleteWaitingResponse(requestId)
+  lspClient.deleteWaitingResponse(requestId)
 
-    let textEdits = parseDocumentFormattingResponse(res)
-    if textEdits.isErr:
-      return Result[(), string].err textEdits.error
+  let textEdits = parseDocumentFormattingResponse(res)
+  if textEdits.isErr:
+    return Result[(), string].err textEdits.error
 
-    if textEdits.get.len == 0:
-      return Result[(), string].ok ()
-
-    for e in textEdits.get:
-      discard currentBufStatus.applyTextEdit(e)
-
-    currentBufStatus.isUpdate = true
-
+  if textEdits.get.len == 0:
     return Result[(), string].ok ()
+
+  for e in textEdits.get:
+    discard currentBufStatus.applyTextEdit(e)
+
+  currentBufStatus.isUpdate = true
+
+  return Result[(), string].ok ()
 
 proc jumpToDefinition(
-  status: var EditorStatus,
-  l: BufferLocation,
-  openWin: bool): Result[(), string] =
-    ## Goto Declaration, Goto Definition and etc.
+    status: var EditorStatus, l: BufferLocation, openWin: bool
+): Result[(), string] =
+  ## Goto Declaration, Goto Definition and etc.
 
-    let
-      beforePath = $currentBufStatus.path
-      beforePosition = currentMainWindowNode.bufferPosition
+  let
+    beforePath = $currentBufStatus.path
+    beforePosition = currentMainWindowNode.bufferPosition
 
-    if l.path == $currentBufStatus.absolutePath:
-      currentMainWindowNode.currentLine = l.range.first.line
-      currentMainWindowNode.currentColumn = l.range.first.column
-    else:
-      if openWin:
-        # Open a buffer in a new window.
-        status.verticalSplitWindow
-        status.moveNextWindow
+  if l.path == $currentBufStatus.absolutePath:
+    currentMainWindowNode.currentLine = l.range.first.line
+    currentMainWindowNode.currentColumn = l.range.first.column
+  else:
+    if openWin:
+      # Open a buffer in a new window.
+      status.verticalSplitWindow
+      status.moveNextWindow
 
-      let r = status.addNewBufferInCurrentWin(l.path)
-      if r.isErr:
-        return Result[(), string].err fmt"Cannot open file: {l.path}"
+    let r = status.addNewBufferInCurrentWin(l.path)
+    if r.isErr:
+      return Result[(), string].err fmt"Cannot open file: {l.path}"
 
-      status.changeCurrentBuffer(status.bufStatus.high)
+    status.changeCurrentBuffer(status.bufStatus.high)
 
-      template canMove(): bool =
-        l.range.first.line < currentBufStatus.buffer.len and
+    template canMove(): bool =
+      l.range.first.line < currentBufStatus.buffer.len and
         l.range.first.column < currentBufStatus.buffer[l.range.first.line].len
 
-      if not canMove():
-        return Result[(), string].err fmt"Invalid position: {$l.range.first.line}, {$l.range.first.column}"
-
-      status.resize
-      status.update
-
-      jumpLine(currentBufStatus, currentMainWindowNode, l.range.first.line)
-      currentMainWindowNode.currentColumn = l.range.first.column
-
-    block:
-      let p = BufferPosition(
-        line: beforePosition.line,
-        column: beforePosition.column)
-      currentBufStatus.setGotoDefinitionSource(BufferLocation(
-        path: beforePath,
-        range: BufferRange(
-          first: p,
-          last: p)))
-
-    return Result[(), string].ok ()
-
-proc lspDeclaration(
-  status: var EditorStatus,
-  res: JsonNode): Result[(), string] =
-    ## textDocument/declaration
-
-    let parseResult = parseTextDocumentDeclaration(res)
-
-    let requestId =
-      try: res["id"].getInt
-      except CatchableError as e: return Result[(), string].err e.msg
-    lspClient.deleteWaitingResponse(requestId)
-
-    if parseResult.isErr:
-      return Result[(), string].err parseResult.error
-    if parseResult.get.isNone:
-      return Result[(), string].err fmt"Not found"
-
-    return status.jumpToDefinition(
-      parseResult.get.get.location,
-      status.settings.lsp.features.declaration.openWindow)
-
-proc lspDefinition(
-  status: var EditorStatus,
-  res: JsonNode): Result[(), string] =
-    ## textDocument/definition
-
-    let parseResult = parseTextDocumentDefinition(res)
-
-    let requestId =
-      try: res["id"].getInt
-      except CatchableError as e: return Result[(), string].err e.msg
-    lspClient.deleteWaitingResponse(requestId)
-
-    if parseResult.isErr:
-      return Result[(), string].err parseResult.error
-    if parseResult.get.isNone:
-      return Result[(), string].err fmt"Not found"
-
-    return status.jumpToDefinition(
-      parseResult.get.get.location,
-      status.settings.lsp.features.definition.openWindow)
-
-proc lspTypeDefinition(
-  status: var EditorStatus,
-  res: JsonNode): Result[(), string] =
-    ## textDocument/typeDefinition
-
-    let parseResult = parseTextDocumentTypeDefinition(res)
-
-    let requestId =
-      try: res["id"].getInt
-      except CatchableError as e: return Result[(), string].err e.msg
-    lspClient.deleteWaitingResponse(requestId)
-
-    if parseResult.isErr:
-      return Result[(), string].err parseResult.error
-    if parseResult.get.isNone:
-      return Result[(), string].err fmt"Not found"
-
-    return status.jumpToDefinition(
-      parseResult.get.get.location,
-      status.settings.lsp.features.typeDefinition.openWindow)
-
-proc lspImplementation(
-  status: var EditorStatus,
-  res: JsonNode): Result[(), string] =
-    ## textDocument/implementation
-
-    let parseResult = parseTextDocumentImplementation(res)
-
-    let requestId =
-      try: res["id"].getInt
-      except CatchableError as e: return Result[(), string].err e.msg
-    lspClient.deleteWaitingResponse(requestId)
-
-    if parseResult.isErr:
-      return Result[(), string].err parseResult.error
-    if parseResult.get.isNone:
-      return Result[(), string].err fmt"Not found"
-
-    return status.jumpToDefinition(
-      parseResult.get.get.location,
-      status.settings.lsp.features.implementation.openWindow)
-
-proc lspReferences(
-  status: var EditorStatus,
-  res: JsonNode): Result[(), string] =
-    ## textDocument/references
-    ## Open a references mode window.
-
-    let parseResult = parseTextDocumentReferencesResponse(res)
-
-    let requestId =
-      try: res["id"].getInt
-      except CatchableError as e: return Result[(), string].err e.msg
-    lspClient.deleteWaitingResponse(requestId)
-
-    if parseResult.isErr:
-      return Result[(), string].err parseResult.error
-    elif parseResult.get.len == 0:
-      return Result[(), string].err "References not found"
-
-    # Open a new window with references mode.
-    status.horizontalSplitWindow
-    status.moveNextWindow
-
-    discard status.addNewBufferInCurrentWin(Mode.references)
-    currentBufStatus.buffer = initReferencesModeBuffer(parseResult.get)
-      .toGapBuffer
+    if not canMove():
+      return Result[(), string].err fmt"Invalid position: {$l.range.first.line}, {$l.range.first.column}"
 
     status.resize
+    status.update
 
-    return Result[(), string].ok ()
+    jumpLine(currentBufStatus, currentMainWindowNode, l.range.first.line)
+    currentMainWindowNode.currentColumn = l.range.first.column
+
+  block:
+    let p = BufferPosition(line: beforePosition.line, column: beforePosition.column)
+    currentBufStatus.setGotoDefinitionSource(
+      BufferLocation(path: beforePath, range: BufferRange(first: p, last: p))
+    )
+
+  return Result[(), string].ok ()
+
+proc lspDeclaration(status: var EditorStatus, res: JsonNode): Result[(), string] =
+  ## textDocument/declaration
+
+  let parseResult = parseTextDocumentDeclaration(res)
+
+  let requestId =
+    try:
+      res["id"].getInt
+    except CatchableError as e:
+      return Result[(), string].err e.msg
+  lspClient.deleteWaitingResponse(requestId)
+
+  if parseResult.isErr:
+    return Result[(), string].err parseResult.error
+  if parseResult.get.isNone:
+    return Result[(), string].err fmt"Not found"
+
+  return status.jumpToDefinition(
+    parseResult.get.get.location, status.settings.lsp.features.declaration.openWindow
+  )
+
+proc lspDefinition(status: var EditorStatus, res: JsonNode): Result[(), string] =
+  ## textDocument/definition
+
+  let parseResult = parseTextDocumentDefinition(res)
+
+  let requestId =
+    try:
+      res["id"].getInt
+    except CatchableError as e:
+      return Result[(), string].err e.msg
+  lspClient.deleteWaitingResponse(requestId)
+
+  if parseResult.isErr:
+    return Result[(), string].err parseResult.error
+  if parseResult.get.isNone:
+    return Result[(), string].err fmt"Not found"
+
+  return status.jumpToDefinition(
+    parseResult.get.get.location, status.settings.lsp.features.definition.openWindow
+  )
+
+proc lspTypeDefinition(status: var EditorStatus, res: JsonNode): Result[(), string] =
+  ## textDocument/typeDefinition
+
+  let parseResult = parseTextDocumentTypeDefinition(res)
+
+  let requestId =
+    try:
+      res["id"].getInt
+    except CatchableError as e:
+      return Result[(), string].err e.msg
+  lspClient.deleteWaitingResponse(requestId)
+
+  if parseResult.isErr:
+    return Result[(), string].err parseResult.error
+  if parseResult.get.isNone:
+    return Result[(), string].err fmt"Not found"
+
+  return status.jumpToDefinition(
+    parseResult.get.get.location, status.settings.lsp.features.typeDefinition.openWindow
+  )
+
+proc lspImplementation(status: var EditorStatus, res: JsonNode): Result[(), string] =
+  ## textDocument/implementation
+
+  let parseResult = parseTextDocumentImplementation(res)
+
+  let requestId =
+    try:
+      res["id"].getInt
+    except CatchableError as e:
+      return Result[(), string].err e.msg
+  lspClient.deleteWaitingResponse(requestId)
+
+  if parseResult.isErr:
+    return Result[(), string].err parseResult.error
+  if parseResult.get.isNone:
+    return Result[(), string].err fmt"Not found"
+
+  return status.jumpToDefinition(
+    parseResult.get.get.location, status.settings.lsp.features.implementation.openWindow
+  )
+
+proc lspReferences(status: var EditorStatus, res: JsonNode): Result[(), string] =
+  ## textDocument/references
+  ## Open a references mode window.
+
+  let parseResult = parseTextDocumentReferencesResponse(res)
+
+  let requestId =
+    try:
+      res["id"].getInt
+    except CatchableError as e:
+      return Result[(), string].err e.msg
+  lspClient.deleteWaitingResponse(requestId)
+
+  if parseResult.isErr:
+    return Result[(), string].err parseResult.error
+  elif parseResult.get.len == 0:
+    return Result[(), string].err "References not found"
+
+  # Open a new window with references mode.
+  status.horizontalSplitWindow
+  status.moveNextWindow
+
+  discard status.addNewBufferInCurrentWin(Mode.references)
+  currentBufStatus.buffer = initReferencesModeBuffer(parseResult.get).toGapBuffer
+
+  status.resize
+
+  return Result[(), string].ok ()
 
 proc getBufferIndexByAbsPath(status: EditorStatus, path: Runes): Option[int] =
   for i, b in status.bufStatus:
@@ -789,12 +762,14 @@ proc lspRename(status: var EditorStatus, res: JsonNode): Result[(), string] =
   for r in lspRenames.get:
     let bufIndex = status.getBufferIndexByAbsPath(r.path.toRunes)
     if bufIndex.isSome:
-      template b: BufferStatus = status.bufStatus[bufIndex.get]
+      template b(): BufferStatus =
+        status.bufStatus[bufIndex.get]
 
       for c in r.changes:
         if c.range.first.line > b.buffer.high or
-           c.range.last.column > b.buffer[c.range.first.line].high:
-             return Result[(), string].err fmt"lsp rename: invalid range: {r.path}: {$c.range}"
+            c.range.last.column > b.buffer[c.range.first.line].high:
+          return
+            Result[(), string].err fmt"lsp rename: invalid range: {r.path}: {$c.range}"
 
         var newLine = b.buffer[c.range.first.line]
         for _ in 0 ..< c.range.last.column - c.range.first.column:
@@ -805,213 +780,199 @@ proc lspRename(status: var EditorStatus, res: JsonNode): Result[(), string] =
     else:
       let file = openFile(r.path)
       if file.isErr:
-        return Result[(), string].err fmt"lsp rename: cannot open: {r.path}: {file.error}"
+        return
+          Result[(), string].err fmt"lsp rename: cannot open: {r.path}: {file.error}"
 
       var lines = file.get.text.splitLines
       for c in r.changes:
         if c.range.first.line > lines.high or
-           c.range.last.column > lines[c.range.first.line].high:
-             return Result[(), string].err fmt"lsp rename: invalid range: {r.path}: {$c.range}"
+            c.range.last.column > lines[c.range.first.line].high:
+          return
+            Result[(), string].err fmt"lsp rename: invalid range: {r.path}: {$c.range}"
 
         lines[c.range.first.line].delete(c.range.first.column .. c.range.last.column)
         lines[c.range.first.line].insert(c.text.toRunes, c.range.first.column)
 
       let err = saveFile(r.path, lines.toRunes, file.get.encoding)
       if err.isErr:
-        return Result[(), string].err fmt"lsp rename: cannot write: {r.path}: {file.error}"
+        return
+          Result[(), string].err fmt"lsp rename: cannot write: {r.path}: {file.error}"
 
     info fmt"lsp rename success: {r.path}"
 
   return Result[(), string].ok ()
 
 proc lspPrepareCallHierarchy(
-  status: var EditorStatus,
-  res: JsonNode): Result[(), string] =
-    ## textDocument/prepareCallHierarchy
+    status: var EditorStatus, res: JsonNode
+): Result[(), string] =
+  ## textDocument/prepareCallHierarchy
 
-    let items = parseTextDocumentPrepareCallHierarchyResponse(res)
+  let items = parseTextDocumentPrepareCallHierarchyResponse(res)
 
-    try:
-      lspClient.deleteWaitingResponse(res["id"].getInt)
-    except CatchableError as e:
-      return Result[(), string].err e.msg
+  try:
+    lspClient.deleteWaitingResponse(res["id"].getInt)
+  except CatchableError as e:
+    return Result[(), string].err e.msg
 
-    if items.isErr:
-      return Result[(), string].err items.error
+  if items.isErr:
+    return Result[(), string].err items.error
 
-    if items.get.len == 0:
-      return Result[(), string].err "Not found"
+  if items.get.len == 0:
+    return Result[(), string].err "Not found"
 
-    let langId = currentBufStatus.langId
+  let langId = currentBufStatus.langId
 
-    # Open a new window with callhierarchy viewer.
-    status.verticalSplitWindow
-    status.moveNextWindow
+  # Open a new window with callhierarchy viewer.
+  status.verticalSplitWindow
+  status.moveNextWindow
 
-    discard status.addNewBufferInCurrentWin(Mode.callhierarchyviewer)
-    let buf = initCallHierarchyViewBuffer(
-      CallHierarchyType.prepare,
-      items.get)
-    if buf.isErr:
-      return Result[(), string].err buf.error
+  discard status.addNewBufferInCurrentWin(Mode.callhierarchyviewer)
+  let buf = initCallHierarchyViewBuffer(CallHierarchyType.prepare, items.get)
+  if buf.isErr:
+    return Result[(), string].err buf.error
 
-    currentBufStatus.buffer = buf.get.toGapBuffer
-    currentBufStatus.langId = langId
-    currentBufStatus.callHierarchyInfo.items = items.get
+  currentBufStatus.buffer = buf.get.toGapBuffer
+  currentBufStatus.langId = langId
+  currentBufStatus.callHierarchyInfo.items = items.get
 
-    currentMainWindowNode.currentLine = CallHierarchyViewHeaderLength
+  currentMainWindowNode.currentLine = CallHierarchyViewHeaderLength
 
-    status.resize
+  status.resize
 
-    return Result[(), string].ok ()
+  return Result[(), string].ok ()
 
-proc lspIncomingCalls(
-  status: var EditorStatus,
-  res: JsonNode): Result[(), string] =
-    ## callHierarchy/incomingCalls
+proc lspIncomingCalls(status: var EditorStatus, res: JsonNode): Result[(), string] =
+  ## callHierarchy/incomingCalls
 
-    let calls = parseCallhierarchyIncomingCallsResponse(res)
+  let calls = parseCallhierarchyIncomingCallsResponse(res)
 
-    try:
-      lspClient.deleteWaitingResponse(res["id"].getInt)
-    except CatchableError as e:
-      return Result[(), string].err e.msg
+  try:
+    lspClient.deleteWaitingResponse(res["id"].getInt)
+  except CatchableError as e:
+    return Result[(), string].err e.msg
 
-    if calls.isErr:
-      return Result[(), string].err calls.error
+  if calls.isErr:
+    return Result[(), string].err calls.error
 
-    if calls.get.len == 0:
-      return Result[(), string].err "Not found"
+  if calls.get.len == 0:
+    return Result[(), string].err "Not found"
 
-    let items = calls.get.mapIt(it.`from`)
+  let items = calls.get.mapIt(it.`from`)
 
-    let buf = initCallHierarchyViewBuffer(
-      CallHierarchyType.incoming,
-      items)
-    if buf.isErr:
-      return Result[(), string].err buf.error
+  let buf = initCallHierarchyViewBuffer(CallHierarchyType.incoming, items)
+  if buf.isErr:
+    return Result[(), string].err buf.error
 
-    currentBufStatus.buffer = buf.get.toGapBuffer
-    currentBufStatus.callHierarchyInfo.items = items
-    currentBufStatus.isUpdate = true
+  currentBufStatus.buffer = buf.get.toGapBuffer
+  currentBufStatus.callHierarchyInfo.items = items
+  currentBufStatus.isUpdate = true
 
-    currentMainWindowNode.currentLine = CallHierarchyViewHeaderLength
+  currentMainWindowNode.currentLine = CallHierarchyViewHeaderLength
 
-    status.update
+  status.update
 
-    return Result[(), string].ok ()
+  return Result[(), string].ok ()
 
-proc lspOutgoingCalls(
-  status: var EditorStatus,
-  res: JsonNode): Result[(), string] =
-    ## callHierarchy/outgoingCalls
+proc lspOutgoingCalls(status: var EditorStatus, res: JsonNode): Result[(), string] =
+  ## callHierarchy/outgoingCalls
 
-    try:
-      lspClient.deleteWaitingResponse(res["id"].getInt)
-    except CatchableError as e:
-      return Result[(), string].err e.msg
+  try:
+    lspClient.deleteWaitingResponse(res["id"].getInt)
+  except CatchableError as e:
+    return Result[(), string].err e.msg
 
-    let calls = parseCallhierarchyOutgoingCallsResponse(res)
-    if calls.isErr:
-      return Result[(), string].err calls.error
+  let calls = parseCallhierarchyOutgoingCallsResponse(res)
+  if calls.isErr:
+    return Result[(), string].err calls.error
 
-    if calls.get.len == 0:
-      return Result[(), string].err "Not found"
+  if calls.get.len == 0:
+    return Result[(), string].err "Not found"
 
-    let items = calls.get.mapIt(it.`to`)
+  let items = calls.get.mapIt(it.`to`)
 
-    let buf = initCallHierarchyViewBuffer(
-      CallHierarchyType.outgoing,
-      items)
-    if buf.isErr:
-      return Result[(), string].err buf.error
+  let buf = initCallHierarchyViewBuffer(CallHierarchyType.outgoing, items)
+  if buf.isErr:
+    return Result[(), string].err buf.error
 
-    currentBufStatus.buffer = buf.get.toGapBuffer
-    currentBufStatus.callHierarchyInfo.items = items
-    currentBufStatus.isUpdate = true
+  currentBufStatus.buffer = buf.get.toGapBuffer
+  currentBufStatus.callHierarchyInfo.items = items
+  currentBufStatus.isUpdate = true
 
-    currentMainWindowNode.currentLine = CallHierarchyViewHeaderLength
+  currentMainWindowNode.currentLine = CallHierarchyViewHeaderLength
 
-    status.update
+  status.update
 
-    return Result[(), string].ok ()
+  return Result[(), string].ok ()
 
-proc lspDocumentHighlight(
-  status: var EditorStatus,
-  res: JsonNode): Result[(), string] =
-    ## textDocument/documentHighlight
+proc lspDocumentHighlight(status: var EditorStatus, res: JsonNode): Result[(), string] =
+  ## textDocument/documentHighlight
 
-    try:
-      lspClient.deleteWaitingResponse(res["id"].getInt)
-    except CatchableError as e:
-      return Result[(), string].err e.msg
+  try:
+    lspClient.deleteWaitingResponse(res["id"].getInt)
+  except CatchableError as e:
+    return Result[(), string].err e.msg
 
+  let ranges = parseDocumentHighlightResponse(res)
+  if ranges.isErr:
+    return Result[(), string].err ranges.error
 
-    let ranges = parseDocumentHighlightResponse(res)
-    if ranges.isErr:
-      return Result[(), string].err ranges.error
+  currentBufStatus.documentHighlightInfo.ranges = ranges.get
 
-    currentBufStatus.documentHighlightInfo.ranges = ranges.get
+  return Result[(), string].ok ()
 
-    return Result[(), string].ok ()
+proc lspDocumentLink(status: var EditorStatus, res: JsonNode): Result[(), string] =
+  ## textDocument/documentLink
 
-proc lspDocumentLink(
-  status: var EditorStatus,
-  res: JsonNode): Result[(), string] =
-    ## textDocument/documentLink
+  try:
+    lspClient.deleteWaitingResponse(res["id"].getInt)
+  except CatchableError as e:
+    return Result[(), string].err e.msg
 
-    try:
-      lspClient.deleteWaitingResponse(res["id"].getInt)
-    except CatchableError as e:
-      return Result[(), string].err e.msg
+  let links = parseDocumentLinkResponse(res)
+  if links.isErr:
+    return Result[(), string].err links.error
 
-    let links = parseDocumentLinkResponse(res)
-    if links.isErr:
-      return Result[(), string].err links.error
+  if links.get.len == 0:
+    return Result[(), string].err "Not found"
 
-    if links.get.len == 0:
-      return Result[(), string].err "Not found"
+  if links.get[0].isResolve:
+    let r = waitFor lspClient.documentLinkResolve(currentBufStatus.id, links.get[0])
+    if r.isErr:
+      return Result[(), string].err r.error
 
-    if links.get[0].isResolve:
-      let r = waitFor lspClient.documentLinkResolve(
-        currentBufStatus.id,
-        links.get[0])
-      if r.isErr:
-        return Result[(), string].err r.error
-
-    return Result[(), string].ok ()
+  return Result[(), string].ok ()
 
 proc lspDocumentLinkResolve(
-  status: var EditorStatus,
-  res: JsonNode): Result[(), string] =
-    ## documentLink/resolve
+    status: var EditorStatus, res: JsonNode
+): Result[(), string] =
+  ## documentLink/resolve
 
-    try:
-      lspClient.deleteWaitingResponse(res["id"].getInt)
-    except CatchableError as e:
-      return Result[(), string].err e.msg
+  try:
+    lspClient.deleteWaitingResponse(res["id"].getInt)
+  except CatchableError as e:
+    return Result[(), string].err e.msg
 
-    let link = parseDocumentLinkResolveResponse(res)
-    if link.isErr:
-      return Result[(), string].err link.error
+  let link = parseDocumentLinkResolveResponse(res)
+  if link.isErr:
+    return Result[(), string].err link.error
 
-    if link.get.target.isNone:
-      return Result[(), string].err "Not found target"
+  if link.get.target.isNone:
+    return Result[(), string].err "Not found target"
 
-    let path = link.get.target.get.uriToPath
-    if path.isErr:
-      return Result[(), string].err path.error
+  let path = link.get.target.get.uriToPath
+  if path.isErr:
+    return Result[(), string].err path.error
 
-    return status.jumpToDefinition(
-      BufferLocation(path: path.get),
-      true)
+  return status.jumpToDefinition(BufferLocation(path: path.get), true)
 
 proc lspCodeLens(status: var EditorStatus, res: JsonNode): Result[(), string] =
   ## textDocument/codeLens
 
   let requestId =
-    try: res["id"].getInt
-    except CatchableError as e: return Result[(), string].err e.msg
+    try:
+      res["id"].getInt
+    except CatchableError as e:
+      return Result[(), string].err e.msg
 
   let waitingRes = lspClient.getWaitingResponse(requestId)
   if waitingRes.isNone:
@@ -1029,228 +990,219 @@ proc lspCodeLens(status: var EditorStatus, res: JsonNode): Result[(), string] =
 
   return Result[(), string].ok ()
 
-proc lspCodeLensResolve(
-  status: var EditorStatus,
-  res: JsonNode): Result[(), string] =
-    ## codeLens/resolve
+proc lspCodeLensResolve(status: var EditorStatus, res: JsonNode): Result[(), string] =
+  ## codeLens/resolve
 
-    let requestId =
-      try: res["id"].getInt
-      except CatchableError as e: return Result[(), string].err e.msg
+  let requestId =
+    try:
+      res["id"].getInt
+    except CatchableError as e:
+      return Result[(), string].err e.msg
 
-    let waitingRes = lspClient.getWaitingResponse(requestId)
-    if waitingRes.isNone:
-      return Result[(), string].err fmt"Not found id: {requestId}"
+  let waitingRes = lspClient.getWaitingResponse(requestId)
+  if waitingRes.isNone:
+    return Result[(), string].err fmt"Not found id: {requestId}"
 
+  lspClient.deleteWaitingResponse(res["id"].getInt)
+
+  let err = parseCodeLensResolveResponse(res)
+  if err.isErr:
+    return Result[(), string].err err.error
+
+  # TODO: Run commands?
+
+  return Result[(), string].ok ()
+
+proc lspExecuteCommand(status: var EditorStatus, res: JsonNode): Result[(), string] =
+  ## workspace/executeCommand
+
+  try:
     lspClient.deleteWaitingResponse(res["id"].getInt)
+  except CatchableError as e:
+    return Result[(), string].err e.msg
 
-    let err = parseCodeLensResolveResponse(res)
-    if err.isErr:
-      return Result[(), string].err err.error
+  # TODO: Handle Execute command response.
+  let r = parseExecuteCommandResponse(res)
+  if r.isErr:
+    return Result[(), string].err r.error
 
-    # TODO: Run commands?
+  return Result[(), string].ok ()
 
-    return Result[(), string].ok ()
+proc lspFoldingRange(status: var EditorStatus, res: JsonNode): Result[(), string] =
+  ## textDocument/foldingRange
 
-proc lspExecuteCommand(
-  status: var EditorStatus,
-  res: JsonNode): Result[(), string] =
-    ## workspace/executeCommand
+  try:
+    lspClient.deleteWaitingResponse(res["id"].getInt)
+  except CatchableError as e:
+    return Result[(), string].err e.msg
 
-    try:
-      lspClient.deleteWaitingResponse(res["id"].getInt)
-    except CatchableError as e:
-      return Result[(), string].err e.msg
+  let ranges = parseTextDocumentFoldingRangeResponse(res)
+  if ranges.isErr:
+    return Result[(), string].err ranges.error
 
-    # TODO: Handle Execute command response.
-    let r = parseExecuteCommandResponse(res)
-    if r.isErr:
-      return Result[(), string].err r.error
+  if ranges.get.len == 0:
+    return Result[(), string].err "Not found"
 
-    return Result[(), string].ok ()
+  currentMainWindowNode.view.foldingRanges = ranges.get
 
-proc lspFoldingRange(
-  status: var EditorStatus,
-  res: JsonNode): Result[(), string] =
-    ## textDocument/foldingRange
+  let foldingRange = currentMainWindowNode.findFoldingRange
+  if foldingRange.isSome:
+    currentMainWindowNode.currentLine = foldingRange.get.first
 
-    try:
-      lspClient.deleteWaitingResponse(res["id"].getInt)
-    except CatchableError as e:
-      return Result[(), string].err e.msg
+  return Result[(), string].ok ()
 
-    let ranges = parseTextDocumentFoldingRangeResponse(res)
-    if ranges.isErr:
-      return Result[(), string].err ranges.error
+proc lspSelectionRange(status: var EditorStatus, res: JsonNode): Result[(), string] =
+  ## textDocument/selectionRange
 
-    if ranges.get.len == 0:
+  try:
+    lspClient.deleteWaitingResponse(res["id"].getInt)
+  except CatchableError as e:
+    return Result[(), string].err e.msg
+
+  let ranges = parseTextDocumentSelectionRangeResponse(res)
+  if ranges.isErr:
+    return Result[(), string].err ranges.error
+
+  if ranges.get.len == 0:
+    return Result[(), string].err "Not found"
+
+  var selectRange = ranges.get[0]
+  while selectRange.parent.isSome and
+      selectRange.range.start[] == selectRange.range.`end`[]:
+    selectRange = selectRange.parent.get
+
+  let r = selectRange.range
+
+  # The start position
+  currentMainWindowNode.moveCursor(currentBufStatus, r.start)
+
+  # Enter to Visual mode
+  status.changeMode(Mode.visual)
+  currentBufStatus.selectedArea = initSelectedArea(
+    currentMainWindowNode.currentLine, currentMainWindowNode.currentColumn
+  ).some
+
+  # The end position
+  currentMainWindowNode.moveCursor(currentBufStatus, r.`end`)
+
+  if selectRange.parent.isSome:
+    currentBufStatus.selectionRanges = @[selectRange.parent.get]
+
+  return Result[(), string].ok ()
+
+proc lspDocumentSymbol(status: var EditorStatus, res: JsonNode): Result[(), string] =
+  ## textDocument/documentSymbol
+  ##
+  ## Parse a response and enter DocumentSymbol mode.
+
+  try:
+    lspClient.deleteWaitingResponse(res["id"].getInt)
+  except CatchableError as e:
+    return Result[(), string].err e.msg
+
+  let infos = parseTextDocumentSymbolInformationsResponse(res)
+  if infos.isOk:
+    if infos.get.len == 0:
       return Result[(), string].err "Not found"
 
-    currentMainWindowNode.view.foldingRanges = ranges.get
-
-    let foldingRange = currentMainWindowNode.findFoldingRange
-    if foldingRange.isSome:
-      currentMainWindowNode.currentLine = foldingRange.get.first
-
-    return Result[(), string].ok ()
-
-proc lspSelectionRange(
-  status: var EditorStatus,
-  res: JsonNode): Result[(), string] =
-    ## textDocument/selectionRange
-
-    try:
-      lspClient.deleteWaitingResponse(res["id"].getInt)
-    except CatchableError as e:
-      return Result[(), string].err e.msg
-
-    let ranges = parseTextDocumentSelectionRangeResponse(res)
-    if ranges.isErr:
-      return Result[(), string].err ranges.error
-
-    if ranges.get.len == 0:
-      return Result[(), string].err "Not found"
-
-    var selectRange = ranges.get[0]
-    while selectRange.parent.isSome and
-          selectRange.range.start[] == selectRange.range.`end`[]:
-            selectRange = selectRange.parent.get
-
-    let r = selectRange.range
-
-    # The start position
-    currentMainWindowNode.moveCursor(currentBufStatus, r.start)
-
-    # Enter to Visual mode
-    status.changeMode(Mode.visual)
-    currentBufStatus.selectedArea = initSelectedArea(
-      currentMainWindowNode.currentLine,
-      currentMainWindowNode.currentColumn)
-      .some
-
-    # The end position
-    currentMainWindowNode.moveCursor(currentBufStatus, r.`end`)
-
-    if selectRange.parent.isSome:
-      currentBufStatus.selectionRanges = @[selectRange.parent.get]
-
-    return Result[(), string].ok ()
-
-proc lspDocumentSymbol(
-  status: var EditorStatus,
-  res: JsonNode): Result[(), string] =
-    ## textDocument/documentSymbol
-    ##
-    ## Parse a response and enter DocumentSymbol mode.
-
-    try:
-      lspClient.deleteWaitingResponse(res["id"].getInt)
-    except CatchableError as e:
-      return Result[(), string].err e.msg
-
-    let infos = parseTextDocumentSymbolInformationsResponse(res)
-    if infos.isOk:
-      if infos.get.len == 0:
-        return Result[(), string].err "Not found"
-
-      currentBufStatus.documentSymbols = infos.get.mapIt(DocumentSymbol(
+    currentBufStatus.documentSymbols = infos.get.mapIt(
+      DocumentSymbol(
         name: it.name,
         kind: it.kind,
         tags: it.tags,
         range: some(it.location.range),
-        deprecated: it.deprecated))
-    else:
-      let symbols = parseTextDocumentDocumentSymbolsResponse(res)
-      if symbols.isErr:
-        return Result[(), string].err symbols.error
+        deprecated: it.deprecated,
+      )
+    )
+  else:
+    let symbols = parseTextDocumentDocumentSymbolsResponse(res)
+    if symbols.isErr:
+      return Result[(), string].err symbols.error
 
-      if symbols.get.len == 0:
-        return Result[(), string].err "Not found"
+    if symbols.get.len == 0:
+      return Result[(), string].err "Not found"
 
-      currentBufStatus.documentSymbols = symbols.get
+    currentBufStatus.documentSymbols = symbols.get
 
-    status.commandLine.clear
-    status.commandLine.setPrompt(CommandLinePrompt.DocumentSymbol)
+  status.commandLine.clear
+  status.commandLine.setPrompt(CommandLinePrompt.DocumentSymbol)
 
-    currentBufStatus.changeMode(Mode.documentSymbol)
+  currentBufStatus.changeMode(Mode.documentSymbol)
 
-    return Result[(), string].ok ()
+  return Result[(), string].ok ()
 
 proc handleLspServerRequest(
-  status: var EditorStatus,
-  req: JsonNode): Result[(), string] =
-    ## Handle the request from the server.
-    ## workspace/inlayHint/refresh, etc....
+    status: var EditorStatus, req: JsonNode
+): Result[(), string] =
+  ## Handle the request from the server.
+  ## workspace/inlayHint/refresh, etc....
 
-    let lspMethod = req.lspMethod
-    if lspMethod.isErr:
-      # Ignore.
-      return Result[(), string].err fmt"Invalid server request: {req}"
+  let lspMethod = req.lspMethod
+  if lspMethod.isErr:
+    # Ignore.
+    return Result[(), string].err fmt"Invalid server request: {req}"
 
-    template isReady(status: EditorStatus): bool =
-      currentBufStatus.langId.len > 0 and
-      status.lspClients.contains(currentBufStatus.langId) and
-      lspClient.isInitialized
+  template isReady(status: EditorStatus): bool =
+    currentBufStatus.langId.len > 0 and
+      status.lspClients.contains(currentBufStatus.langId) and lspClient.isInitialized
 
-    case lspMethod.get:
-      of LspMethod.workspaceCodeLensRefresh:
-        if status.isReady:
-          lspClient.sendLspCodeLens(currentBufStatus)
-      of LspMethod.workspaceSemanticTokensRefresh:
-        if status.isReady:
-          lspClient.sendLspSemanticTokenRequest(currentBufStatus)
-      of LspMethod.workspaceInlayHintRefresh:
-        if status.isReady:
-          lspClient.sendLspInlayHintRequest(
-            currentBufStatus,
-            status.bufferIndexInCurrentWindow,
-            mainWindowNode)
-      else:
-        # Ignore
-        return Result[(), string].err fmt"Not supported: {req}"
+  case lspMethod.get
+  of LspMethod.workspaceCodeLensRefresh:
+    if status.isReady:
+      lspClient.sendLspCodeLens(currentBufStatus)
+  of LspMethod.workspaceSemanticTokensRefresh:
+    if status.isReady:
+      lspClient.sendLspSemanticTokenRequest(currentBufStatus)
+  of LspMethod.workspaceInlayHintRefresh:
+    if status.isReady:
+      lspClient.sendLspInlayHintRequest(
+        currentBufStatus, status.bufferIndexInCurrentWindow, mainWindowNode
+      )
+  else:
+    # Ignore
+    return Result[(), string].err fmt"Not supported: {req}"
 
-    return Result[(), string].ok ()
+  return Result[(), string].ok ()
 
 proc handleLspServerNotify(
-  status: var EditorStatus,
-  notify: JsonNode): Result[(), string] =
-    ## Handle the notification from the server.
-    ## window/showMessage, textDocument/PublishDiagnostics, etc....
+    status: var EditorStatus, notify: JsonNode
+): Result[(), string] =
+  ## Handle the notification from the server.
+  ## window/showMessage, textDocument/PublishDiagnostics, etc....
 
-    let lspMethod = notify.lspMethod
-    if lspMethod.isErr:
-      return Result[(), string].err fmt"Invalid server notify: {notify}"
+  let lspMethod = notify.lspMethod
+  if lspMethod.isErr:
+    return Result[(), string].err fmt"Invalid server notify: {notify}"
 
-    case lspMethod.get:
-      of LspMethod.windowShowMessage:
-        return status.commandLine.showLspServerLog(notify)
-      of LspMethod.windowLogMessage:
-        # Already logged to LspClint.log.
-        return Result[(), string].ok ()
-      of LspMethod.workspaceConfiguration:
-        # TODO: Configure settings based on notifications if necessary.
-        return Result[(), string].ok ()
-      of LspMethod.windowWorkDnoneProgressCreate:
-        return lspClient.lspProgressCreate(notify)
-      of LspMethod.progress:
-        return status.lspProgress(notify)
-      of LspMethod.textDocumentPublishDiagnostics:
-        return status.bufStatus.lspDiagnostics(notify)
-      of LspMethod.extensionStatusUpdate:
-        # Ignore
-        return Result[(), string].ok ()
-      else:
-        return Result[(), string].err fmt"Not supported: {notify}"
+  case lspMethod.get
+  of LspMethod.windowShowMessage:
+    return status.commandLine.showLspServerLog(notify)
+  of LspMethod.windowLogMessage:
+    # Already logged to LspClint.log.
+    return Result[(), string].ok ()
+  of LspMethod.workspaceConfiguration:
+    # TODO: Configure settings based on notifications if necessary.
+    return Result[(), string].ok ()
+  of LspMethod.windowWorkDnoneProgressCreate:
+    return lspClient.lspProgressCreate(notify)
+  of LspMethod.progress:
+    return status.lspProgress(notify)
+  of LspMethod.textDocumentPublishDiagnostics:
+    return status.bufStatus.lspDiagnostics(notify)
+  of LspMethod.extensionStatusUpdate:
+    # Ignore
+    return Result[(), string].ok ()
+  else:
+    return Result[(), string].err fmt"Not supported: {notify}"
 
-proc containsBufferId(
-  bufStatuses: seq[BufferStatus],
-  bufferId: int): bool {.inline.} =
-
-    for b in bufStatuses:
-      if b.id == bufferId: return true
+proc containsBufferId(bufStatuses: seq[BufferStatus], bufferId: int): bool {.inline.} =
+  for b in bufStatuses:
+    if b.id == bufferId:
+      return true
 
 proc handleLspError(status: var EditorStatus, res: JsonNode) =
-  if not res.contains("id") or res["id"].kind != JInt: return
+  if not res.contains("id") or res["id"].kind != JInt:
+    return
 
   for k, c in status.lspClients.pairs:
     let r = c.getWaitingResponse(res["id"].getInt)
@@ -1320,87 +1272,112 @@ proc handleLspResponse*(status: var EditorStatus) =
         info fmt"lsp: closed buffer. bufferId: {$waitingResponse.get.bufferId}"
         return
 
-      case waitingResponse.get.lspMethod:
-        of LspMethod.initialize:
-          let r = status.lspInitialized(resJson.get)
-          if r.isErr:
-            status.commandLine.writeLspInitializeError(
-              currentBufStatus.langId.toRunes,
-              r.error)
-        of LspMethod.textDocumentHover:
-          let r = status.lspHover(resJson.get)
-          if r.isErr: status.commandLine.writeLspHoverError(r.error)
-        of LspMethod.textDocumentCompletion:
-          let r = status.lspCompletion(resJson.get)
-          if r.isErr: status.commandLine.writeLspCompletionError(r.error)
-        of LspMethod.textDocumentSemanticTokensFull:
-          let r = status.lspSemanticTokens(resJson.get)
-          if r.isErr: status.commandLine.writeLspSemanticTokensError(r.error)
-        of LspMethod.textDocumentInlayHint:
-          let r = status.lspInlayHint(resJson.get)
-          if r.isErr: status.commandLine.writeLspInlayHintError(r.error)
-        of LspMethod.textDocumentInlineValue:
-          let r = status.lspInlineValue(resJson.get)
-          if r.isErr: status.commandLine.writeLspInlineValueError(r.error)
-        of LspMethod.textDocumentSignatureHelp:
-          let r = status.lspSignatureHelp(resJson.get)
-          if r.isErr: status.commandLine.writeLspSignatureHelpError(r.error)
-        of LspMethod.textDocumentFormatting:
-          let r = status.lspDocumentFormatting(resJson.get)
-          if r.isErr: status.commandLine.writeLspDocumentFormattingHelpError(r.error)
-        of LspMethod.textDocumentDeclaration:
-          let r = status.lspDeclaration(resJson.get)
-          if r.isErr: status.commandLine.writeLspDeclarationError(r.error)
-        of LspMethod.textDocumentDefinition:
-          let r = status.lspDefinition(resJson.get)
-          if r.isErr: status.commandLine.writeLspDefinitionError(r.error)
-        of LspMethod.textDocumentTypeDefinition:
-          let r = status.lspTypeDefinition(resJson.get)
-          if r.isErr: status.commandLine.writeLspTypeDefinitionError(r.error)
-        of LspMethod.textDocumentImplementation:
-          let r = status.lspImplementation(resJson.get)
-          if r.isErr: status.commandLine.writeLspImplementationError(r.error)
-        of LspMethod.textDocumentReferences:
-          let r = status.lspReferences(resJson.get)
-          if r.isErr: status.commandLine.writeLspReferencesError(r.error)
-        of LspMethod.textDocumentRename:
-          let r = status.lspRename(resJson.get)
-          if r.isErr: status.commandLine.writeLspRenameError(r.error)
-        of LspMethod.textDocumentPrepareCallHierarchy:
-          let r = status.lspPrepareCallHierarchy(resJson.get)
-          if r.isErr: status.commandLine.writeLspCallHierarchyError(r.error)
-        of LspMethod.callHierarchyIncomingCalls:
-          let r = status.lspIncomingCalls(resJson.get)
-          if r.isErr: status.commandLine.writeLspCallHierarchyError(r.error)
-        of LspMethod.callHierarchyOutgoingCalls:
-          let r = status.lspOutgoingCalls(resJson.get)
-          if r.isErr: status.commandLine.writeLspCallHierarchyError(r.error)
-        of LspMethod.textDocumentDocumentHighlight:
-          let r = status.lspDocumentHighlight(resJson.get)
-          if r.isErr: status.commandLine.writeLspDocumentHighlightError(r.error)
-        of LspMethod.textDocumentDocumentLink:
-          let r = status.lspDocumentLink(resJson.get)
-          if r.isErr: status.commandLine.writeLspDocumentLinkError(r.error)
-        of LspMethod.documentLinkResolve:
-          let r = status.lspDocumentLinkResolve(resJson.get)
-          if r.isErr: status.commandLine.writeLspDocumentLinkError(r.error)
-        of LspMethod.textDocumentCodeLens:
-          let r = status.lspCodeLens(resJson.get)
-          if r.isErr: status.commandLine.writeLspCodeLensError(r.error)
-        of LspMethod.codeLensResolve:
-          let r = status.lspCodeLensResolve(resJson.get)
-          if r.isErr: status.commandLine.writeLspCodeLensError(r.error)
-        of LspMethod.workspaceExecuteCommand:
-          let r = status.lspExecuteCommand(resJson.get)
-          if r.isErr: status.commandLine.writeLspExecuteCommandError(r.error)
-        of LspMethod.textDocumentFoldingRange:
-          let r = status.lspFoldingRange(resJson.get)
-          if r.isErr: status.commandLine.writeLspFoldingRangeError(r.error)
-        of LspMethod.textDocumentSelectionRange:
-          let r = status.lspSelectionRange(resJson.get)
-          if r.isErr: status.commandLine.writeLspSelectionRangeError(r.error)
-        of LspMethod.textDocumentDocumentSymbol:
-          let r = status.lspDocumentSymbol(resJson.get)
-          if r.isErr: status.commandLine.writeLspDocumentSymbolError(r.error)
-        else:
-          info fmt"lsp: Ignore response: {resJson}"
+      case waitingResponse.get.lspMethod
+      of LspMethod.initialize:
+        let r = status.lspInitialized(resJson.get)
+        if r.isErr:
+          status.commandLine.writeLspInitializeError(
+            currentBufStatus.langId.toRunes, r.error
+          )
+      of LspMethod.textDocumentHover:
+        let r = status.lspHover(resJson.get)
+        if r.isErr:
+          status.commandLine.writeLspHoverError(r.error)
+      of LspMethod.textDocumentCompletion:
+        let r = status.lspCompletion(resJson.get)
+        if r.isErr:
+          status.commandLine.writeLspCompletionError(r.error)
+      of LspMethod.textDocumentSemanticTokensFull:
+        let r = status.lspSemanticTokens(resJson.get)
+        if r.isErr:
+          status.commandLine.writeLspSemanticTokensError(r.error)
+      of LspMethod.textDocumentInlayHint:
+        let r = status.lspInlayHint(resJson.get)
+        if r.isErr:
+          status.commandLine.writeLspInlayHintError(r.error)
+      of LspMethod.textDocumentInlineValue:
+        let r = status.lspInlineValue(resJson.get)
+        if r.isErr:
+          status.commandLine.writeLspInlineValueError(r.error)
+      of LspMethod.textDocumentSignatureHelp:
+        let r = status.lspSignatureHelp(resJson.get)
+        if r.isErr:
+          status.commandLine.writeLspSignatureHelpError(r.error)
+      of LspMethod.textDocumentFormatting:
+        let r = status.lspDocumentFormatting(resJson.get)
+        if r.isErr:
+          status.commandLine.writeLspDocumentFormattingHelpError(r.error)
+      of LspMethod.textDocumentDeclaration:
+        let r = status.lspDeclaration(resJson.get)
+        if r.isErr:
+          status.commandLine.writeLspDeclarationError(r.error)
+      of LspMethod.textDocumentDefinition:
+        let r = status.lspDefinition(resJson.get)
+        if r.isErr:
+          status.commandLine.writeLspDefinitionError(r.error)
+      of LspMethod.textDocumentTypeDefinition:
+        let r = status.lspTypeDefinition(resJson.get)
+        if r.isErr:
+          status.commandLine.writeLspTypeDefinitionError(r.error)
+      of LspMethod.textDocumentImplementation:
+        let r = status.lspImplementation(resJson.get)
+        if r.isErr:
+          status.commandLine.writeLspImplementationError(r.error)
+      of LspMethod.textDocumentReferences:
+        let r = status.lspReferences(resJson.get)
+        if r.isErr:
+          status.commandLine.writeLspReferencesError(r.error)
+      of LspMethod.textDocumentRename:
+        let r = status.lspRename(resJson.get)
+        if r.isErr:
+          status.commandLine.writeLspRenameError(r.error)
+      of LspMethod.textDocumentPrepareCallHierarchy:
+        let r = status.lspPrepareCallHierarchy(resJson.get)
+        if r.isErr:
+          status.commandLine.writeLspCallHierarchyError(r.error)
+      of LspMethod.callHierarchyIncomingCalls:
+        let r = status.lspIncomingCalls(resJson.get)
+        if r.isErr:
+          status.commandLine.writeLspCallHierarchyError(r.error)
+      of LspMethod.callHierarchyOutgoingCalls:
+        let r = status.lspOutgoingCalls(resJson.get)
+        if r.isErr:
+          status.commandLine.writeLspCallHierarchyError(r.error)
+      of LspMethod.textDocumentDocumentHighlight:
+        let r = status.lspDocumentHighlight(resJson.get)
+        if r.isErr:
+          status.commandLine.writeLspDocumentHighlightError(r.error)
+      of LspMethod.textDocumentDocumentLink:
+        let r = status.lspDocumentLink(resJson.get)
+        if r.isErr:
+          status.commandLine.writeLspDocumentLinkError(r.error)
+      of LspMethod.documentLinkResolve:
+        let r = status.lspDocumentLinkResolve(resJson.get)
+        if r.isErr:
+          status.commandLine.writeLspDocumentLinkError(r.error)
+      of LspMethod.textDocumentCodeLens:
+        let r = status.lspCodeLens(resJson.get)
+        if r.isErr:
+          status.commandLine.writeLspCodeLensError(r.error)
+      of LspMethod.codeLensResolve:
+        let r = status.lspCodeLensResolve(resJson.get)
+        if r.isErr:
+          status.commandLine.writeLspCodeLensError(r.error)
+      of LspMethod.workspaceExecuteCommand:
+        let r = status.lspExecuteCommand(resJson.get)
+        if r.isErr:
+          status.commandLine.writeLspExecuteCommandError(r.error)
+      of LspMethod.textDocumentFoldingRange:
+        let r = status.lspFoldingRange(resJson.get)
+        if r.isErr:
+          status.commandLine.writeLspFoldingRangeError(r.error)
+      of LspMethod.textDocumentSelectionRange:
+        let r = status.lspSelectionRange(resJson.get)
+        if r.isErr:
+          status.commandLine.writeLspSelectionRangeError(r.error)
+      of LspMethod.textDocumentDocumentSymbol:
+        let r = status.lspDocumentSymbol(resJson.get)
+        if r.isErr:
+          status.commandLine.writeLspDocumentSymbolError(r.error)
+      else:
+        info fmt"lsp: Ignore response: {resJson}"

@@ -62,7 +62,8 @@ type
     path*: string
     range*: BufferRange
 
-proc numberOfDigits*(x: int): int {.inline.} = x.intToStr.len
+proc numberOfDigits*(x: int): int {.inline.} =
+  x.intToStr.len
 
 proc normalizeHex*(s: string): string =
   var count = 0
@@ -83,19 +84,23 @@ proc isInt*(str: string): bool =
 
 proc genDelimiterStr*(buffer: string): string =
   while true:
-    for _ in 0 .. 10: add(result, char(rand(int('A') .. int('Z'))))
-    if buffer != result: break
+    for _ in 0 .. 10:
+      add(result, char(rand(int('A') .. int('Z'))))
+    if buffer != result:
+      break
 
-proc isEmpty*[T](s: seq[T]): bool {.inline.} = s.len == 0
+proc isEmpty*[T](s: seq[T]): bool {.inline.} =
+  s.len == 0
 
-proc isEmpty*(s: string): bool {.inline.} = s.len == 0
+proc isEmpty*(s: string): bool {.inline.} =
+  s.len == 0
 
-proc dec*(n: var Natural) {.inline.} = n -= 1
+proc dec*(n: var Natural) {.inline.} =
+  n -= 1
 
-proc inc*(n: var Natural) {.inline.} = n += 1
+proc inc*(n: var Natural) {.inline.} =
+  n += 1
 
 proc `in`*(r: BufferRange, p: BufferPosition): bool =
-  p.line >= r.first.line and
-  p.column >= r.first.column and
-  p.line <= r.last.line and
-  p.column <= r.last.column
+  p.line >= r.first.line and p.column >= r.first.column and p.line <= r.last.line and
+    p.column <= r.last.column

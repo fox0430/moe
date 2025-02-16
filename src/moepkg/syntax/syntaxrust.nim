@@ -4,132 +4,46 @@ import flags
 import highlite
 
 const
-  rustKeywords* = [ "abstract"
-                  , "as"
-                  , "async"
-                  , "await"
-                  , "become"
-                  , "box"
-                  , "break"
-                  , "const"
-                  , "continue"
-                  , "crate"
-                  , "do"
-                  , "dyn"
-                  , "else"
-                  , "enum"
-                  , "extern"
-                  , "final"
-                  , "fn"
-                  , "for"
-                  , "if"
-                  , "impl"
-                  , "in"
-                  , "let"
-                  , "loop"
-                  , "macro"
-                  , "match"
-                  , "mod"
-                  , "move"
-                  , "mut"
-                  , "override"
-                  , "priv"
-                  , "pub"
-                  , "ref"
-                  , "return"
-                  , "Self"
-                  , "self"
-                  , "static"
-                  , "struct"
-                  , "super"
-                  , "trait"
-                  , "try"
-                  , "type"
-                  , "typeof"
-                  , "unsafe"
-                  , "unsized"
-                  , "use"
-                  , "virtual"
-                  , "where"
-                  , "while"
-                  , "yield"
-                  ]
+  rustKeywords* = [
+    "abstract", "as", "async", "await", "become", "box", "break", "const", "continue",
+    "crate", "do", "dyn", "else", "enum", "extern", "final", "fn", "for", "if", "impl",
+    "in", "let", "loop", "macro", "match", "mod", "move", "mut", "override", "priv",
+    "pub", "ref", "return", "Self", "self", "static", "struct", "super", "trait", "try",
+    "type", "typeof", "unsafe", "unsized", "use", "virtual", "where", "while", "yield",
+  ]
 
   rustBooleans = ["true", "false"]
 
   # Types, traits etc,
-  rustBuiltins* = [ "AsMut"
-                  , "AsRef"
-                  , "Box"
-                  , "Clone"
-                  , "Copy"
-                  , "Default"
-                  , "DoubleEndedIterator"
-                  , "Drop"
-                  , "Eq"
-                  , "Error"
-                  , "ErrSliceConcatExt"
-                  , "ExactSizeIterator"
-                  , "Extend"
-                  , "Fn"
-                  , "FnMut"
-                  , "FnOnce"
-                  , "From"
-                  , "Into"
-                  , "IntoIterator"
-                  , "Iterator"
-                  , "None"
-                  , "Ok"
-                  , "Option"
-                  , "Ord"
-                  , "PartialEq"
-                  , "PartialOrd"
-                  , "Result"
-                  , "Self"
-                  , "Send"
-                  , "Sized"
-                  , "Some"
-                  , "String"
-                  , "Sync"
-                  , "ToOwned"
-                  , "ToString"
-                  , "Variant"
-                  , "Variant"
-                  , "Vec"
-                  , "bool"
-                  , "char"
-                  , "f32"
-                  , "f64"
-                  , "i128"
-                  , "i16"
-                  , "i32"
-                  , "i64"
-                  , "i8"
-                  , "isize"
-                  , "str"
-                  , "u128"
-                  , "u16"
-                  , "u32"
-                  , "u64"
-                  , "u8"
-                  , "usize"
-                  ]
+  rustBuiltins* = [
+    "AsMut", "AsRef", "Box", "Clone", "Copy", "Default", "DoubleEndedIterator", "Drop",
+    "Eq", "Error", "ErrSliceConcatExt", "ExactSizeIterator", "Extend", "Fn", "FnMut",
+    "FnOnce", "From", "Into", "IntoIterator", "Iterator", "None", "Ok", "Option", "Ord",
+    "PartialEq", "PartialOrd", "Result", "Self", "Send", "Sized", "Some", "String",
+    "Sync", "ToOwned", "ToString", "Variant", "Variant", "Vec", "bool", "char", "f32",
+    "f64", "i128", "i16", "i32", "i64", "i8", "isize", "str", "u128", "u16", "u32",
+    "u64", "u8", "usize",
+  ]
 
 proc rustGetKeyword(id: string): TokenClass =
-  if binarySearch(rustKeywords, id) > -1: return gtKeyword
-  if binarySearch(rustBooleans, id) > -1: return gtBoolean
-  if binarySearch(rustBuiltins, id) > -1: return gtBuiltin
-  else: gtIdentifier
+  if binarySearch(rustKeywords, id) > -1:
+    return gtKeyword
+  if binarySearch(rustBooleans, id) > -1:
+    return gtBoolean
+  if binarySearch(rustBuiltins, id) > -1:
+    return gtBuiltin
+  else:
+    gtIdentifier
 
 template isCharLit*(g: var GeneralTokenizer, position: int): bool =
   (g.buf.high > pos + 1) and (g.buf[position + 2] == '\'')
 
 proc rustNextToken(g: var GeneralTokenizer, flags: TokenizerFlags) =
   const
-    hexChars = {'0'..'9', 'A'..'F', 'a'..'f'}
-    octChars = {'0'..'7'}
-    binChars = {'0'..'1'}
-    symChars = {'A'..'Z', 'a'..'z', '0'..'9', '_', '\x80'..'\xFF'}
+    hexChars = {'0' .. '9', 'A' .. 'F', 'a' .. 'f'}
+    octChars = {'0' .. '7'}
+    binChars = {'0' .. '1'}
+    symChars = {'A' .. 'Z', 'a' .. 'z', '0' .. '9', '_', '\x80' .. '\xFF'}
   var pos = g.pos
   g.start = g.pos
   if g.state == gtStringLit:
@@ -142,13 +56,17 @@ proc rustNextToken(g: var GeneralTokenizer, flags: TokenizerFlags) =
         case g.buf[pos]
         of 'x', 'X':
           inc(pos)
-          if g.buf[pos] in hexChars: inc(pos)
-          if g.buf[pos] in hexChars: inc(pos)
-        of '0'..'9':
-          while g.buf[pos] in {'0'..'9'}: inc(pos)
+          if g.buf[pos] in hexChars:
+            inc(pos)
+          if g.buf[pos] in hexChars:
+            inc(pos)
+        of '0' .. '9':
+          while g.buf[pos] in {'0' .. '9'}:
+            inc(pos)
         of '\0':
           g.state = gtNone
-        else: inc(pos)
+        else:
+          inc(pos)
         break
       of '\0', '\r', '\n':
         g.state = gtNone
@@ -157,17 +75,20 @@ proc rustNextToken(g: var GeneralTokenizer, flags: TokenizerFlags) =
         inc(pos)
         g.state = gtNone
         break
-      else: inc(pos)
+      else:
+        inc(pos)
   else:
     case g.buf[pos]
-    of ' ', '\t'..'\r':
+    of ' ', '\t' .. '\r':
       g.kind = gtWhitespace
-      while g.buf[pos] in {' ', '\t'..'\r'}: inc(pos)
+      while g.buf[pos] in {' ', '\t' .. '\r'}:
+        inc(pos)
     of '/':
       inc(pos)
       if g.buf[pos] == '/':
         g.kind = gtComment
-        while not (g.buf[pos] in {'\0', '\n', '\r'}): inc(pos)
+        while not (g.buf[pos] in {'\0', '\n', '\r'}):
+          inc(pos)
       elif g.buf[pos] == '*':
         g.kind = gtLongComment
         var nested = 0
@@ -178,27 +99,33 @@ proc rustNextToken(g: var GeneralTokenizer, flags: TokenizerFlags) =
             inc(pos)
             if g.buf[pos] == '/':
               inc(pos)
-              if nested == 0: break
+              if nested == 0:
+                break
           of '/':
             inc(pos)
             if g.buf[pos] == '*':
               inc(pos)
-              if hasNestedComments in flags: inc(nested)
+              if hasNestedComments in flags:
+                inc(nested)
           of '\0':
             break
-          else: inc(pos)
+          else:
+            inc(pos)
       else:
         g.kind = gtOperator
-        while g.buf[pos] in opChars: inc(pos)
+        while g.buf[pos] in opChars:
+          inc(pos)
     of '#':
       inc(pos)
       if hasPreprocessor in flags:
         g.kind = gtPreprocessor
-        while g.buf[pos] in {' ', '\t'}: inc(pos)
-        while g.buf[pos] in symChars: inc(pos)
+        while g.buf[pos] in {' ', '\t'}:
+          inc(pos)
+        while g.buf[pos] in symChars:
+          inc(pos)
       else:
         g.kind = gtOperator
-    of 'a'..'z', 'A'..'Z', '_', '\x80'..'\xFF':
+    of 'a' .. 'z', 'A' .. 'Z', '_', '\x80' .. '\xFF':
       var id = ""
       while g.buf[pos] in symChars:
         add(id, g.buf[pos])
@@ -209,22 +136,30 @@ proc rustNextToken(g: var GeneralTokenizer, flags: TokenizerFlags) =
       case g.buf[pos]
       of 'b', 'B':
         inc(pos)
-        while g.buf[pos] in binChars: inc(pos)
-        if g.buf[pos] in {'A'..'Z', 'a'..'z'}: inc(pos)
+        while g.buf[pos] in binChars:
+          inc(pos)
+        if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
+          inc(pos)
       of 'x', 'X':
         inc(pos)
-        while g.buf[pos] in hexChars: inc(pos)
-        if g.buf[pos] in {'A'..'Z', 'a'..'z'}: inc(pos)
-      of '0'..'7':
+        while g.buf[pos] in hexChars:
+          inc(pos)
+        if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
+          inc(pos)
+      of '0' .. '7':
         inc(pos)
-        while g.buf[pos] in octChars: inc(pos)
-        if g.buf[pos] in {'A'..'Z', 'a'..'z'}: inc(pos)
+        while g.buf[pos] in octChars:
+          inc(pos)
+        if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
+          inc(pos)
       else:
         pos = generalNumber(g, pos)
-        if g.buf[pos] in {'A'..'Z', 'a'..'z'}: inc(pos)
-    of '1'..'9':
+        if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
+          inc(pos)
+    of '1' .. '9':
       pos = generalNumber(g, pos)
-      if g.buf[pos] in {'A'..'Z', 'a'..'z'}: inc(pos)
+      if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z'}:
+        inc(pos)
     of '\'':
       # TODO: Maybe need to fix Rust lifetime.
       if isCharLit(g, pos):
@@ -248,7 +183,8 @@ proc rustNextToken(g: var GeneralTokenizer, flags: TokenizerFlags) =
         of '\\':
           g.state = g.kind
           break
-        else: inc(pos)
+        else:
+          inc(pos)
     of '(', ')', '[', ']', '{', '}', ':', ',', ';', '.':
       inc(pos)
       g.kind = gtPunctuation
@@ -257,7 +193,8 @@ proc rustNextToken(g: var GeneralTokenizer, flags: TokenizerFlags) =
     else:
       if g.buf[pos] in opChars:
         g.kind = gtOperator
-        while g.buf[pos] in opChars: inc(pos)
+        while g.buf[pos] in opChars:
+          inc(pos)
       else:
         inc(pos)
         g.kind = gtNone

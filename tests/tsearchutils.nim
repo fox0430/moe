@@ -19,8 +19,7 @@
 
 import std/[unittest, options, strformat]
 import pkg/results
-import moepkg/[unicodeext, editorstatus, gapbuffer, independentutils,
-               windownode]
+import moepkg/[unicodeext, editorstatus, gapbuffer, independentutils, windownode]
 
 import moepkg/searchutils {.all.}
 
@@ -110,24 +109,24 @@ suite "searchutils: searchReversely":
     check position.get == 9
 
   test "searchReversely 2":
-      let
-        line = ru"abc efg hijkl"
-        keyword = ru"xyz"
-        isIgnorecase = true
-        isSmartcase = true
-        position = line.searchReversely(keyword, isIgnorecase, isSmartcase)
+    let
+      line = ru"abc efg hijkl"
+      keyword = ru"xyz"
+      isIgnorecase = true
+      isSmartcase = true
+      position = line.searchReversely(keyword, isIgnorecase, isSmartcase)
 
-      check position.isNone
+    check position.isNone
 
   test "searchReversely 3":
-      let
-        line = ru"abc efg hijkl"
-        keyword = ru"abc"
-        isIgnorecase = true
-        isSmartcase = true
-        position = line.searchReversely(keyword, isIgnorecase, isSmartcase)
+    let
+      line = ru"abc efg hijkl"
+      keyword = ru"abc"
+      isIgnorecase = true
+      isSmartcase = true
+      position = line.searchReversely(keyword, isIgnorecase, isSmartcase)
 
-      check position.get == 0
+    check position.get == 0
 
 suite "searchutils: searchBuffer":
   test "Basic":
@@ -145,10 +144,8 @@ suite "searchutils: searchBuffer":
       isIgnorecase = true
       isSmartcase = true
       searchResult = currentBufStatus.searchBuffer(
-        currentMainWindowNode.bufferPosition,
-        keyword,
-        isIgnorecase,
-        isSmartcase)
+        currentMainWindowNode.bufferPosition, keyword, isIgnorecase, isSmartcase
+      )
 
     check searchResult.get.line == 1
     check searchResult.get.column == 2
@@ -168,19 +165,15 @@ suite "searchutils: searchBuffer":
       isIgnorecase = true
       isSmartcase = true
       searchResult = currentBufStatus.searchBuffer(
-        currentMainWindowNode.bufferPosition,
-        keyword,
-        isIgnorecase,
-        isSmartcase)
+        currentMainWindowNode.bufferPosition, keyword, isIgnorecase, isSmartcase
+      )
 
     check searchResult.isNone
 
   test "With newline":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = @["abc", "def", "ghi"]
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
 
     let
       keyword = @["ef", "gh"].toSeqRunes
@@ -188,10 +181,8 @@ suite "searchutils: searchBuffer":
       isSmartcase = true
 
     let r = currentBufStatus.searchBuffer(
-        currentMainWindowNode.bufferPosition,
-        keyword,
-        isIgnorecase,
-        isSmartcase)
+      currentMainWindowNode.bufferPosition, keyword, isIgnorecase, isSmartcase
+    )
 
     check r.get == BufferPosition(line: 1, column: 1)
 
@@ -199,9 +190,7 @@ suite "searchutils: searchBuffer":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
     currentMainWindowNode.currentLine = 2
-    currentBufStatus.buffer = @["abc", "def", "ghi"]
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
 
     let
       keyword = @["bc", "de"].toSeqRunes
@@ -209,10 +198,8 @@ suite "searchutils: searchBuffer":
       isSmartcase = true
 
     let r = currentBufStatus.searchBuffer(
-        currentMainWindowNode.bufferPosition,
-        keyword,
-        isIgnorecase,
-        isSmartcase)
+      currentMainWindowNode.bufferPosition, keyword, isIgnorecase, isSmartcase
+    )
 
     check r.get == BufferPosition(line: 0, column: 1)
 
@@ -232,10 +219,8 @@ suite "searchutils: searchBufferReversely":
       isIgnorecase = true
       isSmartcase = true
       searchResult = currentBufStatus.searchBufferReversely(
-        currentMainWindowNode.bufferPosition,
-        keyword,
-        isIgnorecase,
-        isSmartcase)
+        currentMainWindowNode.bufferPosition, keyword, isIgnorecase, isSmartcase
+      )
 
     check searchResult.get.line == 1
     check searchResult.get.column == 2
@@ -255,10 +240,8 @@ suite "searchutils: searchBufferReversely":
       isIgnorecase = true
       isSmartcase = true
       searchResult = currentBufStatus.searchBufferReversely(
-        currentMainWindowNode.bufferPosition,
-        keyword,
-        isIgnorecase,
-        isSmartcase)
+        currentMainWindowNode.bufferPosition, keyword, isIgnorecase, isSmartcase
+      )
 
     check searchResult.isNone
 
@@ -266,9 +249,7 @@ suite "searchutils: searchBufferReversely":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
     currentMainWindowNode.currentLine = 2
-    currentBufStatus.buffer = @["abc", "def", "ghi"]
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
 
     let
       keyword = @["bc", "de"].toSeqRunes
@@ -276,19 +257,15 @@ suite "searchutils: searchBufferReversely":
       isSmartcase = true
 
     let r = currentBufStatus.searchBufferReversely(
-        currentMainWindowNode.bufferPosition,
-        keyword,
-        isIgnorecase,
-        isSmartcase)
+      currentMainWindowNode.bufferPosition, keyword, isIgnorecase, isSmartcase
+    )
 
     check r.get == BufferPosition(line: 0, column: 1)
 
   test "With newline 2":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = @["abc", "def", "ghi"]
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
 
     let
       keyword = @["ef", "gh"].toSeqRunes
@@ -296,19 +273,15 @@ suite "searchutils: searchBufferReversely":
       isSmartcase = true
 
     let r = currentBufStatus.searchBufferReversely(
-        currentMainWindowNode.bufferPosition,
-        keyword,
-        isIgnorecase,
-        isSmartcase)
+      currentMainWindowNode.bufferPosition, keyword, isIgnorecase, isSmartcase
+    )
 
     check r.get == BufferPosition(line: 1, column: 1)
 
   test "Move to the first of the prev line":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin.get
-    currentBufStatus.buffer = @["abc", "abc"]
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer = @["abc", "abc"].toSeqRunes.toGapBuffer
     currentMainWindowNode.currentLine = 1
 
     let
@@ -317,10 +290,8 @@ suite "searchutils: searchBufferReversely":
       isSmartcase = true
 
     let r = currentBufStatus.searchBufferReversely(
-        currentMainWindowNode.bufferPosition,
-        keyword,
-        isIgnorecase,
-        isSmartcase)
+      currentMainWindowNode.bufferPosition, keyword, isIgnorecase, isSmartcase
+    )
 
     check r.get == BufferPosition(line: 0, column: 0)
 
@@ -338,10 +309,7 @@ suite "searchutils: searchAllOccurrence":
       IsIgnorecase = true
       IsSmartcase = true
 
-    let searchResult = Buffer.searchAllOccurrence(
-      Keyword,
-      IsIgnorecase,
-      IsSmartcase)
+    let searchResult = Buffer.searchAllOccurrence(Keyword, IsIgnorecase, IsSmartcase)
 
     check searchResult.len == 3
 
@@ -367,31 +335,27 @@ suite "searchutils: searchAllOccurrence":
       IsIgnorecase = true
       IsSmartcase = true
 
-    let searchResult = Buffer.searchAllOccurrence(
-        Keyword,
-        IsIgnorecase,
-        IsSmartcase)
+    let searchResult = Buffer.searchAllOccurrence(Keyword, IsIgnorecase, IsSmartcase)
 
     check searchResult.len == 0
 
 suite "searchutils: searchClosingParen":
   const
-    OpenParens = [ru'(', ru'{', ru'[']
-    CloseParens = [ru')', ru'}', ru']']
+    OpenParens = [ru '(', ru '{', ru '[']
+    CloseParens = [ru ')', ru '}', ru ']']
 
   proc searchClosingParenTest(
-    testIndex: int,
-    openParen: Rune,
-    buffer: seq[Runes],
-    closeParenPosition: BufferPosition,
-    expectResult: Option[BufferPosition]) =
+      testIndex: int,
+      openParen: Rune,
+      buffer: seq[Runes],
+      closeParenPosition: BufferPosition,
+      expectResult: Option[BufferPosition],
+  ) =
+    let testTitle = "Case " & $testIndex & ": '" & $openParen & "'"
 
-      let testTitle =
-        "Case " & $testIndex & ": '" & $openParen & "'"
-
-      test testTitle:
-        let searchResult = searchClosingParen(buffer, closeParenPosition)
-        check searchResult == expectResult
+    test testTitle:
+      let searchResult = searchClosingParen(buffer, closeParenPosition)
+      check searchResult == expectResult
 
   block searchClosingParenTestCase1:
     # Case 1 is starting the search on an empty line.
@@ -402,12 +366,7 @@ suite "searchutils: searchClosingParen":
       ExpectResult = SearchResult.none
 
     for paren in OpenParens:
-      searchClosingParenTest(
-        TestIndex,
-        paren,
-        Buffer,
-        CurrentPosition,
-        ExpectResult)
+      searchClosingParenTest(TestIndex, paren, Buffer, CurrentPosition, ExpectResult)
 
   block searchClosingParenTestCase2:
     const TestIndex = 2
@@ -419,11 +378,8 @@ suite "searchutils: searchClosingParen":
         ExpectResult = SearchResult(line: 0, column: 1).some
 
       searchClosingParenTest(
-        TestIndex,
-        OpenParens[i],
-        buffer,
-        CurrentPosition,
-        ExpectResult)
+        TestIndex, OpenParens[i], buffer, CurrentPosition, ExpectResult
+      )
 
   block searchClosingParenTestCase3:
     const TestIndex = 3
@@ -434,11 +390,8 @@ suite "searchutils: searchClosingParen":
         CurrentPosition = BufferPosition(line: 0, column: 0)
         ExpectPosition = SearchResult(line: 0, column: 2).some
       searchClosingParenTest(
-        TestIndex,
-        OpenParens[i],
-        buffer,
-        CurrentPosition,
-        ExpectPosition)
+        TestIndex, OpenParens[i], buffer, CurrentPosition, ExpectPosition
+      )
 
   block searchClosingParenTestCase4:
     const TestIndex = 4
@@ -449,11 +402,8 @@ suite "searchutils: searchClosingParen":
         CurrentPosition = BufferPosition(line: 0, column: 0)
         ExpectResult = SearchResult(line: 1, column: 0).some
       searchClosingParenTest(
-        TestIndex,
-        OpenParens[i],
-        buffer,
-        CurrentPosition,
-        ExpectResult)
+        TestIndex, OpenParens[i], buffer, CurrentPosition, ExpectResult
+      )
 
   block searchClosingParenTestCase5:
     const TestIndex = 5
@@ -464,11 +414,8 @@ suite "searchutils: searchClosingParen":
         CurrentPosition = BufferPosition(line: 0, column: 0)
         ExpectResult = SearchResult(line: 2, column: 0).some
       searchClosingParenTest(
-        TestIndex,
-        OpenParens[i],
-        buffer,
-        CurrentPosition,
-        ExpectResult)
+        TestIndex, OpenParens[i], buffer, CurrentPosition, ExpectResult
+      )
 
   block searchClosingParenTestCase6:
     const TestIndex = 6
@@ -479,62 +426,48 @@ suite "searchutils: searchClosingParen":
         CurrentPosition = BufferPosition(line: 0, column: 0)
         ExpectResult = none(SearchResult)
       searchClosingParenTest(
-        TestIndex,
-        OpenParens[i],
-        buffer,
-        CurrentPosition,
-        ExpectResult)
+        TestIndex, OpenParens[i], buffer, CurrentPosition, ExpectResult
+      )
 
   block searchOpeningParenTest7:
     # matchingParenPair should ignore '"'.
     const
       TestIndex = 7
       Buffer = @["\"\"".toRunes]
-      Paren = ru'"'
+      Paren = ru '"'
       CurrentPosition = BufferPosition(line: 0, column: 0)
       ExpectResult = none(SearchResult)
 
-    searchClosingParenTest(
-      TestIndex,
-      Paren,
-      Buffer,
-      CurrentPosition,
-      ExpectResult)
+    searchClosingParenTest(TestIndex, Paren, Buffer, CurrentPosition, ExpectResult)
 
   block searchOpeningParenTest8:
     # matchingParenPair should ignore '''.
     const
       TestIndex = 8
       Buffer = @["''".toRunes]
-      Paren = ru'\''
+      Paren = ru '\''
       CurrentPosition = BufferPosition(line: 0, column: 0)
       ExpectResult = none(SearchResult)
 
-    searchClosingParenTest(
-      TestIndex,
-      Paren,
-      Buffer,
-      CurrentPosition,
-      ExpectResult)
+    searchClosingParenTest(TestIndex, Paren, Buffer, CurrentPosition, ExpectResult)
 
 suite "searchutils: searchOpeningParen":
   const
-    OpenParens = [ru'(', ru'{', ru'[']
-    CloseParens = [ru')', ru'}', ru']']
+    OpenParens = [ru '(', ru '{', ru '[']
+    CloseParens = [ru ')', ru '}', ru ']']
 
   proc searchOpeningParenTest(
-    testIndex: int,
-    closeParen: Rune,
-    buffer: seq[Runes],
-    closeParenPosition: BufferPosition,
-    expectResult: Option[BufferPosition]) =
+      testIndex: int,
+      closeParen: Rune,
+      buffer: seq[Runes],
+      closeParenPosition: BufferPosition,
+      expectResult: Option[BufferPosition],
+  ) =
+    let testTitle = "Case " & $testIndex & ": '" & $closeParen & "'"
 
-      let testTitle =
-        "Case " & $testIndex & ": '" & $closeParen & "'"
-
-      test testTitle:
-        let searchResult = searchOpeningParen(buffer, closeParenPosition)
-        check searchResult == expectResult
+    test testTitle:
+      let searchResult = searchOpeningParen(buffer, closeParenPosition)
+      check searchResult == expectResult
 
   block searchOpeningParenTestCase1:
     # Case 1 is starting the search on an empty line.
@@ -545,12 +478,7 @@ suite "searchutils: searchOpeningParen":
       ExpectResult = SearchResult.none
 
     for paren in CloseParens:
-      searchOpeningParenTest(
-        TestIndex,
-        paren,
-        Buffer,
-        CurrentPosition,
-        ExpectResult)
+      searchOpeningParenTest(TestIndex, paren, Buffer, CurrentPosition, ExpectResult)
 
   block searchOpeningParenTestCase2:
     const TestIndex = 2
@@ -562,11 +490,8 @@ suite "searchutils: searchOpeningParen":
         ExpectResult = SearchResult(line: 0, column: 0).some
 
       searchOpeningParenTest(
-        TestIndex,
-        CloseParens[i],
-        buffer,
-        CurrentPosition,
-        ExpectResult)
+        TestIndex, CloseParens[i], buffer, CurrentPosition, ExpectResult
+      )
 
   block searchOpeningParenTestCase3:
     const TestIndex = 3
@@ -577,11 +502,8 @@ suite "searchutils: searchOpeningParen":
         CurrentPosition = BufferPosition(line: 0, column: 2)
         ExpectPosition = SearchResult(line: 0, column: 0).some
       searchOpeningParenTest(
-        TestIndex,
-        CloseParens[i],
-        buffer,
-        CurrentPosition,
-        ExpectPosition)
+        TestIndex, CloseParens[i], buffer, CurrentPosition, ExpectPosition
+      )
 
   block searchOpeningParenTestCase4:
     const TestIndex = 4
@@ -592,11 +514,8 @@ suite "searchutils: searchOpeningParen":
         CurrentPosition = BufferPosition(line: 1, column: 0)
         ExpectResult = SearchResult(line: 0, column: 0).some
       searchOpeningParenTest(
-        TestIndex,
-        CloseParens[i],
-        buffer,
-        CurrentPosition,
-        ExpectResult)
+        TestIndex, CloseParens[i], buffer, CurrentPosition, ExpectResult
+      )
 
   block searchOpeningParenTestCase5:
     const TestIndex = 5
@@ -607,11 +526,8 @@ suite "searchutils: searchOpeningParen":
         CurrentPosition = BufferPosition(line: 2, column: 0)
         ExpectResult = SearchResult(line: 0, column: 0).some
       searchOpeningParenTest(
-        TestIndex,
-        CloseParens[i],
-        buffer,
-        CurrentPosition,
-        ExpectResult)
+        TestIndex, CloseParens[i], buffer, CurrentPosition, ExpectResult
+      )
 
   block searchOpeningParenTestCase6:
     const TestIndex = 6
@@ -622,68 +538,53 @@ suite "searchutils: searchOpeningParen":
         CurrentPosition = BufferPosition(line: 0, column: 0)
         ExpectResult = none(SearchResult)
       searchOpeningParenTest(
-        TestIndex,
-        CloseParens[i],
-        buffer,
-        CurrentPosition,
-        ExpectResult)
+        TestIndex, CloseParens[i], buffer, CurrentPosition, ExpectResult
+      )
 
   block searchOpeningParenTest7:
     # matchingParenPair should ignore '"'.
     const
       TestIndex = 7
       Buffer = @["\"\"".toRunes]
-      Paren = ru'"'
+      Paren = ru '"'
       CurrentPosition = BufferPosition(line: 0, column: 0)
       ExpectResult = none(SearchResult)
 
-    searchOpeningParenTest(
-      TestIndex,
-      Paren,
-      Buffer,
-      CurrentPosition,
-      ExpectResult)
+    searchOpeningParenTest(TestIndex, Paren, Buffer, CurrentPosition, ExpectResult)
 
   block searchOpeningParenTest8:
     # matchingParenPair should ignore '''.
     const
       TestIndex = 8
       Buffer = @["''".toRunes]
-      Paren = ru'\''
+      Paren = ru '\''
       CurrentPosition = BufferPosition(line: 0, column: 0)
       ExpectResult = none(SearchResult)
 
-    searchOpeningParenTest(
-      TestIndex,
-      Paren,
-      Buffer,
-      CurrentPosition,
-      ExpectResult)
+    searchOpeningParenTest(TestIndex, Paren, Buffer, CurrentPosition, ExpectResult)
 
 suite "searchutils: matchingParenPair":
   let
-    openParens = @[ru'(', ru'{', ru'[']
-    closeParens = @[ru')', ru'}', ru']']
+    openParens = @[ru '(', ru '{', ru '[']
+    closeParens = @[ru ')', ru '}', ru ']']
 
   proc matchingParenPairTest(
-    testIndex: int,
-    paren: Rune,
-    buffer: seq[Runes],
-    currentPosition: BufferPosition,
-    expectPosition: Option[BufferPosition]) =
+      testIndex: int,
+      paren: Rune,
+      buffer: seq[Runes],
+      currentPosition: BufferPosition,
+      expectPosition: Option[BufferPosition],
+  ) =
+    let testTitle = "Case " & $testIndex & ": matchingParenPair: '" & $paren & "'"
 
-      let testTitle =
-        "Case " & $testIndex & ": matchingParenPair: '" & $paren & "'"
+    test testTitle:
+      var status = initEditorStatus()
+      discard status.addNewBufferInCurrentWin.get
 
-      test testTitle:
-        var status = initEditorStatus()
-        discard status.addNewBufferInCurrentWin.get
+      status.bufStatus[0].buffer = `buffer`.toGapBuffer
 
-        status.bufStatus[0].buffer = `buffer`.toGapBuffer
-
-        let searchResult = status.bufStatus[0].matchingParenPair(
-          currentPosition)
-        check searchResult == expectPosition
+      let searchResult = status.bufStatus[0].matchingParenPair(currentPosition)
+      check searchResult == expectPosition
 
   block matchingParenPairTestCase1:
     ## Case 1 is starting the search on an empty line.
@@ -695,9 +596,13 @@ suite "searchutils: matchingParenPair":
 
     for i in 0 ..< openParens.len:
       block open:
-        matchingParenPairTest(testIndex, openParens[i], buffer, currentPosition, expectPosition)
+        matchingParenPairTest(
+          testIndex, openParens[i], buffer, currentPosition, expectPosition
+        )
       block close:
-        matchingParenPairTest(testIndex, closeParens[i], buffer, currentPosition, expectPosition)
+        matchingParenPairTest(
+          testIndex, closeParens[i], buffer, currentPosition, expectPosition
+        )
 
   block matchingParenPairTestCase2:
     let testIndex = 2
@@ -709,13 +614,17 @@ suite "searchutils: matchingParenPair":
         let
           currentPosition = BufferPosition(line: 0, column: 0)
           expectPosition = SearchResult(line: 0, column: 1).some
-        matchingParenPairTest(testIndex, openParens[i], buffer, currentPosition, expectPosition)
+        matchingParenPairTest(
+          testIndex, openParens[i], buffer, currentPosition, expectPosition
+        )
 
       block close:
         let
           currentPosition = BufferPosition(line: 0, column: 1)
           expectPosition = SearchResult(line: 0, column: 0).some
-        matchingParenPairTest(testIndex, closeParens[i], buffer, currentPosition, expectPosition)
+        matchingParenPairTest(
+          testIndex, closeParens[i], buffer, currentPosition, expectPosition
+        )
 
   block matchingParenPairTestCase3:
     let testIndex = 3
@@ -727,13 +636,17 @@ suite "searchutils: matchingParenPair":
         let
           currentPosition = BufferPosition(line: 0, column: 0)
           expectPosition = SearchResult(line: 0, column: 2).some
-        matchingParenPairTest(testIndex, openParens[i], buffer, currentPosition, expectPosition)
+        matchingParenPairTest(
+          testIndex, openParens[i], buffer, currentPosition, expectPosition
+        )
 
       block close:
         let
           currentPosition = BufferPosition(line: 0, column: 2)
           expectPosition = SearchResult(line: 0, column: 0).some
-        matchingParenPairTest(testIndex, closeParens[i], buffer, currentPosition, expectPosition)
+        matchingParenPairTest(
+          testIndex, closeParens[i], buffer, currentPosition, expectPosition
+        )
 
   block matchingParenPairTestCase4:
     let testIndex = 4
@@ -745,13 +658,17 @@ suite "searchutils: matchingParenPair":
         let
           currentPosition = BufferPosition(line: 0, column: 0)
           expectPosition = SearchResult(line: 1, column: 0).some
-        matchingParenPairTest(testIndex, openParens[i], buffer, currentPosition, expectPosition)
+        matchingParenPairTest(
+          testIndex, openParens[i], buffer, currentPosition, expectPosition
+        )
 
       block close:
         let
           currentPosition = BufferPosition(line: 1, column: 0)
           expectPosition = SearchResult(line: 0, column: 0).some
-        matchingParenPairTest(testIndex, closeParens[i], buffer, currentPosition, expectPosition)
+        matchingParenPairTest(
+          testIndex, closeParens[i], buffer, currentPosition, expectPosition
+        )
 
   block matchingParenPairTestCase5:
     let testIndex = 5
@@ -763,39 +680,46 @@ suite "searchutils: matchingParenPair":
         let
           currentPosition = BufferPosition(line: 0, column: 0)
           expectPosition = SearchResult(line: 2, column: 0).some
-        matchingParenPairTest(testIndex, openParens[i], buffer, currentPosition, expectPosition)
+        matchingParenPairTest(
+          testIndex, openParens[i], buffer, currentPosition, expectPosition
+        )
 
       block close:
         let
           currentPosition = BufferPosition(line: 2, column: 0)
           expectPosition = SearchResult(line: 0, column: 0).some
-        matchingParenPairTest(testIndex, closeParens[i], buffer, currentPosition, expectPosition)
+        matchingParenPairTest(
+          testIndex, closeParens[i], buffer, currentPosition, expectPosition
+        )
 
   block matchingParenPairTestCase6:
     let testIndex = 6
 
     for i in 0 ..< openParens.len:
-
       block open:
         let buffer = @[openParens[i].toRunes, ru""]
         let
           currentPosition = BufferPosition(line: 0, column: 0)
           expectPosition = none(SearchResult)
-        matchingParenPairTest(testIndex, openParens[i], buffer, currentPosition, expectPosition)
+        matchingParenPairTest(
+          testIndex, openParens[i], buffer, currentPosition, expectPosition
+        )
 
       block close:
         let buffer = @[ru"", closeParens[i].toRunes]
         let
           currentPosition = BufferPosition(line: 1, column: 0)
           expectPosition = none(SearchResult)
-        matchingParenPairTest(testIndex, closeParens[i], buffer, currentPosition, expectPosition)
+        matchingParenPairTest(
+          testIndex, closeParens[i], buffer, currentPosition, expectPosition
+        )
 
   block matchingParenPairTestCase7:
     ## matchingParenPair should ignore '"'.
     let
       testIndex = 7
       buffer = @["\"\"".toRunes]
-      paren = ru'"'
+      paren = ru '"'
       currentPosition = BufferPosition(line: 0, column: 0)
       expectPosition = none(SearchResult)
 
@@ -806,7 +730,7 @@ suite "searchutils: matchingParenPair":
     let
       testIndex = 8
       buffer = @["''".toRunes]
-      paren = ru'\''
+      paren = ru '\''
       currentPosition = BufferPosition(line: 0, column: 0)
       expectPosition = none(SearchResult)
 
@@ -909,8 +833,8 @@ suite "searchutils: search (seq[Runes])":
       IsIgnorecase = true
       IsSmartcase = true
 
-    check buffer.search(keyword, IsIgnorecase, IsSmartcase) == @[
-      BufferPosition(line: 1, column: 2)]
+    check buffer.search(keyword, IsIgnorecase, IsSmartcase) ==
+      @[BufferPosition(line: 1, column: 2)]
 
   test "Basic 2":
     let
@@ -920,8 +844,8 @@ suite "searchutils: search (seq[Runes])":
       IsIgnorecase = true
       IsSmartcase = true
 
-    check buffer.search(keyword, IsIgnorecase, IsSmartcase) == @[
-      BufferPosition(line: 1, column: 0)]
+    check buffer.search(keyword, IsIgnorecase, IsSmartcase) ==
+      @[BufferPosition(line: 1, column: 0)]
 
   test "Basic 3":
     let
@@ -931,9 +855,8 @@ suite "searchutils: search (seq[Runes])":
       IsIgnorecase = true
       IsSmartcase = true
 
-    check buffer.search(keyword, IsIgnorecase, IsSmartcase) == @[
-      BufferPosition(line: 0, column: 3)
-    ]
+    check buffer.search(keyword, IsIgnorecase, IsSmartcase) ==
+      @[BufferPosition(line: 0, column: 3)]
 
   test "Search new lines":
     let
@@ -943,12 +866,13 @@ suite "searchutils: search (seq[Runes])":
       IsIgnorecase = true
       IsSmartcase = true
 
-    check buffer.search(keyword, IsIgnorecase, IsSmartcase) == @[
-      BufferPosition(line: 0, column: 1),
-      BufferPosition(line: 1, column: 2),
-      BufferPosition(line: 2, column: 3),
-      BufferPosition(line: 3, column: 0),
-    ]
+    check buffer.search(keyword, IsIgnorecase, IsSmartcase) ==
+      @[
+        BufferPosition(line: 0, column: 1),
+        BufferPosition(line: 1, column: 2),
+        BufferPosition(line: 2, column: 3),
+        BufferPosition(line: 3, column: 0),
+      ]
 
   test "Search new lines 2":
     let
@@ -958,5 +882,5 @@ suite "searchutils: search (seq[Runes])":
       IsIgnorecase = true
       IsSmartcase = true
 
-    check buffer.search(keyword, IsIgnorecase, IsSmartcase) == @[
-      BufferPosition(line: 1, column: 1)]
+    check buffer.search(keyword, IsIgnorecase, IsSmartcase) ==
+      @[BufferPosition(line: 1, column: 1)]

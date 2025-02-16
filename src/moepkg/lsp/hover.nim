@@ -35,13 +35,10 @@ type
 
   LspHoverResult* = Result[Option[Hover], string]
 
-proc initHoverParams*(
-  path: string,
-  position: LspPosition): HoverParams {.inline.} =
-
-    HoverParams(
-      textDocument: TextDocumentIdentifier(uri: path.pathToUri),
-      position: position)
+proc initHoverParams*(path: string, position: LspPosition): HoverParams {.inline.} =
+  HoverParams(
+    textDocument: TextDocumentIdentifier(uri: path.pathToUri), position: position
+  )
 
 proc parseTextDocumentHoverResponse*(res: JsonNode): LspHoverResult =
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#hover
@@ -58,27 +55,28 @@ proc parseTextDocumentHoverResponse*(res: JsonNode): LspHoverResult =
 
 proc toHoverContent*(hover: Hover): HoverContent =
   let contents = %*hover.contents
-  case contents.kind:
-    of JArray:
-      if contents.len == 1:
-        if contents[0].contains("value"):
-          result.description = contents[0]["value"].getStr.splitLines.toSeqRunes
-      else:
-        if contents[0].contains("value"):
-          result.title = contents[0]["value"].getStr.toRunes
-
-        for i in 1 ..< contents.len:
-          if contents[i].contains("value"):
-            result.description.add contents[i]["value"].getStr.splitLines.toSeqRunes
-            if i < contents.len - 1: result.description.add ru""
+  case contents.kind
+  of JArray:
+    if contents.len == 1:
+      if contents[0].contains("value"):
+        result.description = contents[0]["value"].getStr.splitLines.toSeqRunes
     else:
-      result.description = contents["value"].getStr.splitLines.toSeqRunes
+      if contents[0].contains("value"):
+        result.title = contents[0]["value"].getStr.toRunes
+
+      for i in 1 ..< contents.len:
+        if contents[i].contains("value"):
+          result.description.add contents[i]["value"].getStr.splitLines.toSeqRunes
+          if i < contents.len - 1:
+            result.description.add ru""
+  else:
+    result.description = contents["value"].getStr.splitLines.toSeqRunes
 
   if hover.range.isSome:
     let range = %*hover.range
     result.range.first = BufferPosition(
-      line: range["start"]["line"].getInt,
-      column: range["start"]["character"].getInt)
+      line: range["start"]["line"].getInt, column: range["start"]["character"].getInt
+    )
     result.range.last = BufferPosition(
-      line: range["end"]["line"].getInt,
-      column: range["end"]["character"].getInt)
+      line: range["end"]["line"].getInt, column: range["end"]["character"].getInt
+    )

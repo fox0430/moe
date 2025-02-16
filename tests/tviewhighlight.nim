@@ -17,15 +17,17 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, heapqueue, options, strutils, strformat, importutils,
-            sequtils]
+import std/[unittest, heapqueue, options, strutils, strformat, importutils, sequtils]
 
 import pkg/results
 
 import moepkg/lsp/client
 import moepkg/syntax/highlite
-import moepkg/[editorstatus, highlight, color, gapbuffer, unicodeext, movement,
-               windownode, ui, independentutils, bufferstatus]
+import
+  moepkg/[
+    editorstatus, highlight, color, gapbuffer, unicodeext, movement, windownode, ui,
+    independentutils, bufferstatus,
+  ]
 
 import utils
 
@@ -33,9 +35,9 @@ import moepkg/viewhighlight {.all.}
 
 proc initHighlight(status: EditorStatus) {.inline.} =
   currentBufStatus.highlight = initHighlight(
-    currentBufStatus.buffer.toSeqRunes,
-    status.settings.highlight.reservedWords,
-    currentBufStatus.language)
+    currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+    currentBufStatus.language,
+  )
 
 suite "viewhighlight: initBufferInView":
   privateAccess(BufferInView)
@@ -101,9 +103,7 @@ suite "viewhighlight: highlightReferences":
 
     let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
     var highlight = currentBufStatus.highlight
-    highlight.highlightReferences(
-      bufferInView,
-      status.settings.standard.colorMode)
+    highlight.highlightReferences(bufferInView, status.settings.standard.colorMode)
 
     check highlight[0].color == EditorColorPairIndex.default
     check highlight[1].color == EditorColorPairIndex.currentWord
@@ -118,9 +118,7 @@ suite "viewhighlight: highlightReferences":
 
     let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
     var highlight = currentBufStatus.highlight
-    highlight.highlightReferences(
-      bufferInView,
-      status.settings.standard.colorMode)
+    highlight.highlightReferences(bufferInView, status.settings.standard.colorMode)
 
     check highlight[0].color == EditorColorPairIndex.default
     check highlight[1].color == EditorColorPairIndex.currentWord
@@ -136,9 +134,7 @@ suite "viewhighlight: highlightReferences":
 
     let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
     var highlight = currentBufStatus.highlight
-    highlight.highlightReferences(
-      bufferInView,
-      status.settings.standard.colorMode)
+    highlight.highlightReferences(bufferInView, status.settings.standard.colorMode)
 
     check highlight[0].color == EditorColorPairIndex.default
     check highlight[1].color == EditorColorPairIndex.currentWord
@@ -154,9 +150,7 @@ suite "viewhighlight: highlightReferences":
 
     let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
     var highlight = currentBufStatus.highlight
-    highlight.highlightReferences(
-      bufferInView,
-      status.settings.standard.colorMode)
+    highlight.highlightReferences(bufferInView, status.settings.standard.colorMode)
 
     check highlight[0].color == EditorColorPairIndex.default
     check highlight[1].color == EditorColorPairIndex.currentWord
@@ -176,9 +170,7 @@ suite "viewhighlight: highlightFullWidthSpace":
 
     let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
     var highlight = currentBufStatus.highlight
-    highlight.highlightFullWidthSpace(
-      currentMainWindowNode,
-      bufferInView)
+    highlight.highlightFullWidthSpace(currentMainWindowNode, bufferInView)
 
     check highlight[0].color == EditorColorPairIndex.default
     check highlight[1].color == EditorColorPairIndex.highlightFullWidthSpace
@@ -196,9 +188,7 @@ suite "viewhighlight: highlightFullWidthSpace":
 
     let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
     var highlight = currentBufStatus.highlight
-    highlight.highlightFullWidthSpace(
-      currentMainWindowNode,
-      bufferInView)
+    highlight.highlightFullWidthSpace(currentMainWindowNode, bufferInView)
 
     check highlight[0].color == EditorColorPairIndex.default
     check highlight[1].color == EditorColorPairIndex.highlightFullWidthSpace
@@ -247,18 +237,16 @@ suite "viewhighlight: Highlight trailing spaces":
     status.settings.highlight.currentWord = false
 
     currentBufStatus.highlight = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      status.settings.highlight.reservedWords,
-      currentBufStatus.language)
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
 
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
     var highlight = currentBufStatus.highlight
     highlight.updateViewHighlight(
-      currentBufStatus,
-      currentMainWindowNode,
-      status.highlightingText,
-      status.settings)
+      currentBufStatus, currentMainWindowNode, status.highlightingText, status.settings
+    )
 
     status.resize(100, 100)
     status.update
@@ -281,10 +269,8 @@ suite "viewhighlight: Highlight trailing spaces":
 
     var highlight = currentBufStatus.highlight
     highlight.updateViewHighlight(
-      currentBufStatus,
-      currentMainWindowNode,
-      status.highlightingText,
-      status.settings)
+      currentBufStatus, currentMainWindowNode, status.highlightingText, status.settings
+    )
 
     check highlight[0].color == EditorColorPairIndex.default
     check highlight[0].firstColumn == 0
@@ -312,10 +298,8 @@ suite "viewhighlight: Highlight trailing spaces":
 
     var highlight = currentBufStatus.highlight
     highlight.updateViewHighlight(
-      currentBufStatus,
-      currentMainWindowNode,
-      status.highlightingText,
-      status.settings)
+      currentBufStatus, currentMainWindowNode, status.highlightingText, status.settings
+    )
 
     check highlight[0].color == EditorColorPairIndex.default
     check highlight[0].firstColumn == 0
@@ -332,27 +316,24 @@ suite "viewhighlight: Highlight trailing spaces":
 
     status.verticalSplitWindow
 
-    status.highlightingText = HighlightingText(
-      kind: HighlightingTextKind.search,
-      text: @["abc"].toSeqRunes)
-      .some
+    status.highlightingText =
+      HighlightingText(kind: HighlightingTextKind.search, text: @["abc"].toSeqRunes).some
 
     var queue = initHeapQueue[WindowNode]()
     for node in mainWindowNode.child:
       queue.push(node)
 
     while queue.len > 0:
-      for i in  0 ..< queue.len:
+      for i in 0 ..< queue.len:
         var node = queue.pop
-        template b: var BufferStatus = status.bufStatus[node.bufferIndex]
+        template b(): var BufferStatus =
+          status.bufStatus[node.bufferIndex]
 
         if node.window.isSome:
           var highlight = b.highlight
           highlight.updateViewHighlight(
-            b,
-            node,
-            status.highlightingText,
-            status.settings)
+            b, node, status.highlightingText, status.settings
+          )
 
           check highlight.len == 3
           check highlight[0].color == EditorColorPairIndex.searchResult
@@ -369,10 +350,8 @@ suite "viewhighlight: Highlight trailing spaces":
 
     var highlight = currentBufStatus.highlight
     highlight.updateViewHighlight(
-      currentBufStatus,
-      currentMainWindowNode,
-      status.highlightingText,
-      status.settings)
+      currentBufStatus, currentMainWindowNode, status.highlightingText, status.settings
+    )
 
     for c in highlight.colorSegments:
       if c.firstRow == 1 and c.lastColumn < 3:
@@ -388,20 +367,21 @@ suite "viewhighlight: Highlight trailing spaces":
     status.resize(100, 100)
     status.update
 
-    let lspCapabilities = LspCapabilities(
-      documentHighlight: true)
+    let lspCapabilities = LspCapabilities(documentHighlight: true)
 
     currentBufStatus.documentHighlightInfo = DocumentHighlightInfo(
-      position: BufferPosition(line: 0, column: 0),
-       # Incorrect ranges for the test
-      ranges: @[
-        BufferRange(
-          first: BufferPosition(line: 0, column: 0),
-          last: BufferPosition(line: 0, column: 3)),
-        BufferRange(
-          first: BufferPosition(line: 1, column: 0),
-          last: BufferPosition(line: 1, column: 3)),
-      ]
+      position: BufferPosition(line: 0, column: 0), # Incorrect ranges for the test
+      ranges:
+        @[
+          BufferRange(
+            first: BufferPosition(line: 0, column: 0),
+            last: BufferPosition(line: 0, column: 3),
+          ),
+          BufferRange(
+            first: BufferPosition(line: 1, column: 0),
+            last: BufferPosition(line: 1, column: 3),
+          ),
+        ],
     )
 
     var highlight = currentBufStatus.highlight
@@ -410,7 +390,8 @@ suite "viewhighlight: Highlight trailing spaces":
       currentMainWindowNode,
       status.highlightingText,
       status.settings,
-      some(lspCapabilities))
+      some(lspCapabilities),
+    )
 
     for c in highlight.colorSegments:
       if c.firstRow == 1 and c.lastColumn < 4:
@@ -420,43 +401,40 @@ suite "viewhighlight: Highlight trailing spaces":
 
 suite "viewhighlight: highlightPairOfParen":
   const
-    OpenParens = @[ru'(', ru'{', ru'[']
-    CloseParens = @[ru')', ru'}', ru']']
+    OpenParens = @[ru '(', ru '{', ru '[']
+    CloseParens = @[ru ')', ru '}', ru ']']
 
   proc highlightParenPairTest(
-    TestIndex: int,
-    paren: Rune,
-    buffer: seq[Runes],
-    position: BufferPosition,
-    expectHighlight: Highlight) =
+      TestIndex: int,
+      paren: Rune,
+      buffer: seq[Runes],
+      position: BufferPosition,
+      expectHighlight: Highlight,
+  ) =
+    let testTitle = "Case " & $TestIndex & ": highlightParenPair: '" & $paren & "'"
 
-      let testTitle =
-        "Case " & $TestIndex & ": highlightParenPair: '" & $paren & "'"
+    test testTitle:
+      var status = initEditorStatus()
+      discard status.addNewBufferInCurrentWin.get
 
-      test testTitle:
-        var status = initEditorStatus()
-        discard status.addNewBufferInCurrentWin.get
+      status.bufStatus[0].buffer = buffer.toGapBuffer
 
-        status.bufStatus[0].buffer = buffer.toGapBuffer
+      currentMainWindowNode.currentLine = position.line
+      currentMainWindowNode.currentColumn = position.column
 
-        currentMainWindowNode.currentLine = position.line
-        currentMainWindowNode.currentColumn = position.column
+      status.resize(100, 100)
+      status.update
 
-        status.resize(100, 100)
-        status.update
+      status.initHighlight
 
-        status.initHighlight
+      status.update
 
-        status.update
+      let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
 
-        let bufferInView = initBufferInView(
-          currentBufStatus,
-          currentMainWindowNode)
+      var highlight = currentBufStatus.highlight
+      highlight.highlightPairOfParen(bufferInView)
 
-        var highlight = currentBufStatus.highlight
-        highlight.highlightPairOfParen(bufferInView)
-
-        check highlight[] == `expectHighlight`[]
+      check highlight[] == `expectHighlight`[]
 
   block highlightParenPairTestCase1:
     ## Case 1 is starting the search on an empty line.
@@ -464,31 +442,28 @@ suite "viewhighlight: highlightPairOfParen":
       TestIndex = 1
       Buffer = @[ru""]
       Position = BufferPosition(line: 0, column: 0)
-    let
-      expectHighlight = Highlight(colorSegments: @[
-        ColorSegment(
-          firstRow: 0,
-          firstColumn: 0,
-          lastRow: 0,
-          lastColumn: -1,
-          color: EditorColorPairIndex.default),
-      ])
+    let expectHighlight = Highlight(
+      colorSegments:
+        @[
+          ColorSegment(
+            firstRow: 0,
+            firstColumn: 0,
+            lastRow: 0,
+            lastColumn: -1,
+            color: EditorColorPairIndex.default,
+          )
+        ]
+    )
 
     for i in 0 ..< OpenParens.len:
       block open:
         highlightParenPairTest(
-          TestIndex,
-          OpenParens[i],
-          Buffer,
-          Position,
-          expectHighlight)
+          TestIndex, OpenParens[i], Buffer, Position, expectHighlight
+        )
       block close:
         highlightParenPairTest(
-          TestIndex,
-          CloseParens[i],
-          Buffer,
-          Position,
-          expectHighlight)
+          TestIndex, CloseParens[i], Buffer, Position, expectHighlight
+        )
 
   block highlightParenPairTestCase2:
     const TestIndex = 2
@@ -498,51 +473,55 @@ suite "viewhighlight: highlightPairOfParen":
 
       block open:
         const Position = BufferPosition(line: 0, column: 0)
-        let expectHighlight = Highlight(colorSegments: @[
-            ColorSegment(
-              firstRow: 0,
-              firstColumn: 0,
-              lastRow: 0,
-              lastColumn: 0,
-              color: EditorColorPairIndex.default),
-            ColorSegment(
-              firstRow: 0,
-              firstColumn: 1,
-              lastRow: 0,
-              lastColumn: 1,
-              color: EditorColorPairIndex.parenPair),
-          ])
+        let expectHighlight = Highlight(
+          colorSegments:
+            @[
+              ColorSegment(
+                firstRow: 0,
+                firstColumn: 0,
+                lastRow: 0,
+                lastColumn: 0,
+                color: EditorColorPairIndex.default,
+              ),
+              ColorSegment(
+                firstRow: 0,
+                firstColumn: 1,
+                lastRow: 0,
+                lastColumn: 1,
+                color: EditorColorPairIndex.parenPair,
+              ),
+            ]
+        )
 
         highlightParenPairTest(
-          TestIndex,
-          OpenParens[i],
-          buffer,
-          Position,
-          expectHighlight)
+          TestIndex, OpenParens[i], buffer, Position, expectHighlight
+        )
 
       block close:
         const Position = BufferPosition(line: 0, column: 1)
-        let expectHighlight = Highlight(colorSegments: @[
-            ColorSegment(
-              firstRow: 0,
-              firstColumn: 0,
-              lastRow: 0,
-              lastColumn: 0,
-              color: EditorColorPairIndex.parenPair),
-            ColorSegment(
-              firstRow: 0,
-              firstColumn: 1,
-              lastRow: 0,
-              lastColumn: 1,
-              color: EditorColorPairIndex.default)
-          ])
+        let expectHighlight = Highlight(
+          colorSegments:
+            @[
+              ColorSegment(
+                firstRow: 0,
+                firstColumn: 0,
+                lastRow: 0,
+                lastColumn: 0,
+                color: EditorColorPairIndex.parenPair,
+              ),
+              ColorSegment(
+                firstRow: 0,
+                firstColumn: 1,
+                lastRow: 0,
+                lastColumn: 1,
+                color: EditorColorPairIndex.default,
+              ),
+            ]
+        )
 
         highlightParenPairTest(
-          TestIndex,
-          CloseParens[i],
-          buffer,
-          Position,
-          expectHighlight)
+          TestIndex, CloseParens[i], buffer, Position, expectHighlight
+        )
 
   block highlightParenPairTestCase3:
     const TestIndex = 3
@@ -552,51 +531,55 @@ suite "viewhighlight: highlightPairOfParen":
 
       block open:
         const Position = BufferPosition(line: 0, column: 0)
-        let expectHighlight = Highlight(colorSegments: @[
-            ColorSegment(
-              firstRow: 0,
-              firstColumn: 0,
-              lastRow: 0,
-              lastColumn: 1,
-              color: EditorColorPairIndex.default),
-            ColorSegment(
-              firstRow: 0,
-              firstColumn: 2,
-              lastRow: 0,
-              lastColumn: 2,
-              color: EditorColorPairIndex.parenPair),
-          ])
+        let expectHighlight = Highlight(
+          colorSegments:
+            @[
+              ColorSegment(
+                firstRow: 0,
+                firstColumn: 0,
+                lastRow: 0,
+                lastColumn: 1,
+                color: EditorColorPairIndex.default,
+              ),
+              ColorSegment(
+                firstRow: 0,
+                firstColumn: 2,
+                lastRow: 0,
+                lastColumn: 2,
+                color: EditorColorPairIndex.parenPair,
+              ),
+            ]
+        )
 
         highlightParenPairTest(
-          TestIndex,
-          OpenParens[i],
-          buffer,
-          Position,
-          expectHighlight)
+          TestIndex, OpenParens[i], buffer, Position, expectHighlight
+        )
 
       block close:
         const Position = BufferPosition(line: 0, column: 2)
-        let expectHighlight = Highlight(colorSegments: @[
-            ColorSegment(
-              firstRow: 0,
-              firstColumn: 0,
-              lastRow: 0,
-              lastColumn: 0,
-              color: EditorColorPairIndex.parenPair),
-            ColorSegment(
-              firstRow: 0,
-              firstColumn: 1,
-              lastRow: 0,
-              lastColumn: 2,
-              color: EditorColorPairIndex.default),
-          ])
+        let expectHighlight = Highlight(
+          colorSegments:
+            @[
+              ColorSegment(
+                firstRow: 0,
+                firstColumn: 0,
+                lastRow: 0,
+                lastColumn: 0,
+                color: EditorColorPairIndex.parenPair,
+              ),
+              ColorSegment(
+                firstRow: 0,
+                firstColumn: 1,
+                lastRow: 0,
+                lastColumn: 2,
+                color: EditorColorPairIndex.default,
+              ),
+            ]
+        )
 
         highlightParenPairTest(
-          TestIndex,
-          CloseParens[i],
-          buffer,
-          Position,
-          expectHighlight)
+          TestIndex, CloseParens[i], buffer, Position, expectHighlight
+        )
 
   block highlightParenPairTestCase4:
     const TestIndex = 4
@@ -606,51 +589,55 @@ suite "viewhighlight: highlightPairOfParen":
 
       block open:
         const Position = BufferPosition(line: 0, column: 0)
-        let expectHighlight = Highlight(colorSegments: @[
-            ColorSegment(
-              firstRow: 0,
-              firstColumn: 0,
-              lastRow: 0,
-              lastColumn: 0,
-              color: EditorColorPairIndex.default),
-            ColorSegment(
-              firstRow: 1,
-              firstColumn: 0,
-              lastRow: 1,
-              lastColumn: 0,
-              color: EditorColorPairIndex.parenPair),
-          ])
+        let expectHighlight = Highlight(
+          colorSegments:
+            @[
+              ColorSegment(
+                firstRow: 0,
+                firstColumn: 0,
+                lastRow: 0,
+                lastColumn: 0,
+                color: EditorColorPairIndex.default,
+              ),
+              ColorSegment(
+                firstRow: 1,
+                firstColumn: 0,
+                lastRow: 1,
+                lastColumn: 0,
+                color: EditorColorPairIndex.parenPair,
+              ),
+            ]
+        )
 
         highlightParenPairTest(
-          TestIndex,
-          OpenParens[i],
-          buffer,
-          Position,
-          expectHighlight)
+          TestIndex, OpenParens[i], buffer, Position, expectHighlight
+        )
 
       block close:
         const Position = BufferPosition(line: 1, column: 0)
-        let expectHighlight = Highlight(colorSegments: @[
-            ColorSegment(
-              firstRow: 0,
-              firstColumn: 0,
-              lastRow: 0,
-              lastColumn: 0,
-              color: EditorColorPairIndex.parenPair),
-            ColorSegment(
-              firstRow: 1,
-              firstColumn: 0,
-              lastRow: 1,
-              lastColumn: 0,
-              color: EditorColorPairIndex.default),
-          ])
+        let expectHighlight = Highlight(
+          colorSegments:
+            @[
+              ColorSegment(
+                firstRow: 0,
+                firstColumn: 0,
+                lastRow: 0,
+                lastColumn: 0,
+                color: EditorColorPairIndex.parenPair,
+              ),
+              ColorSegment(
+                firstRow: 1,
+                firstColumn: 0,
+                lastRow: 1,
+                lastColumn: 0,
+                color: EditorColorPairIndex.default,
+              ),
+            ]
+        )
 
         highlightParenPairTest(
-          TestIndex,
-          CloseParens[i],
-          buffer,
-          Position,
-          expectHighlight)
+          TestIndex, CloseParens[i], buffer, Position, expectHighlight
+        )
 
   block highlightParenPairTestCase5:
     const TestIndex = 5
@@ -660,118 +647,127 @@ suite "viewhighlight: highlightPairOfParen":
 
       block open:
         const Position = BufferPosition(line: 0, column: 0)
-        let expectHighlight = Highlight(colorSegments: @[
-            ColorSegment(
-              firstRow: 0,
-              firstColumn: 0,
-              lastRow: 0,
-              lastColumn: 0,
-              color: EditorColorPairIndex.default),
-            ColorSegment(
-              firstRow: 1,
-              firstColumn: 0,
-              lastRow: 1,
-              lastColumn: -1,
-              color: EditorColorPairIndex.default),
-            ColorSegment(
-              firstRow: 2,
-              firstColumn: 0,
-              lastRow: 2,
-              lastColumn: 0,
-              color: EditorColorPairIndex.parenPair),
-          ])
+        let expectHighlight = Highlight(
+          colorSegments:
+            @[
+              ColorSegment(
+                firstRow: 0,
+                firstColumn: 0,
+                lastRow: 0,
+                lastColumn: 0,
+                color: EditorColorPairIndex.default,
+              ),
+              ColorSegment(
+                firstRow: 1,
+                firstColumn: 0,
+                lastRow: 1,
+                lastColumn: -1,
+                color: EditorColorPairIndex.default,
+              ),
+              ColorSegment(
+                firstRow: 2,
+                firstColumn: 0,
+                lastRow: 2,
+                lastColumn: 0,
+                color: EditorColorPairIndex.parenPair,
+              ),
+            ]
+        )
 
         highlightParenPairTest(
-          TestIndex,
-          OpenParens[i],
-          buffer,
-          Position,
-          expectHighlight)
+          TestIndex, OpenParens[i], buffer, Position, expectHighlight
+        )
 
       block close:
         const Position = BufferPosition(line: 2, column: 0)
-        let expectHighlight = Highlight(colorSegments: @[
-            ColorSegment(
-              firstRow: 0,
-              firstColumn: 0,
-              lastRow: 0,
-              lastColumn: 0,
-              color: EditorColorPairIndex.parenPair),
-            ColorSegment(
-              firstRow: 1,
-              firstColumn: 0,
-              lastRow: 1,
-              lastColumn: -1,
-              color: EditorColorPairIndex.default),
-            ColorSegment(
-              firstRow: 2,
-              firstColumn: 0,
-              lastRow: 2,
-              lastColumn: 0,
-              color: EditorColorPairIndex.default),
-          ])
+        let expectHighlight = Highlight(
+          colorSegments:
+            @[
+              ColorSegment(
+                firstRow: 0,
+                firstColumn: 0,
+                lastRow: 0,
+                lastColumn: 0,
+                color: EditorColorPairIndex.parenPair,
+              ),
+              ColorSegment(
+                firstRow: 1,
+                firstColumn: 0,
+                lastRow: 1,
+                lastColumn: -1,
+                color: EditorColorPairIndex.default,
+              ),
+              ColorSegment(
+                firstRow: 2,
+                firstColumn: 0,
+                lastRow: 2,
+                lastColumn: 0,
+                color: EditorColorPairIndex.default,
+              ),
+            ]
+        )
 
         highlightParenPairTest(
-          TestIndex,
-          CloseParens[i],
-          buffer,
-          Position,
-          expectHighlight)
+          TestIndex, CloseParens[i], buffer, Position, expectHighlight
+        )
 
   block highlightParenPairTestCase6:
     const TestIndex = 6
 
     for i in 0 ..< OpenParens.len:
-
       block open:
         let buffer = @[OpenParens[i].toRunes, ru""]
         const Position = BufferPosition(line: 0, column: 0)
-        let expectHighlight = Highlight(colorSegments: @[
-            ColorSegment(
-              firstRow: 0,
-              firstColumn: 0,
-              lastRow: 0,
-              lastColumn: 0,
-              color: EditorColorPairIndex.default),
-            ColorSegment(
-              firstRow: 1,
-              firstColumn: 0,
-              lastRow: 1,
-              lastColumn: -1,
-              color: EditorColorPairIndex.default)
-          ])
+        let expectHighlight = Highlight(
+          colorSegments:
+            @[
+              ColorSegment(
+                firstRow: 0,
+                firstColumn: 0,
+                lastRow: 0,
+                lastColumn: 0,
+                color: EditorColorPairIndex.default,
+              ),
+              ColorSegment(
+                firstRow: 1,
+                firstColumn: 0,
+                lastRow: 1,
+                lastColumn: -1,
+                color: EditorColorPairIndex.default,
+              ),
+            ]
+        )
 
         highlightParenPairTest(
-          TestIndex,
-          OpenParens[i],
-          buffer,
-          Position,
-          expectHighlight)
+          TestIndex, OpenParens[i], buffer, Position, expectHighlight
+        )
 
       block close:
         let buffer = @[ru"", CloseParens[i].toRunes]
         const Position = BufferPosition(line: 1, column: 0)
-        let expectHighlight = Highlight(colorSegments: @[
-            ColorSegment(
-              firstRow: 0,
-              firstColumn: 0,
-              lastRow: 0,
-              lastColumn: -1,
-              color: EditorColorPairIndex.default),
-            ColorSegment(
-              firstRow: 1,
-              firstColumn: 0,
-              lastRow: 1,
-              lastColumn: 0,
-              color: EditorColorPairIndex.default)
-          ])
+        let expectHighlight = Highlight(
+          colorSegments:
+            @[
+              ColorSegment(
+                firstRow: 0,
+                firstColumn: 0,
+                lastRow: 0,
+                lastColumn: -1,
+                color: EditorColorPairIndex.default,
+              ),
+              ColorSegment(
+                firstRow: 1,
+                firstColumn: 0,
+                lastRow: 1,
+                lastColumn: 0,
+                color: EditorColorPairIndex.default,
+              ),
+            ]
+        )
 
         highlightParenPairTest(
-          TestIndex,
-          CloseParens[i],
-          buffer,
-          Position,
-          expectHighlight)
+          TestIndex, CloseParens[i], buffer, Position, expectHighlight
+        )
 
   block highlightParenPairTestCase7:
     ## matchingParenPair should ignore '"'.
@@ -779,18 +775,21 @@ suite "viewhighlight: highlightPairOfParen":
       TestIndex = 7
       Buffer = @["\"\"".toRunes]
       Position = BufferPosition(line: 0, column: 0)
-      Paren = ru'"'
-    let expectHighlight = Highlight(colorSegments: @[
-        ColorSegment(
-          firstRow: 0,
-          firstColumn: 0,
-          lastRow: 0,
-          lastColumn: 1,
-          color: EditorColorPairIndex.default)
-      ])
+      Paren = ru '"'
+    let expectHighlight = Highlight(
+      colorSegments:
+        @[
+          ColorSegment(
+            firstRow: 0,
+            firstColumn: 0,
+            lastRow: 0,
+            lastColumn: 1,
+            color: EditorColorPairIndex.default,
+          )
+        ]
+    )
 
     highlightParenPairTest(TestIndex, Paren, Buffer, Position, expectHighlight)
-
 
   block highlightParenPairTestCase8:
     ## matchingParenPair should ignore '''.
@@ -798,15 +797,19 @@ suite "viewhighlight: highlightPairOfParen":
       TestIndex = 8
       Buffer = @["''".toRunes]
       Position = BufferPosition(line: 0, column: 0)
-      Paren = ru'\''
-    let expectHighlight = Highlight(colorSegments: @[
-        ColorSegment(
-          firstRow: 0,
-          firstColumn: 0,
-          lastRow: 0,
-          lastColumn: 1,
-          color: EditorColorPairIndex.default)
-      ])
+      Paren = ru '\''
+    let expectHighlight = Highlight(
+      colorSegments:
+        @[
+          ColorSegment(
+            firstRow: 0,
+            firstColumn: 0,
+            lastRow: 0,
+            lastColumn: 1,
+            color: EditorColorPairIndex.default,
+          )
+        ]
+    )
 
     highlightParenPairTest(TestIndex, Paren, Buffer, Position, expectHighlight)
 
@@ -817,21 +820,22 @@ suite "viewhighlight: highlightPairOfParen":
       let buffer = @[CloseParens[i].toRunes]
 
       const Position = BufferPosition(line: 0, column: 0)
-      let expectHighlight = Highlight(colorSegments: @[
-          ColorSegment(
-            firstRow: 0,
-            firstColumn: 0,
-            lastRow: 0,
-            lastColumn: 0,
-            color: EditorColorPairIndex.default)
-        ])
+      let expectHighlight = Highlight(
+        colorSegments:
+          @[
+            ColorSegment(
+              firstRow: 0,
+              firstColumn: 0,
+              lastRow: 0,
+              lastColumn: 0,
+              color: EditorColorPairIndex.default,
+            )
+          ]
+      )
 
       highlightParenPairTest(
-        TestIndex,
-        CloseParens[i],
-        buffer,
-        Position,
-        expectHighlight)
+        TestIndex, CloseParens[i], buffer, Position, expectHighlight
+      )
 
   test "Highlight ')'":
     var status = initEditorStatus()
@@ -847,9 +851,14 @@ suite "viewhighlight: highlightPairOfParen":
     let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
     highlight.highlightPairOfParen(bufferInView)
 
-    check highlight[8] == ColorSegment(
-      firstRow: 0, firstColumn: 19, lastRow: 0, lastColumn: 19,
-      color: EditorColorPairIndex.parenPair)
+    check highlight[8] ==
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 19,
+        lastRow: 0,
+        lastColumn: 19,
+        color: EditorColorPairIndex.parenPair,
+      )
 
   test "Highlight '('":
     var status = initEditorStatus()
@@ -865,13 +874,18 @@ suite "viewhighlight: highlightPairOfParen":
     let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
     highlight.highlightPairOfParen(bufferInView)
 
-    check highlight[3] == ColorSegment(
-      firstRow: 0, firstColumn: 9, lastRow: 0, lastColumn: 9,
-      color: EditorColorPairIndex.parenPair)
+    check highlight[3] ==
+      ColorSegment(
+        firstRow: 0,
+        firstColumn: 9,
+        lastRow: 0,
+        lastColumn: 9,
+        color: EditorColorPairIndex.parenPair,
+      )
 
   test "Display from the middle":
     # NOTE: https://github.com/fox0430/moe/issues/1850
-    var buffer = toSeq(0..20).mapIt(it.toRunes)
+    var buffer = toSeq(0 .. 20).mapIt(it.toRunes)
     buffer[1] = ru"()"
     var highlight = initHighlightPlain(buffer)
 
@@ -879,13 +893,15 @@ suite "viewhighlight: highlightPairOfParen":
     let bufferInView = BufferInView(
       buffer: buffer[1 .. 20],
       originalLineRange: Range(first: 1, last: 20),
-      currentPosition: BufferPosition(line: 1, column: 0))
+      currentPosition: BufferPosition(line: 1, column: 0),
+    )
 
     highlight.highlightPairOfParen(bufferInView)
 
 suite "viewhighlight: highlightGitConflicts":
   test "Highlight Git conflicts":
-    const Buffer = """
+    const Buffer =
+      """
 <<<<<<< HEAD
 echo 1
 echo 2
@@ -900,9 +916,8 @@ echo "test"
 
     const ReservedWords: seq[ReservedWord] = @[]
     var h = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      ReservedWords,
-      SourceLanguage.langNim)
+      currentBufStatus.buffer.toSeqRunes, ReservedWords, SourceLanguage.langNim
+    )
 
     status.resize(100, 100)
     status.update
@@ -910,120 +925,141 @@ echo "test"
     let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
     h.highlightGitConflicts(bufferInView)
 
-    check h.colorSegments == @[
-      ColorSegment(
-        firstRow: 0,
-        firstColumn: 0,
-        lastRow: 0,
-        lastColumn: 6,
-        color: EditorColorPairIndex.gitConflict,
-        attribute: Attribute.normal),
-      ColorSegment(
-        firstRow: 0,
-        firstColumn: 7,
-        lastRow: 0,
-        lastColumn: 7,
-        color: EditorColorPairIndex.gitConflict,
-        attribute: Attribute.normal),
-      ColorSegment(
-        firstRow: 0,
-        firstColumn: 8,
-        lastRow: 0,
-        lastColumn: 11,
-        color: EditorColorPairIndex.gitConflict,
-        attribute: Attribute.normal),
-      ColorSegment(
-        firstRow: 1,
-        firstColumn: 0,
-        lastRow: 1,
-        lastColumn: 3,
-        color: EditorColorPairIndex.builtin,
-        attribute: Attribute.normal),
-      ColorSegment(
-        firstRow: 1,firstColumn: 4,
-        lastRow: 1,lastColumn: 4,
-        color: EditorColorPairIndex.whitespace,
-        attribute: Attribute.normal),
-      ColorSegment(
-        firstRow: 1,
-        firstColumn: 5,
-        lastRow: 1,
-        lastColumn: 5,
-        color: EditorColorPairIndex.decNumber,
-        attribute: Attribute.normal),
-      ColorSegment(
-        firstRow: 2,
-        firstColumn: 0,
-        lastRow: 2, lastColumn: 3,
-        color: EditorColorPairIndex.builtin,
-        attribute: Attribute.normal),
-      ColorSegment(
-        firstRow: 2,
-        firstColumn: 4,
-        lastRow: 2,
-        lastColumn: 4,
-        color: EditorColorPairIndex.whitespace,
-        attribute: Attribute.normal),
-      ColorSegment(
-        firstRow: 2,
-        firstColumn: 5,
-        lastRow: 2,
-        lastColumn: 5,
-        color: EditorColorPairIndex.decNumber,
-        attribute: Attribute.normal),
-      ColorSegment(
-        firstRow: 3,
-        firstColumn: 0,
-        lastRow: 3,
-        lastColumn: 6,
-        color: EditorColorPairIndex.gitConflict,
-        attribute: Attribute.normal),
-      ColorSegment(
-        firstRow: 4,
-        firstColumn: 0,
-        lastRow: 4,
-        lastColumn: 3,
-        color: EditorColorPairIndex.builtin,
-        attribute: Attribute.normal),
-      ColorSegment(
-        firstRow: 4,
-        firstColumn: 4,
-        lastRow: 4,
-        lastColumn: 4,
-        color: EditorColorPairIndex.whitespace,
-        attribute: Attribute.normal),
-      ColorSegment(
-        firstRow: 4,
-        firstColumn: 5,
-        lastRow: 4,
-        lastColumn: 10,
-        color: EditorColorPairIndex.stringLit,
-        attribute: Attribute.normal),
-      ColorSegment(
-        firstRow: 5,
-        firstColumn: 0,
-        lastRow: 5,
-        lastColumn: 6,
-        color: EditorColorPairIndex.gitConflict,
-        attribute: Attribute.normal),
-      ColorSegment(
-        firstRow: 5,
-        firstColumn: 7,
-        lastRow: 5,
-        lastColumn: 7,
-        color: EditorColorPairIndex.gitConflict,
-        attribute: Attribute.normal),
-      ColorSegment(
-        firstRow: 5,
-        firstColumn: 8,
-        lastRow: 5,
-        lastColumn: 17,
-        color: EditorColorPairIndex.gitConflict,
-        attribute: Attribute.normal)
-    ]
+    check h.colorSegments ==
+      @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 6,
+          color: EditorColorPairIndex.gitConflict,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 7,
+          lastRow: 0,
+          lastColumn: 7,
+          color: EditorColorPairIndex.gitConflict,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 8,
+          lastRow: 0,
+          lastColumn: 11,
+          color: EditorColorPairIndex.gitConflict,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstRow: 1,
+          firstColumn: 0,
+          lastRow: 1,
+          lastColumn: 3,
+          color: EditorColorPairIndex.builtin,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstRow: 1,
+          firstColumn: 4,
+          lastRow: 1,
+          lastColumn: 4,
+          color: EditorColorPairIndex.whitespace,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstRow: 1,
+          firstColumn: 5,
+          lastRow: 1,
+          lastColumn: 5,
+          color: EditorColorPairIndex.decNumber,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstRow: 2,
+          firstColumn: 0,
+          lastRow: 2,
+          lastColumn: 3,
+          color: EditorColorPairIndex.builtin,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstRow: 2,
+          firstColumn: 4,
+          lastRow: 2,
+          lastColumn: 4,
+          color: EditorColorPairIndex.whitespace,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstRow: 2,
+          firstColumn: 5,
+          lastRow: 2,
+          lastColumn: 5,
+          color: EditorColorPairIndex.decNumber,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstRow: 3,
+          firstColumn: 0,
+          lastRow: 3,
+          lastColumn: 6,
+          color: EditorColorPairIndex.gitConflict,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstRow: 4,
+          firstColumn: 0,
+          lastRow: 4,
+          lastColumn: 3,
+          color: EditorColorPairIndex.builtin,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstRow: 4,
+          firstColumn: 4,
+          lastRow: 4,
+          lastColumn: 4,
+          color: EditorColorPairIndex.whitespace,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstRow: 4,
+          firstColumn: 5,
+          lastRow: 4,
+          lastColumn: 10,
+          color: EditorColorPairIndex.stringLit,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstRow: 5,
+          firstColumn: 0,
+          lastRow: 5,
+          lastColumn: 6,
+          color: EditorColorPairIndex.gitConflict,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstRow: 5,
+          firstColumn: 7,
+          lastRow: 5,
+          lastColumn: 7,
+          color: EditorColorPairIndex.gitConflict,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstRow: 5,
+          firstColumn: 8,
+          lastRow: 5,
+          lastColumn: 17,
+          color: EditorColorPairIndex.gitConflict,
+          attribute: Attribute.normal,
+        ),
+      ]
 
   test "Out of range":
-    const Code = """
+    const Code =
+      """
 <<<<<<< HEAD
 echo 1
 echo 2
@@ -1035,16 +1071,15 @@ echo "test"
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin("test.nim").get
 
-    for i in 0..100:
+    for i in 0 .. 100:
       currentBufStatus.buffer.add ru""
     for line in Code:
       currentBufStatus.buffer.add line.toRunes
 
     const ReservedWords: seq[ReservedWord] = @[]
     var h = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      ReservedWords,
-      SourceLanguage.langNim)
+      currentBufStatus.buffer.toSeqRunes, ReservedWords, SourceLanguage.langNim
+    )
 
     status.resize(100, 100)
     status.update
@@ -1067,40 +1102,43 @@ suite "viewhighlight: highlightText":
     status.update
 
     var h = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      ReservedWords,
-      SourceLanguage.langNone)
+      currentBufStatus.buffer.toSeqRunes, ReservedWords, SourceLanguage.langNone
+    )
 
     let
       bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
-      highlightText = HighlightingText(
-        kind: HighlightingTextKind.search,
-        text: @["ghi"].toSeqRunes)
+      highlightText =
+        HighlightingText(kind: HighlightingTextKind.search, text: @["ghi"].toSeqRunes)
 
     h.highlightText(bufferInView, highlightText)
 
-    check h.colorSegments == @[
-      ColorSegment(
-        firstRow: 0,
-        firstColumn: 0,
-        lastRow: 0,
-        lastColumn: 5,
-        color: EditorColorPairIndex.default,
-        attribute: Attribute.normal),
-      ColorSegment(
-        firstRow: 1,
-        firstColumn: 0,
-        lastRow: 1,
-        lastColumn: 2,
-        color: searchResult,
-        attribute: Attribute.normal),
-      ColorSegment(
-        firstRow: 1,
-        firstColumn: 3,
-        lastRow: 1,
-        lastColumn: 5,
-        color: EditorColorPairIndex.default,
-        attribute: Attribute.normal)]
+    check h.colorSegments ==
+      @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 5,
+          color: EditorColorPairIndex.default,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstRow: 1,
+          firstColumn: 0,
+          lastRow: 1,
+          lastColumn: 2,
+          color: searchResult,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstRow: 1,
+          firstColumn: 3,
+          lastRow: 1,
+          lastColumn: 5,
+          color: EditorColorPairIndex.default,
+          attribute: Attribute.normal,
+        ),
+      ]
 
   test "Basic 2":
     var status = initEditorStatus()
@@ -1111,47 +1149,51 @@ suite "viewhighlight: highlightText":
     status.update
 
     var h = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      ReservedWords,
-      SourceLanguage.langNone)
+      currentBufStatus.buffer.toSeqRunes, ReservedWords, SourceLanguage.langNone
+    )
 
     let
       bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
-      highlightText = HighlightingText(
-        kind: HighlightingTextKind.search,
-        text: @["cde"].toSeqRunes)
+      highlightText =
+        HighlightingText(kind: HighlightingTextKind.search, text: @["cde"].toSeqRunes)
 
     h.highlightText(bufferInView, highlightText)
 
-    check h.colorSegments == @[
-      ColorSegment(
-        firstRow: 0,
-        firstColumn: 0,
-        lastRow: 0,
-        lastColumn: 1,
-        color: EditorColorPairIndex.default,
-        attribute: Attribute.normal),
-      ColorSegment(
-        firstRow: 0,
-        firstColumn: 2,
-        lastRow: 0,
-        lastColumn: 4,
-        color: searchResult,
-        attribute: Attribute.normal),
-      ColorSegment(
-        firstRow: 0,
-        firstColumn: 5,
-        lastRow: 0,
-        lastColumn: 5,
-        color: EditorColorPairIndex.default,
-        attribute: Attribute.normal),
-      ColorSegment(
-        firstRow: 1,
-        firstColumn: 0,
-        lastRow: 1,
-        lastColumn: 5,
-        color: EditorColorPairIndex.default,
-        attribute: Attribute.normal)]
+    check h.colorSegments ==
+      @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 1,
+          color: EditorColorPairIndex.default,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 2,
+          lastRow: 0,
+          lastColumn: 4,
+          color: searchResult,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 5,
+          lastRow: 0,
+          lastColumn: 5,
+          color: EditorColorPairIndex.default,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstRow: 1,
+          firstColumn: 0,
+          lastRow: 1,
+          lastColumn: 5,
+          color: EditorColorPairIndex.default,
+          attribute: Attribute.normal,
+        ),
+      ]
 
   test "Multiple lines":
     var status = initEditorStatus()
@@ -1162,54 +1204,60 @@ suite "viewhighlight: highlightText":
     status.update
 
     var h = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      ReservedWords,
-      SourceLanguage.langNone)
+      currentBufStatus.buffer.toSeqRunes, ReservedWords, SourceLanguage.langNone
+    )
 
     let
       bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
       highlightText = HighlightingText(
-        kind: HighlightingTextKind.search,
-        text: @["c", "gh"].toSeqRunes)
+        kind: HighlightingTextKind.search, text: @["c", "gh"].toSeqRunes
+      )
 
     h.highlightText(bufferInView, highlightText)
 
-    check h.colorSegments == @[
-      ColorSegment(
-        firstRow: 0,
-        firstColumn: 0,
-        lastRow: 0,
-        lastColumn: 1,
-        color: EditorColorPairIndex.default,
-        attribute: Attribute.normal),
-      ColorSegment(
-        firstRow: 0,
-        firstColumn: 2,
-        lastRow: 0,
-        lastColumn: 2,
-        color: searchResult,
-        attribute: Attribute.normal),
-      ColorSegment(
-        firstRow: 1,
-        firstColumn: 0,
-        lastRow: 1,
-        lastColumn: 1,
-        color: searchResult,
-        attribute: Attribute.normal),
-      ColorSegment(
-        firstRow: 1,
-        firstColumn: 2,
-        lastRow: 1,
-        lastColumn: 2,
-        color: EditorColorPairIndex.default,
-        attribute: Attribute.normal),
-      ColorSegment(
-        firstRow: 2,
-        firstColumn: 0,
-        lastRow: 2,
-        lastColumn: 2,
-        color: EditorColorPairIndex.default,
-        attribute: Attribute.normal)]
+    check h.colorSegments ==
+      @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 1,
+          color: EditorColorPairIndex.default,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 2,
+          lastRow: 0,
+          lastColumn: 2,
+          color: searchResult,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstRow: 1,
+          firstColumn: 0,
+          lastRow: 1,
+          lastColumn: 1,
+          color: searchResult,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstRow: 1,
+          firstColumn: 2,
+          lastRow: 1,
+          lastColumn: 2,
+          color: EditorColorPairIndex.default,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstRow: 2,
+          firstColumn: 0,
+          lastRow: 2,
+          lastColumn: 2,
+          color: EditorColorPairIndex.default,
+          attribute: Attribute.normal,
+        ),
+      ]
 
   test "Multiple lines 2":
     var status = initEditorStatus()
@@ -1220,47 +1268,52 @@ suite "viewhighlight: highlightText":
     status.update
 
     var h = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      ReservedWords,
-      SourceLanguage.langNone)
+      currentBufStatus.buffer.toSeqRunes, ReservedWords, SourceLanguage.langNone
+    )
 
     let
       bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
       highlightText = HighlightingText(
-        kind: HighlightingTextKind.search,
-        text: @["abc", "", "", "def"].toSeqRunes)
+        kind: HighlightingTextKind.search, text: @["abc", "", "", "def"].toSeqRunes
+      )
 
     h.highlightText(bufferInView, highlightText)
 
-    check h.colorSegments == @[
-      ColorSegment(
-        firstRow: 0,
-        firstColumn: 0,
-        lastRow: 0,
-        lastColumn: 2,
-        color: searchResult,
-        attribute: Attribute.normal),
-      ColorSegment(
-        firstRow: 1,
-        firstColumn: 0,
-        lastRow: 1,
-        lastColumn: -1,
-        color: searchResult,
-        attribute: Attribute.normal),
-      ColorSegment(
-        firstRow: 2,
-        firstColumn: 0,
-        lastRow: 2,
-        lastColumn: -1,
-        color: searchResult,
-        attribute: Attribute.normal),
-      ColorSegment(
-        firstRow: 3,
-        firstColumn: 0,
-        lastRow: 3,
-        lastColumn: 2,
-        color: searchResult,
-        attribute: Attribute.normal)]
+    check h.colorSegments ==
+      @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 2,
+          color: searchResult,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstRow: 1,
+          firstColumn: 0,
+          lastRow: 1,
+          lastColumn: -1,
+          color: searchResult,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstRow: 2,
+          firstColumn: 0,
+          lastRow: 2,
+          lastColumn: -1,
+          color: searchResult,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstRow: 3,
+          firstColumn: 0,
+          lastRow: 3,
+          lastColumn: 2,
+          color: searchResult,
+          attribute: Attribute.normal,
+        ),
+      ]
 
   test "Only a newline":
     var status = initEditorStatus()
@@ -1271,17 +1324,15 @@ suite "viewhighlight: highlightText":
     status.update
 
     var h = initHighlight(
-      currentBufStatus.buffer.toSeqRunes,
-      ReservedWords,
-      SourceLanguage.langNone)
+      currentBufStatus.buffer.toSeqRunes, ReservedWords, SourceLanguage.langNone
+    )
 
     let beforeSegments = h.colorSegments
 
     let
       bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
-      highlightText = HighlightingText(
-        kind: HighlightingTextKind.search,
-        text: @["\n"].toSeqRunes)
+      highlightText =
+        HighlightingText(kind: HighlightingTextKind.search, text: @["\n"].toSeqRunes)
 
     h.highlightText(bufferInView, highlightText)
 

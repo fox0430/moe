@@ -30,9 +30,11 @@ type
     filePath*: Runes
     process*: BackgroundProcess
 
-proc isRunning*(bp: BuildProcess): bool {.inline.} = bp.process.isRunning
+proc isRunning*(bp: BuildProcess): bool {.inline.} =
+  bp.process.isRunning
 
-proc isFinish*(bp: BuildProcess): bool {.inline.} = bp.process.isFinish
+proc isFinish*(bp: BuildProcess): bool {.inline.} =
+  bp.process.isFinish
 
 proc result*(bp: var BuildProcess): Result[seq[string], string] {.inline.} =
   bp.process.result
@@ -41,59 +43,52 @@ proc nimBuildCommand(path: string): BuildCommand {.inline.} =
   return (cmd: "nim", args: @["c", path])
 
 proc buildCommand(
-  path: string,
-  lang: SourceLanguage,
-  workspaceRoot: string): Result[BackgroundProcessCommand, string] =
+    path: string, lang: SourceLanguage, workspaceRoot: string
+): Result[BackgroundProcessCommand, string] =
+  var command: BuildCommand
+  case lang
+  of SourceLanguage.langNim:
+    command = path.nimBuildCommand
+  else:
+    return Result[BackgroundProcessCommand, string].err "Unknown language"
 
-    var command: BuildCommand
-    case lang:
-      of SourceLanguage.langNim:
-        command = path.nimBuildCommand
-      else:
-        return Result[BackgroundProcessCommand, string].err "Unknown language"
-
-    return Result[BackgroundProcessCommand, string].ok BackgroundProcessCommand(
-      cmd: command.cmd,
-      args: command.args,
-      workingDir: workspaceRoot)
+  return Result[BackgroundProcessCommand, string].ok BackgroundProcessCommand(
+    cmd: command.cmd, args: command.args, workingDir: workspaceRoot
+  )
 
 proc startBackgroundBuild*(
-  path: Runes,
-  language: SourceLanguage,
-  workspaceRoot: Runes = ru""): Result[BuildProcess, string] =
-    ## Start a background process for exec the build command.
+    path: Runes, language: SourceLanguage, workspaceRoot: Runes = ru""
+): Result[BuildProcess, string] =
+  ## Start a background process for exec the build command.
 
-    let command = buildCommand($path, language, $workspaceRoot)
-    if command.isErr:
-      return Result[BuildProcess, string].err fmt"Failed to exec build commands: {command.error}"
+  let command = buildCommand($path, language, $workspaceRoot)
+  if command.isErr:
+    return Result[BuildProcess, string].err fmt"Failed to exec build commands: {command.error}"
 
-    let backgroundProcess = startBackgroundProcess(command.get)
-    if backgroundProcess.isErr:
-      return Result[BuildProcess, string].err fmt"Failed to exec build commands: {backgroundProcess.error}"
+  let backgroundProcess = startBackgroundProcess(command.get)
+  if backgroundProcess.isErr:
+    return Result[BuildProcess, string].err fmt"Failed to exec build commands: {backgroundProcess.error}"
 
-    return Result[BuildProcess, string].ok BuildProcess(
-      command: command.get,
-      filePath: path,
-      process: backgroundProcess.get)
+  return Result[BuildProcess, string].ok BuildProcess(
+    command: command.get, filePath: path, process: backgroundProcess.get
+  )
 
 proc startBackgroundBuild*(
-  customCommand: BuildCommand,
-  language: SourceLanguage,
-  workspaceRoot: Runes = ru""): Result[BuildProcess, string] =
-    ## Start the build on a background process.
+    customCommand: BuildCommand, language: SourceLanguage, workspaceRoot: Runes = ru""
+): Result[BuildProcess, string] =
+  ## Start the build on a background process.
 
-    if customCommand.cmd.len == 0:
-      return Result[BuildProcess, string].err fmt"command is empty"
+  if customCommand.cmd.len == 0:
+    return Result[BuildProcess, string].err fmt"command is empty"
 
-    let command = BackgroundProcessCommand(
-      cmd: customCommand.cmd,
-      args: customCommand.args,
-      workingDir: $workspaceRoot)
+  let command = BackgroundProcessCommand(
+    cmd: customCommand.cmd, args: customCommand.args, workingDir: $workspaceRoot
+  )
 
-    let backgroundProcess = startBackgroundProcess(command)
-    if backgroundProcess.isErr:
-      return Result[BuildProcess, string].err fmt"Failed to exec build commands: {backgroundProcess.error}"
+  let backgroundProcess = startBackgroundProcess(command)
+  if backgroundProcess.isErr:
+    return Result[BuildProcess, string].err fmt"Failed to exec build commands: {backgroundProcess.error}"
 
-    return Result[BuildProcess, string].ok BuildProcess(
-      command: command,
-      process: backgroundProcess.get)
+  return Result[BuildProcess, string].ok BuildProcess(
+    command: command, process: backgroundProcess.get
+  )

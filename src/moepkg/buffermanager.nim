@@ -18,23 +18,21 @@
 #[############################################################################]#
 
 import std/heapqueue
-import gapbuffer, ui, editorstatus, unicodeext, windownode, movement,
-       bufferstatus
+import gapbuffer, ui, editorstatus, unicodeext, windownode, movement, bufferstatus
 
-proc initBufferManagerBuffer*(
-  bufStatuses: seq[BufferStatus]): seq[Runes] =
-    ## Return buffer for the buffer manager.
-    ## Exclude the buffer for the buffer manager.
+proc initBufferManagerBuffer*(bufStatuses: seq[BufferStatus]): seq[Runes] =
+  ## Return buffer for the buffer manager.
+  ## Exclude the buffer for the buffer manager.
 
-    for bufStatus in bufStatuses:
-      if not bufStatus.mode.isBufferManagerMode:
-        if bufStatus.path.len > 0:
-          result.add bufStatus.path
-        else:
-          result.add ru"No Name"
+  for bufStatus in bufStatuses:
+    if not bufStatus.mode.isBufferManagerMode:
+      if bufStatus.path.len > 0:
+        result.add bufStatus.path
+      else:
+        result.add ru"No Name"
 
-    if result.len == 0:
-      return @[ru""]
+  if result.len == 0:
+    return @[ru""]
 
 proc deleteSelectedBuffer(status: var EditorStatus) =
   ## Delete the selected buffer and close windows for it.
@@ -56,7 +54,8 @@ proc deleteSelectedBuffer(status: var EditorStatus) =
           status.bufStatus[node.bufferIndex].isUpdate = true
 
       if node.child.len > 0:
-        for node in node.child: qeue.push(node)
+        for node in node.child:
+          qeue.push(node)
 
   status.resize
 
@@ -91,15 +90,11 @@ proc isBufferManagerCommand*(command: Runes): InputState =
 
   if command.len == 1:
     let key = command[0]
-    if isCtrlK(key) or
-       isCtrlJ(key) or
-       key == ord(':') or
-       key == ord('k') or isUpKey(key) or
-       key == ord('j') or isDownKey(key) or
-       isEnterKey(key) or
-       key == ord('o') or
-       key == ord('D'):
-         return InputState.Valid
+    if isCtrlK(key) or isCtrlJ(key) or key == ord(':') or key == ord('k') or isUpKey(
+      key
+    ) or key == ord('j') or isDownKey(key) or isEnterKey(key) or key == ord('o') or
+        key == ord('D'):
+      return InputState.Valid
 
 proc execBufferManagerCommand*(status: var EditorStatus, command: Runes) =
   let key = command[0]

@@ -27,149 +27,129 @@ import moepkg/lsp/rename {.all.}
 
 suite "lsp: parseTextDocumentRenameResponse":
   test "Not found":
-    check parseTextDocumentRenameResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": nil
-    }).get.len == 0
+    check parseTextDocumentRenameResponse(%*{"jsonrpc": "2.0", "id": 0, "result": nil}).get.len ==
+      0
 
   test "Basic":
-    check parseTextDocumentRenameResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": {
-        "changes": {
-          "file:///home/user/moe/src/moe.nim": [
-            {
-              "range": {
-                "start": {
-                  "line": 22,
-                  "character": 5
+    check parseTextDocumentRenameResponse(
+      %*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": {
+          "changes": {
+            "file:///home/user/moe/src/moe.nim": [
+              {
+                "range": {
+                  "start": {"line": 22, "character": 5},
+                  "end": {"line": 22, "character": 9},
                 },
-                "end": {
-                  "line": 22,
-                  "character": 9
-                }
+                "newText": "abc",
               },
-              "newText": "abc"
-            },
-            {
-              "range" :{
-                "start": {
-                  "line": 32,
-                  "character": 19
+              {
+                "range": {
+                  "start": {"line": 32, "character": 19},
+                  "end": {"line": 32, "character": 23},
                 },
-                "end": {
-                  "line": 32,
-                  "character": 23
-                }
+                "newText": "abc",
               },
-              "newText": "abc"
-            }
-          ]
+            ]
+          },
+          "documentChanges": nil,
         },
-        "documentChanges": nil
       }
-    }).get == @[
-      LspRename(
-        path: "/home/user/moe/src/moe.nim",
-        changes: @[
-          RenameChange(
-            range: BufferRange(
-              first: BufferPosition(line: 22, column: 5),
-              last: BufferPosition(line: 22, column: 9)),
-            text: "abc"
-          ),
-          RenameChange(
-            range: BufferRange(
-              first: BufferPosition(line: 32, column: 19),
-              last: BufferPosition(line: 32, column: 23)),
-            text: "abc"
-          )
-        ]
-      )
-    ]
+    ).get ==
+      @[
+        LspRename(
+          path: "/home/user/moe/src/moe.nim",
+          changes:
+            @[
+              RenameChange(
+                range: BufferRange(
+                  first: BufferPosition(line: 22, column: 5),
+                  last: BufferPosition(line: 22, column: 9),
+                ),
+                text: "abc",
+              ),
+              RenameChange(
+                range: BufferRange(
+                  first: BufferPosition(line: 32, column: 19),
+                  last: BufferPosition(line: 32, column: 23),
+                ),
+                text: "abc",
+              ),
+            ],
+        )
+      ]
 
   test "Basic 2":
-    check parseTextDocumentRenameResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": {
-        "changes": {
-          "file:///home/user/test.nim": [
-            {
-              "range": {
-                "start": {
-                  "line": 22,
-                  "character": 5
+    check parseTextDocumentRenameResponse(
+      %*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": {
+          "changes": {
+            "file:///home/user/test.nim": [
+              {
+                "range": {
+                  "start": {"line": 22, "character": 5},
+                  "end": {"line": 22, "character": 9},
                 },
-                "end": {
-                  "line": 22,
-                  "character": 9
-                }
+                "newText": "abc",
               },
-              "newText": "abc"
-            },
-            {
-              "range" :{
-                "start": {
-                  "line": 32,
-                  "character": 19
+              {
+                "range": {
+                  "start": {"line": 32, "character": 19},
+                  "end": {"line": 32, "character": 23},
                 },
-                "end": {
-                  "line": 32,
-                  "character": 23
-                }
+                "newText": "abc",
               },
-              "newText": "abc"
-            }
-          ],
-          "file:///home/user/test2.nim": [
-            {
-              "range": {
-                "start": {
-                  "line": 0,
-                  "character": 0
+            ],
+            "file:///home/user/test2.nim": [
+              {
+                "range": {
+                  "start": {"line": 0, "character": 0},
+                  "end": {"line": 0, "character": 4},
                 },
-                "end": {
-                  "line": 0,
-                  "character": 4
-                }
-              },
-              "newText": "abc"
-            }
-          ],
+                "newText": "abc",
+              }
+            ],
+          },
+          "documentChanges": nil,
         },
-        "documentChanges": nil,
       }
-    }).get == @[
-      LspRename(
-        path: "/home/user/test.nim",
-        changes: @[
-          RenameChange(
-            range: BufferRange(
-              first: BufferPosition(line: 22, column: 5),
-              last: BufferPosition(line: 22, column: 9)),
-            text: "abc"
-          ),
-          RenameChange(
-            range: BufferRange(
-              first: BufferPosition(line: 32, column: 19),
-              last: BufferPosition(line: 32, column: 23)),
-            text: "abc"
-          )
-        ]
-      ),
-      LspRename(
-        path: "/home/user/test2.nim",
-        changes: @[
-          RenameChange(
-            range: BufferRange(
-              first: BufferPosition(line: 0, column: 0),
-              last: BufferPosition(line: 0, column: 4)),
-            text: "abc"
-          )
-        ]
-      )
-
-    ]
+    ).get ==
+      @[
+        LspRename(
+          path: "/home/user/test.nim",
+          changes:
+            @[
+              RenameChange(
+                range: BufferRange(
+                  first: BufferPosition(line: 22, column: 5),
+                  last: BufferPosition(line: 22, column: 9),
+                ),
+                text: "abc",
+              ),
+              RenameChange(
+                range: BufferRange(
+                  first: BufferPosition(line: 32, column: 19),
+                  last: BufferPosition(line: 32, column: 23),
+                ),
+                text: "abc",
+              ),
+            ],
+        ),
+        LspRename(
+          path: "/home/user/test2.nim",
+          changes:
+            @[
+              RenameChange(
+                range: BufferRange(
+                  first: BufferPosition(line: 0, column: 0),
+                  last: BufferPosition(line: 0, column: 4),
+                ),
+                text: "abc",
+              )
+            ],
+        ),
+      ]

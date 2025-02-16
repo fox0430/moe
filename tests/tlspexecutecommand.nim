@@ -25,30 +25,12 @@ import moepkg/lsp/executecommand {.all.}
 
 suite "lsp: parseExecuteCommandResponse":
   test "Empty":
-    check parseExecuteCommandResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": nil
-    })
-    .get
-    .isNone
+    check parseExecuteCommandResponse(%*{"jsonrpc": "2.0", "id": 0, "result": nil}).get.isNone
 
   test "Empty 2":
-    check parseExecuteCommandResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": []
-    })
-    .get
-    .isNone
+    check parseExecuteCommandResponse(%*{"jsonrpc": "2.0", "id": 0, "result": []}).get.isNone
 
   test "Basic":
-    check parseExecuteCommandResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": {
-        "message": "val"
-      }
-    })
-    .get
-    .isSome
+    check parseExecuteCommandResponse(
+      %*{"jsonrpc": "2.0", "id": 0, "result": {"message": "val"}}
+    ).get.isSome

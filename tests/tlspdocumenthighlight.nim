@@ -27,58 +27,39 @@ import moepkg/lsp/documenthighlight {.all.}
 
 suite "documenthighlight: parseDocumentHighlightResponse":
   test "Not found":
-    check parseDocumentHighlightResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 1,
-      "result": []
-    }).get.len == 0
+    check parseDocumentHighlightResponse(%*{"jsonrpc": "2.0", "id": 1, "result": []}).get.len ==
+      0
 
   test "Not found 2":
-    check parseDocumentHighlightResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 1,
-      "result": nil
-    }).get.len == 0
+    check parseDocumentHighlightResponse(%*{"jsonrpc": "2.0", "id": 1, "result": nil}).get.len ==
+      0
 
   test "Basic":
-    check parseDocumentHighlightResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 1,
-      "result": [
-        {
-          "range": {
-            "start": {
-              "line": 0,
-              "character": 4
-            }
-            ,"end": {
-              "line": 0,
-              "character":5
-            }
+    check parseDocumentHighlightResponse(
+      %*{
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": [
+          {
+            "range":
+              {"start": {"line": 0, "character": 4}, "end": {"line": 0, "character": 5}},
+            "kind": nil,
           },
-          "kind": nil
-        },
-        {
-          "range": {
-            "start": {
-              "line": 1,
-              "character": 8
-            },
-            "end": {
-              "line": 1,
-              "character": 9
-            }
+          {
+            "range":
+              {"start": {"line": 1, "character": 8}, "end": {"line": 1, "character": 9}},
+            "kind": nil,
           },
-          "kind": nil
-        }
+        ],
+      }
+    ).get ==
+      @[
+        BufferRange(
+          first: BufferPosition(line: 0, column: 4),
+          last: BufferPosition(line: 0, column: 4),
+        ),
+        BufferRange(
+          first: BufferPosition(line: 1, column: 8),
+          last: BufferPosition(line: 1, column: 8),
+        ),
       ]
-    }).get == @[
-      BufferRange(
-        first: BufferPosition(line: 0, column: 4),
-        last: BufferPosition(line: 0, column: 4)
-      ),
-      BufferRange(
-        first: BufferPosition(line: 1, column: 8),
-        last: BufferPosition(line: 1, column: 8)
-      ),
-    ]

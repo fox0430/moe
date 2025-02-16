@@ -35,8 +35,7 @@ type
   RunCodeLensCommandResult* = Result[QuickRunProcess, string]
 
 proc initCodeLensParams*(path: string): CodeLensParams =
-  CodeLensParams(
-    textDocument: TextDocumentIdentifier(uri: path.pathToUri))
+  CodeLensParams(textDocument: TextDocumentIdentifier(uri: path.pathToUri))
 
 proc parseCodeLensResponse*(res: JsonNode): CodeLensResult =
   if not res.contains("result"):
@@ -74,11 +73,10 @@ proc parseCodeLensResolveResponse*(res: JsonNode): CodeLensResolveResult =
   return CodeLensResolveResult.ok codeLens
 
 proc runCodeLensCommand*(
-  lens: CodeLens,
-  serverName, path: string): RunCodeLensCommandResult =
-
-    case serverName:
-      of "rust-analyzer":
-        return lens.runCodeLensCommand(path)
-      else:
-        return RunCodeLensCommandResult.err "Unknown command"
+    lens: CodeLens, serverName, path: string
+): RunCodeLensCommandResult =
+  case serverName
+  of "rust-analyzer":
+    return lens.runCodeLensCommand(path)
+  else:
+    return RunCodeLensCommandResult.err "Unknown command"

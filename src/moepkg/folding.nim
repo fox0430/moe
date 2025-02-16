@@ -27,19 +27,23 @@ type
 
 proc isStartLine*(ranges: FoldingRanges, line: int): bool =
   for r in ranges:
-    if line == r.first: return true
+    if line == r.first:
+      return true
 
 proc inRange*(ranges: FoldingRanges, line: int): bool =
   for r in ranges:
-    if line >= r.first and line <= r.last: return true
+    if line >= r.first and line <= r.last:
+      return true
 
 proc find*(ranges: FoldingRanges, line: int): Option[FoldingRange] =
   for r in ranges:
-    if line >= r.first and line <= r.last: return some(r)
+    if line >= r.first and line <= r.last:
+      return some(r)
 
 proc find*(ranges: FoldingRanges, range: FoldingRange): Option[int] =
   for i, r in ranges:
-    if r == range: return some(i)
+    if r == range:
+      return some(i)
 
 proc remove*(ranges: var FoldingRanges, range: FoldingRange) =
   for i, r in ranges:
@@ -69,14 +73,15 @@ proc removeAll*(ranges: var FoldingRanges, range: FoldingRange) {.inline.} =
 proc removeAll*(ranges: var FoldingRanges, line: int) =
   var i = 0
   while i < ranges.len:
-    if line >= ranges[i].first  and line <= ranges[i].last:
+    if line >= ranges[i].first and line <= ranges[i].last:
       ranges.delete(i)
     elif ranges[i].last > line:
       break
     else:
       i.inc
 
-proc clear*(ranges: var FoldingRanges) {.inline.} = ranges = @[]
+proc clear*(ranges: var FoldingRanges) {.inline.} =
+  ranges = @[]
 
 proc add*(ranges: var FoldingRanges, range: FoldingRange) =
   ## Added ranges are sorted from smallest to largest by `FoldingRange.first`.

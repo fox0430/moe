@@ -21,8 +21,11 @@ import std/[unittest, os, oids, options]
 
 import pkg/results
 
-import moepkg/[editorstatus, cmdlineoption, bufferstatus, unicodeext, gapbuffer,
-               windownode, settings]
+import
+  moepkg/[
+    editorstatus, cmdlineoption, bufferstatus, unicodeext, gapbuffer, windownode,
+    settings,
+  ]
 
 import moepkg/init {.all.}
 
@@ -142,7 +145,8 @@ suite "init: addBufferStatus":
 
     status.addBufferStatus(parsedList)
 
-    if fileExists(path): removeFile(path)
+    if fileExists(path):
+      removeFile(path)
 
     check status.bufStatus.len == 1
     check currentBufStatus.buffer.toSeqRunes == @[ru""]
@@ -163,7 +167,8 @@ suite "init: addBufferStatus":
 
     status.addBufferStatus(parsedList)
 
-    if dirExists(path): removeDir(path)
+    if dirExists(path):
+      removeDir(path)
 
     check status.bufStatus.len == 1
     check currentBufStatus.buffer.toSeqRunes == @[ru""]

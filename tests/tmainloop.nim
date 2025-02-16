@@ -22,9 +22,11 @@ import std/[unittest, options, importutils, sequtils]
 import pkg/results
 
 import moepkg/syntax/highlite
-import moepkg/[unicodeext, bufferstatus, gapbuffer, editorstatus, windownode,
-               ui, commandLine, viewhighlight, visualmode, independentutils,
-               completion, messagelog]
+import
+  moepkg/[
+    unicodeext, bufferstatus, gapbuffer, editorstatus, windownode, ui, commandLine,
+    viewhighlight, visualmode, independentutils, completion, messagelog,
+  ]
 
 import utils
 
@@ -43,7 +45,7 @@ suite "mainloop: isExecMacroCommand":
     let b = initBufferStatus("").get
 
     const
-      RegisterName = ru'a'
+      RegisterName = ru 'a'
       Operation = ru"yy"
     check registers.addOperation(RegisterName, Operation).isOk
 
@@ -53,7 +55,7 @@ suite "mainloop: isExecMacroCommand":
   test "Except to true 2":
     let b = initBufferStatus("").get
 
-    const RegisterName = ru'0'
+    const RegisterName = ru '0'
     check registers.addOperation(RegisterName, ru"yy").isOk
 
     const Command = ru"@0"
@@ -62,7 +64,7 @@ suite "mainloop: isExecMacroCommand":
   test "Except to true 3":
     let b = initBufferStatus("").get
 
-    const RegisterName = ru'0'
+    const RegisterName = ru '0'
     check registers.addOperation(RegisterName, ru"yy").isOk
 
     const Command = ru"1@0"
@@ -71,7 +73,7 @@ suite "mainloop: isExecMacroCommand":
   test "Except to true 4":
     let b = initBufferStatus("").get
 
-    const RegisterName = ru'0'
+    const RegisterName = ru '0'
     check registers.addOperation(RegisterName, ru"yy").isOk
 
     const Command = ru"10@0"
@@ -80,7 +82,7 @@ suite "mainloop: isExecMacroCommand":
   test "Except to false":
     let b = initBufferStatus("").get
 
-    const RegisterName = ru'a'
+    const RegisterName = ru 'a'
     check registers.addOperation(RegisterName, ru"yy").isOk
 
     const Command = ru""
@@ -89,7 +91,7 @@ suite "mainloop: isExecMacroCommand":
   test "Except to false 2":
     let b = initBufferStatus("").get
 
-    const RegisterName = ru'a'
+    const RegisterName = ru 'a'
     check registers.addOperation(RegisterName, ru"yy").isOk
 
     const Command = ru"@"
@@ -99,7 +101,7 @@ suite "mainloop: isExecMacroCommand":
     var b = initBufferStatus("").get
     b.changeMode(Mode.insert)
 
-    const RegisterName = ru'a'
+    const RegisterName = ru 'a'
     check registers.addOperation(RegisterName, ru"yy").isOk
 
     const Command = ru"@a"
@@ -108,7 +110,7 @@ suite "mainloop: isExecMacroCommand":
   test "Except to false 4":
     var b = initBufferStatus("").get
 
-    const RegisterName = ru'a'
+    const RegisterName = ru 'a'
     check not registers.addOperation(RegisterName, ru"").isOk
 
     const Command = ru"@a"
@@ -141,7 +143,7 @@ suite "mainloop: execMacro":
     status.resize(100, 100)
     status.update
 
-    const RegisterName = ru'a'
+    const RegisterName = ru 'a'
     check status.registers.addOperation(RegisterName, ru"dd").isOk
     status.execMacro(RegisterName)
 
@@ -155,7 +157,7 @@ suite "mainloop: execMacro":
     status.resize(100, 100)
     status.update
 
-    const RegisterName = ru'a'
+    const RegisterName = ru 'a'
     for i in 0 .. 1:
       check status.registers.addOperation(RegisterName, ru"dd").isOk
     status.execMacro(RegisterName)
@@ -170,7 +172,7 @@ suite "mainloop: execMacro":
     status.resize(100, 100)
     status.update
 
-    const RegisterName = ru'a'
+    const RegisterName = ru 'a'
     check status.registers.addOperation(RegisterName, ru"j").isOk
     check status.registers.addOperation(RegisterName, ru"dd").isOk
     status.execMacro(RegisterName)
@@ -213,7 +215,7 @@ suite "mainloop: execEditorCommand":
     status.resize(100, 100)
     status.update
 
-    const RegisterName = ru'a'
+    const RegisterName = ru 'a'
     status.recodingOperationRegister = some(RegisterName)
 
     block:
@@ -236,7 +238,7 @@ suite "mainloop: execEditorCommand":
     status.resize(100, 100)
     status.update
 
-    const RegisterName = ru'a'
+    const RegisterName = ru 'a'
     check status.registers.addOperation(RegisterName, ru"j").isOk
     check status.registers.addOperation(RegisterName, ru"dd").isOk
 
@@ -253,7 +255,7 @@ suite "mainloop: execEditorCommand":
     status.resize(100, 100)
     status.update
 
-    const RegisterName = ru'a'
+    const RegisterName = ru 'a'
     check status.registers.addOperation(RegisterName, ru"2dd").isOk
 
     const Command = ru"@a"
@@ -269,7 +271,7 @@ suite "mainloop: execEditorCommand":
     status.resize(100, 100)
     status.update
 
-    const RegisterName = ru'a'
+    const RegisterName = ru 'a'
     check status.registers.addOperation(RegisterName, ru":").isOk
     check status.registers.addOperation(RegisterName, ru"vs").isOk
     check status.registers.addOperation(RegisterName, ru"dd").isOk
@@ -288,7 +290,7 @@ suite "mainloop: execEditorCommand":
     status.resize(100, 100)
     status.update
 
-    const RegisterName = ru'a'
+    const RegisterName = ru 'a'
     check status.registers.addOperation(RegisterName, ru"dd").isOk
 
     const Command = ru"2@a"
@@ -299,46 +301,40 @@ suite "mainloop: execEditorCommand":
 suite "mainloop: insertPasteBuffer":
   test "Ignore":
     for mode in Mode:
-      case mode:
-        of insert,
-           insertMulti,
-           replace,
-           ex,
-           searchForward,
-           searchBackward:
-             continue
+      case mode
+      of insert, insertMulti, replace, ex, searchForward, searchBackward:
+        continue
+      else:
+        var status = initEditorStatus()
+
+        case mode
+        of filer:
+          discard status.addNewBufferInCurrentWin("./", mode).get
+        of backup:
+          discard status.addNewBufferInCurrentWin().get
+          status.startBackupManager
+        of diff:
+          discard status.addNewBufferInCurrentWin().get
+          status.openDiffViewer("")
         else:
-          var status = initEditorStatus()
+          discard status.addNewBufferInCurrentWin(mode).get
 
-          case mode:
-            of filer:
-              discard status.addNewBufferInCurrentWin("./", mode).get
-            of backup:
-              discard status.addNewBufferInCurrentWin().get
-              status.startBackupManager
-            of diff:
-              discard status.addNewBufferInCurrentWin().get
-              status.openDiffViewer("")
-            else:
-              discard status.addNewBufferInCurrentWin(mode).get
+        currentBufStatus.buffer = @[""].toSeqRunes.initGapBuffer
 
-          currentBufStatus.buffer = @[""].toSeqRunes.initGapBuffer
+        if currentBufStatus.isVisualMode:
+          currentBufStatus.selectedArea = initSelectedArea(
+            currentMainWindowNode.currentLine, currentMainWindowNode.currentColumn
+          ).some
 
-          if currentBufStatus.isVisualMode:
-            currentBufStatus.selectedArea = initSelectedArea(
-              currentMainWindowNode.currentLine,
-              currentMainWindowNode.currentColumn)
-              .some
+        status.resize(100, 100)
+        status.update
 
-          status.resize(100, 100)
-          status.update
+        let beforeBuffer = currentBufStatus.buffer
 
-          let beforeBuffer = currentBufStatus.buffer
+        const PasteBuffer = @["abc"].toSeqRunes
+        status.insertPasteBuffer(PasteBuffer)
 
-          const PasteBuffer = @["abc"].toSeqRunes
-          status.insertPasteBuffer(PasteBuffer)
-
-          check currentBufStatus.buffer == beforeBuffer
+        check currentBufStatus.buffer == beforeBuffer
 
   test "Insert mode":
     var status = initEditorStatus()
@@ -652,7 +648,7 @@ suite "mainloop: jumpAndHighlightInReplaceCommand":
       check currentMainWindowNode.currentLine == 0
       check currentMainWindowNode.currentColumn == 2
 
-      check status.highlightingText.get.kind ==  HighlightingTextKind.replace
+      check status.highlightingText.get.kind == HighlightingTextKind.replace
       check status.highlightingText.get.text == @["a"].toSeqRunes
 
     block:
@@ -662,7 +658,7 @@ suite "mainloop: jumpAndHighlightInReplaceCommand":
       check currentMainWindowNode.currentLine == 0
       check currentMainWindowNode.currentColumn == 2
 
-      check status.highlightingText.get.kind ==  HighlightingTextKind.replace
+      check status.highlightingText.get.kind == HighlightingTextKind.replace
       check status.highlightingText.get.text == @["ab"].toSeqRunes
 
     block:
@@ -672,7 +668,7 @@ suite "mainloop: jumpAndHighlightInReplaceCommand":
       check currentMainWindowNode.currentLine == 0
       check currentMainWindowNode.currentColumn == 2
 
-      check status.highlightingText.get.kind ==  HighlightingTextKind.replace
+      check status.highlightingText.get.kind == HighlightingTextKind.replace
       check status.highlightingText.get.text == @["abc"].toSeqRunes
 
   test "Basic 2":
@@ -689,7 +685,7 @@ suite "mainloop: jumpAndHighlightInReplaceCommand":
     check currentMainWindowNode.currentLine == 1
     check currentMainWindowNode.currentColumn == 0
 
-    check status.highlightingText.get.kind ==  HighlightingTextKind.replace
+    check status.highlightingText.get.kind == HighlightingTextKind.replace
     check status.highlightingText.get.text == @["def"].toSeqRunes
 
 suite "mainloop: initBeforeLineForIncrementalReplace":
@@ -698,9 +694,7 @@ suite "mainloop: initBeforeLineForIncrementalReplace":
   test "Ignore":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin().get
-    currentBufStatus.buffer = @["abc", "abc def", "", "def abc"]
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer = @["abc", "abc def", "", "def abc"].toSeqRunes.toGapBuffer
 
     status.commandLine.buffer = ru"%s/abc"
 
@@ -709,32 +703,30 @@ suite "mainloop: initBeforeLineForIncrementalReplace":
   test "Basic":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin().get
-    currentBufStatus.buffer = @["abc", "abc def", "", "def abc"]
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer = @["abc", "abc def", "", "def abc"].toSeqRunes.toGapBuffer
 
     status.commandLine.buffer = ru"%s/abc/xyz"
 
-    check status.initBeforeLineForIncrementalReplace == @[
-      BeforeLine(lineNumber: 0, lineBuffer: ru"abc"),
-      BeforeLine(lineNumber: 1, lineBuffer: ru"abc def"),
-      BeforeLine(lineNumber: 3, lineBuffer: ru"def abc")
-    ]
+    check status.initBeforeLineForIncrementalReplace ==
+      @[
+        BeforeLine(lineNumber: 0, lineBuffer: ru"abc"),
+        BeforeLine(lineNumber: 1, lineBuffer: ru"abc def"),
+        BeforeLine(lineNumber: 3, lineBuffer: ru"def abc"),
+      ]
 
   test "Replace all":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin().get
-    currentBufStatus.buffer = @["abc", "abc def", "", "def abc"]
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer = @["abc", "abc def", "", "def abc"].toSeqRunes.toGapBuffer
 
     status.commandLine.buffer = ru"%s/abc/xyz/g"
 
-    check status.initBeforeLineForIncrementalReplace == @[
-      BeforeLine(lineNumber: 0, lineBuffer: ru"abc"),
-      BeforeLine(lineNumber: 1, lineBuffer: ru"abc def"),
-      BeforeLine(lineNumber: 3, lineBuffer: ru"def abc")
-    ]
+    check status.initBeforeLineForIncrementalReplace ==
+      @[
+        BeforeLine(lineNumber: 0, lineBuffer: ru"abc"),
+        BeforeLine(lineNumber: 1, lineBuffer: ru"abc def"),
+        BeforeLine(lineNumber: 3, lineBuffer: ru"def abc"),
+      ]
 
 suite "mainloop: execIncrementalReplace":
   privateAccess(IncrementalReplaceInfo)
@@ -742,40 +734,38 @@ suite "mainloop: execIncrementalReplace":
   test "Basic":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin().get
-    currentBufStatus.buffer = @["abc", "abc def", "", "def abc", "abc abc"]
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer =
+      @["abc", "abc def", "", "def abc", "abc abc"].toSeqRunes.toGapBuffer
 
     let incReplaceInfo = IncrementalReplaceInfo(
       sub: ru"abc",
       by: ru"xyz",
       isGlobal: false,
-      beforeLines: status.initBeforeLineForIncrementalReplace)
+      beforeLines: status.initBeforeLineForIncrementalReplace,
+    )
 
     status.execIncrementalReplace(incReplaceInfo)
 
-    check currentBufStatus.buffer.toSeqRunes == @[
-      "xyz", "xyz def", "", "def xyz", "xyz abc"]
-      .toSeqRunes
+    check currentBufStatus.buffer.toSeqRunes ==
+      @["xyz", "xyz def", "", "def xyz", "xyz abc"].toSeqRunes
 
   test "Replace all":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin().get
-    currentBufStatus.buffer = @["abc", "abc def", "", "def abc", "abc abc"]
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer =
+      @["abc", "abc def", "", "def abc", "abc abc"].toSeqRunes.toGapBuffer
 
     let incReplaceInfo = IncrementalReplaceInfo(
       sub: ru"abc",
       by: ru"xyz",
       isGlobal: true,
-      beforeLines: status.initBeforeLineForIncrementalReplace)
+      beforeLines: status.initBeforeLineForIncrementalReplace,
+    )
 
     status.execIncrementalReplace(incReplaceInfo)
 
-    check currentBufStatus.buffer.toSeqRunes == @[
-      "xyz", "xyz def", "", "def xyz", "xyz xyz"]
-      .toSeqRunes
+    check currentBufStatus.buffer.toSeqRunes ==
+      @["xyz", "xyz def", "", "def xyz", "xyz xyz"].toSeqRunes
 
 suite "mainloop: incrementalReplace":
   privateAccess(BeforeLine)
@@ -820,9 +810,8 @@ suite "mainloop: incrementalReplace":
   test "Basic":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin().get
-    currentBufStatus.buffer = @["abc", "abc def", "", "def abc", "abc abc"]
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer =
+      @["abc", "abc def", "", "def abc", "abc abc"].toSeqRunes.toGapBuffer
 
     status.commandLine.buffer = ru"%s/abc/xyz"
 
@@ -842,16 +831,14 @@ suite "mainloop: incrementalReplace":
     check incReplaceInfo.get.beforeLines[3].lineNumber == 4
     check incReplaceInfo.get.beforeLines[3].lineBuffer == ru"abc abc"
 
-    check currentBufStatus.buffer.toSeqRunes == @[
-      "xyz", "xyz def", "", "def xyz", "xyz abc"]
-      .toSeqRunes
+    check currentBufStatus.buffer.toSeqRunes ==
+      @["xyz", "xyz def", "", "def xyz", "xyz abc"].toSeqRunes
 
   test "Replace all":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin().get
-    currentBufStatus.buffer = @["abc", "abc def", "", "def abc", "abc abc"]
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer =
+      @["abc", "abc def", "", "def abc", "abc abc"].toSeqRunes.toGapBuffer
 
     status.commandLine.buffer = ru"%s/abc/xyz/g"
 
@@ -871,16 +858,14 @@ suite "mainloop: incrementalReplace":
     check incReplaceInfo.get.beforeLines[3].lineNumber == 4
     check incReplaceInfo.get.beforeLines[3].lineBuffer == ru"abc abc"
 
-    check currentBufStatus.buffer.toSeqRunes == @[
-      "xyz", "xyz def", "", "def xyz", "xyz xyz"]
-      .toSeqRunes
+    check currentBufStatus.buffer.toSeqRunes ==
+      @["xyz", "xyz def", "", "def xyz", "xyz xyz"].toSeqRunes
 
   test "Restore lines":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin().get
-    currentBufStatus.buffer = @["abc", "abc def", "", "def abc", "abc abc"]
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer =
+      @["abc", "abc def", "", "def abc", "abc abc"].toSeqRunes.toGapBuffer
 
     var incReplaceInfo = none(IncrementalReplaceInfo)
 
@@ -901,9 +886,8 @@ suite "mainloop: incrementalReplace":
       check incReplaceInfo.get.beforeLines[3].lineNumber == 4
       check incReplaceInfo.get.beforeLines[3].lineBuffer == ru"abc abc"
 
-      check currentBufStatus.buffer.toSeqRunes == @[
-        "x", "x def", "", "def x", "x abc"]
-        .toSeqRunes
+      check currentBufStatus.buffer.toSeqRunes ==
+        @["x", "x def", "", "def x", "x abc"].toSeqRunes
 
     block:
       status.commandLine.buffer = ru"%s/abc/z"
@@ -922,16 +906,14 @@ suite "mainloop: incrementalReplace":
       check incReplaceInfo.get.beforeLines[3].lineNumber == 4
       check incReplaceInfo.get.beforeLines[3].lineBuffer == ru"abc abc"
 
-      check currentBufStatus.buffer.toSeqRunes == @[
-        "z", "z def", "", "def z", "z abc"]
-        .toSeqRunes
+      check currentBufStatus.buffer.toSeqRunes ==
+        @["z", "z def", "", "def z", "z abc"].toSeqRunes
 
   test "Restore lines 2":
     var status = initEditorStatus()
     discard status.addNewBufferInCurrentWin().get
-    currentBufStatus.buffer = @["abc", "abc def", "", "def abc", "abc abc"]
-      .toSeqRunes
-      .toGapBuffer
+    currentBufStatus.buffer =
+      @["abc", "abc def", "", "def abc", "abc abc"].toSeqRunes.toGapBuffer
 
     var incReplaceInfo = none(IncrementalReplaceInfo)
 
@@ -952,9 +934,8 @@ suite "mainloop: incrementalReplace":
       check incReplaceInfo.get.beforeLines[3].lineNumber == 4
       check incReplaceInfo.get.beforeLines[3].lineBuffer == ru"abc abc"
 
-      check currentBufStatus.buffer.toSeqRunes == @[
-        "x", "x def", "", "def x", "x abc"]
-        .toSeqRunes
+      check currentBufStatus.buffer.toSeqRunes ==
+        @["x", "x def", "", "def x", "x abc"].toSeqRunes
 
     block:
       status.commandLine.buffer = ru"%s/abc/x/g"
@@ -973,9 +954,8 @@ suite "mainloop: incrementalReplace":
       check incReplaceInfo.get.beforeLines[3].lineNumber == 4
       check incReplaceInfo.get.beforeLines[3].lineBuffer == ru"abc abc"
 
-      check currentBufStatus.buffer.toSeqRunes == @[
-        "x", "x def", "", "def x", "x x"]
-        .toSeqRunes
+      check currentBufStatus.buffer.toSeqRunes ==
+        @["x", "x def", "", "def x", "x x"].toSeqRunes
 
 suite "mainloop: openCompletionWindowInEditor":
   privateAccess(CompletionWindow)
@@ -997,12 +977,10 @@ suite "mainloop: openCompletionWindowInEditor":
 
     status.openCompletionWindowInEditor
 
-    check status.completionWindow.get.popupWindow.get.position == Position(
-      y: 2,
-      x: 2)
+    check status.completionWindow.get.popupWindow.get.position == Position(y: 2, x: 2)
     check status.completionWindow.get.startPosition == BufferPosition(
-      line: 1,
-      column: 0)
+      line: 1, column: 0
+    )
 
   test "Basic 2":
     var status = initEditorStatus()
@@ -1021,12 +999,10 @@ suite "mainloop: openCompletionWindowInEditor":
 
     status.openCompletionWindowInEditor
 
-    check status.completionWindow.get.popupWindow.get.position == Position(
-      y: 2,
-      x: 3)
+    check status.completionWindow.get.popupWindow.get.position == Position(y: 2, x: 3)
     check status.completionWindow.get.startPosition == BufferPosition(
-      line: 1,
-      column: 1)
+      line: 1, column: 1
+    )
 
 suite "mainloop: openCompletionWindowInCommandLine":
   privateAccess(CompletionWindow)
@@ -1044,12 +1020,11 @@ suite "mainloop: openCompletionWindowInCommandLine":
 
     status.openCompletionWindowInCommandLine(true)
 
-    check status.completionWindow.get.popupWindow.get.position == Position(
-      y: 99 - status.commandLine.window.height,
-      x: 0)
+    check status.completionWindow.get.popupWindow.get.position ==
+      Position(y: 99 - status.commandLine.window.height, x: 0)
     check status.completionWindow.get.startPosition == BufferPosition(
-      line: 0,
-      column: 0)
+      line: 0, column: 0
+    )
 
   test "Basic":
     var status = initEditorStatus()
@@ -1059,19 +1034,18 @@ suite "mainloop: openCompletionWindowInCommandLine":
     status.settings.view.lineNumber = false
     status.settings.tabLine.enable = false
 
-    status.commandLine.buffer.insert(ru'e')
+    status.commandLine.buffer.insert(ru 'e')
 
     status.resize(100, 100)
     status.update
 
     status.openCompletionWindowInCommandLine(true)
 
-    check status.completionWindow.get.popupWindow.get.position == Position(
-      y: 99 - status.commandLine.window.height,
-      x: 0)
+    check status.completionWindow.get.popupWindow.get.position ==
+      Position(y: 99 - status.commandLine.window.height, x: 0)
     check status.completionWindow.get.startPosition == BufferPosition(
-      line: 0,
-      column: 0)
+      line: 0, column: 0
+    )
 
 suite "mainloop: updateCompletionWindowBufferInEditor":
   privateAccess(CompletionWindow)
@@ -1094,64 +1068,62 @@ suite "mainloop: updateCompletionWindowBufferInEditor":
     status.openCompletionWindowInEditor
 
     block:
-      currentBufStatus.lspCompletionList.items = @[
-        CompletionItem(label: ru"ea", insertText: ru"ea"),
-        CompletionItem(label: ru"eb", insertText: ru"eb"),
-        CompletionItem(label: ru"ec", insertText: ru"ec")
-      ]
+      currentBufStatus.lspCompletionList.items =
+        @[
+          CompletionItem(label: ru"ea", insertText: ru"ea"),
+          CompletionItem(label: ru"eb", insertText: ru"eb"),
+          CompletionItem(label: ru"ec", insertText: ru"ec"),
+        ]
 
-      status.completionWindow.get.addInput(ru'e')
+      status.completionWindow.get.addInput(ru 'e')
       status.updateCompletionWindowBufferInEditor
 
-      check status.completionWindow.get.list.items[0 .. 3] == @[
-        CompletionItem(label: ru"ec", insertText: ru"ec"),
-        CompletionItem(label: ru"eb", insertText: ru"eb"),
-        CompletionItem(label: ru"ea", insertText: ru"ea"),
-        CompletionItem(label: ru"echo", insertText: ru"echo")
-      ]
+      check status.completionWindow.get.list.items[0 .. 3] ==
+        @[
+          CompletionItem(label: ru"ec", insertText: ru"ec"),
+          CompletionItem(label: ru"eb", insertText: ru"eb"),
+          CompletionItem(label: ru"ea", insertText: ru"ea"),
+          CompletionItem(label: ru"echo", insertText: ru"echo"),
+        ]
 
       check status.completionWindow.get.inputText == ru"e"
       check status.completionWindow.get.list.len >= 4
-      check status.completionWindow.get.startPosition == BufferPosition(
-        line: 1,
-        column: 0)
+      check status.completionWindow.get.startPosition ==
+        BufferPosition(line: 1, column: 0)
 
       check status.completionWindow.get.popupWindow.get.size.h > 4
       check status.completionWindow.get.popupWindow.get.size.w > 6
-      check status.completionWindow.get.popupWindow.get.position == Position(
-        y: 2, x: 1)
+      check status.completionWindow.get.popupWindow.get.position == Position(y: 2, x: 1)
 
     block:
-      currentBufStatus.lspCompletionList.items = @[
-        CompletionItem(label: ru"ec", insertText: ru"ec"),
-      ]
+      currentBufStatus.lspCompletionList.items =
+        @[CompletionItem(label: ru"ec", insertText: ru"ec")]
 
       currentBufStatus.buffer[1] = ru"ec"
       currentMainWindowNode.currentColumn.inc
 
-      status.completionWindow.get.addInput(ru'c')
+      status.completionWindow.get.addInput(ru 'c')
       status.updateCompletionWindowBufferInEditor
 
-      check status.completionWindow.get.list.items == @[
-        CompletionItem(label: ru"ec", insertText: ru"ec"),
-        CompletionItem(label: ru"echo", insertText: ru"echo")
-      ]
+      check status.completionWindow.get.list.items ==
+        @[
+          CompletionItem(label: ru"ec", insertText: ru"ec"),
+          CompletionItem(label: ru"echo", insertText: ru"echo"),
+        ]
 
       check status.completionWindow.get.inputText == ru"ec"
       check status.completionWindow.get.list.len == 2
-      check status.completionWindow.get.startPosition == BufferPosition(
-        line: 1,
-        column: 0)
+      check status.completionWindow.get.startPosition ==
+        BufferPosition(line: 1, column: 0)
 
       check status.completionWindow.get.popupWindow.get.size == Size(h: 2, w: 6)
-      check status.completionWindow.get.popupWindow.get.position == Position(
-        y: 2, x: 1)
+      check status.completionWindow.get.popupWindow.get.position == Position(y: 2, x: 1)
 
   test "Above the cursor":
     var status = initEditorStatus()
     assert status.addNewBufferInCurrentWin().isOk
     currentBufStatus.language = SourceLanguage.langNim
-    currentBufStatus.buffer = toSeq(0..50).mapIt("").toSeqRunes.toGapBuffer
+    currentBufStatus.buffer = toSeq(0 .. 50).mapIt("").toSeqRunes.toGapBuffer
     currentBufStatus.buffer[45] = ru"i"
     currentBufStatus.mode = Mode.insert
     currentMainWindowNode.currentLine = 45
@@ -1168,9 +1140,7 @@ suite "mainloop: updateCompletionWindowBufferInEditor":
     status.completionWindow.get.inputText = ru"i"
     status.updateCompletionWindowBufferInEditor
 
-    check status.completionWindow.get.popupWindow.get.position == Position(
-      y: 17,
-      x: 1)
+    check status.completionWindow.get.popupWindow.get.position == Position(y: 17, x: 1)
 
     currentBufStatus.buffer[currentMainWindowNode.currentLine] = ru"im"
     currentMainWindowNode.currentColumn.inc
@@ -1178,9 +1148,7 @@ suite "mainloop: updateCompletionWindowBufferInEditor":
     status.completionWindow.get.inputText = ru"im"
     status.updateCompletionWindowBufferInEditor
 
-    check status.completionWindow.get.popupWindow.get.position == Position(
-      y: 42,
-      x: 1)
+    check status.completionWindow.get.popupWindow.get.position == Position(y: 42, x: 1)
 
   test "Without LSP (WordDictionary)":
     var status = initEditorStatus()
@@ -1200,38 +1168,34 @@ suite "mainloop: updateCompletionWindowBufferInEditor":
     status.openCompletionWindowInEditor
 
     block:
-      status.completionWindow.get.addInput(ru'e')
+      status.completionWindow.get.addInput(ru 'e')
       status.updateCompletionWindowBufferInEditor
 
       check status.completionWindow.get.inputText == ru"e"
       check status.completionWindow.get.list.len > 0
-      check status.completionWindow.get.startPosition == BufferPosition(
-        line: 1,
-        column: 0)
+      check status.completionWindow.get.startPosition ==
+        BufferPosition(line: 1, column: 0)
 
       check status.completionWindow.get.popupWindow.get.size.h > 0
       check status.completionWindow.get.popupWindow.get.size.w > 0
-      check status.completionWindow.get.popupWindow.get.position == Position(
-        y: 2, x: 1)
+      check status.completionWindow.get.popupWindow.get.position == Position(y: 2, x: 1)
 
     block:
       currentBufStatus.buffer[1] = ru"ec"
 
       currentMainWindowNode.currentColumn.inc
 
-      status.completionWindow.get.addInput(ru'c')
+      status.completionWindow.get.addInput(ru 'c')
       status.updateCompletionWindowBufferInEditor
 
       check status.completionWindow.get.inputText == ru"ec"
       check status.completionWindow.get.list.len == 1
-      check status.completionWindow.get.startPosition == BufferPosition(
-        line: 1,
-        column: 0)
+      check status.completionWindow.get.startPosition ==
+        BufferPosition(line: 1, column: 0)
 
       check status.completionWindow.get.popupWindow.get.size.h > 0
       check status.completionWindow.get.popupWindow.get.size.w > 0
-      check status.completionWindow.get.popupWindow.get.position == Position(
-        y: 2, x: 1)
+      check status.completionWindow.get.popupWindow.get.position == Position(y: 2, x: 1)
 
 suite "mainloop: updateCompletionWindowBufferInCommandLine":
   privateAccess(CompletionWindow)
@@ -1252,40 +1216,38 @@ suite "mainloop: updateCompletionWindowBufferInCommandLine":
     status.openCompletionWindowInCommandLine(false)
 
     block:
-      status.completionWindow.get.addInput(ru'c')
+      status.completionWindow.get.addInput(ru 'c')
       status.updateCompletionWindowBufferInCommandLine
 
       check status.completionWindow.get.inputText == ru"c"
       check status.completionWindow.get.list.len > 1
-      check status.completionWindow.get.startPosition == BufferPosition(
-        line: 0,
-        column: 0)
+      check status.completionWindow.get.startPosition ==
+        BufferPosition(line: 0, column: 0)
 
-      check status.completionWindow.get.popupWindow.get.size == Size(
-        h: status.completionWindow.get.list.len,
-        w: status.completionWindow.get.list.maxLabelLen + 2)
-      check status.completionWindow.get.popupWindow.get.position == Position(
-        y: 99 - status.completionWindow.get.list.len,
-        x: 0)
+      check status.completionWindow.get.popupWindow.get.size ==
+        Size(
+          h: status.completionWindow.get.list.len,
+          w: status.completionWindow.get.list.maxLabelLen + 2,
+        )
+      check status.completionWindow.get.popupWindow.get.position ==
+        Position(y: 99 - status.completionWindow.get.list.len, x: 0)
 
     block:
       status.commandLine.buffer = ru"cl"
 
-      status.completionWindow.get.addInput(ru'l')
+      status.completionWindow.get.addInput(ru 'l')
       status.updateCompletionWindowBufferInCommandLine
 
       check status.completionWindow.get.inputText == ru"cl"
       check status.completionWindow.get.list.len == 1
-      check status.completionWindow.get.startPosition == BufferPosition(
-        line: 0,
-        column: 0)
+      check status.completionWindow.get.startPosition ==
+        BufferPosition(line: 0, column: 0)
 
-      check status.completionWindow.get.popupWindow.get.size == Size(
-        h: 1,
-        w: status.completionWindow.get.list.maxLabelLen + 2)
+      check status.completionWindow.get.popupWindow.get.size ==
+        Size(h: 1, w: status.completionWindow.get.list.maxLabelLen + 2)
       check status.completionWindow.get.popupWindow.get.position == Position(
-        y: 98,
-        x: 0)
+        y: 98, x: 0
+      )
 
 suite "mainloop: confirmCompletion in editor":
   privateAccess(CompletionWindow)
@@ -1305,17 +1267,17 @@ suite "mainloop: confirmCompletion in editor":
     status.resize(100, 100)
     status.update
 
-    currentBufStatus.lspCompletionList.items = @[
-      CompletionItem(label: ru"echo", insertText: ru"echo")
-    ]
+    currentBufStatus.lspCompletionList.items =
+      @[CompletionItem(label: ru"echo", insertText: ru"echo")]
 
-    status.completionWindow = some(CompletionWindow(
-      startPosition: BufferPosition(line: 1, column: 0),
-      popupWindow: some(initPopupWindow(
-        Position(y: 2, x: 0),
-        Size(h: 1, w: 6))),
-      inputText: ru"ec",
-      selectedIndex: -1))
+    status.completionWindow = some(
+      CompletionWindow(
+        startPosition: BufferPosition(line: 1, column: 0),
+        popupWindow: some(initPopupWindow(Position(y: 2, x: 0), Size(h: 1, w: 6))),
+        inputText: ru"ec",
+        selectedIndex: -1,
+      )
+    )
 
     status.confirmCompletion
 
@@ -1339,9 +1301,8 @@ suite "mainloop: confirmCompletion in editor":
     status.resize(100, 100)
     status.update
 
-    currentBufStatus.lspCompletionList.items = @[
-      CompletionItem(label: ru"echo", insertText: ru"echo")
-    ]
+    currentBufStatus.lspCompletionList.items =
+      @[CompletionItem(label: ru"echo", insertText: ru"echo")]
 
     status.openCompletionWindowInEditor
 
@@ -1351,9 +1312,8 @@ suite "mainloop: confirmCompletion in editor":
     status.updateCompletionWindowBufferInEditor
 
     status.completionWindow.get.handleKey(
-      currentBufStatus,
-      currentMainWindowNode,
-      Rune(TabKey))
+      currentBufStatus, currentMainWindowNode, Rune(TabKey)
+    )
 
     status.confirmCompletion
 
@@ -1380,19 +1340,27 @@ suite "mainloop: confirmCompletion in command line":
     status.resize(100, 100)
     status.update
 
-    let list = CompletionList(items: @[
-      initCompletionItem(ru"aa"),
-      initCompletionItem(ru"ab"),
-      initCompletionItem(ru"ac"),
-    ])
+    let list = CompletionList(
+      items:
+        @[
+          initCompletionItem(ru"aa"),
+          initCompletionItem(ru"ab"),
+          initCompletionItem(ru"ac"),
+        ]
+    )
 
-    status.completionWindow = some(CompletionWindow(
-      startPosition: BufferPosition(line: 0, column: 0),
-      popupWindow: some(initPopupWindow(
-        Position(y: 98, x: 0),
-        Size(h: list.len, w: list.maxInsertTextLen))),
-      inputText: ru"a",
-      selectedIndex: -1))
+    status.completionWindow = some(
+      CompletionWindow(
+        startPosition: BufferPosition(line: 0, column: 0),
+        popupWindow: some(
+          initPopupWindow(
+            Position(y: 98, x: 0), Size(h: list.len, w: list.maxInsertTextLen)
+          )
+        ),
+        inputText: ru"a",
+        selectedIndex: -1,
+      )
+    )
 
     status.completionWindow.get.setList list
 
@@ -1416,25 +1384,31 @@ suite "mainloop: confirmCompletion in command line":
     status.resize(100, 100)
     status.update
 
-    let list = CompletionList(items: @[
-      initCompletionItem(ru"aa"),
-      initCompletionItem(ru"ab"),
-      initCompletionItem(ru"ac"),
-    ])
+    let list = CompletionList(
+      items:
+        @[
+          initCompletionItem(ru"aa"),
+          initCompletionItem(ru"ab"),
+          initCompletionItem(ru"ac"),
+        ]
+    )
 
-    status.completionWindow = some(CompletionWindow(
-      startPosition: BufferPosition(line: 0, column: 0),
-      popupWindow: some(initPopupWindow(
-        Position(y: 98, x: 0),
-        Size(h: list.len, w: list.maxInsertTextLen))),
-      inputText: ru"a",
-      selectedIndex: -1))
+    status.completionWindow = some(
+      CompletionWindow(
+        startPosition: BufferPosition(line: 0, column: 0),
+        popupWindow: some(
+          initPopupWindow(
+            Position(y: 98, x: 0), Size(h: list.len, w: list.maxInsertTextLen)
+          )
+        ),
+        inputText: ru"a",
+        selectedIndex: -1,
+      )
+    )
 
     status.completionWindow.get.setList list
 
-    status.completionWindow.get.handleKey(
-      status.commandLine,
-      Rune(TabKey))
+    status.completionWindow.get.handleKey(status.commandLine, Rune(TabKey))
 
     status.confirmCompletion
 
@@ -1462,26 +1436,26 @@ suite "mainloop: updateCompletionWindowHighlightingText":
       status.completionWindow.get.popupWindow.get.highlightText
 
     block:
-      status.highlightingText = some(HighlightingText(
-        text: @["a"].toSeqRunes,
-        kind: HighlightingTextKind.search,
-        isIgnorecase: true))
+      status.highlightingText = some(
+        HighlightingText(
+          text: @["a"].toSeqRunes, kind: HighlightingTextKind.search, isIgnorecase: true
+        )
+      )
 
       status.updateCompletionWindowBufferInEditor
       check status.getHighlightText.get == HighlightText(
-        text: ru"a",
-        isIgnorecase: true)
+        text: ru"a", isIgnorecase: true
+      )
 
     block:
-      status.highlightingText = some(HighlightingText(
-        text: @["b"].toSeqRunes,
-        kind: HighlightingTextKind.search,
-        isSmartcase: true))
+      status.highlightingText = some(
+        HighlightingText(
+          text: @["b"].toSeqRunes, kind: HighlightingTextKind.search, isSmartcase: true
+        )
+      )
 
       status.updateCompletionWindowBufferInEditor
-      check status.getHighlightText.get == HighlightText(
-        text: ru"b",
-        isSmartcase: true)
+      check status.getHighlightText.get == HighlightText(text: ru"b", isSmartcase: true)
 
     block:
       status.highlightingText = none(HighlightingText)

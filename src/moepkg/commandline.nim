@@ -20,28 +20,20 @@
 import std/[sequtils, options]
 import ui, unicodeext, color, independentutils
 
-type
-  CommandLine* = object
-    # TODO: Add EditorView to CommandLine?
-    buffer*: Runes
-      ## The prompt doesn't include in the buffer.
-    prompt: Runes
-      ## The prompt show before the buffer.
-    bufferPosition: Position
-      ## the buffer position
-    color: EditorColorPairIndex
-      ## TODO: Change type from EditorColorPairIndex to Highlight.
-    window*: Window
-      ## Ncurses window
-    isUpdate: bool
-      ## Update flag
+type CommandLine* = object # TODO: Add EditorView to CommandLine?
+  buffer*: Runes ## The prompt doesn't include in the buffer.
+  prompt: Runes ## The prompt show before the buffer.
+  bufferPosition: Position ## the buffer position
+  color: EditorColorPairIndex
+    ## TODO: Change type from EditorColorPairIndex to Highlight.
+  window*: Window ## Ncurses window
+  isUpdate: bool ## Update flag
 
-type
-  CommandLinePrompt* = enum
-    Ex = ":"
-    SearchForward = "/"
-    SearchBackward = "?"
-    DocumentSymbol = "#"
+type CommandLinePrompt* = enum
+  Ex = ":"
+  SearchForward = "/"
+  SearchBackward = "?"
+  DocumentSymbol = "#"
 
 proc initCommandLine*(): CommandLine =
   result.color = EditorColorPairIndex.default
@@ -72,17 +64,15 @@ proc seekCursor*(commandLine: var CommandLine) =
   ## Move the cursor position.
 
   commandLine.window.moveCursor(
-    commandLine.bufferPosition.y,
-    commandLine.prompt.len + commandLine.bufferPosition.x)
+    commandLine.bufferPosition.y, commandLine.prompt.len + commandLine.bufferPosition.x
+  )
 
 proc update*(commandLine: var CommandLine) =
   ## Update the command line view and window.
 
   let
     range = commandLine.getDisplayRange
-    buffer =
-      commandLine.prompt &
-      commandLine.buffer[range.first .. range.last]
+    buffer = commandLine.prompt & commandLine.buffer[range.first .. range.last]
 
   commandLine.window.erase
   commandLine.window.write(0, 0, buffer, commandLine.color.int16)
@@ -203,12 +193,12 @@ proc getPrompt*(commandLine: CommandLine): Runes {.inline.} =
   commandLine.prompt
 
 proc setPrompt*(
-  commandLine: var CommandLine,
-  p: CommandLinePrompt | string) {.inline.} =
-    ## Set a prompt to commandLine.prompt
+    commandLine: var CommandLine, p: CommandLinePrompt | string
+) {.inline.} =
+  ## Set a prompt to commandLine.prompt
 
-    commandLine.prompt = toRunes($p)
-    commandLine.isUpdate = true
+  commandLine.prompt = toRunes($p)
+  commandLine.isUpdate = true
 
 proc setPrompt*(commandLine: var CommandLine, r: Runes) {.inline.} =
   commandLine.setPrompt($r)
@@ -232,11 +222,9 @@ proc bufferPositionX*(commandLine: CommandLine): int {.inline.} =
 proc bufferPositionY*(commandLine: CommandLine): int {.inline.} =
   commandLine.bufferPosition.y
 
-proc setBufferPosition*(
-  commandLine: var CommandLine,
-  pos: Position) {.inline.} =
-    commandLine.bufferPosition = pos
-    commandLine.isUpdate = true
+proc setBufferPosition*(commandLine: var CommandLine, pos: Position) {.inline.} =
+  commandLine.bufferPosition = pos
+  commandLine.isUpdate = true
 
 proc setBufferPositionX*(commandLine: var CommandLine, x: int) {.inline.} =
   commandLine.bufferPosition.x = x
@@ -268,7 +256,6 @@ proc getKeyBlocking*(commandLine: var CommandLine): Rune {.inline.} =
 proc isUpdate*(commandLine: CommandLine): bool {.inline.} =
   commandLine.isUpdate
 
-
 proc getKeys*(commandLine: var CommandLine, prompt: string): bool =
   ## Get keys and update command line until confirmed or canceled.
   ## Received keys are added to the command line buffer.
@@ -291,12 +278,10 @@ proc getKeys*(commandLine: var CommandLine, prompt: string): bool =
     elif isEscKey(key.get) or ctrlCPressed:
       commandLine.clear
       return false
-
     elif isBackspaceKey(key.get):
       commandLine.deleteChar
     elif isDeleteKey(key.get):
       commandLine.deleteCurrentChar
-
     elif isLeftKey(key.get):
       commandLine.moveLeft
     elif isRightKey(key.get):
@@ -305,6 +290,5 @@ proc getKeys*(commandLine: var CommandLine, prompt: string): bool =
       commandLine.moveTop
     elif isEndKey(key.get):
       commandLine.moveEnd
-
     else:
       commandLine.insert(key.get)

@@ -20,10 +20,8 @@
 import std/[strformat, strutils, os, pegs]
 import pkg/results
 
-type
-  VersionInfo* = object
-    major*, minor*, patch*: int
-
+type VersionInfo* = object
+  major*, minor*, patch*: int
 
 proc toSemVerString*(v: VersionInfo): string {.inline.} =
   fmt"{v.major}.{v.minor}.{v.patch}"
@@ -34,11 +32,13 @@ proc parseVersionInfo*(s: string): Result[VersionInfo, string] =
     return Result[VersionInfo, string].ok VersionInfo(
       major: strSplit[0].parseInt,
       minor: strSplit[1].parseInt,
-      patch: strSplit[2].parseInt)
+      patch: strSplit[2].parseInt,
+    )
   except:
-    return Result[VersionInfo, string].err fmt"Invalid value: {getCurrentExceptionMsg()}"
+    return
+      Result[VersionInfo, string].err fmt"Invalid value: {getCurrentExceptionMsg()}"
 
-proc staticReadVersionFromNimble: string {.compileTime.} =
+proc staticReadVersionFromNimble(): string {.compileTime.} =
   ## Get the moe version from moe.nimble.
 
   let
@@ -58,7 +58,7 @@ proc moeVersion*(): VersionInfo {.compileTime.} =
 proc moeSemVersionStr*(): string {.compileTime.} =
   moeVersion().toSemVerString
 
-proc staticGetGitHash: string {.compileTime.} =
+proc staticGetGitHash(): string {.compileTime.} =
   ## Get the current git hash.
 
   const CmdResult = gorgeEx("git rev-parse HEAD")
@@ -70,8 +70,10 @@ proc staticGetGitHash: string {.compileTime.} =
 proc gitHash*(): string {.compileTime.} =
   staticGetGitHash()
 
-proc buildType*: string {.compileTime.} =
+proc buildType*(): string {.compileTime.} =
   ## Return the build type. "Release" or "Debug".
 
-  if defined(release): return "Release"
-  else: return "Debug"
+  if defined(release):
+    return "Release"
+  else:
+    return "Debug"

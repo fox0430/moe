@@ -54,84 +54,105 @@ suite "exmodeutils: splitExCommandBuffer":
 
 suite "exmodeutils: isExCommand":
   test "Case insensitive":
-    for c in exCommandList(): check isExCommand(c)
-    for c in lowerExCommandList(): check isExCommand(c)
+    for c in exCommandList():
+      check isExCommand(c)
+    for c in lowerExCommandList():
+      check isExCommand(c)
 
   test "Case sensitive":
     const IsCaseSensitive = true
-    for c in exCommandList(): check isExCommand(c, IsCaseSensitive)
+    for c in exCommandList():
+      check isExCommand(c, IsCaseSensitive)
     for c in lowerExCommandList():
       if not exCommandList().contains(c):
         check not isExCommand(c.toLower, IsCaseSensitive)
 
 suite "exmodeutils: isToggleArgsCommand":
   test "Case insensitive":
-    for c in noArgsCommandList(): check isNoArgsCommand(c)
-    for c in noArgsCommandList(): check isNoArgsCommand(c.toLower)
+    for c in noArgsCommandList():
+      check isNoArgsCommand(c)
+    for c in noArgsCommandList():
+      check isNoArgsCommand(c.toLower)
 
   test "Case sensitive":
     const IsCaseSensitive = true
-    for c in noArgsCommandList(): check isNoArgsCommand(c, IsCaseSensitive)
+    for c in noArgsCommandList():
+      check isNoArgsCommand(c, IsCaseSensitive)
     for c in noArgsCommandList():
       if not exCommandList().contains(c):
         check isNoArgsCommand(c.toLower, IsCaseSensitive)
 
 suite "exmodeutils: isToggleArgsCommand":
   test "Case insensitive":
-    for c in toggleArgsCommandList(): check isToggleArgsCommand(c)
-    for c in toggleArgsCommandList(): check isToggleArgsCommand(c.toLower)
+    for c in toggleArgsCommandList():
+      check isToggleArgsCommand(c)
+    for c in toggleArgsCommandList():
+      check isToggleArgsCommand(c.toLower)
 
   test "Case sensitive":
     const IsCaseSensitive = true
-    for c in toggleArgsCommandList(): check isToggleArgsCommand(c, IsCaseSensitive)
+    for c in toggleArgsCommandList():
+      check isToggleArgsCommand(c, IsCaseSensitive)
     for c in toggleArgsCommandList():
       if not exCommandList().contains(c.toLower):
         check not isToggleArgsCommand(c.toLower, IsCaseSensitive)
 
 suite "exmodeutils: isNumberArgsCommand":
   test "Case insensitive":
-    for c in numberArgsCommandList(): check isNumberArgsCommand(c)
-    for c in numberArgsCommandList(): check isNumberArgsCommand(c.toLower)
+    for c in numberArgsCommandList():
+      check isNumberArgsCommand(c)
+    for c in numberArgsCommandList():
+      check isNumberArgsCommand(c.toLower)
 
   test "Case sensitive":
     const IsCaseSensitive = true
-    for c in numberArgsCommandList(): check isNumberArgsCommand(c, IsCaseSensitive)
+    for c in numberArgsCommandList():
+      check isNumberArgsCommand(c, IsCaseSensitive)
     for c in numberArgsCommandList():
       if not exCommandList().contains(c.toLower):
         check not isNumberArgsCommand(c.toLower, IsCaseSensitive)
 
 suite "exmodeutils: isTextArgsCommand":
   test "Case insensitive":
-    for c in textArgsCommandList(): check isTextArgsCommand(c)
-    for c in textArgsCommandList(): check isTextArgsCommand(c.toLower)
+    for c in textArgsCommandList():
+      check isTextArgsCommand(c)
+    for c in textArgsCommandList():
+      check isTextArgsCommand(c.toLower)
 
   test "Case sensitive":
     const IsCaseSensitive = true
-    for c in textArgsCommandList(): check isTextArgsCommand(c, IsCaseSensitive)
+    for c in textArgsCommandList():
+      check isTextArgsCommand(c, IsCaseSensitive)
     for c in textArgsCommandList():
       if not exCommandList().contains(c.toLower):
         check not isTextArgsCommand(c.toLower, IsCaseSensitive)
 
 suite "exmodeutils: isPathArgsCommand":
   test "Case insensitive":
-    for c in pathArgsCommandList(): check isPathArgsCommand(c)
-    for c in pathArgsCommandList(): check isPathArgsCommand(c.toLower)
+    for c in pathArgsCommandList():
+      check isPathArgsCommand(c)
+    for c in pathArgsCommandList():
+      check isPathArgsCommand(c.toLower)
 
   test "Case sensitive":
     const IsCaseSensitive = true
-    for c in pathArgsCommandList(): check isPathArgsCommand(c, IsCaseSensitive)
+    for c in pathArgsCommandList():
+      check isPathArgsCommand(c, IsCaseSensitive)
     for c in pathArgsCommandList():
       if not exCommandList().contains(c.toLower):
         check not isPathArgsCommand(c.toLower, IsCaseSensitive)
 
 suite "exmodeutils: isThemeArgsCommand":
   test "Case insensitive":
-    for c in themeArgsCommandList(): check isThemeArgsCommand(c)
-    for c in themeArgsCommandList(): check isThemeArgsCommand(c.toLower)
+    for c in themeArgsCommandList():
+      check isThemeArgsCommand(c)
+    for c in themeArgsCommandList():
+      check isThemeArgsCommand(c.toLower)
 
   test "Case sensitive":
     const IsCaseSensitive = true
-    for c in themeArgsCommandList(): check isThemeArgsCommand(c, IsCaseSensitive)
+    for c in themeArgsCommandList():
+      check isThemeArgsCommand(c, IsCaseSensitive)
     for c in themeArgsCommandList():
       if not exCommandList().contains(c.toLower):
         check not isThemeArgsCommand(c.toLower, IsCaseSensitive)
@@ -299,8 +320,7 @@ suite "exmodeutils: isAutoIndentSettingCommand":
 
 suite "exmodeutils: isIndentationLinesSettingCommand":
   test "Valid":
-    check isIndentationLinesSettingCommand(
-      @["indentationLines", "on"].toSeqRunes)
+    check isIndentationLinesSettingCommand(@["indentationLines", "on"].toSeqRunes)
 
   test "Invalid":
     check not isIndentationLinesSettingCommand(@["a"].toSeqRunes)
@@ -321,16 +341,14 @@ suite "exmodeutils: isStatusLineSettingCommand":
 
 suite "exmodeutils: isIncrementalSearchSettingCommand":
   test "Valid":
-    check isIncrementalSearchSettingCommand(
-      @["incrementalSearch", "on"].toSeqRunes)
+    check isIncrementalSearchSettingCommand(@["incrementalSearch", "on"].toSeqRunes)
 
   test "Invalid":
     check not isIncrementalSearchSettingCommand(@["a"].toSeqRunes)
 
 suite "exmodeutils: isHighlightPairOfParenSettingCommand":
   test "Valid":
-    check isHighlightPairOfParenSettingCommand(
-      @["highlightParen", "on"].toSeqRunes)
+    check isHighlightPairOfParenSettingCommand(@["highlightParen", "on"].toSeqRunes)
 
   test "Invalid":
     check not isHighlightPairOfParenSettingCommand(@["a"].toSeqRunes)
@@ -366,7 +384,8 @@ suite "exmodeutils: isSmoothScrollMaxDelaySettingCommand":
 suite "exmodeutils: isHighlightCurrentWordSettingCommand":
   test "Valid":
     check isHighlightCurrentWordSettingCommand(
-      @["highlightCurrentWord", "on"].toSeqRunes)
+      @["highlightCurrentWord", "on"].toSeqRunes
+    )
 
   test "Invalid":
     check not isHighlightCurrentWordSettingCommand(@["a"].toSeqRunes)
@@ -381,31 +400,29 @@ suite "exmodeutils: isSystemClipboardSettingCommand":
 suite "exmodeutils: isHighlightFullWidthSpaceSettingCommand":
   test "Valid":
     check isHighlightFullWidthSpaceSettingCommand(
-      @["highlightFullSpace", "on"].toSeqRunes)
+      @["highlightFullSpace", "on"].toSeqRunes
+    )
 
   test "Invalid":
     check not isHighlightFullWidthSpaceSettingCommand(@["a"].toSeqRunes)
 
 suite "exmodeutils: isMultipleStatusLineSettingCommand":
   test "Valid":
-    check isMultipleStatusLineSettingCommand(
-      @["multipleStatusLine", "on"].toSeqRunes)
+    check isMultipleStatusLineSettingCommand(@["multipleStatusLine", "on"].toSeqRunes)
 
   test "Invalid":
     check not isMultipleStatusLineSettingCommand(@["a"].toSeqRunes)
 
 suite "exmodeutils: isBuildOnSaveSettingCommand":
   test "Valid":
-    check isBuildOnSaveSettingCommand(
-      @["buildOnSave", "on"].toSeqRunes)
+    check isBuildOnSaveSettingCommand(@["buildOnSave", "on"].toSeqRunes)
 
   test "Invalid":
     check not isBuildOnSaveSettingCommand(@["a"].toSeqRunes)
 
 suite "exmodeutils: isShowGitInInactiveSettingCommand":
   test "Valid":
-    check isShowGitInInactiveSettingCommand(
-      @["showGitInactive", "on"].toSeqRunes)
+    check isShowGitInInactiveSettingCommand(@["showGitInactive", "on"].toSeqRunes)
 
   test "Invalid":
     check not isShowGitInInactiveSettingCommand(@["a"].toSeqRunes)
@@ -427,7 +444,8 @@ suite "exmodeutils: isSmartcaseSettingCommand":
 suite "exmodeutils: isHighlightCurrentLineSettingCommand":
   test "Valid":
     check isHighlightCurrentLineSettingCommand(
-      @["highlightCurrentLine", "on"].toSeqRunes)
+      @["highlightCurrentLine", "on"].toSeqRunes
+    )
 
   test "Invalid":
     check not isHighlightCurrentLineSettingCommand(@["a"].toSeqRunes)
@@ -590,8 +608,7 @@ suite "exmodeutils: isNewEmptyBufferInSplitWindowHorizontallyCommand":
     check isNewEmptyBufferInSplitWindowHorizontallyCommand(@["new"].toSeqRunes)
 
   test "Invalid":
-    check not isNewEmptyBufferInSplitWindowHorizontallyCommand(
-      @["a"].toSeqRunes)
+    check not isNewEmptyBufferInSplitWindowHorizontallyCommand(@["a"].toSeqRunes)
 
 suite "exmodeutils: isNewEmptyBufferInSplitWindowVerticallyCommand":
   test "Valid":

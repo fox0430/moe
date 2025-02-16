@@ -28,16 +28,15 @@ import utils
 
 type
   LspInlayHints* = object
-    range*: independentutils.Range
-      # Line range to request
+    range*: independentutils.Range # Line range to request
     hints*: seq[InlayHint]
 
   LspInlayHintsResult* = Result[seq[InlayHint], string]
 
 proc initInlayHintParams*(path: string, range: BufferRange): InlayHintParams =
   InlayHintParams(
-    textDocument: TextDocumentIdentifier(uri: path.pathToUri),
-    range: range.toLspRange)
+    textDocument: TextDocumentIdentifier(uri: path.pathToUri), range: range.toLspRange
+  )
 
 proc parseTextDocumentInlayHintResponse*(res: JsonNode): LspInlayHintsResult =
   if res["result"].kind == JNull:

@@ -21,15 +21,9 @@
 # Resources.
 #
 
-from ../flags import
-  TokenizerFlag,
-  TokenizerFlags
+from ../flags import TokenizerFlag, TokenizerFlags
 
-from ../highlite import
-  GeneralTokenizer,
-  TokenClass
-
-
+from ../highlite import GeneralTokenizer, TokenClass
 
 #
 # Procedures.
@@ -44,8 +38,9 @@ from ../highlite import
 ##
 ## - Haskell
 
-proc lexCurlyDashPreprocessor(lexer: GeneralTokenizer, position: int,
-    nested: bool): int =
+proc lexCurlyDashPreprocessor(
+    lexer: GeneralTokenizer, position: int, nested: bool
+): int =
   var depth = 0
   result = position
 
@@ -56,7 +51,6 @@ proc lexCurlyDashPreprocessor(lexer: GeneralTokenizer, position: int,
       case lexer.buf[result]
       of '\0':
         break
-
       of '#':
         inc result
 
@@ -70,7 +64,6 @@ proc lexCurlyDashPreprocessor(lexer: GeneralTokenizer, position: int,
               break
             elif nested:
               dec depth
-
       of '{':
         inc result
 
@@ -85,8 +78,6 @@ proc lexCurlyDashPreprocessor(lexer: GeneralTokenizer, position: int,
       else:
         inc result
 
-
-
 ## Lex a curly dash comment.
 ##
 ## This comment type starts with ``{-`` and ends with ``-}``.  Some languages
@@ -96,8 +87,9 @@ proc lexCurlyDashPreprocessor(lexer: GeneralTokenizer, position: int,
 ##
 ## - Haskell
 
-proc lexCurlyDashComment*(lexer: var GeneralTokenizer, position: int,
-    flags: TokenizerFlags): int =
+proc lexCurlyDashComment*(
+    lexer: var GeneralTokenizer, position: int, flags: TokenizerFlags
+): int =
   let nested = hasNestedComments in flags
   var depth = 0
   result = position
@@ -118,7 +110,6 @@ proc lexCurlyDashComment*(lexer: var GeneralTokenizer, position: int,
         case lexer.buf[result]
         of '\0':
           break
-
         of '-':
           inc result
 
@@ -129,7 +120,6 @@ proc lexCurlyDashComment*(lexer: var GeneralTokenizer, position: int,
               break
             elif nested:
               dec depth
-
         of '{':
           inc result
 
@@ -138,7 +128,6 @@ proc lexCurlyDashComment*(lexer: var GeneralTokenizer, position: int,
 
             if nested:
               inc depth
-
         else:
           inc result
 

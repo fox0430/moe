@@ -19,8 +19,9 @@
 
 import std/[deques, strutils, math, strformat, options, sequtils]
 
-import gapbuffer, ui, unicodeext, independentutils, color, highlight, git,
-       syntaxcheck, theme, bufferstatus, folding
+import
+  gapbuffer, ui, unicodeext, independentutils, color, highlight, git, syntaxcheck,
+  theme, bufferstatus, folding
 
 type
   Sidebar = object
@@ -60,31 +61,31 @@ type
     length: int
 
 proc loadSingleViewLine[T](
-  view: EditorView,
-  buffer: T,
-  originalLine,
-  start: int): ViewLine =
+    view: EditorView, buffer: T, originalLine, start: int
+): ViewLine =
+  result.line = ru""
+  result.originalLine = originalLine
+  result.start = start
 
-    result.line = ru""
-    result.originalLine = originalLine
-    result.start = start
+  let bufferLine = buffer[originalLine]
 
-    let bufferLine = buffer[originalLine]
+  template isRemaining(): bool =
+    start + result.length < bufferLine.len
 
-    template isRemaining: bool = start+result.length < bufferLine.len
+  template calcNextWidth(): int =
+    if isRemaining():
+      unicodeext.width(bufferLine[start + result.length])
+    else:
+      0
 
-    template calcNextWidth: int =
-      if isRemaining(): unicodeext.width(bufferLine[start+result.length])
-      else: 0
-
-    var
-      totalWidth = 0
-      nextWidth = calcNextWidth()
-    while isRemaining() and totalWidth+nextWidth <= view.width:
-      result.line.add(bufferLine[start+result.length])
-      result.length.inc
-      totalWidth += nextWidth
-      nextWidth = calcNextWidth
+  var
+    totalWidth = 0
+    nextWidth = calcNextWidth()
+  while isRemaining() and totalWidth + nextWidth <= view.width:
+    result.line.add(bufferLine[start + result.length])
+    result.length.inc
+    totalWidth += nextWidth
+    nextWidth = calcNextWidth
 
 proc isFoldingStartLine*(view: EditorView, line: int): bool {.inline.} =
   view.foldingRanges.isStartLine(line)
@@ -92,20 +93,14 @@ proc isFoldingStartLine*(view: EditorView, line: int): bool {.inline.} =
 proc inFoldingRange*(view: EditorView, line: int): bool {.inline.} =
   view.foldingRanges.inRange(line)
 
-proc findFoldingRange*(
-  view: EditorView,
-  line: int): Option[FoldingRange] {.inline.} =
-
-    view.foldingRanges.find(line)
+proc findFoldingRange*(view: EditorView, line: int): Option[FoldingRange] {.inline.} =
+  view.foldingRanges.find(line)
 
 proc addFoldingRange*(view: var EditorView, range: FoldingRange) {.inline.} =
   view.foldingRanges.add range
 
-proc addFoldingRange*(
-  view: var EditorView, firstLine,
-  lastLine: int) {.inline.} =
-
-    view.foldingRanges.add(firstLine, lastLine)
+proc addFoldingRange*(view: var EditorView, firstLine, lastLine: int) {.inline.} =
+  view.foldingRanges.add(firstLine, lastLine)
 
 proc removeFoldingRange*(view: var EditorView, range: FoldingRange) {.inline.} =
   view.foldingRanges.remove(range)
@@ -113,11 +108,8 @@ proc removeFoldingRange*(view: var EditorView, range: FoldingRange) {.inline.} =
 proc removeFoldingRange*(view: var EditorView, line: int) {.inline.} =
   view.foldingRanges.remove(line)
 
-proc removeAllFoldingRange*(
-  view: var EditorView,
-  range: FoldingRange) {.inline.} =
-
-    view.foldingRanges.removeAll(range)
+proc removeAllFoldingRange*(view: var EditorView, range: FoldingRange) {.inline.} =
+  view.foldingRanges.removeAll(range)
 
 proc removeAllFoldingRange*(view: var EditorView, first, last: int) {.inline.} =
   view.foldingRanges.removeAll(first, last)
@@ -144,9 +136,12 @@ proc reload*[T](view: var EditorView, buffer: T, topLine: int) =
   let height = view.height
 
   const empty = ru""
-  for x in view.originalLine.mitems: x = -1
-  for s in view.lines.mitems: s = empty
-  for x in view.length.mitems: x = 0
+  for x in view.originalLine.mitems:
+    x = -1
+  for s in view.lines.mitems:
+    s = empty
+  for x in view.length.mitems:
+    x = 0
 
   var
     lineNumber = topLine
@@ -154,7 +149,8 @@ proc reload*[T](view: var EditorView, buffer: T, topLine: int) =
     foldingRange: Option[FoldingRange]
     y = 0
   while y < height:
-    if lineNumber >= buffer.len: break
+    if lineNumber >= buffer.len:
+      break
 
     if foldingRange.isNone:
       foldingRange = view.findFoldingRange(lineNumber)
@@ -194,27 +190,32 @@ proc initEditorView*[T](buffer: T, height, width: int): EditorView =
 
   result.height = height
   result.width = width
-  result.widthOfLineNum = buffer.len.intToStr.len+1
+  result.widthOfLineNum = buffer.len.intToStr.len + 1
 
   result.lines = initDeque[Runes]()
-  for i in 0..height-1: result.lines.addLast(ru"")
+  for i in 0 .. height - 1:
+    result.lines.addLast(ru"")
 
   result.originalLine = initDeque[int]()
-  for i in 0..height-1: result.originalLine.addLast(-1)
+  for i in 0 .. height - 1:
+    result.originalLine.addLast(-1)
   result.start = initDeque[int]()
-  for i in 0..height-1: result.start.addLast(-1)
+  for i in 0 .. height - 1:
+    result.start.addLast(-1)
   result.length = initDeque[int]()
-  for i in 0..height-1: result.length.addLast(-1)
+  for i in 0 .. height - 1:
+    result.length.addLast(-1)
 
   result.reload(buffer, 0)
 
 proc initSidebar*(view: var EditorView, width: int = 2) =
   ## Initialize EditorView.sidebar.
 
-  view.sidebar = Sidebar(
-    buffer: view.height.newSeqWith(ru' '.repeat(width)),
-    highlights: view.height.newSeqWith(
-      EditorColorPairIndex.default.repeat(width))).some
+  view.sidebar =
+    Sidebar(
+      buffer: view.height.newSeqWith(ru ' '.repeat(width)),
+      highlights: view.height.newSeqWith(EditorColorPairIndex.default.repeat(width)),
+    ).some
 
   view.sidebarWidth = width
 
@@ -225,54 +226,45 @@ proc clearSidebar*(view: var EditorView) {.inline.} =
     height = view.height
     width = view.sidebar.get.buffer.len
 
-  view.sidebar.get.buffer = height.newSeqWith(ru' '.repeat(width))
-  view.sidebar.get.highlights = height.newSeqWith(
-    EditorColorPairIndex.default.repeat(width))
+  view.sidebar.get.buffer = height.newSeqWith(ru ' '.repeat(width))
+  view.sidebar.get.highlights =
+    height.newSeqWith(EditorColorPairIndex.default.repeat(width))
 
 proc updateSidebarBuffer*(view: var EditorView, buffer: seq[Runes]) {.inline.} =
   view.sidebar.get.buffer = buffer
 
 proc overwriteSidebarBuffer*(
-  view: var EditorView,
-  position: Position,
-  r: Rune) {.inline.} =
-
-    view.sidebar.get.buffer[position.y][position.x] = r
+    view: var EditorView, position: Position, r: Rune
+) {.inline.} =
+  view.sidebar.get.buffer[position.y][position.x] = r
 
 proc overwriteSidebarBuffer*(
-  view: var EditorView,
-  lineNumber: int,
-  line: Runes) {.inline.} =
-
-    view.sidebar.get.buffer[lineNumber] = line
+    view: var EditorView, lineNumber: int, line: Runes
+) {.inline.} =
+  view.sidebar.get.buffer[lineNumber] = line
 
 proc updateSidebarHighlights*(
-  view: var EditorView,
-  h: seq[seq[EditorColorPairIndex]]) {.inline.} =
-
-    view.sidebar.get.highlights = h
-
-proc overwriteSidebarHighlights*(
-  view: var EditorView,
-  position: Position,
-  highlight: EditorColorPairIndex) {.inline.} =
-
-    view.sidebar.get.highlights[position.y][position.x] = highlight
+    view: var EditorView, h: seq[seq[EditorColorPairIndex]]
+) {.inline.} =
+  view.sidebar.get.highlights = h
 
 proc overwriteSidebarHighlights*(
-  view: var EditorView,
-  line: int,
-  highlight: seq[EditorColorPairIndex]) {.inline.} =
+    view: var EditorView, position: Position, highlight: EditorColorPairIndex
+) {.inline.} =
+  view.sidebar.get.highlights[position.y][position.x] = highlight
 
-    view.sidebar.get.highlights[line] = highlight
+proc overwriteSidebarHighlights*(
+    view: var EditorView, line: int, highlight: seq[EditorColorPairIndex]
+) {.inline.} =
+  view.sidebar.get.highlights[line] = highlight
 
 proc resize(s: var Sidebar, size: Size) =
   ## Reszie buffer and highlights.
 
   var
     newBuffer = size.h.newSeqWith(" ".repeat(size.w).toRunes)
-    newHighlights: seq[seq[EditorColorPairIndex]] = size.h.newSeqWith(
-      size.w.newSeqWith(EditorColorPairIndex.default))
+    newHighlights: seq[seq[EditorColorPairIndex]] =
+      size.h.newSeqWith(size.w.newSeqWith(EditorColorPairIndex.default))
 
   for i in 0 .. min(newBuffer.high, s.buffer.high):
     for j in 0 .. min(newBuffer[i].high, s.buffer[i].high):
@@ -282,34 +274,35 @@ proc resize(s: var Sidebar, size: Size) =
   s.buffer = newBuffer
   s.highlights = newHighlights
 
-proc resize*[T](
-  view: var EditorView,
-  buffer: T,
-  height, width, widthOfLineNum: int) =
-    ## Update EditorView with width/height.
-    ## The displayed content is as similar as possible to that before the resizing.
+proc resize*[T](view: var EditorView, buffer: T, height, width, widthOfLineNum: int) =
+  ## Update EditorView with width/height.
+  ## The displayed content is as similar as possible to that before the resizing.
 
-    let topLine = view.originalLine[0]
+  let topLine = view.originalLine[0]
 
-    view.lines = initDeque[Runes]()
-    for i in 0..height-1: view.lines.addLast(ru"")
+  view.lines = initDeque[Runes]()
+  for i in 0 .. height - 1:
+    view.lines.addLast(ru"")
 
-    view.height = height
-    view.width = width
-    view.widthOfLineNum = widthOfLineNum
+  view.height = height
+  view.width = width
+  view.widthOfLineNum = widthOfLineNum
 
-    view.originalLine = initDeque[int]()
-    for i in 0..height-1: view.originalLine.addLast(-1)
-    view.start = initDeque[int]()
-    for i in 0..height-1: view.start.addLast(-1)
-    view.length = initDeque[int]()
-    for i in 0..height-1: view.length.addLast(-1)
+  view.originalLine = initDeque[int]()
+  for i in 0 .. height - 1:
+    view.originalLine.addLast(-1)
+  view.start = initDeque[int]()
+  for i in 0 .. height - 1:
+    view.start.addLast(-1)
+  view.length = initDeque[int]()
+  for i in 0 .. height - 1:
+    view.length.addLast(-1)
 
-    if view.sidebar.isSome:
-      view.sidebar.get.resize(Size(h: height, w: view.sidebarWidth))
+  if view.sidebar.isSome:
+    view.sidebar.get.resize(Size(h: height, w: view.sidebarWidth))
 
-    view.updated = true
-    view.reload(buffer, topLine)
+  view.updated = true
+  view.reload(buffer, topLine)
 
 proc scrollUp*[T](view: var EditorView, buffer: T) =
   ## Shift the EditorView display up one line.
@@ -324,9 +317,9 @@ proc scrollUp*[T](view: var EditorView, buffer: T) =
   var originalLine, last: int
   if view.start[0] > 0:
     originalLine = view.originalLine[0]
-    last = view.start[0]-1
+    last = view.start[0] - 1
   else:
-    originalLine = view.originalLine[0]-1
+    originalLine = view.originalLine[0] - 1
     last = buffer[originalLine].high
 
   var start = 0
@@ -352,15 +345,18 @@ proc scrollDown*[T](view: var EditorView, buffer: T) =
   view.length.popFirst
 
   var originalLine, start: int
-  if view.start[height-2]+view.length[height-2] == buffer[view.originalLine[height-2]].len:
+  if view.start[height - 2] + view.length[height - 2] ==
+      buffer[view.originalLine[height - 2]].len:
     originalLine =
-      if view.originalLine[height-2] == -1 or
-         view.originalLine[height-2]+1 == buffer.len: -1
-      else: view.originalLine[height-2]+1
+      if view.originalLine[height - 2] == -1 or
+          view.originalLine[height - 2] + 1 == buffer.len:
+        -1
+      else:
+        view.originalLine[height - 2] + 1
     start = 0
   else:
-    originalLine = view.originalLine[height-2]
-    start = view.start[height-2]+view.length[height-2]
+    originalLine = view.originalLine[height - 2]
+    start = view.start[height - 2] + view.length[height - 2]
 
   if originalLine == -1:
     view.lines.addLast(ru"")
@@ -385,420 +381,364 @@ proc writeSidebarLine(view: EditorView, win: var Window, y: int) =
     win.write(y, x, $r, highlight[x].int16, Attribute.normal, false)
 
 proc writeLineNum(
-  view: EditorView,
-  win: var Window,
-  windowPosition: WindowPosition,
-  y, line: int,
-  colorPair: EditorColorPairIndex) =
+    view: EditorView,
+    win: var Window,
+    windowPosition: WindowPosition,
+    y, line: int,
+    colorPair: EditorColorPairIndex,
+) =
+  const RightMargin = " "
+  let
+    x = view.sidebarWidth
+    buffer = strutils.align($(line + 1), view.widthOfLineNum - 1) & RightMargin
 
-    const
-      RightMargin = " "
-    let
-      x = view.sidebarWidth
-      buffer =
-        strutils.align($(line + 1), view.widthOfLineNum - 1) & RightMargin
+    absY =
+      if windowPosition.y > 1:
+        windowPosition.y + y
+      else:
+        y
+    absX =
+      if windowPosition.x > 0:
+        windowPosition.x + x
+      else:
+        x
 
-      absY =
-        if windowPosition.y > 1: windowPosition.y + y
-        else: y
-      absX =
-        if windowPosition.x > 0: windowPosition.x + x
-        else: x
-
-    win.write(absY, absX, buffer, colorPair.int16, Attribute.normal, false)
+  win.write(absY, absX, buffer, colorPair.int16, Attribute.normal, false)
 
 proc write(
-  view: EditorView,
-  win: var Window,
-  windowPosition: WindowPosition,
-  y, x: int,
-  runes: Runes,
-  color: EditorColorPairIndex | int16,
-  attribute: Attribute = Attribute.normal) {.inline.} =
+    view: EditorView,
+    win: var Window,
+    windowPosition: WindowPosition,
+    y, x: int,
+    runes: Runes,
+    color: EditorColorPairIndex | int16,
+    attribute: Attribute = Attribute.normal,
+) {.inline.} =
+  # TODO: use settings file
+  const tab = "    "
+  let
+    absY =
+      if windowPosition.y > 1:
+        windowPosition.y + y
+      else:
+        y
+    absX =
+      if windowPosition.x > 0:
+        windowPosition.x + x
+      else:
+        x
 
-    # TODO: use settings file
-    const tab = "    "
-    let
-      absY =
-        if windowPosition.y > 1: windowPosition.y + y
-        else: y
-      absX =
-        if windowPosition.x > 0: windowPosition.x + x
-        else: x
-
-    win.write(
-      absY,
-      absX,
-      replace($runes, "\t", tab),
-      color.int16,
-      attribute,
-      false)
+  win.write(absY, absX, replace($runes, "\t", tab), color.int16, attribute, false)
 
 proc writeCurrentLine(
-  win: var Window,
-  view: EditorView,
-  highlight: Highlight,
-  runes: Runes,
-  windowPosition: Position,
-  currentLineColorPair: var int,
-  y, x, i, last: int) =
+    win: var Window,
+    view: EditorView,
+    highlight: Highlight,
+    runes: Runes,
+    windowPosition: Position,
+    currentLineColorPair: var int,
+    y, x, i, last: int,
+) =
+  if view.config.isHighlightCurrentLine and not view.editorMode.isVisualMode:
+    # Change background color to white if background color is editorBg
+    let
+      originalColorPair =
+        if i >= 0 and i < highlight.len:
+          themeColors[highlight[i].color]
+        else:
+          themeColors[EditorColorPairIndex.default]
 
-    if view.config.isHighlightCurrentLine and not view.editorMode.isVisualMode:
+      attribute =
+        if view.config.isCursorLine:
+          Attribute.underline
+        elif i > -1 and i < highlight.len:
+          highlight[i].attribute
+        else:
+          Attribute.normal
 
-      # Change background color to white if background color is editorBg
-      let
-        originalColorPair =
-          if i >= 0 and i < highlight.len:
-            themeColors[highlight[i].color]
-          else:
-            themeColors[EditorColorPairIndex.default]
+    # Init colors for the current line buffer
+    let
+      bufferFg = originalColorPair.foreground
 
-        attribute =
-          if view.config.isCursorLine: Attribute.underline
-          elif i > -1 and i < highlight.len: highlight[i].attribute
-          else: Attribute.normal
+      originalBgRgb = backgroundRgb(EditorColorPairIndex.default)
+      bufferBg =
+        if originalColorPair.background.rgb == originalBgRgb:
+          themeColors[EditorColorPairIndex.currentLineBg].background
+        else:
+          originalColorPair.background
 
-      # Init colors for the current line buffer
-      let
-        bufferFg = originalColorPair.foreground
+    # TODO: Write an error to the log
+    discard
+      currentLineColorPair.initColorPair(view.config.colorMode, bufferFg, bufferBg)
 
-        originalBgRgb = backgroundRgb(EditorColorPairIndex.default)
-        bufferBg =
-          if originalColorPair.background.rgb == originalBgRgb:
-            themeColors[EditorColorPairIndex.currentLineBg].background
-          else:
-            originalColorPair.background
+    view.write(win, windowPosition, y, x, runes, currentLineColorPair.int16, attribute)
 
-      # TODO: Write an error to the log
-      discard currentLineColorPair.initColorPair(
-        view.config.colorMode,
-        bufferFg,
-        bufferBg)
+    currentLineColorPair.inc
 
-      view.write(
-        win,
-        windowPosition,
-        y,
-        x,
-        runes,
-        currentLineColorPair.int16,
-        attribute)
-
-      currentLineColorPair.inc
-
-      # Write spaces after text in the current line
-      let
-        afterFg = themeColors[EditorColorPairIndex.default].foreground
-        afterBg = themeColors[EditorColorPairIndex.currentLineBg].background
-      # TODO: Write an error to the log
-      discard currentLineColorPair.initColorPair(
-        view.config.colorMode,
-        afterFg,
-        afterBg)
-
-      let
-        spaces = ru" ".repeat(view.width - view.lines[y].width)
-        x = view.sidebarWidth + view.widthOfLineNum + view.lines[y].width
-
-      view.write(
-        win,
-        windowPosition,
-        y,
-        x,
-        spaces,
-        currentLineColorPair.int16,
-        attribute)
-
-      currentLineColorPair.inc
-
-    else:
-      view.write(
-        win,
-        windowPosition,
-        y,
-        x,
-        runes,
-        highlight[i].color.int16)
-
-proc foldingLineBuffer(
-  foldingRange: FoldingRange,
-  originalFirstLine: Runes,
-  width: int): Runes =
+    # Write spaces after text in the current line
+    let
+      afterFg = themeColors[EditorColorPairIndex.default].foreground
+      afterBg = themeColors[EditorColorPairIndex.currentLineBg].background
+    # TODO: Write an error to the log
+    discard currentLineColorPair.initColorPair(view.config.colorMode, afterFg, afterBg)
 
     let
-      originalLineStr = strutils.strip($originalFirstLine)
-      count = foldingRange.last - foldingRange.first + 1
-    var line = fmt"+-- {count} lines {originalLineStr}"
-    if line.high > width:
-      line = line[0 ..< width]
-    else:
-      line = line & "·".repeat(width - line.high)
+      spaces = ru" ".repeat(view.width - view.lines[y].width)
+      x = view.sidebarWidth + view.widthOfLineNum + view.lines[y].width
 
-    return line.toRunes
+    view.write(win, windowPosition, y, x, spaces, currentLineColorPair.int16, attribute)
+
+    currentLineColorPair.inc
+  else:
+    view.write(win, windowPosition, y, x, runes, highlight[i].color.int16)
+
+proc foldingLineBuffer(
+    foldingRange: FoldingRange, originalFirstLine: Runes, width: int
+): Runes =
+  let
+    originalLineStr = strutils.strip($originalFirstLine)
+    count = foldingRange.last - foldingRange.first + 1
+  var line = fmt"+-- {count} lines {originalLineStr}"
+  if line.high > width:
+    line = line[0 ..< width]
+  else:
+    line = line & "·".repeat(width - line.high)
+
+  return line.toRunes
 
 proc lineNumberColor(
-  view: EditorView,
-  isCurrentLine: bool): EditorColorPairIndex {.inline.} =
-
-    if isCurrentLine and
-       view.isCurrentWin and
-       view.config.isHighlightCurrentLineNumber:
-         EditorColorPairIndex.currentLineNum
-    else:
-      EditorColorPairIndex.lineNum
+    view: EditorView, isCurrentLine: bool
+): EditorColorPairIndex {.inline.} =
+  if isCurrentLine and view.isCurrentWin and view.config.isHighlightCurrentLineNumber:
+    EditorColorPairIndex.currentLineNum
+  else:
+    EditorColorPairIndex.lineNum
 
 template isSelectingArea(view: EditorView, viewLine: int): bool =
-  view.editorMode.isVisualMode and
-  view.selectedArea.isSome and
-  view.originalLine[viewLine] >= view.selectedArea.get.startLine and
-  view.selectedArea.get.endLine >= view.originalLine[viewLine]
+  view.editorMode.isVisualMode and view.selectedArea.isSome and
+    view.originalLine[viewLine] >= view.selectedArea.get.startLine and
+    view.selectedArea.get.endLine >= view.originalLine[viewLine]
 
-template isSelectingArea(
-  view: EditorView,
-  viewLine, originalColumn: int): bool =
-
-    view.editorMode.isVisualMode and
-    view.selectedArea.isSome and
+template isSelectingArea(view: EditorView, viewLine, originalColumn: int): bool =
+  view.editorMode.isVisualMode and view.selectedArea.isSome and
     view.originalLine[viewLine] >= view.selectedArea.get.startLine and
     view.selectedArea.get.endLine >= view.originalLine[viewLine] and
     originalColumn >= view.selectedArea.get.startColumn and
     view.selectedArea.get.endColumn >= originalColumn
 
 proc writeAllLines*[T](
-  view: var EditorView,
-  win: var Window,
-  buffer: T,
-  highlight: Highlight,
-  windowPosition: Position,
-  currentLine: int,
-  currentLineColorPair: var int) =
+    view: var EditorView,
+    win: var Window,
+    buffer: T,
+    highlight: Highlight,
+    windowPosition: Position,
+    currentLine: int,
+    currentLineColorPair: var int,
+) =
+  view.widthOfLineNum =
+    if view.config.isLineNumber:
+      buffer.len.numberOfDigits + 1
+    else:
+      0
 
-    view.widthOfLineNum =
-      if view.config.isLineNumber: buffer.len.numberOfDigits + 1
-      else: 0
+  var
+    indents = 0
+    lastOriginalLine = -1
+    lineStart = 0
+  let start = (view.originalLine[0], view.start[0])
 
-    var
-      indents          = 0
-      lastOriginalLine = -1
-      lineStart        = 0
-    let start = (view.originalLine[0], view.start[0])
+  var i =
+    if highlight.len > 0 and (highlight[0].firstRow, highlight[0].firstColumn) <= start and
+        start <= (highlight[^1].lastRow, highlight[^1].lastColumn):
+      highlight.indexOf(view.originalLine[0], view.start[0])
+    else:
+      -1
 
-    var i =
-      if highlight.len > 0 and
-         (highlight[0].firstRow, highlight[0].firstColumn) <= start and
-         start <= (highlight[^1].lastRow, highlight[^1].lastColumn):
-           highlight.indexOf(view.originalLine[0], view.start[0])
-      else: -1
+  for y in 0 ..< view.height:
+    if view.originalLine[y] == -1:
+      break
 
-    for y in 0 ..< view.height:
-      if view.originalLine[y] == -1: break
+    if view.sidebar.isSome:
+      view.writeSidebarLine(win, y)
 
-      if view.sidebar.isSome:
-        view.writeSidebarLine(win, y)
+    let isCurrentLine = view.originalLine[y] == currentLine
+    if view.config.isLineNumber and view.start[y] == 0:
+      view.writeLineNum(
+        win,
+        windowPosition,
+        y,
+        view.originalLine[y],
+        view.lineNumberColor(isCurrentLine),
+      )
 
-      let isCurrentLine = view.originalLine[y] == currentLine
-      if view.config.isLineNumber and view.start[y] == 0:
-        view.writeLineNum(
-          win,
-          windowPosition,
-          y,
-          view.originalLine[y],
-          view.lineNumberColor(isCurrentLine))
+    var x = view.sidebarWidth + view.widthOfLineNum
 
-      var x = view.sidebarWidth + view.widthOfLineNum
+    if view.isFoldingStartLine(view.originalLine[y]):
+      let foldingRange = view.findFoldingRange(view.originalLine[y])
+      view.write(
+        win,
+        windowPosition,
+        y,
+        x,
+        foldingLineBuffer(foldingRange.get, buffer[view.originalLine[y]], view.width),
+        EditorColorPairIndex.foldingLine,
+      )
+      continue
 
-      if view.isFoldingStartLine(view.originalLine[y]):
-        let foldingRange = view.findFoldingRange(view.originalLine[y])
+    if view.length[y] == 0:
+      if view.isSelectingArea(y):
+        view.write(win, windowPosition, y, x, ru" ", EditorColorPairIndex.selectArea)
+      else:
         view.write(
-          win,
-          windowPosition,
-          y,
-          x,
-          foldingLineBuffer(
-            foldingRange.get,
-            buffer[view.originalLine[y]],
-            view.width),
-          EditorColorPairIndex.foldingLine)
-        continue
+          win, windowPosition, y, x, view.lines[y], EditorColorPairIndex.default
+        )
 
-      if view.length[y] == 0:
-        if view.isSelectingArea(y):
-          view.write(
-            win,
-            windowPosition,
-            y,
-            x,
-            ru" ",
-            EditorColorPairIndex.selectArea)
-        else:
-          view.write(
-            win,
-            windowPosition,
-            y,
-            x,
-            view.lines[y],
-            EditorColorPairIndex.default)
-
-          if view.config.isHighlightCurrentLine and
-             isCurrentLine and
-             currentLine < buffer.len:
-               win.writeCurrentLine(
-                 view,
-                 highlight,
-                 ru"",
-                 windowPosition,
-                 currentLineColorPair,
-                 y, x, i, 0)
-          else:
-            view.write(
-              win,
-              windowPosition,
-              y,
-              x,
-              view.lines[y],
-              EditorColorPairIndex.default)
-        continue
-
-      if view.config.isIndentationLines and not view.editorMode.isConfigMode:
-        let currentOriginalLine = view.originalLine[y]
-        if currentOriginalLine != lastOriginalLine:
-          let line =
-            if buffer.len() > currentOriginalLine: buffer[currentOriginalLine]
-            else: ru""
-          lineStart = x
-          var numSpaces = 0
-          for i in 0 ..< line.len:
-            if line[i] != Rune(' '):
-              numSpaces = i+1
-              break
-            inc numSpaces
-          indents = int(numSpaces / view.config.tabStop)
-        else:
-          # Line wrapping
-          indents = 0
-        lastOriginalLine = view.originalLine[y]
-
-      while i < highlight.len and highlight[i].firstRow < view.originalLine[y]:
-        inc(i)
-
-      while i < highlight.len and highlight[i].firstRow == view.originalLine[y]:
-        if (highlight[i].firstRow, highlight[i].firstColumn) > (highlight[i].lastRow, highlight[i].lastColumn):
-          # Skip an empty segment
-          break
-        let
-          first = max(highlight[i].firstColumn-view.start[y], 0)
-          last = min(highlight[i].lastColumn-view.start[y], view.lines[y].high)
-
-        if first > last: break
-
-        block:
-          let
-            lastStr = $last
-            lineStr = $view.lines[y]
-
-          assert(
-            last <= view.lines[y].high,
-            fmt"last = {lastStr}, view.lines[y] = {lineStr}")
-          assert(
-            first <= last,
-            fmt"first = {first}, last = {last}")
-
-        let str = view.lines[y][first .. last]
-
-        view.write(
-          win,
-          windowPosition,
-          y,
-          x,
-          str,
-          highlight[i].color)
-        if isCurrentLine:
+        if view.config.isHighlightCurrentLine and isCurrentLine and
+            currentLine < buffer.len:
           win.writeCurrentLine(
-            view,
-            highlight,
-            str,
-            windowPosition,
-            currentLineColorPair,
-            y, x, i, last)
+            view, highlight, ru"", windowPosition, currentLineColorPair, y, x, i, 0
+          )
         else:
           view.write(
-            win,
-            windowPosition,
-            y, x,
-            str,
-            highlight[i].color, highlight[i].attribute)
-        x += width(str)
-        if last == highlight[i].lastColumn - view.start[y]:
-          inc(i) # consumed a whole segment
-        else:
-          break
+            win, windowPosition, y, x, view.lines[y], EditorColorPairIndex.default
+          )
+      continue
 
-      if view.config.isIndentationLines:
-        # Write indentation lines.
-        for i in 0 ..< indents:
-          let color =
-            if view.isSelectingArea(y, i): EditorColorPairIndex.selectArea
-            else: EditorColorPairIndex.whitespace
+    if view.config.isIndentationLines and not view.editorMode.isConfigMode:
+      let currentOriginalLine = view.originalLine[y]
+      if currentOriginalLine != lastOriginalLine:
+        let line =
+          if buffer.len() > currentOriginalLine:
+            buffer[currentOriginalLine]
+          else:
+            ru""
+        lineStart = x
+        var numSpaces = 0
+        for i in 0 ..< line.len:
+          if line[i] != Rune(' '):
+            numSpaces = i + 1
+            break
+          inc numSpaces
+        indents = int(numSpaces / view.config.tabStop)
+      else:
+        # Line wrapping
+        indents = 0
+      lastOriginalLine = view.originalLine[y]
 
-          view.write(
-            win,
-            windowPosition,
-            y, lineStart + (view.config.tabStop * i),
-            ru("┊"),
-            color)
+    while i < highlight.len and highlight[i].firstRow < view.originalLine[y]:
+      inc(i)
+
+    while i < highlight.len and highlight[i].firstRow == view.originalLine[y]:
+      if (highlight[i].firstRow, highlight[i].firstColumn) >
+          (highlight[i].lastRow, highlight[i].lastColumn):
+        # Skip an empty segment
+        break
+      let
+        first = max(highlight[i].firstColumn - view.start[y], 0)
+        last = min(highlight[i].lastColumn - view.start[y], view.lines[y].high)
+
+      if first > last:
+        break
+
+      block:
+        let
+          lastStr = $last
+          lineStr = $view.lines[y]
+
+        assert(
+          last <= view.lines[y].high, fmt"last = {lastStr}, view.lines[y] = {lineStr}"
+        )
+        assert(first <= last, fmt"first = {first}, last = {last}")
+
+      let str = view.lines[y][first .. last]
+
+      view.write(win, windowPosition, y, x, str, highlight[i].color)
+      if isCurrentLine:
+        win.writeCurrentLine(
+          view, highlight, str, windowPosition, currentLineColorPair, y, x, i, last
+        )
+      else:
+        view.write(
+          win, windowPosition, y, x, str, highlight[i].color, highlight[i].attribute
+        )
+      x += width(str)
+      if last == highlight[i].lastColumn - view.start[y]:
+        inc(i) # consumed a whole segment
+      else:
+        break
+
+    if view.config.isIndentationLines:
+      # Write indentation lines.
+      for i in 0 ..< indents:
+        let color =
+          if view.isSelectingArea(y, i):
+            EditorColorPairIndex.selectArea
+          else:
+            EditorColorPairIndex.whitespace
+
+        view.write(
+          win,
+          windowPosition,
+          y,
+          lineStart + (view.config.tabStop * i),
+          ru("┊"),
+          color,
+        )
 
 proc update*[T](
-  view: var EditorView,
-  win: var Window,
-  buffer: T,
-  highlight: Highlight,
-  windowPosition: Position,
-  currentLine: int,
-  currentLineColorPair: var int) =
-
-    let widthOfLineNum = buffer.len.intToStr.len + 1
-    if view.config.isLineNumber and widthOfLineNum != view.widthOfLineNum:
-      view.resize(
-        buffer,
-        view.height,
-        view.width + view.widthOfLineNum - widthOfLineNum,
-        widthOfLineNum)
-
-    view.writeAllLines(
-      win,
+    view: var EditorView,
+    win: var Window,
+    buffer: T,
+    highlight: Highlight,
+    windowPosition: Position,
+    currentLine: int,
+    currentLineColorPair: var int,
+) =
+  let widthOfLineNum = buffer.len.intToStr.len + 1
+  if view.config.isLineNumber and widthOfLineNum != view.widthOfLineNum:
+    view.resize(
       buffer,
-      highlight,
-      windowPosition,
-      currentLine,
-      currentLineColorPair)
+      view.height,
+      view.width + view.widthOfLineNum - widthOfLineNum,
+      widthOfLineNum,
+    )
 
-    view.updated = false
+  view.writeAllLines(
+    win, buffer, highlight, windowPosition, currentLine, currentLineColorPair
+  )
 
-proc seekCursor*[T](
-  view: var EditorView,
-  buffer: T,
-  currentLine, currentColumn: int) =
+  view.updated = false
 
-    while currentLine < view.originalLine[0] or
-          (currentLine == view.originalLine[0] and
-          view.length[0] > 0 and
-          currentColumn < view.start[0]): view.scrollUp(buffer)
+proc seekCursor*[T](view: var EditorView, buffer: T, currentLine, currentColumn: int) =
+  while currentLine < view.originalLine[0] or (
+    currentLine == view.originalLine[0] and view.length[0] > 0 and
+    currentColumn < view.start[0]
+  )
+  :
+    view.scrollUp(buffer)
 
-    while (view.originalLine[view.height - 1] != -1 and
-           currentLine > view.originalLine[view.height - 1]) or
-           (currentLine == view.originalLine[view.height - 1] and
-           view.length[view.height - 1] > 0 and
-           currentColumn >= view.start[view.height - 1]+view.length[view.height - 1]):
-       view.scrollDown(buffer)
+  while (
+    view.originalLine[view.height - 1] != -1 and
+    currentLine > view.originalLine[view.height - 1]
+  ) or (
+    currentLine == view.originalLine[view.height - 1] and
+    view.length[view.height - 1] > 0 and
+    currentColumn >= view.start[view.height - 1] + view.length[view.height - 1]
+  )
+  :
+    view.scrollDown(buffer)
 
 proc rangeOfOriginalLineInView*(view: EditorView): Range =
   var
     firstLine = 0
     lastLine = 0
   for index, lineNum in view.originalLine:
-    if index == 0: firstLine = lineNum
-    elif lineNum == -1: break
-    else: lastLine = lineNum
+    if index == 0:
+      firstLine = lineNum
+    elif lineNum == -1:
+      break
+    else:
+      lastLine = lineNum
 
   return Range(first: firstLine, last: lastLine)
 
@@ -816,87 +756,80 @@ proc lastOriginLine*(view: EditorView): int =
   else:
     return view.originalLine[^1]
 
-proc updateSidebarBufferForChangedLine*(
-  view: var EditorView,
-  changedLines: seq[Diff]) =
-    ## Update (Overwrite) a sidebar buffer for git diff. It's on left side of
-    ## EditorView.
+proc updateSidebarBufferForChangedLine*(view: var EditorView, changedLines: seq[Diff]) =
+  ## Update (Overwrite) a sidebar buffer for git diff. It's on left side of
+  ## EditorView.
 
-    template buffer: var seq[Runes] = view.sidebar.get.buffer
-    template highlights: var seq[seq[EditorColorPairIndex]] =
-      view.sidebar.get.highlights
+  template buffer(): var seq[Runes] =
+    view.sidebar.get.buffer
 
-    proc inRange(v: EditorView, d: Diff): bool =
-      case d.operation:
-        of deleted, changedAndDeleted:
-          # Only use the firstline.
-          v.firstOriginLine <= d.firstLine
-        else:
-          v.firstOriginLine <= d.firstLine or v.firstOriginLine <= d.lastLine
+  template highlights(): var seq[seq[EditorColorPairIndex]] =
+    view.sidebar.get.highlights
 
-    # 2 or more width required.
-    if view.sidebar.get.buffer.len < 2: return
+  proc inRange(v: EditorView, d: Diff): bool =
+    case d.operation
+    of deleted, changedAndDeleted:
+      # Only use the firstline.
+      v.firstOriginLine <= d.firstLine
+    else:
+      v.firstOriginLine <= d.firstLine or v.firstOriginLine <= d.lastLine
 
-    for d in changedLines:
-      if view.inRange(d):
-        for y, lineNum in view.originalLine:
-          case d.operation:
-            of deleted:
-              # Only use the firstLine.
-              if lineNum >= d.firstLine and lineNum <= d.firstLine:
-                buffer[y] = ru"_ "
-                highlights[y] = EditorColorPairIndex.sidebarGitDeletedSign.repeat(
-                 2)
-            of changedAndDeleted:
-              # Only use the firstLine.
-              if lineNum >= d.firstLine and lineNum <= d.firstLine:
-                buffer[y] = ru"~_"
-                highlights[y] = EditorColorPairIndex.sidebarGitChangedSign.repeat(
-                  2)
-            of changed:
-              if lineNum >= d.firstLine and lineNum <= d.lastLine:
-                buffer[y] = ru"~ "
-                highlights[y] = EditorColorPairIndex.sidebarGitChangedSign.repeat(
-                  2)
-            of OperationType.added:
-              if lineNum >= d.firstLine and lineNum <= d.lastLine:
-                buffer[y] = ru"+ "
-                highlights[y] = EditorColorPairIndex.sidebarGitAddedSign.repeat(
-                  2)
+  # 2 or more width required.
+  if view.sidebar.get.buffer.len < 2:
+    return
+
+  for d in changedLines:
+    if view.inRange(d):
+      for y, lineNum in view.originalLine:
+        case d.operation
+        of deleted:
+          # Only use the firstLine.
+          if lineNum >= d.firstLine and lineNum <= d.firstLine:
+            buffer[y] = ru"_ "
+            highlights[y] = EditorColorPairIndex.sidebarGitDeletedSign.repeat(2)
+        of changedAndDeleted:
+          # Only use the firstLine.
+          if lineNum >= d.firstLine and lineNum <= d.firstLine:
+            buffer[y] = ru"~_"
+            highlights[y] = EditorColorPairIndex.sidebarGitChangedSign.repeat(2)
+        of changed:
+          if lineNum >= d.firstLine and lineNum <= d.lastLine:
+            buffer[y] = ru"~ "
+            highlights[y] = EditorColorPairIndex.sidebarGitChangedSign.repeat(2)
+        of OperationType.added:
+          if lineNum >= d.firstLine and lineNum <= d.lastLine:
+            buffer[y] = ru"+ "
+            highlights[y] = EditorColorPairIndex.sidebarGitAddedSign.repeat(2)
 
 proc updateSidebarBufferForSyntaxChecker*(
-  view: var EditorView,
-  syntaxCheckResults: seq[SyntaxError]) =
-    ## Update (Overwrite) a sidebar buffer for syntax checker reuslts.
-    ## It's on left side of EditorView.
+    view: var EditorView, syntaxCheckResults: seq[SyntaxError]
+) =
+  ## Update (Overwrite) a sidebar buffer for syntax checker reuslts.
+  ## It's on left side of EditorView.
 
-    template highlights: var seq[seq[EditorColorPairIndex]] =
-      view.sidebar.get.highlights
+  template highlights(): var seq[seq[EditorColorPairIndex]] =
+    view.sidebar.get.highlights
 
-    proc inRange(v: EditorView, se: SyntaxError): bool {.inline.} =
-      v.firstOriginLine <= se.position.line and
-      v.lastOriginLine >= se.position.line
+  proc inRange(v: EditorView, se: SyntaxError): bool {.inline.} =
+    v.firstOriginLine <= se.position.line and v.lastOriginLine >= se.position.line
 
-    # 2 or more width required.
-    if view.sidebar.get.buffer.len < 2: return
+  # 2 or more width required.
+  if view.sidebar.get.buffer.len < 2:
+    return
 
-    for syntaxErr in syntaxCheckResults:
-      if view.inRange(syntaxErr):
-        let y = max(syntaxErr.position.line - view.firstOriginLine, 0)
-        case syntaxErr.messageType:
-          of SyntaxCheckMessageType.info:
-            view.sidebar.get.buffer[y] = ru"⚠ "
-            highlights[y] =
-              EditorColorPairIndex.sidebarSyntaxCheckWarnSign.repeat(2)
-          of SyntaxCheckMessageType.hint:
-            view.sidebar.get.buffer[y] = ru"⚠ "
-            highlights[y] =
-              EditorColorPairIndex.sidebarSyntaxCheckWarnSign.repeat(2)
-          of SyntaxCheckMessageType.warning:
-            view.sidebar.get.buffer[y] = ru"⚠ "
-            highlights[y] =
-              EditorColorPairIndex.sidebarSyntaxCheckWarnSign.repeat(2)
-          of SyntaxCheckMessageType.error:
-            view.sidebar.get.buffer[y] = ru">>"
-            highlights[y] =
-              EditorColorPairIndex.sidebarSyntaxCheckErrSign.repeat(2)
+  for syntaxErr in syntaxCheckResults:
+    if view.inRange(syntaxErr):
+      let y = max(syntaxErr.position.line - view.firstOriginLine, 0)
+      case syntaxErr.messageType
+      of SyntaxCheckMessageType.info:
+        view.sidebar.get.buffer[y] = ru"⚠ "
+        highlights[y] = EditorColorPairIndex.sidebarSyntaxCheckWarnSign.repeat(2)
+      of SyntaxCheckMessageType.hint:
+        view.sidebar.get.buffer[y] = ru"⚠ "
+        highlights[y] = EditorColorPairIndex.sidebarSyntaxCheckWarnSign.repeat(2)
+      of SyntaxCheckMessageType.warning:
+        view.sidebar.get.buffer[y] = ru"⚠ "
+        highlights[y] = EditorColorPairIndex.sidebarSyntaxCheckWarnSign.repeat(2)
+      of SyntaxCheckMessageType.error:
+        view.sidebar.get.buffer[y] = ru">>"
+        highlights[y] = EditorColorPairIndex.sidebarSyntaxCheckErrSign.repeat(2)

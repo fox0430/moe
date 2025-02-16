@@ -25,57 +25,33 @@ import moepkg/lsp/formatting {.all.}
 
 suite "lsp: parseDocumentFormattingResponse":
   test "Not found":
-    check parseDocumentFormattingResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": []
-    })
-    .get
-    .len == 0
+    check parseDocumentFormattingResponse(%*{"jsonrpc": "2.0", "id": 0, "result": []}).get.len ==
+      0
 
   test "Not found 2":
-    check parseDocumentFormattingResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": nil
-    })
-    .get
-    .len == 0
+    check parseDocumentFormattingResponse(%*{"jsonrpc": "2.0", "id": 0, "result": nil}).get.len ==
+      0
 
   test "Basic":
-    let r = parseDocumentFormattingResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": [
-        {
-          "range": {
-            "start": {
-              "line": 1,
-              "character": 0
-            },
-            "end": {
-              "line": 1,
-              "character": 0
-            }
-          },
-          "newText": "a"
-        }
-      ]
-    })
-    .get
+    let r = parseDocumentFormattingResponse(
+      %*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": [
+          {
+            "range":
+              {"start": {"line": 1, "character": 0}, "end": {"line": 1, "character": 0}},
+            "newText": "a",
+          }
+        ],
+      }
+    ).get
 
     check r.len == 1
 
-    check %*r[0] == %*{
-      "range": {
-        "start": {
-          "line": 1,
-          "character": 0
-        },
-        "end": {
-          "line": 1,
-          "character": 0
-        }
-      },
-      "newText": "a"
-    }
+    check %*r[0] ==
+      %*{
+        "range":
+          {"start": {"line": 1, "character": 0}, "end": {"line": 1, "character": 0}},
+        "newText": "a",
+      }

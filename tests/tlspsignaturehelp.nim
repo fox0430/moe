@@ -26,48 +26,32 @@ import moepkg/lsp/signaturehelp {.all.}
 
 suite "lsp: SignatureHelpResponse":
   test "Not found":
-    check parseSignatureHelpResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": nil
-    })
-    .get
-    .isNone
+    check parseSignatureHelpResponse(%*{"jsonrpc": "2.0", "id": 0, "result": nil}).get.isNone
 
   test "Basic":
-    let r = parseSignatureHelpResponse(%*{
-      "jsonrpc": "2.0",
-      "id": 0,
-      "result": {
-        "signatures": [
-          {
-            "label": "a",
-            "documentation": {
-              "kind": "markdown",
-              "value": "b"
-            },
-            "parameters": [
-              {
-                "label": "c"
-              }
-            ],
-            "activeParameter": 0
-          }
-        ],
-        "activeSignature": 0,
-        "activeParameter": 0
+    let r = parseSignatureHelpResponse(
+      %*{
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": {
+          "signatures": [
+            {
+              "label": "a",
+              "documentation": {"kind": "markdown", "value": "b"},
+              "parameters": [{"label": "c"}],
+              "activeParameter": 0,
+            }
+          ],
+          "activeSignature": 0,
+          "activeParameter": 0,
+        },
       }
-    })
-    .get
-    .get
+    ).get.get
 
     check r.activeSignature.get == 0
     check r.activeParameter.get == 0
     check r.signatures.len == 1
 
     check r.signatures[0].label == "a"
-    check r.signatures[0].documentation.get == %*{
-      "kind": "markdown",
-      "value": "b"
-    }
+    check r.signatures[0].documentation.get == %*{"kind": "markdown", "value": "b"}
     check r.signatures[0].parameters.get[0].label.get == %*"c"

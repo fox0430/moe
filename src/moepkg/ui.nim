@@ -68,28 +68,22 @@ type
     Cancel
 
   ColorMode* {.pure.} = enum
-    none = 1
-      # No color support
-    c8 = 8
-      # 8 colors
-    c16 = 16
-      # 16 colors
-    c256 = 256
-      # 256 colors
-    c24bit = 16777216
-      # 24 bit colors (True color)
+    none = 1 # No color support
+    c8 = 8 # 8 colors
+    c16 = 16 # 16 colors
+    c256 = 256 # 256 colors
+    c24bit = 16777216 # 24 bit colors (True color)
 
   Key* = Rune
 
 const
   DefaultColorPair*: int16 = 0
 
-  SIGWINCH: int = 28
-    # SIGWINCH signal
+  SIGWINCH: int = 28 # SIGWINCH signal
 
-  TabKey*       = 9
-  EnterKey*     = 10
-  EscKey*       = 27 # or Ctrl-[
+  TabKey* = 9
+  EnterKey* = 10
+  EscKey* = 27 # or Ctrl-[
   BackSpaceKey* = 127
 
   CtrlA* = 1
@@ -121,59 +115,52 @@ const
 
   ShiftTab* = 353
 
-  ResizeKey*           = 1001
-  UpKey*               = 1002
-  DownKey*             = 1003
-  RightKey*            = 1004
-  LeftKey*             = 1005
-  EndKey*              = 1006
-  HomeKey*             = 1007
-  InsertKey*           = 1008
-  DeleteKey*           = 1009
-  PageUpKey*           = 1010
-  PageDownKey*         = 1011
-  PasteKey*            = 1012
+  ResizeKey* = 1001
+  UpKey* = 1002
+  DownKey* = 1003
+  RightKey* = 1004
+  LeftKey* = 1005
+  EndKey* = 1006
+  HomeKey* = 1007
+  InsertKey* = 1008
+  DeleteKey* = 1009
+  PageUpKey* = 1010
+  PageDownKey* = 1011
+  PasteKey* = 1012
   BracketedPasteStart* = 1013
-  BracketedPasteEnd*   = 1014
+  BracketedPasteEnd* = 1014
 
   KeySequences = {
-    UpKey:       @["\eOA", "\e[A"],
-    DownKey:     @["\eOB", "\e[B"],
-    RightKey:    @["\eOC", "\e[C"],
-    LeftKey:     @["\eOD", "\e[D"],
-
-    ShiftTab:     @["\eOZ", "\e[Z"],
-
-    EndKey:      @["\e[4~", "\e[8~", "\eOF", "\e[F"],
-    HomeKey:     @["\e[1~", "\e[7~", "\eOH", "\e[H"],
-    InsertKey:   @["\e[2~"],
-    DeleteKey:   @["\e[3~"],
-    PageUpKey:   @["\e[5~"],
+    UpKey: @["\eOA", "\e[A"],
+    DownKey: @["\eOB", "\e[B"],
+    RightKey: @["\eOC", "\e[C"],
+    LeftKey: @["\eOD", "\e[D"],
+    ShiftTab: @["\eOZ", "\e[Z"],
+    EndKey: @["\e[4~", "\e[8~", "\eOF", "\e[F"],
+    HomeKey: @["\e[1~", "\e[7~", "\eOH", "\e[H"],
+    InsertKey: @["\e[2~"],
+    DeleteKey: @["\e[3~"],
+    PageUpKey: @["\e[5~"],
     PageDownKey: @["\e[6~"],
-
     BracketedPasteStart: @["\e[200~"],
-    BracketedPasteEnd: @["\e[201~"]
+    BracketedPasteEnd: @["\e[201~"],
   }.toTable
 
 var
-  ctrlCPressed* = false
-    # Set true if Ctrl-c key is pressed.
+  ctrlCPressed* = false # Set true if Ctrl-c key is pressed.
 
-  terminalResized* = false
-    # Set true if the terminal size is resized.
+  terminalResized* = false # Set true if the terminal size is resized.
 
   pasteBuffer: Option[seq[Runes]]
 
   terminalSize: Size
 
-proc `$`*(v: NcursesVersion): string = fmt"{v.major}.{v.minor}.{v.date}"
+proc `$`*(v: NcursesVersion): string =
+  fmt"{v.major}.{v.minor}.{v.date}"
 
 proc getNcursesVersion*(): NcursesVersion =
   let v = split($curses_version(), ' ')[1].split('.')
-  return NcursesVersion(
-    major: v[0].parseInt,
-    minor: v[1].parseInt,
-    date: v[2].parseInt)
+  return NcursesVersion(major: v[0].parseInt, minor: v[1].parseInt, date: v[2].parseInt)
 
 proc checkRequireNcursesVersion*(): bool =
   ## Return true if v6.2 or higher.
@@ -185,19 +172,19 @@ proc getPasteBuffer*(): Option[seq[Runes]] =
   return pasteBuffer
 
 proc parseColorMode*(str: string): Result[ColorMode, string] =
-  case str:
-    of "none":
-      return Result[ColorMode, string].ok ColorMode.none
-    of "8":
-      return Result[ColorMode, string].ok ColorMode.c8
-    of "16":
-      return Result[ColorMode, string].ok ColorMode.c16
-    of "256":
-      return Result[ColorMode, string].ok ColorMode.c256
-    of "24bit":
-      return Result[ColorMode, string].ok ColorMode.c24bit
-    else:
-      return Result[ColorMode, string].err "Invalid value"
+  case str
+  of "none":
+    return Result[ColorMode, string].ok ColorMode.none
+  of "8":
+    return Result[ColorMode, string].ok ColorMode.c8
+  of "16":
+    return Result[ColorMode, string].ok ColorMode.c16
+  of "256":
+    return Result[ColorMode, string].ok ColorMode.c256
+  of "24bit":
+    return Result[ColorMode, string].ok ColorMode.c24bit
+  else:
+    return Result[ColorMode, string].err "Invalid value"
 
 ## Get the current terminal size and update.
 proc updateTerminalSize*() =
@@ -212,11 +199,14 @@ proc updateTerminalSize*(h, w: int) =
   terminalSize.h = h
   terminalSize.w = w
 
-proc getTerminalSize*(): Size = terminalSize
+proc getTerminalSize*(): Size =
+  terminalSize
 
-proc getTerminalHeight*(): int = terminalSize.h
+proc getTerminalHeight*(): int =
+  terminalSize.h
 
-proc getTerminalWidth*(): int = terminalSize.w
+proc getTerminalWidth*(): int =
+  terminalSize.w
 
 proc setBlinkingIbeamCursor*() {.inline.} =
   when not defined unitTest:
@@ -255,25 +245,38 @@ proc hideCursor*() {.inline.} =
 
 proc changeCursorType*(cursorType: CursorType) =
   case cursorType
-    of terminalDefault: setTerminalDefaultCursor()
-    of blinkBlock: setBlinkingBlockCursor()
-    of noneBlinkBlock: setNoneBlinkingBlockCursor()
-    of blinkIbeam: setBlinkingIbeamCursor()
-    of noneBlinkIbeam: setNoneBlinkingIbeamCursor()
+  of terminalDefault:
+    setTerminalDefaultCursor()
+  of blinkBlock:
+    setBlinkingBlockCursor()
+  of noneBlinkBlock:
+    setNoneBlinkingBlockCursor()
+  of blinkIbeam:
+    setBlinkingIbeamCursor()
+  of noneBlinkIbeam:
+    setNoneBlinkingIbeamCursor()
 
 proc disableControlC*() {.inline.} =
-  setControlCHook(proc() {.noconv.} = ctrlCPressed = true)
+  setControlCHook(
+    proc() {.noconv.} =
+      ctrlCPressed = true
+  )
 
 proc catchTerminalResize*() {.inline.} =
-  onSignal(SIGWINCH.cint): terminalResized = true
+  onSignal(SIGWINCH.cint):
+    terminalResized = true
 
-proc restoreTerminalModes*() {.inline.} = reset_prog_mode()
+proc restoreTerminalModes*() {.inline.} =
+  reset_prog_mode()
 
-proc saveCurrentTerminalModes*() {.inline.} = def_prog_mode()
+proc saveCurrentTerminalModes*() {.inline.} =
+  def_prog_mode()
 
 proc keyEcho*(keyecho: bool) =
-  if keyecho == true: echo()
-  elif keyecho == false: noecho()
+  if keyecho == true:
+    echo()
+  elif keyecho == false:
+    noecho()
 
 proc checkColorSupportedTerminal*(): ColorMode =
   ## Check how many colors are supported on the terminal and return ColorMode.
@@ -302,11 +305,15 @@ proc checkColorSupportedTerminal*(): ColorMode =
       except ValueError:
         return ColorMode.none
 
-      case num:
-        of 8: return ColorMode.c8
-        of 16: return ColorMode.c16
-        of 256: return ColorMode.c256
-        else: return ColorMode.none
+      case num
+      of 8:
+        return ColorMode.c8
+      of 16:
+        return ColorMode.c16
+      of 256:
+        return ColorMode.c256
+      else:
+        return ColorMode.none
 
 template enableBracketedPasteMode() =
   discard execShellCmd("printf '\x1b[?2004h'")
@@ -317,7 +324,7 @@ proc startUi*() =
 
     updateTerminalSize() # Set the current terminal size.
 
-    discard setlocale(LC_ALL, "")   # enable UTF-8
+    discard setlocale(LC_ALL, "") # enable UTF-8
 
     initscr() # Start terminal control
     cbreak() # Enable cbreak mode
@@ -337,7 +344,8 @@ proc startUi*() =
 
     enableBracketedPasteMode()
 
-proc exitUi*() {.inline.} = endwin()
+proc exitUi*() {.inline.} =
+  endwin()
 
 proc toNcursesColor(element: int16): int16 =
   ## Converts a color element (0 ~ 255) to a value for Ncurses (0 ~ 1000).
@@ -379,7 +387,8 @@ proc initNcursesColorPair*(pair, fg, bg: int): Result[(), string] =
     # Not start when running unit tests
     let exitCode = initExtendedPair(pair.cint, fg.cint, bg.cint)
     if 0 != exitCode:
-      let msg = fmt"Init Ncurses color pair failed: (pair: {pair}, fg: {fg}, bg: {bg}): Exit code: {exitCode}"
+      let msg =
+        fmt"Init Ncurses color pair failed: (pair: {pair}, fg: {fg}, bg: {bg}): Exit code: {exitCode}"
       return Result[(), string].err msg
 
   return Result[(), string].ok ()
@@ -409,47 +418,48 @@ proc attrOn*(win: var Window, colorPair: int16) {.inline.} =
 proc attrOff*(win: var Window, attribute: Attribute) {.inline.} =
   win.cursesWindow.wattroff(cint(attribute))
 
-proc attrOff*(win: var Window, colorPair:  int16) {.inline.} =
+proc attrOff*(win: var Window, colorPair: int16) {.inline.} =
   win.cursesWindow.wattroff(colorPair.cshort)
 
 proc write*(
-  win: var Window,
-  y, x: int,
-  str: string,
-  color: int16 = DefaultColorPair,
-  attribute: Attribute = Attribute.normal,
-  storeCursorPosition: bool = true) =
+    win: var Window,
+    y, x: int,
+    str: string,
+    color: int16 = DefaultColorPair,
+    attribute: Attribute = Attribute.normal,
+    storeCursorPosition: bool = true,
+) =
+  when not defined unitTest:
+    # Not write when running unit tests
+    win.attrSet(color)
+    win.attrOn(attribute)
 
-    when not defined unitTest:
-      # Not write when running unit tests
-      win.attrSet(color)
-      win.attrOn(attribute)
+    win.cursesWindow.mvwaddstr(y.cint, x.cint, str)
 
-      win.cursesWindow.mvwaddstr(y.cint, x.cint, str)
+    win.attrOff(attribute)
+    win.attrOff(color)
 
-      win.attrOff(attribute)
-      win.attrOff(color)
-
-      if storeCursorPosition:
-        # WARNING: If `storeCursorPosition` is true, this procedure will change
-        # the window position. Should we remove the default parameter?
-        win.cursorY = y
-        win.cursorX = x + str.toRunes.width
+    if storeCursorPosition:
+      # WARNING: If `storeCursorPosition` is true, this procedure will change
+      # the window position. Should we remove the default parameter?
+      win.cursorY = y
+      win.cursorX = x + str.toRunes.width
 
 proc write*(
-  win: var Window,
-  y, x: int,
-  runes: Runes,
-  color:  int16 = DefaultColorPair,
-  attribute: Attribute = Attribute.normal,
-  storeCursorPosition: bool = true) {.inline.} =
-
-    win.write(y, x, $runes, color, attribute, storeCursorPosition)
+    win: var Window,
+    y, x: int,
+    runes: Runes,
+    color: int16 = DefaultColorPair,
+    attribute: Attribute = Attribute.normal,
+    storeCursorPosition: bool = true,
+) {.inline.} =
+  win.write(y, x, $runes, color, attribute, storeCursorPosition)
 
 proc erase*(win: var Window) =
   werase(win.cursesWindow)
 
-proc refresh*(win: Window) {.inline.} = wrefresh(win.cursesWindow)
+proc refresh*(win: Window) {.inline.} =
+  wrefresh(win.cursesWindow)
 
 proc overlay*(win, destWin: var Window) {.inline.} =
   overlay(win.cursesWindow, destWin.cursesWindow)
@@ -501,46 +511,52 @@ proc getAbsCursorPosition*(win: Window): Position =
   win.cursesWindow.getyx(y, x)
   return Position(y: y.int + win.y, x: x.int + win.x)
 
-proc deleteWindow*(win: var Window) {.inline.} = delwin(win.cursesWindow)
+proc deleteWindow*(win: var Window) {.inline.} =
+  delwin(win.cursesWindow)
 
 proc toString(s: seq[int]): string {.inline.} =
-  for n in s: result &= n.char
+  for n in s:
+    result &= n.char
 
 proc isBracketedPaste(s: string): bool {.inline.} =
-  template startSeq: string = KeySequences[BracketedPasteStart][0]
-  template endSeq: string = KeySequences[BracketedPasteEnd][0]
+  template startSeq(): string =
+    KeySequences[BracketedPasteStart][0]
 
-  s.startsWith(startSeq) and
-  s.endsWith(endSeq) and
-  s.len > startSeq.len + endSeq.len
+  template endSeq(): string =
+    KeySequences[BracketedPasteEnd][0]
+
+  s.startsWith(startSeq) and s.endsWith(endSeq) and s.len > startSeq.len + endSeq.len
 
 proc parseKey(buffer: seq[int]): Option[Rune] =
-  if buffer.len == 0: return
+  if buffer.len == 0:
+    return
 
   if buffer.len == 1:
     let ch = buffer[0]
-    case ch:
-      of 0, 29, 30, 31:
-        # Ignore
-        return none(Rune)
-      else:
-        return some(ch.toRune)
+    case ch
+    of 0, 29, 30, 31:
+      # Ignore
+      return none(Rune)
+    else:
+      return some(ch.toRune)
   else:
     block specialKey:
       var input = ""
-      for ch in buffer: input &= ch.char
+      for ch in buffer:
+        input &= ch.char
       for keyCode, sequences in KeySequences.pairs:
         for s in sequences:
-          case keyCode:
-            of BracketedPasteStart:
-              if input.isBracketedPaste:
-                let
-                  first = KeySequences[BracketedPasteStart][0].len
-                  last = input.high - KeySequences[BracketedPasteEnd][0].len
-                pasteBuffer = input[first .. last].toRunes.splitLines.some
-                return some(PasteKey.Rune)
-            else:
-              if s == input: return some(keyCode.Rune)
+          case keyCode
+          of BracketedPasteStart:
+            if input.isBracketedPaste:
+              let
+                first = KeySequences[BracketedPasteStart][0].len
+                last = input.high - KeySequences[BracketedPasteEnd][0].len
+              pasteBuffer = input[first .. last].toRunes.splitLines.some
+              return some(PasteKey.Rune)
+          else:
+            if s == input:
+              return some(keyCode.Rune)
 
     block multiByteCharacter:
       let runes = buffer.toString.toRunes
@@ -583,14 +599,16 @@ proc kbhitAsync(timeout: int = 10): Future[int] {.async.} =
 
   return await pollAsync(STDIN_FILENO, timeout)
 
-proc kbhit(timeout: int = 10): int = waitFor kbhitAsync(timeout)
+proc kbhit(timeout: int = 10): int =
+  waitFor kbhitAsync(timeout)
 
 proc read(fd: int): Option[int] =
   ## Read 1 byte.
 
   const Size = 1
   var ch: int
-  if read(fd.cint, ch.addr, Size) > 0: return some(ch)
+  if read(fd.cint, ch.addr, Size) > 0:
+    return some(ch)
 
 proc isSingle(ch: int): bool {.inline.} =
   not (ch <= 0x7F or (0xC2 <= ch and ch <= 0xF0) or ch == 0xF3)
@@ -617,14 +635,16 @@ proc getKey*(timeout: int = 100): Option[Rune] =
         const Timeout = 1
         while kbhit(Timeout) > 0:
           let ch = Fd.read
-          if ch.isSome: buffer.add ch.get
+          if ch.isSome:
+            buffer.add ch.get
         return parseKey(buffer)
       else:
         let length = firstCh.get.char.numberOfBytes
         if length > 1:
           for _ in 1 ..< length:
             var ch: int
-            if read(Fd, ch.addr, Size) > 0: buffer.add ch
+            if read(Fd, ch.addr, Size) > 0:
+              buffer.add ch
         return parseKey(buffer)
   elif readable < 0:
     # Check signals.
@@ -641,146 +661,272 @@ proc getKeyBlocking*(): Rune =
   const Timeout = -1
   return getKey(Timeout).get
 
-proc isEscKey*(key: Rune): bool {.inline.} = key == EscKey
-proc isEscKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == EscKey
+proc isEscKey*(key: Rune): bool {.inline.} =
+  key == EscKey
 
-proc isResizeKey*(key: Rune): bool {.inline.} = key == ResizeKey
-proc isResizeKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == ResizeKey
+proc isEscKey*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0] == EscKey
+
+proc isResizeKey*(key: Rune): bool {.inline.} =
+  key == ResizeKey
+
+proc isResizeKey*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0] == ResizeKey
 
 proc isBracketedPasteStart*(key: Rune): bool {.inline.} =
   key == BracketedPasteStart
+
 proc isBracketedPasteStart*(r: Runes): bool {.inline.} =
   r.len == 1 and r[0].isBracketedPasteStart
 
 proc isBracketedPasteEnd*(key: Rune): bool {.inline.} =
   key == BracketedPasteEnd
+
 proc isBracketedPasteEnd*(r: Runes): bool {.inline.} =
   r.len == 1 and r[0].isBracketedPasteEnd
 
-proc isPasteKey*(key: Rune): bool {.inline.} = key == PasteKey
-proc isPasteKey*(r: Runes): bool {.inline.} =  r.len == 1 and r[0] == PasteKey
+proc isPasteKey*(key: Rune): bool {.inline.} =
+  key == PasteKey
 
-proc isUpKey*(key: Rune): bool {.inline.} = key == UpKey
-proc isUpKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == UpKey
+proc isPasteKey*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0] == PasteKey
 
-proc isDownKey*(key: Rune): bool {.inline.} = key == DownKey
-proc isDownKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == DownKey
+proc isUpKey*(key: Rune): bool {.inline.} =
+  key == UpKey
 
-proc isRightKey*(key: Rune): bool {.inline.} = key == RightKey
-proc isRightKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == RightKey
+proc isUpKey*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0] == UpKey
 
-proc isLeftKey*(key: Rune): bool {.inline.} = key == LeftKey
-proc isLeftKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == LeftKey
+proc isDownKey*(key: Rune): bool {.inline.} =
+  key == DownKey
 
-proc isHomeKey*(key: Rune): bool {.inline.} = key == HomeKey
-proc isHomeKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == HomeKey
+proc isDownKey*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0] == DownKey
 
-proc isEndKey*(key: Rune): bool {.inline.} = key == EndKey
-proc isEndKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == EndKey
+proc isRightKey*(key: Rune): bool {.inline.} =
+  key == RightKey
 
-proc isInsertKey*(key: Rune): bool {.inline.} = key == InsertKey
-proc isInsertKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == InsertKey
+proc isRightKey*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0] == RightKey
 
-proc isDeleteKey*(key: Rune): bool {.inline.} = key == DeleteKey
-proc isDeleteKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == DeleteKey
+proc isLeftKey*(key: Rune): bool {.inline.} =
+  key == LeftKey
 
-proc isPageUpKey*(key: Rune): bool {.inline.} = key == PageUpKey
-proc isPageUpKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0] == PageUpKey
+proc isLeftKey*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0] == LeftKey
 
-proc isPageDownKey*(key: Rune): bool {.inline.} = key == PageDownKey
+proc isHomeKey*(key: Rune): bool {.inline.} =
+  key == HomeKey
+
+proc isHomeKey*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0] == HomeKey
+
+proc isEndKey*(key: Rune): bool {.inline.} =
+  key == EndKey
+
+proc isEndKey*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0] == EndKey
+
+proc isInsertKey*(key: Rune): bool {.inline.} =
+  key == InsertKey
+
+proc isInsertKey*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0] == InsertKey
+
+proc isDeleteKey*(key: Rune): bool {.inline.} =
+  key == DeleteKey
+
+proc isDeleteKey*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0] == DeleteKey
+
+proc isPageUpKey*(key: Rune): bool {.inline.} =
+  key == PageUpKey
+
+proc isPageUpKey*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0] == PageUpKey
+
+proc isPageDownKey*(key: Rune): bool {.inline.} =
+  key == PageDownKey
+
 proc isPageDownKey*(r: Runes): bool {.inline.} =
   r.len == 1 and r[0] == PageDownKey
 
-proc isTabKey*(key: Rune): bool {.inline.} = key == ord('\t') or key == TabKey
-proc isTabKey*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isTabKey
+proc isTabKey*(key: Rune): bool {.inline.} =
+  key == ord('\t') or key == TabKey
 
-proc isCtrlA*(key: Rune): bool {.inline.} = key == CtrlA
-proc isCtrlA*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlA
+proc isTabKey*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0].isTabKey
 
-proc isCtrlB*(key: Rune): bool {.inline.} = key == CtrlB
-proc isCtrlB*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlB
+proc isCtrlA*(key: Rune): bool {.inline.} =
+  key == CtrlA
 
-proc isCtrlC*(key: Rune): bool {.inline.} = key == CtrlC
-proc isCtrlC*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlC
+proc isCtrlA*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0].isCtrlA
 
-proc isCtrlD*(key: Rune): bool {.inline.} = key == CtrlD
-proc isCtrlD*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlD
+proc isCtrlB*(key: Rune): bool {.inline.} =
+  key == CtrlB
 
-proc isCtrlE*(key: Rune): bool {.inline.} = key == CtrlE
-proc isCtrlE*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlE
+proc isCtrlB*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0].isCtrlB
 
-proc isCtrlF*(key: Rune): bool {.inline.} = key == CtrlF
-proc isCtrlF*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlF
+proc isCtrlC*(key: Rune): bool {.inline.} =
+  key == CtrlC
 
-proc isCtrlG*(key: Rune): bool {.inline.} = key == CtrlG
-proc isCtrlG*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlG
+proc isCtrlC*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0].isCtrlC
 
-proc isCtrlH*(key: Rune): bool {.inline.} = key == CtrlH
-proc isCtrlH*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlH
+proc isCtrlD*(key: Rune): bool {.inline.} =
+  key == CtrlD
 
-proc isCtrlI*(key: Rune): bool {.inline.} = key == CtrlI
-proc isCtrlI*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlI
+proc isCtrlD*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0].isCtrlD
 
-proc isCtrlJ*(key: Rune): bool {.inline.} = key == CtrlJ
-proc isCtrlJ*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlJ
+proc isCtrlE*(key: Rune): bool {.inline.} =
+  key == CtrlE
 
-proc isCtrlK*(key: Rune): bool {.inline.} = key == CtrlK
-proc isCtrlK*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlK
+proc isCtrlE*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0].isCtrlE
 
-proc isCtrlL*(key: Rune): bool {.inline.} = key == CtrlL
-proc isCtrlL*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlL
+proc isCtrlF*(key: Rune): bool {.inline.} =
+  key == CtrlF
 
-proc isCtrlM*(key: Rune): bool {.inline.} = key == CtrlM
-proc isCtrlM*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlM
+proc isCtrlF*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0].isCtrlF
 
-proc isCtrlN*(key: Rune): bool {.inline.} = key == CtrlN
-proc isCtrlN*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlN
+proc isCtrlG*(key: Rune): bool {.inline.} =
+  key == CtrlG
 
-proc isCtrlO*(key: Rune): bool {.inline.} = key == CtrlO
-proc isCtrlO*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlO
+proc isCtrlG*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0].isCtrlG
 
-proc isCtrlP*(key: Rune): bool {.inline.} = key == CtrlP
-proc isCtrlP*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlP
+proc isCtrlH*(key: Rune): bool {.inline.} =
+  key == CtrlH
 
-proc isCtrlQ*(key: Rune): bool {.inline.} = key == CtrlQ
-proc isCtrlQ*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlQ
+proc isCtrlH*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0].isCtrlH
 
-proc isCtrlR*(key: Rune): bool {.inline.} = key == CtrlR
-proc isCtrlR*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlR
+proc isCtrlI*(key: Rune): bool {.inline.} =
+  key == CtrlI
 
-proc isCtrlS*(key: Rune): bool {.inline.} = key == CtrlS
-proc isCtrlS*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlS
+proc isCtrlI*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0].isCtrlI
 
-proc isCtrlT*(key: Rune): bool {.inline.} = key == CtrlT
-proc isCtrlT*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlT
+proc isCtrlJ*(key: Rune): bool {.inline.} =
+  key == CtrlJ
 
-proc isCtrlU*(key: Rune): bool {.inline.} = key == CtrlU
-proc isCtrlU*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlU
+proc isCtrlJ*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0].isCtrlJ
 
-proc isCtrlV*(key: Rune): bool {.inline.} = key == CtrlV
-proc isCtrlV*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlV
+proc isCtrlK*(key: Rune): bool {.inline.} =
+  key == CtrlK
 
-proc isCtrlW*(key: Rune): bool {.inline.} = key == CtrlW
-proc isCtrlW*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlW
+proc isCtrlK*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0].isCtrlK
 
-proc isCtrlX*(key: Rune): bool {.inline.} = key == CtrlX
-proc isCtrlX*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlA
+proc isCtrlL*(key: Rune): bool {.inline.} =
+  key == CtrlL
 
-proc isCtrlY*(key: Rune): bool {.inline.} = key == CtrlX
-proc isCtrlY*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlY
+proc isCtrlL*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0].isCtrlL
 
-proc isCtrlZ*(key: Rune): bool {.inline.} = key == CtrlZ
-proc isCtrlZ*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isCtrlZ
+proc isCtrlM*(key: Rune): bool {.inline.} =
+  key == CtrlM
 
-proc isShiftTab*(key: Rune): bool {.inline.} = key == ShiftTab
-proc isShiftTab*(r: Runes): bool {.inline.} = r.len == 1 and r[0].isShiftTab
+proc isCtrlM*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0].isCtrlM
+
+proc isCtrlN*(key: Rune): bool {.inline.} =
+  key == CtrlN
+
+proc isCtrlN*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0].isCtrlN
+
+proc isCtrlO*(key: Rune): bool {.inline.} =
+  key == CtrlO
+
+proc isCtrlO*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0].isCtrlO
+
+proc isCtrlP*(key: Rune): bool {.inline.} =
+  key == CtrlP
+
+proc isCtrlP*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0].isCtrlP
+
+proc isCtrlQ*(key: Rune): bool {.inline.} =
+  key == CtrlQ
+
+proc isCtrlQ*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0].isCtrlQ
+
+proc isCtrlR*(key: Rune): bool {.inline.} =
+  key == CtrlR
+
+proc isCtrlR*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0].isCtrlR
+
+proc isCtrlS*(key: Rune): bool {.inline.} =
+  key == CtrlS
+
+proc isCtrlS*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0].isCtrlS
+
+proc isCtrlT*(key: Rune): bool {.inline.} =
+  key == CtrlT
+
+proc isCtrlT*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0].isCtrlT
+
+proc isCtrlU*(key: Rune): bool {.inline.} =
+  key == CtrlU
+
+proc isCtrlU*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0].isCtrlU
+
+proc isCtrlV*(key: Rune): bool {.inline.} =
+  key == CtrlV
+
+proc isCtrlV*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0].isCtrlV
+
+proc isCtrlW*(key: Rune): bool {.inline.} =
+  key == CtrlW
+
+proc isCtrlW*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0].isCtrlW
+
+proc isCtrlX*(key: Rune): bool {.inline.} =
+  key == CtrlX
+
+proc isCtrlX*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0].isCtrlA
+
+proc isCtrlY*(key: Rune): bool {.inline.} =
+  key == CtrlX
+
+proc isCtrlY*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0].isCtrlY
+
+proc isCtrlZ*(key: Rune): bool {.inline.} =
+  key == CtrlZ
+
+proc isCtrlZ*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0].isCtrlZ
+
+proc isShiftTab*(key: Rune): bool {.inline.} =
+  key == ShiftTab
+
+proc isShiftTab*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0].isShiftTab
 
 proc isBackspaceKey*(key: Rune): bool {.inline.} =
   key == BackSpaceKey or key == 8 or key == 127
+
 proc isBackspaceKey*(r: Runes): bool {.inline.} =
   r.len == 1 and r[0].isBackspaceKey
 
 proc isEnterKey*(key: Rune): bool {.inline.} =
   key == EnterKey or key == ord('\n') or key == 13
+
 proc isEnterKey*(r: Runes): bool {.inline.} =
   r.len == 1 and r[0] == EnterKey or r[0].isEnterKey

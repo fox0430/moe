@@ -33,40 +33,53 @@ suite "sidebar":
 
     privateAccess(sidebar.type)
 
-    check sidebar.terminalBuffer ==
-      1.newSeqWith(ru" ".repeat(2))
+    check sidebar.terminalBuffer == 1.newSeqWith(ru" ".repeat(2))
 
-    check sidebar.highlight[] == Highlight(
-      colorSegments: @[
-        ColorSegment(
-          firstRow: 0,
-          firstColumn: 0,
-          lastRow: 0,
-          lastColumn: 1,
-          color: EditorColorPairIndex.default)])[]
+    check sidebar.highlight[] ==
+      Highlight(
+        colorSegments:
+          @[
+            ColorSegment(
+              firstRow: 0,
+              firstColumn: 0,
+              lastRow: 0,
+              lastColumn: 1,
+              color: EditorColorPairIndex.default,
+            )
+          ]
+      )[]
 
   test "initHighlight":
     var sidebar = initGlobalSidebar(Rect(h: 10, w: 10, y: 0, x: 0))
     # Clear the highlight for the test.
     sidebar.highlight[] = Highlight(
-      colorSegments: @[
-        ColorSegment(
-          firstRow: 0,
-          firstColumn: 0,
-          lastRow: 0,
-          lastColumn: 0,
-          color: EditorColorPairIndex.default)])[]
+      colorSegments:
+        @[
+          ColorSegment(
+            firstRow: 0,
+            firstColumn: 0,
+            lastRow: 0,
+            lastColumn: 0,
+            color: EditorColorPairIndex.default,
+          )
+        ]
+    )[]
 
     sidebar.initHighlight
 
-    check sidebar.highlight[] == Highlight(
-      colorSegments: @[
-        ColorSegment(
-          firstRow: 0,
-          firstColumn: 0,
-          lastRow: 9,
-          lastColumn: 9,
-          color: EditorColorPairIndex.default)])[]
+    check sidebar.highlight[] ==
+      Highlight(
+        colorSegments:
+          @[
+            ColorSegment(
+              firstRow: 0,
+              firstColumn: 0,
+              lastRow: 9,
+              lastColumn: 9,
+              color: EditorColorPairIndex.default,
+            )
+          ]
+      )[]
 
   test "write 1":
     var sidebar = initGlobalSidebar(Rect(h: 100, w: 100, y: 0, x: 0))
@@ -79,20 +92,26 @@ suite "sidebar":
     for i in 1 .. sidebar.terminalBuffer.high:
       check sidebar.terminalBuffer[i] == ru" ".repeat(100)
 
-    check sidebar.highlight[] == Highlight(
-      colorSegments: @[
-        ColorSegment(
-          firstRow: 0,
-          firstColumn: 0,
-          lastRow: 0,
-          lastColumn: 3,
-          color: EditorColorPairIndex.reservedWord),
-        ColorSegment(
-          firstRow: 0,
-          firstColumn: 4,
-          lastRow: 99,
-          lastColumn: 99,
-          color: EditorColorPairIndex.default)])[]
+    check sidebar.highlight[] ==
+      Highlight(
+        colorSegments:
+          @[
+            ColorSegment(
+              firstRow: 0,
+              firstColumn: 0,
+              lastRow: 0,
+              lastColumn: 3,
+              color: EditorColorPairIndex.reservedWord,
+            ),
+            ColorSegment(
+              firstRow: 0,
+              firstColumn: 4,
+              lastRow: 99,
+              lastColumn: 99,
+              color: EditorColorPairIndex.default,
+            ),
+          ]
+      )[]
 
   test "write 2":
     var sidebar = initGlobalSidebar(Rect(h: 100, w: 100, y: 0, x: 0))
@@ -107,26 +126,33 @@ suite "sidebar":
       else:
         check line == ru" ".repeat(100)
 
-    check sidebar.highlight[] == Highlight(
-      colorSegments: @[
-        ColorSegment(
-          firstRow: 0,
-          firstColumn: 0,
-          lastRow: 1,
-          lastColumn: 9,
-          color: EditorColorPairIndex.default),
-        ColorSegment(
-          firstRow: 1,
-          firstColumn: 10,
-          lastRow: 1,
-          lastColumn: 13,
-          color: EditorColorPairIndex.reservedWord),
-        ColorSegment(
-          firstRow: 1,
-          firstColumn: 14,
-          lastRow: 99,
-          lastColumn: 99,
-          color: EditorColorPairIndex.default)])[]
+    check sidebar.highlight[] ==
+      Highlight(
+        colorSegments:
+          @[
+            ColorSegment(
+              firstRow: 0,
+              firstColumn: 0,
+              lastRow: 1,
+              lastColumn: 9,
+              color: EditorColorPairIndex.default,
+            ),
+            ColorSegment(
+              firstRow: 1,
+              firstColumn: 10,
+              lastRow: 1,
+              lastColumn: 13,
+              color: EditorColorPairIndex.reservedWord,
+            ),
+            ColorSegment(
+              firstRow: 1,
+              firstColumn: 14,
+              lastRow: 99,
+              lastColumn: 99,
+              color: EditorColorPairIndex.default,
+            ),
+          ]
+      )[]
 
   test "resize":
     var sidebar = initGlobalSidebar(Rect(h: 1, w: 1, y: 0, x: 0))

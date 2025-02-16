@@ -23,7 +23,8 @@ import moepkg/git {.all.}
 
 suite "git: gitDiff":
   test "Changed 1":
-    const DiffResult = """
+    const DiffResult =
+      """
 diff --git a/src/moepkg/editorstatus.nim b/src/moepkg/editorstatus.nim
 index f328eafe..4f540b87 100644
 --- a/src/moepkg/editorstatus.nim
@@ -48,13 +49,15 @@ index f328eafe..4f540b87 100644
         backup, messages, commandline, register, platform, movement,
 """
 
-    check DiffResult.splitLines.parseGitDiffOutput == @[
-      Diff(operation: OperationType.changed, firstLine: 8, lastLine: 8),
-      Diff(operation: OperationType.changed, firstLine: 21, lastLine: 21),
-    ]
+    check DiffResult.splitLines.parseGitDiffOutput ==
+      @[
+        Diff(operation: OperationType.changed, firstLine: 8, lastLine: 8),
+        Diff(operation: OperationType.changed, firstLine: 21, lastLine: 21),
+      ]
 
   test "Deleted 1":
-    const DiffResult = """
+    const DiffResult =
+      """
 diff --git a/src/moepkg/editorstatus.nim b/src/moepkg/editorstatus.nim
 index f328eafe..a8229205 100644
 --- a/src/moepkg/editorstatus.nim
@@ -69,12 +72,12 @@ index f328eafe..a8229205 100644
  import gapbuffer, editorview, ui, unicodeext, highlight, fileutils,
 """
 
-    check DiffResult.splitLines.parseGitDiffOutput == @[
-      Diff(operation: OperationType.deleted, firstLine: 18, lastLine: 18),
-    ]
+    check DiffResult.splitLines.parseGitDiffOutput ==
+      @[Diff(operation: OperationType.deleted, firstLine: 18, lastLine: 18)]
 
   test "Deleted 2":
-    const DiffResult = """
+    const DiffResult =
+      """
 diff --git a/src/moepkg/editorstatus.nim b/src/moepkg/editorstatus.nim
 index f328eafe..03715814 100644
 --- a/src/moepkg/editorstatus.nim
@@ -90,12 +93,12 @@ index f328eafe..03715814 100644
         windownode, color, settings, statusline, bufferstatus, cursor, tabline,
 """
 
-    check DiffResult.splitLines.parseGitDiffOutput == @[
-      Diff(operation: OperationType.deleted, firstLine: 18, lastLine: 19),
-    ]
+    check DiffResult.splitLines.parseGitDiffOutput ==
+      @[Diff(operation: OperationType.deleted, firstLine: 18, lastLine: 19)]
 
   test "Deleted 3":
-    const DiffResult = """
+    const DiffResult =
+      """
 diff --git a/src/moepkg/editorstatus.nim b/src/moepkg/editorstatus.nim
 index f328eafe..8fa55819 100644
 --- a/src/moepkg/editorstatus.nim
@@ -119,13 +122,15 @@ index f328eafe..8fa55819 100644
 
 """
 
-    check DiffResult.splitLines.parseGitDiffOutput == @[
-      Diff(operation: OperationType.deleted, firstLine: 7, lastLine: 7),
-      Diff(operation: OperationType.deleted, firstLine: 17, lastLine: 17),
-    ]
+    check DiffResult.splitLines.parseGitDiffOutput ==
+      @[
+        Diff(operation: OperationType.deleted, firstLine: 7, lastLine: 7),
+        Diff(operation: OperationType.deleted, firstLine: 17, lastLine: 17),
+      ]
 
   test "Added 1":
-    const DiffResult = """
+    const DiffResult =
+      """
 diff --git a/src/moepkg/editorstatus.nim b/src/moepkg/editorstatus.nim
 index f328eafe..6deb6128 100644
 --- a/src/moepkg/editorstatus.nim
@@ -140,12 +145,12 @@ index f328eafe..6deb6128 100644
         backup, messages, commandline, register, platform, movement,
 """
 
-    check DiffResult.splitLines.parseGitDiffOutput == @[
-      Diff(operation: OperationType.added, firstLine: 22, lastLine: 22)
-    ]
+    check DiffResult.splitLines.parseGitDiffOutput ==
+      @[Diff(operation: OperationType.added, firstLine: 22, lastLine: 22)]
 
   test "Added 2":
-    const DiffResult = """
+    const DiffResult =
+      """
 diff --git a/src/moepkg/editorstatus.nim b/src/moepkg/editorstatus.nim
 index f328eafe..e43d4504 100644
 --- a/src/moepkg/editorstatus.nim
@@ -161,12 +166,12 @@ index f328eafe..e43d4504 100644
         backup, messages, commandline, register, platform, movement,
 """
 
-    check DiffResult.splitLines.parseGitDiffOutput == @[
-      Diff(operation: OperationType.added, firstLine: 22, lastLine: 23)
-    ]
+    check DiffResult.splitLines.parseGitDiffOutput ==
+      @[Diff(operation: OperationType.added, firstLine: 22, lastLine: 23)]
 
   test "Added 3":
-    const DiffResult = """
+    const DiffResult =
+      """
 diff --git a/src/moepkg/editorstatus.nim b/src/moepkg/editorstatus.nim
 index f328eafe..57a9ea4d 100644
 --- a/src/moepkg/editorstatus.nim
@@ -188,13 +193,15 @@ index f328eafe..57a9ea4d 100644
    path: Runes
 """
 
-    check DiffResult.splitLines.parseGitDiffOutput == @[
-      Diff(operation: OperationType.added, firstLine: 22, lastLine: 22),
-      Diff(operation: OperationType.added, firstLine: 29, lastLine: 29)
-    ]
+    check DiffResult.splitLines.parseGitDiffOutput ==
+      @[
+        Diff(operation: OperationType.added, firstLine: 22, lastLine: 22),
+        Diff(operation: OperationType.added, firstLine: 29, lastLine: 29),
+      ]
 
   test "Changed and added 1":
-    const DiffResult = """
+    const DiffResult =
+      """
 diff --git a/src/moepkg/editorstatus.nim b/src/moepkg/editorstatus.nim
 index 6b23176b..d3d54244 100644
 --- a/src/moepkg/editorstatus.nim
@@ -211,13 +218,15 @@ index 6b23176b..d3d54244 100644
         windownode, color, settings, statusline, bufferstatus, cursor, tabline,
 """
 
-    check DiffResult.splitLines.parseGitDiffOutput == @[
-      Diff(operation: OperationType.changed, firstLine: 20, lastLine: 20),
-      Diff(operation: OperationType.added, firstLine: 21, lastLine: 21)
-    ]
+    check DiffResult.splitLines.parseGitDiffOutput ==
+      @[
+        Diff(operation: OperationType.changed, firstLine: 20, lastLine: 20),
+        Diff(operation: OperationType.added, firstLine: 21, lastLine: 21),
+      ]
 
   test "Changed and deleted 1":
-    const DiffResult = """
+    const DiffResult =
+      """
 diff --git a/src/moepkg/editorstatus.nim b/src/moepkg/editorstatus.nim
 index 6b23176b..bd0a8fd3 100644
 --- a/src/moepkg/editorstatus.nim
@@ -234,6 +243,5 @@ index 6b23176b..bd0a8fd3 100644
         autocomplete, suggestionwindow, filermodeutils, debugmodeutils,
 """
 
-    check DiffResult.splitLines.parseGitDiffOutput == @[
-      Diff(operation: OperationType.changedAndDeleted, firstLine: 21, lastLine: 21)
-    ]
+    check DiffResult.splitLines.parseGitDiffOutput ==
+      @[Diff(operation: OperationType.changedAndDeleted, firstLine: 21, lastLine: 21)]

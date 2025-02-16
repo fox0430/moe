@@ -21,8 +21,11 @@ import std/[unittest, options]
 
 import pkg/results
 
-import moepkg/[highlight, editorstatus, gapbuffer, unicodeext, editor, movement,
-               bufferstatus, windownode, visualmode]
+import
+  moepkg/[
+    highlight, editorstatus, gapbuffer, unicodeext, editor, movement, bufferstatus,
+    windownode, visualmode,
+  ]
 
 import utils
 
@@ -30,9 +33,8 @@ import moepkg/insertmode {.all.}
 
 proc initSelectedArea(status: EditorStatus) =
   currentBufStatus.selectedArea = initSelectedArea(
-    currentMainWindowNode.currentLine,
-    currentMainWindowNode.currentColumn)
-    .some
+    currentMainWindowNode.currentLine, currentMainWindowNode.currentColumn
+  ).some
 
 suite "insert: Insert characters":
   test "Issue #474":
@@ -43,16 +45,18 @@ suite "insert: Insert characters":
     currentBufStatus.highlight = initHighlight(
       status.bufStatus[0].buffer.toSeqRunes,
       status.settings.highlight.reservedWords,
-      status.bufStatus[0].language)
+      status.bufStatus[0].language,
+    )
 
     status.resize(10, 10)
 
-    for i in 0..<100:
+    for i in 0 ..< 100:
       insertCharacter(
         status.bufStatus[0],
         currentMainWindowNode,
         status.settings.standard.autoCloseParen,
-        ru'a')
+        ru 'a',
+      )
 
     status.update
 
@@ -61,8 +65,7 @@ suite "insert: Insert characters":
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"b"])
 
-    status.bufStatus[0].insertCharacterBelowCursor(
-      currentMainWindowNode)
+    status.bufStatus[0].insertCharacterBelowCursor(currentMainWindowNode)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 2)
@@ -74,8 +77,7 @@ suite "insert: Insert characters":
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
 
-    status.bufStatus[0].insertCharacterBelowCursor(
-      currentMainWindowNode)
+    status.bufStatus[0].insertCharacterBelowCursor(currentMainWindowNode)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 1)
@@ -88,8 +90,7 @@ suite "insert: Insert characters":
 
     currentMainWindowNode.currentColumn = 2
 
-    status.bufStatus[0].insertCharacterBelowCursor(
-      currentMainWindowNode)
+    status.bufStatus[0].insertCharacterBelowCursor(currentMainWindowNode)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 2)
@@ -103,8 +104,7 @@ suite "insert: Insert characters":
 
     currentMainWindowNode.currentLine = 1
 
-    status.bufStatus[0].insertCharacterAboveCursor(
-      currentMainWindowNode)
+    status.bufStatus[0].insertCharacterAboveCursor(currentMainWindowNode)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 2)
@@ -119,8 +119,7 @@ suite "insert: Insert characters":
     currentMainWindowNode.currentLine = 1
     currentMainWindowNode.currentColumn = 2
 
-    status.bufStatus[0].insertCharacterAboveCursor(
-      currentMainWindowNode)
+    status.bufStatus[0].insertCharacterAboveCursor(currentMainWindowNode)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 2)
@@ -132,8 +131,7 @@ suite "insert: Insert characters":
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a"])
 
-    status.bufStatus[0].insertCharacterAboveCursor(
-      currentMainWindowNode)
+    status.bufStatus[0].insertCharacterAboveCursor(currentMainWindowNode)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 1)
@@ -148,10 +146,8 @@ suite "insert: Insert characters":
 
     const Loop = 1
     currentBufStatus.deleteWordBeforeCursor(
-      currentMainWindowNode,
-      status.registers,
-      Loop,
-      status.settings)
+      currentMainWindowNode, status.registers, Loop, status.settings
+    )
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 1)
@@ -164,10 +160,8 @@ suite "insert: Insert characters":
 
     const Loop = 1
     currentBufStatus.deleteWordBeforeCursor(
-      currentMainWindowNode,
-      status.registers,
-      Loop,
-      status.settings)
+      currentMainWindowNode, status.registers, Loop, status.settings
+    )
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 1)
@@ -182,10 +176,8 @@ suite "insert: Insert characters":
 
     const Loop = 1
     currentBufStatus.deleteWordBeforeCursor(
-      currentMainWindowNode,
-      status.registers,
-      Loop,
-      status.settings)
+      currentMainWindowNode, status.registers, Loop, status.settings
+    )
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 1)
@@ -198,8 +190,7 @@ suite "insert: Insert characters":
 
     currentMainWindowNode.currentColumn = 4
 
-    status.bufStatus[0].deleteCharactersBeforeCursorInCurrentLine(
-      currentMainWindowNode)
+    status.bufStatus[0].deleteCharactersBeforeCursorInCurrentLine(currentMainWindowNode)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 1)
@@ -210,8 +201,7 @@ suite "insert: Insert characters":
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a"])
 
-    status.bufStatus[0].deleteCharactersBeforeCursorInCurrentLine(
-      currentMainWindowNode)
+    status.bufStatus[0].deleteCharactersBeforeCursorInCurrentLine(currentMainWindowNode)
 
     let buffer = status.bufStatus[0].buffer
     check(buffer.len == 1)
@@ -223,8 +213,8 @@ suite "insert: Insert characters":
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
 
     status.bufStatus[0].indentInCurrentLine(
-      currentMainWindowNode,
-      status.settings.view.tabStop)
+      currentMainWindowNode, status.settings.view.tabStop
+    )
 
     let buffer = status.bufStatus[0].buffer
     check(buffer[0] == ru"  abc")
@@ -237,8 +227,8 @@ suite "insert: Insert characters":
     status.bufStatus[0].buffer = initGapBuffer(@[ru" abc"])
 
     status.bufStatus[0].indentInCurrentLine(
-      currentMainWindowNode,
-      status.settings.view.tabStop)
+      currentMainWindowNode, status.settings.view.tabStop
+    )
 
     let buffer = status.bufStatus[0].buffer
     check(buffer[0] == ru"  abc")
@@ -251,8 +241,8 @@ suite "insert: Insert characters":
     status.bufStatus[0].buffer = initGapBuffer(@[ru"  abc"])
 
     status.bufStatus[0].unindentInCurrentLine(
-      currentMainWindowNode,
-      status.settings.view.tabStop)
+      currentMainWindowNode, status.settings.view.tabStop
+    )
 
     let buffer = status.bufStatus[0].buffer
     check(buffer[0] == ru"abc")
@@ -265,8 +255,8 @@ suite "insert: Insert characters":
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
 
     status.bufStatus[0].unindentInCurrentLine(
-      currentMainWindowNode,
-      status.settings.view.tabStop)
+      currentMainWindowNode, status.settings.view.tabStop
+    )
 
     let buffer = status.bufStatus[0].buffer
     check(buffer[0] == ru"abc")
@@ -279,8 +269,8 @@ suite "insert: Insert characters":
     status.bufStatus[0].buffer = initGapBuffer(@[ru"   abc"])
 
     status.bufStatus[0].unindentInCurrentLine(
-      currentMainWindowNode,
-      status.settings.view.tabStop)
+      currentMainWindowNode, status.settings.view.tabStop
+    )
 
     let buffer = status.bufStatus[0].buffer
     check(buffer[0] == ru"  abc")
@@ -312,10 +302,11 @@ suite "insertMulti: Insert characters to multiple positions":
     currentBufStatus.selectedArea.get.endColumn = 0
 
     let keys = ru"xyz"
-    for k in keys: status.insertToBuffer(k)
+    for k in keys:
+      status.insertToBuffer(k)
 
-    check currentBufStatus.buffer.toSeqRunes == @["xyzabc", "xyzabc", "xyzabc"]
-      .toSeqRunes
+    check currentBufStatus.buffer.toSeqRunes ==
+      @["xyzabc", "xyzabc", "xyzabc"].toSeqRunes
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 3
@@ -336,10 +327,11 @@ suite "insertMulti: Insert characters to multiple positions":
     currentMainWindowNode.currentColumn = 1
 
     let keys = ru"xyz"
-    for k in keys: status.insertToBuffer(k)
+    for k in keys:
+      status.insertToBuffer(k)
 
-    check currentBufStatus.buffer.toSeqRunes == @["axyzbc", "axyzbc", "axyzbc"]
-      .toSeqRunes
+    check currentBufStatus.buffer.toSeqRunes ==
+      @["axyzbc", "axyzbc", "axyzbc"].toSeqRunes
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 4
@@ -360,10 +352,11 @@ suite "insertMulti: Insert characters to multiple positions":
     currentMainWindowNode.currentColumn = 2
 
     let keys = ru"xyz"
-    for k in keys: status.insertToBuffer(k)
+    for k in keys:
+      status.insertToBuffer(k)
 
-    check currentBufStatus.buffer.toSeqRunes == @["abxyzc", "abxyzc", "abxyzc"]
-      .toSeqRunes
+    check currentBufStatus.buffer.toSeqRunes ==
+      @["abxyzc", "abxyzc", "abxyzc"].toSeqRunes
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 5

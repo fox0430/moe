@@ -17,8 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[os, json, options, strformat, osproc, strutils, sequtils, enumutils,
-            tables]
+import std/[os, json, options, strformat, osproc, strutils, sequtils, enumutils, tables]
 import pkg/[parsetoml, results, regex]
 import lsp/[protocol/enums, utils]
 import ui, color, unicodeext, highlight, platform, rgb, theme
@@ -407,13 +406,12 @@ proc initDebugModeSettings(): DebugModeSettings =
     currentLine: true,
     currentColumn: true,
     expandedColumn: true,
-    cursor: true)
+    cursor: true,
+  )
 
   result.editorview = DebugEditorViewSettings(
-    enable: true,
-    widthOfLineNum: true,
-    height: true,
-    width: true)
+    enable: true, widthOfLineNum: true, height: true, width: true
+  )
 
   result.bufStatus = DebugBufferStatusSettings(
     enable: true,
@@ -427,7 +425,8 @@ proc initDebugModeSettings(): DebugModeSettings =
     countChange: true,
     cmdLoop: true,
     lastSaveTime: true,
-    bufferLen: true)
+    bufferLen: true,
+  )
 
 proc initNotificationSettings(): NotificationSettings =
   result.screenNotifications = true
@@ -496,11 +495,12 @@ proc initEditorViewSettings*(): EditorViewSettings =
   result.sidebar = true
 
 proc initReservedWords*(): seq[ReservedWord] =
-  result = @[
-    ReservedWord(word: "TODO", color: EditorColorPairIndex.reservedWord),
-    ReservedWord(word: "WIP", color: EditorColorPairIndex.reservedWord),
-    ReservedWord(word: "NOTE", color: EditorColorPairIndex.reservedWord),
-  ]
+  result =
+    @[
+      ReservedWord(word: "TODO", color: EditorColorPairIndex.reservedWord),
+      ReservedWord(word: "WIP", color: EditorColorPairIndex.reservedWord),
+      ReservedWord(word: "NOTE", color: EditorColorPairIndex.reservedWord),
+    ]
 
 proc initHighlightSettings(): HighlightSettings =
   result.replaceText = true
@@ -508,7 +508,7 @@ proc initHighlightSettings(): HighlightSettings =
   result.currentWord = true
   result.fullWidthSpace = true
   result.trailingSpaces = true
-  result.reservedWords =  initReservedWords()
+  result.reservedWords = initReservedWords()
 
 proc initPersistSettings(): PersistSettings =
   result.exCommand = true
@@ -525,7 +525,8 @@ proc detectClipboardTool(): Option[ClipboardTool] =
   ## macOS: pbcopy/pbpaste
   ## WSL: clip.exe/powershell.exe
 
-  proc isXsel(): bool {.inline.} = execCmdEx("xsel --version").exitCode == 0
+  proc isXsel(): bool {.inline.} =
+    execCmdEx("xsel --version").exitCode == 0
 
   proc isXclip(): bool =
     if execCmdEx("xclip -version").exitCode == 0:
@@ -536,24 +537,24 @@ proc detectClipboardTool(): Option[ClipboardTool] =
         versionStr = (strutils.splitWhitespace(lines[0]))[2]
       return parseFloat(versionStr) >= 0.13
 
-  case getGuiEnv():
-    of Gui.x11:
-      # X11 on UNIX system.
-      if isXsel():
-        return some(ClipboardTool.xsel)
-      elif isXclip():
-        return some(ClipboardTool.xclip)
-    of Gui.wayland:
-      # Wayland on UNIX system.
-      return some(ClipboardTool.wlClipboard)
-    of Gui.other:
-      if getPlatform() == mac:
-        # macOS
-        return some(macOsDefault)
-      elif getPlatform() == wsl:
-        return some(wslDefault)
-    of Gui.console:
-      return none(ClipboardTool)
+  case getGuiEnv()
+  of Gui.x11:
+    # X11 on UNIX system.
+    if isXsel():
+      return some(ClipboardTool.xsel)
+    elif isXclip():
+      return some(ClipboardTool.xclip)
+  of Gui.wayland:
+    # Wayland on UNIX system.
+    return some(ClipboardTool.wlClipboard)
+  of Gui.other:
+    if getPlatform() == mac:
+      # macOS
+      return some(macOsDefault)
+    elif getPlatform() == wsl:
+      return some(wslDefault)
+  of Gui.console:
+    return none(ClipboardTool)
 
 proc initClipboardSettings(): ClipboardSettings =
   let tool = detectClipboardTool()
@@ -688,14 +689,12 @@ proc initLspSettings(): LspSettings =
   result.features = initLspFeatureSettings()
 
   result.languages["nim"] = LspLanguageSettings(
-    extensions: @[ru"nim"],
-    command: ru"nimlangserver",
-    trace: TraceValue.verbose)
+    extensions: @[ru"nim"], command: ru"nimlangserver", trace: TraceValue.verbose
+  )
 
   result.languages["rust"] = LspLanguageSettings(
-    extensions: @[ru"rs"],
-    command: ru"rust-analyzer",
-    trace: TraceValue.verbose)
+    extensions: @[ru"rs"], command: ru"rust-analyzer", trace: TraceValue.verbose
+  )
 
   result.servers = initLspServerSettings()
 
@@ -736,7 +735,7 @@ proc initEditorSettings*(): EditorSettings =
   result.theme = initThemeSettings()
   result.lsp = initLspSettings()
 
-proc configFilePath*():  string {.inline.} =
+proc configFilePath*(): string {.inline.} =
   getConfigDir() / "moe" / "moerc.toml"
 
 proc langIdFromLspSettings*(s: LspSettings, ext: Runes): Option[LanguageId] =
@@ -807,7 +806,6 @@ proc makeColorThemeFromVSCodeThemeFile(jsonNode: JsonNode): ThemeColors =
       colorFromNode(jsonNode{"colors", "editor.foreground"})
 
   if jsonNode["colors"].contains("editor.background"):
-
     result[EditorColorPairIndex.default].background.rgb =
       colorFromNode(jsonNode{"colors", "editor.background"})
 
@@ -1208,35 +1206,35 @@ proc vsCodiumUserExtensionsDir(): string {.inline.} =
   # Same as the code-oss.
   codeOssUserExtensionsDir()
 
-proc vsCodeUserExtensionsDir(): string  {.inline.} =
+proc vsCodeUserExtensionsDir(): string {.inline.} =
   getHomeDir() / ".vscode/extensions"
 
 proc vsCodeSettingsFilePath(flavor: VsCodeFlavor): string =
-  case flavor:
-    of VsCodeFlavor.VSCodium:
-      return vsCodiumUserSettingsFilePath()
-    of VsCodeFlavor.CodeOss:
-      return codeOssUserSettingsFilePath()
-    of VsCodeFlavor.VSCode:
-      return vsCodeUserSettingsFilePath()
+  case flavor
+  of VsCodeFlavor.VSCodium:
+    return vsCodiumUserSettingsFilePath()
+  of VsCodeFlavor.CodeOss:
+    return codeOssUserSettingsFilePath()
+  of VsCodeFlavor.VSCode:
+    return vsCodeUserSettingsFilePath()
 
 proc vsCodeUserExtensionsDir(flavor: VsCodeFlavor): string =
-  case flavor:
-    of VsCodeFlavor.VSCodium:
-      return vsCodiumUserExtensionsDir()
-    of VsCodeFlavor.CodeOss:
-      return codeOssUserExtensionsDir()
-    of VsCodeFlavor.VSCode:
-      return vsCodeUserExtensionsDir()
+  case flavor
+  of VsCodeFlavor.VSCodium:
+    return vsCodiumUserExtensionsDir()
+  of VsCodeFlavor.CodeOss:
+    return codeOssUserExtensionsDir()
+  of VsCodeFlavor.VSCode:
+    return vsCodeUserExtensionsDir()
 
 proc vsCodeDefaultExtensionsDir(flavor: VsCodeFlavor): string =
-  case flavor:
-    of VsCodeFlavor.VSCodium:
-      return vSCodiumDefaultExtensionsDir()
-    of VsCodeFlavor.CodeOss:
-      return codeOssDefaultExtensionsDir()
-    of VsCodeFlavor.VSCode:
-      return vsCodeDefaultExtensionsDir()
+  case flavor
+  of VsCodeFlavor.VSCodium:
+    return vSCodiumDefaultExtensionsDir()
+  of VsCodeFlavor.CodeOss:
+    return codeOssDefaultExtensionsDir()
+  of VsCodeFlavor.VSCode:
+    return vsCodeDefaultExtensionsDir()
 
 proc detectVsCodeFlavor(): Option[VsCodeFlavor] =
   ## Check settings dirs in the following order.
@@ -1260,22 +1258,23 @@ proc isCurrentVsCodeThemePackage(json: JsonNode, themeName: string): bool =
           return true
 
 proc parseVsCodeThemeJson(
-  packageJson: JsonNode,
-  themeName, extensionDir: string): Option[JsonNode] =
+    packageJson: JsonNode, themeName, extensionDir: string
+): Option[JsonNode] =
+  let themesJson = packageJson{"contributes", "themes"}
+  if themesJson != nil and themesJson.kind == JArray:
+    for theme in themesJson:
+      if theme{"label"} != nil and theme{"label"}.getStr == themeName:
+        let themePath = theme{"path"}
 
-    let themesJson = packageJson{"contributes", "themes"}
-    if themesJson != nil and themesJson.kind == JArray:
-      for theme in themesJson:
-        if theme{"label"} != nil and theme{"label"}.getStr == themeName:
-          let themePath = theme{"path"}
+        if themePath != nil and themePath.kind == JString:
+          let themeFilePath = parentDir(extensionDir) / themePath.getStr()
 
-          if themePath != nil and themePath.kind == JString:
-            let themeFilePath = parentDir(extensionDir) / themePath.getStr()
-
-            if fileExists(themeFilePath):
-              result =
-                try: some(json.parseFile(themeFilePath))
-                except CatchableError: none(JsonNode)
+          if fileExists(themeFilePath):
+            result =
+              try:
+                some(json.parseFile(themeFilePath))
+              except CatchableError:
+                none(JsonNode)
 
 proc loadVSCodeTheme*(): Result[ThemeColors, string] =
   ## If no vscode theme can be found, this defaults to the dark theme.
@@ -1297,8 +1296,8 @@ proc loadVSCodeTheme*(): Result[ThemeColors, string] =
 
   # The current theme name
   if settingsJson{"workbench.colorTheme"} == nil or
-     settingsJson{"workbench.colorTheme"}.getStr == "":
-       return Result[ThemeColors, string].err "Failed to load VSCode theme: Failed to get the current theme"
+      settingsJson{"workbench.colorTheme"}.getStr == "":
+    return Result[ThemeColors, string].err "Failed to load VSCode theme: Failed to get the current theme"
 
   let
     currentThemeName = settingsJson{"workbench.colorTheme"}.getStr
@@ -1307,20 +1306,20 @@ proc loadVSCodeTheme*(): Result[ThemeColors, string] =
       # Build in themes.
       vsCodeDefaultExtensionsDir(vsCodeFlavor.get),
       # User themes.
-      vsCodeUserExtensionsDir(vsCodeFlavor.get)]
+      vsCodeUserExtensionsDir(vsCodeFlavor.get),
+    ]
 
   for dir in extensionDirs:
     if dirExists(dir):
-      for file in walkPattern(dir / "*/package.json" ):
+      for file in walkPattern(dir / "*/package.json"):
         let packageJson =
-          try: json.parseFile(file)
-          except CatchableError: continue
+          try:
+            json.parseFile(file)
+          except CatchableError:
+            continue
 
         if isCurrentVsCodeThemePackage(packageJson, currentThemeName):
-          let themeJson = parseVsCodeThemeJson(
-            packageJson,
-            currentThemeName,
-            file)
+          let themeJson = parseVsCodeThemeJson(packageJson, currentThemeName, file)
           if themeJson.isSome:
             let colors = makecolorThemeFromVSCodeThemeFile(themeJson.get)
             return Result[ThemeColors, string].ok colors
@@ -1350,7 +1349,7 @@ proc parseStandardTable(s: var EditorSettings, standardConfigs: TomlValueRef) =
     s.standard.syntax = standardConfigs["syntax"].getBool
 
   if standardConfigs.contains("tabStop"):
-    s.standard.tabStop      = standardConfigs["tabStop"].getInt
+    s.standard.tabStop = standardConfigs["tabStop"].getInt
     s.view.tabStop = standardConfigs["tabStop"].getInt
 
   if standardConfigs.contains("sidebar"):
@@ -1393,7 +1392,7 @@ proc parseStandardTable(s: var EditorSettings, standardConfigs: TomlValueRef) =
     s.standard.popupWindowInExmode = standardConfigs["popupWindowInExmode"].getBool
 
   if standardConfigs.contains("autoDeleteParen"):
-    s.standard.autoDeleteParen =  standardConfigs["autoDeleteParen"].getBool
+    s.standard.autoDeleteParen = standardConfigs["autoDeleteParen"].getBool
 
   if standardConfigs.contains("colorMode"):
     s.standard.colorMode = standardConfigs["colorMode"].getStr.parseColorMode.get
@@ -1404,137 +1403,118 @@ proc parseStandardTable(s: var EditorSettings, standardConfigs: TomlValueRef) =
   if standardConfigs.contains("indentationLines"):
     s.view.indentationLines = standardConfigs["indentationLines"].getBool
 
-proc parseClipboardTable(
-  s: var EditorSettings,
-  clipboardConfigs: TomlValueRef) =
+proc parseClipboardTable(s: var EditorSettings, clipboardConfigs: TomlValueRef) =
+  if clipboardConfigs.contains("enable"):
+    s.clipboard.enable = clipboardConfigs["enable"].getBool
 
-    if clipboardConfigs.contains("enable"):
-      s.clipboard.enable = clipboardConfigs["enable"].getBool
-
-    if clipboardConfigs.contains("tool"):
-      let str = clipboardConfigs["tool"].getStr
-      case str:
-        of "xclip":
-          s.clipboard.tool = ClipboardTool.xclip
-        of "wl-clipboard":
-          s.clipboard.tool = ClipboardTool.wlClipboard
-        of "wsl-default":
-          s.clipboard.tool = ClipboardTool.wslDefault
-        of "macOS-default":
-          s.clipboard.tool = ClipboardTool.macOsDefault
-        else:
-          s.clipboard.tool = ClipboardTool.xsel
+  if clipboardConfigs.contains("tool"):
+    let str = clipboardConfigs["tool"].getStr
+    case str
+    of "xclip":
+      s.clipboard.tool = ClipboardTool.xclip
+    of "wl-clipboard":
+      s.clipboard.tool = ClipboardTool.wlClipboard
+    of "wsl-default":
+      s.clipboard.tool = ClipboardTool.wslDefault
+    of "macOS-default":
+      s.clipboard.tool = ClipboardTool.macOsDefault
+    else:
+      s.clipboard.tool = ClipboardTool.xsel
 
 proc parseTabLineTable(s: var EditorSettings, tablineConfigs: TomlValueRef) =
   if tablineConfigs.contains("allBuffer"):
     s.tabLine.allBuffer = tablineConfigs["allBuffer"].getBool
 
-proc parseStatusLineTable(
-  s: var EditorSettings,
-  statusLineConfigs: TomlValueRef) =
+proc parseStatusLineTable(s: var EditorSettings, statusLineConfigs: TomlValueRef) =
+  if statusLineConfigs.contains("multipleStatusLine"):
+    s.statusLine.multipleStatusLine = statusLineConfigs["multipleStatusLine"].getBool
 
-    if statusLineConfigs.contains("multipleStatusLine"):
-      s.statusLine.multipleStatusLine =
-        statusLineConfigs["multipleStatusLine"].getBool
+  if statusLineConfigs.contains("merge"):
+    s.statusLine.merge = statusLineConfigs["merge"].getBool
 
-    if statusLineConfigs.contains("merge"):
-      s.statusLine.merge = statusLineConfigs["merge"].getBool
+  if statusLineConfigs.contains("mode"):
+    s.statusLine.mode = statusLineConfigs["mode"].getBool
 
-    if statusLineConfigs.contains("mode"):
-      s.statusLine.mode= statusLineConfigs["mode"].getBool
+  if statusLineConfigs.contains("filename"):
+    s.statusLine.filename = statusLineConfigs["filename"].getBool
 
-    if statusLineConfigs.contains("filename"):
-      s.statusLine.filename = statusLineConfigs["filename"].getBool
+  if statusLineConfigs.contains("chanedMark"):
+    s.statusLine.chanedMark = statusLineConfigs["chanedMark"].getBool
 
-    if statusLineConfigs.contains("chanedMark"):
-      s.statusLine.chanedMark = statusLineConfigs["chanedMark"].getBool
+  if statusLineConfigs.contains("directory"):
+    s.statusLine.directory = statusLineConfigs["directory"].getBool
 
-    if statusLineConfigs.contains("directory"):
-      s.statusLine.directory = statusLineConfigs["directory"].getBool
+  if statusLineConfigs.contains("gitChangedLines"):
+    s.statusLine.gitChangedLines = statusLineConfigs["gitChangedLines"].getBool
 
-    if statusLineConfigs.contains("gitChangedLines"):
-      s.statusLine.gitChangedLines =
-        statusLineConfigs["gitChangedLines"].getBool
+  if statusLineConfigs.contains("gitBranchName"):
+    s.statusLine.gitBranchName = statusLineConfigs["gitBranchName"].getBool
 
-    if statusLineConfigs.contains("gitBranchName"):
-      s.statusLine.gitBranchName = statusLineConfigs["gitBranchName"].getBool
+  if statusLineConfigs.contains("showGitInactive"):
+    s.statusLine.showGitInactive = statusLineConfigs["showGitInactive"].getBool
 
-    if statusLineConfigs.contains("showGitInactive"):
-      s.statusLine.showGitInactive =
-        statusLineConfigs["showGitInactive"].getBool
+  if statusLineConfigs.contains("showModeInactive"):
+    s.statusLine.showModeInactive = statusLineConfigs["showModeInactive"].getBool
 
-    if statusLineConfigs.contains("showModeInactive"):
-      s.statusLine.showModeInactive =
-        statusLineConfigs["showModeInactive"].getBool
+  if statusLineConfigs.contains("setupText"):
+    s.statusLine.setupText = statusLineConfigs["setupText"].getStr.toRunes
 
-    if statusLineConfigs.contains("setupText"):
-      s.statusLine.setupText = statusLineConfigs["setupText"].getStr.toRunes
+proc parseBuildOnSaveTable(s: var EditorSettings, buildOnSaveConfigs: TomlValueRef) =
+  if buildOnSaveConfigs.contains("enable"):
+    s.buildOnSave.enable = buildOnSaveConfigs["enable"].getBool
 
-proc parseBuildOnSaveTable(
-  s: var EditorSettings,
-  buildOnSaveConfigs: TomlValueRef) =
+  if buildOnSaveConfigs.contains("workspaceRoot"):
+    s.buildOnSave.workspaceRoot = buildOnSaveConfigs["workspaceRoot"].getStr.toRunes
 
-    if buildOnSaveConfigs.contains("enable"):
-      s.buildOnSave.enable = buildOnSaveConfigs["enable"].getBool
+  if buildOnSaveConfigs.contains("command"):
+    s.buildOnSave.command = buildOnSaveConfigs["command"].getStr.toRunes
 
-    if buildOnSaveConfigs.contains("workspaceRoot"):
-      s.buildOnSave.workspaceRoot = buildOnSaveConfigs["workspaceRoot"]
-        .getStr
-        .toRunes
+proc parseHighlightTable(s: var EditorSettings, highlightConfigs: TomlValueRef) =
+  if highlightConfigs.contains("reservedWord"):
+    let reservedWords = highlightConfigs["reservedWord"]
+    for i in 0 ..< reservedWords.len:
+      s.highlight.reservedWords.add(
+        ReservedWord(
+          word: reservedWords[i].getStr, color: EditorColorPairIndex.reservedWord
+        )
+      )
 
-    if buildOnSaveConfigs.contains("command"):
-      s.buildOnSave.command = buildOnSaveConfigs["command"].getStr.toRunes
+  if highlightConfigs.contains("currentLine"):
+    s.view.highlightCurrentLine = highlightConfigs["currentLine"].getBool
 
-proc parseHighlightTable(
-  s: var EditorSettings,
-  highlightConfigs: TomlValueRef) =
+  if highlightConfigs.contains("currentWord"):
+    s.highlight.currentWord = highlightConfigs["currentWord"].getBool
 
-    if highlightConfigs.contains("reservedWord"):
-      let reservedWords = highlightConfigs["reservedWord"]
-      for i in 0 ..< reservedWords.len:
-        s.highlight.reservedWords.add(ReservedWord(
-          word: reservedWords[i].getStr,
-          color: EditorColorPairIndex.reservedWord))
+  if highlightConfigs.contains("replaceText"):
+    s.highlight.replaceText = highlightConfigs["replaceText"].getBool
 
-    if highlightConfigs.contains("currentLine"):
-      s.view.highlightCurrentLine = highlightConfigs["currentLine"].getBool
+  if highlightConfigs.contains("pairOfParen"):
+    s.highlight.pairOfParen = highlightConfigs["pairOfParen"].getBool
 
-    if highlightConfigs.contains("currentWord"):
-      s.highlight.currentWord = highlightConfigs["currentWord"].getBool
+  if highlightConfigs.contains("fullWidthSpace"):
+    s.highlight.fullWidthSpace = highlightConfigs["fullWidthSpace"].getBool
 
-    if highlightConfigs.contains("replaceText"):
-      s.highlight.replaceText = highlightConfigs["replaceText"].getBool
+  if highlightConfigs.contains("trailingSpaces"):
+    s.highlight.trailingSpaces = highlightConfigs["trailingSpaces"].getBool
 
-    if highlightConfigs.contains("pairOfParen"):
-      s.highlight.pairOfParen =  highlightConfigs["pairOfParen"].getBool
+proc parseAutoBackupTable(s: var EditorSettings, autoBackupConfigs: TomlValueRef) =
+  if autoBackupConfigs.contains("enable"):
+    s.autoBackup.enable = autoBackupConfigs["enable"].getBool
 
-    if highlightConfigs.contains("fullWidthSpace"):
-      s.highlight.fullWidthSpace = highlightConfigs["fullWidthSpace"].getBool
+  if autoBackupConfigs.contains("idleTime"):
+    s.autoBackup.idleTime = autoBackupConfigs["idleTime"].getInt
 
-    if highlightConfigs.contains("trailingSpaces"):
-      s.highlight.trailingSpaces = highlightConfigs["trailingSpaces"].getBool
+  if autoBackupConfigs.contains("interval"):
+    s.autoBackup.interval = autoBackupConfigs["interval"].getInt
 
-proc parseAutoBackupTable(
-  s: var EditorSettings,
-  autoBackupConfigs: TomlValueRef) =
+  if autoBackupConfigs.contains("backupDir"):
+    s.autoBackup.backupDir = autoBackupConfigs["backupDir"].getStr.toRunes
 
-    if autoBackupConfigs.contains("enable"):
-      s.autoBackup.enable = autoBackupConfigs["enable"].getBool
-
-    if autoBackupConfigs.contains("idleTime"):
-      s.autoBackup.idleTime = autoBackupConfigs["idleTime"].getInt
-
-    if autoBackupConfigs.contains("interval"):
-      s.autoBackup.interval = autoBackupConfigs["interval"].getInt
-
-    if autoBackupConfigs.contains("backupDir"):
-      s.autoBackup.backupDir = autoBackupConfigs["backupDir"].getStr.toRunes
-
-    if autoBackupConfigs.contains("dirToExclude"):
-      s.autoBackup.dirToExclude = @[]
-      let dirs = autoBackupConfigs["dirToExclude"]
-      for i in 0 ..< dirs.len:
-        s.autoBackup.dirToExclude.add dirs[i].getStr.toRunes
+  if autoBackupConfigs.contains("dirToExclude"):
+    s.autoBackup.dirToExclude = @[]
+    let dirs = autoBackupConfigs["dirToExclude"]
+    for i in 0 ..< dirs.len:
+      s.autoBackup.dirToExclude.add dirs[i].getStr.toRunes
 
 proc parseQuickRunTable(s: var EditorSettings, quickRunConfigs: TomlValueRef) =
   if quickRunConfigs.contains("saveBufferWhenQuickRun"):
@@ -1565,117 +1545,97 @@ proc parseQuickRunTable(s: var EditorSettings, quickRunConfigs: TomlValueRef) =
   if quickRunConfigs.contains("bashOptions"):
     s.quickRun.bashOptions = quickRunConfigs["bashOptions"].getStr
 
-proc parseNotificationTable(
-  s: var EditorSettings,
-  notificationConfigs: TomlValueRef) =
-    if notificationConfigs.contains("screenNotifications"):
-      s.notification.screenNotifications =
-        notificationConfigs["screenNotifications"].getBool
+proc parseNotificationTable(s: var EditorSettings, notificationConfigs: TomlValueRef) =
+  if notificationConfigs.contains("screenNotifications"):
+    s.notification.screenNotifications =
+      notificationConfigs["screenNotifications"].getBool
 
-    if notificationConfigs.contains("logNotifications"):
-      s.notification.logNotifications =
-        notificationConfigs["logNotifications"].getBool
+  if notificationConfigs.contains("logNotifications"):
+    s.notification.logNotifications = notificationConfigs["logNotifications"].getBool
 
-    if notificationConfigs.contains("autoBackupScreenNotify"):
-      s.notification.autoBackupScreenNotify =
-        notificationConfigs["autoBackupScreenNotify"].getBool
+  if notificationConfigs.contains("autoBackupScreenNotify"):
+    s.notification.autoBackupScreenNotify =
+      notificationConfigs["autoBackupScreenNotify"].getBool
 
-    if notificationConfigs.contains("autoBackupLogNotify"):
-      s.notification.autoBackupLogNotify =
-        notificationConfigs["autoBackupLogNotify"].getBool
+  if notificationConfigs.contains("autoBackupLogNotify"):
+    s.notification.autoBackupLogNotify =
+      notificationConfigs["autoBackupLogNotify"].getBool
 
-    if notificationConfigs.contains("autoSaveScreenNotify"):
-      s.notification.autoSaveScreenNotify =
-        notificationConfigs["autoSaveScreenNotify"].getBool
+  if notificationConfigs.contains("autoSaveScreenNotify"):
+    s.notification.autoSaveScreenNotify =
+      notificationConfigs["autoSaveScreenNotify"].getBool
 
-    if notificationConfigs.contains("autoSaveLogNotify"):
-      s.notification.autoSaveLogNotify =
-        notificationConfigs["autoSaveLogNotify"].getBool
+  if notificationConfigs.contains("autoSaveLogNotify"):
+    s.notification.autoSaveLogNotify = notificationConfigs["autoSaveLogNotify"].getBool
 
-    if notificationConfigs.contains("yankScreenNotify"):
-      s.notification.yankScreenNotify =
-        notificationConfigs["yankScreenNotify"].getBool
+  if notificationConfigs.contains("yankScreenNotify"):
+    s.notification.yankScreenNotify = notificationConfigs["yankScreenNotify"].getBool
 
-    if notificationConfigs.contains("yankLogNotify"):
-      s.notification.yankLogNotify =
-        notificationConfigs["yankLogNotify"].getBool
+  if notificationConfigs.contains("yankLogNotify"):
+    s.notification.yankLogNotify = notificationConfigs["yankLogNotify"].getBool
 
-    if notificationConfigs.contains("deleteScreenNotify"):
-      s.notification.deleteScreenNotify =
-        notificationConfigs["deleteScreenNotify"].getBool
+  if notificationConfigs.contains("deleteScreenNotify"):
+    s.notification.deleteScreenNotify =
+      notificationConfigs["deleteScreenNotify"].getBool
 
-    if notificationConfigs.contains("deleteLogNotify"):
-      s.notification.deleteLogNotify =
-        notificationConfigs["deleteLogNotify"].getBool
+  if notificationConfigs.contains("deleteLogNotify"):
+    s.notification.deleteLogNotify = notificationConfigs["deleteLogNotify"].getBool
 
-    if notificationConfigs.contains("saveScreenNotify"):
-      s.notification.saveScreenNotify =
-        notificationConfigs["saveScreenNotify"].getBool
+  if notificationConfigs.contains("saveScreenNotify"):
+    s.notification.saveScreenNotify = notificationConfigs["saveScreenNotify"].getBool
 
-    if notificationConfigs.contains("saveLogNotify"):
-      s.notification.saveLogNotify =
-        notificationConfigs["saveLogNotify"].getBool
+  if notificationConfigs.contains("saveLogNotify"):
+    s.notification.saveLogNotify = notificationConfigs["saveLogNotify"].getBool
 
-    if notificationConfigs.contains("quickRunScreenNotify"):
-      s.notification.quickRunScreenNotify =
-        notificationConfigs["quickRunScreenNotify"].getBool
+  if notificationConfigs.contains("quickRunScreenNotify"):
+    s.notification.quickRunScreenNotify =
+      notificationConfigs["quickRunScreenNotify"].getBool
 
-    if notificationConfigs.contains("quickRunLogNotify"):
-      s.notification.quickRunLogNotify =
-        notificationConfigs["quickRunLogNotify"].getBool
+  if notificationConfigs.contains("quickRunLogNotify"):
+    s.notification.quickRunLogNotify = notificationConfigs["quickRunLogNotify"].getBool
 
-    if notificationConfigs.contains("buildOnSaveScreenNotify"):
-      s.notification.buildOnSaveScreenNotify =
-        notificationConfigs["buildOnSaveScreenNotify"].getBool
+  if notificationConfigs.contains("buildOnSaveScreenNotify"):
+    s.notification.buildOnSaveScreenNotify =
+      notificationConfigs["buildOnSaveScreenNotify"].getBool
 
-    if notificationConfigs.contains("buildOnSaveLogNotify"):
-      s.notification.buildOnSaveLogNotify =
-        notificationConfigs["buildOnSaveLogNotify"].getBool
+  if notificationConfigs.contains("buildOnSaveLogNotify"):
+    s.notification.buildOnSaveLogNotify =
+      notificationConfigs["buildOnSaveLogNotify"].getBool
 
-    if notificationConfigs.contains("filerScreenNotify"):
-      s.notification.filerScreenNotify =
-        notificationConfigs["filerScreenNotify"].getBool
+  if notificationConfigs.contains("filerScreenNotify"):
+    s.notification.filerScreenNotify = notificationConfigs["filerScreenNotify"].getBool
 
-    if notificationConfigs.contains("filerLogNotify"):
-      s.notification.filerLogNotify =
-        notificationConfigs["filerLogNotify"].getBool
+  if notificationConfigs.contains("filerLogNotify"):
+    s.notification.filerLogNotify = notificationConfigs["filerLogNotify"].getBool
 
-    if notificationConfigs.contains("restoreScreenNotify"):
-      s.notification.restoreScreenNotify =
-        notificationConfigs["restoreScreenNotify"].getBool
+  if notificationConfigs.contains("restoreScreenNotify"):
+    s.notification.restoreScreenNotify =
+      notificationConfigs["restoreScreenNotify"].getBool
 
-    if notificationConfigs.contains("restoreLogNotify"):
-      s.notification.restoreLogNotify =
-        notificationConfigs["restoreLogNotify"].getBool
+  if notificationConfigs.contains("restoreLogNotify"):
+    s.notification.restoreLogNotify = notificationConfigs["restoreLogNotify"].getBool
 
 proc parseFilerTable(s: var EditorSettings, filerConfigs: TomlValueRef) =
   if filerConfigs.contains("showIcons"):
     s.filer.showIcons = filerConfigs["showIcons"].getBool
 
-proc parseAutocompleteTable(
-  s: var EditorSettings,
-  autocompleteConfigs: TomlValueRef) =
+proc parseAutocompleteTable(s: var EditorSettings, autocompleteConfigs: TomlValueRef) =
+  if autocompleteConfigs.contains("enable"):
+    s.autocomplete.enable = autocompleteConfigs["enable"].getBool
 
-    if autocompleteConfigs.contains("enable"):
-      s.autocomplete.enable = autocompleteConfigs["enable"].getBool
+proc parseAutoSaveTable(s: var EditorSettings, autoSaveConfigs: TomlValueRef) =
+  if autoSaveConfigs.contains("enable"):
+    s.autoSave.enable = autoSaveConfigs["enable"].getBool
 
-proc parseAutoSaveTable(
-  s: var EditorSettings,
-  autoSaveConfigs: TomlValueRef) =
-
-    if autoSaveConfigs.contains("enable"):
-      s.autoSave.enable = autoSaveConfigs["enable"].getBool
-
-    if autoSaveConfigs.contains("interval"):
-      s.autoSave.interval = autoSaveConfigs["interval"].getInt
+  if autoSaveConfigs.contains("interval"):
+    s.autoSave.interval = autoSaveConfigs["interval"].getInt
 
 proc parsePersistTable(s: var EditorSettings, persistConfigs: TomlValueRef) =
   if persistConfigs.contains("exCommand"):
     s.persist.exCommand = persistConfigs["exCommand"].getBool
 
   if persistConfigs.contains("exCommandHistoryLimit"):
-    s.persist.exCommandHistoryLimit = persistConfigs["exCommandHistoryLimit"]
-      .getInt
+    s.persist.exCommandHistoryLimit = persistConfigs["exCommandHistoryLimit"].getInt
 
   if persistConfigs.contains("search"):
     s.persist.search = persistConfigs["search"].getBool
@@ -1845,300 +1805,285 @@ proc parseGitTable(s: var EditorSettings, gitConfigs: TomlValueRef) =
   if gitConfigs.contains("updateInterval"):
     s.git.updateInterval = gitConfigs["updateInterval"].getInt
 
-proc parseSyntaxCheckerTable(
-  s: var EditorSettings,
-  syntaxCheckConfigs: TomlValueRef) =
+proc parseSyntaxCheckerTable(s: var EditorSettings, syntaxCheckConfigs: TomlValueRef) =
+  if syntaxCheckConfigs.contains("enable"):
+    s.syntaxChecker.enable = syntaxCheckConfigs["enable"].getBool
 
-    if syntaxCheckConfigs.contains("enable"):
-      s.syntaxChecker.enable = syntaxCheckConfigs["enable"].getBool
+proc parseSmoothScrollTable(s: var EditorSettings, smoothScrollConfigs: TomlValueRef) =
+  if smoothScrollConfigs.contains("enable"):
+    s.smoothScroll.enable = smoothScrollConfigs["enable"].getBool
 
-proc parseSmoothScrollTable(
-  s: var EditorSettings,
-  smoothScrollConfigs: TomlValueRef) =
+  if smoothScrollConfigs.contains("minDelay"):
+    s.smoothScroll.minDelay = smoothScrollConfigs["minDelay"].getInt
 
-    if smoothScrollConfigs.contains("enable"):
-      s.smoothScroll.enable = smoothScrollConfigs["enable"].getBool
+  if smoothScrollConfigs.contains("maxDelay"):
+    s.smoothScroll.maxDelay = smoothScrollConfigs["maxDelay"].getInt
 
-    if smoothScrollConfigs.contains("minDelay"):
-      s.smoothScroll.minDelay = smoothScrollConfigs["minDelay"].getInt
+proc parseStartUpSettingsTable(s: var EditorSettings, startUpConfigs: TomlValueRef) =
+  if startUpConfigs.contains("FileOpen"):
+    if startUpConfigs["FileOpen"].contains("autoSplit"):
+      s.startUp.fileOpen.autoSplit = startUpConfigs["FileOpen"]["autoSplit"].getBool
 
-    if smoothScrollConfigs.contains("maxDelay"):
-      s.smoothScroll.maxDelay = smoothScrollConfigs["maxDelay"].getInt
-
-proc parseStartUpSettingsTable(
-  s: var EditorSettings,
-  startUpConfigs: TomlValueRef) =
-
-    if startUpConfigs.contains("FileOpen"):
-      if startUpConfigs["FileOpen"].contains("autoSplit"):
-        s.startUp.fileOpen.autoSplit =
-          startUpConfigs["FileOpen"]["autoSplit"].getBool
-
-      if startUpConfigs["FileOpen"].contains("splitType"):
-        s.startUp.fileOpen.splitType = startUpConfigs["FileOpen"]["splitType"]
-          .getStr
-          .parseWindowSplitType
-          .get
+    if startUpConfigs["FileOpen"].contains("splitType"):
+      s.startUp.fileOpen.splitType =
+        startUpConfigs["FileOpen"]["splitType"].getStr.parseWindowSplitType.get
 
 proc parseThemeTable(s: var EditorSettings, themeConfigs: TomlValueRef) =
   if themeConfigs.contains("kind"):
-    s.theme.kind = parseEnum[ColorThemeKind]themeConfigs["kind"].getStr
+    s.theme.kind = parseEnum[ColorThemeKind] themeConfigs["kind"].getStr
 
   if themeConfigs.contains("path"):
     s.theme.path = themeConfigs["path"].getStr
 
 proc parseLspTable(s: var EditorSettings, lspConfigs: TomlValueRef) =
   for key, val in lspConfigs.getTable:
-    case key:
-      of "enable":
-        s.lsp.enable = lspConfigs["enable"].getBool
-      of "Completion":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              s.lsp.features.completion.enable = val.getBool
+    case key
+    of "enable":
+      s.lsp.enable = lspConfigs["enable"].getBool
+    of "Completion":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          s.lsp.features.completion.enable = val.getBool
+        else:
+          discard
+    of "DocumentFormatting":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          s.lsp.features.formatting.enable = val.getBool
+        else:
+          discard
+    of "Declaration":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          s.lsp.features.declaration.enable = val.getBool
+        of "openWindow":
+          s.lsp.features.declaration.openWindow = val.getBool
+        else:
+          discard
+    of "Definition":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          s.lsp.features.definition.enable = val.getBool
+        of "openWindow":
+          s.lsp.features.definition.openWindow = val.getBool
+        else:
+          discard
+    of "TypeDefinition":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          s.lsp.features.typeDefinition.enable = val.getBool
+        of "openWindow":
+          s.lsp.features.typeDefinition.openWindow = val.getBool
+        else:
+          discard
+    of "Implementation":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          s.lsp.features.implementation.enable = val.getBool
+        of "openWindow":
+          s.lsp.features.implementation.openWindow = val.getBool
+        else:
+          discard
+    of "Diagnostics":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          s.lsp.features.diagnostics.enable = val.getBool
+        else:
+          discard
+    of "SignatureHelp":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          s.lsp.features.signatureHelp.enable = val.getBool
+        else:
+          discard
+    of "FoldingRange":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          s.lsp.features.foldingRange.enable = val.getBool
+        else:
+          discard
+    of "SelectionRange":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          s.lsp.features.selectionRange.enable = val.getBool
+        else:
+          discard
+    of "DocumentSymbol":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          s.lsp.features.documentSymbol.enable = val.getBool
+        else:
+          discard
+    of "Hover":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          s.lsp.features.hover.enable = val.getBool
+        else:
+          discard
+    of "InlayHint":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          s.lsp.features.inlayHint.enable = val.getBool
+        else:
+          discard
+    of "InlineValue":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          s.lsp.features.inlineValue.enable = val.getBool
+        else:
+          discard
+    of "References":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          s.lsp.features.references.enable = val.getBool
+        else:
+          discard
+    of "CallHierarchy":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          s.lsp.features.callHierarchy.enable = val.getBool
+        else:
+          discard
+    of "DocumentHighlight":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          s.lsp.features.documentHighlight.enable = val.getBool
+        else:
+          discard
+    of "DocumentLink":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          s.lsp.features.documentLink.enable = val.getBool
+        else:
+          discard
+    of "CodeLens":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          s.lsp.features.codeLens.enable = val.getBool
+        else:
+          discard
+    of "Rename":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          s.lsp.features.rename.enable = val.getBool
+        else:
+          discard
+    of "SemanticTokens":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          s.lsp.features.semanticTokens.enable = val.getBool
+        else:
+          discard
+    of "ExecuteCommand":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          s.lsp.features.executeCommand.enable = val.getBool
+        else:
+          discard
+    else:
+      let langId = key
+      var
+        serverSettings = initLspServerSettings()
+        langSettings = LspLanguageSettings()
+      for key, val in val.getTable:
+        case key
+        of "extensions":
+          for i in 0 ..< val.len:
+            langSettings.extensions.add val[i].getStr.toRunes
+        of "command":
+          langSettings.command = val.getStr.toRunes
+        of "trace":
+          langSettings.trace = val.getStr.parseTraceValue.get
+        else:
+          case langId
+          of "rust":
+            case key
+            of "rustAnalyzerRunSingle":
+              serverSettings.rustAnalyzer.runSingle = val.getBool
+            of "rustAnalyzerDebugSingle":
+              serverSettings.rustAnalyzer.debugSingle = val.getBool
             else:
               discard
-      of "DocumentFormatting":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              s.lsp.features.formatting.enable = val.getBool
-            else:
-              discard
-      of "Declaration":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              s.lsp.features.declaration.enable = val.getBool
-            of "openWindow":
-              s.lsp.features.declaration.openWindow = val.getBool
-            else:
-              discard
-      of "Definition":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              s.lsp.features.definition.enable = val.getBool
-            of "openWindow":
-              s.lsp.features.definition.openWindow = val.getBool
-            else:
-              discard
-      of "TypeDefinition":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              s.lsp.features.typeDefinition.enable = val.getBool
-            of "openWindow":
-              s.lsp.features.typeDefinition.openWindow = val.getBool
-            else:
-              discard
-      of "Implementation":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              s.lsp.features.implementation.enable = val.getBool
-            of "openWindow":
-              s.lsp.features.implementation.openWindow = val.getBool
-            else:
-              discard
-      of "Diagnostics":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              s.lsp.features.diagnostics.enable = val.getBool
-            else:
-              discard
-      of "SignatureHelp":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              s.lsp.features.signatureHelp.enable = val.getBool
-            else:
-              discard
-      of "FoldingRange":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              s.lsp.features.foldingRange.enable = val.getBool
-            else:
-              discard
-      of "SelectionRange":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              s.lsp.features.selectionRange.enable = val.getBool
-            else:
-              discard
-      of "DocumentSymbol":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              s.lsp.features.documentSymbol.enable = val.getBool
-            else:
-              discard
-      of "Hover":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              s.lsp.features.hover.enable = val.getBool
-            else:
-              discard
-      of "InlayHint":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              s.lsp.features.inlayHint.enable = val.getBool
-            else:
-              discard
-      of "InlineValue":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              s.lsp.features.inlineValue.enable = val.getBool
-            else:
-              discard
-      of "References":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              s.lsp.features.references.enable = val.getBool
-            else:
-              discard
-      of "CallHierarchy":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              s.lsp.features.callHierarchy.enable = val.getBool
-            else:
-              discard
-      of "DocumentHighlight":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              s.lsp.features.documentHighlight.enable = val.getBool
-            else:
-              discard
-      of "DocumentLink":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              s.lsp.features.documentLink.enable = val.getBool
-            else:
-              discard
-      of "CodeLens":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              s.lsp.features.codeLens.enable = val.getBool
-            else:
-              discard
-      of "Rename":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              s.lsp.features.rename.enable = val.getBool
-            else:
-              discard
-      of "SemanticTokens":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              s.lsp.features.semanticTokens.enable = val.getBool
-            else:
-              discard
-      of "ExecuteCommand":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              s.lsp.features.executeCommand.enable = val.getBool
-            else:
-              discard
-      else:
-        let langId = key
-        var
-          serverSettings = initLspServerSettings()
-          langSettings = LspLanguageSettings()
-        for key, val in val.getTable:
-          case key:
-            of "extensions":
-              for i in 0 ..< val.len:
-                langSettings.extensions.add val[i].getStr.toRunes
-            of "command":
-              langSettings.command = val.getStr.toRunes
-            of "trace":
-              langSettings.trace = val.getStr.parseTraceValue.get
-            else:
-              case langId:
-                of "rust":
-                  case key:
-                    of "rustAnalyzerRunSingle":
-                      serverSettings.rustAnalyzer.runSingle = val.getBool
-                    of "rustAnalyzerDebugSingle":
-                      serverSettings.rustAnalyzer.debugSingle = val.getBool
-                    else:
-                      discard
-                else:
-                  discard
+          else:
+            discard
 
-        s.lsp.languages[langId] = langSettings
-        s.lsp.servers = serverSettings
+      s.lsp.languages[langId] = langSettings
+      s.lsp.servers = serverSettings
 
 proc toThemeColors*(config: TomlValueRef): ThemeColors =
   ## Return ThemeColors based on the TOML theme colors config.
 
   template toRgb(s: string): Rgb =
-    case s:
-      of "termDefaultFg", "termDefaultBg":
-        TerminalDefaultRgb
-      else:
-        s.hexToRgb.get
+    case s
+    of "termDefaultFg", "termDefaultBg": TerminalDefaultRgb
+    else: s.hexToRgb.get
 
-  template configColors: TomlValueRef = config["Colors"]
+  template configColors(): TomlValueRef =
+    config["Colors"]
 
   # the base color is DefaultColors.
   result = DefaultColors
 
   for index in EditorColorIndex:
     if configColors.contains($index):
-      case index:
-        of EditorColorIndex.foreground:
-          let rgb = configColors["foreground"].getStr.toRgb
-          result[EditorColorPairIndex.default].foreground.rgb = rgb
-          result[EditorColorPairIndex.currentLineBg].foreground.rgb = rgb
-          result[EditorColorPairIndex.highlightFullWidthSpace].foreground.rgb =
-            rgb
-          result[EditorColorPairIndex.highlightTrailingSpaces].foreground.rgb =
-            rgb
-        of EditorColorIndex.background:
-          let rgb = configColors["background"].getStr.toRgb
-          result[EditorColorPairIndex.default].background.rgb = rgb
-          for i in EditorColorPairIndex.keyword .. EditorColorPairIndex.codeLens:
-            result[i].background.rgb = rgb
-        of EditorColorIndex.currentLineBg:
-          result[EditorColorPairIndex.currentLineBg].background.rgb =
-            configColors[$index].getStr.toRgb
-        of EditorColorIndex.highlightFullWidthSpace:
-          result[EditorColorPairIndex.highlightFullWidthSpace].background.rgb =
-            configColors[$index].getStr.toRgb
-        of EditorColorIndex.highlightTrailingSpaces:
-          result[EditorColorPairIndex.highlightTrailingSpaces].background.rgb =
-            configColors[$index].getStr.toRgb
+      case index
+      of EditorColorIndex.foreground:
+        let rgb = configColors["foreground"].getStr.toRgb
+        result[EditorColorPairIndex.default].foreground.rgb = rgb
+        result[EditorColorPairIndex.currentLineBg].foreground.rgb = rgb
+        result[EditorColorPairIndex.highlightFullWidthSpace].foreground.rgb = rgb
+        result[EditorColorPairIndex.highlightTrailingSpaces].foreground.rgb = rgb
+      of EditorColorIndex.background:
+        let rgb = configColors["background"].getStr.toRgb
+        result[EditorColorPairIndex.default].background.rgb = rgb
+        for i in EditorColorPairIndex.keyword .. EditorColorPairIndex.codeLens:
+          result[i].background.rgb = rgb
+      of EditorColorIndex.currentLineBg:
+        result[EditorColorPairIndex.currentLineBg].background.rgb =
+          configColors[$index].getStr.toRgb
+      of EditorColorIndex.highlightFullWidthSpace:
+        result[EditorColorPairIndex.highlightFullWidthSpace].background.rgb =
+          configColors[$index].getStr.toRgb
+      of EditorColorIndex.highlightTrailingSpaces:
+        result[EditorColorPairIndex.highlightTrailingSpaces].background.rgb =
+          configColors[$index].getStr.toRgb
+      else:
+        if endsWith($index, "Bg"):
+          # Set background colors
+          let
+            # Remove "Bg" and parse enum.
+            indexStr = ($index)[0 .. ($index).high - 2]
+            pairIndex = parseEnum[EditorColorPairIndex](indexStr)
+            rgb = configColors[$index].getStr.toRgb
+          result[pairIndex].background.rgb = rgb
         else:
-          if endsWith($index, "Bg"):
-            # Set background colors
-            let
-              # Remove "Bg" and parse enum.
-              indexStr = ($index)[0 .. ($index).high - 2]
-              pairIndex = parseEnum[EditorColorPairIndex](indexStr)
-              rgb = configColors[$index].getStr.toRgb
-            result[pairIndex].background.rgb = rgb
-          else:
-            # Set foreground colors
-            let
-              pairIndex = parseEnum[EditorColorPairIndex]($index)
-              rgb = configColors[$index].getStr.toRgb
-            result[pairIndex].foreground.rgb = rgb
+          # Set foreground colors
+          let
+            pairIndex = parseEnum[EditorColorPairIndex]($index)
+            rgb = configColors[$index].getStr.toRgb
+          result[pairIndex].foreground.rgb = rgb
 
 proc applyTomlConfigs*(s: var EditorSettings, tomlConfigs: TomlValueRef) =
   if tomlConfigs.contains("Standard"):
@@ -2203,85 +2148,67 @@ proc applyTomlConfigs*(s: var EditorSettings, tomlConfigs: TomlValueRef) =
 
 proc validateStandardTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
-    case key:
-      of "number",
-         "currentNumber",
-         "cursorLine",
-         "statusLine",
-         "tabLine",
-         "syntax",
-         "indentationLines",
-         "autoCloseParen",
-         "autoIndent",
-         "ignorecase",
-         "smartcase",
-         "disableChangeCursor",
-         "autoSave",
-         "liveReloadOfConf",
-         "incrementalSearch",
-         "popupWindowInExmode",
-         "autoDeleteParen",
-         "systemClipboard",
-         "liveReloadOfFile",
-         "sidebar":
-        if not (val.kind == TomlValueKind.Bool):
-          return some(InvalidItem(name: $key, val: $val))
-      of "tabStop":
-        if not (val.kind == TomlValueKind.Int and val.getInt > 0):
-          return some(InvalidItem(name: $key, val: $val))
-      of "defaultCursor",
-         "normalModeCursor",
-         "insertModeCursor":
-        let val = val.getStr
-        var correctValue = false
-        for cursorType in CursorType:
-          if val == $cursorType:
-            correctValue = true
-            break
-        if not correctValue:
-          return some(InvalidItem(name: $key, val: $val))
-      of "colorMode":
-        if val.getStr.parseColorMode.isErr:
-          return some(InvalidItem(name: $key, val: $val))
-      else:
+    case key
+    of "number", "currentNumber", "cursorLine", "statusLine", "tabLine", "syntax",
+        "indentationLines", "autoCloseParen", "autoIndent", "ignorecase", "smartcase",
+        "disableChangeCursor", "autoSave", "liveReloadOfConf", "incrementalSearch",
+        "popupWindowInExmode", "autoDeleteParen", "systemClipboard", "liveReloadOfFile",
+        "sidebar":
+      if not (val.kind == TomlValueKind.Bool):
         return some(InvalidItem(name: $key, val: $val))
+    of "tabStop":
+      if not (val.kind == TomlValueKind.Int and val.getInt > 0):
+        return some(InvalidItem(name: $key, val: $val))
+    of "defaultCursor", "normalModeCursor", "insertModeCursor":
+      let val = val.getStr
+      var correctValue = false
+      for cursorType in CursorType:
+        if val == $cursorType:
+          correctValue = true
+          break
+      if not correctValue:
+        return some(InvalidItem(name: $key, val: $val))
+    of "colorMode":
+      if val.getStr.parseColorMode.isErr:
+        return some(InvalidItem(name: $key, val: $val))
+    else:
+      return some(InvalidItem(name: $key, val: $val))
 
 proc validateClipboardTable(table: TomlValueRef): Option[InvalidItem] =
   template isValidTool(s: string): bool =
-    s in [ "xclip", "xsel", "wl-clipboard", "wsl-default", "macOS-default"]
+    s in ["xclip", "xsel", "wl-clipboard", "wsl-default", "macOS-default"]
 
   for key, val in table.getTable:
-    case key:
-      of "enable":
-        if not (val.kind == TomlValueKind.Bool):
-          return some(InvalidItem(name: $key, val: $val))
-      of "tool":
-        if not (val.kind == TomlValueKind.String and val.getStr.isValidTool):
-          return some(InvalidItem(name: $key, val: $val))
-      else:
+    case key
+    of "enable":
+      if not (val.kind == TomlValueKind.Bool):
         return some(InvalidItem(name: $key, val: $val))
+    of "tool":
+      if not (val.kind == TomlValueKind.String and val.getStr.isValidTool):
+        return some(InvalidItem(name: $key, val: $val))
+    else:
+      return some(InvalidItem(name: $key, val: $val))
 
 proc validateTabLineTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
-    case key:
-      of "allBuffer":
-        if not (val.kind == TomlValueKind.Bool):
-          return some(InvalidItem(name: $key, val: $val))
-      else:
+    case key
+    of "allBuffer":
+      if not (val.kind == TomlValueKind.Bool):
         return some(InvalidItem(name: $key, val: $val))
+    else:
+      return some(InvalidItem(name: $key, val: $val))
 
 proc validateBuildOnSaveTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
-    case key:
-      of "enable":
-        if not (val.kind == TomlValueKind.Bool):
-          return some(InvalidItem(name: $key, val: $val))
-      of "workspaceRoot",
-         "command":
-        if not (val.kind == TomlValueKind.String):
-          return some(InvalidItem(name: $key, val: $val))
-      else:
-          return some(InvalidItem(name: $key, val: $val))
+    case key
+    of "enable":
+      if not (val.kind == TomlValueKind.Bool):
+        return some(InvalidItem(name: $key, val: $val))
+    of "workspaceRoot", "command":
+      if not (val.kind == TomlValueKind.String):
+        return some(InvalidItem(name: $key, val: $val))
+    else:
+      return some(InvalidItem(name: $key, val: $val))
 
 proc validateStatusLineSetupText(text: string): bool =
   ## Check text for StatusLineSettings.setupText.
@@ -2296,581 +2223,538 @@ proc validateStatusLineSetupText(text: string): bool =
 
 proc validateStatusLineTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
-    case key:
-      of "multipleStatusLine",
-         "merge",
-         "mode",
-         "filename",
-         "chanedMark",
-         "directory",
-         "gitChangedLines",
-         "gitBranchName",
-         "showGitInactive",
-         "showModeInactive":
-        if not (val.kind == TomlValueKind.Bool):
-          return some(InvalidItem(name: $key, val: $val))
-      of "setupText":
-        if (val.kind != TomlValueKind.String) and
-           (not validateStatusLineSetupText(val.getStr)):
-             return some(InvalidItem(name: $key, val: $val))
-      else:
+    case key
+    of "multipleStatusLine", "merge", "mode", "filename", "chanedMark", "directory",
+        "gitChangedLines", "gitBranchName", "showGitInactive", "showModeInactive":
+      if not (val.kind == TomlValueKind.Bool):
         return some(InvalidItem(name: $key, val: $val))
+    of "setupText":
+      if (val.kind != TomlValueKind.String) and
+          (not validateStatusLineSetupText(val.getStr)):
+        return some(InvalidItem(name: $key, val: $val))
+    else:
+      return some(InvalidItem(name: $key, val: $val))
 
 proc validateWorkSpaceTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
-    case key:
-      of "workSpaceLine":
-        if not (val.kind == TomlValueKind.Bool):
-          return some(InvalidItem(name: $key, val: $val))
-      else:
+    case key
+    of "workSpaceLine":
+      if not (val.kind == TomlValueKind.Bool):
         return some(InvalidItem(name: $key, val: $val))
+    else:
+      return some(InvalidItem(name: $key, val: $val))
 
 proc validateHighlightTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
-    case key:
-      of "reservedWord":
-        if val.kind == TomlValueKind.Array:
-          for key, val in val.getTable:
-            if val.kind != TomlValueKind.String:
-              return some(InvalidItem(name: $key, val: $val))
-      of "currentLine",
-         "fullWidthSpace",
-         "trailingSpaces",
-         "replaceText",
-         "pairOfParen",
-         "currentWord":
-        if not (val.kind == TomlValueKind.Bool):
-          return some(InvalidItem(name: $key, val: $val))
-      else:
+    case key
+    of "reservedWord":
+      if val.kind == TomlValueKind.Array:
+        for key, val in val.getTable:
+          if val.kind != TomlValueKind.String:
+            return some(InvalidItem(name: $key, val: $val))
+    of "currentLine", "fullWidthSpace", "trailingSpaces", "replaceText", "pairOfParen",
+        "currentWord":
+      if not (val.kind == TomlValueKind.Bool):
         return some(InvalidItem(name: $key, val: $val))
+    else:
+      return some(InvalidItem(name: $key, val: $val))
 
 proc validateAutoBackupTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
-    case key:
-      of "enable", "showMessages":
-        if val.kind != TomlValueKind.Bool:
-          return some(InvalidItem(name: $key, val: $val))
-      of "idleTime",
-         "interval":
-        if val.kind != TomlValueKind.Int:
-          return some(InvalidItem(name: $key, val: $val))
-      of "backupDir":
-        if val.kind != TomlValueKind.String:
-          return some(InvalidItem(name: $key, val: $val))
-      of "dirToExclude":
-        if val.kind != TomlValueKind.Array:
-          for item in val.getElems:
-            if item.kind != TomlValueKind.String:
-              return some(InvalidItem(name: $key, val: $val))
-      else:
+    case key
+    of "enable", "showMessages":
+      if val.kind != TomlValueKind.Bool:
         return some(InvalidItem(name: $key, val: $val))
+    of "idleTime", "interval":
+      if val.kind != TomlValueKind.Int:
+        return some(InvalidItem(name: $key, val: $val))
+    of "backupDir":
+      if val.kind != TomlValueKind.String:
+        return some(InvalidItem(name: $key, val: $val))
+    of "dirToExclude":
+      if val.kind != TomlValueKind.Array:
+        for item in val.getElems:
+          if item.kind != TomlValueKind.String:
+            return some(InvalidItem(name: $key, val: $val))
+    else:
+      return some(InvalidItem(name: $key, val: $val))
 
 proc validateQuickRunTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
-    case key:
-      of "saveBufferWhenQuickRun":
-        if val.kind != TomlValueKind.Bool:
-          return some(InvalidItem(name: $key, val: $val))
-      of "command",
-         "nimAdvancedCommand",
-         "clangOptions",
-         "cppOptions",
-         "nimOptions",
-         "shOptions",
-         "bashOptions":
-        if val.kind != TomlValueKind.String:
-          return some(InvalidItem(name: $key, val: $val))
-      of "timeout":
-        if val.kind != TomlValueKind.Int:
-          return some(InvalidItem(name: $key, val: $val))
-      else:
+    case key
+    of "saveBufferWhenQuickRun":
+      if val.kind != TomlValueKind.Bool:
         return some(InvalidItem(name: $key, val: $val))
+    of "command", "nimAdvancedCommand", "clangOptions", "cppOptions", "nimOptions",
+        "shOptions", "bashOptions":
+      if val.kind != TomlValueKind.String:
+        return some(InvalidItem(name: $key, val: $val))
+    of "timeout":
+      if val.kind != TomlValueKind.Int:
+        return some(InvalidItem(name: $key, val: $val))
+    else:
+      return some(InvalidItem(name: $key, val: $val))
 
 proc validateNotificationTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
-    case key:
-      of "screenNotifications",
-         "logNotifications",
-         "autoBackupScreenNotify",
-         "autoBackupLogNotify",
-         "autoSaveScreenNotify",
-         "autoSaveLogNotify",
-         "yankScreenNotify",
-         "yankLogNotify",
-         "deleteScreenNotify",
-         "deleteLogNotify",
-         "saveScreenNotify",
-         "saveLogNotify",
-         "workspaceScreenNotify",
-         "workspaceLogNotify",
-         "quickRunScreenNotify",
-         "quickRunLogNotify",
-         "buildOnSaveScreenNotify",
-         "buildOnSaveLogNotify",
-         "filerScreenNotify",
-         "filerLogNotify",
-         "restoreScreenNotify",
-         "restoreLogNotify":
-        if val.kind != TomlValueKind.Bool:
-          return some(InvalidItem(name: $key, val: $val))
-      else:
+    case key
+    of "screenNotifications", "logNotifications", "autoBackupScreenNotify",
+        "autoBackupLogNotify", "autoSaveScreenNotify", "autoSaveLogNotify",
+        "yankScreenNotify", "yankLogNotify", "deleteScreenNotify", "deleteLogNotify",
+        "saveScreenNotify", "saveLogNotify", "workspaceScreenNotify",
+        "workspaceLogNotify", "quickRunScreenNotify", "quickRunLogNotify",
+        "buildOnSaveScreenNotify", "buildOnSaveLogNotify", "filerScreenNotify",
+        "filerLogNotify", "restoreScreenNotify", "restoreLogNotify":
+      if val.kind != TomlValueKind.Bool:
         return some(InvalidItem(name: $key, val: $val))
+    else:
+      return some(InvalidItem(name: $key, val: $val))
 
 proc validateFilerTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
-    case key:
-      of "showIcons":
-        if val.kind !=  TomlValueKind.Bool:
-          return some(InvalidItem(name: $key, val: $val))
-      else:
+    case key
+    of "showIcons":
+      if val.kind != TomlValueKind.Bool:
         return some(InvalidItem(name: $key, val: $val))
+    else:
+      return some(InvalidItem(name: $key, val: $val))
 
 proc validateAutocompleteTable(table: TomlValueRef): Option[InvalidItem] =
-    for key, val in table.getTable:
-      case key:
-        of "enable":
-          if val.kind != TomlValueKind.Bool:
-            return some(InvalidItem(name: $key, val: $val))
-        else:
-          return some(InvalidItem(name: $key, val: $val))
+  for key, val in table.getTable:
+    case key
+    of "enable":
+      if val.kind != TomlValueKind.Bool:
+        return some(InvalidItem(name: $key, val: $val))
+    else:
+      return some(InvalidItem(name: $key, val: $val))
 
 proc validateAutoSaveTable(table: TomlValueRef): Option[InvalidItem] =
-    for key, val in table.getTable:
-      case key:
-        of "enable":
-          if val.kind != TomlValueKind.Bool:
-            return some(InvalidItem(name: $key, val: $val))
-        of "interval":
-          if val.kind != TomlValueKind.Int:
-            return some(InvalidItem(name: $key, val: $val))
-        else:
-          return some(InvalidItem(name: $key, val: $val))
+  for key, val in table.getTable:
+    case key
+    of "enable":
+      if val.kind != TomlValueKind.Bool:
+        return some(InvalidItem(name: $key, val: $val))
+    of "interval":
+      if val.kind != TomlValueKind.Int:
+        return some(InvalidItem(name: $key, val: $val))
+    else:
+      return some(InvalidItem(name: $key, val: $val))
 
 proc validatePersistTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
-    case key:
-      of "exCommand", "search", "cursorPosition":
-        if val.kind != TomlValueKind.Bool:
-          return some(InvalidItem(name: $key, val: $val))
-      of "exCommandHistoryLimit", "searchHistoryLimit":
-        if val.kind != TomlValueKind.Int:
-          return some(InvalidItem(name: $key, val: $val))
-      else:
+    case key
+    of "exCommand", "search", "cursorPosition":
+      if val.kind != TomlValueKind.Bool:
         return some(InvalidItem(name: $key, val: $val))
+    of "exCommandHistoryLimit", "searchHistoryLimit":
+      if val.kind != TomlValueKind.Int:
+        return some(InvalidItem(name: $key, val: $val))
+    else:
+      return some(InvalidItem(name: $key, val: $val))
 
 proc validateDebugTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
-    case key:
-      of "WorkSpace":
+    case key
+    of "WorkSpace":
       # Check [Debug.WorkSpace]
-        for key,val in table["WorkSpace"].getTable:
-          case key:
-            of "enable",
-                "numOfWorkSpaces",
-                "currentWorkSpaceIndex":
-              if val.kind != TomlValueKind.Bool:
-                return some(InvalidItem(name: $key, val: $val))
-            else:
-              return some(InvalidItem(name: $key, val: $val))
-      # Check [Debug.WindowNode]
-      of "WindowNode":
-        for key, val in table["WindowNode"].getTable:
-          case key:
-            of "enable",
-               "currentWindow",
-               "index",
-               "windowIndex",
-               "bufferIndex",
-               "parentIndex",
-               "childLen",
-               "splitType",
-               "haveCursesWin",
-               "y",
-               "x",
-               "h",
-               "w",
-               "currentLine",
-               "currentColumn",
-               "expandedColumn",
-               "cursor":
-              if val.kind != TomlValueKind.Bool:
-                return some(InvalidItem(name: $key, val: $val))
-            else:
-              return some(InvalidItem(name: $key, val: $val))
-      # Check [Debug.EditorView]
-      of "EditorView":
-        for key, val in table["EditorView"].getTable:
-          case key:
-            of "enable",
-               "widthOfLineNum",
-               "height",
-               "width",
-               "originalLine",
-               "start",
-               "length":
-              if val.kind != TomlValueKind.Bool:
-                return some(InvalidItem(name: $key, val: $val))
-            else:
-              return some(InvalidItem(name: $key, val: $val))
-      # Check [Debug.BufferStatus]
-      of "BufferStatus":
-        for key, val in table["BufferStatus"].getTable:
-          case key:
-            of "enable",
-               "bufferIndex",
-               "path",
-               "openDir",
-               "currentMode",
-               "prevMode",
-               "language",
-               "encoding",
-               "countChange",
-               "cmdLoop",
-               "lastSaveTime",
-               "bufferLen":
-              if val.kind != TomlValueKind.Bool:
-                return some(InvalidItem(name: $key, val: $val))
-            else:
-              return some(InvalidItem(name: $key, val: $val))
-      else:
-        return some(InvalidItem(name: $key, val: $val))
+      for key, val in table["WorkSpace"].getTable:
+        case key
+        of "enable", "numOfWorkSpaces", "currentWorkSpaceIndex":
+          if val.kind != TomlValueKind.Bool:
+            return some(InvalidItem(name: $key, val: $val))
+        else:
+          return some(InvalidItem(name: $key, val: $val))
+    # Check [Debug.WindowNode]
+    of "WindowNode":
+      for key, val in table["WindowNode"].getTable:
+        case key
+        of "enable", "currentWindow", "index", "windowIndex", "bufferIndex",
+            "parentIndex", "childLen", "splitType", "haveCursesWin", "y", "x", "h", "w",
+            "currentLine", "currentColumn", "expandedColumn", "cursor":
+          if val.kind != TomlValueKind.Bool:
+            return some(InvalidItem(name: $key, val: $val))
+        else:
+          return some(InvalidItem(name: $key, val: $val))
+    # Check [Debug.EditorView]
+    of "EditorView":
+      for key, val in table["EditorView"].getTable:
+        case key
+        of "enable", "widthOfLineNum", "height", "width", "originalLine", "start",
+            "length":
+          if val.kind != TomlValueKind.Bool:
+            return some(InvalidItem(name: $key, val: $val))
+        else:
+          return some(InvalidItem(name: $key, val: $val))
+    # Check [Debug.BufferStatus]
+    of "BufferStatus":
+      for key, val in table["BufferStatus"].getTable:
+        case key
+        of "enable", "bufferIndex", "path", "openDir", "currentMode", "prevMode",
+            "language", "encoding", "countChange", "cmdLoop", "lastSaveTime",
+            "bufferLen":
+          if val.kind != TomlValueKind.Bool:
+            return some(InvalidItem(name: $key, val: $val))
+        else:
+          return some(InvalidItem(name: $key, val: $val))
+    else:
+      return some(InvalidItem(name: $key, val: $val))
 
 proc validateGitTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
-    case key:
-      of "showChangedLine":
-        if val.kind != TomlValueKind.Bool:
-          return some(InvalidItem(name: $key, val: $val))
-      of "updateInterval":
-        if val.kind != TomlValueKind.Int:
-          return some(InvalidItem(name: $key, val: $val))
-      else:
+    case key
+    of "showChangedLine":
+      if val.kind != TomlValueKind.Bool:
         return some(InvalidItem(name: $key, val: $val))
+    of "updateInterval":
+      if val.kind != TomlValueKind.Int:
+        return some(InvalidItem(name: $key, val: $val))
+    else:
+      return some(InvalidItem(name: $key, val: $val))
 
 proc validateSyntaxCheckerTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
-    case key:
-      of "enable":
-        if val.kind != TomlValueKind.Bool:
-          return some(InvalidItem(name: $key, val: $val))
-      else:
+    case key
+    of "enable":
+      if val.kind != TomlValueKind.Bool:
         return some(InvalidItem(name: $key, val: $val))
+    else:
+      return some(InvalidItem(name: $key, val: $val))
 
 proc validateSmoothScrollTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
-    case key:
-      of "enable":
-        if val.kind != TomlValueKind.Bool:
-          return some(InvalidItem(name: $key, val: $val))
-      of "minDelay", "maxDelay":
-        if val.kind != TomlValueKind.Int:
-          return some(InvalidItem(name: $key, val: $val))
-      else:
+    case key
+    of "enable":
+      if val.kind != TomlValueKind.Bool:
         return some(InvalidItem(name: $key, val: $val))
+    of "minDelay", "maxDelay":
+      if val.kind != TomlValueKind.Int:
+        return some(InvalidItem(name: $key, val: $val))
+    else:
+      return some(InvalidItem(name: $key, val: $val))
 
 proc validateStartUpTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
-    case key:
-      of "FileOpen":
-        # Check [StartUp.FileOpen]
-        for key,val in table["FileOpen"].getTable:
-          case key:
-            of "autoSplit":
-              if val.kind != TomlValueKind.Bool:
-                return some(InvalidItem(name: $key, val: $val))
-            of "splitType":
-              if val.kind != TomlValueKind.String or
-                 parseWindowSplitType(val.getStr).isErr:
-                   return some(InvalidItem(name: $key, val: $val))
-            else:
-              return some(InvalidItem(name: $key, val: $val))
-      else:
-        return some(InvalidItem(name: $key, val: $val))
+    case key
+    of "FileOpen":
+      # Check [StartUp.FileOpen]
+      for key, val in table["FileOpen"].getTable:
+        case key
+        of "autoSplit":
+          if val.kind != TomlValueKind.Bool:
+            return some(InvalidItem(name: $key, val: $val))
+        of "splitType":
+          if val.kind != TomlValueKind.String or parseWindowSplitType(val.getStr).isErr:
+            return some(InvalidItem(name: $key, val: $val))
+        else:
+          return some(InvalidItem(name: $key, val: $val))
+    else:
+      return some(InvalidItem(name: $key, val: $val))
 
 proc validateThemeTable(table: TomlValueRef): Option[InvalidItem] =
-  template isColorThemeKind(s: string): bool = s in ColorThemeKind.mapIt($it)
+  template isColorThemeKind(s: string): bool =
+    s in ColorThemeKind.mapIt($it)
 
   for key, val in table.getTable:
-    case key:
-      of "kind":
-        if val.kind != TomlValueKind.String or not isColorThemeKind(val.getStr):
-          return some(InvalidItem(name: $key, val: $val))
-      of "path":
-        if val.kind != TomlValueKind.String:
-          return some(InvalidItem(name: $key, val: $val))
-      else:
+    case key
+    of "kind":
+      if val.kind != TomlValueKind.String or not isColorThemeKind(val.getStr):
         return some(InvalidItem(name: $key, val: $val))
+    of "path":
+      if val.kind != TomlValueKind.String:
+        return some(InvalidItem(name: $key, val: $val))
+    else:
+      return some(InvalidItem(name: $key, val: $val))
 
 proc validateLspTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
-    case key:
-      of "enable":
-        if val.kind != TomlValueKind.Bool:
+    case key
+    of "enable":
+      if val.kind != TomlValueKind.Bool:
+        return some(InvalidItem(name: $key, val: $val))
+    of "Completion":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          if val.kind != TomlValueKind.Bool:
+            return some(InvalidItem(name: $key, val: $val))
+        else:
           return some(InvalidItem(name: $key, val: $val))
-      of "Completion":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              if val.kind != TomlValueKind.Bool:
-                return some(InvalidItem(name: $key, val: $val))
-            else:
-              return some(InvalidItem(name: $key, val: $val))
-      of "DocumentFormatting":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              if val.kind != TomlValueKind.Bool:
-                return some(InvalidItem(name: $key, val: $val))
-            else:
-              return some(InvalidItem(name: $key, val: $val))
-      of "Declaration":
-        for key, val in val.getTable:
-          case key:
-            of "enable", "openWindow":
-              if val.kind != TomlValueKind.Bool:
-                return some(InvalidItem(name: $key, val: $val))
-            else:
-              return some(InvalidItem(name: $key, val: $val))
-      of "Definition":
-        for key, val in val.getTable:
-          case key:
-            of "enable", "openWindow":
-              if val.kind != TomlValueKind.Bool:
-                return some(InvalidItem(name: $key, val: $val))
-            else:
-              return some(InvalidItem(name: $key, val: $val))
-      of "TypeDefinition":
-        for key, val in val.getTable:
-          case key:
-            of "enable", "openWindow":
-              if val.kind != TomlValueKind.Bool:
-                return some(InvalidItem(name: $key, val: $val))
-            else:
-              return some(InvalidItem(name: $key, val: $val))
-      of "Implementation":
-        for key, val in val.getTable:
-          case key:
-            of "enable", "openWindow":
-              if val.kind != TomlValueKind.Bool:
-                return some(InvalidItem(name: $key, val: $val))
-            else:
-              return some(InvalidItem(name: $key, val: $val))
-      of "Diagnostics":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              if val.kind != TomlValueKind.Bool:
-                return some(InvalidItem(name: $key, val: $val))
-            else:
-              return some(InvalidItem(name: $key, val: $val))
-      of "SignatureHelp":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              if val.kind != TomlValueKind.Bool:
-                return some(InvalidItem(name: $key, val: $val))
-            else:
-              return some(InvalidItem(name: $key, val: $val))
-      of "FoldingRange":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              if val.kind != TomlValueKind.Bool:
-                return some(InvalidItem(name: $key, val: $val))
-            else:
-              return some(InvalidItem(name: $key, val: $val))
-      of "SelectionRange":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              if val.kind != TomlValueKind.Bool:
-                return some(InvalidItem(name: $key, val: $val))
-            else:
-              return some(InvalidItem(name: $key, val: $val))
-      of "DocumentSymbol":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              if val.kind != TomlValueKind.Bool:
-                return some(InvalidItem(name: $key, val: $val))
-            else:
-              return some(InvalidItem(name: $key, val: $val))
-      of "Hover":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              if val.kind != TomlValueKind.Bool:
-                return some(InvalidItem(name: $key, val: $val))
-            else:
-              return some(InvalidItem(name: $key, val: $val))
-      of "InlayHint":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              if val.kind != TomlValueKind.Bool:
-                return some(InvalidItem(name: $key, val: $val))
-            else:
-              return some(InvalidItem(name: $key, val: $val))
-      of "InlineValue":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              if val.kind != TomlValueKind.Bool:
-                return some(InvalidItem(name: $key, val: $val))
-            else:
-              return some(InvalidItem(name: $key, val: $val))
-      of "References":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              if val.kind != TomlValueKind.Bool:
-                return some(InvalidItem(name: $key, val: $val))
-            else:
-              return some(InvalidItem(name: $key, val: $val))
-      of "CallHierarchy":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              if val.kind != TomlValueKind.Bool:
-                return some(InvalidItem(name: $key, val: $val))
-            else:
-              return some(InvalidItem(name: $key, val: $val))
-      of "DocumentHighlight":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              if val.kind != TomlValueKind.Bool:
-                return some(InvalidItem(name: $key, val: $val))
-            else:
-              return some(InvalidItem(name: $key, val: $val))
-      of "DocumentLink":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              if val.kind != TomlValueKind.Bool:
-                return some(InvalidItem(name: $key, val: $val))
-            else:
-              return some(InvalidItem(name: $key, val: $val))
-      of "CodeLens":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              if val.kind != TomlValueKind.Bool:
-                return some(InvalidItem(name: $key, val: $val))
-            else:
-              return some(InvalidItem(name: $key, val: $val))
-      of "Rename":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              if val.kind != TomlValueKind.Bool:
-                return some(InvalidItem(name: $key, val: $val))
-            else:
-              return some(InvalidItem(name: $key, val: $val))
-      of "SemanticTokens":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              if val.kind != TomlValueKind.Bool:
-                return some(InvalidItem(name: $key, val: $val))
-            else:
-              return some(InvalidItem(name: $key, val: $val))
-      of "ExecuteCommand":
-        for key, val in val.getTable:
-          case key:
-            of "enable":
-              if val.kind != TomlValueKind.Bool:
-                return some(InvalidItem(name: $key, val: $val))
-            else:
-              return some(InvalidItem(name: $key, val: $val))
-      else:
-        if val.kind != TomlValueKind.Table:
+    of "DocumentFormatting":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          if val.kind != TomlValueKind.Bool:
+            return some(InvalidItem(name: $key, val: $val))
+        else:
           return some(InvalidItem(name: $key, val: $val))
+    of "Declaration":
+      for key, val in val.getTable:
+        case key
+        of "enable", "openWindow":
+          if val.kind != TomlValueKind.Bool:
+            return some(InvalidItem(name: $key, val: $val))
+        else:
+          return some(InvalidItem(name: $key, val: $val))
+    of "Definition":
+      for key, val in val.getTable:
+        case key
+        of "enable", "openWindow":
+          if val.kind != TomlValueKind.Bool:
+            return some(InvalidItem(name: $key, val: $val))
+        else:
+          return some(InvalidItem(name: $key, val: $val))
+    of "TypeDefinition":
+      for key, val in val.getTable:
+        case key
+        of "enable", "openWindow":
+          if val.kind != TomlValueKind.Bool:
+            return some(InvalidItem(name: $key, val: $val))
+        else:
+          return some(InvalidItem(name: $key, val: $val))
+    of "Implementation":
+      for key, val in val.getTable:
+        case key
+        of "enable", "openWindow":
+          if val.kind != TomlValueKind.Bool:
+            return some(InvalidItem(name: $key, val: $val))
+        else:
+          return some(InvalidItem(name: $key, val: $val))
+    of "Diagnostics":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          if val.kind != TomlValueKind.Bool:
+            return some(InvalidItem(name: $key, val: $val))
+        else:
+          return some(InvalidItem(name: $key, val: $val))
+    of "SignatureHelp":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          if val.kind != TomlValueKind.Bool:
+            return some(InvalidItem(name: $key, val: $val))
+        else:
+          return some(InvalidItem(name: $key, val: $val))
+    of "FoldingRange":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          if val.kind != TomlValueKind.Bool:
+            return some(InvalidItem(name: $key, val: $val))
+        else:
+          return some(InvalidItem(name: $key, val: $val))
+    of "SelectionRange":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          if val.kind != TomlValueKind.Bool:
+            return some(InvalidItem(name: $key, val: $val))
+        else:
+          return some(InvalidItem(name: $key, val: $val))
+    of "DocumentSymbol":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          if val.kind != TomlValueKind.Bool:
+            return some(InvalidItem(name: $key, val: $val))
+        else:
+          return some(InvalidItem(name: $key, val: $val))
+    of "Hover":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          if val.kind != TomlValueKind.Bool:
+            return some(InvalidItem(name: $key, val: $val))
+        else:
+          return some(InvalidItem(name: $key, val: $val))
+    of "InlayHint":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          if val.kind != TomlValueKind.Bool:
+            return some(InvalidItem(name: $key, val: $val))
+        else:
+          return some(InvalidItem(name: $key, val: $val))
+    of "InlineValue":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          if val.kind != TomlValueKind.Bool:
+            return some(InvalidItem(name: $key, val: $val))
+        else:
+          return some(InvalidItem(name: $key, val: $val))
+    of "References":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          if val.kind != TomlValueKind.Bool:
+            return some(InvalidItem(name: $key, val: $val))
+        else:
+          return some(InvalidItem(name: $key, val: $val))
+    of "CallHierarchy":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          if val.kind != TomlValueKind.Bool:
+            return some(InvalidItem(name: $key, val: $val))
+        else:
+          return some(InvalidItem(name: $key, val: $val))
+    of "DocumentHighlight":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          if val.kind != TomlValueKind.Bool:
+            return some(InvalidItem(name: $key, val: $val))
+        else:
+          return some(InvalidItem(name: $key, val: $val))
+    of "DocumentLink":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          if val.kind != TomlValueKind.Bool:
+            return some(InvalidItem(name: $key, val: $val))
+        else:
+          return some(InvalidItem(name: $key, val: $val))
+    of "CodeLens":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          if val.kind != TomlValueKind.Bool:
+            return some(InvalidItem(name: $key, val: $val))
+        else:
+          return some(InvalidItem(name: $key, val: $val))
+    of "Rename":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          if val.kind != TomlValueKind.Bool:
+            return some(InvalidItem(name: $key, val: $val))
+        else:
+          return some(InvalidItem(name: $key, val: $val))
+    of "SemanticTokens":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          if val.kind != TomlValueKind.Bool:
+            return some(InvalidItem(name: $key, val: $val))
+        else:
+          return some(InvalidItem(name: $key, val: $val))
+    of "ExecuteCommand":
+      for key, val in val.getTable:
+        case key
+        of "enable":
+          if val.kind != TomlValueKind.Bool:
+            return some(InvalidItem(name: $key, val: $val))
+        else:
+          return some(InvalidItem(name: $key, val: $val))
+    else:
+      if val.kind != TomlValueKind.Table:
+        return some(InvalidItem(name: $key, val: $val))
 
-        # Languages settings
-        for key, val in val.getTable:
-          case key:
-            of "extensions":
-              if val.kind != TomlValueKind.Array:
-                return some(InvalidItem(name: $key, val: $val))
-            of "command", "trace":
-              if val.kind != TomlValueKind.String and
-                 val.getStr.parseTraceValue.isErr:
-                   return some(InvalidItem(name: $key, val: $val))
-            of "rustAnalyzerRunSingle", "rustAnalyzerDebugSingle":
-              if val.kind != TomlValueKind.Bool:
-                return some(InvalidItem(name: $key, val: $val))
-            else:
-              return some(InvalidItem(name: $key, val: $val))
+      # Languages settings
+      for key, val in val.getTable:
+        case key
+        of "extensions":
+          if val.kind != TomlValueKind.Array:
+            return some(InvalidItem(name: $key, val: $val))
+        of "command", "trace":
+          if val.kind != TomlValueKind.String and val.getStr.parseTraceValue.isErr:
+            return some(InvalidItem(name: $key, val: $val))
+        of "rustAnalyzerRunSingle", "rustAnalyzerDebugSingle":
+          if val.kind != TomlValueKind.Bool:
+            return some(InvalidItem(name: $key, val: $val))
+        else:
+          return some(InvalidItem(name: $key, val: $val))
 
 proc validateTomlConfig(toml: TomlValueRef): Option[InvalidItem] =
   for key, val in toml.getTable:
-    case key:
-      of "Standard":
-        let r = validateStandardTable(val)
-        if r.isSome: return r
-      of "Clipboard":
-        let r = validateClipboardTable(val)
-        if r.isSome: return r
-      of "TabLine":
-        let r = validateTabLineTable(val)
-        if r.isSome: return r
-      of "StatusLine":
-        let r = validateStatusLineTable(val)
-        if r.isSome: return r
-      of "BuildOnSave":
-        let r = validateBuildOnSaveTable(val)
-        if r.isSome: return r
-      of "WorkSpace":
-        let r = validateWorkSpaceTable(val)
-        if r.isSome: return r
-      of "Highlight":
-        let r = validateHighlightTable(val)
-        if r.isSome: return r
-      of "AutoBackup":
-        let r = validateAutoBackupTable(val)
-        if r.isSome: return r
-      of "QuickRun":
-        let r = validateQuickRunTable(val)
-        if r.isSome: return r
-      of "Notification":
-        let r = validateNotificationTable(val)
-        if r.isSome: return r
-      of "Filer":
-        let r = validateFilerTable(val)
-        if r.isSome: return r
-      of "Autocomplete":
-        let r = validateAutocompleteTable(val)
-        if r.isSome: return r
-      of "AutoSave":
-        let r = validateAutoSaveTable(val)
-        if r.isSome: return r
-      of "Persist":
-        let r = validatePersistTable(val)
-        if r.isSome: return r
-      of "Debug":
-        let r = validateDebugTable(val)
-        if r.isSome: return r
-      of "Git":
-        let r = validateGitTable(val)
-        if r.isSome: return r
-      of "SyntaxChecker":
-        let r = validateSyntaxCheckerTable(val)
-        if r.isSome: return r
-      of "SmoothScroll":
-        let r = validateSmoothScrollTable(val)
-        if r.isSome: return r
-      of "StartUp":
-        let r = validateStartUpTable(val)
-        if r.isSome: return r
-      of "Theme":
-        let r = validateThemeTable(val)
-        if r.isSome: return r
-      of "Lsp":
-        let r = validateLspTable(val)
-        if r.isSome: return r
-      else:
-        return some(InvalidItem(name: $key, val: $val))
+    case key
+    of "Standard":
+      let r = validateStandardTable(val)
+      if r.isSome:
+        return r
+    of "Clipboard":
+      let r = validateClipboardTable(val)
+      if r.isSome:
+        return r
+    of "TabLine":
+      let r = validateTabLineTable(val)
+      if r.isSome:
+        return r
+    of "StatusLine":
+      let r = validateStatusLineTable(val)
+      if r.isSome:
+        return r
+    of "BuildOnSave":
+      let r = validateBuildOnSaveTable(val)
+      if r.isSome:
+        return r
+    of "WorkSpace":
+      let r = validateWorkSpaceTable(val)
+      if r.isSome:
+        return r
+    of "Highlight":
+      let r = validateHighlightTable(val)
+      if r.isSome:
+        return r
+    of "AutoBackup":
+      let r = validateAutoBackupTable(val)
+      if r.isSome:
+        return r
+    of "QuickRun":
+      let r = validateQuickRunTable(val)
+      if r.isSome:
+        return r
+    of "Notification":
+      let r = validateNotificationTable(val)
+      if r.isSome:
+        return r
+    of "Filer":
+      let r = validateFilerTable(val)
+      if r.isSome:
+        return r
+    of "Autocomplete":
+      let r = validateAutocompleteTable(val)
+      if r.isSome:
+        return r
+    of "AutoSave":
+      let r = validateAutoSaveTable(val)
+      if r.isSome:
+        return r
+    of "Persist":
+      let r = validatePersistTable(val)
+      if r.isSome:
+        return r
+    of "Debug":
+      let r = validateDebugTable(val)
+      if r.isSome:
+        return r
+    of "Git":
+      let r = validateGitTable(val)
+      if r.isSome:
+        return r
+    of "SyntaxChecker":
+      let r = validateSyntaxCheckerTable(val)
+      if r.isSome:
+        return r
+    of "SmoothScroll":
+      let r = validateSmoothScrollTable(val)
+      if r.isSome:
+        return r
+    of "StartUp":
+      let r = validateStartUpTable(val)
+      if r.isSome:
+        return r
+    of "Theme":
+      let r = validateThemeTable(val)
+      if r.isSome:
+        return r
+    of "Lsp":
+      let r = validateLspTable(val)
+      if r.isSome:
+        return r
+    else:
+      return some(InvalidItem(name: $key, val: $val))
 
 proc toValidateErrorMessage(invalidItem: InvalidItem): string =
   # Remove '\n'
@@ -2879,7 +2763,8 @@ proc toValidateErrorMessage(invalidItem: InvalidItem): string =
   var val = ""
   for i in 0 ..< lines.len:
     val &= lines[i]
-    if i < lines.high - 1: val &= " "
+    if i < lines.high - 1:
+      val &= " "
 
   result = fmt"(name: {invalidItem.name}, val: {val})"
 
@@ -2894,8 +2779,7 @@ proc loadConfigFile*(path: string): Result[TomlValueRef, string] =
 
   let invalidItem = toml.validateTomlConfig
   if invalidItem.isSome:
-    return Result[TomlValueRef, string].err toValidateErrorMessage(
-      invalidItem.get)
+    return Result[TomlValueRef, string].err toValidateErrorMessage(invalidItem.get)
 
   return Result[TomlValueRef, string].ok toml
 
@@ -2912,17 +2796,16 @@ proc validateThemeColorsConfig(toml: TomlValueRef): Option[InvalidItem] =
   for key, val in toml.getTable:
     if toml.contains("Colors"):
       for key, val in toml["Colors"].getTable:
-        if val.kind != TomlValueKind.String or
-           not key.isValidKey or
-           not val.getStr.isColorVal:
-             return some(InvalidItem(name: $key, val: $val))
+        if val.kind != TomlValueKind.String or not key.isValidKey or
+            not val.getStr.isColorVal:
+          return some(InvalidItem(name: $key, val: $val))
     else:
       return some(InvalidItem(name: $key, val: ""))
 
 proc loadThemeFile*(path: string): Result[TomlValueRef, string] =
   ## Load and validate.
 
-  let fullPath =  expandTilde(path)
+  let fullPath = expandTilde(path)
 
   if not fileExists(fullPath):
     return Result[TomlValueRef, string].err fmt"File not found: {path}"
@@ -2935,8 +2818,7 @@ proc loadThemeFile*(path: string): Result[TomlValueRef, string] =
 
   let invalidItem = validateThemeColorsConfig(toml)
   if invalidItem.isSome:
-    return Result[TomlValueRef, string].err toValidateErrorMessage(
-      invalidItem.get)
+    return Result[TomlValueRef, string].err toValidateErrorMessage(invalidItem.get)
 
   return Result[TomlValueRef, string].ok toml
 
@@ -2945,46 +2827,50 @@ proc loadConfigs*(s: var EditorSettings): Result[(), string] =
 
   if fileExists(configFilePath()):
     let toml = loadConfigFile(configFilePath())
-    if toml.isErr: return Result[(), string].err toml.tryError
+    if toml.isErr:
+      return Result[(), string].err toml.tryError
 
     s.applyTomlConfigs(toml.get)
 
-  case s.theme.kind:
-    of ColorThemeKind.default:
-      s.theme.colors = DefaultColors
-    of ColorThemeKind.config:
-      let toml = loadThemeFile(s.theme.path)
-      if toml.isErr: return Result[(), string].err toml.tryError
-      s.theme.colors = toml.get.toThemeColors
-    of ColorThemeKind.vscode:
-      let colors = loadVSCodeTheme()
-      if colors.isErr: return Result[(), string].err colors.error
-      s.theme.colors = colors.get
+  case s.theme.kind
+  of ColorThemeKind.default:
+    s.theme.colors = DefaultColors
+  of ColorThemeKind.config:
+    let toml = loadThemeFile(s.theme.path)
+    if toml.isErr:
+      return Result[(), string].err toml.tryError
+    s.theme.colors = toml.get.toThemeColors
+  of ColorThemeKind.vscode:
+    let colors = loadVSCodeTheme()
+    if colors.isErr:
+      return Result[(), string].err colors.error
+    s.theme.colors = colors.get
 
   return Result[(), string].ok ()
 
 proc toConfigStr*(colorMode: ColorMode): string =
   ## Convert ColorMode to string for the config file.
 
-  case colorMode:
-    of ColorMode.none: "none"
-    of ColorMode.c8: "8"
-    of ColorMode.c16: "16"
-    of ColorMode.c256: "256"
-    of ColorMode.c24bit: "24bit"
+  case colorMode
+  of ColorMode.none: "none"
+  of ColorMode.c8: "8"
+  of ColorMode.c16: "16"
+  of ColorMode.c256: "256"
+  of ColorMode.c24bit: "24bit"
 
 proc toConfigStr(tool: ClipboardTool): string =
-  case tool:
-    of xsel: "xsel"
-    of xclip: "xclip"
-    of wlClipboard: "wl-clipboard"
-    of wslDefault: "wsl-default"
-    of macOsDefault: "macOS-default"
+  case tool
+  of xsel: "xsel"
+  of xclip: "xclip"
+  of wlClipboard: "wl-clipboard"
+  of wslDefault: "wsl-default"
+  of macOsDefault: "macOS-default"
 
 proc genTomlConfigStr*(settings: EditorSettings): string =
   ## Generate a string of the configuration file of TOML.
 
-  proc addLine(buf: var string, str: string) {.inline.} = buf &= "\n" & str
+  proc addLine(buf: var string, str: string) {.inline.} =
+    buf &= "\n" & str
 
   result = "[Standard]"
   result.addLine fmt "number = {$settings.view.lineNumber}"
@@ -3052,7 +2938,8 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
   if settings.highlight.reservedWords.len > 0:
     result.addLine "reservedWord = ["
     for index, reservedWord in settings.highlight.reservedWords:
-      if index > 0: result.add ", "
+      if index > 0:
+        result.add ", "
       result.add fmt "\"{reservedWord.word}\""
     result.add "]"
   result.addLine fmt "replaceText = {$settings.highlight.replaceText }"
@@ -3070,7 +2957,8 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
   if settings.autoBackup.dirToExclude.len > 0:
     result.addLine "dirToExclude = ["
     for index, dir in settings.autoBackup.dirToExclude:
-      if index > 0: result.add ", "
+      if index > 0:
+        result.add ", "
       result.add fmt "\"{$dir}\""
     result.add "]"
 
@@ -3081,7 +2969,7 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
   if settings.quickRun.command.len > 0:
     result.addLine fmt "command = {$settings.quickRun.command}"
   result.addLine fmt "timeout = {$settings.quickRun.timeout }"
-  if settings.quickRun.nimAdvancedCommand .len > 0:
+  if settings.quickRun.nimAdvancedCommand.len > 0:
     result.addLine fmt "nimAdvancedCommand = \"{$settings.quickRun.nimAdvancedCommand}\""
   if settings.quickRun.clangOptions.len > 0:
     result.addLine fmt "clangOptions = \"{$settings.quickRun.clangOptions}\""
@@ -3245,17 +3133,18 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
     var exts = "[]"
     for index, ext in val.extensions:
       exts.insert('"' & $ext & '"', 1)
-      if index < val.extensions.high: exts.insert(", ", exts.high - 1)
+      if index < val.extensions.high:
+        exts.insert(", ", exts.high - 1)
     result.addLine fmt "extensions = {exts}"
 
     result.addLine fmt "command = \"{$val.command}\""
 
-    case key:
-      of "rust":
-        result.addLine fmt"rustAnalyzerRunSingle = {$settings.lsp.servers.rustAnalyzer.runSingle}"
-        result.addLine fmt"rustAnalyzerDebugSingle = {$settings.lsp.servers.rustAnalyzer.debugSingle}"
-      else:
-        discard
+    case key
+    of "rust":
+      result.addLine fmt"rustAnalyzerRunSingle = {$settings.lsp.servers.rustAnalyzer.runSingle}"
+      result.addLine fmt"rustAnalyzerDebugSingle = {$settings.lsp.servers.rustAnalyzer.debugSingle}"
+    else:
+      discard
 
   result.addLine fmt "[Debug.WindowNode]"
   result.addLine fmt "enable = {$settings.debugMode.windowNode.enable}"

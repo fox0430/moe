@@ -53,28 +53,36 @@ proc initPlatform(): Platform =
 
 proc getXdgSessionType(): string =
   let r = execCmdEx("echo $XDG_SESSION_TYPE")
-  if r.exitCode == 0: return r.output
+  if r.exitCode == 0:
+    return r.output
 
 proc isX11*(): bool {.inline.} =
-  if getXdgSessionType().contains("x11"): return true
-  else: return execCmdEx("xset q").exitCode == 0
+  if getXdgSessionType().contains("x11"):
+    return true
+  else:
+    return execCmdEx("xset q").exitCode == 0
 
 proc isWayland*(): bool {.inline.} =
   getXdgSessionType().contains("wayland")
 
 proc initGui(platform: Platform): Gui =
-  case platform:
-    of mac, wsl:
-      return Gui.other
+  case platform
+  of mac, wsl:
+    return Gui.other
+  else:
+    if isWayland():
+      return Gui.wayland
+    elif isX11():
+      return Gui.x11
     else:
-      if isWayland(): return Gui.wayland
-      elif isX11(): return Gui.x11
-      else: return Gui.console
+      return Gui.console
 
 let
   platform = initPlatform()
   gui = initGui(platform)
 
-proc getPlatform*(): Platform {.inline.} = platform
+proc getPlatform*(): Platform {.inline.} =
+  platform
 
-proc getGuiEnv*(): Gui {.inline.} = gui
+proc getGuiEnv*(): Gui {.inline.} =
+  gui

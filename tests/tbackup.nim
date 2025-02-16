@@ -46,17 +46,17 @@ suite "Backup: createDir":
 
 suite "Backup: validateBackupJson":
   test "validateBackupJson":
-    let jsonNode = %* { "path" : "path" }
+    let jsonNode = %*{"path": "path"}
     check validateBackupInfoJson(jsonNode)
 
   test "validateBackupJson 2":
     # Invalid json
-    let jsonNode = %* { "a" : "path" }
+    let jsonNode = %*{"a": "path"}
     check not validateBackupInfoJson(jsonNode)
 
   test "validateBackupJson 3":
     # Invalid json
-    let jsonNode = %* { "path" : 0 }
+    let jsonNode = %*{"path": 0}
     check not validateBackupInfoJson(jsonNode)
 
 suite "Backup: validateBackupFileName":
@@ -74,7 +74,7 @@ suite "Backup: backupDir":
     baseBackupDir = getCurrentDir() / "baseBackupDirForTest"
     backupDir = baseBackupDir / $genOid()
     sourceFilePath = getCurrentDir() / "source.txt"
-    backupInfoJsonNode = %* { "path": sourceFilePath }
+    backupInfoJsonNode = %*{"path": sourceFilePath}
 
   setup:
     os.createDir(baseBackupDir)
@@ -92,7 +92,7 @@ suite "Backup: backupDir":
       let
         backupJsonInfoPath = backupDir / "backup.json"
         sourceFilePath = getCurrentDir() / "source-1.txt"
-        backupInfoJsonNode = %* { "path": sourceFilePath }
+        backupInfoJsonNode = %*{"path": sourceFilePath}
       writeFile(backupJsonInfoPath, $backupInfoJsonNode)
 
   teardown:
@@ -106,7 +106,7 @@ suite "Backup: getBackupFiles":
     baseBackupDir = getCurrentDir() / "baseBackupDirForTest"
     backupDir = baseBackupDir / $genOid()
     sourceFilePath = getCurrentDir() / "source.txt"
-    backupInfoJsonNode = %* { "path": sourceFilePath }
+    backupInfoJsonNode = %*{"path": sourceFilePath}
 
   setup:
     os.createDir(baseBackupDir)
@@ -129,7 +129,7 @@ suite "Backup: getBackupFiles":
       let
         backupJsonInfoPath = backupDir / "backup.json"
         sourceFilePath = getCurrentDir() / "source-1.txt"
-        backupInfoJsonNode = %* { "path": sourceFilePath }
+        backupInfoJsonNode = %*{"path": sourceFilePath}
       writeFile(backupJsonInfoPath, $backupInfoJsonNode)
 
   teardown:
@@ -194,4 +194,4 @@ suite "Backup: writeBackupInfoJson":
 
     let backupInfoJsonPath = $backupInfoJsonPath(backupDir.toRunes)
     check fileExists(backupInfoJsonPath)
-    check json.parseFile(backupInfoJsonPath) == %* { "path": $SOURCE_FILE_PATH}
+    check json.parseFile(backupInfoJsonPath) == %*{"path": $SOURCE_FILE_PATH}

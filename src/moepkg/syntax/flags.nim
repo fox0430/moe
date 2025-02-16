@@ -27,41 +27,35 @@ type
   ## Each language has different lexing requirements regarding certain aspects.
   ## These details can be summarised by a flag representing the necessity to
   ## respect a certain convention.
-
   TokenizerFlag* = enum
-    hasBacktickFramedExpressions,
-    hasCurlyComments,
-    hasCurlyDashComments,
-    hasCurlyDashPipeComments,
-    hasDashFunction,
-    hasDashPunctuation,
-    hasDoubleDashCaretComments,
-    hasDoubleDashComments,
-    hasDoubleHashBracketComments,
-    hasDoubleHashComments,
-    hasHashBracketComments,
-    hasHashComments,
-    hasHashHeadings,
-    hasNestedComments,
-    hasPreprocessor,
-    hasSharpBangDoubleDashComments,
-    hasSharpFunction,
-    hasSharpOperator,
-    hasSharpPunctuation,
-    hasShebang,
-    hasTripleBacktickFramedExpressions,
-    hasTripleDashPreprocessor,
-
-
+    hasBacktickFramedExpressions
+    hasCurlyComments
+    hasCurlyDashComments
+    hasCurlyDashPipeComments
+    hasDashFunction
+    hasDashPunctuation
+    hasDoubleDashCaretComments
+    hasDoubleDashComments
+    hasDoubleHashBracketComments
+    hasDoubleHashComments
+    hasHashBracketComments
+    hasHashComments
+    hasHashHeadings
+    hasNestedComments
+    hasPreprocessor
+    hasSharpBangDoubleDashComments
+    hasSharpFunction
+    hasSharpOperator
+    hasSharpPunctuation
+    hasShebang
+    hasTripleBacktickFramedExpressions
+    hasTripleDashPreprocessor
 
   ## The set of rules applying for a given language.
   ##
   ## For each language, a set of lexing rules can be formulated in order to
   ## instruct the lexer appropriately.
-
   TokenizerFlags* = set[TokenizerFlag]
-
-
 
 #
 # Global variables.
@@ -69,52 +63,36 @@ type
 
 const
   ## The lexing rules for Haskell.
-  flagsHaskell*: TokenizerFlags = { hasCurlyDashComments
-                                  , hasCurlyDashPipeComments
-                                  , hasDashFunction
-                                  , hasDoubleDashCaretComments
-                                  , hasDoubleDashComments
-                                  , hasNestedComments
-                                  , hasPreprocessor
-                                  , hasSharpFunction
-                                  }
+  flagsHaskell*: TokenizerFlags = {
+    hasCurlyDashComments, hasCurlyDashPipeComments, hasDashFunction,
+    hasDoubleDashCaretComments, hasDoubleDashComments, hasNestedComments,
+    hasPreprocessor, hasSharpFunction,
+  }
 
   ## The lexing rules for Markdown.
-  flagsMarkdown*: TokenizerFlags = { hasBacktickFramedExpressions
-                                   , hasHashHeadings
-                                   , hasPreprocessor
-                                   , hasSharpBangDoubleDashComments
-                                   , hasTripleBacktickFramedExpressions
-                                   , hasTripleDashPreprocessor
-                                   }
+  flagsMarkdown*: TokenizerFlags = {
+    hasBacktickFramedExpressions, hasHashHeadings, hasPreprocessor,
+    hasSharpBangDoubleDashComments, hasTripleBacktickFramedExpressions,
+    hasTripleDashPreprocessor,
+  }
 
   ## The lexing rules for Nim.
-  flagsNim*: TokenizerFlags = { hasDoubleHashBracketComments
-                              , hasDoubleHashComments
-                              , hasHashBracketComments
-                              , hasHashComments
-                              , hasNestedComments
-                              , hasSharpOperator
-                              }
+  flagsNim*: TokenizerFlags = {
+    hasDoubleHashBracketComments, hasDoubleHashComments, hasHashBracketComments,
+    hasHashComments, hasNestedComments, hasSharpOperator,
+  }
 
   ## The lexing rules for Python.
-  flagsPython*: TokenizerFlags = { hasDoubleHashComments
-                                 , hasHashComments
-                                 , hasSharpOperator
-                                 , hasShebang
-                                 }
+  flagsPython*: TokenizerFlags =
+    {hasDoubleHashComments, hasHashComments, hasSharpOperator, hasShebang}
 
   ## The lexing rules for Shell languages.
-  flagsShell*: TokenizerFlags = { hasHashComments
-                                , hasShebang
-                                }
+  flagsShell*: TokenizerFlags = {hasHashComments, hasShebang}
 
   ## The lexing rules for YAML.
-  flagsYaml*: TokenizerFlags = { hasDashPunctuation
-                               , hasHashComments
-                               }
+  flagsYaml*: TokenizerFlags = {hasDashPunctuation, hasHashComments}
 
   ## The lexing rules for TOML.
-  flagsToml*: TokenizerFlags = { hasHashComments }
+  flagsToml*: TokenizerFlags = {hasHashComments}
 
 #[############################################################################]#

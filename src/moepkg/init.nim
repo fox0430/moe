@@ -21,11 +21,11 @@ import std/[os, times, strformat]
 
 import pkg/results
 
-import ui, bufferstatus, editorstatus, cmdlineoption, git, editorview, theme,
-       settings, messages, logger, registers
+import
+  ui, bufferstatus, editorstatus, cmdlineoption, git, editorview, theme, settings,
+  messages, logger, registers
 
-type
-  InitError* = CatchableError
+type InitError* = CatchableError
 
 proc loadPersistData(status: var EditorStatus) =
   ## Load persisted data (Ex command history, search history and cursor
@@ -41,9 +41,7 @@ proc loadPersistData(status: var EditorStatus) =
 
   if status.settings.persist.cursorPosition:
     status.lastPosition = loadLastCursorPosition()
-    currentMainWindowNode.restoreCursorPosition(
-      currentBufStatus,
-      status.lastPosition)
+    currentMainWindowNode.restoreCursorPosition(currentBufStatus, status.lastPosition)
 
 proc initCurrentMainWindowView(status: var EditorStatus) {.inline.} =
   currentMainWindowNode.view = currentBufStatus.buffer.initEditorView(1, 1)
@@ -86,9 +84,9 @@ proc addBufferStatus(status: var EditorStatus, parsedList: CmdParsedList) =
         else:
           # Split the window and set the buffer to the window and move to the
           # latest window.
-          case status.settings.startUp.fileOpen.splitType:
-            of WindowSplitType.vertical: status.verticalSplitWindow
-            of WindowSplitType.horizontal: status.horizontalSplitWindow
+          case status.settings.startUp.fileOpen.splitType
+          of WindowSplitType.vertical: status.verticalSplitWindow
+          of WindowSplitType.horizontal: status.horizontalSplitWindow
           status.changeCurrentBuffer(i)
           status.moveNextWindow
     else:
@@ -109,9 +107,8 @@ proc checkNcurses(): Result[(), string] =
   let v = getNcursesVersion()
   if not checkRequireNcursesVersion():
     let errorMsg =
-      "Error: This Ncurses version is not supported\n\n" &
-      fmt"Current version: v{$v}" & '\n' &
-      "Require: v6.2 or higher\n"
+      "Error: This Ncurses version is not supported\n\n" & fmt"Current version: v{$v}" &
+      '\n' & "Require: v6.2 or higher\n"
 
     return Result[(), string].err errorMsg
 
@@ -138,13 +135,15 @@ proc initEditor*(): Result[EditorStatus, string] =
     initLogger()
 
   block initColors:
-    let r = s.settings.theme.colors.initEditrorColor(
-      s.settings.standard.colorMode)
-    if r.isErr: return Result[EditorStatus, string].err r.error
+    let r = s.settings.theme.colors.initEditrorColor(s.settings.standard.colorMode)
+    if r.isErr:
+      return Result[EditorStatus, string].err r.error
 
-  setControlCHook(proc() {.noconv.} =
-    exitUi()
-    quit())
+  setControlCHook(
+    proc() {.noconv.} =
+      exitUi()
+      quit()
+  )
 
   if parsedList.isReadonly:
     s.isReadonly = true
