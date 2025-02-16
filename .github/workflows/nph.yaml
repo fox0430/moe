@@ -2,6 +2,10 @@ name: Check `nph` formatting
 
 on:
   pull_request:
+    paths:
+      - '.github/workflows/nph.yaml'
+      - 'src/**'
+      - 'tests/**'
 
 jobs:
   nph:
