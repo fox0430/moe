@@ -406,7 +406,7 @@ proc restart*(c: LspClient): Future[LspRestartClientResult] {.async.} =
         commandSplit[1 .. ^1]
       else:
         @[]
-    opts: set[AsyncProcessOption] = {UsePath, EvalCommand, StdErrToStdOut}
+    opts: set[AsyncProcessOption] = {UsePath, EvalCommand, StdErrToStdOut, ProcessGroup}
 
   try:
     c.serverProcess = await startProcess(
