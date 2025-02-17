@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -26,7 +26,7 @@ import moepkg/syntax/highlite
 import
   moepkg/[
     editorstatus, highlight, color, gapbuffer, unicodeext, movement, windownode, ui,
-    independentutils, bufferstatus,
+    independentutils, bufferstatus, messagelog,
   ]
 
 import utils
@@ -1337,3 +1337,114 @@ suite "viewhighlight: highlightText":
     h.highlightText(bufferInView, highlightText)
 
     check h.colorSegments == beforeSegments
+
+suite "viewhighlight: updateViewHighlight":
+  const ReservedWords: seq[ReservedWord] = @[]
+
+  test "Check highlightingText":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["abcdef", "ghijkl"].toSeqRunes.toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    let highlightingText =
+      HighlightingText(kind: HighlightingTextKind.search, text: @["ghi"].toSeqRunes)
+
+    var h = Highlight(colorSegments: currentBufStatus.highlight.colorSegments)
+    h.updateViewHighlight(
+      currentBufStatus,
+      currentMainWindowNode,
+      some(highlightingText),
+      status.settings,
+      none(LspCapabilities),
+    )
+
+    check h.colorSegments ==
+      @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 5,
+          color: EditorColorPairIndex.default,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstRow: 1,
+          firstColumn: 0,
+          lastRow: 1,
+          lastColumn: 2,
+          color: searchResult,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstRow: 1,
+          firstColumn: 3,
+          lastRow: 1,
+          lastColumn: 5,
+          color: EditorColorPairIndex.default,
+          attribute: Attribute.normal,
+        ),
+      ]
+
+  test "Check highlightingText in logviewer mode":
+    var status = initEditorStatus()
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.mode = Mode.logviewer
+
+    addMessageLog "abcdef"
+    addMessageLog "ghijkl"
+
+    status.resize(100, 100)
+    status.update
+
+    let highlightingText =
+      HighlightingText(kind: HighlightingTextKind.search, text: @["ghi"].toSeqRunes)
+
+    var h = Highlight()
+    h.colorSegments = currentBufStatus.highlight.colorSegments
+    h.updateViewHighlight(
+      currentBufStatus,
+      currentMainWindowNode,
+      some(highlightingText),
+      status.settings,
+      none(LspCapabilities),
+    )
+
+    check h.colorSegments ==
+      @[
+        ColorSegment(
+          firstRow: 0,
+          firstColumn: 0,
+          lastRow: 0,
+          lastColumn: 5,
+          color: EditorColorPairIndex.default,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstRow: 1,
+          firstColumn: 0,
+          lastRow: 1,
+          lastColumn: -1,
+          color: EditorColorPairIndex.default,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstRow: 2,
+          firstColumn: 0,
+          lastRow: 2,
+          lastColumn: 2,
+          color: EditorColorPairIndex.searchResult,
+          attribute: Attribute.normal,
+        ),
+        ColorSegment(
+          firstRow: 2,
+          firstColumn: 3,
+          lastRow: 2,
+          lastColumn: 5,
+          color: EditorColorPairIndex.default,
+          attribute: Attribute.normal,
+        ),
+      ]

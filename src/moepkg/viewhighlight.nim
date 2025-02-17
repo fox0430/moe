@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -300,7 +300,7 @@ proc highlightFullWidthSpace(
     )
     highlight.overwrite(colorSegment)
 
-proc highlightText(
+proc highlightText*(
     highlight: var Highlight,
     bufferInView: BufferInView,
     highlightingText: HighlightingText,
@@ -399,30 +399,32 @@ proc updateViewHighlight*(
 ) =
   let bufferInView = initBufferInView(bufStatus, windowNode)
 
-  # LSP or build-in
-  if lspCapabilities.isSome and lspCapabilities.get.documentHighlight:
-    h.highlightDocumentHighlights(
-      windowNode.bufferPosition, bufStatus.documentHighlightInfo.ranges
-    )
-  elif settings.highlight.currentWord:
-    h.highlightReferences(bufferInView, settings.standard.colorMode)
+  if bufStatus.isEditMode:
+    # LSP or build-in
+    if lspCapabilities.isSome and lspCapabilities.get.documentHighlight:
+      h.highlightDocumentHighlights(
+        windowNode.bufferPosition, bufStatus.documentHighlightInfo.ranges
+      )
+    elif settings.highlight.currentWord:
+      h.highlightReferences(bufferInView, settings.standard.colorMode)
 
-  if bufStatus.selectedArea.isSome:
-    h.highlightSelectedArea(bufStatus, windowNode.initBufferPosition)
+    if bufStatus.selectedArea.isSome:
+      h.highlightSelectedArea(bufStatus, windowNode.initBufferPosition)
 
-  if settings.highlight.pairOfParen:
-    h.highlightPairOfParen(bufferInView)
+    if settings.highlight.pairOfParen:
+      h.highlightPairOfParen(bufferInView)
 
-  if settings.highlight.trailingSpaces and bufStatus.isEditMode:
-    h.highlightTrailingSpaces(bufferInView)
+    if settings.highlight.trailingSpaces and bufStatus.isEditMode:
+      h.highlightTrailingSpaces(bufferInView)
 
-  if settings.highlight.fullWidthSpace:
-    h.highlightFullWidthSpace(windowNode, bufferInView)
+    if settings.highlight.fullWidthSpace:
+      h.highlightFullWidthSpace(windowNode, bufferInView)
 
+    if bufStatus.syntaxCheckResults.len > 0:
+      h.highlightSyntaxCheckerReuslts(bufferInView, bufStatus.syntaxCheckResults)
+
+    h.highlightGitConflicts(bufferInView)
+
+  # highlightText apply all buffers
   if highlightingText.isSome:
     h.highlightText(bufferInView, highlightingText.get)
-
-  if bufStatus.syntaxCheckResults.len > 0:
-    h.highlightSyntaxCheckerReuslts(bufferInView, bufStatus.syntaxCheckResults)
-
-  h.highlightGitConflicts(bufferInView)

@@ -997,14 +997,13 @@ proc update*(status: var EditorStatus) =
         var highlight = Highlight()
         highlight.colorSegments = b.highlight.colorSegments
 
-        if b.isEditMode:
-          highlight.updateViewHighlight(
-            b,
-            node,
-            status.highlightingText,
-            settings,
-            status.lspClients.getLspCapabilities(b.langId),
-          )
+        highlight.updateViewHighlight(
+          b,
+          node,
+          status.highlightingText,
+          settings,
+          status.lspClients.getLspCapabilities(b.langId),
+        )
 
         if node.view.sidebar.isSome:
           # Update the EditorView.Sidebar.buffer
