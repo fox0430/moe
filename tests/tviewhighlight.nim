@@ -26,7 +26,7 @@ import moepkg/syntax/highlite
 import
   moepkg/[
     editorstatus, highlight, color, gapbuffer, unicodeext, movement, windownode, ui,
-    independentutils, bufferstatus, messagelog
+    independentutils, bufferstatus, messagelog,
   ]
 
 import utils
@@ -1349,7 +1349,8 @@ suite "viewhighlight: updateViewHighlight":
     status.resize(100, 100)
     status.update
 
-    let highlightingText = HighlightingText(kind: HighlightingTextKind.search, text: @["ghi"].toSeqRunes)
+    let highlightingText =
+      HighlightingText(kind: HighlightingTextKind.search, text: @["ghi"].toSeqRunes)
 
     var h = Highlight(colorSegments: currentBufStatus.highlight.colorSegments)
     h.updateViewHighlight(
@@ -1357,7 +1358,7 @@ suite "viewhighlight: updateViewHighlight":
       currentMainWindowNode,
       some(highlightingText),
       status.settings,
-      none(LspCapabilities)
+      none(LspCapabilities),
     )
 
     check h.colorSegments ==
@@ -1399,7 +1400,8 @@ suite "viewhighlight: updateViewHighlight":
     status.resize(100, 100)
     status.update
 
-    let highlightingText = HighlightingText(kind: HighlightingTextKind.search, text: @["ghi"].toSeqRunes)
+    let highlightingText =
+      HighlightingText(kind: HighlightingTextKind.search, text: @["ghi"].toSeqRunes)
 
     var h = Highlight()
     h.colorSegments = currentBufStatus.highlight.colorSegments
@@ -1408,7 +1410,7 @@ suite "viewhighlight: updateViewHighlight":
       currentMainWindowNode,
       some(highlightingText),
       status.settings,
-      none(LspCapabilities)
+      none(LspCapabilities),
     )
 
     check h.colorSegments ==
@@ -1444,6 +1446,5 @@ suite "viewhighlight: updateViewHighlight":
           lastColumn: 5,
           color: EditorColorPairIndex.default,
           attribute: Attribute.normal,
-        )
+        ),
       ]
-
