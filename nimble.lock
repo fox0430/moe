@@ -117,15 +117,15 @@
       }
     },
     "regex": {
-      "version": "0.26.2",
-      "vcsRevision": "7abf6a36238c26a073c6e5a74e7ed504545d4081",
+      "version": "0.26.3",
+      "vcsRevision": "4593305ed1e49731fc75af1dc572dd2559aad19c",
       "url": "https://github.com/nitely/nim-regex",
       "downloadMethod": "git",
       "dependencies": [
         "unicodedb"
       ],
       "checksums": {
-        "sha1": "378ca01bffff25e3db854f584c3a7224e5178741"
+        "sha1": "4d24e7d7441137cd202e16f2359a5807ddbdc31f"
       }
     }
   },
