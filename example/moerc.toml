@@ -189,6 +189,8 @@ showIcons = true
 
 enable = true
 
+windowBorder = true
+
 [AutoSave]
 
 enable = true

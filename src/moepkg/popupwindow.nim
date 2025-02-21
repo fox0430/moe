@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -33,9 +33,10 @@ type
     buffer*: seq[Runes] # contents
     currentLine*: Option[int] # Current line number
     highlightText*: Option[HighlightText] # Change the color of matching texts
+    showBorder*: bool # Show/Hide window border
 
 proc initPopupWindow*(
-    position: Position, size: Size, buffer: seq[Runes]
+    position: Position, size: Size, buffer: seq[Runes], showBorder: bool = false
 ): PopupWindow {.inline.} =
   PopupWindow(
     window: initWindow(
@@ -44,10 +45,13 @@ proc initPopupWindow*(
     position: position,
     size: size,
     buffer: buffer,
+    showBorder: showBorder
   )
 
-proc initPopupWindow*(position: Position, size: Size): PopupWindow {.inline.} =
-  initPopupWindow(position, size, @[])
+proc initPopupWindow*(
+    position: Position, size: Size, showBorder: bool = false
+): PopupWindow {.inline.} =
+  initPopupWindow(position, size, @[], showBorder)
 
 proc initPopupWindow*(): PopupWindow {.inline.} =
   initPopupWindow(Position(y: 0, x: 0), Size(h: 1, w: 1), @[])
@@ -113,30 +117,33 @@ proc autoMoveAndResize*(p: var PopupWindow, minPosition, maxPosition: Position) 
     # If true, display the window right the current `p.position.x`.
     isRight = bufferMaxLen < rightWidth or rightWidth > leftWidth
 
+    borderMargin = if p.showBorder: 2 else: 0
+
   let
     y =
       if isBelow:
         p.position.y
       else:
-        max(minPosition.y, aboveHeight - p.buffer.len)
+        max(minPosition.y, aboveHeight - p.buffer.len - borderMargin)
     x =
       if isRight:
-        p.position.x
+        p.position.x + borderMargin
       else:
         max(minPosition.x, leftWidth - bufferMaxLen)
 
+  let
     # If the buffer length is smaller than the displayable area, the
     # buffer length will be maximized.
     h =
       if isBelow:
-        min(p.buffer.len, belowHeight - 1)
+        min(p.buffer.len + borderMargin, belowHeight - 1)
       else:
-        min(p.buffer.len, aboveHeight - 1)
+        min(p.buffer.len + borderMargin, aboveHeight - 1)
     w =
       if isRight:
-        min(bufferMaxLen, rightWidth)
+        min(bufferMaxLen + borderMargin, rightWidth)
       else:
-        min(bufferMaxLen, leftWidth)
+        min(bufferMaxLen + borderMargin, leftWidth)
 
   p.resize(Size(h: max(1, h), w: max(1, w)))
   p.move(Position(y: y, x: x))
@@ -159,15 +166,23 @@ proc update*(p: var PopupWindow) =
   ## If the number of lines in the buffer is larger than the window height and
   ## the currentline is set, the display range will be automatically adjusted.
 
-  let startLine =
-    if p.currentLine.isSome and p.currentLine.get - p.size.h >= 0:
-      p.currentLine.get - p.size.h + 1
-    else:
-      0
+  let
+    borderMargin = if p.showBorder: 2 else: 0
+
+    startLine =
+      if p.currentLine.isSome and p.currentLine.get - p.size.h + borderMargin >= 0:
+        if p.showBorder:
+          p.currentLine.get - p.size.h + borderMargin + 1
+        else:
+          p.currentLine.get - p.size.h + 1
+      else:
+        0
 
   p.window.erase
 
   for i in 0 ..< min(p.size.h, p.buffer.len):
+    if i + startLine > p.buffer.high: break
+
     template removeMargin(line: Runes): Runes =
       line[1 .. (line.high - 1)]
 
@@ -191,28 +206,39 @@ proc update*(p: var PopupWindow) =
         else:
           none(int)
 
+      x= if p.showBorder: i + 1 else: i
+
     if highlightPosi.isSome:
       template isHighlight(col, highlightPosi: int, highlightText: Runes): bool =
         j >= highlightPosi and j < highlightPosi + highlightText.len
 
       for j in 0 .. p.size.w:
+        let y = if p.showBorder: j + 1 else: j
+
         if j > line.high:
-          p.window.write(i, j, ru" ", color.int16, Attribute.normal, false)
+          p.window.write(x, y, ru" ", color.int16, Attribute.normal, false)
         elif isHighlight(j, highlightPosi.get, p.highlightText.get.text):
           # Change color for highlightText
           let highlightColor = EditorColorPairIndex.searchResult
           p.window.write(
-            i, j, line[j].toRunes, highlightColor.int16, Attribute.normal, false
+            x, y, line[j].toRunes, highlightColor.int16, Attribute.normal, false
           )
         else:
-          p.window.write(i, j, line[j].toRunes, color.int16, Attribute.normal, false)
+          p.window.write(x, y, line[j].toRunes, color.int16, Attribute.normal, false)
     else:
-      let buffer =
-        if p.size.w > line.high:
-          line & " ".repeat(p.size.w - line.high).toRunes
-        else:
-          line[0 .. p.size.w]
-      p.window.write(i, 0, buffer, color.int16, Attribute.normal, false)
+      let
+        y = if p.showBorder: 1 else: 0
+
+        buffer =
+          if p.size.w > line.high:
+            line & " ".repeat(p.size.w - line.high - y).toRunes
+          else:
+            line[0 .. p.size.w - y]
+
+      p.window.write(x, y, buffer, color.int16, Attribute.normal, false)
+
+  if p.showBorder:
+    p.window.box(0, 0)
 
   p.refresh
 

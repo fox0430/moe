@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -39,10 +39,11 @@ proc initCompletionWindow*(
     size: Size = Size(h: 1, w: 1),
     list: CompletionList = initCompletionList(),
     inputText: Runes = ru"",
+    showBorder: bool = true,
 ): CompletionWindow =
   CompletionWindow(
     startPosition: startPosition,
-    popupWindow: some(initPopupWindow(windowPosition, size)),
+    popupWindow: some(initPopupWindow(windowPosition, size, showBorder)),
     list: list,
     inputText: inputText,
     selectedIndex: -1,

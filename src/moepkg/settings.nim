@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -183,6 +183,7 @@ type
 
   AutocompleteSettings* = object
     enable*: bool
+    windowBorder*: bool
 
   AutoSaveSettings* = object
     enable*: bool
@@ -466,6 +467,7 @@ proc initFilerSettings(): FilerSettings {.inline.} =
 
 proc initAutocompleteSettings*(): AutocompleteSettings {.inline.} =
   result.enable = true
+  result.windowBorder = true
 
 proc initAutoSaveSettings(): AutoSaveSettings {.inline.} =
   result.enable = true
@@ -1623,6 +1625,9 @@ proc parseAutocompleteTable(s: var EditorSettings, autocompleteConfigs: TomlValu
   if autocompleteConfigs.contains("enable"):
     s.autocomplete.enable = autocompleteConfigs["enable"].getBool
 
+  if autocompleteConfigs.contains("windowBorder"):
+    s.autocomplete.windowBorder = autocompleteConfigs["windowBorder"].getBool
+
 proc parseAutoSaveTable(s: var EditorSettings, autoSaveConfigs: TomlValueRef) =
   if autoSaveConfigs.contains("enable"):
     s.autoSave.enable = autoSaveConfigs["enable"].getBool
@@ -2322,7 +2327,7 @@ proc validateFilerTable(table: TomlValueRef): Option[InvalidItem] =
 proc validateAutocompleteTable(table: TomlValueRef): Option[InvalidItem] =
   for key, val in table.getTable:
     case key
-    of "enable":
+    of "enable", "windowBorder":
       if val.kind != TomlValueKind.Bool:
         return some(InvalidItem(name: $key, val: $val))
     else:
@@ -3015,6 +3020,7 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
 
   result.addLine fmt "[Autocomplete]"
   result.addLine fmt "enable = {$settings.autocomplete.enable}"
+  result.addLine fmt "windowBorder = {$settings.autocomplete.windowBorder}"
 
   result.addLine ""
 
