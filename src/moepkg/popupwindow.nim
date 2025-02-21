@@ -45,7 +45,7 @@ proc initPopupWindow*(
     position: position,
     size: size,
     buffer: buffer,
-    showBorder: showBorder
+    showBorder: showBorder,
   )
 
 proc initPopupWindow*(
@@ -181,7 +181,8 @@ proc update*(p: var PopupWindow) =
   p.window.erase
 
   for i in 0 ..< min(p.size.h, p.buffer.len):
-    if i + startLine > p.buffer.high: break
+    if i + startLine > p.buffer.high:
+      break
 
     template removeMargin(line: Runes): Runes =
       line[1 .. (line.high - 1)]
@@ -206,14 +207,22 @@ proc update*(p: var PopupWindow) =
         else:
           none(int)
 
-      x= if p.showBorder: i + 1 else: i
+      x =
+        if p.showBorder:
+          i + 1
+        else:
+          i
 
     if highlightPosi.isSome:
       template isHighlight(col, highlightPosi: int, highlightText: Runes): bool =
         j >= highlightPosi and j < highlightPosi + highlightText.len
 
       for j in 0 .. p.size.w:
-        let y = if p.showBorder: j + 1 else: j
+        let y =
+          if p.showBorder:
+            j + 1
+          else:
+            j
 
         if j > line.high:
           p.window.write(x, y, ru" ", color.int16, Attribute.normal, false)

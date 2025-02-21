@@ -391,7 +391,7 @@ proc openCompletionWindowInCommandLine(
       startPosition = startPosition,
       windowPosition = windowPosition,
       list = initCompletionList(),
-      showBorder = status.settings.autocomplete.windowBorder
+      showBorder = status.settings.autocomplete.windowBorder,
     )
   )
 
@@ -712,7 +712,7 @@ proc openCompletionWindowInEditor(status: var EditorStatus) =
       startPosition = bufferPosition,
       windowPosition = windowPosition,
       list = currentBufStatus.lspCompletionList,
-      showBorder = status.settings.autocomplete.windowBorder
+      showBorder = status.settings.autocomplete.windowBorder,
     )
   )
 
