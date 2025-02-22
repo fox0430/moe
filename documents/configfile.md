@@ -217,7 +217,8 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 
 | Name | Type | Default Value | Description |
 |:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
-| enable | bool | true | General-purpose autocompletion |
+| enable | bool | true | Enable/Disable General-purpose autocompletion |
+| windowBorder | bool | true | Show borderline on completion window |
 
 
 ### AutoSave table

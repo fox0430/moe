@@ -421,6 +421,9 @@ proc attrOff*(win: var Window, attribute: Attribute) {.inline.} =
 proc attrOff*(win: var Window, colorPair: int16) {.inline.} =
   win.cursesWindow.wattroff(colorPair.cshort)
 
+proc box*(win: Window, verch, horch: int) {.inline.} =
+  win.cursesWindow.box(verch.chtype, horch.chtype)
+
 proc write*(
     win: var Window,
     y, x: int,

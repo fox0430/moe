@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -391,6 +391,7 @@ proc openCompletionWindowInCommandLine(
       startPosition = startPosition,
       windowPosition = windowPosition,
       list = initCompletionList(),
+      showBorder = status.settings.autocomplete.windowBorder,
     )
   )
 
@@ -711,6 +712,7 @@ proc openCompletionWindowInEditor(status: var EditorStatus) =
       startPosition = bufferPosition,
       windowPosition = windowPosition,
       list = currentBufStatus.lspCompletionList,
+      showBorder = status.settings.autocomplete.windowBorder,
     )
   )
 

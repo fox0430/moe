@@ -130,6 +130,7 @@ showIcons = false
 
 [Autocomplete]
 enable = false
+windowBorder = false
 
 [AutoSave]
 enable = false
@@ -609,6 +610,7 @@ suite "settings: Parse configuration file":
     check not settings.filer.showIcons
 
     check not settings.autocomplete.enable
+    check not settings.autocomplete.windowBorder
 
     check not settings.autoSave.enable
     check settings.autoSave.interval == 1

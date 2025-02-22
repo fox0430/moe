@@ -132,6 +132,7 @@ type
 
   AutocompleteTableNames {.pure.} = enum
     enable
+    windowBorder
 
   AutoSaveTableNames {.pure.} = enum
     enable
@@ -1946,6 +1947,8 @@ proc initAutocompleteTableBuffer(settings: EditorSettings): seq[Runes] =
     case $name
     of "enable":
       result.add(ru nameStr & space & $settings.autocomplete.enable)
+    of "windowBorder":
+      result.add(ru nameStr & space & $settings.autocomplete.windowBorder)
 
 proc initAutoSaveTableBuffer(settings: EditorSettings): seq[Runes] =
   result.add(ru"AutoSave")
