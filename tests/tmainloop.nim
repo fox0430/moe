@@ -1059,6 +1059,7 @@ suite "mainloop: updateCompletionWindowBufferInEditor":
     currentMainWindowNode.currentLine = 1
     currentMainWindowNode.currentColumn = 1
 
+    status.settings.autocomplete.windowBorder = false
     status.settings.view.lineNumber = false
     status.settings.tabLine.enable = false
 
@@ -1129,6 +1130,7 @@ suite "mainloop: updateCompletionWindowBufferInEditor":
     currentMainWindowNode.currentLine = 45
     currentMainWindowNode.currentColumn = 1
 
+    status.settings.autocomplete.windowBorder = false
     status.settings.view.lineNumber = false
     status.settings.tabLine.enable = false
 
@@ -1159,6 +1161,7 @@ suite "mainloop: updateCompletionWindowBufferInEditor":
     currentMainWindowNode.currentLine = 1
     currentMainWindowNode.currentColumn = 1
 
+    status.settings.autocomplete.windowBorder = false
     status.settings.view.lineNumber = false
     status.settings.tabLine.enable = false
 
@@ -1205,6 +1208,7 @@ suite "mainloop: updateCompletionWindowBufferInCommandLine":
     discard status.addNewBufferInCurrentWin().get
     currentBufStatus.mode = Mode.ex
 
+    status.settings.autocomplete.windowBorder = false
     status.settings.view.lineNumber = false
     status.settings.tabLine.enable = false
 
@@ -1261,6 +1265,7 @@ suite "mainloop: confirmCompletion in editor":
     currentMainWindowNode.currentLine = 1
     currentMainWindowNode.currentColumn = 2
 
+    status.settings.autocomplete.windowBorder = false
     status.settings.view.lineNumber = false
     status.settings.tabLine.enable = false
 
@@ -1298,6 +1303,7 @@ suite "mainloop: confirmCompletion in editor":
     status.settings.view.lineNumber = false
     status.settings.tabLine.enable = false
 
+    status.settings.autocomplete.windowBorder = false
     status.resize(100, 100)
     status.update
 
@@ -1328,6 +1334,7 @@ suite "mainloop: confirmCompletion in command line":
   test "Not selected":
     var status = initEditorStatus()
 
+    status.settings.autocomplete.windowBorder = false
     status.settings.view.lineNumber = false
     status.settings.tabLine.enable = false
 
@@ -1372,6 +1379,7 @@ suite "mainloop: confirmCompletion in command line":
   test "Selected":
     var status = initEditorStatus()
 
+    status.settings.autocomplete.windowBorder = false
     status.settings.view.lineNumber = false
     status.settings.tabLine.enable = false
 

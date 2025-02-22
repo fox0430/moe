@@ -198,7 +198,11 @@ suite "Config mode: Init buffer":
     var status = initEditorStatus()
     let buffer = status.settings.initAutocompleteTableBuffer
 
-    const Sample = @["Autocomplete", "  enable                   true"].toSeqRunes
+    const Sample = @[
+      "Autocomplete",
+      "  enable                   true",
+      "  windowBorder             true"
+    ].toSeqRunes
 
     for index, line in buffer:
       check Sample[index] == line
