@@ -17,7 +17,9 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[deques, strutils, math, strformat, options, sequtils]
+import std/[deques, strutils, math, strformat, options, sequtils, logging]
+
+import pkg/results
 
 import
   gapbuffer, ui, unicodeext, independentutils, color, highlight, git, syntaxcheck,
@@ -467,20 +469,25 @@ proc writeCurrentLine(
         else:
           originalColorPair.background
 
-    # TODO: Write an error to the log
-    discard
-      currentLineColorPair.initColorPair(view.config.colorMode, bufferFg, bufferBg)
+    block:
+      let r =
+        currentLineColorPair.initColorPair(view.config.colorMode, bufferFg, bufferBg)
+      if r.isErr:
+        error fmt"editorView: ${r.error}"
 
     view.write(win, windowPosition, y, x, runes, currentLineColorPair.int16, attribute)
 
     currentLineColorPair.inc
 
-    # Write spaces after text in the current line
-    let
-      afterFg = themeColors[EditorColorPairIndex.default].foreground
-      afterBg = themeColors[EditorColorPairIndex.currentLineBg].background
-    # TODO: Write an error to the log
-    discard currentLineColorPair.initColorPair(view.config.colorMode, afterFg, afterBg)
+    block:
+      # Write spaces after text in the current line
+      let
+        afterFg = themeColors[EditorColorPairIndex.default].foreground
+        afterBg = themeColors[EditorColorPairIndex.currentLineBg].background
+      let r =
+        currentLineColorPair.initColorPair(view.config.colorMode, afterFg, afterBg)
+      if r.isErr:
+        error fmt"editorView: ${r.error}"
 
     let
       spaces = ru" ".repeat(view.width - view.lines[y].width)
