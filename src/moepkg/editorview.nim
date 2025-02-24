@@ -473,7 +473,7 @@ proc writeCurrentLine(
       let r =
         currentLineColorPair.initColorPair(view.config.colorMode, bufferFg, bufferBg)
       if r.isErr:
-        error fmt"editorView: {r.error}"
+        error fmt"editorView: ${r.error}"
 
     view.write(win, windowPosition, y, x, runes, currentLineColorPair.int16, attribute)
 
@@ -487,7 +487,7 @@ proc writeCurrentLine(
       let r =
         currentLineColorPair.initColorPair(view.config.colorMode, afterFg, afterBg)
       if r.isErr:
-        error fmt"editorView: {r.error}"
+        error fmt"editorView: ${r.error}"
 
     let
       spaces = ru" ".repeat(view.width - view.lines[y].width)
