@@ -147,9 +147,11 @@ proc read*(s: OutputStream): Future[JsonRpcResponseResult] {.async.} =
 proc write(s: InputStream, req: string) {.async.} =
   try:
     await s.stream.write(req)
-  except:
-    # TODO: Add messages to error log.
-    discard
+  except CatchableError as e:
+    try:
+      error fmt"lsp: ${e.msg}"
+    except Exception as e:
+      echo e.msg
 
 proc send(s: InputStream, frame: string): Future[Result[(), string]] {.async.} =
   ## Write json-rpc message to the stream.
