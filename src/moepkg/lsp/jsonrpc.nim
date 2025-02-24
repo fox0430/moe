@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -21,8 +21,6 @@ import std/[strformat, strutils, json, parseutils, options, logging]
 
 import pkg/stew/byteutils
 import pkg/[results, jsony, chronos]
-
-import ../messagelog
 
 export chronos
 
@@ -69,7 +67,6 @@ proc debugLog(messageType: MessageType, message: string) {.raises: [].} =
         "lsp: Write messages: \n" & message & '\n'
 
     debug debugMessage
-    addMessageLog debugMessage
   except:
     discard
 
