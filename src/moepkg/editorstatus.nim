@@ -406,8 +406,7 @@ proc addNewBuffer*(
       backupFilePath = backupDir / $currentLineBuffer
     status.bufStatus.add initBufferStatus(mode).get
 
-    let diffResult =
-      initDiffViewerBuffer(sourceFilePath, backupFilePath)
+    let diffResult = initDiffViewerBuffer(sourceFilePath, backupFilePath)
     if diffResult.isOk:
       status.bufStatus[^1].buffer = diffResult.get.toGapBuffer
       status.bufStatus[^1].path = backupFilePath.toRunes

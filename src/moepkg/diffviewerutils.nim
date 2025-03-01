@@ -23,7 +23,9 @@ import pkg/results
 
 import unicodeext, highlight, color
 
-proc initDiffViewerBuffer*(sourceFilePath, backupFilePath: string): Result[seq[Runes], string] =
+proc initDiffViewerBuffer*(
+    sourceFilePath, backupFilePath: string
+): Result[seq[Runes], string] =
   let cmdResult = execCmdEx(fmt"diff -u {sourceFilePath} {backupFilePath}")
   if cmdResult.exitCode == 2:
     # The diff command return 2 on failure.
