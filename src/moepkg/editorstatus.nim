@@ -340,7 +340,7 @@ proc initLspExperimentalParams*(
     discard
 
 proc lspInitialize*(
-  status: var EditorStatus, bufferId: int,  workspaceRoot, langId: string
+    status: var EditorStatus, bufferId: int, workspaceRoot, langId: string
 ): Result[(), string] =
   ## Start LSP server and initialize LSP client and server.
 
@@ -397,7 +397,7 @@ proc addNewBuffer*(
     newBuf = b.get
   of Mode.backup:
     # Get a backup history of the current buffer.
-    var b =  initBufferStatus(mode)
+    var b = initBufferStatus(mode)
     if b.isErr:
       return Result[int, string].err b.error
 
@@ -465,9 +465,7 @@ proc addNewBuffer*(
           if status.lspClients.contains(newBuf.langId) and lspClient.isInitialized:
             # Send textDocument/didOpen notify
             let err = waitFor lspClient.textDocumentDidOpen(
-              $newBuf.path.absolutePath,
-              newBuf.langId,
-              newBuf.buffer.toString,
+              $newBuf.path.absolutePath, newBuf.langId, newBuf.buffer.toString
             )
             if err.isErr:
               status.commandLine.writeLspInitializeError(
