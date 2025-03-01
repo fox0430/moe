@@ -340,7 +340,7 @@ proc initLspExperimentalParams*(
     discard
 
 proc lspInitialize*(
-    status: var EditorStatus, workspaceRoot, langId: string
+  status: var EditorStatus, bufferId: int,  workspaceRoot, langId: string
 ): Result[(), string] =
   ## Start LSP server and initialize LSP client and server.
 
@@ -354,7 +354,7 @@ proc lspInitialize*(
 
     # Send Initialize request
     let err = waitFor status.lspClients[langId].initialize(
-      status.bufStatus[^1].id,
+      bufferId,
       initInitializeParams(
         status.lspClients[langId].serverName,
         workspaceRoot,
@@ -386,37 +386,51 @@ proc addNewBuffer*(
 ): Result[int, string] =
   ## Return bufStatus.high after adding a new buffer.
 
+  var newBuf: BufferStatus
+
   case mode
   of Mode.help:
-    status.bufStatus.add initBufferStatus(mode).get
+    var b = initBufferStatus(mode)
+    if b.isErr:
+      return Result[int, string].err b.error
+
+    newBuf = b.get
   of Mode.backup:
     # Get a backup history of the current buffer.
+    var b =  initBufferStatus(mode)
+    if b.isErr:
+      return Result[int, string].err b.error
+
+    newBuf = b.get
     let sourceFilePath = currentBufStatus.absolutePath
-    status.bufStatus.add initBufferStatus(mode).get
-    status.bufStatus[^1].buffer = initBackupManagerBuffer(
+    newBuf.buffer = initBackupManagerBuffer(
       status.settings.autoBackup.backupDir, sourceFilePath
     ).toGapBuffer
     # Set the source file path to bufStatus.path.
-    status.bufStatus[^1].path = sourceFilePath
+    newBuf.path = sourceFilePath
   of Mode.diff:
+    var b = initBufferStatus(mode)
+    if b.isErr:
+      return Result[int, string].err b.error
+
+    newBuf = b.get
+
     let
       sourceFilePath = $currentBufStatus.path
       baseBackupDir = $status.settings.autoBackup.backupDir
       backupDir = backupDir(baseBackupDir, sourceFilePath)
       backupFilePath = backupDir / $currentLineBuffer
-    status.bufStatus.add initBufferStatus(mode).get
 
     let diffResult = initDiffViewerBuffer(sourceFilePath, backupFilePath)
-    if diffResult.isOk:
-      status.bufStatus[^1].buffer = diffResult.get.toGapBuffer
-      status.bufStatus[^1].path = backupFilePath.toRunes
-    else:
+    if diffResult.isErr:
       status.commandLine.writeDiffViewerError(diffResult.error)
+      return Result[int, string].err b.error
+
+    newBuf.buffer = diffResult.get.toGapBuffer
+    newBuf.path = backupFilePath.toRunes
   else:
     let b = initBufferStatus(path, mode)
-    if b.isOk:
-      status.bufStatus.add b.get
-    else:
+    if b.isErr:
       let errMessage =
         if mode.isFilerMode:
           fmt"Failed to open dir: {path} : {getCurrentExceptionMsg()}"
@@ -424,53 +438,54 @@ proc addNewBuffer*(
           fmt"Failed to open file: {path} {getCurrentExceptionMsg()}"
 
       status.commandLine.writeError(errMessage.toRunes)
-      addMessageLog errMessage
       return Result[int, string].err errMessage
 
-    template newBufStatus(): var BufferStatus =
-      status.bufStatus[^1]
+    newBuf = b.get
 
     if status.isReadonly:
-      newBufStatus.isReadonly = true
+      newBuf.isReadonly = true
 
-    if status.settings.git.showChangedLine and newBufStatus.isTrackingByGit:
+    if status.settings.git.showChangedLine and newBuf.isTrackingByGit:
       let gitDiffProcess = startBackgroundGitDiff(
-        newBufStatus.path, newBufStatus.buffer.toRunes, newBufStatus.characterEncoding
+        newBuf.path, newBuf.buffer.toRunes, newBuf.characterEncoding
       )
-      if gitDiffProcess.isOk:
-        status.backgroundTasks.gitDiff.add gitDiffProcess.get
-      else:
+      if gitDiffProcess.isErr:
         status.commandLine.writeGitInfoUpdateError(gitDiffProcess.error)
+        return Result[int, string].err gitDiffProcess.error
 
-    if status.settings.lsp.enable and newBufStatus.isEditMode:
-      if newBufStatus.langId.len == 0:
-        let langId = status.settings.lsp.langIdFromLspSettings(newBufStatus.extension)
+      status.backgroundTasks.gitDiff.add gitDiffProcess.get
+
+    if status.settings.lsp.enable and newBuf.isEditMode:
+      if newBuf.langId.len == 0:
+        let langId = status.settings.lsp.langIdFromLspSettings(newBuf.extension)
         if langId.isSome:
-          newBufStatus.langId = langId.get
+          newBuf.langId = langId.get
 
-        if status.settings.lsp.languages.contains(newBufStatus.langId):
-          if status.lspClients.contains(newBufStatus.langId) and lspClient.isInitialized:
+        if status.settings.lsp.languages.contains(newBuf.langId):
+          if status.lspClients.contains(newBuf.langId) and lspClient.isInitialized:
             # Send textDocument/didOpen notify
             let err = waitFor lspClient.textDocumentDidOpen(
-              $newBufStatus.path.absolutePath,
-              newBufStatus.langId,
-              newBufStatus.buffer.toString,
+              $newBuf.path.absolutePath,
+              newBuf.langId,
+              newBuf.buffer.toString,
             )
             if err.isErr:
               status.commandLine.writeLspInitializeError(
-                status.settings.lsp.languages[newBufStatus.langId].command, err.error
+                status.settings.lsp.languages[newBuf.langId].command, err.error
               )
           else:
             # Start LSP server and initialization.
-            let err = status.lspInitialize($newBufStatus.openDir, newBufStatus.langId)
+            let err = status.lspInitialize(newBuf.id, $newBuf.openDir, newBuf.langId)
             if err.isErr:
               status.commandLine.writeLspInitializeError(
-                status.settings.lsp.languages[newBufStatus.langId].command, err.error
+                status.settings.lsp.languages[newBuf.langId].command, err.error
               )
             else:
               status.commandLine.writeLspServerStart(
-                status.settings.lsp.languages[newBufStatus.langId].command
+                status.settings.lsp.languages[newBuf.langId].command
               )
+
+  status.bufStatus.add newBuf
 
   return Result[int, string].ok status.bufStatus.high
 
