@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -18,18 +18,22 @@
 #[############################################################################]#
 
 import std/[strformat, osproc, strutils]
+
+import pkg/results
+
 import unicodeext, highlight, color
 
-proc initDiffViewerBuffer*(sourceFilePath, backupFilePath: string): seq[Runes] =
+proc initDiffViewerBuffer*(sourceFilePath, backupFilePath: string): Result[seq[Runes], string] =
   let cmdResult = execCmdEx(fmt"diff -u {sourceFilePath} {backupFilePath}")
-  # The diff command return 2 on failure.
   if cmdResult.exitCode == 2:
-    # TODO: Write the error message to the command window.
-    return @[ru""]
+    # The diff command return 2 on failure.
+    return Result[seq[Runes], string].err "diff command failed"
 
-  result = @[ru""]
+  var r = @[ru""]
   for line in cmdResult.output.splitLines:
-    result.add line.toRunes
+    r.add line.toRunes
+
+  return Result[seq[Runes], string].ok r
 
 proc initDiffViewerHighlight*(buffer: seq[Runes]): Highlight =
   for i, line in buffer:
