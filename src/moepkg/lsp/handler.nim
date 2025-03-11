@@ -166,7 +166,7 @@ proc lspInitialized(
   return Result[(), string].ok ()
 
 proc lspShutdown(status: var EditorStatus): Result[(), string] =
-  ## Send Exit notify.
+  ## Send a Exit notify.
 
   let r = waitFor lspClient.exit
   if r.isErr:

@@ -990,6 +990,9 @@ proc exit*(c: LspClient): Future[LspSendNotifyResult] {.async.} =
   if id.isErr:
     return LspSendNotifyResult.err fmt"Exit notification failed: {id.error}"
 
+  if c.state != LspServerState.restarting:
+    c.state = LspServerState.exited
+
   return LspSendNotifyResult.ok ()
 
 proc workspaceDidChangeConfiguration*(
