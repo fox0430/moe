@@ -165,6 +165,15 @@ proc lspInitialized(
 
   return Result[(), string].ok ()
 
+proc lspShutdown(status: var EditorStatus): Result[(), string] =
+  ## Send Exit notify.
+
+  let r = waitFor lspClient.exit
+  if r.isErr:
+    return Result[(), string].err r.error
+
+  return Result[(), string].ok ()
+
 proc initHoverWindow(windowNode: WindowNode, hoverContent: HoverContent): PopupWindow =
   ## Return a popup window for textDocument/hover.
 
@@ -1213,14 +1222,42 @@ proc handleLspError(status: var EditorStatus, res: JsonNode) =
       status.lspClients[k].deleteWaitingResponse(res["id"].getInt)
       return
 
+proc restartLspClient(status: EditorStatus) =
+  let r = waitFor lspClient.restart
+  if r.isErr:
+    status.commandLine.writeLspError(fmt"server cannot restart: {r.error}")
+    lspClient.state = LspServerState.crashed
+    return
+
+  let langId = currentBufStatus.langId
+
+  for b in status.bufStatus:
+    if b.langId == langId:
+      let r = waitFor lspClient.initialize(
+        status.bufStatus[^1].id,
+        initInitializeParams(
+          lspClient.serverName,
+          $b.openDir,
+          status.settings.lsp.languages[langId].trace,
+          initLspExperimentalParams(
+            status.lspClients[langId].serverName, status.settings.lsp.servers
+          ),
+        ),
+      )
+      if r.isErr:
+        status.commandLine.writeLspError(r.error)
+
 proc handleLspResponse*(status: var EditorStatus) =
   ## Read a Json from the server and handle the response and notification.
 
   while status.isLspResponse:
     if not lspClient.closed and not lspClient.running:
-      lspClient.closed = true
-      status.commandLine.writeLspError("server crashed")
-      return
+      if lspClient.state == LspServerState.restarting:
+        status.restartLspClient
+      else:
+        lspClient.closed = true
+        status.commandLine.writeLspError("server crashed")
+        return
 
     let resJson = waitFor lspClient.read
     if resJson.isErr:
@@ -1279,6 +1316,10 @@ proc handleLspResponse*(status: var EditorStatus) =
           status.commandLine.writeLspInitializeError(
             currentBufStatus.langId.toRunes, r.error
           )
+      of LspMethod.shutdown:
+        let r = status.lspShutdown
+        if r.isErr:
+          status.commandLine.writeLspError(r.error)
       of LspMethod.textDocumentHover:
         let r = status.lspHover(resJson.get)
         if r.isErr:

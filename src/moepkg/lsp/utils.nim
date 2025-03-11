@@ -40,6 +40,7 @@ type
     initialize
     initialized
     shutdown
+    exit
     windowShowMessage
     windowLogMessage
     windowWorkDnoneProgressCreate
@@ -155,6 +156,7 @@ proc toLspMethodStr*(m: LspMethod): string =
   of initialize: "initialize"
   of initialized: "initialized"
   of shutdown: "shutdown"
+  of exit: "exit"
   of windowShowMessage: "window/showMessage"
   of windowLogMessage: "window/logMessage"
   of windowWorkDnoneProgressCreate: "window/workDoneProgress/create"
@@ -224,6 +226,8 @@ proc lspMethod*(j: JsonNode): LspMethodResult =
     LspMethodResult.ok initialized
   of "shutdown":
     LspMethodResult.ok shutdown
+  of "exit":
+    LspMethodResult.ok exit
   of "window/showMessage":
     LspMethodResult.ok windowShowMessage
   of "window/logMessage":

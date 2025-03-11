@@ -77,7 +77,15 @@ type
 
   RequestId* = int
 
+  LspServerState* {.pure.} = enum
+    running
+    shuttingDown
+    exited
+    restarting
+    crashed
+
   LspClient* = ref object
+    state*: LspServerState # State of the Lsp server.
     closed*: bool # Set true if the LSP server closed (crashed).
     serverProcess: AsyncProcessRef # LSP server process.
     serverStreams: Streams # Input/Output streams for the LSP server process.
@@ -123,13 +131,6 @@ proc serverProcessId*(c: LspClient): int {.inline.} =
 
   if c.running:
     return c.serverProcess.processID
-
-proc exit*(c: LspClient) {.inline.} =
-  ## Exit a LSP server process.
-  ## TODO: Send a shutdown request?
-
-  if c.running:
-    discard c.serverProcess.terminate
 
 proc kill*(c: LspClient): Result[(), string] =
   ## kill a LSP server process.
@@ -383,16 +384,18 @@ proc initLspClient*(command: string): Future[initLspClientResult] {.async.} =
 
   c.serverName = commandSplit[0]
 
+  c.state = LspServerState.running
+
   c.command = command
 
   return initLspClientResult.ok c
 
 proc restart*(c: LspClient): Future[LspRestartClientResult] {.async.} =
-  ## Restart the LSP server process.
+  ## Force restart the LSP server process.
   ## Logs will be taken over.
 
   if c.running:
-    c.exit
+    discard c.serverProcess.kill
 
   let beforeLog = c.log
 
@@ -427,6 +430,8 @@ proc restart*(c: LspClient): Future[LspRestartClientResult] {.async.} =
   )
 
   c.serverName = commandSplit[0]
+
+  c.state = LspServerState.running
 
   c.log = beforeLog
 
@@ -964,12 +969,26 @@ proc shutdown*(c: LspClient, bufferId: int): Future[LspSendNotifyResult] {.async
       c.closed = true
     return LspSendNotifyResult.err "server crashed"
 
-  if not c.isInitialized:
-    return R[(), string].err "lsp unavailable"
-
   let id = await c.request(bufferId, LspMethod.shutdown, %*{})
   if id.isErr:
     return LspSendNotifyResult.err "Shutdown request failed: {id.error}"
+
+  c.state = LspServerState.shuttingDown
+
+  return LspSendNotifyResult.ok ()
+
+proc exit*(c: LspClient): Future[LspSendNotifyResult] {.async.} =
+  ## Send a exit notification to the server.
+  ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#exit
+
+  if not c.running:
+    if not c.closed:
+      c.closed = true
+    return LspSendNotifyResult.err "server crashed"
+
+  let id = await c.notify(LspMethod.exit, %*{})
+  if id.isErr:
+    return LspSendNotifyResult.err fmt"Exit notification failed: {id.error}"
 
   return LspSendNotifyResult.ok ()
 

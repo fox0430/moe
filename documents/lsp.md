@@ -10,6 +10,7 @@ Please feedback, bug reports and PRs.
 
 - `Initialize`
 - `shutdown`
+- `exit`
 - `window/showMessage`
 - `window/logMessage`
 - `window/workDoneProgress/create`
