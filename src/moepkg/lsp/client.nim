@@ -257,7 +257,7 @@ proc read*(c: LspClient): Future[JsonRpcResponseResult] {.async.} =
     return JsonRpcResponseResult.err r.error
 
 proc request(
-    c: LspClient, bufferId: int, lspMethod: LspMethod, params: JsonNode
+    c: LspClient, lspMethod: LspMethod, params: JsonNode, bufferId: int = -1
 ): Future[Result[int, string]] {.async.} =
   ## Send a request to the LSP server and set to waitingResponse.
   ## Return request id.
@@ -928,7 +928,7 @@ proc initialize*(
 
   let params = %*initParams
 
-  let r = await c.request(bufferId, LspMethod.initialize, params)
+  let r = await c.request(LspMethod.initialize, params, bufferId)
   if r.isErr:
     return LspSendRequestResult.err fmt"Initialize request failed: {r.error}"
 
@@ -965,20 +965,20 @@ proc initialized*(c: LspClient): Future[LspSendNotifyResult] {.async.} =
 
   return LspSendNotifyResult.ok ()
 
-proc shutdown*(c: LspClient, bufferId: int): Future[LspSendNotifyResult] {.async.} =
+proc shutdown*(c: LspClient, bufferId: int): Future[LspSendRequestResult] {.async.} =
   ## Send a shutdown request to the server.
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#shutdown
 
   if not c.running:
-    return LspSendNotifyResult.err "server unavailable"
+    return LspSendRequestResult.err "server unavailable"
 
-  let id = await c.request(bufferId, LspMethod.shutdown, %*{})
+  let id = await c.request(LspMethod.shutdown, %*{})
   if id.isErr:
-    return LspSendNotifyResult.err "Shutdown request failed: {id.error}"
+    return LspSendRequestResult.err "Shutdown request failed: {id.error}"
 
   c.state = LspServerState.shuttingDown
 
-  return LspSendNotifyResult.ok ()
+  return LspSendRequestResult.ok ()
 
 proc exit*(c: LspClient): Future[LspSendNotifyResult] {.async.} =
   ## Send a exit notification to the server.
@@ -1153,7 +1153,7 @@ proc textDocumentHover*(
     return R[(), string].err "textDocument/hover unavailable"
 
   let params = %*initHoverParams(path, position.toLspPosition)
-  let id = await c.request(bufferId, LspMethod.textDocumentHover, params)
+  let id = await c.request(LspMethod.textDocumentHover, params, bufferId)
   if id.isErr:
     return R[(), string].err fmt"textDocument/hover request failed: {id.error}"
 
@@ -1184,7 +1184,7 @@ proc textDocumentCompletion*(
       path, position, c.capabilities.get.completion.get, isIncompleteTrigger, character
     )
 
-  let id = await c.request(bufferId, LspMethod.textDocumentCompletion, params)
+  let id = await c.request(LspMethod.textDocumentCompletion, params, bufferId)
   if id.isErr:
     return R[(), string].err fmt"textDocument/completion request failed: {id.error}"
 
@@ -1207,7 +1207,7 @@ proc textDocumentSemanticTokens*(
 
   let params = %*initSemanticTokensParams(path)
 
-  let id = await c.request(bufferId, LspMethod.textDocumentSemanticTokensFull, params)
+  let id = await c.request(LspMethod.textDocumentSemanticTokensFull, params, bufferId)
   if id.isErr:
     return
       R[(), string].err fmt"textDocument/semanticTokens/full request failed: {id.error}"
@@ -1231,7 +1231,7 @@ proc textDocumentInlayHint*(
 
   let params = %*initInlayHintParams(path, range)
 
-  let r = await c.request(bufferId, LspMethod.textDocumentInlayHint, params)
+  let r = await c.request(LspMethod.textDocumentInlayHint, params, bufferId)
   if r.isErr:
     return R[(), string].err fmt"textDocument/inlayHint request failed: {r.error}"
 
@@ -1254,7 +1254,7 @@ proc textDocumentDefinition*(
 
   let params = %*initDefinitionParams(path, posi)
 
-  let r = await c.request(bufferId, LspMethod.textDocumentDefinition, params)
+  let r = await c.request(LspMethod.textDocumentDefinition, params, bufferId)
   if r.isErr:
     return R[(), string].err fmt"textDocument/definition request failed: {r.error}"
 
@@ -1277,7 +1277,7 @@ proc textDocumentReferences*(
 
   let params = %*initReferenceParams(path, posi.toLspPosition)
 
-  let r = await c.request(bufferId, LspMethod.textDocumentReferences, params)
+  let r = await c.request(LspMethod.textDocumentReferences, params, bufferId)
   if r.isErr:
     return R[(), string].err fmt"textDocument/references request failed: {r.error}"
 
@@ -1300,7 +1300,7 @@ proc textDocumentRename*(
 
   let params = %*initRenameParams(path, posi.toLspPosition, newName)
 
-  let r = await c.request(bufferId, LspMethod.textDocumentRename, params)
+  let r = await c.request(LspMethod.textDocumentRename, params, bufferId)
   if r.isErr:
     return R[(), string].err fmt"textDocument/rename request failed: {r.error}"
 
@@ -1323,7 +1323,7 @@ proc textDocumentTypeDefinition*(
 
   let params = %*initTypeDefinitionParams(path, posi)
 
-  let r = await c.request(bufferId, LspMethod.textDocumentTypeDefinition, params)
+  let r = await c.request(LspMethod.textDocumentTypeDefinition, params, bufferId)
   if r.isErr:
     return R[(), string].err fmt"textDocument/typeDefinition request failed: {r.error}"
 
@@ -1346,7 +1346,7 @@ proc textDocumentImplementation*(
 
   let params = %*initImplementationParams(path, posi)
 
-  let r = await c.request(bufferId, LspMethod.textDocumentImplementation, params)
+  let r = await c.request(LspMethod.textDocumentImplementation, params, bufferId)
   if r.isErr:
     return R[(), string].err fmt"textDocument/implementation request failed: {r.error}"
 
@@ -1369,7 +1369,7 @@ proc textDocumentDeclaration*(
 
   let params = %*initImplementationParams(path, posi)
 
-  let r = await c.request(bufferId, LspMethod.textDocumentDeclaration, params)
+  let r = await c.request(LspMethod.textDocumentDeclaration, params, bufferId)
   if r.isErr:
     return R[(), string].err fmt"textDocument/declaration request failed: {r.error}"
 
@@ -1392,7 +1392,7 @@ proc textDocumentPrepareCallHierarchy*(
 
   let params = %*initCallHierarchyPrepareParams(path, posi)
 
-  let r = await c.request(bufferId, LspMethod.textDocumentPrepareCallHierarchy, params)
+  let r = await c.request(LspMethod.textDocumentPrepareCallHierarchy, params, bufferId)
   if r.isErr:
     return
       R[(), string].err fmt"textDocument/prepareCallHierarchy request failed: {r.error}"
@@ -1416,7 +1416,7 @@ proc textDocumentIncomingCalls*(
 
   let params = %*initCallHierarchyIncomingParams(item)
 
-  let r = await c.request(bufferId, LspMethod.callHierarchyIncomingCalls, params)
+  let r = await c.request(LspMethod.callHierarchyIncomingCalls, params, bufferId)
   if r.isErr:
     return R[(), string].err fmt"callHierarchy/incomingCalls request failed: {r.error}"
 
@@ -1439,7 +1439,7 @@ proc textDocumentOutgoingCalls*(
 
   let params = %*initCallHierarchyOutgoingParams(item)
 
-  let r = await c.request(bufferId, LspMethod.callHierarchyOutgoingCalls, params)
+  let r = await c.request(LspMethod.callHierarchyOutgoingCalls, params, bufferId)
   if r.isErr:
     return R[(), string].err fmt"callHierarchy/outgoingCalls request failed: {r.error}"
 
@@ -1462,7 +1462,7 @@ proc textDocumentDocumentHighlight*(
 
   let params = %*initDocumentHighlightParamas(path, posi)
 
-  let r = await c.request(bufferId, LspMethod.textDocumentDocumentHighlight, params)
+  let r = await c.request(LspMethod.textDocumentDocumentHighlight, params, bufferId)
   if r.isErr:
     return
       R[(), string].err fmt"textDocument/documentHighlight request failed: {r.error}"
@@ -1486,7 +1486,7 @@ proc textDocumentDocumentLink*(
 
   let params = %*initDocumentLinkParams(path)
 
-  let r = await c.request(bufferId, LspMethod.textDocumentDocumentLink, params)
+  let r = await c.request(LspMethod.textDocumentDocumentLink, params, bufferId)
   if r.isErr:
     return R[(), string].err fmt"textDocument/documentLink request failed: {r.error}"
 
@@ -1509,7 +1509,7 @@ proc documentLinkResolve*(
 
   let params = %*documentLink
 
-  let r = await c.request(bufferId, LspMethod.textDocumentDocumentLink, params)
+  let r = await c.request(LspMethod.textDocumentDocumentLink, params, bufferId)
   if r.isErr:
     return R[(), string].err fmt"textDocument/documentLink request failed: {r.error}"
 
@@ -1532,7 +1532,7 @@ proc textDocumentCodeLens*(
 
   let params = %*initCodeLensParams(path)
 
-  let r = await c.request(bufferId, LspMethod.textDocumentCodeLens, params)
+  let r = await c.request(LspMethod.textDocumentCodeLens, params, bufferId)
   if r.isErr:
     return R[(), string].err fmt"textDocument/codeLens request failed: {r.error}"
 
@@ -1555,7 +1555,7 @@ proc codeLensResolve*(
 
   let params = %*codeLens
 
-  let r = await c.request(bufferId, LspMethod.codeLensResolve, params)
+  let r = await c.request(LspMethod.codeLensResolve, params, bufferId)
   if r.isErr:
     return R[(), string].err fmt"codeLens/resolve request failed: {r.error}"
 
@@ -1578,7 +1578,7 @@ proc workspaceExecuteCommand*(
 
   let params = %*initExecuteCommandParams(command, args)
 
-  let r = await c.request(bufferId, LspMethod.workspaceExecuteCommand, params)
+  let r = await c.request(LspMethod.workspaceExecuteCommand, params, bufferId)
   if r.isErr:
     return R[(), string].err fmt"workspace/executeCommand request failed: {r.error}"
 
@@ -1601,7 +1601,7 @@ proc textDocumentFoldingRange*(
 
   let params = %*initFoldingRangeParam(path)
 
-  let r = await c.request(bufferId, LspMethod.textDocumentFoldingRange, params)
+  let r = await c.request(LspMethod.textDocumentFoldingRange, params, bufferId)
   if r.isErr:
     return R[(), string].err fmt"textDocument/foldingRange request failed: {r.error}"
 
@@ -1624,7 +1624,7 @@ proc textDocumentSelectionRange*(
 
   let params = %*initSelectionRangeParams(path, positions)
 
-  let r = await c.request(bufferId, LspMethod.textDocumentSelectionRange, params)
+  let r = await c.request(LspMethod.textDocumentSelectionRange, params, bufferId)
   if r.isErr:
     return R[(), string].err fmt"textDocument/selectionRange request failed: {r.error}"
 
@@ -1647,7 +1647,7 @@ proc textDocumentDocumentSymbol*(
 
   let params = %*initDocumentSymbolParams(path)
 
-  let r = await c.request(bufferId, LspMethod.textDocumentDocumentSymbol, params)
+  let r = await c.request(LspMethod.textDocumentDocumentSymbol, params, bufferId)
   if r.isErr:
     return R[(), string].err fmt"textDocument/documentSymbol request failed: {r.error}"
 
@@ -1672,7 +1672,7 @@ proc textDocumentInlineValue*(
   let context = InlineValueContext(frameId: 0, stoppedLocation: range.toLspRange)
   let params = %*initInlineValueParams(path, range.toLspRange, context)
 
-  let r = await c.request(bufferId, LspMethod.textDocumentInlineValue, params)
+  let r = await c.request(LspMethod.textDocumentInlineValue, params, bufferId)
   if r.isErr:
     return R[(), string].err fmt"textDocument/inlineValue request failed: {r.error}"
 
@@ -1702,7 +1702,7 @@ proc textDocumentSignatureHelp*(
   let params =
     %*initSignatureHelpParams(path, position.toLspPosition, kind, triggerChar, active)
 
-  let r = await c.request(bufferId, LspMethod.textDocumentSignatureHelp, params)
+  let r = await c.request(LspMethod.textDocumentSignatureHelp, params, bufferId)
   if r.isErr:
     return R[(), string].err fmt"textDocument/signatureHelp request failed: {r.error}"
 
@@ -1725,7 +1725,7 @@ proc textDocumentFormatting*(
 
   let params = %*initDocumentFormattingParams(path, options)
 
-  let r = await c.request(bufferId, LspMethod.textDocumentFormatting, params)
+  let r = await c.request(LspMethod.textDocumentFormatting, params, bufferId)
   if r.isErr:
     return
       LspSendRequestResult.err fmt"textDocument/formatting request failed: {r.error}"
