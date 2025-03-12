@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -1176,28 +1176,13 @@ proc lspRestartClient(status: var EditorStatus) =
     status.commandLine.writeLspError("Client not found")
     return
 
-  let r = waitFor lspClient.restart
-  if r.isOk:
-    status.commandLine.writeStandard(fmt"lsp: restarted client: {lspClient.serverName}")
-  else:
-    status.commandLine.writeLspError("Client not found")
+  let r = waitFor lspClient.shutdown(currentBufStatus.id)
+  if r.isErr:
+    status.commandLine.writeLspError(r.error)
 
-  let langId = currentBufStatus.langId
-  for b in status.bufStatus:
-    if b.langId == langId:
-      let r = waitFor lspClient.initialize(
-        status.bufStatus[^1].id,
-        initInitializeParams(
-          lspClient.serverName,
-          $b.openDir,
-          status.settings.lsp.languages[langId].trace,
-          initLspExperimentalParams(
-            status.lspClients[langId].serverName, status.settings.lsp.servers
-          ),
-        ),
-      )
-      if r.isErr:
-        status.commandLine.writeLspError(r.error)
+  status.commandLine.writeStandard(fmt"lsp: restarting client: {lspClient.serverName}")
+
+  lspClient.state = LspServerState.restarting
 
 proc lspDocumentFormatting(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)

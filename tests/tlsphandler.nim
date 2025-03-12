@@ -1697,6 +1697,33 @@ suite "lsp: handleLspServerNotify":
       }
     ).isOk
 
+suite "lsp: shutdown":
+  var status: EditorStatus
+
+  setup:
+    if isNimlangserverAvailable():
+      status = initEditorStatus()
+      status.settings.lsp.enable = true
+
+      let filename = $genOid() & ".nim"
+      assert status.addNewBufferInCurrentWin(filename).isOk
+
+  teardown:
+    if isNimlangserverAvailable():
+      discard status.lspClients["nim"].kill
+
+  test "Basic":
+    check status.lspShutdown.isOk
+
+    var isTimeout = true
+    for i in 0 .. 60:
+      sleep 5000
+      if not lspClient.running:
+        isTimeout = false
+        break
+
+    check not isTimeout
+
 suite "lsp: handleLspResponse":
   var status: EditorStatus
 
@@ -1727,7 +1754,26 @@ suite "lsp: handleLspResponse":
             isTimeout = false
             break
 
-        if not isTimeout:
+      check not isTimeout
+
+  test "Server restart":
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      # Open a new file.
+      let filename = $genOid() & ".nim"
+      assert status.addNewBufferInCurrentWin(filename).isOk
+
+      lspClient.state = LspServerState.restarting
+      discard lspClient.kill
+
+      var isTimeout = true
+      for _ in 0 .. 30:
+        waitFor sleepAsync(chronos.timer.seconds(5))
+        status.handleLspResponse
+
+        if lspClient.running and lspClient.isRunning:
+          isTimeout = false
           break
 
       check not isTimeout

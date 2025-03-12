@@ -1714,3 +1714,25 @@ suite "exmode: openBufferManager":
     check status.bufStatus[1].mode.isBufferManagerMode
 
     check mainWindow.numOfMainWindow == 2
+
+suite "exmode: lspRestartClient":
+  test "Basic":
+    if not isNimlangserverAvailable():
+      skip()
+    else:
+      var status = initEditorStatus()
+
+      status.settings.lsp.enable = true
+
+      assert status.addNewBufferInCurrentWin("test.nim").isOk
+
+      status.resize(100, 100)
+      status.update
+
+      assert lspClient.running
+
+      status.lspRestartClient
+
+      discard lspClient.kill
+
+      check lspClient.waitingResponses[lspClient.lastId].lspMethod == LspMethod.shutdown
