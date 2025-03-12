@@ -92,7 +92,7 @@ proc applyTextEdit(b: var BufferStatus, edit: TextEdit): Result[(), string] =
   return Result[(), string].ok ()
 
 template isLspClientInitialized*(status: EditorStatus): bool =
-  status.lspClients.contains(currentBufStatus.langId) and not lspClient.closed
+  status.lspClients.contains(currentBufStatus.langId) and not lspClient.isExited
 
 template isLspResponse*(status: EditorStatus): bool =
   status.isLspClientInitialized and (let r = lspClient.readable; r.isOk and r.get)
@@ -1251,11 +1251,12 @@ proc handleLspResponse*(status: var EditorStatus) =
   ## Read a Json from the server and handle the response and notification.
 
   while status.isLspResponse:
-    if not lspClient.closed and not lspClient.running:
-      if lspClient.state == LspServerState.restarting:
+    if not lspClient.isExited and not lspClient.running:
+      if lspClient.isRestarting:
         status.restartLspClient
+        return
       else:
-        lspClient.closed = true
+        lspClient.state = LspServerState.crashed
         status.commandLine.writeLspError("server crashed")
         return
 

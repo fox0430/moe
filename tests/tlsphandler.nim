@@ -1754,9 +1754,6 @@ suite "lsp: handleLspResponse":
             isTimeout = false
             break
 
-        if not isTimeout:
-          break
-
       check not isTimeout
 
   test "Server restart":
@@ -1775,11 +1772,8 @@ suite "lsp: handleLspResponse":
         waitFor sleepAsync(chronos.timer.seconds(5))
         status.handleLspResponse
 
-        if lspClient.running:
+        if lspClient.running and lspClient.isRunning:
           isTimeout = false
-          break
-
-        if not isTimeout:
           break
 
       check not isTimeout
