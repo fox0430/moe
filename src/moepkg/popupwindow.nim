@@ -127,7 +127,7 @@ proc autoMoveAndResize*(p: var PopupWindow, minPosition, maxPosition: Position) 
         max(minPosition.y, aboveHeight - p.buffer.len - borderMargin)
     x =
       if isRight:
-        p.position.x + borderMargin
+        p.position.x
       else:
         max(minPosition.x, leftWidth - bufferMaxLen)
 
