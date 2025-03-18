@@ -517,7 +517,8 @@ proc eraseWindow*(node: var WindowNode) {.inline.} =
     nodeY = if node.y > 1: node.y else: 0
     nodeX = if node.x > 0: node.x else: 0
 
-    nodeSize = Size(h: node.h, w: node.w)
+    # Node size without status line
+    nodeSize = Size(h: node.view.height - 1, w: node.w)
 
   var root = node
   while not root.parent.isNil:
