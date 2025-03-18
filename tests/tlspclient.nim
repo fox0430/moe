@@ -1190,7 +1190,7 @@ suite "lsp: Send requests":
 
       let requestId = client.lastId + 1
 
-      check (waitFor client.shutdown(BufferId)).isOk
+      check (waitFor client.shutdown).isOk
       check client.waitingResponses[requestId].lspMethod == LspMethod.shutdown
 
       var isTimeout = true
