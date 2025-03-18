@@ -141,6 +141,29 @@ suite "popupwindow: autoMoveAndResize":
     check p.position == Position(y: 96, x: 93)
     check p.size == Size(h: 2, w: 5)
 
+  test "autoMoveAndResize enable border and add text":
+    var p = initPopupWindow(
+      Position(y: 99, x: 99), Size(h: 2, w: 5), @[ru"a"], showBorder = true
+    )
+
+    let
+      min = Position(y: 1, x: 1)
+      max = Position(y: 100, x: 100)
+
+    block:
+      p.autoMoveAndResize(min, max)
+
+      check p.position == Position(y: 95, x: 97)
+      check p.size == Size(h: 3, w: 3)
+
+    block:
+      p.buffer[0].add ru"b"
+
+      p.autoMoveAndResize(min, max)
+
+      check p.position == Position(y: 95, x: 97)
+      check p.size == Size(h: 3, w: 3)
+
 suite "popupwindow: update":
   privateAccess(HighlightText)
 
