@@ -315,7 +315,7 @@ proc checkColorSupportedTerminal*(): ColorMode =
       else:
         return ColorMode.none
 
-template enableBracketedPasteMode() =
+template enableBracketedPasteMode() {.used.} =
   discard execShellCmd("printf '\x1b[?2004h'")
 
 proc startUi*() =
