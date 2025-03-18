@@ -350,7 +350,8 @@
 | `lspFormat` | LSP Document Formatting |
 | `log` | Open a log viewer for editor log |
 | `lspLog` | Open a log viewer for LSP log |
-| `lspRestart` | Result the current LSP server |
+| `lspRestart` | Restart the current LSP server |
+| `lspForceRestart` | Force restart the current LSP server |
 | `help` | Open help |
 | `putConfigFile` | Put a sample configuration file in ~/.config/moe |
 | `run` | Quick run |

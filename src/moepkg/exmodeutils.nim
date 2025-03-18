@@ -198,6 +198,11 @@ const ExCommandInfoList* = [
     argsType: ArgsType.none,
   ),
   ExCommandInfo(
+    command: "lspForceRestart",
+    description: "Force restart the current LSP server",
+    argsType: ArgsType.none,
+  ),
+  ExCommandInfo(
     command: "man",
     description: "Show the given UNIX manual page, if available",
     argsType: ArgsType.toggle,
@@ -696,6 +701,9 @@ proc isLspFormatCommand*(command: seq[Runes]): bool {.inline.} =
 proc isLspRestartCommand*(command: seq[Runes]): bool {.inline.} =
   command.len == 1 and cmpIgnoreCase($command[0], "lsprestart") == 0
 
+proc isLspForceRestartCommand*(command: seq[Runes]): bool {.inline.} =
+  command.len == 1 and cmpIgnoreCase($command[0], "lspforcerestart") == 0
+
 proc isValidExCommand*(commandSplit: seq[Runes]): bool =
   ## Return true if valid ex command and valid args.
 
@@ -754,7 +762,8 @@ proc isValidExCommand*(commandSplit: seq[Runes]): bool =
     isForceWriteAndQuitCommand(commandSplit) or isStartDebugModeCommand(commandSplit) or
     isHighlightCurrentLineSettingCommand(commandSplit) or isBuildCommand(commandSplit) or
     isLspExeCommand(commandSplit) or isLspFoldingCommand(commandSplit) or
-    isLspRestartCommand(commandSplit) or isLspFormatCommand(commandSplit)
+    isLspRestartCommand(commandSplit) or isLspFormatCommand(commandSplit) or
+    isLspForceRestartCommand(commandSplit)
 
 proc getArgsType*(command: Runes): Result[ArgsType, string] =
   ## Return ArgsType if valid ex command.

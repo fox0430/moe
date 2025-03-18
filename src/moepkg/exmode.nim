@@ -1184,6 +1184,17 @@ proc lspRestartClient(status: var EditorStatus) =
 
   lspClient.state = LspServerState.restarting
 
+proc lspForceRestartClient(status: var EditorStatus) =
+  status.changeMode(currentBufStatus.prevMode)
+
+  if not status.lspClients.contains(currentBufStatus.langId):
+    status.commandLine.writeLspError("Client not found")
+    return
+
+  lspClient.state = LspServerState.restarting
+
+  status.commandLine.writeStandard(fmt"lsp: restarting client: {lspClient.serverName}")
+
 proc lspDocumentFormatting(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 
@@ -1409,6 +1420,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[Runes]) =
     status.lspRestartClient
   elif isLspFormatCommand(command):
     status.lspDocumentFormatting
+  elif isLspForceRestartCommand(command):
+    status.lspForceRestartClient
   else:
     status.commandLine.writeNotEditorCommandError(command)
     status.changeMode(currentBufStatus.prevMode)
