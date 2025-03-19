@@ -247,7 +247,7 @@ proc update*(p: var PopupWindow) =
       p.window.write(x, y, buffer, color.int16, Attribute.normal, false)
 
   if p.showBorder:
-    p.window.box(0, 0)
+    p.window.box(0, 0, EditorColorPairIndex.popUpWindow.int16)
 
   p.refresh
 
