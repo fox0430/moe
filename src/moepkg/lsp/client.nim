@@ -965,7 +965,7 @@ proc initialized*(c: LspClient): Future[LspSendNotifyResult] {.async.} =
 
   return LspSendNotifyResult.ok ()
 
-proc shutdown*(c: LspClient, bufferId: int): Future[LspSendRequestResult] {.async.} =
+proc shutdown*(c: LspClient): Future[LspSendRequestResult] {.async.} =
   ## Send a shutdown request to the server.
   ## https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#shutdown
 

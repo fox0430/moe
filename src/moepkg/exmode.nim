@@ -1176,7 +1176,7 @@ proc lspRestartClient(status: var EditorStatus) =
     status.commandLine.writeLspError("Client not found")
     return
 
-  let r = waitFor lspClient.shutdown(currentBufStatus.id)
+  let r = waitFor lspClient.shutdown
   if r.isErr:
     status.commandLine.writeLspError(r.error)
 
