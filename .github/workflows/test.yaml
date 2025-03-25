@@ -80,7 +80,7 @@ jobs:
 
     - name: Install nimlangserver and nph
       run: |
-        nimble install nimlangserver
+        nimble install nimlangserver@1.8.1
         nimble install nph
 
     - name: Run unit test
