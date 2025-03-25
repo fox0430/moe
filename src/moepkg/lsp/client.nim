@@ -1110,7 +1110,7 @@ proc textDocumentDidSave*(
 
   let params = %*initTextDocumentDidSaveParams(version, path, text)
 
-  let err = await c.notify(LspMethod.textDocumentDidChange, params)
+  let err = await c.notify(LspMethod.textDocumentDidSave, params)
   if err.isErr:
     return
       LspSendNotifyResult.err fmt"textDocument/didSave notification failed: {err.error}"
