@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strformat, osproc, strutils, terminal, options, tables, posix]
+import std/[strformat, osproc, strutils, terminal, options, tables, posix, dynlib]
 
 import pkg/[ncurses, results, chronos]
 
@@ -27,6 +27,11 @@ when not defined unitTest:
   import std/os
 
 type
+  NcursesInitExtendedColor = proc(color: cint, r, g, b: cint): ErrCode {.cdecl.}
+    # libncurses.init_extended_color
+  NcursesInitExtendedPair = proc(pair, f, b: cint): ErrCode {.cdecl.}
+    # libncurses.init_extended_pair
+
   NcursesVersion* = object
     major*, minor*, date*: int
 
@@ -154,6 +159,40 @@ var
   pasteBuffer: Option[seq[Runes]]
 
   terminalSize: Size
+
+let libncurseswHandle: LibHandle =
+  # Workaround for `could not import: init_extended_color`.
+  # The LibHandle for checking availability of "init_extended_color" and "init_extended_pair" when running.
+  # https://github.com/fox0430/moe/issues/2262
+  # https://github.com/fox0430/moe/issues/2146
+  block:
+    when defined(windows):
+      const libPatterns = ["libncurses.dll"]
+    elif defined(macosx):
+      const libPatterns = ["libncurses.dylib"]
+    else:
+      const libPatterns = ["libncursesw.so.6", "libncursesw.so.5", "libncursesw.so"]
+
+    var lib: LibHandle
+    for libncurses in libPatterns:
+      lib = loadLib(libncurses)
+      if not lib.isNil:
+        break
+
+    if lib.isNil:
+      echo "Error: libncurses not found. Please install ncurses"
+      quit()
+
+    lib
+
+let
+  ncursesInitExtendedColor =
+    cast[NcursesInitExtendedColor](libncurseswHandle.symAddr("init_extended_color"))
+  ncursesInitExtendedPair =
+    cast[NcursesInitExtendedPair](libncurseswHandle.symAddr("init_extended_pair"))
+
+proc isNcursesExtendedColors*(): bool {.inline.} =
+  not ncursesInitExtendedColor.isNil and not ncursesInitExtendedPair.isNil
 
 proc `$`*(v: NcursesVersion): string =
   fmt"{v.major}.{v.minor}.{v.date}"
@@ -352,7 +391,6 @@ proc toNcursesColor(element: int16): int16 =
   ## The accuracy is not perfect.
 
   when not defined(release):
-    # TODO: Return an error?
     doAssert(element >= 0 and element <= 255, fmt"Invalid value: `{element}`")
 
   return int16(element.float * (1000.0 / 255.0) + 0.5)
@@ -364,32 +402,43 @@ proc initNcursesColor*(color: int, red, green, blue: int16): Result[(), string] 
     b = blue.toNcursesColor
 
   when not defined(release):
-    # TODO: Return an error?
     doAssert(r >= 0, fmt"Invalid value: (r: `{r}`)")
     doAssert(g >= 0, fmt"Invalid value: (g: `{g}`)")
     doAssert(b >= 0, fmt"Invalid value: (b: `{b}`)")
 
   when not defined unitTest:
     # Not start when running unit tests
-    let exitCode = initExtendedColor(color.cint, r.cshort, g.cshort, b.cshort)
-    if 0 != exitCode:
-      return Result[(), string].err fmt"Init Ncurses color failed: (index: {color}, r: {r}, g: {g}, b: {b}): Exit code: {exitCode}"
+
+    if isNcursesExtendedColors():
+      let exitCode = ncursesInitExtendedColor(color.cint, r.cshort, g.cshort, b.cshort)
+      if 0 != exitCode:
+        return Result[(), string].err fmt"Init Ncurses color failed: (index: {color}, r: {r}, g: {g}, b: {b}): Exit code: {exitCode}"
+    else:
+      let exitCode = init_color(color.cshort, cshort(r), cshort(g), cshort(b))
+      if 0 != exitCode:
+        return Result[(), string].err fmt"Init Ncurses color failed: (index: {color}, r: {r}, g: {g}, b: {b}): Exit code: {exitCode}"
 
   return Result[(), string].ok ()
 
 proc initNcursesColorPair*(pair, fg, bg: int): Result[(), string] =
   when not defined(release):
-    # TODO: Return an error?
     # 0 is reserved by Ncurses.
     doAssert(pair > 0, fmt"Cannot use `{pair}` in Ncurses color pair")
 
   when not defined unitTest:
     # Not start when running unit tests
-    let exitCode = initExtendedPair(pair.cint, fg.cint, bg.cint)
-    if 0 != exitCode:
-      let msg =
-        fmt"Init Ncurses color pair failed: (pair: {pair}, fg: {fg}, bg: {bg}): Exit code: {exitCode}"
-      return Result[(), string].err msg
+    if isNcursesExtendedColors():
+      let exitCode = ncursesInitExtendedPair(pair.cint, fg.cint, bg.cint)
+      if 0 != exitCode:
+        let msg =
+          fmt"Init Ncurses color pair failed: (pair: {pair}, fg: {fg}, bg: {bg}): Exit code: {exitCode}"
+        return Result[(), string].err msg
+    else:
+      let exitCode = init_pair(pair.cshort, fg.cshort, bg.cshort)
+      if 0 != exitCode:
+        let msg =
+          fmt"Init Ncurses color pair failed: (pair: {pair}, fg: {fg}, bg: {bg}): Exit code: {exitCode}"
+        return Result[(), string].err msg
 
   return Result[(), string].ok ()
 
