@@ -712,7 +712,7 @@ proc initStandardSettings(): StandardSettings =
   result.insertModeCursor = CursorType.blinkIbeam
   result.incrementalSearch = true
   result.popupWindowInExmode = true
-  result.colorMode = checkColorSupportedTerminal()
+  result.colorMode = checkColorSupport()
 
 proc initEditorSettings*(): EditorSettings =
   result.standard = initStandardSettings()

@@ -317,14 +317,17 @@ proc keyEcho*(keyecho: bool) =
   elif keyecho == false:
     noecho()
 
-proc checkColorSupportedTerminal*(): ColorMode =
-  ## Check how many colors are supported on the terminal and return ColorMode.
-  ## Check "$COLORTERM" first, then check "tput colors" if it fails.
-  ## Return ColorMode.None if unknown color support.
+proc checkColorSupport*(): ColorMode =
+  ## Check how many colors are supported on the terminal and ncurses and return ColorMode.
+  ##
+  ## Check ncurses availability of "init_extended_color" and "init_extended_pair".
+  ## Also check "$COLORTERM" first, then check "tput colors" if it fails.
+  ##
+  ## Return ColorMode.none if unknown.
 
   result = ColorMode.none
 
-  block checkColorTerm:
+  if isNcursesExtendedColors():
     let cmdResult = execCmdEx("echo $COLORTERM")
     if cmdResult.exitCode == 0:
       var output = cmdResult.output
