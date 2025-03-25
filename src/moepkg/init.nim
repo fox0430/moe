@@ -139,6 +139,9 @@ proc initEditor*(): Result[EditorStatus, string] =
     if r.isErr:
       return Result[EditorStatus, string].err r.error
 
+    if not isNcursesExtendedColors():
+      s.commandLine.writeNcursesColorError
+
   setControlCHook(
     proc() {.noconv.} =
       exitUi()

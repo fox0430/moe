@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -59,6 +59,11 @@ proc writeWarn*(c: var CommandLine, message: string) =
   let mess = fmt"WARN: {message}"
   c.writeMessageOnCommandLine(mess, EditorColorPairIndex.warnMessage)
   addMessageLog message
+
+proc writeNcursesColorError*(commandLine: var CommandLine) =
+  let mess = fmt"Error: Ncurses: Cannot use extened colors"
+  commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
+  addMessageLog mess
 
 proc writeNoWriteError*(commandLine: var CommandLine) =
   let mess = "Error: No write since last change"
