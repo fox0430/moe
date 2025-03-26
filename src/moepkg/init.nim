@@ -135,7 +135,8 @@ proc initEditor*(): Result[EditorStatus, string] =
     initLogger()
 
   block initColors:
-    let r = status.settings.theme.colors.initEditrorColor(status.settings.standard.colorMode)
+    let r =
+      status.settings.theme.colors.initEditrorColor(status.settings.standard.colorMode)
     if r.isErr:
       return Result[EditorStatus, string].err r.error
 
