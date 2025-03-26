@@ -553,10 +553,6 @@ proc resizeMainWindowNode(status: var EditorStatus, terminalSize: Size) =
 proc resize*(status: var EditorStatus) =
   ## Reszie all windows to ui.terminalSize.
 
-  if currentBufStatus.isCursor:
-    # Disable the cursor while updating views.
-    hideCursor()
-
   # Get the current terminal from ui.terminalSize.
   let terminalSize = getTerminalSize()
 
@@ -658,9 +654,6 @@ proc resize*(status: var EditorStatus) =
   const X = 0
   let y = max(terminalHeight, 4) - 1
   status.commandLine.resize(y, X, CommandLineWindowHeight, terminalWidth)
-
-  if currentBufStatus.isCursor:
-    showCursor()
 
 proc updateStatusLine(status: var EditorStatus) =
   if not status.settings.statusLine.multipleStatusLine:
@@ -941,9 +934,6 @@ proc shiftFoldingRanges*(status: var EditorStatus, start, shift: int) =
 proc update*(status: var EditorStatus) =
   ## Update all views, highlighting, cursor, etc.
 
-  # Hide the cursor while updating.
-  hideCursor()
-
   let settings = status.settings
 
   if settings.tabLine.enable:
@@ -1181,8 +1171,8 @@ proc update*(status: var EditorStatus) =
     # Always write a message to the command line while recording operations.
     status.commandLine.writeInRecordingOperations(status.recodingOperationRegister.get)
 
-  if currentBufStatus.isCursor:
-    showCursor()
+  if not currentBufStatus.isCursor:
+    hideCursor()
 
   doUpdate()
 
