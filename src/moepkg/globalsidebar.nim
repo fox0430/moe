@@ -178,15 +178,14 @@ proc write(sidebar: var GlobalSidebar) =
 
       sidebar.window.write(i, j, $buf[i][j], cs.color.int16)
 
-proc refresh(sidebar: GlobalSidebar) {.inline.} =
-  ## Refresh the ncurses window for the sidebar.
-  sidebar.window.refresh
+proc noutrefresh(sidebar: GlobalSidebar) {.inline.} =
+  sidebar.window.noutrefresh
 
 proc update*(sidebar: var GlobalSidebar) =
-  ## Write buffer to the terminal and refresh.
+  ## Write buffer to the terminal and refresh (noutrefresh).
 
   sidebar.write
-  sidebar.refresh
+  sidebar.noutrefresh
 
 proc resize*(sidebar: var GlobalSidebar, size: Size) {.inline.} =
   ## Resize the sidebar window

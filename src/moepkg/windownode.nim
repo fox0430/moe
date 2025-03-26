@@ -475,7 +475,7 @@ proc moveCursor*(node: var WindowNode, y, x: int) =
         else:
           x
     root.window.get.moveCursor(cursorY, cursorX)
-    root.window.get.refresh
+    root.window.get.noutrefresh
 
 proc moveCursor*(node: var WindowNode, position: BufferPosition) {.inline.} =
   node.moveCursor(position.line, position.column)
@@ -484,7 +484,14 @@ proc moveCursor*(node: var WindowNode) =
   if node.isActualWin:
     node.moveCursor(node.y, node.x)
 
-proc refreshWindow*(node: var WindowNode) =
+proc noutrefresh*(node: var WindowNode) =
+  var root = node
+  while not root.parent.isNil:
+    root = root.parent
+
+  root.window.get.noutrefresh
+
+proc refresh*(node: var WindowNode) =
   var root = node
   while not root.parent.isNil:
     root = root.parent
@@ -494,20 +501,20 @@ proc refreshWindow*(node: var WindowNode) =
 proc getKey*(node: var WindowNode): Option[Rune] {.inline.} =
   ## Non-blocking read.
 
-  node.refreshWindow
+  node.refresh
   return getKey()
 
 proc getKey*(node: var WindowNode, timeout: int): Option[Rune] {.inline.} =
   ## Non-blocking read.
   ## `timeout` is milliSeconds.
 
-  node.refreshWindow
+  node.refresh
   return getKey(timeout)
 
 proc getKeyBlocking*(node: var WindowNode): Rune {.inline.} =
   ## Blocking read.
 
-  node.refreshWindow
+  node.refresh
   return getKeyBlocking()
 
 proc eraseWindow*(node: var WindowNode) {.inline.} =

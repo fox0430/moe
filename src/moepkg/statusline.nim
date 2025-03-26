@@ -529,7 +529,7 @@ proc updateStatusLine*(
 
   s.window.erase
   s.write
-  s.window.refresh
+  s.window.noutrefresh
 
 proc updateMessage*(s: var StatusLine, message: Runes) {.inline.} =
   s.message = message
