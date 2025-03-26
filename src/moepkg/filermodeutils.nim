@@ -494,7 +494,7 @@ proc searchFileMode*(
     bufStatus.buffer = @["Not found"].toSeqRunes.toGapBuffer
 
     windowNode.eraseWindow
-    windowNode.refreshWindow
+    windowNode.noutrefresh
     filerStatus.isUpdatePathList = true
 
 proc isFilerModeCommand*(command: Runes): InputState =

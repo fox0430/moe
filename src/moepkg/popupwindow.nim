@@ -59,6 +59,9 @@ proc initPopupWindow*(): PopupWindow {.inline.} =
 proc refresh*(p: var PopupWindow) {.inline.} =
   p.window.refresh
 
+proc noutrefresh*(p: var PopupWindow) {.inline.} =
+  p.window.noutrefresh
+
 proc overlay*(p: var PopupWindow, destWin: var Window) {.inline.} =
   overlay(p.window, destWin)
 
@@ -249,7 +252,7 @@ proc update*(p: var PopupWindow) =
   if p.showBorder:
     p.window.box(0, 0, EditorColorPairIndex.popUpWindow.int16)
 
-  p.refresh
+  p.noutrefresh
 
 proc close*(p: var PopupWindow) =
   ## Delete the popup window.

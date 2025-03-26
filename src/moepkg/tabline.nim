@@ -155,4 +155,4 @@ proc update*(
       cs.color.int16,
       cs.attribute,
     )
-  tabLine.window.refresh
+  tabLine.window.noutrefresh

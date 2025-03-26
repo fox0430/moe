@@ -518,6 +518,12 @@ proc erase*(win: var Window) =
 proc refresh*(win: Window) {.inline.} =
   wrefresh(win.cursesWindow)
 
+proc noutrefresh*(win: Window) {.inline.} =
+  wnoutrefresh(win.cursesWindow)
+
+proc doUpdate*() {.inline.} =
+  ncurses.doupdate()
+
 proc overlay*(win, destWin: var Window) {.inline.} =
   overlay(win.cursesWindow, destWin.cursesWindow)
 

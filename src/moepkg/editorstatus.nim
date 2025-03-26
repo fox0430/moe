@@ -615,7 +615,7 @@ proc resize*(status: var EditorStatus) =
           status.statusLine[statusLineIndex].window.resize(
             StatusLineHeight, width, y, x
           )
-          status.statusLine[statusLineIndex].window.refresh
+          status.statusLine[statusLineIndex].window.noutrefresh
 
           # Update status line info.
           status.statusLine[statusLineIndex].bufferIndex = node.bufferIndex
@@ -896,7 +896,7 @@ proc updateCommandLine(status: var EditorStatus) =
   if status.commandLine.isUpdate:
     status.commandLine.update
 
-  status.commandLine.window.refresh
+  status.commandLine.window.noutrefresh
 
 proc updateEditorViewConfig(view: var EditorView, settings: EditorSettings) =
   ## Update `EditorView.config` based on `EditorSettings`.
@@ -1151,7 +1151,7 @@ proc update*(status: var EditorStatus) =
           node.cursor.update(node.view, node.currentLine, node.currentColumn)
 
         # Update the terminal view.
-        node.refreshWindow
+        node.noutrefresh
 
       if node.child.len > 0:
         for node in node.child:
@@ -1183,6 +1183,8 @@ proc update*(status: var EditorStatus) =
 
   if currentBufStatus.isCursor:
     showCursor()
+
+  doUpdate()
 
 proc restoreCursorPosition*(
     node: var WindowNode, bufStatus: BufferStatus, lastPosition: seq[LastCursorPosition]

@@ -79,7 +79,7 @@ proc update*(commandLine: var CommandLine) =
 
   commandLine.seekCursor
 
-  commandLine.window.refresh
+  commandLine.window.noutrefresh
 
   commandLine.isUpdate = false
 
