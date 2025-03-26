@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -125,22 +125,22 @@ proc initEditor*(): Result[EditorStatus, string] =
 
   startUi()
 
-  var s = initEditorStatus()
+  var status = initEditorStatus()
 
-  s.loadConfigurationFile
-  s.timeConfFileLastReloaded = now()
+  status.loadConfigurationFile
+  status.timeConfFileLastReloaded = now()
 
-  if parsedList.isLogger or s.settings.lsp.enable:
+  if parsedList.isLogger or status.settings.lsp.enable:
     # Force enable logger if enabled LSP.
     initLogger()
 
   block initColors:
-    let r = s.settings.theme.colors.initEditrorColor(s.settings.standard.colorMode)
+    let r = status.settings.theme.colors.initEditrorColor(status.settings.standard.colorMode)
     if r.isErr:
       return Result[EditorStatus, string].err r.error
 
     if not isNcursesExtendedColors():
-      s.commandLine.writeNcursesColorError
+      status.commandLine.writeNcursesColorError
 
   setControlCHook(
     proc() {.noconv.} =
@@ -149,16 +149,16 @@ proc initEditor*(): Result[EditorStatus, string] =
   )
 
   if parsedList.isReadonly:
-    s.isReadonly = true
+    status.isReadonly = true
 
-  s.addBufferStatus(parsedList)
+  status.addBufferStatus(parsedList)
 
-  s.loadPersistData
+  status.loadPersistData
 
-  s.initSidebar
+  status.initSidebar
 
-  if s.settings.clipboard.enable:
-    s.registers.setClipBoardTool(s.settings.clipboard.tool)
+  if status.settings.clipboard.enable:
+    status.registers.setClipBoardTool(status.settings.clipboard.tool)
 
   disableControlC()
   catchTerminalResize()
@@ -166,4 +166,7 @@ proc initEditor*(): Result[EditorStatus, string] =
   showCursor()
   setBlinkingBlockCursor()
 
-  return Result[EditorStatus, string].ok s
+  if not currentBufStatus.isCursor:
+    hideCursor()
+
+  return Result[EditorStatus, string].ok status
