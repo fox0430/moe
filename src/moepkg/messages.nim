@@ -95,8 +95,9 @@ proc writeFileOpenError*(commandLine: var CommandLine, fileName: string) =
   commandLine.writeMessageOnCommandLine(mess, EditorColorPairIndex.errorMessage)
   addMessageLog mess
 
-proc writeCreateDirError*(commandLine: var CommandLine) {.inline.} =
+proc writeCreateDirError*(commandLine: var CommandLine) =
   const Mess = "Error: Can not create directory"
+  commandLine.writeError(Mess)
   addMessageLog Mess
 
 proc writeMessageDeletedFile*(
