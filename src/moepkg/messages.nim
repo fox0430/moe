@@ -345,6 +345,10 @@ proc writeDiffViewerError*(commandLine: var CommandLine, message: string) =
   let mess = fmt"Error: diff: ${message}"
   commandLine.writeError(mess)
 
+proc writeChangeThemeError*(commandLine: var CommandLine, message: string) =
+  let mess = fmt"Error: Change theme failed: ${message}"
+  commandLine.writeError(mess)
+
 proc writeLspError*(commandLine: var CommandLine, message: string) =
   let mess = fmt"lsp: {message}"
   commandLine.writeError(mess)
