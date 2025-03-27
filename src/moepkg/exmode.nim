@@ -306,12 +306,13 @@ proc changeThemeSettingCommand(status: var EditorStatus, command: Runes) =
     discard
 
   let r = status.settings.changeTheme
-  # TODO: Add error message
   if r.isOk:
     status.resize
     status.commandLine.clear
+  else:
+    status.commandLine.writeChangeThemeError(r.error)
 
-    status.changeMode(currentBufStatus.prevMode)
+  status.changeMode(currentBufStatus.prevMode)
 
 proc tabLineSettingCommand(status: var EditorStatus, command: Runes) =
   if command == ru"on":
