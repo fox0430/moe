@@ -204,6 +204,8 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | filerLogNotify | bool | true | Filer messages/notifications to the log |
 | restoreScreenNotify | bool | true | Restore messages/notifications in the command line |
 | restoreLogNotify | bool | true | Restore messages/notifications to the log |
+| lspScreenNotify | bool | true | Lsp messages/notifications in the command line |
+| lspLogNotify | bool | true | Lsp messages/notifications to the log |
 
 
 ### Filer table

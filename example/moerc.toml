@@ -181,6 +181,10 @@ restoreScreenNotify = true
 
 restoreLogNotify = true
 
+lspScreenNotify = true
+
+lspLogNotify = true
+
 [Filer]
 
 showIcons = true

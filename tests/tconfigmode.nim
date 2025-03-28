@@ -178,7 +178,9 @@ suite "Config mode: Init buffer":
         "  quickRunLogNotify        true", "  buildOnSaveScreenNotify  true",
         "  buildOnSaveLogNotify     true", "  filerScreenNotify        true",
         "  filerLogNotify           true", "  restoreScreenNotify      true",
-        "  restoreLogNotify         true",
+        "  restoreLogNotify         true", "  lspScreenNotify          true",
+        "  lspLogNotify             true"
+
       ].toSeqRunes
 
     for index, line in buffer:
@@ -1136,6 +1138,28 @@ suite "Config mode: Get Notification table setting values":
     const Name = "restoreLogNotify"
     let
       default = notificationSettings.restoreLogNotify
+      values = notificationSettings.getNotificationTableSettingValues(Name)
+
+    checkBoolSettingValue(default, values)
+
+  test "Get lspScreenNotify values":
+    var status = initEditorStatus()
+    let notificationSettings = status.settings.notification
+
+    const Name = "lspScreenNotify"
+    let
+      default = notificationSettings.lspScreenNotify
+      values = notificationSettings.getNotificationTableSettingValues(Name)
+
+    checkBoolSettingValue(default, values)
+
+  test "Get lspLogNotify values":
+    var status = initEditorStatus()
+    let notificationSettings = status.settings.notification
+
+    const Name = "lspLogNotify"
+    let
+      default = notificationSettings.lspLogNotify
       values = notificationSettings.getNotificationTableSettingValues(Name)
 
     checkBoolSettingValue(default, values)

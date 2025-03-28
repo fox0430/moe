@@ -68,9 +68,7 @@ proc writeError*(c: var CommandLine, message: string) {.inline.} =
     fmt"Error: {message}", EditorColorPairIndex.errorMessage, true, true
   )
 
-proc writeWarn*(
-    c: var CommandLine, message: string, log = true, screen = true
-) {.inline.} =
+proc writeWarn*(c: var CommandLine, message: string) {.inline.} =
   c.writeMessageOnCommandLine(fmt"Warn: {message}", EditorColorPairIndex.warnMessage)
 
 proc writeNcursesColorError*(commandLine: var CommandLine) {.inline.} =
@@ -258,12 +256,6 @@ proc writeInRecordingOperations*(
 ) {.inline.} =
   commandLine.writeMessageOnCommandLine(fmt"recording @{registerName}")
 
-proc writeLspServerStart*(commandLine: var CommandLine, command: Runes) {.inline.} =
-  commandLine.writeMessageOnCommandLine(fmt"LSP server starting: {command}")
-
-proc writeLspInitialized*(commandLine: var CommandLine, command: Runes) {.inline.} =
-  commandLine.writeMessageOnCommandLine(fmt"LSP client initialized: {command}")
-
 proc writeAutoBackupFailedError*(
     commandLine: var CommandLine, filename: Runes
 ) {.inline.} =
@@ -380,13 +372,43 @@ proc writeLspInfo*(
 ) {.inline.} =
   commandLine.writeInfo(fmt"lsp: {message}", log, screen)
 
-proc writeLspWarn*(
-    commandLine: var CommandLine, message: string, log = true, screen = true
-) {.inline.} =
-  commandLine.writeWarn(fmt"lsp: {message}", log, screen)
+proc writeLspWarn*(commandLine: var CommandLine, message: string) {.inline.} =
+  commandLine.writeWarn(fmt"lsp: {message}")
 
 proc writeLspError*(commandLine: var CommandLine, message: string) {.inline.} =
   commandLine.writeError(fmt"lsp: {message}")
+
+proc writeLspServerStart*(
+    commandLine: var CommandLine, command: Runes, settings: NotificationSettings
+) =
+  let
+    isLog = settings.logNotifications and settings.lspLogNotify
+    isScreen = settings.screenNotifications and settings.lspScreenNotify
+
+  if isLog or isScreen:
+    commandLine.writeLspStandard(fmt"Server starting: {command}", isLog, isScreen)
+
+proc writeLspInitialized*(
+    commandLine: var CommandLine, command: Runes, settings: NotificationSettings
+) =
+  let
+    isLog = settings.logNotifications and settings.lspLogNotify
+    isScreen = settings.screenNotifications and settings.lspScreenNotify
+
+  if isLog or isScreen:
+    commandLine.writeLspStandard(fmt"Client initialized: {command}", isLog, isScreen)
+
+proc writeLspProgress*(
+    commandLine: var CommandLine, message: string, settings: NotificationSettings
+) =
+  let
+    isLog = settings.logNotifications and settings.lspLogNotify
+    isScreen = settings.screenNotifications and settings.lspScreenNotify
+
+  if isLog or isScreen:
+    commandLine.writeLspStandard(
+      fmt"Progress: {message}", log = isLog, screen = isScreen
+    )
 
 proc writeLspInitializeError*(
     commandLine: var CommandLine, command: Runes, errorMessage: string
@@ -489,15 +511,3 @@ proc writeLspDocumentSymbolError*(
     commandLine: var CommandLine, message: string
 ) {.inline.} =
   commandLine.writeLspError(fmt"Document symbol: {message}")
-
-proc writeLspProgress*(
-    commandLine: var CommandLine, message: string, settings: NotificationSettings
-) =
-  let
-    isLog = settings.logNotifications
-    isScreen = settings.screenNotifications
-
-  if isLog or isScreen:
-    commandLine.writeLspStandard(
-      fmt"Progress: {message}", log = isLog, screen = isScreen
-    )

@@ -126,6 +126,8 @@ type
     filerLogNotify
     restoreScreenNotify
     restoreLogNotify
+    lspScreenNotify
+    lspLogNotify
 
   FilerTableNames {.pure.} = enum
     showIcons
@@ -493,6 +495,10 @@ proc getNotificationTableSettingValues(
     currentVal = settings.restoreScreenNotify
   of "restoreLogNotify":
     currentVal = settings.restoreLogNotify
+  of "lspScreenNotify":
+    currentVal = settings.lspScreenNotify
+  of "lspLogNotify":
+    currentVal = settings.lspLogNotify
   else:
     return
 
@@ -904,6 +910,10 @@ proc changeNotificationTableSetting(
     settings.restoreScreenNotify = parseBool(settingVal)
   of "restoreLogNotify":
     settings.restoreLogNotify = parseBool(settingVal)
+  of "lspScreenNotify":
+    settings.lspScreenNotify = parseBool(settingVal)
+  of "lspLogNotify":
+    settings.lspLogNotify = parseBool(settingVal)
 
 proc changeFilerTableSetting(
     settings: var FilerSettings, settingName, settingVal: string
@@ -1187,7 +1197,8 @@ proc getSettingType(table, name: string): SettingType =
         "yankScreenNotify", "yankLogNotify", "deleteScreenNotify", "deleteLogNotify",
         "saveScreenNotify", "saveLogNotify", "quickRunScreenNotify",
         "quickRunLogNotify", "buildOnSaveScreenNotify", "buildOnSaveLogNotify",
-        "filerScreenNotify", "filerLogNotify", "restoreScreenNotify", "restoreLogNotify":
+        "filerScreenNotify", "filerLogNotify", "restoreScreenNotify",
+        "restoreLogNotify", "lspScreenNotify", "lspLogNotify":
       result = SettingType.bool
     else:
       result = SettingType.none
@@ -1925,6 +1936,10 @@ proc initNotificationTableBuffer(settings: NotificationSettings): seq[Runes] =
       result.add(ru nameStr & space & $settings.restoreScreenNotify)
     of "restoreLogNotify":
       result.add(ru nameStr & space & $settings.restoreLogNotify)
+    of "lspScreenNotify":
+      result.add(ru nameStr & space & $settings.lspScreenNotify)
+    of "lspLogNotify":
+      result.add(ru nameStr & space & $settings.lspLogNotify)
 
 proc initFilerTableBuffer(settings: EditorSettings): seq[Runes] =
   result.add(ru"Filer")

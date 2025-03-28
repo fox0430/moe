@@ -480,7 +480,8 @@ proc addNewBuffer*(
               )
             else:
               status.commandLine.writeLspServerStart(
-                status.settings.lsp.languages[newBuf.langId].command
+                status.settings.lsp.languages[newBuf.langId].command,
+                status.settings.notification,
               )
 
   status.bufStatus.add newBuf

@@ -116,6 +116,8 @@ type
     filerLogNotify*: bool
     restoreScreenNotify*: bool
     restoreLogNotify*: bool
+    lspScreenNotify*: bool
+    lspLogNotify*: bool
 
   BuildOnSaveSettings* = object
     enable*: bool
@@ -450,6 +452,8 @@ proc initNotificationSettings(): NotificationSettings =
   result.filerLogNotify = true
   result.restoreScreenNotify = true
   result.restoreLogNotify = true
+  result.lspScreenNotify = true
+  result.lspLogNotify = true
 
 proc initQuickRunSettings(): QuickRunSettings =
   result.saveBufferWhenQuickRun = true
@@ -1617,6 +1621,12 @@ proc parseNotificationTable(s: var EditorSettings, notificationConfigs: TomlValu
   if notificationConfigs.contains("restoreLogNotify"):
     s.notification.restoreLogNotify = notificationConfigs["restoreLogNotify"].getBool
 
+  if notificationConfigs.contains("lspScreenNotify"):
+    s.notification.lspScreenNotify = notificationConfigs["lspScreenNotify"].getBool
+
+  if notificationConfigs.contains("lspLogNotify"):
+    s.notification.lspLogNotify = notificationConfigs["lspLogNotify"].getBool
+
 proc parseFilerTable(s: var EditorSettings, filerConfigs: TomlValueRef) =
   if filerConfigs.contains("showIcons"):
     s.filer.showIcons = filerConfigs["showIcons"].getBool
@@ -2309,7 +2319,8 @@ proc validateNotificationTable(table: TomlValueRef): Option[InvalidItem] =
         "saveScreenNotify", "saveLogNotify", "workspaceScreenNotify",
         "workspaceLogNotify", "quickRunScreenNotify", "quickRunLogNotify",
         "buildOnSaveScreenNotify", "buildOnSaveLogNotify", "filerScreenNotify",
-        "filerLogNotify", "restoreScreenNotify", "restoreLogNotify":
+        "filerLogNotify", "restoreScreenNotify", "restoreLogNotify", "lspScreenNotify",
+        "lspLogNotify":
       if val.kind != TomlValueKind.Bool:
         return some(InvalidItem(name: $key, val: $val))
     else:
@@ -3010,6 +3021,8 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "filerLogNotify = {$settings.notification.filerLogNotify}"
   result.addLine fmt "restoreScreenNotify = {$settings.notification.restoreScreenNotify}"
   result.addLine fmt "restoreLogNotify = {$settings.notification.restoreLogNotify}"
+  result.addLine fmt "lspScreenNotify = {$settings.notification.lspScreenNotify}"
+  result.addLine fmt "lspLogNotify = {$settings.notification.lspLogNotify}"
 
   result.addLine ""
 
