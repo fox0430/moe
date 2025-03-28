@@ -179,8 +179,7 @@ suite "Config mode: Init buffer":
         "  buildOnSaveLogNotify     true", "  filerScreenNotify        true",
         "  filerLogNotify           true", "  restoreScreenNotify      true",
         "  restoreLogNotify         true", "  lspScreenNotify          true",
-        "  lspLogNotify             true"
-
+        "  lspLogNotify             true",
       ].toSeqRunes
 
     for index, line in buffer:
