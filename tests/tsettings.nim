@@ -124,6 +124,8 @@ filerScreenNotify = false
 filerLogNotify = false
 restoreScreenNotify = false
 restoreLogNotify = false
+lspScreenNotify = false
+lspLogNotify = false
 
 [Filer]
 showIcons = false
@@ -606,6 +608,8 @@ suite "settings: Parse configuration file":
     check not settings.notification.filerLogNotify
     check not settings.notification.restoreScreenNotify
     check not settings.notification.restoreLogNotify
+    check not settings.notification.lspScreenNotify
+    check not settings.notification.lspLogNotify
 
     check not settings.filer.showIcons
 

@@ -158,7 +158,8 @@ proc lspInitialized(
     lspClient.sendLspCodeLens(b)
 
   status.commandLine.writeLspInitialized(
-    status.settings.lsp.languages[currentBufStatus.langId].command
+    status.settings.lsp.languages[currentBufStatus.langId].command,
+    status.settings.notification,
   )
 
   status.setServerNameToStatusLine
