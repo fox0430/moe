@@ -186,7 +186,7 @@ proc backupBuffer*(
 
   let backupDir = initBackupDir(baseBackupDir, sourceFilePath.toRunes)
   if backupDir.len == 0:
-    commandLine.writeAutoBackupFailedMessage(backupFilename, notificationSettings)
+    commandLine.writeAutoBackupFailedError(backupFilename)
     return
 
   let isSame = diff(baseBackupDir, sourceFilePath.toRunes, bufStatus.buffer.toString)
@@ -199,13 +199,12 @@ proc backupBuffer*(
       encoding = bufStatus.characterEncoding
 
     if not writeBackupFile(backupFilePath, buffer, encoding):
-      commandLine.writeAutoBackupFailedMessage(backupFilename, notificationSettings)
+      commandLine.writeAutoBackupFailedError(backupFilename)
       return
 
     if not fileExists($backupInfoJsonPath(backupDir)):
       if not writeBackupInfoJson(backupDir, sourceFilePath.toRunes):
-        commandLine.writeAutoBackupFailedMessage(backupFilename, notificationSettings)
+        commandLine.writeAutoBackupFailedError(backupFilename)
         return
 
-    let message = "Automatic backup successful: " & $backupFilePath
-    commandLine.writeAutoBackupSuccessMessage(message, notificationSettings)
+    commandLine.writeAutoBackupSuccessMessage(backupFilePath, notificationSettings)

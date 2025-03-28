@@ -1559,7 +1559,7 @@ proc checkBackgroundBuild(status: var EditorStatus) =
         )
       else:
         addMessageLog r.error.toRunes
-        status.commandLine.writeMessageFailedBuildOnSave(p.filePath)
+        status.commandLine.writeMessageFailedBuildOnSaveError(p.filePath)
 
       # Back to the cursor position to the current main window from the command
       # line window.

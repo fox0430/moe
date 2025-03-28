@@ -237,15 +237,15 @@ proc showLspServerLog(
 
   case m.get.messageType
   of LspMessageType.error:
-    commandLine.writeLspServerError(m.get.message)
+    commandLine.writeLspError(m.get.message)
   of LspMessageType.warn:
-    commandLine.writeLspServerWarn(m.get.message)
+    commandLine.writeLspWarn(m.get.message)
   of LspMessageType.info:
-    commandLine.writeLspServerInfo(m.get.message)
+    commandLine.writeLspInfo(m.get.message)
   of LspMessageType.log:
-    commandLine.writeLspServerLog(m.get.message)
+    commandLine.writeLspLog(m.get.message)
   of LspMessageType.debug:
-    commandLine.writeLspServerDebug(m.get.message)
+    commandLine.writeLspDebug(m.get.message)
 
   return Result[(), string].ok ()
 
@@ -370,7 +370,9 @@ proc lspProgress(status: var EditorStatus, notify: JsonNode): Result[(), string]
 
   case lspClient.progress[token].state
   of begin, report, `end`:
-    status.commandLine.writeLspProgress(progressMessage(lspClient.progress[token]))
+    status.commandLine.writeLspProgress(
+      progressMessage(lspClient.progress[token]), status.settings.notification
+    )
   else:
     discard
 

@@ -510,7 +510,7 @@ proc showCurrentCharInfoCommand(status: var EditorStatus, windowNode: WindowNode
     currentColumn = windowNode.currentColumn
     currentChar = currentBufStatus.buffer[currentLine][currentColumn]
 
-  status.commandLine.writeCurrentCharInfo(currentChar)
+  status.commandLine.writeCurrentCharInfo(currentChar, status.settings.notification)
 
 proc requestGotoDeclaration(status: var EditorStatus) =
   if not status.lspClients.contains(currentBufStatus.langId):
@@ -1443,7 +1443,7 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
     return
   elif isCtrlC(commands[^1]):
     # Cnacel commands and show the exit help
-    status.commandLine.writeExitHelp
+    status.commandLine.writeExitHelp(status.settings.notification)
   elif commands.len > 1 and isEscKey(commands[0]):
     # Remove ECS key and call recursively.
     discard status.normalCommand(commands[1 .. commands.high])

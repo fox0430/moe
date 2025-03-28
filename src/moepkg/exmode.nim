@@ -702,7 +702,7 @@ proc buildOnSave(status: var EditorStatus) =
   )
 
   if buildProcess.isErr:
-    status.commandLine.writeMessageFailedBuildOnSave(currentBufStatus.path)
+    status.commandLine.writeMessageFailedBuildOnSaveError(currentBufStatus.path)
   else:
     status.backgroundTasks.build.add buildProcess.get
 
@@ -752,7 +752,9 @@ proc writeConfigurationFile(status: var EditorStatus) =
 
     let r = saveFile(configFilePath.toRunes, buffer.toRunes, CharacterEncoding.utf8)
     if r.isOk:
-      status.commandLine.writePutConfigFile(configFilePath)
+      status.commandLine.writePutConfigFile(
+        configFilePath, status.settings.notification
+      )
     else:
       status.commandLine.writeSaveError
 

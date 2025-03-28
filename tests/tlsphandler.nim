@@ -284,7 +284,7 @@ suite "lsp showLspServerLog":
         "params": {"type": 1, "message": "error message"},
       }
     ).isOk
-    check cli.buffer == ru"ERR: lsp: error message"
+    check cli.buffer == ru"Error: lsp: error message"
 
   test "Warning":
     check cli.showLspServerLog(
@@ -294,7 +294,7 @@ suite "lsp showLspServerLog":
         "params": {"type": 2, "message": "warning message"},
       }
     ).isOk
-    check cli.buffer == ru"WARN: lsp: warning message"
+    check cli.buffer == ru"Warn: lsp: warning message"
 
   test "Info":
     check cli.showLspServerLog(
@@ -304,7 +304,7 @@ suite "lsp showLspServerLog":
         "params": {"type": 3, "message": "info message"},
       }
     ).isOk
-    check cli.buffer == ru"INFO: lsp: info message"
+    check cli.buffer == ru"Info: lsp: info message"
 
   test "Log":
     check cli.showLspServerLog(
@@ -314,7 +314,7 @@ suite "lsp showLspServerLog":
         "params": {"type": 4, "message": "log message"},
       }
     ).isOk
-    check cli.buffer == ru"LOG: lsp: log message"
+    check cli.buffer == ru"Log: lsp: log message"
 
   test "Debug":
     check cli.showLspServerLog(
@@ -324,7 +324,7 @@ suite "lsp showLspServerLog":
         "params": {"type": 5, "message": "debug message"},
       }
     ).isOk
-    check cli.buffer == ru"DEBUG: lsp: debug message"
+    check cli.buffer == ru"Debug: lsp: debug message"
 
 suite "lsp: lspDiagnostics":
   const FilePath = "/tmp/test.nim"
@@ -519,7 +519,7 @@ suite "lsp: lspProgress":
     check "" == lspClient.progress["token"].message
     check none(Natural) == lspClient.progress["token"].percentage
 
-    check ru"lsp: progress: begin" == status.commandLine.buffer
+    check ru"lsp: Progress: begin" == status.commandLine.buffer
 
   test "begin with message":
     lspClient.progress["token"] = ProgressReport(title: "", state: ProgressState.create)
@@ -545,7 +545,7 @@ suite "lsp: lspProgress":
     check "message" == lspClient.progress["token"].message
     check none(Natural) == lspClient.progress["token"].percentage
 
-    check ru"lsp: progress: begin: message" == status.commandLine.buffer
+    check ru"lsp: Progress: begin: message" == status.commandLine.buffer
 
   test "report":
     lspClient.progress["token"] =
@@ -567,7 +567,7 @@ suite "lsp: lspProgress":
     check "report" == lspClient.progress["token"].message
     check none(Natural) == lspClient.progress["token"].percentage
 
-    check ru"lsp: progress: report: report" == status.commandLine.buffer
+    check ru"lsp: Progress: report: report" == status.commandLine.buffer
 
   test "report with percentage":
     lspClient.progress["token"] =
@@ -594,7 +594,7 @@ suite "lsp: lspProgress":
     check "report" == lspClient.progress["token"].message
     check some(Natural(50)) == lspClient.progress["token"].percentage
 
-    check ru"lsp: progress: report: 50%: report" == status.commandLine.buffer
+    check ru"lsp: Progress: report: 50%: report" == status.commandLine.buffer
 
   test "end":
     lspClient.progress["token"] =
@@ -613,7 +613,7 @@ suite "lsp: lspProgress":
     check "end" == lspClient.progress["token"].message
     check none(Natural) == lspClient.progress["token"].percentage
 
-    check ru"lsp: progress: end: end" == status.commandLine.buffer
+    check ru"lsp: Progress: end: end" == status.commandLine.buffer
 
 suite "lsp: lspCompletion":
   var status: EditorStatus
