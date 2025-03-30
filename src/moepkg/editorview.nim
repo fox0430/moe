@@ -415,7 +415,7 @@ proc write(
     runes: Runes,
     color: EditorColorPairIndex | int16,
     attribute: Attribute = Attribute.normal,
-) {.inline.} =
+) =
   # TODO: use settings file
   const tab = "    "
   let

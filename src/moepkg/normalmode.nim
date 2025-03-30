@@ -80,7 +80,7 @@ template changeModeToExMode*(
 ) =
   bufStatus.changeMode(Mode.ex)
   commandLine.clear
-  commandLine.setPrompt(Ex)
+  commandLine.setPrompt(CommandLinePrompt.ex)
 
 template moveCursorLeft(status: var EditorStatus) =
   for i in 0 ..< currentBufStatus.cmdLoop:
@@ -1428,12 +1428,12 @@ proc isChangeModeKey(key: Rune): bool {.inline.} =
 proc changeModeToSearchForwardMode(status: var EditorStatus) =
   currentBufStatus.changeMode(Mode.searchForward)
   status.commandLine.clear
-  status.commandLine.setPrompt(SearchForward)
+  status.commandLine.setPrompt(CommandLinePrompt.searchForward)
 
 proc changeModeToSearchBackwardMode(status: var EditorStatus) =
   currentBufStatus.changeMode(Mode.searchBackward)
   status.commandLine.clear
-  status.commandLine.setPrompt(SearchBackward)
+  status.commandLine.setPrompt(CommandLinePrompt.searchBackward)
 
 proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
   ## Exec normal mode commands.

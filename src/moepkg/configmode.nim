@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -2165,14 +2165,14 @@ proc changeModeToSearchForwardMode(
 ) =
   bufStatus.changeMode(Mode.searchForward)
   commandLine.clear
-  commandLine.setPrompt(SearchForward)
+  commandLine.setPrompt(CommandLinePrompt.searchForward)
 
 proc changeModeToSearchBackwardMode(
     bufStatus: var BufferStatus, commandLine: var CommandLine
 ) =
   bufStatus.changeMode(Mode.searchBackward)
   commandLine.clear
-  commandLine.setPrompt(SearchBackward)
+  commandLine.setPrompt(CommandLinePrompt.searchBackward)
 
 proc isConfigModeCommand*(command: Runes): InputState =
   result = InputState.Invalid

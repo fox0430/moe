@@ -64,7 +64,7 @@ proc currentPathInfo(status: EditorStatus): PathInfo {.inline.} =
 proc changeModeToExMode*(bufStatus: var BufferStatus, commandLine: var CommandLine) =
   bufStatus.changeMode(Mode.ex)
   commandLine.clear
-  commandLine.setPrompt(Ex)
+  commandLine.setPrompt(CommandLinePrompt.ex)
 
 proc execFilerModeCommand*(status: var EditorStatus, command: Runes) =
   let key = command[0]

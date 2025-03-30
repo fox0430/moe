@@ -627,7 +627,7 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
     if status.isPathCompletionInCommandLine and
         status.completionWindow.get.selectedIndex == -1 and key == ru '/':
       # Confirm and resopen the completion window. If '/' entered.
-      status.commandLine.seekCursor
+      #      status.commandLine.seekCursor
       status.openCompletionWindowInCommandLine(true)
       status.updateCompletionWindowBufferInCommandLine
       continue

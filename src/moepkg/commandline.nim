@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -17,78 +17,110 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[sequtils, options]
-import ui, unicodeext, color, independentutils
+import std/[sequtils, options, math]
+import ui, unicodeext, color, independentutils, editorview, highlight
+import lsp/client
 
-type CommandLine* = object # TODO: Add EditorView to CommandLine?
-  buffer*: Runes ## The prompt doesn't include in the buffer.
-  prompt: Runes ## The prompt show before the buffer.
-  bufferPosition: Position ## the buffer position
-  color: EditorColorPairIndex
-    ## TODO: Change type from EditorColorPairIndex to Highlight.
-  window*: Window ## Ncurses window
-  isUpdate: bool ## Update flag
+type
+  CommandLine* = object
+    buffer*: Runes ## The prompt doesn't include in the buffer.
+    prompt: Runes ## The prompt show before the buffer.
+    bufferPosition: Position ## the buffer position
+    color*: EditorColorPairIndex
+    window*: Window ## Ncurses window
+    view*: EditorView ## Comand line view
+    isUpdate: bool ## Update flag
+    y*, x*, h*, w*: int ## Window position and window size
 
-type CommandLinePrompt* = enum
-  Ex = ":"
-  SearchForward = "/"
-  SearchBackward = "?"
-  DocumentSymbol = "#"
+  CommandLinePrompt* {.pure.} = enum
+    ex = ":"
+    searchForward = "/"
+    searchBackward = "?"
+    documentSymbol = "#"
+
+proc initCommandLineHighlight(
+    buffer: seq[Runes], color: EditorColorPairIndex
+): Highlight =
+  ## TODO: Move to highlight module?
+
+  if buffer.len > 0:
+    return initHighlight(buffer, color)
 
 proc initCommandLine*(): CommandLine =
-  result.color = EditorColorPairIndex.default
-
   # Init the command line window
   const
     Color = EditorColorPairIndex.default.int16
-    X = 0
     H = 1
-  let
-    y = getTerminalHeight() - 1
-    w = getTerminalWidth()
-  result.window = initWindow(H, w, y, X, Color)
+    W = 1
+    Y = 1
+    X = 0
+  result.window = initWindow(H, W, Y, X, Color)
+  result.color = EditorColorPairIndex.commandLine
 
-proc resize*(commandLine: var CommandLine, y, x, h, w: int) {.inline.} =
+  result.buffer = ru""
+
+  result.view = initEditorView(@[result.buffer], H, W)
+  result.view.config.isHighlightCurrentLine = false
+
+proc calcWindowaHeight*(commandLine: CommandLine): int =
+  if commandLine.window.width < 1: return 1
+
+  return int(max(1.0, ceil(commandLine.buffer.len / commandLine.window.width)))
+
+proc resize*(commandLine: var CommandLine, y, x, h, w: int) =
   commandLine.window.resize(h, w, y, x)
+
+  let buffer = @[commandLine.prompt & commandline.buffer]
+
+  const
+    WidthOfLineNum = 1
+    TopLine = 0
+  commandLine.view.resize(buffer, h, w, WidthOfLineNum)
+  commandLine.view.reload(buffer, TopLine)
+
   commandLine.isUpdate = true
 
-proc getDisplayRange(commandLine: CommandLine): tuple[first, last: int] =
-  if commandLine.bufferPosition.x > commandLine.window.width:
-    result.first = commandLine.bufferPosition.x - commandLine.window.width
-    result.last = min(commandLine.buffer.high, commandLine.window.width)
-  else:
-    result.first = 0
-    result.last = min(commandLine.buffer.high, commandLine.window.width)
+  commandLine.y = y
+  commandLine.x = x
+  commandLine.h = h
+  commandLine.w = w
 
-proc seekCursor*(commandLine: var CommandLine) =
-  ## Move the cursor position.
-
-  commandLine.window.moveCursor(
-    commandLine.bufferPosition.y, commandLine.prompt.len + commandLine.bufferPosition.x
-  )
+proc erase*(commandLine: var CommandLine) {.inline.} =
+  commandLine.window.erase
 
 proc update*(commandLine: var CommandLine) =
   ## Update the command line view and window.
 
-  let
-    range = commandLine.getDisplayRange
-    buffer = commandLine.prompt & commandLine.buffer[range.first .. range.last]
+  let buffer = @[commandLine.prompt & commandLine.buffer]
 
-  commandLine.window.erase
-  commandLine.window.write(0, 0, buffer, commandLine.color.int16)
+  var highlight = initCommandLineHighlight(buffer, commandLine.color)
 
-  commandLine.seekCursor
+  # Reload Editorview. This is not the actual terminal view.
+  commandLine.view.reload(buffer, 0)
+
+  commandLine.erase
+
+  const CurrentLine = 0
+  let windowPosition = Position(x: 0, y: 0)
+  var currentLineColorPair = 0
+  commandLine.view.update(
+    commandLine.window, buffer, highlight, windowPosition, CurrentLine,
+    currentLineColorPair,
+  )
 
   commandLine.window.noutrefresh
 
   commandLine.isUpdate = false
+
+proc refreshWindow*(commandLine: CommandLine) {.inline.} =
+  commandLine.window.refresh
 
 proc clear*(commandLine: var CommandLine) =
   commandLine.buffer = "".toRunes
   commandLine.prompt = "".toRunes
   commandLine.bufferPosition.x = 0
   commandLine.bufferPosition.y = 0
-  commandLine.color = EditorColorPairIndex.default
+  commandLine.color = EditorColorPairIndex.commandLine
   commandLine.isUpdate = true
 
 proc clearPrompt*(commandLine: var CommandLine) {.inline.} =
