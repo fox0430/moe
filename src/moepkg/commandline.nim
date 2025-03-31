@@ -83,6 +83,9 @@ proc update*(commandLine: var CommandLine) =
 
   commandLine.isUpdate = false
 
+proc refreshWindow*(commandLine: var CommandLine) =
+  commandLine.window.refresh
+
 proc clear*(commandLine: var CommandLine) =
   commandLine.buffer = "".toRunes
   commandLine.prompt = "".toRunes
