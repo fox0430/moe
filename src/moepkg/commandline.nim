@@ -63,7 +63,8 @@ proc initCommandLine*(): CommandLine =
   result.view.config.isHighlightCurrentLine = false
 
 proc calcWindowaHeight*(commandLine: CommandLine): int =
-  if commandLine.window.width < 1: return 1
+  if commandLine.window.width < 1:
+    return 1
 
   return int(max(1.0, ceil(commandLine.buffer.len / commandLine.window.width)))
 

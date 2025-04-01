@@ -541,7 +541,9 @@ proc resize*(status: var EditorStatus) =
     status.resizeMainWindowNode(
       Position(y: tabLineHeight, x: sidebarWidth),
       Size(
-        h: max(4, (terminalSize.h + 1) - tabLineHeight - statusLineHeight - commandLineHeight),
+        h: max(
+          4, (terminalSize.h + 1) - tabLineHeight - statusLineHeight - commandLineHeight
+        ),
         w: max(4, terminalSize.w - sidebarWidth),
       ),
     )
@@ -608,8 +610,7 @@ proc resize*(status: var EditorStatus) =
   # Resize single status line.
   if status.settings.statusLine.enable and
       not status.settings.statusLine.multipleStatusLine:
-    const
-      X = 0
+    const X = 0
     let
       y = max(terminalSize.h, 4) - 1 - (if status.settings.statusLine.merge: 0 else: 1)
       w = if status.sidebar.isSome: mainWindowNode.w else: terminalSize.w
