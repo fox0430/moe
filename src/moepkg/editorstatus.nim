@@ -916,6 +916,10 @@ proc shiftFoldingRanges*(status: var EditorStatus, start, shift: int) =
 proc update*(status: var EditorStatus) =
   ## Update all views, highlighting, cursor, etc.
 
+  if currentBufStatus.isCursor:
+    # Hide the cursor while updating.
+    hideCursor()
+
   let settings = status.settings
 
   if status.commandLine.h != status.commandLine.calcWindowaHeight:
@@ -1156,10 +1160,18 @@ proc update*(status: var EditorStatus) =
     # Always write a message to the command line while recording operations.
     status.commandLine.writeInRecordingOperations(status.recodingOperationRegister.get)
 
-  if not currentBufStatus.isCursor:
-    hideCursor()
-
+  # Update terminal view (Apply all noutrefresh).
   doUpdate()
+
+  if currentBufStatus.isCursor:
+    # Restore cursor after update
+    showCursor()
+
+  # Restore cursor position after update.
+  if currentBufStatus.isCommandLineMode:
+    status.commandLine.refreshWindow
+  else:
+    currentMainWindowNode.refresh
 
 proc restoreCursorPosition*(
     node: var WindowNode, bufStatus: BufferStatus, lastPosition: seq[LastCursorPosition]
