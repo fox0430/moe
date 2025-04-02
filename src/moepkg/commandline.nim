@@ -66,7 +66,7 @@ proc calcWindowaHeight*(commandLine: CommandLine): int =
   if commandLine.window.width < 1:
     return 1
 
-  return int(max(1.0, ceil(commandLine.buffer.len / commandLine.window.width)))
+  return int(max(1.0, ceil((commandLine.prompt.len + commandLine.buffer.len) / commandLine.w)))
 
 proc resize*(commandLine: var CommandLine, y, x, h, w: int) =
   commandLine.window.resize(h, w, y, x)
