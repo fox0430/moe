@@ -268,7 +268,7 @@ proc handleKey*(c: var CompletionWindow, commandLine: var CommandLine, key: Rune
       commandLine.insertSelectedText(c)
 
       # Move cursor to the last position of the inserted text.
-      commandLine.setBufferPositionX(c.startPosition.column + c.selectedText.len)
+      commandLine.setBufferPosition(c.startPosition.column + c.selectedText.len)
   elif isShiftTab(key) or isUpKey(key):
     # Move to the prev item and inserting text.
     if c.list.len > 0:
@@ -278,7 +278,7 @@ proc handleKey*(c: var CompletionWindow, commandLine: var CommandLine, key: Rune
       commandLine.insertSelectedText(c)
 
       # Move cursor to the last position of the inserted text.
-      commandLine.setBufferPositionX(c.startPosition.column + c.selectedText.len)
+      commandLine.setBufferPosition(c.startPosition.column + c.selectedText.len)
 
 proc resize*(c: var CompletionWindow, size: Size) {.inline.} =
   if c.popupWindow.isSome:

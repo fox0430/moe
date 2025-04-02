@@ -1342,7 +1342,7 @@ suite "mainloop: confirmCompletion in command line":
     currentBufStatus.mode = Mode.ex
 
     status.commandLine.buffer = ru"a"
-    status.commandLine.setBufferPosition Position(y: 0, x: 1)
+    status.commandLine.setBufferPosition 1
 
     status.resize(100, 100)
     status.update
@@ -1387,7 +1387,7 @@ suite "mainloop: confirmCompletion in command line":
     currentBufStatus.mode = Mode.ex
 
     status.commandLine.buffer = ru"a"
-    status.commandLine.setBufferPosition Position(y: 0, x: 1)
+    status.commandLine.setBufferPosition 1
 
     status.resize(100, 100)
     status.update

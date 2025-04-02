@@ -18,14 +18,15 @@
 #[############################################################################]#
 
 import std/[sequtils, options, math]
-import ui, unicodeext, color, independentutils, editorview, highlight
+import ui, unicodeext, color, independentutils, editorview, highlight, cursor
 import lsp/client
 
 type
   CommandLine* = object
     buffer*: Runes ## The prompt doesn't include in the buffer.
     prompt: Runes ## The prompt show before the buffer.
-    bufferPosition: Position ## the buffer position
+    bufferPosition: int ## The buffer position.
+    cursor: CursorPosition
     color*: EditorColorPairIndex
     window*: Window ## Ncurses window
     view*: EditorView ## Comand line view
@@ -91,25 +92,39 @@ proc resize*(commandLine: var CommandLine, y, x, h, w: int) =
 proc erase*(commandLine: var CommandLine) {.inline.} =
   commandLine.window.erase
 
+template isEmpty(b: seq[Runes]): bool =
+  b.len == 0 or (b.len == 1 and b[0].len == 0)
+
+template moveCursor(commandLine: CommandLine) =
+  commandline.window.moveCursor(commandLine.cursor.y, commandLine.cursor.x + 1)
+
 proc update*(commandLine: var CommandLine) =
   ## Update the command line view and window.
 
+  # EditorView require 2d array.
   let buffer = @[commandLine.prompt & commandLine.buffer]
 
   var highlight = initCommandLineHighlight(buffer, commandLine.color)
 
+  const
+    CurrentLine = 0
+    TopLine = 0
+
   # Reload Editorview. This is not the actual terminal view.
-  commandLine.view.reload(buffer, 0)
+  commandLine.view.reload(buffer, TopLine)
 
   commandLine.erase
 
-  const CurrentLine = 0
   let windowPosition = Position(x: 0, y: 0)
   var currentLineColorPair = 0
   commandLine.view.update(
     commandLine.window, buffer, highlight, windowPosition, CurrentLine,
     currentLineColorPair,
   )
+
+  if not buffer.isEmpty:
+    commandLine.cursor.update(commandLine.view, CurrentLine, commandLine.bufferPosition)
+    commandline.moveCursor
 
   commandLine.window.noutrefresh
 
@@ -121,8 +136,7 @@ proc refreshWindow*(commandLine: CommandLine) {.inline.} =
 proc clear*(commandLine: var CommandLine) =
   commandLine.buffer = "".toRunes
   commandLine.prompt = "".toRunes
-  commandLine.bufferPosition.x = 0
-  commandLine.bufferPosition.y = 0
+  commandLine.bufferPosition = 0
   commandLine.color = EditorColorPairIndex.commandLine
   commandLine.isUpdate = true
 
@@ -131,34 +145,34 @@ proc clearPrompt*(commandLine: var CommandLine) {.inline.} =
   commandLine.isUpdate = true
 
 proc moveLeft*(commandLine: var CommandLine) {.inline.} =
-  if commandLine.bufferPosition.x > 0:
-    commandLine.bufferPosition.x.dec
+  if commandLine.bufferPosition > 0:
+    commandLine.bufferPosition.dec
     commandLine.isUpdate = true
 
 proc moveRight*(commandLine: var CommandLine) {.inline.} =
-  if commandLine.bufferPosition.x < commandLine.buffer.len:
-    commandLine.bufferPosition.x.inc
+  if commandLine.bufferPosition < commandLine.buffer.len:
+    commandLine.bufferPosition.inc
     commandLine.isUpdate = true
 
 proc moveTop*(commandLine: var CommandLine) {.inline.} =
-  commandLine.bufferPosition.x = 0
+  commandLine.bufferPosition = 0
   commandLine.isUpdate = true
 
 proc moveEnd*(commandLine: var CommandLine) {.inline.} =
-  commandLine.bufferPosition.x = commandLine.buffer.len
+  commandLine.bufferPosition = commandLine.buffer.len
   commandLine.isUpdate = true
 
 proc deleteChar*(commandLine: var CommandLine) =
   ## Remove a character before the cursor and move to left.
 
-  if commandLine.bufferPosition.x > 0:
-    commandLine.bufferPosition.x.dec
-    commandLine.buffer.delete(commandLine.bufferPosition.x)
+  if commandLine.bufferPosition > 0:
+    commandLine.bufferPosition.dec
+    commandLine.buffer.delete(commandLine.bufferPosition)
     commandLine.isUpdate = true
 
 proc deleteCurrentChar*(commandLine: var CommandLine) =
-  if commandLine.buffer.high >= commandLine.bufferPosition.x:
-    commandLine.buffer.delete(commandLine.bufferPosition.x)
+  if commandLine.buffer.high >= commandLine.bufferPosition:
+    commandLine.buffer.delete(commandLine.bufferPosition)
     commandLine.isUpdate = true
 
 proc delete*(commandLine: var CommandLine, slice: Slice) {.inline.} =
@@ -169,29 +183,29 @@ proc insert*(commandLine: var CommandLine, r: Rune, pos: int) =
   ## Insert a character to the command line buffer and move to Right.
 
   commandLine.buffer.insert(r, pos)
-  if commandLine.bufferPosition.x < commandLine.buffer.len:
-    commandLine.bufferPosition.x.inc
+  if commandLine.bufferPosition < commandLine.buffer.len:
+    commandLine.bufferPosition.inc
     commandLine.isUpdate = true
 
 proc insert*(commandLine: var CommandLine, r: Rune) {.inline.} =
   ## Insert text to the command line buffer and move to Right.
 
-  commandLine.insert(r, commandLine.bufferPosition.x)
+  commandLine.insert(r, commandLine.bufferPosition)
   commandLine.isUpdate = true
 
 proc insert*(commandLine: var CommandLine, runes: Runes, pos: int) =
   ## Insert text to the command line buffer and move to Right.
 
   commandLine.buffer.insert(runes, pos)
-  if commandLine.bufferPosition.x < commandLine.buffer.len:
-    commandLine.bufferPosition.x += runes.len
+  if commandLine.bufferPosition < commandLine.buffer.len:
+    commandLine.bufferPosition += runes.len
 
   commandLine.isUpdate = true
 
 proc insert*(commandLine: var CommandLine, runes: Runes) {.inline.} =
   ## Insert text to the command line buffer and move to Right.
 
-  commandLine.insert(runes, commandLine.bufferPosition.x)
+  commandLine.insert(runes, commandLine.bufferPosition)
   commandLine.isUpdate = true
 
 proc write*(commandLine: var CommandLine, runes: Runes) =
@@ -248,25 +262,11 @@ proc color*(commandLine: CommandLine): EditorColorPairIndex {.inline.} =
 
   commandLine.color
 
-proc bufferPosition*(commandLine: CommandLine): Position {.inline.} =
+proc bufferPosition*(commandLine: CommandLine): int {.inline.} =
   commandLine.bufferPosition
 
-proc bufferPositionX*(commandLine: CommandLine): int {.inline.} =
-  commandLine.bufferPosition.x
-
-proc bufferPositionY*(commandLine: CommandLine): int {.inline.} =
-  commandLine.bufferPosition.y
-
-proc setBufferPosition*(commandLine: var CommandLine, pos: Position) {.inline.} =
+proc setBufferPosition*(commandLine: var CommandLine, pos: int) {.inline.} =
   commandLine.bufferPosition = pos
-  commandLine.isUpdate = true
-
-proc setBufferPositionX*(commandLine: var CommandLine, x: int) {.inline.} =
-  commandLine.bufferPosition.x = x
-  commandLine.isUpdate = true
-
-proc setBufferPositionY*(commandLine: var CommandLine, y: int) {.inline.} =
-  commandLine.bufferPosition.y = y
   commandLine.isUpdate = true
 
 proc cursorPosition*(commandLine: CommandLine): Position {.inline.} =
