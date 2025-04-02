@@ -62,11 +62,12 @@ proc initCommandLine*(): CommandLine =
   result.view = initEditorView(@[result.buffer], H, W)
   result.view.config.isHighlightCurrentLine = false
 
-proc calcWindowaHeight*(commandLine: CommandLine): int =
-  if commandLine.window.width < 1:
+proc calcWindowaHeight*(commandLine: CommandLine, newWinHeight: int = -1): int =
+  if newWinHeight == -1 and commandLine.w < 1:
     return 1
 
-  return int(max(1.0, ceil((commandLine.prompt.len + commandLine.buffer.len) / commandLine.w)))
+  let winHeight = if newWinHeight > -1: newWinHeight else: commandLine.w
+  return int(max(1.0, ceil((commandLine.prompt.len + commandLine.buffer.len) / winHeight)))
 
 proc resize*(commandLine: var CommandLine, y, x, h, w: int) =
   commandLine.window.resize(h, w, y, x)
