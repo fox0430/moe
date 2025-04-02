@@ -27,7 +27,7 @@ import
   moepkg/[
     editor, gapbuffer, bufferstatus, editorview, unicodeext, build, highlight,
     windownode, movement, backgroundprocess, syntaxcheck, independentutils, tabline,
-    settings, visualmode,
+    settings, visualmode, statusline
   ]
 
 import utils
@@ -1244,3 +1244,61 @@ suite "editorstatus: updateSyntaxHighlightings":
     status.updateSyntaxHighlightings
 
     check currentBufStatus.isGitUpdate
+
+suite "editorstatus: resize":
+  privateAccess TabLine
+
+  var status: EditorStatus
+
+  setup:
+    status = initEditorStatus()
+    assert status.addNewBufferInCurrentWin.isOk
+
+  test "Basic":
+    status.resize(100, 100)
+
+    check status.tabLine.position.y == 0
+    check status.tabLine.position.x == 0
+    check status.tabLine.size.h == 1
+    check status.tabLine.size.w == 100
+
+    check status.mainWindow.root.y == 1
+    check status.mainWindow.root.x == 0
+    check status.mainWindow.root.h == 98
+    check status.mainWindow.root.w == 100
+
+    check status.statusLine[0].window.y == 98
+    check status.statusLine[0].window.x == 0
+    check status.statusLine[0].window.height == 1
+    check status.statusLine[0].window.width == 100
+
+    check status.commandLine.y == 99
+    check status.commandLine.x == 0
+    check status.commandLine.h == 1
+    check status.commandLine.w == 100
+
+  test "Command line height is 2":
+    status.resize(100, 100)
+
+    status.commandLine.buffer = "a".repeat(150).toRunes
+    status.resize(100, 100)
+
+    check status.tabLine.position.y == 0
+    check status.tabLine.position.x == 0
+    check status.tabLine.size.h == 1
+    check status.tabLine.size.w == 100
+
+    check status.mainWindow.root.y == 1
+    check status.mainWindow.root.x == 0
+    check status.mainWindow.root.h == 97
+    check status.mainWindow.root.w == 100
+
+    check status.statusLine[0].window.y == 97
+    check status.statusLine[0].window.x == 0
+    check status.statusLine[0].window.height == 1
+    check status.statusLine[0].window.width == 100
+
+    check status.commandLine.y == 98
+    check status.commandLine.x == 0
+    check status.commandLine.h == 2
+    check status.commandLine.w == 100
