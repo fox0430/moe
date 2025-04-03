@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -167,7 +167,7 @@ proc backupBuffer*(
     bufStatus: BufferStatus,
     autoBackupSettings: AutoBackupSettings,
     notificationSettings: NotificationSettings,
-    commandLine: var CommandLine,
+    commandLine: CommandLine,
 ) =
   if bufStatus.path.len == 0:
     return

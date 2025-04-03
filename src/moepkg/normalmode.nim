@@ -76,7 +76,7 @@ template changeModeToVisualLineMode(status: var EditorStatus) =
   ).some
 
 template changeModeToExMode*(
-    bufStatus: var BufferStatus, commandLine: var CommandLine
+    bufStatus: var BufferStatus, commandLine: CommandLine
 ) =
   bufStatus.changeMode(Mode.ex)
   commandLine.clear

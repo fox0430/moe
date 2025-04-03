@@ -182,7 +182,7 @@ proc jumpToDestination(status: var EditorStatus) =
   currentMainWindowNode.currentColumn = d.get.column
 
 proc changeModeToExMode*(
-    bufStatus: var BufferStatus, commandLine: var CommandLine
+    bufStatus: var BufferStatus, commandLine: CommandLine
 ) {.inline.} =
   bufStatus.changeMode(Mode.ex)
   commandLine.clear

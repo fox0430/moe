@@ -226,7 +226,7 @@ proc lspHover*(status: var EditorStatus, res: JsonNode): Result[(), string] =
   return Result[(), string].ok ()
 
 proc showLspServerLog(
-    commandLine: var CommandLine, notify: JsonNode
+    commandLine: CommandLine, notify: JsonNode
 ): Result[(), string] =
   ## Show the log to the command line.
   ##

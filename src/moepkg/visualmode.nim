@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -128,7 +128,7 @@ proc deleteBuffer(
     area: SelectedArea,
     firstCursorPosition: BufferPosition,
     settings: EditorSettings,
-    commandLine: var CommandLine,
+    commandLine: CommandLine,
 ) =
   if bufStatus.isReadonly:
     commandLine.writeReadonlyModeWarning
@@ -203,7 +203,7 @@ proc deleteBufferBlock(
     windowNode: var WindowNode,
     area: SelectedArea,
     settings: EditorSettings,
-    commandLine: var CommandLine,
+    commandLine: CommandLine,
 ) =
   if bufStatus.isReadonly:
     commandLine.writeReadonlyModeWarning
@@ -241,7 +241,7 @@ proc addIndent(
     windowNode: var WindowNode,
     area: SelectedArea,
     tabStop: int,
-    commandLine: var CommandLine,
+    commandLine: CommandLine,
 ) =
   if bufStatus.isReadonly:
     commandLine.writeReadonlyModeWarning
@@ -261,7 +261,7 @@ proc deleteIndent(
     windowNode: var WindowNode,
     area: SelectedArea,
     tabStop: int,
-    commandLine: var CommandLine,
+    commandLine: CommandLine,
 ) =
   if bufStatus.isReadonly:
     commandLine.writeReadonlyModeWarning
@@ -281,7 +281,7 @@ proc insertIndent(
     windowNode: var WindowNode,
     area: SelectedArea,
     tabStop: int,
-    commandLine: var CommandLine,
+    commandLine: CommandLine,
 ) =
   if bufStatus.isReadonly:
     commandLine.writeReadonlyModeWarning
@@ -303,7 +303,7 @@ proc replaceCharacter(
     windowNode: var WindowNode,
     area: SelectedArea,
     ch: Rune,
-    commandLine: var CommandLine,
+    commandLine: CommandLine,
 ) =
   if bufStatus.isReadonly:
     commandLine.writeReadonlyModeWarning
@@ -339,7 +339,7 @@ proc replaceCharacterBlock(
     windowNode: var WindowNode,
     area: SelectedArea,
     ch: Rune,
-    commandLine: var CommandLine,
+    commandLine: CommandLine,
 ) =
   if bufStatus.isReadonly:
     commandLine.writeReadonlyModeWarning
@@ -359,7 +359,7 @@ proc joinLines(
     bufStatus: var BufferStatus,
     windowNode: var WindowNode,
     area: SelectedArea,
-    commandLine: var CommandLine,
+    commandLine: CommandLine,
 ) =
   if bufStatus.isReadonly:
     commandLine.writeReadonlyModeWarning
@@ -376,7 +376,7 @@ proc toLowerString(
     windowNode: var WindowNode,
     area: SelectedArea,
     firstCursorPosition: BufferPosition,
-    commandLine: var CommandLine,
+    commandLine: CommandLine,
 ) =
   if bufStatus.isReadonly:
     commandLine.writeReadonlyModeWarning
@@ -412,7 +412,7 @@ proc toLowerStringBlock(
     windowNode: var WindowNode,
     area: SelectedArea,
     firstCursorPosition: BufferPosition,
-    commandLine: var CommandLine,
+    commandLine: CommandLine,
 ) =
   if bufStatus.isReadonly:
     commandLine.writeReadonlyModeWarning
@@ -435,7 +435,7 @@ proc toUpperString(
     windowNode: var WindowNode,
     area: SelectedArea,
     firstCursorPosition: BufferPosition,
-    commandLine: var CommandLine,
+    commandLine: CommandLine,
 ) =
   if bufStatus.isReadonly:
     commandLine.writeReadonlyModeWarning
@@ -471,7 +471,7 @@ proc toUpperStringBlock(
     windowNode: var WindowNode,
     area: SelectedArea,
     firstCursorPosition: BufferPosition,
-    commandLine: var CommandLine,
+    commandLine: CommandLine,
 ) =
   if bufStatus.isReadonly:
     commandLine.writeReadonlyModeWarning

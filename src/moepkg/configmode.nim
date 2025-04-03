@@ -2161,14 +2161,14 @@ proc keyDown(bufStatus: BufferStatus, windowNode: var WindowNode) =
       bufStatus.keyDown(windowNode)
 
 proc changeModeToSearchForwardMode(
-    bufStatus: var BufferStatus, commandLine: var CommandLine
+    bufStatus: var BufferStatus, commandLine: CommandLine
 ) =
   bufStatus.changeMode(Mode.searchForward)
   commandLine.clear
   commandLine.setPrompt(CommandLinePrompt.searchForward)
 
 proc changeModeToSearchBackwardMode(
-    bufStatus: var BufferStatus, commandLine: var CommandLine
+    bufStatus: var BufferStatus, commandLine: CommandLine
 ) =
   bufStatus.changeMode(Mode.searchBackward)
   commandLine.clear

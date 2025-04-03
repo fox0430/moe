@@ -718,7 +718,7 @@ proc updateChangedLines(status: var EditorStatus) =
   else:
     status.commandLine.writeGitInfoUpdateError(gitDiffProcess.error)
 
-proc checkAndCreateDir(commandLine: var CommandLine, filename: Runes): bool =
+proc checkAndCreateDir(commandLine: CommandLine, filename: Runes): bool =
   # Not include directory
   if not filename.contains(ru"/"):
     return true
