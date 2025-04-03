@@ -1415,7 +1415,7 @@ proc deleteTillNextBlankLine*(
 proc yankLines*(
     bufStatus: BufferStatus,
     registers: var Registers,
-    commandLine: var CommandLine,
+    commandLine: CommandLine,
     notificationSettings: NotificationSettings,
     first, last: int,
     registerName: string,
@@ -1438,7 +1438,7 @@ proc yankLines*(
 proc yankLines*(
     bufStatus: BufferStatus,
     registers: var Registers,
-    commandLine: var CommandLine,
+    commandLine: CommandLine,
     notificationSettings: NotificationSettings,
     first, last: int,
     isDelete: bool,
@@ -1452,7 +1452,7 @@ proc yankLines*(
 proc yankLines*(
     bufStatus: BufferStatus,
     registers: var Registers,
-    commandLine: var CommandLine,
+    commandLine: CommandLine,
     notificationSettings: NotificationSettings,
     first, last: int,
     name: string,
@@ -1466,7 +1466,7 @@ proc yankLines*(
 proc yankLines*(
     bufStatus: BufferStatus,
     registers: var Registers,
-    commandLine: var CommandLine,
+    commandLine: CommandLine,
     notificationSettings: NotificationSettings,
     first, last: int,
     settings: EditorSettings,
@@ -1482,7 +1482,7 @@ proc yankCharacters*(
     bufStatus: BufferStatus,
     registers: var Registers,
     windowNode: WindowNode,
-    commandLine: var CommandLine,
+    commandLine: CommandLine,
     settings: EditorSettings,
     length: int,
     registerName: string,

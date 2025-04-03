@@ -33,7 +33,7 @@ type
     command*: Runes
     args*: seq[Runes]
 
-proc askCreateDirPrompt*(commandLine: var CommandLine, path: string): bool =
+proc askCreateDirPrompt*(commandLine: CommandLine, path: string): bool =
   let mess = fmt"{path} does not exists. Create it now?: y/n"
   commandLine.write(mess.toRunes)
   addMessageLog mess.toRunes
@@ -44,7 +44,7 @@ proc askCreateDirPrompt*(commandLine: var CommandLine, path: string): bool =
   else:
     result = false
 
-proc askBackupRestorePrompt*(commandLine: var CommandLine, filename: Runes): bool =
+proc askBackupRestorePrompt*(commandLine: CommandLine, filename: Runes): bool =
   let mess = fmt"Restore {filename}?: y/n"
   commandLine.write(mess.toRunes)
   addMessageLog mess
@@ -55,7 +55,7 @@ proc askBackupRestorePrompt*(commandLine: var CommandLine, filename: Runes): boo
   else:
     result = false
 
-proc askDeleteBackupPrompt*(commandLine: var CommandLine, filename: Runes): bool =
+proc askDeleteBackupPrompt*(commandLine: CommandLine, filename: Runes): bool =
   let mess = fmt"Delete {filename}?: y/n"
   commandLine.write(mess.toRunes)
   addMessageLog mess
@@ -66,7 +66,7 @@ proc askDeleteBackupPrompt*(commandLine: var CommandLine, filename: Runes): bool
   else:
     result = false
 
-proc askFileChangedSinceReading*(commandLine: var CommandLine): bool =
+proc askFileChangedSinceReading*(commandLine: CommandLine): bool =
   block:
     const Mess = "WARNING: The file has been changed since reading it!: Press any key"
     commandLine.write(Mess.toRunes)

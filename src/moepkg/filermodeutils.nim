@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -185,7 +185,7 @@ proc cutFile*(filerStatus: var FilerStatus, currentLine: int, currentPath: Runes
   filerStatus.register.originPath = $currentPath / path
 
 proc pasteFile*(
-    commandLine: var CommandLine, filerStatus: var FilerStatus, currentPath: Runes
+    commandLine: CommandLine, filerStatus: var FilerStatus, currentPath: Runes
 ) =
   try:
     let filename = filerStatus.register.filename
@@ -205,7 +205,7 @@ proc pasteFile*(
 
 ## Get keys for a dir name and create a dir.
 proc createDir*(
-    filerStatus: var FilerStatus, commandLine: var CommandLine
+    filerStatus: var FilerStatus, commandLine: CommandLine
 ): Result[(), string] =
   const prompt = "Dir name: "
   if commandLine.getKeys(prompt):

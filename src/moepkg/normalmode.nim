@@ -75,9 +75,7 @@ template changeModeToVisualLineMode(status: var EditorStatus) =
     currentMainWindowNode.currentLine, currentMainWindowNode.currentColumn
   ).some
 
-template changeModeToExMode*(
-    bufStatus: var BufferStatus, commandLine: var CommandLine
-) =
+template changeModeToExMode*(bufStatus: var BufferStatus, commandLine: CommandLine) =
   bufStatus.changeMode(Mode.ex)
   commandLine.clear
   commandLine.setPrompt(CommandLinePrompt.ex)

@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -61,7 +61,7 @@ proc openNewWinAndOpenFilerOrDir(
 proc currentPathInfo(status: EditorStatus): PathInfo {.inline.} =
   currentFilerStatus.pathList[currentMainWindowNode.currentLine]
 
-proc changeModeToExMode*(bufStatus: var BufferStatus, commandLine: var CommandLine) =
+proc changeModeToExMode*(bufStatus: var BufferStatus, commandLine: CommandLine) =
   bufStatus.changeMode(Mode.ex)
   commandLine.clear
   commandLine.setPrompt(CommandLinePrompt.ex)

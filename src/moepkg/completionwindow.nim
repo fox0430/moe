@@ -161,9 +161,7 @@ proc removeInsertedText*(
       if bufStatus.buffer[lineNum] != newLine:
         bufStatus.buffer[lineNum] = newLine
 
-proc removeInsertedText*(
-    commandLine: var CommandLine, completionWindow: CompletionWindow
-) =
+proc removeInsertedText*(commandLine: CommandLine, completionWindow: CompletionWindow) =
   ## Remove text temporarily inserted by completion.
 
   if completionWindow.selectedText.len > 0:
@@ -194,9 +192,7 @@ proc insertSelectedText*(
     lines.mapIt(BufferPosition(line: it, column: completionWindow.startColumn))
   bufStatus.insertMultiplePositions(positions, completionWindow.selectedText)
 
-proc insertSelectedText*(
-    commandLine: var CommandLine, completionWindow: CompletionWindow
-) =
+proc insertSelectedText*(commandLine: CommandLine, completionWindow: CompletionWindow) =
   # Insert the selected text to the line.
 
   if completionWindow.selectedText.len > 0:
@@ -253,7 +249,7 @@ proc handleKey*(
 
       bufStatus.isUpdate = true
 
-proc handleKey*(c: var CompletionWindow, commandLine: var CommandLine, key: Rune) =
+proc handleKey*(c: var CompletionWindow, commandLine: CommandLine, key: Rune) =
   ## The completion window in command line.
 
   when not defined(release):

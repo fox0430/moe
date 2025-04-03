@@ -19,7 +19,7 @@
 
 import unicodeext, bufferstatus, ui, editorstatus, movement, windownode, commandline
 
-proc changeModeToExMode*(bufStatus: var BufferStatus, commandLine: var CommandLine) =
+proc changeModeToExMode*(bufStatus: var BufferStatus, commandLine: CommandLine) =
   bufStatus.changeMode(Mode.ex)
   commandLine.clear
   commandLine.setPrompt(CommandLinePrompt.ex)
