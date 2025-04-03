@@ -120,8 +120,7 @@ proc update*(c: CommandLine) =
   let windowPosition = Position(x: 0, y: 0)
   var currentLineColorPair = 0
   c.view.update(
-    c.window, buffer, highlight, windowPosition, CurrentLine,
-    currentLineColorPair,
+    c.window, buffer, highlight, windowPosition, CurrentLine, currentLineColorPair
   )
 
   if not buffer.isEmpty:
@@ -243,9 +242,7 @@ proc getPrompt*(c: CommandLine): Runes {.inline.} =
 
   c.prompt
 
-proc setPrompt*(
-    c: CommandLine, p: CommandLinePrompt | string
-) {.inline.} =
+proc setPrompt*(c: CommandLine, p: CommandLinePrompt | string) {.inline.} =
   ## Set a prompt to commandLine.prompt
 
   c.prompt = toRunes($p)
