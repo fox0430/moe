@@ -48,14 +48,10 @@ proc writeStandard*(
 ) {.inline.} =
   c.writeMessageOnCommandLine(message, EditorColorPairIndex.commandLine, log, screen)
 
-proc writeInfo*(
-    c: CommandLine, message: string, log = true, screen = true
-) {.inline.} =
+proc writeInfo*(c: CommandLine, message: string, log = true, screen = true) {.inline.} =
   c.writeMessageOnCommandLine(fmt"Info: {message}", EditorColorPairIndex.commandLine)
 
-proc writeLog*(
-    c: CommandLine, message: string, log = true, screen = true
-) {.inline.} =
+proc writeLog*(c: CommandLine, message: string, log = true, screen = true) {.inline.} =
   c.writeMessageOnCommandLine(fmt"Log: {message}", EditorColorPairIndex.commandLine)
 
 proc writeDebug*(
@@ -160,9 +156,7 @@ proc writeMessageFailedBuildOnSaveError*(
 ) {.inline.} =
   commandLine.writeError(fmt"Build failed: {path}")
 
-proc writeNotEditorCommandError*(
-    commandLine: CommandLine, command: Runes
-) {.inline.} =
+proc writeNotEditorCommandError*(commandLine: CommandLine, command: Runes) {.inline.} =
   commandLine.writeError(fmt"Not an editor command: {command}")
 
 proc writeNotEditorCommandError*(
@@ -256,9 +250,7 @@ proc writeInRecordingOperations*(
 ) {.inline.} =
   commandLine.writeMessageOnCommandLine(fmt"recording @{registerName}")
 
-proc writeAutoBackupFailedError*(
-    commandLine: CommandLine, filename: Runes
-) {.inline.} =
+proc writeAutoBackupFailedError*(commandLine: CommandLine, filename: Runes) {.inline.} =
   commandLine.writeError(fmt"Automatic backups failed: {filename}")
 
 proc writeRunQuickRunTimeoutError*(commandLine: CommandLine) {.inline.} =
@@ -325,17 +317,13 @@ proc writeReadonlyModeWarning*(commandLine: CommandLine) {.inline.} =
   const msg = "Readonly mode"
   commandLine.writeWarn(msg)
 
-proc writeManualCommandError*(
-    commandLine: CommandLine, message: string
-) {.inline.} =
+proc writeManualCommandError*(commandLine: CommandLine, message: string) {.inline.} =
   commandLine.writeError(fmt"No manual entry for {message}")
 
 proc writeSyntaxCheckError*(commandLine: CommandLine, message: string) {.inline.} =
   commandLine.writeError(fmt"Syntax check failed: {message}")
 
-proc writeGitInfoUpdateError*(
-    commandLine: CommandLine, message: string
-) {.inline.} =
+proc writeGitInfoUpdateError*(commandLine: CommandLine, message: string) {.inline.} =
   commandLine.writeError(fmt"Update Git info: {message}")
 
 proc writeBufferChangedWarn*(commandLine: CommandLine, filename: Runes) {.inline.} =
@@ -418,9 +406,7 @@ proc writeLspInitializeError*(
 proc writeLspHoverError*(commandLine: CommandLine, message: string) {.inline.} =
   commandLine.writeLspError(fmt"Hover failed: {message}")
 
-proc writeLspCompletionError*(
-    commandLine: CommandLine, message: string
-) {.inline.} =
+proc writeLspCompletionError*(commandLine: CommandLine, message: string) {.inline.} =
   commandLine.writeLspError(fmt"Completion failed: {message}")
 
 proc writeLspSemanticTokensError*(
@@ -431,14 +417,10 @@ proc writeLspSemanticTokensError*(
 proc writeLspInlayHintError*(commandLine: CommandLine, message: string) {.inline.} =
   commandLine.writeLspError(fmt"InlayHint failed: {message}")
 
-proc writeLspInlineValueError*(
-    commandLine: CommandLine, message: string
-) {.inline.} =
+proc writeLspInlineValueError*(commandLine: CommandLine, message: string) {.inline.} =
   commandLine.writeLspError(fmt"Inline value failed: {message}")
 
-proc writeLspSignatureHelpError*(
-    commandLine: CommandLine, message: string
-) {.inline.} =
+proc writeLspSignatureHelpError*(commandLine: CommandLine, message: string) {.inline.} =
   commandLine.writeLspError(fmt"SignatureHelp failed: {message}")
 
 proc writeLspDocumentFormattingHelpError*(
@@ -446,14 +428,10 @@ proc writeLspDocumentFormattingHelpError*(
 ) {.inline.} =
   commandLine.writeLspError(fmt"Document formatting failed: {message}")
 
-proc writeLspDeclarationError*(
-    commandLine: CommandLine, message: string
-) {.inline.} =
+proc writeLspDeclarationError*(commandLine: CommandLine, message: string) {.inline.} =
   commandLine.writeLspError(fmt"Declaration failed: {message}")
 
-proc writeLspDefinitionError*(
-    commandLine: CommandLine, message: string
-) {.inline.} =
+proc writeLspDefinitionError*(commandLine: CommandLine, message: string) {.inline.} =
   commandLine.writeLspError(fmt"Definition failed: {message}")
 
 proc writeLspTypeDefinitionError*(
@@ -466,14 +444,10 @@ proc writeLspImplementationError*(
 ) {.inline.} =
   commandLine.writeLspError(fmt"Implementation failed: {message}")
 
-proc writeLspReferencesError*(
-    commandLine: CommandLine, message: string
-) {.inline.} =
+proc writeLspReferencesError*(commandLine: CommandLine, message: string) {.inline.} =
   commandLine.writeLspError(fmt"References failed: {message}")
 
-proc writeLspCallHierarchyError*(
-    commandLine: CommandLine, message: string
-) {.inline.} =
+proc writeLspCallHierarchyError*(commandLine: CommandLine, message: string) {.inline.} =
   commandLine.writeLspError(fmt"Call hierarchy failed: {message}")
 
 proc writeLspDocumentHighlightError*(
@@ -481,9 +455,7 @@ proc writeLspDocumentHighlightError*(
 ) {.inline.} =
   commandLine.writeLspError(fmt"Document highlight failed: {message}")
 
-proc writeLspDocumentLinkError*(
-    commandLine: CommandLine, message: string
-) {.inline.} =
+proc writeLspDocumentLinkError*(commandLine: CommandLine, message: string) {.inline.} =
   commandLine.writeLspError(fmt"Document link failed: {message}")
 
 proc writeLspCodeLensError*(commandLine: CommandLine, message: string) {.inline.} =
@@ -497,9 +469,7 @@ proc writeLspExecuteCommandError*(
 ) {.inline.} =
   commandLine.writeLspError(fmt"Execute command: {message}")
 
-proc writeLspFoldingRangeError*(
-    commandLine: CommandLine, message: string
-) {.inline.} =
+proc writeLspFoldingRangeError*(commandLine: CommandLine, message: string) {.inline.} =
   commandLine.writeLspError(fmt"Folding range: {message}")
 
 proc writeLspSelectionRangeError*(
