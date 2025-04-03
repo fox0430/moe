@@ -997,6 +997,8 @@ suite "lsp: lspReferences":
       let filename = $genOid() & ".nim"
       assert status.addNewBufferInCurrentWin(filename).isOk
 
+      status.resize(100, 100)
+
   teardown:
     if isNimlangserverAvailable():
       discard status.lspClients["nim"].kill

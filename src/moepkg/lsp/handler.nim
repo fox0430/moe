@@ -1137,7 +1137,7 @@ proc lspDocumentSymbol(status: var EditorStatus, res: JsonNode): Result[(), stri
     currentBufStatus.documentSymbols = symbols.get
 
   status.commandLine.clear
-  status.commandLine.setPrompt(CommandLinePrompt.DocumentSymbol)
+  status.commandLine.setPrompt(CommandLinePrompt.documentSymbol)
 
   currentBufStatus.changeMode(Mode.documentSymbol)
 

@@ -887,7 +887,7 @@ suite "viewhighlight: highlightPairOfParen":
     # NOTE: https://github.com/fox0430/moe/issues/1850
     var buffer = toSeq(0 .. 20).mapIt(it.toRunes)
     buffer[1] = ru"()"
-    var highlight = initHighlightPlain(buffer)
+    var highlight = initHighlight(buffer)
 
     privateAccess(BufferInView)
     let bufferInView = BufferInView(

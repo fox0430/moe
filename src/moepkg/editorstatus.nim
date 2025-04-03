@@ -78,11 +78,6 @@ type
     highlightingText*: Option[HighlightingText]
     lspClients*: LspClientTable
 
-const
-  TabLineWindowHeight = 1
-  StatusLineWindowHeight = 1
-  CommandLineWindowHeight = 1
-
 proc initEditorStatus*(): EditorStatus =
   result = EditorStatus(
     currentDir: getCurrentDir().toRunes,
@@ -529,41 +524,30 @@ proc addNewBufferInCurrentWin*(
   const Path = ""
   status.addNewBufferInCurrentWin(Path)
 
-proc resizeMainWindowNode(status: var EditorStatus, terminalSize: Size) =
-  let
-    height = terminalSize.h
-    tabLineHeight = if status.settings.tabLine.enable: TabLineWindowHeight else: 0
-    statusLineHeight =
-      if status.settings.statusLine.enable: StatusLineWindowHeight else: 0
-    commandLineHeight =
-      if status.settings.statusLine.merge: CommandLineWindowHeight else: 0
-    sidebarWidth = if status.sidebar.isSome: status.sidebar.get.w else: 0
-    width =
-      if status.sidebar.isSome:
-        terminalSize.w - sidebarWidth
-      else:
-        terminalSize.w
-
-    y = tabLineHeight
-    x = if status.sidebar.isSome: sidebarWidth else: 0
-    h = height - tabLineHeight - statusLineHeight - commandLineHeight
-    w = width
-
-  mainWindowNode.resize(Position(y: y, x: x), Size(h: h, w: w))
+proc resizeMainWindowNode(status: var EditorStatus, position: Position, size: Size) =
+  mainWindowNode.resize(position, size)
 
 proc resize*(status: var EditorStatus) =
   ## Reszie all windows to ui.terminalSize.
 
-  # Get the current terminal from ui.terminalSize.
-  let terminalSize = getTerminalSize()
-
-  status.resizeMainWindowNode(terminalSize)
-
   let
-    terminalHeight = terminalSize.h
-    terminalWidth = terminalSize.w
+    terminalSize = getTerminalSize() # Get the current terminal from ui.terminalSize.
+    tabLineHeight = if status.settings.tabLine.enable: 1 else: 0
+    statusLineHeight = if status.settings.statusLine.enable: 1 else: 0
+    commandLineHeight = status.commandLine.calcWindowaHeight
+    sidebarWidth = if status.sidebar.isSome: status.sidebar.get.w else: 0
 
-  const StatusLineHeight = 1
+  block:
+    status.resizeMainWindowNode(
+      Position(y: tabLineHeight, x: sidebarWidth),
+      Size(
+        h: max(
+          4, (terminalSize.h + 1) - tabLineHeight - statusLineHeight - commandLineHeight
+        ),
+        w: max(4, terminalSize.w - sidebarWidth),
+      ),
+    )
+
   var
     statusLineIndex = 0
     queue = initHeapQueue[WindowNode]()
@@ -584,7 +568,7 @@ proc resize*(status: var EditorStatus) =
 
           sidebarWidth = if node.view.sidebar.isSome: 2 else: 2
 
-          adjustedHeight = max(node.h - StatusLineHeight, 4)
+          adjustedHeight = max(node.h - statusLineHeight, 4)
           adjustedWidth = max(node.w - widthOfLineNum - sidebarWidth, 4)
 
         # Resize EditorView.
@@ -610,7 +594,7 @@ proc resize*(status: var EditorStatus) =
             y = node.y + node.h
             x = node.x
           status.statusLine[statusLineIndex].window.resize(
-            StatusLineHeight, width, y, x
+            statusLineHeight, width, y, x
           )
           status.statusLine[statusLineIndex].window.noutrefresh
 
@@ -626,13 +610,11 @@ proc resize*(status: var EditorStatus) =
   # Resize single status line.
   if status.settings.statusLine.enable and
       not status.settings.statusLine.multipleStatusLine:
-    const
-      StatusLineHeight = 1
-      X = 0
+    const X = 0
     let
-      y = max(terminalHeight, 4) - 1 - (if status.settings.statusLine.merge: 0 else: 1)
-      w = if status.sidebar.isSome: mainWindowNode.w else: terminalWidth
-    status.statusLine[0].window.resize(StatusLineHeight, w, y, X)
+      y = max(terminalSize.h, 4) - 1 - (if status.settings.statusLine.merge: 0 else: 1)
+      w = if status.sidebar.isSome: mainWindowNode.w else: terminalSize.w
+    status.statusLine[0].window.resize(statusLineHeight, w, y, X)
 
   if status.settings.tabLine.enable:
     # Resize the tabline.
@@ -646,15 +628,15 @@ proc resize*(status: var EditorStatus) =
     let rect = Rect(
       x: 0,
       y: 0,
-      h: terminalHeight - CommandLineWindowHeight,
-      w: terminalWidth - mainWindowNode.w,
+      h: terminalSize.h - commandLineHeight,
+      w: terminalSize.w - mainWindowNode.w,
     )
     status.sidebar.get.resize(rect)
 
   # Resize command line.
   const X = 0
-  let y = max(terminalHeight, 4) - 1
-  status.commandLine.resize(y, X, CommandLineWindowHeight, terminalWidth)
+  let y = max(terminalSize.h, 4) - commandLineHeight
+  status.commandLine.resize(y, X, commandLineHeight, terminalSize.w)
 
 proc updateStatusLine(status: var EditorStatus) =
   if not status.settings.statusLine.multipleStatusLine:
@@ -940,6 +922,9 @@ proc update*(status: var EditorStatus) =
     hideCursor()
 
   let settings = status.settings
+
+  if status.commandLine.h != status.commandLine.calcWindowaHeight:
+    status.resize
 
   if settings.tabLine.enable:
     status.tabLine.update(

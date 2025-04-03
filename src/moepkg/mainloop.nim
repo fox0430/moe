@@ -376,9 +376,9 @@ proc openCompletionWindowInCommandLine(
   let
     column =
       if isCurrentPosition:
-        status.commandLine.bufferPosition.x
+        status.commandLine.bufferPosition
       else:
-        max(0, status.commandLine.bufferPosition.x - 1)
+        max(0, status.commandLine.bufferPosition - 1)
     startPosition = BufferPosition(line: 0, column: column)
 
     windowPosition = Position(
@@ -438,7 +438,7 @@ proc updateCompletionWindowBufferInCommandLine(status: var EditorStatus) =
     status.completionWindow.get.selectedIndex = -1
     status.commandline.insertSelectedText(status.completionWindow.get)
 
-    status.commandline.setBufferPositionX(status.completionWindow.get.startColumn)
+    status.commandline.setBufferPosition(status.completionWindow.get.startColumn)
 
   let
     # Calc min/max positions for the completion window.
@@ -627,7 +627,7 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
     if status.isPathCompletionInCommandLine and
         status.completionWindow.get.selectedIndex == -1 and key == ru '/':
       # Confirm and resopen the completion window. If '/' entered.
-      status.commandLine.seekCursor
+      #      status.commandLine.seekCursor
       status.openCompletionWindowInCommandLine(true)
       status.updateCompletionWindowBufferInCommandLine
       continue

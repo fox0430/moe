@@ -322,7 +322,9 @@ proc getEditorColorPair(
   except ValueError:
     result = EditorColorPairIndex.default
 
-proc initHighlightPlain*(buffer: seq[Runes]): Highlight {.inline.} =
+proc initHighlight*(
+    buffer: seq[Runes], color = EditorColorPairIndex.default
+): Highlight {.inline.} =
   ## Return highlighting for the plain text.
 
   var colorSegments: seq[ColorSegment]
@@ -333,11 +335,7 @@ proc initHighlightPlain*(buffer: seq[Runes]): Highlight {.inline.} =
       else:
         -1
     colorSegments.add ColorSegment(
-      firstRow: i,
-      firstColumn: 0,
-      lastRow: i,
-      lastColumn: lastColumn,
-      color: EditorColorPairIndex.default,
+      firstRow: i, firstColumn: 0, lastRow: i, lastColumn: lastColumn, color: color
     )
 
   return Highlight(colorSegments: colorSegments)
@@ -346,7 +344,7 @@ proc initHighlight*(
     buffer: seq[Runes], reservedWords: seq[ReservedWord], language: SourceLanguage
 ): Highlight =
   if language == SourceLanguage.langNone:
-    return initHighlightPlain(buffer)
+    return initHighlight(buffer)
 
   var bufferStr: string
   for i in 0 .. buffer.high:
@@ -452,7 +450,7 @@ proc initHighlight*(
 ): Highlight =
   ## Initialize Highlight with LSP SemanticTokens.
 
-  result = initHighlightPlain(buffer)
+  result = initHighlight(buffer)
   for t in semTokens:
     result.overwrite(
       ColorSegment(
