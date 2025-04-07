@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -18,7 +18,9 @@
 #[############################################################################]#
 
 import std/[strformat, strutils, osproc, os, times]
+
 import pkg/results
+
 import unicodeext, backgroundprocess, fileutils
 
 type
@@ -93,7 +95,9 @@ proc getCurrentGitBranchName*(): Result[Runes, string] =
 
   let cmdResult = execCmdEx("git rev-parse --abbrev-ref HEAD")
   if cmdResult.exitCode == 0:
-    return Result[Runes, string].ok stripLineEnd(cmdResult.output.toRunes)
+    var output = cmdResult.output
+    output.stripLineEnd
+    return Result[Runes, string].ok output.toRunes
   else:
     return Result[Runes, string].err "Failed to get a git branch: {cmdResult.output}"
 

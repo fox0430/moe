@@ -46,11 +46,6 @@ type
     input*: InputStream
     output*: OutputStream
 
-proc skipWhitespace(x: string, pos: int): int =
-  result = pos
-  while result < x.len and x[result] in Whitespace:
-    inc result
-
 proc isInvalidContentType(s: string, valueStart: int): bool {.inline.} =
   s.find("utf-8", valueStart) == -1 and s.find("utf8", valueStart) == -1
 
@@ -97,7 +92,8 @@ proc readFrame(s: AsyncStreamReader): Future[ReadFrameResult] {.async.} =
       # Skip line if not JSON-RPC.
       continue
 
-    let valueStart = header.get.ln.skipWhitespace(header.get.sep + 1)
+    let valueStart =
+      header.get.sep + 1 + header.get.ln.skipWhitespace(header.get.sep + 1)
 
     var contentLen = -1
     case header.get.ln[0 ..< header.get.sep]
@@ -139,14 +135,14 @@ proc read*(s: OutputStream): Future[JsonRpcResponseResult] {.async.} =
   if res.isValidJsonRpc:
     return JsonRpcResponseResult.ok res
   else:
-    return JsonRpcResponseResult.err fmt"Invalid jsonrpc: {$res}"
+    return JsonRpcResponseResult.err fmt"Invalid jsonrpc: {res}"
 
 proc write(s: InputStream, req: string) {.async.} =
   try:
     await s.stream.write(req)
   except CatchableError as e:
     try:
-      error fmt"lsp: ${e.msg}"
+      error fmt"lsp: {e.msg}"
     except Exception as e:
       echo e.msg
 
