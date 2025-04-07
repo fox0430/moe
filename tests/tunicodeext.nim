@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -17,9 +17,12 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, unittest, encodings, sequtils, sugar]
+import std/[unittest, encodings, sequtils, sugar]
+
 from std/os import `/`
+
 import moepkg/gapbuffer
+
 import moepkg/unicodeext
 
 suite "unicodeext: width":
@@ -192,9 +195,9 @@ suite "unicodeext: numberOfBytes":
     check(numberOfBytes("🀀"[0]) == 4)
 
 suite "unicodeext: countRepeat":
-  test "countRepeat":
-    check(ru"あいうえお   あいう".countRepeat(Whitespace, 5) == 3)
-    check(ru"    ".countRepeat(Whitespace, 1) == 3)
+  test "Basic":
+    check(ru"あいうえお   あいう".countRepeat(WhitespaceRune, 5) == 3)
+    check(ru"    ".countRepeat(WhitespaceRune, 1) == 3)
 
 suite "unicodeext: toRunes":
   test "toRunes":
@@ -399,12 +402,12 @@ suite "unicodeext: detectCharacterEncoding":
     check(converted.detectCharacterEncoding == CharacterEncoding.utf32Le)
     ec.close
 
-suite "unicodeext: findRune":
-  test "findRune":
+suite "unicodeext: find":
+  test "Basic":
     check find(ru"あaa", ru 'a') == 1
     check find(ru"あaa", ru 'b') == -1
 
-  test "findRunes":
+  test "Basic 2":
     check find(runes = ru"あいういう", sub = ru"いう") == 1
     check find(runes = ru"あいういういう", sub = ru"いう", start = 2, last = 4) ==
       3
@@ -464,3 +467,50 @@ suite "unicodeext: toString":
     check @[""].toSeqRunes.toString == "\n"
     check @["abc"].toSeqRunes.toString == "abc\n"
     check @["abc", "def"].toSeqRunes.toString == "abc\ndef\n"
+
+suite "unicodeext: replace":
+  test "Basic replacement":
+    let input = ru"hello world hello"
+    let expected = ru"hi world hi"
+    check replace(input, ru"hello", ru"hi") == expected
+
+  test "With emoji":
+    let input = ru"🍣😋🍣😋"
+    let expected = ru"すし😋すし😋"
+    check replace(input, ru"🍣", ru"すし") == expected
+
+  test "Full match":
+    let input = ru"abcabcabc"
+    let expected = ru"xxx"
+    check replace(input, ru"abc", ru"x") == expected
+
+  test "No match":
+    let input = "abcdefg".toRunes
+    let expected = input
+    check replace(input, ru"xyz", ru"123") == expected
+
+  test "Replace with empty":
+    let input = ru"あいうあい"
+    let expected = ru"う"
+    check replace(input, ru"あい", @[]) == expected
+
+  test "Empty sub pattern":
+    let input = ru"test"
+    let expected = input
+    check replace(input, @[], ru"x") == expected
+
+suite "unicodeext: isDigit":
+  test "Rune":
+    check isDigit(ru '1')
+    check not isDigit(ru 'a')
+
+  test "Runes":
+    check isDigit(ru"123")
+    check not isDigit(ru"abc")
+    check not isDigit(ru"a1b2c3")
+
+suite "unicodeext: repeat":
+  test "Basics":
+    check ru"" == ru"abc".repeat(0)
+    check ru"abc" == ru"abc".repeat(1)
+    check ru"abcabc" == ru"abc".repeat(2)

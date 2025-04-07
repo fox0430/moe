@@ -388,11 +388,11 @@ proc basicNewLine(
     bufStatus: var BufferStatus, windowNode: WindowNode, autoIndent: bool, tabStop: int
 ) =
   var startOfCopy = max(
-    countRepeat(bufStatus.buffer[windowNode.currentLine], Whitespace, 0),
+    countRepeat(bufStatus.buffer[windowNode.currentLine], WhitespaceRune, 0),
     windowNode.currentColumn,
   )
   startOfCopy +=
-    countRepeat(bufStatus.buffer[windowNode.currentLine], Whitespace, startOfCopy)
+    countRepeat(bufStatus.buffer[windowNode.currentLine], WhitespaceRune, startOfCopy)
 
   block:
     let oldLine = bufStatus.buffer[windowNode.currentLine + 1]
@@ -425,7 +425,7 @@ proc basicNewLine(
   if autoIndent:
     block:
       let line = bufStatus.buffer[windowNode.currentLine]
-      windowNode.currentColumn = countRepeat(line, Whitespace, 0)
+      windowNode.currentColumn = countRepeat(line, WhitespaceRune, 0)
 
     # Delete all characters in the previous line if only whitespaces.
     if windowNode.currentLine > 0 and
@@ -442,7 +442,7 @@ proc basicNewLine(
 proc basicInsrtIndent(bufStatus: var BufferStatus, windowNode: WindowNode) =
   let
     currentLine = windowNode.currentLine
-    count = countRepeat(bufStatus.buffer[currentLine], Whitespace, 0)
+    count = countRepeat(bufStatus.buffer[currentLine], WhitespaceRune, 0)
     indent = min(count, windowNode.currentColumn)
     oldLine = bufStatus.buffer[currentLine + 1]
   var newLine = bufStatus.buffer[currentLine + 1]
@@ -457,7 +457,7 @@ proc insertIndentWhenPairOfParen(
   let
     currentLine = windowNode.currentLine
     line = bufStatus.buffer[currentLine]
-    count = countRepeat(line, Whitespace, 0) + tabStop
+    count = countRepeat(line, WhitespaceRune, 0) + tabStop
     openParen = line[windowNode.currentColumn - 1]
 
   let oldLine = bufStatus.buffer[windowNode.currentLine + 1]
@@ -484,7 +484,7 @@ proc insertIndentWhenPairOfParen(
           bufStatus.buffer[currentLine + 1] = newLine
       # Add the close paren in the buffer[nextLine + 1]
       block:
-        let count = countRepeat(line, Whitespace, 0)
+        let count = countRepeat(line, WhitespaceRune, 0)
         var newLine = repeat(' ', count).toRunes & closeParen
         bufStatus.buffer.insert(newLine, windowNode.currentLine + 1)
 
@@ -513,7 +513,7 @@ proc insertIndentInNimForKeyEnter(
       ) or line[^1] == (ru ':') or line[^1] == (ru '=')
     ):
       let
-        count = countRepeat(line, Whitespace, 0) + tabStop
+        count = countRepeat(line, WhitespaceRune, 0) + tabStop
         oldLine = bufStatus.buffer[windowNode.currentLine + 1]
       var newLine = bufStatus.buffer[currentLine + 1]
       newLine &= repeat(' ', count).toRunes
@@ -528,7 +528,7 @@ proc insertIndentInNimForKeyEnter(
       (line.len > 3 and line[line.len - 3 .. ^1] == ru "and")
     ):
       let
-        count = countRepeat(line, Whitespace, 0) + tabStop
+        count = countRepeat(line, WhitespaceRune, 0) + tabStop
         oldLine = bufStatus.buffer[windowNode.currentLine + 1]
       var newLine = bufStatus.buffer[currentLine + 1]
       newLine &= repeat(' ', count).toRunes
@@ -558,7 +558,7 @@ proc insertIndentInPythonForKeyEnter(
     # if finish the current line with ':', the unclosed paren.
     if isOpenParen(line[^1]) or line[^1] == ru ':':
       let
-        count = countRepeat(line, Whitespace, 0) + tabStop
+        count = countRepeat(line, WhitespaceRune, 0) + tabStop
         oldLine = bufStatus.buffer[windowNode.currentLine + 1]
       var newLine = bufStatus.buffer[currentLine + 1]
       newLine &= repeat(' ', count).toRunes
@@ -569,7 +569,7 @@ proc insertIndentInPythonForKeyEnter(
     elif (line.len > 2 and line[line.len - 2 .. ^1] == ru "or") or
         (line.len > 3 and line[line.len - 3 .. ^1] == ru "and"):
       let
-        count = countRepeat(line, Whitespace, 0) + tabStop
+        count = countRepeat(line, WhitespaceRune, 0) + tabStop
         oldLine = bufStatus.buffer[windowNode.currentLine + 1]
       var newLine = bufStatus.buffer[currentLine + 1]
       newLine &= repeat(' ', count).toRunes
@@ -609,7 +609,7 @@ proc insertIndentInYamlForKeyEnter(
     # if finish the current line with ':'.
     if line[^1] == ru ':':
       let
-        count = countRepeat(line, Whitespace, 0) + tabStop
+        count = countRepeat(line, WhitespaceRune, 0) + tabStop
         oldLine = bufStatus.buffer[windowNode.currentLine + 1]
       var newLine = bufStatus.buffer[currentLine + 1]
       newLine &= repeat(' ', count).toRunes
@@ -623,7 +623,7 @@ proc insertIndentInPlainTextForKeyEnter(
 ) =
   let
     currentLine = windowNode.currentLine
-    count = countRepeat(bufStatus.buffer[currentLine], Whitespace, 0)
+    count = countRepeat(bufStatus.buffer[currentLine], WhitespaceRune, 0)
     indent = min(count, windowNode.currentColumn)
 
     oldLine = bufStatus.buffer[currentLine + 1]
@@ -1078,7 +1078,7 @@ proc insertIndentNimForOpenBlankLine(
       aboveLine[^1] == (ru '=')
     ):
       let
-        count = countRepeat(aboveLine, Whitespace, 0) + tabStop
+        count = countRepeat(aboveLine, WhitespaceRune, 0) + tabStop
         oldLine = bufStatus.buffer[currentLineNum]
       var newLine = bufStatus.buffer[currentLineNum]
 
@@ -1091,7 +1091,7 @@ proc insertIndentNimForOpenBlankLine(
     ):
       # Auto indent if finish the current line with "or", "and"
       let
-        count = countRepeat(aboveLine, Whitespace, 0) + tabStop
+        count = countRepeat(aboveLine, WhitespaceRune, 0) + tabStop
         oldLine = bufStatus.buffer[currentLineNum]
       var newLine = bufStatus.buffer[currentLineNum]
 
@@ -1100,7 +1100,7 @@ proc insertIndentNimForOpenBlankLine(
         bufStatus.buffer[currentLineNum] = newLine
     else:
       let
-        count = countRepeat(aboveLine, Whitespace, 0)
+        count = countRepeat(aboveLine, WhitespaceRune, 0)
         oldLine = bufStatus.buffer[currentLineNum]
       var newLine = bufStatus.buffer[currentLineNum]
 
@@ -1125,7 +1125,7 @@ proc insertIndentInPythonForOpenBlankLine(
         (aboveLine.len > 3 and (aboveLine.splitWhitespace)[^1] == ru "and") or
         (aboveLine[^1] == ru ':'):
       let
-        count = countRepeat(aboveLine, Whitespace, 0) + tabStop
+        count = countRepeat(aboveLine, WhitespaceRune, 0) + tabStop
         oldLine = bufStatus.buffer[currentLineNum]
       var newLine = bufStatus.buffer[currentLineNum]
 
@@ -1134,7 +1134,7 @@ proc insertIndentInPythonForOpenBlankLine(
         bufStatus.buffer[currentLineNum] = newLine
     else:
       let
-        count = countRepeat(aboveLine, Whitespace, 0)
+        count = countRepeat(aboveLine, WhitespaceRune, 0)
         oldLine = bufStatus.buffer[currentLineNum]
       var newLine = bufStatus.buffer[currentLineNum]
 
@@ -1150,7 +1150,7 @@ proc insertIndentPlainTextForOpenBlankLine(
   let
     currentLineNum = windowNode.currentLine
     aboveLine = bufStatus.buffer[currentLineNum - 1]
-    count = countRepeat(aboveLine, Whitespace, 0)
+    count = countRepeat(aboveLine, WhitespaceRune, 0)
     oldLine = bufStatus.buffer[currentLineNum]
   var newLine = bufStatus.buffer[currentLineNum]
 

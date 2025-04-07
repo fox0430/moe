@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -42,6 +42,22 @@ const
   DecimalDigitCharacter* = ctgNd
   ConnectingCharacter* = ctgPc
   FormattingCharacter* = ctgCf
+
+  WhitespaceRune* =
+    [Rune(' '), Rune('\t'), Rune('\v'), Rune('\r'), Rune('\l'), Rune('\f')]
+
+  DigitsRune* = [
+    Rune('0'),
+    Rune('1'),
+    Rune('2'),
+    Rune('3'),
+    Rune('4'),
+    Rune('5'),
+    Rune('6'),
+    Rune('7'),
+    Rune('8'),
+    Rune('9'),
+  ]
 
 proc `$`*(encoding: CharacterEncoding): string =
   case encoding
@@ -260,34 +276,59 @@ proc numberOfBytes*(firstByte: char): int =
     return 4
   doAssert(false, "Invalid UTF-8 first byte.")
 
-proc isDigit*(c: Rune): bool =
-  let s = $c
-  return s.len == 1 and strutils.isDigit(s[0])
+proc isDigit*(r: Rune): bool =
+  return r in DigitsRune
 
 proc isDigit*(runes: Runes): bool {.inline.} =
   all(runes, isDigit)
 
-proc isSpace*(c: Rune): bool {.inline.} =
-  return unicode.isSpace($c)
+proc isSpace*(r: Rune): bool {.inline.} =
+  return r in WhitespaceRune
 
-proc isPunct*(c: Rune): bool =
-  let s = $c
+proc isPunct*(r: Rune): bool =
   return
-    s.len == 1 and
-    s[0] in {
-      '!', '"', '#', '$', '%', '$', '\'', '(', ')', '*', '+', ',', '-', '.', '/', ':',
-      ';', '<', '=', '>', '?', '@', '[', '\\', ']', '^', '_', '`', '{', '=', '}',
-    }
+    r in [
+      ru '!',
+      ru '"',
+      ru '#',
+      ru '$',
+      ru '%',
+      ru '\'',
+      ru '(',
+      ru ')',
+      ru '*',
+      ru '+',
+      ru ',',
+      ru '-',
+      ru '.',
+      ru '/',
+      ru ':',
+      ru ';',
+      ru '<',
+      ru '=',
+      ru '>',
+      ru '?',
+      ru '@',
+      ru '[',
+      ru '\\',
+      ru ']',
+      ru '^',
+      ru '_',
+      ru '`',
+      ru '{',
+      ru '=',
+      ru '}',
+    ]
 
 proc isNewline*(r: Rune): bool {.inline.} =
   r in [ru '\n', ru '\r']
 
-proc countRepeat*(runes: Runes, charSet: set[char], start: int): int =
+proc countRepeat*(runes: Runes, runeArray: openArray[Rune], start: int): int =
   for i in start ..< runes.len:
-    let s = $runes[i]
-    if s.len > 1 or (not (s[0] in charSet)):
+    if not (runes[i] in runeArray):
       break
-    inc(result)
+    else:
+      result.inc
 
 proc toRunes*(r: Runes): Runes {.inline.} =
   r
@@ -314,6 +355,10 @@ proc toRunes*(r: seq[Runes]): Runes {.inline.} =
     if i < r.high:
       result.add ru '\n'
 
+proc toRunes*(a: openArray[char]): Runes {.inline.} =
+  for i, c in a:
+    result.add c.toRune
+
 proc toSeqRunes*(s: seq[string]): seq[Runes] {.inline.} =
   for l in s:
     result.add l.toRunes
@@ -322,22 +367,53 @@ proc toSeqRunes*(r: Deque[Runes]): seq[Runes] {.inline.} =
   for l in r:
     result.add l
 
-proc startsWith*(r1: Runes, r2: Runes | Rune): bool {.inline.} =
-  startsWith($r1, $r2)
+proc startsWith*(r: Runes, prefix: Rune): bool {.inline.} =
+  result = r.len > 0 and r[0] == prefix
 
-proc endsWith*(r1: Runes, r2: Runes | Rune): bool {.inline.} =
-  endsWith($r1, $r2)
+proc startsWith*(r, prefix: Runes): bool =
+  let prefixLen = prefix.len
+  let sLen = r.len
+  var i = 0
+  while true:
+    if i >= prefixLen:
+      return true
+    if i >= sLen or r[i] != prefix[i]:
+      return false
+    inc(i)
+
+proc endsWith*(r: Runes, suffix: Rune): bool {.inline.} =
+  result = r.len > 0 and r[r.high] == suffix
+
+proc endsWith*(r: Runes, suffix: Runes): bool =
+  let suffixLen = suffix.len
+  let sLen = r.len
+  var i = 0
+  var j = sLen - suffixLen
+  while i + j >= 0 and i + j < sLen:
+    if r[i + j] != suffix[i]:
+      return false
+    inc(i)
+  if i >= suffixLen:
+    return true
 
 proc toString*(runes: Runes): string {.inline.} =
-  $runes
+  return $runes
 
 proc toString*(lines: seq[Runes]): string =
   for i, runes in lines:
     result &= $runes & '\n'
 
-proc `&`*(runes1, runes2: Runes): Runes {.inline.} =
-  result = runes1
-  result.add runes2
+proc `&`*(r1, r2: Rune | Runes): Runes =
+  result = r1
+  result.add r2
+
+proc `&`*(r1: Runes, r2: Rune): Runes =
+  result = r1
+  result.add r2
+
+proc `&`*(r1: Rune, r2: Runes): Runes =
+  result = @[r1]
+  result.add r2
 
 proc correspondingOpenParen*(r: Rune): Rune =
   case r
@@ -565,16 +641,41 @@ proc toggleCase*(ch: Rune): Rune =
     result = result.toUpper()
   return result
 
-proc `/`*(runes1, runes2: Runes): Runes {.inline.} =
-  toRunes($runes1 / $runes2)
+proc removePrefix*(r: var Runes, prefix: Runes) =
+  var start = 0
+  while start < r.len and r[start] in prefix:
+    start += 1
+  if start > 0:
+    r.delete(0 .. start - 1)
 
-proc repeat*(runes: Runes, n: Natural): Runes =
-  let str = repeat($runes, n)
-  result = str.toRunes
+proc removePrefix*(r: var Runes, prefix: Rune) {.inline.} =
+  r.removePrefix(@[prefix])
 
-proc repeat*(rune: Rune, n: Natural): Runes =
-  let str = repeat($rune, n)
-  result = str.ru
+proc removePrefix*(r: Rune | Runes, prefix: Rune): Runes {.inline.} =
+  result = r
+  result.removePrefix(prefix)
+
+proc removeSuffix*(r: var Runes, suffix: Runes) =
+  if r.len == 0:
+    return
+  var last = r.high
+  while last > -1 and r[last] in suffix:
+    last -= 1
+  r.setLen(last + 1)
+
+proc removeSuffix*(r: var Runes, suffix: Rune) {.inline.} =
+  r.removeSuffix(@[suffix])
+
+proc removeSuffix*(r: Rune | Runes, suffix: Rune): Runes {.inline.} =
+  result = r
+  result.removeSuffix(suffix)
+
+proc `/`*(head, tail: Runes): Runes {.inline.} =
+  return toRunes($head / $tail)
+
+proc repeat*(r: Rune | Runes, n: Natural): Runes {.inline.} =
+  for _ in 0 ..< n:
+    result.add r
 
 proc encodeUTF8*(r: Rune): seq[uint32] =
   const
@@ -611,15 +712,11 @@ proc encodeUTF8*(r: Rune): seq[uint32] =
     result.add MbLead or i shl 6
     result.add MbLead or i and MbMask
 
-proc absolutePath*(runes: Runes): Runes {.inline.} =
-  result = absolutePath($runes).ru
-  if result.len > 0 and dirExists($runes) and result[^1] != ru '/':
-    result &= ru "/"
-
-proc removePrefix*(runes: Runes, prefix: Runes): Runes {.inline.} =
-  var str = $runes
-  removePrefix(str, $prefix)
-  return str.ru
+proc absolutePath*(runes: Runes): Runes =
+  let pathStr = $runes
+  result = absolutePath(pathStr).toRunes
+  if result.len > 0 and dirExists(pathStr) and result[^1] != ru '/':
+    result &= ru '/'
 
 proc count*(runes: Runes, r: Rune): int {.inline.} =
   ## Count `r` contained in `runes`
@@ -640,7 +737,7 @@ template clear*(r: var Runes) =
 
 proc isContainUpper*(runes: Runes): bool =
   for r in runes:
-    let ch = ($r)[0]
+    let ch = r.toChar
     if isUpperAscii(ch):
       return true
 
@@ -649,16 +746,6 @@ proc join*(lines: seq[Runes], sep: Runes = ru""): Runes =
     result.add runes
     if index < lines.high:
       result.add sep
-
-proc removePrefix*(runes: var Runes, prefix: Runes) =
-  var str = $runes
-  str.removePrefix($prefix)
-  runes = str.toRunes
-
-proc removeSuffix*(runes: var Runes, suffix: Runes) =
-  var str = $runes
-  str.removeSuffix($suffix)
-  runes = str.toRunes
 
 proc toLower*(runes: Runes): Runes =
   for r in runes:
@@ -674,13 +761,41 @@ proc isAllLower*(runes: Runes): bool =
     if not r.isLower:
       return false
 
-proc stripLineEnd*(runes: Runes): Runes =
-  var s = $runes
-  s.stripLineEnd
-  return s.toRunes
+proc stripLineEnd*(r: var Runes) =
+  if r.len > 0:
+    case r[^1]
+    of ru '\n':
+      if r.len > 1 and r[^2] == ru '\r':
+        r.setLen r.len - 2
+      else:
+        r.setLen r.len - 1
+    of ru '\r', ru '\v', ru '\f':
+      r.setLen r.len - 1
+    else:
+      discard
 
-proc replace*(runes1, sub: Runes, by: Runes = ru""): Runes {.inline.} =
-  replace($runes1, $sub, $by).toRunes
+proc replace*(r, sub: Runes, by: Runes = ru""): Runes =
+  ## Replaces every occurrence of the `sub` sequence in `s` with `by`.
+
+  result = @[]
+  let subLen = sub.len
+  if subLen == 0:
+    result = r
+    return
+
+  var i = 0
+  while i <= r.len - subLen:
+    if r[i ..< i + subLen] == sub:
+      result.add(by)
+      i += subLen
+    else:
+      result.add(r[i])
+      inc i
+
+  # Copy the remaining runes, if any
+  while i < r.len:
+    result.add(r[i])
+    inc i
 
 proc replaceToNewLines*(runes: Runes): Runes =
   ## Replaces "\n" to '\n' in `runes`.
@@ -730,3 +845,8 @@ proc addMargins*(lines: seq[Runes], width: int = 1): seq[Runes] =
       result.add ru" " & line & ru" "
     else:
       result.add ru" " & line
+
+proc skipWhitespace*(r: Runes, start = 0): int =
+  let array = r[start .. r.high]
+  while result < array.len and array[result] in WhitespaceRune:
+    result.inc

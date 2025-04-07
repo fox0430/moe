@@ -310,7 +310,7 @@ proc writeCurrentCharInfo*(
       e = encodeUTF8(r)
       eHex = e[0].uint64.toHex
       eOct = int64(e[0]).toOct(5)
-      msg = fmt "<{$r}>  {e[0]}  Hex {normalizeHex($eHex)}  Oct {$eOct}"
+      msg = fmt "<{r}>  {e[0]}  Hex {normalizeHex($eHex)}  Oct {eOct}"
     commandLine.writeStandard(msg, log = isLog, screen = isScreen)
 
 proc writeReadonlyModeWarning*(commandLine: CommandLine) {.inline.} =
@@ -335,7 +335,7 @@ proc writeDiffViewerError*(commandLine: CommandLine, message: string) {.inline.}
   commandLine.writeError(fmt"diff: {message}")
 
 proc writeChangeThemeError*(commandLine: CommandLine, message: string) =
-  commandLine.writeError(fmt"Error: Change theme failed: ${message}")
+  commandLine.writeError(fmt"Error: Change theme failed: {message}")
 
 proc writePasteIgnoreWarn*(commandLine: CommandLine) {.inline.} =
   commandLine.writeWarn("Paste is ignored in this mode")
