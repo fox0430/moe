@@ -92,7 +92,8 @@ proc readFrame(s: AsyncStreamReader): Future[ReadFrameResult] {.async.} =
       # Skip line if not JSON-RPC.
       continue
 
-    let valueStart = header.get.sep + 1 + header.get.ln.skipWhitespace(header.get.sep + 1)
+    let valueStart =
+      header.get.sep + 1 + header.get.ln.skipWhitespace(header.get.sep + 1)
 
     var contentLen = -1
     case header.get.ln[0 ..< header.get.sep]
