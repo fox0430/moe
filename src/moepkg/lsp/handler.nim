@@ -793,7 +793,7 @@ proc lspRename(status: var EditorStatus, res: JsonNode): Result[(), string] =
         return
           Result[(), string].err fmt"lsp rename: cannot open: {r.path}: {file.error}"
 
-      var lines = file.get.text.splitLines
+      var lines = file.get.text
       for c in r.changes:
         if c.range.first.line > lines.high or
             c.range.last.column > lines[c.range.first.line].high:

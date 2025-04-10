@@ -1419,7 +1419,7 @@ suite "Ex mode: w! command":
     status.exModeCommand(Command)
 
     let entireFile = readFile(Filename)
-    check entireFile == "abc"
+    check entireFile == "abc\n"
 
     removeFile(Filename)
 
@@ -1445,7 +1445,7 @@ suite "Ex mode: wq! command":
     check status.mainWindow.numOfMainWindow == 1
 
     let entireFile = readFile(Filename)
-    check entireFile == "abc"
+    check entireFile == "abc\n"
 
     removeFile(Filename)
 

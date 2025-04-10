@@ -4401,7 +4401,7 @@ suite "Normal mode: requestGotoDefinition":
     status.update
 
 suite "Normal mode: jumpBackFromGotoDefinitionSource":
-  const TestFileBuffer = "123\n123\n"
+  const TestFileBuffer = "123\n123"
 
   var status: EditorStatus
 
@@ -4414,7 +4414,7 @@ suite "Normal mode: jumpBackFromGotoDefinitionSource":
   setup:
     createDir(testDir)
 
-    writeFile(testFilePath1, TestFileBuffer)
+    writeFile(testFilePath1, TestFileBuffer & '\n')
     writeFile(testFilePath2, "a\n")
 
     status = initEditorStatus()
