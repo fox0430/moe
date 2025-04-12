@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -17,20 +17,22 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[os, encodings, strformat]
+import std/[os, encodings, strformat, strutils]
+
 import pkg/results
+
 import gapbuffer, unicodeext
 
 type
   TextAndEncoding* = object
-    text*: Runes
+    text*: seq[Runes]
     encoding*: CharacterEncoding
 
   OpenFileResult* = Result[TextAndEncoding, string]
 
   SaveFileResult* = Result[(), string]
 
-  FileType* = enum
+  FileType* {.pure.} = enum
     dir
     docker
     nim
@@ -90,6 +92,10 @@ type
     bmp
     gif
     unknown
+
+const
+  SmallFileSizeThreshold = 1024 * 1024 * 10 # 10MB
+  MaxReadBytes = 1024 * 1024 * 10 # 10MB
 
 proc fileTypeIcon*(fileType: FileType): Runes =
   case fileType
@@ -207,23 +213,242 @@ proc splitAndNormalizedPath*(path: Runes): tuple[head, tail: Runes] =
   let (head, tail) = splitPath(path)
   return (head: normalizedPath(head), tail: normalizedPath(tail))
 
-proc openFile*(filename: string | Runes): OpenFileResult =
-  let raw =
-    try:
-      readFile($filename)
-    except IOError as e:
-      return OpenFileResult.err fmt"Failed to read file: {e.msg}"
+proc readFile(
+    path: Runes, smallFileSizeThreshold = SmallFileSizeThreshold
+): seq[Runes] =
+  ## Read file and return `seq[Runes]`.
+
+  # Get file size to optimize memory allocation
+  let fileSize = getFileSize($path)
+
+  # For small files, read all at once (reduces intermediate copies)
+  if fileSize <= smallFileSizeThreshold:
+    # Read the entire file at once
+    let content = readFile($path)
+
+    # Initialize result array (pre-allocate with estimated line count)
+    let estimatedLineCount = max(1, content.count('\n') + 1)
+    result = newSeqOfCap[Runes](estimatedLineCount)
+
+    # Buffer to hold the current line (pre-allocate with estimated average line length)
+    let avgLineLen = max(10, fileSize div estimatedLineCount)
+    var currentLine = newSeqOfCap[Rune](avgLineLen)
+
+    var i = 0
+    while i < content.len:
+      # Process line breaks
+      if content[i] == '\n':
+        result.add currentLine
+        currentLine = newSeqOfCap[Rune](avgLineLen)
+        i += 1
+        continue
+      elif content[i] == '\r':
+        if i + 1 < content.len and content[i + 1] == '\n':
+          # Windows-style line break (\r\n)
+          result.add currentLine
+          currentLine = newSeqOfCap[Rune](avgLineLen)
+          i += 2
+          continue
+        else:
+          # Old Mac-style line break (\r)
+          result.add currentLine
+          currentLine = newSeqOfCap[Rune](avgLineLen)
+          i += 1
+          continue
+
+      # Get rune length
+      let runeLen = runeLenAt(content, i)
+
+      # Add the rune to the current line (with boundary check)
+      if i + runeLen <= content.len:
+        currentLine.add content.runeAt(i)
+      i += runeLen
+
+    # Add the last line (if the file doesn't end with a line break)
+    if currentLine.len > 0:
+      result.add currentLine
+  else:
+    # For large files, use buffering (balance with memory usage)
+    var f = open($path, fmRead)
+    defer:
+      f.close
+
+    # Use a value close to system page size (4KB-16KB on most systems)
+    const bufferSize = 16384
+    var buffer = newString(bufferSize)
+
+    # Use a variable-length buffer that can be accessed directly to reduce buffer concatenation copies
+    var workBuffer: string
+    workBuffer.setLen(2 * bufferSize) # Allocate sufficient initial size
+    var workBufferLen = 0
+
+    # Initialize result array (pre-allocate with estimated line count)
+    # Assuming average line length of 80 bytes
+    let estimatedLineCount = max(1, fileSize div 80 + 1)
+    result = newSeqOfCap[Runes](estimatedLineCount)
+
+    # Buffer to hold the current line
+    var currentLine = newSeqOfCap[Rune](80) # Assume average line length
+
+    # File reading loop
+    while not f.endOfFile():
+      let bytesRead = f.readChars(buffer)
+      if bytesRead <= 0:
+        break
+
+      # Check and extend workBuffer capacity
+      if workBufferLen + bytesRead > workBuffer.len:
+        # New size = 2x current size or enough to hold bytesRead
+        let newSize = max(workBuffer.len * 2, workBufferLen + bytesRead)
+        workBuffer.setLen(newSize)
+
+      # Add newly read data to workBuffer (direct copy)
+      copyMem(addr workBuffer[workBufferLen], addr buffer[0], bytesRead)
+      workBufferLen += bytesRead
+
+      var processedPos = 0
+      var i = 0
+      while i < workBufferLen:
+        # Process line breaks
+        if workBuffer[i] == '\n':
+          result.add currentLine
+          currentLine = newSeqOfCap[Rune](80)
+          i += 1
+          processedPos = i
+          continue
+        elif workBuffer[i] == '\r':
+          if i + 1 < workBufferLen and workBuffer[i + 1] == '\n':
+            # Windows-style line break (\r\n)
+            result.add currentLine
+            currentLine = newSeqOfCap[Rune](80)
+            i += 2
+            processedPos = i
+            continue
+          else:
+            # Old Mac-style line break (\r)
+            result.add currentLine
+            currentLine = newSeqOfCap[Rune](80)
+            i += 1
+            processedPos = i
+            continue
+
+        # Get rune length
+        let runeLen = runeLenAt(workBuffer, i)
+
+        # If rune length exceeds buffer remainder, interrupt processing
+        if i + runeLen > workBufferLen:
+          break
+
+        # Add the rune to the current line
+        currentLine.add workBuffer.runeAt(i)
+        i += runeLen
+        processedPos = i
+
+      # Remove processed portion from buffer (data shift)
+      if processedPos > 0:
+        if processedPos < workBufferLen:
+          # Move remaining data to beginning (memory move)
+          moveMem(
+            addr workBuffer[0],
+            addr workBuffer[processedPos],
+            workBufferLen - processedPos,
+          )
+        workBufferLen -= processedPos
+
+    # Process the last line (if the file doesn't end with a line break)
+    if workBufferLen > 0:
+      # Convert remaining buffer to runes
+      var i = 0
+      while i < workBufferLen:
+        let runeLen = runeLenAt(workBuffer, i)
+        if i + runeLen <= workBufferLen:
+          currentLine.add workBuffer.runeAt(i)
+        i += runeLen
+
+    # Add the last line if it exists
+    if currentLine.len > 0:
+      result.add currentLine
+
+proc detectFileEncoding(
+    path: string, isReadAll = true
+): Result[CharacterEncoding, string] =
+  ## Detect file encoding. If isReadAll is false, Don't read all file. Only read `MaxReadBytes` bytes and detection.
+
+  if isReadAll:
+    # Read all
+
+    let buf =
+      try:
+        readFile(path)
+      except IOError as e:
+        return Result[CharacterEncoding, string].err fmt"Failed to read file: {e.msg}"
+
+    let e = detectCharacterEncoding(buf)
+    return Result[CharacterEncoding, string].ok e
+  else:
+    var # Don't read all. Only read `MaxReadBytes` bytes.
+      f =
+        try:
+          open(path, fmRead)
+        except IOError as e:
+          return Result[CharacterEncoding, string].err fmt"Failed to read file: {e.msg}"
+    defer:
+      f.close
+
+    let
+      fileSize = getFileSize(path)
+      bytesToRead = min(MaxReadBytes, fileSize)
+
+    var buf = newSeq[byte](bytesToRead)
+    let bytesRead = f.readBytes(buf, 0, bytesToRead)
+
+    if bytesRead < bytesToRead:
+      buf.setLen(bytesRead)
+
+    var str = newString(bytesRead)
+    for i in 0 ..< bytesRead:
+      str[i] = char(buf[i])
+
+    let e = detectCharacterEncoding(str)
+    return Result[CharacterEncoding, string].ok e
+
+proc openFile*(path: string | Runes): OpenFileResult =
+  ## Read file and convert character encoding to UTF-8.
 
   var t: TextAndEncoding
 
-  t.encoding = detectCharacterEncoding(raw)
+  block:
+    # Detect file encoding
+    let
+      # Don't read all if the file is large.
+      isReadAll = getFileSize($path) > MaxReadBytes
+      e = detectFileEncoding($path, isReadAll)
+    if e.isOk:
+      t.encoding = e.get
+    else:
+      return OpenFileResult.err fmt"Failed to read file: {e.error}"
 
   case t.encoding
   of CharacterEncoding.unknown, CharacterEncoding.utf8:
     # If the character encoding is unknown, convert to UTF-8.
-    t.text = raw.toRunes
+    t.text =
+      try:
+        readFile(path.toRunes)
+      except IOError as e:
+        return OpenFileResult.err fmt"Failed to read file: {e.msg}"
   else:
-    t.text = convert(raw, "UTF-8", $t.encoding).toRunes
+    let raw =
+      try:
+        readFile($path)
+      except IOError as e:
+        return OpenFileResult.err fmt"Failed to read file: {e.msg}"
+
+    let text = convert(raw, "UTF-8", $t.encoding)
+    t.text = text.toSeqRunes
+
+    # Remove the newline at end of file.
+    if t.text.len > 0 and t.text[^1] == ru"":
+      t.text.delete(t.text.high)
 
   return OpenFileResult.ok t
 
@@ -234,10 +459,11 @@ proc newFile*(): GapBuffer[Runes] {.inline.} =
 proc saveFile*(
     path: string | Runes, runes: Runes, encoding: CharacterEncoding
 ): SaveFileResult =
+  const NewlineEndOfFile = '\n'
   let
     encode =
       if encoding == CharacterEncoding.unknown: CharacterEncoding.utf8 else: encoding
-    buffer = convert($runes, $encode, "UTF-8")
+    buffer = convert($runes & NewlineEndOfFile, $encode, "UTF-8")
 
   try:
     writeFile($path, buffer)

@@ -359,6 +359,13 @@ proc toRunes*(a: openArray[char]): Runes {.inline.} =
   for i, c in a:
     result.add c.toRune
 
+proc toSeqRunes*(s: string): seq[Runes] =
+  let lines = s.splitLines
+  result = newSeq[Runes](lines.len)
+
+  for i, line in lines:
+    result[i] = line.toRunes
+
 proc toSeqRunes*(s: seq[string]): seq[Runes] {.inline.} =
   for l in s:
     result.add l.toRunes

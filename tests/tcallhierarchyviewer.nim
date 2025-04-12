@@ -177,8 +177,8 @@ suite "callhierarchyviewer: jumpToDestination":
 
   test "Basic":
     let filePath = testDir / $genOid() & ".rs"
-    const Buffer = "main(){\n    println(\"\")\n}\n"
-    writeFile(filePath, Buffer)
+    const Buffer = "main(){\n    println(\"\")\n}"
+    writeFile(filePath, Buffer & '\n')
 
     assert status.addNewBufferInCurrentWin("").isOk
 
