@@ -93,6 +93,10 @@ type
     gif
     unknown
 
+const
+  SmallFileSizeThreshold = 1024 * 1024 * 10 # 10MB
+  MaxReadBytes = 1024 * 1024 * 10 # 10MB
+
 proc fileTypeIcon*(fileType: FileType): Runes =
   case fileType
   of dir:
@@ -209,14 +213,13 @@ proc splitAndNormalizedPath*(path: Runes): tuple[head, tail: Runes] =
   let (head, tail) = splitPath(path)
   return (head: normalizedPath(head), tail: normalizedPath(tail))
 
-proc readFile(path: Runes): seq[Runes] =
+proc readFile(path: Runes, smallFileSizeThreshold = SmallFileSizeThreshold): seq[Runes] =
   ## Read file and return `seq[Runes]`.
 
   # Get file size to optimize memory allocation
   let fileSize = getFileSize($path)
 
   # For small files, read all at once (reduces intermediate copies)
-  const smallFileSizeThreshold = 1024 * 1024 * 10 # 10MB
   if fileSize <= smallFileSizeThreshold:
     # Read the entire file at once
     let content = readFile($path)
@@ -364,38 +367,58 @@ proc readFile(path: Runes): seq[Runes] =
     if currentLine.len > 0:
       result.add currentLine
 
-proc detectFileEncoding(path: string): Result[CharacterEncoding, string] =
-  var f =
-    try:
-      open(path, fmRead)
-    except IOError as e:
-      return Result[CharacterEncoding, string].err fmt"Failed to read file: {e.msg}"
-  defer:
-    f.close()
+proc detectFileEncoding(path: string, isReadAll = true): Result[CharacterEncoding, string] =
+  ## Detect file encoding. If isReadAll is false, Don't read all file. Only read `MaxReadBytes` bytes and detection.
 
-  const MaxReadBytes = 100
-  let
-    fileSize = getFileSize(path)
-    bytesToRead = min(MaxReadBytes, fileSize)
+  if isReadAll:
+    # Read all
 
-  var buf = newSeq[byte](bytesToRead)
-  let bytesRead = f.readBytes(buf, 0, bytesToRead)
+    let buf =
+      try:
+        readFile(path)
+      except IOError as e:
+        return Result[CharacterEncoding, string].err fmt"Failed to read file: {e.msg}"
 
-  if bytesRead < bytesToRead:
-    buf.setLen(bytesRead)
+    let e = detectCharacterEncoding(buf)
+    return Result[CharacterEncoding, string].ok e
+  else:
+   # Don't read all. Only read `MaxReadBytes` bytes.
 
-  var str = newString(bytesRead)
-  for i in 0 ..< bytesRead:
-    str[i] = char(buf[i])
+    var f =
+      try:
+        open(path, fmRead)
+      except IOError as e:
+        return Result[CharacterEncoding, string].err fmt"Failed to read file: {e.msg}"
+    defer: f.close
 
-  let e = detectCharacterEncoding(str)
-  return Result[CharacterEncoding, string].ok e
+    let
+      fileSize = getFileSize(path)
+      bytesToRead = min(MaxReadBytes, fileSize)
+
+    var buf = newSeq[byte](bytesToRead)
+    let bytesRead = f.readBytes(buf, 0, bytesToRead)
+
+    if bytesRead < bytesToRead:
+      buf.setLen(bytesRead)
+
+    var str = newString(bytesRead)
+    for i in 0 ..< bytesRead:
+      str[i] = char(buf[i])
+
+    let e = detectCharacterEncoding(str)
+    return Result[CharacterEncoding, string].ok e
 
 proc openFile*(path: string | Runes): OpenFileResult =
+  ## Read file and convert character encoding to UTF-8.
+
   var t: TextAndEncoding
 
   block:
-    let e = detectFileEncoding($path)
+    # Detect file encoding
+    let
+      # Don't read all if the file is large.
+      isReadAll = getFileSize($path) > MaxReadBytes
+      e = detectFileEncoding($path, isReadAll)
     if e.isOk:
       t.encoding = e.get
     else:
@@ -419,6 +442,9 @@ proc openFile*(path: string | Runes): OpenFileResult =
     let text = convert(raw, "UTF-8", $t.encoding)
     t.text = text.toSeqRunes
 
+    # Remove the newline at end of file.
+    if t.text.len > 0 and t.text[^1] == ru"": t.text.delete(t.text.high)
+
   return OpenFileResult.ok t
 
 proc newFile*(): GapBuffer[Runes] {.inline.} =
@@ -428,10 +454,11 @@ proc newFile*(): GapBuffer[Runes] {.inline.} =
 proc saveFile*(
     path: string | Runes, runes: Runes, encoding: CharacterEncoding
 ): SaveFileResult =
+  const NewlineEndOfFile = '\n'
   let
     encode =
       if encoding == CharacterEncoding.unknown: CharacterEncoding.utf8 else: encoding
-    buffer = convert($runes & '\n', $encode, "UTF-8")
+    buffer = convert($runes & NewlineEndOfFile, $encode, "UTF-8")
 
   try:
     writeFile($path, buffer)
