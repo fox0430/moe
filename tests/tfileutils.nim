@@ -26,7 +26,7 @@ import moepkg/unicodeext
 import moepkg/fileutils {.all.}
 
 const Text =
-    """Sentences that contain all letters commonly used in a language
+  """Sentences that contain all letters commonly used in a language
 --------------------------------------------------------------
 
 Markus Kuhn <http://www.cl.cam.ac.uk/~mgk25/> -- 2012-04-11

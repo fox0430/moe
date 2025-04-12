@@ -213,7 +213,9 @@ proc splitAndNormalizedPath*(path: Runes): tuple[head, tail: Runes] =
   let (head, tail) = splitPath(path)
   return (head: normalizedPath(head), tail: normalizedPath(tail))
 
-proc readFile(path: Runes, smallFileSizeThreshold = SmallFileSizeThreshold): seq[Runes] =
+proc readFile(
+    path: Runes, smallFileSizeThreshold = SmallFileSizeThreshold
+): seq[Runes] =
   ## Read file and return `seq[Runes]`.
 
   # Get file size to optimize memory allocation
@@ -367,7 +369,9 @@ proc readFile(path: Runes, smallFileSizeThreshold = SmallFileSizeThreshold): seq
     if currentLine.len > 0:
       result.add currentLine
 
-proc detectFileEncoding(path: string, isReadAll = true): Result[CharacterEncoding, string] =
+proc detectFileEncoding(
+    path: string, isReadAll = true
+): Result[CharacterEncoding, string] =
   ## Detect file encoding. If isReadAll is false, Don't read all file. Only read `MaxReadBytes` bytes and detection.
 
   if isReadAll:
@@ -382,14 +386,14 @@ proc detectFileEncoding(path: string, isReadAll = true): Result[CharacterEncodin
     let e = detectCharacterEncoding(buf)
     return Result[CharacterEncoding, string].ok e
   else:
-   # Don't read all. Only read `MaxReadBytes` bytes.
-
-    var f =
-      try:
-        open(path, fmRead)
-      except IOError as e:
-        return Result[CharacterEncoding, string].err fmt"Failed to read file: {e.msg}"
-    defer: f.close
+    var # Don't read all. Only read `MaxReadBytes` bytes.
+      f =
+        try:
+          open(path, fmRead)
+        except IOError as e:
+          return Result[CharacterEncoding, string].err fmt"Failed to read file: {e.msg}"
+    defer:
+      f.close
 
     let
       fileSize = getFileSize(path)
@@ -443,7 +447,8 @@ proc openFile*(path: string | Runes): OpenFileResult =
     t.text = text.toSeqRunes
 
     # Remove the newline at end of file.
-    if t.text.len > 0 and t.text[^1] == ru"": t.text.delete(t.text.high)
+    if t.text.len > 0 and t.text[^1] == ru"":
+      t.text.delete(t.text.high)
 
   return OpenFileResult.ok t
 
