@@ -533,6 +533,9 @@ proc overwrite*(win, destWin: var Window) {.inline.} =
 proc move*(win: Window, y, x: int) =
   mvwin(win.cursesWindow, cint(y), cint(x))
 
+  win.y = y
+  win.x = x
+
 proc move*(win: Window, position: Position) {.inline.} =
   move(win, position.y, position.x)
 
@@ -548,9 +551,6 @@ proc resize*(win: var Window, size: Size) {.inline.} =
 proc resize*(win: var Window, height, width, y, x: int) =
   win.resize(height, width)
   win.move(y, x)
-
-  win.y = y
-  win.x = x
 
 proc resize*(win: var Window, position: Position, size: Size) {.inline.} =
   win.resize(size.h, size.w, position.y, position.x)
