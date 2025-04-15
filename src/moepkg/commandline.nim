@@ -30,7 +30,7 @@ type
     color*: EditorColorPairIndex
     window*: Window ## Ncurses window
     view*: EditorView ## Comand line view
-    isUpdate: bool ## Update flag
+    isUpdate*: bool ## Update flag
     y*, x*, h*, w*: int ## Window position and window size
 
   CommandLinePrompt* {.pure.} = enum

@@ -637,6 +637,7 @@ proc resize*(status: var EditorStatus) =
   const X = 0
   let y = max(terminalSize.h, 4) - commandLineHeight
   status.commandLine.resize(y, X, commandLineHeight, terminalSize.w)
+  status.commandLine.isUpdate = true
 
 proc updateStatusLine(status: var EditorStatus) =
   if not status.settings.statusLine.multipleStatusLine:
