@@ -552,9 +552,6 @@ proc resize*(win: var Window, height, width, y, x: int) =
   win.resize(height, width)
   win.move(y, x)
 
-  win.y = y
-  win.x = x
-
 proc resize*(win: var Window, position: Position, size: Size) {.inline.} =
   win.resize(size.h, size.w, position.y, position.x)
 
