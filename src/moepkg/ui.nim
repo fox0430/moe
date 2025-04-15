@@ -533,9 +533,6 @@ proc overwrite*(win, destWin: var Window) {.inline.} =
 proc move*(win: Window, y, x: int) =
   mvwin(win.cursesWindow, cint(y), cint(x))
 
-  win.y = y
-  win.x = x
-
 proc move*(win: Window, position: Position) {.inline.} =
   move(win, position.y, position.x)
 
