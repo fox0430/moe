@@ -35,7 +35,7 @@ suite "windownode: resize":
   var status: EditorStatus
 
   setup:
-    status = initEditorStatus()
+    status = initEditorStatus().get
     assert status.addNewBufferInCurrentWin.isOk
 
   test "Single window":
@@ -58,7 +58,7 @@ suite "windownode: resize":
   test "Horizontal split":
     status.resize(100, 100)
 
-    status.horizontalSplitWindow
+    assert status.horizontalSplitWindow.isOk
     status.resize(100, 100)
 
     check mainWindow.numOfMainWindow == 2
@@ -89,7 +89,7 @@ suite "windownode: resize":
   test "Vertical split":
     status.resize(100, 100)
 
-    status.verticalSplitWindow
+    assert status.verticalSplitWindow.isOk
     status.resize(100, 100)
 
     check mainWindow.numOfMainWindow == 2
@@ -120,10 +120,10 @@ suite "windownode: resize":
   test "Vertical split and horizontal split":
     status.resize(100, 100)
 
-    status.verticalSplitWindow
+    assert status.verticalSplitWindow.isOk
     status.resize(100, 100)
 
-    status.horizontalSplitWindow
+    assert status.horizontalSplitWindow.isOk
     status.resize(100, 100)
 
     check mainWindow.numOfMainWindow == 3
@@ -160,7 +160,7 @@ suite "windownode: resize":
 
 suite "windownode: absolutePosition":
   test "Enable EditorView.Sidebar":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentMainWindowNode.view.initSidebar
 
@@ -170,7 +170,7 @@ suite "windownode: absolutePosition":
     check currentMainWindowNode.absolutePosition(0, 0) == (y: 1, x: 4)
 
   test "Disable EditorView.Sidebar":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.settings.view.sidebar = false
     discard status.addNewBufferInCurrentWin.get
 
@@ -181,7 +181,7 @@ suite "windownode: absolutePosition":
 
 suite "windownode: moveCursor":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.resize(100, 100)
     status.update
@@ -197,7 +197,7 @@ suite "windownode: moveCursor":
     check currentMainWindowNode.x == beforeWindowPosition.x
 
   test "Basic 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.resize(100, 100)
     status.update

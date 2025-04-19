@@ -24,7 +24,7 @@ import moepkg/debugmodeutils {.all.}
 
 suite "Init debug mode buffer":
   test "Init buffer":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     let bufferIndex = status.addNewBuffer(Mode.debug)
 

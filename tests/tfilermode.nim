@@ -92,7 +92,7 @@ suite "Filer mode":
 
     var
       bufStatuses = @[initBufferStatus($Path, Mode.filer).get]
-      mainWindow = initMainWindow()
+      mainWindow = initMainWindow().get
     const IsShowIcons = false
 
     bufStatuses[0].buffer = filerStatus.initFilerBuffer(IsShowIcons).toGapBuffer
@@ -115,7 +115,7 @@ suite "Filer mode":
 
     var
       bufStatuses = @[initBufferStatus($Path, Mode.filer).get]
-      mainWindow = initMainWindow()
+      mainWindow = initMainWindow().get
     const IsShowIcons = false
 
     bufStatuses[0].buffer = filerStatus.initFilerBuffer(IsShowIcons).toGapBuffer

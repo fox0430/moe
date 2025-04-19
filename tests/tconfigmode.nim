@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -26,14 +26,14 @@ import moepkg/configmode {.all.}
 
 suite "Config mode: Start configuration mode":
   test "Init configuration mode buffer":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin(Mode.config).get
 
     currentBufStatus.buffer = initConfigModeBuffer(status.settings)
 
 suite "Config mode: Init buffer":
   test "Init standard table buffer":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.settings.standard.colorMode = ColorMode.c24bit
 
     let buffer = status.settings.initStandardTableBuffer
@@ -60,7 +60,7 @@ suite "Config mode: Init buffer":
       check Sample[index] == line
 
   test "Init ClipBoard table buffer":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.settings.clipboard.enable = true
     status.settings.clipboard.tool = ClipboardTool.xsel
     let buffer = status.settings.clipboard.initClipBoardTableBuffer
@@ -75,7 +75,7 @@ suite "Config mode: Init buffer":
       check Sample[index] == line
 
   test "Init build on save table buffer":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let buffer = status.settings.buildOnSave.initBuildOnSaveTableBuffer
 
     const Sample =
@@ -88,7 +88,7 @@ suite "Config mode: Init buffer":
       check Sample[index] == line
 
   test "Init tab line table buffer":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let buffer = status.settings.initTabLineTableBuffer
 
     const Sample = @["TabLine", "  allBuffer                false"].toSeqRunes
@@ -97,7 +97,7 @@ suite "Config mode: Init buffer":
       check Sample[index] == line
 
   test "Init status line table buffer":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let buffer = status.settings.statusLine.initStatusLineTableBuffer
 
     const Sample =
@@ -115,7 +115,7 @@ suite "Config mode: Init buffer":
       check Sample[index] == line
 
   test "Init highlight table buffer":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let buffer = status.settings.initHighlightTableBuffer
 
     const Sample =
@@ -130,7 +130,7 @@ suite "Config mode: Init buffer":
       check Sample[index] == line
 
   test "Init auto backup table buffer":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let buffer = status.settings.autoBackup.initAutoBackupTableBuffer
 
     const Sample =
@@ -145,7 +145,7 @@ suite "Config mode: Init buffer":
       check Sample[index] == line
 
   test "Init QuickRun table buffer":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let buffer = status.settings.quickRun.initQuickRunTableBuffer
 
     const Sample =
@@ -161,7 +161,7 @@ suite "Config mode: Init buffer":
       check Sample[index] == line
 
   test "Init Notification table buffer":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let
       notificationSettings = status.settings.notification
       buffer = notificationSettings.initNotificationTableBuffer
@@ -186,7 +186,7 @@ suite "Config mode: Init buffer":
       check Sample[index] == line
 
   test "Init Filer table buffer":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let buffer = status.settings.initFilerTableBuffer
 
     echo buffer[1]
@@ -196,7 +196,7 @@ suite "Config mode: Init buffer":
       check Sample[index] == line
 
   test "Init Autocomplete table buffer":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let buffer = status.settings.initAutocompleteTableBuffer
 
     const Sample =
@@ -209,7 +209,7 @@ suite "Config mode: Init buffer":
       check Sample[index] == line
 
   test "Init AutoSave table buffer":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let buffer = status.settings.initAutoSaveTableBuffer
 
     const Sample =
@@ -219,7 +219,7 @@ suite "Config mode: Init buffer":
       check Sample[index] == line
 
   test "Init Persist table buffer":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let buffer = status.settings.persist.initPersistTableBuffer
 
     const Sample =
@@ -233,7 +233,7 @@ suite "Config mode: Init buffer":
       check Sample[index] == line
 
   test "init GitTableBuffer":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let buffer = status.settings.git.initGitTableBuffer
 
     const Sample =
@@ -243,7 +243,7 @@ suite "Config mode: Init buffer":
       check Sample[index] == line
 
   test "Init Theme table buffer":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let buffer = status.settings.theme.initThemeTableBuffer
 
     const Sample =
@@ -263,7 +263,7 @@ proc checkBoolSettingValue(default: bool, values: seq[Runes]) =
 
 suite "Config mode: Get standard table setting values":
   test "Get defaultCursor values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let settings = status.settings
 
     const Name = "defaultCursor"
@@ -279,7 +279,7 @@ suite "Config mode: Get standard table setting values":
       ]
 
   test "Get normalModeCursor values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let settings = status.settings
 
     const Name = "normalModeCursor"
@@ -295,7 +295,7 @@ suite "Config mode: Get standard table setting values":
       ]
 
   test "Get insertModeCursor values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let settings = status.settings
 
     const Name = "insertModeCursor"
@@ -311,7 +311,7 @@ suite "Config mode: Get standard table setting values":
       ]
 
   test "Get number values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let settings = status.settings
 
     const Name = "number"
@@ -322,7 +322,7 @@ suite "Config mode: Get standard table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get currentNumber values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let settings = status.settings
 
     const Name = "currentNumber"
@@ -333,7 +333,7 @@ suite "Config mode: Get standard table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get cursorLine values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let settings = status.settings
 
     const Name = "cursorLine"
@@ -344,7 +344,7 @@ suite "Config mode: Get standard table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get statusLine values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let settings = status.settings
 
     const Name = "statusLine"
@@ -355,7 +355,7 @@ suite "Config mode: Get standard table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get tabLine values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let settings = status.settings
 
     const Name = "tabLine"
@@ -366,7 +366,7 @@ suite "Config mode: Get standard table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get syntax values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let settings = status.settings
 
     const Name = "syntax"
@@ -377,7 +377,7 @@ suite "Config mode: Get standard table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get indentationLines values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let settings = status.settings
 
     const Name = "indentationLines"
@@ -388,7 +388,7 @@ suite "Config mode: Get standard table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get autoCloseParen values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let settings = status.settings
 
     const Name = "autoCloseParen"
@@ -399,7 +399,7 @@ suite "Config mode: Get standard table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get autoIndent values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let settings = status.settings
 
     const Name = "autoIndent"
@@ -410,7 +410,7 @@ suite "Config mode: Get standard table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get ignorecase values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let settings = status.settings
 
     const Name = "ignorecase"
@@ -421,7 +421,7 @@ suite "Config mode: Get standard table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get smartcase values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let settings = status.settings
 
     const Name = "smartcase"
@@ -432,7 +432,7 @@ suite "Config mode: Get standard table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get disableChangeCursor values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let settings = status.settings
 
     const Name = "disableChangeCursor"
@@ -443,7 +443,7 @@ suite "Config mode: Get standard table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get liveReloadOfConfvalues":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let settings = status.settings
 
     const Name = "liveReloadOfConf"
@@ -454,7 +454,7 @@ suite "Config mode: Get standard table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get incrementalSearch values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let settings = status.settings
 
     const Name = "incrementalSearch"
@@ -465,7 +465,7 @@ suite "Config mode: Get standard table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get popupWindowInExmode values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let settings = status.settings
 
     const Name = "popupWindowInExmode"
@@ -476,7 +476,7 @@ suite "Config mode: Get standard table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get autoDeleteParen values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let settings = status.settings
 
     const Name = "autoDeleteParen"
@@ -487,7 +487,7 @@ suite "Config mode: Get standard table setting values":
     checkBoolSettingValue(default, values)
 
   test "Set invalid Name":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let settings = status.settings
 
     const Name = "test"
@@ -497,7 +497,7 @@ suite "Config mode: Get standard table setting values":
 
 suite "Config mode: Get ClipBoard table setting values":
   test "Get enable value":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let clipboardSettings = status.settings.clipboard
 
     const Name = "enable"
@@ -508,7 +508,7 @@ suite "Config mode: Get ClipBoard table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get tool value (none)":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.settings.clipboard.tool = ClipboardTool.xsel
     let clipboardSettings = status.settings.clipboard
 
@@ -521,7 +521,7 @@ suite "Config mode: Get ClipBoard table setting values":
 
 suite "Config mode: Get BuildOnSave table setting values":
   test "Get enable values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let buildOnSaveSettings = status.settings.buildOnSave
 
     const Name = "enable"
@@ -532,7 +532,7 @@ suite "Config mode: Get BuildOnSave table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get workspaceRoot values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let buildOnSaveSettings = status.settings.buildOnSave
 
     const Name = "workspaceRoot"
@@ -543,7 +543,7 @@ suite "Config mode: Get BuildOnSave table setting values":
     check default == values[0]
 
   test "Get command values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let buildOnSaveSettings = status.settings.buildOnSave
 
     const Name = "command"
@@ -554,7 +554,7 @@ suite "Config mode: Get BuildOnSave table setting values":
     check default == values[0]
 
   test "Set invalid Name":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let buildOnSaveSettings = status.settings.buildOnSave
 
     const Name = "test"
@@ -564,7 +564,7 @@ suite "Config mode: Get BuildOnSave table setting values":
 
 suite "Config mode: Get TabLine table setting values":
   test "Get allBuffer values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let tablineSettings = status.settings.tabLine
 
     const Name = "allBuffer"
@@ -575,7 +575,7 @@ suite "Config mode: Get TabLine table setting values":
     checkBoolSettingValue(default, values)
 
   test "Set invalid Name":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let tablineSettings = status.settings.tabLine
 
     const Name = "test"
@@ -585,7 +585,7 @@ suite "Config mode: Get TabLine table setting values":
 
 suite "Config mode: Get StatusLine table setting values":
   test "Get multipleStatusLine values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let statusLineSettings = status.settings.statusLine
 
     const Name = "multipleStatusLine"
@@ -596,7 +596,7 @@ suite "Config mode: Get StatusLine table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get merge values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let statusLineSettings = status.settings.statusLine
 
     const Name = "merge"
@@ -607,7 +607,7 @@ suite "Config mode: Get StatusLine table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get mode values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let statusLineSettings = status.settings.statusLine
 
     const Name = "mode"
@@ -618,7 +618,7 @@ suite "Config mode: Get StatusLine table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get fileName values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let statusLineSettings = status.settings.statusLine
 
     const Name = "filename"
@@ -629,7 +629,7 @@ suite "Config mode: Get StatusLine table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get chanedMark values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let statusLineSettings = status.settings.statusLine
 
     const Name = "chanedMark"
@@ -640,7 +640,7 @@ suite "Config mode: Get StatusLine table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get directory values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let statusLineSettings = status.settings.statusLine
 
     const Name = "directory"
@@ -651,7 +651,7 @@ suite "Config mode: Get StatusLine table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get gitChangedLines values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let statusLineSettings = status.settings.statusLine
 
     const Name = "gitChangedLines"
@@ -662,7 +662,7 @@ suite "Config mode: Get StatusLine table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get gitBranchName values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let statusLineSettings = status.settings.statusLine
 
     const Name = "gitBranchName"
@@ -673,7 +673,7 @@ suite "Config mode: Get StatusLine table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get showGitInactive values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let statusLineSettings = status.settings.statusLine
 
     const Name = "showGitInactive"
@@ -684,7 +684,7 @@ suite "Config mode: Get StatusLine table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get showModeInactive values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let statusLineSettings = status.settings.statusLine
 
     const Name = "showModeInactive"
@@ -695,7 +695,7 @@ suite "Config mode: Get StatusLine table setting values":
     checkBoolSettingValue(default, values)
 
   test "Set invalid Name":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let statusLineSettings = status.settings.statusLine
 
     const Name = "test"
@@ -705,7 +705,7 @@ suite "Config mode: Get StatusLine table setting values":
 
 suite "Config mode: Get Highlight table setting values":
   test "Get currentLine values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let settings = status.settings
 
     const Name = "currentLine"
@@ -716,7 +716,7 @@ suite "Config mode: Get Highlight table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get fullWidthSpace values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let settings = status.settings
 
     const Name = "fullWidthSpace"
@@ -727,7 +727,7 @@ suite "Config mode: Get Highlight table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get trailingSpaces values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let settings = status.settings
 
     const Name = "trailingSpaces"
@@ -738,7 +738,7 @@ suite "Config mode: Get Highlight table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get currentWord values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let settings = status.settings
 
     const Name = "currentWord"
@@ -749,7 +749,7 @@ suite "Config mode: Get Highlight table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get replaceText values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let settings = status.settings
 
     const Name = "replaceText"
@@ -760,7 +760,7 @@ suite "Config mode: Get Highlight table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get pairOfParen values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let settings = status.settings
 
     const Name = "pairOfParen"
@@ -771,7 +771,7 @@ suite "Config mode: Get Highlight table setting values":
     checkBoolSettingValue(default, values)
 
   test "Set invalid Name":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let settings = status.settings
 
     const Name = "test"
@@ -781,7 +781,7 @@ suite "Config mode: Get Highlight table setting values":
 
 suite "Config mode: Get AutoBackup table setting values":
   test "Get enable values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let autoBackupSettings = status.settings.autoBackup
 
     const
@@ -794,7 +794,7 @@ suite "Config mode: Get AutoBackup table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get backupDir values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let autoBackupSettings = status.settings.autoBackup
 
     const
@@ -807,7 +807,7 @@ suite "Config mode: Get AutoBackup table setting values":
     check default == values[0]
 
   test "Set invalid Name":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let autoBackupSettings = status.settings.autoBackup
 
     const
@@ -819,7 +819,7 @@ suite "Config mode: Get AutoBackup table setting values":
 
 suite "Config mode: Get QuickRun table setting values":
   test "Get saveBufferWhenQuickRun values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let quickRunSettings = status.settings.quickRun
 
     const
@@ -832,7 +832,7 @@ suite "Config mode: Get QuickRun table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get nimAdvancedCommandvalues":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let quickRunSettings = status.settings.quickRun
 
     const
@@ -845,7 +845,7 @@ suite "Config mode: Get QuickRun table setting values":
     check default == values[0]
 
   test "Get clangOptions values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let quickRunSettings = status.settings.quickRun
 
     const
@@ -858,7 +858,7 @@ suite "Config mode: Get QuickRun table setting values":
     check default == values[0]
 
   test "Get cppOptions values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let quickRunSettings = status.settings.quickRun
 
     const
@@ -871,7 +871,7 @@ suite "Config mode: Get QuickRun table setting values":
     check default == values[0]
 
   test "Get nimOptions values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let quickRunSettings = status.settings.quickRun
 
     const
@@ -884,7 +884,7 @@ suite "Config mode: Get QuickRun table setting values":
     check default == values[0]
 
   test "Get shOptions values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let quickRunSettings = status.settings.quickRun
 
     const
@@ -897,7 +897,7 @@ suite "Config mode: Get QuickRun table setting values":
     check default == values[0]
 
   test "Get bashOptions values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let quickRunSettings = status.settings.quickRun
 
     const
@@ -910,7 +910,7 @@ suite "Config mode: Get QuickRun table setting values":
     check default == values[0]
 
   test "Set invalid Name":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let quickRunSettings = status.settings.quickRun
 
     const
@@ -922,7 +922,7 @@ suite "Config mode: Get QuickRun table setting values":
 
 suite "Config mode: Get Notification table setting values":
   test "Get screenNotifications values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let notificationSettings = status.settings.notification
 
     const Name = "screenNotifications"
@@ -933,7 +933,7 @@ suite "Config mode: Get Notification table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get logNotifications values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let notificationSettings = status.settings.notification
 
     const Name = "logNotifications"
@@ -944,7 +944,7 @@ suite "Config mode: Get Notification table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get autoBackupScreenNotify values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let notificationSettings = status.settings.notification
 
     const Name = "autoBackupScreenNotify"
@@ -955,7 +955,7 @@ suite "Config mode: Get Notification table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get autoBackupLogNotify values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let notificationSettings = status.settings.notification
 
     const Name = "autoBackupLogNotify"
@@ -966,7 +966,7 @@ suite "Config mode: Get Notification table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get autoSaveScreenNotify values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let notificationSettings = status.settings.notification
 
     const Name = "autoSaveScreenNotify"
@@ -977,7 +977,7 @@ suite "Config mode: Get Notification table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get autoSaveLogNotify values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let notificationSettings = status.settings.notification
 
     const Name = "autoSaveLogNotify"
@@ -988,7 +988,7 @@ suite "Config mode: Get Notification table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get yankScreenNotify values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let notificationSettings = status.settings.notification
 
     const Name = "yankScreenNotify"
@@ -999,7 +999,7 @@ suite "Config mode: Get Notification table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get yankLogNotify values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let notificationSettings = status.settings.notification
 
     const Name = "yankLogNotify"
@@ -1010,7 +1010,7 @@ suite "Config mode: Get Notification table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get deleteScreenNotify values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let notificationSettings = status.settings.notification
 
     const Name = "deleteScreenNotify"
@@ -1021,7 +1021,7 @@ suite "Config mode: Get Notification table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get deleteLogNotify values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let notificationSettings = status.settings.notification
 
     const Name = "deleteLogNotify"
@@ -1032,7 +1032,7 @@ suite "Config mode: Get Notification table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get saveScreenNotify values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let notificationSettings = status.settings.notification
 
     const Name = "saveScreenNotify"
@@ -1043,7 +1043,7 @@ suite "Config mode: Get Notification table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get saveLogNotify values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let notificationSettings = status.settings.notification
 
     const Name = "saveLogNotify"
@@ -1054,7 +1054,7 @@ suite "Config mode: Get Notification table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get quickRunScreenNotify values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let notificationSettings = status.settings.notification
 
     const Name = "quickRunScreenNotify"
@@ -1065,7 +1065,7 @@ suite "Config mode: Get Notification table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get quickRunLogNotify values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let notificationSettings = status.settings.notification
 
     const Name = "quickRunLogNotify"
@@ -1076,7 +1076,7 @@ suite "Config mode: Get Notification table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get buildOnSaveScreenNotify values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let notificationSettings = status.settings.notification
 
     const Name = "buildOnSaveScreenNotify"
@@ -1087,7 +1087,7 @@ suite "Config mode: Get Notification table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let notificationSettings = status.settings.notification
 
     const Name = "buildOnSaveLogNotify"
@@ -1098,7 +1098,7 @@ suite "Config mode: Get Notification table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get filerScreenNotify values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let notificationSettings = status.settings.notification
 
     const Name = "filerScreenNotify"
@@ -1109,7 +1109,7 @@ suite "Config mode: Get Notification table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get filerLogNotify values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let notificationSettings = status.settings.notification
 
     const Name = "filerLogNotify"
@@ -1120,7 +1120,7 @@ suite "Config mode: Get Notification table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get restoreScreenNotify values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let notificationSettings = status.settings.notification
 
     const Name = "restoreScreenNotify"
@@ -1131,7 +1131,7 @@ suite "Config mode: Get Notification table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get restoreLogNotify values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let notificationSettings = status.settings.notification
 
     const Name = "restoreLogNotify"
@@ -1142,7 +1142,7 @@ suite "Config mode: Get Notification table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get lspScreenNotify values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let notificationSettings = status.settings.notification
 
     const Name = "lspScreenNotify"
@@ -1153,7 +1153,7 @@ suite "Config mode: Get Notification table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get lspLogNotify values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let notificationSettings = status.settings.notification
 
     const Name = "lspLogNotify"
@@ -1164,7 +1164,7 @@ suite "Config mode: Get Notification table setting values":
     checkBoolSettingValue(default, values)
 
   test "Set invalid Name":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let notificationSettings = status.settings.notification
 
     const Name = "test"
@@ -1174,7 +1174,7 @@ suite "Config mode: Get Notification table setting values":
 
 suite "Config mode: Get Filer table setting values":
   test "Get showIcons values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let filerSettings = status.settings.filer
 
     const Name = "showIcons"
@@ -1185,7 +1185,7 @@ suite "Config mode: Get Filer table setting values":
     checkBoolSettingValue(default, values)
 
   test "Set invalid Name":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let filerSettings = status.settings.filer
 
     const Name = "test"
@@ -1195,7 +1195,7 @@ suite "Config mode: Get Filer table setting values":
 
 suite "Config mode: Get Autocomplete table setting values":
   test "Get enable values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let autocompleteSettings = status.settings.autocomplete
 
     const Name = "enable"
@@ -1206,7 +1206,7 @@ suite "Config mode: Get Autocomplete table setting values":
     checkBoolSettingValue(default, values)
 
   test "Set invalid Name":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let autocompleteSettings = status.settings.autocomplete
 
     const Name = "test"
@@ -1216,7 +1216,7 @@ suite "Config mode: Get Autocomplete table setting values":
 
 suite "Config mode: Get Persist table setting values":
   test "Get exCommand values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let persistSettings = status.settings.persist
 
     const Name = "exCommand"
@@ -1227,7 +1227,7 @@ suite "Config mode: Get Persist table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get exCommandHistoryLimit values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let persistSettings = status.settings.persist
 
     const Name = "exCommandHistoryLimit"
@@ -1238,7 +1238,7 @@ suite "Config mode: Get Persist table setting values":
     check default == values[0].parseInt
 
   test "Get search values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let persistSettings = status.settings.persist
 
     const Name = "search"
@@ -1249,7 +1249,7 @@ suite "Config mode: Get Persist table setting values":
     checkBoolSettingValue(default, values)
 
   test "Get searchHistoryLimit values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let persistSettings = status.settings.persist
 
     const Name = "searchHistoryLimit"
@@ -1260,7 +1260,7 @@ suite "Config mode: Get Persist table setting values":
     check default == values[0].parseInt
 
   test "Get cursorPosition values":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let persistSettings = status.settings.persist
 
     const Name = "cursorPosition"
@@ -1271,7 +1271,7 @@ suite "Config mode: Get Persist table setting values":
     checkBoolSettingValue(default, values)
 
   test "Set invalid Name":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let persistSettings = status.settings.persist
 
     const Name = "test"

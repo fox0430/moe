@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -68,7 +68,7 @@ suite "statusline: getFileType":
 
 suite "statusline: statusLineInfoBuffer":
   test "Default setting with Nim":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     const Path = "test.nim"
     discard status.addNewBufferInCurrentWin(Path).get
@@ -83,7 +83,7 @@ suite "statusline: statusLineInfoBuffer":
       currentBufStatus.statusLineInfoBuffer(currentMainWindowNode, SetupText)
 
   test "Nim 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     const Path = "test.nim"
     discard status.addNewBufferInCurrentWin(Path).get
@@ -104,7 +104,7 @@ suite "statusline: statusLineInfoBuffer":
       currentBufStatus.statusLineInfoBuffer(currentMainWindowNode, SetupText)
 
   test "Plain":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     const Path = "test.txt"
     discard status.addNewBufferInCurrentWin(Path).get
@@ -119,7 +119,7 @@ suite "statusline: statusLineInfoBuffer":
       currentBufStatus.statusLineInfoBuffer(currentMainWindowNode, SetupText)
 
   test "Empty":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     const Path = "test.txt"
     discard status.addNewBufferInCurrentWin(Path).get
@@ -134,7 +134,7 @@ suite "statusline: statusLineInfoBuffer":
     )
 
   test "Without items":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     const Path = "test.txt"
     discard status.addNewBufferInCurrentWin(Path).get
@@ -161,7 +161,7 @@ suite "statusline: statusLineFilerInfoBuffer":
     # Create a file for the test.
     writeFile(path / "dummy", "")
 
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     discard status.addNewBufferInCurrentWin(path, Mode.filer).get
 
@@ -175,7 +175,7 @@ suite "statusline: statusLineFilerInfoBuffer":
     # Create a file for the test.
     writeFile(path / "dummy", "")
 
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     discard status.addNewBufferInCurrentWin(path, Mode.filer).get
 
@@ -192,7 +192,7 @@ suite "statusline: statusLineFilerInfoBuffer":
     for i in 0 ..< 9:
       writeFile(path / "dummy" & $i, "")
 
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     discard status.addNewBufferInCurrentWin(path, Mode.filer).get
 
@@ -207,7 +207,7 @@ suite "statusline: statusLineFilerInfoBuffer":
     for i in 0 ..< 9:
       writeFile(path / "dummy" & $i, "")
 
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     discard status.addNewBufferInCurrentWin(path, Mode.filer).get
 
@@ -234,7 +234,7 @@ suite "statusline: addFilerModeInfo":
     removeDir(path)
 
   test "Active window":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     discard status.addNewBufferInCurrentWin(path, Mode.filer).get
 
@@ -273,7 +273,7 @@ suite "statusline: addFilerModeInfo":
       ]
 
   test "Inactive window":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     discard status.addNewBufferInCurrentWin(path, Mode.filer).get
 
@@ -309,7 +309,7 @@ suite "statusline: addFilerModeInfo":
       ]
 
   test "With message":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     assert status.addNewBufferInCurrentWin(path, Mode.filer).isOk
 
@@ -351,7 +351,7 @@ suite "statusline: addFilerModeInfo":
 
 suite "statusline: addBufManagerModeInfo":
   test "Active window":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     const Path = ""
     discard status.addNewBufferInCurrentWin(Path, Mode.bufManager).get
@@ -389,7 +389,7 @@ suite "statusline: addBufManagerModeInfo":
       ]
 
   test "Inactive window":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     const Path = ""
     discard status.addNewBufferInCurrentWin(Path, Mode.bufManager).get
@@ -424,7 +424,7 @@ suite "statusline: addBufManagerModeInfo":
       ]
 
   test "With message":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     const Path = ""
     assert status.addNewBufferInCurrentWin(Path, Mode.bufManager).isOk
@@ -468,7 +468,7 @@ suite "statusline: addLogViewerModeInfo":
     clearMessageLog()
 
   test "Active window":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     const Path = ""
     discard status.addNewBufferInCurrentWin(Path, Mode.logViewer).get
@@ -506,7 +506,7 @@ suite "statusline: addLogViewerModeInfo":
       ]
 
   test "Inactive window":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     const Path = ""
     discard status.addNewBufferInCurrentWin(Path, Mode.logViewer).get
@@ -541,7 +541,7 @@ suite "statusline: addLogViewerModeInfo":
       ]
 
   test "With message":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     const Path = ""
     assert status.addNewBufferInCurrentWin(Path, Mode.logViewer).isOk
@@ -582,7 +582,7 @@ suite "statusline: addLogViewerModeInfo":
 
 suite "statusline: addQuickRunModeInfo":
   test "Active window":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     const Path = ""
     discard status.addNewBufferInCurrentWin(Path, Mode.quickRun).get
@@ -620,7 +620,7 @@ suite "statusline: addQuickRunModeInfo":
       ]
 
   test "Inactive window":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     const Path = ""
     discard status.addNewBufferInCurrentWin(Path, Mode.quickRun).get
@@ -655,7 +655,7 @@ suite "statusline: addQuickRunModeInfo":
       ]
 
   test "With message":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     const Path = ""
     assert status.addNewBufferInCurrentWin(Path, Mode.quickRun).isOk
@@ -696,7 +696,7 @@ suite "statusline: addQuickRunModeInfo":
 
 suite "statusline: addNormalModeInfo":
   test "Active window":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     const Path = ""
     discard status.addNewBufferInCurrentWin(Path, Mode.normal).get
@@ -734,7 +734,7 @@ suite "statusline: addNormalModeInfo":
       ]
 
   test "Inactive window":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     const Path = ""
     discard status.addNewBufferInCurrentWin(Path, Mode.normal).get
@@ -769,7 +769,7 @@ suite "statusline: addNormalModeInfo":
       ]
 
   test "With message":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     const Path = ""
     assert status.addNewBufferInCurrentWin(Path, Mode.normal).isOk
@@ -914,7 +914,7 @@ suite "statusline: changedLinesBuffer":
 
 suite "statusline: addGitInfo":
   test "Only Changed lines":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     const Path = ""
     discard status.addNewBufferInCurrentWin(Path, Mode.normal).get
@@ -946,7 +946,7 @@ suite "statusline: addGitInfo":
       ]
 
   test "Only Git branch":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     const Path = ""
     discard status.addNewBufferInCurrentWin(Path, Mode.normal).get
@@ -982,7 +982,7 @@ suite "statusline: addGitInfo":
       ]
 
   test "Git branch and Changed lines":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     const Path = ""
     discard status.addNewBufferInCurrentWin(Path, Mode.normal).get
@@ -1095,7 +1095,7 @@ suite "statusline: modeLabelColor":
 
 suite "statusline: addModeLabel":
   test "Normal mode in active window":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     const Path = ""
     discard status.addNewBufferInCurrentWin(Path, Mode.normal).get
@@ -1115,7 +1115,7 @@ suite "statusline: addModeLabel":
     check status.statusLine[0].buffer == ru" NORMAL "
 
   test "Normal mode in inactive window":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     const Path = ""
     discard status.addNewBufferInCurrentWin(Path, Mode.normal).get
@@ -1136,7 +1136,7 @@ suite "statusline: addModeLabel":
 
 suite "statusline: clear":
   test "Clear":
-    var s = initStatusLine()
+    var s = initStatusLine().get
 
     privateAccess(s.type)
     s.buffer = ru"test"
@@ -1157,7 +1157,7 @@ suite "statusline: clear":
 
 suite "statusline: updateStatusLineBuffer":
   test "Normal mode in active window":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     const Path = ""
     discard status.addNewBufferInCurrentWin(Path, Mode.normal).get
@@ -1200,7 +1200,7 @@ suite "statusline: updateStatusLineBuffer":
       ]
 
   test "Normal mode in inactive window":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     const Path = ""
     discard status.addNewBufferInCurrentWin(Path, Mode.normal).get

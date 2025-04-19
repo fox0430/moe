@@ -53,7 +53,7 @@ suite "Backup Manager: initbackupManagerBuffer":
       removeFile(sourceFilePath)
 
   test "initBackupManagerBuffer":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     discard status.addNewBufferInCurrentWin(Mode.backup).get
@@ -68,7 +68,7 @@ suite "Backup Manager: initbackupManagerBuffer":
 
     writeBackupInfoJson(backupDir, sourceFilePath)
 
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin(sourceFilePath).get
     status.settings.autoBackup.backupDir = baseBackupDir.toRunes
 
@@ -106,7 +106,7 @@ suite "Backup Manager: openDiffViewer":
   test "openDiffViewer":
     writeFile(sourceFilePath, "test\n")
 
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin(sourceFilePath).get
     status.settings.autoBackup.backupDir = baseBackupDir.toRunes
 
@@ -145,7 +145,7 @@ suite "Backup Manager: restoreBackupFile":
   test "restoreBackupFile":
     writeFile(sourceFilePath, "test\n")
 
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin(sourceFilePath).get
     status.settings.autoBackup.backupDir = baseBackupDir.toRunes
 
@@ -181,7 +181,7 @@ suite "Backup Manager: removeBackupFile":
   test "removeBackupFile":
     writeFile(sourceFilePath, "test\n")
 
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin(sourceFilePath).get
     status.settings.autoBackup.backupDir = baseBackupDir.toRunes
 

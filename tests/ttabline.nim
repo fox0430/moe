@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -91,7 +91,7 @@ suite "tabline: update":
   privateAccess(ColorSegment)
 
   test "Single buffer":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.resize(100, 100)
 
@@ -99,7 +99,7 @@ suite "tabline: update":
       CurrentBufferIndex = 0
       IsAllbuffer = true
 
-    status.tabLine.update(status.bufStatus, CurrentBufferIndex, IsAllbuffer)
+    check status.tabLine.update(status.bufStatus, CurrentBufferIndex, IsAllbuffer).isOk
 
     check status.tabLine.position == Position(x: 0, y: 0)
     check status.tabLine.size == Size(h: 1, w: 100)
@@ -116,7 +116,7 @@ suite "tabline: update":
 
   test "Single buffer 2":
     const Path = ru"text.txt"
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.path = Path
     status.resize(100, 100)
@@ -125,7 +125,7 @@ suite "tabline: update":
       CurrentBufferIndex = 0
       IsAllbuffer = true
 
-    status.tabLine.update(status.bufStatus, CurrentBufferIndex, IsAllbuffer)
+    check status.tabLine.update(status.bufStatus, CurrentBufferIndex, IsAllbuffer).isOk
 
     check status.tabLine.position == Position(x: 0, y: 0)
     check status.tabLine.size == Size(h: 1, w: 100)
@@ -142,7 +142,7 @@ suite "tabline: update":
 
   test "Single buffer 3":
     const Path = ru"text.txt"
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.path = Path
     status.resize(100, 5)
@@ -151,7 +151,7 @@ suite "tabline: update":
       CurrentBufferIndex = 0
       IsAllbuffer = true
 
-    status.tabLine.update(status.bufStatus, CurrentBufferIndex, IsAllbuffer)
+    check status.tabLine.update(status.bufStatus, CurrentBufferIndex, IsAllbuffer).isOk
 
     check status.tabLine.position == Position(x: 0, y: 0)
     check status.tabLine.size == Size(h: 1, w: 5)
@@ -170,7 +170,7 @@ suite "tabline: update":
     const
       Path1 = ru"text.txt"
       Path2 = ru"text2.txt"
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.path = Path1
 
@@ -183,7 +183,7 @@ suite "tabline: update":
       CurrentBufferIndex = 0
       IsAllbuffer = false
 
-    status.tabLine.update(status.bufStatus, CurrentBufferIndex, IsAllbuffer)
+    check status.tabLine.update(status.bufStatus, CurrentBufferIndex, IsAllbuffer).isOk
 
     check status.tabLine.position == Position(x: 0, y: 0)
     check status.tabLine.size == Size(h: 1, w: 100)
@@ -202,7 +202,7 @@ suite "tabline: update":
     const
       Path1 = ru"text.txt"
       Path2 = ru"text2.txt"
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.path = Path1
 
@@ -215,7 +215,7 @@ suite "tabline: update":
       CurrentBufferIndex = 0
       IsAllbuffer = true
 
-    status.tabLine.update(status.bufStatus, CurrentBufferIndex, IsAllbuffer)
+    check status.tabLine.update(status.bufStatus, CurrentBufferIndex, IsAllbuffer).isOk
 
     check status.tabLine.position == Position(x: 0, y: 0)
     check status.tabLine.size == Size(h: 1, w: 100)

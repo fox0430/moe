@@ -136,7 +136,7 @@ suite "mainloop: isExecMacroCommand":
 
 suite "mainloop: execMacro":
   test "Single dd command":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["1", "2"].toSeqRunes.initGapBuffer
 
@@ -150,7 +150,7 @@ suite "mainloop: execMacro":
     check currentBufStatus.buffer.toSeqRunes == @["2"].toSeqRunes
 
   test "Two dd commands":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["1", "2", "3"].toSeqRunes.initGapBuffer
 
@@ -165,7 +165,7 @@ suite "mainloop: execMacro":
     check currentBufStatus.buffer.toSeqRunes == @["3"].toSeqRunes
 
   test "j and dd commands":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["1", "2", "3"].toSeqRunes.initGapBuffer
 
@@ -181,7 +181,7 @@ suite "mainloop: execMacro":
 
 suite "mainloop: execEditorCommand":
   test "Exec normal mode commands":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["1", "2"].toSeqRunes.initGapBuffer
 
@@ -195,7 +195,7 @@ suite "mainloop: execEditorCommand":
     check currentBufStatus.buffer.toSeqRunes == @["2"].toSeqRunes
 
   test "Enter to Ex mode":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["1", "2"].toSeqRunes.initGapBuffer
 
@@ -208,7 +208,7 @@ suite "mainloop: execEditorCommand":
     check currentBufStatus.isExMode
 
   test "Recoding commands":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["1", "2"].toSeqRunes.initGapBuffer
 
@@ -231,7 +231,7 @@ suite "mainloop: execEditorCommand":
     check currentBufStatus.buffer.toSeqRunes == @["2"].toSeqRunes
 
   test "Exec macro":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["1", "2", "3"].toSeqRunes.initGapBuffer
 
@@ -248,7 +248,7 @@ suite "mainloop: execEditorCommand":
     check currentBufStatus.buffer.toSeqRunes == @["1", "3"].toSeqRunes
 
   test "Exec macro 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["1", "2", "3"].toSeqRunes.initGapBuffer
 
@@ -264,7 +264,7 @@ suite "mainloop: execEditorCommand":
     check currentBufStatus.buffer.toSeqRunes == @["3"].toSeqRunes
 
   test "Exec macro 3":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["1", "2", "3"].toSeqRunes.initGapBuffer
 
@@ -283,7 +283,7 @@ suite "mainloop: execEditorCommand":
     check mainWindow.numOfMainWindow == 2
 
   test "Repeat macro":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["1", "2"].toSeqRunes.initGapBuffer
 
@@ -305,7 +305,7 @@ suite "mainloop: insertPasteBuffer":
       of insert, insertMulti, replace, ex, searchForward, searchBackward:
         continue
       else:
-        var status = initEditorStatus()
+        var status = initEditorStatus().get
 
         case mode
         of filer:
@@ -337,7 +337,7 @@ suite "mainloop: insertPasteBuffer":
         check currentBufStatus.buffer == beforeBuffer
 
   test "Insert mode":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin(Mode.insert).get
     currentBufStatus.buffer = @[""].toSeqRunes.initGapBuffer
 
@@ -354,7 +354,7 @@ suite "mainloop: insertPasteBuffer":
     check not r.isLine
 
   test "Insert mode 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin(Mode.insert).get
     currentBufStatus.buffer = @["abc"].toSeqRunes.initGapBuffer
 
@@ -371,7 +371,7 @@ suite "mainloop: insertPasteBuffer":
     check not r.isLine
 
   test "Insert mode 3":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin(Mode.insert).get
     currentBufStatus.buffer = @[""].toSeqRunes.initGapBuffer
 
@@ -388,7 +388,7 @@ suite "mainloop: insertPasteBuffer":
     check r.isLine
 
   test "Replace mode":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin(Mode.replace).get
     currentBufStatus.buffer = @[""].toSeqRunes.initGapBuffer
 
@@ -405,7 +405,7 @@ suite "mainloop: insertPasteBuffer":
     check not r.isLine
 
   test "Replace mode 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin(Mode.replace).get
     currentBufStatus.buffer = @["abc"].toSeqRunes.initGapBuffer
 
@@ -422,7 +422,7 @@ suite "mainloop: insertPasteBuffer":
     check not r.isLine
 
   test "Replace mode 3":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin(Mode.replace).get
     currentBufStatus.buffer = @["abcd"].toSeqRunes.initGapBuffer
 
@@ -439,7 +439,7 @@ suite "mainloop: insertPasteBuffer":
     check r.isLine
 
   test "Ex mode":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin(Mode.ex).get
 
     status.resize(100, 100)
@@ -451,7 +451,7 @@ suite "mainloop: insertPasteBuffer":
     check status.commandLine.buffer == ru"abc"
 
   test "Ex mode 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin(Mode.ex).get
     status.commandLine.buffer = ru"abc"
     status.commandLine.moveEnd
@@ -465,7 +465,7 @@ suite "mainloop: insertPasteBuffer":
     check status.commandLine.buffer == ru"abcxyz"
 
   test "Ex mode 3":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin(Mode.ex).get
     status.commandLine.buffer = ru"abc"
     status.commandLine.moveEnd
@@ -479,7 +479,7 @@ suite "mainloop: insertPasteBuffer":
     check status.commandLine.buffer == ru"abcxyz"
 
   test "Ex mode 4":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin(Mode.ex).get
     status.commandLine.buffer = ru""
     status.commandLine.moveEnd
@@ -493,7 +493,7 @@ suite "mainloop: insertPasteBuffer":
     check status.commandLine.buffer == ru"a\nb\nc"
 
   test "Search mode":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin(Mode.searchForward).get
 
     status.searchHistory = @[ru""]
@@ -507,7 +507,7 @@ suite "mainloop: insertPasteBuffer":
     check status.commandLine.buffer == ru"abc"
 
   test "Search mode 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin(Mode.searchForward).get
     status.commandLine.buffer = ru"abc"
     status.commandLine.moveEnd
@@ -523,7 +523,7 @@ suite "mainloop: insertPasteBuffer":
     check status.commandLine.buffer == ru"abcxyz"
 
   test "Search mode 3":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin(Mode.searchForward).get
     status.commandLine.buffer = ru"abc"
     status.commandLine.moveEnd
@@ -539,7 +539,7 @@ suite "mainloop: insertPasteBuffer":
     check status.commandLine.buffer == ru"abcxyz"
 
   test "Search mode 4":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin(Mode.searchForward).get
     status.commandLine.buffer = ru""
     status.commandLine.moveEnd
@@ -556,7 +556,7 @@ suite "mainloop: insertPasteBuffer":
 
 suite "mainloop: jumpAndHighlightInReplaceCommand":
   test "Check jump":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin().get
     currentBufStatus.buffer = @["abc", "abc", "abc"].toSeqRunes.toGapBuffer
     status.searchHistory = @[ru""]
@@ -581,7 +581,7 @@ suite "mainloop: jumpAndHighlightInReplaceCommand":
     check currentMainWindowNode.currentLine == 1
     check currentMainWindowNode.currentColumn == 0
   test "Check jump 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin().get
     currentBufStatus.buffer = @["", "abc", "", "abc"].toSeqRunes.toGapBuffer
     status.searchHistory = @[ru""]
@@ -606,7 +606,7 @@ suite "mainloop: jumpAndHighlightInReplaceCommand":
 
 suite "mainloop: jumpAndHighlightInReplaceCommand":
   test "Ignore":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin().get
     currentBufStatus.buffer = @["", "abc"].toSeqRunes.toGapBuffer
 
@@ -620,7 +620,7 @@ suite "mainloop: jumpAndHighlightInReplaceCommand":
     check status.highlightingText.isNone
 
   test "Ignore 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin().get
     currentBufStatus.buffer = @["abc", "abc"].toSeqRunes.toGapBuffer
 
@@ -634,7 +634,7 @@ suite "mainloop: jumpAndHighlightInReplaceCommand":
     check status.highlightingText.isNone
 
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin().get
     currentBufStatus.buffer = @["  abc"].toSeqRunes.toGapBuffer
 
@@ -672,7 +672,7 @@ suite "mainloop: jumpAndHighlightInReplaceCommand":
       check status.highlightingText.get.text == @["abc"].toSeqRunes
 
   test "Basic 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin().get
     currentBufStatus.buffer = @["abc", "def"].toSeqRunes.toGapBuffer
 
@@ -692,7 +692,7 @@ suite "mainloop: initBeforeLineForIncrementalReplace":
   privateAccess(BeforeLine)
 
   test "Ignore":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin().get
     currentBufStatus.buffer = @["abc", "abc def", "", "def abc"].toSeqRunes.toGapBuffer
 
@@ -701,7 +701,7 @@ suite "mainloop: initBeforeLineForIncrementalReplace":
     check status.initBeforeLineForIncrementalReplace.len == 0
 
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin().get
     currentBufStatus.buffer = @["abc", "abc def", "", "def abc"].toSeqRunes.toGapBuffer
 
@@ -715,7 +715,7 @@ suite "mainloop: initBeforeLineForIncrementalReplace":
       ]
 
   test "Replace all":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin().get
     currentBufStatus.buffer = @["abc", "abc def", "", "def abc"].toSeqRunes.toGapBuffer
 
@@ -732,7 +732,7 @@ suite "mainloop: execIncrementalReplace":
   privateAccess(IncrementalReplaceInfo)
 
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin().get
     currentBufStatus.buffer =
       @["abc", "abc def", "", "def abc", "abc abc"].toSeqRunes.toGapBuffer
@@ -750,7 +750,7 @@ suite "mainloop: execIncrementalReplace":
       @["xyz", "xyz def", "", "def xyz", "xyz abc"].toSeqRunes
 
   test "Replace all":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin().get
     currentBufStatus.buffer =
       @["abc", "abc def", "", "def abc", "abc abc"].toSeqRunes.toGapBuffer
@@ -772,7 +772,7 @@ suite "mainloop: incrementalReplace":
   privateAccess(IncrementalReplaceInfo)
 
   test "Init and replace":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin().get
     currentBufStatus.buffer = @["abc"].toSeqRunes.toGapBuffer
 
@@ -789,7 +789,7 @@ suite "mainloop: incrementalReplace":
     check incReplaceInfo.get.beforeLines[0].lineBuffer == ru"abc"
 
   test "Init and replace 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin().get
     currentBufStatus.buffer = @["abc"].toSeqRunes.toGapBuffer
 
@@ -808,7 +808,7 @@ suite "mainloop: incrementalReplace":
     check currentBufStatus.buffer.toSeqRunes == @["xyz"].toSeqRunes
 
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin().get
     currentBufStatus.buffer =
       @["abc", "abc def", "", "def abc", "abc abc"].toSeqRunes.toGapBuffer
@@ -835,7 +835,7 @@ suite "mainloop: incrementalReplace":
       @["xyz", "xyz def", "", "def xyz", "xyz abc"].toSeqRunes
 
   test "Replace all":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin().get
     currentBufStatus.buffer =
       @["abc", "abc def", "", "def abc", "abc abc"].toSeqRunes.toGapBuffer
@@ -862,7 +862,7 @@ suite "mainloop: incrementalReplace":
       @["xyz", "xyz def", "", "def xyz", "xyz xyz"].toSeqRunes
 
   test "Restore lines":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin().get
     currentBufStatus.buffer =
       @["abc", "abc def", "", "def abc", "abc abc"].toSeqRunes.toGapBuffer
@@ -910,7 +910,7 @@ suite "mainloop: incrementalReplace":
         @["z", "z def", "", "def z", "z abc"].toSeqRunes
 
   test "Restore lines 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin().get
     currentBufStatus.buffer =
       @["abc", "abc def", "", "def abc", "abc abc"].toSeqRunes.toGapBuffer
@@ -961,7 +961,7 @@ suite "mainloop: openCompletionWindowInEditor":
   privateAccess(CompletionWindow)
 
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin().get
     currentBufStatus.language = SourceLanguage.langNim
     currentBufStatus.buffer = @["echo 1", "e"].toSeqRunes.toGapBuffer
@@ -983,7 +983,7 @@ suite "mainloop: openCompletionWindowInEditor":
     )
 
   test "Basic 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin().get
     currentBufStatus.language = SourceLanguage.langNim
     currentBufStatus.buffer = @["echo 1", "echo 2"].toSeqRunes.toGapBuffer
@@ -1008,7 +1008,7 @@ suite "mainloop: openCompletionWindowInCommandLine":
   privateAccess(CompletionWindow)
 
   test "Empty buffer":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin().get
     currentBufStatus.mode = Mode.ex
 
@@ -1027,7 +1027,7 @@ suite "mainloop: openCompletionWindowInCommandLine":
     )
 
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin().get
     currentBufStatus.mode = Mode.ex
 
@@ -1051,7 +1051,7 @@ suite "mainloop: updateCompletionWindowBufferInEditor":
   privateAccess(CompletionWindow)
 
   test "With LSP":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin().get
     currentBufStatus.language = SourceLanguage.langNim
     currentBufStatus.buffer = @["echo 1", "e"].toSeqRunes.toGapBuffer
@@ -1121,7 +1121,7 @@ suite "mainloop: updateCompletionWindowBufferInEditor":
       check status.completionWindow.get.popupWindow.get.position == Position(y: 2, x: 1)
 
   test "Above the cursor":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     assert status.addNewBufferInCurrentWin().isOk
     currentBufStatus.language = SourceLanguage.langNim
     currentBufStatus.buffer = toSeq(0 .. 50).mapIt("").toSeqRunes.toGapBuffer
@@ -1153,7 +1153,7 @@ suite "mainloop: updateCompletionWindowBufferInEditor":
     check status.completionWindow.get.popupWindow.get.position == Position(y: 42, x: 1)
 
   test "Without LSP (WordDictionary)":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin().get
     currentBufStatus.language = SourceLanguage.langNim
     currentBufStatus.buffer = @["echo 1", "e"].toSeqRunes.toGapBuffer
@@ -1204,7 +1204,7 @@ suite "mainloop: updateCompletionWindowBufferInCommandLine":
   privateAccess(CompletionWindow)
 
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin().get
     currentBufStatus.mode = Mode.ex
 
@@ -1257,7 +1257,7 @@ suite "mainloop: confirmCompletion in editor":
   privateAccess(CompletionWindow)
 
   test "Not selected":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin().get
     currentBufStatus.language = SourceLanguage.langNim
     currentBufStatus.buffer = @["echo 1", "ec"].toSeqRunes.toGapBuffer
@@ -1278,7 +1278,7 @@ suite "mainloop: confirmCompletion in editor":
     status.completionWindow = some(
       CompletionWindow(
         startPosition: BufferPosition(line: 1, column: 0),
-        popupWindow: some(initPopupWindow(Position(y: 2, x: 0), Size(h: 1, w: 6))),
+        popupWindow: some(initPopupWindow(Position(y: 2, x: 0), Size(h: 1, w: 6)).get),
         inputText: ru"ec",
         selectedIndex: -1,
       )
@@ -1292,7 +1292,7 @@ suite "mainloop: confirmCompletion in editor":
     check currentMainWindowNode.currentColumn == 2
 
   test "Selected":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin().get
     currentBufStatus.language = SourceLanguage.langNim
     currentBufStatus.buffer = @["echo 1", "e"].toSeqRunes.toGapBuffer
@@ -1332,7 +1332,7 @@ suite "mainloop: confirmCompletion in command line":
   privateAccess(CompletionWindow)
 
   test "Not selected":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     status.settings.autocomplete.windowBorder = false
     status.settings.view.lineNumber = false
@@ -1362,7 +1362,7 @@ suite "mainloop: confirmCompletion in command line":
         popupWindow: some(
           initPopupWindow(
             Position(y: 98, x: 0), Size(h: list.len, w: list.maxInsertTextLen)
-          )
+          ).get
         ),
         inputText: ru"a",
         selectedIndex: -1,
@@ -1377,7 +1377,7 @@ suite "mainloop: confirmCompletion in command line":
     check status.commandLine.buffer == ru"a"
 
   test "Selected":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     status.settings.autocomplete.windowBorder = false
     status.settings.view.lineNumber = false
@@ -1407,7 +1407,7 @@ suite "mainloop: confirmCompletion in command line":
         popupWindow: some(
           initPopupWindow(
             Position(y: 98, x: 0), Size(h: list.len, w: list.maxInsertTextLen)
-          )
+          ).get
         ),
         inputText: ru"a",
         selectedIndex: -1,
@@ -1427,7 +1427,7 @@ suite "mainloop: updateCompletionWindowHighlightingText":
   privateAccess(HighlightText)
 
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin().get
     currentBufStatus.language = SourceLanguage.langNim
     currentBufStatus.buffer = @["echo 1", "e"].toSeqRunes.toGapBuffer
@@ -1473,7 +1473,7 @@ suite "mainloop: updateCompletionWindowHighlightingText":
 
 suite "mainloop: Log viewer":
   test "Enter visual mode (Fix #2017)":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     status.resize(100, 100)

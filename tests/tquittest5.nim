@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -22,11 +22,11 @@ import pkg/results
 import moepkg/[editorstatus, unicodeext, exmode]
 
 test "All buffer force quit command":
-  var status = initEditorStatus()
+  var status = initEditorStatus().get
   for i in 0 ..< 2:
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[i].countChange = 1
-  status.verticalSplitWindow
+  assert status.verticalSplitWindow.isOk
 
   const Command = @[ru"qa!"]
   status.exModeCommand(Command)

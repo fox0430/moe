@@ -38,7 +38,7 @@ proc initSelectedArea(status: EditorStatus) =
 
 suite "insert: Insert characters":
   test "Issue #474":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru""])
 
@@ -61,7 +61,7 @@ suite "insert: Insert characters":
     status.update
 
   test "Insert the character which is below the cursor":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"b"])
 
@@ -73,7 +73,7 @@ suite "insert: Insert characters":
     check(buffer[1] == ru"b")
 
   test "Insert the character which is below the cursor 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
 
@@ -84,7 +84,7 @@ suite "insert: Insert characters":
     check(buffer[0] == ru"abc")
 
   test "Insert the character which is below the cursor 3":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"e"])
 
@@ -98,7 +98,7 @@ suite "insert: Insert characters":
     check(buffer[1] == ru"e")
 
   test "Insert the character which is above the cursor":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"b"])
 
@@ -112,7 +112,7 @@ suite "insert: Insert characters":
     check(buffer[1] == ru"ab")
 
   test "Insert the character which is above the cursor":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"bcd"])
 
@@ -127,7 +127,7 @@ suite "insert: Insert characters":
     check(buffer[1] == ru"bcd")
 
   test "Insert the character which is above the cursor 3":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a"])
 
@@ -138,7 +138,7 @@ suite "insert: Insert characters":
     check(buffer[0] == ru"a")
 
   test "Delete the word before the cursor":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc def"])
 
@@ -154,7 +154,7 @@ suite "insert: Insert characters":
     check(buffer[0] == ru"def")
 
   test "Delete the word before the cursor 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
@@ -168,7 +168,7 @@ suite "insert: Insert characters":
     check(buffer[0] == ru"abc")
 
   test "Delete the word before the cursor 3":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def"])
 
@@ -184,7 +184,7 @@ suite "insert: Insert characters":
     check(buffer[0] == ru"abcdef")
 
   test "Delete characters before the cursor in current line":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abcdef"])
 
@@ -197,7 +197,7 @@ suite "insert: Insert characters":
     check(buffer[0] == ru"ef")
 
   test "Delete characters before the cursor in current line 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a"])
 
@@ -208,7 +208,7 @@ suite "insert: Insert characters":
     check(buffer[0] == ru"a")
 
   test "Add indent in current line 1":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
 
@@ -222,7 +222,7 @@ suite "insert: Insert characters":
     check(currentMainWindowNode.currentColumn == 2)
 
   test "Indent in current line 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru" abc"])
 
@@ -236,7 +236,7 @@ suite "insert: Insert characters":
     check(currentMainWindowNode.currentColumn == 2)
 
   test "Unindent in current line 1":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"  abc"])
 
@@ -250,7 +250,7 @@ suite "insert: Insert characters":
     check(currentMainWindowNode.currentColumn == 0)
 
   test "Delete indent in current line 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
 
@@ -264,7 +264,7 @@ suite "insert: Insert characters":
     check(currentMainWindowNode.currentColumn == 0)
 
   test "Delete indent in current line 3":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"   abc"])
 
@@ -278,7 +278,7 @@ suite "insert: Insert characters":
     check(currentMainWindowNode.currentColumn == 0)
 
   test "Move to last of line":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
     status.bufStatus[0].mode = Mode.insert
@@ -289,7 +289,7 @@ suite "insert: Insert characters":
 
 suite "insertMulti: Insert characters to multiple positions":
   test "Insert characters to 3 lines":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["abc", "abc", "abc"].toSeqRunes.toGapBuffer
     currentBufStatus.mode = Mode.insertMulti
@@ -312,7 +312,7 @@ suite "insertMulti: Insert characters to multiple positions":
     check currentMainWindowNode.currentColumn == 3
 
   test "Insert characters to 3 lines 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["abc", "abc", "abc"].toSeqRunes.toGapBuffer
     currentBufStatus.mode = Mode.insertMulti
@@ -337,7 +337,7 @@ suite "insertMulti: Insert characters to multiple positions":
     check currentMainWindowNode.currentColumn == 4
 
   test "Insert characters to 3 lines 3":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["abc", "abc", "abc"].toSeqRunes.toGapBuffer
     currentBufStatus.mode = Mode.insertMulti
@@ -363,7 +363,7 @@ suite "insertMulti: Insert characters to multiple positions":
 
 suite "insertMulti: Delete characters from multiple positions":
   test "Ignore":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["", "", ""].toSeqRunes.toGapBuffer
     currentBufStatus.mode = Mode.insertMulti
@@ -383,7 +383,7 @@ suite "insertMulti: Delete characters from multiple positions":
     check currentMainWindowNode.currentColumn == 0
 
   test "Delete characters from 3 lines":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["abc", "abc", "abc"].toSeqRunes.toGapBuffer
     currentBufStatus.mode = Mode.insertMulti
@@ -404,7 +404,7 @@ suite "insertMulti: Delete characters from multiple positions":
     check currentMainWindowNode.currentColumn == 0
 
   test "Delete characters from 3 lines 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["abc", "", "abc"].toSeqRunes.toGapBuffer
     currentBufStatus.mode = Mode.insertMulti
@@ -426,7 +426,7 @@ suite "insertMulti: Delete characters from multiple positions":
 
 suite "insertMulti: Delete current characters from multiple positions":
   test "Ignore":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["", "", ""].toSeqRunes.toGapBuffer
     currentBufStatus.mode = Mode.insertMulti
@@ -446,7 +446,7 @@ suite "insertMulti: Delete current characters from multiple positions":
     check currentMainWindowNode.currentColumn == 0
 
   test "Delete current characters from 3 lines":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["abc", "abc", "abc"].toSeqRunes.toGapBuffer
     currentBufStatus.mode = Mode.insertMulti
@@ -467,7 +467,7 @@ suite "insertMulti: Delete current characters from multiple positions":
     check currentMainWindowNode.currentColumn == 0
 
   test "Delete current characters from 3 lines 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["abc", "", "abc"].toSeqRunes.toGapBuffer
     currentBufStatus.mode = Mode.insertMulti
@@ -488,7 +488,7 @@ suite "insertMulti: Delete current characters from multiple positions":
     check currentMainWindowNode.currentColumn == 0
 
   test "Delete current characters from 3 lines 3":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["abc", "abc", "abc"].toSeqRunes.toGapBuffer
     currentBufStatus.mode = Mode.insertMulti
@@ -508,7 +508,7 @@ suite "insertMulti: Delete current characters from multiple positions":
     check currentMainWindowNode.currentColumn == 1
 
   test "Delete current characters from 3 lines 4":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["abc", "abc", "abc"].toSeqRunes.toGapBuffer
     currentBufStatus.mode = Mode.insertMulti

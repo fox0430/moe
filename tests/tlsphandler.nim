@@ -230,7 +230,7 @@ suite "lsp: lspInitialized":
 
   setup:
     if isNimlangserverAvailable():
-      status = initEditorStatus()
+      status = initEditorStatus().get
       status.settings.lsp.enable = true
 
   teardown:
@@ -258,20 +258,20 @@ suite "lsp: lspInitialized":
 
 suite "lsp: initHoverWindow":
   test "Basic":
-    var node = initWindowNode()
+    var node = initWindowNode().get
     node.resize(independentutils.Position(y: 0, x: 0), Size(h: 100, w: 100))
 
     let hoverContent =
       HoverContent(title: ru"title", description: @["1", "2"].toSeqRunes)
 
-    var hoverWin = initHoverWindow(node, hoverContent)
+    var hoverWin = initHoverWindow(node, hoverContent).get
 
     check hoverWin.buffer == @[" title ", "", " 1 ", " 2 "].toSeqRunes
     check hoverWin.size == Size(h: 4, w: 7)
 
 suite "lsp showLspServerLog":
   setup:
-    var cli = initCommandLine()
+    var cli = initCommandLine().get
 
   test "Invalid":
     check cli.showLspServerLog(%*{"jsonrpc": "2.0", "result": nil}).isErr
@@ -330,13 +330,13 @@ suite "lsp: lspDiagnostics":
   const FilePath = "/tmp/test.nim"
 
   test "Invalid":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     assert status.addNewBufferInCurrentWin(FilePath).isOk
 
     check status.bufStatus.lspDiagnostics(%*{"jsonrpc": "2.0", "result": nil}).isErr
 
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     assert status.addNewBufferInCurrentWin(FilePath).isOk
 
     check status.bufStatus.lspDiagnostics(
@@ -371,7 +371,7 @@ suite "lsp: lspDiagnostics":
       ]
 
   test "2 errors":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     assert status.addNewBufferInCurrentWin(FilePath).isOk
 
     check status.bufStatus.lspDiagnostics(
@@ -421,7 +421,7 @@ suite "lsp: lspDiagnostics":
       ]
 
   test "Unopened file results":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     assert status.addNewBufferInCurrentWin(FilePath).isOk
 
     check status.bufStatus.lspDiagnostics(
@@ -453,7 +453,7 @@ suite "lsp: lspWorkDoneProgressCreate":
 
   setup:
     if isNimlangserverAvailable():
-      status = initEditorStatus()
+      status = initEditorStatus().get
       status.settings.lsp.enable = true
 
       let filename = $genOid() & ".nim"
@@ -491,7 +491,7 @@ suite "lsp: lspProgress":
   var status: EditorStatus
 
   setup:
-    status = initEditorStatus()
+    status = initEditorStatus().get
     # Use dummy LSP client. Don't start nimlangserver.
     status.settings.lsp.enable = false
 
@@ -620,7 +620,7 @@ suite "lsp: lspCompletion":
 
   setup:
     if isNimlangserverAvailable():
-      status = initEditorStatus()
+      status = initEditorStatus().get
       status.settings.lsp.enable = true
 
       let filename = $genOid() & ".nim"
@@ -733,7 +733,7 @@ suite "lsp: lspInlayHint":
 
   setup:
     if isNimlangserverAvailable():
-      status = initEditorStatus()
+      status = initEditorStatus().get
       status.settings.lsp.enable = true
 
       let filename = $genOid() & ".nim"
@@ -820,7 +820,7 @@ suite "lsp: lspDeclaration":
 
   setup:
     if isNimlangserverAvailable():
-      status = initEditorStatus()
+      status = initEditorStatus().get
       status.settings.lsp.enable = true
 
       let filename = $genOid() & ".nim"
@@ -877,7 +877,7 @@ suite "lsp: lspDefinition":
 
   setup:
     if isNimlangserverAvailable():
-      status = initEditorStatus()
+      status = initEditorStatus().get
       status.settings.lsp.enable = true
 
       let filename = $genOid() & ".nim"
@@ -934,7 +934,7 @@ suite "lsp: lspTypeDefinition":
 
   setup:
     if isNimlangserverAvailable():
-      status = initEditorStatus()
+      status = initEditorStatus().get
       status.settings.lsp.enable = true
 
       let filename = $genOid() & ".nim"
@@ -991,7 +991,7 @@ suite "lsp: lspReferences":
 
   setup:
     if isNimlangserverAvailable():
-      status = initEditorStatus()
+      status = initEditorStatus().get
       status.settings.lsp.enable = true
 
       let filename = $genOid() & ".nim"
@@ -1119,7 +1119,7 @@ suite "lsp: lspRename":
 
   setup:
     if isNimlangserverAvailable():
-      status = initEditorStatus()
+      status = initEditorStatus().get
       status.settings.lsp.enable = true
 
       filename = $genOid() & ".nim"
@@ -1191,7 +1191,7 @@ suite "lsp: lspFoldingRange":
   var status: EditorStatus
 
   setup:
-    status = initEditorStatus()
+    status = initEditorStatus().get
     # Use dummy LSP client. Don't start nimlangserver.
     status.settings.lsp.enable = false
 
@@ -1249,7 +1249,7 @@ suite "lsp: Selection Range":
   var status: EditorStatus
 
   setup:
-    status = initEditorStatus()
+    status = initEditorStatus().get
     # Use dummy LSP client. Don't start nimlangserver.
     status.settings.lsp.enable = false
 
@@ -1403,7 +1403,7 @@ suite "lsp: Selection Range":
   var status: EditorStatus
 
   setup:
-    status = initEditorStatus()
+    status = initEditorStatus().get
     status.settings.lsp.enable = false
 
     let filename = $genOid()
@@ -1541,7 +1541,7 @@ suite "lsp: handleLspServerNotify":
   var status: EditorStatus
 
   setup:
-    status = initEditorStatus()
+    status = initEditorStatus().get
     status.settings.lsp.enable = true
 
     assert status.addNewBufferInCurrentWin.isOk
@@ -1704,7 +1704,7 @@ suite "lsp: shutdown":
 
   setup:
     if isNimlangserverAvailable():
-      status = initEditorStatus()
+      status = initEditorStatus().get
       status.settings.lsp.enable = true
 
       let filename = $genOid() & ".nim"
@@ -1731,7 +1731,7 @@ suite "lsp: handleLspResponse":
 
   setup:
     if isNimlangserverAvailable():
-      status = initEditorStatus()
+      status = initEditorStatus().get
       status.settings.lsp.enable = true
 
   teardown:

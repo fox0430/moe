@@ -30,7 +30,7 @@ import moepkg/buffermanager {.all.}
 proc openBufferManager(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 
-  status.verticalSplitWindow
+  assert status.verticalSplitWindow.isOk
   status.resize
   status.moveNextWindow
 
@@ -42,7 +42,7 @@ proc openBufferManager(status: var EditorStatus) =
 
 suite "buffermanager: initBufferManagerBuffer":
   test "Single empty buffer":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].path = ru"first"
@@ -52,7 +52,7 @@ suite "buffermanager: initBufferManagerBuffer":
     check status.bufStatus.initBufferManagerBuffer == @[ru"first"]
 
   test "2 buffers":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].path = ru"first"
@@ -68,7 +68,7 @@ suite "buffermanager: initBufferManagerBuffer":
 
 suite "buffermanager: deleteSelectedBuffer":
   test "Single empty buffer":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     discard status.addNewBufferInCurrentWin.get
     status.resize(100, 100)
@@ -87,7 +87,7 @@ suite "buffermanager: deleteSelectedBuffer":
     status.update
 
   test "2 buffers and delete first buffer":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].path = ru"first"
@@ -112,7 +112,7 @@ suite "buffermanager: deleteSelectedBuffer":
     status.update
 
   test "2 buffers and delete second buffer":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].path = ru"first"
@@ -138,14 +138,14 @@ suite "buffermanager: deleteSelectedBuffer":
     status.update
 
   test "2 windows":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].path = ru"first"
     status.resize(100, 100)
     status.update
 
-    status.verticalSplitWindow
+    assert status.verticalSplitWindow.isOk
     status.resize(100, 100)
     status.update
 
@@ -166,7 +166,7 @@ suite "buffermanager: deleteSelectedBuffer":
 
 suite "buffermanager: openSelectedBuffer":
   test "Open in current win":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].path = ru"first"
@@ -188,7 +188,7 @@ suite "buffermanager: openSelectedBuffer":
     status.update
 
   test "Open in new win":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].path = ru"first"
@@ -213,7 +213,7 @@ suite "buffermanager: openSelectedBuffer":
     status.update
 
   test "2 buffers and open first":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].path = ru"first"
@@ -239,7 +239,7 @@ suite "buffermanager: openSelectedBuffer":
     status.update
 
   test "2 buffers and open second":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].path = ru"first"

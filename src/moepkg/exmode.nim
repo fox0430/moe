@@ -33,8 +33,13 @@ import
 proc startDebugMode(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 
-  # Split window and move to new window
-  status.verticalSplitWindow
+  block:
+    # Split window and move to new window
+    let r = status.verticalSplitWindow
+    if r.isErr:
+      status.commandline.writeNcursesError(r.error)
+      return
+
   status.resize
 
   # Add the buffer for the debug mode
@@ -53,10 +58,15 @@ proc startDebugMode(status: var EditorStatus) =
     status.resize
 
 proc openConfigMode(status: var EditorStatus) =
-  let bufferIndex = status.bufferIndexInCurrentWindow
-  status.changeMode(status.bufStatus[bufferIndex].prevMode)
+  status.changeMode(currentBufStatus.prevMode)
 
-  status.verticalSplitWindow
+  block:
+    # Split window and move to new window
+    let r = status.verticalSplitWindow
+    if r.isErr:
+      status.commandline.writeNcursesError(r.error)
+      return
+
   status.resize
   status.moveNextWindow
 
@@ -75,7 +85,12 @@ proc startBackupManager(status: var EditorStatus) =
 
   let bufferIndex = status.addNewBuffer(Mode.backup)
   if bufferIndex.isOk:
-    status.verticalSplitWindow
+    block:
+      let r = status.verticalSplitWindow
+      if r.isErr:
+        status.commandline.writeNcursesError(r.error)
+        return
+
     status.resize
     status.moveNextWindow
 
@@ -97,7 +112,12 @@ proc startRecentFileMode(status: var EditorStatus) =
     status.commandLine.writeOpenRecentlyUsedXbelError
     return
 
-  status.verticalSplitWindow
+  block:
+    let r = status.verticalSplitWindow
+    if r.isErr:
+      status.commandline.writeNcursesError(r.error)
+      return
+
   status.resize
   status.moveNextWindow
 
@@ -116,7 +136,7 @@ proc runQuickRunCommand(status: var EditorStatus) =
     status.bufStatus[currentMainWindowNode.bufferIndex], status.settings
   )
   if quickRunProcess.isErr:
-    status.commandLine.writeError(quickRunProcess.error.toRunes)
+    status.commandline.writeError(quickRunProcess.error)
     addMessageLog quickRunProcess.error.toRunes
     return
 
@@ -130,7 +150,12 @@ proc runQuickRunCommand(status: var EditorStatus) =
       quickRunStartupMessage($status.bufStatus[index.get].path).toRunes.toGapBuffer
   else:
     # Open a new window and add a buffer for this quickrun.
-    status.verticalSplitWindow
+    block:
+      let r = status.verticalSplitWindow
+      if r.isErr:
+        status.commandline.writeNcursesError(r.error)
+        return
+
     status.resize
     status.moveNextWindow
 
@@ -192,7 +217,12 @@ proc deleteTrailingSpacesCommand(status: var EditorStatus) =
 proc openHelp(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 
-  status.verticalSplitWindow
+  block:
+    let r = status.verticalSplitWindow
+    if r.isErr:
+      status.commandline.writeNcursesError(r.error)
+      return
+
   status.resize
   status.moveNextWindow
 
@@ -205,7 +235,12 @@ proc openEditorLogViewer(status: var EditorStatus) =
 
   status.changeMode(currentBufStatus.prevMode)
 
-  status.verticalSplitWindow
+  block:
+    let r = status.verticalSplitWindow
+    if r.isErr:
+      status.commandline.writeNcursesError(r.error)
+      return
+
   status.resize
   status.moveNextWindow
 
@@ -227,7 +262,12 @@ proc openLspLogViewer(status: var EditorStatus) =
 
   status.changeMode(currentBufStatus.prevMode)
 
-  status.verticalSplitWindow
+  block:
+    let r = status.verticalSplitWindow
+    if r.isErr:
+      status.commandline.writeNcursesError(r.error)
+      return
+
   status.resize
   status.moveNextWindow
 
@@ -243,7 +283,12 @@ proc openLspLogViewer(status: var EditorStatus) =
 proc openBufferManager(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 
-  status.verticalSplitWindow
+  block:
+    let r = status.verticalSplitWindow
+    if r.isErr:
+      status.commandline.writeNcursesError(r.error)
+      return
+
   status.resize
   status.moveNextWindow
 
@@ -264,12 +309,24 @@ proc changeCursorLineCommand(status: var EditorStatus, command: Runes) =
 
 proc verticalSplitWindowCommand(status: var EditorStatus) =
   let prevMode = currentBufStatus.prevMode
-  status.verticalSplitWindow
+
+  block:
+    let r = status.verticalSplitWindow
+    if r.isErr:
+      status.commandline.writeNcursesError(r.error)
+      return
+
   status.changeMode(prevMode)
 
 proc horizontalSplitWindowCommand(status: var EditorStatus) =
   let prevMode = currentBufStatus.prevMode
-  status.horizontalSplitWindow
+
+  block:
+    let r = status.horizontalSplitWindow
+    if r.isErr:
+      status.commandline.writeNcursesError(r.error)
+      return
+
   status.changeMode(prevMode)
 
 proc filerIconSettingCommand(status: var EditorStatus, command: Runes) =
@@ -673,13 +730,23 @@ proc editCommand(status: var EditorStatus, path: Runes) =
       currentMainWindowNode.restoreCursorPosition(currentBufStatus, status.lastPosition)
 
 proc openInHorizontalSplitWindow(status: var EditorStatus, filename: Runes) =
-  status.horizontalSplitWindow
+  block:
+    let r = status.horizontalSplitWindow
+    if r.isErr:
+      status.commandline.writeNcursesError(r.error)
+      return
+
   status.resize
 
   status.editCommand(filename)
 
 proc openInVerticalSplitWindowCommand(status: var EditorStatus, filename: Runes) =
-  status.verticalSplitWindow
+  block:
+    let r = status.verticalSplitWindow
+    if r.isErr:
+      status.commandline.writeNcursesError(r.error)
+      return
+
   status.resize
 
   status.editCommand(filename)
@@ -1113,7 +1180,11 @@ proc createNewEmptyBufferCommand*(status: var EditorStatus) =
 proc newEmptyBufferInSplitWindowHorizontally*(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 
-  status.horizontalSplitWindow
+  block:
+    let r = status.horizontalSplitWindow
+    if r.isErr:
+      status.commandline.writeNcursesError(r.error)
+      return
 
   discard status.addNewBufferInCurrentWin
   status.changeCurrentBuffer(status.bufStatus.high)
@@ -1123,7 +1194,11 @@ proc newEmptyBufferInSplitWindowHorizontally*(status: var EditorStatus) =
 proc newEmptyBufferInSplitWindowVertically*(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 
-  status.verticalSplitWindow
+  block:
+    let r = status.verticalSplitWindow
+    if r.isErr:
+      status.commandline.writeNcursesError(r.error)
+      return
 
   discard status.addNewBufferInCurrentWin
   status.changeCurrentBuffer(status.bufStatus.high)

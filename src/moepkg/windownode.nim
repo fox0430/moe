@@ -18,6 +18,9 @@
 #[############################################################################]#
 
 import std/[heapqueue, options, strformat, strutils, tables]
+
+import pkg/results
+
 import
   ui, editorview, gapbuffer, color, cursor, highlight, unicodeext, independentutils,
   settings, undoredostack, folding
@@ -45,28 +48,40 @@ type
     root*, currentMainWindowNode*: WindowNode
     numOfMainWindow*: int
 
-proc newWindow(): Window {.inline.} =
-  result = initWindow(1, 1, 0, 0, EditorColorPairIndex.default.ord)
+proc newWindow(): Result[Window, string] {.inline.} =
+  return initWindow(1, 1, 0, 0, EditorColorPairIndex.default.ord)
 
-proc initWindowNode*(): WindowNode =
+proc initWindowNode*(): Result[WindowNode, string] =
+  var win = newWindow()
+  if win.isErr:
+    return Result[WindowNode, string].err win.error
+
   var
     node = WindowNode(child: @[], splitType: SplitType.vertical, h: 1, w: 1)
     root = WindowNode(
       child: @[node],
       splitType: SplitType.vertical,
-      window: some(newWindow()),
+      window: some(win.get),
       y: 0,
       x: 0,
       h: 1,
       w: 1,
     )
   node.parent = root
-  return root
 
-proc initMainWindow*(): MainWindow =
-  result.root = initWindowNode()
-  result.currentMainWindowNode = result.root.child[0]
-  result.numOfMainWindow = 1
+  return Result[WindowNode, string].ok root
+
+proc initMainWindow*(): Result[MainWindow, string] =
+  var root = initWindowNode()
+  if root.isErr:
+    return Result[MainWindow, string].err root.error
+
+  var mainWin = MainWindow()
+  mainWin.root = root.get
+  mainWin.currentMainWindowNode = root.get.child[0]
+  mainWin.numOfMainWindow = 1
+
+  return Result[MainWindow, string].ok mainWin
 
 proc verticalSplit*[T](n: var WindowNode, buffer: T): WindowNode =
   var parent = n.parent

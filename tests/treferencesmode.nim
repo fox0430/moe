@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -31,7 +31,7 @@ import
 import moepkg/referencesmode {.all.}
 
 template openReferencesMode(status: var EditorStatus, references: seq[LspReference]) =
-  status.horizontalSplitWindow
+  assert status.horizontalSplitWindow.isOk
   status.moveNextWindow
 
   discard status.addNewBufferInCurrentWin(Mode.references)
@@ -75,7 +75,7 @@ suite "references: openWindowAndJumpToReference":
   let testDir = getCurrentDir() / "referencesTest"
 
   setup:
-    status = initEditorStatus()
+    status = initEditorStatus().get
 
     createDir(testDir)
 
@@ -134,7 +134,7 @@ suite "references: closeReferencesMode":
   var status: EditorStatus
 
   setup:
-    status = initEditorStatus()
+    status = initEditorStatus().get
     assert status.addNewBufferInCurrentWin(Mode.normal).isOk
 
   test "Basic":

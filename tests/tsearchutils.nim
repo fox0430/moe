@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -130,7 +130,7 @@ suite "searchutils: searchReversely":
 
 suite "searchutils: searchBuffer":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     let
@@ -151,7 +151,7 @@ suite "searchutils: searchBuffer":
     check searchResult.get.column == 2
 
   test "Basic 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     let
@@ -171,7 +171,7 @@ suite "searchutils: searchBuffer":
     check searchResult.isNone
 
   test "With newline":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
 
@@ -187,7 +187,7 @@ suite "searchutils: searchBuffer":
     check r.get == BufferPosition(line: 1, column: 1)
 
   test "With newline 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentMainWindowNode.currentLine = 2
     currentBufStatus.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
@@ -205,7 +205,7 @@ suite "searchutils: searchBuffer":
 
 suite "searchutils: searchBufferReversely":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     let
@@ -226,7 +226,7 @@ suite "searchutils: searchBufferReversely":
     check searchResult.get.column == 2
 
   test "Basic 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     let
@@ -246,7 +246,7 @@ suite "searchutils: searchBufferReversely":
     check searchResult.isNone
 
   test "With newline":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentMainWindowNode.currentLine = 2
     currentBufStatus.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
@@ -263,7 +263,7 @@ suite "searchutils: searchBufferReversely":
     check r.get == BufferPosition(line: 0, column: 1)
 
   test "With newline 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
 
@@ -279,7 +279,7 @@ suite "searchutils: searchBufferReversely":
     check r.get == BufferPosition(line: 1, column: 1)
 
   test "Move to the first of the prev line":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["abc", "abc"].toSeqRunes.toGapBuffer
     currentMainWindowNode.currentLine = 1
@@ -297,7 +297,7 @@ suite "searchutils: searchBufferReversely":
 
 suite "searchutils: searchAllOccurrence":
   test "searchAllOccurrence":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     const
@@ -323,7 +323,7 @@ suite "searchutils: searchAllOccurrence":
     check searchResult[2].column == 0
 
   test "searchAllOccurrence 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     const
@@ -578,7 +578,7 @@ suite "searchutils: matchingParenPair":
     let testTitle = "Case " & $testIndex & ": matchingParenPair: '" & $paren & "'"
 
     test testTitle:
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
 
       status.bufStatus[0].buffer = `buffer`.toGapBuffer

@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -41,7 +41,7 @@ suite "Visual mode: Move right":
   var status: EditorStatus
 
   setup:
-    status = initEditorStatus()
+    status = initEditorStatus().get
     assert status.addNewBufferInCurrentWin.isOk
 
   test "Basic":
@@ -71,7 +71,7 @@ suite "Visual mode: Move right":
 
 suite "Visual mode: Delete buffer":
   test "Delete buffer 1":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.settings.clipboard.enable = false
 
     discard status.addNewBufferInCurrentWin.get
@@ -98,7 +98,7 @@ suite "Visual mode: Delete buffer":
     check(currentBufStatus.buffer[0] == ru"d")
 
   test "Delete buffer 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.settings.clipboard.enable = false
 
     discard status.addNewBufferInCurrentWin.get
@@ -125,7 +125,7 @@ suite "Visual mode: Delete buffer":
     check(currentBufStatus.buffer[0] == ru"")
 
   test "Delete buffer 3":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.settings.clipboard.enable = false
 
     discard status.addNewBufferInCurrentWin.get
@@ -154,7 +154,7 @@ suite "Visual mode: Delete buffer":
     check(currentBufStatus.buffer[0] == ru"ef")
 
   test "Delete buffer 4":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.settings.clipboard.enable = false
 
     discard status.addNewBufferInCurrentWin.get
@@ -187,7 +187,7 @@ suite "Visual mode: Delete buffer":
     check(currentBufStatus.buffer[1] == ru"g")
 
   test "Delete buffer 5":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.settings.clipboard.enable = false
 
     discard status.addNewBufferInCurrentWin.get
@@ -217,7 +217,7 @@ suite "Visual mode: Delete buffer":
     check(currentBufStatus.buffer[1] == ru"i")
 
   test "Delete buffer 6":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.settings.clipboard.enable = false
 
     discard status.addNewBufferInCurrentWin.get
@@ -243,7 +243,7 @@ suite "Visual mode: Delete buffer":
     check currentBufStatus.buffer[1] == ru"ghi"
 
   test "Fix #890":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"a", ru"", ru"a"])
 
@@ -270,7 +270,7 @@ suite "Visual mode: Delete buffer":
     check currentBufStatus.buffer[1] == ru"a"
 
   test "Visual mode: Check cursor position after delete buffer":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"a b c"])
 
@@ -296,7 +296,7 @@ suite "Visual mode: Delete buffer":
     check currentMainWindowNode.currentColumn == 2
 
   test "Contains folding lines":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.settings.clipboard.enable = false
 
     assert status.addNewBufferInCurrentWin.isOk
@@ -325,7 +325,7 @@ suite "Visual mode: Delete buffer":
     check currentMainWindowNode.view.foldingRanges.len == 0
 
   test "Before folding lines":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.settings.clipboard.enable = false
 
     assert status.addNewBufferInCurrentWin.isOk
@@ -355,7 +355,7 @@ suite "Visual mode: Delete buffer":
 
 suite "Visual mode: Yank buffer (Disable clipboard)":
   test "Yank lines":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
@@ -390,7 +390,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     check status.registers.getNoNamedRegister.buffer == @[ru"abc", ru"def"]
 
   test "Yank lines 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
@@ -424,7 +424,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     check status.registers.getNoNamedRegister.buffer == @[ru"abc"]
 
   test "Yank string (Fix #1124)":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
@@ -456,7 +456,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     check status.registers.getNoNamedRegister.buffer[^1] == ru"abc"
 
   test "Yank lines when the last line is empty (Fix #1183)":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru""])
 
@@ -488,7 +488,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     check status.registers.getNoNamedRegister.buffer == @[ru"abc", ru""]
 
   test "Yank the empty line":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru""])
 
@@ -518,7 +518,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     check status.registers.getNoNamedRegister.buffer == @[ru""]
 
   test "Contains folding lines":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     assert status.addNewBufferInCurrentWin.isOk
     currentBufStatus.buffer = @["a", "b", "c"].toSeqRunes.toGapBuffer
     currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
@@ -553,7 +553,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
     check currentMainWindowNode.view.foldingRanges == @[FoldingRange(first: 0, last: 1)]
 
   test "Contains folding line":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["a", "b", "c"].toSeqRunes.toGapBuffer
     currentMainWindowNode.view.foldingRanges = @[FoldingRange(first: 0, last: 1)]
@@ -587,7 +587,7 @@ suite "Visual mode: Yank buffer (Disable clipboard)":
 
 suite "Visual block mode: Yank buffer (Disable clipboard)":
   test "Yank lines 1":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
@@ -615,7 +615,7 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
     check status.registers.getNoNamedRegister.buffer == @[ru"a", ru"d"]
 
   test "Yank lines 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"d"])
 
@@ -647,7 +647,7 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
     check status.registers.getNoNamedRegister.buffer == @[ru"ab", ru"d"]
 
   test "Fix #1636":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"d"])
 
@@ -674,7 +674,7 @@ suite "Visual block mode: Yank buffer (Disable clipboard)":
 
 suite "Visual block mode: Delete buffer (Disable clipboard)":
   test "Delete buffer":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
@@ -709,7 +709,7 @@ suite "Visual mode: Yank buffer (Enable clipboard)":
     else:
       assert clearXsel()
 
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
 
       discard status.addNewBufferInCurrentWin.get
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
@@ -750,7 +750,7 @@ suite "Visual mode: Yank buffer (Enable clipboard)":
     else:
       assert clearXsel()
 
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
@@ -795,7 +795,7 @@ suite "Visual block mode: Yank buffer (Enable clipboard) 1":
     else:
       assert clearXsel()
 
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
@@ -832,7 +832,7 @@ suite "Visual block mode: Yank buffer (Enable clipboard) 1":
     else:
       assert clearXsel()
 
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"d"])
 
@@ -873,7 +873,7 @@ suite "Visual block mode: Delete buffer":
     else:
       assert clearXsel()
 
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
@@ -911,7 +911,7 @@ suite "Visual block mode: Delete buffer":
     else:
       assert clearXsel()
 
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"", ru"edf"])
 
@@ -948,7 +948,7 @@ suite "Visual block mode: Delete buffer":
     else:
       assert clearXsel()
 
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
       currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"de", ru"fgh"])
 
@@ -988,7 +988,7 @@ suite "Visual mode: Join lines":
   var status: EditorStatus
 
   setup:
-    status = initEditorStatus()
+    status = initEditorStatus().get
     assert status.addNewBufferInCurrentWin.isOk
 
   test "Join 2 lines":
@@ -1040,7 +1040,7 @@ suite "Visual mode: Join lines":
 
 suite "Visual block mode: Join lines":
   test "Join 3 lines":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
 
@@ -1071,7 +1071,7 @@ suite "Visual mode: Add indent":
   var status: EditorStatus
 
   setup:
-    status = initEditorStatus()
+    status = initEditorStatus().get
     assert status.addNewBufferInCurrentWin.isOk
 
   test "Add 1 indent":
@@ -1123,7 +1123,7 @@ suite "Visual mode: Add indent":
 
 suite "Visual block mode: Add indent":
   test "Add 1 indent":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
 
@@ -1153,7 +1153,7 @@ suite "Visual mode: Delete indent":
   var status: EditorStatus
 
   setup:
-    status = initEditorStatus()
+    status = initEditorStatus().get
     assert status.addNewBufferInCurrentWin.isOk
 
   test "Delete 1 indent":
@@ -1204,7 +1204,7 @@ suite "Visual mode: Delete indent":
 
 suite "Visual block mode: Delete indent":
   test "Delete 1 indent":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"  abc", ru"  def", ru"  ghi"])
 
@@ -1232,7 +1232,7 @@ suite "Visual block mode: Delete indent":
 
 suite "Visual mode: Converts string into lower-case string":
   test "Converts string into lower-case string 1":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"ABC"])
 
@@ -1256,7 +1256,7 @@ suite "Visual mode: Converts string into lower-case string":
     check(currentBufStatus.buffer[0] == ru"abc")
 
   test "Converts string into lower-case string 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"AあbC"])
 
@@ -1280,7 +1280,7 @@ suite "Visual mode: Converts string into lower-case string":
     check(currentBufStatus.buffer[0] == ru"aあbc")
 
   test "Converts string into lower-case string 3":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"ABC", ru"DEF"])
 
@@ -1304,7 +1304,7 @@ suite "Visual mode: Converts string into lower-case string":
     check(currentBufStatus.buffer[1] == ru"dEF")
 
   test "Converts string into lower-case string 4 (Fix #687)":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"ABC", ru"", ru"DEF", ru""])
     currentBufStatus.highlight = initHighlight(
@@ -1329,7 +1329,7 @@ suite "Visual mode: Converts string into lower-case string":
 
 suite "Visual block mode: Converts string into lower-case string":
   test "Converts string into lower-case string":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"ABC"])
 
@@ -1353,7 +1353,7 @@ suite "Visual block mode: Converts string into lower-case string":
     check(currentBufStatus.buffer[0] == ru"abc")
 
   test "Converts string into lower-case string 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"ABC", ru"DEF"])
 
@@ -1381,7 +1381,7 @@ suite "Visual block mode: Converts string into lower-case string":
 
 suite "Visual mode: Converts string into upper-case string":
   test "Converts string into upper-case string 1":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
@@ -1405,7 +1405,7 @@ suite "Visual mode: Converts string into upper-case string":
     check(currentBufStatus.buffer[0] == ru"ABC")
 
   test "Converts string into upper-case string 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"aあBc"])
 
@@ -1429,7 +1429,7 @@ suite "Visual mode: Converts string into upper-case string":
     check(currentBufStatus.buffer[0] == ru"AあBC")
 
   test "Converts string into upper-case string 3":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
@@ -1453,7 +1453,7 @@ suite "Visual mode: Converts string into upper-case string":
     check(currentBufStatus.buffer[1] == ru"Def")
 
   test "Visual mode: Converts string into upper-case string 4 (Fix #687)":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"", ru"def", ru""])
     currentBufStatus.highlight = initHighlight(
@@ -1479,7 +1479,7 @@ suite "Visual mode: Converts string into upper-case string":
 
 suite "Visual mode: Movement":
   test "Move to end of the line + 1":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
     currentBufStatus.highlight = initHighlight(
@@ -1500,7 +1500,7 @@ suite "Visual mode: Movement":
 
 suite "Visual block mode: Converts string into upper-case string":
   test "Converts string into upper-case string 1":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
@@ -1524,7 +1524,7 @@ suite "Visual block mode: Converts string into upper-case string":
     check(currentBufStatus.buffer[0] == ru"ABC")
 
   test "Converts string into upper-case string 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def"])
 
@@ -1551,7 +1551,7 @@ suite "Visual block mode: Converts string into upper-case string":
 
 suite "Visual mode: move to the previous blank line":
   test "move to the previous blank line":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"1", ru "", ru "3", ru "4"])
 
@@ -1571,7 +1571,7 @@ suite "Visual mode: move to the previous blank line":
 
 suite "Visual mode: move to the next blank line":
   test "move to the next blank line":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"1", ru "2", ru "", ru "4"])
 
@@ -1591,7 +1591,7 @@ suite "Visual mode: Replace characters":
   var status: EditorStatus
 
   setup:
-    status = initEditorStatus()
+    status = initEditorStatus().get
     assert status.addNewBufferInCurrentWin.isOk
 
   test "Empty buffer":
@@ -1697,7 +1697,7 @@ suite "Visual mode: Replace characters":
 
 suite "Visual block mode: Replace characters":
   test "Empty buffer":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru""])
 
@@ -1725,7 +1725,7 @@ suite "Visual block mode: Replace characters":
 
 suite "Visual mode: Run command when Readonly mode":
   test "Delete buffer (\"x\" command)":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.isReadonly = true
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
@@ -1749,7 +1749,7 @@ suite "Visual mode: Run command when Readonly mode":
     check currentBufStatus.buffer[0] == ru "abc"
 
   test "Add the indent (\">\" command)":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.isReadonly = true
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
@@ -1773,7 +1773,7 @@ suite "Visual mode: Run command when Readonly mode":
     check currentBufStatus.buffer[0] == ru "abc"
 
   test "Add the indent (\"<\" command)":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.isReadonly = true
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
@@ -1797,7 +1797,7 @@ suite "Visual mode: Run command when Readonly mode":
     check currentBufStatus.buffer[0] == ru "abc"
 
   test "Join lines (\"J\" command)":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.isReadonly = true
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru "def"])
@@ -1826,7 +1826,7 @@ suite "Visual mode: Run command when Readonly mode":
     check currentBufStatus.buffer[1] == ru "def"
 
   test "To lower case (\"u\" command)":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.isReadonly = true
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
@@ -1850,7 +1850,7 @@ suite "Visual mode: Run command when Readonly mode":
     check currentBufStatus.buffer[0] == ru "abc"
 
   test "To upper case (\"U\" command)":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.isReadonly = true
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
@@ -1874,7 +1874,7 @@ suite "Visual mode: Run command when Readonly mode":
     check currentBufStatus.buffer[0] == ru "abc"
 
   test "Replace characters (\"r\" command)":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.isReadonly = true
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
@@ -1903,7 +1903,7 @@ suite "Visual mode: Run command when Readonly mode":
     check currentBufStatus.buffer[0] == ru "abc"
 
   test "Enter insert mode when readonly mode (\"I\" command)":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.isReadonly = true
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
@@ -1927,7 +1927,7 @@ suite "Visual mode: Run command when Readonly mode":
 
 suite "Visual block mode: move to the previous blank line":
   test "move to the previous blank line":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"1", ru "", ru "3", ru "4"])
 
@@ -1947,7 +1947,7 @@ suite "Visual block mode: move to the previous blank line":
 
 suite "Visual block mode: move to the next blank line":
   test "move to the next blank line":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"1", ru "2", ru "", ru "4"])
 
@@ -1965,7 +1965,7 @@ suite "Visual block mode: move to the next blank line":
 
 suite "Visual block mode: Run command when Readonly mode":
   test "Delete buffer (\"x\" command)":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.isReadonly = true
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
@@ -1989,7 +1989,7 @@ suite "Visual block mode: Run command when Readonly mode":
     check currentBufStatus.buffer[0] == ru "abc"
 
   test "Enter insert mode when readonly mode (\"I\" command)":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.isReadonly = true
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
@@ -2012,7 +2012,7 @@ suite "Visual block mode: Run command when Readonly mode":
     check currentBufStatus.mode == Mode.normal
 
   test "Add the indent (\">\" command)":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.isReadonly = true
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
@@ -2036,7 +2036,7 @@ suite "Visual block mode: Run command when Readonly mode":
     check currentBufStatus.buffer[0] == ru "abc"
 
   test "Add the indent (\"<\" command)":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.isReadonly = true
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
@@ -2060,7 +2060,7 @@ suite "Visual block mode: Run command when Readonly mode":
     check currentBufStatus.buffer[0] == ru "abc"
 
   test "Join lines (\"J\" command)":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.isReadonly = true
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru "def"])
@@ -2089,7 +2089,7 @@ suite "Visual block mode: Run command when Readonly mode":
     check currentBufStatus.buffer[1] == ru "def"
 
   test "To lower case (\"u\" command)":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.isReadonly = true
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
@@ -2113,7 +2113,7 @@ suite "Visual block mode: Run command when Readonly mode":
     check currentBufStatus.buffer[0] == ru "abc"
 
   test "To upper case (\"U\" command)":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.isReadonly = true
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
@@ -2137,7 +2137,7 @@ suite "Visual block mode: Run command when Readonly mode":
     check currentBufStatus.buffer[0] == ru "abc"
 
   test "Replace characters (\"r\" command)":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.isReadonly = true
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
@@ -2167,7 +2167,7 @@ suite "Visual block mode: Run command when Readonly mode":
 
 suite "Visual block mode: Movement":
   test "Move to end of the line + 1":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
     currentBufStatus.highlight = initHighlight(
@@ -2187,7 +2187,7 @@ suite "Visual block mode: Movement":
 
 suite "Visual line mode: Delete buffer":
   test "Delete buffer with 'x' command":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.settings.clipboard.enable = false
 
     discard status.addNewBufferInCurrentWin.get
@@ -2212,7 +2212,7 @@ suite "Visual line mode: Delete buffer":
     check currentBufStatus.buffer[2] == ru"d"
 
   test "Delete buffer with 'x' command 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.settings.clipboard.enable = false
 
     discard status.addNewBufferInCurrentWin.get
@@ -2239,7 +2239,7 @@ suite "Visual line mode: Delete buffer":
     check(currentBufStatus.buffer[0] == ru"d")
 
   test "Delete buffer with 'd' command":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.settings.clipboard.enable = false
 
     discard status.addNewBufferInCurrentWin.get
@@ -2264,7 +2264,7 @@ suite "Visual line mode: Delete buffer":
     check currentBufStatus.buffer[2] == ru"d"
 
   test "Delete buffer with 'd' command 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.settings.clipboard.enable = false
 
     discard status.addNewBufferInCurrentWin.get
@@ -2292,7 +2292,7 @@ suite "Visual line mode: Delete buffer":
 
 suite "Visual line mode: Yank buffer (Disable clipboard)":
   test "Yank lines":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     let buffer = @[ru"a", ru"b", ru"c", ru"d"]
     currentBufStatus.buffer = buffer.toGapBuffer
@@ -2332,7 +2332,7 @@ suite "Visual line mode: Yank buffer (Enable clipboard)":
     else:
       assert clearXsel()
 
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
       let buffer = @[ru"a", ru"b", ru"c", ru"d"]
       currentBufStatus.buffer = buffer.toGapBuffer
@@ -2372,7 +2372,7 @@ suite "Visual line mode: Yank buffer (Enable clipboard)":
 
 suite "Visual line mode: idenet":
   test "Add the indent (\">\" command)":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.isReadonly = true
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
@@ -2398,7 +2398,7 @@ suite "Visual line mode: idenet":
     check currentBufStatus.buffer[0] == ru "abc"
 
   test "Add the indent (\"<\" command)":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.isReadonly = true
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
@@ -2427,7 +2427,7 @@ suite "Visual mode: Add folding range":
   var status: EditorStatus
 
   setup:
-    status = initEditorStatus()
+    status = initEditorStatus().get
     assert status.addNewBufferInCurrentWin.isOk
 
   test "Ignore":
@@ -2535,7 +2535,7 @@ suite "Visual mode: selectionrange":
   var status: EditorStatus
 
   setup:
-    status = initEditorStatus()
+    status = initEditorStatus().get
     assert status.addNewBufferInCurrentWin.isOk
 
   test "Not found":

@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -20,6 +20,9 @@
 ## A sidebar is a window that displays side to the main window.
 
 import std/sequtils
+
+import pkg/results
+
 import ui, unicodeext, highlight, color, independentutils
 
 type GlobalSidebar* = object
@@ -78,34 +81,45 @@ proc initTerminalBuffer(sidebar: var GlobalSidebar) {.inline.} =
 
   sidebar.terminalBuffer = sidebar.h.newSeqWith(ru" ".repeat(sidebar.w))
 
-proc initGlobalSidebar*(rect: Rect): GlobalSidebar =
+proc initGlobalSidebar*(rect: Rect): Result[GlobalSidebar, string] =
   when not defined(release):
     assert rect.y >= 0 and rect.x >= 0 and rect.h > 0 and rect.w > 0
 
-  result.window = initWindow(rect, EditorColorPairIndex.default.ord)
+  var win = initWindow(rect, EditorColorPairIndex.default.ord)
+  if win.isErr:
+    return Result[GlobalSidebar, string].err win.error
 
-  result.initTerminalBuffer
+  var gs = GlobalSidebar()
+  gs.window = win.get
 
-  result.highlight = Highlight(
+  gs.initTerminalBuffer
+
+  gs.highlight = Highlight(
     colorSegments:
       @[
         ColorSegment(
           firstRow: 0,
           firstColumn: 0,
-          lastRow: result.terminalBuffer.high,
-          lastColumn: result.terminalBuffer[0].high,
+          lastRow: gs.terminalBuffer.high,
+          lastColumn: gs.terminalBuffer[0].high,
           color: EditorColorPairIndex.default,
         )
       ]
   )
 
-proc initGlobalSidebar*(): GlobalSidebar {.inline.} =
-  result.window =
-    initWindow(Rect(h: 1, w: 0, y: 0, x: 0), EditorColorPairIndex.default.ord)
+  return Result[GlobalSidebar, string].ok gs
 
-  result.initTerminalBuffer
+proc initGlobalSidebar*(): Result[GlobalSidebar, string] =
+  var win = initWindow(Rect(h: 1, w: 0, y: 0, x: 0), EditorColorPairIndex.default.ord)
+  if win.isErr:
+    return Result[GlobalSidebar, string].err win.error
 
-  result.highlight = Highlight(
+  var gs = GlobalSidebar()
+  gs.window = win.get
+
+  gs.initTerminalBuffer
+
+  gs.highlight = Highlight(
     colorSegments:
       @[
         ColorSegment(
@@ -117,6 +131,8 @@ proc initGlobalSidebar*(): GlobalSidebar {.inline.} =
         )
       ]
   )
+
+  return Result[GlobalSidebar, string].ok gs
 
 proc initHighlight*(sidebar: var GlobalSidebar) =
   ## Init the sidebar highlight

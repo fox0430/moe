@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -31,7 +31,7 @@ suite "Move right":
   var status: EditorStatus
 
   setup:
-    status = initEditorStatus()
+    status = initEditorStatus().get
     assert status.addNewBufferInCurrentWin.isOk
 
   test "Basic":
@@ -64,7 +64,7 @@ suite "Move right":
 
 suite "Move left":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc"])
 
@@ -82,7 +82,7 @@ suite "Move left":
 
 suite "Move down":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"efg", ru"hij"])
 
@@ -99,7 +99,7 @@ suite "Move down":
 
 suite "Move up":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"efg", ru"hij"])
 
@@ -117,7 +117,7 @@ suite "Move up":
 
 suite "Move to first non blank of current line":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"  abc"])
     currentMainWindowNode.currentColumn = 4
@@ -126,7 +126,7 @@ suite "Move to first non blank of current line":
 
 suite "Move to first of current line":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"  abc"])
     currentMainWindowNode.currentColumn = 4
@@ -135,7 +135,7 @@ suite "Move to first of current line":
 
 suite "Move to last of current line":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"  abc"])
     status.bufStatus[0].moveToLastOfLine(currentMainWindowNode)
@@ -143,7 +143,7 @@ suite "Move to last of current line":
 
 suite "Move to first of previous Line":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"  abc", ru"efg"])
     currentMainWindowNode.currentLine = 1
@@ -153,7 +153,7 @@ suite "Move to first of previous Line":
 
 suite "Move to first of next Line":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"  abc", ru"efg"])
     status.bufStatus[0].moveToFirstOfNextLine(currentMainWindowNode)
@@ -162,7 +162,7 @@ suite "Move to first of next Line":
 
 suite "Jump line":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer =
       initGapBuffer(@["abc", "efg", "hij", "klm", "nop", "qrs"].toSeqRunes)
@@ -173,7 +173,7 @@ suite "Jump line":
 
 suite "Move to first line":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer =
       initGapBuffer(@["abc", "efg", "hij", "klm", "nop", "qrs"].toSeqRunes)
@@ -184,7 +184,7 @@ suite "Move to first line":
 
 suite "Move to last line":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer =
       initGapBuffer(@["abc", "efg", "hij", "klm", "nop", "qrs"].toSeqRunes)
@@ -194,7 +194,7 @@ suite "Move to last line":
     check(currentMainWindowNode.currentLine == 5)
 
   test "Long line":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     assert status.addNewBufferInCurrentWin.isOk
     status.bufStatus[0].buffer = @[ru"a".repeat(1000)].toGapBuffer
     for _ in 0 .. 20:
@@ -208,7 +208,7 @@ suite "Move to last line":
 
 suite "Move to forward word":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc efg"])
     status.bufStatus[0].moveToForwardWord(currentMainWindowNode)
@@ -216,7 +216,7 @@ suite "Move to forward word":
 
 suite "Move to backward word":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc efg"])
     currentMainWindowNode.currentColumn = 5
@@ -226,7 +226,7 @@ suite "Move to backward word":
 
 suite "Move to forward end of word":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc efg"])
     for i in 0 ..< 2:
@@ -235,7 +235,7 @@ suite "Move to forward end of word":
 
 suite "Move to forward end of word":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc efg"])
     for i in 0 ..< 2:
@@ -244,7 +244,7 @@ suite "Move to forward end of word":
 
 suite "Move to previous blank line":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"", ru"def", ru"ghi"])
     currentMainWindowNode.currentLine = currentBufStatus.buffer.high
@@ -255,7 +255,7 @@ suite "Move to previous blank line":
     check currentMainWindowNode.currentColumn == 0
 
   test "Basic 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"", ru"ghi"])
     currentMainWindowNode.currentLine = 2
@@ -266,7 +266,7 @@ suite "Move to previous blank line":
     check currentMainWindowNode.currentColumn == 0
 
   test "Basic 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
     currentMainWindowNode.currentColumn = 2
@@ -278,7 +278,7 @@ suite "Move to previous blank line":
 
 suite "Move to next blank line":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"", ru"ghi"])
 
@@ -288,7 +288,7 @@ suite "Move to next blank line":
     check currentMainWindowNode.currentColumn == 0
 
   test "Basic 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"", ru"def", ru"ghi"])
     currentMainWindowNode.currentLine = 1
@@ -299,7 +299,7 @@ suite "Move to next blank line":
     check currentMainWindowNode.currentColumn == 2
 
   test "Basic 3":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
@@ -310,7 +310,7 @@ suite "Move to next blank line":
 
 suite "Move to the top line of the screen":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = 7.newSeqWith(ru"").toGapBuffer
 
@@ -325,7 +325,7 @@ suite "Move to the top line of the screen":
     check currentMainWindowNode.currentLine == 0
 
   test "Basic 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = 20.newSeqWith(ru"").toGapBuffer
 
@@ -341,7 +341,7 @@ suite "Move to the top line of the screen":
 
 suite "Move to the center line of the screen":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = 7.newSeqWith(ru"").toGapBuffer
 
@@ -354,7 +354,7 @@ suite "Move to the center line of the screen":
 
 suite "Move to the center line of the screen 2":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = 20.newSeqWith(ru"").toGapBuffer
 
@@ -369,7 +369,7 @@ suite "Move to the center line of the screen 2":
 
 suite "Move to the bottom line of the screen":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = 7.newSeqWith(ru"").toGapBuffer
 
@@ -382,7 +382,7 @@ suite "Move to the bottom line of the screen":
 
 suite "Move to the bottom line of the screen 2":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = 2.newSeqWith(ru"").toGapBuffer
 
@@ -395,7 +395,7 @@ suite "Move to the bottom line of the screen 2":
 
 suite "Move to the bottom line of the screen 3":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = 20.newSeqWith(ru"").toGapBuffer
 
@@ -410,7 +410,7 @@ suite "Move to the bottom line of the screen 3":
 
 suite "Move to matching pair of paren 1":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @[ru"( )"].toGapBuffer
 
@@ -424,7 +424,7 @@ suite "Move to matching pair of paren 1":
 
 suite "Move to matching pair of paren 2":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @[ru"(", ru")"].toGapBuffer
 
@@ -438,7 +438,7 @@ suite "Move to matching pair of paren 2":
 
 suite "Move to matching pair of paren 3":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @[ru" )"].toGapBuffer
 
@@ -452,7 +452,7 @@ suite "Move to matching pair of paren 3":
 
 suite "Move to matching pair of paren 4":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @[ru"(", ru"", ru"]"].toGapBuffer
 
@@ -466,7 +466,7 @@ suite "Move to matching pair of paren 4":
 
 suite "Move to matching pair of paren 5":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @[ru"(", ru"", ru"]"].toGapBuffer
     currentMainWindowNode.currentColumn = currentBufStatus.buffer.len
@@ -481,7 +481,7 @@ suite "Move to matching pair of paren 5":
 
 suite "jumpToSearchForwardResults":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     currentMainWindowNode.currentColumn = 1
@@ -498,7 +498,7 @@ suite "jumpToSearchForwardResults":
     check currentMainWindowNode.currentColumn == 4
 
   test "Basic 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     currentMainWindowNode.currentColumn = 1
@@ -515,7 +515,7 @@ suite "jumpToSearchForwardResults":
     check currentMainWindowNode.currentColumn == 1
 
   test "With newline":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     currentMainWindowNode.currentColumn = 0
@@ -532,7 +532,7 @@ suite "jumpToSearchForwardResults":
 
 suite "jumpToSearchBackwardResults":
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     currentMainWindowNode.currentLine = 1
@@ -549,7 +549,7 @@ suite "jumpToSearchBackwardResults":
     check currentMainWindowNode.currentColumn == 0
 
   test "Basic 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     currentMainWindowNode.currentColumn = 1
@@ -566,7 +566,7 @@ suite "jumpToSearchBackwardResults":
     check currentMainWindowNode.currentColumn == 1
 
   test "With newline":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     currentMainWindowNode.currentLine = 2
@@ -584,7 +584,7 @@ suite "jumpToSearchBackwardResults":
 
 suite "movement: moveToFirstWordOfPrevLine":
   test "Only whitespaces":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = toGapBuffer(@[ru"  ", ru"  ", ru"  "])
     currentMainWindowNode.currentLine = 2
@@ -598,7 +598,7 @@ suite "movement: moveToFirstWordOfPrevLine":
     check currentMainWindowNode.currentColumn == 0
 
   test "Nothing to do":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = toGapBuffer(@[ru"  word", ru"  ", ru"  "])
     currentMainWindowNode.currentLine = 2
@@ -613,7 +613,7 @@ suite "movement: moveToFirstWordOfPrevLine":
     check currentMainWindowNode.currentColumn == 1
 
   test "Move to the prev first word 1":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = toGapBuffer(@[ru"  word", ru"  "])
     currentMainWindowNode.currentLine = 1
@@ -627,7 +627,7 @@ suite "movement: moveToFirstWordOfPrevLine":
     check currentMainWindowNode.currentColumn == 2
 
   test "Move to the prev first word 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = toGapBuffer(@[ru"word", ru"  "])
     currentMainWindowNode.currentLine = 1
@@ -643,7 +643,7 @@ suite "movement: moveToFirstWordOfPrevLine":
 
 suite "movement: moveToFirstWordOfNextLine":
   test "Only whitespaces":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = toGapBuffer(@[ru"  ", ru"  ", ru"  "])
     currentMainWindowNode.currentLine = 0
@@ -657,7 +657,7 @@ suite "movement: moveToFirstWordOfNextLine":
     check currentMainWindowNode.currentColumn == 0
 
   test "Nothing to do":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = toGapBuffer(@[ru"  ", ru"  ", ru"  word"])
     currentMainWindowNode.currentLine = 0
@@ -672,7 +672,7 @@ suite "movement: moveToFirstWordOfNextLine":
     check currentMainWindowNode.currentColumn == 0
 
   test "Move to the next first word 1":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = toGapBuffer(@[ru"  ", ru"  word"])
     currentMainWindowNode.currentLine = 0
@@ -686,7 +686,7 @@ suite "movement: moveToFirstWordOfNextLine":
     check currentMainWindowNode.currentColumn == 2
 
   test "Move to the next first word 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = toGapBuffer(@[ru"  ", ru"word"])
     currentMainWindowNode.currentLine = 0

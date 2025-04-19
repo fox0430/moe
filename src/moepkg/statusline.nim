@@ -39,14 +39,21 @@ type
     bufferIndex*: int
     message*: Runes
 
-proc initStatusLine*(): StatusLine {.inline.} =
+proc initStatusLine*(): Result[StatusLine, string] {.inline.} =
   const
     Height = 1
     Width = 1
     Y = 1
     X = 1
     Color = EditorColorPairIndex.default
-  result.window = initWindow(Height, Width, X, Y, Color.int16)
+  var win = initWindow(Height, Width, X, Y, Color.int16)
+  if win.isErr:
+    return Result[StatusLine, string].err win.error
+
+  var s = StatusLine()
+  s.window = win.get
+
+  return Result[StatusLine, string].ok s
 
 proc displayPath(bufStatus: BufferStatus): Runes =
   ## Return text of the path for display in the status line.
