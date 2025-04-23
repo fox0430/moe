@@ -551,16 +551,19 @@ proc resize*(status: var EditorStatus) =
     commandLineHeight = status.commandLine.calcWindowaHeight
     sidebarWidth = if status.sidebar.isSome: status.sidebar.get.w else: 0
 
-  block:
-    status.resizeMainWindowNode(
-      Position(y: tabLineHeight, x: sidebarWidth),
-      Size(
-        h: max(
-          4, (terminalSize.h + 1) - tabLineHeight - statusLineHeight - commandLineHeight
-        ),
-        w: max(4, terminalSize.w - sidebarWidth),
+  # Force sync a terminal size in ncurses.
+  exitUi()
+  refresh()
+
+  status.resizeMainWindowNode(
+    Position(y: tabLineHeight, x: sidebarWidth),
+    Size(
+      h: max(
+        4, (terminalSize.h + 1) - tabLineHeight - statusLineHeight - commandLineHeight
       ),
-    )
+      w: max(4, terminalSize.w - sidebarWidth),
+    ),
+  )
 
   var
     statusLineIndex = 0

@@ -549,6 +549,11 @@ proc erase*(win: var Window) =
   if r.isErr:
     error fmt"werase failed"
 
+proc refresh*() =
+  let r = ncurses.refresh()
+  if r.isErr:
+    error fmt"refresh failed"
+
 proc refresh*(win: Window) =
   let r = wrefresh(win.cursesWindow)
   if r.isErr:
