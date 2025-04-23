@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -22,7 +22,7 @@ import pkg/results
 import moepkg/[editorstatus, unicodeext, exmode]
 
 test "Force quit command":
-  var status = initEditorStatus()
+  var status = initEditorStatus().get
   discard status.addNewBufferInCurrentWin.get
 
   status.bufStatus[0].countChange = 1

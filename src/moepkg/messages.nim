@@ -340,6 +340,9 @@ proc writeChangeThemeError*(commandLine: CommandLine, message: string) =
 proc writePasteIgnoreWarn*(commandLine: CommandLine) {.inline.} =
   commandLine.writeWarn("Paste is ignored in this mode")
 
+proc writeNcursesError*(commandLine: CommandLine, message: string) =
+  commandLine.writeError(fmt"ncurses: {message}")
+
 proc writeLspStandard*(
     commandLine: CommandLine, message: string, log = true, screen = true
 ) {.inline.} =

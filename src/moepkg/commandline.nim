@@ -47,8 +47,8 @@ proc initCommandLineHighlight(
   if buffer.len > 0:
     return initHighlight(buffer, color)
 
-proc initCommandLine*(): CommandLine =
-  result = CommandLine()
+proc initCommandLine*(): Result[CommandLine, string] =
+  var c = CommandLine()
 
   # Init the command line window
   const
@@ -57,13 +57,20 @@ proc initCommandLine*(): CommandLine =
     W = 1
     Y = 1
     X = 0
-  result.window = initWindow(H, W, Y, X, Color)
-  result.color = EditorColorPairIndex.commandLine
 
-  result.buffer = ru""
+  var win = initWindow(H, W, Y, X, Color)
+  if win.isErr:
+    return Result[CommandLine, string].err win.error
 
-  result.view = initEditorView(@[result.buffer], H, W)
-  result.view.config.isHighlightCurrentLine = false
+  c.window = win.get
+  c.color = EditorColorPairIndex.commandLine
+
+  c.buffer = ru""
+
+  c.view = initEditorView(@[c.buffer], H, W)
+  c.view.config.isHighlightCurrentLine = false
+
+  return Result[CommandLine, string].ok c
 
 proc calcWindowaHeight*(commandLine: CommandLine, newWinHeight: int = -1): int =
   if newWinHeight == -1 and commandLine.w < 1:

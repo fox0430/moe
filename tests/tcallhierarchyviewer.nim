@@ -167,7 +167,7 @@ suite "callhierarchyviewer: jumpToDestination":
   let testDir = getCurrentDir() / "callhierarchyTest"
 
   setup:
-    status = initEditorStatus()
+    status = initEditorStatus().get
 
     createDir(testDir)
 
@@ -203,7 +203,7 @@ suite "callhierarchyviewer: jumpToDestination":
         )
       ]
 
-    status.verticalSplitWindow
+    assert status.verticalSplitWindow.isOk
     status.moveNextWindow
 
     assert status.addNewBufferInCurrentWin(Mode.callhierarchyviewer).isOk

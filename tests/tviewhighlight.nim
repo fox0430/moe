@@ -43,7 +43,7 @@ suite "viewhighlight: initBufferInView":
   privateAccess(BufferInView)
 
   test "Less than the terminal size":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"line1"])
     status.initHighlight
@@ -59,7 +59,7 @@ suite "viewhighlight: initBufferInView":
     check bufferInView.currentPosition == BufferPosition(line: 0, column: 0)
 
   test "More than the terminal size":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = toSeq(0 .. 20).mapIt(it.toRunes).toGapBuffer
     status.initHighlight
@@ -75,7 +75,7 @@ suite "viewhighlight: initBufferInView":
     check bufferInView.currentPosition == BufferPosition(line: 0, column: 0)
 
   test "More than the terminal size 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = toSeq(0 .. 20).mapIt(it.toRunes).toGapBuffer
     status.initHighlight
@@ -93,7 +93,7 @@ suite "viewhighlight: initBufferInView":
 
 suite "viewhighlight: highlightReferences":
   test "Same line":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"test abc test"])
     status.initHighlight
@@ -109,7 +109,7 @@ suite "viewhighlight: highlightReferences":
     check highlight[1].color == EditorColorPairIndex.currentWord
 
   test "Another line":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"test", ru"test"])
 
@@ -124,7 +124,7 @@ suite "viewhighlight: highlightReferences":
     check highlight[1].color == EditorColorPairIndex.currentWord
 
   test "With brackets":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"[test]", ru"test"])
 
@@ -140,7 +140,7 @@ suite "viewhighlight: highlightReferences":
     check highlight[1].color == EditorColorPairIndex.currentWord
 
   test "With underbar":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"_test", ru"_test"])
 
@@ -157,7 +157,7 @@ suite "viewhighlight: highlightReferences":
 
 suite "viewhighlight: highlightFullWidthSpace":
   test "Highlight full width space 1":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"", ru"　"])
@@ -176,7 +176,7 @@ suite "viewhighlight: highlightFullWidthSpace":
     check highlight[1].color == EditorColorPairIndex.highlightFullWidthSpace
 
   test "Highlight full width space 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc　"])
 
@@ -194,7 +194,7 @@ suite "viewhighlight: highlightFullWidthSpace":
     check highlight[1].color == EditorColorPairIndex.highlightFullWidthSpace
 
   test "Highlight full width space 3":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"　"])
 
@@ -211,7 +211,7 @@ suite "viewhighlight: highlightFullWidthSpace":
     check highlight[0].color == EditorColorPairIndex.highlightFullWidthSpace
 
   test "Highlight full width space 4":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"a　b"])
 
@@ -231,7 +231,7 @@ suite "viewhighlight: highlightFullWidthSpace":
 
 suite "viewhighlight: Highlight trailing spaces":
   test "Highlight trailing spaces 1":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     status.settings.highlight.currentWord = false
@@ -256,7 +256,7 @@ suite "viewhighlight: Highlight trailing spaces":
     check currentBufStatus.highlight[0].lastColumn == 2
 
   test "Highlight trailing spaces 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"", ru"abc  "])
 
@@ -285,7 +285,7 @@ suite "viewhighlight: Highlight trailing spaces":
     check highlight[2].lastColumn == 4
 
   test "Highlight trailing spaces 3":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru" "])
 
@@ -306,7 +306,7 @@ suite "viewhighlight: Highlight trailing spaces":
     check highlight[0].lastColumn == 0
 
   test "Highlight search results in two windows":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin("test.nim").get
     currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
 
@@ -314,7 +314,7 @@ suite "viewhighlight: Highlight trailing spaces":
     status.resize
     status.update
 
-    status.verticalSplitWindow
+    assert status.verticalSplitWindow.isOk
 
     status.highlightingText =
       HighlightingText(kind: HighlightingTextKind.search, text: @["abc"].toSeqRunes).some
@@ -341,7 +341,7 @@ suite "viewhighlight: Highlight trailing spaces":
           check highlight[2].color == EditorColorPairIndex.identifier
 
   test "Disable LSP Document Highlight":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     assert status.addNewBufferInCurrentWin("test.nim").isOk
     currentBufStatus.buffer = @["abc d", "abc d", ""].toSeqRunes.toGapBuffer
 
@@ -360,7 +360,7 @@ suite "viewhighlight: Highlight trailing spaces":
         check c.color != EditorColorPairIndex.currentWord
 
   test "Enable LSP Document Highlight":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     assert status.addNewBufferInCurrentWin("test.nim").isOk
     currentBufStatus.buffer = @["abc d", "abc d", ""].toSeqRunes.toGapBuffer
 
@@ -414,7 +414,7 @@ suite "viewhighlight: highlightPairOfParen":
     let testTitle = "Case " & $TestIndex & ": highlightParenPair: '" & $paren & "'"
 
     test testTitle:
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
 
       status.bufStatus[0].buffer = buffer.toGapBuffer
@@ -838,7 +838,7 @@ suite "viewhighlight: highlightPairOfParen":
       )
 
   test "Highlight ')'":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin("test.nim").get
     currentBufStatus.buffer = initGapBuffer(@[ru"proc test(a: string) ="])
     status.initHighlight
@@ -861,7 +861,7 @@ suite "viewhighlight: highlightPairOfParen":
       )
 
   test "Highlight '('":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin("test.nim").get
     currentBufStatus.buffer = initGapBuffer(@[ru"proc test(a: string) ="])
     status.initHighlight
@@ -910,7 +910,7 @@ echo "test"
 >>>>>>> new_branch
 """.splitLines.toSeqRunes
 
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin("test.nim").get
     currentBufStatus.buffer = Buffer.toGapBuffer
 
@@ -1068,7 +1068,7 @@ echo "test"
 >>>>>>> new_branch
 """.splitLines
 
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin("test.nim").get
 
     for i in 0 .. 100:
@@ -1094,7 +1094,7 @@ suite "viewhighlight: highlightText":
   const ReservedWords: seq[ReservedWord] = @[]
 
   test "Basic":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["abcdef", "ghijkl"].toSeqRunes.toGapBuffer
 
@@ -1141,7 +1141,7 @@ suite "viewhighlight: highlightText":
       ]
 
   test "Basic 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["abcdef", "ghijkl"].toSeqRunes.toGapBuffer
 
@@ -1196,7 +1196,7 @@ suite "viewhighlight: highlightText":
       ]
 
   test "Multiple lines":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["abc", "ghi", "jkl"].toSeqRunes.toGapBuffer
 
@@ -1260,7 +1260,7 @@ suite "viewhighlight: highlightText":
       ]
 
   test "Multiple lines 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["abc", "", "", "def"].toSeqRunes.toGapBuffer
 
@@ -1316,7 +1316,7 @@ suite "viewhighlight: highlightText":
       ]
 
   test "Only a newline":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["abc", "def", "ghi"].toSeqRunes.toGapBuffer
 
@@ -1342,7 +1342,7 @@ suite "viewhighlight: updateViewHighlight":
   const ReservedWords: seq[ReservedWord] = @[]
 
   test "Check highlightingText":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = @["abcdef", "ghijkl"].toSeqRunes.toGapBuffer
 
@@ -1390,7 +1390,7 @@ suite "viewhighlight: updateViewHighlight":
       ]
 
   test "Check highlightingText in logviewer mode":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.mode = Mode.logviewer
 

@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -371,8 +371,12 @@ template initQuickRunWindow(status: var EditorStatus, filePath: string) =
     status.bufStatus[index.get].buffer =
       quickRunStartupMessage($status.bufStatus[index.get].path).toRunes.toGapBuffer
   else:
-    # Open a new window and add a buffer for this quickrun.
-    status.verticalSplitWindow
+    block:
+      # Open a new window and add a buffer for this quickrun.
+      let r = status.verticalSplitWindow
+      if r.isErr:
+        status.commandLine.writeNcursesError(r.error)
+
     status.resize
     status.moveNextWindow
 
@@ -639,18 +643,21 @@ proc requestDocumentSymbol(status: var EditorStatus) =
 
 proc initCodeLensSelectorWindow(
     status: var EditorStatus, buffer: seq[Runes]
-): PopupWindow =
+): Result[PopupWindow, string] =
   const MARGIN = 2
-  result = initPopupWindow(
+  var popupWin = initPopupWindow(
     independentutils.Position(
       y: currentMainWindowNode.currentLine, x: currentMainWindowNode.currentColumn
     ),
     Size(h: buffer.len, w: buffer.maxLen + MARGIN),
   )
+  if popupWin.isErr:
+    return Result[PopupWindow, string].err popupWin.error
 
-  result.buffer = buffer.addMargins
+  popupWin.get.buffer = buffer.addMargins
+  popupWin.get.currentLine = some(0)
 
-  result.currentLine = some(0)
+  return Result[PopupWindow, string].ok popupWin.get
 
 proc runCodeLensCommand(status: var EditorStatus) =
   let codeLenses = currentBufStatus.codeLenses.filterIt(
@@ -668,35 +675,38 @@ proc runCodeLensCommand(status: var EditorStatus) =
     var popupWin = status.initCodeLensSelectorWindow(
       codelenses.mapIt(it.command.get.command.toRunes)
     )
+    if popupWin.isErr:
+      status.commandLine.writeLspCodeLensError(popupWin.error)
+      return
 
     while true:
-      popupWin.update
+      popupWin.get.update
       let key = currentMainWindowNode.getKeyBlocking
 
       if isTabKey(key) or isDownKey(key) or key == ord('j'):
-        if popupWin.currentLine.get == codelenses.high:
-          popupWin.currentLine = some(0)
+        if popupWin.get.currentLine.get == codelenses.high:
+          popupWin.get.currentLine = some(0)
         else:
-          popupWin.currentLine.get.inc
+          popupWin.get.currentLine.get.inc
       elif isShiftTab(key) or isUpKey(key) or key == ord('k'):
-        if popupWin.currentLine.get == 0:
-          popupWin.currentLine = some(codeLenses.high)
+        if popupWin.get.currentLine.get == 0:
+          popupWin.get.currentLine = some(codeLenses.high)
         else:
-          popupWin.currentLine.get.dec
+          popupWin.get.currentLine.get.dec
       elif isEnterKey(key):
         # Confirm
         break
       elif isEscKey(key) or isCtrlC(key):
         # Cancel
-        popupWin.currentLine = none(int)
+        popupWin.get.currentLine = none(int)
         break
 
-    popupWin.close
+    popupWin.get.close
     showCursor()
 
-    if popupWin.currentLine.isSome:
+    if popupWin.get.currentLine.isSome:
       # Confirm
-      index = popupWin.currentLine.get
+      index = popupWin.get.currentLine.get
     else:
       # Cancel
       return

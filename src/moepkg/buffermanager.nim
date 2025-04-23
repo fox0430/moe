@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -18,7 +18,11 @@
 #[############################################################################]#
 
 import std/heapqueue
-import gapbuffer, ui, editorstatus, unicodeext, windownode, movement, bufferstatus
+
+import pkg/results
+
+import
+  gapbuffer, ui, editorstatus, unicodeext, windownode, movement, bufferstatus, messages
 
 proc initBufferManagerBuffer*(bufStatuses: seq[BufferStatus]): seq[Runes] =
   ## Return buffer for the buffer manager.
@@ -66,7 +70,12 @@ proc deleteSelectedBuffer(status: var EditorStatus) =
 
 proc openSelectedBuffer(status: var EditorStatus, isNewWindow: bool) =
   if isNewWindow:
-    status.verticalSplitWindow
+    block:
+      let r = status.verticalSplitWindow
+      if r.isErr:
+        status.commandLine.writeNcursesError(r.error)
+        return
+
     status.moveNextWindow
 
     status.changeCurrentBuffer(currentMainWindowNode.currentLine)

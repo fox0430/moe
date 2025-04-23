@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -31,10 +31,10 @@ import moepkg/init {.all.}
 
 suite "init: addBufferStatus":
   test "No args":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     const ParsedList = CmdParsedList()
 
-    status.addBufferStatus(ParsedList)
+    assert status.addBufferStatus(ParsedList).isOk
 
     check status.bufStatus.len == 1
     check currentBufStatus.buffer.toSeqRunes == @[ru""]
@@ -44,12 +44,12 @@ suite "init: addBufferStatus":
     check mainWindowNode.getAllWindowNode.len == 1
 
   test "1 file":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let
       path = $genOid()
       parsedList = CmdParsedList(path: @[path])
 
-    status.addBufferStatus(parsedList)
+    assert status.addBufferStatus(parsedList).isOk
 
     check status.bufStatus.len == 1
     check currentBufStatus.buffer.toSeqRunes == @[ru""]
@@ -59,10 +59,10 @@ suite "init: addBufferStatus":
     check mainWindowNode.getAllWindowNode.len == 1
 
   test "1 dir":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     const ParsedList = CmdParsedList(path: @["./"])
 
-    status.addBufferStatus(ParsedList)
+    assert status.addBufferStatus(ParsedList).isOk
 
     check status.bufStatus.len == 1
     check currentBufStatus.buffer.toSeqRunes.len > 0
@@ -73,10 +73,10 @@ suite "init: addBufferStatus":
     check mainWindowNode.getAllWindowNode.len == 1
 
   test "2 files and auto vertical split":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     const ParsedList = CmdParsedList(path: @["test1.nim", "test2.nim"])
 
-    status.addBufferStatus(ParsedList)
+    assert status.addBufferStatus(ParsedList).isOk
 
     check status.bufStatus.len == 2
 
@@ -93,11 +93,11 @@ suite "init: addBufferStatus":
     check currentMainWindowNode.parent.splitType == SplitType.vertical
 
   test "2 files and auto horizontal split":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.settings.startUp.fileOpen.splitType = WindowSplitType.horizontal
     const ParsedList = CmdParsedList(path: @["test1.nim", "test2.nim"])
 
-    status.addBufferStatus(ParsedList)
+    assert status.addBufferStatus(ParsedList).isOk
 
     check status.bufStatus.len == 2
 
@@ -114,11 +114,11 @@ suite "init: addBufferStatus":
     check currentMainWindowNode.parent.splitType == SplitType.horizontal
 
   test "2 files and startUp.fileOpen.autoSplit = false":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     status.settings.startUp.fileOpen.autoSplit = false
     const ParsedList = CmdParsedList(path: @["test1.nim", "test2.nim"])
 
-    status.addBufferStatus(ParsedList)
+    assert status.addBufferStatus(ParsedList).isOk
 
     check status.bufStatus.len == 2
 
@@ -140,10 +140,10 @@ suite "init: addBufferStatus":
     const Permissions = {fpUserWrite}
     setFilePermissions(path, Permissions)
 
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let parsedList = CmdParsedList(path: @[path])
 
-    status.addBufferStatus(parsedList)
+    assert status.addBufferStatus(parsedList).isOk
 
     if fileExists(path):
       removeFile(path)
@@ -162,10 +162,10 @@ suite "init: addBufferStatus":
     const Permissions = {fpUserWrite}
     setFilePermissions(path, Permissions)
 
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     let parsedList = CmdParsedList(path: @[path])
 
-    status.addBufferStatus(parsedList)
+    assert status.addBufferStatus(parsedList).isOk
 
     if dirExists(path):
       removeDir(path)
@@ -178,12 +178,12 @@ suite "init: addBufferStatus":
     check currentMainWindowNode.bufferIndex == 0
 
   test "Read only mode":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     const ParsedList = CmdParsedList(isReadonly: true)
 
     status.isReadonly = true
 
-    status.addBufferStatus(ParsedList)
+    assert status.addBufferStatus(ParsedList).isOk
 
     check status.bufStatus.len == 1
     check currentBufStatus.buffer.toSeqRunes == @[ru""]

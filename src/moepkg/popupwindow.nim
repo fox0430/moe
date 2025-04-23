@@ -19,6 +19,8 @@
 
 import std/[options, strutils]
 
+import pkg/results
+
 import ui, color, unicodeext, independentutils, searchutils
 
 type
@@ -37,24 +39,30 @@ type
 
 proc initPopupWindow*(
     position: Position, size: Size, buffer: seq[Runes], showBorder: bool = false
-): PopupWindow {.inline.} =
-  PopupWindow(
-    window: initWindow(
-      size.h, size.w, position.y, position.x, EditorColorPairIndex.popUpWindow.ord
-    ),
+): Result[PopupWindow, string] =
+  var win = initWindow(
+    size.h, size.w, position.y, position.x, EditorColorPairIndex.popUpWindow.ord
+  )
+  if win.isErr:
+    return Result[PopupWindow, string].err win.error
+
+  var p = PopupWindow(
+    window: win.get,
     position: position,
     size: size,
     buffer: buffer,
     showBorder: showBorder,
   )
 
+  return Result[PopupWindow, string].ok p
+
 proc initPopupWindow*(
     position: Position, size: Size, showBorder: bool = false
-): PopupWindow {.inline.} =
-  initPopupWindow(position, size, @[], showBorder)
+): Result[PopupWindow, string] {.inline.} =
+  return initPopupWindow(position, size, @[], showBorder)
 
-proc initPopupWindow*(): PopupWindow {.inline.} =
-  initPopupWindow(Position(y: 0, x: 0), Size(h: 1, w: 1), @[])
+proc initPopupWindow*(): Result[PopupWindow, string] {.inline.} =
+  return initPopupWindow(Position(y: 0, x: 0), Size(h: 1, w: 1), @[])
 
 proc refresh*(p: var PopupWindow) {.inline.} =
   p.window.refresh

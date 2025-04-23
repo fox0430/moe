@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -18,6 +18,9 @@
 #[############################################################################]#
 
 import std/[strutils, unicode, strformat, math]
+
+import pkg/results
+
 import ui, color, bufferstatus, independentutils, unicodeext
 
 type
@@ -106,7 +109,7 @@ proc initHighlight(buffers: seq[Runes], currentBufferIndex: int): Highlight =
 
 proc initTabLine(
     bufStatuses: seq[BufferStatus], currentBufferIndex: int, isAllbuffer: bool
-): TabLine =
+): Result[TabLine, string] =
   const
     Position = Position(y: 0, x: 0)
     Color = EditorColorPairIndex.tab.int16
@@ -116,34 +119,50 @@ proc initTabLine(
 
     let buffers = initBuffers(bufStatuses, getTerminalWidth())
 
-    return TabLine(
-      window: initWindow(1, getTerminalWidth(), 0, 0, Color),
+    var win = initWindow(1, getTerminalWidth(), 0, 0, Color)
+    if win.isErr:
+      return Result[TabLine, string].err win.error
+
+    var t = TabLine(
+      window: win.get,
       position: Position,
       size: Size(h: 1, w: getTerminalWidth()),
       highlight: initHighlight(buffers, currentBufferIndex),
       buffer: buffers.join,
     )
+
+    return Result[TabLine, string].ok t
   else:
     # Only the current buffer.
     let buffers = initBuffers(@[bufStatuses[currentBufferIndex]], getTerminalWidth())
 
-    return TabLine(
-      window: initWindow(1, getTerminalWidth(), 0, 0, Color),
+    var win = initWindow(1, getTerminalWidth(), 0, 0, Color)
+    if win.isErr:
+      return Result[TabLine, string].err win.error
+
+    var t = TabLine(
+      window: win.get,
       position: Position,
       size: Size(h: 1, w: getTerminalWidth()),
       highlight: initHighlight(buffers, currentBufferIndex),
       buffer: buffers[0],
     )
 
+    return Result[TabLine, string].ok t
+
 proc update*(
     tabLine: var TabLine,
     bufStatuses: seq[BufferStatus],
     currentBufferIndex: int,
     isAllbuffer: bool,
-) =
+): Result[(), string] =
   ## Update tabline and window.
 
-  tabline = initTabLine(bufStatuses, currentBufferIndex, isAllbuffer)
+  var t = initTabLine(bufStatuses, currentBufferIndex, isAllbuffer)
+  if t.isErr:
+    return Result[(), string].err t.error
+
+  tabline = t.get
 
   # Update the window
   tabLine.window.erase
@@ -156,3 +175,5 @@ proc update*(
       cs.attribute,
     )
   tabLine.window.noutrefresh
+
+  return Result[(), string].ok ()

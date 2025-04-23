@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -18,13 +18,16 @@
 #[############################################################################]#
 
 import std/[unittest, importutils, sequtils]
+
+import pkg/results
+
 import moepkg/[independentutils, unicodeext, highlight, color]
 
 import moepkg/globalsidebar {.all.}
 
 suite "sidebar":
   test "initGlobalSidebar":
-    let sidebar = initGlobalSidebar(Rect(h: 1, w: 2, y: 3, x: 4))
+    let sidebar = initGlobalSidebar(Rect(h: 1, w: 2, y: 3, x: 4)).get
 
     check sidebar.h == 1
     check sidebar.w == 2
@@ -50,7 +53,7 @@ suite "sidebar":
       )[]
 
   test "initHighlight":
-    var sidebar = initGlobalSidebar(Rect(h: 10, w: 10, y: 0, x: 0))
+    var sidebar = initGlobalSidebar(Rect(h: 10, w: 10, y: 0, x: 0)).get
     # Clear the highlight for the test.
     sidebar.highlight[] = Highlight(
       colorSegments:
@@ -82,7 +85,7 @@ suite "sidebar":
       )[]
 
   test "write 1":
-    var sidebar = initGlobalSidebar(Rect(h: 100, w: 100, y: 0, x: 0))
+    var sidebar = initGlobalSidebar(Rect(h: 100, w: 100, y: 0, x: 0)).get
 
     sidebar.write(Position(y: 0, x: 0), ru"test", EditorColorPairIndex.reservedWord)
 
@@ -114,7 +117,7 @@ suite "sidebar":
       )[]
 
   test "write 2":
-    var sidebar = initGlobalSidebar(Rect(h: 100, w: 100, y: 0, x: 0))
+    var sidebar = initGlobalSidebar(Rect(h: 100, w: 100, y: 0, x: 0)).get
 
     sidebar.write(Position(y: 1, x: 10), ru"test", EditorColorPairIndex.reservedWord)
 
@@ -155,28 +158,28 @@ suite "sidebar":
       )[]
 
   test "resize":
-    var sidebar = initGlobalSidebar(Rect(h: 1, w: 1, y: 0, x: 0))
+    var sidebar = initGlobalSidebar(Rect(h: 1, w: 1, y: 0, x: 0)).get
 
     sidebar.resize(Size(h: 2, w: 3))
 
     check sidebar.size == Size(h: 2, w: 3)
 
   test "resize 2":
-    var sidebar = initGlobalSidebar(Rect(h: 1, w: 1, y: 0, x: 0))
+    var sidebar = initGlobalSidebar(Rect(h: 1, w: 1, y: 0, x: 0)).get
 
     sidebar.resize(Rect(y: 2, x: 3, h: 4, w: 5))
 
     check sidebar.rect == Rect(y: 2, x: 3, h: 4, w: 5)
 
   test "move":
-    var sidebar = initGlobalSidebar(Rect(h: 1, w: 1, y: 0, x: 0))
+    var sidebar = initGlobalSidebar(Rect(h: 1, w: 1, y: 0, x: 0)).get
 
     sidebar.move(Position(y: 2, x: 3))
 
     check sidebar.position == Position(y: 2, x: 3)
 
   test "clear":
-    var sidebar = initGlobalSidebar(Rect(h: 1, w: 1, y: 0, x: 0))
+    var sidebar = initGlobalSidebar(Rect(h: 1, w: 1, y: 0, x: 0)).get
 
     sidebar.write(Position(y: 0, x: 0), ru"a")
 

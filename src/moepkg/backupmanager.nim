@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -44,8 +44,13 @@ proc openDiffViewer(status: var EditorStatus, sourceFilePath: string) =
   if not validateBackupFileName(backupFilePath.splitPath.tail):
     return
 
-  # Create a new window and move to it.
-  status.verticalSplitWindow
+  block:
+    # Create a new window and move to it.
+    let r = status.verticalSplitWindow
+    if r.isErr:
+      status.commandLine.writeNcursesError(r.error)
+      return
+
   status.resize
   status.moveNextWindow
 

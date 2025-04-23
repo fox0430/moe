@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -75,8 +75,13 @@ proc openWindowAndJumpToReference(status: var EditorStatus) =
 
   status.resize
 
-  # Open a window for the destination.
-  status.verticalSplitWindow
+  block:
+    # Open a window for the destination.
+    let r = status.verticalSplitWindow
+    if r.isErr:
+      status.commandLine.writeNcursesError(r.error)
+      return
+
   status.moveNextWindow
 
   template canMove(): bool =

@@ -386,14 +386,17 @@ proc openCompletionWindowInCommandLine(
       x: max(0, status.commandLine.absCursorPosition.x - 1),
     )
 
-  status.completionWindow = some(
-    initCompletionWindow(
-      startPosition = startPosition,
-      windowPosition = windowPosition,
-      list = initCompletionList(),
-      showBorder = status.settings.autocomplete.windowBorder,
-    )
+  var win = initCompletionWindow(
+    startPosition = startPosition,
+    windowPosition = windowPosition,
+    list = initCompletionList(),
+    showBorder = status.settings.autocomplete.windowBorder,
   )
+  if win.isErr:
+    status.commandLine.writeNcursesError(win.error)
+    return
+
+  status.completionWindow = some(win.get)
 
 template closeCompletionWindow(status: var EditorStatus) =
   ## Close the completion window and reset completionList.
@@ -461,7 +464,10 @@ proc updateCompletionWindowBufferInCommandLine(status: var EditorStatus) =
         y: status.commandLine.window.y,
         x: status.completionWindow.get.startPosition.column,
       )
-      status.completionWindow.get.reopen(posi)
+      let r = status.completionWindow.get.reopen(posi)
+      if r.isErr:
+        status.commandLine.writeNcursesError(r.error)
+        return
 
     # Update completion window buffer
     status.completionWindow.get.updateBuffer
@@ -707,14 +713,17 @@ proc openCompletionWindowInEditor(status: var EditorStatus) =
     windowPosition =
       currentMainWindowNode.completionWindowPositionInEditor(currentBufStatus)
 
-  status.completionWindow = some(
-    initCompletionWindow(
-      startPosition = bufferPosition,
-      windowPosition = windowPosition,
-      list = currentBufStatus.lspCompletionList,
-      showBorder = status.settings.autocomplete.windowBorder,
-    )
+  var win = initCompletionWindow(
+    startPosition = bufferPosition,
+    windowPosition = windowPosition,
+    list = currentBufStatus.lspCompletionList,
+    showBorder = status.settings.autocomplete.windowBorder,
   )
+  if win.isErr:
+    status.commandLine.writeNcursesError(win.error)
+    return
+
+  status.completionWindow = some(win.get)
 
 template updateCompletionWindowHighlightingText(status: var EditorStatus) =
   if status.highlightingText.isSome and status.highlightingText.get.isSearch and
@@ -778,9 +787,12 @@ proc updateCompletionWindowBufferInEditor(status: var EditorStatus) =
 
   if status.completionWindow.get.list.len > 0:
     if status.completionWindow.get.popupWindow.isNone:
-      status.completionWindow.get.reopen(
+      let r = status.completionWindow.get.reopen(
         currentMainWindowNode.completionWindowPositionInEditor(currentBufStatus)
       )
+      if r.isErr:
+        status.commandLine.writeNcursesError(r.error)
+        return
     else:
       status.completionWindow.get.popupWindow.get.position = currentMainWindowNode.completionWindowPositionInEditor(
         currentBufStatus, status.completionWindow.get.inputText

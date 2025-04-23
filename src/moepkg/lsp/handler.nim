@@ -175,7 +175,9 @@ proc lspShutdown(status: var EditorStatus): Result[(), string] =
 
   return Result[(), string].ok ()
 
-proc initHoverWindow(windowNode: WindowNode, hoverContent: HoverContent): PopupWindow =
+proc initHoverWindow(
+    windowNode: WindowNode, hoverContent: HoverContent
+): Result[PopupWindow, string] =
   ## Return a popup window for textDocument/hover.
 
   const Margin = ru" "
@@ -188,15 +190,21 @@ proc initHoverWindow(windowNode: WindowNode, hoverContent: HoverContent): PopupW
   let
     absPosition = windowNode.absolutePosition
     expectPosition = Position(y: absPosition.y + 1, x: absPosition.x + 1)
-  result =
-    initPopupWindow(expectPosition, Size(h: buffer.len, w: buffer.maxLen), buffer)
+
+  var w = initPopupWindow(expectPosition, Size(h: buffer.len, w: buffer.maxLen), buffer)
+  if w.isErr:
+    return w
+
+  var popupWin = w.get
 
   let
     minPosition = Position(y: windowNode.y, x: windowNode.x)
     maxPosition =
       Position(y: windowNode.y + windowNode.h, x: windowNode.x + windowNode.w)
-  result.autoMoveAndResize(minPosition, maxPosition)
-  result.update
+  popupWin.autoMoveAndResize(minPosition, maxPosition)
+  popupWin.update
+
+  return Result[PopupWindow, string].ok popupWin
 
 proc lspHover*(status: var EditorStatus, res: JsonNode): Result[(), string] =
   ## Display the hover on a popup window until any key is pressed.
@@ -214,14 +222,17 @@ proc lspHover*(status: var EditorStatus, res: JsonNode): Result[(), string] =
     return Result[(), string].ok ()
 
   var hoverWin = initHoverWindow(currentMainWindowNode, hover.get.get.toHoverContent)
-  hoverWin.noutrefresh
+  if hoverWin.isErr:
+    return Result[(), string].err hoverWin.error
+
+  hoverWin.get.noutrefresh
 
   # Keep the cursor position on currentMainWindowNode.
   currentMainWindowNode.refresh
 
   # Wait until any key is pressed.
   discard getKeyBlocking()
-  hoverWin.close
+  hoverWin.get.close
 
   return Result[(), string].ok ()
 
@@ -489,7 +500,7 @@ proc lspInlineValue(status: var EditorStatus, res: JsonNode): Result[(), string]
 
 proc initSignatureHelpWindow(
     windowNode: WindowNode, sigInfo: SignatureInformation
-): PopupWindow =
+): Result[PopupWindow, string] =
   ## Return a popup window for textDocument/signatureHelp.
 
   const Margin = ru" "
@@ -514,15 +525,20 @@ proc initSignatureHelpWindow(
   let
     absPosition = windowNode.absolutePosition
     expectPosition = Position(y: absPosition.y + 1, x: absPosition.x + 1)
-  result =
-    initPopupWindow(expectPosition, Size(h: buffer.len, w: buffer.maxLen), buffer)
+  var w = initPopupWindow(expectPosition, Size(h: buffer.len, w: buffer.maxLen), buffer)
+  if w.isErr:
+    return w
+
+  var popupWin = w.get
 
   let
     minPosition = Position(y: windowNode.y, x: windowNode.x)
     maxPosition =
       Position(y: windowNode.y + windowNode.h, x: windowNode.x + windowNode.w)
-  result.autoMoveAndResize(minPosition, maxPosition)
-  result.update
+  popupWin.autoMoveAndResize(minPosition, maxPosition)
+  popupWin.update
+
+  return Result[PopupWindow, string].ok popupWin
 
 proc lspSignatureHelp(status: var EditorStatus, res: JsonNode): Result[(), string] =
   ## textDocument/signatureHelp
@@ -547,15 +563,17 @@ proc lspSignatureHelp(status: var EditorStatus, res: JsonNode): Result[(), strin
     return Result[(), string].err "Not found"
 
   var win = initSignatureHelpWindow(currentMainWindowNode, sig.get.get.signatures[0])
+  if win.isErr:
+    return Result[(), string].err win.error
 
   # Keep the cursor position on currentMainWindowNode and display the hover
   # window on the top.
-  win.overwrite(currentMainWindowNode.window.get)
-  win.refresh
+  win.get.overwrite(currentMainWindowNode.window.get)
+  win.get.refresh
 
   # Wait until any key is pressed.
   discard getKeyBlocking()
-  win.close
+  win.get.close
 
   return Result[(), string].ok ()
 
@@ -604,8 +622,12 @@ proc jumpToDefinition(
     currentMainWindowNode.currentColumn = l.range.first.column
   else:
     if openWin:
-      # Open a buffer in a new window.
-      status.verticalSplitWindow
+      block:
+        # Open a buffer in a new window.
+        let r = status.verticalSplitWindow
+        if r.isErr:
+          return r
+
       status.moveNextWindow
 
     let r = status.addNewBufferInCurrentWin(l.path)
@@ -737,8 +759,12 @@ proc lspReferences(status: var EditorStatus, res: JsonNode): Result[(), string] 
   elif parseResult.get.len == 0:
     return Result[(), string].err "References not found"
 
-  # Open a new window with references mode.
-  status.horizontalSplitWindow
+  block:
+    # Open a new window with references mode.
+    let r = status.horizontalSplitWindow
+    if r.isErr:
+      return r
+
   status.moveNextWindow
 
   discard status.addNewBufferInCurrentWin(Mode.references)
@@ -832,8 +858,12 @@ proc lspPrepareCallHierarchy(
 
   let langId = currentBufStatus.langId
 
-  # Open a new window with callhierarchy viewer.
-  status.verticalSplitWindow
+  block:
+    # Open a new window with callhierarchy viewer.
+    let r = status.verticalSplitWindow
+    if r.isErr:
+      return r
+
   status.moveNextWindow
 
   discard status.addNewBufferInCurrentWin(Mode.callhierarchyviewer)

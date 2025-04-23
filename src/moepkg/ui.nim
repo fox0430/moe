@@ -17,7 +17,8 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strformat, osproc, strutils, terminal, options, tables, posix, dynlib]
+import
+  std/[strformat, osproc, strutils, terminal, options, tables, posix, dynlib, logging]
 
 import pkg/[ncurses, results, chronos]
 
@@ -190,6 +191,9 @@ let
     cast[NcursesInitExtendedColor](libncurseswHandle.symAddr("init_extended_color"))
   ncursesInitExtendedPair =
     cast[NcursesInitExtendedPair](libncurseswHandle.symAddr("init_extended_pair"))
+
+template isErr(e: ErrCode): bool =
+  e == -1
 
 proc isNcursesExtendedColors*(): bool {.inline.} =
   not ncursesInitExtendedColor.isNil and not ncursesInitExtendedPair.isNil
@@ -386,8 +390,10 @@ proc startUi*() =
 
     enableBracketedPasteMode()
 
-proc exitUi*() {.inline.} =
-  endwin()
+proc exitUi*() =
+  let r = endwin()
+  if r.isErr:
+    error fmt"endwin failed"
 
 proc toNcursesColor(element: int16): int16 =
   ## Converts a color element (0 ~ 255) to a value for Ncurses (0 ~ 1000).
@@ -445,38 +451,64 @@ proc initNcursesColorPair*(pair, fg, bg: int): Result[(), string] =
 
   return Result[(), string].ok ()
 
-proc initWindow*(height, width, y, x: int, color: int16): Window =
-  result = Window()
-  result.y = y
-  result.x = x
-  result.height = height
-  result.width = width
-  result.cursesWindow = newwin(cint(height), cint(width), cint(y), cint(x))
-  result.cursesWindow.keypad(true)
-  result.cursesWindow.wbkgd(ncurses.COLOR_PAIR(color))
+proc initWindow*(height, width, y, x: int, color: int16): Result[Window, string] =
+  var cursesWin = newwin(cint(height), cint(width), cint(y), cint(x))
+  when not defined unitTest:
+    if cursesWin.isNil:
+      return Result[Window, string].err "ncurses: newwin failed"
 
-proc initWindow*(rect: Rect, color: int16): Window {.inline.} =
-  initWindow(rect.h, rect.w, rect.y, rect.x, color)
+  var win = Window()
+  win.cursesWindow = cursesWin
+  win.cursesWindow.keypad(true)
+  win.cursesWindow.wbkgd(ncurses.COLOR_PAIR(color))
+  win.y = y
+  win.x = x
+  win.height = height
+  win.width = width
 
-proc attrSet*(win: var Window, color: int16) {.inline.} =
-  win.cursesWindow.wattrSet(A_COLOR, color.cshort, nil)
+  return Result[Window, string].ok win
 
-proc attrOn*(win: var Window, attribute: Attribute) {.inline.} =
-  win.cursesWindow.wattron(cint(attribute))
+proc initWindow*(rect: Rect, color: int16): Result[Window, string] {.inline.} =
+  return initWindow(rect.h, rect.w, rect.y, rect.x, color)
 
-proc attrOn*(win: var Window, colorPair: int16) {.inline.} =
-  win.cursesWindow.wattron(colorPair.cshort)
+proc attrSet*(win: var Window, color: int16) =
+  let r = win.cursesWindow.wattrSet(A_COLOR, color.cshort, nil)
+  if r.isErr:
+    error fmt"attrSet failed: (color: {color})"
 
-proc attrOff*(win: var Window, attribute: Attribute) {.inline.} =
-  win.cursesWindow.wattroff(cint(attribute))
+proc attrOn*(win: var Window, attribute: Attribute) =
+  let r = win.cursesWindow.wattron(cint(attribute))
+  if r.isErr:
+    error fmt"wattron failed: (attribute: {attribute})"
 
-proc attrOff*(win: var Window, colorPair: int16) {.inline.} =
-  win.cursesWindow.wattroff(colorPair.cshort)
+proc attrOn*(win: var Window, colorPair: int16) =
+  let r = win.cursesWindow.wattron(colorPair.cshort)
+  if r.isErr:
+    error fmt"wattron failed: (colorPair: {colorPair})"
+
+proc attrOff*(win: var Window, attribute: Attribute) =
+  let r = win.cursesWindow.wattroff(cint(attribute))
+  if r.isErr:
+    error fmt"wattroff failed: (attribute: {attribute})"
+
+proc attrOff*(win: var Window, colorPair: int16) =
+  let r = win.cursesWindow.wattroff(colorPair.cshort)
+  if r.isErr:
+    error fmt"wattroff failed: (colorPair: {colorPair})"
 
 proc box*(win: var Window, verch, horch: int, colorPair: int16 = DefaultColorPair) =
   win.attrSet(colorPair)
-  win.cursesWindow.box(verch.chtype, horch.chtype)
+
+  let r = win.cursesWindow.box(verch.chtype, horch.chtype)
+  if r.isErr:
+    error fmt"box failed: (verch: {verch}, horch: {horch})"
+
   win.attrOff(colorPair)
+
+proc mvwaddstr(win: var Window, y, x: int, str: string) =
+  let r = win.cursesWindow.mvwaddstr(y.cint, x.cint, str)
+  if r.isErr:
+    error fmt"mvwaddstr failed: (y: {y}, x: {x}, str: {str})"
 
 proc write*(
     win: var Window,
@@ -491,7 +523,7 @@ proc write*(
     win.attrSet(color)
     win.attrOn(attribute)
 
-    win.cursesWindow.mvwaddstr(y.cint, x.cint, str)
+    win.mvwaddstr(y, x, str)
 
     win.attrOff(attribute)
     win.attrOff(color)
@@ -513,25 +545,41 @@ proc write*(
   win.write(y, x, $runes, color, attribute, storeCursorPosition)
 
 proc erase*(win: var Window) =
-  werase(win.cursesWindow)
+  let r = werase(win.cursesWindow)
+  if r.isErr:
+    error fmt"werase failed"
 
-proc refresh*(win: Window) {.inline.} =
-  wrefresh(win.cursesWindow)
+proc refresh*(win: Window) =
+  let r = wrefresh(win.cursesWindow)
+  if r.isErr:
+    error fmt"wrefresh failed"
 
-proc noutrefresh*(win: Window) {.inline.} =
-  wnoutrefresh(win.cursesWindow)
+proc noutrefresh*(win: Window) =
+  let r = wnoutrefresh(win.cursesWindow)
+  if r.isErr:
+    error fmt"wrefresh failed"
 
-proc doUpdate*() {.inline.} =
-  ncurses.doupdate()
+proc doUpdate*() =
+  let r = ncurses.doupdate()
+  if r.isErr:
+    error fmt"doupdate failed"
 
-proc overlay*(win, destWin: var Window) {.inline.} =
-  overlay(win.cursesWindow, destWin.cursesWindow)
+proc overlay*(win, destWin: var Window) =
+  let r = overlay(win.cursesWindow, destWin.cursesWindow)
+  if r.isErr:
+    error fmt"overlay failed"
 
-proc overwrite*(win, destWin: var Window) {.inline.} =
-  overwrite(win.cursesWindow, destWin.cursesWindow)
+proc overwrite*(win, destWin: var Window) =
+  let r = overwrite(win.cursesWindow, destWin.cursesWindow)
+  if r.isErr:
+    error fmt"overwrite failed"
 
 proc move*(win: Window, y, x: int) =
-  mvwin(win.cursesWindow, cint(y), cint(x))
+  let r = mvwin(win.cursesWindow, cint(y), cint(x))
+  when not defined unitTest:
+    if r.isErr:
+      error fmt"mvwin failed: (y: {y} x: {x})"
+      return
 
   win.y = y
   win.x = x
@@ -540,7 +588,11 @@ proc move*(win: Window, position: Position) {.inline.} =
   move(win, position.y, position.x)
 
 proc resize*(win: var Window, height, width: int) =
-  wresize(win.cursesWindow, cint(height), cint(width))
+  let r = wresize(win.cursesWindow, cint(height), cint(width))
+  when not defined unitTest:
+    if r.isErr:
+      error fmt"wresize failed: (height: {height} width: {width})"
+      return
 
   win.height = height
   win.width = width
@@ -558,8 +610,10 @@ proc resize*(win: var Window, position: Position, size: Size) {.inline.} =
 proc resize*(win: var Window, rect: Rect) {.inline.} =
   win.resize(rect.h, rect.w, rect.y, rect.x)
 
-proc moveCursor*(win: Window, y, x: int) {.inline.} =
-  wmove(win.cursesWindow, cint(y), cint(x))
+proc moveCursor*(win: Window, y, x: int) =
+  let r = wmove(win.cursesWindow, cint(y), cint(x))
+  if r.isErr:
+    error fmt"wmove failed: (y: {y} x: {x})"
 
 proc getCursorPosition*(win: Window): Position =
   var x, y: cint
@@ -571,10 +625,12 @@ proc getAbsCursorPosition*(win: Window): Position =
   win.cursesWindow.getyx(y, x)
   return Position(y: y.int + win.y, x: x.int + win.x)
 
-proc deleteWindow*(win: var Window) {.inline.} =
-  delwin(win.cursesWindow)
+proc deleteWindow*(win: var Window) =
+  let r = delwin(win.cursesWindow)
+  if r.isErr:
+    error fmt"delwin failed"
 
-proc toString(s: seq[int]): string {.inline.} =
+proc toString(s: seq[int]): string =
   for n in s:
     result &= n.char
 

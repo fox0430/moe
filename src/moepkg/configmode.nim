@@ -21,7 +21,8 @@ import std/[times, strutils, options, strformat, sequtils]
 import pkg/results
 import
   gapbuffer, ui, editorstatus, unicodeext, windownode, movement, settings, bufferstatus,
-  color, highlight, editor, commandline, popupwindow, rgb, theme, independentutils
+  color, highlight, editor, commandline, popupwindow, rgb, theme, independentutils,
+  messages
 
 type
   StandardTableNames {.pure.} = enum
@@ -1603,7 +1604,7 @@ proc editEnumAndBoolSettings(
     lineSplit: seq[Runes],
     selectedTable, selectedSetting: string,
     settingValues: seq[Runes],
-) =
+): Result[(), string] =
   const Margin = 1
   let
     h = min(currentMainWindowNode.h, settingValues.len)
@@ -1614,15 +1615,17 @@ proc editEnumAndBoolSettings(
     y = absoluteY
     x = absoluteX + positionOfSetVal() + NumOfIndent - Margin
 
-  var
-    popupWindow = initPopupWindow(Position(y: y, x: x), Size(h: h, w: w))
-    suggestIndex = 0
+  var popupWindow = initPopupWindow(Position(y: y, x: x), Size(h: h, w: w))
+  if popupWindow.isErr:
+    return Result[(), string].err popupWindow.error
+
+  var suggestIndex = 0
 
   while settingValues.len > 1:
-    popupWindow.currentLine = some(suggestIndex)
-    popupWindow.buffer = settingValues
+    popupWindow.get.currentLine = some(suggestIndex)
+    popupWindow.get.buffer = settingValues
 
-    popupWindow.update
+    popupWindow.get.update
 
     let key = currentMainWindowNode.getKeyBlocking
 
@@ -1681,9 +1684,11 @@ proc selectAndChangeEditorSettings(status: var EditorStatus, arrayIndex: int) =
   of SettingType.text:
     status.editTextSetting(selectedTable, selectedSetting)
   else:
-    status.editEnumAndBoolSettings(
+    let r = status.editEnumAndBoolSettings(
       lineSplit, selectedTable, selectedSetting, settingValues
     )
+    if r.isErr:
+      status.commandline.writeNcursesError(r.error)
 
 proc initStandardTableBuffer(settings: EditorSettings): seq[Runes] =
   result.add(ru"Standard")

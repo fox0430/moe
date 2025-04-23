@@ -78,17 +78,31 @@ type
     highlightingText*: Option[HighlightingText]
     lspClients*: LspClientTable
 
-proc initEditorStatus*(): EditorStatus =
-  result = EditorStatus(
+proc initEditorStatus*(): Result[EditorStatus, string] =
+  var mainWin = initMainWindow()
+  if mainWin.isErr:
+    return Result[EditorStatus, string].err mainWin.error
+
+  var cmdLine = initCommandLine()
+  if cmdLine.isErr:
+    return Result[EditorStatus, string].err cmdLine.error
+
+  var statusLine = initStatusLine()
+  if statusLine.isErr:
+    return Result[EditorStatus, string].err mainWin.error
+
+  var s = EditorStatus(
     currentDir: getCurrentDir().toRunes,
     settings: initEditorSettings(),
     lastOperatingTime: now(),
     autoBackupStatus: initAutoBackupStatus(),
-    commandLine: initCommandLine(),
-    mainWindow: initMainWindow(),
-    statusLine: @[initStatusLine()],
+    commandLine: cmdLine.get,
+    mainWindow: mainWin.get,
+    statusLine: @[statusLine.get],
     registers: initRegisters(),
   )
+
+  return Result[EditorStatus, string].ok s
 
 template currentBufStatus*(): var BufferStatus =
   mixin status
@@ -618,10 +632,12 @@ proc resize*(status: var EditorStatus) =
 
   if status.settings.tabLine.enable:
     # Resize the tabline.
-    status.tabLine.update(
+    let r = status.tabLine.update(
       status.bufStatus, status.bufferIndexInCurrentWindow,
       status.settings.tabLine.allBuffer,
     )
+    if r.isErr:
+      error fmt"resize: {r.error}"
 
   # Resize the sidebar
   if status.sidebar.isSome:
@@ -928,9 +944,11 @@ proc update*(status: var EditorStatus) =
     status.resize
 
   if settings.tabLine.enable:
-    status.tabLine.update(
+    let r = status.tabLine.update(
       status.bufStatus, status.bufferIndexInCurrentWindow, settings.tabLine.allBuffer
     )
+    if r.isErr:
+      error fmt"update: {r.error}"
 
   for i in 0 .. status.bufStatus.high:
     template b(): var BufferStatus =
@@ -1216,7 +1234,7 @@ proc movePrevWindow*(status: var EditorStatus) {.inline.} =
 
   status.moveCurrentMainWindow(currentMainWindowNode.windowIndex - 1)
 
-proc verticalSplitWindow*(status: var EditorStatus) =
+proc verticalSplitWindow*(status: var EditorStatus): Result[(), string] =
   status.updateLastCursorPosition
 
   # Create the new window
@@ -1231,7 +1249,11 @@ proc verticalSplitWindow*(status: var EditorStatus) =
       return
     status.addFilerStatus(bufStatusIndex.get)
 
-    status.statusLine.add(initStatusLine())
+    block:
+      var s = initStatusLine()
+      if s.isErr:
+        return Result[(), string].err s.error
+      status.statusLine.add s.get
 
     status.resize
 
@@ -1239,14 +1261,21 @@ proc verticalSplitWindow*(status: var EditorStatus) =
     currentMainWindowNode.bufferIndex = bufStatusIndex.get
     status.movePrevWindow
   else:
-    status.statusLine.add(initStatusLine())
+    block:
+      var s = initStatusLine()
+      if s.isErr:
+        return Result[(), string].err s.error
+      status.statusLine.add s.get
+
     status.resize
 
   var newNode =
     mainWindowNode.searchByWindowIndex(currentMainWindowNode.windowIndex + 1)
   newNode.restoreCursorPosition(currentBufStatus, status.lastPosition)
 
-proc horizontalSplitWindow*(status: var EditorStatus) =
+  return Result[(), string].ok ()
+
+proc horizontalSplitWindow*(status: var EditorStatus): Result[(), string] =
   status.updateLastCursorPosition
 
   let buffer = currentBufStatus.buffer
@@ -1260,7 +1289,11 @@ proc horizontalSplitWindow*(status: var EditorStatus) =
       return
     status.addFilerStatus(bufStatusIndex.get)
 
-    status.statusLine.add(initStatusLine())
+    block:
+      var s = initStatusLine()
+      if s.isErr:
+        return Result[(), string].err s.error
+      status.statusLine.add s.get
 
     status.resize
 
@@ -1268,12 +1301,19 @@ proc horizontalSplitWindow*(status: var EditorStatus) =
     currentMainWindowNode.bufferIndex = bufStatusIndex.get
     status.movePrevWindow
   else:
-    status.statusLine.add(initStatusLine())
+    block:
+      var s = initStatusLine()
+      if s.isErr:
+        return Result[(), string].err s.error
+      status.statusLine.add s.get
+
     status.resize
 
   var newNode =
     mainWindowNode.searchByWindowIndex(currentMainWindowNode.windowIndex + 1)
   newNode.restoreCursorPosition(currentBufStatus, status.lastPosition)
+
+  return Result[(), string].ok ()
 
 proc closeWindow*(status: var EditorStatus, node: WindowNode) =
   if isNormalMode(currentBufStatus.mode, currentBufStatus.prevMode) or

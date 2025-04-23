@@ -19,6 +19,8 @@
 
 import std/[options, sequtils, deques]
 
+import pkg/results
+
 import
   ui, unicodeext, independentutils, completion, popupwindow, bufferstatus, windownode,
   gapbuffer, worddictionary, editor, commandline
@@ -40,14 +42,20 @@ proc initCompletionWindow*(
     list: CompletionList = initCompletionList(),
     inputText: Runes = ru"",
     showBorder: bool = true,
-): CompletionWindow =
-  CompletionWindow(
+): Result[CompletionWindow, string] =
+  var win = initPopupWindow(windowPosition, size, showBorder)
+  if win.isErr:
+    return Result[CompletionWindow, string].err win.error
+
+  var c = CompletionWindow(
     startPosition: startPosition,
-    popupWindow: some(initPopupWindow(windowPosition, size, showBorder)),
+    popupWindow: some(win.get),
     list: list,
     inputText: inputText,
     selectedIndex: -1,
   )
+
+  return Result[CompletionWindow, string].ok c
 
 proc isPathCompletion*(c: CompletionWindow): bool {.inline.} =
   c.inputText.isPathCompletion
@@ -321,8 +329,14 @@ proc reopen*(
     c: var CompletionWindow,
     windowPosition: Position = Position(y: 0, x: 0),
     size: Size = Size(h: 1, w: 1),
-) =
-  c.popupWindow = some(initPopupWindow(windowPosition, size))
+): Result[(), string] =
+  var win = initPopupWindow(windowPosition, size)
+  if win.isErr:
+    return Result[(), string].err win.error
+
+  c.popupWindow = some(win.get)
+
+  return Result[(), string].ok ()
 
 proc isOpen*(c: CompletionWindow): bool {.inline.} =
   c.popupWindow.isSome

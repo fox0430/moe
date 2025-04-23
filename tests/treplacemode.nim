@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -29,7 +29,7 @@ template recordCurrentPosition() =
 
 suite "Replace mode: Replace current Character":
   test "Replace current character":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.mode = Mode.replace
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
@@ -42,7 +42,7 @@ suite "Replace mode: Replace current Character":
     check currentBufStatus.buffer[0] == ru"zbc"
 
   test "Replace current character 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.mode = Mode.replace
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
@@ -57,7 +57,7 @@ suite "Replace mode: Replace current Character":
 
 suite "Replace mode: Undo":
   test "undo":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.mode = Mode.replace
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
@@ -76,7 +76,7 @@ suite "Replace mode: Undo":
     check currentBufStatus.buffer[0] == ru"abc"
 
   test "undo 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.mode = Mode.replace
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
@@ -97,7 +97,7 @@ suite "Replace mode: Undo":
     check currentBufStatus.buffer[0] == ru"zbc"
 
   test "undo 3":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.mode = Mode.replace
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
@@ -120,7 +120,7 @@ suite "Replace mode: Undo":
 
 suite "Replace mode: New line":
   test "New line and replace character":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.mode = Mode.replace
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])

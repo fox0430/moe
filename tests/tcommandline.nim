@@ -19,6 +19,8 @@
 
 import std/[unittest, strutils, importutils, deques]
 
+import pkg/results
+
 import moepkg/[unicodeext, editorview]
 
 import moepkg/commandline {.all.}
@@ -27,7 +29,7 @@ suite "commandline: calcWindowaHeight":
   var c: CommandLine
 
   setup:
-    c = initCommandLine()
+    c = initCommandLine().get
 
   test "Empty buffer":
     c.w = 100
@@ -82,7 +84,7 @@ suite "commandline: resize":
   var c: CommandLine
 
   setup:
-    c = initCommandLine()
+    c = initCommandLine().get
 
   test "Height is 0":
     c.buffer = "".repeat(60).toRunes

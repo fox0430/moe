@@ -46,7 +46,9 @@ proc loadPersistData(status: var EditorStatus) =
 proc initCurrentMainWindowView(status: var EditorStatus) {.inline.} =
   currentMainWindowNode.view = currentBufStatus.buffer.initEditorView(1, 1)
 
-proc addBufferStatus(status: var EditorStatus, parsedList: CmdParsedList) =
+proc addBufferStatus(
+    status: var EditorStatus, parsedList: CmdParsedList
+): Result[(), string] =
   ## Open files or dirs at received paths and initialize views and windows.
   ## If paths don't exist, add an empty buffer.
 
@@ -85,8 +87,15 @@ proc addBufferStatus(status: var EditorStatus, parsedList: CmdParsedList) =
           # Split the window and set the buffer to the window and move to the
           # latest window.
           case status.settings.startUp.fileOpen.splitType
-          of WindowSplitType.vertical: status.verticalSplitWindow
-          of WindowSplitType.horizontal: status.horizontalSplitWindow
+          of WindowSplitType.vertical:
+            var r = status.verticalSplitWindow
+            if r.isErr:
+              return Result[(), string].ok r.get
+          of WindowSplitType.horizontal:
+            let r = status.horizontalSplitWindow
+            if r.isErr:
+              return Result[(), string].ok r.get
+
           status.changeCurrentBuffer(i)
           status.moveNextWindow
     else:
@@ -98,6 +107,8 @@ proc addBufferStatus(status: var EditorStatus, parsedList: CmdParsedList) =
       else:
         status.initCurrentMainWindowView
         status.changeCurrentBuffer(status.bufStatus.high)
+
+  return Result[(), string].ok ()
 
 proc initSidebar(status: var EditorStatus) =
   if status.settings.view.sidebar:
@@ -126,22 +137,25 @@ proc initEditor*(): Result[EditorStatus, string] =
   startUi()
 
   var status = initEditorStatus()
+  if status.isErr:
+    return status
 
-  status.loadConfigurationFile
-  status.timeConfFileLastReloaded = now()
+  status.get.loadConfigurationFile
+  status.get.timeConfFileLastReloaded = now()
 
-  if parsedList.isLogger or status.settings.lsp.enable:
+  if parsedList.isLogger or status.get.settings.lsp.enable:
     # Force enable logger if enabled LSP.
     initLogger()
 
   block initColors:
-    let r =
-      status.settings.theme.colors.initEditrorColor(status.settings.standard.colorMode)
+    let r = status.get.settings.theme.colors.initEditrorColor(
+      status.get.settings.standard.colorMode
+    )
     if r.isErr:
       return Result[EditorStatus, string].err r.error
 
     if not isNcursesExtendedColors():
-      status.commandLine.writeNcursesColorError
+      status.get.commandLine.writeNcursesColorError
 
   setControlCHook(
     proc() {.noconv.} =
@@ -150,16 +164,19 @@ proc initEditor*(): Result[EditorStatus, string] =
   )
 
   if parsedList.isReadonly:
-    status.isReadonly = true
+    status.get.isReadonly = true
 
-  status.addBufferStatus(parsedList)
+  block:
+    let r = status.get.addBufferStatus(parsedList)
+    if r.isErr:
+      return Result[EditorStatus, string].err r.error
 
-  status.loadPersistData
+  status.get.loadPersistData
 
-  status.initSidebar
+  status.get.initSidebar
 
-  if status.settings.clipboard.enable:
-    status.registers.setClipBoardTool(status.settings.clipboard.tool)
+  if status.get.settings.clipboard.enable:
+    status.get.registers.setClipBoardTool(status.get.settings.clipboard.tool)
 
   disableControlC()
   catchTerminalResize()
@@ -167,7 +184,7 @@ proc initEditor*(): Result[EditorStatus, string] =
   showCursor()
   setBlinkingBlockCursor()
 
-  if not currentBufStatus.isCursor:
+  if not status.get.bufStatus[status.get.bufferIndexInCurrentWindow].isCursor:
     hideCursor()
 
-  return Result[EditorStatus, string].ok status
+  return Result[EditorStatus, string].ok status.get

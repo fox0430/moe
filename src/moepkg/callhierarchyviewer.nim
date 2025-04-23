@@ -151,8 +151,13 @@ proc jumpToDestination(status: var EditorStatus) =
 
   status.resize
 
-  # Open a window for the destination.
-  status.verticalSplitWindow
+  block:
+    # Open a window for the destination.
+    let r = status.verticalSplitWindow
+    if r.isErr:
+      status.commandLine.writeNcursesError(r.error)
+      return
+
   status.moveNextWindow
 
   template canMove(): bool =

@@ -51,7 +51,7 @@ proc sourceLangToStr(lang: SourceLanguage): string =
 
 suite "Editor: getRegister":
   test "No named register":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     status.registers.setNoNamedRegister(ru"abc")
 
@@ -59,7 +59,7 @@ suite "Editor: getRegister":
     check not status.registers.getRegister.isLine
 
   test "Named register":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     const RegisterName = 'a'
     status.registers.setNamedRegister(ru"abc", RegisterName)
@@ -69,7 +69,7 @@ suite "Editor: getRegister":
     check not r.isLine
 
   test "Small delete register":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     status.registers.setDeletedRegister(ru"abc")
 
@@ -79,7 +79,7 @@ suite "Editor: getRegister":
     check not r.isLine
 
   test "Number register":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
 
     status.registers.setDeletedRegister(@["abc"].toSeqRunes)
 
@@ -90,7 +90,7 @@ suite "Editor: getRegister":
 
 suite "Editor: Auto indent":
   test "Auto indent in current Line":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"  a", ru"b"])
@@ -103,7 +103,7 @@ suite "Editor: Auto indent":
     check(status.bufStatus[0].buffer[1] == ru"  b")
 
   test "Auto indent in current Line 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"b"])
@@ -116,7 +116,7 @@ suite "Editor: Auto indent":
     check(status.bufStatus[0].buffer[1] == ru"b")
 
   test "Auto indent in current Line 3":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"a", ru"  b"])
@@ -129,7 +129,7 @@ suite "Editor: Auto indent":
     check(status.bufStatus[0].buffer[1] == ru"b")
 
   test "Auto indent in current Line 4":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru""])
@@ -140,7 +140,7 @@ suite "Editor: Auto indent":
 
 suite "Editor: Delete trailing spaces":
   test "Delete trailing spaces 1":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"d  ", ru"efg"])
@@ -166,7 +166,7 @@ suite "Editor: Delete trailing spaces":
 
 suite "Editor: Delete word":
   test "With space":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"test  "])
 
@@ -183,7 +183,7 @@ suite "Editor: Delete word":
     check status.registers.getNoNamedRegister.buffer == @[ru"test  "]
 
   test "Without space":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"test  "])
 
@@ -200,7 +200,7 @@ suite "Editor: Delete word":
     check status.registers.getNoNamedRegister.buffer == @[ru"test"]
 
   test "Fix #842":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     currentBufStatus.buffer = initGapBuffer(@[ru"block:", ru"  "])
@@ -217,7 +217,7 @@ suite "Editor: Delete word":
 
 suite "Editor: keyEnter":
   test "Delete all characters in the previous line if only whitespaces":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"block:", ru"  "])
@@ -237,7 +237,7 @@ suite "Editor: keyEnter":
     check status.bufStatus[0].buffer[3] == ru"  "
 
   test "Fix #1370":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     currentBufStatus.buffer = initGapBuffer(@[ru""])
@@ -256,7 +256,7 @@ suite "Editor: keyEnter":
     check currentMainWindowNode.currentColumn == 0
 
   test "Fix #1490":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     currentBufStatus.buffer = initGapBuffer(@[ru"import std/os", ru"       a"])
@@ -287,7 +287,7 @@ suite "Editor: keyEnter":
 
     # Generate test code
     test testTitle:
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
 
       status.bufStatus[0].buffer = initGapBuffer(@[ru"test"])
@@ -335,7 +335,7 @@ suite "Editor: keyEnter":
 
     # Generate test code
     test testTitle:
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
 
       status.bufStatus[0].buffer = initGapBuffer(@[ru"test"])
@@ -380,7 +380,7 @@ suite "Editor: keyEnter":
           "Case 3: Disable autoindent: Newline in " & langStr
 
     test testTitle:
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
 
       status.bufStatus[0].buffer = initGapBuffer(@[ru"test"])
@@ -423,7 +423,7 @@ suite "Editor: keyEnter":
           "Case 4: Disable autoindent: Newline in " & langStr
 
     test testTitle:
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
 
       status.bufStatus[0].buffer = initGapBuffer(@[ru""])
@@ -462,7 +462,7 @@ suite "Editor: keyEnter":
       testTitle = "Case 5: Disable autoindent: Newline in " & langStr
 
     test testTitle:
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
 
       status.bufStatus[0].buffer = initGapBuffer(@[ru"  test"])
@@ -500,7 +500,7 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
     let testTitle = "Case 1: if the current line is " & keyword & " in Nim"
 
     test testTitle:
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
 
       status.bufStatus[0].buffer = initGapBuffer(@[keyword.toRunes])
@@ -544,7 +544,7 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
     let testTitle = "Case 2: if the current line is " & keyword & " in Nim"
 
     test testTitle:
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
 
       const Indent = "  "
@@ -591,7 +591,7 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
     let testTitle = "Case 3: if the current line is " & keyword & " in Nim"
 
     test testTitle:
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
 
       status.bufStatus[0].buffer = initGapBuffer(@[keyword.toRunes])
@@ -631,7 +631,7 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
     let testTitle = "Case 4: When the current line ends with " & keyword & " in Nim"
 
     test testTitle:
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
 
       let buffer = @["test " & keyword].toSeqRunes
@@ -677,7 +677,7 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
     let testTitle = "Case 5: When the current line ends with " & keyword & " in Nim"
 
     test testTitle:
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
 
       let buffer = "test " & keyword
@@ -720,7 +720,7 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
     let testTitle = "Case 6: When the current line ends with " & pair & " in Nim"
 
     test testTitle:
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
 
       status.bufStatus[0].buffer = initGapBuffer(@[pair.toRunes])
@@ -758,7 +758,7 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
     let testTitle = "Case 7: When the current line ends with " & pair & " in Nim"
 
     test testTitle:
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
 
       status.bufStatus[0].buffer = initGapBuffer(@[pair.toRunes])
@@ -795,7 +795,7 @@ suite "Editor: keyEnter: Enable autoindent in Nim":
     let testTitle = "Case 8: When the current line ends with " & pair & " in Nim"
 
     test testTitle:
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
 
       let buffer = pair[0] & "a" & pair[1]
@@ -835,7 +835,7 @@ suite "Editor: keyEnter: Enable autoindent in C":
     let testTitle = "Case 1: When the current line ends with " & pair & " in C"
 
     test testTitle:
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
 
       status.bufStatus[0].buffer = initGapBuffer(@[pair.toRunes])
@@ -874,7 +874,7 @@ suite "Editor: keyEnter: Enable autoindent in C":
     let testTitle = "Case 2: When the current line ends with " & pair & " in C"
 
     test testTitle:
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
 
       status.bufStatus[0].buffer = initGapBuffer(@[pair.toRunes])
@@ -911,7 +911,7 @@ suite "Editor: keyEnter: Enable autoindent in C":
     let testTitle = "Case 3: When the current line ends with " & pair & " in C"
 
     test testTitle:
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
 
       let buffer = pair[0] & "a" & pair[1]
@@ -944,7 +944,7 @@ suite "Editor: keyEnter: Enable autoindent in C":
 
 suite "Editor: keyEnter: Enable autoindent in Yaml":
   test "Auto indent if finish th current line with ':' in Yaml":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"test:"])
@@ -962,7 +962,7 @@ suite "Editor: keyEnter: Enable autoindent in Yaml":
 
 suite "Editor: keyEnter and autoindent in Python":
   test "Auto indent if finish th current line with ':' in Python":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"if true:"])
@@ -979,7 +979,7 @@ suite "Editor: keyEnter and autoindent in Python":
     check status.bufStatus[0].buffer[1] == ru"  "
 
   test "Auto indent if finish th current line with 'and' in Python":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"if true and"])
@@ -996,7 +996,7 @@ suite "Editor: keyEnter and autoindent in Python":
     check status.bufStatus[0].buffer[1] == ru"  "
 
   test "Auto indent if finish th current line with 'or' in Python":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"if true or"])
@@ -1013,7 +1013,7 @@ suite "Editor: keyEnter and autoindent in Python":
     check currentBufStatus.buffer[1] == ru"  "
 
   test "Insert a new line in Nim (Fix #1450)":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"block:", ru"  const a = 0"])
@@ -1030,7 +1030,7 @@ suite "Editor: keyEnter and autoindent in Python":
 
 suite "Delete character before cursor":
   test "Delete one character":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"test"])
@@ -1046,7 +1046,7 @@ suite "Delete character before cursor":
     check status.bufStatus[0].buffer[0] == ru"tes"
 
   test "Delete one character 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"  test test2"])
@@ -1062,7 +1062,7 @@ suite "Delete character before cursor":
     check status.bufStatus[0].buffer[0] == ru"  testtest2"
 
   test "Delete current Line":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"test", ru""])
@@ -1079,7 +1079,7 @@ suite "Delete character before cursor":
     check status.bufStatus[0].buffer[0] == ru"test"
 
   test "Delete tab":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"  test"])
@@ -1095,7 +1095,7 @@ suite "Delete character before cursor":
     check status.bufStatus[0].buffer[0] == ru"test"
 
   test "Delete tab 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"   test"])
@@ -1111,7 +1111,7 @@ suite "Delete character before cursor":
     check status.bufStatus[0].buffer[0] == ru"  test"
 
   test "Delete tab 3":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"    test"])
@@ -1127,7 +1127,7 @@ suite "Delete character before cursor":
     check status.bufStatus[0].buffer[0] == ru"  test"
 
   test "Delete tab 4":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"  test"])
@@ -1143,7 +1143,7 @@ suite "Delete character before cursor":
     check status.bufStatus[0].buffer[0] == ru" test"
 
   test "Delete tab 5":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
 
     status.bufStatus[0].buffer = initGapBuffer(@[ru"  test"])
@@ -1160,7 +1160,7 @@ suite "Delete character before cursor":
 
 suite "Editor: Delete inside paren":
   test "delete inside double quotes":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru """abc "def" "ghi""""])
     currentMainWindowNode.currentColumn = 6
@@ -1174,7 +1174,7 @@ suite "Editor: Delete inside paren":
 
 suite "Editor: insertLinesFromRegister":
   test "Insert the empty line":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
 
@@ -1186,7 +1186,7 @@ suite "Editor: insertLinesFromRegister":
     check currentBufStatus.buffer.toSeqRunes == @[ru"abc", ru""]
 
   test "Insert lines":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
 
@@ -1199,7 +1199,7 @@ suite "Editor: insertLinesFromRegister":
 
 suite "Editor: insertRunesFromRegister":
   test "Nothing to do":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
@@ -1215,7 +1215,7 @@ suite "Editor: insertRunesFromRegister":
     check not currentBufStatus.isUpdate
 
   test "Insert words to the empty line":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru""])
 
@@ -1231,7 +1231,7 @@ suite "Editor: insertRunesFromRegister":
     check currentBufStatus.isUpdate
 
   test "Insert the word to end of the line":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
@@ -1247,7 +1247,7 @@ suite "Editor: insertRunesFromRegister":
     check currentBufStatus.isUpdate
 
   test "Insert the word to the mid of the line":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
@@ -1264,7 +1264,7 @@ suite "Editor: insertRunesFromRegister":
 
 suite "Editor: pasteAfterCursor":
   test "Nothing to do":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
@@ -1283,7 +1283,7 @@ suite "Editor: pasteAfterCursor":
     check currentMainWindowNode.currentColumn == 0
 
   test "Paste words 1":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru""])
 
@@ -1302,7 +1302,7 @@ suite "Editor: pasteAfterCursor":
     check currentMainWindowNode.currentColumn == 2
 
   test "Paste words 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc "])
     currentMainWindowNode.currentColumn = 3
@@ -1322,7 +1322,7 @@ suite "Editor: pasteAfterCursor":
     check currentMainWindowNode.currentColumn == 10
 
   test "Paste words 3":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc ghi"])
     currentMainWindowNode.currentColumn = 3
@@ -1342,7 +1342,7 @@ suite "Editor: pasteAfterCursor":
     check currentMainWindowNode.currentColumn == 7
 
   test "Paste words 4":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
     currentMainWindowNode.currentColumn = 2
@@ -1362,7 +1362,7 @@ suite "Editor: pasteAfterCursor":
     check currentMainWindowNode.currentColumn == 3
 
   test "Paste words 5":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"acd"])
 
@@ -1381,7 +1381,7 @@ suite "Editor: pasteAfterCursor":
     check currentMainWindowNode.currentColumn == 1
 
   test "Paste words 6":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru""])
 
@@ -1400,7 +1400,7 @@ suite "Editor: pasteAfterCursor":
     check currentMainWindowNode.currentColumn == 0
 
   test "Paste lines":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"line1"])
 
@@ -1419,7 +1419,7 @@ suite "Editor: pasteAfterCursor":
     check currentMainWindowNode.currentColumn == 0
 
   test "Paste lines 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"line1"])
 
@@ -1438,7 +1438,7 @@ suite "Editor: pasteAfterCursor":
     check currentMainWindowNode.currentColumn == 2
 
   test "Paste lines 3":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"line1", ru"line3"])
     currentMainWindowNode.currentLine = 0
@@ -1459,7 +1459,7 @@ suite "Editor: pasteAfterCursor":
 
 suite "Editor: pasteBeforeCursor":
   test "Nothing to do":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc"])
 
@@ -1478,7 +1478,7 @@ suite "Editor: pasteBeforeCursor":
     check currentMainWindowNode.currentColumn == 0
 
   test "Paste words 1":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru""])
 
@@ -1497,7 +1497,7 @@ suite "Editor: pasteBeforeCursor":
     check currentMainWindowNode.currentColumn == 2
 
   test "Paste words 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru" ghi"])
 
@@ -1516,7 +1516,7 @@ suite "Editor: pasteBeforeCursor":
     check currentMainWindowNode.currentColumn == 6
 
   test "Paste words 3":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"abc ghi"])
     currentMainWindowNode.currentColumn = 4
@@ -1536,7 +1536,7 @@ suite "Editor: pasteBeforeCursor":
     check currentMainWindowNode.currentColumn == 7
 
   test "Paste words 4":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"bcd"])
     currentMainWindowNode.currentColumn = 0
@@ -1556,7 +1556,7 @@ suite "Editor: pasteBeforeCursor":
     check currentMainWindowNode.currentColumn == 0
 
   test "Paste words 5":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"acd"])
     currentMainWindowNode.currentColumn = 1
@@ -1576,7 +1576,7 @@ suite "Editor: pasteBeforeCursor":
     check currentMainWindowNode.currentColumn == 1
 
   test "Paste words 6":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru""])
 
@@ -1595,7 +1595,7 @@ suite "Editor: pasteBeforeCursor":
     check currentMainWindowNode.currentColumn == 0
 
   test "Paste lines":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"line3"])
 
@@ -1614,7 +1614,7 @@ suite "Editor: pasteBeforeCursor":
     check currentMainWindowNode.currentColumn == 0
 
   test "Paste lines 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"line2"])
 
@@ -1633,7 +1633,7 @@ suite "Editor: pasteBeforeCursor":
     check currentMainWindowNode.currentColumn == 2
 
   test "Paste lines 3":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru"line1", ru"line3"])
     currentMainWindowNode.currentLine = 1
@@ -1659,7 +1659,7 @@ suite "Editor: Yank characters":
     else:
       assert clearXsel()
 
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
       currentBufStatus.buffer = initGapBuffer(@[ru ""])
 
@@ -1684,7 +1684,7 @@ suite "Editor: Yank words":
     else:
       assert clearXsel()
 
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
       currentBufStatus.buffer = initGapBuffer(@[ru "abc def"])
 
@@ -1705,7 +1705,7 @@ suite "Editor: Yank words":
 
 suite "Editor: Modify the number string under the cursor":
   test "Increment the number string":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru "1"])
 
@@ -1716,7 +1716,7 @@ suite "Editor: Modify the number string under the cursor":
     check currentBufStatus.buffer[0] == ru "2"
 
   test "Increment the number string 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru " 1 "])
     currentMainWindowNode.currentColumn = 1
@@ -1728,7 +1728,7 @@ suite "Editor: Modify the number string under the cursor":
     check currentBufStatus.buffer[0] == ru " 2 "
 
   test "Increment the number string 3":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru "9"])
 
@@ -1739,7 +1739,7 @@ suite "Editor: Modify the number string under the cursor":
     check currentBufStatus.buffer[0] == ru "10"
 
   test "Decrement the number string":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru "1"])
 
@@ -1750,7 +1750,7 @@ suite "Editor: Modify the number string under the cursor":
     check currentBufStatus.buffer[0] == ru "0"
 
   test "Decrement the number string 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru "0"])
 
@@ -1761,7 +1761,7 @@ suite "Editor: Modify the number string under the cursor":
     check currentBufStatus.buffer[0] == ru "-1"
 
   test "Decrement the number string 3":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru "10"])
 
@@ -1772,7 +1772,7 @@ suite "Editor: Modify the number string under the cursor":
     check currentBufStatus.buffer[0] == ru "9"
 
   test "Do nothing":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru "abc"])
 
@@ -1784,7 +1784,7 @@ suite "Editor: Modify the number string under the cursor":
 
 suite "Editor: Delete from the previous blank line to the current line":
   test "Delete lines":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru "abc", ru "", ru "def", ru "ghi"])
     currentMainWindowNode.currentLine = 3
@@ -1802,7 +1802,7 @@ suite "Editor: Delete from the previous blank line to the current line":
     check status.registers.getNoNamedRegister.isLine
 
   test "Delete lines 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@["abc", "", "def", "ghi"].toSeqRunes)
     currentMainWindowNode.currentLine = 3
@@ -1822,7 +1822,7 @@ suite "Editor: Delete from the previous blank line to the current line":
 
 suite "Editor: Delete from the current line to the next blank line":
   test "Delete lines":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@["abc", "def", "", "ghi"].toSeqRunes)
 
@@ -1839,7 +1839,7 @@ suite "Editor: Delete from the current line to the next blank line":
     check status.registers.getNoNamedRegister.isLine
 
   test "Delete lines 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@["abc", "def", "", "ghi"].toSeqRunes)
     currentMainWindowNode.currentColumn = 1
@@ -1859,7 +1859,7 @@ suite "Editor: Delete from the current line to the next blank line":
 
 suite "Editor: Replace characters":
   test "Replace a character":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
 
@@ -1878,7 +1878,7 @@ suite "Editor: Replace characters":
     check currentMainWindowNode.currentColumn == 0
 
   test "Replace characters":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
 
@@ -1897,7 +1897,7 @@ suite "Editor: Replace characters":
     check currentMainWindowNode.currentColumn == 2
 
   test "Replace characters 2":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
 
@@ -1916,7 +1916,7 @@ suite "Editor: Replace characters":
     check currentMainWindowNode.currentColumn == 5
 
   test "Replace characters 3":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
 
@@ -1936,7 +1936,7 @@ suite "Editor: Replace characters":
     check currentBufStatus.buffer[1] == ru "bcdef"
 
   test "Replace characters 4":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
 
@@ -1956,7 +1956,7 @@ suite "Editor: Replace characters":
     check currentBufStatus.buffer[1] == ru "def"
 
   test "Fix #1384":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
     currentMainWindowNode.currentColumn = 2
@@ -1977,7 +1977,7 @@ suite "Editor: Replace characters":
 
 suite "Editor: Toggle characters":
   test "Toggle a character":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
 
@@ -1988,7 +1988,7 @@ suite "Editor: Toggle characters":
     check currentMainWindowNode.currentColumn == 1
 
   test "Toggle characters":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru "abcdef"])
 
@@ -1999,7 +1999,7 @@ suite "Editor: Toggle characters":
     check currentMainWindowNode.currentColumn == 3
 
   test "Do nothing":
-    var status = initEditorStatus()
+    var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
     currentBufStatus.buffer = initGapBuffer(@[ru " abcde"])
 
@@ -2024,7 +2024,7 @@ suite "Editor: Open the blank line below":
           "Case 1: Disable autoindent: Open the blank line below in " & langStr
 
     test testTitle:
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
 
       status.bufStatus[0].buffer = initGapBuffer(@[ru "  test"])
@@ -2070,7 +2070,7 @@ suite "Editor: Open the blank line below":
     let testTitle = "Case 2: if the current line is " & keyword & " in Nim"
 
     test testTitle:
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
 
       status.bufStatus[0].buffer = initGapBuffer(@[keyword.toRunes])
@@ -2110,7 +2110,7 @@ suite "Editor: Open the blank line below":
     let testTitle = "Case 3: if the current line end with " & keyword & " in Nim"
 
     test testTitle:
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
 
       let buffer = "test " & keyword
@@ -2161,7 +2161,7 @@ suite "Editor: Open the blank line below":
           "Case 4: Disable autoindent: Open the blank line below in " & langStr
 
     test testTitle:
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
 
       status.bufStatus[0].buffer = initGapBuffer(@[ru ""])
@@ -2204,7 +2204,7 @@ suite "Editor: Open the blank line below":
     let testTitle = "Case 5: if the current line end with " & keyword & " in Python"
 
     test testTitle:
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
 
       let buffer = "test " & keyword
@@ -2250,7 +2250,7 @@ suite "Editor: Open the blank line abave":
           "Case 1: Disable autoindent: Open the blank line abave in " & langStr
 
     test testTitle:
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
 
       status.bufStatus[0].buffer = initGapBuffer(@[ru "test"])
@@ -2294,7 +2294,7 @@ suite "Editor: Open the blank line abave":
           "Case 2: Disable autoindent: Open the blank line abave in " & langStr
 
     test testTitle:
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
 
       status.bufStatus[0].buffer = initGapBuffer(@[ru "  test", ru ""])
@@ -2341,7 +2341,7 @@ suite "Editor: Open the blank line abave":
     let testTitle = "Case 3: if the current line is " & keyword & " in Nim"
 
     test testTitle:
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
 
       status.bufStatus[0].buffer = initGapBuffer(@[keyword, ""].toSeqRunes)
@@ -2383,7 +2383,7 @@ suite "Editor: Open the blank line abave":
     let testTitle = "Case 4: if the current line end with " & `keyword` & " in Nim"
 
     test testTitle:
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
 
       let buffer = @["test " & keyword, ""].toSeqRunes
@@ -2435,7 +2435,7 @@ suite "Editor: Open the blank line abave":
     let testTitle = "Case 5: if the current line end with " & keyword & " in Python"
 
     test testTitle:
-      var status = initEditorStatus()
+      var status = initEditorStatus().get
       discard status.addNewBufferInCurrentWin.get
 
       let buffer = @["test " & keyword, ""].toSeqRunes
@@ -2483,7 +2483,7 @@ suite "Editor: Indent":
         testTitle = "Case 1: Indenet in " & langStr
 
       test testTitle:
-        var status = initEditorStatus()
+        var status = initEditorStatus().get
         discard status.addNewBufferInCurrentWin.get
 
         status.bufStatus[0].buffer = initGapBuffer(@[ru""])
@@ -2517,7 +2517,7 @@ suite "Editor: Indent":
         testTitle = "Case 2: Indenet in " & langStr
 
       test testTitle:
-        var status = initEditorStatus()
+        var status = initEditorStatus().get
         discard status.addNewBufferInCurrentWin.get
 
         status.bufStatus[0].buffer = initGapBuffer(@[ru"  "])
@@ -2546,7 +2546,7 @@ suite "Editor: Indent":
         testTitle = "Case 3: Indenet in " & langStr
 
       test testTitle:
-        var status = initEditorStatus()
+        var status = initEditorStatus().get
         discard status.addNewBufferInCurrentWin.get
 
         status.bufStatus[0].buffer = initGapBuffer(@[ru"  test"])
@@ -2580,7 +2580,7 @@ suite "Editor: Indent":
 
       # Generate test code
       test testTitle:
-        var status = initEditorStatus()
+        var status = initEditorStatus().get
         discard status.addNewBufferInCurrentWin.get
 
         status.bufStatus[0].buffer = initGapBuffer(@[ru"  "])
@@ -2615,7 +2615,7 @@ suite "Editor: Indent":
         testTitle = "Case 5: Indenet in " & langStr
 
       test testTitle:
-        var status = initEditorStatus()
+        var status = initEditorStatus().get
         discard status.addNewBufferInCurrentWin.get
 
         status.bufStatus[0].buffer = initGapBuffer(@[ru"  ", ru"", ru"  "])
@@ -2655,7 +2655,7 @@ suite "Editor: Unindent":
 
       # Generate test code
       test testTitle:
-        var status = initEditorStatus()
+        var status = initEditorStatus().get
         discard status.addNewBufferInCurrentWin.get
 
         status.bufStatus[0].buffer = initGapBuffer(@[ru"  "])
@@ -2690,7 +2690,7 @@ suite "Editor: Unindent":
 
       # Generate test code
       test testTitle:
-        var status = initEditorStatus()
+        var status = initEditorStatus().get
         discard status.addNewBufferInCurrentWin.get
 
         status.bufStatus[0].buffer = initGapBuffer(@[ru"  "])
@@ -2725,7 +2725,7 @@ suite "Editor: Unindent":
         testTitle = "Case 3: Unindenet in " & langStr
 
       test testTitle:
-        var status = initEditorStatus()
+        var status = initEditorStatus().get
         discard status.addNewBufferInCurrentWin.get
 
         status.bufStatus[0].buffer = initGapBuffer(@[ru"  test"])
@@ -2761,7 +2761,7 @@ suite "Editor: Unindent":
 
       # Generate test code
       test testTitle:
-        var status = initEditorStatus()
+        var status = initEditorStatus().get
         discard status.addNewBufferInCurrentWin.get
 
         status.bufStatus[0].buffer = initGapBuffer(@[ru""])
@@ -2795,7 +2795,7 @@ suite "Editor: Unindent":
 
       # Generate test code
       test testTitle:
-        var status = initEditorStatus()
+        var status = initEditorStatus().get
         discard status.addNewBufferInCurrentWin.get
 
         status.bufStatus[0].buffer = initGapBuffer(@[ru"  ", ru"", ru"  "])

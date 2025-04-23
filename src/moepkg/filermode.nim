@@ -40,7 +40,12 @@ proc openNewWinAndOpenFilerOrDir(
       status.commandLine.writeFileOpenError($path)
       return
 
-    status.verticalSplitWindow
+    block:
+      let r = status.verticalSplitWindow
+      if r.isErr:
+        status.commandline.writeNcursesError(r.error)
+        return
+
     status.resize
     status.moveNextWindow
 
@@ -51,7 +56,12 @@ proc openNewWinAndOpenFilerOrDir(
       status.commandLine.writeFileOpenError($path)
       return
 
-    status.verticalSplitWindow
+    block:
+      let r = status.verticalSplitWindow
+      if r.isErr:
+        status.commandline.writeNcursesError(r.error)
+        return
+
     status.resize
     status.moveNextWindow
 
