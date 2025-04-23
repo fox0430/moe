@@ -3,5 +3,5 @@
 Added
 .....
 
-- `#2286`_ Add ncurses errors
+- `#2287`_ Add ncurses errors
 
