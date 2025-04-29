@@ -266,7 +266,8 @@ suite "lsp: initHoverWindow":
 
     var hoverWin = initHoverWindow(node, hoverContent).get
 
-    check hoverWin.buffer == @[" title ", "———————", " 1 ", " 2 "].toSeqRunes
+    check hoverWin.buffer ==
+      @[" title ", "———————", " 1 ", " 2 "].toSeqRunes
     check hoverWin.size == Size(h: 4, w: 7)
 
 suite "lsp showLspServerLog":
