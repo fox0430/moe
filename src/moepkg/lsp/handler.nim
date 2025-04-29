@@ -181,17 +181,38 @@ proc initHoverWindow(
   ## Return a popup window for textDocument/hover.
 
   const Margin = ru" "
-  var buffer: seq[Runes]
+  var
+    title: Option[seq[Runes]]
+    description: seq[Runes]
   if hoverContent.title.len > 0:
-    buffer = @[Margin & hoverContent.title & Margin, ru""]
+    title = some(@[Margin & hoverContent.title & Margin])
   for line in hoverContent.description:
-    buffer.add Margin & line & Margin
+    description.add Margin & line & Margin
+
+  let
+    width =
+      if title.isSome:
+        var
+          titleMaxLen = title.get.maxLen
+          descriptionMaxLen = description.maxLen
+        max(titleMaxLen, descriptionMaxLen)
+      else:
+        description.maxLen
+
+    buffer =
+      if title.isSome:
+        var b: seq[Runes] = title.get
+        b.add "—".repeat(width).toRunes
+        for l in description: b.add l
+        b
+      else:
+        description
 
   let
     absPosition = windowNode.absolutePosition
     expectPosition = Position(y: absPosition.y + 1, x: absPosition.x + 1)
 
-  var w = initPopupWindow(expectPosition, Size(h: buffer.len, w: buffer.maxLen), buffer)
+  var w = initPopupWindow(expectPosition, Size(h: buffer.len, w: width), buffer)
   if w.isErr:
     return w
 
