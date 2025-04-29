@@ -203,7 +203,8 @@ proc initHoverWindow(
       if title.isSome:
         var b: seq[Runes] = title.get
         b.add "—".repeat(width).toRunes
-        for l in description: b.add l
+        for l in description:
+          b.add l
         b
       else:
         description
