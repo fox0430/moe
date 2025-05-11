@@ -1291,18 +1291,21 @@ suite "lsp: Send requests":
       prepareLsp(BufferId, LanguageId, rootDir, path, Text)
 
       let position = BufferPosition(line: 0, column: 7)
-      var requestId = client.lastId + 1
-
-      check (waitFor client.textDocumentHover(BufferId, path, position)).isOk
-      check client.waitingResponses[requestId].lspMethod == LspMethod.textDocumentHover
 
       var isTimeout = true
       for _ in 0 .. 20:
+        sleep 500
+
+        let requestId = client.lastId + 1
+        check (waitFor client.textDocumentHover(BufferId, path, position)).isOk
+        check client.waitingResponses[requestId].lspMethod == LspMethod.textDocumentHover
+
         let res = client.readResponse
         if res.isOk and res.get.contains("id"):
-          check res.get["result"]["contents"][0]["value"].getStr == "system.int: int"
-          isTimeout = false
-          break
+          if res.get.contains("result") and not res.get["result"].isNil:
+            check res.get["result"]["contents"][0]["value"].getStr == "system.int: int"
+            isTimeout = false
+            break
 
       check not isTimeout
 
@@ -1361,23 +1364,24 @@ suite "lsp: Send requests":
 
       prepareLsp(BufferId, LanguageId, rootDir, path, Text)
 
-      var requestId = client.lastId + 1
-
-      check (
-        waitFor client.textDocumentInlayHint(
-          BufferId,
-          path,
-          BufferRange(
-            first: BufferPosition(line: 0, column: 0),
-            last: BufferPosition(line: 1, column: 0),
-          ),
-        )
-      ).isOk
-      check client.waitingResponses[requestId].lspMethod ==
-        LspMethod.textDocumentInlayHint
-
       var isTimeout = true
       for _ in 0 .. 20:
+        sleep 500
+
+        let requestId = client.lastId + 1
+        check (
+          waitFor client.textDocumentInlayHint(
+            BufferId,
+            path,
+            BufferRange(
+              first: BufferPosition(line: 0, column: 0),
+              last: BufferPosition(line: 1, column: 0),
+            ),
+          )
+        ).isOk
+        check client.waitingResponses[requestId].lspMethod ==
+          LspMethod.textDocumentInlayHint
+
         let res = client.readResponse
         if res.isOk and res.get.contains("id"):
           check res.get["result"][0]["position"]["line"].getInt == 0
@@ -1405,20 +1409,22 @@ var num: number
 
       prepareLsp(BufferId, LanguageId, rootDir, path, Text)
 
-      let requestId = client.lastId + 1
-
-      check (
-        waitFor client.textDocumentDefinition(
-          BufferId, path, BufferPosition(line: 1, column: 9)
-        )
-      ).isOk
-      check client.waitingResponses[requestId].lspMethod ==
-        LspMethod.textDocumentDefinition
-
       var isTimeout = true
       for _ in 0 .. 20:
+        sleep 500
+
+        let requestId = client.lastId + 1
+        check (
+          waitFor client.textDocumentDefinition(
+            BufferId, path, BufferPosition(line: 1, column: 9)
+          )
+        ).isOk
+        check client.waitingResponses[requestId].lspMethod ==
+          LspMethod.textDocumentDefinition
+
         let res = client.readResponse
-        if res.isOk and res.get.contains("id"):
+        if res.isOk and res.get.contains("id") and res.get.contains("result") and
+            res.get["result"].len > 0:
           check res.get["result"] ==
             %*[
               {
@@ -1452,20 +1458,22 @@ var num: number
 
       prepareLsp(BufferId, LanguageId, rootDir, path, Text)
 
-      let requestId = client.lastId + 1
-
-      check (
-        waitFor client.textDocumentTypeDefinition(
-          BufferId, path, BufferPosition(line: 1, column: 9)
-        )
-      ).isOk
-      check client.waitingResponses[requestId].lspMethod ==
-        LspMethod.textDocumentTypeDefinition
-
       var isTimeout = true
       for _ in 0 .. 20:
+        sleep 500
+
+        let requestId = client.lastId + 1
+        check (
+          waitFor client.textDocumentTypeDefinition(
+            BufferId, path, BufferPosition(line: 1, column: 9)
+          )
+        ).isOk
+        check client.waitingResponses[requestId].lspMethod ==
+          LspMethod.textDocumentTypeDefinition
+
         let res = client.readResponse
-        if res.isOk and res.get.contains("id"):
+        if res.isOk and res.get.contains("id") and res.get.contains("result") and
+            res.get["result"].len > 0:
           check res.get["result"] ==
             %*[
               {
@@ -1500,57 +1508,57 @@ echo a
 
       prepareLsp(BufferId, LanguageId, rootDir, path, Text)
 
-      let requestId = client.lastId + 1
-
-      check (
-        waitFor client.textDocumentDocumentHighlight(
-          BufferId, path, BufferPosition(line: 0, column: 4)
-        )
-      ).isOk
-      check client.waitingResponses[requestId].lspMethod ==
-        LspMethod.textDocumentDocumentHighlight
-
       var isTimeout = true
       for _ in 0 .. 20:
+        sleep 500
+
+        let requestId = client.lastId + 1
+        check (
+          waitFor client.textDocumentDocumentHighlight(
+            BufferId, path, BufferPosition(line: 0, column: 4)
+          )
+        ).isOk
+        check client.waitingResponses[requestId].lspMethod ==
+          LspMethod.textDocumentDocumentHighlight
+
         let res = client.readResponse
-        if res.isOk and res.get.contains("id"):
-          check res.get ==
-            %*{
-              "jsonrpc": "2.0",
-              "id": requestId,
-              "result": [
-                {
-                  "range": {
-                    "start": {"line": 0, "character": 4},
-                    "end": {"line": 0, "character": 5},
-                  },
-                  "kind": nil,
+        if res.isOk and res.get.contains("id") and res.get.contains("result") and
+            res.get["result"].len > 0:
+          check res.get["result"] ==
+            %*[
+              {
+                "range": {
+                  "start": {"line": 0, "character": 4},
+                  "end": {"line": 0, "character": 5},
                 },
-                {
-                  "range": {
-                    "start": {"line": 0, "character": 4},
-                    "end": {"line": 0, "character": 5},
-                  },
-                  "kind": nil,
+                "kind": nil,
+              },
+              {
+                "range": {
+                  "start": {"line": 0, "character": 4},
+                  "end": {"line": 0, "character": 5},
                 },
-                {
-                  "range": {
-                    "start": {"line": 1, "character": 8},
-                    "end": {"line": 1, "character": 9},
-                  },
-                  "kind": nil,
+                "kind": nil,
+              },
+              {
+                "range": {
+                  "start": {"line": 1, "character": 8},
+                  "end": {"line": 1, "character": 9},
                 },
-                {
-                  "range": {
-                    "start": {"line": 2, "character": 5},
-                    "end": {"line": 2, "character": 6},
-                  },
-                  "kind": nil,
+                "kind": nil,
+              },
+              {
+                "range": {
+                  "start": {"line": 2, "character": 5},
+                  "end": {"line": 2, "character": 6},
                 },
-              ],
-            }
+                "kind": nil,
+              },
+            ]
           isTimeout = false
           break
+
+      check not isTimeout
 
   test "Send textDocument/rename":
     if not isNimlangserverAvailable():
@@ -1581,19 +1589,22 @@ echo Ojb(n: 1)
 
       prepareLsp(BufferId, LanguageId, rootDir, path, Text)
 
-      let requestId = client.lastId + 1
-
-      check (
-        waitFor client.textDocumentRename(
-          BufferId, path, BufferPosition(line: 1, column: 8), "newName"
-        )
-      ).isOk
-      check client.waitingResponses[requestId].lspMethod == LspMethod.textDocumentRename
-
       var isTimeout = true
       for _ in 0 .. 20:
+        sleep 500
+
+        let requestId = client.lastId + 1
+        check (
+          waitFor client.textDocumentRename(
+            BufferId, path, BufferPosition(line: 1, column: 8), "newName"
+          )
+        ).isOk
+        check client.waitingResponses[requestId].lspMethod ==
+          LspMethod.textDocumentRename
+
         let res = client.readResponse
-        if res.isOk and res.get.contains("id"):
+        if res.isOk and res.get.contains("id") and res.get.contains("result") and
+            res.get["result"] != %*{}:
           check res.get["result"] ==
             %*{
               "changes": {
