@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -26,6 +26,7 @@ import
   moepkg/[
     registers, settings, editorstatus, gapbuffer, unicodeext, bufferstatus, ui,
     windownode, quickrunutils, viewhighlight, folding, editorview, independentutils,
+    jumplist,
   ]
 
 import utils
@@ -223,7 +224,7 @@ suite "Normal mode: Move to first non blank of line":
 suite "Normal mode: Move to first of previous line":
   test "Move to first of previous line":
     var status = initEditorStatus().get
-    discard status.addNewBufferInCurrentWin.get
+    assert status.addNewBufferInCurrentWin.isOk
     status.bufStatus[0].buffer = initGapBuffer(@[ru"  abc", ru"def", ru"ghi"])
     currentMainWindowNode.currentLine = 2
 
@@ -233,18 +234,33 @@ suite "Normal mode: Move to first of previous line":
     const Key = @[ru '-']
     check status.normalCommand(Key).isNone
     status.update
-    check(currentMainWindowNode.currentLine == 1)
-    check(currentMainWindowNode.currentColumn == 0)
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0
+    check currentMainWindowNode.jumpList ==
+      @[
+        JumpInfo(
+          file: currentBufStatus.path, position: BufferPosition(line: 1, column: 0)
+        )
+      ]
 
     check status.normalCommand(Key).isNone
     status.update
-    check(currentMainWindowNode.currentLine == 0)
-    check(currentMainWindowNode.currentColumn == 0)
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+    check currentMainWindowNode.jumpList ==
+      @[
+        JumpInfo(
+          file: currentBufStatus.path, position: BufferPosition(line: 1, column: 0)
+        ),
+        JumpInfo(
+          file: currentBufStatus.path, position: BufferPosition(line: 0, column: 0)
+        ),
+      ]
 
 suite "Normal mode: Move to first of next line":
   test "Move to first of next line":
     var status = initEditorStatus().get
-    discard status.addNewBufferInCurrentWin.get
+    assert status.addNewBufferInCurrentWin.isOk
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def"])
 
     status.resize(100, 100)
@@ -254,13 +270,64 @@ suite "Normal mode: Move to first of next line":
     check status.normalCommand(Key).isNone
     status.update
 
-    check(currentMainWindowNode.currentLine == 1)
-    check(currentMainWindowNode.currentColumn == 0)
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0
+    check currentMainWindowNode.jumpList ==
+      @[
+        JumpInfo(
+          file: currentBufStatus.path, position: BufferPosition(line: 1, column: 0)
+        )
+      ]
+
+suite "Normal mode: Move to previous blank line":
+  test "Basic":
+    var status = initEditorStatus().get
+    assert status.addNewBufferInCurrentWin.isOk
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"", ru"abc", ru"def"])
+    currentMainWindowNode.currentLine = 2
+
+    status.resize(100, 100)
+    status.update
+
+    const Key = @[ru '{']
+    check status.normalCommand(Key).isNone
+    status.update
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+    check currentMainWindowNode.jumpList ==
+      @[
+        JumpInfo(
+          file: currentBufStatus.path, position: BufferPosition(line: 0, column: 0)
+        )
+      ]
+
+suite "Normal mode: Move to next blank line":
+  test "Basic":
+    var status = initEditorStatus().get
+    assert status.addNewBufferInCurrentWin.isOk
+    status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def", ru""])
+
+    status.resize(100, 100)
+    status.update
+
+    const Key = @[ru '}']
+    check status.normalCommand(Key).isNone
+    status.update
+
+    check currentMainWindowNode.currentLine == 2
+    check currentMainWindowNode.currentColumn == 0
+    check currentMainWindowNode.jumpList ==
+      @[
+        JumpInfo(
+          file: currentBufStatus.path, position: BufferPosition(line: 2, column: 0)
+        )
+      ]
 
 suite "Normal mode: Move to last line":
   test "Move to last line":
     var status = initEditorStatus().get
-    discard status.addNewBufferInCurrentWin.get
+    assert status.addNewBufferInCurrentWin.isOk
     status.bufStatus[0].buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
 
     status.resize(100, 100)
@@ -270,7 +337,13 @@ suite "Normal mode: Move to last line":
     check status.normalCommand(Key).isNone
     status.update
 
-    check(currentMainWindowNode.currentLine == 2)
+    check currentMainWindowNode.currentLine == 2
+    check currentMainWindowNode.jumpList ==
+      @[
+        JumpInfo(
+          file: currentBufStatus.path, position: BufferPosition(line: 2, column: 0)
+        )
+      ]
 
 suite "Normal mode: Move to the top of the screen":
   test "Some lines":
@@ -3390,7 +3463,7 @@ suite "Normal mode: execNormalModeCommand":
     # Move to matching pair of paren.
 
     var status = initEditorStatus().get
-    discard status.addNewBufferInCurrentWin.get
+    assert status.addNewBufferInCurrentWin.isOk
 
     currentBufStatus.buffer = @["( )".toRunes].initGapBuffer
 
@@ -3404,6 +3477,12 @@ suite "Normal mode: execNormalModeCommand":
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 2
+    check currentMainWindowNode.jumpList ==
+      @[
+        JumpInfo(
+          file: currentBufStatus.path, position: BufferPosition(line: 0, column: 2)
+        )
+      ]
 
   test "'*' command":
     # Search the current words.
