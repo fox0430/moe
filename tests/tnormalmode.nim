@@ -239,7 +239,7 @@ suite "Normal mode: Move to first of previous line":
     check currentMainWindowNode.jumpList ==
       @[
         JumpInfo(
-          file: currentBufStatus.path, position: BufferPosition(line: 1, column: 0)
+          bufferId: currentBufStatus.id, position: BufferPosition(line: 1, column: 0)
         )
       ]
 
@@ -250,10 +250,10 @@ suite "Normal mode: Move to first of previous line":
     check currentMainWindowNode.jumpList ==
       @[
         JumpInfo(
-          file: currentBufStatus.path, position: BufferPosition(line: 1, column: 0)
+          bufferId: currentBufStatus.id, position: BufferPosition(line: 1, column: 0)
         ),
         JumpInfo(
-          file: currentBufStatus.path, position: BufferPosition(line: 0, column: 0)
+          bufferId: currentBufStatus.id, position: BufferPosition(line: 0, column: 0)
         ),
       ]
 
@@ -275,7 +275,7 @@ suite "Normal mode: Move to first of next line":
     check currentMainWindowNode.jumpList ==
       @[
         JumpInfo(
-          file: currentBufStatus.path, position: BufferPosition(line: 1, column: 0)
+          bufferId: currentBufStatus.id, position: BufferPosition(line: 1, column: 0)
         )
       ]
 
@@ -298,7 +298,7 @@ suite "Normal mode: Move to previous blank line":
     check currentMainWindowNode.jumpList ==
       @[
         JumpInfo(
-          file: currentBufStatus.path, position: BufferPosition(line: 0, column: 0)
+          bufferId: currentBufStatus.id, position: BufferPosition(line: 0, column: 0)
         )
       ]
 
@@ -320,7 +320,7 @@ suite "Normal mode: Move to next blank line":
     check currentMainWindowNode.jumpList ==
       @[
         JumpInfo(
-          file: currentBufStatus.path, position: BufferPosition(line: 2, column: 0)
+          bufferId: currentBufStatus.id, position: BufferPosition(line: 2, column: 0)
         )
       ]
 
@@ -341,7 +341,7 @@ suite "Normal mode: Move to last line":
     check currentMainWindowNode.jumpList ==
       @[
         JumpInfo(
-          file: currentBufStatus.path, position: BufferPosition(line: 2, column: 0)
+          bufferId: currentBufStatus.id, position: BufferPosition(line: 2, column: 0)
         )
       ]
 
@@ -3480,7 +3480,7 @@ suite "Normal mode: execNormalModeCommand":
     check currentMainWindowNode.jumpList ==
       @[
         JumpInfo(
-          file: currentBufStatus.path, position: BufferPosition(line: 0, column: 2)
+          bufferId: currentBufStatus.id, position: BufferPosition(line: 0, column: 2)
         )
       ]
 

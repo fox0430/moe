@@ -17,17 +17,17 @@
 #                                                                              #
 #[############################################################################]#
 
-import unicodeext, independentutils
+import independentutils
 
 type
   JumpInfo* = object
-    file*: Runes # File path
+    bufferId*: int # BufferStatus.id
     position*: BufferPosition
 
   JumpList* = seq[JumpInfo]
 
-proc add*(l: var JumpList, file: Runes, line, col: int) {.inline.} =
-  l.add JumpInfo(file: file, position: BufferPosition(line: line, column: col))
+proc add*(l: var JumpList, bufferId, line, col: int) {.inline.} =
+  l.add JumpInfo(bufferId: bufferId, position: BufferPosition(line: line, column: col))
 
-proc add*(l: var JumpList, file: Runes, position: BufferPosition) {.inline.} =
-  l.add JumpInfo(file: file, position: position)
+proc add*(l: var JumpList, bufferId: int, position: BufferPosition) {.inline.} =
+  l.add JumpInfo(bufferId: bufferId, position: position)

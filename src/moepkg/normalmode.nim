@@ -185,7 +185,7 @@ proc searchNextOccurrence(status: var EditorStatus, keyword: Runes) =
     currentMainWindowNode.keyLeft
 
   if beforePosi != currentMainWindowNode.bufferPosition:
-    currentMainWindowNode.recordJump(currentBufStatus.path)
+    currentMainWindowNode.recordJump(currentBufStatus.id)
 
 proc searchNextOccurrence(status: var EditorStatus) {.inline.} =
   if status.searchHistory.len > 0:
@@ -232,7 +232,7 @@ proc searchPrevOccurrence(status: var EditorStatus, keyword: Runes) =
       currentBufStatus.keyRight(currentMainWindowNode)
 
     if beforePosi != currentMainWindowNode.bufferPosition:
-      currentMainWindowNode.recordJump(currentBufStatus.path)
+      currentMainWindowNode.recordJump(currentBufStatus.id)
 
 proc searchPrevOccurrence(status: var EditorStatus) {.inline.} =
   if status.searchHistory.len > 0:
@@ -313,7 +313,7 @@ proc moveToFirstLine(status: var EditorStatus) =
   currentBufStatus.jumpLine(currentMainWindowNode, dest)
 
   if beforePosi != currentMainWindowNode.bufferPosition:
-    currentMainWindowNode.recordJump(currentBufStatus.path)
+    currentMainWindowNode.recordJump(currentBufStatus.id)
 
 proc moveToLastLine(status: var EditorStatus) =
   let beforePosi = currentMainWindowNode.bufferPosition
@@ -321,7 +321,7 @@ proc moveToLastLine(status: var EditorStatus) =
   currentBufStatus.moveToLastLine(currentMainWindowNode)
 
   if beforePosi != currentMainWindowNode.bufferPosition:
-    currentMainWindowNode.recordJump(currentBufStatus.path)
+    currentMainWindowNode.recordJump(currentBufStatus.id)
 
 proc moveToLastOfLine(status: var EditorStatus) =
   let beforePosi = currentMainWindowNode.bufferPosition
@@ -329,7 +329,7 @@ proc moveToLastOfLine(status: var EditorStatus) =
   currentBufStatus.moveToLastOfLine(currentMainWindowNode)
 
   if beforePosi != currentMainWindowNode.bufferPosition:
-    currentMainWindowNode.recordJump(currentBufStatus.path)
+    currentMainWindowNode.recordJump(currentBufStatus.id)
 
 proc moveToFirstOfPreviousLine(status: var EditorStatus) =
   let beforePosi = currentMainWindowNode.bufferPosition
@@ -337,7 +337,7 @@ proc moveToFirstOfPreviousLine(status: var EditorStatus) =
   currentBufStatus.moveToFirstOfPreviousLine(currentMainWindowNode)
 
   if beforePosi != currentMainWindowNode.bufferPosition:
-    currentMainWindowNode.recordJump(currentBufStatus.path)
+    currentMainWindowNode.recordJump(currentBufStatus.id)
 
 proc moveToFirstOfNextLine(status: var EditorStatus) =
   let beforePosi = currentMainWindowNode.bufferPosition
@@ -345,7 +345,7 @@ proc moveToFirstOfNextLine(status: var EditorStatus) =
   currentBufStatus.moveToFirstOfNextLine(currentMainWindowNode)
 
   if beforePosi != currentMainWindowNode.bufferPosition:
-    currentMainWindowNode.recordJump(currentBufStatus.path)
+    currentMainWindowNode.recordJump(currentBufStatus.id)
 
 proc moveToPreviousBlankLine(status: var EditorStatus) =
   let beforePosi = currentMainWindowNode.bufferPosition
@@ -353,7 +353,7 @@ proc moveToPreviousBlankLine(status: var EditorStatus) =
   currentBufStatus.moveToPreviousBlankLine(currentMainWindowNode)
 
   if beforePosi != currentMainWindowNode.bufferPosition:
-    currentMainWindowNode.recordJump(currentBufStatus.path)
+    currentMainWindowNode.recordJump(currentBufStatus.id)
 
 proc moveToNextBlankLine(status: var EditorStatus) =
   let beforePosi = currentMainWindowNode.bufferPosition
@@ -361,7 +361,7 @@ proc moveToNextBlankLine(status: var EditorStatus) =
   currentBufStatus.moveToNextBlankLine(currentMainWindowNode)
 
   if beforePosi != currentMainWindowNode.bufferPosition:
-    currentMainWindowNode.recordJump(currentBufStatus.path)
+    currentMainWindowNode.recordJump(currentBufStatus.id)
 
 proc moveToPairOfParen(status: var EditorStatus) =
   let beforePosi = currentMainWindowNode.bufferPosition
@@ -369,7 +369,7 @@ proc moveToPairOfParen(status: var EditorStatus) =
   currentBufStatus.moveToPairOfParen(currentMainWindowNode)
 
   if beforePosi != currentMainWindowNode.bufferPosition:
-    currentMainWindowNode.recordJump(currentBufStatus.path)
+    currentMainWindowNode.recordJump(currentBufStatus.id)
 
 template moveToForwardWord(status: var EditorStatus) =
   for i in 0 ..< currentBufStatus.cmdLoop:
@@ -1291,7 +1291,7 @@ proc moveToFirstNonBlankOfLineAndEnterInsertMode(status: var EditorStatus) =
   currentBufStatus.moveToFirstNonBlankOfLine(currentMainWindowNode)
 
   if beforePosi != currentMainWindowNode.bufferPosition:
-    currentMainWindowNode.recordJump(currentBufStatus.path)
+    currentMainWindowNode.recordJump(currentBufStatus.id)
 
   status.changeModeToInsertMode
 
@@ -1306,7 +1306,7 @@ proc moveToEndOfLineAndEnterInsertMode(status: var EditorStatus) =
   currentMainWindowNode.currentColumn = lineLen
 
   if beforePosi != currentMainWindowNode.bufferPosition:
-    currentMainWindowNode.recordJump(currentBufStatus.path)
+    currentMainWindowNode.recordJump(currentBufStatus.id)
 
   status.changeModeToInsertMode
 

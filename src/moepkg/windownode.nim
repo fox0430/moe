@@ -621,7 +621,7 @@ proc removeAllFoldingRange*(n: var WindowNode, first, last: int) {.inline.} =
 proc clearFoldingRange*(n: var WindowNode) {.inline.} =
   n.view.clearFoldingRange
 
-proc recordJump*(n: WindowNode, path: Runes) =
+proc recordJump*(n: WindowNode, bufferId: int) =
   ## Add the current position to jumpList.
 
-  n.jumpList.add(path, n.bufferPosition)
+  n.jumpList.add(bufferId, n.bufferPosition)

@@ -66,7 +66,7 @@ proc moveToLastLine(status: var EditorStatus) =
   currentBufStatus.moveToLastLine(currentMainWindowNode)
 
   if beforePosi != currentMainWindowNode.bufferPosition:
-    currentMainWindowNode.recordJump(currentBufStatus.path)
+    currentMainWindowNode.recordJump(currentBufStatus.id)
 
 proc moveToFirstLine(status: var EditorStatus) =
   let beforePosi = currentMainWindowNode.bufferPosition
@@ -74,7 +74,7 @@ proc moveToFirstLine(status: var EditorStatus) =
   currentBufStatus.moveToFirstLine(currentMainWindowNode)
 
   if beforePosi != currentMainWindowNode.bufferPosition:
-    currentMainWindowNode.recordJump(currentBufStatus.path)
+    currentMainWindowNode.recordJump(currentBufStatus.id)
 
 proc moveToPreviousBlankLine(status: var EditorStatus) =
   let beforePosi = currentMainWindowNode.bufferPosition
@@ -82,7 +82,7 @@ proc moveToPreviousBlankLine(status: var EditorStatus) =
   currentBufStatus.moveToPreviousBlankLine(currentMainWindowNode)
 
   if beforePosi != currentMainWindowNode.bufferPosition:
-    currentMainWindowNode.recordJump(currentBufStatus.path)
+    currentMainWindowNode.recordJump(currentBufStatus.id)
 
 proc moveToNextBlankLine(status: var EditorStatus) =
   let beforePosi = currentMainWindowNode.bufferPosition
@@ -90,7 +90,7 @@ proc moveToNextBlankLine(status: var EditorStatus) =
   currentBufStatus.moveToNextBlankLine(currentMainWindowNode)
 
   if beforePosi != currentMainWindowNode.bufferPosition:
-    currentMainWindowNode.recordJump(currentBufStatus.path)
+    currentMainWindowNode.recordJump(currentBufStatus.id)
 
 proc yankBuffer(
     bufStatus: var BufferStatus,
