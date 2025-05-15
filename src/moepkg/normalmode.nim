@@ -1278,12 +1278,7 @@ proc moveToFirstNonBlankOfLineAndEnterInsertMode(status: var EditorStatus) =
     status.commandLine.writeReadonlyModeWarning
     return
 
-  let beforePosi = currentMainWindowNode.bufferPosition
-
   currentBufStatus.moveToFirstNonBlankOfLine(currentMainWindowNode)
-
-  if beforePosi != currentMainWindowNode.bufferPosition:
-    currentMainWindowNode.recordJump(currentBufStatus.id)
 
   status.changeModeToInsertMode
 
@@ -1292,13 +1287,8 @@ proc moveToEndOfLineAndEnterInsertMode(status: var EditorStatus) =
     status.commandLine.writeReadonlyModeWarning
     return
 
-  let beforePosi = currentMainWindowNode.bufferPosition
-
   let lineLen = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
   currentMainWindowNode.currentColumn = lineLen
-
-  if beforePosi != currentMainWindowNode.bufferPosition:
-    currentMainWindowNode.recordJump(currentBufStatus.id)
 
   status.changeModeToInsertMode
 
