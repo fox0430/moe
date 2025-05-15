@@ -323,14 +323,6 @@ proc moveToLastLine(status: var EditorStatus) =
   if beforePosi != currentMainWindowNode.bufferPosition:
     currentMainWindowNode.recordJump(currentBufStatus.id)
 
-proc moveToLastOfLine(status: var EditorStatus) =
-  let beforePosi = currentMainWindowNode.bufferPosition
-
-  currentBufStatus.moveToLastOfLine(currentMainWindowNode)
-
-  if beforePosi != currentMainWindowNode.bufferPosition:
-    currentMainWindowNode.recordJump(currentBufStatus.id)
-
 proc moveToFirstOfPreviousLine(status: var EditorStatus) =
   let beforePosi = currentMainWindowNode.bufferPosition
 
@@ -1568,7 +1560,7 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
   elif key == ord('0') or isHomeKey(key):
     currentMainWindowNode.moveToFirstOfLine
   elif key == ord('$') or isEndKey(key):
-    status.moveToLastOfLine
+    currentBufStatus.moveToLastOfLine(currentMainWindowNode)
   elif key == ord('-'):
     status.moveToFirstOfPreviousLine
   elif key == ord('+'):
