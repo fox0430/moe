@@ -323,22 +323,6 @@ proc moveToLastLine(status: var EditorStatus) =
   if beforePosi != currentMainWindowNode.bufferPosition:
     currentMainWindowNode.recordJump(currentBufStatus.path)
 
-proc moveToFirstNonBlankOfLine(status: var EditorStatus) =
-  let beforePosi = currentMainWindowNode.bufferPosition
-
-  currentBufStatus.moveToFirstNonBlankOfLine(currentMainWindowNode)
-
-  if beforePosi != currentMainWindowNode.bufferPosition:
-    currentMainWindowNode.recordJump(currentBufStatus.path)
-
-proc moveToFirstOfLine(status: var EditorStatus) =
-  let beforePosi = currentMainWindowNode.bufferPosition
-
-  currentMainWindowNode.moveToFirstOfLine
-
-  if beforePosi != currentMainWindowNode.bufferPosition:
-    currentMainWindowNode.recordJump(currentBufStatus.path)
-
 proc moveToLastOfLine(status: var EditorStatus) =
   let beforePosi = currentMainWindowNode.bufferPosition
 
@@ -358,7 +342,7 @@ proc moveToFirstOfPreviousLine(status: var EditorStatus) =
 proc moveToFirstOfNextLine(status: var EditorStatus) =
   let beforePosi = currentMainWindowNode.bufferPosition
 
-  currentBufStatus.moveToFirstOfPreviousLine(currentMainWindowNode)
+  currentBufStatus.moveToFirstOfNextLine(currentMainWindowNode)
 
   if beforePosi != currentMainWindowNode.bufferPosition:
     currentMainWindowNode.recordJump(currentBufStatus.path)
@@ -375,14 +359,6 @@ proc moveToNextBlankLine(status: var EditorStatus) =
   let beforePosi = currentMainWindowNode.bufferPosition
 
   currentBufStatus.moveToNextBlankLine(currentMainWindowNode)
-
-  if beforePosi != currentMainWindowNode.bufferPosition:
-    currentMainWindowNode.recordJump(currentBufStatus.path)
-
-proc moveToLastNonBlankOfLine(status: var EditorStatus) =
-  let beforePosi = currentMainWindowNode.bufferPosition
-
-  currentBufStatus.moveToLastNonBlankOfLine(currentMainWindowNode)
 
   if beforePosi != currentMainWindowNode.bufferPosition:
     currentMainWindowNode.recordJump(currentBufStatus.path)
@@ -1588,7 +1564,7 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
   elif key == ord('X'):
     status.cutCharacterBeforeCursor
   elif key == ord('^') or key == ord('_'):
-    status.moveToFirstNonBlankOfLine
+    currentBufStatus.moveToFirstNonBlankOfLine(currentMainWindowNode)
   elif key == ord('0') or isHomeKey(key):
     currentMainWindowNode.moveToFirstOfLine
   elif key == ord('$') or isEndKey(key):
@@ -1606,7 +1582,7 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
     if secondKey == ord('g'):
       status.moveToFirstLine
     elif secondKey == ord('_'):
-      status.moveToLastNonBlankOfLine
+      currentBufStatus.moveToLastNonBlankOfLine(currentMainWindowNode)
     elif secondKey == ord('a'):
       status.showCurrentCharInfoCommand(currentMainWindowNode)
     elif secondKey == ord('c'):

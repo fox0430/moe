@@ -60,22 +60,6 @@ proc moveRight(windowNode: var WindowNode, bufStatus: var BufferStatus) =
 
   bufStatus.keyRight(windowNode)
 
-proc moveToFirstNonBlankOfLine(status: var EditorStatus) =
-  let beforePosi = currentMainWindowNode.bufferPosition
-
-  currentBufStatus.moveToFirstNonBlankOfLine(currentMainWindowNode)
-
-  if beforePosi != currentMainWindowNode.bufferPosition:
-    currentMainWindowNode.recordJump(currentBufStatus.path)
-
-proc moveToFirstOfLine(status: var EditorStatus) =
-  let beforePosi = currentMainWindowNode.bufferPosition
-
-  currentMainWindowNode.moveToFirstOfLine
-
-  if beforePosi != currentMainWindowNode.bufferPosition:
-    currentMainWindowNode.recordJump(currentBufStatus.path)
-
 proc moveToLastLine(status: var EditorStatus) =
   let beforePosi = currentMainWindowNode.bufferPosition
 
@@ -87,8 +71,7 @@ proc moveToLastLine(status: var EditorStatus) =
 proc moveToFirstLine(status: var EditorStatus) =
   let beforePosi = currentMainWindowNode.bufferPosition
 
-  let dest = currentBufStatus.cmdLoop - 1
-  currentBufStatus.jumpLine(currentMainWindowNode, dest)
+  currentBufStatus.moveToFirstLine(currentMainWindowNode)
 
   if beforePosi != currentMainWindowNode.bufferPosition:
     currentMainWindowNode.recordJump(currentBufStatus.path)
@@ -782,9 +765,9 @@ proc execVisualModeCommand*(status: var EditorStatus, command: Runes) =
   elif key == ord('j') or isDownKey(key) or isEnterKey(key):
     currentBufStatus.keyDown(currentMainWindowNode)
   elif key == ord('^'):
-    status.moveToFirstNonBlankOfLine
+    currentBufStatus.moveToFirstNonBlankOfLine(currentMainWindowNode)
   elif key == ord('0') or isHomeKey(key):
-    status.moveToFirstOfLine
+    currentMainWindowNode.moveToFirstOfLine
   elif key == ord('$') or isEndKey(key):
     currentBufStatus.moveToLastOfLine(currentMainWindowNode)
   elif key == ord('w'):
