@@ -23,7 +23,7 @@ import pkg/results
 
 import
   ui, editorview, gapbuffer, color, cursor, highlight, unicodeext, independentutils,
-  settings, undoredostack, folding
+  settings, undoredostack, folding, jumplist
 
 type
   SplitType* = enum
@@ -38,6 +38,7 @@ type
     splitType*: SplitType
     view*: EditorView
     cursor*: CursorPosition
+    jumpList*: JumpList
     currentLine*, currentColumn*, expandedColumn*: int
     bufferIndex*: int
     windowIndex*: int
@@ -619,3 +620,8 @@ proc removeAllFoldingRange*(n: var WindowNode, first, last: int) {.inline.} =
 
 proc clearFoldingRange*(n: var WindowNode) {.inline.} =
   n.view.clearFoldingRange
+
+proc recordJump*(n: WindowNode, path: Runes) =
+  ## Add the current position to jumpList.
+
+  n.jumpList.add(path, n.bufferPosition)

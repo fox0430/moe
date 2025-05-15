@@ -135,6 +135,8 @@ proc searchNextOccurrence(status: var EditorStatus, keyword: Runes) =
   if keyword.len == 0:
     return
 
+  let beforePosi = currentMainWindowNode.bufferPosition
+
   status.highlightingText =
     HighlightingText(
       kind: HighlightingTextKind.search,
@@ -182,6 +184,9 @@ proc searchNextOccurrence(status: var EditorStatus, keyword: Runes) =
   else:
     currentMainWindowNode.keyLeft
 
+  if beforePosi != currentMainWindowNode.bufferPosition:
+    currentMainWindowNode.recordJump(currentBufStatus.path)
+
 proc searchNextOccurrence(status: var EditorStatus) {.inline.} =
   if status.searchHistory.len > 0:
     status.searchNextOccurrence(status.searchHistory[^1])
@@ -220,9 +225,14 @@ proc searchPrevOccurrence(status: var EditorStatus, keyword: Runes) =
         status.settings.standard.ignorecase, status.settings.standard.smartcase,
       )
   if searchResult.isSome:
+    let beforePosi = currentMainWindowNode.bufferPosition
+
     currentBufStatus.jumpLine(currentMainWindowNode, searchResult.get.line)
     for column in 0 ..< searchResult.get.column:
       currentBufStatus.keyRight(currentMainWindowNode)
+
+    if beforePosi != currentMainWindowNode.bufferPosition:
+      currentMainWindowNode.recordJump(currentBufStatus.path)
 
 proc searchPrevOccurrence(status: var EditorStatus) {.inline.} =
   if status.searchHistory.len > 0:
@@ -297,8 +307,93 @@ proc halfPageDownCommand(status: var EditorStatus): Option[Rune] =
       status.halfPageDown
 
 proc moveToFirstLine(status: var EditorStatus) =
+  let beforePosi = currentMainWindowNode.bufferPosition
+
   let dest = currentBufStatus.cmdLoop - 1
   currentBufStatus.jumpLine(currentMainWindowNode, dest)
+
+  if beforePosi != currentMainWindowNode.bufferPosition:
+    currentMainWindowNode.recordJump(currentBufStatus.path)
+
+proc moveToLastLine(status: var EditorStatus) =
+  let beforePosi = currentMainWindowNode.bufferPosition
+
+  currentBufStatus.moveToLastLine(currentMainWindowNode)
+
+  if beforePosi != currentMainWindowNode.bufferPosition:
+    currentMainWindowNode.recordJump(currentBufStatus.path)
+
+proc moveToFirstNonBlankOfLine(status: var EditorStatus) =
+  let beforePosi = currentMainWindowNode.bufferPosition
+
+  currentBufStatus.moveToFirstNonBlankOfLine(currentMainWindowNode)
+
+  if beforePosi != currentMainWindowNode.bufferPosition:
+    currentMainWindowNode.recordJump(currentBufStatus.path)
+
+proc moveToFirstOfLine(status: var EditorStatus) =
+  let beforePosi = currentMainWindowNode.bufferPosition
+
+  currentMainWindowNode.moveToFirstOfLine
+
+  if beforePosi != currentMainWindowNode.bufferPosition:
+    currentMainWindowNode.recordJump(currentBufStatus.path)
+
+proc moveToLastOfLine(status: var EditorStatus) =
+  let beforePosi = currentMainWindowNode.bufferPosition
+
+  currentBufStatus.moveToLastOfLine(currentMainWindowNode)
+
+  if beforePosi != currentMainWindowNode.bufferPosition:
+    currentMainWindowNode.recordJump(currentBufStatus.path)
+
+proc moveToFirstOfPreviousLine(status: var EditorStatus) =
+  let beforePosi = currentMainWindowNode.bufferPosition
+
+  currentBufStatus.moveToFirstOfPreviousLine(currentMainWindowNode)
+
+  if beforePosi != currentMainWindowNode.bufferPosition:
+    currentMainWindowNode.recordJump(currentBufStatus.path)
+
+proc moveToFirstOfNextLine(status: var EditorStatus) =
+  let beforePosi = currentMainWindowNode.bufferPosition
+
+  currentBufStatus.moveToFirstOfPreviousLine(currentMainWindowNode)
+
+  if beforePosi != currentMainWindowNode.bufferPosition:
+    currentMainWindowNode.recordJump(currentBufStatus.path)
+
+proc moveToPreviousBlankLine(status: var EditorStatus) =
+  let beforePosi = currentMainWindowNode.bufferPosition
+
+  currentBufStatus.moveToPreviousBlankLine(currentMainWindowNode)
+
+  if beforePosi != currentMainWindowNode.bufferPosition:
+    currentMainWindowNode.recordJump(currentBufStatus.path)
+
+proc moveToNextBlankLine(status: var EditorStatus) =
+  let beforePosi = currentMainWindowNode.bufferPosition
+
+  currentBufStatus.moveToNextBlankLine(currentMainWindowNode)
+
+  if beforePosi != currentMainWindowNode.bufferPosition:
+    currentMainWindowNode.recordJump(currentBufStatus.path)
+
+proc moveToLastNonBlankOfLine(status: var EditorStatus) =
+  let beforePosi = currentMainWindowNode.bufferPosition
+
+  currentBufStatus.moveToLastNonBlankOfLine(currentMainWindowNode)
+
+  if beforePosi != currentMainWindowNode.bufferPosition:
+    currentMainWindowNode.recordJump(currentBufStatus.path)
+
+proc moveToPairOfParen(status: var EditorStatus) =
+  let beforePosi = currentMainWindowNode.bufferPosition
+
+  currentBufStatus.moveToPairOfParen(currentMainWindowNode)
+
+  if beforePosi != currentMainWindowNode.bufferPosition:
+    currentMainWindowNode.recordJump(currentBufStatus.path)
 
 template moveToForwardWord(status: var EditorStatus) =
   for i in 0 ..< currentBufStatus.cmdLoop:
@@ -1215,7 +1310,12 @@ proc moveToFirstNonBlankOfLineAndEnterInsertMode(status: var EditorStatus) =
     status.commandLine.writeReadonlyModeWarning
     return
 
+  let beforePosi = currentMainWindowNode.bufferPosition
+
   currentBufStatus.moveToFirstNonBlankOfLine(currentMainWindowNode)
+
+  if beforePosi != currentMainWindowNode.bufferPosition:
+    currentMainWindowNode.recordJump(currentBufStatus.path)
 
   status.changeModeToInsertMode
 
@@ -1224,8 +1324,14 @@ proc moveToEndOfLineAndEnterInsertMode(status: var EditorStatus) =
     status.commandLine.writeReadonlyModeWarning
     return
 
+  let beforePosi = currentMainWindowNode.bufferPosition
+
   let lineLen = currentBufStatus.buffer[currentMainWindowNode.currentLine].len
   currentMainWindowNode.currentColumn = lineLen
+
+  if beforePosi != currentMainWindowNode.bufferPosition:
+    currentMainWindowNode.recordJump(currentBufStatus.path)
+
   status.changeModeToInsertMode
 
 proc closeCurrentWindow(status: var EditorStatus) =
@@ -1482,25 +1588,25 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
   elif key == ord('X'):
     status.cutCharacterBeforeCursor
   elif key == ord('^') or key == ord('_'):
-    currentBufStatus.moveToFirstNonBlankOfLine(currentMainWindowNode)
+    status.moveToFirstNonBlankOfLine
   elif key == ord('0') or isHomeKey(key):
     currentMainWindowNode.moveToFirstOfLine
   elif key == ord('$') or isEndKey(key):
-    currentBufStatus.moveToLastOfLine(currentMainWindowNode)
+    status.moveToLastOfLine
   elif key == ord('-'):
-    currentBufStatus.moveToFirstOfPreviousLine(currentMainWindowNode)
+    status.moveToFirstOfPreviousLine
   elif key == ord('+'):
-    currentBufStatus.moveToFirstOfNextLine(currentMainWindowNode)
+    status.moveToFirstOfNextLine
   elif key == ord('{'):
-    currentBufStatus.moveToPreviousBlankLine(currentMainWindowNode)
+    status.moveToPreviousBlankLine
   elif key == ord('}'):
-    currentBufStatus.moveToNextBlankLine(currentMainWindowNode)
+    status.moveToNextBlankLine
   elif key == ord('g'):
     let secondKey = commands[1]
     if secondKey == ord('g'):
       status.moveToFirstLine
     elif secondKey == ord('_'):
-      currentBufStatus.moveToLastNonBlankOfLine(currentMainWindowNode)
+      status.moveToLastNonBlankOfLine
     elif secondKey == ord('a'):
       status.showCurrentCharInfoCommand(currentMainWindowNode)
     elif secondKey == ord('c'):
@@ -1518,8 +1624,9 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
     elif secondKey == ord('l'):
       status.requestDocumentLink
   elif key == ord('G'):
-    currentBufStatus.moveToLastLine(currentMainWindowNode)
+    status.moveToLastLine
   elif isCtrlO(key):
+    # TODO: Change behavior
     status.jumpBackFromGotoDefinitionSource
   elif isCtrlU(key):
     return status.halfPageUpCommand
@@ -1554,7 +1661,7 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
   elif key == ord('L'):
     currentBufStatus.moveToBottomOfScreen(currentMainWindowNode)
   elif key == ord('%'):
-    currentBufStatus.moveToPairOfParen(currentMainWindowNode)
+    status.moveToPairOfParen
   elif key == ord('o'):
     status.openBlankLineBelowAndEnterInsertMode
   elif key == ord('O'):

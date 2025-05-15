@@ -60,6 +60,55 @@ proc moveRight(windowNode: var WindowNode, bufStatus: var BufferStatus) =
 
   bufStatus.keyRight(windowNode)
 
+proc moveToFirstNonBlankOfLine(status: var EditorStatus) =
+  let beforePosi = currentMainWindowNode.bufferPosition
+
+  currentBufStatus.moveToFirstNonBlankOfLine(currentMainWindowNode)
+
+  if beforePosi != currentMainWindowNode.bufferPosition:
+    currentMainWindowNode.recordJump(currentBufStatus.path)
+
+proc moveToFirstOfLine(status: var EditorStatus) =
+  let beforePosi = currentMainWindowNode.bufferPosition
+
+  currentMainWindowNode.moveToFirstOfLine
+
+  if beforePosi != currentMainWindowNode.bufferPosition:
+    currentMainWindowNode.recordJump(currentBufStatus.path)
+
+proc moveToLastLine(status: var EditorStatus) =
+  let beforePosi = currentMainWindowNode.bufferPosition
+
+  currentBufStatus.moveToLastLine(currentMainWindowNode)
+
+  if beforePosi != currentMainWindowNode.bufferPosition:
+    currentMainWindowNode.recordJump(currentBufStatus.path)
+
+proc moveToFirstLine(status: var EditorStatus) =
+  let beforePosi = currentMainWindowNode.bufferPosition
+
+  let dest = currentBufStatus.cmdLoop - 1
+  currentBufStatus.jumpLine(currentMainWindowNode, dest)
+
+  if beforePosi != currentMainWindowNode.bufferPosition:
+    currentMainWindowNode.recordJump(currentBufStatus.path)
+
+proc moveToPreviousBlankLine(status: var EditorStatus) =
+  let beforePosi = currentMainWindowNode.bufferPosition
+
+  currentBufStatus.moveToPreviousBlankLine(currentMainWindowNode)
+
+  if beforePosi != currentMainWindowNode.bufferPosition:
+    currentMainWindowNode.recordJump(currentBufStatus.path)
+
+proc moveToNextBlankLine(status: var EditorStatus) =
+  let beforePosi = currentMainWindowNode.bufferPosition
+
+  currentBufStatus.moveToNextBlankLine(currentMainWindowNode)
+
+  if beforePosi != currentMainWindowNode.bufferPosition:
+    currentMainWindowNode.recordJump(currentBufStatus.path)
+
 proc yankBuffer(
     bufStatus: var BufferStatus,
     registers: var Registers,
@@ -733,9 +782,9 @@ proc execVisualModeCommand*(status: var EditorStatus, command: Runes) =
   elif key == ord('j') or isDownKey(key) or isEnterKey(key):
     currentBufStatus.keyDown(currentMainWindowNode)
   elif key == ord('^'):
-    currentBufStatus.moveToFirstNonBlankOfLine(currentMainWindowNode)
+    status.moveToFirstNonBlankOfLine
   elif key == ord('0') or isHomeKey(key):
-    currentMainWindowNode.moveToFirstOfLine
+    status.moveToFirstOfLine
   elif key == ord('$') or isEndKey(key):
     currentBufStatus.moveToLastOfLine(currentMainWindowNode)
   elif key == ord('w'):
@@ -745,14 +794,14 @@ proc execVisualModeCommand*(status: var EditorStatus, command: Runes) =
   elif key == ord('e'):
     currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
   elif key == ord('G'):
-    currentBufStatus.moveToLastLine(currentMainWindowNode)
+    status.moveToLastLine
   elif key == ord('g') and command.len == 2:
     if command[1] == ord('g'):
-      currentBufStatus.moveToFirstLine(currentMainWindowNode)
+      status.moveToFirstLine
   elif key == ord('{'):
-    currentBufStatus.moveToPreviousBlankLine(currentMainWindowNode)
+    status.moveToPreviousBlankLine
   elif key == ord('}'):
-    currentBufStatus.moveToNextBlankLine(currentMainWindowNode)
+    status.moveToNextBlankLine
   elif isCtrlS(key):
     status.selectionRange
   else:
