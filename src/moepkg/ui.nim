@@ -505,7 +505,7 @@ proc box*(win: var Window, verch, horch: int, colorPair: int16 = DefaultColorPai
 
   win.attrOff(colorPair)
 
-proc mvwaddstr(win: var Window, y, x: int, str: string) =
+proc mvwaddstr*(win: var Window, y, x: int, str: string) =
   let r = win.cursesWindow.mvwaddstr(y.cint, x.cint, str)
   if r.isErr:
     error fmt"mvwaddstr failed: (y: {y}, x: {x}, str: {str})"
@@ -580,8 +580,8 @@ proc overwrite*(win, destWin: var Window) =
     error fmt"overwrite failed"
 
 proc move*(win: Window, y, x: int) =
-  let r = mvwin(win.cursesWindow, cint(y), cint(x))
   when not defined unitTest:
+    let r = mvwin(win.cursesWindow, cint(y), cint(x))
     if r.isErr:
       error fmt"mvwin failed: (y: {y} x: {x})"
       return
@@ -593,8 +593,8 @@ proc move*(win: Window, position: Position) {.inline.} =
   move(win, position.y, position.x)
 
 proc resize*(win: var Window, height, width: int) =
-  let r = wresize(win.cursesWindow, cint(height), cint(width))
   when not defined unitTest:
+    let r = wresize(win.cursesWindow, cint(height), cint(width))
     if r.isErr:
       error fmt"wresize failed: (height: {height} width: {width})"
       return
