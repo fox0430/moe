@@ -17,17 +17,36 @@
 #                                                                              #
 #[############################################################################]#
 
-import independentutils
+import std/options
+
+import independentutils, unicodeext
 
 type
   JumpInfo* = object
     bufferId*: int # BufferStatus.id
+    path*: Runes # File path
     position*: BufferPosition
 
-  JumpList* = seq[JumpInfo]
+  JumpList* = ref object
+    currentPosition*: int # The current position of the jump history
+    history*: seq[JumpInfo]
 
-proc add*(l: var JumpList, bufferId, line, col: int) {.inline.} =
-  l.add JumpInfo(bufferId: bufferId, position: BufferPosition(line: line, column: col))
+proc initJumpList*(): JumpList {.inline.} =
+  return JumpList(currentPosition: -1, history: @[])
 
-proc add*(l: var JumpList, bufferId: int, position: BufferPosition) {.inline.} =
-  l.add JumpInfo(bufferId: bufferId, position: position)
+proc add*(l: var JumpList, bufferId: int, path: Runes, line, col: int) {.inline.} =
+  l.history.add JumpInfo(
+    bufferId: bufferId, path: path, position: BufferPosition(line: line, column: col)
+  )
+  l.currentPosition.inc
+
+proc add*(
+    l: var JumpList, bufferId: int, path: Runes, position: BufferPosition
+) {.inline.} =
+  l.history.add JumpInfo(bufferId: bufferId, path: path, position: position)
+  l.currentPosition.inc
+
+proc getCurrentHistoryPosition*(l: JumpList): Option[JumpInfo] =
+  if l.history.len > 0 and l.currentPosition > -1:
+    result = some(l.history[l.currentPosition])
+    l.currentPosition.dec

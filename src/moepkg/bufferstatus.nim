@@ -102,8 +102,6 @@ type
     codeLenses*: seq[CodeLens] # Lsp CodeLens
     selectionRanges*: seq[SelectionRange] # Lsp SelectionRange
     documentSymbols*: seq[DocumentSymbol] # Lsp DocumentSybol
-    gotoDefinitionSource: Option[BufferLocation]
-      # The position before LSP Goto definition
 
 var countAddedBuffer = 0 # Increment after new BufferStatus is created.
 
@@ -326,7 +324,7 @@ proc initId(b: var BufferStatus) {.inline.} =
   b.id = countAddedBuffer
   countAddedBuffer.inc
 
-proc initBufferStatus*(path: string, mode: Mode): Result[BufferStatus, string] =
+proc initBufferStatus*(path: string | Runes, mode: Mode): Result[BufferStatus, string] =
   ## Open file or dir and return a new BufferStatus.
 
   var b = BufferStatus(
@@ -341,7 +339,7 @@ proc initBufferStatus*(path: string, mode: Mode): Result[BufferStatus, string] =
 
   case mode
   of Mode.filer:
-    if isAccessibleDir(path):
+    if isAccessibleDir($path):
       b.path = absolutePath(path).toRunes
       b.buffer = initGapBuffer(@[ru""])
     else:
@@ -355,7 +353,7 @@ proc initBufferStatus*(path: string, mode: Mode): Result[BufferStatus, string] =
   else:
     b.path = path.toRunes
 
-    b.fileType = getFileType(path)
+    b.fileType = getFileType($path)
     b.extension = getFileExtension(b.path)
 
     if not fileExists($b.path):
@@ -368,7 +366,7 @@ proc initBufferStatus*(path: string, mode: Mode): Result[BufferStatus, string] =
       b.buffer = textAndEncoding.get.text.toGapBuffer
       b.characterEncoding = textAndEncoding.get.encoding
 
-      b.isTrackingByGit = isTrackingByGit(path)
+      b.isTrackingByGit = isTrackingByGit($path)
 
     b.language = detectLanguage($b.path)
 
@@ -405,7 +403,7 @@ proc initBufferStatus*(mode: Mode = Mode.normal): Result[BufferStatus, string] =
 
   return Result[BufferStatus, string].ok b
 
-proc initBufferStatus*(path: string): Result[BufferStatus, string] {.inline.} =
+proc initBufferStatus*(path: string | Runes): Result[BufferStatus, string] {.inline.} =
   initBufferStatus(path, Mode.normal)
 
 proc changeMode*(bufStatus: var BufferStatus, mode: Mode) =
@@ -443,17 +441,12 @@ proc updateSyntaxCheckerResults*(
 
   return Result[(), string].ok ()
 
-proc setGotoDefinitionSource*(b: BufferStatus, l: BufferLocation) {.inline.} =
-  b.gotoDefinitionSource = some(l)
-
-proc getGotoDefinitionSource*(
-    b: BufferStatus, clear: bool = true
-): Option[BufferLocation] =
-  if b.gotoDefinitionSource.isSome:
-    let l = b.gotoDefinitionSource
-    if clear:
-      b.gotoDefinitionSource = none(BufferLocation)
-    return l
-
 proc clearDocumentHighlightInfo*(b: BufferStatus) {.inline.} =
   b.documentHighlightInfo = DocumentHighlightInfo()
+
+proc getBufferStatusByBufferId*(
+    bufStatuses: seq[BufferStatus], id: int
+): Option[BufferStatus] =
+  for b in bufStatuses:
+    if b.id == id:
+      return some(b)

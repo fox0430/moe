@@ -236,7 +236,7 @@ suite "Normal mode: Move to first of previous line":
     status.update
     check currentMainWindowNode.currentLine == 1
     check currentMainWindowNode.currentColumn == 0
-    check currentMainWindowNode.jumpList ==
+    check currentMainWindowNode.jumpList.history ==
       @[
         JumpInfo(
           bufferId: currentBufStatus.id, position: BufferPosition(line: 1, column: 0)
@@ -247,7 +247,7 @@ suite "Normal mode: Move to first of previous line":
     status.update
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
-    check currentMainWindowNode.jumpList ==
+    check currentMainWindowNode.jumpList.history ==
       @[
         JumpInfo(
           bufferId: currentBufStatus.id, position: BufferPosition(line: 1, column: 0)
@@ -272,7 +272,7 @@ suite "Normal mode: Move to first of next line":
 
     check currentMainWindowNode.currentLine == 1
     check currentMainWindowNode.currentColumn == 0
-    check currentMainWindowNode.jumpList ==
+    check currentMainWindowNode.jumpList.history ==
       @[
         JumpInfo(
           bufferId: currentBufStatus.id, position: BufferPosition(line: 1, column: 0)
@@ -295,7 +295,7 @@ suite "Normal mode: Move to previous blank line":
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
-    check currentMainWindowNode.jumpList ==
+    check currentMainWindowNode.jumpList.history ==
       @[
         JumpInfo(
           bufferId: currentBufStatus.id, position: BufferPosition(line: 0, column: 0)
@@ -317,7 +317,7 @@ suite "Normal mode: Move to next blank line":
 
     check currentMainWindowNode.currentLine == 2
     check currentMainWindowNode.currentColumn == 0
-    check currentMainWindowNode.jumpList ==
+    check currentMainWindowNode.jumpList.history ==
       @[
         JumpInfo(
           bufferId: currentBufStatus.id, position: BufferPosition(line: 2, column: 0)
@@ -338,7 +338,7 @@ suite "Normal mode: Move to last line":
     status.update
 
     check currentMainWindowNode.currentLine == 2
-    check currentMainWindowNode.jumpList ==
+    check currentMainWindowNode.jumpList.history ==
       @[
         JumpInfo(
           bufferId: currentBufStatus.id, position: BufferPosition(line: 2, column: 0)
@@ -3477,7 +3477,7 @@ suite "Normal mode: execNormalModeCommand":
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 2
-    check currentMainWindowNode.jumpList ==
+    check currentMainWindowNode.jumpList.history ==
       @[
         JumpInfo(
           bufferId: currentBufStatus.id, position: BufferPosition(line: 0, column: 2)
@@ -4479,7 +4479,7 @@ suite "Normal mode: requestGotoDefinition":
 
     status.update
 
-suite "Normal mode: jumpBackFromGotoDefinitionSource":
+suite "Normal mode: jumpBack":
   const TestFileBuffer = "123\n123"
 
   var status: EditorStatus
@@ -4509,12 +4509,11 @@ suite "Normal mode: jumpBackFromGotoDefinitionSource":
     status.resize(100, 100)
     status.update
 
-    status.jumpBackFromGotoDefinitionSource
+    status.jumpBack
 
     status.update
 
     check currentBufStatus.path == testFilePath2.toRunes
-    check currentBufStatus.getGotoDefinitionSource.isNone
 
     check currentMainWindowNode.bufferPosition == BufferPosition(line: 0, column: 0)
 
@@ -4525,23 +4524,24 @@ suite "Normal mode: jumpBackFromGotoDefinitionSource":
     status.resize(100, 100)
     status.update
 
-    let l = BufferLocation(
-      path: testFilePath1,
-      range: BufferRange(
-        first: BufferPosition(line: 0, column: 1),
-        last: BufferPosition(line: 0, column: 1),
-      ),
+    currentMainWindowNode.jumpList = JumpList(
+      currentPosition: 0,
+      history:
+        @[
+          JumpInfo(
+            bufferId: status.bufStatus[0].id,
+            path: status.bufStatus[0].path,
+            position: BufferPosition(line: 0, column: 1),
+          )
+        ],
     )
 
-    currentBufStatus.setGotoDefinitionSource(l)
-
-    status.jumpBackFromGotoDefinitionSource
+    status.jumpBack
 
     status.update
 
     check currentBufStatus.path == testFilePath1.toRunes
     check currentBufStatus.buffer.toRunes == TestFileBuffer.toRunes
-    check currentBufStatus.getGotoDefinitionSource.isNone
 
     check currentMainWindowNode.bufferPosition == BufferPosition(line: 0, column: 1)
 
@@ -4551,22 +4551,23 @@ suite "Normal mode: jumpBackFromGotoDefinitionSource":
     status.resize(100, 100)
     status.update
 
-    let l = BufferLocation(
-      path: testFilePath1,
-      range: BufferRange(
-        first: BufferPosition(line: 0, column: 1),
-        last: BufferPosition(line: 0, column: 1),
-      ),
+    currentMainWindowNode.jumpList = JumpList(
+      currentPosition: 0,
+      history:
+        @[
+          JumpInfo(
+            bufferId: 100,
+            path: testFilePath1.toRunes,
+            position: BufferPosition(line: 0, column: 1),
+          )
+        ],
     )
 
-    currentBufStatus.setGotoDefinitionSource(l)
-
-    status.jumpBackFromGotoDefinitionSource
+    status.jumpBack
 
     status.update
 
     check currentBufStatus.path == testFilePath1.toRunes
     check currentBufStatus.buffer.toRunes == TestFileBuffer.toRunes
-    check currentBufStatus.getGotoDefinitionSource.isNone
 
     check currentMainWindowNode.bufferPosition == BufferPosition(line: 0, column: 1)

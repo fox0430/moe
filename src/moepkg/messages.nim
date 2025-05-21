@@ -343,6 +343,9 @@ proc writePasteIgnoreWarn*(commandLine: CommandLine) {.inline.} =
 proc writeNcursesError*(commandLine: CommandLine, message: string) =
   commandLine.writeError(fmt"ncurses: {message}")
 
+proc writeJumpBackError*(commandLine: CommandLine, message: string) {.inline.} =
+  commandLine.writeError(fmt"Jump back: {message}")
+
 proc writeLspStandard*(
     commandLine: CommandLine, message: string, log = true, screen = true
 ) {.inline.} =
