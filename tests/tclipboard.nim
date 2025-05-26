@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -23,6 +23,8 @@ import moepkg/[settings, unicodeext, clipboard]
 import utils
 
 import moepkg/platform {.all.}
+
+let nimbleVersion = nimbleVersion()
 
 proc removeLineEnd(buf: string, tool: ClipboardTool): string =
   case tool
@@ -62,7 +64,7 @@ template clearClipboard(tool: ClipboardTool) =
 
 template runClipboardSendTests(tool: ClipboardTool) =
   test "Runes":
-    if not isToolAvailable(tool):
+    if not isToolAvailable(tool) or isSkipNimbleVersion():
       skip()
     else:
       clearClipboard(tool)
@@ -74,7 +76,7 @@ template runClipboardSendTests(tool: ClipboardTool) =
       check buf == $Buffer
 
   test "Single Line":
-    if not isToolAvailable(tool):
+    if not isToolAvailable(tool) or isSkipNimbleVersion():
       skip()
     else:
       clearClipboard(tool)
@@ -85,7 +87,7 @@ template runClipboardSendTests(tool: ClipboardTool) =
       check "abc\n" == getClipboardBuffer(tool).removeLineEnd(tool)
 
   test "Lines":
-    if not isToolAvailable(tool):
+    if not isToolAvailable(tool) or isSkipNimbleVersion():
       skip()
     else:
       clearClipboard(tool)
@@ -97,7 +99,7 @@ template runClipboardSendTests(tool: ClipboardTool) =
       check buf == Buffer.toString.removeLineEnd
 
   test "Only back quotes":
-    if not isToolAvailable(tool):
+    if not isToolAvailable(tool) or isSkipNimbleVersion():
       skip()
     else:
       const Buffer = ru"`````"
@@ -108,7 +110,7 @@ template runClipboardSendTests(tool: ClipboardTool) =
 
 template runClipboardGetTests(tool: ClipboardTool) =
   test "Runes":
-    if not isToolAvailable(tool):
+    if not isToolAvailable(tool) or isSkipNimbleVersion():
       skip()
     else:
       clearClipboard(tool)
@@ -120,7 +122,7 @@ template runClipboardGetTests(tool: ClipboardTool) =
       check buf == Buffer
 
   test "Single Line":
-    if not isToolAvailable(tool):
+    if not isToolAvailable(tool) or isSkipNimbleVersion():
       skip()
     else:
       clearClipboard(tool)
@@ -131,7 +133,7 @@ template runClipboardGetTests(tool: ClipboardTool) =
       check "abc\n".toRunes == getFromClipboard(tool).get
 
   test "Lines":
-    if not isToolAvailable(tool):
+    if not isToolAvailable(tool) or isSkipNimbleVersion():
       skip()
     else:
       clearClipboard(tool)

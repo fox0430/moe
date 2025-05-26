@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -108,7 +108,7 @@ suite "registers: setNoNamedRegister":
     check not r.noNamed.isLine
 
   test "Runes with Clipboard (xsel)":
-    if not isXAvailable():
+    if not isXAvailable() or isSkipNimbleVersion():
       skip()
     else:
       r.setClipboardTool(ClipboardTool.xsel)
@@ -117,7 +117,7 @@ suite "registers: setNoNamedRegister":
       check "abc" == getClipboardBuffer(ClipboardTool.xsel)
 
   test "Lines with Clipboard (xsel)":
-    if not isXAvailable():
+    if not isXAvailable() or isSkipNimbleVersion():
       skip()
     else:
       r.setClipboardTool(ClipboardTool.xsel)
@@ -569,7 +569,7 @@ suite "registers: trySetClipBoardRegister":
     var r = initRegisters()
 
   test "xsel: Runes":
-    if not isXselAvailable():
+    if not isXselAvailable() or isSkipNimbleVersion():
       skip()
     else:
       r.setClipboardTool(ClipboardTool.xsel)
@@ -586,7 +586,7 @@ suite "registers: trySetClipBoardRegister":
       check not r.noNamed.isLine
 
   test "xsel: Lines":
-    if not isXselAvailable():
+    if not isXselAvailable() or isSkipNimbleVersion():
       skip()
     else:
       r.setClipboardTool(ClipboardTool.xsel)
@@ -603,7 +603,7 @@ suite "registers: trySetClipBoardRegister":
       check r.noNamed.isLine
 
   test "xclip: Runes":
-    if not isXclipAvailable():
+    if not isXclipAvailable() or isSkipNimbleVersion():
       skip()
     else:
       r.setClipboardTool(ClipboardTool.xclip)
@@ -620,7 +620,7 @@ suite "registers: trySetClipBoardRegister":
       check not r.noNamed.isLine
 
   test "xclip: Lines":
-    if not isXselAvailable():
+    if not isXselAvailable() or isSkipNimbleVersion():
       skip()
     else:
       r.setClipboardTool(ClipboardTool.xclip)
@@ -637,7 +637,7 @@ suite "registers: trySetClipBoardRegister":
       check r.noNamed.isLine
 
   test "wl-clipboard: Runes":
-    if not isWlClipboardAvailable():
+    if not isWlClipboardAvailable() or isSkipNimbleVersion():
       skip()
     else:
       r.setClipboardTool(ClipboardTool.wlClipboard)
@@ -654,7 +654,7 @@ suite "registers: trySetClipBoardRegister":
       check not r.noNamed.isLine
 
   test "wl-clipboard: Lines":
-    if not isWlClipboardAvailable():
+    if not isWlClipboardAvailable() or isSkipNimbleVersion():
       skip()
     else:
       r.setClipboardTool(ClipboardTool.wlClipboard)
@@ -671,7 +671,7 @@ suite "registers: trySetClipBoardRegister":
       check r.noNamed.isLine
 
   test "Don't set":
-    if not isXclipAvailable():
+    if not isXclipAvailable() or isSkipNimbleVersion():
       skip()
     else:
       r.setClipboardTool(ClipboardTool.xclip)
@@ -695,7 +695,7 @@ suite "registers: getClipBoardRegister":
   privateAccess(Registers)
 
   test "Basic":
-    if not isXclipAvailable():
+    if not isXclipAvailable() or isSkipNimbleVersion():
       skip()
     else:
       var registers = initRegisters()
