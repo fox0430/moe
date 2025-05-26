@@ -671,12 +671,7 @@ proc jumpToDefinition(
     jumpLine(currentBufStatus, currentMainWindowNode, l.range.first.line)
     currentMainWindowNode.currentColumn = l.range.first.column
 
-  block:
-    let p = BufferPosition(line: beforePosition.line, column: beforePosition.column)
-    # TODO: Add history to jumplist
-    #currentBufStatus.setGotoDefinitionSource(
-    #  BufferLocation(path: beforePath, range: BufferRange(first: p, last: p))
-    #)
+  currentMainWindowNode.recordJump(currentBufStatus.id, currentBufStatus.path)
 
   return Result[(), string].ok ()
 
