@@ -631,7 +631,9 @@ proc jumpBack(status: var EditorStatus) =
     if b.get.id != currentBufStatus.id:
       let err = status.changeCurrentBufferById(b.get.id)
       if err.isErr:
-        status.commandLine.writeJumpBackError(fmt"Failed to change buffer: (bufferId: {b.get.id})")
+        status.commandLine.writeJumpBackError(
+          fmt"Failed to change buffer: (bufferId: {b.get.id})"
+        )
         return
   else:
     if not fileExists($j.get.path):
