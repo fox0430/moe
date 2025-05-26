@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[times, strutils, sequtils, options, strformat, tables, logging, json]
+import std/[times, strutils, sequtils, options, strformat, tables, logging, json, os]
 
 import pkg/results
 
@@ -27,7 +27,7 @@ import
   editorstatus, ui, gapbuffer, unicodeext, fileutils, windownode, movement, editor,
   searchutils, bufferstatus, quickrunutils, messages, visualmode, commandline,
   viewhighlight, messagelog, registers, independentutils, popupwindow, editorview,
-  folding
+  folding, jumplist
 
 template removeAllFoldingRange(status: var EditorStatus) =
   currentMainWindowNode.removeAllFoldingRange(currentMainWindowNode.currentLine)
@@ -185,7 +185,7 @@ proc searchNextOccurrence(status: var EditorStatus, keyword: Runes) =
     currentMainWindowNode.keyLeft
 
   if beforePosi != currentMainWindowNode.bufferPosition:
-    currentMainWindowNode.recordJump(currentBufStatus.id)
+    currentMainWindowNode.recordJump(currentBufStatus.id, currentBufStatus.path)
 
 proc searchNextOccurrence(status: var EditorStatus) {.inline.} =
   if status.searchHistory.len > 0:
@@ -232,7 +232,7 @@ proc searchPrevOccurrence(status: var EditorStatus, keyword: Runes) =
       currentBufStatus.keyRight(currentMainWindowNode)
 
     if beforePosi != currentMainWindowNode.bufferPosition:
-      currentMainWindowNode.recordJump(currentBufStatus.id)
+      currentMainWindowNode.recordJump(currentBufStatus.id, currentBufStatus.path)
 
 proc searchPrevOccurrence(status: var EditorStatus) {.inline.} =
   if status.searchHistory.len > 0:
@@ -313,7 +313,7 @@ proc moveToFirstLine(status: var EditorStatus) =
   currentBufStatus.jumpLine(currentMainWindowNode, dest)
 
   if beforePosi != currentMainWindowNode.bufferPosition:
-    currentMainWindowNode.recordJump(currentBufStatus.id)
+    currentMainWindowNode.recordJump(currentBufStatus.id, currentBufStatus.path)
 
 proc moveToLastLine(status: var EditorStatus) =
   let beforePosi = currentMainWindowNode.bufferPosition
@@ -321,7 +321,7 @@ proc moveToLastLine(status: var EditorStatus) =
   currentBufStatus.moveToLastLine(currentMainWindowNode)
 
   if beforePosi != currentMainWindowNode.bufferPosition:
-    currentMainWindowNode.recordJump(currentBufStatus.id)
+    currentMainWindowNode.recordJump(currentBufStatus.id, currentBufStatus.path)
 
 proc moveToFirstOfPreviousLine(status: var EditorStatus) =
   let beforePosi = currentMainWindowNode.bufferPosition
@@ -329,7 +329,7 @@ proc moveToFirstOfPreviousLine(status: var EditorStatus) =
   currentBufStatus.moveToFirstOfPreviousLine(currentMainWindowNode)
 
   if beforePosi != currentMainWindowNode.bufferPosition:
-    currentMainWindowNode.recordJump(currentBufStatus.id)
+    currentMainWindowNode.recordJump(currentBufStatus.id, currentBufStatus.path)
 
 proc moveToFirstOfNextLine(status: var EditorStatus) =
   let beforePosi = currentMainWindowNode.bufferPosition
@@ -337,7 +337,7 @@ proc moveToFirstOfNextLine(status: var EditorStatus) =
   currentBufStatus.moveToFirstOfNextLine(currentMainWindowNode)
 
   if beforePosi != currentMainWindowNode.bufferPosition:
-    currentMainWindowNode.recordJump(currentBufStatus.id)
+    currentMainWindowNode.recordJump(currentBufStatus.id, currentBufStatus.path)
 
 proc moveToPreviousBlankLine(status: var EditorStatus) =
   let beforePosi = currentMainWindowNode.bufferPosition
@@ -345,7 +345,7 @@ proc moveToPreviousBlankLine(status: var EditorStatus) =
   currentBufStatus.moveToPreviousBlankLine(currentMainWindowNode)
 
   if beforePosi != currentMainWindowNode.bufferPosition:
-    currentMainWindowNode.recordJump(currentBufStatus.id)
+    currentMainWindowNode.recordJump(currentBufStatus.id, currentBufStatus.path)
 
 proc moveToNextBlankLine(status: var EditorStatus) =
   let beforePosi = currentMainWindowNode.bufferPosition
@@ -353,7 +353,7 @@ proc moveToNextBlankLine(status: var EditorStatus) =
   currentBufStatus.moveToNextBlankLine(currentMainWindowNode)
 
   if beforePosi != currentMainWindowNode.bufferPosition:
-    currentMainWindowNode.recordJump(currentBufStatus.id)
+    currentMainWindowNode.recordJump(currentBufStatus.id, currentBufStatus.path)
 
 proc moveToPairOfParen(status: var EditorStatus) =
   let beforePosi = currentMainWindowNode.bufferPosition
@@ -361,7 +361,7 @@ proc moveToPairOfParen(status: var EditorStatus) =
   currentBufStatus.moveToPairOfParen(currentMainWindowNode)
 
   if beforePosi != currentMainWindowNode.bufferPosition:
-    currentMainWindowNode.recordJump(currentBufStatus.id)
+    currentMainWindowNode.recordJump(currentBufStatus.id, currentBufStatus.path)
 
 template moveToForwardWord(status: var EditorStatus) =
   for i in 0 ..< currentBufStatus.cmdLoop:
@@ -616,30 +616,42 @@ proc requestGotoTypeDefinition(status: var EditorStatus) =
   if r.isErr:
     status.commandLine.writeLspTypeDefinitionError(r.error)
 
-proc jumpBackFromGotoDefinitionSource(status: var EditorStatus) =
-  let location = currentBufStatus.getGotoDefinitionSource
-  if location.isNone:
-    # Not found
+proc jumpBack(status: var EditorStatus) =
+  ## Ctrl-O command
+
+  let j = currentMainWindowNode.getCurrentHistoryPosition
+  if j.isNone:
+    status.commandLine.writeJumpBackError("History not found")
     return
 
-  let
-    path = location.get.path
-    bufferIndex = status.bufStatus.checkBufferExist(path)
-  if bufferIndex.isSome:
-    status.changeCurrentBuffer(bufferIndex.get)
+  # Find destination buffer
+  let b = status.bufStatus.getBufferStatusByBufferId(j.get.bufferId)
+  if b.isSome:
+    # Alread opend
+    if b.get.id != currentBufStatus.id:
+      let err = status.changeCurrentBufferById(b.get.id)
+      if err.isErr:
+        status.commandLine.writeJumpBackError(
+          fmt"Failed to change buffer: (bufferId: {b.get.id})"
+        )
+        return
   else:
-    let err = status.addNewBufferInCurrentWin($path)
-    if err.isErr:
-      status.commandLine.writeFileOpenError(location.get.path)
+    if not fileExists($j.get.path):
+      status.commandLine.writeJumpBackError(fmt"File not found: {j.get.path}")
       return
 
-    status.resize
+    let err = status.addNewBufferInCurrentWin($j.get.path)
+    if err.isErr:
+      status.commandLine.writeJumpBackError("Failed to open buffer: {j.get.path}")
+      return
+
+  status.resize
 
   currentMainWindowNode.currentLine =
-    min(currentBufStatus.buffer.high, location.get.range.first.line)
+    min(currentBufStatus.buffer.high, j.get.position.line)
   currentMainWindowNode.currentColumn = min(
     currentBufStatus.buffer[currentMainWindowNode.currentLine].high,
-    location.get.range.first.column,
+    j.get.position.column,
   )
 
 proc requestGotoImplementation(status: var EditorStatus) =
@@ -1584,8 +1596,7 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
   elif key == ord('G'):
     status.moveToLastLine
   elif isCtrlO(key):
-    # TODO: Change behavior
-    status.jumpBackFromGotoDefinitionSource
+    status.jumpBack
   elif isCtrlU(key):
     return status.halfPageUpCommand
   elif isCtrlD(key):

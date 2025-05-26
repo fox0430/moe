@@ -58,7 +58,9 @@ proc initWindowNode*(): Result[WindowNode, string] =
     return Result[WindowNode, string].err win.error
 
   var
-    node = WindowNode(child: @[], splitType: SplitType.vertical, h: 1, w: 1)
+    node = WindowNode(
+      child: @[], splitType: SplitType.vertical, jumpList: initJumpList(), h: 1, w: 1
+    )
     root = WindowNode(
       child: @[node],
       splitType: SplitType.vertical,
@@ -137,6 +139,7 @@ proc verticalSplit*[T](n: var WindowNode, buffer: T): WindowNode =
     n.child.add(node1)
     n.child.add(node2)
     n.window = none(Window)
+    n.jumpList = initJumpList()
 
     return node1
 
@@ -211,6 +214,7 @@ proc horizontalSplit*[T](n: var WindowNode, buffer: T): WindowNode =
     n.child.add(node1)
     n.child.add(node2)
     n.window = none(Window)
+    n.jumpList = initJumpList()
 
     return node1
 
@@ -621,7 +625,12 @@ proc removeAllFoldingRange*(n: var WindowNode, first, last: int) {.inline.} =
 proc clearFoldingRange*(n: var WindowNode) {.inline.} =
   n.view.clearFoldingRange
 
-proc recordJump*(n: WindowNode, bufferId: int) =
+proc recordJump*(n: WindowNode, bufferId: int, path: Runes) {.inline.} =
   ## Add the current position to jumpList.
 
-  n.jumpList.add(bufferId, n.bufferPosition)
+  n.jumpList.add(bufferId, path, n.bufferPosition)
+
+proc getCurrentHistoryPosition*(n: WindowNode): Option[JumpInfo] =
+  ## Return the jumpInfo of the current history position.
+
+  return n.jumpList.getCurrentHistoryPosition

@@ -1519,12 +1519,17 @@ suite "Visual mode: Movement":
 
     check currentMainWindowNode.currentLine == 2
     check currentMainWindowNode.currentColumn == 0
-    check currentMainWindowNode.jumpList ==
-      @[
-        JumpInfo(
-          bufferId: currentBufStatus.id, position: BufferPosition(line: 2, column: 0)
-        )
-      ]
+    check currentMainWindowNode.jumpList[] ==
+      JumpList(
+        currentPosition: 0,
+        history:
+          @[
+            JumpInfo(
+              bufferId: currentBufStatus.id,
+              position: BufferPosition(line: 2, column: 0),
+            )
+          ],
+      )[]
 
   test "Move to the first line (gg command)":
     var status = initEditorStatus().get
@@ -1548,12 +1553,17 @@ suite "Visual mode: Movement":
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
-    check currentMainWindowNode.jumpList ==
-      @[
-        JumpInfo(
-          bufferId: currentBufStatus.id, position: BufferPosition(line: 0, column: 0)
-        )
-      ]
+    check currentMainWindowNode.jumpList[] ==
+      JumpList(
+        currentPosition: 0,
+        history:
+          @[
+            JumpInfo(
+              bufferId: currentBufStatus.id,
+              position: BufferPosition(line: 0, column: 0),
+            )
+          ],
+      )[]
 
   test "Move to the previous blank line({ command)":
     var status = initEditorStatus().get
@@ -1577,12 +1587,17 @@ suite "Visual mode: Movement":
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
-    check currentMainWindowNode.jumpList ==
-      @[
-        JumpInfo(
-          bufferId: currentBufStatus.id, position: BufferPosition(line: 0, column: 0)
-        )
-      ]
+    check currentMainWindowNode.jumpList[] ==
+      JumpList(
+        currentPosition: 0,
+        history:
+          @[
+            JumpInfo(
+              bufferId: currentBufStatus.id,
+              position: BufferPosition(line: 0, column: 0),
+            )
+          ],
+      )[]
 
   test "Move to the next blank line(} command)":
     var status = initEditorStatus().get
@@ -1605,12 +1620,17 @@ suite "Visual mode: Movement":
 
     check currentMainWindowNode.currentLine == 2
     check currentMainWindowNode.currentColumn == 0
-    check currentMainWindowNode.jumpList ==
-      @[
-        JumpInfo(
-          bufferId: currentBufStatus.id, position: BufferPosition(line: 2, column: 0)
-        )
-      ]
+    check currentMainWindowNode.jumpList[] ==
+      JumpList(
+        currentPosition: 0,
+        history:
+          @[
+            JumpInfo(
+              bufferId: currentBufStatus.id,
+              position: BufferPosition(line: 2, column: 0),
+            )
+          ],
+      )[]
 
   test "Move to the next blank line(} command)":
     var status = initEditorStatus().get
@@ -1633,12 +1653,17 @@ suite "Visual mode: Movement":
 
     check currentMainWindowNode.currentLine == 2
     check currentMainWindowNode.currentColumn == 0
-    check currentMainWindowNode.jumpList ==
-      @[
-        JumpInfo(
-          bufferId: currentBufStatus.id, position: BufferPosition(line: 2, column: 0)
-        )
-      ]
+    check currentMainWindowNode.jumpList[] ==
+      JumpList(
+        currentPosition: 0,
+        history:
+          @[
+            JumpInfo(
+              bufferId: currentBufStatus.id,
+              position: BufferPosition(line: 2, column: 0),
+            )
+          ],
+      )[]
 
 suite "Visual block mode: Converts string into upper-case string":
   test "Converts string into upper-case string 1":
