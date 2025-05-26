@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -18,9 +18,12 @@
 #[############################################################################]#
 
 import std/[unittest, os]
+
 import pkg/results
+
 import moepkg/syntax/highlite
 import moepkg/[unicodeext, bufferstatus, gapbuffer, backgroundprocess]
+import utils
 
 import moepkg/settings {.all.}
 import moepkg/quickrunutils {.all.}
@@ -186,152 +189,176 @@ suite "QuickRun: quickRunCommand":
 
 suite "QuickRun: isRunning":
   test "Return true":
-    let settings = initEditorSettings()
+    if isSkipNimbleVersion():
+      skip()
+    else:
+      let settings = initEditorSettings()
 
-    var bufStatus = initBufferStatus("test.sh").get
-    bufStatus.buffer = @[ru"sleep 1000"].toGapBuffer
+      var bufStatus = initBufferStatus("test.sh").get
+      bufStatus.buffer = @[ru"sleep 1000"].toGapBuffer
 
-    var p = bufStatus.startBackgroundQuickRun(settings).get
+      var p = bufStatus.startBackgroundQuickRun(settings).get
 
-    # Wait just in case
-    sleep 100
+      # Wait just in case
+      sleep 100
 
-    let isRunning = p.isRunning
+      let isRunning = p.isRunning
 
-    p.close
+      p.close
 
-    if fileExists("quickruntemp.bash"):
-      removeFile("quickruntemp.bash")
+      if fileExists("quickruntemp.bash"):
+        removeFile("quickruntemp.bash")
 
-    check isRunning
+      check isRunning
 
   test "Return false":
-    let settings = initEditorSettings()
+    if isSkipNimbleVersion():
+      skip()
+    else:
+      let settings = initEditorSettings()
 
-    var bufStatus = initBufferStatus("test.sh").get
-    bufStatus.buffer = @[ru"sleep 0"].toGapBuffer
+      var bufStatus = initBufferStatus("test.sh").get
+      bufStatus.buffer = @[ru"sleep 0"].toGapBuffer
 
-    var p = bufStatus.startBackgroundQuickRun(settings).get
+      var p = bufStatus.startBackgroundQuickRun(settings).get
 
-    # Wait just in case
-    sleep 100
+      # Wait just in case
+      sleep 100
 
-    let isRunning = p.isRunning
+      let isRunning = p.isRunning
 
-    p.close
+      p.close
 
-    if fileExists("quickruntemp.bash"):
-      removeFile("quickruntemp.bash")
+      if fileExists("quickruntemp.bash"):
+        removeFile("quickruntemp.bash")
 
-    check not isRunning
+      check not isRunning
 
 suite "QuickRun: isFinish":
   test "Return true":
-    let settings = initEditorSettings()
+    if isSkipNimbleVersion():
+      skip()
+    else:
+      let settings = initEditorSettings()
 
-    var bufStatus = initBufferStatus("test.sh").get
-    bufStatus.buffer = @[ru"sleep 0"].toGapBuffer
+      var bufStatus = initBufferStatus("test.sh").get
+      bufStatus.buffer = @[ru"sleep 0"].toGapBuffer
 
-    var p = bufStatus.startBackgroundQuickRun(settings).get
+      var p = bufStatus.startBackgroundQuickRun(settings).get
 
-    # Wait just in case
-    sleep 100
+      # Wait just in case
+      sleep 100
 
-    let isFinish = p.isFinish
+      let isFinish = p.isFinish
 
-    p.close
+      p.close
 
-    check isFinish
+      check isFinish
 
   test "Return false":
-    let settings = initEditorSettings()
+    if isSkipNimbleVersion():
+      skip()
+    else:
+      let settings = initEditorSettings()
 
-    var bufStatus = initBufferStatus("test.sh").get
-    bufStatus.buffer = @[ru"sleep 500"].toGapBuffer
+      var bufStatus = initBufferStatus("test.sh").get
+      bufStatus.buffer = @[ru"sleep 500"].toGapBuffer
 
-    var p = bufStatus.startBackgroundQuickRun(settings).get
+      var p = bufStatus.startBackgroundQuickRun(settings).get
 
-    let isFinish = p.isFinish
+      let isFinish = p.isFinish
 
-    p.close
+      p.close
 
-    if fileExists("quickruntemp.bash"):
-      removeFile("quickruntemp.bash")
+      if fileExists("quickruntemp.bash"):
+        removeFile("quickruntemp.bash")
 
-    check not isFinish
+      check not isFinish
 
 suite "QuickRun: cancel":
   test "cancel":
-    let settings = initEditorSettings()
+    if isSkipNimbleVersion():
+      skip()
+    else:
+      let settings = initEditorSettings()
 
-    var bufStatus = initBufferStatus("test.sh").get
-    bufStatus.buffer = @[ru"sleep 500"].toGapBuffer
+      var bufStatus = initBufferStatus("test.sh").get
+      bufStatus.buffer = @[ru"sleep 500"].toGapBuffer
 
-    var p = bufStatus.startBackgroundQuickRun(settings).get
+      var p = bufStatus.startBackgroundQuickRun(settings).get
 
-    p.cancel
+      p.cancel
 
-    # Wait just in case
-    sleep 100
+      # Wait just in case
+      sleep 100
 
-    let isFinish = p.isFinish
+      let isFinish = p.isFinish
 
-    if fileExists("quickruntemp.bash"):
-      removeFile("quickruntemp.bash")
+      if fileExists("quickruntemp.bash"):
+        removeFile("quickruntemp.bash")
 
-    check isFinish
+      check isFinish
 
 suite "QuickRun: kill":
   test "kill":
-    let settings = initEditorSettings()
+    if isSkipNimbleVersion():
+      skip()
+    else:
+      let settings = initEditorSettings()
 
-    var bufStatus = initBufferStatus("test.sh").get
-    bufStatus.buffer = @[ru"sleep 500"].toGapBuffer
+      var bufStatus = initBufferStatus("test.sh").get
+      bufStatus.buffer = @[ru"sleep 500"].toGapBuffer
 
-    var p = bufStatus.startBackgroundQuickRun(settings).get
+      var p = bufStatus.startBackgroundQuickRun(settings).get
 
-    p.kill
+      p.kill
 
-    # Wait just in case
-    sleep 100
+      # Wait just in case
+      sleep 100
 
-    let isFinish = p.isFinish
+      let isFinish = p.isFinish
 
-    if fileExists("quickruntemp.bash"):
-      removeFile("quickruntemp.bash")
+      if fileExists("quickruntemp.bash"):
+        removeFile("quickruntemp.bash")
 
-    check isFinish
+      check isFinish
 
 suite "QuickRun: close":
   test "close":
-    let settings = initEditorSettings()
+    if isSkipNimbleVersion():
+      skip()
+    else:
+      let settings = initEditorSettings()
 
-    var bufStatus = initBufferStatus("test.sh").get
-    bufStatus.buffer = @[ru"sleep 500"].toGapBuffer
+      var bufStatus = initBufferStatus("test.sh").get
+      bufStatus.buffer = @[ru"sleep 500"].toGapBuffer
 
-    var p = bufStatus.startBackgroundQuickRun(settings).get
+      var p = bufStatus.startBackgroundQuickRun(settings).get
 
-    p.close
+      p.close
 
-    if fileExists("quickruntemp.bash"):
-      removeFile("quickruntemp.bash")
+      if fileExists("quickruntemp.bash"):
+        removeFile("quickruntemp.bash")
 
 suite "QuickRun: startBackgroundQuickRun and result":
   test "Without file":
-    let settings = initEditorSettings()
+    if isSkipNimbleVersion():
+      skip()
+    else:
+      let settings = initEditorSettings()
 
-    var bufStatus = initBufferStatus("test.nim").get
-    bufStatus.buffer = @[ru"echo 1"].toGapBuffer
+      var bufStatus = initBufferStatus("test.nim").get
+      bufStatus.buffer = @[ru"echo 1"].toGapBuffer
 
-    var p = bufStatus.startBackgroundQuickRun(settings).get
+      var p = bufStatus.startBackgroundQuickRun(settings).get
 
-    var timeout = true
-    for _ in 0 .. 20:
-      sleep 500
+      var timeout = true
+      for _ in 0 .. 20:
+        sleep 500
 
-      if p.isFinish:
-        check p.result.get[^1] == "1"
-        timeout = false
-        break
+        if p.isFinish:
+          check p.result.get[^1] == "1"
+          timeout = false
+          break
 
-    check not timeout
+      check not timeout
