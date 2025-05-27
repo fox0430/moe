@@ -91,7 +91,6 @@ jobs:
 
         # Workaround for https://github.com/nim-lang/nimble/issues/1384
         # Related: https://github.com/fox0430/moe/pull/2300
-        nimble setup
         nim c -r tests/tclipboard.nim
         nim c -r tests/tquickrun.nim
         nim c -r tests/tregisters.nim
