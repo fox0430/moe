@@ -7,3 +7,5 @@ test.txt
 .history
 src/.history
 src/moepkg/.history
+nimble.develop
+nimble.paths
