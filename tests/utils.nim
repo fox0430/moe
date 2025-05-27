@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -18,7 +18,27 @@
 #[############################################################################]#
 
 import std/[options, os, strutils]
-import moepkg/[platform, editorstatus, ui]
+
+import moepkg/[platform, editorstatus, ui, appinfo]
+
+proc nimbleVersionStr(): string {.compileTime.} =
+  const lines = staticExec("nimble -v").splitLines
+  for l in lines:
+    if l.startsWith("nimble v"):
+      return l.split(" ")[1][1 ..^ 1]
+
+  raise newException(ValueError, "Invalid nimble version")
+
+proc nimbleVersion*(): VersionInfo {.compileTime.} =
+  let splited = nimbleVersionStr().split(".")
+  return VersionInfo(
+    major: splited[0].parseInt, minor: splited[1].parseInt, patch: splited[2].parseInt
+  )
+
+proc isSkipNimbleVersion*(): bool =
+  ## Workaround for https://github.com/nim-lang/nimble/issues/1384
+  const NimbleVersion = nimbleVersion()
+  return NimbleVersion.major == 0 and NimbleVersion.minor > 16
 
 proc resize*(status: var EditorStatus, h, w: int) =
   updateTerminalSize(h, w)

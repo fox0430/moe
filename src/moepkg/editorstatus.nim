@@ -132,10 +132,7 @@ template lspClient*(): var LspClient =
   status.lspClients[currentBufStatus.langId]
 
 proc changeCurrentBuffer*(
-    currentNode: var WindowNode,
-    statusLines: var seq[StatusLine],
-    bufStatuses: seq[BufferStatus],
-    bufferIndex: int,
+    currentNode: var WindowNode, bufStatuses: seq[BufferStatus], bufferIndex: int
 ) =
   if 0 <= bufferIndex and bufferIndex < bufStatuses.len:
     currentNode.bufferIndex = bufferIndex
@@ -145,9 +142,27 @@ proc changeCurrentBuffer*(
     currentNode.expandedColumn = 0
 
 proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
-  changeCurrentBuffer(
-    currentMainWindowNode, status.statusLine, status.bufStatus, bufferIndex
-  )
+  changeCurrentBuffer(currentMainWindowNode, status.bufStatus, bufferIndex)
+
+proc changeCurrentBufferById*(
+    currentNode: var WindowNode, bufStatuses: seq[BufferStatus], bufferId: int
+): Result[(), string] =
+  for i in 0 .. bufStatuses.high:
+    if bufStatuses[i].id == bufferId:
+      currentNode.bufferIndex = i
+
+      currentNode.currentLine = 0
+      currentNode.currentColumn = 0
+      currentNode.expandedColumn = 0
+
+      return Result[(), string].ok ()
+
+  return Result[(), string].err fmt"Not found: {bufferId}"
+
+proc changeCurrentBufferById*(
+    status: var EditorStatus, bufferId: int
+): Result[(), string] =
+  return changeCurrentBufferById(currentMainWindowNode, status.bufStatus, bufferId)
 
 proc bufferIndexInCurrentWindow*(status: EditorStatus): int {.inline.} =
   currentMainWindowNode.bufferIndex
@@ -391,7 +406,7 @@ proc addFilerStatus*(status: var EditorStatus, bufStatusIndex: int) {.inline.} =
   status.bufStatus[bufStatusIndex].filerStatusIndex = some(status.filerStatuses.high)
 
 proc addNewBuffer*(
-    status: var EditorStatus, path: string, mode: Mode
+    status: var EditorStatus, path: string | Runes, mode: Mode
 ): Result[int, string] =
   ## Return bufStatus.high after adding a new buffer.
 
@@ -502,7 +517,7 @@ proc addNewBuffer*(status: var EditorStatus, mode: Mode): Result[int, string] =
   return status.addNewBuffer(Path, mode)
 
 proc addNewBufferInCurrentWin*(
-    status: var EditorStatus, path: string, mode: Mode
+    status: var EditorStatus, path: string | Runes, mode: Mode
 ): Result[(), string] =
   ## Add a new buffer and change the current buffer to it and init an editor
   ## view.
@@ -528,9 +543,9 @@ proc addNewBufferInCurrentWin*(
   status.addNewBufferInCurrentWin("", mode)
 
 proc addNewBufferInCurrentWin*(
-    status: var EditorStatus, filename: string
+    status: var EditorStatus, path: string | Runes
 ): Result[(), string] {.inline.} =
-  status.addNewBufferInCurrentWin(filename, Mode.normal)
+  status.addNewBufferInCurrentWin(path, Mode.normal)
 
 proc addNewBufferInCurrentWin*(
     status: var EditorStatus
@@ -551,16 +566,19 @@ proc resize*(status: var EditorStatus) =
     commandLineHeight = status.commandLine.calcWindowaHeight
     sidebarWidth = if status.sidebar.isSome: status.sidebar.get.w else: 0
 
-  block:
-    status.resizeMainWindowNode(
-      Position(y: tabLineHeight, x: sidebarWidth),
-      Size(
-        h: max(
-          4, (terminalSize.h + 1) - tabLineHeight - statusLineHeight - commandLineHeight
-        ),
-        w: max(4, terminalSize.w - sidebarWidth),
+  # Force sync a terminal size in ncurses.
+  exitUi()
+  refresh()
+
+  status.resizeMainWindowNode(
+    Position(y: tabLineHeight, x: sidebarWidth),
+    Size(
+      h: max(
+        4, (terminalSize.h + 1) - tabLineHeight - statusLineHeight - commandLineHeight
       ),
-    )
+      w: max(4, terminalSize.w - sidebarWidth),
+    ),
+  )
 
   var
     statusLineIndex = 0

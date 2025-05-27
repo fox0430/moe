@@ -25,7 +25,7 @@ import moepkg/lsp/selectionrange
 import
   moepkg/[
     highlight, independentutils, editorstatus, gapbuffer, unicodeext, bufferstatus,
-    movement, registers, settings, clipboard, folding, ui,
+    movement, registers, settings, clipboard, folding, ui, jumplist,
   ]
 
 import utils
@@ -1497,6 +1497,173 @@ suite "Visual mode: Movement":
     status.update
 
     assert currentMainWindowNode.currentColumn == currentBufStatus.buffer[0].len
+
+  test "Move to the last line (G command)":
+    var status = initEditorStatus().get
+    assert status.addNewBufferInCurrentWin.isOk
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
+    currentBufStatus.highlight = initHighlight(
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
+
+    status.resize(100, 100)
+    status.update
+
+    status.changeMode(Mode.visual)
+
+    status.initSelectedArea
+
+    status.moveToLastLine
+    status.update
+
+    check currentMainWindowNode.currentLine == 2
+    check currentMainWindowNode.currentColumn == 0
+    check currentMainWindowNode.jumpList[] ==
+      JumpList(
+        currentPosition: 0,
+        history:
+          @[
+            JumpInfo(
+              bufferId: currentBufStatus.id,
+              position: BufferPosition(line: 2, column: 0),
+            )
+          ],
+      )[]
+
+  test "Move to the first line (gg command)":
+    var status = initEditorStatus().get
+    assert status.addNewBufferInCurrentWin.isOk
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru"ghi"])
+    currentBufStatus.highlight = initHighlight(
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
+    currentMainWindowNode.currentLine = 2
+
+    status.resize(100, 100)
+    status.update
+
+    status.changeMode(Mode.visual)
+
+    status.initSelectedArea
+
+    status.moveToFirstLine
+    status.update
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+    check currentMainWindowNode.jumpList[] ==
+      JumpList(
+        currentPosition: 0,
+        history:
+          @[
+            JumpInfo(
+              bufferId: currentBufStatus.id,
+              position: BufferPosition(line: 0, column: 0),
+            )
+          ],
+      )[]
+
+  test "Move to the previous blank line({ command)":
+    var status = initEditorStatus().get
+    assert status.addNewBufferInCurrentWin.isOk
+    currentBufStatus.buffer = initGapBuffer(@[ru"", ru"abc", ru"def"])
+    currentBufStatus.highlight = initHighlight(
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
+    currentMainWindowNode.currentLine = 2
+
+    status.resize(100, 100)
+    status.update
+
+    status.changeMode(Mode.visual)
+
+    status.initSelectedArea
+
+    status.moveToPreviousBlankLine
+    status.update
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+    check currentMainWindowNode.jumpList[] ==
+      JumpList(
+        currentPosition: 0,
+        history:
+          @[
+            JumpInfo(
+              bufferId: currentBufStatus.id,
+              position: BufferPosition(line: 0, column: 0),
+            )
+          ],
+      )[]
+
+  test "Move to the next blank line(} command)":
+    var status = initEditorStatus().get
+    assert status.addNewBufferInCurrentWin.isOk
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru""])
+    currentBufStatus.highlight = initHighlight(
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
+
+    status.resize(100, 100)
+    status.update
+
+    status.changeMode(Mode.visual)
+
+    status.initSelectedArea
+
+    status.moveToNextBlankLine
+    status.update
+
+    check currentMainWindowNode.currentLine == 2
+    check currentMainWindowNode.currentColumn == 0
+    check currentMainWindowNode.jumpList[] ==
+      JumpList(
+        currentPosition: 0,
+        history:
+          @[
+            JumpInfo(
+              bufferId: currentBufStatus.id,
+              position: BufferPosition(line: 2, column: 0),
+            )
+          ],
+      )[]
+
+  test "Move to the next blank line(} command)":
+    var status = initEditorStatus().get
+    assert status.addNewBufferInCurrentWin.isOk
+    currentBufStatus.buffer = initGapBuffer(@[ru"abc", ru"def", ru""])
+    currentBufStatus.highlight = initHighlight(
+      currentBufStatus.buffer.toSeqRunes, status.settings.highlight.reservedWords,
+      currentBufStatus.language,
+    )
+
+    status.resize(100, 100)
+    status.update
+
+    status.changeMode(Mode.visual)
+
+    status.initSelectedArea
+
+    status.moveToNextBlankLine
+    status.update
+
+    check currentMainWindowNode.currentLine == 2
+    check currentMainWindowNode.currentColumn == 0
+    check currentMainWindowNode.jumpList[] ==
+      JumpList(
+        currentPosition: 0,
+        history:
+          @[
+            JumpInfo(
+              bufferId: currentBufStatus.id,
+              position: BufferPosition(line: 2, column: 0),
+            )
+          ],
+      )[]
 
 suite "Visual block mode: Converts string into upper-case string":
   test "Converts string into upper-case string 1":

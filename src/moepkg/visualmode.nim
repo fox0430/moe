@@ -60,6 +60,38 @@ proc moveRight(windowNode: var WindowNode, bufStatus: var BufferStatus) =
 
   bufStatus.keyRight(windowNode)
 
+proc moveToLastLine(status: var EditorStatus) =
+  let beforePosi = currentMainWindowNode.bufferPosition
+
+  currentBufStatus.moveToLastLine(currentMainWindowNode)
+
+  if beforePosi != currentMainWindowNode.bufferPosition:
+    currentMainWindowNode.recordJump(currentBufStatus.id, currentBufStatus.path)
+
+proc moveToFirstLine(status: var EditorStatus) =
+  let beforePosi = currentMainWindowNode.bufferPosition
+
+  currentBufStatus.moveToFirstLine(currentMainWindowNode)
+
+  if beforePosi != currentMainWindowNode.bufferPosition:
+    currentMainWindowNode.recordJump(currentBufStatus.id, currentBufStatus.path)
+
+proc moveToPreviousBlankLine(status: var EditorStatus) =
+  let beforePosi = currentMainWindowNode.bufferPosition
+
+  currentBufStatus.moveToPreviousBlankLine(currentMainWindowNode)
+
+  if beforePosi != currentMainWindowNode.bufferPosition:
+    currentMainWindowNode.recordJump(currentBufStatus.id, currentBufStatus.path)
+
+proc moveToNextBlankLine(status: var EditorStatus) =
+  let beforePosi = currentMainWindowNode.bufferPosition
+
+  currentBufStatus.moveToNextBlankLine(currentMainWindowNode)
+
+  if beforePosi != currentMainWindowNode.bufferPosition:
+    currentMainWindowNode.recordJump(currentBufStatus.id, currentBufStatus.path)
+
 proc yankBuffer(
     bufStatus: var BufferStatus,
     registers: var Registers,
@@ -745,14 +777,14 @@ proc execVisualModeCommand*(status: var EditorStatus, command: Runes) =
   elif key == ord('e'):
     currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
   elif key == ord('G'):
-    currentBufStatus.moveToLastLine(currentMainWindowNode)
+    status.moveToLastLine
   elif key == ord('g') and command.len == 2:
     if command[1] == ord('g'):
-      currentBufStatus.moveToFirstLine(currentMainWindowNode)
+      status.moveToFirstLine
   elif key == ord('{'):
-    currentBufStatus.moveToPreviousBlankLine(currentMainWindowNode)
+    status.moveToPreviousBlankLine
   elif key == ord('}'):
-    currentBufStatus.moveToNextBlankLine(currentMainWindowNode)
+    status.moveToNextBlankLine
   elif isCtrlS(key):
     status.selectionRange
   else:
