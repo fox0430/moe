@@ -4482,8 +4482,6 @@ suite "Normal mode: requestGotoDefinition":
 suite "Normal mode: jumpBack":
   const TestFileBuffer = "123\n123"
 
-  var status: EditorStatus
-
   let
     currentDir = getCurrentDir()
     testDir = currentDir / "jumpBackTest"
@@ -4496,7 +4494,7 @@ suite "Normal mode: jumpBack":
     writeFile(testFilePath1, TestFileBuffer & '\n')
     writeFile(testFilePath2, "a\n")
 
-    status = initEditorStatus().get
+    var status = initEditorStatus().get
     status.settings.lsp.enable = false
 
   teardown:
@@ -4571,3 +4569,158 @@ suite "Normal mode: jumpBack":
     check currentBufStatus.buffer.toRunes == TestFileBuffer.toRunes
 
     check currentMainWindowNode.bufferPosition == BufferPosition(line: 0, column: 1)
+
+  test "Ignore the first":
+    assert status.addNewBufferInCurrentWin(testFilePath1).isOk
+    currentMainWindowNode.currentColumn = 1
+
+    status.resize(100, 100)
+    status.update
+
+    currentMainWindowNode.jumpList = JumpList(
+      currentPosition: 1,
+      history:
+        @[
+          JumpInfo(
+            bufferId: status.bufStatus[0].id,
+            path: status.bufStatus[0].path,
+            position: BufferPosition(line: 0, column: 2),
+          ),
+          JumpInfo(
+            bufferId: status.bufStatus[0].id,
+            path: status.bufStatus[0].path,
+            position: BufferPosition(line: 0, column: 1),
+          ),
+        ],
+    )
+
+    status.jumpBack
+
+    status.update
+
+    check currentBufStatus.path == testFilePath1.toRunes
+    check currentBufStatus.buffer.toRunes == TestFileBuffer.toRunes
+
+    check currentMainWindowNode.bufferPosition == BufferPosition(line: 0, column: 2)
+
+suite "Normal mode: jumpFoward":
+  const TestFileBuffer = "123\n123"
+
+  let
+    currentDir = getCurrentDir()
+    testDir = currentDir / "jumpFowardTest"
+    testFilePath1 = testDir / "file1"
+    testFilePath2 = testDir / "file2"
+
+  setup:
+    createDir(testDir)
+
+    writeFile(testFilePath1, TestFileBuffer & '\n')
+    writeFile(testFilePath2, "a\n")
+
+    var status = initEditorStatus().get
+    status.settings.lsp.enable = false
+
+  teardown:
+    removeDir(testDir)
+
+  test "Empty":
+    assert status.addNewBufferInCurrentWin(testFilePath1).isOk
+    assert status.addNewBufferInCurrentWin(testFilePath2).isOk
+
+    status.resize(100, 100)
+    status.update
+
+    status.jumpFoward
+
+    status.update
+
+    check currentBufStatus.path == testFilePath2.toRunes
+
+    check currentMainWindowNode.bufferPosition == BufferPosition(line: 0, column: 0)
+
+  test "Basic":
+    assert status.addNewBufferInCurrentWin(testFilePath1).isOk
+    assert status.addNewBufferInCurrentWin(testFilePath2).isOk
+
+    status.resize(100, 100)
+    status.update
+
+    currentMainWindowNode.jumpList = JumpList(
+      currentPosition: 0,
+      history:
+        @[
+          JumpInfo(
+            bufferId: status.bufStatus[0].id,
+            path: status.bufStatus[0].path,
+            position: BufferPosition(line: 0, column: 1),
+          )
+        ],
+    )
+
+    status.jumpFoward
+
+    status.update
+
+    check currentBufStatus.path == testFilePath1.toRunes
+    check currentBufStatus.buffer.toRunes == TestFileBuffer.toRunes
+
+    check currentMainWindowNode.bufferPosition == BufferPosition(line: 0, column: 1)
+
+  test "Basic 2":
+    assert status.addNewBufferInCurrentWin(testFilePath2).isOk
+
+    status.resize(100, 100)
+    status.update
+
+    currentMainWindowNode.jumpList = JumpList(
+      currentPosition: 0,
+      history:
+        @[
+          JumpInfo(
+            bufferId: 100,
+            path: testFilePath1.toRunes,
+            position: BufferPosition(line: 0, column: 1),
+          )
+        ],
+    )
+
+    status.jumpFoward
+
+    status.update
+
+    check currentBufStatus.path == testFilePath1.toRunes
+    check currentBufStatus.buffer.toRunes == TestFileBuffer.toRunes
+
+    check currentMainWindowNode.bufferPosition == BufferPosition(line: 0, column: 1)
+
+  test "Ignore the first":
+    assert status.addNewBufferInCurrentWin(testFilePath1).isOk
+    currentMainWindowNode.currentColumn = 1
+
+    status.resize(100, 100)
+    status.update
+
+    currentMainWindowNode.jumpList = JumpList(
+      currentPosition: 0,
+      history:
+        @[
+          JumpInfo(
+            bufferId: status.bufStatus[0].id,
+            path: status.bufStatus[0].path,
+            position: BufferPosition(line: 0, column: 1),
+          ),
+          JumpInfo(
+            bufferId: status.bufStatus[0].id,
+            path: status.bufStatus[0].path,
+            position: BufferPosition(line: 0, column: 2),
+          ),
+        ],
+    )
+
+    status.jumpFoward
+
+    status.update
+
+    check currentMainWindowNode.bufferPosition == BufferPosition(line: 0, column: 2)
+    check currentMainWindowNode.jumpList.currentPosition == 1

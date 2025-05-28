@@ -25,7 +25,7 @@ import moepkg/jumplist {.all.}
 
 suite "jumplist: initJumpList":
   test "Basic":
-    check initJumpList()[] == JumpList(currentPosition: -1, history: @[])[]
+    check initJumpList()[] == JumpList(currentPosition: 0, history: @[])[]
 
 suite "jumplist: add":
   setup:
@@ -85,7 +85,7 @@ suite "jumplist: add":
           ],
       )[]
 
-suite "jumplist: getCurrentHistoryPosition":
+suite "jumplist: jumpBack":
   test "Basic":
     var l = JumpList(
       currentPosition: 1,
@@ -105,7 +105,7 @@ suite "jumplist: getCurrentHistoryPosition":
     )
 
     block:
-      check l.getCurrentHistoryPosition ==
+      check l.jumpBack ==
         some(
           JumpInfo(
             bufferId: 0,
@@ -132,7 +132,7 @@ suite "jumplist: getCurrentHistoryPosition":
         )[]
 
     block:
-      check l.getCurrentHistoryPosition ==
+      check l.jumpBack ==
         some(
           JumpInfo(
             bufferId: 0,
@@ -142,7 +142,7 @@ suite "jumplist: getCurrentHistoryPosition":
         )
       check l[] ==
         JumpList(
-          currentPosition: -1,
+          currentPosition: 0,
           history:
             @[
               JumpInfo(
@@ -159,10 +159,90 @@ suite "jumplist: getCurrentHistoryPosition":
         )[]
 
     block:
-      check l.getCurrentHistoryPosition == none(JumpInfo)
+      check l.jumpBack ==
+        some(
+          JumpInfo(
+            bufferId: 0,
+            path: ru"text0.txt",
+            position: BufferPosition(line: 0, column: 0),
+          )
+        )
       check l[] ==
         JumpList(
-          currentPosition: -1,
+          currentPosition: 0,
+          history:
+            @[
+              JumpInfo(
+                bufferId: 0,
+                path: ru"text0.txt",
+                position: BufferPosition(line: 0, column: 0),
+              ),
+              JumpInfo(
+                bufferId: 0,
+                path: ru"text1.txt",
+                position: BufferPosition(line: 1, column: 1),
+              ),
+            ],
+        )[]
+
+suite "jumplist: jumpFoward":
+  test "Basic":
+    var l = JumpList(
+      currentPosition: 0,
+      history:
+        @[
+          JumpInfo(
+            bufferId: 0,
+            path: ru"text0.txt",
+            position: BufferPosition(line: 0, column: 0),
+          ),
+          JumpInfo(
+            bufferId: 0,
+            path: ru"text1.txt",
+            position: BufferPosition(line: 1, column: 1),
+          ),
+        ],
+    )
+
+    block:
+      check l.jumpFoward ==
+        some(
+          JumpInfo(
+            bufferId: 0,
+            path: ru"text0.txt",
+            position: BufferPosition(line: 0, column: 0),
+          )
+        )
+      check l[] ==
+        JumpList(
+          currentPosition: 1,
+          history:
+            @[
+              JumpInfo(
+                bufferId: 0,
+                path: ru"text0.txt",
+                position: BufferPosition(line: 0, column: 0),
+              ),
+              JumpInfo(
+                bufferId: 0,
+                path: ru"text1.txt",
+                position: BufferPosition(line: 1, column: 1),
+              ),
+            ],
+        )[]
+
+    block:
+      check l.jumpFoward ==
+        some(
+          JumpInfo(
+            bufferId: 0,
+            path: ru"text1.txt",
+            position: BufferPosition(line: 1, column: 1),
+          )
+        )
+      check l[] ==
+        JumpList(
+          currentPosition: 1,
           history:
             @[
               JumpInfo(
