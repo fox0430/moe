@@ -616,16 +616,9 @@ proc requestGotoTypeDefinition(status: var EditorStatus) =
   if r.isErr:
     status.commandLine.writeLspTypeDefinitionError(r.error)
 
-proc jumpBack(status: var EditorStatus) =
-  ## Ctrl-O command
-
-  let j = currentMainWindowNode.getCurrentHistoryPosition
-  if j.isNone:
-    status.commandLine.writeJumpBackError("History not found")
-    return
-
+proc jumpByJumpList(status: var EditorStatus, j: JumpInfo) =
   # Find destination buffer
-  let b = status.bufStatus.getBufferStatusByBufferId(j.get.bufferId)
+  let b = status.bufStatus.getBufferStatusByBufferId(j.bufferId)
   if b.isSome:
     # Alread opend
     if b.get.id != currentBufStatus.id:
@@ -636,23 +629,61 @@ proc jumpBack(status: var EditorStatus) =
         )
         return
   else:
-    if not fileExists($j.get.path):
-      status.commandLine.writeJumpBackError(fmt"File not found: {j.get.path}")
+    if not fileExists($j.path):
+      status.commandLine.writeJumpBackError(fmt"File not found: {j.path}")
       return
 
-    let err = status.addNewBufferInCurrentWin($j.get.path)
+    let err = status.addNewBufferInCurrentWin($j.path)
     if err.isErr:
-      status.commandLine.writeJumpBackError("Failed to open buffer: {j.get.path}")
+      status.commandLine.writeJumpBackError("Failed to open buffer: {j.path}")
       return
 
-  status.resize
+    status.resize
 
-  currentMainWindowNode.currentLine =
-    min(currentBufStatus.buffer.high, j.get.position.line)
+  currentMainWindowNode.currentLine = min(currentBufStatus.buffer.high, j.position.line)
   currentMainWindowNode.currentColumn = min(
-    currentBufStatus.buffer[currentMainWindowNode.currentLine].high,
-    j.get.position.column,
+    currentBufStatus.buffer[currentMainWindowNode.currentLine].high, j.position.column
   )
+
+template isSamePosition(status: EditorStatus, p: BufferPosition): bool =
+  currentMainWindowNode.currentLine == p.line and
+    currentMainWindowNode.currentColumn == p.column
+
+proc jumpBack(status: var EditorStatus) =
+  ## Ctrl-O command
+
+  let j = currentMainWindowNode.jumpBack
+  if j.isNone:
+    status.commandLine.writeJumpBackError("History not found")
+    return
+
+  if j.get.bufferId == currentBufStatus.id and status.isSamePosition(j.get.position):
+    # Ignore the first JumpInfo if the same position.
+    let j2 = currentMainWindowNode.jumpBack
+    if j2.isNone:
+      status.commandLine.writeJumpBackError("History not found")
+      return
+    status.jumpByJumpList(j2.get)
+  else:
+    status.jumpByJumpList(j.get)
+
+proc jumpFoward(status: var EditorStatus) =
+  ## Ctrl-I command
+
+  let j = currentMainWindowNode.jumpFoward
+  if j.isNone:
+    status.commandLine.writeJumpBackError("History not found")
+    return
+
+  if j.get.bufferId == currentBufStatus.id and status.isSamePosition(j.get.position):
+    # Ignore the first JumpInfo if the same position.
+    let j2 = currentMainWindowNode.jumpFoward
+    if j2.isNone:
+      status.commandLine.writeJumpBackError("History not found")
+      return
+    status.jumpByJumpList(j2.get)
+  else:
+    status.jumpByJumpList(j.get)
 
 proc requestGotoImplementation(status: var EditorStatus) =
   if not status.lspClients.contains(currentBufStatus.langId):
@@ -1597,6 +1628,8 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
     status.moveToLastLine
   elif isCtrlO(key):
     status.jumpBack
+  elif isCtrlI(key):
+    status.jumpFoward
   elif isCtrlU(key):
     return status.halfPageUpCommand
   elif isCtrlD(key):
@@ -1848,7 +1881,7 @@ proc isNormalModeCommand*(
         $command == "v" or $command == "a" or $command == "A" or $command == "u" or
         isCtrlR(command) or $command == "." or $command == "Y" or $command == "V" or
         $command == "H" or $command == "M" or $command == "L" or $command == "%" or
-        $command == "K" or isCtrlS(command) or isCtrlO(command):
+        $command == "K" or isCtrlS(command) or isCtrlO(command) or isCtrlI(command):
       result = InputState.Valid
     elif isDigit(command[0]):
       if command.isDigit:

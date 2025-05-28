@@ -630,7 +630,12 @@ proc recordJump*(n: WindowNode, bufferId: int, path: Runes) {.inline.} =
 
   n.jumpList.add(bufferId, path, n.bufferPosition)
 
-proc getCurrentHistoryPosition*(n: WindowNode): Option[JumpInfo] =
+proc jumpBack*(n: WindowNode): Option[JumpInfo] =
   ## Return the jumpInfo of the current history position.
 
-  return n.jumpList.getCurrentHistoryPosition
+  return n.jumpList.jumpBack
+
+proc jumpFoward*(n: WindowNode): Option[JumpInfo] =
+  ## Return the jumpInfo of the current history position.
+
+  return n.jumpList.jumpFoward

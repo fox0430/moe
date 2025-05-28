@@ -143,6 +143,7 @@ zD         - Delete all folding lines
 Ctrl-s     - Selection Range (LSP)
 Space o    - Document Symbol (LSP)
 Ctrl-o     - Jump Back (Jumplist)
+Ctrl-i     - Jump Foward (Jumplist)
 
 # Register
 
