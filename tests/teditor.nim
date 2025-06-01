@@ -1654,7 +1654,7 @@ suite "Editor: pasteBeforeCursor":
 
 suite "Editor: Yank characters":
   test "Yank a string with name in the empty line":
-    if not isXselAvailable():
+    if not isXselAvailable() or isSkipNimbleVersion():
       skip()
     else:
       assert clearXsel()
@@ -1679,7 +1679,7 @@ suite "Editor: Yank characters":
 
 suite "Editor: Yank words":
   test "Yank a word":
-    if not isXselAvailable():
+    if not isXselAvailable() or isSkipNimbleVersion():
       skip()
     else:
       assert clearXsel()
