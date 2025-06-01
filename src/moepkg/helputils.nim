@@ -327,6 +327,8 @@ backup - Open backup file manager
 conf - Open configuration mode
 
 debug - Open debug mode
+
+ju or jumps - Open Jump list viewer
 """
 
 proc initHelpModeBuffer*(): seq[Runes] =

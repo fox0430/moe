@@ -141,7 +141,7 @@ proc changeCurrentBuffer*(
     currentNode.currentColumn = 0
     currentNode.expandedColumn = 0
 
-proc changeCurrentBuffer*(status: var EditorStatus, bufferIndex: int) =
+proc changeCurrentBuffer*(status: EditorStatus, bufferIndex: int) =
   changeCurrentBuffer(currentMainWindowNode, status.bufStatus, bufferIndex)
 
 proc changeCurrentBufferById*(
@@ -167,7 +167,7 @@ proc changeCurrentBufferById*(
 proc bufferIndexInCurrentWindow*(status: EditorStatus): int {.inline.} =
   currentMainWindowNode.bufferIndex
 
-proc changeMode*(status: var EditorStatus, mode: Mode) =
+proc changeMode*(status: EditorStatus, mode: Mode) =
   let currentMode = currentBufStatus.mode
 
   if currentMode != Mode.ex:
@@ -177,7 +177,7 @@ proc changeMode*(status: var EditorStatus, mode: Mode) =
   currentBufStatus.mode = mode
 
 # Set the current cursor position to status.lastPosition
-proc updateLastCursorPosition*(status: var EditorStatus) =
+proc updateLastCursorPosition*(status: EditorStatus) =
   for i, p in status.lastPosition:
     if p.path.absolutePath == currentBufStatus.path.absolutePath:
       status.lastPosition[i].line = currentMainWindowNode.currentLine
@@ -364,7 +364,7 @@ proc initLspExperimentalParams*(
     discard
 
 proc lspInitialize*(
-    status: var EditorStatus, bufferId: int, workspaceRoot, langId: string
+    status: EditorStatus, bufferId: int, workspaceRoot, langId: string
 ): Result[(), string] =
   ## Start LSP server and initialize LSP client and server.
 
@@ -393,20 +393,20 @@ proc lspInitialize*(
 
   return Result[(), string].ok ()
 
-proc addFilerStatus*(status: var EditorStatus) {.inline.} =
+proc addFilerStatus*(status: EditorStatus) {.inline.} =
   ## Add a new FilerStatus and link it to the current bufStatus.
 
   status.filerStatuses.add initFilerStatus()
   currentBufStatus.filerStatusIndex = some(status.filerStatuses.high)
 
-proc addFilerStatus*(status: var EditorStatus, bufStatusIndex: int) {.inline.} =
+proc addFilerStatus*(status: EditorStatus, bufStatusIndex: int) {.inline.} =
   ## Add a new FilerStatus and link it to the bufStatus.
 
   status.filerStatuses.add initFilerStatus()
   status.bufStatus[bufStatusIndex].filerStatusIndex = some(status.filerStatuses.high)
 
 proc addNewBuffer*(
-    status: var EditorStatus, path: string | Runes, mode: Mode
+    status: EditorStatus, path: string | Runes, mode: Mode
 ): Result[int, string] =
   ## Return bufStatus.high after adding a new buffer.
 
@@ -512,12 +512,12 @@ proc addNewBuffer*(
 
   return Result[int, string].ok status.bufStatus.high
 
-proc addNewBuffer*(status: var EditorStatus, mode: Mode): Result[int, string] =
+proc addNewBuffer*(status: EditorStatus, mode: Mode): Result[int, string] =
   const Path = ""
   return status.addNewBuffer(Path, mode)
 
 proc addNewBufferInCurrentWin*(
-    status: var EditorStatus, path: string | Runes, mode: Mode
+    status: EditorStatus, path: string | Runes, mode: Mode
 ): Result[(), string] =
   ## Add a new buffer and change the current buffer to it and init an editor
   ## view.
@@ -538,25 +538,25 @@ proc addNewBufferInCurrentWin*(
   return Result[(), string].ok ()
 
 proc addNewBufferInCurrentWin*(
-    status: var EditorStatus, mode: Mode
+    status: EditorStatus, mode: Mode
 ): Result[(), string] {.inline.} =
   status.addNewBufferInCurrentWin("", mode)
 
 proc addNewBufferInCurrentWin*(
-    status: var EditorStatus, path: string | Runes
+    status: EditorStatus, path: string | Runes
 ): Result[(), string] {.inline.} =
   status.addNewBufferInCurrentWin(path, Mode.normal)
 
 proc addNewBufferInCurrentWin*(
-    status: var EditorStatus
+    status: EditorStatus
 ): Result[(), string] {.inline.} =
   const Path = ""
   status.addNewBufferInCurrentWin(Path)
 
-proc resizeMainWindowNode(status: var EditorStatus, position: Position, size: Size) =
+proc resizeMainWindowNode(status: EditorStatus, position: Position, size: Size) =
   mainWindowNode.resize(position, size)
 
-proc resize*(status: var EditorStatus) =
+proc resize*(status: EditorStatus) =
   ## Reszie all windows to ui.terminalSize.
 
   let
@@ -1234,7 +1234,7 @@ proc restoreCursorPosition*(
     else:
       node.currentColumn = posi.column
 
-proc moveCurrentMainWindow*(status: var EditorStatus, index: int) =
+proc moveCurrentMainWindow*(status: EditorStatus, index: int) =
   if index < 0 or status.mainWindow.numOfMainWindow <= index:
     return
 
@@ -1242,17 +1242,17 @@ proc moveCurrentMainWindow*(status: var EditorStatus, index: int) =
 
   currentMainWindowNode = mainWindowNode.searchByWindowIndex(index)
 
-proc moveNextWindow*(status: var EditorStatus) {.inline.} =
+proc moveNextWindow*(status: EditorStatus) {.inline.} =
   status.updateLastCursorPosition
 
   status.moveCurrentMainWindow(currentMainWindowNode.windowIndex + 1)
 
-proc movePrevWindow*(status: var EditorStatus) {.inline.} =
+proc movePrevWindow*(status: EditorStatus) {.inline.} =
   status.updateLastCursorPosition
 
   status.moveCurrentMainWindow(currentMainWindowNode.windowIndex - 1)
 
-proc verticalSplitWindow*(status: var EditorStatus): Result[(), string] =
+proc verticalSplitWindow*(status: EditorStatus): Result[(), string] =
   status.updateLastCursorPosition
 
   # Create the new window
@@ -1293,7 +1293,7 @@ proc verticalSplitWindow*(status: var EditorStatus): Result[(), string] =
 
   return Result[(), string].ok ()
 
-proc horizontalSplitWindow*(status: var EditorStatus): Result[(), string] =
+proc horizontalSplitWindow*(status: EditorStatus): Result[(), string] =
   status.updateLastCursorPosition
 
   let buffer = currentBufStatus.buffer

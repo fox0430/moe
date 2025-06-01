@@ -28,7 +28,7 @@ import
   independentutils, highlight, windownode, movement, build, bufferstatus, editor,
   settings, quickrunutils, messages, commandline, debugmodeutils, platform,
   commandlineutils, recentfilemode, messagelog, buffermanager, viewhighlight,
-  configmode, git, syntaxcheck, exmodeutils, logviewerutils
+  configmode, git, syntaxcheck, exmodeutils, logviewerutils, jumplistviewer
 
 proc startDebugMode(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
@@ -61,7 +61,6 @@ proc openConfigMode(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 
   block:
-    # Split window and move to new window
     let r = status.verticalSplitWindow
     if r.isErr:
       status.commandline.writeNcursesError(r.error)
@@ -1030,8 +1029,9 @@ proc writeAndQuitAllBufferCommand(status: var EditorStatus) =
       status.changeMode(currentBufStatus.prevMode)
       return
 
-# Save buffer, build and open log viewer
 proc buildCommand(status: var EditorStatus) =
+  ## Save buffer, build and open log viewer
+
   # Force enable a build on save temporarily.
   let currentSetting = status.settings.buildOnSave.enable
 
@@ -1041,6 +1041,32 @@ proc buildCommand(status: var EditorStatus) =
   status.settings.buildOnSave.enable = currentSetting
 
   status.openEditorLogViewer
+
+proc openJumpList(status: EditorStatus) =
+  status.changeMode(currentBufStatus.prevMode)
+  let list = currentMainWindowNode.jumpList
+
+  block:
+    # Split window and move to new window
+    let r = status.verticalSplitWindow
+    if r.isErr:
+      status.commandline.writeNcursesError(r.error)
+      return
+
+  status.resize
+  status.moveNextWindow
+
+  block:
+    let err = status.addNewBufferInCurrentWin(Mode.jumpList)
+    if err.isErr:
+      status.commandline.writeError(err.error)
+      return
+
+  status.changeCurrentBuffer(status.bufStatus.high)
+
+  currentBufStatus.buffer = list.initJumpListBuffer.toGapBuffer
+
+  status.resize
 
 proc shellCommand(status: var EditorStatus, shellCommand: string) =
   saveCurrentTerminalModes()
@@ -1490,6 +1516,8 @@ proc exModeCommand*(status: var EditorStatus, command: seq[Runes]) =
     status.highlightCurrentLineSettingCommand(command[1])
   elif isBuildCommand(command):
     status.buildCommand
+  elif isJumpListCommand(command):
+    status.openJumpList
   elif isLspExeCommand(command):
     status.lspExecuteCommand(command[1 .. ^1])
   elif isLspFoldingCommand(command):

@@ -159,6 +159,16 @@ const ExCommandInfoList* = [
     argsType: ArgsType.toggle,
   ),
   ExCommandInfo(
+    command: "ju",
+    description: "Show Jump List",
+    argsType: ArgsType.toggle,
+  ),
+  ExCommandInfo(
+    command: "jumps",
+    description: "Show Jump List",
+    argsType: ArgsType.toggle,
+  ),
+  ExCommandInfo(
     command: "linenum",
     description: "Enable/Disable the line number",
     argsType: ArgsType.toggle,
@@ -689,6 +699,9 @@ proc isStartDebugModeCommand*(command: seq[Runes]): bool {.inline.} =
 proc isBuildCommand*(command: seq[Runes]): bool {.inline.} =
   command.len == 1 and cmpIgnoreCase($command[0], "build") == 0
 
+proc isJumpListCommand*(command: seq[Runes]): bool {.inline.} =
+  command.len == 1 and (cmpIgnoreCase($command[0], "ju") == 0 or cmpIgnoreCase($command[0], "jumps") == 0)
+
 proc isLspExeCommand*(command: seq[Runes]): bool {.inline.} =
   command.len > 1 and cmpIgnoreCase($command[0], "lspexecommand") == 0
 
@@ -761,6 +774,7 @@ proc isValidExCommand*(commandSplit: seq[Runes]): bool =
     isSmartcaseSettingCommand(commandSplit) or isForceWriteCommand(commandSplit) or
     isForceWriteAndQuitCommand(commandSplit) or isStartDebugModeCommand(commandSplit) or
     isHighlightCurrentLineSettingCommand(commandSplit) or isBuildCommand(commandSplit) or
+    isJumpListCommand(commandSplit) or
     isLspExeCommand(commandSplit) or isLspFoldingCommand(commandSplit) or
     isLspRestartCommand(commandSplit) or isLspFormatCommand(commandSplit) or
     isLspForceRestartCommand(commandSplit)

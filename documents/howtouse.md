@@ -360,6 +360,7 @@
 | `backup` | Open backup manager |
 | `conf` | Open configuration mode |
 | `debug` | Open debug mode |
+| `ju` or `jumps` | Open Jump list viewer |
 
 </details>
 
