@@ -704,7 +704,7 @@ suite "Visual block mode: Delete buffer (Disable clipboard)":
 
 suite "Visual mode: Yank buffer (Enable clipboard)":
   test "Yank string":
-    if not isXselAvailable():
+    if not isXselAvailable() or isSkipNimbleVersion():
       skip()
     else:
       assert clearXsel()
@@ -745,7 +745,7 @@ suite "Visual mode: Yank buffer (Enable clipboard)":
       check getXselBuffer().removeLineEnd == "abc"
 
   test "Yank lines":
-    if not isXselAvailable():
+    if not isXselAvailable() or isSkipNimbleVersion():
       skip()
     else:
       assert clearXsel()
@@ -790,7 +790,7 @@ suite "Visual mode: Yank buffer (Enable clipboard)":
 
 suite "Visual block mode: Yank buffer (Enable clipboard) 1":
   test "Yank lines 1":
-    if not isXselAvailable():
+    if not isXselAvailable() or isSkipNimbleVersion():
       skip()
     else:
       assert clearXsel()
@@ -827,7 +827,7 @@ suite "Visual block mode: Yank buffer (Enable clipboard) 1":
       check getXselBuffer().removeLineEnd == "a\nd"
 
   test "Yank lines 2":
-    if not isXselAvailable():
+    if not isXselAvailable() or isSkipNimbleVersion():
       skip()
     else:
       assert clearXsel()
@@ -868,7 +868,7 @@ suite "Visual block mode: Yank buffer (Enable clipboard) 1":
 
 suite "Visual block mode: Delete buffer":
   test "Delete buffer (Enable clipboard) 1":
-    if not isXselAvailable():
+    if not isXselAvailable() or isSkipNimbleVersion():
       skip()
     else:
       assert clearXsel()
@@ -906,7 +906,7 @@ suite "Visual block mode: Delete buffer":
       check getXselBuffer().removeLineEnd == "a\nd"
 
   test "Delete buffer (Enable clipboard) 2":
-    if not isXselAvailable():
+    if not isXselAvailable() or isSkipNimbleVersion():
       skip()
     else:
       assert clearXsel()
@@ -943,7 +943,7 @@ suite "Visual block mode: Delete buffer":
       )
 
   test "Fix #885":
-    if not isXselAvailable():
+    if not isXselAvailable() or isSkipNimbleVersion():
       skip()
     else:
       assert clearXsel()
@@ -2494,7 +2494,7 @@ suite "Visual line mode: Yank buffer (Disable clipboard)":
 
 suite "Visual line mode: Yank buffer (Enable clipboard)":
   test "Yank lines":
-    if not isXselAvailable():
+    if not isXselAvailable() or isSkipNimbleVersion():
       skip()
     else:
       assert clearXsel()

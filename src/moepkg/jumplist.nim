@@ -32,21 +32,28 @@ type
     history*: seq[JumpInfo]
 
 proc initJumpList*(): JumpList {.inline.} =
-  return JumpList(currentPosition: -1, history: @[])
+  return JumpList(currentPosition: 0, history: @[])
 
 proc add*(l: var JumpList, bufferId: int, path: Runes, line, col: int) {.inline.} =
   l.history.add JumpInfo(
     bufferId: bufferId, path: path, position: BufferPosition(line: line, column: col)
   )
-  l.currentPosition.inc
+  l.currentPosition = l.history.high
 
 proc add*(
     l: var JumpList, bufferId: int, path: Runes, position: BufferPosition
 ) {.inline.} =
   l.history.add JumpInfo(bufferId: bufferId, path: path, position: position)
-  l.currentPosition.inc
+  l.currentPosition = l.history.high
 
-proc getCurrentHistoryPosition*(l: JumpList): Option[JumpInfo] =
-  if l.history.len > 0 and l.currentPosition > -1:
+proc jumpBack*(l: JumpList): Option[JumpInfo] =
+  if l.history.len > 0:
     result = some(l.history[l.currentPosition])
-    l.currentPosition.dec
+    if l.currentPosition > 0:
+      l.currentPosition.dec
+
+proc jumpFoward*(l: JumpList): Option[JumpInfo] =
+  if l.history.len > 0:
+    result = some(l.history[l.currentPosition])
+    if l.currentPosition < l.history.high:
+      l.currentPosition.inc

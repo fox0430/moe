@@ -37,8 +37,12 @@ proc nimbleVersion*(): VersionInfo {.compileTime.} =
 
 proc isSkipNimbleVersion*(): bool =
   ## Workaround for https://github.com/nim-lang/nimble/issues/1384
-  const NimbleVersion = nimbleVersion()
-  return NimbleVersion.major == 0 and NimbleVersion.minor > 16
+
+  if getEnv("NOT_SKIP_TESTS") == "y":
+    return false
+  else:
+    const NimbleVersion = nimbleVersion()
+    return NimbleVersion.major == 0 and NimbleVersion.minor > 16
 
 proc resize*(status: var EditorStatus, h, w: int) =
   updateTerminalSize(h, w)
