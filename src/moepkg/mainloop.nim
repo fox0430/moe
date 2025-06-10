@@ -29,7 +29,7 @@ import
   popupwindow, messages, filermodeutils, editor, registers, exmodeutils, movement,
   searchutils, independentutils, viewhighlight, completion, completionwindow,
   worddictionary, referencesmode, callhierarchyviewer, editorview, logviewerutils,
-  documentsymbol
+  documentsymbol, jumplistviewer
 
 type
   BeforeLine = object
@@ -74,6 +74,8 @@ proc invokeCommand(
     isReferencesModeCommand(command)
   of Mode.callhierarchyViewer:
     isCallHierarchyViewerCommand(command)
+  of Mode.jumpList:
+    isJumpListCommand(command)
 
 proc execCommand(status: var EditorStatus, command: Runes): Option[Rune] =
   ## Exec editor commands.
@@ -113,6 +115,8 @@ proc execCommand(status: var EditorStatus, command: Runes): Option[Rune] =
     status.execCallHierarchyViewerCommand(command)
   of Mode.documentSymbol:
     status.execDocumentSymbolCommand(command)
+  of Mode.jumpList:
+    status.execJumpListCommand(command)
 
 proc assignNextExCommandHistory(
     status: var EditorStatus, exCommandHistoryIndex: var Option[int]

@@ -55,6 +55,7 @@ type
     references
     callhierarchyViewer
     documentSymbol
+    jumpList
 
   CallHierarchyInfo* = object
     bufferId*: int
@@ -258,6 +259,12 @@ proc isDocumentSymbolMode*(mode: Mode): bool {.inline.} =
 
 proc isDocumentSymbolMode*(b: BufferStatus): bool {.inline.} =
   isDocumentSymbolMode(b.mode)
+
+proc isJumpListMode*(mode, prevMode: Mode): bool {.inline.} =
+  (mode == Mode.jumpList) or (mode == Mode.ex and prevMode == Mode.jumpList)
+
+proc isJumpListMode*(b: BufferStatus): bool {.inline.} =
+  isJumpListMode(b.mode, b.prevMode)
 
 proc isEditMode*(mode, prevMode: Mode): bool {.inline.} =
   ## Modes for editing text
