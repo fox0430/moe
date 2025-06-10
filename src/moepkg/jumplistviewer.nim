@@ -27,14 +27,15 @@ proc calcPositionStrMaxLen(h: seq[JumpInfo]): tuple[line: int, col: int] =
     line = 0
     col = 0
   for ji in h:
-    if len($ji.position.line) > line: line = len($ji.position.line)
-    if len($ji.position.column) > col: col = len($ji.position.column)
+    if len($ji.position.line) > line:
+      line = len($ji.position.line)
+    if len($ji.position.column) > col:
+      col = len($ji.position.column)
 
   return (line, col)
 
 proc initJumpListBuffer*(list: JumpList): seq[Runes] =
-  let
-    positionMaxLen = calcPositionStrMaxLen(list.history)
+  let positionMaxLen = calcPositionStrMaxLen(list.history)
 
   # Header line
   block:

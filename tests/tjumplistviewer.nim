@@ -52,11 +52,8 @@ suite "initJumpListBuffer":
         path = fmt"text{i}.txt"
       l.add(bufferId, path.toRunes, line, column)
 
-    check l.initJumpListBuffer == @[
-      "line column path",
-      "0    0      text0.txt",
-      "1    1      text1.txt",
-    ].toSeqRunes
+    check l.initJumpListBuffer ==
+      @["line column path", "0    0      text0.txt", "1    1      text1.txt"].toSeqRunes
 
   test "Basic 2":
     const Path = "text.txt"
@@ -64,9 +61,8 @@ suite "initJumpListBuffer":
     l.add(0, Path.toRunes, 100000, 0)
     l.add(0, Path.toRunes, 0, 100000)
 
-    check l.initJumpListBuffer == @[
-      "line   column path",
-      "0      0      text.txt",
-      "100000 0      text.txt",
-      "0      100000 text.txt"
-    ].toSeqRunes
+    check l.initJumpListBuffer ==
+      @[
+        "line   column path", "0      0      text.txt", "100000 0      text.txt",
+        "0      100000 text.txt",
+      ].toSeqRunes

@@ -547,9 +547,7 @@ proc addNewBufferInCurrentWin*(
 ): Result[(), string] {.inline.} =
   status.addNewBufferInCurrentWin(path, Mode.normal)
 
-proc addNewBufferInCurrentWin*(
-    status: EditorStatus
-): Result[(), string] {.inline.} =
+proc addNewBufferInCurrentWin*(status: EditorStatus): Result[(), string] {.inline.} =
   const Path = ""
   status.addNewBufferInCurrentWin(Path)
 
