@@ -158,9 +158,9 @@ const ExCommandInfoList* = [
     description: "Enable/Disable auto indentation lines",
     argsType: ArgsType.toggle,
   ),
-  ExCommandInfo(command: "ju", description: "Show Jump List", argsType: ArgsType.toggle),
+  ExCommandInfo(command: "ju", description: "Show Jump List", argsType: ArgsType.none),
   ExCommandInfo(
-    command: "jumps", description: "Show Jump List", argsType: ArgsType.toggle
+    command: "jumps", description: "Show Jump List", argsType: ArgsType.none
   ),
   ExCommandInfo(
     command: "linenum",
