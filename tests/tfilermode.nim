@@ -18,9 +18,16 @@
 #[############################################################################]#
 
 import std/[unittest, strutils, algorithm, os]
-import pkg/results
-import moepkg/[unicodeext, bufferstatus, gapbuffer, color, windownode, highlight]
 
+import pkg/results
+
+import
+  moepkg/[
+    unicodeext, bufferstatus, gapbuffer, color, windownode, highlight, editorstatus,
+    commandline,
+  ]
+
+import moepkg/filermode {.all.}
 import moepkg/filermodeutils {.all.}
 
 proc getCurrentFiles(path: string): seq[string] =
@@ -130,3 +137,16 @@ suite "Filer mode":
     check bufStatuses.openFileOrDir(mainWindow.currentMainWindowNode, filerStatus).isOk
 
     check Mode.normal == bufStatuses[0].mode
+
+  test "Change to ex mode":
+    const
+      Path = ru"./"
+      IsShowIcons = false
+
+    var status = initEditorStatus().get
+    assert status.addNewBufferInCurrentWin(Path, Mode.filer).isOk
+
+    status.execFilerModeCommand(ru":")
+
+    check status.commandline.getPrompt == ru":"
+    check status.commandline.buffer.len == 0

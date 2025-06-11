@@ -18,8 +18,10 @@
 #[############################################################################]#
 
 import std/[unittest, strformat, os, options]
+
 import pkg/results
-import moepkg/[unicodeext, editorstatus, bufferstatus, ui]
+
+import moepkg/[unicodeext, editorstatus, bufferstatus, ui, commandline]
 
 import moepkg/settings {.all.}
 import moepkg/configmode {.all.}
@@ -2152,3 +2154,14 @@ suite "Config mode: getColorModeSettingValues":
   test "Current mode is ColorMode.c24bit":
     check @[ru"24bit", ru"none", ru"8", ru"16", ru"256"] ==
       ColorMode.c24bit.getColorModeSettingValues
+
+suite "Config mode: execConfigCommand":
+  setup:
+    var status = initEditorStatus().get
+    assert status.addNewBufferInCurrentWin(Mode.config).isOk
+
+  test "Change to ex mode":
+    status.execConfigCommand(ru":")
+
+    check status.commandline.getPrompt == ru":"
+    check status.commandline.buffer.len == 0

@@ -19,11 +19,13 @@
 
 import std/[unittest, strformat]
 
-import moepkg/[unicodeext, jumplist]
+import pkg/results
+
+import moepkg/[unicodeext, jumplist, editorstatus, bufferstatus, commandline]
 
 import moepkg/jumplistviewer {.all.}
 
-suite "calcPositionStrMaxLen":
+suite "jumplistviewer: calcPositionStrMaxLen":
   setup:
     var l = initJumpList()
 
@@ -39,7 +41,7 @@ suite "calcPositionStrMaxLen":
     l.add(0, ru"", 0, 10)
     check l.history.calcPositionStrMaxLen == (1, 2)
 
-suite "initJumpListBuffer":
+suite "jumplistviewer: initJumpListBuffer":
   setup:
     var l = initJumpList()
 
@@ -66,3 +68,14 @@ suite "initJumpListBuffer":
         "line   column path", "0      0      text.txt", "100000 0      text.txt",
         "0      100000 text.txt",
       ].toSeqRunes
+
+suite "jumplistviewer: execJumpListCommand":
+  setup:
+    var status = initEditorStatus().get
+    assert status.addNewBufferInCurrentWin(Mode.jumpList).isOk
+
+  test "Change to ex mode":
+    status.execJumpListCommand(ru":")
+
+    check status.commandline.getPrompt == ru":"
+    check status.commandline.buffer.len == 0

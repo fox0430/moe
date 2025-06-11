@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -18,9 +18,12 @@
 #[############################################################################]#
 
 import std/os
+
 import pkg/[regex, results]
+
 import
-  editorstatus, ui, unicodeext, bufferstatus, movement, gapbuffer, messages, windownode
+  editorstatus, ui, unicodeext, bufferstatus, movement, gapbuffer, messages, windownode,
+  commandline
 
 proc openSelectedBuffer(status: var EditorStatus) =
   let
@@ -70,6 +73,11 @@ proc isRecentFileCommand*(command: Runes): InputState =
       if command[1] == ord('g'):
         return InputState.Valid
 
+template changeModeToExMode(bufStatus: var BufferStatus, commandLine: CommandLine) =
+  bufStatus.changeMode(Mode.ex)
+  commandLine.clear
+  commandLine.setPrompt(CommandLinePrompt.ex)
+
 proc execRecentFileCommand*(status: var EditorStatus, command: Runes) =
   if command.len == 1:
     let key = command[0]
@@ -78,7 +86,7 @@ proc execRecentFileCommand*(status: var EditorStatus, command: Runes) =
     elif isCtrlJ(key):
       status.movePrevWindow
     elif key == ord(':'):
-      status.changeMode(Mode.ex)
+      currentBufStatus.changeModeToExMode(status.commandLine)
     elif key == ord('k') or isUpKey(key):
       currentBufStatus.keyUp(currentMainWindowNode)
     elif key == ord('j') or isDownKey(key):

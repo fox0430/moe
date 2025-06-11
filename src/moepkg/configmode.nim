@@ -2198,6 +2198,11 @@ proc isConfigModeCommand*(command: Runes): InputState =
       if command[1] == ord('g'):
         return InputState.Valid
 
+template changeModeToExMode(bufStatus: var BufferStatus, commandLine: CommandLine) =
+  bufStatus.changeMode(Mode.ex)
+  commandLine.clear
+  commandLine.setPrompt(CommandLinePrompt.ex)
+
 proc execConfigCommand*(status: var EditorStatus, command: Runes) =
   # TODO: Fix or Remove
   # For SettingType.Array
@@ -2210,7 +2215,7 @@ proc execConfigCommand*(status: var EditorStatus, command: Runes) =
     elif isCtrlJ(key):
       status.movePrevWindow
     elif key == ord(':'):
-      status.changeMode(Mode.ex)
+      currentBufStatus.changeModeToExMode(status.commandLine)
     elif isEnterKey(key):
       status.selectAndChangeEditorSettings(arrayIndex)
       currentBufStatus.buffer = initConfigModeBuffer(status.settings)

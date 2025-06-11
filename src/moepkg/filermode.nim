@@ -71,7 +71,7 @@ proc openNewWinAndOpenFilerOrDir(
 proc currentPathInfo(status: EditorStatus): PathInfo {.inline.} =
   currentFilerStatus.pathList[currentMainWindowNode.currentLine]
 
-proc changeModeToExMode*(bufStatus: var BufferStatus, commandLine: CommandLine) =
+template changeModeToExMode(bufStatus: BufferStatus, commandLine: CommandLine) =
   bufStatus.changeMode(Mode.ex)
   commandLine.clear
   commandLine.setPrompt(CommandLinePrompt.ex)

@@ -35,7 +35,7 @@ proc isDebugModeCommand*(command: Runes): InputState =
       if command[1] == ord('g'):
         return InputState.Valid
 
-proc changeModeToExMode(bufStatus: var BufferStatus, commandLine: CommandLine) =
+template changeModeToExMode(bufStatus: BufferStatus, commandLine: CommandLine) =
   bufStatus.changeMode(Mode.ex)
   commandLine.clear
   commandLine.setPrompt(CommandLinePrompt.ex)

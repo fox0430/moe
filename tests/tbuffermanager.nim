@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -21,7 +21,8 @@ import std/unittest
 
 import pkg/results
 
-import moepkg/[editorstatus, bufferstatus, unicodeext, gapbuffer, windownode]
+import
+  moepkg/[editorstatus, bufferstatus, unicodeext, gapbuffer, windownode, commandline]
 
 import utils
 
@@ -264,3 +265,14 @@ suite "buffermanager: openSelectedBuffer":
     check nodes[1].bufferIndex == 1
 
     status.update
+
+suite "buffermanager: execBufferManagerCommand":
+  setup:
+    var status = initEditorStatus().get
+    assert status.addNewBufferInCurrentWin(Mode.bufmanager).isOk
+
+  test "Change to ex mode":
+    status.execBufferManagerCommand(ru":")
+
+    check status.commandline.getPrompt == ru":"
+    check status.commandline.buffer.len == 0

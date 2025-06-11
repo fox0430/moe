@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -21,7 +21,7 @@ import std/[unittest, oids, os]
 
 import pkg/results
 
-import moepkg/unicodeext
+import moepkg/[unicodeext, editorstatus, bufferstatus, commandline]
 
 import moepkg/recentfilemode {.all.}
 
@@ -61,3 +61,14 @@ suite "getRecentUsedFiles":
     writeFile(recentlyUsedXbelPath, RecentlyUsedXbelBuffer)
 
     check @[ru"/home/user/picture.jpg"] == getRecentUsedFiles(recentlyUsedXbelPath).get
+
+suite "QuickRun: execRecentFileCommand":
+  setup:
+    var status = initEditorStatus().get
+    assert status.addNewBufferInCurrentWin(Mode.recentFile).isOk
+
+  test "Change to ex mode":
+    status.execRecentFileCommand(ru":")
+
+    check status.commandline.getPrompt == ru":"
+    check status.commandline.buffer.len == 0
