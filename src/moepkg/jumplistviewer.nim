@@ -44,10 +44,11 @@ proc initJumpListBuffer*(list: JumpList): seq[Runes] =
       colFieldWidth = max(6, positionMaxLen.col)
       lineHeader = "line" & " ".repeat(max(lineFieldWidth - 4, 0))
       colHeader = "column" & " ".repeat(max(colFieldWidth - 6, 0))
-    result.add toRunes(fmt"{lineHeader} {colHeader} path")
+      pathHeader = "path"
+    result.add toRunes(fmt" {lineHeader} {colHeader} {pathHeader}")
 
   # Data lines
-  for l in list.history:
+  for i, l in list.history:
     let
       lineStr = $l.position.line
       colStr = $l.position.column
@@ -57,7 +58,15 @@ proc initJumpListBuffer*(list: JumpList): seq[Runes] =
       # Padding
       linePadded = lineStr & " ".repeat(max(lineFieldWidth - lineStr.len, 0))
       colPadded = colStr & " ".repeat(max(colFieldWidth - colStr.len, 0))
-    result.add linePadded.toRunes & ru" " & colPadded.toRunes & ru" " & l.path
+
+    if i == list.currentPosition:
+      let currentPositionMark = ru">"
+      result.add currentPositionMark & linePadded.toRunes & ru" " & colPadded.toRunes &
+        ru" " & l.path
+    else:
+      let currentPositionPadded = ru" "
+      result.add currentPositionPadded & linePadded.toRunes & ru" " & colPadded.toRunes &
+        ru" " & l.path
 
 proc isJumpListCommand*(command: Runes): InputState =
   result = InputState.Invalid
