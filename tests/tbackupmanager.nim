@@ -22,7 +22,7 @@ import std/[unittest, oids, os, json, strformat]
 import pkg/results
 
 import ./utils
-import moepkg/[unicodeext, editorstatus, bufferstatus, backup, gapbuffer]
+import moepkg/[unicodeext, editorstatus, bufferstatus, backup, gapbuffer, commandline]
 
 import moepkg/backupmanagerutils {.all.}
 import moepkg/backupmanager {.all.}
@@ -195,3 +195,31 @@ suite "Backup Manager: removeBackupFile":
     status.removeBackupFile(sourceFilePath.toRunes, IS_FORCE_REMOVE)
 
     check getBackupFiles(status.baseBackupDir, sourceFilePath.toRunes).len == 0
+
+suite "Backup Manager: execBackupManagerCommand":
+  let
+    baseBackupDir = getCurrentDir() / "baseBackupDirForTest"
+    backupDir = baseBackupDir / $genOid()
+    sourceFilePath = fmt"{getCurrentDir()}/{$genOid()}.txt"
+
+  setup:
+    os.createDir(baseBackupDir)
+    os.createDir(backupDir)
+
+    var status = initEditorStatus().get
+    discard status.addNewBufferInCurrentWin().get
+
+    writeFile(sourceFilePath, "test")
+
+    status.addBackupManagerBuffer
+
+  teardown:
+    removeDir(baseBackupDir)
+    if fileExists(sourceFilePath):
+      removeFile(sourceFilePath)
+
+  test "Change to ex mode":
+    status.execBackupManagerCommand(ru":")
+
+    check status.commandline.getPrompt == ru":"
+    check status.commandline.buffer.len == 0

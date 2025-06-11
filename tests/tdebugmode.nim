@@ -18,11 +18,15 @@
 #[############################################################################]#
 
 import std/[unittest, os, strformat, times, options]
+
 import pkg/results
-import moepkg/[editorstatus, bufferstatus, gapbuffer, unicodeext, ui]
+
+import moepkg/[editorstatus, bufferstatus, gapbuffer, unicodeext, ui, commandline]
+
+import moepkg/debugmode {.all.}
 import moepkg/debugmodeutils {.all.}
 
-suite "Init debug mode buffer":
+suite "debugmode: Init debug mode buffer":
   test "Init buffer":
     var status = initEditorStatus().get
     discard status.addNewBufferInCurrentWin.get
@@ -92,3 +96,14 @@ suite "Init debug mode buffer":
 
     for i in 0 ..< status.bufStatus[1].buffer.len:
       check status.bufStatus[1].buffer[i] == correctBuf[i]
+
+suite "debugmode: execDebugModeCommand":
+  setup:
+    var status = initEditorStatus().get
+    assert status.addNewBufferInCurrentWin(Mode.debug).isOk
+
+  test "Change to ex mode":
+    status.execDebugModeCommand(ru":")
+
+    check status.commandline.getPrompt == ru":"
+    check status.commandline.buffer.len == 0

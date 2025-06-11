@@ -24,7 +24,7 @@ import pkg/results
 import
   editorstatus, bufferstatus, unicodeext, ui, movement, gapbuffer, highlight, settings,
   messages, backup, fileutils, editorview, windownode, commandlineutils,
-  backupmanagerutils
+  backupmanagerutils, commandline
 
 template baseBackupDir*(status: EditorStatus): Runes =
   status.settings.autoBackup.backupDir
@@ -185,6 +185,11 @@ proc isBackupManagerCommand*(command: Runes): InputState =
       if command[1] == ord('g'):
         return InputState.Valid
 
+template changeModeToExMode*(bufStatus: BufferStatus, commandLine: CommandLine) =
+  bufStatus.changeMode(Mode.ex)
+  commandLine.clear
+  commandLine.setPrompt(CommandLinePrompt.ex)
+
 proc execBackupManagerCommand*(status: var EditorStatus, command: Runes) =
   let sourceFilePath = status.bufStatus[status.prevBufferIndex].absolutePath
 
@@ -195,7 +200,7 @@ proc execBackupManagerCommand*(status: var EditorStatus, command: Runes) =
     elif isCtrlJ(key):
       status.movePrevWindow
     elif key == ord(':'):
-      status.changeMode(Mode.ex)
+      currentBufStatus.changeModeToExMode(status.commandLine)
     elif key == ord('k') or isUpKey(key):
       currentBufStatus.keyUp(currentMainWindowNode)
     elif key == ord('j') or isDownKey(key):

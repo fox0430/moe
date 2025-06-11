@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -23,7 +23,8 @@ import pkg/results
 
 import utils
 
-import moepkg/[unicodeext, editorstatus, bufferstatus, gapbuffer, windownode]
+import
+  moepkg/[unicodeext, editorstatus, bufferstatus, gapbuffer, windownode, commandline]
 import moepkg/lsp/protocol/types
 import moepkg/lsp/[callhierarchy, utils]
 
@@ -226,3 +227,14 @@ suite "callhierarchyviewer: jumpToDestination":
 
     check $currentBufStatus.absolutePath == filePath
     check currentBufStatus.buffer.toSeqRunes == Buffer.splitLines.toSeqRunes
+
+suite "callhierarchyviewer: execCallHierarchyViewerCommand":
+  setup:
+    var status = initEditorStatus().get
+    assert status.addNewBufferInCurrentWin(Mode.callhierarchyviewer).isOk
+
+  test "Change to ex mode":
+    status.execCallHierarchyViewerCommand(ru":")
+
+    check status.commandline.getPrompt == ru":"
+    check status.commandline.buffer.len == 0

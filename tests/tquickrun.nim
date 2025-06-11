@@ -22,10 +22,13 @@ import std/[unittest, os]
 import pkg/results
 
 import moepkg/syntax/highlite
-import moepkg/[unicodeext, bufferstatus, gapbuffer, backgroundprocess]
+import
+  moepkg/
+    [unicodeext, bufferstatus, gapbuffer, backgroundprocess, editorstatus, commandline]
 import utils
 
 import moepkg/settings {.all.}
+import moepkg/quickrun {.all.}
 import moepkg/quickrunutils {.all.}
 
 suite "QuickRun: languageExtension":
@@ -362,3 +365,14 @@ suite "QuickRun: startBackgroundQuickRun and result":
           break
 
       check not timeout
+
+suite "QuickRun: execQuickRunCommand":
+  setup:
+    var status = initEditorStatus().get
+    assert status.addNewBufferInCurrentWin(Mode.quickRun).isOk
+
+  test "Change to ex mode":
+    status.execQuickRunCommand(ru":")
+
+    check status.commandline.getPrompt == ru":"
+    check status.commandline.buffer.len == 0

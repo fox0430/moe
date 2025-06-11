@@ -22,7 +22,8 @@ import std/heapqueue
 import pkg/results
 
 import
-  gapbuffer, ui, editorstatus, unicodeext, windownode, movement, bufferstatus, messages
+  gapbuffer, ui, editorstatus, unicodeext, windownode, movement, bufferstatus, messages,
+  commandline
 
 proc initBufferManagerBuffer*(bufStatuses: seq[BufferStatus]): seq[Runes] =
   ## Return buffer for the buffer manager.
@@ -105,6 +106,11 @@ proc isBufferManagerCommand*(command: Runes): InputState =
         key == ord('D'):
       return InputState.Valid
 
+template changeModeToExMode(bufStatus: BufferStatus, commandLine: CommandLine) =
+  bufStatus.changeMode(Mode.ex)
+  commandLine.clear
+  commandLine.setPrompt(CommandLinePrompt.ex)
+
 proc execBufferManagerCommand*(status: var EditorStatus, command: Runes) =
   let key = command[0]
 
@@ -113,7 +119,7 @@ proc execBufferManagerCommand*(status: var EditorStatus, command: Runes) =
   elif isCtrlJ(key):
     status.movePrevWindow
   elif key == ord(':'):
-    status.changeMode(Mode.ex)
+    currentBufStatus.changeModeToExMode(status.commandLine)
   elif key == ord('k') or isUpKey(key):
     currentBufStatus.keyUp(currentMainWindowNode)
   elif key == ord('j') or isDownKey(key):

@@ -19,7 +19,7 @@
 
 import std/[strformat, strutils]
 
-import jumplist, unicodeext, ui, editorstatus, bufferstatus, movement
+import jumplist, unicodeext, ui, editorstatus, bufferstatus, movement, commandline
 
 proc calcPositionStrMaxLen(h: seq[JumpInfo]): tuple[line: int, col: int] =
   var
@@ -70,6 +70,11 @@ proc isJumpListCommand*(command: Runes): InputState =
         key == ord('D'):
       return InputState.Valid
 
+template changeModeToExMode*(bufStatus: BufferStatus, commandLine: CommandLine) =
+  bufStatus.changeMode(Mode.ex)
+  commandLine.clear
+  commandLine.setPrompt(CommandLinePrompt.ex)
+
 proc execJumpListCommand*(status: EditorStatus, command: Runes) =
   let key = command[0]
 
@@ -78,7 +83,7 @@ proc execJumpListCommand*(status: EditorStatus, command: Runes) =
   elif isCtrlJ(key):
     status.movePrevWindow
   elif key == ord(':'):
-    status.changeMode(Mode.ex)
+    currentBufStatus.changeModeToExMode(status.commandLine)
   elif key == ord('k') or isUpKey(key):
     currentBufStatus.keyUp(currentMainWindowNode)
   elif key == ord('j') or isDownKey(key):
