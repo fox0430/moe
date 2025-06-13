@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -1142,7 +1142,7 @@ suite "mainloop: updateCompletionWindowBufferInEditor":
     status.completionWindow.get.inputText = ru"i"
     status.updateCompletionWindowBufferInEditor
 
-    check status.completionWindow.get.popupWindow.get.position == Position(y: 17, x: 1)
+    check status.completionWindow.get.popupWindow.get.position == Position(y: 16, x: 1)
 
     currentBufStatus.buffer[currentMainWindowNode.currentLine] = ru"im"
     currentMainWindowNode.currentColumn.inc
@@ -1150,7 +1150,7 @@ suite "mainloop: updateCompletionWindowBufferInEditor":
     status.completionWindow.get.inputText = ru"im"
     status.updateCompletionWindowBufferInEditor
 
-    check status.completionWindow.get.popupWindow.get.position == Position(y: 42, x: 1)
+    check status.completionWindow.get.popupWindow.get.position == Position(y: 41, x: 1)
 
   test "Without LSP (WordDictionary)":
     var status = initEditorStatus().get
@@ -1234,7 +1234,7 @@ suite "mainloop: updateCompletionWindowBufferInCommandLine":
           w: status.completionWindow.get.list.maxLabelLen + 2,
         )
       check status.completionWindow.get.popupWindow.get.position ==
-        Position(y: 99 - status.completionWindow.get.list.len, x: 0)
+        Position(y: 98 - status.completionWindow.get.list.len, x: 0)
 
     block:
       status.commandLine.buffer = ru"cl"
@@ -1250,7 +1250,7 @@ suite "mainloop: updateCompletionWindowBufferInCommandLine":
       check status.completionWindow.get.popupWindow.get.size ==
         Size(h: 1, w: status.completionWindow.get.list.maxLabelLen + 2)
       check status.completionWindow.get.popupWindow.get.position == Position(
-        y: 98, x: 0
+        y: 97, x: 0
       )
 
 suite "mainloop: confirmCompletion in editor":
