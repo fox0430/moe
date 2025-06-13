@@ -349,20 +349,18 @@ proc highlightSyntaxCheckerReuslts(
 
   for se in syntaxErrors:
     if inRange(bufferInView, se.position):
-      let
-        originalPosition = bufferInView.originalPosition(se.position)
-        color =
-          case se.messageType
-          of SyntaxCheckMessageType.info: EditorColorPairIndex.syntaxCheckInfo
-          of SyntaxCheckMessageType.hint: EditorColorPairIndex.syntaxCheckHint
-          of SyntaxCheckMessageType.warning: EditorColorPairIndex.syntaxCheckWarn
-          of SyntaxCheckMessageType.error: EditorColorPairIndex.syntaxCheckErr
+      let color =
+        case se.messageType
+        of SyntaxCheckMessageType.info: EditorColorPairIndex.syntaxCheckInfo
+        of SyntaxCheckMessageType.hint: EditorColorPairIndex.syntaxCheckHint
+        of SyntaxCheckMessageType.warning: EditorColorPairIndex.syntaxCheckWarn
+        of SyntaxCheckMessageType.error: EditorColorPairIndex.syntaxCheckErr
       highlight.overwrite(
         ColorSegment(
-          firstRow: originalPosition.line,
-          firstColumn: originalPosition.column,
-          lastRow: originalPosition.line,
-          lastColumn: originalPosition.column,
+          firstRow: se.position.line,
+          firstColumn: se.position.column,
+          lastRow: se.position.line,
+          lastColumn: se.position.column,
           color: color,
           attribute: Attribute.underline,
         )

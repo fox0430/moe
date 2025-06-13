@@ -26,7 +26,7 @@ import moepkg/syntax/highlite
 import
   moepkg/[
     editorstatus, highlight, color, gapbuffer, unicodeext, movement, windownode, ui,
-    independentutils, bufferstatus, messagelog,
+    independentutils, bufferstatus, messagelog, syntaxcheck,
   ]
 
 import utils
@@ -1448,3 +1448,82 @@ suite "viewhighlight: updateViewHighlight":
           attribute: Attribute.normal,
         ),
       ]
+
+suite "viewhighlight: highlightSyntaxCheckerReuslts":
+  privateAccess(BufferInView)
+
+  test "Scroll lines":
+    var status = initEditorStatus().get
+    assert status.addNewBufferInCurrentWin.isOk
+    currentBufStatus.buffer = (0 .. 50).mapIt(it.toRunes).toGapBuffer
+
+    status.resize(10, 10)
+    status.update
+
+    let syntaxCheckResults =
+      @[
+        SyntaxError(
+          position: BufferPosition(line: 0, column: 0),
+          messageType: SyntaxCheckMessageType.error,
+          message: "Error1".toRunes,
+        ),
+        SyntaxError(
+          position: BufferPosition(line: 5, column: 0),
+          messageType: SyntaxCheckMessageType.error,
+          message: "Error2".toRunes,
+        ),
+      ]
+
+    block:
+      var h = Highlight()
+      h.colorSegments = currentBufStatus.highlight.colorSegments
+
+      let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
+
+      h.highlightSyntaxCheckerReuslts(bufferInView, syntaxCheckResults)
+
+      for c in h.colorSegments:
+        if c.attribute == Attribute.underline:
+          check c ==
+            ColorSegment(
+              firstRow: 0,
+              firstColumn: 0,
+              lastRow: 0,
+              lastColumn: 0,
+              color: syntaxCheckErr,
+              attribute: underline,
+            ) or
+            c ==
+            ColorSegment(
+              firstRow: 5,
+              firstColumn: 0,
+              lastRow: 5,
+              lastColumn: 0,
+              color: syntaxCheckErr,
+              attribute: underline,
+            )
+
+    # Scroll editor view
+    for _ in 0 .. 6:
+      currentBufStatus.keyDown(currentMainWindowNode)
+    status.update
+
+    block:
+      var h = Highlight()
+      h.colorSegments = currentBufStatus.highlight.colorSegments
+
+      let bufferInView = initBufferInView(currentBufStatus, currentMainWindowNode)
+
+      h.highlightSyntaxCheckerReuslts(bufferInView, syntaxCheckResults)
+
+      for c in h.colorSegments:
+        if c.attribute == Attribute.underline:
+          check c ==
+            ColorSegment(
+              firstRow: 5,
+              firstColumn: 0,
+              lastRow: 5,
+              lastColumn: 0,
+              color: syntaxCheckErr,
+              attribute: underline,
+            )
