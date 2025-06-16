@@ -42,7 +42,7 @@ suite "jumplist: add":
 
     check l[] ==
       JumpList(
-        currentPosition: 1,
+        currentPosition: 2,
         history:
           @[
             JumpInfo(
@@ -69,7 +69,7 @@ suite "jumplist: add":
 
     check l[] ==
       JumpList(
-        currentPosition: 1,
+        currentPosition: 2,
         history:
           @[
             JumpInfo(
@@ -88,7 +88,7 @@ suite "jumplist: add":
 suite "jumplist: jumpBack":
   test "Basic":
     var l = JumpList(
-      currentPosition: 1,
+      currentPosition: 2,
       history:
         @[
           JumpInfo(
@@ -115,7 +115,7 @@ suite "jumplist: jumpBack":
         )
       check l[] ==
         JumpList(
-          currentPosition: 0,
+          currentPosition: 1,
           history:
             @[
               JumpInfo(
@@ -159,6 +159,7 @@ suite "jumplist: jumpBack":
         )[]
 
     block:
+      # No effect
       check l.jumpBack ==
         some(
           JumpInfo(
@@ -232,6 +233,7 @@ suite "jumplist: jumpFoward":
         )[]
 
     block:
+      # No effect
       check l.jumpFoward ==
         some(
           JumpInfo(

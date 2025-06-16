@@ -47,26 +47,32 @@ proc initJumpListBuffer*(list: JumpList): seq[Runes] =
       pathHeader = "path"
     result.add toRunes(fmt" {lineHeader} {colHeader} {pathHeader}")
 
+  let
+    currentPositionMark = ru">"
+    currentPositionPadded = ru" "
+
   # Data lines
-  for i, l in list.history:
-    let
-      lineStr = $l.position.line
-      colStr = $l.position.column
-      lineFieldWidth = max(4, positionMaxLen.line)
-      colFieldWidth = max(6, positionMaxLen.col)
-
-      # Padding
-      linePadded = lineStr & " ".repeat(max(lineFieldWidth - lineStr.len, 0))
-      colPadded = colStr & " ".repeat(max(colFieldWidth - colStr.len, 0))
-
-    if i == list.currentPosition:
-      let currentPositionMark = ru">"
-      result.add currentPositionMark & linePadded.toRunes & ru" " & colPadded.toRunes &
-        ru" " & l.path
+  for i in 0 .. list.history.len:
+    if i == list.history.len:
+      if i == list.currentPosition:
+        result.add currentPositionMark
     else:
-      let currentPositionPadded = ru" "
-      result.add currentPositionPadded & linePadded.toRunes & ru" " & colPadded.toRunes &
-        ru" " & l.path
+      let
+        lineStr = $list.history[i].position.line
+        colStr = $list.history[i].position.column
+        lineFieldWidth = max(4, positionMaxLen.line)
+        colFieldWidth = max(6, positionMaxLen.col)
+
+        # Padding
+        linePadded = lineStr & " ".repeat(max(lineFieldWidth - lineStr.len, 0))
+        colPadded = colStr & " ".repeat(max(colFieldWidth - colStr.len, 0))
+
+      if i == list.currentPosition:
+        result.add currentPositionMark & linePadded.toRunes & ru" " & colPadded.toRunes &
+          ru" " & list.history[i].path
+      else:
+        result.add currentPositionPadded & linePadded.toRunes & ru" " & colPadded.toRunes &
+          ru" " & list.history[i].path
 
 proc isJumpListCommand*(command: Runes): InputState =
   result = InputState.Invalid
