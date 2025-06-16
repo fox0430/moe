@@ -1234,7 +1234,7 @@ suite "mainloop: updateCompletionWindowBufferInCommandLine":
           w: status.completionWindow.get.list.maxLabelLen + 2,
         )
       check status.completionWindow.get.popupWindow.get.position ==
-        Position(y: 98 - status.completionWindow.get.list.len, x: 0)
+        Position(y: 99 - status.completionWindow.get.list.len, x: 0)
 
     block:
       status.commandLine.buffer = ru"cl"
@@ -1250,7 +1250,7 @@ suite "mainloop: updateCompletionWindowBufferInCommandLine":
       check status.completionWindow.get.popupWindow.get.size ==
         Size(h: 1, w: status.completionWindow.get.list.maxLabelLen + 2)
       check status.completionWindow.get.popupWindow.get.position == Position(
-        y: 97, x: 0
+        y: 98, x: 0
       )
 
 suite "mainloop: confirmCompletion in editor":
