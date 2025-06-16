@@ -136,7 +136,8 @@ proc autoMoveAndResize*(p: var PopupWindow, minPosition, maxPosition: Position) 
         p.position.y
       else:
         var tmpY = max(minPosition.y, aboveHeight - p.buffer.len - borderMargin)
-        if p.position.y < getTerminalHeight() - 1 and tmpY > 0: tmpY.dec
+        if p.position.y < getTerminalHeight() - 1 and tmpY > 0:
+          tmpY.dec
         tmpY
     x =
       if isRight:
