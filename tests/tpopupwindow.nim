@@ -118,7 +118,7 @@ suite "popupwindow: autoMoveAndResize":
       max = Position(y: 100, x: 100)
     p.autoMoveAndResize(min, max)
 
-    check p.position == Position(y: 95, x: 1)
+    check p.position == Position(y: 96, x: 1)
     check p.size == Size(h: 2, w: 5)
 
   test "autoMoveAndResize 4":
@@ -144,7 +144,7 @@ suite "popupwindow: autoMoveAndResize":
       max = Position(y: 100, x: 100)
     p.autoMoveAndResize(min, max)
 
-    check p.position == Position(y: 95, x: 93)
+    check p.position == Position(y: 96, x: 93)
     check p.size == Size(h: 2, w: 5)
 
   test "autoMoveAndResize enable border and add text":
@@ -159,7 +159,7 @@ suite "popupwindow: autoMoveAndResize":
     block:
       p.autoMoveAndResize(min, max)
 
-      check p.position == Position(y: 94, x: 97)
+      check p.position == Position(y: 95, x: 97)
       check p.size == Size(h: 3, w: 3)
 
     block:
@@ -167,7 +167,7 @@ suite "popupwindow: autoMoveAndResize":
 
       p.autoMoveAndResize(min, max)
 
-      check p.position == Position(y: 94, x: 97)
+      check p.position == Position(y: 95, x: 97)
       check p.size == Size(h: 3, w: 3)
 
 suite "popupwindow: update":
