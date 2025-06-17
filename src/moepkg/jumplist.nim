@@ -38,19 +38,19 @@ proc add*(l: var JumpList, bufferId: int, path: Runes, line, col: int) {.inline.
   l.history.add JumpInfo(
     bufferId: bufferId, path: path, position: BufferPosition(line: line, column: col)
   )
-  l.currentPosition = l.history.high
+  l.currentPosition = l.history.len
 
 proc add*(
     l: var JumpList, bufferId: int, path: Runes, position: BufferPosition
 ) {.inline.} =
   l.history.add JumpInfo(bufferId: bufferId, path: path, position: position)
-  l.currentPosition = l.history.high
+  l.currentPosition = l.history.len
 
 proc jumpBack*(l: JumpList): Option[JumpInfo] =
   if l.history.len > 0:
-    result = some(l.history[l.currentPosition])
     if l.currentPosition > 0:
       l.currentPosition.dec
+    result = some(l.history[l.currentPosition])
 
 proc jumpFoward*(l: JumpList): Option[JumpInfo] =
   if l.history.len > 0:

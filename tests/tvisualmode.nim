@@ -1521,7 +1521,7 @@ suite "Visual mode: Movement":
     check currentMainWindowNode.currentColumn == 0
     check currentMainWindowNode.jumpList[] ==
       JumpList(
-        currentPosition: 0,
+        currentPosition: 1,
         history:
           @[
             JumpInfo(
@@ -1555,7 +1555,7 @@ suite "Visual mode: Movement":
     check currentMainWindowNode.currentColumn == 0
     check currentMainWindowNode.jumpList[] ==
       JumpList(
-        currentPosition: 0,
+        currentPosition: 1,
         history:
           @[
             JumpInfo(
@@ -1589,7 +1589,7 @@ suite "Visual mode: Movement":
     check currentMainWindowNode.currentColumn == 0
     check currentMainWindowNode.jumpList[] ==
       JumpList(
-        currentPosition: 0,
+        currentPosition: 1,
         history:
           @[
             JumpInfo(
@@ -1622,7 +1622,7 @@ suite "Visual mode: Movement":
     check currentMainWindowNode.currentColumn == 0
     check currentMainWindowNode.jumpList[] ==
       JumpList(
-        currentPosition: 0,
+        currentPosition: 1,
         history:
           @[
             JumpInfo(
@@ -1655,7 +1655,7 @@ suite "Visual mode: Movement":
     check currentMainWindowNode.currentColumn == 0
     check currentMainWindowNode.jumpList[] ==
       JumpList(
-        currentPosition: 0,
+        currentPosition: 1,
         history:
           @[
             JumpInfo(
