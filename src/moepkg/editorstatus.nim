@@ -317,7 +317,7 @@ proc exitEditor*(status: EditorStatus) =
     saveLastCursorPosition(status.lastPosition)
 
   if dirExists(gitDiffTmpDir()):
-    # Cleanup temporary files fot git diff.
+    # Cleanup temporary files for git diff.
     removeDir(gitDiffTmpDir())
 
   exitUi()
@@ -896,7 +896,7 @@ proc updateCommandLine(status: var EditorStatus) =
     let message = currentBufStatus.syntaxCheckResults.formattedMessage(
       currentMainWindowNode.currentLine
     )
-    if message.isSome: # Write messages for syntax checker reuslts.
+    if message.isSome: # Write messages for syntax checker results.
       status.commandLine.write message.get
     elif status.commandLine.buffer.isSyntaxCheckFormattedMessage:
       # Clear if messages for other lines are still displayed.
@@ -1047,7 +1047,7 @@ proc update*(status: var EditorStatus) =
             node.view.updateSidebarBufferForChangedLine(b.changedLines)
 
           if status.settings.syntaxChecker.enable:
-            # Write syntax checker reuslts to the sidebar
+            # Write syntax checker results to the sidebar
             node.view.updateSidebarBufferForSyntaxChecker(b.syntaxCheckResults)
 
         node.view.updateEditorViewConfig(status.settings)

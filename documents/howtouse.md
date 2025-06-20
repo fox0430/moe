@@ -140,7 +140,7 @@
 | <kbd>**Ctrl**</kbd> <kbd>**s**</kbd></br> | Selection Range (LSP) |
 | <kbd>**Space**</kbd> <kbd>**o**</kbd></br> | Document Symbol (LSP) |
 | <kbd>**Ctrl**</kbd> <kbd>**o**</kbd></br> | Jump Back (Jumplist) |
-| <kbd>**Ctrl**</kbd> <kbd>**i**</kbd></br> | Jump Foward (Jumplist) |
+| <kbd>**Ctrl**</kbd> <kbd>**i**</kbd></br> | Jump Forward (Jumplist) |
 
 </details>
 

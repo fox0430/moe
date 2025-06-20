@@ -398,7 +398,7 @@ proc updateViewHighlight*(
   let bufferInView = initBufferInView(bufStatus, windowNode)
 
   if bufStatus.isEditMode:
-    # LSP or build-in
+    # LSP or built-in
     if lspCapabilities.isSome and lspCapabilities.get.documentHighlight:
       h.highlightDocumentHighlights(
         windowNode.bufferPosition, bufStatus.documentHighlightInfo.ranges

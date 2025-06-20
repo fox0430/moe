@@ -29,7 +29,7 @@ type
     cursor: CursorPosition
     color*: EditorColorPairIndex
     window*: Window ## Ncurses window
-    view*: EditorView ## Comand line view
+    view*: EditorView ## Command line view
     isUpdate*: bool ## Update flag
     y*, x*, h*, w*: int ## Window position and window size
 

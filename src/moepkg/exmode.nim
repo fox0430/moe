@@ -887,7 +887,7 @@ proc writeCommand(status: var EditorStatus, path: Runes) =
     if status.settings.git.showChangedLine and currentBufStatus.isTrackingByGit:
       status.updateChangedLines
 
-    # Update syntax checker reuslts.
+    # Update syntax checker results.
     if status.settings.syntaxChecker.enable:
       let syntaxCheckProcess =
         startBackgroundSyntaxCheck($currentBufStatus.path, currentBufStatus.language)
@@ -1246,7 +1246,7 @@ proc lspExecuteCommand(status: var EditorStatus, command: seq[Runes]) =
   let lspCommand = $command[0]
 
   if lspCommand notin lspClient.capabilities.get.executeCommand.get:
-    status.commandLine.writeLspExecuteCommandError("unknow command")
+    status.commandLine.writeLspExecuteCommandError("unknown command")
     return
 
   let r = waitFor lspClient.workspaceExecuteCommand(

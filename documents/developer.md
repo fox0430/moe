@@ -116,7 +116,7 @@ Implementation of Gap buffer.
 
 ### ```src/moepkg/movement.nim```
 Many editor movement procs (Ex. move right, move to the end of the line, move to the next word, etc...).
-theses procs are used in many modes.
+these procs are used in many modes.
 
 ### ```src/moepkg/editor.nim```
 Many procs for editing text (Ex. Insert/delete characters, undo/redo, delete a word, etc...).
@@ -189,8 +189,8 @@ Main module for the log mode (Log viewer).
 The log mode can be started with `:log` command.
 
 ### ```src/moepkg/backupmanager.nim```
-Main module for the backup mode (Backup manger).
-Backup manger is the manager of the auto-backup files.
+Main module for the backup mode (Backup manager).
+Backup manager is the manager of the auto-backup files.
 The backup mode can be started with `:backup` command.
 
 ### ```src/moepkg/diffviewer.nim```
