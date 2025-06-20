@@ -68,7 +68,7 @@ proc writeWarn*(c: CommandLine, message: string) {.inline.} =
   c.writeMessageOnCommandLine(fmt"Warn: {message}", EditorColorPairIndex.warnMessage)
 
 proc writeNcursesColorError*(commandLine: CommandLine) {.inline.} =
-  commandLine.writeError("Ncurses: Cannot use extened colors")
+  commandLine.writeError("Ncurses: Cannot use extended colors")
 
 proc writeNoWriteError*(commandLine: CommandLine) {.inline.} =
   commandLine.writeError("No write since last change")

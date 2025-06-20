@@ -121,7 +121,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | Name | Type | Default Value | Description |
 |:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
 | multipleStatusLine | bool | true | Show multiple status lines |
-| merge | bool | fale | Enable merge the status line with the command line |
+| merge | bool | false | Enable merge the status line with the command line |
 | mode | bool | true | Display the current mode |
 | chanedMark | bool | true | Display the buffer changed mark |
 | directory | bool | true | Display the directory of the path |

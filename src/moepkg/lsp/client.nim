@@ -88,7 +88,7 @@ type
     state*: LspServerState # State of the Lsp server.
     serverProcess: AsyncProcessRef # LSP server process.
     serverStreams: Streams # Input/Output streams for the LSP server process.
-    outputStreamFuture: Future[JsonRpcResponseResult] # The feture of the output stream.
+    outputStreamFuture: Future[JsonRpcResponseResult] # The feature of the output stream.
     capabilities*: Option[LspCapabilities] # LSP server capabilities
     progress*: LspProgressTable # Use in window/workDoneProgress
     waitingResponses*: Table[RequestId, WaitLspResponse]

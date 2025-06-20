@@ -157,7 +157,7 @@ proc write*(
     color: EditorColorPairIndex = EditorColorPairIndex.default,
 ) {.inline.} =
   ## Write a buffer to the terminalBuffer
-  ## Cut off the buffer if longer than the window sieze.
+  ## Cut off the buffer if longer than the window size.
 
   when not defined(release):
     assert startPosition.y >= 0 and startPosition.x >= 0

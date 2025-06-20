@@ -974,7 +974,7 @@ suite "Normal mode: Repeat last command":
 
       check isNormalModeCommand(Command, none(Rune)) == InputState.Valid
 
-      # Dont' save "j"
+      # Don't save "j"
       check status.normalCommand(Command).isNone
       status.update
 

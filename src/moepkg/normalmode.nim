@@ -620,7 +620,7 @@ proc jumpByJumpList(status: var EditorStatus, j: JumpInfo) =
   # Find destination buffer
   let b = status.bufStatus.getBufferStatusByBufferId(j.bufferId)
   if b.isSome:
-    # Alread opend
+    # Already opend
     if b.get.id != currentBufStatus.id:
       let err = status.changeCurrentBufferById(b.get.id)
       if err.isErr:

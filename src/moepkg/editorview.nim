@@ -811,7 +811,7 @@ proc updateSidebarBufferForChangedLine*(view: var EditorView, changedLines: seq[
 proc updateSidebarBufferForSyntaxChecker*(
     view: var EditorView, syntaxCheckResults: seq[SyntaxError]
 ) =
-  ## Update (Overwrite) a sidebar buffer for syntax checker reuslts.
+  ## Update (Overwrite) a sidebar buffer for syntax checker results.
   ## It's on left side of EditorView.
 
   template highlights(): var seq[seq[EditorColorPairIndex]] =
