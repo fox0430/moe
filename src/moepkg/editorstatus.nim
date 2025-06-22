@@ -33,7 +33,7 @@ import
   registers, platform, movement, filermodeutils, debugmodeutils, independentutils,
   viewhighlight, backupmanagerutils, diffviewerutils, messagelog, globalsidebar, build,
   quickrunutils, git, syntaxcheck, theme, logviewerutils, completionwindow,
-  worddictionary, folding
+  worddictionary, folding, buffercache
 
 type
   LastCursorPosition* = object
@@ -77,6 +77,7 @@ type
     recodingOperationRegister*: Option[Rune]
     highlightingText*: Option[HighlightingText]
     lspClients*: LspClientTable
+    bufferCache*: BufferCache
 
 proc initEditorStatus*(): Result[EditorStatus, string] =
   var mainWin = initMainWindow()
@@ -100,6 +101,7 @@ proc initEditorStatus*(): Result[EditorStatus, string] =
     mainWindow: mainWin.get,
     statusLine: @[statusLine.get],
     registers: initRegisters(),
+    bufferCache: initBufferCache(),
   )
 
   return Result[EditorStatus, string].ok s
@@ -140,6 +142,71 @@ proc changeCurrentBuffer*(
     currentNode.currentLine = 0
     currentNode.currentColumn = 0
     currentNode.expandedColumn = 0
+
+proc changeCurrentBufferWithCache*(status: var EditorStatus, bufferIndex: int) =
+  ## Optimized buffer switching with cache and state preservation
+  if bufferIndex < 0 or bufferIndex >= status.bufStatus.len:
+    return
+
+  # Save current buffer state to cache if switching away
+  let currentIndex = currentMainWindowNode.bufferIndex
+  if currentIndex != bufferIndex:
+    let currentBuf = status.bufStatus[currentIndex]
+
+    # Save current state to cache
+    status.bufferCache.saveBufferState(
+      currentBuf.id,
+      currentMainWindowNode.currentLine,
+      currentMainWindowNode.currentColumn,
+      currentMainWindowNode.expandedColumn,
+      0, # scrollY - not available in this architecture
+      0, # scrollX - not available in this architecture
+      currentBuf.selectedArea,
+      currentBuf.highlight,
+      currentBuf.version,
+    )
+
+    # Add buffer to cache if not already there
+    if not status.bufferCache.isInCache(currentBuf.id):
+      status.bufferCache.addToCache(currentBuf)
+
+  # Switch to new buffer
+  currentMainWindowNode.bufferIndex = bufferIndex
+  let newBuf = status.bufStatus[bufferIndex]
+
+  # Try to restore state from cache
+  let cachedBuffer = status.bufferCache.getFromCache(newBuf.id)
+  if cachedBuffer.isSome:
+    let cached = cachedBuffer.get
+    let state = cached.state
+
+    # Restore cursor position and scroll if valid
+    if state.cursorLine < len(newBuf.buffer):
+      currentMainWindowNode.currentLine = state.cursorLine
+      currentMainWindowNode.currentColumn = min(
+        state.cursorColumn,
+        if len(newBuf.buffer) > 0:
+          len(newBuf.buffer[state.cursorLine])
+        else:
+          0,
+      )
+      currentMainWindowNode.expandedColumn = state.expandedColumn
+
+      # Note: View scroll state not available in this architecture
+      # The editor handles view positioning differently
+    else:
+      # Reset to beginning if cached position is invalid
+      currentMainWindowNode.currentLine = 0
+      currentMainWindowNode.currentColumn = 0
+      currentMainWindowNode.expandedColumn = 0
+  else:
+    # No cached state, start from beginning
+    currentMainWindowNode.currentLine = 0
+    currentMainWindowNode.currentColumn = 0
+    currentMainWindowNode.expandedColumn = 0
+
+    # Add to cache for future use
+    status.bufferCache.addToCache(newBuf)
 
 proc changeCurrentBuffer*(status: EditorStatus, bufferIndex: int) =
   changeCurrentBuffer(currentMainWindowNode, status.bufStatus, bufferIndex)
@@ -527,6 +594,51 @@ proc addNewBufferInCurrentWin*(
     return Result[(), string].err fmt"Failed to add new buffer: {index.error}"
 
   status.changeCurrentBuffer(index.get)
+
+  currentMainWindowNode.view = currentBufStatus.buffer.initEditorView(1, 1)
+  if status.settings.view.sidebar:
+    currentMainWindowNode.view.initSidebar
+
+  if mode.isFilerMode:
+    status.addFilerStatus
+
+  return Result[(), string].ok ()
+
+proc addNewBufferInCurrentWinWithCache*(
+    status: var EditorStatus, path: string | Runes, mode: Mode
+): Result[(), string] =
+  ## Optimized buffer opening that checks cache first
+  let pathStr = $path
+
+  # Check if buffer is already cached
+  if pathStr.len > 0 and status.bufferCache.isInCacheByPath(pathStr):
+    let cachedBuffer = status.bufferCache.getFromCacheByPath(pathStr)
+    if cachedBuffer.isSome:
+      # Buffer is in cache, check if it's already in bufStatus
+      let cached = cachedBuffer.get
+      for i, bufStatus in status.bufStatus:
+        if bufStatus.id == cached.bufStatus.id:
+          # Buffer already loaded, just switch to it
+          status.changeCurrentBufferWithCache(i)
+          return Result[(), string].ok ()
+
+      # Buffer in cache but not in bufStatus, add it back
+      status.bufStatus.add(cached.bufStatus)
+      let newIndex = status.bufStatus.len - 1
+      status.changeCurrentBufferWithCache(newIndex)
+
+      currentMainWindowNode.view = currentBufStatus.buffer.initEditorView(1, 1)
+      if status.settings.view.sidebar:
+        currentMainWindowNode.view.initSidebar
+
+      return Result[(), string].ok ()
+
+  # Not in cache, use normal loading process
+  let index = status.addNewBuffer(path, mode)
+  if index.isErr:
+    return Result[(), string].err fmt"Failed to add new buffer: {index.error}"
+
+  status.changeCurrentBufferWithCache(index.get)
 
   currentMainWindowNode.view = currentBufStatus.buffer.initEditorView(1, 1)
   if status.settings.view.sidebar:

@@ -323,7 +323,7 @@ proc getEditorColorPair(
     result = EditorColorPairIndex.default
 
 proc initHighlight*(
-    buffer: seq[Runes], color = EditorColorPairIndex.default
+    buffer: seq[Runes] = @[], color = EditorColorPairIndex.default
 ): Highlight {.inline.} =
   ## Return highlighting for the plain text.
 

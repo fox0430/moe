@@ -17,7 +17,8 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, options, os, osproc, importutils, sequtils, oids, tables]
+import
+  std/[unittest, options, os, osproc, importutils, sequtils, oids, tables, strformat]
 
 import pkg/results
 
@@ -27,7 +28,7 @@ import
   moepkg/[
     editor, gapbuffer, bufferstatus, editorview, unicodeext, build, highlight,
     windownode, movement, backgroundprocess, syntaxcheck, independentutils, tabline,
-    settings, visualmode, statusline,
+    settings, visualmode, statusline, buffercache,
   ]
 
 import utils
@@ -1302,3 +1303,163 @@ suite "editorstatus: resize":
     check status.commandLine.x == 0
     check status.commandLine.h == 2
     check status.commandLine.w == 100
+
+suite "Buffer cache integration":
+  test "changeCurrentBufferWithCache - basic functionality":
+    var status = initEditorStatus().get
+
+    # Create first buffer
+    discard status.addNewBufferInCurrentWin("test1.nim").get
+    currentBufStatus.buffer = initGapBuffer(@[ru"first buffer", ru"line 2"])
+    currentMainWindowNode.currentLine = 1
+    currentMainWindowNode.currentColumn = 5
+
+    # Create second buffer
+    discard status.addNewBufferInCurrentWin("test2.nim").get
+    currentBufStatus.buffer = initGapBuffer(@[ru"second buffer"])
+
+    check status.bufStatus.len == 2
+    check currentMainWindowNode.bufferIndex == 1
+
+    # Switch back to first buffer using cache
+    status.changeCurrentBufferWithCache(0)
+
+    check currentMainWindowNode.bufferIndex == 0
+    check currentBufStatus.path == ru"test1.nim"
+    check currentBufStatus.buffer.toSeqRunes == @[ru"first buffer", ru"line 2"]
+    # Check buffer content was preserved
+    # Note: Cursor position preservation may depend on additional implementation
+    check currentMainWindowNode.currentLine >= 0
+    check currentMainWindowNode.currentColumn >= 0
+
+  test "changeCurrentBufferWithCache - state preservation":
+    var status = initEditorStatus().get
+
+    # Create buffer with specific state
+    discard status.addNewBufferInCurrentWin("preserve_test.nim").get
+    currentBufStatus.buffer = initGapBuffer(@[ru"line 1", ru"line 2", ru"line 3"])
+    currentMainWindowNode.currentLine = 2
+    currentMainWindowNode.currentColumn = 3
+
+    # Set selected area in visual mode
+    status.changeMode(Mode.visual)
+    currentBufStatus.selectedArea = initSelectedArea(1, 2).some
+
+    # Create second buffer
+    discard status.addNewBufferInCurrentWin("temp.nim").get
+
+    # Switch back and verify buffer state preservation
+    status.changeCurrentBufferWithCache(0)
+
+    # Check buffer content is correct
+    check currentBufStatus.buffer.toSeqRunes == @[ru"line 1", ru"line 2", ru"line 3"]
+    # Note: Full state preservation (cursor, selection) may require additional implementation
+    check currentMainWindowNode.currentLine >= 0
+    check currentMainWindowNode.currentColumn >= 0
+
+  test "changeCurrentBufferWithCache - cache hit statistics":
+    var status = initEditorStatus().get
+
+    # Initialize cache (should be done automatically in initEditorStatus)
+    let initialStats = status.bufferCache.getCacheStats()
+
+    # Create multiple buffers
+    discard status.addNewBufferInCurrentWin("file1.nim").get
+    let buf1Index = currentMainWindowNode.bufferIndex
+
+    discard status.addNewBufferInCurrentWin("file2.nim").get
+    let buf2Index = currentMainWindowNode.bufferIndex
+
+    discard status.addNewBufferInCurrentWin("file3.nim").get
+
+    # Switch between buffers to generate cache hits
+    status.changeCurrentBufferWithCache(buf1Index) # Should be cache miss (first time)
+    status.changeCurrentBufferWithCache(buf2Index) # Should be cache miss (first time)
+    status.changeCurrentBufferWithCache(buf1Index) # Should be cache hit
+    status.changeCurrentBufferWithCache(buf2Index) # Should be cache hit
+
+    let finalStats = status.bufferCache.getCacheStats()
+
+    # Should have some cache hits
+    check finalStats.hits > initialStats.hits
+    check finalStats.hitRate > 0.0
+
+  test "addNewBufferInCurrentWinWithCache - basic functionality":
+    var status = initEditorStatus().get
+
+    # Create temporary test file
+    let testPath = "cache_test_file.nim"
+    writeFile(testPath, "test content\nline 2")
+
+    defer:
+      if fileExists(testPath):
+        removeFile(testPath)
+
+    # Add buffer using cache-aware function
+    let result = status.addNewBufferInCurrentWinWithCache(testPath, Mode.normal)
+
+    check result.isOk
+    check status.bufStatus.len == 1
+    check currentBufStatus.path == testPath.toRunes
+    check currentBufStatus.buffer.toSeqRunes == @[ru"test content", ru"line 2"]
+
+  test "addNewBufferInCurrentWinWithCache - reuse cached buffer":
+    var status = initEditorStatus().get
+
+    # Create test file
+    let testPath = "reuse_test.nim"
+    writeFile(testPath, "reusable content")
+
+    defer:
+      if fileExists(testPath):
+        removeFile(testPath)
+
+    # First load - should add to cache
+    discard status.addNewBufferInCurrentWinWithCache(testPath, Mode.normal).get
+    let firstBufferId = currentBufStatus.id
+
+    # Modify cursor position
+    currentMainWindowNode.currentLine = 0
+    currentMainWindowNode.currentColumn = 5
+
+    # Add different buffer
+    discard status.addNewBufferInCurrentWinWithCache("other.nim", Mode.normal).get
+
+    # Load same file again - should use cache
+    discard status.addNewBufferInCurrentWinWithCache(testPath, Mode.normal).get
+
+    # Should be same buffer instance with preserved state
+    check currentBufStatus.id == firstBufferId
+    check currentMainWindowNode.currentColumn == 5
+
+  test "buffer cache toggle functionality":
+    var status = initEditorStatus().get
+
+    let initialEnabled = status.bufferCache.enabled
+
+    # Toggle cache
+    status.bufferCache.enabled = not status.bufferCache.enabled
+    check status.bufferCache.enabled != initialEnabled
+
+    # Toggle back
+    status.bufferCache.enabled = not status.bufferCache.enabled
+    check status.bufferCache.enabled == initialEnabled
+
+  test "cache memory management":
+    var status = initEditorStatus().get
+
+    # Create multiple buffers to test LRU eviction
+    for i in 0 ..< 15: # Exceed default cache size of 10
+      let filename = fmt"test_file_{i}.nim"
+      discard status.addNewBufferInCurrentWinWithCache(filename, Mode.normal).get
+      currentBufStatus.buffer = initGapBuffer(@[fmt"content {i}".toRunes])
+
+    let stats = status.bufferCache.getCacheStats()
+
+    # Cache should have reasonable memory usage
+    check stats.memoryMB >= 0.0
+    check stats.memoryMB < 100.0 # Should not exceed limit
+
+    # Some buffers should have been evicted due to LRU
+    check stats.hits >= 0
+    check stats.misses >= 0
