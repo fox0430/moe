@@ -21,7 +21,10 @@ import std/[unittest, os, tempfiles, options, strutils]
 import pkg/results
 
 import
-  moepkg/[editorstatus, bufferstatus, unicodeext, gapbuffer, ui, registers, movement, viewhighlight]
+  moepkg/[
+    editorstatus, bufferstatus, unicodeext, gapbuffer, ui, registers, movement,
+    viewhighlight,
+  ]
 import utils
 
 import moepkg/mainloop {.all.}
@@ -297,13 +300,13 @@ suite "Command Execution Integration Tests":
     # Sequence: Move down, insert mode, add text, normal mode, move up
     let bufferLen = currentBufStatus.buffer.len
     let currentLine = currentMainWindowNode.currentLine
-    
+
     # Only test keyDown if there are more lines to move to
     if currentLine + 1 < bufferLen:
       currentBufStatus.keyDown(currentMainWindowNode) # Move to line 1
       check currentMainWindowNode.currentLine == 1
       let targetLine = 1
-      
+
       status.changeMode(Mode.insert)
       check currentBufStatus.mode == Mode.insert
 

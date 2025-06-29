@@ -20,8 +20,7 @@
 import std/[unittest, os, tempfiles, strutils]
 import pkg/results
 
-import
-  moepkg/[editorstatus, bufferstatus, unicodeext, gapbuffer, windownode]
+import moepkg/[editorstatus, bufferstatus, unicodeext, gapbuffer, windownode]
 
 proc createTempFile(content: string): string =
   ## Create a temporary file with given content and return the path
@@ -262,15 +261,15 @@ suite "Window Management Integration Tests":
 
     # Set up buffer with multiple lines
     currentBufStatus.buffer = "Line 1\nLine 2\nLine 3\nLine 4".toGapBuffer
-    
+
     # Verify buffer was set up correctly (buffer.len returns number of lines)
     check currentBufStatus.buffer.len >= 1
-    
+
     # Set cursor position within valid bounds (use 0-based indexing)
     let maxValidLine = max(0, currentBufStatus.buffer.len - 1)
     currentMainWindowNode.currentLine = min(2, maxValidLine)
     currentMainWindowNode.currentColumn = 3
-    
+
     # Verify cursor is within bounds before proceeding
     check currentMainWindowNode.currentLine < currentBufStatus.buffer.len
 

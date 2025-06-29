@@ -282,7 +282,7 @@ suite "Buffer Lifecycle Integration Tests":
     check buffer.id >= 0
     check buffer.mode in
       {Mode.normal, Mode.insert, Mode.visual, Mode.ex, Mode.help, Mode.filer}
-    check buffer.buffer.len >= 0  # Buffer should be initialized
+    check buffer.buffer.len >= 0 # Buffer should be initialized
     check buffer.characterEncoding != CharacterEncoding.unknown or buffer.path.len == 0
 
     # State transition consistency

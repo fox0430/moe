@@ -20,8 +20,7 @@
 import std/[unittest, os, tempfiles, strutils, options]
 import pkg/results
 
-import
-  moepkg/[editorstatus, bufferstatus, unicodeext, gapbuffer, viewhighlight]
+import moepkg/[editorstatus, bufferstatus, unicodeext, gapbuffer, viewhighlight]
 
 proc createTempFile(content: string): string =
   ## Create a temporary file with given content and return the path
@@ -66,7 +65,7 @@ suite "Editor Workflow Integration Tests":
 
     # Get initial buffer content and add text
     let initialContent = currentBufStatus.buffer.toString()
-    
+
     # Simulate typing "Hello, World!" (append to existing content)
     let text = "Hello, World!".toRunes
     currentBufStatus.buffer.add(text)
@@ -188,12 +187,14 @@ suite "Editor Workflow Integration Tests":
     check status.searchHistory[^1] == searchTerm
 
     # Test highlighting functionality (basic check)
-    status.highlightingText = some(HighlightingText(
-      kind: HighlightingTextKind.search,
-      text: @[searchTerm],
-      isIgnorecase: false,
-      isSmartcase: false,
-    ))
+    status.highlightingText = some(
+      HighlightingText(
+        kind: HighlightingTextKind.search,
+        text: @[searchTerm],
+        isIgnorecase: false,
+        isSmartcase: false,
+      )
+    )
 
     check status.highlightingText.isSome
     check status.highlightingText.get.kind == HighlightingTextKind.search
