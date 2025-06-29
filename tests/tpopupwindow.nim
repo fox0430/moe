@@ -147,6 +147,19 @@ suite "popupwindow: autoMoveAndResize":
     check p.position == Position(y: 96, x: 93)
     check p.size == Size(h: 2, w: 5)
 
+  test "autoMoveAndResize 6":
+    var p = initPopupWindow(
+      Position(y: 99, x: 1), Size(h: 101, w: 5), (0..100).mapIt(it.toRunes)
+    ).get
+
+    let
+      min = Position(y: 1, x: 1)
+      max = Position(y: 100, x: 100)
+    p.autoMoveAndResize(min, max)
+
+    check p.position == Position(y: 1, x: 1)
+    check p.size == Size(h: 97, w: 3)
+
   test "autoMoveAndResize enable border and add text":
     var p = initPopupWindow(
       Position(y: 99, x: 99), Size(h: 2, w: 5), @[ru"a"], showBorder = true
