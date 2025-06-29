@@ -149,7 +149,7 @@ suite "popupwindow: autoMoveAndResize":
 
   test "autoMoveAndResize 6":
     var p = initPopupWindow(
-      Position(y: 99, x: 1), Size(h: 101, w: 5), (0..100).mapIt(it.toRunes)
+      Position(y: 99, x: 1), Size(h: 101, w: 5), (0 .. 100).mapIt(it.toRunes)
     ).get
 
     let
