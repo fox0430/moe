@@ -3,5 +3,5 @@
 Fixed
 .....
 
-- `#2214`_ Fix completion window height in command line
+- `#2314`_ Fix completion window height in command line
 
