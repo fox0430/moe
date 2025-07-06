@@ -1085,12 +1085,16 @@ suite "lsp: Send requests":
       check (waitFor client.initialize(BufferId, params)).isOk
       check client.waitingResponses[1].lspMethod == LspMethod.initialize
 
+      var isTimeout = true
       for _ in 0 .. 20:
         let res = client.readResponse
         if res.isOk and res.get.contains("id"):
+          isTimeout = false
           check res.get["id"].getInt == 1
           check client.initCapacities(initLspFeatureSettings(), res.get).isOk
           break
+
+      check not isTimeout
 
   proc lspInitialize(
       c: var LspClient, bufferId: int, params: InitializeParams
