@@ -22,12 +22,10 @@ name: Build
 on:
   push:
     paths:
-      - '.github/workflows/test.yaml'
-      - 'example/**'
+      - '.github/workflows/build.yaml'
       - 'moe.nimble'
       - 'nimble.lock'
       - 'src/**'
-      - 'tests/**'
     branches:
       - develop
       - master
