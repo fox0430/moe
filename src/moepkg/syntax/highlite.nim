@@ -126,6 +126,8 @@ type
     langHaskell
     langJava
     langJavaScript
+    langJsx
+    langTsx
     langMarkdown
     langNim
     langPython
@@ -155,8 +157,8 @@ const
   wsChars*: set[char] = {'\t' .. '\r', ' '}
 
   sourceLanguageToStr*: array[SourceLanguage, string] = [
-    "none", "C", "C++", "C#", "Haskell", "Java", "JavaScript", "Markdown", "Nim",
-    "Python", "Rust", "Shell", "Toml", "Yaml", "Json",
+    "none", "C", "C++", "C#", "Haskell", "Java", "JavaScript", "JavaScriptReact", "Markdown", "Nim",
+    "Python", "Rust", "Shell", "Toml", "TypeScriptReact", "Yaml", "Json",
   ]
 
 proc getSourceLanguage*(name: string): SourceLanguage =
@@ -247,7 +249,7 @@ proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   of langCsharp: g.csharpNextToken
   of langHaskell: g.haskellNextToken
   of langJava: g.javaNextToken
-  of langJavaScript: g.javaScriptNextToken
+  of langJavaScript, langJsx, langTsx: g.javaScriptNextToken
   of langMarkdown: g.markdownNextToken
   of langNim: g.nimNextToken
   of langPython: g.pythonNextToken
