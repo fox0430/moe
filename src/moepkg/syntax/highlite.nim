@@ -157,8 +157,9 @@ const
   wsChars*: set[char] = {'\t' .. '\r', ' '}
 
   sourceLanguageToStr*: array[SourceLanguage, string] = [
-    "none", "C", "C++", "C#", "Haskell", "Java", "JavaScript", "JavaScriptReact", "Markdown", "Nim",
-    "Python", "Rust", "Shell", "Toml", "TypeScriptReact", "Yaml", "Json",
+    "none", "C", "C++", "C#", "Haskell", "Java", "JavaScript", "JavaScriptReact",
+    "Markdown", "Nim", "Python", "Rust", "Shell", "Toml", "TypeScriptReact", "Yaml",
+    "Json",
   ]
 
 proc getSourceLanguage*(name: string): SourceLanguage =
