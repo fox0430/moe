@@ -127,13 +127,13 @@ type
     langJava
     langJavaScript
     langJsx
-    langTsx
     langMarkdown
     langNim
     langPython
     langRust
     langShell
     langToml
+    langTsx
     langYaml
     langJson
 
