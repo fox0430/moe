@@ -281,6 +281,8 @@ proc getEditorColorPair(
       EditorColorPairIndex.default
     else:
       EditorColorPairIndex.stringLit
+  of gtLongStringLit:
+    EditorColorPairIndex.stringLit
   of gtBinNumber:
     EditorColorPairIndex.binNumber
   of gtDecNumber:
