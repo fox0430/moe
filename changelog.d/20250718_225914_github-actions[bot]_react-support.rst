@@ -3,5 +3,5 @@
 Added
 .....
 
-- `#2319`_ Add React (jsx, tsx) supports
+- `#2319`_ Add React (jsx) supports
 
