@@ -133,7 +133,6 @@ type
     langRust
     langShell
     langToml
-    langTsx
     langYaml
     langJson
 
@@ -158,7 +157,7 @@ const
 
   sourceLanguageToStr*: array[SourceLanguage, string] = [
     "none", "C", "C++", "C#", "Haskell", "Java", "JavaScript", "JavaScriptReact",
-    "Markdown", "Nim", "Python", "Rust", "Shell", "Toml", "TypeScriptReact", "Yaml",
+    "Markdown", "Nim", "Python", "Rust", "Shell", "Toml", "Yaml",
     "Json",
   ]
 
@@ -250,7 +249,7 @@ proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   of langCsharp: g.csharpNextToken
   of langHaskell: g.haskellNextToken
   of langJava: g.javaNextToken
-  of langJavaScript, langJsx, langTsx: g.javaScriptNextToken
+  of langJavaScript, langJsx: g.javaScriptNextToken
   of langMarkdown: g.markdownNextToken
   of langNim: g.nimNextToken
   of langPython: g.pythonNextToken
