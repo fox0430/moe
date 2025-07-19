@@ -32,8 +32,18 @@ proc tokens(code: string): seq[GT] =
       break
     else:
       result.add token
-      # Clear token.buf
+      # Clear token.buf and reset state fields for comparison
       result[^1].buf = ""
+      result[^1].templateLiteralDepth = 0
+      result[^1].braceDepthStack = @[]
+      result[^1].inJsxMode = false
+      result[^1].jsxTagDepth = 0
+      result[^1].inComment = false
+      result[^1].commentDepth = 0
+      result[^1].inScript = false
+      result[^1].inStyle = false
+      result[^1].astroInFrontmatter = false
+      result[^1].astroFirstLine = false
 
 suite "syntaxjson: jsonNextToken":
   test "Basic":
