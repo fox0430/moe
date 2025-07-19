@@ -21,9 +21,23 @@ import std/unittest
 
 import moepkg/syntax/highlite
 
-type GT = GeneralTokenizer
+type 
+  TestToken = object
+    kind: TokenClass
+    start, length: int
+    pos: int
+    state: TokenClass
 
-proc tokens(code: string): seq[GT] =
+proc toTestToken(gt: GeneralTokenizer): TestToken =
+  TestToken(
+    kind: gt.kind,
+    start: gt.start,
+    length: gt.length,
+    pos: gt.pos,
+    state: gt.state
+  )
+
+proc tokens(code: string): seq[TestToken] =
   var token = GeneralTokenizer()
   token.initGeneralTokenizer(code)
 
@@ -32,9 +46,7 @@ proc tokens(code: string): seq[GT] =
     if token.kind == gtEof:
       break
     else:
-      result.add token
-      # Clear token.buf
-      result[^1].buf = ""
+      result.add token.toTestToken()
 
 suite "syntax: Astro":
   test "Basic frontmatter only":
@@ -44,18 +56,18 @@ const a = 'hello';
 ---"""
     check tokens(Code) ==
       @[
-        GT(kind: gtDirective, start: 0, length: 3, buf: "", pos: 3, state: gtEof),
-        GT(kind: gtWhitespace, start: 3, length: 1, buf: "", pos: 4, state: gtEof),
-        GT(kind: gtKeyword, start: 4, length: 5, buf: "", pos: 9, state: gtEof),
-        GT(kind: gtWhitespace, start: 9, length: 1, buf: "", pos: 10, state: gtEof),
-        GT(kind: gtIdentifier, start: 10, length: 1, buf: "", pos: 11, state: gtEof),
-        GT(kind: gtWhitespace, start: 11, length: 1, buf: "", pos: 12, state: gtEof),
-        GT(kind: gtOperator, start: 12, length: 1, buf: "", pos: 13, state: gtEof),
-        GT(kind: gtWhitespace, start: 13, length: 1, buf: "", pos: 14, state: gtEof),
-        GT(kind: gtStringLit, start: 14, length: 7, buf: "", pos: 21, state: gtEof),
-        GT(kind: gtPunctuation, start: 21, length: 1, buf: "", pos: 22, state: gtEof),
-        GT(kind: gtWhitespace, start: 22, length: 1, buf: "", pos: 23, state: gtEof),
-        GT(kind: gtDirective, start: 23, length: 3, buf: "", pos: 26, state: gtEof),
+        TestToken(kind: gtDirective, start: 0, length: 3, pos: 3, state: gtEof),
+        TestToken(kind: gtWhitespace, start: 3, length: 1, pos: 4, state: gtEof),
+        TestToken(kind: gtKeyword, start: 4, length: 5, pos: 9, state: gtEof),
+        TestToken(kind: gtWhitespace, start: 9, length: 1, pos: 10, state: gtEof),
+        TestToken(kind: gtIdentifier, start: 10, length: 1, pos: 11, state: gtEof),
+        TestToken(kind: gtWhitespace, start: 11, length: 1, pos: 12, state: gtEof),
+        TestToken(kind: gtOperator, start: 12, length: 1, pos: 13, state: gtEof),
+        TestToken(kind: gtWhitespace, start: 13, length: 1, pos: 14, state: gtEof),
+        TestToken(kind: gtStringLit, start: 14, length: 7, pos: 21, state: gtEof),
+        TestToken(kind: gtPunctuation, start: 21, length: 1, pos: 22, state: gtEof),
+        TestToken(kind: gtWhitespace, start: 22, length: 1, pos: 23, state: gtEof),
+        TestToken(kind: gtDirective, start: 23, length: 3, pos: 26, state: gtEof),
       ]
 
   test "Simple Astro component":
