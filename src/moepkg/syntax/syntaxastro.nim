@@ -34,48 +34,46 @@
 import highlite
 import syntaxjavascript
 
-# Astro file state tracking
-var astroInFrontmatter {.global.}: bool = false
-var astroFirstLine {.global.}: bool = true
+# Astro file state tracking is now in GeneralTokenizer
 
 proc astroNextToken*(g: var GeneralTokenizer) =
   ## Astro syntax tokenizer that handles frontmatter and JSX template sections
 
   # Reset state when starting fresh
   if g.pos == 0:
-    astroInFrontmatter = false
-    astroFirstLine = true
+    g.astroInFrontmatter = false
+    g.astroFirstLine = true
 
   var pos = g.pos
   g.start = g.pos
 
   # Handle frontmatter delimiters
-  if astroFirstLine and g.buf[pos] == '-' and g.buf[pos + 1] == '-' and
+  if g.astroFirstLine and g.buf[pos] == '-' and g.buf[pos + 1] == '-' and
       g.buf[pos + 2] == '-':
     # Start of frontmatter
-    astroInFrontmatter = true
-    astroFirstLine = false
+    g.astroInFrontmatter = true
+    g.astroFirstLine = false
     g.kind = gtDirective
     inc(pos, 3)
     # Skip any trailing characters on the line
     while g.buf[pos] notin {'\0', '\n', '\r'}:
       inc(pos)
-  elif astroInFrontmatter and g.buf[pos] == '-' and g.buf[pos + 1] == '-' and
+  elif g.astroInFrontmatter and g.buf[pos] == '-' and g.buf[pos + 1] == '-' and
       g.buf[pos + 2] == '-':
     # End of frontmatter
-    astroInFrontmatter = false
+    g.astroInFrontmatter = false
     g.kind = gtDirective
     inc(pos, 3)
     # Skip any trailing characters on the line
     while g.buf[pos] notin {'\0', '\n', '\r'}:
       inc(pos)
-  elif astroInFrontmatter:
+  elif g.astroInFrontmatter:
     # Inside frontmatter - use JavaScript tokenizer
     javaScriptNextToken(g)
     return
   else:
     # Outside frontmatter - use JavaScript tokenizer for JSX content
-    astroFirstLine = false
+    g.astroFirstLine = false
     javaScriptNextToken(g)
     return
 

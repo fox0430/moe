@@ -504,6 +504,8 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langCsharp
   of ".cabal", ".hs":
     return SourceLanguage.langHaskell
+  of ".html":
+    return SourceLanguage.langHtml
   of ".java":
     return SourceLanguage.langJava
   of ".js", ".ts":

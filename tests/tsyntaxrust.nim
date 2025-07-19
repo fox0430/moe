@@ -37,8 +37,18 @@ suite "syntax: Rust":
         break
       else:
         tokens.add token
-        # Clear token.buf
+        # Clear token.buf and reset state fields for comparison
         tokens[^1].buf = ""
+        tokens[^1].templateLiteralDepth = 0
+        tokens[^1].braceDepthStack = @[]
+        tokens[^1].inJsxMode = false
+        tokens[^1].jsxTagDepth = 0
+        tokens[^1].inComment = false
+        tokens[^1].commentDepth = 0
+        tokens[^1].inScript = false
+        tokens[^1].inStyle = false
+        tokens[^1].astroInFrontmatter = false
+        tokens[^1].astroFirstLine = false
 
     check tokens ==
       @[
@@ -76,8 +86,18 @@ suite "syntax: Rust":
         break
       else:
         tokens.add token
-        # Clear token.buf
+        # Clear token.buf and reset state fields for comparison
         tokens[^1].buf = ""
+        tokens[^1].templateLiteralDepth = 0
+        tokens[^1].braceDepthStack = @[]
+        tokens[^1].inJsxMode = false
+        tokens[^1].jsxTagDepth = 0
+        tokens[^1].inComment = false
+        tokens[^1].commentDepth = 0
+        tokens[^1].inScript = false
+        tokens[^1].inStyle = false
+        tokens[^1].astroInFrontmatter = false
+        tokens[^1].astroFirstLine = false
 
     check tokens ==
       @[GT(kind: gtOperator, start: 0, length: 1, buf: "", pos: 1, state: gtEof)]
@@ -96,8 +116,18 @@ suite "syntax: Rust":
         break
       else:
         tokens.add token
-        # Clear token.buf
+        # Clear token.buf and reset state fields for comparison
         tokens[^1].buf = ""
+        tokens[^1].templateLiteralDepth = 0
+        tokens[^1].braceDepthStack = @[]
+        tokens[^1].inJsxMode = false
+        tokens[^1].jsxTagDepth = 0
+        tokens[^1].inComment = false
+        tokens[^1].commentDepth = 0
+        tokens[^1].inScript = false
+        tokens[^1].inStyle = false
+        tokens[^1].astroInFrontmatter = false
+        tokens[^1].astroFirstLine = false
 
     check tokens ==
       @[GT(kind: gtComment, start: 0, length: 41, buf: "", pos: 41, state: gtEof)]
