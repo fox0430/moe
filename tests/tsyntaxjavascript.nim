@@ -423,3 +423,34 @@ suite "syntax: JavaScript":
     let tokenList = tokens(Code)
     check tokenList.len >= 10
     # Should handle complex HTML structure with interpolation
+
+  test "JSX element with proper keyword highlighting":
+    const Code = "<div className=\"test\"><span>text</span></div>"
+    let tokenList = tokens(Code)
+    # Should recognize HTML keywords properly
+    var divKeywordFound = false
+    var spanKeywordFound = false
+    for token in tokenList:
+      if token.kind == gtKeyword:
+        let tokenText = Code[token.start ..< token.start + token.length]
+        if tokenText == "div":
+          divKeywordFound = true
+        elif tokenText == "span":
+          spanKeywordFound = true
+    check divKeywordFound
+    check spanKeywordFound
+
+  test "HTML tag keywords in JSX":
+    const Code = "<button type=\"submit\"><input value=\"test\" /></button>"
+    let tokenList = tokens(Code)
+    var buttonKeywordFound = false
+    var inputKeywordFound = false
+    for token in tokenList:
+      if token.kind == gtKeyword:
+        let tokenText = Code[token.start ..< token.start + token.length]
+        if tokenText == "button":
+          buttonKeywordFound = true
+        elif tokenText == "input":
+          inputKeywordFound = true
+    check buttonKeywordFound
+    check inputKeywordFound
