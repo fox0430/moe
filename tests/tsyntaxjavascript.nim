@@ -44,11 +44,12 @@ proc testTokens(code: string): seq[TestToken] =
         start: token.start,
         length: token.length,
         pos: token.pos,
-        state: token.state
+        state: token.state,
       )
 
 # Keep the old function for backwards compatibility
-proc tokens(code: string): seq[TestToken] = testTokens(code)
+proc tokens(code: string): seq[TestToken] =
+  testTokens(code)
 
 suite "syntax: JavaScript":
   test "Basic":
@@ -112,29 +113,19 @@ suite "syntax: JavaScript":
   test "Template literal simple":
     const Code = "`Hello World`"
     check tokens(Code) ==
-      @[
-        TestToken(kind: gtLongStringLit, start: 0, length: 13, pos: 13, state: gtNone)
-      ]
+      @[TestToken(kind: gtLongStringLit, start: 0, length: 13, pos: 13, state: gtNone)]
 
   test "Template literal with interpolation":
     const Code = "`Hello ${name}!`"
     check tokens(Code) ==
       @[
         TestToken(
-          kind: gtLongStringLit,
-          start: 0,
-          length: 7,
-          pos: 7,
-          state: gtLongStringLit,
+          kind: gtLongStringLit, start: 0, length: 7, pos: 7, state: gtLongStringLit
         ),
         TestToken(kind: gtOperator, start: 7, length: 2, pos: 9, state: gtNone),
         TestToken(kind: gtIdentifier, start: 9, length: 4, pos: 13, state: gtNone),
         TestToken(
-          kind: gtOperator,
-          start: 13,
-          length: 1,
-          pos: 14,
-          state: gtLongStringLit,
+          kind: gtOperator, start: 13, length: 1, pos: 14, state: gtLongStringLit
         ),
         TestToken(kind: gtLongStringLit, start: 14, length: 2, pos: 16, state: gtNone),
       ]
@@ -144,39 +135,21 @@ suite "syntax: JavaScript":
     check tokens(Code) ==
       @[
         TestToken(
-          kind: gtLongStringLit,
-          start: 0,
-          length: 1,
-          pos: 1,
-          state: gtLongStringLit,
+          kind: gtLongStringLit, start: 0, length: 1, pos: 1, state: gtLongStringLit
         ),
         TestToken(kind: gtOperator, start: 1, length: 2, pos: 3, state: gtNone),
         TestToken(kind: gtIdentifier, start: 3, length: 1, pos: 4, state: gtNone),
+        TestToken(kind: gtOperator, start: 4, length: 1, pos: 5, state: gtLongStringLit),
         TestToken(
-          kind: gtOperator, start: 4, length: 1, pos: 5, state: gtLongStringLit
-        ),
-        TestToken(
-          kind: gtLongStringLit,
-          start: 5,
-          length: 3,
-          pos: 8,
-          state: gtLongStringLit,
+          kind: gtLongStringLit, start: 5, length: 3, pos: 8, state: gtLongStringLit
         ),
         TestToken(kind: gtOperator, start: 8, length: 2, pos: 10, state: gtNone),
         TestToken(kind: gtIdentifier, start: 10, length: 1, pos: 11, state: gtNone),
         TestToken(
-          kind: gtOperator,
-          start: 11,
-          length: 1,
-          pos: 12,
-          state: gtLongStringLit,
+          kind: gtOperator, start: 11, length: 1, pos: 12, state: gtLongStringLit
         ),
         TestToken(
-          kind: gtLongStringLit,
-          start: 12,
-          length: 3,
-          pos: 15,
-          state: gtLongStringLit,
+          kind: gtLongStringLit, start: 12, length: 3, pos: 15, state: gtLongStringLit
         ),
         TestToken(kind: gtOperator, start: 15, length: 2, pos: 17, state: gtNone),
         TestToken(kind: gtIdentifier, start: 17, length: 1, pos: 18, state: gtNone),
@@ -185,11 +158,7 @@ suite "syntax: JavaScript":
         TestToken(kind: gtWhitespace, start: 20, length: 1, pos: 21, state: gtNone),
         TestToken(kind: gtIdentifier, start: 21, length: 1, pos: 22, state: gtNone),
         TestToken(
-          kind: gtOperator,
-          start: 22,
-          length: 1,
-          pos: 23,
-          state: gtLongStringLit,
+          kind: gtOperator, start: 22, length: 1, pos: 23, state: gtLongStringLit
         ),
         TestToken(kind: gtLongStringLit, start: 23, length: 1, pos: 24, state: gtNone),
       ]
@@ -199,11 +168,7 @@ suite "syntax: JavaScript":
     check tokens(Code) ==
       @[
         TestToken(
-          kind: gtLongStringLit,
-          start: 0,
-          length: 1,
-          pos: 1,
-          state: gtLongStringLit,
+          kind: gtLongStringLit, start: 0, length: 1, pos: 1, state: gtLongStringLit
         ),
         TestToken(kind: gtOperator, start: 1, length: 2, pos: 3, state: gtNone),
         TestToken(kind: gtIdentifier, start: 3, length: 3, pos: 6, state: gtNone),
@@ -218,11 +183,7 @@ suite "syntax: JavaScript":
         TestToken(kind: gtPunctuation, start: 25, length: 1, pos: 26, state: gtNone),
         TestToken(kind: gtPunctuation, start: 26, length: 1, pos: 27, state: gtNone),
         TestToken(
-          kind: gtOperator,
-          start: 27,
-          length: 1,
-          pos: 28,
-          state: gtLongStringLit,
+          kind: gtOperator, start: 27, length: 1, pos: 28, state: gtLongStringLit
         ),
         TestToken(kind: gtLongStringLit, start: 28, length: 1, pos: 29, state: gtNone),
       ]
@@ -351,38 +312,24 @@ suite "syntax: JavaScript":
   test "Template literal escapes":
     const Code = "`Line 1\\nLine 2\\tTabbed`"
     check tokens(Code) ==
-      @[
-        TestToken(kind: gtLongStringLit, start: 0, length: 24, pos: 24, state: gtNone)
-      ]
+      @[TestToken(kind: gtLongStringLit, start: 0, length: 24, pos: 24, state: gtNone)]
 
   test "Complex template literal":
     const Code = "`User: ${user.name}, Age: ${user.age > 18 ? 'Adult' : 'Minor'}`"
     check tokens(Code) ==
       @[
         TestToken(
-          kind: gtLongStringLit,
-          start: 0,
-          length: 7,
-          pos: 7,
-          state: gtLongStringLit,
+          kind: gtLongStringLit, start: 0, length: 7, pos: 7, state: gtLongStringLit
         ),
         TestToken(kind: gtOperator, start: 7, length: 2, pos: 9, state: gtNone),
         TestToken(kind: gtIdentifier, start: 9, length: 4, pos: 13, state: gtNone),
         TestToken(kind: gtPunctuation, start: 13, length: 1, pos: 14, state: gtNone),
         TestToken(kind: gtIdentifier, start: 14, length: 4, pos: 18, state: gtNone),
         TestToken(
-          kind: gtOperator,
-          start: 18,
-          length: 1,
-          pos: 19,
-          state: gtLongStringLit,
+          kind: gtOperator, start: 18, length: 1, pos: 19, state: gtLongStringLit
         ),
         TestToken(
-          kind: gtLongStringLit,
-          start: 19,
-          length: 7,
-          pos: 26,
-          state: gtLongStringLit,
+          kind: gtLongStringLit, start: 19, length: 7, pos: 26, state: gtLongStringLit
         ),
         TestToken(kind: gtOperator, start: 26, length: 2, pos: 28, state: gtNone),
         TestToken(kind: gtIdentifier, start: 28, length: 4, pos: 32, state: gtNone),
@@ -401,11 +348,7 @@ suite "syntax: JavaScript":
         TestToken(kind: gtWhitespace, start: 53, length: 1, pos: 54, state: gtNone),
         TestToken(kind: gtStringLit, start: 54, length: 7, pos: 61, state: gtNone),
         TestToken(
-          kind: gtOperator,
-          start: 61,
-          length: 1,
-          pos: 62,
-          state: gtLongStringLit,
+          kind: gtOperator, start: 61, length: 1, pos: 62, state: gtLongStringLit
         ),
         TestToken(kind: gtLongStringLit, start: 62, length: 1, pos: 63, state: gtNone),
       ]
@@ -415,36 +358,20 @@ suite "syntax: JavaScript":
     check tokens(Code) ==
       @[
         TestToken(
-          kind: gtLongStringLit,
-          start: 0,
-          length: 7,
-          pos: 7,
-          state: gtLongStringLit,
+          kind: gtLongStringLit, start: 0, length: 7, pos: 7, state: gtLongStringLit
         ),
         TestToken(kind: gtOperator, start: 7, length: 2, pos: 9, state: gtNone),
         TestToken(
-          kind: gtLongStringLit,
-          start: 9,
-          length: 7,
-          pos: 16,
-          state: gtLongStringLit,
+          kind: gtLongStringLit, start: 9, length: 7, pos: 16, state: gtLongStringLit
         ),
         TestToken(kind: gtOperator, start: 16, length: 2, pos: 18, state: gtNone),
         TestToken(kind: gtKeyword, start: 18, length: 5, pos: 23, state: gtNone),
         TestToken(
-          kind: gtOperator,
-          start: 23,
-          length: 1,
-          pos: 24,
-          state: gtLongStringLit,
+          kind: gtOperator, start: 23, length: 1, pos: 24, state: gtLongStringLit
         ),
         TestToken(kind: gtLongStringLit, start: 24, length: 1, pos: 25, state: gtNone),
         TestToken(
-          kind: gtOperator,
-          start: 25,
-          length: 1,
-          pos: 26,
-          state: gtLongStringLit,
+          kind: gtOperator, start: 25, length: 1, pos: 26, state: gtLongStringLit
         ),
         TestToken(kind: gtLongStringLit, start: 26, length: 5, pos: 31, state: gtNone),
       ]
