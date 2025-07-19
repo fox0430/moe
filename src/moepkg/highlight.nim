@@ -493,6 +493,8 @@ proc indexOf*(highlight: Highlight, row, column: int): int =
 proc detectLanguage*(filename: string): SourceLanguage =
   # TODO: use settings file
   case filename.splitFile.ext
+  of ".astro":
+    return SourceLanguage.langAstro
   of ".c", ".dox", ".h", ".i":
     return SourceLanguage.langC
   of ".C", ".CPP", ".H", ".HPP", ".c++", ".cc", ".cp", ".cpp", ".cxx", ".h++", ".hh",

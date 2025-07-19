@@ -120,6 +120,7 @@ type
 
   SourceLanguage* = enum
     langNone
+    langAstro
     langC
     langCpp
     langCsharp
@@ -156,7 +157,7 @@ const
   wsChars*: set[char] = {'\t' .. '\r', ' '}
 
   sourceLanguageToStr*: array[SourceLanguage, string] = [
-    "none", "C", "C++", "C#", "Haskell", "Java", "JavaScript", "JavaScriptReact",
+    "none", "Astro", "C", "C++", "C#", "Haskell", "Java", "JavaScript", "JavaScriptReact",
     "Markdown", "Nim", "Python", "Rust", "Shell", "Toml", "Yaml", "Json",
   ]
 
@@ -237,12 +238,13 @@ proc isKeyword*(x: openArray[string], y: string): int =
   binarySearch(x, y)
 
 import
-  syntaxc, syntaxcpp, syntaxcsharp, syntaxhaskell, syntaxjava, syntaxjavascript,
-  syntaxmarkdown, syntaxnim, syntaxpython, syntaxrust, syntaxshell, syntaxyaml,
-  syntaxtoml, syntaxjson
+  syntaxastro, syntaxc, syntaxcpp, syntaxcsharp, syntaxhaskell, syntaxjava,
+  syntaxjavascript, syntaxmarkdown, syntaxnim, syntaxpython, syntaxrust, syntaxshell,
+  syntaxyaml, syntaxtoml, syntaxjson
 
 proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   case lang
+  of langAstro: g.astroNextToken
   of langC: g.cNextToken
   of langCpp: g.cppNextToken
   of langCsharp: g.csharpNextToken
