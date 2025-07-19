@@ -33,6 +33,7 @@
 
 import highlite
 import syntaxjavascript
+import syntaxhtml
 
 # Astro file state tracking is now in GeneralTokenizer
 
@@ -72,10 +73,23 @@ proc astroNextToken*(g: var GeneralTokenizer) =
     javaScriptNextToken(g)
     return
   else:
-    # Outside frontmatter - use JavaScript tokenizer for JSX content
+    # Outside frontmatter - check for HTML content
     g.astroFirstLine = false
-    javaScriptNextToken(g)
-    return
+
+    # Check if we're starting an HTML tag
+    if g.buf[g.pos] == '<' and g.pos + 1 < g.buf.len and
+        g.buf[g.pos + 1] in {'A' .. 'Z', 'a' .. 'z', '/', '!'}:
+      # Use HTML tokenizer for HTML content
+      htmlNextToken(g)
+      return
+    elif g.buf[g.pos] == '{':
+      # This might be a JSX expression, use JavaScript tokenizer
+      javaScriptNextToken(g)
+      return
+    else:
+      # Default to HTML tokenizer for template content
+      htmlNextToken(g)
+      return
 
   g.length = pos - g.pos
   if g.kind != gtEof and g.length <= 0:

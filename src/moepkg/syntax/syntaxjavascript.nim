@@ -86,6 +86,20 @@ proc javaScriptNextToken*(g: var GeneralTokenizer) =
     g.inJsxMode = false
     g.jsxTagDepth = 0
 
+  # If we're in JSX mode, delegate to HTML tokenizer
+  if g.inJsxMode and g.state != gtLongStringLit:
+    htmlNextToken(g)
+    # Check if we should exit JSX mode
+    if g.buf[g.pos] == '{' and g.buf[g.pos - 1] != '\\':
+      # Entering JSX expression
+      g.inJsxMode = false
+      return
+    elif g.kind == gtOperator and g.buf[g.pos - 1] == '>':
+      # Check if this is the end of a closing tag
+      if g.jsxTagDepth == 0:
+        g.inJsxMode = false
+    return
+
   # Handle template literal state
   if g.state == gtLongStringLit:
     # We're inside a template literal
@@ -167,17 +181,9 @@ proc javaScriptNextToken*(g: var GeneralTokenizer) =
   of '<':
     # Check for JSX tags outside of template literals
     if pos + 1 < g.buf.len and g.buf[pos + 1] in {'A' .. 'Z', 'a' .. 'z', '/', '!'}:
-      # This looks like JSX/HTML, use HTML tokenizer
-      var htmlTokenizer = g
-      htmlTokenizer.pos = pos
-      htmlTokenizer.start = pos
-      htmlNextToken(htmlTokenizer)
-      # Copy the result
-      g.kind = htmlTokenizer.kind
-      g.pos = htmlTokenizer.pos
-      g.length = htmlTokenizer.length
-      if g.kind == gtKeyword or g.kind == gtOperator:
-        g.inJsxMode = true
+      # This looks like JSX/HTML, switch to JSX mode
+      g.inJsxMode = true
+      htmlNextToken(g)
       return
     else:
       # Regular less-than operator
@@ -337,6 +343,9 @@ proc javaScriptNextToken*(g: var GeneralTokenizer) =
         g.kind = gtPunctuation
     else:
       g.kind = gtPunctuation
+      # Check if we should return to JSX mode after closing expression
+      if pos < g.buf.len and g.buf[pos] == '<':
+        g.inJsxMode = true
   of '\0':
     g.kind = gtEof
   else:
@@ -344,6 +353,10 @@ proc javaScriptNextToken*(g: var GeneralTokenizer) =
       g.kind = gtOperator
       while g.buf[pos] in opChars:
         inc(pos)
+    elif g.buf[pos] == '>' and g.inJsxMode:
+      # Handle JSX closing tags
+      htmlNextToken(g)
+      return
     else:
       inc(pos)
       g.kind = gtNone
