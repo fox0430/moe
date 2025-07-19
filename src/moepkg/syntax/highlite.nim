@@ -148,6 +148,7 @@ type
     langToml
     langYaml
     langJson
+    langTypeScript
 
 const
   ## Characters ending a line.
@@ -171,7 +172,7 @@ const
   sourceLanguageToStr*: array[SourceLanguage, string] = [
     "none", "Astro", "C", "C++", "C#", "Haskell", "HTML", "Java", "JavaScript",
     "JavaScriptReact", "Markdown", "Nim", "Python", "Rust", "Shell", "Toml", "Yaml",
-    "Json",
+    "Json", "TypeScript",
   ]
 
 proc getSourceLanguage*(name: string): SourceLanguage =
@@ -264,7 +265,7 @@ proc isKeyword*(x: openArray[string], y: string): int =
 import
   syntaxastro, syntaxc, syntaxcpp, syntaxcsharp, syntaxhaskell, syntaxhtml, syntaxjava,
   syntaxjavascript, syntaxmarkdown, syntaxnim, syntaxpython, syntaxrust, syntaxshell,
-  syntaxyaml, syntaxtoml, syntaxjson
+  syntaxyaml, syntaxtoml, syntaxjson, syntaxtypescript
 
 proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   case lang
@@ -284,4 +285,5 @@ proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   of langToml: g.tomlNextToken
   of langYaml: g.yamlNextToken
   of langJson: g.jsonNextToken
+  of langTypeScript: g.typescriptNextToken
   else: discard
