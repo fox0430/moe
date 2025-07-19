@@ -21,20 +21,15 @@ import std/unittest
 
 import moepkg/syntax/highlite
 
-type 
-  TestToken = object
-    kind: TokenClass
-    start, length: int
-    pos: int
-    state: TokenClass
+type TestToken = object
+  kind: TokenClass
+  start, length: int
+  pos: int
+  state: TokenClass
 
 proc toTestToken(gt: GeneralTokenizer): TestToken =
   TestToken(
-    kind: gt.kind,
-    start: gt.start,
-    length: gt.length,
-    pos: gt.pos,
-    state: gt.state
+    kind: gt.kind, start: gt.start, length: gt.length, pos: gt.pos, state: gt.state
   )
 
 proc tokens(code: string): seq[TestToken] =
