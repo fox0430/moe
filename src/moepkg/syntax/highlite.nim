@@ -117,6 +117,17 @@ type
     buf*: cstring
     pos*: int
     state*: TokenClass
+    # Language-specific state fields
+    templateLiteralDepth*: int
+    braceDepthStack*: seq[int]
+    inJsxMode*: bool
+    jsxTagDepth*: int
+    inComment*: bool
+    commentDepth*: int
+    inScript*: bool
+    inStyle*: bool
+    astroInFrontmatter*: bool
+    astroFirstLine*: bool
 
   SourceLanguage* = enum
     langNone
@@ -125,6 +136,7 @@ type
     langCpp
     langCsharp
     langHaskell
+    langHtml
     langJava
     langJavaScript
     langJsx
@@ -157,7 +169,7 @@ const
   wsChars*: set[char] = {'\t' .. '\r', ' '}
 
   sourceLanguageToStr*: array[SourceLanguage, string] = [
-    "none", "Astro", "C", "C++", "C#", "Haskell", "Java", "JavaScript",
+    "none", "Astro", "C", "C++", "C#", "Haskell", "HTML", "Java", "JavaScript",
     "JavaScriptReact", "Markdown", "Nim", "Python", "Rust", "Shell", "Toml", "Yaml",
     "Json",
   ]
@@ -174,6 +186,17 @@ proc initGeneralTokenizer*(g: var GeneralTokenizer, buf: string) =
   g.start = 0
   g.length = 0
   g.state = low(TokenClass)
+  # Initialize language-specific state fields
+  g.templateLiteralDepth = 0
+  g.braceDepthStack = @[]
+  g.inJsxMode = false
+  g.jsxTagDepth = 0
+  g.inComment = false
+  g.commentDepth = 0
+  g.inScript = false
+  g.inStyle = false
+  g.astroInFrontmatter = false
+  g.astroFirstLine = true
   var pos = 0 # skip initial whitespace:
   while g.buf[pos] in {' ', '\x09' .. '\x0D'}:
     inc(pos)
@@ -239,7 +262,7 @@ proc isKeyword*(x: openArray[string], y: string): int =
   binarySearch(x, y)
 
 import
-  syntaxastro, syntaxc, syntaxcpp, syntaxcsharp, syntaxhaskell, syntaxjava,
+  syntaxastro, syntaxc, syntaxcpp, syntaxcsharp, syntaxhaskell, syntaxhtml, syntaxjava,
   syntaxjavascript, syntaxmarkdown, syntaxnim, syntaxpython, syntaxrust, syntaxshell,
   syntaxyaml, syntaxtoml, syntaxjson
 
@@ -250,6 +273,7 @@ proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   of langCpp: g.cppNextToken
   of langCsharp: g.csharpNextToken
   of langHaskell: g.haskellNextToken
+  of langHtml: g.htmlNextToken
   of langJava: g.javaNextToken
   of langJavaScript, langJsx: g.javaScriptNextToken
   of langMarkdown: g.markdownNextToken

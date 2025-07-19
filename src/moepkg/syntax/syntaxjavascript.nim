@@ -32,6 +32,7 @@
 #
 
 import highlite
+import syntaxhtml
 
 const javaScriptkeywords* = [
   "Array", "ArrayBuffer", "Attr", "BigInt64Array", "BigUint64Array", "Boolean",
@@ -65,9 +66,7 @@ const javaScriptkeywords* = [
   "while", "window", "yield",
 ]
 
-# Track template literal depth and brace depth per template level
-var templateLiteralDepth {.global.}: int = 0
-var braceDepthStack {.global.}: seq[int] = @[]
+# Template literal depth and brace depth are now tracked in GeneralTokenizer
 
 proc javaScriptNextToken*(g: var GeneralTokenizer) =
   ## javaScriptNextToken is Incomplete
@@ -80,14 +79,17 @@ proc javaScriptNextToken*(g: var GeneralTokenizer) =
   var pos = g.pos
   g.start = g.pos
 
-  # Reset global state when starting fresh (pos = 0 and not in template literal state)
+  # Reset state when starting fresh (pos = 0 and not in template literal state)
   if g.pos == 0 and g.state != gtLongStringLit:
-    templateLiteralDepth = 0
-    braceDepthStack = @[]
+    g.templateLiteralDepth = 0
+    g.braceDepthStack = @[]
+    g.inJsxMode = false
+    g.jsxTagDepth = 0
 
   # Handle template literal state
   if g.state == gtLongStringLit:
     # We're inside a template literal
+    let startPos = pos
     while true:
       case g.buf[pos]
       of '\0':
@@ -99,8 +101,8 @@ proc javaScriptNextToken*(g: var GeneralTokenizer) =
         inc(pos)
         g.kind = gtLongStringLit
         g.state = gtNone
-        if templateLiteralDepth > 0:
-          dec(templateLiteralDepth)
+        if g.templateLiteralDepth > 0:
+          dec(g.templateLiteralDepth)
         break
       of '\\':
         inc(pos)
@@ -121,10 +123,34 @@ proc javaScriptNextToken*(g: var GeneralTokenizer) =
             g.kind = gtOperator
             g.state = gtNone # Exit template literal state temporarily
             # Push 0 to track brace depth for this interpolation
-            braceDepthStack.add(0)
+            g.braceDepthStack.add(0)
           break
         else:
           inc(pos)
+      of '<':
+        # Check if this looks like HTML in template literal
+        if pos > startPos:
+          # Return the string part before HTML
+          g.kind = gtLongStringLit
+          break
+        else:
+          # Try to parse as HTML tag
+          let htmlStart = pos
+          inc(pos)
+          if g.buf[pos] in {'A' .. 'Z', 'a' .. 'z', '/', '!'}:
+            # This looks like an HTML tag, use HTML tokenizer
+            var htmlTokenizer = g
+            htmlTokenizer.pos = htmlStart
+            htmlTokenizer.start = htmlStart
+            htmlNextToken(htmlTokenizer)
+            # Copy the result
+            g.kind = htmlTokenizer.kind
+            g.pos = htmlTokenizer.pos
+            g.length = htmlTokenizer.length
+            return
+          else:
+            # Not HTML, treat as regular string content
+            discard
       else:
         inc(pos)
     g.length = pos - g.pos
@@ -138,6 +164,26 @@ proc javaScriptNextToken*(g: var GeneralTokenizer) =
     g.kind = gtWhitespace
     while g.buf[pos] in {' ', '\x09' .. '\x0D'}:
       inc(pos)
+  of '<':
+    # Check for JSX tags outside of template literals
+    if pos + 1 < g.buf.len and g.buf[pos + 1] in {'A' .. 'Z', 'a' .. 'z', '/', '!'}:
+      # This looks like JSX/HTML, use HTML tokenizer
+      var htmlTokenizer = g
+      htmlTokenizer.pos = pos
+      htmlTokenizer.start = pos
+      htmlNextToken(htmlTokenizer)
+      # Copy the result
+      g.kind = htmlTokenizer.kind
+      g.pos = htmlTokenizer.pos
+      g.length = htmlTokenizer.length
+      if g.kind == gtKeyword or g.kind == gtOperator:
+        g.inJsxMode = true
+      return
+    else:
+      # Regular less-than operator
+      g.kind = gtOperator
+      while g.buf[pos] in opChars:
+        inc(pos)
   of '/':
     inc(pos)
     if g.buf[pos] == '/':
@@ -242,7 +288,7 @@ proc javaScriptNextToken*(g: var GeneralTokenizer) =
     inc(pos)
     g.kind = gtLongStringLit
     g.state = gtLongStringLit
-    inc(templateLiteralDepth)
+    inc(g.templateLiteralDepth)
     # Only consume until first ${
     while true:
       case g.buf[pos]
@@ -252,8 +298,8 @@ proc javaScriptNextToken*(g: var GeneralTokenizer) =
       of '`':
         inc(pos)
         g.state = gtNone
-        if templateLiteralDepth > 0:
-          dec(templateLiteralDepth)
+        if g.templateLiteralDepth > 0:
+          dec(g.templateLiteralDepth)
         break
       of '\\':
         inc(pos)
@@ -274,20 +320,20 @@ proc javaScriptNextToken*(g: var GeneralTokenizer) =
     g.kind = gtPunctuation
   of '{':
     inc(pos)
-    if braceDepthStack.len > 0:
-      inc(braceDepthStack[^1])
+    if g.braceDepthStack.len > 0:
+      inc(g.braceDepthStack[^1])
     g.kind = gtPunctuation
   of '}':
     inc(pos)
-    if braceDepthStack.len > 0:
-      if braceDepthStack[^1] == 0:
+    if g.braceDepthStack.len > 0:
+      if g.braceDepthStack[^1] == 0:
         # This closes a template interpolation
-        discard braceDepthStack.pop()
+        discard g.braceDepthStack.pop()
         g.kind = gtOperator
         g.state = gtLongStringLit # Go back to template literal
       else:
         # This is a regular brace inside interpolation
-        dec(braceDepthStack[^1])
+        dec(g.braceDepthStack[^1])
         g.kind = gtPunctuation
     else:
       g.kind = gtPunctuation
