@@ -221,7 +221,7 @@ proc javaScriptNextToken*(g: var GeneralTokenizer) =
     while g.buf[pos] in symChars:
       add(id, g.buf[pos])
       inc(pos)
-    
+
     # Check if this identifier is a key (followed by colon)
     var isKey = false
     var tempPos = pos
@@ -231,7 +231,7 @@ proc javaScriptNextToken*(g: var GeneralTokenizer) =
     # Check if next non-whitespace character is colon
     if tempPos < g.buf.len and g.buf[tempPos] == ':':
       isKey = true
-    
+
     if isKeyword(javaScriptkeywords, id) >= 0:
       g.kind = gtKeyword
     elif isKey:

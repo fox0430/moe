@@ -521,14 +521,14 @@ suite "syntax: JavaScript":
 
   test "Extended key highlighting - all quote types":
     const Code = """{name: "Alice", "age": 25, 'active': true}"""
-    
+
     let tokenList = tokens(Code)
     var unquotedKeyCount = 0
     var doubleQuotedKeyCount = 0
     var singleQuotedKeyCount = 0
-    
+
     for token in tokenList:
-      let tokenText = Code[token.start ..<  token.start + token.length]
+      let tokenText = Code[token.start ..< token.start + token.length]
       if token.kind == gtKey:
         if tokenText.startsWith("\""):
           doubleQuotedKeyCount += 1
@@ -536,7 +536,7 @@ suite "syntax: JavaScript":
           singleQuotedKeyCount += 1
         elif not (tokenText.startsWith("\"") or tokenText.startsWith("'")):
           unquotedKeyCount += 1
-    
-    check unquotedKeyCount == 1    # name
-    check doubleQuotedKeyCount == 1  # "age"
-    check singleQuotedKeyCount == 1  # 'active'
+
+    check unquotedKeyCount == 1 # name
+    check doubleQuotedKeyCount == 1 # "age"
+    check singleQuotedKeyCount == 1 # 'active'
