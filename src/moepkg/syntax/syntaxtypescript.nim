@@ -238,7 +238,8 @@ proc typescriptNextToken*(g: var GeneralTokenizer) =
     if tempPos < g.buf.len:
       if g.buf[tempPos] == ':':
         isKey = true
-      elif g.buf[tempPos] == '?' and tempPos + 1 < g.buf.len and g.buf[tempPos + 1] == ':':
+      elif g.buf[tempPos] == '?' and tempPos + 1 < g.buf.len and
+          g.buf[tempPos + 1] == ':':
         isKey = true
 
     if isKeyword(typescriptKeywords, id) >= 0:
@@ -324,7 +325,8 @@ proc typescriptNextToken*(g: var GeneralTokenizer) =
           if tempPos < g.buf.len:
             if g.buf[tempPos] == ':':
               isKey = true
-            elif g.buf[tempPos] == '?' and tempPos + 1 < g.buf.len and g.buf[tempPos + 1] == ':':
+            elif g.buf[tempPos] == '?' and tempPos + 1 < g.buf.len and
+                g.buf[tempPos + 1] == ':':
               isKey = true
           break
         else:
