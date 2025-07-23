@@ -149,6 +149,7 @@ type
     langYaml
     langJson
     langTypeScript
+    langTsx
 
 const
   ## Characters ending a line.
@@ -172,7 +173,7 @@ const
   sourceLanguageToStr*: array[SourceLanguage, string] = [
     "none", "Astro", "C", "C++", "C#", "Haskell", "HTML", "Java", "JavaScript",
     "JavaScriptReact", "Markdown", "Nim", "Python", "Rust", "Shell", "Toml", "Yaml",
-    "Json", "TypeScript",
+    "Json", "TypeScript", "TypeScriptReact",
   ]
 
 proc getSourceLanguage*(name: string): SourceLanguage =
@@ -285,5 +286,5 @@ proc getNextToken*(g: var GeneralTokenizer, lang: SourceLanguage) =
   of langToml: g.tomlNextToken
   of langYaml: g.yamlNextToken
   of langJson: g.jsonNextToken
-  of langTypeScript: g.typescriptNextToken
+  of langTypeScript, langTsx: g.typescriptNextToken
   else: discard
