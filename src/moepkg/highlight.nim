@@ -512,8 +512,10 @@ proc detectLanguage*(filename: string): SourceLanguage =
     return SourceLanguage.langJavaScript
   of ".jsx":
     return SourceLanguage.langJsx
-  of ".ts", ".tsx":
+  of ".ts":
     return SourceLanguage.langTypeScript
+  of ".tsx":
+    return SourceLanguage.langTsx
   of ".markdown", ".md":
     return SourceLanguage.langMarkdown
   of ".nim", ".nimble", ".nims":
