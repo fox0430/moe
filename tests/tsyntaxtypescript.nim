@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/unittest
+import std/[unittest, strutils]
 
 import moepkg/syntax/highlite
 
@@ -62,7 +62,7 @@ suite "syntax: TypeScript":
       @[
         TestToken(kind: gtKeyword, start: 0, length: 3, pos: 3, state: gtEof),
         TestToken(kind: gtWhitespace, start: 3, length: 1, pos: 4, state: gtEof),
-        TestToken(kind: gtIdentifier, start: 4, length: 1, pos: 5, state: gtEof),
+        TestToken(kind: gtKey, start: 4, length: 1, pos: 5, state: gtEof),
         TestToken(kind: gtPunctuation, start: 5, length: 1, pos: 6, state: gtEof),
         TestToken(kind: gtWhitespace, start: 6, length: 1, pos: 7, state: gtEof),
         TestToken(kind: gtKeyword, start: 7, length: 6, pos: 13, state: gtEof),
@@ -123,13 +123,13 @@ suite "syntax: TypeScript":
         TestToken(kind: gtWhitespace, start: 16, length: 1, pos: 17, state: gtEof),
         TestToken(kind: gtPunctuation, start: 17, length: 1, pos: 18, state: gtEof),
         TestToken(kind: gtWhitespace, start: 18, length: 1, pos: 19, state: gtEof),
-        TestToken(kind: gtIdentifier, start: 19, length: 4, pos: 23, state: gtEof),
+        TestToken(kind: gtKey, start: 19, length: 4, pos: 23, state: gtEof),
         TestToken(kind: gtPunctuation, start: 23, length: 1, pos: 24, state: gtEof),
         TestToken(kind: gtWhitespace, start: 24, length: 1, pos: 25, state: gtEof),
         TestToken(kind: gtKeyword, start: 25, length: 6, pos: 31, state: gtEof),
         TestToken(kind: gtPunctuation, start: 31, length: 1, pos: 32, state: gtEof),
         TestToken(kind: gtWhitespace, start: 32, length: 1, pos: 33, state: gtEof),
-        TestToken(kind: gtIdentifier, start: 33, length: 3, pos: 36, state: gtEof),
+        TestToken(kind: gtKey, start: 33, length: 3, pos: 36, state: gtEof),
         TestToken(kind: gtOperator, start: 36, length: 1, pos: 37, state: gtEof),
         TestToken(kind: gtPunctuation, start: 37, length: 1, pos: 38, state: gtEof),
         TestToken(kind: gtWhitespace, start: 38, length: 1, pos: 39, state: gtEof),
@@ -371,3 +371,107 @@ suite "syntax: TypeScript":
           overrideFound = true
           break
     check overrideFound
+
+  test "Object literal key highlighting":
+    const Code = """const user: User = {"name": "Bob", "age": 30, "active": true};"""
+
+    let tokenList = tokens(Code)
+    var nameKeyFound = false
+    var ageKeyFound = false
+    var activeKeyFound = false
+    var bobValueFound = false
+
+    for token in tokenList:
+      let tokenText = Code[token.start ..< token.start + token.length]
+      if token.kind == gtKey:
+        if tokenText == "\"name\"":
+          nameKeyFound = true
+        elif tokenText == "\"age\"":
+          ageKeyFound = true
+        elif tokenText == "\"active\"":
+          activeKeyFound = true
+      elif token.kind == gtStringLit:
+        if tokenText == "\"Bob\"":
+          bobValueFound = true
+
+    check nameKeyFound
+    check ageKeyFound
+    check activeKeyFound
+    check bobValueFound
+
+  test "Type annotation with object keys":
+    const Code = """type Config = {"apiUrl": string; "timeout": number};"""
+
+    let tokenList = tokens(Code)
+    var apiUrlKeyFound = false
+    var timeoutKeyFound = false
+
+    for token in tokenList:
+      let tokenText = Code[token.start ..< token.start + token.length]
+      if token.kind == gtKey:
+        if tokenText == "\"apiUrl\"":
+          apiUrlKeyFound = true
+        elif tokenText == "\"timeout\"":
+          timeoutKeyFound = true
+
+    check apiUrlKeyFound
+    check timeoutKeyFound
+
+  test "Interface with quoted property names":
+    const Code =
+      """interface API { "get-user": () => User; "post-data": (data: any) => void; }"""
+
+    let tokenList = tokens(Code)
+    var getUserKeyFound = false
+    var postDataKeyFound = false
+
+    for token in tokenList:
+      let tokenText = Code[token.start ..< token.start + token.length]
+      if token.kind == gtKey:
+        if tokenText == "\"get-user\"":
+          getUserKeyFound = true
+        elif tokenText == "\"post-data\"":
+          postDataKeyFound = true
+
+    check getUserKeyFound
+    check postDataKeyFound
+
+  test "Extended key highlighting - all quote types":
+    const Code = """const obj = {name: "Bob", "age": 30, 'active': true};"""
+
+    let tokenList = tokens(Code)
+    var unquotedKeyCount = 0
+    var doubleQuotedKeyCount = 0
+    var singleQuotedKeyCount = 0
+
+    for token in tokenList:
+      let tokenText = Code[token.start ..< token.start + token.length]
+      if token.kind == gtKey:
+        if tokenText.startsWith("\""):
+          doubleQuotedKeyCount += 1
+        elif tokenText.startsWith("'"):
+          singleQuotedKeyCount += 1
+        elif not (tokenText.startsWith("\"") or tokenText.startsWith("'")):
+          unquotedKeyCount += 1
+
+    check unquotedKeyCount == 1 # name
+    check doubleQuotedKeyCount == 1 # "age" 
+    check singleQuotedKeyCount == 1 # 'active'
+
+  test "Optional property syntax":
+    const Code = """interface User { name?: string; "email"?: string; }"""
+
+    let tokenList = tokens(Code)
+    var nameKeyFound = false
+    var emailKeyFound = false
+
+    for token in tokenList:
+      let tokenText = Code[token.start ..< token.start + token.length]
+      if token.kind == gtKey:
+        if tokenText == "name":
+          nameKeyFound = true
+        elif tokenText == "\"email\"":
+          emailKeyFound = true
+
+    check nameKeyFound
+    check emailKeyFound

@@ -221,8 +221,21 @@ proc javaScriptNextToken*(g: var GeneralTokenizer) =
     while g.buf[pos] in symChars:
       add(id, g.buf[pos])
       inc(pos)
+
+    # Check if this identifier is a key (followed by colon)
+    var isKey = false
+    var tempPos = pos
+    # Skip whitespace after identifier
+    while tempPos < g.buf.len and g.buf[tempPos] in {' ', '\t', '\n', '\r'}:
+      inc(tempPos)
+    # Check if next non-whitespace character is colon
+    if tempPos < g.buf.len and g.buf[tempPos] == ':':
+      isKey = true
+
     if isKeyword(javaScriptkeywords, id) >= 0:
       g.kind = gtKeyword
+    elif isKey:
+      g.kind = gtKey
     else:
       g.kind = gtIdentifier
   of '0':
@@ -267,7 +280,36 @@ proc javaScriptNextToken*(g: var GeneralTokenizer) =
   of '\"', '\'':
     let quote = g.buf[pos]
     inc(pos)
-    g.kind = gtStringLit
+
+    # Check if this string is a key (for object literals with quotes)
+    var isKey = false
+    var tempPos = pos
+    # Skip to end of string to check if it's followed by colon
+    while tempPos < g.buf.len and g.buf[tempPos] != '\0':
+      case g.buf[tempPos]
+      of '\"', '\'':
+        if g.buf[tempPos] == quote:
+          inc(tempPos)
+          # Skip whitespace after closing quote
+          while tempPos < g.buf.len and g.buf[tempPos] in {' ', '\t', '\n', '\r'}:
+            inc(tempPos)
+          # Check if next non-whitespace character is colon
+          if tempPos < g.buf.len and g.buf[tempPos] == ':':
+            isKey = true
+          break
+        else:
+          inc(tempPos)
+      of '\\':
+        inc(tempPos, 2) # Skip escape sequence
+      else:
+        inc(tempPos)
+
+    # Set kind based on whether this is a key or value
+    if isKey:
+      g.kind = gtKey
+    else:
+      g.kind = gtStringLit
+
     while true:
       case g.buf[pos]
       of '\0':
