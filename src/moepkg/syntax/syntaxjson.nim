@@ -24,7 +24,7 @@ const
   JsonKeywords = ["false", "null", "true"]
 
 proc jsonNextToken*(g: var GeneralTokenizer) =
-  ## jsonNextToken is Incomplete
+  ## Enhanced JSON tokenizer with improved name and variable highlighting
 
   var pos = g.pos
   g.start = g.pos
@@ -73,6 +73,26 @@ proc jsonNextToken*(g: var GeneralTokenizer) =
         inc(pos)
     of '"':
       inc(pos)
+      # Check if this string is a key (followed by a colon)
+      var isKey = false
+      var tempPos = pos
+      # Skip to end of string to check if it's followed by colon
+      while tempPos < g.buf.len and g.buf[tempPos] != '\0':
+        case g.buf[tempPos]
+        of '"':
+          inc(tempPos)
+          # Skip whitespace after closing quote
+          while tempPos < g.buf.len and g.buf[tempPos] in {' ', '\t', '\n', '\r'}:
+            inc(tempPos)
+          # Check if next non-whitespace character is colon
+          if tempPos < g.buf.len and g.buf[tempPos] == ':':
+            isKey = true
+          break
+        of '\\':
+          inc(tempPos, 2) # Skip escape sequence
+        else:
+          inc(tempPos)
+
       if (g.buf[pos] == '\"') and (g.buf[pos + 1] == '\"'):
         inc(pos, 2)
         g.kind = gtLongStringLit
@@ -88,7 +108,11 @@ proc jsonNextToken*(g: var GeneralTokenizer) =
           else:
             inc(pos)
       else:
-        g.kind = gtStringLit
+        # Set kind based on whether this is a key or value
+        if isKey:
+          g.kind = gtKey
+        else:
+          g.kind = gtStringLit
         while true:
           case g.buf[pos]
           of '\0', '\r', '\n':
@@ -102,6 +126,12 @@ proc jsonNextToken*(g: var GeneralTokenizer) =
           else:
             inc(pos)
     of '{', '}', '[', ']':
+      inc(pos)
+      g.kind = gtPunctuation
+    of ':':
+      inc(pos)
+      g.kind = gtOperator
+    of ',':
       inc(pos)
       g.kind = gtPunctuation
     of '\0':

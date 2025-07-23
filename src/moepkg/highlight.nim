@@ -313,6 +313,8 @@ proc getEditorColorPair(
     EditorColorPairIndex.table
   of gtDate:
     EditorColorPairIndex.date
+  of gtKey:
+    EditorColorPairIndex.property
   else:
     EditorColorPairIndex.default
 

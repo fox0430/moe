@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/unittest
+import std/[unittest, strutils]
 
 import moepkg/syntax/highlite
 
@@ -176,7 +176,7 @@ suite "syntax: JavaScript":
         TestToken(kind: gtIdentifier, start: 7, length: 6, pos: 13, state: gtNone),
         TestToken(kind: gtPunctuation, start: 13, length: 1, pos: 14, state: gtNone),
         TestToken(kind: gtPunctuation, start: 14, length: 1, pos: 15, state: gtNone),
-        TestToken(kind: gtIdentifier, start: 15, length: 3, pos: 18, state: gtNone),
+        TestToken(kind: gtKey, start: 15, length: 3, pos: 18, state: gtNone),
         TestToken(kind: gtPunctuation, start: 18, length: 1, pos: 19, state: gtNone),
         TestToken(kind: gtWhitespace, start: 19, length: 1, pos: 20, state: gtNone),
         TestToken(kind: gtKeyword, start: 20, length: 5, pos: 25, state: gtNone),
@@ -279,7 +279,7 @@ suite "syntax: JavaScript":
         TestToken(kind: gtIdentifier, start: 7, length: 3, pos: 10, state: gtEof),
         TestToken(kind: gtPunctuation, start: 10, length: 1, pos: 11, state: gtEof),
         TestToken(kind: gtWhitespace, start: 11, length: 1, pos: 12, state: gtEof),
-        TestToken(kind: gtIdentifier, start: 12, length: 3, pos: 15, state: gtEof),
+        TestToken(kind: gtKey, start: 12, length: 3, pos: 15, state: gtEof),
         TestToken(kind: gtPunctuation, start: 15, length: 1, pos: 16, state: gtEof),
         TestToken(kind: gtWhitespace, start: 16, length: 1, pos: 17, state: gtEof),
         TestToken(kind: gtIdentifier, start: 17, length: 3, pos: 20, state: gtEof),
@@ -342,7 +342,7 @@ suite "syntax: JavaScript":
         TestToken(kind: gtWhitespace, start: 41, length: 1, pos: 42, state: gtNone),
         TestToken(kind: gtOperator, start: 42, length: 1, pos: 43, state: gtNone),
         TestToken(kind: gtWhitespace, start: 43, length: 1, pos: 44, state: gtNone),
-        TestToken(kind: gtStringLit, start: 44, length: 7, pos: 51, state: gtNone),
+        TestToken(kind: gtKey, start: 44, length: 7, pos: 51, state: gtNone),
         TestToken(kind: gtWhitespace, start: 51, length: 1, pos: 52, state: gtNone),
         TestToken(kind: gtPunctuation, start: 52, length: 1, pos: 53, state: gtNone),
         TestToken(kind: gtWhitespace, start: 53, length: 1, pos: 54, state: gtNone),
@@ -454,3 +454,89 @@ suite "syntax: JavaScript":
           inputKeywordFound = true
     check buttonKeywordFound
     check inputKeywordFound
+
+  test "Object literal key highlighting":
+    const Code = """{"name": "John", "age": 30, "active": true}"""
+
+    let tokenList = tokens(Code)
+    var nameKeyFound = false
+    var ageKeyFound = false
+    var activeKeyFound = false
+    var johnValueFound = false
+
+    for token in tokenList:
+      let tokenText = Code[token.start ..< token.start + token.length]
+      if token.kind == gtKey:
+        if tokenText == "\"name\"":
+          nameKeyFound = true
+        elif tokenText == "\"age\"":
+          ageKeyFound = true
+        elif tokenText == "\"active\"":
+          activeKeyFound = true
+      elif token.kind == gtStringLit:
+        if tokenText == "\"John\"":
+          johnValueFound = true
+
+    check nameKeyFound
+    check ageKeyFound
+    check activeKeyFound
+    check johnValueFound
+
+  test "Nested object key highlighting":
+    const Code =
+      """{"user": {"profile": {"name": "Alice", "email": "alice@test.com"}}}"""
+
+    let tokenList = tokens(Code)
+    var keyCount = 0
+    var valueCount = 0
+
+    for token in tokenList:
+      if token.kind == gtKey:
+        keyCount += 1
+      elif token.kind == gtStringLit:
+        valueCount += 1
+
+    # Should find 4 keys: "user", "profile", "name", "email"
+    check keyCount == 4
+    # Should find 2 string values: "Alice", "alice@test.com"
+    check valueCount == 2
+
+  test "Object with mixed quotes - only double quotes as keys":
+    const Code = """{"key1": 'single', 'key2': "double"}"""
+
+    let tokenList = tokens(Code)
+    var doubleQuoteKeyCount = 0
+    var singleQuoteStringCount = 0
+
+    for token in tokenList:
+      let tokenText = Code[token.start ..< token.start + token.length]
+      if token.kind == gtKey and tokenText.startsWith("\""):
+        doubleQuoteKeyCount += 1
+      elif token.kind == gtStringLit and tokenText.startsWith("'"):
+        singleQuoteStringCount += 1
+
+    # Only double-quoted strings followed by colon should be keys
+    check doubleQuoteKeyCount == 1 # "key1"
+    check singleQuoteStringCount >= 1 # 'single' and 'key2'
+
+  test "Extended key highlighting - all quote types":
+    const Code = """{name: "Alice", "age": 25, 'active': true}"""
+    
+    let tokenList = tokens(Code)
+    var unquotedKeyCount = 0
+    var doubleQuotedKeyCount = 0
+    var singleQuotedKeyCount = 0
+    
+    for token in tokenList:
+      let tokenText = Code[token.start ..<  token.start + token.length]
+      if token.kind == gtKey:
+        if tokenText.startsWith("\""):
+          doubleQuotedKeyCount += 1
+        elif tokenText.startsWith("'"):
+          singleQuotedKeyCount += 1
+        elif not (tokenText.startsWith("\"") or tokenText.startsWith("'")):
+          unquotedKeyCount += 1
+    
+    check unquotedKeyCount == 1    # name
+    check doubleQuotedKeyCount == 1  # "age"
+    check singleQuotedKeyCount == 1  # 'active'
