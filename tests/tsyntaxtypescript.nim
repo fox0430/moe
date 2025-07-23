@@ -129,7 +129,7 @@ suite "syntax: TypeScript":
         TestToken(kind: gtKeyword, start: 25, length: 6, pos: 31, state: gtEof),
         TestToken(kind: gtPunctuation, start: 31, length: 1, pos: 32, state: gtEof),
         TestToken(kind: gtWhitespace, start: 32, length: 1, pos: 33, state: gtEof),
-        TestToken(kind: gtIdentifier, start: 33, length: 3, pos: 36, state: gtEof),
+        TestToken(kind: gtKey, start: 33, length: 3, pos: 36, state: gtEof),
         TestToken(kind: gtOperator, start: 36, length: 1, pos: 37, state: gtEof),
         TestToken(kind: gtPunctuation, start: 37, length: 1, pos: 38, state: gtEof),
         TestToken(kind: gtWhitespace, start: 38, length: 1, pos: 39, state: gtEof),
@@ -457,3 +457,21 @@ suite "syntax: TypeScript":
     check unquotedKeyCount == 1 # name
     check doubleQuotedKeyCount == 1 # "age" 
     check singleQuotedKeyCount == 1 # 'active'
+
+  test "Optional property syntax":
+    const Code = """interface User { name?: string; "email"?: string; }"""
+
+    let tokenList = tokens(Code)
+    var nameKeyFound = false
+    var emailKeyFound = false
+
+    for token in tokenList:
+      let tokenText = Code[token.start ..< token.start + token.length]
+      if token.kind == gtKey:
+        if tokenText == "name":
+          nameKeyFound = true
+        elif tokenText == "\"email\"":
+          emailKeyFound = true
+
+    check nameKeyFound
+    check emailKeyFound

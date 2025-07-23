@@ -228,15 +228,18 @@ proc typescriptNextToken*(g: var GeneralTokenizer) =
       add(id, g.buf[pos])
       inc(pos)
 
-    # Check if this identifier is a key (followed by colon)
+    # Check if this identifier is a key (followed by colon or ?:)
     var isKey = false
     var tempPos = pos
     # Skip whitespace after identifier
     while tempPos < g.buf.len and g.buf[tempPos] in {' ', '\t', '\n', '\r'}:
       inc(tempPos)
-    # Check if next non-whitespace character is colon
-    if tempPos < g.buf.len and g.buf[tempPos] == ':':
-      isKey = true
+    # Check if next non-whitespace character is colon or optional colon (?:)
+    if tempPos < g.buf.len:
+      if g.buf[tempPos] == ':':
+        isKey = true
+      elif g.buf[tempPos] == '?' and tempPos + 1 < g.buf.len and g.buf[tempPos + 1] == ':':
+        isKey = true
 
     if isKeyword(typescriptKeywords, id) >= 0:
       g.kind = gtKeyword
@@ -317,9 +320,12 @@ proc typescriptNextToken*(g: var GeneralTokenizer) =
           # Skip whitespace after closing quote
           while tempPos < g.buf.len and g.buf[tempPos] in {' ', '\t', '\n', '\r'}:
             inc(tempPos)
-          # Check if next non-whitespace character is colon
-          if tempPos < g.buf.len and g.buf[tempPos] == ':':
-            isKey = true
+          # Check if next non-whitespace character is colon or optional colon (?:)
+          if tempPos < g.buf.len:
+            if g.buf[tempPos] == ':':
+              isKey = true
+            elif g.buf[tempPos] == '?' and tempPos + 1 < g.buf.len and g.buf[tempPos + 1] == ':':
+              isKey = true
           break
         else:
           inc(tempPos)
