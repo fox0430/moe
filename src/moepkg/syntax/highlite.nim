@@ -173,7 +173,7 @@ const
   sourceLanguageToStr*: array[SourceLanguage, string] = [
     "none", "Astro", "C", "C++", "C#", "Haskell", "HTML", "Java", "JavaScript",
     "JavaScriptReact", "Markdown", "Nim", "Python", "Rust", "Shell", "Toml", "Yaml",
-    "Json", "TypeScript", "TypeScriptReact"
+    "Json", "TypeScript", "TypeScriptReact",
   ]
 
 proc getSourceLanguage*(name: string): SourceLanguage =
