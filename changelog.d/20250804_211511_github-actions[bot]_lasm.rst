@@ -3,5 +3,5 @@
 Changed
 .......
 
-- `#2336`_  tests: LSP tests with lasm
+- `#2326`_  tests: LSP tests with lasm
 
