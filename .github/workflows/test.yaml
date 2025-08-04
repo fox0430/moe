@@ -79,6 +79,7 @@ jobs:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: install lasm
+      run: |
         nimble install https://github.com/fox0430/lasm@#head
 
     - name: Run unit test
