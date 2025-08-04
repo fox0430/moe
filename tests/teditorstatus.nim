@@ -1146,9 +1146,7 @@ suite "editorstatus: initLsp":
 
       status.settings.lsp.enable = true
       status.settings.lsp.languages["nim"] = LspLanguageSettings(
-        extensions: @[LanguageId.toRunes],
-        command: ru"lasm",
-        trace: TraceValue.verbose,
+        extensions: @[LanguageId.toRunes], command: ru"lasm", trace: TraceValue.verbose
       )
 
       assert status.addNewBufferInCurrentWin(path).isOk
