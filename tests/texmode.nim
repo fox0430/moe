@@ -179,7 +179,7 @@ suite "Ex mode: Write command":
     status.backgroundTasks.build[0].process.kill
 
   test "Enable LSP":
-    if not isNimlangserverAvailable():
+    if not islasmAvailable():
       skip()
     else:
       writeFile(TestFilePath, "echo 1")
@@ -1717,7 +1717,7 @@ suite "exmode: openBufferManager":
 
 suite "exmode: lspRestartClient":
   test "Basic":
-    if not isNimlangserverAvailable():
+    if not islasmAvailable():
       skip()
     else:
       var status = initEditorStatus().get
@@ -1739,7 +1739,7 @@ suite "exmode: lspRestartClient":
 
 suite "exmode: lspForceRestartClient":
   test "Basic":
-    if not isNimlangserverAvailable():
+    if not islasmAvailable():
       skip()
     else:
       var status = initEditorStatus().get

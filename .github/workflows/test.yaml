@@ -80,7 +80,7 @@ jobs:
 
     - name: Run unit test
       run: |
-        nimble install https://github.com/fox0430/lasm.git
+        nimble install https://github.com/fox0430/lasm@#head
 
         xvfb-run env XDG_SESSION_TYPE=x11 nimble --useSystemNim test --verbose -y
 
