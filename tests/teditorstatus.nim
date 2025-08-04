@@ -1114,8 +1114,8 @@ suite "editorstatus: smoothScrollDownNumberOfLines":
     check currentMainWindowNode.currentLine == 10
 
 suite "editorstatus: initLsp":
-  test "Init with nimlangserver":
-    if not isNimlangserverAvailable():
+  test "Init with lasm":
+    if not isLasmAvailable():
       skip()
     else:
       let path = $genOid() & ".nim"
@@ -1123,7 +1123,7 @@ suite "editorstatus: initLsp":
 
       status.settings.lsp.enable = true
       status.settings.lsp.languages["nim"] = LspLanguageSettings(
-        extensions: @[ru"nim"], command: ru"nimlangserver", trace: TraceValue.verbose
+        extensions: @[ru"nim"], command: ru"lasm", trace: TraceValue.verbose
       )
 
       status.bufStatus.add initBufferStatus(path, Mode.normal).get
@@ -1135,7 +1135,7 @@ suite "editorstatus: initLsp":
       check status.lspInitialize(BufferId, workspaceRoot, LanguageId).isOk
 
   test "Don't send initialize request twice":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
       const
@@ -1146,9 +1146,7 @@ suite "editorstatus: initLsp":
 
       status.settings.lsp.enable = true
       status.settings.lsp.languages["nim"] = LspLanguageSettings(
-        extensions: @[LanguageId.toRunes],
-        command: ru"nimlangserver",
-        trace: TraceValue.verbose,
+        extensions: @[LanguageId.toRunes], command: ru"lasm", trace: TraceValue.verbose
       )
 
       assert status.addNewBufferInCurrentWin(path).isOk
@@ -1192,7 +1190,7 @@ suite "editorstatus: autoSave":
 
     status.settings.lsp.enable = true
     status.settings.lsp.languages["nim"] = LspLanguageSettings(
-      extensions: @[ru"nim"], command: ru"nimlangserver", trace: TraceValue.verbose
+      extensions: @[ru"nim"], command: ru"lasm", trace: TraceValue.verbose
     )
 
     discard status.addNewBufferInCurrentWin(filePath).get

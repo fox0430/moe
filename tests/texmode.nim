@@ -179,7 +179,7 @@ suite "Ex mode: Write command":
     status.backgroundTasks.build[0].process.kill
 
   test "Enable LSP":
-    if not isNimlangserverAvailable():
+    if not islasmAvailable():
       skip()
     else:
       writeFile(TestFilePath, "echo 1")
@@ -187,6 +187,8 @@ suite "Ex mode: Write command":
       var status = initEditorStatus().get
 
       status.settings.lsp.enable = true
+      status.settings.lsp.languages["nim"] =
+        LspLanguageSettings(extensions: @[ru"nim"], command: ru"lasm")
 
       assert status.addNewBufferInCurrentWin(TestFilePath).isOk
 
@@ -1717,12 +1719,14 @@ suite "exmode: openBufferManager":
 
 suite "exmode: lspRestartClient":
   test "Basic":
-    if not isNimlangserverAvailable():
+    if not islasmAvailable():
       skip()
     else:
       var status = initEditorStatus().get
 
       status.settings.lsp.enable = true
+      status.settings.lsp.languages["nim"] =
+        LspLanguageSettings(extensions: @[ru"nim"], command: ru"lasm")
 
       assert status.addNewBufferInCurrentWin("test.nim").isOk
 
@@ -1739,12 +1743,14 @@ suite "exmode: lspRestartClient":
 
 suite "exmode: lspForceRestartClient":
   test "Basic":
-    if not isNimlangserverAvailable():
+    if not islasmAvailable():
       skip()
     else:
       var status = initEditorStatus().get
 
       status.settings.lsp.enable = true
+      status.settings.lsp.languages["nim"] =
+        LspLanguageSettings(extensions: @[ru"nim"], command: ru"lasm")
 
       assert status.addNewBufferInCurrentWin("test.nim").isOk
 

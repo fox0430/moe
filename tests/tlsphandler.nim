@@ -229,16 +229,17 @@ suite "lsp: lspInitialized":
   var status: EditorStatus
 
   setup:
-    if isNimlangserverAvailable():
+    if isLasmAvailable():
       status = initEditorStatus().get
       status.settings.lsp.enable = true
+      status.settings.lsp.languages["nim"].command = ru"lasm"
 
   teardown:
-    if isNimlangserverAvailable():
+    if isLasmAvailable():
       discard lspClient.kill
 
   test "Basic":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
       assert status.addNewBufferInCurrentWin("test.nim").isOk
@@ -254,7 +255,7 @@ suite "lsp: lspInitialized":
 
       check not isTimeout
       check lspClient.isInitialized
-      check status.statusLine[0].message == ru"nimlangserver"
+      check status.statusLine[0].message == ru"lasm"
 
 suite "lsp: initHoverWindow":
   test "Basic":
@@ -453,9 +454,10 @@ suite "lsp: lspWorkDoneProgressCreate":
   var status: EditorStatus
 
   setup:
-    if isNimlangserverAvailable():
+    if isLasmAvailable():
       status = initEditorStatus().get
       status.settings.lsp.enable = true
+      status.settings.lsp.languages["nim"].command = ru"lasm"
 
       let filename = $genOid() & ".nim"
       assert status.addNewBufferInCurrentWin(filename).isOk
@@ -464,17 +466,17 @@ suite "lsp: lspWorkDoneProgressCreate":
         ProgressReport(title: "", state: ProgressState.create)
 
   teardown:
-    if isNimlangserverAvailable():
+    if isLasmAvailable():
       discard lspClient.kill
 
   test "Invalid":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
       check lspClient.lspProgressCreate(%*{"jsonrpc": "2.0", "id": 0, "result": nil}).isErr
 
   test "Basic":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
       check lspClient.lspProgressCreate(
@@ -493,7 +495,7 @@ suite "lsp: lspProgress":
 
   setup:
     status = initEditorStatus().get
-    # Use dummy LSP client. Don't start nimlangserver.
+    # Use dummy LSP client. Don't start lasm.
     status.settings.lsp.enable = false
 
     let filename = $genOid() & ".nim"
@@ -620,19 +622,20 @@ suite "lsp: lspCompletion":
   var status: EditorStatus
 
   setup:
-    if isNimlangserverAvailable():
+    if isLasmAvailable():
       status = initEditorStatus().get
       status.settings.lsp.enable = true
+      status.settings.lsp.languages["nim"].command = ru"lasm"
 
       let filename = $genOid() & ".nim"
       assert status.addNewBufferInCurrentWin(filename).isOk
 
   teardown:
-    if isNimlangserverAvailable():
+    if isLasmAvailable():
       discard lspClient.kill
 
   test "Basic":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
       check status.lspCompletion(
@@ -681,7 +684,7 @@ suite "lsp: lspCompletion":
         ]
 
   test "Without insertText":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
       check status.lspCompletion(
@@ -733,19 +736,20 @@ suite "lsp: lspInlayHint":
   var status: EditorStatus
 
   setup:
-    if isNimlangserverAvailable():
+    if isLasmAvailable():
       status = initEditorStatus().get
       status.settings.lsp.enable = true
+      status.settings.lsp.languages["nim"].command = ru"lasm"
 
       let filename = $genOid() & ".nim"
       assert status.addNewBufferInCurrentWin(filename).isOk
 
   teardown:
-    if isNimlangserverAvailable():
+    if isLasmAvailable():
       discard lspClient.kill
 
   test "Empty":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
       currentBufStatus.inlayHints.range = independentutils.Range(first: 0, last: 0)
@@ -764,7 +768,7 @@ suite "lsp: lspInlayHint":
       check currentBufStatus.inlayHints.hints.len == 0
 
   test "Basic":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
       currentBufStatus.inlayHints.range = independentutils.Range(first: 0, last: 0)
@@ -820,9 +824,10 @@ suite "lsp: lspDeclaration":
   var status: EditorStatus
 
   setup:
-    if isNimlangserverAvailable():
+    if isLasmAvailable():
       status = initEditorStatus().get
       status.settings.lsp.enable = true
+      status.settings.lsp.languages["nim"].command = ru"lasm"
 
       let filename = $genOid() & ".nim"
       assert status.addNewBufferInCurrentWin(filename).isOk
@@ -830,11 +835,11 @@ suite "lsp: lspDeclaration":
         @["type number = int", "var a: number"].toSeqRunes.toGapBuffer
 
   teardown:
-    if isNimlangserverAvailable():
+    if isLasmAvailable():
       discard lspClient.kill
 
   test "Not found":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
       lspClient.waitingResponses[0] = WaitLspResponse(
@@ -846,7 +851,7 @@ suite "lsp: lspDeclaration":
       check status.lspDeclaration(%*{"jsonrpc": "2.0", "id": 0, "result": []}).isErr
 
   test "Basic":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
       lspClient.waitingResponses[0] = WaitLspResponse(
@@ -877,9 +882,10 @@ suite "lsp: lspDefinition":
   var status: EditorStatus
 
   setup:
-    if isNimlangserverAvailable():
+    if isLasmAvailable():
       status = initEditorStatus().get
       status.settings.lsp.enable = true
+      status.settings.lsp.languages["nim"].command = ru"lasm"
 
       let filename = $genOid() & ".nim"
       assert status.addNewBufferInCurrentWin(filename).isOk
@@ -887,11 +893,11 @@ suite "lsp: lspDefinition":
         @["type number = int", "var a: number"].toSeqRunes.toGapBuffer
 
   teardown:
-    if isNimlangserverAvailable():
+    if isLasmAvailable():
       discard lspClient.kill
 
   test "Not found":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
       lspClient.waitingResponses[0] = WaitLspResponse(
@@ -903,7 +909,7 @@ suite "lsp: lspDefinition":
       check status.lspDefinition(%*{"jsonrpc": "2.0", "id": 0, "result": []}).isErr
 
   test "Basic":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
       lspClient.waitingResponses[0] = WaitLspResponse(
@@ -934,9 +940,10 @@ suite "lsp: lspTypeDefinition":
   var status: EditorStatus
 
   setup:
-    if isNimlangserverAvailable():
+    if isLasmAvailable():
       status = initEditorStatus().get
       status.settings.lsp.enable = true
+      status.settings.lsp.languages["nim"].command = ru"lasm"
 
       let filename = $genOid() & ".nim"
       assert status.addNewBufferInCurrentWin(filename).isOk
@@ -944,11 +951,11 @@ suite "lsp: lspTypeDefinition":
         @["type number = int", "var a: number"].toSeqRunes.toGapBuffer
 
   teardown:
-    if isNimlangserverAvailable():
+    if isLasmAvailable():
       discard lspClient.kill
 
   test "Not found":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
       lspClient.waitingResponses[0] = WaitLspResponse(
@@ -960,7 +967,7 @@ suite "lsp: lspTypeDefinition":
       check status.lspTypeDefinition(%*{"jsonrpc": "2.0", "id": 0, "result": []}).isErr
 
   test "Basic":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
       lspClient.waitingResponses[0] = WaitLspResponse(
@@ -991,9 +998,10 @@ suite "lsp: lspReferences":
   var status: EditorStatus
 
   setup:
-    if isNimlangserverAvailable():
+    if isLasmAvailable():
       status = initEditorStatus().get
       status.settings.lsp.enable = true
+      status.settings.lsp.languages["nim"].command = ru"lasm"
 
       let filename = $genOid() & ".nim"
       assert status.addNewBufferInCurrentWin(filename).isOk
@@ -1001,11 +1009,11 @@ suite "lsp: lspReferences":
       status.resize(100, 100)
 
   teardown:
-    if isNimlangserverAvailable():
+    if isLasmAvailable():
       discard status.lspClients["nim"].kill
 
   test "Not found":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
       lspClient.waitingResponses[0] = WaitLspResponse(
@@ -1017,7 +1025,7 @@ suite "lsp: lspReferences":
       check status.lspReferences(%*{"jsonrpc": "2.0", "id": 0, "result": []}).isErr
 
   test "Same buffer":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
       lspClient.waitingResponses[0] = WaitLspResponse(
@@ -1066,7 +1074,7 @@ suite "lsp: lspReferences":
         ].toSeqRunes
 
   test "Other buffer":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
       let destFilePath = getCurrentDir() / $genOid() & ".nim"
@@ -1119,19 +1127,20 @@ suite "lsp: lspRename":
     filename: string
 
   setup:
-    if isNimlangserverAvailable():
+    if isLasmAvailable():
       status = initEditorStatus().get
       status.settings.lsp.enable = true
+      status.settings.lsp.languages["nim"].command = ru"lasm"
 
       filename = $genOid() & ".nim"
       assert status.addNewBufferInCurrentWin(filename).isOk
 
   teardown:
-    if isNimlangserverAvailable():
+    if isLasmAvailable():
       discard lspClient.kill
 
   test "Not found":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
       lspClient.waitingResponses[0] = WaitLspResponse(
@@ -1143,7 +1152,7 @@ suite "lsp: lspRename":
       check status.lspReferences(%*{"jsonrpc": "2.0", "id": 0, "result": []}).isErr
 
   test "Basic":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
       let filePath = getCurrentDir() / filename
@@ -1193,7 +1202,7 @@ suite "lsp: lspFoldingRange":
 
   setup:
     status = initEditorStatus().get
-    # Use dummy LSP client. Don't start nimlangserver.
+    # Use dummy LSP client. Don't start lasm.
     status.settings.lsp.enable = false
 
     let filename = $genOid()
@@ -1202,13 +1211,13 @@ suite "lsp: lspFoldingRange":
     status.lspClients["dummy"] = LspClient()
 
   test "Not found":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
       check status.lspFoldingRange(%*{"jsonrpc": "2.0", "id": 0, "result": []}).isErr
 
   test "Basic":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
       currentBufStatus.buffer = toSeq(0 .. 5).mapIt(it.toRunes & ru" ").toGapBuffer
@@ -1251,7 +1260,7 @@ suite "lsp: Selection Range":
 
   setup:
     status = initEditorStatus().get
-    # Use dummy LSP client. Don't start nimlangserver.
+    # Use dummy LSP client. Don't start lasm.
     status.settings.lsp.enable = false
 
     let filename = $genOid()
@@ -1260,13 +1269,13 @@ suite "lsp: Selection Range":
     status.lspClients["dummy"] = LspClient()
 
   test "Not found":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
       check status.lspFoldingRange(%*{"jsonrpc": "2.0", "id": 0, "result": []}).isErr
 
   test "Basic":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
       currentBufStatus.buffer = toSeq(0 .. 10).mapIt(" ".repeat(10).toRunes).toGapBuffer
@@ -1331,7 +1340,7 @@ suite "lsp: Selection Range":
       check r.parent.isNone
 
   test "Over buffer len":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
       currentBufStatus.buffer = toSeq(0 .. 2).mapIt(" ".repeat(10).toRunes).toGapBuffer
@@ -1366,7 +1375,7 @@ suite "lsp: Selection Range":
       check currentMainWindowNode.currentColumn == 0
 
   test "Over line len":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
       currentBufStatus.buffer = toSeq(0 .. 2).mapIt(" ".repeat(10).toRunes).toGapBuffer
@@ -1634,7 +1643,7 @@ suite "lsp: handleLspServerNotify":
         "jsonrpc": "2.0",
         "method": "extension/statusUpdate",
         "params": {
-          "lspPath": "nimlangserver",
+          "lspPath": "lasm",
           "version": "1.8.1",
           "nimsuggestInstances": [],
           "openFiles": [],
@@ -1704,43 +1713,48 @@ suite "lsp: shutdown":
   var status: EditorStatus
 
   setup:
-    if isNimlangserverAvailable():
+    if isLasmAvailable():
       status = initEditorStatus().get
       status.settings.lsp.enable = true
+      status.settings.lsp.languages["nim"].command = ru"lasm"
 
       let filename = $genOid() & ".nim"
       assert status.addNewBufferInCurrentWin(filename).isOk
 
   teardown:
-    if isNimlangserverAvailable():
+    if isLasmAvailable():
       discard status.lspClients["nim"].kill
 
   test "Basic":
-    check status.lspShutdown.isOk
+    if not isLasmAvailable():
+      skip()
+    else:
+      check status.lspShutdown.isOk
 
-    var isTimeout = true
-    for i in 0 .. 60:
-      sleep 5000
-      if not lspClient.running:
-        isTimeout = false
-        break
+      var isTimeout = true
+      for i in 0 .. 20:
+        sleep 5
+        if not lspClient.running:
+          isTimeout = false
+          break
 
-    check not isTimeout
+      check not isTimeout
 
 suite "lsp: handleLspResponse":
   var status: EditorStatus
 
   setup:
-    if isNimlangserverAvailable():
+    if isLasmAvailable():
       status = initEditorStatus().get
       status.settings.lsp.enable = true
+      status.settings.lsp.languages["nim"].command = ru"lasm"
 
   teardown:
-    if isNimlangserverAvailable():
+    if isLasmAvailable():
       discard lspClient.kill
 
   test "Initialize response":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
       # Open a new file.
@@ -1748,8 +1762,8 @@ suite "lsp: handleLspResponse":
       assert status.addNewBufferInCurrentWin(filename).isOk
 
       var isTimeout = true
-      for _ in 0 .. 36:
-        waitFor sleepAsync(chronos.timer.seconds(10))
+      for _ in 0 .. 20:
+        waitFor sleepAsync(5.milliSeconds)
         if lspClient.readable().get:
           status.handleLspResponse
 
@@ -1760,7 +1774,7 @@ suite "lsp: handleLspResponse":
       check not isTimeout
 
   test "Server restart":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
       # Open a new file.
@@ -1771,8 +1785,8 @@ suite "lsp: handleLspResponse":
       discard lspClient.kill
 
       var isTimeout = true
-      for _ in 0 .. 30:
-        waitFor sleepAsync(chronos.timer.seconds(5))
+      for _ in 0 .. 20:
+        waitFor sleepAsync(5.milliSeconds)
         status.handleLspResponse
 
         if lspClient.running and lspClient.isRunning:

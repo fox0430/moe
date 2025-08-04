@@ -78,15 +78,12 @@ jobs:
         nim-version: 2.2.4
         repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Install nimlangserver and nph
+    - name: install lasm
       run: |
-        nimble install nimlangserver@1.12.0
-        nimble install nph
+        nimble install https://github.com/fox0430/lasm@#head
 
     - name: Run unit test
       run: |
-        nimble install stew # Workaround
-
         xvfb-run env XDG_SESSION_TYPE=x11 nimble --useSystemNim test --verbose -y
 
         # Workaround for https://github.com/nim-lang/nimble/issues/1384

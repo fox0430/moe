@@ -635,10 +635,6 @@ proc jumpToDefinition(
 ): Result[(), string] =
   ## Goto Declaration, Goto Definition and etc.
 
-  let
-    beforePath = $currentBufStatus.path
-    beforePosition = currentMainWindowNode.bufferPosition
-
   if l.path == $currentBufStatus.absolutePath:
     currentMainWindowNode.currentLine = l.range.first.line
     currentMainWindowNode.currentColumn = l.range.first.column
