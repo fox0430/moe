@@ -187,6 +187,8 @@ suite "Ex mode: Write command":
       var status = initEditorStatus().get
 
       status.settings.lsp.enable = true
+      status.settings.lsp.languages["nim"] =
+        LspLanguageSettings(extensions: @[ru"nim"], command: ru"lasm")
 
       assert status.addNewBufferInCurrentWin(TestFilePath).isOk
 
