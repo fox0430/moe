@@ -1723,6 +1723,8 @@ suite "exmode: lspRestartClient":
       var status = initEditorStatus().get
 
       status.settings.lsp.enable = true
+      status.settings.lsp.languages["nim"] =
+        LspLanguageSettings(extensions: @[ru"nim"], command: ru"lasm")
 
       assert status.addNewBufferInCurrentWin("test.nim").isOk
 
@@ -1745,6 +1747,8 @@ suite "exmode: lspForceRestartClient":
       var status = initEditorStatus().get
 
       status.settings.lsp.enable = true
+      status.settings.lsp.languages["nim"] =
+        LspLanguageSettings(extensions: @[ru"nim"], command: ru"lasm")
 
       assert status.addNewBufferInCurrentWin("test.nim").isOk
 
