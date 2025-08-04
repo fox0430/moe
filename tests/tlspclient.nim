@@ -17,7 +17,8 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest, importutils, os, osproc, options, tables, json, strformat]
+import
+  std/[unittest, importutils, os, osproc, options, tables, json, strformat, strutils]
 
 import pkg/results
 
@@ -66,8 +67,8 @@ suite "lsp: restart":
   privateAccess(LspClient)
 
   const
-    ServerName = "nimlangserver"
-    Command = "nimlangserver"
+    ServerName = "lasm"
+    Command = "lasm"
     Trace = TraceValue.verbose
 
   var
@@ -77,18 +78,18 @@ suite "lsp: restart":
   setup:
     beforePid = -1
 
-    if isNimlangserverAvailable():
+    if isLasmAvailable():
       client = (waitFor initLspClient(Command)).get
 
   teardown:
-    if isNimlangserverAvailable():
+    if isLasmAvailable():
       if beforePid > -1:
         discard execCmd(fmt"kill -9 {$beforePid}")
 
       discard client.kill
 
   test "Basic 1":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
       const BufferId = 1
@@ -107,7 +108,7 @@ suite "lsp: restart":
       check client.log.len == beforeLogLen
 
   test "Basic 2":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
       const BufferId = 1
@@ -1042,26 +1043,29 @@ suite "lsp: Send requests":
   privateAccess(LspClient)
 
   const
-    ServerName = "nimlangserver"
-    Command = "nimlangserver"
+    ServerName = "lasm"
     Trace = TraceValue.verbose
 
   let rootDir = getCurrentDir() / "lspTestDir"
 
   var client: LspClient
 
-  setup:
-    if isNimlangserverAvailable():
-      client = (waitFor initLspClient(Command)).get
-      createDir(rootDir)
-
   teardown:
-    if isNimlangserverAvailable():
+    if isLasmAvailable():
       if dirExists(rootDir):
         removeDir(rootDir)
 
     if not client.isNil and not client.serverProcess.isNil:
       discard client.kill
+
+  proc startLasm(c: var LspClient, args: string = "") =
+    let command =
+      if args.len > 0:
+        "lasm " & args
+      else:
+        "lasm"
+    c = (waitFor initLspClient(command)).get
+    createDir(rootDir)
 
   proc readResponse(c: LspClient, timeout = 30.seconds): Result[JsonNode, string] =
     let
@@ -1076,9 +1080,11 @@ suite "lsp: Send requests":
     return Result[JsonNode, string].ok res.value.get
 
   test "Send initialize":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
+      client.startLasm
+
       const BufferId = 1
       let params = initInitializeParams(ServerName, rootDir, Trace)
 
@@ -1087,6 +1093,7 @@ suite "lsp: Send requests":
 
       var isTimeout = true
       for _ in 0 .. 20:
+        sleep 5
         let res = client.readResponse
         if res.isOk and res.get.contains("id"):
           isTimeout = false
@@ -1121,10 +1128,19 @@ suite "lsp: Send requests":
 
         return Result[(), string].ok ()
 
+  template prepareLsp(bufferId: int, langId: LanguageId, rootDir, path, text: string) =
+    block:
+      let params = initInitializeParams(ServerName, rootDir, Trace)
+      assert client.lspInitialize(bufferId, params).isOk
+
+    check (waitFor client.textDocumentDidOpen(path, langId, text)).isOk
+
   test "Send textDocument/didOpen":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
+      client.startLasm()
+
       const
         BufferId = 1
         LanguageId = "nim"
@@ -1134,33 +1150,36 @@ suite "lsp: Send requests":
         let params = initInitializeParams(ServerName, rootDir, Trace)
         assert client.lspInitialize(BufferId, params).isOk
 
-        # workspace/didChangeConfiguration notification
-        assert (waitFor client.workspaceDidChangeConfiguration).isOk
-
       let path = rootDir / "test.nim"
 
       check (waitFor client.textDocumentDidOpen(path, LanguageId, Text)).isOk
 
-  template prepareLsp(bufferId: int, langId: LanguageId, rootDir, path, text: string) =
-    block:
-      let params = initInitializeParams(ServerName, rootDir, Trace)
-      assert client.lspInitialize(bufferId, params).isOk
+      var isTimeout = true
+      for _ in 0 .. 20:
+        sleep 5
+        let res = client.readResponse
+        if res.isOk and res.get.contains("method") and
+            res.get["method"].getStr == "window/logMessage" and
+            res.get["params"]["message"].getStr.contains(
+              "Received textDocument/didOpen "
+            ):
+          isTimeout = false
+          break
 
-    assert (waitFor client.workspaceDidChangeConfiguration).isOk
-
-    check (waitFor client.textDocumentDidOpen(path, langId, text)).isOk
+      check not isTimeout
 
   test "Send $/cancelRequest":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
+      client.startLasm()
+
       const
         BufferId = 1
         LanguageId = "nim"
         Text = "let a: int = 0"
 
       let path = rootDir / "test.nim"
-      writeFile(path, Text)
 
       prepareLsp(BufferId, LanguageId, rootDir, path, Text)
 
@@ -1175,22 +1194,10 @@ suite "lsp: Send requests":
       check (waitFor client.cancelRequest(BufferId, requestId)).isOk
 
   test "Send shutdown":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
-      const BufferId = 1
-
-      block:
-        # Initialize
-        const
-          BufferId = 1
-          LanguageId = "nim"
-          Text = "echo 0\n"
-
-        let path = rootDir / "test.nim"
-        writeFile(path, Text)
-
-        prepareLsp(BufferId, LanguageId, rootDir, path, Text)
+      client.startLasm()
 
       let requestId = client.lastId + 1
 
@@ -1199,6 +1206,7 @@ suite "lsp: Send requests":
 
       var isTimeout = true
       for _ in 0 .. 20:
+        sleep 5
         let res = client.readResponse
         if res.isOk and res.get.contains("id"):
           check res.get["id"].getInt == requestId
@@ -1209,34 +1217,49 @@ suite "lsp: Send requests":
       check not isTimeout
 
   test "Send workspace/didChangeConfiguration":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
+      client.startLasm()
+
       block:
         # Initialize
         const
           BufferId = 1
           LanguageId = "nim"
           Text = "echo 0\n"
-
         let path = rootDir / "test.nim"
-        writeFile(path, Text)
 
         prepareLsp(BufferId, LanguageId, rootDir, path, Text)
 
       check (waitFor client.workspaceDidChangeConfiguration).isOk
 
+      var isTimeout = true
+      for _ in 0 .. 20:
+        sleep 5
+        let res = client.readResponse
+        if res.isOk and res.get.contains("method") and
+            res.get["method"].getStr == "window/logMessage" and
+            res.get["params"]["message"].getStr.contains(
+              "Received workspace/didChangeConfiguration "
+            ):
+          isTimeout = false
+          break
+
+      check not isTimeout
+
   test "Send textDocument/didChange":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
+      client.startLasm()
+
       const
         BufferId = 1
         LanguageId = "nim"
         Text = "echo 0\n"
 
       let path = rootDir / "test.nim"
-      writeFile(path, Text)
 
       prepareLsp(BufferId, LanguageId, rootDir, path, Text)
 
@@ -1245,27 +1268,57 @@ suite "lsp: Send requests":
         ChangedText = "echo 1"
       check (waitFor client.textDocumentDidChange(SecondVersion, path, ChangedText)).isOk
 
+      var isTimeout = true
+      for _ in 0 .. 20:
+        sleep 5
+        let res = client.readResponse
+        if res.isOk and res.get.contains("method") and
+            res.get["method"].getStr == "window/logMessage" and
+            res.get["params"]["message"].getStr.contains(
+              "Received textDocument/didChange "
+            ):
+          isTimeout = false
+          break
+
+      check not isTimeout
+
   test "Send textDocument/didSave":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
+      client.startLasm()
+
       const
         BufferId = 1
         LanguageId = "nim"
         Text = "echo 0\n"
 
       let path = rootDir / "test.nim"
-      writeFile(path, Text)
 
       prepareLsp(BufferId, LanguageId, rootDir, path, Text)
 
       const Version = 1
       check (waitFor client.textDocumentDidSave(Version, path, Text)).isOk
 
+      var isTimeout = true
+      for _ in 0 .. 20:
+        let res = client.readResponse
+        if res.isOk and res.get.contains("method") and
+            res.get["method"].getStr == "window/logMessage" and
+            res.get["params"]["message"].getStr.contains(
+              "Received textDocument/didSave "
+            ):
+          isTimeout = false
+          break
+
+      check not isTimeout
+
   test "Send textDocument/didClose":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
+      client.startLasm()
+
       const
         BufferId = 1
         LanguageId = "nim"
@@ -1280,32 +1333,53 @@ suite "lsp: Send requests":
 
       check (waitFor client.textDocumentDidClose(path)).isOk
 
+      var isTimeout = true
+      for _ in 0 .. 20:
+        sleep 5
+        let res = client.readResponse
+        if res.isOk and res.get.contains("method") and
+            res.get["method"].getStr == "window/logMessage" and
+            res.get["params"]["message"].getStr.contains(
+              "Received textDocument/didClose "
+            ):
+          isTimeout = false
+          break
+
+      check not isTimeout
+
+  template switchLasmScenario(name: string) =
+    const Command = "lsptest.switchScenario"
+    let args = %*[name]
+    assert (waitFor client.workspaceExecuteCommand(BufferId, Command, args)).isOk
+
   test "Send textDocument/hover":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
+      client.startLasm("--config ./tests/lasm-config.json")
+
       const
         BufferId = 1
         LanguageId = "nim"
         Text = "let a: int = 0\n"
 
       let path = rootDir / "test.nim"
-      writeFile(path, Text)
 
       prepareLsp(BufferId, LanguageId, rootDir, path, Text)
 
-      let position = BufferPosition(line: 0, column: 7)
+      switchLasmScenario("tlspclient")
+
+      let
+        position = BufferPosition(line: 0, column: 7)
+        requestId = client.lastId + 1
+      check (waitFor client.textDocumentHover(BufferId, path, position)).isOk
+      check client.waitingResponses[requestId].lspMethod == LspMethod.textDocumentHover
 
       var isTimeout = true
       for _ in 0 .. 20:
-        sleep 500
-
-        let requestId = client.lastId + 1
-        check (waitFor client.textDocumentHover(BufferId, path, position)).isOk
-        check client.waitingResponses[requestId].lspMethod == LspMethod.textDocumentHover
-
+        sleep 5
         let res = client.readResponse
-        if res.isOk and res.get.contains("id"):
+        if res.isOk and res.get.contains("id") and res.get["id"].getInt == requestId:
           if res.get.contains("result") and not res.get["result"].isNil:
             check res.get["result"]["contents"][0]["value"].getStr == "system.int: int"
             isTimeout = false
@@ -1314,27 +1388,30 @@ suite "lsp: Send requests":
       check not isTimeout
 
   test "Send textDocument/completion":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
+      client.startLasm("--config ./tests/lasm-config.json")
+
       const
         BufferId = 1
         LanguageId = "nim"
         Text = "echo 1\n"
 
       let path = rootDir / "test.nim"
-      writeFile(path, Text)
 
       prepareLsp(BufferId, LanguageId, rootDir, path, Text)
+
+      switchLasmScenario("tlspclient")
 
       block:
         const SecondVersion = 2
         let changedText = "echo 1\ne"
         check (waitFor client.textDocumentDidChange(SecondVersion, path, changedText)).isOk
 
-      var requestId = client.lastId + 1
-
-      let position = BufferPosition(line: 1, column: 0)
+      let
+        requestId = client.lastId + 1
+        position = BufferPosition(line: 1, column: 0)
       const IsIncompleteTrigger = false
       check (
         waitFor client.textDocumentCompletion(
@@ -1346,48 +1423,51 @@ suite "lsp: Send requests":
 
       var isTimeout = true
       for _ in 0 .. 20:
+        sleep 5
         let res = client.readResponse
-        if res.isOk and res.get.contains("id"):
-          check res.get["result"][0].len > 0
+        if res.isOk and res.get.contains("id") and res.get["id"].getInt == requestId:
+          check res.get["result"]["items"].len > 0
           isTimeout = false
           break
 
       check not isTimeout
 
   test "Send textDocument/inlayHint":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
+      client.startLasm("--config ./tests/lasm-config.json")
+
       const
         BufferId = 1
         LanguageId = "nim"
         Text = "let a = 0\n"
 
       let path = rootDir / "test.nim"
-      writeFile(path, Text)
 
       prepareLsp(BufferId, LanguageId, rootDir, path, Text)
 
+      switchLasmScenario("tlspclient")
+
+      let requestId = client.lastId + 1
+      check (
+        waitFor client.textDocumentInlayHint(
+          BufferId,
+          path,
+          BufferRange(
+            first: BufferPosition(line: 0, column: 0),
+            last: BufferPosition(line: 1, column: 0),
+          ),
+        )
+      ).isOk
+      check client.waitingResponses[requestId].lspMethod ==
+        LspMethod.textDocumentInlayHint
+
       var isTimeout = true
       for _ in 0 .. 20:
-        sleep 500
-
-        let requestId = client.lastId + 1
-        check (
-          waitFor client.textDocumentInlayHint(
-            BufferId,
-            path,
-            BufferRange(
-              first: BufferPosition(line: 0, column: 0),
-              last: BufferPosition(line: 1, column: 0),
-            ),
-          )
-        ).isOk
-        check client.waitingResponses[requestId].lspMethod ==
-          LspMethod.textDocumentInlayHint
-
+        sleep 5
         let res = client.readResponse
-        if res.isOk and res.get.contains("id"):
+        if res.isOk and res.get.contains("id") and res.get["id"].getInt == requestId:
           check res.get["result"][0]["position"]["line"].getInt == 0
           check res.get["result"][0]["position"]["character"].getInt == 5
           isTimeout = false
@@ -1396,9 +1476,11 @@ suite "lsp: Send requests":
       check not isTimeout
 
   test "Send textDocument/definition":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
+      client.startLasm("--config ./tests/lasm-config.json")
+
       const
         BufferId = 1
         LanguageId = "nim"
@@ -1409,45 +1491,44 @@ var num: number
         """
 
       let path = rootDir / "test.nim"
-      writeFile(path, Text)
 
       prepareLsp(BufferId, LanguageId, rootDir, path, Text)
 
+      switchLasmScenario("tlspclient")
+
+      let requestId = client.lastId + 1
+      check (
+        waitFor client.textDocumentDefinition(
+          BufferId, path, BufferPosition(line: 1, column: 9)
+        )
+      ).isOk
+      check client.waitingResponses[requestId].lspMethod ==
+        LspMethod.textDocumentDefinition
+
       var isTimeout = true
       for _ in 0 .. 20:
-        sleep 500
-
-        let requestId = client.lastId + 1
-        check (
-          waitFor client.textDocumentDefinition(
-            BufferId, path, BufferPosition(line: 1, column: 9)
-          )
-        ).isOk
-        check client.waitingResponses[requestId].lspMethod ==
-          LspMethod.textDocumentDefinition
-
+        sleep 5
         let res = client.readResponse
-        if res.isOk and res.get.contains("id") and res.get.contains("result") and
-            res.get["result"].len > 0:
+        if res.isOk and res.get.contains("id") and res.get["id"].getInt == requestId:
           check res.get["result"] ==
-            %*[
-              {
-                "uri": "file://" & getCurrentDir() & "/lspTestDir/test.nim",
-                "range": {
-                  "start": {"line": 0, "character": 5},
-                  "end": {"line": 0, "character": 11},
-                },
-              }
-            ]
+            %*{
+              "uri": "file:///test.nim",
+              "range": {
+                "start": {"line": 0, "character": 5},
+                "end": {"line": 0, "character": 11},
+              },
+            }
           isTimeout = false
           break
 
       check not isTimeout
 
   test "Send textDocument/typeDefinition":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
+      client.startLasm("--config ./tests/lasm-config.json")
+
       const
         BufferId = 1
         LanguageId = "nim"
@@ -1458,45 +1539,45 @@ var num: number
         """
 
       let path = rootDir / "test.nim"
-      writeFile(path, Text)
 
       prepareLsp(BufferId, LanguageId, rootDir, path, Text)
 
+      switchLasmScenario("tlspclient")
+
+      let requestId = client.lastId + 1
+      check (
+        waitFor client.textDocumentTypeDefinition(
+          BufferId, path, BufferPosition(line: 1, column: 9)
+        )
+      ).isOk
+      check client.waitingResponses[requestId].lspMethod ==
+        LspMethod.textDocumentTypeDefinition
+
       var isTimeout = true
       for _ in 0 .. 20:
-        sleep 500
-
-        let requestId = client.lastId + 1
-        check (
-          waitFor client.textDocumentTypeDefinition(
-            BufferId, path, BufferPosition(line: 1, column: 9)
-          )
-        ).isOk
-        check client.waitingResponses[requestId].lspMethod ==
-          LspMethod.textDocumentTypeDefinition
-
+        sleep 5
         let res = client.readResponse
         if res.isOk and res.get.contains("id") and res.get.contains("result") and
-            res.get["result"].len > 0:
+            res.get["id"].getInt == requestId:
           check res.get["result"] ==
-            %*[
-              {
-                "uri": "file://" & getCurrentDir() & "/lspTestDir/test.nim",
-                "range": {
-                  "start": {"line": 0, "character": 5},
-                  "end": {"line": 0, "character": 11},
-                },
-              }
-            ]
+            %*{
+              "uri": "file:///test.nim",
+              "range": {
+                "start": {"line": 0, "character": 5},
+                "end": {"line": 0, "character": 11},
+              },
+            }
           isTimeout = false
           break
 
       check not isTimeout
 
   test "Send textDocument/documentHighlight":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
+      client.startLasm("--config ./tests/lasm-config.json")
+
       const
         BufferId = 1
         LanguageId = "nim"
@@ -1508,55 +1589,47 @@ echo a
        """
 
       let path = rootDir / "test.nim"
-      writeFile(path, Text)
 
       prepareLsp(BufferId, LanguageId, rootDir, path, Text)
 
+      switchLasmScenario("tlspclient")
+
+      let requestId = client.lastId + 1
+      check (
+        waitFor client.textDocumentDocumentHighlight(
+          BufferId, path, BufferPosition(line: 0, column: 4)
+        )
+      ).isOk
+      check client.waitingResponses[requestId].lspMethod ==
+        LspMethod.textDocumentDocumentHighlight
+
       var isTimeout = true
       for _ in 0 .. 20:
-        sleep 500
-
-        let requestId = client.lastId + 1
-        check (
-          waitFor client.textDocumentDocumentHighlight(
-            BufferId, path, BufferPosition(line: 0, column: 4)
-          )
-        ).isOk
-        check client.waitingResponses[requestId].lspMethod ==
-          LspMethod.textDocumentDocumentHighlight
-
+        sleep 5
         let res = client.readResponse
-        if res.isOk and res.get.contains("id") and res.get.contains("result") and
-            res.get["result"].len > 0:
+        if res.isOk and res.get.contains("id") and res.get["id"].getInt == requestId:
           check res.get["result"] ==
             %*[
               {
                 "range": {
-                  "start": {"line": 0, "character": 4},
-                  "end": {"line": 0, "character": 5},
+                  "start": {"line": 10, "character": 5},
+                  "end": {"line": 10, "character": 15},
                 },
-                "kind": nil,
+                "kind": 1,
               },
               {
                 "range": {
-                  "start": {"line": 0, "character": 4},
-                  "end": {"line": 0, "character": 5},
+                  "start": {"line": 20, "character": 8},
+                  "end": {"line": 20, "character": 18},
                 },
-                "kind": nil,
+                "kind": 2,
               },
               {
                 "range": {
-                  "start": {"line": 1, "character": 8},
-                  "end": {"line": 1, "character": 9},
+                  "start": {"line": 25, "character": 12},
+                  "end": {"line": 25, "character": 22},
                 },
-                "kind": nil,
-              },
-              {
-                "range": {
-                  "start": {"line": 2, "character": 5},
-                  "end": {"line": 2, "character": 6},
-                },
-                "kind": nil,
+                "kind": 3,
               },
             ]
           isTimeout = false
@@ -1565,18 +1638,10 @@ echo a
       check not isTimeout
 
   test "Send textDocument/rename":
-    if not isNimlangserverAvailable():
+    if not isLasmAvailable():
       skip()
     else:
-      block:
-        const Text =
-          """
-type Obj* = object
-  n*: int
-"""
-
-        let path = rootDir / "test1.nim"
-        writeFile(path, Text)
+      client.startLasm("--config ./tests/lasm-config.json")
 
       const
         BufferId = 1
@@ -1589,30 +1654,28 @@ echo Ojb(n: 1)
         """
 
       let path = rootDir / "test2.nim"
-      writeFile(path, Text)
 
       prepareLsp(BufferId, LanguageId, rootDir, path, Text)
 
+      switchLasmScenario("tlspclient")
+
+      let requestId = client.lastId + 1
+      check (
+        waitFor client.textDocumentRename(
+          BufferId, path, BufferPosition(line: 1, column: 8), "newName"
+        )
+      ).isOk
+      check client.waitingResponses[requestId].lspMethod == LspMethod.textDocumentRename
+
       var isTimeout = true
       for _ in 0 .. 20:
-        sleep 500
-
-        let requestId = client.lastId + 1
-        check (
-          waitFor client.textDocumentRename(
-            BufferId, path, BufferPosition(line: 1, column: 8), "newName"
-          )
-        ).isOk
-        check client.waitingResponses[requestId].lspMethod ==
-          LspMethod.textDocumentRename
-
+        sleep 5
         let res = client.readResponse
-        if res.isOk and res.get.contains("id") and res.get.contains("result") and
-            res.get["result"] != %*{}:
+        if res.isOk and res.get.contains("id") and res.get["id"].getInt == requestId:
           check res.get["result"] ==
             %*{
               "changes": {
-                "file://" & getCurrentDir() & "/lspTestDir/test2.nim": [
+                "file:///test2.nim": [
                   {
                     "range": {
                       "start": {"line": 1, "character": 8},
@@ -1621,7 +1684,7 @@ echo Ojb(n: 1)
                     "newText": "newName",
                   }
                 ],
-                "file://" & getCurrentDir() & "/lspTestDir/test1.nim": [
+                "file:///test1.nim": [
                   {
                     "range": {
                       "start": {"line": 0, "character": 5},
@@ -1639,18 +1702,21 @@ echo Ojb(n: 1)
       check not isTimeout
 
   test "Send textDocument/formatting":
-    if not isNimlangserverAvailable() or not isNphAvailable():
+    if not isLasmAvailable() or not isNphAvailable():
       skip()
     else:
+      client.startLasm("--file-log --config ./tests/lasm-config.json")
+
       const
         BufferId = 1
         LanguageId = "nim"
         Text = "  echo 0\n"
 
       let path = rootDir / "test.nim"
-      writeFile(path, Text)
 
       prepareLsp(BufferId, LanguageId, rootDir, path, Text)
+
+      switchLasmScenario("tlspclient")
 
       let requestId = client.lastId + 1
 
@@ -1658,17 +1724,22 @@ echo Ojb(n: 1)
       check client.waitingResponses[requestId].lspMethod ==
         LspMethod.textDocumentFormatting
 
-      proc isPending(r: JsonNode): bool =
-        if r.contains("params") and r["params"].contains("pendingRequests") and
-            r["params"]["pendingRequests"].len > 0:
-          for p in r["params"]["pendingRequests"]:
-            if p.contains("name") and p["name"].getStr == "textDocument/formatting":
-              return true
-
       var isTimeout = true
       for _ in 0 .. 20:
+        sleep 5
         let res = client.readResponse
-        if res.isOk and res.get.isPending:
+        if res.isOk and res.get.contains("id") and res.get["id"].getInt == requestId:
+          check res.get["result"] ==
+            %*[
+              {
+                "range": {
+                  "start": {"line": 1, "character": 0},
+                  "end": {"line": 1, "character": 20},
+                },
+                "newText": "function formattedFunction() {",
+              }
+            ]
+
           isTimeout = false
           break
 

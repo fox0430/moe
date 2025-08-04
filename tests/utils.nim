@@ -48,8 +48,8 @@ proc resize*(status: var EditorStatus, h, w: int) =
   updateTerminalSize(h, w)
   status.resize
 
-template isNimlangserverAvailable*(): bool =
-  execCmdEx("nimlangserver --version").exitCode == 0
+template isLasmAvailable*(): bool =
+  execCmdEx("lasm --version").exitCode == 0
 
 template isNphAvailable*(): bool =
   execCmdEx("nph --v").exitCode == 0
