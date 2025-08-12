@@ -56,7 +56,7 @@ jobs:
 
     name: Build on ${{ matrix.nim-version }} (${{ matrix.os }})
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Cache nimble
         id: cache-nimble
