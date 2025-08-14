@@ -50,9 +50,9 @@ jobs:
           - 'macOS-latest'
         nim-version:
           - '2.0.10'
-          - '2.0.14'
+          - '2.0.16'
           - 'stable'
-          #- 'devel'
+          - 'devel'
 
     name: Build on ${{ matrix.nim-version }} (${{ matrix.os }})
     steps:
