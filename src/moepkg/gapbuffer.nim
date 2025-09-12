@@ -213,8 +213,12 @@ proc empty*(gapBuffer: GapBuffer): bool {.inline.} =
   return gapBuffer.len == 0
 
 proc toString*(gapBuffer: GapBuffer): string =
+  var lines = newSeqOfCap[string](gapBuffer.len)
   for i in 0 ..< gapBuffer.len:
-    result &= $gapBuffer[i] & "\n"
+    lines.add($gapBuffer[i])
+  result = lines.join("\n")
+  if gapBuffer.len > 0:
+    result.add('\n')
 
 proc next*(gapBuffer: GapBuffer, line, column: int): (int, int) =
   result = (line, column)
