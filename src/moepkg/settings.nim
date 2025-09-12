@@ -345,6 +345,7 @@ type
     languages*: Table[LanguageId, LspLanguageSettings]
     features*: LspFeatureSettings
     servers*: LspServerSettings
+    timeout*: int
 
   StandardSettings* = object
     syntax*: bool
@@ -703,6 +704,7 @@ proc initLspSettings(): LspSettings =
   )
 
   result.servers = initLspServerSettings()
+  result.timeout = 5000 # 5000 milliseconds
 
 proc initStandardSettings(): StandardSettings =
   result.syntax = true
@@ -1855,6 +1857,8 @@ proc parseLspTable(s: var EditorSettings, lspConfigs: TomlValueRef) =
     case key
     of "enable":
       s.lsp.enable = lspConfigs["enable"].getBool
+    of "timeout":
+      s.lsp.timeout = lspConfigs["timeout"].getInt
     of "Completion":
       for key, val in val.getTable:
         case key
@@ -2487,6 +2491,9 @@ proc validateLspTable(table: TomlValueRef): Option[InvalidItem] =
     of "enable":
       if val.kind != TomlValueKind.Bool:
         return some(InvalidItem(name: $key, val: $val))
+    of "timeout":
+      if val.kind != TomlValueKind.Int or val.getInt < 0:
+        return some(InvalidItem(name: $key, val: $val))
     of "Completion":
       for key, val in val.getTable:
         case key
@@ -3074,6 +3081,7 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
 
   result.addLine fmt "[Lsp]"
   result.addLine fmt "enable = {$settings.lsp.enable}"
+  result.addLine fmt "timeout = {$settings.lsp.timeout}"
 
   result.addLine fmt "[Lsp.Completion]"
   result.addLine fmt "enable = {$settings.lsp.features.completion.enable}"

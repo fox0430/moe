@@ -324,6 +324,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | Name | Type | Default Value | Description |
 |:-----------------------------|:-----------------------------|:---------------------------|:---------------------------|
 | enable | bool | true | LSP (Language Server Protocol) Client |
+| timeout | integer | 5000 | Timeout in milliseconds for LSP requests (0 = no timeout) |
 
 
 ### Lsp.Completion table

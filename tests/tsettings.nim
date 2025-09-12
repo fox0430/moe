@@ -163,6 +163,7 @@ splitType = "horizontal"
 
 [Lsp]
 enable = true
+timeout = 1000
 
 [Lsp.Completion]
 enable = false
@@ -638,6 +639,7 @@ suite "settings: Parse configuration file":
     check settings.startUp.fileOpen.splitType == WindowSplitType.horizontal
 
     check settings.lsp.enable
+    check settings.lsp.timeout == 1000
 
     check not settings.lsp.features.completion.enable
 
