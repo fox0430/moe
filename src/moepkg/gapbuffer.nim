@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -213,8 +213,12 @@ proc empty*(gapBuffer: GapBuffer): bool {.inline.} =
   return gapBuffer.len == 0
 
 proc toString*(gapBuffer: GapBuffer): string =
+  var lines = newSeqOfCap[string](gapBuffer.len)
   for i in 0 ..< gapBuffer.len:
-    result &= $gapBuffer[i] & "\n"
+    lines.add($gapBuffer[i])
+  result = lines.join("\n")
+  if gapBuffer.len > 0:
+    result.add('\n')
 
 proc next*(gapBuffer: GapBuffer, line, column: int): (int, int) =
   result = (line, column)

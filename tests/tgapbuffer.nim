@@ -17,8 +17,10 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[unittest]
-import moepkg/[gapbuffer, unicodeext]
+import std/unittest
+
+import moepkg/unicodeext
+import moepkg/gapbuffer {.all.}
 
 suite "gapbuffer: empty":
   test "Basic":
@@ -238,6 +240,64 @@ suite "gapbuffer: toRunes":
     check buffer.len == 2
 
     check buffer.toRunes == "0\n1".toRunes
+
+suite "gapbuffer: toString":
+  test "Empty buffer":
+    let buffer = initGapBuffer[string]()
+    check buffer.toString == ""
+
+  test "Single line":
+    var buffer = initGapBuffer[string]()
+    buffer.add("hello")
+    check buffer.toString == "hello\n"
+
+  test "Multiple lines":
+    var buffer = initGapBuffer[string]()
+    buffer.add("line1")
+    buffer.add("line2")
+    buffer.add("line3")
+    check buffer.toString == "line1\nline2\nline3\n"
+
+  test "Empty lines":
+    var buffer = initGapBuffer[string]()
+    buffer.add("")
+    buffer.add("content")
+    buffer.add("")
+    check buffer.toString == "\ncontent\n\n"
+
+  test "Lines with special characters":
+    var buffer = initGapBuffer[string]()
+    buffer.add("tab\tcharacter")
+    buffer.add("space character")
+    buffer.add("special !@#$%^&*()")
+    check buffer.toString == "tab\tcharacter\nspace character\nspecial !@#$%^&*()\n"
+
+  test "After insert operations":
+    var buffer = initGapBuffer[string]()
+    buffer.insert("third", 0)
+    buffer.insert("first", 0)
+    buffer.insert("second", 1)
+    check buffer.toString == "first\nsecond\nthird\n"
+
+  test "After delete operations":
+    var buffer = initGapBuffer[string]()
+    buffer.add("keep1")
+    buffer.add("delete1")
+    buffer.add("delete2")
+    buffer.add("keep2")
+    buffer.delete(1, 2)
+    check buffer.toString == "keep1\nkeep2\n"
+
+  test "Large buffer":
+    var buffer = initGapBuffer[string]()
+    for i in 0 ..< 100:
+      buffer.add("line" & $i)
+
+    var expected = ""
+    for i in 0 ..< 100:
+      expected &= "line" & $i & "\n"
+
+    check buffer.toString == expected
 
 suite "gapbuffer: toSeqRunes":
   test "Basic":
