@@ -437,7 +437,9 @@ proc lspInitialize*(
 
   if not status.lspClients.contains(langId):
     # Init a LSP client and start a LSP server.
-    var c = waitFor initLspClient($status.settings.lsp.languages[langId].command)
+    var c = waitFor initLspClient(
+      $status.settings.lsp.languages[langId].command, status.settings.lsp.timeout
+    )
     if c.isErr:
       return Result[(), string].err c.error
 

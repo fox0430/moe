@@ -237,6 +237,7 @@ splitType = "vertical"
 
 [Lsp]
 enable = false
+timeout = 5000
 
 [Lsp.Completion]
 enable = true

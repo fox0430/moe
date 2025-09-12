@@ -97,6 +97,7 @@ type
     lastId*: RequestId # Last request ID
     serverName*: string # The LSP server name
     command*: string # The LSP server start command
+    timeoutMs*: int # Timeout in milliseconds for requests (0 = no timeout)
 
 type
   R = Result
@@ -112,6 +113,35 @@ type
   LspSendNotifyResult* = R[(), string]
 
   LspInitializeResult* = R[(), string]
+
+proc withLspTimeout*[T](
+    fut: Future[T], timeoutMs: int
+): Future[Result[T, string]] {.async.} =
+  ## Timeout wrapper
+
+  if timeoutMs <= 0:
+    # No timeout
+    try:
+      let res = await fut
+      return Result[T, string].ok(res)
+    except CatchableError as e:
+      return Result[T, string].err(e.msg)
+  else:
+    let timeoutFut = sleepAsync(chronos.milliseconds(timeoutMs))
+
+    # Race between the actual future and timeout
+    discard await race(fut, timeoutFut)
+
+    if fut.finished and not fut.failed:
+      # Request completed successfully
+      return Result[T, string].ok(fut.read)
+    elif fut.failed:
+      # Request failed with error
+      return Result[T, string].err(fut.error.msg)
+    else:
+      # Timeout occurred
+      fut.cancelSoon()
+      return Result[T, string].err("Request timed out after " & $timeoutMs & "ms")
 
 proc running*(c: LspClient): bool {.inline.} =
   ## Return true if the LSP server process running.
@@ -267,9 +297,16 @@ proc request(
 
   c.addRequestLog(req)
 
-  let r = await c.serverStreams.input.sendRequest(req)
-  if r.isErr:
-    return Result[int, string].err r.error
+  # Apply timeout if configured
+  if c.timeoutMs > 0:
+    let sendFut = c.serverStreams.input.sendRequest(req)
+    let r = await withLspTimeout(sendFut, c.timeoutMs)
+    if r.isErr:
+      return Result[int, string].err r.error
+  else:
+    let r = await c.serverStreams.input.sendRequest(req)
+    if r.isErr:
+      return Result[int, string].err r.error
 
   c.waitingResponses[c.lastId] =
     WaitLspResponse(bufferId: bufferId, requestId: c.lastId, lspMethod: lspMethod)
@@ -356,7 +393,9 @@ proc getForegroundWaitingResponse*(
     if v.bufferId == bufferId and v.lspMethod.isForegroundWait:
       return some(v)
 
-proc initLspClient*(command: string): Future[initLspClientResult] {.async.} =
+proc initLspClient*(
+    command: string, timeoutMs: int = 0
+): Future[initLspClientResult] {.async.} =
   ## Start a LSP server process and init streams.
 
   const
@@ -398,6 +437,8 @@ proc initLspClient*(command: string): Future[initLspClientResult] {.async.} =
   c.state = LspServerState.running
 
   c.command = command
+
+  c.timeoutMs = timeoutMs
 
   return initLspClientResult.ok c
 
