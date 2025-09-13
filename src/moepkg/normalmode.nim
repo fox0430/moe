@@ -22,7 +22,7 @@ import std/[times, strutils, sequtils, options, strformat, tables, logging, json
 import pkg/results
 
 import lsp/protocol/types
-import lsp/[client, codelens]
+import lsp/[client, codelens, request]
 import
   editorstatus, ui, gapbuffer, unicodeext, fileutils, windownode, movement, editor,
   searchutils, bufferstatus, quickrunutils, messages, visualmode, commandline,
@@ -578,43 +578,13 @@ proc showCurrentCharInfoCommand(status: var EditorStatus, windowNode: WindowNode
   status.commandLine.writeCurrentCharInfo(currentChar, status.settings.notification)
 
 proc requestGotoDeclaration(status: var EditorStatus) =
-  if not status.lspClients.contains(currentBufStatus.langId):
-    debug "lsp client is not ready"
-    return
-
-  let r = waitFor lspClient.textDocumentDeclaration(
-    currentBufStatus.id,
-    $currentBufStatus.absolutePath,
-    currentMainWindowNode.bufferPosition,
-  )
-  if r.isErr:
-    status.commandLine.writeLspDeclarationError(r.error)
+  status.lspRequest(textDocumentDeclaration, writeLspDeclarationError)
 
 proc requestGotoDefinition(status: var EditorStatus) =
-  if not status.lspClients.contains(currentBufStatus.langId):
-    debug "lsp client is not ready"
-    return
-
-  let r = waitFor lspClient.textDocumentDefinition(
-    currentBufStatus.id,
-    $currentBufStatus.absolutePath,
-    currentMainWindowNode.bufferPosition,
-  )
-  if r.isErr:
-    status.commandLine.writeLspDefinitionError(r.error)
+  status.lspRequest(textDocumentDefinition, writeLspDefinitionError)
 
 proc requestGotoTypeDefinition(status: var EditorStatus) =
-  if not status.lspClients.contains(currentBufStatus.langId):
-    debug "lsp client is not ready"
-    return
-
-  let r = waitFor lspClient.textDocumentTypeDefinition(
-    currentBufStatus.id,
-    $currentBufStatus.absolutePath,
-    currentMainWindowNode.bufferPosition,
-  )
-  if r.isErr:
-    status.commandLine.writeLspTypeDefinitionError(r.error)
+  status.lspRequest(textDocumentTypeDefinition, writeLspTypeDefinitionError)
 
 proc jumpByJumpList(status: var EditorStatus, j: JumpInfo) =
   # Find destination buffer
@@ -686,47 +656,17 @@ proc jumpFoward(status: var EditorStatus) =
     status.jumpByJumpList(j.get)
 
 proc requestGotoImplementation(status: var EditorStatus) =
-  if not status.lspClients.contains(currentBufStatus.langId):
-    debug "lsp client is not ready"
-    return
-
-  let r = waitFor lspClient.textDocumentImplementation(
-    currentBufStatus.id,
-    $currentBufStatus.absolutePath,
-    currentMainWindowNode.bufferPosition,
-  )
-  if r.isErr:
-    status.commandLine.writeLspImplementationError(r.error)
+  status.lspRequest(textDocumentImplementation, writeLspImplementationError)
 
 proc requestFindReferences(status: var EditorStatus) =
-  if not status.lspClients.contains(currentBufStatus.langId):
-    debug "lsp client is not ready"
-    return
-
-  let r = waitFor lspClient.textDocumentReferences(
-    currentBufStatus.id,
-    $currentBufStatus.path.absolutePath,
-    currentMainWindowNode.bufferPosition,
-  )
-  if r.isErr:
-    status.commandLine.writeLspReferencesError(r.error)
+  status.lspRequest(textDocumentReferences, writeLspReferencesError)
 
 proc requestPrepareCallHierarchy(status: var EditorStatus) =
-  if not status.lspClients.contains(currentBufStatus.langId):
-    debug "lsp client is not ready"
-    return
-
-  let r = waitFor lspClient.textDocumentPrepareCallHierarchy(
-    currentBufStatus.id,
-    $currentBufStatus.path.absolutePath,
-    currentMainWindowNode.bufferPosition,
-  )
-  if r.isErr:
-    status.commandLine.writeLspCallHierarchyError(r.error)
+  status.lspRequest(textDocumentPrepareCallHierarchy, writeLspCallHierarchyError)
 
 proc requestDocumentLink(status: var EditorStatus) =
-  if not status.lspClients.contains(currentBufStatus.langId):
-    debug "lsp client is not ready"
+  # Note: Document link doesn't take position parameter
+  if not status.checkLspClient(currentBufStatus):
     return
 
   let r = waitFor lspClient.textDocumentDocumentLink(
@@ -736,6 +676,7 @@ proc requestDocumentLink(status: var EditorStatus) =
     status.commandLine.writeLspDocumentLinkError(r.error)
 
 proc requestDocumentSymbol(status: var EditorStatus) =
+  # Document symbol doesn't take position parameter and needs init check
   if not status.lspClients.contains(currentBufStatus.langId) or
       not lspClient.isInitialized:
     status.commandLine.writeLspDocumentSymbolError("client is not ready")
@@ -830,8 +771,7 @@ proc runCodeLensCommand(status: var EditorStatus) =
   status.commandLine.writeRunQuickRunMessage(status.settings.notification)
 
 proc requestRename(status: var EditorStatus) =
-  if not status.lspClients.contains(currentBufStatus.langId):
-    debug "lsp client is not ready"
+  if not status.checkLspClient(currentBufStatus):
     return
 
   const Prompt = "newName: "
@@ -849,9 +789,7 @@ proc requestRename(status: var EditorStatus) =
 
 proc requestSelectionRange(status: var EditorStatus) =
   ## LSP Selection Range
-
-  if not status.lspClients.contains(currentBufStatus.langId):
-    debug "lsp client is not ready"
+  if not status.checkLspClient(currentBufStatus):
     return
 
   let r = waitFor lspClient.textDocumentSelectionRange(
@@ -1347,18 +1285,7 @@ proc closeCurrentWindow(status: var EditorStatus) =
 
 proc requestHover(status: var EditorStatus) =
   ## Send textDocument/hover request to the LSP server.
-
-  if not status.lspClients.contains(currentBufStatus.langId):
-    debug "lsp client is not ready"
-    return
-
-  let r = waitFor lspClient.textDocumentHover(
-    currentBufStatus.id,
-    $currentBufStatus.path.absolutePath,
-    currentMainWindowNode.bufferPosition,
-  )
-  if r.isErr:
-    status.commandLine.writeLspHoverError(r.error)
+  status.lspRequest(textDocumentHover, writeLspHoverError)
 
 template isFoldingStartLine(status: EditorStatus): bool =
   currentMainWindowNode.view.isFoldingStartLine(currentMainWindowNode.currentLine)
