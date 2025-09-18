@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -17,18 +17,41 @@
 #                                                                              #
 #[############################################################################]#
 
-import pkg/results
-import moepkg/[editorstatus, init, mainloop, ui]
+import std/[os, strformat]
+
+import pkg/[celina, results]
+
+import moepkg/editor
 
 proc main() =
-  var status = initEditor()
-  if status.isErr:
-    exitUi()
-    raise newException(InitError, status.error)
+  var app = newApp(
+    AppConfig(
+      title: "moe",
+      alternateScreen: true,
+      mouseCapture: false,
+      rawMode: true,
+      windowMode: true,
+    )
+  )
 
-  status.get.editorMainLoop
+  let editor = newEditor()
 
-  status.get.exitEditor
+  if paramCount() > 0:
+    let path = paramStr(1)
+
+    block:
+      let r = editor.loadFile(path)
+      if r.isErr:
+        echo fmt"Error: {r.error}"
+        quit(1)
+
+  app.onEvent proc(e: Event): bool =
+    false
+
+  app.onRender proc(b: var Buffer) =
+    editor.render(b)
+
+  app.run()
 
 when isMainModule:
   main()

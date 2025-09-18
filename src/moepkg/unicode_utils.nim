@@ -17,14 +17,57 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/unittest
-import pkg/results
-import moepkg/[editorstatus, unicodeext, exmode]
+## Unicode utilities for text editing
+##
+## This module provides utilities for handling Unicode text properly,
+## including cursor positioning and character operations.
 
-test "Force quit command":
-  var status = initEditorStatus().get
-  discard status.addNewBufferInCurrentWin.get
+import std/unicode
 
-  status.bufStatus[0].countChange = 1
-  const Command = @[ru"q!"]
-  status.exModeCommand(Command)
+proc byteToCharPos*(text: string, bytePos: int): int =
+  ## Convert byte position to character position (Unicode-aware)
+  var currentByte = 0
+
+  for rune in text.runes:
+    if currentByte >= bytePos:
+      break
+    currentByte += rune.size
+    result += 1
+
+proc charToBytePos*(text: string, charPos: int): int =
+  ## Convert character position to byte position (Unicode-aware)
+  var currentChar = 0
+
+  for rune in text.runes:
+    if currentChar >= charPos:
+      break
+    result += rune.size
+    currentChar += 1
+
+proc getCharAtPos*(text: string, charPos: int): (Rune, int) =
+  ## Get the Unicode character at the given character position
+  ## Returns (rune, byte_size)
+  var
+    currentChar = 0
+    bytePos = 0
+
+  for rune in text.runes:
+    if currentChar == charPos:
+      return (rune, rune.size)
+    bytePos += rune.size
+    currentChar += 1
+
+  # Return null rune if position is out of bounds
+  (Rune(0), 0)
+
+proc deleteCharAt*(text: string, charPos: int): string =
+  ## Delete a Unicode character at the given character position
+  let bytePos = charToBytePos(text, charPos)
+  if bytePos >= text.len:
+    return text
+
+  let (_, size) = getCharAtPos(text, charPos)
+  if size == 0:
+    return text
+
+  text[0 ..< bytePos] & text[bytePos + size ..^ 1]

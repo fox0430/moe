@@ -17,268 +17,356 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strformat, strutils]
-import undoredostack, unicodeext
-export undoredostack
+const
+  DEFAULT_GAP_SIZE = 1024
+  MIN_GAP_SIZE = 512
+  GROWTH_FACTOR = 1.5
 
-type GapBuffer*[T] = object
-  buffer: seq[T]
-  size: int # Size at which the actual data is stored
-  capacity: int # Amount of secured memory
-  gapBegin, gapEnd: int # The half-open interval [gapBegin,gapEnd) is the gap
-  undoRedoStack: UndoRedoStack[T]
+type GapBuffer* = ref object
+  buffer: seq[char]
+  gapStart: int
+  gapEnd: int
+  length: int # Logical length (excluding gap)
 
-proc gapLen(gapBuffer: GapBuffer): int {.inline.} =
-  gapBuffer.gapEnd - gapBuffer.gapBegin
+proc newGapBuffer*(initialCapacity: int = DEFAULT_GAP_SIZE): GapBuffer =
+  let capacity = max(initialCapacity, MIN_GAP_SIZE)
+  GapBuffer(buffer: newSeq[char](capacity), gapStart: 0, gapEnd: capacity, length: 0)
 
-proc makeGap(gapBuffer: var GapBuffer, gapBegin: int) =
-  ## Create a gap starting with gapBegin
+proc newGapBuffer*(text: string): GapBuffer =
+  let textLen = text.len
+  let capacity = max(textLen + DEFAULT_GAP_SIZE, MIN_GAP_SIZE)
 
-  doAssert(
-    0 <= gapBegin and gapBuffer.capacity - gapBegin >= gapBuffer.gapLen,
-    "Gapbuffer: Invalid position.",
+  result = GapBuffer(
+    buffer: newSeq[char](capacity), gapStart: textLen, gapEnd: capacity, length: textLen
   )
 
-  if gapBegin < gapBuffer.gapBegin:
-    let
-      len = gapBuffer.gapBegin - gapBegin
-      index = gapBegin + gapBuffer.gapLen .. gapBegin + gapBuffer.gapLen + len - 1
-    gapBuffer.buffer[index] = gapBuffer.buffer[gapBegin .. gapBegin + len - 1]
+  # Copy text before gap
+  for i in 0 ..< textLen:
+    result.buffer[i] = text[i]
+
+proc gapSize(gb: GapBuffer): int {.inline.} =
+  gb.gapEnd - gb.gapStart
+
+proc capacity(gb: GapBuffer): int {.inline.} =
+  gb.buffer.len
+
+proc logicalToPhysical(gb: GapBuffer, logicalPos: int): int {.inline.} =
+  ## Convert logical position to physical buffer position
+  if logicalPos < gb.gapStart:
+    logicalPos
   else:
-    let
-      gapEnd = gapBegin + (gapBuffer.gapEnd - gapBuffer.gapBegin)
-      len = gapEnd - gapBuffer.gapEnd
-    gapBuffer.buffer[gapBuffer.gapBegin .. gapBuffer.gapBegin + len - 1] =
-      gapBuffer.buffer[gapBuffer.gapEnd .. gapBuffer.gapEnd + len - 1]
+    logicalPos + gb.gapSize()
 
-  gapBuffer.gapEnd = gapBegin + gapBuffer.gapLen
-  gapBuffer.gapBegin = gapBegin
+proc ensureGapSize(gb: GapBuffer, minSize: int) =
+  ## Ensure gap has at least minSize characters
+  if gb.gapSize() >= minSize:
+    return
 
-proc reserve(gapBuffer: var GapBuffer, capacity: int) =
-  doAssert(
-    1 <= capacity and gapBuffer.size <= capacity,
-    "Gapbuffer: New buffer capacity is too small.",
-  )
+  let currentCapacity = gb.capacity()
+  let requiredSize = gb.length + minSize
+  let newCapacity =
+    max(int(float(currentCapacity) * GROWTH_FACTOR), requiredSize + DEFAULT_GAP_SIZE)
 
-  gapBuffer.makeGap(gapBuffer.capacity - gapBuffer.gapLen)
-  gapBuffer.buffer.setLen(capacity)
-  gapBuffer.gapBegin = gapBuffer.size
-  gapBuffer.gapEnd = capacity
-  gapBuffer.capacity = capacity
+  var newBuffer = newSeq[char](newCapacity)
 
-proc insert*[T](
-    gapBuffer: var GapBuffer, element: T, position: int, pushToStack: bool = true
-) =
-  ## Insert an element just before `position`.
-  ## If you want to add the element at the end, pass the number of elements in the buffer to `position`.
-  ## ex: If you want to add the element to empty buffer, pass 0 to `position`.
+  # Copy prefix (before gap)
+  for i in 0 ..< gb.gapStart:
+    newBuffer[i] = gb.buffer[i]
 
-  doAssert(0 <= position and position <= gapBuffer.size, "Gapbuffer: Invalid position.")
+  # Copy suffix (after gap) to end of new buffer
+  let suffixStart = newCapacity - (gb.capacity() - gb.gapEnd)
+  for i in gb.gapEnd ..< gb.capacity():
+    newBuffer[suffixStart + (i - gb.gapEnd)] = gb.buffer[i]
 
-  if pushToStack:
-    gapBuffer.undoRedoStack.push(newInsertCommand[T](element, position))
+  gb.buffer = newBuffer
+  gb.gapEnd = suffixStart
 
-  if gapBuffer.size == gapBuffer.capacity:
-    gapBuffer.reserve(gapBuffer.capacity * 2)
-  if gapBuffer.gapBegin != position:
-    gapBuffer.makeGap(position)
-  gapBuffer.buffer[gapBuffer.gapBegin] = element
-  inc(gapBuffer.gapBegin)
-  inc(gapBuffer.size)
+proc moveGapTo(gb: GapBuffer, position: int) =
+  ## Move gap to specified logical position
+  let clampedPos = max(0, min(position, gb.length))
 
-proc add*[T](gapBuffer: var GapBuffer[T], val: T, pushToStack: bool = true) {.inline.} =
-  gapBuffer.insert(val, gapBuffer.len, pushToStack)
+  if clampedPos == gb.gapStart:
+    return
 
-proc initGapBuffer*[T](): GapBuffer[T] =
-  result.buffer = newSeq[T](1)
-  result.capacity = 1
-  result.gapEnd = 1
-  result.undoRedoStack = initUndoRedoStack[T]()
+  if clampedPos < gb.gapStart:
+    # Move gap left
+    let moveCount = gb.gapStart - clampedPos
+    let srcStart = clampedPos
+    let dstStart = gb.gapEnd - moveCount
 
-proc initGapBuffer*[T](elements: seq[T]): GapBuffer[T] =
-  result = initGapBuffer[T]()
-  for e in elements:
-    result.add(e, false)
+    # Move characters from before gap to after gap
+    for i in countdown(moveCount - 1, 0):
+      gb.buffer[dstStart + i] = gb.buffer[srcStart + i]
 
-proc deleteInterval(gapBuffer: var GapBuffer, first, last: int) =
-  ## Delete [first, last] elements
-
-  let
-    delBegin = first
-    delEnd = last + 1
-  doAssert(
-    0 <= delBegin and delBegin <= delEnd and delEnd <= gapBuffer.size,
-    "Gapbuffer: Invalid interval.",
-  )
-
-  let
-    trueBegin =
-      if gapBuffer.gapBegin > delBegin:
-        delBegin
-      else:
-        gapBuffer.gapEnd + (delBegin - gapBuffer.gapBegin)
-    trueEnd =
-      if gapBuffer.gapBegin > delEnd:
-        delEnd
-      else:
-        gapBuffer.gapEnd + (delEnd - gapBuffer.gapBegin)
-
-  if trueBegin <= gapBuffer.gapBegin and gapBuffer.gapEnd <= trueEnd:
-    gapBuffer.gapBegin = trueBegin
-    gapBuffer.gapEnd = trueEnd
-  elif trueEnd <= gapBuffer.gapBegin:
-    gapBuffer.makeGap(trueEnd)
-    gapBuffer.gapBegin = trueBegin
+    gb.gapStart = clampedPos
+    gb.gapEnd -= moveCount
   else:
-    let len = trueBegin - gapBuffer.gapEnd
-    gapBuffer.buffer[gapBuffer.gapBegin .. gapBuffer.gapBegin + len - 1] =
-      gapBuffer.buffer[gapBuffer.gapEnd .. gapBuffer.gapEnd + len - 1]
-    gapBuffer.gapBegin = gapBuffer.gapBegin + trueBegin - gapBuffer.gapEnd
-    gapBuffer.gapEnd = trueEnd
+    # Move gap right
+    let moveCount = clampedPos - gb.gapStart
+    let srcStart = gb.gapEnd
+    let dstStart = gb.gapStart
 
-  gapBuffer.size -= delEnd - delBegin
-  while gapBuffer.size > 0 and gapBuffer.size * 4 <= gapBuffer.capacity:
-    gapBuffer.reserve(gapBuffer.capacity div 2)
+    # Move characters from after gap to before gap
+    for i in 0 ..< moveCount:
+      gb.buffer[dstStart + i] = gb.buffer[srcStart + i]
 
-proc delete*[T](gapBuffer: var GapBuffer[T], index: int, pushToStack: bool = true) =
-  ## Delete the i-th element
+    gb.gapStart = clampedPos
+    gb.gapEnd += moveCount
 
-  if pushToStack:
-    gapBuffer.undoRedoStack.push(newDeleteCommand[T](gapBuffer[index], index))
-  gapBuffer.deleteInterval(index, index)
+proc insert*(gb: GapBuffer, position: int, text: string) =
+  ## Insert text at the specified position
+  if text.len == 0:
+    return
 
-proc delete*[T](
-    gapBuffer: var GapBuffer[T], first, last: int, pushToStack: bool = true
-) =
-  ## Delete [first, last] elements
+  let clampedPos = max(0, min(position, gb.length))
 
-  for i in countdown(last, first):
-    gapBuffer.delete(i)
+  # Ensure gap is large enough
+  gb.ensureGapSize(text.len)
 
-proc assign*[T](
-    gapBuffer: var GapBuffer, val: T, index: int, pushToStack: bool = true
-) =
-  doAssert(0 <= index and index < gapBuffer.size, "Gapbuffer: Invalid index.")
+  # Move gap to insertion point
+  gb.moveGapTo(clampedPos)
 
-  if pushToStack:
-    gapBuffer.undoRedoStack.push(newAssignCommand[T](gapBuffer[index], val, index))
-  if index < gapBuffer.gapBegin:
-    gapBuffer.buffer[index] = val
+  # Insert characters into gap
+  for i, ch in text:
+    gb.buffer[gb.gapStart + i] = ch
+
+  gb.gapStart += text.len
+  gb.length += text.len
+
+proc insert*(gb: GapBuffer, position: int, ch: char) =
+  ## Insert a single character at the specified position
+  let clampedPos = max(0, min(position, gb.length))
+
+  gb.ensureGapSize(1)
+  gb.moveGapTo(clampedPos)
+
+  gb.buffer[gb.gapStart] = ch
+  gb.gapStart += 1
+  gb.length += 1
+
+proc delete*(gb: GapBuffer, position: int, count: int = 1) =
+  ## Delete count characters starting from position
+  if count <= 0:
+    return
+
+  let clampedPos = max(0, min(position, gb.length))
+  let actualCount = min(count, gb.length - clampedPos)
+
+  if actualCount <= 0:
+    return
+
+  # Move gap to deletion point
+  gb.moveGapTo(clampedPos)
+
+  # Expand gap to include deleted characters
+  gb.gapEnd += actualCount
+  gb.length -= actualCount
+
+proc charAt*(gb: GapBuffer, position: int): char =
+  ## Get character at logical position
+  if position < 0 or position >= gb.length:
+    raise newException(IndexDefect, "GapBuffer index out of bounds")
+
+  let physicalPos = gb.logicalToPhysical(position)
+  gb.buffer[physicalPos]
+
+proc substring*(gb: GapBuffer, start: int, length: int): string =
+  ## Extract substring from start position with given length
+  if start < 0 or start >= gb.length or length <= 0:
+    return ""
+
+  let actualLength = min(length, gb.length - start)
+  result = newString(actualLength)
+
+  for i in 0 ..< actualLength:
+    result[i] = gb.charAt(start + i)
+
+proc `$`*(gb: GapBuffer): string =
+  ## Convert entire buffer to string
+  if gb.length == 0:
+    return ""
+
+  result = newString(gb.length)
+  var resultIndex = 0
+
+  # Copy prefix (before gap)
+  for i in 0 ..< gb.gapStart:
+    result[resultIndex] = gb.buffer[i]
+    inc resultIndex
+
+  # Copy suffix (after gap)
+  for i in gb.gapEnd ..< gb.capacity():
+    result[resultIndex] = gb.buffer[i]
+    inc resultIndex
+
+proc clear*(gb: GapBuffer) =
+  ## Clear all content
+  gb.gapStart = 0
+  gb.gapEnd = gb.capacity()
+  gb.length = 0
+
+proc len*(gb: GapBuffer): int {.inline.} =
+  ## Get logical length of buffer
+  gb.length
+
+proc findChar*(gb: GapBuffer, ch: char, start: int = 0): int =
+  ## Find first occurrence of character starting from start position
+  ## Returns -1 if not found
+  for i in start ..< gb.length:
+    if gb.charAt(i) == ch:
+      return i
+  return -1
+
+proc findString*(gb: GapBuffer, pattern: string, start: int = 0): int =
+  ## Find first occurrence of pattern starting from start position
+  ## Returns -1 if not found
+  if pattern.len == 0:
+    return start
+
+  for i in start ..< (gb.length - pattern.len + 1):
+    var match = true
+    for j in 0 ..< pattern.len:
+      if gb.charAt(i + j) != pattern[j]:
+        match = false
+        break
+    if match:
+      return i
+
+  return -1
+
+proc replace*(gb: GapBuffer, start: int, length: int, replacement: string) =
+  ## Replace length characters at start with replacement text
+  gb.delete(start, length)
+  gb.insert(start, replacement)
+
+# Line-based operations
+proc findLineStart*(gb: GapBuffer, position: int): int =
+  ## Find start of line containing position
+  var pos = min(position, gb.length - 1)
+  while pos > 0 and gb.charAt(pos - 1) != '\n':
+    dec pos
+  pos
+
+proc findLineEnd*(gb: GapBuffer, position: int): int =
+  ## Find end of line containing position
+  var pos = min(position, gb.length - 1)
+  while pos < gb.length and gb.charAt(pos) != '\n':
+    inc pos
+  pos
+
+proc getLine*(gb: GapBuffer, lineNumber: int): string =
+  ## Get content of specific line (0-based, without newline)
+  var currentLine = 0
+  var lineStart = 0
+
+  # Find start of target line
+  while lineStart < gb.length and currentLine < lineNumber:
+    if gb.charAt(lineStart) == '\n':
+      inc currentLine
+      inc lineStart
+    else:
+      inc lineStart
+
+  if currentLine < lineNumber:
+    return "" # Line doesn't exist
+
+  # Find end of line
+  var lineEnd = lineStart
+  while lineEnd < gb.length and gb.charAt(lineEnd) != '\n':
+    inc lineEnd
+
+  if lineEnd > lineStart:
+    gb.substring(lineStart, lineEnd - lineStart)
   else:
-    gapBuffer.buffer[gapBuffer.gapEnd + (index - gapBuffer.gapBegin)] = val
+    ""
 
-proc `[]=`*[T](gapBuffer: var GapBuffer, index: int, val: T) =
-  gapBuffer.assign(val, index)
+proc lineCount*(gb: GapBuffer): int =
+  ## Count number of lines
+  result = 1
+  for i in 0 ..< gb.length:
+    if gb.charAt(i) == '\n':
+      inc result
 
-proc `[]`*[T](gapBuffer: GapBuffer[T], index: int): T =
-  let size = gapBuffer.size
-  doAssert(
-    0 <= index and index < gapBuffer.size,
-    "Gapbuffer: Invalid index. index = " & ($index) & ", gapBuffer.size = " & ($size),
-  )
+proc insertLine*(gb: GapBuffer, lineNumber: int, content: string) =
+  ## Insert a new line at the specified line number
+  if lineNumber <= 0:
+    gb.insert(0, content & "\n")
+  else:
+    var currentLine = 0
+    var pos = 0
 
-  if index < gapBuffer.gapBegin:
-    return gapBuffer.buffer[index]
-  return gapBuffer.buffer[gapBuffer.gapEnd + (index - gapBuffer.gapBegin)]
+    # Find insertion point
+    while pos < gb.length and currentLine < lineNumber:
+      if gb.charAt(pos) == '\n':
+        inc currentLine
+      inc pos
 
-proc `[]`*[T](gapBuffer: Gapbuffer[T], s: HSlice[int, int]): seq[Runes] =
-  for i in s.a .. s.b:
-    result.add gapBuffer[i]
+    if currentLine == lineNumber:
+      gb.insert(pos, content & "\n")
+    else:
+      # Line number beyond end, append
+      gb.insert(gb.length, "\n" & content)
 
-proc lastSuitId*(gapBuffer: GapBuffer): int {.inline.} =
-  gapBuffer.undoRedoStack.lastSuitId
+proc deleteLine*(gb: GapBuffer, lineNumber: int) =
+  ## Delete the specified line
+  var currentLine = 0
+  var lineStart = 0
 
-proc beginNewSuitIfNeeded*(gapBuffer: var GapBuffer) {.inline.} =
-  gapBuffer.undoRedoStack.beginNewSuitIfNeeded
+  # Find start of target line
+  while lineStart < gb.length and currentLine < lineNumber:
+    if gb.charAt(lineStart) == '\n':
+      inc currentLine
+      inc lineStart
+    else:
+      inc lineStart
 
-proc canUndo*(gapBuffer: GapBuffer): bool {.inline.} =
-  gapBuffer.undoRedoStack.canUndo
+  if currentLine < lineNumber:
+    return # Line doesn't exist
 
-proc canRedo*(gapBuffer: GapBuffer): bool {.inline.} =
-  gapBuffer.undoRedoStack.canRedo
+  # Determine if this is the last line
+  var isLastLine = true
+  var tempPos = lineStart
+  while tempPos < gb.length:
+    if gb.charAt(tempPos) == '\n':
+      isLastLine = false
+      break
+    inc tempPos
 
-proc undo*(gapBuffer: var GapBuffer) {.inline.} =
-  gapBuffer.undoRedoStack.undo(gapBuffer)
+  # Determine deletion strategy to ensure line count decreases by exactly 1
+  var lineEnd = lineStart
 
-proc redo*(gapBuffer: var GapBuffer) {.inline.} =
-  gapBuffer.undoRedoStack.redo(gapBuffer)
+  # Find end of line content
+  while lineEnd < gb.length and gb.charAt(lineEnd) != '\n':
+    inc lineEnd
 
-proc len*(gapBuffer: GapBuffer): int {.inline.} =
-  gapBuffer.size
+  if lineNumber == 0:
+    # First line: always include trailing newline if it exists to maintain structure
+    if lineEnd < gb.length and gb.charAt(lineEnd) == '\n':
+      inc lineEnd
+  else:
+    # For non-first lines, we need to delete exactly one line separator
+    # Strategy: always include the preceding newline, never the trailing one
+    if lineStart > 0:
+      dec lineStart
 
-proc high*(gapBuffer: GapBuffer): int {.inline.} =
-  gapBuffer.len - 1
+  gb.delete(lineStart, lineEnd - lineStart)
 
-proc empty*(gapBuffer: GapBuffer): bool {.inline.} =
-  return gapBuffer.len == 0
+# Iterator support
+iterator chars*(gb: GapBuffer): char =
+  for i in 0 ..< gb.length:
+    yield gb.charAt(i)
 
-proc toString*(gapBuffer: GapBuffer): string =
-  var lines = newSeqOfCap[string](gapBuffer.len)
-  for i in 0 ..< gapBuffer.len:
-    lines.add($gapBuffer[i])
-  result = lines.join("\n")
-  if gapBuffer.len > 0:
-    result.add('\n')
+iterator lines*(gb: GapBuffer): string =
+  let numLines = gb.lineCount()
+  for i in 0 ..< numLines:
+    yield gb.getLine(i)
 
-proc next*(gapBuffer: GapBuffer, line, column: int): (int, int) =
-  result = (line, column)
-  if line == gapBuffer.size - 1 and column >= gapBuffer[gapBuffer.len - 1].len - 1:
-    return result
+# Memory usage
+proc estimateMemoryUsage*(gb: GapBuffer): int =
+  ## Estimate memory usage in bytes
+  sizeof(GapBuffer) + gb.capacity() * sizeof(char)
 
-  inc(result[1])
-  if result[1] >= gapBuffer[line].len:
-    inc(result[0])
-    result[1] = 0
-
-proc prev*(gapBuffer: GapBuffer, line, column: int): (int, int) =
-  result = (line, column)
-  if line == 0 and column == 0:
-    return result
-
-  dec(result[1])
-  if result[1] == -1:
-    dec(result[0])
-    result[1] = max(gapBuffer[result[0]].len - 1, 0)
-
-proc isFirst*(gapBuffer: GapBuffer, line, column: int): bool {.inline.} =
-  line == 0 and column == 0
-
-proc isLast*(gapBuffer: GapBuffer, line, column: int): bool {.inline.} =
-  line == gapBuffer.len - 1 and column >= gapBuffer[gapBuffer.len - 1].len - 1
-
-proc calcIndexInEntireBuffer*[T: array | seq | string](
-    gapBuffer: GapBuffer[T], line, column: int, containNewline: bool
-): int =
-  block:
-    let mess =
-      fmt"GapBuffer: The line is less than 0 or exceeds the length of the buffer. line = {line}, gapBuffer.len = {gapBuffer.len}."
-    doAssert(0 <= line and line < gapBuffer.len, mess)
-  block:
-    let mess =
-      fmt"GapBuffer: The column is less than 0 or exceeds the length of the buffer[line]. column = {column}, gapBuffer[line].len = {gapBuffer[line].len}."
-    doAssert(0 <= column and column < gapBuffer[line].len, mess)
-
-  for i in 0 ..< line:
-    result += gapBuffer[i].len
-    if containNewline:
-      inc(result)
-  result += column
-
-proc toGapBuffer*(r: Runes): GapBuffer[Runes] {.inline.} =
-  r.splitLines.initGapBuffer
-
-proc toGapBuffer*(r: seq[Runes]): GapBuffer[Runes] {.inline.} =
-  r.initGapBuffer
-
-proc toGapBuffer*(s: string): GapBuffer[Runes] {.inline.} =
-  s.splitLines.toRunes.toGapBuffer
-
-proc toRunes*(buffer: GapBuffer[Runes]): Runes =
-  for i in 0 ..< buffer.len:
-    result.add(buffer[i])
-    if i + 1 < buffer.len:
-      result.add(ru '\n')
-
-proc toSeqRunes*(buffer: GapBuffer[Runes]): seq[Runes] =
-  for i in 0 ..< buffer.len:
-    result.add buffer[i]
+# Debug information
+proc getGapInfo*(gb: GapBuffer): tuple[start: int, size: int, capacity: int] =
+  ## Get gap information for debugging
+  (start: gb.gapStart, size: gb.gapSize(), capacity: gb.capacity())
