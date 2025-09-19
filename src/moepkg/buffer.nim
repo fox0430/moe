@@ -45,6 +45,7 @@ type
     readOnly*: bool
     lineEnding*: LineEnding
     encoding*: CharacterEncofing
+    cursor*: BufferPosition # Buffer-specific cursor position
 
     # Backend storage
     case backendKind*: BufferBackend
@@ -69,6 +70,7 @@ proc newTextBuffer*(
       readOnly: false,
       lineEnding: LF,
       encoding: utf8,
+      cursor: BufferPosition(line: 0, column: 0),
       gapBuffer: newGapBuffer(content),
     )
 
@@ -88,7 +90,7 @@ proc charAt*(b: TextBuffer, position: int): char =
     b.gapBuffer.charAt(position)
 
 # Line-based helper functions
-proc lineToPosition*(b: TextBuffer, pos: CursorPosition): int =
+proc lineToPosition*(b: TextBuffer, pos: BufferPosition): int =
   ## Convert line/column position to character position
   var
     currentLine = 0
@@ -106,7 +108,7 @@ proc lineToPosition*(b: TextBuffer, pos: CursorPosition): int =
   else:
     b.length
 
-proc positionToLine*(b: TextBuffer, position: int): CursorPosition =
+proc positionToLine*(b: TextBuffer, position: int): BufferPosition =
   ## Convert character position to line/column position
   var
     currentLine = 0
@@ -117,10 +119,10 @@ proc positionToLine*(b: TextBuffer, position: int): CursorPosition =
       inc currentLine
       lineStart = i + 1
 
-  CursorPosition(line: currentLine, column: position - lineStart)
+  BufferPosition(line: currentLine, column: position - lineStart)
 
 # Editing operations
-proc insertText*(b: TextBuffer, pos: CursorPosition, text: string) =
+proc insertText*(b: TextBuffer, pos: BufferPosition, text: string) =
   if text.len == 0:
     return
 
@@ -158,7 +160,7 @@ proc charLen*(text: string): int =
   ## Get character length (not byte length)
   text.runeLen
 
-proc deleteChar*(b: TextBuffer, pos: CursorPosition) =
+proc deleteChar*(b: TextBuffer, pos: BufferPosition) =
   # Unicode-aware character deletion
   case b.backendKind
   of GapBuffer:
@@ -189,7 +191,7 @@ proc deleteLine*(b: TextBuffer, lineIndex: int) =
 
   b.modified = true
 
-proc splitLine*(b: TextBuffer, pos: CursorPosition) =
+proc splitLine*(b: TextBuffer, pos: BufferPosition) =
   b.insertText(pos, "\n")
 
 # File operations

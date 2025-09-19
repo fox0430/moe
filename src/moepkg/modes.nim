@@ -17,46 +17,12 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[os, strformat]
+import std/options
 
-import pkg/[celina, results]
+type
+  EditorMode* = enum
+    Normal
 
-import moepkg/[editor, handler]
-
-proc main() =
-  var app = newApp(
-    AppConfig(
-      title: "moe",
-      alternateScreen: true,
-      mouseCapture: false,
-      rawMode: true,
-      windowMode: false,
-    )
-  )
-
-  let editor = newEditor()
-
-  if paramCount() > 0:
-    let path = paramStr(1)
-
-    block:
-      let r = editor.loadFile(path)
-      if r.isErr:
-        echo fmt"Error: {r.error}"
-        quit(1)
-
-  app.onEvent proc(e: Event): bool =
-    editor.handleEvent(e)
-    return true # Always return true to prevent app exit on unhandled keys
-
-  app.onRender proc(b: var Buffer) =
-    # Update editor view
-    editor.render(b)
-
-    # Set cursor position from calculated screen coordinates
-    app.setCursor(editor.state.cursor.x, editor.state.cursor.y)
-
-  app.run()
-
-when isMainModule:
-  main()
+  ModeTransition* = object
+    newMode*: Option[EditorMode]
+    handled*: bool

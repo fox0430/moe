@@ -17,46 +17,43 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[os, strformat]
+import std/options
 
-import pkg/[celina, results]
+import cursor, modes
 
-import moepkg/[editor, handler]
+type
+  ViewPort* = object
+    topLine*: int
+    leftColumn*: int
+    width*: int
+    height*: int
 
-proc main() =
-  var app = newApp(
-    AppConfig(
-      title: "moe",
-      alternateScreen: true,
-      mouseCapture: false,
-      rawMode: true,
-      windowMode: false,
-    )
-  )
+  Motion* = enum
+    Left
+    Right
+    Up
+    Down
+    PageUp
+    PageDown
 
-  let editor = newEditor()
+  TypedCommandKind* = enum
+    MovementCommand
+    OperatorCommand
+    SimpleCommand
 
-  if paramCount() > 0:
-    let path = paramStr(1)
+  TypedCommand* = object
+    case kind*: TypedCommandKind
+    of MovementCommand:
+      motion*: Motion
+      count*: int
+    of OperatorCommand:
+      operator*: string # Keep as string for now
+      target*: string # Keep as string for now
+    of SimpleCommand:
+      command*: string # Keep as string for now
 
-    block:
-      let r = editor.loadFile(path)
-      if r.isErr:
-        echo fmt"Error: {r.error}"
-        quit(1)
-
-  app.onEvent proc(e: Event): bool =
-    editor.handleEvent(e)
-    return true # Always return true to prevent app exit on unhandled keys
-
-  app.onRender proc(b: var Buffer) =
-    # Update editor view
-    editor.render(b)
-
-    # Set cursor position from calculated screen coordinates
-    app.setCursor(editor.state.cursor.x, editor.state.cursor.y)
-
-  app.run()
-
-when isMainModule:
-  main()
+  EditorState* = ref object
+    cursor*: CursorPosition # Actual cursor position
+    mode*: EditorMode
+    command*: string
+    lastMotion*: Option[Motion]

@@ -17,4 +17,17 @@
 #                                                                              #
 #[############################################################################]#
 
-import pkg/cleina
+import std/options
+
+import pkg/celina
+
+import editor, commands, motion
+
+proc handleEvent*(e: Editor, event: Event) =
+  if event.kind != EventKind.Key:
+    return
+
+  let cmd = parseMotion(event.key.char, 1)
+  if cmd.isSome:
+    let motionCmd = cmd.get
+    discard e.executer.motionController.executeMotion(motionCmd)

@@ -361,6 +361,70 @@ iterator lines*(gb: GapBuffer): string =
   for i in 0 ..< numLines:
     yield gb.getLine(i)
 
+# Bracket operators for convenient access
+proc `[]`*(gb: GapBuffer, position: int): char =
+  ## Get character at logical position using [] operator
+  if position < 0 or position >= gb.length:
+    raise newException(IndexDefect, "GapBuffer index out of bounds")
+
+  let physicalPos = gb.logicalToPhysical(position)
+  gb.buffer[physicalPos]
+
+proc `[]`*(gb: GapBuffer, slice: HSlice[int, int]): string =
+  ## Get substring using slice notation gb[start..end]
+  let start = max(0, slice.a)
+  let endPos = min(gb.length - 1, slice.b)
+
+  if start > endPos or start >= gb.length:
+    return ""
+
+  let actualLength = endPos - start + 1
+  result = newString(actualLength)
+
+  # Optimize by copying directly from buffer segments
+  if endPos < gb.gapStart:
+    # All characters are before the gap
+    for i in 0 ..< actualLength:
+      result[i] = gb.buffer[start + i]
+  elif start >= gb.gapStart:
+    # All characters are after the gap
+    let physicalStart = start + gb.gapSize()
+    for i in 0 ..< actualLength:
+      result[i] = gb.buffer[physicalStart + i]
+  else:
+    # Range spans the gap
+    var resultIndex = 0
+    # Copy from before gap
+    for i in start ..< gb.gapStart:
+      result[resultIndex] = gb.buffer[i]
+      inc resultIndex
+    # Copy from after gap
+    for i in gb.gapEnd ..< gb.gapEnd + (endPos - gb.gapStart + 1):
+      result[resultIndex] = gb.buffer[i]
+      inc resultIndex
+
+proc `[]=`*(gb: GapBuffer, position: int, ch: char) =
+  ## Set character at logical position using [] operator
+  if position < 0 or position >= gb.length:
+    raise newException(IndexDefect, "GapBuffer index out of bounds")
+
+  let physicalPos = gb.logicalToPhysical(position)
+  gb.buffer[physicalPos] = ch
+
+proc `[]=`*(gb: GapBuffer, slice: HSlice[int, int], text: string) =
+  ## Replace range with text using slice notation gb[start..end] = text
+  let start = max(0, slice.a)
+  let endPos = min(gb.length - 1, slice.b)
+
+  if start > endPos or start >= gb.length:
+    # Invalid range, insert at start position
+    if start < gb.length:
+      gb.insert(start, text)
+  else:
+    let deleteLength = endPos - start + 1
+    gb.delete(start, deleteLength)
+    gb.insert(start, text)
+
 # Memory usage
 proc estimateMemoryUsage*(gb: GapBuffer): int =
   ## Estimate memory usage in bytes

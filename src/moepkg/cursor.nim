@@ -17,6 +17,11 @@
 #                                                                              #
 #[############################################################################]#
 
-type CursorPosition* = object
-  line*: int
-  column*: int
+type
+  CursorPosition* = object
+    x*: int
+    y*: int
+
+  BufferPosition* = object
+    line*: int
+    column*: int
