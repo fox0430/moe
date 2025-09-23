@@ -35,6 +35,14 @@ type
     Down
     PageUp
     PageDown
+    Home
+    End
+    FirstLine
+    LastLine
+    FindChar
+    FindCharBackward
+    TillChar
+    TillCharBackward
 
   TypedCommandKind* = enum
     MovementCommand

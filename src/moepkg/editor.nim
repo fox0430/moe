@@ -17,26 +17,48 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/strutils
+import std/[strutils, options]
 
 import pkg/[celina, results]
 
-import buffer, cursor, types, commands
+import buffer, cursor, types, commands, keybindings, commandregistry
 
 type Editor* = ref object
   textBuffer*: TextBuffer
   state*: EditorState
   viewport*: ViewPort
   executer*: CommandExecutor
+  commandRegistry*: CommandRegistry
+  keyBindingRegistry*: KeyBindingRegistry
+
+proc buffer*(e: Editor): TextBuffer =
+  e.textBuffer
 
 proc newEditor*(): Editor =
+  # Create registries first
+  let
+    cmdRegistry = newCommandRegistry()
+    keyRegistry = newKeyBindingRegistry()
+
+  # Register built-in commands and default bindings
+  cmdRegistry.registerBuiltinCommands()
+  keyRegistry.setupDefaultBindings()
+
   result = Editor(
     textBuffer: newTextBuffer(),
     state: EditorState(cursor: CursorPosition(x: 0, y: 0)),
     viewport: ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24),
+    commandRegistry: cmdRegistry,
+    keyBindingRegistry: keyRegistry,
   )
 
-  result.executer = newCommandExecutor(result.textBuffer, result.state, result.viewport)
+  result.executer = newCommandExecutor(
+    result.textBuffer,
+    result.state,
+    result.viewport,
+    some(cmdRegistry),
+    some(keyRegistry),
+  )
 
 proc loadFile*(e: Editor, path: string): Result[(), string] =
   ## Load text file

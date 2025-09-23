@@ -17,65 +17,88 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/strutils
+import std/options
 
-import types, buffer, motion
+import pkg/results
+
+import types, buffer, motion, commandregistry, keybindings
 
 type CommandExecutor* = ref object
   motionController*: MotionController
   buffer*: buffer.TextBuffer
   state*: EditorState
   viewport*: ViewPort
+  commandRegistry*: CommandRegistry
+  keyBindingRegistry*: KeyBindingRegistry
 
 proc newCommandExecutor*(
-    buffer: buffer.TextBuffer, state: EditorState, viewport: ViewPort
+    buffer: buffer.TextBuffer,
+    state: EditorState,
+    viewport: ViewPort,
+    commandRegistry: Option[CommandRegistry] = none(CommandRegistry),
+    keyBindingRegistry: Option[KeyBindingRegistry] = none(KeyBindingRegistry),
 ): CommandExecutor =
+  let cmdReg =
+    if commandRegistry.isSome:
+      commandRegistry.get
+    else:
+      newCommandRegistry()
+  let keyReg =
+    if keyBindingRegistry.isSome:
+      keyBindingRegistry.get
+    else:
+      newKeyBindingRegistry()
+
+  # Register built-in commands if using new registry
+  if commandRegistry.isNone:
+    cmdReg.registerBuiltinCommands
+
+  # Setup default key bindings if using new registry
+  if keyBindingRegistry.isNone:
+    keyReg.setupDefaultBindings
+
   CommandExecutor(
     motionController: newMotionController(buffer, state, viewport),
     buffer: buffer,
     state: state,
     viewport: viewport,
+    commandRegistry: cmdReg,
+    keyBindingRegistry: keyReg,
   )
 
-proc execute*(e: CommandExecutor, command: string): bool =
-  ## Execute a command string
+proc execute*(e: CommandExecutor, command: string): Result[(), string] =
+  ## Execute a command string through the command registry
 
-  # Handle single character motion commands
-  const repeatCount = 0
-  if command.len == 1:
-    let success = e.motionController.executeMotionKey(command[0], repeatCount)
-    if success:
-      e.state.command = ""
-      return true
+  # Create command context
+  let ctx = CommandContext(
+    buffer: e.buffer,
+    state: e.state,
+    viewport: e.viewport,
+    motionController: e.motionController,
+    keyBindingRegistry: nil, # Not available in this context
+  )
 
-  # Handle motion: prefixed commands (from key bindings)
-  if command.startsWith("motion:"):
-    let motionType = command[7 ..^ 1]
-    var motion: Motion
-    case motionType
-    of "left":
-      motion = Motion.Left
-    of "right":
-      motion = Motion.Right
-    of "up":
-      motion = Motion.Up
-    of "down":
-      motion = Motion.Down
-    of "pageup":
-      motion = Motion.PageUp
-    of "pagedown":
-      motion = Motion.PageDown
-    else:
-      return false
+  # Execute through command registry (handles both commands and aliases)
+  let r = e.commandRegistry.execute(ctx, command)
+  if r.isOk:
+    # Clear command buffer on success
+    e.state.command = ""
 
-    let cmd = MotionCommand(motion: motion, count: 1)
-    let success = e.motionController.executeMotion(cmd)
-    if success:
-      e.state.command = ""
-    return success
+  return r
 
-  # Unknown command
-  return false
+proc executeKeybinding*(
+    e: CommandExecutor, binding: keybindings.Command
+): Result[(), string] =
+  ## Execute a keybinding command
+  let ctx = CommandContext(
+    buffer: e.buffer,
+    state: e.state,
+    viewport: e.viewport,
+    motionController: e.motionController,
+    keyBindingRegistry: nil, # Not available in this context
+  )
+
+  return e.commandRegistry.executeCommand(ctx, binding)
 
 # Compatibility methods for existing code
 proc clampCursor*(exec: CommandExecutor) =

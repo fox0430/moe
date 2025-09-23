@@ -24,6 +24,8 @@
 
 import std/options
 
+import pkg/results
+
 import buffer, cursor, types
 
 type
@@ -31,6 +33,7 @@ type
   MotionCommand* = object
     motion*: Motion
     count*: int
+    targetChar*: char # For find/till commands
 
   # Motion executor - handles only motion logic
   MotionExecutor* = ref object
@@ -50,24 +53,138 @@ type
     viewportManager*: ViewportManager
     cursorManager*: CursorManager
 
-proc parseMotion*(key: char, repeatCount: int = 0): Option[MotionCommand] =
-  ## Parse a single character into a motion command
-  let count = if repeatCount <= 0: 1 else: repeatCount
-
-  case key
-  of 'h':
-    return some(MotionCommand(motion: Motion.Left, count: count))
-  of 'l':
-    return some(MotionCommand(motion: Motion.Right, count: count))
-  of 'j':
-    return some(MotionCommand(motion: Motion.Down, count: count))
-  of 'k':
-    return some(MotionCommand(motion: Motion.Up, count: count))
-  else:
-    return none(MotionCommand)
-
 proc newMotionExecutor*(buffer: buffer.TextBuffer): MotionExecutor =
   MotionExecutor(buffer: buffer)
+
+proc moveLeft(
+    e: MotionExecutor, currentPos: CursorPosition, count: int
+): CursorPosition =
+  result = currentPos
+  if currentPos.y >= 0 and currentPos.y < e.buffer.len:
+    let line = e.buffer.getLine(currentPos.y)
+    var newCol = currentPos.x
+    for _ in 0 ..< count:
+      if newCol > 0:
+        newCol -= 1
+        while newCol > 0 and ord(line[newCol]) >= 0x80 and ord(line[newCol]) < 0xC0:
+          newCol -= 1
+    result.x = max(0, newCol)
+
+proc moveRight(
+    e: MotionExecutor, currentPos: CursorPosition, count: int
+): CursorPosition =
+  result = currentPos
+  if currentPos.y >= 0 and currentPos.y < e.buffer.len:
+    let line = e.buffer.getLine(currentPos.y)
+    var newCol = currentPos.x
+    for _ in 0 ..< count:
+      if newCol < line.len:
+        if ord(line[newCol]) < 0x80:
+          newCol += 1
+        elif ord(line[newCol]) < 0xE0:
+          newCol += 2
+        elif ord(line[newCol]) < 0xF0:
+          newCol += 3
+        else:
+          newCol += 4
+    result.x = newCol
+
+proc moveUp(e: MotionExecutor, currentPos: CursorPosition, count: int): CursorPosition =
+  result = currentPos
+  result.y = max(0, currentPos.y - count)
+
+proc moveDown(
+    e: MotionExecutor, currentPos: CursorPosition, count: int
+): CursorPosition =
+  result = currentPos
+  if e.buffer.len > 0:
+    result.y = min(e.buffer.len - 1, currentPos.y + count)
+  else:
+    result.y = 0
+
+proc movePageUp(
+    e: MotionExecutor, currentPos: CursorPosition, count: int, viewportHeight: int
+): CursorPosition =
+  result = currentPos
+  let pageSize = max(1, viewportHeight - 1) * count
+  result.y = max(0, currentPos.y - pageSize)
+
+proc movePageDown(
+    e: MotionExecutor, currentPos: CursorPosition, count: int, viewportHeight: int
+): CursorPosition =
+  result = currentPos
+  let pageSize = max(1, viewportHeight - 1) * count
+  if e.buffer.len > 0:
+    result.y = min(e.buffer.len - 1, currentPos.y + pageSize)
+  else:
+    result.y = 0
+
+proc moveHome(e: MotionExecutor, currentPos: CursorPosition): CursorPosition =
+  result = currentPos
+  result.x = 0
+
+proc moveEnd(e: MotionExecutor, currentPos: CursorPosition): CursorPosition =
+  result = currentPos
+  if currentPos.y >= 0 and currentPos.y < e.buffer.len:
+    let line = e.buffer.getLine(currentPos.y)
+    result.x = line.len
+
+proc moveFirstLine(e: MotionExecutor, currentPos: CursorPosition): CursorPosition =
+  result = currentPos
+  result.y = 0
+  result.x = 0
+
+proc moveLastLine(e: MotionExecutor, currentPos: CursorPosition): CursorPosition =
+  result = currentPos
+  if e.buffer.len > 0:
+    result.y = e.buffer.len - 1
+    result.x = 0
+
+proc findChar(
+    e: MotionExecutor, currentPos: CursorPosition, targetChar: char, count: int
+): CursorPosition =
+  ## Find next occurrence of character on current line
+  result = currentPos
+  if currentPos.y >= 0 and currentPos.y < e.buffer.len:
+    let line = e.buffer.getLine(currentPos.y)
+    var found = 0
+    for i in currentPos.x + 1 ..< line.len:
+      if line[i] == targetChar:
+        found.inc
+        if found == count:
+          result.x = i
+          break
+
+proc findCharBackward(
+    e: MotionExecutor, currentPos: CursorPosition, targetChar: char, count: int
+): CursorPosition =
+  ## Find previous occurrence of character on current line
+  result = currentPos
+  if currentPos.y >= 0 and currentPos.y < e.buffer.len:
+    let line = e.buffer.getLine(currentPos.y)
+    var found = 0
+    for i in countdown(currentPos.x - 1, 0):
+      if line[i] == targetChar:
+        found.inc
+        if found == count:
+          result.x = i
+          break
+
+proc tillChar(
+    e: MotionExecutor, currentPos: CursorPosition, targetChar: char, count: int
+): CursorPosition =
+  ## Move till (before) next occurrence of character
+  result = e.findChar(currentPos, targetChar, count)
+  if result.x > currentPos.x:
+    result.x = result.x - 1
+
+proc tillCharBackward(
+    e: MotionExecutor, currentPos: CursorPosition, targetChar: char, count: int
+): CursorPosition =
+  ## Move till (after) previous occurrence of character
+  result = e.findCharBackward(currentPos, targetChar, count)
+  if result.x < currentPos.x:
+    result.x = result.x + 1
 
 proc calculateNewPosition*(
     e: MotionExecutor,
@@ -76,57 +193,35 @@ proc calculateNewPosition*(
     viewportHeight: int = 24,
 ): CursorPosition =
   ## Calculate new cursor position after motion, without modifying state
-  result = currentPos
-
   case cmd.motion
   of Motion.Left:
-    # Ensure we don't access beyond buffer bounds
-    if currentPos.y >= 0 and currentPos.y < e.buffer.len:
-      let line = e.buffer.getLine(currentPos.y)
-      var newCol = currentPos.x
-      for _ in 0 ..< cmd.count:
-        if newCol > 0:
-          newCol -= 1
-          # Handle UTF-8 properly
-          while newCol > 0 and ord(line[newCol]) >= 0x80 and ord(line[newCol]) < 0xC0:
-            newCol -= 1
-      result.x = max(0, newCol)
+    e.moveLeft(currentPos, cmd.count)
   of Motion.Right:
-    # Ensure we don't access beyond buffer bounds
-    if currentPos.y >= 0 and currentPos.y < e.buffer.len:
-      let line = e.buffer.getLine(currentPos.y)
-      var newCol = currentPos.x
-      for _ in 0 ..< cmd.count:
-        if newCol < line.len:
-          # Move forward by one character (handling UTF-8)
-          if ord(line[newCol]) < 0x80:
-            newCol += 1
-          elif ord(line[newCol]) < 0xE0:
-            newCol += 2
-          elif ord(line[newCol]) < 0xF0:
-            newCol += 3
-          else:
-            newCol += 4
-      result.x = newCol
+    e.moveRight(currentPos, cmd.count)
   of Motion.Up:
-    result.y = max(0, currentPos.y - cmd.count)
+    e.moveUp(currentPos, cmd.count)
   of Motion.Down:
-    if e.buffer.len > 0:
-      # Don't allow movement beyond last line of file
-      result.y = min(e.buffer.len - 1, currentPos.y + cmd.count)
-    else:
-      result.y = 0
+    e.moveDown(currentPos, cmd.count)
   of Motion.PageUp:
-    # Move up by viewport height lines (minus 1 for status line)
-    let pageSize = max(1, viewportHeight - 1) * cmd.count
-    result.y = max(0, currentPos.y - pageSize)
+    e.movePageUp(currentPos, cmd.count, viewportHeight)
   of Motion.PageDown:
-    # Move down by viewport height lines (minus 1 for status line)
-    let pageSize = max(1, viewportHeight - 1) * cmd.count
-    if e.buffer.len > 0:
-      result.y = min(e.buffer.len - 1, currentPos.y + pageSize)
-    else:
-      result.y = 0
+    e.movePageDown(currentPos, cmd.count, viewportHeight)
+  of Motion.Home:
+    e.moveHome(currentPos)
+  of Motion.End:
+    e.moveEnd(currentPos)
+  of Motion.FirstLine:
+    e.moveFirstLine(currentPos)
+  of Motion.LastLine:
+    e.moveLastLine(currentPos)
+  of Motion.FindChar:
+    e.findChar(currentPos, cmd.targetChar, cmd.count)
+  of Motion.FindCharBackward:
+    e.findCharBackward(currentPos, cmd.targetChar, cmd.count)
+  of Motion.TillChar:
+    e.tillChar(currentPos, cmd.targetChar, cmd.count)
+  of Motion.TillCharBackward:
+    e.tillCharBackward(currentPos, cmd.targetChar, cmd.count)
 
 proc newCursorManager*(state: EditorState): CursorManager =
   CursorManager(state: state)
@@ -200,7 +295,9 @@ proc newMotionController*(
     cursorManager: newCursorManager(state),
   )
 
-proc executeMotion*(controller: MotionController, cmd: MotionCommand): bool =
+proc executeMotion*(
+    controller: MotionController, cmd: MotionCommand
+): Result[(), string] =
   ## Execute a motion command - main entry point
   # Get current buffer position (logical position in file)
   let currentPos = CursorPosition(
@@ -224,13 +321,4 @@ proc executeMotion*(controller: MotionController, cmd: MotionCommand): bool =
   # Store last motion for repeat
   controller.cursorManager.state.lastMotion = some(cmd.motion)
 
-  return true
-
-proc executeMotionKey*(
-    controller: MotionController, key: char, repeatCount: int = 0
-): bool =
-  ## Convenience method to execute motion from a key press
-  let cmd = parseMotion(key, repeatCount)
-  if cmd.isSome:
-    return controller.executeMotion(cmd.get())
-  return false
+  return Result[(), string].ok ()

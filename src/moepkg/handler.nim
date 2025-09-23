@@ -21,13 +21,31 @@ import std/options
 
 import pkg/celina
 
-import editor, commands, motion
+import editor, commands, keybindings, commandregistry
 
 proc handleEvent*(e: Editor, event: Event) =
   if event.kind != EventKind.Key:
     return
 
-  let cmd = parseMotion(event.key.char, 1)
-  if cmd.isSome:
-    let motionCmd = cmd.get
-    discard e.executer.motionController.executeMotion(motionCmd)
+  # Convert event to key combo
+  let keyCombo = eventToKeyCombo(event)
+  if keyCombo.isNone:
+    return
+
+  # Find binding for current mode
+  let binding = e.keyBindingRegistry.findBinding(e.state.mode, keyCombo.get)
+  if binding.isSome:
+    # Create command context
+    let ctx = CommandContext(
+      buffer: e.textBuffer,
+      state: e.state,
+      viewport: e.viewport,
+      motionController: e.executer.motionController,
+      keyBindingRegistry: e.keyBindingRegistry,
+    )
+
+    # Execute the bound command
+    discard e.commandRegistry.executeCommand(ctx, binding.get)
+    return
+
+  # No fallback needed - all keys should be handled through bindings

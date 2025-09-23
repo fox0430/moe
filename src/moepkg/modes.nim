@@ -22,6 +22,8 @@ import std/options
 type
   EditorMode* = enum
     Normal
+    Insert
+    Command
 
   ModeTransition* = object
     newMode*: Option[EditorMode]
