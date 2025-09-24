@@ -21,7 +21,7 @@ import std/[strutils, options]
 
 import pkg/[celina, results]
 
-import buffer, cursor, types, commands, keybindings, commandregistry
+import buffer, cursor, types, commands, keybindings, commandregistry, modes
 
 type Editor* = ref object
   textBuffer*: TextBuffer
@@ -187,3 +187,20 @@ proc render*(e: Editor, buffer: var Buffer) =
 
   e.renderTextBuffer(buffer, textArea)
   e.setCursorPosition(lineNumOffset)
+
+  # Render mode indicator in the bottom status line
+  let modeStr =
+    case e.state.mode
+    of EditorMode.Normal: "-- NORMAL --"
+    of EditorMode.Insert: "-- INSERT --"
+    of EditorMode.Command: "-- COMMAND --"
+
+  let modeStyle = Style(
+    fg: ColorValue(kind: Indexed, indexed: Color.White),
+    bg: ColorValue(kind: Indexed, indexed: Color.Black),
+    modifiers: {StyleModifier.Bold},
+  )
+
+  # Draw status line at the bottom
+  let statusY = buffer.area.y + buffer.area.height - 1
+  buffer.setString(buffer.area.x, statusY, modeStr, modeStyle)

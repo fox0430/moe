@@ -544,6 +544,24 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
     )
   )
 
+  registry.registerCommand(
+    Command(
+      name: "line-home",
+      description: "Move to beginning of line",
+      kind: ctMotion,
+      motion: Motion.Home,
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "line-end",
+      description: "Move to end of line",
+      kind: ctMotion,
+      motion: Motion.End,
+    )
+  )
+
   # Register sequence commands (mock for now)
   registry.registerCommand(
     Command(
@@ -570,6 +588,50 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.Normal, "l", "move-right")
   registry.bindKey(EditorMode.Normal, "C-u", "page-up")
   registry.bindKey(EditorMode.Normal, "C-d", "page-down")
+
+  # Arrow key bindings for Normal mode
+  registry.bindKey(
+    EditorMode.Normal,
+    KeyCombo(isSpecial: true, special: skLeft, fnNum: 0),
+    registry.commandRegistry["move-left"],
+  )
+  registry.bindKey(
+    EditorMode.Normal,
+    KeyCombo(isSpecial: true, special: skRight, fnNum: 0),
+    registry.commandRegistry["move-right"],
+  )
+  registry.bindKey(
+    EditorMode.Normal,
+    KeyCombo(isSpecial: true, special: skUp, fnNum: 0),
+    registry.commandRegistry["move-up"],
+  )
+  registry.bindKey(
+    EditorMode.Normal,
+    KeyCombo(isSpecial: true, special: skDown, fnNum: 0),
+    registry.commandRegistry["move-down"],
+  )
+
+  # Additional navigation keys for Normal mode
+  registry.bindKey(
+    EditorMode.Normal,
+    KeyCombo(isSpecial: true, special: skHome, fnNum: 0),
+    registry.commandRegistry["line-home"],
+  )
+  registry.bindKey(
+    EditorMode.Normal,
+    KeyCombo(isSpecial: true, special: skEnd, fnNum: 0),
+    registry.commandRegistry["line-end"],
+  )
+  registry.bindKey(
+    EditorMode.Normal,
+    KeyCombo(isSpecial: true, special: skPageUp, fnNum: 0),
+    registry.commandRegistry["page-up"],
+  )
+  registry.bindKey(
+    EditorMode.Normal,
+    KeyCombo(isSpecial: true, special: skPageDown, fnNum: 0),
+    registry.commandRegistry["page-down"],
+  )
 
   # Register additional commands for sequences
   registry.registerCommand(
@@ -671,6 +733,81 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.Normal, "d d", "delete-line") # Delete line
   registry.bindKey(EditorMode.Normal, "d w", "delete-word") # Delete word
   registry.bindKey(EditorMode.Normal, "c w", "change-word") # Change word
+
+  # Register mode switching commands
+  registry.registerCommand(
+    Command(
+      name: "switch-to-insert",
+      description: "Switch to insert mode",
+      kind: ctModeSwitch,
+      targetMode: EditorMode.Insert,
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "switch-to-normal",
+      description: "Switch to normal mode",
+      kind: ctModeSwitch,
+      targetMode: EditorMode.Normal,
+    )
+  )
+
+  # Register o and O commands
+  registry.registerCommand(
+    Command(
+      name: "open-line-below",
+      description: "Open new line below and enter insert mode",
+      kind: ctAction,
+      commandId: "insert.line.below",
+      args: @[],
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "open-line-above",
+      description: "Open new line above and enter insert mode",
+      kind: ctAction,
+      commandId: "insert.line.above",
+      args: @[],
+    )
+  )
+
+  # Register a and A commands
+  registry.registerCommand(
+    Command(
+      name: "append",
+      description: "Append after cursor",
+      kind: ctAction,
+      commandId: "insert.append",
+      args: @[],
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "append-end",
+      description: "Append at end of line",
+      kind: ctAction,
+      commandId: "insert.append.end",
+      args: @[],
+    )
+  )
+
+  # Normal mode to Insert mode transitions
+  registry.bindKey(EditorMode.Normal, "i", "switch-to-insert") # Enter insert mode
+  registry.bindKey(EditorMode.Normal, "a", "append") # Enter insert mode after cursor
+  registry.bindKey(EditorMode.Normal, "I", "switch-to-insert")
+    # Enter insert mode at line start
+  registry.bindKey(EditorMode.Normal, "A", "append-end") # Enter insert mode at line end
+  registry.bindKey(EditorMode.Normal, "o", "open-line-below")
+    # Enter insert mode on new line below
+  registry.bindKey(EditorMode.Normal, "O", "open-line-above")
+    # Enter insert mode on new line above
+
+  # Insert mode key bindings
+  registry.bindKey(EditorMode.Insert, "Escape", "switch-to-normal") # Exit to normal mode
 
 proc eventToKeyCombo*(event: celina.Event): Option[KeyCombo] =
   ## Convert a Celina event to a key combination

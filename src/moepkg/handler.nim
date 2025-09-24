@@ -21,7 +21,7 @@ import std/options
 
 import pkg/celina
 
-import editor, commands, keybindings, commandregistry
+import editor, commands, keybindings, commandregistry, modes
 
 proc handleEvent*(e: Editor, event: Event) =
   if event.kind != EventKind.Key:
@@ -32,7 +32,77 @@ proc handleEvent*(e: Editor, event: Event) =
   if keyCombo.isNone:
     return
 
-  # Find binding for current mode
+  # Special handling for Insert mode
+  if e.state.mode == EditorMode.Insert:
+    # Check for mode switch keys first (like Escape)
+    let binding = e.keyBindingRegistry.findBinding(e.state.mode, keyCombo.get)
+    if binding.isSome:
+      # Create command context
+      let ctx = CommandContext(
+        buffer: e.textBuffer,
+        state: e.state,
+        viewport: e.viewport,
+        motionController: e.executer.motionController,
+        keyBindingRegistry: e.keyBindingRegistry,
+      )
+
+      # Execute the bound command (e.g., switch to Normal mode)
+      discard e.commandRegistry.executeCommand(ctx, binding.get)
+      return
+
+    # Handle regular character insertion in Insert mode
+    if not keyCombo.get.isSpecial and keyCombo.get.modifiers == {}:
+      # Insert the character
+      let ctx = CommandContext(
+        buffer: e.textBuffer,
+        state: e.state,
+        viewport: e.viewport,
+        motionController: e.executer.motionController,
+        keyBindingRegistry: e.keyBindingRegistry,
+      )
+
+      # Execute insert character command
+      discard e.commandRegistry.execute(ctx, "insert.char", @[$keyCombo.get.char])
+      return
+
+    # Handle special keys in Insert mode
+    if keyCombo.get.isSpecial:
+      let ctx = CommandContext(
+        buffer: e.textBuffer,
+        state: e.state,
+        viewport: e.viewport,
+        motionController: e.executer.motionController,
+        keyBindingRegistry: e.keyBindingRegistry,
+      )
+
+      case keyCombo.get.special
+      of skBackspace:
+        discard e.commandRegistry.execute(ctx, "insert.backspace")
+      of skDelete:
+        discard e.commandRegistry.execute(ctx, "insert.delete")
+      of skEnter:
+        discard e.commandRegistry.execute(ctx, "insert.newline")
+      of skLeft:
+        discard e.commandRegistry.execute(ctx, "motion.left")
+      of skRight:
+        discard e.commandRegistry.execute(ctx, "motion.right")
+      of skUp:
+        discard e.commandRegistry.execute(ctx, "motion.up")
+      of skDown:
+        discard e.commandRegistry.execute(ctx, "motion.down")
+      of skHome:
+        discard e.commandRegistry.execute(ctx, "motion.home")
+      of skEnd:
+        discard e.commandRegistry.execute(ctx, "motion.end")
+      of skPageUp:
+        discard e.commandRegistry.execute(ctx, "motion.pageup")
+      of skPageDown:
+        discard e.commandRegistry.execute(ctx, "motion.pagedown")
+      else:
+        discard # Ignore other special keys in Insert mode for now
+      return
+
+  # Normal handling for other modes
   let binding = e.keyBindingRegistry.findBinding(e.state.mode, keyCombo.get)
   if binding.isSome:
     # Create command context
