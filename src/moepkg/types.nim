@@ -64,4 +64,6 @@ type
     cursor*: CursorPosition # Actual cursor position
     mode*: EditorMode
     command*: string
+    commandText*: string # Text being typed in command mode
+    statusMessage*: string # Message to display in status line
     lastMotion*: Option[Motion]

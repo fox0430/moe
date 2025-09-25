@@ -806,6 +806,17 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.Normal, "O", "open-line-above")
     # Enter insert mode on new line above
 
+  # Add binding for Command mode
+  registry.registerCommand(
+    Command(
+      name: "switch-to-command",
+      description: "Switch to command mode",
+      kind: ctModeSwitch,
+      targetMode: EditorMode.Command,
+    )
+  )
+  registry.bindKey(EditorMode.Normal, ":", "switch-to-command")
+
   # Insert mode key bindings
   registry.bindKey(EditorMode.Insert, "Escape", "switch-to-normal") # Exit to normal mode
 

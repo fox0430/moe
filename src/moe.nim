@@ -46,8 +46,7 @@ proc main() =
         quit(1)
 
   app.onEvent proc(e: Event): bool =
-    editor.handleEvent(e)
-    return true # Always return true to prevent app exit on unhandled keys
+    return editor.handleEvent(e)
 
   app.onRender proc(b: var Buffer) =
     # Update editor view

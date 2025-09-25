@@ -17,11 +17,14 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, options]
+import std/[strutils, strformat, options, tables]
 
 import pkg/[celina, results]
 
-import buffer, cursor, types, commands, keybindings, commandregistry, modes
+import
+  buffer, cursor, types, commands, keybindings, commandregistry, modes, commandline,
+  commandconfig
+import command_handlers/handler_manager
 
 type Editor* = ref object
   textBuffer*: TextBuffer
@@ -30,19 +33,47 @@ type Editor* = ref object
   executer*: CommandExecutor
   commandRegistry*: CommandRegistry
   keyBindingRegistry*: KeyBindingRegistry
+  commandLineParser*: CommandLineParser
+  commandConfig*: CommandConfig
+  handlerManager*: HandlerManager
 
 proc buffer*(e: Editor): TextBuffer =
   e.textBuffer
 
+proc addCommandAlias*(
+    e: Editor, alias: string, action: CommandLineAction
+): Result[(), string] =
+  ## Add a new command alias
+  e.commandConfig.addAlias(alias, action)
+  e.commandConfig.applyToParser(e.commandLineParser)
+  ok(())
+
+proc removeCommandAlias*(e: Editor, alias: string): Result[(), string] =
+  ## Remove a command alias
+  if e.commandLineParser.aliases.hasKey(alias):
+    e.commandLineParser.removeAlias(alias)
+    # Note: This doesn't remove from config until save is called
+    ok(())
+  else:
+    err fmt"Alias not found: {alias}"
+
 proc newEditor*(): Editor =
-  # Create registries first
+  # Create registries and configuration first
   let
     cmdRegistry = newCommandRegistry()
     keyRegistry = newKeyBindingRegistry()
+    cmdConfig = newCommandConfig()
+    cmdLineParser = newCommandLineParser()
 
   # Register built-in commands and default bindings
-  cmdRegistry.registerBuiltinCommands()
-  keyRegistry.setupDefaultBindings()
+  cmdRegistry.registerBuiltinCommands
+  keyRegistry.setupDefaultBindings
+
+  # Load command configuration
+  cmdConfig.loadDefaultConfig
+
+  # Apply configuration to parser
+  cmdConfig.applyToParser(cmdLineParser)
 
   result = Editor(
     textBuffer: newTextBuffer(),
@@ -50,6 +81,9 @@ proc newEditor*(): Editor =
     viewport: ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24),
     commandRegistry: cmdRegistry,
     keyBindingRegistry: keyRegistry,
+    commandLineParser: cmdLineParser,
+    commandConfig: cmdConfig,
+    handlerManager: nil, # Will be set after executer is created
   )
 
   result.executer = newCommandExecutor(
@@ -58,6 +92,11 @@ proc newEditor*(): Editor =
     result.viewport,
     some(cmdRegistry),
     some(keyRegistry),
+  )
+
+  # Create handler manager after executer (which creates motion controller)
+  result.handlerManager = newHandlerManager(
+    result.executer.motionController, keyRegistry, cmdLineParser, cmdConfig, cmdRegistry
   )
 
 proc loadFile*(e: Editor, path: string): Result[(), string] =
@@ -74,7 +113,7 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
   e.viewport.topLine = 0
   e.viewport.leftColumn = 0
 
-  return ok(())
+  ok(())
 
 proc renderLineNumbers(e: Editor, buffer: var Buffer): int =
   ## Render line numbers and return max width of the line number text.
@@ -203,4 +242,20 @@ proc render*(e: Editor, buffer: var Buffer) =
 
   # Draw status line at the bottom
   let statusY = buffer.area.y + buffer.area.height - 1
-  buffer.setString(buffer.area.x, statusY, modeStr, modeStyle)
+
+  # In Command mode, show the command being typed instead of mode indicator
+  if e.state.mode == EditorMode.Command:
+    # Show command text
+    buffer.setString(buffer.area.x, statusY, e.state.commandText, modeStyle)
+    # Set cursor at the end of command text
+    e.state.cursor.x = e.state.commandText.len
+    e.state.cursor.y = buffer.area.height - 1
+  else:
+    # Check if there's a status message to display
+    if e.state.statusMessage.len > 0:
+      buffer.setString(buffer.area.x, statusY, e.state.statusMessage, modeStyle)
+      # Clear status message after displaying
+      e.state.statusMessage = ""
+    else:
+      # Normal mode indicator
+      buffer.setString(buffer.area.x, statusY, modeStr, modeStyle)

@@ -21,101 +21,109 @@ import std/options
 
 import pkg/celina
 
-import editor, commands, keybindings, commandregistry, modes
+import editor, keybindings, modes, buffer
+import command_handlers/handler_manager
 
-proc handleEvent*(e: Editor, event: Event) =
+proc handleCommandModeEvent(e: Editor, event: Event): bool =
+  ## Handle Command mode events (special handling for text input)
   if event.kind != EventKind.Key:
-    return
+    return true
 
   # Convert event to key combo
-  let keyCombo = eventToKeyCombo(event)
-  if keyCombo.isNone:
-    return
+  let keyComboOpt = eventToKeyCombo(event)
+  if keyComboOpt.isNone:
+    return true
 
-  # Special handling for Insert mode
-  if e.state.mode == EditorMode.Insert:
-    # Check for mode switch keys first (like Escape)
-    let binding = e.keyBindingRegistry.findBinding(e.state.mode, keyCombo.get)
-    if binding.isSome:
-      # Create command context
-      let ctx = CommandContext(
-        buffer: e.textBuffer,
-        state: e.state,
-        viewport: e.viewport,
-        motionController: e.executer.motionController,
-        keyBindingRegistry: e.keyBindingRegistry,
-      )
+  let keyCombo = keyComboOpt.get
 
-      # Execute the bound command (e.g., switch to Normal mode)
-      discard e.commandRegistry.executeCommand(ctx, binding.get)
-      return
+  # Handle Escape to exit Command mode
+  if keyCombo.isSpecial and keyCombo.special == skEscape:
+    e.state.mode = EditorMode.Normal
+    e.state.commandText = ""
+    return true
 
-    # Handle regular character insertion in Insert mode
-    if not keyCombo.get.isSpecial and keyCombo.get.modifiers == {}:
-      # Insert the character
-      let ctx = CommandContext(
-        buffer: e.textBuffer,
-        state: e.state,
-        viewport: e.viewport,
-        motionController: e.executer.motionController,
-        keyBindingRegistry: e.keyBindingRegistry,
-      )
+  # Handle Enter to execute command
+  let isEnter =
+    (keyCombo.isSpecial and keyCombo.special == skEnter) or
+    (not keyCombo.isSpecial and (keyCombo.char == '\n' or keyCombo.char == '\r'))
 
-      # Execute insert character command
-      discard e.commandRegistry.execute(ctx, "insert.char", @[$keyCombo.get.char])
-      return
+  if isEnter:
+    if e.state.commandText.len > 1: # Must have something after :
+      # Use the command handler
+      let r = e.handlerManager.handleCommandMode(e.textBuffer, e.state.commandText)
 
-    # Handle special keys in Insert mode
-    if keyCombo.get.isSpecial:
-      let ctx = CommandContext(
-        buffer: e.textBuffer,
-        state: e.state,
-        viewport: e.viewport,
-        motionController: e.executer.motionController,
-        keyBindingRegistry: e.keyBindingRegistry,
-      )
+      if r.shouldQuit():
+        return false # Signal app should quit
 
-      case keyCombo.get.special
-      of skBackspace:
-        discard e.commandRegistry.execute(ctx, "insert.backspace")
-      of skDelete:
-        discard e.commandRegistry.execute(ctx, "insert.delete")
-      of skEnter:
-        discard e.commandRegistry.execute(ctx, "insert.newline")
-      of skLeft:
-        discard e.commandRegistry.execute(ctx, "motion.left")
-      of skRight:
-        discard e.commandRegistry.execute(ctx, "motion.right")
-      of skUp:
-        discard e.commandRegistry.execute(ctx, "motion.up")
-      of skDown:
-        discard e.commandRegistry.execute(ctx, "motion.down")
-      of skHome:
-        discard e.commandRegistry.execute(ctx, "motion.home")
-      of skEnd:
-        discard e.commandRegistry.execute(ctx, "motion.end")
-      of skPageUp:
-        discard e.commandRegistry.execute(ctx, "motion.pageup")
-      of skPageDown:
-        discard e.commandRegistry.execute(ctx, "motion.pagedown")
+      if r.shouldGotoLine():
+        # Jump to the specified line
+        let lineNum = r.getLineNumber()
+        if lineNum > 0 and lineNum <= e.textBuffer.len:
+          e.textBuffer.cursor.line = lineNum - 1 # Convert to 0-based
+          e.textBuffer.cursor.column = 0
+
+      # Handle mode transitions
+      let modeTransition = r.getModeTransition()
+      if modeTransition.isSome:
+        e.state.mode = modeTransition.get
       else:
-        discard # Ignore other special keys in Insert mode for now
-      return
+        e.state.mode = EditorMode.Normal # Default back to normal
 
-  # Normal handling for other modes
-  let binding = e.keyBindingRegistry.findBinding(e.state.mode, keyCombo.get)
-  if binding.isSome:
-    # Create command context
-    let ctx = CommandContext(
-      buffer: e.textBuffer,
-      state: e.state,
-      viewport: e.viewport,
-      motionController: e.executer.motionController,
-      keyBindingRegistry: e.keyBindingRegistry,
-    )
+      # Set status message if any
+      let statusMsg = r.getStatusMessage()
+      if statusMsg.len > 0:
+        e.state.statusMessage = statusMsg
+    else:
+      # Empty command, just return to normal mode
+      e.state.mode = EditorMode.Normal
 
-    # Execute the bound command
-    discard e.commandRegistry.executeCommand(ctx, binding.get)
-    return
+    # Clear command text
+    e.state.commandText = ""
+    return true
 
-  # No fallback needed - all keys should be handled through bindings
+  # Handle Backspace
+  if keyCombo.isSpecial and keyCombo.special == skBackspace:
+    if e.state.commandText.len > 1: # Keep the : prefix
+      e.state.commandText = e.state.commandText[0 ..^ 2]
+    return true
+
+  # Handle character input
+  if not keyCombo.isSpecial and keyCombo.modifiers == {}:
+    e.state.commandText.add(keyCombo.char)
+    return true
+
+  # Ignore other special keys
+  return true
+
+proc handleEvent*(e: Editor, event: Event): bool =
+  ## Main event handler using the new handler manager system
+
+  # Handle Command mode input differently (character by character)
+  if e.state.mode == EditorMode.Command:
+    return handleCommandModeEvent(e, event)
+
+  # For other modes, use the unified handler manager
+  let r = e.handlerManager.handleEvent(e.textBuffer, e.state, e.viewport, event)
+
+  # Process the result
+  if r.shouldQuit():
+    return false # Signal app should quit
+
+  if r.shouldGotoLine():
+    # Jump to the specified line
+    let lineNum = r.getLineNumber()
+    if lineNum > 0 and lineNum <= e.textBuffer.len:
+      e.textBuffer.cursor.line = lineNum - 1 # Convert to 0-based
+      e.textBuffer.cursor.column = 0
+
+  # Handle mode transitions
+  let modeTransition = r.getModeTransition()
+  if modeTransition.isSome:
+    e.state.mode = modeTransition.get
+
+  # Set status message if any
+  let statusMsg = r.getStatusMessage()
+  if statusMsg.len > 0:
+    e.state.statusMessage = statusMsg
+
+  return true # Continue running

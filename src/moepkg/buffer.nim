@@ -80,7 +80,7 @@ proc getTextString*(b: TextBuffer): string =
   of GapBuffer:
     $b.gapBuffer
 
-proc length*(b: TextBuffer): int =
+proc len*(b: TextBuffer): int =
   case b.backendKind
   of GapBuffer: b.gapBuffer.len
 
@@ -96,7 +96,7 @@ proc lineToPosition*(b: TextBuffer, pos: BufferPosition): int =
     currentLine = 0
     lineStart = 0
 
-  for i in 0 ..< b.length:
+  for i in 0 ..< b.len:
     if currentLine == pos.line:
       return lineStart + pos.column
     if b.charAt(i) == '\n':
@@ -106,7 +106,7 @@ proc lineToPosition*(b: TextBuffer, pos: BufferPosition): int =
   if currentLine == pos.line:
     lineStart + pos.column
   else:
-    b.length
+    b.len
 
 proc positionToLine*(b: TextBuffer, position: int): BufferPosition =
   ## Convert character position to line/column position
@@ -114,7 +114,7 @@ proc positionToLine*(b: TextBuffer, position: int): BufferPosition =
     currentLine = 0
     lineStart = 0
 
-  for i in 0 ..< min(position, b.length):
+  for i in 0 ..< min(position, b.len):
     if b.charAt(i) == '\n':
       inc currentLine
       lineStart = i + 1
@@ -132,11 +132,6 @@ proc insertText*(b: TextBuffer, pos: BufferPosition, text: string) =
     b.gapBuffer.insert(position, text)
 
   b.modified = true
-
-proc len*(b: TextBuffer): int =
-  case b.backendKind
-  of GapBuffer:
-    b.gapBuffer.lineCount()
 
 proc getLine*(b: TextBuffer, lineIndex: int): string =
   case b.backendKind
@@ -266,8 +261,4 @@ proc getPerformanceStats*(
     case buffer.backendKind
     of GapBuffer: "GapBuffer"
 
-  (
-    backend: backendName,
-    memoryUsage: buffer.estimateMemoryUsage(),
-    length: buffer.length,
-  )
+  (backend: backendName, memoryUsage: buffer.estimateMemoryUsage(), length: buffer.len)

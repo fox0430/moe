@@ -49,6 +49,7 @@ type
     # Mode switching commands
     bcModeNormal = "mode.normal"
     bcModeInsert = "mode.insert"
+    bcModeCommand = "mode.command"
     # File operations
     bcFileSave = "file.save"
     bcFileOpen = "file.open"
@@ -277,6 +278,10 @@ proc executeCommand*(
   of ctModeSwitch:
     # Handle mode switching
     ctx.state.mode = cmd.targetMode
+    # Initialize command text when entering Command mode
+    if cmd.targetMode == EditorMode.Command:
+      ctx.state.commandText = ":"
+      ctx.state.statusMessage = "" # Clear any status message
     # Clear any pending key sequences when switching modes
     if ctx.keyBindingRegistry != nil:
       ctx.keyBindingRegistry.clearSequence
@@ -571,6 +576,18 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     "Switch to insert mode",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       handleModeSwitch(ctx, EditorMode.Insert),
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcModeCommand),
+    "Command Mode",
+    "Switch to command mode",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      # Clear command text when entering command mode
+      ctx.state.commandText = ":"
+      handleModeSwitch(ctx, EditorMode.Command),
     0,
     0,
   )
