@@ -67,3 +67,7 @@ type
     commandText*: string # Text being typed in command mode
     statusMessage*: string # Message to display in status line
     lastMotion*: Option[Motion]
+    showStatusLine*: bool # Whether to show the status line
+    showLineCount*: bool # Whether to show line count in status line
+    showLinePercentage*: bool # Whether to show line percentage in status line
+    showEncoding*: bool # Whether to show file encoding in status line

@@ -23,7 +23,7 @@ import pkg/[celina, results]
 
 import
   buffer, cursor, types, commands, keybindings, commandregistry, modes, commandline,
-  commandconfig
+  commandconfig, statusline
 import command_handlers/handler_manager
 
 type Editor* = ref object
@@ -57,6 +57,38 @@ proc removeCommandAlias*(e: Editor, alias: string): Result[(), string] =
   else:
     err fmt"Alias not found: {alias}"
 
+proc toggleStatusLine*(e: Editor) =
+  ## Toggle the visibility of the status line
+  e.state.toggleStatusLine()
+
+proc setStatusLineVisible*(e: Editor, visible: bool) =
+  ## Set the visibility of the status line
+  e.state.setStatusLineVisible(visible)
+
+proc toggleLineCount*(e: Editor) =
+  ## Toggle the visibility of line count in status line
+  e.state.toggleLineCount()
+
+proc setLineCountVisible*(e: Editor, visible: bool) =
+  ## Set the visibility of line count in status line
+  e.state.setLineCountVisible(visible)
+
+proc toggleLinePercentage*(e: Editor) =
+  ## Toggle the visibility of line percentage in status line
+  e.state.toggleLinePercentage()
+
+proc setLinePercentageVisible*(e: Editor, visible: bool) =
+  ## Set the visibility of line percentage in status line
+  e.state.setLinePercentageVisible(visible)
+
+proc toggleEncoding*(e: Editor) =
+  ## Toggle the visibility of encoding in status line
+  e.state.toggleEncoding()
+
+proc setEncodingVisible*(e: Editor, visible: bool) =
+  ## Set the visibility of encoding in status line
+  e.state.setEncodingVisible(visible)
+
 proc newEditor*(): Editor =
   # Create registries and configuration first
   let
@@ -77,7 +109,13 @@ proc newEditor*(): Editor =
 
   result = Editor(
     textBuffer: newTextBuffer(),
-    state: EditorState(cursor: CursorPosition(x: 0, y: 0)),
+    state: EditorState(
+      cursor: CursorPosition(x: 0, y: 0),
+      showStatusLine: true,
+      showLineCount: true,
+      showLinePercentage: true,
+      showEncoding: true,
+    ),
     viewport: ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24),
     commandRegistry: cmdRegistry,
     keyBindingRegistry: keyRegistry,
@@ -194,8 +232,10 @@ proc setCursorPosition*(e: Editor, lineNumOffset: int) =
     cursorColumn = e.textBuffer.cursor.column
 
   # Only set screen cursor if the buffer cursor is within visible viewport
+  let reservedLines = if e.state.showStatusLine: 2 else: 1
+    # Status line + command line or just command line
   if cursorLine >= e.viewport.topLine and
-      cursorLine < e.viewport.topLine + e.viewport.height - 1: # -1 for status line
+      cursorLine < e.viewport.topLine + e.viewport.height - reservedLines:
     let
       screenY = cursorLine - e.viewport.topLine
       screenX = lineNumOffset + max(0, cursorColumn - e.viewport.leftColumn)
@@ -217,45 +257,42 @@ proc render*(e: Editor, buffer: var Buffer) =
   let
     lineNumOffset = e.renderLineNumbers(buffer)
 
+    # Calculate text area height based on status line visibility
+    reservedLines = if e.state.showStatusLine: 2 else: 1
+      # Status line + command line or just command line
     textArea = Rect(
       x: buffer.area.x + lineNumOffset,
       y: buffer.area.y,
       width: buffer.area.width - lineNumOffset,
-      height: buffer.area.height - 1,
+      height: buffer.area.height - reservedLines,
     )
 
   e.renderTextBuffer(buffer, textArea)
   e.setCursorPosition(lineNumOffset)
 
-  # Render mode indicator in the bottom status line
-  let modeStr =
-    case e.state.mode
-    of EditorMode.Normal: "-- NORMAL --"
-    of EditorMode.Insert: "-- INSERT --"
-    of EditorMode.Command: "-- COMMAND --"
+  # Calculate line positions based on status line visibility
+  let
+    statusLineY = buffer.area.y + buffer.area.height - 2
+    commandLineY = buffer.area.y + buffer.area.height - 1
+    commandStyle = Style(
+      fg: ColorValue(kind: Indexed, indexed: Color.White),
+      bg: ColorValue(kind: Default),
+      modifiers: {StyleModifier.Bold},
+    )
 
-  let modeStyle = Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.White),
-    bg: ColorValue(kind: Indexed, indexed: Color.Black),
-    modifiers: {StyleModifier.Bold},
-  )
+  # Render status line using the dedicated statusline module
+  e.state.renderStatusLine(e.textBuffer, buffer, statusLineY)
 
-  # Draw status line at the bottom
-  let statusY = buffer.area.y + buffer.area.height - 1
-
-  # In Command mode, show the command being typed instead of mode indicator
+  # Handle command line (bottom line)
   if e.state.mode == EditorMode.Command:
-    # Show command text
-    buffer.setString(buffer.area.x, statusY, e.state.commandText, modeStyle)
+    # Show command text in command line
+    buffer.setString(buffer.area.x, commandLineY, e.state.commandText, commandStyle)
     # Set cursor at the end of command text
     e.state.cursor.x = e.state.commandText.len
     e.state.cursor.y = buffer.area.height - 1
   else:
-    # Check if there's a status message to display
+    # Check if there's a status message to display in command line
     if e.state.statusMessage.len > 0:
-      buffer.setString(buffer.area.x, statusY, e.state.statusMessage, modeStyle)
+      buffer.setString(buffer.area.x, commandLineY, e.state.statusMessage, commandStyle)
       # Clear status message after displaying
       e.state.statusMessage = ""
-    else:
-      # Normal mode indicator
-      buffer.setString(buffer.area.x, statusY, modeStr, modeStyle)

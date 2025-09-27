@@ -205,10 +205,6 @@ proc clear*(gb: GapBuffer) =
   gb.gapEnd = gb.capacity()
   gb.length = 0
 
-proc len*(gb: GapBuffer): int {.inline.} =
-  ## Get logical length of buffer
-  gb.length
-
 proc findChar*(gb: GapBuffer, ch: char, start: int = 0): int =
   ## Find first occurrence of character starting from start position
   ## Returns -1 if not found
@@ -281,11 +277,18 @@ proc getLine*(gb: GapBuffer, lineNumber: int): string =
     ""
 
 proc lineCount*(gb: GapBuffer): int =
-  ## Count number of lines
+  ## Count number of lines (vim-style: trailing newline doesn't count as extra line)
+  if gb.length == 0:
+    return 1 # Empty buffer has 1 line
+
   result = 1
   for i in 0 ..< gb.length:
     if gb.charAt(i) == '\n':
       inc result
+
+  # If buffer ends with newline, don't count it as an extra line (vim behavior)
+  if gb.length > 0 and gb.charAt(gb.length - 1) == '\n':
+    dec result
 
 proc insertLine*(gb: GapBuffer, lineNumber: int, content: string) =
   ## Insert a new line at the specified line number

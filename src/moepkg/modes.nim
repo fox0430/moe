@@ -28,3 +28,9 @@ type
   ModeTransition* = object
     newMode*: Option[EditorMode]
     handled*: bool
+
+proc modeLabel*(m: EditorMode): string =
+  case m
+  of EditorMode.Normal: "NORMAL"
+  of EditorMode.Insert: "INSERT"
+  of EditorMode.Command: "COMMAND"

@@ -26,8 +26,14 @@ import pkg/results
 import gapbuffer, cursor, unicode_utils
 
 type
-  CharacterEncofing* = enum
+  CharacterEncoding* = enum
     utf8
+    utf16
+    utf16Be
+    utf16Le
+    utf32
+    utf32Be
+    utf32Le
     unknown
 
   LineEnding* = enum
@@ -44,7 +50,8 @@ type
     modified*: bool
     readOnly*: bool
     lineEnding*: LineEnding
-    encoding*: CharacterEncofing
+    encoding*: CharacterEncoding
+    endOfLine*: bool # Whether file should end with newline (vim 'endofline' option)
     cursor*: BufferPosition # Buffer-specific cursor position
 
     # Backend storage
@@ -70,6 +77,7 @@ proc newTextBuffer*(
       readOnly: false,
       lineEnding: LF,
       encoding: utf8,
+      endOfLine: true, # Default to POSIX text file standard
       cursor: BufferPosition(line: 0, column: 0),
       gapBuffer: newGapBuffer(content),
     )
@@ -81,8 +89,9 @@ proc getTextString*(b: TextBuffer): string =
     $b.gapBuffer
 
 proc len*(b: TextBuffer): int =
+  ## Get number of lines in buffer
   case b.backendKind
-  of GapBuffer: b.gapBuffer.len
+  of GapBuffer: b.gapBuffer.lineCount
 
 proc charAt*(b: TextBuffer, position: int): char =
   case b.backendKind
@@ -194,14 +203,181 @@ proc chooseBackendForFile(): BufferBackend =
   # TODO: Choose appropriate backend based on file size
   chooseBackend()
 
+proc encodingToString*(encoding: CharacterEncoding): string =
+  ## Convert encoding enum to display string
+  case encoding
+  of CharacterEncoding.utf8:
+    return "UTF-8"
+  of CharacterEncoding.utf16:
+    return "UTF-16"
+  of CharacterEncoding.utf16Be:
+    return "UTF-16BE"
+  of CharacterEncoding.utf16Le:
+    return "UTF-16LE"
+  of CharacterEncoding.utf32:
+    return "UTF-32"
+  of CharacterEncoding.utf32Be:
+    return "UTF-32BE"
+  of CharacterEncoding.utf32Le:
+    return "UTF-32LE"
+  of CharacterEncoding.unknown:
+    return "UNKNOWN"
+
+proc validateUtf16Be(s: string): bool =
+  if (s.len mod 2) != 0:
+    return false
+
+  var i = 0
+
+  proc advance(): int =
+    result = 256 * ord(s[i]) + ord(s[i + 1])
+    i += 2
+
+  while i < s.len:
+    let curr = advance()
+    if curr <= 0xD7FF or (0xE000 <= curr and curr <= 0xFFFF):
+      continue
+    let next = advance()
+    if (not (0xD800 <= curr and curr <= 0xDBFF)) or
+        (not (0xDC00 <= next and next <= 0xDFFF)):
+      return false
+    let
+      higher = (curr and 0b11_1111_1111) shl 10
+      lower = (next and 0b11_1111_1111)
+      point = higher or lower
+    if point < 0x10000:
+      return false
+
+  return true
+
+proc validateUtf16Le(s: string): bool =
+  if (s.len mod 2) != 0:
+    return false
+
+  var i = 0
+
+  proc advance(): int =
+    result = ord(s[i]) + 256 * ord(s[i + 1])
+    i += 2
+
+  while i < s.len:
+    let curr = advance()
+    if curr <= 0xD7FF or (0xE000 <= curr and curr <= 0xFFFF):
+      continue
+    let next = advance()
+    if (not (0xD800 <= curr and curr <= 0xDBFF)) or
+        (not (0xDC00 <= next and next <= 0xDFFF)):
+      return false
+    let
+      higher = (curr and 0b11_1111_1111) shl 10
+      lower = (next and 0b11_1111_1111)
+      point = higher or lower
+    if point < 0x10000:
+      return false
+
+  return true
+
+proc validateUtf32Be(s: string): bool =
+  if (s.len mod 4) != 0:
+    return false
+
+  var i = 0
+  proc advance(): uint32 =
+    result =
+      0x1000000'u32 * uint32(ord(s[i])) + 0x10000'u32 * uint32(ord(s[i + 1])) +
+      0x100'u32 * uint32(ord(s[i + 2])) + uint32(ord(s[i + 3]))
+    i += 4
+
+  while i < s.len:
+    let curr = advance()
+    if curr > 0x10FFFF'u32:
+      return false
+
+  return true
+
+proc validateUtf32Le(s: string): bool =
+  if (s.len mod 4) != 0:
+    return false
+
+  var i = 0
+  proc advance(): uint32 =
+    result =
+      uint32(ord(s[i])) + 0x100'u32 * uint32(ord(s[i + 1])) +
+      0x10000'u32 * uint32(ord(s[i + 2])) + 0x1000000'u32 * uint32(ord(s[i + 3]))
+    i += 4
+
+  while i < s.len:
+    let curr = advance()
+    if curr > 0x10FFFF'u32:
+      return false
+
+  return true
+
+proc count0000(s: string): int =
+  var i = 0
+  while i + 1 < s.len:
+    if ord(s[i]) == 0x00 and ord(s[i + 1]) == 0x00:
+      inc(result)
+    i += 2
+
+proc detectCharacterEncoding*(s: string): CharacterEncoding =
+  ## Guess the character encoding.
+  ## In currently, only Unicode formats are supported.
+  ## Returns `CharacterEncoding.utf8` if only ASCII characters are included.
+  ## Returns `CharacterEncoding.unknown` if encoding format is unknown.
+
+  # Check UTF-8 BOM
+  if s.len >= 3 and s[0 .. 2] == "\xEF\xBB\xBF":
+    return CharacterEncoding.utf8
+
+  if s.len >= 4:
+    # Check UTF-32 BOM
+    if s[0 .. 3] == "\x00\x00\xFE\xFF" or s[0 .. 3] == "\xFF\xFE\x00\x00":
+      return CharacterEncoding.utf32
+
+    # Check UTF-16 BOM
+    if s[0 .. 1] == "\xFE\xFF" or s[0 .. 1] == "\xFF\xFE":
+      return CharacterEncoding.utf16
+
+  if s.validateUtf8 == -1:
+    return CharacterEncoding.utf8
+
+  var validEncodings: seq[CharacterEncoding]
+  if s.validateUtf16Be:
+    validEncodings.add(CharacterEncoding.utf16Be)
+  if s.validateUtf16Le:
+    validEncodings.add(CharacterEncoding.utf16Le)
+  if s.validateUtf32Be:
+    validEncodings.add(CharacterEncoding.utf32Be)
+  if s.validateUtf32Le:
+    validEncodings.add(CharacterEncoding.utf32Le)
+
+  let threshold = (s.len / 2) * (2 / 5)
+  if float(count0000(s)) >= threshold:
+    # If there are too many 0x000, assume it is not UTF-16.
+    if validEncodings.contains(CharacterEncoding.utf16Be):
+      validEncodings.delete(validEncodings.find(CharacterEncoding.utf16Be))
+    if validEncodings.contains(CharacterEncoding.utf16Le):
+      validEncodings.delete(validEncodings.find(CharacterEncoding.utf16Le))
+
+  if validEncodings.len == 1:
+    return validEncodings[0]
+
+  return CharacterEncoding.unknown
+
 template detectLineEnding(b: TextBuffer, content: lent string) =
-  ## Detect line ending
+  ## Detect line ending and trailing newline
   if content.contains("\r\n"):
     b.lineEnding = CRLF
   elif content.contains("\r"):
     b.lineEnding = CR
   else:
     b.lineEnding = LF
+
+  # Detect if file ends with newline (vim 'endofline' behavior)
+  b.endOfLine =
+    content.len > 0 and
+    (content.endsWith("\n") or content.endsWith("\r\n") or content.endsWith("\r"))
 
 proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
   let newBackend = chooseBackendForFile()
@@ -226,6 +402,7 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
       b.gapBuffer = newGapBuffer(content)
 
   b.detectLineEnding(content)
+  b.encoding = detectCharacterEncoding(content)
 
   b.filePath = some(path)
   b.modified = false
@@ -235,9 +412,35 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
 proc saveFile*(buffer: TextBuffer, path: string): Result[(), string] =
   case buffer.backendKind
   of GapBuffer:
-    # Get full content and write
+    # Get full content
+    var content = buffer.getTextString
+
+    # Handle trailing newline according to endOfLine setting (vim behavior)
+    if buffer.endOfLine:
+      # Ensure file ends with newline
+      if content.len == 0 or
+          not (
+            content.endsWith("\n") or content.endsWith("\r\n") or content.endsWith("\r")
+          ):
+        case buffer.lineEnding
+        of LF:
+          content.add('\n')
+        of CRLF:
+          content.add("\r\n")
+        of CR:
+          content.add('\r')
+    else:
+      # Remove trailing newline if present
+      while content.len > 0 and
+          (content.endsWith("\n") or content.endsWith("\r\n") or content.endsWith("\r")):
+        if content.endsWith("\r\n"):
+          content.setLen(content.len - 2)
+        else:
+          content.setLen(content.len - 1)
+
+    # Write to file
     try:
-      writeFile(path, buffer.getTextString)
+      writeFile(path, content)
     except IOError as e:
       return Result[(), string].err e.msg
 

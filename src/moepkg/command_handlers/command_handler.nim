@@ -129,6 +129,12 @@ proc executeGotoLine*(
   if lineNumber <= 0:
     return CommandModeResult(kind: cmrError, errorMessage: "Invalid line number")
 
+  # Check if line number is beyond the buffer length
+  if lineNumber > buffer.len:
+    return CommandModeResult(
+      kind: cmrError, errorMessage: "Line number exceeds buffer length"
+    )
+
   return CommandModeResult(kind: cmrGotoLine, lineNumber: lineNumber)
 
 proc executeSet*(
