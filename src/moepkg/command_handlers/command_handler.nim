@@ -34,9 +34,12 @@ import ../[buffer, modes, commandline, commandconfig, commandregistry]
 type
   CommandModeResultKind* = enum
     cmrQuit # Application should quit
+    cmrCloseWindow # Close current window
     cmrModeSwitch # Switch to different mode
     cmrMessage # Show status message
     cmrGotoLine # Jump to specific line
+    cmrVSplit # Vertical split window
+    cmrHSplit # Horizontal split window
     cmrError # Command error
 
   CommandModeHandler* = ref object ## Handler for Command mode specific commands
@@ -48,12 +51,18 @@ type
     case kind*: CommandModeResultKind
     of cmrQuit:
       forceQuit*: bool
+    of cmrCloseWindow:
+      forceClose*: bool
     of cmrModeSwitch:
       targetMode*: EditorMode
     of cmrMessage:
       message*: string
     of cmrGotoLine:
       lineNumber*: int
+    of cmrVSplit:
+      vsplitFilename*: Option[string]
+    of cmrHSplit:
+      hsplitFilename*: Option[string]
     of cmrError:
       errorMessage*: string
 
@@ -66,7 +75,7 @@ proc newCommandModeHandler*(
 proc executeQuit*(
     handler: CommandModeHandler, buffer: TextBuffer, force: bool
 ): CommandModeResult =
-  ## Execute quit command (:q, :q!)
+  ## Execute quit command (:q, :q!) - now closes current window
   if not force:
     # Check if there are unsaved changes
     if buffer.modified:
@@ -74,7 +83,7 @@ proc executeQuit*(
         kind: cmrError, errorMessage: "No write since last change (add ! to override)"
       )
 
-  return CommandModeResult(kind: cmrQuit, forceQuit: force)
+  return CommandModeResult(kind: cmrCloseWindow, forceClose: force)
 
 proc executeSave*(
     handler: CommandModeHandler,
@@ -110,10 +119,16 @@ proc executeSaveAndQuit*(
 proc executeQuitAll*(
     handler: CommandModeHandler, buffer: TextBuffer, force: bool
 ): CommandModeResult =
-  ## Execute quit all command (:qa, :qa!)
-  # For single buffer editor, this is the same as executeQuit
-  # In a multi-buffer editor, this would check all buffers
-  return handler.executeQuit(buffer, force)
+  ## Execute quit all command (:qa, :qa!) - closes all windows and quits
+  if not force:
+    # Check if there are unsaved changes
+    if buffer.modified:
+      return CommandModeResult(
+        kind: cmrError, errorMessage: "No write since last change (add ! to override)"
+      )
+
+  # Return cmrQuit to signal immediate editor quit
+  return CommandModeResult(kind: cmrQuit, forceQuit: force)
 
 proc executeEdit*(
     handler: CommandModeHandler, buffer: TextBuffer, filename: string
@@ -158,6 +173,18 @@ proc executeHelp*(
 
   return CommandModeResult(kind: cmrMessage, message: "Help for: " & helpTopic)
 
+proc executeVSplit*(
+    handler: CommandModeHandler, filename: Option[string]
+): CommandModeResult =
+  ## Execute vertical split command (:vs, :vs filename)
+  return CommandModeResult(kind: cmrVSplit, vsplitFilename: filename)
+
+proc executeHSplit*(
+    handler: CommandModeHandler, filename: Option[string]
+): CommandModeResult =
+  ## Execute horizontal split command (:sp, :sp filename)
+  return CommandModeResult(kind: cmrHSplit, hsplitFilename: filename)
+
 proc handleCommandModeInput*(
     handler: CommandModeHandler, buffer: TextBuffer, commandText: string
 ): CommandModeResult =
@@ -193,6 +220,10 @@ proc handleCommandModeInput*(
     return handler.executeSet(cmdResult.option, cmdResult.value)
   of claHelp:
     return handler.executeHelp(cmdResult.topic)
+  of claVSplit:
+    return handler.executeVSplit(cmdResult.vsplitFilename)
+  of claHSplit:
+    return handler.executeHSplit(cmdResult.hsplitFilename)
   of claSubstitute:
     # TODO: Implement search and replace
     return CommandModeResult(kind: cmrMessage, message: "Substitute not implemented")

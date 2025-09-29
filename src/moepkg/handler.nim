@@ -19,7 +19,7 @@
 
 import std/options
 
-import pkg/celina
+import pkg/[celina, results]
 
 import editor, keybindings, modes, buffer
 import command_handlers/handler_manager
@@ -49,28 +49,47 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
 
   if isEnter:
     if e.state.commandText.len > 1: # Must have something after :
-      # Use the command handler
-      let r = e.handlerManager.handleCommandMode(e.textBuffer, e.state.commandText)
+      # Use the command handler with active buffer
+      let activeBuffer = e.activeBuffer()
+      let r = e.handlerManager.handleCommandMode(activeBuffer, e.state.commandText)
 
-      if r.shouldQuit():
+      if r.shouldQuit:
         return false # Signal app should quit
 
-      if r.shouldGotoLine():
+      if r.shouldCloseWindow:
+        # Handle window close - may also quit if last window
+        let shouldQuit = e.closeWindow
+        if shouldQuit:
+          return false # Last window closed, quit editor
+
+      if r.shouldGotoLine:
         # Jump to the specified line
-        let lineNum = r.getLineNumber()
-        if lineNum > 0 and lineNum <= e.textBuffer.len:
-          e.textBuffer.cursor.line = lineNum - 1 # Convert to 0-based
-          e.textBuffer.cursor.column = 0
+        let lineNum = r.getLineNumber
+        if lineNum > 0 and lineNum <= activeBuffer.len:
+          activeBuffer.cursor.line = lineNum - 1 # Convert to 0-based
+          activeBuffer.cursor.column = 0
+
+      if r.shouldVSplit:
+        # Handle vertical split
+        let splitResult = e.vsplit(r.getVSplitFilename())
+        if splitResult.isErr:
+          e.state.statusMessage = "Error: " & splitResult.error
+
+      if r.shouldHSplit:
+        # Handle horizontal split
+        let splitResult = e.hsplit(r.getHSplitFilename())
+        if splitResult.isErr:
+          e.state.statusMessage = "Error: " & splitResult.error
 
       # Handle mode transitions
-      let modeTransition = r.getModeTransition()
+      let modeTransition = r.getModeTransition
       if modeTransition.isSome:
         e.state.mode = modeTransition.get
       else:
         e.state.mode = EditorMode.Normal # Default back to normal
 
       # Set status message if any
-      let statusMsg = r.getStatusMessage()
+      let statusMsg = r.getStatusMessage
       if statusMsg.len > 0:
         e.state.statusMessage = statusMsg
     else:
@@ -102,27 +121,93 @@ proc handleEvent*(e: Editor, event: Event): bool =
   if e.state.mode == EditorMode.Command:
     return handleCommandModeEvent(e, event)
 
-  # For other modes, use the unified handler manager
-  let r = e.handlerManager.handleEvent(e.textBuffer, e.state, e.viewport, event)
+  # Check for Vim-style Ctrl-w prefix for window commands
+  if e.state.mode == EditorMode.Normal and event.kind == EventKind.Key:
+    let keyComboOpt = eventToKeyCombo(event)
+    if keyComboOpt.isSome:
+      let keyCombo = keyComboOpt.get
+
+      # Check if we're in window command mode (waiting for second key after Ctrl-w)
+      if e.state.command == "window_cmd":
+        e.state.command = "" # Reset command state
+
+        # Handle second key: j (down/prev) or k (up/next)
+        if not keyCombo.isSpecial:
+          if keyCombo.char == 'j':
+            e.switchToPrevWindow
+            return true
+          elif keyCombo.char == 'k':
+            e.switchToNextWindow
+            return true
+          else:
+            # Unknown window command, just cancel
+            return true
+
+      # Check for Ctrl-w (ASCII 23) to enter window command mode
+      if not keyCombo.isSpecial:
+        let charCode = ord(keyCombo.char)
+        if charCode == 23: # Ctrl-w
+          e.state.command = "window_cmd"
+          e.state.statusMessage = "-- (window) --"
+          return true
+
+  # For other modes, use the unified handler manager with active buffer
+  let activeBuffer = e.activeBuffer
+
+  # Get the active viewport if in split mode and sync with motion controller
+  var activeViewport = e.viewport
+  if e.windowManager.windows.len > 0 and
+      e.windowManager.activeWindowIndex < e.windowManager.windows.len:
+    activeViewport = e.windowManager.windows[e.windowManager.activeWindowIndex].viewport
+    # Sync the motion controller's viewport with the active window's viewport
+    e.executer.motionController.viewportManager.viewport = activeViewport
+
+    # Set reserved lines for viewport calculations
+    # Find the maximum bottom Y coordinate to determine bottom windows
+    var maxBottomY = 0
+    for window in e.windowManager.windows:
+      let bottomY = window.viewport.y + window.viewport.height
+      if bottomY > maxBottomY:
+        maxBottomY = bottomY
+
+    # A window is a bottom window if its bottom edge is at the maximum bottom Y
+    let
+      activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
+      windowBottomY = activeWindow.viewport.y + activeWindow.viewport.height
+      isBottomWindow = (windowBottomY == maxBottomY)
+
+    e.state.viewportReservedLines =
+      if isBottomWindow and e.state.showStatusLine: 2 else: 0
+  else:
+    # Single window mode - use default calculation
+    e.state.viewportReservedLines = if e.state.showStatusLine: 2 else: 1
+
+  let r = e.handlerManager.handleEvent(activeBuffer, e.state, activeViewport, event)
+
+  # Sync viewport back from motion controller to active window
+  if e.windowManager.windows.len > 0 and
+      e.windowManager.activeWindowIndex < e.windowManager.windows.len:
+    e.windowManager.windows[e.windowManager.activeWindowIndex].viewport =
+      e.executer.motionController.viewportManager.viewport
 
   # Process the result
-  if r.shouldQuit():
+  if r.shouldQuit:
     return false # Signal app should quit
 
-  if r.shouldGotoLine():
+  if r.shouldGotoLine:
     # Jump to the specified line
-    let lineNum = r.getLineNumber()
-    if lineNum > 0 and lineNum <= e.textBuffer.len:
-      e.textBuffer.cursor.line = lineNum - 1 # Convert to 0-based
-      e.textBuffer.cursor.column = 0
+    let lineNum = r.getLineNumber
+    if lineNum > 0 and lineNum <= activeBuffer.len:
+      activeBuffer.cursor.line = lineNum - 1 # Convert to 0-based
+      activeBuffer.cursor.column = 0
 
   # Handle mode transitions
-  let modeTransition = r.getModeTransition()
+  let modeTransition = r.getModeTransition
   if modeTransition.isSome:
     e.state.mode = modeTransition.get
 
   # Set status message if any
-  let statusMsg = r.getStatusMessage()
+  let statusMsg = r.getStatusMessage
   if statusMsg.len > 0:
     e.state.statusMessage = statusMsg
 

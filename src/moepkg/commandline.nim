@@ -39,6 +39,8 @@ type
     claHelp # :help, :h
     claSubstitute # :s
     claGoto # :123 (go to line 123)
+    claVSplit # :vs (vertical split)
+    claHSplit # :sp (horizontal split)
     claUnknown # Unknown command
 
   ParsedCommand* = object
@@ -78,6 +80,10 @@ type
       substituteFlags*: string
     of claHelp:
       topic*: Option[string]
+    of claVSplit:
+      vsplitFilename*: Option[string]
+    of claHSplit:
+      hsplitFilename*: Option[string]
     of claUnknown:
       errorMessage*: string
 
@@ -131,6 +137,12 @@ proc loadDefaultAliases*(parser: CommandLineParser) =
 
   parser.addAlias("s", claSubstitute)
   parser.addAlias("substitute", claSubstitute)
+
+  parser.addAlias("vs", claVSplit)
+  parser.addAlias("vsplit", claVSplit)
+
+  parser.addAlias("sp", claHSplit)
+  parser.addAlias("split", claHSplit)
 
 proc parseCommandLine*(parser: CommandLineParser, input: string): ParsedCommand =
   ## Parse a command line input string into a structured command
@@ -247,6 +259,24 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
     return CommandLineResult(
       kind: claHelp,
       topic:
+        if cmd.args.len > 0:
+          some(cmd.args[0])
+        else:
+          none(string),
+    )
+  of claVSplit:
+    return CommandLineResult(
+      kind: claVSplit,
+      vsplitFilename:
+        if cmd.args.len > 0:
+          some(cmd.args[0])
+        else:
+          none(string),
+    )
+  of claHSplit:
+    return CommandLineResult(
+      kind: claHSplit,
+      hsplitFilename:
         if cmd.args.len > 0:
           some(cmd.args[0])
         else:

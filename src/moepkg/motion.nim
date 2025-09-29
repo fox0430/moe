@@ -282,6 +282,7 @@ proc updateViewport*(
     cursorPos: CursorPosition,
     lineCount: int,
     showStatusLine: bool = true,
+    reservedLines: int = -1, # -1 means auto-calculate from showStatusLine
 ) =
   ## Update viewport to keep cursor visible with 1-line scrolling
 
@@ -295,19 +296,22 @@ proc updateViewport*(
     clampedCursorY = max(0, min(cursorPos.y, lineCount - 1))
     clampedCursorX = max(0, cursorPos.x)
 
-    # Calculate reserved lines based on status line visibility
-    # Status line + command line or just command line
-    reservedLines = if showStatusLine: 2 else: 1
+    # Calculate reserved lines based on status line visibility or explicit parameter
+    actualReservedLines =
+      if reservedLines >= 0:
+        reservedLines
+      else:
+        (if showStatusLine: 2 else: 1)
 
   # Vertical scrolling - always keep cursor visible
   if clampedCursorY < mgr.viewport.topLine:
     # Cursor moved above viewport - scroll up
     mgr.viewport.topLine = clampedCursorY
-  elif clampedCursorY >= mgr.viewport.topLine + mgr.viewport.height - reservedLines:
+  elif clampedCursorY >= mgr.viewport.topLine + mgr.viewport.height - actualReservedLines:
     # Cursor moved below viewport - scroll down (account for status and command lines)
     let
-      newTopLine = clampedCursorY - mgr.viewport.height + reservedLines + 1
-      maxTopLine = max(0, lineCount - mgr.viewport.height + reservedLines)
+      newTopLine = clampedCursorY - mgr.viewport.height + actualReservedLines + 1
+      maxTopLine = max(0, lineCount - mgr.viewport.height + actualReservedLines)
     mgr.viewport.topLine = max(0, min(maxTopLine, newTopLine))
 
   # Horizontal scrolling - keep cursor visible
@@ -347,7 +351,8 @@ proc executeMotion*(
   # Update viewport to follow cursor
   let lineCount = controller.executor.buffer.len
   controller.viewportManager.updateViewport(
-    newPos, lineCount, controller.cursorManager.state.showStatusLine
+    newPos, lineCount, controller.cursorManager.state.showStatusLine,
+    controller.cursorManager.state.viewportReservedLines,
   )
 
   # Store last motion for repeat

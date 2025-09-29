@@ -23,22 +23,87 @@ import pkg/[celina, results]
 
 import
   buffer, cursor, types, commands, keybindings, commandregistry, modes, commandline,
-  commandconfig, statusline
+  commandconfig, statusline, windowmanager
 import command_handlers/handler_manager
 
-type Editor* = ref object
-  textBuffer*: TextBuffer
-  state*: EditorState
-  viewport*: ViewPort
-  executer*: CommandExecutor
-  commandRegistry*: CommandRegistry
-  keyBindingRegistry*: KeyBindingRegistry
-  commandLineParser*: CommandLineParser
-  commandConfig*: CommandConfig
-  handlerManager*: HandlerManager
+type
+  Editor* = ref object
+    textBuffer*: TextBuffer
+    state*: EditorState
+    viewport*: ViewPort
+    executer*: CommandExecutor
+    commandRegistry*: CommandRegistry
+    keyBindingRegistry*: KeyBindingRegistry
+    commandLineParser*: CommandLineParser
+    commandConfig*: CommandConfig
+    handlerManager*: HandlerManager
+    windowManager*: EditorWindowManager # Window manager for split windows
 
 proc buffer*(e: Editor): TextBuffer =
   e.textBuffer
+
+proc activeBuffer*(e: Editor): TextBuffer =
+  ## Get the currently active buffer (from active window if split, otherwise main buffer)
+  if e.windowManager.windows.len > 0 and
+      e.windowManager.activeWindowIndex < e.windowManager.windows.len:
+    e.windowManager.windows[e.windowManager.activeWindowIndex].buffer
+  else:
+    e.textBuffer
+
+proc syncActiveWindow(e: Editor) =
+  ## Sync the active window's buffer and viewport with the executor and motion controller
+  let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
+  e.executer.buffer = activeWindow.buffer
+  e.executer.motionController.executor.buffer = activeWindow.buffer
+  e.executer.motionController.viewportManager.viewport = activeWindow.viewport
+  e.state.needsFullRedraw = true
+
+proc switchToNextWindow*(e: Editor) =
+  ## Switch to the next window (Ctrl-w, k)
+  if e.windowManager.windows.len <= 1:
+    return
+
+  # Deactivate all windows
+  for i in 0 ..< e.windowManager.windows.len:
+    e.windowManager.windows[i].active = false
+
+  e.windowManager.activeWindowIndex =
+    (e.windowManager.activeWindowIndex + 1) mod e.windowManager.windows.len
+
+  # Activate the new window
+  e.windowManager.windows[e.windowManager.activeWindowIndex].active = true
+  e.syncActiveWindow
+
+proc switchToPrevWindow*(e: Editor) =
+  ## Switch to the previous window (Ctrl-w, j)
+  if e.windowManager.windows.len <= 1:
+    return
+
+  # Deactivate all windows
+  for i in 0 ..< e.windowManager.windows.len:
+    e.windowManager.windows[i].active = false
+
+  e.windowManager.activeWindowIndex =
+    (e.windowManager.activeWindowIndex - 1 + e.windowManager.windows.len) mod
+    e.windowManager.windows.len
+
+  # Activate the new window
+  e.windowManager.windows[e.windowManager.activeWindowIndex].active = true
+  e.syncActiveWindow
+
+proc closeWindow*(e: Editor): bool =
+  ## Close the active window
+  ## Returns true if editor should quit (last window closed)
+
+  let shouldQuit = e.windowManager.closeWindow()
+
+  if shouldQuit:
+    return true
+
+  # Sync to the new active window
+  e.syncActiveWindow()
+
+  return false
 
 proc addCommandAlias*(
     e: Editor, alias: string, action: CommandLineAction
@@ -89,6 +154,32 @@ proc setEncodingVisible*(e: Editor, visible: bool) =
   ## Set the visibility of encoding in status line
   e.state.setEncodingVisible(visible)
 
+proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), string] =
+  ## Create a vertical split window
+  let bufferResult = e.windowManager.vsplit(e.textBuffer, e.viewport, filename)
+  if bufferResult.isErr:
+    return err(bufferResult.error)
+
+  let newBuffer = bufferResult.get
+  e.executer.buffer = newBuffer
+  e.executer.motionController.executor.buffer = newBuffer
+  e.state.needsFullRedraw = true
+
+  ok(())
+
+proc hsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), string] =
+  ## Create a horizontal split window (top and bottom)
+  let bufferResult = e.windowManager.hsplit(e.textBuffer, e.viewport, filename)
+  if bufferResult.isErr:
+    return err(bufferResult.error)
+
+  let newBuffer = bufferResult.get
+  e.executer.buffer = newBuffer
+  e.executer.motionController.executor.buffer = newBuffer
+  e.state.needsFullRedraw = true
+
+  ok(())
+
 proc newEditor*(): Editor =
   # Create registries and configuration first
   let
@@ -116,13 +207,15 @@ proc newEditor*(): Editor =
       showLinePercentage: true,
       showEncoding: true,
       needsFullRedraw: true, # Initial render needs full draw
+      viewportReservedLines: 2, # Default for single window mode with status line
     ),
-    viewport: ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24),
+    viewport: ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 20, x: 0, y: 0),
     commandRegistry: cmdRegistry,
     keyBindingRegistry: keyRegistry,
     commandLineParser: cmdLineParser,
     commandConfig: cmdConfig,
     handlerManager: nil, # Will be set after executer is created
+    windowManager: newEditorWindowManager(),
   )
 
   result.executer = newCommandExecutor(
@@ -236,47 +329,190 @@ proc setCursorPosition*(e: Editor, lineNumOffset: int) =
     e.state.cursor.x = screenX
     e.state.cursor.y = screenY
 
-proc render*(e: Editor, buffer: var Buffer) =
-  # Always clear the entire buffer to prevent artifacts
-  # TODO: Clear when resize
-  let clearStyle = Style(
-    fg: ColorValue(kind: Default),
+proc renderWindow(
+    e: Editor,
+    buffer: var Buffer,
+    window: EditorWindow,
+    lineNumOffset: int,
+    isLastWindow: bool,
+) =
+  ## Render a single window with line numbers
+  let
+    lineCount = window.buffer.len
+    # Only the last window needs to reserve space for status line
+    reservedLines = if isLastWindow and e.state.showStatusLine: 2 else: 0
+    visibleHeight = window.viewport.height - reservedLines
+    visibleLines = min(visibleHeight, lineCount - window.viewport.topLine)
+
+  let normalStyle =
+    Style(fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {})
+
+  let lineNumStyle = Style(
+    fg: ColorValue(kind: Indexed, indexed: Color.BrightBlack),
     bg: ColorValue(kind: Default),
-    modifiers: {}
+    modifiers: {},
   )
 
-  for y in 0..<buffer.area.height:
-    for x in 0..<buffer.area.width:
+  let currentLineStyle = Style(
+    fg: ColorValue(kind: Indexed, indexed: Color.Yellow),
+    bg: ColorValue(kind: Default),
+    modifiers: {StyleModifier.Bold},
+  )
+
+  # Render line numbers and text content for this window
+  for y in 0 ..< visibleLines:
+    let
+      lineIndex = window.viewport.topLine + y
+      screenY = window.viewport.y + y
+
+    # Skip if outside window bounds
+    if screenY >= window.viewport.y + window.viewport.height:
+      break
+
+    # Render line number
+    let
+      lineNumStr = align($(lineIndex + 1), lineNumOffset - 1) & " "
+      lineNumScreenX = window.viewport.x
+      isCurrentLine = (lineIndex == window.buffer.cursor.line and window.active)
+      lineStyle = if isCurrentLine: currentLineStyle else: lineNumStyle
+
+    if lineNumScreenX + lineNumStr.len <= buffer.area.width:
+      buffer.setString(lineNumScreenX, screenY, lineNumStr, lineStyle)
+
+    # Render text content
+    let
+      line = window.buffer.getLine(lineIndex)
+      displayLine =
+        if window.viewport.leftColumn < line.len:
+          line[window.viewport.leftColumn ..^ 1]
+        else:
+          ""
+      textScreenX = window.viewport.x + lineNumOffset
+
+    if displayLine.len > 0 and textScreenX < buffer.area.width:
+      let maxWidth = min(displayLine.len, window.viewport.width - lineNumOffset)
+      if maxWidth > 0:
+        buffer.setString(textScreenX, screenY, displayLine[0 ..< maxWidth], normalStyle)
+
+proc render*(e: Editor, buffer: var Buffer) =
+  # Always clear the entire buffer to prevent artifacts
+  let clearStyle =
+    Style(fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {})
+
+  for y in 0 ..< buffer.area.height:
+    for x in 0 ..< buffer.area.width:
       buffer[x, y] = cell(" ", clearStyle)
 
   # Reset the full redraw flag if it was set
   if e.state.needsFullRedraw:
     e.state.needsFullRedraw = false
 
-  # Update viewport size from buffer area (but preserve topLine and leftColumn)
+  # Update viewport size from buffer area
+  let oldWidth = e.viewport.width
+  let oldHeight = e.viewport.height
   e.viewport.width = buffer.area.width
   e.viewport.height = buffer.area.height
 
-  # Sync viewport with motion controller (both directions)
-  e.executer.motionController.viewportManager.viewport.width = e.viewport.width
-  e.executer.motionController.viewportManager.viewport.height = e.viewport.height
-  e.viewport = e.executer.motionController.viewportManager.viewport
+  # Check if terminal was resized
+  let wasResized = (oldWidth != e.viewport.width) or (oldHeight != e.viewport.height)
 
-  let
-    lineNumOffset = e.renderLineNumbers(buffer)
+  # Check if we have split windows
+  if e.windowManager.windows.len > 0:
+    # If terminal was resized, rebuild window layout
+    if wasResized and oldWidth > 0 and oldHeight > 0:
+      e.windowManager.resizeWindows(e.viewport.width, e.viewport.height, oldWidth, oldHeight)
+    # Sync active window's cursor with buffer cursor
+    if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
+      let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
+      # Update window cursor from buffer
+      e.windowManager.windows[e.windowManager.activeWindowIndex].cursor =
+        activeWindow.buffer.cursor
 
-    # Calculate text area height based on status line visibility
-    reservedLines = if e.state.showStatusLine: 2 else: 1
-      # Status line + command line or just command line
-    textArea = Rect(
-      x: buffer.area.x + lineNumOffset,
-      y: buffer.area.y,
-      width: buffer.area.width - lineNumOffset,
-      height: buffer.area.height - reservedLines,
-    )
+    # Find the maximum bottom Y coordinate (to determine bottom windows)
+    var maxBottomY = 0
+    for window in e.windowManager.windows:
+      let bottomY = window.viewport.y + window.viewport.height
+      if bottomY > maxBottomY:
+        maxBottomY = bottomY
 
-  e.renderTextBuffer(buffer, textArea)
-  e.setCursorPosition(lineNumOffset)
+    # Render all split windows
+    for i, window in e.windowManager.windows:
+      # Note: Don't override viewport dimensions here as they're set by split logic
+
+      # Render line numbers for this window (simplified for split view)
+      let lineNumOffset = 4 # Fixed width for now
+
+      # Determine if this is a bottom window (needs status line reservation)
+      # A window is a bottom window if its bottom edge is at the maximum bottom Y
+      let windowBottomY = window.viewport.y + window.viewport.height
+      let isBottomWindow = (windowBottomY == maxBottomY)
+
+      e.renderWindow(buffer, window, lineNumOffset, isBottomWindow)
+
+      # Draw separator between windows (except for last window)
+      if i < e.windowManager.windows.len - 1:
+        let sepStyle = Style(
+          fg: ColorValue(kind: Indexed, indexed: Color.BrightBlack),
+          bg: ColorValue(kind: Default),
+          modifiers: {},
+        )
+        let nextWindow = e.windowManager.windows[i + 1]
+
+        # Check if windows are side by side (vertical split) or top/bottom (horizontal split)
+        if window.viewport.y == nextWindow.viewport.y:
+          # Vertical split - draw vertical separator at window boundary
+          let sepX = window.viewport.x + window.viewport.width
+          if sepX < buffer.area.width:
+            # Calculate separator height (exclude status line space for bottom windows)
+            let sepHeight =
+              if isBottomWindow and e.state.showStatusLine:
+                window.viewport.height - 2 # Exclude status line and command line
+              else:
+                window.viewport.height
+
+            # Draw separator for the content height of this window
+            for y in window.viewport.y ..< (window.viewport.y + sepHeight):
+              if y < buffer.area.height:
+                buffer.setString(sepX, y, "│", sepStyle)
+        else:
+          # Horizontal split - draw horizontal separator at window boundary
+          let sepY = window.viewport.y + window.viewport.height
+          if sepY < buffer.area.height:
+            # Draw separator for the width of this window
+            for x in window.viewport.x ..< (window.viewport.x + window.viewport.width):
+              if x < buffer.area.width:
+                buffer.setString(x, sepY, "─", sepStyle)
+
+    # Set cursor to active window position
+    if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
+      let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
+      let screenY =
+        activeWindow.viewport.y +
+        (activeWindow.cursor.line - activeWindow.viewport.topLine)
+      let screenX =
+        activeWindow.viewport.x + 4 +
+        max(0, activeWindow.cursor.column - activeWindow.viewport.leftColumn)
+      e.state.cursor.x = screenX
+      e.state.cursor.y = screenY
+  else:
+    # No split windows - render single buffer as before
+    # Sync viewport with motion controller (both directions)
+    e.executer.motionController.viewportManager.viewport.width = e.viewport.width
+    e.executer.motionController.viewportManager.viewport.height = e.viewport.height
+    e.viewport = e.executer.motionController.viewportManager.viewport
+
+    let
+      lineNumOffset = e.renderLineNumbers(buffer)
+      reservedLines = if e.state.showStatusLine: 2 else: 1
+      textArea = Rect(
+        x: buffer.area.x + lineNumOffset,
+        y: buffer.area.y,
+        width: buffer.area.width - lineNumOffset,
+        height: buffer.area.height - reservedLines,
+      )
+
+    e.renderTextBuffer(buffer, textArea)
+    e.setCursorPosition(lineNumOffset)
 
   # Calculate line positions based on status line visibility
   let
@@ -288,19 +524,15 @@ proc render*(e: Editor, buffer: var Buffer) =
       modifiers: {StyleModifier.Bold},
     )
 
-  # Render status line using the dedicated statusline module
-  e.state.renderStatusLine(e.textBuffer, buffer, statusLineY)
+  # Render status line using active buffer
+  e.state.renderStatusLine(e.activeBuffer(), buffer, statusLineY)
 
-  # Handle command line (bottom line)
+  # Handle command line
   if e.state.mode == EditorMode.Command:
-    # Show command text in command line
     buffer.setString(buffer.area.x, commandLineY, e.state.commandText, commandStyle)
-    # Set cursor at the end of command text
     e.state.cursor.x = e.state.commandText.len
     e.state.cursor.y = buffer.area.height - 1
   else:
-    # Check if there's a status message to display in command line
     if e.state.statusMessage.len > 0:
       buffer.setString(buffer.area.x, commandLineY, e.state.statusMessage, commandStyle)
-      # Clear status message after displaying
       e.state.statusMessage = ""

@@ -39,7 +39,10 @@ type
   HandlerResultKind* = enum
     hrHandled # Command was handled successfully
     hrQuit # Application should quit
+    hrCloseWindow # Close current window
     hrGotoLine # Jump to specific line
+    hrVSplit # Vertical split window
+    hrHSplit # Horizontal split window
     hrUnhandled # Command was not handled
     hrError # Error occurred
 
@@ -60,8 +63,14 @@ type
       statusMessage*: string
     of hrQuit:
       shouldQuit*: bool
+    of hrCloseWindow:
+      forceClose*: bool
     of hrGotoLine:
       lineNumber*: int
+    of hrVSplit:
+      vsplitFilename*: Option[string]
+    of hrHSplit:
+      hsplitFilename*: Option[string]
     of hrUnhandled:
       discard
     of hrError:
@@ -137,6 +146,8 @@ proc handleCommandMode*(
   case r.kind
   of cmrQuit:
     return HandlerResult(kind: hrQuit, shouldQuit: true)
+  of cmrCloseWindow:
+    return HandlerResult(kind: hrCloseWindow, forceClose: r.forceClose)
   of cmrModeSwitch:
     return HandlerResult(
       kind: hrHandled, modeTransition: some(r.targetMode), statusMessage: ""
@@ -147,6 +158,10 @@ proc handleCommandMode*(
     )
   of cmrGotoLine:
     return HandlerResult(kind: hrGotoLine, lineNumber: r.lineNumber)
+  of cmrVSplit:
+    return HandlerResult(kind: hrVSplit, vsplitFilename: r.vsplitFilename)
+  of cmrHSplit:
+    return HandlerResult(kind: hrHSplit, hsplitFilename: r.hsplitFilename)
   of cmrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
@@ -183,15 +198,27 @@ proc handleEvent*(
 # Utility functions for HandlerResult
 proc wasHandled*(hrResult: HandlerResult): bool =
   ## Check if the event was handled
-  hrResult.kind in {hrHandled, hrQuit, hrGotoLine}
+  hrResult.kind in {hrHandled, hrQuit, hrCloseWindow, hrGotoLine, hrVSplit, hrHSplit}
 
 proc shouldQuit*(hrResult: HandlerResult): bool =
   ## Check if the application should quit
   if hrResult.kind == hrQuit: hrResult.shouldQuit else: false
 
+proc shouldCloseWindow*(hrResult: HandlerResult): bool =
+  ## Check if we should close the current window
+  hrResult.kind == hrCloseWindow
+
 proc shouldGotoLine*(hrResult: HandlerResult): bool =
   ## Check if we should jump to a line
   hrResult.kind == hrGotoLine
+
+proc shouldVSplit*(hrResult: HandlerResult): bool =
+  ## Check if we should create a vertical split
+  hrResult.kind == hrVSplit
+
+proc shouldHSplit*(hrResult: HandlerResult): bool =
+  ## Check if we should create a horizontal split
+  hrResult.kind == hrHSplit
 
 proc hasError*(hrResult: HandlerResult): bool =
   ## Check if there was an error
@@ -214,3 +241,17 @@ proc getStatusMessage*(hrResult: HandlerResult): string =
 proc getLineNumber*(hrResult: HandlerResult): int =
   ## Get line number for goto
   if hrResult.kind == hrGotoLine: hrResult.lineNumber else: 0
+
+proc getVSplitFilename*(hrResult: HandlerResult): Option[string] =
+  ## Get filename for vertical split
+  if hrResult.kind == hrVSplit:
+    hrResult.vsplitFilename
+  else:
+    none(string)
+
+proc getHSplitFilename*(hrResult: HandlerResult): Option[string] =
+  ## Get filename for horizontal split
+  if hrResult.kind == hrHSplit:
+    hrResult.hsplitFilename
+  else:
+    none(string)

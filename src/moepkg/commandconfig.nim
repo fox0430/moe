@@ -96,6 +96,12 @@ proc loadDefaultConfig*(config: CommandConfig) =
   config.addAlias("s", claSubstitute)
   config.addAlias("substitute", claSubstitute)
 
+  # Window split
+  config.addAlias("vs", claVSplit)
+  config.addAlias("vsplit", claVSplit)
+  config.addAlias("sp", claHSplit)
+  config.addAlias("split", claHSplit)
+
 proc applyToParser*(config: CommandConfig, parser: CommandLineParser) =
   ## Apply configuration to a command line parser
   # Clear existing aliases

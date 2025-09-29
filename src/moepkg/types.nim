@@ -19,7 +19,7 @@
 
 import std/options
 
-import cursor, modes
+import cursor, modes, buffer
 
 type
   ViewPort* = object
@@ -27,6 +27,15 @@ type
     leftColumn*: int
     width*: int
     height*: int
+    x*: int # Screen position X
+    y*: int # Screen position Y
+
+  EditorWindow* = ref object
+    ## Represents a split window with its own buffer and viewport
+    buffer*: TextBuffer
+    viewport*: ViewPort
+    cursor*: BufferPosition # Window-local cursor position
+    active*: bool # Whether this is the active window
 
   Motion* = enum
     Left
@@ -72,3 +81,5 @@ type
     showLinePercentage*: bool # Whether to show line percentage in status line
     showEncoding*: bool # Whether to show file encoding in status line
     needsFullRedraw*: bool # Whether a full screen redraw is needed
+    viewportReservedLines*: int
+      # Reserved lines for viewport calculations (for split windows)
