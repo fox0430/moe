@@ -71,3 +71,4 @@ type
     showLineCount*: bool # Whether to show line count in status line
     showLinePercentage*: bool # Whether to show line percentage in status line
     showEncoding*: bool # Whether to show file encoding in status line
+    needsFullRedraw*: bool # Whether a full screen redraw is needed

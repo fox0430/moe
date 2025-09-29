@@ -115,6 +115,7 @@ proc newEditor*(): Editor =
       showLineCount: true,
       showLinePercentage: true,
       showEncoding: true,
+      needsFullRedraw: true, # Initial render needs full draw
     ),
     viewport: ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 24),
     commandRegistry: cmdRegistry,
@@ -212,18 +213,9 @@ proc renderTextBuffer(e: Editor, buffer: var Buffer, area: Rect) =
       else:
         ""
 
-    # Clear the entire line first, then set content
-    for x in 0 ..< area.width:
-      buffer[area.x + x, area.y + y] = cell(" ", normalStyle)
-
-    # Set the actual line content
+    # Set the actual line content (no need to clear as buffer is already cleared)
     if displayLine.len > 0:
       buffer.setString(area.x, area.y + y, displayLine, normalStyle)
-
-  # Clear remaining lines to prevent artifacts
-  for y in visibleLines ..< area.height:
-    for x in 0 ..< area.width:
-      buffer[area.x + x, area.y + y] = cell(" ", normalStyle)
 
 proc setCursorPosition*(e: Editor, lineNumOffset: int) =
   ## Calculate the cursor screen position from buffer's logical position
@@ -245,6 +237,22 @@ proc setCursorPosition*(e: Editor, lineNumOffset: int) =
     e.state.cursor.y = screenY
 
 proc render*(e: Editor, buffer: var Buffer) =
+  # Always clear the entire buffer to prevent artifacts
+  # TODO: Clear when resize
+  let clearStyle = Style(
+    fg: ColorValue(kind: Default),
+    bg: ColorValue(kind: Default),
+    modifiers: {}
+  )
+
+  for y in 0..<buffer.area.height:
+    for x in 0..<buffer.area.width:
+      buffer[x, y] = cell(" ", clearStyle)
+
+  # Reset the full redraw flag if it was set
+  if e.state.needsFullRedraw:
+    e.state.needsFullRedraw = false
+
   # Update viewport size from buffer area (but preserve topLine and leftColumn)
   e.viewport.width = buffer.area.width
   e.viewport.height = buffer.area.height

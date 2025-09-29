@@ -46,6 +46,14 @@ proc main() =
         quit(1)
 
   app.onEvent proc(e: Event): bool =
+    # Special handling for resize events to force screen clear
+    if e.kind == EventKind.Resize:
+      # Physically clear the terminal screen to remove artifacts
+      clearScreen()
+      # Set the editor's full redraw flag
+      editor.state.needsFullRedraw = true
+      return true
+
     return editor.handleEvent(e)
 
   app.onRender proc(b: var Buffer) =
