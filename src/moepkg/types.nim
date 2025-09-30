@@ -83,3 +83,4 @@ type
     needsFullRedraw*: bool # Whether a full screen redraw is needed
     viewportReservedLines*: int
       # Reserved lines for viewport calculations (for split windows)
+    lineWrap*: bool # Whether to wrap long lines

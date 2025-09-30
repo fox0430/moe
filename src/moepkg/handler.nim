@@ -53,43 +53,43 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
       let activeBuffer = e.activeBuffer()
       let r = e.handlerManager.handleCommandMode(activeBuffer, e.state.commandText)
 
-      if r.shouldQuit:
+      if r.shouldQuit():
         return false # Signal app should quit
 
-      if r.shouldCloseWindow:
+      if r.shouldCloseWindow():
         # Handle window close - may also quit if last window
         let shouldQuit = e.closeWindow
         if shouldQuit:
           return false # Last window closed, quit editor
 
-      if r.shouldGotoLine:
+      if r.shouldGotoLine():
         # Jump to the specified line
-        let lineNum = r.getLineNumber
+        let lineNum = r.getLineNumber()
         if lineNum > 0 and lineNum <= activeBuffer.len:
           activeBuffer.cursor.line = lineNum - 1 # Convert to 0-based
           activeBuffer.cursor.column = 0
 
-      if r.shouldVSplit:
+      if r.shouldVSplit():
         # Handle vertical split
         let splitResult = e.vsplit(r.getVSplitFilename())
         if splitResult.isErr:
           e.state.statusMessage = "Error: " & splitResult.error
 
-      if r.shouldHSplit:
+      if r.shouldHSplit():
         # Handle horizontal split
         let splitResult = e.hsplit(r.getHSplitFilename())
         if splitResult.isErr:
           e.state.statusMessage = "Error: " & splitResult.error
 
       # Handle mode transitions
-      let modeTransition = r.getModeTransition
+      let modeTransition = r.getModeTransition()
       if modeTransition.isSome:
         e.state.mode = modeTransition.get
       else:
         e.state.mode = EditorMode.Normal # Default back to normal
 
       # Set status message if any
-      let statusMsg = r.getStatusMessage
+      let statusMsg = r.getStatusMessage()
       if statusMsg.len > 0:
         e.state.statusMessage = statusMsg
     else:
@@ -191,23 +191,23 @@ proc handleEvent*(e: Editor, event: Event): bool =
       e.executer.motionController.viewportManager.viewport
 
   # Process the result
-  if r.shouldQuit:
+  if r.shouldQuit():
     return false # Signal app should quit
 
-  if r.shouldGotoLine:
+  if r.shouldGotoLine():
     # Jump to the specified line
-    let lineNum = r.getLineNumber
+    let lineNum = r.getLineNumber()
     if lineNum > 0 and lineNum <= activeBuffer.len:
       activeBuffer.cursor.line = lineNum - 1 # Convert to 0-based
       activeBuffer.cursor.column = 0
 
   # Handle mode transitions
-  let modeTransition = r.getModeTransition
+  let modeTransition = r.getModeTransition()
   if modeTransition.isSome:
     e.state.mode = modeTransition.get
 
   # Set status message if any
-  let statusMsg = r.getStatusMessage
+  let statusMsg = r.getStatusMessage()
   if statusMsg.len > 0:
     e.state.statusMessage = statusMsg
 

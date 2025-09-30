@@ -26,18 +26,17 @@ import
   commandconfig, statusline, windowmanager
 import command_handlers/handler_manager
 
-type
-  Editor* = ref object
-    textBuffer*: TextBuffer
-    state*: EditorState
-    viewport*: ViewPort
-    executer*: CommandExecutor
-    commandRegistry*: CommandRegistry
-    keyBindingRegistry*: KeyBindingRegistry
-    commandLineParser*: CommandLineParser
-    commandConfig*: CommandConfig
-    handlerManager*: HandlerManager
-    windowManager*: EditorWindowManager # Window manager for split windows
+type Editor* = ref object
+  textBuffer*: TextBuffer
+  state*: EditorState
+  viewport*: ViewPort
+  executer*: CommandExecutor
+  commandRegistry*: CommandRegistry
+  keyBindingRegistry*: KeyBindingRegistry
+  commandLineParser*: CommandLineParser
+  commandConfig*: CommandConfig
+  handlerManager*: HandlerManager
+  windowManager*: EditorWindowManager # Window manager for split windows
 
 proc buffer*(e: Editor): TextBuffer =
   e.textBuffer
@@ -154,6 +153,16 @@ proc setEncodingVisible*(e: Editor, visible: bool) =
   ## Set the visibility of encoding in status line
   e.state.setEncodingVisible(visible)
 
+proc toggleLineWrap*(e: Editor) =
+  ## Toggle line wrapping
+  e.state.lineWrap = not e.state.lineWrap
+  e.state.needsFullRedraw = true
+
+proc setLineWrap*(e: Editor, enabled: bool) =
+  ## Set line wrapping
+  e.state.lineWrap = enabled
+  e.state.needsFullRedraw = true
+
 proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), string] =
   ## Create a vertical split window
   let bufferResult = e.windowManager.vsplit(e.textBuffer, e.viewport, filename)
@@ -208,6 +217,7 @@ proc newEditor*(): Editor =
       showEncoding: true,
       needsFullRedraw: true, # Initial render needs full draw
       viewportReservedLines: 2, # Default for single window mode with status line
+      lineWrap: true, # Default to wrapping
     ),
     viewport: ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 20, x: 0, y: 0),
     commandRegistry: cmdRegistry,
@@ -247,8 +257,13 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
 
   ok(())
 
-proc renderLineNumbers(e: Editor, buffer: var Buffer): int =
+proc renderLineNumbers(e: Editor, buffer: var Buffer, textAreaWidth: int): int =
   ## Render line numbers and return max width of the line number text.
+
+  # Guard against invalid text area width
+  if textAreaWidth <= 0:
+    return 0
+
   let
     lineLen = e.textBuffer.len
     maxLineNumWidth = len($lineLen) + 1
@@ -265,50 +280,106 @@ proc renderLineNumbers(e: Editor, buffer: var Buffer): int =
     modifiers: {StyleModifier.Bold},
   )
 
-  let visibleLineNums = min(buffer.area.height - 1, lineLen - e.viewport.topLine)
+  let reservedLines = if e.state.showStatusLine: 2 else: 1
+  var
+    screenY = 0
+    lineIndex = e.viewport.topLine
 
-  # Render line numbers for visible lines
-  for y in 0 ..< visibleLineNums:
+  while screenY < buffer.area.height - reservedLines and lineIndex < lineLen:
+    # Render line numbers with wrapping support
     let
-      lineNum = e.viewport.topLine + y
-      lineNumStr = align($(lineNum + 1), maxLineNumWidth - 1) & " "
+      line = e.textBuffer.getLine(lineIndex)
+      isCurrentLine = lineIndex == e.textBuffer.cursor.line
+      lineStyle = if isCurrentLine: currentLineStyle else: lineNumStyle
 
-    let style =
-      if lineNum == e.textBuffer.cursor.line: currentLineStyle else: lineNumStyle
+    if e.state.lineWrap and line.len > textAreaWidth:
+      let
+        # This line will wrap - calculate number of screen lines needed
+        numWraps = (line.len + textAreaWidth - 1) div textAreaWidth
+        # Render line number for first wrap
+        lineNumStr = align($(lineIndex + 1), maxLineNumWidth - 1) & " "
 
-    buffer.setString(buffer.area.x, buffer.area.y + y, lineNumStr, style)
+      buffer.setString(buffer.area.x, buffer.area.y + screenY, lineNumStr, lineStyle)
+      inc screenY
 
-  # Clear remaining line number area to prevent artifacts
-  for y in visibleLineNums ..< buffer.area.height - 1:
+      for _ in 1 ..< numWraps:
+        # Render empty space for wrapped parts (no line number)
+        if screenY >= buffer.area.height - reservedLines:
+          break
+        let emptyLineNumStr = spaces(maxLineNumWidth)
+        buffer.setString(
+          buffer.area.x, buffer.area.y + screenY, emptyLineNumStr, lineNumStyle
+        )
+        inc screenY
+    else:
+      # Normal single-line display
+      let lineNumStr = align($(lineIndex + 1), maxLineNumWidth - 1) & " "
+      buffer.setString(buffer.area.x, buffer.area.y + screenY, lineNumStr, lineStyle)
+      inc screenY
+
+    inc lineIndex
+
+  while screenY < buffer.area.height - reservedLines:
+    # Clear remaining line number area to prevent artifacts
     let emptyLineNumStr = spaces(maxLineNumWidth)
-    buffer.setString(buffer.area.x, buffer.area.y + y, emptyLineNumStr, lineNumStyle)
+    buffer.setString(
+      buffer.area.x, buffer.area.y + screenY, emptyLineNumStr, lineNumStyle
+    )
+    inc screenY
 
   return maxLineNumWidth
 
 proc renderTextBuffer(e: Editor, buffer: var Buffer, area: Rect) =
   let
     lineCount = e.textBuffer.len
-    visibleLines = min(area.height, lineCount - e.viewport.topLine)
+    normalStyle =
+      Style(fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {})
 
-  # Default background
-  let normalStyle =
-    Style(fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {})
+  var
+    screenY = 0
+    lineIndex = e.viewport.topLine
 
-  # Render actual file content
-  for y in 0 ..< visibleLines:
-    let
-      lineIndex = e.viewport.topLine + y
-      line = e.textBuffer.getLine(lineIndex)
+  while screenY < area.height and lineIndex < lineCount:
+    # Render file content with optional line wrapping
+    let line = e.textBuffer.getLine(lineIndex)
 
-    let displayLine =
-      if e.viewport.leftColumn < line.len:
-        line[e.viewport.leftColumn ..^ 1]
-      else:
-        ""
+    if e.state.lineWrap:
+      # Line wrapping enabled - split long lines across multiple screen lines
+      let
+        maxWidth = area.width
+        lineLen = line.len
 
-    # Set the actual line content (no need to clear as buffer is already cleared)
-    if displayLine.len > 0:
-      buffer.setString(area.x, area.y + y, displayLine, normalStyle)
+      if lineLen == 0:
+        # Empty line
+        inc screenY
+        inc lineIndex
+        continue
+
+      var startCol = 0
+      while startCol < lineLen and screenY < area.height:
+        let
+          endCol = min(startCol + maxWidth, lineLen)
+          displayLine = line[startCol ..< endCol]
+
+        if displayLine.len > 0:
+          buffer.setString(area.x, area.y + screenY, displayLine, normalStyle)
+
+        inc screenY
+        startCol += maxWidth
+    else:
+      # No line wrapping - use horizontal scrolling
+      let displayLine =
+        if e.viewport.leftColumn < line.len:
+          line[e.viewport.leftColumn ..^ 1]
+        else:
+          ""
+
+      if displayLine.len > 0:
+        buffer.setString(area.x, area.y + screenY, displayLine, normalStyle)
+
+      inc screenY
+
+    inc lineIndex
 
 proc setCursorPosition*(e: Editor, lineNumOffset: int) =
   ## Calculate the cursor screen position from buffer's logical position
@@ -342,7 +413,6 @@ proc renderWindow(
     # Only the last window needs to reserve space for status line
     reservedLines = if isLastWindow and e.state.showStatusLine: 2 else: 0
     visibleHeight = window.viewport.height - reservedLines
-    visibleLines = min(visibleHeight, lineCount - window.viewport.topLine)
 
   let normalStyle =
     Style(fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {})
@@ -359,42 +429,117 @@ proc renderWindow(
     modifiers: {StyleModifier.Bold},
   )
 
-  # Render line numbers and text content for this window
-  for y in 0 ..< visibleLines:
+  var
+    screenY = 0
+    lineIndex = window.viewport.topLine
+
+  while screenY < visibleHeight and lineIndex < lineCount:
+    # Render line numbers and text content with optional line wrapping
     let
-      lineIndex = window.viewport.topLine + y
-      screenY = window.viewport.y + y
+      actualScreenY = window.viewport.y + screenY
+      line = window.buffer.getLine(lineIndex)
 
     # Skip if outside window bounds
-    if screenY >= window.viewport.y + window.viewport.height:
+    if actualScreenY >= window.viewport.y + window.viewport.height:
       break
 
-    # Render line number
-    let
-      lineNumStr = align($(lineIndex + 1), lineNumOffset - 1) & " "
-      lineNumScreenX = window.viewport.x
-      isCurrentLine = (lineIndex == window.buffer.cursor.line and window.active)
-      lineStyle = if isCurrentLine: currentLineStyle else: lineNumStyle
+    if e.state.lineWrap:
+      # Line wrapping enabled - split long lines across multiple screen lines
+      let
+        maxWidth = window.viewport.width - lineNumOffset
+        lineLen = line.len
+        isCurrentLine = (lineIndex == window.buffer.cursor.line and window.active)
+        lineStyle = if isCurrentLine: currentLineStyle else: lineNumStyle
+        lineNumScreenX = window.viewport.x
 
-    if lineNumScreenX + lineNumStr.len <= buffer.area.width:
-      buffer.setString(lineNumScreenX, screenY, lineNumStr, lineStyle)
+      if lineLen == 0:
+        # Empty line - just render line number
+        let lineNumStr = align($(lineIndex + 1), lineNumOffset - 1) & " "
+        if lineNumScreenX + lineNumStr.len <= buffer.area.width:
+          buffer.setString(lineNumScreenX, actualScreenY, lineNumStr, lineStyle)
+        inc screenY
+        inc lineIndex
+        continue
 
-    # Render text content
-    let
-      line = window.buffer.getLine(lineIndex)
-      displayLine =
-        if window.viewport.leftColumn < line.len:
-          line[window.viewport.leftColumn ..^ 1]
+      var
+        startCol = 0
+        wrapLineCount = 0
+      while startCol < lineLen and screenY < visibleHeight:
+        let
+          endCol = min(startCol + maxWidth, lineLen)
+          displayLine = line[startCol ..< endCol]
+          textScreenX = window.viewport.x + lineNumOffset
+          currentActualScreenY = window.viewport.y + screenY
+
+        # Render line number for first wrap, empty space for others
+        if wrapLineCount == 0:
+          let lineNumStr = align($(lineIndex + 1), lineNumOffset - 1) & " "
+          if lineNumScreenX + lineNumStr.len <= buffer.area.width:
+            buffer.setString(
+              lineNumScreenX, currentActualScreenY, lineNumStr, lineStyle
+            )
         else:
-          ""
-      textScreenX = window.viewport.x + lineNumOffset
+          if lineNumScreenX + lineNumOffset <= buffer.area.width:
+            let emptyLineNumStr = spaces(lineNumOffset)
+            buffer.setString(
+              lineNumScreenX, currentActualScreenY, emptyLineNumStr, lineNumStyle
+            )
 
-    if displayLine.len > 0 and textScreenX < buffer.area.width:
-      let maxWidth = min(displayLine.len, window.viewport.width - lineNumOffset)
-      if maxWidth > 0:
-        buffer.setString(textScreenX, screenY, displayLine[0 ..< maxWidth], normalStyle)
+        if displayLine.len > 0 and textScreenX < buffer.area.width:
+          let displayWidth = min(displayLine.len, maxWidth)
+          if displayWidth > 0:
+            buffer.setString(
+              textScreenX,
+              currentActualScreenY,
+              displayLine[0 ..< displayWidth],
+              normalStyle,
+            )
+
+        inc screenY
+        inc wrapLineCount
+        startCol += maxWidth
+
+        if screenY >= visibleHeight:
+          break
+    else:
+      # No line wrapping - use horizontal scrolling
+      let
+        isCurrentLine = (lineIndex == window.buffer.cursor.line and window.active)
+        lineStyle = if isCurrentLine: currentLineStyle else: lineNumStyle
+
+      # Render line number
+      let
+        lineNumStr = align($(lineIndex + 1), lineNumOffset - 1) & " "
+        lineNumScreenX = window.viewport.x
+
+      if lineNumScreenX + lineNumStr.len <= buffer.area.width:
+        buffer.setString(lineNumScreenX, actualScreenY, lineNumStr, lineStyle)
+
+      # Render text content
+      let
+        displayLine =
+          if window.viewport.leftColumn < line.len:
+            line[window.viewport.leftColumn ..^ 1]
+          else:
+            ""
+        textScreenX = window.viewport.x + lineNumOffset
+
+      if displayLine.len > 0 and textScreenX < buffer.area.width:
+        let maxWidth = min(displayLine.len, window.viewport.width - lineNumOffset)
+        if maxWidth > 0:
+          buffer.setString(
+            textScreenX, actualScreenY, displayLine[0 ..< maxWidth], normalStyle
+          )
+
+      inc screenY
+
+    inc lineIndex
 
 proc render*(e: Editor, buffer: var Buffer) =
+  # Early return if buffer area is too small
+  if buffer.area.width <= 0 or buffer.area.height <= 0:
+    return
+
   # Always clear the entire buffer to prevent artifacts
   let clearStyle =
     Style(fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {})
@@ -419,8 +564,11 @@ proc render*(e: Editor, buffer: var Buffer) =
   # Check if we have split windows
   if e.windowManager.windows.len > 0:
     # If terminal was resized, rebuild window layout
-    if wasResized and oldWidth > 0 and oldHeight > 0:
-      e.windowManager.resizeWindows(e.viewport.width, e.viewport.height, oldWidth, oldHeight)
+    if wasResized and oldWidth > 0 and oldHeight > 0 and
+        e.viewport.width > 0 and e.viewport.height > 0:
+      e.windowManager.resizeWindows(
+        e.viewport.width, e.viewport.height, oldWidth, oldHeight
+      )
     # Sync active window's cursor with buffer cursor
     if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
       let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
@@ -502,13 +650,14 @@ proc render*(e: Editor, buffer: var Buffer) =
     e.viewport = e.executer.motionController.viewportManager.viewport
 
     let
-      lineNumOffset = e.renderLineNumbers(buffer)
       reservedLines = if e.state.showStatusLine: 2 else: 1
+      textAreaWidth = max(0, buffer.area.width - (len($e.textBuffer.len) + 2))
+      lineNumOffset = e.renderLineNumbers(buffer, textAreaWidth)
       textArea = Rect(
         x: buffer.area.x + lineNumOffset,
         y: buffer.area.y,
-        width: buffer.area.width - lineNumOffset,
-        height: buffer.area.height - reservedLines,
+        width: max(0, buffer.area.width - lineNumOffset),
+        height: max(0, buffer.area.height - reservedLines),
       )
 
     e.renderTextBuffer(buffer, textArea)

@@ -25,10 +25,9 @@ import pkg/results
 
 import types, buffer, cursor
 
-type
-  EditorWindowManager* = ref object ## Manages multiple split windows
-    windows*: seq[EditorWindow]
-    activeWindowIndex*: int
+type EditorWindowManager* = ref object ## Manages multiple split windows
+  windows*: seq[EditorWindow]
+  activeWindowIndex*: int
 
 proc newEditorWindowManager*(): EditorWindowManager =
   ## Create a new window manager
@@ -94,11 +93,11 @@ proc closeWindow*(wm: EditorWindowManager): bool =
   # Find windows that were adjacent to the closed window
   for window in wm.windows.mitems:
     # Check if window was to the right of closed window (vertical split case)
-    if window.viewport.x == closedX + closedWidth + 1 and
-        window.viewport.y == closedY and window.viewport.height == closedHeight:
+    if window.viewport.x == closedX + closedWidth + 1 and window.viewport.y == closedY and
+        window.viewport.height == closedHeight:
       # Expand this window to the left
       window.viewport.x = closedX
-      window.viewport.width += closedWidth + 1  # +1 for separator
+      window.viewport.width += closedWidth + 1 # +1 for separator
 
     # Check if window was to the left of closed window
     elif window.viewport.x + window.viewport.width + 1 == closedX and
@@ -107,8 +106,8 @@ proc closeWindow*(wm: EditorWindowManager): bool =
       window.viewport.width += closedWidth + 1
 
     # Check if window was below closed window (horizontal split case)
-    elif window.viewport.y == closedY + closedHeight + 1 and
-        window.viewport.x == closedX and window.viewport.width == closedWidth:
+    elif window.viewport.y == closedY + closedHeight + 1 and window.viewport.x == closedX and
+        window.viewport.width == closedWidth:
       # Expand this window upward
       window.viewport.y = closedY
       window.viewport.height += closedHeight + 1
@@ -127,7 +126,7 @@ proc closeWindow*(wm: EditorWindowManager): bool =
     # Activate current
     wm.windows[wm.activeWindowIndex].active = true
 
-  return false  # Not the last window, don't quit
+  return false # Not the last window, don't quit
 
 proc vsplit*(
     wm: EditorWindowManager,
@@ -341,14 +340,18 @@ proc hsplit*(
   return ok(newBuffer)
 
 proc resizeWindows*(
-    wm: EditorWindowManager, newWidth: int, newHeight: int, oldWidth: int, oldHeight: int
+    wm: EditorWindowManager,
+    newWidth: int,
+    newHeight: int,
+    oldWidth: int,
+    oldHeight: int,
 ) =
   ## Adjust all window viewports when terminal is resized
 
   if wm.windows.len == 0:
     return
 
-  if oldWidth <= 0 or oldHeight <= 0:
+  if oldWidth <= 0 or oldHeight <= 0 or newWidth <= 0 or newHeight <= 0:
     return
 
   let
