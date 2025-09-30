@@ -81,6 +81,10 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         if splitResult.isErr:
           e.state.statusMessage = "Error: " & splitResult.error
 
+      if r.shouldSetMultiStatusLine():
+        # Handle multi status line setting
+        e.setMultiStatusLine(r.getMultiStatusLineEnabled())
+
       # Handle mode transitions
       let modeTransition = r.getModeTransition()
       if modeTransition.isSome:

@@ -55,6 +55,14 @@ proc setEncodingVisible*(state: var EditorState, visible: bool) =
   ## Set the visibility of encoding in status line
   state.showEncoding = visible
 
+proc toggleMultiStatusLine*(state: var EditorState) =
+  ## Toggle between single status line (at bottom) and multi status lines (per window)
+  state.multiStatusLine = not state.multiStatusLine
+
+proc setMultiStatusLine*(state: var EditorState, enabled: bool) =
+  ## Set multi status line mode
+  state.multiStatusLine = enabled
+
 proc renderStatusLine*(
     state: EditorState, textBuffer: TextBuffer, buffer: var Buffer, statusLineY: int
 ) =
@@ -134,6 +142,107 @@ proc renderStatusLine*(
       lineCountText.len > 0 and buffer.area.width >= lineCountWidth + 1:
     buffer.setString(
       buffer.area.x + buffer.area.width - lineCountWidth - 1,
+      statusLineY,
+      lineCountText,
+      statusLineStyle,
+    )
+
+proc renderWindowStatusLine*(
+    state: EditorState,
+    textBuffer: TextBuffer,
+    buffer: var Buffer,
+    statusLineY: int,
+    statusLineX: int,
+    statusLineWidth: int,
+    isActiveWindow: bool,
+) =
+  ## Render a status line for a specific window
+  if not state.showStatusLine or not state.multiStatusLine:
+    return
+
+  let
+    modeLabel =
+      if isActiveWindow:
+        modeLabel(state.mode)
+      else:
+        ""
+    modeLabelStyle = Style(
+      fg: ColorValue(kind: Indexed, indexed: Color.Black),
+      bg: ColorValue(kind: Indexed, indexed: Color.White),
+      modifiers: {StyleModifier.Bold},
+    )
+    statusLineStyle = Style(
+      fg: ColorValue(kind: Indexed, indexed: Color.White),
+      bg: ColorValue(kind: Indexed, indexed: Color.Blue),
+      modifiers: {StyleModifier.Bold},
+    )
+
+  # Draw mode label with white background (only for active window)
+  var currentX = statusLineX
+  if isActiveWindow:
+    let modeLabelText = fmt" {modeLabel} "
+    buffer.setString(currentX, statusLineY, modeLabelText, modeLabelStyle)
+    currentX += modeLabelText.len
+
+  # Draw file path
+  let
+    filePathText =
+      if textBuffer.filePath.isSome:
+        " " & textBuffer.filePath.get()
+      else:
+        " [No Name]"
+    maxFilePathWidth = statusLineWidth - (currentX - statusLineX) - 1
+    truncatedFilePath =
+      if filePathText.len > maxFilePathWidth:
+        filePathText[0 ..< maxFilePathWidth]
+      else:
+        filePathText
+
+  buffer.setString(currentX, statusLineY, truncatedFilePath, statusLineStyle)
+  currentX += truncatedFilePath.len
+
+  # Prepare line count and percentage display
+  let
+    lineCountText = block:
+      var parts: seq[string] = @[]
+
+      if state.showEncoding:
+        parts.add(encodingToString(textBuffer.encoding))
+
+      if state.showLinePercentage:
+        let
+          currentLine = textBuffer.cursor.line + 1 # Convert to 1-based
+          totalLines = textBuffer.len
+          percentage =
+            if totalLines > 0:
+              int((currentLine.float / totalLines.float) * 100.0)
+            else:
+              0
+        parts.add(fmt"{percentage}%")
+
+      if state.showLineCount:
+        let
+          currentLine = textBuffer.cursor.line + 1 # Convert to 1-based
+          totalLines = textBuffer.len
+        parts.add(fmt"{currentLine}/{totalLines}")
+
+      if parts.len > 0:
+        " " & parts.join(" ")
+      else:
+        ""
+    lineCountWidth = lineCountText.len
+
+  # Fill the rest of the line with blue background
+  let remainingWidth = max(0, (statusLineX + statusLineWidth) - currentX)
+  if remainingWidth > 0:
+    let blueBackground = " ".repeat(remainingWidth)
+    buffer.setString(currentX, statusLineY, blueBackground, statusLineStyle)
+
+  # Draw encoding/line count/percentage with 1 character space from the right end if enabled
+  if (state.showEncoding or state.showLineCount or state.showLinePercentage) and
+      lineCountText.len > 0 and statusLineWidth >= lineCountWidth + 1:
+    buffer.setString(
+      statusLineX + statusLineWidth - lineCountWidth - 1,
       statusLineY,
       lineCountText,
       statusLineStyle,

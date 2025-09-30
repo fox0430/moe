@@ -163,6 +163,16 @@ proc setLineWrap*(e: Editor, enabled: bool) =
   e.state.lineWrap = enabled
   e.state.needsFullRedraw = true
 
+proc toggleMultiStatusLine*(e: Editor) =
+  ## Toggle between single status line (at bottom) and multi status lines (per window)
+  e.state.multiStatusLine = not e.state.multiStatusLine
+  e.state.needsFullRedraw = true
+
+proc setMultiStatusLine*(e: Editor, enabled: bool) =
+  ## Set multi status line mode
+  e.state.multiStatusLine = enabled
+  e.state.needsFullRedraw = true
+
 proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), string] =
   ## Create a vertical split window
   let bufferResult = e.windowManager.vsplit(e.textBuffer, e.viewport, filename)
@@ -212,6 +222,7 @@ proc newEditor*(): Editor =
     state: EditorState(
       cursor: CursorPosition(x: 0, y: 0),
       showStatusLine: true,
+      multiStatusLine: true, # Default to multiple status line
       showLineCount: true,
       showLinePercentage: true,
       showEncoding: true,
@@ -405,13 +416,33 @@ proc renderWindow(
     buffer: var Buffer,
     window: EditorWindow,
     lineNumOffset: int,
-    isLastWindow: bool,
+    isBottomWindow: bool,
+    isActiveWindow: bool,
 ) =
   ## Render a single window with line numbers
   let
     lineCount = window.buffer.len
-    # Only the last window needs to reserve space for status line
-    reservedLines = if isLastWindow and e.state.showStatusLine: 2 else: 0
+    # Reserve space for status line based on mode:
+    # - Multi-status line mode:
+    #   - Bottom windows: reserve 2 lines (status line + command line)
+    #   - Non-bottom windows: reserve 1 line (status line)
+    # - Single-status line mode: reserve 2 lines only for bottom windows (status + command line)
+    reservedLines =
+      if e.state.showStatusLine:
+        if e.state.multiStatusLine:
+          if isBottomWindow:
+            2 # Reserve for status line + command line
+          else:
+            1 # Reserve for window's own status line
+        elif isBottomWindow:
+          2 # Reserve for status + command line in single-status-line mode
+        else:
+          0
+      else:
+        if isBottomWindow:
+          1 # Reserve for command line even without status line
+        else:
+          0
     visibleHeight = window.viewport.height - reservedLines
 
   let normalStyle =
@@ -564,8 +595,8 @@ proc render*(e: Editor, buffer: var Buffer) =
   # Check if we have split windows
   if e.windowManager.windows.len > 0:
     # If terminal was resized, rebuild window layout
-    if wasResized and oldWidth > 0 and oldHeight > 0 and
-        e.viewport.width > 0 and e.viewport.height > 0:
+    if wasResized and oldWidth > 0 and oldHeight > 0 and e.viewport.width > 0 and
+        e.viewport.height > 0:
       e.windowManager.resizeWindows(
         e.viewport.width, e.viewport.height, oldWidth, oldHeight
       )
@@ -594,8 +625,23 @@ proc render*(e: Editor, buffer: var Buffer) =
       # A window is a bottom window if its bottom edge is at the maximum bottom Y
       let windowBottomY = window.viewport.y + window.viewport.height
       let isBottomWindow = (windowBottomY == maxBottomY)
+      let isActiveWindow = (i == e.windowManager.activeWindowIndex)
 
-      e.renderWindow(buffer, window, lineNumOffset, isBottomWindow)
+      e.renderWindow(buffer, window, lineNumOffset, isBottomWindow, isActiveWindow)
+
+      # Render per-window status line if multi-status line mode is enabled
+      if e.state.showStatusLine and e.state.multiStatusLine:
+        # For bottom windows, place status line above command line (height - 2)
+        # For non-bottom windows, place at window bottom (height - 1)
+        let statusLineY =
+          if isBottomWindow:
+            window.viewport.y + window.viewport.height - 2
+          else:
+            window.viewport.y + window.viewport.height - 1
+        e.state.renderWindowStatusLine(
+          window.buffer, buffer, statusLineY, window.viewport.x, window.viewport.width,
+          isActiveWindow,
+        )
 
       # Draw separator between windows (except for last window)
       if i < e.windowManager.windows.len - 1:
@@ -611,12 +657,23 @@ proc render*(e: Editor, buffer: var Buffer) =
           # Vertical split - draw vertical separator at window boundary
           let sepX = window.viewport.x + window.viewport.width
           if sepX < buffer.area.width:
-            # Calculate separator height (exclude status line space for bottom windows)
+            # Calculate separator height (exclude status line and command line)
             let sepHeight =
-              if isBottomWindow and e.state.showStatusLine:
-                window.viewport.height - 2 # Exclude status line and command line
+              if e.state.showStatusLine:
+                if e.state.multiStatusLine:
+                  if isBottomWindow:
+                    window.viewport.height - 2 # Exclude status line and command line
+                  else:
+                    window.viewport.height - 1 # Exclude per-window status line
+                elif isBottomWindow:
+                  window.viewport.height - 2 # Exclude status line and command line
+                else:
+                  window.viewport.height
               else:
-                window.viewport.height
+                if isBottomWindow:
+                  window.viewport.height - 1 # Exclude command line
+                else:
+                  window.viewport.height
 
             # Draw separator for the content height of this window
             for y in window.viewport.y ..< (window.viewport.y + sepHeight):
@@ -674,7 +731,10 @@ proc render*(e: Editor, buffer: var Buffer) =
     )
 
   # Render status line using active buffer
-  e.state.renderStatusLine(e.activeBuffer(), buffer, statusLineY)
+  # - Single window mode: always render status line at bottom
+  # - Multi-window mode: only render if multiStatusLine is disabled (single status line mode)
+  if e.windowManager.windows.len == 0 or not e.state.multiStatusLine:
+    e.state.renderStatusLine(e.activeBuffer(), buffer, statusLineY)
 
   # Handle command line
   if e.state.mode == EditorMode.Command:

@@ -25,7 +25,7 @@
 ## - Settings (:set)
 ## - Navigation (:123 for line jumping)
 
-import std/options
+import std/[options, strutils]
 
 import pkg/results
 
@@ -40,6 +40,7 @@ type
     cmrGotoLine # Jump to specific line
     cmrVSplit # Vertical split window
     cmrHSplit # Horizontal split window
+    cmrSetMultiStatusLine # Set multi status line
     cmrError # Command error
 
   CommandModeHandler* = ref object ## Handler for Command mode specific commands
@@ -63,6 +64,8 @@ type
       vsplitFilename*: Option[string]
     of cmrHSplit:
       hsplitFilename*: Option[string]
+    of cmrSetMultiStatusLine:
+      enabled*: bool
     of cmrError:
       errorMessage*: string
 
@@ -156,14 +159,20 @@ proc executeSet*(
     handler: CommandModeHandler, option: string, value: Option[string]
 ): CommandModeResult =
   ## Execute set command (:set option=value)
-  # TODO: Implement settings management
-  let optionStr =
-    if value.isSome:
-      option & "=" & value.get
-    else:
-      option
+  case option.toLower
+  of "multistatusline":
+    return CommandModeResult(kind: cmrSetMultiStatusLine, enabled: true)
+  of "nomultistatusline":
+    return CommandModeResult(kind: cmrSetMultiStatusLine, enabled: false)
+  else:
+    # TODO: Implement other settings management
+    let optionStr =
+      if value.isSome:
+        option & "=" & value.get
+      else:
+        option
 
-  return CommandModeResult(kind: cmrMessage, message: "Set: " & optionStr)
+    return CommandModeResult(kind: cmrMessage, message: "Set: " & optionStr)
 
 proc executeHelp*(
     handler: CommandModeHandler, topic: Option[string]

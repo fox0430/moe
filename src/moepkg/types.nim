@@ -77,6 +77,8 @@ type
     statusMessage*: string # Message to display in status line
     lastMotion*: Option[Motion]
     showStatusLine*: bool # Whether to show the status line
+    multiStatusLine*: bool
+      # Whether to show status line for each window (true) or only one at bottom (false)
     showLineCount*: bool # Whether to show line count in status line
     showLinePercentage*: bool # Whether to show line percentage in status line
     showEncoding*: bool # Whether to show file encoding in status line

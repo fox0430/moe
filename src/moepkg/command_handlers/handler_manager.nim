@@ -43,6 +43,7 @@ type
     hrGotoLine # Jump to specific line
     hrVSplit # Vertical split window
     hrHSplit # Horizontal split window
+    hrSetMultiStatusLine # Set multi status line
     hrUnhandled # Command was not handled
     hrError # Error occurred
 
@@ -71,6 +72,8 @@ type
       vsplitFilename*: Option[string]
     of hrHSplit:
       hsplitFilename*: Option[string]
+    of hrSetMultiStatusLine:
+      enabled*: bool
     of hrUnhandled:
       discard
     of hrError:
@@ -162,6 +165,8 @@ proc handleCommandMode*(
     return HandlerResult(kind: hrVSplit, vsplitFilename: r.vsplitFilename)
   of cmrHSplit:
     return HandlerResult(kind: hrHSplit, hsplitFilename: r.hsplitFilename)
+  of cmrSetMultiStatusLine:
+    return HandlerResult(kind: hrSetMultiStatusLine, enabled: r.enabled)
   of cmrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
@@ -220,6 +225,10 @@ proc shouldHSplit*(hrResult: HandlerResult): bool =
   ## Check if we should create a horizontal split
   hrResult.kind == hrHSplit
 
+proc shouldSetMultiStatusLine*(hrResult: HandlerResult): bool =
+  ## Check if we should set multi status line mode
+  hrResult.kind == hrSetMultiStatusLine
+
 proc hasError*(hrResult: HandlerResult): bool =
   ## Check if there was an error
   hrResult.kind == hrError
@@ -255,3 +264,7 @@ proc getHSplitFilename*(hrResult: HandlerResult): Option[string] =
     hrResult.hsplitFilename
   else:
     none(string)
+
+proc getMultiStatusLineEnabled*(hrResult: HandlerResult): bool =
+  ## Get multi status line enabled setting
+  if hrResult.kind == hrSetMultiStatusLine: hrResult.enabled else: false
