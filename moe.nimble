@@ -11,7 +11,7 @@ bin = @["moe"]
 
 requires "nim >= 2.0.10"
 requires "results >= 0.5.1"
-requires "celina >= 0.1.0"
+requires "celina >= 0.1.1"
 
 task release, "Build for release":
   exec "nimble build -d:release"
