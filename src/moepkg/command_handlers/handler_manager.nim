@@ -95,7 +95,7 @@ proc newHandlerManager*(
     newInsertModeHandler(keyBindingRegistry, motionController, commandRegistry)
   let commandHandler =
     newCommandModeHandler(commandLineParser, commandConfig, commandRegistry)
-  let visualHandler = newVisualModeHandler()
+  let visualHandler = newVisualModeHandler(keyBindingRegistry, commandRegistry)
 
   HandlerManager(
     normalHandler: normalHandler,
@@ -180,43 +180,17 @@ proc handleVisualMode*(
     viewport: ViewPort,
     keyCombo: KeyCombo,
 ): HandlerResult =
-  ## Handle Visual mode input using Command Registry
-  let r = manager.visualHandler.handleVisualModeInput(state, buffer, viewport, keyCombo)
-
-  if not r.handled:
-    return HandlerResult(kind: hrUnhandled)
-
-  # Map key to command ID and execute via registry
-  if not keyCombo.isSpecial and keyCombo.modifiers == {}:
-    let commandId =
-      case keyCombo.char
-      of 'h': "visual.move.left"
-      of 'l': "visual.move.right"
-      of 'j': "visual.move.down"
-      of 'k': "visual.move.up"
-      of 'd', 'x': "visual.delete"
-      else: ""
-
-    if commandId != "":
-      let ctx = CommandContext(
-        buffer: buffer,
-        state: state,
-        viewport: viewport,
-        motionController: manager.motionController,
-        keyBindingRegistry: manager.keyBindingRegistry,
-      )
-
-      let cmdResult = manager.commandRegistry.execute(ctx, commandId, @[])
-      if cmdResult.isErr:
-        return HandlerResult(kind: hrError, errorMessage: cmdResult.error)
-
-  # Return mode transition if any
-  if r.newMode.isSome:
-    return HandlerResult(kind: hrHandled, modeTransition: r.newMode, statusMessage: "")
-  else:
+  ## Handle Visual mode input
+  let r = manager.visualHandler.handleVisualModeKey(buffer, state, viewport, keyCombo)
+  case r.kind
+  of vmrHandled:
     return HandlerResult(
-      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+      kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
     )
+  of vmrUnhandled:
+    return HandlerResult(kind: hrUnhandled)
+  of vmrError:
+    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
 proc handleEvent*(
     manager: HandlerManager,

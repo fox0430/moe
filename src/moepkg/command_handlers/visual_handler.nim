@@ -24,13 +24,36 @@
 
 import std/options
 
-import ../[buffer, cursor, modes, types, keybindings]
+import pkg/results
 
-type VisualModeHandler* = ref object ## Handler for Visual mode operations (stateless)
+import ../[buffer, cursor, modes, types, keybindings, commandregistry]
 
-proc newVisualModeHandler*(): VisualModeHandler =
+type
+  VisualModeResultKind* = enum
+    vmrHandled
+    vmrUnhandled
+    vmrError
+
+  VisualModeHandler* = ref object ## Handler for Visual mode operations
+    keyBindingRegistry*: KeyBindingRegistry
+    commandRegistry*: CommandRegistry
+
+  VisualModeResult* = object ## Result of visual mode command execution
+    case kind*: VisualModeResultKind
+    of vmrHandled:
+      modeTransition*: Option[EditorMode]
+    of vmrUnhandled:
+      discard
+    of vmrError:
+      errorMessage*: string
+
+proc newVisualModeHandler*(
+    keyBindingRegistry: KeyBindingRegistry, commandRegistry: CommandRegistry
+): VisualModeHandler =
   ## Create a new Visual mode handler
-  VisualModeHandler()
+  VisualModeHandler(
+    keyBindingRegistry: keyBindingRegistry, commandRegistry: commandRegistry
+  )
 
 proc initSelection*(state: EditorState, buffer: TextBuffer) =
   ## Initialize visual selection at current cursor position
@@ -92,34 +115,76 @@ proc isPositionInSelection*(selection: VisualSelection, pos: BufferPosition): bo
     # Position is on a middle line
     return true
 
-proc handleVisualModeInput*(
+proc executeCommand*(
     handler: VisualModeHandler,
-    state: EditorState,
     buffer: TextBuffer,
+    state: EditorState,
+    viewport: ViewPort,
+    commandId: string,
+    args: seq[string] = @[],
+): VisualModeResult =
+  ## Execute a command using the CommandRegistry
+  let ctx = CommandContext(
+    buffer: buffer,
+    state: state,
+    viewport: viewport,
+    motionController: nil, # Visual mode doesn't use motion controller
+    keyBindingRegistry: handler.keyBindingRegistry,
+  )
+
+  let r = handler.commandRegistry.execute(ctx, commandId, args)
+  if r.isOk:
+    # Check if mode changed
+    let modeTransition =
+      if state.mode != EditorMode.Visual:
+        some(state.mode)
+      else:
+        none(EditorMode)
+    return VisualModeResult(kind: vmrHandled, modeTransition: modeTransition)
+  else:
+    return VisualModeResult(kind: vmrError, errorMessage: r.error)
+
+proc handleVisualModeKey*(
+    handler: VisualModeHandler,
+    buffer: TextBuffer,
+    state: EditorState,
     viewport: ViewPort,
     keyCombo: KeyCombo,
-): ModeTransition =
-  ## Handle input in Visual mode
-  ## Returns mode transition if mode should change
-  ## NOTE: Actual command logic is in commandregistry.nim to avoid circular dependencies
+): VisualModeResult =
+  ## Main entry point for handling Visual mode key presses
 
+  # Special handling for ESC to clear selection
   if keyCombo.isSpecial and keyCombo.special == skEscape:
-    # Handle ESC key
     state.clearSelection()
-    return ModeTransition(newMode: some(state.previousMode), handled: true)
 
-  if keyCombo.isSpecial or keyCombo.modifiers != {}:
-    # Only handle regular character keys for movement
-    return ModeTransition(newMode: none(EditorMode), handled: false)
+  # Try to find a binding for this key
+  let binding = handler.keyBindingRegistry.findBinding(EditorMode.Visual, keyCombo)
 
-  # Simple key mapping - delegates to command registry via handler_manager
-  case keyCombo.char
-  of 'h', 'l', 'j', 'k':
-    # Movement keys - handled
-    return ModeTransition(newMode: none(EditorMode), handled: true)
-  of 'd', 'x':
-    # Delete - switches mode
-    return ModeTransition(newMode: some(state.previousMode), handled: true)
-  else:
-    # Unhandled key
-    return ModeTransition(newMode: none(EditorMode), handled: false)
+  if binding.isNone:
+    return VisualModeResult(kind: vmrUnhandled)
+
+  let cmd = binding.get
+
+  # Create command context
+  let ctx = CommandContext(
+    buffer: buffer,
+    state: state,
+    viewport: viewport,
+    motionController: nil, # Visual mode doesn't use motion controller
+    keyBindingRegistry: handler.keyBindingRegistry,
+  )
+
+  # Execute command through registry
+  let cmdResult = handler.commandRegistry.executeCommand(ctx, cmd)
+
+  if cmdResult.isErr:
+    return VisualModeResult(kind: vmrError, errorMessage: cmdResult.error)
+
+  # Check for mode transition
+  let modeTransition =
+    if state.mode != EditorMode.Visual:
+      some(state.mode)
+    else:
+      none(EditorMode)
+
+  return VisualModeResult(kind: vmrHandled, modeTransition: modeTransition)

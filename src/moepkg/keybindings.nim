@@ -827,6 +827,62 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.Normal, ":", "switch-to-command")
   registry.bindKey(EditorMode.Normal, "v", "switch-to-visual") # Enter visual mode
 
+  # Visual mode commands
+  registry.registerCommand(
+    Command(
+      name: "visual-move-left",
+      description: "Move left in visual mode",
+      kind: ctAction,
+      commandId: "visual.move.left",
+      args: @[],
+    )
+  )
+  registry.registerCommand(
+    Command(
+      name: "visual-move-right",
+      description: "Move right in visual mode",
+      kind: ctAction,
+      commandId: "visual.move.right",
+      args: @[],
+    )
+  )
+  registry.registerCommand(
+    Command(
+      name: "visual-move-up",
+      description: "Move up in visual mode",
+      kind: ctAction,
+      commandId: "visual.move.up",
+      args: @[],
+    )
+  )
+  registry.registerCommand(
+    Command(
+      name: "visual-move-down",
+      description: "Move down in visual mode",
+      kind: ctAction,
+      commandId: "visual.move.down",
+      args: @[],
+    )
+  )
+  registry.registerCommand(
+    Command(
+      name: "visual-delete",
+      description: "Delete visual selection",
+      kind: ctAction,
+      commandId: "visual.delete",
+      args: @[],
+    )
+  )
+
+  # Visual mode key bindings
+  registry.bindKey(EditorMode.Visual, "h", "visual-move-left")
+  registry.bindKey(EditorMode.Visual, "l", "visual-move-right")
+  registry.bindKey(EditorMode.Visual, "j", "visual-move-down")
+  registry.bindKey(EditorMode.Visual, "k", "visual-move-up")
+  registry.bindKey(EditorMode.Visual, "d", "visual-delete")
+  registry.bindKey(EditorMode.Visual, "x", "visual-delete")
+  registry.bindKey(EditorMode.Visual, "Escape", "switch-to-normal") # Exit to normal mode
+
   # Insert mode key bindings
   registry.bindKey(EditorMode.Insert, "Escape", "switch-to-normal") # Exit to normal mode
 

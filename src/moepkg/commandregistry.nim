@@ -28,9 +28,7 @@ import pkg/results
 
 import types, buffer, motion, keybindings, modes
 
-# Import visual mode helper functions - these don't have circular dependencies
-from command_handlers/visual_handler import
-  clearSelection, updateSelection, getSelectionRange
+import command_handlers/[visual_commands, insert_commands, normal_commands]
 
 type
   ## Built-in command identifiers
@@ -428,167 +426,80 @@ proc registerMotionCommand(
     maxArgs,
   )
 
-## Command handler implementations
+## Command handler wrappers (delegate to mode-specific command modules)
+
 proc handleModeSwitch(ctx: CommandContext, targetMode: EditorMode): Result[(), string] =
   ## Handle switching between editor modes
-  ctx.state.mode = targetMode
-  # Clear any pending key sequences when switching modes
-  if ctx.keyBindingRegistry != nil:
-    ctx.keyBindingRegistry.clearSequence
-  return ok(())
+  switchMode(ctx.state, targetMode, ctx.keyBindingRegistry)
+  ok(())
 
 proc handleInsertChar(ctx: CommandContext, args: seq[string]): Result[(), string] =
   ## Handle character insertion in insert mode
   if args.len != 1 or args[0].len != 1:
     return err("Insert character requires exactly one character")
-
-  let ch = args[0][0]
-  let pos = ctx.buffer.cursor
-  ctx.buffer.insertText(pos, $ch)
-
-  # Move cursor right after insertion
-  ctx.buffer.cursor.column += 1
-  return ok(())
+  insertChar(ctx.buffer, args[0][0])
+  ok(())
 
 proc handleBackspace(ctx: CommandContext): Result[(), string] =
   ## Handle backspace key in insert mode
-  let pos = ctx.buffer.cursor
-  if pos.column > 0:
-    # Move cursor back and delete
-    ctx.buffer.cursor.column -= 1
-    ctx.buffer.deleteChar(ctx.buffer.cursor)
-  elif pos.line > 0:
-    # At start of line, join with previous line
-    let prevLine = ctx.buffer.getLine(pos.line - 1)
-    ctx.buffer.cursor.line -= 1
-    ctx.buffer.cursor.column = prevLine.len
-    # Join lines by deleting the newline
-    ctx.buffer.deleteChar(ctx.buffer.cursor)
-  return ok(())
+  insertBackspace(ctx.buffer)
+  ok(())
 
 proc handleDelete(ctx: CommandContext): Result[(), string] =
   ## Handle delete key in insert mode
-  ctx.buffer.deleteChar(ctx.buffer.cursor)
-  return ok(())
+  insertDelete(ctx.buffer)
+  ok(())
 
 proc handleNewline(ctx: CommandContext): Result[(), string] =
   ## Handle newline insertion
-  let pos = ctx.buffer.cursor
-  ctx.buffer.insertText(pos, "\n")
-
-  # Move cursor to start of new line
-  ctx.buffer.cursor.line += 1
-  ctx.buffer.cursor.column = 0
-  return ok(())
+  insertNewline(ctx.buffer)
+  ok(())
 
 proc handleInsertLineBelow(ctx: CommandContext): Result[(), string] =
   ## Handle 'o' command - insert line below and enter insert mode
-  let currentLine = ctx.buffer.cursor.line
-
-  # Move to end of current line
-  let lineContent = ctx.buffer.getLine(currentLine)
-  ctx.buffer.cursor.column = lineContent.len
-
-  # Insert newline
-  ctx.buffer.insertText(ctx.buffer.cursor, "\n")
-
-  # Move cursor to new line
-  ctx.buffer.cursor.line = currentLine + 1
-  ctx.buffer.cursor.column = 0
-
-  # Switch to insert mode
-  return handleModeSwitch(ctx, EditorMode.Insert)
+  insertLineBelow(ctx.buffer, ctx.state)
+  ok(())
 
 proc handleInsertLineAbove(ctx: CommandContext): Result[(), string] =
   ## Handle 'O' command - insert line above and enter insert mode
-  let currentLine = ctx.buffer.cursor.line
-
-  # Move to start of current line
-  ctx.buffer.cursor.column = 0
-
-  # Insert newline
-  ctx.buffer.insertText(ctx.buffer.cursor, "\n")
-
-  # Move cursor to the new line (which is the current line)
-  ctx.buffer.cursor.line = currentLine
-  ctx.buffer.cursor.column = 0
-
-  # Switch to insert mode
-  return handleModeSwitch(ctx, EditorMode.Insert)
+  insertLineAbove(ctx.buffer, ctx.state)
+  ok(())
 
 proc handleAppend(ctx: CommandContext): Result[(), string] =
   ## Handle 'a' command - move cursor right and enter insert mode
-  let lineContent = ctx.buffer.getLine(ctx.buffer.cursor.line)
-
-  # Only move right if not at end of line
-  if ctx.buffer.cursor.column < lineContent.len:
-    ctx.buffer.cursor.column += 1
-
-  # Switch to insert mode
-  return handleModeSwitch(ctx, EditorMode.Insert)
+  insertAppend(ctx.buffer, ctx.state)
+  ok(())
 
 proc handleAppendEnd(ctx: CommandContext): Result[(), string] =
   ## Handle 'A' command - move to end of line and enter insert mode
-  let lineContent = ctx.buffer.getLine(ctx.buffer.cursor.line)
-  ctx.buffer.cursor.column = lineContent.len
+  insertAppendEnd(ctx.buffer, ctx.state)
+  ok(())
 
-  # Switch to insert mode
-  return handleModeSwitch(ctx, EditorMode.Insert)
-
-## Visual mode command handlers
+## Visual mode command handlers (wrappers for visual_handler functions)
 
 proc handleVisualMoveLeft(ctx: CommandContext): Result[(), string] =
   ## Move left in visual mode and update selection
-  if ctx.buffer.cursor.column > 0:
-    ctx.buffer.cursor.column -= 1
-    ctx.state.updateSelection(ctx.buffer.cursor)
-    ctx.state.needsFullRedraw = true
+  visualMoveLeft(ctx.buffer, ctx.state)
   ok(())
 
 proc handleVisualMoveRight(ctx: CommandContext): Result[(), string] =
   ## Move right in visual mode and update selection
-  if ctx.buffer.cursor.column < ctx.buffer.getCurrentLineLen:
-    ctx.buffer.cursor.column += 1
-    ctx.state.updateSelection(ctx.buffer.cursor)
-    ctx.state.needsFullRedraw = true
+  visualMoveRight(ctx.buffer, ctx.state)
   ok(())
 
 proc handleVisualMoveUp(ctx: CommandContext): Result[(), string] =
   ## Move up in visual mode and update selection
-  if ctx.buffer.cursor.line > 0:
-    ctx.buffer.cursor.line -= 1
-    # Clamp cursor to new line length
-    let newLineLen = ctx.buffer.getCurrentLineLen
-    if ctx.buffer.cursor.column > newLineLen:
-      ctx.buffer.cursor.column = newLineLen
-    ctx.state.updateSelection(ctx.buffer.cursor)
-    ctx.state.needsFullRedraw = true
+  visualMoveUp(ctx.buffer, ctx.state)
   ok(())
 
 proc handleVisualMoveDown(ctx: CommandContext): Result[(), string] =
   ## Move down in visual mode and update selection
-  if ctx.buffer.cursor.line < ctx.buffer.len - 1:
-    ctx.buffer.cursor.line += 1
-    # Clamp cursor to new line length
-    let newLineLen = ctx.buffer.getCurrentLineLen
-    if ctx.buffer.cursor.column > newLineLen:
-      ctx.buffer.cursor.column = newLineLen
-    ctx.state.updateSelection(ctx.buffer.cursor)
-    ctx.state.needsFullRedraw = true
+  visualMoveDown(ctx.buffer, ctx.state)
   ok(())
 
 proc handleVisualDelete(ctx: CommandContext): Result[(), string] =
   ## Delete visual selection
-  if ctx.state.visualSelection.active:
-    let (selStart, selEnd) = ctx.state.visualSelection.getSelectionRange()
-    ctx.buffer.deleteRange(selStart, selEnd)
-    # Move cursor to start of deleted range
-    ctx.buffer.cursor = selStart
-    ctx.state.clearSelection()
-    ctx.state.needsFullRedraw = true
-    # Return to previous mode
-    ctx.state.previousMode = ctx.state.mode
-    ctx.state.mode = ctx.state.previousMode
+  visualDelete(ctx.buffer, ctx.state)
   ok(())
 
 ## Register built-in commands

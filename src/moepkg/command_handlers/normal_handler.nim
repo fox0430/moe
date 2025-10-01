@@ -19,10 +19,7 @@
 
 ## Normal mode command handler
 ##
-## This module handles commands specific to Normal mode, including:
-## - Movement commands (h, j, k, l, w, b, etc.)
-## - Mode switching commands (i, a, o, O, :)
-## - Text manipulation commands (d, y, c, etc.)
+## This module handles commands specific to Normal mode.
 
 import std/options
 
