@@ -29,6 +29,7 @@ import std/options
 import pkg/results
 
 import ../[types, buffer, modes, motion, keybindings, commandregistry]
+import visual_handler
 
 type
   NormalModeResultKind* = enum
@@ -93,7 +94,10 @@ proc handleMotionCommand*(
   return handler.motionController.executeMotion(motionCmd)
 
 proc handleModeSwitch*(
-    handler: NormalModeHandler, targetMode: EditorMode, state: EditorState
+    handler: NormalModeHandler,
+    targetMode: EditorMode,
+    state: EditorState,
+    buffer: TextBuffer,
 ): NormalModeResult =
   ## Handle mode switching commands
   case targetMode
@@ -103,6 +107,10 @@ proc handleModeSwitch*(
     # Initialize command mode state
     state.commandText = ":"
     return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Command))
+  of EditorMode.Visual:
+    # Initialize visual selection at current cursor position
+    state.initSelection(buffer)
+    return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Visual))
   of EditorMode.Normal:
     # Already in Normal mode
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
@@ -240,7 +248,7 @@ proc handleNormalModeKey*(
     else:
       return NormalModeResult(kind: nmrError, errorMessage: cmdResult.error)
   of ctModeSwitch:
-    return handler.handleModeSwitch(cmd.targetMode, state)
+    return handler.handleModeSwitch(cmd.targetMode, state, buffer)
   of ctAction:
     # Handle various actions based on command ID
     case cmd.commandId

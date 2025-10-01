@@ -28,6 +28,10 @@ import pkg/results
 
 import types, buffer, motion, keybindings, modes
 
+# Import visual mode helper functions - these don't have circular dependencies
+from command_handlers/visual_handler import
+  clearSelection, updateSelection, getSelectionRange
+
 type
   ## Built-in command identifiers
   BuiltinCommandId* = enum
@@ -70,6 +74,12 @@ type
     bcInsertLineAbove = "insert.line.above"
     bcInsertAppend = "insert.append"
     bcInsertAppendEnd = "insert.append.end"
+    # Visual mode operations
+    bcVisualMoveLeft = "visual.move.left"
+    bcVisualMoveRight = "visual.move.right"
+    bcVisualMoveUp = "visual.move.up"
+    bcVisualMoveDown = "visual.move.down"
+    bcVisualDelete = "visual.delete"
 
   ## Command ID can be builtin or custom
   CommandIdKind* = enum
@@ -525,6 +535,62 @@ proc handleAppendEnd(ctx: CommandContext): Result[(), string] =
   # Switch to insert mode
   return handleModeSwitch(ctx, EditorMode.Insert)
 
+## Visual mode command handlers
+
+proc handleVisualMoveLeft(ctx: CommandContext): Result[(), string] =
+  ## Move left in visual mode and update selection
+  if ctx.buffer.cursor.column > 0:
+    ctx.buffer.cursor.column -= 1
+    ctx.state.updateSelection(ctx.buffer.cursor)
+    ctx.state.needsFullRedraw = true
+  ok(())
+
+proc handleVisualMoveRight(ctx: CommandContext): Result[(), string] =
+  ## Move right in visual mode and update selection
+  if ctx.buffer.cursor.column < ctx.buffer.getCurrentLineLen:
+    ctx.buffer.cursor.column += 1
+    ctx.state.updateSelection(ctx.buffer.cursor)
+    ctx.state.needsFullRedraw = true
+  ok(())
+
+proc handleVisualMoveUp(ctx: CommandContext): Result[(), string] =
+  ## Move up in visual mode and update selection
+  if ctx.buffer.cursor.line > 0:
+    ctx.buffer.cursor.line -= 1
+    # Clamp cursor to new line length
+    let newLineLen = ctx.buffer.getCurrentLineLen
+    if ctx.buffer.cursor.column > newLineLen:
+      ctx.buffer.cursor.column = newLineLen
+    ctx.state.updateSelection(ctx.buffer.cursor)
+    ctx.state.needsFullRedraw = true
+  ok(())
+
+proc handleVisualMoveDown(ctx: CommandContext): Result[(), string] =
+  ## Move down in visual mode and update selection
+  if ctx.buffer.cursor.line < ctx.buffer.len - 1:
+    ctx.buffer.cursor.line += 1
+    # Clamp cursor to new line length
+    let newLineLen = ctx.buffer.getCurrentLineLen
+    if ctx.buffer.cursor.column > newLineLen:
+      ctx.buffer.cursor.column = newLineLen
+    ctx.state.updateSelection(ctx.buffer.cursor)
+    ctx.state.needsFullRedraw = true
+  ok(())
+
+proc handleVisualDelete(ctx: CommandContext): Result[(), string] =
+  ## Delete visual selection
+  if ctx.state.visualSelection.active:
+    let (selStart, selEnd) = ctx.state.visualSelection.getSelectionRange()
+    ctx.buffer.deleteRange(selStart, selEnd)
+    # Move cursor to start of deleted range
+    ctx.buffer.cursor = selStart
+    ctx.state.clearSelection()
+    ctx.state.needsFullRedraw = true
+    # Return to previous mode
+    ctx.state.previousMode = ctx.state.mode
+    ctx.state.mode = ctx.state.previousMode
+  ok(())
+
 ## Register built-in commands
 proc registerBuiltinCommands*(registry: CommandRegistry) =
   ## Register all built-in commands
@@ -675,6 +741,57 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     "Move to end of line and enter insert mode",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       handleAppendEnd(ctx),
+    0,
+    0,
+  )
+
+  # Visual mode movement commands
+  registry.register(
+    builtin(bcVisualMoveLeft),
+    "Visual Move Left",
+    "Move left and update visual selection",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleVisualMoveLeft(ctx),
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcVisualMoveRight),
+    "Visual Move Right",
+    "Move right and update visual selection",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleVisualMoveRight(ctx),
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcVisualMoveUp),
+    "Visual Move Up",
+    "Move up and update visual selection",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleVisualMoveUp(ctx),
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcVisualMoveDown),
+    "Visual Move Down",
+    "Move down and update visual selection",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleVisualMoveDown(ctx),
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcVisualDelete),
+    "Visual Delete",
+    "Delete visual selection",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleVisualDelete(ctx),
     0,
     0,
   )

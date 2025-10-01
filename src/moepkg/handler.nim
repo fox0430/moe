@@ -36,9 +36,9 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
 
   let keyCombo = keyComboOpt.get
 
-  # Handle Escape to exit Command mode
+  # Handle Escape to exit Command mode and return to previous mode
   if keyCombo.isSpecial and keyCombo.special == skEscape:
-    e.state.mode = EditorMode.Normal
+    e.state.mode = e.state.previousMode
     e.state.commandText = ""
     return true
 
@@ -88,8 +88,10 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
       # Handle mode transitions
       let modeTransition = r.getModeTransition()
       if modeTransition.isSome:
+        e.state.previousMode = e.state.mode
         e.state.mode = modeTransition.get
       else:
+        e.state.previousMode = e.state.mode
         e.state.mode = EditorMode.Normal # Default back to normal
 
       # Set status message if any
@@ -97,8 +99,8 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
       if statusMsg.len > 0:
         e.state.statusMessage = statusMsg
     else:
-      # Empty command, just return to normal mode
-      e.state.mode = EditorMode.Normal
+      # Empty command, just return to previous mode
+      e.state.mode = e.state.previousMode
 
     # Clear command text
     e.state.commandText = ""
@@ -147,10 +149,9 @@ proc handleEvent*(e: Editor, event: Event): bool =
             # Unknown window command, just cancel
             return true
 
-      # Check for Ctrl-w (ASCII 23) to enter window command mode
-      if not keyCombo.isSpecial:
-        let charCode = ord(keyCombo.char)
-        if charCode == 23: # Ctrl-w
+      # Check for Ctrl-w to enter window command mode
+      if not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers:
+        if keyCombo.char == 'w':
           e.state.command = "window_cmd"
           e.state.statusMessage = "-- (window) --"
           return true
@@ -208,6 +209,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
   # Handle mode transitions
   let modeTransition = r.getModeTransition()
   if modeTransition.isSome:
+    e.state.previousMode = e.state.mode
     e.state.mode = modeTransition.get
 
   # Set status message if any

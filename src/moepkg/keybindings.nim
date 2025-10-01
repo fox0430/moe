@@ -753,6 +753,15 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
     )
   )
 
+  registry.registerCommand(
+    Command(
+      name: "switch-to-visual",
+      description: "Switch to visual mode",
+      kind: ctModeSwitch,
+      targetMode: EditorMode.Visual,
+    )
+  )
+
   # Register o and O commands
   registry.registerCommand(
     Command(
@@ -816,6 +825,7 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
     )
   )
   registry.bindKey(EditorMode.Normal, ":", "switch-to-command")
+  registry.bindKey(EditorMode.Normal, "v", "switch-to-visual") # Enter visual mode
 
   # Insert mode key bindings
   registry.bindKey(EditorMode.Insert, "Escape", "switch-to-normal") # Exit to normal mode

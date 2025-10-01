@@ -24,7 +24,7 @@ import pkg/[celina, results]
 import
   buffer, cursor, types, commands, keybindings, commandregistry, modes, commandline,
   commandconfig, statusline, windowmanager
-import command_handlers/handler_manager
+import command_handlers/[handler_manager, visual_handler]
 
 type Editor* = ref object
   textBuffer*: TextBuffer
@@ -221,6 +221,8 @@ proc newEditor*(): Editor =
     textBuffer: newTextBuffer(),
     state: EditorState(
       cursor: CursorPosition(x: 0, y: 0),
+      mode: EditorMode.Normal,
+      previousMode: EditorMode.Normal,
       showStatusLine: true,
       multiStatusLine: true, # Default to multiple status line
       showLineCount: true,
@@ -345,6 +347,18 @@ proc renderTextBuffer(e: Editor, buffer: var Buffer, area: Rect) =
     lineCount = e.textBuffer.len
     normalStyle =
       Style(fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {})
+    visualStyle = Style(
+      fg: ColorValue(kind: Default),
+      bg: ColorValue(kind: Indexed, indexed: Color.Blue),
+      modifiers: {},
+    )
+
+  # Get visual selection range if active
+  var selStart, selEnd: BufferPosition
+  let hasSelection =
+    e.state.mode == EditorMode.Visual and e.state.visualSelection.active
+  if hasSelection:
+    (selStart, selEnd) = e.state.visualSelection.getSelectionRange()
 
   var
     screenY = 0
@@ -373,7 +387,23 @@ proc renderTextBuffer(e: Editor, buffer: var Buffer, area: Rect) =
           displayLine = line[startCol ..< endCol]
 
         if displayLine.len > 0:
-          buffer.setString(area.x, area.y + screenY, displayLine, normalStyle)
+          # Render with selection highlighting if in visual mode
+          if hasSelection and lineIndex >= selStart.line and lineIndex <= selEnd.line:
+            # Render character by character to apply selection style
+            for col in startCol ..< endCol:
+              let
+                pos = BufferPosition(line: lineIndex, column: col)
+                style =
+                  if e.state.visualSelection.isPositionInSelection(pos):
+                    visualStyle
+                  else:
+                    normalStyle
+                charStr = $line[col]
+              buffer.setString(
+                area.x + (col - startCol), area.y + screenY, charStr, style
+              )
+          else:
+            buffer.setString(area.x, area.y + screenY, displayLine, normalStyle)
 
         inc screenY
         startCol += maxWidth
@@ -386,7 +416,22 @@ proc renderTextBuffer(e: Editor, buffer: var Buffer, area: Rect) =
           ""
 
       if displayLine.len > 0:
-        buffer.setString(area.x, area.y + screenY, displayLine, normalStyle)
+        # Render with selection highlighting if in visual mode
+        if hasSelection and lineIndex >= selStart.line and lineIndex <= selEnd.line:
+          # Render character by character to apply selection style
+          for i in 0 ..< displayLine.len:
+            let
+              col = e.viewport.leftColumn + i
+              pos = BufferPosition(line: lineIndex, column: col)
+              style =
+                if e.state.visualSelection.isPositionInSelection(pos):
+                  visualStyle
+                else:
+                  normalStyle
+              charStr = $displayLine[i]
+            buffer.setString(area.x + i, area.y + screenY, charStr, style)
+        else:
+          buffer.setString(area.x, area.y + screenY, displayLine, normalStyle)
 
       inc screenY
 
@@ -448,6 +493,12 @@ proc renderWindow(
   let normalStyle =
     Style(fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {})
 
+  let visualStyle = Style(
+    fg: ColorValue(kind: Default),
+    bg: ColorValue(kind: Indexed, indexed: Color.Blue),
+    modifiers: {},
+  )
+
   let lineNumStyle = Style(
     fg: ColorValue(kind: Indexed, indexed: Color.BrightBlack),
     bg: ColorValue(kind: Default),
@@ -459,6 +510,14 @@ proc renderWindow(
     bg: ColorValue(kind: Default),
     modifiers: {StyleModifier.Bold},
   )
+
+  # Get visual selection range if active
+  var selStart, selEnd: BufferPosition
+  let hasSelection =
+    e.state.mode == EditorMode.Visual and e.state.visualSelection.active and
+    window.active
+  if hasSelection:
+    (selStart, selEnd) = e.state.visualSelection.getSelectionRange()
 
   var
     screenY = 0
@@ -519,12 +578,30 @@ proc renderWindow(
         if displayLine.len > 0 and textScreenX < buffer.area.width:
           let displayWidth = min(displayLine.len, maxWidth)
           if displayWidth > 0:
-            buffer.setString(
-              textScreenX,
-              currentActualScreenY,
-              displayLine[0 ..< displayWidth],
-              normalStyle,
-            )
+            # Render with selection highlighting if in visual mode
+            if hasSelection and lineIndex >= selStart.line and lineIndex <= selEnd.line:
+              # Render character by character to apply selection style
+              for i in 0 ..< displayWidth:
+                let
+                  col = startCol + i
+                  pos = BufferPosition(line: lineIndex, column: col)
+                  style =
+                    if e.state.visualSelection.isPositionInSelection(pos):
+                      visualStyle
+                    else:
+                      normalStyle
+                  charStr = $displayLine[i]
+                if textScreenX + i < buffer.area.width:
+                  buffer.setString(
+                    textScreenX + i, currentActualScreenY, charStr, style
+                  )
+            else:
+              buffer.setString(
+                textScreenX,
+                currentActualScreenY,
+                displayLine[0 ..< displayWidth],
+                normalStyle,
+              )
 
         inc screenY
         inc wrapLineCount
@@ -558,9 +635,25 @@ proc renderWindow(
       if displayLine.len > 0 and textScreenX < buffer.area.width:
         let maxWidth = min(displayLine.len, window.viewport.width - lineNumOffset)
         if maxWidth > 0:
-          buffer.setString(
-            textScreenX, actualScreenY, displayLine[0 ..< maxWidth], normalStyle
-          )
+          # Render with selection highlighting if in visual mode
+          if hasSelection and lineIndex >= selStart.line and lineIndex <= selEnd.line:
+            # Render character by character to apply selection style
+            for i in 0 ..< maxWidth:
+              let
+                col = window.viewport.leftColumn + i
+                pos = BufferPosition(line: lineIndex, column: col)
+                style =
+                  if e.state.visualSelection.isPositionInSelection(pos):
+                    visualStyle
+                  else:
+                    normalStyle
+                charStr = $displayLine[i]
+              if textScreenX + i < buffer.area.width:
+                buffer.setString(textScreenX + i, actualScreenY, charStr, style)
+          else:
+            buffer.setString(
+              textScreenX, actualScreenY, displayLine[0 ..< maxWidth], normalStyle
+            )
 
       inc screenY
 

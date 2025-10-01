@@ -150,6 +150,14 @@ proc getLine*(b: TextBuffer, lineIndex: int): string =
 proc getLineLen*(b: TextBuffer, lineIndex: int): int =
   b.getLine(lineIndex).len
 
+proc getCurrentLine*(b: TextBuffer): string =
+  case b.backendKind
+  of GapBuffer:
+    b.gapBuffer.getLine(b.cursor.line)
+
+proc getCurrentLineLen*(b: TextBuffer): int {.inline.} =
+  b.getCurrentLine.len
+
 proc charToBytePos*(text: string, charPos: int): int =
   ## Convert character position to byte position (Unicode-aware)
   var currentChar = 0
@@ -192,6 +200,83 @@ proc deleteLine*(b: TextBuffer, lineIndex: int) =
   case b.backendKind
   of GapBuffer:
     b.gapBuffer.deleteLine(lineIndex)
+
+  b.modified = true
+
+proc deleteRange*(b: TextBuffer, startPos, endPos: BufferPosition) =
+  ## Delete text from startPos to endPos (inclusive)
+  ## Assumes startPos <= endPos (normalized range)
+  ## If selection extends to/past line end, includes the newline
+  case b.backendKind
+  of GapBuffer:
+    if startPos.line == endPos.line:
+      # Single line deletion
+      let line = b.getLine(startPos.line)
+      let lineLen = line.charLen
+
+      # Check if selection extends to or past line end (includes newline)
+      if endPos.column >= lineLen:
+        # Delete from startPos to end of line, then join with next line
+        if endPos.line < b.len - 1:
+          # Multi-line: join with next line
+          let nextLine = b.getLine(endPos.line + 1)
+          var newLine = ""
+          if startPos.column < lineLen:
+            newLine = line.substr(0, startPos.column - 1)
+          newLine &= nextLine
+
+          # Delete current and next line, insert combined
+          b.gapBuffer.deleteLine(endPos.line + 1)
+          b.gapBuffer.deleteLine(startPos.line)
+          b.gapBuffer.insertLine(startPos.line, newLine)
+        else:
+          # Last line: just delete to end
+          var newLine = ""
+          if startPos.column < lineLen:
+            newLine = line.substr(0, startPos.column - 1)
+          b.gapBuffer.deleteLine(startPos.line)
+          b.gapBuffer.insertLine(startPos.line, newLine)
+      elif startPos.column < lineLen and endPos.column < lineLen:
+        # Normal single-line deletion within bounds
+        var newLine = line
+        for i in countdown(endPos.column, startPos.column):
+          if i < newLine.charLen:
+            newLine = newLine.deleteCharAt(i)
+
+        b.gapBuffer.deleteLine(startPos.line)
+        b.gapBuffer.insertLine(startPos.line, newLine)
+    else:
+      # Multi-line deletion
+      let
+        startLine = b.getLine(startPos.line)
+        endLine = b.getLine(endPos.line)
+        endLineLen = endLine.charLen
+
+      # Create new combined line
+      var newLine = ""
+
+      # Keep chars before selection start
+      if startPos.column < startLine.charLen:
+        newLine = startLine.substr(0, startPos.column - 1)
+
+      # If endPos is at or past line end, delete the newline (join lines)
+      # Otherwise, keep chars after selection end
+      if endPos.column < endLineLen:
+        # Selection ends within the line - keep remaining chars
+        newLine &= endLine.substr(endPos.column + 1)
+      elif endPos.line < b.len - 1:
+        # Selection extends to/past line end - join with next line instead
+        let nextLine = b.getLine(endPos.line + 1)
+        newLine &= nextLine
+        # Delete one more line (the next line that we're joining)
+        b.gapBuffer.deleteLine(endPos.line + 1)
+
+      # Delete all lines from startPos.line to endPos.line
+      for i in countdown(endPos.line, startPos.line):
+        b.gapBuffer.deleteLine(i)
+
+      # Insert the combined line
+      b.gapBuffer.insertLine(startPos.line, newLine)
 
   b.modified = true
 

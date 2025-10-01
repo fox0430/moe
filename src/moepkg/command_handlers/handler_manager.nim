@@ -31,9 +31,9 @@ import
     types, buffer, modes, motion, keybindings, commandline, commandconfig,
     commandregistry,
   ]
-import normal_handler, insert_handler, command_handler
+import normal_handler, insert_handler, command_handler, visual_handler
 
-export normal_handler, insert_handler, command_handler
+export normal_handler, insert_handler, command_handler, visual_handler
 
 type
   HandlerResultKind* = enum
@@ -51,6 +51,7 @@ type
     normalHandler*: NormalModeHandler
     insertHandler*: InsertModeHandler
     commandHandler*: CommandModeHandler
+    visualHandler*: VisualModeHandler
     motionController*: MotionController
     keyBindingRegistry*: KeyBindingRegistry
     commandLineParser*: CommandLineParser
@@ -94,11 +95,13 @@ proc newHandlerManager*(
     newInsertModeHandler(keyBindingRegistry, motionController, commandRegistry)
   let commandHandler =
     newCommandModeHandler(commandLineParser, commandConfig, commandRegistry)
+  let visualHandler = newVisualModeHandler()
 
   HandlerManager(
     normalHandler: normalHandler,
     insertHandler: insertHandler,
     commandHandler: commandHandler,
+    visualHandler: visualHandler,
     motionController: motionController,
     keyBindingRegistry: keyBindingRegistry,
     commandLineParser: commandLineParser,
@@ -170,6 +173,51 @@ proc handleCommandMode*(
   of cmrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
+proc handleVisualMode*(
+    manager: HandlerManager,
+    buffer: TextBuffer,
+    state: EditorState,
+    viewport: ViewPort,
+    keyCombo: KeyCombo,
+): HandlerResult =
+  ## Handle Visual mode input using Command Registry
+  let r = manager.visualHandler.handleVisualModeInput(state, buffer, viewport, keyCombo)
+
+  if not r.handled:
+    return HandlerResult(kind: hrUnhandled)
+
+  # Map key to command ID and execute via registry
+  if not keyCombo.isSpecial and keyCombo.modifiers == {}:
+    let commandId =
+      case keyCombo.char
+      of 'h': "visual.move.left"
+      of 'l': "visual.move.right"
+      of 'j': "visual.move.down"
+      of 'k': "visual.move.up"
+      of 'd', 'x': "visual.delete"
+      else: ""
+
+    if commandId != "":
+      let ctx = CommandContext(
+        buffer: buffer,
+        state: state,
+        viewport: viewport,
+        motionController: manager.motionController,
+        keyBindingRegistry: manager.keyBindingRegistry,
+      )
+
+      let cmdResult = manager.commandRegistry.execute(ctx, commandId, @[])
+      if cmdResult.isErr:
+        return HandlerResult(kind: hrError, errorMessage: cmdResult.error)
+
+  # Return mode transition if any
+  if r.newMode.isSome:
+    return HandlerResult(kind: hrHandled, modeTransition: r.newMode, statusMessage: "")
+  else:
+    return HandlerResult(
+      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+    )
+
 proc handleEvent*(
     manager: HandlerManager,
     buffer: TextBuffer,
@@ -199,6 +247,8 @@ proc handleEvent*(
     # Command mode is handled differently - through text input
     # This should not be called for command mode key events
     return HandlerResult(kind: hrUnhandled)
+  of EditorMode.Visual:
+    return manager.handleVisualMode(buffer, state, viewport, keyCombo)
 
 # Utility functions for HandlerResult
 proc wasHandled*(hrResult: HandlerResult): bool =

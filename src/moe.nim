@@ -63,11 +63,9 @@ proc main() =
     # Set cursor style based on editor mode
     case editor.state.mode
     of EditorMode.Insert:
-      app.setCursorStyle(CursorStyle.SteadyBar) # I-beam cursor for Insert mode
-    of EditorMode.Normal:
-      app.setCursorStyle(CursorStyle.SteadyBlock) # Block cursor for Normal mode
-    of EditorMode.Command:
-      app.setCursorStyle(CursorStyle.SteadyUnderline) # Underline cursor for Command mode
+      app.setCursorStyle(CursorStyle.SteadyBar)
+    else:
+      app.setCursorStyle(CursorStyle.SteadyBlock)
 
     # Set cursor position from calculated screen coordinates
     app.setCursor(editor.state.cursor.x, editor.state.cursor.y)

@@ -24,6 +24,7 @@ type
     Normal
     Insert
     Command
+    Visual
 
   ModeTransition* = object
     newMode*: Option[EditorMode]
@@ -34,3 +35,4 @@ proc modeLabel*(m: EditorMode): string =
   of EditorMode.Normal: "NORMAL"
   of EditorMode.Insert: "INSERT"
   of EditorMode.Command: "COMMAND"
+  of EditorMode.Visual: "VISUAL"

@@ -69,13 +69,20 @@ type
     of SimpleCommand:
       command*: string # Keep as string for now
 
+  VisualSelection* = object ## Represents a visual mode selection range
+    start*: BufferPosition # Selection start position (anchor)
+    current*: BufferPosition # Current cursor position (selection end)
+    active*: bool # Whether selection is currently active
+
   EditorState* = ref object
     cursor*: CursorPosition # Actual cursor position
     mode*: EditorMode
+    previousMode*: EditorMode # Previous mode for ESC handling
     command*: string
     commandText*: string # Text being typed in command mode
     statusMessage*: string # Message to display in status line
     lastMotion*: Option[Motion]
+    visualSelection*: VisualSelection # Visual mode selection state
     showStatusLine*: bool # Whether to show the status line
     multiStatusLine*: bool
       # Whether to show status line for each window (true) or only one at bottom (false)
