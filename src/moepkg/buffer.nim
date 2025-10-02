@@ -44,6 +44,42 @@ type
   BufferBackend* = enum
     GapBuffer # Best for small to medium files
 
+  # Undo/Redo system types
+  BufferChangeKind* = enum
+    ckInsertText
+    ckDeleteText
+    ckInsertLine
+    ckDeleteLine
+    ckDeleteRange
+    ckTransaction # Transaction containing multiple changes
+
+  BufferChange* = object
+    case kind*: BufferChangeKind
+    of ckInsertText:
+      insertPos*: BufferPosition
+      insertText*: string
+    of ckDeleteText:
+      deletePos*: BufferPosition
+      deletedText*: string
+    of ckInsertLine:
+      insertLineIdx*: int
+      insertLineText*: string
+    of ckDeleteLine:
+      deleteLineIdx*: int
+      deletedLineText*: string
+    of ckDeleteRange:
+      deleteStartPos*: BufferPosition
+      deleteEndPos*: BufferPosition
+      deletedRangeText*: string
+    of ckTransaction:
+      transactionChanges*: seq[BufferChange]
+      transactionDescription*: string
+
+  # Transaction for grouping multiple changes
+  BufferTransaction* = object
+    changes*: seq[BufferChange]
+    description*: string
+
   TextBuffer* = ref object
     backend*: BufferBackend
     filePath*: Option[string]
@@ -53,6 +89,15 @@ type
     encoding*: CharacterEncoding
     endOfLine*: bool # Whether file should end with newline (vim 'endofline' option)
     cursor*: BufferPosition # Buffer-specific cursor position
+
+    # Undo/Redo stacks
+    undoStack*: seq[BufferChange]
+    redoStack*: seq[BufferChange]
+    maxUndoLevels*: int # Maximum number of undo levels (0 = unlimited)
+
+    # Transaction support
+    currentTransaction*: Option[BufferTransaction]
+    inTransaction*: bool
 
     # Backend storage
     case backendKind*: BufferBackend
@@ -80,6 +125,11 @@ proc newTextBuffer*(
       endOfLine: true, # Default to POSIX text file standard
       cursor: BufferPosition(line: 0, column: 0),
       gapBuffer: newGapBuffer(content),
+      undoStack: @[],
+      redoStack: @[],
+      maxUndoLevels: 1000, # Default maximum undo levels
+      currentTransaction: none(BufferTransaction),
+      inTransaction: false,
     )
 
 # Core text operations
@@ -98,49 +148,9 @@ proc charAt*(b: TextBuffer, position: int): char =
   of GapBuffer:
     b.gapBuffer.charAt(position)
 
-# Line-based helper functions
-proc lineToPosition*(b: TextBuffer, pos: BufferPosition): int =
-  ## Convert line/column position to character position
-  var
-    currentLine = 0
-    lineStart = 0
-
-  for i in 0 ..< b.len:
-    if currentLine == pos.line:
-      return lineStart + pos.column
-    if b.charAt(i) == '\n':
-      inc currentLine
-      lineStart = i + 1
-
-  if currentLine == pos.line:
-    lineStart + pos.column
-  else:
-    b.len
-
-proc positionToLine*(b: TextBuffer, position: int): BufferPosition =
-  ## Convert character position to line/column position
-  var
-    currentLine = 0
-    lineStart = 0
-
-  for i in 0 ..< min(position, b.len):
-    if b.charAt(i) == '\n':
-      inc currentLine
-      lineStart = i + 1
-
-  BufferPosition(line: currentLine, column: position - lineStart)
-
-# Editing operations
-proc insertText*(b: TextBuffer, pos: BufferPosition, text: string) =
-  if text.len == 0:
-    return
-
-  case b.backendKind
-  of GapBuffer:
-    let position = b.lineToPosition(pos)
-    b.gapBuffer.insert(position, text)
-
-  b.modified = true
+proc charLen*(text: string): int =
+  ## Get character length (not byte length)
+  text.runeLen
 
 proc getLine*(b: TextBuffer, lineIndex: int): string =
   case b.backendKind
@@ -158,6 +168,77 @@ proc getCurrentLine*(b: TextBuffer): string =
 proc getCurrentLineLen*(b: TextBuffer): int {.inline.} =
   b.getCurrentLine.len
 
+# Line-based helper functions
+proc lineToPosition*(b: TextBuffer, pos: BufferPosition): int =
+  ## Convert line/column position (character-based) to byte position
+  ## pos.column is interpreted as a character position (Unicode-aware)
+
+  # Validate line number
+  if pos.line < 0 or pos.line >= b.len:
+    return 0
+
+  # Calculate byte position of line start
+  var bytePos = 0
+  for i in 0 ..< pos.line:
+    bytePos += b.getLine(i).len + 1 # +1 for newline character
+
+  # Get the line content and convert character position to byte offset
+  let
+    line = b.getLine(pos.line)
+    byteOffset = charToBytePos(line, pos.column)
+
+  return bytePos + byteOffset
+
+proc positionToLine*(b: TextBuffer, position: int): BufferPosition =
+  ## Convert byte position to line/column position (character-based)
+  ## Returns column as character position (Unicode-aware)
+
+  var
+    currentLine = 0
+    bytePos = 0
+
+  # Find which line the position is on
+  for lineIdx in 0 ..< b.len:
+    let
+      line = b.getLine(lineIdx)
+      lineEndByte = bytePos + line.len
+
+    if position <= lineEndByte:
+      # Position is on this line
+      let
+        byteOffsetInLine = position - bytePos
+        charColumn = byteToCharPos(line, byteOffsetInLine)
+      return BufferPosition(line: lineIdx, column: charColumn)
+
+    bytePos = lineEndByte + 1 # +1 for newline
+
+    currentLine = lineIdx + 1
+
+  # Position is past the end of the buffer
+  if b.len > 0:
+    let lastLine = b.getLine(b.len - 1)
+    BufferPosition(line: b.len - 1, column: charLen(lastLine))
+  else:
+    BufferPosition(line: 0, column: 0)
+
+# Forward declaration for undo system
+proc pushUndoChange(b: TextBuffer, change: BufferChange)
+
+# Editing operations
+proc insertText*(b: TextBuffer, pos: BufferPosition, text: string) =
+  if text.len == 0:
+    return
+
+  case b.backendKind
+  of GapBuffer:
+    let position = b.lineToPosition(pos)
+    b.gapBuffer.insert(position, text)
+
+  # Record change for undo
+  b.pushUndoChange(BufferChange(kind: ckInsertText, insertPos: pos, insertText: text))
+
+  b.modified = true
+
 proc charToBytePos*(text: string, charPos: int): int =
   ## Convert character position to byte position (Unicode-aware)
   var currentChar = 0
@@ -168,24 +249,27 @@ proc charToBytePos*(text: string, charPos: int): int =
     result += rune.size
     currentChar += 1
 
-proc charLen*(text: string): int =
-  ## Get character length (not byte length)
-  text.runeLen
-
 proc deleteChar*(b: TextBuffer, pos: BufferPosition) =
   # Unicode-aware character deletion
   case b.backendKind
   of GapBuffer:
-    # Use line-based approach to handle Unicode properly
+    # Use byte-based approach to avoid line reconstruction issues
     if pos.line >= 0 and pos.line < b.len:
       let line = b.getLine(pos.line)
       if pos.column >= 0 and pos.column < line.charLen:
-        # Use Unicode utilities for safe character deletion
-        let newLine = line.deleteCharAt(pos.column)
+        # Get the character that will be deleted for undo
+        let
+          deletedChar = line.runeAtPos(pos.column)
+          charSize = len($deletedChar)
 
-        # Delete old line and insert new one
-        b.gapBuffer.deleteLine(pos.line)
-        b.gapBuffer.insertLine(pos.line, newLine)
+        # Convert to byte position and delete directly
+        let bytePos = b.lineToPosition(pos)
+        b.gapBuffer.delete(bytePos, charSize)
+
+        # Record change for undo
+        b.pushUndoChange(
+          BufferChange(kind: ckDeleteText, deletePos: pos, deletedText: $deletedChar)
+        )
 
   b.modified = true
 
@@ -194,19 +278,61 @@ proc insertLine*(b: TextBuffer, lineIndex: int, content: string) =
   of GapBuffer:
     b.gapBuffer.insertLine(lineIndex, content)
 
+  # Record change for undo
+  b.pushUndoChange(
+    BufferChange(kind: ckInsertLine, insertLineIdx: lineIndex, insertLineText: content)
+  )
+
   b.modified = true
 
 proc deleteLine*(b: TextBuffer, lineIndex: int) =
+  # Save line content before deleting for undo
+  let deletedContent = b.getLine(lineIndex)
+
   case b.backendKind
   of GapBuffer:
     b.gapBuffer.deleteLine(lineIndex)
 
+  # Record change for undo
+  b.pushUndoChange(
+    BufferChange(
+      kind: ckDeleteLine, deleteLineIdx: lineIndex, deletedLineText: deletedContent
+    )
+  )
+
   b.modified = true
+
+proc getTextInRange*(b: TextBuffer, startPos, endPos: BufferPosition): string =
+  ## Get text from startPos to endPos (inclusive)
+  if startPos.line == endPos.line:
+    let line = b.getLine(startPos.line)
+    if endPos.column >= line.charLen:
+      # Include newline
+      result = line.substr(startPos.column) & "\n"
+    else:
+      result = line.substr(startPos.column, endPos.column)
+  else:
+    # Multi-line range
+    for lineIdx in startPos.line .. endPos.line:
+      let line = b.getLine(lineIdx)
+      if lineIdx == startPos.line:
+        result &= line.substr(startPos.column) & "\n"
+      elif lineIdx == endPos.line:
+        if endPos.column >= line.charLen:
+          result &= line & "\n"
+        else:
+          result &= line.substr(0, endPos.column)
+      else:
+        result &= line & "\n"
 
 proc deleteRange*(b: TextBuffer, startPos, endPos: BufferPosition) =
   ## Delete text from startPos to endPos (inclusive)
   ## Assumes startPos <= endPos (normalized range)
   ## If selection extends to/past line end, includes the newline
+
+  # Save deleted text for undo
+  let deletedText = b.getTextInRange(startPos, endPos)
+
   case b.backendKind
   of GapBuffer:
     if startPos.line == endPos.line:
@@ -278,10 +404,231 @@ proc deleteRange*(b: TextBuffer, startPos, endPos: BufferPosition) =
       # Insert the combined line
       b.gapBuffer.insertLine(startPos.line, newLine)
 
+  # Record change for undo
+  b.pushUndoChange(
+    BufferChange(
+      kind: ckDeleteRange,
+      deleteStartPos: startPos,
+      deleteEndPos: endPos,
+      deletedRangeText: deletedText,
+    )
+  )
+
   b.modified = true
 
 proc splitLine*(b: TextBuffer, pos: BufferPosition) =
+  # splitLine just inserts a newline, which is already recorded by insertText
   b.insertText(pos, "\n")
+
+# Undo/Redo system
+
+proc pushUndoChange(b: TextBuffer, change: BufferChange) =
+  ## Add a change to the undo stack (or current transaction)
+  if b.inTransaction and b.currentTransaction.isSome:
+    # Add to current transaction
+    var transaction = b.currentTransaction.get
+    transaction.changes.add(change)
+    b.currentTransaction = some(transaction)
+  else:
+    # Add directly to undo stack
+    b.undoStack.add(change)
+
+    # Clear redo stack when new change is made
+    b.redoStack.setLen(0)
+
+    # Limit undo stack size if maxUndoLevels is set
+    if b.maxUndoLevels > 0 and b.undoStack.len > b.maxUndoLevels:
+      b.undoStack.delete(0)
+
+proc beginTransaction*(b: TextBuffer, description: string = "") =
+  ## Begin a transaction to group multiple changes
+  if b.inTransaction:
+    return # Already in a transaction
+
+  b.inTransaction = true
+  b.currentTransaction = some(BufferTransaction(changes: @[], description: description))
+
+proc commitTransaction*(b: TextBuffer) =
+  ## Commit the current transaction
+  if not b.inTransaction or b.currentTransaction.isNone:
+    return
+
+  let transaction = b.currentTransaction.get
+  b.inTransaction = false
+  b.currentTransaction = none(BufferTransaction)
+
+  # Add transaction as a single undo entry if it has changes
+  if transaction.changes.len > 0:
+    b.undoStack.add(
+      BufferChange(
+        kind: ckTransaction,
+        transactionChanges: transaction.changes,
+        transactionDescription: transaction.description,
+      )
+    )
+
+    # Clear redo stack when new change is made
+    b.redoStack.setLen(0)
+
+    # Limit undo stack size if maxUndoLevels is set
+    if b.maxUndoLevels > 0 and b.undoStack.len > b.maxUndoLevels:
+      b.undoStack.delete(0)
+
+proc rollbackTransaction*(b: TextBuffer) =
+  ## Rollback the current transaction without applying changes
+  if not b.inTransaction:
+    return
+
+  b.inTransaction = false
+  b.currentTransaction = none(BufferTransaction)
+
+proc getChangePosition(change: BufferChange): BufferPosition =
+  ## Get the starting position of a change
+  case change.kind
+  of ckInsertText:
+    return change.insertPos
+  of ckDeleteText:
+    return change.deletePos
+  of ckInsertLine:
+    return BufferPosition(line: change.insertLineIdx, column: 0)
+  of ckDeleteLine:
+    return BufferPosition(line: change.deleteLineIdx, column: 0)
+  of ckDeleteRange:
+    return change.deleteStartPos
+  of ckTransaction:
+    # For transactions, return the position of the first change
+    if change.transactionChanges.len > 0:
+      return getChangePosition(change.transactionChanges[0])
+    else:
+      return BufferPosition(line: 0, column: 0)
+
+proc undoChange(b: TextBuffer, change: BufferChange) =
+  ## Apply the inverse of a single change (internal helper)
+  case change.kind
+  of ckInsertText:
+    # Undo insert by deleting the inserted text (all bytes at once)
+    case b.backendKind
+    of GapBuffer:
+      let position = b.lineToPosition(change.insertPos)
+      b.gapBuffer.delete(position, change.insertText.len)
+  of ckDeleteText:
+    # Undo delete by inserting the deleted text
+    case b.backendKind
+    of GapBuffer:
+      let position = b.lineToPosition(change.deletePos)
+      b.gapBuffer.insert(position, change.deletedText)
+  of ckInsertLine:
+    # Undo insert line by deleting it
+    case b.backendKind
+    of GapBuffer:
+      b.gapBuffer.deleteLine(change.insertLineIdx)
+  of ckDeleteLine:
+    # Undo delete line by inserting it
+    case b.backendKind
+    of GapBuffer:
+      b.gapBuffer.insertLine(change.deleteLineIdx, change.deletedLineText)
+  of ckDeleteRange:
+    # Undo delete range by inserting the deleted text
+    case b.backendKind
+    of GapBuffer:
+      let position = b.lineToPosition(change.deleteStartPos)
+      b.gapBuffer.insert(position, change.deletedRangeText)
+  of ckTransaction:
+    # Undo all changes in transaction in reverse order
+    for i in countdown(change.transactionChanges.len - 1, 0):
+      b.undoChange(change.transactionChanges[i])
+
+proc undo*(b: TextBuffer, count: int = 1): Result[(), string] =
+  ## Undo the last 'count' changes (or all changes in a transaction group)
+  ## Moves cursor to the position of the first undone change
+  if b.undoStack.len == 0:
+    return Result[(), string].err "Nothing to undo"
+
+  var undoneChanges: seq[BufferChange] = @[]
+
+  # Undo 'count' changes
+  for i in 0 ..< count:
+    if b.undoStack.len == 0:
+      break
+
+    let change = b.undoStack.pop()
+    b.undoChange(change)
+    undoneChanges.add(change)
+
+  # Add all undone changes to redo stack (in reverse order to maintain correct redo)
+  for change in undoneChanges:
+    b.redoStack.add(change)
+
+  # Move cursor to the position of the first change
+  if undoneChanges.len > 0:
+    b.cursor = getChangePosition(undoneChanges[0])
+
+  # Mark buffer as modified
+  b.modified = true
+
+  return Result[(), string].ok ()
+
+proc redoChange(b: TextBuffer, change: BufferChange) =
+  ## Re-apply a single change (internal helper)
+  case change.kind
+  of ckInsertText:
+    case b.backendKind
+    of GapBuffer:
+      let position = b.lineToPosition(change.insertPos)
+      b.gapBuffer.insert(position, change.insertText)
+  of ckDeleteText:
+    case b.backendKind
+    of GapBuffer:
+      let position = b.lineToPosition(change.deletePos)
+      b.gapBuffer.delete(position, change.deletedText.len)
+  of ckInsertLine:
+    case b.backendKind
+    of GapBuffer:
+      b.gapBuffer.insertLine(change.insertLineIdx, change.insertLineText)
+  of ckDeleteLine:
+    case b.backendKind
+    of GapBuffer:
+      b.gapBuffer.deleteLine(change.deleteLineIdx)
+  of ckDeleteRange:
+    # Re-apply delete range (delete all bytes at once)
+    case b.backendKind
+    of GapBuffer:
+      let position = b.lineToPosition(change.deleteStartPos)
+      b.gapBuffer.delete(position, change.deletedRangeText.len)
+  of ckTransaction:
+    # Redo all changes in transaction in forward order
+    for change in change.transactionChanges:
+      b.redoChange(change)
+
+proc redo*(b: TextBuffer, count: int = 1): Result[(), string] =
+  ## Redo the last 'count' undone changes
+  ## Moves cursor to the position of the first redone change
+  if b.redoStack.len == 0:
+    return Result[(), string].err "Nothing to redo"
+
+  var redoneChanges: seq[BufferChange] = @[]
+
+  # Redo 'count' changes
+  for i in 0 ..< count:
+    if b.redoStack.len == 0:
+      break
+
+    let change = b.redoStack.pop()
+    b.redoChange(change)
+    redoneChanges.add(change)
+
+  # Add all redone changes back to undo stack (in reverse order)
+  for i in countdown(redoneChanges.len - 1, 0):
+    b.undoStack.add(redoneChanges[i])
+
+  # Move cursor to the position of the first change
+  if redoneChanges.len > 0:
+    b.cursor = getChangePosition(redoneChanges[0])
+
+  # Mark buffer as modified
+  b.modified = true
+
+  return Result[(), string].ok ()
 
 # File operations
 proc chooseBackendForFile(): BufferBackend =

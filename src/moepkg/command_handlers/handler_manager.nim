@@ -120,6 +120,10 @@ proc handleNormalMode*(
   let r = manager.normalHandler.handleNormalModeKey(buffer, state, viewport, keyCombo)
   case r.kind
   of nmrHandled:
+    # Check if we're entering Insert mode
+    if r.modeTransition.isSome and r.modeTransition.get == EditorMode.Insert:
+      # Begin a transaction when entering Insert mode
+      buffer.beginTransaction("Insert mode edit")
     return HandlerResult(
       kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
     )
@@ -135,6 +139,10 @@ proc handleInsertMode*(
   let r = manager.insertHandler.handleInsertModeKey(buffer, keyCombo)
   case r.kind
   of imrHandled:
+    # Check if we're leaving Insert mode
+    if r.modeTransition.isSome and r.modeTransition.get != EditorMode.Insert:
+      # Commit the transaction when leaving Insert mode
+      buffer.commitTransaction()
     return HandlerResult(
       kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
     )

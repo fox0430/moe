@@ -261,6 +261,18 @@ proc handleNormalModeKey*(
       return handler.handleTextManipulation(buffer, "delete", "word")
     of "delete.line":
       return handler.handleTextManipulation(buffer, "delete", "line")
+    of "edit.undo":
+      let r = buffer.undo()
+      if r.isOk:
+        return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+      else:
+        return NormalModeResult(kind: nmrError, errorMessage: r.error)
+    of "edit.redo":
+      let r = buffer.redo()
+      if r.isOk:
+        return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+      else:
+        return NormalModeResult(kind: nmrError, errorMessage: r.error)
     else:
       return NormalModeResult(
         kind: nmrError, errorMessage: "Unknown action: " & cmd.commandId

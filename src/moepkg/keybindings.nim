@@ -581,6 +581,27 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
     )
   )
 
+  # Register undo/redo commands
+  registry.registerCommand(
+    Command(
+      name: "undo",
+      description: "Undo last change",
+      kind: ctAction,
+      commandId: "edit.undo",
+      args: @[],
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "redo",
+      description: "Redo last undone change",
+      kind: ctAction,
+      commandId: "edit.redo",
+      args: @[],
+    )
+  )
+
   # Normal mode default bindings
   registry.bindKey(EditorMode.Normal, "h", "move-left")
   registry.bindKey(EditorMode.Normal, "j", "move-down")
@@ -588,6 +609,8 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.Normal, "l", "move-right")
   registry.bindKey(EditorMode.Normal, "C-u", "page-up")
   registry.bindKey(EditorMode.Normal, "C-d", "page-down")
+  registry.bindKey(EditorMode.Normal, "u", "undo")
+  registry.bindKey(EditorMode.Normal, "C-r", "redo")
 
   # Arrow key bindings for Normal mode
   registry.bindKey(
