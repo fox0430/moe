@@ -837,4 +837,3 @@ proc render*(e: Editor, buffer: var Buffer) =
   else:
     if e.state.statusMessage.len > 0:
       buffer.setString(buffer.area.x, commandLineY, e.state.statusMessage, commandStyle)
-      e.state.statusMessage = ""
