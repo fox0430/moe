@@ -19,31 +19,33 @@
 
 ## Line-based Gap Buffer implementation
 
-import std/strutils
-
 const
   DEFAULT_GAP_SIZE = 32
   MIN_GAP_SIZE = 16
   GROWTH_FACTOR = 2
 
 type
-  Line = ref object
-    content: string # Line content without newline character
-
   GapBuffer* = ref object
-    lines: seq[Line] # Array of lines
+    lines: seq[string] # Array of line contents
     gapStart: int # Gap start line index
     gapEnd: int # Gap end line index
-    logicalLineCount: int # Number of logical lines (excluding gap)
+
+  DeletionRange* = object
+    ## Represents the range of a deletion operation
+    # TODO: Move to other module
+    startLine*: int
+    startCol*: int
+    endLine*: int
+    endCol*: int
 
 # Core Gap Buffer operations
 
 proc newGapBuffer*(initialCapacity: int = DEFAULT_GAP_SIZE): GapBuffer =
   let capacity = max(initialCapacity, MIN_GAP_SIZE)
-  var lines = newSeq[Line](capacity)
+  var lines = newSeq[string](capacity)
   # Always start with at least one empty line
-  lines[0] = Line(content: "")
-  GapBuffer(lines: lines, gapStart: 1, gapEnd: capacity, logicalLineCount: 1)
+  lines[0] = ""
+  GapBuffer(lines: lines, gapStart: 1, gapEnd: capacity)
 
 proc newGapBuffer*(text: string): GapBuffer =
   # Parse text into lines
@@ -65,19 +67,25 @@ proc newGapBuffer*(text: string): GapBuffer =
     lineCount = linesList.len
     capacity = max(lineCount + DEFAULT_GAP_SIZE, MIN_GAP_SIZE)
 
-  var lines = newSeq[Line](capacity)
+  var lines = newSeq[string](capacity)
   for i in 0 ..< lineCount:
-    lines[i] = Line(content: linesList[i])
+    lines[i] = linesList[i]
 
-  GapBuffer(
-    lines: lines, gapStart: lineCount, gapEnd: capacity, logicalLineCount: lineCount
-  )
+  GapBuffer(lines: lines, gapStart: lineCount, gapEnd: capacity)
 
 proc gapSize(gb: GapBuffer): int {.inline.} =
   gb.gapEnd - gb.gapStart
 
 proc capacity(gb: GapBuffer): int {.inline.} =
   gb.lines.len
+
+proc lineCount(gb: GapBuffer): int {.inline.} =
+  ## Count number of lines
+  gb.capacity - gb.gapSize
+
+proc len*(gb: GapBuffer): int {.inline.} =
+  ## Return line length
+  gb.lineCount
 
 proc logicalToPhysical(gb: GapBuffer, logicalLine: int): int {.inline.} =
   ## Convert logical line number to physical buffer line index
@@ -88,17 +96,20 @@ proc logicalToPhysical(gb: GapBuffer, logicalLine: int): int {.inline.} =
 
 proc ensureGapSize(gb: GapBuffer, minSize: int) =
   ## Ensure gap has at least minSize lines
+  ##
+  ## Performance: O(n) when resize needed (amortized O(1) with 2x growth)
+  ## Memory: Nim's string is COW, so assignment is efficient (O(1) pointer copy)
   if gb.gapSize >= minSize:
     return
 
   let
     currentCapacity = gb.capacity
-    requiredSize = gb.logicalLineCount + minSize
+    requiredSize = gb.lineCount + minSize
     newCapacity = max(currentCapacity * GROWTH_FACTOR, requiredSize + DEFAULT_GAP_SIZE)
 
-  var newLines = newSeq[Line](newCapacity)
+  var newLines = newSeq[string](newCapacity)
 
-  # Copy prefix (before gap)
+  # Copy prefix (before gap) - Nim strings are COW, so this is efficient
   for i in 0 ..< gb.gapStart:
     newLines[i] = gb.lines[i]
 
@@ -110,9 +121,17 @@ proc ensureGapSize(gb: GapBuffer, minSize: int) =
   gb.lines = newLines
   gb.gapEnd = suffixStart
 
+const BULK_COPY_THRESHOLD = 8 # Use bulk copy for moves larger than this
+
 proc moveGapTo(gb: GapBuffer, lineNumber: int) =
   ## Move gap to specified logical line number
-  let clampedLine = max(0, min(lineNumber, gb.logicalLineCount))
+  ## Uses optimized bulk copy for large moves (threshold: 8 lines)
+  ##
+  ## Performance:
+  ## - Best case: O(1) - gap already at target position
+  ## - Worst case: O(n) where n = distance to move
+  ## - Amortized: O(1) with locality of reference
+  let clampedLine = max(0, min(lineNumber, gb.lineCount))
 
   if clampedLine == gb.gapStart:
     return
@@ -124,9 +143,18 @@ proc moveGapTo(gb: GapBuffer, lineNumber: int) =
       srcStart = clampedLine
       dstStart = gb.gapEnd - moveCount
 
-    # Move lines from before gap to after gap
-    for i in countdown(moveCount - 1, 0):
-      gb.lines[dstStart + i] = gb.lines[srcStart + i]
+    # Move lines from before gap to after gap (reverse order to avoid overlap)
+    if moveCount >= BULK_COPY_THRESHOLD:
+      # Bulk copy for large moves - use temporary buffer
+      var temp = newSeq[string](moveCount)
+      for i in 0 ..< moveCount:
+        temp[i] = gb.lines[srcStart + i]
+      for i in 0 ..< moveCount:
+        gb.lines[dstStart + i] = temp[i]
+    else:
+      # Small move - direct copy in reverse order
+      for i in countdown(moveCount - 1, 0):
+        gb.lines[dstStart + i] = gb.lines[srcStart + i]
 
     gb.gapStart = clampedLine
     gb.gapEnd -= moveCount
@@ -137,498 +165,311 @@ proc moveGapTo(gb: GapBuffer, lineNumber: int) =
       srcStart = gb.gapEnd
       dstStart = gb.gapStart
 
-    # Move lines from after gap to before gap
-    for i in 0 ..< moveCount:
-      gb.lines[dstStart + i] = gb.lines[srcStart + i]
+    # Move lines from after gap to before gap (forward order is safe)
+    if moveCount >= BULK_COPY_THRESHOLD:
+      # Bulk copy for large moves - direct forward copy is safe (no overlap)
+      for i in 0 ..< moveCount:
+        gb.lines[dstStart + i] = gb.lines[srcStart + i]
+    else:
+      # Small move - same as bulk for forward direction
+      for i in 0 ..< moveCount:
+        gb.lines[dstStart + i] = gb.lines[srcStart + i]
 
     gb.gapStart = clampedLine
     gb.gapEnd += moveCount
 
-# Character-based operations (for API compatibility)
+proc insertIntoLine*(gb: GapBuffer, line, col: int, text: string) =
+  ## Insert text into an existing line at (line, column) position
+  ## Note: col is expected to be a byte position, not a character position
+  ## Use buffer.nim's insertText for Unicode-aware insertion
+  ##
+  ## Raises IndexDefect if line or col is out of valid range
+  ## Valid range: line [0..len), col [0..lineLen]
+  if line < 0 or line >= gb.len:
+    raise newException(IndexDefect, "GapBuffer line out of bounds: " & $line)
 
-proc positionToLineCol(gb: GapBuffer, position: int): tuple[line: int, col: int] =
-  ## Convert character position to (line, column)
+  let physicalLine = gb.logicalToPhysical(line)
+  var lineObj = gb.lines[physicalLine]
+
+  if col < 0 or col > lineObj.len:
+    raise newException(
+      IndexDefect,
+      "GapBuffer column out of valid range [0.." & $lineObj.len & "]: " & $col,
+    )
+
+  lineObj.insert(text, col)
+  gb.lines[physicalLine] = lineObj
+
+proc findDeletionEndPos(gb: GapBuffer, line, col, count: int): DeletionRange =
+  ## Calculate the end position for a deletion of 'count' bytes
+  ## starting from (line, col)
   var
-    pos = position
-    lineIdx = 0
+    endLine = line
+    endCol = col
+    remaining = count
 
-  while lineIdx < gb.logicalLineCount:
+  while remaining > 0 and endLine < gb.len:
     let
-      physicalLine = gb.logicalToPhysical(lineIdx)
-      line = gb.lines[physicalLine]
-      lineLen = if line.isNil: 0 else: line.content.len
-
-    if pos <= lineLen:
-      return (lineIdx, pos)
-
-    # +1 for newline character
-    pos -= (lineLen + 1)
-    inc lineIdx
-
-  # Position beyond end of buffer
-  if gb.logicalLineCount > 0:
-    let
-      lastPhysicalLine = gb.logicalToPhysical(gb.logicalLineCount - 1)
-      lastLine = gb.lines[lastPhysicalLine]
-      lastLineLen = if lastLine.isNil: 0 else: lastLine.content.len
-    return (gb.logicalLineCount - 1, lastLineLen)
-  else:
-    return (0, 0)
-
-proc lineColToPosition(gb: GapBuffer, line: int, col: int): int =
-  ## Convert (line, column) to character position
-  var pos = 0
-
-  for i in 0 ..< min(line, gb.logicalLineCount):
-    let
-      physicalLine = gb.logicalToPhysical(i)
+      physicalLine = gb.logicalToPhysical(endLine)
       lineObj = gb.lines[physicalLine]
-      lineLen = if lineObj.isNil: 0 else: lineObj.content.len
-    pos += lineLen + 1 # +1 for newline
+      lineLen = lineObj.len
 
-  pos + col
-
-proc insert*(gb: GapBuffer, position: int, text: string) =
-  ## Insert text at the specified character position
-  if text.len == 0:
-    return
-
-  let (targetLine, targetCol) = gb.positionToLineCol(position)
-
-  # Split text into lines
-  var
-    newLines: seq[string]
-    currentLine = ""
-
-  for ch in text:
-    if ch == '\n':
-      newLines.add(currentLine)
-      currentLine = ""
+    let availableInLine = lineLen - endCol
+    if remaining <= availableInLine:
+      # Deletion ends within this line
+      endCol += remaining
+      remaining = 0
+      break
     else:
-      currentLine.add(ch)
+      # Delete to end of line
+      remaining -= availableInLine
 
-  if newLines.len == 0:
-    # No newlines, simple insertion within a line
-    if targetLine >= gb.logicalLineCount:
-      # Insert at end, add new line
-      gb.ensureGapSize(1)
-      gb.moveGapTo(gb.logicalLineCount)
-      gb.lines[gb.gapStart] = Line(content: text)
-      gb.gapStart += 1
-      gb.logicalLineCount += 1
-    else:
-      # Insert within existing line
-      let physicalLine = gb.logicalToPhysical(targetLine)
-      var line = gb.lines[physicalLine]
-      if line.isNil:
-        line = Line(content: "")
-        gb.lines[physicalLine] = line
+      # Try to consume newline
+      if remaining > 0 and endLine < gb.len - 1:
+        remaining -= 1 # consume newline
+        endCol = 0
+        inc endLine
+      else:
+        # No more newlines, end at end of current line
+        endCol = lineLen
+        break
 
-      let col = min(targetCol, line.content.len)
-      line.content.insert(text, col)
-  else:
-    # Text contains newlines, need to split current line and insert multiple lines
-    # newLines = text before each '\n', currentLine = text after last '\n'
-    # Total lines created = newLines.len + 1
+  # Clamp to valid positions
+  if endLine >= gb.len:
+    endLine = gb.len - 1
 
-    if targetLine >= gb.logicalLineCount:
-      # Appending at end - add all new lines
-      let linesToAdd = newLines.len + 1
-      gb.ensureGapSize(linesToAdd)
-      gb.moveGapTo(gb.logicalLineCount)
+  let
+    endPhysicalLine = gb.logicalToPhysical(endLine)
+    endLineObj = gb.lines[endPhysicalLine]
+    endLineLen = endLineObj.len
 
-      for i, lineText in newLines:
-        gb.lines[gb.gapStart + i] = Line(content: lineText)
+  if endCol > endLineLen:
+    endCol = endLineLen
 
-      # Always add final line after the newlines (even if empty)
-      gb.lines[gb.gapStart + newLines.len] = Line(content: currentLine)
+  DeletionRange(startLine: line, startCol: col, endLine: endLine, endCol: endCol)
 
-      gb.gapStart += linesToAdd
-      gb.logicalLineCount += linesToAdd
-    else:
-      # Splitting existing line - replace 1 line with (newLines.len + 1) lines
-      let physicalLine = gb.logicalToPhysical(targetLine)
-      var originalLine = gb.lines[physicalLine]
-      if originalLine.isNil:
-        originalLine = Line(content: "")
-
-      let
-        col = min(targetCol, originalLine.content.len)
-        prefix =
-          if col > 0:
-            originalLine.content[0 ..< col]
-          else:
-            ""
-        suffix =
-          if col < originalLine.content.len:
-            originalLine.content[col .. ^1]
-          else:
-            ""
-
-      # We replace current line and add newLines.len new lines
-      let linesToAdd = newLines.len
-      gb.ensureGapSize(linesToAdd)
-      gb.moveGapTo(targetLine + 1) # Move gap to after current line
-
-      # Update current line with prefix + first part of inserted text
-      gb.lines[gb.logicalToPhysical(targetLine)] = Line(content: prefix & newLines[0])
-
-      # Insert remaining lines
-      var insertIdx = 0
-      for i in 1 ..< newLines.len:
-        gb.lines[gb.gapStart + insertIdx] = Line(content: newLines[i])
-        inc insertIdx
-
-      # Always add final line when splitting (continuation after last newline)
-      gb.lines[gb.gapStart + insertIdx] = Line(content: currentLine & suffix)
-      inc insertIdx
-
-      gb.gapStart += insertIdx
-      gb.logicalLineCount += insertIdx
-
-proc insert*(gb: GapBuffer, position: int, ch: char) =
-  ## Insert a single character at the specified position
-  gb.insert(position, $ch)
-
-proc delete*(gb: GapBuffer, position: int, count: int = 1) =
-  ## Delete count characters starting from position
-  if count <= 0:
-    return
-
-  let (startLine, startCol) = gb.positionToLineCol(position)
-  let (endLine, endCol) = gb.positionToLineCol(position + count)
-
-  if startLine == endLine:
-    # Delete within single line
-    if startLine >= gb.logicalLineCount:
-      return
-
-    let physicalLine = gb.logicalToPhysical(startLine)
-    var line = gb.lines[physicalLine]
-    if line.isNil:
-      return
-
-    let
-      actualStartCol = min(startCol, line.content.len)
-      actualEndCol = min(endCol, line.content.len)
-
-    if actualStartCol < actualEndCol:
-      # Delete characters by reconstructing string
-      let
-        prefix =
-          if actualStartCol > 0:
-            line.content[0 ..< actualStartCol]
-          else:
-            ""
-        suffix =
-          if actualEndCol < line.content.len:
-            line.content[actualEndCol .. ^1]
-          else:
-            ""
-      line.content = prefix & suffix
-  else:
-    # Delete spans multiple lines
-    # Get content before moving gap
-    let
-      startPhysicalLine = gb.logicalToPhysical(startLine)
-      endPhysicalLine = gb.logicalToPhysical(endLine)
-
-    var startLineObj = gb.lines[startPhysicalLine]
-    if startLineObj.isNil:
-      startLineObj = Line(content: "")
-
-    var endLineObj = gb.lines[endPhysicalLine]
-    if endLineObj.isNil:
-      endLineObj = Line(content: "")
-
-    let
-      startActualCol = min(startCol, startLineObj.content.len)
-      endActualCol = min(endCol, endLineObj.content.len)
-
-    # Merge start line prefix with end line suffix
-    let
-      prefix =
-        if startActualCol > 0:
-          startLineObj.content[0 ..< startActualCol]
-        else:
-          ""
-      suffix =
-        if endActualCol < endLineObj.content.len:
-          endLineObj.content[endActualCol .. ^1]
-        else:
-          ""
-
-    # Move gap and update
-    gb.moveGapTo(startLine + 1)
-
-    # Update start line with merged content
-    gb.lines[gb.logicalToPhysical(startLine)] = Line(content: prefix & suffix)
-
-    # Delete lines in between (including endLine)
-    let linesToDelete = endLine - startLine
-    if linesToDelete > 0:
-      gb.gapEnd += linesToDelete
-      gb.logicalLineCount -= linesToDelete
-
-proc len*(gb: GapBuffer): int =
-  ## Get total character length (including newlines)
-  result = 0
-  for i in 0 ..< gb.logicalLineCount:
-    let physicalLine = gb.logicalToPhysical(i)
-    let line = gb.lines[physicalLine]
-    if not line.isNil:
-      result += line.content.len
-    # Add newline for all lines except the last
-    if i < gb.logicalLineCount - 1:
-      inc result
-
-proc charAt*(gb: GapBuffer, position: int): char =
-  ## Get character at character position
-  # Validate position is within valid range
-  # Allow position == len() for virtual newline at end of last line
-  if position < 0 or position > gb.len():
-    raise newException(IndexDefect, "GapBuffer index out of bounds")
-
-  let (line, col) = gb.positionToLineCol(position)
-
-  if line >= gb.logicalLineCount:
-    raise newException(IndexDefect, "GapBuffer index out of bounds")
-
+proc deleteSingleLine(gb: GapBuffer, line, startCol, endCol: int) =
+  ## Delete within a single line from startCol to endCol (byte positions)
   let
     physicalLine = gb.logicalToPhysical(line)
     lineObj = gb.lines[physicalLine]
+    prefix =
+      if startCol > 0 and startCol <= lineObj.len:
+        lineObj[0 ..< startCol]
+      else:
+        ""
+    suffix =
+      if endCol < lineObj.len:
+        lineObj[endCol .. ^1]
+      else:
+        ""
 
-  if lineObj.isNil or col >= lineObj.content.len:
-    if col == lineObj.content.len:
-      # Return newline at end of line (including virtual newline at end of last line)
-      return '\n'
-    raise newException(IndexDefect, "GapBuffer index out of bounds")
+  gb.lines[physicalLine] = prefix & suffix
 
-  lineObj.content[col]
+proc deleteMultiLine(gb: GapBuffer, range: DeletionRange) =
+  ## Delete across multiple lines, merging start and end lines
+  let
+    startPhysicalLine = gb.logicalToPhysical(range.startLine)
+    startLineObj = gb.lines[startPhysicalLine]
+    endPhysicalLine = gb.logicalToPhysical(range.endLine)
+    endLineObj = gb.lines[endPhysicalLine]
 
-proc substring*(gb: GapBuffer, start: int, length: int): string =
-  ## Extract substring from start position with given length
-  if length <= 0:
-    return ""
+  # Build the merged line
+  let prefix =
+    if range.startCol > 0 and range.startCol <= startLineObj.len:
+      startLineObj[0 ..< range.startCol]
+    else:
+      ""
 
-  result = ""
+  let suffix =
+    if range.endCol < endLineObj.len:
+      endLineObj[range.endCol .. ^1]
+    else:
+      ""
 
-  for i in 0 ..< length:
-    if start + i >= gb.len:
-      break
-    result.add(gb.charAt(start + i))
+  # Move gap to after start line
+  gb.moveGapTo(range.startLine + 1)
+
+  # Update start line with merged content
+  gb.lines[gb.logicalToPhysical(range.startLine)] = prefix & suffix
+
+  # Delete all lines from startLine+1 to endLine (inclusive)
+  let linesToDelete = range.endLine - range.startLine
+  if linesToDelete > 0:
+    gb.gapEnd += linesToDelete
+
+proc deleteAtLineCol*(gb: GapBuffer, line: int, col: int, count: int = 1) =
+  ## Delete 'count' bytes starting from (line, column) position
+  ## Note: 'col' and 'count' are in bytes, not characters
+  ## Use buffer.nim's deleteChar for Unicode-aware deletion
+  ##
+  ## Performance:
+  ## - Single line: O(1) amortized
+  ## - Multi-line: O(k) where k = number of lines deleted
+  ## Valid range: line [0..len), col [0..lineLen], count >= 1
+  if count <= 0 or line < 0 or line >= gb.len:
+    raise newException(IndexDefect, "GapBuffer line out of bounds")
+
+  let range = gb.findDeletionEndPos(line, col, count)
+
+  if range.startLine == range.endLine:
+    gb.deleteSingleLine(range.startLine, range.startCol, range.endCol)
+  else:
+    gb.deleteMultiLine(range)
 
 proc `$`*(gb: GapBuffer): string =
   ## Convert entire buffer to string
-  if gb.logicalLineCount == 0:
+  if gb.len == 0:
     return ""
 
-  for i in 0 ..< gb.logicalLineCount:
+  for i in 0 ..< gb.len:
     let
       physicalLine = gb.logicalToPhysical(i)
       line = gb.lines[physicalLine]
 
-    if not line.isNil:
-      result.add(line.content)
+    result.add(line)
 
-    if i < gb.logicalLineCount - 1:
+    if i < gb.len - 1:
       result.add('\n')
 
 proc clear*(gb: GapBuffer) =
-  ## Clear all content
-  gb.gapStart = 0
+  ## Clear all content and reset to single empty line
+  gb.lines[0] = ""
+  gb.gapStart = 1
   gb.gapEnd = gb.capacity()
-  gb.logicalLineCount = 0
 
-proc findChar*(gb: GapBuffer, ch: char, start: int = 0): int =
-  ## Find first occurrence of character starting from start position
-  ## Returns -1 if not found
-  var pos = start
-  let (startLine, startCol) = gb.positionToLineCol(start)
+proc getLine*(gb: GapBuffer, lineNumber: int): string =
+  ## Get content of specific line (0-based, without newline)
+  if lineNumber < 0 or lineNumber >= gb.len:
+    return ""
 
-  for lineIdx in startLine ..< gb.logicalLineCount:
-    let
-      physicalLine = gb.logicalToPhysical(lineIdx)
-      line = gb.lines[physicalLine]
+  let physicalLine = gb.logicalToPhysical(lineNumber)
+  gb.lines[physicalLine]
 
-    if line.isNil:
-      if ch == '\n':
-        return pos
-      inc pos
-      continue
-
-    let searchStart = if lineIdx == startLine: startCol else: 0
-
-    for i in searchStart ..< line.content.len:
-      if line.content[i] == ch:
-        return pos + (i - searchStart)
-
-    pos += line.content.len - searchStart
-
-    if ch == '\n' and lineIdx < gb.logicalLineCount - 1:
-      return pos
-
-    inc pos # For newline
-
-  return -1
-
-proc findString*(gb: GapBuffer, pattern: string, start: int = 0): int =
-  ## Find first occurrence of pattern starting from start position
-  ## Returns -1 if not found
-  if pattern.len == 0:
-    return start
-
-  # Convert to string and search (simple implementation)
-  let
-    text = $gb
-    found = text.find(pattern, start)
-  return found
-
-proc replace*(gb: GapBuffer, start: int, length: int, replacement: string) =
-  ## Replace length characters at start with replacement text
-  gb.delete(start, length)
-  gb.insert(start, replacement)
-
-# Line-based operations
-
-proc findLineStart*(gb: GapBuffer, position: int): int =
-  ## Find start of line containing position
-  let (line, _) = gb.positionToLineCol(position)
-  gb.lineColToPosition(line, 0)
-
-proc findLineEnd*(gb: GapBuffer, position: int): int =
-  ## Find end of line containing position
-  let (line, _) = gb.positionToLineCol(position)
-
-  if line >= gb.logicalLineCount:
-    return position
+proc charAtLineCol*(gb: GapBuffer, line: int, col: int): char =
+  ## Get character at (line, column) position
+  if line < 0 or line >= gb.len:
+    raise newException(IndexDefect, "GapBuffer line out of bounds")
 
   let
     physicalLine = gb.logicalToPhysical(line)
     lineObj = gb.lines[physicalLine]
-    lineLen = if lineObj.isNil: 0 else: lineObj.content.len
 
-  gb.lineColToPosition(line, lineLen)
+  if col >= 0 and col < lineObj.len:
+    return lineObj[col]
+  elif col == lineObj.len and line < gb.len - 1:
+    # At end of line (but not last line) - return newline
+    return '\n'
+  else:
+    raise newException(IndexDefect, "GapBuffer column out of bounds")
 
-proc getLine*(gb: GapBuffer, lineNumber: int): string =
-  ## Get content of specific line (0-based, without newline)
-  if lineNumber < 0 or lineNumber >= gb.logicalLineCount:
-    return ""
+proc replaceLine*(gb: GapBuffer, lineNumber: int, content: string) =
+  ## Replace the content of a specific line
+  ## Raises IndexDefect if lineNumber is out of bounds
+  if lineNumber < 0 or lineNumber >= gb.len:
+    raise newException(IndexDefect, "GapBuffer line out of bounds")
 
   let physicalLine = gb.logicalToPhysical(lineNumber)
-  let line = gb.lines[physicalLine]
+  gb.lines[physicalLine] = content
 
-  if line.isNil:
-    return ""
+proc `[]`*(gb: GapBuffer, lineNumber: int): string =
+  ## Bracket operator for accessing lines by index
+  gb.getLine(lineNumber)
 
-  line.content
+proc `[][]`*(gb: GapBuffer, line, col: int): char =
+  ## Bracket operator for accessing character at (line, column)
+  gb.charAtLineCol(line, col)
 
-proc lineCount*(gb: GapBuffer): int =
-  ## Count number of lines
-  gb.logicalLineCount
+proc `[]=`*(gb: GapBuffer, lineNumber: int, content: string) =
+  ## Bracket operator for replacing line content
+  gb.replaceLine(lineNumber, content)
+
+proc `[][]=`*(gb: GapBuffer, line, col: int, ch: char) =
+  ## Bracket operator for replacing character at (line, column)
+  if line < 0 or line >= gb.len:
+    raise newException(IndexDefect, "GapBuffer line out of bounds")
+
+  let physicalLine = gb.logicalToPhysical(line)
+  var lineObj = gb.lines[physicalLine]
+
+  if col < 0 or col >= lineObj.len:
+    raise newException(IndexDefect, "GapBuffer column out of bounds")
+
+  lineObj[col] = ch
+  gb.lines[physicalLine] = lineObj
 
 proc insertLine*(gb: GapBuffer, lineNumber: int, content: string) =
   ## Insert a new line at the specified line number
+  ## Raises IndexDefect if lineNumber is out of valid range [0..len]
+  ##
+  ## Performance: O(1) amortized - may trigger gap resize O(n)
+  ## Valid range: [0..len] (inclusive of len for appending)
+  if lineNumber < 0 or lineNumber > gb.len:
+    raise newException(
+      IndexDefect, "GapBuffer line index out of valid range [0.." & $gb.len & "]"
+    )
+
   gb.ensureGapSize(1)
 
-  let targetLine = max(0, min(lineNumber, gb.logicalLineCount))
-  gb.moveGapTo(targetLine)
+  gb.moveGapTo(lineNumber)
 
-  gb.lines[gb.gapStart] = Line(content: content)
+  gb.lines[gb.gapStart] = content
   gb.gapStart += 1
-  gb.logicalLineCount += 1
 
 proc deleteLine*(gb: GapBuffer, lineNumber: int) =
   ## Delete the specified line
-  if lineNumber < 0 or lineNumber >= gb.logicalLineCount:
-    return
+  ## Raises IndexDefect if lineNumber is out of bounds
+  ##
+  ## Performance: O(1) amortized
+  ## Valid range: [0..len) (exclusive of len)
+  if lineNumber < 0 or lineNumber >= gb.len:
+    raise newException(IndexDefect, "GapBuffer line out of bounds")
 
   gb.moveGapTo(lineNumber)
 
   # Expand gap to include the line
   gb.gapEnd += 1
-  gb.logicalLineCount -= 1
+
+proc modifyLineContent*(gb: GapBuffer, lineNumber: int, f: proc(s: var string)) =
+  ## Modify line content in-place using a function
+  ## Raises IndexDefect if lineNumber is out of bounds
+  if lineNumber < 0 or lineNumber >= gb.len:
+    raise newException(IndexDefect, "GapBuffer line out of bounds")
+
+  let physicalLine = gb.logicalToPhysical(lineNumber)
+  var line = gb.lines[physicalLine]
+  f(line)
+  gb.lines[physicalLine] = line
 
 # Iterator support
 
 iterator chars*(gb: GapBuffer): char =
-  for i in 0 ..< gb.logicalLineCount:
+  for i in 0 ..< gb.len:
     let
       physicalLine = gb.logicalToPhysical(i)
       line = gb.lines[physicalLine]
 
-    if not line.isNil:
-      for ch in line.content:
-        yield ch
+    for ch in line:
+      yield ch
 
-    if i < gb.logicalLineCount - 1:
+    if i < gb.len - 1:
       yield '\n'
 
 iterator lines*(gb: GapBuffer): string =
-  for i in 0 ..< gb.logicalLineCount:
+  for i in 0 ..< gb.len:
     yield gb.getLine(i)
-
-# Bracket operators for convenient access
-
-proc `[]`*(gb: GapBuffer, position: int): char =
-  ## Get character at logical position using [] operator
-  gb.charAt(position)
-
-proc `[]`*(gb: GapBuffer, slice: HSlice[int, int]): string =
-  ## Get substring using slice notation gb[start..end]
-  let
-    start = max(0, slice.a)
-    endPos = slice.b
-
-  if start > endPos:
-    return ""
-
-  let length = endPos - start + 1
-  gb.substring(start, length)
-
-proc `[]=`*(gb: GapBuffer, position: int, ch: char) =
-  ## Set character at logical position using [] operator
-  let (line, col) = gb.positionToLineCol(position)
-
-  if line >= gb.logicalLineCount:
-    raise newException(IndexDefect, "GapBuffer index out of bounds")
-
-  let physicalLine = gb.logicalToPhysical(line)
-  var lineObj = gb.lines[physicalLine]
-
-  if lineObj.isNil:
-    lineObj = Line(content: "")
-    gb.lines[physicalLine] = lineObj
-
-  if col >= lineObj.content.len:
-    raise newException(IndexDefect, "GapBuffer index out of bounds")
-
-  lineObj.content[col] = ch
-
-proc `[]=`*(gb: GapBuffer, slice: HSlice[int, int], text: string) =
-  ## Replace range with text using slice notation gb[start..end] = text
-  let
-    start = max(0, slice.a)
-    endPos = slice.b
-
-  if start > endPos:
-    gb.insert(start, text)
-  else:
-    let deleteLength = endPos - start + 1
-    gb.replace(start, deleteLength, text)
 
 # Memory usage
 
 proc estimateMemoryUsage*(gb: GapBuffer): int =
   ## Estimate memory usage in bytes
-  result = sizeof(GapBuffer) + gb.capacity * sizeof(Line)
+  result = sizeof(GapBuffer) + gb.capacity * sizeof(string)
 
-  for i in 0 ..< gb.logicalLineCount:
+  for i in 0 ..< gb.len:
     let
       physicalLine = gb.logicalToPhysical(i)
       line = gb.lines[physicalLine]
-    if not line.isNil:
-      result += sizeof(Line) + line.content.len
+    result += sizeof(string) + line.len
 
 # Debug information
 

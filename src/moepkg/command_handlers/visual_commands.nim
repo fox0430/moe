@@ -22,6 +22,8 @@
 ## This module provides Visual mode specific command implementations
 ## that are independent of CommandContext for better testability
 
+import pkg/results
+
 import ../[buffer, types, cursor]
 
 proc visualMoveLeft*(buffer: TextBuffer, state: EditorState) =
@@ -76,10 +78,14 @@ proc visualDelete*(buffer: TextBuffer, state: EditorState) =
         else:
           (state.visualSelection.current, state.visualSelection.start)
 
-    buffer.deleteRange(selStart, selEnd)
-    # Move cursor to start of deleted range
-    buffer.cursor = selStart
-    state.visualSelection.active = false
-    state.needsFullRedraw = true
+    let result = buffer.deleteRange(selStart, selEnd)
+    if result.isErr:
+      # TODO: Show error message to user
+      discard
+    else:
+      # Move cursor to start of deleted range
+      buffer.cursor = selStart
+      state.visualSelection.active = false
+      state.needsFullRedraw = true
     # Return to previous mode (before entering Visual mode)
     state.mode = state.previousMode

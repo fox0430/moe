@@ -123,7 +123,13 @@ proc handleNormalMode*(
     # Check if we're entering Insert mode
     if r.modeTransition.isSome and r.modeTransition.get == EditorMode.Insert:
       # Begin a transaction when entering Insert mode
-      buffer.beginTransaction("Insert mode edit")
+      let transactionResult = buffer.beginTransaction("Insert mode edit")
+      if transactionResult.isErr:
+        # This should not happen in normal operation, but handle it gracefully
+        return HandlerResult(
+          kind: hrError,
+          errorMessage: "Failed to begin transaction: " & transactionResult.error,
+        )
     return HandlerResult(
       kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
     )
@@ -142,7 +148,13 @@ proc handleInsertMode*(
     # Check if we're leaving Insert mode
     if r.modeTransition.isSome and r.modeTransition.get != EditorMode.Insert:
       # Commit the transaction when leaving Insert mode
-      buffer.commitTransaction()
+      let transactionResult = buffer.commitTransaction()
+      if transactionResult.isErr:
+        # This should not happen in normal operation, but handle it gracefully
+        return HandlerResult(
+          kind: hrError,
+          errorMessage: "Failed to commit transaction: " & transactionResult.error,
+        )
     return HandlerResult(
       kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
     )

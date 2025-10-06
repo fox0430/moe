@@ -134,14 +134,14 @@ proc handleInsertModeEntry*(
     let currentLine = buffer.cursor.line
     let lineContent = buffer.getLine(currentLine)
     buffer.cursor.column = lineContent.len
-    buffer.insertText(buffer.cursor, "\n")
+    discard buffer.insertText(buffer.cursor, "\n")
     buffer.cursor.line = currentLine + 1
     buffer.cursor.column = 0
   of "open-above":
     # Insert new line above and position cursor
     let currentLine = buffer.cursor.line
     buffer.cursor.column = 0
-    buffer.insertText(buffer.cursor, "\n")
+    discard buffer.insertText(buffer.cursor, "\n")
     buffer.cursor.line = currentLine
     buffer.cursor.column = 0
   else:

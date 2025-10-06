@@ -19,23 +19,15 @@
 
 ## Main buffer interface
 
-import std/[unicode, options, strutils]
+import std/[unicode, options, strutils, deques]
 
 import pkg/results
 
-import gapbuffer, cursor, unicode_utils
+import gapbuffer, cursor, unicode_utils, encoding
+
+export CharacterEncoding, encodingToString, detectCharacterEncoding
 
 type
-  CharacterEncoding* = enum
-    utf8
-    utf16
-    utf16Be
-    utf16Le
-    utf32
-    utf32Be
-    utf32Le
-    unknown
-
   LineEnding* = enum
     LF
     CRLF
@@ -83,17 +75,20 @@ type
   TextBuffer* = ref object
     backend*: BufferBackend
     filePath*: Option[string]
-    modified*: bool
     readOnly*: bool
     lineEnding*: LineEnding
     encoding*: CharacterEncoding
     endOfLine*: bool # Whether file should end with newline (vim 'endofline' option)
     cursor*: BufferPosition # Buffer-specific cursor position
 
-    # Undo/Redo stacks
-    undoStack*: seq[BufferChange]
-    redoStack*: seq[BufferChange]
+    # Undo/Redo stacks (using Deque for O(1) operations at both ends)
+    undoStack*: Deque[BufferChange]
+    redoStack*: Deque[BufferChange]
     maxUndoLevels*: int # Maximum number of undo levels (0 = unlimited)
+
+    # Change sequence tracking for modified flag
+    changeSeq*: int # Current change sequence number
+    savedSeq*: int # Sequence number when file was last saved
 
     # Transaction support
     currentTransaction*: Option[BufferTransaction]
@@ -107,6 +102,18 @@ type
 proc chooseBackend(): BufferBackend =
   GapBuffer
 
+proc isModified*(b: TextBuffer): bool {.inline.} =
+  ## Check if buffer has unsaved changes
+  b.changeSeq != b.savedSeq
+
+proc `modified=`*(
+    b: TextBuffer, value: bool
+) {.deprecated: "Use saveFile to mark as unmodified".} =
+  ## Deprecated: modified flag is now managed automatically
+  ## Set savedSeq to current changeSeq if value is false
+  if not value:
+    b.savedSeq = b.changeSeq
+
 proc newTextBuffer*(
     content: string = "", filePath: Option[string] = none(string)
 ): TextBuffer =
@@ -118,16 +125,17 @@ proc newTextBuffer*(
       backendKind: GapBuffer,
       backend: backend,
       filePath: filePath,
-      modified: false,
       readOnly: false,
       lineEnding: LF,
       encoding: utf8,
       endOfLine: true, # Default to POSIX text file standard
       cursor: BufferPosition(line: 0, column: 0),
       gapBuffer: newGapBuffer(content),
-      undoStack: @[],
-      redoStack: @[],
+      undoStack: initDeque[BufferChange](),
+      redoStack: initDeque[BufferChange](),
       maxUndoLevels: 1000, # Default maximum undo levels
+      changeSeq: 0, # Initial sequence number
+      savedSeq: 0, # Starts as saved (no changes)
       currentTransaction: none(BufferTransaction),
       inTransaction: false,
     )
@@ -141,12 +149,7 @@ proc getTextString*(b: TextBuffer): string =
 proc len*(b: TextBuffer): int =
   ## Get number of lines in buffer
   case b.backendKind
-  of GapBuffer: b.gapBuffer.lineCount
-
-proc charAt*(b: TextBuffer, position: int): char =
-  case b.backendKind
-  of GapBuffer:
-    b.gapBuffer.charAt(position)
+  of GapBuffer: b.gapBuffer.len
 
 proc charLen*(text: string): int =
   ## Get character length (not byte length)
@@ -156,6 +159,10 @@ proc getLine*(b: TextBuffer, lineIndex: int): string =
   case b.backendKind
   of GapBuffer:
     b.gapBuffer.getLine(lineIndex)
+
+proc `[]`*(b: TextBuffer, lineIndex: int): string =
+  ## Bracket operator for accessing lines by index
+  b.getLine(lineIndex)
 
 proc getLineLen*(b: TextBuffer, lineIndex: int): int =
   b.getLine(lineIndex).len
@@ -168,130 +175,110 @@ proc getCurrentLine*(b: TextBuffer): string =
 proc getCurrentLineLen*(b: TextBuffer): int {.inline.} =
   b.getCurrentLine.len
 
-# Line-based helper functions
-proc lineToPosition*(b: TextBuffer, pos: BufferPosition): int =
-  ## Convert line/column position (character-based) to byte position
-  ## pos.column is interpreted as a character position (Unicode-aware)
-
-  # Validate line number
-  if pos.line < 0 or pos.line >= b.len:
-    return 0
-
-  # Calculate byte position of line start
-  var bytePos = 0
-  for i in 0 ..< pos.line:
-    bytePos += b.getLine(i).len + 1 # +1 for newline character
-
-  # Get the line content and convert character position to byte offset
-  let
-    line = b.getLine(pos.line)
-    byteOffset = charToBytePos(line, pos.column)
-
-  return bytePos + byteOffset
-
-proc positionToLine*(b: TextBuffer, position: int): BufferPosition =
-  ## Convert byte position to line/column position (character-based)
-  ## Returns column as character position (Unicode-aware)
-
-  var
-    currentLine = 0
-    bytePos = 0
-
-  # Find which line the position is on
-  for lineIdx in 0 ..< b.len:
-    let
-      line = b.getLine(lineIdx)
-      lineEndByte = bytePos + line.len
-
-    if position <= lineEndByte:
-      # Position is on this line
-      let
-        byteOffsetInLine = position - bytePos
-        charColumn = byteToCharPos(line, byteOffsetInLine)
-      return BufferPosition(line: lineIdx, column: charColumn)
-
-    bytePos = lineEndByte + 1 # +1 for newline
-
-    currentLine = lineIdx + 1
-
-  # Position is past the end of the buffer
-  if b.len > 0:
-    let lastLine = b.getLine(b.len - 1)
-    BufferPosition(line: b.len - 1, column: charLen(lastLine))
-  else:
-    BufferPosition(line: 0, column: 0)
+proc `[][]`*(b: TextBuffer, lineIndex, colIndex: int): char =
+  ## Bracket operator for accessing character at (line, column)
+  b[lineIndex][colIndex]
 
 # Forward declaration for undo system
 proc pushUndoChange(b: TextBuffer, change: BufferChange)
 
 # Editing operations
-proc insertText*(b: TextBuffer, pos: BufferPosition, text: string) =
+proc insertText*(b: TextBuffer, pos: BufferPosition, text: string): Result[(), string] =
+  ## Insert text at the specified position
+  ## Returns error if position is out of bounds
   if text.len == 0:
-    return
+    return ok(())
+
+  if pos.line < 0 or pos.line >= b.len:
+    return err("Line position out of bounds: " & $pos.line)
+
+  if pos.column < 0:
+    return err("Column position cannot be negative: " & $pos.column)
 
   case b.backendKind
   of GapBuffer:
-    let position = b.lineToPosition(pos)
-    b.gapBuffer.insert(position, text)
+    try:
+      # Convert character position to byte position for gapbuffer
+      let line = b.getLine(pos.line)
+      let bytePos = charToBytePos(line, pos.column)
+      b.gapBuffer.insertIntoLine(pos.line, bytePos, text)
+    except IndexDefect as e:
+      return err("Failed to insert text: " & e.msg)
 
   # Record change for undo
   b.pushUndoChange(BufferChange(kind: ckInsertText, insertPos: pos, insertText: text))
 
-  b.modified = true
+  return ok(())
 
-proc charToBytePos*(text: string, charPos: int): int =
-  ## Convert character position to byte position (Unicode-aware)
-  var currentChar = 0
+proc deleteChar*(b: TextBuffer, pos: BufferPosition): Result[(), string] =
+  ## Delete a single Unicode character at the specified position
+  ## Returns error if position is out of bounds
+  if pos.line < 0 or pos.line >= b.len:
+    return err("Line position out of bounds: " & $pos.line)
 
-  for rune in text.runes:
-    if currentChar >= charPos:
-      break
-    result += rune.size
-    currentChar += 1
+  if pos.column < 0:
+    return err("Column position cannot be negative: " & $pos.column)
 
-proc deleteChar*(b: TextBuffer, pos: BufferPosition) =
-  # Unicode-aware character deletion
   case b.backendKind
   of GapBuffer:
-    # Use byte-based approach to avoid line reconstruction issues
-    if pos.line >= 0 and pos.line < b.len:
-      let line = b.getLine(pos.line)
-      if pos.column >= 0 and pos.column < line.charLen:
-        # Get the character that will be deleted for undo
-        let
-          deletedChar = line.runeAtPos(pos.column)
-          charSize = len($deletedChar)
+    let line = b.getLine(pos.line)
+    if pos.column >= line.charLen:
+      return err("Column position out of bounds: " & $pos.column)
 
-        # Convert to byte position and delete directly
-        let bytePos = b.lineToPosition(pos)
-        b.gapBuffer.delete(bytePos, charSize)
+    try:
+      # Get the character that will be deleted for undo
+      let
+        deletedChar = line.runeAtPos(pos.column)
+        charSize = len($deletedChar)
+        bytePos = charToBytePos(line, pos.column)
 
-        # Record change for undo
-        b.pushUndoChange(
-          BufferChange(kind: ckDeleteText, deletePos: pos, deletedText: $deletedChar)
-        )
+      # Delete character at byte position
+      b.gapBuffer.deleteAtLineCol(pos.line, bytePos, charSize)
 
-  b.modified = true
+      # Record change for undo
+      b.pushUndoChange(
+        BufferChange(kind: ckDeleteText, deletePos: pos, deletedText: $deletedChar)
+      )
+    except IndexDefect as e:
+      return err("Failed to delete character: " & e.msg)
 
-proc insertLine*(b: TextBuffer, lineIndex: int, content: string) =
+  return ok(())
+
+proc insert*(b: TextBuffer, lineIndex: int, content: string): Result[(), string] =
+  ## Insert a new line at the specified index
+  ## Returns error if lineIndex is out of valid range [0..len]
+  if lineIndex < 0 or lineIndex > b.len:
+    return err("Line index out of valid range [0.." & $b.len & "]: " & $lineIndex)
+
   case b.backendKind
   of GapBuffer:
-    b.gapBuffer.insertLine(lineIndex, content)
+    try:
+      b.gapBuffer.insertLine(lineIndex, content)
+    except IndexDefect as e:
+      return err("Failed to insert line: " & e.msg)
 
   # Record change for undo
   b.pushUndoChange(
     BufferChange(kind: ckInsertLine, insertLineIdx: lineIndex, insertLineText: content)
   )
 
-  b.modified = true
+  return ok(())
 
-proc deleteLine*(b: TextBuffer, lineIndex: int) =
+proc deleteLine*(b: TextBuffer, lineIndex: int): Result[(), string] =
+  ## Delete the line at the specified index
+  ## Returns error if lineIndex is out of bounds
+  if lineIndex < 0 or lineIndex >= b.len:
+    return err("Line index out of bounds: " & $lineIndex)
+
   # Save line content before deleting for undo
   let deletedContent = b.getLine(lineIndex)
 
   case b.backendKind
   of GapBuffer:
-    b.gapBuffer.deleteLine(lineIndex)
+    try:
+      b.gapBuffer.deleteLine(lineIndex)
+    except IndexDefect as e:
+      return err("Failed to delete line: " & e.msg)
 
   # Record change for undo
   b.pushUndoChange(
@@ -300,109 +287,171 @@ proc deleteLine*(b: TextBuffer, lineIndex: int) =
     )
   )
 
-  b.modified = true
+  return ok(())
 
 proc getTextInRange*(b: TextBuffer, startPos, endPos: BufferPosition): string =
   ## Get text from startPos to endPos (inclusive)
+  ## Both positions use character indices (not byte indices)
+  ## If positions are out of bounds, they are clamped to valid range
   if startPos.line == endPos.line:
-    let line = b.getLine(startPos.line)
-    if endPos.column >= line.charLen:
-      # Include newline
-      result = line.substr(startPos.column) & "\n"
+    # Single line case
+    let line = b[startPos.line]
+    let lineLen = line.charLen
+
+    # Clamp positions to valid range
+    let
+      startCol = min(startPos.column, lineLen)
+      endCol = min(endPos.column, lineLen)
+
+    if endCol >= lineLen:
+      # Selection extends to/past line end - include newline
+      if startCol >= lineLen:
+        result = "\n"
+      else:
+        result = line.runeSubStr(startCol) & "\n"
     else:
-      result = line.substr(startPos.column, endPos.column)
+      # Selection within line
+      if startCol >= lineLen:
+        result = ""
+      elif startCol == endCol:
+        # Single character
+        result = $line.runeAtPos(startCol)
+      else:
+        result = line.runeSubStr(startCol, endCol - startCol + 1)
   else:
     # Multi-line range
     for lineIdx in startPos.line .. endPos.line:
       let line = b.getLine(lineIdx)
+      let lineLen = line.charLen
+
       if lineIdx == startPos.line:
-        result &= line.substr(startPos.column) & "\n"
+        # First line: from startPos.column to end
+        let startCol = min(startPos.column, lineLen)
+        if startCol >= lineLen:
+          result &= "\n"
+        else:
+          result &= line.runeSubStr(startCol) & "\n"
       elif lineIdx == endPos.line:
-        if endPos.column >= line.charLen:
+        # Last line: from beginning to endPos.column
+        let endCol = min(endPos.column, lineLen)
+        if endCol >= lineLen:
           result &= line & "\n"
         else:
-          result &= line.substr(0, endPos.column)
+          result &= line.runeSubStr(0, endCol + 1)
       else:
+        # Middle lines: entire line
         result &= line & "\n"
 
-proc deleteRange*(b: TextBuffer, startPos, endPos: BufferPosition) =
+proc buildMergedLine(prefix: string, suffix: string): string {.inline.} =
+  ## Helper to build a merged line from prefix and suffix
+  prefix & suffix
+
+proc deleteRangeSingleLine(
+    b: TextBuffer, line: string, startPos, endPos: BufferPosition
+) =
+  ## Handle single-line deletion
+  let lineLen = line.charLen
+
+  # Check if selection extends to or past line end (includes newline)
+  if endPos.column >= lineLen:
+    # Delete from startPos to end of line, then join with next line
+    if endPos.line < b.len - 1:
+      # Multi-line: join with next line
+      let nextLine = b.getLine(endPos.line + 1)
+      let prefix =
+        if startPos.column < lineLen:
+          line.runeSubStr(0, startPos.column)
+        else:
+          ""
+      let newLine = buildMergedLine(prefix, nextLine)
+
+      # Delete current and next line, insert combined
+      b.gapBuffer.deleteLine(endPos.line + 1)
+      b.gapBuffer.deleteLine(startPos.line)
+      b.gapBuffer.insertLine(startPos.line, newLine)
+    else:
+      # Last line: just delete to end
+      let newLine =
+        if startPos.column < lineLen:
+          line.runeSubStr(0, startPos.column)
+        else:
+          ""
+      b.gapBuffer.deleteLine(startPos.line)
+      b.gapBuffer.insertLine(startPos.line, newLine)
+  elif startPos.column < lineLen and endPos.column < lineLen:
+    # Normal single-line deletion within bounds
+    # Build new line by concatenating prefix and suffix using Unicode-safe substring
+    let prefix = line.runeSubStr(0, startPos.column)
+    let suffix = line.runeSubStr(endPos.column + 1)
+    let newLine = buildMergedLine(prefix, suffix)
+
+    b.gapBuffer.deleteLine(startPos.line)
+    b.gapBuffer.insertLine(startPos.line, newLine)
+
+proc deleteRangeMultiLine(b: TextBuffer, startPos, endPos: BufferPosition) =
+  ## Handle multi-line deletion
+  let
+    startLine = b.getLine(startPos.line)
+    endLine = b.getLine(endPos.line)
+    endLineLen = endLine.charLen
+
+  # Build prefix (chars before selection start)
+  let prefix =
+    if startPos.column < startLine.charLen:
+      startLine.runeSubStr(0, startPos.column)
+    else:
+      ""
+
+  # Build suffix (chars after selection end)
+  var suffix = ""
+  var extraLineToDelete = -1
+
+  if endPos.column < endLineLen:
+    # Selection ends within the line - keep remaining chars
+    suffix = endLine.runeSubStr(endPos.column + 1)
+  elif endPos.line < b.len - 1:
+    # Selection extends to/past line end - join with next line instead
+    suffix = b.getLine(endPos.line + 1)
+    extraLineToDelete = endPos.line + 1
+
+  # Delete extra line if needed
+  if extraLineToDelete >= 0:
+    b.gapBuffer.deleteLine(extraLineToDelete)
+
+  # Delete all lines from startPos.line to endPos.line
+  for i in countdown(endPos.line, startPos.line):
+    b.gapBuffer.deleteLine(i)
+
+  # Insert the combined line
+  b.gapBuffer.insertLine(startPos.line, buildMergedLine(prefix, suffix))
+
+proc deleteRange*(b: TextBuffer, startPos, endPos: BufferPosition): Result[(), string] =
   ## Delete text from startPos to endPos (inclusive)
   ## Assumes startPos <= endPos (normalized range)
   ## If selection extends to/past line end, includes the newline
+  ## Returns error if positions are out of bounds
+
+  if startPos.line < 0 or startPos.line >= b.len:
+    return err("Start line position out of bounds: " & $startPos.line)
+
+  if endPos.line < 0 or endPos.line >= b.len:
+    return err("End line position out of bounds: " & $endPos.line)
+
+  if startPos.column < 0 or endPos.column < 0:
+    return err("Column positions cannot be negative")
 
   # Save deleted text for undo
   let deletedText = b.getTextInRange(startPos, endPos)
 
   case b.backendKind
   of GapBuffer:
-    if startPos.line == endPos.line:
-      # Single line deletion
-      let line = b.getLine(startPos.line)
-      let lineLen = line.charLen
-
-      # Check if selection extends to or past line end (includes newline)
-      if endPos.column >= lineLen:
-        # Delete from startPos to end of line, then join with next line
-        if endPos.line < b.len - 1:
-          # Multi-line: join with next line
-          let nextLine = b.getLine(endPos.line + 1)
-          var newLine = ""
-          if startPos.column < lineLen:
-            newLine = line.substr(0, startPos.column - 1)
-          newLine &= nextLine
-
-          # Delete current and next line, insert combined
-          b.gapBuffer.deleteLine(endPos.line + 1)
-          b.gapBuffer.deleteLine(startPos.line)
-          b.gapBuffer.insertLine(startPos.line, newLine)
-        else:
-          # Last line: just delete to end
-          var newLine = ""
-          if startPos.column < lineLen:
-            newLine = line.substr(0, startPos.column - 1)
-          b.gapBuffer.deleteLine(startPos.line)
-          b.gapBuffer.insertLine(startPos.line, newLine)
-      elif startPos.column < lineLen and endPos.column < lineLen:
-        # Normal single-line deletion within bounds
-        var newLine = line
-        for i in countdown(endPos.column, startPos.column):
-          if i < newLine.charLen:
-            newLine = newLine.deleteCharAt(i)
-
-        b.gapBuffer.deleteLine(startPos.line)
-        b.gapBuffer.insertLine(startPos.line, newLine)
-    else:
-      # Multi-line deletion
-      let
-        startLine = b.getLine(startPos.line)
-        endLine = b.getLine(endPos.line)
-        endLineLen = endLine.charLen
-
-      # Create new combined line
-      var newLine = ""
-
-      # Keep chars before selection start
-      if startPos.column < startLine.charLen:
-        newLine = startLine.substr(0, startPos.column - 1)
-
-      # If endPos is at or past line end, delete the newline (join lines)
-      # Otherwise, keep chars after selection end
-      if endPos.column < endLineLen:
-        # Selection ends within the line - keep remaining chars
-        newLine &= endLine.substr(endPos.column + 1)
-      elif endPos.line < b.len - 1:
-        # Selection extends to/past line end - join with next line instead
-        let nextLine = b.getLine(endPos.line + 1)
-        newLine &= nextLine
-        # Delete one more line (the next line that we're joining)
-        b.gapBuffer.deleteLine(endPos.line + 1)
-
-      # Delete all lines from startPos.line to endPos.line
-      for i in countdown(endPos.line, startPos.line):
-        b.gapBuffer.deleteLine(i)
-
-      # Insert the combined line
-      b.gapBuffer.insertLine(startPos.line, newLine)
+    try:
+      if startPos.line == endPos.line:
+        b.deleteRangeSingleLine(b.getLine(startPos.line), startPos, endPos)
+      else:
+        b.deleteRangeMultiLine(startPos, endPos)
+    except IndexDefect as e:
+      return err("Failed to delete range: " & e.msg)
 
   # Record change for undo
   b.pushUndoChange(
@@ -414,10 +463,11 @@ proc deleteRange*(b: TextBuffer, startPos, endPos: BufferPosition) =
     )
   )
 
-  b.modified = true
+  return ok(())
 
-proc splitLine*(b: TextBuffer, pos: BufferPosition) =
-  # splitLine just inserts a newline, which is already recorded by insertText
+proc splitLine*(b: TextBuffer, pos: BufferPosition): Result[(), string] =
+  ## Split line at the specified position by inserting a newline
+  ## Returns error if position is out of bounds
   b.insertText(pos, "\n")
 
 # Undo/Redo system
@@ -431,27 +481,38 @@ proc pushUndoChange(b: TextBuffer, change: BufferChange) =
     b.currentTransaction = some(transaction)
   else:
     # Add directly to undo stack
-    b.undoStack.add(change)
+    b.undoStack.addLast(change)
 
     # Clear redo stack when new change is made
-    b.redoStack.setLen(0)
+    b.redoStack.clear()
 
-    # Limit undo stack size if maxUndoLevels is set
+    # Increment change sequence number (marks as modified)
+    b.changeSeq.inc
+
+    # Limit undo stack size if maxUndoLevels is set (O(1) operation with deque)
     if b.maxUndoLevels > 0 and b.undoStack.len > b.maxUndoLevels:
-      b.undoStack.delete(0)
+      discard b.undoStack.popFirst()
 
-proc beginTransaction*(b: TextBuffer, description: string = "") =
+proc beginTransaction*(b: TextBuffer, description: string = ""): Result[(), string] =
   ## Begin a transaction to group multiple changes
+  ## Returns error if a transaction is already in progress
   if b.inTransaction:
-    return # Already in a transaction
+    let currentDesc =
+      if b.currentTransaction.isSome:
+        b.currentTransaction.get.description
+      else:
+        "(unknown)"
+    return err("Transaction already in progress: " & currentDesc)
 
   b.inTransaction = true
   b.currentTransaction = some(BufferTransaction(changes: @[], description: description))
+  return ok(())
 
-proc commitTransaction*(b: TextBuffer) =
+proc commitTransaction*(b: TextBuffer): Result[(), string] =
   ## Commit the current transaction
+  ## Returns error if no transaction is in progress
   if not b.inTransaction or b.currentTransaction.isNone:
-    return
+    return err("No transaction in progress")
 
   let transaction = b.currentTransaction.get
   b.inTransaction = false
@@ -459,7 +520,7 @@ proc commitTransaction*(b: TextBuffer) =
 
   # Add transaction as a single undo entry if it has changes
   if transaction.changes.len > 0:
-    b.undoStack.add(
+    b.undoStack.addLast(
       BufferChange(
         kind: ckTransaction,
         transactionChanges: transaction.changes,
@@ -468,19 +529,26 @@ proc commitTransaction*(b: TextBuffer) =
     )
 
     # Clear redo stack when new change is made
-    b.redoStack.setLen(0)
+    b.redoStack.clear()
 
-    # Limit undo stack size if maxUndoLevels is set
+    # Increment change sequence number (marks as modified)
+    b.changeSeq.inc
+
+    # Limit undo stack size if maxUndoLevels is set (O(1) operation with deque)
     if b.maxUndoLevels > 0 and b.undoStack.len > b.maxUndoLevels:
-      b.undoStack.delete(0)
+      discard b.undoStack.popFirst()
 
-proc rollbackTransaction*(b: TextBuffer) =
+  return ok(())
+
+proc rollbackTransaction*(b: TextBuffer): Result[(), string] =
   ## Rollback the current transaction without applying changes
+  ## Returns error if no transaction is in progress
   if not b.inTransaction:
-    return
+    return err("No transaction in progress")
 
   b.inTransaction = false
   b.currentTransaction = none(BufferTransaction)
+  return ok(())
 
 proc getChangePosition(change: BufferChange): BufferPosition =
   ## Get the starting position of a change
@@ -502,6 +570,58 @@ proc getChangePosition(change: BufferChange): BufferPosition =
     else:
       return BufferPosition(line: 0, column: 0)
 
+proc insertTextWithNewlines(b: TextBuffer, pos: BufferPosition, text: string) =
+  ## Insert text that may contain newlines, properly splitting into multiple lines
+  ## This is used internally for undo/redo operations
+  if '\n' notin text:
+    # Simple case: no newlines, just insert into current line
+    let line = b.getLine(pos.line)
+    let bytePos = charToBytePos(line, pos.column)
+    b.gapBuffer.insertIntoLine(pos.line, bytePos, text)
+  else:
+    # Complex case: text contains newlines, need to split current line and insert multiple lines
+    let
+      currentLine = b.getLine(pos.line)
+      currentLineLen = currentLine.charLen
+
+    # Split current line at insertion position
+    let
+      prefix =
+        if pos.column < currentLineLen:
+          currentLine.runeSubStr(0, pos.column)
+        else:
+          currentLine
+      suffix =
+        if pos.column < currentLineLen:
+          currentLine.runeSubStr(pos.column)
+        else:
+          ""
+
+    # Split text to insert by newlines
+    let insertedLines = text.split('\n')
+
+    # Build new lines
+    var newLines: seq[string] = @[]
+
+    if insertedLines.len == 1:
+      # Should not happen (we checked for \n above), but handle it
+      newLines.add(prefix & insertedLines[0] & suffix)
+    else:
+      # First line: prefix + first inserted line
+      newLines.add(prefix & insertedLines[0])
+
+      # Middle lines: just the inserted lines
+      for i in 1 ..< insertedLines.len - 1:
+        newLines.add(insertedLines[i])
+
+      # Last line: last inserted line + suffix
+      newLines.add(insertedLines[^1] & suffix)
+
+    # Replace current line with new lines
+    b.gapBuffer.deleteLine(pos.line)
+    for i, newLine in newLines:
+      b.gapBuffer.insertLine(pos.line + i, newLine)
+
 proc undoChange(b: TextBuffer, change: BufferChange) =
   ## Apply the inverse of a single change (internal helper)
   case change.kind
@@ -509,14 +629,16 @@ proc undoChange(b: TextBuffer, change: BufferChange) =
     # Undo insert by deleting the inserted text (all bytes at once)
     case b.backendKind
     of GapBuffer:
-      let position = b.lineToPosition(change.insertPos)
-      b.gapBuffer.delete(position, change.insertText.len)
+      let line = b.getLine(change.insertPos.line)
+      let bytePos = charToBytePos(line, change.insertPos.column)
+      b.gapBuffer.deleteAtLineCol(change.insertPos.line, bytePos, change.insertText.len)
   of ckDeleteText:
     # Undo delete by inserting the deleted text
     case b.backendKind
     of GapBuffer:
-      let position = b.lineToPosition(change.deletePos)
-      b.gapBuffer.insert(position, change.deletedText)
+      let line = b.getLine(change.deletePos.line)
+      let bytePos = charToBytePos(line, change.deletePos.column)
+      b.gapBuffer.insertIntoLine(change.deletePos.line, bytePos, change.deletedText)
   of ckInsertLine:
     # Undo insert line by deleting it
     case b.backendKind
@@ -529,10 +651,10 @@ proc undoChange(b: TextBuffer, change: BufferChange) =
       b.gapBuffer.insertLine(change.deleteLineIdx, change.deletedLineText)
   of ckDeleteRange:
     # Undo delete range by inserting the deleted text
+    # Handle both single-line and multi-line deletions correctly
     case b.backendKind
     of GapBuffer:
-      let position = b.lineToPosition(change.deleteStartPos)
-      b.gapBuffer.insert(position, change.deletedRangeText)
+      b.insertTextWithNewlines(change.deleteStartPos, change.deletedRangeText)
   of ckTransaction:
     # Undo all changes in transaction in reverse order
     for i in countdown(change.transactionChanges.len - 1, 0):
@@ -551,20 +673,20 @@ proc undo*(b: TextBuffer, count: int = 1): Result[(), string] =
     if b.undoStack.len == 0:
       break
 
-    let change = b.undoStack.pop()
+    let change = b.undoStack.popLast()
     b.undoChange(change)
     undoneChanges.add(change)
 
+    # Decrement change sequence for each undo
+    b.changeSeq.dec
+
   # Add all undone changes to redo stack (in reverse order to maintain correct redo)
   for change in undoneChanges:
-    b.redoStack.add(change)
+    b.redoStack.addLast(change)
 
   # Move cursor to the position of the first change
   if undoneChanges.len > 0:
     b.cursor = getChangePosition(undoneChanges[0])
-
-  # Mark buffer as modified
-  b.modified = true
 
   return Result[(), string].ok ()
 
@@ -574,13 +696,17 @@ proc redoChange(b: TextBuffer, change: BufferChange) =
   of ckInsertText:
     case b.backendKind
     of GapBuffer:
-      let position = b.lineToPosition(change.insertPos)
-      b.gapBuffer.insert(position, change.insertText)
+      let line = b.getLine(change.insertPos.line)
+      let bytePos = charToBytePos(line, change.insertPos.column)
+      b.gapBuffer.insertIntoLine(change.insertPos.line, bytePos, change.insertText)
   of ckDeleteText:
     case b.backendKind
     of GapBuffer:
-      let position = b.lineToPosition(change.deletePos)
-      b.gapBuffer.delete(position, change.deletedText.len)
+      let line = b.getLine(change.deletePos.line)
+      let bytePos = charToBytePos(line, change.deletePos.column)
+      b.gapBuffer.deleteAtLineCol(
+        change.deletePos.line, bytePos, change.deletedText.len
+      )
   of ckInsertLine:
     case b.backendKind
     of GapBuffer:
@@ -590,11 +716,17 @@ proc redoChange(b: TextBuffer, change: BufferChange) =
     of GapBuffer:
       b.gapBuffer.deleteLine(change.deleteLineIdx)
   of ckDeleteRange:
-    # Re-apply delete range (delete all bytes at once)
+    # Re-apply delete range using the same logic as the original deleteRange
+    # Handle both single-line and multi-line deletions correctly
     case b.backendKind
     of GapBuffer:
-      let position = b.lineToPosition(change.deleteStartPos)
-      b.gapBuffer.delete(position, change.deletedRangeText.len)
+      let startPos = change.deleteStartPos
+      let endPos = change.deleteEndPos
+
+      if startPos.line == endPos.line:
+        b.deleteRangeSingleLine(b.getLine(startPos.line), startPos, endPos)
+      else:
+        b.deleteRangeMultiLine(startPos, endPos)
   of ckTransaction:
     # Redo all changes in transaction in forward order
     for change in change.transactionChanges:
@@ -613,20 +745,20 @@ proc redo*(b: TextBuffer, count: int = 1): Result[(), string] =
     if b.redoStack.len == 0:
       break
 
-    let change = b.redoStack.pop()
+    let change = b.redoStack.popLast()
     b.redoChange(change)
     redoneChanges.add(change)
 
+    # Increment change sequence for each redo
+    b.changeSeq.inc
+
   # Add all redone changes back to undo stack (in reverse order)
   for i in countdown(redoneChanges.len - 1, 0):
-    b.undoStack.add(redoneChanges[i])
+    b.undoStack.addLast(redoneChanges[i])
 
   # Move cursor to the position of the first change
   if redoneChanges.len > 0:
     b.cursor = getChangePosition(redoneChanges[0])
-
-  # Mark buffer as modified
-  b.modified = true
 
   return Result[(), string].ok ()
 
@@ -634,168 +766,6 @@ proc redo*(b: TextBuffer, count: int = 1): Result[(), string] =
 proc chooseBackendForFile(): BufferBackend =
   # TODO: Choose appropriate backend based on file size
   chooseBackend()
-
-proc encodingToString*(encoding: CharacterEncoding): string =
-  ## Convert encoding enum to display string
-  case encoding
-  of CharacterEncoding.utf8:
-    return "UTF-8"
-  of CharacterEncoding.utf16:
-    return "UTF-16"
-  of CharacterEncoding.utf16Be:
-    return "UTF-16BE"
-  of CharacterEncoding.utf16Le:
-    return "UTF-16LE"
-  of CharacterEncoding.utf32:
-    return "UTF-32"
-  of CharacterEncoding.utf32Be:
-    return "UTF-32BE"
-  of CharacterEncoding.utf32Le:
-    return "UTF-32LE"
-  of CharacterEncoding.unknown:
-    return "UNKNOWN"
-
-proc validateUtf16Be(s: string): bool =
-  if (s.len mod 2) != 0:
-    return false
-
-  var i = 0
-
-  proc advance(): int =
-    result = 256 * ord(s[i]) + ord(s[i + 1])
-    i += 2
-
-  while i < s.len:
-    let curr = advance()
-    if curr <= 0xD7FF or (0xE000 <= curr and curr <= 0xFFFF):
-      continue
-    let next = advance()
-    if (not (0xD800 <= curr and curr <= 0xDBFF)) or
-        (not (0xDC00 <= next and next <= 0xDFFF)):
-      return false
-    let
-      higher = (curr and 0b11_1111_1111) shl 10
-      lower = (next and 0b11_1111_1111)
-      point = higher or lower
-    if point < 0x10000:
-      return false
-
-  return true
-
-proc validateUtf16Le(s: string): bool =
-  if (s.len mod 2) != 0:
-    return false
-
-  var i = 0
-
-  proc advance(): int =
-    result = ord(s[i]) + 256 * ord(s[i + 1])
-    i += 2
-
-  while i < s.len:
-    let curr = advance()
-    if curr <= 0xD7FF or (0xE000 <= curr and curr <= 0xFFFF):
-      continue
-    let next = advance()
-    if (not (0xD800 <= curr and curr <= 0xDBFF)) or
-        (not (0xDC00 <= next and next <= 0xDFFF)):
-      return false
-    let
-      higher = (curr and 0b11_1111_1111) shl 10
-      lower = (next and 0b11_1111_1111)
-      point = higher or lower
-    if point < 0x10000:
-      return false
-
-  return true
-
-proc validateUtf32Be(s: string): bool =
-  if (s.len mod 4) != 0:
-    return false
-
-  var i = 0
-  proc advance(): uint32 =
-    result =
-      0x1000000'u32 * uint32(ord(s[i])) + 0x10000'u32 * uint32(ord(s[i + 1])) +
-      0x100'u32 * uint32(ord(s[i + 2])) + uint32(ord(s[i + 3]))
-    i += 4
-
-  while i < s.len:
-    let curr = advance()
-    if curr > 0x10FFFF'u32:
-      return false
-
-  return true
-
-proc validateUtf32Le(s: string): bool =
-  if (s.len mod 4) != 0:
-    return false
-
-  var i = 0
-  proc advance(): uint32 =
-    result =
-      uint32(ord(s[i])) + 0x100'u32 * uint32(ord(s[i + 1])) +
-      0x10000'u32 * uint32(ord(s[i + 2])) + 0x1000000'u32 * uint32(ord(s[i + 3]))
-    i += 4
-
-  while i < s.len:
-    let curr = advance()
-    if curr > 0x10FFFF'u32:
-      return false
-
-  return true
-
-proc count0000(s: string): int =
-  var i = 0
-  while i + 1 < s.len:
-    if ord(s[i]) == 0x00 and ord(s[i + 1]) == 0x00:
-      inc(result)
-    i += 2
-
-proc detectCharacterEncoding*(s: string): CharacterEncoding =
-  ## Guess the character encoding.
-  ## In currently, only Unicode formats are supported.
-  ## Returns `CharacterEncoding.utf8` if only ASCII characters are included.
-  ## Returns `CharacterEncoding.unknown` if encoding format is unknown.
-
-  # Check UTF-8 BOM
-  if s.len >= 3 and s[0 .. 2] == "\xEF\xBB\xBF":
-    return CharacterEncoding.utf8
-
-  if s.len >= 4:
-    # Check UTF-32 BOM
-    if s[0 .. 3] == "\x00\x00\xFE\xFF" or s[0 .. 3] == "\xFF\xFE\x00\x00":
-      return CharacterEncoding.utf32
-
-    # Check UTF-16 BOM
-    if s[0 .. 1] == "\xFE\xFF" or s[0 .. 1] == "\xFF\xFE":
-      return CharacterEncoding.utf16
-
-  if s.validateUtf8 == -1:
-    return CharacterEncoding.utf8
-
-  var validEncodings: seq[CharacterEncoding]
-  if s.validateUtf16Be:
-    validEncodings.add(CharacterEncoding.utf16Be)
-  if s.validateUtf16Le:
-    validEncodings.add(CharacterEncoding.utf16Le)
-  if s.validateUtf32Be:
-    validEncodings.add(CharacterEncoding.utf32Be)
-  if s.validateUtf32Le:
-    validEncodings.add(CharacterEncoding.utf32Le)
-
-  let threshold = (s.len / 2) * (2 / 5)
-  if float(count0000(s)) >= threshold:
-    # If there are too many 0x000, assume it is not UTF-16.
-    if validEncodings.contains(CharacterEncoding.utf16Be):
-      validEncodings.delete(validEncodings.find(CharacterEncoding.utf16Be))
-    if validEncodings.contains(CharacterEncoding.utf16Le):
-      validEncodings.delete(validEncodings.find(CharacterEncoding.utf16Le))
-
-  if validEncodings.len == 1:
-    return validEncodings[0]
-
-  return CharacterEncoding.unknown
 
 template detectLineEnding(b: TextBuffer, content: lent string) =
   ## Detect line ending and trailing newline
@@ -837,7 +807,10 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
   b.encoding = detectCharacterEncoding(content)
 
   b.filePath = some(path)
-  b.modified = false
+
+  # Reset change tracking - file was just loaded
+  b.changeSeq = 0
+  b.savedSeq = 0
 
   return Result[(), string].ok ()
 
@@ -876,7 +849,8 @@ proc saveFile*(buffer: TextBuffer, path: string): Result[(), string] =
     except IOError as e:
       return Result[(), string].err e.msg
 
-    buffer.modified = false
+    # Mark buffer as saved at current sequence
+    buffer.savedSeq = buffer.changeSeq
     buffer.filePath = some(path)
 
   return Result[(), string].ok ()

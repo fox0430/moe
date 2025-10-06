@@ -91,7 +91,7 @@ proc handleCharacterInsertion*(
 ): InsertModeResult =
   ## Handle regular character insertion
   let pos = buffer.cursor
-  buffer.insertText(pos, $char)
+  discard buffer.insertText(pos, $char)
 
   # Move cursor right after insertion
   buffer.cursor.column += 1
@@ -107,27 +107,27 @@ proc handleBackspace*(
   if pos.column > 0:
     # Move cursor back and delete
     buffer.cursor.column -= 1
-    buffer.deleteChar(buffer.cursor)
+    discard buffer.deleteChar(buffer.cursor)
   elif pos.line > 0:
     # At start of line, join with previous line
     let prevLine = buffer.getLine(pos.line - 1)
     buffer.cursor.line -= 1
     buffer.cursor.column = prevLine.len
     # Join lines by deleting the newline
-    buffer.deleteChar(buffer.cursor)
+    discard buffer.deleteChar(buffer.cursor)
 
   return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
 proc handleDelete*(handler: InsertModeHandler, buffer: TextBuffer): InsertModeResult =
   ## Handle delete key
-  buffer.deleteChar(buffer.cursor)
+  discard buffer.deleteChar(buffer.cursor)
 
   return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
 proc handleNewline*(handler: InsertModeHandler, buffer: TextBuffer): InsertModeResult =
   ## Handle newline insertion
   let pos = buffer.cursor
-  buffer.insertText(pos, "\n")
+  discard buffer.insertText(pos, "\n")
 
   # Move cursor to start of new line
   buffer.cursor.line += 1

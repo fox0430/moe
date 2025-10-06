@@ -81,7 +81,7 @@ proc executeQuit*(
   ## Execute quit command (:q, :q!) - now closes current window
   if not force:
     # Check if there are unsaved changes
-    if buffer.modified:
+    if buffer.isModified:
       return CommandModeResult(
         kind: cmrError, errorMessage: "No write since last change (add ! to override)"
       )
@@ -125,7 +125,7 @@ proc executeQuitAll*(
   ## Execute quit all command (:qa, :qa!) - closes all windows and quits
   if not force:
     # Check if there are unsaved changes
-    if buffer.modified:
+    if buffer.isModified:
       return CommandModeResult(
         kind: cmrError, errorMessage: "No write since last change (add ! to override)"
       )

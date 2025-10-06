@@ -27,7 +27,7 @@ import ../[buffer, types, modes]
 proc insertChar*(buffer: TextBuffer, ch: char) =
   ## Insert a character at cursor position
   let pos = buffer.cursor
-  buffer.insertText(pos, $ch)
+  discard buffer.insertText(pos, $ch)
   # Move cursor right after insertion
   buffer.cursor.column += 1
 
@@ -37,23 +37,23 @@ proc insertBackspace*(buffer: TextBuffer) =
   if pos.column > 0:
     # Move cursor back and delete
     buffer.cursor.column -= 1
-    buffer.deleteChar(buffer.cursor)
+    discard buffer.deleteChar(buffer.cursor)
   elif pos.line > 0:
     # At start of line, join with previous line
     let prevLine = buffer.getLine(pos.line - 1)
     buffer.cursor.line -= 1
     buffer.cursor.column = prevLine.len
     # Join lines by deleting the newline
-    buffer.deleteChar(buffer.cursor)
+    discard buffer.deleteChar(buffer.cursor)
 
 proc insertDelete*(buffer: TextBuffer) =
   ## Handle delete key in insert mode
-  buffer.deleteChar(buffer.cursor)
+  discard buffer.deleteChar(buffer.cursor)
 
 proc insertNewline*(buffer: TextBuffer) =
   ## Handle newline insertion
   let pos = buffer.cursor
-  buffer.insertText(pos, "\n")
+  discard buffer.insertText(pos, "\n")
   # Move cursor to start of new line
   buffer.cursor.line += 1
   buffer.cursor.column = 0
@@ -65,7 +65,7 @@ proc insertLineBelow*(buffer: TextBuffer, state: EditorState) =
   let lineContent = buffer.getLine(currentLine)
   buffer.cursor.column = lineContent.len
   # Insert newline
-  buffer.insertText(buffer.cursor, "\n")
+  discard buffer.insertText(buffer.cursor, "\n")
   # Move cursor to new line
   buffer.cursor.line = currentLine + 1
   buffer.cursor.column = 0
@@ -78,7 +78,7 @@ proc insertLineAbove*(buffer: TextBuffer, state: EditorState) =
   # Move to start of current line
   buffer.cursor.column = 0
   # Insert newline
-  buffer.insertText(buffer.cursor, "\n")
+  discard buffer.insertText(buffer.cursor, "\n")
   # Move cursor to the new line (which is the current line)
   buffer.cursor.line = currentLine
   buffer.cursor.column = 0
