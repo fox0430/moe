@@ -22,18 +22,18 @@
 ## This module extends the command executor to handle text objects
 ## like iw, aw, i", a", i(, a(, etc.
 
-import std/options
+import std/[options, unicode]
 
 import pkg/results
 
-import buffer, cursor, types
+import buffer, cursor, types, unicode_utils
 
 type
   # Motion command with count
   MotionCommand* = object
     motion*: Motion
     count*: int
-    targetChar*: char # For find/till commands
+    targetChar*: string # For find/till commands
 
   # Motion executor - handles only motion logic
   MotionExecutor* = ref object
@@ -61,14 +61,8 @@ proc moveLeft(
 ): CursorPosition =
   result = currentPos
   if currentPos.y >= 0 and currentPos.y < e.buffer.len:
-    let line = e.buffer.getLine(currentPos.y)
-    var newCol = currentPos.x
-    for _ in 0 ..< count:
-      if newCol > 0:
-        newCol -= 1
-        while newCol > 0 and ord(line[newCol]) >= 0x80 and ord(line[newCol]) < 0xC0:
-          newCol -= 1
-    result.x = max(0, newCol)
+    # Move left by character count, not byte count
+    result.x = max(0, currentPos.x - count)
 
 proc moveRight(
     e: MotionExecutor, currentPos: CursorPosition, count: int
@@ -76,19 +70,10 @@ proc moveRight(
   result = currentPos
   if currentPos.y >= 0 and currentPos.y < e.buffer.len:
     let line = e.buffer.getLine(currentPos.y)
-    var newCol = currentPos.x
-    for _ in 0 ..< count:
-      if newCol < line.len:
-        if ord(line[newCol]) < 0x80:
-          newCol += 1
-        elif ord(line[newCol]) < 0xE0:
-          newCol += 2
-        elif ord(line[newCol]) < 0xF0:
-          newCol += 3
-        else:
-          newCol += 4
+    let lineCharLen = line.charLen
+    # Move right by character count, not byte count
     # In normal mode, don't allow cursor to go beyond the last character
-    result.x = min(newCol, max(0, line.len - 1))
+    result.x = min(currentPos.x + count, max(0, lineCharLen - 1))
 
 proc moveUp(e: MotionExecutor, currentPos: CursorPosition, count: int): CursorPosition =
   result = currentPos
@@ -128,8 +113,9 @@ proc moveEnd(e: MotionExecutor, currentPos: CursorPosition): CursorPosition =
   result = currentPos
   if currentPos.y >= 0 and currentPos.y < e.buffer.len:
     let line = e.buffer.getLine(currentPos.y)
+    let lineCharLen = line.charLen
     # In normal mode, cursor should be on the last character, not after it
-    result.x = max(0, line.len - 1)
+    result.x = max(0, lineCharLen - 1)
 
 proc moveFirstLine(e: MotionExecutor, currentPos: CursorPosition): CursorPosition =
   result = currentPos
@@ -155,37 +141,44 @@ proc moveLastLine(
       result.x = 0
 
 proc findChar(
-    e: MotionExecutor, currentPos: CursorPosition, targetChar: char, count: int
+    e: MotionExecutor, currentPos: CursorPosition, targetChar: string, count: int
 ): CursorPosition =
   ## Find next occurrence of character on current line
   result = currentPos
   if currentPos.y >= 0 and currentPos.y < e.buffer.len:
     let line = e.buffer.getLine(currentPos.y)
+    let lineCharLen = line.charLen
     var found = 0
-    for i in currentPos.x + 1 ..< line.len:
-      if line[i] == targetChar:
+    # Search character by character, not byte by byte
+    for charIdx in currentPos.x + 1 ..< lineCharLen:
+      # Get the character at this character position
+      let (rune, _) = getCharAtPos(line, charIdx)
+      if toUTF8(rune) == targetChar:
         found.inc
         if found == count:
-          result.x = i
+          result.x = charIdx
           break
 
 proc findCharBackward(
-    e: MotionExecutor, currentPos: CursorPosition, targetChar: char, count: int
+    e: MotionExecutor, currentPos: CursorPosition, targetChar: string, count: int
 ): CursorPosition =
   ## Find previous occurrence of character on current line
   result = currentPos
   if currentPos.y >= 0 and currentPos.y < e.buffer.len:
     let line = e.buffer.getLine(currentPos.y)
     var found = 0
-    for i in countdown(currentPos.x - 1, 0):
-      if line[i] == targetChar:
+    # Search character by character backward, not byte by byte
+    for charIdx in countdown(currentPos.x - 1, 0):
+      # Get the character at this character position
+      let (rune, _) = getCharAtPos(line, charIdx)
+      if toUTF8(rune) == targetChar:
         found.inc
         if found == count:
-          result.x = i
+          result.x = charIdx
           break
 
 proc tillChar(
-    e: MotionExecutor, currentPos: CursorPosition, targetChar: char, count: int
+    e: MotionExecutor, currentPos: CursorPosition, targetChar: string, count: int
 ): CursorPosition =
   ## Move till (before) next occurrence of character
   result = e.findChar(currentPos, targetChar, count)
@@ -193,7 +186,7 @@ proc tillChar(
     result.x = result.x - 1
 
 proc tillCharBackward(
-    e: MotionExecutor, currentPos: CursorPosition, targetChar: char, count: int
+    e: MotionExecutor, currentPos: CursorPosition, targetChar: string, count: int
 ): CursorPosition =
   ## Move till (after) previous occurrence of character
   result = e.findCharBackward(currentPos, targetChar, count)
@@ -260,22 +253,46 @@ proc clampPosition*(
 
   # Clamp column - ensure line index is valid before accessing
   if result.y >= 0 and result.y < buf.len:
-    let lineLength = buf.getLine(result.y).len
+    let line = buf.getLine(result.y)
+    let lineCharLen = line.charLen # Use character count, not byte count
     # Normal mode keeps cursor on last character, not after it
-    if lineLength == 0:
+    if lineCharLen == 0:
       result.x = 0
-    elif result.x >= lineLength:
+    elif result.x >= lineCharLen:
       # Clamp to last valid character position
-      result.x = max(0, lineLength - 1)
+      result.x = max(0, lineCharLen - 1)
     elif result.x < 0:
       result.x = 0
 
-proc applyCursorPosition*(mgr: CursorManager, pos: CursorPosition) =
+proc applyCursorPosition*(mgr: CursorManager, pos: BufferPosition) =
   ## Update the actual cursor position in state
   mgr.state.cursor = pos
 
 proc newViewportManager*(viewport: ViewPort): ViewportManager =
   ViewportManager(viewport: viewport)
+
+proc calculateScreenLine(
+    buffer: buffer.TextBuffer,
+    startLine: int,
+    targetLine: int,
+    lineWrap: bool,
+    maxWidth: int,
+): int =
+  ## Calculate screen line position of targetLine starting from startLine
+  ## Returns the number of screen lines from startLine to targetLine
+  result = 0
+  for lineIdx in startLine ..< targetLine:
+    if lineIdx >= 0 and lineIdx < buffer.len:
+      if lineWrap:
+        let line = buffer.getLine(lineIdx)
+        let lineCharLen = line.charLen
+        if lineCharLen == 0:
+          result += 1
+        else:
+          let wrappedLines = ((lineCharLen - 1) div maxWidth) + 1
+          result += wrappedLines
+      else:
+        result += 1
 
 proc updateViewport*(
     mgr: ViewportManager,
@@ -283,6 +300,9 @@ proc updateViewport*(
     lineCount: int,
     showStatusLine: bool = true,
     reservedLines: int = -1, # -1 means auto-calculate from showStatusLine
+    lineWrap: bool = false,
+    buffer: buffer.TextBuffer = nil,
+    lineNumOffset: int = 0,
 ) =
   ## Update viewport to keep cursor visible with 1-line scrolling
 
@@ -303,22 +323,56 @@ proc updateViewport*(
       else:
         (if showStatusLine: 2 else: 1)
 
-  # Vertical scrolling - always keep cursor visible
-  if clampedCursorY < mgr.viewport.topLine:
-    # Cursor moved above viewport - scroll up
-    mgr.viewport.topLine = clampedCursorY
-  elif clampedCursorY >= mgr.viewport.topLine + mgr.viewport.height - actualReservedLines:
-    # Cursor moved below viewport - scroll down (account for status and command lines)
-    let
-      newTopLine = clampedCursorY - mgr.viewport.height + actualReservedLines + 1
-      maxTopLine = max(0, lineCount - mgr.viewport.height + actualReservedLines)
-    mgr.viewport.topLine = max(0, min(maxTopLine, newTopLine))
+  # Vertical scrolling - handle line wrap mode differently
+  if lineWrap and not buffer.isNil:
+    # Line wrap mode: calculate screen positions
+    let maxWidth = max(1, mgr.viewport.width - lineNumOffset)
 
-  # Horizontal scrolling - keep cursor visible
-  if clampedCursorX < mgr.viewport.leftColumn:
-    mgr.viewport.leftColumn = clampedCursorX
-  elif clampedCursorX >= mgr.viewport.leftColumn + mgr.viewport.width:
-    mgr.viewport.leftColumn = clampedCursorX - mgr.viewport.width + 1
+    # Calculate cursor's screen line position relative to topLine
+    var cursorScreenLine = calculateScreenLine(
+      buffer, mgr.viewport.topLine, clampedCursorY, lineWrap, maxWidth
+    )
+
+    # Add offset within the cursor's wrapped line
+    if clampedCursorY >= 0 and clampedCursorY < buffer.len:
+      let wrapLineIndex = clampedCursorX div maxWidth
+      cursorScreenLine += wrapLineIndex
+
+    let visibleHeight = mgr.viewport.height - actualReservedLines
+
+    # Scroll up if cursor is above viewport
+    if cursorScreenLine < 0 or clampedCursorY < mgr.viewport.topLine:
+      mgr.viewport.topLine = clampedCursorY
+    # Scroll down if cursor is below viewport
+    elif cursorScreenLine >= visibleHeight:
+      # If cursor is far below viewport (e.g., G command), jump directly
+      if cursorScreenLine >= visibleHeight + 10:
+        # Calculate a reasonable topLine to place cursor near bottom
+        # Simple heuristic: start from a few lines above cursor
+        mgr.viewport.topLine = max(0, clampedCursorY - (visibleHeight div 2))
+      else:
+        # Smooth scroll: move topLine down by one logical line
+        if mgr.viewport.topLine < clampedCursorY:
+          mgr.viewport.topLine += 1
+  else:
+    # No line wrap: simple logic
+    if clampedCursorY < mgr.viewport.topLine:
+      # Cursor moved above viewport - scroll up
+      mgr.viewport.topLine = clampedCursorY
+    elif clampedCursorY >=
+        mgr.viewport.topLine + mgr.viewport.height - actualReservedLines:
+      # Cursor moved below viewport - scroll down (account for status and command lines)
+      let
+        newTopLine = clampedCursorY - mgr.viewport.height + actualReservedLines + 1
+        maxTopLine = max(0, lineCount - mgr.viewport.height + actualReservedLines)
+      mgr.viewport.topLine = max(0, min(maxTopLine, newTopLine))
+
+  # Horizontal scrolling - keep cursor visible (disabled in wrap mode)
+  if not lineWrap:
+    if clampedCursorX < mgr.viewport.leftColumn:
+      mgr.viewport.leftColumn = clampedCursorX
+    elif clampedCursorX >= mgr.viewport.leftColumn + mgr.viewport.width:
+      mgr.viewport.leftColumn = clampedCursorX - mgr.viewport.width + 1
 
 proc newMotionController*(
     buf: buffer.TextBuffer, state: EditorState, viewport: ViewPort
@@ -330,14 +384,12 @@ proc newMotionController*(
   )
 
 proc executeMotion*(
-    controller: MotionController, cmd: MotionCommand
-): Result[(), string] =
+    controller: MotionController, cmd: MotionCommand, currentCursorPos: BufferPosition
+): Result[BufferPosition, string] =
   ## Execute a motion command - main entry point
-  # Get current buffer position (logical position in file)
-  let currentPos = CursorPosition(
-    x: controller.executor.buffer.cursor.column,
-    y: controller.executor.buffer.cursor.line,
-  )
+  ## Returns the new cursor position
+  # Convert to CursorPosition for internal calculations
+  let currentPos = CursorPosition(x: currentCursorPos.column, y: currentCursorPos.line)
   var newPos = controller.executor.calculateNewPosition(
     currentPos, cmd, controller.viewportManager.viewport.height
   )
@@ -345,17 +397,29 @@ proc executeMotion*(
   # Clamp to valid buffer bounds
   newPos = controller.cursorManager.clampPosition(newPos, controller.executor.buffer)
 
-  # Update buffer cursor (logical position)
-  controller.executor.buffer.cursor = BufferPosition(line: newPos.y, column: newPos.x)
+  # Update viewport to follow cursor with line wrap support
+  let
+    lineCount = controller.executor.buffer.len
+    lineWrap = controller.cursorManager.state.lineWrap
+    # Calculate line number offset for viewport calculation (matches renderLineNumbers)
+    lineNumOffset =
+      if lineCount > 0:
+        len($lineCount) + 1
+      else:
+        0
 
-  # Update viewport to follow cursor
-  let lineCount = controller.executor.buffer.len
   controller.viewportManager.updateViewport(
     newPos, lineCount, controller.cursorManager.state.showStatusLine,
-    controller.cursorManager.state.viewportReservedLines,
+    controller.cursorManager.state.viewportReservedLines, lineWrap,
+    controller.executor.buffer, lineNumOffset,
   )
+
+  # Disable horizontal scrolling when line wrap is enabled
+  if lineWrap:
+    controller.viewportManager.viewport.leftColumn = 0
 
   # Store last motion for repeat
   controller.cursorManager.state.lastMotion = some(cmd.motion)
 
-  return Result[(), string].ok ()
+  # Return the new cursor position
+  return ok(BufferPosition(line: newPos.y, column: newPos.x))

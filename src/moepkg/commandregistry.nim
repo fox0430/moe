@@ -282,7 +282,11 @@ proc executeCommand*(
     if ctx.keyBindingRegistry != nil:
       ctx.keyBindingRegistry.sequenceState.numericPrefix = ""
       ctx.keyBindingRegistry.sequenceState.hasNumericPrefix = false
-    return ctx.motionController.executeMotion(motionCmd)
+    let r = ctx.motionController.executeMotion(motionCmd, ctx.state.cursor)
+    if r.isErr:
+      return err(r.error)
+    ctx.state.cursor = r.value
+    return Result[(), string].ok ()
   of ctModeSwitch:
     # Handle mode switching
     ctx.state.mode = cmd.targetMode
@@ -318,7 +322,11 @@ proc executeCommand*(
       if ctx.keyBindingRegistry != nil:
         ctx.keyBindingRegistry.sequenceState.numericPrefix = ""
         ctx.keyBindingRegistry.sequenceState.hasNumericPrefix = false
-      return ctx.motionController.executeMotion(motionCmd)
+      let r = ctx.motionController.executeMotion(motionCmd, ctx.state.cursor)
+      if r.isErr:
+        return err(r.error)
+      ctx.state.cursor = r.value
+      return Result[(), string].ok ()
     of "till":
       # Execute till character motion
       let motionCmd =
@@ -334,7 +342,11 @@ proc executeCommand*(
       if ctx.keyBindingRegistry != nil:
         ctx.keyBindingRegistry.sequenceState.numericPrefix = ""
         ctx.keyBindingRegistry.sequenceState.hasNumericPrefix = false
-      return ctx.motionController.executeMotion(motionCmd)
+      let r = ctx.motionController.executeMotion(motionCmd, ctx.state.cursor)
+      if r.isErr:
+        return err(r.error)
+      ctx.state.cursor = r.value
+      return Result[(), string].ok ()
     of "replace":
       # Execute replace character action
       # This would need to be implemented in the actual editor
@@ -421,7 +433,11 @@ proc registerMotionCommand(
         else:
           1
       let cmd = MotionCommand(motion: motion, count: count)
-      return ctx.motionController.executeMotion(cmd),
+      let r = ctx.motionController.executeMotion(cmd, ctx.state.cursor)
+      if r.isErr:
+        return err(r.error)
+      ctx.state.cursor = r.value
+      return Result[(), string].ok (),
     0,
     maxArgs,
   )
@@ -431,76 +447,76 @@ proc registerMotionCommand(
 proc handleModeSwitch(ctx: CommandContext, targetMode: EditorMode): Result[(), string] =
   ## Handle switching between editor modes
   switchMode(ctx.state, targetMode, ctx.keyBindingRegistry)
-  ok(())
+  Result[(), string].ok ()
 
 proc handleInsertChar(ctx: CommandContext, args: seq[string]): Result[(), string] =
   ## Handle character insertion in insert mode
   if args.len != 1 or args[0].len != 1:
     return err("Insert character requires exactly one character")
-  insertChar(ctx.buffer, args[0][0])
-  ok(())
+  insertChar(ctx.buffer, ctx.state, args[0][0])
+  Result[(), string].ok ()
 
 proc handleBackspace(ctx: CommandContext): Result[(), string] =
   ## Handle backspace key in insert mode
-  insertBackspace(ctx.buffer)
-  ok(())
+  insertBackspace(ctx.buffer, ctx.state)
+  Result[(), string].ok ()
 
 proc handleDelete(ctx: CommandContext): Result[(), string] =
   ## Handle delete key in insert mode
-  insertDelete(ctx.buffer)
-  ok(())
+  insertDelete(ctx.buffer, ctx.state)
+  Result[(), string].ok ()
 
 proc handleNewline(ctx: CommandContext): Result[(), string] =
   ## Handle newline insertion
-  insertNewline(ctx.buffer)
-  ok(())
+  insertNewline(ctx.buffer, ctx.state)
+  Result[(), string].ok ()
 
 proc handleInsertLineBelow(ctx: CommandContext): Result[(), string] =
   ## Handle 'o' command - insert line below and enter insert mode
   insertLineBelow(ctx.buffer, ctx.state)
-  ok(())
+  Result[(), string].ok ()
 
 proc handleInsertLineAbove(ctx: CommandContext): Result[(), string] =
   ## Handle 'O' command - insert line above and enter insert mode
   insertLineAbove(ctx.buffer, ctx.state)
-  ok(())
+  Result[(), string].ok ()
 
 proc handleAppend(ctx: CommandContext): Result[(), string] =
   ## Handle 'a' command - move cursor right and enter insert mode
   insertAppend(ctx.buffer, ctx.state)
-  ok(())
+  Result[(), string].ok ()
 
 proc handleAppendEnd(ctx: CommandContext): Result[(), string] =
   ## Handle 'A' command - move to end of line and enter insert mode
   insertAppendEnd(ctx.buffer, ctx.state)
-  ok(())
+  Result[(), string].ok ()
 
 ## Visual mode command handlers (wrappers for visual_handler functions)
 
 proc handleVisualMoveLeft(ctx: CommandContext): Result[(), string] =
   ## Move left in visual mode and update selection
   visualMoveLeft(ctx.buffer, ctx.state)
-  ok(())
+  Result[(), string].ok ()
 
 proc handleVisualMoveRight(ctx: CommandContext): Result[(), string] =
   ## Move right in visual mode and update selection
   visualMoveRight(ctx.buffer, ctx.state)
-  ok(())
+  Result[(), string].ok ()
 
 proc handleVisualMoveUp(ctx: CommandContext): Result[(), string] =
   ## Move up in visual mode and update selection
   visualMoveUp(ctx.buffer, ctx.state)
-  ok(())
+  Result[(), string].ok ()
 
 proc handleVisualMoveDown(ctx: CommandContext): Result[(), string] =
   ## Move down in visual mode and update selection
   visualMoveDown(ctx.buffer, ctx.state)
-  ok(())
+  Result[(), string].ok ()
 
 proc handleVisualDelete(ctx: CommandContext): Result[(), string] =
   ## Delete visual selection
   visualDelete(ctx.buffer, ctx.state)
-  ok(())
+  Result[(), string].ok ()
 
 ## Register built-in commands
 proc registerBuiltinCommands*(registry: CommandRegistry) =
@@ -751,7 +767,11 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     "Undo",
     "Undo the last change",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      return ctx.buffer.undo(),
+      let r = ctx.buffer.undo()
+      if r.isErr:
+        return err(r.error)
+      # TODO: Apply cursor position from r.value to active window
+      return Result[(), string].ok (),
     0,
     0,
   )
@@ -761,7 +781,11 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     "Redo",
     "Redo the last undone change",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      return ctx.buffer.redo(),
+      let r = ctx.buffer.redo()
+      if r.isErr:
+        return err(r.error)
+      # TODO: Apply cursor position from r.value to active window
+      return Result[(), string].ok (),
     0,
     0,
   )

@@ -45,7 +45,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
   # Handle Enter to execute command
   let isEnter =
     (keyCombo.isSpecial and keyCombo.special == skEnter) or
-    (not keyCombo.isSpecial and (keyCombo.char == '\n' or keyCombo.char == '\r'))
+    (not keyCombo.isSpecial and (keyCombo.char == "\n" or keyCombo.char == "\r"))
 
   if isEnter:
     if e.state.commandText.len > 1: # Must have something after :
@@ -66,8 +66,8 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         # Jump to the specified line
         let lineNum = r.getLineNumber()
         if lineNum > 0 and lineNum <= activeBuffer.len:
-          activeBuffer.cursor.line = lineNum - 1 # Convert to 0-based
-          activeBuffer.cursor.column = 0
+          e.state.cursor.line = lineNum - 1 # Convert to 0-based
+          e.state.cursor.column = 0
 
       if r.shouldVSplit():
         # Handle vertical split
@@ -139,10 +139,10 @@ proc handleEvent*(e: Editor, event: Event): bool =
 
         # Handle second key: j (down/prev) or k (up/next)
         if not keyCombo.isSpecial:
-          if keyCombo.char == 'j':
+          if keyCombo.char == "j":
             e.switchToPrevWindow
             return true
-          elif keyCombo.char == 'k':
+          elif keyCombo.char == "k":
             e.switchToNextWindow
             return true
           else:
@@ -151,7 +151,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
 
       # Check for Ctrl-w to enter window command mode
       if not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers:
-        if keyCombo.char == 'w':
+        if keyCombo.char == "w":
           e.state.command = "window_cmd"
           e.state.statusMessage = "-- (window) --"
           return true
@@ -203,8 +203,8 @@ proc handleEvent*(e: Editor, event: Event): bool =
     # Jump to the specified line
     let lineNum = r.getLineNumber()
     if lineNum > 0 and lineNum <= activeBuffer.len:
-      activeBuffer.cursor.line = lineNum - 1 # Convert to 0-based
-      activeBuffer.cursor.column = 0
+      e.state.cursor.line = lineNum - 1 # Convert to 0-based
+      e.state.cursor.column = 0
 
   # Handle mode transitions
   let modeTransition = r.getModeTransition()

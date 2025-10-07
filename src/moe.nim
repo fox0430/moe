@@ -68,7 +68,7 @@ proc main() =
       app.setCursorStyle(CursorStyle.SteadyBlock)
 
     # Set cursor position from calculated screen coordinates
-    app.setCursor(editor.state.cursor.x, editor.state.cursor.y)
+    app.setCursor(editor.state.screenCursor.x, editor.state.screenCursor.y)
 
   app.run()
 

@@ -108,7 +108,7 @@ proc renderStatusLine*(
 
       if state.showLinePercentage:
         let
-          currentLine = textBuffer.cursor.line + 1 # Convert to 1-based
+          currentLine = state.cursor.line + 1 # Convert to 1-based
           totalLines = textBuffer.len
           percentage =
             if totalLines > 0:
@@ -119,7 +119,7 @@ proc renderStatusLine*(
 
       if state.showLineCount:
         let
-          currentLine = textBuffer.cursor.line + 1 # Convert to 1-based
+          currentLine = state.cursor.line + 1 # Convert to 1-based
           totalLines = textBuffer.len
         parts.add(fmt"{currentLine}/{totalLines}")
 
@@ -211,7 +211,7 @@ proc renderWindowStatusLine*(
 
       if state.showLinePercentage:
         let
-          currentLine = textBuffer.cursor.line + 1 # Convert to 1-based
+          currentLine = state.cursor.line + 1 # Convert to 1-based
           totalLines = textBuffer.len
           percentage =
             if totalLines > 0:
@@ -222,7 +222,7 @@ proc renderWindowStatusLine*(
 
       if state.showLineCount:
         let
-          currentLine = textBuffer.cursor.line + 1 # Convert to 1-based
+          currentLine = state.cursor.line + 1 # Convert to 1-based
           totalLines = textBuffer.len
         parts.add(fmt"{currentLine}/{totalLines}")
 

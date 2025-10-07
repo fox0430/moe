@@ -84,11 +84,19 @@ proc executeCommand*(
     return NormalModeResult(kind: nmrError, errorMessage: r.error)
 
 proc handleMotionCommand*(
-    handler: NormalModeHandler, buffer: TextBuffer, motion: Motion, count: int = 1
+    handler: NormalModeHandler,
+    buffer: TextBuffer,
+    state: EditorState,
+    motion: Motion,
+    count: int = 1,
 ): Result[(), string] =
   ## Handle motion commands (h, j, k, l, w, b, etc.)
   let motionCmd = MotionCommand(motion: motion, count: count)
-  return handler.motionController.executeMotion(motionCmd)
+  let r = handler.motionController.executeMotion(motionCmd, state.cursor)
+  if r.isErr:
+    return err(r.error)
+  state.cursor = r.value
+  return Result[(), string].ok ()
 
 proc handleModeSwitch*(
     handler: NormalModeHandler,
@@ -113,7 +121,10 @@ proc handleModeSwitch*(
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
 
 proc handleInsertModeEntry*(
-    handler: NormalModeHandler, buffer: TextBuffer, insertType: string
+    handler: NormalModeHandler,
+    buffer: TextBuffer,
+    state: EditorState,
+    insertType: string,
 ): NormalModeResult =
   ## Handle different types of insert mode entry (i, a, o, O, etc.)
   case insertType
@@ -122,28 +133,28 @@ proc handleInsertModeEntry*(
     discard
   of "append":
     # Move cursor right if not at end of line
-    let lineContent = buffer.getLine(buffer.cursor.line)
-    if buffer.cursor.column < lineContent.len:
-      buffer.cursor.column += 1
+    let lineContent = buffer.getLine(state.cursor.line)
+    if state.cursor.column < lineContent.len:
+      state.cursor.column += 1
   of "append-end":
     # Move to end of line
-    let lineContent = buffer.getLine(buffer.cursor.line)
-    buffer.cursor.column = lineContent.len
+    let lineContent = buffer.getLine(state.cursor.line)
+    state.cursor.column = lineContent.len
   of "open-below":
     # Insert new line below and position cursor
-    let currentLine = buffer.cursor.line
+    let currentLine = state.cursor.line
     let lineContent = buffer.getLine(currentLine)
-    buffer.cursor.column = lineContent.len
-    discard buffer.insertText(buffer.cursor, "\n")
-    buffer.cursor.line = currentLine + 1
-    buffer.cursor.column = 0
+    state.cursor.column = lineContent.len
+    discard buffer.insertText(state.cursor, "\n")
+    state.cursor.line = currentLine + 1
+    state.cursor.column = 0
   of "open-above":
     # Insert new line above and position cursor
-    let currentLine = buffer.cursor.line
-    buffer.cursor.column = 0
-    discard buffer.insertText(buffer.cursor, "\n")
-    buffer.cursor.line = currentLine
-    buffer.cursor.column = 0
+    let currentLine = state.cursor.line
+    state.cursor.column = 0
+    discard buffer.insertText(state.cursor, "\n")
+    state.cursor.line = currentLine
+    state.cursor.column = 0
   else:
     return NormalModeResult(
       kind: nmrError, errorMessage: "Unknown insert type: " & insertType
@@ -224,7 +235,7 @@ proc handleNormalModeKey*(
         "motion.pagedown"
       else:
         # Fallback to direct motion execution for unsupported motions
-        let motionResult = handler.handleMotionCommand(buffer, cmd.motion)
+        let motionResult = handler.handleMotionCommand(buffer, state, cmd.motion)
         if motionResult.isOk:
           return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
         else:
@@ -250,13 +261,13 @@ proc handleNormalModeKey*(
     # Handle various actions based on command ID
     case cmd.commandId
     of "insert.append":
-      return handler.handleInsertModeEntry(buffer, "append")
+      return handler.handleInsertModeEntry(buffer, state, "append")
     of "insert.append.end":
-      return handler.handleInsertModeEntry(buffer, "append-end")
+      return handler.handleInsertModeEntry(buffer, state, "append-end")
     of "insert.line.below":
-      return handler.handleInsertModeEntry(buffer, "open-below")
+      return handler.handleInsertModeEntry(buffer, state, "open-below")
     of "insert.line.above":
-      return handler.handleInsertModeEntry(buffer, "open-above")
+      return handler.handleInsertModeEntry(buffer, state, "open-above")
     of "delete.word":
       return handler.handleTextManipulation(buffer, "delete", "word")
     of "delete.line":
@@ -264,12 +275,14 @@ proc handleNormalModeKey*(
     of "edit.undo":
       let r = buffer.undo()
       if r.isOk:
+        # TODO: Apply cursor position from r.value
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
       else:
         return NormalModeResult(kind: nmrError, errorMessage: r.error)
     of "edit.redo":
       let r = buffer.redo()
       if r.isOk:
+        # TODO: Apply cursor position from r.value
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
       else:
         return NormalModeResult(kind: nmrError, errorMessage: r.error)

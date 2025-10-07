@@ -71,3 +71,76 @@ proc deleteCharAt*(text: string, charPos: int): string =
     return text
 
   text[0 ..< bytePos] & text[bytePos + size ..^ 1]
+
+proc runeWidth*(r: Rune): int =
+  ## Calculate the display width of a Unicode character
+  ## Returns 2 for East Asian Wide/Fullwidth characters, 1 otherwise
+  let codepoint = r.int32
+
+  # ASCII printable characters: width 1
+  if codepoint >= 0x20 and codepoint <= 0x7E:
+    return 1
+
+  # Control characters: width 0
+  if codepoint < 0x20 or (codepoint >= 0x7F and codepoint < 0xA0):
+    return 0
+
+  # East Asian Wide and Fullwidth characters: width 2
+  # CJK Unified Ideographs
+  if (codepoint >= 0x4E00 and codepoint <= 0x9FFF) or
+  # CJK Unified Ideographs Extension A
+  (codepoint >= 0x3400 and codepoint <= 0x4DBF) or
+  # Hiragana
+  (codepoint >= 0x3040 and codepoint <= 0x309F) or
+  # Katakana
+  (codepoint >= 0x30A0 and codepoint <= 0x30FF) or
+  # Hangul Syllables
+  (codepoint >= 0xAC00 and codepoint <= 0xD7AF) or
+  # Fullwidth ASCII variants
+  (codepoint >= 0xFF01 and codepoint <= 0xFF60) or
+  # Halfwidth and Fullwidth Forms
+  (codepoint >= 0xFFE0 and codepoint <= 0xFFE6):
+    return 2
+
+  # Default: width 1
+  return 1
+
+proc displayWidth*(text: string): int =
+  ## Calculate the display width of a string
+  ## Accounts for East Asian Wide/Fullwidth characters (width 2)
+  result = 0
+  for rune in text.runes:
+    result += runeWidth(rune)
+
+proc displayWidthSubstr*(text: string, startChar: int, maxWidth: int): (int, int) =
+  ## Calculate how many characters fit within maxWidth display columns
+  ## Returns (charCount, actualWidth)
+  var
+    currentChar = 0
+    currentWidth = 0
+
+  for rune in text.runes:
+    if currentChar < startChar:
+      currentChar += 1
+      continue
+
+    let w = runeWidth(rune)
+    if currentWidth + w > maxWidth:
+      break
+
+    currentWidth += w
+    currentChar += 1
+
+  return (currentChar - startChar, currentWidth)
+
+proc displayWidthUpTo*(text: string, charPos: int): int =
+  ## Calculate the display width from start to charPos (not including charPos)
+  ## charPos is a character index (not byte position)
+  result = 0
+  var currentChar = 0
+
+  for rune in text.runes:
+    if currentChar >= charPos:
+      break
+    result += runeWidth(rune)
+    currentChar += 1

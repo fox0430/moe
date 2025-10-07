@@ -63,7 +63,7 @@ type
       special*: SpecialKey
       fnNum*: int ## For function keys
     of false:
-      char*: char
+      char*: string
     modifiers*: set[KeyModifier]
 
   ## Types of commands that can be bound
@@ -88,7 +88,7 @@ type
     of ctOperatorPending:
       operatorType*: string ## "find", "till", "replace", etc
       reverse*: bool ## For F, T (backwards versions)
-      targetChar*: char ## The character to find/till/replace
+      targetChar*: string ## The character to find/till/replace
     of ctAction, ctTextObject, ctOperator, ctCustom:
       commandId*: string # Will be converted to CommandId in commandregistry
       args*: seq[string]
@@ -138,7 +138,7 @@ proc toKeyCombo*(
     ch: char, ctrl = false, alt = false, shift = false, meta = false
 ): KeyCombo =
   ## Create a key combination from a character and modifiers
-  result = KeyCombo(isSpecial: false, char: ch)
+  result = KeyCombo(isSpecial: false, char: $ch)
   if ctrl:
     result.modifiers.incl(kmCtrl)
   if alt:
@@ -193,12 +193,12 @@ proc parseKeyCombo*(s: string): Option[KeyCombo] =
   var combo: KeyCombo
 
   if keyStr.len == 1:
-    combo = KeyCombo(isSpecial: false, char: keyStr[0])
+    combo = KeyCombo(isSpecial: false, char: $keyStr[0])
   else:
     # Handle special keys
     case keyStr.toUpperAscii
     of "SPACE":
-      combo = KeyCombo(isSpecial: false, char: ' ')
+      combo = KeyCombo(isSpecial: false, char: " ")
     of "ENTER", "RETURN":
       combo = KeyCombo(isSpecial: true, special: skEnter, fnNum: 0)
     of "TAB":
@@ -342,8 +342,8 @@ proc clearSequence*(registry: KeyBindingRegistry) =
 
 proc isDigitKey*(combo: KeyCombo): bool =
   ## Check if the key combination is a digit (0-9)
-  not combo.isSpecial and combo.modifiers == {} and combo.char >= '0' and
-    combo.char <= '9'
+  not combo.isSpecial and combo.modifiers == {} and combo.char.len == 1 and
+    combo.char[0] >= '0' and combo.char[0] <= '9'
 
 proc getNumericPrefix*(registry: KeyBindingRegistry): int =
   ## Get the numeric prefix as integer, defaulting to 1
@@ -412,7 +412,7 @@ proc processKey*(
   if registry.sequenceState.keys.len == 0 and not registry.sequenceState.waitingForChar and
       isDigitKey(combo):
     # Special case: ignore leading zero unless it's standalone
-    if combo.char == '0' and registry.sequenceState.numericPrefix.len == 0:
+    if combo.char == "0" and registry.sequenceState.numericPrefix.len == 0:
       # Standalone 0 is not allowed as count prefix in vim, treat as regular key
       discard
     else:
@@ -695,7 +695,7 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
       kind: ctOperatorPending,
       operatorType: "find",
       reverse: false,
-      targetChar: '\0', # Will be filled when user presses a key
+      targetChar: "", # Will be filled when user presses a key
     )
   )
 
@@ -706,7 +706,7 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
       kind: ctOperatorPending,
       operatorType: "find",
       reverse: true,
-      targetChar: '\0', # Will be filled when user presses a key
+      targetChar: "", # Will be filled when user presses a key
     )
   )
 
@@ -717,7 +717,7 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
       kind: ctOperatorPending,
       operatorType: "till",
       reverse: false,
-      targetChar: '\0', # Will be filled when user presses a key
+      targetChar: "", # Will be filled when user presses a key
     )
   )
 
@@ -728,7 +728,7 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
       kind: ctOperatorPending,
       operatorType: "till",
       reverse: true,
-      targetChar: '\0', # Will be filled when user presses a key
+      targetChar: "", # Will be filled when user presses a key
     )
   )
 
@@ -739,7 +739,7 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
       kind: ctOperatorPending,
       operatorType: "replace",
       reverse: false,
-      targetChar: '\0', # Will be filled when user presses a key
+      targetChar: "", # Will be filled when user presses a key
     )
   )
 
@@ -949,7 +949,7 @@ proc eventToKeyCombo*(event: celina.Event): Option[KeyCombo] =
     of celina.KeyCode.End:
       combo = KeyCombo(isSpecial: true, special: skEnd, fnNum: 0)
     of celina.KeyCode.Space:
-      combo = KeyCombo(isSpecial: false, char: ' ')
+      combo = KeyCombo(isSpecial: false, char: " ")
     else:
       # Function keys are handled differently in celina
       return none(KeyCombo)

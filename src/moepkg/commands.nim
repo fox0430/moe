@@ -112,4 +112,6 @@ proc updateViewport*(exec: CommandExecutor) =
 proc executeMotion*(exec: CommandExecutor, motion: Motion, count: int = 1) =
   ## Compatibility wrapper for direct motion execution
   let cmd = MotionCommand(motion: motion, count: count)
-  discard exec.motionController.executeMotion(cmd)
+  let r = exec.motionController.executeMotion(cmd, exec.state.cursor)
+  if r.isOk:
+    exec.state.cursor = r.value

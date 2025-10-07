@@ -132,6 +132,7 @@ proc vsplit*(
     wm: EditorWindowManager,
     currentBuffer: TextBuffer,
     currentViewport: ViewPort,
+    cursorPosition: BufferPosition,
     filename: Option[string] = none(string),
 ): Result[TextBuffer, string] =
   ## Create a vertical split window (side by side)
@@ -143,7 +144,7 @@ proc vsplit*(
       EditorWindow(
         buffer: currentBuffer,
         viewport: currentViewport,
-        cursor: currentBuffer.cursor,
+        cursor: cursorPosition,
         active: false,
       )
     )
@@ -237,6 +238,7 @@ proc hsplit*(
     wm: EditorWindowManager,
     currentBuffer: TextBuffer,
     currentViewport: ViewPort,
+    cursorPosition: BufferPosition,
     filename: Option[string] = none(string),
 ): Result[TextBuffer, string] =
   ## Create a horizontal split window (top and bottom)
@@ -248,7 +250,7 @@ proc hsplit*(
       EditorWindow(
         buffer: currentBuffer,
         viewport: currentViewport,
-        cursor: currentBuffer.cursor,
+        cursor: cursorPosition,
         active: false,
       )
     )

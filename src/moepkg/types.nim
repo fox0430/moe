@@ -75,7 +75,8 @@ type
     active*: bool # Whether selection is currently active
 
   EditorState* = ref object
-    cursor*: CursorPosition # Actual cursor position
+    cursor*: BufferPosition # Actual buffer cursor position (line/column)
+    screenCursor*: CursorPosition # Screen cursor position (x/y)
     mode*: EditorMode
     previousMode*: EditorMode # Previous mode for ESC handling
     command*: string

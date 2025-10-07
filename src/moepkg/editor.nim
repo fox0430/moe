@@ -17,13 +17,13 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, strformat, options, tables]
+import std/[strutils, strformat, options, tables, unicode]
 
 import pkg/[celina, results]
 
 import
   buffer, cursor, types, commands, keybindings, commandregistry, modes, commandline,
-  commandconfig, statusline, windowmanager
+  commandconfig, statusline, windowmanager, unicode_utils
 import command_handlers/[handler_manager, visual_handler]
 
 type Editor* = ref object
@@ -175,7 +175,8 @@ proc setMultiStatusLine*(e: Editor, enabled: bool) =
 
 proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), string] =
   ## Create a vertical split window
-  let bufferResult = e.windowManager.vsplit(e.textBuffer, e.viewport, filename)
+  let bufferResult =
+    e.windowManager.vsplit(e.textBuffer, e.viewport, e.state.cursor, filename)
   if bufferResult.isErr:
     return err(bufferResult.error)
 
@@ -188,7 +189,8 @@ proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
 
 proc hsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), string] =
   ## Create a horizontal split window (top and bottom)
-  let bufferResult = e.windowManager.hsplit(e.textBuffer, e.viewport, filename)
+  let bufferResult =
+    e.windowManager.hsplit(e.textBuffer, e.viewport, e.state.cursor, filename)
   if bufferResult.isErr:
     return err(bufferResult.error)
 
@@ -220,7 +222,8 @@ proc newEditor*(): Editor =
   result = Editor(
     textBuffer: newTextBuffer(),
     state: EditorState(
-      cursor: CursorPosition(x: 0, y: 0),
+      cursor: BufferPosition(line: 0, column: 0),
+      screenCursor: CursorPosition(x: 0, y: 0),
       mode: EditorMode.Normal,
       previousMode: EditorMode.Normal,
       showStatusLine: true,
@@ -260,9 +263,8 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
   if r.isErr:
     return err r.error
 
-  # Reset both cursor positions to file start
-  e.state.cursor = CursorPosition(x: 0, y: 0)
-  e.textBuffer.cursor = BufferPosition(line: 0, column: 0)
+  # Reset cursor to file start
+  e.state.cursor = BufferPosition(line: 0, column: 0)
 
   # Reset viewport to start
   e.viewport.topLine = 0
@@ -302,13 +304,18 @@ proc renderLineNumbers(e: Editor, buffer: var Buffer, textAreaWidth: int): int =
     # Render line numbers with wrapping support
     let
       line = e.textBuffer.getLine(lineIndex)
-      isCurrentLine = lineIndex == e.textBuffer.cursor.line
+      isCurrentLine = lineIndex == e.state.cursor.line
       lineStyle = if isCurrentLine: currentLineStyle else: lineNumStyle
 
-    if e.state.lineWrap and line.len > textAreaWidth:
+    if e.state.lineWrap:
       let
+        lineCharLen = line.charLen # Use character count, not byte count
         # This line will wrap - calculate number of screen lines needed
-        numWraps = (line.len + textAreaWidth - 1) div textAreaWidth
+        numWraps =
+          if lineCharLen == 0:
+            1
+          else:
+            ((lineCharLen - 1) div textAreaWidth) + 1
         # Render line number for first wrap
         lineNumStr = align($(lineIndex + 1), maxLineNumWidth - 1) & " "
 
@@ -372,41 +379,47 @@ proc renderTextBuffer(e: Editor, buffer: var Buffer, area: Rect) =
       # Line wrapping enabled - split long lines across multiple screen lines
       let
         maxWidth = area.width
-        lineLen = line.len
+        lineCharLen = line.charLen # Use character count, not byte count
 
-      if lineLen == 0:
+      if lineCharLen == 0:
         # Empty line
         inc screenY
         inc lineIndex
         continue
 
-      var startCol = 0
-      while startCol < lineLen and screenY < area.height:
+      var startCharCol = 0 # Character position, not byte position
+      while startCharCol < lineCharLen and screenY < area.height:
         let
-          endCol = min(startCol + maxWidth, lineLen)
-          displayLine = line[startCol ..< endCol]
+          endCharCol = min(startCharCol + maxWidth, lineCharLen)
+          # Convert character positions to byte positions for slicing
+          startBytePos = charToBytePos(line, startCharCol)
+          endBytePos = charToBytePos(line, endCharCol)
+          displayLine = line[startBytePos ..< endBytePos]
 
         if displayLine.len > 0:
           # Render with selection highlighting if in visual mode
           if hasSelection and lineIndex >= selStart.line and lineIndex <= selEnd.line:
             # Render character by character to apply selection style
-            for col in startCol ..< endCol:
+            var displayX = 0
+            var charIdx = startCharCol
+            for rune in displayLine.runes:
               let
-                pos = BufferPosition(line: lineIndex, column: col)
+                pos = BufferPosition(line: lineIndex, column: charIdx)
                 style =
                   if e.state.visualSelection.isPositionInSelection(pos):
                     visualStyle
                   else:
                     normalStyle
-                charStr = $line[col]
-              buffer.setString(
-                area.x + (col - startCol), area.y + screenY, charStr, style
-              )
+                charStr = $rune
+              if area.x + displayX < buffer.area.width:
+                buffer.setString(area.x + displayX, area.y + screenY, charStr, style)
+              displayX += 1
+              charIdx += 1
           else:
             buffer.setString(area.x, area.y + screenY, displayLine, normalStyle)
 
         inc screenY
-        startCol += maxWidth
+        startCharCol += maxWidth
     else:
       # No line wrapping - use horizontal scrolling
       let displayLine =
@@ -438,23 +451,75 @@ proc renderTextBuffer(e: Editor, buffer: var Buffer, area: Rect) =
     inc lineIndex
 
 proc setCursorPosition*(e: Editor, lineNumOffset: int) =
-  ## Calculate the cursor screen position from buffer's logical position
+  ## Calculate the cursor screen position from state's logical position
   let
-    cursorLine = e.textBuffer.cursor.line
-    cursorColumn = e.textBuffer.cursor.column
+    cursorLine = e.state.cursor.line
+    cursorColumn = e.state.cursor.column
+    reservedLines = if e.state.showStatusLine: 2 else: 1
+
+  # Check if cursor line is in valid range
+  if cursorLine < 0 or cursorLine >= e.textBuffer.len:
+    return
 
   # Only set screen cursor if the buffer cursor is within visible viewport
-  let reservedLines = if e.state.showStatusLine: 2 else: 1
-    # Status line + command line or just command line
-  if cursorLine >= e.viewport.topLine and
-      cursorLine < e.viewport.topLine + e.viewport.height - reservedLines:
-    let
-      screenY = cursorLine - e.viewport.topLine
-      screenX = lineNumOffset + max(0, cursorColumn - e.viewport.leftColumn)
+  if cursorLine >= e.viewport.topLine:
+    if e.state.lineWrap:
+      # Line wrap enabled - calculate screen position considering wrapped lines
+      let maxWidth = max(1, e.viewport.width - lineNumOffset)
 
-    # Set the screen cursor position for display
-    e.state.cursor.x = screenX
-    e.state.cursor.y = screenY
+      # Count additional screen lines from wrapped lines before cursor line
+      # Only iterate through potentially visible lines to avoid O(n) performance issue
+      var screenY = 0
+      let maxVisibleLine = min(cursorLine, e.viewport.topLine + e.viewport.height)
+
+      for lineIdx in e.viewport.topLine ..< maxVisibleLine:
+        if lineIdx >= 0 and lineIdx < e.textBuffer.len:
+          let line = e.textBuffer.getLine(lineIdx)
+          let lineCharLen = line.charLen # Use character count, not byte count
+          if lineCharLen == 0:
+            screenY += 1
+          else:
+            # Calculate how many screen lines this logical line takes
+            let wrappedLines = ((lineCharLen - 1) div maxWidth) + 1
+            screenY += wrappedLines
+
+          # Early exit if we've already exceeded visible height
+          if screenY >= e.viewport.height - reservedLines:
+            return
+
+      # Calculate cursor position within the wrapped cursor line
+      let cursorLineText = e.textBuffer.getLine(cursorLine)
+
+      # Calculate display width up to cursor position
+      let displayWidthUpToCursor = displayWidthUpTo(cursorLineText, cursorColumn)
+      let wrapLineIndex = displayWidthUpToCursor div maxWidth # Which wrap of this line
+      let wrapLineColumn = displayWidthUpToCursor mod maxWidth # Column within that wrap
+
+      # Add the wraps before cursor position in cursor line
+      screenY += wrapLineIndex
+
+      # Check if cursor is visible on screen
+      if screenY < e.viewport.height - reservedLines:
+        e.state.screenCursor.x = lineNumOffset + wrapLineColumn
+        e.state.screenCursor.y = screenY
+    else:
+      # No line wrapping - use horizontal scrolling
+      if cursorLine < e.viewport.topLine + e.viewport.height - reservedLines:
+        let cursorLineText = e.textBuffer.getLine(cursorLine)
+
+        # Calculate display widths
+        let displayWidthUpToCursor = displayWidthUpTo(cursorLineText, cursorColumn)
+        let displayWidthUpToLeftCol =
+          displayWidthUpTo(cursorLineText, e.viewport.leftColumn)
+
+        let
+          screenY = cursorLine - e.viewport.topLine
+          screenX =
+            lineNumOffset + max(0, displayWidthUpToCursor - displayWidthUpToLeftCol)
+
+        # Set the screen cursor position for display
+        e.state.screenCursor.x = screenX
+        e.state.screenCursor.y = screenY
 
 proc renderWindow(
     e: Editor,
@@ -537,12 +602,12 @@ proc renderWindow(
       # Line wrapping enabled - split long lines across multiple screen lines
       let
         maxWidth = window.viewport.width - lineNumOffset
-        lineLen = line.len
-        isCurrentLine = (lineIndex == window.buffer.cursor.line and window.active)
+        lineCharLen = line.charLen # Use character count, not byte count
+        isCurrentLine = (lineIndex == window.cursor.line and window.active)
         lineStyle = if isCurrentLine: currentLineStyle else: lineNumStyle
         lineNumScreenX = window.viewport.x
 
-      if lineLen == 0:
+      if lineCharLen == 0:
         # Empty line - just render line number
         let lineNumStr = align($(lineIndex + 1), lineNumOffset - 1) & " "
         if lineNumScreenX + lineNumStr.len <= buffer.area.width:
@@ -552,12 +617,15 @@ proc renderWindow(
         continue
 
       var
-        startCol = 0
+        startCharCol = 0 # Character position, not byte position
         wrapLineCount = 0
-      while startCol < lineLen and screenY < visibleHeight:
+      while startCharCol < lineCharLen and screenY < visibleHeight:
         let
-          endCol = min(startCol + maxWidth, lineLen)
-          displayLine = line[startCol ..< endCol]
+          endCharCol = min(startCharCol + maxWidth, lineCharLen)
+          # Convert character positions to byte positions for slicing
+          startBytePos = charToBytePos(line, startCharCol)
+          endBytePos = charToBytePos(line, endCharCol)
+          displayLine = line[startBytePos ..< endBytePos]
           textScreenX = window.viewport.x + lineNumOffset
           currentActualScreenY = window.viewport.y + screenY
 
@@ -576,43 +644,44 @@ proc renderWindow(
             )
 
         if displayLine.len > 0 and textScreenX < buffer.area.width:
-          let displayWidth = min(displayLine.len, maxWidth)
-          if displayWidth > 0:
+          let displayCharCount = endCharCol - startCharCol # Character count in this wrap
+          if displayCharCount > 0:
             # Render with selection highlighting if in visual mode
             if hasSelection and lineIndex >= selStart.line and lineIndex <= selEnd.line:
               # Render character by character to apply selection style
-              for i in 0 ..< displayWidth:
+              var displayX = 0
+              var charIdx = startCharCol
+              for rune in displayLine.runes:
                 let
-                  col = startCol + i
+                  col = charIdx
                   pos = BufferPosition(line: lineIndex, column: col)
                   style =
                     if e.state.visualSelection.isPositionInSelection(pos):
                       visualStyle
                     else:
                       normalStyle
-                  charStr = $displayLine[i]
-                if textScreenX + i < buffer.area.width:
+                  charStr = $rune
+                if textScreenX + displayX < buffer.area.width:
                   buffer.setString(
-                    textScreenX + i, currentActualScreenY, charStr, style
+                    textScreenX + displayX, currentActualScreenY, charStr, style
                   )
+                displayX += 1
+                charIdx += 1
             else:
               buffer.setString(
-                textScreenX,
-                currentActualScreenY,
-                displayLine[0 ..< displayWidth],
-                normalStyle,
+                textScreenX, currentActualScreenY, displayLine, normalStyle
               )
 
         inc screenY
         inc wrapLineCount
-        startCol += maxWidth
+        startCharCol += maxWidth
 
         if screenY >= visibleHeight:
           break
     else:
       # No line wrapping - use horizontal scrolling
       let
-        isCurrentLine = (lineIndex == window.buffer.cursor.line and window.active)
+        isCurrentLine = (lineIndex == window.cursor.line and window.active)
         lineStyle = if isCurrentLine: currentLineStyle else: lineNumStyle
 
       # Render line number
@@ -693,12 +762,10 @@ proc render*(e: Editor, buffer: var Buffer) =
       e.windowManager.resizeWindows(
         e.viewport.width, e.viewport.height, oldWidth, oldHeight
       )
-    # Sync active window's cursor with buffer cursor
+    # Sync active window's cursor with state cursor
     if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-      let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
-      # Update window cursor from buffer
-      e.windowManager.windows[e.windowManager.activeWindowIndex].cursor =
-        activeWindow.buffer.cursor
+      # Update window cursor from editor state
+      e.windowManager.windows[e.windowManager.activeWindowIndex].cursor = e.state.cursor
 
     # Find the maximum bottom Y coordinate (to determine bottom windows)
     var maxBottomY = 0
@@ -711,8 +778,12 @@ proc render*(e: Editor, buffer: var Buffer) =
     for i, window in e.windowManager.windows:
       # Note: Don't override viewport dimensions here as they're set by split logic
 
-      # Render line numbers for this window (simplified for split view)
-      let lineNumOffset = 4 # Fixed width for now
+      # Calculate line number offset dynamically based on buffer size
+      let lineNumOffset =
+        if window.buffer.len > 0:
+          len($window.buffer.len) + 1
+        else:
+          0
 
       # Determine if this is a bottom window (needs status line reservation)
       # A window is a bottom window if its bottom edge is at the maximum bottom Y
@@ -784,14 +855,67 @@ proc render*(e: Editor, buffer: var Buffer) =
     # Set cursor to active window position
     if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
       let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
-      let screenY =
-        activeWindow.viewport.y +
-        (activeWindow.cursor.line - activeWindow.viewport.topLine)
-      let screenX =
-        activeWindow.viewport.x + 4 +
-        max(0, activeWindow.cursor.column - activeWindow.viewport.leftColumn)
-      e.state.cursor.x = screenX
-      e.state.cursor.y = screenY
+      let lineNumOffset =
+        if activeWindow.buffer.len > 0:
+          len($activeWindow.buffer.len) + 1
+        else:
+          0
+
+      if e.state.lineWrap:
+        # Line wrap mode: calculate screen position considering wrapped lines
+        let
+          maxWidth = max(1, activeWindow.viewport.width - lineNumOffset)
+          reservedLines = if e.state.showStatusLine: 2 else: 1
+          maxVisibleLine = min(
+            activeWindow.cursor.line,
+            activeWindow.viewport.topLine + activeWindow.viewport.height,
+          )
+
+        var screenY = 0
+
+        # Count wrapped lines from topLine to cursor line (only visible range)
+        for lineIdx in activeWindow.viewport.topLine ..< maxVisibleLine:
+          if lineIdx >= 0 and lineIdx < activeWindow.buffer.len:
+            let line = activeWindow.buffer.getLine(lineIdx)
+            let lineCharLen = line.charLen
+            if lineCharLen == 0:
+              screenY += 1
+            else:
+              let wrappedLines = ((lineCharLen - 1) div maxWidth) + 1
+              screenY += wrappedLines
+
+            # Early exit if exceeded visible height
+            if screenY >= activeWindow.viewport.height - reservedLines:
+              return
+
+        # Add offset within cursor's wrapped line
+        let cursorLineText = activeWindow.buffer.getLine(activeWindow.cursor.line)
+        let displayWidthUpToCursor =
+          displayWidthUpTo(cursorLineText, activeWindow.cursor.column)
+        let wrapLineIndex = displayWidthUpToCursor div maxWidth
+        screenY += wrapLineIndex
+
+        e.state.screenCursor.x =
+          activeWindow.viewport.x + lineNumOffset + (
+            displayWidthUpToCursor mod maxWidth
+          )
+        e.state.screenCursor.y = activeWindow.viewport.y + screenY
+      else:
+        # No line wrap: simple calculation
+        let cursorLineText = activeWindow.buffer.getLine(activeWindow.cursor.line)
+        let displayWidthUpToCursor =
+          displayWidthUpTo(cursorLineText, activeWindow.cursor.column)
+        let displayWidthUpToLeftCol =
+          displayWidthUpTo(cursorLineText, activeWindow.viewport.leftColumn)
+
+        let screenY =
+          activeWindow.viewport.y +
+          (activeWindow.cursor.line - activeWindow.viewport.topLine)
+        let screenX =
+          activeWindow.viewport.x + lineNumOffset +
+          max(0, displayWidthUpToCursor - displayWidthUpToLeftCol)
+        e.state.screenCursor.x = screenX
+        e.state.screenCursor.y = screenY
   else:
     # No split windows - render single buffer as before
     # Sync viewport with motion controller (both directions)
@@ -832,8 +956,8 @@ proc render*(e: Editor, buffer: var Buffer) =
   # Handle command line
   if e.state.mode == EditorMode.Command:
     buffer.setString(buffer.area.x, commandLineY, e.state.commandText, commandStyle)
-    e.state.cursor.x = e.state.commandText.len
-    e.state.cursor.y = buffer.area.height - 1
+    e.state.screenCursor.x = e.state.commandText.len
+    e.state.screenCursor.y = buffer.area.height - 1
   else:
     if e.state.statusMessage.len > 0:
       buffer.setString(buffer.area.x, commandLineY, e.state.statusMessage, commandStyle)

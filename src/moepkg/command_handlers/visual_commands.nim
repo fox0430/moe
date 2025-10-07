@@ -28,38 +28,39 @@ import ../[buffer, types, cursor]
 
 proc visualMoveLeft*(buffer: TextBuffer, state: EditorState) =
   ## Move left in visual mode and update selection
-  if buffer.cursor.column > 0:
-    buffer.cursor.column -= 1
-    state.visualSelection.current = buffer.cursor
+  if state.cursor.column > 0:
+    state.cursor.column -= 1
+    state.visualSelection.current = state.cursor
     state.needsFullRedraw = true
 
 proc visualMoveRight*(buffer: TextBuffer, state: EditorState) =
   ## Move right in visual mode and update selection
-  if buffer.cursor.column < buffer.getCurrentLineLen:
-    buffer.cursor.column += 1
-    state.visualSelection.current = buffer.cursor
+  let lineLen = buffer.getLine(state.cursor.line).len
+  if state.cursor.column < lineLen:
+    state.cursor.column += 1
+    state.visualSelection.current = state.cursor
     state.needsFullRedraw = true
 
 proc visualMoveUp*(buffer: TextBuffer, state: EditorState) =
   ## Move up in visual mode and update selection
-  if buffer.cursor.line > 0:
-    buffer.cursor.line -= 1
+  if state.cursor.line > 0:
+    state.cursor.line -= 1
     # Clamp cursor to new line length
-    let newLineLen = buffer.getCurrentLineLen
-    if buffer.cursor.column > newLineLen:
-      buffer.cursor.column = newLineLen
-    state.visualSelection.current = buffer.cursor
+    let newLineLen = buffer.getLine(state.cursor.line).len
+    if state.cursor.column > newLineLen:
+      state.cursor.column = newLineLen
+    state.visualSelection.current = state.cursor
     state.needsFullRedraw = true
 
 proc visualMoveDown*(buffer: TextBuffer, state: EditorState) =
   ## Move down in visual mode and update selection
-  if buffer.cursor.line < buffer.len - 1:
-    buffer.cursor.line += 1
+  if state.cursor.line < buffer.len - 1:
+    state.cursor.line += 1
     # Clamp cursor to new line length
-    let newLineLen = buffer.getCurrentLineLen
-    if buffer.cursor.column > newLineLen:
-      buffer.cursor.column = newLineLen
-    state.visualSelection.current = buffer.cursor
+    let newLineLen = buffer.getLine(state.cursor.line).len
+    if state.cursor.column > newLineLen:
+      state.cursor.column = newLineLen
+    state.visualSelection.current = state.cursor
     state.needsFullRedraw = true
 
 proc visualDelete*(buffer: TextBuffer, state: EditorState) =
@@ -84,7 +85,7 @@ proc visualDelete*(buffer: TextBuffer, state: EditorState) =
       discard
     else:
       # Move cursor to start of deleted range
-      buffer.cursor = selStart
+      state.cursor = selStart
       state.visualSelection.active = false
       state.needsFullRedraw = true
     # Return to previous mode (before entering Visual mode)

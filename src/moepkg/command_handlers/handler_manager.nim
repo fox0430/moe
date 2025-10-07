@@ -139,10 +139,10 @@ proc handleNormalMode*(
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
 proc handleInsertMode*(
-    manager: HandlerManager, buffer: TextBuffer, keyCombo: KeyCombo
+    manager: HandlerManager, buffer: TextBuffer, state: EditorState, keyCombo: KeyCombo
 ): HandlerResult =
   ## Handle Insert mode input
-  let r = manager.insertHandler.handleInsertModeKey(buffer, keyCombo)
+  let r = manager.insertHandler.handleInsertModeKey(buffer, state, keyCombo)
   case r.kind
   of imrHandled:
     # Check if we're leaving Insert mode
@@ -236,7 +236,7 @@ proc handleEvent*(
   of EditorMode.Normal:
     return manager.handleNormalMode(buffer, state, viewport, keyCombo)
   of EditorMode.Insert:
-    return manager.handleInsertMode(buffer, keyCombo)
+    return manager.handleInsertMode(buffer, state, keyCombo)
   of EditorMode.Command:
     # Command mode is handled differently - through text input
     # This should not be called for command mode key events

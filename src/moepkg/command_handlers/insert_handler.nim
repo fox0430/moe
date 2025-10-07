@@ -25,7 +25,7 @@
 ## - Navigation within insert mode
 ## - Mode switching (Escape)
 
-import std/options
+import std/[options, unicode]
 
 import pkg/results
 
@@ -87,65 +87,69 @@ proc executeCommand*(
     return InsertModeResult(kind: imrError, errorMessage: cmdResult.error)
 
 proc handleCharacterInsertion*(
-    handler: InsertModeHandler, buffer: TextBuffer, char: char
+    handler: InsertModeHandler, buffer: TextBuffer, state: EditorState, text: string
 ): InsertModeResult =
   ## Handle regular character insertion
-  let pos = buffer.cursor
-  discard buffer.insertText(pos, $char)
+  let pos = state.cursor
+  discard buffer.insertText(pos, text)
 
-  # Move cursor right after insertion
-  buffer.cursor.column += 1
+  # Move cursor right after insertion (by character count, not byte count)
+  state.cursor.column += text.runeLen
 
   return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
 proc handleBackspace*(
-    handler: InsertModeHandler, buffer: TextBuffer
+    handler: InsertModeHandler, buffer: TextBuffer, state: EditorState
 ): InsertModeResult =
   ## Handle backspace key
-  let pos = buffer.cursor
+  let pos = state.cursor
 
   if pos.column > 0:
     # Move cursor back and delete
-    buffer.cursor.column -= 1
-    discard buffer.deleteChar(buffer.cursor)
+    state.cursor.column -= 1
+    discard buffer.deleteChar(state.cursor)
   elif pos.line > 0:
     # At start of line, join with previous line
     let prevLine = buffer.getLine(pos.line - 1)
-    buffer.cursor.line -= 1
-    buffer.cursor.column = prevLine.len
+    state.cursor.line -= 1
+    state.cursor.column = prevLine.len
     # Join lines by deleting the newline
-    discard buffer.deleteChar(buffer.cursor)
+    discard buffer.deleteChar(state.cursor)
 
   return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
-proc handleDelete*(handler: InsertModeHandler, buffer: TextBuffer): InsertModeResult =
+proc handleDelete*(
+    handler: InsertModeHandler, buffer: TextBuffer, state: EditorState
+): InsertModeResult =
   ## Handle delete key
-  discard buffer.deleteChar(buffer.cursor)
+  discard buffer.deleteChar(state.cursor)
 
   return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
-proc handleNewline*(handler: InsertModeHandler, buffer: TextBuffer): InsertModeResult =
+proc handleNewline*(
+    handler: InsertModeHandler, buffer: TextBuffer, state: EditorState
+): InsertModeResult =
   ## Handle newline insertion
-  let pos = buffer.cursor
+  let pos = state.cursor
   discard buffer.insertText(pos, "\n")
 
   # Move cursor to start of new line
-  buffer.cursor.line += 1
-  buffer.cursor.column = 0
+  state.cursor.line += 1
+  state.cursor.column = 0
 
   return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
 proc handleMotion*(
-    handler: InsertModeHandler, buffer: TextBuffer, motion: Motion
+    handler: InsertModeHandler, buffer: TextBuffer, state: EditorState, motion: Motion
 ): InsertModeResult =
   ## Handle motion commands in insert mode
   let motionCmd = MotionCommand(motion: motion, count: 1)
 
-  let r = handler.motionController.executeMotion(motionCmd)
-  if r.isOk:
-    return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
-  else:
+  let r = handler.motionController.executeMotion(motionCmd, state.cursor)
+  if r.isErr:
     return InsertModeResult(kind: imrError, errorMessage: r.error)
+  state.cursor = r.value
+  return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
 proc handleModeSwitch*(
     handler: InsertModeHandler, targetMode: EditorMode
@@ -154,7 +158,10 @@ proc handleModeSwitch*(
   return InsertModeResult(kind: imrHandled, modeTransition: some(targetMode))
 
 proc handleInsertModeKey*(
-    handler: InsertModeHandler, buffer: TextBuffer, keyCombo: KeyCombo
+    handler: InsertModeHandler,
+    buffer: TextBuffer,
+    state: EditorState,
+    keyCombo: KeyCombo,
 ): InsertModeResult =
   ## Main entry point for handling Insert mode key presses
 
@@ -166,40 +173,40 @@ proc handleInsertModeKey*(
     of ctModeSwitch:
       return handler.handleModeSwitch(cmd.targetMode)
     of ctMotion:
-      return handler.handleMotion(buffer, cmd.motion)
+      return handler.handleMotion(buffer, state, cmd.motion)
     else:
       # Other command types not supported in insert mode
       return InsertModeResult(kind: imrUnhandled)
 
   # Handle regular character insertion
   if not keyCombo.isSpecial and keyCombo.modifiers == {}:
-    return handler.handleCharacterInsertion(buffer, keyCombo.char)
+    return handler.handleCharacterInsertion(buffer, state, keyCombo.char)
 
   # Handle special keys
   if keyCombo.isSpecial:
     case keyCombo.special
     of skBackspace:
-      return handler.handleBackspace(buffer)
+      return handler.handleBackspace(buffer, state)
     of skDelete:
-      return handler.handleDelete(buffer)
+      return handler.handleDelete(buffer, state)
     of skEnter:
-      return handler.handleNewline(buffer)
+      return handler.handleNewline(buffer, state)
     of skLeft:
-      return handler.handleMotion(buffer, Motion.Left)
+      return handler.handleMotion(buffer, state, Motion.Left)
     of skRight:
-      return handler.handleMotion(buffer, Motion.Right)
+      return handler.handleMotion(buffer, state, Motion.Right)
     of skUp:
-      return handler.handleMotion(buffer, Motion.Up)
+      return handler.handleMotion(buffer, state, Motion.Up)
     of skDown:
-      return handler.handleMotion(buffer, Motion.Down)
+      return handler.handleMotion(buffer, state, Motion.Down)
     of skHome:
-      return handler.handleMotion(buffer, Motion.Home)
+      return handler.handleMotion(buffer, state, Motion.Home)
     of skEnd:
-      return handler.handleMotion(buffer, Motion.End)
+      return handler.handleMotion(buffer, state, Motion.End)
     of skPageUp:
-      return handler.handleMotion(buffer, Motion.PageUp)
+      return handler.handleMotion(buffer, state, Motion.PageUp)
     of skPageDown:
-      return handler.handleMotion(buffer, Motion.PageDown)
+      return handler.handleMotion(buffer, state, Motion.PageDown)
     else:
       return InsertModeResult(kind: imrUnhandled)
 

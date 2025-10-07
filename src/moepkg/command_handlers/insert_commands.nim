@@ -24,79 +24,79 @@
 
 import ../[buffer, types, modes]
 
-proc insertChar*(buffer: TextBuffer, ch: char) =
+proc insertChar*(buffer: TextBuffer, state: EditorState, ch: char) =
   ## Insert a character at cursor position
-  let pos = buffer.cursor
+  let pos = state.cursor
   discard buffer.insertText(pos, $ch)
   # Move cursor right after insertion
-  buffer.cursor.column += 1
+  state.cursor.column += 1
 
-proc insertBackspace*(buffer: TextBuffer) =
+proc insertBackspace*(buffer: TextBuffer, state: EditorState) =
   ## Handle backspace key in insert mode
-  let pos = buffer.cursor
+  let pos = state.cursor
   if pos.column > 0:
     # Move cursor back and delete
-    buffer.cursor.column -= 1
-    discard buffer.deleteChar(buffer.cursor)
+    state.cursor.column -= 1
+    discard buffer.deleteChar(state.cursor)
   elif pos.line > 0:
     # At start of line, join with previous line
     let prevLine = buffer.getLine(pos.line - 1)
-    buffer.cursor.line -= 1
-    buffer.cursor.column = prevLine.len
+    state.cursor.line -= 1
+    state.cursor.column = prevLine.len
     # Join lines by deleting the newline
-    discard buffer.deleteChar(buffer.cursor)
+    discard buffer.deleteChar(state.cursor)
 
-proc insertDelete*(buffer: TextBuffer) =
+proc insertDelete*(buffer: TextBuffer, state: EditorState) =
   ## Handle delete key in insert mode
-  discard buffer.deleteChar(buffer.cursor)
+  discard buffer.deleteChar(state.cursor)
 
-proc insertNewline*(buffer: TextBuffer) =
+proc insertNewline*(buffer: TextBuffer, state: EditorState) =
   ## Handle newline insertion
-  let pos = buffer.cursor
+  let pos = state.cursor
   discard buffer.insertText(pos, "\n")
   # Move cursor to start of new line
-  buffer.cursor.line += 1
-  buffer.cursor.column = 0
+  state.cursor.line += 1
+  state.cursor.column = 0
 
 proc insertLineBelow*(buffer: TextBuffer, state: EditorState) =
   ## Handle 'o' command - insert line below and enter insert mode
-  let currentLine = buffer.cursor.line
+  let currentLine = state.cursor.line
   # Move to end of current line
   let lineContent = buffer.getLine(currentLine)
-  buffer.cursor.column = lineContent.len
+  state.cursor.column = lineContent.len
   # Insert newline
-  discard buffer.insertText(buffer.cursor, "\n")
+  discard buffer.insertText(state.cursor, "\n")
   # Move cursor to new line
-  buffer.cursor.line = currentLine + 1
-  buffer.cursor.column = 0
+  state.cursor.line = currentLine + 1
+  state.cursor.column = 0
   # Switch to insert mode
   state.mode = EditorMode.Insert
 
 proc insertLineAbove*(buffer: TextBuffer, state: EditorState) =
   ## Handle 'O' command - insert line above and enter insert mode
-  let currentLine = buffer.cursor.line
+  let currentLine = state.cursor.line
   # Move to start of current line
-  buffer.cursor.column = 0
+  state.cursor.column = 0
   # Insert newline
-  discard buffer.insertText(buffer.cursor, "\n")
+  discard buffer.insertText(state.cursor, "\n")
   # Move cursor to the new line (which is the current line)
-  buffer.cursor.line = currentLine
-  buffer.cursor.column = 0
+  state.cursor.line = currentLine
+  state.cursor.column = 0
   # Switch to insert mode
   state.mode = EditorMode.Insert
 
 proc insertAppend*(buffer: TextBuffer, state: EditorState) =
   ## Handle 'a' command - move cursor right and enter insert mode
-  let lineContent = buffer.getLine(buffer.cursor.line)
+  let lineContent = buffer.getLine(state.cursor.line)
   # Only move right if not at end of line
-  if buffer.cursor.column < lineContent.len:
-    buffer.cursor.column += 1
+  if state.cursor.column < lineContent.len:
+    state.cursor.column += 1
   # Switch to insert mode
   state.mode = EditorMode.Insert
 
 proc insertAppendEnd*(buffer: TextBuffer, state: EditorState) =
   ## Handle 'A' command - move to end of line and enter insert mode
-  let lineContent = buffer.getLine(buffer.cursor.line)
-  buffer.cursor.column = lineContent.len
+  let lineContent = buffer.getLine(state.cursor.line)
+  state.cursor.column = lineContent.len
   # Switch to insert mode
   state.mode = EditorMode.Insert

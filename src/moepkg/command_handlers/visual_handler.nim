@@ -57,7 +57,7 @@ proc newVisualModeHandler*(
 
 proc initSelection*(state: EditorState, buffer: TextBuffer) =
   ## Initialize visual selection at current cursor position
-  let cursorPos = buffer.cursor
+  let cursorPos = state.cursor
   state.visualSelection =
     VisualSelection(start: cursorPos, current: cursorPos, active: true)
 
