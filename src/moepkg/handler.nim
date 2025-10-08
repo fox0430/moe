@@ -181,8 +181,18 @@ proc handleEvent*(e: Editor, event: Event): bool =
       windowBottomY = activeWindow.viewport.y + activeWindow.viewport.height
       isBottomWindow = (windowBottomY == maxBottomY)
 
+    # Calculate reserved lines based on window position and status line mode
     e.state.viewportReservedLines =
-      if isBottomWindow and e.state.showStatusLine: 2 else: 0
+      if e.state.showStatusLine:
+        if e.state.multiStatusLine:
+          # Multi status line mode: each window has status, bottom has command too
+          if isBottomWindow: 2 else: 1
+        else:
+          # Single status line mode: only bottom has status + command
+          if isBottomWindow: 2 else: 0
+      else:
+        # No status line: only bottom has command line
+        if isBottomWindow: 1 else: 0
   else:
     # Single window mode - use default calculation
     e.state.viewportReservedLines = if e.state.showStatusLine: 2 else: 1
