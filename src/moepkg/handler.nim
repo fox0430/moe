@@ -199,11 +199,12 @@ proc handleEvent*(e: Editor, event: Event): bool =
 
   let r = e.handlerManager.handleEvent(activeBuffer, e.state, activeViewport, event)
 
-  # Sync viewport back from motion controller to active window
+  # Sync viewport and cursor back from state to active window
   if e.windowManager.windows.len > 0 and
       e.windowManager.activeWindowIndex < e.windowManager.windows.len:
     e.windowManager.windows[e.windowManager.activeWindowIndex].viewport =
       e.executer.motionController.viewportManager.viewport
+    e.windowManager.windows[e.windowManager.activeWindowIndex].cursor = e.state.cursor
 
   # Process the result
   if r.shouldQuit():

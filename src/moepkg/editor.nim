@@ -49,12 +49,37 @@ proc activeBuffer*(e: Editor): TextBuffer =
   else:
     e.textBuffer
 
+proc saveActiveWindowState(e: Editor) =
+  ## Save current EditorState cursor and viewport to the active window
+  if e.windowManager.windows.len > 0 and
+      e.windowManager.activeWindowIndex < e.windowManager.windows.len:
+    let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
+    activeWindow.cursor = e.state.cursor
+    # Also save viewport scroll position from motionController
+    activeWindow.viewport.topLine =
+      e.executer.motionController.viewportManager.viewport.topLine
+    activeWindow.viewport.leftColumn =
+      e.executer.motionController.viewportManager.viewport.leftColumn
+
+proc restoreActiveWindowState(e: Editor) =
+  ## Restore the active window's cursor and viewport to EditorState
+  if e.windowManager.windows.len > 0 and
+      e.windowManager.activeWindowIndex < e.windowManager.windows.len:
+    let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
+    e.state.cursor = activeWindow.cursor
+    # Restore viewport scroll position to motionController
+    e.executer.motionController.viewportManager.viewport.topLine =
+      activeWindow.viewport.topLine
+    e.executer.motionController.viewportManager.viewport.leftColumn =
+      activeWindow.viewport.leftColumn
+
 proc syncActiveWindow(e: Editor) =
   ## Sync the active window's buffer and viewport with the executor and motion controller
   let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
   e.executer.buffer = activeWindow.buffer
   e.executer.motionController.executor.buffer = activeWindow.buffer
   e.executer.motionController.viewportManager.viewport = activeWindow.viewport
+  e.restoreActiveWindowState()
   e.state.needsFullRedraw = true
 
 proc calculateReservedLines(e: Editor, isBottomWindow: bool = true): int =
@@ -231,16 +256,14 @@ proc switchToNextWindow*(e: Editor) =
   if e.windowManager.windows.len <= 1:
     return
 
-  # Deactivate all windows
-  for i in 0 ..< e.windowManager.windows.len:
-    e.windowManager.windows[i].active = false
+  # Save current window state before switching
+  e.saveActiveWindowState()
 
-  e.windowManager.activeWindowIndex =
-    (e.windowManager.activeWindowIndex + 1) mod e.windowManager.windows.len
+  # Switch to next window using window manager
+  e.windowManager.switchToNextWindow()
 
-  # Activate the new window
-  e.windowManager.windows[e.windowManager.activeWindowIndex].active = true
-  e.syncActiveWindow
+  # Sync and restore the new active window state
+  e.syncActiveWindow()
 
   # Update cursor position immediately to avoid visual glitch
   if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
@@ -252,17 +275,14 @@ proc switchToPrevWindow*(e: Editor) =
   if e.windowManager.windows.len <= 1:
     return
 
-  # Deactivate all windows
-  for i in 0 ..< e.windowManager.windows.len:
-    e.windowManager.windows[i].active = false
+  # Save current window state before switching
+  e.saveActiveWindowState()
 
-  e.windowManager.activeWindowIndex =
-    (e.windowManager.activeWindowIndex - 1 + e.windowManager.windows.len) mod
-    e.windowManager.windows.len
+  # Switch to previous window using window manager
+  e.windowManager.switchToPrevWindow()
 
-  # Activate the new window
-  e.windowManager.windows[e.windowManager.activeWindowIndex].active = true
-  e.syncActiveWindow
+  # Sync and restore the new active window state
+  e.syncActiveWindow()
 
   # Update cursor position immediately to avoid visual glitch
   if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
@@ -359,6 +379,10 @@ proc setMultiStatusLine*(e: Editor, enabled: bool) =
 
 proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), string] =
   ## Create a vertical split window
+  # Save current window state before splitting (if windows already exist)
+  if e.windowManager.windows.len > 0:
+    e.saveActiveWindowState()
+
   let bufferResult =
     e.windowManager.vsplit(e.textBuffer, e.viewport, e.state.cursor, filename)
   if bufferResult.isErr:
@@ -367,6 +391,9 @@ proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
   let newBuffer = bufferResult.get
   e.executer.buffer = newBuffer
   e.executer.motionController.executor.buffer = newBuffer
+
+  # Restore the new active window state
+  e.restoreActiveWindowState()
   e.state.needsFullRedraw = true
 
   # Update cursor position immediately to avoid visual glitch
@@ -378,6 +405,10 @@ proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
 
 proc hsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), string] =
   ## Create a horizontal split window (top and bottom)
+  # Save current window state before splitting (if windows already exist)
+  if e.windowManager.windows.len > 0:
+    e.saveActiveWindowState()
+
   let bufferResult = e.windowManager.hsplit(
     e.textBuffer, e.viewport, e.state.cursor, e.state.multiStatusLine, filename
   )
@@ -387,6 +418,9 @@ proc hsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
   let newBuffer = bufferResult.get
   e.executer.buffer = newBuffer
   e.executer.motionController.executor.buffer = newBuffer
+
+  # Restore the new active window state
+  e.restoreActiveWindowState()
   e.state.needsFullRedraw = true
 
   # Update cursor position immediately to avoid visual glitch
@@ -687,7 +721,7 @@ proc renderWindowLineWrapped(
     actualScreenY = window.viewport.y + screenY
     maxWidth = window.viewport.width - lineNumOffset
     lineCharLen = line.charLen
-    isCurrentLine = (lineIndex == window.cursor.line and window.active)
+    isCurrentLine = (lineIndex == window.cursor.line)
     lineStyle = if isCurrentLine: currentLineStyle else: lineNumStyle
     lineNumScreenX = window.viewport.x
 
@@ -765,7 +799,7 @@ proc renderWindowLineNoWrap(
   let
     line = window.buffer.getLine(lineIndex)
     actualScreenY = window.viewport.y + screenY
-    isCurrentLine = (lineIndex == window.cursor.line and window.active)
+    isCurrentLine = (lineIndex == window.cursor.line)
     lineStyle = if isCurrentLine: currentLineStyle else: lineNumStyle
     lineNumStr = formatLineNumber(lineIndex, lineNumOffset)
     lineNumScreenX = window.viewport.x
