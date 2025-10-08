@@ -131,6 +131,249 @@ proc closeWindow*(wm: EditorWindowManager, multiStatusLine: bool): bool =
 
   return false # Not the last window, don't quit
 
+proc groupWindowsByY*(wm: EditorWindowManager): seq[seq[int]] =
+  ## Group windows by their Y coordinate (horizontal groups)
+  var groups: seq[seq[int]] = @[]
+  for i in 0 ..< wm.windows.len:
+    var foundGroup = false
+    for group in groups.mitems:
+      if group.len > 0 and wm.windows[group[0]].viewport.y == wm.windows[i].viewport.y:
+        group.add(i)
+        foundGroup = true
+        break
+    if not foundGroup:
+      groups.add(@[i])
+  return groups
+
+proc groupAdjacentWindowsHorizontally*(wm: EditorWindowManager): seq[seq[int]] =
+  ## Group windows that are horizontally adjacent (same y and height, side by side)
+  var groups: seq[seq[int]] = @[]
+  for i in 0 ..< wm.windows.len:
+    var foundGroup = false
+    for group in groups.mitems:
+      if group.len > 0:
+        let
+          groupFirst = wm.windows[group[0]]
+          currentWin = wm.windows[i]
+        if groupFirst.viewport.y == currentWin.viewport.y and
+            groupFirst.viewport.height == currentWin.viewport.height:
+          let
+            lastIdx = group[^1]
+            lastWin = wm.windows[lastIdx]
+            lastEndX = lastWin.viewport.x + lastWin.viewport.width
+          if abs(currentWin.viewport.x - lastEndX) <= 1:
+            group.add(i)
+            foundGroup = true
+            break
+    if not foundGroup:
+      groups.add(@[i])
+  return groups
+
+proc groupAdjacentWindowsVertically*(wm: EditorWindowManager): seq[seq[int]] =
+  ## Group windows that are vertically adjacent (same x and width, stacked)
+  var groups: seq[seq[int]] = @[]
+  for i in 0 ..< wm.windows.len:
+    var foundGroup = false
+    for group in groups.mitems:
+      if group.len > 0:
+        let
+          groupFirst = wm.windows[group[0]]
+          currentWin = wm.windows[i]
+        if groupFirst.viewport.x == currentWin.viewport.x and
+            groupFirst.viewport.width == currentWin.viewport.width:
+          let
+            lastIdx = group[^1]
+            lastWin = wm.windows[lastIdx]
+            lastEndY = lastWin.viewport.y + lastWin.viewport.height
+          if abs(currentWin.viewport.y - lastEndY) <= 1:
+            group.add(i)
+            foundGroup = true
+            break
+    if not foundGroup:
+      groups.add(@[i])
+  return groups
+
+proc groupWindowsByXAndWidth*(wm: EditorWindowManager): seq[seq[int]] =
+  ## Group windows by their X coordinate and width (vertical groups)
+  var groups: seq[seq[int]] = @[]
+  for i in 0 ..< wm.windows.len:
+    var foundGroup = false
+    for group in groups.mitems:
+      if group.len > 0 and wm.windows[group[0]].viewport.x == wm.windows[i].viewport.x and
+          wm.windows[group[0]].viewport.width == wm.windows[i].viewport.width:
+        group.add(i)
+        foundGroup = true
+        break
+    if not foundGroup:
+      groups.add(@[i])
+  return groups
+
+proc equalizeWidthsInGroup*(
+    wm: EditorWindowManager, group: seq[int], totalWidth: int, startX: int
+) =
+  ## Equalize widths of windows in a horizontal group
+  if group.len <= 1:
+    return
+
+  var sortedGroup = group
+  sortedGroup.sort(
+    proc(a, b: int): int =
+      cmp(wm.windows[a].viewport.x, wm.windows[b].viewport.x)
+  )
+
+  let
+    numSeparators = sortedGroup.len - 1
+    availableWidth = totalWidth - numSeparators
+    windowWidth = availableWidth div sortedGroup.len
+
+  var currentX = startX
+  for i, idx in sortedGroup:
+    wm.windows[idx].viewport.x = currentX
+    if i == sortedGroup.len - 1:
+      # Last window gets remaining width
+      wm.windows[idx].viewport.width = (startX + totalWidth) - currentX
+    else:
+      wm.windows[idx].viewport.width = windowWidth
+      currentX += windowWidth + 1 # +1 for separator
+
+proc equalizeWidthsForResize*(wm: EditorWindowManager, group: seq[int], newWidth: int) =
+  ## Equalize widths during window resize (handles single window case)
+  if group.len == 1:
+    let
+      idx = group[0]
+      minX = wm.windows[idx].viewport.x
+    wm.windows[idx].viewport.width = newWidth - minX
+    return
+
+  var sortedGroup = group
+  sortedGroup.sort(
+    proc(a, b: int): int =
+      cmp(wm.windows[a].viewport.x, wm.windows[b].viewport.x)
+  )
+
+  let
+    firstWindow = wm.windows[sortedGroup[0]]
+    minX = firstWindow.viewport.x
+    availableWidth = newWidth - minX
+    numSeparators = sortedGroup.len - 1
+    totalWidth = availableWidth - numSeparators
+    windowWidth = totalWidth div sortedGroup.len
+
+  var currentX = minX
+  for i, idx in sortedGroup:
+    wm.windows[idx].viewport.x = currentX
+    if i == sortedGroup.len - 1:
+      wm.windows[idx].viewport.width = (minX + availableWidth) - currentX
+    else:
+      wm.windows[idx].viewport.width = windowWidth
+      currentX += windowWidth + 1
+
+proc equalizeHeightsInGroup*(
+    wm: EditorWindowManager,
+    group: seq[int],
+    totalHeight: int,
+    startY: int,
+    multiStatusLine: bool,
+) =
+  ## Equalize heights of windows in a vertical group
+  if group.len <= 1:
+    return
+
+  var sortedGroup = group
+  sortedGroup.sort(
+    proc(a, b: int): int =
+      cmp(wm.windows[a].viewport.y, wm.windows[b].viewport.y)
+  )
+
+  let
+    numSeparators =
+      if multiStatusLine:
+        0
+      else:
+        sortedGroup.len - 1
+    numStatusLines = if multiStatusLine: sortedGroup.len else: 1
+    commandLineReserve = 1 # Last window includes command line
+    totalContentHeight =
+      totalHeight - numSeparators - numStatusLines - commandLineReserve
+    windowContentHeight = totalContentHeight div sortedGroup.len
+    separatorOffset = if multiStatusLine: 0 else: 1
+
+  var currentY = startY
+  for i, idx in sortedGroup:
+    wm.windows[idx].viewport.y = currentY
+    if i == sortedGroup.len - 1:
+      # Last window: give it remaining height including status line and command line
+      wm.windows[idx].viewport.height = (startY + totalHeight) - currentY
+    else:
+      # Non-last windows
+      if multiStatusLine:
+        # Each window has its own status line
+        wm.windows[idx].viewport.height = windowContentHeight + 1
+      else:
+        # No status line for non-last windows
+        wm.windows[idx].viewport.height = windowContentHeight
+      currentY += wm.windows[idx].viewport.height + separatorOffset
+
+proc equalizeHeightsForResize*(
+    wm: EditorWindowManager, group: seq[int], newHeight: int, multiStatusLine: bool
+) =
+  ## Equalize heights during window resize (handles single window case and bottom detection)
+  if group.len == 1:
+    let
+      idx = group[0]
+      window = wm.windows[idx]
+      minY = window.viewport.y
+      # Check if this is the bottom window
+      isBottomWindow = (window.viewport.y + window.viewport.height >= newHeight - 1)
+      # Reserve 1 line for command line if this is the bottom window
+      commandLineReserve = if isBottomWindow: 1 else: 0
+    wm.windows[idx].viewport.height = newHeight - minY - commandLineReserve
+    return
+
+  var sortedGroup = group
+  sortedGroup.sort(
+    proc(a, b: int): int =
+      cmp(wm.windows[a].viewport.y, wm.windows[b].viewport.y)
+  )
+
+  let
+    firstWindow = wm.windows[sortedGroup[0]]
+    lastWindowIdx = sortedGroup[^1]
+    lastWindow = wm.windows[lastWindowIdx]
+    minY = firstWindow.viewport.y
+    # Check if this is the bottom group (last window reaches screen bottom)
+    isBottomGroup =
+      (lastWindow.viewport.y + lastWindow.viewport.height >= newHeight - 1)
+    # Reserve 1 line for command line if this is the bottom group
+    commandLineReserve = if isBottomGroup: 1 else: 0
+    availableHeight = newHeight - minY - commandLineReserve
+    numSeparators =
+      if multiStatusLine:
+        0
+      else:
+        sortedGroup.len - 1
+    # Calculate total content height (excluding status lines)
+    numStatusLines = if multiStatusLine: sortedGroup.len else: 1
+    totalContentHeight = availableHeight - numSeparators - numStatusLines
+    windowContentHeight = totalContentHeight div sortedGroup.len
+    separatorOffset = if multiStatusLine: 0 else: 1
+
+  var currentY = minY
+  for i, idx in sortedGroup:
+    wm.windows[idx].viewport.y = currentY
+    if i == sortedGroup.len - 1:
+      # Last window: give it remaining height including status line
+      wm.windows[idx].viewport.height = (minY + availableHeight) - currentY
+    else:
+      # Non-last windows
+      if multiStatusLine:
+        # Each window has its own status line
+        wm.windows[idx].viewport.height = windowContentHeight + 1
+      else:
+        # No status line for non-last windows
+        wm.windows[idx].viewport.height = windowContentHeight
+      currentY += wm.windows[idx].viewport.height + separatorOffset
+
 proc vsplit*(
     wm: EditorWindowManager,
     currentBuffer: TextBuffer,
@@ -196,18 +439,7 @@ proc vsplit*(
   wm.activeWindowIndex = wm.activeWindowIndex + 1
 
   # Equalize widths of all windows at the same vertical position
-  var windowGroups: seq[seq[int]] = @[]
-  for i in 0 ..< wm.windows.len:
-    var foundGroup = false
-    for group in windowGroups.mitems:
-      if group.len > 0 and wm.windows[group[0]].viewport.y == wm.windows[i].viewport.y:
-        group.add(i)
-        foundGroup = true
-        break
-    if not foundGroup:
-      windowGroups.add(@[i])
-
-  # Equalize widths within each horizontal group
+  let windowGroups = wm.groupWindowsByY()
   for group in windowGroups:
     if group.len > 1:
       var sortedGroup = group
@@ -215,25 +447,13 @@ proc vsplit*(
         proc(a, b: int): int =
           cmp(wm.windows[a].viewport.x, wm.windows[b].viewport.x)
       )
-
       let
         firstWindow = wm.windows[sortedGroup[0]]
         lastWindow = wm.windows[sortedGroup[^1]]
         totalWidth =
           (lastWindow.viewport.x + lastWindow.viewport.width) - firstWindow.viewport.x
-        numSeparators = sortedGroup.len - 1
-        availableWidth = totalWidth - numSeparators
-        windowWidth = availableWidth div sortedGroup.len
-
-      var currentX = firstWindow.viewport.x
-      for i, idx in sortedGroup:
-        wm.windows[idx].viewport.x = currentX
-        if i == sortedGroup.len - 1:
-          wm.windows[idx].viewport.width =
-            (firstWindow.viewport.x + totalWidth) - currentX
-        else:
-          wm.windows[idx].viewport.width = windowWidth
-          currentX += windowWidth + 1
+        startX = firstWindow.viewport.x
+      wm.equalizeWidthsInGroup(sortedGroup, totalWidth, startX)
 
   return ok(newBuffer)
 
@@ -322,19 +542,7 @@ proc hsplit*(
   wm.activeWindowIndex = wm.activeWindowIndex + 1
 
   # Equalize heights of all windows at the same horizontal position
-  var windowGroups: seq[seq[int]] = @[]
-  for i in 0 ..< wm.windows.len:
-    var foundGroup = false
-    for group in windowGroups.mitems:
-      if group.len > 0 and wm.windows[group[0]].viewport.x == wm.windows[i].viewport.x and
-          wm.windows[group[0]].viewport.width == wm.windows[i].viewport.width:
-        group.add(i)
-        foundGroup = true
-        break
-    if not foundGroup:
-      windowGroups.add(@[i])
-
-  # Equalize heights within each vertical group
+  let windowGroups = wm.groupWindowsByXAndWidth()
   for group in windowGroups:
     if group.len > 1:
       var sortedGroup = group
@@ -342,41 +550,13 @@ proc hsplit*(
         proc(a, b: int): int =
           cmp(wm.windows[a].viewport.y, wm.windows[b].viewport.y)
       )
-
       let
         firstWindow = wm.windows[sortedGroup[0]]
         lastWindow = wm.windows[sortedGroup[^1]]
-        # Total height includes command line for bottom window
         totalHeight =
           (lastWindow.viewport.y + lastWindow.viewport.height) - firstWindow.viewport.y
-        numSeparators =
-          if multiStatusLine:
-            0
-          else:
-            sortedGroup.len - 1
-        # Calculate total content height (excluding status lines and command line)
-        numStatusLines = if multiStatusLine: sortedGroup.len else: 1
-        commandLineReserve = 1 # Last window includes command line
-        totalContentHeight =
-          totalHeight - numSeparators - numStatusLines - commandLineReserve
-        windowContentHeight = totalContentHeight div sortedGroup.len
-
-      var currentY = firstWindow.viewport.y
-      for i, idx in sortedGroup:
-        wm.windows[idx].viewport.y = currentY
-        if i == sortedGroup.len - 1:
-          # Last window: give it remaining height including status line and command line
-          wm.windows[idx].viewport.height =
-            (firstWindow.viewport.y + totalHeight) - currentY
-        else:
-          # Non-last windows
-          if multiStatusLine:
-            # Each window has its own status line
-            wm.windows[idx].viewport.height = windowContentHeight + 1
-          else:
-            # No status line for non-last windows
-            wm.windows[idx].viewport.height = windowContentHeight
-          currentY += wm.windows[idx].viewport.height + separatorOffset
+        startY = firstWindow.viewport.y
+      wm.equalizeHeightsInGroup(sortedGroup, totalHeight, startY, multiStatusLine)
 
   return ok(newBuffer)
 
@@ -414,133 +594,11 @@ proc resizeWindows*(
       window.viewport.topLine = window.cursor.line
 
   # Horizontal groups (same y coordinate AND height, horizontally adjacent)
-  var horizontalGroups: seq[seq[int]] = @[]
-  for i in 0 ..< wm.windows.len:
-    var foundGroup = false
-    for group in horizontalGroups.mitems:
-      if group.len > 0:
-        let
-          groupFirst = wm.windows[group[0]]
-          currentWin = wm.windows[i]
-        if groupFirst.viewport.y == currentWin.viewport.y and
-            groupFirst.viewport.height == currentWin.viewport.height:
-          let
-            lastIdx = group[^1]
-            lastWin = wm.windows[lastIdx]
-            lastEndX = lastWin.viewport.x + lastWin.viewport.width
-          if abs(currentWin.viewport.x - lastEndX) <= 1:
-            group.add(i)
-            foundGroup = true
-            break
-    if not foundGroup:
-      horizontalGroups.add(@[i])
-
-  # Equalize widths within horizontal groups
+  let horizontalGroups = wm.groupAdjacentWindowsHorizontally()
   for group in horizontalGroups:
-    if group.len > 1:
-      var sortedGroup = group
-      sortedGroup.sort(
-        proc(a, b: int): int =
-          cmp(wm.windows[a].viewport.x, wm.windows[b].viewport.x)
-      )
-
-      let
-        firstWindow = wm.windows[sortedGroup[0]]
-        minX = firstWindow.viewport.x
-        availableWidth = newWidth - minX
-        numSeparators = sortedGroup.len - 1
-        totalWidth = availableWidth - numSeparators
-        windowWidth = totalWidth div sortedGroup.len
-
-      var currentX = minX
-      for i, idx in sortedGroup:
-        wm.windows[idx].viewport.x = currentX
-        if i == sortedGroup.len - 1:
-          wm.windows[idx].viewport.width = (minX + availableWidth) - currentX
-        else:
-          wm.windows[idx].viewport.width = windowWidth
-          currentX += windowWidth + 1
-    elif group.len == 1:
-      let
-        idx = group[0]
-        minX = wm.windows[idx].viewport.x
-      wm.windows[idx].viewport.width = newWidth - minX
+    wm.equalizeWidthsForResize(group, newWidth)
 
   # Vertical groups (same x and width, vertically adjacent)
-  var verticalGroups: seq[seq[int]] = @[]
-  for i in 0 ..< wm.windows.len:
-    var foundGroup = false
-    for group in verticalGroups.mitems:
-      if group.len > 0:
-        let
-          groupFirst = wm.windows[group[0]]
-          currentWin = wm.windows[i]
-        if groupFirst.viewport.x == currentWin.viewport.x and
-            groupFirst.viewport.width == currentWin.viewport.width:
-          let
-            lastIdx = group[^1]
-            lastWin = wm.windows[lastIdx]
-            lastEndY = lastWin.viewport.y + lastWin.viewport.height
-          if abs(currentWin.viewport.y - lastEndY) <= 1:
-            group.add(i)
-            foundGroup = true
-            break
-    if not foundGroup:
-      verticalGroups.add(@[i])
-
-  # Equalize heights within vertical groups
+  let verticalGroups = wm.groupAdjacentWindowsVertically()
   for group in verticalGroups:
-    if group.len > 1:
-      var sortedGroup = group
-      sortedGroup.sort(
-        proc(a, b: int): int =
-          cmp(wm.windows[a].viewport.y, wm.windows[b].viewport.y)
-      )
-
-      let
-        firstWindow = wm.windows[sortedGroup[0]]
-        lastWindowIdx = sortedGroup[^1]
-        lastWindow = wm.windows[lastWindowIdx]
-        minY = firstWindow.viewport.y
-        # Check if this is the bottom group (last window reaches screen bottom)
-        isBottomGroup =
-          (lastWindow.viewport.y + lastWindow.viewport.height >= newHeight - 1)
-        # Reserve 1 line for command line if this is the bottom group
-        commandLineReserve = if isBottomGroup: 1 else: 0
-        availableHeight = newHeight - minY - commandLineReserve
-        numSeparators =
-          if multiStatusLine:
-            0
-          else:
-            sortedGroup.len - 1
-        # Calculate total content height (excluding status lines)
-        numStatusLines = if multiStatusLine: sortedGroup.len else: 1
-        totalContentHeight = availableHeight - numSeparators - numStatusLines
-        windowContentHeight = totalContentHeight div sortedGroup.len
-        separatorOffset = if multiStatusLine: 0 else: 1
-
-      var currentY = minY
-      for i, idx in sortedGroup:
-        wm.windows[idx].viewport.y = currentY
-        if i == sortedGroup.len - 1:
-          # Last window: give it remaining height including status line
-          wm.windows[idx].viewport.height = (minY + availableHeight) - currentY
-        else:
-          # Non-last windows
-          if multiStatusLine:
-            # Each window has its own status line
-            wm.windows[idx].viewport.height = windowContentHeight + 1
-          else:
-            # No status line for non-last windows
-            wm.windows[idx].viewport.height = windowContentHeight
-          currentY += wm.windows[idx].viewport.height + separatorOffset
-    elif group.len == 1:
-      let
-        idx = group[0]
-        window = wm.windows[idx]
-        minY = window.viewport.y
-        # Check if this is the bottom window
-        isBottomWindow = (window.viewport.y + window.viewport.height >= newHeight - 1)
-        # Reserve 1 line for command line if this is the bottom window
-        commandLineReserve = if isBottomWindow: 1 else: 0
-      wm.windows[idx].viewport.height = newHeight - minY - commandLineReserve
+    wm.equalizeHeightsForResize(group, newHeight, multiStatusLine)
