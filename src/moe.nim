@@ -17,11 +17,31 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[os, strformat]
+import std/[os, strformat, monotimes, times]
 
 import pkg/[celina, results]
 
 import moepkg/[editor, handler, modes]
+
+proc handleResize(e: Editor) =
+  ## Debounce resize events to prevent terminal buffer overflow
+  ## Only process if at least 50ms have passed since last resize
+  const resizeDebounceMs = initDuration(milliseconds = 50)
+  let
+    now = getMonoTime()
+    timeSinceLastResize = now - e.state.lastResizeTime
+
+  if timeSinceLastResize < resizeDebounceMs:
+    # Too soon after last resize, skip processing
+    return
+
+  # Update last resize time
+  e.state.lastResizeTime = now
+
+  # Physically clear the terminal screen to remove artifacts
+  clearScreen()
+  # Set the editor's full redraw flag
+  e.state.needsFullRedraw = true
 
 proc main() =
   var app = newApp(
@@ -46,12 +66,9 @@ proc main() =
         quit(1)
 
   app.onEvent proc(e: Event): bool =
-    # Special handling for resize events to force screen clear
     if e.kind == EventKind.Resize:
-      # Physically clear the terminal screen to remove artifacts
-      clearScreen()
-      # Set the editor's full redraw flag
-      editor.state.needsFullRedraw = true
+      # Special handling for resize events to force screen clear
+      editor.handleResize
       return true
 
     return editor.handleEvent(e)

@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, strformat, options, tables, unicode]
+import std/[strutils, strformat, options, tables, unicode, monotimes]
 
 import pkg/[celina, results]
 
@@ -429,6 +429,7 @@ proc newEditor*(): Editor =
       needsFullRedraw: true, # Initial render needs full draw
       viewportReservedLines: 2, # Default for single window mode with status line
       lineWrap: true, # Default to wrapping
+      lastResizeTime: getMonoTime(), # Initialize to current time
     ),
     viewport: ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 20, x: 0, y: 0),
     commandRegistry: cmdRegistry,

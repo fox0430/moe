@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/options
+import std/[options, monotimes]
 
 import cursor, modes, buffer
 
@@ -94,3 +94,4 @@ type
     viewportReservedLines*: int
       # Reserved lines for viewport calculations (for split windows)
     lineWrap*: bool # Whether to wrap long lines
+    lastResizeTime*: MonoTime # Timestamp of last processed resize event
