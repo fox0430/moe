@@ -614,3 +614,37 @@ proc resizeWindows*(
   let verticalGroups = wm.groupAdjacentWindowsVertically()
   for group in verticalGroups:
     wm.equalizeHeightsForResize(group, newHeight, multiStatusLine)
+
+  # After all resize operations, adjust viewport to keep cursor visible
+  # This must be done AFTER equalizeHeightsForResize since that changes viewport.height
+
+  # Find max bottom Y to determine which windows are bottom windows
+  var maxBottomY = 0
+  for window in wm.windows:
+    let bottomY = window.viewport.y + window.viewport.height
+    if bottomY > maxBottomY:
+      maxBottomY = bottomY
+
+  for window in wm.windows.mitems:
+    # Determine if this is a bottom window
+    let
+      windowBottomY = window.viewport.y + window.viewport.height
+      isBottomWindow = (windowBottomY == maxBottomY)
+
+    # Calculate reserved lines based on window position and status line mode
+    # Bottom windows always have status line (1) + command line (1) = 2
+    # Non-bottom windows: multiStatusLine = 1, singleStatusLine = 0
+    let reservedLines =
+      if isBottomWindow:
+        StatusLineHeight + CommandLineHeight # Always 2 for bottom windows
+      else:
+        if multiStatusLine: StatusLineHeight else: 0
+
+    let visibleHeight = max(1, window.viewport.height - reservedLines)
+
+    # If cursor is now below the visible area, adjust topLine
+    if window.cursor.line >= window.viewport.topLine + visibleHeight:
+      window.viewport.topLine = max(0, window.cursor.line - visibleHeight + 1)
+    # If cursor is above the visible area
+    elif window.cursor.line < window.viewport.topLine:
+      window.viewport.topLine = window.cursor.line

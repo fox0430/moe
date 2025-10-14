@@ -921,14 +921,26 @@ proc renderSplitView(e: Editor, buffer: var Buffer, wasResized: bool) =
   # If terminal was resized, rebuild window layout
   if wasResized and oldWidth > 0 and oldHeight > 0 and e.viewport.width > 0 and
       e.viewport.height > 0:
+    # Save current state to window before resize
+    if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
+      e.windowManager.windows[e.windowManager.activeWindowIndex].cursor = e.state.cursor
+
     e.windowManager.resizeWindows(
       e.viewport.width, e.viewport.height, oldWidth, oldHeight, e.state.multiStatusLine
     )
 
-  # Sync active window's cursor with state cursor
-  if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
-    # Update window cursor from editor state
-    e.windowManager.windows[e.windowManager.activeWindowIndex].cursor = e.state.cursor
+    # After resize, restore viewport scroll position from window to motion controller
+    if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
+      let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
+      e.executer.motionController.viewportManager.viewport.topLine =
+        activeWindow.viewport.topLine
+      e.executer.motionController.viewportManager.viewport.leftColumn =
+        activeWindow.viewport.leftColumn
+  else:
+    # Normal case: sync active window's cursor with state cursor
+    if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
+      # Update window cursor from editor state
+      e.windowManager.windows[e.windowManager.activeWindowIndex].cursor = e.state.cursor
 
   # Find the maximum bottom Y coordinate (to determine bottom windows)
   let maxBottomY = findMaxBottomY(e.windowManager.windows)
@@ -965,7 +977,7 @@ proc renderSplitView(e: Editor, buffer: var Buffer, wasResized: bool) =
     let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
     e.setActiveWindowScreenCursor(activeWindow)
 
-proc renderSingleView(e: Editor, buffer: var Buffer) =
+proc renderSingleView(e: Editor, buffer: var Buffer, wasResized: bool) =
   ## Render single buffer view (no split windows)
   # Sync viewport with motion controller (both directions)
   e.executer.motionController.viewportManager.viewport.width = e.viewport.width
@@ -982,6 +994,20 @@ proc renderSingleView(e: Editor, buffer: var Buffer) =
       width: max(0, buffer.area.width - lineNumOffset),
       height: max(0, buffer.area.height - reservedLines),
     )
+
+  # If terminal was resized, adjust viewport to keep cursor visible
+  if wasResized:
+    let visibleHeight = max(1, e.viewport.height - reservedLines)
+
+    # If cursor is now below the visible area, adjust topLine
+    if e.state.cursor.line >= e.viewport.topLine + visibleHeight:
+      let newTopLine = max(0, e.state.cursor.line - visibleHeight + 1)
+      e.viewport.topLine = newTopLine
+      e.executer.motionController.viewportManager.viewport.topLine = newTopLine
+    # If cursor is above the visible area
+    elif e.state.cursor.line < e.viewport.topLine:
+      e.viewport.topLine = e.state.cursor.line
+      e.executer.motionController.viewportManager.viewport.topLine = e.state.cursor.line
 
   discard e.renderLineNumbers(buffer, textAreaWidth)
   e.renderTextBuffer(buffer, textArea)
@@ -1032,7 +1058,7 @@ proc render*(e: Editor, buffer: var Buffer) =
   if e.windowManager.windows.len > 0:
     e.renderSplitView(buffer, wasResized)
   else:
-    e.renderSingleView(buffer)
+    e.renderSingleView(buffer, wasResized)
 
   # Render bottom lines (status and command lines)
   e.renderBottomLines(buffer)
