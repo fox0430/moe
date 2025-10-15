@@ -35,7 +35,7 @@ proc visualMoveLeft*(buffer: TextBuffer, state: EditorState) =
 
 proc visualMoveRight*(buffer: TextBuffer, state: EditorState) =
   ## Move right in visual mode and update selection
-  let lineLen = buffer.getLine(state.cursor.line).len
+  let lineLen = buffer.getLine(state.cursor.line).charLen
   if state.cursor.column < lineLen:
     state.cursor.column += 1
     state.visualSelection.current = state.cursor
@@ -46,7 +46,7 @@ proc visualMoveUp*(buffer: TextBuffer, state: EditorState) =
   if state.cursor.line > 0:
     state.cursor.line -= 1
     # Clamp cursor to new line length
-    let newLineLen = buffer.getLine(state.cursor.line).len
+    let newLineLen = buffer.getLine(state.cursor.line).charLen
     if state.cursor.column > newLineLen:
       state.cursor.column = newLineLen
     state.visualSelection.current = state.cursor
@@ -57,7 +57,7 @@ proc visualMoveDown*(buffer: TextBuffer, state: EditorState) =
   if state.cursor.line < buffer.len - 1:
     state.cursor.line += 1
     # Clamp cursor to new line length
-    let newLineLen = buffer.getLine(state.cursor.line).len
+    let newLineLen = buffer.getLine(state.cursor.line).charLen
     if state.cursor.column > newLineLen:
       state.cursor.column = newLineLen
     state.visualSelection.current = state.cursor

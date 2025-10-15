@@ -189,10 +189,13 @@ proc pushUndoChange(b: TextBuffer, change: BufferChange)
 proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string]
 # Forward declaration for sidebar marker management
 proc ensureMarkersSize(b: TextBuffer)
+# Forward declaration for text insertion with newlines
+proc insertTextWithNewlines(b: TextBuffer, pos: BufferPosition, text: string)
 
 # Editing operations
 proc insertText*(b: TextBuffer, pos: BufferPosition, text: string): Result[(), string] =
   ## Insert text at the specified position
+  ## Handles newlines by splitting lines as needed
   ## Returns error if position is out of bounds
   if text.len == 0:
     return ok(())
@@ -206,10 +209,8 @@ proc insertText*(b: TextBuffer, pos: BufferPosition, text: string): Result[(), s
   case b.backendKind
   of GapBuffer:
     try:
-      # Convert character position to byte position for gapbuffer
-      let line = b.getLine(pos.line)
-      let bytePos = charToBytePos(line, pos.column)
-      b.gapBuffer.insertIntoLine(pos.line, bytePos, text)
+      # Use insertTextWithNewlines to handle newlines correctly
+      b.insertTextWithNewlines(pos, text)
     except IndexDefect as e:
       return err("Failed to insert text: " & e.msg)
 

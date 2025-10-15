@@ -139,12 +139,12 @@ proc handleInsertModeEntry*(
   of "append-end":
     # Move to end of line
     let lineContent = buffer.getLine(state.cursor.line)
-    state.cursor.column = lineContent.len
+    state.cursor.column = lineContent.charLen
   of "open-below":
     # Insert new line below and position cursor
     let currentLine = state.cursor.line
     let lineContent = buffer.getLine(currentLine)
-    state.cursor.column = lineContent.len
+    state.cursor.column = lineContent.charLen
     discard buffer.insertText(state.cursor, "\n")
     state.cursor.line = currentLine + 1
     state.cursor.column = 0

@@ -42,7 +42,7 @@ proc insertBackspace*(buffer: TextBuffer, state: EditorState) =
     # At start of line, join with previous line
     let prevLine = buffer.getLine(pos.line - 1)
     state.cursor.line -= 1
-    state.cursor.column = prevLine.len
+    state.cursor.column = prevLine.charLen
     # Join lines by deleting the newline
     discard buffer.deleteChar(state.cursor)
 
@@ -63,7 +63,7 @@ proc insertLineBelow*(buffer: TextBuffer, state: EditorState) =
   let currentLine = state.cursor.line
   # Move to end of current line
   let lineContent = buffer.getLine(currentLine)
-  state.cursor.column = lineContent.len
+  state.cursor.column = lineContent.charLen
   # Insert newline
   discard buffer.insertText(state.cursor, "\n")
   # Move cursor to new line
@@ -97,6 +97,6 @@ proc insertAppend*(buffer: TextBuffer, state: EditorState) =
 proc insertAppendEnd*(buffer: TextBuffer, state: EditorState) =
   ## Handle 'A' command - move to end of line and enter insert mode
   let lineContent = buffer.getLine(state.cursor.line)
-  state.cursor.column = lineContent.len
+  state.cursor.column = lineContent.charLen
   # Switch to insert mode
   state.mode = EditorMode.Insert

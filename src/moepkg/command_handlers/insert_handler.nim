@@ -112,7 +112,7 @@ proc handleBackspace*(
     # At start of line, join with previous line
     let prevLine = buffer.getLine(pos.line - 1)
     state.cursor.line -= 1
-    state.cursor.column = prevLine.len
+    state.cursor.column = prevLine.charLen
     # Join lines by deleting the newline
     discard buffer.deleteChar(state.cursor)
 
