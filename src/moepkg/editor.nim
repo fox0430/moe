@@ -17,13 +17,14 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, strformat, options, tables, unicode, monotimes]
+import std/[strutils, strformat, options, tables, unicode, monotimes, times]
 
 import pkg/[celina, results]
 
 import
   buffer, cursor, types, commands, keybindings, commandregistry, modes, commandline,
-  commandconfig, statusline, windowmanager, unicode_utils, render_utils
+  commandconfig, statusline, windowmanager, unicode_utils, render_utils, sidebar,
+  gitdiff
 import command_handlers/[handler_manager, visual_handler]
 
 type Editor* = ref object
@@ -231,6 +232,10 @@ proc calculateWindowCursor(
   # Cursor is not visible (off-screen)
   return CursorPosition(x: 0, y: 0)
 
+proc calculateSidebarWidth(e: Editor): int =
+  ## Calculate the width occupied by the sidebar (0 if disabled)
+  if e.state.showSidebar: DefaultSidebarWidth else: 0
+
 proc setActiveWindowScreenCursor(e: Editor, window: EditorWindow) =
   ## Calculate and set screen cursor position for the active window
 
@@ -244,7 +249,8 @@ proc setActiveWindowScreenCursor(e: Editor, window: EditorWindow) =
   let
     windowBottomY = window.viewport.y + window.viewport.height
     isBottomWindow = (windowBottomY == maxBottomY)
-    lineNumOffset = calculateLineNumOffset(window.buffer)
+    sidebarWidth = e.calculateSidebarWidth()
+    lineNumOffset = calculateLineNumOffset(window.buffer) + sidebarWidth
     reservedLines = e.calculateReservedLines(isBottomWindow)
 
   e.state.screenCursor = e.calculateWindowCursor(
@@ -377,6 +383,46 @@ proc setMultiStatusLine*(e: Editor, enabled: bool) =
   e.state.multiStatusLine = enabled
   e.state.needsFullRedraw = true
 
+proc toggleSidebar*(e: Editor) =
+  ## Toggle the visibility of the sidebar
+  e.state.showSidebar = not e.state.showSidebar
+  e.state.needsFullRedraw = true
+
+proc setSidebarVisible*(e: Editor, visible: bool) =
+  ## Set the visibility of the sidebar
+  e.state.showSidebar = visible
+  e.state.needsFullRedraw = true
+
+proc toggleGitDiff*(e: Editor) =
+  ## Toggle git diff indicators in sidebar
+  e.state.showGitDiff = not e.state.showGitDiff
+
+  # Update git diff information when enabled
+  if e.state.showGitDiff:
+    discard updateBufferWithGitDiff(e.textBuffer)
+
+  e.state.needsFullRedraw = true
+
+proc setGitDiffVisible*(e: Editor, visible: bool) =
+  ## Set git diff indicators visibility in sidebar
+  e.state.showGitDiff = visible
+
+  # Update git diff information when enabled
+  if visible:
+    discard updateBufferWithGitDiff(e.textBuffer)
+
+  e.state.needsFullRedraw = true
+
+proc toggleSyntaxChecker*(e: Editor) =
+  ## Toggle syntax checker results in sidebar
+  e.state.showSyntaxChecker = not e.state.showSyntaxChecker
+  e.state.needsFullRedraw = true
+
+proc setSyntaxCheckerVisible*(e: Editor, visible: bool) =
+  ## Set syntax checker results visibility in sidebar
+  e.state.showSyntaxChecker = visible
+  e.state.needsFullRedraw = true
+
 proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), string] =
   ## Create a vertical split window
   # Save current window state before splitting (if windows already exist)
@@ -464,6 +510,13 @@ proc newEditor*(): Editor =
       viewportReservedLines: 2, # Default for single window mode with status line
       lineWrap: true, # Default to wrapping
       lastResizeTime: getMonoTime(), # Initialize to current time
+      # Sidebar defaults
+      showSidebar: true, # Enabled by default (git diff and syntax checker indicators)
+      showGitDiff: true, # Show git diff when sidebar is enabled
+      showSyntaxChecker: true, # Show syntax checker when sidebar is enabled
+      lastGitDiffUpdate: getMonoTime(), # Initialize to current time
+      lastGitDiffChangeSeq: 0, # Initialize to 0 (no changes yet)
+      gitDiffUpdateInterval: 500, # Update at most every 500ms (debounce)
     ),
     viewport: ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 20, x: 0, y: 0),
     commandRegistry: cmdRegistry,
@@ -487,6 +540,44 @@ proc newEditor*(): Editor =
     result.executer.motionController, keyRegistry, cmdLineParser, cmdConfig, cmdRegistry
   )
 
+proc refreshGitDiff*(e: Editor, useBuffer: bool = true) =
+  ## Refresh git diff information for the active buffer
+  ## This should be called after saving a file or buffer modifications
+  ##
+  ## Parameters:
+  ## - useBuffer: If true, compare buffer contents with HEAD (real-time)
+  ##              If false, compare disk file with working tree (saved only)
+  if e.state.showGitDiff:
+    let activeBuffer = e.activeBuffer()
+    let diffResult = updateBufferWithGitDiff(activeBuffer, useBuffer)
+
+    if diffResult.isOk:
+      e.state.lastGitDiffUpdate = getMonoTime()
+      e.state.lastGitDiffChangeSeq = activeBuffer.changeSeq
+      e.state.needsFullRedraw = true
+
+proc maybeUpdateGitDiff*(e: Editor) =
+  ## Update git diff if buffer was modified and enough time has passed (debouncing)
+  ## This should be called after buffer modifications to provide real-time updates
+
+  if not e.state.showGitDiff:
+    return
+
+  let activeBuffer = e.activeBuffer()
+
+  # Only update if buffer has changed since last update
+  if activeBuffer.changeSeq == e.state.lastGitDiffChangeSeq:
+    return
+
+  let now = getMonoTime()
+  let elapsed = now - e.state.lastGitDiffUpdate
+
+  # Compare with threshold duration (500ms)
+  let threshold = initDuration(milliseconds = e.state.gitDiffUpdateInterval)
+
+  if elapsed >= threshold:
+    e.refreshGitDiff(useBuffer = true)
+
 proc loadFile*(e: Editor, path: string): Result[(), string] =
   ## Load text file
   let r = e.textBuffer.loadFile(path)
@@ -499,6 +590,42 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
   # Reset viewport to start
   e.viewport.topLine = 0
   e.viewport.leftColumn = 0
+
+  # Update git diff information if sidebar and git diff are enabled
+  # Use useBuffer=false to compare disk file with working tree (not buffer with HEAD)
+  if e.state.showGitDiff:
+    let diffResult = updateBufferWithGitDiff(e.textBuffer, useBuffer = false)
+    if diffResult.isErr:
+      # Log error but don't fail the file load
+      # (file might not be in a git repository)
+      discard
+    else:
+      # Update lastGitDiffChangeSeq to prevent immediate re-check
+      e.state.lastGitDiffChangeSeq = e.textBuffer.changeSeq
+
+  ok(())
+
+proc saveFile*(e: Editor, path: Option[string] = none(string)): Result[(), string] =
+  ## Save the active buffer to file
+  ## If path is provided, save to that path, otherwise use buffer's current file path
+  let activeBuffer = e.activeBuffer()
+
+  # Determine the file path to save to
+  let savePath =
+    if path.isSome:
+      path.get
+    elif activeBuffer.filePath.isSome:
+      activeBuffer.filePath.get
+    else:
+      return err("No file path specified")
+
+  # Save the file
+  let saveResult = activeBuffer.saveFile(savePath)
+  if saveResult.isErr:
+    return err(saveResult.error)
+
+  # Update git diff information after saving (use disk file for comparison)
+  e.refreshGitDiff(useBuffer = false)
 
   ok(())
 
@@ -569,7 +696,9 @@ proc renderLineSegmentWithSelection(
       if screenX + i < buffer.area.width:
         buffer.setString(screenX + i, screenY, charStr, style)
 
-proc renderLineNumbers(e: Editor, buffer: var Buffer, textAreaWidth: int): int =
+proc renderLineNumbers(
+    e: Editor, buffer: var Buffer, textAreaWidth: int, sidebarWidth: int = 0
+): int =
   ## Render line numbers and return max width of the line number text.
 
   # Guard against invalid text area width
@@ -580,6 +709,7 @@ proc renderLineNumbers(e: Editor, buffer: var Buffer, textAreaWidth: int): int =
     lineLen = e.textBuffer.len
     maxLineNumWidth = len($lineLen) + LineNumberSpacer
     reservedLines = e.calculateReservedLines(isBottomWindow = true)
+    lineNumX = buffer.area.x + sidebarWidth
   var
     screenY = 0
     lineIndex = e.viewport.topLine
@@ -597,7 +727,7 @@ proc renderLineNumbers(e: Editor, buffer: var Buffer, textAreaWidth: int): int =
         numWraps = calculateWrapCount(lineCharLen, textAreaWidth)
         lineNumStr = formatLineNumber(lineIndex, maxLineNumWidth)
 
-      buffer.setString(buffer.area.x, buffer.area.y + screenY, lineNumStr, lineStyle)
+      buffer.setString(lineNumX, buffer.area.y + screenY, lineNumStr, lineStyle)
       inc screenY
 
       for _ in 1 ..< numWraps:
@@ -606,13 +736,13 @@ proc renderLineNumbers(e: Editor, buffer: var Buffer, textAreaWidth: int): int =
           break
         let emptyLineNumStr = spaces(maxLineNumWidth)
         buffer.setString(
-          buffer.area.x, buffer.area.y + screenY, emptyLineNumStr, lineNumStyle
+          lineNumX, buffer.area.y + screenY, emptyLineNumStr, lineNumStyle
         )
         inc screenY
     else:
       # Normal single-line display
       let lineNumStr = formatLineNumber(lineIndex, maxLineNumWidth)
-      buffer.setString(buffer.area.x, buffer.area.y + screenY, lineNumStr, lineStyle)
+      buffer.setString(lineNumX, buffer.area.y + screenY, lineNumStr, lineStyle)
       inc screenY
 
     inc lineIndex
@@ -620,9 +750,7 @@ proc renderLineNumbers(e: Editor, buffer: var Buffer, textAreaWidth: int): int =
   while screenY < buffer.area.height - reservedLines:
     # Clear remaining line number area to prevent artifacts
     let emptyLineNumStr = spaces(maxLineNumWidth)
-    buffer.setString(
-      buffer.area.x, buffer.area.y + screenY, emptyLineNumStr, lineNumStyle
-    )
+    buffer.setString(lineNumX, buffer.area.y + screenY, emptyLineNumStr, lineNumStyle)
     inc screenY
 
   return maxLineNumWidth
@@ -719,11 +847,12 @@ proc renderWindowLineWrapped(
   let
     line = window.buffer.getLine(lineIndex)
     actualScreenY = window.viewport.y + screenY
-    maxWidth = window.viewport.width - lineNumOffset
+    sidebarWidth = e.calculateSidebarWidth()
+    maxWidth = window.viewport.width - sidebarWidth - lineNumOffset
     lineCharLen = line.charLen
     isCurrentLine = (lineIndex == window.cursor.line)
     lineStyle = if isCurrentLine: currentLineStyle else: lineNumStyle
-    lineNumScreenX = window.viewport.x
+    lineNumScreenX = window.viewport.x + sidebarWidth
 
   if lineCharLen == 0:
     # Empty line - just render line number
@@ -744,7 +873,7 @@ proc renderWindowLineWrapped(
       startBytePos = charToBytePos(line, startCharCol)
       endBytePos = charToBytePos(line, endCharCol)
       displayLine = line[startBytePos ..< endBytePos]
-      textScreenX = window.viewport.x + lineNumOffset
+      textScreenX = window.viewport.x + sidebarWidth + lineNumOffset
       currentActualScreenY = window.viewport.y + screenY
 
     # Render line number for first wrap, empty space for others
@@ -799,10 +928,11 @@ proc renderWindowLineNoWrap(
   let
     line = window.buffer.getLine(lineIndex)
     actualScreenY = window.viewport.y + screenY
+    sidebarWidth = e.calculateSidebarWidth()
     isCurrentLine = (lineIndex == window.cursor.line)
     lineStyle = if isCurrentLine: currentLineStyle else: lineNumStyle
     lineNumStr = formatLineNumber(lineIndex, lineNumOffset)
-    lineNumScreenX = window.viewport.x
+    lineNumScreenX = window.viewport.x + sidebarWidth
 
   # Render line number
   if lineNumScreenX + lineNumStr.len <= buffer.area.width:
@@ -815,7 +945,7 @@ proc renderWindowLineNoWrap(
         line[window.viewport.leftColumn ..^ 1]
       else:
         ""
-    textScreenX = window.viewport.x + lineNumOffset
+    textScreenX = window.viewport.x + sidebarWidth + lineNumOffset
 
   if displayLine.len > 0 and textScreenX < buffer.area.width:
     let maxWidth = min(displayLine.len, window.viewport.width - lineNumOffset)
@@ -834,6 +964,24 @@ proc renderWindowLineNoWrap(
         useRunes = false,
       )
 
+proc renderWindowSidebar(
+    buffer: var Buffer,
+    window: EditorWindow,
+    sidebar: Sidebar,
+    screenY: int,
+    sidebarOffset: int,
+) =
+  ## Render a single line of the sidebar
+  let actualScreenY = window.viewport.y + screenY
+
+  if screenY >= 0 and screenY < sidebar.buffer.len:
+    for x in 0 ..< sidebar.width:
+      let
+        item = sidebar.buffer[screenY][x]
+        screenX = window.viewport.x + sidebarOffset + x
+      if screenX < buffer.area.width and actualScreenY < buffer.area.height:
+        buffer.setString(screenX, actualScreenY, item.text, item.style)
+
 proc renderWindow(
     e: Editor,
     buffer: var Buffer,
@@ -842,11 +990,20 @@ proc renderWindow(
     isBottomWindow: bool,
     isActiveWindow: bool,
 ) =
-  ## Render a single window with line numbers and text content
+  ## Render a single window with sidebar, line numbers and text content
   let
     lineCount = window.buffer.len
     reservedLines = e.calculateReservedLines(isBottomWindow)
     visibleHeight = window.viewport.height - reservedLines
+
+  # Generate sidebar dynamically from buffer markers if enabled
+  let maybeSidebar =
+    if e.state.showSidebar:
+      some(
+        generateSidebarFromBuffer(window.buffer, window.viewport.topLine, visibleHeight)
+      )
+    else:
+      none(Sidebar)
 
   # Get visual selection range if active
   let (hasSelection, selStart, selEnd) = e.getVisualSelection(window.active)
@@ -856,6 +1013,10 @@ proc renderWindow(
     lineIndex = window.viewport.topLine
 
   while screenY < visibleHeight and lineIndex < lineCount:
+    # Render sidebar if enabled
+    if maybeSidebar.isSome:
+      renderWindowSidebar(buffer, window, maybeSidebar.get, screenY, 0)
+
     if e.state.lineWrap:
       e.renderWindowLineWrapped(
         buffer, window, lineNumOffset, hasSelection, selStart, selEnd, screenY,
@@ -977,6 +1138,14 @@ proc renderSplitView(e: Editor, buffer: var Buffer, wasResized: bool) =
     let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
     e.setActiveWindowScreenCursor(activeWindow)
 
+proc renderSingleViewSidebar(buffer: var Buffer, sidebar: Sidebar, screenY: int) =
+  ## Render a single line of the sidebar for single view mode
+  if screenY >= 0 and screenY < sidebar.buffer.len:
+    for x in 0 ..< sidebar.width:
+      let item = sidebar.buffer[screenY][x]
+      if x < buffer.area.width and screenY < buffer.area.height:
+        buffer.setString(x, screenY, item.text, item.style)
+
 proc renderSingleView(e: Editor, buffer: var Buffer, wasResized: bool) =
   ## Render single buffer view (no split windows)
   # Sync viewport with motion controller (both directions)
@@ -986,14 +1155,27 @@ proc renderSingleView(e: Editor, buffer: var Buffer, wasResized: bool) =
 
   let
     reservedLines = e.calculateReservedLines(isBottomWindow = true)
+    sidebarWidth = e.calculateSidebarWidth()
     lineNumOffset = calculateLineNumOffset(e.textBuffer)
-    textAreaWidth = max(0, buffer.area.width - lineNumOffset - LineNumberPadding)
+    textAreaWidth =
+      max(0, buffer.area.width - sidebarWidth - lineNumOffset - LineNumberPadding)
     textArea = Rect(
-      x: buffer.area.x + lineNumOffset,
+      x: buffer.area.x + sidebarWidth + lineNumOffset,
       y: buffer.area.y,
-      width: max(0, buffer.area.width - lineNumOffset),
+      width: max(0, buffer.area.width - sidebarWidth - lineNumOffset),
       height: max(0, buffer.area.height - reservedLines),
     )
+
+  # Generate sidebar dynamically from buffer markers if enabled
+  let maybeSidebar =
+    if e.state.showSidebar:
+      some(
+        generateSidebarFromBuffer(
+          e.textBuffer, e.viewport.topLine, buffer.area.height - reservedLines
+        )
+      )
+    else:
+      none(Sidebar)
 
   # If terminal was resized, adjust viewport to keep cursor visible
   if wasResized:
@@ -1009,12 +1191,26 @@ proc renderSingleView(e: Editor, buffer: var Buffer, wasResized: bool) =
       e.viewport.topLine = e.state.cursor.line
       e.executer.motionController.viewportManager.viewport.topLine = e.state.cursor.line
 
-  discard e.renderLineNumbers(buffer, textAreaWidth)
+  # Render sidebar if enabled
+  if maybeSidebar.isSome:
+    let sidebar = maybeSidebar.get
+    var screenY = 0
+    var lineIndex = e.viewport.topLine
+    while screenY < buffer.area.height - reservedLines and lineIndex < e.textBuffer.len:
+      renderSingleViewSidebar(buffer, sidebar, screenY)
+      inc screenY
+      inc lineIndex
+
+  discard e.renderLineNumbers(buffer, textAreaWidth, sidebarWidth)
   e.renderTextBuffer(buffer, textArea)
 
-  # Calculate and set cursor position
+  # Calculate and set cursor position (including sidebar width)
   e.state.screenCursor = e.calculateWindowCursor(
-    e.textBuffer, e.viewport, e.state.cursor, lineNumOffset, reservedLines
+    e.textBuffer,
+    e.viewport,
+    e.state.cursor,
+    sidebarWidth + lineNumOffset,
+    reservedLines,
   )
 
 proc renderBottomLines(e: Editor, buffer: var Buffer) =
@@ -1043,6 +1239,9 @@ proc render*(e: Editor, buffer: var Buffer) =
   # Early return if buffer area is too small
   if buffer.area.width <= 0 or buffer.area.height <= 0:
     return
+
+  # Update git diff if buffer was modified (with debouncing)
+  e.maybeUpdateGitDiff()
 
   # Clear buffer to prevent artifacts
   clearBuffer(buffer)

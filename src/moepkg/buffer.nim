@@ -28,6 +28,16 @@ import gapbuffer, cursor, unicode_utils, encoding
 export CharacterEncoding, encodingToString, detectCharacterEncoding
 
 type
+  SidebarItemKind* = enum
+    ## Type of sidebar indicator
+    GitAdded ## Line was added in git diff
+    GitChanged ## Line was changed in git diff
+    GitDeleted ## Line was deleted in git diff
+    GitChangedAndDeleted ## Line was changed and deleted in git diff
+    SyntaxError ## Syntax error indicator
+    SyntaxWarning ## Syntax warning indicator
+    Empty ## Empty sidebar cell
+
   LineEnding* = enum
     LF
     CRLF
@@ -93,6 +103,9 @@ type
     currentTransaction*: Option[BufferTransaction]
     inTransaction*: bool
 
+    # Sidebar markers (line-based markers for git diff, syntax errors, etc.)
+    lineMarkers*: seq[Option[SidebarItemKind]] # Each line can have at most one marker
+
     # Backend storage
     case backendKind*: BufferBackend
     of GapBuffer:
@@ -120,6 +133,7 @@ proc newTextBuffer*(
 
   case backend
   of GapBuffer:
+    let gb = newGapBuffer(content)
     TextBuffer(
       backendKind: GapBuffer,
       backend: backend,
@@ -128,13 +142,15 @@ proc newTextBuffer*(
       lineEnding: LF,
       encoding: utf8,
       endOfLine: true, # Default to POSIX text file standard
-      gapBuffer: newGapBuffer(content),
+      gapBuffer: gb,
       undoStack: initDeque[BufferChange](),
       redoStack: initDeque[BufferChange](),
       changeSeq: 0, # Initial sequence number
       savedSeq: 0, # Starts as saved (no changes)
       currentTransaction: none(BufferTransaction),
       inTransaction: false,
+      lineMarkers: newSeq[Option[SidebarItemKind]](gb.len),
+        # Initialize with buffer length
     )
 
 # Core text operations
@@ -171,6 +187,8 @@ proc `[][]`*(b: TextBuffer, lineIndex, colIndex: int): char =
 # Forward declarations for undo system
 proc pushUndoChange(b: TextBuffer, change: BufferChange)
 proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string]
+# Forward declaration for sidebar marker management
+proc ensureMarkersSize(b: TextBuffer)
 
 # Editing operations
 proc insertText*(b: TextBuffer, pos: BufferPosition, text: string): Result[(), string] =
@@ -247,6 +265,12 @@ proc insert*(b: TextBuffer, lineIndex: int, content: string): Result[(), string]
     except IndexDefect as e:
       return err("Failed to insert line: " & e.msg)
 
+  # Insert marker entry (none by default)
+  if lineIndex < b.lineMarkers.len:
+    b.lineMarkers.insert(none(SidebarItemKind), lineIndex)
+  elif lineIndex == b.lineMarkers.len:
+    b.lineMarkers.add(none(SidebarItemKind))
+
   # Record change for undo
   b.pushUndoChange(
     BufferChange(kind: ckInsertLine, insertLineIdx: lineIndex, insertLineText: content)
@@ -269,6 +293,10 @@ proc deleteLine*(b: TextBuffer, lineIndex: int): Result[(), string] =
       b.gapBuffer.deleteLine(lineIndex)
     except IndexDefect as e:
       return err("Failed to delete line: " & e.msg)
+
+  # Delete corresponding marker entry
+  if lineIndex < b.lineMarkers.len:
+    b.lineMarkers.delete(lineIndex)
 
   # Record change for undo
   b.pushUndoChange(
@@ -378,6 +406,9 @@ proc deleteRangeSingleLine(
     b.gapBuffer.deleteLine(startPos.line)
     b.gapBuffer.insertLine(startPos.line, newLine)
 
+  # Ensure lineMarkers stays in sync after direct gapBuffer operations
+  b.ensureMarkersSize()
+
 proc deleteRangeMultiLine(b: TextBuffer, startPos, endPos: BufferPosition) =
   ## Handle multi-line deletion
   let
@@ -416,6 +447,9 @@ proc deleteRangeMultiLine(b: TextBuffer, startPos, endPos: BufferPosition) =
   if endPos.line > startPos.line:
     for i in countdown(endPos.line, startPos.line + 1):
       b.gapBuffer.deleteLine(i)
+
+  # Ensure lineMarkers stays in sync after direct gapBuffer operations
+  b.ensureMarkersSize()
 
 proc deleteRange*(b: TextBuffer, startPos, endPos: BufferPosition): Result[(), string] =
   ## Delete text from startPos to endPos (inclusive)
@@ -620,6 +654,9 @@ proc insertTextWithNewlines(b: TextBuffer, pos: BufferPosition, text: string) =
     for i, newLine in newLines:
       b.gapBuffer.insertLine(pos.line + i, newLine)
 
+  # Ensure lineMarkers stays in sync after direct gapBuffer operations
+  b.ensureMarkersSize()
+
 proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
   ## Apply the inverse of a single change (internal helper)
   ## Returns error if the operation fails
@@ -663,6 +700,9 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
         let r = b.undoChange(change.transactionChanges[i])
         if r.isErr:
           return r
+
+    # Ensure lineMarkers stays in sync after undo operations
+    b.ensureMarkersSize()
     return ok(())
   except CatchableError as e:
     return err("Failed to undo change: " & e.msg)
@@ -752,6 +792,9 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
         let r = b.redoChange(change)
         if r.isErr:
           return r
+
+    # Ensure lineMarkers stays in sync after redo operations
+    b.ensureMarkersSize()
     return ok(())
   except CatchableError as e:
     return err("Failed to redo change: " & e.msg)
@@ -846,6 +889,9 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
   b.changeSeq = 0
   b.savedSeq = 0
 
+  # Reset markers for new file content
+  b.lineMarkers = newSeq[Option[SidebarItemKind]](b.len)
+
   return Result[(), string].ok ()
 
 proc saveFile*(buffer: TextBuffer, path: string): Result[(), string] =
@@ -905,3 +951,40 @@ proc getPerformanceStats*(
     of GapBuffer: "GapBuffer"
 
   (backend: backendName, memoryUsage: buffer.estimateMemoryUsage(), length: buffer.len)
+
+# Sidebar marker management
+proc ensureMarkersSize(b: TextBuffer) =
+  ## Ensure lineMarkers array matches buffer length
+  let bufferLen = b.len
+  if b.lineMarkers.len < bufferLen:
+    # Extend with none values
+    for i in b.lineMarkers.len ..< bufferLen:
+      b.lineMarkers.add(none(SidebarItemKind))
+  elif b.lineMarkers.len > bufferLen:
+    # Truncate
+    b.lineMarkers.setLen(bufferLen)
+
+proc setLineMarker*(b: TextBuffer, line: int, kind: SidebarItemKind) =
+  ## Set a sidebar marker for a specific line
+  ## Automatically resizes the marker array if needed
+  b.ensureMarkersSize()
+  if line >= 0 and line < b.lineMarkers.len:
+    b.lineMarkers[line] = some(kind)
+
+proc clearLineMarker*(b: TextBuffer, line: int) =
+  ## Clear the sidebar marker for a specific line
+  if line >= 0 and line < b.lineMarkers.len:
+    b.lineMarkers[line] = none(SidebarItemKind)
+
+proc getLineMarker*(b: TextBuffer, line: int): Option[SidebarItemKind] =
+  ## Get the sidebar marker for a specific line
+  ## Returns none if no marker is set or line is out of bounds
+  if line >= 0 and line < b.lineMarkers.len:
+    return b.lineMarkers[line]
+  else:
+    return none(SidebarItemKind)
+
+proc clearAllMarkers*(b: TextBuffer) =
+  ## Clear all sidebar markers
+  for i in 0 ..< b.lineMarkers.len:
+    b.lineMarkers[i] = none(SidebarItemKind)

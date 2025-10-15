@@ -19,9 +19,25 @@
 
 import std/[options, monotimes]
 
+import pkg/celina
+
 import cursor, modes, buffer
 
+# Re-export SidebarItemKind from buffer module
+export buffer.SidebarItemKind
+
 type
+  SidebarItem* = object ## Single cell in the sidebar
+    text*: string ## Display text (e.g., "+", "~", ">>")
+    kind*: SidebarItemKind
+    style*: Style ## Rendering style
+
+  Sidebar* = object
+    ## Sidebar displayed on the left side of editor window
+    ## Used for git diff, syntax errors, etc.
+    width*: int ## Width of sidebar in characters
+    buffer*: seq[seq[SidebarItem]] ## Per-line sidebar content [y][x]
+
   ViewPort* = object
     topLine*: int
     leftColumn*: int
@@ -95,3 +111,11 @@ type
       # Reserved lines for viewport calculations (for split windows)
     lineWrap*: bool # Whether to wrap long lines
     lastResizeTime*: MonoTime # Timestamp of last processed resize event
+    # Sidebar settings
+    showSidebar*: bool # Whether to show the sidebar
+    showGitDiff*: bool # Whether to show git diff indicators in sidebar
+    showSyntaxChecker*: bool # Whether to show syntax checker results in sidebar
+    lastGitDiffUpdate*: MonoTime # Timestamp of last git diff update
+    lastGitDiffChangeSeq*: int # Buffer changeSeq at last git diff update
+    gitDiffUpdateInterval*: int64
+      # Minimum milliseconds between git diff updates (debounce)
