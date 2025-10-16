@@ -785,6 +785,15 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
     )
   )
 
+  registry.registerCommand(
+    Command(
+      name: "switch-to-replace",
+      description: "Switch to replace mode",
+      kind: ctModeSwitch,
+      targetMode: EditorMode.Replace,
+    )
+  )
+
   # Register o and O commands
   registry.registerCommand(
     Command(
@@ -849,6 +858,7 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   )
   registry.bindKey(EditorMode.Normal, ":", "switch-to-command")
   registry.bindKey(EditorMode.Normal, "v", "switch-to-visual") # Enter visual mode
+  registry.bindKey(EditorMode.Normal, "R", "switch-to-replace") # Enter replace mode
 
   # Visual mode commands
   registry.registerCommand(
@@ -908,6 +918,10 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
 
   # Insert mode key bindings
   registry.bindKey(EditorMode.Insert, "Escape", "switch-to-normal") # Exit to normal mode
+
+  # Replace mode key bindings
+  registry.bindKey(EditorMode.Replace, "Escape", "switch-to-normal")
+    # Exit to normal mode
 
 proc eventToKeyCombo*(event: celina.Event): Option[KeyCombo] =
   ## Convert a Celina event to a key combination

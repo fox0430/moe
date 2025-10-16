@@ -90,6 +90,10 @@ type
     current*: BufferPosition # Current cursor position (selection end)
     active*: bool # Whether selection is currently active
 
+  ReplaceHistoryEntry* = object ## Replace mode history entry for undo with Backspace
+    pos*: BufferPosition # Position where character was replaced
+    originalChar*: string # Original character before replacement
+
   EditorState* = ref object
     cursor*: BufferPosition # Actual buffer cursor position (line/column)
     screenCursor*: CursorPosition # Screen cursor position (x/y)
@@ -100,6 +104,7 @@ type
     statusMessage*: string # Message to display in status line
     lastMotion*: Option[Motion]
     visualSelection*: VisualSelection # Visual mode selection state
+    replaceHistory*: seq[ReplaceHistoryEntry] # Replace mode undo history
     showStatusLine*: bool # Whether to show the status line
     multiStatusLine*: bool
       # Whether to show status line for each window (true) or only one at bottom (false)

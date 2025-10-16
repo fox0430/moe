@@ -116,6 +116,8 @@ proc handleModeSwitch*(
     # Initialize visual selection at current cursor position
     state.initSelection(buffer)
     return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Visual))
+  of EditorMode.Replace:
+    return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Replace))
   of EditorMode.Normal:
     # Already in Normal mode
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))

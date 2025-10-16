@@ -25,6 +25,7 @@ type
     Insert
     Command
     Visual
+    Replace
 
   ModeTransition* = object
     newMode*: Option[EditorMode]
@@ -36,3 +37,4 @@ proc modeLabel*(m: EditorMode): string =
   of EditorMode.Insert: "INSERT"
   of EditorMode.Command: "COMMAND"
   of EditorMode.Visual: "VISUAL"
+  of EditorMode.Replace: "REPLACE"

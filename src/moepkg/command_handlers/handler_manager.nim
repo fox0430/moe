@@ -31,9 +31,9 @@ import
     types, buffer, modes, motion, keybindings, commandline, commandconfig,
     commandregistry,
   ]
-import normal_handler, insert_handler, command_handler, visual_handler
+import normal_handler, insert_handler, command_handler, visual_handler, replace_handler
 
-export normal_handler, insert_handler, command_handler, visual_handler
+export normal_handler, insert_handler, command_handler, visual_handler, replace_handler
 
 type
   HandlerResultKind* = enum
@@ -52,6 +52,7 @@ type
     insertHandler*: InsertModeHandler
     commandHandler*: CommandModeHandler
     visualHandler*: VisualModeHandler
+    replaceHandler*: ReplaceModeHandler
     motionController*: MotionController
     keyBindingRegistry*: KeyBindingRegistry
     commandLineParser*: CommandLineParser
@@ -96,12 +97,15 @@ proc newHandlerManager*(
   let commandHandler =
     newCommandModeHandler(commandLineParser, commandConfig, commandRegistry)
   let visualHandler = newVisualModeHandler(keyBindingRegistry, commandRegistry)
+  let replaceHandler =
+    newReplaceModeHandler(keyBindingRegistry, motionController, commandRegistry)
 
   HandlerManager(
     normalHandler: normalHandler,
     insertHandler: insertHandler,
     commandHandler: commandHandler,
     visualHandler: visualHandler,
+    replaceHandler: replaceHandler,
     motionController: motionController,
     keyBindingRegistry: keyBindingRegistry,
     commandLineParser: commandLineParser,
@@ -120,16 +124,29 @@ proc handleNormalMode*(
   let r = manager.normalHandler.handleNormalModeKey(buffer, state, viewport, keyCombo)
   case r.kind
   of nmrHandled:
-    # Check if we're entering Insert mode
-    if r.modeTransition.isSome and r.modeTransition.get == EditorMode.Insert:
-      # Begin a transaction when entering Insert mode
-      let transactionResult = buffer.beginTransaction("Insert mode edit")
-      if transactionResult.isErr:
-        # This should not happen in normal operation, but handle it gracefully
-        return HandlerResult(
-          kind: hrError,
-          errorMessage: "Failed to begin transaction: " & transactionResult.error,
-        )
+    # Check if we're entering Insert or Replace mode
+    if r.modeTransition.isSome:
+      let targetMode = r.modeTransition.get
+      if targetMode == EditorMode.Insert:
+        # Begin a transaction when entering Insert mode
+        let transactionResult = buffer.beginTransaction("Insert mode edit")
+        if transactionResult.isErr:
+          # This should not happen in normal operation, but handle it gracefully
+          return HandlerResult(
+            kind: hrError,
+            errorMessage: "Failed to begin transaction: " & transactionResult.error,
+          )
+      elif targetMode == EditorMode.Replace:
+        # Begin a transaction when entering Replace mode
+        let transactionResult = buffer.beginTransaction("Replace mode edit")
+        if transactionResult.isErr:
+          # This should not happen in normal operation, but handle it gracefully
+          return HandlerResult(
+            kind: hrError,
+            errorMessage: "Failed to begin transaction: " & transactionResult.error,
+          )
+        # Clear replace history when entering Replace mode
+        state.replaceHistory = @[]
     return HandlerResult(
       kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
     )
@@ -212,6 +229,31 @@ proc handleVisualMode*(
   of vmrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
+proc handleReplaceMode*(
+    manager: HandlerManager, buffer: TextBuffer, state: EditorState, keyCombo: KeyCombo
+): HandlerResult =
+  ## Handle Replace mode input
+  let r = manager.replaceHandler.handleReplaceModeKey(buffer, state, keyCombo)
+  case r.kind
+  of rmrHandled:
+    # Check if we're leaving Replace mode
+    if r.modeTransition.isSome and r.modeTransition.get != EditorMode.Replace:
+      # Commit the transaction when leaving Replace mode
+      let transactionResult = buffer.commitTransaction()
+      if transactionResult.isErr:
+        # This should not happen in normal operation, but handle it gracefully
+        return HandlerResult(
+          kind: hrError,
+          errorMessage: "Failed to commit transaction: " & transactionResult.error,
+        )
+    return HandlerResult(
+      kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
+    )
+  of rmrUnhandled:
+    return HandlerResult(kind: hrUnhandled)
+  of rmrError:
+    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
+
 proc handleEvent*(
     manager: HandlerManager,
     buffer: TextBuffer,
@@ -243,6 +285,8 @@ proc handleEvent*(
     return HandlerResult(kind: hrUnhandled)
   of EditorMode.Visual:
     return manager.handleVisualMode(buffer, state, viewport, keyCombo)
+  of EditorMode.Replace:
+    return manager.handleReplaceMode(buffer, state, keyCombo)
 
 # Utility functions for HandlerResult
 proc wasHandled*(hrResult: HandlerResult): bool =
