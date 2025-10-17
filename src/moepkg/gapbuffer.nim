@@ -48,7 +48,7 @@ proc newGapBuffer*(initialCapacity: int = DEFAULT_GAP_SIZE): GapBuffer =
   GapBuffer(lines: lines, gapStart: 1, gapEnd: capacity)
 
 proc newGapBuffer*(text: string): GapBuffer =
-  # Parse text into lines
+  # Parse text into lines (POSIX standard: newline is line terminator, not separator)
   var
     linesList: seq[string]
     currentLine = ""
@@ -60,8 +60,12 @@ proc newGapBuffer*(text: string): GapBuffer =
     else:
       currentLine.add(ch)
 
-  # Always add the last line (even if empty, which represents text ending with newline)
-  linesList.add(currentLine)
+  # Add remaining content as last line only if:
+  # - There's content in currentLine (text doesn't end with newline), OR
+  # - The text is empty (need at least one line in buffer)
+  # This ensures "hello\n" = 1 line, "hello" = 1 line, "hello\n\n" = 2 lines
+  if currentLine.len > 0 or linesList.len == 0:
+    linesList.add(currentLine)
 
   let
     lineCount = linesList.len
@@ -319,6 +323,8 @@ proc deleteAtLineCol*(gb: GapBuffer, line: int, col: int, count: int = 1) =
 
 proc `$`*(gb: GapBuffer): string =
   ## Convert entire buffer to string
+  ## Each line is followed by a newline, including the last line
+  ## This preserves user-created empty lines at the end of the buffer
   if gb.len == 0:
     return ""
 
@@ -328,9 +334,7 @@ proc `$`*(gb: GapBuffer): string =
       line = gb.lines[physicalLine]
 
     result.add(line)
-
-    if i < gb.len - 1:
-      result.add('\n')
+    result.add('\n')
 
 proc clear*(gb: GapBuffer) =
   ## Clear all content and reset to single empty line
@@ -444,6 +448,8 @@ proc modifyLineContent*(gb: GapBuffer, lineNumber: int, f: proc(s: var string)) 
 # Iterator support
 
 iterator chars*(gb: GapBuffer): char =
+  ## Iterate over all characters in the buffer, including newlines
+  ## Each line is followed by a newline character
   for i in 0 ..< gb.len:
     let
       physicalLine = gb.logicalToPhysical(i)
@@ -452,8 +458,8 @@ iterator chars*(gb: GapBuffer): char =
     for ch in line:
       yield ch
 
-    if i < gb.len - 1:
-      yield '\n'
+    # Each line ends with a newline
+    yield '\n'
 
 iterator lines*(gb: GapBuffer): string =
   for i in 0 ..< gb.len:

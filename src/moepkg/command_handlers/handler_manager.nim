@@ -44,6 +44,8 @@ type
     hrVSplit # Vertical split window
     hrHSplit # Horizontal split window
     hrSetMultiStatusLine # Set multi status line
+    hrSave # Save file
+    hrSaveAndQuit # Save file and quit
     hrUnhandled # Command was not handled
     hrError # Error occurred
 
@@ -76,6 +78,11 @@ type
       hsplitFilename*: Option[string]
     of hrSetMultiStatusLine:
       enabled*: bool
+    of hrSave:
+      saveFilename*: Option[string]
+    of hrSaveAndQuit:
+      saveAndQuitFilename*: Option[string]
+      forceQuitAfterSave*: bool
     of hrUnhandled:
       discard
     of hrError:
@@ -207,6 +214,14 @@ proc handleCommandMode*(
     return HandlerResult(kind: hrHSplit, hsplitFilename: r.hsplitFilename)
   of cmrSetMultiStatusLine:
     return HandlerResult(kind: hrSetMultiStatusLine, enabled: r.enabled)
+  of cmrSave:
+    return HandlerResult(kind: hrSave, saveFilename: r.saveFilename)
+  of cmrSaveAndQuit:
+    return HandlerResult(
+      kind: hrSaveAndQuit,
+      saveAndQuitFilename: r.saveAndQuitFilename,
+      forceQuitAfterSave: r.forceSaveAndQuit,
+    )
   of cmrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
@@ -291,7 +306,10 @@ proc handleEvent*(
 # Utility functions for HandlerResult
 proc wasHandled*(hrResult: HandlerResult): bool =
   ## Check if the event was handled
-  hrResult.kind in {hrHandled, hrQuit, hrCloseWindow, hrGotoLine, hrVSplit, hrHSplit}
+  hrResult.kind in {
+    hrHandled, hrQuit, hrCloseWindow, hrGotoLine, hrVSplit, hrHSplit, hrSave,
+    hrSaveAndQuit,
+  }
 
 proc shouldQuit*(hrResult: HandlerResult): bool =
   ## Check if the application should quit
@@ -316,6 +334,14 @@ proc shouldHSplit*(hrResult: HandlerResult): bool =
 proc shouldSetMultiStatusLine*(hrResult: HandlerResult): bool =
   ## Check if we should set multi status line mode
   hrResult.kind == hrSetMultiStatusLine
+
+proc shouldSave*(hrResult: HandlerResult): bool =
+  ## Check if we should save the file
+  hrResult.kind == hrSave
+
+proc shouldSaveAndQuit*(hrResult: HandlerResult): bool =
+  ## Check if we should save the file and quit
+  hrResult.kind == hrSaveAndQuit
 
 proc hasError*(hrResult: HandlerResult): bool =
   ## Check if there was an error
@@ -356,3 +382,21 @@ proc getHSplitFilename*(hrResult: HandlerResult): Option[string] =
 proc getMultiStatusLineEnabled*(hrResult: HandlerResult): bool =
   ## Get multi status line enabled setting
   if hrResult.kind == hrSetMultiStatusLine: hrResult.enabled else: false
+
+proc getSaveFilename*(hrResult: HandlerResult): Option[string] =
+  ## Get filename for save operation
+  if hrResult.kind == hrSave:
+    hrResult.saveFilename
+  else:
+    none(string)
+
+proc getSaveAndQuitFilename*(hrResult: HandlerResult): Option[string] =
+  ## Get filename for save and quit operation
+  if hrResult.kind == hrSaveAndQuit:
+    hrResult.saveAndQuitFilename
+  else:
+    none(string)
+
+proc getForceQuitAfterSave*(hrResult: HandlerResult): bool =
+  ## Get force quit flag for save and quit operation
+  if hrResult.kind == hrSaveAndQuit: hrResult.forceQuitAfterSave else: false

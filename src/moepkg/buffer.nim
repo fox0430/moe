@@ -1005,9 +1005,11 @@ template detectLineEnding(b: TextBuffer, content: lent string) =
     b.lineEnding = LF
 
   # Detect if file ends with newline
-  b.endOfLine =
-    content.len > 0 and
-    (content.endsWith("\n") or content.endsWith("\r\n") or content.endsWith("\r"))
+  # For empty files (new files), keep the default endOfLine=true (POSIX standard)
+  if content.len > 0:
+    b.endOfLine =
+      content.endsWith("\n") or content.endsWith("\r\n") or content.endsWith("\r")
+  # else: keep the default endOfLine value (true for new files)
 
 proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
   let newBackend = chooseBackendForFile()

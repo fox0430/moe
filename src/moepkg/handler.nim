@@ -85,6 +85,26 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         # Handle multi status line setting
         e.setMultiStatusLine(r.getMultiStatusLineEnabled())
 
+      if r.shouldSave():
+        # Handle file save
+        let saveResult = e.saveFile(r.getSaveFilename())
+        if saveResult.isErr:
+          e.state.statusMessage = "Error: " & saveResult.error
+        else:
+          # Get saved file path from active buffer
+          let savedPath =
+            if activeBuffer.filePath.isSome: activeBuffer.filePath.get else: "file"
+          e.state.statusMessage = "Saved: " & savedPath
+
+      if r.shouldSaveAndQuit():
+        # Handle file save and quit
+        let saveResult = e.saveFile(r.getSaveAndQuitFilename())
+        if saveResult.isErr:
+          e.state.statusMessage = "Error: " & saveResult.error
+        else:
+          # Save succeeded, now quit
+          return false # Signal app should quit
+
       # Handle mode transitions
       let modeTransition = r.getModeTransition()
       if modeTransition.isSome:

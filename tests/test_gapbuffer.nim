@@ -203,15 +203,15 @@ suite "GapBuffer - Replace Operations":
 suite "GapBuffer - String Conversion":
   test "toString single line":
     let gb = newGapBuffer("test")
-    check $gb == "test"
+    check $gb == "test\n" # Each line ends with newline
 
   test "toString multiple lines":
     let gb = newGapBuffer("first\nsecond\nthird")
-    check $gb == "first\nsecond\nthird"
+    check $gb == "first\nsecond\nthird\n" # Each line ends with newline
 
   test "toString empty buffer":
     let gb = newGapBuffer("")
-    check $gb == ""
+    check $gb == "\n" # Empty buffer has one empty line with newline
 
 suite "GapBuffer - Clear":
   test "clear resets to empty buffer":
@@ -226,7 +226,7 @@ suite "GapBuffer - Iterators":
     var chars: seq[char] = @[]
     for c in gb.chars:
       chars.add(c)
-    check chars == @['a', 'b', '\n', 'c', 'd']
+    check chars == @['a', 'b', '\n', 'c', 'd', '\n'] # Each line ends with newline
 
   test "lines iterator":
     let gb = newGapBuffer("first\nsecond\nthird")
@@ -255,10 +255,9 @@ suite "GapBuffer - Edge Cases":
 
   test "multiple empty lines":
     let gb = newGapBuffer("\n\n")
-    check gb.len == 3
+    check gb.len == 2 # "\n\n" = 2 empty lines (newline is terminator, not separator)
     check gb[0] == ""
     check gb[1] == ""
-    check gb[2] == ""
 
   test "insertIntoLine at boundary positions":
     let gb = newGapBuffer("test")
@@ -369,7 +368,7 @@ suite "GapBuffer - Unicode/Multibyte Support":
   test "newGapBuffer with multibyte text preserves content":
     let text = "日本語とEnglishと🎌"
     let gb = newGapBuffer(text)
-    check $gb == text
+    check $gb == text & "\n" # Each line ends with newline
     check gb.len == 1
     check gb[0] == text
 
@@ -404,7 +403,7 @@ suite "GapBuffer - Unicode/Multibyte Support":
 
   test "toString with multibyte multiline content":
     let gb = newGapBuffer("日本語\nEmoji🌍\nMixed混合")
-    check $gb == "日本語\nEmoji🌍\nMixed混合"
+    check $gb == "日本語\nEmoji🌍\nMixed混合\n" # Each line ends with newline
 
   test "byte length vs character length awareness":
     let gb = newGapBuffer("abc")
@@ -689,18 +688,19 @@ suite "GapBuffer - Iterator Edge Cases":
     var charCount = 0
     for ch in gb.chars:
       charCount += 1
-    check charCount == 0 # No characters
+    check charCount == 1 # One newline (empty line still has trailing newline)
 
   test "iterate over single character":
     let gb = newGapBuffer("x")
     var chars: seq[char] = @[]
     for ch in gb.chars:
       chars.add(ch)
-    check chars == @['x']
+    check chars == @['x', '\n'] # Each line ends with newline
 
   test "iterate over lines with empty lines":
     let gb = newGapBuffer("\n\n")
     var lines: seq[string] = @[]
     for line in gb.lines:
       lines.add(line)
-    check lines == @["", "", ""]
+    check lines ==
+      @["", ""] # "\n\n" = 2 empty lines (newline is terminator, not separator)

@@ -41,6 +41,8 @@ type
     cmrVSplit # Vertical split window
     cmrHSplit # Horizontal split window
     cmrSetMultiStatusLine # Set multi status line
+    cmrSave # Save file
+    cmrSaveAndQuit # Save file and quit
     cmrError # Command error
 
   CommandModeHandler* = ref object ## Handler for Command mode specific commands
@@ -66,6 +68,11 @@ type
       hsplitFilename*: Option[string]
     of cmrSetMultiStatusLine:
       enabled*: bool
+    of cmrSave:
+      saveFilename*: Option[string]
+    of cmrSaveAndQuit:
+      saveAndQuitFilename*: Option[string]
+      forceSaveAndQuit*: bool
     of cmrError:
       errorMessage*: string
 
@@ -95,14 +102,9 @@ proc executeSave*(
     force: bool,
 ): CommandModeResult =
   ## Execute save command (:w, :w!)
-  # TODO: Implement actual file saving
-  let saveFile =
-    if filename.isSome:
-      filename.get
-    else:
-      "current_file" # Should get from buffer
-
-  return CommandModeResult(kind: cmrMessage, message: "Saved to: " & saveFile)
+  ## Returns cmrSave to signal that the file should be saved
+  ## The actual save operation is performed by the editor
+  return CommandModeResult(kind: cmrSave, saveFilename: filename)
 
 proc executeSaveAndQuit*(
     handler: CommandModeHandler,
@@ -111,13 +113,11 @@ proc executeSaveAndQuit*(
     force: bool,
 ): CommandModeResult =
   ## Execute save and quit command (:wq, :x)
-  # First save
-  let saveResult = handler.executeSave(buffer, filename, force)
-  if saveResult.kind == cmrError:
-    return saveResult
-
-  # Then quit
-  return CommandModeResult(kind: cmrQuit, forceQuit: force)
+  ## Returns cmrSaveAndQuit to signal that the file should be saved and editor should quit
+  ## The actual save operation is performed by the editor
+  return CommandModeResult(
+    kind: cmrSaveAndQuit, saveAndQuitFilename: filename, forceSaveAndQuit: force
+  )
 
 proc executeQuitAll*(
     handler: CommandModeHandler, buffer: TextBuffer, force: bool
