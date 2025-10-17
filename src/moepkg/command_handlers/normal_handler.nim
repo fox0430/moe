@@ -277,14 +277,14 @@ proc handleNormalModeKey*(
     of "edit.undo":
       let r = buffer.undo()
       if r.isOk:
-        # TODO: Apply cursor position from r.value
+        state.cursor = r.value
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
       else:
         return NormalModeResult(kind: nmrError, errorMessage: r.error)
     of "edit.redo":
       let r = buffer.redo()
       if r.isOk:
-        # TODO: Apply cursor position from r.value
+        state.cursor = r.value
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
       else:
         return NormalModeResult(kind: nmrError, errorMessage: r.error)
