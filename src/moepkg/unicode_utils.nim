@@ -24,6 +24,14 @@
 
 import std/unicode
 
+type CursorPosCache* = object
+  ## Cache for accelerating character-to-byte position conversions
+  ## Dramatically improves performance for consecutive edits on long lines
+  line*: int # Cached line number
+  charPos*: int # Cached character position (Unicode character count)
+  bytePos*: int # Cached byte position (UTF-8 byte offset)
+  changeSeq*: int # Buffer change sequence number for invalidation
+
 proc byteToCharPos*(text: string, bytePos: int): int =
   ## Convert byte position to character position (Unicode-aware)
   var currentByte = 0
@@ -144,3 +152,77 @@ proc displayWidthUpTo*(text: string, charPos: int): int =
       break
     result += runeWidth(rune)
     currentChar += 1
+
+proc charToBytePosCached*(
+    text: string, charPos: int, cache: var CursorPosCache, lineNum: int, changeSeq: int
+): int =
+  ## Convert character position to byte position using cache for performance
+  ##
+  ## This function dramatically improves performance for consecutive edits by
+  ## caching the last conversion and performing incremental scans.
+  ##
+  ## Performance:
+  ##   - Cache hit (same position): O(1)
+  ##   - Cache hit (forward movement): O(distance)
+  ##   - Cache miss: O(charPos)
+  ##
+  ## Args:
+  ##   text: The line text to analyze
+  ##   charPos: Target character position (0-based)
+  ##   cache: Cache object (will be updated)
+  ##   lineNum: Current line number
+  ##   changeSeq: Current buffer change sequence number
+  ##
+  ## Returns:
+  ##   Byte position corresponding to charPos
+
+  # Bounds check
+  if charPos <= 0:
+    # Update cache for position 0
+    cache.line = lineNum
+    cache.charPos = 0
+    cache.bytePos = 0
+    cache.changeSeq = changeSeq
+    return 0
+
+  # Check if cache is valid for this line and buffer state
+  if cache.line == lineNum and cache.changeSeq == changeSeq:
+    # Cache HIT!
+
+    if cache.charPos == charPos:
+      # Perfect match - return immediately
+      return cache.bytePos
+    elif cache.charPos < charPos:
+      # Forward movement (most common case)
+      # Scan from cached position to target
+      result = cache.bytePos
+      var currentChar = cache.charPos
+      var byteIdx = cache.bytePos
+
+      while byteIdx < text.len and currentChar < charPos:
+        let rune = text.runeAt(byteIdx)
+        result += rune.size
+        byteIdx += rune.size
+        currentChar += 1
+
+      # Update cache
+      cache.charPos = charPos
+      cache.bytePos = result
+      return result
+    else:
+      # Backward movement
+      # For now, fall back to full scan from start
+      # (Backward incremental scan is complex due to UTF-8 variable width)
+      result = charToBytePos(text, charPos)
+      cache.charPos = charPos
+      cache.bytePos = result
+      return result
+
+  # Cache MISS - perform full scan from start
+  result = charToBytePos(text, charPos)
+
+  # Update cache with new values
+  cache.line = lineNum
+  cache.charPos = charPos
+  cache.bytePos = result
+  cache.changeSeq = changeSeq

@@ -113,6 +113,9 @@ type
     incrementalHighlight*: IncrementalHighlight # Incremental highlighting cache
     lastChangedLines*: tuple[start, theEnd: int] # Last edit range for incremental update
 
+    # Performance optimization
+    cursorCache*: CursorPosCache # Cache for character-to-byte position conversions
+
     # Backend storage
     case backendKind*: BufferBackend
     of GapBuffer:
@@ -168,6 +171,8 @@ proc newTextBuffer*(
       highlightNeedsUpdate: false,
       incrementalHighlight: nil,
       lastChangedLines: (0, 0),
+      # Initialize cursor position cache (invalid state)
+      cursorCache: CursorPosCache(line: -1, charPos: 0, bytePos: 0, changeSeq: -1),
     )
 
 # Core text operations
@@ -257,7 +262,8 @@ proc deleteChar*(b: TextBuffer, pos: BufferPosition): Result[(), string] =
       let
         deletedChar = line.runeAtPos(pos.column)
         charSize = len($deletedChar)
-        bytePos = charToBytePos(line, pos.column)
+        bytePos =
+          charToBytePosCached(line, pos.column, b.cursorCache, pos.line, b.changeSeq)
 
       # Delete character at byte position
       b.gapBuffer.deleteAtLineCol(pos.line, bytePos, charSize)
@@ -687,7 +693,8 @@ proc insertTextWithNewlines(b: TextBuffer, pos: BufferPosition, text: string) =
   if '\n' notin text:
     # Simple case: no newlines, just insert into current line
     let line = b.getLine(pos.line)
-    let bytePos = charToBytePos(line, pos.column)
+    let bytePos =
+      charToBytePosCached(line, pos.column, b.cursorCache, pos.line, b.changeSeq)
     b.gapBuffer.insertIntoLine(pos.line, bytePos, text)
   else:
     # Complex case: text contains newlines, need to split current line and insert multiple lines
@@ -746,7 +753,10 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
       case b.backendKind
       of GapBuffer:
         let line = b.getLine(change.insertPos.line)
-        let bytePos = charToBytePos(line, change.insertPos.column)
+        let bytePos = charToBytePosCached(
+          line, change.insertPos.column, b.cursorCache, change.insertPos.line,
+          b.changeSeq,
+        )
         b.gapBuffer.deleteAtLineCol(
           change.insertPos.line, bytePos, change.insertText.len
         )
@@ -755,7 +765,10 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
       case b.backendKind
       of GapBuffer:
         let line = b.getLine(change.deletePos.line)
-        let bytePos = charToBytePos(line, change.deletePos.column)
+        let bytePos = charToBytePosCached(
+          line, change.deletePos.column, b.cursorCache, change.deletePos.line,
+          b.changeSeq,
+        )
         b.gapBuffer.insertIntoLine(change.deletePos.line, bytePos, change.deletedText)
     of ckInsertLine:
       # Undo insert line by deleting it
@@ -863,13 +876,19 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
       case b.backendKind
       of GapBuffer:
         let line = b.getLine(change.insertPos.line)
-        let bytePos = charToBytePos(line, change.insertPos.column)
+        let bytePos = charToBytePosCached(
+          line, change.insertPos.column, b.cursorCache, change.insertPos.line,
+          b.changeSeq,
+        )
         b.gapBuffer.insertIntoLine(change.insertPos.line, bytePos, change.insertText)
     of ckDeleteText:
       case b.backendKind
       of GapBuffer:
         let line = b.getLine(change.deletePos.line)
-        let bytePos = charToBytePos(line, change.deletePos.column)
+        let bytePos = charToBytePosCached(
+          line, change.deletePos.column, b.cursorCache, change.deletePos.line,
+          b.changeSeq,
+        )
         b.gapBuffer.deleteAtLineCol(
           change.deletePos.line, bytePos, change.deletedText.len
         )
