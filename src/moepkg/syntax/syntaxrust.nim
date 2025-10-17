@@ -200,7 +200,7 @@ proc rustNextToken(g: var GeneralTokenizer, flags: TokenizerFlags) =
         g.kind = gtNone
   g.length = pos - g.pos
   if g.kind != gtEof and g.length <= 0:
-    assert false, "clikeNextToken: produced an empty token"
+    assert false, "rustNextToken: produced an empty token"
   g.pos = pos
 
 proc rustNextToken*(g: var GeneralTokenizer) =
