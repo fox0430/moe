@@ -240,11 +240,8 @@ proc getGitDiffFromBuffer*(buffer: TextBuffer): Result[GitDiffInfo, string] =
       return err("Failed to execute git show: " & e.msg)
 
   if showExitCode != 0:
-    # File not in git yet, mark all lines as added
-    var diffInfo = GitDiffInfo(lines: @[])
-    for i in 0 ..< buffer.len:
-      diffInfo.lines.add(GitDiffLine(lineNumber: i, kind: Added))
-    return ok(diffInfo)
+    # File not in git yet, return empty diff (no markers)
+    return ok(GitDiffInfo(lines: @[]))
 
   # Create temporary files for comparison
   let tempOriginal =
