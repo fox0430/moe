@@ -19,7 +19,7 @@
 
 ## Main buffer interface
 
-import std/[unicode, options, strutils, deques]
+import std/[unicode, options, strutils, deques, os]
 
 import pkg/results
 
@@ -89,7 +89,7 @@ type
     readOnly*: bool
     lineEnding*: LineEnding
     encoding*: CharacterEncoding
-    endOfLine*: bool # Whether file should end with newline (vim 'endofline' option)
+    endOfLine*: bool # Whether file should end with newline
 
     # Undo/Redo stacks (using Deque for O(1) operations at both ends)
     undoStack*: Deque[BufferChange]
@@ -1004,7 +1004,7 @@ template detectLineEnding(b: TextBuffer, content: lent string) =
   else:
     b.lineEnding = LF
 
-  # Detect if file ends with newline (vim 'endofline' behavior)
+  # Detect if file ends with newline
   b.endOfLine =
     content.len > 0 and
     (content.endsWith("\n") or content.endsWith("\r\n") or content.endsWith("\r"))
@@ -1012,23 +1012,25 @@ template detectLineEnding(b: TextBuffer, content: lent string) =
 proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
   let newBackend = chooseBackendForFile()
   var content: string
+
+  # Check if file exists; if not, start with empty content
+  if fileExists(path):
+    # File exists, read its content
+    try:
+      content = readFile(path)
+    except IOError as e:
+      return Result[(), string].err e.msg
+  else:
+    # File doesn't exist, start with empty content
+    content = ""
+
   # Reinitialize with new backend if needed
   if b.backendKind != newBackend:
-    content =
-      try:
-        readFile(path)
-      except IOError as e:
-        return Result[(), string].err e.msg
     let newBuffer = newTextBuffer(content, some(path))
     b[] = newBuffer[]
   else:
     case b.backendKind
     of GapBuffer:
-      content =
-        try:
-          readFile(path)
-        except IOError as e:
-          return Result[(), string].err e.msg
       b.gapBuffer = newGapBuffer(content)
 
   b.detectLineEnding(content)
