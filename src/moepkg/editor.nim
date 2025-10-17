@@ -24,7 +24,7 @@ import pkg/[celina, results]
 import
   buffer, cursor, types, commands, keybindings, commandregistry, modes, commandline,
   commandconfig, statusline, windowmanager, unicode_utils, render_utils, sidebar,
-  gitdiff
+  gitdiff, highlight
 import command_handlers/[handler_manager, visual_handler]
 
 type Editor* = ref object
@@ -629,10 +629,77 @@ proc saveFile*(e: Editor, path: Option[string] = none(string)): Result[(), strin
 
   ok(())
 
-proc getSelectionStyle(e: Editor, hasSelection: bool, pos: BufferPosition): Style =
-  ## Get the appropriate style for a character based on selection state
+proc colorIndexToStyle(colorIdx: EditorColorPairIndex): Style =
+  ## Convert EditorColorPairIndex to Celina Style based on dark.toml theme
+  case colorIdx
+  of keyword:
+    # #87d7ff - Light blue
+    Style(fg: rgb(0x87, 0xd7, 0xff), bg: ColorValue(kind: Default), modifiers: {})
+  of builtin:
+    # #add8e6 - Light blue
+    Style(fg: rgb(0xad, 0xd8, 0xe6), bg: ColorValue(kind: Default), modifiers: {})
+  of boolean:
+    # #add8e6 - Light blue
+    Style(fg: rgb(0xad, 0xd8, 0xe6), bg: ColorValue(kind: Default), modifiers: {})
+  of specialVar:
+    # #0090a8 - Dark cyan
+    Style(fg: rgb(0x00, 0x90, 0xa8), bg: ColorValue(kind: Default), modifiers: {})
+  of stringLit, charLit:
+    # #add8e6 - Light blue
+    Style(fg: rgb(0xad, 0xd8, 0xe6), bg: ColorValue(kind: Default), modifiers: {})
+  of decNumber, binNumber, hexNumber, octNumber, floatNumber:
+    # #add8e6 - Light blue
+    Style(fg: rgb(0xad, 0xd8, 0xe6), bg: ColorValue(kind: Default), modifiers: {})
+  of comment, longComment:
+    # #808080 - Gray
+    Style(fg: rgb(0x80, 0x80, 0x80), bg: ColorValue(kind: Default), modifiers: {})
+  of preprocessor:
+    # #0090a8 - Dark cyan
+    Style(fg: rgb(0x00, 0x90, 0xa8), bg: ColorValue(kind: Default), modifiers: {})
+  of functionName:
+    # #00b7ce - Cyan
+    Style(fg: rgb(0x00, 0xb7, 0xce), bg: ColorValue(kind: Default), modifiers: {})
+  of typeName:
+    # #00ffff - Cyan
+    Style(fg: rgb(0x00, 0xff, 0xff), bg: ColorValue(kind: Default), modifiers: {})
+  of identifier:
+    # Use default foreground color
+    normalStyle
+  of operator:
+    # #00b7ce - Cyan
+    Style(fg: rgb(0x00, 0xb7, 0xce), bg: ColorValue(kind: Default), modifiers: {})
+  of pragma:
+    # #0090a8 - Dark cyan
+    Style(fg: rgb(0x00, 0x90, 0xa8), bg: ColorValue(kind: Default), modifiers: {})
+  of whitespace:
+    # #808080 - Gray
+    Style(fg: rgb(0x80, 0x80, 0x80), bg: ColorValue(kind: Default), modifiers: {})
+  of table:
+    # #0090a8 - Dark cyan
+    Style(fg: rgb(0x00, 0x90, 0xa8), bg: ColorValue(kind: Default), modifiers: {})
+  of date:
+    # #0090a8 - Dark cyan
+    Style(fg: rgb(0x00, 0x90, 0xa8), bg: ColorValue(kind: Default), modifiers: {})
+  of property:
+    # #00b7ce - Cyan
+    Style(fg: rgb(0x00, 0xb7, 0xce), bg: ColorValue(kind: Default), modifiers: {})
+  of selectArea:
+    visualStyle
+  else:
+    normalStyle
+
+proc getSelectionStyle(
+    e: Editor, buffer: TextBuffer, hasSelection: bool, pos: BufferPosition
+): Style =
+  ## Get the appropriate style for a character based on selection state and syntax
   if hasSelection and e.state.visualSelection.isPositionInSelection(pos):
     visualStyle
+  elif not buffer.highlight.isNil:
+    # Apply syntax highlighting from buffer
+    # Update highlight if needed (after text edits)
+    buffer.updateHighlight()
+    let colorPair = buffer.highlight.getColorPair(pos.line, pos.column)
+    colorIndexToStyle(colorPair)
   else:
     normalStyle
 
@@ -656,6 +723,7 @@ proc getVisualSelection(
 
 proc renderLineSegmentWithSelection(
     e: Editor,
+    textBuffer: TextBuffer,
     buffer: var Buffer,
     displayLine: string,
     screenX, screenY: int,
@@ -665,13 +733,10 @@ proc renderLineSegmentWithSelection(
     selStart, selEnd: BufferPosition,
     useRunes: bool = true,
 ) =
-  ## Render a line segment with selection highlighting
+  ## Render a line segment with selection highlighting and syntax highlighting
   ## useRunes: true for wrapped mode (character-based), false for byte-based rendering
-  if not hasSelection or lineIndex < selStart.line or lineIndex > selEnd.line:
-    # No selection - fast path
-    buffer.setString(screenX, screenY, displayLine, normalStyle)
-    return
 
+  # Always render character by character to apply syntax highlighting
   if useRunes:
     # Character-based rendering (for wrapped mode)
     var displayX = 0
@@ -679,7 +744,7 @@ proc renderLineSegmentWithSelection(
     for rune in displayLine.runes:
       let
         pos = BufferPosition(line: lineIndex, column: charIdx)
-        style = e.getSelectionStyle(hasSelection, pos)
+        style = e.getSelectionStyle(textBuffer, hasSelection, pos)
         charStr = $rune
       if screenX + displayX < buffer.area.width:
         buffer.setString(screenX + displayX, screenY, charStr, style)
@@ -691,7 +756,7 @@ proc renderLineSegmentWithSelection(
       let
         col = startColumn + i
         pos = BufferPosition(line: lineIndex, column: col)
-        style = e.getSelectionStyle(hasSelection, pos)
+        style = e.getSelectionStyle(textBuffer, hasSelection, pos)
         charStr = $displayLine[i]
       if screenX + i < buffer.area.width:
         buffer.setString(screenX + i, screenY, charStr, style)
@@ -791,6 +856,7 @@ proc renderTextBuffer(e: Editor, buffer: var Buffer, area: Rect) =
         if displayLine.len > 0:
           # Render with selection highlighting if in visual mode
           e.renderLineSegmentWithSelection(
+            e.textBuffer,
             buffer,
             displayLine,
             area.x,
@@ -816,6 +882,7 @@ proc renderTextBuffer(e: Editor, buffer: var Buffer, area: Rect) =
       if displayLine.len > 0:
         # Render with selection highlighting if in visual mode
         e.renderLineSegmentWithSelection(
+          e.textBuffer,
           buffer,
           displayLine,
           area.x,
@@ -893,6 +960,7 @@ proc renderWindowLineWrapped(
       if displayCharCount > 0:
         # Render with selection highlighting if in visual mode
         e.renderLineSegmentWithSelection(
+          window.buffer,
           buffer,
           displayLine,
           textScreenX,
@@ -952,6 +1020,7 @@ proc renderWindowLineNoWrap(
     if maxWidth > 0:
       # Render with selection highlighting if in visual mode
       e.renderLineSegmentWithSelection(
+        window.buffer,
         buffer,
         displayLine[0 ..< maxWidth],
         textScreenX,

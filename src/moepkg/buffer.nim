@@ -23,7 +23,7 @@ import std/[unicode, options, strutils, deques]
 
 import pkg/results
 
-import gapbuffer, cursor, unicode_utils, encoding
+import gapbuffer, cursor, unicode_utils, encoding, highlight
 
 export CharacterEncoding, encodingToString, detectCharacterEncoding
 
@@ -106,6 +106,13 @@ type
     # Sidebar markers (line-based markers for git diff, syntax errors, etc.)
     lineMarkers*: seq[Option[SidebarItemKind]] # Each line can have at most one marker
 
+    # Syntax highlighting
+    highlight*: Highlight # Syntax highlighting for this buffer
+    language*: SourceLanguage # Programming language for syntax highlighting
+    highlightNeedsUpdate*: bool # Flag to track if highlight needs regeneration
+    incrementalHighlight*: IncrementalHighlight # Incremental highlighting cache
+    lastChangedLines*: tuple[start, theEnd: int] # Last edit range for incremental update
+
     # Backend storage
     case backendKind*: BufferBackend
     of GapBuffer:
@@ -134,6 +141,11 @@ proc newTextBuffer*(
   case backend
   of GapBuffer:
     let gb = newGapBuffer(content)
+    # Convert buffer to Runes sequence for highlighting
+    var runesBuffer: seq[Runes] = @[]
+    for i in 0 ..< gb.len:
+      runesBuffer.add(gb.getLine(i).toRunes())
+
     TextBuffer(
       backendKind: GapBuffer,
       backend: backend,
@@ -150,7 +162,12 @@ proc newTextBuffer*(
       currentTransaction: none(BufferTransaction),
       inTransaction: false,
       lineMarkers: newSeq[Option[SidebarItemKind]](gb.len),
-        # Initialize with buffer length
+      # Initialize with plain text highlighting (no language)
+      highlight: initHighlight(runesBuffer),
+      language: SourceLanguage.langNone,
+      highlightNeedsUpdate: false,
+      incrementalHighlight: nil,
+      lastChangedLines: (0, 0),
     )
 
 # Core text operations
@@ -185,6 +202,7 @@ proc `[][]`*(b: TextBuffer, lineIndex, colIndex: int): char =
   b[lineIndex][colIndex]
 
 # Forward declarations for undo system
+proc getChangePosition(change: BufferChange): BufferPosition
 proc pushUndoChange(b: TextBuffer, change: BufferChange)
 proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string]
 # Forward declaration for sidebar marker management
@@ -509,6 +527,41 @@ proc pushUndoChange(b: TextBuffer, change: BufferChange) =
   # Increment change sequence number (marks as modified)
   b.changeSeq.inc
 
+  # Mark highlight as needing update and track changed range
+  b.highlightNeedsUpdate = true
+
+  # Track the range of changed lines for incremental highlighting
+  case change.kind
+  of ckInsertText:
+    let numNewlines = change.insertText.count('\n')
+    b.lastChangedLines = (change.insertPos.line, change.insertPos.line + numNewlines)
+  of ckDeleteText:
+    b.lastChangedLines = (change.deletePos.line, change.deletePos.line)
+  of ckInsertLine:
+    b.lastChangedLines = (change.insertLineIdx, change.insertLineIdx)
+  of ckDeleteLine:
+    b.lastChangedLines = (change.deleteLineIdx, change.deleteLineIdx)
+  of ckDeleteRange:
+    b.lastChangedLines = (change.deleteStartPos.line, change.deleteEndPos.line)
+  of ckTransaction:
+    # For transactions, compute the range of all changes
+    var minLine = int.high
+    var maxLine = 0
+    for ch in change.transactionChanges:
+      let pos = getChangePosition(ch)
+      minLine = min(minLine, pos.line)
+      # Estimate end line based on change type
+      case ch.kind
+      of ckInsertText:
+        let numLines = ch.insertText.count('\n')
+        maxLine = max(maxLine, pos.line + numLines)
+      of ckDeleteRange:
+        maxLine = max(maxLine, ch.deleteEndPos.line)
+      else:
+        maxLine = max(maxLine, pos.line)
+    if minLine != int.high:
+      b.lastChangedLines = (minLine, maxLine)
+
   if b.inTransaction and b.currentTransaction.isSome:
     # Add to current transaction
     var transaction = b.currentTransaction.get
@@ -578,6 +631,31 @@ proc rollbackTransaction*(b: TextBuffer): Result[(), string] =
 
   # Restore changeSeq to its value at transaction start
   b.changeSeq = transaction.startSeq
+
+  # Mark highlight as needing update after rollback
+  if transaction.changes.len > 0:
+    b.highlightNeedsUpdate = true
+    # Compute changed range from rolled back changes
+    var minLine = int.high
+    var maxLine = 0
+    for change in transaction.changes:
+      let pos = getChangePosition(change)
+      minLine = min(minLine, pos.line)
+      # Estimate end line based on change type (inverse operation)
+      case change.kind
+      of ckInsertText:
+        # Rolling back insert = delete
+        maxLine = max(maxLine, pos.line)
+      of ckDeleteText, ckInsertLine, ckDeleteLine:
+        maxLine = max(maxLine, pos.line)
+      of ckDeleteRange:
+        # Rolling back delete = insert
+        let numNewlines = change.deletedRangeText.count('\n')
+        maxLine = max(maxLine, pos.line + numNewlines)
+      of ckTransaction:
+        maxLine = max(maxLine, b.len - 1)
+    if minLine != int.high:
+      b.lastChangedLines = (minLine, maxLine)
 
   b.inTransaction = false
   b.currentTransaction = none(BufferTransaction)
@@ -742,6 +820,34 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
   for change in undoneChanges:
     b.redoStack.addLast(change)
 
+  # Mark highlight as needing update after undo
+  if undoneChanges.len > 0:
+    b.highlightNeedsUpdate = true
+
+    # Compute changed range from undone changes for incremental highlighting
+    var minLine = int.high
+    var maxLine = 0
+    for change in undoneChanges:
+      let pos = getChangePosition(change)
+      minLine = min(minLine, pos.line)
+      # Estimate end line based on change type (inverse operation)
+      case change.kind
+      of ckInsertText:
+        # Undoing insert = delete, affects only the start line
+        maxLine = max(maxLine, pos.line)
+      of ckDeleteText, ckInsertLine, ckDeleteLine:
+        # Undoing these affects the target line
+        maxLine = max(maxLine, pos.line)
+      of ckDeleteRange:
+        # Undoing delete = insert, may span multiple lines
+        let numNewlines = change.deletedRangeText.count('\n')
+        maxLine = max(maxLine, pos.line + numNewlines)
+      of ckTransaction:
+        # Transactions may affect wide range
+        maxLine = max(maxLine, b.len - 1)
+    if minLine != int.high:
+      b.lastChangedLines = (minLine, maxLine)
+
   # Return suggested cursor position for the first change
   if undoneChanges.len > 0:
     return ok(getChangePosition(undoneChanges[0]))
@@ -834,6 +940,31 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
   for i in countdown(redoneChanges.len - 1, 0):
     b.undoStack.addLast(redoneChanges[i])
 
+  # Mark highlight as needing update after redo
+  if redoneChanges.len > 0:
+    b.highlightNeedsUpdate = true
+
+    # Compute changed range from redone changes for incremental highlighting
+    var minLine = int.high
+    var maxLine = 0
+    for change in redoneChanges:
+      let pos = getChangePosition(change)
+      minLine = min(minLine, pos.line)
+      # Estimate end line based on change type
+      case change.kind
+      of ckInsertText:
+        let numNewlines = change.insertText.count('\n')
+        maxLine = max(maxLine, pos.line + numNewlines)
+      of ckDeleteText, ckInsertLine, ckDeleteLine:
+        maxLine = max(maxLine, pos.line)
+      of ckDeleteRange:
+        maxLine = max(maxLine, change.deleteEndPos.line)
+      of ckTransaction:
+        # Transactions may affect wide range
+        maxLine = max(maxLine, b.len - 1)
+    if minLine != int.high:
+      b.lastChangedLines = (minLine, maxLine)
+
   # Return suggested cursor position for the first change
   if redoneChanges.len > 0:
     return ok(getChangePosition(redoneChanges[0]))
@@ -892,6 +1023,38 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
 
   # Reset markers for new file content
   b.lineMarkers = newSeq[Option[SidebarItemKind]](b.len)
+
+  # Initialize syntax highlighting based on file extension
+  b.language = detectLanguage(path)
+  var runesBuffer: seq[Runes] = @[]
+  for i in 0 ..< b.len:
+    runesBuffer.add(b.getLine(i).toRunes())
+
+  if b.language != SourceLanguage.langNone:
+    b.highlight = initHighlight(runesBuffer, @[], b.language)
+
+    # Build initial incremental cache for future edits
+    if runesBuffer.len > 0:
+      let (segments, lineStates) = initHighlightIncremental(
+        runesBuffer,
+        0,
+        runesBuffer.high,
+        TokenizerState(), # Default initial state
+        @[],
+        b.language,
+      )
+
+      b.incrementalHighlight = IncrementalHighlight(
+        segments: segments,
+        lineStates: LineStateCache(states: lineStates, version: b.changeSeq),
+      )
+    else:
+      b.incrementalHighlight = nil
+  else:
+    b.highlight = initHighlight(runesBuffer)
+    b.incrementalHighlight = nil
+
+  b.highlightNeedsUpdate = false
 
   return Result[(), string].ok ()
 
@@ -989,3 +1152,61 @@ proc clearAllMarkers*(b: TextBuffer) =
   ## Clear all sidebar markers
   for i in 0 ..< b.lineMarkers.len:
     b.lineMarkers[i] = none(SidebarItemKind)
+
+# Syntax highlighting management
+proc updateHighlight*(b: TextBuffer) =
+  ## Update syntax highlighting if needed
+  ## This should be called before rendering
+  if b.highlightNeedsUpdate:
+    var runesBuffer: seq[Runes] = @[]
+    for i in 0 ..< b.len:
+      runesBuffer.add(b.getLine(i).toRunes())
+
+    if b.language != SourceLanguage.langNone:
+      # Check if incremental cache is valid
+      let cacheValid =
+        b.incrementalHighlight != nil and
+        b.incrementalHighlight.lineStates.states.len > 0 and
+        b.incrementalHighlight.segments.len > 0
+
+      if cacheValid:
+        # Use incremental highlighting for better performance
+        updateHighlightIncremental(
+          runesBuffer,
+          b.incrementalHighlight,
+          b.lastChangedLines.start,
+          b.lastChangedLines.theEnd,
+          b.changeSeq,
+          @[], # reservedWords - empty for now
+          b.language,
+        )
+
+        # Convert IncrementalHighlight segments to Highlight
+        b.highlight = Highlight(colorSegments: b.incrementalHighlight.segments)
+      else:
+        # Cache invalid or first time - do full parse
+        b.highlight = initHighlight(runesBuffer, @[], b.language)
+
+        # Build initial incremental cache for next time
+        if runesBuffer.len > 0:
+          # Parse entire buffer with default initial state
+          let (segments, lineStates) = initHighlightIncremental(
+            runesBuffer,
+            0,
+            runesBuffer.high,
+            TokenizerState(), # Default initial state
+            @[],
+            b.language,
+          )
+
+          b.incrementalHighlight = IncrementalHighlight(
+            segments: segments,
+            lineStates: LineStateCache(states: lineStates, version: b.changeSeq),
+          )
+        else:
+          b.incrementalHighlight = nil
+    else:
+      # Plain text - use simple highlighting
+      b.highlight = initHighlight(runesBuffer)
+
+    b.highlightNeedsUpdate = false
