@@ -83,10 +83,14 @@ proc newCommandModeHandler*(
   CommandModeHandler(parser: parser, config: config, commandRegistry: commandRegistry)
 
 proc executeQuit*(
-    handler: CommandModeHandler, buffer: TextBuffer, force: bool
+    handler: CommandModeHandler,
+    buffer: TextBuffer,
+    force: bool,
+    isSharedBuffer: bool = false,
 ): CommandModeResult =
   ## Execute quit command (:q, :q!) - now closes current window
-  if not force:
+  ## If isSharedBuffer is true, skip the isModified check since buffer is shared across windows
+  if not force and not isSharedBuffer:
     # Check if there are unsaved changes
     if buffer.isModified:
       return CommandModeResult(
@@ -195,9 +199,13 @@ proc executeHSplit*(
   return CommandModeResult(kind: cmrHSplit, hsplitFilename: filename)
 
 proc handleCommandModeInput*(
-    handler: CommandModeHandler, buffer: TextBuffer, commandText: string
+    handler: CommandModeHandler,
+    buffer: TextBuffer,
+    commandText: string,
+    isSharedBuffer: bool = false,
 ): CommandModeResult =
   ## Main entry point for handling Command mode input
+  ## isSharedBuffer: true if the buffer is shared across multiple windows
 
   if commandText.len <= 1: # Just ":"
     return CommandModeResult(kind: cmrModeSwitch, targetMode: EditorMode.Normal)
@@ -207,7 +215,7 @@ proc handleCommandModeInput*(
 
   case cmdResult.kind
   of claQuit:
-    return handler.executeQuit(buffer, cmdResult.forceQuit)
+    return handler.executeQuit(buffer, cmdResult.forceQuit, isSharedBuffer)
   of claQuitAll:
     return handler.executeQuitAll(buffer, cmdResult.forceQuitAll)
   of claSave:

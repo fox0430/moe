@@ -188,10 +188,15 @@ proc handleInsertMode*(
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
 proc handleCommandMode*(
-    manager: HandlerManager, buffer: TextBuffer, commandText: string
+    manager: HandlerManager,
+    buffer: TextBuffer,
+    commandText: string,
+    isSharedBuffer: bool = false,
 ): HandlerResult =
   ## Handle Command mode input (when Enter is pressed)
-  let r = manager.commandHandler.handleCommandModeInput(buffer, commandText)
+  ## isSharedBuffer: true if the buffer is shared across multiple windows
+  let r =
+    manager.commandHandler.handleCommandModeInput(buffer, commandText, isSharedBuffer)
 
   case r.kind
   of cmrQuit:

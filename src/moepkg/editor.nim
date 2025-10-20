@@ -295,6 +295,19 @@ proc switchToPrevWindow*(e: Editor) =
     let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
     e.setActiveWindowScreenCursor(activeWindow)
 
+proc isBufferShared*(e: Editor, buffer: TextBuffer): bool =
+  ## Check if the given buffer is shared across multiple windows
+  ## Returns true if the buffer is open in more than one window
+  for window in e.windowManager.windows:
+    if window.buffer == buffer:
+      if result:
+        return true
+      else:
+        result = true
+
+  # Buffer is not shared across multiple windows (0 or 1 window)
+  return false
+
 proc closeWindow*(e: Editor): bool =
   ## Close the active window
   ## Returns true if editor should quit (last window closed)

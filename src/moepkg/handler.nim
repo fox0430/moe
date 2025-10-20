@@ -51,7 +51,10 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
     if e.state.commandText.len > 1: # Must have something after :
       # Use the command handler with active buffer
       let activeBuffer = e.activeBuffer()
-      let r = e.handlerManager.handleCommandMode(activeBuffer, e.state.commandText)
+      # Check if the buffer is shared across multiple windows
+      let isShared = e.isBufferShared(activeBuffer)
+      let r =
+        e.handlerManager.handleCommandMode(activeBuffer, e.state.commandText, isShared)
 
       if r.shouldQuit():
         return false # Signal app should quit
