@@ -23,7 +23,7 @@ import std/[unicode, options, strutils, deques, os]
 
 import pkg/results
 
-import gapbuffer, cursor, unicode_utils, encoding, highlight
+import gapbuffer, cursor, unicode_utils, encoding, highlight, logger
 
 export CharacterEncoding, encodingToString, detectCharacterEncoding
 
@@ -797,6 +797,7 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
     b.ensureMarkersSize()
     return ok(())
   except CatchableError as e:
+    logError("buffer", "Undo operation failed: " & e.msg)
     return err("Failed to undo change: " & e.msg)
 
 proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
@@ -923,6 +924,7 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
     b.ensureMarkersSize()
     return ok(())
   except CatchableError as e:
+    logError("buffer", "Redo operation failed: " & e.msg)
     return err("Failed to redo change: " & e.msg)
 
 proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
@@ -1021,9 +1023,11 @@ proc loadFile*(b: TextBuffer, path: string): Result[(), string] =
     try:
       content = readFile(path)
     except IOError as e:
+      logError("buffer", "Failed to read file " & path & ": " & e.msg)
       return Result[(), string].err e.msg
   else:
     # File doesn't exist, start with empty content
+    logDebug("buffer", "File does not exist, creating new: " & path)
     content = ""
 
   # Reinitialize with new backend if needed
@@ -1113,7 +1117,9 @@ proc saveFile*(buffer: TextBuffer, path: string): Result[(), string] =
     # Write to file
     try:
       writeFile(path, content)
+      logDebug("buffer", "File written successfully: " & path)
     except IOError as e:
+      logError("buffer", "Failed to write file " & path & ": " & e.msg)
       return Result[(), string].err e.msg
 
     # Mark buffer as saved at current sequence

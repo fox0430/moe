@@ -24,7 +24,7 @@ import pkg/[celina, results]
 import
   buffer, cursor, types, commands, keybindings, commandregistry, modes, commandline,
   commandconfig, statusline, windowmanager, unicode_utils, render_utils, sidebar,
-  gitdiff, highlight
+  gitdiff, highlight, logger
 import command_handlers/[handler_manager, visual_handler]
 
 type Editor* = ref object
@@ -593,9 +593,13 @@ proc maybeUpdateGitDiff*(e: Editor) =
 
 proc loadFile*(e: Editor, path: string): Result[(), string] =
   ## Load text file
+  logDebug("editor", "Loading file: " & path)
   let r = e.textBuffer.loadFile(path)
   if r.isErr:
+    logError("editor", "Failed to load file " & path & ": " & r.error)
     return err r.error
+
+  logInfo("editor", "Successfully loaded file: " & path)
 
   # Reset cursor to file start
   e.state.cursor = BufferPosition(line: 0, column: 0)
@@ -611,7 +615,7 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
     if diffResult.isErr:
       # Log error but don't fail the file load
       # (file might not be in a git repository)
-      discard
+      logDebug("editor", "Git diff not available for " & path & ": " & diffResult.error)
     else:
       # Update lastGitDiffChangeSeq to prevent immediate re-check
       e.state.lastGitDiffChangeSeq = e.textBuffer.changeSeq
@@ -630,12 +634,17 @@ proc saveFile*(e: Editor, path: Option[string] = none(string)): Result[(), strin
     elif activeBuffer.filePath.isSome:
       activeBuffer.filePath.get
     else:
+      logError("editor", "Save failed: No file path specified")
       return err("No file path specified")
 
   # Save the file
+  logDebug("editor", "Saving file: " & savePath)
   let saveResult = activeBuffer.saveFile(savePath)
   if saveResult.isErr:
+    logError("editor", "Failed to save file " & savePath & ": " & saveResult.error)
     return err(saveResult.error)
+
+  logInfo("editor", "Successfully saved file: " & savePath)
 
   # Update git diff information after saving (use disk file for comparison)
   e.refreshGitDiff(useBuffer = false)

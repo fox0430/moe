@@ -17,11 +17,11 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[os, strformat, monotimes, times]
+import std/[strformat, monotimes, times]
 
 import pkg/[celina, results]
 
-import moepkg/[editor, handler, modes]
+import moepkg/[editor, handler, modes, logger, cmdline]
 
 proc handleResize(e: Editor) =
   ## Debounce resize events to prevent terminal buffer overflow
@@ -44,6 +44,15 @@ proc handleResize(e: Editor) =
   e.state.needsFullRedraw = true
 
 proc main() =
+  # Parse command line arguments
+  let config = parseCmdLine()
+
+  # Initialize file logging system for debugging
+  let log = initLogger(LogLevel.Debug, enabled = config.debugEnabled)
+  setGlobalLogger(log)
+  if config.debugEnabled:
+    logInfo("moe", "Editor starting with debug logging enabled")
+
   var app = newApp(
     AppConfig(
       title: "moe",
@@ -56,11 +65,9 @@ proc main() =
 
   let editor = newEditor()
 
-  if paramCount() > 0:
-    let path = paramStr(1)
-
+  if config.filePath.len > 0:
     block:
-      let r = editor.loadFile(path)
+      let r = editor.loadFile(config.filePath)
       if r.isErr:
         echo fmt"Error: {r.error}"
         quit(1)
@@ -88,6 +95,11 @@ proc main() =
     app.setCursor(editor.state.screenCursor.x, editor.state.screenCursor.y)
 
   app.run()
+
+  # Clean up logger
+  if config.debugEnabled:
+    logInfo("moe", "Editor shutting down")
+    log.close()
 
 when isMainModule:
   main()

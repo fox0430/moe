@@ -21,7 +21,7 @@ import std/options
 
 import pkg/[celina, results]
 
-import editor, keybindings, modes, buffer
+import editor, keybindings, modes, buffer, logger
 import command_handlers/handler_manager
 
 proc handleCommandModeEvent(e: Editor, event: Event): bool =
@@ -76,12 +76,14 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         # Handle vertical split
         let splitResult = e.vsplit(r.getVSplitFilename())
         if splitResult.isErr:
+          logError("handler", "Vertical split failed: " & splitResult.error)
           e.state.statusMessage = "Error: " & splitResult.error
 
       if r.shouldHSplit():
         # Handle horizontal split
         let splitResult = e.hsplit(r.getHSplitFilename())
         if splitResult.isErr:
+          logError("handler", "Horizontal split failed: " & splitResult.error)
           e.state.statusMessage = "Error: " & splitResult.error
 
       if r.shouldSetMultiStatusLine():
@@ -92,20 +94,24 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         # Handle file save
         let saveResult = e.saveFile(r.getSaveFilename())
         if saveResult.isErr:
+          logError("handler", "Save command failed: " & saveResult.error)
           e.state.statusMessage = "Error: " & saveResult.error
         else:
           # Get saved file path from active buffer
           let savedPath =
             if activeBuffer.filePath.isSome: activeBuffer.filePath.get else: "file"
+          logInfo("handler", "File saved via command: " & savedPath)
           e.state.statusMessage = "Saved: " & savedPath
 
       if r.shouldSaveAndQuit():
         # Handle file save and quit
         let saveResult = e.saveFile(r.getSaveAndQuitFilename())
         if saveResult.isErr:
+          logError("handler", "Save and quit failed: " & saveResult.error)
           e.state.statusMessage = "Error: " & saveResult.error
         else:
           # Save succeeded, now quit
+          logInfo("handler", "File saved, quitting editor")
           return false # Signal app should quit
 
       # Handle mode transitions
