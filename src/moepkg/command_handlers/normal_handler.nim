@@ -136,7 +136,8 @@ proc handleInsertModeEntry*(
   of "append":
     # Move cursor right if not at end of line
     let lineContent = buffer.getLine(state.cursor.line)
-    if state.cursor.column < lineContent.len:
+    # Use charLen (character count) not len (byte count) for multibyte character support
+    if state.cursor.column < lineContent.charLen:
       state.cursor.column += 1
   of "append-end":
     # Move to end of line

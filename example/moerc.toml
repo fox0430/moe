@@ -1,60 +1,62 @@
 [Standard]
 
-number = true
+number = true                          # 📝 Line numbers (not yet applied)
 
-currentNumber = true
+currentNumber = true                   # 📝 Current line number (not yet applied)
 
-cursorLine = false
+cursorLine = false                     # 📝 Cursor line highlighting (not yet applied)
 
-statusLine = true
+statusLine = true                      # ✅ Show status line (IMPLEMENTED)
 
-tabLine = true
+tabLine = true                         # 📝 Tab line display (not yet applied)
 
-syntax = true
+syntax = true                          # 📝 Syntax highlighting (not yet applied)
 
-indentationLines = true
+indentationLines = true                # 📝 Indentation guides (not yet applied)
 
-tabStop = 2
+tabStop = 2                            # ✅ Tab width (IMPLEMENTED)
 
-sidebar = true
+expandTab = false                      # ✅ Insert spaces instead of tab (IMPLEMENTED)
 
-autoCloseParen = true
+sidebar = true                         # ✅ Show sidebar (IMPLEMENTED)
 
-autoIndent = true
+autoCloseParen = true                  # 📝 Auto-close parentheses (not yet applied)
 
-ignorecase = true
+autoIndent = true                      # 📝 Auto-indent (not yet applied)
 
-smartcase = true
+ignorecase = true                      # 📝 Search case insensitive (not yet applied)
 
-disableChangeCursor = false
+smartcase = true                       # 📝 Smart case search (not yet applied)
 
-defaultCursor = "terminalDefault"
+disableChangeCursor = false            # 📝 Cursor shape changes (not yet applied)
 
-normalModeCursor = "blinkBlock"
+defaultCursor = "terminalDefault"      # 📝 Default cursor style (not yet applied)
 
-insertModeCursor = "blinkIbeam"
+normalModeCursor = "blinkBlock"        # 📝 Normal mode cursor (not yet applied)
 
-liveReloadOfConf = false
+insertModeCursor = "blinkIbeam"        # 📝 Insert mode cursor (not yet applied)
 
-incrementalSearch = true
+liveReloadOfConf = false               # 📝 Live config reload (not yet applied)
 
-popupWindowInExmode = true
+incrementalSearch = true               # 📝 Incremental search (not yet applied)
 
-autoDeleteParen = false
+popupWindowInExmode = true             # 📝 Ex mode popup (not yet applied)
 
-liveReloadOfFile = false
+autoDeleteParen = false                # 📝 Auto-delete matching parens (not yet applied)
 
-colorMode = "24bit"
+liveReloadOfFile = false               # 📝 Live file reload (not yet applied)
+
+colorMode = "24bit"                    # 📝 Color mode: "8bit", "24bit", "none" (not yet applied)
 
 [Clipboard]
 
-enable = true
+enable = true                          # 📝 Clipboard integration (not yet applied)
 
-tool = "xsel"
+tool = "xsel"                          # 📝 Tool: xsel, xclip, wl-clipboard, etc. (not yet applied)
 
 [BuildOnSave]
 
-enable = false
+enable = false                         # 📝 Build on save feature (not implemented)
 
 # workspaceRoot = "/home/fox/git/moe"
 
@@ -62,51 +64,51 @@ enable = false
 
 [TabLine]
 
-allBuffer = false
+allBuffer = false                      # 📝 Show all buffers in tab line (not yet applied)
 
 [StatusLine]
 
-multipleStatusLine = true
+multipleStatusLine = true              # ✅ Show status line per window (IMPLEMENTED)
 
-merge = false
+merge = false                          # 📝 Merge status lines (not yet applied)
 
-mode = true
+mode = true                            # 📝 Show mode in status line (not yet applied)
 
-filename = true
+filename = true                        # 📝 Show filename in status line (not yet applied)
 
-chanedMark = true
+chanedMark = true                      # 📝 Show changed mark (not yet applied)
 
-directory = true
+directory = true                       # 📝 Show directory (not yet applied)
 
-gitChangedLines = true
+gitChangedLines = true                 # 📝 Show git changed lines count (not yet applied)
 
-gitBranchName = true
+gitBranchName = true                   # 📝 Show git branch name (not yet applied)
 
-showGitInactive = false
+showGitInactive = false                # 📝 Show git info in inactive windows (not yet applied)
 
-showModeInactive = false
+showModeInactive = false               # 📝 Show mode in inactive windows (not yet applied)
 
-setupText = "{lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {fileType}"
+setupText = "{lineNumber}/{totalLines} {columnNumber}/{totalColumns} {encoding} {fileType}"  # 📝 Custom format (not yet applied)
 
 [Highlight]
 
-currentLine = true
+currentLine = true                     # 📝 Highlight current line (not yet applied)
 
-reservedWord = ["TODO", "WIP", "NOTE"]
+reservedWord = ["TODO", "WIP", "NOTE"] # 📝 Highlight reserved words (not implemented)
 
-replaceText = true
+replaceText = true                     # 📝 Highlight replace text (not implemented)
 
-pairOfParen = true
+pairOfParen = true                     # 📝 Highlight matching parens (not yet applied)
 
-fullWidthSpace = true
+fullWidthSpace = true                  # 📝 Highlight full-width spaces (not implemented)
 
-trailingSpaces = true
+trailingSpaces = true                  # 📝 Highlight trailing spaces (not implemented)
 
-currentWord = true
+currentWord = true                     # 📝 Highlight current word (not implemented)
 
 [AutoBackup]
 
-enable = false
+enable = false                         # 📝 Auto-backup feature (not implemented)
 
 # backupDir = "/home/user/.cache/moe/backups"
 
@@ -120,7 +122,7 @@ dirToExclude = ["/etc"]
 
 [QuickRun]
 
-saveBufferWhenQuickRun = true
+saveBufferWhenQuickRun = true          # 📝 Quick run feature (not implemented)
 
 # command = "nimble build"
 
@@ -140,8 +142,9 @@ timeout = 30
 # bashOptions = "-c"
 
 [Notification]
+# All notification settings are loaded but not yet applied to actual notification system
 
-screenNotifications = true
+screenNotifications = true             # 📝 Screen notifications (not yet applied)
 
 logNotifications = true
 
@@ -187,23 +190,23 @@ lspLogNotify = true
 
 [Filer]
 
-showIcons = true
+showIcons = true                       # 📝 File browser icons (not yet applied)
 
 [Autocomplete]
 
-enable = true
+enable = true                          # 📝 Autocomplete (not yet applied)
 
-windowBorder = true
+windowBorder = true                    # 📝 Autocomplete window border (not yet applied)
 
 [AutoSave]
 
-enable = true
+enable = true                          # 📝 Auto-save feature (not implemented)
 
-interval = 5
+interval = 5                           # 📝 Auto-save interval in minutes (not implemented)
 
 [Persist]
 
-exCommand = true
+exCommand = true                       # 📝 Persist command history (not implemented)
 
 exCommandHistoryLimit = 1000
 
@@ -215,115 +218,29 @@ cursorPosition = true
 
 [Git]
 
-showChangedLine = true
+showChangedLine = true                 # ✅ Show git diff indicators in sidebar (IMPLEMENTED)
 
-updateInterval = 1000
+updateInterval = 1000                  # ✅ Git diff update interval in milliseconds (IMPLEMENTED)
 
 [SyntaxChecker]
 
-enable = false
+enable = false                         # ✅ Enable syntax checker in sidebar (IMPLEMENTED)
 
 [SmoothScroll]
 
-enable = true
+enable = true                          # 📝 Smooth scrolling (not yet applied)
 
-minDelay = 5
+minDelay = 5                           # 📝 Min delay in ms (not yet applied)
 
-maxDelay = 20
+maxDelay = 20                          # 📝 Max delay in ms (not yet applied)
 
 [StartUp.FileOpen]
-autoSplit = true
-splitType = "vertical"
+autoSplit = true                       # 📝 Auto-split on startup (not implemented)
+splitType = "vertical"                 # 📝 Split type: "vertical" or "horizontal" (not implemented)
 
-[Lsp]
-enable = false
-timeout = 5000
-
-[Lsp.Completion]
-enable = true
-
-[Lsp.Declaration]
-enable = true
-openWindow = false
-
-[Lsp.Definition]
-enable = true
-openWindow = false
-
-[Lsp.TypeDefinition]
-enable = true
-openWindow = false
-
-[Lsp.Implementation]
-enable = true
-openWindow = false
-
-[Lsp.Diagnostics]
-enable = true
-
-[Lsp.SignatureHelp]
-enable = true
-
-[Lsp.DocumentFormatting]
-enable = true
-
-[Lsp.FoldingRange]
-enable = true
-
-[Lsp.SelectionRange]
-enable = true
-
-[Lsp.DocumentSymbol]
-enable = true
-
-[Lsp.Hover]
-enable = true
-
-[Lsp.InlayHint]
-enable = true
-
-[Lsp.InlineValue]
-enable = false
-
-[Lsp.References]
-enable = true
-
-[Lsp.CallHierarchy]
-enable = true
-
-[Lsp.DocumentHighlight]
-enable = true
-
-[Lsp.DocumentLink]
-enable = true
-
-[Lsp.CodeLens]
-enable = false
-
-[Lsp.Rename]
-enable = true
-
-[Lsp.SemanticTokens]
-enable = true
-
-[Lsp.ExecuteCommand]
-enable = true
-
-[Lsp.nim]
-extensions = ["nim"]
-command = "nimlangserver"
-trace = "verbose"
-
-[Lsp.rust]
-extensions = ["rs"]
-command = "rust-analyzer"
-trace = "verbose"
-rustAnalyzerRunSingle = true
-rustAnalyzerDebugSingle = true
-
-
+# Debug sections - all settings are loaded but not yet applied
 [Debug.WindowNode]
-enable = true
+enable = true                          # 📝 Debug output (not yet applied)
 currentWindow = true
 index = true
 windowIndex = true
@@ -366,8 +283,8 @@ bufferLen = true
 
 [Theme]
 
-# "default" or "config" or "vscode".
-kind = "config"
+# 📝 Theme system not yet implemented
+kind = "config"                        # 📝 Theme kind: "default", "config", "vscode" (not implemented)
 
-# Please set the path of the theme config file.
-path = "~/.config/moe/themes/dark.toml"
+# 📝 Please set the path of the theme config file.
+path = "~/.config/moe/themes/dark.toml" # 📝 Theme file path (not implemented)

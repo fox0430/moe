@@ -31,6 +31,13 @@ proc insertChar*(buffer: TextBuffer, state: EditorState, ch: char) =
   # Move cursor right after insertion
   state.cursor.column += 1
 
+proc insertTab*(buffer: TextBuffer, state: EditorState) =
+  ## Insert a tab character at cursor position
+  let pos = state.cursor
+  discard buffer.insertText(pos, "\t")
+  # Move cursor right after insertion
+  state.cursor.column += 1
+
 proc insertBackspace*(buffer: TextBuffer, state: EditorState) =
   ## Handle backspace key in insert mode
   let pos = state.cursor
@@ -89,7 +96,8 @@ proc insertAppend*(buffer: TextBuffer, state: EditorState) =
   ## Handle 'a' command - move cursor right and enter insert mode
   let lineContent = buffer.getLine(state.cursor.line)
   # Only move right if not at end of line
-  if state.cursor.column < lineContent.len:
+  # Use charLen (character count) not len (byte count) for multibyte character support
+  if state.cursor.column < lineContent.charLen:
     state.cursor.column += 1
   # Switch to insert mode
   state.mode = EditorMode.Insert

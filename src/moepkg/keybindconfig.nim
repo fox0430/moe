@@ -19,133 +19,185 @@
 
 ## Configuration file loading for keybindings
 ##
-## This module handles loading keybindings from configuration files.
-## The actual implementation is deferred - this just shows the structure.
+## This module handles loading keybindings from configuration files (TOML format).
 
-import std/[json, os, strutils]
-import keybindings, modes, commandregistry
+import std/[os, strutils, tables, options]
+import parsetoml
+import keybindings, modes
 
 type KeybindingConfig* = object ## Structure for keybinding configuration
-  mode*: string
+  mode*: EditorMode
   key*: string
   command*: string
+  commandType*: CommandType
   args*: seq[string]
 
-proc loadKeybindingsFromJson*(
-    registry: KeyBindingRegistry, cmdRegistry: CommandRegistry, jsonPath: string
+proc parseMode(s: string): Option[EditorMode] =
+  ## Parse mode string to EditorMode enum
+  case s.toLowerAscii
+  of "normal":
+    some(EditorMode.Normal)
+  of "insert":
+    some(EditorMode.Insert)
+  of "command":
+    some(EditorMode.Command)
+  of "visual":
+    some(EditorMode.Visual)
+  of "replace":
+    some(EditorMode.Replace)
+  else:
+    none(EditorMode)
+
+proc parseCommandType(s: string): CommandType =
+  ## Parse command type string
+  case s.toLowerAscii
+  of "motion": ctMotion
+  of "action": ctAction
+  of "mode_switch", "modeswitch": ctModeSwitch
+  of "text_object", "textobject": ctTextObject
+  of "operator": ctOperator
+  of "operator_pending", "operatorpending": ctOperatorPending
+  of "custom": ctCustom
+  else: ctAction
+    # default to action
+
+proc addKeybinding*(
+    registry: KeyBindingRegistry, mode: EditorMode, keyStr: string, cmd: Command
 ) =
-  ## Load keybindings from a JSON configuration file
-  ##
-  ## Example JSON structure:
-  ## {
-  ##   "keybindings": [
-  ##     {"mode": "normal", "key": "h", "command": "motion.left"},
-  ##     {"mode": "normal", "key": "C-s", "command": "file.save"},
-  ##     {"mode": "normal", "key": "g g", "command": "motion.firstline"}
-  ##   ]
-  ## }
-  ##
-  ## This is a placeholder implementation
-  if not fileExists(jsonPath):
+  ## Add a keybinding to the registry
+  if not registry.bindings.hasKey(mode):
+    registry.bindings[mode] = @[]
+
+  let keyComboOpt = parseKeyCombo(keyStr)
+  if keyComboOpt.isNone:
+    # Invalid key combination, skip
     return
 
-  # TODO: Implement actual JSON parsing and loading
-  # let json = parseFile(jsonPath)
-  # for binding in json["keybindings"]:
-  #   let mode = parseEnum[EditorMode](binding["mode"].getStr)
-  #   let key = binding["key"].getStr
-  #   let command = binding["command"].getStr
-  #   registry.bindKey(mode, key, command)
+  let binding = KeyBinding(combo: keyComboOpt.get, command: cmd, context: mode)
+  registry.bindings[mode].add(binding)
 
-proc loadKeybindingsFromToml*(
-    registry: KeyBindingRegistry, cmdRegistry: CommandRegistry, tomlPath: string
-) =
+proc loadKeybindingsFromToml*(registry: KeyBindingRegistry, tomlPath: string) =
   ## Load keybindings from a TOML configuration file
   ##
   ## Example TOML structure:
   ## [[keybinding]]
   ## mode = "normal"
   ## key = "h"
-  ## command = "motion.left"
+  ## command_type = "action"
+  ## command = "move.left"
   ##
   ## [[keybinding]]
   ## mode = "normal"
   ## key = "C-s"
+  ## command_type = "action"
   ## command = "file.save"
   ##
-  ## This is a placeholder implementation
+  ## [[keybinding]]
+  ## mode = "insert"
+  ## key = "C-c"
+  ## command_type = "mode_switch"
+  ## target_mode = "normal"
+  ##
   if not fileExists(tomlPath):
     return
 
-  # TODO: Implement actual TOML parsing and loading
-  # Would require a TOML parser library
+  let toml = parseFile(tomlPath)
+  let tomlTable = toml.getTable()
 
-proc loadKeybindingsFromNim*(
-    registry: KeyBindingRegistry, cmdRegistry: CommandRegistry, nimPath: string
-) =
-  ## Load keybindings from a Nim configuration file
-  ##
-  ## Example Nim structure:
-  ## # config.nim
-  ## import moepkg/[keybindings, modes]
-  ##
-  ## proc configureKeybindings*(registry: KeyBindingRegistry) =
-  ##   registry.bindKey(Normal, "h", "motion.left")
-  ##   registry.bindKey(Normal, parseKeyCombo("C-s").get,
-  ##                    Command(name: "save", kind: ctAction, commandId: "file.save"))
-  ##
-  ## This would allow for maximum flexibility and type safety
-  ##
-  ## This is a placeholder implementation
-  if not fileExists(nimPath):
+  # Check for keybinding array
+  if not tomlTable.hasKey("keybinding"):
     return
 
-  # TODO: Implement actual Nim config loading
-  # This would require dynamic compilation or a plugin system
+  let bindings = tomlTable["keybinding"]
+  if bindings.kind != TomlValueKind.Array:
+    return
 
-proc loadDefaultKeybindings*(
-    registry: KeyBindingRegistry, cmdRegistry: CommandRegistry
-) =
-  ## Load keybindings from default configuration locations
-  ##
-  ## Searches in order:
-  ## 1. $XDG_CONFIG_HOME/moe/keybindings.json
-  ## 2. ~/.config/moe/keybindings.json
-  ## 3. ./keybindings.json
-  ##
-  ## Falls back to built-in defaults if no config found
+  for bindingVal in bindings.getElems():
+    if bindingVal.kind != TomlValueKind.Table:
+      continue
+
+    let binding = bindingVal.getTable()
+
+    # Parse required fields
+    if not (binding.hasKey("mode") and binding.hasKey("key")):
+      continue
+
+    let modeStr = binding["mode"].getStr()
+    let keyStr = binding["key"].getStr()
+
+    let modeOpt = parseMode(modeStr)
+    if modeOpt.isNone:
+      continue
+
+    let mode = modeOpt.get
+
+    # Parse command type (default to action)
+    let cmdType =
+      if binding.hasKey("command_type"):
+        parseCommandType(binding["command_type"].getStr())
+      else:
+        ctAction
+
+    # Build command based on type
+    var cmdOpt: Option[keybindings.Command] = none(keybindings.Command)
+
+    case cmdType
+    of ctModeSwitch:
+      if binding.hasKey("target_mode"):
+        let targetModeOpt = parseMode(binding["target_mode"].getStr())
+        if targetModeOpt.isSome:
+          let cmd = Command(
+            kind: ctModeSwitch,
+            name: "mode_switch",
+            description: "Switch to " & binding["target_mode"].getStr(),
+            targetMode: targetModeOpt.get,
+          )
+          cmdOpt = some(cmd)
+    of ctAction, ctTextObject, ctOperator, ctCustom:
+      if binding.hasKey("command"):
+        let commandId = binding["command"].getStr()
+        var args: seq[string] = @[]
+        if binding.hasKey("args"):
+          for arg in binding["args"].getElems():
+            args.add(arg.getStr())
+        let cmd = Command(
+          kind: cmdType,
+          name: commandId,
+          description: commandId,
+          commandId: commandId,
+          args: args,
+        )
+        cmdOpt = some(cmd)
+    of ctMotion, ctOperatorPending:
+      # These command types require special handling not supported in TOML config yet
+      discard
+
+    # Add the keybinding if command was successfully created
+    if cmdOpt.isSome:
+      registry.addKeybinding(mode, keyStr, cmdOpt.get)
+
+proc getKeybindingsPath*(): string =
+  ## Get the path to the keybindings configuration file
+  ## Searches in standard locations:
+  ## 1. $XDG_CONFIG_HOME/moe/keybindings.toml
+  ## 2. ~/.config/moe/keybindings.toml
+  ## 3. ./keybindings.toml
 
   let configPaths = [
-    getConfigDir() / "moe" / "keybindings.json",
-    getHomeDir() / ".config" / "moe" / "keybindings.json",
-    "keybindings.json",
+    getConfigDir() / "moe" / "keybindings.toml",
+    getHomeDir() / ".config" / "moe" / "keybindings.toml",
+    "keybindings.toml",
   ]
 
   for path in configPaths:
     if fileExists(path):
-      registry.loadKeybindingsFromJson(cmdRegistry, path)
-      return
+      return path
 
-  # No config found, use built-in defaults
-  registry.setupDefaultBindings()
+  # Return the default location even if it doesn't exist
+  return getConfigDir() / "moe" / "keybindings.toml"
 
-proc saveKeybindings*(registry: KeyBindingRegistry, jsonPath: string) =
-  ## Save current keybindings to a JSON file
-  ##
-  ## This allows users to export their current configuration
-  ##
-  ## This is a placeholder implementation
-
-  # TODO: Implement saving keybindings to JSON
-  # var json = newJObject()
-  # var bindings = newJArray()
-  # for mode, modeBindings in registry.bindings:
-  #   for binding in modeBindings:
-  #     bindings.add(%*{
-  #       "mode": $mode,
-  #       "key": formatKeyCombo(binding.combo),
-  #       "command": binding.command.name
-  #     })
-  # json["keybindings"] = bindings
-  # writeFile(jsonPath, json.pretty)
-  discard
+proc loadDefaultKeybindings*(registry: KeyBindingRegistry) =
+  ## Load keybindings from the default location
+  let keybindingsPath = getKeybindingsPath()
+  if fileExists(keybindingsPath):
+    registry.loadKeybindingsFromToml(keybindingsPath)

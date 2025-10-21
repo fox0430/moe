@@ -249,8 +249,38 @@ proc handleEvent*(e: Editor, event: Event): bool =
   # Handle mode transitions
   let modeTransition = r.getModeTransition()
   if modeTransition.isSome:
-    e.state.previousMode = e.state.mode
-    e.state.mode = modeTransition.get
+    let oldMode = e.state.mode
+    let newMode = modeTransition.get
+
+    e.state.previousMode = oldMode
+    e.state.mode = newMode
+
+    # Adjust cursor when transitioning from Insert to Normal mode
+    # In Insert mode, cursor can be after the last character
+    # In Normal mode, cursor must be on a character (not after)
+    if oldMode == EditorMode.Insert and newMode == EditorMode.Normal:
+      let
+        currentLine = activeBuffer.getLine(e.state.cursor.line)
+        lineCharLen = currentLine.charLen
+        oldColumn = e.state.cursor.column
+
+      logDebug(
+        "handler",
+        "Insert→Normal transition: line=" & $e.state.cursor.line & " oldColumn=" &
+          $oldColumn & " lineCharLen=" & $lineCharLen,
+      )
+
+      if lineCharLen == 0:
+        # Empty line: cursor should be at column 0
+        e.state.cursor.column = 0
+      elif e.state.cursor.column >= lineCharLen:
+        # Cursor is beyond last character, move it back to last char
+        e.state.cursor.column = lineCharLen - 1
+
+      if oldColumn != e.state.cursor.column:
+        logDebug(
+          "handler", "Cursor adjusted: " & $oldColumn & " → " & $e.state.cursor.column
+        )
 
   # Set status message if any
   let statusMsg = r.getStatusMessage()

@@ -124,3 +124,6 @@ type
     lastGitDiffChangeSeq*: int # Buffer changeSeq at last git diff update
     gitDiffUpdateInterval*: int64
       # Minimum milliseconds between git diff updates (debounce)
+    # Editor behavior settings
+    tabStop*: int # Tab width (number of spaces per tab character)
+    expandTab*: bool # Insert spaces instead of tab character when Tab key is pressed

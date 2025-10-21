@@ -26,7 +26,7 @@ import std/[options, unicode]
 
 import pkg/results
 
-import buffer, cursor, types, unicode_utils
+import buffer, cursor, types, unicode_utils, logger
 
 type
   # Motion command with count
@@ -60,20 +60,49 @@ proc moveLeft(
     e: MotionExecutor, currentPos: CursorPosition, count: int
 ): CursorPosition =
   result = currentPos
+  logDebug(
+    "motion",
+    "moveLeft: currentPos=(" & $currentPos.y & "," & $currentPos.x & ") count=" & $count,
+  )
+
   if currentPos.y >= 0 and currentPos.y < e.buffer.len:
     # Move left by character count, not byte count
-    result.x = max(0, currentPos.x - count)
+    let newX = max(0, currentPos.x - count)
+    logDebug("motion", "moveLeft: newX=" & $newX)
+    result.x = newX
 
 proc moveRight(
     e: MotionExecutor, currentPos: CursorPosition, count: int
 ): CursorPosition =
   result = currentPos
+  logDebug(
+    "motion",
+    "moveRight: currentPos=(" & $currentPos.y & "," & $currentPos.x & ") count=" & $count &
+      " bufLen=" & $e.buffer.len,
+  )
+
   if currentPos.y >= 0 and currentPos.y < e.buffer.len:
     let line = e.buffer.getLine(currentPos.y)
     let lineCharLen = line.charLen
+    let lineByteLen = line.len
+    logDebug(
+      "motion",
+      "moveRight: line='" & line & "' charLen=" & $lineCharLen & " byteLen=" &
+        $lineByteLen,
+    )
+
     # Move right by character count, not byte count
     # In normal mode, don't allow cursor to go beyond the last character
-    result.x = min(currentPos.x + count, max(0, lineCharLen - 1))
+    let maxPos = max(0, lineCharLen - 1)
+    let newX = min(currentPos.x + count, maxPos)
+    logDebug(
+      "motion",
+      "moveRight: currentPos.x=" & $currentPos.x & " newX=" & $newX & " maxPos=" &
+        $maxPos,
+    )
+    result.x = newX
+  else:
+    logDebug("motion", "moveRight: buffer bounds check failed")
 
 proc moveUp(e: MotionExecutor, currentPos: CursorPosition, count: int): CursorPosition =
   result = currentPos
@@ -390,12 +419,22 @@ proc executeMotion*(
   ## Returns the new cursor position
   # Convert to CursorPosition for internal calculations
   let currentPos = CursorPosition(x: currentCursorPos.column, y: currentCursorPos.line)
+
+  logDebug(
+    "motion",
+    "Executing " & $cmd.motion & " from (" & $currentPos.y & "," & $currentPos.x & ")",
+  )
+
   var newPos = controller.executor.calculateNewPosition(
     currentPos, cmd, controller.viewportManager.viewport.height
   )
 
+  logDebug("motion", "Calculated newPos: (" & $newPos.y & "," & $newPos.x & ")")
+
   # Clamp to valid buffer bounds
   newPos = controller.cursorManager.clampPosition(newPos, controller.executor.buffer)
+
+  logDebug("motion", "After clamp: (" & $newPos.y & "," & $newPos.x & ")")
 
   # Update viewport to follow cursor with line wrap support
   let

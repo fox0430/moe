@@ -24,11 +24,14 @@
 ## improve modularity and prepare for additional rendering features.
 
 import pkg/celina
+import std/unicode
 
-import types, buffer
+import types, buffer, unicode_utils
 
 # Rendering constants
 const
+  TAB_CHAR* = 0x09.Rune ## Tab character constant
+
   StatusLineReserve* = 1
   CommandLineReserve* = 1
   StatusAndCommandReserve* = 2
@@ -116,3 +119,52 @@ proc calculateWindowStatusLineY*(window: EditorWindow, isBottomWindow: bool): in
     window.viewport.y + window.viewport.height - 2
   else:
     window.viewport.y + window.viewport.height - 1
+
+# Display width calculation with tab support
+
+proc displayWidthUpToWithTabs*(text: string, charPos: int, tabStop: int): int =
+  ## Calculate the display width from start to charPos, accounting for tab characters
+  ## charPos is a character index (not byte position)
+  ## Tab characters expand to the next tab stop position
+  ##
+  ## Note: If tabStop <= 0, it defaults to 1 to prevent division by zero.
+  ##       If charPos < 0, returns 0.
+
+  # Guard against invalid inputs without crashing
+  if charPos < 0:
+    return 0
+
+  let safeTabStop = if tabStop > 0: tabStop else: 1
+
+  result = 0
+  var currentChar = 0
+
+  for rune in text.runes:
+    if currentChar >= charPos:
+      break
+
+    # Handle tab character specially
+    if rune == TAB_CHAR:
+      # Calculate spaces to next tab stop
+      let spacesToNextTab = safeTabStop - (result mod safeTabStop)
+      result += spacesToNextTab
+    else:
+      result += runeWidth(rune)
+
+    currentChar += 1
+
+proc displayWidthWithTabs*(text: string, tabStop: int): int =
+  ## Calculate the display width of a string, accounting for tab characters
+  ## Tab characters expand to the next tab stop position
+  ##
+  ## Note: If tabStop <= 0, it defaults to 1 to prevent division by zero.
+
+  let safeTabStop = if tabStop > 0: tabStop else: 1
+
+  result = 0
+  for rune in text.runes:
+    if rune == TAB_CHAR:
+      let spacesToNextTab = safeTabStop - (result mod safeTabStop)
+      result += spacesToNextTab
+    else:
+      result += runeWidth(rune)

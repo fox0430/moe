@@ -25,7 +25,7 @@
 ## - Navigation within insert mode
 ## - Mode switching (Escape)
 
-import std/[options, unicode]
+import std/[options, unicode, strutils]
 
 import pkg/results
 
@@ -139,6 +139,39 @@ proc handleNewline*(
 
   return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
+proc handleTab*(
+    handler: InsertModeHandler, buffer: TextBuffer, state: EditorState
+): InsertModeResult =
+  ## Handle tab key insertion
+  ## Inserts either a tab character or spaces based on expandTab setting
+  let pos = state.cursor
+
+  if state.expandTab:
+    # Insert spaces instead of tab character
+    let tabWidth = max(1, state.tabStop) # Ensure at least 1 space
+    let spaces = " ".repeat(tabWidth)
+
+    let insertResult = buffer.insertText(pos, spaces)
+    if insertResult.isErr:
+      return InsertModeResult(
+        kind: imrError, errorMessage: "Failed to insert spaces: " & insertResult.error
+      )
+
+    # Move cursor right by number of spaces
+    state.cursor.column += tabWidth
+  else:
+    # Insert actual tab character
+    let insertResult = buffer.insertText(pos, "\t")
+    if insertResult.isErr:
+      return InsertModeResult(
+        kind: imrError, errorMessage: "Failed to insert tab: " & insertResult.error
+      )
+
+    # Move cursor right after tab (1 character)
+    state.cursor.column += 1
+
+  return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+
 proc handleMotion*(
     handler: InsertModeHandler, buffer: TextBuffer, state: EditorState, motion: Motion
 ): InsertModeResult =
@@ -191,6 +224,8 @@ proc handleInsertModeKey*(
       return handler.handleDelete(buffer, state)
     of skEnter:
       return handler.handleNewline(buffer, state)
+    of skTab:
+      return handler.handleTab(buffer, state)
     of skLeft:
       return handler.handleMotion(buffer, state, Motion.Left)
     of skRight:

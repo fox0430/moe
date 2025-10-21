@@ -24,7 +24,7 @@ import pkg/[celina, results]
 import
   buffer, cursor, types, commands, keybindings, commandregistry, modes, commandline,
   commandconfig, statusline, windowmanager, unicode_utils, render_utils, sidebar,
-  gitdiff, highlight, logger
+  gitdiff, highlight, logger, config, configloader, keybindconfig
 import command_handlers/[handler_manager, visual_handler]
 
 type Editor* = ref object
@@ -38,6 +38,7 @@ type Editor* = ref object
   commandConfig*: CommandConfig
   handlerManager*: HandlerManager
   windowManager*: EditorWindowManager # Window manager for split windows
+  config*: EditorConfig # TOML configuration
 
 proc buffer*(e: Editor): TextBuffer =
   e.textBuffer
@@ -176,7 +177,8 @@ proc calculateWindowCursor(
       # Get display width (accounting for wide characters like tabs, Unicode)
       # Example: "Hello\tWorld" with cursor at column 7
       # displayWidthUpToCursor accounts for tab width
-      displayWidthUpToCursor = displayWidthUpTo(cursorLineText, cursor.column)
+      displayWidthUpToCursor =
+        displayWidthUpToWithTabs(cursorLineText, cursor.column, e.state.tabStop)
 
       # Determine which wrapped line segment the cursor is on
       # Example: cursor at display width 95 with maxWidth=40
@@ -193,9 +195,15 @@ proc calculateWindowCursor(
       # Cursor is visible - calculate absolute screen coordinates
       # x = viewport.x (window x) + lineNumOffset (line number width) + wrapLineColumn
       # y = viewport.y (window y) + screenY (lines from top)
-      return CursorPosition(
-        x: viewport.x + lineNumOffset + wrapLineColumn, y: viewport.y + screenY
+      let finalX = viewport.x + lineNumOffset + wrapLineColumn
+      let finalY = viewport.y + screenY
+      logDebug(
+        "editor",
+        "calcCursorScreenPos(wrapped): cursorCol=" & $cursor.column & " displayWidth=" &
+          $displayWidthUpToCursor & " wrapColumn=" & $wrapLineColumn & " screenX=" &
+          $finalX,
       )
+      return CursorPosition(x: finalX, y: finalY)
   else:
     # === NO-WRAP MODE: Calculate cursor position with horizontal scrolling ===
     #
@@ -215,8 +223,10 @@ proc calculateWindowCursor(
         cursorLineText = buffer.getLine(cursor.line)
 
         # Calculate display widths (accounting for tabs, wide characters)
-        displayWidthUpToCursor = displayWidthUpTo(cursorLineText, cursor.column)
-        displayWidthUpToLeftCol = displayWidthUpTo(cursorLineText, viewport.leftColumn)
+        displayWidthUpToCursor =
+          displayWidthUpToWithTabs(cursorLineText, cursor.column, e.state.tabStop)
+        displayWidthUpToLeftCol =
+          displayWidthUpToWithTabs(cursorLineText, viewport.leftColumn, e.state.tabStop)
 
         # Y position: simple offset from top of viewport
         screenY = viewport.y + (cursor.line - viewport.topLine)
@@ -227,6 +237,11 @@ proc calculateWindowCursor(
           viewport.x + lineNumOffset +
           max(0, displayWidthUpToCursor - displayWidthUpToLeftCol)
 
+      logDebug(
+        "editor",
+        "calcCursorScreenPos: cursorCol=" & $cursor.column & " displayWidthUpToCursor=" &
+          $displayWidthUpToCursor & " screenX=" & $screenX,
+      )
       return CursorPosition(x: screenX, y: screenY)
 
   # Cursor is not visible (off-screen)
@@ -490,6 +505,9 @@ proc hsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
   ok(())
 
 proc newEditor*(): Editor =
+  # Load TOML configuration
+  let editorConfig = loadConfig()
+
   # Create registries and configuration first
   let
     cmdRegistry = newCommandRegistry()
@@ -500,6 +518,9 @@ proc newEditor*(): Editor =
   # Register built-in commands and default bindings
   cmdRegistry.registerBuiltinCommands
   keyRegistry.setupDefaultBindings
+
+  # Load custom keybindings from TOML
+  keyRegistry.loadDefaultKeybindings()
 
   # Load command configuration
   cmdConfig.loadDefaultConfig
@@ -514,8 +535,8 @@ proc newEditor*(): Editor =
       screenCursor: CursorPosition(x: 0, y: 0),
       mode: EditorMode.Normal,
       previousMode: EditorMode.Normal,
-      showStatusLine: true,
-      multiStatusLine: true, # Default to multiple status line
+      showStatusLine: editorConfig.standard.statusLine,
+      multiStatusLine: editorConfig.statusLine.multipleStatusLine,
       showLineCount: true,
       showLinePercentage: true,
       showEncoding: true,
@@ -524,12 +545,15 @@ proc newEditor*(): Editor =
       lineWrap: true, # Default to wrapping
       lastResizeTime: getMonoTime(), # Initialize to current time
       # Sidebar defaults
-      showSidebar: true, # Enabled by default (git diff and syntax checker indicators)
-      showGitDiff: true, # Show git diff when sidebar is enabled
-      showSyntaxChecker: true, # Show syntax checker when sidebar is enabled
+      showSidebar: editorConfig.standard.sidebar,
+      showGitDiff: editorConfig.git.showChangedLine,
+      showSyntaxChecker: editorConfig.syntaxChecker.enable,
       lastGitDiffUpdate: getMonoTime(), # Initialize to current time
       lastGitDiffChangeSeq: 0, # Initialize to 0 (no changes yet)
-      gitDiffUpdateInterval: 500, # Update at most every 500ms (debounce)
+      gitDiffUpdateInterval: editorConfig.git.updateInterval,
+      # Editor behavior
+      tabStop: editorConfig.standard.tabStop,
+      expandTab: editorConfig.standard.expandTab,
     ),
     viewport: ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 20, x: 0, y: 0),
     commandRegistry: cmdRegistry,
@@ -538,6 +562,7 @@ proc newEditor*(): Editor =
     commandConfig: cmdConfig,
     handlerManager: nil, # Will be set after executer is created
     windowManager: newEditorWindowManager(),
+    config: editorConfig, # Store configuration
   )
 
   result.executer = newCommandExecutor(
@@ -767,21 +792,53 @@ proc renderLineSegmentWithSelection(
       let
         pos = BufferPosition(line: lineIndex, column: charIdx)
         style = e.getSelectionStyle(textBuffer, hasSelection, pos)
-        charStr = $rune
-      if screenX + displayX < buffer.area.width:
-        buffer.setString(screenX + displayX, screenY, charStr, style)
-      displayX += 1
+
+      # Handle tab character specially
+      if rune.int32 == 0x09: # Tab character
+        # Calculate how many spaces until next tab stop
+        let spacesToNextTab = e.state.tabStop - (displayX mod e.state.tabStop)
+        # Render spaces instead of tab character
+        for i in 0 ..< spacesToNextTab:
+          if screenX + displayX < buffer.area.width:
+            buffer.setString(screenX + displayX, screenY, " ", style)
+          displayX += 1
+      else:
+        # Normal character
+        let charStr = $rune
+        if screenX + displayX < buffer.area.width:
+          buffer.setString(screenX + displayX, screenY, charStr, style)
+        # Account for character width (wide characters like CJK are width 2)
+        displayX += runeWidth(rune)
+
       charIdx += 1
   else:
     # Byte-based rendering (for non-wrapped mode)
-    for i in 0 ..< displayLine.len:
+    var displayX = 0
+    var charIdx = 0
+    for rune in displayLine.runes:
       let
-        col = startColumn + i
+        col = startColumn + charIdx
         pos = BufferPosition(line: lineIndex, column: col)
         style = e.getSelectionStyle(textBuffer, hasSelection, pos)
-        charStr = $displayLine[i]
-      if screenX + i < buffer.area.width:
-        buffer.setString(screenX + i, screenY, charStr, style)
+
+      # Handle tab character specially
+      if rune.int32 == 0x09: # Tab character
+        # Calculate how many spaces until next tab stop
+        let spacesToNextTab = e.state.tabStop - (displayX mod e.state.tabStop)
+        # Render spaces instead of tab character
+        for i in 0 ..< spacesToNextTab:
+          if screenX + displayX < buffer.area.width:
+            buffer.setString(screenX + displayX, screenY, " ", style)
+          displayX += 1
+      else:
+        # Normal character
+        let charStr = $rune
+        if screenX + displayX < buffer.area.width:
+          buffer.setString(screenX + displayX, screenY, charStr, style)
+        # Account for character width (wide characters like CJK are width 2)
+        displayX += runeWidth(rune)
+
+      charIdx += 1
 
 proc renderLineNumbers(
     e: Editor, buffer: var Buffer, textAreaWidth: int, sidebarWidth: int = 0
@@ -868,8 +925,11 @@ proc renderTextBuffer(e: Editor, buffer: var Buffer, area: Rect) =
 
       var startCharCol = 0 # Character position, not byte position
       while startCharCol < lineCharLen and screenY < area.height:
+        # Calculate how many characters fit in maxWidth display columns
+        # This properly handles wide characters (CJK, etc.)
+        let (charCount, actualWidth) = displayWidthSubstr(line, startCharCol, maxWidth)
         let
-          endCharCol = min(startCharCol + maxWidth, lineCharLen)
+          endCharCol = startCharCol + charCount
           # Convert character positions to byte positions for slicing
           startBytePos = charToBytePos(line, startCharCol)
           endBytePos = charToBytePos(line, endCharCol)
@@ -892,12 +952,13 @@ proc renderTextBuffer(e: Editor, buffer: var Buffer, area: Rect) =
           )
 
         inc screenY
-        startCharCol += maxWidth
+        startCharCol += charCount # Use actual character count, not maxWidth
     else:
       # No line wrapping - use horizontal scrolling
+      # Use character-based slicing (not byte-based) for multibyte character support
       let displayLine =
-        if e.viewport.leftColumn < line.len:
-          line[e.viewport.leftColumn ..^ 1]
+        if e.viewport.leftColumn < line.charLen:
+          line.runeSubStr(e.viewport.leftColumn)
         else:
           ""
 
@@ -1029,10 +1090,11 @@ proc renderWindowLineNoWrap(
     buffer.setString(lineNumScreenX, actualScreenY, lineNumStr, lineStyle)
 
   # Render text content
+  # Use character-based slicing (not byte-based) for multibyte character support
   let
     displayLine =
-      if window.viewport.leftColumn < line.len:
-        line[window.viewport.leftColumn ..^ 1]
+      if window.viewport.leftColumn < line.charLen:
+        line.runeSubStr(window.viewport.leftColumn)
       else:
         ""
     textScreenX = window.viewport.x + sidebarWidth + lineNumOffset
