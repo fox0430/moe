@@ -127,3 +127,5 @@ type
     # Editor behavior settings
     tabStop*: int # Tab width (number of spaces per tab character)
     expandTab*: bool # Insert spaces instead of tab character when Tab key is pressed
+    showLineNumbers*: bool # Whether to show line numbers
+    showCurrentLineNumber*: bool # Whether to highlight current line number

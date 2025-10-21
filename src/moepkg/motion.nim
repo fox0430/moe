@@ -26,7 +26,7 @@ import std/[options, unicode]
 
 import pkg/results
 
-import buffer, cursor, types, unicode_utils, logger
+import buffer, cursor, types, unicode_utils, logger, render_utils
 
 type
   # Motion command with count
@@ -441,11 +441,8 @@ proc executeMotion*(
     lineCount = controller.executor.buffer.len
     lineWrap = controller.cursorManager.state.lineWrap
     # Calculate line number offset for viewport calculation (matches renderLineNumbers)
-    lineNumOffset =
-      if lineCount > 0:
-        len($lineCount) + 1
-      else:
-        0
+    showLineNumbers = controller.cursorManager.state.showLineNumbers
+    lineNumOffset = calculateLineNumOffset(controller.executor.buffer, showLineNumbers)
 
   controller.viewportManager.updateViewport(
     newPos, lineCount, controller.cursorManager.state.showStatusLine,

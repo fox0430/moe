@@ -265,7 +265,8 @@ proc setActiveWindowScreenCursor(e: Editor, window: EditorWindow) =
     windowBottomY = window.viewport.y + window.viewport.height
     isBottomWindow = (windowBottomY == maxBottomY)
     sidebarWidth = e.calculateSidebarWidth()
-    lineNumOffset = calculateLineNumOffset(window.buffer) + sidebarWidth
+    lineNumOffset =
+      calculateLineNumOffset(window.buffer, e.state.showLineNumbers) + sidebarWidth
     reservedLines = e.calculateReservedLines(isBottomWindow)
 
   e.state.screenCursor = e.calculateWindowCursor(
@@ -554,6 +555,8 @@ proc newEditor*(): Editor =
       # Editor behavior
       tabStop: editorConfig.standard.tabStop,
       expandTab: editorConfig.standard.expandTab,
+      showLineNumbers: editorConfig.standard.number,
+      showCurrentLineNumber: editorConfig.standard.currentNumber,
     ),
     viewport: ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 20, x: 0, y: 0),
     commandRegistry: cmdRegistry,
@@ -863,7 +866,12 @@ proc renderLineNumbers(
     let
       line = e.textBuffer.getLine(lineIndex)
       isCurrentLine = lineIndex == e.state.cursor.line
-      lineStyle = if isCurrentLine: currentLineStyle else: lineNumStyle
+      # Apply currentNumber setting: highlight current line number only if enabled
+      lineStyle =
+        if isCurrentLine and e.state.showCurrentLineNumber:
+          currentLineStyle
+        else:
+          lineNumStyle
 
     if e.state.lineWrap:
       let
@@ -1001,14 +1009,20 @@ proc renderWindowLineWrapped(
     maxWidth = window.viewport.width - sidebarWidth - lineNumOffset
     lineCharLen = line.charLen
     isCurrentLine = (lineIndex == window.cursor.line)
-    lineStyle = if isCurrentLine: currentLineStyle else: lineNumStyle
+    # Apply currentNumber setting: highlight current line number only if enabled
+    lineStyle =
+      if isCurrentLine and e.config.standard.currentNumber:
+        currentLineStyle
+      else:
+        lineNumStyle
     lineNumScreenX = window.viewport.x + sidebarWidth
 
   if lineCharLen == 0:
-    # Empty line - just render line number
-    let lineNumStr = formatLineNumber(lineIndex, lineNumOffset)
-    if lineNumScreenX + lineNumStr.len <= buffer.area.width:
-      buffer.setString(lineNumScreenX, actualScreenY, lineNumStr, lineStyle)
+    # Empty line - just render line number (if enabled)
+    if lineNumOffset > 0:
+      let lineNumStr = formatLineNumber(lineIndex, lineNumOffset)
+      if lineNumScreenX + lineNumStr.len <= buffer.area.width:
+        buffer.setString(lineNumScreenX, actualScreenY, lineNumStr, lineStyle)
     inc screenY
     inc lineIndex
     return
@@ -1026,17 +1040,18 @@ proc renderWindowLineWrapped(
       textScreenX = window.viewport.x + sidebarWidth + lineNumOffset
       currentActualScreenY = window.viewport.y + screenY
 
-    # Render line number for first wrap, empty space for others
-    if wrapLineCount == 0:
-      let lineNumStr = formatLineNumber(lineIndex, lineNumOffset)
-      if lineNumScreenX + lineNumStr.len <= buffer.area.width:
-        buffer.setString(lineNumScreenX, currentActualScreenY, lineNumStr, lineStyle)
-    else:
-      if lineNumScreenX + lineNumOffset <= buffer.area.width:
-        let emptyLineNumStr = spaces(lineNumOffset)
-        buffer.setString(
-          lineNumScreenX, currentActualScreenY, emptyLineNumStr, lineNumStyle
-        )
+    # Render line number for first wrap, empty space for others (if enabled)
+    if lineNumOffset > 0:
+      if wrapLineCount == 0:
+        let lineNumStr = formatLineNumber(lineIndex, lineNumOffset)
+        if lineNumScreenX + lineNumStr.len <= buffer.area.width:
+          buffer.setString(lineNumScreenX, currentActualScreenY, lineNumStr, lineStyle)
+      else:
+        if lineNumScreenX + lineNumOffset <= buffer.area.width:
+          let emptyLineNumStr = spaces(lineNumOffset)
+          buffer.setString(
+            lineNumScreenX, currentActualScreenY, emptyLineNumStr, lineNumStyle
+          )
 
     if displayLine.len > 0 and textScreenX < buffer.area.width:
       let displayCharCount = endCharCol - startCharCol
@@ -1081,13 +1096,19 @@ proc renderWindowLineNoWrap(
     actualScreenY = window.viewport.y + screenY
     sidebarWidth = e.calculateSidebarWidth()
     isCurrentLine = (lineIndex == window.cursor.line)
-    lineStyle = if isCurrentLine: currentLineStyle else: lineNumStyle
-    lineNumStr = formatLineNumber(lineIndex, lineNumOffset)
+    # Apply currentNumber setting: highlight current line number only if enabled
+    lineStyle =
+      if isCurrentLine and e.config.standard.currentNumber:
+        currentLineStyle
+      else:
+        lineNumStyle
     lineNumScreenX = window.viewport.x + sidebarWidth
 
-  # Render line number
-  if lineNumScreenX + lineNumStr.len <= buffer.area.width:
-    buffer.setString(lineNumScreenX, actualScreenY, lineNumStr, lineStyle)
+  # Render line number (if enabled)
+  if lineNumOffset > 0:
+    let lineNumStr = formatLineNumber(lineIndex, lineNumOffset)
+    if lineNumScreenX + lineNumStr.len <= buffer.area.width:
+      buffer.setString(lineNumScreenX, actualScreenY, lineNumStr, lineStyle)
 
   # Render text content
   # Use character-based slicing (not byte-based) for multibyte character support
@@ -1262,7 +1283,7 @@ proc renderSplitView(e: Editor, buffer: var Buffer, wasResized: bool) =
   # Render all split windows
   for i, window in e.windowManager.windows:
     # Calculate line number offset dynamically based on buffer size
-    let lineNumOffset = calculateLineNumOffset(window.buffer)
+    let lineNumOffset = calculateLineNumOffset(window.buffer, e.state.showLineNumbers)
 
     # Determine if this is a bottom window (needs status line reservation)
     # A window is a bottom window if its bottom edge is at the maximum bottom Y
@@ -1309,7 +1330,7 @@ proc renderSingleView(e: Editor, buffer: var Buffer, wasResized: bool) =
   let
     reservedLines = e.calculateReservedLines(isBottomWindow = true)
     sidebarWidth = e.calculateSidebarWidth()
-    lineNumOffset = calculateLineNumOffset(e.textBuffer)
+    lineNumOffset = calculateLineNumOffset(e.textBuffer, e.state.showLineNumbers)
     textAreaWidth =
       max(0, buffer.area.width - sidebarWidth - lineNumOffset - LineNumberPadding)
     textArea = Rect(
@@ -1354,7 +1375,9 @@ proc renderSingleView(e: Editor, buffer: var Buffer, wasResized: bool) =
       inc screenY
       inc lineIndex
 
-  discard e.renderLineNumbers(buffer, textAreaWidth, sidebarWidth)
+  # Render line numbers only if enabled
+  if e.state.showLineNumbers:
+    discard e.renderLineNumbers(buffer, textAreaWidth, sidebarWidth)
   e.renderTextBuffer(buffer, textArea)
 
   # Calculate and set cursor position (including sidebar width)
