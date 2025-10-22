@@ -129,3 +129,4 @@ type
     expandTab*: bool # Insert spaces instead of tab character when Tab key is pressed
     showLineNumbers*: bool # Whether to show line numbers
     showCurrentLineNumber*: bool # Whether to highlight current line number
+    showCursorLine*: bool # Whether to highlight the cursor line

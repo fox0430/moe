@@ -71,6 +71,16 @@ let
     bg: ColorValue(kind: Default),
     modifiers: {StyleModifier.Bold},
   )
+  cursorLineHighlightStyle* = Style(
+    fg: ColorValue(kind: Default),
+    bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 40, g: 40, b: 40)),
+    modifiers: {},
+  )
+  cursorCharStyle* = Style(
+    fg: ColorValue(kind: Rgb, rgb: RgbColor(r: 180, g: 180, b: 180)),
+    bg: ColorValue(kind: Default),
+    modifiers: {},
+  )
 
 # Pure utility functions
 

@@ -27,18 +27,27 @@ import
   gitdiff, highlight, logger, config, configloader, keybindconfig
 import command_handlers/[handler_manager, visual_handler]
 
-type Editor* = ref object
-  textBuffer*: TextBuffer
-  state*: EditorState
-  viewport*: ViewPort
-  executer*: CommandExecutor
-  commandRegistry*: CommandRegistry
-  keyBindingRegistry*: KeyBindingRegistry
-  commandLineParser*: CommandLineParser
-  commandConfig*: CommandConfig
-  handlerManager*: HandlerManager
-  windowManager*: EditorWindowManager # Window manager for split windows
-  config*: EditorConfig # TOML configuration
+type
+  RenderContext* = object
+    ## Context for rendering operations to reduce parameter passing
+    cursorLine*: int
+    cursorCol*: int
+    hasSelection*: bool
+    selStart*: BufferPosition
+    selEnd*: BufferPosition
+
+  Editor* = ref object
+    textBuffer*: TextBuffer
+    state*: EditorState
+    viewport*: ViewPort
+    executer*: CommandExecutor
+    commandRegistry*: CommandRegistry
+    keyBindingRegistry*: KeyBindingRegistry
+    commandLineParser*: CommandLineParser
+    commandConfig*: CommandConfig
+    handlerManager*: HandlerManager
+    windowManager*: EditorWindowManager # Window manager for split windows
+    config*: EditorConfig # TOML configuration
 
 proc buffer*(e: Editor): TextBuffer =
   e.textBuffer
@@ -557,6 +566,7 @@ proc newEditor*(): Editor =
       expandTab: editorConfig.standard.expandTab,
       showLineNumbers: editorConfig.standard.number,
       showCurrentLineNumber: editorConfig.standard.currentNumber,
+      showCursorLine: editorConfig.standard.cursorLine,
     ),
     viewport: ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 20, x: 0, y: 0),
     commandRegistry: cmdRegistry,
@@ -739,19 +749,38 @@ proc colorIndexToStyle(colorIdx: EditorColorPairIndex): Style =
     normalStyle
 
 proc getSelectionStyle(
-    e: Editor, buffer: TextBuffer, hasSelection: bool, pos: BufferPosition
+    e: Editor,
+    buffer: TextBuffer,
+    hasSelection: bool,
+    pos: BufferPosition,
+    cursorLine: int,
+    cursorCol: int,
 ): Style =
   ## Get the appropriate style for a character based on selection state and syntax
+  # Check if this is the cursor position
+  let isCursorPos = (pos.line == cursorLine and pos.column == cursorCol)
+
   if hasSelection and e.state.visualSelection.isPositionInSelection(pos):
     visualStyle
+  elif isCursorPos:
+    # Cursor position: always use gray foreground color
+    cursorCharStyle
   elif not buffer.highlight.isNil:
     # Apply syntax highlighting from buffer
     # Update highlight if needed (after text edits)
     buffer.updateHighlight()
     let colorPair = buffer.highlight.getColorPair(pos.line, pos.column)
-    colorIndexToStyle(colorPair)
+    var style = colorIndexToStyle(colorPair)
+    # Apply cursor line highlighting if enabled and on cursor line
+    if e.state.showCursorLine and pos.line == cursorLine:
+      style.bg = cursorLineHighlightStyle.bg
+    style
   else:
-    normalStyle
+    # Apply cursor line highlighting if enabled and on cursor line
+    if e.state.showCursorLine and pos.line == cursorLine:
+      cursorLineHighlightStyle
+    else:
+      normalStyle
 
 proc getVisualSelection(
     e: Editor, windowActive: bool = true
@@ -779,22 +808,24 @@ proc renderLineSegmentWithSelection(
     screenX, screenY: int,
     lineIndex: int,
     startColumn: int,
-    hasSelection: bool,
-    selStart, selEnd: BufferPosition,
+    ctx: RenderContext,
     useRunes: bool = true,
 ) =
   ## Render a line segment with selection highlighting and syntax highlighting
   ## useRunes: true for wrapped mode (character-based), false for byte-based rendering
+  ## ctx: RenderContext containing cursor position and selection information
 
   # Always render character by character to apply syntax highlighting
+  var displayX = 0
   if useRunes:
     # Character-based rendering (for wrapped mode)
-    var displayX = 0
     var charIdx = startColumn
     for rune in displayLine.runes:
       let
         pos = BufferPosition(line: lineIndex, column: charIdx)
-        style = e.getSelectionStyle(textBuffer, hasSelection, pos)
+        style = e.getSelectionStyle(
+          textBuffer, ctx.hasSelection, pos, ctx.cursorLine, ctx.cursorCol
+        )
 
       # Handle tab character specially
       if rune.int32 == 0x09: # Tab character
@@ -816,13 +847,14 @@ proc renderLineSegmentWithSelection(
       charIdx += 1
   else:
     # Byte-based rendering (for non-wrapped mode)
-    var displayX = 0
     var charIdx = 0
     for rune in displayLine.runes:
       let
         col = startColumn + charIdx
         pos = BufferPosition(line: lineIndex, column: col)
-        style = e.getSelectionStyle(textBuffer, hasSelection, pos)
+        style = e.getSelectionStyle(
+          textBuffer, ctx.hasSelection, pos, ctx.cursorLine, ctx.cursorCol
+        )
 
       # Handle tab character specially
       if rune.int32 == 0x09: # Tab character
@@ -842,6 +874,22 @@ proc renderLineSegmentWithSelection(
         displayX += runeWidth(rune)
 
       charIdx += 1
+
+  # Fill the rest of the line with cursor line highlight if on cursor line
+  if e.state.showCursorLine and lineIndex == ctx.cursorLine:
+    while screenX + displayX < buffer.area.width:
+      buffer.setString(screenX + displayX, screenY, " ", cursorLineHighlightStyle)
+      displayX += 1
+
+proc fillCursorLineBackground(
+    e: Editor, buffer: var Buffer, screenX, screenY: int, lineIndex, cursorLine: int
+) =
+  ## Fill the rest of the line with cursor line background if on cursor line
+  if e.state.showCursorLine and lineIndex == cursorLine:
+    var displayX = 0
+    while screenX + displayX < buffer.area.width:
+      buffer.setString(screenX + displayX, screenY, " ", cursorLineHighlightStyle)
+      displayX += 1
 
 proc renderLineNumbers(
     e: Editor, buffer: var Buffer, textAreaWidth: int, sidebarWidth: int = 0
@@ -911,6 +959,15 @@ proc renderTextBuffer(e: Editor, buffer: var Buffer, area: Rect) =
   # Get visual selection range if active
   let (hasSelection, selStart, selEnd) = e.getVisualSelection()
 
+  # Create render context
+  let ctx = RenderContext(
+    cursorLine: e.state.cursor.line,
+    cursorCol: e.state.cursor.column,
+    hasSelection: hasSelection,
+    selStart: selStart,
+    selEnd: selEnd,
+  )
+
   var
     screenY = 0
     lineIndex = e.viewport.topLine
@@ -926,7 +983,10 @@ proc renderTextBuffer(e: Editor, buffer: var Buffer, area: Rect) =
         lineCharLen = line.charLen # Use character count, not byte count
 
       if lineCharLen == 0:
-        # Empty line
+        # Empty line - fill with cursor line highlight if on cursor line
+        e.fillCursorLineBackground(
+          buffer, area.x, area.y + screenY, lineIndex, e.state.cursor.line
+        )
         inc screenY
         inc lineIndex
         continue
@@ -953,9 +1013,7 @@ proc renderTextBuffer(e: Editor, buffer: var Buffer, area: Rect) =
             area.y + screenY,
             lineIndex,
             startCharCol,
-            hasSelection,
-            selStart,
-            selEnd,
+            ctx,
             useRunes = true,
           )
 
@@ -980,10 +1038,13 @@ proc renderTextBuffer(e: Editor, buffer: var Buffer, area: Rect) =
           area.y + screenY,
           lineIndex,
           e.viewport.leftColumn,
-          hasSelection,
-          selStart,
-          selEnd,
+          ctx,
           useRunes = false,
+        )
+      else:
+        # Empty line or scrolled past line end - fill with cursor line highlight if on cursor line
+        e.fillCursorLineBackground(
+          buffer, area.x, area.y + screenY, lineIndex, e.state.cursor.line
         )
 
       inc screenY
@@ -995,8 +1056,7 @@ proc renderWindowLineWrapped(
     buffer: var Buffer,
     window: EditorWindow,
     lineNumOffset: int,
-    hasSelection: bool,
-    selStart, selEnd: BufferPosition,
+    ctx: RenderContext,
     screenY: var int,
     lineIndex: var int,
     visibleHeight: int,
@@ -1023,6 +1083,11 @@ proc renderWindowLineWrapped(
       let lineNumStr = formatLineNumber(lineIndex, lineNumOffset)
       if lineNumScreenX + lineNumStr.len <= buffer.area.width:
         buffer.setString(lineNumScreenX, actualScreenY, lineNumStr, lineStyle)
+    # Fill with cursor line highlight if on cursor line
+    let textScreenX = window.viewport.x + sidebarWidth + lineNumOffset
+    e.fillCursorLineBackground(
+      buffer, textScreenX, actualScreenY, lineIndex, window.cursor.line
+    )
     inc screenY
     inc lineIndex
     return
@@ -1065,9 +1130,7 @@ proc renderWindowLineWrapped(
           currentActualScreenY,
           lineIndex,
           startCharCol,
-          hasSelection,
-          selStart,
-          selEnd,
+          ctx,
           useRunes = true,
         )
 
@@ -1085,8 +1148,7 @@ proc renderWindowLineNoWrap(
     buffer: var Buffer,
     window: EditorWindow,
     lineNumOffset: int,
-    hasSelection: bool,
-    selStart, selEnd: BufferPosition,
+    ctx: RenderContext,
     screenY: int,
     lineIndex: int,
 ) =
@@ -1132,11 +1194,14 @@ proc renderWindowLineNoWrap(
         actualScreenY,
         lineIndex,
         window.viewport.leftColumn,
-        hasSelection,
-        selStart,
-        selEnd,
+        ctx,
         useRunes = false,
       )
+  else:
+    # Empty line or scrolled past line end - fill with cursor line highlight if on cursor line
+    e.fillCursorLineBackground(
+      buffer, textScreenX, actualScreenY, lineIndex, window.cursor.line
+    )
 
 proc renderWindowSidebar(
     buffer: var Buffer,
@@ -1182,6 +1247,15 @@ proc renderWindow(
   # Get visual selection range if active
   let (hasSelection, selStart, selEnd) = e.getVisualSelection(window.active)
 
+  # Create render context for this window
+  let ctx = RenderContext(
+    cursorLine: window.cursor.line,
+    cursorCol: window.cursor.column,
+    hasSelection: hasSelection,
+    selStart: selStart,
+    selEnd: selEnd,
+  )
+
   var
     screenY = 0
     lineIndex = window.viewport.topLine
@@ -1193,14 +1267,10 @@ proc renderWindow(
 
     if e.state.lineWrap:
       e.renderWindowLineWrapped(
-        buffer, window, lineNumOffset, hasSelection, selStart, selEnd, screenY,
-        lineIndex, visibleHeight,
+        buffer, window, lineNumOffset, ctx, screenY, lineIndex, visibleHeight
       )
     else:
-      e.renderWindowLineNoWrap(
-        buffer, window, lineNumOffset, hasSelection, selStart, selEnd, screenY,
-        lineIndex,
-      )
+      e.renderWindowLineNoWrap(buffer, window, lineNumOffset, ctx, screenY, lineIndex)
       inc screenY
       inc lineIndex
 
