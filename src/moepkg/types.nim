@@ -130,3 +130,5 @@ type
     showLineNumbers*: bool # Whether to show line numbers
     showCurrentLineNumber*: bool # Whether to highlight current line number
     showCursorLine*: bool # Whether to highlight the cursor line
+    showSyntax*: bool # Whether to apply syntax highlighting
+    showIndentationLines*: bool # Whether to show indentation guide lines

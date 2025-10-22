@@ -28,6 +28,12 @@ import
 import command_handlers/[handler_manager, visual_handler]
 
 type
+  IndentInfo = object
+    ## Cached indentation analysis for a line to avoid O(n²) performance
+    leadingWhitespaceEnd: int
+      # Character index where leading whitespace ends (-1 if no content)
+    hasContent: bool # Whether the line contains non-whitespace content
+
   RenderContext* = object
     ## Context for rendering operations to reduce parameter passing
     cursorLine*: int
@@ -567,6 +573,8 @@ proc newEditor*(): Editor =
       showLineNumbers: editorConfig.standard.number,
       showCurrentLineNumber: editorConfig.standard.currentNumber,
       showCursorLine: editorConfig.standard.cursorLine,
+      showSyntax: editorConfig.standard.syntax,
+      showIndentationLines: editorConfig.standard.indentationLines,
     ),
     viewport: ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 20, x: 0, y: 0),
     commandRegistry: cmdRegistry,
@@ -748,6 +756,47 @@ proc colorIndexToStyle(colorIdx: EditorColorPairIndex): Style =
   else:
     normalStyle
 
+proc analyzeIndentation(lineText: string): IndentInfo =
+  ## Analyze a line once to determine indentation properties
+  ## Returns cached information to avoid repeated line scanning (O(n) instead of O(n²))
+  result.leadingWhitespaceEnd = -1
+  result.hasContent = false
+
+  var charIdx = 0
+  for rune in lineText.runes:
+    if rune != ' '.Rune and rune != TAB_CHAR:
+      # Found first non-whitespace character
+      result.leadingWhitespaceEnd = charIdx - 1
+      result.hasContent = true
+      break
+    charIdx += 1
+
+proc shouldShowIndentationGuide(
+    e: Editor, indentInfo: IndentInfo, displayX: int, charIdx: int
+): bool =
+  ## Check if an indentation guide should be shown at this position
+  ## Uses cached indentInfo to avoid O(n²) performance
+  ## displayX: the display column position (accounting for tabs)
+  ## charIdx: the character index in the line
+  if not e.state.showIndentationLines:
+    return false
+
+  # Only show guides at indent levels (multiples of tabStop)
+  if displayX mod e.state.tabStop != 0:
+    return false
+
+  # Don't show on column 0
+  if displayX == 0:
+    return false
+
+  # Check if this position is within leading whitespace
+  if charIdx < 0:
+    return false
+
+  # Use cached indentation info: O(1) instead of O(n)
+  # Show guide only if we're within leading whitespace and line has content
+  return indentInfo.hasContent and charIdx <= indentInfo.leadingWhitespaceEnd
+
 proc getSelectionStyle(
     e: Editor,
     buffer: TextBuffer,
@@ -765,7 +814,7 @@ proc getSelectionStyle(
   elif isCursorPos:
     # Cursor position: always use gray foreground color
     cursorCharStyle
-  elif not buffer.highlight.isNil:
+  elif e.state.showSyntax and not buffer.highlight.isNil:
     # Apply syntax highlighting from buffer
     # Update highlight if needed (after text edits)
     buffer.updateHighlight()
@@ -815,8 +864,45 @@ proc renderLineSegmentWithSelection(
   ## useRunes: true for wrapped mode (character-based), false for byte-based rendering
   ## ctx: RenderContext containing cursor position and selection information
 
+  # Get the full line for indentation guide checking
+  let fullLine = textBuffer.getLine(lineIndex)
+  # Analyze indentation once (O(n)) to avoid repeated scanning (O(n²))
+  let indentInfo = analyzeIndentation(fullLine)
+
   # Always render character by character to apply syntax highlighting
   var displayX = 0
+
+  # Template to render a single character (eliminates code duplication)
+  # Using template instead of proc to avoid closure capture issues
+  template renderChar(rune: Rune, col: int, style: Style) =
+    # Handle tab character specially
+    if rune == TAB_CHAR:
+      # Calculate how many spaces until next tab stop
+      let spacesToNextTab = e.state.tabStop - (displayX mod e.state.tabStop)
+      # Render spaces instead of tab character
+      for i in 0 ..< spacesToNextTab:
+        if screenX + displayX < buffer.area.width:
+          # Check if we should show indentation guide at this position
+          if e.shouldShowIndentationGuide(indentInfo, displayX, col):
+            buffer.setString(screenX + displayX, screenY, "│", indentationLineStyle)
+          else:
+            buffer.setString(screenX + displayX, screenY, " ", style)
+        displayX += 1
+    else:
+      # Normal character
+      var charStr = $rune
+      var renderStyle = style
+
+      # Check if this is a space and should show indentation guide
+      if rune == ' '.Rune and e.shouldShowIndentationGuide(indentInfo, displayX, col):
+        charStr = "│"
+        renderStyle = indentationLineStyle
+
+      if screenX + displayX < buffer.area.width:
+        buffer.setString(screenX + displayX, screenY, charStr, renderStyle)
+      # Account for character width (wide characters like CJK are width 2)
+      displayX += runeWidth(rune)
+
   if useRunes:
     # Character-based rendering (for wrapped mode)
     var charIdx = startColumn
@@ -826,24 +912,7 @@ proc renderLineSegmentWithSelection(
         style = e.getSelectionStyle(
           textBuffer, ctx.hasSelection, pos, ctx.cursorLine, ctx.cursorCol
         )
-
-      # Handle tab character specially
-      if rune.int32 == 0x09: # Tab character
-        # Calculate how many spaces until next tab stop
-        let spacesToNextTab = e.state.tabStop - (displayX mod e.state.tabStop)
-        # Render spaces instead of tab character
-        for i in 0 ..< spacesToNextTab:
-          if screenX + displayX < buffer.area.width:
-            buffer.setString(screenX + displayX, screenY, " ", style)
-          displayX += 1
-      else:
-        # Normal character
-        let charStr = $rune
-        if screenX + displayX < buffer.area.width:
-          buffer.setString(screenX + displayX, screenY, charStr, style)
-        # Account for character width (wide characters like CJK are width 2)
-        displayX += runeWidth(rune)
-
+      renderChar(rune, charIdx, style)
       charIdx += 1
   else:
     # Byte-based rendering (for non-wrapped mode)
@@ -855,24 +924,7 @@ proc renderLineSegmentWithSelection(
         style = e.getSelectionStyle(
           textBuffer, ctx.hasSelection, pos, ctx.cursorLine, ctx.cursorCol
         )
-
-      # Handle tab character specially
-      if rune.int32 == 0x09: # Tab character
-        # Calculate how many spaces until next tab stop
-        let spacesToNextTab = e.state.tabStop - (displayX mod e.state.tabStop)
-        # Render spaces instead of tab character
-        for i in 0 ..< spacesToNextTab:
-          if screenX + displayX < buffer.area.width:
-            buffer.setString(screenX + displayX, screenY, " ", style)
-          displayX += 1
-      else:
-        # Normal character
-        let charStr = $rune
-        if screenX + displayX < buffer.area.width:
-          buffer.setString(screenX + displayX, screenY, charStr, style)
-        # Account for character width (wide characters like CJK are width 2)
-        displayX += runeWidth(rune)
-
+      renderChar(rune, col, style)
       charIdx += 1
 
   # Fill the rest of the line with cursor line highlight if on cursor line

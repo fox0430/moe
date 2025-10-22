@@ -1,18 +1,16 @@
 [Standard]
 
-number = true                          # 📝 Line numbers (not yet applied)
+number = true                          # ✅ Line numbers (IMPLEMENTED)
 
-currentNumber = true                   # 📝 Current line number (not yet applied)
+currentNumber = true                   # ✅ Current line number highlighting (IMPLEMENTED)
 
-cursorLine = false                     # 📝 Cursor line highlighting (not yet applied)
+cursorLine = true                      # ✅ Cursor line highlighting (IMPLEMENTED)
 
 statusLine = true                      # ✅ Show status line (IMPLEMENTED)
 
-tabLine = true                         # 📝 Tab line display (not yet applied)
+syntax = true                          # ✅ Syntax highlighting (IMPLEMENTED)
 
-syntax = true                          # 📝 Syntax highlighting (not yet applied)
-
-indentationLines = true                # 📝 Indentation guides (not yet applied)
+indentationLines = true                # ✅ Indentation guides (IMPLEMENTED)
 
 tabStop = 2                            # ✅ Tab width (IMPLEMENTED)
 

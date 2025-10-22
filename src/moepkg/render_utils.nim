@@ -81,6 +81,11 @@ let
     bg: ColorValue(kind: Default),
     modifiers: {},
   )
+  indentationLineStyle* = Style(
+    fg: ColorValue(kind: Rgb, rgb: RgbColor(r: 70, g: 70, b: 70)),
+    bg: ColorValue(kind: Default),
+    modifiers: {},
+  )
 
 # Pure utility functions
 
