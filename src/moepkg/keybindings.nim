@@ -602,6 +602,27 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
     )
   )
 
+  # Register search navigation commands
+  registry.registerCommand(
+    Command(
+      name: "search-next",
+      description: "Find next search result",
+      kind: ctAction,
+      commandId: "search.next",
+      args: @[],
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "search-prev",
+      description: "Find previous search result",
+      kind: ctAction,
+      commandId: "search.prev",
+      args: @[],
+    )
+  )
+
   # Normal mode default bindings
   registry.bindKey(EditorMode.Normal, "h", "move-left")
   registry.bindKey(EditorMode.Normal, "j", "move-down")
@@ -611,6 +632,8 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.Normal, "C-d", "page-down")
   registry.bindKey(EditorMode.Normal, "u", "undo")
   registry.bindKey(EditorMode.Normal, "C-r", "redo")
+  registry.bindKey(EditorMode.Normal, "n", "search-next")
+  registry.bindKey(EditorMode.Normal, "N", "search-prev")
 
   # Arrow key bindings for Normal mode
   registry.bindKey(
@@ -857,6 +880,29 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
     )
   )
   registry.bindKey(EditorMode.Normal, ":", "switch-to-command")
+
+  # Add binding for Search mode (forward)
+  registry.registerCommand(
+    Command(
+      name: "switch-to-search",
+      description: "Switch to search mode (forward)",
+      kind: ctModeSwitch,
+      targetMode: EditorMode.Search,
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "/", "switch-to-search")
+
+  # Add binding for Search mode (backward)
+  registry.registerCommand(
+    Command(
+      name: "switch-to-search-backward",
+      description: "Switch to search mode (backward)",
+      kind: ctModeSwitch,
+      targetMode: EditorMode.Search,
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "?", "switch-to-search-backward")
+
   registry.bindKey(EditorMode.Normal, "v", "switch-to-visual") # Enter visual mode
   registry.bindKey(EditorMode.Normal, "R", "switch-to-replace") # Enter replace mode
 

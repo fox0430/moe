@@ -53,6 +53,10 @@ type
     cursor*: BufferPosition # Window-local cursor position
     active*: bool # Whether this is the active window
 
+  SearchDirection* = enum
+    Forward # Search forward (/)
+    Backward # Search backward (?)
+
   Motion* = enum
     Left
     Right
@@ -101,6 +105,8 @@ type
     previousMode*: EditorMode # Previous mode for ESC handling
     command*: string
     commandText*: string # Text being typed in command mode
+    searchText*: string # Text being typed in search mode
+    lastSearchText*: string # Last executed search text for n/N commands
     statusMessage*: string # Message to display in status line
     lastMotion*: Option[Motion]
     visualSelection*: VisualSelection # Visual mode selection state
@@ -132,3 +138,17 @@ type
     showCursorLine*: bool # Whether to highlight the cursor line
     showSyntax*: bool # Whether to apply syntax highlighting
     showIndentationLines*: bool # Whether to show indentation guide lines
+    # Search behavior settings
+    ignorecase*: bool # Ignore case in search patterns
+    smartcase*: bool # Override ignorecase if search pattern contains uppercase letters
+    incsearch*: bool # Show search matches as you type
+    hlsearch*: bool # Highlight all search matches in the buffer
+    hlsearchTempDisabled*: bool # Temporarily disable highlight (like :nohlsearch in Vim)
+    lastKeyWasEscape*: bool
+      # Track if last key was Escape (for double-Escape to clear highlight)
+    searchStartPos*: BufferPosition
+      # Cursor position when search mode started (for incsearch cancellation)
+    searchDirection*: SearchDirection # Direction of current search (/ or ?)
+    searchHistory*: seq[string] # Search history (most recent first)
+    searchHistoryIndex*: int
+      # Current position in search history (-1 when not navigating history)

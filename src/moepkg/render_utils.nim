@@ -51,6 +51,11 @@ let
     bg: ColorValue(kind: Indexed, indexed: Color.Blue),
     modifiers: {},
   )
+  searchHighlightStyle* = Style(
+    fg: ColorValue(kind: Indexed, indexed: Color.Black),
+    bg: ColorValue(kind: Indexed, indexed: Color.Yellow),
+    modifiers: {},
+  )
   lineNumStyle* = Style(
     fg: ColorValue(kind: Indexed, indexed: Color.BrightBlack),
     bg: ColorValue(kind: Default),

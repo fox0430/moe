@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-## Command line argument parsing for moe editor
+## Command line argument parsing
 ##
 ## This module handles parsing of command line arguments and provides
 ## configuration for the editor startup.
@@ -52,6 +52,7 @@ proc parseCmdLine*(): CmdLineConfig =
   ##     echo "Debug mode enabled"
   result = CmdLineConfig(debugEnabled: false, filePath: "")
 
+  # TODO: Add version
   for i in 1 .. paramCount():
     let arg = paramStr(i)
     case arg

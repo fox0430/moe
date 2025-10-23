@@ -21,7 +21,7 @@ import std/[strformat, monotimes, times]
 
 import pkg/[celina, results]
 
-import moepkg/[editor, handler, modes, logger, cmdline]
+import moepkg/[editor, handler, modes, logger, cmdline, search_utils]
 
 proc handleResize(e: Editor) =
   ## Debounce resize events to prevent terminal buffer overflow
@@ -95,6 +95,11 @@ proc main() =
     app.setCursor(editor.state.screenCursor.x, editor.state.screenCursor.y)
 
   app.run()
+
+  # Save search history before shutdown
+  let r = saveSearchHistory(editor.state.searchHistory)
+  if r.isErr:
+    logError("moe", r.error)
 
   # Clean up logger
   if config.debugEnabled:

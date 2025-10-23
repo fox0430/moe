@@ -354,6 +354,7 @@ proc updateViewport*(
 
   # Vertical scrolling - handle line wrap mode differently
   if lineWrap and not buffer.isNil:
+    logDebug("viewport", "updateViewport: LINE WRAP MODE")
     # Line wrap mode: calculate screen positions
     let maxWidth = max(1, mgr.viewport.width - lineNumOffset)
 
@@ -384,17 +385,40 @@ proc updateViewport*(
         if mgr.viewport.topLine < clampedCursorY:
           mgr.viewport.topLine += 1
   else:
+    logDebug("viewport", "updateViewport: NO WRAP MODE")
     # No line wrap: simple logic
     if clampedCursorY < mgr.viewport.topLine:
       # Cursor moved above viewport - scroll up
+      logDebug(
+        "viewport",
+        "Cursor above viewport: clampedCursorY=" & $clampedCursorY & " topLine=" &
+          $mgr.viewport.topLine,
+      )
       mgr.viewport.topLine = clampedCursorY
     elif clampedCursorY >=
         mgr.viewport.topLine + mgr.viewport.height - actualReservedLines:
       # Cursor moved below viewport - scroll down (account for status and command lines)
+      logDebug(
+        "viewport",
+        "Cursor below viewport: clampedCursorY=" & $clampedCursorY & " threshold=" &
+          $(mgr.viewport.topLine + mgr.viewport.height - actualReservedLines),
+      )
       let
         newTopLine = clampedCursorY - mgr.viewport.height + actualReservedLines + 1
         maxTopLine = max(0, lineCount - mgr.viewport.height + actualReservedLines)
+      logDebug(
+        "viewport",
+        "Calculated newTopLine=" & $newTopLine & " maxTopLine=" & $maxTopLine,
+      )
       mgr.viewport.topLine = max(0, min(maxTopLine, newTopLine))
+      logDebug("viewport", "Final topLine=" & $mgr.viewport.topLine)
+    else:
+      logDebug(
+        "viewport",
+        "Cursor within viewport: clampedCursorY=" & $clampedCursorY & " range=[" &
+          $mgr.viewport.topLine & ", " &
+          $(mgr.viewport.topLine + mgr.viewport.height - actualReservedLines - 1) & "]",
+      )
 
   # Horizontal scrolling - keep cursor visible (disabled in wrap mode)
   if not lineWrap:

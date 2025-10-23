@@ -34,11 +34,13 @@ suite "GapBuffer - Basic Operations":
     check gb[1] == "world"
 
   test "newGapBuffer with trailing newline":
+    # In the editor design, trailing newlines are NOT stored as empty lines
+    # Instead, they're tracked by the endOfLine flag in TextBuffer
+    # The buffer stores lines as separators, not terminators
     let gb = newGapBuffer("hello\nworld\n")
-    check gb.len == 3
+    check gb.len == 2 # Two lines: "hello" and "world"
     check gb[0] == "hello"
     check gb[1] == "world"
-    check gb[2] == ""
 
   test "len returns line count":
     let gb = newGapBuffer("line1\nline2\nline3")
@@ -203,15 +205,15 @@ suite "GapBuffer - Replace Operations":
 suite "GapBuffer - String Conversion":
   test "toString single line":
     let gb = newGapBuffer("test")
-    check $gb == "test\n" # Each line ends with newline
+    check $gb == "test" # Last line has no trailing newline
 
   test "toString multiple lines":
     let gb = newGapBuffer("first\nsecond\nthird")
-    check $gb == "first\nsecond\nthird\n" # Each line ends with newline
+    check $gb == "first\nsecond\nthird" # Last line has no trailing newline
 
   test "toString empty buffer":
     let gb = newGapBuffer("")
-    check $gb == "\n" # Empty buffer has one empty line with newline
+    check $gb == "" # Empty buffer returns empty string
 
 suite "GapBuffer - Clear":
   test "clear resets to empty buffer":
@@ -368,7 +370,7 @@ suite "GapBuffer - Unicode/Multibyte Support":
   test "newGapBuffer with multibyte text preserves content":
     let text = "日本語とEnglishと🎌"
     let gb = newGapBuffer(text)
-    check $gb == text & "\n" # Each line ends with newline
+    check $gb == text # Last line has no trailing newline
     check gb.len == 1
     check gb[0] == text
 
@@ -403,7 +405,7 @@ suite "GapBuffer - Unicode/Multibyte Support":
 
   test "toString with multibyte multiline content":
     let gb = newGapBuffer("日本語\nEmoji🌍\nMixed混合")
-    check $gb == "日本語\nEmoji🌍\nMixed混合\n" # Each line ends with newline
+    check $gb == "日本語\nEmoji🌍\nMixed混合" # Last line has no trailing newline
 
   test "byte length vs character length awareness":
     let gb = newGapBuffer("abc")

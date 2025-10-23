@@ -41,6 +41,10 @@ type
     cmrVSplit # Vertical split window
     cmrHSplit # Horizontal split window
     cmrSetMultiStatusLine # Set multi status line
+    cmrSetIgnoreCase # Set ignorecase option
+    cmrSetSmartCase # Set smartcase option
+    cmrSetIncSearch # Set incsearch option
+    cmrSetHlSearch # Set hlsearch option
     cmrSave # Save file
     cmrSaveAndQuit # Save file and quit
     cmrError # Command error
@@ -68,6 +72,14 @@ type
       hsplitFilename*: Option[string]
     of cmrSetMultiStatusLine:
       enabled*: bool
+    of cmrSetIgnoreCase:
+      ignorecaseEnabled*: bool
+    of cmrSetSmartCase:
+      smartcaseEnabled*: bool
+    of cmrSetIncSearch:
+      incsearchEnabled*: bool
+    of cmrSetHlSearch:
+      hlsearchEnabled*: bool
     of cmrSave:
       saveFilename*: Option[string]
     of cmrSaveAndQuit:
@@ -168,6 +180,22 @@ proc executeSet*(
     return CommandModeResult(kind: cmrSetMultiStatusLine, enabled: true)
   of "nomultistatusline":
     return CommandModeResult(kind: cmrSetMultiStatusLine, enabled: false)
+  of "ignorecase", "ic":
+    return CommandModeResult(kind: cmrSetIgnoreCase, ignorecaseEnabled: true)
+  of "noignorecase", "noic":
+    return CommandModeResult(kind: cmrSetIgnoreCase, ignorecaseEnabled: false)
+  of "smartcase", "scs":
+    return CommandModeResult(kind: cmrSetSmartCase, smartcaseEnabled: true)
+  of "nosmartcase", "noscs":
+    return CommandModeResult(kind: cmrSetSmartCase, smartcaseEnabled: false)
+  of "incsearch", "is":
+    return CommandModeResult(kind: cmrSetIncSearch, incsearchEnabled: true)
+  of "noincsearch", "nois":
+    return CommandModeResult(kind: cmrSetIncSearch, incsearchEnabled: false)
+  of "hlsearch", "hls":
+    return CommandModeResult(kind: cmrSetHlSearch, hlsearchEnabled: true)
+  of "nohlsearch", "nohls":
+    return CommandModeResult(kind: cmrSetHlSearch, hlsearchEnabled: false)
   else:
     # TODO: Implement other settings management
     let optionStr =

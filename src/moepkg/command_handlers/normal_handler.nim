@@ -103,6 +103,7 @@ proc handleModeSwitch*(
     targetMode: EditorMode,
     state: EditorState,
     buffer: TextBuffer,
+    commandName: string = "",
 ): NormalModeResult =
   ## Handle mode switching commands
   case targetMode
@@ -112,6 +113,19 @@ proc handleModeSwitch*(
     # Initialize command mode state
     state.commandText = ":"
     return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Command))
+  of EditorMode.Search:
+    # Initialize search mode state
+    state.searchText = ""
+    # Save current cursor position for incsearch cancellation
+    state.searchStartPos = state.cursor
+    # Set search direction based on command name
+    if commandName == "switch-to-search-backward":
+      state.searchDirection = Backward
+    else:
+      state.searchDirection = Forward
+    # Reset history navigation index
+    state.searchHistoryIndex = -1
+    return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Search))
   of EditorMode.Visual:
     # Initialize visual selection at current cursor position
     state.initSelection(buffer)
@@ -259,7 +273,7 @@ proc handleNormalModeKey*(
     else:
       return NormalModeResult(kind: nmrError, errorMessage: cmdResult.error)
   of ctModeSwitch:
-    return handler.handleModeSwitch(cmd.targetMode, state, buffer)
+    return handler.handleModeSwitch(cmd.targetMode, state, buffer, cmd.name)
   of ctAction:
     # Handle various actions based on command ID
     case cmd.commandId
@@ -290,9 +304,19 @@ proc handleNormalModeKey*(
       else:
         return NormalModeResult(kind: nmrError, errorMessage: r.error)
     else:
-      return NormalModeResult(
-        kind: nmrError, errorMessage: "Unknown action: " & cmd.commandId
+      # Try to execute using command registry for other actions
+      let ctx = CommandContext(
+        buffer: buffer,
+        state: state,
+        viewport: viewport,
+        motionController: handler.motionController,
+        keyBindingRegistry: handler.keyBindingRegistry,
       )
+      let cmdResult = handler.commandRegistry.execute(ctx, cmd.commandId, cmd.args)
+      if cmdResult.isOk:
+        return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+      else:
+        return NormalModeResult(kind: nmrError, errorMessage: cmdResult.error)
   else:
     return NormalModeResult(
       kind: nmrError, errorMessage: "Unsupported command type in Normal mode"

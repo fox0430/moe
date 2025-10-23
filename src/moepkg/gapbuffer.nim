@@ -49,6 +49,7 @@ proc newGapBuffer*(initialCapacity: int = DEFAULT_GAP_SIZE): GapBuffer =
 
 proc newGapBuffer*(text: string): GapBuffer =
   # Parse text into lines (POSIX standard: newline is line terminator, not separator)
+  # The trailing newline is NOT stored as an empty line - it's managed by TextBuffer.endOfLine
   var
     linesList: seq[string]
     currentLine = ""
@@ -323,8 +324,8 @@ proc deleteAtLineCol*(gb: GapBuffer, line: int, col: int, count: int = 1) =
 
 proc `$`*(gb: GapBuffer): string =
   ## Convert entire buffer to string
-  ## Each line is followed by a newline, including the last line
-  ## This preserves user-created empty lines at the end of the buffer
+  ## Each line gets a newline EXCEPT the final line (unless it's empty)
+  ## Empty final line represents explicit trailing newline in the original content
   if gb.len == 0:
     return ""
 
@@ -334,7 +335,10 @@ proc `$`*(gb: GapBuffer): string =
       line = gb.lines[physicalLine]
 
     result.add(line)
-    result.add('\n')
+    # Add newline: between all lines, and after last line if it's empty
+    let isLastLine = i == gb.len - 1
+    if not isLastLine or (isLastLine and line.len == 0 and gb.len > 1):
+      result.add('\n')
 
 proc clear*(gb: GapBuffer) =
   ## Clear all content and reset to single empty line

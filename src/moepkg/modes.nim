@@ -26,6 +26,7 @@ type
     Command
     Visual
     Replace
+    Search
 
   ModeTransition* = object
     newMode*: Option[EditorMode]
@@ -38,3 +39,4 @@ proc modeLabel*(m: EditorMode): string =
   of EditorMode.Command: "COMMAND"
   of EditorMode.Visual: "VISUAL"
   of EditorMode.Replace: "REPLACE"
+  of EditorMode.Search: "SEARCH"

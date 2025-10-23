@@ -24,7 +24,7 @@ import pkg/[celina, results]
 import
   buffer, cursor, types, commands, keybindings, commandregistry, modes, commandline,
   commandconfig, statusline, windowmanager, unicode_utils, render_utils, sidebar,
-  gitdiff, highlight, logger, config, configloader, keybindconfig
+  gitdiff, highlight, logger, config, configloader, keybindconfig, search_utils
 import command_handlers/[handler_manager, visual_handler]
 
 type
@@ -575,6 +575,18 @@ proc newEditor*(): Editor =
       showCursorLine: editorConfig.standard.cursorLine,
       showSyntax: editorConfig.standard.syntax,
       showIndentationLines: editorConfig.standard.indentationLines,
+      # Search settings
+      ignorecase: true,
+      smartcase: true,
+      incsearch: true, # Enable incremental search by default
+      hlsearch: true, # Enable search highlighting by default
+      hlsearchTempDisabled: false, # Highlight is not disabled initially
+      lastKeyWasEscape: false, # Track double-Escape for clearing highlight
+      searchStartPos: BufferPosition(line: 0, column: 0),
+        # Will be set when entering search mode
+      searchDirection: Forward, # Default to forward search
+      searchHistory: loadSearchHistory(), # Load search history from disk
+      searchHistoryIndex: -1, # Not navigating history initially
     ),
     viewport: ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 20, x: 0, y: 0),
     commandRegistry: cmdRegistry,
@@ -814,6 +826,62 @@ proc getSelectionStyle(
   elif isCursorPos:
     # Cursor position: always use gray foreground color
     cursorCharStyle
+  elif e.state.hlsearch and not e.state.hlsearchTempDisabled:
+    # Determine which search pattern to use:
+    # - In Search mode with text: use current searchText (incremental highlight)
+    # - In Search mode without text: no highlight (user is starting a new search)
+    # - Not in Search mode: use lastSearchText (persistent highlight from previous search)
+    let searchPattern =
+      if e.state.mode == EditorMode.Search:
+        # In Search mode: only highlight if user has typed something
+        if e.state.searchText.len > 0:
+          e.state.searchText
+        else:
+          "" # No highlight when starting a new search
+      else:
+        # Not in Search mode: use last search pattern
+        e.state.lastSearchText
+
+    # Only apply highlight if we have a valid search pattern
+    if searchPattern.len > 0:
+      # Apply smartcase logic
+      let shouldIgnoreCase =
+        shouldIgnoreCase(searchPattern, e.state.ignorecase, e.state.smartcase)
+
+      if buffer.isPositionInSearchMatch(pos, searchPattern, shouldIgnoreCase):
+        searchHighlightStyle
+      elif e.state.showSyntax and not buffer.highlight.isNil:
+        # Apply syntax highlighting from buffer
+        # Update highlight if needed (after text edits)
+        buffer.updateHighlight()
+        let colorPair = buffer.highlight.getColorPair(pos.line, pos.column)
+        var style = colorIndexToStyle(colorPair)
+        # Apply cursor line highlighting if enabled and on cursor line
+        if e.state.showCursorLine and pos.line == cursorLine:
+          style.bg = cursorLineHighlightStyle.bg
+        style
+      else:
+        # Apply cursor line highlighting if enabled and on cursor line
+        if e.state.showCursorLine and pos.line == cursorLine:
+          cursorLineHighlightStyle
+        else:
+          normalStyle
+    elif e.state.showSyntax and not buffer.highlight.isNil:
+      # Apply syntax highlighting from buffer
+      # Update highlight if needed (after text edits)
+      buffer.updateHighlight()
+      let colorPair = buffer.highlight.getColorPair(pos.line, pos.column)
+      var style = colorIndexToStyle(colorPair)
+      # Apply cursor line highlighting if enabled and on cursor line
+      if e.state.showCursorLine and pos.line == cursorLine:
+        style.bg = cursorLineHighlightStyle.bg
+      style
+    else:
+      # Apply cursor line highlighting if enabled and on cursor line
+      if e.state.showCursorLine and pos.line == cursorLine:
+        cursorLineHighlightStyle
+      else:
+        normalStyle
   elif e.state.showSyntax and not buffer.highlight.isNil:
     # Apply syntax highlighting from buffer
     # Update highlight if needed (after text edits)
@@ -1527,6 +1595,12 @@ proc renderBottomLines(e: Editor, buffer: var Buffer) =
   if e.state.mode == EditorMode.Command:
     buffer.setString(buffer.area.x, commandLineY, e.state.commandText, commandStyle)
     e.state.screenCursor.x = e.state.commandText.len
+    e.state.screenCursor.y = buffer.area.height - 1
+  elif e.state.mode == EditorMode.Search:
+    let searchChar = if e.state.searchDirection == Forward: "/" else: "?"
+    let searchPrompt = searchChar & e.state.searchText
+    buffer.setString(buffer.area.x, commandLineY, searchPrompt, commandStyle)
+    e.state.screenCursor.x = searchPrompt.len
     e.state.screenCursor.y = buffer.area.height - 1
   else:
     if e.state.statusMessage.len > 0:

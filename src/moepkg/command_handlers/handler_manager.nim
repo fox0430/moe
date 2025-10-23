@@ -44,6 +44,10 @@ type
     hrVSplit # Vertical split window
     hrHSplit # Horizontal split window
     hrSetMultiStatusLine # Set multi status line
+    hrSetIgnoreCase # Set ignorecase option
+    hrSetSmartCase # Set smartcase option
+    hrSetIncSearch # Set incsearch option
+    hrSetHlSearch # Set hlsearch option
     hrSave # Save file
     hrSaveAndQuit # Save file and quit
     hrUnhandled # Command was not handled
@@ -78,6 +82,14 @@ type
       hsplitFilename*: Option[string]
     of hrSetMultiStatusLine:
       enabled*: bool
+    of hrSetIgnoreCase:
+      ignorecaseEnabled*: bool
+    of hrSetSmartCase:
+      smartcaseEnabled*: bool
+    of hrSetIncSearch:
+      incsearchEnabled*: bool
+    of hrSetHlSearch:
+      hlsearchEnabled*: bool
     of hrSave:
       saveFilename*: Option[string]
     of hrSaveAndQuit:
@@ -219,6 +231,14 @@ proc handleCommandMode*(
     return HandlerResult(kind: hrHSplit, hsplitFilename: r.hsplitFilename)
   of cmrSetMultiStatusLine:
     return HandlerResult(kind: hrSetMultiStatusLine, enabled: r.enabled)
+  of cmrSetIgnoreCase:
+    return HandlerResult(kind: hrSetIgnoreCase, ignorecaseEnabled: r.ignorecaseEnabled)
+  of cmrSetSmartCase:
+    return HandlerResult(kind: hrSetSmartCase, smartcaseEnabled: r.smartcaseEnabled)
+  of cmrSetIncSearch:
+    return HandlerResult(kind: hrSetIncSearch, incsearchEnabled: r.incsearchEnabled)
+  of cmrSetHlSearch:
+    return HandlerResult(kind: hrSetHlSearch, hlsearchEnabled: r.hlsearchEnabled)
   of cmrSave:
     return HandlerResult(kind: hrSave, saveFilename: r.saveFilename)
   of cmrSaveAndQuit:
@@ -303,6 +323,10 @@ proc handleEvent*(
     # Command mode is handled differently - through text input
     # This should not be called for command mode key events
     return HandlerResult(kind: hrUnhandled)
+  of EditorMode.Search:
+    # Search mode is handled differently - through text input
+    # This should not be called for search mode key events
+    return HandlerResult(kind: hrUnhandled)
   of EditorMode.Visual:
     return manager.handleVisualMode(buffer, state, viewport, keyCombo)
   of EditorMode.Replace:
@@ -339,6 +363,22 @@ proc shouldHSplit*(hrResult: HandlerResult): bool =
 proc shouldSetMultiStatusLine*(hrResult: HandlerResult): bool =
   ## Check if we should set multi status line mode
   hrResult.kind == hrSetMultiStatusLine
+
+proc shouldSetIgnoreCase*(hrResult: HandlerResult): bool =
+  ## Check if we should set ignorecase option
+  hrResult.kind == hrSetIgnoreCase
+
+proc shouldSetSmartCase*(hrResult: HandlerResult): bool =
+  ## Check if we should set smartcase option
+  hrResult.kind == hrSetSmartCase
+
+proc shouldSetIncSearch*(hrResult: HandlerResult): bool =
+  ## Check if we should set incsearch option
+  hrResult.kind == hrSetIncSearch
+
+proc shouldSetHlSearch*(hrResult: HandlerResult): bool =
+  ## Check if we should set hlsearch option
+  hrResult.kind == hrSetHlSearch
 
 proc shouldSave*(hrResult: HandlerResult): bool =
   ## Check if we should save the file
@@ -387,6 +427,22 @@ proc getHSplitFilename*(hrResult: HandlerResult): Option[string] =
 proc getMultiStatusLineEnabled*(hrResult: HandlerResult): bool =
   ## Get multi status line enabled setting
   if hrResult.kind == hrSetMultiStatusLine: hrResult.enabled else: false
+
+proc getIgnoreCaseEnabled*(hrResult: HandlerResult): bool =
+  ## Get ignorecase enabled setting
+  if hrResult.kind == hrSetIgnoreCase: hrResult.ignorecaseEnabled else: false
+
+proc getSmartCaseEnabled*(hrResult: HandlerResult): bool =
+  ## Get smartcase enabled setting
+  if hrResult.kind == hrSetSmartCase: hrResult.smartcaseEnabled else: false
+
+proc getIncSearchEnabled*(hrResult: HandlerResult): bool =
+  ## Get incsearch enabled setting
+  if hrResult.kind == hrSetIncSearch: hrResult.incsearchEnabled else: false
+
+proc getHlSearchEnabled*(hrResult: HandlerResult): bool =
+  ## Get hlsearch enabled setting
+  if hrResult.kind == hrSetHlSearch: hrResult.hlsearchEnabled else: false
 
 proc getSaveFilename*(hrResult: HandlerResult): Option[string] =
   ## Get filename for save operation

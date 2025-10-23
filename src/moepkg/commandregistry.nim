@@ -26,7 +26,7 @@ import std/[tables, options, strutils]
 
 import pkg/results
 
-import types, buffer, motion, keybindings, modes
+import types, buffer, motion, keybindings, modes, cursor, search_utils
 
 import command_handlers/[visual_commands, insert_commands, normal_commands]
 
@@ -786,6 +786,81 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
         return err(r.error)
       # TODO: Apply cursor position from r.value to active window
       return Result[(), string].ok (),
+    0,
+    0,
+  )
+
+  # Helper proc for executing search and updating cursor/viewport
+  # Reduces code duplication between search.next and search.prev
+  proc executeSearch(
+      ctx: CommandContext,
+      searchText: string,
+      searchProc: proc(
+        b: TextBuffer, text: string, pos: BufferPosition, ignorecase: bool
+      ): Option[BufferPosition],
+  ): Result[(), string] =
+    # Apply smartcase logic
+    let shouldIgnoreCase =
+      shouldIgnoreCase(searchText, ctx.state.ignorecase, ctx.state.smartcase)
+
+    # Execute the search (findNext or findPrev)
+    let searchResult =
+      searchProc(ctx.buffer, searchText, ctx.state.cursor, shouldIgnoreCase)
+
+    if searchResult.isSome:
+      let newPos = searchResult.get
+      ctx.state.cursor = newPos
+
+      # Update viewport to follow cursor
+      let lineCount = ctx.buffer.len
+      let cursorPos = CursorPosition(x: newPos.column, y: newPos.line)
+
+      ctx.motionController.viewportManager.updateViewport(
+        cursorPos,
+        lineCount,
+        ctx.state.showStatusLine,
+        ctx.state.viewportReservedLines,
+        false, # Force immediate scroll for search
+        ctx.buffer,
+        0, # lineNumOffset
+      )
+
+      ctx.state.statusMessage = "Found: " & searchText
+      ctx.state.needsFullRedraw = true
+      return Result[(), string].ok ()
+    else:
+      ctx.state.statusMessage = "Pattern not found: " & searchText
+      return err("Pattern not found")
+
+  # Search navigation commands
+  registry.register(
+    custom("search.next"),
+    "Search Next",
+    "Find next occurrence of last search",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      if ctx.state.lastSearchText.len == 0:
+        return err("No previous search")
+
+      # Re-enable highlight when using n/N
+      ctx.state.hlsearchTempDisabled = false
+
+      return executeSearch(ctx, ctx.state.lastSearchText, findNext),
+    0,
+    0,
+  )
+
+  registry.register(
+    custom("search.prev"),
+    "Search Previous",
+    "Find previous occurrence of last search",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      if ctx.state.lastSearchText.len == 0:
+        return err("No previous search")
+
+      # Re-enable highlight when using n/N
+      ctx.state.hlsearchTempDisabled = false
+
+      return executeSearch(ctx, ctx.state.lastSearchText, findPrev),
     0,
     0,
   )
