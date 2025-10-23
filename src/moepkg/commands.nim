@@ -21,7 +21,7 @@ import std/options
 
 import pkg/results
 
-import types, buffer, motion, commandregistry, keybindings
+import types, buffer, motion, commandregistry, keybindings, config
 
 type CommandExecutor* = ref object
   motionController*: MotionController
@@ -30,11 +30,13 @@ type CommandExecutor* = ref object
   viewport*: ViewPort
   commandRegistry*: CommandRegistry
   keyBindingRegistry*: KeyBindingRegistry
+  clipboardConfig*: ClipboardConfig
 
 proc newCommandExecutor*(
     buffer: buffer.TextBuffer,
     state: EditorState,
     viewport: ViewPort,
+    clipboardConfig: ClipboardConfig = ClipboardConfig(enable: false, tool: ctXclip),
     commandRegistry: Option[CommandRegistry] = none(CommandRegistry),
     keyBindingRegistry: Option[KeyBindingRegistry] = none(KeyBindingRegistry),
 ): CommandExecutor =
@@ -64,6 +66,7 @@ proc newCommandExecutor*(
     viewport: viewport,
     commandRegistry: cmdReg,
     keyBindingRegistry: keyReg,
+    clipboardConfig: clipboardConfig,
   )
 
 proc execute*(e: CommandExecutor, command: string): Result[(), string] =
@@ -76,6 +79,7 @@ proc execute*(e: CommandExecutor, command: string): Result[(), string] =
     viewport: e.viewport,
     motionController: e.motionController,
     keyBindingRegistry: nil, # Not available in this context
+    clipboardConfig: e.clipboardConfig,
   )
 
   # Execute through command registry (handles both commands and aliases)
@@ -96,6 +100,7 @@ proc executeKeybinding*(
     viewport: e.viewport,
     motionController: e.motionController,
     keyBindingRegistry: nil, # Not available in this context
+    clipboardConfig: e.clipboardConfig,
   )
 
   return e.commandRegistry.executeCommand(ctx, binding)

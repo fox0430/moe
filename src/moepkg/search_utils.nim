@@ -65,7 +65,7 @@ proc getSearchHistoryPath*(): Result[Path, string] =
   ## Get the path to the search history file
   ## Returns: ~/$XDG_CACHE_HOME/moe/search_history
   let cacheDir = appdirs.getCacheDir()
-  if len($cacheDir) == 0:
+  if len(cacheDir.string) == 0:
     return Result[Path, string].err "Failed to get history path"
 
   var p = cacheDir
@@ -83,7 +83,7 @@ proc loadSearchHistory*(): seq[string] =
     logError("search_utils", historyPath.error)
     return
 
-  let historyPathStr = $historyPath.get
+  let historyPathStr = historyPath.get.string
 
   if not fileExists(historyPathStr):
     logDebug("search_utils", fmt"history file not found: {historyPathStr}")
@@ -115,14 +115,14 @@ proc saveSearchHistory*(history: seq[string]): Result[(), string] =
 
   let
     pathSplited = historyPath.get.splitPath
-    pathHeadStr = $pathSplited.head
+    pathHeadStr = pathSplited.head.string
   if not dirExists(pathHeadStr):
     try:
       createDir(pathHeadStr)
     except CatchableError as e:
       logError("search_utils", fmt"Failed to create dir: {e.msg}: {pathHeadStr}")
 
-  let historyPathStr = $historyPath.get
+  let historyPathStr = historyPath.get.string
 
   if historyPathStr.len == 0:
     logDebug("search_utils", fmt"history file not found: {historyPathStr}")

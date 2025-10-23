@@ -222,6 +222,284 @@ proc tillCharBackward(
   if result.x < currentPos.x:
     result.x = result.x + 1
 
+# Helper functions for word motion
+proc isWordChar(r: Rune): bool =
+  ## Check if a character is part of a word (alphanumeric or underscore)
+  let c = r.int32
+  return
+    (c >= 'a'.ord and c <= 'z'.ord) or (c >= 'A'.ord and c <= 'Z'.ord) or
+    (c >= '0'.ord and c <= '9'.ord) or c == '_'.ord
+
+proc isWhitespace(r: Rune): bool =
+  ## Check if a character is whitespace
+  let c = r.int32
+  return c == ' '.ord or c == '\t'.ord or c == '\n'.ord or c == '\r'.ord
+
+proc moveWordForward(
+    e: MotionExecutor, currentPos: CursorPosition, count: int
+): CursorPosition =
+  ## Move to the start of the next word (w motion)
+  ## In Vim, a word is either:
+  ## 1. A sequence of word characters (letters, digits, underscore)
+  ## 2. A sequence of non-word, non-whitespace characters (symbols)
+  ##
+  ## Note: Uses toRunes() for simplicity. For most lines (<1000 chars),
+  ## the overhead is negligible compared to the clarity and correctness.
+  result = currentPos
+  var iterCount = count
+
+  while iterCount > 0:
+    # Get current line
+    if result.y >= e.buffer.len:
+      break
+
+    let line = e.buffer.getLine(result.y)
+    # Remove trailing newline if present for proper rune processing
+    let lineContent =
+      if line.len > 0 and line[^1] == '\n':
+        line[0 ..< ^1]
+      else:
+        line
+    let runes = lineContent.toRunes()
+    var pos = result.x
+
+    # Skip current word/symbol sequence
+    if pos < runes.len:
+      let firstCh = runes[pos]
+      if isWordChar(firstCh):
+        # Skip word characters
+        while pos < runes.len and isWordChar(runes[pos]):
+          pos += 1
+      elif not isWhitespace(firstCh):
+        # Skip symbol characters (non-word, non-whitespace)
+        while pos < runes.len and not isWordChar(runes[pos]) and
+            not isWhitespace(runes[pos]):
+          pos += 1
+
+    # Skip whitespace after the word/symbols
+    while pos < runes.len and isWhitespace(runes[pos]):
+      pos += 1
+
+    # If we reached end of line, move to next line
+    if pos >= runes.len:
+      if result.y + 1 < e.buffer.len:
+        result.y += 1
+        result.x = 0
+        # Skip leading whitespace on new line
+        let nextLine = e.buffer.getLine(result.y)
+        let nextContent =
+          if nextLine.len > 0 and nextLine[^1] == '\n':
+            nextLine[0 ..< ^1]
+          else:
+            nextLine
+        let nextRunes = nextContent.toRunes()
+        while result.x < nextRunes.len and isWhitespace(nextRunes[result.x]):
+          result.x += 1
+      else:
+        # At last line, stay at end
+        result.x = max(0, runes.len - 1)
+    else:
+      result.x = pos
+
+    iterCount -= 1
+
+proc moveWordBackward(
+    e: MotionExecutor, currentPos: CursorPosition, count: int
+): CursorPosition =
+  ## Move to the start of the previous word (b motion)
+  ## Same word definition as moveWordForward
+  result = currentPos
+  var iterCount = count
+
+  while iterCount > 0:
+    if result.y < 0:
+      break
+
+    var pos = result.x
+
+    # Move back one position first
+    if pos > 0:
+      pos -= 1
+    elif result.y > 0:
+      # Move to previous line
+      result.y -= 1
+      let prevLine = e.buffer.getLine(result.y)
+      let prevContent =
+        if prevLine.len > 0 and prevLine[^1] == '\n':
+          prevLine[0 ..< ^1]
+        else:
+          prevLine
+      let prevRunes = prevContent.toRunes()
+      pos = max(0, prevRunes.len - 1)
+    else:
+      # At beginning of buffer
+      break
+
+    let currentLine = e.buffer.getLine(result.y)
+    let lineContent =
+      if currentLine.len > 0 and currentLine[^1] == '\n':
+        currentLine[0 ..< ^1]
+      else:
+        currentLine
+    let runes = lineContent.toRunes()
+
+    # Skip whitespace backwards
+    while pos > 0 and isWhitespace(runes[pos]):
+      pos -= 1
+
+    # Now we're on a non-whitespace character
+    # Skip backwards through the word/symbol sequence to find its start
+    if pos >= 0 and pos < runes.len:
+      if isWordChar(runes[pos]):
+        # Skip word characters backwards
+        while pos > 0 and isWordChar(runes[pos - 1]):
+          pos -= 1
+      elif not isWhitespace(runes[pos]):
+        # Skip symbol characters backwards
+        while pos > 0 and not isWordChar(runes[pos - 1]) and
+            not isWhitespace(runes[pos - 1]):
+          pos -= 1
+
+    result.x = pos
+    iterCount -= 1
+
+proc moveWordEnd(
+    e: MotionExecutor, currentPos: CursorPosition, count: int
+): CursorPosition =
+  ## Move to the end of the next word (e motion)
+  ## Same word definition as moveWordForward
+  result = currentPos
+  var iterCount = count
+
+  while iterCount > 0:
+    if result.y >= e.buffer.len:
+      break
+
+    var pos = result.x
+    var currentLine = e.buffer.getLine(result.y)
+    var lineContent =
+      if currentLine.len > 0 and currentLine[^1] == '\n':
+        currentLine[0 ..< ^1]
+      else:
+        currentLine
+    var runes = lineContent.toRunes()
+
+    # Move forward one position first
+    if pos + 1 < runes.len:
+      pos += 1
+    elif result.y + 1 < e.buffer.len:
+      # Move to next line
+      result.y += 1
+      pos = 0
+      currentLine = e.buffer.getLine(result.y)
+      lineContent =
+        if currentLine.len > 0 and currentLine[^1] == '\n':
+          currentLine[0 ..< ^1]
+        else:
+          currentLine
+      runes = lineContent.toRunes()
+    else:
+      # At end of buffer
+      break
+
+    # Skip whitespace
+    while pos < runes.len and isWhitespace(runes[pos]):
+      pos += 1
+      if pos >= runes.len and result.y + 1 < e.buffer.len:
+        result.y += 1
+        pos = 0
+        currentLine = e.buffer.getLine(result.y)
+        lineContent =
+          if currentLine.len > 0 and currentLine[^1] == '\n':
+            currentLine[0 ..< ^1]
+          else:
+            currentLine
+        runes = lineContent.toRunes()
+
+    # Move to end of word/symbol sequence
+    if pos < runes.len:
+      if isWordChar(runes[pos]):
+        # Move to end of word characters
+        while pos + 1 < runes.len and isWordChar(runes[pos + 1]):
+          pos += 1
+      elif not isWhitespace(runes[pos]):
+        # Move to end of symbol characters
+        while pos + 1 < runes.len and not isWordChar(runes[pos + 1]) and
+            not isWhitespace(runes[pos + 1]):
+          pos += 1
+
+    result.x = pos
+    iterCount -= 1
+
+proc isBlankLine(line: string): bool =
+  ## Check if a line is blank (empty or contains only whitespace)
+  let content =
+    if line.len > 0 and line[^1] == '\n':
+      line[0 ..< ^1]
+    else:
+      line
+
+  if content.len == 0:
+    return true
+
+  # Check if all characters are whitespace
+  for r in content.toRunes():
+    if not isWhitespace(r):
+      return false
+  return true
+
+proc moveParagraphForward(
+    e: MotionExecutor, currentPos: CursorPosition, count: int
+): CursorPosition =
+  ## Move to next paragraph (} motion)
+  ## A paragraph is defined as a block of text separated by blank lines
+  result = currentPos
+  var iterCount = count
+
+  while iterCount > 0:
+    var lineIdx = result.y
+
+    # If we're on a blank line, skip blank lines
+    if lineIdx < e.buffer.len and isBlankLine(e.buffer.getLine(lineIdx)):
+      while lineIdx < e.buffer.len - 1 and isBlankLine(e.buffer.getLine(lineIdx)):
+        lineIdx += 1
+
+    # Now find the next blank line
+    while lineIdx < e.buffer.len - 1:
+      lineIdx += 1
+      if isBlankLine(e.buffer.getLine(lineIdx)):
+        break
+
+    result.y = lineIdx
+    result.x = 0
+    iterCount -= 1
+
+proc moveParagraphBackward(
+    e: MotionExecutor, currentPos: CursorPosition, count: int
+): CursorPosition =
+  ## Move to previous paragraph ({ motion)
+  ## A paragraph is defined as a block of text separated by blank lines
+  result = currentPos
+  var iterCount = count
+
+  while iterCount > 0:
+    var lineIdx = result.y
+
+    # If we're on a blank line, skip blank lines going backward
+    if lineIdx > 0 and isBlankLine(e.buffer.getLine(lineIdx)):
+      while lineIdx > 0 and isBlankLine(e.buffer.getLine(lineIdx)):
+        lineIdx -= 1
+
+    # Now find the previous blank line
+    while lineIdx > 0:
+      lineIdx -= 1
+      if isBlankLine(e.buffer.getLine(lineIdx)):
+        break
+
+    result.y = lineIdx
+    result.x = 0
+    iterCount -= 1
+
 proc calculateNewPosition*(
     e: MotionExecutor,
     currentPos: CursorPosition,
@@ -258,6 +536,19 @@ proc calculateNewPosition*(
     e.tillChar(currentPos, cmd.targetChar, cmd.count)
   of Motion.TillCharBackward:
     e.tillCharBackward(currentPos, cmd.targetChar, cmd.count)
+  of Motion.WordForward:
+    e.moveWordForward(currentPos, cmd.count)
+  of Motion.WordBackward:
+    e.moveWordBackward(currentPos, cmd.count)
+  of Motion.WordEnd:
+    e.moveWordEnd(currentPos, cmd.count)
+  of Motion.WordEndBackward:
+    # Not implemented yet, just return current position
+    currentPos
+  of Motion.ParagraphForward:
+    e.moveParagraphForward(currentPos, cmd.count)
+  of Motion.ParagraphBackward:
+    e.moveParagraphBackward(currentPos, cmd.count)
 
 proc newCursorManager*(state: EditorState): CursorManager =
   CursorManager(state: state)
@@ -483,3 +774,402 @@ proc executeMotion*(
 
   # Return the new cursor position
   return ok(BufferPosition(line: newPos.y, column: newPos.x))
+
+## Operator range calculation utilities
+
+proc calculateOperatorRange*(
+    buffer: TextBuffer, startPos: BufferPosition, endPos: BufferPosition, motion: Motion
+): OperatorRange =
+  ## Calculate the range affected by an operator+motion combination
+  ## Returns OperatorRange with proper start/end and linewise flag
+
+  # Determine if this is a linewise motion
+  let isLinewise =
+    motion in {
+      Motion.Up, Motion.Down, Motion.FirstLine, Motion.LastLine, Motion.PageUp,
+      Motion.PageDown, Motion.ParagraphForward, Motion.ParagraphBackward,
+    }
+
+  # Determine if this is an exclusive motion (Vim behavior)
+  # Exclusive motions do NOT include the character at endPos
+  let isExclusive =
+    motion in {
+      Motion.WordForward, # w
+      Motion.WordEnd, # e
+      Motion.WordBackward, # b
+      Motion.WordEndBackward, # ge
+      Motion.Right, # l (when used with operator)
+      Motion.Left, # h (when used with operator)
+    }
+
+  var range = OperatorRange(start: startPos, endPos: endPos, isLinewise: isLinewise)
+
+  # Ensure start comes before end
+  if range.start.line > range.endPos.line or
+      (
+        range.start.line == range.endPos.line and
+        range.start.column > range.endPos.column
+      ):
+    swap(range.start, range.endPos)
+
+  # For exclusive motions in characterwise mode, exclude the endPos character
+  # by moving endPos back by 1 column (this matches Vim's behavior)
+  if isExclusive and not isLinewise:
+    # Only adjust if we're not at the start of the range
+    if range.endPos.line == range.start.line and range.endPos.column > range.start.column:
+      # Same line - just move column back
+      range.endPos.column -= 1
+    elif range.endPos.line > range.start.line and range.endPos.column > 0:
+      # Different line - move column back
+      range.endPos.column -= 1
+    # Note: If endPos.column is 0 and we're on a different line,
+    # we need to move to the previous line's end
+    elif range.endPos.line > range.start.line and range.endPos.column == 0:
+      range.endPos.line -= 1
+      if range.endPos.line >= 0 and range.endPos.line < buffer.len:
+        let prevLine = buffer.getLine(range.endPos.line)
+        let prevContent =
+          if prevLine.len > 0 and prevLine[^1] == '\n':
+            prevLine[0 ..< ^1]
+          else:
+            prevLine
+        range.endPos.column = max(0, prevContent.charLen - 1)
+
+  # For linewise operations, extend to full lines
+  if isLinewise:
+    range.start.column = 0
+    if range.endPos.line < buffer.len:
+      let endLine = buffer.getLine(range.endPos.line)
+      range.endPos.column = endLine.charLen
+
+  return range
+
+proc extractRangeText*(buffer: TextBuffer, range: OperatorRange): string =
+  ## Extract text from the given range
+  ## Used for yank operations
+
+  var text = ""
+
+  if range.isLinewise:
+    # Extract entire lines
+    for lineIdx in range.start.line .. range.endPos.line:
+      if lineIdx < buffer.len:
+        let lineContent = buffer.getLine(lineIdx)
+        text.add(lineContent)
+        if lineContent.len == 0 or lineContent[^1] != '\n':
+          text.add("\n")
+  else:
+    # Extract character range
+    if range.start.line == range.endPos.line:
+      # Single line extraction
+      let line = buffer.getLine(range.start.line)
+      let startCol = min(range.start.column, line.charLen)
+      let endCol = min(range.endPos.column, line.charLen)
+      if startCol < line.charLen:
+        let runes = line.toRunes()
+        for i in startCol ..< endCol:
+          if i < runes.len:
+            text.add($runes[i])
+    else:
+      # Multi-line extraction
+      for lineIdx in range.start.line .. range.endPos.line:
+        if lineIdx < buffer.len:
+          let line = buffer.getLine(lineIdx)
+          if lineIdx == range.start.line:
+            # First line: from startCol to end
+            if range.start.column < line.charLen:
+              let runes = line.toRunes()
+              for i in range.start.column ..< runes.len:
+                text.add($runes[i])
+            text.add("\n")
+          elif lineIdx == range.endPos.line:
+            # Last line: from start to endCol
+            let runes = line.toRunes()
+            let endCol = min(range.endPos.column, runes.len)
+            for i in 0 ..< endCol:
+              text.add($runes[i])
+          else:
+            # Middle lines: entire line
+            text.add(line)
+            if line.len == 0 or line[^1] != '\n':
+              text.add("\n")
+
+  return text
+
+proc deleteRange*(buffer: TextBuffer, range: OperatorRange): Result[(), string] =
+  ## Delete text in the given range
+  ## Used for delete and change operations
+
+  if range.isLinewise:
+    # Delete entire lines
+    for i in 0 .. (range.endPos.line - range.start.line):
+      if range.start.line < buffer.len:
+        let deleteResult = buffer.deleteLine(range.start.line)
+        if deleteResult.isErr:
+          return err(deleteResult.error)
+  else:
+    # Delete character range using buffer.deleteRange
+    let deleteResult = buffer.deleteRange(range.start, range.endPos)
+    if deleteResult.isErr:
+      return err(deleteResult.error)
+
+  return ok(())
+
+## Text object range calculation
+
+proc findWordBoundaries(
+    buffer: TextBuffer, cursor: BufferPosition, inner: bool
+): Result[TextObjectRange, string] =
+  ## Find word boundaries for iw (inner word) or aw (a word)
+  ## inner=true: just the word
+  ## inner=false: word + trailing whitespace (or leading if no trailing)
+
+  if cursor.line < 0 or cursor.line >= buffer.len:
+    return err("Cursor position out of bounds")
+
+  let line = buffer.getLine(cursor.line)
+  let runes = line.toRunes()
+
+  if runes.len == 0:
+    return err("Empty line")
+
+  let cursorCol = min(cursor.column, runes.len - 1)
+
+  # Find start of word
+  var startCol = cursorCol
+  # If cursor is on whitespace, move to next word
+  if isWhitespace(runes[startCol]):
+    while startCol < runes.len and isWhitespace(runes[startCol]):
+      startCol.inc
+    if startCol >= runes.len:
+      return err("No word found")
+
+  # Now find the actual word start
+  while startCol > 0 and isWordChar(runes[startCol - 1]):
+    startCol.dec
+
+  # Find end of word
+  var endCol = startCol
+  while endCol < runes.len and isWordChar(runes[endCol]):
+    endCol.inc
+
+  if inner:
+    # Inner word: just the word itself
+    return ok(
+      TextObjectRange(
+        start: BufferPosition(line: cursor.line, column: startCol),
+        endPos: BufferPosition(line: cursor.line, column: endCol),
+        isLinewise: false,
+      )
+    )
+  else:
+    # Around word: word + trailing whitespace
+    var extendedEnd = endCol
+    while extendedEnd < runes.len and isWhitespace(runes[extendedEnd]):
+      extendedEnd.inc
+
+    # If no trailing whitespace, try leading
+    if extendedEnd == endCol and startCol > 0:
+      var extendedStart = startCol
+      while extendedStart > 0 and isWhitespace(runes[extendedStart - 1]):
+        extendedStart.dec
+      return ok(
+        TextObjectRange(
+          start: BufferPosition(line: cursor.line, column: extendedStart),
+          endPos: BufferPosition(line: cursor.line, column: endCol),
+          isLinewise: false,
+        )
+      )
+
+    return ok(
+      TextObjectRange(
+        start: BufferPosition(line: cursor.line, column: startCol),
+        endPos: BufferPosition(line: cursor.line, column: extendedEnd),
+        isLinewise: false,
+      )
+    )
+
+proc findQuotedBoundaries(
+    buffer: TextBuffer, cursor: BufferPosition, quoteChar: char, inner: bool
+): Result[TextObjectRange, string] =
+  ## Find quoted string boundaries for i" or a"
+  ## inner=true: content inside quotes
+  ## inner=false: content + quotes
+
+  if cursor.line < 0 or cursor.line >= buffer.len:
+    return err("Cursor position out of bounds")
+
+  let line = buffer.getLine(cursor.line)
+  let runes = line.toRunes()
+
+  if runes.len == 0:
+    return err("Empty line")
+
+  let cursorCol = min(cursor.column, runes.len - 1)
+
+  # Find opening quote (search backward from cursor)
+  var startCol = -1
+  var i = cursorCol
+  while i >= 0:
+    if $runes[i] == $quoteChar:
+      # Check if it's escaped
+      var escaped = false
+      if i > 0 and $runes[i - 1] == "\\":
+        escaped = true
+      if not escaped:
+        startCol = i
+        break
+    i.dec
+
+  if startCol < 0:
+    return err("No opening quote found")
+
+  # Find closing quote (search forward from opening quote)
+  var endCol = -1
+  i = startCol + 1
+  while i < runes.len:
+    if $runes[i] == $quoteChar:
+      # Check if it's escaped
+      var escaped = false
+      if i > 0 and $runes[i - 1] == "\\":
+        escaped = true
+      if not escaped:
+        endCol = i
+        break
+    i.inc
+
+  if endCol < 0:
+    return err("No closing quote found")
+
+  if inner:
+    # Inner: content only (exclude quotes)
+    return ok(
+      TextObjectRange(
+        start: BufferPosition(line: cursor.line, column: startCol + 1),
+        endPos: BufferPosition(line: cursor.line, column: endCol),
+        isLinewise: false,
+      )
+    )
+  else:
+    # Around: content + quotes
+    return ok(
+      TextObjectRange(
+        start: BufferPosition(line: cursor.line, column: startCol),
+        endPos: BufferPosition(line: cursor.line, column: endCol + 1),
+        isLinewise: false,
+      )
+    )
+
+proc findMatchingParen(
+    buffer: TextBuffer,
+    cursor: BufferPosition,
+    openChar: char,
+    closeChar: char,
+    inner: bool,
+): Result[TextObjectRange, string] =
+  ## Find matching parenthesis/bracket/brace boundaries
+  ## inner=true: content inside delimiters
+  ## inner=false: content + delimiters
+
+  if cursor.line < 0 or cursor.line >= buffer.len:
+    return err("Cursor position out of bounds")
+
+  let line = buffer.getLine(cursor.line)
+  let runes = line.toRunes()
+
+  if runes.len == 0:
+    return err("Empty line")
+
+  let cursorCol = min(cursor.column, runes.len - 1)
+
+  # Find opening delimiter (search backward from cursor)
+  var startCol = -1
+  var depth = 0
+  var i = cursorCol
+
+  # If cursor is on a closing delimiter, start from before it
+  if $runes[i] == $closeChar:
+    depth = 1
+    i.dec
+
+  while i >= 0:
+    if $runes[i] == $closeChar:
+      depth.inc
+    elif $runes[i] == $openChar:
+      if depth == 0:
+        startCol = i
+        break
+      else:
+        depth.dec
+    i.dec
+
+  if startCol < 0:
+    return err("No opening delimiter found")
+
+  # Find closing delimiter (search forward from opening)
+  var endCol = -1
+  depth = 0
+  i = startCol + 1
+  while i < runes.len:
+    if $runes[i] == $openChar:
+      depth.inc
+    elif $runes[i] == $closeChar:
+      if depth == 0:
+        endCol = i
+        break
+      else:
+        depth.dec
+    i.inc
+
+  if endCol < 0:
+    return err("No closing delimiter found")
+
+  if inner:
+    # Inner: content only (exclude delimiters)
+    return ok(
+      TextObjectRange(
+        start: BufferPosition(line: cursor.line, column: startCol + 1),
+        endPos: BufferPosition(line: cursor.line, column: endCol),
+        isLinewise: false,
+      )
+    )
+  else:
+    # Around: content + delimiters
+    return ok(
+      TextObjectRange(
+        start: BufferPosition(line: cursor.line, column: startCol),
+        endPos: BufferPosition(line: cursor.line, column: endCol + 1),
+        isLinewise: false,
+      )
+    )
+
+proc calculateTextObjectRange*(
+    buffer: TextBuffer,
+    cursor: BufferPosition,
+    kind: TextObjectKind,
+    modifier: TextObjectModifier,
+): Result[TextObjectRange, string] =
+  ## Calculate the range of a text object
+  ## Returns TextObjectRange with start and end positions
+
+  let inner = (modifier == tomInner)
+
+  case kind
+  of toWord:
+    return findWordBoundaries(buffer, cursor, inner)
+  of toQuotedDouble:
+    return findQuotedBoundaries(buffer, cursor, '"', inner)
+  of toQuotedSingle:
+    return findQuotedBoundaries(buffer, cursor, '\'', inner)
+  of toQuotedBacktick:
+    return findQuotedBoundaries(buffer, cursor, '`', inner)
+  of toParenthesis:
+    return findMatchingParen(buffer, cursor, '(', ')', inner)
+  of toBracket:
+    return findMatchingParen(buffer, cursor, '[', ']', inner)
+  of toBrace:
+    return findMatchingParen(buffer, cursor, '{', '}', inner)
+  of toAngleBracket:
+    return findMatchingParen(buffer, cursor, '<', '>', inner)
+  else:
+    return err("Text object " & $kind & " not yet implemented")

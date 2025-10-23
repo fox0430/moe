@@ -587,6 +587,11 @@ proc newEditor*(): Editor =
       searchDirection: Forward, # Default to forward search
       searchHistory: loadSearchHistory(), # Load search history from disk
       searchHistoryIndex: -1, # Not navigating history initially
+      pendingOperator: none(PendingOperator), # No pending operator initially
+      pendingTextObject: none(PendingTextObject), # No pending text object initially
+      # Yank register (internal clipboard)
+      yankRegister: "", # Empty initially
+      yankIsLine: false, # Not linewise initially
     ),
     viewport: ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 20, x: 0, y: 0),
     commandRegistry: cmdRegistry,
@@ -602,13 +607,15 @@ proc newEditor*(): Editor =
     result.textBuffer,
     result.state,
     result.viewport,
+    result.config.clipboard,
     some(cmdRegistry),
     some(keyRegistry),
   )
 
   # Create handler manager after executer (which creates motion controller)
   result.handlerManager = newHandlerManager(
-    result.executer.motionController, keyRegistry, cmdLineParser, cmdConfig, cmdRegistry
+    result.executer.motionController, keyRegistry, cmdLineParser, cmdConfig,
+    cmdRegistry, result.config.clipboard,
   )
 
 proc refreshGitDiff*(e: Editor, useBuffer: bool = true) =

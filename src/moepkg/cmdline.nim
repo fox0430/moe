@@ -40,6 +40,10 @@ proc showHelp() =
 
   quit(0)
 
+proc showUnknownArgsError(arg: string) =
+  echo "Unknown argument: \"" & arg & "\""
+  quit(0)
+
 proc parseCmdLine*(): CmdLineConfig =
   ## Parse command line arguments and return configuration
   ##
@@ -63,3 +67,5 @@ proc parseCmdLine*(): CmdLineConfig =
     else:
       if not arg.startsWith("-"):
         result.filePath = arg
+      else:
+        showUnknownArgsError(arg)

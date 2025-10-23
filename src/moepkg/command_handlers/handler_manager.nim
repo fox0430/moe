@@ -29,7 +29,7 @@ import pkg/[results, celina]
 import
   ../[
     types, buffer, modes, motion, keybindings, commandline, commandconfig,
-    commandregistry,
+    commandregistry, config,
   ]
 import normal_handler, insert_handler, command_handler, visual_handler, replace_handler
 
@@ -106,11 +106,13 @@ proc newHandlerManager*(
     commandLineParser: CommandLineParser,
     commandConfig: CommandConfig,
     commandRegistry: CommandRegistry,
+    clipboardConfig: ClipboardConfig,
 ): HandlerManager =
   ## Create a new handler manager with all mode handlers
 
-  let normalHandler =
-    newNormalModeHandler(motionController, keyBindingRegistry, commandRegistry)
+  let normalHandler = newNormalModeHandler(
+    motionController, keyBindingRegistry, commandRegistry, clipboardConfig
+  )
   let insertHandler =
     newInsertModeHandler(keyBindingRegistry, motionController, commandRegistry)
   let commandHandler =

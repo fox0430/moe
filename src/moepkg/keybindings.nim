@@ -26,7 +26,7 @@ import std/[tables, strutils, options, sequtils, hashes]
 
 import pkg/celina
 
-import types, modes
+import types, modes, logger
 
 type
   ## Key modifiers that can be combined
@@ -80,6 +80,7 @@ type
   Command* = object
     name*: string
     description*: string
+    count*: int ## Numeric prefix (e.g., 2 in "2w"), defaults to 1
     case kind*: CommandType
     of ctMotion:
       motion*: Motion
@@ -347,15 +348,33 @@ proc isDigitKey*(combo: KeyCombo): bool =
 
 proc getNumericPrefix*(registry: KeyBindingRegistry): int =
   ## Get the numeric prefix as integer, defaulting to 1
+  logDebug(
+    "keybind",
+    "getNumericPrefix: hasPrefix=" & $registry.sequenceState.hasNumericPrefix &
+      ", prefix='" & registry.sequenceState.numericPrefix & "'",
+  )
   if registry.sequenceState.hasNumericPrefix and
       registry.sequenceState.numericPrefix.len > 0:
     try:
       let num = parseInt(registry.sequenceState.numericPrefix)
-      return if num > 0: num else: 1
+      let prefixValue = if num > 0: num else: 1
+      logDebug("keybind", "getNumericPrefix returning: " & $prefixValue)
+      return prefixValue
     except ValueError:
+      logDebug("keybind", "getNumericPrefix returning 1 (parse error)")
       return 1
   else:
+    logDebug("keybind", "getNumericPrefix returning 1 (no prefix)")
     return 1
+
+proc applyCountToCommand(registry: KeyBindingRegistry, cmd: Command): Command =
+  ## Apply numeric prefix count to a command and clear the prefix
+  result = cmd
+  result.count = registry.getNumericPrefix()
+  # Clear numeric prefix after applying
+  registry.sequenceState.numericPrefix = ""
+  registry.sequenceState.hasNumericPrefix = false
+  logDebug("keybind", "Applied count=" & $result.count & " to command: " & cmd.name)
 
 proc updatePossibleSequences*(registry: KeyBindingRegistry, mode: EditorMode) =
   ## Update the list of possible sequences based on current keys
@@ -446,8 +465,11 @@ proc processKey*(
         registry.sequenceState.keys = @[] # Clear keys but keep pending state
         return none(Command) # Wait for next key
       else:
-        # Don't clear sequence here - let the command execution handle numeric prefix clearing
-        return some(command)
+        # Apply count and clear sequence
+        let cmdWithCount = registry.applyCountToCommand(command)
+        registry.sequenceState.keys = @[]
+        registry.sequenceState.possibleSequences = @[]
+        return some(cmdWithCount)
 
   # Check if we have any possible sequences that could continue
   if registry.sequenceState.possibleSequences.len > 0:
@@ -472,12 +494,17 @@ proc processKey*(
       registry.sequenceState.waitingForChar = true
       registry.sequenceState.keys = @[] # Clear keys but keep pending state
       return none(Command) # Wait for next key
-    else:
-      # Clear only keys but keep numeric prefix for command execution
+    elif singleKeyResult.isSome:
+      # Apply count and clear sequence
+      let cmdWithCount = registry.applyCountToCommand(singleKeyResult.get)
       registry.sequenceState.keys = @[]
       registry.sequenceState.possibleSequences = @[]
-      # Don't clear numeric prefix - let command execution handle it
-      return singleKeyResult
+      return some(cmdWithCount)
+    else:
+      # No binding found
+      registry.sequenceState.keys = @[]
+      registry.sequenceState.possibleSequences = @[]
+      return none(Command)
 
   # Invalid sequence
   registry.clearSequence()
@@ -581,6 +608,53 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
     )
   )
 
+  # Word motion commands
+  registry.registerCommand(
+    Command(
+      name: "word-forward",
+      description: "Move to start of next word",
+      kind: ctMotion,
+      motion: Motion.WordForward,
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "word-backward",
+      description: "Move to start of previous word",
+      kind: ctMotion,
+      motion: Motion.WordBackward,
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "word-end",
+      description: "Move to end of next word",
+      kind: ctMotion,
+      motion: Motion.WordEnd,
+    )
+  )
+
+  # Paragraph motion commands
+  registry.registerCommand(
+    Command(
+      name: "paragraph-forward",
+      description: "Move to next paragraph",
+      kind: ctMotion,
+      motion: Motion.ParagraphForward,
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "paragraph-backward",
+      description: "Move to previous paragraph",
+      kind: ctMotion,
+      motion: Motion.ParagraphBackward,
+    )
+  )
+
   # Register undo/redo commands
   registry.registerCommand(
     Command(
@@ -634,6 +708,17 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.Normal, "C-r", "redo")
   registry.bindKey(EditorMode.Normal, "n", "search-next")
   registry.bindKey(EditorMode.Normal, "N", "search-prev")
+  # Word motion bindings
+  registry.bindKey(EditorMode.Normal, "w", "word-forward")
+  registry.bindKey(EditorMode.Normal, "b", "word-backward")
+  registry.bindKey(EditorMode.Normal, "e", "word-end")
+
+  # Paragraph motion bindings
+  registry.bindKey(EditorMode.Normal, "}", "paragraph-forward")
+  registry.bindKey(EditorMode.Normal, "{", "paragraph-backward")
+
+  registry.bindKey(EditorMode.Normal, "0", "line-home")
+  registry.bindKey(EditorMode.Normal, "$", "line-end")
 
   # Arrow key bindings for Normal mode
   registry.bindKey(
@@ -699,6 +784,217 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
       args: @[],
     )
   )
+
+  registry.registerCommand(
+    Command(
+      name: "yank-line",
+      description: "Yank (copy) line",
+      kind: ctCustom,
+      commandId: "yank.line",
+      args: @[],
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "paste-after",
+      description: "Paste after cursor",
+      kind: ctCustom,
+      commandId: "paste.after",
+      args: @[],
+    )
+  )
+  # Bind p key to paste-after (must be after registerCommand)
+  registry.bindKey(EditorMode.Normal, "p", "paste-after")
+
+  registry.registerCommand(
+    Command(
+      name: "paste-before",
+      description: "Paste before cursor",
+      kind: ctCustom,
+      commandId: "paste.before",
+      args: @[],
+    )
+  )
+  # Bind P key to paste-before (must be after registerCommand)
+  registry.bindKey(EditorMode.Normal, "P", "paste-before")
+
+  # Operator commands
+  registry.registerCommand(
+    Command(
+      name: "operator-delete",
+      description: "Delete operator",
+      kind: ctCustom,
+      commandId: "operator.delete",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "d", "operator-delete")
+
+  registry.registerCommand(
+    Command(
+      name: "operator-change",
+      description: "Change operator",
+      kind: ctCustom,
+      commandId: "operator.change",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "c", "operator-change")
+
+  registry.registerCommand(
+    Command(
+      name: "operator-yank",
+      description: "Yank operator",
+      kind: ctCustom,
+      commandId: "operator.yank",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "y", "operator-yank")
+
+  # D - Delete to end of line
+  registry.registerCommand(
+    Command(
+      name: "delete-to-end",
+      description: "Delete to end of line",
+      kind: ctCustom,
+      commandId: "operator.delete.to.end",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "D", "delete-to-end")
+
+  # C - Change to end of line
+  registry.registerCommand(
+    Command(
+      name: "change-to-end",
+      description: "Change to end of line",
+      kind: ctCustom,
+      commandId: "operator.change.to.end",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "C", "change-to-end")
+
+  # x - Delete character at cursor
+  registry.registerCommand(
+    Command(
+      name: "delete-char",
+      description: "Delete character at cursor",
+      kind: ctCustom,
+      commandId: "delete.char",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "x", "delete-char")
+
+  # X - Delete character before cursor
+  registry.registerCommand(
+    Command(
+      name: "delete-char-before",
+      description: "Delete character before cursor",
+      kind: ctCustom,
+      commandId: "delete.char.before",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "X", "delete-char-before")
+
+  # Text object commands
+  registry.registerCommand(
+    Command(
+      name: "textobject-inner",
+      description: "Inner text object",
+      kind: ctCustom,
+      commandId: "textobject.inner",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "i", "textobject-inner")
+
+  registry.registerCommand(
+    Command(
+      name: "textobject-around",
+      description: "Around text object",
+      kind: ctCustom,
+      commandId: "textobject.around",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "a", "textobject-around")
+
+  # Text object kinds
+  # Note: w, b, e are now motion commands, not text objects
+  # Text objects are triggered by i/a modifiers (iw, aw, etc.)
+  registry.registerCommand(
+    Command(
+      name: "textobject-word",
+      description: "Word text object",
+      kind: ctCustom,
+      commandId: "textobject.word",
+      args: @[],
+    )
+  )
+  # registry.bindKey(EditorMode.Normal, "w", "textobject-word")  # Removed - w is a motion
+
+  registry.registerCommand(
+    Command(
+      name: "textobject-quote-double",
+      description: "Double quote text object",
+      kind: ctCustom,
+      commandId: "textobject.quote.double",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "\"", "textobject-quote-double")
+
+  registry.registerCommand(
+    Command(
+      name: "textobject-quote-single",
+      description: "Single quote text object",
+      kind: ctCustom,
+      commandId: "textobject.quote.single",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "'", "textobject-quote-single")
+
+  registry.registerCommand(
+    Command(
+      name: "textobject-paren",
+      description: "Parenthesis text object",
+      kind: ctCustom,
+      commandId: "textobject.paren",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "(", "textobject-paren")
+  registry.bindKey(EditorMode.Normal, ")", "textobject-paren")
+
+  registry.registerCommand(
+    Command(
+      name: "textobject-bracket",
+      description: "Bracket text object",
+      kind: ctCustom,
+      commandId: "textobject.bracket",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "[", "textobject-bracket")
+  registry.bindKey(EditorMode.Normal, "]", "textobject-bracket")
+
+  registry.registerCommand(
+    Command(
+      name: "textobject-brace",
+      description: "Brace text object",
+      kind: ctCustom,
+      commandId: "textobject.brace",
+      args: @[],
+    )
+  )
+  # Note: { and } are bound to paragraph motion in Normal mode (see above)
+  # They are used as text objects only in operator-pending mode (e.g., di{)
 
   registry.registerCommand(
     Command(
@@ -776,9 +1072,9 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   # Sequence bindings - Vim-style
   registry.bindKey(EditorMode.Normal, "g g", "goto-first-line") # Go to first line
   registry.bindKey(EditorMode.Normal, "G", "goto-last-line") # Go to last line
-  registry.bindKey(EditorMode.Normal, "d d", "delete-line") # Delete line
-  registry.bindKey(EditorMode.Normal, "d w", "delete-word") # Delete word
-  registry.bindKey(EditorMode.Normal, "c w", "change-word") # Change word
+  # Note: dd, yy, cc are handled by operator doubling in handleOperatorDelete/Yank/Change
+  # When 'd' is pressed twice, the operator handler detects it and executes line operation
+  # This allows d+motion (like dw, d2w) to work via operator+motion system
 
   # Register mode switching commands
   registry.registerCommand(

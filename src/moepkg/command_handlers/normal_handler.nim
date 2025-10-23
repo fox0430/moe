@@ -25,7 +25,7 @@ import std/options
 
 import pkg/results
 
-import ../[types, buffer, modes, motion, keybindings, commandregistry]
+import ../[types, buffer, modes, motion, keybindings, commandregistry, config]
 import visual_handler
 
 type
@@ -38,6 +38,7 @@ type
     motionController*: MotionController
     keyBindingRegistry*: KeyBindingRegistry
     commandRegistry*: CommandRegistry
+    clipboardConfig*: ClipboardConfig
 
   NormalModeResult* = object ## Result of normal mode command execution
     case kind*: NormalModeResultKind
@@ -52,12 +53,14 @@ proc newNormalModeHandler*(
     motionController: MotionController,
     keyBindingRegistry: KeyBindingRegistry,
     commandRegistry: CommandRegistry,
+    clipboardConfig: ClipboardConfig = ClipboardConfig(enable: false, tool: ctXclip),
 ): NormalModeHandler =
   ## Create a new Normal mode handler
   NormalModeHandler(
     motionController: motionController,
     keyBindingRegistry: keyBindingRegistry,
     commandRegistry: commandRegistry,
+    clipboardConfig: clipboardConfig,
   )
 
 proc executeCommand*(
@@ -75,6 +78,7 @@ proc executeCommand*(
     viewport: viewport,
     motionController: handler.motionController,
     keyBindingRegistry: handler.keyBindingRegistry,
+    clipboardConfig: handler.clipboardConfig,
   )
 
   let r = handler.commandRegistry.execute(ctx, commandId, args)
@@ -179,38 +183,8 @@ proc handleInsertModeEntry*(
 
   return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Insert))
 
-proc handleTextManipulation*(
-    handler: NormalModeHandler,
-    buffer: TextBuffer,
-    operation: string,
-    target: string = "",
-    count: int = 1,
-): NormalModeResult =
-  ## Handle text manipulation commands (d, y, c, etc.)
-  case operation
-  of "delete":
-    case target
-    of "word":
-      # TODO: Implement delete word
-      return
-        NormalModeResult(kind: nmrError, errorMessage: "Delete word not implemented")
-    of "line":
-      # TODO: Implement delete line
-      return
-        NormalModeResult(kind: nmrError, errorMessage: "Delete line not implemented")
-    else:
-      return NormalModeResult(
-        kind: nmrError, errorMessage: "Unknown delete target: " & target
-      )
-  of "yank":
-    # TODO: Implement yank operations
-    return NormalModeResult(kind: nmrError, errorMessage: "Yank not implemented")
-  of "change":
-    # TODO: Implement change operations
-    return NormalModeResult(kind: nmrError, errorMessage: "Change not implemented")
-  else:
-    return
-      NormalModeResult(kind: nmrError, errorMessage: "Unknown operation: " & operation)
+# All text manipulation (delete, yank, change) is now handled by the
+# operator+motion system in commandregistry.nim
 
 proc handleNormalModeKey*(
     handler: NormalModeHandler,
@@ -221,53 +195,29 @@ proc handleNormalModeKey*(
 ): NormalModeResult =
   ## Main entry point for handling Normal mode key presses
 
-  # Try to find a binding for this key
-  let binding = handler.keyBindingRegistry.findBinding(EditorMode.Normal, keyCombo)
+  # Process the key (handles numeric prefixes, sequences, etc.)
+  let cmdOption = handler.keyBindingRegistry.processKey(EditorMode.Normal, keyCombo)
 
-  if binding.isNone:
-    return NormalModeResult(kind: nmrUnhandled)
+  if cmdOption.isNone:
+    # Key was consumed (e.g., building numeric prefix or sequence)
+    return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
 
-  let cmd = binding.get
+  let cmd = cmdOption.get
 
   case cmd.kind
   of ctMotion:
-    # Map motion to command ID and use CommandRegistry
-    let commandId =
-      case cmd.motion
-      of Motion.Left:
-        "motion.left"
-      of Motion.Right:
-        "motion.right"
-      of Motion.Up:
-        "motion.up"
-      of Motion.Down:
-        "motion.down"
-      of Motion.Home:
-        "motion.home"
-      of Motion.End:
-        "motion.end"
-      of Motion.PageUp:
-        "motion.pageup"
-      of Motion.PageDown:
-        "motion.pagedown"
-      else:
-        # Fallback to direct motion execution for unsupported motions
-        let motionResult = handler.handleMotionCommand(buffer, state, cmd.motion)
-        if motionResult.isOk:
-          return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
-        else:
-          return NormalModeResult(kind: nmrError, errorMessage: motionResult.error)
-
-    # Execute through CommandRegistry
+    # Execute all motions through CommandRegistry to handle numeric prefixes
     let ctx = CommandContext(
       buffer: buffer,
       state: state,
       viewport: viewport,
       motionController: handler.motionController,
       keyBindingRegistry: handler.keyBindingRegistry,
+      clipboardConfig: handler.clipboardConfig,
     )
 
-    let cmdResult = handler.commandRegistry.execute(ctx, commandId, @[])
+    # Execute the motion command directly through CommandRegistry
+    let cmdResult = handler.commandRegistry.executeCommand(ctx, cmd)
     if cmdResult.isOk:
       return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
     else:
@@ -285,10 +235,7 @@ proc handleNormalModeKey*(
       return handler.handleInsertModeEntry(buffer, state, "open-below")
     of "insert.line.above":
       return handler.handleInsertModeEntry(buffer, state, "open-above")
-    of "delete.word":
-      return handler.handleTextManipulation(buffer, "delete", "word")
-    of "delete.line":
-      return handler.handleTextManipulation(buffer, "delete", "line")
+    # dd, yy, cc are handled by operator doubling in commandregistry
     of "edit.undo":
       let r = buffer.undo()
       if r.isOk:
@@ -311,16 +258,29 @@ proc handleNormalModeKey*(
         viewport: viewport,
         motionController: handler.motionController,
         keyBindingRegistry: handler.keyBindingRegistry,
+        clipboardConfig: handler.clipboardConfig,
       )
       let cmdResult = handler.commandRegistry.execute(ctx, cmd.commandId, cmd.args)
       if cmdResult.isOk:
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
       else:
         return NormalModeResult(kind: nmrError, errorMessage: cmdResult.error)
-  else:
-    return NormalModeResult(
-      kind: nmrError, errorMessage: "Unsupported command type in Normal mode"
+  of ctCustom, ctTextObject, ctOperator, ctOperatorPending:
+    # Execute custom commands and operators through command registry
+    let ctx = CommandContext(
+      buffer: buffer,
+      state: state,
+      viewport: viewport,
+      motionController: handler.motionController,
+      keyBindingRegistry: handler.keyBindingRegistry,
+      clipboardConfig: handler.clipboardConfig,
     )
+    # Use executeCommand to handle numeric prefixes properly
+    let cmdResult = handler.commandRegistry.executeCommand(ctx, cmd)
+    if cmdResult.isOk:
+      return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+    else:
+      return NormalModeResult(kind: nmrError, errorMessage: cmdResult.error)
 
 proc isHandled*(nmResult: NormalModeResult): bool =
   ## Check if the command was handled

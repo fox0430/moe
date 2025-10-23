@@ -72,6 +72,12 @@ type
     FindCharBackward
     TillChar
     TillCharBackward
+    WordForward # w - move to start of next word
+    WordBackward # b - move to start of previous word
+    WordEnd # e - move to end of next word
+    WordEndBackward # ge - move to end of previous word
+    ParagraphForward # } - move to next paragraph (next blank line)
+    ParagraphBackward # { - move to previous paragraph (previous blank line)
 
   TypedCommandKind* = enum
     MovementCommand
@@ -88,6 +94,58 @@ type
       target*: string # Keep as string for now
     of SimpleCommand:
       command*: string # Keep as string for now
+
+  OperatorType* = enum
+    ## Types of operators that can be combined with motions
+    OpDelete # d - delete
+    OpChange # c - change (delete and enter insert mode)
+    OpYank # y - yank (copy)
+    OpIndent # > - indent
+    OpOutdent # < - outdent
+    OpSwapCase # ~ - swap case
+    OpLowerCase # gu - lowercase
+    OpUpperCase # gU - uppercase
+
+  OperatorRange* = object ## Range affected by an operator
+    start*: BufferPosition
+    endPos*: BufferPosition
+    isLinewise*: bool # Whether the operation affects entire lines
+
+  PendingOperator* = object
+    ## Represents an operator waiting for a motion or text object
+    operatorType*: OperatorType
+    operatorCount*: int # Count before operator (2d3w の "2")
+    startPos*: BufferPosition # Position where operator was invoked
+
+  TextObjectKind* = enum
+    ## Types of text objects
+    toWord # w - word
+    toWideWord # W - WORD (space-separated)
+    toSentence # s - sentence
+    toParagraph # p - paragraph
+    toQuotedDouble # " - double quoted string
+    toQuotedSingle # ' - single quoted string
+    toQuotedBacktick # ` - backtick quoted string
+    toParenthesis # ( or ) - parentheses
+    toBracket # [ or ] - square brackets
+    toBrace # { or } - curly braces
+    toAngleBracket # < or > - angle brackets
+    toTag # t - HTML/XML tag
+
+  TextObjectModifier* = enum
+    ## Modifiers for text objects
+    tomInner # i - inner (excludes delimiters)
+    tomAround # a - around (includes delimiters)
+
+  TextObjectRange* = object ## Range of a text object
+    start*: BufferPosition
+    endPos*: BufferPosition
+    isLinewise*: bool # Whether this is a linewise text object
+
+  PendingTextObject* = object
+    ## Represents a text object selection waiting for the object type
+    modifier*: TextObjectModifier # i or a
+    operatorCount*: int # Count before operator (if any)
 
   VisualSelection* = object ## Represents a visual mode selection range
     start*: BufferPosition # Selection start position (anchor)
@@ -109,6 +167,9 @@ type
     lastSearchText*: string # Last executed search text for n/N commands
     statusMessage*: string # Message to display in status line
     lastMotion*: Option[Motion]
+    pendingOperator*: Option[PendingOperator] # Operator waiting for motion/text object
+    pendingTextObject*: Option[PendingTextObject]
+      # Text object modifier waiting for object kind
     visualSelection*: VisualSelection # Visual mode selection state
     replaceHistory*: seq[ReplaceHistoryEntry] # Replace mode undo history
     showStatusLine*: bool # Whether to show the status line
@@ -152,3 +213,6 @@ type
     searchHistory*: seq[string] # Search history (most recent first)
     searchHistoryIndex*: int
       # Current position in search history (-1 when not navigating history)
+    # Yank register (internal clipboard)
+    yankRegister*: string # Content yanked with yy, y, etc.
+    yankIsLine*: bool # Whether the yank was linewise (yy) or characterwise

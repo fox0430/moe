@@ -22,11 +22,13 @@
 ## This module provides a centralized command registry that decouples
 ## command definitions from key bindings, allowing flexible configuration.
 
-import std/[tables, options, strutils]
+import std/[tables, options, strutils, unicode]
 
 import pkg/results
 
-import types, buffer, motion, keybindings, modes, cursor, search_utils
+import
+  types, buffer, motion, keybindings, modes, cursor, search_utils, clipboard, config,
+  logger
 
 import command_handlers/[visual_commands, insert_commands, normal_commands]
 
@@ -98,6 +100,7 @@ type
     viewport*: ViewPort
     motionController*: MotionController
     keyBindingRegistry*: keybindings.KeyBindingRegistry
+    clipboardConfig*: ClipboardConfig
 
   ## Function signature for command handlers
   CommandHandler* =
@@ -265,28 +268,146 @@ proc execute*(
 
   return command.handler(ctx, args)
 
+proc executeOperatorOnRange(
+    ctx: CommandContext,
+    operatorType: OperatorType,
+    range: OperatorRange,
+    operatorCount: int,
+): Result[(), string] =
+  ## Execute an operator on the given range
+  ## operatorCount: count before operator (e.g., "2" in "2d3w")
+
+  logDebug(
+    "operator",
+    "executeOperatorOnRange: " & $operatorType & " on range " & $range.start & " to " &
+      $range.endPos & ", linewise=" & $range.isLinewise,
+  )
+
+  case operatorType
+  of OpYank:
+    # Yank (copy) the range
+    let text = extractRangeText(ctx.buffer, range)
+    ctx.state.yankRegister = text
+    ctx.state.yankIsLine = range.isLinewise
+
+    # Also write to system clipboard if enabled
+    if ctx.clipboardConfig.enable:
+      discard writeToClipboard(ctx.clipboardConfig.tool, text)
+
+    let lineCount =
+      if range.isLinewise:
+        range.endPos.line - range.start.line + 1
+      else:
+        0
+    ctx.state.statusMessage =
+      if range.isLinewise:
+        "Yanked " & $lineCount & " line(s)"
+      else:
+        "Yanked " & $text.len & " character(s)"
+
+    # Don't move cursor for yank
+    return ok(())
+  of OpDelete:
+    # Delete the range (and yank it)
+    let text = extractRangeText(ctx.buffer, range)
+    ctx.state.yankRegister = text
+    ctx.state.yankIsLine = range.isLinewise
+
+    # Also write to system clipboard if enabled
+    if ctx.clipboardConfig.enable:
+      discard writeToClipboard(ctx.clipboardConfig.tool, text)
+
+    # Delete the text
+    let delResult = deleteRange(ctx.buffer, range)
+    if delResult.isErr:
+      return err(delResult.error)
+
+    # Move cursor to start of deletion
+    ctx.state.cursor = range.start
+    # Clamp cursor to valid position
+    if ctx.state.cursor.line >= ctx.buffer.len:
+      ctx.state.cursor.line = max(0, ctx.buffer.len - 1)
+    if ctx.state.cursor.line < ctx.buffer.len:
+      let line = ctx.buffer.getLine(ctx.state.cursor.line)
+      ctx.state.cursor.column = min(ctx.state.cursor.column, max(0, line.charLen - 1))
+
+    ctx.state.needsFullRedraw = true
+    return ok(())
+  of OpChange:
+    # Change the range (delete and enter insert mode)
+    let text = extractRangeText(ctx.buffer, range)
+    ctx.state.yankRegister = text
+    ctx.state.yankIsLine = range.isLinewise
+
+    # Delete the text
+    let delResult = deleteRange(ctx.buffer, range)
+    if delResult.isErr:
+      return err(delResult.error)
+
+    # Move cursor to start of change
+    ctx.state.cursor = range.start
+    # Clamp cursor
+    if ctx.state.cursor.line >= ctx.buffer.len:
+      ctx.state.cursor.line = max(0, ctx.buffer.len - 1)
+
+    # Enter insert mode
+    ctx.state.mode = EditorMode.Insert
+    ctx.state.needsFullRedraw = true
+
+    # Begin transaction for insert mode
+    let transactionResult = ctx.buffer.beginTransaction("Change operation")
+    if transactionResult.isErr:
+      return err("Failed to begin transaction: " & transactionResult.error)
+
+    return ok(())
+  else:
+    return err("Operator " & $operatorType & " not yet implemented")
+
 proc executeCommand*(
     registry: CommandRegistry, ctx: CommandContext, cmd: keybindings.Command
 ): Result[(), string] =
   ## Execute a keybinding command
   case cmd.kind
   of ctMotion:
-    # Handle motion commands directly - use numeric prefix if available
-    let count =
-      if ctx.keyBindingRegistry != nil:
-        ctx.keyBindingRegistry.getNumericPrefix()
-      else:
-        1
+    # Handle motion commands directly - use count from command object
+    let count = cmd.count
+
+    logDebug("command", "Motion command: " & $cmd.motion & " with count=" & $count)
+
     let motionCmd = MotionCommand(motion: cmd.motion, count: count)
-    # Clear the numeric prefix after using it
-    if ctx.keyBindingRegistry != nil:
-      ctx.keyBindingRegistry.sequenceState.numericPrefix = ""
-      ctx.keyBindingRegistry.sequenceState.hasNumericPrefix = false
-    let r = ctx.motionController.executeMotion(motionCmd, ctx.state.cursor)
-    if r.isErr:
-      return err(r.error)
-    ctx.state.cursor = r.value
-    return Result[(), string].ok ()
+
+    # Check if we have a pending operator
+    if ctx.state.pendingOperator.isSome:
+      let op = ctx.state.pendingOperator.get
+      logDebug(
+        "operator",
+        "Executing operator+motion: " & $op.operatorType & " with " & $cmd.motion,
+      )
+
+      # Execute motion to get end position
+      let r = ctx.motionController.executeMotion(motionCmd, op.startPos)
+      if r.isErr:
+        ctx.state.pendingOperator = none(PendingOperator)
+        return err(r.error)
+
+      # Calculate the range affected by this operator+motion
+      let range = calculateOperatorRange(ctx.buffer, op.startPos, r.value, cmd.motion)
+
+      block:
+        # Execute the operator on the range
+        let r = executeOperatorOnRange(ctx, op.operatorType, range, op.operatorCount)
+        ctx.state.pendingOperator = none(PendingOperator)
+        if r.isErr:
+          return err(r.error)
+
+      return ok(())
+    else:
+      # No pending operator - just move cursor
+      let r = ctx.motionController.executeMotion(motionCmd, ctx.state.cursor)
+      if r.isErr:
+        return err(r.error)
+      ctx.state.cursor = r.value
+      return Result[(), string].ok ()
   of ctModeSwitch:
     # Handle mode switching
     ctx.state.mode = cmd.targetMode
@@ -301,11 +422,7 @@ proc executeCommand*(
   of ctOperatorPending:
     # Handle operators that need character input (f, t, r, etc)
     # The character should have been set by processKey
-    let count =
-      if ctx.keyBindingRegistry != nil:
-        ctx.keyBindingRegistry.getNumericPrefix()
-      else:
-        1
+    let count = cmd.count
     case cmd.operatorType
     of "find":
       # Execute find character motion
@@ -355,14 +472,31 @@ proc executeCommand*(
       return Result[(), string].err "Unknown operator type: " & cmd.operatorType
   of ctAction, ctTextObject, ctOperator, ctCustom:
     # Execute through registry - convert string to CommandId
+    # Get count from command object
+    let count = cmd.count
+
+    # Debug: log the count
+    logDebug("command", "Executing " & cmd.commandId & " with count=" & $count)
+
+    # Prepare args with count as first argument if count > 1
+    var finalArgs = cmd.args
+    if count > 1:
+      finalArgs = @[$count] & cmd.args
+    logDebug("command", "finalArgs (count=" & $count & "): " & $finalArgs)
+
+    # Clear the numeric prefix after using it
+    if ctx.keyBindingRegistry != nil:
+      ctx.keyBindingRegistry.sequenceState.numericPrefix = ""
+      ctx.keyBindingRegistry.sequenceState.hasNumericPrefix = false
+
     # First try as alias, then as custom command
     let cmdResult = registry.findCommand(cmd.commandId)
     if cmdResult.isSome:
       # Found via alias or existing command
-      return registry.execute(ctx, cmdResult.get.id, cmd.args)
+      return registry.execute(ctx, cmdResult.get.id, finalArgs)
     else:
       # Try as custom command
-      return registry.execute(ctx, custom(cmd.commandId), cmd.args)
+      return registry.execute(ctx, custom(cmd.commandId), finalArgs)
 
 ## Helper function to parse count from arguments safely
 proc parseCount(
@@ -372,19 +506,25 @@ proc parseCount(
   ## - Returns default if no args or parsing fails
   ## - Clamps value to [minVal, maxVal] range
   ## - Ensures positive counts for motions
+  logDebug("parse", "parseCount called with args.len=" & $args.len & ", args=" & $args)
   if args.len > 0 and args[0].len > 0:
     try:
       let val = parseInt(args[0])
       # Clamp to valid range
-      if val < minVal:
-        return minVal
-      elif val > maxVal:
-        return maxVal
-      else:
-        return val
+      let parsedCount =
+        if val < minVal:
+          minVal
+        elif val > maxVal:
+          maxVal
+        else:
+          val
+      logDebug("parse", "parseCount returning: " & $parsedCount)
+      return parsedCount
     except ValueError:
+      logDebug("parse", "parseCount returning default (parse error): " & $default)
       return default
   else:
+    logDebug("parse", "parseCount returning default (no args): " & $default)
     return default
 
 ## Helper function to parse optional string argument
@@ -517,6 +657,667 @@ proc handleVisualDelete(ctx: CommandContext): Result[(), string] =
   ## Delete visual selection
   visualDelete(ctx.buffer, ctx.state)
   Result[(), string].ok ()
+
+## Clipboard command handlers
+
+proc handleClipboardCopy(ctx: CommandContext): Result[(), string] =
+  ## Copy selected text to system clipboard
+  if not ctx.clipboardConfig.enable:
+    return err("Clipboard integration is disabled")
+
+  # Get selected text
+  let selectedText = getSelectedText(ctx.state, ctx.buffer)
+  if selectedText.len == 0:
+    return err("No text selected")
+
+  # Write to clipboard
+  let writeResult = writeToClipboard(ctx.clipboardConfig.tool, selectedText)
+  if writeResult.isErr:
+    return err(writeResult.error)
+
+  return Result[(), string].ok ()
+
+proc handleClipboardPaste(ctx: CommandContext): Result[(), string] =
+  ## Paste text from system clipboard at cursor position
+  if not ctx.clipboardConfig.enable:
+    return err("Clipboard integration is disabled")
+
+  # Read from clipboard
+  let readResult = readFromClipboard(ctx.clipboardConfig.tool)
+  if readResult.isErr:
+    return err(readResult.error)
+
+  let clipboardText = readResult.value
+  if clipboardText.len == 0:
+    return Result[(), string].ok () # Nothing to paste
+
+  # Insert text at cursor position
+  let insertResult = ctx.buffer.insertText(ctx.state.cursor, clipboardText)
+  if insertResult.isErr:
+    return err(insertResult.error)
+
+  # Update cursor position to end of pasted text
+  # Note: For simplicity, we'll keep cursor at original position for now
+  # A more sophisticated implementation would move cursor to end of paste
+
+  ctx.state.needsFullRedraw = true
+  return Result[(), string].ok ()
+
+proc handlePasteAfter(ctx: CommandContext, count: int = 1): Result[(), string] =
+  ## Paste text from internal register or system clipboard after cursor (p command)
+  ## Mimics Vim's 'p' behavior
+  ## count: number of times to paste (default: 1)
+
+  logDebug("paste", "handlePasteAfter called with count=" & $count)
+  let actualCount = max(1, count)
+
+  # First try to use internal yank register
+  var pasteText = ctx.state.yankRegister
+  var isFullLine = ctx.state.yankIsLine
+
+  logDebug(
+    "paste",
+    "Using internal register, length: " & $pasteText.len & ", isLine=" & $isFullLine,
+  )
+
+  # If internal register is empty, try system clipboard (if enabled)
+  if pasteText.len == 0 and ctx.clipboardConfig.enable:
+    logDebug("paste", "Internal register empty, trying clipboard")
+    let readResult = readFromClipboard(ctx.clipboardConfig.tool)
+    if readResult.isErr:
+      return err(
+        "Nothing to paste (yank register empty and clipboard error: " & readResult.error &
+          ")"
+      )
+
+    pasteText = readResult.value
+    # Detect if it's a full line from clipboard
+    isFullLine = pasteText.len > 0 and pasteText[^1] == '\n'
+    logDebug("paste", "Got from clipboard, length: " & $pasteText.len)
+
+  if pasteText.len == 0:
+    return err("Nothing to paste")
+
+  # Begin transaction if count > 1 to group all pastes into single undo entry
+  if actualCount > 1:
+    let txnResult = ctx.buffer.beginTransaction("paste " & $actualCount & " times")
+    if txnResult.isErr:
+      return err(txnResult.error)
+
+  # Paste count times
+  for i in 1 .. actualCount:
+    if isFullLine:
+      # Paste on new line below current line (Vim 'p' behavior for linewise yank)
+      let currentLine = ctx.buffer.getLine(ctx.state.cursor.line)
+      let pastePos =
+        BufferPosition(line: ctx.state.cursor.line, column: currentLine.charLen)
+
+      # Insert the paste content
+      # Remove trailing newline from pasteText and add newline prefix
+      let textToInsert =
+        "\n" & pasteText.strip(leading = false, trailing = true, chars = {'\n'})
+      let insertResult = ctx.buffer.insertText(pastePos, textToInsert)
+      if insertResult.isErr:
+        # Rollback transaction on error
+        if actualCount > 1:
+          discard ctx.buffer.commitTransaction()
+        return err(insertResult.error)
+
+      # Move cursor to the start of pasted line (next line)
+      ctx.state.cursor.line = ctx.state.cursor.line + 1
+      ctx.state.cursor.column = 0
+    else:
+      # Paste after cursor position (Vim 'p' behavior for characterwise yank)
+      let lineContent = ctx.buffer.getLine(ctx.state.cursor.line)
+      var pastePos = ctx.state.cursor
+
+      # Move one character right if not at end of line (only for first paste)
+      if i == 1 and ctx.state.cursor.column < lineContent.charLen:
+        pastePos.column = ctx.state.cursor.column + 1
+
+      let insertResult = ctx.buffer.insertText(pastePos, pasteText)
+      if insertResult.isErr:
+        # Rollback transaction on error
+        if actualCount > 1:
+          discard ctx.buffer.commitTransaction()
+        return err(insertResult.error)
+
+      # Update cursor position for next paste
+      ctx.state.cursor.column = pastePos.column + pasteText.len
+
+  # Commit transaction if we started one
+  if actualCount > 1:
+    let txnResult = ctx.buffer.commitTransaction()
+    if txnResult.isErr:
+      return err(txnResult.error)
+
+  ctx.state.needsFullRedraw = true
+  return Result[(), string].ok ()
+
+proc handlePasteBefore(ctx: CommandContext, count: int = 1): Result[(), string] =
+  ## Paste text from internal register or system clipboard before cursor (P command)
+  ## Mimics Vim's 'P' behavior
+  ## count: number of times to paste (default: 1)
+
+  logDebug("paste", "handlePasteBefore called with count=" & $count)
+  let actualCount = max(1, count)
+
+  # First try to use internal yank register
+  var pasteText = ctx.state.yankRegister
+  var isFullLine = ctx.state.yankIsLine
+
+  logDebug(
+    "paste",
+    "Using internal register, length: " & $pasteText.len & ", isLine=" & $isFullLine,
+  )
+
+  # If internal register is empty, try system clipboard (if enabled)
+  if pasteText.len == 0 and ctx.clipboardConfig.enable:
+    logDebug("paste", "Internal register empty, trying clipboard")
+    let readResult = readFromClipboard(ctx.clipboardConfig.tool)
+    if readResult.isErr:
+      return err(
+        "Nothing to paste (yank register empty and clipboard error: " & readResult.error &
+          ")"
+      )
+
+    pasteText = readResult.value
+    # Detect if it's a full line from clipboard
+    isFullLine = pasteText.len > 0 and pasteText[^1] == '\n'
+    logDebug("paste", "Got from clipboard, length: " & $pasteText.len)
+
+  if pasteText.len == 0:
+    return err("Nothing to paste")
+
+  # Begin transaction if count > 1 to group all pastes into single undo entry
+  if actualCount > 1:
+    let txnResult = ctx.buffer.beginTransaction("paste " & $actualCount & " times")
+    if txnResult.isErr:
+      return err(txnResult.error)
+
+  # Paste count times
+  for i in 1 .. actualCount:
+    if isFullLine:
+      # Paste on new line above current line (Vim 'P' behavior for linewise yank)
+      let pastePos = BufferPosition(line: ctx.state.cursor.line, column: 0)
+
+      # Insert the paste content
+      # Remove trailing newline from pasteText and add newline suffix
+      let textToInsert =
+        pasteText.strip(leading = false, trailing = true, chars = {'\n'}) & "\n"
+      let insertResult = ctx.buffer.insertText(pastePos, textToInsert)
+      if insertResult.isErr:
+        # Rollback transaction on error
+        if actualCount > 1:
+          discard ctx.buffer.commitTransaction()
+        return err(insertResult.error)
+
+      # Cursor stays at current line (which is now the pasted content)
+      ctx.state.cursor.column = 0
+    else:
+      # Paste at cursor position (Vim 'P' behavior for characterwise yank)
+      let pastePos = ctx.state.cursor
+
+      let insertResult = ctx.buffer.insertText(pastePos, pasteText)
+      if insertResult.isErr:
+        # Rollback transaction on error
+        if actualCount > 1:
+          discard ctx.buffer.commitTransaction()
+        return err(insertResult.error)
+
+      # Update cursor position for next paste
+      ctx.state.cursor.column = pastePos.column + pasteText.len
+
+  # Commit transaction if we started one
+  if actualCount > 1:
+    let txnResult = ctx.buffer.commitTransaction()
+    if txnResult.isErr:
+      return err(txnResult.error)
+
+  ctx.state.needsFullRedraw = true
+  return Result[(), string].ok ()
+
+proc handleDeleteChar(ctx: CommandContext, count: int = 1): Result[(), string] =
+  ## Delete character(s) at cursor position (x command)
+  ## count: number of characters to delete (default: 1)
+
+  logDebug("delete", "handleDeleteChar called with count=" & $count)
+  let actualCount = max(1, count)
+  let lineContent = ctx.buffer.getLine(ctx.state.cursor.line)
+
+  # Check if we're at or past the end of the line
+  if ctx.state.cursor.column >= lineContent.charLen:
+    return err("Nothing to delete")
+
+  # Calculate how many characters we can actually delete
+  let charsAvailable = lineContent.charLen - ctx.state.cursor.column
+  let charsToDelete = min(actualCount, charsAvailable)
+
+  # Extract the characters to be deleted (for yank register)
+  # Get the line content and extract the substring
+  let runes = lineContent.toRunes()
+  var deletedText = ""
+  for i in 0 ..< charsToDelete:
+    let runeIdx = ctx.state.cursor.column + i
+    if runeIdx < runes.len:
+      deletedText.add($runes[runeIdx])
+
+  # Store in yank register before deleting
+  ctx.state.yankRegister = deletedText
+  ctx.state.yankIsLine = false
+
+  # Begin transaction if deleting multiple characters
+  if charsToDelete > 1:
+    let txnResult = ctx.buffer.beginTransaction("delete " & $charsToDelete & " chars")
+    if txnResult.isErr:
+      return err(txnResult.error)
+
+  # Delete the characters
+  for i in 0 ..< charsToDelete:
+    # deleteRange is inclusive, so endPos should be at the same column as cursor
+    # to delete only one character
+    let endPos = ctx.state.cursor
+    let delResult = ctx.buffer.deleteRange(ctx.state.cursor, endPos)
+    if delResult.isErr:
+      if charsToDelete > 1:
+        discard ctx.buffer.commitTransaction()
+      return err(delResult.error)
+
+  # Commit transaction if we started one
+  if charsToDelete > 1:
+    let txnResult = ctx.buffer.commitTransaction()
+    if txnResult.isErr:
+      return err(txnResult.error)
+
+  # Also write to system clipboard if enabled
+  if ctx.clipboardConfig.enable:
+    discard writeToClipboard(ctx.clipboardConfig.tool, deletedText)
+
+  ctx.state.needsFullRedraw = true
+  return Result[(), string].ok ()
+
+proc handleDeleteCharBefore(ctx: CommandContext, count: int = 1): Result[(), string] =
+  ## Delete character(s) before cursor position (X command)
+  ## count: number of characters to delete (default: 1)
+
+  logDebug("delete", "handleDeleteCharBefore called with count=" & $count)
+  let actualCount = max(1, count)
+
+  # Check if we're at the beginning of the line
+  if ctx.state.cursor.column == 0:
+    return err("Nothing to delete")
+
+  # Calculate how many characters we can actually delete
+  let charsAvailable = ctx.state.cursor.column
+  let charsToDelete = min(actualCount, charsAvailable)
+
+  # Calculate the start position for deletion
+  let startColumn = ctx.state.cursor.column - charsToDelete
+
+  # Extract the characters to be deleted (for yank register)
+  # Get the line content and extract the substring
+  let lineContent = ctx.buffer.getLine(ctx.state.cursor.line)
+  let runes = lineContent.toRunes()
+  var deletedText = ""
+  for i in 0 ..< charsToDelete:
+    let runeIdx = startColumn + i
+    if runeIdx < runes.len:
+      deletedText.add($runes[runeIdx])
+
+  # Store in yank register before deleting
+  ctx.state.yankRegister = deletedText
+  ctx.state.yankIsLine = false
+
+  # Begin transaction if deleting multiple characters
+  if charsToDelete > 1:
+    let txnResult = ctx.buffer.beginTransaction("delete " & $charsToDelete & " chars")
+    if txnResult.isErr:
+      return err(txnResult.error)
+
+  # Delete the characters (delete from startColumn multiple times)
+  for i in 0 ..< charsToDelete:
+    let startPos = BufferPosition(line: ctx.state.cursor.line, column: startColumn)
+    # deleteRange is inclusive, so endPos should be the same as startPos
+    # to delete only one character
+    let endPos = startPos
+    let delResult = ctx.buffer.deleteRange(startPos, endPos)
+    if delResult.isErr:
+      if charsToDelete > 1:
+        discard ctx.buffer.commitTransaction()
+      return err(delResult.error)
+
+  # Commit transaction if we started one
+  if charsToDelete > 1:
+    let txnResult = ctx.buffer.commitTransaction()
+    if txnResult.isErr:
+      return err(txnResult.error)
+
+  # Move cursor to the position where deletion started
+  ctx.state.cursor.column = startColumn
+
+  # Also write to system clipboard if enabled
+  if ctx.clipboardConfig.enable:
+    discard writeToClipboard(ctx.clipboardConfig.tool, deletedText)
+
+  ctx.state.needsFullRedraw = true
+  return Result[(), string].ok ()
+
+proc handleDeleteLine(ctx: CommandContext, count: int = 1): Result[(), string] =
+  ## Delete current line(s) and store in yank register (dd command)
+  ## count: number of lines to delete (default: 1)
+
+  logDebug("delete", "handleDeleteLine called with count=" & $count)
+  let actualCount = max(1, count)
+  let startLine = ctx.state.cursor.line
+  let endLine = min(startLine + actualCount - 1, ctx.buffer.len - 1)
+
+  # Build text from lines to be deleted (for yank register)
+  var deletedText = ""
+  for lineIdx in startLine .. endLine:
+    if lineIdx < ctx.buffer.len:
+      let lineContent = ctx.buffer.getLine(lineIdx)
+      deletedText.add(lineContent)
+      if lineIdx < endLine or (lineContent.len > 0 and lineContent[^1] != '\n'):
+        deletedText.add("\n")
+
+  # Store in yank register before deleting
+  ctx.state.yankRegister = deletedText
+  ctx.state.yankIsLine = true
+
+  # Delete the lines
+  for i in 1 .. actualCount:
+    if startLine < ctx.buffer.len:
+      let delResult = ctx.buffer.deleteLine(startLine)
+      if delResult.isErr:
+        return err(delResult.error)
+
+  # Adjust cursor position if needed
+  if ctx.state.cursor.line >= ctx.buffer.len:
+    ctx.state.cursor.line = max(0, ctx.buffer.len - 1)
+  ctx.state.cursor.column = 0
+
+  # Also write to system clipboard if enabled
+  if ctx.clipboardConfig.enable:
+    discard writeToClipboard(ctx.clipboardConfig.tool, deletedText)
+
+  ctx.state.needsFullRedraw = true
+  ctx.state.statusMessage = "Deleted " & $actualCount & " line(s)"
+  return Result[(), string].ok ()
+
+proc handleClipboardCut(ctx: CommandContext): Result[(), string] =
+  ## Cut selected text to system clipboard (copy + delete)
+  if not ctx.clipboardConfig.enable:
+    return err("Clipboard integration is disabled")
+
+  # First, copy to clipboard
+  let copyResult = handleClipboardCopy(ctx)
+  if copyResult.isErr:
+    return copyResult
+
+  # Then delete the selection
+  if ctx.state.visualSelection.active:
+    visualDelete(ctx.buffer, ctx.state)
+
+  return Result[(), string].ok ()
+
+proc handleYankLine(ctx: CommandContext, count: int = 1): Result[(), string] =
+  ## Yank (copy) the current line(s) to internal register and optionally to system clipboard
+  ## count: number of lines to yank (default: 1)
+
+  logDebug("yank", "handleYankLine called with count=" & $count)
+  let actualCount = max(1, count) # Ensure at least 1 line
+  logDebug("yank", "actualCount=" & $actualCount)
+  let startLine = ctx.state.cursor.line
+  let endLine = min(startLine + actualCount - 1, ctx.buffer.len - 1)
+
+  # Build text from multiple lines
+  var yankText = ""
+  for lineIdx in startLine .. endLine:
+    if lineIdx < ctx.buffer.len:
+      let lineContent = ctx.buffer.getLine(lineIdx)
+      yankText.add(lineContent)
+      # Add newline if not the last line or if the line itself doesn't end with one
+      if lineIdx < endLine or (lineContent.len > 0 and lineContent[^1] != '\n'):
+        yankText.add("\n")
+
+  # Debug: log the yanked text
+  logDebug(
+    "yank", "Yanking " & $actualCount & " line(s), total length: " & $yankText.len
+  )
+  logDebug("yank", "Yanked text: '" & yankText & "'")
+
+  if yankText.len == 0:
+    return err("No text to yank")
+
+  # Store in internal yank register
+  ctx.state.yankRegister = yankText
+  ctx.state.yankIsLine = true
+
+  logDebug(
+    "yank",
+    "Stored in register: '" & ctx.state.yankRegister & "', isLine=" &
+      $ctx.state.yankIsLine,
+  )
+
+  # Also write to system clipboard if enabled
+  if ctx.clipboardConfig.enable:
+    let writeResult = writeToClipboard(ctx.clipboardConfig.tool, yankText)
+    if writeResult.isErr:
+      # Don't fail the operation if clipboard write fails
+      ctx.state.statusMessage =
+        "Yanked " & $actualCount & " line(s) (clipboard error: " & writeResult.error &
+        ")"
+      return Result[(), string].ok ()
+
+  ctx.state.statusMessage = "Yanked " & $actualCount & " line(s)"
+  return Result[(), string].ok ()
+
+## Operator command handlers
+
+proc handleOperatorYank(ctx: CommandContext, count: int = 1): Result[(), string] =
+  ## Yank operator - waits for motion (y2w, y$, etc.) or yy for line
+  ## count: number of times to apply the operator (default: 1)
+
+  # Check if same operator was pressed (yy for yank line)
+  if ctx.state.pendingOperator.isSome and
+      ctx.state.pendingOperator.get.operatorType == OpYank:
+    # Execute line yank
+    let startLine = ctx.state.cursor.line
+    let operatorCount = ctx.state.pendingOperator.get.operatorCount
+    let endLine = min(startLine + operatorCount - 1, ctx.buffer.len - 1)
+
+    # Extract lines for yank register
+    var text = ""
+    for lineIdx in startLine .. endLine:
+      if lineIdx < ctx.buffer.len:
+        let lineContent = ctx.buffer.getLine(lineIdx)
+        text.add(lineContent)
+        if lineContent.len == 0 or lineContent[^1] != '\n':
+          text.add("\n")
+
+    ctx.state.yankRegister = text
+    ctx.state.yankIsLine = true
+
+    # Clear operator state
+    ctx.state.pendingOperator = none(PendingOperator)
+    let lineCount = endLine - startLine + 1
+    ctx.state.statusMessage = "Yanked " & $lineCount & " line(s)"
+    return ok(())
+  else:
+    # Set pending operator for motion
+    ctx.state.pendingOperator = some(
+      PendingOperator(
+        operatorType: OpYank, operatorCount: count, startPos: ctx.state.cursor
+      )
+    )
+    ctx.state.statusMessage = "y"
+    return ok(())
+
+proc handleOperatorDelete(ctx: CommandContext, count: int = 1): Result[(), string] =
+  ## Delete operator - waits for motion (d2w, d$, etc.) or dd for line
+  ## count: number of times to apply the operator (default: 1)
+
+  # Check if same operator was pressed (dd for delete line)
+  if ctx.state.pendingOperator.isSome and
+      ctx.state.pendingOperator.get.operatorType == OpDelete:
+    # Execute line deletion
+    let startLine = ctx.state.cursor.line
+    let operatorCount = ctx.state.pendingOperator.get.operatorCount
+    let endLine = min(startLine + operatorCount - 1, ctx.buffer.len - 1)
+
+    # Extract lines for yank register
+    var text = ""
+    for lineIdx in startLine .. endLine:
+      if lineIdx < ctx.buffer.len:
+        let lineContent = ctx.buffer.getLine(lineIdx)
+        text.add(lineContent)
+        if lineContent.len == 0 or lineContent[^1] != '\n':
+          text.add("\n")
+
+    ctx.state.yankRegister = text
+    ctx.state.yankIsLine = true
+
+    # Delete lines
+    for i in 0 ..< (endLine - startLine + 1):
+      if startLine < ctx.buffer.len:
+        let deleteResult = ctx.buffer.deleteLine(startLine)
+        if deleteResult.isErr:
+          return err("Failed to delete line: " & deleteResult.error)
+
+    # Move cursor to beginning of line
+    ctx.state.cursor.line = min(startLine, ctx.buffer.len - 1)
+    ctx.state.cursor.column = 0
+
+    # Clear operator state
+    ctx.state.pendingOperator = none(PendingOperator)
+    let lineCount = endLine - startLine + 1
+    ctx.state.statusMessage = "Deleted " & $lineCount & " line(s)"
+    return ok(())
+  else:
+    # Set pending operator for motion
+    ctx.state.pendingOperator = some(
+      PendingOperator(
+        operatorType: OpDelete, operatorCount: count, startPos: ctx.state.cursor
+      )
+    )
+    ctx.state.statusMessage = "d"
+    return ok(())
+
+proc handleOperatorChange(ctx: CommandContext, count: int = 1): Result[(), string] =
+  ## Change operator - waits for motion (c2w, c$, etc.) or cc for line
+  ## count: number of times to apply the operator (default: 1)
+
+  # Check if same operator was pressed (cc for change line)
+  if ctx.state.pendingOperator.isSome and
+      ctx.state.pendingOperator.get.operatorType == OpChange:
+    # Execute line change
+    let startLine = ctx.state.cursor.line
+    let operatorCount = ctx.state.pendingOperator.get.operatorCount
+    let endLine = min(startLine + operatorCount - 1, ctx.buffer.len - 1)
+
+    # Extract lines for yank register
+    var text = ""
+    for lineIdx in startLine .. endLine:
+      if lineIdx < ctx.buffer.len:
+        let lineContent = ctx.buffer.getLine(lineIdx)
+        text.add(lineContent)
+        if lineContent.len == 0 or lineContent[^1] != '\n':
+          text.add("\n")
+
+    ctx.state.yankRegister = text
+    ctx.state.yankIsLine = true
+
+    # Delete all but first line
+    for i in 0 ..< (endLine - startLine):
+      if startLine + 1 < ctx.buffer.len:
+        let deleteResult = ctx.buffer.deleteLine(startLine + 1)
+        if deleteResult.isErr:
+          return err("Failed to delete line: " & deleteResult.error)
+
+    # Clear the first line
+    if startLine < ctx.buffer.len:
+      let line = ctx.buffer.getLine(startLine)
+      for i in 0 ..< line.charLen:
+        let deleteResult = ctx.buffer.deleteRange(
+          BufferPosition(line: startLine, column: 0),
+          BufferPosition(line: startLine, column: 1),
+        )
+        if deleteResult.isErr:
+          return err("Failed to clear line: " & deleteResult.error)
+
+    # Move cursor to beginning of line and enter Insert mode
+    ctx.state.cursor.line = startLine
+    ctx.state.cursor.column = 0
+    ctx.state.mode = EditorMode.Insert
+
+    # Begin transaction for change
+    let transactionResult = ctx.buffer.beginTransaction("Change line")
+    if transactionResult.isErr:
+      return err("Failed to begin transaction: " & transactionResult.error)
+
+    # Clear operator state
+    ctx.state.pendingOperator = none(PendingOperator)
+    ctx.state.statusMessage = "-- INSERT --"
+    return ok(())
+  else:
+    # Set pending operator for motion
+    ctx.state.pendingOperator = some(
+      PendingOperator(
+        operatorType: OpChange, operatorCount: count, startPos: ctx.state.cursor
+      )
+    )
+    ctx.state.statusMessage = "c"
+    return ok(())
+
+## Text object command handlers
+
+proc handleTextObjectInner(ctx: CommandContext): Result[(), string] =
+  ## Handle inner text object (iw, i", i(, etc.) or enter Insert mode
+
+  # Check if we have a pending operator
+  if ctx.state.pendingOperator.isSome:
+    # We have a pending operator - set text object modifier
+    let operatorCount = ctx.state.pendingOperator.get.operatorCount
+    ctx.state.pendingTextObject =
+      some(PendingTextObject(modifier: tomInner, operatorCount: operatorCount))
+    ctx.state.statusMessage = $ctx.state.pendingOperator.get.operatorType & "i"
+    return ok(())
+  else:
+    # No pending operator - enter Insert mode
+    ctx.state.mode = EditorMode.Insert
+    # Begin transaction for insert mode edit
+    let transactionResult = ctx.buffer.beginTransaction("Insert mode edit")
+    if transactionResult.isErr:
+      return err("Failed to begin transaction: " & transactionResult.error)
+    ctx.state.statusMessage = "-- INSERT --"
+    return ok(())
+
+proc handleTextObjectAround(ctx: CommandContext): Result[(), string] =
+  ## Handle around text object (aw, a", a(, etc.) or enter Append mode
+
+  # Check if we have a pending operator
+  if ctx.state.pendingOperator.isSome:
+    # We have a pending operator - set text object modifier
+    let operatorCount = ctx.state.pendingOperator.get.operatorCount
+    ctx.state.pendingTextObject =
+      some(PendingTextObject(modifier: tomAround, operatorCount: operatorCount))
+    ctx.state.statusMessage = $ctx.state.pendingOperator.get.operatorType & "a"
+    return ok(())
+  else:
+    # No pending operator - enter Append mode (move cursor right, then Insert)
+    # Move cursor one position to the right if not at end of line
+    if ctx.state.cursor.line < ctx.buffer.len:
+      let currentLine = ctx.buffer.getLine(ctx.state.cursor.line)
+      if ctx.state.cursor.column < currentLine.len:
+        ctx.state.cursor.column += 1
+    # Enter Insert mode
+    ctx.state.mode = EditorMode.Insert
+    # Begin transaction for insert mode edit
+    let transactionResult = ctx.buffer.beginTransaction("Append mode edit")
+    if transactionResult.isErr:
+      return err("Failed to begin transaction: " & transactionResult.error)
+    ctx.state.statusMessage = "-- INSERT --"
+    return ok(())
 
 ## Register built-in commands
 proc registerBuiltinCommands*(registry: CommandRegistry) =
@@ -723,71 +1524,314 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     0,
   )
 
-  # Register mock delete commands for testing sequences
-  registry.register(
-    custom("delete.word"),
-    "Delete Word",
-    "Delete word under cursor",
-    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      # Mock implementation
-      echo "DELETE WORD (mock)"
-      return ok(()),
-    0,
-    0,
-  )
+  # Note: delete.word is now handled by operator+motion system (d+w)
+  # The operator.delete handler sets pendingOperator, then Motion.WordForward
+  # is executed, and executeOperatorOnRange is called automatically
 
   registry.register(
     custom("delete.line"),
     "Delete Line",
-    "Delete current line",
+    "Delete current line(s)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      # Mock implementation
-      echo "DELETE LINE (mock)"
-      return ok(()),
+      let count = parseCount(args, default = 1)
+      handleDeleteLine(ctx, count),
     0,
-    0,
+    1, # Accept optional count argument
   )
 
   registry.register(
-    custom("change.word"),
-    "Change Word",
-    "Change word under cursor",
+    custom("delete.char"),
+    "Delete Character",
+    "Delete character(s) at cursor (x command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      # Mock implementation
-      echo "CHANGE WORD (mock)"
-      ctx.state.mode = EditorMode.Insert
-      return ok(()),
+      let count = parseCount(args, default = 1)
+      handleDeleteChar(ctx, count),
     0,
-    0,
+    1, # Accept optional count argument
   )
+
+  registry.register(
+    custom("delete.char.before"),
+    "Delete Character Before",
+    "Delete character(s) before cursor (X command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let count = parseCount(args, default = 1)
+      handleDeleteCharBefore(ctx, count),
+    0,
+    1, # Accept optional count argument
+  )
+
+  registry.register(
+    custom("yank.line"),
+    "Yank Line",
+    "Yank (copy) current line(s) to clipboard",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let count = parseCount(args, default = 1)
+      handleYankLine(ctx, count),
+    0,
+    1, # Accept optional count argument
+  )
+
+  registry.register(
+    custom("paste.after"),
+    "Paste After",
+    "Paste clipboard content after cursor (p command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let count = parseCount(args, default = 1)
+      handlePasteAfter(ctx, count),
+    0,
+    1, # Accept optional count argument
+  )
+
+  registry.register(
+    custom("paste.before"),
+    "Paste Before",
+    "Paste clipboard content before cursor (P command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let count = parseCount(args, default = 1)
+      handlePasteBefore(ctx, count),
+    0,
+    1, # Accept optional count argument
+  )
+
+  # Note: change.word is now handled by operator+motion system (c+w)
+  # The operator.change handler sets pendingOperator, then Motion.WordForward
+  # is executed, and executeOperatorOnRange is called automatically
 
   # Undo/Redo commands
   registry.register(
     builtin(bcEditUndo),
     "Undo",
-    "Undo the last change",
+    "Undo the last change(s)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let r = ctx.buffer.undo()
-      if r.isErr:
-        return err(r.error)
+      let count = parseCount(args, default = 1)
+      for i in 1 .. count:
+        let r = ctx.buffer.undo()
+        if r.isErr:
+          if i == 1:
+            return err(r.error)
+          else:
+            break # Stop if we can't undo anymore
       # TODO: Apply cursor position from r.value to active window
       return Result[(), string].ok (),
     0,
-    0,
+    1, # Accept optional count argument
   )
 
   registry.register(
     builtin(bcEditRedo),
     "Redo",
-    "Redo the last undone change",
+    "Redo the last undone change(s)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      let r = ctx.buffer.redo()
-      if r.isErr:
-        return err(r.error)
+      let count = parseCount(args, default = 1)
+      for i in 1 .. count:
+        let r = ctx.buffer.redo()
+        if r.isErr:
+          if i == 1:
+            return err(r.error)
+          else:
+            break # Stop if we can't redo anymore
       # TODO: Apply cursor position from r.value to active window
       return Result[(), string].ok (),
     0,
+    1, # Accept optional count argument
+  )
+
+  # Clipboard commands
+  registry.register(
+    builtin(bcEditCopy),
+    "Copy",
+    "Copy selected text to system clipboard",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleClipboardCopy(ctx),
     0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcEditPaste),
+    "Paste",
+    "Paste text from system clipboard",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleClipboardPaste(ctx),
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcEditCut),
+    "Cut",
+    "Cut selected text to system clipboard",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleClipboardCut(ctx),
+    0,
+    0,
+  )
+
+  # Operator commands (d, c, y) - these wait for motion/text object
+  registry.register(
+    custom("operator.delete"),
+    "Delete Operator",
+    "Delete operator - waits for motion (d2w, d$, etc.) or dd for line",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let count = parseCount(args, default = 1)
+      handleOperatorDelete(ctx, count),
+    0,
+    1, # Accept optional count
+  )
+
+  registry.register(
+    custom("operator.change"),
+    "Change Operator",
+    "Change operator - waits for motion (c2w, c$, etc.) or cc for line",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let count = parseCount(args, default = 1)
+      handleOperatorChange(ctx, count),
+    0,
+    1, # Accept optional count
+  )
+
+  registry.register(
+    custom("operator.yank"),
+    "Yank Operator",
+    "Yank operator - waits for motion (y2w, y$, etc.) or yy for line",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let count = parseCount(args, default = 1)
+      handleOperatorYank(ctx, count),
+    0,
+    1, # Accept optional count
+  )
+
+  # D - Delete to end of line (equivalent to d$)
+  registry.register(
+    custom("operator.delete.to.end"),
+    "Delete To End Of Line",
+    "Delete from cursor to end of line (D command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      # Calculate range from cursor to end of line
+      let startPos = ctx.state.cursor
+      let line = ctx.buffer.getLine(startPos.line)
+      let endPos = BufferPosition(line: startPos.line, column: line.charLen)
+
+      let range = OperatorRange(start: startPos, endPos: endPos, isLinewise: false)
+
+      # Execute delete operation
+      return executeOperatorOnRange(ctx, OpDelete, range, 1),
+    0,
+    0,
+  )
+
+  # C - Change to end of line (equivalent to c$)
+  registry.register(
+    custom("operator.change.to.end"),
+    "Change To End Of Line",
+    "Change from cursor to end of line (C command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      # Calculate range from cursor to end of line
+      let startPos = ctx.state.cursor
+      let line = ctx.buffer.getLine(startPos.line)
+      let endPos = BufferPosition(line: startPos.line, column: line.charLen)
+
+      let range = OperatorRange(start: startPos, endPos: endPos, isLinewise: false)
+
+      # Execute change operation
+      return executeOperatorOnRange(ctx, OpChange, range, 1),
+    0,
+    0,
+  )
+
+  # Text object commands (i, a) - wait for text object kind
+  registry.register(
+    custom("textobject.inner"),
+    "Inner Text Object",
+    "Select inner text object (iw, i\", i(, etc.) or enter Insert mode",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleTextObjectInner(ctx),
+    0,
+    0,
+  )
+
+  registry.register(
+    custom("textobject.around"),
+    "Around Text Object",
+    "Select around text object (aw, a\", a(, etc.) or enter Append mode",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleTextObjectAround(ctx),
+    0,
+    0,
+  )
+
+  # Text object kind commands (w, ", (, etc.)
+  proc registerTextObjectKind(
+      reg: CommandRegistry, id: string, name: string, desc: string, kind: TextObjectKind
+  ) =
+    reg.register(
+      custom(id),
+      name,
+      desc,
+      proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+        # Check if we have a pending text object modifier
+        if ctx.state.pendingTextObject.isNone:
+          # No text object modifier - ignore this key press
+          # (In the future, we should fallback to the key's normal function)
+          return ok(())
+
+        let textObj = ctx.state.pendingTextObject.get
+        ctx.state.pendingTextObject = none(PendingTextObject)
+
+        # Calculate text object range
+        let rangeResult =
+          calculateTextObjectRange(ctx.buffer, ctx.state.cursor, kind, textObj.modifier)
+        if rangeResult.isErr:
+          return err(rangeResult.error)
+
+        let toRange = rangeResult.value
+
+        # Convert TextObjectRange to OperatorRange
+        let opRange = OperatorRange(
+          start: toRange.start, endPos: toRange.endPos, isLinewise: toRange.isLinewise
+        )
+
+        # Check if we have a pending operator
+        if ctx.state.pendingOperator.isSome:
+          let op = ctx.state.pendingOperator.get
+          ctx.state.pendingOperator = none(PendingOperator)
+
+          # Execute operator on text object
+          return executeOperatorOnRange(ctx, op.operatorType, opRange, op.operatorCount)
+        else:
+          # No operator - just select the text object in visual mode (future feature)
+          return err("Text objects without operators not yet implemented"),
+      0,
+      0,
+    )
+
+  # Register text object kinds
+  registerTextObjectKind(
+    registry, "textobject.word", "Word Text Object", "Word text object (iw/aw)", toWord
+  )
+  registerTextObjectKind(
+    registry, "textobject.quote.double", "Double Quote Text Object",
+    "Double-quoted string (i\"/a\")", toQuotedDouble,
+  )
+  registerTextObjectKind(
+    registry, "textobject.quote.single", "Single Quote Text Object",
+    "Single-quoted string (i'/a')", toQuotedSingle,
+  )
+  registerTextObjectKind(
+    registry, "textobject.quote.backtick", "Backtick Text Object",
+    "Backtick string (i`/a`)", toQuotedBacktick,
+  )
+  registerTextObjectKind(
+    registry, "textobject.paren", "Parenthesis Text Object", "Parentheses (i(/a()",
+    toParenthesis,
+  )
+  registerTextObjectKind(
+    registry, "textobject.bracket", "Bracket Text Object", "Square brackets (i[/a[)",
+    toBracket,
+  )
+  registerTextObjectKind(
+    registry, "textobject.brace", "Brace Text Object", "Curly braces (i{/a{)", toBrace
   )
 
   # Helper proc for executing search and updating cursor/viewport
