@@ -762,8 +762,10 @@ proc updateHighlightIncremental*(
   # Remove old segments in the re-parse range
   var filteredSegments: seq[ColorSegment]
   for seg in incrHighlight.segments:
-    # Keep segments that don't overlap with the re-parse range
-    if seg.lastRow < reparseStart or seg.firstRow > reparseEnd:
+    # Keep segments that are within buffer bounds and don't overlap with the re-parse range
+    # This ensures we don't keep segments pointing to deleted lines
+    if seg.firstRow < buffer.len and seg.lastRow < buffer.len and
+        (seg.lastRow < reparseStart or seg.firstRow > reparseEnd):
       filteredSegments.add(seg)
 
   # Merge new segments

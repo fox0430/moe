@@ -30,6 +30,7 @@ import std/[options, unicode, strutils]
 import pkg/results
 
 import ../[types, buffer, modes, keybindings, motion, commandregistry]
+import insert_commands
 
 type
   InsertModeResultKind* = enum
@@ -129,13 +130,9 @@ proc handleDelete*(
 proc handleNewline*(
     handler: InsertModeHandler, buffer: TextBuffer, state: EditorState
 ): InsertModeResult =
-  ## Handle newline insertion
-  let pos = state.cursor
-  discard buffer.insertText(pos, "\n")
-
-  # Move cursor to start of new line
-  state.cursor.line += 1
-  state.cursor.column = 0
+  ## Handle newline insertion with auto-indentation
+  # Call the insert_commands implementation which has auto-indent logic
+  insertNewline(buffer, state)
 
   return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 

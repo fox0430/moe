@@ -26,7 +26,7 @@ import std/options
 import pkg/results
 
 import ../[types, buffer, modes, motion, keybindings, commandregistry, config]
-import visual_handler
+import visual_handler, insert_commands
 
 type
   NormalModeResultKind* = enum
@@ -162,20 +162,13 @@ proc handleInsertModeEntry*(
     let lineContent = buffer.getLine(state.cursor.line)
     state.cursor.column = lineContent.charLen
   of "open-below":
-    # Insert new line below and position cursor
-    let currentLine = state.cursor.line
-    let lineContent = buffer.getLine(currentLine)
-    state.cursor.column = lineContent.charLen
-    discard buffer.insertText(state.cursor, "\n")
-    state.cursor.line = currentLine + 1
-    state.cursor.column = 0
+    # Insert new line below and position cursor with auto-indent
+    insertLineBelow(buffer, state)
+    # Note: insertLineBelow already switches to Insert mode, but we override below
   of "open-above":
-    # Insert new line above and position cursor
-    let currentLine = state.cursor.line
-    state.cursor.column = 0
-    discard buffer.insertText(state.cursor, "\n")
-    state.cursor.line = currentLine
-    state.cursor.column = 0
+    # Insert new line above and position cursor with auto-indent
+    insertLineAbove(buffer, state)
+    # Note: insertLineAbove already switches to Insert mode, but we override below
   else:
     return NormalModeResult(
       kind: nmrError, errorMessage: "Unknown insert type: " & insertType

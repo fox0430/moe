@@ -841,7 +841,8 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
     # Compute changed range from undone changes for incremental highlighting
     var minLine = int.high
     var maxLine = 0
-    for change in undoneChanges:
+
+    proc processChange(change: BufferChange, depth: int = 0) =
       let pos = getChangePosition(change)
       minLine = min(minLine, pos.line)
       # Estimate end line based on change type (inverse operation)
@@ -857,8 +858,13 @@ proc undo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
         let numNewlines = change.deletedRangeText.count('\n')
         maxLine = max(maxLine, pos.line + numNewlines)
       of ckTransaction:
-        # Transactions may affect wide range
-        maxLine = max(maxLine, b.len - 1)
+        # Recursively process transaction changes
+        for innerChange in change.transactionChanges:
+          processChange(innerChange, depth + 1)
+
+    for change in undoneChanges:
+      processChange(change)
+
     if minLine != int.high:
       b.lastChangedLines = (minLine, maxLine)
 
@@ -874,14 +880,8 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
   try:
     case change.kind
     of ckInsertText:
-      case b.backendKind
-      of GapBuffer:
-        let line = b.getLine(change.insertPos.line)
-        let bytePos = charToBytePosCached(
-          line, change.insertPos.column, b.cursorCache, change.insertPos.line,
-          b.changeSeq,
-        )
-        b.gapBuffer.insertIntoLine(change.insertPos.line, bytePos, change.insertText)
+      # Use insertTextWithNewlines to handle newlines correctly during redo
+      b.insertTextWithNewlines(change.insertPos, change.insertText)
     of ckDeleteText:
       case b.backendKind
       of GapBuffer:
@@ -968,7 +968,8 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
     # Compute changed range from redone changes for incremental highlighting
     var minLine = int.high
     var maxLine = 0
-    for change in redoneChanges:
+
+    proc processChange(change: BufferChange, depth: int = 0) =
       let pos = getChangePosition(change)
       minLine = min(minLine, pos.line)
       # Estimate end line based on change type
@@ -976,13 +977,24 @@ proc redo*(b: TextBuffer, count: int = 1): Result[BufferPosition, string] =
       of ckInsertText:
         let numNewlines = change.insertText.count('\n')
         maxLine = max(maxLine, pos.line + numNewlines)
-      of ckDeleteText, ckInsertLine, ckDeleteLine:
+      of ckDeleteText:
         maxLine = max(maxLine, pos.line)
-      of ckDeleteRange:
-        maxLine = max(maxLine, change.deleteEndPos.line)
-      of ckTransaction:
-        # Transactions may affect wide range
+      of ckInsertLine:
+        maxLine = max(maxLine, pos.line)
+      of ckDeleteLine:
+        # Line deletion shifts all subsequent lines up
         maxLine = max(maxLine, b.len - 1)
+      of ckDeleteRange:
+        # Redoing delete affects from the deletion point to the end
+        # Since lines are deleted, maxLine should be the last line of the buffer after deletion
+        maxLine = max(maxLine, b.len - 1)
+      of ckTransaction:
+        # Recursively process transaction changes
+        for innerChange in change.transactionChanges:
+          processChange(innerChange, depth + 1)
+
+    for change in redoneChanges:
+      processChange(change)
     if minLine != int.high:
       b.lastChangedLines = (minLine, maxLine)
 

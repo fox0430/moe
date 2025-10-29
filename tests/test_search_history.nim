@@ -200,6 +200,6 @@ suite "Search History - Path Functions":
     if cacheDir.len == 0:
       skip()
     else:
-      let path = $getSearchHistoryPath().get
+      let path = getSearchHistoryPath().get.string
       check path.len > 0
       check path == cacheDir / "moe" / "search_history"

@@ -22,7 +22,26 @@
 ## This module provides Insert mode specific command implementations
 ## that are independent of CommandContext for better testability
 
+import std/strutils
 import ../[buffer, types, modes]
+
+proc getLineIndent*(line: string): string =
+  ## Extract leading whitespace (spaces and tabs) from a line
+  ## Returns the indentation string (empty if no indentation)
+  result = ""
+  for ch in line:
+    if ch == ' ' or ch == '\t':
+      result.add(ch)
+    else:
+      break
+
+proc getIndentString*(state: EditorState): string =
+  ## Get the indent string to use for auto-indentation
+  ## Returns either a tab or spaces based on expandTab setting
+  if state.expandTab:
+    return " ".repeat(state.tabStop)
+  else:
+    return "\t"
 
 proc insertChar*(buffer: TextBuffer, state: EditorState, ch: char) =
   ## Insert a character at cursor position
@@ -58,37 +77,90 @@ proc insertDelete*(buffer: TextBuffer, state: EditorState) =
   discard buffer.deleteChar(state.cursor)
 
 proc insertNewline*(buffer: TextBuffer, state: EditorState) =
-  ## Handle newline insertion
+  ## Handle newline insertion with optional auto-indentation
   let pos = state.cursor
-  discard buffer.insertText(pos, "\n")
-  # Move cursor to start of new line
+
+  # Get current line content for indent detection
+  let currentLineText = buffer.getLine(pos.line)
+
+  # Prepare the text to insert (newline + optional indent as single operation)
+  var textToInsert = "\n"
+  var indentLen = 0
+
+  # Apply auto-indent if enabled
+  if state.autoIndent:
+    # Get the indentation from the current line
+    let indent = getLineIndent(currentLineText)
+
+    if indent.len > 0:
+      # Combine newline and indent into single insertion
+      textToInsert = "\n" & indent
+      indentLen = indent.len
+
+  # Insert newline (and indent if any) as a single undo-able operation
+  discard buffer.insertText(pos, textToInsert)
+
+  # Move cursor to start of new line (after indent if any)
   state.cursor.line += 1
-  state.cursor.column = 0
+  state.cursor.column = indentLen
 
 proc insertLineBelow*(buffer: TextBuffer, state: EditorState) =
-  ## Handle 'o' command - insert line below and enter insert mode
+  ## Handle 'o' command - insert line below and enter insert mode with auto-indent
   let currentLine = state.cursor.line
-  # Move to end of current line
+  # Get current line content for indent detection
   let lineContent = buffer.getLine(currentLine)
+
+  # Move to end of current line
   state.cursor.column = lineContent.charLen
-  # Insert newline
-  discard buffer.insertText(state.cursor, "\n")
-  # Move cursor to new line
+
+  # Prepare the text to insert (newline + optional indent as single operation)
+  var textToInsert = "\n"
+  var indentLen = 0
+
+  # Apply auto-indent if enabled
+  if state.autoIndent:
+    let indent = getLineIndent(lineContent)
+    if indent.len > 0:
+      textToInsert = "\n" & indent
+      indentLen = indent.len
+
+  # Insert newline (and indent if any) as a single undo-able operation
+  discard buffer.insertText(state.cursor, textToInsert)
+
+  # Move cursor to new line (after indent if any)
   state.cursor.line = currentLine + 1
-  state.cursor.column = 0
+  state.cursor.column = indentLen
+
   # Switch to insert mode
   state.mode = EditorMode.Insert
 
 proc insertLineAbove*(buffer: TextBuffer, state: EditorState) =
-  ## Handle 'O' command - insert line above and enter insert mode
+  ## Handle 'O' command - insert line above and enter insert mode with auto-indent
   let currentLine = state.cursor.line
+  # Get current line content for indent detection
+  let lineContent = buffer.getLine(currentLine)
+
   # Move to start of current line
   state.cursor.column = 0
-  # Insert newline
-  discard buffer.insertText(state.cursor, "\n")
-  # Move cursor to the new line (which is the current line)
+
+  # Prepare the text to insert (newline + optional indent as single operation)
+  var textToInsert = "\n"
+  var indentLen = 0
+
+  # Apply auto-indent if enabled
+  if state.autoIndent:
+    let indent = getLineIndent(lineContent)
+    if indent.len > 0:
+      textToInsert = "\n" & indent
+      indentLen = indent.len
+
+  # Insert newline (and indent if any) as a single undo-able operation
+  discard buffer.insertText(state.cursor, textToInsert)
+
+  # Move cursor to the new line (which is the current line, after indent if any)
   state.cursor.line = currentLine
-  state.cursor.column = 0
+  state.cursor.column = indentLen
+
   # Switch to insert mode
   state.mode = EditorMode.Insert
 

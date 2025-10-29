@@ -570,6 +570,9 @@ proc newEditor*(): Editor =
       # Editor behavior
       tabStop: editorConfig.standard.tabStop,
       expandTab: editorConfig.standard.expandTab,
+      autoIndent: editorConfig.standard.autoIndent,
+      autoCloseParen: editorConfig.standard.autoCloseParen,
+      autoDeleteParen: editorConfig.standard.autoDeleteParen,
       showLineNumbers: editorConfig.standard.number,
       showCurrentLineNumber: editorConfig.standard.currentNumber,
       showCursorLine: editorConfig.standard.cursorLine,

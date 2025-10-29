@@ -194,6 +194,10 @@ type
     # Editor behavior settings
     tabStop*: int # Tab width (number of spaces per tab character)
     expandTab*: bool # Insert spaces instead of tab character when Tab key is pressed
+    autoIndent*: bool # Automatically indent new lines based on previous line
+    autoCloseParen*: bool # Automatically insert closing parenthesis/bracket/quote
+    autoDeleteParen*: bool
+      # Automatically delete matching closing paren when opening is deleted
     showLineNumbers*: bool # Whether to show line numbers
     showCurrentLineNumber*: bool # Whether to highlight current line number
     showCursorLine*: bool # Whether to highlight the cursor line

@@ -22,6 +22,7 @@ import std/[unittest, options, strutils]
 import pkg/results
 
 import ../src/moepkg/[buffer, cursor]
+import ../src/moepkg/syntax/highlite
 
 suite "Buffer - Undo/Redo Basic Operations":
   test "undo insertText single character":
@@ -348,3 +349,123 @@ suite "Buffer - Cursor Position Suggestion":
     check r.isOk
     check r.value.line == 0
     check r.value.column == 4
+
+suite "Buffer - Redo with Newlines and Highlighting":
+  test "redo insertText with newline updates buffer length":
+    # Regression test for bug where redo did not handle newlines correctly
+    let b = newTextBuffer("line1\nline2\nline3")
+    check b.len == 3
+
+    # Insert text with newline at line 1, column 0
+    discard b.insertText(BufferPosition(line: 1, column: 0), "new\n")
+    check b.len == 4
+    check b.getLine(0) == "line1"
+    check b.getLine(1) == "new"
+    check b.getLine(2) == "line2"
+    check b.getLine(3) == "line3"
+
+    # Undo the insertion
+    discard b.undo()
+    check b.len == 3
+    check b.getLine(0) == "line1"
+    check b.getLine(1) == "line2"
+    check b.getLine(2) == "line3"
+
+    # Redo should correctly handle the newline and restore buffer to 4 lines
+    let r = b.redo()
+    check r.isOk
+    check b.len == 4
+    check b.getLine(0) == "line1"
+    check b.getLine(1) == "new"
+    check b.getLine(2) == "line2"
+    check b.getLine(3) == "line3"
+
+  test "redo insertText with multiple newlines":
+    let b = newTextBuffer("first\nlast")
+    check b.len == 2
+
+    # Insert multiple lines at the end of first line
+    discard b.insertText(BufferPosition(line: 0, column: 5), "\nmiddle1\nmiddle2")
+    check b.len == 4
+    check b.getLine(0) == "first"
+    check b.getLine(1) == "middle1"
+    check b.getLine(2) == "middle2"
+    check b.getLine(3) == "last"
+
+    # Undo
+    discard b.undo()
+    check b.len == 2
+    check b.getLine(0) == "first"
+    check b.getLine(1) == "last"
+
+    # Redo should restore all 4 lines
+    let r = b.redo()
+    check r.isOk
+    check b.len == 4
+    check b.getLine(0) == "first"
+    check b.getLine(1) == "middle1"
+    check b.getLine(2) == "middle2"
+    check b.getLine(3) == "last"
+
+  test "redo with highlighting maintains consistency":
+    # Regression test: ensure buffer length and highlight segments stay in sync
+    let b = newTextBuffer("func test() {")
+    b.language = SourceLanguage.langNim
+    check b.len == 1
+
+    # Insert newline to create second line
+    discard b.insertText(BufferPosition(line: 0, column: 13), "\n  return")
+    check b.len == 2
+    check b.getLine(0) == "func test() {"
+    check b.getLine(1) == "  return"
+
+    # Update highlighting to ensure it's initialized
+    b.updateHighlight()
+
+    # Undo the insertion
+    discard b.undo()
+    check b.len == 1
+    check b.getLine(0) == "func test() {"
+
+    # Update highlighting after undo
+    b.updateHighlight()
+
+    # Redo should maintain buffer and highlight consistency
+    let r = b.redo()
+    check r.isOk
+    check b.len == 2
+    check b.getLine(0) == "func test() {"
+    check b.getLine(1) == "  return"
+
+    # Update highlighting after redo - should not crash or create invalid segments
+    b.updateHighlight()
+
+    # Verify highlight segments don't reference invalid line numbers
+    if b.highlight.colorSegments.len > 0:
+      for seg in b.highlight.colorSegments:
+        # All segments should reference lines within buffer bounds
+        check seg.firstRow < b.len
+        check seg.lastRow < b.len
+
+  test "multiple redo with newlines":
+    let b = newTextBuffer("start")
+
+    # Make multiple insertions with newlines
+    discard b.insertText(BufferPosition(line: 0, column: 5), "\nline1")
+    discard b.insertText(BufferPosition(line: 1, column: 5), "\nline2")
+    discard b.insertText(BufferPosition(line: 2, column: 5), "\nline3")
+    check b.len == 4
+
+    # Undo all
+    discard b.undo(3)
+    check b.len == 1
+    check b.getLine(0) == "start"
+
+    # Redo all
+    let r = b.redo(3)
+    check r.isOk
+    check b.len == 4
+    check b.getLine(0) == "start"
+    check b.getLine(1) == "line1"
+    check b.getLine(2) == "line2"
+    check b.getLine(3) == "line3"
