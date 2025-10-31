@@ -138,6 +138,36 @@ proc moveHome(e: MotionExecutor, currentPos: CursorPosition): CursorPosition =
   result = currentPos
   result.x = 0
 
+proc moveFirstNonBlank(e: MotionExecutor, currentPos: CursorPosition): CursorPosition =
+  ## Move to the first non-whitespace character on the current line (^ command)
+  result = currentPos
+  result.x = 0
+
+  if currentPos.y >= 0 and currentPos.y < e.buffer.len:
+    let line = e.buffer.getLine(currentPos.y)
+    let runes = line.toRunes()
+
+    # Find first non-whitespace character
+    for i, r in runes:
+      if not isWhitespace(r):
+        result.x = i
+        break
+
+proc moveLastNonBlank(e: MotionExecutor, currentPos: CursorPosition): CursorPosition =
+  ## Move to the last non-whitespace character on the current line (g_ command)
+  result = currentPos
+  result.x = 0
+
+  if currentPos.y >= 0 and currentPos.y < e.buffer.len:
+    let line = e.buffer.getLine(currentPos.y)
+    let runes = line.toRunes()
+
+    # Find last non-whitespace character by scanning backwards
+    for i in countdown(runes.len - 1, 0):
+      if not isWhitespace(runes[i]):
+        result.x = i
+        break
+
 proc moveEnd(e: MotionExecutor, currentPos: CursorPosition): CursorPosition =
   result = currentPos
   if currentPos.y >= 0 and currentPos.y < e.buffer.len:
@@ -145,6 +175,51 @@ proc moveEnd(e: MotionExecutor, currentPos: CursorPosition): CursorPosition =
     let lineCharLen = line.charLen
     # In normal mode, cursor should be on the last character, not after it
     result.x = max(0, lineCharLen - 1)
+
+proc moveNextLineFirstNonBlank(
+    e: MotionExecutor, currentPos: CursorPosition, count: int
+): CursorPosition =
+  ## Move to next line's first non-whitespace character (Enter/+ key in normal mode)
+  ## This is like pressing j followed by ^
+  result = currentPos
+
+  # Move down by count lines
+  if e.buffer.len > 0:
+    result.y = min(e.buffer.len - 1, currentPos.y + count)
+  else:
+    result.y = 0
+
+  # Move to first non-whitespace character on the new line
+  result.x = 0
+  if result.y >= 0 and result.y < e.buffer.len:
+    let line = e.buffer.getLine(result.y)
+    let runes = line.toRunes()
+    # Find first non-whitespace character
+    for i, r in runes:
+      if not isWhitespace(r):
+        result.x = i
+        break
+
+proc movePreviousLineFirstNonBlank(
+    e: MotionExecutor, currentPos: CursorPosition, count: int
+): CursorPosition =
+  ## Move to previous line's first non-whitespace character (- key in normal mode)
+  ## This is like pressing k followed by ^
+  result = currentPos
+
+  # Move up by count lines
+  result.y = max(0, currentPos.y - count)
+
+  # Move to first non-whitespace character on the new line
+  result.x = 0
+  if result.y >= 0 and result.y < e.buffer.len:
+    let line = e.buffer.getLine(result.y)
+    let runes = line.toRunes()
+    # Find first non-whitespace character
+    for i, r in runes:
+      if not isWhitespace(r):
+        result.x = i
+        break
 
 proc moveFirstLine(e: MotionExecutor, currentPos: CursorPosition): CursorPosition =
   result = currentPos
@@ -500,11 +575,56 @@ proc moveParagraphBackward(
     result.x = 0
     iterCount -= 1
 
+proc moveViewportHigh(
+    e: MotionExecutor, currentPos: CursorPosition, viewportTopLine: int, count: int = 1
+): CursorPosition =
+  ## Move to top line of viewport (H motion)
+  ## count specifies offset from top (e.g., 2H moves to second line from top)
+  result = currentPos
+  let targetLine = viewportTopLine + (count - 1)
+  result.y = min(targetLine, e.buffer.len - 1)
+  result.x = 0
+
+proc moveViewportMiddle(
+    e: MotionExecutor,
+    currentPos: CursorPosition,
+    viewportTopLine: int,
+    viewportHeight: int,
+    reservedLines: int,
+): CursorPosition =
+  ## Move to middle line of viewport (M motion)
+  result = currentPos
+  # Calculate the middle line of the visible area (excluding reserved lines)
+  let visibleHeight = viewportHeight - reservedLines
+  let middleLine = viewportTopLine + (visibleHeight div 2)
+  result.y = min(middleLine, e.buffer.len - 1)
+  result.x = 0
+
+proc moveViewportLow(
+    e: MotionExecutor,
+    currentPos: CursorPosition,
+    viewportTopLine: int,
+    viewportHeight: int,
+    reservedLines: int,
+    count: int = 1,
+): CursorPosition =
+  ## Move to bottom line of viewport (L motion)
+  ## count specifies offset from bottom (e.g., 2L moves to second line from bottom)
+  result = currentPos
+  # Calculate the target line (bottom of viewport minus count, excluding reserved lines)
+  let visibleHeight = viewportHeight - reservedLines
+  let bottomLine = viewportTopLine + visibleHeight - 1
+  let targetLine = bottomLine - (count - 1)
+  result.y = min(max(0, targetLine), e.buffer.len - 1)
+  result.x = 0
+
 proc calculateNewPosition*(
     e: MotionExecutor,
     currentPos: CursorPosition,
     cmd: MotionCommand,
     viewportHeight: int = 24,
+    viewportTopLine: int = 0,
+    reservedLines: int = 2,
 ): CursorPosition =
   ## Calculate new cursor position after motion, without modifying state
   case cmd.motion
@@ -522,6 +642,10 @@ proc calculateNewPosition*(
     e.movePageDown(currentPos, cmd.count, viewportHeight)
   of Motion.Home:
     e.moveHome(currentPos)
+  of Motion.FirstNonBlank:
+    e.moveFirstNonBlank(currentPos)
+  of Motion.LastNonBlank:
+    e.moveLastNonBlank(currentPos)
   of Motion.End:
     e.moveEnd(currentPos)
   of Motion.FirstLine:
@@ -549,6 +673,18 @@ proc calculateNewPosition*(
     e.moveParagraphForward(currentPos, cmd.count)
   of Motion.ParagraphBackward:
     e.moveParagraphBackward(currentPos, cmd.count)
+  of Motion.ViewportHigh:
+    e.moveViewportHigh(currentPos, viewportTopLine, cmd.count)
+  of Motion.ViewportMiddle:
+    e.moveViewportMiddle(currentPos, viewportTopLine, viewportHeight, reservedLines)
+  of Motion.ViewportLow:
+    e.moveViewportLow(
+      currentPos, viewportTopLine, viewportHeight, reservedLines, cmd.count
+    )
+  of Motion.NextLineFirstNonBlank:
+    e.moveNextLineFirstNonBlank(currentPos, cmd.count)
+  of Motion.PreviousLineFirstNonBlank:
+    e.movePreviousLineFirstNonBlank(currentPos, cmd.count)
 
 proc newCursorManager*(state: EditorState): CursorManager =
   CursorManager(state: state)
@@ -740,8 +876,16 @@ proc executeMotion*(
     "Executing " & $cmd.motion & " from (" & $currentPos.y & "," & $currentPos.x & ")",
   )
 
+  # Calculate reserved lines (same logic as updateViewport)
+  let actualReservedLines =
+    if controller.cursorManager.state.viewportReservedLines >= 0:
+      controller.cursorManager.state.viewportReservedLines
+    else:
+      (if controller.cursorManager.state.showStatusLine: 2 else: 1)
+
   var newPos = controller.executor.calculateNewPosition(
-    currentPos, cmd, controller.viewportManager.viewport.height
+    currentPos, cmd, controller.viewportManager.viewport.height,
+    controller.viewportManager.viewport.topLine, actualReservedLines,
   )
 
   logDebug("motion", "Calculated newPos: (" & $newPos.y & "," & $newPos.x & ")")
@@ -788,6 +932,7 @@ proc calculateOperatorRange*(
     motion in {
       Motion.Up, Motion.Down, Motion.FirstLine, Motion.LastLine, Motion.PageUp,
       Motion.PageDown, Motion.ParagraphForward, Motion.ParagraphBackward,
+      Motion.NextLineFirstNonBlank, Motion.PreviousLineFirstNonBlank,
     }
 
   # Determine if this is an exclusive motion (Vim behavior)

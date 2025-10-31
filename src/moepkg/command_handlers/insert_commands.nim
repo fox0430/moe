@@ -23,7 +23,7 @@
 ## that are independent of CommandContext for better testability
 
 import std/strutils
-import ../[buffer, types, modes]
+import ../[buffer, types, modes, cursor]
 
 proc getLineIndent*(line: string): string =
   ## Extract leading whitespace (spaces and tabs) from a line
@@ -180,3 +180,60 @@ proc insertAppendEnd*(buffer: TextBuffer, state: EditorState) =
   state.cursor.column = lineContent.charLen
   # Switch to insert mode
   state.mode = EditorMode.Insert
+
+proc indentLine*(buffer: TextBuffer, state: EditorState, count: int = 1) =
+  ## Indent current line by adding indentation at the beginning
+  ## count: number of times to indent (default: 1)
+  let currentLine = state.cursor.line
+  if currentLine < 0 or currentLine >= buffer.len:
+    return
+
+  # Get the indent string to add
+  let indentStr = getIndentString(state)
+
+  # Build the full indentation to add (count times)
+  var fullIndent = ""
+  for i in 1 .. count:
+    fullIndent.add(indentStr)
+
+  # Insert at the beginning of the line
+  let insertPos = BufferPosition(line: currentLine, column: 0)
+  discard buffer.insertText(insertPos, fullIndent)
+
+  # Keep cursor at the same relative position within the line content
+  # (move cursor right by the amount of indentation added)
+  state.cursor.column += fullIndent.len
+
+proc dedentLine*(buffer: TextBuffer, state: EditorState, count: int = 1) =
+  ## Dedent current line by removing indentation from the beginning
+  ## count: number of times to dedent (default: 1)
+  let currentLine = state.cursor.line
+  if currentLine < 0 or currentLine >= buffer.len:
+    return
+
+  let lineContent = buffer.getLine(currentLine)
+  let currentIndent = getLineIndent(lineContent)
+
+  if currentIndent.len == 0:
+    return # No indentation to remove
+
+  # Calculate how much to remove
+  let indentStr = getIndentString(state)
+  let indentWidth = indentStr.len
+  let removeCount = min(count * indentWidth, currentIndent.len)
+
+  if removeCount <= 0:
+    return
+
+  # Delete characters from the beginning of the line
+  for i in 1 .. removeCount:
+    let deletePos = BufferPosition(line: currentLine, column: 0)
+    discard buffer.deleteChar(deletePos)
+
+  # Adjust cursor position
+  # If cursor was in the indentation area, move it to column 0
+  # Otherwise, move it left by the amount removed
+  if state.cursor.column >= removeCount:
+    state.cursor.column -= removeCount
+  else:
+    state.cursor.column = 0

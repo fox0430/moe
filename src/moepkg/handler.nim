@@ -264,6 +264,8 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         if lineNum > 0 and lineNum <= activeBuffer.len:
           e.state.cursor.line = lineNum - 1 # Convert to 0-based
           e.state.cursor.column = 0
+          # Update viewport to make the line visible
+          e.updateViewportForCursor(e.state.cursor)
 
       if r.shouldVSplit():
         # Handle vertical split
@@ -572,6 +574,8 @@ proc handleEvent*(e: Editor, event: Event): bool =
     if lineNum > 0 and lineNum <= activeBuffer.len:
       e.state.cursor.line = lineNum - 1 # Convert to 0-based
       e.state.cursor.column = 0
+      # Update viewport to make the line visible
+      e.updateViewportForCursor(e.state.cursor)
 
   # Handle mode transitions
   let modeTransition = r.getModeTransition()

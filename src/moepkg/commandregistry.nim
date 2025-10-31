@@ -28,7 +28,7 @@ import pkg/results
 
 import
   types, buffer, motion, keybindings, modes, cursor, search_utils, clipboard, config,
-  logger
+  logger, unicode_utils
 
 import command_handlers/[visual_commands, insert_commands, normal_commands]
 
@@ -44,12 +44,16 @@ type
     bcMotionPageUp = "motion.pageup"
     bcMotionPageDown = "motion.pagedown"
     bcMotionHome = "motion.home"
+    bcMotionFirstNonBlank = "motion.firstnonblank"
     bcMotionEnd = "motion.end"
     bcMotionFirstLine = "motion.firstline"
     bcMotionLastLine = "motion.lastline"
     bcMotionWord = "motion.word"
     bcMotionWordBack = "motion.word.back"
     bcMotionWordEnd = "motion.word.end"
+    bcMotionViewportHigh = "motion.viewport.high"
+    bcMotionViewportMiddle = "motion.viewport.middle"
+    bcMotionViewportLow = "motion.viewport.low"
     # Mode switching commands
     bcModeNormal = "mode.normal"
     bcModeInsert = "mode.insert"
@@ -880,6 +884,7 @@ proc handlePasteBefore(ctx: CommandContext, count: int = 1): Result[(), string] 
 proc handleDeleteChar(ctx: CommandContext, count: int = 1): Result[(), string] =
   ## Delete character(s) at cursor position (x command)
   ## count: number of characters to delete (default: 1)
+  ## With autoDeleteParen enabled, deleting an opening paren also deletes matching closing paren
 
   logDebug("delete", "handleDeleteChar called with count=" & $count)
   let actualCount = max(1, count)
@@ -889,6 +894,57 @@ proc handleDeleteChar(ctx: CommandContext, count: int = 1): Result[(), string] =
   if ctx.state.cursor.column >= lineContent.charLen:
     return err("Nothing to delete")
 
+  # Auto-delete paren logic (only for single character deletion)
+  if ctx.state.autoDeleteParen and actualCount == 1:
+    let lineCharLen = lineContent.charLen
+    let cursorCol = ctx.state.cursor.column
+
+    # Check if we can apply auto-delete (need at least 2 characters)
+    if cursorCol + 1 < lineCharLen:
+      try:
+        # Get character at cursor and next character
+        let charAtCursor = $lineContent.runeAtPos(cursorCol)
+        let nextChar = $lineContent.runeAtPos(cursorCol + 1)
+
+        # Check if both are single-byte ASCII characters
+        if charAtCursor.len == 1 and nextChar.len == 1:
+          let openChar = charAtCursor[0]
+          let closeChar = nextChar[0]
+
+          # Check if it's a matching pair
+          if unicode_utils.isMatchingPair(openChar, closeChar):
+            # Delete both characters
+            let txnResult = ctx.buffer.beginTransaction("delete paren pair")
+            if txnResult.isErr:
+              return err(txnResult.error)
+
+            # Delete opening paren
+            let delResult1 = ctx.buffer.deleteRange(ctx.state.cursor, ctx.state.cursor)
+            if delResult1.isErr:
+              discard ctx.buffer.commitTransaction()
+              return err(delResult1.error)
+
+            # Delete closing paren (now at cursor position)
+            let delResult2 = ctx.buffer.deleteRange(ctx.state.cursor, ctx.state.cursor)
+            if delResult2.isErr:
+              discard ctx.buffer.commitTransaction()
+              return err(delResult2.error)
+
+            let commitResult = ctx.buffer.commitTransaction()
+            if commitResult.isErr:
+              return err(commitResult.error)
+
+            # Store in yank register
+            ctx.state.yankRegister = charAtCursor & nextChar
+            ctx.state.yankIsLine = false
+            ctx.state.needsFullRedraw = true
+
+            return Result[(), string].ok ()
+      except CatchableError:
+        # If auto-delete fails, fall through to normal delete
+        discard
+
+  # Normal delete logic
   # Calculate how many characters we can actually delete
   let charsAvailable = lineContent.charLen - ctx.state.cursor.column
   let charsToDelete = min(actualCount, charsAvailable)
@@ -939,6 +995,7 @@ proc handleDeleteChar(ctx: CommandContext, count: int = 1): Result[(), string] =
 proc handleDeleteCharBefore(ctx: CommandContext, count: int = 1): Result[(), string] =
   ## Delete character(s) before cursor position (X command)
   ## count: number of characters to delete (default: 1)
+  ## With autoDeleteParen enabled, deleting a closing paren also deletes matching opening paren
 
   logDebug("delete", "handleDeleteCharBefore called with count=" & $count)
   let actualCount = max(1, count)
@@ -947,6 +1004,61 @@ proc handleDeleteCharBefore(ctx: CommandContext, count: int = 1): Result[(), str
   if ctx.state.cursor.column == 0:
     return err("Nothing to delete")
 
+  let lineContent = ctx.buffer.getLine(ctx.state.cursor.line)
+
+  # Auto-delete paren logic (only for single character deletion)
+  if ctx.state.autoDeleteParen and actualCount == 1 and ctx.state.cursor.column >= 2:
+    let cursorCol = ctx.state.cursor.column
+
+    try:
+      # Get character before cursor (to be deleted) and the one before that
+      let charBeforeCursor = $lineContent.runeAtPos(cursorCol - 1)
+      let charBeforeThat = $lineContent.runeAtPos(cursorCol - 2)
+
+      # Check if both are single-byte ASCII characters
+      if charBeforeCursor.len == 1 and charBeforeThat.len == 1:
+        let closeChar = charBeforeCursor[0]
+        let openChar = charBeforeThat[0]
+
+        # Check if it's a matching pair
+        if unicode_utils.isMatchingPair(openChar, closeChar):
+          # Delete both characters
+          let txnResult = ctx.buffer.beginTransaction("delete paren pair")
+          if txnResult.isErr:
+            return err(txnResult.error)
+
+          # Delete the character before cursor (closing paren)
+          let pos1 = BufferPosition(line: ctx.state.cursor.line, column: cursorCol - 1)
+          let delResult1 = ctx.buffer.deleteRange(pos1, pos1)
+          if delResult1.isErr:
+            discard ctx.buffer.commitTransaction()
+            return err(delResult1.error)
+
+          # Delete the opening paren (now at column - 1)
+          let pos2 = BufferPosition(line: ctx.state.cursor.line, column: cursorCol - 2)
+          let delResult2 = ctx.buffer.deleteRange(pos2, pos2)
+          if delResult2.isErr:
+            discard ctx.buffer.commitTransaction()
+            return err(delResult2.error)
+
+          let commitResult = ctx.buffer.commitTransaction()
+          if commitResult.isErr:
+            return err(commitResult.error)
+
+          # Store in yank register
+          ctx.state.yankRegister = charBeforeThat & charBeforeCursor
+          ctx.state.yankIsLine = false
+
+          # Move cursor back by 2
+          ctx.state.cursor.column = cursorCol - 2
+          ctx.state.needsFullRedraw = true
+
+          return Result[(), string].ok ()
+    except CatchableError:
+      # If auto-delete fails, fall through to normal delete
+      discard
+
+  # Normal delete logic
   # Calculate how many characters we can actually delete
   let charsAvailable = ctx.state.cursor.column
   let charsToDelete = min(actualCount, charsAvailable)
@@ -956,7 +1068,6 @@ proc handleDeleteCharBefore(ctx: CommandContext, count: int = 1): Result[(), str
 
   # Extract the characters to be deleted (for yank register)
   # Get the line content and extract the substring
-  let lineContent = ctx.buffer.getLine(ctx.state.cursor.line)
   let runes = lineContent.toRunes()
   var deletedText = ""
   for i in 0 ..< charsToDelete:
@@ -1110,6 +1221,24 @@ proc handleYankLine(ctx: CommandContext, count: int = 1): Result[(), string] =
       return Result[(), string].ok ()
 
   ctx.state.statusMessage = "Yanked " & $actualCount & " line(s)"
+  return Result[(), string].ok ()
+
+proc handleJoinLines(ctx: CommandContext, count: int = 1): Result[(), string] =
+  ## Join lines starting from current line (J command)
+  ## count: number of additional lines to join (default: 1, meaning join 2 lines total)
+  ## Example: count=1 joins current and next line, count=2 joins 3 lines, etc.
+
+  logDebug("join", "handleJoinLines called with count=" & $count)
+  let actualCount = max(1, count)
+
+  # Join lines using the buffer's joinLines function
+  let joinResult = ctx.buffer.joinLines(ctx.state.cursor.line, actualCount)
+  if joinResult.isErr:
+    return err(joinResult.error)
+
+  ctx.state.needsFullRedraw = true
+  let totalLines = actualCount + 1
+  ctx.state.statusMessage = "Joined " & $totalLines & " line(s)"
   return Result[(), string].ok ()
 
 ## Operator command handlers
@@ -1344,6 +1473,10 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     bcMotionHome, "Home", "Move to beginning of line", Motion.Home, false
   )
   registry.registerMotionCommand(
+    bcMotionFirstNonBlank, "First Non-Blank", "Move to first non-whitespace character",
+    Motion.FirstNonBlank, false,
+  )
+  registry.registerMotionCommand(
     bcMotionEnd, "End", "Move to end of line", Motion.End, false
   )
   registry.registerMotionCommand(
@@ -1351,6 +1484,18 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
   )
   registry.registerMotionCommand(
     bcMotionLastLine, "Last Line", "Move to last line", Motion.LastLine, false
+  )
+  registry.registerMotionCommand(
+    bcMotionViewportHigh, "Viewport High", "Move to top of viewport",
+    Motion.ViewportHigh, true,
+  )
+  registry.registerMotionCommand(
+    bcMotionViewportMiddle, "Viewport Middle", "Move to middle of viewport",
+    Motion.ViewportMiddle, false,
+  )
+  registry.registerMotionCommand(
+    bcMotionViewportLow, "Viewport Low", "Move to bottom of viewport",
+    Motion.ViewportLow, true,
   )
 
   # Mode switching commands
@@ -1590,6 +1735,41 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       let count = parseCount(args, default = 1)
       handlePasteBefore(ctx, count),
+    0,
+    1, # Accept optional count argument
+  )
+
+  registry.register(
+    custom("indent.line"),
+    "Indent Line",
+    "Indent current line (>> command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let count = parseCount(args, default = 1)
+      indentLine(ctx.buffer, ctx.state, count)
+      return Result[(), string].ok (),
+    0,
+    1, # Accept optional count argument
+  )
+
+  registry.register(
+    custom("dedent.line"),
+    "Dedent Line",
+    "Dedent current line (<< command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let count = parseCount(args, default = 1)
+      dedentLine(ctx.buffer, ctx.state, count)
+      return Result[(), string].ok (),
+    0,
+    1, # Accept optional count argument
+  )
+
+  registry.register(
+    custom("join.lines"),
+    "Join Lines",
+    "Join current line with next line(s) (J command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let count = parseCount(args, default = 1)
+      handleJoinLines(ctx, count),
     0,
     1, # Accept optional count argument
   )
@@ -1905,6 +2085,168 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
       ctx.state.hlsearchTempDisabled = false
 
       return executeSearch(ctx, ctx.state.lastSearchText, findPrev),
+    0,
+    0,
+  )
+
+  # Helper proc to get the word under cursor
+  proc getWordUnderCursor(buffer: TextBuffer, cursor: BufferPosition): string =
+    if cursor.line < 0 or cursor.line >= buffer.len:
+      return ""
+
+    let line = buffer.getLine(cursor.line)
+    if line.len == 0 or cursor.column >= line.charLen:
+      return ""
+
+    let runes = line.toRunes()
+    if cursor.column >= runes.len:
+      return ""
+
+    # Check if cursor is on a word character
+    let charAtCursor = $runes[cursor.column]
+    if not (charAtCursor[0].isAlphaNumeric or charAtCursor[0] == '_'):
+      return ""
+
+    # Find word start
+    var startCol = cursor.column
+    while startCol > 0:
+      let ch = $runes[startCol - 1]
+      if not (ch[0].isAlphaNumeric or ch[0] == '_'):
+        break
+      startCol.dec
+
+    # Find word end
+    var endCol = cursor.column
+    while endCol < runes.len:
+      let ch = $runes[endCol]
+      if not (ch[0].isAlphaNumeric or ch[0] == '_'):
+        break
+      endCol.inc
+
+    # Extract word
+    var word = ""
+    for i in startCol ..< endCol:
+      word.add($runes[i])
+
+    return word
+
+  # Helper proc to find matching bracket at cursor
+  proc findMatchingBracketAtCursor(
+      buffer: TextBuffer, cursor: BufferPosition
+  ): Result[BufferPosition, string] =
+    if cursor.line < 0 or cursor.line >= buffer.len:
+      return err("Invalid cursor position")
+
+    let line = buffer.getLine(cursor.line)
+    if line.len == 0 or cursor.column >= line.charLen:
+      return err("No bracket at cursor")
+
+    let runes = line.toRunes()
+    if cursor.column >= runes.len:
+      return err("No bracket at cursor")
+
+    let charAtCursor = ($runes[cursor.column])[0]
+
+    # Define bracket pairs
+    const openBrackets = ['(', '[', '{', '<']
+    const closeBrackets = [')', ']', '}', '>']
+
+    var openChar, closeChar: char
+    var searchForward = false
+
+    # Check if cursor is on a bracket
+    if charAtCursor in openBrackets:
+      openChar = charAtCursor
+      closeChar = closeBrackets[openBrackets.find(charAtCursor)]
+      searchForward = true
+    elif charAtCursor in closeBrackets:
+      closeChar = charAtCursor
+      openChar = openBrackets[closeBrackets.find(charAtCursor)]
+      searchForward = false
+    else:
+      return err("No bracket at cursor")
+
+    if searchForward:
+      # Search forward for closing bracket
+      var depth = 1
+      var col = cursor.column + 1
+      while col < runes.len:
+        let ch = ($runes[col])[0]
+        if ch == openChar:
+          depth.inc
+        elif ch == closeChar:
+          depth.dec
+          if depth == 0:
+            return ok(BufferPosition(line: cursor.line, column: col))
+        col.inc
+    else:
+      # Search backward for opening bracket
+      var depth = 1
+      var col = cursor.column - 1
+      while col >= 0:
+        let ch = ($runes[col])[0]
+        if ch == closeChar:
+          depth.inc
+        elif ch == openChar:
+          depth.dec
+          if depth == 0:
+            return ok(BufferPosition(line: cursor.line, column: col))
+        col.dec
+
+    return err("No matching bracket found")
+
+  # % - Jump to matching bracket
+  registry.register(
+    custom("motion.match.bracket"),
+    "Match Bracket",
+    "Jump to matching bracket (%)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let matchResult = findMatchingBracketAtCursor(ctx.buffer, ctx.state.cursor)
+      if matchResult.isErr:
+        return err(matchResult.error)
+
+      ctx.state.cursor = matchResult.value
+      return Result[(), string].ok (),
+    0,
+    0,
+  )
+
+  # * - Search word under cursor forward
+  registry.register(
+    custom("search.word.forward"),
+    "Search Word Forward",
+    "Search for word under cursor forward (*)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let word = getWordUnderCursor(ctx.buffer, ctx.state.cursor)
+      if word.len == 0:
+        return err("No word under cursor")
+
+      # Update last search text
+      ctx.state.lastSearchText = word
+      ctx.state.hlsearchTempDisabled = false
+
+      # Search for next occurrence
+      return executeSearch(ctx, word, findNext),
+    0,
+    0,
+  )
+
+  # # - Search word under cursor backward
+  registry.register(
+    custom("search.word.backward"),
+    "Search Word Backward",
+    "Search for word under cursor backward (#)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let word = getWordUnderCursor(ctx.buffer, ctx.state.cursor)
+      if word.len == 0:
+        return err("No word under cursor")
+
+      # Update last search text
+      ctx.state.lastSearchText = word
+      ctx.state.hlsearchTempDisabled = false
+
+      # Search for previous occurrence
+      return executeSearch(ctx, word, findPrev),
     0,
     0,
   )

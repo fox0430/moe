@@ -29,7 +29,7 @@ import std/[options, unicode, strutils]
 
 import pkg/results
 
-import ../[types, buffer, modes, keybindings, motion, commandregistry]
+import ../[types, buffer, modes, keybindings, motion, commandregistry, unicode_utils]
 import insert_commands
 
 type
@@ -90,23 +90,66 @@ proc executeCommand*(
 proc handleCharacterInsertion*(
     handler: InsertModeHandler, buffer: TextBuffer, state: EditorState, text: string
 ): InsertModeResult =
-  ## Handle regular character insertion
+  ## Handle regular character insertion with auto-close paren support
   let pos = state.cursor
-  discard buffer.insertText(pos, text)
 
-  # Move cursor right after insertion (by character count, not byte count)
-  state.cursor.column += text.runeLen
+  # Check if auto-close paren is enabled and text is a single character opening paren
+  if state.autoCloseParen and text.len == 1 and isOpeningParen(text[0]):
+    let openChar = text[0]
+    let closeChar = getClosingChar(openChar)
+
+    # Insert both opening and closing characters
+    discard buffer.insertText(pos, text & $closeChar)
+
+    # Move cursor to position between the pair (after opening char)
+    state.cursor.column += 1
+  else:
+    # Normal insertion
+    discard buffer.insertText(pos, text)
+
+    # Move cursor right after insertion (by character count, not byte count)
+    state.cursor.column += text.runeLen
 
   return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
 proc handleBackspace*(
     handler: InsertModeHandler, buffer: TextBuffer, state: EditorState
 ): InsertModeResult =
-  ## Handle backspace key
+  ## Handle backspace key with auto-delete paren support
   let pos = state.cursor
 
   if pos.column > 0:
-    # Move cursor back and delete
+    # Check if auto-delete paren is enabled
+    if state.autoDeleteParen:
+      # Get the character before cursor (the one to be deleted)
+      let currentLine = buffer.getLine(pos.line)
+      let lineCharLen = currentLine.charLen
+
+      # Need at least 2 characters: one before cursor and one after
+      if pos.column >= 1 and pos.column < lineCharLen:
+        try:
+          # Get the characters before and after cursor as strings
+          let beforeStr = $currentLine.runeAtPos(pos.column - 1)
+          let afterStr = $currentLine.runeAtPos(pos.column)
+
+          # Check if both are single-byte ASCII characters
+          if beforeStr.len == 1 and afterStr.len == 1:
+            let beforeChar = beforeStr[0]
+            let afterChar = afterStr[0]
+
+            # Check if it's a matching paren pair
+            if isMatchingPair(beforeChar, afterChar):
+              # Delete both characters
+              state.cursor.column -= 1
+              discard buffer.deleteChar(state.cursor) # Delete opening paren
+              discard buffer.deleteChar(state.cursor) # Delete closing paren
+              return
+                InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+        except IndexDefect, CatchableError:
+          # If accessing rune fails, just fall through to normal backspace
+          discard
+
+    # Normal backspace: move cursor back and delete
     state.cursor.column -= 1
     discard buffer.deleteChar(state.cursor)
   elif pos.line > 0:

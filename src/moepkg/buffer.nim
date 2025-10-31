@@ -667,6 +667,77 @@ proc rollbackTransaction*(b: TextBuffer): Result[(), string] =
   b.currentTransaction = none(BufferTransaction)
   return ok(())
 
+proc joinLines*(b: TextBuffer, startLine: int, count: int = 1): Result[(), string] =
+  ## Join lines starting from startLine
+  ## count: number of lines to join (default: 1, meaning join current line with next)
+  ## Example: count=1 joins 2 lines, count=2 joins 3 lines, etc.
+  ## Returns error if there aren't enough lines to join
+
+  if startLine < 0 or startLine >= b.len:
+    return err("Line index out of bounds: " & $startLine)
+
+  # Need at least one more line to join with
+  if startLine + 1 >= b.len:
+    return err("No line to join with")
+
+  # Calculate actual number of lines to join
+  let linesToJoin = min(count + 1, b.len - startLine)
+  if linesToJoin < 2:
+    return err("Not enough lines to join")
+
+  # Begin transaction for multiple operations
+  let txnResult = b.beginTransaction("join " & $linesToJoin & " lines")
+  if txnResult.isErr:
+    return err(txnResult.error)
+
+  # Join lines one by one
+  for i in 1 ..< linesToJoin:
+    # Always join with the line at startLine (since we delete lines as we go)
+    let currentLine = b.getLine(startLine)
+    let nextLine = b.getLine(startLine + 1)
+
+    # Trim trailing whitespace from current line
+    var trimmedCurrent = currentLine.strip(leading = false, trailing = true)
+
+    # Trim leading whitespace from next line
+    let trimmedNext = nextLine.strip(leading = true, trailing = false)
+
+    # Add a space between lines if current line doesn't end with whitespace
+    # and next line is not empty
+    if trimmedCurrent.len > 0 and trimmedNext.len > 0:
+      # Don't add space if current line ends with certain punctuation
+      let lastChar = trimmedCurrent[^1]
+      if lastChar notin {' ', '\t', '\n'}:
+        trimmedCurrent.add(' ')
+
+    # Build the joined line
+    let joinedLine = trimmedCurrent & trimmedNext
+
+    # Delete the current line and insert the joined line
+    let deleteResult = b.deleteLine(startLine)
+    if deleteResult.isErr:
+      discard b.commitTransaction()
+      return err(deleteResult.error)
+
+    # Delete the next line (which is now at startLine position)
+    let deleteNextResult = b.deleteLine(startLine)
+    if deleteNextResult.isErr:
+      discard b.commitTransaction()
+      return err(deleteNextResult.error)
+
+    # Insert the joined line
+    let insertResult = b.insert(startLine, joinedLine)
+    if insertResult.isErr:
+      discard b.commitTransaction()
+      return err(insertResult.error)
+
+  # Commit transaction
+  let commitResult = b.commitTransaction()
+  if commitResult.isErr:
+    return err(commitResult.error)
+
+  return ok(())
+
 proc getChangePosition(change: BufferChange): BufferPosition =
   ## Get the starting position of a change
   case change.kind

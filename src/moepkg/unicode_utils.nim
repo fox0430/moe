@@ -22,7 +22,7 @@
 ## This module provides utilities for handling Unicode text properly,
 ## including cursor positioning and character operations.
 
-import std/unicode
+import std/[unicode, tables]
 import pkg/celina
 
 # Re-export runeWidth from celina's buffer module
@@ -186,3 +186,24 @@ proc charToBytePosCached*(
   cache.charPos = charPos
   cache.bytePos = result
   cache.changeSeq = changeSeq
+
+# Parenthesis pairs for auto-close/delete feature
+const parenPairs* = {'(': ')', '[': ']', '{': '}', '"': '"', '\'': '\''}.toTable
+
+proc isOpeningParen*(ch: char): bool =
+  ## Check if a character is an opening parenthesis/bracket/quote
+  ch in parenPairs
+
+proc getClosingChar*(openChar: char): char =
+  ## Get the closing character for an opening character
+  ## Returns '\0' if the character is not an opening paren
+  if openChar in parenPairs:
+    return parenPairs[openChar]
+  return '\0'
+
+proc isMatchingPair*(openChar, closeChar: char): bool =
+  ## Check if two characters form a matching parenthesis pair
+  ## Returns true if openChar is an opening paren and closeChar is its matching closing paren
+  if openChar in parenPairs:
+    return parenPairs[openChar] == closeChar
+  return false

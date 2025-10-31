@@ -309,7 +309,7 @@ proc newEditorConfig*(): EditorConfig =
       liveReloadOfConf: false,
       incrementalSearch: true,
       popupWindowInExmode: true,
-      autoDeleteParen: false,
+      autoDeleteParen: true,
       liveReloadOfFile: false,
       colorMode: cm24bit,
     ),

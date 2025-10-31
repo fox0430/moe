@@ -582,6 +582,24 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
 
   registry.registerCommand(
     Command(
+      name: "line-first-non-blank",
+      description: "Move to first non-whitespace character",
+      kind: ctMotion,
+      motion: Motion.FirstNonBlank,
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "line-last-non-blank",
+      description: "Move to last non-whitespace character",
+      kind: ctMotion,
+      motion: Motion.LastNonBlank,
+    )
+  )
+
+  registry.registerCommand(
+    Command(
       name: "line-end",
       description: "Move to end of line",
       kind: ctMotion,
@@ -605,6 +623,52 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
       description: "Go to last line",
       kind: ctMotion,
       motion: Motion.LastLine,
+    )
+  )
+
+  # Viewport motion commands
+  registry.registerCommand(
+    Command(
+      name: "viewport-high",
+      description: "Move to top of viewport",
+      kind: ctMotion,
+      motion: Motion.ViewportHigh,
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "viewport-middle",
+      description: "Move to middle of viewport",
+      kind: ctMotion,
+      motion: Motion.ViewportMiddle,
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "viewport-low",
+      description: "Move to bottom of viewport",
+      kind: ctMotion,
+      motion: Motion.ViewportLow,
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "next-line-first-non-blank",
+      description: "Move to next line's first non-whitespace character",
+      kind: ctMotion,
+      motion: Motion.NextLineFirstNonBlank,
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "previous-line-first-non-blank",
+      description: "Move to previous line's first non-whitespace character",
+      kind: ctMotion,
+      motion: Motion.PreviousLineFirstNonBlank,
     )
   )
 
@@ -697,6 +761,38 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
     )
   )
 
+  # Register additional search commands
+  registry.registerCommand(
+    Command(
+      name: "search-word-forward",
+      description: "Search for word under cursor forward (*)",
+      kind: ctAction,
+      commandId: "search.word.forward",
+      args: @[],
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "search-word-backward",
+      description: "Search for word under cursor backward (#)",
+      kind: ctAction,
+      commandId: "search.word.backward",
+      args: @[],
+    )
+  )
+
+  # Register bracket matching command
+  registry.registerCommand(
+    Command(
+      name: "match-bracket",
+      description: "Jump to matching bracket (%)",
+      kind: ctAction,
+      commandId: "motion.match.bracket",
+      args: @[],
+    )
+  )
+
   # Normal mode default bindings
   registry.bindKey(EditorMode.Normal, "h", "move-left")
   registry.bindKey(EditorMode.Normal, "j", "move-down")
@@ -708,6 +804,13 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.Normal, "C-r", "redo")
   registry.bindKey(EditorMode.Normal, "n", "search-next")
   registry.bindKey(EditorMode.Normal, "N", "search-prev")
+  registry.bindKey(EditorMode.Normal, "*", "search-word-forward")
+  registry.bindKey(EditorMode.Normal, "#", "search-word-backward")
+  registry.bindKey(EditorMode.Normal, "%", "match-bracket")
+  # Viewport motion bindings
+  registry.bindKey(EditorMode.Normal, "H", "viewport-high")
+  registry.bindKey(EditorMode.Normal, "M", "viewport-middle")
+  registry.bindKey(EditorMode.Normal, "L", "viewport-low")
   # Word motion bindings
   registry.bindKey(EditorMode.Normal, "w", "word-forward")
   registry.bindKey(EditorMode.Normal, "b", "word-backward")
@@ -718,6 +821,7 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.Normal, "{", "paragraph-backward")
 
   registry.bindKey(EditorMode.Normal, "0", "line-home")
+  registry.bindKey(EditorMode.Normal, "^", "line-first-non-blank")
   registry.bindKey(EditorMode.Normal, "$", "line-end")
 
   # Arrow key bindings for Normal mode
@@ -762,6 +866,26 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
     EditorMode.Normal,
     KeyCombo(isSpecial: true, special: skPageDown, fnNum: 0),
     registry.commandRegistry["page-down"],
+  )
+  registry.bindKey(
+    EditorMode.Normal,
+    KeyCombo(isSpecial: true, special: skBackspace, fnNum: 0),
+    registry.commandRegistry["move-left"],
+  )
+  registry.bindKey(
+    EditorMode.Normal,
+    KeyCombo(isSpecial: true, special: skEnter, fnNum: 0),
+    registry.commandRegistry["next-line-first-non-blank"],
+  )
+  registry.bindKey(
+    EditorMode.Normal,
+    KeyCombo(isSpecial: false, char: "+"),
+    registry.commandRegistry["next-line-first-non-blank"],
+  )
+  registry.bindKey(
+    EditorMode.Normal,
+    KeyCombo(isSpecial: false, char: "-"),
+    registry.commandRegistry["previous-line-first-non-blank"],
   )
 
   # Register additional commands for sequences
@@ -818,6 +942,43 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   )
   # Bind P key to paste-before (must be after registerCommand)
   registry.bindKey(EditorMode.Normal, "P", "paste-before")
+
+  registry.registerCommand(
+    Command(
+      name: "join-lines",
+      description: "Join current line with next line",
+      kind: ctCustom,
+      commandId: "join.lines",
+      args: @[],
+    )
+  )
+  # Bind J key to join-lines (must be after registerCommand)
+  registry.bindKey(EditorMode.Normal, "J", "join-lines")
+
+  # Indent/dedent commands
+  registry.registerCommand(
+    Command(
+      name: "indent-line",
+      description: "Indent current line",
+      kind: ctCustom,
+      commandId: "indent.line",
+      args: @[],
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "dedent-line",
+      description: "Dedent current line",
+      kind: ctCustom,
+      commandId: "dedent.line",
+      args: @[],
+    )
+  )
+
+  # Bind >> and << sequences for indent/dedent
+  registry.bindKey(EditorMode.Normal, "> >", "indent-line")
+  registry.bindKey(EditorMode.Normal, "< <", "dedent-line")
 
   # Operator commands
   registry.registerCommand(
@@ -1071,6 +1232,8 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
 
   # Sequence bindings - Vim-style
   registry.bindKey(EditorMode.Normal, "g g", "goto-first-line") # Go to first line
+  registry.bindKey(EditorMode.Normal, "g _", "line-last-non-blank")
+    # Go to last non-blank character
   registry.bindKey(EditorMode.Normal, "G", "goto-last-line") # Go to last line
   # Note: dd, yy, cc are handled by operator doubling in handleOperatorDelete/Yank/Change
   # When 'd' is pressed twice, the operator handler detects it and executes line operation

@@ -18,9 +18,9 @@ expandTab = false                      # ✅ Insert spaces instead of tab (IMPLE
 
 sidebar = true                         # ✅ Show sidebar (IMPLEMENTED)
 
-autoCloseParen = true                  # 📝 Auto-close parentheses (not yet applied)
+autoCloseParen = true                  # ✅ Auto-close parentheses (IMPLEMENTED)
 
-autoIndent = true                      # 📝 Auto-indent (not yet applied)
+autoIndent = true                      # ✅ Auto-indent (IMPLEMENTED)
 
 ignorecase = true                      # 📝 Search case insensitive (not yet applied)
 
@@ -40,7 +40,7 @@ incrementalSearch = true               # 📝 Incremental search (not yet applie
 
 popupWindowInExmode = true             # 📝 Ex mode popup (not yet applied)
 
-autoDeleteParen = false                # 📝 Auto-delete matching parens (not yet applied)
+autoDeleteParen = true                 # ✅ Auto-delete matching parens (IMPLEMENTED) - Set to false to disable
 
 liveReloadOfFile = false               # 📝 Live file reload (not yet applied)
 

@@ -65,6 +65,8 @@ type
     PageUp
     PageDown
     Home
+    FirstNonBlank # ^ - move to first non-whitespace character
+    LastNonBlank # g_ - move to last non-whitespace character
     End
     FirstLine
     LastLine
@@ -78,6 +80,11 @@ type
     WordEndBackward # ge - move to end of previous word
     ParagraphForward # } - move to next paragraph (next blank line)
     ParagraphBackward # { - move to previous paragraph (previous blank line)
+    ViewportHigh # H - move to top of viewport
+    ViewportMiddle # M - move to middle of viewport
+    ViewportLow # L - move to bottom of viewport
+    NextLineFirstNonBlank # Enter/+ - move to next line's first non-whitespace character
+    PreviousLineFirstNonBlank # - - move to previous line's first non-whitespace character
 
   TypedCommandKind* = enum
     MovementCommand
