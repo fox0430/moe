@@ -592,6 +592,7 @@ proc newEditor*(): Editor =
       searchHistoryIndex: -1, # Not navigating history initially
       pendingOperator: none(PendingOperator), # No pending operator initially
       pendingTextObject: none(PendingTextObject), # No pending text object initially
+      savedViewportTopLine: 0, # Saved viewport position for operators
       # Yank register (internal clipboard)
       yankRegister: "", # Empty initially
       yankIsLine: false, # Not linewise initially
@@ -1125,7 +1126,7 @@ proc renderTextBuffer(e: Editor, buffer: var Buffer, area: Rect) =
       while startCharCol < lineCharLen and screenY < area.height:
         # Calculate how many characters fit in maxWidth display columns
         # This properly handles wide characters (CJK, etc.)
-        let (charCount, actualWidth) = displayWidthSubstr(line, startCharCol, maxWidth)
+        let (charCount, _) = displayWidthSubstr(line, startCharCol, maxWidth)
         let
           endCharCol = startCharCol + charCount
           # Convert character positions to byte positions for slicing

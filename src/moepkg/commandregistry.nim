@@ -335,6 +335,28 @@ proc executeOperatorOnRange(
       let line = ctx.buffer.getLine(ctx.state.cursor.line)
       ctx.state.cursor.column = min(ctx.state.cursor.column, max(0, line.charLen - 1))
 
+    # Restore viewport position to where it was before the operator started
+    # Use savedViewportTopLine which was saved when operator (d/c/y) was pressed
+    let newBufferLen = ctx.buffer.len
+    let restoredTopLine = ctx.state.savedViewportTopLine
+    let cursorLine = ctx.state.cursor.line
+
+    # Restore viewport, but ensure cursor remains visible
+    # Cases:
+    # 1. restoredTopLine >= newBufferLen: clamp to valid range
+    # 2. cursor < restoredTopLine: use cursor position (e.g., dgg moves cursor up)
+    # 3. otherwise: restore saved position
+    if restoredTopLine >= newBufferLen:
+      # Saved position is beyond new buffer size
+      ctx.motionController.viewportManager.viewport.topLine =
+        max(0, min(cursorLine, newBufferLen - 1))
+    elif cursorLine < restoredTopLine:
+      # Cursor is above saved viewport (e.g., dgg), use cursor position
+      ctx.motionController.viewportManager.viewport.topLine = cursorLine
+    else:
+      # Restore to saved position
+      ctx.motionController.viewportManager.viewport.topLine = restoredTopLine
+
     ctx.state.needsFullRedraw = true
     return ok(())
   of OpChange:
@@ -353,6 +375,23 @@ proc executeOperatorOnRange(
     # Clamp cursor
     if ctx.state.cursor.line >= ctx.buffer.len:
       ctx.state.cursor.line = max(0, ctx.buffer.len - 1)
+
+    # Restore viewport position (same logic as OpDelete)
+    let newBufferLen = ctx.buffer.len
+    let restoredTopLine = ctx.state.savedViewportTopLine
+    let cursorLine = ctx.state.cursor.line
+
+    # Restore viewport, but ensure cursor remains visible
+    if restoredTopLine >= newBufferLen:
+      # Saved position is beyond new buffer size
+      ctx.motionController.viewportManager.viewport.topLine =
+        max(0, min(cursorLine, newBufferLen - 1))
+    elif cursorLine < restoredTopLine:
+      # Cursor is above saved viewport (e.g., cgg), use cursor position
+      ctx.motionController.viewportManager.viewport.topLine = cursorLine
+    else:
+      # Restore to saved position
+      ctx.motionController.viewportManager.viewport.topLine = restoredTopLine
 
     # Enter insert mode
     ctx.state.mode = EditorMode.Insert
@@ -374,22 +413,17 @@ proc executeCommand*(
   case cmd.kind
   of ctMotion:
     # Handle motion commands directly - use count from command object
-    let count = cmd.count
-
-    logDebug("command", "Motion command: " & $cmd.motion & " with count=" & $count)
-
-    let motionCmd = MotionCommand(motion: cmd.motion, count: count)
+    let motionCmd = MotionCommand(motion: cmd.motion, count: cmd.count)
 
     # Check if we have a pending operator
     if ctx.state.pendingOperator.isSome:
       let op = ctx.state.pendingOperator.get
-      logDebug(
-        "operator",
-        "Executing operator+motion: " & $op.operatorType & " with " & $cmd.motion,
-      )
 
       # Execute motion to get end position
-      let r = ctx.motionController.executeMotion(motionCmd, op.startPos)
+      # Suppress viewport updates to prevent visual scrolling during operator+motion
+      let r = ctx.motionController.executeMotion(
+        motionCmd, op.startPos, updateViewport = false
+      )
       if r.isErr:
         ctx.state.pendingOperator = none(PendingOperator)
         return err(r.error)
@@ -1242,6 +1276,20 @@ proc handleJoinLines(ctx: CommandContext, count: int = 1): Result[(), string] =
   return Result[(), string].ok ()
 
 ## Operator command handlers
+## Use setPendingOperator() for all operators to save viewport position
+## before motion execution. This prevents unwanted scrolling.
+
+proc setPendingOperator(
+    ctx: CommandContext, operatorType: OperatorType, count: int, statusMsg: string
+) =
+  ## Set pending operator and save viewport position for operator+motion commands
+  ctx.state.savedViewportTopLine = ctx.motionController.viewportManager.viewport.topLine
+  ctx.state.pendingOperator = some(
+    PendingOperator(
+      operatorType: operatorType, operatorCount: count, startPos: ctx.state.cursor
+    )
+  )
+  ctx.state.statusMessage = statusMsg
 
 proc handleOperatorYank(ctx: CommandContext, count: int = 1): Result[(), string] =
   ## Yank operator - waits for motion (y2w, y$, etc.) or yy for line
@@ -1274,12 +1322,7 @@ proc handleOperatorYank(ctx: CommandContext, count: int = 1): Result[(), string]
     return ok(())
   else:
     # Set pending operator for motion
-    ctx.state.pendingOperator = some(
-      PendingOperator(
-        operatorType: OpYank, operatorCount: count, startPos: ctx.state.cursor
-      )
-    )
-    ctx.state.statusMessage = "y"
+    setPendingOperator(ctx, OpYank, count, "y")
     return ok(())
 
 proc handleOperatorDelete(ctx: CommandContext, count: int = 1): Result[(), string] =
@@ -1324,12 +1367,7 @@ proc handleOperatorDelete(ctx: CommandContext, count: int = 1): Result[(), strin
     return ok(())
   else:
     # Set pending operator for motion
-    ctx.state.pendingOperator = some(
-      PendingOperator(
-        operatorType: OpDelete, operatorCount: count, startPos: ctx.state.cursor
-      )
-    )
-    ctx.state.statusMessage = "d"
+    setPendingOperator(ctx, OpDelete, count, "d")
     return ok(())
 
 proc handleOperatorChange(ctx: CommandContext, count: int = 1): Result[(), string] =
@@ -1390,12 +1428,7 @@ proc handleOperatorChange(ctx: CommandContext, count: int = 1): Result[(), strin
     return ok(())
   else:
     # Set pending operator for motion
-    ctx.state.pendingOperator = some(
-      PendingOperator(
-        operatorType: OpChange, operatorCount: count, startPos: ctx.state.cursor
-      )
-    )
-    ctx.state.statusMessage = "c"
+    setPendingOperator(ctx, OpChange, count, "c")
     return ok(())
 
 ## Text object command handlers

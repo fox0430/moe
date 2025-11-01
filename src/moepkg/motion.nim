@@ -781,7 +781,6 @@ proc updateViewport*(
 
   # Vertical scrolling - handle line wrap mode differently
   if lineWrap and not buffer.isNil:
-    logDebug("viewport", "updateViewport: LINE WRAP MODE")
     # Line wrap mode: calculate screen positions
     let maxWidth = max(1, mgr.viewport.width - lineNumOffset)
 
@@ -812,40 +811,17 @@ proc updateViewport*(
         if mgr.viewport.topLine < clampedCursorY:
           mgr.viewport.topLine += 1
   else:
-    logDebug("viewport", "updateViewport: NO WRAP MODE")
     # No line wrap: simple logic
     if clampedCursorY < mgr.viewport.topLine:
       # Cursor moved above viewport - scroll up
-      logDebug(
-        "viewport",
-        "Cursor above viewport: clampedCursorY=" & $clampedCursorY & " topLine=" &
-          $mgr.viewport.topLine,
-      )
       mgr.viewport.topLine = clampedCursorY
     elif clampedCursorY >=
         mgr.viewport.topLine + mgr.viewport.height - actualReservedLines:
       # Cursor moved below viewport - scroll down (account for status and command lines)
-      logDebug(
-        "viewport",
-        "Cursor below viewport: clampedCursorY=" & $clampedCursorY & " threshold=" &
-          $(mgr.viewport.topLine + mgr.viewport.height - actualReservedLines),
-      )
       let
         newTopLine = clampedCursorY - mgr.viewport.height + actualReservedLines + 1
         maxTopLine = max(0, lineCount - mgr.viewport.height + actualReservedLines)
-      logDebug(
-        "viewport",
-        "Calculated newTopLine=" & $newTopLine & " maxTopLine=" & $maxTopLine,
-      )
       mgr.viewport.topLine = max(0, min(maxTopLine, newTopLine))
-      logDebug("viewport", "Final topLine=" & $mgr.viewport.topLine)
-    else:
-      logDebug(
-        "viewport",
-        "Cursor within viewport: clampedCursorY=" & $clampedCursorY & " range=[" &
-          $mgr.viewport.topLine & ", " &
-          $(mgr.viewport.topLine + mgr.viewport.height - actualReservedLines - 1) & "]",
-      )
 
   # Horizontal scrolling - keep cursor visible (disabled in wrap mode)
   if not lineWrap:
@@ -864,17 +840,16 @@ proc newMotionController*(
   )
 
 proc executeMotion*(
-    controller: MotionController, cmd: MotionCommand, currentCursorPos: BufferPosition
+    controller: MotionController,
+    cmd: MotionCommand,
+    currentCursorPos: BufferPosition,
+    updateViewport: bool = true,
 ): Result[BufferPosition, string] =
   ## Execute a motion command - main entry point
   ## Returns the new cursor position
+  ## If updateViewport=false, skip viewport updates (useful for operator+motion combinations)
   # Convert to CursorPosition for internal calculations
   let currentPos = CursorPosition(x: currentCursorPos.column, y: currentCursorPos.line)
-
-  logDebug(
-    "motion",
-    "Executing " & $cmd.motion & " from (" & $currentPos.y & "," & $currentPos.x & ")",
-  )
 
   # Calculate reserved lines (same logic as updateViewport)
   let actualReservedLines =
@@ -888,26 +863,26 @@ proc executeMotion*(
     controller.viewportManager.viewport.topLine, actualReservedLines,
   )
 
-  logDebug("motion", "Calculated newPos: (" & $newPos.y & "," & $newPos.x & ")")
-
   # Clamp to valid buffer bounds
   newPos = controller.cursorManager.clampPosition(newPos, controller.executor.buffer)
 
-  logDebug("motion", "After clamp: (" & $newPos.y & "," & $newPos.x & ")")
+  # Get line wrap state (needed for viewport update and horizontal scroll)
+  let lineWrap = controller.cursorManager.state.lineWrap
 
-  # Update viewport to follow cursor with line wrap support
-  let
-    lineCount = controller.executor.buffer.len
-    lineWrap = controller.cursorManager.state.lineWrap
-    # Calculate line number offset for viewport calculation (matches renderLineNumbers)
-    showLineNumbers = controller.cursorManager.state.showLineNumbers
-    lineNumOffset = calculateLineNumOffset(controller.executor.buffer, showLineNumbers)
+  # Update viewport to follow cursor with line wrap support (unless suppressed)
+  if updateViewport:
+    let
+      lineCount = controller.executor.buffer.len
+      # Calculate line number offset for viewport calculation (matches renderLineNumbers)
+      showLineNumbers = controller.cursorManager.state.showLineNumbers
+      lineNumOffset =
+        calculateLineNumOffset(controller.executor.buffer, showLineNumbers)
 
-  controller.viewportManager.updateViewport(
-    newPos, lineCount, controller.cursorManager.state.showStatusLine,
-    controller.cursorManager.state.viewportReservedLines, lineWrap,
-    controller.executor.buffer, lineNumOffset,
-  )
+    controller.viewportManager.updateViewport(
+      newPos, lineCount, controller.cursorManager.state.showStatusLine,
+      controller.cursorManager.state.viewportReservedLines, lineWrap,
+      controller.executor.buffer, lineNumOffset,
+    )
 
   # Disable horizontal scrolling when line wrap is enabled
   if lineWrap:
@@ -1047,11 +1022,27 @@ proc deleteRange*(buffer: TextBuffer, range: OperatorRange): Result[(), string] 
 
   if range.isLinewise:
     # Delete entire lines
+    let lineCount = range.endPos.line - range.start.line + 1
+
+    # Use transaction for multiple line deletions
+    if lineCount > 1:
+      let txnResult = buffer.beginTransaction("delete " & $lineCount & " lines")
+      if txnResult.isErr:
+        return err(txnResult.error)
+
     for i in 0 .. (range.endPos.line - range.start.line):
       if range.start.line < buffer.len:
         let deleteResult = buffer.deleteLine(range.start.line)
         if deleteResult.isErr:
+          if lineCount > 1:
+            discard buffer.rollbackTransaction()
           return err(deleteResult.error)
+
+    # Commit transaction if we started one
+    if lineCount > 1:
+      let commitResult = buffer.commitTransaction()
+      if commitResult.isErr:
+        return err(commitResult.error)
   else:
     # Delete character range using buffer.deleteRange
     let deleteResult = buffer.deleteRange(range.start, range.endPos)

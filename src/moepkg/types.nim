@@ -84,7 +84,8 @@ type
     ViewportMiddle # M - move to middle of viewport
     ViewportLow # L - move to bottom of viewport
     NextLineFirstNonBlank # Enter/+ - move to next line's first non-whitespace character
-    PreviousLineFirstNonBlank # - - move to previous line's first non-whitespace character
+    PreviousLineFirstNonBlank
+      # - - move to previous line's first non-whitespace character
 
   TypedCommandKind* = enum
     MovementCommand
@@ -177,6 +178,7 @@ type
     pendingOperator*: Option[PendingOperator] # Operator waiting for motion/text object
     pendingTextObject*: Option[PendingTextObject]
       # Text object modifier waiting for object kind
+    savedViewportTopLine*: int # Viewport position saved when operator starts
     visualSelection*: VisualSelection # Visual mode selection state
     replaceHistory*: seq[ReplaceHistoryEntry] # Replace mode undo history
     showStatusLine*: bool # Whether to show the status line
