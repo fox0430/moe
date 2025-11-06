@@ -365,9 +365,15 @@ proc executeOperatorOnRange(
     ctx.state.yankRegister = text
     ctx.state.yankIsLine = range.isLinewise
 
+    # Begin transaction for all change operations (delete + insert mode input)
+    let transactionResult = ctx.buffer.beginTransaction("Change operation")
+    if transactionResult.isErr:
+      return err("Failed to begin transaction: " & transactionResult.error)
+
     # Delete the text
     let delResult = deleteRange(ctx.buffer, range)
     if delResult.isErr:
+      discard ctx.buffer.commitTransaction()
       return err(delResult.error)
 
     # Move cursor to start of change
@@ -393,14 +399,9 @@ proc executeOperatorOnRange(
       # Restore to saved position
       ctx.motionController.viewportManager.viewport.topLine = restoredTopLine
 
-    # Enter insert mode
+    # Enter insert mode (transaction remains open for insert mode input)
     ctx.state.mode = EditorMode.Insert
     ctx.state.needsFullRedraw = true
-
-    # Begin transaction for insert mode
-    let transactionResult = ctx.buffer.beginTransaction("Change operation")
-    if transactionResult.isErr:
-      return err("Failed to begin transaction: " & transactionResult.error)
 
     return ok(())
   else:
@@ -437,6 +438,19 @@ proc executeCommand*(
         ctx.state.pendingOperator = none(PendingOperator)
         if r.isErr:
           return err(r.error)
+
+        # Record this command for repeat (.) - only if successful and not a yank
+        # Yank is not a change operation, so it should not be repeatable
+        if op.operatorType != OpYank:
+          ctx.state.lastEditCommand = some(
+            LastEditCommand(
+              kind: lecOperatorMotion,
+              operator: op.operatorType,
+              motion: cmd.motion,
+              motionCount: cmd.count,
+              operatorCount: op.operatorCount,
+            )
+          )
 
       return ok(())
     else:
@@ -503,9 +517,70 @@ proc executeCommand*(
       ctx.state.cursor = r.value
       return Result[(), string].ok ()
     of "replace":
-      # Execute replace character action
-      # This would need to be implemented in the actual editor
-      return Result[(), string].err "Replace command not yet implemented"
+      # Execute replace character action (r command)
+      # Replace count characters with the target character
+      if cmd.targetChar.len == 0:
+        return err("No character specified for replace")
+
+      let actualCount = max(1, count)
+      let lineContent = ctx.buffer.getLine(ctx.state.cursor.line)
+
+      # Check if we're at or past the end of the line
+      if ctx.state.cursor.column >= lineContent.charLen:
+        return err("Nothing to replace")
+
+      # Calculate how many characters we can actually replace
+      let charsAvailable = lineContent.charLen - ctx.state.cursor.column
+      let charsToReplace = min(actualCount, charsAvailable)
+
+      # Begin transaction for all replace operations
+      let txnResult =
+        ctx.buffer.beginTransaction("replace " & $charsToReplace & " char(s)")
+      if txnResult.isErr:
+        return err(txnResult.error)
+
+      # Replace each character
+      for i in 0 ..< charsToReplace:
+        let pos = BufferPosition(
+          line: ctx.state.cursor.line, column: ctx.state.cursor.column + i
+        )
+
+        # Delete original character
+        let delResult = ctx.buffer.deleteRange(pos, pos)
+        if delResult.isErr:
+          discard ctx.buffer.rollbackTransaction()
+          return err(delResult.error)
+
+        # Insert replacement character
+        let insResult = ctx.buffer.insertText(pos, cmd.targetChar)
+        if insResult.isErr:
+          discard ctx.buffer.rollbackTransaction()
+          return err(insResult.error)
+
+      # Commit transaction
+      let commitResult = ctx.buffer.commitTransaction()
+      if commitResult.isErr:
+        return err(commitResult.error)
+
+      # Record this command for repeat (.)
+      ctx.state.lastEditCommand = some(
+        LastEditCommand(
+          kind: lecReplaceChar,
+          replaceChar: cmd.targetChar,
+          replaceCount: charsToReplace,
+        )
+      )
+
+      # Move cursor to the last replaced character (Vim behavior)
+      ctx.state.cursor.column += charsToReplace - 1
+
+      # Clear the numeric prefix
+      if ctx.keyBindingRegistry != nil:
+        ctx.keyBindingRegistry.sequenceState.numericPrefix = ""
+        ctx.keyBindingRegistry.sequenceState.hasNumericPrefix = false
+
+      ctx.state.needsFullRedraw = true
+      return ok(())
     else:
       return Result[(), string].err "Unknown operator type: " & cmd.operatorType
   of ctAction, ctTextObject, ctOperator, ctCustom:
@@ -651,11 +726,21 @@ proc handleNewline(ctx: CommandContext): Result[(), string] =
 
 proc handleInsertLineBelow(ctx: CommandContext): Result[(), string] =
   ## Handle 'o' command - insert line below and enter insert mode
+  # Begin transaction for line insertion + insert mode input (all in one undo unit)
+  let txnResult = ctx.buffer.beginTransaction("Insert line below")
+  if txnResult.isErr:
+    return err("Failed to begin transaction: " & txnResult.error)
+
   insertLineBelow(ctx.buffer, ctx.state)
   Result[(), string].ok ()
 
 proc handleInsertLineAbove(ctx: CommandContext): Result[(), string] =
   ## Handle 'O' command - insert line above and enter insert mode
+  # Begin transaction for line insertion + insert mode input (all in one undo unit)
+  let txnResult = ctx.buffer.beginTransaction("Insert line above")
+  if txnResult.isErr:
+    return err("Failed to begin transaction: " & txnResult.error)
+
   insertLineAbove(ctx.buffer, ctx.state)
   Result[(), string].ok ()
 
@@ -829,6 +914,10 @@ proc handlePasteAfter(ctx: CommandContext, count: int = 1): Result[(), string] =
     if txnResult.isErr:
       return err(txnResult.error)
 
+  # Record this command for repeat (.)
+  ctx.state.lastEditCommand =
+    some(LastEditCommand(kind: lecPaste, pasteCount: actualCount, pasteBefore: false))
+
   ctx.state.needsFullRedraw = true
   return Result[(), string].ok ()
 
@@ -911,6 +1000,10 @@ proc handlePasteBefore(ctx: CommandContext, count: int = 1): Result[(), string] 
     let txnResult = ctx.buffer.commitTransaction()
     if txnResult.isErr:
       return err(txnResult.error)
+
+  # Record this command for repeat (.)
+  ctx.state.lastEditCommand =
+    some(LastEditCommand(kind: lecPaste, pasteCount: actualCount, pasteBefore: true))
 
   ctx.state.needsFullRedraw = true
   return Result[(), string].ok ()
@@ -1022,6 +1115,13 @@ proc handleDeleteChar(ctx: CommandContext, count: int = 1): Result[(), string] =
   # Also write to system clipboard if enabled
   if ctx.clipboardConfig.enable:
     discard writeToClipboard(ctx.clipboardConfig.tool, deletedText)
+
+  # Record this command for repeat (.)
+  ctx.state.lastEditCommand = some(
+    LastEditCommand(
+      kind: lecDeleteChar, deleteCount: charsToDelete, deleteForward: true
+    )
+  )
 
   ctx.state.needsFullRedraw = true
   return Result[(), string].ok ()
@@ -1144,6 +1244,239 @@ proc handleDeleteCharBefore(ctx: CommandContext, count: int = 1): Result[(), str
   if ctx.clipboardConfig.enable:
     discard writeToClipboard(ctx.clipboardConfig.tool, deletedText)
 
+  # Record this command for repeat (.)
+  ctx.state.lastEditCommand = some(
+    LastEditCommand(
+      kind: lecDeleteChar, deleteCount: charsToDelete, deleteForward: false
+    )
+  )
+
+  ctx.state.needsFullRedraw = true
+  return Result[(), string].ok ()
+
+proc handleSubstituteChar(ctx: CommandContext, count: int = 1): Result[(), string] =
+  ## Substitute character(s) at cursor position (s command)
+  ## Deletes character(s) and enters Insert mode
+  ## count: number of characters to substitute (default: 1)
+
+  logDebug("substitute", "handleSubstituteChar called with count=" & $count)
+  let actualCount = max(1, count)
+  let lineContent = ctx.buffer.getLine(ctx.state.cursor.line)
+
+  # Check if we're at or past the end of the line
+  if ctx.state.cursor.column >= lineContent.charLen:
+    # At end of line, just enter insert mode
+    ctx.state.mode = EditorMode.Insert
+    let transactionResult = ctx.buffer.beginTransaction("Substitute")
+    if transactionResult.isErr:
+      return err("Failed to begin transaction: " & transactionResult.error)
+    ctx.state.statusMessage = "-- INSERT --"
+    return Result[(), string].ok ()
+
+  # Calculate how many characters we can actually delete
+  let charsAvailable = lineContent.charLen - ctx.state.cursor.column
+  let charsToDelete = min(actualCount, charsAvailable)
+
+  # Extract the characters to be deleted (for yank register)
+  let runes = lineContent.toRunes()
+  var deletedText = ""
+  for i in 0 ..< charsToDelete:
+    let runeIdx = ctx.state.cursor.column + i
+    if runeIdx < runes.len:
+      deletedText.add($runes[runeIdx])
+
+  # Store in yank register before deleting
+  ctx.state.yankRegister = deletedText
+  ctx.state.yankIsLine = false
+
+  # Also write to system clipboard if enabled
+  if ctx.clipboardConfig.enable:
+    discard writeToClipboard(ctx.clipboardConfig.tool, deletedText)
+
+  # Begin transaction for delete + insert mode (all in one undo unit)
+  let txnResult =
+    ctx.buffer.beginTransaction("substitute " & $charsToDelete & " char(s)")
+  if txnResult.isErr:
+    return err(txnResult.error)
+
+  # Delete the characters
+  for i in 0 ..< charsToDelete:
+    let endPos = ctx.state.cursor
+    let delResult = ctx.buffer.deleteRange(ctx.state.cursor, endPos)
+    if delResult.isErr:
+      discard ctx.buffer.rollbackTransaction()
+      return err(delResult.error)
+
+  # Enter Insert mode (transaction remains open for insert mode input)
+  ctx.state.mode = EditorMode.Insert
+
+  # Record substitute context so Insert mode exit can properly record the command
+  ctx.state.substituteContext =
+    some(SubstituteContext(kind: skChar, deleteCount: charsToDelete))
+
+  ctx.state.needsFullRedraw = true
+  ctx.state.statusMessage = "-- INSERT --"
+  return Result[(), string].ok ()
+
+proc handleSubstituteLine(ctx: CommandContext, count: int = 1): Result[(), string] =
+  ## Substitute line(s) (S command or cc)
+  ## Deletes line content and enters Insert mode
+  ## count: number of lines to substitute (default: 1)
+
+  logDebug("substitute", "handleSubstituteLine called with count=" & $count)
+  let actualCount = max(1, count)
+  let startLine = ctx.state.cursor.line
+  let endLine = min(startLine + actualCount - 1, ctx.buffer.len - 1)
+
+  # Extract lines for yank register
+  var text = ""
+  for lineIdx in startLine .. endLine:
+    if lineIdx < ctx.buffer.len:
+      let lineContent = ctx.buffer.getLine(lineIdx)
+      text.add(lineContent)
+      if lineContent.len == 0 or lineContent[^1] != '\n':
+        text.add("\n")
+
+  ctx.state.yankRegister = text
+  ctx.state.yankIsLine = true
+
+  # Also write to system clipboard if enabled
+  if ctx.clipboardConfig.enable:
+    discard writeToClipboard(ctx.clipboardConfig.tool, text)
+
+  # Get indent from first line (for auto-indent)
+  let firstLine = ctx.buffer.getLine(startLine)
+  var indent = ""
+  for rune in firstLine.toRunes():
+    let ch = $rune
+    if ch == " " or ch == "\t":
+      indent.add(ch)
+    else:
+      break
+
+  # Begin transaction for all substitute operations (delete + insert mode input)
+  let transactionResult = ctx.buffer.beginTransaction("Substitute line")
+  if transactionResult.isErr:
+    return err("Failed to begin transaction: " & transactionResult.error)
+
+  # Delete all but first line
+  for i in 0 ..< (endLine - startLine):
+    if startLine + 1 < ctx.buffer.len:
+      let deleteResult = ctx.buffer.deleteLine(startLine + 1)
+      if deleteResult.isErr:
+        discard ctx.buffer.rollbackTransaction()
+        return err("Failed to delete line: " & deleteResult.error)
+
+  # Clear the first line but preserve indent
+  if startLine < ctx.buffer.len:
+    let line = ctx.buffer.getLine(startLine)
+    # Delete all characters in the line
+    for i in 0 ..< line.charLen:
+      let deleteResult = ctx.buffer.deleteRange(
+        BufferPosition(line: startLine, column: 0),
+        BufferPosition(line: startLine, column: 0),
+      )
+      if deleteResult.isErr:
+        discard ctx.buffer.rollbackTransaction()
+        return err("Failed to clear line: " & deleteResult.error)
+
+    # Insert indent if auto-indent is enabled
+    if ctx.state.autoIndent and indent.len > 0:
+      let insertResult =
+        ctx.buffer.insertText(BufferPosition(line: startLine, column: 0), indent)
+      if insertResult.isErr:
+        discard ctx.buffer.rollbackTransaction()
+        return err("Failed to insert indent: " & insertResult.error)
+
+  # Move cursor to beginning of line (after indent)
+  ctx.state.cursor.line = startLine
+  ctx.state.cursor.column = indent.len
+
+  # Enter Insert mode (transaction remains open for insert mode input)
+  ctx.state.mode = EditorMode.Insert
+
+  # Record substitute context so Insert mode exit can properly record the command
+  let lineCount = endLine - startLine + 1
+  ctx.state.substituteContext =
+    some(SubstituteContext(kind: skLine, deleteCount: lineCount))
+
+  ctx.state.needsFullRedraw = true
+  ctx.state.statusMessage = "-- INSERT --"
+  return Result[(), string].ok ()
+
+proc handleToggleCase(ctx: CommandContext, count: int = 1): Result[(), string] =
+  ## Toggle case of character(s) at cursor position (~ command)
+  ## Changes uppercase to lowercase and vice versa, then moves cursor right
+  ## count: number of characters to toggle (default: 1)
+
+  logDebug("toggle", "handleToggleCase called with count=" & $count)
+  let actualCount = max(1, count)
+  let lineContent = ctx.buffer.getLine(ctx.state.cursor.line)
+
+  # Check if we're at or past the end of the line
+  if ctx.state.cursor.column >= lineContent.charLen:
+    return err("Nothing to toggle")
+
+  # Calculate how many characters we can actually toggle
+  let charsAvailable = lineContent.charLen - ctx.state.cursor.column
+  let charsToToggle = min(actualCount, charsAvailable)
+
+  # Begin transaction for all toggle operations (to group as single undo)
+  let txnResult = ctx.buffer.beginTransaction("toggle " & $charsToToggle & " char(s)")
+  if txnResult.isErr:
+    return err(txnResult.error)
+
+  # Toggle each character
+  let runes = lineContent.toRunes()
+  for i in 0 ..< charsToToggle:
+    let runeIdx = ctx.state.cursor.column + i
+    if runeIdx < runes.len:
+      let originalChar = $runes[runeIdx]
+
+      # Toggle case: convert to uppercase if lowercase, lowercase if uppercase
+      var toggledChar: string
+      if originalChar == originalChar.toUpperAscii():
+        # Character is uppercase (or non-alphabetic), convert to lowercase
+        toggledChar = originalChar.toLowerAscii()
+      else:
+        # Character is lowercase, convert to uppercase
+        toggledChar = originalChar.toUpperAscii()
+
+      # Only perform replacement if the character actually changed
+      if originalChar != toggledChar:
+        let pos = BufferPosition(
+          line: ctx.state.cursor.line, column: ctx.state.cursor.column + i
+        )
+
+        # Delete original character
+        let delResult = ctx.buffer.deleteRange(pos, pos)
+        if delResult.isErr:
+          discard ctx.buffer.commitTransaction()
+          return err(delResult.error)
+
+        # Insert toggled character
+        let insResult = ctx.buffer.insertText(pos, toggledChar)
+        if insResult.isErr:
+          discard ctx.buffer.commitTransaction()
+          return err(insResult.error)
+
+  # Commit transaction
+  let commitResult = ctx.buffer.commitTransaction()
+  if commitResult.isErr:
+    return err(commitResult.error)
+
+  # Move cursor to the right by the number of characters toggled
+  ctx.state.cursor.column += charsToToggle
+
+  # Keep cursor within line bounds
+  let finalLineContent = ctx.buffer.getLine(ctx.state.cursor.line)
+  if ctx.state.cursor.column > finalLineContent.charLen:
+    ctx.state.cursor.column = max(0, finalLineContent.charLen)
+
+  # Record this command for repeat (.)
+  ctx.state.lastEditCommand =
+    some(LastEditCommand(kind: lecToggleCase, toggleCaseCount: charsToToggle))
+
   ctx.state.needsFullRedraw = true
   return Result[(), string].ok ()
 
@@ -1184,6 +1517,10 @@ proc handleDeleteLine(ctx: CommandContext, count: int = 1): Result[(), string] =
   # Also write to system clipboard if enabled
   if ctx.clipboardConfig.enable:
     discard writeToClipboard(ctx.clipboardConfig.tool, deletedText)
+
+  # Record this command for repeat (.)
+  ctx.state.lastEditCommand =
+    some(LastEditCommand(kind: lecDeleteLine, deleteLineCount: actualCount))
 
   ctx.state.needsFullRedraw = true
   ctx.state.statusMessage = "Deleted " & $actualCount & " line(s)"
@@ -1270,6 +1607,10 @@ proc handleJoinLines(ctx: CommandContext, count: int = 1): Result[(), string] =
   if joinResult.isErr:
     return err(joinResult.error)
 
+  # Record this command for repeat (.)
+  ctx.state.lastEditCommand =
+    some(LastEditCommand(kind: lecJoinLines, joinLinesCount: actualCount))
+
   ctx.state.needsFullRedraw = true
   let totalLines = actualCount + 1
   ctx.state.statusMessage = "Joined " & $totalLines & " line(s)"
@@ -1336,6 +1677,13 @@ proc handleOperatorDelete(ctx: CommandContext, count: int = 1): Result[(), strin
     let startLine = ctx.state.cursor.line
     let operatorCount = ctx.state.pendingOperator.get.operatorCount
     let endLine = min(startLine + operatorCount - 1, ctx.buffer.len - 1)
+    let lineCount = endLine - startLine + 1
+
+    # Begin transaction for all line deletions
+    let transactionResult =
+      ctx.buffer.beginTransaction("Delete " & $lineCount & " line(s)")
+    if transactionResult.isErr:
+      return err("Failed to begin transaction: " & transactionResult.error)
 
     # Extract lines for yank register
     var text = ""
@@ -1350,19 +1698,28 @@ proc handleOperatorDelete(ctx: CommandContext, count: int = 1): Result[(), strin
     ctx.state.yankIsLine = true
 
     # Delete lines
-    for i in 0 ..< (endLine - startLine + 1):
+    for i in 0 ..< lineCount:
       if startLine < ctx.buffer.len:
         let deleteResult = ctx.buffer.deleteLine(startLine)
         if deleteResult.isErr:
+          discard ctx.buffer.rollbackTransaction()
           return err("Failed to delete line: " & deleteResult.error)
+
+    # Commit transaction
+    let commitResult = ctx.buffer.commitTransaction()
+    if commitResult.isErr:
+      return err("Failed to commit transaction: " & commitResult.error)
 
     # Move cursor to beginning of line
     ctx.state.cursor.line = min(startLine, ctx.buffer.len - 1)
     ctx.state.cursor.column = 0
 
+    # Record this command for repeat (.)
+    ctx.state.lastEditCommand =
+      some(LastEditCommand(kind: lecDeleteLine, deleteLineCount: lineCount))
+
     # Clear operator state
     ctx.state.pendingOperator = none(PendingOperator)
-    let lineCount = endLine - startLine + 1
     ctx.state.statusMessage = "Deleted " & $lineCount & " line(s)"
     return ok(())
   else:
@@ -1381,6 +1738,7 @@ proc handleOperatorChange(ctx: CommandContext, count: int = 1): Result[(), strin
     let startLine = ctx.state.cursor.line
     let operatorCount = ctx.state.pendingOperator.get.operatorCount
     let endLine = min(startLine + operatorCount - 1, ctx.buffer.len - 1)
+    let lineCount = endLine - startLine + 1
 
     # Extract lines for yank register
     var text = ""
@@ -1394,11 +1752,18 @@ proc handleOperatorChange(ctx: CommandContext, count: int = 1): Result[(), strin
     ctx.state.yankRegister = text
     ctx.state.yankIsLine = true
 
+    # Begin transaction for all change operations (delete + insert mode input)
+    let transactionResult =
+      ctx.buffer.beginTransaction("Change " & $lineCount & " line(s)")
+    if transactionResult.isErr:
+      return err("Failed to begin transaction: " & transactionResult.error)
+
     # Delete all but first line
     for i in 0 ..< (endLine - startLine):
       if startLine + 1 < ctx.buffer.len:
         let deleteResult = ctx.buffer.deleteLine(startLine + 1)
         if deleteResult.isErr:
+          discard ctx.buffer.rollbackTransaction()
           return err("Failed to delete line: " & deleteResult.error)
 
     # Clear the first line
@@ -1410,17 +1775,17 @@ proc handleOperatorChange(ctx: CommandContext, count: int = 1): Result[(), strin
           BufferPosition(line: startLine, column: 1),
         )
         if deleteResult.isErr:
+          discard ctx.buffer.rollbackTransaction()
           return err("Failed to clear line: " & deleteResult.error)
 
-    # Move cursor to beginning of line and enter Insert mode
+    # Move cursor to beginning of line and enter Insert mode (transaction remains open)
     ctx.state.cursor.line = startLine
     ctx.state.cursor.column = 0
     ctx.state.mode = EditorMode.Insert
 
-    # Begin transaction for change
-    let transactionResult = ctx.buffer.beginTransaction("Change line")
-    if transactionResult.isErr:
-      return err("Failed to begin transaction: " & transactionResult.error)
+    # Record substitute context so Insert mode exit can properly record the command
+    ctx.state.substituteContext =
+      some(SubstituteContext(kind: skLine, deleteCount: lineCount))
 
     # Clear operator state
     ctx.state.pendingOperator = none(PendingOperator)
@@ -1740,6 +2105,39 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
   )
 
   registry.register(
+    custom("substitute.char"),
+    "Substitute Character",
+    "Substitute character(s) at cursor (s command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let count = parseCount(args, default = 1)
+      handleSubstituteChar(ctx, count),
+    0,
+    1, # Accept optional count argument
+  )
+
+  registry.register(
+    custom("substitute.line"),
+    "Substitute Line",
+    "Substitute line(s) (S command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let count = parseCount(args, default = 1)
+      handleSubstituteLine(ctx, count),
+    0,
+    1, # Accept optional count argument
+  )
+
+  registry.register(
+    custom("toggle.case"),
+    "Toggle Case",
+    "Toggle case of character(s) at cursor (~ command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      let count = parseCount(args, default = 1)
+      handleToggleCase(ctx, count),
+    0,
+    1, # Accept optional count argument
+  )
+
+  registry.register(
     custom("yank.line"),
     "Yank Line",
     "Yank (copy) current line(s) to clipboard",
@@ -1779,6 +2177,9 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       let count = parseCount(args, default = 1)
       indentLine(ctx.buffer, ctx.state, count)
+      # Record this command for repeat (.)
+      ctx.state.lastEditCommand =
+        some(LastEditCommand(kind: lecIndent, indentCount: count))
       return Result[(), string].ok (),
     0,
     1, # Accept optional count argument
@@ -1791,6 +2192,9 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       let count = parseCount(args, default = 1)
       dedentLine(ctx.buffer, ctx.state, count)
+      # Record this command for repeat (.)
+      ctx.state.lastEditCommand =
+        some(LastEditCommand(kind: lecDedent, dedentCount: count))
       return Result[(), string].ok (),
     0,
     1, # Accept optional count argument
@@ -1848,6 +2252,286 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
       return Result[(), string].ok (),
     0,
     1, # Accept optional count argument
+  )
+
+  # Repeat last change command (.)
+  registry.register(
+    custom("edit.repeat"),
+    "Repeat Last Change",
+    "Repeat the last change command (. command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      # Check if we have a last edit command
+      if ctx.state.lastEditCommand.isNone:
+        return err("No previous change to repeat")
+
+      let lastCmd = ctx.state.lastEditCommand.get
+
+      case lastCmd.kind
+      of lecOperatorMotion:
+        # Repeat operator+motion command (e.g., dw, c2w, y$)
+        # Create a pending operator
+        ctx.state.pendingOperator = some(
+          PendingOperator(
+            operatorType: lastCmd.operator,
+            operatorCount: lastCmd.operatorCount,
+            startPos: ctx.state.cursor,
+          )
+        )
+        # Save viewport position for restoration after operator
+        ctx.state.savedViewportTopLine =
+          ctx.motionController.viewportManager.viewport.topLine
+
+        # Execute the motion
+        let motionCmd =
+          MotionCommand(motion: lastCmd.motion, count: lastCmd.motionCount)
+        let r = ctx.motionController.executeMotion(
+          motionCmd, ctx.state.cursor, updateViewport = false
+        )
+        if r.isErr:
+          ctx.state.pendingOperator = none(PendingOperator)
+          return err(r.error)
+
+        # Calculate the range
+        let range =
+          calculateOperatorRange(ctx.buffer, ctx.state.cursor, r.value, lastCmd.motion)
+
+        # Execute the operator on the range
+        let op = ctx.state.pendingOperator.get
+        ctx.state.pendingOperator = none(PendingOperator)
+        let execResult =
+          executeOperatorOnRange(ctx, op.operatorType, range, op.operatorCount)
+        if execResult.isErr:
+          return err(execResult.error)
+
+        # Note: We don't update lastEditCommand here because we're repeating the same command
+        return ok(())
+      of lecDeleteChar:
+        # Repeat character deletion (x or X)
+        if lastCmd.deleteForward:
+          # x command - delete forward
+          return handleDeleteChar(ctx, lastCmd.deleteCount)
+        else:
+          # X command - delete backward
+          return handleDeleteCharBefore(ctx, lastCmd.deleteCount)
+      of lecDeleteLine:
+        # Repeat line deletion (dd)
+        return handleDeleteLine(ctx, lastCmd.deleteLineCount)
+      of lecPaste:
+        # Repeat paste operation (p or P)
+        if lastCmd.pasteBefore:
+          # P command - paste before
+          return handlePasteBefore(ctx, lastCmd.pasteCount)
+        else:
+          # p command - paste after
+          return handlePasteAfter(ctx, lastCmd.pasteCount)
+      of lecToggleCase:
+        # Repeat toggle case (~)
+        return handleToggleCase(ctx, lastCmd.toggleCaseCount)
+      of lecSubstitute:
+        # Repeat substitute (s/S/cc)
+        # Delete + insert the recorded text without entering Insert mode
+        case lastCmd.substituteKind
+        of skChar:
+          # Repeat s command - delete characters then insert text
+          let lineContent = ctx.buffer.getLine(ctx.state.cursor.line)
+
+          # Check if we're at or past the end of the line
+          if ctx.state.cursor.column >= lineContent.charLen:
+            # At end of line, just insert text
+            let insertResult =
+              ctx.buffer.insertText(ctx.state.cursor, lastCmd.substituteText)
+            if insertResult.isErr:
+              return err("Failed to insert text: " & insertResult.error)
+          else:
+            # Delete characters
+            let charsAvailable = lineContent.charLen - ctx.state.cursor.column
+            let charsToDelete = min(lastCmd.substituteCount, charsAvailable)
+
+            # Begin transaction
+            let txnResult =
+              ctx.buffer.beginTransaction("substitute " & $charsToDelete & " char(s)")
+            if txnResult.isErr:
+              return err(txnResult.error)
+
+            # Delete the characters
+            for i in 0 ..< charsToDelete:
+              let delResult = ctx.buffer.deleteRange(ctx.state.cursor, ctx.state.cursor)
+              if delResult.isErr:
+                discard ctx.buffer.rollbackTransaction()
+                return err(delResult.error)
+
+            # Insert the recorded text
+            let insertResult =
+              ctx.buffer.insertText(ctx.state.cursor, lastCmd.substituteText)
+            if insertResult.isErr:
+              discard ctx.buffer.rollbackTransaction()
+              return err("Failed to insert text: " & insertResult.error)
+
+            # Commit transaction
+            let commitResult = ctx.buffer.commitTransaction()
+            if commitResult.isErr:
+              return err(commitResult.error)
+
+          # Move cursor to last inserted character (Vim behavior)
+          let numNewlines = lastCmd.substituteText.count('\n')
+          if numNewlines > 0:
+            ctx.state.cursor.line += numNewlines
+            let lines = lastCmd.substituteText.split('\n')
+            let lastLine = lines[^1]
+            # Position cursor on last character (or at column 0 if empty)
+            ctx.state.cursor.column = max(0, lastLine.charLen - 1)
+          else:
+            # Single line - move cursor to last inserted character
+            ctx.state.cursor.column += lastCmd.substituteText.charLen
+            if ctx.state.cursor.column > 0:
+              ctx.state.cursor.column -= 1 # Stay on last inserted character
+
+          ctx.state.needsFullRedraw = true
+          return ok(())
+        of skLine:
+          # Repeat S or cc command - delete lines then insert text
+          let startLine = ctx.state.cursor.line
+          let endLine = min(startLine + lastCmd.substituteCount - 1, ctx.buffer.len - 1)
+
+          # Begin transaction
+          let transactionResult = ctx.buffer.beginTransaction("Substitute line")
+          if transactionResult.isErr:
+            return err("Failed to begin transaction: " & transactionResult.error)
+
+          # Delete all but first line
+          for i in 0 ..< (endLine - startLine):
+            if startLine + 1 < ctx.buffer.len:
+              let deleteResult = ctx.buffer.deleteLine(startLine + 1)
+              if deleteResult.isErr:
+                discard ctx.buffer.rollbackTransaction()
+                return err("Failed to delete line: " & deleteResult.error)
+
+          # Clear the first line
+          if startLine < ctx.buffer.len:
+            let line = ctx.buffer.getLine(startLine)
+            for i in 0 ..< line.charLen:
+              let deleteResult = ctx.buffer.deleteRange(
+                BufferPosition(line: startLine, column: 0),
+                BufferPosition(line: startLine, column: 0),
+              )
+              if deleteResult.isErr:
+                discard ctx.buffer.rollbackTransaction()
+                return err("Failed to clear line: " & deleteResult.error)
+
+          # Insert the recorded text at the beginning of the line
+          let insertResult = ctx.buffer.insertText(
+            BufferPosition(line: startLine, column: 0), lastCmd.substituteText
+          )
+          if insertResult.isErr:
+            discard ctx.buffer.rollbackTransaction()
+            return err("Failed to insert text: " & insertResult.error)
+
+          # Commit transaction
+          let commitResult = ctx.buffer.commitTransaction()
+          if commitResult.isErr:
+            return err(commitResult.error)
+
+          # Move cursor to last inserted character (Vim behavior)
+          let numNewlines = lastCmd.substituteText.count('\n')
+          if numNewlines > 0:
+            ctx.state.cursor.line = startLine + numNewlines
+            let lines = lastCmd.substituteText.split('\n')
+            let lastLine = lines[^1]
+            # Position cursor on last character (or at column 0 if empty)
+            ctx.state.cursor.column = max(0, lastLine.charLen - 1)
+          else:
+            ctx.state.cursor.line = startLine
+            # Position cursor on last character (or at column 0 if empty)
+            ctx.state.cursor.column = max(0, lastCmd.substituteText.charLen - 1)
+
+          ctx.state.needsFullRedraw = true
+          return ok(())
+      of lecInsertText:
+        # Repeat insert text
+        let insertResult = ctx.buffer.insertText(ctx.state.cursor, lastCmd.insertedText)
+        if insertResult.isErr:
+          return err("Failed to repeat insert: " & insertResult.error)
+
+        # Move cursor to last inserted character (Vim behavior: cursor on last char, not after)
+        # Count newlines to handle multi-line insertion
+        let numNewlines = lastCmd.insertedText.count('\n')
+        if numNewlines > 0:
+          # Multi-line insertion - move to last line
+          ctx.state.cursor.line += numNewlines
+          let lines = lastCmd.insertedText.split('\n')
+          let lastLine = lines[^1]
+          # Position cursor on last character (or at column 0 if last line is empty)
+          ctx.state.cursor.column = max(0, lastLine.charLen - 1)
+        else:
+          # Single line insertion - move cursor to last inserted character
+          if lastCmd.insertedText.len > 0:
+            ctx.state.cursor.column += lastCmd.insertedText.charLen
+            # Move back one to be on the last character, not after it
+            if ctx.state.cursor.column > 0:
+              ctx.state.cursor.column -= 1
+          # If empty string, cursor stays at current position
+
+        ctx.state.needsFullRedraw = true
+        return ok(())
+      of lecReplaceChar:
+        # Repeat replace character (r command)
+        let lineContent = ctx.buffer.getLine(ctx.state.cursor.line)
+
+        # Check if we're at or past the end of the line
+        if ctx.state.cursor.column >= lineContent.charLen:
+          return err("Nothing to replace")
+
+        # Calculate how many characters we can actually replace
+        let charsAvailable = lineContent.charLen - ctx.state.cursor.column
+        let charsToReplace = min(lastCmd.replaceCount, charsAvailable)
+
+        # Begin transaction
+        let txnResult =
+          ctx.buffer.beginTransaction("replace " & $charsToReplace & " char(s)")
+        if txnResult.isErr:
+          return err(txnResult.error)
+
+        # Replace each character
+        for i in 0 ..< charsToReplace:
+          let pos = BufferPosition(
+            line: ctx.state.cursor.line, column: ctx.state.cursor.column + i
+          )
+          let delResult = ctx.buffer.deleteRange(pos, pos)
+          if delResult.isErr:
+            discard ctx.buffer.rollbackTransaction()
+            return err(delResult.error)
+
+          let insResult = ctx.buffer.insertText(pos, lastCmd.replaceChar)
+          if insResult.isErr:
+            discard ctx.buffer.rollbackTransaction()
+            return err(insResult.error)
+
+        # Commit transaction
+        let commitResult = ctx.buffer.commitTransaction()
+        if commitResult.isErr:
+          return err(commitResult.error)
+
+        # Move cursor to the last replaced character
+        ctx.state.cursor.column += charsToReplace - 1
+        ctx.state.needsFullRedraw = true
+        return ok(())
+      of lecJoinLines:
+        # Repeat join lines (J command)
+        return handleJoinLines(ctx, lastCmd.joinLinesCount)
+      of lecIndent:
+        # Repeat indent (>>)
+        indentLine(ctx.buffer, ctx.state, lastCmd.indentCount)
+        return ok(())
+      of lecDedent:
+        # Repeat dedent (<<)
+        dedentLine(ctx.buffer, ctx.state, lastCmd.dedentCount)
+        return ok(())
+      of lecChangeLine:
+        # Note: This case should not be reached anymore as cc now uses lecSubstitute
+        # Kept for backwards compatibility if old state exists
+        return err("Repeating cc command is not yet implemented (use latest version)"),
+    0,
+    0,
   )
 
   # Clipboard commands
@@ -1929,7 +2613,19 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
       let range = OperatorRange(start: startPos, endPos: endPos, isLinewise: false)
 
       # Execute delete operation
-      return executeOperatorOnRange(ctx, OpDelete, range, 1),
+      let r = executeOperatorOnRange(ctx, OpDelete, range, 1)
+      if r.isOk:
+        # Record this command for repeat (.)
+        ctx.state.lastEditCommand = some(
+          LastEditCommand(
+            kind: lecOperatorMotion,
+            operator: OpDelete,
+            motion: End,
+            motionCount: 1,
+            operatorCount: 1,
+          )
+        )
+      return r,
     0,
     0,
   )
@@ -1948,7 +2644,19 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
       let range = OperatorRange(start: startPos, endPos: endPos, isLinewise: false)
 
       # Execute change operation
-      return executeOperatorOnRange(ctx, OpChange, range, 1),
+      let r = executeOperatorOnRange(ctx, OpChange, range, 1)
+      if r.isOk:
+        # Record this command for repeat (.)
+        ctx.state.lastEditCommand = some(
+          LastEditCommand(
+            kind: lecOperatorMotion,
+            operator: OpChange,
+            motion: End,
+            motionCount: 1,
+            operatorCount: 1,
+          )
+        )
+      return r,
     0,
     0,
   )

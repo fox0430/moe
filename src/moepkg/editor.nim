@@ -212,12 +212,6 @@ proc calculateWindowCursor(
       # y = viewport.y (window y) + screenY (lines from top)
       let finalX = viewport.x + lineNumOffset + wrapLineColumn
       let finalY = viewport.y + screenY
-      logDebug(
-        "editor",
-        "calcCursorScreenPos(wrapped): cursorCol=" & $cursor.column & " displayWidth=" &
-          $displayWidthUpToCursor & " wrapColumn=" & $wrapLineColumn & " screenX=" &
-          $finalX,
-      )
       return CursorPosition(x: finalX, y: finalY)
   else:
     # === NO-WRAP MODE: Calculate cursor position with horizontal scrolling ===
@@ -252,11 +246,6 @@ proc calculateWindowCursor(
           viewport.x + lineNumOffset +
           max(0, displayWidthUpToCursor - displayWidthUpToLeftCol)
 
-      logDebug(
-        "editor",
-        "calcCursorScreenPos: cursorCol=" & $cursor.column & " displayWidthUpToCursor=" &
-          $displayWidthUpToCursor & " screenX=" & $screenX,
-      )
       return CursorPosition(x: screenX, y: screenY)
 
   # Cursor is not visible (off-screen)

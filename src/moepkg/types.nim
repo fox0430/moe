@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[options, monotimes]
+import std/[options, monotimes, tables]
 
 import pkg/celina
 
@@ -155,6 +155,58 @@ type
     modifier*: TextObjectModifier # i or a
     operatorCount*: int # Count before operator (if any)
 
+  LastEditCommandKind* = enum
+    ## Types of repeatable edit commands
+    lecOperatorMotion # Operator + motion (e.g., dw, c2w, y$)
+    lecInsertText # Text inserted in insert mode
+    lecReplaceChar # Character replacement with r command
+    lecDeleteChar # Character deletion with x/X
+    lecSubstitute # Substitute command (s/S)
+    lecDeleteLine # Delete line(s) with dd
+    lecChangeLine # Change line(s) with cc
+    lecPaste # Paste operation (p/P)
+    lecToggleCase # Toggle case with ~
+    lecJoinLines # Join lines with J
+    lecIndent # Indent line(s) with >>
+    lecDedent # Dedent line(s) with <<
+
+  LastEditCommand* = object
+    ## Represents the last change command that can be repeated with "."
+    case kind*: LastEditCommandKind
+    of lecOperatorMotion:
+      operator*: OperatorType # d, c, y, >, <, ~, gu, gU
+      motion*: Motion # h, j, k, l, w, b, e, etc.
+      motionCount*: int # Count for motion (3 in "d3w")
+      operatorCount*: int # Count for operator (2 in "2dd")
+    of lecInsertText:
+      insertedText*: string # Text that was inserted
+      insertPosition*: BufferPosition # Where insertion started
+    of lecReplaceChar:
+      replaceChar*: string # Character used for replacement
+      replaceCount*: int # Number of characters to replace
+    of lecDeleteChar:
+      deleteCount*: int # Number of characters to delete
+      deleteForward*: bool # true for x, false for X
+    of lecSubstitute:
+      substituteText*: string # Text substituted
+      substituteCount*: int # Number of characters or lines substituted
+      substituteKind*: SubstituteKind # Whether it was s (char) or S/cc (line)
+    of lecDeleteLine:
+      deleteLineCount*: int # Number of lines to delete
+    of lecChangeLine:
+      changeLineCount*: int # Number of lines to change
+    of lecPaste:
+      pasteCount*: int # Number of times to paste
+      pasteBefore*: bool # true for P (before), false for p (after)
+    of lecToggleCase:
+      toggleCaseCount*: int # Number of characters to toggle
+    of lecJoinLines:
+      joinLinesCount*: int # Number of lines to join
+    of lecIndent:
+      indentCount*: int # Number of indent levels
+    of lecDedent:
+      dedentCount*: int # Number of dedent levels
+
   VisualSelection* = object ## Represents a visual mode selection range
     start*: BufferPosition # Selection start position (anchor)
     current*: BufferPosition # Current cursor position (selection end)
@@ -163,6 +215,17 @@ type
   ReplaceHistoryEntry* = object ## Replace mode history entry for undo with Backspace
     pos*: BufferPosition # Position where character was replaced
     originalChar*: string # Original character before replacement
+
+  SubstituteKind* = enum
+    ## Kind of substitute operation that led to Insert mode
+    skChar # s command - substitute character(s)
+    skLine # S or cc command - substitute line(s)
+
+  SubstituteContext* = object
+    ## Tracks context when Insert mode was entered via substitute command
+    ## Used to properly record the command for repeat (.)
+    kind*: SubstituteKind # Type of substitute operation
+    deleteCount*: int # Number of characters or lines deleted
 
   EditorState* = ref object
     cursor*: BufferPosition # Actual buffer cursor position (line/column)
@@ -175,6 +238,11 @@ type
     lastSearchText*: string # Last executed search text for n/N commands
     statusMessage*: string # Message to display in status line
     lastMotion*: Option[Motion]
+    lastEditCommand*: Option[LastEditCommand] # Last change command for . (repeat)
+    insertModeStartPos*: Option[BufferPosition]
+      # Position where Insert mode started (for text tracking)
+    substituteContext*: Option[SubstituteContext]
+      # Context when Insert mode was entered via substitute (s/S/cc)
     pendingOperator*: Option[PendingOperator] # Operator waiting for motion/text object
     pendingTextObject*: Option[PendingTextObject]
       # Text object modifier waiting for object kind
@@ -229,3 +297,11 @@ type
     # Yank register (internal clipboard)
     yankRegister*: string # Content yanked with yy, y, etc.
     yankIsLine*: bool # Whether the yank was linewise (yy) or characterwise
+    # Macro recording (q command)
+    isRecordingMacro*: bool # Whether currently recording a macro
+    macroRegister*: char # Which register (a-z) is being recorded to
+    recordedKeys*: seq[string] # Keys being recorded in current macro session
+    macroRegisters*: Table[char, seq[string]] # Saved macros by register (a-z)
+    lastMacroRegister*: Option[char] # Last executed macro register (for @@ repeat)
+    waitingForMacroRegister*: bool # Waiting for register name after q or @
+    macroCommandType*: string # "record" or "playback" - what we're waiting to do

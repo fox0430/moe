@@ -28,8 +28,8 @@ import pkg/[results, celina]
 
 import
   ../[
-    types, buffer, modes, motion, keybindings, commandline, commandconfig,
-    commandregistry, config,
+    types, buffer, cursor, modes, motion, keybindings, commandline, commandconfig,
+    commandregistry, config, stringbuilder,
   ]
 import normal_handler, insert_handler, command_handler, visual_handler, replace_handler
 
@@ -134,6 +134,41 @@ proc newHandlerManager*(
     commandRegistry: commandRegistry,
   )
 
+proc extractInsertedText(transaction: buffer.BufferTransaction): string =
+  ## Extract net inserted text from a transaction
+  ## Handles insertions and deletions (backspace during insert mode)
+  ## Optimized with StringBuilder for O(n) instead of O(n²) performance
+  var sb = stringbuilder.newStringBuilder()
+  for change in transaction.changes:
+    case change.kind
+    of buffer.ckInsertText:
+      sb.add(change.insertText)
+    of buffer.ckDeleteText:
+      # Backspace - remove from end of accumulated text
+      sb.removeLast(change.deletedText.len)
+    of buffer.ckInsertLine:
+      # Line insertion - add the line text
+      sb.add(change.insertLineText)
+      # Ensure it ends with newline if it doesn't already
+      if change.insertLineText.len == 0 or change.insertLineText[^1] != '\n':
+        sb.add("\n")
+    of buffer.ckDeleteLine:
+      # Line deletion during insert mode (rare, but handle it)
+      # We can't easily track which line was deleted, so clear accumulated text
+      sb.clear()
+    of buffer.ckDeleteRange:
+      # Range deletion - remove from end of accumulated text
+      sb.removeLast(change.deletedRangeText.len)
+    of buffer.ckTransaction:
+      # Nested transaction - recursively extract text
+      let nestedTransaction = buffer.BufferTransaction(
+        changes: change.transactionChanges,
+        description: change.transactionDescription,
+        startSeq: 0,
+      )
+      sb.add(extractInsertedText(nestedTransaction))
+  return sb.toString()
+
 proc handleNormalMode*(
     manager: HandlerManager,
     buffer: TextBuffer,
@@ -157,6 +192,8 @@ proc handleNormalMode*(
             kind: hrError,
             errorMessage: "Failed to begin transaction: " & transactionResult.error,
           )
+        # Record insert start position for text tracking
+        state.insertModeStartPos = some(state.cursor)
       elif targetMode == EditorMode.Replace:
         # Begin a transaction when entering Replace mode
         let transactionResult = buffer.beginTransaction("Replace mode edit")
@@ -185,6 +222,38 @@ proc handleInsertMode*(
   of imrHandled:
     # Check if we're leaving Insert mode
     if r.modeTransition.isSome and r.modeTransition.get != EditorMode.Insert:
+      # Extract inserted text before committing transaction
+      if buffer.currentTransaction.isSome and state.insertModeStartPos.isSome:
+        let transaction = buffer.currentTransaction.get
+        let insertedText = extractInsertedText(transaction)
+
+        # Record the insert command for repeat (.) if text was actually inserted
+        if insertedText.len > 0:
+          # Check if we entered Insert mode via substitute command (s/S/cc)
+          if state.substituteContext.isSome:
+            let subCtx = state.substituteContext.get
+            state.lastEditCommand = some(
+              types.LastEditCommand(
+                kind: types.lecSubstitute,
+                substituteText: insertedText,
+                substituteCount: subCtx.deleteCount,
+                substituteKind: subCtx.kind,
+              )
+            )
+          else:
+            # Normal insert (i, a, o, O)
+            state.lastEditCommand = some(
+              types.LastEditCommand(
+                kind: types.lecInsertText,
+                insertedText: insertedText,
+                insertPosition: state.insertModeStartPos.get,
+              )
+            )
+
+        # Clear insert position tracking and substitute context
+        state.insertModeStartPos = none(BufferPosition)
+        state.substituteContext = none(types.SubstituteContext)
+
       # Commit the transaction when leaving Insert mode
       let transactionResult = buffer.commitTransaction()
       if transactionResult.isErr:

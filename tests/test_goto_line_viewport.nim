@@ -36,7 +36,7 @@ suite "Goto Line - Viewport Scrolling":
   test "viewport scrolls when jumping to line far below":
     # Create a buffer with 100 lines
     var lines = ""
-    for i in 1..100:
+    for i in 1 .. 100:
       if i > 1:
         lines.add("\n")
       lines.add("Line " & $i)
@@ -48,10 +48,10 @@ suite "Goto Line - Viewport Scrolling":
       viewport: ViewPort(
         topLine: 0,
         leftColumn: 0,
-        height: 20,  # Only 20 lines visible
+        height: 20, # Only 20 lines visible
         width: 80,
         x: 0,
-        y: 0
+        y: 0,
       )
     )
 
@@ -64,24 +64,24 @@ suite "Goto Line - Viewport Scrolling":
       cursorPos,
       buffer.len,
       showStatusLine = true,
-      reservedLines = 2  # Status line + command line
+      reservedLines = 2, # Status line + command line
     )
 
     # Viewport should have scrolled to make line 100 visible
     # Line 100 (index 99) should be within the visible range
-    let visibleHeight = viewportManager.viewport.height - 2  # 20 - 2 = 18 lines visible
+    let visibleHeight = viewportManager.viewport.height - 2 # 20 - 2 = 18 lines visible
     let maxVisibleLine = viewportManager.viewport.topLine + visibleHeight - 1
 
     check targetLine >= viewportManager.viewport.topLine
     check targetLine <= maxVisibleLine
 
     # topLine should be significantly greater than 0
-    check viewportManager.viewport.topLine > 70  # Should be around 82 (100 - 18)
+    check viewportManager.viewport.topLine > 70 # Should be around 82 (100 - 18)
 
   test "viewport scrolls when jumping to line far above":
     # Create a buffer with 100 lines
     var lines = ""
-    for i in 1..100:
+    for i in 1 .. 100:
       if i > 1:
         lines.add("\n")
       lines.add("Line " & $i)
@@ -91,12 +91,12 @@ suite "Goto Line - Viewport Scrolling":
     # Create viewport manager positioned at the bottom
     let viewportManager = ViewportManager(
       viewport: ViewPort(
-        topLine: 80,  # Near the bottom
+        topLine: 80, # Near the bottom
         leftColumn: 0,
         height: 20,
         width: 80,
         x: 0,
-        y: 0
+        y: 0,
       )
     )
 
@@ -106,20 +106,17 @@ suite "Goto Line - Viewport Scrolling":
 
     # Update viewport to follow cursor
     viewportManager.updateViewport(
-      cursorPos,
-      buffer.len,
-      showStatusLine = true,
-      reservedLines = 2
+      cursorPos, buffer.len, showStatusLine = true, reservedLines = 2
     )
 
     # Viewport should have scrolled up to make line 10 visible
     check targetLine >= viewportManager.viewport.topLine
-    check viewportManager.viewport.topLine <= 9  # Should be at or below line 10
+    check viewportManager.viewport.topLine <= 9 # Should be at or below line 10
 
   test "viewport does not scroll if target line is already visible":
     # Create a buffer with 100 lines
     var lines = ""
-    for i in 1..100:
+    for i in 1 .. 100:
       if i > 1:
         lines.add("\n")
       lines.add("Line " & $i)
@@ -130,12 +127,7 @@ suite "Goto Line - Viewport Scrolling":
     let initialTopLine = 40
     let viewportManager = ViewportManager(
       viewport: ViewPort(
-        topLine: initialTopLine,
-        leftColumn: 0,
-        height: 20,
-        width: 80,
-        x: 0,
-        y: 0
+        topLine: initialTopLine, leftColumn: 0, height: 20, width: 80, x: 0, y: 0
       )
     )
 
@@ -145,10 +137,7 @@ suite "Goto Line - Viewport Scrolling":
 
     # Update viewport
     viewportManager.updateViewport(
-      cursorPos,
-      buffer.len,
-      showStatusLine = true,
-      reservedLines = 2
+      cursorPos, buffer.len, showStatusLine = true, reservedLines = 2
     )
 
     # Viewport topLine should remain the same or close
@@ -159,7 +148,7 @@ suite "Goto Line - Viewport Scrolling":
     # Test that the command handler correctly processes goto command with valid line
     # Create buffer with 100 lines
     var lines = ""
-    for i in 1..100:
+    for i in 1 .. 100:
       if i > 1:
         lines.add("\n")
       lines.add("Line " & $i)
@@ -194,7 +183,7 @@ suite "Goto Line - Viewport Scrolling":
 
   test "viewport scrolls to first line with :1":
     var lines = ""
-    for i in 1..100:
+    for i in 1 .. 100:
       if i > 1:
         lines.add("\n")
       lines.add("Line " & $i)
@@ -203,24 +192,14 @@ suite "Goto Line - Viewport Scrolling":
 
     # Start at bottom
     let viewportManager = ViewportManager(
-      viewport: ViewPort(
-        topLine: 80,
-        leftColumn: 0,
-        height: 20,
-        width: 80,
-        x: 0,
-        y: 0
-      )
+      viewport: ViewPort(topLine: 80, leftColumn: 0, height: 20, width: 80, x: 0, y: 0)
     )
 
     # Jump to line 1 (index 0)
     let cursorPos = CursorPosition(x: 0, y: 0)
 
     viewportManager.updateViewport(
-      cursorPos,
-      buffer.len,
-      showStatusLine = true,
-      reservedLines = 2
+      cursorPos, buffer.len, showStatusLine = true, reservedLines = 2
     )
 
     # Should scroll to the very top
@@ -230,7 +209,7 @@ suite "Goto Line - Viewport Scrolling":
     # Note: This test is for the viewport behavior,
     # actual :$ command parsing is handled separately
     var lines = ""
-    for i in 1..100:
+    for i in 1 .. 100:
       if i > 1:
         lines.add("\n")
       lines.add("Line " & $i)
@@ -239,14 +218,7 @@ suite "Goto Line - Viewport Scrolling":
 
     # Start at top
     let viewportManager = ViewportManager(
-      viewport: ViewPort(
-        topLine: 0,
-        leftColumn: 0,
-        height: 20,
-        width: 80,
-        x: 0,
-        y: 0
-      )
+      viewport: ViewPort(topLine: 0, leftColumn: 0, height: 20, width: 80, x: 0, y: 0)
     )
 
     # Jump to last line (index 99)
@@ -254,10 +226,7 @@ suite "Goto Line - Viewport Scrolling":
     let cursorPos = CursorPosition(x: 0, y: lastLine)
 
     viewportManager.updateViewport(
-      cursorPos,
-      buffer.len,
-      showStatusLine = true,
-      reservedLines = 2
+      cursorPos, buffer.len, showStatusLine = true, reservedLines = 2
     )
 
     # Should scroll so last line is visible

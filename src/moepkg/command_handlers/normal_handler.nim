@@ -21,7 +21,7 @@
 ##
 ## This module handles commands specific to Normal mode.
 
-import std/options
+import std/[options, strutils, tables]
 
 import pkg/results
 
@@ -179,6 +179,147 @@ proc handleInsertModeEntry*(
 # All text manipulation (delete, yank, change) is now handled by the
 # operator+motion system in commandregistry.nim
 
+proc keyComboToString(keyCombo: KeyCombo): string =
+  ## Convert a KeyCombo to a string for macro recording
+  if keyCombo.isSpecial:
+    case keyCombo.special
+    of skEnter:
+      return "<Enter>"
+    of skTab:
+      return "<Tab>"
+    of skBackspace:
+      return "<Backspace>"
+    of skDelete:
+      return "<Delete>"
+    of skEscape:
+      return "<Escape>"
+    of skUp:
+      return "<Up>"
+    of skDown:
+      return "<Down>"
+    of skLeft:
+      return "<Left>"
+    of skRight:
+      return "<Right>"
+    of skPageUp:
+      return "<PageUp>"
+    of skPageDown:
+      return "<PageDown>"
+    of skHome:
+      return "<Home>"
+    of skEnd:
+      return "<End>"
+    of skFunction:
+      return "<F" & $keyCombo.fnNum & ">"
+    of skNone:
+      return ""
+  else:
+    return keyCombo.char
+
+proc stringToKeyCombo(s: string): Option[KeyCombo] =
+  ## Convert a string back to a KeyCombo for macro playback
+  if s.len == 0:
+    return none(KeyCombo)
+
+  if s.startsWith("<") and s.endsWith(">"):
+    # Special key
+    let key = s[1 ..< s.len - 1]
+    case key
+    of "Enter":
+      return some(KeyCombo(isSpecial: true, special: skEnter, fnNum: 0))
+    of "Tab":
+      return some(KeyCombo(isSpecial: true, special: skTab, fnNum: 0))
+    of "Backspace":
+      return some(KeyCombo(isSpecial: true, special: skBackspace, fnNum: 0))
+    of "Delete":
+      return some(KeyCombo(isSpecial: true, special: skDelete, fnNum: 0))
+    of "Escape":
+      return some(KeyCombo(isSpecial: true, special: skEscape, fnNum: 0))
+    of "Up":
+      return some(KeyCombo(isSpecial: true, special: skUp, fnNum: 0))
+    of "Down":
+      return some(KeyCombo(isSpecial: true, special: skDown, fnNum: 0))
+    of "Left":
+      return some(KeyCombo(isSpecial: true, special: skLeft, fnNum: 0))
+    of "Right":
+      return some(KeyCombo(isSpecial: true, special: skRight, fnNum: 0))
+    of "PageUp":
+      return some(KeyCombo(isSpecial: true, special: skPageUp, fnNum: 0))
+    of "PageDown":
+      return some(KeyCombo(isSpecial: true, special: skPageDown, fnNum: 0))
+    of "Home":
+      return some(KeyCombo(isSpecial: true, special: skHome, fnNum: 0))
+    of "End":
+      return some(KeyCombo(isSpecial: true, special: skEnd, fnNum: 0))
+    else:
+      # Check for function keys
+      if key.startsWith("F"):
+        try:
+          let num = parseInt(key[1 ..^ 1])
+          return some(KeyCombo(isSpecial: true, special: skFunction, fnNum: num))
+        except ValueError:
+          return none(KeyCombo)
+      else:
+        return none(KeyCombo)
+  else:
+    # Regular character
+    return some(KeyCombo(isSpecial: false, char: s, modifiers: {}))
+
+# Forward declaration for recursive call in playbackMacro
+proc handleNormalModeKey*(
+  handler: NormalModeHandler,
+  buffer: TextBuffer,
+  state: EditorState,
+  viewport: ViewPort,
+  keyCombo: KeyCombo,
+): NormalModeResult
+
+proc playbackMacro(
+    handler: NormalModeHandler,
+    buffer: TextBuffer,
+    state: EditorState,
+    viewport: ViewPort,
+    keys: seq[string],
+): NormalModeResult =
+  ## Play back a recorded macro
+  # Clear any pending key sequences before starting playback
+  handler.keyBindingRegistry.clearSequence()
+
+  for keyStr in keys:
+    let keyComboOpt = stringToKeyCombo(keyStr)
+    if keyComboOpt.isNone:
+      return NormalModeResult(
+        kind: nmrError, errorMessage: "Invalid key in macro: " & keyStr
+      )
+
+    let keyCombo = keyComboOpt.get
+    # Recursively call handleNormalModeKey, but skip macro recording
+    # We need to temporarily disable recording to avoid recording during playback
+    let wasRecording = state.isRecordingMacro
+    let wasWaitingForRegister = state.waitingForMacroRegister
+    state.isRecordingMacro = false
+    state.waitingForMacroRegister = false
+
+    let res = handler.handleNormalModeKey(buffer, state, viewport, keyCombo)
+
+    # Restore recording state
+    state.isRecordingMacro = wasRecording
+    state.waitingForMacroRegister = wasWaitingForRegister
+
+    # If there was an error, stop playback
+    if res.kind == nmrError:
+      return res
+
+    # If mode changed (e.g., entered insert mode), we should stop playback
+    # This prevents issues with mode-specific commands
+    if res.modeTransition.isSome:
+      # Allow the mode transition but stop further playback
+      return res
+
+  # Clear any pending sequences after playback
+  handler.keyBindingRegistry.clearSequence()
+  return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+
 proc handleNormalModeKey*(
     handler: NormalModeHandler,
     buffer: TextBuffer,
@@ -187,6 +328,112 @@ proc handleNormalModeKey*(
     keyCombo: KeyCombo,
 ): NormalModeResult =
   ## Main entry point for handling Normal mode key presses
+
+  # Check if we're waiting for a macro register name
+  if state.waitingForMacroRegister:
+    # Expecting a register name (a-z or @)
+    if not keyCombo.isSpecial and keyCombo.modifiers == {}:
+      let registerChar =
+        if keyCombo.char.len > 0:
+          keyCombo.char[0]
+        else:
+          '\0'
+
+      if state.macroCommandType == "record":
+        # Start recording to the specified register
+        if registerChar >= 'a' and registerChar <= 'z':
+          state.isRecordingMacro = true
+          state.macroRegister = registerChar
+          state.recordedKeys = @[]
+          state.statusMessage = "recording @" & $registerChar
+          state.waitingForMacroRegister = false
+          state.macroCommandType = ""
+          return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+        else:
+          state.statusMessage = "Invalid register (use a-z)"
+          state.waitingForMacroRegister = false
+          state.macroCommandType = ""
+          return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+      elif state.macroCommandType == "playback":
+        # Play back the macro from the specified register
+        if registerChar == '@':
+          # @@ - repeat last macro
+          if state.lastMacroRegister.isSome:
+            let reg = state.lastMacroRegister.get
+            if state.macroRegisters.hasKey(reg):
+              state.waitingForMacroRegister = false
+              state.macroCommandType = ""
+              let keys = state.macroRegisters[reg]
+              return handler.playbackMacro(buffer, state, viewport, keys)
+            else:
+              state.statusMessage = "Register @" & $reg & " is empty"
+              state.waitingForMacroRegister = false
+              state.macroCommandType = ""
+              return
+                NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+          else:
+            state.statusMessage = "No previous macro"
+            state.waitingForMacroRegister = false
+            state.macroCommandType = ""
+            return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+        elif registerChar >= 'a' and registerChar <= 'z':
+          if state.macroRegisters.hasKey(registerChar):
+            state.lastMacroRegister = some(registerChar)
+            state.waitingForMacroRegister = false
+            state.macroCommandType = ""
+            let keys = state.macroRegisters[registerChar]
+            return handler.playbackMacro(buffer, state, viewport, keys)
+          else:
+            state.statusMessage = "Register @" & $registerChar & " is empty"
+            state.waitingForMacroRegister = false
+            state.macroCommandType = ""
+            return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+        else:
+          state.statusMessage = "Invalid register (use a-z or @)"
+          state.waitingForMacroRegister = false
+          state.macroCommandType = ""
+          return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+    else:
+      # Cancel on any non-char key
+      state.statusMessage = ""
+      state.waitingForMacroRegister = false
+      state.macroCommandType = ""
+      return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+
+  # Handle macro recording - check if we're in recording mode
+  # and this is not the 'q' key that would stop recording
+  if state.isRecordingMacro:
+    # Check if this is 'q' to stop recording
+    if not keyCombo.isSpecial and keyCombo.modifiers == {} and keyCombo.char == "q":
+      # Stop recording
+      state.macroRegisters[state.macroRegister] = state.recordedKeys
+      state.isRecordingMacro = false
+      state.recordedKeys = @[]
+      state.statusMessage = ""
+      return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+    else:
+      # Record this key
+      state.recordedKeys.add(keyComboToString(keyCombo))
+      # Continue processing the key normally
+
+  # Check for macro commands before processing through key bindings
+  # Handle 'q' for macro recording start
+  if not state.isRecordingMacro and not keyCombo.isSpecial and keyCombo.modifiers == {} and
+      keyCombo.char == "q":
+    # Wait for the next key (register name)
+    state.waitingForMacroRegister = true
+    state.macroCommandType = "record"
+    state.statusMessage = "recording @"
+    return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+
+  # Handle '@' for macro playback - only when NOT recording
+  if not state.isRecordingMacro and not keyCombo.isSpecial and keyCombo.modifiers == {} and
+      keyCombo.char == "@":
+    # Wait for the next key (register name)
+    state.waitingForMacroRegister = true
+    state.macroCommandType = "playback"
+    state.statusMessage = "@"
+    return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
 
   # Process the key (handles numeric prefixes, sequences, etc.)
   let cmdOption = handler.keyBindingRegistry.processKey(EditorMode.Normal, keyCombo)

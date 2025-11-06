@@ -12,6 +12,7 @@ bin = @["moe"]
 requires "nim >= 2.0.10"
 requires "results >= 0.5.1"
 requires "celina >= 0.2.0"
+requires "parsetoml >= 0.7.1"
 
 task release, "Build for release":
   exec "nimble build -d:release"

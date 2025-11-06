@@ -1062,6 +1062,54 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   )
   registry.bindKey(EditorMode.Normal, "X", "delete-char-before")
 
+  # s - Substitute character at cursor
+  registry.registerCommand(
+    Command(
+      name: "substitute-char",
+      description: "Substitute character at cursor",
+      kind: ctCustom,
+      commandId: "substitute.char",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "s", "substitute-char")
+
+  # S - Substitute line
+  registry.registerCommand(
+    Command(
+      name: "substitute-line",
+      description: "Substitute line",
+      kind: ctCustom,
+      commandId: "substitute.line",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "S", "substitute-line")
+
+  # ~ - Toggle case
+  registry.registerCommand(
+    Command(
+      name: "toggle-case",
+      description: "Toggle case of character at cursor",
+      kind: ctCustom,
+      commandId: "toggle.case",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "~", "toggle-case")
+
+  # . - Repeat last change
+  registry.registerCommand(
+    Command(
+      name: "repeat-last-change",
+      description: "Repeat last change",
+      kind: ctAction,
+      commandId: "edit.repeat",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, ".", "repeat-last-change")
+
   # Text object commands
   registry.registerCommand(
     Command(
