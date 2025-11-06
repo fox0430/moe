@@ -955,6 +955,18 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   # Bind J key to join-lines (must be after registerCommand)
   registry.bindKey(EditorMode.Normal, "J", "join-lines")
 
+  registry.registerCommand(
+    Command(
+      name: "show-char-info",
+      description: "Show ASCII/Unicode value of character under cursor",
+      kind: ctCustom,
+      commandId: "show.char.info",
+      args: @[],
+    )
+  )
+  # Bind ga key sequence to show-char-info (must be after registerCommand)
+  registry.bindKey(EditorMode.Normal, "g a", "show-char-info")
+
   # Indent/dedent commands
   registry.registerCommand(
     Command(
@@ -979,6 +991,43 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   # Bind >> and << sequences for indent/dedent
   registry.bindKey(EditorMode.Normal, "> >", "indent-line")
   registry.bindKey(EditorMode.Normal, "< <", "dedent-line")
+
+  # Scroll commands
+  registry.registerCommand(
+    Command(
+      name: "scroll-cursor-top",
+      description: "Scroll cursor to top of screen",
+      kind: ctCustom,
+      commandId: "scroll.cursor.top",
+      args: @[],
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "scroll-cursor-center",
+      description: "Scroll cursor to center of screen",
+      kind: ctCustom,
+      commandId: "scroll.cursor.center",
+      args: @[],
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "scroll-cursor-bottom",
+      description: "Scroll cursor to bottom of screen",
+      kind: ctCustom,
+      commandId: "scroll.cursor.bottom",
+      args: @[],
+    )
+  )
+
+  # Bind z commands (scroll)
+  registry.bindKey(EditorMode.Normal, "z t", "scroll-cursor-top")
+  registry.bindKey(EditorMode.Normal, "z z", "scroll-cursor-center")
+  registry.bindKey(EditorMode.Normal, "z .", "scroll-cursor-center")
+  registry.bindKey(EditorMode.Normal, "z b", "scroll-cursor-bottom")
 
   # Operator commands
   registry.registerCommand(

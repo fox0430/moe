@@ -54,6 +54,10 @@ type
     bcMotionViewportHigh = "motion.viewport.high"
     bcMotionViewportMiddle = "motion.viewport.middle"
     bcMotionViewportLow = "motion.viewport.low"
+    # Scroll commands
+    bcScrollCursorTop = "scroll.cursor.top"
+    bcScrollCursorCenter = "scroll.cursor.center"
+    bcScrollCursorBottom = "scroll.cursor.bottom"
     # Mode switching commands
     bcModeNormal = "mode.normal"
     bcModeInsert = "mode.insert"
@@ -1616,6 +1620,36 @@ proc handleJoinLines(ctx: CommandContext, count: int = 1): Result[(), string] =
   ctx.state.statusMessage = "Joined " & $totalLines & " line(s)"
   return Result[(), string].ok ()
 
+proc handleShowCharInfo(ctx: CommandContext): Result[(), string] =
+  ## Show ASCII/Unicode value of character under cursor (ga command)
+  ## Displays character info in status message
+
+  logDebug("charinfo", "handleShowCharInfo called")
+  let lineContent = ctx.buffer.getLine(ctx.state.cursor.line)
+
+  # Check if cursor is at valid position
+  if ctx.state.cursor.column >= lineContent.charLen:
+    ctx.state.statusMessage = "No character under cursor"
+    return Result[(), string].ok ()
+
+  # Get the character at cursor position
+  let runes = lineContent.toRunes()
+  if ctx.state.cursor.column < runes.len:
+    let ch = runes[ctx.state.cursor.column]
+    let codepoint = ch.int32
+
+    # Format the message like Vim: <c>  123,  Hex 7b,  Oct 173
+    var msg = "<" & $ch & ">"
+    msg &= "  " & $codepoint & ","
+    msg &= "  Hex " & toHex(codepoint, 2) & ","
+    msg &= "  Oct " & toOct(codepoint, 3)
+
+    ctx.state.statusMessage = msg
+  else:
+    ctx.state.statusMessage = "No character under cursor"
+
+  return Result[(), string].ok ()
+
 ## Operator command handlers
 ## Use setPendingOperator() for all operators to save viewport position
 ## before motion execution. This prevents unwanted scrolling.
@@ -1846,6 +1880,53 @@ proc handleTextObjectAround(ctx: CommandContext): Result[(), string] =
     ctx.state.statusMessage = "-- INSERT --"
     return ok(())
 
+## Scroll commands
+
+proc handleScrollCursorTop(ctx: CommandContext, args: seq[string]): Result[(), string] =
+  ## Scroll the viewport to place cursor line at the top (zt command)
+  ## Cursor position doesn't change, only the viewport
+
+  ctx.motionController.viewportManager.viewport.topLine = ctx.state.cursor.line
+  return ok(())
+
+proc handleScrollCursorCenter(
+    ctx: CommandContext, args: seq[string]
+): Result[(), string] =
+  ## Scroll the viewport to place cursor line at the center (z. or zz command)
+  ## Cursor position doesn't change, only the viewport
+
+  # Calculate reserved lines (status line + command line)
+  let reservedLines = if ctx.state.showStatusLine: 2 else: 1
+  let visibleHeight =
+    ctx.motionController.viewportManager.viewport.height - reservedLines
+
+  # Center the cursor line
+  let targetTopLine = ctx.state.cursor.line - (visibleHeight div 2)
+
+  # Clamp to valid range
+  ctx.motionController.viewportManager.viewport.topLine = max(0, targetTopLine)
+
+  return ok(())
+
+proc handleScrollCursorBottom(
+    ctx: CommandContext, args: seq[string]
+): Result[(), string] =
+  ## Scroll the viewport to place cursor line at the bottom (zb command)
+  ## Cursor position doesn't change, only the viewport
+
+  # Calculate reserved lines (status line + command line)
+  let reservedLines = if ctx.state.showStatusLine: 2 else: 1
+  let visibleHeight =
+    ctx.motionController.viewportManager.viewport.height - reservedLines
+
+  # Place cursor at the bottom of viewport
+  let targetTopLine = ctx.state.cursor.line - visibleHeight + 1
+
+  # Clamp to valid range
+  ctx.motionController.viewportManager.viewport.topLine = max(0, targetTopLine)
+
+  return ok(())
+
 ## Register built-in commands
 proc registerBuiltinCommands*(registry: CommandRegistry) =
   ## Register all built-in commands
@@ -1894,6 +1975,34 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
   registry.registerMotionCommand(
     bcMotionViewportLow, "Viewport Low", "Move to bottom of viewport",
     Motion.ViewportLow, true,
+  )
+
+  # Scroll commands
+  registry.register(
+    builtin(bcScrollCursorTop),
+    "Scroll Cursor Top",
+    "Scroll viewport to place cursor line at top (zt)",
+    handleScrollCursorTop,
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcScrollCursorCenter),
+    "Scroll Cursor Center",
+    "Scroll viewport to place cursor line at center (z. or zz)",
+    handleScrollCursorCenter,
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcScrollCursorBottom),
+    "Scroll Cursor Bottom",
+    "Scroll viewport to place cursor line at bottom (zb)",
+    handleScrollCursorBottom,
+    0,
+    0,
   )
 
   # Mode switching commands
@@ -2209,6 +2318,16 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
       handleJoinLines(ctx, count),
     0,
     1, # Accept optional count argument
+  )
+
+  registry.register(
+    custom("show.char.info"),
+    "Show Character Info",
+    "Show ASCII/Unicode value of character under cursor (ga command)",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleShowCharInfo(ctx),
+    0,
+    0, # No arguments
   )
 
   # Note: change.word is now handled by operator+motion system (c+w)
