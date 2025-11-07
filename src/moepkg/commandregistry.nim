@@ -73,6 +73,8 @@ type
     bcEditCut = "edit.cut"
     bcEditCopy = "edit.copy"
     bcEditPaste = "edit.paste"
+    bcEditIncrementNumber = "edit.increment"
+    bcEditDecrementNumber = "edit.decrement"
     # Insert mode operations
     bcInsertChar = "insert.char"
     bcInsertBackspace = "insert.backspace"
@@ -1927,6 +1929,147 @@ proc handleScrollCursorBottom(
 
   return ok(())
 
+proc findNumberAtOrAfterColumn(
+    line: string, startCol: int
+): tuple[found: bool, startPos: int, endPos: int, value: int] =
+  ## Find a number at or after the given column in the line
+  ## Returns (found, startPos, endPos, value) where positions are byte indices
+  var col = startCol
+  let lineLen = line.len
+
+  # Skip to start column
+  if col >= lineLen:
+    return (false, 0, 0, 0)
+
+  # Skip non-digit characters (but stop at digit or minus sign before digit)
+  while col < lineLen:
+    if line[col] >= '0' and line[col] <= '9':
+      break
+    elif line[col] == '-' and col + 1 < lineLen and line[col + 1] >= '0' and
+        line[col + 1] <= '9':
+      break
+    col += 1
+
+  if col >= lineLen:
+    return (false, 0, 0, 0)
+
+  # Found start of number
+  let startPos = col
+  var numStr = ""
+
+  # Handle optional minus sign
+  if line[col] == '-':
+    numStr.add('-')
+    col += 1
+
+  # Collect digits
+  while col < lineLen and line[col] >= '0' and line[col] <= '9':
+    numStr.add(line[col])
+    col += 1
+
+  # Parse the number
+  try:
+    let value = parseInt(numStr)
+    return (true, startPos, col - 1, value)
+  except ValueError:
+    return (false, 0, 0, 0)
+
+proc handleIncrementNumber(ctx: CommandContext, args: seq[string]): Result[(), string] =
+  ## Increment the number at or after cursor (Ctrl-A command)
+  if ctx.state.cursor.line >= ctx.buffer.len:
+    return err("Cursor out of bounds")
+
+  let line = ctx.buffer.getLine(ctx.state.cursor.line)
+  let col = ctx.state.cursor.column
+
+  # Find number at or after cursor position
+  let (found, startPos, endPos, value) = findNumberAtOrAfterColumn(line, col)
+
+  if not found:
+    return err("No number found")
+
+  # Increment the number
+  let newValue = value + 1
+  let newNumStr = $newValue
+
+  # Replace the number in the line
+  let newLine =
+    line[0 ..< startPos] & newNumStr &
+    (if endPos + 1 < line.len: line[endPos + 1 ..^ 1] else: "")
+
+  # Update the buffer using transaction
+  let txnResult = ctx.buffer.beginTransaction("Increment number")
+  if txnResult.isErr:
+    return err(txnResult.error)
+
+  let lineIdx = ctx.state.cursor.line
+  let delResult = ctx.buffer.deleteLine(lineIdx)
+  if delResult.isErr:
+    discard ctx.buffer.rollbackTransaction()
+    return err(delResult.error)
+
+  let insResult = ctx.buffer.insert(lineIdx, newLine)
+  if insResult.isErr:
+    discard ctx.buffer.rollbackTransaction()
+    return err(insResult.error)
+
+  let commitResult = ctx.buffer.commitTransaction()
+  if commitResult.isErr:
+    return err(commitResult.error)
+
+  # Move cursor to start of the number
+  ctx.state.cursor.column = startPos
+
+  return ok(())
+
+proc handleDecrementNumber(ctx: CommandContext, args: seq[string]): Result[(), string] =
+  ## Decrement the number at or after cursor (Ctrl-X command)
+  if ctx.state.cursor.line >= ctx.buffer.len:
+    return err("Cursor out of bounds")
+
+  let line = ctx.buffer.getLine(ctx.state.cursor.line)
+  let col = ctx.state.cursor.column
+
+  # Find number at or after cursor position
+  let (found, startPos, endPos, value) = findNumberAtOrAfterColumn(line, col)
+
+  if not found:
+    return err("No number found")
+
+  # Decrement the number
+  let newValue = value - 1
+  let newNumStr = $newValue
+
+  # Replace the number in the line
+  let newLine =
+    line[0 ..< startPos] & newNumStr &
+    (if endPos + 1 < line.len: line[endPos + 1 ..^ 1] else: "")
+
+  # Update the buffer using transaction
+  let txnResult = ctx.buffer.beginTransaction("Decrement number")
+  if txnResult.isErr:
+    return err(txnResult.error)
+
+  let lineIdx = ctx.state.cursor.line
+  let delResult = ctx.buffer.deleteLine(lineIdx)
+  if delResult.isErr:
+    discard ctx.buffer.rollbackTransaction()
+    return err(delResult.error)
+
+  let insResult = ctx.buffer.insert(lineIdx, newLine)
+  if insResult.isErr:
+    discard ctx.buffer.rollbackTransaction()
+    return err(insResult.error)
+
+  let commitResult = ctx.buffer.commitTransaction()
+  if commitResult.isErr:
+    return err(commitResult.error)
+
+  # Move cursor to start of the number
+  ctx.state.cursor.column = startPos
+
+  return ok(())
+
 ## Register built-in commands
 proc registerBuiltinCommands*(registry: CommandRegistry) =
   ## Register all built-in commands
@@ -2371,6 +2514,25 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
       return Result[(), string].ok (),
     0,
     1, # Accept optional count argument
+  )
+
+  # Increment/Decrement number commands
+  registry.register(
+    builtin(bcEditIncrementNumber),
+    "Increment Number",
+    "Increment the number at or after cursor (Ctrl-A)",
+    handleIncrementNumber,
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcEditDecrementNumber),
+    "Decrement Number",
+    "Decrement the number at or after cursor (Ctrl-X)",
+    handleDecrementNumber,
+    0,
+    0,
   )
 
   # Repeat last change command (.)

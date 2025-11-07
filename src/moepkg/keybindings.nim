@@ -740,6 +740,27 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
     )
   )
 
+  # Register increment/decrement number commands
+  registry.registerCommand(
+    Command(
+      name: "increment-number",
+      description: "Increment number at or after cursor",
+      kind: ctAction,
+      commandId: "edit.increment",
+      args: @[],
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "decrement-number",
+      description: "Decrement number at or after cursor",
+      kind: ctAction,
+      commandId: "edit.decrement",
+      args: @[],
+    )
+  )
+
   # Register search navigation commands
   registry.registerCommand(
     Command(
@@ -802,6 +823,8 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.Normal, "C-d", "page-down")
   registry.bindKey(EditorMode.Normal, "u", "undo")
   registry.bindKey(EditorMode.Normal, "C-r", "redo")
+  registry.bindKey(EditorMode.Normal, "C-a", "increment-number")
+  registry.bindKey(EditorMode.Normal, "C-x", "decrement-number")
   registry.bindKey(EditorMode.Normal, "n", "search-next")
   registry.bindKey(EditorMode.Normal, "N", "search-prev")
   registry.bindKey(EditorMode.Normal, "*", "search-word-forward")
