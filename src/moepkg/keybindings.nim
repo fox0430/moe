@@ -573,6 +573,24 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
 
   registry.registerCommand(
     Command(
+      name: "half-page-up",
+      description: "Scroll half page up",
+      kind: ctMotion,
+      motion: Motion.HalfPageUp,
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "half-page-down",
+      description: "Scroll half page down",
+      kind: ctMotion,
+      motion: Motion.HalfPageDown,
+    )
+  )
+
+  registry.registerCommand(
+    Command(
       name: "line-home",
       description: "Move to beginning of line",
       kind: ctMotion,
@@ -819,8 +837,10 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.Normal, "j", "move-down")
   registry.bindKey(EditorMode.Normal, "k", "move-up")
   registry.bindKey(EditorMode.Normal, "l", "move-right")
-  registry.bindKey(EditorMode.Normal, "C-u", "page-up")
-  registry.bindKey(EditorMode.Normal, "C-d", "page-down")
+  registry.bindKey(EditorMode.Normal, "C-b", "page-up")
+  registry.bindKey(EditorMode.Normal, "C-u", "half-page-up")
+  registry.bindKey(EditorMode.Normal, "C-d", "half-page-down")
+  registry.bindKey(EditorMode.Normal, "C-f", "page-down")
   registry.bindKey(EditorMode.Normal, "u", "undo")
   registry.bindKey(EditorMode.Normal, "C-r", "redo")
   registry.bindKey(EditorMode.Normal, "C-a", "increment-number")

@@ -134,6 +134,23 @@ proc movePageDown(
   else:
     result.y = 0
 
+proc moveHalfPageUp(
+    e: MotionExecutor, currentPos: CursorPosition, count: int, viewportHeight: int
+): CursorPosition =
+  result = currentPos
+  let halfPageSize = max(1, (viewportHeight - 1) div 2) * count
+  result.y = max(0, currentPos.y - halfPageSize)
+
+proc moveHalfPageDown(
+    e: MotionExecutor, currentPos: CursorPosition, count: int, viewportHeight: int
+): CursorPosition =
+  result = currentPos
+  let halfPageSize = max(1, (viewportHeight - 1) div 2) * count
+  if e.buffer.len > 0:
+    result.y = min(e.buffer.len - 1, currentPos.y + halfPageSize)
+  else:
+    result.y = 0
+
 proc moveHome(e: MotionExecutor, currentPos: CursorPosition): CursorPosition =
   result = currentPos
   result.x = 0
@@ -640,6 +657,10 @@ proc calculateNewPosition*(
     e.movePageUp(currentPos, cmd.count, viewportHeight)
   of Motion.PageDown:
     e.movePageDown(currentPos, cmd.count, viewportHeight)
+  of Motion.HalfPageUp:
+    e.moveHalfPageUp(currentPos, cmd.count, viewportHeight)
+  of Motion.HalfPageDown:
+    e.moveHalfPageDown(currentPos, cmd.count, viewportHeight)
   of Motion.Home:
     e.moveHome(currentPos)
   of Motion.FirstNonBlank:
@@ -801,15 +822,28 @@ proc updateViewport*(
       mgr.viewport.topLine = clampedCursorY
     # Scroll down if cursor is below viewport
     elif cursorScreenLine >= visibleHeight:
-      # If cursor is far below viewport (e.g., G command), jump directly
-      if cursorScreenLine >= visibleHeight + 10:
-        # Calculate a reasonable topLine to place cursor near bottom
-        # Simple heuristic: start from a few lines above cursor
-        mgr.viewport.topLine = max(0, clampedCursorY - (visibleHeight div 2))
-      else:
-        # Smooth scroll: move topLine down by one logical line
-        if mgr.viewport.topLine < clampedCursorY:
-          mgr.viewport.topLine += 1
+      # Calculate target topLine to make cursor visible
+      # We want to scroll just enough to show the cursor
+      # Start by trying to place cursor near the top of the viewport
+      var targetTopLine = mgr.viewport.topLine
+
+      # Increment topLine until cursor is within visible area
+      while targetTopLine <= clampedCursorY:
+        let testScreenLine =
+          calculateScreenLine(buffer, targetTopLine, clampedCursorY, lineWrap, maxWidth)
+        let testWrapOffset =
+          if clampedCursorY >= 0 and clampedCursorY < buffer.len:
+            clampedCursorX div maxWidth
+          else:
+            0
+        let totalScreenLine = testScreenLine + testWrapOffset
+
+        if totalScreenLine < visibleHeight:
+          # Cursor is now visible
+          break
+        targetTopLine += 1
+
+      mgr.viewport.topLine = targetTopLine
   else:
     # No line wrap: simple logic
     if clampedCursorY < mgr.viewport.topLine:
@@ -825,10 +859,12 @@ proc updateViewport*(
 
   # Horizontal scrolling - keep cursor visible (disabled in wrap mode)
   if not lineWrap:
+    # Account for line number offset when calculating visible text width
+    let visibleTextWidth = max(1, mgr.viewport.width - lineNumOffset)
     if clampedCursorX < mgr.viewport.leftColumn:
       mgr.viewport.leftColumn = clampedCursorX
-    elif clampedCursorX >= mgr.viewport.leftColumn + mgr.viewport.width:
-      mgr.viewport.leftColumn = clampedCursorX - mgr.viewport.width + 1
+    elif clampedCursorX >= mgr.viewport.leftColumn + visibleTextWidth:
+      mgr.viewport.leftColumn = clampedCursorX - visibleTextWidth + 1
 
 proc newMotionController*(
     buf: buffer.TextBuffer, state: EditorState, viewport: ViewPort
@@ -875,8 +911,15 @@ proc executeMotion*(
       lineCount = controller.executor.buffer.len
       # Calculate line number offset for viewport calculation (matches renderLineNumbers)
       showLineNumbers = controller.cursorManager.state.showLineNumbers
+      # Include sidebar width to match the calculation in editor.nim
+      sidebarWidth =
+        if controller.cursorManager.state.showSidebar:
+          2 # DefaultSidebarWidth from sidebar.nim
+        else:
+          0
       lineNumOffset =
-        calculateLineNumOffset(controller.executor.buffer, showLineNumbers)
+        calculateLineNumOffset(controller.executor.buffer, showLineNumbers) +
+        sidebarWidth
 
     controller.viewportManager.updateViewport(
       newPos, lineCount, controller.cursorManager.state.showStatusLine,
@@ -906,8 +949,9 @@ proc calculateOperatorRange*(
   let isLinewise =
     motion in {
       Motion.Up, Motion.Down, Motion.FirstLine, Motion.LastLine, Motion.PageUp,
-      Motion.PageDown, Motion.ParagraphForward, Motion.ParagraphBackward,
-      Motion.NextLineFirstNonBlank, Motion.PreviousLineFirstNonBlank,
+      Motion.PageDown, Motion.HalfPageUp, Motion.HalfPageDown, Motion.ParagraphForward,
+      Motion.ParagraphBackward, Motion.NextLineFirstNonBlank,
+      Motion.PreviousLineFirstNonBlank,
     }
 
   # Determine if this is an exclusive motion (Vim behavior)

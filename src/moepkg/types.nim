@@ -64,6 +64,8 @@ type
     Down
     PageUp
     PageDown
+    HalfPageUp # Ctrl-u - scroll half page up
+    HalfPageDown # Ctrl-d - scroll half page down
     Home
     FirstNonBlank # ^ - move to first non-whitespace character
     LastNonBlank # g_ - move to last non-whitespace character

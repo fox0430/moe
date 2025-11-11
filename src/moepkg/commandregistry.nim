@@ -461,10 +461,24 @@ proc executeCommand*(
       return ok(())
     else:
       # No pending operator - just move cursor
+      logDebug(
+        "command",
+        "Executing motion, current cursor=(" & $ctx.state.cursor.line & "," &
+          $ctx.state.cursor.column & ")",
+      )
       let r = ctx.motionController.executeMotion(motionCmd, ctx.state.cursor)
       if r.isErr:
         return err(r.error)
+      logDebug(
+        "command",
+        "Motion returned cursor=(" & $r.value.line & "," & $r.value.column & ")",
+      )
       ctx.state.cursor = r.value
+      logDebug(
+        "command",
+        "Cursor after assignment=(" & $ctx.state.cursor.line & "," &
+          $ctx.state.cursor.column & ")",
+      )
       return Result[(), string].ok ()
   of ctModeSwitch:
     # Handle mode switching
