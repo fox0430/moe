@@ -442,7 +442,8 @@ proc processKey*(
 
   # Check for ESC key - cancel any current sequence
   if combo.isSpecial and combo.special == skEscape:
-    if registry.sequenceState.keys.len > 0 or registry.sequenceState.waitingForChar:
+    if registry.sequenceState.keys.len > 0 or registry.sequenceState.waitingForChar or
+        registry.sequenceState.hasNumericPrefix:
       registry.clearSequence()
       return none(Command) # Sequence cancelled
     # If no sequence active, treat ESC as normal key
@@ -1010,6 +1011,32 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   # Bind ga key sequence to show-char-info (must be after registerCommand)
   registry.bindKey(EditorMode.Normal, "g a", "show-char-info")
 
+  # ZZ - Save and quit
+  registry.registerCommand(
+    Command(
+      name: "save-and-quit",
+      description: "Save file and quit",
+      kind: ctAction,
+      commandId: "file.save.and.quit",
+      args: @[],
+    )
+  )
+  # Bind ZZ key sequence to save-and-quit
+  registry.bindKey(EditorMode.Normal, "Z Z", "save-and-quit")
+
+  # ZQ - Quit without saving
+  registry.registerCommand(
+    Command(
+      name: "quit-force",
+      description: "Quit without saving",
+      kind: ctAction,
+      commandId: "file.quit.force",
+      args: @[],
+    )
+  )
+  # Bind ZQ key sequence to quit-force
+  registry.bindKey(EditorMode.Normal, "Z Q", "quit-force")
+
   # Indent/dedent commands
   registry.registerCommand(
     Command(
@@ -1458,11 +1485,22 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
     )
   )
 
+  # Register I command
+  registry.registerCommand(
+    Command(
+      name: "insert-first-non-blank",
+      description: "Insert at first non-blank character",
+      kind: ctAction,
+      commandId: "insert.first.non.blank",
+      args: @[],
+    )
+  )
+
   # Normal mode to Insert mode transitions
   registry.bindKey(EditorMode.Normal, "i", "switch-to-insert") # Enter insert mode
   registry.bindKey(EditorMode.Normal, "a", "append") # Enter insert mode after cursor
-  registry.bindKey(EditorMode.Normal, "I", "switch-to-insert")
-    # Enter insert mode at line start
+  registry.bindKey(EditorMode.Normal, "I", "insert-first-non-blank")
+    # Enter insert mode at first non-blank character
   registry.bindKey(EditorMode.Normal, "A", "append-end") # Enter insert mode at line end
   registry.bindKey(EditorMode.Normal, "o", "open-line-below")
     # Enter insert mode on new line below

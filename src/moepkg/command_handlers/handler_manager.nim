@@ -212,6 +212,14 @@ proc handleNormalMode*(
     return HandlerResult(kind: hrUnhandled)
   of nmrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
+  of nmrSaveAndQuit:
+    # ZZ command - Save and quit
+    return HandlerResult(
+      kind: hrSaveAndQuit, saveAndQuitFilename: none(string), forceQuitAfterSave: false
+    )
+  of nmrQuitWithoutSave:
+    # ZQ command - Quit without saving (force quit)
+    return HandlerResult(kind: hrQuit, shouldQuit: true)
 
 proc handleInsertMode*(
     manager: HandlerManager, buffer: TextBuffer, state: EditorState, keyCombo: KeyCombo

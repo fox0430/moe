@@ -33,6 +33,8 @@ type
     nmrHandled
     nmrUnhandled
     nmrError
+    nmrSaveAndQuit
+    nmrQuitWithoutSave
 
   NormalModeHandler* = ref object ## Handler for Normal mode specific commands
     motionController*: MotionController
@@ -48,6 +50,10 @@ type
       discard
     of nmrError:
       errorMessage*: string
+    of nmrSaveAndQuit:
+      discard
+    of nmrQuitWithoutSave:
+      discard
 
 proc newNormalModeHandler*(
     motionController: MotionController,
@@ -151,6 +157,13 @@ proc handleInsertModeEntry*(
   of "insert":
     # Simple insert at cursor
     discard
+  of "insert-first-non-blank":
+    # Move to first non-blank character and insert
+    let motionCmd = MotionCommand(motion: Motion.FirstNonBlank, count: 1)
+    let r = handler.motionController.executeMotion(motionCmd, state.cursor)
+    if r.isErr:
+      return NormalModeResult(kind: nmrError, errorMessage: r.error)
+    state.cursor = r.value
   of "append":
     # Move cursor right if not at end of line
     let lineContent = buffer.getLine(state.cursor.line)
@@ -471,6 +484,8 @@ proc handleNormalModeKey*(
       return handler.handleInsertModeEntry(buffer, state, "append")
     of "insert.append.end":
       return handler.handleInsertModeEntry(buffer, state, "append-end")
+    of "insert.first.non.blank":
+      return handler.handleInsertModeEntry(buffer, state, "insert-first-non-blank")
     of "insert.line.below":
       return handler.handleInsertModeEntry(buffer, state, "open-below")
     of "insert.line.above":
@@ -490,6 +505,12 @@ proc handleNormalModeKey*(
         return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
       else:
         return NormalModeResult(kind: nmrError, errorMessage: r.error)
+    of "file.save.and.quit":
+      # ZZ command - Save and quit
+      return NormalModeResult(kind: nmrSaveAndQuit)
+    of "file.quit.force":
+      # ZQ command - Quit without saving
+      return NormalModeResult(kind: nmrQuitWithoutSave)
     else:
       # Try to execute using command registry for other actions
       let ctx = CommandContext(

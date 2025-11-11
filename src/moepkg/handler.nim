@@ -568,6 +568,17 @@ proc handleEvent*(e: Editor, event: Event): bool =
   if r.shouldQuit():
     return false # Signal app should quit
 
+  if r.shouldSaveAndQuit():
+    # Handle file save and quit
+    let saveResult = e.saveFile(r.getSaveAndQuitFilename())
+    if saveResult.isErr:
+      logError("handler", "Save and quit failed: " & saveResult.error)
+      e.state.statusMessage = "Error: " & saveResult.error
+    else:
+      # Save succeeded, now quit
+      logInfo("handler", "File saved, quitting editor")
+      return false # Signal app should quit
+
   if r.shouldGotoLine():
     # Jump to the specified line
     let lineNum = r.getLineNumber()
