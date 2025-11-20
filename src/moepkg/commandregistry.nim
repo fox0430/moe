@@ -75,6 +75,9 @@ type
     bcEditPaste = "edit.paste"
     bcEditIncrementNumber = "edit.increment"
     bcEditDecrementNumber = "edit.decrement"
+    # Jump list operations
+    bcJumpBack = "jump.back" # Ctrl-o
+    bcJumpForward = "jump.forward" # Ctrl-i
     # Insert mode operations
     bcInsertChar = "insert.char"
     bcInsertBackspace = "insert.backspace"
@@ -511,11 +514,58 @@ proc executeCommand*(
       if ctx.keyBindingRegistry != nil:
         ctx.keyBindingRegistry.sequenceState.numericPrefix = ""
         ctx.keyBindingRegistry.sequenceState.hasNumericPrefix = false
-      let r = ctx.motionController.executeMotion(motionCmd, ctx.state.cursor)
-      if r.isErr:
-        return err(r.error)
-      ctx.state.cursor = r.value
-      return Result[(), string].ok ()
+
+      # Check if we have a pending operator (e.g., df{char})
+      if ctx.state.pendingOperator.isSome:
+        let op = ctx.state.pendingOperator.get
+
+        # Execute motion to get end position
+        # Suppress viewport updates to prevent visual scrolling during operator+motion
+        let r = ctx.motionController.executeMotion(
+          motionCmd, op.startPos, updateViewport = false
+        )
+        if r.isErr:
+          ctx.state.pendingOperator = none(PendingOperator)
+          return err(r.error)
+
+        # Check if motion actually moved the cursor
+        # If not (e.g., character not found), don't execute the operator
+        if r.value.line == op.startPos.line and r.value.column == op.startPos.column:
+          # Motion didn't move - clear operator and do nothing
+          ctx.state.pendingOperator = none(PendingOperator)
+          return ok(())
+
+        # Calculate the range affected by this operator+motion
+        let motion = if cmd.reverse: Motion.FindCharBackward else: Motion.FindChar
+        let range = calculateOperatorRange(ctx.buffer, op.startPos, r.value, motion)
+
+        # Execute the operator on the range
+        let opResult =
+          executeOperatorOnRange(ctx, op.operatorType, range, op.operatorCount)
+        ctx.state.pendingOperator = none(PendingOperator)
+        if opResult.isErr:
+          return err(opResult.error)
+
+        # Record this command for repeat (.) - only if successful and not a yank
+        if op.operatorType != OpYank:
+          ctx.state.lastEditCommand = some(
+            LastEditCommand(
+              kind: lecOperatorMotion,
+              operator: op.operatorType,
+              motion: motion,
+              motionCount: count,
+              operatorCount: op.operatorCount,
+            )
+          )
+
+        return ok(())
+      else:
+        # No pending operator - just move cursor
+        let r = ctx.motionController.executeMotion(motionCmd, ctx.state.cursor)
+        if r.isErr:
+          return err(r.error)
+        ctx.state.cursor = r.value
+        return Result[(), string].ok ()
     of "till":
       # Execute till character motion
       let motionCmd =
@@ -531,11 +581,58 @@ proc executeCommand*(
       if ctx.keyBindingRegistry != nil:
         ctx.keyBindingRegistry.sequenceState.numericPrefix = ""
         ctx.keyBindingRegistry.sequenceState.hasNumericPrefix = false
-      let r = ctx.motionController.executeMotion(motionCmd, ctx.state.cursor)
-      if r.isErr:
-        return err(r.error)
-      ctx.state.cursor = r.value
-      return Result[(), string].ok ()
+
+      # Check if we have a pending operator (e.g., dt{char})
+      if ctx.state.pendingOperator.isSome:
+        let op = ctx.state.pendingOperator.get
+
+        # Execute motion to get end position
+        # Suppress viewport updates to prevent visual scrolling during operator+motion
+        let r = ctx.motionController.executeMotion(
+          motionCmd, op.startPos, updateViewport = false
+        )
+        if r.isErr:
+          ctx.state.pendingOperator = none(PendingOperator)
+          return err(r.error)
+
+        # Check if motion actually moved the cursor
+        # If not (e.g., character not found), don't execute the operator
+        if r.value.line == op.startPos.line and r.value.column == op.startPos.column:
+          # Motion didn't move - clear operator and do nothing
+          ctx.state.pendingOperator = none(PendingOperator)
+          return ok(())
+
+        # Calculate the range affected by this operator+motion
+        let motion = if cmd.reverse: Motion.TillCharBackward else: Motion.TillChar
+        let range = calculateOperatorRange(ctx.buffer, op.startPos, r.value, motion)
+
+        # Execute the operator on the range
+        let opResult =
+          executeOperatorOnRange(ctx, op.operatorType, range, op.operatorCount)
+        ctx.state.pendingOperator = none(PendingOperator)
+        if opResult.isErr:
+          return err(opResult.error)
+
+        # Record this command for repeat (.) - only if successful and not a yank
+        if op.operatorType != OpYank:
+          ctx.state.lastEditCommand = some(
+            LastEditCommand(
+              kind: lecOperatorMotion,
+              operator: op.operatorType,
+              motion: motion,
+              motionCount: count,
+              operatorCount: op.operatorCount,
+            )
+          )
+
+        return ok(())
+      else:
+        # No pending operator - just move cursor
+        let r = ctx.motionController.executeMotion(motionCmd, ctx.state.cursor)
+        if r.isErr:
+          return err(r.error)
+        ctx.state.cursor = r.value
+        return Result[(), string].ok ()
     of "replace":
       # Execute replace character action (r command)
       # Replace count characters with the target character
@@ -683,6 +780,126 @@ proc parseBoolArg(args: seq[string], index: int = 0, default: bool = false): boo
   else:
     return default
 
+## Jump list management functions
+proc recordJump*(state: EditorState) =
+  ## Record current cursor position as a jump point
+  ## This should be called before jumping to a different location
+  let currentPos = JumpPosition(line: state.cursor.line, column: state.cursor.column)
+
+  # Don't record if the position is the same as the last jump in the list
+  if state.jumpList.len > 0:
+    let lastPos = state.jumpList[^1]
+    if lastPos.line == currentPos.line and lastPos.column == currentPos.column:
+      # Same position as last jump - don't record duplicate
+      return
+
+  # If we're navigating the jump list, truncate everything after current position
+  if state.jumpListIndex >= 0 and state.jumpListIndex < state.jumpList.len - 1:
+    state.jumpList.setLen(state.jumpListIndex + 1)
+
+  # Add new position to the end
+  state.jumpList.add(currentPos)
+
+  # Keep jump list to a reasonable size (100 entries like Vim)
+  const MaxJumpListSize = 100
+  while state.jumpList.len > MaxJumpListSize:
+    state.jumpList.delete(0)
+
+  # Reset index to indicate we're not navigating the list
+  state.jumpListIndex = -1
+
+proc handleJumpBack(ctx: CommandContext, args: seq[string]): Result[(), string] =
+  ## Jump to previous position in jump list (Ctrl-o)
+  if ctx.state.jumpList.len == 0:
+    return err("Jump list is empty")
+
+  # If this is the first jump back, record current position and start from end
+  if ctx.state.jumpListIndex < 0:
+    let currentPos =
+      JumpPosition(line: ctx.state.cursor.line, column: ctx.state.cursor.column)
+    ctx.state.jumpList.add(currentPos)
+    ctx.state.jumpListIndex = ctx.state.jumpList.len - 2
+  else:
+    # Move back in the list
+    ctx.state.jumpListIndex = max(0, ctx.state.jumpListIndex - 1)
+
+  # Jump to the position
+  let pos = ctx.state.jumpList[ctx.state.jumpListIndex]
+
+  # Check for empty buffer
+  if ctx.buffer.len == 0:
+    return err("Cannot jump: buffer is empty")
+
+  # Clamp line to valid range
+  ctx.state.cursor.line = min(pos.line, ctx.buffer.len - 1)
+
+  # Clamp column to valid range for the target line
+  let line = ctx.buffer.getLine(ctx.state.cursor.line)
+  let lineCharLen = line.charLen
+  ctx.state.cursor.column =
+    if lineCharLen == 0:
+      0
+    else:
+      min(pos.column, max(0, lineCharLen - 1))
+
+  # Update viewport using motion controller to properly handle reserved lines and line wrapping
+  let cursorPos = CursorPosition(x: ctx.state.cursor.column, y: ctx.state.cursor.line)
+  ctx.motionController.viewportManager.updateViewport(
+    cursorPos,
+    ctx.buffer.len,
+    ctx.state.showStatusLine,
+    ctx.state.viewportReservedLines,
+    ctx.state.lineWrap,
+    ctx.buffer,
+    0, # lineNumOffset - will be calculated by updateViewport if needed
+  )
+
+  return ok(())
+
+proc handleJumpForward(ctx: CommandContext, args: seq[string]): Result[(), string] =
+  ## Jump to next position in jump list (Ctrl-i)
+  if ctx.state.jumpList.len == 0 or ctx.state.jumpListIndex < 0:
+    return err("No newer jump position")
+
+  # Move forward in the list
+  if ctx.state.jumpListIndex >= ctx.state.jumpList.len - 1:
+    return err("Already at newest jump position")
+
+  ctx.state.jumpListIndex = ctx.state.jumpListIndex + 1
+
+  # Jump to the position
+  let pos = ctx.state.jumpList[ctx.state.jumpListIndex]
+
+  # Check for empty buffer
+  if ctx.buffer.len == 0:
+    return err("Cannot jump: buffer is empty")
+
+  # Clamp line to valid range
+  ctx.state.cursor.line = min(pos.line, ctx.buffer.len - 1)
+
+  # Clamp column to valid range for the target line
+  let line = ctx.buffer.getLine(ctx.state.cursor.line)
+  let lineCharLen = line.charLen
+  ctx.state.cursor.column =
+    if lineCharLen == 0:
+      0
+    else:
+      min(pos.column, max(0, lineCharLen - 1))
+
+  # Update viewport using motion controller to properly handle reserved lines and line wrapping
+  let cursorPos = CursorPosition(x: ctx.state.cursor.column, y: ctx.state.cursor.line)
+  ctx.motionController.viewportManager.updateViewport(
+    cursorPos,
+    ctx.buffer.len,
+    ctx.state.showStatusLine,
+    ctx.state.viewportReservedLines,
+    ctx.state.lineWrap,
+    ctx.buffer,
+    0, # lineNumOffset - will be calculated by updateViewport if needed
+  )
+
+  return ok(())
+
 ## Helper function to register motion commands
 proc registerMotionCommand(
     registry: CommandRegistry,
@@ -691,8 +908,10 @@ proc registerMotionCommand(
     description: string,
     motion: Motion,
     acceptsCount: bool = true,
+    shouldRecordJump: bool = false,
 ) =
   ## Register a motion command with common handler pattern
+  ## If shouldRecordJump is true, the current position will be recorded in the jump list
   let maxArgs = if acceptsCount: 1 else: 0
 
   registry.register(
@@ -700,6 +919,10 @@ proc registerMotionCommand(
     name,
     description,
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      # Record jump for big movements
+      if shouldRecordJump:
+        recordJump(ctx.state)
+
       let count =
         if acceptsCount:
           parseCount(args)
@@ -2100,10 +2323,14 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     bcMotionDown, "Move Down", "Move cursor down", Motion.Down
   )
   registry.registerMotionCommand(
-    bcMotionPageUp, "Page Up", "Scroll page up", Motion.PageUp
+    bcMotionPageUp, "Page Up", "Scroll page up", Motion.PageUp, shouldRecordJump = true
   )
   registry.registerMotionCommand(
-    bcMotionPageDown, "Page Down", "Scroll page down", Motion.PageDown
+    bcMotionPageDown,
+    "Page Down",
+    "Scroll page down",
+    Motion.PageDown,
+    shouldRecordJump = true,
   )
   registry.registerMotionCommand(
     bcMotionHome, "Home", "Move to beginning of line", Motion.Home, false
@@ -2116,22 +2343,44 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     bcMotionEnd, "End", "Move to end of line", Motion.End, false
   )
   registry.registerMotionCommand(
-    bcMotionFirstLine, "First Line", "Move to first line", Motion.FirstLine, false
+    bcMotionFirstLine,
+    "First Line",
+    "Move to first line",
+    Motion.FirstLine,
+    false,
+    shouldRecordJump = true,
   )
   registry.registerMotionCommand(
-    bcMotionLastLine, "Last Line", "Move to last line", Motion.LastLine, false
+    bcMotionLastLine,
+    "Last Line",
+    "Move to last line",
+    Motion.LastLine,
+    false,
+    shouldRecordJump = true,
   )
   registry.registerMotionCommand(
-    bcMotionViewportHigh, "Viewport High", "Move to top of viewport",
-    Motion.ViewportHigh, true,
+    bcMotionViewportHigh,
+    "Viewport High",
+    "Move to top of viewport",
+    Motion.ViewportHigh,
+    true,
+    shouldRecordJump = true,
   )
   registry.registerMotionCommand(
-    bcMotionViewportMiddle, "Viewport Middle", "Move to middle of viewport",
-    Motion.ViewportMiddle, false,
+    bcMotionViewportMiddle,
+    "Viewport Middle",
+    "Move to middle of viewport",
+    Motion.ViewportMiddle,
+    false,
+    shouldRecordJump = true,
   )
   registry.registerMotionCommand(
-    bcMotionViewportLow, "Viewport Low", "Move to bottom of viewport",
-    Motion.ViewportLow, true,
+    bcMotionViewportLow,
+    "Viewport Low",
+    "Move to bottom of viewport",
+    Motion.ViewportLow,
+    true,
+    shouldRecordJump = true,
   )
 
   # Scroll commands
@@ -2545,6 +2794,25 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     "Decrement Number",
     "Decrement the number at or after cursor (Ctrl-X)",
     handleDecrementNumber,
+    0,
+    0,
+  )
+
+  # Jump list commands
+  registry.register(
+    builtin(bcJumpBack),
+    "Jump Back",
+    "Jump to previous position in jump list (Ctrl-o)",
+    handleJumpBack,
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcJumpForward),
+    "Jump Forward",
+    "Jump to next position in jump list (Ctrl-i)",
+    handleJumpForward,
     0,
     0,
   )
@@ -3101,6 +3369,9 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
       if ctx.state.lastSearchText.len == 0:
         return err("No previous search")
 
+      # Record jump before searching
+      recordJump(ctx.state)
+
       # Re-enable highlight when using n/N
       ctx.state.hlsearchTempDisabled = false
 
@@ -3116,6 +3387,9 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       if ctx.state.lastSearchText.len == 0:
         return err("No previous search")
+
+      # Record jump before searching
+      recordJump(ctx.state)
 
       # Re-enable highlight when using n/N
       ctx.state.hlsearchTempDisabled = false
@@ -3241,6 +3515,9 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
       if matchResult.isErr:
         return err(matchResult.error)
 
+      # Record jump before moving to matching bracket
+      recordJump(ctx.state)
+
       ctx.state.cursor = matchResult.value
       return Result[(), string].ok (),
     0,
@@ -3256,6 +3533,9 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
       let word = getWordUnderCursor(ctx.buffer, ctx.state.cursor)
       if word.len == 0:
         return err("No word under cursor")
+
+      # Record jump before searching
+      recordJump(ctx.state)
 
       # Update last search text
       ctx.state.lastSearchText = word
@@ -3276,6 +3556,9 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
       let word = getWordUnderCursor(ctx.buffer, ctx.state.cursor)
       if word.len == 0:
         return err("No word under cursor")
+
+      # Record jump before searching
+      recordJump(ctx.state)
 
       # Update last search text
       ctx.state.lastSearchText = word

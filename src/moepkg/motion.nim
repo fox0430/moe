@@ -1031,7 +1031,8 @@ proc extractRangeText*(buffer: TextBuffer, range: OperatorRange): string =
       let endCol = min(range.endPos.column, line.charLen)
       if startCol < line.charLen:
         let runes = line.toRunes()
-        for i in startCol ..< endCol:
+        # Use inclusive range to match buffer.deleteRange behavior
+        for i in startCol .. min(endCol, runes.len - 1):
           if i < runes.len:
             text.add($runes[i])
     else:
@@ -1047,11 +1048,13 @@ proc extractRangeText*(buffer: TextBuffer, range: OperatorRange): string =
                 text.add($runes[i])
             text.add("\n")
           elif lineIdx == range.endPos.line:
-            # Last line: from start to endCol
+            # Last line: from start to endCol (inclusive)
             let runes = line.toRunes()
-            let endCol = min(range.endPos.column, runes.len)
-            for i in 0 ..< endCol:
-              text.add($runes[i])
+            let endCol = min(range.endPos.column, runes.len - 1)
+            # Use inclusive range to match buffer.deleteRange behavior
+            for i in 0 .. endCol:
+              if i < runes.len:
+                text.add($runes[i])
           else:
             # Middle lines: entire line
             text.add(line)

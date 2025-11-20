@@ -585,6 +585,9 @@ proc newEditor*(): Editor =
       # Yank register (internal clipboard)
       yankRegister: "", # Empty initially
       yankIsLine: false, # Not linewise initially
+      # Jump list
+      jumpList: @[], # Empty jump list initially
+      jumpListIndex: -1, # Not navigating jump list initially
     ),
     viewport: ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 20, x: 0, y: 0),
     commandRegistry: cmdRegistry,

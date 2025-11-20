@@ -57,6 +57,10 @@ type
     Forward # Search forward (/)
     Backward # Search backward (?)
 
+  JumpPosition* = object ## Represents a position in the jump list
+    line*: int # Line number
+    column*: int # Column position
+
   Motion* = enum
     Left
     Right
@@ -307,3 +311,6 @@ type
     lastMacroRegister*: Option[char] # Last executed macro register (for @@ repeat)
     waitingForMacroRegister*: bool # Waiting for register name after q or @
     macroCommandType*: string # "record" or "playback" - what we're waiting to do
+    # Jump list (Ctrl-o / Ctrl-i)
+    jumpList*: seq[JumpPosition] # List of jump positions
+    jumpListIndex*: int # Current position in jump list (-1 when not navigating)

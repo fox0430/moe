@@ -420,8 +420,10 @@ proc processKey*(
       # Set the target character
       var finalCommand = pendingCmd
       finalCommand.targetChar = combo.char
+      # Apply numeric prefix count before clearing
+      let cmdWithCount = registry.applyCountToCommand(finalCommand)
       registry.clearSequence()
-      return some(finalCommand)
+      return some(cmdWithCount)
     else:
       # Invalid input for character-waiting commands
       registry.clearSequence()
@@ -780,6 +782,27 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
     )
   )
 
+  # Register jump list commands
+  registry.registerCommand(
+    Command(
+      name: "jump-back",
+      description: "Jump to previous position in jump list",
+      kind: ctAction,
+      commandId: "jump.back",
+      args: @[],
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "jump-forward",
+      description: "Jump to next position in jump list",
+      kind: ctAction,
+      commandId: "jump.forward",
+      args: @[],
+    )
+  )
+
   # Register search navigation commands
   registry.registerCommand(
     Command(
@@ -846,6 +869,8 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.Normal, "C-r", "redo")
   registry.bindKey(EditorMode.Normal, "C-a", "increment-number")
   registry.bindKey(EditorMode.Normal, "C-x", "decrement-number")
+  registry.bindKey(EditorMode.Normal, "C-o", "jump-back")
+  registry.bindKey(EditorMode.Normal, "C-i", "jump-forward")
   registry.bindKey(EditorMode.Normal, "n", "search-next")
   registry.bindKey(EditorMode.Normal, "N", "search-prev")
   registry.bindKey(EditorMode.Normal, "*", "search-word-forward")
