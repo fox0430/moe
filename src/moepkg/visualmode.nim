@@ -729,6 +729,8 @@ proc isVisualModeCommand*(command: Runes): InputState =
 
   if command.len == 0:
     return InputState.Continue
+  elif isMouseEvent(command):
+    return InputState.Valid
   elif command.len == 1:
     let c = command[0]
     if isCtrlC(c) or isEscKey(c) or c == ord('h') or isLeftKey(c) or isBackspaceKey(c) or
@@ -752,54 +754,59 @@ proc isVisualModeCommand*(command: Runes): InputState =
 proc execVisualModeCommand*(status: var EditorStatus, command: Runes) =
   ## Execute the visual command and change the mode to a previous mode.
 
-  let key = command[0]
+  if command.len == 0:
+    return
 
-  if isCtrlC(key) or isEscKey(key):
-    status.exitVisualMode
-  elif key == ord('h') or isLeftKey(key) or isBackspaceKey(key):
-    currentMainWindowNode.keyLeft
-  elif key == ord('l') or isRightKey(key):
-    currentMainWindowNode.moveRight(currentBufStatus)
-  elif key == ord('k') or isUpKey(key):
-    currentBufStatus.keyUp(currentMainWindowNode)
-  elif key == ord('j') or isDownKey(key) or isEnterKey(key):
-    currentBufStatus.keyDown(currentMainWindowNode)
-  elif key == ord('^'):
-    currentBufStatus.moveToFirstNonBlankOfLine(currentMainWindowNode)
-  elif key == ord('0') or isHomeKey(key):
-    currentMainWindowNode.moveToFirstOfLine
-  elif key == ord('$') or isEndKey(key):
-    currentBufStatus.moveToLastOfLine(currentMainWindowNode)
-  elif key == ord('w'):
-    currentBufStatus.moveToForwardWord(currentMainWindowNode)
-  elif key == ord('b'):
-    currentBufStatus.moveToBackwardWord(currentMainWindowNode)
-  elif key == ord('e'):
-    currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
-  elif key == ord('G'):
-    status.moveToLastLine
-  elif key == ord('g') and command.len == 2:
-    if command[1] == ord('g'):
-      status.moveToFirstLine
-  elif key == ord('{'):
-    status.moveToPreviousBlankLine
-  elif key == ord('}'):
-    status.moveToNextBlankLine
-  elif isCtrlS(key):
-    status.selectionRange
+  if isMouseEvent(command):
+    status.handleMouseEvent
   else:
-    let beforeBufferLen = currentBufStatus.buffer.len
-
-    if isVisualBlockMode(currentBufStatus.mode):
-      status.visualBlockCommand(currentBufStatus.selectedArea.get, command)
+    let key = command[0]
+    if isCtrlC(key) or isEscKey(key):
+      status.exitVisualMode
+    elif key == ord('h') or isLeftKey(key) or isBackspaceKey(key):
+      currentMainWindowNode.keyLeft
+    elif key == ord('l') or isRightKey(key):
+      currentMainWindowNode.moveRight(currentBufStatus)
+    elif key == ord('k') or isUpKey(key):
+      currentBufStatus.keyUp(currentMainWindowNode)
+    elif key == ord('j') or isDownKey(key) or isEnterKey(key):
+      currentBufStatus.keyDown(currentMainWindowNode)
+    elif key == ord('^'):
+      currentBufStatus.moveToFirstNonBlankOfLine(currentMainWindowNode)
+    elif key == ord('0') or isHomeKey(key):
+      currentMainWindowNode.moveToFirstOfLine
+    elif key == ord('$') or isEndKey(key):
+      currentBufStatus.moveToLastOfLine(currentMainWindowNode)
+    elif key == ord('w'):
+      currentBufStatus.moveToForwardWord(currentMainWindowNode)
+    elif key == ord('b'):
+      currentBufStatus.moveToBackwardWord(currentMainWindowNode)
+    elif key == ord('e'):
+      currentBufStatus.moveToForwardEndOfWord(currentMainWindowNode)
+    elif key == ord('G'):
+      status.moveToLastLine
+    elif key == ord('g') and command.len == 2:
+      if command[1] == ord('g'):
+        status.moveToFirstLine
+    elif key == ord('{'):
+      status.moveToPreviousBlankLine
+    elif key == ord('}'):
+      status.moveToNextBlankLine
+    elif isCtrlS(key):
+      status.selectionRange
     else:
-      status.visualCommand(currentBufStatus.selectedArea.get, command)
+      let beforeBufferLen = currentBufStatus.buffer.len
 
-    if currentBufStatus.selectionRanges.len > 0:
-      # Clear LSP selection ranges when exit Visual mode.
-      currentBufStatus.selectionRanges = @[]
+      if isVisualBlockMode(currentBufStatus.mode):
+        status.visualBlockCommand(currentBufStatus.selectedArea.get, command)
+      else:
+        status.visualCommand(currentBufStatus.selectedArea.get, command)
 
-    # Update folding ranges
-    status.shiftFoldingRanges(
-      currentMainWindowNode.currentLine, currentBufStatus.buffer.len - beforeBufferLen
-    )
+      if currentBufStatus.selectionRanges.len > 0:
+        # Clear LSP selection ranges when exit Visual mode.
+        currentBufStatus.selectionRanges = @[]
+
+      # Update folding ranges
+      status.shiftFoldingRanges(
+        currentMainWindowNode.currentLine, currentBufStatus.buffer.len - beforeBufferLen
+      )

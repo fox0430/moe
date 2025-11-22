@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[times, strutils, sequtils, options, strformat, tables, logging, json, os]
+import std/[times, strutils, sequtils, options, strformat, tables, json, os]
 
 import pkg/results
 
@@ -1497,7 +1497,9 @@ proc normalCommand(status: var EditorStatus, commands: Runes): Option[Rune] =
     beforeBufferLen = currentBufStatus.buffer.len
     key = commands[0]
 
-  if isCtrlK(key):
+  if isMouseEvent(key):
+    status.handleMouseEvent
+  elif isCtrlK(key):
     status.moveNextWindow
   elif isCtrlJ(key):
     status.movePrevWindow
@@ -1790,25 +1792,26 @@ proc isNormalModeCommand*(
     # Cancel commands.
     result = InputState.Invalid
   else:
-    if $command == "/" or $command == "?" or $command == ":" or isCtrlK(command) or
-        isCtrlJ(command) or isCtrlV(command) or $command == "h" or isLeftKey(command) or
-        isBackspaceKey(command[0]) or $command == "l" or isRightKey(command) or
-        $command == "k" or isUpKey(command) or $command == "j" or isDownKey(command) or
-        isEnterKey(command) or $command == "x" or isDeleteKey(command) or $command == "X" or
-        $command == "^" or $command == "_" or $command == "0" or isHomeKey(command) or
-        $command == "$" or isEndKey(command) or $command == "{" or $command == "}" or
-        $command == "-" or $command == "+" or $command == "G" or isCtrlU(command) or
-        isCtrlD(command) or isPageUpKey(command) or isPageDownKey(command) or
-        isCtrlF(command) or $command == "w" or $command == "b" or $command == "e" or
-        $command == "o" or $command == "O" or $command == "D" or $command == "S" or
-        $command == "s" or $command == "p" or $command == "P" or $command == ">" or
-        $command == "<" or $command == "J" or isCtrlA(command) or isCtrlX(command) or
-        $command == "~" or $command == "n" or $command == "N" or $command == "*" or
-        $command == "#" or $command == "R" or $command == "i" or $command == "I" or
-        $command == "v" or $command == "a" or $command == "A" or $command == "u" or
-        isCtrlR(command) or $command == "." or $command == "Y" or $command == "V" or
-        $command == "H" or $command == "M" or $command == "L" or $command == "%" or
-        $command == "K" or isCtrlS(command) or isCtrlO(command) or isCtrlI(command):
+    if isMouseEvent(command) or $command == "/" or $command == "?" or $command == ":" or
+        isCtrlK(command) or isCtrlJ(command) or isCtrlV(command) or $command == "h" or
+        isLeftKey(command) or isBackspaceKey(command[0]) or $command == "l" or
+        isRightKey(command) or $command == "k" or isUpKey(command) or $command == "j" or
+        isDownKey(command) or isEnterKey(command) or $command == "x" or
+        isDeleteKey(command) or $command == "X" or $command == "^" or $command == "_" or
+        $command == "0" or isHomeKey(command) or $command == "$" or isEndKey(command) or
+        $command == "{" or $command == "}" or $command == "-" or $command == "+" or
+        $command == "G" or isCtrlU(command) or isCtrlD(command) or isPageUpKey(command) or
+        isPageDownKey(command) or isCtrlF(command) or $command == "w" or $command == "b" or
+        $command == "e" or $command == "o" or $command == "O" or $command == "D" or
+        $command == "S" or $command == "s" or $command == "p" or $command == "P" or
+        $command == ">" or $command == "<" or $command == "J" or isCtrlA(command) or
+        isCtrlX(command) or $command == "~" or $command == "n" or $command == "N" or
+        $command == "*" or $command == "#" or $command == "R" or $command == "i" or
+        $command == "I" or $command == "v" or $command == "a" or $command == "A" or
+        $command == "u" or isCtrlR(command) or $command == "." or $command == "Y" or
+        $command == "V" or $command == "H" or $command == "M" or $command == "L" or
+        $command == "%" or $command == "K" or isCtrlS(command) or isCtrlO(command) or
+        isCtrlI(command):
       result = InputState.Valid
     elif isDigit(command[0]):
       if command.isDigit:

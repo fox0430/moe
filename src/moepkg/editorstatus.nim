@@ -1958,3 +1958,78 @@ proc getKeyFromCommandLine*(status: var EditorStatus): Rune =
     status.runBackgroundTasks
 
   return key.get
+
+proc handleMouseEvent*(status: EditorStatus) =
+  let mouseEvent = getLastMouseEvent()
+  if mouseEvent.isSome:
+    let event = mouseEvent.get
+
+    # Only handle left button press
+    if (event.bstate and MouseMask(MouseButton1Pressed)) != 0:
+      # Get the clicked position
+      let
+        clickY = event.y.int
+        clickX = event.x.int
+
+      let node = currentMainWindowNode
+
+      # Convert screen coordinates to buffer coordinates
+      # clickY is screen coordinate (0-based)
+      # node.y is window starting position on screen
+      # The actual text starts at node.y + 1 (after the tab line)
+      # So we need to subtract (node.y + 1) from clickY
+      #
+      # For X coordinate, we need to account for:
+      # - node.x: window starting X position
+      # - sidebarWidth: width of any sidebar
+      # - widthOfLineNum: width of line number column
+      let
+        tabLineHeight = if status.settings.tabLine.enable: 1 else: 0
+        bufferY = clickY - node.y - tabLineHeight + node.view.originalLine[0]
+        bufferX = clickX - node.x - node.view.sidebarWidth - node.view.widthOfLineNum
+
+      # Move cursor to the clicked position if valid
+      if bufferY >= 0:
+        # If clicked beyond the last line, move to the last line
+        let targetLine =
+          if bufferY >= currentBufStatus.buffer.len:
+            currentBufStatus.buffer.len - 1
+          else:
+            bufferY
+
+        node.currentLine = targetLine
+        let lineLen = currentBufStatus.buffer[targetLine].len
+        if bufferX >= 0 and bufferX < lineLen:
+          node.currentColumn = bufferX
+        elif lineLen > 0:
+          node.currentColumn = lineLen - 1
+        else:
+          node.currentColumn = 0
+
+proc handleMouseEventCommandLine*(status: EditorStatus) =
+  let mouseEvent = getLastMouseEvent()
+  if mouseEvent.isSome:
+    let event = mouseEvent.get
+
+    # Only handle left button press
+    if (event.bstate and MouseMask(MouseButton1Pressed)) != 0:
+      let
+        clickY = event.y.int
+        clickX = event.x.int
+
+      # Check if the click is on the command line
+      if clickY == status.commandLine.y:
+        # Calculate buffer position from click position
+        # Account for the prompt (e.g., ":", "/", "?")
+        let promptLen = status.commandLine.prompt.len
+        var newBufferPosition = clickX - promptLen
+
+        # Clamp to valid range
+        if newBufferPosition < 0:
+          newBufferPosition = 0
+        elif newBufferPosition > status.commandLine.buffer.len:
+          newBufferPosition = status.commandLine.buffer.len
+
+        # Update buffer position
+        status.commandLine.bufferPosition = newBufferPosition
+        status.commandLine.isUpdate = true

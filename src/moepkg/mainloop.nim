@@ -516,6 +516,11 @@ proc commandLineLoop*(status: var EditorStatus): Option[Rune] =
 
     let key = status.getKeyFromCommandLine
 
+    # Handle mouse events in command line
+    if isMouseEvent(key):
+      status.handleMouseEventCommandLine
+      continue
+
     if isResizeKey(key):
       updateTerminalSize()
       status.resize
@@ -960,7 +965,11 @@ proc editorMainLoop*(status: var EditorStatus) =
           currentBufStatus.clearDocumentHighlightInfo
 
       if key.isSome:
-        if isResizeKey(key.get):
+        if isMouseEvent(key.get):
+          # Mouse events are handled directly in mode commands
+          # Don't skip, let it be added to command
+          discard
+        elif isResizeKey(key.get):
           updateTerminalSize()
           status.resize
           key.resetKeyAndContinue
@@ -998,6 +1007,7 @@ proc editorMainLoop*(status: var EditorStatus) =
         let inputState = invokeCommand(
           currentBufStatus.mode, command, status.recodingOperationRegister
         )
+
         case inputState
         of InputState.Continue:
           key.resetKeyAndContinue

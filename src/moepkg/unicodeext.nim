@@ -410,15 +410,15 @@ proc toString*(lines: seq[Runes]): string =
   for i, runes in lines:
     result &= $runes & '\n'
 
-proc `&`*(r1, r2: Rune | Runes): Runes =
-  result = r1
-  result.add r2
-
 proc `&`*(r1: Runes, r2: Rune): Runes =
   result = r1
   result.add r2
 
 proc `&`*(r1: Rune, r2: Runes): Runes =
+  result = @[r1]
+  result.add r2
+
+proc `&`*(r1, r2: Rune): Runes =
   result = @[r1]
   result.add r2
 

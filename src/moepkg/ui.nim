@@ -33,6 +33,8 @@ type
   NcursesInitExtendedPair = proc(pair, f, b: cint): ErrCode {.cdecl.}
     # libncurses.init_extended_pair
 
+  MouseMask* = mmask_t # Re-export ncurses mouse mask type
+
   NcursesVersion* = object
     major*, minor*, date*: int
 
@@ -135,6 +137,18 @@ const
   PasteKey* = 1012
   BracketedPasteStart* = 1013
   BracketedPasteEnd* = 1014
+  MouseEventKey* = 1015
+
+  # Mouse button state constants (re-exported from ncurses)
+  MouseButton1Pressed* = BUTTON1_PRESSED
+  MouseButton1Released* = BUTTON1_RELEASED
+  MouseButton1Clicked* = BUTTON1_CLICKED
+  MouseButton2Pressed* = BUTTON2_PRESSED
+  MouseButton2Released* = BUTTON2_RELEASED
+  MouseButton2Clicked* = BUTTON2_CLICKED
+  MouseButton3Pressed* = BUTTON3_PRESSED
+  MouseButton3Released* = BUTTON3_RELEASED
+  MouseButton3Clicked* = BUTTON3_CLICKED
 
   KeySequences = {
     UpKey: @["\eOA", "\e[A"],
@@ -160,6 +174,8 @@ var
   pasteBuffer: Option[seq[Runes]]
 
   terminalSize: Size
+
+  lastMouseEvent*: Option[Mevent] # Last mouse event
 
 let libncurseswHandle: LibHandle =
   # Workaround for `could not import: init_extended_color`.
@@ -373,7 +389,7 @@ proc startUi*() =
     discard setlocale(LC_ALL, "") # enable UTF-8
 
     initscr() # Start terminal control
-    cbreak() # Enable cbreak mode
+    raw() # Enable raw mode (instead of cbreak) to get all input
     nonl() # Exit new line mode and improve move cursor performance
     curs_set(1) # Hide cursor
 
@@ -388,9 +404,26 @@ proc startUi*() =
     keyEcho(false)
     set_escdelay(25)
 
+    # Enable ncurses mouse support
+    when not defined(unitTest):
+      let oldMask = mousemask(
+        mmask_t(
+          BUTTON1_PRESSED or BUTTON1_RELEASED or BUTTON1_CLICKED or BUTTON2_PRESSED or
+            BUTTON2_RELEASED or BUTTON2_CLICKED or BUTTON3_PRESSED or BUTTON3_RELEASED or
+            BUTTON3_CLICKED or BUTTON4_PRESSED or BUTTON4_RELEASED or BUTTON5_PRESSED or
+            BUTTON5_RELEASED
+        ),
+        cast[ptr mmask_t](nil),
+      )
+
     enableBracketedPasteMode()
 
 proc exitUi*() =
+  # Disable mouse mode
+  when not defined(unitTest):
+    const mouseDisableSeq = "\e[?1000l\e[?1006l"
+    discard write(STDOUT_FILENO, mouseDisableSeq.cstring, mouseDisableSeq.len)
+
   let r = endwin()
   if r.isErr:
     error fmt"endwin failed"
@@ -648,6 +681,70 @@ proc isBracketedPaste(s: string): bool {.inline.} =
 
   s.startsWith(startSeq) and s.endsWith(endSeq) and s.len > startSeq.len + endSeq.len
 
+proc parseMouseEvent(s: string): bool =
+  ## Parse SGR mouse event format: \e[<buttons;x;y;M/m
+  ## Returns true if a valid mouse event was parsed
+
+  if not s.startsWith("\e[<"):
+    return false
+
+  # Find the ending M or m
+  let lastChar =
+    if s.len > 0:
+      s[^1]
+    else:
+      '\0'
+
+  if lastChar != 'M' and lastChar != 'm':
+    return false
+
+  # Parse the event: <buttons;x;y>
+  let content = s[3 ..< ^1] # Skip "\e[<" and last char
+  let parts = content.split(';')
+
+  if parts.len != 3:
+    return false
+
+  try:
+    var mouseEvent: Mevent
+    let
+      buttons = parts[0].parseInt
+      x = parts[1].parseInt - 1 # Convert to 0-based
+      y = parts[2].parseInt - 1 # Convert to 0-based
+
+    mouseEvent.x = x.cint
+    mouseEvent.y = y.cint
+
+    # Determine button state
+    if lastChar == 'M':
+      # Button press
+      case buttons mod 4
+      of 0:
+        mouseEvent.bstate = mmask_t(BUTTON1_PRESSED)
+      of 1:
+        mouseEvent.bstate = mmask_t(BUTTON2_PRESSED)
+      of 2:
+        mouseEvent.bstate = mmask_t(BUTTON3_PRESSED)
+      else:
+        mouseEvent.bstate = 0
+    else:
+      # Button release (m)
+      case buttons mod 4
+      of 0:
+        mouseEvent.bstate = mmask_t(BUTTON1_RELEASED)
+      of 1:
+        mouseEvent.bstate = mmask_t(BUTTON2_RELEASED)
+      of 2:
+        mouseEvent.bstate = mmask_t(BUTTON3_RELEASED)
+      else:
+        mouseEvent.bstate = 0
+
+    lastMouseEvent = some(mouseEvent)
+
+    return true
+  except ValueError:
+    return false
+
 proc parseKey(buffer: seq[int]): Option[Rune] =
   if buffer.len == 0:
     return
@@ -665,6 +762,11 @@ proc parseKey(buffer: seq[int]): Option[Rune] =
       var input = ""
       for ch in buffer:
         input &= ch.char
+
+      # Check for mouse event
+      if input.parseMouseEvent():
+        return some(MouseEventKey.Rune)
+
       for keyCode, sequences in KeySequences.pairs:
         for s in sequences:
           case keyCode
@@ -753,11 +855,25 @@ proc getKey*(timeout: int = 100): Option[Rune] =
       if firstCh.get.isSingle:
         return parseKey(buffer)
       elif firstCh.get == EscKey:
-        const Timeout = 1
-        while kbhit(Timeout) > 0:
-          let ch = Fd.read
-          if ch.isSome:
-            buffer.add ch.get
+        # Wait a bit for the rest of the escape sequence to arrive
+        # Mouse events and arrow keys send multi-byte sequences
+        const InitialTimeout = 5 # Short initial wait
+        const ReadTimeout = 1 # Per-character timeout
+
+        # First wait to let initial bytes arrive
+        discard kbhit(InitialTimeout)
+
+        # Then read all available bytes
+        var consecutiveTimeouts = 0
+        while consecutiveTimeouts < 3: # Allow up to 3 timeouts before giving up
+          if kbhit(ReadTimeout) > 0:
+            let ch = Fd.read
+            if ch.isSome:
+              buffer.add ch.get
+              consecutiveTimeouts = 0 # Reset on successful read
+          else:
+            inc consecutiveTimeouts
+
         return parseKey(buffer)
       else:
         let length = firstCh.get.char.numberOfBytes
@@ -811,6 +927,15 @@ proc isPasteKey*(key: Rune): bool {.inline.} =
 
 proc isPasteKey*(r: Runes): bool {.inline.} =
   r.len == 1 and r[0] == PasteKey
+
+proc isMouseEvent*(key: Rune): bool {.inline.} =
+  key == MouseEventKey
+
+proc isMouseEvent*(r: Runes): bool {.inline.} =
+  r.len == 1 and r[0] == MouseEventKey
+
+proc getLastMouseEvent*(): Option[Mevent] =
+  lastMouseEvent
 
 proc isUpKey*(key: Rune): bool {.inline.} =
   key == UpKey

@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2024 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -205,7 +205,9 @@ proc execInsertModeCommand*(status: var EditorStatus, command: Runes) =
     beforeBufferLen = currentBufStatus.buffer.len
     key = command[0]
 
-  if isCtrlC(key) or isEscKey(key):
+  if isMouseEvent(key):
+    status.handleMouseEvent
+  elif isCtrlC(key) or isEscKey(key):
     status.exitInsertMode
   elif isCtrlU(key):
     currentBufStatus.deleteBeforeCursorToFirstNonBlank(currentMainWindowNode)

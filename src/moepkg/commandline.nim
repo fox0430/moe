@@ -24,8 +24,8 @@ import lsp/client
 type
   CommandLine* = ref object
     buffer*: Runes ## The prompt doesn't include in the buffer.
-    prompt: Runes ## The prompt show before the buffer.
-    bufferPosition: int ## The buffer position.
+    prompt*: Runes ## The prompt show before the buffer.
+    bufferPosition*: int ## The buffer position.
     cursor: CursorPosition
     color*: EditorColorPairIndex
     window*: Window ## Ncurses window
