@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -18,7 +18,9 @@
 #[############################################################################]#
 
 import std/[unittest, options, sequtils]
-import pkg/results
+
+import pkg/[results, ncurses]
+
 import moepkg/unicodeext
 
 import moepkg/ui {.all.}
@@ -102,3 +104,120 @@ suite "parseKey":
     block Emoji:
       const Buffer = "🚀"
       check Buffer.toRunes[0] == parseKey(Buffer.mapIt(it.int)).get
+
+suite "parseMouseEvent":
+  test "Valid mouse button 1 press event":
+    let input = "\e[<0;10;20M"
+    check parseMouseEvent(input) == true
+    let event = getLastMouseEvent()
+    check event.isSome
+    check event.get.x == 9 # 0-based
+    check event.get.y == 19 # 0-based
+    check event.get.bstate == mmask_t(MouseButton1Pressed)
+
+  test "Valid mouse button 1 release event":
+    let input = "\e[<0;10;20m"
+    check parseMouseEvent(input) == true
+    let event = getLastMouseEvent()
+    check event.isSome
+    check event.get.x == 9
+    check event.get.y == 19
+    check event.get.bstate == mmask_t(MouseButton1Released)
+
+  test "Valid mouse button 2 press event":
+    let input = "\e[<1;5;15M"
+    check parseMouseEvent(input) == true
+    let event = getLastMouseEvent()
+    check event.isSome
+    check event.get.x == 4
+    check event.get.y == 14
+    check event.get.bstate == mmask_t(MouseButton2Pressed)
+
+  test "Valid mouse button 2 release event":
+    let input = "\e[<1;5;15m"
+    check parseMouseEvent(input) == true
+    let event = getLastMouseEvent()
+    check event.isSome
+    check event.get.x == 4
+    check event.get.y == 14
+    check event.get.bstate == mmask_t(MouseButton2Released)
+
+  test "Valid mouse button 3 press event":
+    let input = "\e[<2;30;40M"
+    check parseMouseEvent(input) == true
+    let event = getLastMouseEvent()
+    check event.isSome
+    check event.get.x == 29
+    check event.get.y == 39
+    check event.get.bstate == mmask_t(MouseButton3Pressed)
+
+  test "Valid mouse button 3 release event":
+    let input = "\e[<2;30;40m"
+    check parseMouseEvent(input) == true
+    let event = getLastMouseEvent()
+    check event.isSome
+    check event.get.x == 29
+    check event.get.y == 39
+    check event.get.bstate == mmask_t(MouseButton3Released)
+
+  test "Valid mouse event at origin (1,1)":
+    let input = "\e[<0;1;1M"
+    check parseMouseEvent(input) == true
+    let event = getLastMouseEvent()
+    check event.isSome
+    check event.get.x == 0
+    check event.get.y == 0
+
+  test "Invalid format: missing start sequence":
+    let input = "[<0;10;20M"
+    check parseMouseEvent(input) == false
+
+  test "Invalid format: wrong start sequence":
+    let input = "\e[0;10;20M"
+    check parseMouseEvent(input) == false
+
+  test "Invalid format: missing end character":
+    let input = "\e[<0;10;20"
+    check parseMouseEvent(input) == false
+
+  test "Invalid format: wrong end character":
+    let input = "\e[<0;10;20X"
+    check parseMouseEvent(input) == false
+
+  test "Invalid format: too few parts":
+    let input = "\e[<0;10M"
+    check parseMouseEvent(input) == false
+
+  test "Invalid format: too many parts":
+    let input = "\e[<0;10;20;30M"
+    check parseMouseEvent(input) == false
+
+  test "Invalid format: non-numeric button":
+    let input = "\e[<x;10;20M"
+    check parseMouseEvent(input) == false
+
+  test "Invalid format: non-numeric x coordinate":
+    let input = "\e[<0;x;20M"
+    check parseMouseEvent(input) == false
+
+  test "Invalid format: non-numeric y coordinate":
+    let input = "\e[<0;10;yM"
+    check parseMouseEvent(input) == false
+
+  test "Invalid format: empty string":
+    let input = ""
+    check parseMouseEvent(input) == false
+
+  test "Button with modifier (drag): button 4 (mod 4 = 0)":
+    let input = "\e[<4;10;20M"
+    check parseMouseEvent(input) == true
+    let event = getLastMouseEvent()
+    check event.isSome
+    check event.get.bstate == mmask_t(MouseButton1Pressed)
+
+  test "Button with modifier (drag): button 5 (mod 4 = 1)":
+    let input = "\e[<5;10;20M"
+    check parseMouseEvent(input) == true
+    let event = getLastMouseEvent()
+    check event.isSome
+    check event.get.bstate == mmask_t(MouseButton2Pressed)
