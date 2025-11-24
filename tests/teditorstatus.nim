@@ -35,6 +35,7 @@ import utils
 
 import moepkg/exmode {.all.}
 import moepkg/editorstatus {.all.}
+import moepkg/ui {.all.}
 
 proc initSelectedArea(status: EditorStatus) =
   currentBufStatus.selectedArea = initSelectedArea(
@@ -1461,3 +1462,273 @@ suite "Buffer cache integration":
     # Some buffers should have been evicted due to LRU
     check stats.hits >= 0
     check stats.misses >= 0
+
+suite "handleMouseEvent":
+  test "Click on valid position":
+    var status = initEditorStatus().get
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["line 1", "line 2", "line 3"].toSeqRunes.toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    # Set initial cursor position
+    currentMainWindowNode.currentLine = 0
+    currentMainWindowNode.currentColumn = 0
+
+    # Simulate a click at line 1 (second line), column 3
+    # Click position calculation:
+    # bufferY = clickY - node.y - tabLineHeight + node.view.originalLine[0]
+    # We want bufferY=1, so: clickY = bufferY + node.y + tabLineHeight - node.view.originalLine[0]
+    # bufferX = clickX - node.x - sidebarWidth - widthOfLineNum
+    # We want bufferX=3, so: clickX = bufferX + node.x + sidebarWidth + widthOfLineNum
+    # Note: parseMouseEvent converts from 1-based to 0-based, so we need to add 1 for SGR format
+    let
+      tabLineHeight = if status.settings.tabLine.enable: 1 else: 0
+      sidebarWidth = currentMainWindowNode.view.sidebarWidth
+      widthOfLineNum = currentMainWindowNode.view.widthOfLineNum
+    # Calculate 0-based screen coordinates
+    # bufferY = clickY - node.y - tabLineHeight + node.view.originalLine[0]
+    # We want bufferY=1, so: clickY = bufferY + node.y + tabLineHeight - node.view.originalLine[0]
+    # Note: originalLine[0] is 0 in these tests (no scrolling)
+    let
+      clickY = 1 + currentMainWindowNode.y + tabLineHeight
+      clickX = 3 + currentMainWindowNode.x + sidebarWidth + widthOfLineNum
+      # Convert to 1-based for SGR format
+      sgrY = clickY + 1
+      sgrX = clickX + 1
+
+    # Create a mouse event for button 1 press at the calculated position
+    let input = "\e[<0;" & $sgrX & ";" & $sgrY & "M"
+    check parseMouseEvent(input) == true
+
+    # Handle the mouse event
+    status.handleMouseEvent
+
+    # Verify cursor moved to the clicked position
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 3
+
+  test "Click beyond the last line":
+    var status = initEditorStatus().get
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["line 1", "line 2"].toSeqRunes.toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    let
+      tabLineHeight = if status.settings.tabLine.enable: 1 else: 0
+      sidebarWidth = currentMainWindowNode.view.sidebarWidth
+      widthOfLineNum = currentMainWindowNode.view.widthOfLineNum
+      # Click at buffer line 10 (beyond the 2 lines in buffer)
+      clickY = 10 + currentMainWindowNode.y + tabLineHeight
+      clickX = 0 + currentMainWindowNode.x + sidebarWidth + widthOfLineNum
+      sgrY = clickY + 1
+      sgrX = clickX + 1
+
+    let input = "\e[<0;" & $sgrX & ";" & $sgrY & "M"
+    check parseMouseEvent(input) == true
+
+    status.handleMouseEvent
+
+    # Should move to the last line
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0
+
+  test "Click beyond the end of a line":
+    var status = initEditorStatus().get
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["abc", "def"].toSeqRunes.toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    let
+      tabLineHeight = if status.settings.tabLine.enable: 1 else: 0
+      sidebarWidth = currentMainWindowNode.view.sidebarWidth
+      widthOfLineNum = currentMainWindowNode.view.widthOfLineNum
+
+      clickY = 0 + currentMainWindowNode.y + tabLineHeight # First line
+      clickX = 10 + currentMainWindowNode.x + sidebarWidth + widthOfLineNum
+        # Beyond "abc"
+      sgrY = clickY + 1
+      sgrX = clickX + 1
+
+    let input = "\e[<0;" & $sgrX & ";" & $sgrY & "M"
+    check parseMouseEvent(input) == true
+
+    status.handleMouseEvent
+
+    # Should move to the end of the line (column 2 for "abc")
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 2
+
+  test "Click on empty line":
+    var status = initEditorStatus().get
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["abc", "", "def"].toSeqRunes.toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    let
+      tabLineHeight = if status.settings.tabLine.enable: 1 else: 0
+      sidebarWidth = currentMainWindowNode.view.sidebarWidth
+      widthOfLineNum = currentMainWindowNode.view.widthOfLineNum
+
+      clickY = 1 + currentMainWindowNode.y + tabLineHeight # Second line (empty)
+      clickX = 5 + currentMainWindowNode.x + sidebarWidth + widthOfLineNum
+      sgrY = clickY + 1
+      sgrX = clickX + 1
+
+    let input = "\e[<0;" & $sgrX & ";" & $sgrY & "M"
+    check parseMouseEvent(input) == true
+
+    status.handleMouseEvent
+
+    # Should move to the empty line at column 0
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 0
+
+  test "Click at the beginning of a line":
+    var status = initEditorStatus().get
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["line 1", "line 2"].toSeqRunes.toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    # Set cursor to somewhere else first
+    currentMainWindowNode.currentLine = 1
+    currentMainWindowNode.currentColumn = 5
+
+    let
+      tabLineHeight = if status.settings.tabLine.enable: 1 else: 0
+      sidebarWidth = currentMainWindowNode.view.sidebarWidth
+      widthOfLineNum = currentMainWindowNode.view.widthOfLineNum
+
+      clickY = 0 + currentMainWindowNode.y + tabLineHeight # First line
+      clickX = 0 + currentMainWindowNode.x + sidebarWidth + widthOfLineNum # Column 0
+      sgrY = clickY + 1
+      sgrX = clickX + 1
+
+    let input = "\e[<0;" & $sgrX & ";" & $sgrY & "M"
+    check parseMouseEvent(input) == true
+
+    status.handleMouseEvent
+
+    # Should move to line 0, column 0
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+
+  test "Click with tab line disabled":
+    var status = initEditorStatus().get
+    status.settings.tabLine.enable = false
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["line 1", "line 2"].toSeqRunes.toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    let
+      tabLineHeight = if status.settings.tabLine.enable: 1 else: 0
+      sidebarWidth = currentMainWindowNode.view.sidebarWidth
+      widthOfLineNum = currentMainWindowNode.view.widthOfLineNum
+
+      clickY = 1 + currentMainWindowNode.y + tabLineHeight # Second line
+      clickX = 2 + currentMainWindowNode.x + sidebarWidth + widthOfLineNum
+      sgrY = clickY + 1
+      sgrX = clickX + 1
+
+    let input = "\e[<0;" & $sgrX & ";" & $sgrY & "M"
+    check parseMouseEvent(input) == true
+
+    status.handleMouseEvent
+
+    check currentMainWindowNode.currentLine == 1
+    check currentMainWindowNode.currentColumn == 2
+
+  test "Click on last character of a line":
+    var status = initEditorStatus().get
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["abcdef"].toSeqRunes.toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    let
+      tabLineHeight = if status.settings.tabLine.enable: 1 else: 0
+      sidebarWidth = currentMainWindowNode.view.sidebarWidth
+      widthOfLineNum = currentMainWindowNode.view.widthOfLineNum
+
+      clickY = 0 + currentMainWindowNode.y + tabLineHeight
+      clickX = 5 + currentMainWindowNode.x + sidebarWidth + widthOfLineNum # Last char
+      sgrY = clickY + 1
+      sgrX = clickX + 1
+
+    let input = "\e[<0;" & $sgrX & ";" & $sgrY & "M"
+    check parseMouseEvent(input) == true
+
+    status.handleMouseEvent
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 5
+
+  test "Ignore non-left-button events":
+    var status = initEditorStatus().get
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["line 1", "line 2"].toSeqRunes.toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    # Set initial cursor position
+    currentMainWindowNode.currentLine = 0
+    currentMainWindowNode.currentColumn = 0
+
+    let
+      tabLineHeight = if status.settings.tabLine.enable: 1 else: 0
+      sidebarWidth = currentMainWindowNode.view.sidebarWidth
+      widthOfLineNum = currentMainWindowNode.view.widthOfLineNum
+
+      clickY = 1 + currentMainWindowNode.y + tabLineHeight
+      clickX = 3 + currentMainWindowNode.x + sidebarWidth + widthOfLineNum
+      sgrY = clickY + 1
+      sgrX = clickX + 1
+
+    # Button 2 (middle button) press - should be ignored
+    let input = "\e[<1;" & $sgrX & ";" & $sgrY & "M"
+    check parseMouseEvent(input) == true
+
+    status.handleMouseEvent
+
+    # Cursor should not have moved
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0
+
+  test "Click on single character line":
+    var status = initEditorStatus().get
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["a"].toSeqRunes.toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    let
+      tabLineHeight = if status.settings.tabLine.enable: 1 else: 0
+      sidebarWidth = currentMainWindowNode.view.sidebarWidth
+      widthOfLineNum = currentMainWindowNode.view.widthOfLineNum
+
+      clickY = 0 + currentMainWindowNode.y + tabLineHeight
+      clickX = 0 + currentMainWindowNode.x + sidebarWidth + widthOfLineNum
+      sgrY = clickY + 1
+      sgrX = clickX + 1
+
+    let input = "\e[<0;" & $sgrX & ";" & $sgrY & "M"
+    check parseMouseEvent(input) == true
+
+    status.handleMouseEvent
+
+    check currentMainWindowNode.currentLine == 0
+    check currentMainWindowNode.currentColumn == 0

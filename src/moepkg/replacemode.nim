@@ -1,6 +1,6 @@
 #[###################### GNU General Public License 3.0 ######################]#
 #                                                                              #
-#  Copyright (C) 2017─2023 Shuhei Nogawa                                       #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
 #                                                                              #
 #  This program is free software: you can redistribute it and/or modify        #
 #  it under the terms of the GNU General Public License as published by        #
@@ -105,7 +105,7 @@ proc undoOrMoveCursor(bufStatus: var BufferStatus, windowNode: var WindowNode) =
 proc isReplaceModeCommand*(command: Runes): InputState =
   result = InputState.Invalid
 
-  if isCtrlC(command) or command.len == 1:
+  if isCtrlC(command) or isMouseEvent(command) or command.len == 1:
     return InputState.Valid
 
 # TODO: Fix replace mode
@@ -113,6 +113,15 @@ proc execReplaceModeCommand*(status: var EditorStatus, command: Runes) =
   if undoLastSuitId.isNone:
     # Init undo/redo history for the replace mode.
     undoLastSuitId = some(currentBufStatus.buffer.lastSuitId)
+
+  # Handle mouse events
+  if isMouseEvent(command):
+    let beforePosition = currentMainWindowNode.bufferPosition
+    status.handleMouseEvent
+    if beforePosition != currentMainWindowNode.bufferPosition:
+      # Update undo history
+      undoLastSuitId = some(currentBufStatus.buffer.lastSuitId)
+    return
 
   let key = command[0]
 
