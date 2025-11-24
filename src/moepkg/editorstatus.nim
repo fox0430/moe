@@ -1960,6 +1960,7 @@ proc getKeyFromCommandLine*(status: var EditorStatus): Rune =
   return key.get
 
 proc handleMouseEvent*(status: EditorStatus) =
+  ## Handle mouse event and move cursor
   let mouseEvent = getLastMouseEvent()
   if mouseEvent.isSome:
     let event = mouseEvent.get
@@ -1972,7 +1973,6 @@ proc handleMouseEvent*(status: EditorStatus) =
         clickX = event.x.int
 
       let node = currentMainWindowNode
-
       # Convert screen coordinates to buffer coordinates
       # clickY is screen coordinate (0-based)
       # node.y is window starting position on screen
@@ -2001,12 +2001,16 @@ proc handleMouseEvent*(status: EditorStatus) =
         let lineLen = currentBufStatus.buffer[targetLine].len
         if bufferX >= 0 and bufferX < lineLen:
           node.currentColumn = bufferX
+          node.expandedColumn = bufferX
         elif lineLen > 0:
           node.currentColumn = lineLen - 1
+          node.expandedColumn = lineLen - 1
         else:
           node.currentColumn = 0
+          node.expandedColumn = 0
 
 proc handleMouseEventCommandLine*(status: EditorStatus) =
+  ## Handle mouse event and move cursor in command line.
   let mouseEvent = getLastMouseEvent()
   if mouseEvent.isSome:
     let event = mouseEvent.get
