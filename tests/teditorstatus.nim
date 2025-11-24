@@ -28,7 +28,7 @@ import
   moepkg/[
     editor, gapbuffer, bufferstatus, editorview, unicodeext, build, highlight,
     windownode, movement, backgroundprocess, syntaxcheck, independentutils, tabline,
-    settings, visualmode, statusline, buffercache
+    settings, visualmode, statusline, buffercache,
   ]
 
 import utils
