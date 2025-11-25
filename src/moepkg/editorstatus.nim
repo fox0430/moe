@@ -1972,6 +1972,17 @@ proc handleMouseEvent*(status: EditorStatus) =
         clickY = event.y.int
         clickX = event.x.int
 
+      # Find which window was clicked
+      let clickedWindow = mainWindowNode.findWindowByPosition(clickY, clickX)
+      if clickedWindow.isNone:
+        return
+
+      let targetNode = clickedWindow.get
+
+      # Switch to the clicked window if different from current
+      if targetNode.windowIndex != currentMainWindowNode.windowIndex:
+        status.moveCurrentMainWindow(targetNode.windowIndex)
+
       let node = currentMainWindowNode
       # Convert screen coordinates to buffer coordinates
       # clickY is screen coordinate (0-based)
