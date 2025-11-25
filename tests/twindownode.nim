@@ -21,7 +21,7 @@ import std/[unittest, options]
 
 import pkg/results
 
-import moepkg/[editorstatus, editorview, independentutils]
+import moepkg/[editorstatus, editorview, independentutils, jumplist]
 
 import utils
 
@@ -211,3 +211,136 @@ suite "windownode: moveCursor":
     check currentMainWindowNode.cursor.x == 5
     check currentMainWindowNode.y == beforeWindowPosition.y
     check currentMainWindowNode.x == beforeWindowPosition.x
+
+suite "windownode: findWindowByPosition":
+  test "Single window - inside":
+    var status = initEditorStatus().get
+    discard status.addNewBufferInCurrentWin.get
+    status.resize(100, 100)
+
+    let
+      node = currentMainWindowNode
+      found = mainWindow.root.findWindowByPosition(node.y + 1, node.x + 1)
+
+    check found.isSome
+    check found.get.windowIndex == 0
+
+  test "Single window - outside":
+    var status = initEditorStatus().get
+    discard status.addNewBufferInCurrentWin.get
+    status.resize(100, 100)
+
+    # Position outside all windows
+    let found = mainWindow.root.findWindowByPosition(1000, 1000)
+
+    check found.isNone
+
+  test "Vertical split - find left window":
+    var status = initEditorStatus().get
+    discard status.addNewBufferInCurrentWin.get
+    status.resize(100, 100)
+
+    assert status.verticalSplitWindow.isOk
+    status.resize(100, 100)
+
+    let
+      nodes = mainWindow.root.getAllWindowNode
+      leftNode = nodes[0]
+      # Click inside left window
+      found = mainWindow.root.findWindowByPosition(leftNode.y + 1, leftNode.x + 1)
+
+    check found.isSome
+    check found.get.windowIndex == leftNode.windowIndex
+
+  test "Vertical split - find right window":
+    var status = initEditorStatus().get
+    discard status.addNewBufferInCurrentWin.get
+    status.resize(100, 100)
+
+    assert status.verticalSplitWindow.isOk
+    status.resize(100, 100)
+
+    let
+      nodes = mainWindow.root.getAllWindowNode
+      rightNode = nodes[1]
+      # Click inside right window
+      found = mainWindow.root.findWindowByPosition(rightNode.y + 1, rightNode.x + 1)
+
+    check found.isSome
+    check found.get.windowIndex == rightNode.windowIndex
+
+  test "Horizontal split - find top window":
+    var status = initEditorStatus().get
+    discard status.addNewBufferInCurrentWin.get
+    status.resize(100, 100)
+
+    assert status.horizontalSplitWindow.isOk
+    status.resize(100, 100)
+
+    let
+      nodes = mainWindow.root.getAllWindowNode
+      topNode = nodes[0]
+      # Click inside top window
+      found = mainWindow.root.findWindowByPosition(topNode.y + 1, topNode.x + 1)
+
+    check found.isSome
+    check found.get.windowIndex == topNode.windowIndex
+
+  test "Horizontal split - find bottom window":
+    var status = initEditorStatus().get
+    discard status.addNewBufferInCurrentWin.get
+    status.resize(100, 100)
+
+    assert status.horizontalSplitWindow.isOk
+    status.resize(100, 100)
+
+    let
+      nodes = mainWindow.root.getAllWindowNode
+      bottomNode = nodes[1]
+      # Click inside bottom window
+      found = mainWindow.root.findWindowByPosition(bottomNode.y + 1, bottomNode.x + 1)
+
+    check found.isSome
+    check found.get.windowIndex == bottomNode.windowIndex
+
+  test "Window boundary - at exact position":
+    var status = initEditorStatus().get
+    discard status.addNewBufferInCurrentWin.get
+    status.resize(100, 100)
+
+    let
+      node = currentMainWindowNode
+      # Click at exact window boundary (y, x)
+      found = mainWindow.root.findWindowByPosition(node.y, node.x)
+
+    check found.isSome
+    check found.get.windowIndex == 0
+
+suite "windownode: jumpList initialization":
+  test "verticalSplit initializes jumpList":
+    var status = initEditorStatus().get
+    discard status.addNewBufferInCurrentWin.get
+    status.resize(100, 100)
+
+    assert status.verticalSplitWindow.isOk
+    status.resize(100, 100)
+
+    let nodes = mainWindow.root.getAllWindowNode
+    for node in nodes:
+      # This should not crash - jumpList should be initialized
+      node.jumpList.add(0, @[], BufferPosition(line: 0, column: 0))
+      check node.jumpList.history.len == 1
+
+  test "horizontalSplit initializes jumpList":
+    var status = initEditorStatus().get
+    discard status.addNewBufferInCurrentWin.get
+    status.resize(100, 100)
+
+    assert status.horizontalSplitWindow.isOk
+    status.resize(100, 100)
+
+    let nodes = mainWindow.root.getAllWindowNode
+    for node in nodes:
+      # This should not crash - jumpList should be initialized
+      node.jumpList.add(0, @[], BufferPosition(line: 0, column: 0))
+      check node.jumpList.history.len == 1
