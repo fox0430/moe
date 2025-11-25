@@ -1732,3 +1732,77 @@ suite "handleMouseEvent":
 
     check currentMainWindowNode.currentLine == 0
     check currentMainWindowNode.currentColumn == 0
+
+  test "Click to switch window in vertical split":
+    var status = initEditorStatus().get
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["left window"].toSeqRunes.toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    # Split vertically
+    assert status.verticalSplitWindow.isOk
+    status.resize(100, 100)
+    status.update
+
+    # Now we have 2 windows. After split, the left one (index 0) is focused.
+    check currentMainWindowNode.windowIndex == 0
+
+    let rightWindowNode = mainWindowNode.searchByWindowIndex(1)
+    check rightWindowNode.windowIndex == 1
+
+    # Click on the right window
+    let
+      tabLineHeight = if status.settings.tabLine.enable: 1 else: 0
+      clickY = rightWindowNode.y + tabLineHeight + 1
+      clickX =
+        rightWindowNode.x + rightWindowNode.view.sidebarWidth +
+        rightWindowNode.view.widthOfLineNum + 1
+      sgrY = clickY + 1
+      sgrX = clickX + 1
+
+    let input = "\e[<0;" & $sgrX & ";" & $sgrY & "M"
+    check parseMouseEvent(input) == true
+
+    status.handleMouseEvent
+
+    # Should have switched to the right window
+    check currentMainWindowNode.windowIndex == 1
+
+  test "Click to switch window in horizontal split":
+    var status = initEditorStatus().get
+    discard status.addNewBufferInCurrentWin.get
+    currentBufStatus.buffer = @["top window"].toSeqRunes.toGapBuffer
+
+    status.resize(100, 100)
+    status.update
+
+    # Split horizontally
+    assert status.horizontalSplitWindow.isOk
+    status.resize(100, 100)
+    status.update
+
+    # Now we have 2 windows. After split, the top one (index 0) is focused.
+    check currentMainWindowNode.windowIndex == 0
+
+    let bottomWindowNode = mainWindowNode.searchByWindowIndex(1)
+    check bottomWindowNode.windowIndex == 1
+
+    # Click on the bottom window
+    let
+      tabLineHeight = if status.settings.tabLine.enable: 1 else: 0
+      clickY = bottomWindowNode.y + tabLineHeight + 1
+      clickX =
+        bottomWindowNode.x + bottomWindowNode.view.sidebarWidth +
+        bottomWindowNode.view.widthOfLineNum + 1
+      sgrY = clickY + 1
+      sgrX = clickX + 1
+
+    let input = "\e[<0;" & $sgrX & ";" & $sgrY & "M"
+    check parseMouseEvent(input) == true
+
+    status.handleMouseEvent
+
+    # Should have switched to the bottom window
+    check currentMainWindowNode.windowIndex == 1
