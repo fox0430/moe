@@ -418,15 +418,6 @@ proc getAllWindowNode*(root: WindowNode): seq[WindowNode] =
         for node in node.child:
           qeue.push(node)
 
-proc findWindowByPosition*(root: WindowNode, y, x: int): Option[WindowNode] =
-  ## Find the window node that contains the given screen coordinates.
-  ## Returns none if no window contains the position.
-  for node in root.getAllWindowNode:
-    if y >= node.y and y < node.y + node.h and x >= node.x and x < node.x + node.w:
-      return some(node)
-
-  return none(WindowNode)
-
 proc getAllBufferIndex*(root: WindowNode): seq[int] =
   var qeue = initHeapQueue[WindowNode]()
   for node in root.child:
