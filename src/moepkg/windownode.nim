@@ -65,6 +65,7 @@ proc initWindowNode*(): Result[WindowNode, string] =
       child: @[node],
       splitType: SplitType.vertical,
       window: some(win.get),
+      jumpList: initJumpList(),
       y: 0,
       x: 0,
       h: 1,
@@ -95,6 +96,7 @@ proc verticalSplit*[T](n: var WindowNode, buffer: T): WindowNode =
       child: @[],
       splitType: SplitType.vertical,
       view: initEditorView(buffer, 1, 1),
+      jumpList: initJumpList(),
       bufferIndex: n.bufferIndex,
       h: 1,
       w: 1,
@@ -116,6 +118,7 @@ proc verticalSplit*[T](n: var WindowNode, buffer: T): WindowNode =
         child: @[],
         splitType: SplitType.vertical,
         view: initEditorView(buffer, 1, 1),
+        jumpList: initJumpList(),
         bufferIndex: n.bufferIndex,
       )
       node2 = WindowNode(
@@ -123,6 +126,7 @@ proc verticalSplit*[T](n: var WindowNode, buffer: T): WindowNode =
         child: @[],
         splitType: SplitType.vertical,
         view: initEditorView(buffer, 1, 1),
+        jumpList: initJumpList(),
         bufferIndex: n.bufferIndex,
       )
 
@@ -152,6 +156,7 @@ proc horizontalSplit*[T](n: var WindowNode, buffer: T): WindowNode =
       child: @[],
       splitType: SplitType.horizontal,
       view: initEditorView(buffer, 1, 1),
+      jumpList: initJumpList(),
       bufferIndex: n.bufferIndex,
     )
 
@@ -171,6 +176,7 @@ proc horizontalSplit*[T](n: var WindowNode, buffer: T): WindowNode =
       child: @[],
       splitType: SplitType.vertical,
       view: initEditorView(buffer, 1, 1),
+      jumpList: initJumpList(),
       bufferIndex: n.bufferIndex,
     )
 
@@ -191,6 +197,7 @@ proc horizontalSplit*[T](n: var WindowNode, buffer: T): WindowNode =
         child: @[],
         splitType: SplitType.vertical,
         view: initEditorView(buffer, 1, 1),
+        jumpList: initJumpList(),
         bufferIndex: n.bufferIndex,
       )
       node2 = WindowNode(
@@ -198,6 +205,7 @@ proc horizontalSplit*[T](n: var WindowNode, buffer: T): WindowNode =
         child: @[],
         splitType: SplitType.vertical,
         view: initEditorView(buffer, 1, 1),
+        jumpList: initJumpList(),
         bufferIndex: n.bufferIndex,
       )
 
