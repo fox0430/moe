@@ -1961,6 +1961,9 @@ proc getKeyFromCommandLine*(status: var EditorStatus): Rune =
 
 proc handleMouseEvent*(status: EditorStatus) =
   ## Handle mouse event and move cursor
+  if not status.settings.standard.mouse:
+    return
+
   let mouseEvent = getLastMouseEvent()
   if mouseEvent.isSome:
     let event = mouseEvent.get
@@ -2022,6 +2025,9 @@ proc handleMouseEvent*(status: EditorStatus) =
 
 proc handleMouseEventCommandLine*(status: EditorStatus) =
   ## Handle mouse event and move cursor in command line.
+  if not status.settings.standard.mouse:
+    return
+
   let mouseEvent = getLastMouseEvent()
   if mouseEvent.isSome:
     let event = mouseEvent.get

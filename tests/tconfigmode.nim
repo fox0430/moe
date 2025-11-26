@@ -55,7 +55,7 @@ suite "Config mode: Init buffer":
         "  insertModeCursor         blinkIbeam", "  liveReloadOfConf         false",
         "  incrementalSearch        true", "  popupWindowInExmode      true",
         "  autoDeleteParen          false", "  liveReloadOfFile         false",
-        "  colorMode                24bit",
+        "  colorMode                24bit", "  mouse                    true",
       ].toSeqRunes
 
     for index, line in buffer:

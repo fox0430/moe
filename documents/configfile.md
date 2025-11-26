@@ -99,6 +99,7 @@ You can use the example -> https://github.com/fox0430/moe/blob/develop/example
 | incrementalSearch | bool | false | Enable incremental search |
 | popUpWindowInExmode | bool | true | Show Pop-up window in Ex mode |
 | colorMode | TerminalColorMode | 24bit | Terminal color mode |
+| mouse | bool | true | Enable mouse cursor movement |
 
 
 ### Clipboard table

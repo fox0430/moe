@@ -50,6 +50,7 @@ incrementalSearch = false
 popupWindowInExmode = false
 autoDeleteParen = false
 colorMode = "none"
+mouse = false
 
 [Clipboard]
 enable = false
@@ -542,6 +543,7 @@ suite "settings: Parse configuration file":
     check not settings.standard.popupWindowInExmode
     check not settings.standard.autoDeleteParen
     check settings.standard.colorMode == ColorMode.none
+    check not settings.standard.mouse
 
     check not settings.clipboard.enable
     check settings.clipboard.tool == ClipboardTool.xclip

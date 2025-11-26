@@ -49,6 +49,7 @@ type
     autoDeleteParen
     liveReloadOfFile
     colorMode
+    mouse
 
   ClipboardTableNames {.pure.} = enum
     enable
@@ -293,6 +294,8 @@ proc getStandardTableSettingValues(settings: EditorSettings, name: string): seq[
       currentVal = settings.standard.autoDeleteParen
     of "liveReloadOfFile":
       currentVal = settings.standard.liveReloadOfFile
+    of "mouse":
+      currentVal = settings.standard.mouse
     else:
       return
 
@@ -766,6 +769,8 @@ proc changeStandardTableSetting(
     settings.standard.liveReloadOfFile = parseBool(settingVal)
   of "colorMode":
     settings.standard.colorMode = parseColorMode(settingVal).get
+  of "mouse":
+    settings.standard.mouse = parseBool(settingVal)
   else:
     discard
 
@@ -1115,7 +1120,7 @@ proc getSettingType(table, name: string): SettingType =
         "indentationLines", "autoCloseParen", "autoIndent", "ignorecase", "smartcase",
         "disableChangeCursor", "liveReloadOfConf", "incrementalSearch",
         "popupWindowInExmode", "autoDeleteParen", "systemClipboard", "smoothScroll",
-        "liveReloadOfFile", "sidebar":
+        "liveReloadOfFile", "sidebar", "mouse":
       result = SettingType.bool
     of "tabStop", "smoothScrollMaxDelay":
       result = SettingType.number
@@ -1744,6 +1749,8 @@ proc initStandardTableBuffer(settings: EditorSettings): seq[Runes] =
       result.add(ru nameStr & space & $settings.standard.liveReloadOfFile)
     of "colorMode":
       result.add(ru nameStr & space & settings.standard.colorMode.toConfigStr)
+    of "mouse":
+      result.add(ru nameStr & space & $settings.standard.mouse)
 
 proc initClipBoardTableBuffer(settings: ClipboardSettings): seq[Runes] =
   result.add(ru"ClipBoard")
