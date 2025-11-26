@@ -28,7 +28,7 @@ import pkg/results
 
 import
   types, buffer, motion, keybindings, modes, cursor, search_utils, clipboard, config,
-  logger, unicode_utils
+  logger, unicode_utils, registers
 
 import command_handlers/[visual_commands, insert_commands, normal_commands]
 
@@ -93,6 +93,7 @@ type
     bcVisualMoveUp = "visual.move.up"
     bcVisualMoveDown = "visual.move.down"
     bcVisualDelete = "visual.delete"
+    bcVisualYank = "visual.yank"
 
   ## Command ID can be builtin or custom
   CommandIdKind* = enum
@@ -300,12 +301,23 @@ proc executeOperatorOnRange(
   of OpYank:
     # Yank (copy) the range
     let text = extractRangeText(ctx.buffer, range)
+
+    # Store in register system
+    if ctx.state.pendingRegister.isSome and ctx.state.pendingRegister.get != '\0':
+      let regName = ctx.state.pendingRegister.get
+      if regName.isNamedRegisterName:
+        discard ctx.state.registers.setNamedRegister(regName, text, range.isLinewise)
+      elif regName.isClipboardRegisterName:
+        ctx.state.registers.setClipboardRegister(text, range.isLinewise)
+      else:
+        ctx.state.registers.setYankedRegister(text, range.isLinewise)
+      ctx.state.pendingRegister = none(char)
+    else:
+      ctx.state.registers.setYankedRegister(text, range.isLinewise)
+
+    # Also update legacy register for backward compatibility
     ctx.state.yankRegister = text
     ctx.state.yankIsLine = range.isLinewise
-
-    # Also write to system clipboard if enabled
-    if ctx.clipboardConfig.enable:
-      discard writeToClipboard(ctx.clipboardConfig.tool, text)
 
     let lineCount =
       if range.isLinewise:
@@ -323,12 +335,23 @@ proc executeOperatorOnRange(
   of OpDelete:
     # Delete the range (and yank it)
     let text = extractRangeText(ctx.buffer, range)
+
+    # Store in register system
+    if ctx.state.pendingRegister.isSome and ctx.state.pendingRegister.get != '\0':
+      let regName = ctx.state.pendingRegister.get
+      if regName.isNamedRegisterName:
+        discard ctx.state.registers.setNamedRegister(regName, text, range.isLinewise)
+      elif regName.isClipboardRegisterName:
+        ctx.state.registers.setClipboardRegister(text, range.isLinewise)
+      else:
+        ctx.state.registers.setDeletedRegister(text, range.isLinewise)
+      ctx.state.pendingRegister = none(char)
+    else:
+      ctx.state.registers.setDeletedRegister(text, range.isLinewise)
+
+    # Also update legacy register for backward compatibility
     ctx.state.yankRegister = text
     ctx.state.yankIsLine = range.isLinewise
-
-    # Also write to system clipboard if enabled
-    if ctx.clipboardConfig.enable:
-      discard writeToClipboard(ctx.clipboardConfig.tool, text)
 
     # Delete the text
     let delResult = deleteRange(ctx.buffer, range)
@@ -371,6 +394,21 @@ proc executeOperatorOnRange(
   of OpChange:
     # Change the range (delete and enter insert mode)
     let text = extractRangeText(ctx.buffer, range)
+
+    # Store in register system (change also yanks before deleting)
+    if ctx.state.pendingRegister.isSome and ctx.state.pendingRegister.get != '\0':
+      let regName = ctx.state.pendingRegister.get
+      if regName.isNamedRegisterName:
+        discard ctx.state.registers.setNamedRegister(regName, text, range.isLinewise)
+      elif regName.isClipboardRegisterName:
+        ctx.state.registers.setClipboardRegister(text, range.isLinewise)
+      else:
+        ctx.state.registers.setDeletedRegister(text, range.isLinewise)
+      ctx.state.pendingRegister = none(char)
+    else:
+      ctx.state.registers.setDeletedRegister(text, range.isLinewise)
+
+    # Also update legacy register for backward compatibility
     ctx.state.yankRegister = text
     ctx.state.yankIsLine = range.isLinewise
 
@@ -1024,6 +1062,11 @@ proc handleVisualDelete(ctx: CommandContext): Result[(), string] =
   visualDelete(ctx.buffer, ctx.state)
   Result[(), string].ok ()
 
+proc handleVisualYank(ctx: CommandContext): Result[(), string] =
+  ## Yank (copy) visual selection
+  visualYank(ctx.buffer, ctx.state)
+  Result[(), string].ok ()
+
 ## Clipboard command handlers
 
 proc handleClipboardCopy(ctx: CommandContext): Result[(), string] =
@@ -1077,23 +1120,41 @@ proc handlePasteAfter(ctx: CommandContext, count: int = 1): Result[(), string] =
   logDebug("paste", "handlePasteAfter called with count=" & $count)
   let actualCount = max(1, count)
 
-  # First try to use internal yank register
-  var pasteText = ctx.state.yankRegister
-  var isFullLine = ctx.state.yankIsLine
+  # Get content from register system
+  var pasteText: string
+  var isFullLine: bool
+
+  if ctx.state.pendingRegister.isSome and ctx.state.pendingRegister.get != '\0':
+    # User specified a register with "
+    let regName = ctx.state.pendingRegister.get
+    let reg = ctx.state.registers.getRegister(regName)
+    pasteText = reg.getContent()
+    isFullLine = reg.isLine
+    ctx.state.pendingRegister = none(char)
+    ctx.state.statusMessage = ""
+    logDebug("paste", "Using register '" & $regName & "', length: " & $pasteText.len)
+  else:
+    # Use unnamed register (most recent yank/delete)
+    let reg = ctx.state.registers.getNoNamedRegister()
+    pasteText = reg.getContent()
+    isFullLine = reg.isLine
+    # Also check legacy register for backward compatibility
+    if pasteText.len == 0:
+      pasteText = ctx.state.yankRegister
+      isFullLine = ctx.state.yankIsLine
+    logDebug("paste", "Using unnamed register, length: " & $pasteText.len)
 
   logDebug(
-    "paste",
-    "Using internal register, length: " & $pasteText.len & ", isLine=" & $isFullLine,
+    "paste", "Paste content length: " & $pasteText.len & ", isLine=" & $isFullLine
   )
 
-  # If internal register is empty, try system clipboard (if enabled)
+  # If register is empty, try system clipboard (if enabled)
   if pasteText.len == 0 and ctx.clipboardConfig.enable:
-    logDebug("paste", "Internal register empty, trying clipboard")
+    logDebug("paste", "Register empty, trying clipboard")
     let readResult = readFromClipboard(ctx.clipboardConfig.tool)
     if readResult.isErr:
       return err(
-        "Nothing to paste (yank register empty and clipboard error: " & readResult.error &
-          ")"
+        "Nothing to paste (register empty and clipboard error: " & readResult.error & ")"
       )
 
     pasteText = readResult.value
@@ -1172,23 +1233,41 @@ proc handlePasteBefore(ctx: CommandContext, count: int = 1): Result[(), string] 
   logDebug("paste", "handlePasteBefore called with count=" & $count)
   let actualCount = max(1, count)
 
-  # First try to use internal yank register
-  var pasteText = ctx.state.yankRegister
-  var isFullLine = ctx.state.yankIsLine
+  # Get content from register system
+  var pasteText: string
+  var isFullLine: bool
+
+  if ctx.state.pendingRegister.isSome and ctx.state.pendingRegister.get != '\0':
+    # User specified a register with "
+    let regName = ctx.state.pendingRegister.get
+    let reg = ctx.state.registers.getRegister(regName)
+    pasteText = reg.getContent()
+    isFullLine = reg.isLine
+    ctx.state.pendingRegister = none(char)
+    ctx.state.statusMessage = ""
+    logDebug("paste", "Using register '" & $regName & "', length: " & $pasteText.len)
+  else:
+    # Use unnamed register (most recent yank/delete)
+    let reg = ctx.state.registers.getNoNamedRegister()
+    pasteText = reg.getContent()
+    isFullLine = reg.isLine
+    # Also check legacy register for backward compatibility
+    if pasteText.len == 0:
+      pasteText = ctx.state.yankRegister
+      isFullLine = ctx.state.yankIsLine
+    logDebug("paste", "Using unnamed register, length: " & $pasteText.len)
 
   logDebug(
-    "paste",
-    "Using internal register, length: " & $pasteText.len & ", isLine=" & $isFullLine,
+    "paste", "Paste content length: " & $pasteText.len & ", isLine=" & $isFullLine
   )
 
-  # If internal register is empty, try system clipboard (if enabled)
+  # If register is empty, try system clipboard (if enabled)
   if pasteText.len == 0 and ctx.clipboardConfig.enable:
-    logDebug("paste", "Internal register empty, trying clipboard")
+    logDebug("paste", "Register empty, trying clipboard")
     let readResult = readFromClipboard(ctx.clipboardConfig.tool)
     if readResult.isErr:
       return err(
-        "Nothing to paste (yank register empty and clipboard error: " & readResult.error &
-          ")"
+        "Nothing to paste (register empty and clipboard error: " & readResult.error & ")"
       )
 
     pasteText = readResult.value
@@ -2578,6 +2657,16 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     "Delete visual selection",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       handleVisualDelete(ctx),
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcVisualYank),
+    "Visual Yank",
+    "Yank (copy) visual selection",
+    proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
+      handleVisualYank(ctx),
     0,
     0,
   )

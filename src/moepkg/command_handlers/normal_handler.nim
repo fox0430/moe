@@ -25,7 +25,8 @@ import std/[options, strutils, tables]
 
 import pkg/results
 
-import ../[types, buffer, modes, motion, keybindings, commandregistry, config]
+import
+  ../[types, buffer, modes, motion, keybindings, commandregistry, config, registers]
 import visual_handler, insert_commands
 
 type
@@ -137,9 +138,19 @@ proc handleModeSwitch*(
     state.searchHistoryIndex = -1
     return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Search))
   of EditorMode.Visual:
-    # Initialize visual selection at current cursor position
-    state.initSelection(buffer)
+    # Initialize visual selection at current cursor position (character-wise)
+    state.initSelection(buffer, vskChar)
     return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Visual))
+  of EditorMode.VisualBlock:
+    # Initialize visual selection at current cursor position (block/column)
+    state.initSelection(buffer, vskBlock)
+    return
+      NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.VisualBlock))
+  of EditorMode.VisualLine:
+    # Initialize visual selection at current cursor position (line-wise)
+    state.initSelection(buffer, vskLine)
+    return
+      NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.VisualLine))
   of EditorMode.Replace:
     return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Replace))
   of EditorMode.Normal:
@@ -446,6 +457,35 @@ proc handleNormalModeKey*(
     state.waitingForMacroRegister = true
     state.macroCommandType = "playback"
     state.statusMessage = "@"
+    return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+
+  # Handle '"' for register selection
+  # When pendingRegister is '\0' (null), we're waiting for register name
+  # When pendingRegister is a valid register name, we proceed with the command
+  if state.pendingRegister.isSome and state.pendingRegister.get == '\0':
+    # We're waiting for a register name after "
+    if not keyCombo.isSpecial and keyCombo.modifiers == {} and keyCombo.char.len > 0:
+      let registerChar = keyCombo.char[0]
+      if isValidRegisterName(registerChar):
+        state.pendingRegister = some(registerChar)
+        state.statusMessage = "\"" & $registerChar
+        # Now wait for the actual command (y, d, p, etc.)
+        return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+      else:
+        # Invalid register name, cancel
+        state.pendingRegister = none(char)
+        state.statusMessage = ""
+        return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+    else:
+      # Cancel on special key
+      state.pendingRegister = none(char)
+      state.statusMessage = ""
+      return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+
+  # Handle '"' key to start register selection
+  if not keyCombo.isSpecial and keyCombo.modifiers == {} and keyCombo.char == "\"":
+    state.pendingRegister = some('\0') # Placeholder - next key will be actual register
+    state.statusMessage = "\""
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
 
   # Process the key (handles numeric prefixes, sequences, etc.)

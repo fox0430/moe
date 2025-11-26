@@ -25,6 +25,8 @@ type
     Insert
     Command
     Visual
+    VisualBlock
+    VisualLine
     Replace
     Search
 
@@ -38,5 +40,7 @@ proc modeLabel*(m: EditorMode): string =
   of EditorMode.Insert: "INSERT"
   of EditorMode.Command: "COMMAND"
   of EditorMode.Visual: "VISUAL"
+  of EditorMode.VisualBlock: "VISUAL BLOCK"
+  of EditorMode.VisualLine: "VISUAL LINE"
   of EditorMode.Replace: "REPLACE"
   of EditorMode.Search: "SEARCH"

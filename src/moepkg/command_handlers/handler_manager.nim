@@ -406,7 +406,7 @@ proc handleEvent*(
     # Search mode is handled differently - through text input
     # This should not be called for search mode key events
     return HandlerResult(kind: hrUnhandled)
-  of EditorMode.Visual:
+  of EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine:
     return manager.handleVisualMode(buffer, state, viewport, keyCombo)
   of EditorMode.Replace:
     return manager.handleReplaceMode(buffer, state, keyCombo)

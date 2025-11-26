@@ -21,10 +21,12 @@ import std/[options, monotimes, tables]
 
 import pkg/celina
 
-import cursor, modes, buffer
+import cursor, modes, buffer, registers
 
 # Re-export SidebarItemKind from buffer module
 export buffer.SidebarItemKind
+# Re-export registers types
+export registers
 
 type
   SidebarItem* = object ## Single cell in the sidebar
@@ -213,10 +215,17 @@ type
     of lecDedent:
       dedentCount*: int # Number of dedent levels
 
+  VisualSelectionKind* = enum
+    ## Type of visual selection
+    vskChar # Character-wise selection (v)
+    vskBlock # Block (column) selection (Ctrl-V)
+    vskLine # Line-wise selection (V)
+
   VisualSelection* = object ## Represents a visual mode selection range
     start*: BufferPosition # Selection start position (anchor)
     current*: BufferPosition # Current cursor position (selection end)
     active*: bool # Whether selection is currently active
+    kind*: VisualSelectionKind # Type of selection (char, block, line)
 
   ReplaceHistoryEntry* = object ## Replace mode history entry for undo with Backspace
     pos*: BufferPosition # Position where character was replaced
@@ -300,9 +309,13 @@ type
     searchHistory*: seq[string] # Search history (most recent first)
     searchHistoryIndex*: int
       # Current position in search history (-1 when not navigating history)
-    # Yank register (internal clipboard)
+    # Yank register (internal clipboard) - DEPRECATED: use registers instead
     yankRegister*: string # Content yanked with yy, y, etc.
     yankIsLine*: bool # Whether the yank was linewise (yy) or characterwise
+    # Full register system (vim-style)
+    registers*: Registers # All registers (", 0-9, a-z, -, *, +)
+    pendingRegister*: Option[char]
+      # Register selected with " prefix (e.g., "a for register a)
     # Macro recording (q command)
     isRecordingMacro*: bool # Whether currently recording a macro
     macroRegister*: char # Which register (a-z) is being recorded to

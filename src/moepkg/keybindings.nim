@@ -1565,7 +1565,29 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   )
   registry.bindKey(EditorMode.Normal, "?", "switch-to-search-backward")
 
-  registry.bindKey(EditorMode.Normal, "v", "switch-to-visual") # Enter visual mode
+  # Visual mode switches
+  registry.registerCommand(
+    Command(
+      name: "switch-to-visual-block",
+      description: "Switch to visual block mode",
+      kind: ctModeSwitch,
+      targetMode: EditorMode.VisualBlock,
+    )
+  )
+  registry.registerCommand(
+    Command(
+      name: "switch-to-visual-line",
+      description: "Switch to visual line mode",
+      kind: ctModeSwitch,
+      targetMode: EditorMode.VisualLine,
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "v", "switch-to-visual")
+    # Enter visual mode (character-wise)
+  registry.bindKey(EditorMode.Normal, "V", "switch-to-visual-line")
+    # Enter visual line mode
+  registry.bindKey(EditorMode.Normal, "C-v", "switch-to-visual-block")
+    # Enter visual block mode
   registry.bindKey(EditorMode.Normal, "R", "switch-to-replace") # Enter replace mode
 
   # Visual mode commands
@@ -1614,15 +1636,45 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
       args: @[],
     )
   )
+  registry.registerCommand(
+    Command(
+      name: "visual-yank",
+      description: "Yank visual selection",
+      kind: ctAction,
+      commandId: "visual.yank",
+      args: @[],
+    )
+  )
 
-  # Visual mode key bindings
+  # Visual mode key bindings (character-wise)
   registry.bindKey(EditorMode.Visual, "h", "visual-move-left")
   registry.bindKey(EditorMode.Visual, "l", "visual-move-right")
   registry.bindKey(EditorMode.Visual, "j", "visual-move-down")
   registry.bindKey(EditorMode.Visual, "k", "visual-move-up")
   registry.bindKey(EditorMode.Visual, "d", "visual-delete")
   registry.bindKey(EditorMode.Visual, "x", "visual-delete")
+  registry.bindKey(EditorMode.Visual, "y", "visual-yank")
   registry.bindKey(EditorMode.Visual, "Escape", "switch-to-normal") # Exit to normal mode
+
+  # Visual block mode key bindings (share most bindings with Visual mode via fallback)
+  registry.bindKey(EditorMode.VisualBlock, "h", "visual-move-left")
+  registry.bindKey(EditorMode.VisualBlock, "l", "visual-move-right")
+  registry.bindKey(EditorMode.VisualBlock, "j", "visual-move-down")
+  registry.bindKey(EditorMode.VisualBlock, "k", "visual-move-up")
+  registry.bindKey(EditorMode.VisualBlock, "d", "visual-delete")
+  registry.bindKey(EditorMode.VisualBlock, "x", "visual-delete")
+  registry.bindKey(EditorMode.VisualBlock, "y", "visual-yank")
+  registry.bindKey(EditorMode.VisualBlock, "Escape", "switch-to-normal")
+
+  # Visual line mode key bindings
+  registry.bindKey(EditorMode.VisualLine, "h", "visual-move-left")
+  registry.bindKey(EditorMode.VisualLine, "l", "visual-move-right")
+  registry.bindKey(EditorMode.VisualLine, "j", "visual-move-down")
+  registry.bindKey(EditorMode.VisualLine, "k", "visual-move-up")
+  registry.bindKey(EditorMode.VisualLine, "d", "visual-delete")
+  registry.bindKey(EditorMode.VisualLine, "x", "visual-delete")
+  registry.bindKey(EditorMode.VisualLine, "y", "visual-yank")
+  registry.bindKey(EditorMode.VisualLine, "Escape", "switch-to-normal")
 
   # Insert mode key bindings
   registry.bindKey(EditorMode.Insert, "Escape", "switch-to-normal") # Exit to normal mode
@@ -1640,7 +1692,7 @@ proc eventToKeyCombo*(event: celina.Event): Option[KeyCombo] =
 
   # Check if it's a character key
   if event.key.code == celina.KeyCode.Char:
-    combo = KeyCombo(isSpecial: false, char: event.key.char)
+    combo = KeyCombo(isSpecial: false, char: $event.key.char)
   else:
     # Map special keys
     case event.key.code

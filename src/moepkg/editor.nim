@@ -582,9 +582,12 @@ proc newEditor*(): Editor =
       pendingOperator: none(PendingOperator), # No pending operator initially
       pendingTextObject: none(PendingTextObject), # No pending text object initially
       savedViewportTopLine: 0, # Saved viewport position for operators
-      # Yank register (internal clipboard)
+      # Yank register (internal clipboard) - DEPRECATED
       yankRegister: "", # Empty initially
       yankIsLine: false, # Not linewise initially
+      # Full register system
+      registers: initRegisters(),
+      pendingRegister: none(char),
       # Jump list
       jumpList: @[], # Empty jump list initially
       jumpListIndex: -1, # Not navigating jump list initially
@@ -613,6 +616,10 @@ proc newEditor*(): Editor =
     result.executer.motionController, keyRegistry, cmdLineParser, cmdConfig,
     cmdRegistry, result.config.clipboard,
   )
+
+  # Set clipboard tool for register system
+  if result.config.clipboard.enable:
+    result.state.registers.setClipboardTool(result.config.clipboard.tool)
 
 proc refreshGitDiff*(e: Editor, useBuffer: bool = true) =
   ## Refresh git diff information for the active buffer
@@ -902,13 +909,17 @@ proc getSelectionStyle(
     else:
       normalStyle
 
+proc isVisualMode(mode: EditorMode): bool {.inline.} =
+  ## Check if the mode is any visual mode variant
+  mode in {EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine}
+
 proc getVisualSelection(
     e: Editor, windowActive: bool = true
 ): tuple[hasSelection: bool, selStart, selEnd: BufferPosition] =
   ## Get visual selection range if active
   ## windowActive: only show selection in active window (default true for compatibility)
   let hasSelection =
-    e.state.mode == EditorMode.Visual and e.state.visualSelection.active and windowActive
+    isVisualMode(e.state.mode) and e.state.visualSelection.active and windowActive
 
   if hasSelection:
     let (start, endPos) = e.state.visualSelection.getSelectionRange()

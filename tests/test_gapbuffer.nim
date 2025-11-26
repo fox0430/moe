@@ -224,11 +224,12 @@ suite "GapBuffer - Clear":
 
 suite "GapBuffer - Iterators":
   test "chars iterator":
+    # POSIX semantics: newlines between lines, no trailing newline for non-empty last line
     let gb = newGapBuffer("ab\ncd")
     var chars: seq[char] = @[]
     for c in gb.chars:
       chars.add(c)
-    check chars == @['a', 'b', '\n', 'c', 'd', '\n'] # Each line ends with newline
+    check chars == @['a', 'b', '\n', 'c', 'd'] # Consistent with $ operator
 
   test "lines iterator":
     let gb = newGapBuffer("first\nsecond\nthird")
@@ -690,14 +691,16 @@ suite "GapBuffer - Iterator Edge Cases":
     var charCount = 0
     for ch in gb.chars:
       charCount += 1
-    check charCount == 1 # One newline (empty line still has trailing newline)
+    # Empty buffer = 1 empty line, no characters emitted (consistent with $ returning "")
+    check charCount == 0
 
   test "iterate over single character":
+    # POSIX semantics: single non-empty line has no trailing newline
     let gb = newGapBuffer("x")
     var chars: seq[char] = @[]
     for ch in gb.chars:
       chars.add(ch)
-    check chars == @['x', '\n'] # Each line ends with newline
+    check chars == @['x'] # Consistent with $ operator
 
   test "iterate over lines with empty lines":
     let gb = newGapBuffer("\n\n")

@@ -55,11 +55,13 @@ proc newVisualModeHandler*(
     keyBindingRegistry: keyBindingRegistry, commandRegistry: commandRegistry
   )
 
-proc initSelection*(state: EditorState, buffer: TextBuffer) =
+proc initSelection*(
+    state: EditorState, buffer: TextBuffer, kind: VisualSelectionKind = vskChar
+) =
   ## Initialize visual selection at current cursor position
   let cursorPos = state.cursor
   state.visualSelection =
-    VisualSelection(start: cursorPos, current: cursorPos, active: true)
+    VisualSelection(start: cursorPos, current: cursorPos, active: true, kind: kind)
 
 proc clearSelection*(state: EditorState) =
   ## Clear the visual selection
@@ -102,18 +104,33 @@ proc isPositionInSelection*(selection: VisualSelection, pos: BufferPosition): bo
   if pos.line < selStart.line or pos.line > selEnd.line:
     return false
 
-  if pos.line == selStart.line and pos.line == selEnd.line:
-    # Selection is on a single line
-    return pos.column >= selStart.column and pos.column <= selEnd.column
-  elif pos.line == selStart.line:
-    # Position is on start line
-    return pos.column >= selStart.column
-  elif pos.line == selEnd.line:
-    # Position is on end line
-    return pos.column <= selEnd.column
-  else:
-    # Position is on a middle line
-    return true
+  case selection.kind
+  of vskBlock:
+    # Block selection: column range applies to all lines in the selection
+    let colStart = min(selection.start.column, selection.current.column)
+    let colEnd = max(selection.start.column, selection.current.column)
+    return pos.column >= colStart and pos.column <= colEnd
+  of vskLine:
+    # Line selection: entire lines are selected
+    return true # Already checked line range above
+  of vskChar:
+    # Character-wise selection
+    if pos.line == selStart.line and pos.line == selEnd.line:
+      # Selection is on a single line
+      return pos.column >= selStart.column and pos.column <= selEnd.column
+    elif pos.line == selStart.line:
+      # Position is on start line
+      return pos.column >= selStart.column
+    elif pos.line == selEnd.line:
+      # Position is on end line
+      return pos.column <= selEnd.column
+    else:
+      # Position is on a middle line
+      return true
+
+proc isVisualMode*(mode: EditorMode): bool {.inline.} =
+  ## Check if the mode is any visual mode variant
+  mode in {EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine}
 
 proc executeCommand*(
     handler: VisualModeHandler,
@@ -132,11 +149,12 @@ proc executeCommand*(
     keyBindingRegistry: handler.keyBindingRegistry,
   )
 
+  let originalMode = state.mode
   let r = handler.commandRegistry.execute(ctx, commandId, args)
   if r.isOk:
-    # Check if mode changed
+    # Check if mode changed from a visual mode to something else
     let modeTransition =
-      if state.mode != EditorMode.Visual:
+      if not isVisualMode(state.mode) or state.mode != originalMode:
         some(state.mode)
       else:
         none(EditorMode)
@@ -152,13 +170,20 @@ proc handleVisualModeKey*(
     keyCombo: KeyCombo,
 ): VisualModeResult =
   ## Main entry point for handling Visual mode key presses
+  ## Works for Visual, VisualBlock, and VisualLine modes
 
   # Special handling for ESC to clear selection
   if keyCombo.isSpecial and keyCombo.special == skEscape:
     state.clearSelection()
 
-  # Try to find a binding for this key
-  let binding = handler.keyBindingRegistry.findBinding(EditorMode.Visual, keyCombo)
+  let originalMode = state.mode
+
+  # Try to find a binding for this key in the current mode first,
+  # then fall back to Visual mode for shared bindings
+  var binding = handler.keyBindingRegistry.findBinding(state.mode, keyCombo)
+  if binding.isNone and state.mode != EditorMode.Visual:
+    # Fall back to Visual mode bindings for VisualBlock/VisualLine
+    binding = handler.keyBindingRegistry.findBinding(EditorMode.Visual, keyCombo)
 
   if binding.isNone:
     return VisualModeResult(kind: vmrUnhandled)
@@ -180,9 +205,9 @@ proc handleVisualModeKey*(
   if cmdResult.isErr:
     return VisualModeResult(kind: vmrError, errorMessage: cmdResult.error)
 
-  # Check for mode transition
+  # Check for mode transition (exiting any visual mode)
   let modeTransition =
-    if state.mode != EditorMode.Visual:
+    if not isVisualMode(state.mode) or state.mode != originalMode:
       some(state.mode)
     else:
       none(EditorMode)
