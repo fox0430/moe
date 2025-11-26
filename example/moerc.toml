@@ -46,6 +46,8 @@ liveReloadOfFile = false
 
 colorMode = "24bit"
 
+mouse = true
+
 [Clipboard]
 
 enable = true

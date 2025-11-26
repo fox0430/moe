@@ -364,6 +364,7 @@ type
     autoDeleteParen*: bool
     liveReloadOfFile*: bool
     colorMode*: ColorMode
+    mouse*: bool
 
   EditorSettings* = object
     standard*: StandardSettings
@@ -719,6 +720,7 @@ proc initStandardSettings(): StandardSettings =
   result.incrementalSearch = true
   result.popupWindowInExmode = true
   result.colorMode = checkColorSupport()
+  result.mouse = true
 
 proc initEditorSettings*(): EditorSettings =
   result.standard = initStandardSettings()
@@ -1410,6 +1412,9 @@ proc parseStandardTable(s: var EditorSettings, standardConfigs: TomlValueRef) =
 
   if standardConfigs.contains("indentationLines"):
     s.view.indentationLines = standardConfigs["indentationLines"].getBool
+
+  if standardConfigs.contains("mouse"):
+    s.standard.mouse = standardConfigs["mouse"].getBool
 
 proc parseClipboardTable(s: var EditorSettings, clipboardConfigs: TomlValueRef) =
   if clipboardConfigs.contains("enable"):
@@ -2172,7 +2177,7 @@ proc validateStandardTable(table: TomlValueRef): Option[InvalidItem] =
         "indentationLines", "autoCloseParen", "autoIndent", "ignorecase", "smartcase",
         "disableChangeCursor", "autoSave", "liveReloadOfConf", "incrementalSearch",
         "popupWindowInExmode", "autoDeleteParen", "systemClipboard", "liveReloadOfFile",
-        "sidebar":
+        "sidebar", "mouse":
       if not (val.kind == TomlValueKind.Bool):
         return some(InvalidItem(name: $key, val: $val))
     of "tabStop":
@@ -2918,6 +2923,7 @@ proc genTomlConfigStr*(settings: EditorSettings): string =
   result.addLine fmt "autoDeleteParen = {$settings.standard.autoDeleteParen }"
   result.addLine fmt "liveReloadOfFile = {$settings.standard.liveReloadOfFile}"
   result.addLine fmt "colorMode = \"{settings.standard.colorMode.toConfigStr}\""
+  result.addLine fmt "mouse = {$settings.standard.mouse}"
 
   result.addLine ""
 

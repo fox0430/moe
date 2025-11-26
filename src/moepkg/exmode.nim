@@ -76,6 +76,8 @@ proc openConfigMode(status: var EditorStatus) =
 
   status.resize
 
+  hideCursor()
+
 proc startBackupManager(status: var EditorStatus) =
   status.changeMode(currentBufStatus.prevMode)
 
