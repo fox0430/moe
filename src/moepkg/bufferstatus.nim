@@ -57,6 +57,9 @@ type
     documentSymbol
     jumpList
 
+  EditorModes* = object
+    current*, prev*: Mode
+
   CallHierarchyInfo* = object
     bufferId*: int
     items*: seq[CallHierarchyItem]
@@ -227,6 +230,9 @@ proc isBufferManagerMode*(b: BufferStatus): bool {.inline.} =
 proc isVisualMode*(mode: Mode): bool {.inline.} =
   mode == Mode.visual or mode == Mode.visualBlock or mode == Mode.visualLine
 
+proc isVisualMode*(modes: EditorModes): bool {.inline.} =
+  isVisualMode(modes.current)
+
 proc isVisualMode*(b: BufferStatus): bool {.inline.} =
   b.mode == Mode.visual or b.mode == Mode.visualBlock or b.mode == Mode.visualLine
 
@@ -274,6 +280,9 @@ proc isEditMode*(mode, prevMode: Mode): bool {.inline.} =
 
 proc isEditMode*(mode: Mode): bool {.inline.} =
   isNormalMode(mode) or isInsertMode(mode) or isVisualMode(mode) or isReplaceMode(mode)
+
+proc isEditMode*(modes: EditorModes): bool {.inline.} =
+  isEditMode(modes.current, modes.prev)
 
 proc isEditMode*(b: BufferStatus): bool {.inline.} =
   b.isNormalMode or b.isInsertMode or b.isVisualMode or b.isReplaceMode
