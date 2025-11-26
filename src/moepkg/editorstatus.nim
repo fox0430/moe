@@ -1316,6 +1316,8 @@ proc update*(status: var EditorStatus) =
   if currentBufStatus.isCursor:
     # Restore cursor after update
     showCursor()
+  else:
+    hideCursor()
 
   # Restore cursor position after update.
   if currentBufStatus.isCommandLineMode:
