@@ -51,7 +51,7 @@ type
     selectedArea*: Option[SelectedArea]
     foldingRanges*: FoldingRanges
     updated*: bool
-    editorMode*: Mode
+    editorModes*: EditorModes
     isCurrentWin*: bool
     sidebar*: Option[Sidebar]
     config*: EditorViewConfig
@@ -441,7 +441,7 @@ proc writeCurrentLine(
     currentLineColorPair: var int,
     y, x, i, last: int,
 ) =
-  if view.config.isHighlightCurrentLine and not view.editorMode.isVisualMode:
+  if view.config.isHighlightCurrentLine and not view.editorModes.isVisualMode:
     # Change background color to white if background color is editorBg
     let
       originalColorPair =
@@ -522,12 +522,12 @@ proc lineNumberColor(
     EditorColorPairIndex.lineNum
 
 template isSelectingArea(view: EditorView, viewLine: int): bool =
-  view.editorMode.isVisualMode and view.selectedArea.isSome and
+  view.editorModes.isVisualMode and view.selectedArea.isSome and
     view.originalLine[viewLine] >= view.selectedArea.get.startLine and
     view.selectedArea.get.endLine >= view.originalLine[viewLine]
 
 template isSelectingArea(view: EditorView, viewLine, originalColumn: int): bool =
-  view.editorMode.isVisualMode and view.selectedArea.isSome and
+  view.editorModes.isVisualMode and view.selectedArea.isSome and
     view.originalLine[viewLine] >= view.selectedArea.get.startLine and
     view.selectedArea.get.endLine >= view.originalLine[viewLine] and
     originalColumn >= view.selectedArea.get.startColumn and
@@ -611,7 +611,7 @@ proc writeAllLines*[T](
           )
       continue
 
-    if view.config.isIndentationLines and not view.editorMode.isConfigMode:
+    if view.config.isIndentationLines and view.editorModes.isEditMode:
       let currentOriginalLine = view.originalLine[y]
       if currentOriginalLine != lastOriginalLine:
         let line =

@@ -1167,8 +1167,9 @@ proc update*(status: var EditorStatus) =
         node.view.updateEditorViewConfig(status.settings)
 
         block updateTerminalBuffer:
-          if node.view.editorMode != b.mode:
-            node.view.editorMode = b.mode
+          if node.view.editorModes.current != b.mode:
+            node.view.editorModes.current = b.mode
+            node.view.editorModes.prev = b.prevMode
 
           if b.selectedArea.isSome and node.view.selectedArea != b.selectedArea:
             node.view.selectedArea = b.selectedArea
