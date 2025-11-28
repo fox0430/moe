@@ -123,6 +123,7 @@ proc handleModeSwitch*(
   of EditorMode.Command:
     # Initialize command mode state
     state.commandText = ":"
+    state.commandCursor = 0 # Cursor starts after the ":"
     return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Command))
   of EditorMode.Search:
     # Initialize search mode state

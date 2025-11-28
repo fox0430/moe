@@ -31,6 +31,7 @@ import types, buffer, unicode_utils
 # Rendering constants
 const
   TAB_CHAR* = 0x09.Rune ## Tab character constant
+  FULLWIDTH_SPACE* = 0x3000.Rune ## Full-width space character (U+3000)
 
   StatusLineReserve* = 1
   CommandLineReserve* = 1
@@ -89,6 +90,16 @@ let
   indentationLineStyle* = Style(
     fg: ColorValue(kind: Rgb, rgb: RgbColor(r: 70, g: 70, b: 70)),
     bg: ColorValue(kind: Default),
+    modifiers: {},
+  )
+  fullWidthSpaceStyle* = Style(
+    fg: ColorValue(kind: Default),
+    bg: ColorValue(kind: Indexed, indexed: Color.Red),
+    modifiers: {},
+  )
+  trailingSpacesStyle* = Style(
+    fg: ColorValue(kind: Default),
+    bg: ColorValue(kind: Indexed, indexed: Color.Red),
     modifiers: {},
   )
 
@@ -191,3 +202,26 @@ proc displayWidthWithTabs*(text: string, tabStop: int): int =
       result += spacesToNextTab
     else:
       result += runeWidth(rune)
+
+proc isWhitespace(rune: Rune): bool =
+  ## Check if a rune is a whitespace character (space, tab, full-width space)
+  rune == ' '.Rune or rune == TAB_CHAR or rune == FULLWIDTH_SPACE
+
+proc findTrailingSpaceStart*(text: string): int =
+  ## Find the character index where trailing spaces start.
+  ## Returns the character count (length) if no trailing spaces.
+  ## Returns 0 if the entire line is whitespace.
+  var runes: seq[Rune] = @[]
+  for r in text.runes:
+    runes.add(r)
+
+  if runes.len == 0:
+    return 0
+
+  # Scan backwards to find first non-whitespace character
+  var lastNonSpace = runes.len - 1
+  while lastNonSpace >= 0 and isWhitespace(runes[lastNonSpace]):
+    dec lastNonSpace
+
+  # Return the index after the last non-whitespace character
+  result = lastNonSpace + 1

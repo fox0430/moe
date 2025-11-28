@@ -35,12 +35,19 @@ type
     claSaveAndQuit # :wq, :x
     claSaveAllAndQuit # :wqa, :xa (save all and quit)
     claEdit # :e
+    claEnew # :ene, :enew (new empty buffer)
     claSet # :set
     claHelp # :help, :h
     claSubstitute # :s
     claGoto # :123 (go to line 123)
     claVSplit # :vs (vertical split)
     claHSplit # :sp (horizontal split)
+    claBufferNext # :bnext, :bn (next buffer)
+    claBufferPrev # :bprev, :bp (previous buffer)
+    claBufferFirst # :bfirst, :bf (first buffer)
+    claBufferLast # :blast, :bl (last buffer)
+    claBufferDelete # :bd, :bdelete (delete buffer)
+    claStripWhitespace # :stripwhitespace, :stripws (remove trailing whitespace)
     claUnknown # Unknown command
 
   ParsedCommand* = object
@@ -69,6 +76,8 @@ type
       forceSaveAllAndQuit*: bool # true for :wqa!
     of claEdit:
       editFilename*: string
+    of claEnew:
+      discard
     of claGoto:
       lineNumber*: int
     of claSet:
@@ -84,6 +93,12 @@ type
       vsplitFilename*: Option[string]
     of claHSplit:
       hsplitFilename*: Option[string]
+    of claBufferNext, claBufferPrev, claBufferFirst, claBufferLast:
+      discard
+    of claBufferDelete:
+      forceBufferDelete*: bool # true for :bd!
+    of claStripWhitespace:
+      discard
     of claUnknown:
       errorMessage*: string
 
@@ -129,6 +144,9 @@ proc loadDefaultAliases*(parser: CommandLineParser) =
   parser.addAlias("e", claEdit)
   parser.addAlias("edit", claEdit)
 
+  parser.addAlias("ene", claEnew)
+  parser.addAlias("enew", claEnew)
+
   parser.addAlias("set", claSet)
   parser.addAlias("se", claSet)
 
@@ -143,6 +161,26 @@ proc loadDefaultAliases*(parser: CommandLineParser) =
 
   parser.addAlias("sp", claHSplit)
   parser.addAlias("split", claHSplit)
+
+  parser.addAlias("bn", claBufferNext)
+  parser.addAlias("bnext", claBufferNext)
+
+  parser.addAlias("bp", claBufferPrev)
+  parser.addAlias("bprev", claBufferPrev)
+  parser.addAlias("bprevious", claBufferPrev)
+
+  parser.addAlias("bf", claBufferFirst)
+  parser.addAlias("bfirst", claBufferFirst)
+  parser.addAlias("brewind", claBufferFirst)
+
+  parser.addAlias("bl", claBufferLast)
+  parser.addAlias("blast", claBufferLast)
+
+  parser.addAlias("bd", claBufferDelete)
+  parser.addAlias("bdelete", claBufferDelete)
+
+  parser.addAlias("stripwhitespace", claStripWhitespace)
+  parser.addAlias("stripws", claStripWhitespace)
 
 proc parseCommandLine*(parser: CommandLineParser, input: string): ParsedCommand =
   ## Parse a command line input string into a structured command
@@ -228,6 +266,8 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
       return CommandLineResult(kind: claEdit, editFilename: cmd.args[0])
     else:
       return CommandLineResult(kind: claUnknown, errorMessage: "E32: No file name")
+  of claEnew:
+    return CommandLineResult(kind: claEnew)
   of claGoto:
     if cmd.args.len > 0:
       try:
@@ -282,6 +322,19 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
         else:
           none(string),
     )
+  of claBufferNext:
+    return CommandLineResult(kind: claBufferNext)
+  of claBufferPrev:
+    return CommandLineResult(kind: claBufferPrev)
+  of claBufferFirst:
+    return CommandLineResult(kind: claBufferFirst)
+  of claBufferLast:
+    return CommandLineResult(kind: claBufferLast)
+  of claBufferDelete:
+    return
+      CommandLineResult(kind: claBufferDelete, forceBufferDelete: "force" in cmd.flags)
+  of claStripWhitespace:
+    return CommandLineResult(kind: claStripWhitespace)
   of claUnknown:
     return CommandLineResult(
       kind: claUnknown, errorMessage: "Not an editor command: " & cmd.rawText

@@ -83,6 +83,8 @@ proc loadDefaultConfig*(config: CommandConfig) =
   # Edit commands
   config.addAlias("e", claEdit)
   config.addAlias("edit", claEdit)
+  config.addAlias("ene", claEnew)
+  config.addAlias("enew", claEnew)
 
   # Settings
   config.addAlias("set", claSet)
@@ -101,6 +103,24 @@ proc loadDefaultConfig*(config: CommandConfig) =
   config.addAlias("vsplit", claVSplit)
   config.addAlias("sp", claHSplit)
   config.addAlias("split", claHSplit)
+
+  # Buffer navigation
+  config.addAlias("bn", claBufferNext)
+  config.addAlias("bnext", claBufferNext)
+  config.addAlias("bp", claBufferPrev)
+  config.addAlias("bprev", claBufferPrev)
+  config.addAlias("bprevious", claBufferPrev)
+  config.addAlias("bf", claBufferFirst)
+  config.addAlias("bfirst", claBufferFirst)
+  config.addAlias("brewind", claBufferFirst)
+  config.addAlias("bl", claBufferLast)
+  config.addAlias("blast", claBufferLast)
+  config.addAlias("bd", claBufferDelete)
+  config.addAlias("bdelete", claBufferDelete)
+
+  # Strip whitespace
+  config.addAlias("stripwhitespace", claStripWhitespace)
+  config.addAlias("stripws", claStripWhitespace)
 
 proc applyToParser*(config: CommandConfig, parser: CommandLineParser) =
   ## Apply configuration to a command line parser

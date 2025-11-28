@@ -29,7 +29,7 @@ import std/[options, strutils]
 
 import pkg/results
 
-import ../[buffer, modes, commandline, commandconfig, commandregistry]
+import ../[buffer, gapbuffer, modes, commandline, commandconfig, commandregistry]
 
 type
   CommandModeResultKind* = enum
@@ -40,6 +40,7 @@ type
     cmrGotoLine # Jump to specific line
     cmrVSplit # Vertical split window
     cmrHSplit # Horizontal split window
+    cmrEnew # Create new empty buffer
     cmrSetMultiStatusLine # Set multi status line
     cmrSetIgnoreCase # Set ignorecase option
     cmrSetSmartCase # Set smartcase option
@@ -47,6 +48,12 @@ type
     cmrSetHlSearch # Set hlsearch option
     cmrSave # Save file
     cmrSaveAndQuit # Save file and quit
+    cmrBufferNext # Switch to next buffer
+    cmrBufferPrev # Switch to previous buffer
+    cmrBufferFirst # Switch to first buffer
+    cmrBufferLast # Switch to last buffer
+    cmrBufferDelete # Delete current buffer
+    cmrStripWhitespace # Remove trailing whitespace
     cmrError # Command error
 
   CommandModeHandler* = ref object ## Handler for Command mode specific commands
@@ -70,6 +77,8 @@ type
       vsplitFilename*: Option[string]
     of cmrHSplit:
       hsplitFilename*: Option[string]
+    of cmrEnew:
+      discard
     of cmrSetMultiStatusLine:
       enabled*: bool
     of cmrSetIgnoreCase:
@@ -85,6 +94,12 @@ type
     of cmrSaveAndQuit:
       saveAndQuitFilename*: Option[string]
       forceSaveAndQuit*: bool
+    of cmrBufferNext, cmrBufferPrev, cmrBufferFirst, cmrBufferLast:
+      discard
+    of cmrBufferDelete:
+      forceBufferDelete*: bool
+    of cmrStripWhitespace:
+      strippedLineCount*: int
     of cmrError:
       errorMessage*: string
 
@@ -226,6 +241,50 @@ proc executeHSplit*(
   ## Execute horizontal split command (:sp, :sp filename)
   return CommandModeResult(kind: cmrHSplit, hsplitFilename: filename)
 
+proc executeEnew*(handler: CommandModeHandler): CommandModeResult =
+  ## Execute enew command (:ene, :enew) - create new empty buffer
+  return CommandModeResult(kind: cmrEnew)
+
+proc executeBufferNext*(handler: CommandModeHandler): CommandModeResult =
+  ## Execute bnext command (:bn, :bnext) - switch to next buffer
+  return CommandModeResult(kind: cmrBufferNext)
+
+proc executeBufferPrev*(handler: CommandModeHandler): CommandModeResult =
+  ## Execute bprev command (:bp, :bprev) - switch to previous buffer
+  return CommandModeResult(kind: cmrBufferPrev)
+
+proc executeBufferFirst*(handler: CommandModeHandler): CommandModeResult =
+  ## Execute bfirst command (:bf, :bfirst) - switch to first buffer
+  return CommandModeResult(kind: cmrBufferFirst)
+
+proc executeBufferLast*(handler: CommandModeHandler): CommandModeResult =
+  ## Execute blast command (:bl, :blast) - switch to last buffer
+  return CommandModeResult(kind: cmrBufferLast)
+
+proc executeBufferDelete*(
+    handler: CommandModeHandler, buffer: TextBuffer, force: bool
+): CommandModeResult =
+  ## Execute bdelete command (:bd, :bdelete) - delete current buffer
+  if not force and buffer.isModified:
+    return CommandModeResult(
+      kind: cmrError, errorMessage: "No write since last change (add ! to override)"
+    )
+  return CommandModeResult(kind: cmrBufferDelete, forceBufferDelete: force)
+
+proc executeStripWhitespace*(
+    handler: CommandModeHandler, buffer: TextBuffer
+): CommandModeResult =
+  ## Execute stripwhitespace command (:stripwhitespace, :stripws)
+  ## Removes trailing whitespace from all lines
+  var strippedCount = 0
+  for lineIdx in 0 ..< buffer.len:
+    let line = buffer.getLine(lineIdx)
+    let trimmed = line.strip(leading = false, trailing = true)
+    if trimmed != line:
+      buffer.gapBuffer.replaceLine(lineIdx, trimmed)
+      strippedCount.inc
+  return CommandModeResult(kind: cmrStripWhitespace, strippedLineCount: strippedCount)
+
 proc handleCommandModeInput*(
     handler: CommandModeHandler,
     buffer: TextBuffer,
@@ -259,6 +318,8 @@ proc handleCommandModeInput*(
       handler.executeSaveAndQuit(buffer, none(string), cmdResult.forceSaveAllAndQuit)
   of claEdit:
     return handler.executeEdit(buffer, cmdResult.editFilename)
+  of claEnew:
+    return handler.executeEnew()
   of claGoto:
     return handler.executeGotoLine(buffer, cmdResult.lineNumber)
   of claSet:
@@ -269,6 +330,18 @@ proc handleCommandModeInput*(
     return handler.executeVSplit(cmdResult.vsplitFilename)
   of claHSplit:
     return handler.executeHSplit(cmdResult.hsplitFilename)
+  of claBufferNext:
+    return handler.executeBufferNext()
+  of claBufferPrev:
+    return handler.executeBufferPrev()
+  of claBufferFirst:
+    return handler.executeBufferFirst()
+  of claBufferLast:
+    return handler.executeBufferLast()
+  of claBufferDelete:
+    return handler.executeBufferDelete(buffer, cmdResult.forceBufferDelete)
+  of claStripWhitespace:
+    return handler.executeStripWhitespace(buffer)
   of claSubstitute:
     # TODO: Implement search and replace
     return CommandModeResult(kind: cmrMessage, message: "Substitute not implemented")

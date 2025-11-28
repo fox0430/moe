@@ -233,6 +233,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
   if keyCombo.isSpecial and keyCombo.special == skEscape:
     e.state.mode = e.state.previousMode
     e.state.commandText = ""
+    e.state.commandCursor = 0
     return true
 
   # Handle Enter to execute command
@@ -280,6 +281,13 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         if splitResult.isErr:
           logError("handler", "Horizontal split failed: " & splitResult.error)
           e.state.statusMessage = "Error: " & splitResult.error
+
+      if r.shouldEnew():
+        # Handle enew (create new empty buffer)
+        let enewResult = e.enew()
+        if enewResult.isErr:
+          logError("handler", "Enew failed: " & enewResult.error)
+          e.state.statusMessage = "Error: " & enewResult.error
 
       if r.shouldSetMultiStatusLine():
         # Handle multi status line setting
@@ -329,6 +337,42 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           logInfo("handler", "File saved, quitting editor")
           return false # Signal app should quit
 
+      if r.shouldBufferNext():
+        # Handle switch to next buffer
+        e.switchToNextBuffer()
+
+      if r.shouldBufferPrev():
+        # Handle switch to previous buffer
+        e.switchToPrevBuffer()
+
+      if r.shouldBufferFirst():
+        # Handle switch to first buffer
+        e.switchToFirstBuffer()
+
+      if r.shouldBufferLast():
+        # Handle switch to last buffer
+        e.switchToLastBuffer()
+
+      if r.shouldBufferDelete():
+        # Handle buffer delete (close window)
+        let shouldQuit = e.closeWindow()
+        if shouldQuit:
+          # Last buffer deleted, create a new empty buffer instead of quitting
+          let enewResult = e.enew()
+          if enewResult.isErr:
+            logError("handler", "Enew failed after buffer delete: " & enewResult.error)
+            e.state.statusMessage = "Error: " & enewResult.error
+
+      if r.shouldStripWhitespace():
+        # Handle strip trailing whitespace
+        let count = r.getStrippedLineCount()
+        if count > 0:
+          e.state.statusMessage =
+            "Stripped trailing whitespace from " & $count & " lines"
+          e.state.needsFullRedraw = true
+        else:
+          e.state.statusMessage = "No trailing whitespace found"
+
       # Handle mode transitions
       let modeTransition = r.getModeTransition()
       if modeTransition.isSome:
@@ -346,19 +390,60 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
       # Empty command, just return to previous mode
       e.state.mode = e.state.previousMode
 
-    # Clear command text
+    # Clear command text and cursor
     e.state.commandText = ""
+    e.state.commandCursor = 0
     return true
 
-  # Handle Backspace
+  # Handle Left arrow - move cursor left
+  if keyCombo.isSpecial and keyCombo.special == skLeft:
+    if e.state.commandCursor > 0:
+      e.state.commandCursor -= 1
+    return true
+
+  # Handle Right arrow - move cursor right
+  if keyCombo.isSpecial and keyCombo.special == skRight:
+    # commandText includes the ":" prefix, so max cursor position is len - 1
+    let maxPos = e.state.commandText.len - 1
+    if e.state.commandCursor < maxPos:
+      e.state.commandCursor += 1
+    return true
+
+  # Handle Backspace - delete character before cursor
   if keyCombo.isSpecial and keyCombo.special == skBackspace:
-    if e.state.commandText.len > 1: # Keep the : prefix
-      e.state.commandText = e.state.commandText[0 ..^ 2]
+    if e.state.commandCursor > 0 and e.state.commandText.len > 1:
+      # Calculate position in commandText (cursor is 0-based after ":")
+      let pos = e.state.commandCursor # Position after ":"
+      # Delete character at pos (which is pos in commandText since commandText starts with ":")
+      e.state.commandText =
+        e.state.commandText[0 ..< pos] & e.state.commandText[pos + 1 ..^ 1]
+      e.state.commandCursor -= 1
     return true
 
-  # Handle character input
+  # Handle Delete - delete character at cursor
+  if keyCombo.isSpecial and keyCombo.special == skDelete:
+    let pos = e.state.commandCursor + 1 # Position in commandText (after ":")
+    if pos < e.state.commandText.len:
+      e.state.commandText =
+        e.state.commandText[0 ..< pos] & e.state.commandText[pos + 1 ..^ 1]
+    return true
+
+  # Handle Home - move cursor to beginning
+  if keyCombo.isSpecial and keyCombo.special == skHome:
+    e.state.commandCursor = 0
+    return true
+
+  # Handle End - move cursor to end
+  if keyCombo.isSpecial and keyCombo.special == skEnd:
+    e.state.commandCursor = e.state.commandText.len - 1
+    return true
+
+  # Handle character input - insert at cursor position
   if not keyCombo.isSpecial and keyCombo.modifiers == {}:
-    e.state.commandText.add(keyCombo.char)
+    let pos = e.state.commandCursor + 1 # Position in commandText (after ":")
+    e.state.commandText =
+      e.state.commandText[0 ..< pos] & keyCombo.char & e.state.commandText[pos ..^ 1]
+    e.state.commandCursor += 1
     return true
 
   # Ignore other special keys

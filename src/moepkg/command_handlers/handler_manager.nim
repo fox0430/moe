@@ -43,6 +43,7 @@ type
     hrGotoLine # Jump to specific line
     hrVSplit # Vertical split window
     hrHSplit # Horizontal split window
+    hrEnew # Create new empty buffer
     hrSetMultiStatusLine # Set multi status line
     hrSetIgnoreCase # Set ignorecase option
     hrSetSmartCase # Set smartcase option
@@ -50,6 +51,12 @@ type
     hrSetHlSearch # Set hlsearch option
     hrSave # Save file
     hrSaveAndQuit # Save file and quit
+    hrBufferNext # Switch to next buffer
+    hrBufferPrev # Switch to previous buffer
+    hrBufferFirst # Switch to first buffer
+    hrBufferLast # Switch to last buffer
+    hrBufferDelete # Delete current buffer
+    hrStripWhitespace # Remove trailing whitespace
     hrUnhandled # Command was not handled
     hrError # Error occurred
 
@@ -80,6 +87,8 @@ type
       vsplitFilename*: Option[string]
     of hrHSplit:
       hsplitFilename*: Option[string]
+    of hrEnew:
+      discard
     of hrSetMultiStatusLine:
       enabled*: bool
     of hrSetIgnoreCase:
@@ -95,6 +104,12 @@ type
     of hrSaveAndQuit:
       saveAndQuitFilename*: Option[string]
       forceQuitAfterSave*: bool
+    of hrBufferNext, hrBufferPrev, hrBufferFirst, hrBufferLast:
+      discard
+    of hrBufferDelete:
+      forceBufferDelete*: bool
+    of hrStripWhitespace:
+      strippedLineCount*: int
     of hrUnhandled:
       discard
     of hrError:
@@ -308,6 +323,8 @@ proc handleCommandMode*(
     return HandlerResult(kind: hrVSplit, vsplitFilename: r.vsplitFilename)
   of cmrHSplit:
     return HandlerResult(kind: hrHSplit, hsplitFilename: r.hsplitFilename)
+  of cmrEnew:
+    return HandlerResult(kind: hrEnew)
   of cmrSetMultiStatusLine:
     return HandlerResult(kind: hrSetMultiStatusLine, enabled: r.enabled)
   of cmrSetIgnoreCase:
@@ -326,6 +343,19 @@ proc handleCommandMode*(
       saveAndQuitFilename: r.saveAndQuitFilename,
       forceQuitAfterSave: r.forceSaveAndQuit,
     )
+  of cmrBufferNext:
+    return HandlerResult(kind: hrBufferNext)
+  of cmrBufferPrev:
+    return HandlerResult(kind: hrBufferPrev)
+  of cmrBufferFirst:
+    return HandlerResult(kind: hrBufferFirst)
+  of cmrBufferLast:
+    return HandlerResult(kind: hrBufferLast)
+  of cmrBufferDelete:
+    return HandlerResult(kind: hrBufferDelete, forceBufferDelete: r.forceBufferDelete)
+  of cmrStripWhitespace:
+    return
+      HandlerResult(kind: hrStripWhitespace, strippedLineCount: r.strippedLineCount)
   of cmrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
@@ -415,8 +445,9 @@ proc handleEvent*(
 proc wasHandled*(hrResult: HandlerResult): bool =
   ## Check if the event was handled
   hrResult.kind in {
-    hrHandled, hrQuit, hrCloseWindow, hrGotoLine, hrVSplit, hrHSplit, hrSave,
-    hrSaveAndQuit,
+    hrHandled, hrQuit, hrCloseWindow, hrGotoLine, hrVSplit, hrHSplit, hrEnew, hrSave,
+    hrSaveAndQuit, hrBufferNext, hrBufferPrev, hrBufferFirst, hrBufferLast,
+    hrBufferDelete, hrStripWhitespace,
   }
 
 proc shouldQuit*(hrResult: HandlerResult): bool =
@@ -438,6 +469,10 @@ proc shouldVSplit*(hrResult: HandlerResult): bool =
 proc shouldHSplit*(hrResult: HandlerResult): bool =
   ## Check if we should create a horizontal split
   hrResult.kind == hrHSplit
+
+proc shouldEnew*(hrResult: HandlerResult): bool =
+  ## Check if we should create a new empty buffer
+  hrResult.kind == hrEnew
 
 proc shouldSetMultiStatusLine*(hrResult: HandlerResult): bool =
   ## Check if we should set multi status line mode
@@ -466,6 +501,38 @@ proc shouldSave*(hrResult: HandlerResult): bool =
 proc shouldSaveAndQuit*(hrResult: HandlerResult): bool =
   ## Check if we should save the file and quit
   hrResult.kind == hrSaveAndQuit
+
+proc shouldBufferNext*(hrResult: HandlerResult): bool =
+  ## Check if we should switch to next buffer
+  hrResult.kind == hrBufferNext
+
+proc shouldBufferPrev*(hrResult: HandlerResult): bool =
+  ## Check if we should switch to previous buffer
+  hrResult.kind == hrBufferPrev
+
+proc shouldBufferFirst*(hrResult: HandlerResult): bool =
+  ## Check if we should switch to first buffer
+  hrResult.kind == hrBufferFirst
+
+proc shouldBufferLast*(hrResult: HandlerResult): bool =
+  ## Check if we should switch to last buffer
+  hrResult.kind == hrBufferLast
+
+proc shouldBufferDelete*(hrResult: HandlerResult): bool =
+  ## Check if we should delete the current buffer
+  hrResult.kind == hrBufferDelete
+
+proc getForceBufferDelete*(hrResult: HandlerResult): bool =
+  ## Get force flag for buffer delete
+  if hrResult.kind == hrBufferDelete: hrResult.forceBufferDelete else: false
+
+proc shouldStripWhitespace*(hrResult: HandlerResult): bool =
+  ## Check if we should strip trailing whitespace
+  hrResult.kind == hrStripWhitespace
+
+proc getStrippedLineCount*(hrResult: HandlerResult): int =
+  ## Get number of lines that had whitespace stripped
+  if hrResult.kind == hrStripWhitespace: hrResult.strippedLineCount else: 0
 
 proc hasError*(hrResult: HandlerResult): bool =
   ## Check if there was an error

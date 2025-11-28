@@ -315,6 +315,81 @@ proc switchToPrevWindow*(e: Editor) =
     let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
     e.setActiveWindowScreenCursor(activeWindow)
 
+proc switchToNextBuffer*(e: Editor) =
+  ## Switch to the next buffer (:bnext)
+  ## In this editor, buffers are windows, so this switches to the next window
+  if e.windowManager.windows.len <= 1:
+    e.state.statusMessage = "No more buffers"
+    return
+
+  e.switchToNextWindow()
+  e.state.statusMessage = ""
+
+proc switchToPrevBuffer*(e: Editor) =
+  ## Switch to the previous buffer (:bprev)
+  ## In this editor, buffers are windows, so this switches to the previous window
+  if e.windowManager.windows.len <= 1:
+    e.state.statusMessage = "No more buffers"
+    return
+
+  e.switchToPrevWindow()
+  e.state.statusMessage = ""
+
+proc switchToFirstBuffer*(e: Editor) =
+  ## Switch to the first buffer (:bfirst)
+  ## In this editor, buffers are windows, so this switches to the first window
+  if e.windowManager.windows.len <= 1:
+    e.state.statusMessage = "Already at first buffer"
+    return
+
+  if e.windowManager.activeWindowIndex == 0:
+    e.state.statusMessage = "Already at first buffer"
+    return
+
+  # Save current window state before switching
+  e.saveActiveWindowState()
+
+  # Switch to first window
+  e.windowManager.activeWindowIndex = 0
+  for i, window in e.windowManager.windows:
+    window.active = (i == 0)
+
+  # Sync and restore the new active window state
+  e.syncActiveWindow()
+
+  # Update cursor position immediately to avoid visual glitch
+  let activeWindow = e.windowManager.windows[0]
+  e.setActiveWindowScreenCursor(activeWindow)
+  e.state.statusMessage = ""
+
+proc switchToLastBuffer*(e: Editor) =
+  ## Switch to the last buffer (:blast)
+  ## In this editor, buffers are windows, so this switches to the last window
+  if e.windowManager.windows.len <= 1:
+    e.state.statusMessage = "Already at last buffer"
+    return
+
+  let lastIndex = e.windowManager.windows.len - 1
+  if e.windowManager.activeWindowIndex == lastIndex:
+    e.state.statusMessage = "Already at last buffer"
+    return
+
+  # Save current window state before switching
+  e.saveActiveWindowState()
+
+  # Switch to last window
+  e.windowManager.activeWindowIndex = lastIndex
+  for i, window in e.windowManager.windows:
+    window.active = (i == lastIndex)
+
+  # Sync and restore the new active window state
+  e.syncActiveWindow()
+
+  # Update cursor position immediately to avoid visual glitch
+  let activeWindow = e.windowManager.windows[lastIndex]
+  e.setActiveWindowScreenCursor(activeWindow)
+  e.state.statusMessage = ""
+
 proc isBufferShared*(e: Editor, buffer: TextBuffer): bool =
   ## Check if the given buffer is shared across multiple windows
   ## Returns true if the buffer is open in more than one window
@@ -507,6 +582,38 @@ proc hsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
     let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
     e.setActiveWindowScreenCursor(activeWindow)
 
+  ok(())
+
+proc enew*(e: Editor): Result[(), string] =
+  ## Create a new empty buffer and replace the current one
+  let newBuffer = newTextBuffer()
+
+  if e.windowManager.windows.len > 0 and
+      e.windowManager.activeWindowIndex < e.windowManager.windows.len:
+    # Replace the buffer in the active window
+    let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
+    activeWindow.buffer = newBuffer
+    activeWindow.cursor = BufferPosition(line: 0, column: 0)
+    activeWindow.viewport.topLine = 0
+    activeWindow.viewport.leftColumn = 0
+
+    # Update executor and motion controller references
+    e.executer.buffer = newBuffer
+    e.executer.motionController.executor.buffer = newBuffer
+    e.executer.motionController.viewportManager.viewport = activeWindow.viewport
+
+    # Reset cursor
+    e.state.cursor = BufferPosition(line: 0, column: 0)
+  else:
+    # No windows, replace the main buffer
+    e.textBuffer = newBuffer
+    e.executer.buffer = newBuffer
+    e.executer.motionController.executor.buffer = newBuffer
+    e.state.cursor = BufferPosition(line: 0, column: 0)
+    e.viewport.topLine = 0
+    e.viewport.leftColumn = 0
+
+  e.state.needsFullRedraw = true
   ok(())
 
 proc newEditor*(): Editor =
@@ -950,6 +1057,8 @@ proc renderLineSegmentWithSelection(
   let fullLine = textBuffer.getLine(lineIndex)
   # Analyze indentation once (O(n)) to avoid repeated scanning (O(n²))
   let indentInfo = analyzeIndentation(fullLine)
+  # Find where trailing spaces start (for highlighting)
+  let trailingSpaceStart = findTrailingSpaceStart(fullLine)
 
   # Always render character by character to apply syntax highlighting
   var displayX = 0
@@ -961,6 +1070,12 @@ proc renderLineSegmentWithSelection(
     if rune == TAB_CHAR:
       # Calculate how many spaces until next tab stop
       let spacesToNextTab = e.state.tabStop - (displayX mod e.state.tabStop)
+      # Determine style for tab (trailing space highlighting takes priority)
+      let tabStyle =
+        if e.config.highlight.trailingSpaces and col >= trailingSpaceStart:
+          trailingSpacesStyle
+        else:
+          style
       # Render spaces instead of tab character
       for i in 0 ..< spacesToNextTab:
         if screenX + displayX < buffer.area.width:
@@ -968,7 +1083,7 @@ proc renderLineSegmentWithSelection(
           if e.shouldShowIndentationGuide(indentInfo, displayX, col):
             buffer.setString(screenX + displayX, screenY, "│", indentationLineStyle)
           else:
-            buffer.setString(screenX + displayX, screenY, " ", style)
+            buffer.setString(screenX + displayX, screenY, " ", tabStyle)
         displayX += 1
     else:
       # Normal character
@@ -979,6 +1094,15 @@ proc renderLineSegmentWithSelection(
       if rune == ' '.Rune and e.shouldShowIndentationGuide(indentInfo, displayX, col):
         charStr = "│"
         renderStyle = indentationLineStyle
+
+      # Highlight full-width space if enabled
+      if rune == FULLWIDTH_SPACE and e.config.highlight.fullWidthSpace:
+        renderStyle = fullWidthSpaceStyle
+
+      # Highlight trailing spaces if enabled
+      if e.config.highlight.trailingSpaces and col >= trailingSpaceStart:
+        if rune == ' '.Rune or rune == TAB_CHAR or rune == FULLWIDTH_SPACE:
+          renderStyle = trailingSpacesStyle
 
       if screenX + displayX < buffer.area.width:
         buffer.setString(screenX + displayX, screenY, charStr, renderStyle)
@@ -1608,7 +1732,8 @@ proc renderBottomLines(e: Editor, buffer: var Buffer) =
   # Handle command line
   if e.state.mode == EditorMode.Command:
     buffer.setString(buffer.area.x, commandLineY, e.state.commandText, commandStyle)
-    e.state.screenCursor.x = e.state.commandText.len
+    # Cursor position: ":" + commandCursor (0-based after ":")
+    e.state.screenCursor.x = 1 + e.state.commandCursor
     e.state.screenCursor.y = buffer.area.height - 1
   elif e.state.mode == EditorMode.Search:
     let searchChar = if e.state.searchDirection == Forward: "/" else: "?"

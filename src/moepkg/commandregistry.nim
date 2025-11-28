@@ -527,6 +527,7 @@ proc executeCommand*(
     # Initialize command text when entering Command mode
     if cmd.targetMode == EditorMode.Command:
       ctx.state.commandText = ":"
+      ctx.state.commandCursor = 0 # Cursor starts after the ":"
       ctx.state.statusMessage = "" # Clear any status message
     # Clear any pending key sequences when switching modes
     if ctx.keyBindingRegistry != nil:
@@ -2518,6 +2519,7 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       # Clear command text when entering command mode
       ctx.state.commandText = ":"
+      ctx.state.commandCursor = 0 # Cursor starts after the ":"
       handleModeSwitch(ctx, EditorMode.Command),
     0,
     0,

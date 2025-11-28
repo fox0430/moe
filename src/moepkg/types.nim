@@ -249,6 +249,8 @@ type
     previousMode*: EditorMode # Previous mode for ESC handling
     command*: string
     commandText*: string # Text being typed in command mode
+    commandCursor*: int
+      # Cursor position within commandText (0-based, after the : prefix)
     searchText*: string # Text being typed in search mode
     lastSearchText*: string # Last executed search text for n/N commands
     statusMessage*: string # Message to display in status line
