@@ -17,11 +17,12 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/options
+import std/[options, os]
 
 import pkg/[celina, results]
 
-import editor, keybindings, modes, buffer, logger, types, cursor, motion, search_utils
+import
+  editor, keybindings, modes, buffer, logger, types, cursor, motion, search_utils, filer
 import command_handlers/handler_manager
 
 ## NOTE: While in Search Mode:
@@ -373,14 +374,28 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         else:
           e.state.statusMessage = "No trailing whitespace found"
 
-      # Handle mode transitions
-      let modeTransition = r.getModeTransition()
-      if modeTransition.isSome:
+      if r.shouldEnterFiler():
+        # Enter filer mode with optional path
         e.state.previousMode = e.state.mode
-        e.state.mode = modeTransition.get
+        e.state.mode = EditorMode.Filer
+        let filerPath = r.getEnterFilerPath()
+        let startPath =
+          if filerPath.isSome:
+            filerPath.get
+          elif activeBuffer.filePath.isSome:
+            parentDir(activeBuffer.filePath.get)
+          else:
+            getCurrentDir()
+        e.state.filerState = some(newFilerState(startPath))
       else:
-        e.state.previousMode = e.state.mode
-        e.state.mode = EditorMode.Normal # Default back to normal
+        # Handle mode transitions
+        let modeTransition = r.getModeTransition()
+        if modeTransition.isSome:
+          e.state.previousMode = e.state.mode
+          e.state.mode = modeTransition.get
+        else:
+          e.state.previousMode = e.state.mode
+          e.state.mode = EditorMode.Normal # Default back to normal
 
       # Set status message if any
       let statusMsg = r.getStatusMessage()
@@ -673,6 +688,48 @@ proc handleEvent*(e: Editor, event: Event): bool =
       # Update viewport to make the line visible
       e.updateViewportForCursor(e.state.cursor)
 
+  # Handle Filer mode results
+  if r.kind == hrFilerOpenFile:
+    # Open file from filer
+    let loadResult = e.loadFile(r.filerFilePath)
+    if loadResult.isErr:
+      e.state.statusMessage = "Error: " & loadResult.error
+    else:
+      # Clear filer state and switch to Normal mode
+      e.state.filerState = none(FilerState)
+      e.state.mode = EditorMode.Normal
+      e.state.cursor = BufferPosition(line: 0, column: 0)
+    return true
+
+  if r.kind == hrFilerOpenFileVSplit:
+    # Open file in vertical split from filer
+    let splitResult = e.vsplit(some(r.filerFilePath))
+    if splitResult.isErr:
+      e.state.statusMessage = "Error: " & splitResult.error
+    else:
+      # Clear filer state and switch to Normal mode
+      e.state.filerState = none(FilerState)
+      e.state.mode = EditorMode.Normal
+    return true
+
+  if r.kind == hrFilerOpenFileHSplit:
+    # Open file in horizontal split from filer
+    let splitResult = e.hsplit(some(r.filerFilePath))
+    if splitResult.isErr:
+      e.state.statusMessage = "Error: " & splitResult.error
+    else:
+      # Clear filer state and switch to Normal mode
+      e.state.filerState = none(FilerState)
+      e.state.mode = EditorMode.Normal
+    return true
+
+  if r.kind == hrFilerQuit:
+    # Close filer and return to Normal mode
+    # (previousMode may be Filer if we went Command->Filer, so always use Normal)
+    e.state.filerState = none(FilerState)
+    e.state.mode = EditorMode.Normal
+    return true
+
   # Handle mode transitions
   let modeTransition = r.getModeTransition()
   if modeTransition.isSome:
@@ -681,6 +738,16 @@ proc handleEvent*(e: Editor, event: Event): bool =
 
     e.state.previousMode = oldMode
     e.state.mode = newMode
+
+    # Initialize filer state when entering Filer mode
+    if newMode == EditorMode.Filer and e.state.filerState.isNone:
+      # Use buffer's directory or current working directory
+      let startPath =
+        if activeBuffer.filePath.isSome:
+          parentDir(activeBuffer.filePath.get)
+        else:
+          getCurrentDir()
+      e.state.filerState = some(newFilerState(startPath))
 
     # Adjust cursor when transitioning from Insert to Normal mode
     # In Insert mode, cursor can be after the last character

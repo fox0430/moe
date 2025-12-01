@@ -21,7 +21,7 @@ import std/[options, monotimes, tables]
 
 import pkg/celina
 
-import cursor, modes, buffer, registers
+import cursor, modes, buffer, registers, filer
 
 # Re-export SidebarItemKind from buffer module
 export buffer.SidebarItemKind
@@ -329,3 +329,5 @@ type
     # Jump list (Ctrl-o / Ctrl-i)
     jumpList*: seq[JumpPosition] # List of jump positions
     jumpListIndex*: int # Current position in jump list (-1 when not navigating)
+    # Filer state
+    filerState*: Option[FilerState] # File explorer state (when in Filer mode)

@@ -94,6 +94,8 @@ type
     bcVisualMoveDown = "visual.move.down"
     bcVisualDelete = "visual.delete"
     bcVisualYank = "visual.yank"
+    # Filer operations
+    bcFiler = "filer.open"
 
   ## Command ID can be builtin or custom
   CommandIdKind* = enum

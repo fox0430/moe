@@ -48,6 +48,7 @@ type
     claBufferLast # :blast, :bl (last buffer)
     claBufferDelete # :bd, :bdelete (delete buffer)
     claStripWhitespace # :stripwhitespace, :stripws (remove trailing whitespace)
+    claFiler # :Filer (open file explorer)
     claUnknown # Unknown command
 
   ParsedCommand* = object
@@ -99,6 +100,8 @@ type
       forceBufferDelete*: bool # true for :bd!
     of claStripWhitespace:
       discard
+    of claFiler:
+      filerPath*: Option[string] # Optional path to open in filer
     of claUnknown:
       errorMessage*: string
 
@@ -181,6 +184,11 @@ proc loadDefaultAliases*(parser: CommandLineParser) =
 
   parser.addAlias("stripwhitespace", claStripWhitespace)
   parser.addAlias("stripws", claStripWhitespace)
+
+  parser.addAlias("Filer", claFiler)
+  parser.addAlias("filer", claFiler)
+  parser.addAlias("Ex", claFiler)
+  parser.addAlias("Explore", claFiler)
 
 proc parseCommandLine*(parser: CommandLineParser, input: string): ParsedCommand =
   ## Parse a command line input string into a structured command
@@ -335,6 +343,15 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
       CommandLineResult(kind: claBufferDelete, forceBufferDelete: "force" in cmd.flags)
   of claStripWhitespace:
     return CommandLineResult(kind: claStripWhitespace)
+  of claFiler:
+    return CommandLineResult(
+      kind: claFiler,
+      filerPath:
+        if cmd.args.len > 0:
+          some(cmd.args[0])
+        else:
+          none(string),
+    )
   of claUnknown:
     return CommandLineResult(
       kind: claUnknown, errorMessage: "Not an editor command: " & cmd.rawText

@@ -25,7 +25,7 @@
 ## - Settings (:set)
 ## - Navigation (:123 for line jumping)
 
-import std/[options, strutils]
+import std/[options, strutils, os]
 
 import pkg/results
 
@@ -54,6 +54,7 @@ type
     cmrBufferLast # Switch to last buffer
     cmrBufferDelete # Delete current buffer
     cmrStripWhitespace # Remove trailing whitespace
+    cmrFiler # Open file explorer
     cmrError # Command error
 
   CommandModeHandler* = ref object ## Handler for Command mode specific commands
@@ -100,6 +101,8 @@ type
       forceBufferDelete*: bool
     of cmrStripWhitespace:
       strippedLineCount*: int
+    of cmrFiler:
+      filerPath*: Option[string] # Optional path for filer
     of cmrError:
       errorMessage*: string
 
@@ -168,6 +171,9 @@ proc executeEdit*(
     handler: CommandModeHandler, buffer: TextBuffer, filename: string
 ): CommandModeResult =
   ## Execute edit command (:e filename)
+  # If path is a directory, open in Filer mode
+  if dirExists(filename):
+    return CommandModeResult(kind: cmrFiler, filerPath: some(absolutePath(filename)))
   # TODO: Implement file loading
   return CommandModeResult(kind: cmrMessage, message: "Opened: " & filename)
 
@@ -233,12 +239,20 @@ proc executeVSplit*(
     handler: CommandModeHandler, filename: Option[string]
 ): CommandModeResult =
   ## Execute vertical split command (:vs, :vs filename)
+  # If path is a directory, open in Filer mode
+  if filename.isSome and dirExists(filename.get):
+    return
+      CommandModeResult(kind: cmrFiler, filerPath: some(absolutePath(filename.get)))
   return CommandModeResult(kind: cmrVSplit, vsplitFilename: filename)
 
 proc executeHSplit*(
     handler: CommandModeHandler, filename: Option[string]
 ): CommandModeResult =
   ## Execute horizontal split command (:sp, :sp filename)
+  # If path is a directory, open in Filer mode
+  if filename.isSome and dirExists(filename.get):
+    return
+      CommandModeResult(kind: cmrFiler, filerPath: some(absolutePath(filename.get)))
   return CommandModeResult(kind: cmrHSplit, hsplitFilename: filename)
 
 proc executeEnew*(handler: CommandModeHandler): CommandModeResult =
@@ -342,6 +356,8 @@ proc handleCommandModeInput*(
     return handler.executeBufferDelete(buffer, cmdResult.forceBufferDelete)
   of claStripWhitespace:
     return handler.executeStripWhitespace(buffer)
+  of claFiler:
+    return CommandModeResult(kind: cmrFiler, filerPath: cmdResult.filerPath)
   of claSubstitute:
     # TODO: Implement search and replace
     return CommandModeResult(kind: cmrMessage, message: "Substitute not implemented")

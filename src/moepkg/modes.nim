@@ -29,6 +29,7 @@ type
     VisualLine
     Replace
     Search
+    Filer
 
   ModeTransition* = object
     newMode*: Option[EditorMode]
@@ -44,3 +45,4 @@ proc modeLabel*(m: EditorMode): string =
   of EditorMode.VisualLine: "VISUAL LINE"
   of EditorMode.Replace: "REPLACE"
   of EditorMode.Search: "SEARCH"
+  of EditorMode.Filer: "FILER"

@@ -24,7 +24,7 @@ import pkg/[celina, results]
 import
   buffer, cursor, types, commands, keybindings, commandregistry, modes, commandline,
   commandconfig, statusline, windowmanager, unicode_utils, render_utils, sidebar,
-  gitdiff, highlight, logger, config, configloader, keybindconfig, search_utils
+  gitdiff, highlight, logger, config, configloader, keybindconfig, search_utils, filer
 import command_handlers/[handler_manager, visual_handler]
 
 type
@@ -1745,6 +1745,107 @@ proc renderBottomLines(e: Editor, buffer: var Buffer) =
     if e.state.statusMessage.len > 0:
       buffer.setString(buffer.area.x, commandLineY, e.state.statusMessage, commandStyle)
 
+proc renderFiler(e: Editor, buffer: var Buffer) =
+  ## Render the file explorer view
+  if e.state.filerState.isNone:
+    return
+
+  # Calculate reserved lines at bottom: status line (if shown) + command line
+  let reservedBottom = if e.state.showStatusLine: 2 else: 1
+
+  let
+    filerState = e.state.filerState.get
+    headerY = buffer.area.y
+    listStartY = buffer.area.y + 1
+    listEndY = buffer.area.y + buffer.area.height - reservedBottom
+    width = buffer.area.width
+
+  # Render header (current path)
+  let headerText =
+    if filerState.currentPath.len > width - 2:
+      "..." & filerState.currentPath[^(width - 5) .. ^1]
+    else:
+      filerState.currentPath
+  buffer.setString(
+    buffer.area.x,
+    headerY,
+    headerText,
+    Style(
+      fg: rgb(0xff, 0xd7, 0x00),
+      bg: ColorValue(kind: Default),
+      modifiers: {StyleModifier.Bold},
+    ),
+  )
+
+  # Ensure selected entry is visible (pass total reserved: 1 header + reservedBottom)
+  filerState.ensureSelectedVisible(buffer.area.height, 1 + reservedBottom)
+
+  # Render file entries
+  var screenY = listStartY
+  for i in filerState.topLine ..< filerState.entries.len:
+    if screenY >= listEndY:
+      break
+
+    let
+      entry = filerState.entries[i]
+      isSelected = i == filerState.selectedIndex
+
+    # Build display line
+    var displayLine: string
+    let prefix = if isSelected: "> " else: "  "
+
+    let icon =
+      case entry.kind
+      of fekDirectory: "▸ "
+      of fekSymlink: "@ "
+      of fekFile: "  "
+
+    let name =
+      if entry.isDirectory:
+        entry.name & "/"
+      else:
+        entry.name
+
+    displayLine = prefix & icon & name
+
+    # Truncate if too long
+    if displayLine.len > width:
+      displayLine = displayLine[0 ..< width - 3] & "..."
+
+    # Apply style
+    let style =
+      if isSelected:
+        Style(fg: rgb(0x00, 0x00, 0x00), bg: rgb(0xff, 0xff, 0xff), modifiers: {})
+      elif entry.kind == fekDirectory:
+        Style(
+          fg: rgb(0x5f, 0x87, 0xff),
+          bg: ColorValue(kind: Default),
+          modifiers: {StyleModifier.Bold},
+        )
+      elif entry.kind == fekSymlink:
+        # Symlinks: cyan for files, magenta for directories
+        if entry.targetKind == fekDirectory:
+          Style(
+            fg: rgb(0xaf, 0x5f, 0xff),
+            bg: ColorValue(kind: Default),
+            modifiers: {StyleModifier.Bold},
+          )
+        else:
+          Style(fg: rgb(0x00, 0xff, 0xff), bg: ColorValue(kind: Default), modifiers: {})
+      elif entry.isHidden:
+        Style(fg: rgb(0x80, 0x80, 0x80), bg: ColorValue(kind: Default), modifiers: {})
+      else:
+        Style(
+          fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {}
+        )
+
+    buffer.setString(buffer.area.x, screenY, displayLine, style)
+    inc screenY
+
+  # Set cursor position (hidden in filer mode, but set to selected line)
+  e.state.screenCursor.x = 0
+  e.state.screenCursor.y = listStartY + (filerState.selectedIndex - filerState.topLine)
+
 proc render*(e: Editor, buffer: var Buffer) =
   ## Main render procedure - orchestrates the rendering of all editor components
   # Early return if buffer area is too small
@@ -1763,6 +1864,14 @@ proc render*(e: Editor, buffer: var Buffer) =
 
   # Update viewport size and check if resized
   let wasResized = e.updateViewportSize(buffer)
+
+  # Handle Filer mode rendering separately
+  # Also render filer when in Command mode but came from Filer (filerState is active)
+  if e.state.mode == EditorMode.Filer or
+      (e.state.mode == EditorMode.Command and e.state.filerState.isSome):
+    e.renderFiler(buffer)
+    e.renderBottomLines(buffer)
+    return
 
   # Render appropriate view based on window configuration
   if e.windowManager.windows.len > 0:

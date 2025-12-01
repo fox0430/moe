@@ -17,11 +17,11 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strformat, monotimes, times]
+import std/[strformat, monotimes, times, os, options]
 
 import pkg/[celina, results]
 
-import moepkg/[editor, handler, modes, logger, cmdline, search_utils]
+import moepkg/[editor, handler, modes, logger, cmdline, search_utils, filer]
 
 proc handleResize(e: Editor) =
   ## Debounce resize events to prevent terminal buffer overflow
@@ -66,11 +66,18 @@ proc main() =
   let editor = newEditor()
 
   if config.filePath.len > 0:
-    block:
-      let r = editor.loadFile(config.filePath)
-      if r.isErr:
-        echo fmt"Error: {r.error}"
-        quit(1)
+    if dirExists(config.filePath):
+      # Directory specified - start in Filer mode
+      let dirPath = absolutePath(config.filePath)
+      editor.state.mode = EditorMode.Filer
+      editor.state.filerState = some(newFilerState(dirPath))
+    else:
+      # File specified - load it
+      block:
+        let r = editor.loadFile(config.filePath)
+        if r.isErr:
+          echo fmt"Error: {r.error}"
+          quit(1)
 
   app.onEvent proc(e: Event): bool =
     if e.kind == EventKind.Resize:

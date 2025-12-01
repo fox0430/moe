@@ -29,11 +29,15 @@ import pkg/[results, celina]
 import
   ../[
     types, buffer, cursor, modes, motion, keybindings, commandline, commandconfig,
-    commandregistry, config, stringbuilder,
+    commandregistry, config, stringbuilder, filer,
   ]
-import normal_handler, insert_handler, command_handler, visual_handler, replace_handler
+import
+  normal_handler, insert_handler, command_handler, visual_handler, replace_handler,
+  filer_handler
 
-export normal_handler, insert_handler, command_handler, visual_handler, replace_handler
+export
+  normal_handler, insert_handler, command_handler, visual_handler, replace_handler,
+  filer_handler
 
 type
   HandlerResultKind* = enum
@@ -57,6 +61,11 @@ type
     hrBufferLast # Switch to last buffer
     hrBufferDelete # Delete current buffer
     hrStripWhitespace # Remove trailing whitespace
+    hrFilerOpenFile # Open file from filer
+    hrFilerOpenFileVSplit # Open file from filer in vertical split
+    hrFilerOpenFileHSplit # Open file from filer in horizontal split
+    hrFilerQuit # Close filer and return to previous mode
+    hrEnterFiler # Enter filer mode with optional path
     hrUnhandled # Command was not handled
     hrError # Error occurred
 
@@ -66,6 +75,7 @@ type
     commandHandler*: CommandModeHandler
     visualHandler*: VisualModeHandler
     replaceHandler*: ReplaceModeHandler
+    filerHandler*: FilerHandler
     motionController*: MotionController
     keyBindingRegistry*: KeyBindingRegistry
     commandLineParser*: CommandLineParser
@@ -110,6 +120,12 @@ type
       forceBufferDelete*: bool
     of hrStripWhitespace:
       strippedLineCount*: int
+    of hrFilerOpenFile, hrFilerOpenFileVSplit, hrFilerOpenFileHSplit:
+      filerFilePath*: string
+    of hrFilerQuit:
+      discard
+    of hrEnterFiler:
+      enterFilerPath*: Option[string]
     of hrUnhandled:
       discard
     of hrError:
@@ -135,6 +151,7 @@ proc newHandlerManager*(
   let visualHandler = newVisualModeHandler(keyBindingRegistry, commandRegistry)
   let replaceHandler =
     newReplaceModeHandler(keyBindingRegistry, motionController, commandRegistry)
+  let filerHandler = newFilerHandler()
 
   HandlerManager(
     normalHandler: normalHandler,
@@ -142,6 +159,7 @@ proc newHandlerManager*(
     commandHandler: commandHandler,
     visualHandler: visualHandler,
     replaceHandler: replaceHandler,
+    filerHandler: filerHandler,
     motionController: motionController,
     keyBindingRegistry: keyBindingRegistry,
     commandLineParser: commandLineParser,
@@ -356,6 +374,9 @@ proc handleCommandMode*(
   of cmrStripWhitespace:
     return
       HandlerResult(kind: hrStripWhitespace, strippedLineCount: r.strippedLineCount)
+  of cmrFiler:
+    # Switch to Filer mode with optional path
+    return HandlerResult(kind: hrEnterFiler, enterFilerPath: r.filerPath)
   of cmrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
@@ -403,6 +424,43 @@ proc handleReplaceMode*(
   of rmrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
+proc handleFilerMode*(
+    manager: HandlerManager, state: EditorState, viewportHeight: int, keyCombo: KeyCombo
+): HandlerResult =
+  ## Handle Filer mode input
+  let r = manager.filerHandler.handleFilerModeKey(state, viewportHeight, keyCombo)
+  case r.kind
+  of frHandled:
+    return HandlerResult(
+      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+    )
+  of frOpenFile:
+    return HandlerResult(kind: hrFilerOpenFile, filerFilePath: r.filePath)
+  of frOpenFileVSplit:
+    return HandlerResult(kind: hrFilerOpenFileVSplit, filerFilePath: r.filePath)
+  of frOpenFileHSplit:
+    return HandlerResult(kind: hrFilerOpenFileHSplit, filerFilePath: r.filePath)
+  of frOpenDirectory:
+    # Directory navigation is handled within the filer state
+    if state.filerState.isSome:
+      discard state.filerState.get.enterDirectory(r.dirPath)
+    return HandlerResult(
+      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+    )
+  of frEnterCommand:
+    # Enter command mode from filer
+    state.commandText = ":"
+    state.commandCursor = 0
+    return HandlerResult(
+      kind: hrHandled, modeTransition: some(EditorMode.Command), statusMessage: ""
+    )
+  of frQuit:
+    return HandlerResult(kind: hrFilerQuit)
+  of frUnhandled:
+    return HandlerResult(kind: hrUnhandled)
+  of frError:
+    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
+
 proc handleEvent*(
     manager: HandlerManager,
     buffer: TextBuffer,
@@ -440,6 +498,8 @@ proc handleEvent*(
     return manager.handleVisualMode(buffer, state, viewport, keyCombo)
   of EditorMode.Replace:
     return manager.handleReplaceMode(buffer, state, keyCombo)
+  of EditorMode.Filer:
+    return manager.handleFilerMode(state, viewport.height, keyCombo)
 
 # Utility functions for HandlerResult
 proc wasHandled*(hrResult: HandlerResult): bool =
@@ -447,7 +507,8 @@ proc wasHandled*(hrResult: HandlerResult): bool =
   hrResult.kind in {
     hrHandled, hrQuit, hrCloseWindow, hrGotoLine, hrVSplit, hrHSplit, hrEnew, hrSave,
     hrSaveAndQuit, hrBufferNext, hrBufferPrev, hrBufferFirst, hrBufferLast,
-    hrBufferDelete, hrStripWhitespace,
+    hrBufferDelete, hrStripWhitespace, hrFilerOpenFile, hrFilerOpenFileVSplit,
+    hrFilerOpenFileHSplit, hrFilerQuit,
   }
 
 proc shouldQuit*(hrResult: HandlerResult): bool =
@@ -533,6 +594,17 @@ proc shouldStripWhitespace*(hrResult: HandlerResult): bool =
 proc getStrippedLineCount*(hrResult: HandlerResult): int =
   ## Get number of lines that had whitespace stripped
   if hrResult.kind == hrStripWhitespace: hrResult.strippedLineCount else: 0
+
+proc shouldEnterFiler*(hrResult: HandlerResult): bool =
+  ## Check if we should enter filer mode
+  hrResult.kind == hrEnterFiler
+
+proc getEnterFilerPath*(hrResult: HandlerResult): Option[string] =
+  ## Get the path for filer mode
+  if hrResult.kind == hrEnterFiler:
+    hrResult.enterFilerPath
+  else:
+    none(string)
 
 proc hasError*(hrResult: HandlerResult): bool =
   ## Check if there was an error

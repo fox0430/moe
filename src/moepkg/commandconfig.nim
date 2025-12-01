@@ -122,6 +122,12 @@ proc loadDefaultConfig*(config: CommandConfig) =
   config.addAlias("stripwhitespace", claStripWhitespace)
   config.addAlias("stripws", claStripWhitespace)
 
+  # Filer (file explorer)
+  config.addAlias("Filer", claFiler)
+  config.addAlias("filer", claFiler)
+  config.addAlias("Ex", claFiler)
+  config.addAlias("Explore", claFiler)
+
 proc applyToParser*(config: CommandConfig, parser: CommandLineParser) =
   ## Apply configuration to a command line parser
   # Clear existing aliases
