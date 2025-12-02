@@ -21,7 +21,8 @@ import std/[strformat, monotimes, times, os, options]
 
 import pkg/[celina, results]
 
-import moepkg/[editor, handler, modes, logger, cmdline, search_utils, filer]
+import
+  moepkg/[editor, handler, modes, logger, cmdline, search_utils, filer, lspintegration]
 
 proc handleResize(e: Editor) =
   ## Debounce resize events to prevent terminal buffer overflow
@@ -65,6 +66,17 @@ proc main() =
 
   let editor = newEditor()
 
+  # Set up LSP diagnostics callback to update buffer markers
+  editor.lsp.setDiagnosticsCallback(
+    proc(uri: string, diagnostics: seq[Diagnostic]) =
+      # Find the buffer with this URI and apply diagnostics
+      let path = uriToPath(uri)
+      let activeBuffer = editor.activeBuffer()
+      if activeBuffer.filePath.isSome and activeBuffer.filePath.get == path:
+        applyDiagnosticsToBuffer(activeBuffer, diagnostics)
+        editor.state.needsFullRedraw = true
+  )
+
   if config.filePath.len > 0:
     if dirExists(config.filePath):
       # Directory specified - start in Filer mode
@@ -102,6 +114,9 @@ proc main() =
     app.showCursorAt(editor.state.screenCursor.x, editor.state.screenCursor.y)
 
   app.run()
+
+  # Shutdown LSP servers before exiting
+  editor.shutdown()
 
   # Save search history before shutdown
   let r = saveSearchHistory(editor.state.searchHistory)

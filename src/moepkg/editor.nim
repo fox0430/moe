@@ -17,14 +17,15 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, strformat, options, tables, unicode, monotimes, times]
+import std/[strutils, strformat, options, tables, unicode, monotimes, times, os]
 
 import pkg/[celina, results]
 
 import
   buffer, cursor, types, commands, keybindings, commandregistry, modes, commandline,
   commandconfig, statusline, windowmanager, unicode_utils, render_utils, sidebar,
-  gitdiff, highlight, logger, config, configloader, keybindconfig, search_utils, filer
+  gitdiff, highlight, logger, config, configloader, keybindconfig, search_utils, filer,
+  lspintegration
 import command_handlers/[handler_manager, visual_handler]
 
 type
@@ -54,6 +55,8 @@ type
     handlerManager*: HandlerManager
     windowManager*: EditorWindowManager # Window manager for split windows
     config*: EditorConfig # TOML configuration
+    lsp*: LspIntegration # LSP client integration
+    lastLspChangeSeq*: int # Track buffer changes for LSP notifications
 
 proc buffer*(e: Editor): TextBuffer =
   e.textBuffer
@@ -667,8 +670,13 @@ proc newEditor*(): Editor =
   # Apply configuration to parser
   cmdConfig.applyToParser(cmdLineParser)
 
+  # Initialize LSP integration with current working directory as workspace root
+  let lspIntegration = newLspIntegration(getCurrentDir())
+
   result = Editor(
     textBuffer: newTextBuffer(),
+    lsp: lspIntegration,
+    lastLspChangeSeq: 0,
     state: EditorState(
       cursor: BufferPosition(line: 0, column: 0),
       screenCursor: CursorPosition(x: 0, y: 0),
@@ -822,6 +830,14 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
       # Update lastGitDiffChangeSeq to prevent immediate re-check
       e.state.lastGitDiffChangeSeq = e.textBuffer.changeSeq
 
+  # Notify LSP that a document was opened
+  if e.lsp.enabled:
+    let lspResult = e.lsp.onBufferOpen(e.textBuffer)
+    if lspResult.isErr:
+      logDebug("editor", "LSP onBufferOpen failed for " & path & ": " & lspResult.error)
+    else:
+      e.lastLspChangeSeq = e.textBuffer.changeSeq
+
   ok(())
 
 proc saveFile*(e: Editor, path: Option[string] = none(string)): Result[(), string] =
@@ -850,6 +866,14 @@ proc saveFile*(e: Editor, path: Option[string] = none(string)): Result[(), strin
 
   # Update git diff information after saving (use disk file for comparison)
   e.refreshGitDiff(useBuffer = false)
+
+  # Notify LSP that a document was saved
+  if e.lsp.enabled:
+    let lspResult = e.lsp.onBufferSave(activeBuffer)
+    if lspResult.isErr:
+      logDebug(
+        "editor", "LSP onBufferSave failed for " & savePath & ": " & lspResult.error
+      )
 
   ok(())
 
@@ -1873,11 +1897,35 @@ proc renderFiler(e: Editor, buffer: var Buffer) =
   e.state.screenCursor.x = 0
   e.state.screenCursor.y = listStartY + (filerState.selectedIndex - filerState.topLine)
 
+proc maybeUpdateLsp*(e: Editor) =
+  ## Update LSP if buffer was modified
+  ## This notifies the LSP server of document changes for real-time diagnostics
+  if not e.lsp.enabled:
+    return
+
+  let activeBuffer = e.activeBuffer()
+
+  # Only notify LSP if buffer has changed since last notification
+  if activeBuffer.changeSeq != e.lastLspChangeSeq:
+    let lspResult = e.lsp.onBufferChange(activeBuffer)
+    if lspResult.isOk:
+      e.lastLspChangeSeq = activeBuffer.changeSeq
+
+proc shutdown*(e: Editor) =
+  ## Shutdown editor and clean up resources (including LSP servers)
+  e.lsp.shutdown()
+
 proc render*(e: Editor, buffer: var Buffer) =
   ## Main render procedure - orchestrates the rendering of all editor components
   # Early return if buffer area is too small
   if buffer.area.width <= 0 or buffer.area.height <= 0:
     return
+
+  # Poll LSP for messages (non-blocking)
+  e.lsp.poll(0)
+
+  # Update LSP if buffer was modified
+  e.maybeUpdateLsp()
 
   # Update git diff if buffer was modified (with debouncing)
   e.maybeUpdateGitDiff()
