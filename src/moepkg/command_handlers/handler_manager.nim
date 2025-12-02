@@ -66,6 +66,7 @@ type
     hrFilerOpenFileHSplit # Open file from filer in horizontal split
     hrFilerQuit # Close filer and return to previous mode
     hrEnterFiler # Enter filer mode with optional path
+    hrQuickRun # Run the current buffer
     hrUnhandled # Command was not handled
     hrError # Error occurred
 
@@ -126,6 +127,8 @@ type
       discard
     of hrEnterFiler:
       enterFilerPath*: Option[string]
+    of hrQuickRun:
+      discard
     of hrUnhandled:
       discard
     of hrError:
@@ -377,6 +380,8 @@ proc handleCommandMode*(
   of cmrFiler:
     # Switch to Filer mode with optional path
     return HandlerResult(kind: hrEnterFiler, enterFilerPath: r.filerPath)
+  of cmrQuickRun:
+    return HandlerResult(kind: hrQuickRun)
   of cmrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
@@ -500,6 +505,9 @@ proc handleEvent*(
     return manager.handleReplaceMode(buffer, state, keyCombo)
   of EditorMode.Filer:
     return manager.handleFilerMode(state, viewport.height, keyCombo)
+  of EditorMode.QuickRun:
+    # QuickRun mode is not interactive - handled through command mode
+    return HandlerResult(kind: hrUnhandled)
 
 # Utility functions for HandlerResult
 proc wasHandled*(hrResult: HandlerResult): bool =
@@ -605,6 +613,10 @@ proc getEnterFilerPath*(hrResult: HandlerResult): Option[string] =
     hrResult.enterFilerPath
   else:
     none(string)
+
+proc shouldQuickRun*(hrResult: HandlerResult): bool =
+  ## Check if we should run QuickRun
+  hrResult.kind == hrQuickRun
 
 proc hasError*(hrResult: HandlerResult): bool =
   ## Check if there was an error

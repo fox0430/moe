@@ -30,6 +30,7 @@ type
     Replace
     Search
     Filer
+    QuickRun
 
   ModeTransition* = object
     newMode*: Option[EditorMode]
@@ -46,3 +47,4 @@ proc modeLabel*(m: EditorMode): string =
   of EditorMode.Replace: "REPLACE"
   of EditorMode.Search: "SEARCH"
   of EditorMode.Filer: "FILER"
+  of EditorMode.QuickRun: "QUICKRUN"

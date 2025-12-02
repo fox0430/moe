@@ -55,6 +55,7 @@ type
     cmrBufferDelete # Delete current buffer
     cmrStripWhitespace # Remove trailing whitespace
     cmrFiler # Open file explorer
+    cmrQuickRun # Run the current buffer
     cmrError # Command error
 
   CommandModeHandler* = ref object ## Handler for Command mode specific commands
@@ -103,6 +104,8 @@ type
       strippedLineCount*: int
     of cmrFiler:
       filerPath*: Option[string] # Optional path for filer
+    of cmrQuickRun:
+      discard
     of cmrError:
       errorMessage*: string
 
@@ -299,6 +302,10 @@ proc executeStripWhitespace*(
       strippedCount.inc
   return CommandModeResult(kind: cmrStripWhitespace, strippedLineCount: strippedCount)
 
+proc executeQuickRun*(handler: CommandModeHandler): CommandModeResult =
+  ## Execute quickrun command (:run, :quickrun, :qr)
+  return CommandModeResult(kind: cmrQuickRun)
+
 proc handleCommandModeInput*(
     handler: CommandModeHandler,
     buffer: TextBuffer,
@@ -358,6 +365,8 @@ proc handleCommandModeInput*(
     return handler.executeStripWhitespace(buffer)
   of claFiler:
     return CommandModeResult(kind: cmrFiler, filerPath: cmdResult.filerPath)
+  of claQuickRun:
+    return handler.executeQuickRun()
   of claSubstitute:
     # TODO: Implement search and replace
     return CommandModeResult(kind: cmrMessage, message: "Substitute not implemented")

@@ -17,12 +17,13 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[options, os]
+import std/[options, os, strutils]
 
 import pkg/[celina, results]
 
 import
-  editor, keybindings, modes, buffer, logger, types, cursor, motion, search_utils, filer
+  editor, keybindings, modes, buffer, logger, types, cursor, motion, search_utils,
+  filer, quickrunutils
 import command_handlers/handler_manager
 
 ## NOTE: While in Search Mode:
@@ -373,6 +374,41 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           e.state.needsFullRedraw = true
         else:
           e.state.statusMessage = "No trailing whitespace found"
+
+      if r.shouldQuickRun():
+        # Handle QuickRun command
+        let quickRunResult = startBackgroundQuickRun(activeBuffer, e.config)
+        if quickRunResult.isErr:
+          e.state.statusMessage = "QuickRun error: " & quickRunResult.error
+          logError("handler", "QuickRun failed: " & quickRunResult.error)
+        else:
+          var qrProcess = quickRunResult.get
+          e.state.statusMessage = quickRunStartupMessage(qrProcess.filePath)
+
+          # Wait for the process to finish and get the result
+          let outputResult = qrProcess.waitForResult()
+          if outputResult.isErr:
+            e.state.statusMessage = "QuickRun error: " & outputResult.error
+          else:
+            let output = outputResult.get
+            # Create a new buffer with the output
+            let outputContent = output.join("\n")
+            let outputBuffer = newTextBuffer(outputContent)
+            # Mark as read-only since it's just output
+            outputBuffer.readOnly = true
+
+            # Open the output in a new horizontal split window
+            let splitResult = e.hsplitWithBuffer(outputBuffer)
+            if splitResult.isErr:
+              e.state.statusMessage =
+                "Failed to open output window: " & splitResult.error
+              logError("handler", "QuickRun window split failed: " & splitResult.error)
+            else:
+              e.state.statusMessage = "QuickRun completed: " & qrProcess.filePath
+              logInfo("handler", "QuickRun completed: " & qrProcess.filePath)
+        # Return to Normal mode
+        e.state.previousMode = e.state.mode
+        e.state.mode = EditorMode.Normal
 
       if r.shouldEnterFiler():
         # Enter filer mode with optional path

@@ -584,6 +584,33 @@ proc hsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
 
   ok(())
 
+proc hsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
+  ## Create a horizontal split window with a specific buffer
+  # Save current window state before splitting (if windows already exist)
+  if e.windowManager.windows.len > 0:
+    e.saveActiveWindowState()
+
+  let bufferResult = e.windowManager.hsplitWithBuffer(
+    e.textBuffer, e.viewport, e.state.cursor, e.state.multiStatusLine, buffer
+  )
+  if bufferResult.isErr:
+    return err(bufferResult.error)
+
+  let newBuffer = bufferResult.get
+  e.executer.buffer = newBuffer
+  e.executer.motionController.executor.buffer = newBuffer
+
+  # Restore the new active window state
+  e.restoreActiveWindowState()
+  e.state.needsFullRedraw = true
+
+  # Update cursor position immediately to avoid visual glitch
+  if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
+    let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
+    e.setActiveWindowScreenCursor(activeWindow)
+
+  ok(())
+
 proc enew*(e: Editor): Result[(), string] =
   ## Create a new empty buffer and replace the current one
   let newBuffer = newTextBuffer()

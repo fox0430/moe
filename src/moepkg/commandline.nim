@@ -49,6 +49,7 @@ type
     claBufferDelete # :bd, :bdelete (delete buffer)
     claStripWhitespace # :stripwhitespace, :stripws (remove trailing whitespace)
     claFiler # :Filer (open file explorer)
+    claQuickRun # :run (quick run)
     claUnknown # Unknown command
 
   ParsedCommand* = object
@@ -102,6 +103,8 @@ type
       discard
     of claFiler:
       filerPath*: Option[string] # Optional path to open in filer
+    of claQuickRun:
+      discard
     of claUnknown:
       errorMessage*: string
 
@@ -352,6 +355,8 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
         else:
           none(string),
     )
+  of claQuickRun:
+    return CommandLineResult(kind: claQuickRun)
   of claUnknown:
     return CommandLineResult(
       kind: claUnknown, errorMessage: "Not an editor command: " & cmd.rawText

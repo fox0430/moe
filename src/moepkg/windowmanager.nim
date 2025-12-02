@@ -572,6 +572,92 @@ proc hsplit*(
 
   return ok(newBuffer)
 
+proc hsplitWithBuffer*(
+    wm: EditorWindowManager,
+    currentBuffer: TextBuffer,
+    currentViewport: ViewPort,
+    cursorPosition: BufferPosition,
+    multiStatusLine: bool,
+    newBuffer: TextBuffer,
+): Result[TextBuffer, string] =
+  ## Create a horizontal split window with a specific buffer
+  ## Returns the new buffer that should be used
+
+  # If no windows exist yet, create first window from current state
+  if wm.windows.len == 0:
+    wm.windows.add(
+      EditorWindow(
+        buffer: currentBuffer,
+        viewport: currentViewport,
+        cursor: cursorPosition,
+        active: false,
+      )
+    )
+
+  let
+    # Split the active window horizontally (top and bottom)
+    originalViewport = wm.windows[wm.activeWindowIndex].viewport
+
+    # Separator offset (WindowSeparatorWidth for single status line, 0 for multi status line)
+    separatorOffset = if multiStatusLine: 0 else: WindowSeparatorWidth
+
+    numReservedLines =
+      if multiStatusLine:
+        2 * StatusLineHeight + CommandLineHeight
+      else:
+        StatusLineHeight + CommandLineHeight
+    availableContentHeight =
+      originalViewport.height - numReservedLines - separatorOffset
+
+    # Split content area: favor top window (round up) to preserve scroll position
+    topContentHeight = (availableContentHeight + 1) div 2 # round up
+    bottomContentHeight = availableContentHeight - topContentHeight
+
+  # Update the active window to use top half
+  wm.windows[wm.activeWindowIndex].viewport.height =
+    topContentHeight + (if multiStatusLine: StatusLineHeight else: 0)
+  wm.deactivateAllWindows()
+
+  # Create new window for bottom half with the provided buffer
+  let newWindow = EditorWindow(
+    buffer: newBuffer,
+    viewport: ViewPort(
+      topLine: 0,
+      leftColumn: 0,
+      width: originalViewport.width,
+      height: bottomContentHeight + StatusLineHeight + CommandLineHeight,
+      x: originalViewport.x,
+      y:
+        originalViewport.y + topContentHeight +
+        (if multiStatusLine: StatusLineHeight else: 0) + separatorOffset,
+    ),
+    cursor: BufferPosition(line: 0, column: 0),
+    active: true,
+  )
+
+  # Insert new window right after the active window
+  wm.windows.insert(newWindow, wm.activeWindowIndex + 1)
+  wm.activeWindowIndex = wm.activeWindowIndex + 1
+
+  # Equalize heights of all windows at the same horizontal position
+  let windowGroups = wm.groupWindowsByXAndWidth()
+  for group in windowGroups:
+    if group.len > 1:
+      var sortedGroup = group
+      sortedGroup.sort(
+        proc(a, b: int): int =
+          cmp(wm.windows[a].viewport.y, wm.windows[b].viewport.y)
+      )
+      let
+        firstWindow = wm.windows[sortedGroup[0]]
+        lastWindow = wm.windows[sortedGroup[^1]]
+        totalHeight =
+          (lastWindow.viewport.y + lastWindow.viewport.height) - firstWindow.viewport.y
+        startY = firstWindow.viewport.y
+      wm.equalizeHeightsInGroup(sortedGroup, totalHeight, startY, multiStatusLine)
+
+  return ok(newBuffer)
+
 proc resizeWindows*(
     wm: EditorWindowManager,
     newWidth: int,

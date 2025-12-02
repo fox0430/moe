@@ -128,6 +128,11 @@ proc loadDefaultConfig*(config: CommandConfig) =
   config.addAlias("Ex", claFiler)
   config.addAlias("Explore", claFiler)
 
+  # QuickRun
+  config.addAlias("run", claQuickRun)
+  config.addAlias("quickrun", claQuickRun)
+  config.addAlias("qr", claQuickRun)
+
 proc applyToParser*(config: CommandConfig, parser: CommandLineParser) =
   ## Apply configuration to a command line parser
   # Clear existing aliases
