@@ -25,7 +25,7 @@ import
   buffer, cursor, types, commands, keybindings, commandregistry, modes, commandline,
   commandconfig, statusline, windowmanager, unicode_utils, render_utils, sidebar,
   gitdiff, highlight, logger, config, configloader, keybindconfig, search_utils, filer,
-  lspintegration
+  lspintegration, completion
 import command_handlers/[handler_manager, visual_handler]
 
 type
@@ -1956,3 +1956,19 @@ proc render*(e: Editor, buffer: var Buffer) =
 
   # Render bottom lines (status and command lines)
   e.renderBottomLines(buffer)
+
+  # Render completion popup if active (must be after other rendering)
+  if e.state.mode == EditorMode.Insert:
+    let completionMgr = e.handlerManager.insertHandler.completionManager
+    if completionMgr.isActive():
+      # Use already-calculated screen cursor position
+      # This correctly accounts for line wrapping and viewport scrolling
+      let popupPos = calculatePopupPosition(
+        e.state.screenCursor.x, e.state.screenCursor.y, buffer.area.width,
+        buffer.area.height, completionMgr.menu.entries, completionMgr.menu.maxVisible,
+      )
+
+      # Render the popup
+      renderCompletionPopup(
+        buffer, completionMgr.menu, popupPos, e.config.autocomplete.windowBorder
+      )

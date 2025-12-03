@@ -24,12 +24,17 @@
 ## - Backspace and delete
 ## - Navigation within insert mode
 ## - Mode switching (Escape)
+## - Auto-completion (Ctrl+N/Ctrl+P to navigate, Tab to commit)
 
 import std/[options, unicode, strutils]
 
 import pkg/results
 
-import ../[types, buffer, modes, keybindings, motion, commandregistry, unicode_utils]
+import
+  ../[
+    types, buffer, modes, keybindings, motion, commandregistry, unicode_utils,
+    completion,
+  ]
 import insert_commands
 
 type
@@ -42,6 +47,7 @@ type
     keyBindingRegistry*: KeyBindingRegistry
     motionController*: MotionController
     commandRegistry*: CommandRegistry
+    completionManager*: CompletionManager
 
   InsertModeResult* = object ## Result of insert mode command execution
     case kind*: InsertModeResultKind
@@ -62,6 +68,7 @@ proc newInsertModeHandler*(
     keyBindingRegistry: keyBindingRegistry,
     motionController: motionController,
     commandRegistry: commandRegistry,
+    completionManager: newCompletionManager(),
   )
 
 proc executeCommand*(
@@ -228,7 +235,67 @@ proc handleModeSwitch*(
     handler: InsertModeHandler, targetMode: EditorMode
 ): InsertModeResult =
   ## Handle mode switching from insert mode
+  # Cancel completion when leaving insert mode
+  handler.completionManager.cancelCompletion()
   return InsertModeResult(kind: imrHandled, modeTransition: some(targetMode))
+
+proc commitCompletion*(
+    handler: InsertModeHandler,
+    buffer: TextBuffer,
+    state: EditorState,
+    keepPopupOpen: bool = false,
+): InsertModeResult =
+  ## Commit the selected completion item
+  ## If keepPopupOpen is true, the popup remains visible for further selection
+  ## Uses transaction to group delete+insert as single undo operation
+  let selectedWord = handler.completionManager.getSelectedWord()
+  if selectedWord.len == 0:
+    if not keepPopupOpen:
+      handler.completionManager.cancelCompletion()
+    return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+
+  let menu = handler.completionManager.menu
+
+  # Delete the prefix that was typed (use runeLen for multi-byte character support)
+  let prefixLen = menu.prefix.runeLen
+
+  # Begin transaction to group delete+insert as single undo operation
+  discard buffer.beginTransaction("completion")
+
+  if prefixLen > 0:
+    for _ in 0 ..< prefixLen:
+      state.cursor.column -= 1
+      discard buffer.deleteChar(state.cursor)
+
+  # Insert the selected word
+  discard buffer.insertText(state.cursor, selectedWord)
+  state.cursor.column += selectedWord.runeLen
+
+  # Commit transaction
+  discard buffer.commitTransaction()
+
+  # Close the completion menu (unless keepPopupOpen)
+  if not keepPopupOpen:
+    handler.completionManager.cancelCompletion()
+  else:
+    # Update the prefix to the full word (so further typing filters from here)
+    handler.completionManager.menu.prefix = selectedWord
+
+  return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+
+proc isCtrlN(keyCombo: KeyCombo): bool =
+  ## Check if key is Ctrl+N
+  not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and
+    keyCombo.char.toLowerAscii == "n"
+
+proc isCtrlP(keyCombo: KeyCombo): bool =
+  ## Check if key is Ctrl+P
+  not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and
+    keyCombo.char.toLowerAscii == "p"
+
+proc isCtrlSpace(keyCombo: KeyCombo): bool =
+  ## Check if key is Ctrl+Space (manual completion trigger)
+  not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and keyCombo.char == " "
 
 proc handleInsertModeKey*(
     handler: InsertModeHandler,
@@ -238,7 +305,97 @@ proc handleInsertModeKey*(
 ): InsertModeResult =
   ## Main entry point for handling Insert mode key presses
 
-  # Check for mode switch keys first (like Escape)
+  let completionActive = handler.completionManager.isActive()
+
+  # Handle completion-specific keys when completion is active
+  if completionActive:
+    # Ctrl+N, Down, or Tab - select next and replace current word
+    if keyCombo.isCtrlN or (keyCombo.isSpecial and keyCombo.special == skDown) or (
+      keyCombo.isSpecial and keyCombo.special == skTab and
+      kmShift notin keyCombo.modifiers
+    ):
+      # First Tab activates selection mode
+      if not handler.completionManager.menu.hasSelection:
+        handler.completionManager.menu.hasSelection = true
+      else:
+        handler.completionManager.selectNext()
+      # Replace current word with selected one
+      return handler.commitCompletion(buffer, state, keepPopupOpen = true)
+
+    # Ctrl+P, Up, or Shift+Tab - select previous and replace current word
+    if keyCombo.isCtrlP or (keyCombo.isSpecial and keyCombo.special == skUp) or
+        (
+          keyCombo.isSpecial and keyCombo.special == skTab and
+          kmShift in keyCombo.modifiers
+        ):
+      # First Shift+Tab activates selection mode
+      if not handler.completionManager.menu.hasSelection:
+        handler.completionManager.menu.hasSelection = true
+      else:
+        handler.completionManager.selectPrevious()
+      # Replace current word with selected one
+      return handler.commitCompletion(buffer, state, keepPopupOpen = true)
+
+    # Enter - confirm selection and close popup
+    if keyCombo.isSpecial and keyCombo.special == skEnter:
+      handler.completionManager.cancelCompletion()
+      return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+
+    # Escape - cancel completion and leave insert mode
+    if keyCombo.isSpecial and keyCombo.special == skEscape:
+      handler.completionManager.cancelCompletion()
+      return handler.handleModeSwitch(EditorMode.Normal)
+
+    # Backspace - update filter or cancel if prefix is empty
+    if keyCombo.isSpecial and keyCombo.special == skBackspace:
+      let backspaceResult = handler.handleBackspace(buffer, state)
+      # Update completion filter with new prefix
+      let line = buffer.getLine(state.cursor.line)
+      let newPrefix = extractPrefixBeforeCursor(line, state.cursor.column)
+      if newPrefix.len >= MinPrefixLength:
+        handler.completionManager.updateFilter(newPrefix)
+      else:
+        handler.completionManager.cancelCompletion()
+      return backspaceResult
+
+    # Regular character input while completion is active
+    if not keyCombo.isSpecial and keyCombo.modifiers == {}:
+      let hasSelection = handler.completionManager.menu.hasSelection
+
+      if hasSelection:
+        # Confirm current selection and close popup
+        handler.completionManager.cancelCompletion()
+
+      # Insert the new character
+      discard handler.handleCharacterInsertion(buffer, state, keyCombo.char)
+
+      # Re-trigger completion with new prefix (start fresh, no selection)
+      let line = buffer.getLine(state.cursor.line)
+      let newPrefix = extractPrefixBeforeCursor(line, state.cursor.column)
+      if newPrefix.len >= AutoTriggerPrefixLength:
+        handler.completionManager.triggerCompletion(
+          buffer, state.cursor.line, state.cursor.column
+        )
+        # New completion starts without selection
+      else:
+        handler.completionManager.cancelCompletion()
+      return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+
+  # Ctrl+N - trigger completion (when not active)
+  if keyCombo.isCtrlN and not completionActive:
+    handler.completionManager.triggerCompletion(
+      buffer, state.cursor.line, state.cursor.column
+    )
+    return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+
+  # Ctrl+Space - also trigger completion
+  if keyCombo.isCtrlSpace and not completionActive:
+    handler.completionManager.triggerCompletion(
+      buffer, state.cursor.line, state.cursor.column
+    )
+    return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+
+  # Check for mode switch keys (like Escape)
   let binding = handler.keyBindingRegistry.findBinding(EditorMode.Insert, keyCombo)
   if binding.isSome:
     let cmd = binding.get
@@ -246,14 +403,25 @@ proc handleInsertModeKey*(
     of ctModeSwitch:
       return handler.handleModeSwitch(cmd.targetMode)
     of ctMotion:
+      # Cancel completion on motion
+      handler.completionManager.cancelCompletion()
       return handler.handleMotion(buffer, state, cmd.motion)
     else:
       # Other command types not supported in insert mode
       return InsertModeResult(kind: imrUnhandled)
 
-  # Handle regular character insertion
+  # Handle regular character insertion with auto-completion trigger
   if not keyCombo.isSpecial and keyCombo.modifiers == {}:
-    return handler.handleCharacterInsertion(buffer, state, keyCombo.char)
+    discard handler.handleCharacterInsertion(buffer, state, keyCombo.char)
+    # Auto-trigger completion after typing (when prefix is long enough)
+    let line = buffer.getLine(state.cursor.line)
+    let prefix = extractPrefixBeforeCursor(line, state.cursor.column)
+    if prefix.len >= AutoTriggerPrefixLength:
+      handler.completionManager.triggerCompletion(
+        buffer, state.cursor.line, state.cursor.column
+      )
+      # Don't auto-insert - wait for Tab to be pressed first
+    return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
   # Handle special keys
   if keyCombo.isSpecial:
@@ -267,20 +435,26 @@ proc handleInsertModeKey*(
     of skTab:
       return handler.handleTab(buffer, state)
     of skLeft:
+      handler.completionManager.cancelCompletion()
       return handler.handleMotion(buffer, state, Motion.Left)
     of skRight:
+      handler.completionManager.cancelCompletion()
       return handler.handleMotion(buffer, state, Motion.Right)
     of skUp:
       return handler.handleMotion(buffer, state, Motion.Up)
     of skDown:
       return handler.handleMotion(buffer, state, Motion.Down)
     of skHome:
+      handler.completionManager.cancelCompletion()
       return handler.handleMotion(buffer, state, Motion.Home)
     of skEnd:
+      handler.completionManager.cancelCompletion()
       return handler.handleMotion(buffer, state, Motion.End)
     of skPageUp:
+      handler.completionManager.cancelCompletion()
       return handler.handleMotion(buffer, state, Motion.PageUp)
     of skPageDown:
+      handler.completionManager.cancelCompletion()
       return handler.handleMotion(buffer, state, Motion.PageDown)
     else:
       return InsertModeResult(kind: imrUnhandled)
