@@ -25,8 +25,8 @@ import
   buffer, cursor, types, commands, keybindings, commandregistry, modes, commandline,
   commandconfig, statusline, windowmanager, unicode_utils, render_utils, sidebar,
   gitdiff, highlight, logger, config, configloader, keybindconfig, search_utils, filer,
-  lspintegration, completion
-import command_handlers/[handler_manager, visual_handler]
+  lspintegration, completion, signaturehelp
+import command_handlers/[handler_manager, visual_handler, insert_handler]
 
 type
   IndentInfo = object
@@ -1911,6 +1911,32 @@ proc maybeUpdateLsp*(e: Editor) =
     if lspResult.isOk:
       e.lastLspChangeSeq = activeBuffer.changeSeq
 
+proc requestSignatureHelpFromLsp*(e: Editor) =
+  ## Request signature help from LSP if in insert mode with paren depth > 0
+  if not e.lsp.enabled:
+    return
+
+  if e.state.mode != EditorMode.Insert:
+    return
+
+  let sigHelpMgr = e.handlerManager.insertHandler.signatureHelpManager
+  if sigHelpMgr.parenDepth == 0 and not sigHelpMgr.isActive():
+    return
+
+  let activeBuffer = e.activeBuffer()
+  let sigHelpResult =
+    e.lsp.requestSignatureHelp(activeBuffer, e.state.cursor.line, e.state.cursor.column)
+
+  if sigHelpResult.isOk:
+    let sigHelpOpt = sigHelpResult.get
+    if sigHelpOpt.isSome:
+      let sigHelp = sigHelpOpt.get
+      sigHelpMgr.show(sigHelp, e.state.cursor.line, e.state.cursor.column)
+    else:
+      # No signature help available
+      if sigHelpMgr.parenDepth == 0:
+        sigHelpMgr.hide()
+
 proc shutdown*(e: Editor) =
   ## Shutdown editor and clean up resources (including LSP servers)
   e.lsp.shutdown()
@@ -1926,6 +1952,9 @@ proc render*(e: Editor, buffer: var Buffer) =
 
   # Update LSP if buffer was modified
   e.maybeUpdateLsp()
+
+  # Request signature help from LSP if in insert mode
+  e.requestSignatureHelpFromLsp()
 
   # Update git diff if buffer was modified (with debouncing)
   e.maybeUpdateGitDiff()
@@ -1972,3 +2001,12 @@ proc render*(e: Editor, buffer: var Buffer) =
       renderCompletionPopup(
         buffer, completionMgr.menu, popupPos, e.config.autocomplete.windowBorder
       )
+
+    # Render signature help popup if active
+    let sigHelpMgr = e.handlerManager.insertHandler.signatureHelpManager
+    if sigHelpMgr.isActive():
+      let popupPos = calculateSignatureHelpPosition(
+        e.state.screenCursor.x, e.state.screenCursor.y, buffer.area.width,
+        buffer.area.height, sigHelpMgr.display.signature.len,
+      )
+      renderSignatureHelpPopup(buffer, sigHelpMgr.display, popupPos, true)

@@ -145,6 +145,27 @@ type
     textDocument*: TextDocumentIdentifier
     position*: Position
 
+  # Signature Help types
+  ParameterInformation* = object ## Information about a parameter
+    label*: string # Parameter label (can also be [start, end] but we use string)
+    documentation*: Option[JsonNode] # string | MarkupContent
+
+  SignatureInformation* = object ## Information about a signature
+    label*: string
+    documentation*: Option[JsonNode] # string | MarkupContent
+    parameters*: Option[seq[ParameterInformation]]
+    activeParameter*: Option[int]
+
+  SignatureHelp* = object ## Result of signature help request
+    signatures*: seq[SignatureInformation]
+    activeSignature*: Option[int]
+    activeParameter*: Option[int]
+
+  SignatureHelpParams* = object ## Parameters for signature help request
+    textDocument*: TextDocumentIdentifier
+    position*: Position
+    context*: Option[JsonNode] # SignatureHelpContext
+
   # Definition/Declaration types
   DefinitionParams* = object ## Parameters for definition request
     textDocument*: TextDocumentIdentifier
@@ -372,6 +393,41 @@ proc parseHover*(node: JsonNode): Hover =
   if node.hasKey("range"):
     result.range = some(parseRange(node["range"]))
 
+proc parseParameterInformation*(node: JsonNode): ParameterInformation =
+  ## Parse parameter information from JSON
+  # Label can be string or [start, end] tuple - we handle both
+  if node.hasKey("label"):
+    if node["label"].kind == JString:
+      result.label = node["label"].getStr
+    elif node["label"].kind == JArray:
+      # [start, end] format - we'll just use empty string and rely on signature label
+      result.label = ""
+  if node.hasKey("documentation"):
+    result.documentation = some(node["documentation"])
+
+proc parseSignatureInformation*(node: JsonNode): SignatureInformation =
+  ## Parse signature information from JSON
+  result.label = node["label"].getStr
+  if node.hasKey("documentation"):
+    result.documentation = some(node["documentation"])
+  if node.hasKey("parameters"):
+    var params: seq[ParameterInformation] = @[]
+    for p in node["parameters"]:
+      params.add(parseParameterInformation(p))
+    result.parameters = some(params)
+  if node.hasKey("activeParameter"):
+    result.activeParameter = some(node["activeParameter"].getInt)
+
+proc parseSignatureHelp*(node: JsonNode): SignatureHelp =
+  ## Parse signature help response from JSON
+  if node.hasKey("signatures"):
+    for sig in node["signatures"]:
+      result.signatures.add(parseSignatureInformation(sig))
+  if node.hasKey("activeSignature"):
+    result.activeSignature = some(node["activeSignature"].getInt)
+  if node.hasKey("activeParameter"):
+    result.activeParameter = some(node["activeParameter"].getInt)
+
 proc parseServerCapabilities*(node: JsonNode): ServerCapabilities =
   if node.hasKey("textDocumentSync"):
     result.textDocumentSync = some(node["textDocumentSync"])
@@ -386,6 +442,20 @@ proc parseServerCapabilities*(node: JsonNode): ServerCapabilities =
     if cp.hasKey("resolveProvider"):
       opts.resolveProvider = some(cp["resolveProvider"].getBool)
     result.completionProvider = some(opts)
+  if node.hasKey("signatureHelpProvider"):
+    let sh = node["signatureHelpProvider"]
+    var opts = SignatureHelpOptions()
+    if sh.hasKey("triggerCharacters"):
+      var chars: seq[string] = @[]
+      for c in sh["triggerCharacters"]:
+        chars.add(c.getStr)
+      opts.triggerCharacters = some(chars)
+    if sh.hasKey("retriggerCharacters"):
+      var chars: seq[string] = @[]
+      for c in sh["retriggerCharacters"]:
+        chars.add(c.getStr)
+      opts.retriggerCharacters = some(chars)
+    result.signatureHelpProvider = some(opts)
   if node.hasKey("hoverProvider"):
     result.hoverProvider = some(node["hoverProvider"])
   if node.hasKey("definitionProvider"):

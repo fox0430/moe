@@ -183,6 +183,19 @@ proc requestReferences*(
   let path = buffer.filePath.get
   return lsp.service.requestReferences(path, line, column)
 
+proc requestSignatureHelp*(
+    lsp: LspIntegration, buffer: TextBuffer, line, column: int
+): Result[Option[SignatureHelp], string] =
+  ## Request signature help at cursor position
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.requestSignatureHelp(path, line, column)
+
 # Diagnostic helpers
 proc applyDiagnosticsToBuffer*(buffer: TextBuffer, diagnostics: seq[Diagnostic]) =
   ## Apply LSP diagnostics to buffer's line markers
@@ -217,6 +230,82 @@ proc applyDiagnosticsToBuffer*(buffer: TextBuffer, diagnostics: seq[Diagnostic])
         kind == SidebarItemKind.SyntaxError
       ):
         buffer.setLineMarker(line, kind)
+
+# Signature help content helpers
+proc getSignatureHelpText*(sigHelp: SignatureHelp): string =
+  ## Extract formatted text from signature help response
+  if sigHelp.signatures.len == 0:
+    return ""
+
+  # Get the active signature (default to first)
+  let activeIdx = sigHelp.activeSignature.get(0)
+  if activeIdx < 0 or activeIdx >= sigHelp.signatures.len:
+    return ""
+
+  let sig = sigHelp.signatures[activeIdx]
+  result = sig.label
+
+  # Add documentation if available
+  if sig.documentation.isSome:
+    let doc = sig.documentation.get
+    var docText = ""
+    case doc.kind
+    of JString:
+      docText = doc.getStr
+    of JObject:
+      if doc.hasKey("value"):
+        docText = doc["value"].getStr
+    else:
+      discard
+    if docText.len > 0:
+      result.add("\n\n" & docText)
+
+proc getActiveParameterIndex*(sigHelp: SignatureHelp): int =
+  ## Get the active parameter index from signature help
+  # First check the top-level activeParameter
+  if sigHelp.activeParameter.isSome:
+    return sigHelp.activeParameter.get
+
+  # Fall back to the active signature's activeParameter
+  let activeIdx = sigHelp.activeSignature.get(0)
+  if activeIdx >= 0 and activeIdx < sigHelp.signatures.len:
+    let sig = sigHelp.signatures[activeIdx]
+    if sig.activeParameter.isSome:
+      return sig.activeParameter.get
+
+  return 0
+
+proc getParameterInfo*(sigHelp: SignatureHelp): tuple[label: string, start, stop: int] =
+  ## Get the active parameter's highlighting range within the signature label
+  ## Returns (full label, start position, end position) for highlighting
+  result = ("", -1, -1)
+
+  if sigHelp.signatures.len == 0:
+    return
+
+  let activeIdx = sigHelp.activeSignature.get(0)
+  if activeIdx < 0 or activeIdx >= sigHelp.signatures.len:
+    return
+
+  let sig = sigHelp.signatures[activeIdx]
+  result.label = sig.label
+
+  if sig.parameters.isNone or sig.parameters.get.len == 0:
+    return
+
+  let paramIdx = getActiveParameterIndex(sigHelp)
+  let params = sig.parameters.get
+
+  if paramIdx < 0 or paramIdx >= params.len:
+    return
+
+  let param = params[paramIdx]
+  if param.label.len > 0:
+    # Find the parameter label in the signature label
+    let pos = sig.label.find(param.label)
+    if pos >= 0:
+      result.start = pos
+      result.stop = pos + param.label.len
 
 # Hover content helpers
 proc getHoverText*(hover: Hover): string =

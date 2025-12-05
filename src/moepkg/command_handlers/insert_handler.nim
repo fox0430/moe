@@ -33,7 +33,7 @@ import pkg/results
 import
   ../[
     types, buffer, modes, keybindings, motion, commandregistry, unicode_utils,
-    completion,
+    completion, signaturehelp,
   ]
 import insert_commands
 
@@ -48,6 +48,7 @@ type
     motionController*: MotionController
     commandRegistry*: CommandRegistry
     completionManager*: CompletionManager
+    signatureHelpManager*: SignatureHelpManager
 
   InsertModeResult* = object ## Result of insert mode command execution
     case kind*: InsertModeResultKind
@@ -69,6 +70,7 @@ proc newInsertModeHandler*(
     motionController: motionController,
     commandRegistry: commandRegistry,
     completionManager: newCompletionManager(),
+    signatureHelpManager: newSignatureHelpManager(),
   )
 
 proc executeCommand*(
@@ -99,6 +101,13 @@ proc handleCharacterInsertion*(
 ): InsertModeResult =
   ## Handle regular character insertion with auto-close paren support
   let pos = state.cursor
+
+  # Track paren depth for signature help
+  if text.len == 1:
+    if text[0] == '(':
+      handler.signatureHelpManager.incrementParenDepth()
+    elif text[0] == ')':
+      handler.signatureHelpManager.decrementParenDepth()
 
   # Check if auto-close paren is enabled and text is a single character opening paren
   if state.autoCloseParen and text.len == 1 and isOpeningParen(text[0]):
@@ -235,8 +244,9 @@ proc handleModeSwitch*(
     handler: InsertModeHandler, targetMode: EditorMode
 ): InsertModeResult =
   ## Handle mode switching from insert mode
-  # Cancel completion when leaving insert mode
+  # Cancel completion and signature help when leaving insert mode
   handler.completionManager.cancelCompletion()
+  handler.signatureHelpManager.hide()
   return InsertModeResult(kind: imrHandled, modeTransition: some(targetMode))
 
 proc commitCompletion*(
@@ -296,6 +306,16 @@ proc isCtrlP(keyCombo: KeyCombo): bool =
 proc isCtrlSpace(keyCombo: KeyCombo): bool =
   ## Check if key is Ctrl+Space (manual completion trigger)
   not keyCombo.isSpecial and kmCtrl in keyCombo.modifiers and keyCombo.char == " "
+
+proc shouldTriggerSignatureHelp*(keyCombo: KeyCombo): bool =
+  ## Check if the typed character should trigger signature help
+  not keyCombo.isSpecial and keyCombo.modifiers == {} and keyCombo.char.len == 1 and
+    isTriggerChar(keyCombo.char[0])
+
+proc shouldRetriggerSignatureHelp*(keyCombo: KeyCombo): bool =
+  ## Check if the typed character should retrigger signature help
+  not keyCombo.isSpecial and keyCombo.modifiers == {} and keyCombo.char.len == 1 and
+    isRetriggerChar(keyCombo.char[0])
 
 proc handleInsertModeKey*(
     handler: InsertModeHandler,

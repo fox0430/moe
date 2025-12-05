@@ -347,6 +347,18 @@ proc requestReferences*(
   let uri = pathToUri(path)
   return client.references(uri, line, character, includeDeclaration)
 
+proc requestSignatureHelp*(
+    svc: LspService, path: string, line, character: int
+): Result[Option[SignatureHelp], string] =
+  ## Request signature help at a position
+  let clientResult = svc.getClientForPath(path)
+  if clientResult.isErr:
+    return err(clientResult.error)
+
+  let client = clientResult.get
+  let uri = pathToUri(path)
+  return client.signatureHelp(uri, line, character)
+
 # Capability checking
 proc hasCompletionSupport*(svc: LspService, langId: string): bool =
   ## Check if completion is supported for a language
@@ -395,6 +407,18 @@ proc hasReferencesSupport*(svc: LspService, langId: string): bool =
     return false
 
   return client.capabilities.get.referencesProvider.isSome
+
+proc hasSignatureHelpSupport*(svc: LspService, langId: string): bool =
+  ## Check if signature help is supported for a language
+  let clientOpt = svc.getClient(langId)
+  if clientOpt.isNone:
+    return false
+
+  let client = clientOpt.get
+  if client.capabilities.isNone:
+    return false
+
+  return client.capabilities.get.signatureHelpProvider.isSome
 
 # Status information
 proc getRunningLanguages*(svc: LspService): seq[string] =

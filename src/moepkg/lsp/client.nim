@@ -520,6 +520,27 @@ proc hover*(
 
   return ok(some(parseHover(response)))
 
+proc signatureHelp*(
+    client: LspClient, uri: string, line, character: int
+): Result[Option[SignatureHelp], string] =
+  ## Request signature help at a position
+  let params =
+    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
+
+  let reqResult = client.sendRequest("textDocument/signatureHelp", params)
+  if reqResult.isErr:
+    return err(reqResult.error)
+
+  let respResult = client.waitForResponse(reqResult.get)
+  if respResult.isErr:
+    return err(respResult.error)
+
+  let response = respResult.get
+  if response.kind == JNull:
+    return ok(none(SignatureHelp))
+
+  return ok(some(parseSignatureHelp(response)))
+
 proc gotoDefinition*(
     client: LspClient, uri: string, line, character: int
 ): Result[seq[Location], string] =
