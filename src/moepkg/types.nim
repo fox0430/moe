@@ -21,12 +21,14 @@ import std/[options, monotimes, tables]
 
 import pkg/celina
 
-import cursor, modes, buffer, registers, filer
+import cursor, modes, buffer, registers, filer, command_completion
 
 # Re-export SidebarItemKind from buffer module
 export buffer.SidebarItemKind
 # Re-export registers types
 export registers
+# Re-export command_completion types
+export command_completion
 
 type
   SidebarItem* = object ## Single cell in the sidebar
@@ -285,6 +287,11 @@ type
     lastGitDiffChangeSeq*: int # Buffer changeSeq at last git diff update
     gitDiffUpdateInterval*: int64
       # Minimum milliseconds between git diff updates (debounce)
+    # Auto save settings
+    lastAutoSave*: MonoTime # Timestamp of last auto save
+    # Auto backup settings
+    lastAutoBackup*: MonoTime # Timestamp of last auto backup
+    lastInputTime*: MonoTime # Timestamp of last user input (for idle detection)
     # Editor behavior settings
     tabStop*: int # Tab width (number of spaces per tab character)
     expandTab*: bool # Insert spaces instead of tab character when Tab key is pressed
@@ -331,3 +338,6 @@ type
     jumpListIndex*: int # Current position in jump list (-1 when not navigating)
     # Filer state
     filerState*: Option[FilerState] # File explorer state (when in Filer mode)
+    # Command mode completion
+    commandCompletionManager*: CommandCompletionManager
+      # Command mode auto-completion manager

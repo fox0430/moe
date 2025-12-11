@@ -193,6 +193,10 @@ proc loadDefaultAliases*(parser: CommandLineParser) =
   parser.addAlias("Ex", claFiler)
   parser.addAlias("Explore", claFiler)
 
+  parser.addAlias("run", claQuickRun)
+  parser.addAlias("quickrun", claQuickRun)
+  parser.addAlias("qr", claQuickRun)
+
 proc parseCommandLine*(parser: CommandLineParser, input: string): ParsedCommand =
   ## Parse a command line input string into a structured command
   result.rawText = input

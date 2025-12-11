@@ -41,6 +41,7 @@ type
     cmrVSplit # Vertical split window
     cmrHSplit # Horizontal split window
     cmrEnew # Create new empty buffer
+    cmrEdit # Edit/open file in current window
     cmrSetMultiStatusLine # Set multi status line
     cmrSetIgnoreCase # Set ignorecase option
     cmrSetSmartCase # Set smartcase option
@@ -81,6 +82,8 @@ type
       hsplitFilename*: Option[string]
     of cmrEnew:
       discard
+    of cmrEdit:
+      editFilename*: string
     of cmrSetMultiStatusLine:
       enabled*: bool
     of cmrSetIgnoreCase:
@@ -177,8 +180,8 @@ proc executeEdit*(
   # If path is a directory, open in Filer mode
   if dirExists(filename):
     return CommandModeResult(kind: cmrFiler, filerPath: some(absolutePath(filename)))
-  # TODO: Implement file loading
-  return CommandModeResult(kind: cmrMessage, message: "Opened: " & filename)
+  # Open the file in the current window
+  return CommandModeResult(kind: cmrEdit, editFilename: absolutePath(filename))
 
 proc executeGotoLine*(
     handler: CommandModeHandler, buffer: TextBuffer, lineNumber: int

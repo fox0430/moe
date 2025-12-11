@@ -233,9 +233,63 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
 
   # Handle Escape to exit Command mode and return to previous mode
   if keyCombo.isSpecial and keyCombo.special == skEscape:
+    e.state.commandCompletionManager.cancelCompletion()
     e.state.mode = e.state.previousMode
     e.state.commandText = ""
     e.state.commandCursor = 0
+    return true
+
+  # Handle Tab key for command completion
+  if keyCombo.isSpecial and keyCombo.special == skTab:
+    let mgr = e.state.commandCompletionManager
+    let hasSpace = ' ' in e.state.commandText
+
+    proc applyCompletion(): bool =
+      ## Apply the selected completion to command text
+      ## Returns true if a directory was selected (needs re-trigger)
+      let selected = mgr.getSelectedCommand()
+      if selected.len == 0:
+        return false
+
+      case mgr.mode
+      of cmCommand:
+        e.state.commandText = ":" & selected
+        e.state.commandCursor = selected.len
+        return false
+      of cmFilePath:
+        # Use original directory prefix (saved when completion started)
+        let newArg = mgr.originalDirPrefix & selected
+        e.state.commandText = ":" & mgr.baseCommand & " " & newArg
+        e.state.commandCursor = mgr.baseCommand.len + 1 + newArg.len
+        # Return true if directory selected (ends with /)
+        return selected.endsWith("/")
+      of cmSetOption:
+        # Replace only the argument part
+        let (cmd, _) = parseCommandLine(e.state.commandText)
+        e.state.commandText = ":" & cmd & " " & selected
+        e.state.commandCursor = cmd.len + 1 + selected.len
+        return false
+
+    if kmShift in keyCombo.modifiers:
+      # Shift+Tab: select previous item
+      if mgr.isActive():
+        mgr.selectPrevious()
+        # Apply if something is now selected
+        if mgr.menu.selectedIndex >= 0:
+          discard applyCompletion()
+    else:
+      # Tab: trigger or select next item
+      if mgr.isActive():
+        mgr.selectNext()
+        # Apply if something is now selected
+        if mgr.menu.selectedIndex >= 0:
+          discard applyCompletion()
+      else:
+        # Trigger completion
+        if hasSpace:
+          mgr.triggerArgumentCompletion(e.state.commandText, getCurrentDir())
+        else:
+          mgr.triggerCompletion(e.commandLineParser, e.state.commandText)
     return true
 
   # Handle Enter to execute command
@@ -244,6 +298,21 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
     (not keyCombo.isSpecial and (keyCombo.char == "\n" or keyCombo.char == "\r"))
 
   if isEnter:
+    # If completion popup is active with a selection, confirm it
+    if e.state.commandCompletionManager.isActive() and
+        e.state.commandCompletionManager.menu.selectedIndex >= 0:
+      let mgr = e.state.commandCompletionManager
+      # Check if selected item is a directory (for file path mode)
+      let isDir = mgr.mode == cmFilePath and mgr.getSelectedCommand().endsWith("/")
+      mgr.cancelCompletion()
+      # If directory was confirmed, re-trigger completion for its contents
+      if isDir:
+        mgr.triggerArgumentCompletion(e.state.commandText, getCurrentDir())
+      return true
+
+    # Cancel completion if active (no selection case)
+    e.state.commandCompletionManager.cancelCompletion()
+
     if e.state.commandText.len > 1: # Must have something after :
       # Use the command handler with active buffer
       let activeBuffer = e.activeBuffer()
@@ -290,6 +359,15 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         if enewResult.isErr:
           logError("handler", "Enew failed: " & enewResult.error)
           e.state.statusMessage = "Error: " & enewResult.error
+
+      if r.shouldEdit():
+        # Handle edit (open file in current window)
+        let editResult = e.editFile(r.getEditFilename())
+        if editResult.isErr:
+          logError("handler", "Edit failed: " & editResult.error)
+          e.state.statusMessage = "Error: " & editResult.error
+        else:
+          e.state.statusMessage = "Opened: " & r.getEditFilename()
 
       if r.shouldSetMultiStatusLine():
         # Handle multi status line setting
@@ -450,6 +528,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
   if keyCombo.isSpecial and keyCombo.special == skLeft:
     if e.state.commandCursor > 0:
       e.state.commandCursor -= 1
+      e.state.commandCompletionManager.cancelCompletion()
     return true
 
   # Handle Right arrow - move cursor right
@@ -458,6 +537,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
     let maxPos = e.state.commandText.len - 1
     if e.state.commandCursor < maxPos:
       e.state.commandCursor += 1
+      e.state.commandCompletionManager.cancelCompletion()
     return true
 
   # Handle Backspace - delete character before cursor
@@ -469,6 +549,14 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
       e.state.commandText =
         e.state.commandText[0 ..< pos] & e.state.commandText[pos + 1 ..^ 1]
       e.state.commandCursor -= 1
+      # Update completion
+      let mgr = e.state.commandCompletionManager
+      if ' ' in e.state.commandText:
+        # Argument mode
+        mgr.triggerArgumentCompletion(e.state.commandText, getCurrentDir())
+      elif mgr.isActive():
+        let prefix = extractCommandPrefix(e.state.commandText)
+        mgr.updateFilter(prefix)
     return true
 
   # Handle Delete - delete character at cursor
@@ -477,16 +565,26 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
     if pos < e.state.commandText.len:
       e.state.commandText =
         e.state.commandText[0 ..< pos] & e.state.commandText[pos + 1 ..^ 1]
+      # Update completion
+      let mgr = e.state.commandCompletionManager
+      if ' ' in e.state.commandText:
+        # Argument mode
+        mgr.triggerArgumentCompletion(e.state.commandText, getCurrentDir())
+      elif mgr.isActive():
+        let prefix = extractCommandPrefix(e.state.commandText)
+        mgr.updateFilter(prefix)
     return true
 
   # Handle Home - move cursor to beginning
   if keyCombo.isSpecial and keyCombo.special == skHome:
     e.state.commandCursor = 0
+    e.state.commandCompletionManager.cancelCompletion()
     return true
 
   # Handle End - move cursor to end
   if keyCombo.isSpecial and keyCombo.special == skEnd:
     e.state.commandCursor = e.state.commandText.len - 1
+    e.state.commandCompletionManager.cancelCompletion()
     return true
 
   # Handle character input - insert at cursor position
@@ -495,6 +593,22 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
     e.state.commandText =
       e.state.commandText[0 ..< pos] & keyCombo.char & e.state.commandText[pos ..^ 1]
     e.state.commandCursor += 1
+    # Handle completion
+    let mgr = e.state.commandCompletionManager
+    let hasSpace = ' ' in e.state.commandText
+    if keyCombo.char == " ":
+      # Space is a delimiter - trigger argument completion if applicable
+      mgr.cancelCompletion()
+      mgr.triggerArgumentCompletion(e.state.commandText, getCurrentDir())
+    elif hasSpace:
+      # In argument mode - always update argument completion
+      mgr.triggerArgumentCompletion(e.state.commandText, getCurrentDir())
+    elif mgr.isActive():
+      let prefix = extractCommandPrefix(e.state.commandText)
+      mgr.updateFilter(prefix)
+    else:
+      # Auto-trigger command completion on first character
+      mgr.triggerCompletion(e.commandLineParser, e.state.commandText)
     return true
 
   # Ignore other special keys
@@ -590,6 +704,9 @@ proc handleSearchModeEvent(e: Editor, event: Event): bool =
 
 proc handleEvent*(e: Editor, event: Event): bool =
   ## Main event handler using the new handler manager system
+
+  # Update last input time for auto backup idle detection
+  e.updateInputTime()
 
   # Handle Command mode input differently (character by character)
   if e.state.mode == EditorMode.Command:

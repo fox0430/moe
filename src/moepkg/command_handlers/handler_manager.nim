@@ -48,6 +48,7 @@ type
     hrVSplit # Vertical split window
     hrHSplit # Horizontal split window
     hrEnew # Create new empty buffer
+    hrEdit # Edit/open file in current window
     hrSetMultiStatusLine # Set multi status line
     hrSetIgnoreCase # Set ignorecase option
     hrSetSmartCase # Set smartcase option
@@ -100,6 +101,8 @@ type
       hsplitFilename*: Option[string]
     of hrEnew:
       discard
+    of hrEdit:
+      editFilename*: string
     of hrSetMultiStatusLine:
       enabled*: bool
     of hrSetIgnoreCase:
@@ -346,6 +349,8 @@ proc handleCommandMode*(
     return HandlerResult(kind: hrHSplit, hsplitFilename: r.hsplitFilename)
   of cmrEnew:
     return HandlerResult(kind: hrEnew)
+  of cmrEdit:
+    return HandlerResult(kind: hrEdit, editFilename: r.editFilename)
   of cmrSetMultiStatusLine:
     return HandlerResult(kind: hrSetMultiStatusLine, enabled: r.enabled)
   of cmrSetIgnoreCase:
@@ -542,6 +547,14 @@ proc shouldHSplit*(hrResult: HandlerResult): bool =
 proc shouldEnew*(hrResult: HandlerResult): bool =
   ## Check if we should create a new empty buffer
   hrResult.kind == hrEnew
+
+proc shouldEdit*(hrResult: HandlerResult): bool =
+  ## Check if we should edit/open a file
+  hrResult.kind == hrEdit
+
+proc getEditFilename*(hrResult: HandlerResult): string =
+  ## Get the filename for edit command
+  if hrResult.kind == hrEdit: hrResult.editFilename else: ""
 
 proc shouldSetMultiStatusLine*(hrResult: HandlerResult): bool =
   ## Check if we should set multi status line mode

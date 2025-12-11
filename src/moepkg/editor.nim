@@ -25,7 +25,7 @@ import
   buffer, cursor, types, commands, keybindings, commandregistry, modes, commandline,
   commandconfig, statusline, windowmanager, unicode_utils, render_utils, sidebar,
   gitdiff, highlight, logger, config, configloader, keybindconfig, search_utils, filer,
-  lspintegration, completion, signaturehelp
+  lspintegration, completion, signaturehelp, backup, command_completion
 import command_handlers/[handler_manager, visual_handler, insert_handler]
 
 type
@@ -646,6 +646,48 @@ proc enew*(e: Editor): Result[(), string] =
   e.state.needsFullRedraw = true
   ok(())
 
+proc editFile*(e: Editor, path: string): Result[(), string] =
+  ## Load a file and replace the current buffer (like :e in Vim)
+  ## If the file doesn't exist, create an empty buffer with the path set (new file)
+  let newBuffer = newTextBuffer()
+
+  if fileExists(path):
+    # Load existing file
+    let loadResult = newBuffer.loadFile(path)
+    if loadResult.isErr:
+      return err(loadResult.error)
+  else:
+    # New file: set the path for saving later
+    newBuffer.filePath = some(path)
+
+  if e.windowManager.windows.len > 0 and
+      e.windowManager.activeWindowIndex < e.windowManager.windows.len:
+    # Replace the buffer in the active window
+    let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
+    activeWindow.buffer = newBuffer
+    activeWindow.cursor = BufferPosition(line: 0, column: 0)
+    activeWindow.viewport.topLine = 0
+    activeWindow.viewport.leftColumn = 0
+
+    # Update executor and motion controller references
+    e.executer.buffer = newBuffer
+    e.executer.motionController.executor.buffer = newBuffer
+    e.executer.motionController.viewportManager.viewport = activeWindow.viewport
+
+    # Reset cursor
+    e.state.cursor = BufferPosition(line: 0, column: 0)
+  else:
+    # No windows, replace the main buffer
+    e.textBuffer = newBuffer
+    e.executer.buffer = newBuffer
+    e.executer.motionController.executor.buffer = newBuffer
+    e.state.cursor = BufferPosition(line: 0, column: 0)
+    e.viewport.topLine = 0
+    e.viewport.leftColumn = 0
+
+  e.state.needsFullRedraw = true
+  ok(())
+
 proc newEditor*(): Editor =
   # Load TOML configuration
   let editorConfig = loadConfig()
@@ -698,6 +740,11 @@ proc newEditor*(): Editor =
       lastGitDiffUpdate: getMonoTime(), # Initialize to current time
       lastGitDiffChangeSeq: 0, # Initialize to 0 (no changes yet)
       gitDiffUpdateInterval: editorConfig.git.updateInterval,
+      # Auto save
+      lastAutoSave: getMonoTime(), # Initialize to current time
+      # Auto backup
+      lastAutoBackup: getMonoTime(), # Initialize to current time
+      lastInputTime: getMonoTime(), # Initialize to current time
       # Editor behavior
       tabStop: editorConfig.standard.tabStop,
       expandTab: editorConfig.standard.expandTab,
@@ -733,6 +780,8 @@ proc newEditor*(): Editor =
       # Jump list
       jumpList: @[], # Empty jump list initially
       jumpListIndex: -1, # Not navigating jump list initially
+      # Command mode completion
+      commandCompletionManager: newCommandCompletionManager(),
     ),
     viewport: ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 20, x: 0, y: 0),
     commandRegistry: cmdRegistry,
@@ -876,6 +925,192 @@ proc saveFile*(e: Editor, path: Option[string] = none(string)): Result[(), strin
       )
 
   ok(())
+
+proc autoSave*(e: Editor) =
+  ## Automatically save modified buffers if auto save is enabled and interval has passed
+  ## This should be called periodically (e.g., from render loop)
+  ##
+  ## Conditions for auto save:
+  ## - autoSave.enable is true in config
+  ## - Buffer has been modified (isModified)
+  ## - Buffer has a file path
+  ## - Enough time has passed since last auto save (interval in minutes)
+
+  if not e.config.autoSave.enable:
+    return
+
+  let now = getMonoTime()
+  let elapsed = now - e.state.lastAutoSave
+
+  # Convert interval from minutes to Duration
+  let intervalMinutes = e.config.autoSave.interval
+  let threshold = initDuration(minutes = intervalMinutes)
+
+  if elapsed < threshold:
+    return
+
+  # Check all windows for modified buffers and save them
+  var savedCount = 0
+  var savedPaths: seq[string] = @[]
+
+  if e.windowManager.windows.len > 0:
+    # Multi-window mode: check each window's buffer
+    var savedBuffers: seq[TextBuffer] =
+      @[] # Track already saved buffers to avoid duplicates
+
+    for window in e.windowManager.windows:
+      let buffer = window.buffer
+
+      # Skip if already saved (same buffer in multiple windows)
+      if buffer in savedBuffers:
+        continue
+
+      # Check if buffer is modified and has a file path
+      if buffer.isModified and buffer.filePath.isSome:
+        let savePath = buffer.filePath.get
+        let saveResult = buffer.saveFile(savePath)
+
+        if saveResult.isOk:
+          savedBuffers.add(buffer)
+          savedCount += 1
+          savedPaths.add(savePath)
+
+          # Refresh git diff after saving
+          if e.state.showGitDiff:
+            discard updateBufferWithGitDiff(buffer, useBuffer = false)
+
+          # Notify LSP that a document was saved
+          if e.lsp.enabled:
+            discard e.lsp.onBufferSave(buffer)
+        else:
+          logError(
+            "editor", "Auto save failed for " & savePath & ": " & saveResult.error
+          )
+  else:
+    # Single window mode: check the main buffer
+    if e.textBuffer.isModified and e.textBuffer.filePath.isSome:
+      let savePath = e.textBuffer.filePath.get
+      let saveResult = e.textBuffer.saveFile(savePath)
+
+      if saveResult.isOk:
+        savedCount += 1
+        savedPaths.add(savePath)
+
+        # Refresh git diff after saving
+        e.refreshGitDiff(useBuffer = false)
+
+        # Notify LSP that a document was saved
+        if e.lsp.enabled:
+          discard e.lsp.onBufferSave(e.textBuffer)
+      else:
+        logError("editor", "Auto save failed for " & savePath & ": " & saveResult.error)
+
+  # Update last auto save time
+  e.state.lastAutoSave = now
+
+  # Show notification if any files were saved
+  if savedCount > 0:
+    # Log notification
+    if e.config.notification.autoSaveLogNotify:
+      if savedCount == 1:
+        logInfo("editor", "Auto saved: " & savedPaths[0])
+      else:
+        logInfo("editor", "Auto saved " & $savedCount & " files")
+
+    # Screen notification (status message)
+    if e.config.notification.autoSaveScreenNotify:
+      if savedCount == 1:
+        e.state.statusMessage = "Auto saved: " & savedPaths[0]
+      else:
+        e.state.statusMessage = "Auto saved " & $savedCount & " files"
+
+proc updateInputTime*(e: Editor) =
+  ## Update the last input time (called when user provides input)
+  e.state.lastInputTime = getMonoTime()
+
+proc autoBackup*(e: Editor) =
+  ## Automatically backup modified buffers if auto backup is enabled
+  ## This should be called periodically (e.g., from render loop)
+  ##
+  ## Conditions for auto backup:
+  ## - autoBackup.enable is true in config
+  ## - User has been idle for idleTime seconds
+  ## - Enough time has passed since last backup (interval in minutes)
+
+  if not e.config.autoBackup.enable:
+    return
+
+  let now = getMonoTime()
+
+  # Check idle time (user must be idle for idleTime seconds)
+  let idleElapsed = now - e.state.lastInputTime
+  let idleThreshold = initDuration(seconds = e.config.autoBackup.idleTime)
+
+  if idleElapsed < idleThreshold:
+    return
+
+  # Check backup interval (must have passed interval minutes since last backup)
+  let backupElapsed = now - e.state.lastAutoBackup
+  let backupThreshold = initDuration(minutes = e.config.autoBackup.interval)
+
+  if backupElapsed < backupThreshold:
+    return
+
+  # Backup all modified buffers
+  var backupCount = 0
+  var backupPaths: seq[string] = @[]
+
+  if e.windowManager.windows.len > 0:
+    # Multi-window mode: backup each window's buffer
+    var backedUpBuffers: seq[TextBuffer] =
+      @[] # Track already backed up buffers to avoid duplicates
+
+    for window in e.windowManager.windows:
+      let buffer = window.buffer
+
+      # Skip if already backed up (same buffer in multiple windows)
+      if buffer in backedUpBuffers:
+        continue
+
+      # Only backup modified buffers with a file path
+      if buffer.isModified and buffer.filePath.isSome:
+        let backupResult = backupBuffer(buffer, e.config.autoBackup)
+
+        if backupResult.isOk:
+          backedUpBuffers.add(buffer)
+          backupCount += 1
+          backupPaths.add(backupResult.get)
+        elif backupResult.error != "No changes since last backup":
+          logError("editor", "Auto backup failed: " & backupResult.error)
+  else:
+    # Single window mode: backup the main buffer
+    if e.textBuffer.isModified and e.textBuffer.filePath.isSome:
+      let backupResult = backupBuffer(e.textBuffer, e.config.autoBackup)
+
+      if backupResult.isOk:
+        backupCount += 1
+        backupPaths.add(backupResult.get)
+      elif backupResult.error != "No changes since last backup":
+        logError("editor", "Auto backup failed: " & backupResult.error)
+
+  # Show notification and update last backup time only if any files were backed up
+  if backupCount > 0:
+    # Update last backup time only when backup actually occurred
+    e.state.lastAutoBackup = now
+
+    # Log notification
+    if e.config.notification.autoBackupLogNotify:
+      if backupCount == 1:
+        logInfo("editor", "Auto backup: " & backupPaths[0])
+      else:
+        logInfo("editor", "Auto backup: " & $backupCount & " files")
+
+    # Screen notification (status message)
+    if e.config.notification.autoBackupScreenNotify:
+      if backupCount == 1:
+        e.state.statusMessage = "Auto backup created"
+      else:
+        e.state.statusMessage = "Auto backup: " & $backupCount & " files"
 
 proc colorIndexToStyle(colorIdx: EditorColorPairIndex): Style =
   ## Convert EditorColorPairIndex to Celina Style based on dark.toml theme
@@ -1786,6 +2021,18 @@ proc renderBottomLines(e: Editor, buffer: var Buffer) =
     # Cursor position: ":" + commandCursor (0-based after ":")
     e.state.screenCursor.x = 1 + e.state.commandCursor
     e.state.screenCursor.y = buffer.area.height - 1
+
+    # Render command completion popup if active
+    if e.state.commandCompletionManager.isActive():
+      let popupPos = calculateCommandPopupPosition(
+        e.state.commandCursor, buffer.area.width, buffer.area.height,
+        e.state.commandCompletionManager.menu.entries,
+        e.state.commandCompletionManager.menu.maxVisible,
+        e.state.commandCompletionManager.argStartX,
+      )
+      renderCommandCompletionPopup(
+        buffer, e.state.commandCompletionManager.menu, popupPos
+      )
   elif e.state.mode == EditorMode.Search:
     let searchChar = if e.state.searchDirection == Forward: "/" else: "?"
     let searchPrompt = searchChar & e.state.searchText
@@ -1958,6 +2205,12 @@ proc render*(e: Editor, buffer: var Buffer) =
 
   # Update git diff if buffer was modified (with debouncing)
   e.maybeUpdateGitDiff()
+
+  # Auto save if enabled and interval has passed
+  e.autoSave()
+
+  # Auto backup if enabled and conditions are met
+  e.autoBackup()
 
   # Clear buffer to prevent artifacts
   clearBuffer(buffer)

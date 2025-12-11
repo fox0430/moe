@@ -174,6 +174,72 @@ proc loadThemeConfig(table: TomlTableRef, config: var ThemeConfig) =
   if table.hasKey("path"):
     config.path = table["path"].getStr()
 
+proc loadAutoSaveConfig(table: TomlTableRef, config: var AutoSaveConfig) =
+  if table.hasKey("enable"):
+    config.enable = table["enable"].getBool()
+  if table.hasKey("interval"):
+    config.interval = table["interval"].getInt()
+
+proc loadNotificationConfig(table: TomlTableRef, config: var NotificationConfig) =
+  if table.hasKey("screenNotifications"):
+    config.screenNotifications = table["screenNotifications"].getBool()
+  if table.hasKey("logNotifications"):
+    config.logNotifications = table["logNotifications"].getBool()
+  if table.hasKey("autoBackupScreenNotify"):
+    config.autoBackupScreenNotify = table["autoBackupScreenNotify"].getBool()
+  if table.hasKey("autoBackupLogNotify"):
+    config.autoBackupLogNotify = table["autoBackupLogNotify"].getBool()
+  if table.hasKey("autoSaveScreenNotify"):
+    config.autoSaveScreenNotify = table["autoSaveScreenNotify"].getBool()
+  if table.hasKey("autoSaveLogNotify"):
+    config.autoSaveLogNotify = table["autoSaveLogNotify"].getBool()
+  if table.hasKey("yankScreenNotify"):
+    config.yankScreenNotify = table["yankScreenNotify"].getBool()
+  if table.hasKey("yankLogNotify"):
+    config.yankLogNotify = table["yankLogNotify"].getBool()
+  if table.hasKey("deleteScreenNotify"):
+    config.deleteScreenNotify = table["deleteScreenNotify"].getBool()
+  if table.hasKey("deleteLogNotify"):
+    config.deleteLogNotify = table["deleteLogNotify"].getBool()
+  if table.hasKey("saveScreenNotify"):
+    config.saveScreenNotify = table["saveScreenNotify"].getBool()
+  if table.hasKey("saveLogNotify"):
+    config.saveLogNotify = table["saveLogNotify"].getBool()
+  if table.hasKey("quickRunScreenNotify"):
+    config.quickRunScreenNotify = table["quickRunScreenNotify"].getBool()
+  if table.hasKey("quickRunLogNotify"):
+    config.quickRunLogNotify = table["quickRunLogNotify"].getBool()
+  if table.hasKey("buildOnSaveScreenNotify"):
+    config.buildOnSaveScreenNotify = table["buildOnSaveScreenNotify"].getBool()
+  if table.hasKey("buildOnSaveLogNotify"):
+    config.buildOnSaveLogNotify = table["buildOnSaveLogNotify"].getBool()
+  if table.hasKey("filerScreenNotify"):
+    config.filerScreenNotify = table["filerScreenNotify"].getBool()
+  if table.hasKey("filerLogNotify"):
+    config.filerLogNotify = table["filerLogNotify"].getBool()
+  if table.hasKey("restoreScreenNotify"):
+    config.restoreScreenNotify = table["restoreScreenNotify"].getBool()
+  if table.hasKey("restoreLogNotify"):
+    config.restoreLogNotify = table["restoreLogNotify"].getBool()
+  if table.hasKey("lspScreenNotify"):
+    config.lspScreenNotify = table["lspScreenNotify"].getBool()
+  if table.hasKey("lspLogNotify"):
+    config.lspLogNotify = table["lspLogNotify"].getBool()
+
+proc loadAutoBackupConfig(table: TomlTableRef, config: var AutoBackupConfig) =
+  if table.hasKey("enable"):
+    config.enable = table["enable"].getBool()
+  if table.hasKey("backupDir"):
+    config.backupDir = some(table["backupDir"].getStr())
+  if table.hasKey("idleTime"):
+    config.idleTime = table["idleTime"].getInt()
+  if table.hasKey("interval"):
+    config.interval = table["interval"].getInt()
+  if table.hasKey("dirToExclude"):
+    config.dirToExclude = @[]
+    for item in table["dirToExclude"].getElems():
+      config.dirToExclude.add(item.getStr())
+
 proc loadConfigFromToml*(path: string): EditorConfig =
   ## Load configuration from a TOML file
   ## Returns a new EditorConfig with values loaded from the file
@@ -209,6 +275,15 @@ proc loadConfigFromToml*(path: string): EditorConfig =
 
   if toml.hasKey("Theme"):
     loadThemeConfig(toml["Theme"].getTable(), result.theme)
+
+  if toml.hasKey("AutoSave"):
+    loadAutoSaveConfig(toml["AutoSave"].getTable(), result.autoSave)
+
+  if toml.hasKey("Notification"):
+    loadNotificationConfig(toml["Notification"].getTable(), result.notification)
+
+  if toml.hasKey("AutoBackup"):
+    loadAutoBackupConfig(toml["AutoBackup"].getTable(), result.autoBackup)
 
 proc getConfigPath*(): string =
   ## Get the path to the configuration file
