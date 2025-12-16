@@ -170,6 +170,19 @@ proc requestDefinition*(
   let path = buffer.filePath.get
   return lsp.service.requestDefinition(path, line, column)
 
+proc requestTypeDefinition*(
+    lsp: LspIntegration, buffer: TextBuffer, line, column: int
+): Result[seq[Location], string] =
+  ## Request go to type definition at cursor position
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.requestTypeDefinition(path, line, column)
+
 proc requestReferences*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
 ): Result[seq[Location], string] =
@@ -253,6 +266,118 @@ proc requestDocumentSymbols*(
 
   let path = buffer.filePath.get
   return lsp.service.requestDocumentSymbols(path)
+
+proc requestInlayHints*(
+    lsp: LspIntegration, buffer: TextBuffer, startLine, startChar, endLine, endChar: int
+): Result[seq[InlayHint], string] =
+  ## Request inlay hints for a range in a buffer
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.requestInlayHints(path, startLine, startChar, endLine, endChar)
+
+proc requestInlayHintsForVisibleRange*(
+    lsp: LspIntegration, buffer: TextBuffer, firstLine, lastLine: int
+): Result[seq[InlayHint], string] =
+  ## Request inlay hints for the visible range of a buffer
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  if buffer.len == 0:
+    return ok(newSeq[InlayHint]())
+
+  let path = buffer.filePath.get
+  # Clamp line numbers to valid range
+  let actualLastLine = min(lastLine, buffer.len - 1)
+  let actualFirstLine = min(firstLine, actualLastLine)
+  let endChar = buffer.getLine(actualLastLine).charLen
+  return
+    lsp.service.requestInlayHints(path, actualFirstLine, 0, actualLastLine, endChar)
+
+proc requestSemanticTokensFull*(
+    lsp: LspIntegration, buffer: TextBuffer
+): Result[Option[SemanticTokens], string] =
+  ## Request full semantic tokens for a buffer
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.requestSemanticTokensFull(path)
+
+proc requestSemanticTokensRange*(
+    lsp: LspIntegration, buffer: TextBuffer, startLine, startChar, endLine, endChar: int
+): Result[Option[SemanticTokens], string] =
+  ## Request semantic tokens for a range in a buffer
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return
+    lsp.service.requestSemanticTokensRange(path, startLine, startChar, endLine, endChar)
+
+proc requestSemanticTokensForVisibleRange*(
+    lsp: LspIntegration, buffer: TextBuffer, firstLine, lastLine: int
+): Result[Option[SemanticTokens], string] =
+  ## Request semantic tokens for the visible range of a buffer
+  ## Falls back to full document request if range is not supported
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  if buffer.len == 0:
+    return ok(none(SemanticTokens))
+
+  let path = buffer.filePath.get
+  let langIdOpt = lsp.service.getLanguageIdFromPath(path)
+  if langIdOpt.isNone:
+    return err("No LSP support for file: " & path)
+
+  # Check if range request is supported, fall back to full if not
+  if lsp.service.hasSemanticTokensRangeSupport(langIdOpt.get):
+    # Clamp line numbers to valid range
+    let actualLastLine = min(lastLine, buffer.len - 1)
+    let actualFirstLine = min(firstLine, actualLastLine)
+    let endChar = buffer.getLine(actualLastLine).charLen
+    return lsp.service.requestSemanticTokensRange(
+      path, actualFirstLine, 0, actualLastLine, endChar
+    )
+  elif lsp.service.hasSemanticTokensFullSupport(langIdOpt.get):
+    # Fall back to full document request
+    return lsp.service.requestSemanticTokensFull(path)
+  else:
+    return err("Semantic tokens not supported")
+
+proc getSemanticTokensLegend*(
+    lsp: LspIntegration, buffer: TextBuffer
+): Option[SemanticTokensLegend] =
+  ## Get the semantic tokens legend for a buffer's language
+  if not lsp.enabled:
+    return none(SemanticTokensLegend)
+
+  if buffer.filePath.isNone:
+    return none(SemanticTokensLegend)
+
+  let path = buffer.filePath.get
+  let langIdOpt = lsp.service.getLanguageIdFromPath(path)
+  if langIdOpt.isNone:
+    return none(SemanticTokensLegend)
+
+  return lsp.service.getSemanticTokensLegend(langIdOpt.get)
 
 # TextEdit application helpers
 proc compareTextEditReverse(a, b: TextEdit): int =

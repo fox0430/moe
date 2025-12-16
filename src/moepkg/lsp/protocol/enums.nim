@@ -119,6 +119,11 @@ type
     mkPlainText = "plaintext"
     mkMarkdown = "markdown"
 
+  InlayHintKind* = enum
+    ## Inlay hint kinds
+    ihkType = 1 ## Type annotation hints
+    ihkParameter = 2 ## Parameter name hints
+
   ErrorCodes* = enum
     ## JSON-RPC error codes
     ecParseError = -32700
@@ -133,3 +138,44 @@ type
     ecServerCancelled = -32802
     ecContentModified = -32801
     ecRequestCancelled = -32800
+
+  SemanticTokenTypes* = enum
+    ## Standard semantic token types (LSP 3.16+)
+    ## The order matches the LSP spec and should not be changed
+    sttNamespace = "namespace"
+    sttType = "type"
+    sttClass = "class"
+    sttEnum = "enum"
+    sttInterface = "interface"
+    sttStruct = "struct"
+    sttTypeParameter = "typeParameter"
+    sttParameter = "parameter"
+    sttVariable = "variable"
+    sttProperty = "property"
+    sttEnumMember = "enumMember"
+    sttEvent = "event"
+    sttFunction = "function"
+    sttMethod = "method"
+    sttMacro = "macro"
+    sttKeyword = "keyword"
+    sttModifier = "modifier"
+    sttComment = "comment"
+    sttString = "string"
+    sttNumber = "number"
+    sttRegexp = "regexp"
+    sttOperator = "operator"
+    sttDecorator = "decorator"
+
+  SemanticTokenModifiers* = enum
+    ## Standard semantic token modifiers (LSP 3.16+)
+    ## These are bit flags - each modifier is a power of 2
+    stmDeclaration = "declaration"
+    stmDefinition = "definition"
+    stmReadonly = "readonly"
+    stmStatic = "static"
+    stmDeprecated = "deprecated"
+    stmAbstract = "abstract"
+    stmAsync = "async"
+    stmModification = "modification"
+    stmDocumentation = "documentation"
+    stmDefaultLibrary = "defaultLibrary"

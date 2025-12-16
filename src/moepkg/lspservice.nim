@@ -335,6 +335,18 @@ proc requestDefinition*(
   let uri = pathToUri(path)
   return client.gotoDefinition(uri, line, character)
 
+proc requestTypeDefinition*(
+    svc: LspService, path: string, line, character: int
+): Result[seq[Location], string] =
+  ## Request go to type definition
+  let clientResult = svc.getClientForPath(path)
+  if clientResult.isErr:
+    return err(clientResult.error)
+
+  let client = clientResult.get
+  let uri = pathToUri(path)
+  return client.gotoTypeDefinition(uri, line, character)
+
 proc requestReferences*(
     svc: LspService, path: string, line, character: int, includeDeclaration: bool = true
 ): Result[seq[Location], string] =
@@ -438,6 +450,18 @@ proc hasDefinitionSupport*(svc: LspService, langId: string): bool =
 
   return client.capabilities.get.definitionProvider.isSome
 
+proc hasTypeDefinitionSupport*(svc: LspService, langId: string): bool =
+  ## Check if go to type definition is supported for a language
+  let clientOpt = svc.getClient(langId)
+  if clientOpt.isNone:
+    return false
+
+  let client = clientOpt.get
+  if client.capabilities.isNone:
+    return false
+
+  return client.capabilities.get.typeDefinitionProvider.isSome
+
 proc hasReferencesSupport*(svc: LspService, langId: string): bool =
   ## Check if find references is supported for a language
   let clientOpt = svc.getClient(langId)
@@ -521,6 +545,152 @@ proc requestDocumentSymbols*(
   let client = clientResult.get
   let uri = pathToUri(path)
   return client.documentSymbol(uri)
+
+proc hasInlayHintSupport*(svc: LspService, langId: string): bool =
+  ## Check if inlay hints is supported for a language
+  let clientOpt = svc.getClient(langId)
+  if clientOpt.isNone:
+    return false
+
+  let client = clientOpt.get
+  if client.capabilities.isNone:
+    return false
+
+  return client.capabilities.get.inlayHintProvider.isSome
+
+proc requestInlayHints*(
+    svc: LspService, path: string, startLine, startChar, endLine, endChar: int
+): Result[seq[InlayHint], string] =
+  ## Request inlay hints for a range in a file
+  let clientResult = svc.getClientForPath(path)
+  if clientResult.isErr:
+    return err(clientResult.error)
+
+  let client = clientResult.get
+  let uri = pathToUri(path)
+  return client.inlayHints(uri, startLine, startChar, endLine, endChar)
+
+proc hasSemanticTokensSupport*(svc: LspService, langId: string): bool =
+  ## Check if semantic tokens is supported for a language
+  let clientOpt = svc.getClient(langId)
+  if clientOpt.isNone:
+    return false
+
+  let client = clientOpt.get
+  if client.capabilities.isNone:
+    return false
+
+  return client.capabilities.get.semanticTokensProvider.isSome
+
+proc hasSemanticTokensFullSupport*(svc: LspService, langId: string): bool =
+  ## Check if full semantic tokens is supported for a language
+  let clientOpt = svc.getClient(langId)
+  if clientOpt.isNone:
+    return false
+
+  let client = clientOpt.get
+  if client.capabilities.isNone:
+    return false
+
+  let provider = client.capabilities.get.semanticTokensProvider
+  if provider.isNone:
+    return false
+
+  return provider.get.full.isSome
+
+proc hasSemanticTokensRangeSupport*(svc: LspService, langId: string): bool =
+  ## Check if range semantic tokens is supported for a language
+  let clientOpt = svc.getClient(langId)
+  if clientOpt.isNone:
+    return false
+
+  let client = clientOpt.get
+  if client.capabilities.isNone:
+    return false
+
+  let provider = client.capabilities.get.semanticTokensProvider
+  if provider.isNone:
+    return false
+
+  return provider.get.range.isSome
+
+proc getSemanticTokensLegend*(
+    svc: LspService, langId: string
+): Option[SemanticTokensLegend] =
+  ## Get the semantic tokens legend for a language
+  let clientOpt = svc.getClient(langId)
+  if clientOpt.isNone:
+    return none(SemanticTokensLegend)
+
+  let client = clientOpt.get
+  if client.capabilities.isNone:
+    return none(SemanticTokensLegend)
+
+  let provider = client.capabilities.get.semanticTokensProvider
+  if provider.isNone:
+    return none(SemanticTokensLegend)
+
+  return some(provider.get.legend)
+
+proc requestSemanticTokensFull*(
+    svc: LspService, path: string
+): Result[Option[SemanticTokens], string] =
+  ## Request full semantic tokens for a file
+  let clientResult = svc.getClientForPath(path)
+  if clientResult.isErr:
+    return err(clientResult.error)
+
+  let client = clientResult.get
+  let uri = pathToUri(path)
+  return client.semanticTokensFull(uri)
+
+proc requestSemanticTokensRange*(
+    svc: LspService, path: string, startLine, startChar, endLine, endChar: int
+): Result[Option[SemanticTokens], string] =
+  ## Request semantic tokens for a range in a file
+  let clientResult = svc.getClientForPath(path)
+  if clientResult.isErr:
+    return err(clientResult.error)
+
+  let client = clientResult.get
+  let uri = pathToUri(path)
+  return client.semanticTokensRange(uri, startLine, startChar, endLine, endChar)
+
+proc hasSelectionRangeSupport*(svc: LspService, langId: string): bool =
+  ## Check if selection range is supported for a language
+  let clientOpt = svc.getClient(langId)
+  if clientOpt.isNone:
+    return false
+
+  let client = clientOpt.get
+  if client.capabilities.isNone:
+    return false
+
+  return client.capabilities.get.selectionRangeProvider.isSome
+
+proc requestSelectionRange*(
+    svc: LspService, path: string, positions: seq[Position]
+): Result[seq[SelectionRange], string] =
+  ## Request selection ranges for given positions in a file
+  let clientResult = svc.getClientForPath(path)
+  if clientResult.isErr:
+    return err(clientResult.error)
+
+  let client = clientResult.get
+  let uri = pathToUri(path)
+  return client.selectionRange(uri, positions)
+
+proc requestSelectionRange*(
+    svc: LspService, path: string, line, character: int
+): Result[Option[SelectionRange], string] =
+  ## Request selection range for a single position in a file
+  let clientResult = svc.getClientForPath(path)
+  if clientResult.isErr:
+    return err(clientResult.error)
+
+  let client = clientResult.get
+  let uri = pathToUri(path)
+  return client.selectionRange(uri, line, character)
 
 # Status information
 proc getRunningLanguages*(svc: LspService): seq[string] =

@@ -311,6 +311,7 @@ proc buildClientCapabilities(): JsonNode =
         "signatureInformation": {"documentationFormat": ["plaintext", "markdown"]},
       },
       "definition": {"dynamicRegistration": false},
+      "typeDefinition": {"dynamicRegistration": false},
       "references": {"dynamicRegistration": false},
       "documentSymbol":
         {"dynamicRegistration": false, "hierarchicalDocumentSymbolSupport": true},
@@ -319,6 +320,25 @@ proc buildClientCapabilities(): JsonNode =
       "rename": {"dynamicRegistration": false, "prepareSupport": false},
       "formatting": {"dynamicRegistration": false},
       "rangeFormatting": {"dynamicRegistration": false},
+      "inlayHint": {"dynamicRegistration": false},
+      "selectionRange": {"dynamicRegistration": false},
+      "semanticTokens": {
+        "dynamicRegistration": false,
+        "requests": {"range": true, "full": {"delta": false}},
+        "tokenTypes": [
+          "namespace", "type", "class", "enum", "interface", "struct", "typeParameter",
+          "parameter", "variable", "property", "enumMember", "event", "function",
+          "method", "macro", "keyword", "modifier", "comment", "string", "number",
+          "regexp", "operator", "decorator",
+        ],
+        "tokenModifiers": [
+          "declaration", "definition", "readonly", "static", "deprecated", "abstract",
+          "async", "modification", "documentation", "defaultLibrary",
+        ],
+        "formats": ["relative"],
+        "overlappingTokenSupport": false,
+        "multilineTokenSupport": true,
+      },
     },
     "workspace": {"applyEdit": true, "workspaceFolders": false, "configuration": false},
   }
@@ -565,11 +585,59 @@ proc gotoDefinition*(
   if response.kind == JNull:
     return ok(locations)
 
-  # Handle both Location and Location[]
+  # Handle Location, Location[], LocationLink, and LocationLink[]
   if response.kind == JArray:
-    for loc in response:
-      locations.add(parseLocation(loc))
+    for item in response:
+      if item.hasKey("targetUri"):
+        # LocationLink
+        locations.add(locationLinkToLocation(parseLocationLink(item)))
+      elif item.hasKey("uri"):
+        # Location
+        locations.add(parseLocation(item))
+  elif response.hasKey("targetUri"):
+    # Single LocationLink
+    locations.add(locationLinkToLocation(parseLocationLink(response)))
   elif response.hasKey("uri"):
+    # Single Location
+    locations.add(parseLocation(response))
+
+  return ok(locations)
+
+proc gotoTypeDefinition*(
+    client: LspClient, uri: string, line, character: int
+): Result[seq[Location], string] =
+  ## Request go to type definition
+  let params =
+    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
+
+  let reqResult = client.sendRequest("textDocument/typeDefinition", params)
+  if reqResult.isErr:
+    return err(reqResult.error)
+
+  let respResult = client.waitForResponse(reqResult.get)
+  if respResult.isErr:
+    return err(respResult.error)
+
+  var locations: seq[Location] = @[]
+  let response = respResult.get
+
+  if response.kind == JNull:
+    return ok(locations)
+
+  # Handle Location, Location[], LocationLink, and LocationLink[]
+  if response.kind == JArray:
+    for item in response:
+      if item.hasKey("targetUri"):
+        # LocationLink
+        locations.add(locationLinkToLocation(parseLocationLink(item)))
+      elif item.hasKey("uri"):
+        # Location
+        locations.add(parseLocation(item))
+  elif response.hasKey("targetUri"):
+    # Single LocationLink
+    locations.add(locationLinkToLocation(parseLocationLink(response)))
+  elif response.hasKey("uri"):
+    # Single Location
     locations.add(parseLocation(response))
 
   return ok(locations)
@@ -737,3 +805,127 @@ proc documentSymbol*(
       return ok(DocumentSymbolResult(isHierarchical: false, symbolInfos: infos))
 
   return ok(DocumentSymbolResult(isHierarchical: true, symbols: @[]))
+
+proc inlayHints*(
+    client: LspClient, uri: string, startLine, startChar, endLine, endChar: int
+): Result[seq[InlayHint], string] =
+  ## Request inlay hints for a range in a document
+  let params =
+    %*{
+      "textDocument": {"uri": uri},
+      "range": {
+        "start": {"line": startLine, "character": startChar},
+        "end": {"line": endLine, "character": endChar},
+      },
+    }
+
+  let reqResult = client.sendRequest("textDocument/inlayHint", params)
+  if reqResult.isErr:
+    return err(reqResult.error)
+
+  let respResult = client.waitForResponse(reqResult.get)
+  if respResult.isErr:
+    return err(respResult.error)
+
+  var hints: seq[InlayHint] = @[]
+  let response = respResult.get
+
+  if response.kind == JNull:
+    return ok(hints)
+
+  if response.kind == JArray:
+    for hint in response:
+      hints.add(parseInlayHint(hint))
+
+  return ok(hints)
+
+proc semanticTokensFull*(
+    client: LspClient, uri: string
+): Result[Option[SemanticTokens], string] =
+  ## Request full semantic tokens for a document
+  let params = %*{"textDocument": {"uri": uri}}
+
+  let reqResult = client.sendRequest("textDocument/semanticTokens/full", params)
+  if reqResult.isErr:
+    return err(reqResult.error)
+
+  let respResult = client.waitForResponse(reqResult.get)
+  if respResult.isErr:
+    return err(respResult.error)
+
+  let response = respResult.get
+  if response.kind == JNull:
+    return ok(none(SemanticTokens))
+
+  return ok(some(parseSemanticTokens(response)))
+
+proc semanticTokensRange*(
+    client: LspClient, uri: string, startLine, startChar, endLine, endChar: int
+): Result[Option[SemanticTokens], string] =
+  ## Request semantic tokens for a range in a document
+  let params =
+    %*{
+      "textDocument": {"uri": uri},
+      "range": {
+        "start": {"line": startLine, "character": startChar},
+        "end": {"line": endLine, "character": endChar},
+      },
+    }
+
+  let reqResult = client.sendRequest("textDocument/semanticTokens/range", params)
+  if reqResult.isErr:
+    return err(reqResult.error)
+
+  let respResult = client.waitForResponse(reqResult.get)
+  if respResult.isErr:
+    return err(respResult.error)
+
+  let response = respResult.get
+  if response.kind == JNull:
+    return ok(none(SemanticTokens))
+
+  return ok(some(parseSemanticTokens(response)))
+
+proc selectionRange*(
+    client: LspClient, uri: string, positions: seq[Position]
+): Result[seq[SelectionRange], string] =
+  ## Request selection ranges for given positions
+  let params = SelectionRangeParams(
+    textDocument: TextDocumentIdentifier(uri: uri), positions: positions
+  )
+
+  let reqResult = client.sendRequest("textDocument/selectionRange", params.toJson)
+  if reqResult.isErr:
+    return err(reqResult.error)
+
+  let respResult = client.waitForResponse(reqResult.get)
+  if respResult.isErr:
+    return err(respResult.error)
+
+  var ranges: seq[SelectionRange] = @[]
+  let response = respResult.get
+
+  if response.kind == JNull:
+    return ok(ranges)
+
+  if response.kind == JArray:
+    for item in response:
+      let parsed = parseSelectionRange(item)
+      if parsed != nil:
+        ranges.add(parsed)
+
+  return ok(ranges)
+
+proc selectionRange*(
+    client: LspClient, uri: string, line, character: int
+): Result[Option[SelectionRange], string] =
+  ## Request selection range for a single position
+  let pos = Position(line: line, character: character)
+  let rangesResult = client.selectionRange(uri, @[pos])
+  if rangesResult.isErr:
+    return err(rangesResult.error)
+
+  let ranges = rangesResult.get
+  if ranges.len > 0:
+    return ok(some(ranges[0]))
+  return ok(none(SelectionRange))

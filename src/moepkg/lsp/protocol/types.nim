@@ -229,6 +229,60 @@ type
     of false:
       symbolInfos*: seq[SymbolInformation]
 
+  # Inlay Hint types
+  InlayHintLabelPart* = object ## A part of an inlay hint label
+    value*: string
+    tooltip*: Option[JsonNode] # string | MarkupContent
+    location*: Option[Location]
+    command*: Option[JsonNode]
+
+  InlayHint* = object ## An inlay hint
+    position*: Position
+    label*: JsonNode # string | InlayHintLabelPart[]
+    kind*: Option[InlayHintKind]
+    textEdits*: Option[seq[TextEdit]]
+    tooltip*: Option[JsonNode] # string | MarkupContent
+    paddingLeft*: Option[bool]
+    paddingRight*: Option[bool]
+    data*: Option[JsonNode]
+
+  InlayHintParams* = object ## Parameters for inlay hint request
+    textDocument*: TextDocumentIdentifier
+    range*: Range
+
+  # Selection Range types
+  SelectionRange* = ref object ## Selection range with optional parent
+    range*: Range
+    parent*: SelectionRange # nil if no parent
+
+  SelectionRangeParams* = object ## Parameters for selection range request
+    textDocument*: TextDocumentIdentifier
+    positions*: seq[Position]
+
+  # Semantic Tokens types
+  SemanticTokensLegend* = object
+    ## Semantic tokens legend (defines token types and modifiers)
+    tokenTypes*: seq[string]
+    tokenModifiers*: seq[string]
+
+  SemanticTokensOptions* = object ## Server semantic tokens options
+    legend*: SemanticTokensLegend
+    range*: Option[JsonNode] # bool | {}
+    full*: Option[JsonNode] # bool | { delta?: bool }
+
+  SemanticTokens* = object ## Result of semantic tokens request
+    resultId*: Option[string]
+    data*: seq[int]
+      # Encoded token data (deltaLine, deltaStart, length, tokenType, tokenModifiers)
+
+  SemanticToken* = object ## Decoded individual semantic token
+    line*: int
+    startChar*: int
+    endChar*: int ## startChar + length (exclusive)
+    length*: int
+    tokenType*: int
+    tokenModifiers*: int
+
   # Server capabilities
   CompletionOptions* = object ## Completion options
     triggerCharacters*: Option[seq[string]]
@@ -273,7 +327,7 @@ type
     selectionRangeProvider*: Option[JsonNode]
     linkedEditingRangeProvider*: Option[JsonNode]
     callHierarchyProvider*: Option[JsonNode]
-    semanticTokensProvider*: Option[JsonNode]
+    semanticTokensProvider*: Option[SemanticTokensOptions]
     monikerProvider*: Option[JsonNode]
     typeHierarchyProvider*: Option[JsonNode]
     inlineValueProvider*: Option[JsonNode]
@@ -363,6 +417,12 @@ proc toJson*(item: TextDocumentItem): JsonNode =
     "text": item.text,
   }
 
+proc toJson*(params: SelectionRangeParams): JsonNode =
+  var positionsJson = newJArray()
+  for pos in params.positions:
+    positionsJson.add(pos.toJson)
+  %*{"textDocument": params.textDocument.toJson, "positions": positionsJson}
+
 # JSON parsing helpers
 proc parsePosition*(node: JsonNode): Position =
   Position(line: node["line"].getInt, character: node["character"].getInt)
@@ -372,6 +432,17 @@ proc parseRange*(node: JsonNode): Range =
 
 proc parseLocation*(node: JsonNode): Location =
   Location(uri: node["uri"].getStr, range: parseRange(node["range"]))
+
+proc parseLocationLink*(node: JsonNode): LocationLink =
+  result.targetUri = node["targetUri"].getStr
+  result.targetRange = parseRange(node["targetRange"])
+  result.targetSelectionRange = parseRange(node["targetSelectionRange"])
+  if node.hasKey("originSelectionRange"):
+    result.originSelectionRange = some(parseRange(node["originSelectionRange"]))
+
+proc locationLinkToLocation*(link: LocationLink): Location =
+  ## Convert LocationLink to Location (uses targetSelectionRange for precise navigation)
+  Location(uri: link.targetUri, range: link.targetSelectionRange)
 
 proc parseTextEdit*(node: JsonNode): TextEdit =
   TextEdit(range: parseRange(node["range"]), newText: node["newText"].getStr)
@@ -516,6 +587,243 @@ proc parseSymbolInformation*(node: JsonNode): SymbolInformation =
   if node.hasKey("containerName") and node["containerName"].kind != JNull:
     result.containerName = some(node["containerName"].getStr)
 
+proc parseInlayHintLabelPart*(node: JsonNode): InlayHintLabelPart =
+  ## Parse InlayHintLabelPart from JSON
+  result.value = node["value"].getStr
+  if node.hasKey("tooltip"):
+    result.tooltip = some(node["tooltip"])
+  if node.hasKey("location"):
+    result.location = some(parseLocation(node["location"]))
+  if node.hasKey("command"):
+    result.command = some(node["command"])
+
+proc parseInlayHint*(node: JsonNode): InlayHint =
+  ## Parse InlayHint from JSON
+  result.position = parsePosition(node["position"])
+  result.label = node["label"]
+  if node.hasKey("kind"):
+    result.kind = some(InlayHintKind(node["kind"].getInt))
+  if node.hasKey("textEdits"):
+    var edits: seq[TextEdit] = @[]
+    for edit in node["textEdits"]:
+      edits.add(parseTextEdit(edit))
+    result.textEdits = some(edits)
+  if node.hasKey("tooltip"):
+    result.tooltip = some(node["tooltip"])
+  if node.hasKey("paddingLeft"):
+    result.paddingLeft = some(node["paddingLeft"].getBool)
+  if node.hasKey("paddingRight"):
+    result.paddingRight = some(node["paddingRight"].getBool)
+  if node.hasKey("data"):
+    result.data = some(node["data"])
+
+proc getInlayHintLabel*(hint: InlayHint): string =
+  ## Extract the label string from an inlay hint
+  case hint.label.kind
+  of JString:
+    return hint.label.getStr
+  of JArray:
+    # Concatenate all label parts
+    for part in hint.label:
+      if part.hasKey("value"):
+        result.add(part["value"].getStr)
+  else:
+    return ""
+
+proc parseSelectionRange*(node: JsonNode): SelectionRange =
+  ## Parse SelectionRange from JSON (recursive structure)
+  ## Returns nil if node is invalid
+  if node.isNil or node.kind == JNull or not node.hasKey("range"):
+    return nil
+
+  result = SelectionRange()
+  result.range = parseRange(node["range"])
+  if node.hasKey("parent") and node["parent"].kind != JNull:
+    result.parent = parseSelectionRange(node["parent"])
+
+proc parseSemanticTokensLegend*(node: JsonNode): SemanticTokensLegend =
+  ## Parse SemanticTokensLegend from JSON
+  if node.hasKey("tokenTypes"):
+    for t in node["tokenTypes"]:
+      result.tokenTypes.add(t.getStr)
+  if node.hasKey("tokenModifiers"):
+    for m in node["tokenModifiers"]:
+      result.tokenModifiers.add(m.getStr)
+
+proc parseSemanticTokensOptions*(node: JsonNode): SemanticTokensOptions =
+  ## Parse SemanticTokensOptions from JSON
+  if node.hasKey("legend"):
+    result.legend = parseSemanticTokensLegend(node["legend"])
+  if node.hasKey("range"):
+    result.range = some(node["range"])
+  if node.hasKey("full"):
+    result.full = some(node["full"])
+
+proc parseSemanticTokens*(node: JsonNode): SemanticTokens =
+  ## Parse SemanticTokens response from JSON
+  if node.hasKey("resultId") and node["resultId"].kind == JString:
+    result.resultId = some(node["resultId"].getStr)
+  if node.hasKey("data") and node["data"].kind == JArray:
+    for item in node["data"]:
+      result.data.add(item.getInt)
+
+proc decodeSemanticTokens*(tokens: SemanticTokens): seq[SemanticToken] =
+  ## Decode encoded semantic tokens data into SemanticToken objects
+  ## The data array is encoded as: [deltaLine, deltaStartChar, length, tokenType, tokenModifiers]
+  ## Each group of 5 integers represents one token
+  if tokens.data.len == 0 or tokens.data.len mod 5 != 0:
+    return @[]
+
+  var currentLine = 0
+  var currentChar = 0
+
+  for i in countup(0, tokens.data.len - 1, 5):
+    let deltaLine = tokens.data[i]
+    let deltaStart = tokens.data[i + 1]
+    let length = tokens.data[i + 2]
+    let tokenType = tokens.data[i + 3]
+    let tokenModifiers = tokens.data[i + 4]
+
+    # Update position
+    if deltaLine > 0:
+      currentLine += deltaLine
+      currentChar = deltaStart
+    else:
+      currentChar += deltaStart
+
+    result.add(
+      SemanticToken(
+        line: currentLine,
+        startChar: currentChar,
+        endChar: currentChar + length,
+        length: length,
+        tokenType: tokenType,
+        tokenModifiers: tokenModifiers,
+      )
+    )
+
+proc getSemanticTokenType*(token: SemanticToken, legend: SemanticTokensLegend): string =
+  ## Get the token type name from the legend
+  if token.tokenType >= 0 and token.tokenType < legend.tokenTypes.len:
+    return legend.tokenTypes[token.tokenType]
+  return ""
+
+proc getSemanticTokenModifiers*(
+    token: SemanticToken, legend: SemanticTokensLegend
+): seq[string] =
+  ## Get the token modifier names from the legend (tokenModifiers is a bitmask)
+  var modifiers = token.tokenModifiers
+  var idx = 0
+  while modifiers > 0 and idx < legend.tokenModifiers.len:
+    if (modifiers and 1) != 0:
+      result.add(legend.tokenModifiers[idx])
+    modifiers = modifiers shr 1
+    inc idx
+
+proc toSemanticTokenType*(typeName: string): Option[SemanticTokenTypes] =
+  ## Convert a token type name string to SemanticTokenTypes enum
+  case typeName
+  of "namespace":
+    some(sttNamespace)
+  of "type":
+    some(sttType)
+  of "class":
+    some(sttClass)
+  of "enum":
+    some(sttEnum)
+  of "interface":
+    some(sttInterface)
+  of "struct":
+    some(sttStruct)
+  of "typeParameter":
+    some(sttTypeParameter)
+  of "parameter":
+    some(sttParameter)
+  of "variable":
+    some(sttVariable)
+  of "property":
+    some(sttProperty)
+  of "enumMember":
+    some(sttEnumMember)
+  of "event":
+    some(sttEvent)
+  of "function":
+    some(sttFunction)
+  of "method":
+    some(sttMethod)
+  of "macro":
+    some(sttMacro)
+  of "keyword":
+    some(sttKeyword)
+  of "modifier":
+    some(sttModifier)
+  of "comment":
+    some(sttComment)
+  of "string":
+    some(sttString)
+  of "number":
+    some(sttNumber)
+  of "regexp":
+    some(sttRegexp)
+  of "operator":
+    some(sttOperator)
+  of "decorator":
+    some(sttDecorator)
+  else:
+    none(SemanticTokenTypes)
+
+proc toSemanticTokenModifier*(modifierName: string): Option[SemanticTokenModifiers] =
+  ## Convert a token modifier name string to SemanticTokenModifiers enum
+  case modifierName
+  of "declaration":
+    some(stmDeclaration)
+  of "definition":
+    some(stmDefinition)
+  of "readonly":
+    some(stmReadonly)
+  of "static":
+    some(stmStatic)
+  of "deprecated":
+    some(stmDeprecated)
+  of "abstract":
+    some(stmAbstract)
+  of "async":
+    some(stmAsync)
+  of "modification":
+    some(stmModification)
+  of "documentation":
+    some(stmDocumentation)
+  of "defaultLibrary":
+    some(stmDefaultLibrary)
+  else:
+    none(SemanticTokenModifiers)
+
+proc getSemanticTokenTypeEnum*(
+    token: SemanticToken, legend: SemanticTokensLegend
+): Option[SemanticTokenTypes] =
+  ## Get the token type as SemanticTokenTypes enum
+  let typeName = getSemanticTokenType(token, legend)
+  if typeName.len > 0:
+    return toSemanticTokenType(typeName)
+  return none(SemanticTokenTypes)
+
+proc getSemanticTokenModifierEnums*(
+    token: SemanticToken, legend: SemanticTokensLegend
+): seq[SemanticTokenModifiers] =
+  ## Get the token modifiers as SemanticTokenModifiers enum sequence
+  let modifierNames = getSemanticTokenModifiers(token, legend)
+  for name in modifierNames:
+    let enumOpt = toSemanticTokenModifier(name)
+    if enumOpt.isSome:
+      result.add(enumOpt.get)
+
+proc hasModifier*(
+    token: SemanticToken, legend: SemanticTokensLegend, modifier: SemanticTokenModifiers
+): bool =
+  ## Check if a token has a specific modifier
+  let modifiers = getSemanticTokenModifierEnums(token, legend)
+  return modifier in modifiers
+
 proc parseServerCapabilities*(node: JsonNode): ServerCapabilities =
   if node.hasKey("textDocumentSync"):
     result.textDocumentSync = some(node["textDocumentSync"])
@@ -559,6 +867,9 @@ proc parseServerCapabilities*(node: JsonNode): ServerCapabilities =
   if node.hasKey("renameProvider"):
     result.renameProvider = some(node["renameProvider"])
   if node.hasKey("semanticTokensProvider"):
-    result.semanticTokensProvider = some(node["semanticTokensProvider"])
+    result.semanticTokensProvider =
+      some(parseSemanticTokensOptions(node["semanticTokensProvider"]))
   if node.hasKey("inlayHintProvider"):
     result.inlayHintProvider = some(node["inlayHintProvider"])
+  if node.hasKey("selectionRangeProvider"):
+    result.selectionRangeProvider = some(node["selectionRangeProvider"])
