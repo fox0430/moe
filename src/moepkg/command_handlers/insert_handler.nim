@@ -25,6 +25,7 @@
 ## - Navigation within insert mode
 ## - Mode switching (Escape)
 ## - Auto-completion (Ctrl+N/Ctrl+P to navigate, Tab to commit)
+## - Macro recording support
 
 import std/[options, unicode, strutils]
 
@@ -324,6 +325,10 @@ proc handleInsertModeKey*(
     keyCombo: KeyCombo,
 ): InsertModeResult =
   ## Main entry point for handling Insert mode key presses
+
+  # Record key for macro if recording is active
+  if state.isRecordingMacro:
+    state.recordedKeys.add(keyComboToString(keyCombo))
 
   let completionActive = handler.completionManager.isActive()
 

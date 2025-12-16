@@ -22,11 +22,11 @@
 ## This module extends the command executor to handle text objects
 ## like iw, aw, i", a", i(, a(, etc.
 
-import std/[options, unicode]
+import std/[options, unicode, monotimes, times]
 
 import pkg/results
 
-import buffer, cursor, types, unicode_utils, logger, render_utils
+import buffer, cursor, types, unicode_utils, logger, render_utils, config
 
 type
   # Motion command with count
@@ -865,6 +865,132 @@ proc updateViewport*(
       mgr.viewport.leftColumn = clampedCursorX
     elif clampedCursorX >= mgr.viewport.leftColumn + visibleTextWidth:
       mgr.viewport.leftColumn = clampedCursorX - visibleTextWidth + 1
+
+# Smooth scrolling functions
+
+proc easeInOutQuart(t: float): float =
+  ## Easing function with pronounced acceleration and deceleration
+  ## t: 0.0 to 1.0 progress
+  if t < 0.5:
+    result = 8.0 * t * t * t * t
+  else:
+    let t1 = -2.0 * t + 2.0
+    result = 1.0 - t1 * t1 * t1 * t1 / 2.0
+
+proc cancelScrollAnimation*(anim: var ScrollAnimation) =
+  ## Cancel any active scroll animation
+  anim.active = false
+
+proc completeScrollAnimation*(
+    anim: var ScrollAnimation
+): tuple[completed: bool, cursorLine: int, topLine: int] =
+  ## Complete a scroll animation immediately, returning the target positions
+  ## Returns (completed=false, 0, 0) if no animation was active
+  if not anim.active:
+    return (false, 0, 0)
+  result = (true, anim.targetCursorLine, anim.targetTopLine)
+  anim.active = false
+
+proc startScrollAnimation*(
+    anim: var ScrollAnimation,
+    currentTopLine: int,
+    targetTopLine: int,
+    currentCursorLine: int,
+    targetCursorLine: int,
+    config: SmoothScrollConfig,
+) =
+  ## Start a smooth scroll animation from currentTopLine to targetTopLine
+  ## Uses config.minDelay as base duration and config.maxDelay as maximum additional duration
+  ## If an animation is already active, it will be cancelled and replaced
+
+  # Cancel any existing animation (new scroll takes over from current position)
+  # If already animating, the new animation starts from current interpolated position
+
+  let cursorDistance = abs(targetCursorLine - currentCursorLine)
+  if cursorDistance == 0:
+    anim.active = false
+    return
+
+  # Calculate duration based on cursor distance using config values
+  # Duration scales from baseDurationMs to maxDurationMs based on distance
+  let additionalDuration = config.maxDurationMs - config.baseDurationMs
+  let distanceFactor = min(1.0, cursorDistance.float / 50.0)
+  let duration = config.baseDurationMs + int(additionalDuration.float * distanceFactor)
+
+  anim.active = true
+  anim.startTopLine = currentTopLine.float
+  anim.targetTopLine = targetTopLine
+  anim.startCursorLine = currentCursorLine
+  anim.targetCursorLine = targetCursorLine
+  anim.startTime = getMonoTime()
+  anim.duration = initDuration(milliseconds = duration)
+
+proc updateScrollAnimation*(
+    mgr: ViewportManager,
+    anim: var ScrollAnimation,
+    config: SmoothScrollConfig,
+    reservedLines: int = 2,
+): tuple[active: bool, cursorLine: int] =
+  ## Update scroll animation each frame. Returns (active, currentCursorLine).
+  ## Cursor moves first, viewport scrolls when cursor reaches screen edge.
+  if not anim.active:
+    return (false, anim.targetCursorLine)
+
+  if not config.enable:
+    # Smooth scroll disabled, jump to target immediately
+    mgr.viewport.topLine = anim.targetTopLine
+    anim.active = false
+    return (false, anim.targetCursorLine)
+
+  let now = getMonoTime()
+  let elapsed = now - anim.startTime
+  let durationMs = anim.duration.inMilliseconds
+  let progress =
+    if durationMs > 0:
+      min(1.0, elapsed.inMilliseconds.float / durationMs.float)
+    else:
+      1.0
+
+  let easedProgress = easeInOutQuart(progress)
+
+  # Update cursor line first (linear interpolation with easing)
+  let cursorDelta = anim.targetCursorLine - anim.startCursorLine
+  var newCursorLine = anim.startCursorLine + int(cursorDelta.float * easedProgress)
+
+  # Calculate viewport bounds
+  let visibleHeight = max(1, mgr.viewport.height - reservedLines)
+
+  # Viewport scrolls only when cursor goes beyond screen edges
+  var newTopLine = mgr.viewport.topLine
+  if anim.targetCursorLine > anim.startCursorLine:
+    # Scrolling down: viewport follows when cursor exceeds bottom
+    let bottomEdge = newTopLine + visibleHeight - 1
+    if newCursorLine > bottomEdge:
+      # Cursor passed bottom edge, scroll viewport to keep cursor at bottom
+      newTopLine = newCursorLine - visibleHeight + 1
+  else:
+    # Scrolling up: viewport follows when cursor goes above top
+    if newCursorLine < newTopLine:
+      # Cursor passed top edge, scroll viewport to keep cursor at top
+      newTopLine = newCursorLine
+
+  # Clamp topLine to valid range
+  newTopLine = max(0, newTopLine)
+
+  mgr.viewport.topLine = newTopLine
+
+  if progress >= 1.0:
+    # Animation complete - use final cursor position, topLine follows naturally
+    newCursorLine = anim.targetCursorLine
+    # Ensure cursor is visible at the end
+    if newCursorLine > mgr.viewport.topLine + visibleHeight - 1:
+      mgr.viewport.topLine = newCursorLine - visibleHeight + 1
+    elif newCursorLine < mgr.viewport.topLine:
+      mgr.viewport.topLine = newCursorLine
+    anim.active = false
+    return (false, anim.targetCursorLine)
+
+  return (true, newCursorLine)
 
 proc newMotionController*(
     buf: buffer.TextBuffer, state: EditorState, viewport: ViewPort

@@ -244,6 +244,126 @@ proc parseKeyCombo*(s: string): Option[KeyCombo] =
   combo.modifiers = modifiers
   return some(combo)
 
+proc keyComboToString*(keyCombo: KeyCombo): string =
+  ## Convert a KeyCombo to a string representation for macro recording
+  ## This is the inverse of stringToKeyCombo
+  if keyCombo.isSpecial:
+    case keyCombo.special
+    of skEnter:
+      return "<Enter>"
+    of skTab:
+      return "<Tab>"
+    of skBackspace:
+      return "<Backspace>"
+    of skDelete:
+      return "<Delete>"
+    of skEscape:
+      return "<Escape>"
+    of skUp:
+      return "<Up>"
+    of skDown:
+      return "<Down>"
+    of skLeft:
+      return "<Left>"
+    of skRight:
+      return "<Right>"
+    of skPageUp:
+      return "<PageUp>"
+    of skPageDown:
+      return "<PageDown>"
+    of skHome:
+      return "<Home>"
+    of skEnd:
+      return "<End>"
+    of skFunction:
+      return "<F" & $keyCombo.fnNum & ">"
+    of skNone:
+      return ""
+  else:
+    # Handle modifiers
+    var prefix = ""
+    if kmCtrl in keyCombo.modifiers:
+      prefix.add("C-")
+    if kmAlt in keyCombo.modifiers:
+      prefix.add("M-")
+    if kmShift in keyCombo.modifiers:
+      prefix.add("S-")
+    if prefix.len > 0:
+      return "<" & prefix & keyCombo.char & ">"
+    else:
+      return keyCombo.char
+
+proc stringToKeyCombo*(s: string): Option[KeyCombo] =
+  ## Convert a string back to a KeyCombo for macro playback
+  ## This is the inverse of keyComboToString
+  if s.len == 0:
+    return none(KeyCombo)
+
+  if s.startsWith("<") and s.endsWith(">"):
+    # Special key or modifier key combination
+    var key = s[1 ..< s.len - 1]
+
+    # Parse modifiers (C-, M-, S-)
+    var modifiers: set[KeyModifier] = {}
+    while true:
+      if key.startsWith("C-"):
+        modifiers.incl(kmCtrl)
+        key = key[2 ..^ 1]
+      elif key.startsWith("M-"):
+        modifiers.incl(kmAlt)
+        key = key[2 ..^ 1]
+      elif key.startsWith("S-"):
+        modifiers.incl(kmShift)
+        key = key[2 ..^ 1]
+      else:
+        break
+
+    # If we have modifiers, return a modified character key
+    if modifiers != {}:
+      return some(KeyCombo(isSpecial: false, char: key, modifiers: modifiers))
+
+    # Handle special keys
+    case key
+    of "Enter":
+      return some(KeyCombo(isSpecial: true, special: skEnter, fnNum: 0))
+    of "Tab":
+      return some(KeyCombo(isSpecial: true, special: skTab, fnNum: 0))
+    of "Backspace":
+      return some(KeyCombo(isSpecial: true, special: skBackspace, fnNum: 0))
+    of "Delete":
+      return some(KeyCombo(isSpecial: true, special: skDelete, fnNum: 0))
+    of "Escape":
+      return some(KeyCombo(isSpecial: true, special: skEscape, fnNum: 0))
+    of "Up":
+      return some(KeyCombo(isSpecial: true, special: skUp, fnNum: 0))
+    of "Down":
+      return some(KeyCombo(isSpecial: true, special: skDown, fnNum: 0))
+    of "Left":
+      return some(KeyCombo(isSpecial: true, special: skLeft, fnNum: 0))
+    of "Right":
+      return some(KeyCombo(isSpecial: true, special: skRight, fnNum: 0))
+    of "PageUp":
+      return some(KeyCombo(isSpecial: true, special: skPageUp, fnNum: 0))
+    of "PageDown":
+      return some(KeyCombo(isSpecial: true, special: skPageDown, fnNum: 0))
+    of "Home":
+      return some(KeyCombo(isSpecial: true, special: skHome, fnNum: 0))
+    of "End":
+      return some(KeyCombo(isSpecial: true, special: skEnd, fnNum: 0))
+    else:
+      # Check for function keys
+      if key.startsWith("F"):
+        try:
+          let num = parseInt(key[1 ..^ 1])
+          return some(KeyCombo(isSpecial: true, special: skFunction, fnNum: num))
+        except ValueError:
+          return none(KeyCombo)
+      else:
+        return none(KeyCombo)
+  else:
+    # Regular character
+    return some(KeyCombo(isSpecial: false, char: s, modifiers: {}))
+
 proc newKeyBindingRegistry*(): KeyBindingRegistry =
   ## Create a new keybinding registry with default bindings
   result = KeyBindingRegistry(
@@ -1035,6 +1155,30 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   )
   # Bind ga key sequence to show-char-info (must be after registerCommand)
   registry.bindKey(EditorMode.Normal, "g a", "show-char-info")
+
+  # LSP - Go to definition (gd)
+  registry.registerCommand(
+    Command(
+      name: "lsp-goto-definition",
+      description: "Go to definition (LSP)",
+      kind: ctCustom,
+      commandId: "lsp.goto.definition",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "g d", "lsp-goto-definition")
+
+  # LSP - Find references (gr)
+  registry.registerCommand(
+    Command(
+      name: "lsp-find-references",
+      description: "Find all references (LSP)",
+      kind: ctCustom,
+      commandId: "lsp.find.references",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "g r", "lsp-find-references")
 
   # ZZ - Save and quit
   registry.registerCommand(

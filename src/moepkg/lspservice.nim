@@ -359,6 +359,48 @@ proc requestSignatureHelp*(
   let uri = pathToUri(path)
   return client.signatureHelp(uri, line, character)
 
+proc requestRename*(
+    svc: LspService, path: string, line, character: int, newName: string
+): Result[Option[WorkspaceEdit], string] =
+  ## Request rename of a symbol
+  let clientResult = svc.getClientForPath(path)
+  if clientResult.isErr:
+    return err(clientResult.error)
+
+  let client = clientResult.get
+  let uri = pathToUri(path)
+  return client.rename(uri, line, character, newName)
+
+proc requestFormatting*(
+    svc: LspService, path: string, tabSize: int = 2, insertSpaces: bool = true
+): Result[seq[TextEdit], string] =
+  ## Request document formatting
+  let clientResult = svc.getClientForPath(path)
+  if clientResult.isErr:
+    return err(clientResult.error)
+
+  let client = clientResult.get
+  let uri = pathToUri(path)
+  return client.formatting(uri, tabSize, insertSpaces)
+
+proc requestRangeFormatting*(
+    svc: LspService,
+    path: string,
+    startLine, startChar, endLine, endChar: int,
+    tabSize: int = 2,
+    insertSpaces: bool = true,
+): Result[seq[TextEdit], string] =
+  ## Request range formatting
+  let clientResult = svc.getClientForPath(path)
+  if clientResult.isErr:
+    return err(clientResult.error)
+
+  let client = clientResult.get
+  let uri = pathToUri(path)
+  return client.rangeFormatting(
+    uri, startLine, startChar, endLine, endChar, tabSize, insertSpaces
+  )
+
 # Capability checking
 proc hasCompletionSupport*(svc: LspService, langId: string): bool =
   ## Check if completion is supported for a language
@@ -419,6 +461,66 @@ proc hasSignatureHelpSupport*(svc: LspService, langId: string): bool =
     return false
 
   return client.capabilities.get.signatureHelpProvider.isSome
+
+proc hasRenameSupport*(svc: LspService, langId: string): bool =
+  ## Check if rename is supported for a language
+  let clientOpt = svc.getClient(langId)
+  if clientOpt.isNone:
+    return false
+
+  let client = clientOpt.get
+  if client.capabilities.isNone:
+    return false
+
+  return client.capabilities.get.renameProvider.isSome
+
+proc hasFormattingSupport*(svc: LspService, langId: string): bool =
+  ## Check if document formatting is supported for a language
+  let clientOpt = svc.getClient(langId)
+  if clientOpt.isNone:
+    return false
+
+  let client = clientOpt.get
+  if client.capabilities.isNone:
+    return false
+
+  return client.capabilities.get.documentFormattingProvider.isSome
+
+proc hasRangeFormattingSupport*(svc: LspService, langId: string): bool =
+  ## Check if range formatting is supported for a language
+  let clientOpt = svc.getClient(langId)
+  if clientOpt.isNone:
+    return false
+
+  let client = clientOpt.get
+  if client.capabilities.isNone:
+    return false
+
+  return client.capabilities.get.documentRangeFormattingProvider.isSome
+
+proc hasDocumentSymbolSupport*(svc: LspService, langId: string): bool =
+  ## Check if document symbol is supported for a language
+  let clientOpt = svc.getClient(langId)
+  if clientOpt.isNone:
+    return false
+
+  let client = clientOpt.get
+  if client.capabilities.isNone:
+    return false
+
+  return client.capabilities.get.documentSymbolProvider.isSome
+
+proc requestDocumentSymbols*(
+    svc: LspService, path: string
+): Result[DocumentSymbolResult, string] =
+  ## Request document symbols for a file
+  let clientResult = svc.getClientForPath(path)
+  if clientResult.isErr:
+    return err(clientResult.error)
+
+  let client = clientResult.get
+  let uri = pathToUri(path)
+  return client.documentSymbol(uri)
 
 # Status information
 proc getRunningLanguages*(svc: LspService): seq[string] =

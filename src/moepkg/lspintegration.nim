@@ -20,11 +20,11 @@
 ## LSP Integration with Editor
 ## Connects LspService to Editor, TextBuffer, and UI components
 
-import std/[options, json, strutils]
+import std/[options, json, strutils, algorithm]
 
 import pkg/results
 
-import buffer, types, lspservice
+import buffer, cursor, types, lspservice
 import lsp/protocol/types as lspTypes
 
 export lspservice
@@ -195,6 +195,128 @@ proc requestSignatureHelp*(
 
   let path = buffer.filePath.get
   return lsp.service.requestSignatureHelp(path, line, column)
+
+proc requestRename*(
+    lsp: LspIntegration, buffer: TextBuffer, line, column: int, newName: string
+): Result[Option[WorkspaceEdit], string] =
+  ## Request rename of a symbol at cursor position
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.requestRename(path, line, column, newName)
+
+proc requestFormatting*(
+    lsp: LspIntegration, buffer: TextBuffer, tabSize: int = 2, insertSpaces: bool = true
+): Result[seq[TextEdit], string] =
+  ## Request document formatting
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.requestFormatting(path, tabSize, insertSpaces)
+
+proc requestRangeFormatting*(
+    lsp: LspIntegration,
+    buffer: TextBuffer,
+    startLine, startChar, endLine, endChar: int,
+    tabSize: int = 2,
+    insertSpaces: bool = true,
+): Result[seq[TextEdit], string] =
+  ## Request range formatting
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.requestRangeFormatting(
+    path, startLine, startChar, endLine, endChar, tabSize, insertSpaces
+  )
+
+proc requestDocumentSymbols*(
+    lsp: LspIntegration, buffer: TextBuffer
+): Result[DocumentSymbolResult, string] =
+  ## Request document symbols for a buffer
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.requestDocumentSymbols(path)
+
+# TextEdit application helpers
+proc compareTextEditReverse(a, b: TextEdit): int =
+  ## Compare TextEdits for reverse sorting (back to front)
+  ## Returns positive if a should come before b (a is after b in document)
+  if a.range.start.line != b.range.start.line:
+    return b.range.start.line - a.range.start.line
+  return b.range.start.character - a.range.start.character
+
+proc applyTextEdits*(buffer: TextBuffer, edits: seq[TextEdit]): Result[void, string] =
+  ## Apply a sequence of TextEdits to the buffer
+  ## Edits are applied in reverse order (back to front) to preserve positions
+  ## Note: LSP TextEdit.range.end is exclusive, buffer.deleteRange is inclusive
+  if edits.len == 0:
+    return ok()
+
+  # Sort edits in reverse order (back to front)
+  var sortedEdits = edits
+  sortedEdits.sort(compareTextEditReverse)
+
+  # Apply each edit
+  for edit in sortedEdits:
+    let startPos =
+      BufferPosition(line: edit.range.start.line, column: edit.range.start.character)
+    let lspEndPos = edit.range.`end`
+
+    # Check if range is empty (LSP exclusive end == start means empty range)
+    let isEmptyRange =
+      edit.range.start.line == lspEndPos.line and
+      edit.range.start.character == lspEndPos.character
+
+    # Delete the range if it's not empty
+    if not isEmptyRange:
+      # Convert LSP exclusive end to buffer inclusive end
+      var adjustedEndPos: BufferPosition
+      if lspEndPos.character > 0:
+        # Simply decrement character position
+        adjustedEndPos =
+          BufferPosition(line: lspEndPos.line, column: lspEndPos.character - 1)
+      else:
+        # End is at start of a line (character == 0)
+        # Need to point to end of previous line to include the newline
+        if lspEndPos.line > 0:
+          let prevLineLen = buffer.getLine(lspEndPos.line - 1).charLen
+          adjustedEndPos = BufferPosition(line: lspEndPos.line - 1, column: prevLineLen)
+        else:
+          # Edge case: end is at (0, 0), skip deletion
+          adjustedEndPos = startPos
+
+      # Only delete if we have a valid range
+      if startPos.line < adjustedEndPos.line or (
+        startPos.line == adjustedEndPos.line and startPos.column <= adjustedEndPos.column
+      ):
+        let deleteResult = buffer.deleteRange(startPos, adjustedEndPos)
+        if deleteResult.isErr:
+          return err("Failed to delete range: " & deleteResult.error)
+
+    # Insert the new text if not empty
+    if edit.newText.len > 0:
+      let insertResult = buffer.insertText(startPos, edit.newText)
+      if insertResult.isErr:
+        return err("Failed to insert text: " & insertResult.error)
+
+  return ok()
 
 # Diagnostic helpers
 proc applyDiagnosticsToBuffer*(buffer: TextBuffer, diagnostics: seq[Diagnostic]) =

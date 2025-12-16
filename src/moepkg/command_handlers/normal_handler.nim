@@ -21,7 +21,7 @@
 ##
 ## This module handles commands specific to Normal mode.
 
-import std/[options, strutils, tables]
+import std/[options, tables]
 
 import pkg/results
 
@@ -36,12 +36,16 @@ type
     nmrError
     nmrSaveAndQuit
     nmrQuitWithoutSave
+    nmrPlaybackMacro # Signal to handler_manager to playback a macro
+    nmrLspGotoDefinition # Signal to handler_manager to execute LSP goto definition
+    nmrLspFindReferences # Signal to handler_manager to execute LSP find references
 
   NormalModeHandler* = ref object ## Handler for Normal mode specific commands
     motionController*: MotionController
     keyBindingRegistry*: KeyBindingRegistry
     commandRegistry*: CommandRegistry
     clipboardConfig*: ClipboardConfig
+    smoothScrollConfig*: SmoothScrollConfig
 
   NormalModeResult* = object ## Result of normal mode command execution
     case kind*: NormalModeResultKind
@@ -55,12 +59,21 @@ type
       discard
     of nmrQuitWithoutSave:
       discard
+    of nmrPlaybackMacro:
+      macroKeys*: seq[string] # Keys to playback
+      macroCount*: int # Number of times to playback (default 1)
+    of nmrLspGotoDefinition:
+      discard
+    of nmrLspFindReferences:
+      discard
 
 proc newNormalModeHandler*(
     motionController: MotionController,
     keyBindingRegistry: KeyBindingRegistry,
     commandRegistry: CommandRegistry,
     clipboardConfig: ClipboardConfig = ClipboardConfig(enable: false, tool: ctXclip),
+    smoothScrollConfig: SmoothScrollConfig =
+      SmoothScrollConfig(enable: true, baseDurationMs: 350, maxDurationMs: 650),
 ): NormalModeHandler =
   ## Create a new Normal mode handler
   NormalModeHandler(
@@ -68,6 +81,7 @@ proc newNormalModeHandler*(
     keyBindingRegistry: keyBindingRegistry,
     commandRegistry: commandRegistry,
     clipboardConfig: clipboardConfig,
+    smoothScrollConfig: smoothScrollConfig,
   )
 
 proc executeCommand*(
@@ -86,6 +100,7 @@ proc executeCommand*(
     motionController: handler.motionController,
     keyBindingRegistry: handler.keyBindingRegistry,
     clipboardConfig: handler.clipboardConfig,
+    smoothScrollConfig: handler.smoothScrollConfig,
   )
 
   let r = handler.commandRegistry.execute(ctx, commandId, args)
@@ -208,92 +223,6 @@ proc handleInsertModeEntry*(
 # All text manipulation (delete, yank, change) is now handled by the
 # operator+motion system in commandregistry.nim
 
-proc keyComboToString(keyCombo: KeyCombo): string =
-  ## Convert a KeyCombo to a string for macro recording
-  if keyCombo.isSpecial:
-    case keyCombo.special
-    of skEnter:
-      return "<Enter>"
-    of skTab:
-      return "<Tab>"
-    of skBackspace:
-      return "<Backspace>"
-    of skDelete:
-      return "<Delete>"
-    of skEscape:
-      return "<Escape>"
-    of skUp:
-      return "<Up>"
-    of skDown:
-      return "<Down>"
-    of skLeft:
-      return "<Left>"
-    of skRight:
-      return "<Right>"
-    of skPageUp:
-      return "<PageUp>"
-    of skPageDown:
-      return "<PageDown>"
-    of skHome:
-      return "<Home>"
-    of skEnd:
-      return "<End>"
-    of skFunction:
-      return "<F" & $keyCombo.fnNum & ">"
-    of skNone:
-      return ""
-  else:
-    return keyCombo.char
-
-proc stringToKeyCombo(s: string): Option[KeyCombo] =
-  ## Convert a string back to a KeyCombo for macro playback
-  if s.len == 0:
-    return none(KeyCombo)
-
-  if s.startsWith("<") and s.endsWith(">"):
-    # Special key
-    let key = s[1 ..< s.len - 1]
-    case key
-    of "Enter":
-      return some(KeyCombo(isSpecial: true, special: skEnter, fnNum: 0))
-    of "Tab":
-      return some(KeyCombo(isSpecial: true, special: skTab, fnNum: 0))
-    of "Backspace":
-      return some(KeyCombo(isSpecial: true, special: skBackspace, fnNum: 0))
-    of "Delete":
-      return some(KeyCombo(isSpecial: true, special: skDelete, fnNum: 0))
-    of "Escape":
-      return some(KeyCombo(isSpecial: true, special: skEscape, fnNum: 0))
-    of "Up":
-      return some(KeyCombo(isSpecial: true, special: skUp, fnNum: 0))
-    of "Down":
-      return some(KeyCombo(isSpecial: true, special: skDown, fnNum: 0))
-    of "Left":
-      return some(KeyCombo(isSpecial: true, special: skLeft, fnNum: 0))
-    of "Right":
-      return some(KeyCombo(isSpecial: true, special: skRight, fnNum: 0))
-    of "PageUp":
-      return some(KeyCombo(isSpecial: true, special: skPageUp, fnNum: 0))
-    of "PageDown":
-      return some(KeyCombo(isSpecial: true, special: skPageDown, fnNum: 0))
-    of "Home":
-      return some(KeyCombo(isSpecial: true, special: skHome, fnNum: 0))
-    of "End":
-      return some(KeyCombo(isSpecial: true, special: skEnd, fnNum: 0))
-    else:
-      # Check for function keys
-      if key.startsWith("F"):
-        try:
-          let num = parseInt(key[1 ..^ 1])
-          return some(KeyCombo(isSpecial: true, special: skFunction, fnNum: num))
-        except ValueError:
-          return none(KeyCombo)
-      else:
-        return none(KeyCombo)
-  else:
-    # Regular character
-    return some(KeyCombo(isSpecial: false, char: s, modifiers: {}))
-
 # Forward declaration for recursive call in playbackMacro
 proc handleNormalModeKey*(
   handler: NormalModeHandler,
@@ -303,51 +232,11 @@ proc handleNormalModeKey*(
   keyCombo: KeyCombo,
 ): NormalModeResult
 
-proc playbackMacro(
-    handler: NormalModeHandler,
-    buffer: TextBuffer,
-    state: EditorState,
-    viewport: ViewPort,
-    keys: seq[string],
-): NormalModeResult =
-  ## Play back a recorded macro
-  # Clear any pending key sequences before starting playback
-  handler.keyBindingRegistry.clearSequence()
-
-  for keyStr in keys:
-    let keyComboOpt = stringToKeyCombo(keyStr)
-    if keyComboOpt.isNone:
-      return NormalModeResult(
-        kind: nmrError, errorMessage: "Invalid key in macro: " & keyStr
-      )
-
-    let keyCombo = keyComboOpt.get
-    # Recursively call handleNormalModeKey, but skip macro recording
-    # We need to temporarily disable recording to avoid recording during playback
-    let wasRecording = state.isRecordingMacro
-    let wasWaitingForRegister = state.waitingForMacroRegister
-    state.isRecordingMacro = false
-    state.waitingForMacroRegister = false
-
-    let res = handler.handleNormalModeKey(buffer, state, viewport, keyCombo)
-
-    # Restore recording state
-    state.isRecordingMacro = wasRecording
-    state.waitingForMacroRegister = wasWaitingForRegister
-
-    # If there was an error, stop playback
-    if res.kind == nmrError:
-      return res
-
-    # If mode changed (e.g., entered insert mode), we should stop playback
-    # This prevents issues with mode-specific commands
-    if res.modeTransition.isSome:
-      # Allow the mode transition but stop further playback
-      return res
-
-  # Clear any pending sequences after playback
-  handler.keyBindingRegistry.clearSequence()
-  return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
+proc requestMacroPlayback(keys: seq[string], count: int = 1): NormalModeResult =
+  ## Request macro playback - actual playback is done by handler_manager
+  ## This returns the keys to be played back, and handler_manager will
+  ## dispatch each key to the appropriate mode handler
+  NormalModeResult(kind: nmrPlaybackMacro, macroKeys: keys, macroCount: count)
 
 proc handleNormalModeKey*(
     handler: NormalModeHandler,
@@ -385,6 +274,8 @@ proc handleNormalModeKey*(
           return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
       elif state.macroCommandType == "playback":
         # Play back the macro from the specified register
+        let count = state.pendingMacroCount
+        state.pendingMacroCount = 0 # Reset for next use
         if registerChar == '@':
           # @@ - repeat last macro
           if state.lastMacroRegister.isSome:
@@ -393,7 +284,7 @@ proc handleNormalModeKey*(
               state.waitingForMacroRegister = false
               state.macroCommandType = ""
               let keys = state.macroRegisters[reg]
-              return handler.playbackMacro(buffer, state, viewport, keys)
+              return requestMacroPlayback(keys, count)
             else:
               state.statusMessage = "Register @" & $reg & " is empty"
               state.waitingForMacroRegister = false
@@ -411,7 +302,7 @@ proc handleNormalModeKey*(
             state.waitingForMacroRegister = false
             state.macroCommandType = ""
             let keys = state.macroRegisters[registerChar]
-            return handler.playbackMacro(buffer, state, viewport, keys)
+            return requestMacroPlayback(keys, count)
           else:
             state.statusMessage = "Register @" & $registerChar & " is empty"
             state.waitingForMacroRegister = false
@@ -458,6 +349,10 @@ proc handleNormalModeKey*(
   # Handle '@' for macro playback - only when NOT recording
   if not state.isRecordingMacro and not keyCombo.isSpecial and keyCombo.modifiers == {} and
       keyCombo.char == "@":
+    # Get numeric prefix (e.g., 3@a means play macro 3 times)
+    state.pendingMacroCount = handler.keyBindingRegistry.getNumericPrefix()
+    # Clear the numeric prefix since we've consumed it
+    handler.keyBindingRegistry.clearSequence()
     # Wait for the next key (register name)
     state.waitingForMacroRegister = true
     state.macroCommandType = "playback"
@@ -512,6 +407,7 @@ proc handleNormalModeKey*(
       motionController: handler.motionController,
       keyBindingRegistry: handler.keyBindingRegistry,
       clipboardConfig: handler.clipboardConfig,
+      smoothScrollConfig: handler.smoothScrollConfig,
     )
 
     # Execute the motion command directly through CommandRegistry
@@ -565,6 +461,7 @@ proc handleNormalModeKey*(
         motionController: handler.motionController,
         keyBindingRegistry: handler.keyBindingRegistry,
         clipboardConfig: handler.clipboardConfig,
+        smoothScrollConfig: handler.smoothScrollConfig,
       )
       let cmdResult = handler.commandRegistry.execute(ctx, cmd.commandId, cmd.args)
       if cmdResult.isOk:
@@ -572,6 +469,12 @@ proc handleNormalModeKey*(
       else:
         return NormalModeResult(kind: nmrError, errorMessage: cmdResult.error)
   of ctCustom, ctTextObject, ctOperator, ctOperatorPending:
+    # Check for LSP commands first
+    if cmd.commandId == "lsp.goto.definition":
+      return NormalModeResult(kind: nmrLspGotoDefinition)
+    elif cmd.commandId == "lsp.find.references":
+      return NormalModeResult(kind: nmrLspFindReferences)
+
     # Execute custom commands and operators through command registry
     let ctx = CommandContext(
       buffer: buffer,
@@ -580,6 +483,7 @@ proc handleNormalModeKey*(
       motionController: handler.motionController,
       keyBindingRegistry: handler.keyBindingRegistry,
       clipboardConfig: handler.clipboardConfig,
+      smoothScrollConfig: handler.smoothScrollConfig,
     )
     # Use executeCommand to handle numeric prefixes properly
     let cmdResult = handler.commandRegistry.executeCommand(ctx, cmd)

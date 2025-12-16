@@ -22,7 +22,7 @@
 ## This module provides a unified interface for all mode-specific handlers,
 ## maintaining the shared infrastructure while delegating to specialized handlers.
 
-import std/options
+import std/[options, unicode]
 
 import pkg/[results, celina]
 
@@ -68,6 +68,8 @@ type
     hrFilerQuit # Close filer and return to previous mode
     hrEnterFiler # Enter filer mode with optional path
     hrQuickRun # Run the current buffer
+    hrLspGotoDefinition # Execute LSP goto definition
+    hrLspFindReferences # Execute LSP find references
     hrUnhandled # Command was not handled
     hrError # Error occurred
 
@@ -132,6 +134,10 @@ type
       enterFilerPath*: Option[string]
     of hrQuickRun:
       discard
+    of hrLspGotoDefinition:
+      discard
+    of hrLspFindReferences:
+      discard
     of hrUnhandled:
       discard
     of hrError:
@@ -144,11 +150,14 @@ proc newHandlerManager*(
     commandConfig: CommandConfig,
     commandRegistry: CommandRegistry,
     clipboardConfig: ClipboardConfig,
+    smoothScrollConfig: SmoothScrollConfig =
+      SmoothScrollConfig(enable: true, baseDurationMs: 350, maxDurationMs: 650),
 ): HandlerManager =
   ## Create a new handler manager with all mode handlers
 
   let normalHandler = newNormalModeHandler(
-    motionController, keyBindingRegistry, commandRegistry, clipboardConfig
+    motionController, keyBindingRegistry, commandRegistry, clipboardConfig,
+    smoothScrollConfig,
   )
   let insertHandler =
     newInsertModeHandler(keyBindingRegistry, motionController, commandRegistry)
@@ -208,6 +217,15 @@ proc extractInsertedText(transaction: buffer.BufferTransaction): string =
       sb.add(extractInsertedText(nestedTransaction))
   return sb.toString()
 
+# Forward declaration for playbackMacro
+proc playbackMacro*(
+  manager: HandlerManager,
+  buffer: TextBuffer,
+  state: EditorState,
+  viewport: ViewPort,
+  keys: seq[string],
+): HandlerResult
+
 proc handleNormalMode*(
     manager: HandlerManager,
     buffer: TextBuffer,
@@ -259,6 +277,23 @@ proc handleNormalMode*(
   of nmrQuitWithoutSave:
     # ZQ command - Quit without saving (force quit)
     return HandlerResult(kind: hrQuit, shouldQuit: true)
+  of nmrPlaybackMacro:
+    # Playback the macro through handler_manager which can dispatch to any mode
+    # Loop for the specified count (e.g., 3@a plays macro 3 times)
+    let count = if r.macroCount > 0: r.macroCount else: 1
+    for i in 0 ..< count:
+      let playbackResult = manager.playbackMacro(buffer, state, viewport, r.macroKeys)
+      if playbackResult.kind == hrError or playbackResult.kind == hrQuit:
+        return playbackResult
+    return HandlerResult(
+      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+    )
+  of nmrLspGotoDefinition:
+    # Signal to editor to execute LSP goto definition
+    return HandlerResult(kind: hrLspGotoDefinition)
+  of nmrLspFindReferences:
+    # Signal to editor to execute LSP find references
+    return HandlerResult(kind: hrLspFindReferences)
 
 proc handleInsertMode*(
     manager: HandlerManager, buffer: TextBuffer, state: EditorState, keyCombo: KeyCombo
@@ -390,6 +425,146 @@ proc handleCommandMode*(
   of cmrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
+proc handleCommandMode*(
+    manager: HandlerManager,
+    buffer: TextBuffer,
+    state: EditorState,
+    viewport: ViewPort,
+    keyCombo: KeyCombo,
+): HandlerResult =
+  ## Handle Command mode key events (for macro playback)
+  ## This builds up the command text character by character
+
+  # Record key for macro if recording is active
+  if state.isRecordingMacro:
+    state.recordedKeys.add(keyComboToString(keyCombo))
+
+  if keyCombo.isSpecial:
+    case keyCombo.special
+    of skEscape:
+      # Cancel command mode
+      state.commandText = ""
+      state.commandCursor = 0
+      return HandlerResult(
+        kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: ""
+      )
+    of skEnter:
+      # Execute the command
+      let commandText = state.commandText
+      state.commandText = ""
+      state.commandCursor = 0
+      return manager.handleCommandMode(buffer, commandText, false)
+    of skBackspace:
+      # Delete character (rune) before cursor - handles unicode properly
+      if state.commandCursor > 1: # Keep the ":" prefix
+        let beforeCursor = state.commandText[0 ..< state.commandCursor]
+        let afterCursor = state.commandText[state.commandCursor ..^ 1]
+        # Convert to runes and remove last one
+        var runes = beforeCursor.toRunes
+        if runes.len > 1: # Keep the ":" prefix
+          runes.setLen(runes.len - 1)
+          let newBefore = $runes
+          state.commandText = newBefore & afterCursor
+          state.commandCursor = newBefore.len
+      return HandlerResult(
+        kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+      )
+    of skLeft:
+      # Move cursor left by one rune (handles unicode properly)
+      if state.commandCursor > 1:
+        let beforeCursor = state.commandText[0 ..< state.commandCursor]
+        let runes = beforeCursor.toRunes
+        if runes.len > 1: # Keep cursor after ":"
+          state.commandCursor = ($runes[0 ..< runes.len - 1]).len
+      return HandlerResult(
+        kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+      )
+    of skRight:
+      # Move cursor right by one rune (handles unicode properly)
+      if state.commandCursor < state.commandText.len:
+        let afterCursor = state.commandText[state.commandCursor ..^ 1]
+        let runes = afterCursor.toRunes
+        if runes.len > 0:
+          state.commandCursor += ($runes[0]).len
+      return HandlerResult(
+        kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+      )
+    of skHome:
+      state.commandCursor = 1 # After ":"
+      return HandlerResult(
+        kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+      )
+    of skEnd:
+      state.commandCursor = state.commandText.len
+      return HandlerResult(
+        kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+      )
+    else:
+      return HandlerResult(kind: hrUnhandled)
+  else:
+    # Regular character - insert at cursor position
+    if keyCombo.modifiers == {} and keyCombo.char.len > 0:
+      state.commandText =
+        state.commandText[0 ..< state.commandCursor] & keyCombo.char &
+        state.commandText[state.commandCursor ..^ 1]
+      state.commandCursor += keyCombo.char.len
+      return HandlerResult(
+        kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+      )
+    else:
+      return HandlerResult(kind: hrUnhandled)
+
+proc handleSearchMode*(
+    manager: HandlerManager,
+    buffer: TextBuffer,
+    state: EditorState,
+    viewport: ViewPort,
+    keyCombo: KeyCombo,
+): HandlerResult =
+  ## Handle Search mode key events (for macro playback)
+  ## This builds up the search text character by character
+
+  # Record key for macro if recording is active
+  if state.isRecordingMacro:
+    state.recordedKeys.add(keyComboToString(keyCombo))
+
+  if keyCombo.isSpecial:
+    case keyCombo.special
+    of skEscape:
+      # Cancel search mode and restore cursor
+      state.searchText = ""
+      state.cursor = state.searchStartPos
+      return HandlerResult(
+        kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: ""
+      )
+    of skEnter:
+      # Confirm search and switch to Normal mode
+      # The search result is already applied via incremental search
+      return HandlerResult(
+        kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: ""
+      )
+    of skBackspace:
+      # Delete last character (rune) - handles unicode properly
+      if state.searchText.len > 0:
+        var runes = state.searchText.toRunes
+        if runes.len > 0:
+          runes.setLen(runes.len - 1)
+          state.searchText = $runes
+      return HandlerResult(
+        kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+      )
+    else:
+      return HandlerResult(kind: hrUnhandled)
+  else:
+    # Regular character - append to search text
+    if keyCombo.modifiers == {} and keyCombo.char.len > 0:
+      state.searchText.add(keyCombo.char)
+      return HandlerResult(
+        kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+      )
+    else:
+      return HandlerResult(kind: hrUnhandled)
+
 proc handleVisualMode*(
     manager: HandlerManager,
     buffer: TextBuffer,
@@ -471,6 +646,109 @@ proc handleFilerMode*(
   of frError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
+const MaxMacroRecursionDepth = 100
+  ## Maximum macro recursion depth to prevent infinite loops
+
+proc handleKeyCombo*(
+    manager: HandlerManager,
+    buffer: TextBuffer,
+    state: EditorState,
+    viewport: ViewPort,
+    keyCombo: KeyCombo,
+): HandlerResult =
+  ## Handle a KeyCombo by dispatching to the appropriate mode handler
+  ## This is used for macro playback where we have KeyCombo directly
+
+  # Complete any active scroll animation on key input (instant jump to target)
+  if state.scrollAnimation.active:
+    let (completed, cursorLine, topLine) =
+      completeScrollAnimation(state.scrollAnimation)
+    if completed:
+      state.cursor.line = cursorLine
+      manager.motionController.viewportManager.viewport.topLine = topLine
+
+  # Delegate to appropriate mode handler
+  case state.mode
+  of EditorMode.Normal:
+    return manager.handleNormalMode(buffer, state, viewport, keyCombo)
+  of EditorMode.Insert:
+    return manager.handleInsertMode(buffer, state, keyCombo)
+  of EditorMode.Command:
+    # Handle Command mode key events for macro playback
+    return manager.handleCommandMode(buffer, state, viewport, keyCombo)
+  of EditorMode.Search:
+    # Handle Search mode key events for macro playback
+    return manager.handleSearchMode(buffer, state, viewport, keyCombo)
+  of EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine:
+    return manager.handleVisualMode(buffer, state, viewport, keyCombo)
+  of EditorMode.Replace:
+    return manager.handleReplaceMode(buffer, state, keyCombo)
+  of EditorMode.Filer:
+    return manager.handleFilerMode(state, viewport.height, keyCombo)
+  of EditorMode.QuickRun:
+    # QuickRun mode is not interactive - handled through command mode
+    return HandlerResult(kind: hrUnhandled)
+
+proc playbackMacro*(
+    manager: HandlerManager,
+    buffer: TextBuffer,
+    state: EditorState,
+    viewport: ViewPort,
+    keys: seq[string],
+): HandlerResult =
+  ## Play back a recorded macro, handling mode transitions properly
+  ## This dispatches each key to the appropriate mode handler based on current mode
+
+  # Check for recursion depth limit
+  if state.macroPlaybackDepth >= MaxMacroRecursionDepth:
+    return HandlerResult(
+      kind: hrError,
+      errorMessage:
+        "Macro recursion limit exceeded (max " & $MaxMacroRecursionDepth & ")",
+    )
+
+  # Increment recursion depth
+  state.macroPlaybackDepth += 1
+
+  # Clear any pending key sequences before starting playback
+  manager.keyBindingRegistry.clearSequence()
+
+  # Temporarily disable macro recording to avoid recording during playback
+  let wasRecording = state.isRecordingMacro
+  state.isRecordingMacro = false
+
+  for keyStr in keys:
+    let keyComboOpt = stringToKeyCombo(keyStr)
+    if keyComboOpt.isNone:
+      state.isRecordingMacro = wasRecording
+      state.macroPlaybackDepth -= 1
+      return
+        HandlerResult(kind: hrError, errorMessage: "Invalid key in macro: " & keyStr)
+
+    let keyCombo = keyComboOpt.get
+
+    # Dispatch to appropriate mode handler based on current state.mode
+    let keyResult = manager.handleKeyCombo(buffer, state, viewport, keyCombo)
+
+    # Handle mode transitions from keyResult
+    if keyResult.kind == hrHandled and keyResult.modeTransition.isSome:
+      state.mode = keyResult.modeTransition.get
+
+    # If error or quit, stop playback
+    if keyResult.kind == hrError or keyResult.kind == hrQuit:
+      state.isRecordingMacro = wasRecording
+      state.macroPlaybackDepth -= 1
+      return keyResult
+
+  # Restore recording state and decrement recursion depth
+  state.isRecordingMacro = wasRecording
+  state.macroPlaybackDepth -= 1
+
+  # Clear any pending sequences after playback
+  manager.keyBindingRegistry.clearSequence()
+  return
+    HandlerResult(kind: hrHandled, modeTransition: none(EditorMode), statusMessage: "")
+
 proc handleEvent*(
     manager: HandlerManager,
     buffer: TextBuffer,
@@ -488,31 +766,7 @@ proc handleEvent*(
   if keyComboOpt.isNone:
     return HandlerResult(kind: hrUnhandled)
 
-  let keyCombo = keyComboOpt.get
-
-  # Delegate to appropriate mode handler
-  case state.mode
-  of EditorMode.Normal:
-    return manager.handleNormalMode(buffer, state, viewport, keyCombo)
-  of EditorMode.Insert:
-    return manager.handleInsertMode(buffer, state, keyCombo)
-  of EditorMode.Command:
-    # Command mode is handled differently - through text input
-    # This should not be called for command mode key events
-    return HandlerResult(kind: hrUnhandled)
-  of EditorMode.Search:
-    # Search mode is handled differently - through text input
-    # This should not be called for search mode key events
-    return HandlerResult(kind: hrUnhandled)
-  of EditorMode.Visual, EditorMode.VisualBlock, EditorMode.VisualLine:
-    return manager.handleVisualMode(buffer, state, viewport, keyCombo)
-  of EditorMode.Replace:
-    return manager.handleReplaceMode(buffer, state, keyCombo)
-  of EditorMode.Filer:
-    return manager.handleFilerMode(state, viewport.height, keyCombo)
-  of EditorMode.QuickRun:
-    # QuickRun mode is not interactive - handled through command mode
-    return HandlerResult(kind: hrUnhandled)
+  return manager.handleKeyCombo(buffer, state, viewport, keyComboOpt.get)
 
 # Utility functions for HandlerResult
 proc wasHandled*(hrResult: HandlerResult): bool =
@@ -521,7 +775,7 @@ proc wasHandled*(hrResult: HandlerResult): bool =
     hrHandled, hrQuit, hrCloseWindow, hrGotoLine, hrVSplit, hrHSplit, hrEnew, hrSave,
     hrSaveAndQuit, hrBufferNext, hrBufferPrev, hrBufferFirst, hrBufferLast,
     hrBufferDelete, hrStripWhitespace, hrFilerOpenFile, hrFilerOpenFileVSplit,
-    hrFilerOpenFileHSplit, hrFilerQuit,
+    hrFilerOpenFileHSplit, hrFilerQuit, hrLspGotoDefinition, hrLspFindReferences,
   }
 
 proc shouldQuit*(hrResult: HandlerResult): bool =
@@ -704,3 +958,11 @@ proc getSaveAndQuitFilename*(hrResult: HandlerResult): Option[string] =
 proc getForceQuitAfterSave*(hrResult: HandlerResult): bool =
   ## Get force quit flag for save and quit operation
   if hrResult.kind == hrSaveAndQuit: hrResult.forceQuitAfterSave else: false
+
+proc shouldLspGotoDefinition*(hrResult: HandlerResult): bool =
+  ## Check if we should execute LSP goto definition
+  hrResult.kind == hrLspGotoDefinition
+
+proc shouldLspFindReferences*(hrResult: HandlerResult): bool =
+  ## Check if we should execute LSP find references
+  hrResult.kind == hrLspFindReferences

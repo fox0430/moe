@@ -96,6 +96,9 @@ type
     bcVisualYank = "visual.yank"
     # Filer operations
     bcFiler = "filer.open"
+    # LSP operations
+    bcLspGotoDefinition = "lsp.goto.definition"
+    bcLspFindReferences = "lsp.find.references"
 
   ## Command ID can be builtin or custom
   CommandIdKind* = enum
@@ -117,6 +120,7 @@ type
     motionController*: MotionController
     keyBindingRegistry*: keybindings.KeyBindingRegistry
     clipboardConfig*: ClipboardConfig
+    smoothScrollConfig*: SmoothScrollConfig
 
   ## Function signature for command handlers
   CommandHandler* =
@@ -509,6 +513,14 @@ proc executeCommand*(
         "Executing motion, current cursor=(" & $ctx.state.cursor.line & "," &
           $ctx.state.cursor.column & ")",
       )
+
+      # Check if this is a scroll motion for smooth scrolling
+      let isScrollMotion =
+        cmd.motion in
+        {Motion.PageUp, Motion.PageDown, Motion.HalfPageUp, Motion.HalfPageDown}
+      let prevTopLine = ctx.motionController.viewportManager.viewport.topLine
+      let prevCursorLine = ctx.state.cursor.line
+
       let r = ctx.motionController.executeMotion(motionCmd, ctx.state.cursor)
       if r.isErr:
         return err(r.error)
@@ -516,7 +528,54 @@ proc executeCommand*(
         "command",
         "Motion returned cursor=(" & $r.value.line & "," & $r.value.column & ")",
       )
-      ctx.state.cursor = r.value
+
+      let targetCursorLine = r.value.line
+
+      # Start smooth scroll animation if this was a scroll motion
+      if isScrollMotion and ctx.smoothScrollConfig.enable:
+        # For page scroll motions, we want to scroll the full page amount, not just minimum to show cursor
+        let viewportHeight = ctx.motionController.viewportManager.viewport.height
+        let lineCount = ctx.motionController.executor.buffer.len
+        let reservedLines = if ctx.state.showStatusLine: 2 else: 1
+        let pageSize = max(1, viewportHeight - reservedLines - 1)
+        let halfPageSize = max(1, pageSize div 2)
+
+        # Calculate target topLine based on motion type
+        var targetTopLine = prevTopLine
+        case cmd.motion
+        of Motion.PageDown:
+          targetTopLine = min(
+            max(0, lineCount - viewportHeight + reservedLines), prevTopLine + pageSize
+          )
+        of Motion.PageUp:
+          targetTopLine = max(0, prevTopLine - pageSize)
+        of Motion.HalfPageDown:
+          targetTopLine = min(
+            max(0, lineCount - viewportHeight + reservedLines),
+            prevTopLine + halfPageSize,
+          )
+        of Motion.HalfPageUp:
+          targetTopLine = max(0, prevTopLine - halfPageSize)
+        else:
+          discard
+
+        if targetTopLine != prevTopLine:
+          # Restore original positions - animation will interpolate from here
+          ctx.motionController.viewportManager.viewport.topLine = prevTopLine
+          ctx.state.cursor.line = prevCursorLine
+          startScrollAnimation(
+            ctx.state.scrollAnimation, prevTopLine, targetTopLine, prevCursorLine,
+            targetCursorLine, ctx.smoothScrollConfig,
+          )
+        else:
+          # No scroll needed, just update cursor
+          ctx.state.cursor = r.value
+      elif isScrollMotion:
+        # Smooth scroll disabled, just update cursor
+        ctx.state.cursor = r.value
+      else:
+        ctx.state.cursor = r.value
+
       logDebug(
         "command",
         "Cursor after assignment=(" & $ctx.state.cursor.line & "," &

@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[options, monotimes, tables]
+import std/[options, monotimes, times, tables]
 
 import pkg/celina
 
@@ -49,6 +49,15 @@ type
     height*: int
     x*: int # Screen position X
     y*: int # Screen position Y
+
+  ScrollAnimation* = object
+    active*: bool
+    startTopLine*: float # Scroll position at animation start
+    targetTopLine*: int # Target scroll position
+    startCursorLine*: int # Cursor line at animation start
+    targetCursorLine*: int # Target cursor line
+    startTime*: MonoTime # Animation start time
+    duration*: Duration # Total animation duration
 
   EditorWindow* = ref object
     ## Represents a split window with its own buffer and viewport
@@ -244,6 +253,19 @@ type
     kind*: SubstituteKind # Type of substitute operation
     deleteCount*: int # Number of characters or lines deleted
 
+  LspLocationItem* = object ## Single location item for LSP results display
+    uri*: string # File URI
+    path*: string # File path (extracted from URI)
+    line*: int # Line number (0-indexed)
+    column*: int # Column number (0-indexed)
+    text*: string # Optional context text from the line
+
+  LspLocationsResult* = object
+    ## Collection of LSP location results (used for references, definitions, etc.)
+    items*: seq[LspLocationItem]
+    selectedIndex*: int # Currently selected item index
+    title*: string # Title for the list (e.g., "References", "Definitions")
+
   EditorState* = ref object
     cursor*: BufferPosition # Actual buffer cursor position (line/column)
     screenCursor*: CursorPosition # Screen cursor position (x/y)
@@ -333,6 +355,8 @@ type
     lastMacroRegister*: Option[char] # Last executed macro register (for @@ repeat)
     waitingForMacroRegister*: bool # Waiting for register name after q or @
     macroCommandType*: string # "record" or "playback" - what we're waiting to do
+    pendingMacroCount*: int # Numeric prefix for macro playback (e.g., 3@a)
+    macroPlaybackDepth*: int # Current macro recursion depth (for protection)
     # Jump list (Ctrl-o / Ctrl-i)
     jumpList*: seq[JumpPosition] # List of jump positions
     jumpListIndex*: int # Current position in jump list (-1 when not navigating)
@@ -341,3 +365,8 @@ type
     # Command mode completion
     commandCompletionManager*: CommandCompletionManager
       # Command mode auto-completion manager
+    # LSP results display
+    lspLocations*: Option[LspLocationsResult]
+      # LSP locations result for references/definitions picker
+    # Smooth scroll animation
+    scrollAnimation*: ScrollAnimation # Current scroll animation state

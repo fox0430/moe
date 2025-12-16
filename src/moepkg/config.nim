@@ -198,8 +198,8 @@ type
   # Smooth scroll settings
   SmoothScrollConfig* = object
     enable*: bool
-    minDelay*: int
-    maxDelay*: int
+    baseDurationMs*: int # Base animation duration in milliseconds
+    maxDurationMs*: int # Maximum animation duration in milliseconds
 
   # Startup file open settings
   StartUpFileOpenConfig* = object
@@ -395,7 +395,8 @@ proc newEditorConfig*(): EditorConfig =
     ),
     git: GitConfig(showChangedLine: true, updateInterval: 1000),
     syntaxChecker: SyntaxCheckerConfig(enable: false),
-    smoothScroll: SmoothScrollConfig(enable: true, minDelay: 5, maxDelay: 20),
+    smoothScroll:
+      SmoothScrollConfig(enable: true, baseDurationMs: 350, maxDurationMs: 650),
     startUpFileOpen: StartUpFileOpenConfig(autoSplit: true, splitType: stVertical),
     debug: DebugConfig(
       windowNode: DebugWindowNodeConfig(

@@ -18,6 +18,7 @@
 #[############################################################################]#
 
 ## Replace mode handler
+## - Macro recording support
 
 import std/[options, unicode]
 
@@ -206,6 +207,10 @@ proc handleReplaceModeKey*(
     keyCombo: KeyCombo,
 ): ReplaceModeResult =
   ## Main entry point for handling Replace mode key presses
+
+  # Record key for macro if recording is active
+  if state.isRecordingMacro:
+    state.recordedKeys.add(keyComboToString(keyCombo))
 
   # Check for mode switch keys first (like Escape)
   let binding = handler.keyBindingRegistry.findBinding(EditorMode.Replace, keyCombo)

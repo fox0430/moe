@@ -25,7 +25,8 @@ import
   buffer, cursor, types, commands, keybindings, commandregistry, modes, commandline,
   commandconfig, statusline, windowmanager, unicode_utils, render_utils, sidebar,
   gitdiff, highlight, logger, config, configloader, keybindconfig, search_utils, filer,
-  lspintegration, completion, signaturehelp, backup, command_completion
+  lspintegration, completion, signaturehelp, backup, command_completion, motion
+import lsp/protocol/types as lspTypes
 import command_handlers/[handler_manager, visual_handler, insert_handler]
 
 type
@@ -805,7 +806,7 @@ proc newEditor*(): Editor =
   # Create handler manager after executer (which creates motion controller)
   result.handlerManager = newHandlerManager(
     result.executer.motionController, keyRegistry, cmdLineParser, cmdConfig,
-    cmdRegistry, result.config.clipboard,
+    cmdRegistry, result.config.clipboard, result.config.smoothScroll,
   )
 
   # Set clipboard tool for register system
@@ -2184,6 +2185,136 @@ proc requestSignatureHelpFromLsp*(e: Editor) =
       if sigHelpMgr.parenDepth == 0:
         sigHelpMgr.hide()
 
+proc addToJumpList(e: Editor) =
+  ## Add current cursor position to jump list before a jump
+  let jumpPos = JumpPosition(line: e.state.cursor.line, column: e.state.cursor.column)
+
+  # Don't add if same as last position
+  if e.state.jumpList.len > 0:
+    let lastPos = e.state.jumpList[^1]
+    if lastPos.line == jumpPos.line and lastPos.column == jumpPos.column:
+      return
+
+  e.state.jumpList.add(jumpPos)
+  # Keep jump list at reasonable size (max 100 entries)
+  if e.state.jumpList.len > 100:
+    e.state.jumpList.delete(0)
+  # Reset jump list index when adding new position
+  e.state.jumpListIndex = -1
+
+proc jumpToLspLocation(e: Editor, loc: lspTypes.Location, resultKind: string): bool =
+  ## Jump to a single LSP location
+  ## Returns true if successful
+  let activeBuffer = e.activeBuffer()
+  let path = lspservice.uriToPath(loc.uri)
+
+  # Add current position to jump list before jumping
+  e.addToJumpList()
+
+  # Check if it's the same file
+  if activeBuffer.filePath.isSome and activeBuffer.filePath.get == path:
+    # Same file - just move cursor with boundary checks
+    let targetLine = min(loc.range.start.line, max(0, activeBuffer.len - 1))
+    let lineLen =
+      if activeBuffer.len > 0:
+        activeBuffer[targetLine].len
+      else:
+        0
+    let targetCol = min(loc.range.start.character, max(0, lineLen - 1))
+    e.state.cursor.line = targetLine
+    e.state.cursor.column = max(0, targetCol)
+    e.state.statusMessage = resultKind & " at line " & $(targetLine + 1)
+  else:
+    # Different file - open it
+    let loadResult = e.loadFile(path)
+    if loadResult.isErr:
+      e.state.statusMessage = "Failed to open file: " & loadResult.error
+      return false
+    # Set cursor with boundary checks (loadFile already loaded into e.textBuffer)
+    let targetLine = min(loc.range.start.line, max(0, e.textBuffer.len - 1))
+    let lineLen =
+      if e.textBuffer.len > 0:
+        e.textBuffer[targetLine].len
+      else:
+        0
+    let targetCol = min(loc.range.start.character, max(0, lineLen - 1))
+    e.state.cursor.line = targetLine
+    e.state.cursor.column = max(0, targetCol)
+    e.state.statusMessage = resultKind & " in " & path
+
+  # Update viewport to follow cursor
+  e.state.needsFullRedraw = true
+  return true
+
+proc handleLspLocations(
+    e: Editor, locations: seq[lspTypes.Location], title: string, singularName: string
+): bool =
+  ## Handle LSP location results (shared by definition and references)
+  ## Returns true if successful
+  if locations.len == 0:
+    e.state.statusMessage = "No " & title.toLowerAscii() & " found"
+    return false
+
+  if locations.len == 1:
+    # Single location - jump directly
+    return e.jumpToLspLocation(locations[0], singularName)
+  else:
+    # Multiple locations - jump to first and store all for reference
+    var items: seq[LspLocationItem] = @[]
+    for loc in locations:
+      let path = lspservice.uriToPath(loc.uri)
+      items.add(
+        LspLocationItem(
+          uri: loc.uri,
+          path: path,
+          line: loc.range.start.line,
+          column: loc.range.start.character,
+          text: "",
+        )
+      )
+    e.state.lspLocations =
+      some(LspLocationsResult(items: items, selectedIndex: 0, title: title))
+
+    # Jump to the first location
+    discard e.jumpToLspLocation(locations[0], singularName)
+    e.state.statusMessage =
+      $locations.len & " " & title.toLowerAscii() & " found (showing first)"
+    return true
+
+proc requestLspGotoDefinition*(e: Editor): bool =
+  ## Request LSP goto definition at current cursor position
+  ## Returns true if successful and location was found
+  if not e.lsp.enabled:
+    e.state.statusMessage = "LSP is not enabled"
+    return false
+
+  let activeBuffer = e.activeBuffer()
+  let defResult =
+    e.lsp.requestDefinition(activeBuffer, e.state.cursor.line, e.state.cursor.column)
+
+  if defResult.isErr:
+    e.state.statusMessage = "LSP goto definition failed: " & defResult.error
+    return false
+
+  return e.handleLspLocations(defResult.get, "Definitions", "Definition")
+
+proc requestLspReferences*(e: Editor): bool =
+  ## Request LSP find references at current cursor position
+  ## Returns true if successful and references were found
+  if not e.lsp.enabled:
+    e.state.statusMessage = "LSP is not enabled"
+    return false
+
+  let activeBuffer = e.activeBuffer()
+  let refsResult =
+    e.lsp.requestReferences(activeBuffer, e.state.cursor.line, e.state.cursor.column)
+
+  if refsResult.isErr:
+    e.state.statusMessage = "LSP find references failed: " & refsResult.error
+    return false
+
+  return e.handleLspLocations(refsResult.get, "References", "Reference")
+
 proc shutdown*(e: Editor) =
   ## Shutdown editor and clean up resources (including LSP servers)
   e.lsp.shutdown()
@@ -2214,6 +2345,15 @@ proc render*(e: Editor, buffer: var Buffer) =
 
   # Clear buffer to prevent artifacts
   clearBuffer(buffer)
+
+  # Update smooth scroll animation
+  if e.state.scrollAnimation.active:
+    let reservedLines = if e.state.showStatusLine: 2 else: 1
+    let (active, cursorLine) = e.executer.motionController.viewportManager.updateScrollAnimation(
+      e.state.scrollAnimation, e.config.smoothScroll, reservedLines
+    )
+    # Update cursor line during animation
+    e.state.cursor.line = cursorLine
 
   # Reset the full redraw flag if it was set
   if e.state.needsFullRedraw:

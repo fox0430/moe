@@ -21,6 +21,7 @@
 ##
 ## This module handles visual selection and provides the core selection
 ## functionality for Visual mode
+## - Macro recording support
 
 import std/options
 
@@ -171,6 +172,10 @@ proc handleVisualModeKey*(
 ): VisualModeResult =
   ## Main entry point for handling Visual mode key presses
   ## Works for Visual, VisualBlock, and VisualLine modes
+
+  # Record key for macro if recording is active
+  if state.isRecordingMacro:
+    state.recordedKeys.add(keyComboToString(keyCombo))
 
   # Special handling for ESC to clear selection
   if keyCombo.isSpecial and keyCombo.special == skEscape:

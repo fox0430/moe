@@ -20,7 +20,7 @@
 ## LSP Protocol Types
 ## Based on LSP Specification 3.17
 
-import std/[options, json]
+import std/[options, json, tables]
 
 import enums
 
@@ -69,6 +69,20 @@ type
   TextEdit* = object ## A text edit
     range*: Range
     newText*: string
+
+  OptionalVersionedTextDocumentIdentifier* = object
+    ## Text document identifier with optional version
+    uri*: string
+    version*: Option[int]
+      # null means the version is known and the content on disk is the truth
+
+  TextDocumentEdit* = object ## An edit to a versioned text document
+    textDocument*: OptionalVersionedTextDocumentIdentifier
+    edits*: seq[TextEdit]
+
+  WorkspaceEdit* = object ## A workspace edit
+    changes*: Option[Table[string, seq[TextEdit]]] # uri -> edits
+    documentChanges*: Option[seq[TextDocumentEdit]]
 
   TextDocumentContentChangeEvent* = object ## Content change event for didChange
     range*: Option[Range]
@@ -205,6 +219,15 @@ type
 
   DocumentSymbolParams* = object ## Parameters for document symbol request
     textDocument*: TextDocumentIdentifier
+
+  DocumentSymbolResult* = object
+    ## Result of documentSymbol request
+    ## Either hierarchical DocumentSymbol[] or flat SymbolInformation[]
+    case isHierarchical*: bool
+    of true:
+      symbols*: seq[DocumentSymbol]
+    of false:
+      symbolInfos*: seq[SymbolInformation]
 
   # Server capabilities
   CompletionOptions* = object ## Completion options
@@ -350,6 +373,33 @@ proc parseRange*(node: JsonNode): Range =
 proc parseLocation*(node: JsonNode): Location =
   Location(uri: node["uri"].getStr, range: parseRange(node["range"]))
 
+proc parseTextEdit*(node: JsonNode): TextEdit =
+  TextEdit(range: parseRange(node["range"]), newText: node["newText"].getStr)
+
+proc parseTextDocumentEdit*(node: JsonNode): TextDocumentEdit =
+  let tdoc = node["textDocument"]
+  result.textDocument.uri = tdoc["uri"].getStr
+  if tdoc.hasKey("version") and tdoc["version"].kind != JNull:
+    result.textDocument.version = some(tdoc["version"].getInt)
+  for edit in node["edits"]:
+    result.edits.add(parseTextEdit(edit))
+
+proc parseWorkspaceEdit*(node: JsonNode): WorkspaceEdit =
+  if node.hasKey("changes"):
+    var changes = initTable[string, seq[TextEdit]]()
+    for uri, edits in node["changes"].pairs:
+      var editSeq: seq[TextEdit] = @[]
+      for edit in edits:
+        editSeq.add(parseTextEdit(edit))
+      changes[uri] = editSeq
+    result.changes = some(changes)
+  if node.hasKey("documentChanges"):
+    var docChanges: seq[TextDocumentEdit] = @[]
+    for docChange in node["documentChanges"]:
+      if docChange.hasKey("textDocument"):
+        docChanges.add(parseTextDocumentEdit(docChange))
+    result.documentChanges = some(docChanges)
+
 proc parseDiagnostic*(node: JsonNode): Diagnostic =
   result.range = parseRange(node["range"])
   result.message = node["message"].getStr
@@ -427,6 +477,44 @@ proc parseSignatureHelp*(node: JsonNode): SignatureHelp =
     result.activeSignature = some(node["activeSignature"].getInt)
   if node.hasKey("activeParameter"):
     result.activeParameter = some(node["activeParameter"].getInt)
+
+proc parseDocumentSymbol*(node: JsonNode): DocumentSymbol =
+  ## Parse DocumentSymbol from JSON (hierarchical format)
+  result.name = node["name"].getStr
+  result.kind = SymbolKind(node["kind"].getInt)
+  result.range = parseRange(node["range"])
+  result.selectionRange = parseRange(node["selectionRange"])
+
+  if node.hasKey("detail") and node["detail"].kind != JNull:
+    result.detail = some(node["detail"].getStr)
+  if node.hasKey("deprecated"):
+    result.deprecated = some(node["deprecated"].getBool)
+  if node.hasKey("tags") and node["tags"].kind == JArray:
+    var tags: seq[int] = @[]
+    for t in node["tags"]:
+      tags.add(t.getInt)
+    result.tags = some(tags)
+  if node.hasKey("children") and node["children"].kind == JArray:
+    var children: seq[DocumentSymbol] = @[]
+    for child in node["children"]:
+      children.add(parseDocumentSymbol(child))
+    result.children = some(children)
+
+proc parseSymbolInformation*(node: JsonNode): SymbolInformation =
+  ## Parse SymbolInformation from JSON (flat format)
+  result.name = node["name"].getStr
+  result.kind = SymbolKind(node["kind"].getInt)
+  result.location = parseLocation(node["location"])
+
+  if node.hasKey("deprecated"):
+    result.deprecated = some(node["deprecated"].getBool)
+  if node.hasKey("tags") and node["tags"].kind == JArray:
+    var tags: seq[int] = @[]
+    for t in node["tags"]:
+      tags.add(t.getInt)
+    result.tags = some(tags)
+  if node.hasKey("containerName") and node["containerName"].kind != JNull:
+    result.containerName = some(node["containerName"].getStr)
 
 proc parseServerCapabilities*(node: JsonNode): ServerCapabilities =
   if node.hasKey("textDocumentSync"):

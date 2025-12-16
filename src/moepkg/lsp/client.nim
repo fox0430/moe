@@ -316,8 +316,11 @@ proc buildClientCapabilities(): JsonNode =
         {"dynamicRegistration": false, "hierarchicalDocumentSymbolSupport": true},
       "publishDiagnostics":
         {"relatedInformation": true, "tagSupport": {"valueSet": [1, 2]}},
+      "rename": {"dynamicRegistration": false, "prepareSupport": false},
+      "formatting": {"dynamicRegistration": false},
+      "rangeFormatting": {"dynamicRegistration": false},
     },
-    "workspace": {"applyEdit": false, "workspaceFolders": false, "configuration": false},
+    "workspace": {"applyEdit": true, "workspaceFolders": false, "configuration": false},
   }
 
 proc start*(client: LspClient): Result[void, string] =
@@ -604,3 +607,133 @@ proc references*(
       locations.add(parseLocation(loc))
 
   return ok(locations)
+
+proc rename*(
+    client: LspClient, uri: string, line, character: int, newName: string
+): Result[Option[WorkspaceEdit], string] =
+  ## Request rename of a symbol
+  let params =
+    %*{
+      "textDocument": {"uri": uri},
+      "position": {"line": line, "character": character},
+      "newName": newName,
+    }
+
+  let reqResult = client.sendRequest("textDocument/rename", params)
+  if reqResult.isErr:
+    return err(reqResult.error)
+
+  let respResult = client.waitForResponse(reqResult.get)
+  if respResult.isErr:
+    return err(respResult.error)
+
+  let response = respResult.get
+  if response.kind == JNull:
+    return ok(none(WorkspaceEdit))
+
+  return ok(some(parseWorkspaceEdit(response)))
+
+proc formatting*(
+    client: LspClient, uri: string, tabSize: int = 2, insertSpaces: bool = true
+): Result[seq[TextEdit], string] =
+  ## Request document formatting
+  let params =
+    %*{
+      "textDocument": {"uri": uri},
+      "options": {"tabSize": tabSize, "insertSpaces": insertSpaces},
+    }
+
+  let reqResult = client.sendRequest("textDocument/formatting", params)
+  if reqResult.isErr:
+    return err(reqResult.error)
+
+  let respResult = client.waitForResponse(reqResult.get)
+  if respResult.isErr:
+    return err(respResult.error)
+
+  var edits: seq[TextEdit] = @[]
+  let response = respResult.get
+
+  if response.kind == JNull:
+    return ok(edits)
+
+  if response.kind == JArray:
+    for edit in response:
+      edits.add(parseTextEdit(edit))
+
+  return ok(edits)
+
+proc rangeFormatting*(
+    client: LspClient,
+    uri: string,
+    startLine, startChar, endLine, endChar: int,
+    tabSize: int = 2,
+    insertSpaces: bool = true,
+): Result[seq[TextEdit], string] =
+  ## Request range formatting
+  let params =
+    %*{
+      "textDocument": {"uri": uri},
+      "range": {
+        "start": {"line": startLine, "character": startChar},
+        "end": {"line": endLine, "character": endChar},
+      },
+      "options": {"tabSize": tabSize, "insertSpaces": insertSpaces},
+    }
+
+  let reqResult = client.sendRequest("textDocument/rangeFormatting", params)
+  if reqResult.isErr:
+    return err(reqResult.error)
+
+  let respResult = client.waitForResponse(reqResult.get)
+  if respResult.isErr:
+    return err(respResult.error)
+
+  var edits: seq[TextEdit] = @[]
+  let response = respResult.get
+
+  if response.kind == JNull:
+    return ok(edits)
+
+  if response.kind == JArray:
+    for edit in response:
+      edits.add(parseTextEdit(edit))
+
+  return ok(edits)
+
+proc documentSymbol*(
+    client: LspClient, uri: string
+): Result[DocumentSymbolResult, string] =
+  ## Request document symbols for a document
+  let params = %*{"textDocument": {"uri": uri}}
+
+  let reqResult = client.sendRequest("textDocument/documentSymbol", params)
+  if reqResult.isErr:
+    return err(reqResult.error)
+
+  let respResult = client.waitForResponse(reqResult.get)
+  if respResult.isErr:
+    return err(respResult.error)
+
+  let response = respResult.get
+
+  if response.kind == JNull or (response.kind == JArray and response.len == 0):
+    return ok(DocumentSymbolResult(isHierarchical: true, symbols: @[]))
+
+  if response.kind == JArray and response.len > 0:
+    let first = response[0]
+    # DocumentSymbol has 'range' and 'selectionRange', SymbolInformation has 'location'
+    if first.hasKey("range") and first.hasKey("selectionRange"):
+      # Hierarchical DocumentSymbol[]
+      var symbols: seq[DocumentSymbol] = @[]
+      for item in response:
+        symbols.add(parseDocumentSymbol(item))
+      return ok(DocumentSymbolResult(isHierarchical: true, symbols: symbols))
+    elif first.hasKey("location"):
+      # Flat SymbolInformation[]
+      var infos: seq[SymbolInformation] = @[]
+      for item in response:
+        infos.add(parseSymbolInformation(item))
+      return ok(DocumentSymbolResult(isHierarchical: false, symbolInfos: infos))
+
+  return ok(DocumentSymbolResult(isHierarchical: true, symbols: @[]))

@@ -883,6 +883,16 @@ proc handleEvent*(e: Editor, event: Event): bool =
     e.state.mode = EditorMode.Normal
     return true
 
+  # Handle LSP goto definition
+  if r.shouldLspGotoDefinition():
+    discard e.requestLspGotoDefinition()
+    return true
+
+  # Handle LSP find references
+  if r.shouldLspFindReferences():
+    discard e.requestLspReferences()
+    return true
+
   # Handle mode transitions
   let modeTransition = r.getModeTransition()
   if modeTransition.isSome:
