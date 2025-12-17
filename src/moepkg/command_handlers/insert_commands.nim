@@ -38,8 +38,8 @@ proc getLineIndent*(line: string): string =
 proc getIndentString*(state: EditorState): string =
   ## Get the indent string to use for auto-indentation
   ## Returns either a tab or spaces based on expandTab setting
-  if state.expandTab:
-    return " ".repeat(state.tabStop)
+  if state.display.expandTab:
+    return " ".repeat(state.display.tabStop)
   else:
     return "\t"
 
@@ -88,7 +88,7 @@ proc insertNewline*(buffer: TextBuffer, state: EditorState) =
   var indentLen = 0
 
   # Apply auto-indent if enabled
-  if state.autoIndent:
+  if state.display.autoIndent:
     # Get the indentation from the current line
     let indent = getLineIndent(currentLineText)
 
@@ -118,7 +118,7 @@ proc insertLineBelow*(buffer: TextBuffer, state: EditorState) =
   var indentLen = 0
 
   # Apply auto-indent if enabled
-  if state.autoIndent:
+  if state.display.autoIndent:
     let indent = getLineIndent(lineContent)
     if indent.len > 0:
       textToInsert = "\n" & indent
@@ -148,7 +148,7 @@ proc insertLineAbove*(buffer: TextBuffer, state: EditorState) =
   var indentLen = 0
 
   # Apply auto-indent if enabled
-  if state.autoIndent:
+  if state.display.autoIndent:
     let indent = getLineIndent(lineContent)
     if indent.len > 0:
       textToInsert = "\n" & indent

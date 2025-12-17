@@ -42,7 +42,7 @@ proc updateViewportForCursor(e: Editor, pos: BufferPosition) =
   e.handlerManager.motionController.viewportManager.updateViewport(
     cursorPos,
     lineCount,
-    e.state.showStatusLine,
+    e.state.display.showStatusLine,
     e.state.viewportReservedLines,
     false, # Force immediate scroll
     activeBuffer,
@@ -62,25 +62,26 @@ proc executeSearchFromCurrentPosition(e: Editor): bool =
   ## - Updates viewport to follow cursor
   ## - Sets status message (success or failure)
   ## - Sets needsFullRedraw flag
-  let shouldIgnoreCase =
-    shouldIgnoreCase(e.state.searchText, e.state.ignorecase, e.state.smartcase)
+  let shouldIgnoreCase = shouldIgnoreCase(
+    e.state.search.text, e.state.search.ignorecase, e.state.search.smartcase
+  )
 
   let activeBuffer = e.activeBuffer()
   let searchResult =
-    if e.state.searchDirection == Forward:
-      activeBuffer.findNext(e.state.searchText, e.state.cursor, shouldIgnoreCase)
+    if e.state.search.direction == Forward:
+      activeBuffer.findNext(e.state.search.text, e.state.cursor, shouldIgnoreCase)
     else:
-      activeBuffer.findPrev(e.state.searchText, e.state.cursor, shouldIgnoreCase)
+      activeBuffer.findPrev(e.state.search.text, e.state.cursor, shouldIgnoreCase)
 
   if searchResult.isSome:
     let pos = searchResult.get
     e.state.cursor = pos
     e.updateViewportForCursor(pos)
-    e.state.statusMessage = "Found: " & e.state.searchText
+    e.state.statusMessage = "Found: " & e.state.search.text
     e.state.needsFullRedraw = true
     return true
   else:
-    e.state.statusMessage = "Pattern not found: " & e.state.searchText
+    e.state.statusMessage = "Pattern not found: " & e.state.search.text
     return false
 
 proc finalizeSearch(e: Editor) =
@@ -95,28 +96,28 @@ proc finalizeSearch(e: Editor) =
   ## - Re-enable search highlight (hlsearch)
   ## - Transition to Normal mode
   ## - Clear searchText buffer
-  if e.state.searchText.len > 0:
+  if e.state.search.text.len > 0:
     # Save search text for n/N commands
-    e.state.lastSearchText = e.state.searchText
+    e.state.search.lastText = e.state.search.text
     # Re-enable highlight for new search
-    e.state.hlsearchTempDisabled = false
+    e.state.search.hlsearchTempDisabled = false
 
     # Add to search history (avoid duplicates)
     # Remove if already exists in history
-    let searchTextCopy = e.state.searchText
-    for i in countdown(e.state.searchHistory.high, 0):
-      if e.state.searchHistory[i] == searchTextCopy:
-        e.state.searchHistory.delete(i)
+    let searchTextCopy = e.state.search.text
+    for i in countdown(e.state.search.history.high, 0):
+      if e.state.search.history[i] == searchTextCopy:
+        e.state.search.history.delete(i)
 
     # Add to beginning of history (most recent first)
-    e.state.searchHistory.insert(searchTextCopy, 0)
+    e.state.search.history.insert(searchTextCopy, 0)
 
     # Limit history size to MaxHistoryEntries
-    if e.state.searchHistory.len > MaxHistoryEntries:
-      e.state.searchHistory.setLen(MaxHistoryEntries)
+    if e.state.search.history.len > MaxHistoryEntries:
+      e.state.search.history.setLen(MaxHistoryEntries)
 
     # If incsearch is enabled, cursor is already at the found position
-    if e.state.incsearch:
+    if e.state.search.incsearch:
       e.updateViewportForCursor(e.state.cursor)
       e.state.needsFullRedraw = true
     else:
@@ -126,9 +127,9 @@ proc finalizeSearch(e: Editor) =
   # Return to Normal mode
   e.state.previousMode = e.state.mode
   e.state.mode = EditorMode.Normal
-  e.state.searchText = ""
+  e.state.search.text = ""
   # Reset history navigation index
-  e.state.searchHistoryIndex = -1
+  e.state.search.historyIndex = -1
 
 proc cancelSearch(e: Editor) =
   ## Cancel search and return to previous mode
@@ -140,12 +141,12 @@ proc cancelSearch(e: Editor) =
   ## - Transition back to previous mode
   ## - Clear searchText buffer
   ## - Does NOT save to lastSearchText (search was cancelled)
-  if e.state.incsearch:
-    e.state.cursor = e.state.searchStartPos
+  if e.state.search.incsearch:
+    e.state.cursor = e.state.search.startPos
   e.state.mode = e.state.previousMode
-  e.state.searchText = ""
+  e.state.search.text = ""
   # Reset history navigation index
-  e.state.searchHistoryIndex = -1
+  e.state.search.historyIndex = -1
 
 proc performIncrementalSearch(e: Editor) =
   ## Perform incremental search and update cursor position dynamically
@@ -163,23 +164,24 @@ proc performIncrementalSearch(e: Editor) =
   ## - Sets appropriate status message
   ##
   ## This provides real-time feedback as the user types their search query.
-  if not e.state.incsearch or e.state.searchText.len == 0:
+  if not e.state.search.incsearch or e.state.search.text.len == 0:
     return
 
   # Apply smartcase logic to determine if we should ignore case
-  let shouldIgnoreCase =
-    shouldIgnoreCase(e.state.searchText, e.state.ignorecase, e.state.smartcase)
+  let shouldIgnoreCase = shouldIgnoreCase(
+    e.state.search.text, e.state.search.ignorecase, e.state.search.smartcase
+  )
 
   # Perform search from the original search start position (not current cursor!)
   let activeBuffer = e.activeBuffer()
   let searchResult =
-    if e.state.searchDirection == Forward:
+    if e.state.search.direction == Forward:
       activeBuffer.findNext(
-        e.state.searchText, e.state.searchStartPos, shouldIgnoreCase
+        e.state.search.text, e.state.search.startPos, shouldIgnoreCase
       )
     else:
       activeBuffer.findPrev(
-        e.state.searchText, e.state.searchStartPos, shouldIgnoreCase
+        e.state.search.text, e.state.search.startPos, shouldIgnoreCase
       )
 
   if searchResult.isSome:
@@ -189,12 +191,12 @@ proc performIncrementalSearch(e: Editor) =
     # Update viewport to follow cursor
     e.updateViewportForCursor(pos)
 
-    e.state.statusMessage = "Found: " & e.state.searchText
+    e.state.statusMessage = "Found: " & e.state.search.text
     e.state.needsFullRedraw = true
   else:
     # No match found, restore to start position
-    e.state.cursor = e.state.searchStartPos
-    e.state.statusMessage = "Pattern not found: " & e.state.searchText
+    e.state.cursor = e.state.search.startPos
+    e.state.statusMessage = "Pattern not found: " & e.state.search.text
 
 proc handleSearchCharacterInput(e: Editor, ch: string) =
   ## Handle character input in Search mode
@@ -204,7 +206,7 @@ proc handleSearchCharacterInput(e: Editor, ch: string) =
   ## Behavior:
   ## - Append character to searchText
   ## - If incsearch enabled: Trigger incremental search
-  e.state.searchText.add(ch)
+  e.state.search.text.add(ch)
   e.performIncrementalSearch()
 
 proc handleSearchBackspace(e: Editor) =
@@ -215,8 +217,8 @@ proc handleSearchBackspace(e: Editor) =
   ## Behavior:
   ## - Remove last character from searchText (if any)
   ## - If incsearch enabled: Trigger incremental search with updated text
-  if e.state.searchText.len > 0:
-    e.state.searchText = e.state.searchText[0 ..^ 2]
+  if e.state.search.text.len > 0:
+    e.state.search.text = e.state.search.text[0 ..^ 2]
     e.performIncrementalSearch()
 
 proc handleCommandModeEvent(e: Editor, event: Event): bool =
@@ -375,23 +377,23 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
 
       if r.shouldSetIgnoreCase():
         # Handle ignorecase setting
-        e.state.ignorecase = r.getIgnoreCaseEnabled()
-        e.state.statusMessage = "ignorecase = " & $e.state.ignorecase
+        e.state.search.ignorecase = r.getIgnoreCaseEnabled()
+        e.state.statusMessage = "ignorecase = " & $e.state.search.ignorecase
 
       if r.shouldSetSmartCase():
         # Handle smartcase setting
-        e.state.smartcase = r.getSmartCaseEnabled()
-        e.state.statusMessage = "smartcase = " & $e.state.smartcase
+        e.state.search.smartcase = r.getSmartCaseEnabled()
+        e.state.statusMessage = "smartcase = " & $e.state.search.smartcase
 
       if r.shouldSetIncSearch():
         # Handle incsearch setting
-        e.state.incsearch = r.getIncSearchEnabled()
-        e.state.statusMessage = "incsearch = " & $e.state.incsearch
+        e.state.search.incsearch = r.getIncSearchEnabled()
+        e.state.statusMessage = "incsearch = " & $e.state.search.incsearch
 
       if r.shouldSetHlSearch():
         # Handle hlsearch setting
-        e.state.hlsearch = r.getHlSearchEnabled()
-        e.state.statusMessage = "hlsearch = " & $e.state.hlsearch
+        e.state.search.hlsearch = r.getHlSearchEnabled()
+        e.state.statusMessage = "hlsearch = " & $e.state.search.hlsearch
 
       if r.shouldSave():
         # Handle file save
@@ -654,48 +656,48 @@ proc handleSearchModeEvent(e: Editor, event: Event): bool =
 
   # Up arrow: Navigate to previous (older) search in history
   if keyCombo.isSpecial and keyCombo.special == skUp:
-    if e.state.searchHistory.len > 0:
+    if e.state.search.history.len > 0:
       # If not yet navigating history, start from the most recent entry
-      if e.state.searchHistoryIndex == -1:
-        e.state.searchHistoryIndex = 0
+      if e.state.search.historyIndex == -1:
+        e.state.search.historyIndex = 0
       # Otherwise, move to the next older entry
-      elif e.state.searchHistoryIndex < e.state.searchHistory.high:
-        e.state.searchHistoryIndex += 1
+      elif e.state.search.historyIndex < e.state.search.history.high:
+        e.state.search.historyIndex += 1
 
       # Update search text with history entry
-      e.state.searchText = e.state.searchHistory[e.state.searchHistoryIndex]
+      e.state.search.text = e.state.search.history[e.state.search.historyIndex]
       # Trigger incremental search with history entry
       e.performIncrementalSearch()
     return true
 
   # Down arrow: Navigate to next (newer) search in history
   if keyCombo.isSpecial and keyCombo.special == skDown:
-    if e.state.searchHistory.len > 0 and e.state.searchHistoryIndex >= 0:
+    if e.state.search.history.len > 0 and e.state.search.historyIndex >= 0:
       # Move to newer entry
-      if e.state.searchHistoryIndex > 0:
-        e.state.searchHistoryIndex -= 1
-        e.state.searchText = e.state.searchHistory[e.state.searchHistoryIndex]
+      if e.state.search.historyIndex > 0:
+        e.state.search.historyIndex -= 1
+        e.state.search.text = e.state.search.history[e.state.search.historyIndex]
         e.performIncrementalSearch()
       else:
         # Reached the newest entry, clear search text
-        e.state.searchHistoryIndex = -1
-        e.state.searchText = ""
+        e.state.search.historyIndex = -1
+        e.state.search.text = ""
         # Restore cursor to start position if incsearch is enabled
-        if e.state.incsearch:
-          e.state.cursor = e.state.searchStartPos
+        if e.state.search.incsearch:
+          e.state.cursor = e.state.search.startPos
     return true
 
   # Backspace: Remove last character and re-search
   if keyCombo.isSpecial and keyCombo.special == skBackspace:
     # Reset history navigation when user types
-    e.state.searchHistoryIndex = -1
+    e.state.search.historyIndex = -1
     e.handleSearchBackspace()
     return true
 
   # Character input: Add character and perform incremental search
   if not keyCombo.isSpecial and keyCombo.modifiers == {}:
     # Reset history navigation when user types
-    e.state.searchHistoryIndex = -1
+    e.state.search.historyIndex = -1
     e.handleSearchCharacterInput(keyCombo.char)
     return true
 
@@ -716,6 +718,53 @@ proc handleEvent*(e: Editor, event: Event): bool =
   if e.state.mode == EditorMode.Search:
     return handleSearchModeEvent(e, event)
 
+  # Handle CodeLens picker input when active
+  if e.state.lspCache.codeLensPicker.isActive and event.kind == EventKind.Key:
+    let keyComboOpt = eventToKeyCombo(event)
+    if keyComboOpt.isSome:
+      let keyCombo = keyComboOpt.get
+
+      # Escape - cancel picker
+      if keyCombo.isSpecial and keyCombo.special == skEscape:
+        e.hideCodeLensPicker()
+        e.state.statusMessage = ""
+        return true
+
+      # Enter - confirm selection
+      if keyCombo.isSpecial and keyCombo.special == skEnter:
+        discard e.codeLensPickerConfirm()
+        return true
+
+      # j or Down - next item
+      if not keyCombo.isSpecial:
+        if keyCombo.char == "j":
+          e.codeLensPickerSelectNext()
+          return true
+        # k or Up - previous item
+        if keyCombo.char == "k":
+          e.codeLensPickerSelectPrev()
+          return true
+        # Number keys 1-9 - direct selection
+        if keyCombo.char.len == 1 and keyCombo.char[0] in '1' .. '9':
+          let num = ord(keyCombo.char[0]) - ord('0')
+          if e.codeLensPickerSelectByNumber(num):
+            return true
+          # If number is out of range, just ignore
+          return true
+
+      if keyCombo.isSpecial:
+        if keyCombo.special == skDown:
+          e.codeLensPickerSelectNext()
+          return true
+        if keyCombo.special == skUp:
+          e.codeLensPickerSelectPrev()
+          return true
+
+      # Any other key closes picker
+      e.hideCodeLensPicker()
+      e.state.statusMessage = ""
+      # Don't return - let the key be processed normally
+
   # Check for Vim-style Ctrl-w prefix for window commands
   if e.state.mode == EditorMode.Normal and event.kind == EventKind.Key:
     let keyComboOpt = eventToKeyCombo(event)
@@ -727,7 +776,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
       if keyCombo.isSpecial and keyCombo.special == skEscape:
         if e.state.lastKeyWasEscape:
           # Second Escape press - clear highlight
-          e.state.hlsearchTempDisabled = true
+          e.state.search.hlsearchTempDisabled = true
           e.state.needsFullRedraw = true
           e.state.statusMessage = "Search highlight cleared"
           e.state.lastKeyWasEscape = false
@@ -789,8 +838,8 @@ proc handleEvent*(e: Editor, event: Event): bool =
 
     # Calculate reserved lines based on window position and status line mode
     e.state.viewportReservedLines =
-      if e.state.showStatusLine:
-        if e.state.multiStatusLine:
+      if e.state.display.showStatusLine:
+        if e.state.display.multiStatusLine:
           # Multi status line mode: each window has status, bottom has command too
           if isBottomWindow: 2 else: 1
         else:
@@ -801,7 +850,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
         if isBottomWindow: 1 else: 0
   else:
     # Single window mode - use default calculation
-    e.state.viewportReservedLines = if e.state.showStatusLine: 2 else: 1
+    e.state.viewportReservedLines = if e.state.display.showStatusLine: 2 else: 1
     # Sync the motion controller's viewport with the editor's viewport
     e.executer.motionController.viewportManager.viewport = e.viewport
 
@@ -888,9 +937,19 @@ proc handleEvent*(e: Editor, event: Event): bool =
     discard e.requestLspGotoDefinition()
     return true
 
+  # Handle LSP goto declaration
+  if r.shouldLspGotoDeclaration():
+    discard e.requestLspGotoDeclaration()
+    return true
+
   # Handle LSP find references
   if r.shouldLspFindReferences():
     discard e.requestLspReferences()
+    return true
+
+  # Handle LSP CodeLens execute
+  if r.shouldLspCodeLensExecute():
+    discard e.executeCurrentLineCodeLens()
     return true
 
   # Handle mode transitions

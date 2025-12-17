@@ -310,9 +310,13 @@ proc buildClientCapabilities(): JsonNode =
         "dynamicRegistration": false,
         "signatureInformation": {"documentationFormat": ["plaintext", "markdown"]},
       },
+      "declaration": {"dynamicRegistration": false},
       "definition": {"dynamicRegistration": false},
       "typeDefinition": {"dynamicRegistration": false},
+      "implementation": {"dynamicRegistration": false},
       "references": {"dynamicRegistration": false},
+      "documentHighlight": {"dynamicRegistration": false},
+      "documentLink": {"dynamicRegistration": false, "tooltipSupport": true},
       "documentSymbol":
         {"dynamicRegistration": false, "hierarchicalDocumentSymbolSupport": true},
       "publishDiagnostics":
@@ -321,7 +325,9 @@ proc buildClientCapabilities(): JsonNode =
       "formatting": {"dynamicRegistration": false},
       "rangeFormatting": {"dynamicRegistration": false},
       "inlayHint": {"dynamicRegistration": false},
+      "inlineValue": {"dynamicRegistration": false},
       "selectionRange": {"dynamicRegistration": false},
+      "codeLens": {"dynamicRegistration": false},
       "semanticTokens": {
         "dynamicRegistration": false,
         "requests": {"range": true, "full": {"delta": false}},
@@ -603,6 +609,45 @@ proc gotoDefinition*(
 
   return ok(locations)
 
+proc gotoDeclaration*(
+    client: LspClient, uri: string, line, character: int
+): Result[seq[Location], string] =
+  ## Request go to declaration
+  let params =
+    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
+
+  let reqResult = client.sendRequest("textDocument/declaration", params)
+  if reqResult.isErr:
+    return err(reqResult.error)
+
+  let respResult = client.waitForResponse(reqResult.get)
+  if respResult.isErr:
+    return err(respResult.error)
+
+  var locations: seq[Location] = @[]
+  let response = respResult.get
+
+  if response.kind == JNull:
+    return ok(locations)
+
+  # Handle Location, Location[], LocationLink, and LocationLink[]
+  if response.kind == JArray:
+    for item in response:
+      if item.hasKey("targetUri"):
+        # LocationLink
+        locations.add(locationLinkToLocation(parseLocationLink(item)))
+      elif item.hasKey("uri"):
+        # Location
+        locations.add(parseLocation(item))
+  elif response.hasKey("targetUri"):
+    # Single LocationLink
+    locations.add(locationLinkToLocation(parseLocationLink(response)))
+  elif response.hasKey("uri"):
+    # Single Location
+    locations.add(parseLocation(response))
+
+  return ok(locations)
+
 proc gotoTypeDefinition*(
     client: LspClient, uri: string, line, character: int
 ): Result[seq[Location], string] =
@@ -611,6 +656,45 @@ proc gotoTypeDefinition*(
     %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
 
   let reqResult = client.sendRequest("textDocument/typeDefinition", params)
+  if reqResult.isErr:
+    return err(reqResult.error)
+
+  let respResult = client.waitForResponse(reqResult.get)
+  if respResult.isErr:
+    return err(respResult.error)
+
+  var locations: seq[Location] = @[]
+  let response = respResult.get
+
+  if response.kind == JNull:
+    return ok(locations)
+
+  # Handle Location, Location[], LocationLink, and LocationLink[]
+  if response.kind == JArray:
+    for item in response:
+      if item.hasKey("targetUri"):
+        # LocationLink
+        locations.add(locationLinkToLocation(parseLocationLink(item)))
+      elif item.hasKey("uri"):
+        # Location
+        locations.add(parseLocation(item))
+  elif response.hasKey("targetUri"):
+    # Single LocationLink
+    locations.add(locationLinkToLocation(parseLocationLink(response)))
+  elif response.hasKey("uri"):
+    # Single Location
+    locations.add(parseLocation(response))
+
+  return ok(locations)
+
+proc gotoImplementation*(
+    client: LspClient, uri: string, line, character: int
+): Result[seq[Location], string] =
+  ## Request go to implementation
+  let params =
+    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
+
+  let reqResult = client.sendRequest("textDocument/implementation", params)
   if reqResult.isErr:
     return err(reqResult.error)
 
@@ -675,6 +759,78 @@ proc references*(
       locations.add(parseLocation(loc))
 
   return ok(locations)
+
+proc documentHighlight*(
+    client: LspClient, uri: string, line, character: int
+): Result[seq[DocumentHighlight], string] =
+  ## Request document highlights at a position
+  ## Returns all occurrences of the symbol at the given position
+  let params =
+    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
+
+  let reqResult = client.sendRequest("textDocument/documentHighlight", params)
+  if reqResult.isErr:
+    return err(reqResult.error)
+
+  let respResult = client.waitForResponse(reqResult.get)
+  if respResult.isErr:
+    return err(respResult.error)
+
+  var highlights: seq[DocumentHighlight] = @[]
+  let response = respResult.get
+
+  if response.kind == JNull:
+    return ok(highlights)
+
+  if response.kind == JArray:
+    for item in response:
+      highlights.add(parseDocumentHighlight(item))
+
+  return ok(highlights)
+
+proc documentLink*(client: LspClient, uri: string): Result[seq[DocumentLink], string] =
+  ## Request document links for a document
+  ## Returns links to internal or external resources (e.g., imports, URLs)
+  let params = %*{"textDocument": {"uri": uri}}
+
+  let reqResult = client.sendRequest("textDocument/documentLink", params)
+  if reqResult.isErr:
+    return err(reqResult.error)
+
+  let respResult = client.waitForResponse(reqResult.get)
+  if respResult.isErr:
+    return err(respResult.error)
+
+  var links: seq[DocumentLink] = @[]
+  let response = respResult.get
+
+  if response.kind == JNull:
+    return ok(links)
+
+  if response.kind == JArray:
+    for item in response:
+      links.add(parseDocumentLink(item))
+
+  return ok(links)
+
+proc documentLinkResolve*(
+    client: LspClient, link: DocumentLink
+): Result[DocumentLink, string] =
+  ## Resolve a document link to get its target URI
+  ## Used when the initial documentLink response doesn't include target
+  let reqResult = client.sendRequest("documentLink/resolve", link.toJson)
+  if reqResult.isErr:
+    return err(reqResult.error)
+
+  let respResult = client.waitForResponse(reqResult.get)
+  if respResult.isErr:
+    return err(respResult.error)
+
+  let response = respResult.get
+  if response.kind == JNull:
+    return err("Resolve returned null")
+
+  return ok(parseDocumentLink(response))
 
 proc rename*(
     client: LspClient, uri: string, line, character: int, newName: string
@@ -929,3 +1085,107 @@ proc selectionRange*(
   if ranges.len > 0:
     return ok(some(ranges[0]))
   return ok(none(SelectionRange))
+
+proc inlineValues*(
+    client: LspClient,
+    uri: string,
+    startLine, startChar, endLine, endChar: int,
+    frameId: int,
+    stoppedLine, stoppedStartChar, stoppedEndLine, stoppedEndChar: int,
+): Result[seq[InlineValue], string] =
+  ## Request inline values for a range in a document during debugging
+  let params = InlineValueParams(
+    textDocument: TextDocumentIdentifier(uri: uri),
+    range: newRange(startLine, startChar, endLine, endChar),
+    context: InlineValueContext(
+      frameId: frameId,
+      stoppedLocation:
+        newRange(stoppedLine, stoppedStartChar, stoppedEndLine, stoppedEndChar),
+    ),
+  )
+
+  let reqResult = client.sendRequest("textDocument/inlineValue", params.toJson)
+  if reqResult.isErr:
+    return err(reqResult.error)
+
+  let respResult = client.waitForResponse(reqResult.get)
+  if respResult.isErr:
+    return err(respResult.error)
+
+  var values: seq[InlineValue] = @[]
+  let response = respResult.get
+
+  if response.kind == JNull:
+    return ok(values)
+
+  if response.kind == JArray:
+    for item in response:
+      values.add(parseInlineValue(item))
+
+  return ok(values)
+
+proc executeCommand*(
+    client: LspClient, command: string, arguments: seq[JsonNode] = @[]
+): Result[JsonNode, string] =
+  ## Execute a command on the server
+  ## Returns the command result or null
+  let params = ExecuteCommandParams(
+    command: command,
+    arguments:
+      if arguments.len > 0:
+        some(arguments)
+      else:
+        none(seq[JsonNode]),
+  )
+
+  let reqResult = client.sendRequest("workspace/executeCommand", params.toJson)
+  if reqResult.isErr:
+    return err(reqResult.error)
+
+  let respResult = client.waitForResponse(reqResult.get)
+  if respResult.isErr:
+    return err(respResult.error)
+
+  return ok(respResult.get)
+
+proc codeLens*(client: LspClient, uri: string): Result[seq[CodeLens], string] =
+  ## Request code lenses for a document
+  ## Code lenses represent commands shown along with source text (e.g., "5 references")
+  let params = %*{"textDocument": {"uri": uri}}
+
+  let reqResult = client.sendRequest("textDocument/codeLens", params)
+  if reqResult.isErr:
+    return err(reqResult.error)
+
+  let respResult = client.waitForResponse(reqResult.get)
+  if respResult.isErr:
+    return err(respResult.error)
+
+  var lenses: seq[CodeLens] = @[]
+  let response = respResult.get
+
+  if response.kind == JNull:
+    return ok(lenses)
+
+  if response.kind == JArray:
+    for item in response:
+      lenses.add(parseCodeLens(item))
+
+  return ok(lenses)
+
+proc codeLensResolve*(client: LspClient, lens: CodeLens): Result[CodeLens, string] =
+  ## Resolve a code lens to get its command
+  ## Used when the initial codeLens response doesn't include the command
+  let reqResult = client.sendRequest("codeLens/resolve", lens.toJson)
+  if reqResult.isErr:
+    return err(reqResult.error)
+
+  let respResult = client.waitForResponse(reqResult.get)
+  if respResult.isErr:
+    return err(respResult.error)
+
+  let response = respResult.get
+  if response.kind == JNull:
+    return err("Resolve returned null")
+
+  return ok(parseCodeLens(response))

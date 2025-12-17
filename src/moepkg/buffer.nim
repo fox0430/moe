@@ -38,6 +38,14 @@ type
     SyntaxWarning ## Syntax warning indicator
     Empty ## Empty sidebar cell
 
+  Fold* = object ## Represents a foldable region of text (vim-like manual folding)
+    startLine*: int # Fold start line (0-based, inclusive)
+    endLine*: int # Fold end line (0-based, inclusive)
+    collapsed*: bool # Whether the fold is currently collapsed
+
+  FoldState* = object ## Manages all folds in a buffer
+    folds*: seq[Fold] # List of all folds (sorted by startLine)
+
   LineEnding* = enum
     LF
     CRLF
@@ -116,6 +124,9 @@ type
     # Performance optimization
     cursorCache*: CursorPosCache # Cache for character-to-byte position conversions
 
+    # Line folding state (vim-like manual folding)
+    foldState*: FoldState
+
     # Backend storage
     case backendKind*: BufferBackend
     of GapBuffer:
@@ -123,6 +134,11 @@ type
 
 proc chooseBackend(): BufferBackend =
   GapBuffer
+
+# Forward declarations for fold state
+proc initFoldState*(): FoldState
+proc adjustFoldsAfterInsert*(state: var FoldState, insertLine: int, lineCount: int)
+proc adjustFoldsAfterDelete*(state: var FoldState, deleteLine: int, lineCount: int)
 
 proc isModified*(b: TextBuffer): bool {.inline.} =
   ## Check if buffer has unsaved changes
@@ -173,6 +189,8 @@ proc newTextBuffer*(
       lastChangedLines: (0, 0),
       # Initialize cursor position cache (invalid state)
       cursorCache: CursorPosCache(line: -1, charPos: 0, bytePos: 0, changeSeq: -1),
+      # Initialize empty fold state
+      foldState: initFoldState(),
     )
 
 # Core text operations
@@ -301,6 +319,9 @@ proc insert*(b: TextBuffer, lineIndex: int, content: string): Result[(), string]
     BufferChange(kind: ckInsertLine, insertLineIdx: lineIndex, insertLineText: content)
   )
 
+  # Adjust fold positions
+  b.foldState.adjustFoldsAfterInsert(lineIndex, 1)
+
   return ok(())
 
 proc deleteLine*(b: TextBuffer, lineIndex: int): Result[(), string] =
@@ -329,6 +350,9 @@ proc deleteLine*(b: TextBuffer, lineIndex: int): Result[(), string] =
       kind: ckDeleteLine, deleteLineIdx: lineIndex, deletedLineText: deletedContent
     )
   )
+
+  # Adjust fold positions
+  b.foldState.adjustFoldsAfterDelete(lineIndex, 1)
 
   return ok(())
 
@@ -513,6 +537,10 @@ proc deleteRange*(b: TextBuffer, startPos, endPos: BufferPosition): Result[(), s
       deletedRangeText: deletedText,
     )
   )
+
+  # Adjust fold positions if multiple lines were deleted
+  if endPos.line > startPos.line:
+    b.foldState.adjustFoldsAfterDelete(startPos.line, endPos.line - startPos.line)
 
   return ok(())
 
@@ -811,6 +839,10 @@ proc insertTextWithNewlines(b: TextBuffer, pos: BufferPosition, text: string) =
     for i, newLine in newLines:
       b.gapBuffer.insertLine(pos.line + i, newLine)
 
+    # Adjust fold positions for newly inserted lines
+    if newLines.len > 1:
+      b.foldState.adjustFoldsAfterInsert(pos.line, newLines.len - 1)
+
   # Ensure lineMarkers stays in sync after direct gapBuffer operations
   b.ensureMarkersSize()
 
@@ -846,11 +878,13 @@ proc undoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
       case b.backendKind
       of GapBuffer:
         b.gapBuffer.deleteLine(change.insertLineIdx)
+        b.foldState.adjustFoldsAfterDelete(change.insertLineIdx, 1)
     of ckDeleteLine:
       # Undo delete line by inserting it
       case b.backendKind
       of GapBuffer:
         b.gapBuffer.insertLine(change.deleteLineIdx, change.deletedLineText)
+        b.foldState.adjustFoldsAfterInsert(change.deleteLineIdx, 1)
     of ckDeleteRange:
       # Undo delete range by inserting the deleted text
       # Handle both single-line and multi-line deletions correctly
@@ -968,10 +1002,12 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
       case b.backendKind
       of GapBuffer:
         b.gapBuffer.insertLine(change.insertLineIdx, change.insertLineText)
+        b.foldState.adjustFoldsAfterInsert(change.insertLineIdx, 1)
     of ckDeleteLine:
       case b.backendKind
       of GapBuffer:
         b.gapBuffer.deleteLine(change.deleteLineIdx)
+        b.foldState.adjustFoldsAfterDelete(change.deleteLineIdx, 1)
     of ckDeleteRange:
       # Re-apply delete range using the same logic as the original deleteRange
       # Handle both single-line and multi-line deletions correctly
@@ -984,6 +1020,8 @@ proc redoChange(b: TextBuffer, change: BufferChange): Result[(), string] =
           b.deleteRangeSingleLine(b.getLine(startPos.line), startPos, endPos)
         else:
           b.deleteRangeMultiLine(startPos, endPos)
+          # Adjust fold positions for multi-line delete
+          b.foldState.adjustFoldsAfterDelete(startPos.line, endPos.line - startPos.line)
     of ckTransaction:
       # Redo all changes in transaction in forward order
       for change in change.transactionChanges:
@@ -1671,3 +1709,180 @@ proc isPositionInSearchMatch*(
     searchCharPos = charIdx + 1
 
   return false
+
+# ============================================================================
+# Line Folding Operations (vim-like manual folding)
+# ============================================================================
+
+proc initFoldState*(): FoldState =
+  ## Initialize an empty fold state
+  FoldState(folds: @[])
+
+proc addFold*(state: var FoldState, startLine, endLine: int): bool =
+  ## Add a new fold. Returns true if successful, false if overlapping with existing fold.
+  ## Folds are kept sorted by startLine. Single-line folds (startLine == endLine) are allowed.
+  if startLine > endLine or startLine < 0:
+    return false
+
+  # Check for overlapping folds
+  for fold in state.folds:
+    # Check if new fold overlaps with existing fold
+    if not (endLine < fold.startLine or startLine > fold.endLine):
+      return false
+
+  # Insert in sorted order by startLine
+  var insertIdx = state.folds.len
+  for i, fold in state.folds:
+    if startLine < fold.startLine:
+      insertIdx = i
+      break
+
+  state.folds.insert(
+    Fold(startLine: startLine, endLine: endLine, collapsed: true), insertIdx
+  )
+  return true
+
+proc getFoldAt*(state: FoldState, line: int): Option[ptr Fold] =
+  ## Get the fold containing the given line (if any)
+  ## Returns a pointer to allow modification
+  for i in 0 ..< state.folds.len:
+    let fold = state.folds[i]
+    if line >= fold.startLine and line <= fold.endLine:
+      return some(unsafeAddr state.folds[i])
+  return none(ptr Fold)
+
+proc getFoldAtStartLine*(state: FoldState, line: int): Option[ptr Fold] =
+  ## Get the fold that starts at the given line (if any)
+  for i in 0 ..< state.folds.len:
+    if state.folds[i].startLine == line:
+      return some(unsafeAddr state.folds[i])
+  return none(ptr Fold)
+
+proc isLineInCollapsedFold*(state: FoldState, line: int): bool =
+  ## Check if a line is inside a collapsed fold (but not the start line)
+  for fold in state.folds:
+    if fold.collapsed and line > fold.startLine and line <= fold.endLine:
+      return true
+  return false
+
+proc getCollapsedFoldAt*(state: FoldState, line: int): Option[Fold] =
+  ## Get the collapsed fold that contains this line (for rendering the fold marker)
+  for fold in state.folds:
+    if fold.collapsed and line >= fold.startLine and line <= fold.endLine:
+      return some(fold)
+  return none(Fold)
+
+proc openFold*(state: var FoldState, line: int): bool =
+  ## Open the fold at the given line. Returns true if a fold was opened.
+  let foldOpt = state.getFoldAt(line)
+  if foldOpt.isSome:
+    foldOpt.get[].collapsed = false
+    return true
+  return false
+
+proc closeFold*(state: var FoldState, line: int): bool =
+  ## Close the fold at the given line. Returns true if a fold was closed.
+  let foldOpt = state.getFoldAt(line)
+  if foldOpt.isSome:
+    foldOpt.get[].collapsed = true
+    return true
+  return false
+
+proc toggleFold*(state: var FoldState, line: int): bool =
+  ## Toggle the fold at the given line. Returns true if a fold was toggled.
+  let foldOpt = state.getFoldAt(line)
+  if foldOpt.isSome:
+    foldOpt.get[].collapsed = not foldOpt.get[].collapsed
+    return true
+  return false
+
+proc deleteFold*(state: var FoldState, line: int): bool =
+  ## Delete the fold containing the given line. Returns true if a fold was deleted.
+  for i in 0 ..< state.folds.len:
+    let fold = state.folds[i]
+    if line >= fold.startLine and line <= fold.endLine:
+      state.folds.delete(i)
+      return true
+  return false
+
+proc openAllFolds*(state: var FoldState) =
+  ## Open all folds
+  for i in 0 ..< state.folds.len:
+    state.folds[i].collapsed = false
+
+proc closeAllFolds*(state: var FoldState) =
+  ## Close all folds
+  for i in 0 ..< state.folds.len:
+    state.folds[i].collapsed = true
+
+proc getNextVisibleLine*(state: FoldState, line: int, maxLine: int): int =
+  ## Get the next visible line after a folded region
+  ## If line is inside a collapsed fold, skip to the line after the fold
+  for fold in state.folds:
+    if fold.collapsed and line >= fold.startLine and line <= fold.endLine:
+      return min(fold.endLine + 1, maxLine)
+  return line
+
+proc getPrevVisibleLine*(state: FoldState, line: int): int =
+  ## Get the previous visible line (skip over collapsed folds)
+  ## If line is at the end of a collapsed fold, jump to the start line
+  for fold in state.folds:
+    if fold.collapsed and line > fold.startLine and line <= fold.endLine:
+      return fold.startLine
+  return line
+
+proc adjustFoldsAfterInsert*(state: var FoldState, insertLine: int, lineCount: int) =
+  ## Adjust fold line numbers after lines are inserted
+  for i in 0 ..< state.folds.len:
+    if state.folds[i].startLine >= insertLine:
+      state.folds[i].startLine += lineCount
+      state.folds[i].endLine += lineCount
+    elif state.folds[i].endLine >= insertLine:
+      # Fold spans the insertion point - extend it
+      state.folds[i].endLine += lineCount
+
+proc adjustFoldsAfterDelete*(state: var FoldState, deleteLine: int, lineCount: int) =
+  ## Adjust fold line numbers after lines are deleted
+  var toRemove: seq[int] = @[]
+
+  for i in 0 ..< state.folds.len:
+    let deleteEnd = deleteLine + lineCount - 1
+
+    if state.folds[i].endLine < deleteLine:
+      # Fold entirely before deletion - no change
+      discard
+    elif state.folds[i].startLine > deleteEnd:
+      # Fold entirely after deletion - shift down
+      state.folds[i].startLine -= lineCount
+      state.folds[i].endLine -= lineCount
+    elif state.folds[i].startLine >= deleteLine and state.folds[i].endLine <= deleteEnd:
+      # Fold entirely within deletion - remove it
+      toRemove.add(i)
+    else:
+      # Fold partially overlaps - adjust
+      if state.folds[i].startLine < deleteLine:
+        # Fold starts before deletion
+        state.folds[i].endLine =
+          max(state.folds[i].startLine, state.folds[i].endLine - lineCount)
+      else:
+        # Fold starts within deletion range
+        state.folds[i].startLine = deleteLine
+        state.folds[i].endLine = max(deleteLine, state.folds[i].endLine - lineCount)
+
+  # Remove folds marked for deletion (in reverse order to preserve indices)
+  for i in countdown(toRemove.high, 0):
+    state.folds.delete(toRemove[i])
+
+proc formatFoldText*(b: TextBuffer, fold: Fold): string =
+  ## Format the display text for a collapsed fold (vim-style)
+  ## Example: "+-- 10 lines: func foo() {...}"
+  let lineCount = fold.endLine - fold.startLine + 1
+  let firstLine = b.getLine(fold.startLine)
+  # Use character-based slicing for UTF-8 safety
+  let firstLineCharLen = firstLine.charLen
+  let preview =
+    if firstLineCharLen > 40:
+      firstLine.runeSubStr(0, 40) & "..."
+    else:
+      firstLine
+  result = "+-- " & $lineCount & " lines: " & preview

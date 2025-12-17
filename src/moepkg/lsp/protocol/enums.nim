@@ -179,3 +179,9 @@ type
     stmModification = "modification"
     stmDocumentation = "documentation"
     stmDefaultLibrary = "defaultLibrary"
+
+  DocumentHighlightKind* = enum
+    ## A document highlight kind
+    dhkText = 1 ## A textual occurrence
+    dhkRead = 2 ## Read-access of a symbol, like reading a variable
+    dhkWrite = 3 ## Write-access of a symbol, like writing to a variable

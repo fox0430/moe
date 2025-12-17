@@ -180,6 +180,15 @@ type
     position*: Position
     context*: Option[JsonNode] # SignatureHelpContext
 
+  # Execute Command types
+  ExecuteCommandParams* = object ## Parameters for workspace/executeCommand request
+    command*: string
+    arguments*: Option[seq[JsonNode]]
+
+  ExecuteCommandOptions* = object ## Execute command options
+    commands*: seq[string]
+    workDoneProgress*: Option[bool]
+
   # Definition/Declaration types
   DefinitionParams* = object ## Parameters for definition request
     textDocument*: TextDocumentIdentifier
@@ -250,6 +259,45 @@ type
     textDocument*: TextDocumentIdentifier
     range*: Range
 
+  # Inline Value types
+  InlineValueText* = object ## Provide inline value as text
+    range*: Range
+    text*: string
+
+  InlineValueVariableLookup* = object ## Provide inline value through a variable lookup
+    range*: Range
+    variableName*: Option[string]
+    caseSensitiveLookup*: bool
+
+  InlineValueEvaluatableExpression* = object
+    ## Provide inline value through an expression evaluation
+    range*: Range
+    expression*: Option[string]
+
+  InlineValueKind* = enum
+    ivkText
+    ivkVariableLookup
+    ivkEvaluatableExpression
+
+  InlineValue* = object
+    ## An inline value (one of: text, variable lookup, or evaluatable expression)
+    case kind*: InlineValueKind
+    of ivkText:
+      text*: InlineValueText
+    of ivkVariableLookup:
+      variableLookup*: InlineValueVariableLookup
+    of ivkEvaluatableExpression:
+      evaluatableExpression*: InlineValueEvaluatableExpression
+
+  InlineValueContext* = object ## Context for inline values request
+    frameId*: int
+    stoppedLocation*: Range
+
+  InlineValueParams* = object ## Parameters for inline value request
+    textDocument*: TextDocumentIdentifier
+    range*: Range
+    context*: InlineValueContext
+
   # Selection Range types
   SelectionRange* = ref object ## Selection range with optional parent
     range*: Range
@@ -258,6 +306,49 @@ type
   SelectionRangeParams* = object ## Parameters for selection range request
     textDocument*: TextDocumentIdentifier
     positions*: seq[Position]
+
+  # Document Highlight types
+  DocumentHighlight* = object
+    ## A document highlight is a range inside a text document which deserves
+    ## special attention. Usually a document highlight is visualized by changing
+    ## the background color of its range.
+    range*: Range
+    kind*: Option[DocumentHighlightKind]
+
+  DocumentHighlightParams* = object ## Parameters for document highlight request
+    textDocument*: TextDocumentIdentifier
+    position*: Position
+
+  # Document Link types
+  DocumentLink* = object
+    ## A document link is a range in a text document that links to an internal
+    ## or external resource, like another text document or a web site.
+    range*: Range ## The range this link applies to
+    target*: Option[string] ## The uri this link points to (can be resolved later)
+    tooltip*: Option[string] ## The tooltip text when hovering over this link
+    data*: Option[JsonNode] ## A data entry field for resolve request
+
+  DocumentLinkParams* = object ## Parameters for document link request
+    textDocument*: TextDocumentIdentifier
+
+  # Command type (used by CodeLens and other features)
+  Command* = object ## Represents a reference to a command
+    title*: string ## Title of the command (displayed in UI)
+    command*: string ## The identifier of the actual command handler
+    arguments*: Option[seq[JsonNode]]
+      ## Arguments that the command handler should be invoked with
+
+  # CodeLens types
+  CodeLens* = object
+    ## A code lens represents a command that should be shown along with source text
+    range*: Range ## The range in which this code lens is valid
+    command*: Option[Command]
+      ## The command this code lens represents (can be resolved later)
+    data*: Option[JsonNode]
+      ## A data entry field preserved on a code lens item between resolve request
+
+  CodeLensParams* = object ## Parameters for textDocument/codeLens request
+    textDocument*: TextDocumentIdentifier
 
   # Semantic Tokens types
   SemanticTokensLegend* = object
@@ -323,7 +414,7 @@ type
     documentOnTypeFormattingProvider*: Option[JsonNode]
     renameProvider*: Option[JsonNode]
     foldingRangeProvider*: Option[JsonNode]
-    executeCommandProvider*: Option[JsonNode]
+    executeCommandProvider*: Option[ExecuteCommandOptions]
     selectionRangeProvider*: Option[JsonNode]
     linkedEditingRangeProvider*: Option[JsonNode]
     callHierarchyProvider*: Option[JsonNode]
@@ -422,6 +513,22 @@ proc toJson*(params: SelectionRangeParams): JsonNode =
   for pos in params.positions:
     positionsJson.add(pos.toJson)
   %*{"textDocument": params.textDocument.toJson, "positions": positionsJson}
+
+proc toJson*(link: DocumentLink): JsonNode =
+  ## Serialize DocumentLink to JSON (for resolve request)
+  result = %*{"range": link.range.toJson}
+  if link.target.isSome:
+    result["target"] = %link.target.get
+  if link.tooltip.isSome:
+    result["tooltip"] = %link.tooltip.get
+  if link.data.isSome:
+    result["data"] = link.data.get
+
+proc toJson*(params: ExecuteCommandParams): JsonNode =
+  ## Serialize ExecuteCommandParams to JSON
+  result = %*{"command": params.command}
+  if params.arguments.isSome:
+    result["arguments"] = %params.arguments.get
 
 # JSON parsing helpers
 proc parsePosition*(node: JsonNode): Position =
@@ -641,6 +748,81 @@ proc parseSelectionRange*(node: JsonNode): SelectionRange =
   if node.hasKey("parent") and node["parent"].kind != JNull:
     result.parent = parseSelectionRange(node["parent"])
 
+proc parseDocumentHighlight*(node: JsonNode): DocumentHighlight =
+  ## Parse DocumentHighlight from JSON
+  result.range = parseRange(node["range"])
+  if node.hasKey("kind") and node["kind"].kind == JInt:
+    result.kind = some(DocumentHighlightKind(node["kind"].getInt))
+
+proc parseDocumentLink*(node: JsonNode): DocumentLink =
+  ## Parse DocumentLink from JSON
+  result.range = parseRange(node["range"])
+  if node.hasKey("target") and node["target"].kind == JString:
+    result.target = some(node["target"].getStr)
+  if node.hasKey("tooltip") and node["tooltip"].kind == JString:
+    result.tooltip = some(node["tooltip"].getStr)
+  if node.hasKey("data"):
+    result.data = some(node["data"])
+
+proc parseInlineValueText*(node: JsonNode): InlineValueText =
+  ## Parse InlineValueText from JSON
+  result.range = parseRange(node["range"])
+  result.text = node["text"].getStr
+
+proc parseInlineValueVariableLookup*(node: JsonNode): InlineValueVariableLookup =
+  ## Parse InlineValueVariableLookup from JSON
+  result.range = parseRange(node["range"])
+  if node.hasKey("variableName") and node["variableName"].kind == JString:
+    result.variableName = some(node["variableName"].getStr)
+  result.caseSensitiveLookup = node["caseSensitiveLookup"].getBool
+
+proc parseInlineValueEvaluatableExpression*(
+    node: JsonNode
+): InlineValueEvaluatableExpression =
+  ## Parse InlineValueEvaluatableExpression from JSON
+  result.range = parseRange(node["range"])
+  if node.hasKey("expression") and node["expression"].kind == JString:
+    result.expression = some(node["expression"].getStr)
+
+proc parseInlineValue*(node: JsonNode): InlineValue =
+  ## Parse InlineValue from JSON
+  ## Determines type based on which fields are present
+  if node.hasKey("text"):
+    # InlineValueText
+    result = InlineValue(kind: ivkText, text: parseInlineValueText(node))
+  elif node.hasKey("caseSensitiveLookup"):
+    # InlineValueVariableLookup
+    result = InlineValue(
+      kind: ivkVariableLookup, variableLookup: parseInlineValueVariableLookup(node)
+    )
+  else:
+    # InlineValueEvaluatableExpression (has range and optionally expression)
+    result = InlineValue(
+      kind: ivkEvaluatableExpression,
+      evaluatableExpression: parseInlineValueEvaluatableExpression(node),
+    )
+
+proc getInlineValueRange*(value: InlineValue): Range =
+  ## Get the range from an inline value
+  case value.kind
+  of ivkText:
+    return value.text.range
+  of ivkVariableLookup:
+    return value.variableLookup.range
+  of ivkEvaluatableExpression:
+    return value.evaluatableExpression.range
+
+proc toJson*(params: InlineValueParams): JsonNode =
+  ## Serialize InlineValueParams to JSON
+  %*{
+    "textDocument": params.textDocument.toJson,
+    "range": params.range.toJson,
+    "context": {
+      "frameId": params.context.frameId,
+      "stoppedLocation": params.context.stoppedLocation.toJson,
+    },
+  }
+
 proc parseSemanticTokensLegend*(node: JsonNode): SemanticTokensLegend =
   ## Parse SemanticTokensLegend from JSON
   if node.hasKey("tokenTypes"):
@@ -658,6 +840,14 @@ proc parseSemanticTokensOptions*(node: JsonNode): SemanticTokensOptions =
     result.range = some(node["range"])
   if node.hasKey("full"):
     result.full = some(node["full"])
+
+proc parseExecuteCommandOptions*(node: JsonNode): ExecuteCommandOptions =
+  ## Parse ExecuteCommandOptions from JSON
+  if node.hasKey("commands"):
+    for cmd in node["commands"]:
+      result.commands.add(cmd.getStr)
+  if node.hasKey("workDoneProgress"):
+    result.workDoneProgress = some(node["workDoneProgress"].getBool)
 
 proc parseSemanticTokens*(node: JsonNode): SemanticTokens =
   ## Parse SemanticTokens response from JSON
@@ -858,18 +1048,73 @@ proc parseServerCapabilities*(node: JsonNode): ServerCapabilities =
     result.definitionProvider = some(node["definitionProvider"])
   if node.hasKey("declarationProvider"):
     result.declarationProvider = some(node["declarationProvider"])
+  if node.hasKey("typeDefinitionProvider"):
+    result.typeDefinitionProvider = some(node["typeDefinitionProvider"])
+  if node.hasKey("implementationProvider"):
+    result.implementationProvider = some(node["implementationProvider"])
   if node.hasKey("referencesProvider"):
     result.referencesProvider = some(node["referencesProvider"])
+  if node.hasKey("documentHighlightProvider"):
+    result.documentHighlightProvider = some(node["documentHighlightProvider"])
+  if node.hasKey("documentLinkProvider"):
+    result.documentLinkProvider = some(node["documentLinkProvider"])
   if node.hasKey("documentSymbolProvider"):
     result.documentSymbolProvider = some(node["documentSymbolProvider"])
   if node.hasKey("documentFormattingProvider"):
     result.documentFormattingProvider = some(node["documentFormattingProvider"])
+  if node.hasKey("documentRangeFormattingProvider"):
+    result.documentRangeFormattingProvider =
+      some(node["documentRangeFormattingProvider"])
   if node.hasKey("renameProvider"):
     result.renameProvider = some(node["renameProvider"])
+  if node.hasKey("executeCommandProvider"):
+    result.executeCommandProvider =
+      some(parseExecuteCommandOptions(node["executeCommandProvider"]))
   if node.hasKey("semanticTokensProvider"):
     result.semanticTokensProvider =
       some(parseSemanticTokensOptions(node["semanticTokensProvider"]))
   if node.hasKey("inlayHintProvider"):
     result.inlayHintProvider = some(node["inlayHintProvider"])
+  if node.hasKey("inlineValueProvider"):
+    result.inlineValueProvider = some(node["inlineValueProvider"])
   if node.hasKey("selectionRangeProvider"):
     result.selectionRangeProvider = some(node["selectionRangeProvider"])
+  if node.hasKey("codeLensProvider"):
+    result.codeLensProvider = some(node["codeLensProvider"])
+
+# CodeLens serialization and parsing
+proc toJson*(cmd: Command): JsonNode =
+  ## Serialize Command to JSON
+  result = %*{"title": cmd.title, "command": cmd.command}
+  if cmd.arguments.isSome:
+    result["arguments"] = %cmd.arguments.get
+
+proc toJson*(lens: CodeLens): JsonNode =
+  ## Serialize CodeLens to JSON (for resolve request)
+  result = %*{"range": lens.range.toJson}
+  if lens.command.isSome:
+    result["command"] = lens.command.get.toJson
+  if lens.data.isSome:
+    result["data"] = lens.data.get
+
+proc toJson*(params: CodeLensParams): JsonNode =
+  ## Serialize CodeLensParams to JSON
+  %*{"textDocument": params.textDocument.toJson}
+
+proc parseCommand*(node: JsonNode): Command =
+  ## Parse Command from JSON
+  result.title = node["title"].getStr
+  result.command = node["command"].getStr
+  if node.hasKey("arguments") and node["arguments"].kind == JArray:
+    var args: seq[JsonNode] = @[]
+    for arg in node["arguments"]:
+      args.add(arg)
+    result.arguments = some(args)
+
+proc parseCodeLens*(node: JsonNode): CodeLens =
+  ## Parse CodeLens from JSON
+  result.range = parseRange(node["range"])
+  if node.hasKey("command") and node["command"].kind == JObject:
+    result.command = some(parseCommand(node["command"]))
+  if node.hasKey("data"):
+    result.data = some(node["data"])

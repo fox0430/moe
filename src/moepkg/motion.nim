@@ -106,14 +106,42 @@ proc moveRight(
 
 proc moveUp(e: MotionExecutor, currentPos: CursorPosition, count: int): CursorPosition =
   result = currentPos
-  result.y = max(0, currentPos.y - count)
+  var targetY = max(0, currentPos.y - count)
+
+  # Skip over folded lines when moving up (with safety limit to prevent infinite loop)
+  var iterations = 0
+  let maxIterations = e.buffer.len + 1
+  while targetY > 0 and e.buffer.foldState.isLineInCollapsedFold(targetY) and
+      iterations < maxIterations:
+    let newY = e.buffer.foldState.getPrevVisibleLine(targetY)
+    if newY == targetY:
+      # getPrevVisibleLine didn't make progress, break to prevent infinite loop
+      break
+    targetY = newY
+    inc iterations
+
+  result.y = targetY
 
 proc moveDown(
     e: MotionExecutor, currentPos: CursorPosition, count: int
 ): CursorPosition =
   result = currentPos
   if e.buffer.len > 0:
-    result.y = min(e.buffer.len - 1, currentPos.y + count)
+    var targetY = min(e.buffer.len - 1, currentPos.y + count)
+
+    # Skip over folded lines when moving down (with safety limit to prevent infinite loop)
+    var iterations = 0
+    let maxIterations = e.buffer.len + 1
+    while targetY < e.buffer.len - 1 and
+        e.buffer.foldState.isLineInCollapsedFold(targetY) and iterations < maxIterations:
+      let newY = e.buffer.foldState.getNextVisibleLine(targetY, e.buffer.len - 1)
+      if newY == targetY:
+        # getNextVisibleLine didn't make progress, break to prevent infinite loop
+        break
+      targetY = newY
+      inc iterations
+
+    result.y = targetY
   else:
     result.y = 0
 
@@ -728,6 +756,11 @@ proc clampPosition*(
   elif result.y < 0:
     result.y = 0
 
+  # Ensure cursor doesn't land on a folded line (except fold start line)
+  if buf.foldState.isLineInCollapsedFold(result.y):
+    # Move to the fold start line
+    result.y = buf.foldState.getPrevVisibleLine(result.y)
+
   # Clamp column - ensure line index is valid before accessing
   if result.y >= 0 and result.y < buf.len:
     let line = buf.getLine(result.y)
@@ -1018,7 +1051,7 @@ proc executeMotion*(
     if controller.cursorManager.state.viewportReservedLines >= 0:
       controller.cursorManager.state.viewportReservedLines
     else:
-      (if controller.cursorManager.state.showStatusLine: 2 else: 1)
+      (if controller.cursorManager.state.display.showStatusLine: 2 else: 1)
 
   var newPos = controller.executor.calculateNewPosition(
     currentPos, cmd, controller.viewportManager.viewport.height,
@@ -1029,17 +1062,17 @@ proc executeMotion*(
   newPos = controller.cursorManager.clampPosition(newPos, controller.executor.buffer)
 
   # Get line wrap state (needed for viewport update and horizontal scroll)
-  let lineWrap = controller.cursorManager.state.lineWrap
+  let lineWrap = controller.cursorManager.state.display.lineWrap
 
   # Update viewport to follow cursor with line wrap support (unless suppressed)
   if updateViewport:
     let
       lineCount = controller.executor.buffer.len
       # Calculate line number offset for viewport calculation (matches renderLineNumbers)
-      showLineNumbers = controller.cursorManager.state.showLineNumbers
+      showLineNumbers = controller.cursorManager.state.display.showLineNumbers
       # Include sidebar width to match the calculation in editor.nim
       sidebarWidth =
-        if controller.cursorManager.state.showSidebar:
+        if controller.cursorManager.state.display.showSidebar:
           2 # DefaultSidebarWidth from sidebar.nim
         else:
           0
@@ -1048,7 +1081,7 @@ proc executeMotion*(
         sidebarWidth
 
     controller.viewportManager.updateViewport(
-      newPos, lineCount, controller.cursorManager.state.showStatusLine,
+      newPos, lineCount, controller.cursorManager.state.display.showStatusLine,
       controller.cursorManager.state.viewportReservedLines, lineWrap,
       controller.executor.buffer, lineNumOffset,
     )
@@ -1058,7 +1091,7 @@ proc executeMotion*(
     controller.viewportManager.viewport.leftColumn = 0
 
   # Store last motion for repeat
-  controller.cursorManager.state.lastMotion = some(cmd.motion)
+  controller.cursorManager.state.editState.lastMotion = some(cmd.motion)
 
   # Return the new cursor position
   return ok(BufferPosition(line: newPos.y, column: newPos.x))

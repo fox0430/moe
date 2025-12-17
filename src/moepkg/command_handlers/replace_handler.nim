@@ -76,7 +76,7 @@ proc handleCharacterReplacement*(
         kind: rmrError, errorMessage: "Failed to insert text: " & insertResult.error
       )
     # Save empty string as original character for consistency
-    state.replaceHistory.add(ReplaceHistoryEntry(pos: pos, originalChar: ""))
+    state.editState.replaceHistory.add(ReplaceHistoryEntry(pos: pos, originalChar: ""))
   else:
     # Replace character at cursor
     # Save original character for undo with backspace
@@ -98,7 +98,9 @@ proc handleCharacterReplacement*(
       )
 
     # Only add to history if operations succeeded
-    state.replaceHistory.add(ReplaceHistoryEntry(pos: pos, originalChar: originalChar))
+    state.editState.replaceHistory.add(
+      ReplaceHistoryEntry(pos: pos, originalChar: originalChar)
+    )
 
   # Move cursor right after replacement/insertion
   state.cursor.column += text.runeLen
@@ -114,7 +116,7 @@ proc handleBackspace*(
   ## This is achieved by using the replace history.
 
   # Check if there's any replace history to undo
-  if state.replaceHistory.len == 0:
+  if state.editState.replaceHistory.len == 0:
     # No history, just move cursor back (beginning of replace session)
     if state.cursor.column > 0:
       state.cursor.column -= 1
@@ -125,7 +127,7 @@ proc handleBackspace*(
     return ReplaceModeResult(kind: rmrHandled, modeTransition: none(EditorMode))
 
   # Pop last replace entry
-  let lastEntry = state.replaceHistory.pop()
+  let lastEntry = state.editState.replaceHistory.pop()
 
   # Move cursor to the position where the character was replaced
   state.cursor = lastEntry.pos
@@ -136,7 +138,7 @@ proc handleBackspace*(
     let deleteResult = buffer.deleteChar(state.cursor)
     if deleteResult.isErr:
       # Restore history entry on error
-      state.replaceHistory.add(lastEntry)
+      state.editState.replaceHistory.add(lastEntry)
       return ReplaceModeResult(
         kind: rmrError,
         errorMessage: "Failed to delete character: " & deleteResult.error,
@@ -145,7 +147,7 @@ proc handleBackspace*(
     let insertResult = buffer.insertText(state.cursor, lastEntry.originalChar)
     if insertResult.isErr:
       # Restore history entry on error
-      state.replaceHistory.add(lastEntry)
+      state.editState.replaceHistory.add(lastEntry)
       return ReplaceModeResult(
         kind: rmrError,
         errorMessage: "Failed to restore character: " & insertResult.error,
@@ -155,7 +157,7 @@ proc handleBackspace*(
     let deleteResult = buffer.deleteChar(state.cursor)
     if deleteResult.isErr:
       # Restore history entry on error
-      state.replaceHistory.add(lastEntry)
+      state.editState.replaceHistory.add(lastEntry)
       return ReplaceModeResult(
         kind: rmrError,
         errorMessage: "Failed to delete character: " & deleteResult.error,
@@ -209,8 +211,8 @@ proc handleReplaceModeKey*(
   ## Main entry point for handling Replace mode key presses
 
   # Record key for macro if recording is active
-  if state.isRecordingMacro:
-    state.recordedKeys.add(keyComboToString(keyCombo))
+  if state.macroState.isRecording:
+    state.macroState.recordedKeys.add(keyComboToString(keyCombo))
 
   # Check for mode switch keys first (like Escape)
   let binding = handler.keyBindingRegistry.findBinding(EditorMode.Replace, keyCombo)

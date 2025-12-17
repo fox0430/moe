@@ -38,7 +38,9 @@ type
     nmrQuitWithoutSave
     nmrPlaybackMacro # Signal to handler_manager to playback a macro
     nmrLspGotoDefinition # Signal to handler_manager to execute LSP goto definition
+    nmrLspGotoDeclaration # Signal to handler_manager to execute LSP goto declaration
     nmrLspFindReferences # Signal to handler_manager to execute LSP find references
+    nmrLspCodeLensExecute # Signal to handler_manager to execute CodeLens on current line
 
   NormalModeHandler* = ref object ## Handler for Normal mode specific commands
     motionController*: MotionController
@@ -64,7 +66,11 @@ type
       macroCount*: int # Number of times to playback (default 1)
     of nmrLspGotoDefinition:
       discard
+    of nmrLspGotoDeclaration:
+      discard
     of nmrLspFindReferences:
+      discard
+    of nmrLspCodeLensExecute:
       discard
 
 proc newNormalModeHandler*(
@@ -142,16 +148,16 @@ proc handleModeSwitch*(
     return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Command))
   of EditorMode.Search:
     # Initialize search mode state
-    state.searchText = ""
+    state.search.text = ""
     # Save current cursor position for incsearch cancellation
-    state.searchStartPos = state.cursor
+    state.search.startPos = state.cursor
     # Set search direction based on command name
     if commandName == "switch-to-search-backward":
-      state.searchDirection = Backward
+      state.search.direction = Backward
     else:
-      state.searchDirection = Forward
+      state.search.direction = Forward
     # Reset history navigation index
-    state.searchHistoryIndex = -1
+    state.search.historyIndex = -1
     return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Search))
   of EditorMode.Visual:
     # Initialize visual selection at current cursor position (character-wise)
@@ -248,7 +254,7 @@ proc handleNormalModeKey*(
   ## Main entry point for handling Normal mode key presses
 
   # Check if we're waiting for a macro register name
-  if state.waitingForMacroRegister:
+  if state.macroState.waitingForRegister:
     # Expecting a register name (a-z or @)
     if not keyCombo.isSpecial and keyCombo.modifiers == {}:
       let registerChar =
@@ -257,105 +263,106 @@ proc handleNormalModeKey*(
         else:
           '\0'
 
-      if state.macroCommandType == "record":
+      if state.macroState.commandType == "record":
         # Start recording to the specified register
         if registerChar >= 'a' and registerChar <= 'z':
-          state.isRecordingMacro = true
-          state.macroRegister = registerChar
-          state.recordedKeys = @[]
+          state.macroState.isRecording = true
+          state.macroState.register = registerChar
+          state.macroState.recordedKeys = @[]
           state.statusMessage = "recording @" & $registerChar
-          state.waitingForMacroRegister = false
-          state.macroCommandType = ""
+          state.macroState.waitingForRegister = false
+          state.macroState.commandType = ""
           return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
         else:
           state.statusMessage = "Invalid register (use a-z)"
-          state.waitingForMacroRegister = false
-          state.macroCommandType = ""
+          state.macroState.waitingForRegister = false
+          state.macroState.commandType = ""
           return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
-      elif state.macroCommandType == "playback":
+      elif state.macroState.commandType == "playback":
         # Play back the macro from the specified register
-        let count = state.pendingMacroCount
-        state.pendingMacroCount = 0 # Reset for next use
+        let count = state.macroState.pendingCount
+        state.macroState.pendingCount = 0 # Reset for next use
         if registerChar == '@':
           # @@ - repeat last macro
-          if state.lastMacroRegister.isSome:
-            let reg = state.lastMacroRegister.get
-            if state.macroRegisters.hasKey(reg):
-              state.waitingForMacroRegister = false
-              state.macroCommandType = ""
-              let keys = state.macroRegisters[reg]
+          if state.macroState.lastRegister.isSome:
+            let reg = state.macroState.lastRegister.get
+            if state.macroState.registers.hasKey(reg):
+              state.macroState.waitingForRegister = false
+              state.macroState.commandType = ""
+              let keys = state.macroState.registers[reg]
               return requestMacroPlayback(keys, count)
             else:
               state.statusMessage = "Register @" & $reg & " is empty"
-              state.waitingForMacroRegister = false
-              state.macroCommandType = ""
+              state.macroState.waitingForRegister = false
+              state.macroState.commandType = ""
               return
                 NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
           else:
             state.statusMessage = "No previous macro"
-            state.waitingForMacroRegister = false
-            state.macroCommandType = ""
+            state.macroState.waitingForRegister = false
+            state.macroState.commandType = ""
             return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
         elif registerChar >= 'a' and registerChar <= 'z':
-          if state.macroRegisters.hasKey(registerChar):
-            state.lastMacroRegister = some(registerChar)
-            state.waitingForMacroRegister = false
-            state.macroCommandType = ""
-            let keys = state.macroRegisters[registerChar]
+          if state.macroState.registers.hasKey(registerChar):
+            state.macroState.lastRegister = some(registerChar)
+            state.macroState.waitingForRegister = false
+            state.macroState.commandType = ""
+            let keys = state.macroState.registers[registerChar]
             return requestMacroPlayback(keys, count)
           else:
             state.statusMessage = "Register @" & $registerChar & " is empty"
-            state.waitingForMacroRegister = false
-            state.macroCommandType = ""
+            state.macroState.waitingForRegister = false
+            state.macroState.commandType = ""
             return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
         else:
           state.statusMessage = "Invalid register (use a-z or @)"
-          state.waitingForMacroRegister = false
-          state.macroCommandType = ""
+          state.macroState.waitingForRegister = false
+          state.macroState.commandType = ""
           return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
     else:
       # Cancel on any non-char key
       state.statusMessage = ""
-      state.waitingForMacroRegister = false
-      state.macroCommandType = ""
+      state.macroState.waitingForRegister = false
+      state.macroState.commandType = ""
       return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
 
   # Handle macro recording - check if we're in recording mode
   # and this is not the 'q' key that would stop recording
-  if state.isRecordingMacro:
+  if state.macroState.isRecording:
     # Check if this is 'q' to stop recording
     if not keyCombo.isSpecial and keyCombo.modifiers == {} and keyCombo.char == "q":
       # Stop recording
-      state.macroRegisters[state.macroRegister] = state.recordedKeys
-      state.isRecordingMacro = false
-      state.recordedKeys = @[]
+      state.macroState.registers[state.macroState.register] =
+        state.macroState.recordedKeys
+      state.macroState.isRecording = false
+      state.macroState.recordedKeys = @[]
       state.statusMessage = ""
       return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
     else:
       # Record this key
-      state.recordedKeys.add(keyComboToString(keyCombo))
+      state.macroState.recordedKeys.add(keyComboToString(keyCombo))
       # Continue processing the key normally
 
   # Check for macro commands before processing through key bindings
   # Handle 'q' for macro recording start
-  if not state.isRecordingMacro and not keyCombo.isSpecial and keyCombo.modifiers == {} and
-      keyCombo.char == "q":
+  if not state.macroState.isRecording and not keyCombo.isSpecial and
+      keyCombo.modifiers == {} and keyCombo.char == "q":
     # Wait for the next key (register name)
-    state.waitingForMacroRegister = true
-    state.macroCommandType = "record"
+    state.macroState.waitingForRegister = true
+    state.macroState.commandType = "record"
     state.statusMessage = "recording @"
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
 
   # Handle '@' for macro playback - only when NOT recording
-  if not state.isRecordingMacro and not keyCombo.isSpecial and keyCombo.modifiers == {} and
-      keyCombo.char == "@":
+  if not state.macroState.isRecording and not keyCombo.isSpecial and
+      keyCombo.modifiers == {} and keyCombo.char == "@":
     # Get numeric prefix (e.g., 3@a means play macro 3 times)
-    state.pendingMacroCount = handler.keyBindingRegistry.getNumericPrefix()
+    state.macroState.pendingCount = handler.keyBindingRegistry.getNumericPrefix()
     # Clear the numeric prefix since we've consumed it
     handler.keyBindingRegistry.clearSequence()
     # Wait for the next key (register name)
-    state.waitingForMacroRegister = true
-    state.macroCommandType = "playback"
+    state.macroState.waitingForRegister = true
+    state.macroState.commandType = "playback"
     state.statusMessage = "@"
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
 
@@ -472,8 +479,12 @@ proc handleNormalModeKey*(
     # Check for LSP commands first
     if cmd.commandId == "lsp.goto.definition":
       return NormalModeResult(kind: nmrLspGotoDefinition)
+    elif cmd.commandId == "lsp.goto.declaration":
+      return NormalModeResult(kind: nmrLspGotoDeclaration)
     elif cmd.commandId == "lsp.find.references":
       return NormalModeResult(kind: nmrLspFindReferences)
+    elif cmd.commandId == "lsp.codelens.execute":
+      return NormalModeResult(kind: nmrLspCodeLensExecute)
 
     # Execute custom commands and operators through command registry
     let ctx = CommandContext(

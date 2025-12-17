@@ -20,7 +20,7 @@
 ## LSP Service Layer
 ## Manages multiple LSP clients and provides high-level API for editor integration
 
-import std/[tables, options, os, strutils]
+import std/[tables, options, os, strutils, json]
 
 import pkg/results
 
@@ -335,6 +335,18 @@ proc requestDefinition*(
   let uri = pathToUri(path)
   return client.gotoDefinition(uri, line, character)
 
+proc requestDeclaration*(
+    svc: LspService, path: string, line, character: int
+): Result[seq[Location], string] =
+  ## Request go to declaration
+  let clientResult = svc.getClientForPath(path)
+  if clientResult.isErr:
+    return err(clientResult.error)
+
+  let client = clientResult.get
+  let uri = pathToUri(path)
+  return client.gotoDeclaration(uri, line, character)
+
 proc requestTypeDefinition*(
     svc: LspService, path: string, line, character: int
 ): Result[seq[Location], string] =
@@ -347,6 +359,18 @@ proc requestTypeDefinition*(
   let uri = pathToUri(path)
   return client.gotoTypeDefinition(uri, line, character)
 
+proc requestImplementation*(
+    svc: LspService, path: string, line, character: int
+): Result[seq[Location], string] =
+  ## Request go to implementation
+  let clientResult = svc.getClientForPath(path)
+  if clientResult.isErr:
+    return err(clientResult.error)
+
+  let client = clientResult.get
+  let uri = pathToUri(path)
+  return client.gotoImplementation(uri, line, character)
+
 proc requestReferences*(
     svc: LspService, path: string, line, character: int, includeDeclaration: bool = true
 ): Result[seq[Location], string] =
@@ -358,6 +382,41 @@ proc requestReferences*(
   let client = clientResult.get
   let uri = pathToUri(path)
   return client.references(uri, line, character, includeDeclaration)
+
+proc requestDocumentHighlight*(
+    svc: LspService, path: string, line, character: int
+): Result[seq[DocumentHighlight], string] =
+  ## Request document highlights at a position
+  let clientResult = svc.getClientForPath(path)
+  if clientResult.isErr:
+    return err(clientResult.error)
+
+  let client = clientResult.get
+  let uri = pathToUri(path)
+  return client.documentHighlight(uri, line, character)
+
+proc requestDocumentLinks*(
+    svc: LspService, path: string
+): Result[seq[DocumentLink], string] =
+  ## Request document links for a file
+  let clientResult = svc.getClientForPath(path)
+  if clientResult.isErr:
+    return err(clientResult.error)
+
+  let client = clientResult.get
+  let uri = pathToUri(path)
+  return client.documentLink(uri)
+
+proc requestDocumentLinkResolve*(
+    svc: LspService, path: string, link: DocumentLink
+): Result[DocumentLink, string] =
+  ## Resolve a document link to get its target URI
+  let clientResult = svc.getClientForPath(path)
+  if clientResult.isErr:
+    return err(clientResult.error)
+
+  let client = clientResult.get
+  return client.documentLinkResolve(link)
 
 proc requestSignatureHelp*(
     svc: LspService, path: string, line, character: int
@@ -450,6 +509,18 @@ proc hasDefinitionSupport*(svc: LspService, langId: string): bool =
 
   return client.capabilities.get.definitionProvider.isSome
 
+proc hasDeclarationSupport*(svc: LspService, langId: string): bool =
+  ## Check if go to declaration is supported for a language
+  let clientOpt = svc.getClient(langId)
+  if clientOpt.isNone:
+    return false
+
+  let client = clientOpt.get
+  if client.capabilities.isNone:
+    return false
+
+  return client.capabilities.get.declarationProvider.isSome
+
 proc hasTypeDefinitionSupport*(svc: LspService, langId: string): bool =
   ## Check if go to type definition is supported for a language
   let clientOpt = svc.getClient(langId)
@@ -462,6 +533,18 @@ proc hasTypeDefinitionSupport*(svc: LspService, langId: string): bool =
 
   return client.capabilities.get.typeDefinitionProvider.isSome
 
+proc hasImplementationSupport*(svc: LspService, langId: string): bool =
+  ## Check if go to implementation is supported for a language
+  let clientOpt = svc.getClient(langId)
+  if clientOpt.isNone:
+    return false
+
+  let client = clientOpt.get
+  if client.capabilities.isNone:
+    return false
+
+  return client.capabilities.get.implementationProvider.isSome
+
 proc hasReferencesSupport*(svc: LspService, langId: string): bool =
   ## Check if find references is supported for a language
   let clientOpt = svc.getClient(langId)
@@ -473,6 +556,51 @@ proc hasReferencesSupport*(svc: LspService, langId: string): bool =
     return false
 
   return client.capabilities.get.referencesProvider.isSome
+
+proc hasDocumentHighlightSupport*(svc: LspService, langId: string): bool =
+  ## Check if document highlight is supported for a language
+  let clientOpt = svc.getClient(langId)
+  if clientOpt.isNone:
+    return false
+
+  let client = clientOpt.get
+  if client.capabilities.isNone:
+    return false
+
+  return client.capabilities.get.documentHighlightProvider.isSome
+
+proc hasDocumentLinkSupport*(svc: LspService, langId: string): bool =
+  ## Check if document link is supported for a language
+  let clientOpt = svc.getClient(langId)
+  if clientOpt.isNone:
+    return false
+
+  let client = clientOpt.get
+  if client.capabilities.isNone:
+    return false
+
+  return client.capabilities.get.documentLinkProvider.isSome
+
+proc hasDocumentLinkResolveSupport*(svc: LspService, langId: string): bool =
+  ## Check if document link resolve is supported for a language
+  let clientOpt = svc.getClient(langId)
+  if clientOpt.isNone:
+    return false
+
+  let client = clientOpt.get
+  if client.capabilities.isNone:
+    return false
+
+  let provider = client.capabilities.get.documentLinkProvider
+  if provider.isNone:
+    return false
+
+  # Check if resolveProvider is true in the provider options
+  let providerNode = provider.get
+  if providerNode.kind == JObject and providerNode.hasKey("resolveProvider"):
+    return providerNode["resolveProvider"].getBool(false)
+
+  return false
 
 proc hasSignatureHelpSupport*(svc: LspService, langId: string): bool =
   ## Check if signature help is supported for a language
@@ -668,6 +796,18 @@ proc hasSelectionRangeSupport*(svc: LspService, langId: string): bool =
 
   return client.capabilities.get.selectionRangeProvider.isSome
 
+proc hasInlineValueSupport*(svc: LspService, langId: string): bool =
+  ## Check if inline value is supported for a language
+  let clientOpt = svc.getClient(langId)
+  if clientOpt.isNone:
+    return false
+
+  let client = clientOpt.get
+  if client.capabilities.isNone:
+    return false
+
+  return client.capabilities.get.inlineValueProvider.isSome
+
 proc requestSelectionRange*(
     svc: LspService, path: string, positions: seq[Position]
 ): Result[seq[SelectionRange], string] =
@@ -705,3 +845,88 @@ proc getServerInfo*(svc: LspService, langId: string): Option[ServerInfo] =
   if clientOpt.isNone:
     return none(ServerInfo)
   return clientOpt.get.serverInfo
+
+proc requestInlineValues*(
+    svc: LspService,
+    path: string,
+    startLine, startChar, endLine, endChar: int,
+    frameId: int,
+    stoppedLine, stoppedStartChar, stoppedEndLine, stoppedEndChar: int,
+): Result[seq[InlineValue], string] =
+  ## Request inline values for a range in a file during debugging
+  let clientResult = svc.getClientForPath(path)
+  if clientResult.isErr:
+    return err(clientResult.error)
+
+  let client = clientResult.get
+  let uri = pathToUri(path)
+  return client.inlineValues(
+    uri, startLine, startChar, endLine, endChar, frameId, stoppedLine, stoppedStartChar,
+    stoppedEndLine, stoppedEndChar,
+  )
+
+# CodeLens support
+proc hasCodeLensSupport*(svc: LspService, langId: string): bool =
+  ## Check if code lens is supported for a language
+  let clientOpt = svc.getClient(langId)
+  if clientOpt.isNone:
+    return false
+
+  let client = clientOpt.get
+  if client.capabilities.isNone:
+    return false
+
+  return client.capabilities.get.codeLensProvider.isSome
+
+proc hasCodeLensResolveSupport*(svc: LspService, langId: string): bool =
+  ## Check if code lens resolve is supported for a language
+  let clientOpt = svc.getClient(langId)
+  if clientOpt.isNone:
+    return false
+
+  let client = clientOpt.get
+  if client.capabilities.isNone:
+    return false
+
+  let provider = client.capabilities.get.codeLensProvider
+  if provider.isNone:
+    return false
+
+  # Check if resolveProvider is true in the provider options
+  let providerNode = provider.get
+  if providerNode.kind == JObject and providerNode.hasKey("resolveProvider"):
+    return providerNode["resolveProvider"].getBool(false)
+
+  return false
+
+proc requestCodeLens*(svc: LspService, path: string): Result[seq[CodeLens], string] =
+  ## Request code lenses for a file
+  let clientResult = svc.getClientForPath(path)
+  if clientResult.isErr:
+    return err(clientResult.error)
+
+  let client = clientResult.get
+  let uri = pathToUri(path)
+  return client.codeLens(uri)
+
+proc requestCodeLensResolve*(
+    svc: LspService, path: string, lens: CodeLens
+): Result[CodeLens, string] =
+  ## Resolve a code lens to get its command
+  let clientResult = svc.getClientForPath(path)
+  if clientResult.isErr:
+    return err(clientResult.error)
+
+  let client = clientResult.get
+  return client.codeLensResolve(lens)
+
+proc requestExecuteCommand*(
+    svc: LspService, path: string, command: string, arguments: seq[JsonNode] = @[]
+): Result[JsonNode, string] =
+  ## Execute a command on the LSP server
+  let clientResult = svc.getClientForPath(path)
+  if clientResult.isErr:
+    return err(clientResult.error)
+
+  let client = clientResult.get
+  return client.executeCommand(command, arguments)

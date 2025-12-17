@@ -92,6 +92,11 @@ let
     bg: ColorValue(kind: Default),
     modifiers: {},
   )
+  foldStyle* = Style(
+    fg: ColorValue(kind: Indexed, indexed: Color.Cyan),
+    bg: ColorValue(kind: Default),
+    modifiers: {},
+  )
   fullWidthSpaceStyle* = Style(
     fg: ColorValue(kind: Default),
     bg: ColorValue(kind: Indexed, indexed: Color.Red),
@@ -100,6 +105,30 @@ let
   trailingSpacesStyle* = Style(
     fg: ColorValue(kind: Default),
     bg: ColorValue(kind: Indexed, indexed: Color.Red),
+    modifiers: {},
+  )
+  codeLensStyle* = Style(
+    fg: ColorValue(kind: Rgb, rgb: RgbColor(r: 120, g: 120, b: 120)),
+    bg: ColorValue(kind: Default),
+    modifiers: {},
+  )
+  # Document Highlight styles (LSP textDocument/documentHighlight)
+  documentHighlightTextStyle* = Style(
+    ## Style for generic text occurrence (DocumentHighlightKind.Text)
+    fg: ColorValue(kind: Default),
+    bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 60, g: 60, b: 80)),
+    modifiers: {},
+  )
+  documentHighlightReadStyle* = Style(
+    ## Style for read-access of a symbol (DocumentHighlightKind.Read)
+    fg: ColorValue(kind: Default),
+    bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 40, g: 70, b: 40)),
+    modifiers: {},
+  )
+  documentHighlightWriteStyle* = Style(
+    ## Style for write-access of a symbol (DocumentHighlightKind.Write)
+    fg: ColorValue(kind: Default),
+    bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 80, g: 50, b: 50)),
     modifiers: {},
   )
 

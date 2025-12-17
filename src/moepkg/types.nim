@@ -70,6 +70,88 @@ type
     Forward # Search forward (/)
     Backward # Search backward (?)
 
+  SearchState* = object ## Search-related state grouped together for better organization
+    text*: string # Text being typed in search mode (was: searchText)
+    lastText*: string # Last executed search text for n/N commands (was: lastSearchText)
+    direction*: SearchDirection # Direction of current search (/ or ?)
+    history*: seq[string] # Search history (most recent first)
+    historyIndex*: int # Current position in search history (-1 when not navigating)
+    startPos*: BufferPosition # Cursor position when search mode started (for incsearch)
+    # Search behavior settings
+    ignorecase*: bool # Ignore case in search patterns
+    smartcase*: bool # Override ignorecase if pattern contains uppercase
+    incsearch*: bool # Show search matches as you type
+    hlsearch*: bool # Highlight all search matches in the buffer
+    hlsearchTempDisabled*: bool # Temporarily disable highlight (like :nohlsearch)
+
+  MacroState* = object ## Macro recording and playback state grouped together
+    isRecording*: bool # Whether currently recording a macro (was: isRecordingMacro)
+    register*: char # Which register (a-z) is being recorded to (was: macroRegister)
+    recordedKeys*: seq[string] # Keys being recorded in current macro session
+    registers*: Table[char, seq[string]] # Saved macros by register (was: macroRegisters)
+    lastRegister*: Option[char]
+      # Last executed macro register for @@ (was: lastMacroRegister)
+    waitingForRegister*: bool # Waiting for register name after q or @
+    commandType*: string # "record" or "playback" (was: macroCommandType)
+    pendingCount*: int # Numeric prefix for macro playback (was: pendingMacroCount)
+    playbackDepth*: int # Current macro recursion depth (was: macroPlaybackDepth)
+
+  EditState* = object ## Edit operation state grouped together
+    lastMotion*: Option[Motion] # Last motion for repeat
+    lastEditCommand*: Option[LastEditCommand] # Last change command for . (repeat)
+    pendingOperator*: Option[PendingOperator] # Operator waiting for motion/text object
+    pendingTextObject*: Option[PendingTextObject]
+      # Text object modifier waiting for object kind
+    substituteContext*: Option[SubstituteContext]
+      # Context for substitute commands (s/S/cc)
+    replaceHistory*: seq[ReplaceHistoryEntry] # Replace mode undo history
+    insertModeStartPos*: Option[BufferPosition] # Position where Insert mode started
+
+  DisplaySettings* = object ## Display and UI settings grouped together
+    showStatusLine*: bool # Whether to show the status line
+    multiStatusLine*: bool
+      # Status line for each window (true) or only one at bottom (false)
+    showLineCount*: bool # Whether to show line count in status line
+    showLinePercentage*: bool # Whether to show line percentage in status line
+    showEncoding*: bool # Whether to show file encoding in status line
+    showLineNumbers*: bool # Whether to show line numbers
+    showCurrentLineNumber*: bool # Whether to highlight current line number
+    showCursorLine*: bool # Whether to highlight the cursor line
+    showSyntax*: bool # Whether to apply syntax highlighting
+    showIndentationLines*: bool # Whether to show indentation guide lines
+    showSidebar*: bool # Whether to show the sidebar
+    showGitDiff*: bool # Whether to show git diff indicators in sidebar
+    showSyntaxChecker*: bool # Whether to show syntax checker results in sidebar
+    showCodeLens*: bool # Whether to show CodeLens
+    showDocumentHighlight*: bool # Whether to show document highlights
+    lineWrap*: bool # Whether to wrap long lines
+    tabStop*: int # Tab width (number of spaces per tab character)
+    expandTab*: bool # Insert spaces instead of tab character
+    autoIndent*: bool # Automatically indent new lines
+    autoCloseParen*: bool # Automatically insert closing parenthesis/bracket/quote
+    autoDeleteParen*: bool # Automatically delete matching parenthesis
+
+  LspCacheState* = object ## LSP cache and picker state grouped together
+    codeLensCache*: CodeLensCache # Cached CodeLens items for current buffer
+    codeLensPicker*: CodeLensPicker # CodeLens selection UI state
+    documentHighlightCache*: DocumentHighlightCache # Cached document highlights
+    locations*: Option[LspLocationsResult]
+      # LSP locations for references/definitions picker
+    lastCodeLensUpdate*: MonoTime # Timestamp of last CodeLens update
+    codeLensUpdateInterval*: int64 # Debounce interval for CodeLens updates
+    lastDocumentHighlightUpdate*: MonoTime # Timestamp of last document highlight update
+    documentHighlightUpdateInterval*: int64
+      # Debounce interval for document highlight updates
+
+  TimingState* = object ## Timing and debounce state grouped together
+    lastResizeTime*: MonoTime # Timestamp of last processed resize event
+    lastGitDiffUpdate*: MonoTime # Timestamp of last git diff update
+    lastGitDiffChangeSeq*: int # Buffer changeSeq at last git diff update
+    gitDiffUpdateInterval*: int64 # Minimum milliseconds between git diff updates
+    lastAutoSave*: MonoTime # Timestamp of last auto save
+    lastAutoBackup*: MonoTime # Timestamp of last auto backup
+    lastInputTime*: MonoTime # Timestamp of last user input (for idle detection)
+
   JumpPosition* = object ## Represents a position in the jump list
     line*: int # Line number
     column*: int # Column position
@@ -266,6 +348,43 @@ type
     selectedIndex*: int # Currently selected item index
     title*: string # Title for the list (e.g., "References", "Definitions")
 
+  CodeLensItem* = object ## Cached CodeLens item with display information
+    line*: int # Line number (0-indexed)
+    title*: string # Display title (e.g., "5 references")
+    command*: string # Command identifier
+    arguments*: seq[string] # Command arguments (JSON strings)
+
+  CodeLensCache* = object
+    ## Cache for CodeLens items per buffer
+    ## Uses Table for O(1) line lookup instead of O(n) sequential search
+    itemsByLine*: Table[int, seq[CodeLensItem]] # Line number -> CodeLens items
+    changeSeq*: int # Buffer changeSeq when cache was last updated
+    filePath*: string # Path of the buffer this cache belongs to
+    isValid*: bool # Whether the cache is valid
+
+  CodeLensPicker* = object
+    ## State for CodeLens selection UI when multiple items exist on a line
+    items*: seq[CodeLensItem] # Items to choose from
+    selectedIndex*: int # Currently selected index
+    scrollOffset*: int # Scroll offset for displaying items (first visible item index)
+    maxVisibleItems*: int # Maximum number of visible items (for scroll calculation)
+    isActive*: bool # Whether the picker is currently shown
+
+  DocumentHighlightItem* = object ## A single document highlight range
+    line*: int # Line number (0-indexed)
+    startColumn*: int # Start column (0-indexed)
+    endColumn*: int # End column (0-indexed, exclusive)
+    kind*: int # 1=Text, 2=Read, 3=Write (matches DocumentHighlightKind)
+
+  DocumentHighlightCache* = object
+    ## Cache for document highlights
+    ## Uses Table for O(1) line lookup instead of O(n) sequential search
+    itemsByLine*: Table[int, seq[DocumentHighlightItem]] # Line number -> items
+    cursorLine*: int # Cursor line when highlights were requested
+    cursorColumn*: int # Cursor column when highlights were requested
+    changeSeq*: int # Buffer changeSeq when cache was last updated
+    isValid*: bool # Whether the cache is valid
+
   EditorState* = ref object
     cursor*: BufferPosition # Actual buffer cursor position (line/column)
     screenCursor*: CursorPosition # Screen cursor position (x/y)
@@ -275,71 +394,18 @@ type
     commandText*: string # Text being typed in command mode
     commandCursor*: int
       # Cursor position within commandText (0-based, after the : prefix)
-    searchText*: string # Text being typed in search mode
-    lastSearchText*: string # Last executed search text for n/N commands
+    search*: SearchState # Search-related state (text, history, settings)
     statusMessage*: string # Message to display in status line
-    lastMotion*: Option[Motion]
-    lastEditCommand*: Option[LastEditCommand] # Last change command for . (repeat)
-    insertModeStartPos*: Option[BufferPosition]
-      # Position where Insert mode started (for text tracking)
-    substituteContext*: Option[SubstituteContext]
-      # Context when Insert mode was entered via substitute (s/S/cc)
-    pendingOperator*: Option[PendingOperator] # Operator waiting for motion/text object
-    pendingTextObject*: Option[PendingTextObject]
-      # Text object modifier waiting for object kind
+    editState*: EditState # Edit operation state (operators, motions, repeat, etc.)
     savedViewportTopLine*: int # Viewport position saved when operator starts
     visualSelection*: VisualSelection # Visual mode selection state
-    replaceHistory*: seq[ReplaceHistoryEntry] # Replace mode undo history
-    showStatusLine*: bool # Whether to show the status line
-    multiStatusLine*: bool
-      # Whether to show status line for each window (true) or only one at bottom (false)
-    showLineCount*: bool # Whether to show line count in status line
-    showLinePercentage*: bool # Whether to show line percentage in status line
-    showEncoding*: bool # Whether to show file encoding in status line
+    display*: DisplaySettings # Display and UI settings
     needsFullRedraw*: bool # Whether a full screen redraw is needed
     viewportReservedLines*: int
       # Reserved lines for viewport calculations (for split windows)
-    lineWrap*: bool # Whether to wrap long lines
-    lastResizeTime*: MonoTime # Timestamp of last processed resize event
-    # Sidebar settings
-    showSidebar*: bool # Whether to show the sidebar
-    showGitDiff*: bool # Whether to show git diff indicators in sidebar
-    showSyntaxChecker*: bool # Whether to show syntax checker results in sidebar
-    lastGitDiffUpdate*: MonoTime # Timestamp of last git diff update
-    lastGitDiffChangeSeq*: int # Buffer changeSeq at last git diff update
-    gitDiffUpdateInterval*: int64
-      # Minimum milliseconds between git diff updates (debounce)
-    # Auto save settings
-    lastAutoSave*: MonoTime # Timestamp of last auto save
-    # Auto backup settings
-    lastAutoBackup*: MonoTime # Timestamp of last auto backup
-    lastInputTime*: MonoTime # Timestamp of last user input (for idle detection)
-    # Editor behavior settings
-    tabStop*: int # Tab width (number of spaces per tab character)
-    expandTab*: bool # Insert spaces instead of tab character when Tab key is pressed
-    autoIndent*: bool # Automatically indent new lines based on previous line
-    autoCloseParen*: bool # Automatically insert closing parenthesis/bracket/quote
-    autoDeleteParen*: bool
-      # Automatically delete matching closing paren when opening is deleted
-    showLineNumbers*: bool # Whether to show line numbers
-    showCurrentLineNumber*: bool # Whether to highlight current line number
-    showCursorLine*: bool # Whether to highlight the cursor line
-    showSyntax*: bool # Whether to apply syntax highlighting
-    showIndentationLines*: bool # Whether to show indentation guide lines
-    # Search behavior settings
-    ignorecase*: bool # Ignore case in search patterns
-    smartcase*: bool # Override ignorecase if search pattern contains uppercase letters
-    incsearch*: bool # Show search matches as you type
-    hlsearch*: bool # Highlight all search matches in the buffer
-    hlsearchTempDisabled*: bool # Temporarily disable highlight (like :nohlsearch in Vim)
+    timing*: TimingState # Timing and debounce state
     lastKeyWasEscape*: bool
       # Track if last key was Escape (for double-Escape to clear highlight)
-    searchStartPos*: BufferPosition
-      # Cursor position when search mode started (for incsearch cancellation)
-    searchDirection*: SearchDirection # Direction of current search (/ or ?)
-    searchHistory*: seq[string] # Search history (most recent first)
-    searchHistoryIndex*: int
-      # Current position in search history (-1 when not navigating history)
     # Yank register (internal clipboard) - DEPRECATED: use registers instead
     yankRegister*: string # Content yanked with yy, y, etc.
     yankIsLine*: bool # Whether the yank was linewise (yy) or characterwise
@@ -347,16 +413,8 @@ type
     registers*: Registers # All registers (", 0-9, a-z, -, *, +)
     pendingRegister*: Option[char]
       # Register selected with " prefix (e.g., "a for register a)
-    # Macro recording (q command)
-    isRecordingMacro*: bool # Whether currently recording a macro
-    macroRegister*: char # Which register (a-z) is being recorded to
-    recordedKeys*: seq[string] # Keys being recorded in current macro session
-    macroRegisters*: Table[char, seq[string]] # Saved macros by register (a-z)
-    lastMacroRegister*: Option[char] # Last executed macro register (for @@ repeat)
-    waitingForMacroRegister*: bool # Waiting for register name after q or @
-    macroCommandType*: string # "record" or "playback" - what we're waiting to do
-    pendingMacroCount*: int # Numeric prefix for macro playback (e.g., 3@a)
-    macroPlaybackDepth*: int # Current macro recursion depth (for protection)
+    # Macro state (grouped in MacroState)
+    macroState*: MacroState # Macro recording and playback state
     # Jump list (Ctrl-o / Ctrl-i)
     jumpList*: seq[JumpPosition] # List of jump positions
     jumpListIndex*: int # Current position in jump list (-1 when not navigating)
@@ -365,8 +423,7 @@ type
     # Command mode completion
     commandCompletionManager*: CommandCompletionManager
       # Command mode auto-completion manager
-    # LSP results display
-    lspLocations*: Option[LspLocationsResult]
-      # LSP locations result for references/definitions picker
     # Smooth scroll animation
     scrollAnimation*: ScrollAnimation # Current scroll animation state
+    # LSP cache state (grouped in LspCacheState)
+    lspCache*: LspCacheState # LSP cache and picker state

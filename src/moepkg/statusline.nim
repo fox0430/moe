@@ -25,49 +25,49 @@ import types, buffer, modes
 
 proc toggleStatusLine*(state: var EditorState) =
   ## Toggle the visibility of the status line
-  state.showStatusLine = not state.showStatusLine
+  state.display.showStatusLine = not state.display.showStatusLine
 
 proc setStatusLineVisible*(state: var EditorState, visible: bool) =
   ## Set the visibility of the status line
-  state.showStatusLine = visible
+  state.display.showStatusLine = visible
 
 proc toggleLineCount*(state: var EditorState) =
   ## Toggle the visibility of line count in status line
-  state.showLineCount = not state.showLineCount
+  state.display.showLineCount = not state.display.showLineCount
 
 proc setLineCountVisible*(state: var EditorState, visible: bool) =
   ## Set the visibility of line count in status line
-  state.showLineCount = visible
+  state.display.showLineCount = visible
 
 proc toggleLinePercentage*(state: var EditorState) =
   ## Toggle the visibility of line percentage in status line
-  state.showLinePercentage = not state.showLinePercentage
+  state.display.showLinePercentage = not state.display.showLinePercentage
 
 proc setLinePercentageVisible*(state: var EditorState, visible: bool) =
   ## Set the visibility of line percentage in status line
-  state.showLinePercentage = visible
+  state.display.showLinePercentage = visible
 
 proc toggleEncoding*(state: var EditorState) =
   ## Toggle the visibility of encoding in status line
-  state.showEncoding = not state.showEncoding
+  state.display.showEncoding = not state.display.showEncoding
 
 proc setEncodingVisible*(state: var EditorState, visible: bool) =
   ## Set the visibility of encoding in status line
-  state.showEncoding = visible
+  state.display.showEncoding = visible
 
 proc toggleMultiStatusLine*(state: var EditorState) =
   ## Toggle between single status line (at bottom) and multi status lines (per window)
-  state.multiStatusLine = not state.multiStatusLine
+  state.display.multiStatusLine = not state.display.multiStatusLine
 
 proc setMultiStatusLine*(state: var EditorState, enabled: bool) =
   ## Set multi status line mode
-  state.multiStatusLine = enabled
+  state.display.multiStatusLine = enabled
 
 proc renderStatusLine*(
     state: EditorState, textBuffer: TextBuffer, buffer: var Buffer, statusLineY: int
 ) =
   ## Render the status line at the specified Y position
-  if not state.showStatusLine:
+  if not state.display.showStatusLine:
     return
 
   let
@@ -103,10 +103,10 @@ proc renderStatusLine*(
     lineCountText = block:
       var parts: seq[string] = @[]
 
-      if state.showEncoding:
+      if state.display.showEncoding:
         parts.add(encodingToString(textBuffer.encoding))
 
-      if state.showLinePercentage:
+      if state.display.showLinePercentage:
         let
           currentLine = state.cursor.line + 1 # Convert to 1-based
           totalLines = textBuffer.len
@@ -117,7 +117,7 @@ proc renderStatusLine*(
               0
         parts.add(fmt"{percentage}%")
 
-      if state.showLineCount:
+      if state.display.showLineCount:
         let
           currentLine = state.cursor.line + 1 # Convert to 1-based
           totalLines = textBuffer.len
@@ -138,8 +138,10 @@ proc renderStatusLine*(
     )
 
   # Draw encoding/line count/percentage with 1 character space from the right end if enabled and there's enough space
-  if (state.showEncoding or state.showLineCount or state.showLinePercentage) and
-      lineCountText.len > 0 and buffer.area.width >= lineCountWidth + 1:
+  if (
+    state.display.showEncoding or state.display.showLineCount or
+    state.display.showLinePercentage
+  ) and lineCountText.len > 0 and buffer.area.width >= lineCountWidth + 1:
     buffer.setString(
       buffer.area.x + buffer.area.width - lineCountWidth - 1,
       statusLineY,
@@ -157,7 +159,7 @@ proc renderWindowStatusLine*(
     isActiveWindow: bool,
 ) =
   ## Render a status line for a specific window
-  if not state.showStatusLine or not state.multiStatusLine:
+  if not state.display.showStatusLine or not state.display.multiStatusLine:
     return
 
   let
@@ -206,10 +208,10 @@ proc renderWindowStatusLine*(
     lineCountText = block:
       var parts: seq[string] = @[]
 
-      if state.showEncoding:
+      if state.display.showEncoding:
         parts.add(encodingToString(textBuffer.encoding))
 
-      if state.showLinePercentage:
+      if state.display.showLinePercentage:
         let
           currentLine = state.cursor.line + 1 # Convert to 1-based
           totalLines = textBuffer.len
@@ -220,7 +222,7 @@ proc renderWindowStatusLine*(
               0
         parts.add(fmt"{percentage}%")
 
-      if state.showLineCount:
+      if state.display.showLineCount:
         let
           currentLine = state.cursor.line + 1 # Convert to 1-based
           totalLines = textBuffer.len
@@ -239,8 +241,10 @@ proc renderWindowStatusLine*(
     buffer.setString(currentX, statusLineY, blueBackground, statusLineStyle)
 
   # Draw encoding/line count/percentage with 1 character space from the right end if enabled
-  if (state.showEncoding or state.showLineCount or state.showLinePercentage) and
-      lineCountText.len > 0 and statusLineWidth >= lineCountWidth + 1:
+  if (
+    state.display.showEncoding or state.display.showLineCount or
+    state.display.showLinePercentage
+  ) and lineCountText.len > 0 and statusLineWidth >= lineCountWidth + 1:
     buffer.setString(
       statusLineX + statusLineWidth - lineCountWidth - 1,
       statusLineY,

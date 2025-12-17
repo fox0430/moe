@@ -69,7 +69,9 @@ type
     hrEnterFiler # Enter filer mode with optional path
     hrQuickRun # Run the current buffer
     hrLspGotoDefinition # Execute LSP goto definition
+    hrLspGotoDeclaration # Execute LSP goto declaration
     hrLspFindReferences # Execute LSP find references
+    hrLspCodeLensExecute # Execute CodeLens on current line
     hrUnhandled # Command was not handled
     hrError # Error occurred
 
@@ -136,7 +138,11 @@ type
       discard
     of hrLspGotoDefinition:
       discard
+    of hrLspGotoDeclaration:
+      discard
     of hrLspFindReferences:
+      discard
+    of hrLspCodeLensExecute:
       discard
     of hrUnhandled:
       discard
@@ -250,7 +256,7 @@ proc handleNormalMode*(
             errorMessage: "Failed to begin transaction: " & transactionResult.error,
           )
         # Record insert start position for text tracking
-        state.insertModeStartPos = some(state.cursor)
+        state.editState.insertModeStartPos = some(state.cursor)
       elif targetMode == EditorMode.Replace:
         # Begin a transaction when entering Replace mode
         let transactionResult = buffer.beginTransaction("Replace mode edit")
@@ -261,7 +267,7 @@ proc handleNormalMode*(
             errorMessage: "Failed to begin transaction: " & transactionResult.error,
           )
         # Clear replace history when entering Replace mode
-        state.replaceHistory = @[]
+        state.editState.replaceHistory = @[]
     return HandlerResult(
       kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
     )
@@ -291,9 +297,15 @@ proc handleNormalMode*(
   of nmrLspGotoDefinition:
     # Signal to editor to execute LSP goto definition
     return HandlerResult(kind: hrLspGotoDefinition)
+  of nmrLspGotoDeclaration:
+    # Signal to editor to execute LSP goto declaration
+    return HandlerResult(kind: hrLspGotoDeclaration)
   of nmrLspFindReferences:
     # Signal to editor to execute LSP find references
     return HandlerResult(kind: hrLspFindReferences)
+  of nmrLspCodeLensExecute:
+    # Signal to editor to execute CodeLens on current line
+    return HandlerResult(kind: hrLspCodeLensExecute)
 
 proc handleInsertMode*(
     manager: HandlerManager, buffer: TextBuffer, state: EditorState, keyCombo: KeyCombo
@@ -305,16 +317,16 @@ proc handleInsertMode*(
     # Check if we're leaving Insert mode
     if r.modeTransition.isSome and r.modeTransition.get != EditorMode.Insert:
       # Extract inserted text before committing transaction
-      if buffer.currentTransaction.isSome and state.insertModeStartPos.isSome:
+      if buffer.currentTransaction.isSome and state.editState.insertModeStartPos.isSome:
         let transaction = buffer.currentTransaction.get
         let insertedText = extractInsertedText(transaction)
 
         # Record the insert command for repeat (.) if text was actually inserted
         if insertedText.len > 0:
           # Check if we entered Insert mode via substitute command (s/S/cc)
-          if state.substituteContext.isSome:
-            let subCtx = state.substituteContext.get
-            state.lastEditCommand = some(
+          if state.editState.substituteContext.isSome:
+            let subCtx = state.editState.substituteContext.get
+            state.editState.lastEditCommand = some(
               types.LastEditCommand(
                 kind: types.lecSubstitute,
                 substituteText: insertedText,
@@ -324,17 +336,17 @@ proc handleInsertMode*(
             )
           else:
             # Normal insert (i, a, o, O)
-            state.lastEditCommand = some(
+            state.editState.lastEditCommand = some(
               types.LastEditCommand(
                 kind: types.lecInsertText,
                 insertedText: insertedText,
-                insertPosition: state.insertModeStartPos.get,
+                insertPosition: state.editState.insertModeStartPos.get,
               )
             )
 
         # Clear insert position tracking and substitute context
-        state.insertModeStartPos = none(BufferPosition)
-        state.substituteContext = none(types.SubstituteContext)
+        state.editState.insertModeStartPos = none(BufferPosition)
+        state.editState.substituteContext = none(types.SubstituteContext)
 
       # Commit the transaction when leaving Insert mode
       let transactionResult = buffer.commitTransaction()
@@ -436,8 +448,8 @@ proc handleCommandMode*(
   ## This builds up the command text character by character
 
   # Record key for macro if recording is active
-  if state.isRecordingMacro:
-    state.recordedKeys.add(keyComboToString(keyCombo))
+  if state.macroState.isRecording:
+    state.macroState.recordedKeys.add(keyComboToString(keyCombo))
 
   if keyCombo.isSpecial:
     case keyCombo.special
@@ -525,15 +537,15 @@ proc handleSearchMode*(
   ## This builds up the search text character by character
 
   # Record key for macro if recording is active
-  if state.isRecordingMacro:
-    state.recordedKeys.add(keyComboToString(keyCombo))
+  if state.macroState.isRecording:
+    state.macroState.recordedKeys.add(keyComboToString(keyCombo))
 
   if keyCombo.isSpecial:
     case keyCombo.special
     of skEscape:
       # Cancel search mode and restore cursor
-      state.searchText = ""
-      state.cursor = state.searchStartPos
+      state.search.text = ""
+      state.cursor = state.search.startPos
       return HandlerResult(
         kind: hrHandled, modeTransition: some(EditorMode.Normal), statusMessage: ""
       )
@@ -545,11 +557,11 @@ proc handleSearchMode*(
       )
     of skBackspace:
       # Delete last character (rune) - handles unicode properly
-      if state.searchText.len > 0:
-        var runes = state.searchText.toRunes
+      if state.search.text.len > 0:
+        var runes = state.search.text.toRunes
         if runes.len > 0:
           runes.setLen(runes.len - 1)
-          state.searchText = $runes
+          state.search.text = $runes
       return HandlerResult(
         kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
       )
@@ -558,7 +570,7 @@ proc handleSearchMode*(
   else:
     # Regular character - append to search text
     if keyCombo.modifiers == {} and keyCombo.char.len > 0:
-      state.searchText.add(keyCombo.char)
+      state.search.text.add(keyCombo.char)
       return HandlerResult(
         kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
       )
@@ -700,7 +712,7 @@ proc playbackMacro*(
   ## This dispatches each key to the appropriate mode handler based on current mode
 
   # Check for recursion depth limit
-  if state.macroPlaybackDepth >= MaxMacroRecursionDepth:
+  if state.macroState.playbackDepth >= MaxMacroRecursionDepth:
     return HandlerResult(
       kind: hrError,
       errorMessage:
@@ -708,20 +720,20 @@ proc playbackMacro*(
     )
 
   # Increment recursion depth
-  state.macroPlaybackDepth += 1
+  state.macroState.playbackDepth += 1
 
   # Clear any pending key sequences before starting playback
   manager.keyBindingRegistry.clearSequence()
 
   # Temporarily disable macro recording to avoid recording during playback
-  let wasRecording = state.isRecordingMacro
-  state.isRecordingMacro = false
+  let wasRecording = state.macroState.isRecording
+  state.macroState.isRecording = false
 
   for keyStr in keys:
     let keyComboOpt = stringToKeyCombo(keyStr)
     if keyComboOpt.isNone:
-      state.isRecordingMacro = wasRecording
-      state.macroPlaybackDepth -= 1
+      state.macroState.isRecording = wasRecording
+      state.macroState.playbackDepth -= 1
       return
         HandlerResult(kind: hrError, errorMessage: "Invalid key in macro: " & keyStr)
 
@@ -736,13 +748,13 @@ proc playbackMacro*(
 
     # If error or quit, stop playback
     if keyResult.kind == hrError or keyResult.kind == hrQuit:
-      state.isRecordingMacro = wasRecording
-      state.macroPlaybackDepth -= 1
+      state.macroState.isRecording = wasRecording
+      state.macroState.playbackDepth -= 1
       return keyResult
 
   # Restore recording state and decrement recursion depth
-  state.isRecordingMacro = wasRecording
-  state.macroPlaybackDepth -= 1
+  state.macroState.isRecording = wasRecording
+  state.macroState.playbackDepth -= 1
 
   # Clear any pending sequences after playback
   manager.keyBindingRegistry.clearSequence()
@@ -775,7 +787,8 @@ proc wasHandled*(hrResult: HandlerResult): bool =
     hrHandled, hrQuit, hrCloseWindow, hrGotoLine, hrVSplit, hrHSplit, hrEnew, hrSave,
     hrSaveAndQuit, hrBufferNext, hrBufferPrev, hrBufferFirst, hrBufferLast,
     hrBufferDelete, hrStripWhitespace, hrFilerOpenFile, hrFilerOpenFileVSplit,
-    hrFilerOpenFileHSplit, hrFilerQuit, hrLspGotoDefinition, hrLspFindReferences,
+    hrFilerOpenFileHSplit, hrFilerQuit, hrLspGotoDefinition, hrLspGotoDeclaration,
+    hrLspFindReferences, hrLspCodeLensExecute,
   }
 
 proc shouldQuit*(hrResult: HandlerResult): bool =
@@ -963,6 +976,14 @@ proc shouldLspGotoDefinition*(hrResult: HandlerResult): bool =
   ## Check if we should execute LSP goto definition
   hrResult.kind == hrLspGotoDefinition
 
+proc shouldLspGotoDeclaration*(hrResult: HandlerResult): bool =
+  ## Check if we should execute LSP goto declaration
+  hrResult.kind == hrLspGotoDeclaration
+
 proc shouldLspFindReferences*(hrResult: HandlerResult): bool =
   ## Check if we should execute LSP find references
   hrResult.kind == hrLspFindReferences
+
+proc shouldLspCodeLensExecute*(hrResult: HandlerResult): bool =
+  ## Check if we should execute CodeLens on current line
+  hrResult.kind == hrLspCodeLensExecute

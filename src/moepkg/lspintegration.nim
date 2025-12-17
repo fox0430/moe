@@ -170,6 +170,19 @@ proc requestDefinition*(
   let path = buffer.filePath.get
   return lsp.service.requestDefinition(path, line, column)
 
+proc requestDeclaration*(
+    lsp: LspIntegration, buffer: TextBuffer, line, column: int
+): Result[seq[Location], string] =
+  ## Request go to declaration at cursor position
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.requestDeclaration(path, line, column)
+
 proc requestTypeDefinition*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
 ): Result[seq[Location], string] =
@@ -183,6 +196,19 @@ proc requestTypeDefinition*(
   let path = buffer.filePath.get
   return lsp.service.requestTypeDefinition(path, line, column)
 
+proc requestImplementation*(
+    lsp: LspIntegration, buffer: TextBuffer, line, column: int
+): Result[seq[Location], string] =
+  ## Request go to implementation at cursor position
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.requestImplementation(path, line, column)
+
 proc requestReferences*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
 ): Result[seq[Location], string] =
@@ -195,6 +221,48 @@ proc requestReferences*(
 
   let path = buffer.filePath.get
   return lsp.service.requestReferences(path, line, column)
+
+proc requestDocumentHighlight*(
+    lsp: LspIntegration, buffer: TextBuffer, line, column: int
+): Result[seq[DocumentHighlight], string] =
+  ## Request document highlights at cursor position
+  ## Returns all occurrences of the symbol at the given position
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.requestDocumentHighlight(path, line, column)
+
+proc requestDocumentLinks*(
+    lsp: LspIntegration, buffer: TextBuffer
+): Result[seq[DocumentLink], string] =
+  ## Request document links for a buffer
+  ## Returns links to internal or external resources (e.g., imports, URLs)
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.requestDocumentLinks(path)
+
+proc requestDocumentLinkResolve*(
+    lsp: LspIntegration, buffer: TextBuffer, link: DocumentLink
+): Result[DocumentLink, string] =
+  ## Resolve a document link to get its target URI
+  ## Used when the initial documentLink response doesn't include target
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.requestDocumentLinkResolve(path, link)
 
 proc requestSignatureHelp*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
@@ -378,6 +446,98 @@ proc getSemanticTokensLegend*(
     return none(SemanticTokensLegend)
 
   return lsp.service.getSemanticTokensLegend(langIdOpt.get)
+
+proc requestInlineValues*(
+    lsp: LspIntegration,
+    buffer: TextBuffer,
+    startLine, startChar, endLine, endChar: int,
+    frameId: int,
+    stoppedLine, stoppedStartChar, stoppedEndLine, stoppedEndChar: int,
+): Result[seq[InlineValue], string] =
+  ## Request inline values for a range in a buffer during debugging
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.requestInlineValues(
+    path, startLine, startChar, endLine, endChar, frameId, stoppedLine,
+    stoppedStartChar, stoppedEndLine, stoppedEndChar,
+  )
+
+proc requestInlineValuesForVisibleRange*(
+    lsp: LspIntegration,
+    buffer: TextBuffer,
+    firstLine, lastLine: int,
+    frameId: int,
+    stoppedLine, stoppedStartChar, stoppedEndLine, stoppedEndChar: int,
+): Result[seq[InlineValue], string] =
+  ## Request inline values for the visible range of a buffer during debugging
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  if buffer.len == 0:
+    return ok(newSeq[InlineValue]())
+
+  let path = buffer.filePath.get
+  # Clamp line numbers to valid range
+  let actualLastLine = min(lastLine, buffer.len - 1)
+  let actualFirstLine = min(firstLine, actualLastLine)
+  let endChar = buffer.getLine(actualLastLine).charLen
+  return lsp.service.requestInlineValues(
+    path, actualFirstLine, 0, actualLastLine, endChar, frameId, stoppedLine,
+    stoppedStartChar, stoppedEndLine, stoppedEndChar,
+  )
+
+proc hasInlineValueSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
+  ## Check if inline value is supported for a buffer's language
+  if not lsp.enabled:
+    return false
+
+  if buffer.filePath.isNone:
+    return false
+
+  let path = buffer.filePath.get
+  let langIdOpt = lsp.service.getLanguageIdFromPath(path)
+  if langIdOpt.isNone:
+    return false
+
+  return lsp.service.hasInlineValueSupport(langIdOpt.get)
+
+proc hasDocumentLinkSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
+  ## Check if document link is supported for a buffer's language
+  if not lsp.enabled:
+    return false
+
+  if buffer.filePath.isNone:
+    return false
+
+  let path = buffer.filePath.get
+  let langIdOpt = lsp.service.getLanguageIdFromPath(path)
+  if langIdOpt.isNone:
+    return false
+
+  return lsp.service.hasDocumentLinkSupport(langIdOpt.get)
+
+proc hasDocumentLinkResolveSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
+  ## Check if document link resolve is supported for a buffer's language
+  if not lsp.enabled:
+    return false
+
+  if buffer.filePath.isNone:
+    return false
+
+  let path = buffer.filePath.get
+  let langIdOpt = lsp.service.getLanguageIdFromPath(path)
+  if langIdOpt.isNone:
+    return false
+
+  return lsp.service.hasDocumentLinkResolveSupport(langIdOpt.get)
 
 # TextEdit application helpers
 proc compareTextEditReverse(a, b: TextEdit): int =
@@ -606,6 +766,81 @@ proc isServerRunningForPath*(lsp: LspIntegration, path: string): bool =
   if langIdOpt.isNone:
     return false
   lsp.service.getClient(langIdOpt.get).isSome
+
+# CodeLens support
+proc hasCodeLensSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
+  ## Check if code lens is supported for a buffer's language
+  if not lsp.enabled:
+    return false
+
+  if buffer.filePath.isNone:
+    return false
+
+  let path = buffer.filePath.get
+  let langIdOpt = lsp.service.getLanguageIdFromPath(path)
+  if langIdOpt.isNone:
+    return false
+
+  return lsp.service.hasCodeLensSupport(langIdOpt.get)
+
+proc hasCodeLensResolveSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
+  ## Check if code lens resolve is supported for a buffer's language
+  if not lsp.enabled:
+    return false
+
+  if buffer.filePath.isNone:
+    return false
+
+  let path = buffer.filePath.get
+  let langIdOpt = lsp.service.getLanguageIdFromPath(path)
+  if langIdOpt.isNone:
+    return false
+
+  return lsp.service.hasCodeLensResolveSupport(langIdOpt.get)
+
+proc requestCodeLens*(
+    lsp: LspIntegration, buffer: TextBuffer
+): Result[seq[CodeLens], string] =
+  ## Request code lenses for a buffer
+  ## Code lenses represent commands shown along with source text (e.g., "5 references")
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.requestCodeLens(path)
+
+proc requestCodeLensResolve*(
+    lsp: LspIntegration, buffer: TextBuffer, lens: CodeLens
+): Result[CodeLens, string] =
+  ## Resolve a code lens to get its command
+  ## Used when the initial codeLens response doesn't include the command
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.requestCodeLensResolve(path, lens)
+
+proc requestExecuteCommand*(
+    lsp: LspIntegration,
+    buffer: TextBuffer,
+    command: string,
+    arguments: seq[JsonNode] = @[],
+): Result[JsonNode, string] =
+  ## Execute a command on the LSP server (used for code lens commands)
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.requestExecuteCommand(path, command, arguments)
 
 # Cleanup
 proc shutdown*(lsp: LspIntegration) =

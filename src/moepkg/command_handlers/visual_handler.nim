@@ -174,8 +174,8 @@ proc handleVisualModeKey*(
   ## Works for Visual, VisualBlock, and VisualLine modes
 
   # Record key for macro if recording is active
-  if state.isRecordingMacro:
-    state.recordedKeys.add(keyComboToString(keyCombo))
+  if state.macroState.isRecording:
+    state.macroState.recordedKeys.add(keyComboToString(keyCombo))
 
   # Special handling for ESC to clear selection
   if keyCombo.isSpecial and keyCombo.special == skEscape:

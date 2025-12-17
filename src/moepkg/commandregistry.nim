@@ -99,6 +99,15 @@ type
     # LSP operations
     bcLspGotoDefinition = "lsp.goto.definition"
     bcLspFindReferences = "lsp.find.references"
+    bcLspCodeLensExecute = "lsp.codelens.execute"
+    # Fold operations
+    bcFoldOpen = "fold.open" # zo - open fold at cursor
+    bcFoldClose = "fold.close" # zc - close fold at cursor
+    bcFoldToggle = "fold.toggle" # za - toggle fold at cursor
+    bcFoldOpenAll = "fold.open.all" # zR - open all folds
+    bcFoldCloseAll = "fold.close.all" # zM - close all folds
+    bcFoldCreate = "fold.create" # zf - create fold from selection
+    bcFoldDelete = "fold.delete" # zd - delete fold at cursor
 
   ## Command ID can be builtin or custom
   CommandIdKind* = enum
@@ -470,8 +479,8 @@ proc executeCommand*(
     let motionCmd = MotionCommand(motion: cmd.motion, count: cmd.count)
 
     # Check if we have a pending operator
-    if ctx.state.pendingOperator.isSome:
-      let op = ctx.state.pendingOperator.get
+    if ctx.state.editState.pendingOperator.isSome:
+      let op = ctx.state.editState.pendingOperator.get
 
       # Execute motion to get end position
       # Suppress viewport updates to prevent visual scrolling during operator+motion
@@ -479,7 +488,7 @@ proc executeCommand*(
         motionCmd, op.startPos, updateViewport = false
       )
       if r.isErr:
-        ctx.state.pendingOperator = none(PendingOperator)
+        ctx.state.editState.pendingOperator = none(PendingOperator)
         return err(r.error)
 
       # Calculate the range affected by this operator+motion
@@ -488,14 +497,14 @@ proc executeCommand*(
       block:
         # Execute the operator on the range
         let r = executeOperatorOnRange(ctx, op.operatorType, range, op.operatorCount)
-        ctx.state.pendingOperator = none(PendingOperator)
+        ctx.state.editState.pendingOperator = none(PendingOperator)
         if r.isErr:
           return err(r.error)
 
         # Record this command for repeat (.) - only if successful and not a yank
         # Yank is not a change operation, so it should not be repeatable
         if op.operatorType != OpYank:
-          ctx.state.lastEditCommand = some(
+          ctx.state.editState.lastEditCommand = some(
             LastEditCommand(
               kind: lecOperatorMotion,
               operator: op.operatorType,
@@ -536,7 +545,7 @@ proc executeCommand*(
         # For page scroll motions, we want to scroll the full page amount, not just minimum to show cursor
         let viewportHeight = ctx.motionController.viewportManager.viewport.height
         let lineCount = ctx.motionController.executor.buffer.len
-        let reservedLines = if ctx.state.showStatusLine: 2 else: 1
+        let reservedLines = if ctx.state.display.showStatusLine: 2 else: 1
         let pageSize = max(1, viewportHeight - reservedLines - 1)
         let halfPageSize = max(1, pageSize div 2)
 
@@ -616,8 +625,8 @@ proc executeCommand*(
         ctx.keyBindingRegistry.sequenceState.hasNumericPrefix = false
 
       # Check if we have a pending operator (e.g., df{char})
-      if ctx.state.pendingOperator.isSome:
-        let op = ctx.state.pendingOperator.get
+      if ctx.state.editState.pendingOperator.isSome:
+        let op = ctx.state.editState.pendingOperator.get
 
         # Execute motion to get end position
         # Suppress viewport updates to prevent visual scrolling during operator+motion
@@ -625,14 +634,14 @@ proc executeCommand*(
           motionCmd, op.startPos, updateViewport = false
         )
         if r.isErr:
-          ctx.state.pendingOperator = none(PendingOperator)
+          ctx.state.editState.pendingOperator = none(PendingOperator)
           return err(r.error)
 
         # Check if motion actually moved the cursor
         # If not (e.g., character not found), don't execute the operator
         if r.value.line == op.startPos.line and r.value.column == op.startPos.column:
           # Motion didn't move - clear operator and do nothing
-          ctx.state.pendingOperator = none(PendingOperator)
+          ctx.state.editState.pendingOperator = none(PendingOperator)
           return ok(())
 
         # Calculate the range affected by this operator+motion
@@ -642,13 +651,13 @@ proc executeCommand*(
         # Execute the operator on the range
         let opResult =
           executeOperatorOnRange(ctx, op.operatorType, range, op.operatorCount)
-        ctx.state.pendingOperator = none(PendingOperator)
+        ctx.state.editState.pendingOperator = none(PendingOperator)
         if opResult.isErr:
           return err(opResult.error)
 
         # Record this command for repeat (.) - only if successful and not a yank
         if op.operatorType != OpYank:
-          ctx.state.lastEditCommand = some(
+          ctx.state.editState.lastEditCommand = some(
             LastEditCommand(
               kind: lecOperatorMotion,
               operator: op.operatorType,
@@ -683,8 +692,8 @@ proc executeCommand*(
         ctx.keyBindingRegistry.sequenceState.hasNumericPrefix = false
 
       # Check if we have a pending operator (e.g., dt{char})
-      if ctx.state.pendingOperator.isSome:
-        let op = ctx.state.pendingOperator.get
+      if ctx.state.editState.pendingOperator.isSome:
+        let op = ctx.state.editState.pendingOperator.get
 
         # Execute motion to get end position
         # Suppress viewport updates to prevent visual scrolling during operator+motion
@@ -692,14 +701,14 @@ proc executeCommand*(
           motionCmd, op.startPos, updateViewport = false
         )
         if r.isErr:
-          ctx.state.pendingOperator = none(PendingOperator)
+          ctx.state.editState.pendingOperator = none(PendingOperator)
           return err(r.error)
 
         # Check if motion actually moved the cursor
         # If not (e.g., character not found), don't execute the operator
         if r.value.line == op.startPos.line and r.value.column == op.startPos.column:
           # Motion didn't move - clear operator and do nothing
-          ctx.state.pendingOperator = none(PendingOperator)
+          ctx.state.editState.pendingOperator = none(PendingOperator)
           return ok(())
 
         # Calculate the range affected by this operator+motion
@@ -709,13 +718,13 @@ proc executeCommand*(
         # Execute the operator on the range
         let opResult =
           executeOperatorOnRange(ctx, op.operatorType, range, op.operatorCount)
-        ctx.state.pendingOperator = none(PendingOperator)
+        ctx.state.editState.pendingOperator = none(PendingOperator)
         if opResult.isErr:
           return err(opResult.error)
 
         # Record this command for repeat (.) - only if successful and not a yank
         if op.operatorType != OpYank:
-          ctx.state.lastEditCommand = some(
+          ctx.state.editState.lastEditCommand = some(
             LastEditCommand(
               kind: lecOperatorMotion,
               operator: op.operatorType,
@@ -780,7 +789,7 @@ proc executeCommand*(
         return err(commitResult.error)
 
       # Record this command for repeat (.)
-      ctx.state.lastEditCommand = some(
+      ctx.state.editState.lastEditCommand = some(
         LastEditCommand(
           kind: lecReplaceChar,
           replaceChar: cmd.targetChar,
@@ -947,9 +956,9 @@ proc handleJumpBack(ctx: CommandContext, args: seq[string]): Result[(), string] 
   ctx.motionController.viewportManager.updateViewport(
     cursorPos,
     ctx.buffer.len,
-    ctx.state.showStatusLine,
+    ctx.state.display.showStatusLine,
     ctx.state.viewportReservedLines,
-    ctx.state.lineWrap,
+    ctx.state.display.lineWrap,
     ctx.buffer,
     0, # lineNumOffset - will be calculated by updateViewport if needed
   )
@@ -991,9 +1000,9 @@ proc handleJumpForward(ctx: CommandContext, args: seq[string]): Result[(), strin
   ctx.motionController.viewportManager.updateViewport(
     cursorPos,
     ctx.buffer.len,
-    ctx.state.showStatusLine,
+    ctx.state.display.showStatusLine,
     ctx.state.viewportReservedLines,
-    ctx.state.lineWrap,
+    ctx.state.display.lineWrap,
     ctx.buffer,
     0, # lineNumOffset - will be calculated by updateViewport if needed
   )
@@ -1281,7 +1290,7 @@ proc handlePasteAfter(ctx: CommandContext, count: int = 1): Result[(), string] =
       return err(txnResult.error)
 
   # Record this command for repeat (.)
-  ctx.state.lastEditCommand =
+  ctx.state.editState.lastEditCommand =
     some(LastEditCommand(kind: lecPaste, pasteCount: actualCount, pasteBefore: false))
 
   ctx.state.needsFullRedraw = true
@@ -1386,7 +1395,7 @@ proc handlePasteBefore(ctx: CommandContext, count: int = 1): Result[(), string] 
       return err(txnResult.error)
 
   # Record this command for repeat (.)
-  ctx.state.lastEditCommand =
+  ctx.state.editState.lastEditCommand =
     some(LastEditCommand(kind: lecPaste, pasteCount: actualCount, pasteBefore: true))
 
   ctx.state.needsFullRedraw = true
@@ -1406,7 +1415,7 @@ proc handleDeleteChar(ctx: CommandContext, count: int = 1): Result[(), string] =
     return err("Nothing to delete")
 
   # Auto-delete paren logic (only for single character deletion)
-  if ctx.state.autoDeleteParen and actualCount == 1:
+  if ctx.state.display.autoDeleteParen and actualCount == 1:
     let lineCharLen = lineContent.charLen
     let cursorCol = ctx.state.cursor.column
 
@@ -1501,7 +1510,7 @@ proc handleDeleteChar(ctx: CommandContext, count: int = 1): Result[(), string] =
     discard writeToClipboard(ctx.clipboardConfig.tool, deletedText)
 
   # Record this command for repeat (.)
-  ctx.state.lastEditCommand = some(
+  ctx.state.editState.lastEditCommand = some(
     LastEditCommand(
       kind: lecDeleteChar, deleteCount: charsToDelete, deleteForward: true
     )
@@ -1525,7 +1534,8 @@ proc handleDeleteCharBefore(ctx: CommandContext, count: int = 1): Result[(), str
   let lineContent = ctx.buffer.getLine(ctx.state.cursor.line)
 
   # Auto-delete paren logic (only for single character deletion)
-  if ctx.state.autoDeleteParen and actualCount == 1 and ctx.state.cursor.column >= 2:
+  if ctx.state.display.autoDeleteParen and actualCount == 1 and
+      ctx.state.cursor.column >= 2:
     let cursorCol = ctx.state.cursor.column
 
     try:
@@ -1629,7 +1639,7 @@ proc handleDeleteCharBefore(ctx: CommandContext, count: int = 1): Result[(), str
     discard writeToClipboard(ctx.clipboardConfig.tool, deletedText)
 
   # Record this command for repeat (.)
-  ctx.state.lastEditCommand = some(
+  ctx.state.editState.lastEditCommand = some(
     LastEditCommand(
       kind: lecDeleteChar, deleteCount: charsToDelete, deleteForward: false
     )
@@ -1695,7 +1705,7 @@ proc handleSubstituteChar(ctx: CommandContext, count: int = 1): Result[(), strin
   ctx.state.mode = EditorMode.Insert
 
   # Record substitute context so Insert mode exit can properly record the command
-  ctx.state.substituteContext =
+  ctx.state.editState.substituteContext =
     some(SubstituteContext(kind: skChar, deleteCount: charsToDelete))
 
   ctx.state.needsFullRedraw = true
@@ -1765,7 +1775,7 @@ proc handleSubstituteLine(ctx: CommandContext, count: int = 1): Result[(), strin
         return err("Failed to clear line: " & deleteResult.error)
 
     # Insert indent if auto-indent is enabled
-    if ctx.state.autoIndent and indent.len > 0:
+    if ctx.state.display.autoIndent and indent.len > 0:
       let insertResult =
         ctx.buffer.insertText(BufferPosition(line: startLine, column: 0), indent)
       if insertResult.isErr:
@@ -1781,7 +1791,7 @@ proc handleSubstituteLine(ctx: CommandContext, count: int = 1): Result[(), strin
 
   # Record substitute context so Insert mode exit can properly record the command
   let lineCount = endLine - startLine + 1
-  ctx.state.substituteContext =
+  ctx.state.editState.substituteContext =
     some(SubstituteContext(kind: skLine, deleteCount: lineCount))
 
   ctx.state.needsFullRedraw = true
@@ -1858,7 +1868,7 @@ proc handleToggleCase(ctx: CommandContext, count: int = 1): Result[(), string] =
     ctx.state.cursor.column = max(0, finalLineContent.charLen)
 
   # Record this command for repeat (.)
-  ctx.state.lastEditCommand =
+  ctx.state.editState.lastEditCommand =
     some(LastEditCommand(kind: lecToggleCase, toggleCaseCount: charsToToggle))
 
   ctx.state.needsFullRedraw = true
@@ -1903,7 +1913,7 @@ proc handleDeleteLine(ctx: CommandContext, count: int = 1): Result[(), string] =
     discard writeToClipboard(ctx.clipboardConfig.tool, deletedText)
 
   # Record this command for repeat (.)
-  ctx.state.lastEditCommand =
+  ctx.state.editState.lastEditCommand =
     some(LastEditCommand(kind: lecDeleteLine, deleteLineCount: actualCount))
 
   ctx.state.needsFullRedraw = true
@@ -1992,7 +2002,7 @@ proc handleJoinLines(ctx: CommandContext, count: int = 1): Result[(), string] =
     return err(joinResult.error)
 
   # Record this command for repeat (.)
-  ctx.state.lastEditCommand =
+  ctx.state.editState.lastEditCommand =
     some(LastEditCommand(kind: lecJoinLines, joinLinesCount: actualCount))
 
   ctx.state.needsFullRedraw = true
@@ -2039,7 +2049,7 @@ proc setPendingOperator(
 ) =
   ## Set pending operator and save viewport position for operator+motion commands
   ctx.state.savedViewportTopLine = ctx.motionController.viewportManager.viewport.topLine
-  ctx.state.pendingOperator = some(
+  ctx.state.editState.pendingOperator = some(
     PendingOperator(
       operatorType: operatorType, operatorCount: count, startPos: ctx.state.cursor
     )
@@ -2051,11 +2061,11 @@ proc handleOperatorYank(ctx: CommandContext, count: int = 1): Result[(), string]
   ## count: number of times to apply the operator (default: 1)
 
   # Check if same operator was pressed (yy for yank line)
-  if ctx.state.pendingOperator.isSome and
-      ctx.state.pendingOperator.get.operatorType == OpYank:
+  if ctx.state.editState.pendingOperator.isSome and
+      ctx.state.editState.pendingOperator.get.operatorType == OpYank:
     # Execute line yank
     let startLine = ctx.state.cursor.line
-    let operatorCount = ctx.state.pendingOperator.get.operatorCount
+    let operatorCount = ctx.state.editState.pendingOperator.get.operatorCount
     let endLine = min(startLine + operatorCount - 1, ctx.buffer.len - 1)
 
     # Extract lines for yank register
@@ -2071,7 +2081,7 @@ proc handleOperatorYank(ctx: CommandContext, count: int = 1): Result[(), string]
     ctx.state.yankIsLine = true
 
     # Clear operator state
-    ctx.state.pendingOperator = none(PendingOperator)
+    ctx.state.editState.pendingOperator = none(PendingOperator)
     let lineCount = endLine - startLine + 1
     ctx.state.statusMessage = "Yanked " & $lineCount & " line(s)"
     return ok(())
@@ -2085,11 +2095,11 @@ proc handleOperatorDelete(ctx: CommandContext, count: int = 1): Result[(), strin
   ## count: number of times to apply the operator (default: 1)
 
   # Check if same operator was pressed (dd for delete line)
-  if ctx.state.pendingOperator.isSome and
-      ctx.state.pendingOperator.get.operatorType == OpDelete:
+  if ctx.state.editState.pendingOperator.isSome and
+      ctx.state.editState.pendingOperator.get.operatorType == OpDelete:
     # Execute line deletion
     let startLine = ctx.state.cursor.line
-    let operatorCount = ctx.state.pendingOperator.get.operatorCount
+    let operatorCount = ctx.state.editState.pendingOperator.get.operatorCount
     let endLine = min(startLine + operatorCount - 1, ctx.buffer.len - 1)
     let lineCount = endLine - startLine + 1
 
@@ -2129,11 +2139,11 @@ proc handleOperatorDelete(ctx: CommandContext, count: int = 1): Result[(), strin
     ctx.state.cursor.column = 0
 
     # Record this command for repeat (.)
-    ctx.state.lastEditCommand =
+    ctx.state.editState.lastEditCommand =
       some(LastEditCommand(kind: lecDeleteLine, deleteLineCount: lineCount))
 
     # Clear operator state
-    ctx.state.pendingOperator = none(PendingOperator)
+    ctx.state.editState.pendingOperator = none(PendingOperator)
     ctx.state.statusMessage = "Deleted " & $lineCount & " line(s)"
     return ok(())
   else:
@@ -2146,11 +2156,11 @@ proc handleOperatorChange(ctx: CommandContext, count: int = 1): Result[(), strin
   ## count: number of times to apply the operator (default: 1)
 
   # Check if same operator was pressed (cc for change line)
-  if ctx.state.pendingOperator.isSome and
-      ctx.state.pendingOperator.get.operatorType == OpChange:
+  if ctx.state.editState.pendingOperator.isSome and
+      ctx.state.editState.pendingOperator.get.operatorType == OpChange:
     # Execute line change
     let startLine = ctx.state.cursor.line
-    let operatorCount = ctx.state.pendingOperator.get.operatorCount
+    let operatorCount = ctx.state.editState.pendingOperator.get.operatorCount
     let endLine = min(startLine + operatorCount - 1, ctx.buffer.len - 1)
     let lineCount = endLine - startLine + 1
 
@@ -2198,11 +2208,11 @@ proc handleOperatorChange(ctx: CommandContext, count: int = 1): Result[(), strin
     ctx.state.mode = EditorMode.Insert
 
     # Record substitute context so Insert mode exit can properly record the command
-    ctx.state.substituteContext =
+    ctx.state.editState.substituteContext =
       some(SubstituteContext(kind: skLine, deleteCount: lineCount))
 
     # Clear operator state
-    ctx.state.pendingOperator = none(PendingOperator)
+    ctx.state.editState.pendingOperator = none(PendingOperator)
     ctx.state.statusMessage = "-- INSERT --"
     return ok(())
   else:
@@ -2216,12 +2226,13 @@ proc handleTextObjectInner(ctx: CommandContext): Result[(), string] =
   ## Handle inner text object (iw, i", i(, etc.) or enter Insert mode
 
   # Check if we have a pending operator
-  if ctx.state.pendingOperator.isSome:
+  if ctx.state.editState.pendingOperator.isSome:
     # We have a pending operator - set text object modifier
-    let operatorCount = ctx.state.pendingOperator.get.operatorCount
-    ctx.state.pendingTextObject =
+    let operatorCount = ctx.state.editState.pendingOperator.get.operatorCount
+    ctx.state.editState.pendingTextObject =
       some(PendingTextObject(modifier: tomInner, operatorCount: operatorCount))
-    ctx.state.statusMessage = $ctx.state.pendingOperator.get.operatorType & "i"
+    ctx.state.statusMessage =
+      $ctx.state.editState.pendingOperator.get.operatorType & "i"
     return ok(())
   else:
     # No pending operator - enter Insert mode
@@ -2237,12 +2248,13 @@ proc handleTextObjectAround(ctx: CommandContext): Result[(), string] =
   ## Handle around text object (aw, a", a(, etc.) or enter Append mode
 
   # Check if we have a pending operator
-  if ctx.state.pendingOperator.isSome:
+  if ctx.state.editState.pendingOperator.isSome:
     # We have a pending operator - set text object modifier
-    let operatorCount = ctx.state.pendingOperator.get.operatorCount
-    ctx.state.pendingTextObject =
+    let operatorCount = ctx.state.editState.pendingOperator.get.operatorCount
+    ctx.state.editState.pendingTextObject =
       some(PendingTextObject(modifier: tomAround, operatorCount: operatorCount))
-    ctx.state.statusMessage = $ctx.state.pendingOperator.get.operatorType & "a"
+    ctx.state.statusMessage =
+      $ctx.state.editState.pendingOperator.get.operatorType & "a"
     return ok(())
   else:
     # No pending operator - enter Append mode (move cursor right, then Insert)
@@ -2276,7 +2288,7 @@ proc handleScrollCursorCenter(
   ## Cursor position doesn't change, only the viewport
 
   # Calculate reserved lines (status line + command line)
-  let reservedLines = if ctx.state.showStatusLine: 2 else: 1
+  let reservedLines = if ctx.state.display.showStatusLine: 2 else: 1
   let visibleHeight =
     ctx.motionController.viewportManager.viewport.height - reservedLines
 
@@ -2295,7 +2307,7 @@ proc handleScrollCursorBottom(
   ## Cursor position doesn't change, only the viewport
 
   # Calculate reserved lines (status line + command line)
-  let reservedLines = if ctx.state.showStatusLine: 2 else: 1
+  let reservedLines = if ctx.state.display.showStatusLine: 2 else: 1
   let visibleHeight =
     ctx.motionController.viewportManager.viewport.height - reservedLines
 
@@ -2306,6 +2318,101 @@ proc handleScrollCursorBottom(
   ctx.motionController.viewportManager.viewport.topLine = max(0, targetTopLine)
 
   return ok(())
+
+## Fold commands
+
+proc handleFoldOpen(ctx: CommandContext, args: seq[string]): Result[(), string] =
+  ## Open fold at cursor position (zo command)
+  if ctx.buffer.foldState.openFold(ctx.state.cursor.line):
+    ctx.state.needsFullRedraw = true
+    return ok(())
+  else:
+    ctx.state.statusMessage = "No fold found"
+    return ok(())
+
+proc handleFoldClose(ctx: CommandContext, args: seq[string]): Result[(), string] =
+  ## Close fold at cursor position (zc command)
+  if ctx.buffer.foldState.closeFold(ctx.state.cursor.line):
+    ctx.state.needsFullRedraw = true
+    # Ensure cursor is not on a hidden line after closing
+    if ctx.buffer.foldState.isLineInCollapsedFold(ctx.state.cursor.line):
+      ctx.state.cursor.line =
+        ctx.buffer.foldState.getPrevVisibleLine(ctx.state.cursor.line)
+      # Clamp column to new line's length
+      let lineLen = ctx.buffer.getLine(ctx.state.cursor.line).charLen
+      ctx.state.cursor.column = min(ctx.state.cursor.column, max(0, lineLen - 1))
+    return ok(())
+  else:
+    ctx.state.statusMessage = "No fold found"
+    return ok(())
+
+proc handleFoldToggle(ctx: CommandContext, args: seq[string]): Result[(), string] =
+  ## Toggle fold at cursor position (za command)
+  if ctx.buffer.foldState.toggleFold(ctx.state.cursor.line):
+    ctx.state.needsFullRedraw = true
+    # Ensure cursor is not on a hidden line after closing
+    if ctx.buffer.foldState.isLineInCollapsedFold(ctx.state.cursor.line):
+      ctx.state.cursor.line =
+        ctx.buffer.foldState.getPrevVisibleLine(ctx.state.cursor.line)
+      let lineLen = ctx.buffer.getLine(ctx.state.cursor.line).charLen
+      ctx.state.cursor.column = min(ctx.state.cursor.column, max(0, lineLen - 1))
+    return ok(())
+  else:
+    ctx.state.statusMessage = "No fold found"
+    return ok(())
+
+proc handleFoldOpenAll(ctx: CommandContext, args: seq[string]): Result[(), string] =
+  ## Open all folds (zR command)
+  ctx.buffer.foldState.openAllFolds()
+  ctx.state.needsFullRedraw = true
+  return ok(())
+
+proc handleFoldCloseAll(ctx: CommandContext, args: seq[string]): Result[(), string] =
+  ## Close all folds (zM command)
+  ctx.buffer.foldState.closeAllFolds()
+  ctx.state.needsFullRedraw = true
+  # Ensure cursor is not on a hidden line
+  if ctx.buffer.foldState.isLineInCollapsedFold(ctx.state.cursor.line):
+    ctx.state.cursor.line =
+      ctx.buffer.foldState.getPrevVisibleLine(ctx.state.cursor.line)
+    # Clamp column to new line's length
+    let lineLen = ctx.buffer.getLine(ctx.state.cursor.line).charLen
+    ctx.state.cursor.column = min(ctx.state.cursor.column, max(0, lineLen - 1))
+  return ok(())
+
+proc handleFoldCreate(ctx: CommandContext, args: seq[string]): Result[(), string] =
+  ## Create fold from visual selection (zf command)
+  ## This is called from visual mode with the selection range
+  if not ctx.state.visualSelection.active:
+    ctx.state.statusMessage = "No selection"
+    return ok(())
+
+  let
+    startLine =
+      min(ctx.state.visualSelection.start.line, ctx.state.visualSelection.current.line)
+    endLine =
+      max(ctx.state.visualSelection.start.line, ctx.state.visualSelection.current.line)
+
+  if ctx.buffer.foldState.addFold(startLine, endLine):
+    ctx.state.statusMessage = "Fold created"
+    ctx.state.needsFullRedraw = true
+    # Exit visual mode
+    ctx.state.visualSelection.active = false
+    ctx.state.mode = EditorMode.Normal
+  else:
+    ctx.state.statusMessage = "Cannot create overlapping fold"
+
+  return ok(())
+
+proc handleFoldDelete(ctx: CommandContext, args: seq[string]): Result[(), string] =
+  ## Delete fold at cursor position (zd command)
+  if ctx.buffer.foldState.deleteFold(ctx.state.cursor.line):
+    ctx.state.statusMessage = "Fold deleted"
+    ctx.state.needsFullRedraw = true
+    return ok(())
+  else:
+    ctx.state.statusMessage = "No fold found"
+    return ok(())
 
 proc findNumberAtOrAfterColumn(
     line: string, startCol: int
@@ -2548,6 +2655,70 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     "Scroll Cursor Bottom",
     "Scroll viewport to place cursor line at bottom (zb)",
     handleScrollCursorBottom,
+    0,
+    0,
+  )
+
+  # Fold commands
+  registry.register(
+    builtin(bcFoldOpen),
+    "Fold Open",
+    "Open fold at cursor position (zo)",
+    handleFoldOpen,
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcFoldClose),
+    "Fold Close",
+    "Close fold at cursor position (zc)",
+    handleFoldClose,
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcFoldToggle),
+    "Fold Toggle",
+    "Toggle fold at cursor position (za)",
+    handleFoldToggle,
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcFoldOpenAll),
+    "Fold Open All",
+    "Open all folds (zR)",
+    handleFoldOpenAll,
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcFoldCloseAll),
+    "Fold Close All",
+    "Close all folds (zM)",
+    handleFoldCloseAll,
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcFoldCreate),
+    "Fold Create",
+    "Create fold from visual selection (zf)",
+    handleFoldCreate,
+    0,
+    0,
+  )
+
+  registry.register(
+    builtin(bcFoldDelete),
+    "Fold Delete",
+    "Delete fold at cursor position (zd)",
+    handleFoldDelete,
     0,
     0,
   )
@@ -2845,7 +3016,7 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
       let count = parseCount(args, default = 1)
       indentLine(ctx.buffer, ctx.state, count)
       # Record this command for repeat (.)
-      ctx.state.lastEditCommand =
+      ctx.state.editState.lastEditCommand =
         some(LastEditCommand(kind: lecIndent, indentCount: count))
       return Result[(), string].ok (),
     0,
@@ -2860,7 +3031,7 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
       let count = parseCount(args, default = 1)
       dedentLine(ctx.buffer, ctx.state, count)
       # Record this command for repeat (.)
-      ctx.state.lastEditCommand =
+      ctx.state.editState.lastEditCommand =
         some(LastEditCommand(kind: lecDedent, dedentCount: count))
       return Result[(), string].ok (),
     0,
@@ -2976,16 +3147,16 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     "Repeat the last change command (. command)",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
       # Check if we have a last edit command
-      if ctx.state.lastEditCommand.isNone:
+      if ctx.state.editState.lastEditCommand.isNone:
         return err("No previous change to repeat")
 
-      let lastCmd = ctx.state.lastEditCommand.get
+      let lastCmd = ctx.state.editState.lastEditCommand.get
 
       case lastCmd.kind
       of lecOperatorMotion:
         # Repeat operator+motion command (e.g., dw, c2w, y$)
         # Create a pending operator
-        ctx.state.pendingOperator = some(
+        ctx.state.editState.pendingOperator = some(
           PendingOperator(
             operatorType: lastCmd.operator,
             operatorCount: lastCmd.operatorCount,
@@ -3003,7 +3174,7 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
           motionCmd, ctx.state.cursor, updateViewport = false
         )
         if r.isErr:
-          ctx.state.pendingOperator = none(PendingOperator)
+          ctx.state.editState.pendingOperator = none(PendingOperator)
           return err(r.error)
 
         # Calculate the range
@@ -3011,8 +3182,8 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
           calculateOperatorRange(ctx.buffer, ctx.state.cursor, r.value, lastCmd.motion)
 
         # Execute the operator on the range
-        let op = ctx.state.pendingOperator.get
-        ctx.state.pendingOperator = none(PendingOperator)
+        let op = ctx.state.editState.pendingOperator.get
+        ctx.state.editState.pendingOperator = none(PendingOperator)
         let execResult =
           executeOperatorOnRange(ctx, op.operatorType, range, op.operatorCount)
         if execResult.isErr:
@@ -3331,7 +3502,7 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
       let r = executeOperatorOnRange(ctx, OpDelete, range, 1)
       if r.isOk:
         # Record this command for repeat (.)
-        ctx.state.lastEditCommand = some(
+        ctx.state.editState.lastEditCommand = some(
           LastEditCommand(
             kind: lecOperatorMotion,
             operator: OpDelete,
@@ -3362,7 +3533,7 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
       let r = executeOperatorOnRange(ctx, OpChange, range, 1)
       if r.isOk:
         # Record this command for repeat (.)
-        ctx.state.lastEditCommand = some(
+        ctx.state.editState.lastEditCommand = some(
           LastEditCommand(
             kind: lecOperatorMotion,
             operator: OpChange,
@@ -3407,13 +3578,13 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
       desc,
       proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
         # Check if we have a pending text object modifier
-        if ctx.state.pendingTextObject.isNone:
+        if ctx.state.editState.pendingTextObject.isNone:
           # No text object modifier - ignore this key press
           # (In the future, we should fallback to the key's normal function)
           return ok(())
 
-        let textObj = ctx.state.pendingTextObject.get
-        ctx.state.pendingTextObject = none(PendingTextObject)
+        let textObj = ctx.state.editState.pendingTextObject.get
+        ctx.state.editState.pendingTextObject = none(PendingTextObject)
 
         # Calculate text object range
         let rangeResult =
@@ -3429,9 +3600,9 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
         )
 
         # Check if we have a pending operator
-        if ctx.state.pendingOperator.isSome:
-          let op = ctx.state.pendingOperator.get
-          ctx.state.pendingOperator = none(PendingOperator)
+        if ctx.state.editState.pendingOperator.isSome:
+          let op = ctx.state.editState.pendingOperator.get
+          ctx.state.editState.pendingOperator = none(PendingOperator)
 
           # Execute operator on text object
           return executeOperatorOnRange(ctx, op.operatorType, opRange, op.operatorCount)
@@ -3480,8 +3651,9 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
       ): Option[BufferPosition],
   ): Result[(), string] =
     # Apply smartcase logic
-    let shouldIgnoreCase =
-      shouldIgnoreCase(searchText, ctx.state.ignorecase, ctx.state.smartcase)
+    let shouldIgnoreCase = shouldIgnoreCase(
+      searchText, ctx.state.search.ignorecase, ctx.state.search.smartcase
+    )
 
     # Execute the search (findNext or findPrev)
     let searchResult =
@@ -3498,7 +3670,7 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
       ctx.motionController.viewportManager.updateViewport(
         cursorPos,
         lineCount,
-        ctx.state.showStatusLine,
+        ctx.state.display.showStatusLine,
         ctx.state.viewportReservedLines,
         false, # Force immediate scroll for search
         ctx.buffer,
@@ -3518,16 +3690,16 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     "Search Next",
     "Find next occurrence of last search",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      if ctx.state.lastSearchText.len == 0:
+      if ctx.state.search.lastText.len == 0:
         return err("No previous search")
 
       # Record jump before searching
       recordJump(ctx.state)
 
       # Re-enable highlight when using n/N
-      ctx.state.hlsearchTempDisabled = false
+      ctx.state.search.hlsearchTempDisabled = false
 
-      return executeSearch(ctx, ctx.state.lastSearchText, findNext),
+      return executeSearch(ctx, ctx.state.search.lastText, findNext),
     0,
     0,
   )
@@ -3537,16 +3709,16 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
     "Search Previous",
     "Find previous occurrence of last search",
     proc(ctx: CommandContext, args: seq[string]): Result[(), string] =
-      if ctx.state.lastSearchText.len == 0:
+      if ctx.state.search.lastText.len == 0:
         return err("No previous search")
 
       # Record jump before searching
       recordJump(ctx.state)
 
       # Re-enable highlight when using n/N
-      ctx.state.hlsearchTempDisabled = false
+      ctx.state.search.hlsearchTempDisabled = false
 
-      return executeSearch(ctx, ctx.state.lastSearchText, findPrev),
+      return executeSearch(ctx, ctx.state.search.lastText, findPrev),
     0,
     0,
   )
@@ -3690,8 +3862,8 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
       recordJump(ctx.state)
 
       # Update last search text
-      ctx.state.lastSearchText = word
-      ctx.state.hlsearchTempDisabled = false
+      ctx.state.search.lastText = word
+      ctx.state.search.hlsearchTempDisabled = false
 
       # Search for next occurrence
       return executeSearch(ctx, word, findNext),
@@ -3713,8 +3885,8 @@ proc registerBuiltinCommands*(registry: CommandRegistry) =
       recordJump(ctx.state)
 
       # Update last search text
-      ctx.state.lastSearchText = word
-      ctx.state.hlsearchTempDisabled = false
+      ctx.state.search.lastText = word
+      ctx.state.search.hlsearchTempDisabled = false
 
       # Search for previous occurrence
       return executeSearch(ctx, word, findPrev),

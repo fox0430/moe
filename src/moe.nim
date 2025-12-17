@@ -30,14 +30,14 @@ proc handleResize(e: Editor) =
   const resizeDebounceMs = initDuration(milliseconds = 50)
   let
     now = getMonoTime()
-    timeSinceLastResize = now - e.state.lastResizeTime
+    timeSinceLastResize = now - e.state.timing.lastResizeTime
 
   if timeSinceLastResize < resizeDebounceMs:
     # Too soon after last resize, skip processing
     return
 
   # Update last resize time
-  e.state.lastResizeTime = now
+  e.state.timing.lastResizeTime = now
 
   # Physically clear the terminal screen to remove artifacts
   clearScreen()
@@ -119,7 +119,7 @@ proc main() =
   editor.shutdown()
 
   # Save search history before shutdown
-  let r = saveSearchHistory(editor.state.searchHistory)
+  let r = saveSearchHistory(editor.state.search.history)
   if r.isErr:
     logError("moe", r.error)
 

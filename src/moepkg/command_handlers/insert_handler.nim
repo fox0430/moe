@@ -111,7 +111,7 @@ proc handleCharacterInsertion*(
       handler.signatureHelpManager.decrementParenDepth()
 
   # Check if auto-close paren is enabled and text is a single character opening paren
-  if state.autoCloseParen and text.len == 1 and isOpeningParen(text[0]):
+  if state.display.autoCloseParen and text.len == 1 and isOpeningParen(text[0]):
     let openChar = text[0]
     let closeChar = getClosingChar(openChar)
 
@@ -137,7 +137,7 @@ proc handleBackspace*(
 
   if pos.column > 0:
     # Check if auto-delete paren is enabled
-    if state.autoDeleteParen:
+    if state.display.autoDeleteParen:
       # Get the character before cursor (the one to be deleted)
       let currentLine = buffer.getLine(pos.line)
       let lineCharLen = currentLine.charLen
@@ -203,9 +203,9 @@ proc handleTab*(
   ## Inserts either a tab character or spaces based on expandTab setting
   let pos = state.cursor
 
-  if state.expandTab:
+  if state.display.expandTab:
     # Insert spaces instead of tab character
-    let tabWidth = max(1, state.tabStop) # Ensure at least 1 space
+    let tabWidth = max(1, state.display.tabStop) # Ensure at least 1 space
     let spaces = " ".repeat(tabWidth)
 
     let insertResult = buffer.insertText(pos, spaces)
@@ -327,8 +327,8 @@ proc handleInsertModeKey*(
   ## Main entry point for handling Insert mode key presses
 
   # Record key for macro if recording is active
-  if state.isRecordingMacro:
-    state.recordedKeys.add(keyComboToString(keyCombo))
+  if state.macroState.isRecording:
+    state.macroState.recordedKeys.add(keyComboToString(keyCombo))
 
   let completionActive = handler.completionManager.isActive()
 

@@ -17,7 +17,7 @@
 #                                                                              #
 #[############################################################################]#
 
-import std/[strutils, strformat, options, tables, unicode, monotimes, times, os]
+import std/[strutils, strformat, options, tables, unicode, monotimes, times, os, json]
 
 import pkg/[celina, results]
 
@@ -105,8 +105,8 @@ proc syncActiveWindow(e: Editor) =
 
 proc calculateReservedLines(e: Editor, isBottomWindow: bool = true): int =
   ## Calculate number of reserved lines based on status line configuration
-  if e.state.showStatusLine:
-    if e.state.multiStatusLine:
+  if e.state.display.showStatusLine:
+    if e.state.display.multiStatusLine:
       if isBottomWindow: StatusAndCommandReserve else: StatusLineReserve
     elif isBottomWindow:
       StatusAndCommandReserve
@@ -147,7 +147,7 @@ proc calculateWindowCursor(
   if cursor.line < viewport.topLine:
     return CursorPosition(x: 0, y: 0)
 
-  if e.state.lineWrap:
+  if e.state.display.lineWrap:
     # === WRAP MODE: Calculate cursor position considering line wrapping ===
     #
     # Strategy:
@@ -197,7 +197,7 @@ proc calculateWindowCursor(
       # Example: "Hello\tWorld" with cursor at column 7
       # displayWidthUpToCursor accounts for tab width
       displayWidthUpToCursor =
-        displayWidthUpToWithTabs(cursorLineText, cursor.column, e.state.tabStop)
+        displayWidthUpToWithTabs(cursorLineText, cursor.column, e.state.display.tabStop)
 
       # Determine which wrapped line segment the cursor is on
       # Example: cursor at display width 95 with maxWidth=40
@@ -236,10 +236,12 @@ proc calculateWindowCursor(
         cursorLineText = buffer.getLine(cursor.line)
 
         # Calculate display widths (accounting for tabs, wide characters)
-        displayWidthUpToCursor =
-          displayWidthUpToWithTabs(cursorLineText, cursor.column, e.state.tabStop)
-        displayWidthUpToLeftCol =
-          displayWidthUpToWithTabs(cursorLineText, viewport.leftColumn, e.state.tabStop)
+        displayWidthUpToCursor = displayWidthUpToWithTabs(
+          cursorLineText, cursor.column, e.state.display.tabStop
+        )
+        displayWidthUpToLeftCol = displayWidthUpToWithTabs(
+          cursorLineText, viewport.leftColumn, e.state.display.tabStop
+        )
 
         # Y position: simple offset from top of viewport
         screenY = viewport.y + (cursor.line - viewport.topLine)
@@ -257,7 +259,7 @@ proc calculateWindowCursor(
 
 proc calculateSidebarWidth(e: Editor): int =
   ## Calculate the width occupied by the sidebar (0 if disabled)
-  if e.state.showSidebar: DefaultSidebarWidth else: 0
+  if e.state.display.showSidebar: DefaultSidebarWidth else: 0
 
 proc setActiveWindowScreenCursor(e: Editor, window: EditorWindow) =
   ## Calculate and set screen cursor position for the active window
@@ -274,7 +276,8 @@ proc setActiveWindowScreenCursor(e: Editor, window: EditorWindow) =
     isBottomWindow = (windowBottomY == maxBottomY)
     sidebarWidth = e.calculateSidebarWidth()
     lineNumOffset =
-      calculateLineNumOffset(window.buffer, e.state.showLineNumbers) + sidebarWidth
+      calculateLineNumOffset(window.buffer, e.state.display.showLineNumbers) +
+      sidebarWidth
     reservedLines = e.calculateReservedLines(isBottomWindow)
 
   e.state.screenCursor = e.calculateWindowCursor(
@@ -411,7 +414,7 @@ proc closeWindow*(e: Editor): bool =
   ## Close the active window
   ## Returns true if editor should quit (last window closed)
 
-  let shouldQuit = e.windowManager.closeWindow(e.state.multiStatusLine)
+  let shouldQuit = e.windowManager.closeWindow(e.state.display.multiStatusLine)
 
   if shouldQuit:
     return true
@@ -477,47 +480,47 @@ proc setEncodingVisible*(e: Editor, visible: bool) =
 
 proc toggleLineWrap*(e: Editor) =
   ## Toggle line wrapping
-  e.state.lineWrap = not e.state.lineWrap
+  e.state.display.lineWrap = not e.state.display.lineWrap
   e.state.needsFullRedraw = true
 
 proc setLineWrap*(e: Editor, enabled: bool) =
   ## Set line wrapping
-  e.state.lineWrap = enabled
+  e.state.display.lineWrap = enabled
   e.state.needsFullRedraw = true
 
 proc toggleMultiStatusLine*(e: Editor) =
   ## Toggle between single status line (at bottom) and multi status lines (per window)
-  e.state.multiStatusLine = not e.state.multiStatusLine
+  e.state.display.multiStatusLine = not e.state.display.multiStatusLine
   e.state.needsFullRedraw = true
 
 proc setMultiStatusLine*(e: Editor, enabled: bool) =
   ## Set multi status line mode
-  e.state.multiStatusLine = enabled
+  e.state.display.multiStatusLine = enabled
   e.state.needsFullRedraw = true
 
 proc toggleSidebar*(e: Editor) =
   ## Toggle the visibility of the sidebar
-  e.state.showSidebar = not e.state.showSidebar
+  e.state.display.showSidebar = not e.state.display.showSidebar
   e.state.needsFullRedraw = true
 
 proc setSidebarVisible*(e: Editor, visible: bool) =
   ## Set the visibility of the sidebar
-  e.state.showSidebar = visible
+  e.state.display.showSidebar = visible
   e.state.needsFullRedraw = true
 
 proc toggleGitDiff*(e: Editor) =
   ## Toggle git diff indicators in sidebar
-  e.state.showGitDiff = not e.state.showGitDiff
+  e.state.display.showGitDiff = not e.state.display.showGitDiff
 
   # Update git diff information when enabled
-  if e.state.showGitDiff:
+  if e.state.display.showGitDiff:
     discard updateBufferWithGitDiff(e.textBuffer)
 
   e.state.needsFullRedraw = true
 
 proc setGitDiffVisible*(e: Editor, visible: bool) =
   ## Set git diff indicators visibility in sidebar
-  e.state.showGitDiff = visible
+  e.state.display.showGitDiff = visible
 
   # Update git diff information when enabled
   if visible:
@@ -527,12 +530,12 @@ proc setGitDiffVisible*(e: Editor, visible: bool) =
 
 proc toggleSyntaxChecker*(e: Editor) =
   ## Toggle syntax checker results in sidebar
-  e.state.showSyntaxChecker = not e.state.showSyntaxChecker
+  e.state.display.showSyntaxChecker = not e.state.display.showSyntaxChecker
   e.state.needsFullRedraw = true
 
 proc setSyntaxCheckerVisible*(e: Editor, visible: bool) =
   ## Set syntax checker results visibility in sidebar
-  e.state.showSyntaxChecker = visible
+  e.state.display.showSyntaxChecker = visible
   e.state.needsFullRedraw = true
 
 proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), string] =
@@ -568,7 +571,7 @@ proc hsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
     e.saveActiveWindowState()
 
   let bufferResult = e.windowManager.hsplit(
-    e.textBuffer, e.viewport, e.state.cursor, e.state.multiStatusLine, filename
+    e.textBuffer, e.viewport, e.state.cursor, e.state.display.multiStatusLine, filename
   )
   if bufferResult.isErr:
     return err(bufferResult.error)
@@ -595,7 +598,7 @@ proc hsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
     e.saveActiveWindowState()
 
   let bufferResult = e.windowManager.hsplitWithBuffer(
-    e.textBuffer, e.viewport, e.state.cursor, e.state.multiStatusLine, buffer
+    e.textBuffer, e.viewport, e.state.cursor, e.state.display.multiStatusLine, buffer
   )
   if bufferResult.isErr:
     return err(bufferResult.error)
@@ -725,52 +728,79 @@ proc newEditor*(): Editor =
       screenCursor: CursorPosition(x: 0, y: 0),
       mode: EditorMode.Normal,
       previousMode: EditorMode.Normal,
-      showStatusLine: editorConfig.standard.statusLine,
-      multiStatusLine: editorConfig.statusLine.multipleStatusLine,
-      showLineCount: true,
-      showLinePercentage: true,
-      showEncoding: true,
+      # Display settings (grouped in DisplaySettings)
+      display: DisplaySettings(
+        showStatusLine: editorConfig.standard.statusLine,
+        multiStatusLine: editorConfig.statusLine.multipleStatusLine,
+        showLineCount: true,
+        showLinePercentage: true,
+        showEncoding: true,
+        showLineNumbers: editorConfig.standard.number,
+        showCurrentLineNumber: editorConfig.standard.currentNumber,
+        showCursorLine: editorConfig.standard.cursorLine,
+        showSyntax: editorConfig.standard.syntax,
+        showIndentationLines: editorConfig.standard.indentationLines,
+        showSidebar: editorConfig.standard.sidebar,
+        showGitDiff: editorConfig.git.showChangedLine,
+        showSyntaxChecker: editorConfig.syntaxChecker.enable,
+        showCodeLens: true,
+        showDocumentHighlight: true,
+        lineWrap: true,
+        tabStop: editorConfig.standard.tabStop,
+        expandTab: editorConfig.standard.expandTab,
+        autoIndent: editorConfig.standard.autoIndent,
+        autoCloseParen: editorConfig.standard.autoCloseParen,
+        autoDeleteParen: editorConfig.standard.autoDeleteParen,
+      ),
       needsFullRedraw: true, # Initial render needs full draw
       viewportReservedLines: 2, # Default for single window mode with status line
-      lineWrap: true, # Default to wrapping
-      lastResizeTime: getMonoTime(), # Initialize to current time
-      # Sidebar defaults
-      showSidebar: editorConfig.standard.sidebar,
-      showGitDiff: editorConfig.git.showChangedLine,
-      showSyntaxChecker: editorConfig.syntaxChecker.enable,
-      lastGitDiffUpdate: getMonoTime(), # Initialize to current time
-      lastGitDiffChangeSeq: 0, # Initialize to 0 (no changes yet)
-      gitDiffUpdateInterval: editorConfig.git.updateInterval,
-      # Auto save
-      lastAutoSave: getMonoTime(), # Initialize to current time
-      # Auto backup
-      lastAutoBackup: getMonoTime(), # Initialize to current time
-      lastInputTime: getMonoTime(), # Initialize to current time
-      # Editor behavior
-      tabStop: editorConfig.standard.tabStop,
-      expandTab: editorConfig.standard.expandTab,
-      autoIndent: editorConfig.standard.autoIndent,
-      autoCloseParen: editorConfig.standard.autoCloseParen,
-      autoDeleteParen: editorConfig.standard.autoDeleteParen,
-      showLineNumbers: editorConfig.standard.number,
-      showCurrentLineNumber: editorConfig.standard.currentNumber,
-      showCursorLine: editorConfig.standard.cursorLine,
-      showSyntax: editorConfig.standard.syntax,
-      showIndentationLines: editorConfig.standard.indentationLines,
-      # Search settings
-      ignorecase: true,
-      smartcase: true,
-      incsearch: true, # Enable incremental search by default
-      hlsearch: true, # Enable search highlighting by default
-      hlsearchTempDisabled: false, # Highlight is not disabled initially
+      # Timing state (grouped in TimingState)
+      timing: TimingState(
+        lastResizeTime: getMonoTime(),
+        lastGitDiffUpdate: getMonoTime(),
+        lastGitDiffChangeSeq: 0,
+        gitDiffUpdateInterval: editorConfig.git.updateInterval,
+        lastAutoSave: getMonoTime(),
+        lastAutoBackup: getMonoTime(),
+        lastInputTime: getMonoTime(),
+      ),
+      # Search state (grouped in SearchState)
+      search: SearchState(
+        text: "",
+        lastText: "",
+        direction: Forward,
+        history: loadSearchHistory(),
+        historyIndex: -1,
+        startPos: BufferPosition(line: 0, column: 0),
+        ignorecase: true,
+        smartcase: true,
+        incsearch: true,
+        hlsearch: true,
+        hlsearchTempDisabled: false,
+      ),
+      # Macro state (grouped in MacroState)
+      macroState: MacroState(
+        isRecording: false,
+        register: '\0',
+        recordedKeys: @[],
+        registers: initTable[char, seq[string]](),
+        lastRegister: none(char),
+        waitingForRegister: false,
+        commandType: "",
+        pendingCount: 1,
+        playbackDepth: 0,
+      ),
       lastKeyWasEscape: false, # Track double-Escape for clearing highlight
-      searchStartPos: BufferPosition(line: 0, column: 0),
-        # Will be set when entering search mode
-      searchDirection: Forward, # Default to forward search
-      searchHistory: loadSearchHistory(), # Load search history from disk
-      searchHistoryIndex: -1, # Not navigating history initially
-      pendingOperator: none(PendingOperator), # No pending operator initially
-      pendingTextObject: none(PendingTextObject), # No pending text object initially
+      # Edit operation state (grouped in EditState)
+      editState: EditState(
+        lastMotion: none(Motion),
+        lastEditCommand: none(LastEditCommand),
+        pendingOperator: none(PendingOperator),
+        pendingTextObject: none(PendingTextObject),
+        substituteContext: none(SubstituteContext),
+        replaceHistory: @[],
+        insertModeStartPos: none(BufferPosition),
+      ),
       savedViewportTopLine: 0, # Saved viewport position for operators
       # Yank register (internal clipboard) - DEPRECATED
       yankRegister: "", # Empty initially
@@ -783,6 +813,17 @@ proc newEditor*(): Editor =
       jumpListIndex: -1, # Not navigating jump list initially
       # Command mode completion
       commandCompletionManager: newCommandCompletionManager(),
+      # LSP cache state (grouped in LspCacheState)
+      lspCache: LspCacheState(
+        codeLensCache: CodeLensCache(isValid: false),
+        codeLensPicker: CodeLensPicker(isActive: false),
+        documentHighlightCache: DocumentHighlightCache(isValid: false),
+        locations: none(LspLocationsResult),
+        lastCodeLensUpdate: getMonoTime(),
+        codeLensUpdateInterval: 1000, # 1 second debounce
+        lastDocumentHighlightUpdate: getMonoTime(),
+        documentHighlightUpdateInterval: 200, # 200ms debounce
+      ),
     ),
     viewport: ViewPort(topLine: 0, leftColumn: 0, width: 80, height: 20, x: 0, y: 0),
     commandRegistry: cmdRegistry,
@@ -820,33 +861,33 @@ proc refreshGitDiff*(e: Editor, useBuffer: bool = true) =
   ## Parameters:
   ## - useBuffer: If true, compare buffer contents with HEAD (real-time)
   ##              If false, compare disk file with working tree (saved only)
-  if e.state.showGitDiff:
+  if e.state.display.showGitDiff:
     let activeBuffer = e.activeBuffer()
     let diffResult = updateBufferWithGitDiff(activeBuffer, useBuffer)
 
     if diffResult.isOk:
-      e.state.lastGitDiffUpdate = getMonoTime()
-      e.state.lastGitDiffChangeSeq = activeBuffer.changeSeq
+      e.state.timing.lastGitDiffUpdate = getMonoTime()
+      e.state.timing.lastGitDiffChangeSeq = activeBuffer.changeSeq
       e.state.needsFullRedraw = true
 
 proc maybeUpdateGitDiff*(e: Editor) =
   ## Update git diff if buffer was modified and enough time has passed (debouncing)
   ## This should be called after buffer modifications to provide real-time updates
 
-  if not e.state.showGitDiff:
+  if not e.state.display.showGitDiff:
     return
 
   let activeBuffer = e.activeBuffer()
 
   # Only update if buffer has changed since last update
-  if activeBuffer.changeSeq == e.state.lastGitDiffChangeSeq:
+  if activeBuffer.changeSeq == e.state.timing.lastGitDiffChangeSeq:
     return
 
   let now = getMonoTime()
-  let elapsed = now - e.state.lastGitDiffUpdate
+  let elapsed = now - e.state.timing.lastGitDiffUpdate
 
   # Compare with threshold duration (500ms)
-  let threshold = initDuration(milliseconds = e.state.gitDiffUpdateInterval)
+  let threshold = initDuration(milliseconds = e.state.timing.gitDiffUpdateInterval)
 
   if elapsed >= threshold:
     e.refreshGitDiff(useBuffer = true)
@@ -870,7 +911,7 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
 
   # Update git diff information if sidebar and git diff are enabled
   # Use useBuffer=false to compare disk file with working tree (not buffer with HEAD)
-  if e.state.showGitDiff:
+  if e.state.display.showGitDiff:
     let diffResult = updateBufferWithGitDiff(e.textBuffer, useBuffer = false)
     if diffResult.isErr:
       # Log error but don't fail the file load
@@ -878,7 +919,7 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
       logDebug("editor", "Git diff not available for " & path & ": " & diffResult.error)
     else:
       # Update lastGitDiffChangeSeq to prevent immediate re-check
-      e.state.lastGitDiffChangeSeq = e.textBuffer.changeSeq
+      e.state.timing.lastGitDiffChangeSeq = e.textBuffer.changeSeq
 
   # Notify LSP that a document was opened
   if e.lsp.enabled:
@@ -941,7 +982,7 @@ proc autoSave*(e: Editor) =
     return
 
   let now = getMonoTime()
-  let elapsed = now - e.state.lastAutoSave
+  let elapsed = now - e.state.timing.lastAutoSave
 
   # Convert interval from minutes to Duration
   let intervalMinutes = e.config.autoSave.interval
@@ -977,7 +1018,7 @@ proc autoSave*(e: Editor) =
           savedPaths.add(savePath)
 
           # Refresh git diff after saving
-          if e.state.showGitDiff:
+          if e.state.display.showGitDiff:
             discard updateBufferWithGitDiff(buffer, useBuffer = false)
 
           # Notify LSP that a document was saved
@@ -1007,7 +1048,7 @@ proc autoSave*(e: Editor) =
         logError("editor", "Auto save failed for " & savePath & ": " & saveResult.error)
 
   # Update last auto save time
-  e.state.lastAutoSave = now
+  e.state.timing.lastAutoSave = now
 
   # Show notification if any files were saved
   if savedCount > 0:
@@ -1027,7 +1068,7 @@ proc autoSave*(e: Editor) =
 
 proc updateInputTime*(e: Editor) =
   ## Update the last input time (called when user provides input)
-  e.state.lastInputTime = getMonoTime()
+  e.state.timing.lastInputTime = getMonoTime()
 
 proc autoBackup*(e: Editor) =
   ## Automatically backup modified buffers if auto backup is enabled
@@ -1044,14 +1085,14 @@ proc autoBackup*(e: Editor) =
   let now = getMonoTime()
 
   # Check idle time (user must be idle for idleTime seconds)
-  let idleElapsed = now - e.state.lastInputTime
+  let idleElapsed = now - e.state.timing.lastInputTime
   let idleThreshold = initDuration(seconds = e.config.autoBackup.idleTime)
 
   if idleElapsed < idleThreshold:
     return
 
   # Check backup interval (must have passed interval minutes since last backup)
-  let backupElapsed = now - e.state.lastAutoBackup
+  let backupElapsed = now - e.state.timing.lastAutoBackup
   let backupThreshold = initDuration(minutes = e.config.autoBackup.interval)
 
   if backupElapsed < backupThreshold:
@@ -1097,7 +1138,7 @@ proc autoBackup*(e: Editor) =
   # Show notification and update last backup time only if any files were backed up
   if backupCount > 0:
     # Update last backup time only when backup actually occurred
-    e.state.lastAutoBackup = now
+    e.state.timing.lastAutoBackup = now
 
     # Log notification
     if e.config.notification.autoBackupLogNotify:
@@ -1194,11 +1235,11 @@ proc shouldShowIndentationGuide(
   ## Uses cached indentInfo to avoid O(n²) performance
   ## displayX: the display column position (accounting for tabs)
   ## charIdx: the character index in the line
-  if not e.state.showIndentationLines:
+  if not e.state.display.showIndentationLines:
     return false
 
   # Only show guides at indent levels (multiples of tabStop)
-  if displayX mod e.state.tabStop != 0:
+  if displayX mod e.state.display.tabStop != 0:
     return false
 
   # Don't show on column 0
@@ -1212,6 +1253,33 @@ proc shouldShowIndentationGuide(
   # Use cached indentation info: O(1) instead of O(n)
   # Show guide only if we're within leading whitespace and line has content
   return indentInfo.hasContent and charIdx <= indentInfo.leadingWhitespaceEnd
+
+proc isPositionInDocumentHighlight(e: Editor, pos: BufferPosition): Option[int] =
+  ## Check if position is within any document highlight range
+  ## Returns the highlight kind (1=Text, 2=Read, 3=Write) if found, none otherwise
+  ## Uses O(1) line lookup + O(m) column search where m is highlights on that line
+  if not e.state.display.showDocumentHighlight or
+      not e.state.lspCache.documentHighlightCache.isValid:
+    return none(int)
+
+  # O(1) lookup by line
+  let items =
+    e.state.lspCache.documentHighlightCache.itemsByLine.getOrDefault(pos.line, @[])
+  for item in items:
+    if pos.column >= item.startColumn and pos.column < item.endColumn:
+      return some(item.kind)
+
+  return none(int)
+
+proc getDocumentHighlightStyle(kind: int): Style =
+  ## Get the style for a document highlight based on its kind
+  case kind
+  of 2: # Read
+    documentHighlightReadStyle
+  of 3: # Write
+    documentHighlightWriteStyle
+  else: # Text or unknown
+    documentHighlightTextStyle
 
 proc getSelectionStyle(
     e: Editor,
@@ -1230,7 +1298,7 @@ proc getSelectionStyle(
   elif isCursorPos:
     # Cursor position: always use gray foreground color
     cursorCharStyle
-  elif e.state.hlsearch and not e.state.hlsearchTempDisabled:
+  elif e.state.search.hlsearch and not e.state.search.hlsearchTempDisabled:
     # Determine which search pattern to use:
     # - In Search mode with text: use current searchText (incremental highlight)
     # - In Search mode without text: no highlight (user is starting a new search)
@@ -1238,67 +1306,86 @@ proc getSelectionStyle(
     let searchPattern =
       if e.state.mode == EditorMode.Search:
         # In Search mode: only highlight if user has typed something
-        if e.state.searchText.len > 0:
-          e.state.searchText
+        if e.state.search.text.len > 0:
+          e.state.search.text
         else:
           "" # No highlight when starting a new search
       else:
         # Not in Search mode: use last search pattern
-        e.state.lastSearchText
+        e.state.search.lastText
 
     # Only apply highlight if we have a valid search pattern
     if searchPattern.len > 0:
       # Apply smartcase logic
-      let shouldIgnoreCase =
-        shouldIgnoreCase(searchPattern, e.state.ignorecase, e.state.smartcase)
+      let shouldIgnoreCase = shouldIgnoreCase(
+        searchPattern, e.state.search.ignorecase, e.state.search.smartcase
+      )
 
       if buffer.isPositionInSearchMatch(pos, searchPattern, shouldIgnoreCase):
         searchHighlightStyle
-      elif e.state.showSyntax and not buffer.highlight.isNil:
+      elif e.state.display.showSyntax and not buffer.highlight.isNil:
         # Apply syntax highlighting from buffer
         # Update highlight if needed (after text edits)
         buffer.updateHighlight()
         let colorPair = buffer.highlight.getColorPair(pos.line, pos.column)
         var style = colorIndexToStyle(colorPair)
-        # Apply cursor line highlighting if enabled and on cursor line
-        if e.state.showCursorLine and pos.line == cursorLine:
+        # Apply document highlight or cursor line highlighting
+        let highlightKind = e.isPositionInDocumentHighlight(pos)
+        if highlightKind.isSome:
+          style.bg = getDocumentHighlightStyle(highlightKind.get).bg
+        elif e.state.display.showCursorLine and pos.line == cursorLine:
           style.bg = cursorLineHighlightStyle.bg
         style
       else:
-        # Apply cursor line highlighting if enabled and on cursor line
-        if e.state.showCursorLine and pos.line == cursorLine:
+        # Check document highlight first
+        let highlightKind = e.isPositionInDocumentHighlight(pos)
+        if highlightKind.isSome:
+          getDocumentHighlightStyle(highlightKind.get)
+        elif e.state.display.showCursorLine and pos.line == cursorLine:
           cursorLineHighlightStyle
         else:
           normalStyle
-    elif e.state.showSyntax and not buffer.highlight.isNil:
+    elif e.state.display.showSyntax and not buffer.highlight.isNil:
       # Apply syntax highlighting from buffer
       # Update highlight if needed (after text edits)
       buffer.updateHighlight()
       let colorPair = buffer.highlight.getColorPair(pos.line, pos.column)
       var style = colorIndexToStyle(colorPair)
-      # Apply cursor line highlighting if enabled and on cursor line
-      if e.state.showCursorLine and pos.line == cursorLine:
+      # Apply document highlight or cursor line highlighting
+      let highlightKind = e.isPositionInDocumentHighlight(pos)
+      if highlightKind.isSome:
+        style.bg = getDocumentHighlightStyle(highlightKind.get).bg
+      elif e.state.display.showCursorLine and pos.line == cursorLine:
         style.bg = cursorLineHighlightStyle.bg
       style
     else:
-      # Apply cursor line highlighting if enabled and on cursor line
-      if e.state.showCursorLine and pos.line == cursorLine:
+      # Check document highlight first
+      let highlightKind = e.isPositionInDocumentHighlight(pos)
+      if highlightKind.isSome:
+        getDocumentHighlightStyle(highlightKind.get)
+      elif e.state.display.showCursorLine and pos.line == cursorLine:
         cursorLineHighlightStyle
       else:
         normalStyle
-  elif e.state.showSyntax and not buffer.highlight.isNil:
+  elif e.state.display.showSyntax and not buffer.highlight.isNil:
     # Apply syntax highlighting from buffer
     # Update highlight if needed (after text edits)
     buffer.updateHighlight()
     let colorPair = buffer.highlight.getColorPair(pos.line, pos.column)
     var style = colorIndexToStyle(colorPair)
-    # Apply cursor line highlighting if enabled and on cursor line
-    if e.state.showCursorLine and pos.line == cursorLine:
+    # Apply document highlight or cursor line highlighting
+    let highlightKind = e.isPositionInDocumentHighlight(pos)
+    if highlightKind.isSome:
+      style.bg = getDocumentHighlightStyle(highlightKind.get).bg
+    elif e.state.display.showCursorLine and pos.line == cursorLine:
       style.bg = cursorLineHighlightStyle.bg
     style
   else:
-    # Apply cursor line highlighting if enabled and on cursor line
-    if e.state.showCursorLine and pos.line == cursorLine:
+    # Check document highlight first
+    let highlightKind = e.isPositionInDocumentHighlight(pos)
+    if highlightKind.isSome:
+      getDocumentHighlightStyle(highlightKind.get)
+    elif e.state.display.showCursorLine and pos.line == cursorLine:
       cursorLineHighlightStyle
     else:
       normalStyle
@@ -1356,7 +1443,8 @@ proc renderLineSegmentWithSelection(
     # Handle tab character specially
     if rune == TAB_CHAR:
       # Calculate how many spaces until next tab stop
-      let spacesToNextTab = e.state.tabStop - (displayX mod e.state.tabStop)
+      let spacesToNextTab =
+        e.state.display.tabStop - (displayX mod e.state.display.tabStop)
       # Determine style for tab (trailing space highlighting takes priority)
       let tabStyle =
         if e.config.highlight.trailingSpaces and col >= trailingSpaceStart:
@@ -1421,7 +1509,7 @@ proc renderLineSegmentWithSelection(
       charIdx += 1
 
   # Fill the rest of the line with cursor line highlight if on cursor line
-  if e.state.showCursorLine and lineIndex == ctx.cursorLine:
+  if e.state.display.showCursorLine and lineIndex == ctx.cursorLine:
     while screenX + displayX < buffer.area.width:
       buffer.setString(screenX + displayX, screenY, " ", cursorLineHighlightStyle)
       displayX += 1
@@ -1430,11 +1518,207 @@ proc fillCursorLineBackground(
     e: Editor, buffer: var Buffer, screenX, screenY: int, lineIndex, cursorLine: int
 ) =
   ## Fill the rest of the line with cursor line background if on cursor line
-  if e.state.showCursorLine and lineIndex == cursorLine:
+  if e.state.display.showCursorLine and lineIndex == cursorLine:
     var displayX = 0
     while screenX + displayX < buffer.area.width:
       buffer.setString(screenX + displayX, screenY, " ", cursorLineHighlightStyle)
       displayX += 1
+
+proc renderCodeLensInline(
+    e: Editor,
+    buffer: var Buffer,
+    screenX, screenY: int,
+    lineIndex: int,
+    lineDisplayWidth: int,
+) =
+  ## Render CodeLens text inline at the end of a line
+  ## Shows CodeLens items after the line content with dimmed style
+  if not e.state.display.showCodeLens or not e.state.lspCache.codeLensCache.isValid:
+    return
+
+  # Get CodeLens items for this line from cache (O(1) lookup)
+  let items = e.state.lspCache.codeLensCache.itemsByLine.getOrDefault(lineIndex, @[])
+  if items.len == 0:
+    return
+
+  var texts: seq[string] = @[]
+  for item in items:
+    if item.title.len > 0:
+      texts.add(item.title)
+
+  if texts.len == 0:
+    return
+
+  let codeLensText = texts.join(" | ")
+
+  # Calculate position: after line content with some padding
+  let padding = 2
+  var displayX = lineDisplayWidth + padding
+
+  # Add separator before CodeLens text
+  let separator = "  "
+  let displayText = separator & codeLensText
+
+  # Render the CodeLens text
+  for ch in displayText:
+    if screenX + displayX >= buffer.area.width:
+      break
+    buffer.setString(screenX + displayX, screenY, $ch, codeLensStyle)
+    displayX += 1
+
+proc renderCodeLensPicker*(e: Editor, buffer: var Buffer) =
+  ## Render CodeLens picker popup when multiple items are available
+  if not e.state.lspCache.codeLensPicker.isActive or
+      e.state.lspCache.codeLensPicker.items.len == 0:
+    return
+
+  let
+    items = e.state.lspCache.codeLensPicker.items
+    selectedIdx = e.state.lspCache.codeLensPicker.selectedIndex
+    scrollOffset = e.state.lspCache.codeLensPicker.scrollOffset
+    maxVisibleItems = e.state.lspCache.codeLensPicker.maxVisibleItems
+
+  # Calculate how many items to actually show
+  let visibleCount = min(maxVisibleItems, items.len - scrollOffset)
+
+  # Check if scroll indicators are needed
+  let hasMoreAbove = scrollOffset > 0
+  let hasMoreBelow = scrollOffset + visibleCount < items.len
+
+  # Calculate popup dimensions using display width for multi-byte characters
+  var maxDisplayWidth = 0
+  for item in items:
+    let w = displayWidth(item.title)
+    if w > maxDisplayWidth:
+      maxDisplayWidth = w
+  # Add padding (2 chars each side) + number prefix (3 chars: "N. ") and limit to screen width
+  let contentWidth = min(maxDisplayWidth + 2 + 3, buffer.area.width - 6)
+  let popupWidth = contentWidth + 2 # +2 for border
+
+  let popupHeight = visibleCount + 2 # +2 for border
+
+  # Position popup near cursor
+  var
+    popupX = e.state.screenCursor.x
+    popupY = e.state.screenCursor.y + 1
+
+  # Adjust if popup goes off screen
+  if popupX + popupWidth > buffer.area.width:
+    popupX = max(0, buffer.area.width - popupWidth)
+  if popupY + popupHeight > buffer.area.height - 2:
+    popupY = max(0, e.state.screenCursor.y - popupHeight)
+
+  # Define styles
+  let
+    borderStyle = Style(
+      fg: ColorValue(kind: Indexed, indexed: Color.BrightBlack),
+      bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 30, g: 30, b: 30)),
+      modifiers: {},
+    )
+    normalStyle = Style(
+      fg: ColorValue(kind: Default),
+      bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 30, g: 30, b: 30)),
+      modifiers: {},
+    )
+    selectedStyle = Style(
+      fg: ColorValue(kind: Indexed, indexed: Color.Black),
+      bg: ColorValue(kind: Indexed, indexed: Color.Cyan),
+      modifiers: {},
+    )
+    scrollIndicatorStyle = Style(
+      fg: ColorValue(kind: Indexed, indexed: Color.Yellow),
+      bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 30, g: 30, b: 30)),
+      modifiers: {},
+    )
+
+  # Draw top border with scroll indicator if needed
+  if popupY >= 0 and popupY < buffer.area.height:
+    buffer.setString(popupX, popupY, "┌", borderStyle)
+    for x in 1 ..< popupWidth - 1:
+      if popupX + x < buffer.area.width:
+        buffer.setString(popupX + x, popupY, "─", borderStyle)
+    # Show scroll up indicator in top-right corner
+    if hasMoreAbove and popupX + popupWidth - 2 < buffer.area.width:
+      buffer.setString(popupX + popupWidth - 2, popupY, "▲", scrollIndicatorStyle)
+    if popupX + popupWidth - 1 < buffer.area.width:
+      buffer.setString(popupX + popupWidth - 1, popupY, "┐", borderStyle)
+
+  # Draw visible items (based on scroll offset)
+  for displayIdx in 0 ..< visibleCount:
+    let itemIdx = scrollOffset + displayIdx
+    if itemIdx >= items.len:
+      break
+
+    let item = items[itemIdx]
+    let y = popupY + 1 + displayIdx
+    if y >= buffer.area.height - 1:
+      break
+
+    let style = if itemIdx == selectedIdx: selectedStyle else: normalStyle
+
+    # Left border
+    buffer.setString(popupX, y, "│", borderStyle)
+
+    # Fill background first
+    for x in 1 ..< popupWidth - 1:
+      if popupX + x < buffer.area.width:
+        buffer.setString(popupX + x, y, " ", style)
+
+    # Draw number prefix for items 1-9
+    var textX = popupX + 2
+    if itemIdx < 9:
+      let numStr = $(itemIdx + 1) & "."
+      let numStyle = Style(
+        fg: ColorValue(kind: Indexed, indexed: Color.Yellow),
+        bg: style.bg,
+        modifiers: {},
+      )
+      buffer.setString(textX, y, numStr, numStyle)
+      textX += 2
+      buffer.setString(textX, y, " ", style)
+      textX += 1
+
+    # Draw item text with proper multi-byte character handling
+    let maxTextX = popupX + popupWidth - 2
+    var currentWidth = 0
+    # Adjust maxContentWidth for number prefix (3 chars: "N. ")
+    let prefixWidth = if itemIdx < 9: 3 else: 0
+    let maxContentWidth = contentWidth - 2 - prefixWidth
+      # Leave space for padding and prefix
+
+    for rune in item.title.runes:
+      let runeW = runeWidth(rune)
+      # Check if we need to truncate (leave space for ellipsis)
+      if currentWidth + runeW > maxContentWidth - 1 and
+          currentWidth + runeW < displayWidth(item.title):
+        # Add ellipsis and stop
+        if textX < maxTextX and textX < buffer.area.width:
+          buffer.setString(textX, y, "…", style)
+        break
+
+      if textX + runeW <= maxTextX and textX < buffer.area.width:
+        buffer.setString(textX, y, $rune, style)
+        textX += runeW
+        currentWidth += runeW
+      else:
+        break
+
+    # Right border
+    if popupX + popupWidth - 1 < buffer.area.width:
+      buffer.setString(popupX + popupWidth - 1, y, "│", borderStyle)
+
+  # Draw bottom border with scroll indicator if needed
+  let bottomY = popupY + visibleCount + 1
+  if bottomY < buffer.area.height:
+    buffer.setString(popupX, bottomY, "└", borderStyle)
+    for x in 1 ..< popupWidth - 1:
+      if popupX + x < buffer.area.width:
+        buffer.setString(popupX + x, bottomY, "─", borderStyle)
+    # Show scroll down indicator in bottom-right corner
+    if hasMoreBelow and popupX + popupWidth - 2 < buffer.area.width:
+      buffer.setString(popupX + popupWidth - 2, bottomY, "▼", scrollIndicatorStyle)
+    if popupX + popupWidth - 1 < buffer.area.width:
+      buffer.setString(popupX + popupWidth - 1, bottomY, "┘", borderStyle)
 
 proc renderLineNumbers(
     e: Editor, buffer: var Buffer, textAreaWidth: int, sidebarWidth: int = 0
@@ -1461,12 +1745,12 @@ proc renderLineNumbers(
       isCurrentLine = lineIndex == e.state.cursor.line
       # Apply currentNumber setting: highlight current line number only if enabled
       lineStyle =
-        if isCurrentLine and e.state.showCurrentLineNumber:
+        if isCurrentLine and e.state.display.showCurrentLineNumber:
           currentLineStyle
         else:
           lineNumStyle
 
-    if e.state.lineWrap:
+    if e.state.display.lineWrap:
       let
         lineCharLen = line.charLen # Use character count, not byte count
         numWraps = calculateWrapCount(lineCharLen, textAreaWidth)
@@ -1521,7 +1805,7 @@ proc renderTextBuffer(e: Editor, buffer: var Buffer, area: Rect) =
     # Render file content with optional line wrapping
     let line = e.textBuffer.getLine(lineIndex)
 
-    if e.state.lineWrap:
+    if e.state.display.lineWrap:
       # Line wrapping enabled - split long lines across multiple screen lines
       let
         maxWidth = area.width
@@ -1532,11 +1816,15 @@ proc renderTextBuffer(e: Editor, buffer: var Buffer, area: Rect) =
         e.fillCursorLineBackground(
           buffer, area.x, area.y + screenY, lineIndex, e.state.cursor.line
         )
+        # Render CodeLens on empty lines
+        e.renderCodeLensInline(buffer, area.x, area.y + screenY, lineIndex, 0)
         inc screenY
         inc lineIndex
         continue
 
       var startCharCol = 0 # Character position, not byte position
+      var isFirstWrappedLine = true
+        # Track if this is the first screen line for this logical line
       while startCharCol < lineCharLen and screenY < area.height:
         # Calculate how many characters fit in maxWidth display columns
         # This properly handles wide characters (CJK, etc.)
@@ -1562,6 +1850,15 @@ proc renderTextBuffer(e: Editor, buffer: var Buffer, area: Rect) =
             useRunes = true,
           )
 
+          # Render CodeLens only on the first wrapped line
+          if isFirstWrappedLine:
+            let lineDisplayWidth =
+              displayWidthWithTabs(displayLine, e.state.display.tabStop)
+            e.renderCodeLensInline(
+              buffer, area.x, area.y + screenY, lineIndex, lineDisplayWidth
+            )
+            isFirstWrappedLine = false
+
         inc screenY
         startCharCol += charCount # Use actual character count, not maxWidth
     else:
@@ -1586,11 +1883,21 @@ proc renderTextBuffer(e: Editor, buffer: var Buffer, area: Rect) =
           ctx,
           useRunes = false,
         )
+
+        # Render CodeLens inline after line content
+        let lineDisplayWidth =
+          displayWidthWithTabs(displayLine, e.state.display.tabStop)
+        e.renderCodeLensInline(
+          buffer, area.x, area.y + screenY, lineIndex, lineDisplayWidth
+        )
       else:
         # Empty line or scrolled past line end - fill with cursor line highlight if on cursor line
         e.fillCursorLineBackground(
           buffer, area.x, area.y + screenY, lineIndex, e.state.cursor.line
         )
+
+        # Render CodeLens even on empty lines
+        e.renderCodeLensInline(buffer, area.x, area.y + screenY, lineIndex, 0)
 
       inc screenY
 
@@ -1766,6 +2073,38 @@ proc renderWindowSidebar(
       if screenX < buffer.area.width and actualScreenY < buffer.area.height:
         buffer.setString(screenX, actualScreenY, item.text, item.style)
 
+proc renderFoldLine(
+    e: Editor,
+    buffer: var Buffer,
+    window: EditorWindow,
+    lineNumOffset: int,
+    screenY: int,
+    fold: Fold,
+) =
+  ## Render a collapsed fold marker line (vim-style)
+  let
+    actualScreenY = window.viewport.y + screenY
+    sidebarWidth = e.calculateSidebarWidth()
+    lineNumScreenX = window.viewport.x + sidebarWidth
+    textScreenX = window.viewport.x + sidebarWidth + lineNumOffset
+    foldText = window.buffer.formatFoldText(fold)
+
+  # Render line number (if enabled)
+  if lineNumOffset > 0:
+    let lineNumStr = formatLineNumber(fold.startLine, lineNumOffset)
+    if lineNumScreenX + lineNumStr.len <= buffer.area.width:
+      buffer.setString(lineNumScreenX, actualScreenY, lineNumStr, lineNumStyle)
+
+  # Render fold text
+  if textScreenX < buffer.area.width:
+    let maxWidth = buffer.area.width - textScreenX
+    let displayText =
+      if foldText.len > maxWidth:
+        foldText[0 ..< maxWidth]
+      else:
+        foldText
+    buffer.setString(textScreenX, actualScreenY, displayText, foldStyle)
+
 proc renderWindow(
     e: Editor,
     buffer: var Buffer,
@@ -1782,7 +2121,7 @@ proc renderWindow(
 
   # Generate sidebar dynamically from buffer markers if enabled
   let maybeSidebar =
-    if e.state.showSidebar:
+    if e.state.display.showSidebar:
       some(
         generateSidebarFromBuffer(window.buffer, window.viewport.topLine, visibleHeight)
       )
@@ -1806,11 +2145,30 @@ proc renderWindow(
     lineIndex = window.viewport.topLine
 
   while screenY < visibleHeight and lineIndex < lineCount:
+    # Check if this line is inside a collapsed fold (but not the start line)
+    if window.buffer.foldState.isLineInCollapsedFold(lineIndex):
+      # Skip this line (it's hidden inside a fold)
+      inc lineIndex
+      continue
+
+    # Check if this line is the start of a collapsed fold
+    let foldOpt = window.buffer.foldState.getCollapsedFoldAt(lineIndex)
+    if foldOpt.isSome and foldOpt.get.startLine == lineIndex:
+      # Render the fold marker
+      if maybeSidebar.isSome:
+        renderWindowSidebar(buffer, window, maybeSidebar.get, screenY, 0)
+      e.renderFoldLine(buffer, window, lineNumOffset, screenY, foldOpt.get)
+      # Skip to the line after the fold
+      lineIndex = foldOpt.get.endLine + 1
+      inc screenY
+      continue
+
+    # Normal line rendering
     # Render sidebar if enabled
     if maybeSidebar.isSome:
       renderWindowSidebar(buffer, window, maybeSidebar.get, screenY, 0)
 
-    if e.state.lineWrap:
+    if e.state.display.lineWrap:
       e.renderWindowLineWrapped(
         buffer, window, lineNumOffset, ctx, screenY, lineIndex, visibleHeight
       )
@@ -1841,7 +2199,7 @@ proc renderWindowSeparator(
       for y in window.viewport.y ..< (window.viewport.y + actualSepHeight):
         if y < buffer.area.height:
           buffer.setString(sepX, y, "│", separatorStyle)
-  elif not e.state.multiStatusLine:
+  elif not e.state.display.multiStatusLine:
     # Horizontal split - draw horizontal separator at window boundary
     # ONLY when using a single status line
     let sepY = window.viewport.y + window.viewport.height
@@ -1876,7 +2234,8 @@ proc renderSplitView(e: Editor, buffer: var Buffer, wasResized: bool) =
       e.windowManager.windows[e.windowManager.activeWindowIndex].cursor = e.state.cursor
 
     e.windowManager.resizeWindows(
-      e.viewport.width, e.viewport.height, oldWidth, oldHeight, e.state.multiStatusLine
+      e.viewport.width, e.viewport.height, oldWidth, oldHeight,
+      e.state.display.multiStatusLine,
     )
 
     # After resize, restore viewport scroll position from window to motion controller
@@ -1898,7 +2257,8 @@ proc renderSplitView(e: Editor, buffer: var Buffer, wasResized: bool) =
   # Render all split windows
   for i, window in e.windowManager.windows:
     # Calculate line number offset dynamically based on buffer size
-    let lineNumOffset = calculateLineNumOffset(window.buffer, e.state.showLineNumbers)
+    let lineNumOffset =
+      calculateLineNumOffset(window.buffer, e.state.display.showLineNumbers)
 
     # Determine if this is a bottom window (needs status line reservation)
     # A window is a bottom window if its bottom edge is at the maximum bottom Y
@@ -1910,7 +2270,7 @@ proc renderSplitView(e: Editor, buffer: var Buffer, wasResized: bool) =
     e.renderWindow(buffer, window, lineNumOffset, isBottomWindow, isActiveWindow)
 
     # Render per-window status line if multi-status line mode is enabled
-    if e.state.showStatusLine and e.state.multiStatusLine:
+    if e.state.display.showStatusLine and e.state.display.multiStatusLine:
       let statusLineY = calculateWindowStatusLineY(window, isBottomWindow)
       e.state.renderWindowStatusLine(
         window.buffer, buffer, statusLineY, window.viewport.x, window.viewport.width,
@@ -1945,7 +2305,8 @@ proc renderSingleView(e: Editor, buffer: var Buffer, wasResized: bool) =
   let
     reservedLines = e.calculateReservedLines(isBottomWindow = true)
     sidebarWidth = e.calculateSidebarWidth()
-    lineNumOffset = calculateLineNumOffset(e.textBuffer, e.state.showLineNumbers)
+    lineNumOffset =
+      calculateLineNumOffset(e.textBuffer, e.state.display.showLineNumbers)
     textAreaWidth =
       max(0, buffer.area.width - sidebarWidth - lineNumOffset - LineNumberPadding)
     textArea = Rect(
@@ -1957,7 +2318,7 @@ proc renderSingleView(e: Editor, buffer: var Buffer, wasResized: bool) =
 
   # Generate sidebar dynamically from buffer markers if enabled
   let maybeSidebar =
-    if e.state.showSidebar:
+    if e.state.display.showSidebar:
       some(
         generateSidebarFromBuffer(
           e.textBuffer, e.viewport.topLine, buffer.area.height - reservedLines
@@ -1991,7 +2352,7 @@ proc renderSingleView(e: Editor, buffer: var Buffer, wasResized: bool) =
       inc lineIndex
 
   # Render line numbers only if enabled
-  if e.state.showLineNumbers:
+  if e.state.display.showLineNumbers:
     discard e.renderLineNumbers(buffer, textAreaWidth, sidebarWidth)
   e.renderTextBuffer(buffer, textArea)
 
@@ -2013,7 +2374,7 @@ proc renderBottomLines(e: Editor, buffer: var Buffer) =
   # Render status line using active buffer
   # - Single window mode: always render status line at bottom
   # - Multi-window mode: only render if multiStatusLine is disabled (single status line mode)
-  if e.windowManager.windows.len == 0 or not e.state.multiStatusLine:
+  if e.windowManager.windows.len == 0 or not e.state.display.multiStatusLine:
     e.state.renderStatusLine(e.activeBuffer(), buffer, statusLineY)
 
   # Handle command line
@@ -2035,8 +2396,8 @@ proc renderBottomLines(e: Editor, buffer: var Buffer) =
         buffer, e.state.commandCompletionManager.menu, popupPos
       )
   elif e.state.mode == EditorMode.Search:
-    let searchChar = if e.state.searchDirection == Forward: "/" else: "?"
-    let searchPrompt = searchChar & e.state.searchText
+    let searchChar = if e.state.search.direction == Forward: "/" else: "?"
+    let searchPrompt = searchChar & e.state.search.text
     buffer.setString(buffer.area.x, commandLineY, searchPrompt, commandStyle)
     e.state.screenCursor.x = searchPrompt.len
     e.state.screenCursor.y = buffer.area.height - 1
@@ -2050,7 +2411,7 @@ proc renderFiler(e: Editor, buffer: var Buffer) =
     return
 
   # Calculate reserved lines at bottom: status line (if shown) + command line
-  let reservedBottom = if e.state.showStatusLine: 2 else: 1
+  let reservedBottom = if e.state.display.showStatusLine: 2 else: 1
 
   let
     filerState = e.state.filerState.get
@@ -2272,7 +2633,7 @@ proc handleLspLocations(
           text: "",
         )
       )
-    e.state.lspLocations =
+    e.state.lspCache.locations =
       some(LspLocationsResult(items: items, selectedIndex: 0, title: title))
 
     # Jump to the first location
@@ -2298,6 +2659,23 @@ proc requestLspGotoDefinition*(e: Editor): bool =
 
   return e.handleLspLocations(defResult.get, "Definitions", "Definition")
 
+proc requestLspGotoDeclaration*(e: Editor): bool =
+  ## Request LSP goto declaration at current cursor position
+  ## Returns true if successful and location was found
+  if not e.lsp.enabled:
+    e.state.statusMessage = "LSP is not enabled"
+    return false
+
+  let activeBuffer = e.activeBuffer()
+  let declResult =
+    e.lsp.requestDeclaration(activeBuffer, e.state.cursor.line, e.state.cursor.column)
+
+  if declResult.isErr:
+    e.state.statusMessage = "LSP goto declaration failed: " & declResult.error
+    return false
+
+  return e.handleLspLocations(declResult.get, "Declarations", "Declaration")
+
 proc requestLspReferences*(e: Editor): bool =
   ## Request LSP find references at current cursor position
   ## Returns true if successful and references were found
@@ -2315,6 +2693,375 @@ proc requestLspReferences*(e: Editor): bool =
 
   return e.handleLspLocations(refsResult.get, "References", "Reference")
 
+proc hasCodeLensSupport*(e: Editor): bool =
+  ## Check if CodeLens is supported for the current buffer
+  if not e.lsp.enabled:
+    return false
+  let activeBuffer = e.activeBuffer()
+  return e.lsp.hasCodeLensSupport(activeBuffer)
+
+proc doUpdateCodeLensCache(e: Editor) =
+  ## Internal: Actually perform the CodeLens cache update
+  ## This makes LSP requests and should be called with debouncing
+  let activeBuffer = e.activeBuffer()
+  if activeBuffer.filePath.isNone:
+    return
+
+  let filePath = activeBuffer.filePath.get
+
+  # Check if CodeLens is supported
+  if not e.lsp.hasCodeLensSupport(activeBuffer):
+    e.state.lspCache.codeLensCache = CodeLensCache(isValid: false)
+    return
+
+  # Request CodeLenses from LSP
+  let lensesResult = e.lsp.requestCodeLens(activeBuffer)
+  if lensesResult.isErr:
+    e.state.lspCache.codeLensCache = CodeLensCache(isValid: false)
+    return
+
+  # Convert to cached items grouped by line (Table for O(1) lookup)
+  var itemsByLine: Table[int, seq[CodeLensItem]]
+  for lens in lensesResult.get:
+    var item = CodeLensItem(line: lens.range.start.line)
+
+    if lens.command.isSome:
+      let cmd = lens.command.get
+      item.title = cmd.title
+      item.command = cmd.command
+      if cmd.arguments.isSome:
+        for arg in cmd.arguments.get:
+          item.arguments.add($arg)
+    else:
+      # Need to resolve
+      let resolveResult = e.lsp.requestCodeLensResolve(activeBuffer, lens)
+      if resolveResult.isOk:
+        let resolved = resolveResult.get
+        if resolved.command.isSome:
+          let cmd = resolved.command.get
+          item.title = cmd.title
+          item.command = cmd.command
+          if cmd.arguments.isSome:
+            for arg in cmd.arguments.get:
+              item.arguments.add($arg)
+
+    if item.title.len > 0:
+      # Group by line number
+      if item.line notin itemsByLine:
+        itemsByLine[item.line] = @[]
+      itemsByLine[item.line].add(item)
+
+  e.state.lspCache.codeLensCache = CodeLensCache(
+    itemsByLine: itemsByLine,
+    changeSeq: activeBuffer.changeSeq,
+    filePath: filePath,
+    isValid: true,
+  )
+
+  # Update timestamp after successful update
+  e.state.lspCache.lastCodeLensUpdate = getMonoTime()
+
+proc updateCodeLensCache*(e: Editor) =
+  ## Update the CodeLens cache for the current buffer (with debouncing)
+  ## Only updates if enough time has passed since last update and buffer changed
+  if not e.lsp.enabled or not e.state.display.showCodeLens:
+    return
+
+  let activeBuffer = e.activeBuffer()
+  if activeBuffer.filePath.isNone:
+    return
+
+  let filePath = activeBuffer.filePath.get
+
+  # Check if cache is still valid (no changes needed)
+  if e.state.lspCache.codeLensCache.isValid and
+      e.state.lspCache.codeLensCache.filePath == filePath and
+      e.state.lspCache.codeLensCache.changeSeq == activeBuffer.changeSeq:
+    return
+
+  # Debounce: check if enough time has passed since last update
+  let now = getMonoTime()
+  let elapsed = now - e.state.lspCache.lastCodeLensUpdate
+  let threshold = initDuration(milliseconds = e.state.lspCache.codeLensUpdateInterval)
+
+  if elapsed >= threshold:
+    e.doUpdateCodeLensCache()
+
+proc getCodeLensItemsForLine*(e: Editor, line: int): seq[CodeLensItem] =
+  ## Get cached CodeLens items for a specific line (O(1) lookup)
+  if not e.state.lspCache.codeLensCache.isValid:
+    return @[]
+
+  e.state.lspCache.codeLensCache.itemsByLine.getOrDefault(line, @[])
+
+proc getCodeLensItemsForCurrentLine*(e: Editor): seq[CodeLensItem] =
+  ## Get cached CodeLens items for the current cursor line
+  e.getCodeLensItemsForLine(e.state.cursor.line)
+
+proc executeCodeLensItem*(e: Editor, item: CodeLensItem): Result[void, string] =
+  ## Execute a cached CodeLens item's command
+  if not e.lsp.enabled:
+    return err("LSP is not enabled")
+
+  if item.command.len == 0:
+    return err("CodeLens has no command")
+
+  let activeBuffer = e.activeBuffer()
+
+  # Convert arguments back to JsonNode
+  var args: seq[JsonNode] = @[]
+  for argStr in item.arguments:
+    try:
+      args.add(parseJson(argStr))
+    except JsonParsingError:
+      args.add(%argStr)
+
+  let execResult = e.lsp.requestExecuteCommand(activeBuffer, item.command, args)
+  if execResult.isErr:
+    return err("Failed to execute command: " & execResult.error)
+
+  e.state.statusMessage = "Executed: " & item.title
+  return ok()
+
+proc invalidateCodeLensCache*(e: Editor) =
+  ## Invalidate the CodeLens cache (call when buffer changes significantly)
+  e.state.lspCache.codeLensCache.isValid = false
+
+# Document Highlight support
+proc invalidateDocumentHighlightCache*(e: Editor) =
+  ## Invalidate the Document Highlight cache
+  e.state.lspCache.documentHighlightCache.isValid = false
+  e.state.lspCache.documentHighlightCache.itemsByLine.clear()
+
+proc doUpdateDocumentHighlightCache(e: Editor) =
+  ## Internal: Actually perform the Document Highlight cache update
+  let activeBuffer = e.activeBuffer()
+  if activeBuffer.filePath.isNone:
+    e.invalidateDocumentHighlightCache()
+    return
+
+  # Request Document Highlights from LSP
+  let highlightsResult = e.lsp.requestDocumentHighlight(
+    activeBuffer, e.state.cursor.line, e.state.cursor.column
+  )
+  if highlightsResult.isErr:
+    e.invalidateDocumentHighlightCache()
+    return
+
+  # Convert LSP DocumentHighlight to our cached format
+  # Handle multi-line highlights by creating an item for each line
+  # Group by line for O(1) lookup during rendering
+  var itemsByLine: Table[int, seq[DocumentHighlightItem]]
+  for highlight in highlightsResult.get:
+    let kind =
+      if highlight.kind.isSome:
+        highlight.kind.get.int
+      else:
+        1 # Default to Text
+
+    let startLine = highlight.range.start.line
+    let endLine = highlight.range.`end`.line
+
+    if startLine == endLine:
+      # Single line highlight
+      let item = DocumentHighlightItem(
+        line: startLine,
+        startColumn: highlight.range.start.character,
+        endColumn: highlight.range.`end`.character,
+        kind: kind,
+      )
+      if startLine notin itemsByLine:
+        itemsByLine[startLine] = @[]
+      itemsByLine[startLine].add(item)
+    else:
+      # Multi-line highlight: create an item for each line
+      for line in startLine .. endLine:
+        let startCol = if line == startLine: highlight.range.start.character else: 0
+        # For end column, use a large value for middle/last lines
+        # (will be clamped during rendering)
+        let endCol = if line == endLine: highlight.range.`end`.character else: int.high
+        let item = DocumentHighlightItem(
+          line: line, startColumn: startCol, endColumn: endCol, kind: kind
+        )
+        if line notin itemsByLine:
+          itemsByLine[line] = @[]
+        itemsByLine[line].add(item)
+
+  e.state.lspCache.documentHighlightCache = DocumentHighlightCache(
+    itemsByLine: itemsByLine,
+    cursorLine: e.state.cursor.line,
+    cursorColumn: e.state.cursor.column,
+    changeSeq: activeBuffer.changeSeq,
+    isValid: true,
+  )
+  e.state.lspCache.lastDocumentHighlightUpdate = getMonoTime()
+
+proc updateDocumentHighlightCache*(e: Editor) =
+  ## Update the Document Highlight cache (with debouncing)
+  ## Called during render to update highlights when cursor moves
+  ## Only updates in Normal/Visual modes - cleared in Insert/Replace modes
+  if not e.lsp.enabled or not e.state.display.showDocumentHighlight:
+    return
+
+  # In Insert/Replace modes, clear highlights to avoid distraction
+  if e.state.mode in {EditorMode.Insert, EditorMode.Replace}:
+    if e.state.lspCache.documentHighlightCache.isValid:
+      e.invalidateDocumentHighlightCache()
+    return
+
+  let activeBuffer = e.activeBuffer()
+  if activeBuffer.filePath.isNone:
+    return
+
+  # Check if cursor position changed
+  # (same line and column means no need to update)
+  if e.state.lspCache.documentHighlightCache.isValid and
+      e.state.lspCache.documentHighlightCache.cursorLine == e.state.cursor.line and
+      e.state.lspCache.documentHighlightCache.cursorColumn == e.state.cursor.column and
+      e.state.lspCache.documentHighlightCache.changeSeq == activeBuffer.changeSeq:
+    return
+
+  # Debounce - only update if enough time has passed since last update
+  let now = getMonoTime()
+  let elapsed = now - e.state.lspCache.lastDocumentHighlightUpdate
+  let threshold =
+    initDuration(milliseconds = e.state.lspCache.documentHighlightUpdateInterval)
+  if elapsed >= threshold:
+    e.doUpdateDocumentHighlightCache()
+
+proc getCodeLensDisplayText*(e: Editor, line: int): string =
+  ## Get display text for CodeLens on a specific line
+  ## Returns empty string if no CodeLens on this line
+  let items = e.getCodeLensItemsForLine(line)
+  if items.len == 0:
+    return ""
+
+  var texts: seq[string] = @[]
+  for item in items:
+    if item.title.len > 0:
+      texts.add(item.title)
+
+  return texts.join(" | ")
+
+proc showCodeLensPicker*(e: Editor, items: seq[CodeLensItem]) =
+  ## Show the CodeLens picker with the given items
+  # Calculate max visible items based on viewport height
+  # Reserve space for borders (2) and some margin (4)
+  let maxVisible = max(1, e.viewport.height - 6)
+  e.state.lspCache.codeLensPicker = CodeLensPicker(
+    items: items,
+    selectedIndex: 0,
+    scrollOffset: 0,
+    maxVisibleItems: min(items.len, maxVisible),
+    isActive: true,
+  )
+
+proc hideCodeLensPicker*(e: Editor) =
+  ## Hide the CodeLens picker
+  e.state.lspCache.codeLensPicker.isActive = false
+  e.state.lspCache.codeLensPicker.items = @[]
+
+proc codeLensPickerSelectNext*(e: Editor) =
+  ## Move selection down in CodeLens picker
+  if not e.state.lspCache.codeLensPicker.isActive:
+    return
+  if e.state.lspCache.codeLensPicker.selectedIndex <
+      e.state.lspCache.codeLensPicker.items.len - 1:
+    e.state.lspCache.codeLensPicker.selectedIndex += 1
+    # Adjust scroll offset if selection goes below visible area
+    let maxVisible = e.state.lspCache.codeLensPicker.maxVisibleItems
+    if e.state.lspCache.codeLensPicker.selectedIndex >=
+        e.state.lspCache.codeLensPicker.scrollOffset + maxVisible:
+      e.state.lspCache.codeLensPicker.scrollOffset =
+        e.state.lspCache.codeLensPicker.selectedIndex - maxVisible + 1
+
+proc codeLensPickerSelectPrev*(e: Editor) =
+  ## Move selection up in CodeLens picker
+  if not e.state.lspCache.codeLensPicker.isActive:
+    return
+  if e.state.lspCache.codeLensPicker.selectedIndex > 0:
+    e.state.lspCache.codeLensPicker.selectedIndex -= 1
+    # Adjust scroll offset if selection goes above visible area
+    if e.state.lspCache.codeLensPicker.selectedIndex <
+        e.state.lspCache.codeLensPicker.scrollOffset:
+      e.state.lspCache.codeLensPicker.scrollOffset =
+        e.state.lspCache.codeLensPicker.selectedIndex
+
+proc codeLensPickerSelectByNumber*(e: Editor, num: int): bool =
+  ## Select and execute CodeLens item by number (1-9)
+  ## Returns true if successfully executed
+  if not e.state.lspCache.codeLensPicker.isActive or
+      e.state.lspCache.codeLensPicker.items.len == 0:
+    return false
+
+  let index = num - 1 # Convert 1-based to 0-based index
+  if index < 0 or index >= e.state.lspCache.codeLensPicker.items.len:
+    return false
+
+  let item = e.state.lspCache.codeLensPicker.items[index]
+  e.hideCodeLensPicker()
+
+  let execResult = e.executeCodeLensItem(item)
+  if execResult.isErr:
+    e.state.statusMessage = execResult.error
+    return false
+
+  return true
+
+proc codeLensPickerConfirm*(e: Editor): bool =
+  ## Confirm selection and execute the selected CodeLens item
+  ## Returns true if successfully executed
+  if not e.state.lspCache.codeLensPicker.isActive or
+      e.state.lspCache.codeLensPicker.items.len == 0:
+    return false
+
+  let item =
+    e.state.lspCache.codeLensPicker.items[e.state.lspCache.codeLensPicker.selectedIndex]
+  e.hideCodeLensPicker()
+
+  let execResult = e.executeCodeLensItem(item)
+  if execResult.isErr:
+    e.state.statusMessage = execResult.error
+    return false
+
+  return true
+
+proc executeCurrentLineCodeLens*(e: Editor): bool =
+  ## Execute CodeLens on current line
+  ## If multiple CodeLens items exist, show picker to choose
+  ## Returns true if successfully executed (or picker shown)
+  if not e.lsp.enabled:
+    e.state.statusMessage = "LSP is not enabled"
+    return false
+
+  # Force update cache (bypass debouncing for explicit user action)
+  if e.state.display.showCodeLens:
+    e.doUpdateCodeLensCache()
+
+  if not e.state.lspCache.codeLensCache.isValid:
+    e.state.statusMessage = "No CodeLens available"
+    return false
+
+  # Get CodeLens items for current line
+  let items = e.getCodeLensItemsForCurrentLine()
+  if items.len == 0:
+    e.state.statusMessage = "No CodeLens on current line"
+    return false
+
+  # If only one item, execute directly
+  if items.len == 1:
+    let execResult = e.executeCodeLensItem(items[0])
+    if execResult.isErr:
+      e.state.statusMessage = execResult.error
+      return false
+    return true
+
+  # Multiple items - show picker
+  e.showCodeLensPicker(items)
+  e.state.statusMessage =
+    "Select CodeLens (1-9: select, j/k: navigate, Enter: confirm, Esc: cancel)"
+  return true
+
 proc shutdown*(e: Editor) =
   ## Shutdown editor and clean up resources (including LSP servers)
   e.lsp.shutdown()
@@ -2330,6 +3077,12 @@ proc render*(e: Editor, buffer: var Buffer) =
 
   # Update LSP if buffer was modified
   e.maybeUpdateLsp()
+
+  # Update CodeLens cache if needed
+  e.updateCodeLensCache()
+
+  # Update Document Highlight cache if needed
+  e.updateDocumentHighlightCache()
 
   # Request signature help from LSP if in insert mode
   e.requestSignatureHelpFromLsp()
@@ -2348,7 +3101,7 @@ proc render*(e: Editor, buffer: var Buffer) =
 
   # Update smooth scroll animation
   if e.state.scrollAnimation.active:
-    let reservedLines = if e.state.showStatusLine: 2 else: 1
+    let reservedLines = if e.state.display.showStatusLine: 2 else: 1
     let (active, cursorLine) = e.executer.motionController.viewportManager.updateScrollAnimation(
       e.state.scrollAnimation, e.config.smoothScroll, reservedLines
     )
@@ -2403,3 +3156,7 @@ proc render*(e: Editor, buffer: var Buffer) =
         buffer.area.height, sigHelpMgr.display.signature.len,
       )
       renderSignatureHelpPopup(buffer, sigHelpMgr.display, popupPos, true)
+
+  # Render CodeLens picker popup if active
+  if e.state.lspCache.codeLensPicker.isActive:
+    e.renderCodeLensPicker(buffer)

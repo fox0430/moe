@@ -1180,6 +1180,18 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   )
   registry.bindKey(EditorMode.Normal, "g r", "lsp-find-references")
 
+  # LSP - Execute CodeLens (gl)
+  registry.registerCommand(
+    Command(
+      name: "lsp-codelens-execute",
+      description: "Execute CodeLens on current line (LSP)",
+      kind: ctCustom,
+      commandId: "lsp.codelens.execute",
+      args: @[],
+    )
+  )
+  registry.bindKey(EditorMode.Normal, "g l", "lsp-codelens-execute")
+
   # ZZ - Save and quit
   registry.registerCommand(
     Command(
@@ -1267,6 +1279,86 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.Normal, "z z", "scroll-cursor-center")
   registry.bindKey(EditorMode.Normal, "z .", "scroll-cursor-center")
   registry.bindKey(EditorMode.Normal, "z b", "scroll-cursor-bottom")
+
+  # Fold commands
+  registry.registerCommand(
+    Command(
+      name: "fold-open",
+      description: "Open fold at cursor",
+      kind: ctCustom,
+      commandId: "fold.open",
+      args: @[],
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "fold-close",
+      description: "Close fold at cursor",
+      kind: ctCustom,
+      commandId: "fold.close",
+      args: @[],
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "fold-toggle",
+      description: "Toggle fold at cursor",
+      kind: ctCustom,
+      commandId: "fold.toggle",
+      args: @[],
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "fold-open-all",
+      description: "Open all folds",
+      kind: ctCustom,
+      commandId: "fold.open.all",
+      args: @[],
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "fold-close-all",
+      description: "Close all folds",
+      kind: ctCustom,
+      commandId: "fold.close.all",
+      args: @[],
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "fold-create",
+      description: "Create fold from selection",
+      kind: ctCustom,
+      commandId: "fold.create",
+      args: @[],
+    )
+  )
+
+  registry.registerCommand(
+    Command(
+      name: "fold-delete",
+      description: "Delete fold at cursor",
+      kind: ctCustom,
+      commandId: "fold.delete",
+      args: @[],
+    )
+  )
+
+  # Bind z commands (fold)
+  registry.bindKey(EditorMode.Normal, "z o", "fold-open")
+  registry.bindKey(EditorMode.Normal, "z c", "fold-close")
+  registry.bindKey(EditorMode.Normal, "z a", "fold-toggle")
+  registry.bindKey(EditorMode.Normal, "z d", "fold-delete")
+  registry.bindKey(EditorMode.Normal, "z R", "fold-open-all")
+  registry.bindKey(EditorMode.Normal, "z M", "fold-close-all")
+  # zf is bound in visual mode below
 
   # Operator commands
   registry.registerCommand(
@@ -1798,6 +1890,7 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.Visual, "d", "visual-delete")
   registry.bindKey(EditorMode.Visual, "x", "visual-delete")
   registry.bindKey(EditorMode.Visual, "y", "visual-yank")
+  registry.bindKey(EditorMode.Visual, "z f", "fold-create") # Create fold from selection
   registry.bindKey(EditorMode.Visual, "Escape", "switch-to-normal") # Exit to normal mode
 
   # Visual block mode key bindings (share most bindings with Visual mode via fallback)
@@ -1808,6 +1901,8 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.VisualBlock, "d", "visual-delete")
   registry.bindKey(EditorMode.VisualBlock, "x", "visual-delete")
   registry.bindKey(EditorMode.VisualBlock, "y", "visual-yank")
+  registry.bindKey(EditorMode.VisualBlock, "z f", "fold-create")
+    # Create fold from selection
   registry.bindKey(EditorMode.VisualBlock, "Escape", "switch-to-normal")
 
   # Visual line mode key bindings
@@ -1818,6 +1913,8 @@ proc setupDefaultBindings*(registry: KeyBindingRegistry) =
   registry.bindKey(EditorMode.VisualLine, "d", "visual-delete")
   registry.bindKey(EditorMode.VisualLine, "x", "visual-delete")
   registry.bindKey(EditorMode.VisualLine, "y", "visual-yank")
+  registry.bindKey(EditorMode.VisualLine, "z f", "fold-create")
+    # Create fold from selection
   registry.bindKey(EditorMode.VisualLine, "Escape", "switch-to-normal")
 
   # Insert mode key bindings
