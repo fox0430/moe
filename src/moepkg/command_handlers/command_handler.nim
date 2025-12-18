@@ -56,6 +56,8 @@ type
     cmrBufferDelete # Delete current buffer
     cmrStripWhitespace # Remove trailing whitespace
     cmrFiler # Open file explorer
+    cmrLogViewer # Open log viewer
+    cmrHelpViewer # Open help viewer
     cmrQuickRun # Run the current buffer
     cmrError # Command error
 
@@ -107,6 +109,10 @@ type
       strippedLineCount*: int
     of cmrFiler:
       filerPath*: Option[string] # Optional path for filer
+    of cmrLogViewer:
+      discard
+    of cmrHelpViewer:
+      discard
     of cmrQuickRun:
       discard
     of cmrError:
@@ -237,9 +243,8 @@ proc executeHelp*(
     handler: CommandModeHandler, topic: Option[string]
 ): CommandModeResult =
   ## Execute help command (:help, :help topic)
-  let helpTopic = if topic.isSome: topic.get else: "general"
-
-  return CommandModeResult(kind: cmrMessage, message: "Help for: " & helpTopic)
+  # Open the help viewer
+  return CommandModeResult(kind: cmrHelpViewer)
 
 proc executeVSplit*(
     handler: CommandModeHandler, filename: Option[string]
@@ -368,6 +373,8 @@ proc handleCommandModeInput*(
     return handler.executeStripWhitespace(buffer)
   of claFiler:
     return CommandModeResult(kind: cmrFiler, filerPath: cmdResult.filerPath)
+  of claLogViewer:
+    return CommandModeResult(kind: cmrLogViewer)
   of claQuickRun:
     return handler.executeQuickRun()
   of claSubstitute:

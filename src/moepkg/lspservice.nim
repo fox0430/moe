@@ -930,3 +930,73 @@ proc requestExecuteCommand*(
 
   let client = clientResult.get
   return client.executeCommand(command, arguments)
+
+proc hasCallHierarchySupport*(svc: LspService, langId: string): bool =
+  ## Check if call hierarchy is supported for a language
+  let clientOpt = svc.getClient(langId)
+  if clientOpt.isNone:
+    return false
+
+  let client = clientOpt.get
+  if client.capabilities.isNone:
+    return false
+
+  return client.capabilities.get.callHierarchyProvider.isSome
+
+proc hasFoldingRangeSupport*(svc: LspService, langId: string): bool =
+  ## Check if folding range is supported for a language
+  let clientOpt = svc.getClient(langId)
+  if clientOpt.isNone:
+    return false
+
+  let client = clientOpt.get
+  if client.capabilities.isNone:
+    return false
+
+  return client.capabilities.get.foldingRangeProvider.isSome
+
+proc requestCallHierarchyPrepare*(
+    svc: LspService, path: string, line, character: int
+): Result[seq[CallHierarchyItem], string] =
+  ## Prepare call hierarchy at a given position
+  let clientResult = svc.getClientForPath(path)
+  if clientResult.isErr:
+    return err(clientResult.error)
+
+  let client = clientResult.get
+  let uri = pathToUri(path)
+  return client.callHierarchyPrepare(uri, line, character)
+
+proc requestCallHierarchyIncomingCalls*(
+    svc: LspService, path: string, item: CallHierarchyItem
+): Result[seq[CallHierarchyIncomingCall], string] =
+  ## Request incoming calls for a CallHierarchyItem
+  let clientResult = svc.getClientForPath(path)
+  if clientResult.isErr:
+    return err(clientResult.error)
+
+  let client = clientResult.get
+  return client.callHierarchyIncomingCalls(item)
+
+proc requestCallHierarchyOutgoingCalls*(
+    svc: LspService, path: string, item: CallHierarchyItem
+): Result[seq[CallHierarchyOutgoingCall], string] =
+  ## Request outgoing calls for a CallHierarchyItem
+  let clientResult = svc.getClientForPath(path)
+  if clientResult.isErr:
+    return err(clientResult.error)
+
+  let client = clientResult.get
+  return client.callHierarchyOutgoingCalls(item)
+
+proc requestFoldingRange*(
+    svc: LspService, path: string
+): Result[seq[FoldingRange], string] =
+  ## Request folding ranges for a file
+  let clientResult = svc.getClientForPath(path)
+  if clientResult.isErr:
+    return err(clientResult.error)
+
+  let client = clientResult.get
+  let uri = pathToUri(path)
+  return client.foldingRange(uri)

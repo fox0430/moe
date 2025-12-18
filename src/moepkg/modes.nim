@@ -31,6 +31,8 @@ type
     Search
     Filer
     QuickRun
+    LogViewer
+    Help
 
   ModeTransition* = object
     newMode*: Option[EditorMode]
@@ -48,3 +50,5 @@ proc modeLabel*(m: EditorMode): string =
   of EditorMode.Search: "SEARCH"
   of EditorMode.Filer: "FILER"
   of EditorMode.QuickRun: "QUICKRUN"
+  of EditorMode.LogViewer: "LOG"
+  of EditorMode.Help: "HELP"

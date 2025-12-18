@@ -23,7 +23,7 @@ import pkg/[celina, results]
 
 import
   editor, keybindings, modes, buffer, logger, types, cursor, motion, search_utils,
-  filer, quickrunutils
+  filer, quickrunutils, messagelog, helpviewer
 import command_handlers/handler_manager
 
 ## NOTE: While in Search Mode:
@@ -77,11 +77,11 @@ proc executeSearchFromCurrentPosition(e: Editor): bool =
     let pos = searchResult.get
     e.state.cursor = pos
     e.updateViewportForCursor(pos)
-    e.state.statusMessage = "Found: " & e.state.search.text
+    e.state.setStatusMessage("Found: " & e.state.search.text)
     e.state.needsFullRedraw = true
     return true
   else:
-    e.state.statusMessage = "Pattern not found: " & e.state.search.text
+    e.state.setStatusMessage("Pattern not found: " & e.state.search.text)
     return false
 
 proc finalizeSearch(e: Editor) =
@@ -191,12 +191,12 @@ proc performIncrementalSearch(e: Editor) =
     # Update viewport to follow cursor
     e.updateViewportForCursor(pos)
 
-    e.state.statusMessage = "Found: " & e.state.search.text
+    e.state.setStatusMessage("Found: " & e.state.search.text)
     e.state.needsFullRedraw = true
   else:
     # No match found, restore to start position
     e.state.cursor = e.state.search.startPos
-    e.state.statusMessage = "Pattern not found: " & e.state.search.text
+    e.state.setStatusMessage("Pattern not found: " & e.state.search.text)
 
 proc handleSearchCharacterInput(e: Editor, ch: string) =
   ## Handle character input in Search mode
@@ -346,30 +346,30 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         let splitResult = e.vsplit(r.getVSplitFilename())
         if splitResult.isErr:
           logError("handler", "Vertical split failed: " & splitResult.error)
-          e.state.statusMessage = "Error: " & splitResult.error
+          e.state.setStatusMessage("Error: " & splitResult.error)
 
       if r.shouldHSplit():
         # Handle horizontal split
         let splitResult = e.hsplit(r.getHSplitFilename())
         if splitResult.isErr:
           logError("handler", "Horizontal split failed: " & splitResult.error)
-          e.state.statusMessage = "Error: " & splitResult.error
+          e.state.setStatusMessage("Error: " & splitResult.error)
 
       if r.shouldEnew():
         # Handle enew (create new empty buffer)
         let enewResult = e.enew()
         if enewResult.isErr:
           logError("handler", "Enew failed: " & enewResult.error)
-          e.state.statusMessage = "Error: " & enewResult.error
+          e.state.setStatusMessage("Error: " & enewResult.error)
 
       if r.shouldEdit():
         # Handle edit (open file in current window)
         let editResult = e.editFile(r.getEditFilename())
         if editResult.isErr:
           logError("handler", "Edit failed: " & editResult.error)
-          e.state.statusMessage = "Error: " & editResult.error
+          e.state.setStatusMessage("Error: " & editResult.error)
         else:
-          e.state.statusMessage = "Opened: " & r.getEditFilename()
+          e.state.setStatusMessage("Opened: " & r.getEditFilename())
 
       if r.shouldSetMultiStatusLine():
         # Handle multi status line setting
@@ -378,42 +378,42 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
       if r.shouldSetIgnoreCase():
         # Handle ignorecase setting
         e.state.search.ignorecase = r.getIgnoreCaseEnabled()
-        e.state.statusMessage = "ignorecase = " & $e.state.search.ignorecase
+        e.state.setStatusMessage("ignorecase = " & $e.state.search.ignorecase)
 
       if r.shouldSetSmartCase():
         # Handle smartcase setting
         e.state.search.smartcase = r.getSmartCaseEnabled()
-        e.state.statusMessage = "smartcase = " & $e.state.search.smartcase
+        e.state.setStatusMessage("smartcase = " & $e.state.search.smartcase)
 
       if r.shouldSetIncSearch():
         # Handle incsearch setting
         e.state.search.incsearch = r.getIncSearchEnabled()
-        e.state.statusMessage = "incsearch = " & $e.state.search.incsearch
+        e.state.setStatusMessage("incsearch = " & $e.state.search.incsearch)
 
       if r.shouldSetHlSearch():
         # Handle hlsearch setting
         e.state.search.hlsearch = r.getHlSearchEnabled()
-        e.state.statusMessage = "hlsearch = " & $e.state.search.hlsearch
+        e.state.setStatusMessage("hlsearch = " & $e.state.search.hlsearch)
 
       if r.shouldSave():
         # Handle file save
         let saveResult = e.saveFile(r.getSaveFilename())
         if saveResult.isErr:
           logError("handler", "Save command failed: " & saveResult.error)
-          e.state.statusMessage = "Error: " & saveResult.error
+          e.state.setStatusMessage("Error: " & saveResult.error)
         else:
           # Get saved file path from active buffer
           let savedPath =
             if activeBuffer.filePath.isSome: activeBuffer.filePath.get else: "file"
           logInfo("handler", "File saved via command: " & savedPath)
-          e.state.statusMessage = "Saved: " & savedPath
+          e.state.setStatusMessage("Saved: " & savedPath)
 
       if r.shouldSaveAndQuit():
         # Handle file save and quit
         let saveResult = e.saveFile(r.getSaveAndQuitFilename())
         if saveResult.isErr:
           logError("handler", "Save and quit failed: " & saveResult.error)
-          e.state.statusMessage = "Error: " & saveResult.error
+          e.state.setStatusMessage("Error: " & saveResult.error)
         else:
           # Save succeeded, now quit
           logInfo("handler", "File saved, quitting editor")
@@ -443,32 +443,33 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           let enewResult = e.enew()
           if enewResult.isErr:
             logError("handler", "Enew failed after buffer delete: " & enewResult.error)
-            e.state.statusMessage = "Error: " & enewResult.error
+            e.state.setStatusMessage("Error: " & enewResult.error)
 
       if r.shouldStripWhitespace():
         # Handle strip trailing whitespace
         let count = r.getStrippedLineCount()
         if count > 0:
-          e.state.statusMessage =
+          e.state.setStatusMessage(
             "Stripped trailing whitespace from " & $count & " lines"
+          )
           e.state.needsFullRedraw = true
         else:
-          e.state.statusMessage = "No trailing whitespace found"
+          e.state.setStatusMessage("No trailing whitespace found")
 
       if r.shouldQuickRun():
         # Handle QuickRun command
         let quickRunResult = startBackgroundQuickRun(activeBuffer, e.config)
         if quickRunResult.isErr:
-          e.state.statusMessage = "QuickRun error: " & quickRunResult.error
+          e.state.setStatusMessage("QuickRun error: " & quickRunResult.error)
           logError("handler", "QuickRun failed: " & quickRunResult.error)
         else:
           var qrProcess = quickRunResult.get
-          e.state.statusMessage = quickRunStartupMessage(qrProcess.filePath)
+          e.state.setStatusMessage(quickRunStartupMessage(qrProcess.filePath))
 
           # Wait for the process to finish and get the result
           let outputResult = qrProcess.waitForResult()
           if outputResult.isErr:
-            e.state.statusMessage = "QuickRun error: " & outputResult.error
+            e.state.setStatusMessage("QuickRun error: " & outputResult.error)
           else:
             let output = outputResult.get
             # Create a new buffer with the output
@@ -480,11 +481,12 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
             # Open the output in a new horizontal split window
             let splitResult = e.hsplitWithBuffer(outputBuffer)
             if splitResult.isErr:
-              e.state.statusMessage =
+              e.state.setStatusMessage(
                 "Failed to open output window: " & splitResult.error
+              )
               logError("handler", "QuickRun window split failed: " & splitResult.error)
             else:
-              e.state.statusMessage = "QuickRun completed: " & qrProcess.filePath
+              e.state.setStatusMessage("QuickRun completed: " & qrProcess.filePath)
               logInfo("handler", "QuickRun completed: " & qrProcess.filePath)
         # Return to Normal mode
         e.state.previousMode = e.state.mode
@@ -503,6 +505,29 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           else:
             getCurrentDir()
         e.state.filerState = some(newFilerState(startPath))
+      elif r.shouldEnterLogViewer():
+        # Open log viewer in a horizontal split
+        let logs = getMessageLog()
+        let logContent =
+          if logs.len == 0:
+            "(No messages)"
+          else:
+            logs.join("\n")
+        let logBuffer = newTextBuffer(logContent)
+        logBuffer.readOnly = true
+        let splitResult = e.hsplitWithBuffer(logBuffer)
+        if splitResult.isErr:
+          e.state.setStatusMessage("Failed to open log: " & splitResult.error)
+        else:
+          e.state.setStatusMessage("Log: " & $logs.len & " messages")
+        # Return to Normal mode
+        e.state.previousMode = e.state.mode
+        e.state.mode = EditorMode.Normal
+      elif r.shouldEnterHelpViewer():
+        # Enter help viewer mode
+        e.state.previousMode = e.state.mode
+        e.state.mode = EditorMode.Help
+        e.state.helpViewerState = some(newHelpViewerState())
       else:
         # Handle mode transitions
         let modeTransition = r.getModeTransition()
@@ -516,7 +541,7 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
       # Set status message if any
       let statusMsg = r.getStatusMessage()
       if statusMsg.len > 0:
-        e.state.statusMessage = statusMsg
+        e.state.setStatusMessage(statusMsg)
     else:
       # Empty command, just return to previous mode
       e.state.mode = e.state.previousMode
@@ -591,6 +616,10 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
 
   # Handle character input - insert at cursor position
   if not keyCombo.isSpecial and keyCombo.modifiers == {}:
+    # Guard against empty commandText (should have at least ":")
+    if e.state.commandText.len == 0:
+      e.state.commandText = ":"
+      e.state.commandCursor = 0
     let pos = e.state.commandCursor + 1 # Position in commandText (after ":")
     e.state.commandText =
       e.state.commandText[0 ..< pos] & keyCombo.char & e.state.commandText[pos ..^ 1]
@@ -778,7 +807,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
           # Second Escape press - clear highlight
           e.state.search.hlsearchTempDisabled = true
           e.state.needsFullRedraw = true
-          e.state.statusMessage = "Search highlight cleared"
+          e.state.setStatusMessage("Search highlight cleared")
           e.state.lastKeyWasEscape = false
         else:
           # First Escape press - just mark it
@@ -875,7 +904,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
     let saveResult = e.saveFile(r.getSaveAndQuitFilename())
     if saveResult.isErr:
       logError("handler", "Save and quit failed: " & saveResult.error)
-      e.state.statusMessage = "Error: " & saveResult.error
+      e.state.setStatusMessage("Error: " & saveResult.error)
     else:
       # Save succeeded, now quit
       logInfo("handler", "File saved, quitting editor")
@@ -895,7 +924,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
     # Open file from filer
     let loadResult = e.loadFile(r.filerFilePath)
     if loadResult.isErr:
-      e.state.statusMessage = "Error: " & loadResult.error
+      e.state.setStatusMessage("Error: " & loadResult.error)
     else:
       # Clear filer state and switch to Normal mode
       e.state.filerState = none(FilerState)
@@ -907,7 +936,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
     # Open file in vertical split from filer
     let splitResult = e.vsplit(some(r.filerFilePath))
     if splitResult.isErr:
-      e.state.statusMessage = "Error: " & splitResult.error
+      e.state.setStatusMessage("Error: " & splitResult.error)
     else:
       # Clear filer state and switch to Normal mode
       e.state.filerState = none(FilerState)
@@ -918,7 +947,7 @@ proc handleEvent*(e: Editor, event: Event): bool =
     # Open file in horizontal split from filer
     let splitResult = e.hsplit(some(r.filerFilePath))
     if splitResult.isErr:
-      e.state.statusMessage = "Error: " & splitResult.error
+      e.state.setStatusMessage("Error: " & splitResult.error)
     else:
       # Clear filer state and switch to Normal mode
       e.state.filerState = none(FilerState)
@@ -929,6 +958,12 @@ proc handleEvent*(e: Editor, event: Event): bool =
     # Close filer and return to Normal mode
     # (previousMode may be Filer if we went Command->Filer, so always use Normal)
     e.state.filerState = none(FilerState)
+    e.state.mode = EditorMode.Normal
+    return true
+
+  if r.kind == hrHelpViewerQuit:
+    # Close help viewer and return to Normal mode
+    e.state.helpViewerState = none(HelpViewerState)
     e.state.mode = EditorMode.Normal
     return true
 
@@ -950,6 +985,16 @@ proc handleEvent*(e: Editor, event: Event): bool =
   # Handle LSP CodeLens execute
   if r.shouldLspCodeLensExecute():
     discard e.executeCurrentLineCodeLens()
+    return true
+
+  # Handle LSP Call Hierarchy incoming calls
+  if r.shouldLspCallHierarchyIncoming():
+    discard e.requestLspCallHierarchyIncoming()
+    return true
+
+  # Handle LSP Call Hierarchy outgoing calls
+  if r.shouldLspCallHierarchyOutgoing():
+    discard e.requestLspCallHierarchyOutgoing()
     return true
 
   # Handle mode transitions
@@ -1001,6 +1046,6 @@ proc handleEvent*(e: Editor, event: Event): bool =
   # Set status message if any
   let statusMsg = r.getStatusMessage()
   if statusMsg.len > 0:
-    e.state.statusMessage = statusMsg
+    e.state.setStatusMessage(statusMsg)
 
   return true # Continue running

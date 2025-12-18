@@ -328,6 +328,12 @@ proc buildClientCapabilities(): JsonNode =
       "inlineValue": {"dynamicRegistration": false},
       "selectionRange": {"dynamicRegistration": false},
       "codeLens": {"dynamicRegistration": false},
+      "foldingRange": {
+        "dynamicRegistration": false,
+        "rangeLimit": 5000,
+        "lineFoldingOnly": true,
+        "foldingRangeKind": {"valueSet": ["comment", "imports", "region"]},
+      },
       "semanticTokens": {
         "dynamicRegistration": false,
         "requests": {"range": true, "full": {"delta": false}},
@@ -1189,3 +1195,110 @@ proc codeLensResolve*(client: LspClient, lens: CodeLens): Result[CodeLens, strin
     return err("Resolve returned null")
 
   return ok(parseCodeLens(response))
+
+proc callHierarchyPrepare*(
+    client: LspClient, uri: string, line, character: int
+): Result[seq[CallHierarchyItem], string] =
+  ## Prepare call hierarchy at a given position
+  ## Returns a list of CallHierarchyItems for the symbol at the position
+  let params =
+    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
+
+  let reqResult = client.sendRequest("textDocument/prepareCallHierarchy", params)
+  if reqResult.isErr:
+    return err(reqResult.error)
+
+  let respResult = client.waitForResponse(reqResult.get)
+  if respResult.isErr:
+    return err(respResult.error)
+
+  var items: seq[CallHierarchyItem] = @[]
+  let response = respResult.get
+
+  if response.kind == JNull:
+    return ok(items)
+
+  if response.kind == JArray:
+    for item in response:
+      items.add(parseCallHierarchyItem(item))
+
+  return ok(items)
+
+proc callHierarchyIncomingCalls*(
+    client: LspClient, item: CallHierarchyItem
+): Result[seq[CallHierarchyIncomingCall], string] =
+  ## Request incoming calls for a CallHierarchyItem
+  ## Returns all callers of the given item
+  let params = %*{"item": item.toJson}
+
+  let reqResult = client.sendRequest("callHierarchy/incomingCalls", params)
+  if reqResult.isErr:
+    return err(reqResult.error)
+
+  let respResult = client.waitForResponse(reqResult.get)
+  if respResult.isErr:
+    return err(respResult.error)
+
+  var calls: seq[CallHierarchyIncomingCall] = @[]
+  let response = respResult.get
+
+  if response.kind == JNull:
+    return ok(calls)
+
+  if response.kind == JArray:
+    for call in response:
+      calls.add(parseCallHierarchyIncomingCall(call))
+
+  return ok(calls)
+
+proc callHierarchyOutgoingCalls*(
+    client: LspClient, item: CallHierarchyItem
+): Result[seq[CallHierarchyOutgoingCall], string] =
+  ## Request outgoing calls for a CallHierarchyItem
+  ## Returns all items called by the given item
+  let params = %*{"item": item.toJson}
+
+  let reqResult = client.sendRequest("callHierarchy/outgoingCalls", params)
+  if reqResult.isErr:
+    return err(reqResult.error)
+
+  let respResult = client.waitForResponse(reqResult.get)
+  if respResult.isErr:
+    return err(respResult.error)
+
+  var calls: seq[CallHierarchyOutgoingCall] = @[]
+  let response = respResult.get
+
+  if response.kind == JNull:
+    return ok(calls)
+
+  if response.kind == JArray:
+    for call in response:
+      calls.add(parseCallHierarchyOutgoingCall(call))
+
+  return ok(calls)
+
+proc foldingRange*(client: LspClient, uri: string): Result[seq[FoldingRange], string] =
+  ## Request folding ranges for a document
+  ## Returns all foldable regions (functions, classes, comments, imports, etc.)
+  let params = %*{"textDocument": {"uri": uri}}
+
+  let reqResult = client.sendRequest("textDocument/foldingRange", params)
+  if reqResult.isErr:
+    return err(reqResult.error)
+
+  let respResult = client.waitForResponse(reqResult.get)
+  if respResult.isErr:
+    return err(respResult.error)
+
+  var ranges: seq[FoldingRange] = @[]
+  let response = respResult.get
+
+  if response.kind == JNull:
+    return ok(ranges)
+
+  if response.kind == JArray:
+    for item in response:
+      ranges.add(parseFoldingRange(item))
+
+  return ok(ranges)

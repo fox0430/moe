@@ -33,11 +33,11 @@ import
   ]
 import
   normal_handler, insert_handler, command_handler, visual_handler, replace_handler,
-  filer_handler
+  filer_handler, logviewer_handler, help_handler
 
 export
   normal_handler, insert_handler, command_handler, visual_handler, replace_handler,
-  filer_handler
+  filer_handler, logviewer_handler, help_handler
 
 type
   HandlerResultKind* = enum
@@ -67,11 +67,17 @@ type
     hrFilerOpenFileHSplit # Open file from filer in horizontal split
     hrFilerQuit # Close filer and return to previous mode
     hrEnterFiler # Enter filer mode with optional path
+    hrLogViewerQuit # Close log viewer and return to previous mode
+    hrEnterLogViewer # Enter log viewer mode
+    hrHelpViewerQuit # Close help viewer and return to previous mode
+    hrEnterHelpViewer # Enter help viewer mode
     hrQuickRun # Run the current buffer
     hrLspGotoDefinition # Execute LSP goto definition
     hrLspGotoDeclaration # Execute LSP goto declaration
     hrLspFindReferences # Execute LSP find references
     hrLspCodeLensExecute # Execute CodeLens on current line
+    hrLspCallHierarchyIncoming # Execute LSP incoming calls
+    hrLspCallHierarchyOutgoing # Execute LSP outgoing calls
     hrUnhandled # Command was not handled
     hrError # Error occurred
 
@@ -82,6 +88,8 @@ type
     visualHandler*: VisualModeHandler
     replaceHandler*: ReplaceModeHandler
     filerHandler*: FilerHandler
+    logViewerHandler*: LogViewerHandler
+    helpViewerHandler*: HelpViewerHandler
     motionController*: MotionController
     keyBindingRegistry*: KeyBindingRegistry
     commandLineParser*: CommandLineParser
@@ -134,6 +142,14 @@ type
       discard
     of hrEnterFiler:
       enterFilerPath*: Option[string]
+    of hrLogViewerQuit:
+      discard
+    of hrEnterLogViewer:
+      discard
+    of hrHelpViewerQuit:
+      discard
+    of hrEnterHelpViewer:
+      discard
     of hrQuickRun:
       discard
     of hrLspGotoDefinition:
@@ -143,6 +159,10 @@ type
     of hrLspFindReferences:
       discard
     of hrLspCodeLensExecute:
+      discard
+    of hrLspCallHierarchyIncoming:
+      discard
+    of hrLspCallHierarchyOutgoing:
       discard
     of hrUnhandled:
       discard
@@ -173,6 +193,8 @@ proc newHandlerManager*(
   let replaceHandler =
     newReplaceModeHandler(keyBindingRegistry, motionController, commandRegistry)
   let filerHandler = newFilerHandler()
+  let logViewerHandler = newLogViewerHandler()
+  let helpViewerHandler = newHelpViewerHandler()
 
   HandlerManager(
     normalHandler: normalHandler,
@@ -181,6 +203,8 @@ proc newHandlerManager*(
     visualHandler: visualHandler,
     replaceHandler: replaceHandler,
     filerHandler: filerHandler,
+    logViewerHandler: logViewerHandler,
+    helpViewerHandler: helpViewerHandler,
     motionController: motionController,
     keyBindingRegistry: keyBindingRegistry,
     commandLineParser: commandLineParser,
@@ -306,6 +330,12 @@ proc handleNormalMode*(
   of nmrLspCodeLensExecute:
     # Signal to editor to execute CodeLens on current line
     return HandlerResult(kind: hrLspCodeLensExecute)
+  of nmrLspCallHierarchyIncoming:
+    # Signal to editor to execute LSP incoming calls
+    return HandlerResult(kind: hrLspCallHierarchyIncoming)
+  of nmrLspCallHierarchyOutgoing:
+    # Signal to editor to execute LSP outgoing calls
+    return HandlerResult(kind: hrLspCallHierarchyOutgoing)
 
 proc handleInsertMode*(
     manager: HandlerManager, buffer: TextBuffer, state: EditorState, keyCombo: KeyCombo
@@ -432,6 +462,12 @@ proc handleCommandMode*(
   of cmrFiler:
     # Switch to Filer mode with optional path
     return HandlerResult(kind: hrEnterFiler, enterFilerPath: r.filerPath)
+  of cmrLogViewer:
+    # Switch to LogViewer mode
+    return HandlerResult(kind: hrEnterLogViewer)
+  of cmrHelpViewer:
+    # Switch to HelpViewer mode
+    return HandlerResult(kind: hrEnterHelpViewer)
   of cmrQuickRun:
     return HandlerResult(kind: hrQuickRun)
   of cmrError:
@@ -658,6 +694,56 @@ proc handleFilerMode*(
   of frError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
+proc handleLogViewerMode*(
+    manager: HandlerManager, state: EditorState, viewportHeight: int, keyCombo: KeyCombo
+): HandlerResult =
+  ## Handle Log Viewer mode input
+  let r =
+    manager.logViewerHandler.handleLogViewerModeKey(state, viewportHeight, keyCombo)
+  case r.kind
+  of lvrHandled:
+    return HandlerResult(
+      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+    )
+  of lvrEnterCommand:
+    # Enter command mode from log viewer
+    state.commandText = ":"
+    state.commandCursor = 0
+    return HandlerResult(
+      kind: hrHandled, modeTransition: some(EditorMode.Command), statusMessage: ""
+    )
+  of lvrQuit:
+    return HandlerResult(kind: hrLogViewerQuit)
+  of lvrUnhandled:
+    return HandlerResult(kind: hrUnhandled)
+  of lvrError:
+    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
+
+proc handleHelpViewerMode*(
+    manager: HandlerManager, state: EditorState, viewportHeight: int, keyCombo: KeyCombo
+): HandlerResult =
+  ## Handle Help Viewer mode input
+  let r =
+    manager.helpViewerHandler.handleHelpViewerModeKey(state, viewportHeight, keyCombo)
+  case r.kind
+  of hvrHandled:
+    return HandlerResult(
+      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+    )
+  of hvrEnterCommand:
+    # Enter command mode from help viewer
+    state.commandText = ":"
+    state.commandCursor = 0
+    return HandlerResult(
+      kind: hrHandled, modeTransition: some(EditorMode.Command), statusMessage: ""
+    )
+  of hvrQuit:
+    return HandlerResult(kind: hrHelpViewerQuit)
+  of hvrUnhandled:
+    return HandlerResult(kind: hrUnhandled)
+  of hvrError:
+    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
+
 const MaxMacroRecursionDepth = 100
   ## Maximum macro recursion depth to prevent infinite loops
 
@@ -697,6 +783,10 @@ proc handleKeyCombo*(
     return manager.handleReplaceMode(buffer, state, keyCombo)
   of EditorMode.Filer:
     return manager.handleFilerMode(state, viewport.height, keyCombo)
+  of EditorMode.LogViewer:
+    return manager.handleLogViewerMode(state, viewport.height, keyCombo)
+  of EditorMode.Help:
+    return manager.handleHelpViewerMode(state, viewport.height, keyCombo)
   of EditorMode.QuickRun:
     # QuickRun mode is not interactive - handled through command mode
     return HandlerResult(kind: hrUnhandled)
@@ -787,8 +877,10 @@ proc wasHandled*(hrResult: HandlerResult): bool =
     hrHandled, hrQuit, hrCloseWindow, hrGotoLine, hrVSplit, hrHSplit, hrEnew, hrSave,
     hrSaveAndQuit, hrBufferNext, hrBufferPrev, hrBufferFirst, hrBufferLast,
     hrBufferDelete, hrStripWhitespace, hrFilerOpenFile, hrFilerOpenFileVSplit,
-    hrFilerOpenFileHSplit, hrFilerQuit, hrLspGotoDefinition, hrLspGotoDeclaration,
-    hrLspFindReferences, hrLspCodeLensExecute,
+    hrFilerOpenFileHSplit, hrFilerQuit, hrEnterFiler, hrLogViewerQuit, hrEnterLogViewer,
+    hrHelpViewerQuit, hrEnterHelpViewer, hrLspGotoDefinition, hrLspGotoDeclaration,
+    hrLspFindReferences, hrLspCodeLensExecute, hrLspCallHierarchyIncoming,
+    hrLspCallHierarchyOutgoing,
   }
 
 proc shouldQuit*(hrResult: HandlerResult): bool =
@@ -894,6 +986,22 @@ proc getEnterFilerPath*(hrResult: HandlerResult): Option[string] =
   else:
     none(string)
 
+proc shouldEnterLogViewer*(hrResult: HandlerResult): bool =
+  ## Check if we should enter log viewer mode
+  hrResult.kind == hrEnterLogViewer
+
+proc shouldLogViewerQuit*(hrResult: HandlerResult): bool =
+  ## Check if we should close log viewer
+  hrResult.kind == hrLogViewerQuit
+
+proc shouldEnterHelpViewer*(hrResult: HandlerResult): bool =
+  ## Check if we should enter help viewer mode
+  hrResult.kind == hrEnterHelpViewer
+
+proc shouldHelpViewerQuit*(hrResult: HandlerResult): bool =
+  ## Check if we should close help viewer
+  hrResult.kind == hrHelpViewerQuit
+
 proc shouldQuickRun*(hrResult: HandlerResult): bool =
   ## Check if we should run QuickRun
   hrResult.kind == hrQuickRun
@@ -987,3 +1095,11 @@ proc shouldLspFindReferences*(hrResult: HandlerResult): bool =
 proc shouldLspCodeLensExecute*(hrResult: HandlerResult): bool =
   ## Check if we should execute CodeLens on current line
   hrResult.kind == hrLspCodeLensExecute
+
+proc shouldLspCallHierarchyIncoming*(hrResult: HandlerResult): bool =
+  ## Check if we should execute LSP incoming calls
+  hrResult.kind == hrLspCallHierarchyIncoming
+
+proc shouldLspCallHierarchyOutgoing*(hrResult: HandlerResult): bool =
+  ## Check if we should execute LSP outgoing calls
+  hrResult.kind == hrLspCallHierarchyOutgoing

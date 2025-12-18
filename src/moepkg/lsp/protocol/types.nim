@@ -350,6 +350,54 @@ type
   CodeLensParams* = object ## Parameters for textDocument/codeLens request
     textDocument*: TextDocumentIdentifier
 
+  # Call Hierarchy types
+  CallHierarchyItem* = object
+    ## Represents programming constructs like functions or constructors in the
+    ## context of call hierarchy.
+    name*: string ## The name of this item
+    kind*: SymbolKind ## The kind of this item
+    tags*: Option[seq[int]] ## Tags for this item (e.g., deprecated)
+    detail*: Option[string] ## More detail for this item (e.g., signature)
+    uri*: string ## The resource identifier of this item
+    range*: Range ## Range enclosing this symbol (including leading/trailing whitespace)
+    selectionRange*: Range ## Range that should be selected and revealed
+    data*: Option[JsonNode] ## Data preserved between prepare and incoming/outgoing calls
+
+  CallHierarchyIncomingCall* = object
+    ## Represents an incoming call, e.g., a caller of a method or constructor.
+    `from`*: CallHierarchyItem ## The item that makes the call
+    fromRanges*: seq[Range] ## The ranges at which the calls appear
+
+  CallHierarchyOutgoingCall* = object
+    ## Represents an outgoing call, e.g., calling a getter from a method.
+    to*: CallHierarchyItem ## The item that is called
+    fromRanges*: seq[Range] ## The range at which this item is called
+
+  CallHierarchyPrepareParams* = object
+    ## Parameters for textDocument/prepareCallHierarchy
+    textDocument*: TextDocumentIdentifier
+    position*: Position
+
+  CallHierarchyIncomingCallsParams* = object
+    ## Parameters for callHierarchy/incomingCalls
+    item*: CallHierarchyItem
+
+  CallHierarchyOutgoingCallsParams* = object
+    ## Parameters for callHierarchy/outgoingCalls
+    item*: CallHierarchyItem
+
+  # Folding Range types
+  FoldingRange* = object ## Represents a folding range in a text document
+    startLine*: int ## Zero-based line number of the start of the range
+    startCharacter*: Option[int] ## Zero-based character offset of the start (optional)
+    endLine*: int ## Zero-based line number of the end of the range
+    endCharacter*: Option[int] ## Zero-based character offset of the end (optional)
+    kind*: Option[FoldingRangeKind] ## The kind of the folding range
+    collapsedText*: Option[string] ## Text to display when collapsed (LSP 3.17+)
+
+  FoldingRangeParams* = object ## Parameters for textDocument/foldingRange request
+    textDocument*: TextDocumentIdentifier
+
   # Semantic Tokens types
   SemanticTokensLegend* = object
     ## Semantic tokens legend (defines token types and modifiers)
@@ -1081,6 +1129,10 @@ proc parseServerCapabilities*(node: JsonNode): ServerCapabilities =
     result.selectionRangeProvider = some(node["selectionRangeProvider"])
   if node.hasKey("codeLensProvider"):
     result.codeLensProvider = some(node["codeLensProvider"])
+  if node.hasKey("callHierarchyProvider"):
+    result.callHierarchyProvider = some(node["callHierarchyProvider"])
+  if node.hasKey("foldingRangeProvider"):
+    result.foldingRangeProvider = some(node["foldingRangeProvider"])
 
 # CodeLens serialization and parsing
 proc toJson*(cmd: Command): JsonNode =
@@ -1118,3 +1170,80 @@ proc parseCodeLens*(node: JsonNode): CodeLens =
     result.command = some(parseCommand(node["command"]))
   if node.hasKey("data"):
     result.data = some(node["data"])
+
+# Call Hierarchy serialization and parsing
+proc parseCallHierarchyItem*(node: JsonNode): CallHierarchyItem =
+  ## Parse CallHierarchyItem from JSON
+  result.name = node["name"].getStr
+  result.kind = SymbolKind(node["kind"].getInt)
+  result.uri = node["uri"].getStr
+  result.range = parseRange(node["range"])
+  result.selectionRange = parseRange(node["selectionRange"])
+  if node.hasKey("tags") and node["tags"].kind == JArray:
+    var tags: seq[int] = @[]
+    for t in node["tags"]:
+      tags.add(t.getInt)
+    result.tags = some(tags)
+  if node.hasKey("detail") and node["detail"].kind == JString:
+    result.detail = some(node["detail"].getStr)
+  if node.hasKey("data"):
+    result.data = some(node["data"])
+
+proc toJson*(item: CallHierarchyItem): JsonNode =
+  ## Serialize CallHierarchyItem to JSON
+  result =
+    %*{
+      "name": item.name,
+      "kind": item.kind.int,
+      "uri": item.uri,
+      "range": item.range.toJson,
+      "selectionRange": item.selectionRange.toJson,
+    }
+  if item.tags.isSome:
+    result["tags"] = %item.tags.get
+  if item.detail.isSome:
+    result["detail"] = %item.detail.get
+  if item.data.isSome:
+    result["data"] = item.data.get
+
+proc parseCallHierarchyIncomingCall*(node: JsonNode): CallHierarchyIncomingCall =
+  ## Parse CallHierarchyIncomingCall from JSON
+  result.`from` = parseCallHierarchyItem(node["from"])
+  for r in node["fromRanges"]:
+    result.fromRanges.add(parseRange(r))
+
+proc parseCallHierarchyOutgoingCall*(node: JsonNode): CallHierarchyOutgoingCall =
+  ## Parse CallHierarchyOutgoingCall from JSON
+  result.to = parseCallHierarchyItem(node["to"])
+  for r in node["fromRanges"]:
+    result.fromRanges.add(parseRange(r))
+
+# Folding Range serialization and parsing
+proc toJson*(params: FoldingRangeParams): JsonNode =
+  ## Serialize FoldingRangeParams to JSON
+  %*{"textDocument": params.textDocument.toJson}
+
+proc parseFoldingRangeKind*(s: string): Option[FoldingRangeKind] =
+  ## Parse FoldingRangeKind from string
+  case s
+  of "comment":
+    some(frkComment)
+  of "imports":
+    some(frkImports)
+  of "region":
+    some(frkRegion)
+  else:
+    none(FoldingRangeKind)
+
+proc parseFoldingRange*(node: JsonNode): FoldingRange =
+  ## Parse FoldingRange from JSON
+  result.startLine = node["startLine"].getInt
+  result.endLine = node["endLine"].getInt
+  if node.hasKey("startCharacter") and node["startCharacter"].kind == JInt:
+    result.startCharacter = some(node["startCharacter"].getInt)
+  if node.hasKey("endCharacter") and node["endCharacter"].kind == JInt:
+    result.endCharacter = some(node["endCharacter"].getInt)
+  if node.hasKey("kind") and node["kind"].kind == JString:
+    result.kind = parseFoldingRangeKind(node["kind"].getStr)
+  if node.hasKey("collapsedText") and node["collapsedText"].kind == JString:
+    result.collapsedText = some(node["collapsedText"].getStr)

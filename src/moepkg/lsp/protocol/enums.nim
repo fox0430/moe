@@ -185,3 +185,9 @@ type
     dhkText = 1 ## A textual occurrence
     dhkRead = 2 ## Read-access of a symbol, like reading a variable
     dhkWrite = 3 ## Write-access of a symbol, like writing to a variable
+
+  FoldingRangeKind* = enum
+    ## The kind of a folding range
+    frkComment = "comment" ## Folding range for a comment
+    frkImports = "imports" ## Folding range for imports or includes
+    frkRegion = "region" ## Folding range for a region (e.g., #region in C#)

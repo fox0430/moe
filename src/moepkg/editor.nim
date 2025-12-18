@@ -25,7 +25,8 @@ import
   buffer, cursor, types, commands, keybindings, commandregistry, modes, commandline,
   commandconfig, statusline, windowmanager, unicode_utils, render_utils, sidebar,
   gitdiff, highlight, logger, config, configloader, keybindconfig, search_utils, filer,
-  lspintegration, completion, signaturehelp, backup, command_completion, motion
+  lspintegration, completion, signaturehelp, backup, command_completion, motion,
+  logviewer
 import lsp/protocol/types as lspTypes
 import command_handlers/[handler_manager, visual_handler, insert_handler]
 
@@ -2506,6 +2507,141 @@ proc renderFiler(e: Editor, buffer: var Buffer) =
   e.state.screenCursor.x = 0
   e.state.screenCursor.y = listStartY + (filerState.selectedIndex - filerState.topLine)
 
+proc renderLogViewer(e: Editor, buffer: var Buffer) =
+  ## Render the log viewer view
+  if e.state.logViewerState.isNone:
+    return
+
+  # Calculate reserved lines at bottom: status line (if shown) + command line
+  let reservedBottom = if e.state.display.showStatusLine: 2 else: 1
+
+  let
+    logState = e.state.logViewerState.get
+    headerY = buffer.area.y
+    listStartY = buffer.area.y + 1
+    listEndY = buffer.area.y + buffer.area.height - reservedBottom
+    width = buffer.area.width
+
+  # Render header
+  let headerText = "-- LOG --"
+  buffer.setString(
+    buffer.area.x,
+    headerY,
+    headerText,
+    Style(
+      fg: rgb(0xff, 0xd7, 0x00),
+      bg: ColorValue(kind: Default),
+      modifiers: {StyleModifier.Bold},
+    ),
+  )
+
+  # Ensure selected line is visible
+  logState.ensureSelectedVisible(buffer.area.height - 1 - reservedBottom)
+
+  # Render log lines
+  var screenY = listStartY
+  for i in logState.topLine ..< logState.lineCount:
+    if screenY >= listEndY:
+      break
+
+    let
+      line = logState.getLine(i)
+      isSelected = i == logState.selectedIndex
+
+    # Truncate if too long
+    var displayLine =
+      if line.len > width:
+        line[0 ..< width - 3] & "..."
+      else:
+        line
+
+    # Apply style
+    let style =
+      if isSelected:
+        Style(fg: rgb(0x00, 0x00, 0x00), bg: rgb(0xff, 0xff, 0xff), modifiers: {})
+      else:
+        Style(
+          fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {}
+        )
+
+    buffer.setString(buffer.area.x, screenY, displayLine, style)
+    inc screenY
+
+  # Set cursor position (hidden in log viewer mode, but set to selected line)
+  e.state.screenCursor.x = 0
+  e.state.screenCursor.y = listStartY + (logState.selectedIndex - logState.topLine)
+
+proc renderHelpViewer(e: Editor, buffer: var Buffer) =
+  ## Render the help viewer view
+  if e.state.helpViewerState.isNone:
+    return
+
+  # Calculate reserved lines at bottom: status line (if shown) + command line
+  let reservedBottom = if e.state.display.showStatusLine: 2 else: 1
+
+  let
+    helpState = e.state.helpViewerState.get
+    headerY = buffer.area.y
+    listStartY = buffer.area.y + 1
+    listEndY = buffer.area.y + buffer.area.height - reservedBottom
+    width = buffer.area.width
+
+  # Render header
+  let headerText = "-- HELP --"
+  buffer.setString(
+    buffer.area.x,
+    headerY,
+    headerText,
+    Style(
+      fg: rgb(0xff, 0xd7, 0x00),
+      bg: ColorValue(kind: Default),
+      modifiers: {StyleModifier.Bold},
+    ),
+  )
+
+  # Ensure selected line is visible
+  helpState.ensureSelectedVisible(buffer.area.height - 1 - reservedBottom)
+
+  # Render help lines
+  var screenY = listStartY
+  for i in helpState.topLine ..< helpState.lineCount:
+    if screenY >= listEndY:
+      break
+
+    let
+      line = helpState.getLine(i)
+      isSelected = i == helpState.selectedIndex
+      isHeader = line.len > 0 and line[0] == '#'
+
+    # Truncate if too long
+    var displayLine =
+      if line.len > width:
+        line[0 ..< width - 3] & "..."
+      else:
+        line
+
+    # Apply style
+    let style =
+      if isSelected:
+        Style(fg: rgb(0x00, 0x00, 0x00), bg: rgb(0xff, 0xff, 0xff), modifiers: {})
+      elif isHeader:
+        Style(
+          fg: rgb(0x5f, 0xaf, 0xff),
+          bg: ColorValue(kind: Default),
+          modifiers: {StyleModifier.Bold},
+        )
+      else:
+        Style(
+          fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {}
+        )
+
+    buffer.setString(buffer.area.x, screenY, displayLine, style)
+    inc screenY
+
+  # Set cursor position (hidden in help viewer mode, but set to selected line)
+  e.state.screenCursor.x = 0
+  e.state.screenCursor.y = listStartY + (helpState.selectedIndex - helpState.topLine)
+
 proc maybeUpdateLsp*(e: Editor) =
   ## Update LSP if buffer was modified
   ## This notifies the LSP server of document changes for real-time diagnostics
@@ -2692,6 +2828,92 @@ proc requestLspReferences*(e: Editor): bool =
     return false
 
   return e.handleLspLocations(refsResult.get, "References", "Reference")
+
+proc requestLspCallHierarchyIncoming*(e: Editor): bool =
+  ## Request LSP incoming calls (callers) at current cursor position
+  ## Returns true if successful and callers were found
+  if not e.lsp.enabled:
+    e.state.statusMessage = "LSP is not enabled"
+    return false
+
+  let activeBuffer = e.activeBuffer()
+
+  # First, prepare call hierarchy to get the item at cursor
+  let prepareResult = e.lsp.requestCallHierarchyPrepare(
+    activeBuffer, e.state.cursor.line, e.state.cursor.column
+  )
+
+  if prepareResult.isErr:
+    e.state.statusMessage = "LSP call hierarchy failed: " & prepareResult.error
+    return false
+
+  let items = prepareResult.get
+  if items.len == 0:
+    e.state.statusMessage = "No callable symbol at cursor"
+    return false
+
+  # Get incoming calls for the first item
+  let incomingResult = e.lsp.requestCallHierarchyIncomingCalls(activeBuffer, items[0])
+
+  if incomingResult.isErr:
+    e.state.statusMessage = "LSP incoming calls failed: " & incomingResult.error
+    return false
+
+  let calls = incomingResult.get
+  if calls.len == 0:
+    e.state.statusMessage = "No incoming calls found"
+    return false
+
+  # Convert CallHierarchyIncomingCall to Location for display
+  var locations: seq[lspTypes.Location] = @[]
+  for call in calls:
+    locations.add(
+      lspTypes.Location(uri: call.`from`.uri, range: call.`from`.selectionRange)
+    )
+
+  return e.handleLspLocations(locations, "Incoming Calls", "Caller")
+
+proc requestLspCallHierarchyOutgoing*(e: Editor): bool =
+  ## Request LSP outgoing calls (callees) at current cursor position
+  ## Returns true if successful and callees were found
+  if not e.lsp.enabled:
+    e.state.statusMessage = "LSP is not enabled"
+    return false
+
+  let activeBuffer = e.activeBuffer()
+
+  # First, prepare call hierarchy to get the item at cursor
+  let prepareResult = e.lsp.requestCallHierarchyPrepare(
+    activeBuffer, e.state.cursor.line, e.state.cursor.column
+  )
+
+  if prepareResult.isErr:
+    e.state.statusMessage = "LSP call hierarchy failed: " & prepareResult.error
+    return false
+
+  let items = prepareResult.get
+  if items.len == 0:
+    e.state.statusMessage = "No callable symbol at cursor"
+    return false
+
+  # Get outgoing calls for the first item
+  let outgoingResult = e.lsp.requestCallHierarchyOutgoingCalls(activeBuffer, items[0])
+
+  if outgoingResult.isErr:
+    e.state.statusMessage = "LSP outgoing calls failed: " & outgoingResult.error
+    return false
+
+  let calls = outgoingResult.get
+  if calls.len == 0:
+    e.state.statusMessage = "No outgoing calls found"
+    return false
+
+  # Convert CallHierarchyOutgoingCall to Location for display
+  var locations: seq[lspTypes.Location] = @[]
+  for call in calls:
+    locations.add(lspTypes.Location(uri: call.to.uri, range: call.to.selectionRange))
+
+  return e.handleLspLocations(locations, "Outgoing Calls", "Callee")
 
 proc hasCodeLensSupport*(e: Editor): bool =
   ## Check if CodeLens is supported for the current buffer
@@ -3120,6 +3342,22 @@ proc render*(e: Editor, buffer: var Buffer) =
   if e.state.mode == EditorMode.Filer or
       (e.state.mode == EditorMode.Command and e.state.filerState.isSome):
     e.renderFiler(buffer)
+    e.renderBottomLines(buffer)
+    return
+
+  # Handle LogViewer mode rendering separately
+  # Also render log viewer when in Command mode but came from LogViewer (logViewerState is active)
+  if e.state.mode == EditorMode.LogViewer or
+      (e.state.mode == EditorMode.Command and e.state.logViewerState.isSome):
+    e.renderLogViewer(buffer)
+    e.renderBottomLines(buffer)
+    return
+
+  # Handle Help mode rendering separately
+  # Also render help viewer when in Command mode but came from Help (helpViewerState is active)
+  if e.state.mode == EditorMode.Help or
+      (e.state.mode == EditorMode.Command and e.state.helpViewerState.isSome):
+    e.renderHelpViewer(buffer)
     e.renderBottomLines(buffer)
     return
 

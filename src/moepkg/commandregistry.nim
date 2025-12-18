@@ -100,6 +100,8 @@ type
     bcLspGotoDefinition = "lsp.goto.definition"
     bcLspFindReferences = "lsp.find.references"
     bcLspCodeLensExecute = "lsp.codelens.execute"
+    bcLspCallHierarchyIncoming = "lsp.callhierarchy.incoming"
+    bcLspCallHierarchyOutgoing = "lsp.callhierarchy.outgoing"
     # Fold operations
     bcFoldOpen = "fold.open" # zo - open fold at cursor
     bcFoldClose = "fold.close" # zc - close fold at cursor

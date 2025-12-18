@@ -842,6 +842,148 @@ proc requestExecuteCommand*(
   let path = buffer.filePath.get
   return lsp.service.requestExecuteCommand(path, command, arguments)
 
+proc requestCallHierarchyPrepare*(
+    lsp: LspIntegration, buffer: TextBuffer, line, column: int
+): Result[seq[CallHierarchyItem], string] =
+  ## Prepare call hierarchy at cursor position
+  ## Returns a list of CallHierarchyItems for the symbol at the position
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.requestCallHierarchyPrepare(path, line, column)
+
+proc requestCallHierarchyIncomingCalls*(
+    lsp: LspIntegration, buffer: TextBuffer, item: CallHierarchyItem
+): Result[seq[CallHierarchyIncomingCall], string] =
+  ## Request incoming calls for a CallHierarchyItem
+  ## Returns all callers of the given item
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.requestCallHierarchyIncomingCalls(path, item)
+
+proc requestCallHierarchyOutgoingCalls*(
+    lsp: LspIntegration, buffer: TextBuffer, item: CallHierarchyItem
+): Result[seq[CallHierarchyOutgoingCall], string] =
+  ## Request outgoing calls for a CallHierarchyItem
+  ## Returns all items called by the given item
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.requestCallHierarchyOutgoingCalls(path, item)
+
+# Folding Range support
+proc hasFoldingRangeSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =
+  ## Check if folding range is supported for a buffer's language
+  if not lsp.enabled:
+    return false
+
+  if buffer.filePath.isNone:
+    return false
+
+  let path = buffer.filePath.get
+  let langIdOpt = lsp.service.getLanguageIdFromPath(path)
+  if langIdOpt.isNone:
+    return false
+
+  return lsp.service.hasFoldingRangeSupport(langIdOpt.get)
+
+proc requestFoldingRanges*(
+    lsp: LspIntegration, buffer: TextBuffer
+): Result[seq[FoldingRange], string] =
+  ## Request folding ranges for a buffer
+  ## Returns all foldable regions (functions, classes, comments, imports, etc.)
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.requestFoldingRange(path)
+
+proc applyLspFoldingRanges*(
+    buffer: TextBuffer,
+    ranges: seq[FoldingRange],
+    clearExisting: bool = true,
+    startCollapsed: bool = false,
+): int =
+  ## Apply LSP folding ranges to buffer's FoldState
+  ## Returns the number of folds successfully added
+  ## If clearExisting is true, removes all existing folds first
+  ## If startCollapsed is false (default), folds are added in expanded state
+  ## LSP FoldingRange uses 0-based line numbers which matches our FoldState
+  ##
+  ## Note: Due to the current FoldState design, overlapping/nested folds are not supported.
+  ## This function sorts ranges by size (smallest first) to maximize the number of
+  ## non-overlapping folds that can be added. Larger outer folds that overlap with
+  ## already-added smaller folds will be skipped.
+  if clearExisting:
+    buffer.foldState = initFoldState()
+
+  # Filter valid ranges and sort by size (smallest first) to prioritize inner folds
+  var validRanges: seq[FoldingRange] = @[]
+  for range in ranges:
+    # Skip invalid ranges
+    if range.endLine < range.startLine:
+      continue
+    # Skip ranges outside buffer bounds
+    if range.startLine < 0 or range.endLine >= buffer.len:
+      continue
+    validRanges.add(range)
+
+  # Sort by range size (endLine - startLine), smallest first
+  validRanges.sort(
+    proc(a, b: FoldingRange): int =
+      let sizeA = a.endLine - a.startLine
+      let sizeB = b.endLine - b.startLine
+      result = sizeA - sizeB
+  )
+
+  var added = 0
+  for range in validRanges:
+    # Add fold with LSP-provided collapsedText
+    # addFold checks for overlaps and maintains sorted order
+    if buffer.foldState.addFold(
+      range.startLine,
+      range.endLine,
+      collapsed = startCollapsed,
+      collapsedText = range.collapsedText,
+    ):
+      inc added
+
+  return added
+
+proc refreshLspFolds*(
+    lsp: LspIntegration,
+    buffer: TextBuffer,
+    clearExisting: bool = true,
+    startCollapsed: bool = false,
+): Result[int, string] =
+  ## Request folding ranges from LSP and apply them to buffer
+  ## Returns the number of folds successfully added
+  ## If clearExisting is true, removes all existing folds first
+  ## If startCollapsed is false (default), folds are added in expanded state
+  let rangesResult = lsp.requestFoldingRanges(buffer)
+  if rangesResult.isErr:
+    return err(rangesResult.error)
+
+  let count =
+    buffer.applyLspFoldingRanges(rangesResult.get, clearExisting, startCollapsed)
+  return ok(count)
+
 # Cleanup
 proc shutdown*(lsp: LspIntegration) =
   ## Shutdown all LSP servers

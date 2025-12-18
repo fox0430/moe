@@ -21,7 +21,9 @@ import std/[options, monotimes, times, tables]
 
 import pkg/celina
 
-import cursor, modes, buffer, registers, filer, command_completion
+import
+  cursor, modes, buffer, registers, filer, logviewer, helpviewer, command_completion,
+  messagelog
 
 # Re-export SidebarItemKind from buffer module
 export buffer.SidebarItemKind
@@ -29,6 +31,10 @@ export buffer.SidebarItemKind
 export registers
 # Re-export command_completion types
 export command_completion
+# Re-export logviewer types
+export logviewer
+# Re-export helpviewer types
+export helpviewer
 
 type
   SidebarItem* = object ## Single cell in the sidebar
@@ -420,6 +426,10 @@ type
     jumpListIndex*: int # Current position in jump list (-1 when not navigating)
     # Filer state
     filerState*: Option[FilerState] # File explorer state (when in Filer mode)
+    # Log viewer state
+    logViewerState*: Option[LogViewerState] # Log viewer state (when in LogViewer mode)
+    # Help viewer state
+    helpViewerState*: Option[HelpViewerState] # Help viewer state (when in Help mode)
     # Command mode completion
     commandCompletionManager*: CommandCompletionManager
       # Command mode auto-completion manager
@@ -427,3 +437,9 @@ type
     scrollAnimation*: ScrollAnimation # Current scroll animation state
     # LSP cache state (grouped in LspCacheState)
     lspCache*: LspCacheState # LSP cache and picker state
+
+proc setStatusMessage*(state: EditorState, msg: string) =
+  ## Set status message and log it to message log
+  state.statusMessage = msg
+  if msg.len > 0:
+    addMessageLog(msg)

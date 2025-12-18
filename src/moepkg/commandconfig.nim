@@ -60,7 +60,10 @@ proc isCommandEnabled*(config: CommandConfig, action: CommandLineAction): bool =
   action notin config.disabledCommands
 
 proc loadDefaultConfig*(config: CommandConfig) =
-  ## Load default command configuration
+  ## Load default command configuration.
+  ## This is the single source of truth for all command aliases.
+  ## When adding a new command, add its aliases here.
+
   # Standard quit commands
   config.addAlias("q", claQuit)
   config.addAlias("quit", claQuit)
@@ -127,6 +130,10 @@ proc loadDefaultConfig*(config: CommandConfig) =
   config.addAlias("filer", claFiler)
   config.addAlias("Ex", claFiler)
   config.addAlias("Explore", claFiler)
+
+  # Log viewer
+  config.addAlias("log", claLogViewer)
+  config.addAlias("messages", claLogViewer)
 
   # QuickRun
   config.addAlias("run", claQuickRun)

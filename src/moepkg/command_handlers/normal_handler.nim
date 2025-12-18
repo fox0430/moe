@@ -41,6 +41,8 @@ type
     nmrLspGotoDeclaration # Signal to handler_manager to execute LSP goto declaration
     nmrLspFindReferences # Signal to handler_manager to execute LSP find references
     nmrLspCodeLensExecute # Signal to handler_manager to execute CodeLens on current line
+    nmrLspCallHierarchyIncoming # Signal to handler_manager to show incoming calls
+    nmrLspCallHierarchyOutgoing # Signal to handler_manager to show outgoing calls
 
   NormalModeHandler* = ref object ## Handler for Normal mode specific commands
     motionController*: MotionController
@@ -71,6 +73,10 @@ type
     of nmrLspFindReferences:
       discard
     of nmrLspCodeLensExecute:
+      discard
+    of nmrLspCallHierarchyIncoming:
+      discard
+    of nmrLspCallHierarchyOutgoing:
       discard
 
 proc newNormalModeHandler*(
@@ -179,6 +185,11 @@ proc handleModeSwitch*(
     return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Filer))
   of EditorMode.QuickRun:
     return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.QuickRun))
+  of EditorMode.LogViewer:
+    return
+      NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.LogViewer))
+  of EditorMode.Help:
+    return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Help))
   of EditorMode.Normal:
     # Already in Normal mode
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
@@ -485,6 +496,10 @@ proc handleNormalModeKey*(
       return NormalModeResult(kind: nmrLspFindReferences)
     elif cmd.commandId == "lsp.codelens.execute":
       return NormalModeResult(kind: nmrLspCodeLensExecute)
+    elif cmd.commandId == "lsp.callhierarchy.incoming":
+      return NormalModeResult(kind: nmrLspCallHierarchyIncoming)
+    elif cmd.commandId == "lsp.callhierarchy.outgoing":
+      return NormalModeResult(kind: nmrLspCallHierarchyOutgoing)
 
     # Execute custom commands and operators through command registry
     let ctx = CommandContext(

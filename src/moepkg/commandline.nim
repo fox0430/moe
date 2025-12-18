@@ -49,6 +49,7 @@ type
     claBufferDelete # :bd, :bdelete (delete buffer)
     claStripWhitespace # :stripwhitespace, :stripws (remove trailing whitespace)
     claFiler # :Filer (open file explorer)
+    claLogViewer # :log (open log viewer)
     claQuickRun # :run (quick run)
     claUnknown # Unknown command
 
@@ -103,20 +104,21 @@ type
       discard
     of claFiler:
       filerPath*: Option[string] # Optional path to open in filer
+    of claLogViewer:
+      discard
     of claQuickRun:
       discard
     of claUnknown:
       errorMessage*: string
 
 proc newCommandLineParser*(): CommandLineParser =
-  ## Create a new command line parser (aliases will be loaded from config)
+  ## Create a new command line parser.
+  ## Aliases are defined in commandconfig.nim and loaded via CommandConfig.applyToParser()
   result = CommandLineParser(
     aliases: initTable[string, CommandLineAction](),
     validators:
       initTable[CommandLineAction, proc(args: seq[string]): Result[void, string]](),
   )
-  # Note: Aliases are now loaded via CommandConfig.applyToParser()
-  # This allows for user customization through configuration files
 
 proc addAlias*(parser: CommandLineParser, alias: string, action: CommandLineAction) =
   ## Add a command alias to the parser
@@ -129,73 +131,6 @@ proc removeAlias*(parser: CommandLineParser, alias: string) =
 proc clearAliases*(parser: CommandLineParser) =
   ## Clear all command aliases
   parser.aliases.clear
-
-proc loadDefaultAliases*(parser: CommandLineParser) =
-  ## Load default command aliases (for fallback)
-  # Note: ! suffix is handled by the parser, not by aliases
-  parser.addAlias("q", claQuit)
-  parser.addAlias("quit", claQuit)
-  parser.addAlias("qa", claQuitAll)
-
-  parser.addAlias("w", claSave)
-  parser.addAlias("write", claSave)
-  parser.addAlias("wa", claSaveAll)
-
-  parser.addAlias("wq", claSaveAndQuit)
-  parser.addAlias("x", claSaveAndQuit)
-  parser.addAlias("xit", claSaveAndQuit)
-  parser.addAlias("wqa", claSaveAllAndQuit)
-  parser.addAlias("xa", claSaveAllAndQuit)
-
-  parser.addAlias("e", claEdit)
-  parser.addAlias("edit", claEdit)
-
-  parser.addAlias("ene", claEnew)
-  parser.addAlias("enew", claEnew)
-
-  parser.addAlias("set", claSet)
-  parser.addAlias("se", claSet)
-
-  parser.addAlias("h", claHelp)
-  parser.addAlias("help", claHelp)
-
-  parser.addAlias("s", claSubstitute)
-  parser.addAlias("substitute", claSubstitute)
-
-  parser.addAlias("vs", claVSplit)
-  parser.addAlias("vsplit", claVSplit)
-
-  parser.addAlias("sp", claHSplit)
-  parser.addAlias("split", claHSplit)
-
-  parser.addAlias("bn", claBufferNext)
-  parser.addAlias("bnext", claBufferNext)
-
-  parser.addAlias("bp", claBufferPrev)
-  parser.addAlias("bprev", claBufferPrev)
-  parser.addAlias("bprevious", claBufferPrev)
-
-  parser.addAlias("bf", claBufferFirst)
-  parser.addAlias("bfirst", claBufferFirst)
-  parser.addAlias("brewind", claBufferFirst)
-
-  parser.addAlias("bl", claBufferLast)
-  parser.addAlias("blast", claBufferLast)
-
-  parser.addAlias("bd", claBufferDelete)
-  parser.addAlias("bdelete", claBufferDelete)
-
-  parser.addAlias("stripwhitespace", claStripWhitespace)
-  parser.addAlias("stripws", claStripWhitespace)
-
-  parser.addAlias("Filer", claFiler)
-  parser.addAlias("filer", claFiler)
-  parser.addAlias("Ex", claFiler)
-  parser.addAlias("Explore", claFiler)
-
-  parser.addAlias("run", claQuickRun)
-  parser.addAlias("quickrun", claQuickRun)
-  parser.addAlias("qr", claQuickRun)
 
 proc parseCommandLine*(parser: CommandLineParser, input: string): ParsedCommand =
   ## Parse a command line input string into a structured command
@@ -359,6 +294,8 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
         else:
           none(string),
     )
+  of claLogViewer:
+    return CommandLineResult(kind: claLogViewer)
   of claQuickRun:
     return CommandLineResult(kind: claQuickRun)
   of claUnknown:

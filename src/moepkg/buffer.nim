@@ -42,6 +42,7 @@ type
     startLine*: int # Fold start line (0-based, inclusive)
     endLine*: int # Fold end line (0-based, inclusive)
     collapsed*: bool # Whether the fold is currently collapsed
+    collapsedText*: Option[string] # Custom text to display when collapsed (from LSP)
 
   FoldState* = object ## Manages all folds in a buffer
     folds*: seq[Fold] # List of all folds (sorted by startLine)
@@ -1718,9 +1719,16 @@ proc initFoldState*(): FoldState =
   ## Initialize an empty fold state
   FoldState(folds: @[])
 
-proc addFold*(state: var FoldState, startLine, endLine: int): bool =
+proc addFold*(
+    state: var FoldState,
+    startLine, endLine: int,
+    collapsed: bool = true,
+    collapsedText: Option[string] = none(string),
+): bool =
   ## Add a new fold. Returns true if successful, false if overlapping with existing fold.
   ## Folds are kept sorted by startLine. Single-line folds (startLine == endLine) are allowed.
+  ## collapsed: Whether the fold starts collapsed (default: true)
+  ## collapsedText: Custom text to display when collapsed (from LSP)
   if startLine > endLine or startLine < 0:
     return false
 
@@ -1738,7 +1746,13 @@ proc addFold*(state: var FoldState, startLine, endLine: int): bool =
       break
 
   state.folds.insert(
-    Fold(startLine: startLine, endLine: endLine, collapsed: true), insertIdx
+    Fold(
+      startLine: startLine,
+      endLine: endLine,
+      collapsed: collapsed,
+      collapsedText: collapsedText,
+    ),
+    insertIdx,
   )
   return true
 
@@ -1876,13 +1890,19 @@ proc adjustFoldsAfterDelete*(state: var FoldState, deleteLine: int, lineCount: i
 proc formatFoldText*(b: TextBuffer, fold: Fold): string =
   ## Format the display text for a collapsed fold (vim-style)
   ## Example: "+-- 10 lines: func foo() {...}"
+  ## If LSP provided collapsedText, use it instead of generating preview
   let lineCount = fold.endLine - fold.startLine + 1
-  let firstLine = b.getLine(fold.startLine)
-  # Use character-based slicing for UTF-8 safety
-  let firstLineCharLen = firstLine.charLen
-  let preview =
-    if firstLineCharLen > 40:
-      firstLine.runeSubStr(0, 40) & "..."
-    else:
-      firstLine
-  result = "+-- " & $lineCount & " lines: " & preview
+
+  # Use LSP-provided collapsedText if available
+  if fold.collapsedText.isSome and fold.collapsedText.get.len > 0:
+    result = "+-- " & $lineCount & " lines: " & fold.collapsedText.get
+  else:
+    let firstLine = b.getLine(fold.startLine)
+    # Use character-based slicing for UTF-8 safety
+    let firstLineCharLen = firstLine.charLen
+    let preview =
+      if firstLineCharLen > 40:
+        firstLine.runeSubStr(0, 40) & "..."
+      else:
+        firstLine
+    result = "+-- " & $lineCount & " lines: " & preview
