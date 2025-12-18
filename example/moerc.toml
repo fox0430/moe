@@ -106,17 +106,17 @@ currentWord = true                     # 📝 Highlight current word (not implem
 
 [AutoBackup]
 
-enable = false                         # 📝 Auto-backup feature (not implemented)
+enable = false                         # ✅ Auto-backup feature (IMPLEMENTED)
 
-# backupDir = "/home/user/.cache/moe/backups"
+# backupDir = "/home/user/.cache/moe/backups"  # ✅ Backup directory (IMPLEMENTED)
 
-# 10 second
-idleTime = 10
+# 10 second idle time before backup
+idleTime = 10                          # ✅ Idle time in seconds (IMPLEMENTED)
 
-# 5 minute
-interval = 5
+# 5 minute interval between backups
+interval = 5                           # ✅ Interval in minutes (IMPLEMENTED)
 
-dirToExclude = ["/etc"]
+dirToExclude = ["/etc"]                # ✅ Directories to exclude (IMPLEMENTED)
 
 [QuickRun]
 
@@ -198,9 +198,9 @@ windowBorder = true                    # 📝 Autocomplete window border (not ye
 
 [AutoSave]
 
-enable = true                          # 📝 Auto-save feature (not implemented)
+enable = true                          # ✅ Auto-save feature (IMPLEMENTED)
 
-interval = 5                           # 📝 Auto-save interval in minutes (not implemented)
+interval = 5                           # ✅ Auto-save interval in minutes (IMPLEMENTED)
 
 [Persist]
 

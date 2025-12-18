@@ -1,0 +1,129 @@
+#[###################### GNU General Public License 3.0 ######################]#
+#                                                                              #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
+#                                                                              #
+#  This program is free software: you can redistribute it and/or modify        #
+#  it under the terms of the GNU General Public License as published by        #
+#  the Free Software Foundation, either version 3 of the License, or           #
+#  (at your option) any later version.                                         #
+#                                                                              #
+#  This program is distributed in the hope that it will be useful,             #
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of              #
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the               #
+#  GNU General Public License for more details.                                #
+#                                                                              #
+#  You should have received a copy of the GNU General Public License           #
+#  along with this program.  If not, see <https://www.gnu.org/licenses/>.      #
+#                                                                              #
+#[############################################################################]#
+
+## Help viewer mode command handler
+##
+## This module handles commands specific to Help Viewer mode.
+## The help viewer displays editor help information.
+
+import std/options
+
+import ../[types, keybindings, helpviewer]
+
+type
+  HelpViewerResultKind* = enum
+    hvrHandled # Command was handled successfully
+    hvrEnterCommand # Enter command mode
+    hvrQuit # Close help viewer and return to previous mode
+    hvrUnhandled # Command was not handled
+    hvrError # Error occurred
+
+  HelpViewerResult* = object
+    case kind*: HelpViewerResultKind
+    of hvrError:
+      errorMessage*: string
+    else:
+      discard
+
+  HelpViewerHandler* = ref object ## Handler for Help Viewer mode specific commands
+    waitingForG*: bool # Waiting for second 'g' for 'gg' command
+
+proc newHelpViewerHandler*(): HelpViewerHandler =
+  ## Create a new Help Viewer mode handler
+  HelpViewerHandler(waitingForG: false)
+
+proc handleHelpViewerModeKey*(
+    handler: HelpViewerHandler,
+    state: EditorState,
+    viewportHeight: int,
+    keyCombo: KeyCombo,
+): HelpViewerResult =
+  ## Handle a key press in Help Viewer mode
+  ##
+  ## Returns a HelpViewerResult indicating what action should be taken
+
+  if state.helpViewerState.isNone:
+    return HelpViewerResult(
+      kind: hvrError, errorMessage: "Help viewer state not initialized"
+    )
+
+  let helpState = state.helpViewerState.get
+
+  # Handle 'gg' command (two g presses)
+  if handler.waitingForG:
+    handler.waitingForG = false
+    if not keyCombo.isSpecial and keyCombo.char == "g":
+      helpState.moveToFirst()
+      return HelpViewerResult(kind: hvrHandled)
+    # If not 'g', fall through to normal handling
+
+  # Escape or q to quit
+  if keyCombo.isSpecial and keyCombo.special == skEscape:
+    return HelpViewerResult(kind: hvrQuit)
+
+  # Check for special keys first
+  if keyCombo.isSpecial:
+    case keyCombo.special
+    of skUp:
+      helpState.moveUp()
+      helpState.ensureSelectedVisible(viewportHeight)
+      return HelpViewerResult(kind: hvrHandled)
+    of skDown:
+      helpState.moveDown()
+      helpState.ensureSelectedVisible(viewportHeight)
+      return HelpViewerResult(kind: hvrHandled)
+    else:
+      discard
+  else:
+    # Character keys
+    # Check for Ctrl+d (half page down)
+    if kmCtrl in keyCombo.modifiers and keyCombo.char == "d":
+      helpState.halfPageDown(viewportHeight)
+      return HelpViewerResult(kind: hvrHandled)
+
+    # Check for Ctrl+u (half page up)
+    if kmCtrl in keyCombo.modifiers and keyCombo.char == "u":
+      helpState.halfPageUp(viewportHeight)
+      return HelpViewerResult(kind: hvrHandled)
+
+    case keyCombo.char
+    of ":":
+      return HelpViewerResult(kind: hvrEnterCommand)
+    of "q":
+      return HelpViewerResult(kind: hvrQuit)
+    of "j":
+      helpState.moveDown()
+      helpState.ensureSelectedVisible(viewportHeight)
+      return HelpViewerResult(kind: hvrHandled)
+    of "k":
+      helpState.moveUp()
+      helpState.ensureSelectedVisible(viewportHeight)
+      return HelpViewerResult(kind: hvrHandled)
+    of "g":
+      # Start waiting for second 'g'
+      handler.waitingForG = true
+      return HelpViewerResult(kind: hvrHandled)
+    of "G":
+      helpState.moveToLast()
+      helpState.ensureSelectedVisible(viewportHeight)
+      return HelpViewerResult(kind: hvrHandled)
+    else:
+      discard
+
+  return HelpViewerResult(kind: hvrUnhandled)

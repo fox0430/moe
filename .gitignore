@@ -1,10 +1,11 @@
 src/nimcache
 
+src/*
+!src/*/
+!src/*.*
 src/**/*
+!src/**/*/
 !src/**/*.*
-
-src/.history
-src/moepkg/.history
 
 tests/*
 !tests/*.*
