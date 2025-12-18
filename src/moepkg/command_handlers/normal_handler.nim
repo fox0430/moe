@@ -190,6 +190,15 @@ proc handleModeSwitch*(
       NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.LogViewer))
   of EditorMode.Help:
     return NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.Help))
+  of EditorMode.BufferManager:
+    return
+      NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.BufferManager))
+  of EditorMode.BackupManager:
+    return
+      NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.BackupManager))
+  of EditorMode.DiffViewer:
+    return
+      NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.DiffViewer))
   of EditorMode.Normal:
     # Already in Normal mode
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))

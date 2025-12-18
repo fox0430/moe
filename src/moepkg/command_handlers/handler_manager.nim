@@ -33,11 +33,13 @@ import
   ]
 import
   normal_handler, insert_handler, command_handler, visual_handler, replace_handler,
-  filer_handler, logviewer_handler, help_handler
+  filer_handler, logviewer_handler, help_handler, buffermanager_handler,
+  backupmanager_handler, diffviewer_handler
 
 export
   normal_handler, insert_handler, command_handler, visual_handler, replace_handler,
-  filer_handler, logviewer_handler, help_handler
+  filer_handler, logviewer_handler, help_handler, buffermanager_handler,
+  backupmanager_handler, diffviewer_handler
 
 type
   HandlerResultKind* = enum
@@ -72,6 +74,18 @@ type
     hrHelpViewerQuit # Close help viewer and return to previous mode
     hrEnterHelpViewer # Enter help viewer mode
     hrQuickRun # Run the current buffer
+    hrBufferManagerSelectBuffer # Select and switch to a buffer
+    hrBufferManagerDeleteBuffer # Delete a buffer
+    hrBufferManagerQuit # Close buffer manager and return to previous mode
+    hrEnterBufferManager # Enter buffer manager mode
+    hrBackupManagerRestore # Restore a backup file
+    hrBackupManagerDelete # Delete a backup file
+    hrBackupManagerOpenDiff # Open diff viewer for a backup
+    hrBackupManagerRefresh # Refresh backup list
+    hrBackupManagerQuit # Close backup manager and return to previous mode
+    hrEnterBackupManager # Enter backup manager mode
+    hrDiffViewerQuit # Close diff viewer and return to previous mode
+    hrEnterDiffViewer # Enter diff viewer mode
     hrLspGotoDefinition # Execute LSP goto definition
     hrLspGotoDeclaration # Execute LSP goto declaration
     hrLspFindReferences # Execute LSP find references
@@ -90,6 +104,9 @@ type
     filerHandler*: FilerHandler
     logViewerHandler*: LogViewerHandler
     helpViewerHandler*: HelpViewerHandler
+    bufferManagerHandler*: BufferManagerHandler
+    backupManagerHandler*: BackupManagerHandler
+    diffViewerHandler*: DiffViewerHandler
     motionController*: MotionController
     keyBindingRegistry*: KeyBindingRegistry
     commandLineParser*: CommandLineParser
@@ -152,6 +169,31 @@ type
       discard
     of hrQuickRun:
       discard
+    of hrBufferManagerSelectBuffer:
+      selectBufferIndex*: int
+    of hrBufferManagerDeleteBuffer:
+      deleteBufferIdx*: int
+    of hrBufferManagerQuit:
+      discard
+    of hrEnterBufferManager:
+      discard
+    of hrBackupManagerRestore:
+      restoreBackupIndex*: int
+    of hrBackupManagerDelete:
+      deleteBackupIndex*: int
+    of hrBackupManagerOpenDiff:
+      diffBackupIndex*: int
+    of hrBackupManagerRefresh:
+      discard
+    of hrBackupManagerQuit:
+      discard
+    of hrEnterBackupManager:
+      discard
+    of hrDiffViewerQuit:
+      discard
+    of hrEnterDiffViewer:
+      diffSourcePath*: string
+      diffBackupPath*: string
     of hrLspGotoDefinition:
       discard
     of hrLspGotoDeclaration:
@@ -195,6 +237,9 @@ proc newHandlerManager*(
   let filerHandler = newFilerHandler()
   let logViewerHandler = newLogViewerHandler()
   let helpViewerHandler = newHelpViewerHandler()
+  let bufferManagerHandler = newBufferManagerHandler()
+  let backupManagerHandler = newBackupManagerHandler()
+  let diffViewerHandler = newDiffViewerHandler()
 
   HandlerManager(
     normalHandler: normalHandler,
@@ -205,6 +250,9 @@ proc newHandlerManager*(
     filerHandler: filerHandler,
     logViewerHandler: logViewerHandler,
     helpViewerHandler: helpViewerHandler,
+    bufferManagerHandler: bufferManagerHandler,
+    backupManagerHandler: backupManagerHandler,
+    diffViewerHandler: diffViewerHandler,
     motionController: motionController,
     keyBindingRegistry: keyBindingRegistry,
     commandLineParser: commandLineParser,
@@ -470,6 +518,10 @@ proc handleCommandMode*(
     return HandlerResult(kind: hrEnterHelpViewer)
   of cmrQuickRun:
     return HandlerResult(kind: hrQuickRun)
+  of cmrBufferManager:
+    return HandlerResult(kind: hrEnterBufferManager)
+  of cmrBackupManager:
+    return HandlerResult(kind: hrEnterBackupManager)
   of cmrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
@@ -744,6 +796,99 @@ proc handleHelpViewerMode*(
   of hvrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
+proc handleBufferManagerMode*(
+    manager: HandlerManager, state: EditorState, viewportHeight: int, keyCombo: KeyCombo
+): HandlerResult =
+  ## Handle Buffer Manager mode input
+  let r = manager.bufferManagerHandler.handleBufferManagerModeKey(
+    state, viewportHeight, keyCombo
+  )
+  case r.kind
+  of bmrHandled:
+    return HandlerResult(
+      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+    )
+  of bmrSelectBuffer:
+    return
+      HandlerResult(kind: hrBufferManagerSelectBuffer, selectBufferIndex: r.bufferIndex)
+  of bmrDeleteBuffer:
+    return HandlerResult(
+      kind: hrBufferManagerDeleteBuffer, deleteBufferIdx: r.deleteBufferIndex
+    )
+  of bmrEnterCommand:
+    # Enter command mode from buffer manager
+    state.commandText = ":"
+    state.commandCursor = 0
+    return HandlerResult(
+      kind: hrHandled, modeTransition: some(EditorMode.Command), statusMessage: ""
+    )
+  of bmrQuit:
+    return HandlerResult(kind: hrBufferManagerQuit)
+  of bmrUnhandled:
+    return HandlerResult(kind: hrUnhandled)
+  of bmrError:
+    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
+
+proc handleBackupManagerMode*(
+    manager: HandlerManager, state: EditorState, viewportHeight: int, keyCombo: KeyCombo
+): HandlerResult =
+  ## Handle Backup Manager mode input
+  let r = manager.backupManagerHandler.handleBackupManagerModeKey(
+    state, viewportHeight, keyCombo
+  )
+  case r.kind
+  of bkmrHandled:
+    return HandlerResult(
+      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+    )
+  of bkmrRestore:
+    return
+      HandlerResult(kind: hrBackupManagerRestore, restoreBackupIndex: r.restoreIndex)
+  of bkmrDelete:
+    return HandlerResult(kind: hrBackupManagerDelete, deleteBackupIndex: r.deleteIndex)
+  of bkmrOpenDiff:
+    return HandlerResult(kind: hrBackupManagerOpenDiff, diffBackupIndex: r.diffIndex)
+  of bkmrRefresh:
+    return HandlerResult(kind: hrBackupManagerRefresh)
+  of bkmrEnterCommand:
+    # Enter command mode from backup manager
+    state.commandText = ":"
+    state.commandCursor = 0
+    return HandlerResult(
+      kind: hrHandled, modeTransition: some(EditorMode.Command), statusMessage: ""
+    )
+  of bkmrQuit:
+    return HandlerResult(kind: hrBackupManagerQuit)
+  of bkmrUnhandled:
+    return HandlerResult(kind: hrUnhandled)
+  of bkmrError:
+    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
+
+proc handleDiffViewerMode*(
+    manager: HandlerManager, state: EditorState, viewportHeight: int, keyCombo: KeyCombo
+): HandlerResult =
+  ## Handle Diff Viewer mode input
+  let r =
+    manager.diffViewerHandler.handleDiffViewerModeKey(state, viewportHeight, keyCombo)
+  case r.kind
+  of dvrHandled:
+    return HandlerResult(
+      kind: hrHandled, modeTransition: none(EditorMode), statusMessage: ""
+    )
+  of dvrEnterCommand:
+    # Enter command mode from diff viewer
+    state.commandText = ":"
+    state.commandCursor = 0
+    return HandlerResult(
+      kind: hrHandled, modeTransition: some(EditorMode.Command), statusMessage: ""
+    )
+  of dvrQuit:
+    return HandlerResult(kind: hrDiffViewerQuit)
+  of dvrUnhandled:
+    return HandlerResult(kind: hrUnhandled)
+  of dvrError:
+    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
+
 const MaxMacroRecursionDepth = 100
   ## Maximum macro recursion depth to prevent infinite loops
 
@@ -787,6 +932,12 @@ proc handleKeyCombo*(
     return manager.handleLogViewerMode(state, viewport.height, keyCombo)
   of EditorMode.Help:
     return manager.handleHelpViewerMode(state, viewport.height, keyCombo)
+  of EditorMode.BufferManager:
+    return manager.handleBufferManagerMode(state, viewport.height, keyCombo)
+  of EditorMode.BackupManager:
+    return manager.handleBackupManagerMode(state, viewport.height, keyCombo)
+  of EditorMode.DiffViewer:
+    return manager.handleDiffViewerMode(state, viewport.height, keyCombo)
   of EditorMode.QuickRun:
     # QuickRun mode is not interactive - handled through command mode
     return HandlerResult(kind: hrUnhandled)
@@ -878,9 +1029,12 @@ proc wasHandled*(hrResult: HandlerResult): bool =
     hrSaveAndQuit, hrBufferNext, hrBufferPrev, hrBufferFirst, hrBufferLast,
     hrBufferDelete, hrStripWhitespace, hrFilerOpenFile, hrFilerOpenFileVSplit,
     hrFilerOpenFileHSplit, hrFilerQuit, hrEnterFiler, hrLogViewerQuit, hrEnterLogViewer,
-    hrHelpViewerQuit, hrEnterHelpViewer, hrLspGotoDefinition, hrLspGotoDeclaration,
-    hrLspFindReferences, hrLspCodeLensExecute, hrLspCallHierarchyIncoming,
-    hrLspCallHierarchyOutgoing,
+    hrHelpViewerQuit, hrEnterHelpViewer, hrBufferManagerSelectBuffer,
+    hrBufferManagerDeleteBuffer, hrBufferManagerQuit, hrEnterBufferManager,
+    hrBackupManagerRestore, hrBackupManagerDelete, hrBackupManagerOpenDiff,
+    hrBackupManagerRefresh, hrBackupManagerQuit, hrEnterBackupManager, hrDiffViewerQuit,
+    hrEnterDiffViewer, hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
+    hrLspCodeLensExecute, hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing,
   }
 
 proc shouldQuit*(hrResult: HandlerResult): bool =
@@ -1103,3 +1257,79 @@ proc shouldLspCallHierarchyIncoming*(hrResult: HandlerResult): bool =
 proc shouldLspCallHierarchyOutgoing*(hrResult: HandlerResult): bool =
   ## Check if we should execute LSP outgoing calls
   hrResult.kind == hrLspCallHierarchyOutgoing
+
+proc shouldEnterBufferManager*(hrResult: HandlerResult): bool =
+  ## Check if we should enter buffer manager mode
+  hrResult.kind == hrEnterBufferManager
+
+proc shouldBufferManagerQuit*(hrResult: HandlerResult): bool =
+  ## Check if we should close buffer manager
+  hrResult.kind == hrBufferManagerQuit
+
+proc shouldBufferManagerSelectBuffer*(hrResult: HandlerResult): bool =
+  ## Check if we should select a buffer
+  hrResult.kind == hrBufferManagerSelectBuffer
+
+proc getBufferManagerSelectBufferIndex*(hrResult: HandlerResult): int =
+  ## Get the buffer index to select
+  if hrResult.kind == hrBufferManagerSelectBuffer: hrResult.selectBufferIndex else: -1
+
+proc shouldBufferManagerDeleteBuffer*(hrResult: HandlerResult): bool =
+  ## Check if we should delete a buffer
+  hrResult.kind == hrBufferManagerDeleteBuffer
+
+proc getBufferManagerDeleteBufferIndex*(hrResult: HandlerResult): int =
+  ## Get the buffer index to delete
+  if hrResult.kind == hrBufferManagerDeleteBuffer: hrResult.deleteBufferIdx else: -1
+
+proc shouldEnterBackupManager*(hrResult: HandlerResult): bool =
+  ## Check if we should enter backup manager mode
+  hrResult.kind == hrEnterBackupManager
+
+proc shouldBackupManagerQuit*(hrResult: HandlerResult): bool =
+  ## Check if we should close backup manager
+  hrResult.kind == hrBackupManagerQuit
+
+proc shouldBackupManagerRestore*(hrResult: HandlerResult): bool =
+  ## Check if we should restore a backup
+  hrResult.kind == hrBackupManagerRestore
+
+proc getBackupManagerRestoreIndex*(hrResult: HandlerResult): int =
+  ## Get the backup index to restore
+  if hrResult.kind == hrBackupManagerRestore: hrResult.restoreBackupIndex else: -1
+
+proc shouldBackupManagerDelete*(hrResult: HandlerResult): bool =
+  ## Check if we should delete a backup
+  hrResult.kind == hrBackupManagerDelete
+
+proc getBackupManagerDeleteIndex*(hrResult: HandlerResult): int =
+  ## Get the backup index to delete
+  if hrResult.kind == hrBackupManagerDelete: hrResult.deleteBackupIndex else: -1
+
+proc shouldBackupManagerOpenDiff*(hrResult: HandlerResult): bool =
+  ## Check if we should open diff viewer for a backup
+  hrResult.kind == hrBackupManagerOpenDiff
+
+proc getBackupManagerDiffIndex*(hrResult: HandlerResult): int =
+  ## Get the backup index for diff viewer
+  if hrResult.kind == hrBackupManagerOpenDiff: hrResult.diffBackupIndex else: -1
+
+proc shouldBackupManagerRefresh*(hrResult: HandlerResult): bool =
+  ## Check if we should refresh backup list
+  hrResult.kind == hrBackupManagerRefresh
+
+proc shouldDiffViewerQuit*(hrResult: HandlerResult): bool =
+  ## Check if we should close diff viewer
+  hrResult.kind == hrDiffViewerQuit
+
+proc shouldEnterDiffViewer*(hrResult: HandlerResult): bool =
+  ## Check if we should enter diff viewer mode
+  hrResult.kind == hrEnterDiffViewer
+
+proc getDiffViewerSourcePath*(hrResult: HandlerResult): string =
+  ## Get the source file path for diff viewer
+  if hrResult.kind == hrEnterDiffViewer: hrResult.diffSourcePath else: ""
+
+proc getDiffViewerBackupPath*(hrResult: HandlerResult): string =
+  ## Get the backup file path for diff viewer
+  if hrResult.kind == hrEnterDiffViewer: hrResult.diffBackupPath else: ""

@@ -59,6 +59,8 @@ type
     cmrLogViewer # Open log viewer
     cmrHelpViewer # Open help viewer
     cmrQuickRun # Run the current buffer
+    cmrBufferManager # Open buffer manager
+    cmrBackupManager # Open backup manager
     cmrError # Command error
 
   CommandModeHandler* = ref object ## Handler for Command mode specific commands
@@ -114,6 +116,10 @@ type
     of cmrHelpViewer:
       discard
     of cmrQuickRun:
+      discard
+    of cmrBufferManager:
+      discard
+    of cmrBackupManager:
       discard
     of cmrError:
       errorMessage*: string
@@ -377,6 +383,10 @@ proc handleCommandModeInput*(
     return CommandModeResult(kind: cmrLogViewer)
   of claQuickRun:
     return handler.executeQuickRun()
+  of claBufferManager:
+    return CommandModeResult(kind: cmrBufferManager)
+  of claBackupManager:
+    return CommandModeResult(kind: cmrBackupManager)
   of claSubstitute:
     # TODO: Implement search and replace
     return CommandModeResult(kind: cmrMessage, message: "Substitute not implemented")

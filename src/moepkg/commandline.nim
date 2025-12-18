@@ -51,6 +51,8 @@ type
     claFiler # :Filer (open file explorer)
     claLogViewer # :log (open log viewer)
     claQuickRun # :run (quick run)
+    claBufferManager # :buffers, :ls (open buffer manager)
+    claBackupManager # :backups (open backup manager)
     claUnknown # Unknown command
 
   ParsedCommand* = object
@@ -107,6 +109,10 @@ type
     of claLogViewer:
       discard
     of claQuickRun:
+      discard
+    of claBufferManager:
+      discard
+    of claBackupManager:
       discard
     of claUnknown:
       errorMessage*: string
@@ -298,6 +304,10 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
     return CommandLineResult(kind: claLogViewer)
   of claQuickRun:
     return CommandLineResult(kind: claQuickRun)
+  of claBufferManager:
+    return CommandLineResult(kind: claBufferManager)
+  of claBackupManager:
+    return CommandLineResult(kind: claBackupManager)
   of claUnknown:
     return CommandLineResult(
       kind: claUnknown, errorMessage: "Not an editor command: " & cmd.rawText

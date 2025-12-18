@@ -1,0 +1,95 @@
+#[###################### GNU General Public License 3.0 ######################]#
+#                                                                              #
+#  Copyright (C) 2017─2025 Shuhei Nogawa                                       #
+#                                                                              #
+#  This program is free software: you can redistribute it and/or modify        #
+#  it under the terms of the GNU General Public License as published by        #
+#  the Free Software Foundation, either version 3 of the License, or           #
+#  (at your option) any later version.                                         #
+#                                                                              #
+#  This program is distributed in the hope that it will be useful,             #
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of              #
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the               #
+#  GNU General Public License for more details.                                #
+#                                                                              #
+#  You should have received a copy of the GNU General Public License           #
+#  along with this program.  If not, see <https://www.gnu.org/licenses/>.      #
+#                                                                              #
+#[############################################################################]#
+
+## Buffer Manager module
+## Provides a UI for viewing and switching between open buffers
+
+import std/options
+
+type
+  BufferEntry* = object ## Represents a buffer entry in the buffer manager list
+    index*: int # Index in the window list
+    name*: string # Buffer name (file path or "No Name")
+    modified*: bool # Whether buffer has unsaved changes
+    active*: bool # Whether this is the currently active buffer
+
+  BufferManagerState* = ref object ## State for the buffer manager UI
+    entries*: seq[BufferEntry] # List of buffer entries
+    selectedIndex*: int # Currently selected entry index
+    topLine*: int # Scroll position (first visible line)
+    previousWindowIndex*: int # Window index to return to when closing
+
+  BufferInfo* = object ## Information about a buffer for initializing buffer manager
+    filePath*: Option[string]
+    isModified*: bool
+    isActive*: bool
+
+proc newBufferManagerState*(): BufferManagerState =
+  BufferManagerState(entries: @[], selectedIndex: 0, topLine: 0, previousWindowIndex: 0)
+
+proc initBufferManagerEntries*(bufferInfos: seq[BufferInfo]): seq[BufferEntry] =
+  ## Create buffer entries from buffer information
+  result = @[]
+  for i, info in bufferInfos:
+    let name = if info.filePath.isSome: info.filePath.get else: "No Name"
+    result.add(
+      BufferEntry(
+        index: i, name: name, modified: info.isModified, active: info.isActive
+      )
+    )
+
+  # If no buffers, add a placeholder
+  if result.len == 0:
+    result.add(BufferEntry(index: 0, name: "No Name", modified: false, active: true))
+
+proc updateEntries*(state: BufferManagerState, bufferInfos: seq[BufferInfo]) =
+  ## Update the buffer manager entries from buffer information
+  state.entries = initBufferManagerEntries(bufferInfos)
+  # Clamp selectedIndex to valid range
+  if state.selectedIndex >= state.entries.len:
+    state.selectedIndex = max(0, state.entries.len - 1)
+
+proc moveUp*(state: BufferManagerState) =
+  ## Move selection up
+  if state.selectedIndex > 0:
+    state.selectedIndex.dec
+    # Adjust scroll position if needed
+    if state.selectedIndex < state.topLine:
+      state.topLine = state.selectedIndex
+
+proc moveDown*(state: BufferManagerState) =
+  ## Move selection down
+  if state.selectedIndex < state.entries.len - 1:
+    state.selectedIndex.inc
+    # Note: scroll adjustment for moving down is handled during rendering
+
+proc getSelectedEntry*(state: BufferManagerState): Option[BufferEntry] =
+  ## Get the currently selected buffer entry
+  if state.selectedIndex >= 0 and state.selectedIndex < state.entries.len:
+    some(state.entries[state.selectedIndex])
+  else:
+    none(BufferEntry)
+
+proc formatEntry*(entry: BufferEntry): string =
+  ## Format a buffer entry for display
+  let
+    modifiedMark = if entry.modified: "[+] " else: "    "
+    activeMark = if entry.active: "* " else: "  "
+    indexStr = $entry.index & ": "
+  result = activeMark & indexStr & modifiedMark & entry.name

@@ -71,7 +71,7 @@ proc activeBuffer*(e: Editor): TextBuffer =
   else:
     e.textBuffer
 
-proc saveActiveWindowState(e: Editor) =
+proc saveActiveWindowState*(e: Editor) =
   ## Save current EditorState cursor and viewport to the active window
   if e.windowManager.windows.len > 0 and
       e.windowManager.activeWindowIndex < e.windowManager.windows.len:
@@ -95,7 +95,7 @@ proc restoreActiveWindowState(e: Editor) =
     e.executer.motionController.viewportManager.viewport.leftColumn =
       activeWindow.viewport.leftColumn
 
-proc syncActiveWindow(e: Editor) =
+proc syncActiveWindow*(e: Editor) =
   ## Sync the active window's buffer and viewport with the executor and motion controller
   let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
   e.executer.buffer = activeWindow.buffer
@@ -2507,6 +2507,272 @@ proc renderFiler(e: Editor, buffer: var Buffer) =
   e.state.screenCursor.x = 0
   e.state.screenCursor.y = listStartY + (filerState.selectedIndex - filerState.topLine)
 
+proc renderBufferManager(e: Editor, buffer: var Buffer) =
+  ## Render the buffer manager view
+  if e.state.bufferManagerState.isNone:
+    return
+
+  # Calculate reserved lines at bottom: status line (if shown) + command line
+  let reservedBottom = if e.state.display.showStatusLine: 2 else: 1
+
+  let
+    bmState = e.state.bufferManagerState.get
+    headerY = buffer.area.y
+    listStartY = buffer.area.y + 1
+    listEndY = buffer.area.y + buffer.area.height - reservedBottom
+    width = buffer.area.width
+
+  # Render header
+  let headerText = "-- Buffer Manager --"
+  buffer.setString(
+    buffer.area.x,
+    headerY,
+    headerText,
+    Style(
+      fg: rgb(0xff, 0xd7, 0x00),
+      bg: ColorValue(kind: Default),
+      modifiers: {StyleModifier.Bold},
+    ),
+  )
+
+  # Ensure selected entry is visible
+  let visibleLines = listEndY - listStartY
+  if bmState.selectedIndex >= bmState.topLine + visibleLines:
+    bmState.topLine = bmState.selectedIndex - visibleLines + 1
+  if bmState.selectedIndex < bmState.topLine:
+    bmState.topLine = bmState.selectedIndex
+
+  # Render buffer entries
+  var screenY = listStartY
+  for i in bmState.topLine ..< bmState.entries.len:
+    if screenY >= listEndY:
+      break
+
+    let
+      entry = bmState.entries[i]
+      isSelected = i == bmState.selectedIndex
+
+    # Build display line
+    var displayLine: string
+    let prefix = if isSelected: "> " else: "  "
+    let activeMark = if entry.active: "* " else: "  "
+    let modifiedMark = if entry.modified: "[+] " else: "    "
+    let indexStr = $entry.index & ": "
+
+    displayLine = prefix & activeMark & indexStr & modifiedMark & entry.name
+
+    # Truncate if too long
+    if displayLine.len > width:
+      displayLine = displayLine[0 ..< width - 3] & "..."
+
+    # Apply style
+    let style =
+      if isSelected:
+        Style(fg: rgb(0x00, 0x00, 0x00), bg: rgb(0xff, 0xff, 0xff), modifiers: {})
+      elif entry.active:
+        Style(
+          fg: rgb(0x5f, 0xff, 0x5f),
+          bg: ColorValue(kind: Default),
+          modifiers: {StyleModifier.Bold},
+        )
+      elif entry.modified:
+        Style(fg: rgb(0xff, 0x87, 0x00), bg: ColorValue(kind: Default), modifiers: {})
+      else:
+        Style(
+          fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {}
+        )
+
+    buffer.setString(buffer.area.x, screenY, displayLine, style)
+    inc screenY
+
+  # Set cursor position (hidden in buffer manager mode, but set to selected line)
+  e.state.screenCursor.x = 0
+  e.state.screenCursor.y = listStartY + (bmState.selectedIndex - bmState.topLine)
+
+proc renderBackupManager(e: Editor, buffer: var Buffer) =
+  ## Render the backup manager view
+  if e.state.backupManagerState.isNone:
+    return
+
+  # Calculate reserved lines at bottom: status line (if shown) + command line
+  let reservedBottom = if e.state.display.showStatusLine: 2 else: 1
+
+  let
+    bkState = e.state.backupManagerState.get
+    headerY = buffer.area.y
+    listStartY = buffer.area.y + 1
+    listEndY = buffer.area.y + buffer.area.height - reservedBottom
+    width = buffer.area.width
+
+  # Render header
+  let headerText = "-- Backup Manager: " & bkState.sourceFilePath & " --"
+  buffer.setString(
+    buffer.area.x,
+    headerY,
+    if headerText.len > width:
+      headerText[0 ..< width]
+    else:
+      headerText,
+    Style(
+      fg: rgb(0xff, 0xd7, 0x00),
+      bg: ColorValue(kind: Default),
+      modifiers: {StyleModifier.Bold},
+    ),
+  )
+
+  # Handle empty list
+  if bkState.entries.len == 0:
+    buffer.setString(
+      buffer.area.x,
+      listStartY,
+      "No backup files found",
+      Style(fg: rgb(0x87, 0x87, 0x87), bg: ColorValue(kind: Default), modifiers: {}),
+    )
+    e.state.screenCursor.x = 0
+    e.state.screenCursor.y = listStartY
+    return
+
+  # Ensure selected entry is visible
+  let visibleLines = listEndY - listStartY
+  if bkState.selectedIndex >= bkState.topLine + visibleLines:
+    bkState.topLine = bkState.selectedIndex - visibleLines + 1
+  if bkState.selectedIndex < bkState.topLine:
+    bkState.topLine = bkState.selectedIndex
+
+  # Render backup entries
+  var screenY = listStartY
+  for i in bkState.topLine ..< bkState.entries.len:
+    if screenY >= listEndY:
+      break
+
+    let
+      entry = bkState.entries[i]
+      isSelected = i == bkState.selectedIndex
+
+    # Build display line with formatted timestamp
+    let prefix = if isSelected: "> " else: "  "
+    let displayLine = prefix & formatEntry(entry)
+
+    # Apply style
+    let style =
+      if isSelected:
+        Style(fg: rgb(0x00, 0x00, 0x00), bg: rgb(0xff, 0xff, 0xff), modifiers: {})
+      else:
+        Style(
+          fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {}
+        )
+
+    buffer.setString(buffer.area.x, screenY, displayLine, style)
+    inc screenY
+
+  # Set cursor position
+  e.state.screenCursor.x = 0
+  e.state.screenCursor.y = listStartY + (bkState.selectedIndex - bkState.topLine)
+
+proc renderDiffViewer(e: Editor, buffer: var Buffer) =
+  ## Render the diff viewer view
+  if e.state.diffViewerState.isNone:
+    return
+
+  # Calculate reserved lines at bottom: status line (if shown) + command line
+  let reservedBottom = if e.state.display.showStatusLine: 2 else: 1
+
+  let
+    dvState = e.state.diffViewerState.get
+    headerY = buffer.area.y
+    listStartY = buffer.area.y + 1
+    listEndY = buffer.area.y + buffer.area.height - reservedBottom
+    width = buffer.area.width
+
+  # Render header
+  let headerText =
+    "-- Diff: " & extractFilename(dvState.sourceFilePath) & " vs backup --"
+  buffer.setString(
+    buffer.area.x,
+    headerY,
+    if headerText.len > width:
+      headerText[0 ..< width]
+    else:
+      headerText,
+    Style(
+      fg: rgb(0xff, 0xd7, 0x00),
+      bg: ColorValue(kind: Default),
+      modifiers: {StyleModifier.Bold},
+    ),
+  )
+
+  # Handle empty diff
+  if dvState.lines.len == 0:
+    buffer.setString(
+      buffer.area.x,
+      listStartY,
+      "No diff content",
+      Style(fg: rgb(0x87, 0x87, 0x87), bg: ColorValue(kind: Default), modifiers: {}),
+    )
+    e.state.screenCursor.x = 0
+    e.state.screenCursor.y = listStartY
+    return
+
+  # Ensure selected line is visible
+  let visibleLines = listEndY - listStartY
+  if dvState.selectedLine >= dvState.topLine + visibleLines:
+    dvState.topLine = dvState.selectedLine - visibleLines + 1
+  if dvState.selectedLine < dvState.topLine:
+    dvState.topLine = dvState.selectedLine
+
+  # Render diff lines
+  var screenY = listStartY
+  for i in dvState.topLine ..< dvState.lines.len:
+    if screenY >= listEndY:
+      break
+
+    let
+      line = dvState.lines[i]
+      isSelected = i == dvState.selectedLine
+
+    # Truncate line if too long
+    let displayText =
+      if line.text.len > width:
+        line.text[0 ..< width]
+      else:
+        line.text
+
+    # Apply style based on diff line kind and selection
+    let style =
+      if isSelected:
+        # Highlighted/selected line
+        Style(fg: rgb(0x00, 0x00, 0x00), bg: rgb(0xff, 0xff, 0xff), modifiers: {})
+      else:
+        case line.kind
+        of dlkAdded:
+          # Added lines in green
+          Style(fg: rgb(0x00, 0xd7, 0x00), bg: ColorValue(kind: Default), modifiers: {})
+        of dlkDeleted:
+          # Deleted lines in red
+          Style(fg: rgb(0xff, 0x5f, 0x5f), bg: ColorValue(kind: Default), modifiers: {})
+        of dlkHeader:
+          # Header lines (@@, ---, +++) in cyan/bold
+          Style(
+            fg: rgb(0x00, 0xd7, 0xff),
+            bg: ColorValue(kind: Default),
+            modifiers: {StyleModifier.Bold},
+          )
+        of dlkMeta:
+          # Meta lines (diff --git, index) in yellow
+          Style(fg: rgb(0xff, 0xd7, 0x00), bg: ColorValue(kind: Default), modifiers: {})
+        of dlkNormal:
+          # Normal context lines
+          Style(
+            fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {}
+          )
+
+    buffer.setString(buffer.area.x, screenY, displayText, style)
+    inc screenY
+
+  # Set cursor position
+  e.state.screenCursor.x = 0
+  e.state.screenCursor.y = listStartY + (dvState.selectedLine - dvState.topLine)
+
 proc renderLogViewer(e: Editor, buffer: var Buffer) =
   ## Render the log viewer view
   if e.state.logViewerState.isNone:
@@ -3358,6 +3624,30 @@ proc render*(e: Editor, buffer: var Buffer) =
   if e.state.mode == EditorMode.Help or
       (e.state.mode == EditorMode.Command and e.state.helpViewerState.isSome):
     e.renderHelpViewer(buffer)
+    e.renderBottomLines(buffer)
+    return
+
+  # Handle BufferManager mode rendering separately
+  # Also render buffer manager when in Command mode but came from BufferManager (bufferManagerState is active)
+  if e.state.mode == EditorMode.BufferManager or
+      (e.state.mode == EditorMode.Command and e.state.bufferManagerState.isSome):
+    e.renderBufferManager(buffer)
+    e.renderBottomLines(buffer)
+    return
+
+  # Handle BackupManager mode rendering separately
+  # Also render backup manager when in Command mode but came from BackupManager (backupManagerState is active)
+  if e.state.mode == EditorMode.BackupManager or
+      (e.state.mode == EditorMode.Command and e.state.backupManagerState.isSome):
+    e.renderBackupManager(buffer)
+    e.renderBottomLines(buffer)
+    return
+
+  # Handle DiffViewer mode rendering separately
+  # Also render diff viewer when in Command mode but came from DiffViewer (diffViewerState is active)
+  if e.state.mode == EditorMode.DiffViewer or
+      (e.state.mode == EditorMode.Command and e.state.diffViewerState.isSome):
+    e.renderDiffViewer(buffer)
     e.renderBottomLines(buffer)
     return
 

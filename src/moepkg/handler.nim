@@ -23,8 +23,32 @@ import pkg/[celina, results]
 
 import
   editor, keybindings, modes, buffer, logger, types, cursor, motion, search_utils,
-  filer, quickrunutils, messagelog, helpviewer
+  filer, quickrunutils, messagelog, helpviewer, buffermanager, backupmanager, backup,
+  diffviewer
 import command_handlers/handler_manager
+
+proc getBufferInfos(e: Editor): seq[BufferInfo] =
+  ## Extract buffer information from the window manager for BufferManager
+  result = @[]
+  if e.windowManager.windows.len > 0:
+    # Use windows from window manager
+    for window in e.windowManager.windows:
+      result.add(
+        BufferInfo(
+          filePath: window.buffer.filePath,
+          isModified: window.buffer.isModified,
+          isActive: window.active,
+        )
+      )
+  else:
+    # No windows - use the main textBuffer
+    result.add(
+      BufferInfo(
+        filePath: e.textBuffer.filePath,
+        isModified: e.textBuffer.isModified,
+        isActive: true,
+      )
+    )
 
 ## NOTE: While in Search Mode:
 ## - Character input: Add to searchText, trigger performIncrementalSearch (if enabled)
@@ -528,6 +552,24 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         e.state.previousMode = e.state.mode
         e.state.mode = EditorMode.Help
         e.state.helpViewerState = some(newHelpViewerState())
+      elif r.shouldEnterBufferManager():
+        # Enter buffer manager mode
+        e.state.previousMode = e.state.mode
+        e.state.mode = EditorMode.BufferManager
+        let bmState = newBufferManagerState()
+        bmState.updateEntries(e.getBufferInfos())
+        bmState.previousWindowIndex = e.windowManager.activeWindowIndex
+        e.state.bufferManagerState = some(bmState)
+      elif r.shouldEnterBackupManager():
+        # Enter backup manager mode
+        e.state.previousMode = e.state.mode
+        e.state.mode = EditorMode.BackupManager
+        let baseBackupDir = e.config.autoBackup.getBaseBackupDir()
+        var sourceFilePath = ""
+        if e.buffer.filePath.isSome:
+          sourceFilePath = absolutePath(e.buffer.filePath.get)
+        let bkState = initBackupManagerState(baseBackupDir, sourceFilePath)
+        e.state.backupManagerState = some(bkState)
       else:
         # Handle mode transitions
         let modeTransition = r.getModeTransition()
@@ -967,6 +1009,128 @@ proc handleEvent*(e: Editor, event: Event): bool =
     e.state.mode = EditorMode.Normal
     return true
 
+  # Handle Buffer Manager mode results
+  if r.shouldBufferManagerQuit():
+    # Close buffer manager and return to Normal mode
+    e.state.bufferManagerState = none(BufferManagerState)
+    e.state.mode = EditorMode.Normal
+    return true
+
+  if r.shouldBufferManagerSelectBuffer():
+    # Select the buffer and switch to it
+    let bufferIndex = r.getBufferManagerSelectBufferIndex()
+    if e.windowManager.windows.len > 0:
+      # Window manager mode - switch between windows
+      if bufferIndex >= 0 and bufferIndex < e.windowManager.windows.len:
+        e.saveActiveWindowState()
+        # Deactivate all windows
+        for window in e.windowManager.windows.mitems:
+          window.active = false
+        # Activate the selected window
+        e.windowManager.activeWindowIndex = bufferIndex
+        e.windowManager.windows[bufferIndex].active = true
+        e.syncActiveWindow()
+    # else: Single buffer mode - already active, nothing to do
+    # Close buffer manager and return to Normal mode
+    e.state.bufferManagerState = none(BufferManagerState)
+    e.state.mode = EditorMode.Normal
+    return true
+
+  if r.shouldBufferManagerDeleteBuffer():
+    # Delete the buffer (close the window)
+    let bufferIndex = r.getBufferManagerDeleteBufferIndex()
+    if e.windowManager.windows.len > 1:
+      # Window manager mode with multiple windows - can delete
+      if bufferIndex >= 0 and bufferIndex < e.windowManager.windows.len:
+        e.windowManager.windows.delete(bufferIndex)
+        # Adjust active index if needed
+        if e.windowManager.activeWindowIndex >= e.windowManager.windows.len:
+          e.windowManager.activeWindowIndex = e.windowManager.windows.len - 1
+        e.windowManager.windows[e.windowManager.activeWindowIndex].active = true
+        # Update buffer manager entries
+        if e.state.bufferManagerState.isSome:
+          e.state.bufferManagerState.get.updateEntries(e.getBufferInfos())
+    else:
+      # Cannot delete the only buffer
+      e.state.setStatusMessage("Cannot delete the last buffer")
+    return true
+
+  # Handle Backup Manager mode results
+  if r.shouldBackupManagerQuit():
+    # Close backup manager and return to Normal mode
+    e.state.backupManagerState = none(BackupManagerState)
+    e.state.mode = EditorMode.Normal
+    return true
+
+  # Handle Diff Viewer mode results
+  if r.shouldDiffViewerQuit():
+    # Close diff viewer and return to BackupManager
+    # Note: We return to BackupManager directly instead of using previousMode
+    # because previousMode can get corrupted if the user enters Command mode
+    # (e.g., BackupManager -> DiffViewer -> Command -> DiffViewer -> quit
+    #  would incorrectly stay in DiffViewer if we used previousMode)
+    e.state.diffViewerState = none(DiffViewerState)
+    e.state.mode = EditorMode.BackupManager
+    return true
+
+  if r.shouldBackupManagerRefresh():
+    # Refresh backup list
+    if e.state.backupManagerState.isSome:
+      e.state.backupManagerState.get.refresh()
+    return true
+
+  if r.shouldBackupManagerRestore():
+    # Restore the selected backup
+    let backupIndex = r.getBackupManagerRestoreIndex()
+    if e.state.backupManagerState.isSome:
+      let bkState = e.state.backupManagerState.get
+      # Backup current buffer before restore (in case user wants to undo)
+      discard e.buffer.backupBuffer(e.config.autoBackup)
+      if bkState.restoreBackup(backupIndex):
+        # Reload the buffer from the restored file
+        if e.buffer.filePath.isSome:
+          let textResult = e.buffer.loadFile(e.buffer.filePath.get)
+          if textResult.isOk:
+            e.state.setStatusMessage("Backup restored successfully")
+            # Refresh the backup list to show the new backup
+            bkState.refresh()
+          else:
+            e.state.setStatusMessage(
+              "Restored but failed to reload: " & textResult.error
+            )
+        else:
+          e.state.setStatusMessage("Backup restored successfully")
+      else:
+        e.state.setStatusMessage("Failed to restore backup")
+    return true
+
+  if r.shouldBackupManagerDelete():
+    # Delete the selected backup
+    let backupIndex = r.getBackupManagerDeleteIndex()
+    if e.state.backupManagerState.isSome:
+      let bkState = e.state.backupManagerState.get
+      if bkState.deleteBackup(backupIndex):
+        e.state.setStatusMessage("Backup deleted")
+      else:
+        e.state.setStatusMessage("Failed to delete backup")
+    return true
+
+  if r.shouldBackupManagerOpenDiff():
+    # Open diff viewer for the selected backup
+    let backupIndex = r.getBackupManagerDiffIndex()
+    if e.state.backupManagerState.isSome:
+      let bkState = e.state.backupManagerState.get
+      if backupIndex >= 0 and backupIndex < bkState.entries.len:
+        let entry = bkState.entries[backupIndex]
+        # Initialize diff viewer with source and backup paths
+        let dvState = initDiffViewerState(bkState.sourceFilePath, entry.fullPath)
+        e.state.diffViewerState = some(dvState)
+        e.state.previousMode = e.state.mode
+        e.state.mode = EditorMode.DiffViewer
+        if dvState.errorMessage.len > 0:
+          e.state.setStatusMessage("Diff error: " & dvState.errorMessage)
+    return true
+
   # Handle LSP goto definition
   if r.shouldLspGotoDefinition():
     discard e.requestLspGotoDefinition()
@@ -1015,6 +1179,13 @@ proc handleEvent*(e: Editor, event: Event): bool =
         else:
           getCurrentDir()
       e.state.filerState = some(newFilerState(startPath))
+
+    # Initialize buffer manager state when entering BufferManager mode
+    if newMode == EditorMode.BufferManager:
+      let bmState = newBufferManagerState()
+      bmState.updateEntries(e.getBufferInfos())
+      bmState.previousWindowIndex = e.windowManager.activeWindowIndex
+      e.state.bufferManagerState = some(bmState)
 
     # Adjust cursor when transitioning from Insert to Normal mode
     # In Insert mode, cursor can be after the last character

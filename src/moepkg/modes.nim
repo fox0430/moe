@@ -33,6 +33,9 @@ type
     QuickRun
     LogViewer
     Help
+    BufferManager
+    BackupManager
+    DiffViewer
 
   ModeTransition* = object
     newMode*: Option[EditorMode]
@@ -52,3 +55,6 @@ proc modeLabel*(m: EditorMode): string =
   of EditorMode.QuickRun: "QUICKRUN"
   of EditorMode.LogViewer: "LOG"
   of EditorMode.Help: "HELP"
+  of EditorMode.BufferManager: "BUFFERS"
+  of EditorMode.BackupManager: "BACKUPS"
+  of EditorMode.DiffViewer: "DIFF"

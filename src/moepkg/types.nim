@@ -23,18 +23,11 @@ import pkg/celina
 
 import
   cursor, modes, buffer, registers, filer, logviewer, helpviewer, command_completion,
-  messagelog
+  messagelog, buffermanager, backupmanager, diffviewer
 
-# Re-export SidebarItemKind from buffer module
-export buffer.SidebarItemKind
-# Re-export registers types
-export registers
-# Re-export command_completion types
-export command_completion
-# Re-export logviewer types
-export logviewer
-# Re-export helpviewer types
-export helpviewer
+export
+  buffer.SidebarItemKind, registers, command_completion, logviewer, helpviewer,
+  buffermanager, backupmanager, diffviewer
 
 type
   SidebarItem* = object ## Single cell in the sidebar
@@ -430,6 +423,15 @@ type
     logViewerState*: Option[LogViewerState] # Log viewer state (when in LogViewer mode)
     # Help viewer state
     helpViewerState*: Option[HelpViewerState] # Help viewer state (when in Help mode)
+    # Buffer manager state
+    bufferManagerState*: Option[BufferManagerState]
+      # Buffer manager state (when in BufferManager mode)
+    # Backup manager state
+    backupManagerState*: Option[BackupManagerState]
+      # Backup manager state (when in BackupManager mode)
+    # Diff viewer state
+    diffViewerState*: Option[DiffViewerState]
+      # Diff viewer state (when in DiffViewer mode)
     # Command mode completion
     commandCompletionManager*: CommandCompletionManager
       # Command mode auto-completion manager

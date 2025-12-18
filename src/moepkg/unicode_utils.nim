@@ -25,8 +25,6 @@
 import std/[unicode, tables]
 import pkg/celina
 
-# Re-export runeWidth from celina's buffer module
-# This provides Unicode-standard width detection for all characters including emoji
 export buffer.runeWidth
 
 type CursorPosCache* = object
