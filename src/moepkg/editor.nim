@@ -26,7 +26,7 @@ import
   commandconfig, statusline, windowmanager, unicode_utils, render_utils, sidebar,
   gitdiff, highlight, logger, config, configloader, keybindconfig, search_utils, filer,
   lspintegration, completion, signaturehelp, backup, command_completion, motion,
-  logviewer
+  logviewer, recentfilemode
 import lsp/protocol/types as lspTypes
 import command_handlers/[handler_manager, visual_handler, insert_handler]
 
@@ -59,6 +59,7 @@ type
     config*: EditorConfig # TOML configuration
     lsp*: LspIntegration # LSP client integration
     lastLspChangeSeq*: int # Track buffer changes for LSP notifications
+    recentFileModeState*: RecentFileModeState # State for Recent File mode
 
 proc buffer*(e: Editor): TextBuffer =
   e.textBuffer
@@ -724,6 +725,7 @@ proc newEditor*(): Editor =
     textBuffer: newTextBuffer(),
     lsp: lspIntegration,
     lastLspChangeSeq: 0,
+    recentFileModeState: newRecentFileModeState(),
     state: EditorState(
       cursor: BufferPosition(line: 0, column: 0),
       screenCursor: CursorPosition(x: 0, y: 0),
@@ -892,6 +894,13 @@ proc maybeUpdateGitDiff*(e: Editor) =
 
   if elapsed >= threshold:
     e.refreshGitDiff(useBuffer = true)
+
+proc enterRecentFileMode*(e: Editor): Result[void, string] =
+  ## Enter Recent File mode by loading recently used files
+  let loadResult = e.recentFileModeState.loadRecentFiles()
+  if loadResult.isErr:
+    return err(loadResult.error)
+  ok()
 
 proc loadFile*(e: Editor, path: string): Result[(), string] =
   ## Load text file
@@ -2773,6 +2782,86 @@ proc renderDiffViewer(e: Editor, buffer: var Buffer) =
   e.state.screenCursor.x = 0
   e.state.screenCursor.y = listStartY + (dvState.selectedLine - dvState.topLine)
 
+proc renderRecentFileMode(e: Editor, buffer: var Buffer) =
+  ## Render the recent file selection view
+  # Calculate reserved lines at bottom: status line (if shown) + command line
+  let reservedBottom = if e.state.display.showStatusLine: 2 else: 1
+
+  let
+    state = e.recentFileModeState
+    headerY = buffer.area.y
+    listStartY = buffer.area.y + 1
+    listEndY = buffer.area.y + buffer.area.height - reservedBottom
+    width = buffer.area.width
+    viewportHeight = listEndY - listStartY
+
+  # Render header
+  let headerText = "-- Recent Files --"
+  buffer.setString(
+    buffer.area.x,
+    headerY,
+    headerText,
+    Style(
+      fg: rgb(0xff, 0xd7, 0x00),
+      bg: ColorValue(kind: Default),
+      modifiers: {StyleModifier.Bold},
+    ),
+  )
+
+  # Handle empty list
+  if state.files.len == 0:
+    buffer.setString(
+      buffer.area.x,
+      listStartY,
+      "No recent files found",
+      Style(fg: rgb(0x87, 0x87, 0x87), bg: ColorValue(kind: Default), modifiers: {}),
+    )
+    e.state.screenCursor.x = 0
+    e.state.screenCursor.y = listStartY
+    return
+
+  # Adjust viewport to keep selected visible
+  state.adjustViewport(viewportHeight)
+
+  # Render file entries
+  let visibleFiles = state.getVisibleFiles(viewportHeight)
+  var screenY = listStartY
+  for i, entry in visibleFiles:
+    if screenY >= listEndY:
+      break
+
+    let
+      actualIndex = state.topLine + i
+      isSelected = actualIndex == state.selectedIndex
+
+    # Build display line
+    let prefix = if isSelected: "> " else: "  "
+    var displayLine = prefix & entry.path
+
+    # Truncate if too long
+    if displayLine.len > width:
+      displayLine = displayLine[0 ..< width - 3] & "..."
+
+    # Apply style - check if file exists
+    let exists = fileExists(entry.path)
+    let style =
+      if isSelected:
+        Style(fg: rgb(0x00, 0x00, 0x00), bg: rgb(0xff, 0xff, 0xff), modifiers: {})
+      elif not exists:
+        # Non-existent files in dim gray
+        Style(fg: rgb(0x60, 0x60, 0x60), bg: ColorValue(kind: Default), modifiers: {})
+      else:
+        Style(
+          fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {}
+        )
+
+    buffer.setString(buffer.area.x, screenY, displayLine, style)
+    inc screenY
+
+  # Set cursor position
+  e.state.screenCursor.x = 0
+  e.state.screenCursor.y = listStartY + (state.selectedIndex - state.topLine)
+
 proc renderLogViewer(e: Editor, buffer: var Buffer) =
   ## Render the log viewer view
   if e.state.logViewerState.isNone:
@@ -3648,6 +3737,17 @@ proc render*(e: Editor, buffer: var Buffer) =
   if e.state.mode == EditorMode.DiffViewer or
       (e.state.mode == EditorMode.Command and e.state.diffViewerState.isSome):
     e.renderDiffViewer(buffer)
+    e.renderBottomLines(buffer)
+    return
+
+  # Handle RecentFile mode rendering separately
+  # Also render recent files when in Command mode but came from RecentFile
+  if e.state.mode == EditorMode.RecentFile or
+      (
+        e.state.mode == EditorMode.Command and
+        e.state.previousMode == EditorMode.RecentFile
+      ):
+    e.renderRecentFileMode(buffer)
     e.renderBottomLines(buffer)
     return
 

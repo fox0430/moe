@@ -149,6 +149,9 @@ proc loadDefaultConfig*(config: CommandConfig) =
   config.addAlias("backups", claBackupManager)
   config.addAlias("backup", claBackupManager)
 
+  # Recent file
+  config.addAlias("recent", claRecentFile)
+
 proc applyToParser*(config: CommandConfig, parser: CommandLineParser) =
   ## Apply configuration to a command line parser
   # Clear existing aliases

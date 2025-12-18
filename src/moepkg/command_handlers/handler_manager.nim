@@ -29,17 +29,17 @@ import pkg/[results, celina]
 import
   ../[
     types, buffer, cursor, modes, motion, keybindings, commandline, commandconfig,
-    commandregistry, config, stringbuilder, filer,
+    commandregistry, config, stringbuilder, filer, recentfilemode,
   ]
 import
   normal_handler, insert_handler, command_handler, visual_handler, replace_handler,
   filer_handler, logviewer_handler, help_handler, buffermanager_handler,
-  backupmanager_handler, diffviewer_handler
+  backupmanager_handler, diffviewer_handler, recentfilemode_handler
 
 export
   normal_handler, insert_handler, command_handler, visual_handler, replace_handler,
   filer_handler, logviewer_handler, help_handler, buffermanager_handler,
-  backupmanager_handler, diffviewer_handler
+  backupmanager_handler, diffviewer_handler, recentfilemode_handler
 
 type
   HandlerResultKind* = enum
@@ -86,6 +86,11 @@ type
     hrEnterBackupManager # Enter backup manager mode
     hrDiffViewerQuit # Close diff viewer and return to previous mode
     hrEnterDiffViewer # Enter diff viewer mode
+    hrRecentFile # Enter recent file selection mode
+    hrRecentFileOpenFile # Open file from recent file mode
+    hrRecentFileQuit # Quit recent file mode
+    hrNextWindow # Move to next window
+    hrPrevWindow # Move to previous window
     hrLspGotoDefinition # Execute LSP goto definition
     hrLspGotoDeclaration # Execute LSP goto declaration
     hrLspFindReferences # Execute LSP find references
@@ -107,6 +112,7 @@ type
     bufferManagerHandler*: BufferManagerHandler
     backupManagerHandler*: BackupManagerHandler
     diffViewerHandler*: DiffViewerHandler
+    recentFileModeHandler*: RecentFileModeHandler
     motionController*: MotionController
     keyBindingRegistry*: KeyBindingRegistry
     commandLineParser*: CommandLineParser
@@ -194,6 +200,14 @@ type
     of hrEnterDiffViewer:
       diffSourcePath*: string
       diffBackupPath*: string
+    of hrRecentFile:
+      discard
+    of hrRecentFileOpenFile:
+      recentFilePath*: string
+    of hrRecentFileQuit:
+      discard
+    of hrNextWindow, hrPrevWindow:
+      discard
     of hrLspGotoDefinition:
       discard
     of hrLspGotoDeclaration:
@@ -240,6 +254,7 @@ proc newHandlerManager*(
   let bufferManagerHandler = newBufferManagerHandler()
   let backupManagerHandler = newBackupManagerHandler()
   let diffViewerHandler = newDiffViewerHandler()
+  let recentFileModeHandler = newRecentFileModeHandler()
 
   HandlerManager(
     normalHandler: normalHandler,
@@ -253,6 +268,7 @@ proc newHandlerManager*(
     bufferManagerHandler: bufferManagerHandler,
     backupManagerHandler: backupManagerHandler,
     diffViewerHandler: diffViewerHandler,
+    recentFileModeHandler: recentFileModeHandler,
     motionController: motionController,
     keyBindingRegistry: keyBindingRegistry,
     commandLineParser: commandLineParser,
@@ -522,6 +538,8 @@ proc handleCommandMode*(
     return HandlerResult(kind: hrEnterBufferManager)
   of cmrBackupManager:
     return HandlerResult(kind: hrEnterBackupManager)
+  of cmrRecentFile:
+    return HandlerResult(kind: hrRecentFile)
   of cmrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
@@ -889,6 +907,38 @@ proc handleDiffViewerMode*(
   of dvrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
+proc handleRecentFileMode*(
+    manager: HandlerManager,
+    state: recentfilemode.RecentFileModeState,
+    viewportHeight: int,
+    keyCombo: KeyCombo,
+): HandlerResult =
+  ## Handle Recent File mode input
+  let r = manager.recentFileModeHandler.handleRecentFileModeKey(
+    state, viewportHeight, keyCombo
+  )
+  case r.kind
+  of rfmrHandled:
+    return HandlerResult(
+      kind: hrHandled, modeTransition: r.modeTransition, statusMessage: ""
+    )
+  of rfmrOpenFile:
+    return HandlerResult(kind: hrRecentFileOpenFile, recentFilePath: r.filePath)
+  of rfmrEnterCommand:
+    return HandlerResult(
+      kind: hrHandled, modeTransition: some(EditorMode.Command), statusMessage: ""
+    )
+  of rfmrQuit:
+    return HandlerResult(kind: hrRecentFileQuit)
+  of rfmrNextWindow:
+    return HandlerResult(kind: hrNextWindow)
+  of rfmrPrevWindow:
+    return HandlerResult(kind: hrPrevWindow)
+  of rfmrUnhandled:
+    return HandlerResult(kind: hrUnhandled)
+  of rfmrError:
+    return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
+
 const MaxMacroRecursionDepth = 100
   ## Maximum macro recursion depth to prevent infinite loops
 
@@ -938,6 +988,10 @@ proc handleKeyCombo*(
     return manager.handleBackupManagerMode(state, viewport.height, keyCombo)
   of EditorMode.DiffViewer:
     return manager.handleDiffViewerMode(state, viewport.height, keyCombo)
+  of EditorMode.RecentFile:
+    # Recent File mode requires its own state, not EditorState
+    # This should be handled at a higher level with RecentFileModeState
+    return HandlerResult(kind: hrUnhandled)
   of EditorMode.QuickRun:
     # QuickRun mode is not interactive - handled through command mode
     return HandlerResult(kind: hrUnhandled)
@@ -1033,6 +1087,7 @@ proc wasHandled*(hrResult: HandlerResult): bool =
     hrBufferManagerDeleteBuffer, hrBufferManagerQuit, hrEnterBufferManager,
     hrBackupManagerRestore, hrBackupManagerDelete, hrBackupManagerOpenDiff,
     hrBackupManagerRefresh, hrBackupManagerQuit, hrEnterBackupManager, hrDiffViewerQuit,
+    hrRecentFile, hrRecentFileOpenFile, hrRecentFileQuit, hrNextWindow, hrPrevWindow,
     hrEnterDiffViewer, hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
     hrLspCodeLensExecute, hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing,
   }
@@ -1333,3 +1388,27 @@ proc getDiffViewerSourcePath*(hrResult: HandlerResult): string =
 proc getDiffViewerBackupPath*(hrResult: HandlerResult): string =
   ## Get the backup file path for diff viewer
   if hrResult.kind == hrEnterDiffViewer: hrResult.diffBackupPath else: ""
+
+proc shouldEnterRecentFileMode*(hrResult: HandlerResult): bool =
+  ## Check if we should enter Recent File mode
+  hrResult.kind == hrRecentFile
+
+proc shouldOpenRecentFile*(hrResult: HandlerResult): bool =
+  ## Check if we should open a file from Recent File mode
+  hrResult.kind == hrRecentFileOpenFile
+
+proc shouldQuitRecentFileMode*(hrResult: HandlerResult): bool =
+  ## Check if we should quit Recent File mode
+  hrResult.kind == hrRecentFileQuit
+
+proc getRecentFilePath*(hrResult: HandlerResult): string =
+  ## Get the file path to open from Recent File mode
+  if hrResult.kind == hrRecentFileOpenFile: hrResult.recentFilePath else: ""
+
+proc shouldNextWindow*(hrResult: HandlerResult): bool =
+  ## Check if we should move to next window
+  hrResult.kind == hrNextWindow
+
+proc shouldPrevWindow*(hrResult: HandlerResult): bool =
+  ## Check if we should move to previous window
+  hrResult.kind == hrPrevWindow

@@ -53,6 +53,7 @@ type
     claQuickRun # :run (quick run)
     claBufferManager # :buffers, :ls (open buffer manager)
     claBackupManager # :backups (open backup manager)
+    claRecentFile # :recent (open recent file selection mode)
     claUnknown # Unknown command
 
   ParsedCommand* = object
@@ -113,6 +114,8 @@ type
     of claBufferManager:
       discard
     of claBackupManager:
+      discard
+    of claRecentFile:
       discard
     of claUnknown:
       errorMessage*: string
@@ -308,6 +311,8 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
     return CommandLineResult(kind: claBufferManager)
   of claBackupManager:
     return CommandLineResult(kind: claBackupManager)
+  of claRecentFile:
+    return CommandLineResult(kind: claRecentFile)
   of claUnknown:
     return CommandLineResult(
       kind: claUnknown, errorMessage: "Not an editor command: " & cmd.rawText

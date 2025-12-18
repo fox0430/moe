@@ -61,6 +61,7 @@ type
     cmrQuickRun # Run the current buffer
     cmrBufferManager # Open buffer manager
     cmrBackupManager # Open backup manager
+    cmrRecentFile # Open recent file selection mode
     cmrError # Command error
 
   CommandModeHandler* = ref object ## Handler for Command mode specific commands
@@ -120,6 +121,8 @@ type
     of cmrBufferManager:
       discard
     of cmrBackupManager:
+      discard
+    of cmrRecentFile:
       discard
     of cmrError:
       errorMessage*: string
@@ -387,6 +390,8 @@ proc handleCommandModeInput*(
     return CommandModeResult(kind: cmrBufferManager)
   of claBackupManager:
     return CommandModeResult(kind: cmrBackupManager)
+  of claRecentFile:
+    return CommandModeResult(kind: cmrRecentFile)
   of claSubstitute:
     # TODO: Implement search and replace
     return CommandModeResult(kind: cmrMessage, message: "Substitute not implemented")

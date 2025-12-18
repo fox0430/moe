@@ -24,7 +24,7 @@ import pkg/[celina, results]
 import
   editor, keybindings, modes, buffer, logger, types, cursor, motion, search_utils,
   filer, quickrunutils, messagelog, helpviewer, buffermanager, backupmanager, backup,
-  diffviewer
+  diffviewer, command_completion
 import command_handlers/handler_manager
 
 proc getBufferInfos(e: Editor): seq[BufferInfo] =
@@ -330,11 +330,18 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
       let mgr = e.state.commandCompletionManager
       # Check if selected item is a directory (for file path mode)
       let isDir = mgr.mode == cmFilePath and mgr.getSelectedCommand().endsWith("/")
+      # Check if it's a no-argument command that should execute immediately
+      let shouldExecuteNow =
+        mgr.mode == cmCommand and isNoArgumentCommand(mgr.getSelectedCommand())
       mgr.cancelCompletion()
       # If directory was confirmed, re-trigger completion for its contents
       if isDir:
         mgr.triggerArgumentCompletion(e.state.commandText, getCurrentDir())
-      return true
+        return true
+      # If not a no-argument command, wait for more input
+      if not shouldExecuteNow:
+        return true
+      # Otherwise, fall through to execute the command immediately
 
     # Cancel completion if active (no selection case)
     e.state.commandCompletionManager.cancelCompletion()
@@ -570,6 +577,16 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           sourceFilePath = absolutePath(e.buffer.filePath.get)
         let bkState = initBackupManagerState(baseBackupDir, sourceFilePath)
         e.state.backupManagerState = some(bkState)
+      elif r.shouldEnterRecentFileMode():
+        # Enter recent file mode
+        let loadResult = e.enterRecentFileMode()
+        if loadResult.isErr:
+          logError("handler", "Failed to enter Recent File mode: " & loadResult.error)
+          e.state.statusMessage = "Error: " & loadResult.error
+        else:
+          e.state.previousMode = e.state.mode
+          e.state.mode = EditorMode.RecentFile
+          e.state.statusMessage = ""
       else:
         # Handle mode transitions
         let modeTransition = r.getModeTransition()
@@ -775,6 +792,81 @@ proc handleSearchModeEvent(e: Editor, event: Event): bool =
   # Ignore other special keys
   return true
 
+proc handleRecentFileModeEvent(e: Editor, event: Event): bool =
+  ## Handle Recent File mode events
+  if event.kind != EventKind.Key:
+    return true
+
+  # Convert event to key combo
+  let keyComboOpt = eventToKeyCombo(event)
+  if keyComboOpt.isNone:
+    return true
+
+  let keyCombo = keyComboOpt.get
+
+  # Get viewport height for the recent file list
+  # Reserve: 2 lines for status/command line, 1 line for title
+  let viewportHeight = max(0, e.viewport.height - 2 - 1)
+
+  let r = e.handlerManager.handleRecentFileMode(
+    e.recentFileModeState, viewportHeight, keyCombo
+  )
+
+  if r.shouldQuitRecentFileMode():
+    e.state.previousMode = e.state.mode
+    e.state.mode = EditorMode.Normal
+    e.state.statusMessage = ""
+    e.state.needsFullRedraw = true
+    return true
+
+  if r.shouldNextWindow():
+    if e.windowManager.windows.len > 1:
+      e.windowManager.activeWindowIndex =
+        (e.windowManager.activeWindowIndex + 1) mod e.windowManager.windows.len
+      e.state.needsFullRedraw = true
+    return true
+
+  if r.shouldPrevWindow():
+    if e.windowManager.windows.len > 1:
+      e.windowManager.activeWindowIndex =
+        (e.windowManager.activeWindowIndex - 1 + e.windowManager.windows.len) mod
+        e.windowManager.windows.len
+      e.state.needsFullRedraw = true
+    return true
+
+  if r.shouldOpenRecentFile():
+    let filePath = r.getRecentFilePath()
+    # Check if file exists before trying to open
+    if not fileExists(filePath):
+      logError("handler", "File not found: " & filePath)
+      e.state.statusMessage = "File not found: " & filePath
+      # Stay in Recent File mode so user can select another file
+      e.state.needsFullRedraw = true
+      return true
+    # Load the file
+    let loadResult = e.loadFile(filePath)
+    if loadResult.isErr:
+      logError("handler", "Failed to open file: " & loadResult.error)
+      e.state.statusMessage = "Error: " & loadResult.error
+    else:
+      e.state.statusMessage = "Opened: " & filePath
+    e.state.previousMode = e.state.mode
+    e.state.mode = EditorMode.Normal
+    e.state.needsFullRedraw = true
+    return true
+
+  # Handle mode transitions (e.g., entering Command mode with :)
+  let modeTransition = r.getModeTransition()
+  if modeTransition.isSome:
+    e.state.previousMode = e.state.mode
+    e.state.mode = modeTransition.get
+    if modeTransition.get == EditorMode.Command:
+      e.state.commandText = ":"
+      e.state.commandCursor = 0
+
+  e.state.needsFullRedraw = true
+  return true
+
 proc handleEvent*(e: Editor, event: Event): bool =
   ## Main event handler using the new handler manager system
 
@@ -788,6 +880,10 @@ proc handleEvent*(e: Editor, event: Event): bool =
   # Handle Search mode input differently (character by character)
   if e.state.mode == EditorMode.Search:
     return handleSearchModeEvent(e, event)
+
+  # Handle Recent File mode input
+  if e.state.mode == EditorMode.RecentFile:
+    return handleRecentFileModeEvent(e, event)
 
   # Handle CodeLens picker input when active
   if e.state.lspCache.codeLensPicker.isActive and event.kind == EventKind.Key:

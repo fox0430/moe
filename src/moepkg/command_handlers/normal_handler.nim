@@ -199,6 +199,9 @@ proc handleModeSwitch*(
   of EditorMode.DiffViewer:
     return
       NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.DiffViewer))
+  of EditorMode.RecentFile:
+    return
+      NormalModeResult(kind: nmrHandled, modeTransition: some(EditorMode.RecentFile))
   of EditorMode.Normal:
     # Already in Normal mode
     return NormalModeResult(kind: nmrHandled, modeTransition: none(EditorMode))
