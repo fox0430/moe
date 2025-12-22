@@ -32,6 +32,36 @@ import pkg/results
 import ../[buffer, gapbuffer, modes, commandline, commandconfig, commandregistry]
 
 type
+  BoolSettingOption* = enum
+    ## Boolean setting options that can be toggled via :set command
+    bsoNumber # line numbers
+    bsoCurrentNumber # current line number
+    bsoCursorLine # cursor line highlight
+    bsoStatusLine # status line
+    bsoTabLine # tab line
+    bsoSyntax # syntax highlighting
+    bsoIndentationLines # indentation guide lines
+    bsoAutoIndent # auto indent
+    bsoAutoCloseParen # auto close parentheses
+    bsoAutoDeleteParen # auto delete parentheses
+    bsoClipboard # system clipboard
+    bsoSmoothScroll # smooth scroll
+    bsoLiveReloadOfConf # live reload of config
+    bsoShowIcons # filer icons
+    bsoHighlightCurrentLine # highlight current line
+    bsoHighlightCurrentWord # highlight current word
+    bsoHighlightFullWidthSpace # highlight full-width space
+    bsoHighlightPairOfParen # highlight pair of parentheses
+    bsoMultipleStatusLine # multiple status line
+    bsoIgnoreCase # ignore case in search
+    bsoSmartCase # smart case in search
+    bsoIncSearch # incremental search
+    bsoHlSearch # highlight search results
+
+  IntSettingOption* = enum
+    ## Integer setting options that can be set via :set command
+    isoTabStop # tab stop width
+
   CommandModeResultKind* = enum
     cmrQuit # Application should quit
     cmrCloseWindow # Close current window
@@ -42,11 +72,8 @@ type
     cmrHSplit # Horizontal split window
     cmrEnew # Create new empty buffer
     cmrEdit # Edit/open file in current window
-    cmrSetMultiStatusLine # Set multi status line
-    cmrSetIgnoreCase # Set ignorecase option
-    cmrSetSmartCase # Set smartcase option
-    cmrSetIncSearch # Set incsearch option
-    cmrSetHlSearch # Set hlsearch option
+    cmrSetBoolOption # Set boolean option
+    cmrSetIntOption # Set integer option
     cmrSave # Save file
     cmrSaveAndQuit # Save file and quit
     cmrBufferNext # Switch to next buffer
@@ -62,6 +89,8 @@ type
     cmrBufferManager # Open buffer manager
     cmrBackupManager # Open backup manager
     cmrRecentFile # Open recent file selection mode
+    cmrClearSearchHighlight # Clear search highlighting (:noh)
+    cmrShellCommand # Execute shell command (:!)
     cmrError # Command error
 
   CommandModeHandler* = ref object ## Handler for Command mode specific commands
@@ -89,16 +118,12 @@ type
       discard
     of cmrEdit:
       editFilename*: string
-    of cmrSetMultiStatusLine:
-      enabled*: bool
-    of cmrSetIgnoreCase:
-      ignorecaseEnabled*: bool
-    of cmrSetSmartCase:
-      smartcaseEnabled*: bool
-    of cmrSetIncSearch:
-      incsearchEnabled*: bool
-    of cmrSetHlSearch:
-      hlsearchEnabled*: bool
+    of cmrSetBoolOption:
+      boolOption*: BoolSettingOption
+      boolValue*: bool
+    of cmrSetIntOption:
+      intOption*: IntSettingOption
+      intValue*: int
     of cmrSave:
       saveFilename*: Option[string]
     of cmrSaveAndQuit:
@@ -124,6 +149,10 @@ type
       discard
     of cmrRecentFile:
       discard
+    of cmrClearSearchHighlight:
+      discard
+    of cmrShellCommand:
+      shellCommand*: string
     of cmrError:
       errorMessage*: string
 
@@ -217,36 +246,233 @@ proc executeSet*(
     handler: CommandModeHandler, option: string, value: Option[string]
 ): CommandModeResult =
   ## Execute set command (:set option=value)
-  case option.toLower
-  of "multistatusline":
-    return CommandModeResult(kind: cmrSetMultiStatusLine, enabled: true)
-  of "nomultistatusline":
-    return CommandModeResult(kind: cmrSetMultiStatusLine, enabled: false)
-  of "ignorecase", "ic":
-    return CommandModeResult(kind: cmrSetIgnoreCase, ignorecaseEnabled: true)
-  of "noignorecase", "noic":
-    return CommandModeResult(kind: cmrSetIgnoreCase, ignorecaseEnabled: false)
-  of "smartcase", "scs":
-    return CommandModeResult(kind: cmrSetSmartCase, smartcaseEnabled: true)
-  of "nosmartcase", "noscs":
-    return CommandModeResult(kind: cmrSetSmartCase, smartcaseEnabled: false)
-  of "incsearch", "is":
-    return CommandModeResult(kind: cmrSetIncSearch, incsearchEnabled: true)
-  of "noincsearch", "nois":
-    return CommandModeResult(kind: cmrSetIncSearch, incsearchEnabled: false)
-  of "hlsearch", "hls":
-    return CommandModeResult(kind: cmrSetHlSearch, hlsearchEnabled: true)
-  of "nohlsearch", "nohls":
-    return CommandModeResult(kind: cmrSetHlSearch, hlsearchEnabled: false)
-  else:
-    # TODO: Implement other settings management
-    let optionStr =
-      if value.isSome:
-        option & "=" & value.get
-      else:
-        option
+  let opt = option.toLower
 
-    return CommandModeResult(kind: cmrMessage, message: "Set: " & optionStr)
+  # Boolean options - enable
+  case opt
+  # Line numbers
+  of "number", "nu":
+    return
+      CommandModeResult(kind: cmrSetBoolOption, boolOption: bsoNumber, boolValue: true)
+  of "nonumber", "nonu":
+    return
+      CommandModeResult(kind: cmrSetBoolOption, boolOption: bsoNumber, boolValue: false)
+  # Current line number
+  of "currentnumber", "cnu":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoCurrentNumber, boolValue: true
+    )
+  of "nocurrentnumber", "nocnu":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoCurrentNumber, boolValue: false
+    )
+  # Cursor line
+  of "cursorline", "cul":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoCursorLine, boolValue: true
+    )
+  of "nocursorline", "nocul":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoCursorLine, boolValue: false
+    )
+  # Status line
+  of "statusline", "stl":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoStatusLine, boolValue: true
+    )
+  of "nostatusline", "nostl":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoStatusLine, boolValue: false
+    )
+  # Tab line
+  of "tabline", "tal":
+    return
+      CommandModeResult(kind: cmrSetBoolOption, boolOption: bsoTabLine, boolValue: true)
+  of "notabline", "notal":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoTabLine, boolValue: false
+    )
+  # Syntax highlighting
+  of "syntax", "syn":
+    return
+      CommandModeResult(kind: cmrSetBoolOption, boolOption: bsoSyntax, boolValue: true)
+  of "nosyntax", "nosyn":
+    return
+      CommandModeResult(kind: cmrSetBoolOption, boolOption: bsoSyntax, boolValue: false)
+  # Indentation lines
+  of "indentationlines", "indl":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoIndentationLines, boolValue: true
+    )
+  of "noindentationlines", "noindl":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoIndentationLines, boolValue: false
+    )
+  # Auto indent
+  of "autoindent", "ai":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoAutoIndent, boolValue: true
+    )
+  of "noautoindent", "noai":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoAutoIndent, boolValue: false
+    )
+  # Auto close paren
+  of "autocloseparen", "acp":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoAutoCloseParen, boolValue: true
+    )
+  of "noautocloseparen", "noacp":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoAutoCloseParen, boolValue: false
+    )
+  # Auto delete paren
+  of "autodeleteparen", "adp":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoAutoDeleteParen, boolValue: true
+    )
+  of "noautodeleteparen", "noadp":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoAutoDeleteParen, boolValue: false
+    )
+  # Clipboard
+  of "clipboard", "cb":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoClipboard, boolValue: true
+    )
+  of "noclipboard", "nocb":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoClipboard, boolValue: false
+    )
+  # Smooth scroll
+  of "smoothscroll", "sms":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoSmoothScroll, boolValue: true
+    )
+  of "nosmoothscroll", "nosms":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoSmoothScroll, boolValue: false
+    )
+  # Live reload of config
+  of "livereload", "lr":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoLiveReloadOfConf, boolValue: true
+    )
+  of "nolivereload", "nolr":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoLiveReloadOfConf, boolValue: false
+    )
+  # Filer icons
+  of "icon", "icons":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoShowIcons, boolValue: true
+    )
+  of "noicon", "noicons":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoShowIcons, boolValue: false
+    )
+  # Highlight current line
+  of "highlightcurrentline", "hcl":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoHighlightCurrentLine, boolValue: true
+    )
+  of "nohighlightcurrentline", "nohcl":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoHighlightCurrentLine, boolValue: false
+    )
+  # Highlight current word
+  of "highlightcurrentword", "hcw":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoHighlightCurrentWord, boolValue: true
+    )
+  of "nohighlightcurrentword", "nohcw":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoHighlightCurrentWord, boolValue: false
+    )
+  # Highlight full width space
+  of "highlightfullspace", "hfs":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoHighlightFullWidthSpace, boolValue: true
+    )
+  of "nohighlightfullspace", "nohfs":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoHighlightFullWidthSpace, boolValue: false
+    )
+  # Highlight pair of paren
+  of "highlightparen", "hp":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoHighlightPairOfParen, boolValue: true
+    )
+  of "nohighlightparen", "nohp":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoHighlightPairOfParen, boolValue: false
+    )
+  # Multiple status line
+  of "multistatusline", "msl":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoMultipleStatusLine, boolValue: true
+    )
+  of "nomultistatusline", "nomsl":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoMultipleStatusLine, boolValue: false
+    )
+  # Ignore case
+  of "ignorecase", "ic":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoIgnoreCase, boolValue: true
+    )
+  of "noignorecase", "noic":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoIgnoreCase, boolValue: false
+    )
+  # Smart case
+  of "smartcase", "scs":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoSmartCase, boolValue: true
+    )
+  of "nosmartcase", "noscs":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoSmartCase, boolValue: false
+    )
+  # Incremental search
+  of "incsearch", "is":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoIncSearch, boolValue: true
+    )
+  of "noincsearch", "nois":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoIncSearch, boolValue: false
+    )
+  # Highlight search
+  of "hlsearch", "hls":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoHlSearch, boolValue: true
+    )
+  of "nohlsearch", "nohls":
+    return CommandModeResult(
+      kind: cmrSetBoolOption, boolOption: bsoHlSearch, boolValue: false
+    )
+  # Tab stop (integer option)
+  of "tabstop", "ts":
+    if value.isSome:
+      try:
+        let intVal = parseInt(value.get)
+        if intVal > 0:
+          return CommandModeResult(
+            kind: cmrSetIntOption, intOption: isoTabStop, intValue: intVal
+          )
+        else:
+          return
+            CommandModeResult(kind: cmrError, errorMessage: "tabstop must be positive")
+      except ValueError:
+        return
+          CommandModeResult(kind: cmrError, errorMessage: "Invalid value for tabstop")
+    else:
+      return CommandModeResult(
+        kind: cmrError, errorMessage: "tabstop requires a value (e.g., tabstop=4)"
+      )
+  else:
+    return CommandModeResult(kind: cmrError, errorMessage: "Unknown option: " & option)
 
 proc executeHelp*(
     handler: CommandModeHandler, topic: Option[string]
@@ -392,6 +618,11 @@ proc handleCommandModeInput*(
     return CommandModeResult(kind: cmrBackupManager)
   of claRecentFile:
     return CommandModeResult(kind: cmrRecentFile)
+  of claClearSearchHighlight:
+    return CommandModeResult(kind: cmrClearSearchHighlight)
+  of claShellCommand:
+    return
+      CommandModeResult(kind: cmrShellCommand, shellCommand: cmdResult.shellCommand)
   of claSubstitute:
     # TODO: Implement search and replace
     return CommandModeResult(kind: cmrMessage, message: "Substitute not implemented")

@@ -646,7 +646,10 @@ proc parseCompletionItem*(node: JsonNode): CompletionItem =
   result.label = node["label"].getStr
 
   if node.hasKey("kind"):
-    result.kind = some(CompletionItemKind(node["kind"].getInt))
+    let kind = node["kind"].getInt
+    # LSP spec says kind values are 1-25. Handle invalid values gracefully.
+    if kind >= 1 and kind <= 25:
+      result.kind = some(CompletionItemKind(kind))
   if node.hasKey("detail"):
     result.detail = some(node["detail"].getStr)
   if node.hasKey("documentation"):
@@ -654,7 +657,10 @@ proc parseCompletionItem*(node: JsonNode): CompletionItem =
   if node.hasKey("insertText"):
     result.insertText = some(node["insertText"].getStr)
   if node.hasKey("insertTextFormat"):
-    result.insertTextFormat = some(InsertTextFormat(node["insertTextFormat"].getInt))
+    let fmt = node["insertTextFormat"].getInt
+    # LSP spec says 1=PlainText, 2=Snippet. Handle invalid values gracefully.
+    if fmt in {1, 2}:
+      result.insertTextFormat = some(InsertTextFormat(fmt))
   if node.hasKey("sortText"):
     result.sortText = some(node["sortText"].getStr)
   if node.hasKey("filterText"):
@@ -1247,3 +1253,108 @@ proc parseFoldingRange*(node: JsonNode): FoldingRange =
     result.kind = parseFoldingRangeKind(node["kind"].getStr)
   if node.hasKey("collapsedText") and node["collapsedText"].kind == JString:
     result.collapsedText = some(node["collapsedText"].getStr)
+
+# Additional helper functions for LSP client
+
+proc parseLocations*(node: JsonNode): seq[Location] =
+  ## Parse Location or Location[] from JSON (handles both single and array responses)
+  result = @[]
+  case node.kind
+  of JArray:
+    for item in node:
+      result.add(parseLocation(item))
+  of JObject:
+    result.add(parseLocation(node))
+  else:
+    discard
+
+proc parseDocumentSymbolResult*(node: JsonNode): DocumentSymbolResult =
+  ## Parse DocumentSymbol[] or SymbolInformation[] from JSON
+  if node.kind != JArray or node.len == 0:
+    return DocumentSymbolResult(isHierarchical: true, symbols: @[])
+
+  # Check if first item has "children" or "location" to determine type
+  let firstItem = node[0]
+  if firstItem.hasKey("location"):
+    # SymbolInformation[]
+    var syms: seq[SymbolInformation] = @[]
+    for item in node:
+      syms.add(parseSymbolInformation(item))
+    return DocumentSymbolResult(isHierarchical: false, symbolInfos: syms)
+  else:
+    # DocumentSymbol[]
+    var syms: seq[DocumentSymbol] = @[]
+    for item in node:
+      syms.add(parseDocumentSymbol(item))
+    return DocumentSymbolResult(isHierarchical: true, symbols: syms)
+
+proc documentLinkToJson*(link: DocumentLink): JsonNode =
+  ## Convert DocumentLink to JSON for documentLink/resolve request
+  result =
+    %*{
+      "range": {
+        "start":
+          {"line": link.range.start.line, "character": link.range.start.character},
+        "end": {"line": link.range.`end`.line, "character": link.range.`end`.character},
+      }
+    }
+  if link.target.isSome:
+    result["target"] = %link.target.get
+  if link.tooltip.isSome:
+    result["tooltip"] = %link.tooltip.get
+  if link.data.isSome:
+    result["data"] = link.data.get
+
+proc codeLensToJson*(lens: CodeLens): JsonNode =
+  ## Convert CodeLens to JSON for codeLens/resolve request
+  result = newJObject()
+  var rangeNode = newJObject()
+  rangeNode["start"] =
+    %*{"line": lens.range.start.line, "character": lens.range.start.character}
+  rangeNode["end"] =
+    %*{"line": lens.range.`end`.line, "character": lens.range.`end`.character}
+  result["range"] = rangeNode
+
+  if lens.command.isSome:
+    let cmd = lens.command.get
+    var cmdNode = newJObject()
+    cmdNode["title"] = %cmd.title
+    cmdNode["command"] = %cmd.command
+    if cmd.arguments.isSome:
+      var argsArray = newJArray()
+      for arg in cmd.arguments.get:
+        argsArray.add(arg)
+      cmdNode["arguments"] = argsArray
+    result["command"] = cmdNode
+  if lens.data.isSome:
+    result["data"] = lens.data.get
+
+proc callHierarchyItemToJson*(item: CallHierarchyItem): JsonNode =
+  ## Convert CallHierarchyItem to JSON for call hierarchy requests
+  result =
+    %*{
+      "name": item.name,
+      "kind": item.kind.int,
+      "uri": item.uri,
+      "range": {
+        "start":
+          {"line": item.range.start.line, "character": item.range.start.character},
+        "end": {"line": item.range.`end`.line, "character": item.range.`end`.character},
+      },
+      "selectionRange": {
+        "start": {
+          "line": item.selectionRange.start.line,
+          "character": item.selectionRange.start.character,
+        },
+        "end": {
+          "line": item.selectionRange.`end`.line,
+          "character": item.selectionRange.`end`.character,
+        },
+      },
+    }
+  if item.tags.isSome:
+    result["tags"] = %item.tags.get
+  if item.detail.isSome:
+    result["detail"] = %item.detail.get
+  if item.data.isSome:
+    result["data"] = item.data.get

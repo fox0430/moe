@@ -40,7 +40,7 @@ proc handleResize(e: Editor) =
   e.state.timing.lastResizeTime = now
 
   # Physically clear the terminal screen to remove artifacts
-  clearScreen()
+  terminal.clearScreen()
   # Set the editor's full redraw flag
   e.state.needsFullRedraw = true
 
@@ -64,15 +64,17 @@ proc main() =
     )
   )
 
-  let editor = newEditor()
+  var editor = newEditor()
+  editor.app = app
 
   # Set up LSP diagnostics callback to update buffer markers
   editor.lsp.setDiagnosticsCallback(
-    proc(uri: string, diagnostics: seq[Diagnostic]) =
+    proc(uri: string, diagnostics: seq[Diagnostic]) {.gcsafe.} =
       # Find the buffer with this URI and apply diagnostics
-      let path = uriToPath(uri)
+      let path = uriToPath(uri).absolutePath()
       let activeBuffer = editor.activeBuffer()
-      if activeBuffer.filePath.isSome and activeBuffer.filePath.get == path:
+      if activeBuffer.filePath.isSome and
+          activeBuffer.filePath.get.absolutePath() == path:
         applyDiagnosticsToBuffer(activeBuffer, diagnostics)
         editor.state.needsFullRedraw = true
   )
@@ -91,7 +93,7 @@ proc main() =
           echo fmt"Error: {r.error}"
           quit(1)
 
-  app.onEvent proc(e: Event): bool =
+  app.onEvent proc(e: Event, app: App): bool =
     if e.kind == EventKind.Resize:
       # Special handling for resize events to force screen clear
       editor.handleResize

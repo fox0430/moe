@@ -29,7 +29,7 @@ import pkg/[results, celina]
 import
   ../[
     types, buffer, cursor, modes, motion, keybindings, commandline, commandconfig,
-    commandregistry, config, stringbuilder, filer, recentfilemode,
+    commandregistry, config, stringbuilder, filer, recentfilemode, lspintegration,
   ]
 import
   normal_handler, insert_handler, command_handler, visual_handler, replace_handler,
@@ -51,11 +51,9 @@ type
     hrHSplit # Horizontal split window
     hrEnew # Create new empty buffer
     hrEdit # Edit/open file in current window
-    hrSetMultiStatusLine # Set multi status line
-    hrSetIgnoreCase # Set ignorecase option
-    hrSetSmartCase # Set smartcase option
-    hrSetIncSearch # Set incsearch option
-    hrSetHlSearch # Set hlsearch option
+    hrSetBoolOption # Set boolean option
+    hrSetIntOption # Set integer option
+    hrClearSearchHighlight # Clear search highlighting
     hrSave # Save file
     hrSaveAndQuit # Save file and quit
     hrBufferNext # Switch to next buffer
@@ -97,6 +95,7 @@ type
     hrLspCodeLensExecute # Execute CodeLens on current line
     hrLspCallHierarchyIncoming # Execute LSP incoming calls
     hrLspCallHierarchyOutgoing # Execute LSP outgoing calls
+    hrShellCommand # Execute shell command
     hrUnhandled # Command was not handled
     hrError # Error occurred
 
@@ -138,16 +137,14 @@ type
       discard
     of hrEdit:
       editFilename*: string
-    of hrSetMultiStatusLine:
-      enabled*: bool
-    of hrSetIgnoreCase:
-      ignorecaseEnabled*: bool
-    of hrSetSmartCase:
-      smartcaseEnabled*: bool
-    of hrSetIncSearch:
-      incsearchEnabled*: bool
-    of hrSetHlSearch:
-      hlsearchEnabled*: bool
+    of hrSetBoolOption:
+      boolOption*: BoolSettingOption
+      boolValue*: bool
+    of hrSetIntOption:
+      intOption*: IntSettingOption
+      intValue*: int
+    of hrClearSearchHighlight:
+      discard
     of hrSave:
       saveFilename*: Option[string]
     of hrSaveAndQuit:
@@ -220,6 +217,8 @@ type
       discard
     of hrLspCallHierarchyOutgoing:
       discard
+    of hrShellCommand:
+      shellCommand*: string
     of hrUnhandled:
       discard
     of hrError:
@@ -234,6 +233,7 @@ proc newHandlerManager*(
     clipboardConfig: ClipboardConfig,
     smoothScrollConfig: SmoothScrollConfig =
       SmoothScrollConfig(enable: true, baseDurationMs: 350, maxDurationMs: 650),
+    lsp: LspIntegration = nil,
 ): HandlerManager =
   ## Create a new handler manager with all mode handlers
 
@@ -242,7 +242,7 @@ proc newHandlerManager*(
     smoothScrollConfig,
   )
   let insertHandler =
-    newInsertModeHandler(keyBindingRegistry, motionController, commandRegistry)
+    newInsertModeHandler(keyBindingRegistry, motionController, commandRegistry, lsp)
   let commandHandler =
     newCommandModeHandler(commandLineParser, commandConfig, commandRegistry)
   let visualHandler = newVisualModeHandler(keyBindingRegistry, commandRegistry)
@@ -492,16 +492,17 @@ proc handleCommandMode*(
     return HandlerResult(kind: hrEnew)
   of cmrEdit:
     return HandlerResult(kind: hrEdit, editFilename: r.editFilename)
-  of cmrSetMultiStatusLine:
-    return HandlerResult(kind: hrSetMultiStatusLine, enabled: r.enabled)
-  of cmrSetIgnoreCase:
-    return HandlerResult(kind: hrSetIgnoreCase, ignorecaseEnabled: r.ignorecaseEnabled)
-  of cmrSetSmartCase:
-    return HandlerResult(kind: hrSetSmartCase, smartcaseEnabled: r.smartcaseEnabled)
-  of cmrSetIncSearch:
-    return HandlerResult(kind: hrSetIncSearch, incsearchEnabled: r.incsearchEnabled)
-  of cmrSetHlSearch:
-    return HandlerResult(kind: hrSetHlSearch, hlsearchEnabled: r.hlsearchEnabled)
+  of cmrSetBoolOption:
+    return HandlerResult(
+      kind: hrSetBoolOption, boolOption: r.boolOption, boolValue: r.boolValue
+    )
+  of cmrSetIntOption:
+    return
+      HandlerResult(kind: hrSetIntOption, intOption: r.intOption, intValue: r.intValue)
+  of cmrClearSearchHighlight:
+    return HandlerResult(kind: hrClearSearchHighlight)
+  of cmrShellCommand:
+    return HandlerResult(kind: hrShellCommand, shellCommand: r.shellCommand)
   of cmrSave:
     return HandlerResult(kind: hrSave, saveFilename: r.saveFilename)
   of cmrSaveAndQuit:
@@ -1124,25 +1125,41 @@ proc getEditFilename*(hrResult: HandlerResult): string =
   ## Get the filename for edit command
   if hrResult.kind == hrEdit: hrResult.editFilename else: ""
 
-proc shouldSetMultiStatusLine*(hrResult: HandlerResult): bool =
-  ## Check if we should set multi status line mode
-  hrResult.kind == hrSetMultiStatusLine
+proc shouldSetBoolOption*(hrResult: HandlerResult): bool =
+  ## Check if we should set a boolean option
+  hrResult.kind == hrSetBoolOption
 
-proc shouldSetIgnoreCase*(hrResult: HandlerResult): bool =
-  ## Check if we should set ignorecase option
-  hrResult.kind == hrSetIgnoreCase
+proc shouldSetIntOption*(hrResult: HandlerResult): bool =
+  ## Check if we should set an integer option
+  hrResult.kind == hrSetIntOption
 
-proc shouldSetSmartCase*(hrResult: HandlerResult): bool =
-  ## Check if we should set smartcase option
-  hrResult.kind == hrSetSmartCase
+proc shouldClearSearchHighlight*(hrResult: HandlerResult): bool =
+  ## Check if we should clear search highlighting
+  hrResult.kind == hrClearSearchHighlight
 
-proc shouldSetIncSearch*(hrResult: HandlerResult): bool =
-  ## Check if we should set incsearch option
-  hrResult.kind == hrSetIncSearch
+proc shouldShellCommand*(hrResult: HandlerResult): bool =
+  ## Check if we should execute a shell command
+  hrResult.kind == hrShellCommand
 
-proc shouldSetHlSearch*(hrResult: HandlerResult): bool =
-  ## Check if we should set hlsearch option
-  hrResult.kind == hrSetHlSearch
+proc getShellCommand*(hrResult: HandlerResult): string =
+  ## Get the shell command to execute
+  if hrResult.kind == hrShellCommand: hrResult.shellCommand else: ""
+
+proc getBoolOption*(hrResult: HandlerResult): BoolSettingOption =
+  ## Get the boolean option to set
+  if hrResult.kind == hrSetBoolOption: hrResult.boolOption else: bsoNumber
+
+proc getBoolValue*(hrResult: HandlerResult): bool =
+  ## Get the boolean value to set
+  if hrResult.kind == hrSetBoolOption: hrResult.boolValue else: false
+
+proc getIntOption*(hrResult: HandlerResult): IntSettingOption =
+  ## Get the integer option to set
+  if hrResult.kind == hrSetIntOption: hrResult.intOption else: isoTabStop
+
+proc getIntValue*(hrResult: HandlerResult): int =
+  ## Get the integer value to set
+  if hrResult.kind == hrSetIntOption: hrResult.intValue else: 0
 
 proc shouldSave*(hrResult: HandlerResult): bool =
   ## Check if we should save the file
@@ -1250,26 +1267,6 @@ proc getHSplitFilename*(hrResult: HandlerResult): Option[string] =
     hrResult.hsplitFilename
   else:
     none(string)
-
-proc getMultiStatusLineEnabled*(hrResult: HandlerResult): bool =
-  ## Get multi status line enabled setting
-  if hrResult.kind == hrSetMultiStatusLine: hrResult.enabled else: false
-
-proc getIgnoreCaseEnabled*(hrResult: HandlerResult): bool =
-  ## Get ignorecase enabled setting
-  if hrResult.kind == hrSetIgnoreCase: hrResult.ignorecaseEnabled else: false
-
-proc getSmartCaseEnabled*(hrResult: HandlerResult): bool =
-  ## Get smartcase enabled setting
-  if hrResult.kind == hrSetSmartCase: hrResult.smartcaseEnabled else: false
-
-proc getIncSearchEnabled*(hrResult: HandlerResult): bool =
-  ## Get incsearch enabled setting
-  if hrResult.kind == hrSetIncSearch: hrResult.incsearchEnabled else: false
-
-proc getHlSearchEnabled*(hrResult: HandlerResult): bool =
-  ## Get hlsearch enabled setting
-  if hrResult.kind == hrSetHlSearch: hrResult.hlsearchEnabled else: false
 
 proc getSaveFilename*(hrResult: HandlerResult): Option[string] =
   ## Get filename for save operation

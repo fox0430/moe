@@ -54,6 +54,8 @@ type
     claBufferManager # :buffers, :ls (open buffer manager)
     claBackupManager # :backups (open backup manager)
     claRecentFile # :recent (open recent file selection mode)
+    claClearSearchHighlight # :noh, :nohlsearch (clear search highlighting)
+    claShellCommand # :! (execute shell command)
     claUnknown # Unknown command
 
   ParsedCommand* = object
@@ -117,6 +119,10 @@ type
       discard
     of claRecentFile:
       discard
+    of claClearSearchHighlight:
+      discard
+    of claShellCommand:
+      shellCommand*: string
     of claUnknown:
       errorMessage*: string
 
@@ -160,6 +166,14 @@ proc parseCommandLine*(parser: CommandLineParser, input: string): ParsedCommand 
   if cleanInput.allCharsInSet({'0' .. '9'}):
     result.action = claGoto
     result.args = @[cleanInput]
+    return
+
+  # Check if it's a shell command (:!command)
+  if cleanInput.startsWith("!"):
+    result.action = claShellCommand
+    # Get the command after "!"
+    let shellCmd = cleanInput[1 ..^ 1].strip()
+    result.args = @[shellCmd]
     return
 
   # Split into command and arguments
@@ -313,6 +327,14 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
     return CommandLineResult(kind: claBackupManager)
   of claRecentFile:
     return CommandLineResult(kind: claRecentFile)
+  of claClearSearchHighlight:
+    return CommandLineResult(kind: claClearSearchHighlight)
+  of claShellCommand:
+    if cmd.args.len > 0 and cmd.args[0].len > 0:
+      return CommandLineResult(kind: claShellCommand, shellCommand: cmd.args[0])
+    else:
+      return
+        CommandLineResult(kind: claUnknown, errorMessage: "No shell command specified")
   of claUnknown:
     return CommandLineResult(
       kind: claUnknown, errorMessage: "Not an editor command: " & cmd.rawText

@@ -152,6 +152,10 @@ proc loadDefaultConfig*(config: CommandConfig) =
   # Recent file
   config.addAlias("recent", claRecentFile)
 
+  # Clear search highlight
+  config.addAlias("noh", claClearSearchHighlight)
+  config.addAlias("nohlsearch", claClearSearchHighlight)
+
 proc applyToParser*(config: CommandConfig, parser: CommandLineParser) =
   ## Apply configuration to a command line parser
   # Clear existing aliases

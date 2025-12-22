@@ -19,24 +19,36 @@
 
 ## Auto-completion system for Insert mode
 ##
-## This module provides buffer word completion functionality.
-## It collects words from the current buffer and presents them
+## This module provides buffer word completion and LSP completion functionality.
+## It collects words from the current buffer and/or LSP server and presents them
 ## in a popup menu for selection.
 
-import std/[algorithm, sequtils, strutils, unicode, sets]
+import std/[algorithm, sequtils, strutils, unicode, sets, options, json]
 
 import pkg/celina
 
 import buffer, cursor
+import lsp/protocol/types as lspTypes
+
+export lspTypes
 
 type
   CompletionState* = enum
     csIdle ## No completion active
     csActive ## Popup visible, items available
+    csPendingLsp ## Waiting for LSP response
+
+  CompletionSource* = enum
+    csBuffer ## From buffer words
+    csLsp ## From LSP server
 
   CompletionEntry* = object ## A single completion entry
     word*: string ## The word to insert
     matchScore*: int ## Score for sorting (higher = better match)
+    source*: CompletionSource ## Where this entry came from
+    kind*: Option[CompletionItemKind] ## LSP completion kind (function, variable, etc.)
+    detail*: Option[string] ## LSP detail (e.g., type signature)
+    documentation*: Option[string] ## LSP documentation
 
   CompletionMenu* = object ## Completion popup state
     entries*: seq[CompletionEntry]
@@ -52,6 +64,8 @@ type
     state*: CompletionState
     menu*: CompletionMenu
     allWords*: seq[string] ## All collected words from buffer
+    lspRequestId*: Option[int] ## Pending LSP request ID
+    lspItems*: seq[CompletionItem] ## Raw LSP completion items
 
 const
   DefaultMaxVisible* = 10
@@ -230,30 +244,100 @@ proc newCompletionManager*(): CompletionManager =
       triggerCol: 0,
     ),
     allWords: @[],
+    lspRequestId: none(int),
+    lspItems: @[],
+  )
+
+proc getDocumentationText(doc: JsonNode): Option[string] =
+  ## Extract documentation text from LSP documentation field
+  if doc.isNil:
+    return none(string)
+
+  case doc.kind
+  of JString:
+    return some(doc.getStr)
+  of JObject:
+    # MarkupContent
+    if doc.hasKey("value"):
+      return some(doc["value"].getStr)
+  else:
+    discard
+  return none(string)
+
+proc lspItemToEntry*(item: CompletionItem, prefix: string): CompletionEntry =
+  ## Convert an LSP CompletionItem to a CompletionEntry
+  let word =
+    if item.insertText.isSome and item.insertText.get.len > 0:
+      item.insertText.get
+    else:
+      item.label
+
+  var docText: Option[string] = none(string)
+  if item.documentation.isSome:
+    docText = getDocumentationText(item.documentation.get)
+
+  CompletionEntry(
+    word: word,
+    matchScore: matchScore(prefix, word),
+    source: csLsp,
+    kind: item.kind,
+    detail: item.detail,
+    documentation: docText,
   )
 
 proc filterAndSortEntries*(
     mgr: CompletionManager, prefix: string
 ): seq[CompletionEntry] =
   ## Filter words by prefix and sort by match score
+  ## When LSP items are available, show only LSP items (switch from buffer)
+  ## When no LSP items, show buffer words as fallback
   result = @[]
 
-  if prefix.len == 0:
-    # Show all words sorted alphabetically
-    for word in mgr.allWords:
-      result.add(CompletionEntry(word: word, matchScore: 0))
-    return
+  # If LSP items are available, use only LSP items
+  if mgr.lspItems.len > 0:
+    for item in mgr.lspItems:
+      let entry = lspItemToEntry(item, prefix)
+      if prefix.len == 0 or entry.matchScore > 0:
+        result.add(entry)
 
-  # Filter and score
-  for word in mgr.allWords:
-    if fuzzyMatch(prefix, word):
-      let score = matchScore(prefix, word)
-      if score > 0:
-        result.add(CompletionEntry(word: word, matchScore: score))
+    # Sort LSP items by score (descending)
+    result.sort do(a, b: CompletionEntry) -> int:
+      b.matchScore - a.matchScore
+  else:
+    # Fall back to buffer words
+    if prefix.len == 0:
+      # Show all words sorted alphabetically
+      for word in mgr.allWords:
+        result.add(
+          CompletionEntry(
+            word: word,
+            matchScore: 0,
+            source: csBuffer,
+            kind: none(CompletionItemKind),
+            detail: none(string),
+            documentation: none(string),
+          )
+        )
+    else:
+      # Filter and score buffer words
+      for word in mgr.allWords:
+        if fuzzyMatch(prefix, word):
+          let score = matchScore(prefix, word)
+          if score > 0:
+            result.add(
+              CompletionEntry(
+                word: word,
+                matchScore: score,
+                source: csBuffer,
+                kind: none(CompletionItemKind),
+                detail: none(string),
+                documentation: none(string),
+              )
+            )
 
-  # Sort by score (descending)
-  result.sort do(a, b: CompletionEntry) -> int:
-    b.matchScore - a.matchScore
+    # Sort buffer words by score (descending)
+    result.sort do(a, b: CompletionEntry) -> int:
+      b.matchScore - a.matchScore
 
 proc updateFilter*(mgr: CompletionManager, prefix: string) =
   ## Update the completion filter with new prefix
@@ -268,6 +352,10 @@ proc triggerCompletion*(
   ## Trigger completion at current cursor position
   let line = buffer.getLine(cursorLine)
   let prefix = extractPrefixBeforeCursor(line, cursorCol)
+
+  # Clear any previous LSP items (start fresh with buffer completions)
+  mgr.lspItems = @[]
+  mgr.lspRequestId = none(int)
 
   # Collect words from buffer
   mgr.allWords =
@@ -293,6 +381,8 @@ proc cancelCompletion*(mgr: CompletionManager) =
   mgr.menu.selectedIndex = 0
   mgr.menu.scrollOffset = 0
   mgr.menu.prefix = ""
+  mgr.lspRequestId = none(int)
+  mgr.lspItems = @[]
 
 proc selectNext*(mgr: CompletionManager) =
   ## Select the next completion item
@@ -486,3 +576,121 @@ proc renderCompletionPopup*(
           termBuffer[x, bottomY] = cell("─", popupBorderStyle)
       if pos.x + pos.width - 1 >= 0 and pos.x + pos.width - 1 < termBuffer.area.width:
         termBuffer[pos.x + pos.width - 1, bottomY] = cell("┘", popupBorderStyle)
+
+# LSP completion support
+
+proc setLspRequestPending*(mgr: CompletionManager, requestId: int) =
+  ## Set the pending LSP request ID
+  mgr.lspRequestId = some(requestId)
+  mgr.state = csPendingLsp
+
+proc isPendingLsp*(mgr: CompletionManager): bool =
+  ## Check if waiting for LSP response
+  mgr.state == csPendingLsp and mgr.lspRequestId.isSome
+
+proc getLspRequestId*(mgr: CompletionManager): Option[int] =
+  ## Get the pending LSP request ID
+  mgr.lspRequestId
+
+proc setLspItems*(mgr: CompletionManager, items: seq[CompletionItem]) =
+  ## Set LSP completion items and update the menu
+  mgr.lspItems = items
+  mgr.lspRequestId = none(int)
+
+  # Update entries with the new LSP items
+  mgr.menu.entries = mgr.filterAndSortEntries(mgr.menu.prefix)
+  mgr.menu.selectedIndex = 0
+  mgr.menu.scrollOffset = 0
+
+  if mgr.menu.entries.len > 0:
+    mgr.state = csActive
+  else:
+    mgr.state = csIdle
+
+proc triggerLspCompletion*(
+    mgr: CompletionManager, buffer: TextBuffer, cursorLine, cursorCol: int
+) =
+  ## Initialize completion state for LSP request
+  ## Call this before starting the LSP request
+  let line = buffer.getLine(cursorLine)
+  let prefix = extractPrefixBeforeCursor(line, cursorCol)
+
+  # Collect buffer words as fallback
+  mgr.allWords =
+    collectBufferWords(buffer, BufferPosition(line: cursorLine, column: cursorCol))
+
+  # Clear previous LSP items
+  mgr.lspItems = @[]
+
+  # Set trigger position
+  mgr.menu.triggerLine = cursorLine
+  mgr.menu.triggerCol = cursorCol - prefix.runeLen
+  mgr.menu.prefix = prefix
+  mgr.menu.hasSelection = false
+
+  # Filter entries (will only show buffer words until LSP responds)
+  mgr.menu.entries = mgr.filterAndSortEntries(prefix)
+  mgr.menu.selectedIndex = 0
+  mgr.menu.scrollOffset = 0
+
+  # Show popup with buffer words while waiting for LSP
+  if mgr.menu.entries.len > 0:
+    mgr.state = csActive
+
+proc completionItemKindToString*(kind: CompletionItemKind): string =
+  ## Convert CompletionItemKind to display string
+  case kind
+  of cikText: "Text"
+  of cikMethod: "Method"
+  of cikFunction: "Func"
+  of cikConstructor: "Constr"
+  of cikField: "Field"
+  of cikVariable: "Var"
+  of cikClass: "Class"
+  of cikInterface: "Iface"
+  of cikModule: "Module"
+  of cikProperty: "Prop"
+  of cikUnit: "Unit"
+  of cikValue: "Value"
+  of cikEnum: "Enum"
+  of cikKeyword: "Keyw"
+  of cikSnippet: "Snip"
+  of cikColor: "Color"
+  of cikFile: "File"
+  of cikReference: "Ref"
+  of cikFolder: "Folder"
+  of cikEnumMember: "EnumM"
+  of cikConstant: "Const"
+  of cikStruct: "Struct"
+  of cikEvent: "Event"
+  of cikOperator: "Oper"
+  of cikTypeParameter: "TypeP"
+
+proc completionItemKindToIcon*(kind: CompletionItemKind): string =
+  ## Convert CompletionItemKind to icon character
+  case kind
+  of cikText: "󰊄"
+  of cikMethod: "󰊕"
+  of cikFunction: "󰊕"
+  of cikConstructor: ""
+  of cikField: ""
+  of cikVariable: "󰀫"
+  of cikClass: ""
+  of cikInterface: ""
+  of cikModule: ""
+  of cikProperty: ""
+  of cikUnit: ""
+  of cikValue: ""
+  of cikEnum: ""
+  of cikKeyword: ""
+  of cikSnippet: ""
+  of cikColor: ""
+  of cikFile: ""
+  of cikReference: ""
+  of cikFolder: ""
+  of cikEnumMember: ""
+  of cikConstant: ""
+  of cikStruct: ""
+  of cikEvent: ""
+  of cikOperator: ""
+  of cikTypeParameter: ""

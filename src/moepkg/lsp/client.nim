@@ -17,17 +17,21 @@
 #                                                                              #
 #[############################################################################]#
 
-## LSP Client Implementation
+## LSP Client Implementation using chronos async I/O
 ## Manages communication with Language Server Protocol servers
 
-import std/[osproc, streams, json, options, os, strutils, posix, times]
+import std/[json, options, os, strutils, tables]
 
 import pkg/results
+import pkg/chronos
+import pkg/chronos/asyncproc
 
 import jsonrpc
 import protocol/types
+import ../logger
 
 export types
+export chronos
 
 type
   LspServerState* = enum
@@ -37,25 +41,30 @@ type
     lssShuttingDown
     lssCrashed
 
+  WaitingResponse* = object
+    id*: RequestId
+    methodName*: string
+
   LspClient* = ref object
     state*: LspServerState
     languageId*: string
     serverCommand*: string
     serverArgs*: seq[string]
     workspaceRoot*: string
-    process: Process
-    inputStream: Stream # Write to server (server's stdin)
-    outputStream: Stream # Read from server (server's stdout)
+    serverProcess: AsyncProcessRef
+    serverStreams: Streams
+    outputStreamFuture: Future[JsonRpcResponseResult]
     rpcState: JsonRpcState
-    messageReader: MessageReader
     capabilities*: Option[ServerCapabilities]
     serverInfo*: Option[ServerInfo]
+    waitingResponses*: Table[RequestId, WaitingResponse]
+    pendingInitRequest: Option[RequestId] # Tracks pending initialize request
+    needsSendInitialized*: bool # True when we need to send "initialized" notification
+    initError*: string # Error message if initialization failed
     # Callbacks for server notifications
-    onDiagnostics*: proc(uri: string, diagnostics: seq[Diagnostic])
-    onLogMessage*: proc(msgType: MessageType, message: string)
-    onShowMessage*: proc(msgType: MessageType, message: string)
-    # Pending responses
-    pendingResponses*: seq[JsonRpcMessage]
+    onDiagnostics*: proc(uri: string, diagnostics: seq[Diagnostic]) {.gcsafe.}
+    onLogMessage*: proc(msgType: MessageType, message: string) {.gcsafe.}
+    onShowMessage*: proc(msgType: MessageType, message: string) {.gcsafe.}
 
 proc newLspClient*(
     languageId, command: string, args: seq[string] = @[], workspaceRoot: string = ""
@@ -71,216 +80,198 @@ proc newLspClient*(
         workspaceRoot
       else:
         getCurrentDir(),
-    process: nil,
-    inputStream: nil,
-    outputStream: nil,
+    serverProcess: nil,
+    serverStreams: nil,
+    outputStreamFuture: nil,
     rpcState: newJsonRpcState(),
-    messageReader: newMessageReader(),
     capabilities: none(ServerCapabilities),
     serverInfo: none(ServerInfo),
+    waitingResponses: initTable[RequestId, WaitingResponse](),
+    pendingInitRequest: none(RequestId),
+    needsSendInitialized: false,
     onDiagnostics: nil,
     onLogMessage: nil,
     onShowMessage: nil,
-    pendingResponses: @[],
   )
 
+proc running*(client: LspClient): bool {.inline.} =
+  ## Return true if the LSP server process is running
+  if client.serverProcess.isNil:
+    return false
+  let r = client.serverProcess.running
+  if r.isOk:
+    return r.get
+  return false
+
 proc isRunning*(client: LspClient): bool =
-  client.state == lssRunning and client.process != nil and client.process.running
+  client.state == lssRunning and client.running
 
 proc isStopped*(client: LspClient): bool =
   client.state == lssStopped
 
-proc sendRaw(client: LspClient, data: string): Result[void, string] =
-  ## Send raw data to the server
-  if not client.isRunning:
-    return err("Client not running")
+proc isInitialized*(client: LspClient): bool =
+  client.capabilities.isSome
 
-  try:
-    client.inputStream.write(data)
-    client.inputStream.flush()
-    return ok()
-  except IOError as e:
-    return err("Failed to write to server: " & e.msg)
+proc isStarting*(client: LspClient): bool =
+  ## Check if the client is currently starting/initializing
+  client.state == lssStarting
+
+proc isReady*(client: LspClient): bool =
+  ## Check if the client is fully ready to handle requests
+  client.state == lssRunning and client.running and client.capabilities.isSome
+
+# Forward declarations
+proc readable*(client: LspClient): Result[bool, string]
+proc handleNotification*(client: LspClient, meth: string, params: JsonNode) {.gcsafe.}
+proc deleteWaitingResponse*(client: LspClient, id: RequestId) {.inline.}
+
+proc checkInitComplete*(client: LspClient): bool =
+  ## Check if async initialization has completed (success or failure)
+  ## Returns true if init is done, false if still in progress
+  ## Uses a short timeout to avoid blocking the UI
+  if client.state != lssStarting:
+    return true
+
+  # Check if we're waiting for init response
+  if client.pendingInitRequest.isNone:
+    return true
+
+  # Check if the output future is ready
+  if client.outputStreamFuture.isNil:
+    return false
+
+  # Try to wait for the future with a very short timeout (5ms)
+  # This allows us to make progress without blocking the UI too long
+  let completed = waitFor withTimeout(client.outputStreamFuture, 5.milliseconds)
+  if not completed:
+    return false
+
+  logDebug("lsp", "checkInitComplete: got data, reading...")
+
+  let respResult = client.outputStreamFuture.read()
+
+  # Start reading the next message
+  client.outputStreamFuture = client.serverStreams.output.read()
+
+  if respResult.isErr:
+    client.state = lssCrashed
+    client.initError = "Initialize failed: " & respResult.error
+    logDebug("lsp", "checkInitComplete: read error: " & respResult.error)
+    return true
+
+  let response = respResult.get
+  let requestId = client.pendingInitRequest.get
+  logDebug(
+    "lsp",
+    "checkInitComplete: got response, hasId=" & $response.hasKey("id") & " hasMethod=" &
+      $response.hasKey("method"),
+  )
+
+  # Check if this is a notification - handle it and keep waiting
+  if response.hasKey("method") and not response.hasKey("id"):
+    logDebug("lsp", "checkInitComplete: got notification, continuing to wait...")
+    try:
+      client.handleNotification(
+        response["method"].getStr,
+        if response.hasKey("params"):
+          response["params"]
+        else:
+          newJObject(),
+      )
+    except:
+      discard
+    return false # Keep waiting for init response
+
+  # Check if this is the response to our initialize request
+  if response.hasKey("id") and response["id"].getInt == requestId:
+    # Check for error response
+    if response.hasKey("error"):
+      client.state = lssCrashed
+      client.initError =
+        "Initialize error: " & response["error"]["message"].getStr("Unknown error")
+      logDebug("lsp", "checkInitComplete: init error response")
+      return true
+
+    # Parse server capabilities from result
+    if response.hasKey("result"):
+      let resultNode = response["result"]
+      if resultNode.hasKey("capabilities"):
+        client.capabilities = some(parseServerCapabilities(resultNode["capabilities"]))
+      if resultNode.hasKey("serverInfo"):
+        let si = resultNode["serverInfo"]
+        var info = ServerInfo(name: si["name"].getStr)
+        if si.hasKey("version"):
+          info.version = some(si["version"].getStr)
+        client.serverInfo = some(info)
+
+    client.deleteWaitingResponse(requestId)
+    client.pendingInitRequest = none(RequestId)
+
+    # Mark that we need to send the "initialized" notification
+    # This will be done by the poll loop to avoid async issues
+    client.needsSendInitialized = true
+    client.state = lssRunning
+    logDebug("lsp", "checkInitComplete: init response received, state=" & $client.state)
+    return true
+
+  # Unexpected response - keep waiting
+  return false
+
+proc canSend*(client: LspClient): bool =
+  ## Check if the client can send messages (starting or running state)
+  client.state in {lssStarting, lssRunning} and client.running
+
+proc readable*(client: LspClient): Result[bool, string] =
+  ## Check if there is data available to read (non-blocking)
+  if client.outputStreamFuture.isNil:
+    return Result[bool, string].ok(false)
+  return Result[bool, string].ok(client.outputStreamFuture.finished)
+
+proc read*(client: LspClient): Future[JsonRpcResponseResult] {.async.} =
+  ## Read a response from the LSP server
+  let r = await client.outputStreamFuture
+  # Start reading the next message
+  client.outputStreamFuture = client.serverStreams.output.read()
+  return r
+
+proc deleteWaitingResponse*(client: LspClient, id: RequestId) {.inline.} =
+  if client.waitingResponses.contains(id):
+    client.waitingResponses.del(id)
+
+proc getWaitingResponse*(client: LspClient, id: RequestId): Option[WaitingResponse] =
+  if client.waitingResponses.contains(id):
+    return some(client.waitingResponses[id])
+  return none(WaitingResponse)
+
+# Request/notification sending
 
 proc sendRequest*(
     client: LspClient, meth: string, params: JsonNode
-): Result[RequestId, string] =
+): Future[Result[RequestId, string]] {.async.} =
   ## Send a request to the server
+  if not client.canSend:
+    return Result[RequestId, string].err("Client not running")
+
   let id = client.rpcState.getNextId()
-  let message = encodeRequest(id, meth, params)
-  let sendResult = client.sendRaw(message)
+  let req = %*{"jsonrpc": "2.0", "id": id, "method": meth, "params": params}
+
+  let sendResult = await client.serverStreams.input.sendRequest(req)
   if sendResult.isErr:
-    return err(sendResult.error)
+    return Result[RequestId, string].err(sendResult.error)
+
   client.rpcState.addPending(id, meth)
-  return ok(id)
+  client.waitingResponses[id] = WaitingResponse(id: id, methodName: meth)
+  return Result[RequestId, string].ok(id)
 
 proc sendNotification*(
     client: LspClient, meth: string, params: JsonNode
-): Result[void, string] =
+): Future[Result[void, string]] {.async.} =
   ## Send a notification to the server
-  let message = encodeNotification(meth, params)
-  return client.sendRaw(message)
+  if not client.canSend:
+    return Result[void, string].err("Client not running")
 
-proc handleNotification(client: LspClient, meth: string, params: JsonNode) =
-  ## Handle incoming notification from server
-  case meth
-  of "textDocument/publishDiagnostics":
-    if client.onDiagnostics != nil:
-      let uri = params["uri"].getStr
-      var diagnostics: seq[Diagnostic] = @[]
-      if params.hasKey("diagnostics"):
-        for d in params["diagnostics"]:
-          diagnostics.add(parseDiagnostic(d))
-      client.onDiagnostics(uri, diagnostics)
-  of "window/logMessage":
-    if client.onLogMessage != nil:
-      let msgType = MessageType(params["type"].getInt)
-      let message = params["message"].getStr
-      client.onLogMessage(msgType, message)
-  of "window/showMessage":
-    if client.onShowMessage != nil:
-      let msgType = MessageType(params["type"].getInt)
-      let message = params["message"].getStr
-      client.onShowMessage(msgType, message)
-  else:
-    discard # Ignore unknown notifications
-
-proc processMessage(client: LspClient, msg: JsonRpcMessage) =
-  ## Process a received JSON-RPC message
-  case msg.kind
-  of jrmkResponse:
-    # Store response for later retrieval
-    discard client.rpcState.removePending(msg.respId)
-    client.pendingResponses.add(msg)
-  of jrmkError:
-    # Store error response
-    if msg.errId.isSome:
-      discard client.rpcState.removePending(msg.errId.get)
-    client.pendingResponses.add(msg)
-  of jrmkNotification:
-    client.handleNotification(msg.notifyMethod, msg.notifyParams)
-  of jrmkRequest:
-    # Server-initiated requests (rare, but some servers use them)
-    discard
-
-proc tryReadByte(stream: Stream): Option[char] =
-  ## Try to read a single byte without blocking
-  ## Returns none if no data available or on error
-  try:
-    if not stream.atEnd:
-      return some(stream.readChar())
-  except IOError:
-    discard
-  return none(char)
-
-proc poll*(client: LspClient, timeoutMs: int = 0): Result[void, string] =
-  ## Poll for incoming messages from the server
-  ## timeoutMs: 0 = non-blocking, -1 = block forever, >0 = timeout in ms
-  if not client.isRunning:
-    return err("Client not running")
-
-  # Try to read available data
-  var buffer = ""
-  var bytesRead = 0
-  const MaxReadPerPoll = 65536
-
-  # Non-blocking read attempt
-  while bytesRead < MaxReadPerPoll:
-    let byteOpt = tryReadByte(client.outputStream)
-    if byteOpt.isNone:
-      break
-    buffer.add(byteOpt.get)
-    inc bytesRead
-
-  if buffer.len == 0:
-    return ok()
-
-  # Process buffer line by line for headers, then bytes for body
-  var pos = 0
-  while pos < buffer.len:
-    case client.messageReader.state
-    of rsReadingHeaders:
-      # Find end of line
-      var lineEnd = pos
-      while lineEnd < buffer.len and buffer[lineEnd] != '\n':
-        inc lineEnd
-
-      if lineEnd >= buffer.len:
-        # Incomplete line, save for next poll
-        break
-
-      let line = buffer[pos .. lineEnd].strip(chars = {'\r', '\n'})
-      pos = lineEnd + 1
-
-      let feedResult = client.messageReader.feedLine(line)
-      if feedResult.isErr:
-        # Reset reader and continue
-        client.messageReader.reset()
-    of rsReadingBody:
-      let remaining = client.messageReader.remainingBytes()
-      let available = min(remaining, buffer.len - pos)
-      let chunk = buffer[pos ..< pos + available]
-      pos += available
-
-      let feedResult = client.messageReader.feedBytes(chunk)
-      if feedResult.isErr:
-        client.messageReader.reset()
-        continue
-
-      if feedResult.get.isSome:
-        let body = feedResult.get.get
-        let parseResult = parseJsonRpcMessage(body)
-        if parseResult.isOk:
-          client.processMessage(parseResult.get)
-
-  return ok()
-
-proc waitForResponse*(
-    client: LspClient, id: RequestId, timeoutMs: int = 30000
-): Result[JsonNode, string] =
-  ## Wait for a response to a specific request
-  let startTime = epochTime()
-  let timeoutSec = timeoutMs.float / 1000.0
-
-  while true:
-    # Check if we already have the response
-    var foundIdx = -1
-    for i, resp in client.pendingResponses:
-      case resp.kind
-      of jrmkResponse:
-        if resp.respId == id:
-          foundIdx = i
-          break
-      of jrmkError:
-        if resp.errId.isSome and resp.errId.get == id:
-          foundIdx = i
-          break
-      else:
-        discard
-
-    if foundIdx >= 0:
-      let resp = client.pendingResponses[foundIdx]
-      client.pendingResponses.delete(foundIdx)
-      case resp.kind
-      of jrmkResponse:
-        return ok(resp.respResult)
-      of jrmkError:
-        return err("Server error " & $resp.error.code & ": " & resp.error.message)
-      else:
-        return err("Unexpected response type")
-
-    # Check timeout
-    if timeoutMs > 0 and epochTime() - startTime > timeoutSec:
-      discard client.rpcState.removePending(id)
-      return err("Request timed out")
-
-    # Poll for more data
-    let pollResult = client.poll(100)
-    if pollResult.isErr:
-      return err(pollResult.error)
-
-    # Small sleep to avoid busy waiting
-    sleep(10)
+  let notify = %*{"jsonrpc": "2.0", "method": meth, "params": params}
+  return await client.serverStreams.input.sendNotify(notify)
 
 # Initialize request
 proc buildClientCapabilities(): JsonNode =
@@ -355,24 +346,54 @@ proc buildClientCapabilities(): JsonNode =
     "workspace": {"applyEdit": true, "workspaceFolders": false, "configuration": false},
   }
 
-proc start*(client: LspClient): Result[void, string] =
-  ## Start the LSP server and perform initialization handshake
+proc startAsync*(client: LspClient): Result[void, string] =
+  ## Start the LSP server process and send initialize request (non-blocking)
+  ## The response will be handled by checkInitComplete() in the poll loop
   if client.state != lssStopped:
-    return err("Client already started")
+    return Result[void, string].err("Client already started")
 
   client.state = lssStarting
+  logDebug("lsp", "startAsync: starting LSP server")
 
-  # Start server process
+  # Build command with args
+  let commandParts = client.serverCommand.split(' ')
+  let command = commandParts[0]
+  var args = client.serverArgs
+  if commandParts.len > 1:
+    args = commandParts[1 ..^ 1] & args
+
+  # Start server process (blocking but quick)
+  const
+    WorkingDir = ""
+    Env = nil
+  let opts: set[AsyncProcessOption] = {UsePath, StdErrToStdOut}
+
   try:
-    let options = {poUsePath, poStdErrToStdOut}
-    client.process = startProcess(
-      client.serverCommand, client.workspaceRoot, client.serverArgs, nil, options
+    client.serverProcess = waitFor startProcess(
+      command,
+      WorkingDir,
+      args,
+      Env,
+      opts,
+      stdoutHandle = AsyncProcess.Pipe,
+      stdinHandle = AsyncProcess.Pipe,
     )
-    client.inputStream = client.process.inputStream
-    client.outputStream = client.process.outputStream
-  except OSError as e:
+  except CatchableError as e:
     client.state = lssCrashed
-    return err("Failed to start LSP server: " & e.msg)
+    client.initError = "Failed to start LSP server: " & e.msg
+    logDebug("lsp", "startAsync: failed to start process: " & e.msg)
+    return Result[void, string].err(client.initError)
+
+  logDebug("lsp", "startAsync: process started")
+
+  # Set up streams
+  client.serverStreams = Streams(
+    input: InputStream(stream: client.serverProcess.stdinStream),
+    output: OutputStream(stream: client.serverProcess.stdoutStream),
+  )
+
+  # Start reading from output stream
+  client.outputStreamFuture = client.serverStreams.output.read()
 
   # Send initialize request
   let rootUri = "file://" & client.workspaceRoot
@@ -386,359 +407,315 @@ proc start*(client: LspClient): Result[void, string] =
       "trace": "off",
     }
 
-  let reqResult = client.sendRequest("initialize", initParams)
+  let reqResult = waitFor client.sendRequest("initialize", initParams)
   if reqResult.isErr:
     client.state = lssCrashed
-    return err("Failed to send initialize: " & reqResult.error)
+    client.initError = "Failed to send initialize: " & reqResult.error
+    logDebug("lsp", "startAsync: failed to send initialize: " & reqResult.error)
+    return Result[void, string].err(client.initError)
 
-  let respResult = client.waitForResponse(reqResult.get, 30000)
-  if respResult.isErr:
-    client.state = lssCrashed
-    return err("Initialize failed: " & respResult.error)
+  # Store the request ID so checkInitComplete can match the response
+  client.pendingInitRequest = some(reqResult.get)
+  logDebug("lsp", "startAsync: initialize request sent, waiting for response")
 
-  # Parse server capabilities
-  let response = respResult.get
-  if response.hasKey("capabilities"):
-    client.capabilities = some(parseServerCapabilities(response["capabilities"]))
-  if response.hasKey("serverInfo"):
-    let si = response["serverInfo"]
-    var info = ServerInfo(name: si["name"].getStr)
-    if si.hasKey("version"):
-      info.version = some(si["version"].getStr)
-    client.serverInfo = some(info)
+  return Result[void, string].ok()
 
-  # Send initialized notification
-  let initedResult = client.sendNotification("initialized", %*{})
-  if initedResult.isErr:
-    client.state = lssCrashed
-    return err("Failed to send initialized: " & initedResult.error)
+proc startInBackground*(client: LspClient) =
+  ## Start the LSP server initialization in the background (non-blocking)
+  ## Check isReady() or checkInitComplete() to see when initialization is done
+  logDebug("lsp", "startInBackground called, current state=" & $client.state)
+  if client.state != lssStopped:
+    logDebug("lsp", "startInBackground: not stopped, returning")
+    return
 
-  client.state = lssRunning
-  return ok()
+  logDebug("lsp", "startInBackground: starting...")
+  let r = client.startAsync()
+  if r.isErr:
+    logDebug("lsp", "startInBackground: error: " & r.error)
+  else:
+    logDebug("lsp", "startInBackground: started, state=" & $client.state)
 
-proc stop*(client: LspClient): Result[void, string] =
+proc stop*(client: LspClient): Future[Result[void, string]] {.async.} =
   ## Stop the LSP server gracefully
   if client.state != lssRunning:
-    return ok()
+    return Result[void, string].ok()
 
   client.state = lssShuttingDown
 
   # Send shutdown request
-  let shutdownResult = client.sendRequest("shutdown", newJNull())
+  let shutdownResult = await client.sendRequest("shutdown", newJNull())
   if shutdownResult.isOk:
-    # Wait for response (with short timeout)
-    discard client.waitForResponse(shutdownResult.get, 5000)
+    # Wait briefly for response
+    await sleepAsync(milliseconds(100))
 
   # Send exit notification
-  discard client.sendNotification("exit", %*{})
+  discard await client.sendNotification("exit", %*{})
 
-  # Close streams and process
-  if client.inputStream != nil:
-    client.inputStream.close()
-  if client.outputStream != nil:
-    client.outputStream.close()
-  if client.process != nil:
-    client.process.terminate()
-    client.process.close()
+  # Kill process
+  if client.serverProcess != nil:
+    discard client.serverProcess.kill()
 
   client.state = lssStopped
-  client.process = nil
-  client.inputStream = nil
-  client.outputStream = nil
+  client.serverProcess = nil
+  client.serverStreams = nil
+  client.outputStreamFuture = nil
 
-  return ok()
+  return Result[void, string].ok()
 
 proc kill*(client: LspClient) =
   ## Forcefully kill the LSP server
-  if client.process != nil:
+  if client.serverProcess != nil:
     try:
-      client.process.kill()
-      client.process.close()
+      discard client.serverProcess.kill()
     except:
       discard
 
   client.state = lssStopped
-  client.process = nil
-  client.inputStream = nil
-  client.outputStream = nil
+  client.serverProcess = nil
+  client.serverStreams = nil
+  client.outputStreamFuture = nil
 
 # Document synchronization
+
 proc didOpen*(
     client: LspClient, uri: string, languageId: string, version: int, text: string
-): Result[void, string] =
+): Future[Result[void, string]] {.async.} =
   ## Notify server that a document was opened
+  if not client.isInitialized:
+    return Result[void, string].err("Client not initialized")
+
   let params =
     %*{
       "textDocument":
         {"uri": uri, "languageId": languageId, "version": version, "text": text}
     }
-  return client.sendNotification("textDocument/didOpen", params)
+  return await client.sendNotification("textDocument/didOpen", params)
 
-proc didClose*(client: LspClient, uri: string): Result[void, string] =
+proc didClose*(client: LspClient, uri: string): Future[Result[void, string]] {.async.} =
   ## Notify server that a document was closed
+  if not client.isInitialized:
+    return Result[void, string].err("Client not initialized")
+
   let params = %*{"textDocument": {"uri": uri}}
-  return client.sendNotification("textDocument/didClose", params)
+  return await client.sendNotification("textDocument/didClose", params)
 
 proc didChange*(
     client: LspClient, uri: string, version: int, text: string
-): Result[void, string] =
+): Future[Result[void, string]] {.async.} =
   ## Notify server that a document changed (full sync)
+  if not client.isInitialized:
+    return Result[void, string].err("Client not initialized")
+
   let params =
     %*{
       "textDocument": {"uri": uri, "version": version},
       "contentChanges": [{"text": text}],
     }
-  return client.sendNotification("textDocument/didChange", params)
+  return await client.sendNotification("textDocument/didChange", params)
 
 proc didSave*(
     client: LspClient, uri: string, text: Option[string] = none(string)
-): Result[void, string] =
+): Future[Result[void, string]] {.async.} =
   ## Notify server that a document was saved
+  if not client.isInitialized:
+    return Result[void, string].err("Client not initialized")
+
   var params = %*{"textDocument": {"uri": uri}}
   if text.isSome:
     params["text"] = %text.get
-  return client.sendNotification("textDocument/didSave", params)
+  return await client.sendNotification("textDocument/didSave", params)
 
-# Feature requests
+# Notification handling
+
+proc handleNotification*(client: LspClient, meth: string, params: JsonNode) {.gcsafe.} =
+  ## Handle incoming notification from server
+  case meth
+  of "textDocument/publishDiagnostics":
+    if client.onDiagnostics != nil:
+      let uri = params["uri"].getStr
+      var diagnostics: seq[Diagnostic] = @[]
+      if params.hasKey("diagnostics"):
+        for d in params["diagnostics"]:
+          diagnostics.add(parseDiagnostic(d))
+      client.onDiagnostics(uri, diagnostics)
+  of "window/logMessage":
+    if client.onLogMessage != nil:
+      let msgType = MessageType(params["type"].getInt)
+      let message = params["message"].getStr
+      client.onLogMessage(msgType, message)
+  of "window/showMessage":
+    if client.onShowMessage != nil:
+      let msgType = MessageType(params["type"].getInt)
+      let message = params["message"].getStr
+      client.onShowMessage(msgType, message)
+  else:
+    discard # Ignore unknown notifications
+
+proc processResponse*(client: LspClient, response: JsonNode): Option[RequestId] =
+  ## Process a response and return the request ID if it was a response
+  if response.hasKey("id") and not response.hasKey("method"):
+    # This is a response
+    let id = response["id"].getInt
+    client.deleteWaitingResponse(id)
+    discard client.rpcState.removePending(id)
+    return some(id)
+  elif response.hasKey("method"):
+    # This is a notification
+    let meth = response["method"].getStr
+    let params =
+      if response.hasKey("params"):
+        response["params"]
+      else:
+        newJObject()
+    client.handleNotification(meth, params)
+  return none(RequestId)
+
+# Helper to send request and wait for response
+proc sendAndWait*(
+    client: LspClient, meth: string, params: JsonNode
+): Future[Result[JsonNode, string]] {.async.} =
+  ## Send a request and wait for its response
+  if not client.isRunning:
+    return Result[JsonNode, string].err("Client not running")
+
+  let reqResult = await client.sendRequest(meth, params)
+  if reqResult.isErr:
+    return Result[JsonNode, string].err(reqResult.error)
+
+  # Wait for the response, processing any notifications that arrive first
+  var response: JsonNode
+  while true:
+    let respResult = await client.read()
+    if respResult.isErr:
+      return Result[JsonNode, string].err(respResult.error)
+
+    response = respResult.get
+
+    # Check if this is a notification (has method but no id)
+    if response.hasKey("method") and not response.hasKey("id"):
+      try:
+        client.handleNotification(
+          response["method"].getStr, response.getOrDefault("params")
+        )
+      except Exception:
+        discard # Ignore notification handling errors
+      continue
+
+    # This is a response, break out of the loop
+    break
+
+  # Check for error response
+  if response.hasKey("error"):
+    let errMsg = response["error"]["message"].getStr("Unknown error")
+    return Result[JsonNode, string].err(errMsg)
+
+  if response.hasKey("result"):
+    return Result[JsonNode, string].ok(response["result"])
+  else:
+    return Result[JsonNode, string].ok(newJNull())
+
+# LSP Feature Requests
+
 proc completion*(
     client: LspClient, uri: string, line, character: int
-): Result[seq[CompletionItem], string] =
+): Future[Result[seq[CompletionItem], string]] {.async.} =
   ## Request completion at a position
   let params =
     %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
 
-  let reqResult = client.sendRequest("textDocument/completion", params)
-  if reqResult.isErr:
-    return err(reqResult.error)
-
-  let respResult = client.waitForResponse(reqResult.get)
+  let respResult = await client.sendAndWait("textDocument/completion", params)
   if respResult.isErr:
-    return err(respResult.error)
+    return Result[seq[CompletionItem], string].err(respResult.error)
 
+  let resp = respResult.get
   var items: seq[CompletionItem] = @[]
-  let response = respResult.get
 
-  if response.kind == JNull:
-    return ok(items)
-
-  # Handle both CompletionList and CompletionItem[]
-  let itemsArray =
-    if response.hasKey("items"):
-      response["items"]
-    else:
-      response
-
-  if itemsArray.kind == JArray:
-    for item in itemsArray:
+  # Handle both CompletionList and CompletionItem[] responses
+  if resp.kind == JArray:
+    for item in resp:
+      items.add(parseCompletionItem(item))
+  elif resp.kind == JObject and resp.hasKey("items"):
+    for item in resp["items"]:
       items.add(parseCompletionItem(item))
 
-  return ok(items)
+  return Result[seq[CompletionItem], string].ok(items)
 
 proc hover*(
     client: LspClient, uri: string, line, character: int
-): Result[Option[Hover], string] =
+): Future[Result[Option[Hover], string]] {.async.} =
   ## Request hover information at a position
   let params =
     %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
 
-  let reqResult = client.sendRequest("textDocument/hover", params)
-  if reqResult.isErr:
-    return err(reqResult.error)
-
-  let respResult = client.waitForResponse(reqResult.get)
+  let respResult = await client.sendAndWait("textDocument/hover", params)
   if respResult.isErr:
-    return err(respResult.error)
+    return Result[Option[Hover], string].err(respResult.error)
 
-  let response = respResult.get
-  if response.kind == JNull:
-    return ok(none(Hover))
+  let resp = respResult.get
+  if resp.kind == JNull:
+    return Result[Option[Hover], string].ok(none(Hover))
 
-  return ok(some(parseHover(response)))
-
-proc signatureHelp*(
-    client: LspClient, uri: string, line, character: int
-): Result[Option[SignatureHelp], string] =
-  ## Request signature help at a position
-  let params =
-    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
-
-  let reqResult = client.sendRequest("textDocument/signatureHelp", params)
-  if reqResult.isErr:
-    return err(reqResult.error)
-
-  let respResult = client.waitForResponse(reqResult.get)
-  if respResult.isErr:
-    return err(respResult.error)
-
-  let response = respResult.get
-  if response.kind == JNull:
-    return ok(none(SignatureHelp))
-
-  return ok(some(parseSignatureHelp(response)))
+  return Result[Option[Hover], string].ok(some(parseHover(resp)))
 
 proc gotoDefinition*(
     client: LspClient, uri: string, line, character: int
-): Result[seq[Location], string] =
+): Future[Result[seq[Location], string]] {.async.} =
   ## Request go to definition
   let params =
     %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
 
-  let reqResult = client.sendRequest("textDocument/definition", params)
-  if reqResult.isErr:
-    return err(reqResult.error)
-
-  let respResult = client.waitForResponse(reqResult.get)
+  let respResult = await client.sendAndWait("textDocument/definition", params)
   if respResult.isErr:
-    return err(respResult.error)
+    return Result[seq[Location], string].err(respResult.error)
 
-  var locations: seq[Location] = @[]
-  let response = respResult.get
-
-  if response.kind == JNull:
-    return ok(locations)
-
-  # Handle Location, Location[], LocationLink, and LocationLink[]
-  if response.kind == JArray:
-    for item in response:
-      if item.hasKey("targetUri"):
-        # LocationLink
-        locations.add(locationLinkToLocation(parseLocationLink(item)))
-      elif item.hasKey("uri"):
-        # Location
-        locations.add(parseLocation(item))
-  elif response.hasKey("targetUri"):
-    # Single LocationLink
-    locations.add(locationLinkToLocation(parseLocationLink(response)))
-  elif response.hasKey("uri"):
-    # Single Location
-    locations.add(parseLocation(response))
-
-  return ok(locations)
+  return Result[seq[Location], string].ok(parseLocations(respResult.get))
 
 proc gotoDeclaration*(
     client: LspClient, uri: string, line, character: int
-): Result[seq[Location], string] =
+): Future[Result[seq[Location], string]] {.async.} =
   ## Request go to declaration
   let params =
     %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
 
-  let reqResult = client.sendRequest("textDocument/declaration", params)
-  if reqResult.isErr:
-    return err(reqResult.error)
-
-  let respResult = client.waitForResponse(reqResult.get)
+  let respResult = await client.sendAndWait("textDocument/declaration", params)
   if respResult.isErr:
-    return err(respResult.error)
+    return Result[seq[Location], string].err(respResult.error)
 
-  var locations: seq[Location] = @[]
-  let response = respResult.get
-
-  if response.kind == JNull:
-    return ok(locations)
-
-  # Handle Location, Location[], LocationLink, and LocationLink[]
-  if response.kind == JArray:
-    for item in response:
-      if item.hasKey("targetUri"):
-        # LocationLink
-        locations.add(locationLinkToLocation(parseLocationLink(item)))
-      elif item.hasKey("uri"):
-        # Location
-        locations.add(parseLocation(item))
-  elif response.hasKey("targetUri"):
-    # Single LocationLink
-    locations.add(locationLinkToLocation(parseLocationLink(response)))
-  elif response.hasKey("uri"):
-    # Single Location
-    locations.add(parseLocation(response))
-
-  return ok(locations)
+  return Result[seq[Location], string].ok(parseLocations(respResult.get))
 
 proc gotoTypeDefinition*(
     client: LspClient, uri: string, line, character: int
-): Result[seq[Location], string] =
+): Future[Result[seq[Location], string]] {.async.} =
   ## Request go to type definition
   let params =
     %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
 
-  let reqResult = client.sendRequest("textDocument/typeDefinition", params)
-  if reqResult.isErr:
-    return err(reqResult.error)
-
-  let respResult = client.waitForResponse(reqResult.get)
+  let respResult = await client.sendAndWait("textDocument/typeDefinition", params)
   if respResult.isErr:
-    return err(respResult.error)
+    return Result[seq[Location], string].err(respResult.error)
 
-  var locations: seq[Location] = @[]
-  let response = respResult.get
-
-  if response.kind == JNull:
-    return ok(locations)
-
-  # Handle Location, Location[], LocationLink, and LocationLink[]
-  if response.kind == JArray:
-    for item in response:
-      if item.hasKey("targetUri"):
-        # LocationLink
-        locations.add(locationLinkToLocation(parseLocationLink(item)))
-      elif item.hasKey("uri"):
-        # Location
-        locations.add(parseLocation(item))
-  elif response.hasKey("targetUri"):
-    # Single LocationLink
-    locations.add(locationLinkToLocation(parseLocationLink(response)))
-  elif response.hasKey("uri"):
-    # Single Location
-    locations.add(parseLocation(response))
-
-  return ok(locations)
+  return Result[seq[Location], string].ok(parseLocations(respResult.get))
 
 proc gotoImplementation*(
     client: LspClient, uri: string, line, character: int
-): Result[seq[Location], string] =
+): Future[Result[seq[Location], string]] {.async.} =
   ## Request go to implementation
   let params =
     %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
 
-  let reqResult = client.sendRequest("textDocument/implementation", params)
-  if reqResult.isErr:
-    return err(reqResult.error)
-
-  let respResult = client.waitForResponse(reqResult.get)
+  let respResult = await client.sendAndWait("textDocument/implementation", params)
   if respResult.isErr:
-    return err(respResult.error)
+    return Result[seq[Location], string].err(respResult.error)
 
-  var locations: seq[Location] = @[]
-  let response = respResult.get
-
-  if response.kind == JNull:
-    return ok(locations)
-
-  # Handle Location, Location[], LocationLink, and LocationLink[]
-  if response.kind == JArray:
-    for item in response:
-      if item.hasKey("targetUri"):
-        # LocationLink
-        locations.add(locationLinkToLocation(parseLocationLink(item)))
-      elif item.hasKey("uri"):
-        # Location
-        locations.add(parseLocation(item))
-  elif response.hasKey("targetUri"):
-    # Single LocationLink
-    locations.add(locationLinkToLocation(parseLocationLink(response)))
-  elif response.hasKey("uri"):
-    # Single Location
-    locations.add(parseLocation(response))
-
-  return ok(locations)
+  return Result[seq[Location], string].ok(parseLocations(respResult.get))
 
 proc references*(
     client: LspClient,
     uri: string,
     line, character: int,
     includeDeclaration: bool = true,
-): Result[seq[Location], string] =
-  ## Request references to a symbol
+): Future[Result[seq[Location], string]] {.async.} =
+  ## Request find references
   let params =
     %*{
       "textDocument": {"uri": uri},
@@ -746,101 +723,81 @@ proc references*(
       "context": {"includeDeclaration": includeDeclaration},
     }
 
-  let reqResult = client.sendRequest("textDocument/references", params)
-  if reqResult.isErr:
-    return err(reqResult.error)
-
-  let respResult = client.waitForResponse(reqResult.get)
+  let respResult = await client.sendAndWait("textDocument/references", params)
   if respResult.isErr:
-    return err(respResult.error)
+    return Result[seq[Location], string].err(respResult.error)
 
-  var locations: seq[Location] = @[]
-  let response = respResult.get
-
-  if response.kind == JNull:
-    return ok(locations)
-
-  if response.kind == JArray:
-    for loc in response:
-      locations.add(parseLocation(loc))
-
-  return ok(locations)
+  return Result[seq[Location], string].ok(parseLocations(respResult.get))
 
 proc documentHighlight*(
     client: LspClient, uri: string, line, character: int
-): Result[seq[DocumentHighlight], string] =
+): Future[Result[seq[DocumentHighlight], string]] {.async.} =
   ## Request document highlights at a position
-  ## Returns all occurrences of the symbol at the given position
   let params =
     %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
 
-  let reqResult = client.sendRequest("textDocument/documentHighlight", params)
-  if reqResult.isErr:
-    return err(reqResult.error)
-
-  let respResult = client.waitForResponse(reqResult.get)
+  let respResult = await client.sendAndWait("textDocument/documentHighlight", params)
   if respResult.isErr:
-    return err(respResult.error)
+    return Result[seq[DocumentHighlight], string].err(respResult.error)
 
   var highlights: seq[DocumentHighlight] = @[]
-  let response = respResult.get
-
-  if response.kind == JNull:
-    return ok(highlights)
-
-  if response.kind == JArray:
-    for item in response:
+  let resp = respResult.get
+  if resp.kind == JArray:
+    for item in resp:
       highlights.add(parseDocumentHighlight(item))
 
-  return ok(highlights)
+  return Result[seq[DocumentHighlight], string].ok(highlights)
 
-proc documentLink*(client: LspClient, uri: string): Result[seq[DocumentLink], string] =
-  ## Request document links for a document
-  ## Returns links to internal or external resources (e.g., imports, URLs)
+proc documentLink*(
+    client: LspClient, uri: string
+): Future[Result[seq[DocumentLink], string]] {.async.} =
+  ## Request document links
   let params = %*{"textDocument": {"uri": uri}}
 
-  let reqResult = client.sendRequest("textDocument/documentLink", params)
-  if reqResult.isErr:
-    return err(reqResult.error)
-
-  let respResult = client.waitForResponse(reqResult.get)
+  let respResult = await client.sendAndWait("textDocument/documentLink", params)
   if respResult.isErr:
-    return err(respResult.error)
+    return Result[seq[DocumentLink], string].err(respResult.error)
 
   var links: seq[DocumentLink] = @[]
-  let response = respResult.get
-
-  if response.kind == JNull:
-    return ok(links)
-
-  if response.kind == JArray:
-    for item in response:
+  let resp = respResult.get
+  if resp.kind == JArray:
+    for item in resp:
       links.add(parseDocumentLink(item))
 
-  return ok(links)
+  return Result[seq[DocumentLink], string].ok(links)
 
 proc documentLinkResolve*(
     client: LspClient, link: DocumentLink
-): Result[DocumentLink, string] =
-  ## Resolve a document link to get its target URI
-  ## Used when the initial documentLink response doesn't include target
-  let reqResult = client.sendRequest("documentLink/resolve", link.toJson)
-  if reqResult.isErr:
-    return err(reqResult.error)
+): Future[Result[DocumentLink, string]] {.async.} =
+  ## Resolve a document link
+  let params = documentLinkToJson(link)
 
-  let respResult = client.waitForResponse(reqResult.get)
+  let respResult = await client.sendAndWait("documentLink/resolve", params)
   if respResult.isErr:
-    return err(respResult.error)
+    return Result[DocumentLink, string].err(respResult.error)
 
-  let response = respResult.get
-  if response.kind == JNull:
-    return err("Resolve returned null")
+  return Result[DocumentLink, string].ok(parseDocumentLink(respResult.get))
 
-  return ok(parseDocumentLink(response))
+proc signatureHelp*(
+    client: LspClient, uri: string, line, character: int
+): Future[Result[Option[SignatureHelp], string]] {.async.} =
+  ## Request signature help at a position
+  let params =
+    %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
+
+  let respResult = await client.sendAndWait("textDocument/signatureHelp", params)
+  if respResult.isErr:
+    return Result[Option[SignatureHelp], string].err(respResult.error)
+
+  let resp = respResult.get
+  if resp.kind == JNull:
+    return Result[Option[SignatureHelp], string].ok(none(SignatureHelp))
+
+  return Result[Option[SignatureHelp], string].ok(some(parseSignatureHelp(resp)))
 
 proc rename*(
     client: LspClient, uri: string, line, character: int, newName: string
-): Result[Option[WorkspaceEdit], string] =
+): Future[Result[Option[WorkspaceEdit], string]] {.async.} =
   ## Request rename of a symbol
   let params =
     %*{
@@ -849,23 +806,19 @@ proc rename*(
       "newName": newName,
     }
 
-  let reqResult = client.sendRequest("textDocument/rename", params)
-  if reqResult.isErr:
-    return err(reqResult.error)
-
-  let respResult = client.waitForResponse(reqResult.get)
+  let respResult = await client.sendAndWait("textDocument/rename", params)
   if respResult.isErr:
-    return err(respResult.error)
+    return Result[Option[WorkspaceEdit], string].err(respResult.error)
 
-  let response = respResult.get
-  if response.kind == JNull:
-    return ok(none(WorkspaceEdit))
+  let resp = respResult.get
+  if resp.kind == JNull:
+    return Result[Option[WorkspaceEdit], string].ok(none(WorkspaceEdit))
 
-  return ok(some(parseWorkspaceEdit(response)))
+  return Result[Option[WorkspaceEdit], string].ok(some(parseWorkspaceEdit(resp)))
 
 proc formatting*(
     client: LspClient, uri: string, tabSize: int = 2, insertSpaces: bool = true
-): Result[seq[TextEdit], string] =
+): Future[Result[seq[TextEdit], string]] {.async.} =
   ## Request document formatting
   let params =
     %*{
@@ -873,25 +826,17 @@ proc formatting*(
       "options": {"tabSize": tabSize, "insertSpaces": insertSpaces},
     }
 
-  let reqResult = client.sendRequest("textDocument/formatting", params)
-  if reqResult.isErr:
-    return err(reqResult.error)
-
-  let respResult = client.waitForResponse(reqResult.get)
+  let respResult = await client.sendAndWait("textDocument/formatting", params)
   if respResult.isErr:
-    return err(respResult.error)
+    return Result[seq[TextEdit], string].err(respResult.error)
 
   var edits: seq[TextEdit] = @[]
-  let response = respResult.get
+  let resp = respResult.get
+  if resp.kind == JArray:
+    for item in resp:
+      edits.add(parseTextEdit(item))
 
-  if response.kind == JNull:
-    return ok(edits)
-
-  if response.kind == JArray:
-    for edit in response:
-      edits.add(parseTextEdit(edit))
-
-  return ok(edits)
+  return Result[seq[TextEdit], string].ok(edits)
 
 proc rangeFormatting*(
     client: LspClient,
@@ -899,7 +844,7 @@ proc rangeFormatting*(
     startLine, startChar, endLine, endChar: int,
     tabSize: int = 2,
     insertSpaces: bool = true,
-): Result[seq[TextEdit], string] =
+): Future[Result[seq[TextEdit], string]] {.async.} =
   ## Request range formatting
   let params =
     %*{
@@ -911,67 +856,35 @@ proc rangeFormatting*(
       "options": {"tabSize": tabSize, "insertSpaces": insertSpaces},
     }
 
-  let reqResult = client.sendRequest("textDocument/rangeFormatting", params)
-  if reqResult.isErr:
-    return err(reqResult.error)
-
-  let respResult = client.waitForResponse(reqResult.get)
+  let respResult = await client.sendAndWait("textDocument/rangeFormatting", params)
   if respResult.isErr:
-    return err(respResult.error)
+    return Result[seq[TextEdit], string].err(respResult.error)
 
   var edits: seq[TextEdit] = @[]
-  let response = respResult.get
+  let resp = respResult.get
+  if resp.kind == JArray:
+    for item in resp:
+      edits.add(parseTextEdit(item))
 
-  if response.kind == JNull:
-    return ok(edits)
-
-  if response.kind == JArray:
-    for edit in response:
-      edits.add(parseTextEdit(edit))
-
-  return ok(edits)
+  return Result[seq[TextEdit], string].ok(edits)
 
 proc documentSymbol*(
     client: LspClient, uri: string
-): Result[DocumentSymbolResult, string] =
-  ## Request document symbols for a document
+): Future[Result[DocumentSymbolResult, string]] {.async.} =
+  ## Request document symbols
   let params = %*{"textDocument": {"uri": uri}}
 
-  let reqResult = client.sendRequest("textDocument/documentSymbol", params)
-  if reqResult.isErr:
-    return err(reqResult.error)
-
-  let respResult = client.waitForResponse(reqResult.get)
+  let respResult = await client.sendAndWait("textDocument/documentSymbol", params)
   if respResult.isErr:
-    return err(respResult.error)
+    return Result[DocumentSymbolResult, string].err(respResult.error)
 
-  let response = respResult.get
-
-  if response.kind == JNull or (response.kind == JArray and response.len == 0):
-    return ok(DocumentSymbolResult(isHierarchical: true, symbols: @[]))
-
-  if response.kind == JArray and response.len > 0:
-    let first = response[0]
-    # DocumentSymbol has 'range' and 'selectionRange', SymbolInformation has 'location'
-    if first.hasKey("range") and first.hasKey("selectionRange"):
-      # Hierarchical DocumentSymbol[]
-      var symbols: seq[DocumentSymbol] = @[]
-      for item in response:
-        symbols.add(parseDocumentSymbol(item))
-      return ok(DocumentSymbolResult(isHierarchical: true, symbols: symbols))
-    elif first.hasKey("location"):
-      # Flat SymbolInformation[]
-      var infos: seq[SymbolInformation] = @[]
-      for item in response:
-        infos.add(parseSymbolInformation(item))
-      return ok(DocumentSymbolResult(isHierarchical: false, symbolInfos: infos))
-
-  return ok(DocumentSymbolResult(isHierarchical: true, symbols: @[]))
+  return
+    Result[DocumentSymbolResult, string].ok(parseDocumentSymbolResult(respResult.get))
 
 proc inlayHints*(
     client: LspClient, uri: string, startLine, startChar, endLine, endChar: int
-): Result[seq[InlayHint], string] =
-  ## Request inlay hints for a range in a document
+): Future[Result[seq[InlayHint], string]] {.async.} =
+  ## Request inlay hints for a range
   let params =
     %*{
       "textDocument": {"uri": uri},
@@ -981,50 +894,38 @@ proc inlayHints*(
       },
     }
 
-  let reqResult = client.sendRequest("textDocument/inlayHint", params)
-  if reqResult.isErr:
-    return err(reqResult.error)
-
-  let respResult = client.waitForResponse(reqResult.get)
+  let respResult = await client.sendAndWait("textDocument/inlayHint", params)
   if respResult.isErr:
-    return err(respResult.error)
+    return Result[seq[InlayHint], string].err(respResult.error)
 
   var hints: seq[InlayHint] = @[]
-  let response = respResult.get
+  let resp = respResult.get
+  if resp.kind == JArray:
+    for item in resp:
+      hints.add(parseInlayHint(item))
 
-  if response.kind == JNull:
-    return ok(hints)
-
-  if response.kind == JArray:
-    for hint in response:
-      hints.add(parseInlayHint(hint))
-
-  return ok(hints)
+  return Result[seq[InlayHint], string].ok(hints)
 
 proc semanticTokensFull*(
     client: LspClient, uri: string
-): Result[Option[SemanticTokens], string] =
+): Future[Result[Option[SemanticTokens], string]] {.async.} =
   ## Request full semantic tokens for a document
   let params = %*{"textDocument": {"uri": uri}}
 
-  let reqResult = client.sendRequest("textDocument/semanticTokens/full", params)
-  if reqResult.isErr:
-    return err(reqResult.error)
-
-  let respResult = client.waitForResponse(reqResult.get)
+  let respResult = await client.sendAndWait("textDocument/semanticTokens/full", params)
   if respResult.isErr:
-    return err(respResult.error)
+    return Result[Option[SemanticTokens], string].err(respResult.error)
 
-  let response = respResult.get
-  if response.kind == JNull:
-    return ok(none(SemanticTokens))
+  let resp = respResult.get
+  if resp.kind == JNull:
+    return Result[Option[SemanticTokens], string].ok(none(SemanticTokens))
 
-  return ok(some(parseSemanticTokens(response)))
+  return Result[Option[SemanticTokens], string].ok(some(parseSemanticTokens(resp)))
 
 proc semanticTokensRange*(
     client: LspClient, uri: string, startLine, startChar, endLine, endChar: int
-): Result[Option[SemanticTokens], string] =
-  ## Request semantic tokens for a range in a document
+): Future[Result[Option[SemanticTokens], string]] {.async.} =
+  ## Request semantic tokens for a range
   let params =
     %*{
       "textDocument": {"uri": uri},
@@ -1034,63 +935,52 @@ proc semanticTokensRange*(
       },
     }
 
-  let reqResult = client.sendRequest("textDocument/semanticTokens/range", params)
-  if reqResult.isErr:
-    return err(reqResult.error)
-
-  let respResult = client.waitForResponse(reqResult.get)
+  let respResult = await client.sendAndWait("textDocument/semanticTokens/range", params)
   if respResult.isErr:
-    return err(respResult.error)
+    return Result[Option[SemanticTokens], string].err(respResult.error)
 
-  let response = respResult.get
-  if response.kind == JNull:
-    return ok(none(SemanticTokens))
+  let resp = respResult.get
+  if resp.kind == JNull:
+    return Result[Option[SemanticTokens], string].ok(none(SemanticTokens))
 
-  return ok(some(parseSemanticTokens(response)))
+  return Result[Option[SemanticTokens], string].ok(some(parseSemanticTokens(resp)))
 
 proc selectionRange*(
     client: LspClient, uri: string, positions: seq[Position]
-): Result[seq[SelectionRange], string] =
-  ## Request selection ranges for given positions
-  let params = SelectionRangeParams(
-    textDocument: TextDocumentIdentifier(uri: uri), positions: positions
-  )
+): Future[Result[seq[SelectionRange], string]] {.async.} =
+  ## Request selection ranges for multiple positions
+  var posArray = newJArray()
+  for pos in positions:
+    posArray.add(%*{"line": pos.line, "character": pos.character})
 
-  let reqResult = client.sendRequest("textDocument/selectionRange", params.toJson)
-  if reqResult.isErr:
-    return err(reqResult.error)
+  let params = %*{"textDocument": {"uri": uri}, "positions": posArray}
 
-  let respResult = client.waitForResponse(reqResult.get)
+  let respResult = await client.sendAndWait("textDocument/selectionRange", params)
   if respResult.isErr:
-    return err(respResult.error)
+    return Result[seq[SelectionRange], string].err(respResult.error)
 
   var ranges: seq[SelectionRange] = @[]
-  let response = respResult.get
+  let resp = respResult.get
+  if resp.kind == JArray:
+    for item in resp:
+      ranges.add(parseSelectionRange(item))
 
-  if response.kind == JNull:
-    return ok(ranges)
-
-  if response.kind == JArray:
-    for item in response:
-      let parsed = parseSelectionRange(item)
-      if parsed != nil:
-        ranges.add(parsed)
-
-  return ok(ranges)
+  return Result[seq[SelectionRange], string].ok(ranges)
 
 proc selectionRange*(
     client: LspClient, uri: string, line, character: int
-): Result[Option[SelectionRange], string] =
+): Future[Result[Option[SelectionRange], string]] {.async.} =
   ## Request selection range for a single position
-  let pos = Position(line: line, character: character)
-  let rangesResult = client.selectionRange(uri, @[pos])
-  if rangesResult.isErr:
-    return err(rangesResult.error)
+  let positions = @[Position(line: line, character: character)]
+  let selResult = await client.selectionRange(uri, positions)
+  if selResult.isErr:
+    return Result[Option[SelectionRange], string].err(selResult.error)
 
-  let ranges = rangesResult.get
+  let ranges = selResult.get
   if ranges.len > 0:
-    return ok(some(ranges[0]))
-  return ok(none(SelectionRange))
+    return Result[Option[SelectionRange], string].ok(some(ranges[0]))
+  else:
+    return Result[Option[SelectionRange], string].ok(none(SelectionRange))
 
 proc inlineValues*(
     client: LspClient,
@@ -1098,207 +988,181 @@ proc inlineValues*(
     startLine, startChar, endLine, endChar: int,
     frameId: int,
     stoppedLine, stoppedStartChar, stoppedEndLine, stoppedEndChar: int,
-): Result[seq[InlineValue], string] =
-  ## Request inline values for a range in a document during debugging
-  let params = InlineValueParams(
-    textDocument: TextDocumentIdentifier(uri: uri),
-    range: newRange(startLine, startChar, endLine, endChar),
-    context: InlineValueContext(
-      frameId: frameId,
-      stoppedLocation:
-        newRange(stoppedLine, stoppedStartChar, stoppedEndLine, stoppedEndChar),
-    ),
-  )
+): Future[Result[seq[InlineValue], string]] {.async.} =
+  ## Request inline values for debugging
+  let params =
+    %*{
+      "textDocument": {"uri": uri},
+      "viewPort": {
+        "start": {"line": startLine, "character": startChar},
+        "end": {"line": endLine, "character": endChar},
+      },
+      "context": {
+        "frameId": frameId,
+        "stoppedLocation": {
+          "start": {"line": stoppedLine, "character": stoppedStartChar},
+          "end": {"line": stoppedEndLine, "character": stoppedEndChar},
+        },
+      },
+    }
 
-  let reqResult = client.sendRequest("textDocument/inlineValue", params.toJson)
-  if reqResult.isErr:
-    return err(reqResult.error)
-
-  let respResult = client.waitForResponse(reqResult.get)
+  let respResult = await client.sendAndWait("textDocument/inlineValue", params)
   if respResult.isErr:
-    return err(respResult.error)
+    return Result[seq[InlineValue], string].err(respResult.error)
 
   var values: seq[InlineValue] = @[]
-  let response = respResult.get
-
-  if response.kind == JNull:
-    return ok(values)
-
-  if response.kind == JArray:
-    for item in response:
+  let resp = respResult.get
+  if resp.kind == JArray:
+    for item in resp:
       values.add(parseInlineValue(item))
 
-  return ok(values)
+  return Result[seq[InlineValue], string].ok(values)
+
+proc codeLens*(
+    client: LspClient, uri: string
+): Future[Result[seq[CodeLens], string]] {.async.} =
+  ## Request code lenses for a document
+  let params = %*{"textDocument": {"uri": uri}}
+
+  let respResult = await client.sendAndWait("textDocument/codeLens", params)
+  if respResult.isErr:
+    return Result[seq[CodeLens], string].err(respResult.error)
+
+  var lenses: seq[CodeLens] = @[]
+  let resp = respResult.get
+  if resp.kind == JArray:
+    for item in resp:
+      lenses.add(parseCodeLens(item))
+
+  return Result[seq[CodeLens], string].ok(lenses)
+
+proc codeLensResolve*(
+    client: LspClient, lens: CodeLens
+): Future[Result[CodeLens, string]] {.async.} =
+  ## Resolve a code lens
+  let params = codeLensToJson(lens)
+
+  let respResult = await client.sendAndWait("codeLens/resolve", params)
+  if respResult.isErr:
+    return Result[CodeLens, string].err(respResult.error)
+
+  return Result[CodeLens, string].ok(parseCodeLens(respResult.get))
 
 proc executeCommand*(
     client: LspClient, command: string, arguments: seq[JsonNode] = @[]
-): Result[JsonNode, string] =
+): Future[Result[JsonNode, string]] {.async.} =
   ## Execute a command on the server
-  ## Returns the command result or null
-  let params = ExecuteCommandParams(
-    command: command,
-    arguments:
-      if arguments.len > 0:
-        some(arguments)
-      else:
-        none(seq[JsonNode]),
-  )
+  var args = newJArray()
+  for arg in arguments:
+    args.add(arg)
 
-  let reqResult = client.sendRequest("workspace/executeCommand", params.toJson)
-  if reqResult.isErr:
-    return err(reqResult.error)
+  let params = %*{"command": command, "arguments": args}
 
-  let respResult = client.waitForResponse(reqResult.get)
+  let respResult = await client.sendAndWait("workspace/executeCommand", params)
   if respResult.isErr:
-    return err(respResult.error)
+    return Result[JsonNode, string].err(respResult.error)
 
-  return ok(respResult.get)
-
-proc codeLens*(client: LspClient, uri: string): Result[seq[CodeLens], string] =
-  ## Request code lenses for a document
-  ## Code lenses represent commands shown along with source text (e.g., "5 references")
-  let params = %*{"textDocument": {"uri": uri}}
-
-  let reqResult = client.sendRequest("textDocument/codeLens", params)
-  if reqResult.isErr:
-    return err(reqResult.error)
-
-  let respResult = client.waitForResponse(reqResult.get)
-  if respResult.isErr:
-    return err(respResult.error)
-
-  var lenses: seq[CodeLens] = @[]
-  let response = respResult.get
-
-  if response.kind == JNull:
-    return ok(lenses)
-
-  if response.kind == JArray:
-    for item in response:
-      lenses.add(parseCodeLens(item))
-
-  return ok(lenses)
-
-proc codeLensResolve*(client: LspClient, lens: CodeLens): Result[CodeLens, string] =
-  ## Resolve a code lens to get its command
-  ## Used when the initial codeLens response doesn't include the command
-  let reqResult = client.sendRequest("codeLens/resolve", lens.toJson)
-  if reqResult.isErr:
-    return err(reqResult.error)
-
-  let respResult = client.waitForResponse(reqResult.get)
-  if respResult.isErr:
-    return err(respResult.error)
-
-  let response = respResult.get
-  if response.kind == JNull:
-    return err("Resolve returned null")
-
-  return ok(parseCodeLens(response))
+  return Result[JsonNode, string].ok(respResult.get)
 
 proc callHierarchyPrepare*(
     client: LspClient, uri: string, line, character: int
-): Result[seq[CallHierarchyItem], string] =
-  ## Prepare call hierarchy at a given position
-  ## Returns a list of CallHierarchyItems for the symbol at the position
+): Future[Result[seq[CallHierarchyItem], string]] {.async.} =
+  ## Prepare call hierarchy at a position
   let params =
     %*{"textDocument": {"uri": uri}, "position": {"line": line, "character": character}}
 
-  let reqResult = client.sendRequest("textDocument/prepareCallHierarchy", params)
-  if reqResult.isErr:
-    return err(reqResult.error)
-
-  let respResult = client.waitForResponse(reqResult.get)
+  let respResult = await client.sendAndWait("textDocument/prepareCallHierarchy", params)
   if respResult.isErr:
-    return err(respResult.error)
+    return Result[seq[CallHierarchyItem], string].err(respResult.error)
 
   var items: seq[CallHierarchyItem] = @[]
-  let response = respResult.get
-
-  if response.kind == JNull:
-    return ok(items)
-
-  if response.kind == JArray:
-    for item in response:
+  let resp = respResult.get
+  if resp.kind == JArray:
+    for item in resp:
       items.add(parseCallHierarchyItem(item))
 
-  return ok(items)
+  return Result[seq[CallHierarchyItem], string].ok(items)
 
 proc callHierarchyIncomingCalls*(
     client: LspClient, item: CallHierarchyItem
-): Result[seq[CallHierarchyIncomingCall], string] =
-  ## Request incoming calls for a CallHierarchyItem
-  ## Returns all callers of the given item
-  let params = %*{"item": item.toJson}
+): Future[Result[seq[CallHierarchyIncomingCall], string]] {.async.} =
+  ## Request incoming calls for a call hierarchy item
+  let params = %*{"item": callHierarchyItemToJson(item)}
 
-  let reqResult = client.sendRequest("callHierarchy/incomingCalls", params)
-  if reqResult.isErr:
-    return err(reqResult.error)
-
-  let respResult = client.waitForResponse(reqResult.get)
+  let respResult = await client.sendAndWait("callHierarchy/incomingCalls", params)
   if respResult.isErr:
-    return err(respResult.error)
+    return Result[seq[CallHierarchyIncomingCall], string].err(respResult.error)
 
   var calls: seq[CallHierarchyIncomingCall] = @[]
-  let response = respResult.get
+  let resp = respResult.get
+  if resp.kind == JArray:
+    for item in resp:
+      calls.add(parseCallHierarchyIncomingCall(item))
 
-  if response.kind == JNull:
-    return ok(calls)
-
-  if response.kind == JArray:
-    for call in response:
-      calls.add(parseCallHierarchyIncomingCall(call))
-
-  return ok(calls)
+  return Result[seq[CallHierarchyIncomingCall], string].ok(calls)
 
 proc callHierarchyOutgoingCalls*(
     client: LspClient, item: CallHierarchyItem
-): Result[seq[CallHierarchyOutgoingCall], string] =
-  ## Request outgoing calls for a CallHierarchyItem
-  ## Returns all items called by the given item
-  let params = %*{"item": item.toJson}
+): Future[Result[seq[CallHierarchyOutgoingCall], string]] {.async.} =
+  ## Request outgoing calls for a call hierarchy item
+  let params = %*{"item": callHierarchyItemToJson(item)}
 
-  let reqResult = client.sendRequest("callHierarchy/outgoingCalls", params)
-  if reqResult.isErr:
-    return err(reqResult.error)
-
-  let respResult = client.waitForResponse(reqResult.get)
+  let respResult = await client.sendAndWait("callHierarchy/outgoingCalls", params)
   if respResult.isErr:
-    return err(respResult.error)
+    return Result[seq[CallHierarchyOutgoingCall], string].err(respResult.error)
 
   var calls: seq[CallHierarchyOutgoingCall] = @[]
-  let response = respResult.get
+  let resp = respResult.get
+  if resp.kind == JArray:
+    for item in resp:
+      calls.add(parseCallHierarchyOutgoingCall(item))
 
-  if response.kind == JNull:
-    return ok(calls)
+  return Result[seq[CallHierarchyOutgoingCall], string].ok(calls)
 
-  if response.kind == JArray:
-    for call in response:
-      calls.add(parseCallHierarchyOutgoingCall(call))
-
-  return ok(calls)
-
-proc foldingRange*(client: LspClient, uri: string): Result[seq[FoldingRange], string] =
+proc foldingRange*(
+    client: LspClient, uri: string
+): Future[Result[seq[FoldingRange], string]] {.async.} =
   ## Request folding ranges for a document
-  ## Returns all foldable regions (functions, classes, comments, imports, etc.)
   let params = %*{"textDocument": {"uri": uri}}
 
-  let reqResult = client.sendRequest("textDocument/foldingRange", params)
-  if reqResult.isErr:
-    return err(reqResult.error)
-
-  let respResult = client.waitForResponse(reqResult.get)
+  let respResult = await client.sendAndWait("textDocument/foldingRange", params)
   if respResult.isErr:
-    return err(respResult.error)
+    return Result[seq[FoldingRange], string].err(respResult.error)
 
   var ranges: seq[FoldingRange] = @[]
-  let response = respResult.get
-
-  if response.kind == JNull:
-    return ok(ranges)
-
-  if response.kind == JArray:
-    for item in response:
+  let resp = respResult.get
+  if resp.kind == JArray:
+    for item in resp:
       ranges.add(parseFoldingRange(item))
 
-  return ok(ranges)
+  return Result[seq[FoldingRange], string].ok(ranges)
+
+# Poll for messages (processes any available notifications)
+proc poll*(client: LspClient): Future[void] {.async.} =
+  ## Poll for and process any available messages from the server
+  if not client.isRunning:
+    return
+
+  # Check if there's a response ready
+  let readableResult = client.readable()
+  if readableResult.isErr or not readableResult.get:
+    return
+
+  # Read and process the message
+  let respResult = await client.read()
+  if respResult.isErr:
+    return
+
+  let response = respResult.get
+  if response.hasKey("method"):
+    # This is a notification
+    let meth = response["method"].getStr
+    let params =
+      if response.hasKey("params"):
+        response["params"]
+      else:
+        newJObject()
+    try:
+      client.handleNotification(meth, params)
+    except Exception:
+      discard # Ignore notification handling errors

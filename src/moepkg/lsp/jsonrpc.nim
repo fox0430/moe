@@ -19,10 +19,15 @@
 
 ## JSON-RPC 2.0 Implementation for LSP
 ## Handles message framing with Content-Length headers
+## Uses chronos for async I/O
 
-import std/[json, strutils, tables, options]
+import std/[json, strutils, tables, options, parseutils]
 
 import pkg/results
+import pkg/stew/byteutils
+import pkg/chronos
+
+export chronos
 
 type
   RequestId* = int
@@ -302,3 +307,123 @@ proc remainingBytes*(reader: MessageReader): int =
     return reader.contentLength - reader.bytesRead
   else:
     return 0
+
+# Async I/O types and functions using chronos
+
+type
+  JsonRpcResponseResult* = Result[JsonNode, string]
+  JsonRpcSendResult* = Result[void, string]
+
+  InputStream* = ref object
+    stream*: AsyncStreamWriter
+
+  OutputStream* = ref object
+    stream*: AsyncStreamReader
+
+  Streams* = ref object
+    input*: InputStream
+    output*: OutputStream
+
+proc isInvalidContentType(s: string, valueStart: int): bool {.inline.} =
+  s.find("utf-8", valueStart) == -1 and s.find("utf8", valueStart) == -1
+
+proc isValidJsonRpc(json: JsonNode): bool {.inline.} =
+  json.contains("jsonrpc")
+
+proc readFrame(s: AsyncStreamReader): Future[Result[string, string]] {.async.} =
+  ## Read a JSON-RPC frame from the stream
+
+  while true:
+    let buf =
+      try:
+        await s.readLine(sep = "\r\n\r\n")
+      except CatchableError as e:
+        return Result[string, string].err("readLine failed: " & e.msg)
+
+    if buf.len == 0:
+      return Result[string, string].err("readLine: empty")
+
+    var header: Option[tuple[ln: string, sep: int]]
+    for ln in buf.splitLines:
+      if ln.startsWith("Content-"):
+        let sep = ln.find(':')
+        if sep > -1:
+          header = some((ln, sep))
+          break
+
+    if header.isNone:
+      # Skip line if not JSON-RPC
+      continue
+
+    let valueStart =
+      header.get.sep + 1 + header.get.ln.skipWhitespace(header.get.sep + 1)
+
+    var contentLen = -1
+    case header.get.ln[0 ..< header.get.sep]
+    of "Content-Type":
+      if isInvalidContentType(header.get.ln, valueStart):
+        return Result[string, string].err("Only utf-8 is supported")
+    of "Content-Length":
+      if parseInt(header.get.ln, contentLen, valueStart) == 0:
+        return Result[string, string].err(
+          "Invalid Content-Length: " & header.get.ln.substr(valueStart)
+        )
+    else:
+      # Unrecognized headers are ignored
+      continue
+
+    if contentLen != -1:
+      let buf =
+        try:
+          let bytes = await s.read(contentLen)
+          string.fromBytes(bytes)
+        except CatchableError:
+          return Result[string, string].err("readStr failed")
+      return Result[string, string].ok(buf)
+    else:
+      return Result[string, string].err("Missing Content-Length header")
+
+proc read*(s: OutputStream): Future[JsonRpcResponseResult] {.async.} =
+  ## Return a JSON-RPC response from the stream
+
+  let r = await s.stream.readFrame()
+  if r.isErr:
+    return JsonRpcResponseResult.err(r.error)
+
+  var res: JsonNode
+  try:
+    res = parseJson(r.get)
+  except CatchableError as e:
+    return JsonRpcResponseResult.err(e.msg)
+
+  if res.isValidJsonRpc:
+    return JsonRpcResponseResult.ok(res)
+  else:
+    return JsonRpcResponseResult.err("Invalid jsonrpc: " & $res)
+
+proc send(s: InputStream, frame: string): Future[JsonRpcSendResult] {.async.} =
+  ## Write JSON-RPC message to the stream
+  let req = "Content-Length: " & $frame.len & "\r\n\r\n" & frame
+  try:
+    await s.stream.write(req)
+    return JsonRpcSendResult.ok()
+  except CatchableError as e:
+    return JsonRpcSendResult.err("Write failed: " & e.msg)
+
+proc sendRequest*(s: InputStream, req: JsonNode): Future[JsonRpcSendResult] {.async.} =
+  ## Send a request
+
+  let str = $req
+  let err = await s.send(str)
+  if err.isErr:
+    return JsonRpcSendResult.err(err.error)
+  return JsonRpcSendResult.ok()
+
+proc sendNotify*(
+    s: InputStream, notify: JsonNode
+): Future[JsonRpcSendResult] {.async.} =
+  ## Send a notification
+  ## No response to the notification. Also, no `id` is required in the request.
+
+  let str = $notify
+  return await s.send(str)

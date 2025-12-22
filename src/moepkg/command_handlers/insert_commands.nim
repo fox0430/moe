@@ -67,10 +67,20 @@ proc insertBackspace*(buffer: TextBuffer, state: EditorState) =
   elif pos.line > 0:
     # At start of line, join with previous line
     let prevLine = buffer.getLine(pos.line - 1)
+    let currentLine = buffer.getLine(pos.line)
+    let prevLineLen = prevLine.charLen
+
+    # Delete the current line first
+    discard buffer.deleteLine(pos.line)
+    # Append current line content to previous line
+    if currentLine.len > 0:
+      discard buffer.insertText(
+        BufferPosition(line: pos.line - 1, column: prevLineLen), currentLine
+      )
+
+    # Move cursor to the join point
     state.cursor.line -= 1
-    state.cursor.column = prevLine.charLen
-    # Join lines by deleting the newline
-    discard buffer.deleteChar(state.cursor)
+    state.cursor.column = prevLineLen
 
 proc insertDelete*(buffer: TextBuffer, state: EditorState) =
   ## Handle delete key in insert mode

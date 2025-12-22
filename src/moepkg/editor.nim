@@ -60,6 +60,7 @@ type
     lsp*: LspIntegration # LSP client integration
     lastLspChangeSeq*: int # Track buffer changes for LSP notifications
     recentFileModeState*: RecentFileModeState # State for Recent File mode
+    app*: App # Celina application reference for suspend/resume
 
 proc buffer*(e: Editor): TextBuffer =
   e.textBuffer
@@ -850,7 +851,7 @@ proc newEditor*(): Editor =
   # Create handler manager after executer (which creates motion controller)
   result.handlerManager = newHandlerManager(
     result.executer.motionController, keyRegistry, cmdLineParser, cmdConfig,
-    cmdRegistry, result.config.clipboard, result.config.smoothScroll,
+    cmdRegistry, result.config.clipboard, result.config.smoothScroll, result.lsp,
   )
 
   # Set clipboard tool for register system
@@ -931,7 +932,7 @@ proc loadFile*(e: Editor, path: string): Result[(), string] =
       # Update lastGitDiffChangeSeq to prevent immediate re-check
       e.state.timing.lastGitDiffChangeSeq = e.textBuffer.changeSeq
 
-  # Notify LSP that a document was opened
+  # LSP initialization - non-blocking, will start in background
   if e.lsp.enabled:
     let lspResult = e.lsp.onBufferOpen(e.textBuffer)
     if lspResult.isErr:
@@ -3013,6 +3014,7 @@ proc maybeUpdateLsp*(e: Editor) =
 
 proc requestSignatureHelpFromLsp*(e: Editor) =
   ## Request signature help from LSP if in insert mode with paren depth > 0
+  ## Uses non-blocking async pattern to avoid freezing the UI
   if not e.lsp.enabled:
     return
 
@@ -3024,18 +3026,48 @@ proc requestSignatureHelpFromLsp*(e: Editor) =
     return
 
   let activeBuffer = e.activeBuffer()
-  let sigHelpResult =
-    e.lsp.requestSignatureHelp(activeBuffer, e.state.cursor.line, e.state.cursor.column)
 
-  if sigHelpResult.isOk:
-    let sigHelpOpt = sigHelpResult.get
-    if sigHelpOpt.isSome:
-      let sigHelp = sigHelpOpt.get
-      sigHelpMgr.show(sigHelp, e.state.cursor.line, e.state.cursor.column)
-    else:
-      # No signature help available
-      if sigHelpMgr.parenDepth == 0:
-        sigHelpMgr.hide()
+  # Check if there's a pending request - try to get response
+  if e.state.lspCache.pendingSignatureHelpRequestId != 0:
+    let (status, resultOpt, _) =
+      e.lsp.checkResponse(e.state.lspCache.pendingSignatureHelpRequestId)
+    case status
+    of lrsPending:
+      # Still waiting for response, continue
+      return
+    of lrsSuccess:
+      # Got response, process it
+      e.state.lspCache.pendingSignatureHelpRequestId = 0
+      if resultOpt.isSome:
+        let sigHelpOpt = parseSignatureHelpResponse(resultOpt.get)
+        if sigHelpOpt.isSome:
+          sigHelpMgr.show(sigHelpOpt.get, e.state.cursor.line, e.state.cursor.column)
+        else:
+          if sigHelpMgr.parenDepth == 0:
+            sigHelpMgr.hide()
+    of lrsError, lrsTimeout:
+      # Request failed or timed out, clear and try again next time
+      e.state.lspCache.pendingSignatureHelpRequestId = 0
+      return
+
+  # Start a new request
+  let reqResult = e.lsp.startSignatureHelpRequest(
+    activeBuffer, e.state.cursor.line, e.state.cursor.column
+  )
+  if reqResult.isOk:
+    e.state.lspCache.pendingSignatureHelpRequestId = reqResult.get
+
+proc pollLspCompletion*(e: Editor) =
+  ## Poll for pending LSP completion responses
+  ## This should be called from the main event loop
+  if not e.lsp.enabled:
+    return
+
+  if e.state.mode != EditorMode.Insert:
+    return
+
+  # Call the insert handler's poll function
+  e.handlerManager.insertHandler.pollLspCompletion()
 
 proc addToJumpList(e: Editor) =
   ## Add current cursor position to jump list before a jump
@@ -3277,29 +3309,17 @@ proc hasCodeLensSupport*(e: Editor): bool =
   let activeBuffer = e.activeBuffer()
   return e.lsp.hasCodeLensSupport(activeBuffer)
 
-proc doUpdateCodeLensCache(e: Editor) =
-  ## Internal: Actually perform the CodeLens cache update
-  ## This makes LSP requests and should be called with debouncing
+proc processCodeLensResponse(e: Editor, lenses: seq[CodeLens]) =
+  ## Internal: Process code lens response from LSP
   let activeBuffer = e.activeBuffer()
   if activeBuffer.filePath.isNone:
     return
 
   let filePath = activeBuffer.filePath.get
 
-  # Check if CodeLens is supported
-  if not e.lsp.hasCodeLensSupport(activeBuffer):
-    e.state.lspCache.codeLensCache = CodeLensCache(isValid: false)
-    return
-
-  # Request CodeLenses from LSP
-  let lensesResult = e.lsp.requestCodeLens(activeBuffer)
-  if lensesResult.isErr:
-    e.state.lspCache.codeLensCache = CodeLensCache(isValid: false)
-    return
-
   # Convert to cached items grouped by line (Table for O(1) lookup)
   var itemsByLine: Table[int, seq[CodeLensItem]]
-  for lens in lensesResult.get:
+  for lens in lenses:
     var item = CodeLensItem(line: lens.range.start.line)
 
     if lens.command.isSome:
@@ -3310,7 +3330,7 @@ proc doUpdateCodeLensCache(e: Editor) =
         for arg in cmd.arguments.get:
           item.arguments.add($arg)
     else:
-      # Need to resolve
+      # Need to resolve - this is still blocking but only for lenses that need it
       let resolveResult = e.lsp.requestCodeLensResolve(activeBuffer, lens)
       if resolveResult.isOk:
         let resolved = resolveResult.get
@@ -3338,9 +3358,28 @@ proc doUpdateCodeLensCache(e: Editor) =
   # Update timestamp after successful update
   e.state.lspCache.lastCodeLensUpdate = getMonoTime()
 
+proc doUpdateCodeLensCache(e: Editor) =
+  ## Internal: Start an async CodeLens request (non-blocking)
+  let activeBuffer = e.activeBuffer()
+  if activeBuffer.filePath.isNone:
+    return
+
+  # Check if CodeLens is supported
+  if not e.lsp.hasCodeLensSupport(activeBuffer):
+    e.state.lspCache.codeLensCache = CodeLensCache(isValid: false)
+    return
+
+  # Start async request
+  let reqResult = e.lsp.startCodeLensRequest(activeBuffer)
+  if reqResult.isOk:
+    e.state.lspCache.pendingCodeLensRequestId = reqResult.get
+  else:
+    e.state.lspCache.codeLensCache = CodeLensCache(isValid: false)
+
 proc updateCodeLensCache*(e: Editor) =
   ## Update the CodeLens cache for the current buffer (with debouncing)
   ## Only updates if enough time has passed since last update and buffer changed
+  ## Uses non-blocking async pattern to avoid freezing the UI
   if not e.lsp.enabled or not e.state.display.showCodeLens:
     return
 
@@ -3349,6 +3388,30 @@ proc updateCodeLensCache*(e: Editor) =
     return
 
   let filePath = activeBuffer.filePath.get
+
+  # Check if there's a pending request - try to get response
+  if e.state.lspCache.pendingCodeLensRequestId != 0:
+    let (status, resultOpt, _) =
+      e.lsp.checkResponse(e.state.lspCache.pendingCodeLensRequestId)
+    case status
+    of lrsPending:
+      # Still waiting for response, don't start a new request
+      return
+    of lrsSuccess:
+      # Got response, process it
+      e.state.lspCache.pendingCodeLensRequestId = 0
+      if resultOpt.isSome:
+        let lenses = parseCodeLensResponse(resultOpt.get)
+        e.processCodeLensResponse(lenses)
+      # Continue to check if we need to start a new request (buffer might have changed)
+    of lrsError, lrsTimeout:
+      # Request failed or timed out, mark cache as valid but empty to prevent retry loop
+      e.state.lspCache.pendingCodeLensRequestId = 0
+      e.state.lspCache.codeLensCache = CodeLensCache(
+        isValid: true, filePath: filePath, changeSeq: activeBuffer.changeSeq
+      )
+      e.state.lspCache.lastCodeLensUpdate = getMonoTime()
+      return
 
   # Check if cache is still valid (no changes needed)
   if e.state.lspCache.codeLensCache.isValid and
@@ -3410,26 +3473,15 @@ proc invalidateDocumentHighlightCache*(e: Editor) =
   e.state.lspCache.documentHighlightCache.isValid = false
   e.state.lspCache.documentHighlightCache.itemsByLine.clear()
 
-proc doUpdateDocumentHighlightCache(e: Editor) =
-  ## Internal: Actually perform the Document Highlight cache update
+proc processDocumentHighlightResponse(e: Editor, highlights: seq[DocumentHighlight]) =
+  ## Internal: Process document highlights from LSP response
   let activeBuffer = e.activeBuffer()
-  if activeBuffer.filePath.isNone:
-    e.invalidateDocumentHighlightCache()
-    return
-
-  # Request Document Highlights from LSP
-  let highlightsResult = e.lsp.requestDocumentHighlight(
-    activeBuffer, e.state.cursor.line, e.state.cursor.column
-  )
-  if highlightsResult.isErr:
-    e.invalidateDocumentHighlightCache()
-    return
 
   # Convert LSP DocumentHighlight to our cached format
   # Handle multi-line highlights by creating an item for each line
   # Group by line for O(1) lookup during rendering
   var itemsByLine: Table[int, seq[DocumentHighlightItem]]
-  for highlight in highlightsResult.get:
+  for highlight in highlights:
     let kind =
       if highlight.kind.isSome:
         highlight.kind.get.int
@@ -3473,10 +3525,27 @@ proc doUpdateDocumentHighlightCache(e: Editor) =
   )
   e.state.lspCache.lastDocumentHighlightUpdate = getMonoTime()
 
+proc doUpdateDocumentHighlightCache(e: Editor) =
+  ## Internal: Start an async Document Highlight request (non-blocking)
+  let activeBuffer = e.activeBuffer()
+  if activeBuffer.filePath.isNone:
+    e.invalidateDocumentHighlightCache()
+    return
+
+  # Start async request
+  let reqResult = e.lsp.startDocumentHighlightRequest(
+    activeBuffer, e.state.cursor.line, e.state.cursor.column
+  )
+  if reqResult.isOk:
+    e.state.lspCache.pendingDocumentHighlightRequestId = reqResult.get
+  else:
+    e.invalidateDocumentHighlightCache()
+
 proc updateDocumentHighlightCache*(e: Editor) =
   ## Update the Document Highlight cache (with debouncing)
   ## Called during render to update highlights when cursor moves
   ## Only updates in Normal/Visual modes - cleared in Insert/Replace modes
+  ## Uses non-blocking async pattern to avoid freezing the UI
   if not e.lsp.enabled or not e.state.display.showDocumentHighlight:
     return
 
@@ -3484,11 +3553,31 @@ proc updateDocumentHighlightCache*(e: Editor) =
   if e.state.mode in {EditorMode.Insert, EditorMode.Replace}:
     if e.state.lspCache.documentHighlightCache.isValid:
       e.invalidateDocumentHighlightCache()
+    e.state.lspCache.pendingDocumentHighlightRequestId = 0
     return
 
   let activeBuffer = e.activeBuffer()
   if activeBuffer.filePath.isNone:
     return
+
+  # Check if there's a pending request - try to get response
+  if e.state.lspCache.pendingDocumentHighlightRequestId != 0:
+    let (status, resultOpt, _) =
+      e.lsp.checkResponse(e.state.lspCache.pendingDocumentHighlightRequestId)
+    case status
+    of lrsPending:
+      # Still waiting for response, don't start a new request
+      return
+    of lrsSuccess:
+      # Got response, process it
+      e.state.lspCache.pendingDocumentHighlightRequestId = 0
+      if resultOpt.isSome:
+        let highlights = parseDocumentHighlightResponse(resultOpt.get)
+        e.processDocumentHighlightResponse(highlights)
+      # Continue to check if we need to start a new request (cursor might have moved)
+    of lrsError, lrsTimeout:
+      # Request failed or timed out, clear and continue
+      e.state.lspCache.pendingDocumentHighlightRequestId = 0
 
   # Check if cursor position changed
   # (same line and column means no need to update)
@@ -3652,6 +3741,12 @@ proc render*(e: Editor, buffer: var Buffer) =
   # Poll LSP for messages (non-blocking)
   e.lsp.poll(0)
 
+  # Display any pending LSP status messages
+  let lspMessages = e.lsp.getAndClearMessages()
+  if lspMessages.len > 0:
+    # Display the most recent message (last one)
+    e.state.setStatusMessage(lspMessages[^1])
+
   # Update LSP if buffer was modified
   e.maybeUpdateLsp()
 
@@ -3663,6 +3758,9 @@ proc render*(e: Editor, buffer: var Buffer) =
 
   # Request signature help from LSP if in insert mode
   e.requestSignatureHelpFromLsp()
+
+  # Poll for LSP completion responses
+  e.pollLspCompletion()
 
   # Update git diff if buffer was modified (with debouncing)
   e.maybeUpdateGitDiff()

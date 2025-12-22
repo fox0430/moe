@@ -34,22 +34,44 @@ type LspIntegration* = ref object ## Integration layer between LSP and Editor
   enabled*: bool
   # Buffer tracking (path -> version)
   openBuffers: seq[string]
+  # Pending status messages to display in the editor
+  pendingMessages*: seq[string]
 
 proc newLspIntegration*(workspaceRoot: string = ""): LspIntegration =
   ## Create a new LSP integration
   let svc = newLspService(workspaceRoot)
 
-  result = LspIntegration(service: svc, enabled: true, openBuffers: @[])
+  result =
+    LspIntegration(service: svc, enabled: true, openBuffers: @[], pendingMessages: @[])
+
+  # Set up internal callback to collect LSP log messages for display
+  let lsp = result
+  svc.onLogMessage = proc(
+      langId: string, msgType: MessageType, message: string
+  ) {.gcsafe.} =
+    let prefix =
+      case msgType
+      of mtError: "[LSP Error] "
+      of mtWarning: "[LSP Warning] "
+      of mtInfo: "[LSP Info] "
+      of mtLog: "[LSP] "
+    lsp.pendingMessages.add(prefix & langId & ": " & message)
+
+proc getAndClearMessages*(lsp: LspIntegration): seq[string] =
+  ## Get all pending status messages and clear them
+  result = lsp.pendingMessages
+  lsp.pendingMessages = @[]
 
 proc setDiagnosticsCallback*(
-    lsp: LspIntegration, callback: proc(uri: string, diagnostics: seq[Diagnostic])
+    lsp: LspIntegration,
+    callback: proc(uri: string, diagnostics: seq[Diagnostic]) {.gcsafe.},
 ) =
   ## Set callback for diagnostics updates
   lsp.service.onDiagnosticsUpdate = callback
 
 proc setLogCallback*(
     lsp: LspIntegration,
-    callback: proc(langId: string, msgType: MessageType, message: string),
+    callback: proc(langId: string, msgType: MessageType, message: string) {.gcsafe.},
 ) =
   ## Set callback for log messages
   lsp.service.onLogMessage = callback
@@ -130,11 +152,119 @@ proc poll*(lsp: LspIntegration, timeoutMs: int = 0) =
   if lsp.enabled:
     lsp.service.poll(timeoutMs)
 
-# Feature requests
+# Async (non-blocking) feature requests
+# These return immediately with a request ID. Use poll() and checkResponse() to get results.
+
+proc startCompletionRequest*(
+    lsp: LspIntegration, buffer: TextBuffer, line, column: int
+): Result[int, string] =
+  ## Start a completion request (non-blocking). Returns request ID.
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.startCompletionRequest(path, line, column)
+
+proc startHoverRequest*(
+    lsp: LspIntegration, buffer: TextBuffer, line, column: int
+): Result[int, string] =
+  ## Start a hover request (non-blocking). Returns request ID.
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.startHoverRequest(path, line, column)
+
+proc startDefinitionRequest*(
+    lsp: LspIntegration, buffer: TextBuffer, line, column: int
+): Result[int, string] =
+  ## Start a definition request (non-blocking). Returns request ID.
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.startDefinitionRequest(path, line, column)
+
+proc startReferencesRequest*(
+    lsp: LspIntegration, buffer: TextBuffer, line, column: int
+): Result[int, string] =
+  ## Start a references request (non-blocking). Returns request ID.
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.startReferencesRequest(path, line, column)
+
+proc startSignatureHelpRequest*(
+    lsp: LspIntegration, buffer: TextBuffer, line, column: int
+): Result[int, string] =
+  ## Start a signature help request (non-blocking). Returns request ID.
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.startSignatureHelpRequest(path, line, column)
+
+proc startDocumentHighlightRequest*(
+    lsp: LspIntegration, buffer: TextBuffer, line, column: int
+): Result[int, string] =
+  ## Start a document highlight request (non-blocking). Returns request ID.
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.startDocumentHighlightRequest(path, line, column)
+
+proc startCodeLensRequest*(
+    lsp: LspIntegration, buffer: TextBuffer
+): Result[int, string] =
+  ## Start a code lens request (non-blocking). Returns request ID.
+  if not lsp.enabled:
+    return err("LSP disabled")
+
+  if buffer.filePath.isNone:
+    return err("Buffer has no file path")
+
+  let path = buffer.filePath.get
+  return lsp.service.startCodeLensRequest(path)
+
+proc checkResponse*(
+    lsp: LspIntegration, requestId: int
+): tuple[status: LspResponseStatus, result: Option[JsonNode], error: Option[string]] =
+  ## Non-blocking check if a response has arrived
+  return lsp.service.checkResponse(requestId)
+
+proc hasPendingRequests*(lsp: LspIntegration): bool =
+  ## Check if there are any pending requests
+  lsp.service.hasPendingRequests()
+
+proc cleanupTimedOutRequests*(lsp: LspIntegration) =
+  ## Clean up any timed out requests
+  lsp.service.cleanupTimedOutRequests()
+
+# Blocking feature requests (WARNING: These block the main thread!)
 proc requestCompletion*(
     lsp: LspIntegration, buffer: TextBuffer, line, column: int
 ): Result[seq[CompletionItem], string] =
-  ## Request completion at cursor position
+  ## Request completion at cursor position (BLOCKING)
   if not lsp.enabled:
     return err("LSP disabled")
 
@@ -765,7 +895,7 @@ proc isServerRunningForPath*(lsp: LspIntegration, path: string): bool =
   let langIdOpt = lsp.service.getLanguageIdFromPath(path)
   if langIdOpt.isNone:
     return false
-  lsp.service.getClient(langIdOpt.get).isSome
+  lsp.service.getWorker(langIdOpt.get).isSome
 
 # CodeLens support
 proc hasCodeLensSupport*(lsp: LspIntegration, buffer: TextBuffer): bool =

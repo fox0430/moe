@@ -56,7 +56,7 @@ type
     startCursorLine*: int # Cursor line at animation start
     targetCursorLine*: int # Target cursor line
     startTime*: MonoTime # Animation start time
-    duration*: Duration # Total animation duration
+    duration*: times.Duration # Total animation duration
 
   EditorWindow* = ref object
     ## Represents a split window with its own buffer and viewport
@@ -141,6 +141,12 @@ type
     lastDocumentHighlightUpdate*: MonoTime # Timestamp of last document highlight update
     documentHighlightUpdateInterval*: int64
       # Debounce interval for document highlight updates
+    # Pending async request IDs for non-blocking LSP operations
+    pendingSignatureHelpRequestId*: int
+      # Request ID for pending signature help request (0 = none)
+    pendingDocumentHighlightRequestId*: int
+      # Request ID for pending document highlight request (0 = none)
+    pendingCodeLensRequestId*: int # Request ID for pending code lens request (0 = none)
 
   TimingState* = object ## Timing and debounce state grouped together
     lastResizeTime*: MonoTime # Timestamp of last processed resize event

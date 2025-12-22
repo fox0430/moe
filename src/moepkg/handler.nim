@@ -402,29 +402,117 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         else:
           e.state.setStatusMessage("Opened: " & r.getEditFilename())
 
-      if r.shouldSetMultiStatusLine():
-        # Handle multi status line setting
-        e.setMultiStatusLine(r.getMultiStatusLineEnabled())
+      if r.shouldSetBoolOption():
+        # Handle boolean option setting
+        let opt = r.getBoolOption()
+        let val = r.getBoolValue()
+        case opt
+        of bsoNumber:
+          e.config.standard.number = val
+          e.state.setStatusMessage("number = " & $val)
+        of bsoCurrentNumber:
+          e.config.standard.currentNumber = val
+          e.state.setStatusMessage("currentnumber = " & $val)
+        of bsoCursorLine:
+          e.config.standard.cursorLine = val
+          e.state.setStatusMessage("cursorline = " & $val)
+        of bsoStatusLine:
+          e.config.standard.statusLine = val
+          e.state.setStatusMessage("statusline = " & $val)
+        of bsoTabLine:
+          e.config.standard.tabLine = val
+          e.state.setStatusMessage("tabline = " & $val)
+        of bsoSyntax:
+          e.config.standard.syntax = val
+          e.state.setStatusMessage("syntax = " & $val)
+        of bsoIndentationLines:
+          e.config.standard.indentationLines = val
+          e.state.setStatusMessage("indentationlines = " & $val)
+        of bsoAutoIndent:
+          e.config.standard.autoIndent = val
+          e.state.setStatusMessage("autoindent = " & $val)
+        of bsoAutoCloseParen:
+          e.config.standard.autoCloseParen = val
+          e.state.setStatusMessage("autocloseparen = " & $val)
+        of bsoAutoDeleteParen:
+          e.config.standard.autoDeleteParen = val
+          e.state.setStatusMessage("autodeleteparen = " & $val)
+        of bsoClipboard:
+          e.config.clipboard.enable = val
+          e.state.setStatusMessage("clipboard = " & $val)
+        of bsoSmoothScroll:
+          e.config.smoothScroll.enable = val
+          e.state.setStatusMessage("smoothscroll = " & $val)
+        of bsoLiveReloadOfConf:
+          e.config.standard.liveReloadOfConf = val
+          e.state.setStatusMessage("livereload = " & $val)
+        of bsoShowIcons:
+          e.config.filer.showIcons = val
+          e.state.setStatusMessage("icon = " & $val)
+        of bsoHighlightCurrentLine:
+          e.config.highlight.currentLine = val
+          e.state.setStatusMessage("highlightcurrentline = " & $val)
+        of bsoHighlightCurrentWord:
+          e.config.highlight.currentWord = val
+          e.state.setStatusMessage("highlightcurrentword = " & $val)
+        of bsoHighlightFullWidthSpace:
+          e.config.highlight.fullWidthSpace = val
+          e.state.setStatusMessage("highlightfullspace = " & $val)
+        of bsoHighlightPairOfParen:
+          e.config.highlight.pairOfParen = val
+          e.state.setStatusMessage("highlightparen = " & $val)
+        of bsoMultipleStatusLine:
+          e.setMultiStatusLine(val)
+        of bsoIgnoreCase:
+          e.state.search.ignorecase = val
+          e.state.setStatusMessage("ignorecase = " & $val)
+        of bsoSmartCase:
+          e.state.search.smartcase = val
+          e.state.setStatusMessage("smartcase = " & $val)
+        of bsoIncSearch:
+          e.state.search.incsearch = val
+          e.state.setStatusMessage("incsearch = " & $val)
+        of bsoHlSearch:
+          e.state.search.hlsearch = val
+          e.state.setStatusMessage("hlsearch = " & $val)
+        e.state.needsFullRedraw = true
 
-      if r.shouldSetIgnoreCase():
-        # Handle ignorecase setting
-        e.state.search.ignorecase = r.getIgnoreCaseEnabled()
-        e.state.setStatusMessage("ignorecase = " & $e.state.search.ignorecase)
+      if r.shouldSetIntOption():
+        # Handle integer option setting
+        let opt = r.getIntOption()
+        let val = r.getIntValue()
+        case opt
+        of isoTabStop:
+          e.config.standard.tabStop = val
+          e.state.setStatusMessage("tabstop = " & $val)
+        e.state.needsFullRedraw = true
 
-      if r.shouldSetSmartCase():
-        # Handle smartcase setting
-        e.state.search.smartcase = r.getSmartCaseEnabled()
-        e.state.setStatusMessage("smartcase = " & $e.state.search.smartcase)
+      if r.shouldClearSearchHighlight():
+        # Handle clear search highlight (:noh)
+        e.state.search.hlsearch = false
+        e.state.setStatusMessage("Search highlighting cleared")
+        e.state.needsFullRedraw = true
 
-      if r.shouldSetIncSearch():
-        # Handle incsearch setting
-        e.state.search.incsearch = r.getIncSearchEnabled()
-        e.state.setStatusMessage("incsearch = " & $e.state.search.incsearch)
+      if r.shouldShellCommand():
+        # Handle shell command (:!command)
+        let cmd = r.getShellCommand()
+        if cmd.len > 0:
+          var exitCode: int
+          e.app.withSuspend:
+            # Execute the shell command
+            exitCode = execShellCmd(cmd)
 
-      if r.shouldSetHlSearch():
-        # Handle hlsearch setting
-        e.state.search.hlsearch = r.getHlSearchEnabled()
-        e.state.setStatusMessage("hlsearch = " & $e.state.search.hlsearch)
+            # Wait for user to press Enter
+            stdout.write("\nPress Enter to continue...")
+            stdout.flushFile()
+            discard stdin.readLine()
+
+          e.state.needsFullRedraw = true
+
+          if exitCode == 0:
+            e.state.setStatusMessage("Shell command completed")
+          else:
+            e.state.setStatusMessage("Shell command exited with code " & $exitCode)
 
       if r.shouldSave():
         # Handle file save

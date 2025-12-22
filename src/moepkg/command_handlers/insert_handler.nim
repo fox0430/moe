@@ -33,8 +33,8 @@ import pkg/results
 
 import
   ../[
-    types, buffer, modes, keybindings, motion, commandregistry, unicode_utils,
-    completion, signaturehelp,
+    types, buffer, cursor, modes, keybindings, motion, commandregistry, unicode_utils,
+    completion, signaturehelp, lspintegration,
   ]
 import insert_commands
 
@@ -50,6 +50,7 @@ type
     commandRegistry*: CommandRegistry
     completionManager*: CompletionManager
     signatureHelpManager*: SignatureHelpManager
+    lsp*: LspIntegration ## LSP integration for completions
 
   InsertModeResult* = object ## Result of insert mode command execution
     case kind*: InsertModeResultKind
@@ -64,6 +65,7 @@ proc newInsertModeHandler*(
     keyBindingRegistry: KeyBindingRegistry,
     motionController: MotionController,
     commandRegistry: CommandRegistry,
+    lsp: LspIntegration = nil,
 ): InsertModeHandler =
   ## Create a new Insert mode handler
   InsertModeHandler(
@@ -72,6 +74,7 @@ proc newInsertModeHandler*(
     commandRegistry: commandRegistry,
     completionManager: newCompletionManager(),
     signatureHelpManager: newSignatureHelpManager(),
+    lsp: lsp,
   )
 
 proc executeCommand*(
@@ -172,10 +175,20 @@ proc handleBackspace*(
   elif pos.line > 0:
     # At start of line, join with previous line
     let prevLine = buffer.getLine(pos.line - 1)
+    let currentLine = buffer.getLine(pos.line)
+    let prevLineLen = prevLine.charLen
+
+    # Delete the current line first
+    discard buffer.deleteLine(pos.line)
+    # Append current line content to previous line
+    if currentLine.len > 0:
+      discard buffer.insertText(
+        BufferPosition(line: pos.line - 1, column: prevLineLen), currentLine
+      )
+
+    # Move cursor to the join point
     state.cursor.line -= 1
-    state.cursor.column = prevLine.charLen
-    # Join lines by deleting the newline
-    discard buffer.deleteChar(state.cursor)
+    state.cursor.column = prevLineLen
 
   return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
@@ -258,7 +271,7 @@ proc commitCompletion*(
 ): InsertModeResult =
   ## Commit the selected completion item
   ## If keepPopupOpen is true, the popup remains visible for further selection
-  ## Uses transaction to group delete+insert as single undo operation
+  ## Changes are added to the existing Insert mode transaction (do not start a new one)
   let selectedWord = handler.completionManager.getSelectedWord()
   if selectedWord.len == 0:
     if not keepPopupOpen:
@@ -270,8 +283,9 @@ proc commitCompletion*(
   # Delete the prefix that was typed (use runeLen for multi-byte character support)
   let prefixLen = menu.prefix.runeLen
 
-  # Begin transaction to group delete+insert as single undo operation
-  discard buffer.beginTransaction("completion")
+  # Note: We do NOT start a new transaction here because Insert mode already
+  # has an active transaction. The completion changes will be part of that
+  # transaction and undone together with other Insert mode edits.
 
   if prefixLen > 0:
     for _ in 0 ..< prefixLen:
@@ -282,9 +296,6 @@ proc commitCompletion*(
   discard buffer.insertText(state.cursor, selectedWord)
   state.cursor.column += selectedWord.runeLen
 
-  # Commit transaction
-  discard buffer.commitTransaction()
-
   # Close the completion menu (unless keepPopupOpen)
   if not keepPopupOpen:
     handler.completionManager.cancelCompletion()
@@ -293,6 +304,54 @@ proc commitCompletion*(
     handler.completionManager.menu.prefix = selectedWord
 
   return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
+
+proc triggerLspCompletionRequest*(
+    handler: InsertModeHandler, buffer: TextBuffer, state: EditorState
+) =
+  ## Trigger completion with LSP support
+  ## Shows buffer completions immediately, then switches to LSP when response arrives
+
+  # First, show buffer completions immediately for instant feedback
+  handler.completionManager.triggerCompletion(
+    buffer, state.cursor.line, state.cursor.column
+  )
+
+  # If LSP is available, start async request in background
+  if not handler.lsp.isNil and handler.lsp.isEnabled:
+    let reqResult =
+      handler.lsp.startCompletionRequest(buffer, state.cursor.line, state.cursor.column)
+
+    if reqResult.isOk:
+      handler.completionManager.setLspRequestPending(reqResult.get)
+
+proc pollLspCompletion*(handler: InsertModeHandler) =
+  ## Poll for pending LSP completion response
+  if handler.lsp.isNil or not handler.lsp.isEnabled:
+    return
+
+  if not handler.completionManager.isPendingLsp:
+    return
+
+  let reqIdOpt = handler.completionManager.getLspRequestId
+  if reqIdOpt.isNone:
+    return
+
+  # Poll LSP service for events
+  handler.lsp.poll()
+
+  # Check for response
+  let (status, resultOpt, errorOpt) = handler.lsp.checkResponse(reqIdOpt.get)
+
+  case status
+  of lrsPending:
+    discard # Still waiting
+  of lrsSuccess:
+    if resultOpt.isSome:
+      let items = parseCompletionResponse(resultOpt.get)
+      handler.completionManager.setLspItems(items)
+  of lrsError, lrsTimeout:
+    # Clear pending state on error/timeout
+    handler.completionManager.setLspItems(@[])
 
 proc isCtrlN(keyCombo: KeyCombo): bool =
   ## Check if key is Ctrl+N
@@ -398,26 +457,22 @@ proc handleInsertModeKey*(
       let line = buffer.getLine(state.cursor.line)
       let newPrefix = extractPrefixBeforeCursor(line, state.cursor.column)
       if newPrefix.len >= AutoTriggerPrefixLength:
-        handler.completionManager.triggerCompletion(
-          buffer, state.cursor.line, state.cursor.column
-        )
-        # New completion starts without selection
+        # Show buffer completions immediately, LSP will update when ready
+        handler.triggerLspCompletionRequest(buffer, state)
       else:
         handler.completionManager.cancelCompletion()
       return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
   # Ctrl+N - trigger completion (when not active)
   if keyCombo.isCtrlN and not completionActive:
-    handler.completionManager.triggerCompletion(
-      buffer, state.cursor.line, state.cursor.column
-    )
+    # Show buffer completions immediately, LSP will update when ready
+    handler.triggerLspCompletionRequest(buffer, state)
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
   # Ctrl+Space - also trigger completion
   if keyCombo.isCtrlSpace and not completionActive:
-    handler.completionManager.triggerCompletion(
-      buffer, state.cursor.line, state.cursor.column
-    )
+    # Show buffer completions immediately, LSP will update when ready
+    handler.triggerLspCompletionRequest(buffer, state)
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
   # Check for mode switch keys (like Escape)
@@ -442,10 +497,8 @@ proc handleInsertModeKey*(
     let line = buffer.getLine(state.cursor.line)
     let prefix = extractPrefixBeforeCursor(line, state.cursor.column)
     if prefix.len >= AutoTriggerPrefixLength:
-      handler.completionManager.triggerCompletion(
-        buffer, state.cursor.line, state.cursor.column
-      )
-      # Don't auto-insert - wait for Tab to be pressed first
+      # Show buffer completions immediately, LSP will update when ready
+      handler.triggerLspCompletionRequest(buffer, state)
     return InsertModeResult(kind: imrHandled, modeTransition: none(EditorMode))
 
   # Handle special keys

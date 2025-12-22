@@ -13,6 +13,8 @@ requires "nim >= 2.0.10"
 requires "results >= 0.5.1"
 requires "celina >= 0.4.0"
 requires "parsetoml >= 0.7.1"
+requires "chronos >= 4.0.4"
+requires "stew >= 0.2.0"
 
 task release, "Build for release":
   exec "nimble build -d:release"
