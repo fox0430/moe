@@ -445,6 +445,8 @@ type
     scrollAnimation*: ScrollAnimation # Current scroll animation state
     # LSP cache state (grouped in LspCacheState)
     lspCache*: LspCacheState # LSP cache and picker state
+    # Temporary message display (like Vim's :jumps output)
+    tempMessages*: seq[string] # Lines to display temporarily in command area
 
 proc setStatusMessage*(state: EditorState, msg: string) =
   ## Set status message and log it to message log

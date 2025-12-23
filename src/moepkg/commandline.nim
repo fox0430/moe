@@ -42,6 +42,8 @@ type
     claGoto # :123 (go to line 123)
     claVSplit # :vs (vertical split)
     claHSplit # :sp (horizontal split)
+    claNew # :new (new empty buffer in horizontal split)
+    claVnew # :vnew (new empty buffer in vertical split)
     claBufferNext # :bnext, :bn (next buffer)
     claBufferPrev # :bprev, :bp (previous buffer)
     claBufferFirst # :bfirst, :bf (first buffer)
@@ -56,6 +58,9 @@ type
     claRecentFile # :recent (open recent file selection mode)
     claClearSearchHighlight # :noh, :nohlsearch (clear search highlighting)
     claShellCommand # :! (execute shell command)
+    claBackground # :bg (pause editor and show terminal)
+    claJumpList # :ju, :jump (show jump list)
+    claBuild # :build (build current buffer)
     claUnknown # Unknown command
 
   ParsedCommand* = object
@@ -101,6 +106,10 @@ type
       vsplitFilename*: Option[string]
     of claHSplit:
       hsplitFilename*: Option[string]
+    of claNew:
+      discard
+    of claVnew:
+      discard
     of claBufferNext, claBufferPrev, claBufferFirst, claBufferLast:
       discard
     of claBufferDelete:
@@ -123,6 +132,12 @@ type
       discard
     of claShellCommand:
       shellCommand*: string
+    of claBackground:
+      discard
+    of claJumpList:
+      discard
+    of claBuild:
+      discard
     of claUnknown:
       errorMessage*: string
 
@@ -295,6 +310,10 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
         else:
           none(string),
     )
+  of claNew:
+    return CommandLineResult(kind: claNew)
+  of claVnew:
+    return CommandLineResult(kind: claVnew)
   of claBufferNext:
     return CommandLineResult(kind: claBufferNext)
   of claBufferPrev:
@@ -335,6 +354,12 @@ proc execute*(parser: CommandLineParser, cmd: ParsedCommand): CommandLineResult 
     else:
       return
         CommandLineResult(kind: claUnknown, errorMessage: "No shell command specified")
+  of claBackground:
+    return CommandLineResult(kind: claBackground)
+  of claJumpList:
+    return CommandLineResult(kind: claJumpList)
+  of claBuild:
+    return CommandLineResult(kind: claBuild)
   of claUnknown:
     return CommandLineResult(
       kind: claUnknown, errorMessage: "Not an editor command: " & cmd.rawText

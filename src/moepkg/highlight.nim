@@ -23,40 +23,14 @@ import pkg/celina
 
 import syntax/highlite
 import cursor
+import color
 
 export SourceLanguage
+export EditorColorPairIndex
 
 type
   # Runes type alias for sequence of Unicode characters
   Runes* = seq[Rune]
-
-  # Simple color/token type enumeration
-  EditorColorPairIndex* = enum
-    default
-    keyword
-    builtin
-    boolean
-    specialVar
-    stringLit
-    charLit
-    decNumber
-    binNumber
-    hexNumber
-    octNumber
-    floatNumber
-    comment
-    longComment
-    preprocessor
-    functionName
-    typeName
-    identifier
-    operator
-    whitespace
-    pragma
-    table
-    date
-    property
-    selectArea
 
   ColorSegment* = object
     firstRow*, firstColumn*, lastRow*, lastColumn*: int

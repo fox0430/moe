@@ -26,7 +26,7 @@ import
   commandconfig, statusline, windowmanager, unicode_utils, render_utils, sidebar,
   gitdiff, highlight, logger, config, configloader, keybindconfig, search_utils, filer,
   lspintegration, completion, signaturehelp, backup, command_completion, motion,
-  logviewer, recentfilemode
+  logviewer, recentfilemode, color
 import lsp/protocol/types as lspTypes
 import command_handlers/[handler_manager, visual_handler, insert_handler]
 
@@ -567,6 +567,32 @@ proc vsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), str
 
   ok(())
 
+proc vsplitWithBuffer*(e: Editor, buffer: TextBuffer): Result[(), string] =
+  ## Create a vertical split window with a specific buffer
+  # Save current window state before splitting (if windows already exist)
+  if e.windowManager.windows.len > 0:
+    e.saveActiveWindowState()
+
+  let bufferResult =
+    e.windowManager.vsplitWithBuffer(e.textBuffer, e.viewport, e.state.cursor, buffer)
+  if bufferResult.isErr:
+    return err(bufferResult.error)
+
+  let newBuffer = bufferResult.get
+  e.executer.buffer = newBuffer
+  e.executer.motionController.executor.buffer = newBuffer
+
+  # Restore the new active window state
+  e.restoreActiveWindowState()
+  e.state.needsFullRedraw = true
+
+  # Update cursor position immediately to avoid visual glitch
+  if e.windowManager.activeWindowIndex < e.windowManager.windows.len:
+    let activeWindow = e.windowManager.windows[e.windowManager.activeWindowIndex]
+    e.setActiveWindowScreenCursor(activeWindow)
+
+  ok(())
+
 proc hsplit*(e: Editor, filename: Option[string] = none(string)): Result[(), string] =
   ## Create a horizontal split window (top and bottom)
   # Save current window state before splitting (if windows already exist)
@@ -653,6 +679,16 @@ proc enew*(e: Editor): Result[(), string] =
   e.state.needsFullRedraw = true
   ok(())
 
+proc new*(e: Editor): Result[(), string] =
+  ## Create a new empty buffer in a horizontal split (like :new in Vim)
+  let newBuffer = newTextBuffer()
+  return e.hsplitWithBuffer(newBuffer)
+
+proc vnew*(e: Editor): Result[(), string] =
+  ## Create a new empty buffer in a vertical split (like :vnew in Vim)
+  let newBuffer = newTextBuffer()
+  return e.vsplitWithBuffer(newBuffer)
+
 proc editFile*(e: Editor, path: string): Result[(), string] =
   ## Load a file and replace the current buffer (like :e in Vim)
   ## If the file doesn't exist, create an empty buffer with the path set (new file)
@@ -698,6 +734,9 @@ proc editFile*(e: Editor, path: string): Result[(), string] =
 proc newEditor*(): Editor =
   # Load TOML configuration
   let editorConfig = loadConfig()
+
+  # Initialize theme from configuration
+  initTheme(editorConfig)
 
   # Create registries and configuration first
   let
@@ -1166,63 +1205,8 @@ proc autoBackup*(e: Editor) =
         e.state.statusMessage = "Auto backup: " & $backupCount & " files"
 
 proc colorIndexToStyle(colorIdx: EditorColorPairIndex): Style =
-  ## Convert EditorColorPairIndex to Celina Style based on dark.toml theme
-  case colorIdx
-  of keyword:
-    # #87d7ff - Light blue
-    Style(fg: rgb(0x87, 0xd7, 0xff), bg: ColorValue(kind: Default), modifiers: {})
-  of builtin:
-    # #add8e6 - Light blue
-    Style(fg: rgb(0xad, 0xd8, 0xe6), bg: ColorValue(kind: Default), modifiers: {})
-  of boolean:
-    # #add8e6 - Light blue
-    Style(fg: rgb(0xad, 0xd8, 0xe6), bg: ColorValue(kind: Default), modifiers: {})
-  of specialVar:
-    # #0090a8 - Dark cyan
-    Style(fg: rgb(0x00, 0x90, 0xa8), bg: ColorValue(kind: Default), modifiers: {})
-  of stringLit, charLit:
-    # #add8e6 - Light blue
-    Style(fg: rgb(0xad, 0xd8, 0xe6), bg: ColorValue(kind: Default), modifiers: {})
-  of decNumber, binNumber, hexNumber, octNumber, floatNumber:
-    # #add8e6 - Light blue
-    Style(fg: rgb(0xad, 0xd8, 0xe6), bg: ColorValue(kind: Default), modifiers: {})
-  of comment, longComment:
-    # #808080 - Gray
-    Style(fg: rgb(0x80, 0x80, 0x80), bg: ColorValue(kind: Default), modifiers: {})
-  of preprocessor:
-    # #0090a8 - Dark cyan
-    Style(fg: rgb(0x00, 0x90, 0xa8), bg: ColorValue(kind: Default), modifiers: {})
-  of functionName:
-    # #00b7ce - Cyan
-    Style(fg: rgb(0x00, 0xb7, 0xce), bg: ColorValue(kind: Default), modifiers: {})
-  of typeName:
-    # #00ffff - Cyan
-    Style(fg: rgb(0x00, 0xff, 0xff), bg: ColorValue(kind: Default), modifiers: {})
-  of identifier:
-    # Use default foreground color
-    normalStyle
-  of operator:
-    # #00b7ce - Cyan
-    Style(fg: rgb(0x00, 0xb7, 0xce), bg: ColorValue(kind: Default), modifiers: {})
-  of pragma:
-    # #0090a8 - Dark cyan
-    Style(fg: rgb(0x00, 0x90, 0xa8), bg: ColorValue(kind: Default), modifiers: {})
-  of whitespace:
-    # #808080 - Gray
-    Style(fg: rgb(0x80, 0x80, 0x80), bg: ColorValue(kind: Default), modifiers: {})
-  of table:
-    # #0090a8 - Dark cyan
-    Style(fg: rgb(0x00, 0x90, 0xa8), bg: ColorValue(kind: Default), modifiers: {})
-  of date:
-    # #0090a8 - Dark cyan
-    Style(fg: rgb(0x00, 0x90, 0xa8), bg: ColorValue(kind: Default), modifiers: {})
-  of property:
-    # #00b7ce - Cyan
-    Style(fg: rgb(0x00, 0xb7, 0xce), bg: ColorValue(kind: Default), modifiers: {})
-  of selectArea:
-    visualStyle
-  else:
-    normalStyle
+  ## Convert EditorColorPairIndex to Celina Style using theme colors
+  getThemeStyle(colorIdx)
 
 proc analyzeIndentation(lineText: string): IndentInfo =
   ## Analyze a line once to determine indentation properties
@@ -1247,6 +1231,10 @@ proc shouldShowIndentationGuide(
   ## displayX: the display column position (accounting for tabs)
   ## charIdx: the character index in the line
   if not e.state.display.showIndentationLines:
+    return false
+
+  # Don't show indentation guides in utility buffers (jumplist, log, etc.)
+  if e.activeBuffer().isUtilityBuffer:
     return false
 
   # Only show guides at indent levels (multiples of tabStop)
@@ -1286,11 +1274,11 @@ proc getDocumentHighlightStyle(kind: int): Style =
   ## Get the style for a document highlight based on its kind
   case kind
   of 2: # Read
-    documentHighlightReadStyle
+    documentHighlightReadStyle()
   of 3: # Write
-    documentHighlightWriteStyle
+    documentHighlightWriteStyle()
   else: # Text or unknown
-    documentHighlightTextStyle
+    documentHighlightTextStyle()
 
 proc getSelectionStyle(
     e: Editor,
@@ -1305,10 +1293,10 @@ proc getSelectionStyle(
   let isCursorPos = (pos.line == cursorLine and pos.column == cursorCol)
 
   if hasSelection and e.state.visualSelection.isPositionInSelection(pos):
-    visualStyle
+    visualStyle()
   elif isCursorPos:
     # Cursor position: always use gray foreground color
-    cursorCharStyle
+    cursorCharStyle()
   elif e.state.search.hlsearch and not e.state.search.hlsearchTempDisabled:
     # Determine which search pattern to use:
     # - In Search mode with text: use current searchText (incremental highlight)
@@ -1333,7 +1321,7 @@ proc getSelectionStyle(
       )
 
       if buffer.isPositionInSearchMatch(pos, searchPattern, shouldIgnoreCase):
-        searchHighlightStyle
+        searchHighlightStyle()
       elif e.state.display.showSyntax and not buffer.highlight.isNil:
         # Apply syntax highlighting from buffer
         # Update highlight if needed (after text edits)
@@ -1345,7 +1333,7 @@ proc getSelectionStyle(
         if highlightKind.isSome:
           style.bg = getDocumentHighlightStyle(highlightKind.get).bg
         elif e.state.display.showCursorLine and pos.line == cursorLine:
-          style.bg = cursorLineHighlightStyle.bg
+          style.bg = cursorLineHighlightStyle().bg
         style
       else:
         # Check document highlight first
@@ -1353,9 +1341,9 @@ proc getSelectionStyle(
         if highlightKind.isSome:
           getDocumentHighlightStyle(highlightKind.get)
         elif e.state.display.showCursorLine and pos.line == cursorLine:
-          cursorLineHighlightStyle
+          cursorLineHighlightStyle()
         else:
-          normalStyle
+          normalStyle()
     elif e.state.display.showSyntax and not buffer.highlight.isNil:
       # Apply syntax highlighting from buffer
       # Update highlight if needed (after text edits)
@@ -1367,7 +1355,7 @@ proc getSelectionStyle(
       if highlightKind.isSome:
         style.bg = getDocumentHighlightStyle(highlightKind.get).bg
       elif e.state.display.showCursorLine and pos.line == cursorLine:
-        style.bg = cursorLineHighlightStyle.bg
+        style.bg = cursorLineHighlightStyle().bg
       style
     else:
       # Check document highlight first
@@ -1375,9 +1363,9 @@ proc getSelectionStyle(
       if highlightKind.isSome:
         getDocumentHighlightStyle(highlightKind.get)
       elif e.state.display.showCursorLine and pos.line == cursorLine:
-        cursorLineHighlightStyle
+        cursorLineHighlightStyle()
       else:
-        normalStyle
+        normalStyle()
   elif e.state.display.showSyntax and not buffer.highlight.isNil:
     # Apply syntax highlighting from buffer
     # Update highlight if needed (after text edits)
@@ -1389,7 +1377,7 @@ proc getSelectionStyle(
     if highlightKind.isSome:
       style.bg = getDocumentHighlightStyle(highlightKind.get).bg
     elif e.state.display.showCursorLine and pos.line == cursorLine:
-      style.bg = cursorLineHighlightStyle.bg
+      style.bg = cursorLineHighlightStyle().bg
     style
   else:
     # Check document highlight first
@@ -1397,9 +1385,9 @@ proc getSelectionStyle(
     if highlightKind.isSome:
       getDocumentHighlightStyle(highlightKind.get)
     elif e.state.display.showCursorLine and pos.line == cursorLine:
-      cursorLineHighlightStyle
+      cursorLineHighlightStyle()
     else:
-      normalStyle
+      normalStyle()
 
 proc isVisualMode(mode: EditorMode): bool {.inline.} =
   ## Check if the mode is any visual mode variant
@@ -1459,7 +1447,7 @@ proc renderLineSegmentWithSelection(
       # Determine style for tab (trailing space highlighting takes priority)
       let tabStyle =
         if e.config.highlight.trailingSpaces and col >= trailingSpaceStart:
-          trailingSpacesStyle
+          trailingSpacesStyle()
         else:
           style
       # Render spaces instead of tab character
@@ -1467,7 +1455,7 @@ proc renderLineSegmentWithSelection(
         if screenX + displayX < buffer.area.width:
           # Check if we should show indentation guide at this position
           if e.shouldShowIndentationGuide(indentInfo, displayX, col):
-            buffer.setString(screenX + displayX, screenY, "│", indentationLineStyle)
+            buffer.setString(screenX + displayX, screenY, "│", indentationLineStyle())
           else:
             buffer.setString(screenX + displayX, screenY, " ", tabStyle)
         displayX += 1
@@ -1479,16 +1467,16 @@ proc renderLineSegmentWithSelection(
       # Check if this is a space and should show indentation guide
       if rune == ' '.Rune and e.shouldShowIndentationGuide(indentInfo, displayX, col):
         charStr = "│"
-        renderStyle = indentationLineStyle
+        renderStyle = indentationLineStyle()
 
       # Highlight full-width space if enabled
       if rune == FULLWIDTH_SPACE and e.config.highlight.fullWidthSpace:
-        renderStyle = fullWidthSpaceStyle
+        renderStyle = fullWidthSpaceStyle()
 
       # Highlight trailing spaces if enabled
       if e.config.highlight.trailingSpaces and col >= trailingSpaceStart:
         if rune == ' '.Rune or rune == TAB_CHAR or rune == FULLWIDTH_SPACE:
-          renderStyle = trailingSpacesStyle
+          renderStyle = trailingSpacesStyle()
 
       if screenX + displayX < buffer.area.width:
         buffer.setString(screenX + displayX, screenY, charStr, renderStyle)
@@ -1522,7 +1510,7 @@ proc renderLineSegmentWithSelection(
   # Fill the rest of the line with cursor line highlight if on cursor line
   if e.state.display.showCursorLine and lineIndex == ctx.cursorLine:
     while screenX + displayX < buffer.area.width:
-      buffer.setString(screenX + displayX, screenY, " ", cursorLineHighlightStyle)
+      buffer.setString(screenX + displayX, screenY, " ", cursorLineHighlightStyle())
       displayX += 1
 
 proc fillCursorLineBackground(
@@ -1532,7 +1520,7 @@ proc fillCursorLineBackground(
   if e.state.display.showCursorLine and lineIndex == cursorLine:
     var displayX = 0
     while screenX + displayX < buffer.area.width:
-      buffer.setString(screenX + displayX, screenY, " ", cursorLineHighlightStyle)
+      buffer.setString(screenX + displayX, screenY, " ", cursorLineHighlightStyle())
       displayX += 1
 
 proc renderCodeLensInline(
@@ -1574,7 +1562,7 @@ proc renderCodeLensInline(
   for ch in displayText:
     if screenX + displayX >= buffer.area.width:
       break
-    buffer.setString(screenX + displayX, screenY, $ch, codeLensStyle)
+    buffer.setString(screenX + displayX, screenY, $ch, codeLensStyle())
     displayX += 1
 
 proc renderCodeLensPicker*(e: Editor, buffer: var Buffer) =
@@ -1626,7 +1614,7 @@ proc renderCodeLensPicker*(e: Editor, buffer: var Buffer) =
       bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 30, g: 30, b: 30)),
       modifiers: {},
     )
-    normalStyle = Style(
+    popupNormalStyle = Style(
       fg: ColorValue(kind: Default),
       bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 30, g: 30, b: 30)),
       modifiers: {},
@@ -1665,7 +1653,7 @@ proc renderCodeLensPicker*(e: Editor, buffer: var Buffer) =
     if y >= buffer.area.height - 1:
       break
 
-    let style = if itemIdx == selectedIdx: selectedStyle else: normalStyle
+    let style = if itemIdx == selectedIdx: selectedStyle else: popupNormalStyle
 
     # Left border
     buffer.setString(popupX, y, "│", borderStyle)
@@ -1757,9 +1745,9 @@ proc renderLineNumbers(
       # Apply currentNumber setting: highlight current line number only if enabled
       lineStyle =
         if isCurrentLine and e.state.display.showCurrentLineNumber:
-          currentLineStyle
+          currentLineStyle()
         else:
-          lineNumStyle
+          lineNumStyle()
 
     if e.state.display.lineWrap:
       let
@@ -1776,7 +1764,7 @@ proc renderLineNumbers(
           break
         let emptyLineNumStr = spaces(maxLineNumWidth)
         buffer.setString(
-          lineNumX, buffer.area.y + screenY, emptyLineNumStr, lineNumStyle
+          lineNumX, buffer.area.y + screenY, emptyLineNumStr, lineNumStyle()
         )
         inc screenY
     else:
@@ -1790,7 +1778,7 @@ proc renderLineNumbers(
   while screenY < buffer.area.height - reservedLines:
     # Clear remaining line number area to prevent artifacts
     let emptyLineNumStr = spaces(maxLineNumWidth)
-    buffer.setString(lineNumX, buffer.area.y + screenY, emptyLineNumStr, lineNumStyle)
+    buffer.setString(lineNumX, buffer.area.y + screenY, emptyLineNumStr, lineNumStyle())
     inc screenY
 
   return maxLineNumWidth
@@ -1935,9 +1923,9 @@ proc renderWindowLineWrapped(
     # Apply currentNumber setting: highlight current line number only if enabled
     lineStyle =
       if isCurrentLine and e.config.standard.currentNumber:
-        currentLineStyle
+        currentLineStyle()
       else:
-        lineNumStyle
+        lineNumStyle()
     lineNumScreenX = window.viewport.x + sidebarWidth
 
   if lineCharLen == 0:
@@ -1978,7 +1966,7 @@ proc renderWindowLineWrapped(
         if lineNumScreenX + lineNumOffset <= buffer.area.width:
           let emptyLineNumStr = spaces(lineNumOffset)
           buffer.setString(
-            lineNumScreenX, currentActualScreenY, emptyLineNumStr, lineNumStyle
+            lineNumScreenX, currentActualScreenY, emptyLineNumStr, lineNumStyle()
           )
 
     if displayLine.len > 0 and textScreenX < buffer.area.width:
@@ -2024,9 +2012,9 @@ proc renderWindowLineNoWrap(
     # Apply currentNumber setting: highlight current line number only if enabled
     lineStyle =
       if isCurrentLine and e.config.standard.currentNumber:
-        currentLineStyle
+        currentLineStyle()
       else:
-        lineNumStyle
+        lineNumStyle()
     lineNumScreenX = window.viewport.x + sidebarWidth
 
   # Render line number (if enabled)
@@ -2104,7 +2092,7 @@ proc renderFoldLine(
   if lineNumOffset > 0:
     let lineNumStr = formatLineNumber(fold.startLine, lineNumOffset)
     if lineNumScreenX + lineNumStr.len <= buffer.area.width:
-      buffer.setString(lineNumScreenX, actualScreenY, lineNumStr, lineNumStyle)
+      buffer.setString(lineNumScreenX, actualScreenY, lineNumStr, lineNumStyle())
 
   # Render fold text
   if textScreenX < buffer.area.width:
@@ -2114,7 +2102,7 @@ proc renderFoldLine(
         foldText[0 ..< maxWidth]
       else:
         foldText
-    buffer.setString(textScreenX, actualScreenY, displayText, foldStyle)
+    buffer.setString(textScreenX, actualScreenY, displayText, foldStyle())
 
 proc renderWindow(
     e: Editor,
@@ -2209,7 +2197,7 @@ proc renderWindowSeparator(
       # Draw separator for the content height of this window
       for y in window.viewport.y ..< (window.viewport.y + actualSepHeight):
         if y < buffer.area.height:
-          buffer.setString(sepX, y, "│", separatorStyle)
+          buffer.setString(sepX, y, "│", separatorStyle())
   elif not e.state.display.multiStatusLine:
     # Horizontal split - draw horizontal separator at window boundary
     # ONLY when using a single status line
@@ -2218,7 +2206,7 @@ proc renderWindowSeparator(
       # Draw separator for the width of this window
       for x in window.viewport.x ..< (window.viewport.x + window.viewport.width):
         if x < buffer.area.width:
-          buffer.setString(x, sepY, "─", separatorStyle)
+          buffer.setString(x, sepY, "─", separatorStyle())
 
 proc updateViewportSize(e: Editor, buffer: Buffer): bool =
   ## Update viewport size from buffer area and return true if resized
@@ -2390,7 +2378,7 @@ proc renderBottomLines(e: Editor, buffer: var Buffer) =
 
   # Handle command line
   if e.state.mode == EditorMode.Command:
-    buffer.setString(buffer.area.x, commandLineY, e.state.commandText, commandStyle)
+    buffer.setString(buffer.area.x, commandLineY, e.state.commandText, commandStyle())
     # Cursor position: ":" + commandCursor (0-based after ":")
     e.state.screenCursor.x = 1 + e.state.commandCursor
     e.state.screenCursor.y = buffer.area.height - 1
@@ -2409,12 +2397,55 @@ proc renderBottomLines(e: Editor, buffer: var Buffer) =
   elif e.state.mode == EditorMode.Search:
     let searchChar = if e.state.search.direction == Forward: "/" else: "?"
     let searchPrompt = searchChar & e.state.search.text
-    buffer.setString(buffer.area.x, commandLineY, searchPrompt, commandStyle)
+    buffer.setString(buffer.area.x, commandLineY, searchPrompt, commandStyle())
     e.state.screenCursor.x = searchPrompt.len
     e.state.screenCursor.y = buffer.area.height - 1
   else:
     if e.state.statusMessage.len > 0:
-      buffer.setString(buffer.area.x, commandLineY, e.state.statusMessage, commandStyle)
+      buffer.setString(
+        buffer.area.x, commandLineY, e.state.statusMessage, commandStyle()
+      )
+
+proc renderTempMessages(e: Editor, buffer: var Buffer) =
+  ## Render temporary messages at the bottom of screen (like Vim's :jumps output)
+  ## Overwrites the buffer content from bottom up, with a border at top
+  if e.state.tempMessages.len == 0:
+    return
+
+  let
+    # +2 for border line and "Press ENTER..." prompt
+    totalLines = e.state.tempMessages.len + 2
+    startY = max(0, buffer.area.height - totalLines)
+    borderLine = " ".repeat(buffer.area.width)
+    # White background style for border
+    whiteBorderStyle = Style(
+      fg: ColorValue(kind: Default),
+      bg: ColorValue(kind: Indexed, indexed: Color.White),
+      modifiers: {},
+    )
+
+  # Clear the area where messages will be displayed
+  for y in startY ..< buffer.area.height:
+    buffer.setString(buffer.area.x, y, " ".repeat(buffer.area.width), defaultStyle)
+
+  # Render border line at top (white background)
+  buffer.setString(buffer.area.x, startY, borderLine, whiteBorderStyle)
+
+  # Render each message line
+  for i, msg in e.state.tempMessages:
+    let y = startY + 1 + i # +1 to skip border
+    if y < buffer.area.height - 1: # Leave last line for prompt
+      buffer.setString(buffer.area.x, y, msg, defaultStyle)
+
+  # Render the prompt on the last line
+  let promptY = buffer.area.height - 1
+  buffer.setString(
+    buffer.area.x, promptY, "Press ENTER or type command to continue", commandStyle()
+  )
+
+  # Position cursor at the end of the prompt
+  e.state.screenCursor.x = 0
+  e.state.screenCursor.y = promptY
 
 proc renderFiler(e: Editor, buffer: var Buffer) =
   ## Render the file explorer view
@@ -3857,6 +3888,9 @@ proc render*(e: Editor, buffer: var Buffer) =
 
   # Render bottom lines (status and command lines)
   e.renderBottomLines(buffer)
+
+  # Render temporary messages if any (overwrites bottom area)
+  e.renderTempMessages(buffer)
 
   # Render completion popup if active (must be after other rendering)
   if e.state.mode == EditorMode.Insert:

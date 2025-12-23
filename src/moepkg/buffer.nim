@@ -96,6 +96,7 @@ type
     backend*: BufferBackend
     filePath*: Option[string]
     readOnly*: bool
+    isUtilityBuffer*: bool # Utility buffers (jumplist, log, etc.) disable decorations
     lineEnding*: LineEnding
     encoding*: CharacterEncoding
     endOfLine*: bool # Whether file should end with newline

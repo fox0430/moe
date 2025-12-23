@@ -26,7 +26,7 @@
 import pkg/celina
 import std/unicode
 
-import types, buffer, unicode_utils
+import types, buffer, unicode_utils, color
 
 # Rendering constants
 const
@@ -43,90 +43,95 @@ const
   LineNumberPadding* = 1 # Padding for alignment
   LineNumberWidthExtra* = 2 # Extra width for line number area (number + spaces)
 
-# Rendering styles
-let
-  normalStyle* =
-    Style(fg: ColorValue(kind: Default), bg: ColorValue(kind: Default), modifiers: {})
-  visualStyle* = Style(
-    fg: ColorValue(kind: Default),
-    bg: ColorValue(kind: Indexed, indexed: Color.Blue),
-    modifiers: {},
-  )
-  searchHighlightStyle* = Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.Black),
-    bg: ColorValue(kind: Indexed, indexed: Color.Yellow),
-    modifiers: {},
-  )
-  lineNumStyle* = Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.BrightBlack),
-    bg: ColorValue(kind: Default),
-    modifiers: {},
-  )
-  currentLineStyle* = Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.Yellow),
-    bg: ColorValue(kind: Default),
-    modifiers: {StyleModifier.Bold},
-  )
-  separatorStyle* = Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.BrightBlack),
-    bg: ColorValue(kind: Default),
-    modifiers: {},
-  )
-  commandStyle* = Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.White),
-    bg: ColorValue(kind: Default),
-    modifiers: {StyleModifier.Bold},
-  )
-  cursorLineHighlightStyle* = Style(
-    fg: ColorValue(kind: Default),
-    bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 40, g: 40, b: 40)),
-    modifiers: {},
-  )
-  cursorCharStyle* = Style(
+# Rendering style getters - dynamically retrieve from theme
+
+proc normalStyle*(): Style =
+  ## Get default text style from theme
+  getThemeStyle(EditorColorPairIndex.default)
+
+proc visualStyle*(): Style =
+  ## Get visual selection style from theme
+  getThemeStyle(EditorColorPairIndex.selectArea)
+
+proc searchHighlightStyle*(): Style =
+  ## Get search result highlight style from theme
+  getThemeStyle(EditorColorPairIndex.searchResult)
+
+proc lineNumStyle*(): Style =
+  ## Get line number style from theme
+  getThemeStyle(EditorColorPairIndex.lineNum)
+
+proc currentLineStyle*(): Style =
+  ## Get current line number style from theme (with bold)
+  getThemeStyle(EditorColorPairIndex.currentLineNum, {StyleModifier.Bold})
+
+proc separatorStyle*(): Style =
+  ## Get separator style (uses line number colors)
+  getThemeStyle(EditorColorPairIndex.lineNum)
+
+proc commandStyle*(): Style =
+  ## Get command line style from theme (with bold)
+  getThemeStyle(EditorColorPairIndex.commandLine, {StyleModifier.Bold})
+
+proc cursorLineHighlightStyle*(): Style =
+  ## Get current line background highlight style from theme
+  getThemeStyle(EditorColorPairIndex.currentLineBg)
+
+proc cursorCharStyle*(): Style =
+  ## Get cursor character style (uses default with custom foreground)
+  let colorPair = getThemeColor(EditorColorPairIndex.default)
+  Style(
     fg: ColorValue(kind: Rgb, rgb: RgbColor(r: 180, g: 180, b: 180)),
-    bg: ColorValue(kind: Default),
+    bg: colorPair.background.rgb.toColorValue,
     modifiers: {},
   )
-  indentationLineStyle* = Style(
+
+proc indentationLineStyle*(): Style =
+  ## Get indentation guide style (slightly darker than background)
+  let colorPair = getThemeColor(EditorColorPairIndex.default)
+  Style(
     fg: ColorValue(kind: Rgb, rgb: RgbColor(r: 70, g: 70, b: 70)),
-    bg: ColorValue(kind: Default),
+    bg: colorPair.background.rgb.toColorValue,
     modifiers: {},
   )
-  foldStyle* = Style(
-    fg: ColorValue(kind: Indexed, indexed: Color.Cyan),
-    bg: ColorValue(kind: Default),
-    modifiers: {},
-  )
-  fullWidthSpaceStyle* = Style(
-    fg: ColorValue(kind: Default),
-    bg: ColorValue(kind: Indexed, indexed: Color.Red),
-    modifiers: {},
-  )
-  trailingSpacesStyle* = Style(
-    fg: ColorValue(kind: Default),
-    bg: ColorValue(kind: Indexed, indexed: Color.Red),
-    modifiers: {},
-  )
-  codeLensStyle* = Style(
-    fg: ColorValue(kind: Rgb, rgb: RgbColor(r: 120, g: 120, b: 120)),
-    bg: ColorValue(kind: Default),
-    modifiers: {},
-  )
-  # Document Highlight styles (LSP textDocument/documentHighlight)
-  documentHighlightTextStyle* = Style(
-    ## Style for generic text occurrence (DocumentHighlightKind.Text)
+
+proc foldStyle*(): Style =
+  ## Get folding line style from theme
+  getThemeStyle(EditorColorPairIndex.foldingLine)
+
+proc fullWidthSpaceStyle*(): Style =
+  ## Get full-width space highlight style from theme
+  getThemeStyle(EditorColorPairIndex.highlightFullWidthSpace)
+
+proc trailingSpacesStyle*(): Style =
+  ## Get trailing spaces highlight style from theme
+  getThemeStyle(EditorColorPairIndex.highlightTrailingSpaces)
+
+proc codeLensStyle*(): Style =
+  ## Get code lens style from theme
+  getThemeStyle(EditorColorPairIndex.codeLens)
+
+# Document Highlight styles (LSP textDocument/documentHighlight)
+# These use fixed colors for now as they are not in the theme
+proc documentHighlightTextStyle*(): Style =
+  ## Style for generic text occurrence (DocumentHighlightKind.Text)
+  Style(
     fg: ColorValue(kind: Default),
     bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 60, g: 60, b: 80)),
     modifiers: {},
   )
-  documentHighlightReadStyle* = Style(
-    ## Style for read-access of a symbol (DocumentHighlightKind.Read)
+
+proc documentHighlightReadStyle*(): Style =
+  ## Style for read-access of a symbol (DocumentHighlightKind.Read)
+  Style(
     fg: ColorValue(kind: Default),
     bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 40, g: 70, b: 40)),
     modifiers: {},
   )
-  documentHighlightWriteStyle* = Style(
-    ## Style for write-access of a symbol (DocumentHighlightKind.Write)
+
+proc documentHighlightWriteStyle*(): Style =
+  ## Style for write-access of a symbol (DocumentHighlightKind.Write)
+  Style(
     fg: ColorValue(kind: Default),
     bg: ColorValue(kind: Rgb, rgb: RgbColor(r: 80, g: 50, b: 50)),
     modifiers: {},

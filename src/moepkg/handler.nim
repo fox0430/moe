@@ -24,7 +24,7 @@ import pkg/[celina, results]
 import
   editor, keybindings, modes, buffer, logger, types, cursor, motion, search_utils,
   filer, quickrunutils, messagelog, helpviewer, buffermanager, backupmanager, backup,
-  diffviewer, command_completion
+  diffviewer, command_completion, build
 import command_handlers/handler_manager
 
 proc getBufferInfos(e: Editor): seq[BufferInfo] =
@@ -393,6 +393,20 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
           logError("handler", "Enew failed: " & enewResult.error)
           e.state.setStatusMessage("Error: " & enewResult.error)
 
+      if r.shouldNew():
+        # Handle new (create new empty buffer in horizontal split)
+        let newResult = e.new()
+        if newResult.isErr:
+          logError("handler", "New failed: " & newResult.error)
+          e.state.setStatusMessage("Error: " & newResult.error)
+
+      if r.shouldVnew():
+        # Handle vnew (create new empty buffer in vertical split)
+        let vnewResult = e.vnew()
+        if vnewResult.isErr:
+          logError("handler", "Vnew failed: " & vnewResult.error)
+          e.state.setStatusMessage("Error: " & vnewResult.error)
+
       if r.shouldEdit():
         # Handle edit (open file in current window)
         let editResult = e.editFile(r.getEditFilename())
@@ -498,7 +512,8 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
         let cmd = r.getShellCommand()
         if cmd.len > 0:
           var exitCode: int
-          e.app.withSuspend:
+          e.app.suspend()
+          try:
             # Execute the shell command
             exitCode = execShellCmd(cmd)
 
@@ -506,6 +521,8 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
             stdout.write("\nPress Enter to continue...")
             stdout.flushFile()
             discard stdin.readLine()
+          finally:
+            e.app.resume()
 
           e.state.needsFullRedraw = true
 
@@ -513,6 +530,42 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
             e.state.setStatusMessage("Shell command completed")
           else:
             e.state.setStatusMessage("Shell command exited with code " & $exitCode)
+
+      if r.shouldBackground():
+        # Handle background command (:bg)
+        # Pause editor and show recent terminal output
+        e.app.suspend()
+        try:
+          # Wait for user to press Enter
+          stdout.write("Press Enter to return to editor...")
+          stdout.flushFile()
+          discard stdin.readLine()
+        finally:
+          e.app.resume()
+
+        e.state.needsFullRedraw = true
+
+      if r.shouldJumpList():
+        # Handle jump list command (:ju, :jump)
+        # Display jump list temporarily like Vim using tempMessages
+        if e.state.jumpList.len == 0:
+          e.state.setStatusMessage("Jump list is empty")
+        else:
+          e.state.tempMessages = @[]
+          e.state.tempMessages.add(" jump  line  col  file/text")
+          for i, pos in e.state.jumpList:
+            let marker = if i == e.state.jumpListIndex: ">" else: " "
+            let jumpNum = e.state.jumpList.len - i
+            let lineNum = pos.line + 1 # 1-based for display
+            let colNum = pos.column + 1 # 1-based for display
+            e.state.tempMessages.add(
+              marker & ($jumpNum).align(4) & " " & ($lineNum).align(5) & " " &
+                ($colNum).align(4)
+            )
+          e.state.needsFullRedraw = true
+        # Return to Normal mode
+        e.state.previousMode = e.state.mode
+        e.state.mode = EditorMode.Normal
 
       if r.shouldSave():
         # Handle file save
@@ -526,6 +579,49 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
             if activeBuffer.filePath.isSome: activeBuffer.filePath.get else: "file"
           logInfo("handler", "File saved via command: " & savedPath)
           e.state.setStatusMessage("Saved: " & savedPath)
+
+          # Build on save if enabled
+          if e.config.buildOnSave.enable:
+            let customCmd =
+              if e.config.buildOnSave.command.isSome:
+                e.config.buildOnSave.command.get
+              else:
+                ""
+            let workspaceRoot =
+              if e.config.buildOnSave.workspaceRoot.isSome:
+                e.config.buildOnSave.workspaceRoot.get
+              else:
+                parentDir(savedPath)
+            let buildResult = startBackgroundBuildOnSave(
+              savedPath, activeBuffer.language, customCmd, workspaceRoot
+            )
+            if buildResult.isErr:
+              e.state.setStatusMessage("Build error: " & buildResult.error)
+              logError("handler", "Build on save failed: " & buildResult.error)
+            else:
+              var buildProcess = buildResult.get
+              e.state.setStatusMessage("Building: " & savedPath)
+              logInfo("handler", "Build on save started: " & savedPath)
+
+              # Wait for the process to finish and get the result
+              let output = buildProcess.process.waitFor()
+              # Create a new buffer with the output
+              let outputContent = output.join("\n")
+              let outputBuffer = newTextBuffer(outputContent)
+              outputBuffer.readOnly = true
+
+              # Open the output in a new horizontal split window
+              let splitResult = e.hsplitWithBuffer(outputBuffer)
+              if splitResult.isErr:
+                e.state.setStatusMessage(
+                  "Failed to open output window: " & splitResult.error
+                )
+                logError(
+                  "handler", "Build on save window split failed: " & splitResult.error
+                )
+              else:
+                e.state.setStatusMessage("Build completed: " & savedPath)
+                logInfo("handler", "Build on save completed: " & savedPath)
 
       if r.shouldSaveAndQuit():
         # Handle file save and quit
@@ -607,6 +703,44 @@ proc handleCommandModeEvent(e: Editor, event: Event): bool =
             else:
               e.state.setStatusMessage("QuickRun completed: " & qrProcess.filePath)
               logInfo("handler", "QuickRun completed: " & qrProcess.filePath)
+        # Return to Normal mode
+        e.state.previousMode = e.state.mode
+        e.state.mode = EditorMode.Normal
+
+      if r.shouldBuild():
+        # Handle Build command
+        let filePath =
+          if activeBuffer.filePath.isSome: activeBuffer.filePath.get else: ""
+        if filePath.len == 0:
+          e.state.setStatusMessage("Build error: File not saved")
+          logError("handler", "Build failed: No file path")
+        else:
+          let buildResult =
+            startBackgroundBuild(filePath, activeBuffer.language, parentDir(filePath))
+          if buildResult.isErr:
+            e.state.setStatusMessage("Build error: " & buildResult.error)
+            logError("handler", "Build failed: " & buildResult.error)
+          else:
+            var buildProcess = buildResult.get
+            e.state.setStatusMessage("Building: " & filePath)
+
+            # Wait for the process to finish and get the result
+            let output = buildProcess.process.waitFor()
+            # Create a new buffer with the output
+            let outputContent = output.join("\n")
+            let outputBuffer = newTextBuffer(outputContent)
+            outputBuffer.readOnly = true
+
+            # Open the output in a new horizontal split window
+            let splitResult = e.hsplitWithBuffer(outputBuffer)
+            if splitResult.isErr:
+              e.state.setStatusMessage(
+                "Failed to open output window: " & splitResult.error
+              )
+              logError("handler", "Build window split failed: " & splitResult.error)
+            else:
+              e.state.setStatusMessage("Build completed: " & filePath)
+              logInfo("handler", "Build completed: " & filePath)
         # Return to Normal mode
         e.state.previousMode = e.state.mode
         e.state.mode = EditorMode.Normal
@@ -960,6 +1094,23 @@ proc handleEvent*(e: Editor, event: Event): bool =
 
   # Update last input time for auto backup idle detection
   e.updateInputTime()
+
+  # Handle temporary messages (like :jumps output) - dismiss on any key
+  if e.state.tempMessages.len > 0 and event.kind == EventKind.Key:
+    let keyComboOpt = eventToKeyCombo(event)
+    if keyComboOpt.isSome:
+      let keyCombo = keyComboOpt.get
+      e.state.tempMessages = @[]
+      e.state.needsFullRedraw = true
+
+      # If ":" was pressed, enter command mode
+      if not keyCombo.isSpecial and keyCombo.modifiers == {} and keyCombo.char == ":":
+        e.state.previousMode = e.state.mode
+        e.state.mode = EditorMode.Command
+        e.state.commandText = ":"
+        e.state.commandCursor = 0
+      # Otherwise just dismiss and stay in current mode
+      return true
 
   # Handle Command mode input differently (character by character)
   if e.state.mode == EditorMode.Command:

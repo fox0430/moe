@@ -22,11 +22,11 @@
 ## This module handles loading configuration from TOML files and converting
 ## them into EditorConfig structures.
 
-import std/[os, options, tables]
+import std/[os, options, tables, strutils]
 
-import pkg/parsetoml
+import pkg/[parsetoml, results]
 
-import config
+import config, color, theme
 
 proc parseColorMode(s: string): ColorMode =
   case s
@@ -307,3 +307,383 @@ proc loadConfig*(): EditorConfig =
   ## Load configuration from the default location
   let configPath = getConfigPath()
   return loadConfigFromToml(configPath)
+
+# Theme loading functions
+
+proc toEditorColorPairIndex(key: string): Option[EditorColorPairIndex] =
+  ## Convert a TOML key to EditorColorPairIndex
+  ## Keys ending with "Bg" are treated as background colors
+  ## Returns none if the key doesn't match any color index
+
+  # Remove "Bg" suffix if present for lookup
+  let lookupKey =
+    if key.endsWith("Bg"):
+      key[0 ..< key.len - 2]
+    else:
+      key
+
+  case lookupKey
+  of "foreground", "default":
+    return some(EditorColorPairIndex.default)
+  of "lineNum":
+    return some(EditorColorPairIndex.lineNum)
+  of "currentLineNum":
+    return some(EditorColorPairIndex.currentLineNum)
+  of "statusLineNormalMode":
+    return some(EditorColorPairIndex.statusLineNormalMode)
+  of "statusLineNormalModeLabel":
+    return some(EditorColorPairIndex.statusLineNormalModeLabel)
+  of "statusLineNormalModeInactive":
+    return some(EditorColorPairIndex.statusLineNormalModeInactive)
+  of "statusLineInsertMode":
+    return some(EditorColorPairIndex.statusLineInsertMode)
+  of "statusLineInsertModeLabel":
+    return some(EditorColorPairIndex.statusLineInsertModeLabel)
+  of "statusLineInsertModeInactive":
+    return some(EditorColorPairIndex.statusLineInsertModeInactive)
+  of "statusLineVisualMode":
+    return some(EditorColorPairIndex.statusLineVisualMode)
+  of "statusLineVisualModeLabel":
+    return some(EditorColorPairIndex.statusLineVisualModeLabel)
+  of "statusLineVisualModeInactive":
+    return some(EditorColorPairIndex.statusLineVisualModeInactive)
+  of "statusLineReplaceMode":
+    return some(EditorColorPairIndex.statusLineReplaceMode)
+  of "statusLineReplaceModeLabel":
+    return some(EditorColorPairIndex.statusLineReplaceModeLabel)
+  of "statusLineReplaceModeInactive":
+    return some(EditorColorPairIndex.statusLineReplaceModeInactive)
+  of "statusLineFilerMode":
+    return some(EditorColorPairIndex.statusLineFilerMode)
+  of "statusLineFilerModeLabel":
+    return some(EditorColorPairIndex.statusLineFilerModeLabel)
+  of "statusLineFilerModeInactive":
+    return some(EditorColorPairIndex.statusLineFilerModeInactive)
+  of "statusLineExMode":
+    return some(EditorColorPairIndex.statusLineExMode)
+  of "statusLineExModeLabel":
+    return some(EditorColorPairIndex.statusLineExModeLabel)
+  of "statusLineExModeInactive":
+    return some(EditorColorPairIndex.statusLineExModeInactive)
+  of "statusLineGitChangedLines":
+    return some(EditorColorPairIndex.statusLineGitChangedLines)
+  of "statusLineGitBranch":
+    return some(EditorColorPairIndex.statusLineGitBranch)
+  of "tab":
+    return some(EditorColorPairIndex.tab)
+  of "currentTab":
+    return some(EditorColorPairIndex.currentTab)
+  of "commandLine":
+    return some(EditorColorPairIndex.commandLine)
+  of "errorMessage":
+    return some(EditorColorPairIndex.errorMessage)
+  of "warnMessage":
+    return some(EditorColorPairIndex.warnMessage)
+  of "searchResult":
+    return some(EditorColorPairIndex.searchResult)
+  of "selectArea":
+    return some(EditorColorPairIndex.selectArea)
+  of "keyword":
+    return some(EditorColorPairIndex.keyword)
+  of "functionName":
+    return some(EditorColorPairIndex.functionName)
+  of "typeName":
+    return some(EditorColorPairIndex.typeName)
+  of "boolean":
+    return some(EditorColorPairIndex.boolean)
+  of "specialVar":
+    return some(EditorColorPairIndex.specialVar)
+  of "builtin":
+    return some(EditorColorPairIndex.builtin)
+  of "charLit":
+    return some(EditorColorPairIndex.charLit)
+  of "stringLit":
+    return some(EditorColorPairIndex.stringLit)
+  of "binNumber":
+    return some(EditorColorPairIndex.binNumber)
+  of "decNumber":
+    return some(EditorColorPairIndex.decNumber)
+  of "floatNumber":
+    return some(EditorColorPairIndex.floatNumber)
+  of "hexNumber":
+    return some(EditorColorPairIndex.hexNumber)
+  of "octNumber":
+    return some(EditorColorPairIndex.octNumber)
+  of "comment":
+    return some(EditorColorPairIndex.comment)
+  of "longComment":
+    return some(EditorColorPairIndex.longComment)
+  of "whitespace":
+    return some(EditorColorPairIndex.whitespace)
+  of "preprocessor":
+    return some(EditorColorPairIndex.preprocessor)
+  of "pragma":
+    return some(EditorColorPairIndex.pragma)
+  of "identifier":
+    return some(EditorColorPairIndex.identifier)
+  of "table":
+    return some(EditorColorPairIndex.table)
+  of "date":
+    return some(EditorColorPairIndex.date)
+  of "operator":
+    return some(EditorColorPairIndex.operator)
+  of "property":
+    return some(EditorColorPairIndex.property)
+  of "namespace":
+    return some(EditorColorPairIndex.namespace)
+  of "className":
+    return some(EditorColorPairIndex.className)
+  of "enumName":
+    return some(EditorColorPairIndex.enumName)
+  of "enumMember":
+    return some(EditorColorPairIndex.enumMember)
+  of "interfaceName":
+    return some(EditorColorPairIndex.interfaceName)
+  of "typeParameter":
+    return some(EditorColorPairIndex.typeParameter)
+  of "parameter":
+    return some(EditorColorPairIndex.parameter)
+  of "variable":
+    return some(EditorColorPairIndex.variable)
+  of "string":
+    return some(EditorColorPairIndex.lspString)
+  of "event":
+    return some(EditorColorPairIndex.event)
+  of "function":
+    return some(EditorColorPairIndex.function)
+  of "method":
+    return some(EditorColorPairIndex.`method`)
+  of "macro":
+    return some(EditorColorPairIndex.`macro`)
+  of "regexp":
+    return some(EditorColorPairIndex.regexp)
+  of "decorator":
+    return some(EditorColorPairIndex.decorator)
+  of "angle":
+    return some(EditorColorPairIndex.angle)
+  of "arithmetic":
+    return some(EditorColorPairIndex.arithmetic)
+  of "attribute":
+    return some(EditorColorPairIndex.attribute)
+  of "attributeBracket":
+    return some(EditorColorPairIndex.attributeBracket)
+  of "bitwise":
+    return some(EditorColorPairIndex.bitwise)
+  of "brace":
+    return some(EditorColorPairIndex.brace)
+  of "bracket":
+    return some(EditorColorPairIndex.bracket)
+  of "builtinAttribute":
+    return some(EditorColorPairIndex.builtinAttribute)
+  of "builtinType":
+    return some(EditorColorPairIndex.builtinType)
+  of "colon":
+    return some(EditorColorPairIndex.colon)
+  of "comma":
+    return some(EditorColorPairIndex.comma)
+  of "comparison":
+    return some(EditorColorPairIndex.comparison)
+  of "constParameter":
+    return some(EditorColorPairIndex.constParameter)
+  of "derive":
+    return some(EditorColorPairIndex.derive)
+  of "deriveHelper":
+    return some(EditorColorPairIndex.deriveHelper)
+  of "dot":
+    return some(EditorColorPairIndex.dot)
+  of "escapeSequence":
+    return some(EditorColorPairIndex.escapeSequence)
+  of "invalidEscapeSequence":
+    return some(EditorColorPairIndex.invalidEscapeSequence)
+  of "formatSpecifier":
+    return some(EditorColorPairIndex.formatSpecifier)
+  of "generic":
+    return some(EditorColorPairIndex.generic)
+  of "label":
+    return some(EditorColorPairIndex.label)
+  of "lifetime":
+    return some(EditorColorPairIndex.lifetime)
+  of "logical":
+    return some(EditorColorPairIndex.logical)
+  of "macroBang":
+    return some(EditorColorPairIndex.macroBang)
+  of "parenthesis":
+    return some(EditorColorPairIndex.parenthesis)
+  of "punctuation":
+    return some(EditorColorPairIndex.punctuation)
+  of "selfKeyword":
+    return some(EditorColorPairIndex.selfKeyword)
+  of "selfTypeKeyword":
+    return some(EditorColorPairIndex.selfTypeKeyword)
+  of "semicolon":
+    return some(EditorColorPairIndex.semicolon)
+  of "typeAlias":
+    return some(EditorColorPairIndex.typeAlias)
+  of "toolModule":
+    return some(EditorColorPairIndex.toolModule)
+  of "union":
+    return some(EditorColorPairIndex.union)
+  of "unresolvedReference":
+    return some(EditorColorPairIndex.unresolvedReference)
+  of "inlayHint":
+    return some(EditorColorPairIndex.inlayHint)
+  of "inlineValue":
+    return some(EditorColorPairIndex.inlineValue)
+  of "codeLens":
+    return some(EditorColorPairIndex.codeLens)
+  of "currentFile":
+    return some(EditorColorPairIndex.currentFile)
+  of "file":
+    return some(EditorColorPairIndex.file)
+  of "dir":
+    return some(EditorColorPairIndex.dir)
+  of "pcLink":
+    return some(EditorColorPairIndex.pcLink)
+  of "popupWindow":
+    return some(EditorColorPairIndex.popupWindow)
+  of "popupWinCurrentLine":
+    return some(EditorColorPairIndex.popupWinCurrentLine)
+  of "replaceText":
+    return some(EditorColorPairIndex.replaceText)
+  of "parenPair":
+    return some(EditorColorPairIndex.parenPair)
+  of "currentWord":
+    return some(EditorColorPairIndex.currentWord)
+  of "highlightFullWidthSpace":
+    return some(EditorColorPairIndex.highlightFullWidthSpace)
+  of "highlightTrailingSpaces":
+    return some(EditorColorPairIndex.highlightTrailingSpaces)
+  of "reservedWord":
+    return some(EditorColorPairIndex.reservedWord)
+  of "syntaxCheckInfo":
+    return some(EditorColorPairIndex.syntaxCheckInfo)
+  of "syntaxCheckHint":
+    return some(EditorColorPairIndex.syntaxCheckHint)
+  of "syntaxCheckWarn":
+    return some(EditorColorPairIndex.syntaxCheckWarn)
+  of "syntaxCheckErr":
+    return some(EditorColorPairIndex.syntaxCheckErr)
+  of "gitConflict":
+    return some(EditorColorPairIndex.gitConflict)
+  of "backupManagerCurrentLine":
+    return some(EditorColorPairIndex.backupManagerCurrentLine)
+  of "diffViewerAddedLine":
+    return some(EditorColorPairIndex.diffViewerAddedLine)
+  of "diffViewerDeletedLine":
+    return some(EditorColorPairIndex.diffViewerDeletedLine)
+  of "configModeCurrentLine":
+    return some(EditorColorPairIndex.configModeCurrentLine)
+  of "currentLineBg":
+    return some(EditorColorPairIndex.currentLineBg)
+  of "foldingLine":
+    return some(EditorColorPairIndex.foldingLine)
+  of "sidebarGitAddedSign":
+    return some(EditorColorPairIndex.sidebarGitAddedSign)
+  of "sidebarGitDeletedSign":
+    return some(EditorColorPairIndex.sidebarGitDeletedSign)
+  of "sidebarGitChangedSign":
+    return some(EditorColorPairIndex.sidebarGitChangedSign)
+  of "sidebarSyntaxCheckInfoSign":
+    return some(EditorColorPairIndex.sidebarSyntaxCheckInfoSign)
+  of "sidebarSyntaxCheckHintSign":
+    return some(EditorColorPairIndex.sidebarSyntaxCheckHintSign)
+  of "sidebarSyntaxCheckWarnSign":
+    return some(EditorColorPairIndex.sidebarSyntaxCheckWarnSign)
+  of "sidebarSyntaxCheckErrSign":
+    return some(EditorColorPairIndex.sidebarSyntaxCheckErrSign)
+  else:
+    return none(EditorColorPairIndex)
+
+proc loadThemeFromToml*(path: string): Result[ThemeColors, string] =
+  ## Load theme colors from a TOML file
+  ## Returns ThemeColors based on DefaultColors with overrides from the file
+
+  let expandedPath = path.expandTilde
+  if not fileExists(expandedPath):
+    return Result[ThemeColors, string].err("Theme file not found: " & expandedPath)
+
+  var toml: TomlValueRef
+  try:
+    toml = parseFile(expandedPath)
+  except CatchableError as e:
+    return Result[ThemeColors, string].err("Failed to parse theme file: " & e.msg)
+
+  # Start with default colors
+  var colors = DefaultColors
+
+  # Check for Colors section
+  if not toml.hasKey("Colors"):
+    return Result[ThemeColors, string].err("Theme file missing [Colors] section")
+
+  let colorsTable = toml["Colors"].getTable()
+
+  # Get default foreground/background for syntax colors
+  var defaultFg = colors[EditorColorPairIndex.default].foreground.rgb
+  var defaultBg = colors[EditorColorPairIndex.default].background.rgb
+
+  if colorsTable.hasKey("foreground"):
+    let fgResult = hexToRgb(colorsTable["foreground"].getStr())
+    if fgResult.isOk:
+      defaultFg = fgResult.get
+
+  if colorsTable.hasKey("background"):
+    let bgResult = hexToRgb(colorsTable["background"].getStr())
+    if bgResult.isOk:
+      defaultBg = bgResult.get
+
+  # Update default color pair
+  colors[EditorColorPairIndex.default] = ColorPair(
+    foreground: ThemeColor(rgb: defaultFg), background: ThemeColor(rgb: defaultBg)
+  )
+
+  # Process all color entries
+  for key, value in colorsTable:
+    if key == "foreground" or key == "background":
+      continue
+
+    let colorStr = value.getStr()
+    let rgbResult = hexToRgb(colorStr)
+    if rgbResult.isErr:
+      continue
+
+    let rgb = rgbResult.get
+    let isBackground = key.endsWith("Bg")
+    let indexOpt = toEditorColorPairIndex(key)
+
+    if indexOpt.isNone:
+      continue
+
+    let index = indexOpt.get
+
+    if isBackground:
+      colors[index].background = ThemeColor(rgb: rgb)
+    else:
+      colors[index].foreground = ThemeColor(rgb: rgb)
+      # For syntax colors without explicit background, use default background
+      if not colorsTable.hasKey(key & "Bg"):
+        colors[index].background = ThemeColor(rgb: defaultBg)
+
+  return Result[ThemeColors, string].ok(colors)
+
+proc loadTheme*(config: EditorConfig): Result[ThemeColors, string] =
+  ## Load theme based on config settings
+
+  case config.theme.kind
+  of tkDefault:
+    return Result[ThemeColors, string].ok(DefaultColors)
+  of tkConfig:
+    return loadThemeFromToml(config.theme.path)
+  of tkVscode:
+    # VSCode theme loading not yet implemented
+    return Result[ThemeColors, string].err("VSCode themes not yet supported")
+
+proc initTheme*(config: EditorConfig) =
+  ## Initialize the theme based on configuration
+  ## Falls back to default theme on error
+
+  let themeResult = loadTheme(config)
+  if themeResult.isOk:
+    setThemeColors(themeResult.get)
+  else:
+    # Log error and use default
+    initDefaultTheme()

@@ -465,6 +465,76 @@ proc vsplit*(
 
   return ok(newBuffer)
 
+proc vsplitWithBuffer*(
+    wm: EditorWindowManager,
+    currentBuffer: TextBuffer,
+    currentViewport: ViewPort,
+    cursorPosition: BufferPosition,
+    newBuffer: TextBuffer,
+): Result[TextBuffer, string] =
+  ## Create a vertical split window with a specific buffer
+  ## Returns the new buffer that should be used
+
+  # If no windows exist yet, create first window from current state
+  if wm.windows.len == 0:
+    wm.windows.add(
+      EditorWindow(
+        buffer: currentBuffer,
+        viewport: currentViewport,
+        cursor: cursorPosition,
+        active: false,
+      )
+    )
+
+  let
+    # Split the active window vertically (side by side)
+    originalViewport = wm.windows[wm.activeWindowIndex].viewport
+
+    # Calculate new dimensions - split the active window's width
+    splitWidth = originalViewport.width div 2
+
+  # Update the active window to use left half
+  wm.windows[wm.activeWindowIndex].viewport.width = splitWidth
+  wm.deactivateAllWindows()
+
+  # Create new window for right half with the provided buffer
+  let newWindow = EditorWindow(
+    buffer: newBuffer,
+    viewport: ViewPort(
+      topLine: 0,
+      leftColumn: 0,
+      width: originalViewport.width - splitWidth - WindowSeparatorWidth,
+      height: originalViewport.height,
+      x: originalViewport.x + splitWidth + WindowSeparatorWidth,
+      y: originalViewport.y,
+    ),
+    cursor: BufferPosition(line: 0, column: 0),
+    active: true,
+  )
+
+  # Insert new window right after the active window
+  wm.windows.insert(newWindow, wm.activeWindowIndex + 1)
+  wm.activeWindowIndex = wm.activeWindowIndex + 1
+
+  # Equalize widths of all windows at the same vertical position
+  let windowGroups = wm.groupWindowsByY()
+  for group in windowGroups:
+    if group.len > 1:
+      var sortedGroup = group
+      sortedGroup.sort(
+        proc(a, b: int): int =
+          cmp(wm.windows[a].viewport.x, wm.windows[b].viewport.x)
+      )
+      let
+        firstWindow = wm.windows[sortedGroup[0]]
+        lastWindow = wm.windows[sortedGroup[^1]]
+        totalWidth =
+          (lastWindow.viewport.x + lastWindow.viewport.width) - firstWindow.viewport.x
+        startX = firstWindow.viewport.x
+      wm.equalizeWidthsInGroup(sortedGroup, totalWidth, startX)
+
+  return ok(newBuffer)
+
 proc hsplit*(
     wm: EditorWindowManager,
     currentBuffer: TextBuffer,

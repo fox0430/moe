@@ -471,6 +471,9 @@ proc executeOperatorOnRange(
   else:
     return err("Operator " & $operatorType & " not yet implemented")
 
+# Forward declaration for recordJump (defined below)
+proc recordJump*(state: EditorState)
+
 proc executeCommand*(
     registry: CommandRegistry, ctx: CommandContext, cmd: keybindings.Command
 ): Result[(), string] =
@@ -524,6 +527,16 @@ proc executeCommand*(
         "Executing motion, current cursor=(" & $ctx.state.cursor.line & "," &
           $ctx.state.cursor.column & ")",
       )
+
+      # Record jump before big movements (like gg, G, Ctrl-d, Ctrl-u, etc.)
+      let shouldRecordJump =
+        cmd.motion in {
+          Motion.FirstLine, Motion.LastLine, Motion.PageUp, Motion.PageDown,
+          Motion.HalfPageUp, Motion.HalfPageDown, Motion.ViewportHigh,
+          Motion.ViewportMiddle, Motion.ViewportLow,
+        }
+      if shouldRecordJump:
+        recordJump(ctx.state)
 
       # Check if this is a scroll motion for smooth scrolling
       let isScrollMotion =

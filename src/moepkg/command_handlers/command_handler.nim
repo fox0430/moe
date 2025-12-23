@@ -70,6 +70,8 @@ type
     cmrGotoLine # Jump to specific line
     cmrVSplit # Vertical split window
     cmrHSplit # Horizontal split window
+    cmrNew # Create new empty buffer in horizontal split
+    cmrVnew # Create new empty buffer in vertical split
     cmrEnew # Create new empty buffer
     cmrEdit # Edit/open file in current window
     cmrSetBoolOption # Set boolean option
@@ -91,6 +93,9 @@ type
     cmrRecentFile # Open recent file selection mode
     cmrClearSearchHighlight # Clear search highlighting (:noh)
     cmrShellCommand # Execute shell command (:!)
+    cmrBackground # Pause editor and show terminal (:bg)
+    cmrJumpList # Show jump list (:ju, :jump)
+    cmrBuild # Build current buffer (:build)
     cmrError # Command error
 
   CommandModeHandler* = ref object ## Handler for Command mode specific commands
@@ -114,6 +119,10 @@ type
       vsplitFilename*: Option[string]
     of cmrHSplit:
       hsplitFilename*: Option[string]
+    of cmrNew:
+      discard
+    of cmrVnew:
+      discard
     of cmrEnew:
       discard
     of cmrEdit:
@@ -153,6 +162,12 @@ type
       discard
     of cmrShellCommand:
       shellCommand*: string
+    of cmrBackground:
+      discard
+    of cmrJumpList:
+      discard
+    of cmrBuild:
+      discard
     of cmrError:
       errorMessage*: string
 
@@ -501,6 +516,14 @@ proc executeHSplit*(
       CommandModeResult(kind: cmrFiler, filerPath: some(absolutePath(filename.get)))
   return CommandModeResult(kind: cmrHSplit, hsplitFilename: filename)
 
+proc executeNew*(handler: CommandModeHandler): CommandModeResult =
+  ## Execute new command (:new) - create new empty buffer in horizontal split
+  return CommandModeResult(kind: cmrNew)
+
+proc executeVnew*(handler: CommandModeHandler): CommandModeResult =
+  ## Execute vnew command (:vnew) - create new empty buffer in vertical split
+  return CommandModeResult(kind: cmrVnew)
+
 proc executeEnew*(handler: CommandModeHandler): CommandModeResult =
   ## Execute enew command (:ene, :enew) - create new empty buffer
   return CommandModeResult(kind: cmrEnew)
@@ -594,6 +617,10 @@ proc handleCommandModeInput*(
     return handler.executeVSplit(cmdResult.vsplitFilename)
   of claHSplit:
     return handler.executeHSplit(cmdResult.hsplitFilename)
+  of claNew:
+    return handler.executeNew()
+  of claVnew:
+    return handler.executeVnew()
   of claBufferNext:
     return handler.executeBufferNext()
   of claBufferPrev:
@@ -623,6 +650,12 @@ proc handleCommandModeInput*(
   of claShellCommand:
     return
       CommandModeResult(kind: cmrShellCommand, shellCommand: cmdResult.shellCommand)
+  of claBackground:
+    return CommandModeResult(kind: cmrBackground)
+  of claJumpList:
+    return CommandModeResult(kind: cmrJumpList)
+  of claBuild:
+    return CommandModeResult(kind: cmrBuild)
   of claSubstitute:
     # TODO: Implement search and replace
     return CommandModeResult(kind: cmrMessage, message: "Substitute not implemented")

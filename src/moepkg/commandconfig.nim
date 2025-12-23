@@ -106,6 +106,8 @@ proc loadDefaultConfig*(config: CommandConfig) =
   config.addAlias("vsplit", claVSplit)
   config.addAlias("sp", claHSplit)
   config.addAlias("split", claHSplit)
+  config.addAlias("new", claNew)
+  config.addAlias("vnew", claVnew)
 
   # Buffer navigation
   config.addAlias("bn", claBufferNext)
@@ -155,6 +157,17 @@ proc loadDefaultConfig*(config: CommandConfig) =
   # Clear search highlight
   config.addAlias("noh", claClearSearchHighlight)
   config.addAlias("nohlsearch", claClearSearchHighlight)
+
+  # Background (pause editor and show terminal)
+  config.addAlias("bg", claBackground)
+
+  # Jump list
+  config.addAlias("ju", claJumpList)
+  config.addAlias("jump", claJumpList)
+  config.addAlias("jumps", claJumpList)
+
+  # Build
+  config.addAlias("build", claBuild)
 
 proc applyToParser*(config: CommandConfig, parser: CommandLineParser) =
   ## Apply configuration to a command line parser

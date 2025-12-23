@@ -49,6 +49,8 @@ type
     hrGotoLine # Jump to specific line
     hrVSplit # Vertical split window
     hrHSplit # Horizontal split window
+    hrNew # Create new empty buffer in horizontal split
+    hrVnew # Create new empty buffer in vertical split
     hrEnew # Create new empty buffer
     hrEdit # Edit/open file in current window
     hrSetBoolOption # Set boolean option
@@ -96,6 +98,9 @@ type
     hrLspCallHierarchyIncoming # Execute LSP incoming calls
     hrLspCallHierarchyOutgoing # Execute LSP outgoing calls
     hrShellCommand # Execute shell command
+    hrBackground # Pause editor and show terminal (:bg)
+    hrJumpList # Show jump list (:ju, :jump)
+    hrBuild # Build current buffer (:build)
     hrUnhandled # Command was not handled
     hrError # Error occurred
 
@@ -133,6 +138,10 @@ type
       vsplitFilename*: Option[string]
     of hrHSplit:
       hsplitFilename*: Option[string]
+    of hrNew:
+      discard
+    of hrVnew:
+      discard
     of hrEnew:
       discard
     of hrEdit:
@@ -219,6 +228,12 @@ type
       discard
     of hrShellCommand:
       shellCommand*: string
+    of hrBackground:
+      discard
+    of hrJumpList:
+      discard
+    of hrBuild:
+      discard
     of hrUnhandled:
       discard
     of hrError:
@@ -488,6 +503,10 @@ proc handleCommandMode*(
     return HandlerResult(kind: hrVSplit, vsplitFilename: r.vsplitFilename)
   of cmrHSplit:
     return HandlerResult(kind: hrHSplit, hsplitFilename: r.hsplitFilename)
+  of cmrNew:
+    return HandlerResult(kind: hrNew)
+  of cmrVnew:
+    return HandlerResult(kind: hrVnew)
   of cmrEnew:
     return HandlerResult(kind: hrEnew)
   of cmrEdit:
@@ -503,6 +522,8 @@ proc handleCommandMode*(
     return HandlerResult(kind: hrClearSearchHighlight)
   of cmrShellCommand:
     return HandlerResult(kind: hrShellCommand, shellCommand: r.shellCommand)
+  of cmrBackground:
+    return HandlerResult(kind: hrBackground)
   of cmrSave:
     return HandlerResult(kind: hrSave, saveFilename: r.saveFilename)
   of cmrSaveAndQuit:
@@ -541,6 +562,10 @@ proc handleCommandMode*(
     return HandlerResult(kind: hrEnterBackupManager)
   of cmrRecentFile:
     return HandlerResult(kind: hrRecentFile)
+  of cmrJumpList:
+    return HandlerResult(kind: hrJumpList)
+  of cmrBuild:
+    return HandlerResult(kind: hrBuild)
   of cmrError:
     return HandlerResult(kind: hrError, errorMessage: r.errorMessage)
 
@@ -1080,17 +1105,19 @@ proc handleEvent*(
 proc wasHandled*(hrResult: HandlerResult): bool =
   ## Check if the event was handled
   hrResult.kind in {
-    hrHandled, hrQuit, hrCloseWindow, hrGotoLine, hrVSplit, hrHSplit, hrEnew, hrSave,
-    hrSaveAndQuit, hrBufferNext, hrBufferPrev, hrBufferFirst, hrBufferLast,
-    hrBufferDelete, hrStripWhitespace, hrFilerOpenFile, hrFilerOpenFileVSplit,
-    hrFilerOpenFileHSplit, hrFilerQuit, hrEnterFiler, hrLogViewerQuit, hrEnterLogViewer,
-    hrHelpViewerQuit, hrEnterHelpViewer, hrBufferManagerSelectBuffer,
-    hrBufferManagerDeleteBuffer, hrBufferManagerQuit, hrEnterBufferManager,
-    hrBackupManagerRestore, hrBackupManagerDelete, hrBackupManagerOpenDiff,
-    hrBackupManagerRefresh, hrBackupManagerQuit, hrEnterBackupManager, hrDiffViewerQuit,
-    hrRecentFile, hrRecentFileOpenFile, hrRecentFileQuit, hrNextWindow, hrPrevWindow,
-    hrEnterDiffViewer, hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
+    hrHandled, hrQuit, hrCloseWindow, hrGotoLine, hrVSplit, hrHSplit, hrNew, hrVnew,
+    hrEnew, hrSave, hrSaveAndQuit, hrBufferNext, hrBufferPrev, hrBufferFirst,
+    hrBufferLast, hrBufferDelete, hrStripWhitespace, hrFilerOpenFile,
+    hrFilerOpenFileVSplit, hrFilerOpenFileHSplit, hrFilerQuit, hrEnterFiler,
+    hrLogViewerQuit, hrEnterLogViewer, hrHelpViewerQuit, hrEnterHelpViewer,
+    hrBufferManagerSelectBuffer, hrBufferManagerDeleteBuffer, hrBufferManagerQuit,
+    hrEnterBufferManager, hrBackupManagerRestore, hrBackupManagerDelete,
+    hrBackupManagerOpenDiff, hrBackupManagerRefresh, hrBackupManagerQuit,
+    hrEnterBackupManager, hrDiffViewerQuit, hrRecentFile, hrRecentFileOpenFile,
+    hrRecentFileQuit, hrNextWindow, hrPrevWindow, hrEnterDiffViewer,
+    hrLspGotoDefinition, hrLspGotoDeclaration, hrLspFindReferences,
     hrLspCodeLensExecute, hrLspCallHierarchyIncoming, hrLspCallHierarchyOutgoing,
+    hrJumpList,
   }
 
 proc shouldQuit*(hrResult: HandlerResult): bool =
@@ -1116,6 +1143,14 @@ proc shouldHSplit*(hrResult: HandlerResult): bool =
 proc shouldEnew*(hrResult: HandlerResult): bool =
   ## Check if we should create a new empty buffer
   hrResult.kind == hrEnew
+
+proc shouldNew*(hrResult: HandlerResult): bool =
+  ## Check if we should create a new empty buffer in horizontal split
+  hrResult.kind == hrNew
+
+proc shouldVnew*(hrResult: HandlerResult): bool =
+  ## Check if we should create a new empty buffer in vertical split
+  hrResult.kind == hrVnew
 
 proc shouldEdit*(hrResult: HandlerResult): bool =
   ## Check if we should edit/open a file
@@ -1144,6 +1179,10 @@ proc shouldShellCommand*(hrResult: HandlerResult): bool =
 proc getShellCommand*(hrResult: HandlerResult): string =
   ## Get the shell command to execute
   if hrResult.kind == hrShellCommand: hrResult.shellCommand else: ""
+
+proc shouldBackground*(hrResult: HandlerResult): bool =
+  ## Check if we should pause editor and show terminal (:bg)
+  hrResult.kind == hrBackground
 
 proc getBoolOption*(hrResult: HandlerResult): BoolSettingOption =
   ## Get the boolean option to set
@@ -1231,6 +1270,10 @@ proc shouldHelpViewerQuit*(hrResult: HandlerResult): bool =
 proc shouldQuickRun*(hrResult: HandlerResult): bool =
   ## Check if we should run QuickRun
   hrResult.kind == hrQuickRun
+
+proc shouldBuild*(hrResult: HandlerResult): bool =
+  ## Check if we should run Build
+  hrResult.kind == hrBuild
 
 proc hasError*(hrResult: HandlerResult): bool =
   ## Check if there was an error
@@ -1409,3 +1452,7 @@ proc shouldNextWindow*(hrResult: HandlerResult): bool =
 proc shouldPrevWindow*(hrResult: HandlerResult): bool =
   ## Check if we should move to previous window
   hrResult.kind == hrPrevWindow
+
+proc shouldJumpList*(hrResult: HandlerResult): bool =
+  ## Check if we should show jump list
+  hrResult.kind == hrJumpList

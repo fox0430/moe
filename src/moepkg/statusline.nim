@@ -21,7 +21,7 @@ import std/[strformat, options, strutils]
 
 import pkg/celina
 
-import types, buffer, modes
+import types, buffer, modes, color
 
 proc toggleStatusLine*(state: var EditorState) =
   ## Toggle the visibility of the status line
@@ -63,6 +63,42 @@ proc setMultiStatusLine*(state: var EditorState, enabled: bool) =
   ## Set multi status line mode
   state.display.multiStatusLine = enabled
 
+proc getStatusLineModeStyle(mode: EditorMode): Style =
+  ## Get the status line background style based on current mode
+  case mode
+  of EditorMode.Normal:
+    getThemeStyle(EditorColorPairIndex.statusLineNormalMode, {StyleModifier.Bold})
+  of EditorMode.Insert:
+    getThemeStyle(EditorColorPairIndex.statusLineInsertMode, {StyleModifier.Bold})
+  of EditorMode.Visual, EditorMode.VisualLine, EditorMode.VisualBlock:
+    getThemeStyle(EditorColorPairIndex.statusLineVisualMode, {StyleModifier.Bold})
+  of EditorMode.Replace:
+    getThemeStyle(EditorColorPairIndex.statusLineReplaceMode, {StyleModifier.Bold})
+  of EditorMode.Filer:
+    getThemeStyle(EditorColorPairIndex.statusLineFilerMode, {StyleModifier.Bold})
+  of EditorMode.Command, EditorMode.Search:
+    getThemeStyle(EditorColorPairIndex.statusLineExMode, {StyleModifier.Bold})
+  else:
+    getThemeStyle(EditorColorPairIndex.statusLineNormalMode, {StyleModifier.Bold})
+
+proc getStatusLineModeLabelStyle(mode: EditorMode): Style =
+  ## Get the status line mode label style based on current mode
+  case mode
+  of EditorMode.Normal:
+    getThemeStyle(EditorColorPairIndex.statusLineNormalModeLabel, {StyleModifier.Bold})
+  of EditorMode.Insert:
+    getThemeStyle(EditorColorPairIndex.statusLineInsertModeLabel, {StyleModifier.Bold})
+  of EditorMode.Visual, EditorMode.VisualLine, EditorMode.VisualBlock:
+    getThemeStyle(EditorColorPairIndex.statusLineVisualModeLabel, {StyleModifier.Bold})
+  of EditorMode.Replace:
+    getThemeStyle(EditorColorPairIndex.statusLineReplaceModeLabel, {StyleModifier.Bold})
+  of EditorMode.Filer:
+    getThemeStyle(EditorColorPairIndex.statusLineFilerModeLabel, {StyleModifier.Bold})
+  of EditorMode.Command, EditorMode.Search:
+    getThemeStyle(EditorColorPairIndex.statusLineExModeLabel, {StyleModifier.Bold})
+  else:
+    getThemeStyle(EditorColorPairIndex.statusLineNormalModeLabel, {StyleModifier.Bold})
+
 proc renderStatusLine*(
     state: EditorState, textBuffer: TextBuffer, buffer: var Buffer, statusLineY: int
 ) =
@@ -72,16 +108,8 @@ proc renderStatusLine*(
 
   let
     modeLabel = modeLabel(state.mode)
-    modeLabelStyle = Style(
-      fg: ColorValue(kind: Indexed, indexed: Color.Black),
-      bg: ColorValue(kind: Indexed, indexed: Color.White),
-      modifiers: {StyleModifier.Bold},
-    )
-    statusLineStyle = Style(
-      fg: ColorValue(kind: Indexed, indexed: Color.White),
-      bg: ColorValue(kind: Indexed, indexed: Color.Blue),
-      modifiers: {StyleModifier.Bold},
-    )
+    modeLabelStyle = getStatusLineModeLabelStyle(state.mode)
+    statusLineStyle = getStatusLineModeStyle(state.mode)
 
   # Draw mode label with white background
   let
@@ -168,16 +196,8 @@ proc renderWindowStatusLine*(
         modeLabel(state.mode)
       else:
         ""
-    modeLabelStyle = Style(
-      fg: ColorValue(kind: Indexed, indexed: Color.Black),
-      bg: ColorValue(kind: Indexed, indexed: Color.White),
-      modifiers: {StyleModifier.Bold},
-    )
-    statusLineStyle = Style(
-      fg: ColorValue(kind: Indexed, indexed: Color.White),
-      bg: ColorValue(kind: Indexed, indexed: Color.Blue),
-      modifiers: {StyleModifier.Bold},
-    )
+    modeLabelStyle = getStatusLineModeLabelStyle(state.mode)
+    statusLineStyle = getStatusLineModeStyle(state.mode)
 
   # Draw mode label with white background (only for active window)
   var currentX = statusLineX
